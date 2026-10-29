@@ -85,3 +85,10 @@ documented; an unmeasured adapter refuses `--apply` rather than pretending.
 - No secrets, no endpoints, no personal data — this repo is public.
 
 MIT licensed. `AGENTS.md` is the working agreement for agents in this repo.
+
+## Quality gate — GitReins
+
+Commits run through `gitreins guard`: secrets (gitleaks + the builtin scanner), lint, and this
+repo's own `tests/selftest.sh` as the test gate. `guards.allow_skips` is **false** on purpose — a
+guard run that skips its gates reports `DEGRADED PASS` and that is not evidence. Stage what you
+want graded.
