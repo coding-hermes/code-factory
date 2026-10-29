@@ -25,7 +25,7 @@ The text says: `Three environment variables and one harness are all it assumes:`
 
 Fix: say `Two environment variables and one harness...`, or enumerate the third variable if a real third prerequisite exists. Keep the provider-key file requirement explicit without calling it an environment variable.
 
-ch:trace row=CF-015 spec=README.md#running-it-against-your-own-infrastructure wave=code-factory-readme-2026-10-29-22-35-38#readme test=tests/selftest.sh::selftest doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-29-22-35-38.md witness=path@origin:README.md verdict=none:open-finding commit=none:unfixed memory=none:not-written
+ch:trace row=CF-015 spec=README.md#running-it-against-your-own-infrastructure wave=code-factory-readme-2026-10-29-22-35-38#readme test=tests/selftest.sh::selftest doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-29-22-35-38.md witness=path@origin:README.md verdict=none:open-finding commit=396f13387a050643898e37f06a6403e02954b07c memory=none:not-written
 
 ## Existing findings re-measured, not re-filed
 
@@ -38,7 +38,7 @@ ch:trace row=CF-015 spec=README.md#running-it-against-your-own-infrastructure wa
 
 No fresh public release binary, live bunker node, crier dispatch, gateway round trip, or rendered public README was available to probe. Those are evidence limits, not additional failure claims.
 
-ch:trace row=CF-015 spec=README.md#running-it-against-your-own-infrastructure wave=code-factory-readme-2026-10-29-22-35-38#readme test=tests/selftest.sh::selftest doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-29-22-35-38.md witness=none:no-live-bunker-or-release-boundary-available verdict=none:open-finding commit=none:unfixed memory=none:not-written
+ch:trace row=CF-015 spec=README.md#running-it-against-your-own-infrastructure wave=code-factory-readme-2026-10-29-22-35-38#readme test=tests/selftest.sh::selftest doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-29-22-35-38.md witness=none:no-live-bunker-or-release-boundary-available verdict=none:open-finding commit=396f13387a050643898e37f06a6403e02954b07c memory=none:not-written
 
 STATUS: PASS
 TIER: T4 -- executed the published README commands in a fresh archive/HOME, ran selftest, and compared docs/scripts/board against the published tip
