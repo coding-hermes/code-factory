@@ -95,16 +95,35 @@ want graded.
 
 ## The lanes
 
-Six lanes run this repo, all nested under `code-factory` (the scheduler's `projects.parent`):
+Fourteen scheduler projects make up this repo's lane family: the root foreman, ten operating
+lanes, and three QA lanes. The 13 satellite projects are nested under `code-factory` (the
+scheduler's `projects.parent`); the root foreman has no parent. The list below is the shipped
+lane family; verify the live namespace, admission mode, and workdir with the scheduler's
+project inventory before relying on a current deployment count.
 
 | Lane | Job | Admission |
 |---|---|---|
 | `code-factory` | foreman — one board row forward per tick | tasks |
-| `code-factory-qa` | re-run completed evidence, re-open what does not reproduce | cooldown 43200 |
-| `code-factory-pm` | tighten requirements into falsifiable criteria | cooldown 86400 |
-| `code-factory-dogfood` | walk the documented path as a user and report friction | cooldown 259200 |
-| `code-factory-sync` | board/repo/doc drift | cooldown 21600 |
+| `code-factory-docs` | documentation truth | cooldown |
+| `code-factory-readme` | stranger-facing README path | cooldown |
+| `code-factory-releng` | release and public-posture checks | cooldown |
+| `code-factory-perf` | measurements and regressions | cooldown |
+| `code-factory-review` | review and evidence reconciliation | cooldown |
+| `code-factory-qa` | re-run completed evidence, re-open what does not reproduce | cooldown |
+| `code-factory-pm` | tighten requirements into falsifiable criteria | cooldown |
+| `code-factory-dogfood` | walk the documented path as a user and report friction | cooldown |
+| `code-factory-sync` | board/repo/doc drift | cooldown |
 | `code-factory-duckbrain` | dated decision records | cooldown |
+| `code-factory-docs-qa` | QA for the docs lane | cooldown |
+| `code-factory-readme-qa` | QA for the README lane | cooldown |
+| `code-factory-releng-qa` | QA for the release lane | cooldown |
 
-Each lane's prompt lives in `prompts/<lane>.md` and is loaded with
-`scripts/load_lane_config.py` — the file is the source of truth, not the database row.
+The core lane rows are defined in `scripts/load_lane_config.py`; the added family rows are
+listed in `scripts/add_family_lanes.py`. Each lane's prompt lives in `prompts/<lane>.md` and is
+loaded with `scripts/load_lane_config.py` — the file is the source of truth, not the database row.
+
+ch:trace row=CF-005 spec=docs/PRD-code-factory.md#requirements wave=code-factory-docs-2026-10-29-20-26-27#docs test=tests/selftest.sh::selftest doc=README.md prompt=prompts/docs.md evidence=docs/audits/code-factory-docs-2026-10-29-20-26-27.md witness=none:source-and-local-scheduler-db-only verdict=none:open-finding commit=7ee8d7bf6e703870bcd59fab78e9e86fd33d0e1a memory=none:unresolved-namespace
+
+STATUS: PASS
+TIER: T4 -- queried the real local scheduler SQLite project inventory and ran the repository selftest
+EVIDENCE: sqlite3 /home/kara/.hermes/coding-hermes/scheduler.db inventory query; bash tests/selftest.sh
