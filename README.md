@@ -28,7 +28,7 @@ scripts/project-node.sh --project crier --agent <id> --repo git@… --harness he
 ## Layout
 
 ```
-docs/            DESIGN.md, PRD-code-factory.md
+docs/            DESIGN.md, PRD-code-factory.md, ACCEPTANCE-PLAN.md, OPERATIONS.md, THREAT-MODEL.md
 specs/           NODE.md (what a node is), ENVELOPE.md (dispatch/result), HARNESS.md (adapters)
 scripts/         bunker-server-install.sh, project-node.sh, verify-node.sh, lib.sh, boardctl
 scripts/harness/ install-<harness>.sh — one per foreign agent (opencode, claude-code, codex, aider, goose, pi-agent)
@@ -60,7 +60,10 @@ tests/           selftest.sh — proves the checkers FAIL when they should
 
 See `.coding-hermes/board/tasks.jsonl` for the work items and their acceptance criteria. Use the
 repository board interface (`scripts/boardctl`); the command contract and current validation results
-are in [`docs/BOARD.md`](docs/BOARD.md). Scheduler lane admission roots and cadence pins are in
+are in [`docs/BOARD.md`](docs/BOARD.md). The PRD's falsifiable checks and real acceptance status are
+tracked in [`docs/ACCEPTANCE-PLAN.md`](docs/ACCEPTANCE-PLAN.md); operating steps and known blockers are
+in [`docs/OPERATIONS.md`](docs/OPERATIONS.md), and security assumptions/residual risks are in
+[`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md). Scheduler lane admission roots and cadence pins are in
 [`docs/SCHEDULER-ADMISSION.md`](docs/SCHEDULER-ADMISSION.md).
 
 ## Running it against your own infrastructure
