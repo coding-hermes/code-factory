@@ -9,7 +9,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
 
-PROJECT="" REPO="" HARNESS="hermes" AGENT="" TTL="6h" SERVER="${BUNKER_SERVER:-bunker-mvp}" PORT=10800
+PROJECT="" REPO="" HARNESS="hermes" AGENT="" TTL="6h" SERVER="${BUNKER_SERVER:?set BUNKER_SERVER to your bunker server name}" PORT=10800
 
 while [ $# -gt 0 ]; do
   case "$1" in

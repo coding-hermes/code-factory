@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # verify-node.sh — control host: is this node actually usable?
 #
-#   ./verify-node.sh --agent <id> [--server bunker-mvp] [--port 10800]
+#   ./verify-node.sh --agent <id> [--server <name>] [--port 10800]
 #   ./verify-node.sh --agent <id> --artifact <path-on-node>
 #
 # Checks, in order of what they prove:
@@ -14,7 +14,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
 
-AGENT="" SERVER="${BUNKER_SERVER:-bunker-mvp}" PORT=10800 ARTIFACT=""
+AGENT="" SERVER="${BUNKER_SERVER:?set BUNKER_SERVER to your bunker server name}" PORT=10800 ARTIFACT=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --agent) AGENT="$2"; shift 2 ;;

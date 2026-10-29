@@ -11,7 +11,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=lib.sh
 . "$HERE/lib.sh"
 
-SERVER="${BUNKER_SERVER:-bunker-mvp}"
+SERVER="${BUNKER_SERVER:?set BUNKER_SERVER to your bunker server name}"
 JSON=0
 [ "${1:-}" = "--json" ] && JSON=1
 

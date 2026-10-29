@@ -32,7 +32,7 @@ node got the task it was given; a mismatch is a refusal, not a warning.
   "env_version": 1,
   "dispatch_id": "uuid",
   "status": "completed | failed | refused",
-  "host_identity": "bunker-mvp",
+  "host_identity": "node-host-1",
   "harness": {"name": "hermes", "served_model": "openai/gpt-6.1-sol"},
   "exit_codes": [0, 0],
   "gate_exit": 0,

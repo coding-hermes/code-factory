@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install-hermes.sh — the MEASURED Hermes adapter.
 #
-# Measured 2026-10-29 on bunker-mvp: python 3.12.3, hermes-agent 0.19.0, 32 s install,
+# Measured 2026-10-29 on a test node: python 3.12.3, hermes-agent 0.19.0, 32 s install,
 # 248 MB venv, no node/npm (the backend runs with --skip-build).
 #
 #   install-hermes.sh --check

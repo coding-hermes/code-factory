@@ -45,10 +45,15 @@ arch=$(uname -m); ok "arch" "$arch ($(uname -sr))"
 require_disk "$HOME" "$FLOOR" || true
 mem=$(awk '/MemAvailable/{printf "%d", $2/1024}' /proc/meminfo)
 [ "${mem:-0}" -ge 1024 ] && ok "mem" "${mem} MB" || bad "mem" "${mem} MB < 1024"
-for u in "${CRIER_URL:-http://100.97.236.14:8767}/health" https://pypi.org/simple/; do
-  c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$u" 2>/dev/null || echo 000)
-  [ "$c" = 200 ] && ok "reach:${u%%/simple/*}" "200" || bad "reach:$u" "-> $c"
-done
+CRIER="${CRIER_URL:-}"
+if [ -z "$CRIER" ]; then
+  bad "crier_url" "CRIER_URL unset — the node has nothing to connect to (export CRIER_URL=http://crier.example:8767)"
+else
+  for u in "$CRIER/health" https://pypi.org/simple/; do
+    c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$u" 2>/dev/null || echo 000)
+    [ "$c" = 200 ] && ok "reach:$u" "200" || bad "reach:$u" "-> $c"
+  done
+fi
 
 # ---------------------------------------------------------------- 10 base
 say "[10] base"
@@ -105,7 +110,7 @@ path, project, harness, port, repo, ref, host = sys.argv[1:8]
 json.dump({"node_id": host, "project": project,
            "repo": {"origin": repo, "ref": ref, "path": "/home/" + __import__("os").environ.get("USER", "node") + "/repo"},
            "harness": {"name": harness, "port": int(port)},
-           "bus": {"base": "http://100.97.236.14:8767"},
+           "bus": {"base": __import__("os").environ.get("CRIER_BASE", "http://crier.example:8767")},
            "created_by": "project-node.sh v1",
            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
           open(path, "w"), indent=1)

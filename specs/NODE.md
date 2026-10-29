@@ -10,7 +10,7 @@ A **node** is the unit of execution: one bunker agent bound to one project and o
   "project": "crier",
   "repo": {"origin": "git@…", "ref": "main", "path": "/home/<uid>/repo"},
   "harness": {"name": "hermes", "version": "0.19.0", "port": 10800},
-  "bus": {"agent_id": "node-crier", "base": "http://100.97.236.14:8767"},
+  "bus": {"agent_id": "node-crier", "base": "http://crier.example:8767"},
   "created_by": "project-node.sh v1",
   "created_at": "2026-10-29T18:40:00Z"
 }

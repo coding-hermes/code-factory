@@ -59,3 +59,29 @@ tests/           selftest.sh — proves the checkers FAIL when they should
 | Round trip through the node's own gateway | **not yet** — MDP-1 used a bespoke poller |
 
 See `.coding-hermes/board/tasks.jsonl` for the work items and their acceptance criteria.
+
+## Running it against your own infrastructure
+
+This repo carries no endpoints, hostnames or credentials. Three environment variables and one
+harness are all it assumes:
+
+```bash
+export CRIER_URL=http://crier.example:8767     # your message bus
+export BUNKER_SERVER=your-bunker-server        # your agent host
+scripts/bunker-server-install.sh --check       # does this control host qualify?
+scripts/node-create.sh --project myrepo \
+    --repo https://github.com/you/myrepo --harness hermes
+```
+
+A node needs a repo it is allowed to clone and an inference credential of its own — never an
+operator key. `specs/HARNESS.md` records which harness ladders are measured and which are only
+documented; an unmeasured adapter refuses `--apply` rather than pretending.
+
+## Contributing
+
+- `tests/selftest.sh` must pass, and any new check needs a fixture proving it can FAIL.
+- A spec change and the script change it implies belong in the same commit.
+- Board rows: append only, `.coding-hermes/board/tasks.jsonl`.
+- No secrets, no endpoints, no personal data — this repo is public.
+
+MIT licensed. `AGENTS.md` is the working agreement for agents in this repo.

@@ -1,0 +1,7 @@
+# node state is per-machine, never committed
+.node/
+*.log
+.env
+.env.*
+key*
+*.key
