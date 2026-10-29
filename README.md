@@ -18,11 +18,11 @@ One bunker agent, one repo, one harness, one bus identity, one round-trip proof.
 # 1. can this host run the factory at all?
 scripts/bunker-server-install.sh --check
 
-# 2. what does a node look like right now (inside an agent)?
-./scripts/project-node.sh --check --agent <id>
+# 2. inside a designated test node, check its current layers (this creates ~/.node)
+scripts/project-node.sh --check --project <project>
 
-# 3. make one
-scripts/project-node.sh --project crier --agent <id> --repo git@… --harness hermes
+# 3. node creation is BLOCKED for production until bus identity and inference setup
+#    are implemented; see docs/OPERATIONS.md before attempting provisioning
 ```
 
 ## Layout
@@ -32,6 +32,8 @@ docs/            DESIGN.md, PRD-code-factory.md, ACCEPTANCE-PLAN.md, OPERATIONS.
 specs/           NODE.md (what a node is), ENVELOPE.md (dispatch/result), HARNESS.md (adapters)
 scripts/         bunker-server-install.sh, project-node.sh, verify-node.sh, lib.sh, boardctl
 scripts/harness/ install-<harness>.sh — one per foreign agent (opencode, claude-code, codex, aider, goose, pi-agent)
+skills/          code-factory-foreman/SKILL.md — board, admission, evidence and pacing contract
+prompts/         lane prompts; foreman loads the project skill above
 .coding-hermes/board/  tasks.jsonl (JSONL, git-tracked) + events.jsonl
 tests/           selftest.sh — proves the checkers FAIL when they should
 ```
@@ -132,4 +134,4 @@ ch:trace row=CF-005 spec=docs/PRD-code-factory.md#requirements wave=code-factory
 
 STATUS: PASS
 TIER: T4 -- queried the real local scheduler SQLite project inventory and ran the repository selftest
-EVIDENCE: sqlite3 /home/kara/.hermes/coding-hermes/scheduler.db inventory query; bash tests/selftest.sh
+EVIDENCE: sqlite3 "$HOME/.hermes/coding-hermes/scheduler.db" inventory query; bash tests/selftest.sh

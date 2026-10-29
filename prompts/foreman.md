@@ -16,6 +16,10 @@ Your job: move exactly ONE board row forward per tick.
 
 - Read `AGENTS.md` first. It is the working agreement: specs are the design authority, every
   check must be able to fail, nothing is installed until `--check` names the measured value.
+- Load and follow [`skills/code-factory-foreman/SKILL.md`](../skills/code-factory-foreman/SKILL.md),
+  including its scheduler lane family/workdir allowlist and task-admission cooldown rules.
+- For scheduler lane creation, use [`docs/SCHEDULER-ADMISSION.md`](../docs/SCHEDULER-ADMISSION.md);
+  do not treat the repo GitReins gate as the scheduler admission gate.
 - The board is `.coding-hermes/board/tasks.jsonl` — append only, one JSON object per line.
 - Never claim a row complete unless a command someone else can re-run demonstrates the acceptance
   criteria. A commit message is not evidence.

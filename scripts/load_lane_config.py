@@ -5,11 +5,17 @@ Sets, per lane: namespace, admission mode, and the prompt file that is its job.
 Prompts live in prompts/ and are the source of truth; this script copies them in.
 """
 
+import os
 import pathlib
 import sqlite3
 
-DB = "/home/kara/.hermes/coding-hermes/scheduler.db"
-ROOT = pathlib.Path("/home/kara/code-factory")
+HERE = pathlib.Path(__file__).resolve().parents[1]
+DB = pathlib.Path(
+    os.environ.get(
+        "SCHEDULER_DB", pathlib.Path.home() / ".hermes/coding-hermes/scheduler.db"
+    )
+)
+ROOT = pathlib.Path(os.environ.get("CODE_FACTORY_ROOT", HERE))
 
 CFG = {
     "code-factory": ("coding-hermes", "tasks", "foreman"),

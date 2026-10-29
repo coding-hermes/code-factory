@@ -6,7 +6,7 @@ Source commit window: `git log --since='7 days ago' --all --oneline` at local HE
 
 README.md:98 previously said: "Six lanes run this repo." The lane-family implementation added docs, README, release, performance, and review lanes plus their QA lanes in `bf7464c` (`scripts/add_family_lanes.py:36-46`). The live scheduler project inventory contains 14 matching projects, not six:
 
-`sqlite3 /home/kara/.hermes/coding-hermes/scheduler.db "select count(*) from projects where name='code-factory' or name like 'code-factory-%';"` → `14`
+`sqlite3 "$HOME/.hermes/coding-hermes/scheduler.db" "select count(*) from projects where name='code-factory' or name like 'code-factory-%';"` → `14`
 
 The matching names are:
 
@@ -31,4 +31,4 @@ ch:trace row=CF-005 spec=docs/PRD-code-factory.md#requirements wave=code-factory
 
 STATUS: PASS
 TIER: T4 -- queried the real local scheduler SQLite project inventory and ran the repository selftest
-EVIDENCE: sqlite3 /home/kara/.hermes/coding-hermes/scheduler.db inventory query; bash tests/selftest.sh
+EVIDENCE: sqlite3 "$HOME/.hermes/coding-hermes/scheduler.db" inventory query; bash tests/selftest.sh
