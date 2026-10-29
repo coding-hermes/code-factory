@@ -1,0 +1,29 @@
+guards:
+  secrets: true
+  lint: true
+  tests: true
+  test_mode: full
+  test_command: bash tests/selftest.sh
+  lint_command: bash -n $(git ls-files "*.sh")
+  allow_skips: false
+evaluator:
+  max_iterations: 15
+  static_analysis_diagnostics: false
+history:
+  enabled: true
+  storage: git
+  max_verdicts: 1000
+worktree_fleet:
+  disk_ceiling_mb: 4096
+resolution:
+  enabled:
+    cli: false
+    mcp: false
+    predispatch: false
+    judge_prescreen: false
+  model: typesafe/jev-1.13
+  tokens_max: 28000
+  bands:
+    resolved_at: 0.85
+    review_at: 0.5
+  egress_exclude: []
