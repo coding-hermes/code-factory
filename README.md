@@ -92,3 +92,19 @@ Commits run through `gitreins guard`: secrets (gitleaks + the builtin scanner), 
 repo's own `tests/selftest.sh` as the test gate. `guards.allow_skips` is **false** on purpose — a
 guard run that skips its gates reports `DEGRADED PASS` and that is not evidence. Stage what you
 want graded.
+
+## The lanes
+
+Six lanes run this repo, all nested under `code-factory` (the scheduler's `projects.parent`):
+
+| Lane | Job | Admission |
+|---|---|---|
+| `code-factory` | foreman — one board row forward per tick | tasks |
+| `code-factory-qa` | re-run completed evidence, re-open what does not reproduce | cooldown 43200 |
+| `code-factory-pm` | tighten requirements into falsifiable criteria | cooldown 86400 |
+| `code-factory-dogfood` | walk the documented path as a user and report friction | cooldown 259200 |
+| `code-factory-sync` | board/repo/doc drift | cooldown 21600 |
+| `code-factory-duckbrain` | dated decision records | cooldown |
+
+Each lane's prompt lives in `prompts/<lane>.md` and is loaded with
+`scripts/load_lane_config.py` — the file is the source of truth, not the database row.
