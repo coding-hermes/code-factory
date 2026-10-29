@@ -41,5 +41,15 @@ else
   say "  FAIL  board missing"; fails=$((fails+1))
 fi
 
+say "6. project board entrypoint is real and fails closed without dependency"
+bash -n "$HERE/scripts/boardctl" && say "  PASS  bash -n scripts/boardctl" || { say "  FAIL  bash syntax"; fails=$((fails+1)); }
+"$HERE/scripts/boardctl" --help >/dev/null 2>&1 && say "  PASS  local help" || { say "  FAIL  help"; fails=$((fails+1)); }
+missing=$(env -i PATH=/usr/bin:/bin HOME="$HOME" /bin/bash "$HERE/scripts/boardctl" list 2>&1); rc=$?
+if [ "$rc" -eq 127 ] && printf '%s' "$missing" | grep -q 'FAIL boardctl'; then
+  say "  PASS  missing boardctl -> explicit FAIL, exit 127"
+else
+  say "  FAIL  missing dependency was not surfaced"; fails=$((fails+1))
+fi
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

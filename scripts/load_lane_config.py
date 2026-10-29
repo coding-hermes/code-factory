@@ -4,6 +4,7 @@
 Sets, per lane: namespace, admission mode, and the prompt file that is its job.
 Prompts live in prompts/ and are the source of truth; this script copies them in.
 """
+
 import pathlib
 import sqlite3
 
@@ -33,4 +34,6 @@ for row in con.execute(
     "SELECT name, namespace_id, admission_mode, length(prompt) FROM projects "
     "WHERE name LIKE 'code-factory%' ORDER BY name"
 ):
-    print(f"{row[0]:24s} ns={row[1] or '-':14s} mode={row[2] or '-':9s} prompt={row[3]}")
+    print(
+        f"{row[0]:24s} ns={row[1] or '-':14s} mode={row[2] or '-':9s} prompt={row[3]}"
+    )

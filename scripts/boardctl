@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Stable project entrypoint for the fleet's canonical JSONL boardctl.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [[ $# -eq 0 || "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  printf '%s\n' \
+    'code-factory board interface' \
+    'Usage: scripts/boardctl <boardctl-command> [flags]' \
+    'Examples: list --json --all | validate | show CF-001 | create --id CF-009 --title ...' \
+    'Requires the coding-hermes boardctl executable; see docs/BOARD.md.'
+  exit 0
+fi
+
+if ! command -v boardctl >/dev/null 2>&1; then
+  printf 'FAIL boardctl: coding-hermes boardctl executable not found on PATH\n' >&2
+  printf 'See docs/BOARD.md for the supported installation source and required version policy.\n' >&2
+  exit 127
+fi
+
+exec boardctl -C "$ROOT" "$@"

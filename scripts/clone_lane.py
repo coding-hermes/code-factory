@@ -10,6 +10,7 @@ Usage:
   clone_lane.py --from crier-docs --to code-factory-docs --workdir <path> \
                 --namespace docs --parent code-factory --prompt prompts/docs.md
 """
+
 import argparse
 import os
 import sqlite3
@@ -40,26 +41,30 @@ def main():
         row = dict(src)
     else:
         row = dict(src)
-    row.update({
-        "name": a.dst,
-        "workdir": a.workdir,
-        "namespace_id": a.namespace,
-        "parent": a.parent,
-        "enabled": 0,
-        "repo_url": f"local:{os.path.expanduser('~/code-factory')}",
-        "prompt_mode": "append",
-        "last_tick_started": "",
-        "last_tick_completed": "",
-        "last_tick_status": "",
-        "consecutive_failures": 0,
-        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    })
+    row.update(
+        {
+            "name": a.dst,
+            "workdir": a.workdir,
+            "namespace_id": a.namespace,
+            "parent": a.parent,
+            "enabled": 0,
+            "repo_url": f"local:{os.path.expanduser('~/code-factory')}",
+            "prompt_mode": "append",
+            "last_tick_started": "",
+            "last_tick_completed": "",
+            "last_tick_status": "",
+            "consecutive_failures": 0,
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+    )
     if a.prompt:
         row["prompt"] = open(a.prompt).read()
 
     cols = list(row.keys())
-    exists = bool(con.execute("SELECT 1 FROM projects WHERE name=?", (a.dst,)).fetchone())
+    exists = bool(
+        con.execute("SELECT 1 FROM projects WHERE name=?", (a.dst,)).fetchone()
+    )
     if not exists:
         con.execute(
             f"INSERT INTO projects ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
@@ -75,8 +80,11 @@ def main():
         print(f"configured {a.dst}")
     con.commit()
 
-    r = con.execute("SELECT name, namespace_id, admission_mode, cooldown_floor_s, parent, "
-                    "length(prompt) FROM projects WHERE name=?", (a.dst,)).fetchone()
+    r = con.execute(
+        "SELECT name, namespace_id, admission_mode, cooldown_floor_s, parent, "
+        "length(prompt) FROM projects WHERE name=?",
+        (a.dst,),
+    ).fetchone()
     print("  ", dict(r))
 
 
