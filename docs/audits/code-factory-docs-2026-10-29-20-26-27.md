@@ -27,7 +27,7 @@ Source/runtime checks run:
 
 The selftest proves the repository's current shell and board checks; it does not prove a live remote dispatch, node provisioning, or crier round trip. Those claims remain not measured by this correction.
 
-ch:trace row=CF-005 spec=docs/PRD-code-factory.md#requirements wave=code-factory-docs-2026-10-29-20-26-27#docs test=tests/selftest.sh::selftest doc=README.md prompt=prompts/docs.md evidence=docs/audits/code-factory-docs-2026-10-29-20-26-27.md witness=none:source-and-local-scheduler-db-only verdict=none:open-finding commit=7ee8d7bf6e703870bcd59fab78e9e86fd33d0e1a memory=none:unresolved-namespace
+ch:trace row=CF-005 spec=docs/PRD-code-factory.md#requirements wave=code-factory-docs-2026-10-29-20-26-27#docs test=tests/selftest.sh::selftest doc=README.md prompt=prompts/docs.md evidence=docs/audits/code-factory-docs-2026-10-29-20-26-27.md witness=none:source-and-local-scheduler-db-only verdict=none:open-finding commit=f69f5b6fab098109c6d6d4869e3f21b9f7eda646 memory=none:unresolved-namespace
 
 STATUS: PASS
 TIER: T4 -- queried the real local scheduler SQLite project inventory and ran the repository selftest
