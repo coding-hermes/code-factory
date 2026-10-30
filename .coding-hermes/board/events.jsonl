@@ -23,3 +23,4 @@
 {"id": 23, "timestamp": "2026-10-30T06:10:28.418759+00:00", "event_type": "task_created", "task_id": "CF-023", "actor": "foreman", "detail": "{\"id\":\"CF-023\",\"status\":\"pending\"}", "tick_number": null}
 {"id": 24, "timestamp": "2026-10-30T06:20:02.495466+00:00", "event_type": "task_updated", "task_id": "CF-017", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}", "tick_number": null}
 {"id": 25, "timestamp": "2026-10-30T06:20:02.542711+00:00", "event_type": "audit", "task_id": "CF-017", "actor": "dispatcher", "detail": "Direct Bankai work started in isolated docs worktree while scheduler remains enabled; current scheduler has no live Code Factory tick and control-host load is above the 20 gate. No live machine or secret provisioning.", "tick_number": null}
+{"id": 26, "timestamp": "2026-10-30T06:33:30.518091+00:00", "event_type": "task_completed", "task_id": "CF-017", "actor": "foreman", "detail": "{\"status\":\"complete\"}", "tick_number": null}
