@@ -8,7 +8,7 @@ and without a human in the loop.
 
 | ID | Requirement | Verified by |
 |---|---|---|
-| CF-101 | A node is created by one command from a project + repo + harness triple. | `project-node.sh --project X --repo Y --harness Z` exits 0 and writes `node.json`. |
+| CF-101 | A node is created by one command from a project + repo + harness triple. | `node-create.sh --project X --repo Y --harness Z` stages the node-side scripts, runs `project-node.sh --apply`, and then invokes `verify-node.sh --artifact ~/.node/node.json`; live success remains an external acceptance gate. |
 | CF-102 | Every layer reports `PASS`/`FAIL` with the value it measured. | `--check` output; a fixture in `tests/selftest.sh` proves FAIL is reachable. |
 | CF-103 | Creation is idempotent; a second run changes nothing. | Run twice; second run prints `unchanged` per layer and exits 0. |
 | CF-104 | No root, no apt: all artifacts user-space under `$HOME`. | The ladder runs as the agent uid; a `sudo`/`apt` call is a test failure. |

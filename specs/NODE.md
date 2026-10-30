@@ -39,6 +39,33 @@ the manifest to know where the artifacts are.
 - **N-5** A node refuses to start work below the disk floor, and says the number.
 - **N-6** Destroying the agent destroys the node; the scripts must rebuild it exactly.
 
+## Script boundary and manifest mapping
+
+`scripts/project-node.sh` is the node-side entry point. `--check` runs the layers without writing
+the manifest; it may create `$HOME/.node` as the state directory. `--apply` writes the manifest only
+after the adapter check, bus identity check, and repository check have all passed. The adapter must
+print a measured `PASS  version` line; that value is copied into `harness.version`. An existing
+manifest is preserved byte-for-byte on a second apply so the created timestamp does not defeat N-2.
+
+`--node-id` (or `NODE_ID`) supplies `node_id`; `node-create.sh` passes the bunker agent id here.
+The bus fields are `CRIER_AGENT_ID` (falling back to the node id) and `CRIER_BASE` (falling back to
+`CRIER_URL`). The identity file must already exist at `$HOME/.node/crier.json`, be mode 600, and be
+provisioned through an approved secure bundle process. The checked-in scripts do not create a crier
+pull worker or transfer credentials, so that part of layer 30 remains an external precondition and
+must stay **BLOCKED / NOT VERIFIED** until measured.
+
+`scripts/node-create.sh` is the control-host orchestrator for the project + repo + harness triple:
+it reuses or spawns an agent, stages the node scripts, runs `project-node.sh --apply` with the
+validated values, then calls `scripts/verify-node.sh` with the node manifest as the required
+artifact. It stops on staging or provisioning failure and never reports a created node after a
+failed layer. The live bunker path is not a local self-test; absence of a configured bunker is
+**NOT VERIFIED / BLOCKED**, not a successful creation.
+
+`scripts/verify-node.sh` is a control-host check. It requires `--artifact`, verifies agent exec,
+HTTP status 200, an explicit `auth_required:true` response, rejection of unauthenticated stats,
+and equality between the node's reported SHA-256 and a SHA-256 recomputed from pulled bytes.
+Unknown HTTP/auth outcomes and digest mismatches are FAIL, never WARN.
+
 ## Disk floor
 
 Measured footprint per repo node: ~1.5 GB (97 MB repo + 656 MB module cache + ~520 MB build

@@ -44,7 +44,7 @@ The node contract requires architecture, disk at or above the configured floor, 
 ### Exact available entry points
 
 - Control-host qualification: `scripts/bunker-server-install.sh --check`.
-- Node creation orchestrator: `scripts/node-create.sh --project P --repo URL [--harness H] [--agent ID] [--ttl 6h] [--port 10800]`; requires `BUNKER_SERVER` in the environment. Defaults are harness `hermes`, TTL `6h`, port `10800`; if no agent ID is given, its code generates `node-P-<time>` and attempts to spawn/reuse it.
+- Node creation orchestrator: `scripts/node-create.sh --project P --repo URL [--harness H] [--agent ID] [--ref REF] [--ttl 6h] [--port 10800]`; requires `BUNKER_SERVER` in the environment. Defaults are harness `hermes`, ref `main`, TTL `6h`, port `10800`; if no agent ID is given, its code generates `node-P-<time>` and attempts to spawn/reuse it.
 - In-node provisioning/check: `project-node.sh --apply|--check --project P [--harness H] [--repo URL] [--ref main] [--port 10800]`. `scripts/node-create.sh` stages and calls this command remotely. `project-node.sh` defaults to ref `main`, port `10800`, disk floor 5 GB, and repo path `$HOME/repo`.
 - From the repository root, the script is also invoked as `scripts/project-node.sh --check --project P` (or `--apply` with the required arguments). The README's quick start's `--agent` argument is not accepted by `project-node.sh`; `--agent` belongs to `node-create.sh`.
 
@@ -56,8 +56,8 @@ Do not put a literal private URL, host, key, or ID into this public runbook. Sub
 
 - It does not transfer the required `$HOME/.node/crier.json` identity bundle or configure crier's pull worker.
 - It does not establish an inference credential. The Hermes installer only checks for a provider-key assignment in `~/.hermes/.env` and intentionally does not read the value; a Hermes turn without one fails with `No inference provider configured`.
-- `project-node.sh` writes a manifest only when all its layers pass, but its manifest generation currently embeds `repo` and `ref` inputs; `node-create.sh` invokes it without passing `--ref`, while the clone uses the default `main`. Review before relying on manifest provenance.
-- `node-create.sh` continues to verification after provisioning failure, and only logs spawn output to `/tmp/spawn.log`; a failed/incomplete node must be treated as quarantined, not scheduled.
+- `project-node.sh` writes a manifest only when all its layers pass and records the supplied node id, repo/ref, measured harness version, and bus identity/base. A second apply preserves the existing manifest bytes.
+- `node-create.sh` passes the explicit ref and node id, stops on staging/provisioning failure, and verifies the node manifest as the required artifact. A failed/incomplete node must be treated as quarantined, not scheduled.
 - It creates a node using a default `--ttl 6h`; no measured renewal/lease procedure is provided here.
 
 Accordingly, **do not use `scripts/node-create.sh` to create a production node until the secure bus identity and inference setup path is completed and the whole round trip is verified.** There is no separate checked-in renew, destroy, or rebuild command. Those lifecycle actions are **BLOCKED / NOT YET**; see §8.
@@ -109,7 +109,7 @@ Until the end-to-end path exists:
 
 1. Keep the scheduler target disarmed; do not dispatch real work through a bespoke poller and report it as proof of the intended system.
 2. On a designated test node only, verify node/harness state with `scripts/project-node.sh --check --project P` and the selected adapter's `--check`.
-3. Use `scripts/verify-node.sh --agent ID --server NAME --port PORT [--artifact PATH]` from the control host to check agent exec, gateway `/api/status`, unauthenticated stats rejection and (if supplied) a downloaded artifact's SHA-256 equality. Required environment: `BUNKER_SERVER` unless `--server` is supplied. This does **not** prove crier delivery, inference, task execution, result envelope, or scheduler admission.
+3. Use `scripts/verify-node.sh --agent ID --server NAME --port PORT --artifact PATH` from the control host to check agent exec, gateway `/api/status`, the explicit `auth_required:true` gate, unauthenticated stats rejection, and a downloaded artifact's SHA-256 equality. Required environment: `BUNKER_SERVER` unless `--server` is supplied. This does **not** prove crier delivery, inference, task execution, result envelope, or scheduler admission.
 4. Mark a node **verified for work** only after a real dispatch/result round trip has completed, the control host has recomputed each digest from received bytes, and the foreman independently accepts the work. No current repository command demonstrates that full criterion.
 
 Do not accept the node's self-reported digest as proof. A digest mismatch is FAIL and the node stays quarantined until investigation and a fresh passing `--check` plus round trip.
@@ -132,7 +132,7 @@ For this repository itself, the available local test is:
 tests/selftest.sh
 ```
 
-It checks shell syntax, a node-checker failure path, `fetch_verified` digest mismatch handling, literal credential assignments, and board JSONL parseability. It passed during runbook authoring. It is not a live node, gateway, crier, scheduler or end-to-end test.
+It checks shell syntax, the node-check failure path, contract alignment, hermetic creator/verifier pass and fail arms, `fetch_verified` digest handling, literal credential assignments, and board JSONL parseability. It passed during runbook authoring. It is not a live node, gateway, crier, scheduler or end-to-end test.
 
 ## 8. Failure recovery, renew, destroy, rebuild
 
@@ -176,8 +176,8 @@ No teardown script is currently tracked. Until one is added and verified, teardo
 | `scripts/bunker-server-install.sh --check` | Control host/client/server qualification; requires `BUNKER_SERVER` | Check-only; no server install operation. |
 | `scripts/project-node.sh --check --project P` | In-node layer checks | Creates `$HOME/.node`; requires crier URL and identity; not pure read-only. |
 | `scripts/project-node.sh --apply --project P --harness hermes --repo URL --ref REF` | In-node provisioning | Requires bus identity and provider/auth preconfiguration; do not use for production until secure path exists. |
-| `scripts/node-create.sh --project P --repo URL --harness hermes [--agent ID] [--ttl 6h] [--port 10800]` | Control-host spawn/stage/provision/verify orchestrator | Incomplete: no secure bus bundle, no full lifecycle or round trip. |
-| `scripts/verify-node.sh --agent ID --server NAME --port 10800 [--artifact PATH]` | Gateway/auth and optional artifact byte digest checks | Does not verify crier, scheduler, inference, or task completion. |
+| `scripts/node-create.sh --project P --repo URL --harness hermes [--agent ID] [--ref REF] [--ttl 6h] [--port 10800]` | Control-host spawn/stage/provision/verify orchestrator | Incomplete: no secure bus bundle, no full lifecycle or round trip. |
+| `scripts/verify-node.sh --agent ID --server NAME --port 10800 --artifact PATH` | Gateway/auth and required artifact byte digest checks | Does not verify crier, scheduler, inference, or task completion. |
 | `scripts/harness/install-hermes.sh --check\|--apply` | Hermes adapter check/install/start | Must configure basic auth and inference key out of band; current check may fail if gateway is not already running. |
 | `scripts/harness/install-opencode.sh --check\|--apply` | OpenCode adapter check/refusal | `--apply` refuses until ladder is measured. |
 | `scripts/harness/install-claude-code.sh --check\|--apply` | Claude Code prerequisite check/refusal | `--apply` refuses until ladder is measured. |
