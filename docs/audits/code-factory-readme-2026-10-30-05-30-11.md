@@ -1,8 +1,8 @@
 # code-factory README audit — 2026-10-30 05:30:11
 
 Target: published `origin/main` at `b433e0d6f714615b361b3a02848cf250c5a79133`.
-Audit worktree: `/var/tmp/code-factory-readme-20261030-Clb0Zf`, detached from the published tip before this audit. The README was not edited.
-The scheduler-designated stand-in directory is not an independent checkout; the canonical repository is `/home/kara/code-factory`.
+Audit worktree: a clean detached worktree of the published tip before this audit. The README was not edited.
+The scheduler-designated stand-in directory is not an independent checkout; the canonical repository was used.
 
 ## Commands tested
 
