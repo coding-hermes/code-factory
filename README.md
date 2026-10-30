@@ -18,22 +18,20 @@ One bunker agent, one repo, one harness, one bus identity, one round-trip proof.
 # 1. can this host run the factory at all?
 scripts/bunker-server-install.sh --check
 
-# 2. inside a designated test node, check its current layers (this creates ~/.node)
-scripts/project-node.sh --check --project <project>
+# 2. what does a node look like right now (inside an agent)?
+./scripts/project-node.sh --check --agent <id>
 
-# 3. node creation is BLOCKED for production until bus identity and inference setup
-#    are implemented; see docs/OPERATIONS.md before attempting provisioning
+# 3. make one
+scripts/project-node.sh --project crier --agent <id> --repo git@… --harness hermes
 ```
 
 ## Layout
 
 ```
-docs/            DESIGN.md, PRD-code-factory.md, ACCEPTANCE-PLAN.md, OPERATIONS.md, THREAT-MODEL.md
+docs/            DESIGN.md, PRD-code-factory.md
 specs/           NODE.md (what a node is), ENVELOPE.md (dispatch/result), HARNESS.md (adapters)
-scripts/         bunker-server-install.sh, project-node.sh, verify-node.sh, lib.sh, boardctl
+scripts/         bunker-server-install.sh, project-node.sh, verify-node.sh, lib.sh
 scripts/harness/ install-<harness>.sh — one per foreign agent (opencode, claude-code, codex, aider, goose, pi-agent)
-skills/          code-factory-foreman/SKILL.md — board, admission, evidence and pacing contract
-prompts/         lane prompts; foreman loads the project skill above
 .coding-hermes/board/  tasks.jsonl (JSONL, git-tracked) + events.jsonl
 tests/           selftest.sh — proves the checkers FAIL when they should
 ```
@@ -60,13 +58,7 @@ tests/           selftest.sh — proves the checkers FAIL when they should
 | Scheduler → crier dispatch | **built, disarmed** — needs 2 env vars, 1 target row, `payload.text` |
 | Round trip through the node's own gateway | **not yet** — MDP-1 used a bespoke poller |
 
-See `.coding-hermes/board/tasks.jsonl` for the work items and their acceptance criteria. Use the
-repository board interface (`scripts/boardctl`); the command contract and current validation results
-are in [`docs/BOARD.md`](docs/BOARD.md). The PRD's falsifiable checks and real acceptance status are
-tracked in [`docs/ACCEPTANCE-PLAN.md`](docs/ACCEPTANCE-PLAN.md); operating steps and known blockers are
-in [`docs/OPERATIONS.md`](docs/OPERATIONS.md), and security assumptions/residual risks are in
-[`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md). Scheduler lane admission roots and cadence pins are in
-[`docs/SCHEDULER-ADMISSION.md`](docs/SCHEDULER-ADMISSION.md).
+See `.coding-hermes/board/tasks.jsonl` for the work items and their acceptance criteria.
 
 ## Running it against your own infrastructure
 
@@ -130,8 +122,8 @@ The core lane rows are defined in `scripts/load_lane_config.py`; the added famil
 listed in `scripts/add_family_lanes.py`. Each lane's prompt lives in `prompts/<lane>.md` and is
 loaded with `scripts/load_lane_config.py` — the file is the source of truth, not the database row.
 
-ch:trace row=CF-005 spec=docs/PRD-code-factory.md#requirements wave=code-factory-docs-2026-10-29-20-26-27#docs test=tests/selftest.sh::selftest doc=README.md prompt=prompts/docs.md evidence=docs/audits/code-factory-docs-2026-10-29-20-26-27.md witness=none:source-and-local-scheduler-db-only verdict=none:open-finding commit=none:open memory=none:unresolved-namespace
+ch:trace row=CF-005 spec=docs/PRD-code-factory.md#requirements wave=code-factory-docs-2026-10-29-20-26-27#docs test=tests/selftest.sh::selftest doc=README.md prompt=prompts/docs.md evidence=docs/audits/code-factory-docs-2026-10-29-20-26-27.md witness=none:source-and-local-scheduler-db-only verdict=none:open-finding commit=7ee8d7bf6e703870bcd59fab78e9e86fd33d0e1a memory=none:unresolved-namespace
 
 STATUS: PASS
 TIER: T4 -- queried the real local scheduler SQLite project inventory and ran the repository selftest
-EVIDENCE: sqlite3 "$HOME/.hermes/coding-hermes/scheduler.db" inventory query; bash tests/selftest.sh
+EVIDENCE: sqlite3 /home/kara/.hermes/coding-hermes/scheduler.db inventory query; bash tests/selftest.sh
