@@ -100,4 +100,10 @@ if python3 -B "$HERE/tests/disk-contract.py" DiskContract; then
 else
   say "  FAIL  disk contract"; fails=$((fails+1))
 fi
+say "14. check mode preserves empty and seeded HOME (hermetic local fixtures)"
+if python3 -B "$HERE/tests/check-purity.py" CheckPurity; then
+  say "  PASS  check purity contract"
+else
+  say "  FAIL  check purity contract"; fails=$((fails+1))
+fi
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

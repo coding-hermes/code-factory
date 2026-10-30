@@ -30,7 +30,29 @@ provisioning contract, not evidence of a deployed worker.
 | 40 repo | existing Git directory or shallow clone at requested branch/ref | dirty-repo warnings, cache provisioning, existing checkout remote/ref attestation |
 | 90 manifest | identity-checked atomic JSON write after layers pass | scheduler target registration, quarantine |
 
-`--check` does not create `.node`, reclaim space or write a manifest. `--apply` refuses an
+`--check` is read-only with respect to HOME on both success and failure: it must
+not create `.node` or any other file/directory, rewrite existing content, alter
+file types, permissions, ownership, links or modification metadata, reclaim
+space or publish a manifest. Observation may update access time (atime); that
+is explicitly excluded from the purity comparison. Repeated checks preserve
+the same HOME snapshot. Check-mode adapter probes must honor this boundary too;
+local fake adapters do not establish purity of a live third-party harness.
+Temporary probe logs belong in external scratch (`TMPDIR` outside HOME).
+
+An empty HOME cannot pass the existing bus-identity/repo prerequisites: check
+reports their named failures without creating the missing state. With seeded
+identity/repo and all fake prerequisites satisfied, the local control returns
+zero with `NODE: PASS`; removing only `CRIER_URL` returns nonzero with exactly
+`FAIL  crier_url`, preserving HOME in both cases. `tests/check-purity.py`
+(`CheckPurity`) snapshots root/hidden entries, bytes, types, modes, uid/gid,
+links, inode, size, mtime and ctime (not atime), and is executed by
+`tests/selftest.sh`. Its separate `PurityMutations` control runs runnable
+check-mode directory/file creation mutants in disposable source copies and
+requires both the fixture and full selftest to fail by assertion.
+
+Unlike check, `--apply` may create `.node` mode 700 after disk admission even if
+a later prerequisite fails; it may publish the manifest only after all layers
+pass. Disk admission/reclaim rules below remain unchanged. `--apply` refuses an
 existing manifest with mismatched project/repo origin/harness (also node id, ref,
 port, bus identity/base or repo path), malformed JSON or unsafe filesystem type.
 Reuse validation precedes adapter apply and clone operations. Identical re-apply

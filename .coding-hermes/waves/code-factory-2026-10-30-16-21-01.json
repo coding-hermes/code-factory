@@ -1,0 +1,17 @@
+{
+  "tick": "code-factory-2026-10-30-16-21-01",
+  "mode": "serial",
+  "selection_reason": "The lane's exactly-one-row contract limits this tick to CF-025. P0 live dispatch/inference rows require authorization or missing dependencies; P1 live sizing/cache/harness rows require remote targets; CF-022's local audit is already implemented and live policy writes remain gated. CF-025 has no dependency edges and its remaining local regression/spec obligations are independently actionable.",
+  "base_ref": "origin/feat/code-factory-bankai-20261030",
+  "base_sha": "9d8f0a064215627df81783e5fd8a2a20b05fe558",
+  "publication_boundary": "Integration branch only; main carries an older contract. Original stale/diverged supplied checkout and dirty main are preserved.",
+  "tasks": [{
+    "id": "CF-025",
+    "worktree": "../worktrees/code-factory-CF-025-162101",
+    "branch": "wt/CF-025-162101",
+    "model": "gpt-6.1-sol",
+    "provider": "openai-codex",
+    "status": "prepared",
+    "scope": "Read-only check-mode regression, semantic mutation, NODE specification alignment. No live operations, credentials or host cleanup."
+  }]
+}
