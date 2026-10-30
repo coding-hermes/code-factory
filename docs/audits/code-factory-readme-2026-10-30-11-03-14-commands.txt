@@ -1,16 +1,16 @@
 
 ### quickstart-bunker-check
-$ env -u BUNKER_SERVER HOME=/var/tmp/code-factory-readme-20261030-110314.R5aZQp bash scripts/bunker-server-install.sh --check
+$ env -u BUNKER_SERVER HOME=/var/tmp/code-factory-readme-20261030-110314.G1KJIP bash scripts/bunker-server-install.sh --check
 scripts/bunker-server-install.sh: line 14: BUNKER_SERVER: set BUNKER_SERVER to your bunker server name
 RC=1
 
 ### quickstart-project-node
-$ env -u BUNKER_SERVER -u CRIER_URL HOME=/var/tmp/code-factory-readme-20261030-110314.R5aZQp bash scripts/project-node.sh --check --project \<project\>
+$ env -u BUNKER_SERVER -u CRIER_URL HOME=/var/tmp/code-factory-readme-20261030-110314.G1KJIP bash scripts/project-node.sh --check --project \<project\>
 node provisioning — project=<project> harness=hermes host=karaHermes-mde-7840hs
 [00] preflight
   PASS  arch — x86_64 (Linux 7.0.0-38-generic)
-  PASS  disk — 118.0 GB free (floor 5 GB)
-  PASS  mem — 45417 MB
+  PASS  disk — 117.8 GB free (floor 5 GB)
+  PASS  mem — 46226 MB
   FAIL  crier_url — CRIER_URL unset — the node has nothing to connect to (export CRIER_URL=http://crier.example:8767)
 [10] base
   PASS  tool:python3 — /home/kara/.hermes/hermes-agent/venv/bin/python3
@@ -30,7 +30,7 @@ HERMES: FAIL (1)
   FAIL  crier_identity — absent — stage a bundle and re-run; a node without an identity is invisible
   FAIL  crier_base — unset — manifest cannot identify the bus
 [40] repo
-  FAIL  repo — /var/tmp/code-factory-readme-20261030-110314.R5aZQp/repo absent (pass --repo to clone)
+  FAIL  repo — /var/tmp/code-factory-readme-20261030-110314.G1KJIP/repo absent (pass --repo to clone)
 [90] manifest
   ..    manifest is written only when every layer passes
 
@@ -38,12 +38,13 @@ NODE: FAIL (5)
 RC=1
 
 ### selftest
-$ env HOME=/var/tmp/code-factory-readme-20261030-110314.R5aZQp bash tests/selftest.sh
+$ env HOME=/var/tmp/code-factory-readme-20261030-110314.G1KJIP bash tests/selftest.sh
 1. every script parses
   PASS  bash -n bunker-server-install.sh
   PASS  bash -n lib.sh
   PASS  bash -n node-create.sh
   PASS  bash -n project-node.sh
+  PASS  bash -n readme-audit-20261030-110314.sh
   PASS  bash -n verify-node.sh
   PASS  bash -n install-claude-code.sh
   PASS  bash -n install-hermes.sh
@@ -54,7 +55,7 @@ $ env HOME=/var/tmp/code-factory-readme-20261030-110314.R5aZQp bash tests/selfte
 test_named_check (__main__.NodeContract.test_named_check) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 0.101s
+Ran 1 test in 0.080s
 
 OK
   PASS  nonzero exit and anchored exact FAIL crier_url; no bootstrap decoy
@@ -82,7 +83,7 @@ test_named_check (__main__.NodeContract.test_named_check) ... ok
 test_verifier_auth_and_digest_fail_closed (__main__.NodeContract.test_verifier_auth_and_digest_fail_closed) ... ok
 
 ----------------------------------------------------------------------
-Ran 11 tests in 4.381s
+Ran 11 tests in 3.870s
 
 OK
 PASS local mutation named-failure-removed: control=0 mutant=1 assertion=test_named_check
@@ -96,7 +97,7 @@ MUTATIONS: PASS (7 local executable controls; no live proof)
   PASS  node contracts and mutation controls
 5. fetch_verified refuses a wrong digest
   PASS  correct digest accepted
-digest mismatch for file:///var/tmp/hermes-scratch/tmp.F2tsVubbYD/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03
+digest mismatch for file:///var/tmp/hermes-scratch/tmp.XuuMX8yMyZ/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03
   PASS  wrong digest refused
 6. no literal credential assignments
   PASS  none found
@@ -119,7 +120,7 @@ test_private_root_and_symlinks (__main__.Contract.test_private_root_and_symlinks
 test_untrusted_writes_denied (__main__.Contract.test_untrusted_writes_denied) ... ok
 
 ----------------------------------------------------------------------
-Ran 10 tests in 0.229s
+Ran 10 tests in 0.200s
 
 OK
 BUILD CONTRACT: PASS (10 tests; hermetic policy only)
@@ -143,7 +144,7 @@ test_restart_revocation_rotation_and_corruption (__main__.InferenceContract.test
 test_schema_and_override_denials (__main__.InferenceContract.test_schema_and_override_denials) ... ok
 
 ----------------------------------------------------------------------
-Ran 16 tests in 16.357s
+Ran 16 tests in 13.823s
 
 OK
   PASS  inference contract
@@ -151,35 +152,35 @@ SELFTEST: PASS
 RC=0
 
 ### configured-bunker-check
-$ env HOME=/var/tmp/code-factory-readme-20261030-110314.R5aZQp BUNKER_SERVER=your-bunker-server bash scripts/bunker-server-install.sh --check
+$ env HOME=/var/tmp/code-factory-readme-20261030-110314.G1KJIP BUNKER_SERVER=your-bunker-server bash scripts/bunker-server-install.sh --check
 bunker server: your-bunker-server
   PASS  bunker_client — /home/kara/.local/bin/bunker bunker 0.2.0
-  FAIL  bunker_config — missing (/var/tmp/code-factory-readme-20261030-110314.R5aZQp/.config/bunker/config.yaml) — the client has no server to talk to
+  FAIL  bunker_config — missing (/var/tmp/code-factory-readme-20261030-110314.G1KJIP/.config/bunker/config.yaml) — the client has no server to talk to
   FAIL  server_reachable — your-bunker-server did not answer: bunker: reading server "your-bunker-server"
   PASS  tool:python3 — /home/kara/.hermes/hermes-agent/venv/bin/python3
   PASS  tool:git — /usr/bin/git
   PASS  tool:curl — /usr/bin/curl
   PASS  tool:jq — /usr/bin/jq
-  PASS  disk — 117.9 GB free (floor 5 GB)
+  PASS  disk — 117.8 GB free (floor 5 GB)
 
 RESULT: FAIL (2)
 RC=1
 
 ### node-create-refusal
-$ env HOME=/var/tmp/code-factory-readme-20261030-110314.R5aZQp BUNKER_SERVER=your-bunker-server CRIER_URL=http://crier.example:8767 bash scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes
+$ env HOME=/var/tmp/code-factory-readme-20261030-110314.G1KJIP BUNKER_SERVER=your-bunker-server CRIER_URL=http://crier.example:8767 bash scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes
 node-create — project=myrepo harness=hermes server=your-bunker-server
-  ..    spawning node-myrepo-063148 (ttl 6h)
+  ..    spawning node-myrepo-064312 (ttl 6h)
   FAIL  spawn — bunker: server "your-bunker-server" not found in config
 RC=1
 
 ### hermes-check
-$ env HOME=/var/tmp/code-factory-readme-20261030-110314.R5aZQp bash scripts/harness/install-hermes.sh --check
+$ env HOME=/var/tmp/code-factory-readme-20261030-110314.G1KJIP bash scripts/harness/install-hermes.sh --check
   FAIL  inference_integration — UNIMPLEMENTED / BLOCKED: CF-002 host inference proxy and node-scoped identity required; node provider keys unsupported
 HERMES: FAIL (1)
 RC=1
 
 ### opencode-check
-$ env HOME=/var/tmp/code-factory-readme-20261030-110314.R5aZQp bash scripts/harness/install-opencode.sh --check
+$ env HOME=/var/tmp/code-factory-readme-20261030-110314.G1KJIP bash scripts/harness/install-opencode.sh --check
 harness: opencode (UNVERIFIED adapter)
   PASS  binary — /home/kara/.opencode/bin/opencode
   PASS  version — 1.18.29
@@ -190,7 +191,7 @@ OPENCODE: PASS
 RC=0
 
 ### claude-check
-$ env HOME=/var/tmp/code-factory-readme-20261030-110314.R5aZQp bash scripts/harness/install-claude-code.sh --check
+$ env HOME=/var/tmp/code-factory-readme-20261030-110314.G1KJIP bash scripts/harness/install-claude-code.sh --check
 harness: claude-code (UNVERIFIED adapter)
   FAIL  binary — absent
   PASS  node — /home/kara/.local/bin/node (v22.22.3)
@@ -248,4 +249,4 @@ ${TMPDIR
 $TTL
 
 ### scratch-home
-/var/tmp/code-factory-readme-20261030-110314.R5aZQp
+/var/tmp/code-factory-readme-20261030-110314.G1KJIP
