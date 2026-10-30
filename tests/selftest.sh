@@ -142,5 +142,12 @@ else
   say "  FAIL  missing dependency was not surfaced"; fails=$((fails+1))
 fi
 
+say "9. build/cache policy contract (hermetic, not live infrastructure)"
+if bash "$HERE/tests/build-contract.sh"; then
+  say "  PASS  build contract"
+else
+  say "  FAIL  build contract"; fails=$((fails+1))
+fi
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
