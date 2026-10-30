@@ -15,23 +15,27 @@ One bunker agent, one repo, one harness, one bus identity, one round-trip proof.
 ## Quick start
 
 ```bash
-# 1. can this host run the factory at all?
+# 1. Set BUNKER_SERVER to a configured bunker host, then check the control host.
+export BUNKER_SERVER=your-bunker-server
 scripts/bunker-server-install.sh --check
 
-# 2. what does a node look like right now (inside an agent)?
-./scripts/project-node.sh --check --agent <id>
+# 2. Inside a designated test node, check its current layers (this creates ~/.node).
+#    Set CRIER_URL first if the node should verify bus reachability.
+export CRIER_URL=http://crier.example:8767
+scripts/project-node.sh --check --project <project>
 
-# 3. make one
-scripts/project-node.sh --project crier --agent <id> --repo git@… --harness hermes
+# 3. Node creation is BLOCKED for production until bus identity and inference setup
+#    are implemented; see docs/OPERATIONS.md before attempting provisioning.
 ```
 
 ## Layout
 
 ```
-docs/            DESIGN.md, PRD-code-factory.md
+docs/            DESIGN.md, PRD-code-factory
 specs/           NODE.md (what a node is), ENVELOPE.md (dispatch/result), HARNESS.md (adapters)
 scripts/         bunker-server-install.sh, project-node.sh, verify-node.sh, lib.sh
-scripts/harness/ install-<harness>.sh — one per foreign agent (opencode, claude-code, codex, aider, goose, pi-agent)
+scripts/harness/ measured adapters: install-hermes.sh; checks also exist for claude-code and opencode
+                (codex, aider, goose and pi-agent adapters are not shipped)
 .coding-hermes/board/  tasks.jsonl (JSONL, git-tracked) + events.jsonl
 tests/           selftest.sh — proves the checkers FAIL when they should
 ```
@@ -51,19 +55,25 @@ tests/           selftest.sh — proves the checkers FAIL when they should
 
 | Piece | State |
 |---|---|
-| Hermes in a bunker + HTTP gateway over tailnet | **works** — 32 s install, `/api/status` 200, 133 JSON-RPC methods |
-| Repo clone + build in a node | **works** for public https; private needs a deploy key |
+| Hermes in a bunker + HTTP gateway over tailnet | **not yet verified in this repo** — historical measurement: 32 s install, `/api/status` 200, 133 JSON-RPC methods; no current runnable artifact is committed |
+| Repo clone + build in a node | **works for public https** in the measured path; private repositories need a deploy key |
 | Node inference credential | **missing** — a turn dies at `No inference provider configured` |
 | crier identity in a node | **missing** — no `~/.node/crier.json` yet |
 | Scheduler → crier dispatch | **built, disarmed** — needs 2 env vars, 1 target row, `payload.text` |
 | Round trip through the node's own gateway | **not yet** — MDP-1 used a bespoke poller |
 
-See `.coding-hermes/board/tasks.jsonl` for the work items and their acceptance criteria.
+See `.coding-hermes/board/tasks.jsonl` for the work items and their acceptance criteria. Use the
+repository board interface (`scripts/boardctl`); the command contract and current validation results
+are in [`docs/BOARD.md`](docs/BOARD.md). The PRD's falsifiable checks and real acceptance status are
+tracked in [`docs/ACCEPTANCE-PLAN.md`](docs/ACCEPTANCE-PLAN.md); operating steps and known blockers are
+in [`docs/OPERATIONS.md`](docs/OPERATIONS.md), and security assumptions/residual risks are in
+[`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md). Scheduler lane admission roots and cadence pins are in
+[`docs/SCHEDULER-ADMISSION.md`](docs/SCHEDULER-ADMISSION.md).
 
 ## Running it against your own infrastructure
 
-This repo carries no endpoints, hostnames or credentials. Three environment variables and one
-harness are all it assumes:
+This repo carries no endpoints, hostnames or credentials. Two environment variables and one
+harness are documented here; the provider credential is a separate file-based prerequisite:
 
 ```bash
 export CRIER_URL=http://crier.example:8767     # your message bus
@@ -122,8 +132,8 @@ The core lane rows are defined in `scripts/load_lane_config.py`; the added famil
 listed in `scripts/add_family_lanes.py`. Each lane's prompt lives in `prompts/<lane>.md` and is
 loaded with `scripts/load_lane_config.py` — the file is the source of truth, not the database row.
 
-ch:trace row=CF-005 spec=docs/PRD-code-factory.md#requirements wave=code-factory-docs-2026-10-29-20-26-27#docs test=tests/selftest.sh::selftest doc=README.md prompt=prompts/docs.md evidence=docs/audits/code-factory-docs-2026-10-29-20-26-27.md witness=none:source-and-local-scheduler-db-only verdict=none:open-finding commit=f69f5b6fab098109c6d6d4869e3f21b9f7eda646 memory=none:unresolved-namespace
+ch:trace row=CF-005 spec=docs/PRD-code-factory.md#requirements wave=code-factory-readme-2026-10-30-08-47-09#readme test=tests/selftest.sh::selftest doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-08-47-09.md witness=none:source-and-local-probe-only verdict=none:open-finding commit=none:open memory=none:unresolved-namespace
 
-STATUS: PASS
-TIER: T4 -- queried the real local scheduler SQLite project inventory and ran the repository selftest
-EVIDENCE: sqlite3 /home/kara/.hermes/coding-hermes/scheduler.db inventory query; bash tests/selftest.sh
+STATUS: PARTIAL
+TIER: T4 -- executed the published README commands in a fresh clone and read the clone's files and probe output back; no live bunker, crier or gateway boundary was available
+EVIDENCE: docs/audits/code-factory-readme-2026-10-30-08-47-09.md
