@@ -103,11 +103,21 @@ want graded.
 
 ## The lanes
 
-Fourteen scheduler projects make up this repo's lane family: the root foreman, ten operating
-lanes, and three QA lanes. The 13 satellite projects are nested under `code-factory` (the
-scheduler's `projects.parent`); the root foreman has no parent. The list below is the shipped
-lane family; verify the live namespace, admission mode, and workdir with the scheduler's
-project inventory before relying on a current deployment count.
+The table below documents 14 shipped lane rows: the root foreman, ten operating lanes, and
+three QA lanes. The 13 satellite rows are nested under `code-factory` in the documented
+`scheduler.projects.parent` relationship; the root foreman has no parent. This is a shipped
+documentation table, not a live scheduler inventory or enabled/disabled count; verify the live
+namespace, admission mode, workdir, and enabled state with the scheduler's project inventory
+before making deployment claims.
+
+Prompt mapping is by lane family, not by full project name: `code-factory` (the root lane) uses
+`prompts/foreman.md`; `code-factory-docs`, `code-factory-readme`, `code-factory-releng`,
+`code-factory-perf`, `code-factory-review`, `code-factory-pm`, `code-factory-dogfood`,
+`code-factory-sync`, and `code-factory-duckbrain` use their matching short-name prompts. The
+three added QA lanes (`code-factory-docs-qa`, `code-factory-readme-qa`, and
+`code-factory-releng-qa`) share `prompts/qa.md`; the core `code-factory-qa` row also uses that
+shared prompt. The shipped prompt tree therefore has 11 prompt files for the 14 documented rows,
+rather than one `prompts/<lane>.md` file per lane.
 
 | Lane | Job | Admission |
 |---|---|---|
@@ -126,9 +136,12 @@ project inventory before relying on a current deployment count.
 | `code-factory-readme-qa` | QA for the README lane | cooldown |
 | `code-factory-releng-qa` | QA for the release lane | cooldown |
 
-The core lane rows are defined in `scripts/load_lane_config.py`; the added family rows are
-listed in `scripts/add_family_lanes.py`. Each lane's prompt lives in `prompts/<lane>.md` and is
-loaded with `scripts/load_lane_config.py` — the file is the source of truth, not the database row.
+The six core lane rows are defined and loaded by `scripts/load_lane_config.py`: `code-factory`,
+`code-factory-qa`, `code-factory-pm`, `code-factory-dogfood`, `code-factory-sync`, and
+`code-factory-duckbrain`. The other eight family rows are defined and loaded by the `LANES`
+table in `scripts/add_family_lanes.py`: docs, docs-qa, readme, readme-qa, releng, releng-qa,
+perf, and review. Both loaders read the short-name prompt files from `prompts/`; neither loader
+implies a `prompts/<lane>.md` file for every full scheduler project name.
 
 ch:trace row=CF-005 spec=docs/PRD-code-factory.md#requirements wave=code-factory-docs-2026-10-29-20-26-27#docs test=tests/selftest.sh::selftest doc=README.md prompt=prompts/docs.md evidence=docs/audits/code-factory-docs-2026-10-29-20-26-27.md witness=none:source-and-local-scheduler-db-only verdict=none:open-finding commit=none:open memory=none:unresolved-namespace
 
