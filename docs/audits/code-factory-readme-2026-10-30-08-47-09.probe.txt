@@ -3,13 +3,13 @@
 $ BUNKER_SERVER=your-bunker-server scripts/bunker-server-install.sh --check
 bunker server: your-bunker-server
   PASS  bunker_client — /usr/local/bin/bunker bunker 0.2.0
-  FAIL  bunker_config — missing (/var/tmp/cf-readme-literal-home-dn0Hjf/.config/bunker/config.yaml) — the client has no server to talk to
+  FAIL  bunker_config — missing (/var/tmp/cf-readme-rerun-home-E9rfgi/.config/bunker/config.yaml) — the client has no server to talk to
   FAIL  server_reachable — your-bunker-server did not answer: bunker: reading server "your-bunker-server"
   PASS  tool:python3 — /usr/bin/python3
   PASS  tool:git — /usr/bin/git
   PASS  tool:curl — /usr/bin/curl
   PASS  tool:jq — /usr/bin/jq
-  PASS  disk — 215.8 GB free (floor 5 GB)
+  PASS  disk — 215.6 GB free (floor 5 GB)
 
 RESULT: FAIL (2)
 EXIT=1
@@ -19,8 +19,8 @@ $ CRIER_URL=http://crier.example:8767 ./scripts/project-node.sh --check --projec
 node provisioning — project=demo harness=hermes host=karaHermes-mde-7840hs
 [00] preflight
   PASS  arch — x86_64 (Linux 7.0.0-38-generic)
-  PASS  disk — 215.8 GB free (floor 5 GB)
-  PASS  mem — 45305 MB
+  PASS  disk — 215.6 GB free (floor 5 GB)
+  PASS  mem — 45165 MB
   FAIL  reach:http://crier.example:8767/health — -> 000000
   PASS  reach:https://pypi.org/simple/ — 200
 [10] base
@@ -43,7 +43,7 @@ HERMES: FAIL (3)
 [30] bus
   FAIL  crier_identity — absent — stage a bundle and re-run; a node without an identity is invisible
 [40] repo
-  FAIL  repo — /var/tmp/cf-readme-literal-home-dn0Hjf/repo absent (pass --repo to clone)
+  FAIL  repo — /var/tmp/cf-readme-rerun-home-E9rfgi/repo absent (pass --repo to clone)
 [90] manifest
   ..    manifest is written only when every layer passes
 
@@ -54,13 +54,13 @@ EXIT=1
 $ CRIER_URL=http://crier.example:8767 BUNKER_SERVER=your-bunker-server scripts/bunker-server-install.sh --check
 bunker server: your-bunker-server
   PASS  bunker_client — /usr/local/bin/bunker bunker 0.2.0
-  FAIL  bunker_config — missing (/var/tmp/cf-readme-literal-home-dn0Hjf/.config/bunker/config.yaml) — the client has no server to talk to
+  FAIL  bunker_config — missing (/var/tmp/cf-readme-rerun-home-E9rfgi/.config/bunker/config.yaml) — the client has no server to talk to
   FAIL  server_reachable — your-bunker-server did not answer: bunker: reading server "your-bunker-server"
   PASS  tool:python3 — /usr/bin/python3
   PASS  tool:git — /usr/bin/git
   PASS  tool:curl — /usr/bin/curl
   PASS  tool:jq — /usr/bin/jq
-  PASS  disk — 215.8 GB free (floor 5 GB)
+  PASS  disk — 215.3 GB free (floor 5 GB)
 
 RESULT: FAIL (2)
 EXIT=1
@@ -68,7 +68,7 @@ EXIT=1
 === own-infrastructure node create ===
 $ CRIER_URL=http://crier.example:8767 BUNKER_SERVER=your-bunker-server scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes
 node-create — project=myrepo harness=hermes server=your-bunker-server
-  ..    spawning node-myrepo-051334 (ttl 6h)
+  ..    spawning node-myrepo-052146 (ttl 6h)
   FAIL  spawn — bunker: server "your-bunker-server" not found in config
 EXIT=1
 
@@ -89,7 +89,7 @@ $  bash tests/selftest.sh
   PASS  report contains FAIL rows
 3. fetch_verified refuses a wrong digest
   PASS  correct digest accepted
-digest mismatch for file:///var/tmp/hermes-scratch/tmp.Xzg8OfusiB/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03
+digest mismatch for file:///var/tmp/hermes-scratch/tmp.v65ZzolkSB/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03
   PASS  wrong digest refused
 4. no literal credential assignments
   PASS  none found
