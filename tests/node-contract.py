@@ -76,6 +76,10 @@ exit 0
         )
         # Deterministic local resource observations, not measurements of a node.
         self.executable(
+            self.bin / "df",
+            "#!/bin/bash\nprintf '%s\\n' 'Filesystem 1024-blocks Used Available Capacity Mounted on' 'fixture 20000000 1 1048576 1% /'\n",
+        )
+        self.executable(
             self.bin / "awk",
             """#!/bin/bash
 if [[ "${*: -1}" == /proc/meminfo ]]; then echo 2048; else exec /usr/bin/awk "$@"; fi

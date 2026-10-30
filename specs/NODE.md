@@ -30,7 +30,7 @@ provisioning contract, not evidence of a deployed worker.
 | 40 repo | existing Git directory or shallow clone at requested branch/ref | dirty-repo warnings, cache provisioning, existing checkout remote/ref attestation |
 | 90 manifest | identity-checked atomic JSON write after layers pass | scheduler target registration, quarantine |
 
-`--check` can create `.node`, but does not write a manifest. `--apply` refuses an
+`--check` does not create `.node`, reclaim space or write a manifest. `--apply` refuses an
 existing manifest with mismatched project/repo origin/harness (also node id, ref,
 port, bus identity/base or repo path), malformed JSON or unsafe filesystem type.
 Reuse validation precedes adapter apply and clone operations. Identical re-apply
@@ -45,7 +45,7 @@ precondition, not a credential-transfer mechanism in these scripts.
 
 `scripts/node-create.sh --project P --repo URL --harness H` validates all required
 inputs before any Bunker operation, then spawns/reuses, stages scripts (including
-`node-contract.py`), invokes provisioning with shell-quoted validated values and
+`node-contract.py` and `disk-policy.py`), invokes provisioning with shell-quoted validated values and
 verifies the manifest. All transfers and provision failures stop creation.
 
 ### Supported inputs
@@ -103,9 +103,48 @@ recovery feature and does not widen the supported origin/ref grammar above.
 - Manifest publication requires all implemented layers to pass; identical apply
   is byte-idempotent. This is not a guarantee that mutable network installs can
   reproduce a node exactly.
-- Provisioning measures disk in GiB (default floor 5); refusal includes the free
-  space. Historical footprint estimates (~1.5 GB per repo node) are not capacity
-  measurements of this revision or enforceable runtime quotas.
+- Provisioning disk admission runs before state-directory creation, adapter
+  install, clone or manifest publication. `NODE_DISK_FLOOR` defaults to a
+  PROVISIONAL 5 GiB, not a freshly measured role floor. Its grammar is 1–9 ASCII
+  decimal digits, optionally followed by `.` and 1–9 digits; no sign, exponent,
+  whitespace or empty value. Zero is an explicit fixture/operator capacity-floor
+  override, NOT a measurement/parsing bypass. Exact integer byte/rational
+  comparison accepts equality; display rounding never decides admission.
+  `df -Pk -- HOME` under the C locale must exit zero within 10 seconds and return
+  exactly one valid POSIX data row with nonnegative integer KiB fields and
+  consistent totals. Malformed, failed or unknown observations refuse even at
+  floor zero. Output names exact available KiB, free GiB and configured floor GiB.
+  The observation is a point-in-time admission check, not a reservation or quota.
+- Only `--apply --reclaim-disposable` opts into reclamation, and only after a
+  valid below-floor observation. `--check` never reclaims, even with that flag.
+  Measure again after eligible reclamation (including an absent/empty namespace)
+  before admitting. Invalid floor/measurement never authorizes deletion.
+  Unsafe namespace or deletion failure refuses, even if space later increases.
+- Following STORAGE's reconstructable cache / ephemeral scratch classification,
+  the ONLY eligible namespace is `$HOME/.node/disposable-cache-v1`. It is an
+  explicitly enrolled, node-owned flat store of disposable opaque cache blobs,
+  not an existing general cache/job directory. A trusted producer/operator must
+  create it and `.node` as uid-owned mode 700 directories; this command never
+  creates/enrolls it or copies data into it. HOME must be uid-owned and not
+  group/world writable. All absolute HOME components are opened without following
+  symlinks; namespace directories must remain on HOME's device. Entries must be
+  single-link uid-owned mode 600 regular files named `cache-[A-Za-z0-9_-]{1,64}.bin`,
+  on the same device. At most 1024 entries; anything else refuses the entire
+  prevalidation with no deletion. No subdirectories, Git repos, links, special
+  files, credentials, manifests, job evidence or durable records are eligible.
+  Never put any of those in this namespace, even under an eligible blob name.
+  `.node/jobs`, repo clones, build trees and stale user homes remain untouched.
+  Reclamation uses descriptor-relative unlink, no recursive deletion, validates
+  every entry before deleting any and rechecks identity before each unlink.
+  Producers must take an exclusive flock on this directory too; lock contention
+  refuses. The account/code is trusted: this is not protection against a hostile
+  same-uid process that ignores the lock or mislabels valuable bytes. Partial
+  deletion after an I/O/race failure is possible; failure still denies admission.
+  Repeated reclamation of an unchanged empty namespace changes nothing.
+- Historical footprint estimates (~1.5 GB per repo node) remain historical, not
+  current measurements. Measured role sizing, broad build/job/clone reclamation,
+  live Bunker orphan homes/keys/users reporting and authorized reaping are still
+  UNVERIFIED / BLOCKED. This bounded local tranche does not complete CF-007.
 - Harness/bus/repo/check failure returns nonzero. No work-acceptance loop exists.
 - Dirty-repo handling, quarantine, lease/retry/ack and scheduler exclusion are
   planned external integration, not effects of these scripts.

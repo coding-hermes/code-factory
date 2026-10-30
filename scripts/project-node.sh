@@ -4,7 +4,7 @@
 # Runs on the agent, not on the control host (node-create.sh stages it).
 #
 #   project-node.sh --check   [--project P] [--harness hermes] [--repo URL] [--ref main]
-#   project-node.sh --apply   [same args]
+#   project-node.sh --apply   [same args] [--reclaim-disposable]
 #
 # Layers: 00 preflight, 10 base, 20 harness, 30 bus, 40 repo, 90 verify (verify is the
 # control host's job; here we only prove the node-side plumbing exists).
@@ -18,8 +18,9 @@ HARNESS="${NODE_HARNESS:-hermes}"
 REPO=""
 REF="${NODE_REF:-main}"
 PORT="${NODE_GATEWAY_PORT:-10800}"
-FLOOR="${NODE_DISK_FLOOR:-5}"
+FLOOR="${NODE_DISK_FLOOR-5}"
 MODE=""
+RECLAIM=0
 STATE="$HOME/.node"
 
 while [ $# -gt 0 ]; do
@@ -30,6 +31,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --check) MODE=check; shift ;;
     --apply) MODE=apply; shift ;;
+    --reclaim-disposable) RECLAIM=1; shift ;;
     --project) PROJECT="$2"; shift 2 ;;
     --node-id) NODE_ID="$2"; shift 2 ;;
     --harness) HARNESS="$2"; shift 2 ;;
@@ -39,7 +41,7 @@ while [ $# -gt 0 ]; do
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
-[ -z "$MODE" ] && { echo "usage: $0 --check|--apply [--project P] [--harness H] [--repo URL] [--ref R]"; exit 2; }
+[ -z "$MODE" ] && { echo "usage: $0 --check|--apply [--project P] [--harness H] [--repo URL] [--ref R] [--reclaim-disposable]"; exit 2; }
 case "$HARNESS" in hermes|opencode|claude-code) ;; *) echo "unsupported harness" >&2; exit 2 ;; esac
 [ -z "$PROJECT" ] && { echo "--project is required (a node belongs to exactly one project)"; exit 2; }
 BUS_AGENT_ID="${CRIER_AGENT_ID:-$NODE_ID}"
@@ -52,13 +54,19 @@ if [ "$MODE" = apply ]; then
   fi
 fi
 
-mkdir -p "$STATE" || { bad "state" "cannot create node state directory"; exit 1; }
 say "node provisioning — project=$PROJECT harness=$HARNESS host=$(hostname)"
 
 # ---------------------------------------------------------------- 00 preflight
 say "[00] preflight"
 arch=$(uname -m); ok "arch" "$arch ($(uname -sr))"
-require_disk "$HOME" "$FLOOR" || true
+disk_args=("$HOME" "$FLOOR")
+if [ "$MODE" = apply ] && [ "$RECLAIM" -eq 1 ]; then
+  disk_args+=(--reclaim-disposable)
+fi
+require_disk "${disk_args[@]}" || { say "NODE: FAIL (disk admission)"; exit 1; }
+if [ "$MODE" = apply ] && [ ! -d "$STATE" ]; then
+  mkdir -m 700 "$STATE" || { bad "state" "cannot create node state directory"; exit 1; }
+fi
 mem=$(awk '/MemAvailable/{printf "%d", $2/1024}' /proc/meminfo)
 [ "${mem:-0}" -ge 1024 ] && ok "mem" "${mem} MB" || bad "mem" "${mem} MB < 1024"
 CRIER="${CRIER_URL:-}"

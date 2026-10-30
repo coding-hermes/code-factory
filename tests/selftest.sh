@@ -94,4 +94,10 @@ if python3 -B "$HERE/tests/lane-contract.py"; then
 else
   say "  FAIL  lane census contract"; fails=$((fails+1))
 fi
+say "13. precise pre-install disk admission and bounded opt-in reclaim (local fixtures)"
+if python3 -B "$HERE/tests/disk-contract.py" DiskContract; then
+  say "  PASS  disk contract and behavioral refusal mutation"
+else
+  say "  FAIL  disk contract"; fails=$((fails+1))
+fi
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

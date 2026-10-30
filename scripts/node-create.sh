@@ -58,6 +58,9 @@ fi
 if ! "$b" cp "$HERE/node-contract.py" "$AGENT:node-scripts/node-contract.py" --server "$SERVER" >/dev/null 2>&1; then
   bad "stage_contract" "copy failed"; exit 1
 fi
+if ! "$b" cp "$HERE/disk-policy.py" "$AGENT:node-scripts/disk-policy.py" --server "$SERVER" >/dev/null 2>&1; then
+  bad "stage_disk_policy" "copy failed"; exit 1
+fi
 if ! "$b" cp "$HERE/lib.sh" "$AGENT:node-scripts/lib.sh" --server "$SERVER" >/dev/null 2>&1; then
   bad "stage_lib" "copy failed"; exit 1
 fi
