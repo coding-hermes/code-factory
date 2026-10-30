@@ -83,6 +83,11 @@ here, and any new field is added to this spec first.
 
 ## Correlation and idempotency
 
+[STORAGE](STORAGE.md#durable-acceptance-and-trust) defines off-worker authoritative
+acceptance records and trusted artifact expectations. After host loss, pending
+dispatches without accepted terminal evidence remain UNKNOWN until reconciled;
+neither Git reclone nor a local job journal proves delivery or safe replay.
+
 - `corr_id` is the scheduler's join key; `dispatch_id` is the node's.
 - Every dispatch carries an `idempotency_key`; a redelivered message must be recognised and the
   previous result returned rather than the work being done twice.

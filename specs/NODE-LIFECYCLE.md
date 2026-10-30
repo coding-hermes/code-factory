@@ -318,6 +318,11 @@ tested. Never equate “same agent name” with same node identity or successful
 
 ## 10. Failure quarantine and recovery
 
+[STORAGE](STORAGE.md#recovery-protocol) extends this design with durable authority,
+retained immutable commits, independent artifact expectations and pending-work
+reconciliation. [The local proof](../docs/STORAGE-RECOVERY.md) simulates scratch
+loss/reclone only; it does not implement lifecycle rebuild or certify host loss.
+
 | Failure | Required action |
 |---|---|
 | Host/server identity mismatch, unsupported profile, target capability unknown | Fail preflight; no mutation; preserve sanitized evidence. |

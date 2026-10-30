@@ -89,6 +89,10 @@ to a gateway or validate a result envelope.
 
 ## Laws and failure semantics
 
+Storage classification, retained immutable commits and host-loss reconciliation
+are defined by [STORAGE](STORAGE.md). Its local fixture is not an installer
+recovery feature and does not widen the supported origin/ref grammar above.
+
 - No root or provider keys on nodes. CF-002 supplies a host-local loopback proxy
   and scoped service-token enforcement (HARNESS.md#host-only-inference-custody).
   Deployment, node adapter, token issuance/delivery and transport integration are

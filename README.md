@@ -88,6 +88,11 @@ unimplemented / blocked; the Hermes adapter now refuses before installation or g
 
 ## Contributing
 
+Storage and host-loss design: [specs/STORAGE.md](specs/STORAGE.md) compares Git
+reclone, Storage Box/NAS and Kubernetes PVs; [docs/STORAGE-RECOVERY.md](docs/STORAGE-RECOVERY.md)
+documents the executable local loss/reclone proof and its limits. No live storage
+or production recovery is provisioned or certified by that fixture.
+
 - `tests/selftest.sh` must pass, and any new check needs a fixture proving it can FAIL.
 - A spec change and the script change it implies belong in the same commit.
 - Board rows: append only, `.coding-hermes/board/tasks.jsonl`.

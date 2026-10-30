@@ -27,9 +27,10 @@ is an additional execution mode, not a replacement for Crier dispatch. Public
 untrusted PRs use hosted isolated VMs with no private cache or infrastructure
 access; self-hosted untrusted execution is disabled in v1.
 
-CF-019 owns durable shared storage, artifact/log persistence backends, retention,
-backup and restore objectives. This spec requires evidence export interfaces but
-does not select those backends, create a shared mount, or resolve CF-019.
+[STORAGE](STORAGE.md) defines CF-019's durable records/artifact/log classification,
+host-loss recovery, default and shared-storage triggers. Backend procurement,
+retention and numeric backup/restore objectives remain owner decisions. This
+build spec does not select a backend or create a shared mount.
 
 ## Runner modes and support boundaries
 
@@ -236,8 +237,9 @@ lockfiles/tool versions, re-download verified inputs, rebuild cold remotely, and
 verify returned bytes on the control host. Cache outage may make a build slower;
 missing trusted dependencies or integrity provenance must fail, not downgrade
 security. Preserve dispatch idempotency and reconcile prior work per ENVELOPE;
-caches are never the only copy of results. CF-019 must resolve durable evidence
-availability before production teardown can be accepted.
+caches are never the only copy of results. Follow STORAGE's durable acceptance
+and recovery protocol before teardown; production evidence-store availability
+still requires separate qualification, not just the local recovery fixture.
 
 ## Dedicated service versus per-node caches
 

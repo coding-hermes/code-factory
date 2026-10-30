@@ -82,4 +82,10 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/inference-contract.py"; the
 else
   say "  FAIL  inference contract"; fails=$((fails+1))
 fi
+say "11. Git crash/reclone recovery (hermetic local simulation only)"
+if python3 -B "$HERE/tests/recovery-contract.py" RecoveryContract; then
+  say "  PASS  recovery contract"
+else
+  say "  FAIL  recovery contract"; fails=$((fails+1))
+fi
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

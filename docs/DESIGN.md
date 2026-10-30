@@ -62,6 +62,13 @@ digest proves byte consistency, not authentic dispatch association or safe conte
 
 ## 5. Failure model and evidence boundary
 
+[STORAGE](../specs/STORAGE.md) defines durable versus reconstructable/ephemeral
+state and host-loss recovery: retained full Git commits, local disposable scratch
+and caches, with authoritative records/accepted bytes outside the worker failure
+domain. [STORAGE-RECOVERY](STORAGE-RECOVERY.md) proves only local Git crash/reclone
+and independent trusted-digest checks. No production backend or installer recovery
+is supplied; pending work stays unknown until owner reconciliation.
+
 Implemented failures return nonzero: invalid creation input before remote work;
 unsafe artifact before shell probes; missing/uncertain auth, transfer/digest error;
 manifest identity mismatch/write failure; adapter refusal or other required layer
