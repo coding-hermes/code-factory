@@ -1,0 +1,26 @@
+{
+  "scheduler_tick_id": "code-factory-2026-10-30-08-47-08",
+  "mode": "serial",
+  "wave_budget": 12,
+  "row_limit": 1,
+  "reason": "Project lane and repo skill require exactly one row advanced per tick; serial override of generic multi-row wave.",
+  "board_census": {"rows":24,"complete":3,"pending":21},
+  "selected": "CF-005",
+  "selection": "P0 reopened source-safety row, no depends_on edges; previous implementation and quorum reviewed, revised acceptance remains unmet. CF-001/004 need live authorization; CF-002 host proxy is separate architecture; CF-020/023/024 have unmet dependencies.",
+  "base_ref": "origin/feat/code-factory-bankai-20261030",
+  "base_commit": "b2c315e",
+  "state": "awaiting_judge",
+  "workers": [{
+    "task_id": "CF-005",
+    "gitreins_task": "CF-005-REWORK-0847",
+    "worktree": "../worktrees/code-factory-CF-005-REWORK-0847",
+    "branch": "wt/CF-005-REWORK-0847",
+    "model": "gpt-6.1-sol",
+    "provider": "openai-codex",
+    "brief": "none:transient-worker-brief",
+    "session_id": "20261030_034911_a5a859",
+    "implementation_commit": "c1a51ae08b97be61ab15491836cdb0fce65c8407",
+    "exit_code": 0,
+    "state": "merged_awaiting_judge"
+  }]
+}
