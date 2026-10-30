@@ -1,7 +1,7 @@
 # code-factory README audit — 2026-10-30 05:30:11
 
 Target: published `origin/main` at `b433e0d6f714615b361b3a02848cf250c5a79133`.
-The audit ran in `/home/kara/worktrees/code-factory-readme-20261030-0530`, a clean worktree of that published tip. The README was not edited because the measured defects remain covered by open board rows CF-009, CF-010, CF-011, CF-012, CF-013, and CF-015. No new canonical row was filed.
+The audit ran in a clean worktree of that published tip. The README was not edited because the measured defects remain covered by open board rows CF-009, CF-010, CF-011, CF-012, CF-013, and CF-015. No new canonical row was filed for those defects; CF-024 was filed separately for a public-posture leak found by a path scan this sweep added.
 
 ## Commands tested literally
 
@@ -26,12 +26,23 @@ The README's Quick start, infrastructure example, selftest, and shipped harness 
 - CF-015 remains live: README says `Three environment variables and one harness`, but the example exports only `CRIER_URL` and `BUNKER_SERVER`; the provider credential is file-based in `~/.hermes/.env`, not a third environment variable.
 - The README's documented relative paths exist at the published tip and its fenced blocks are balanced. No release binary, rendered public README, live crier dispatch, node gateway round trip, or published release artifact was available; those surfaces remain unverified rather than being reported as failures.
 
+## New this sweep: public-posture path leak (CF-024)
+
+Earlier sweeps compared the README against the code but never scanned tracked files for the maintainer's own filesystem paths. A path scan finds three tracked files on the published tip that carry an absolute home path belonging to the maintainer's machine, which the repo's own rule forbids ("No secrets, no endpoints, no personal data — this repo is public"):
+
+`git grep -n '/home/' origin/main` returns six hits; three are legitimate placeholders (`specs/NODE.md`, `scripts/node-create.sh`, `scripts/project-node.sh` use `/home/<uid>`), and three are real leaks: `.coding-hermes/board/events.jsonl:6`, `.coding-hermes/board/tasks.jsonl:9` (inside the CF-009 reasoning), and `docs/audits/code-factory-readme-2026-10-29-21-37-19.md:6`.
+
+The fix is a text correction in all three files (`~` or a repo-relative path), not a history rewrite; the board rows are append-preserved, so the leaked text must be superseded by an appended `--note` plus a corrected artifact, never by rewriting an existing row.
+
+The same class exists in history and is deliberately out of this row's scope: published commit messages carry absolute paths too (for example the body of `cf2d9f6`, which names the maintainer's checkout twice). Scrubbing that means rewriting published history, which this lane does not propose; the durable fix is a commit-time check that refuses a staged diff or message containing an absolute home path. CF-024's acceptance criteria therefore bound themselves to the tree, not to git history.
+
 ch:trace row=CF-009 spec=README.md#quick-start wave=code-factory-readme-2026-10-30-05-30-11#readme test=tests/selftest.sh::selftest doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-05-30-11.md witness=none:placeholder-infrastructure-and-local-checkout-only verdict=none:open-finding commit=none:unfixed memory=/project/code-factory/readme-audit-2026-10-30
 ch:trace row=CF-010 spec=README.md#layout wave=code-factory-readme-2026-10-30-05-30-11#readme test=tests/selftest.sh::selftest doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-05-30-11.md witness=path@origin:scripts/harness verdict=none:open-finding commit=none:unfixed memory=/project/code-factory/readme-audit-2026-10-30
 ch:trace row=CF-011 spec=AGENTS.md#rules wave=code-factory-readme-2026-10-30-05-30-11#readme test=tests/selftest.sh::selftest doc=AGENTS.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-05-30-11.md witness=path@origin:AGENTS.md verdict=none:open-finding commit=none:unfixed memory=/project/code-factory/readme-audit-2026-10-30
 ch:trace row=CF-012 spec=none:no-doctrine-exists wave=code-factory-readme-2026-10-30-05-30-11#readme test=tests/selftest.sh::selftest doc=docs/traceability-doctrine.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-05-30-11.md witness=none:no-doctrine-file-exists verdict=none:open-finding commit=none:unfixed memory=/project/code-factory/readme-audit-2026-10-30
 ch:trace row=CF-013 spec=README.md#status wave=code-factory-readme-2026-10-30-05-30-11#readme test=scripts/harness/install-hermes.sh::check doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-05-30-11.md witness=none:no-live-bunker-or-gateway-available verdict=none:open-finding commit=none:unfixed memory=/project/code-factory/readme-audit-2026-10-30
 ch:trace row=CF-015 spec=README.md#running-it-against-your-own-infrastructure wave=code-factory-readme-2026-10-30-05-30-11#readme test=tests/selftest.sh::selftest doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-05-30-11.md witness=path@origin:README.md verdict=none:open-finding commit=none:unfixed memory=/project/code-factory/readme-audit-2026-10-30
+ch:trace row=CF-024 spec=AGENTS.md#conventions wave=code-factory-readme-2026-10-30-05-30-11#readme test=tests/selftest.sh::selftest doc=docs/audits/code-factory-readme-2026-10-30-05-30-11.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-05-30-11.md witness=path@origin:docs/audits/code-factory-readme-2026-10-29-21-37-19.md verdict=none:open-finding commit=none:unfixed memory=/project/code-factory/readme-audit-2026-10-30
 
 STATUS: PASS
 TIER: T4 -- executed the published README commands in a clean published-tip worktree and read the repository files and command outputs back
