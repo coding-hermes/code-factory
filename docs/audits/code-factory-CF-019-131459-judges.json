@@ -1,0 +1,154 @@
+{
+  "task_id": "CF-019",
+  "tick": "code-factory-2026-10-30-13-14-59",
+  "implementation_commit": "3daa92c1fbf6a19eb83078733876c27ac5f49967",
+  "binding": "External coordinator captured unchanged HEAD and tracked source/config state around the serial split evaluations. Ephemeral evidence does not provide a native commit field or per-command working-directory attestation.",
+  "redaction": "Personal workstation paths replaced; original byte lengths and SHA-256 recorded. No evidence summaries truncated by this publisher.",
+  "expected_predicates": 2,
+  "collected_predicates": 2,
+  "passed_predicates": 1,
+  "unresolved_predicates": [
+    "runtime"
+  ],
+  "all_passed": false,
+  "results": [
+    {
+      "predicate": "docs",
+      "board_criteria": [
+        1,
+        2,
+        4
+      ],
+      "passed": true,
+      "raw_sha256": "195896d24dd0d05b84f572702787b0798a74f37ab36c933c4877964e8bd792c8",
+      "raw_bytes": 7074,
+      "evidence": {
+        "$schema": "https://gitreins.dev/schemas/evidence/v1.json",
+        "checks": [
+          {
+            "id": "criterion-1",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "Inspect only specs/STORAGE.md and docs/STORAGE-RECOVERY.md at implementation 3daa92c. Verify CF-019 criteria 1,2,4: comparison of Git reclone, Storage Box/NAS and PV/EKS explicitly addresses latency, availability, credentials, cost drivers, portability and failure domains; source, task state, artifacts, caches, logs and secrets classified durable/reconstructable/ephemeral; recommended default plus adoption triggers explicit, no provisioning claims. Report actual file/line evidence. Do not rerun tests for this document-only predicate; runtime criterion is evaluated separately.: Verified at HEAD=3daa92c (git log confirms 3daa92c1fbf6a19eb83078733876c27ac5f49967; working tree clean apart from untracked .gitreins/history/). (1) COMPARISON: specs/STORAGE.md:50 header '| Choice | Latency / availability | Credentials / trust | Cost drivers | Portability / failure domain |' with four rows \u2014 L52 Git reclone+local scratch (default) [G], L53 Hetzner Storage Box [H], L54 Operator NAS [N], L55 Kubernetes PV/EKS [K,A]. Each row explicitly fills all six dimensions: e.g. L53 latency 'Network round trips per operation; host bandwidth is shared and variable... No workspace latency or availability measured', credentials 'Sub-account confined to subdirectory... scoped identity/revocation', cost 'Capacity tier, snapshot changed blocks... Obtain quote; no invented price', portability/failure 'Several disks on one host, plus network/provider/account are correlated failure domains. Same-Box snapshots are not independent backups'; L55 'Local PV has node affinity; remote driver attach/topology/IOPS/throughput constrain recovery', 'Kubernetes RBAC, CSI controller IAM/secret custody', 'provisioned IOPS/throughput, snapshots, data transfer and regional replication', 'Delete reclaim policy can delete underlying storage... RWO is single-node mounting, not single-pod fencing'. (2) CLASSIFICATION: specs/STORAGE.md:27-29 defines durable/reconstructable/ephemeral; table L31-41 classifies Source L33 ('durable at approved origin; worker c[truncated]"
+          },
+          {
+            "id": "stage-tier1",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10"
+          },
+          {
+            "id": "stage-tier2",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "COMPLETE\n  \u2713 Inspect only specs/STORAGE.md and docs/STORAGE-RECOVERY.md at implementation 3daa92c. Verify CF-019 criteria 1,2,4: comparison of Git reclone, Storage Box/NAS and PV/EKS explicitly addresses latency, availability, credentials, cost drivers, portability and failure domains; source, task state, artifacts, caches, logs and secrets classified durable/reconstructable/ephemeral; recommended default plus adoption triggers explicit, no provisioning claims. Report actual file/line evidence. Do not rerun tests for this document-only predicate; runtime criterion is evaluated separately.: Verified at HEAD=3daa92c (git log confirms 3daa92c1fbf6a19eb83078733876c27ac5f49967; working tree clean apart from untracked .gitreins/history/). (1) COMPARISON: specs/STORAGE.md:50 header '| Choice | Latency / availability | Credentials / trust | Cost drivers | Portability / failure domain |' with four rows \u2014 L52 Git reclone+local scratch (default) [G], L53 Hetzner Storage Box [H], L54 Operator NAS [N], L55 Kubernetes PV/EKS [K,A]. Each row explicitly fills all six dimensions: e.g. L53 latency 'Network round trips per operation; host bandwidth is shared and variable... No workspace latency or availability measured', credentials 'Sub-account confined to subdirectory... scoped identity/revocation', cost 'Capacity tier, snapshot changed blocks... Obtain quote; no invented price', portability/failure 'Several disks on one host, plus network/provider/account are correlated failure domains. Same-Box snapshots are not independent backups'; L55 'Local PV has node affinity; remote driver attach/topology/IOPS/throughput constrain recovery', 'Kubernetes RBAC, CSI controller IAM/secret custody', 'provisioned IOPS/throughput, snapshots, data transfer and regional replication', 'Delete reclaim policy can delete underlying storage... RWO is single-node mounting, not single-pod fencing'. (2) CLASSIFICATION: specs/STORAGE.md:27-29 defines durable/reconstructable/ephemeral; table L31-41 classifies Source L33 ('durable at approved ori[truncated]"
+          }
+        ],
+        "command": "judge",
+        "generatedAt": "2026-10-30T13:27:31.506379+00:00",
+        "metadata": {
+          "checkCount": 3,
+          "criterionCount": 1,
+          "ephemeral": true,
+          "historyPersisted": false,
+          "redacted": true,
+          "redactionsApplied": false,
+          "truncated": true
+        },
+        "outcome": "pass",
+        "passed": true,
+        "producer": {
+          "name": "gitreins",
+          "version": "0.17.1"
+        },
+        "schemaVersion": "1.0",
+        "scope": "staged",
+        "subject": {
+          "ephemeral": true,
+          "taskId": "ephemeral:cf-019-storage-decision-predicates",
+          "title": "CF-019 storage decision predicates"
+        },
+        "summary": "Judge Result: ephemeral:cf-019-storage-decision-predicates\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 Inspect only specs/STORAGE.md and docs/STORAGE-RECOVERY.md at implementation 3daa92c. Verify CF-019 criteria 1,2,4: comparison of Git reclone, Storage Box/NAS and PV/EKS explicitly addresses latency, availability, credentials, cost drivers, portability and failure domains; source, task state, artifacts, caches, logs and secrets classified durable/reconstructable/ephemeral; recommended default plus adoption triggers explicit, no provisioning claims. Report actual file/line evidence. Do not rerun tests for this document-only predicate; runtime criterion is evaluated separately.: Verified at HEAD=3daa92c (git log confirms 3daa92c1fbf6a19eb83078733876c27ac5f49967; working tree clean apart from untracked .gitreins/history/). (1) COMPARISON: specs/STORAGE.md:50 header '| Choice | Latency / availability | Credentials / trust | Cost drivers | Portability / failure domain |' with four rows \u2014 L52 Git reclone+local scratch (default) [G], L53 Hetzner Storage Box [H], L54 Operator NAS [N], L55 Kubernetes PV/EKS [K,A]. Each row explicitly fills all six dimensions: e.g. L53 latency 'Network round trips per operation; host bandwidth is shared and variable... No workspace latency or availability measured', credentials 'Sub-account confined to subdirectory... scoped identity/revocation', cost 'Capacity tier, snapshot changed blocks... Obtain quote; no invented price', portability/failure 'Several disks on one host, plus network/provider/account are correlated failure domains. Same-Box snapshots are not independent backups'; L55 'Local PV has node affinity; remote driver attach/topology/IOPS/throughput constrain recovery', 'Kubernetes RBAC, CSI controller IAM/secret custody', 'provisioned IOPS/throughput, snapshots, data transfer and regional replication', 'D[truncated]"
+      }
+    },
+    {
+      "predicate": "runtime",
+      "board_criteria": [
+        3
+      ],
+      "passed": false,
+      "raw_sha256": "1f0a754d86a5772d389dffb47757f9d02597c0fd7b38677c8527e2fac048d534",
+      "raw_bytes": 1357,
+      "evidence": {
+        "$schema": "https://gitreins.dev/schemas/evidence/v1.json",
+        "checks": [
+          {
+            "id": "stage-tier1",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10"
+          },
+          {
+            "id": "stage-tier2",
+            "outcome": "fail",
+            "passed": false,
+            "summary": "INCOMPLETE\n\nCap exceeded: Iteration cap (30) reached (30.6 used). Increase max_iterations or split criteria."
+          }
+        ],
+        "command": "judge",
+        "generatedAt": "2026-10-30T13:34:27.532279+00:00",
+        "metadata": {
+          "checkCount": 2,
+          "criterionCount": 0,
+          "ephemeral": true,
+          "historyPersisted": false,
+          "redacted": true,
+          "redactionsApplied": false,
+          "truncated": false
+        },
+        "outcome": "fail",
+        "passed": false,
+        "producer": {
+          "name": "gitreins",
+          "version": "0.17.1"
+        },
+        "schemaVersion": "1.0",
+        "scope": "staged",
+        "subject": {
+          "ephemeral": true,
+          "taskId": "ephemeral:cf-019-executable-recovery-predicate",
+          "title": "CF-019 executable recovery predicate"
+        },
+        "summary": "Judge Result: ephemeral:cf-019-executable-recovery-predicate\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: FAIL\n  INCOMPLETE\n\nCap exceeded: Iteration cap (30) reached (30.6 used). Increase max_iterations or split criteria.\n\nOverall: FAIL \u2717"
+      }
+    }
+  ],
+  "monolithic_attempts": [
+    {
+      "directory": "96b34a6d",
+      "commit": "3daa92c1fbf6a19eb83078733876c27ac5f49967",
+      "passed": false,
+      "tier1": true,
+      "tier2": false,
+      "summary": "INCOMPLETE\n\nCap exceeded: Iteration cap (15) reached (15.8 used). Increase max_iterations or split criteria."
+    },
+    {
+      "directory": "c9a03625",
+      "commit": "3daa92c1fbf6a19eb83078733876c27ac5f49967",
+      "passed": false,
+      "tier1": true,
+      "tier2": false,
+      "summary": "INCOMPLETE\n\nCap exceeded: Iteration cap (30) reached (30.2 used). Increase max_iterations or split criteria."
+    }
+  ],
+  "prior_full_verdict": {
+    "directory": "8bfde864",
+    "commit": "3daa92c1fbf6a19eb83078733876c27ac5f49967",
+    "passed": true,
+    "tier1": true,
+    "tier2": true,
+    "evaluated_at": "2026-10-30T12:33:02.125945",
+    "raw_sha256": "219723e1fe87efd57ebc75f0427579a31674aa1ffe584812dddbb95b748683fa"
+  },
+  "disposition": "in_progress: retain independently observed local acceptance and earlier exact-commit PASS; do not label the newly capped evaluations a fresh PASS."
+}
