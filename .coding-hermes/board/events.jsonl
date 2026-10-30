@@ -20,3 +20,4 @@
 {"id": 20, "timestamp": "2026-10-30T05:57:38.540678+00:00", "event_type": "audit", "task_id": "CF-016", "actor": "dispatcher", "detail": "Direct Bankai wave 1 assigned to isolated worktree /home/kara/wt-CF-016 on branch wt/CF-016; no scheduler-side spawn while Bankai owns this project.", "tick_number": null}
 {"id": 21, "timestamp": "2026-10-30T06:04:04.477253+00:00", "event_type": "task_created", "task_id": "CF-022", "actor": "foreman", "detail": "{\"id\":\"CF-022\",\"status\":\"pending\"}", "tick_number": null}
 {"id": 22, "timestamp": "2026-10-30T06:09:22.449068+00:00", "event_type": "task_completed", "task_id": "CF-016", "actor": "foreman", "detail": "{\"status\":\"complete\"}", "tick_number": null}
+{"id": 23, "timestamp": "2026-10-30T06:10:28.418759+00:00", "event_type": "task_created", "task_id": "CF-023", "actor": "foreman", "detail": "{\"id\":\"CF-023\",\"status\":\"pending\"}", "tick_number": null}
