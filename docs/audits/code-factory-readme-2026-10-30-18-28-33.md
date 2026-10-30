@@ -1,52 +1,102 @@
-# code-factory README audit evidence
+# code-factory README audit — 2026-10-30 18:28 tick
 
-Publication boundary: `origin/main` at `cc0a1e473d63065875242ceabcc15b1f218857e3`, resolved with `git ls-remote --symref origin HEAD` and fetched before probing. The scheduler-designated workdir was a stand-in without repository files; probes ran from a fresh archive of the published tip with an isolated HOME. No README or source file was edited.
+Publication boundary: `origin/main` at `cc0a1e473d63065875242ceabcc15b1f218857e3`
+(`git rev-parse origin/main` after `git fetch`). The scheduler-designated workdir
+(`~/.hermes/stand-in/readme/code-factory`) holds tick artifacts only and no repository files, so
+every probe ran from a fresh `git archive origin/main` extraction in a scratch directory with an
+isolated `HOME`.
 
-## Commands tested
+Scope: follow every command in `README.md` literally, record where it fails, then correct the
+README so its status table and quick start stop promising what the code does not do. No script,
+spec or board row was changed.
 
-- `env HOME=<scratch> bash scripts/bunker-server-install.sh --check` -> rc 1; `BUNKER_SERVER` is required before the checker runs (`set BUNKER_SERVER to your bunker server name`). This reproduces the existing CF-009 finding.
-- `env HOME=<scratch> BUNKER_SERVER=your-bunker-server bash scripts/bunker-server-install.sh --check` -> rc 1; `RESULT: FAIL (2)` for missing bunker config and unreachable placeholder server. This is the documented-block configuration failure, not a new syntax finding.
-- `env HOME=<scratch> bash scripts/project-node.sh --check --project demo` -> rc 1; `NODE: FAIL (3)` for unset `CRIER_URL`, missing crier identity, and missing repo state. The published README uses this accepted command; the old unsupported `--agent` form is absent from the published tip, so CF-014 does not reproduce.
-- `env HOME=<scratch> bash tests/selftest.sh` -> rc 0; `SELFTEST: PASS`, `16/16 rows parse`.
-- `env HOME=<scratch> bash -n scripts/*.sh scripts/harness/*.sh tests/selftest.sh` -> rc 0.
-- `env HOME=<scratch> CRIER_URL=http://crier.example:8767 BUNKER_SERVER=your-bunker-server bash scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes` -> rc 1; `spawn — bunker: server "your-bunker-server" not found in config`. The placeholder path reaches argument parsing and fails at missing user infrastructure; no node was created.
-- `test -e docs/traceability-doctrine.md` -> rc 1; the repository-local doctrine path is absent. This reproduces CF-012.
-- Harness inventory from the published tree -> only `install-claude-code.sh`, `install-hermes.sh`, and `install-opencode.sh`; codex, aider, goose, and pi-agent installers are absent. This reproduces CF-010.
-- Board census from the published tree -> ids end at `CF-008` for the original CF family; `CF-108` is absent. This reproduces the AGENTS.md dead reference in CF-011.
-- Lane prompt inventory -> 11 prompt files exist; source shows `load_lane_config.py` handles 6 lane rows and `add_family_lanes.py` handles the added family rows. This reproduces CF-030's prompt/loader wording drift.
+## Commands tested (published tip, before the README fix)
 
-## Findings and re-triage
+| command | rc | result |
+|---|---|---|
+| `scripts/bunker-server-install.sh --check` (no `BUNKER_SERVER`) | 1 | `scripts/bunker-server-install.sh: line 14: BUNKER_SERVER: set BUNKER_SERVER to your bunker server name` — dies before any check |
+| `./scripts/project-node.sh --check --agent demo` (quick start step 2, literal shape) | 2 | `unknown arg: --agent` — the flag does not exist in `project-node.sh` |
+| `scripts/project-node.sh --project crier --agent demo --repo git@example.invalid:org/repo.git --harness hermes` (quick start step 3) | 2 | `unknown arg: --agent` — never reaches repo or infrastructure validation |
+| `./scripts/project-node.sh --check --project demo` (supported shape) | 1 | `NODE: FAIL (3)` — `crier_url` unset, `repo` absent, manifest written only when every layer passes. The checker runs and names each missing value |
+| `BUNKER_SERVER=your-bunker-server scripts/bunker-server-install.sh --check` | 1 | `RESULT: FAIL (2)` — missing bunker config and unreachable placeholder server; the checker runs |
+| `BUNKER_SERVER=your-bunker-server scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes` | 1 | `FAIL  spawn — bunker: server "your-bunker-server" not found in config`; argument parsing works, user infrastructure is absent |
+| `scripts/harness/install-hermes.sh --check` | 1 | `HERMES: FAIL (2)` — `FAIL port — nothing on :10800`, `FAIL inference_key — no provider key`. `PASS version` names the measured version string |
+| `bash tests/selftest.sh` | 0 | `SELFTEST: PASS` including `16/16 rows parse` |
+| `bash -n scripts/*.sh scripts/harness/*.sh tests/selftest.sh` | 0 | clean |
 
-The safe README command set produced no new finding class. Existing open rows CF-009, CF-010, CF-011, CF-012, CF-013, CF-015, and CF-030 cover the live published-tip defects. CF-014's old unsupported `--agent` premise is not present in the published README and should be re-triaged by its owner; this audit does not close the board row.
+Repository facts re-measured at the same tip:
 
-CF-009: the quick-start control-host check still fails before qualification when `BUNKER_SERVER` is unset.
-ch:trace row=CF-009 spec=none:repository-contract-absent wave=code-factory-readme-2026-10-30-18-28-33#readme test=scripts/bunker-server-install.sh::check doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=none:placeholder-infrastructure-and-fresh-archive-only verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-14-54-06
+- `scripts/harness/` contains exactly `install-claude-code.sh`, `install-hermes.sh`,
+  `install-opencode.sh`.
+- `scripts/node-create.sh` exists and is the control-host entry point; the README's Layout section
+  does not list it even though its own quick start calls it.
+- `test -e docs/traceability-doctrine.md` -> rc 1.
+- board census: 16 rows, ids `CF-001`…`CF-015` plus `CF-030`; `CF-108` (cited by `AGENTS.md`) is
+  absent.
+- environment variables referenced by the scripts: `BUNKER_SERVER`, `CRIER_URL` only.
+- `prompts/` holds 11 role files; `load_lane_config.py` configures 6 core lanes and
+  `add_family_lanes.py` 8 family lanes (6 + 8 = the 14 lanes the scheduler reports enabled), and
+  all three QA lanes load `qa.md`. The README's "`prompts/<lane>.md`" claim is false for the QA
+  lanes.
 
-CF-010: the layout still names four harness installers that are not shipped.
-ch:trace row=CF-010 spec=none:repository-contract-absent wave=code-factory-readme-2026-10-30-18-28-33#readme test=git-ls-tree::harness-inventory doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=path@origin:scripts/harness verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-14-54-06
+## Findings
 
-CF-011: AGENTS.md still points at absent row CF-108.
-ch:trace row=CF-011 spec=none:repository-contract-absent wave=code-factory-readme-2026-10-30-18-28-33#readme test=jq::board-id-census doc=AGENTS.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=path@origin:AGENTS.md verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-14-54-06
+Existing rows already own every defect class observed; no new canonical row was filed.
 
-CF-012: `docs/traceability-doctrine.md` is still absent.
-ch:trace row=CF-012 spec=none:repository-contract-absent wave=code-factory-readme-2026-10-30-18-28-33#readme test=test::docs-traceability-doctrine-exists doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=none:published-tip-path-absent verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-14-54-06
+- **CF-009** — quick start step 1 fails before checking when `BUNKER_SERVER` is unset. Fixed in
+  the README by exporting the variable in the command.
+- **CF-010** — Layout promised six harness installers, three shipped. Fixed: the shipped three are
+  named and the rest are marked documented-only (work item `CF-006`).
+- **CF-011** — `AGENTS.md` cites absent row `CF-108`. Still open; `AGENTS.md` is the owner's
+  working agreement and this lane does not edit it.
+- **CF-012** — no `docs/traceability-doctrine.md`. Still open; creating a repo contract is a
+  design decision, not a README edit.
+- **CF-013** — status table presented historical live figures as `works` with no re-runnable
+  command. Fixed: each row now names the command that can contradict it, and the live-node figures
+  are labelled as an observation with the re-check command beside them.
+- **CF-014** — quick start used unsupported `project-node.sh --agent`. Fixed: the quick start now
+  uses `--project` for the node-side check and `scripts/node-create.sh` for creation.
+- **CF-015** — "Three environment variables" while two exist. Fixed: two variables, plus the
+  file-based inference credential named explicitly.
+- **CF-030** — lanes section mis-stated prompt naming and loader ownership. Fixed: prompts are role
+  files, three QA lanes share `qa.md`, and both loader scripts are named with their split.
+- **CF-031** (new) — the GitReins guard cannot pass a documentation-only commit: the lint gate
+  skips with `no staged files` because its scope is Python-only, Tier 1 becomes `DEGRADED PASS`,
+  and `guards.allow_skips: false` then refuses the commit. Measured on this very change: secrets
+  clean, `tests (full)` PASS, `git log -1` unchanged after the attempt. This is a gate defect, not a
+  README defect, and it blocks every docs and board-only commit in the repo.
 
-CF-013: the status table still presents historical Hermes figures as `works` without a repository-local rerunnable artifact or live witness.
-ch:trace row=CF-013 spec=none:repository-contract-absent wave=code-factory-readme-2026-10-30-18-28-33#readme test=scripts/harness/install-hermes.sh::check doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=none:no-live-bunker-or-gateway-available verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-14-54-06
+Correction of a published claim: an earlier audit event for this same sweep (board event 16,
+published with `b5f40c0`) recorded that "CF-014's old unsupported `--agent` premise remains absent
+from the published README". Measurement refutes it — quick-start steps 2 and 3 pass `--agent <id>`
+and `project-node.sh` rejects it with `unknown arg: --agent` (rc 2) at the very tip that event
+names. This artifact and its event supersede that sentence; the rest of the earlier event's
+command set was re-measured here rather than inherited.
 
-CF-014: the prior `--agent` quick-start defect does not reproduce at this published tip; the row remains open for owner re-triage rather than being closed here.
-ch:trace row=CF-014 spec=none:repository-contract-absent wave=code-factory-readme-2026-10-30-18-28-33#readme test=scripts/project-node.sh::check-project-demo doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=path@origin:README.md verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-14-54-06
-
-CF-015: the own-infrastructure section still says three environment variables while documenting two; provider credentials are file-based.
-ch:trace row=CF-015 spec=none:repository-contract-absent wave=code-factory-readme-2026-10-30-18-28-33#readme test=grep::environment-variable-inventory doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=path@origin:README.md verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-14-54-06
-
-CF-030: the lanes section still misstates prompt naming, loader ownership, and the scheduler project count; the source inventory confirms the mismatch.
-ch:trace row=CF-030 spec=none:repository-contract-absent wave=code-factory-readme-2026-10-30-18-28-33#readme test=git-ls-tree::lane-prompt-and-loader-census doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=path@origin:prompts verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-14-54-06
+Rows are left `pending` on the board: the fix is now re-runnable, but closing a row on the same
+tick that wrote it is self-grading. The verification recipe is the command table above, re-run
+against the tip that carries this artifact.
 
 ## Unverified scope
 
-No release asset, anonymous rendered README, live bunker deployment, Crier dispatch, node gateway round trip, scheduler dispatch, or external deployment boundary was exercised. The checker and board source runs are T4 local/archive evidence, not live production proof. The canonical checkout had pre-existing shared dirty board changes and was 22 commits behind and 28 commits ahead of `origin/main`; this audit did not stage, rewrite, commit, or push those foreign changes.
+No release asset, anonymous rendered README, live bunker deployment, Crier dispatch, node gateway
+round trip, scheduler dispatch or external deployment boundary was exercised. The production
+counts in the status table (`32 s install`, `/api/status` 200, 133 JSON-RPC methods) are a
+historical observation of a live node and cannot be reproduced from this repository alone; the
+README now says so and gives the re-check command.
 
-STATUS: PARTIAL
-TIER: T4 -- executed the published README's safe commands from a fresh archive and read the script outputs and repository files back
-EVIDENCE: docs/audits/code-factory-readme-2026-10-30-18-28-33.md
+## Traceability
+
+ch:trace row=CF-009 spec=README.md#quick-start wave=code-factory-readme-2026-10-30-18-28-33#readme test=scripts/bunker-server-install.sh::check doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=path@origin:README.md verdict=none:open-finding commit=none:open memory=none:exact-key-not-found
+ch:trace row=CF-010 spec=README.md#layout wave=code-factory-readme-2026-10-30-18-28-33#readme test=git-ls-tree::scripts-harness-inventory doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=path@origin:scripts/harness verdict=none:open-finding commit=none:open memory=none:exact-key-not-found
+ch:trace row=CF-011 spec=AGENTS.md#rules wave=code-factory-readme-2026-10-30-18-28-33#readme test=jq::board-id-census doc=AGENTS.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=path@origin:AGENTS.md verdict=none:open-finding commit=none:open memory=none:exact-key-not-found
+ch:trace row=CF-012 spec=none:doctrine-path-absent wave=code-factory-readme-2026-10-30-18-28-33#readme test=test::docs-traceability-doctrine-exists doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=none:published-tip-path-absent verdict=none:open-finding commit=none:open memory=none:exact-key-not-found
+ch:trace row=CF-013 spec=README.md#status wave=code-factory-readme-2026-10-30-18-28-33#readme test=scripts/harness/install-hermes.sh::check doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=none:no-live-bunker-or-gateway-available verdict=none:open-finding commit=none:open memory=none:exact-key-not-found
+ch:trace row=CF-014 spec=README.md#quick-start wave=code-factory-readme-2026-10-30-18-28-33#readme test=scripts/project-node.sh::check-project-demo doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=path@origin:README.md verdict=none:open-finding commit=none:open memory=none:exact-key-not-found
+ch:trace row=CF-015 spec=README.md#running-it-against-your-own-infrastructure wave=code-factory-readme-2026-10-30-18-28-33#readme test=grep::environment-variable-inventory doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=path@origin:README.md verdict=none:open-finding commit=none:open memory=none:exact-key-not-found
+ch:trace row=CF-030 spec=README.md#the-lanes wave=code-factory-readme-2026-10-30-18-28-33#readme test=source-inventory::lane-prompt-and-loader-census doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=path@origin:prompts verdict=none:open-finding commit=none:open memory=none:exact-key-not-found
+ch:trace row=CF-031 spec=.gitreins/config.yaml#guards wave=code-factory-readme-2026-10-30-18-28-33#readme test=gitreins-guard::docs-only-commit doc=tests/selftest.sh prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=path@origin:.gitreins/config.yaml verdict=none:open-finding commit=none:open memory=none:exact-key-not-found
+
+STATUS: PASS
+TIER: T4 -- executed every README shell block from a fresh archive of origin/main, read each rc and output back, then re-ran the corrected blocks against the fixed tree
+EVIDENCE: docs/audits/code-factory-readme-2026-10-30-18-28-33.md plus the probe outputs f1.out-f4.out under /home/kara/.hermes/cache/scratch/cf-readme-182833-fixed
