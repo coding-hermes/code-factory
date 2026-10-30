@@ -1,0 +1,75 @@
+{
+  "projection": "redacted-native-gitreins-verdict",
+  "native_history_id": "f14a8a02",
+  "native_storage_handle": "469f9b53",
+  "task_id": "CF-007",
+  "task_title": "CF-007 recover local disk tranche merits; live parent remains open",
+  "task_criteria": [
+    "Admission predicate from the original local CF-007 review: inspect scripts/disk-policy.py and scripts/project-node.sh; floor parsing and df observations fail closed even at zero, compare exact thresholds without display rounding, and reject invalid/low disk before state creation, adapter installation, clone or manifest. Execute python3 -B tests/disk-contract.py DiskContract synchronously; its 15 tests must pass including boundary and malformed cases and its exact refusal-removal behavioral mutant. This grades committed local code, not live capacity.",
+    "Reclamation predicate from the original local CF-007 review: inspect scripts/disk-policy.py, lib.sh, project-node.sh and tests/disk-contract.py. Only explicit apply opt-in may delete enrolled flat disposable blobs; check never reclaims. Unsafe paths/types/links/permissions/lock contention fail closed, outside/durable sentinels survive, remeasurement gates admission, and repetition is idempotent. Run focused tests synchronously, never background a suite or use broad pgrep polls. Existing 15-test DiskContract covers these predicates and the staging copy-failure control.",
+    "Integration, scope and trace predicate from the original local CF-007 review: run timeout 110 bash tests/selftest.sh synchronously and require rc0 SELFTEST PASS; do not background or pgrep-poll it. NODE.md and DESIGN.md accurately mark 5GiB provisional, no runtime quota, historical footprints and unauthorized live orphan/role-sizing obligations as still open. Resolve board CF-007, spec Laws section, DiskContract and docs/audits/code-factory-CF-007-152022-worker.md plus -foreman.md as the prior committed trace; explicit witness none is correct and no self-referential final verdict/SHA is required. Parent acceptance remains in_progress; local PASS must not imply live Bunker proof."
+  ],
+  "commit": "37ee7c9d41d1d80741836455f797d70b4b9a1ed6",
+  "evaluated_at": "2026-10-30T16:08:18.669777",
+  "passed": true,
+  "stages": {
+    "tier1": {
+      "passed": true,
+      "summary": "  ✓ lint: scanners: nice=nice -n 10\n  ✓ secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  ✓ tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "passed": true,
+          "data": {
+            "exit_code": 0
+          }
+        },
+        {
+          "id": "secrets",
+          "passed": true,
+          "data": {
+            "exit_code": 0
+          }
+        },
+        {
+          "id": "tests",
+          "passed": true,
+          "data": {
+            "exit_code": 0
+          }
+        }
+      ]
+    },
+    "tier2": {
+      "passed": true,
+      "summary": "COMPLETE\n  ✓ Admission predicate from the original local CF-007 review: inspect scripts/disk-policy.py and scripts/project-node.sh; floor parsing and df observations fail closed even at zero, compare exact thresholds without display rounding, and reject invalid/low disk before state creation, adapter installation, clone or manifest. Execute python3 -B tests/disk-contract.py DiskContract synchronously; its 15 tests must pass including boundary and malformed cases and its exact refusal-removal behavioral mutant. This grades committed local code, not live capacity.: scripts/disk-policy.py:19-27 floor_ratio uses re.fullmatch(r\"[0-9]{1,9}(?:\\.[0-9]{1,9})?\") so empty/sign/exponent/whitespace refuse; :30-46 available_kib requires df rc==0, <=65536 bytes, exact POSIX header, 6 fields, numeric fields, mount starting '/', and used+free<=total — all raise ValueError -> exit 1 even at floor 0; :146-149 enough() compares free*1024*denominator >= numerator*GIB (exact integer, no rounding) while :152-156 display uses exact decimal expansion. scripts/project-node.sh:63-68 require_disk runs before mkdir STATE (:69), harness install (:95-105), clone (:127-133) and manifest write (:141). Ran synchronously: `python3 -B tests/disk-contract.py DiskContract` -> 'Ran 15 tests in 4.955s / OK', RC=0, including test_boundary_exact_above_and_fractional_floor, test_failed_and_malformed_df_even_at_zero, test_malformed_floors_never_measure_or_reclaim, test_low_disk_stops_before_install_clone_and_state, and test_refusal_removal_mutation_breaks_exact_regression printing 'PASS  disk mutation: exact regression caught adapter/clone fall-through'.\n  ✓ Reclamation predicate from the original local CF-007 review: inspect scripts/disk-policy.py, lib.sh, project-node.sh and tests/disk-contract.py. Only explicit apply opt-in may delete enrolled flat disposable blobs; check never reclaims. Unsafe paths/types/links/permissions/lock contention fail closed, outside/durable sentinels survive, remeasurement gates admission, and repetition is idempotent. Run focused tests synchronously, never background a suite or use broad pgrep polls. Existing 15-test DiskContract covers these predicates and the staging copy-failure control.: scripts/project-node.sh:63-66 adds --reclaim-disposable only when MODE=apply && RECLAIM=1; disk-policy.py:170-176 only calls reclaim() when cleanup flag present and only after a valid below-floor reading, then remeasures (:174) before admitting. reclaim() (disk-policy.py:82-141) requires home==$HOME/normalized/absolute, walks HOME components with O_NOFOLLOW|O_DIRECTORY, checks uid and mode 0o700 on .node/disposable-cache-v1, same device, flock LOCK_EX|LOCK_NB, entry regex cache-[A-Za-z0-9_-]{1,64}.bin, S_ISREG/0o600/uid/nlink==1, 1024-entry cap, and re-verifies snapshot before each unlink — all fail closed. Tests executed synchronously (no pgrep/backgrounding in tests/selftest.sh or tests/disk-contract.py): test_check_and_default_apply_do_not_reclaim, test_unsafe_names_types_links_modes_and_paths_refuse_without_deletion (14 subcases incl. symlink/hardlink/fifo/modes/links/limit), test_locked_namespace_refuses, test_reclaim_still_low_remeasures_and_preserves_outside (outside/repo/.git/jobs/credential sentinels survive), test_second_measurement_failure_refuses_after_reclaim, test_reclaim_enables_admission_and_repeat_is_idempotent, test_creator_stages_helper_and_stops_on_copy_failure — all 'ok' in the 15-test run (Ran 15 tests, OK, RC=0).\n  ✓ Integration, scope and trace predicate from the original local CF-007 review: run timeout 110 bash tests/selftest.sh synchronously and require rc0 SELFTEST PASS; do not background or pgrep-poll it. NODE.md and DESIGN.md accurately mark 5GiB provisional, no runtime quota, historical footprints and unauthorized live orphan/role-sizing obligations as still open. Resolve board CF-007, spec Laws section, DiskContract and docs/audits/code-factory-CF-007-152022-worker.md plus -foreman.md as the prior committed trace; explicit witness none is correct and no self-referential final verdict/SHA is required. Parent acceptance remains in_progress; local PASS must not imply live Bunker proof.: `timeout 110 bash tests/selftest.sh` executed synchronously (output captured to /tmp/selftest.out, 177 lines) ending in 'SELFTEST: PASS' with all sections green incl. 'PASS  disk contract and behavioral refusal mutation' (15 tests OK). docs/DESIGN.md:76 'provisioning's disk check does not enforce per-job quotas', :80-81 'default 5 GiB remains provisional; the historical ~1.5 GB estimate is not a current role footprint measurement', :86 'No live node measurement, Bunker orphan/user/key cleanup, runtime job quota ... is implemented or certified'. specs/NODE.md:108-117 PROVISIONAL 5 GiB and 'point-in-time admission check, not a reservation or quota'; :144-147 historical ~1.5 GB, measured role sizing and live Bunker orphan homes/keys/users 'UNVERIFIED / BLOCKED. This bounded local tranche does not complete CF-007.' Board .coding-hermes/board/tasks.jsonl CF-007 status='in_progress' with blocked_reason; events.jsonl:58 task_verified detail has parent_acceptance:'OPEN', tier2 INCOMPLETE. Trace resolves: specs/NODE.md:90 '## Laws and failure semantics', tests/disk-contract.py::DiskContract, docs/audits/code-factory-CF-007-152022-worker.md:111 and -foreman.md:51 ch:trace rows with witness=none:hermetic-local-fixtures / none:hermetic-local-only and non-self-referential verdict/commit (worker: verdict=none:foreman-judge-pending commit=none:self-referential-hash).\nAll three CF-007 criteria verified: DiskContract 15/15 OK including the refusal-removal mutant, selftest.sh ends SELFTEST: PASS, and docs/board/trace correctly keep the parent in_progress with 5GiB provisional and live obligations open.",
+      "steps": [
+        {
+          "id": "tier2",
+          "passed": true,
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "Admission predicate from the original local CF-007 review: inspect scripts/disk-policy.py and scripts/project-node.sh; floor parsing and df observations fail closed even at zero, compare exact thresholds without display rounding, and reject invalid/low disk before state creation, adapter installation, clone or manifest. Execute python3 -B tests/disk-contract.py DiskContract synchronously; its 15 tests must pass including boundary and malformed cases and its exact refusal-removal behavioral mutant. This grades committed local code, not live capacity.",
+                "status": "PASS",
+                "detail": "scripts/disk-policy.py:19-27 floor_ratio uses re.fullmatch(r\"[0-9]{1,9}(?:\\.[0-9]{1,9})?\") so empty/sign/exponent/whitespace refuse; :30-46 available_kib requires df rc==0, <=65536 bytes, exact POSIX header, 6 fields, numeric fields, mount starting '/', and used+free<=total — all raise ValueError -> exit 1 even at floor 0; :146-149 enough() compares free*1024*denominator >= numerator*GIB (exact integer, no rounding) while :152-156 display uses exact decimal expansion. scripts/project-node.sh:63-68 require_disk runs before mkdir STATE (:69), harness install (:95-105), clone (:127-133) and manifest write (:141). Ran synchronously: `python3 -B tests/disk-contract.py DiskContract` -> 'Ran 15 tests in 4.955s / OK', RC=0, including test_boundary_exact_above_and_fractional_floor, test_failed_and_malformed_df_even_at_zero, test_malformed_floors_never_measure_or_reclaim, test_low_disk_stops_before_install_clone_and_state, and test_refusal_removal_mutation_breaks_exact_regression printing 'PASS  disk mutation: exact regression caught adapter/clone fall-through'."
+              },
+              {
+                "criterion": "Reclamation predicate from the original local CF-007 review: inspect scripts/disk-policy.py, lib.sh, project-node.sh and tests/disk-contract.py. Only explicit apply opt-in may delete enrolled flat disposable blobs; check never reclaims. Unsafe paths/types/links/permissions/lock contention fail closed, outside/durable sentinels survive, remeasurement gates admission, and repetition is idempotent. Run focused tests synchronously, never background a suite or use broad pgrep polls. Existing 15-test DiskContract covers these predicates and the staging copy-failure control.",
+                "status": "PASS",
+                "detail": "scripts/project-node.sh:63-66 adds --reclaim-disposable only when MODE=apply && RECLAIM=1; disk-policy.py:170-176 only calls reclaim() when cleanup flag present and only after a valid below-floor reading, then remeasures (:174) before admitting. reclaim() (disk-policy.py:82-141) requires home==$HOME/normalized/absolute, walks HOME components with O_NOFOLLOW|O_DIRECTORY, checks uid and mode 0o700 on .node/disposable-cache-v1, same device, flock LOCK_EX|LOCK_NB, entry regex cache-[A-Za-z0-9_-]{1,64}.bin, S_ISREG/0o600/uid/nlink==1, 1024-entry cap, and re-verifies snapshot before each unlink — all fail closed. Tests executed synchronously (no pgrep/backgrounding in tests/selftest.sh or tests/disk-contract.py): test_check_and_default_apply_do_not_reclaim, test_unsafe_names_types_links_modes_and_paths_refuse_without_deletion (14 subcases incl. symlink/hardlink/fifo/modes/links/limit), test_locked_namespace_refuses, test_reclaim_still_low_remeasures_and_preserves_outside (outside/repo/.git/jobs/credential sentinels survive), test_second_measurement_failure_refuses_after_reclaim, test_reclaim_enables_admission_and_repeat_is_idempotent, test_creator_stages_helper_and_stops_on_copy_failure — all 'ok' in the 15-test run (Ran 15 tests, OK, RC=0)."
+              },
+              {
+                "criterion": "Integration, scope and trace predicate from the original local CF-007 review: run timeout 110 bash tests/selftest.sh synchronously and require rc0 SELFTEST PASS; do not background or pgrep-poll it. NODE.md and DESIGN.md accurately mark 5GiB provisional, no runtime quota, historical footprints and unauthorized live orphan/role-sizing obligations as still open. Resolve board CF-007, spec Laws section, DiskContract and docs/audits/code-factory-CF-007-152022-worker.md plus -foreman.md as the prior committed trace; explicit witness none is correct and no self-referential final verdict/SHA is required. Parent acceptance remains in_progress; local PASS must not imply live Bunker proof.",
+                "status": "PASS",
+                "detail": "`timeout 110 bash tests/selftest.sh` executed synchronously (output captured to /tmp/selftest.out, 177 lines) ending in 'SELFTEST: PASS' with all sections green incl. 'PASS  disk contract and behavioral refusal mutation' (15 tests OK). docs/DESIGN.md:76 'provisioning's disk check does not enforce per-job quotas', :80-81 'default 5 GiB remains provisional; the historical ~1.5 GB estimate is not a current role footprint measurement', :86 'No live node measurement, Bunker orphan/user/key cleanup, runtime job quota ... is implemented or certified'. specs/NODE.md:108-117 PROVISIONAL 5 GiB and 'point-in-time admission check, not a reservation or quota'; :144-147 historical ~1.5 GB, measured role sizing and live Bunker orphan homes/keys/users 'UNVERIFIED / BLOCKED. This bounded local tranche does not complete CF-007.' Board .coding-hermes/board/tasks.jsonl CF-007 status='in_progress' with blocked_reason; events.jsonl:58 task_verified detail has parent_acceptance:'OPEN', tier2 INCOMPLETE. Trace resolves: specs/NODE.md:90 '## Laws and failure semantics', tests/disk-contract.py::DiskContract, docs/audits/code-factory-CF-007-152022-worker.md:111 and -foreman.md:51 ch:trace rows with witness=none:hermetic-local-fixtures / none:hermetic-local-only and non-self-referential verdict/commit (worker: verdict=none:foreman-judge-pending commit=none:self-referential-hash)."
+              }
+            ],
+            "model": "deepseek-v4-flash"
+          }
+        }
+      ]
+    }
+  }
+}

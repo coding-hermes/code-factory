@@ -1,0 +1,25 @@
+{
+  "tick_id": "code-factory-2026-10-30-16-00-38",
+  "mode": "verification-recovery",
+  "base_commit": "37ee7c9d41d1d80741836455f797d70b4b9a1ed6",
+  "delivery_branch": "feat/code-factory-bankai-20261030",
+  "wave_budget": 11,
+  "selection_limit": 1,
+  "selection_reason": "Exactly-one-row lane contract; recover the already-published CF-007 implementation's incomplete local review rather than duplicate dispatch.",
+  "workers": [],
+  "tasks": [
+    {
+      "id": "CF-007",
+      "worktree": "~/worktrees/code-factory-CF-007-review-160038",
+      "branch": "wt/CF-007-review-160038",
+      "implementation_commit": "19f5038e641be547841db06d66b1603f3fa4ba49",
+      "evaluated_commit": "37ee7c9d41d1d80741836455f797d70b4b9a1ed6",
+      "owner": "foreman-verification-only",
+      "local_merits": "PASS",
+      "verdict": "f14a8a02",
+      "parent_status": "in_progress",
+      "evidence": "docs/audits/code-factory-CF-007-160038.md",
+      "live_acceptance": "UNVERIFIED: role sizing and authorized orphan cleanup remain open"
+    }
+  ]
+}
