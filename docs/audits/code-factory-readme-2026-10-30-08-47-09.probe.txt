@@ -1,26 +1,26 @@
 
-=== quick start step 1 ===
-$ scripts/bunker-server-install.sh --check
+=== quick-start bunker check with placeholder ===
+$ BUNKER_SERVER=your-bunker-server scripts/bunker-server-install.sh --check
 bunker server: your-bunker-server
   PASS  bunker_client — /usr/local/bin/bunker bunker 0.2.0
-  FAIL  bunker_config — missing (/var/tmp/code-factory-current-home/.config/bunker/config.yaml) — the client has no server to talk to
+  FAIL  bunker_config — missing (/var/tmp/cf-readme-literal-home-dn0Hjf/.config/bunker/config.yaml) — the client has no server to talk to
   FAIL  server_reachable — your-bunker-server did not answer: bunker: reading server "your-bunker-server"
   PASS  tool:python3 — /usr/bin/python3
   PASS  tool:git — /usr/bin/git
   PASS  tool:curl — /usr/bin/curl
   PASS  tool:jq — /usr/bin/jq
-  PASS  disk — 216.0 GB free (floor 5 GB)
+  PASS  disk — 215.8 GB free (floor 5 GB)
 
 RESULT: FAIL (2)
 EXIT=1
 
-=== quick start step 2 ===
-$ ./scripts/project-node.sh --check --project demo
+=== quick-start project node check with placeholder ===
+$ CRIER_URL=http://crier.example:8767 ./scripts/project-node.sh --check --project demo
 node provisioning — project=demo harness=hermes host=karaHermes-mde-7840hs
 [00] preflight
   PASS  arch — x86_64 (Linux 7.0.0-38-generic)
-  PASS  disk — 216.0 GB free (floor 5 GB)
-  PASS  mem — 47247 MB
+  PASS  disk — 215.8 GB free (floor 5 GB)
+  PASS  mem — 45305 MB
   FAIL  reach:http://crier.example:8767/health — -> 000000
   PASS  reach:https://pypi.org/simple/ — 200
 [10] base
@@ -43,15 +43,37 @@ HERMES: FAIL (3)
 [30] bus
   FAIL  crier_identity — absent — stage a bundle and re-run; a node without an identity is invisible
 [40] repo
-  FAIL  repo — /var/tmp/code-factory-current-home/repo absent (pass --repo to clone)
+  FAIL  repo — /var/tmp/cf-readme-literal-home-dn0Hjf/repo absent (pass --repo to clone)
 [90] manifest
   ..    manifest is written only when every layer passes
 
 NODE: FAIL (3)
 EXIT=1
 
-=== contributing selftest ===
-$ bash tests/selftest.sh
+=== own-infrastructure bunker check ===
+$ CRIER_URL=http://crier.example:8767 BUNKER_SERVER=your-bunker-server scripts/bunker-server-install.sh --check
+bunker server: your-bunker-server
+  PASS  bunker_client — /usr/local/bin/bunker bunker 0.2.0
+  FAIL  bunker_config — missing (/var/tmp/cf-readme-literal-home-dn0Hjf/.config/bunker/config.yaml) — the client has no server to talk to
+  FAIL  server_reachable — your-bunker-server did not answer: bunker: reading server "your-bunker-server"
+  PASS  tool:python3 — /usr/bin/python3
+  PASS  tool:git — /usr/bin/git
+  PASS  tool:curl — /usr/bin/curl
+  PASS  tool:jq — /usr/bin/jq
+  PASS  disk — 215.8 GB free (floor 5 GB)
+
+RESULT: FAIL (2)
+EXIT=1
+
+=== own-infrastructure node create ===
+$ CRIER_URL=http://crier.example:8767 BUNKER_SERVER=your-bunker-server scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes
+node-create — project=myrepo harness=hermes server=your-bunker-server
+  ..    spawning node-myrepo-051334 (ttl 6h)
+  FAIL  spawn — bunker: server "your-bunker-server" not found in config
+EXIT=1
+
+=== selftest ===
+$  bash tests/selftest.sh
 1. every script parses
   PASS  bash -n bunker-server-install.sh
   PASS  bash -n lib.sh
@@ -67,7 +89,7 @@ $ bash tests/selftest.sh
   PASS  report contains FAIL rows
 3. fetch_verified refuses a wrong digest
   PASS  correct digest accepted
-digest mismatch for file:///var/tmp/hermes-scratch/tmp.fVkbhTrKpl/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03
+digest mismatch for file:///var/tmp/hermes-scratch/tmp.Xzg8OfusiB/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03
   PASS  wrong digest refused
 4. no literal credential assignments
   PASS  none found
@@ -81,14 +103,14 @@ digest mismatch for file:///var/tmp/hermes-scratch/tmp.fVkbhTrKpl/src: want 0000
 SELFTEST: PASS
 EXIT=0
 
-=== infrastructure node-create ===
-$ scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes
-node-create — project=myrepo harness=hermes server=your-bunker-server
-  ..    spawning node-myrepo-045718 (ttl 6h)
-  FAIL  spawn — bunker: server "your-bunker-server" not found in config
-EXIT=1
+=== shell syntax ===
+$  bash -n scripts/bunker-server-install.sh scripts/lib.sh scripts/node-create.sh scripts/project-node.sh scripts/verify-node.sh scripts/harness/install-claude-code.sh scripts/harness/install-hermes.sh scripts/harness/install-opencode.sh tests/selftest.sh
+EXIT=0
 
-=== static claims ===
-docs=present:docs/BOARD.md present:docs/ACCEPTANCE-PLAN.md present:docs/OPERATIONS.md present:docs/THREAT-MODEL.md present:docs/SCHEDULER-ADMISSION.md
-installers=install-claude-code.sh install-hermes.sh install-opencode.sh
+=== static census ===
 fences=6
+linked_docs=present:docs/BOARD.md present:docs/ACCEPTANCE-PLAN.md present:docs/OPERATIONS.md present:docs/THREAT-MODEL.md present:docs/SCHEDULER-ADMISSION.md
+doctrine=missing
+installers=scripts/harness/install-claude-code.sh
+scripts/harness/install-hermes.sh
+scripts/harness/install-opencode.sh
