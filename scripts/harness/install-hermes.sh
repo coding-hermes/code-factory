@@ -54,19 +54,43 @@ if [ "$MODE" = "--apply" ]; then
     "$VENV/bin/python" -m pip install --no-cache-dir "hermes-agent==$PIN" >/tmp/hermes-install.log 2>&1 \
       && ok "install" "$("$VENV/bin/hermes" --version 2>/dev/null | head -1)" \
       || { bad "install" "pip failed — /tmp/hermes-install.log"; exit 1; }
+    h=$(hb)
   else
     note "already installed: $("$h" --version 2>/dev/null | head -1)"
   fi
 
   if ! (command -v ss >/dev/null && ss -tln 2>/dev/null | grep -q ":$PORT ") 2>/dev/null; then
     if grep -q 'basic_auth' "$HOME/.hermes/config.yaml" 2>/dev/null; then
-      nohup "$VENV/bin/hermes" serve --host 0.0.0.0 --port "$PORT" --skip-build >"$HOME/.node-serve-$PORT.log" 2>&1 &
+      nohup "$h" serve --host 0.0.0.0 --port "$PORT" --skip-build >"$HOME/.node-serve-$PORT.log" 2>&1 &
       sleep 6
       code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$PORT/api/status" 2>/dev/null || echo 000)
       [ "$code" = 200 ] && ok "gateway_start" "/api/status -> 200" || bad "gateway_start" "-> $code (see ~/.node-serve-$PORT.log)"
     else
       bad "gateway_start" "refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml"
     fi
+  fi
+
+  # The checks above ran before apply and may have observed the intentionally absent
+  # binary/port. Recompute the adapter state so a successful apply can actually pass.
+  FAILED=0
+  h=$(hb)
+  if [ -n "$h" ]; then
+    ok "binary" "$h"
+    ok "version" "$("$h" --version 2>/dev/null | head -1)"
+  else
+    bad "binary" "absent after apply"
+  fi
+  if (command -v ss >/dev/null && ss -tln 2>/dev/null | grep -q ":$PORT ") 2>/dev/null; then
+    ok "port" "listening on :$PORT"
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$PORT/api/status" 2>/dev/null || echo 000)
+    [ "$code" = 200 ] && ok "status_probe" "/api/status -> 200" || bad "status_probe" "/api/status -> $code"
+  else
+    bad "port" "nothing on :$PORT after apply"
+  fi
+  if [ -f "$HOME/.hermes/.env" ] && grep -qE '^[A-Z_]+_API_KEY=' "$HOME/.hermes/.env" 2>/dev/null; then
+    ok "inference_key" "a provider key is present in ~/.hermes/.env (value not read)"
+  else
+    bad "inference_key" "no provider key after apply"
   fi
 fi
 

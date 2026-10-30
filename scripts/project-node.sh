@@ -13,6 +13,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
 
 PROJECT="${NODE_PROJECT:-}"
+NODE_ID="${NODE_ID:-$(hostname)}"
 HARNESS="${NODE_HARNESS:-hermes}"
 REPO=""
 REF="${NODE_REF:-main}"
@@ -26,6 +27,7 @@ while [ $# -gt 0 ]; do
     --check) MODE=check; shift ;;
     --apply) MODE=apply; shift ;;
     --project) PROJECT="$2"; shift 2 ;;
+    --node-id) NODE_ID="$2"; shift 2 ;;
     --harness) HARNESS="$2"; shift 2 ;;
     --repo) REPO="$2"; shift 2 ;;
     --ref) REF="$2"; shift 2 ;;
@@ -71,7 +73,23 @@ inst="$HERE/harness/install-$HARNESS.sh"
 if [ ! -x "$inst" ]; then
   bad "harness:$HARNESS" "no adapter at scripts/harness/install-$HARNESS.sh"
 else
-  if [ "$MODE" = apply ]; then NODE_GATEWAY_PORT="$PORT" "$inst" --apply; else NODE_GATEWAY_PORT="$PORT" "$inst" --check; fi
+  hlog=$(mktemp "${TMPDIR:-/tmp}/project-node-harness.XXXXXX")
+  if [ "$MODE" = apply ]; then
+    NODE_GATEWAY_PORT="$PORT" "$inst" --apply >"$hlog" 2>&1
+  else
+    NODE_GATEWAY_PORT="$PORT" "$inst" --check >"$hlog" 2>&1
+  fi
+  hrc=$?
+  cat "$hlog"
+  harness_version=$(awk -F ' — ' '/PASS  version/{v=$2} END{print v}' "$hlog")
+  if [ "$hrc" -eq 0 ] && [ -n "$harness_version" ]; then
+    ok "harness_check" "$HARNESS version $harness_version"
+  elif [ "$hrc" -eq 0 ]; then
+    bad "harness_check" "$HARNESS adapter passed without a measured version"
+  else
+    bad "harness_check" "$HARNESS adapter exited $hrc"
+  fi
+  rm -f "$hlog"
 fi
 
 # ---------------------------------------------------------------- 30 bus
@@ -82,6 +100,10 @@ if [ -f "$STATE/crier.json" ]; then
 else
   bad "crier_identity" "absent — stage a bundle and re-run; a node without an identity is invisible"
 fi
+
+BUS_AGENT_ID="${CRIER_AGENT_ID:-$NODE_ID}"
+BUS_BASE="${CRIER_BASE:-${CRIER_URL:-}}"
+[ -n "$BUS_BASE" ] && ok "crier_base" "$BUS_BASE" || bad "crier_base" "unset — manifest cannot identify the bus"
 
 # ---------------------------------------------------------------- 40 repo
 say "[40] repo"
@@ -104,19 +126,30 @@ fi
 # ---------------------------------------------------------------- manifest
 say "[90] manifest"
 if [ "$MODE" = apply ] && [ "$FAILED" -eq 0 ]; then
-  python3 - "$STATE/node.json" "$PROJECT" "$HARNESS" "$PORT" "$REPO" "$REF" "$(hostname)" <<'PY'
+  RP="$HOME/repo"
+  repo_origin="$REPO"
+  if [ -z "$repo_origin" ] && [ -d "$RP/.git" ]; then
+    repo_origin=$(git -C "$RP" remote get-url origin 2>/dev/null || true)
+  fi
+  if [ -f "$STATE/node.json" ]; then
+    ok "manifest" "$STATE/node.json unchanged"
+    note "idempotent apply: preserving created_at and manifest bytes"
+  else
+    python3 - "$STATE/node.json" "$NODE_ID" "$PROJECT" "$HARNESS" "${harness_version:-unknown}" "$PORT" "$repo_origin" "$REF" "$BUS_AGENT_ID" "$BUS_BASE" <<'PY'
 import json, sys, time
-path, project, harness, port, repo, ref, host = sys.argv[1:8]
-json.dump({"node_id": host, "project": project,
-           "repo": {"origin": repo, "ref": ref, "path": "/home/" + __import__("os").environ.get("USER", "node") + "/repo"},
-           "harness": {"name": harness, "port": int(port)},
-           "bus": {"base": __import__("os").environ.get("CRIER_BASE", "http://crier.example:8767")},
+path, node_id, project, harness, version, port, repo, ref, bus_agent_id, bus_base = sys.argv[1:11]
+import os
+json.dump({"node_id": node_id, "project": project,
+           "repo": {"origin": repo, "ref": ref, "path": os.path.abspath(os.path.expanduser("~/repo"))},
+           "harness": {"name": harness, "version": version, "port": int(port)},
+           "bus": {"agent_id": bus_agent_id, "base": bus_base},
            "created_by": "project-node.sh v1",
            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
           open(path, "w"), indent=1)
 print("wrote", path)
 PY
-  ok "manifest" "$STATE/node.json"
+    ok "manifest" "$STATE/node.json"
+  fi
 elif [ -f "$STATE/node.json" ]; then
   ok "manifest" "$STATE/node.json"
 else

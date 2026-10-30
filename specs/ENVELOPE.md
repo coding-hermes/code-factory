@@ -9,6 +9,7 @@ ambiguity.
 {
   "env_version": 1,
   "dispatch_id": "uuid",
+  "idempotency_key": "lane-<ts>-<seq>",
   "corr_id": "lane-<ts>-<seq>",
   "issued_at": "2026-10-29T18:40:00Z",
   "reply_to": "mdp-collector",

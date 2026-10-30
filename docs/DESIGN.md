@@ -71,3 +71,32 @@ the command arrives as a message and the answer comes back as a message.
 - It does not hold a request open for the length of a job (crier's delivery budget is 30 s;
   work takes minutes to hours).
 - It does not require root anywhere.
+
+## 7. Executable repository contract
+
+The checked-in implementation has three deliberately separate surfaces:
+
+| Surface | Script | Contract |
+|---|---|---|
+| Node-side layers | `scripts/project-node.sh --check|--apply` | Measures preflight, base, harness, bus identity, and repo layers. `--check` can fail and never writes a manifest. `--apply` writes `$HOME/.node/node.json` only after all required layers pass. |
+| Control-host creation | `scripts/node-create.sh --project P --repo URL --harness H` | Reuses or spawns an agent, stages the selected adapter, passes the triple plus ref/id into the node-side script, stops on staging/provision failure, and invokes verification with the manifest artifact. |
+| Control-host verification | `scripts/verify-node.sh --agent ID --artifact PATH` | Requires agent reachability, HTTP 200, an explicit `auth_required:true` status, rejected unauthenticated stats, and a recomputed control-host digest equal to the node-side digest. |
+
+The node manifest mirrors `specs/NODE.md`: node id, project, repo origin/ref/path, harness name,
+measured adapter version/port, bus agent id/base, creator, and creation time. A second apply keeps
+the existing manifest bytes unchanged. The envelope fields and reserved names are defined only by
+`specs/ENVELOPE.md`; harness adapter behavior is defined only by `specs/HARNESS.md`.
+
+The repository self-test uses hermetic command fixtures to exercise both green and red arms of the
+node creator and verifier. Those fixtures prove control flow and failure semantics only. They do
+not impersonate a live bunker, crier, gateway, credential, scheduler tick, or round trip.
+
+## 8. Evidence boundary
+
+Local evidence is limited to shell parsing, source-contract assertions, hermetic node-check failure
+fixtures, and fake-command tests for creator/verifier failure handling. A configured bunker server,
+crier identity/worker, inference credential, reachable gateway, and production artifact round trip
+are unavailable in this worktree. Therefore node creation and end-to-end verification remain
+**NOT VERIFIED / BLOCKED** until an operator runs the documented commands on an authorized node and
+recomputes the artifact digest from transferred bytes. A fake fixture must never be reported as
+live acceptance.

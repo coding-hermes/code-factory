@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # verify-node.sh — control host: is this node actually usable?
 #
-#   ./verify-node.sh --agent <id> [--server <name>] [--port 10800]
-#   ./verify-node.sh --agent <id> --artifact <path-on-node>
+#   ./verify-node.sh --agent <id> [--server <name>] [--port 10800] --artifact <path-on-node>
 #
 # Checks, in order of what they prove:
 #   1. the agent is alive and exec-able
@@ -24,7 +23,8 @@ while [ $# -gt 0 ]; do
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
-[ -z "$AGENT" ] && { echo "usage: $0 --agent ID [--port P] [--artifact PATH]"; exit 2; }
+[ -z "$AGENT" ] && { echo "usage: $0 --agent ID [--port P] --artifact PATH"; exit 2; }
+[ -z "$ARTIFACT" ] && { echo "--artifact is required: verification must include a control-host digest" >&2; exit 2; }
 
 say "verify node $AGENT"
 
@@ -44,7 +44,7 @@ if [ "$code" = 200 ]; then
   ok "gateway_reachable" "$url -> 200"
   grep -q '"auth_required":true' /tmp/node-status.json 2>/dev/null \
     && ok "auth_gate" "auth_required:true (a public bind must not be open)" \
-    || warn "auth_gate" "auth_required not reported — check dashboard.basic_auth"
+    || bad "auth_gate" "auth_required is not true — check dashboard.basic_auth"
 else
   bad "gateway_reachable" "$url -> $code (is the harness running on 0.0.0.0:$PORT?)"
 fi
@@ -54,20 +54,25 @@ code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "http://$ip:$PORT/api
 case "$code" in
   401|302|403) ok "unauth_refused" "/api/system/stats -> $code" ;;
   200) bad "unauth_refused" "/api/system/stats -> 200 — the node is OPEN to the tailnet" ;;
-  *) warn "unauth_refused" "/api/system/stats -> $code" ;;
+  *) bad "unauth_refused" "/api/system/stats -> $code — expected 401, 302, or 403" ;;
 esac
 
-# 4. optional artifact integrity
-if [ -n "$ARTIFACT" ]; then
-  remote=$(bunker exec --server "$SERVER" "$AGENT" -- bash -lc "sha256sum '$ARTIFACT' 2>/dev/null | cut -d' ' -f1")
-  tmp=$(mktemp)
-  bunker exec --server "$SERVER" "$AGENT" --raw -- cat "$ARTIFACT" > "$tmp" 2>/dev/null
-  local_h=$(sha256sum "$tmp" | cut -d' ' -f1); rm -f "$tmp"
-  if [ -n "$remote" ] && [ "$remote" = "$local_h" ]; then
-    ok "artifact_digest" "$(basename "$ARTIFACT") ${local_h:0:12} on both sides"
-  else
-    bad "artifact_digest" "node ${remote:0:12} vs host ${local_h:0:12} — bytes differ or file missing"
-  fi
+# 4. artifact integrity: the node-reported hash is compared with bytes pulled here.
+case "$ARTIFACT" in
+  *[!A-Za-z0-9_./~:-]*) echo "--artifact contains unsupported shell characters" >&2; exit 2 ;;
+esac
+remote=$(bunker exec --server "$SERVER" "$AGENT" -- bash -lc "sha256sum -- $ARTIFACT 2>/dev/null | cut -d' ' -f1")
+tmp=$(mktemp)
+if bunker exec --server "$SERVER" "$AGENT" --raw -- bash -lc "cat -- $ARTIFACT" > "$tmp" 2>/dev/null; then
+  local_h=$(sha256sum "$tmp" | cut -d' ' -f1)
+else
+  local_h=""
+fi
+rm -f "$tmp"
+if [ -n "$remote" ] && [ "$remote" = "$local_h" ]; then
+  ok "artifact_digest" "$(basename "$ARTIFACT") ${local_h:0:12} on both sides"
+else
+  bad "artifact_digest" "node ${remote:0:12} vs host ${local_h:0:12} — bytes differ or file missing"
 fi
 
 say ""
