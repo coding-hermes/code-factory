@@ -1,0 +1,117 @@
+{
+  "history_directory": "7c838592",
+  "cli_verdict_id": "9f5098fd",
+  "native_sha256": "8f93e708b8d260ebc75d6852a4a283147381d105d6323d77ed11902a2fe04c5b",
+  "redactions": [
+    "personal home path replaced with ~"
+  ],
+  "verdict": {
+    "task_id": "CF-019",
+    "task_title": "Verify full CF-019 storage and recovery acceptance on published implementation",
+    "task_criteria": [
+      "Verify all four original board criteria without changing implementation: specs/STORAGE.md compares Git reclone, Storage Box/NAS and Kubernetes PVs for latency, availability, credentials, cost, portability and failure domains; classifies source/task state/artifacts/caches/logs/secrets; defines host-loss recovery proven by python3 -B tests/recovery-contract.py including positive recovery, idempotence, pinned commit, negative failures, three semantic mutants and caller failure propagation; states default and adoption triggers, no live provisioning. Run bash tests/selftest.sh. Confirm existing ch:trace in docs/audits/code-factory-CF-019-worker-1151.md resolves to row, spec, tests and local-only evidence. Do not claim production recovery. Judge existing source at HEAD 55877fe; historical 8bfde864 is evidence only and earlier 15/30 capped attempts are not PASS."
+    ],
+    "passed": true,
+    "worktree": "~/worktrees/code-factory-CF-019-134638",
+    "branch": "wt/CF-019-134638",
+    "commit": "55877fe429c990b04d46bcc33ba5eaf9f4c49ce4",
+    "items": [],
+    "stages": {
+      "tier1": {
+        "id": "tier1",
+        "passed": true,
+        "any_failed": false,
+        "summary": "  ✓ lint: scanners: nice=nice -n 10\n  ✓ secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  ✓ tests: scanners: nice=nice -n 10",
+        "steps": [
+          {
+            "id": "lint",
+            "type": "script",
+            "passed": true,
+            "output": "scanners: nice=nice -n 10\n",
+            "error": "",
+            "data": {
+              "exit_code": 0
+            }
+          },
+          {
+            "id": "secrets",
+            "type": "script",
+            "passed": true,
+            "output": "secrets: harness state excluded from gitleaks scope (.gitreins/**)\nsecrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n8:48AM INF scanned ~249790 bytes (249.79 KB) in 135ms\n8:48AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 83 files — clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+            "error": "",
+            "data": {
+              "exit_code": 0,
+              "secrets_scanners": [
+                "gitleaks",
+                "builtin"
+              ]
+            }
+          },
+          {
+            "id": "tests",
+            "type": "script",
+            "passed": true,
+            "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n readme-audit-20261030-110314.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n build-contract.sh\n  PASS  bash -n selftest.sh\n2. node --check has exactly the controlled named failure (local fixtures)\ntest_named_check (__main__.NodeContract.test_named_check) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.091s\n\nOK\n  PASS  nonzero exit and anchored exact FAIL crier_url; no bootstrap decoy\n3. specs and scripts expose the same node contract\n  PASS  required contract NODE.md exists\n  PASS  required contract ENVELOPE.md exists\n  PASS  required contract HARNESS.md exists\n  PASS  required contract DESIGN.md exists\n  PASS  required contract THREAT-MODEL.md exists\n  PASS  DESIGN names project-node.sh --check|--apply\n  PASS  DESIGN names node-create.sh --project P --repo URL --harness H\n  PASS  DESIGN names verify-node.sh --agent ID --artifact PATH\n  PASS  envelope declares idempotency_key\n4. focused node contracts and executable mutation controls (local, not live)\ntest_artifact_denials_before_remote_shell (__main__.NodeContract.test_artifact_denials_before_remote_shell) ... ok\ntest_artifact_symlink_hardlink_and_positive (__main__.NodeContract.test_artifact_symlink_hardlink_and_positive) ... ok\ntest_creator_preconditions_and_exact_triple (__main__.NodeContract.test_creator_preconditions_and_exact_triple) ... ok\ntest_creator_stops_on_provision_failure (__main__.NodeContract.test_creator_stops_on_provision_failure) ... ok\ntest_forbidden_manifest_paths_without_dispatch_option (__main__.NodeContract.test_forbidden_manifest_paths_without_dispatch_option) ... ok\ntest_hermes_inference_blocked_without_reading_keys (__main__.NodeContract.test_hermes_inference_blocked_without_reading_keys) ... ok\ntest_manifest_identity_and_byte_idempotence (__main__.NodeContract.test_manifest_identity_and_byte_idempotence) ... ok\ntest_manifest_write_failure (__main__.NodeContract.test_manifest_write_failure) ... ok\n\n… [5862 chars omitted — 81 line(s)] …\nobserved rejection=metadata_integrity exit=1\nok\ntest_metadata_and_artifact_cannot_redefine_expectation (__main__.RecoveryContract.test_metadata_and_artifact_cannot_redefine_expectation) ... observed rejection=metadata_integrity exit=1\nok\ntest_missing_artifact (__main__.RecoveryContract.test_missing_artifact) ... observed rejection=artifact_missing exit=1\nok\ntest_missing_commit (__main__.RecoveryContract.test_missing_commit) ... observed rejection=commit_missing exit=1\nok\ntest_missing_metadata (__main__.RecoveryContract.test_missing_metadata) ... observed rejection=metadata_missing exit=1\nok\ntest_pinned_but_invalid_metadata (__main__.RecoveryContract.test_pinned_but_invalid_metadata) ... observed rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nok\ntest_recover_after_loss_and_repeat (__main__.RecoveryContract.test_recover_after_loss_and_repeat) ... observed recovery commit=cec847032dc6a0b37f8ba1e012a07a2f25877dc4 sha256=b1330093b2bcc4d946a4f85ebf8ad9dabef6d5b81ff81fa003de883752663338 bytes=33 repeat=unchanged fresh=recovered pending=unknown unpublished=unrecoverable\nok\n\n----------------------------------------------------------------------\nRan 11 tests in 2.327s\n\nOK\n  PASS  recovery contract\nSELFTEST: PASS\n",
+            "error": "",
+            "data": {
+              "exit_code": 0
+            }
+          }
+        ],
+        "coverage": "secrets+lint+tests"
+      },
+      "tier2": {
+        "id": "tier2",
+        "passed": true,
+        "any_failed": false,
+        "summary": "COMPLETE\n  ✓ Verify all four original board criteria without changing implementation: specs/STORAGE.md compares Git reclone, Storage Box/NAS and Kubernetes PVs for latency, availability, credentials, cost, portability and failure domains; classifies source/task state/artifacts/caches/logs/secrets; defines host-loss recovery proven by python3 -B tests/recovery-contract.py including positive recovery, idempotence, pinned commit, negative failures, three semantic mutants and caller failure propagation; states default and adoption triggers, no live provisioning. Run bash tests/selftest.sh. Confirm existing ch:trace in docs/audits/code-factory-CF-019-worker-1151.md resolves to row, spec, tests and local-only evidence. Do not claim production recovery. Judge existing source at HEAD 55877fe; historical 8bfde864 is evidence only and earlier 15/30 capped attempts are not PASS.: (1) specs/STORAGE.md:43-61 '## Storage alternatives' table has columns 'Latency / availability', 'Credentials / trust', 'Cost drivers', 'Portability / failure domain' with rows for Git reclone+local scratch (default), Hetzner Storage Box, operator NAS, Kubernetes PV/EKS; lines 45-48 state these are qualitative mechanisms, not measured SLOs/prices. (2) specs/STORAGE.md:25-41 '## State classification' table classifies Source, Unpushed/dirty edits, Task state, Pending dispatches, Artifacts, Caches/tool installs, Logs, Secrets, Node manifest as durable/reconstructable/ephemeral. (3) specs/STORAGE.md:105 '## Recovery protocol' (6-step order) and :133 '## Executable local contract' name `python3 -B tests/recovery-contract.py`. tests/recovery-contract.py:159 test_recover_after_loss_and_repeat asserts positive recovery, pinned commit (assertEqual(observed['commit'], self.commit)), idempotence via byte/inode/mtime snapshot equality plus fresh second recovery and unchanged durable root; negatives at :193-271 (missing_commit, changed_artifact, missing_artifact, corrupt_metadata, missing_metadata, pinned_but_invalid_metadata, invalid_trust_pin, dirty_or_wrong_workspace_not_overwritten, artifact_rechecked_on_repeat); MutationControls.test_private_semantic_mutations (:274) defines exactly three mutants trust-pin/artifact-digest/pinned-checkout; test_selftest_propagates_recovery_failure (:320) proves caller failure propagation. Fresh run `python3 -B tests/recovery-contract.py` printed 'observed semantic mutant=trust-pin|artifact-digest|pinned-checkout assertion-failure exit=1' and 'Ran 11 tests in 1.583s / OK'. Fresh run `bash tests/selftest.sh` printed section '11. Git crash/reclone recovery (hermetic local simulation only)' -> 'PASS recovery contract' and final 'SELFTEST: PASS' (reproduced in /tmp/selftest.log, /tmp/selftest2.log, /tmp/selftest3.log; no FAIL lines). (4) Default at specs/STORAGE.md:7-23 and '### Adoption triggers' at :63-85 (4 numbered triggers); no live provisioning: :3-5 'No backend, mount, backup service, installer recovery, Bunker operation or production disaster recovery is certified', :84 'No thresholds, SLOs, retention or procurement budget have been approved'. (5) ch:trace at docs/audits/code-factory-CF-019-worker-1151.md:165 resolves: row=CF-019, spec=specs/STORAGE.md#recovery-protocol (heading exists at STORAGE.md:105), test=tests/recovery-contract.py::RecoveryContract.test_recover_after_loss_and_repeat (exists at :159), doc=docs/STORAGE-RECOVERY.md (exists), evidence=docs/audits/code-factory-CF-019-worker-1151.md (exists), witness=none:hermetic-local-recovery-only (local-only). (6) No production claim: STORAGE.md:162-163 'proves no independent-disk durability, power-loss/fsync semantics, live failover, remote locality, real credentials, backups, production RPO or RTO'; docs/audits/code-factory-CF-019-131459.md:92-95 'No claim that local directory deletion certifies real host loss'. (7) Implementation unchanged at HEAD 55877fe: `git diff --stat 3daa92c 55877fe` touches only .coding-hermes/board/* and docs/audits/* (no specs/ or tests/ changes). Earlier capped attempts are recorded as unresolved, not PASS: 131459.md '2 collected, 1 passed, 1 unresolved, all_passed=false' and 'the fresh capped attempts are never relabelled PASS'.\nAll four original CF-019 board criteria are satisfied by specs/STORAGE.md and the executable local recovery contract, with fresh passing runs of tests/recovery-contract.py (11 tests OK, three semantic mutants rejected, caller propagation proven) and bash tests/selftest.sh (SELFTEST: PASS), a resolving ch:trace, unchanged implementation at HEAD 55877fe, and no production-recovery claim.",
+        "steps": [
+          {
+            "id": "tier2",
+            "type": "ai_eval",
+            "passed": true,
+            "output": "COMPLETE\n\n… [4174 chars omitted — 1 line(s)] …\nAll four original CF-019 board criteria are satisfied by specs/STORAGE.md and the executable local recovery contract, with fresh passing runs of tests/recovery-contract.py (11 tests OK, three semantic mutants rejected, caller propagation proven) and bash tests/selftest.sh (SELFTEST: PASS), a resolving ch:trace, unchanged implementation at HEAD 55877fe, and no production-recovery claim.",
+            "error": "",
+            "data": {
+              "verdict": "COMPLETE",
+              "items": [
+                {
+                  "criterion": "Verify all four original board criteria without changing implementation: specs/STORAGE.md compares Git reclone, Storage Box/NAS and Kubernetes PVs for latency, availability, credentials, cost, portability and failure domains; classifies source/task state/artifacts/caches/logs/secrets; defines host-loss recovery proven by python3 -B tests/recovery-contract.py including positive recovery, idempotence, pinned commit, negative failures, three semantic mutants and caller failure propagation; states default and adoption triggers, no live provisioning. Run bash tests/selftest.sh. Confirm existing ch:trace in docs/audits/code-factory-CF-019-worker-1151.md resolves to row, spec, tests and local-only evidence. Do not claim production recovery. Judge existing source at HEAD 55877fe; historical 8bfde864 is evidence only and earlier 15/30 capped attempts are not PASS.",
+                  "status": "PASS",
+                  "detail": "(1) specs/STORAGE.md:43-61 '## Storage alternatives' table has columns 'Latency / availability', 'Credentials / trust', 'Cost drivers', 'Portability / failure domain' with rows for Git reclone+local scratch (default), Hetzner Storage Box, operator NAS, Kubernetes PV/EKS; lines 45-48 state these are qualitative mechanisms, not measured SLOs/prices. (2) specs/STORAGE.md:25-41 '## State classification' table classifies Source, Unpushed/dirty edits, Task state, Pending dispatches, Artifacts, Caches/tool installs, Logs, Secrets, Node manifest as durable/reconstructable/ephemeral. (3) specs/STORAGE.md:105 '## Recovery protocol' (6-step order) and :133 '## Executable local contract' name `python3 -B tests/recovery-contract.py`. tests/recovery-contract.py:159 test_recover_after_loss_and_repeat asserts positive recovery, pinned commit (assertEqual(observed['commit'], self.commit)), idempotence via byte/inode/mtime snapshot equality plus fresh second recovery and unchanged durable root; negatives at :193-271 (missing_commit, changed_artifact, missing_artifact, corrupt_metadata, missing_metadata, pinned_but_invalid_metadata, invalid_trust_pin, dirty_or_wrong_workspace_not_overwritten, artifact_rechecked_on_repeat); MutationControls.test_private_semantic_mutations (:274) defines exactly three mutants trust-pin/artifact-digest/pinned-checkout; test_selftest_propagates_recovery_failure (:320) proves caller failure propagation. Fresh run `python3 -B tests/recovery-contract.py` printed 'observed semantic mutant=trust-pin|artifact-digest|pinned-checkout assertion-failure exit=1' and 'Ran 11 tests in 1.583s / OK'. Fresh run `bash tests/selftest.sh` printed section '11. Git crash/reclone recovery (hermetic local simulation only)' -> 'PASS recovery contract' and final 'SELFTEST: PASS' (reproduced in /tmp/selftest.log, /tmp/selftest2.log, /tmp/selftest3.log; no FAIL lines). (4) Default at specs/STORAGE.md:7-23 and '### Adoption triggers' at :63-85 (4 numbered triggers); no live provisioning: :3-5 'No backend, mount, backup service, installer recovery, Bunker operation or production disaster recovery is certified', :84 'No thresholds, SLOs, retention or procurement budget have been approved'. (5) ch:trace at docs/audits/code-factory-CF-019-worker-1151.md:165 resolves: row=CF-019, spec=specs/STORAGE.md#recovery-protocol (heading exists at STORAGE.md:105), test=tests/recovery-contract.py::RecoveryContract.test_recover_after_loss_and_repeat (exists at :159), doc=docs/STORAGE-RECOVERY.md (exists), evidence=docs/audits/code-factory-CF-019-worker-1151.md (exists), witness=none:hermetic-local-recovery-only (local-only). (6) No production claim: STORAGE.md:162-163 'proves no independent-disk durability, power-loss/fsync semantics, live failover, remote locality, real credentials, backups, production RPO or RTO'; docs/audits/code-factory-CF-019-131459.md:92-95 'No claim that local directory deletion certifies real host loss'. (7) Implementation unchanged at HEAD 55877fe: `git diff --stat 3daa92c 55877fe` touches only .coding-hermes/board/* and docs/audits/* (no specs/ or tests/ changes). Earlier capped attempts are recorded as unresolved, not PASS: 131459.md '2 collected, 1 passed, 1 unresolved, all_passed=false' and 'the fresh capped attempts are never relabelled PASS'."
+                }
+              ],
+              "summary": "All four original CF-019 board criteria are satisfied by specs/STORAGE.md and the executable local recovery contract, with fresh passing runs of tests/recovery-contract.py (11 tests OK, three semantic mutants rejected, caller propagation proven) and bash tests/selftest.sh (SELFTEST: PASS), a resolving ch:trace, unchanged implementation at HEAD 55877fe, and no production-recovery claim.",
+              "provenance": {
+                "model": "deepseek-v4-flash",
+                "base_url_source": "GITREINS_LLM_BASE_URL",
+                "api_key_source": "GITREINS_LLM_API_KEY"
+              }
+            }
+          }
+        ],
+        "model": "deepseek-v4-flash",
+        "base_url_source": "GITREINS_LLM_BASE_URL",
+        "api_key_source": "GITREINS_LLM_API_KEY"
+      }
+    },
+    "summary": "Judge Result: CF-019\n\nStage tier1: PASS\n    ✓ lint: scanners: nice=nice -n 10\n  ✓ secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  ✓ tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  ✓ Verify all four original board criteria without changing implementation: specs/STORAGE.md compares Git reclone, Storage Box/NAS and Kubernetes PVs for latency, availability, credentials, cost, portability and failure domains; classifies source/task state/artifacts/caches/logs/secrets; defines host-loss recovery proven by python3 -B tests/recovery-contract.py including positive recovery, idempotence, pinned commit, negative failures, three semantic mutants and caller failure propagation; states default and adoption triggers, no live provisioning. Run bash tests/selftest.sh. Confirm existing ch:trace in docs/audits/code-factory-CF-019-worker-1151.md resolves to row, spec, tests and local-only evidence. Do not claim production recovery. Judge existing source at HEAD 55877fe; historical 8bfde864 is evidence only and earlier 15/30 capped attempts are not PASS.: (1) specs/STORAGE.md:43-61 '## Storage alternatives' table has columns 'Latency / availability', 'Credentials / trust', 'Cost drivers', 'Portability / failure domain' with rows for Git reclone+local scratch (default), Hetzner Storage Box, operator NAS, Kubernetes PV/EKS; lines 45-48 state these are qualitative mechanisms, not measured SLOs/prices. (2) specs/STORAGE.md:25-41 '## State classification' table classifies Source, Unpushed/dirty edits, Task state, Pending dispatches, Artifacts, Caches/tool installs, Logs, Secrets, Node manifest as durable/reconstructable/ephemeral. (3) specs/STORAGE.md:105 '## Recovery protocol' (6-step order) and :133 '## Executable local contract' name `python3 -B tests/recovery-contract.py`. tests/recovery-contract.py:159 test_recover_after_loss_and_repeat asserts positive recovery, pinned commit (assertEqual(observed['commit'], self.commit)), idempotence via byte/inode/mtime snapshot equality plus fresh second recovery and unchanged durable root; negatives at :193-271 (missing_commit, changed_artifact, missing_artifact, corrupt_metadata, missing_metadata, pinned_but_invalid_metadata, invalid_trust_pin, dirty_or_wrong_workspace_not_overwritten, artifact_rechecked_on_repeat); MutationControls.test_private_semantic_mutations (:274) defines exactly three mutants trust-pin/artifact-digest/pinned-checkout; test_selftest_propagates_recovery_failure (:320) proves caller failure propagation. Fresh run `python3 -B tests/recovery-contract.py` printed 'observed semantic mutant=trust-pin|artifact-digest|pinned-checkout assertion-failure exit=1' and 'Ran 11 tests in 1.583s / OK'. Fresh run `bash tests/selftest.sh` printed section '11. Git crash/reclone recovery (hermetic local simulation only)' -> 'PASS recovery contract' and final 'SELFTEST: PASS' (reproduced in /tmp/selftest.log, /tmp/selftest2.log, /tmp/selftest3.log; no FAIL lines). (4) Default at specs/STORAGE.md:7-23 and '### Adoption triggers' at :63-85 (4 numbered triggers); no live provisioning: :3-5 'No backend, mount, backup service, installer recovery, Bunker operation or production disaster recovery is certified', :84 'No thresholds, SLOs, retention or procurement budget have been approved'. (5) ch:trace at docs/audits/code-factory-CF-019-worker-1151.md:165 resolves: row=CF-019, spec=specs/STORAGE.md#recovery-protocol (heading exists at STORAGE.md:105), test=tests/recovery-contract.py::RecoveryContract.test_recover_after_loss_and_repeat (exists at :159), doc=docs/STORAGE-RECOVERY.md (exists), evidence=docs/audits/code-factory-CF-019-worker-1151.md (exists), witness=none:hermetic-local-recovery-only (local-only). (6) No production claim: STORAGE.md:162-163 'proves no independent-disk durability, power-loss/fsync semantics, live failover, remote locality, real credentials, backups, production RPO or RTO'; docs/audits/code-factory-CF-019-131459.md:92-95 'No claim that local directory deletion certifies real host loss'. (7) Implementation unchanged at HEAD 55877fe: `git diff --stat 3daa92c 55877fe` touches only .coding-hermes/board/* and docs/audits/* (no specs/ or tests/ changes). Earlier capped attempts are recorded as unresolved, not PASS: 131459.md '2 collected, 1 passed, 1 unresolved, all_passed=false' and 'the fresh capped attempts are never relabelled PASS'.\nAll four original CF-019 board criteria are satisfied by specs/STORAGE.md and the executable local recovery contract, with fresh passing runs of tests/recovery-contract.py (11 tests OK, three semantic mutants rejected, caller propagation proven) and bash tests/selftest.sh (SELFTEST: PASS), a resolving ch:trace, unchanged implementation at HEAD 55877fe, and no production-recovery claim.\n\nOverall: PASS ✓",
+    "evaluated_at": "2026-10-30T13:53:02.793200",
+    "supersedes": null,
+    "superseded_by": null,
+    "evidence": {
+      "collected_at": "2026-10-30T13:53:02.806751+00:00",
+      "items": [
+        {
+          "name": "patch",
+          "label": "Landed commit patch",
+          "file": "commit.patch",
+          "bytes": 37464,
+          "truncated": false,
+          "source": "git show 55877fe429c9"
+        }
+      ],
+      "task_id": "CF-019"
+    }
+  }
+}
