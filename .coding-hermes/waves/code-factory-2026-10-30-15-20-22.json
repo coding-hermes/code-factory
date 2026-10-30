@@ -1,0 +1,14 @@
+{
+  "tick": "code-factory-2026-10-30-15-20-22",
+  "project": "code-factory",
+  "mode": "serial",
+  "wave_budget": 12,
+  "selected": ["CF-007"],
+  "base": "ed2f9218a63c3a2fe4f860791fcb0abe42603f5b",
+  "base_ref": "origin/feat/code-factory-bankai-20261030",
+  "selection": "One-row lane contract overrides capacity ceiling. P0 CF-001/004 require external scheduler/Crier and authorized remote integration; CF-020/023 dependency-gated and CF-002 blocked. P1 CF-003/006 require authorized nodes; CF-021/024 dependency-gated; CF-022 has published local audit with live policy/authorization and evaluator residuals; QA detector belongs to external QA harness. CF-007 is the earliest unblocked repo-local implementation slice. No dependency array is present on CF-007; no second row selected.",
+  "scope": "CF-007 local fail-closed disk admission, constrained disposable-cache reclamation, fixtures and accurate specs. Live footprint/orphan inventory and host cleanup remain unverified and unauthorized; parent cannot close from local fixtures.",
+  "state": "prepared",
+  "workers": [{"task": "CF-007", "worktree": "/home/kara/worktrees/code-factory-CF-007-152022", "branch": "wt/CF-007-152022", "model": "gpt-6.1-sol", "provider": "openai-codex", "status": "prepared"}],
+  "preserved_checkout": "Supplied integration checkout has unrelated untracked evidence and two local README audit commits; it is not reset, cleaned or rebased. Fresh published integration tip is the source, not stale origin/main."
+}
