@@ -1,0 +1,788 @@
+{
+  "run_id": "CF002-SPLIT-0937",
+  "expected_count": 6,
+  "collected_count": 6,
+  "evaluated_commit_external": "200af57de4872044dec1ff0e6367c1b7607732a5",
+  "binding": "Externally captured frozen checkout HEAD/tree and tracked-byte fingerprint before and after every sequential judge; ephemeral schema may omit commit.",
+  "frozen_before": {
+    "commit": "200af57de4872044dec1ff0e6367c1b7607732a5",
+    "tree": "845d1fb5ea036b19808eff4f7e64d86f94558611",
+    "tracked_fingerprint": "15225ededd7825f66d6e657aac05efc3f3713ab951e9b7a23e44e4252e6c6232"
+  },
+  "frozen_after": {
+    "commit": "200af57de4872044dec1ff0e6367c1b7607732a5",
+    "tree": "845d1fb5ea036b19808eff4f7e64d86f94558611",
+    "tracked_fingerprint": "15225ededd7825f66d6e657aac05efc3f3713ab951e9b7a23e44e4252e6c6232"
+  },
+  "all_passed": false,
+  "results": [
+    {
+      "index": 1,
+      "name": "identity",
+      "criterion": "CF-002 local criterion 1: In scripts/inference-proxy.py, Gateway.authorize binds bearer to exact service/node/project/repository, expiry/revocation and explicit allowed provider/model before State.secret. Independently run python3 -B tests/inference-contract.py InferenceContract.test_denials_before_key_resolution InferenceContract.test_existing_route_disallowed_before_keys. Inspect the tested authorization-before-secret path and require both tests PASS. Local fixtures only.",
+      "command": [
+        "gitreins",
+        "judge",
+        "--ephemeral",
+        "--scope",
+        "working-tree",
+        "--title",
+        "CF002-0937-identity",
+        "--criterion",
+        "CF-002 local criterion 1: In scripts/inference-proxy.py, Gateway.authorize binds bearer to exact service/node/project/repository, expiry/revocation and explicit allowed provider/model before State.secret. Independently run python3 -B tests/inference-contract.py InferenceContract.test_denials_before_key_resolution InferenceContract.test_existing_route_disallowed_before_keys. Inspect the tested authorization-before-secret path and require both tests PASS. Local fixtures only.",
+        "--json"
+      ],
+      "exit_code": 0,
+      "passed": true,
+      "evidence": {
+        "$schema": "https://gitreins.dev/schemas/evidence/v1.json",
+        "checks": [
+          {
+            "id": "criterion-1",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "CF-002 local criterion 1: In scripts/inference-proxy.py, Gateway.authorize binds bearer [REDACTED] exact service/node/project/repository, expiry/revocation and explicit allowed provider/model before State.secret. Independently run python3 -B tests/inference-contract.py InferenceContract.test_denials_before_key_resolution InferenceContract.test_existing_route_disallowed_before_keys. Inspect the tested authorization-before-secret path and require both tests PASS. Local fixtures only.: Gateway.authorize (scripts/inference-proxy.py:469-496) enforces, in order: bearer [REDACTED] regex (471-475), identity lookup by token_hash with hmac.compare_digest (477-486), revocation/expiry `not identity[\"revoked\"] and identity[\"expires_at\"] > time.time()` (487-489), exact scope binding `all(body[k] == identity[k] for k in SCOPE)` where SCOPE={service_identity,node,project,repository} (line 29, 490), requested provider/model present in routes (491-492), and every candidate (incl. fallbacks) in identity[\"allowed\"] (493-495). State.secret is only invoked later in handle() at lines 525-526, after authorize() returns at line 504. Independent run: `python3 -B tests/inference-contract.py InferenceContract.test_denials_before_key_resolution InferenceContract.test_existing_route_disallowed_before_keys` -> EXIT_CODE=0, output 'test_denials_before_key_resolution ... ok', 'test_existing_route_disallowed_before_keys ... ok', 'Ran 2 tests in 1.525s', 'OK'. The tests prove the ordering: helper denied() (tests/inference-contract.py:247-253) asserts status 403, `self.resolutions == []` ('denial resolved upstream credentials') and no upstream calls; test_denials_before_key_resolution (280-314) covers bad/absent bearer, each SCOPE|PAIR field mismatch, revoked and expired identities; test_existing_route_disallowed_before_keys (372-387) shows a route not in identity.allowed is denied with no key resolution, then after explicit allow the same body reaches key resolution (resolutions == ['provider.key','attestation.key']) and fails only at a[truncated]"
+          },
+          {
+            "id": "stage-tier1",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10"
+          },
+          {
+            "id": "stage-tier2",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "COMPLETE\n  \u2713 CF-002 local criterion 1: In scripts/inference-proxy.py, Gateway.authorize binds bearer [REDACTED] exact service/node/project/repository, expiry/revocation and explicit allowed provider/model before State.secret. Independently run python3 -B tests/inference-contract.py InferenceContract.test_denials_before_key_resolution InferenceContract.test_existing_route_disallowed_before_keys. Inspect the tested authorization-before-secret path and require both tests PASS. Local fixtures only.: Gateway.authorize (scripts/inference-proxy.py:469-496) enforces, in order: bearer [REDACTED] regex (471-475), identity lookup by token_hash with hmac.compare_digest (477-486), revocation/expiry `not identity[\"revoked\"] and identity[\"expires_at\"] > time.time()` (487-489), exact scope binding `all(body[k] == identity[k] for k in SCOPE)` where SCOPE={service_identity,node,project,repository} (line 29, 490), requested provider/model present in routes (491-492), and every candidate (incl. fallbacks) in identity[\"allowed\"] (493-495). State.secret is only invoked later in handle() at lines 525-526, after authorize() returns at line 504. Independent run: `python3 -B tests/inference-contract.py InferenceContract.test_denials_before_key_resolution InferenceContract.test_existing_route_disallowed_before_keys` -> EXIT_CODE=0, output 'test_denials_before_key_resolution ... ok', 'test_existing_route_disallowed_before_keys ... ok', 'Ran 2 tests in 1.525s', 'OK'. The tests prove the ordering: helper denied() (tests/inference-contract.py:247-253) asserts status 403, `self.resolutions == []` ('denial resolved upstream credentials') and no upstream calls; test_denials_before_key_resolution (280-314) covers bad/absent bearer, each SCOPE|PAIR field mismatch, revoked and expired identities; test_existing_route_disallowed_before_keys (372-387) shows a route not in identity.allowed is denied with no key resolution, then after explicit allow the same body reaches key resolution (resolutions == ['provider.key','attestation.key']) and fa[truncated]"
+          }
+        ],
+        "command": "judge",
+        "generatedAt": "2026-10-30T10:42:43.958630+00:00",
+        "metadata": {
+          "checkCount": 3,
+          "criterionCount": 1,
+          "ephemeral": true,
+          "historyPersisted": false,
+          "redacted": true,
+          "redactionsApplied": true,
+          "truncated": true
+        },
+        "outcome": "pass",
+        "passed": true,
+        "producer": {
+          "name": "gitreins",
+          "version": "0.17.1"
+        },
+        "schemaVersion": "1.0",
+        "scope": "working-tree",
+        "subject": {
+          "ephemeral": true,
+          "taskId": "ephemeral:cf002-0937-identity",
+          "title": "CF002-0937-identity"
+        },
+        "summary": "Judge Result: ephemeral:cf002-0937-identity\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 CF-002 local criterion 1: In scripts/inference-proxy.py, Gateway.authorize binds bearer [REDACTED] exact service/node/project/repository, expiry/revocation and explicit allowed provider/model before State.secret. Independently run python3 -B tests/inference-contract.py InferenceContract.test_denials_before_key_resolution InferenceContract.test_existing_route_disallowed_before_keys. Inspect the tested authorization-before-secret path and require both tests PASS. Local fixtures only.: Gateway.authorize (scripts/inference-proxy.py:469-496) enforces, in order: bearer [REDACTED] regex (471-475), identity lookup by token_hash with hmac.compare_digest (477-486), revocation/expiry `not identity[\"revoked\"] and identity[\"expires_at\"] > time.time()` (487-489), exact scope binding `all(body[k] == identity[k] for k in SCOPE)` where SCOPE={service_identity,node,project,repository} (line 29, 490), requested provider/model present in routes (491-492), and every candidate (incl. fallbacks) in identity[\"allowed\"] (493-495). State.secret is only invoked later in handle() at lines 525-526, after authorize() returns at line 504. Independent run: `python3 -B tests/inference-contract.py InferenceContract.test_denials_before_key_resolution InferenceContract.test_existing_route_disallowed_before_keys` -> EXIT_CODE=0, output 'test_denials_before_key_resolution ... ok', 'test_existing_route_disallowed_before_keys ... ok', 'Ran 2 tests in 1.525s', 'OK'. The tests prove the ordering: helper denied() (tests/inference-contract.py:247-253) asserts status 403, `self.resolutions == []` ('denial resolved upstream credentials') and no upstream calls; test_denials_before_key_resolution (280-314) covers bad/absent bearer, each SCOPE|PAIR field mismatch, revoked and expired identities; test_ex[truncated]"
+      },
+      "stderr": "gitreins.evaluator: WARNING: jev pre-screen unavailable (hilo-not-initialized) \u2014 tier-2 judge runs at full authority\n"
+    },
+    {
+      "index": 2,
+      "name": "transport",
+      "criterion": "CF-002 local criterion 2: In scripts/inference-proxy.py, clients cannot choose upstream URLs, keys or headers; host keys use private single-link regular no-follow files, no env proxies/redirects, no upstream secrets in node-facing errors/logs/output. Run python3 -B tests/inference-contract.py InferenceContract.test_schema_and_override_denials InferenceContract.test_redirect_and_environment_proxy_not_forwarded InferenceContract.test_host_files_and_policy_fail_closed InferenceContract.test_real_cli_invocation_and_redacted_logs. Require PASS and inspect the corresponding boundary functions. Local only.",
+      "command": [
+        "gitreins",
+        "judge",
+        "--ephemeral",
+        "--scope",
+        "working-tree",
+        "--title",
+        "CF002-0937-transport",
+        "--criterion",
+        "CF-002 local criterion 2: In scripts/inference-proxy.py, clients cannot choose upstream URLs, keys or headers; host keys use private single-link regular no-follow files, no env proxies/redirects, no upstream secrets in node-facing errors/logs/output. Run python3 -B tests/inference-contract.py InferenceContract.test_schema_and_override_denials InferenceContract.test_redirect_and_environment_proxy_not_forwarded InferenceContract.test_host_files_and_policy_fail_closed InferenceContract.test_real_cli_invocation_and_redacted_logs. Require PASS and inspect the corresponding boundary functions. Local only.",
+        "--json"
+      ],
+      "exit_code": 0,
+      "passed": true,
+      "evidence": {
+        "$schema": "https://gitreins.dev/schemas/evidence/v1.json",
+        "checks": [
+          {
+            "id": "criterion-1",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "CF-002 local criterion 2: In scripts/inference-proxy.py, clients cannot choose upstream URLs, keys or headers; host keys use private single-link regular no-follow files, no env proxies/redirects, no upstream secrets in node-facing errors/logs/output. Run python3 -B tests/inference-contract.py InferenceContract.test_schema_and_override_denials InferenceContract.test_redirect_and_environment_proxy_not_forwarded InferenceContract.test_host_files_and_policy_fail_closed InferenceContract.test_real_cli_invocation_and_redacted_logs. Require PASS and inspect the corresponding boundary functions. Local only.: Ran in worktree ~/worktrees/code-factory-CF-002-0937 (commit 114cc2c): `python3 -B tests/inference-contract.py <the 4 named tests>` -> EXIT=0, output 'test_schema_and_override_denials ... ok / test_redirect_and_environment_proxy_not_forwarded ... ok / test_host_files_and_policy_fail_closed ... ok / test_real_cli_invocation_and_redacted_logs ... ok / Ran 4 tests in 3.846s / OK'. Boundary functions inspected: (a) client cannot choose upstream URL/key/headers \u2014 scripts/inference-proxy.py:432-448 validate_body enforces exact key set (SCOPE|PAIR|messages plus only stream/temperature/max_tokens), so url/headers/key/fallback/tools are rejected; :600-608 Handler.do_POST requires path exactly /v1/chat/completions (no query), a header allowlist, Accept-Encoding identity and JSON content type; :200-215 route URL validated (no userinfo/query/fragment, path /v1/chat/completions, http only for 127.0.0.1). (b) host keys private single-link regular no-follow \u2014 :107-118 State pins dir 0700 owned by uid walking ancestors with O_NOFOLLOW; :130-155 State.open uses O_NOFOLLOW|O_NONBLOCK with dir_fd and requires S_ISREG, st_nlink==1, uid==getuid, mode 0600; :163-167 State.secret is the only credential resolver and is called only after authorize (:524-525). (c) no env proxies/redirects \u2014 :346-348 NoRedirect handler returns None and :380 build_opener(ProxyHandler({}), NoRedirect()); test at tests/inference-contract.py:47[truncated]"
+          },
+          {
+            "id": "stage-tier1",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10"
+          },
+          {
+            "id": "stage-tier2",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "COMPLETE\n  \u2713 CF-002 local criterion 2: In scripts/inference-proxy.py, clients cannot choose upstream URLs, keys or headers; host keys use private single-link regular no-follow files, no env proxies/redirects, no upstream secrets in node-facing errors/logs/output. Run python3 -B tests/inference-contract.py InferenceContract.test_schema_and_override_denials InferenceContract.test_redirect_and_environment_proxy_not_forwarded InferenceContract.test_host_files_and_policy_fail_closed InferenceContract.test_real_cli_invocation_and_redacted_logs. Require PASS and inspect the corresponding boundary functions. Local only.: Ran in worktree ~/worktrees/code-factory-CF-002-0937 (commit 114cc2c): `python3 -B tests/inference-contract.py <the 4 named tests>` -> EXIT=0, output 'test_schema_and_override_denials ... ok / test_redirect_and_environment_proxy_not_forwarded ... ok / test_host_files_and_policy_fail_closed ... ok / test_real_cli_invocation_and_redacted_logs ... ok / Ran 4 tests in 3.846s / OK'. Boundary functions inspected: (a) client cannot choose upstream URL/key/headers \u2014 scripts/inference-proxy.py:432-448 validate_body enforces exact key set (SCOPE|PAIR|messages plus only stream/temperature/max_tokens), so url/headers/key/fallback/tools are rejected; :600-608 Handler.do_POST requires path exactly /v1/chat/completions (no query), a header allowlist, Accept-Encoding identity and JSON content type; :200-215 route URL validated (no userinfo/query/fragment, path /v1/chat/completions, http only for 127.0.0.1). (b) host keys private single-link regular no-follow \u2014 :107-118 State pins dir 0700 owned by uid walking ancestors with O_NOFOLLOW; :130-155 State.open uses O_NOFOLLOW|O_NONBLOCK with dir_fd and requires S_ISREG, st_nlink==1, uid==getuid, mode 0600; :163-167 State.secret is the only credential resolver and is called only after authorize (:524-525). (c) no env proxies/redirects \u2014 :346-348 NoRedirect handler returns None and :380 build_opener(ProxyHandler({}), NoRedirect()); test at tests/inference-c[truncated]"
+          }
+        ],
+        "command": "judge",
+        "generatedAt": "2026-10-30T10:44:09.148967+00:00",
+        "metadata": {
+          "checkCount": 3,
+          "criterionCount": 1,
+          "ephemeral": true,
+          "historyPersisted": false,
+          "redacted": true,
+          "redactionsApplied": false,
+          "truncated": true
+        },
+        "outcome": "pass",
+        "passed": true,
+        "producer": {
+          "name": "gitreins",
+          "version": "0.17.1"
+        },
+        "schemaVersion": "1.0",
+        "scope": "working-tree",
+        "subject": {
+          "ephemeral": true,
+          "taskId": "ephemeral:cf002-0937-transport",
+          "title": "CF002-0937-transport"
+        },
+        "summary": "Judge Result: ephemeral:cf002-0937-transport\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 CF-002 local criterion 2: In scripts/inference-proxy.py, clients cannot choose upstream URLs, keys or headers; host keys use private single-link regular no-follow files, no env proxies/redirects, no upstream secrets in node-facing errors/logs/output. Run python3 -B tests/inference-contract.py InferenceContract.test_schema_and_override_denials InferenceContract.test_redirect_and_environment_proxy_not_forwarded InferenceContract.test_host_files_and_policy_fail_closed InferenceContract.test_real_cli_invocation_and_redacted_logs. Require PASS and inspect the corresponding boundary functions. Local only.: Ran in worktree ~/worktrees/code-factory-CF-002-0937 (commit 114cc2c): `python3 -B tests/inference-contract.py <the 4 named tests>` -> EXIT=0, output 'test_schema_and_override_denials ... ok / test_redirect_and_environment_proxy_not_forwarded ... ok / test_host_files_and_policy_fail_closed ... ok / test_real_cli_invocation_and_redacted_logs ... ok / Ran 4 tests in 3.846s / OK'. Boundary functions inspected: (a) client cannot choose upstream URL/key/headers \u2014 scripts/inference-proxy.py:432-448 validate_body enforces exact key set (SCOPE|PAIR|messages plus only stream/temperature/max_tokens), so url/headers/key/fallback/tools are rejected; :600-608 Handler.do_POST requires path exactly /v1/chat/completions (no query), a header allowlist, Accept-Encoding identity and JSON content type; :200-215 route URL validated (no userinfo/query/fragment, path /v1/chat/completions, http only for 127.0.0.1). (b) host keys private single-link regular no-follow \u2014 :107-118 State pins dir 0700 owned by uid walking ancestors with O_NOFOLLOW; :130-155 State.open uses O_NOFOLLOW|O_NONBLOCK with dir_fd and requires S_ISREG, st_nlink==1, uid==getuid, mode 0600; :163-167 Stat[truncated]"
+      },
+      "stderr": "gitreins.evaluator: WARNING: jev pre-screen unavailable (hilo-not-initialized) \u2014 tier-2 judge runs at full authority\n"
+    },
+    {
+      "index": 3,
+      "name": "served-identity",
+      "criterion": "CF-002 local criterion 3: Run python3 -B tests/inference-contract.py InferenceContract.test_http_success_and_evidence InferenceContract.test_attestation_failures_and_error_sentinel InferenceContract.test_fallback_authorized_and_disallowed InferenceContract.test_no_fallback_on_attestation_or_auth_error. Require PASS. Inspect upstream/Gateway.handle: request/body-bound trusted-adapter HMAC, exact attempted served pair, no inference of actual service from labels, and all fallback pairs authorized before keys. Evidence records requested vs served pairs without secrets. HMAC assertion is not independent truth; no live proof claimed.",
+      "command": [
+        "gitreins",
+        "judge",
+        "--ephemeral",
+        "--scope",
+        "working-tree",
+        "--title",
+        "CF002-0937-served-identity",
+        "--criterion",
+        "CF-002 local criterion 3: Run python3 -B tests/inference-contract.py InferenceContract.test_http_success_and_evidence InferenceContract.test_attestation_failures_and_error_sentinel InferenceContract.test_fallback_authorized_and_disallowed InferenceContract.test_no_fallback_on_attestation_or_auth_error. Require PASS. Inspect upstream/Gateway.handle: request/body-bound trusted-adapter HMAC, exact attempted served pair, no inference of actual service from labels, and all fallback pairs authorized before keys. Evidence records requested vs served pairs without secrets. HMAC assertion is not independent truth; no live proof claimed.",
+        "--json"
+      ],
+      "exit_code": 0,
+      "passed": true,
+      "evidence": {
+        "$schema": "https://gitreins.dev/schemas/evidence/v1.json",
+        "checks": [
+          {
+            "id": "criterion-1",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "CF-002 local criterion 3: Run python3 -B tests/inference-contract.py InferenceContract.test_http_success_and_evidence InferenceContract.test_attestation_failures_and_error_sentinel InferenceContract.test_fallback_authorized_and_disallowed InferenceContract.test_no_fallback_on_attestation_or_auth_error. Require PASS. Inspect upstream/Gateway.handle: request/body-bound trusted-adapter HMAC, exact attempted served pair, no inference of actual service from labels, and all fallback pairs authorized before keys. Evidence records requested vs served pairs without secrets. HMAC assertion is not independent truth; no live proof claimed.: Tests: `python3 -B tests/inference-contract.py <4 tests>` -> all 4 'ok', 'Ran 4 tests in 3.760s / OK', EXIT=0; full `bash tests/selftest.sh` -> 'Ran 16 tests in 18.824s / OK / SELFTEST: PASS'. Code: scripts/inference-proxy.py:498-556 Gateway.handle calls authorize() (which resolves no keys) before any secret; :486-488 `candidates = [requested] + pairs(routes[requested]['fallback'])` then `require(all(candidate in allowed ...))` \u2014 every fallback pair authorized before keys; :513 durable 'intent' evidence written before key resolution; :525-526 keys resolved only inside the attempt loop; :522 `attempted = pair_dict(candidate)` records the exact attempted pair; upstream() :404-415 verifies HMAC-SHA256 over {request_id, provider, model, body_sha256} (request/body-bound) and :416 `require((provider, model) == (route['provider'], route['model']))` \u2014 served identity comes from the attested headers, never inferred from labels; :441-443 returns `pair_dict((provider, model))` as served; :546-553 success row records requested/attempted/served/outcome/provenance only. Evidence secrecy asserted in tests/inference-contract.py:275-278 (prompt, answer, key, token absent from rows) and :425-427 (key/token absent from evidence.jsonl). Non-claims documented: specs/HARNESS.md:118-122 'HMAC authenticates the trusted adapter assertion, not its truthfulness... Fake local attestations prove checks, no[truncated]"
+          },
+          {
+            "id": "stage-tier1",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10"
+          },
+          {
+            "id": "stage-tier2",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "COMPLETE\n  \u2713 CF-002 local criterion 3: Run python3 -B tests/inference-contract.py InferenceContract.test_http_success_and_evidence InferenceContract.test_attestation_failures_and_error_sentinel InferenceContract.test_fallback_authorized_and_disallowed InferenceContract.test_no_fallback_on_attestation_or_auth_error. Require PASS. Inspect upstream/Gateway.handle: request/body-bound trusted-adapter HMAC, exact attempted served pair, no inference of actual service from labels, and all fallback pairs authorized before keys. Evidence records requested vs served pairs without secrets. HMAC assertion is not independent truth; no live proof claimed.: Tests: `python3 -B tests/inference-contract.py <4 tests>` -> all 4 'ok', 'Ran 4 tests in 3.760s / OK', EXIT=0; full `bash tests/selftest.sh` -> 'Ran 16 tests in 18.824s / OK / SELFTEST: PASS'. Code: scripts/inference-proxy.py:498-556 Gateway.handle calls authorize() (which resolves no keys) before any secret; :486-488 `candidates = [requested] + pairs(routes[requested]['fallback'])` then `require(all(candidate in allowed ...))` \u2014 every fallback pair authorized before keys; :513 durable 'intent' evidence written before key resolution; :525-526 keys resolved only inside the attempt loop; :522 `attempted = pair_dict(candidate)` records the exact attempted pair; upstream() :404-415 verifies HMAC-SHA256 over {request_id, provider, model, body_sha256} (request/body-bound) and :416 `require((provider, model) == (route['provider'], route['model']))` \u2014 served identity comes from the attested headers, never inferred from labels; :441-443 returns `pair_dict((provider, model))` as served; :546-553 success row records requested/attempted/served/outcome/provenance only. Evidence secrecy asserted in tests/inference-contract.py:275-278 (prompt, answer, key, token absent from rows) and :425-427 (key/token absent from evidence.jsonl). Non-claims documented: specs/HARNESS.md:118-122 'HMAC authenticates the trusted adapter assertion, not its truthfulness... Fake local attestations pro[truncated]"
+          }
+        ],
+        "command": "judge",
+        "generatedAt": "2026-10-30T10:47:21.924903+00:00",
+        "metadata": {
+          "checkCount": 3,
+          "criterionCount": 1,
+          "ephemeral": true,
+          "historyPersisted": false,
+          "redacted": true,
+          "redactionsApplied": false,
+          "truncated": true
+        },
+        "outcome": "pass",
+        "passed": true,
+        "producer": {
+          "name": "gitreins",
+          "version": "0.17.1"
+        },
+        "schemaVersion": "1.0",
+        "scope": "working-tree",
+        "subject": {
+          "ephemeral": true,
+          "taskId": "ephemeral:cf002-0937-served-identity",
+          "title": "CF002-0937-served-identity"
+        },
+        "summary": "Judge Result: ephemeral:cf002-0937-served-identity\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 CF-002 local criterion 3: Run python3 -B tests/inference-contract.py InferenceContract.test_http_success_and_evidence InferenceContract.test_attestation_failures_and_error_sentinel InferenceContract.test_fallback_authorized_and_disallowed InferenceContract.test_no_fallback_on_attestation_or_auth_error. Require PASS. Inspect upstream/Gateway.handle: request/body-bound trusted-adapter HMAC, exact attempted served pair, no inference of actual service from labels, and all fallback pairs authorized before keys. Evidence records requested vs served pairs without secrets. HMAC assertion is not independent truth; no live proof claimed.: Tests: `python3 -B tests/inference-contract.py <4 tests>` -> all 4 'ok', 'Ran 4 tests in 3.760s / OK', EXIT=0; full `bash tests/selftest.sh` -> 'Ran 16 tests in 18.824s / OK / SELFTEST: PASS'. Code: scripts/inference-proxy.py:498-556 Gateway.handle calls authorize() (which resolves no keys) before any secret; :486-488 `candidates = [requested] + pairs(routes[requested]['fallback'])` then `require(all(candidate in allowed ...))` \u2014 every fallback pair authorized before keys; :513 durable 'intent' evidence written before key resolution; :525-526 keys resolved only inside the attempt loop; :522 `attempted = pair_dict(candidate)` records the exact attempted pair; upstream() :404-415 verifies HMAC-SHA256 over {request_id, provider, model, body_sha256} (request/body-bound) and :416 `require((provider, model) == (route['provider'], route['model']))` \u2014 served identity comes from the attested headers, never inferred from labels; :441-443 returns `pair_dict((provider, model))` as served; :546-553 success row records requested/attempted/served/outcome/provenance only. Evidence secrecy asserted in tests/inference-contract.py:275-278 (pr[truncated]"
+      },
+      "stderr": "gitreins.evaluator: WARNING: jev pre-screen unavailable (hilo-not-initialized) \u2014 tier-2 judge runs at full authority\n"
+    },
+    {
+      "index": 4,
+      "name": "journal",
+      "criterion": "CF-002 local criterion 4: In scripts/inference-proxy.py Evidence and Gateway.handle enforce durable intent before keys, fsynced success before 200, poison-on-write-failure, restart hash/schema/sequence integrity, lock/replacement/short-write failure without automatic repair. Run python3 -B tests/inference-contract.py InferenceContract.test_restart_revocation_rotation_and_corruption InferenceContract.test_evidence_write_failure_before_key_and_success InferenceContract.test_evidence_replacement_and_partial_write. Require PASS; inspect these functions. Application append-only only, never host-owner immutable.",
+      "command": [
+        "gitreins",
+        "judge",
+        "--ephemeral",
+        "--scope",
+        "working-tree",
+        "--title",
+        "CF002-0937-journal",
+        "--criterion",
+        "CF-002 local criterion 4: In scripts/inference-proxy.py Evidence and Gateway.handle enforce durable intent before keys, fsynced success before 200, poison-on-write-failure, restart hash/schema/sequence integrity, lock/replacement/short-write failure without automatic repair. Run python3 -B tests/inference-contract.py InferenceContract.test_restart_revocation_rotation_and_corruption InferenceContract.test_evidence_write_failure_before_key_and_success InferenceContract.test_evidence_replacement_and_partial_write. Require PASS; inspect these functions. Application append-only only, never host-owner immutable.",
+        "--json"
+      ],
+      "exit_code": 0,
+      "passed": true,
+      "evidence": {
+        "$schema": "https://gitreins.dev/schemas/evidence/v1.json",
+        "checks": [
+          {
+            "id": "criterion-1",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "CF-002 local criterion 4: In scripts/inference-proxy.py Evidence and Gateway.handle enforce durable intent before keys, fsynced success before 200, poison-on-write-failure, restart hash/schema/sequence integrity, lock/replacement/short-write failure without automatic repair. Run python3 -B tests/inference-contract.py InferenceContract.test_restart_revocation_rotation_and_corruption InferenceContract.test_evidence_write_failure_before_key_and_success InferenceContract.test_evidence_replacement_and_partial_write. Require PASS; inspect these functions. Application append-only only, never host-owner immutable.: Test run: `python3 -B tests/inference-contract.py InferenceContract.test_restart_revocation_rotation_and_corruption InferenceContract.test_evidence_write_failure_before_key_and_success InferenceContract.test_evidence_replacement_and_partial_write` -> EXIT=0, output 'test_... ok' x3, 'Ran 3 tests in 3.076s', 'OK'. Code inspection: Evidence (scripts/inference-proxy.py:228-347) docstring line 230 'Append-only application journal, NOT immutable against the host owner.' (matches specs/HARNESS.md:141-142 'Hash chain is application append-only, not OS-immutable'); validate() (258-296) enforces per-row schema via fields(row, self.KEYS), seq == seq+1, previous-hash chain, uuid/outcome/provenance, and hmac.compare_digest hash recompute; __init__ takes fcntl.flock(LOCK_EX|LOCK_NB) at line 250 (test asserts BlockingIOError on second Evidence) and fsyncs fd + state dir; healthy() (301-313) detects replacement via inode/dev/size/nlink/mode mismatch; append() (315-347) checks short write `require(os.write(self.fd, raw) == len(raw))`, fsyncs, and on any exception sets self.failed = True (poison, no auto-repair) then raises Refused('evidence'). Gateway.handle (498-560): evidence.healthy() first (501), intent row appended at 513 BEFORE state.secret() key resolution at 522, success row appended+fsynced at 546-556 before `return 200, result` at 557, and any evidence failure returns 503 {'error':'evidence_unavailable'} [truncated]"
+          },
+          {
+            "id": "stage-tier1",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10"
+          },
+          {
+            "id": "stage-tier2",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "COMPLETE\n  \u2713 CF-002 local criterion 4: In scripts/inference-proxy.py Evidence and Gateway.handle enforce durable intent before keys, fsynced success before 200, poison-on-write-failure, restart hash/schema/sequence integrity, lock/replacement/short-write failure without automatic repair. Run python3 -B tests/inference-contract.py InferenceContract.test_restart_revocation_rotation_and_corruption InferenceContract.test_evidence_write_failure_before_key_and_success InferenceContract.test_evidence_replacement_and_partial_write. Require PASS; inspect these functions. Application append-only only, never host-owner immutable.: Test run: `python3 -B tests/inference-contract.py InferenceContract.test_restart_revocation_rotation_and_corruption InferenceContract.test_evidence_write_failure_before_key_and_success InferenceContract.test_evidence_replacement_and_partial_write` -> EXIT=0, output 'test_... ok' x3, 'Ran 3 tests in 3.076s', 'OK'. Code inspection: Evidence (scripts/inference-proxy.py:228-347) docstring line 230 'Append-only application journal, NOT immutable against the host owner.' (matches specs/HARNESS.md:141-142 'Hash chain is application append-only, not OS-immutable'); validate() (258-296) enforces per-row schema via fields(row, self.KEYS), seq == seq+1, previous-hash chain, uuid/outcome/provenance, and hmac.compare_digest hash recompute; __init__ takes fcntl.flock(LOCK_EX|LOCK_NB) at line 250 (test asserts BlockingIOError on second Evidence) and fsyncs fd + state dir; healthy() (301-313) detects replacement via inode/dev/size/nlink/mode mismatch; append() (315-347) checks short write `require(os.write(self.fd, raw) == len(raw))`, fsyncs, and on any exception sets self.failed = True (poison, no auto-repair) then raises Refused('evidence'). Gateway.handle (498-560): evidence.healthy() first (501), intent row appended at 513 BEFORE state.secret() key resolution at 522, success row appended+fsynced at 546-556 before `return 200, result` at 557, and any evidence failure returns 503 {'error':'evidence_u[truncated]"
+          }
+        ],
+        "command": "judge",
+        "generatedAt": "2026-10-30T10:55:43.048171+00:00",
+        "metadata": {
+          "checkCount": 3,
+          "criterionCount": 1,
+          "ephemeral": true,
+          "historyPersisted": false,
+          "redacted": true,
+          "redactionsApplied": false,
+          "truncated": true
+        },
+        "outcome": "pass",
+        "passed": true,
+        "producer": {
+          "name": "gitreins",
+          "version": "0.17.1"
+        },
+        "schemaVersion": "1.0",
+        "scope": "working-tree",
+        "subject": {
+          "ephemeral": true,
+          "taskId": "ephemeral:cf002-0937-journal",
+          "title": "CF002-0937-journal"
+        },
+        "summary": "Judge Result: ephemeral:cf002-0937-journal\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 CF-002 local criterion 4: In scripts/inference-proxy.py Evidence and Gateway.handle enforce durable intent before keys, fsynced success before 200, poison-on-write-failure, restart hash/schema/sequence integrity, lock/replacement/short-write failure without automatic repair. Run python3 -B tests/inference-contract.py InferenceContract.test_restart_revocation_rotation_and_corruption InferenceContract.test_evidence_write_failure_before_key_and_success InferenceContract.test_evidence_replacement_and_partial_write. Require PASS; inspect these functions. Application append-only only, never host-owner immutable.: Test run: `python3 -B tests/inference-contract.py InferenceContract.test_restart_revocation_rotation_and_corruption InferenceContract.test_evidence_write_failure_before_key_and_success InferenceContract.test_evidence_replacement_and_partial_write` -> EXIT=0, output 'test_... ok' x3, 'Ran 3 tests in 3.076s', 'OK'. Code inspection: Evidence (scripts/inference-proxy.py:228-347) docstring line 230 'Append-only application journal, NOT immutable against the host owner.' (matches specs/HARNESS.md:141-142 'Hash chain is application append-only, not OS-immutable'); validate() (258-296) enforces per-row schema via fields(row, self.KEYS), seq == seq+1, previous-hash chain, uuid/outcome/provenance, and hmac.compare_digest hash recompute; __init__ takes fcntl.flock(LOCK_EX|LOCK_NB) at line 250 (test asserts BlockingIOError on second Evidence) and fsyncs fd + state dir; healthy() (301-313) detects replacement via inode/dev/size/nlink/mode mismatch; append() (315-347) checks short write `require(os.write(self.fd, raw) == len(raw))`, fsyncs, and on any exception sets self.failed = True (poison, no auto-repair) then raises Refused('evidence'). Gateway.handle (498-560):[truncated]"
+      },
+      "stderr": "gitreins.evaluator: WARNING: jev pre-screen unavailable (hilo-not-initialized) \u2014 tier-2 judge runs at full authority\n",
+      "prior_attempts": [
+        {
+          "index": 4,
+          "name": "journal",
+          "criterion": "CF-002 local criterion 4: In scripts/inference-proxy.py Evidence and Gateway.handle enforce durable intent before keys, fsynced success before 200, poison-on-write-failure, restart hash/schema/sequence integrity, lock/replacement/short-write failure without automatic repair. Run python3 -B tests/inference-contract.py InferenceContract.test_restart_revocation_rotation_and_corruption InferenceContract.test_evidence_write_failure_before_key_and_success InferenceContract.test_evidence_replacement_and_partial_write. Require PASS; inspect these functions. Application append-only only, never host-owner immutable.",
+          "command": [
+            "gitreins",
+            "judge",
+            "--ephemeral",
+            "--scope",
+            "working-tree",
+            "--title",
+            "CF002-0937-journal",
+            "--criterion",
+            "CF-002 local criterion 4: In scripts/inference-proxy.py Evidence and Gateway.handle enforce durable intent before keys, fsynced success before 200, poison-on-write-failure, restart hash/schema/sequence integrity, lock/replacement/short-write failure without automatic repair. Run python3 -B tests/inference-contract.py InferenceContract.test_restart_revocation_rotation_and_corruption InferenceContract.test_evidence_write_failure_before_key_and_success InferenceContract.test_evidence_replacement_and_partial_write. Require PASS; inspect these functions. Application append-only only, never host-owner immutable.",
+            "--json"
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "evidence": {
+            "$schema": "https://gitreins.dev/schemas/evidence/v1.json",
+            "checks": [
+              {
+                "id": "stage-tier1",
+                "outcome": "pass",
+                "passed": true,
+                "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10"
+              },
+              {
+                "id": "stage-tier2",
+                "outcome": "fail",
+                "passed": false,
+                "summary": "INCOMPLETE\n\nCap exceeded: Iteration cap (30) reached (30.1 used). Increase max_iterations or split criteria."
+              }
+            ],
+            "command": "judge",
+            "generatedAt": "2026-10-30T10:53:37.676884+00:00",
+            "metadata": {
+              "checkCount": 2,
+              "criterionCount": 0,
+              "ephemeral": true,
+              "historyPersisted": false,
+              "redacted": true,
+              "redactionsApplied": false,
+              "truncated": false
+            },
+            "outcome": "fail",
+            "passed": false,
+            "producer": {
+              "name": "gitreins",
+              "version": "0.17.1"
+            },
+            "schemaVersion": "1.0",
+            "scope": "working-tree",
+            "subject": {
+              "ephemeral": true,
+              "taskId": "ephemeral:cf002-0937-journal",
+              "title": "CF002-0937-journal"
+            },
+            "summary": "Judge Result: ephemeral:cf002-0937-journal\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: FAIL\n  INCOMPLETE\n\nCap exceeded: Iteration cap (30) reached (30.1 used). Increase max_iterations or split criteria.\n\nOverall: FAIL \u2717"
+          },
+          "stderr": "gitreins.evaluator: WARNING: jev pre-screen unavailable (hilo-not-initialized) \u2014 tier-2 judge runs at full authority\ngitreins.evaluator: WARNING: Eval cap exceeded during tool call: Iteration cap (30) reached (30.1 used). Increase max_iterations or split criteria.\n"
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "name": "contract-boundary",
+      "criterion": "CF-002 local criterion 5: Read specs/HARNESS.md host-only custody/protocol and docs/THREAT-MODEL.md, with NODE/ENVELOPE/DESIGN references: all distinguish the implemented host-local loopback proxy from UNIMPLEMENTED live node adapter/token delivery/Crier/TLS/qualified attestor. Run python3 -B tests/inference-contract.py InferenceContract.test_installer_sentinel_and_no_transport_copy. Require PASS; git diff 683fca1 HEAD -- scripts/harness/install-hermes.sh must be empty. No provisioning/live credentials/service change is claimed, and CF-002 board remains in_progress for original live criterion 5.",
+      "command": [
+        "gitreins",
+        "judge",
+        "--ephemeral",
+        "--scope",
+        "working-tree",
+        "--title",
+        "CF002-0937-contract-boundary",
+        "--criterion",
+        "CF-002 local criterion 5: Read specs/HARNESS.md host-only custody/protocol and docs/THREAT-MODEL.md, with NODE/ENVELOPE/DESIGN references: all distinguish the implemented host-local loopback proxy from UNIMPLEMENTED live node adapter/token delivery/Crier/TLS/qualified attestor. Run python3 -B tests/inference-contract.py InferenceContract.test_installer_sentinel_and_no_transport_copy. Require PASS; git diff 683fca1 HEAD -- scripts/harness/install-hermes.sh must be empty. No provisioning/live credentials/service change is claimed, and CF-002 board remains in_progress for original live criterion 5.",
+        "--json"
+      ],
+      "exit_code": 0,
+      "passed": true,
+      "evidence": {
+        "$schema": "https://gitreins.dev/schemas/evidence/v1.json",
+        "checks": [
+          {
+            "id": "criterion-1",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "CF-002 local criterion 5: Read specs/HARNESS.md host-only custody/protocol and docs/THREAT-MODEL.md, with NODE/ENVELOPE/DESIGN references: all distinguish the implemented host-local loopback proxy from UNIMPLEMENTED live node adapter/token delivery/Crier/TLS/qualified attestor. Run python3 -B tests/inference-contract.py InferenceContract.test_installer_sentinel_and_no_transport_copy. Require PASS; git diff 683fca1 HEAD -- scripts/harness/install-hermes.sh must be empty. No provisioning/live credentials/service change is claimed, and CF-002 board remains in_progress for original live criterion 5.: (a) Test PASS: `python3 -B tests/inference-contract.py InferenceContract.test_installer_sentinel_and_no_transport_copy` -> \"test_installer_sentinel_and_no_transport_copy ... ok / Ran 1 test in 1.305s / OK\", exit_code 0. Test body at tests/inference-contract.py:719-760 asserts installer --apply/--check exit 1 with \"FAIL  inference_integration\", sentinel absent from stdout+stderr, .env bytes unchanged, no .node dir, sentinel absent from all evidence rows. Full suite also green: `bash tests/selftest.sh` -> \"Ran 16 tests ... OK / PASS  inference contract / SELFTEST: PASS\", exit 0. (b) `git diff 683fca1 HEAD -- scripts/harness/install-hermes.sh` produced empty output, exit 0 (diffstat confirms the file is not among the 14 changed files). (c) Docs distinguish implemented loopback proxy from UNIMPLEMENTED items: specs/HARNESS.md:20-27 (\"loopback-only host proxy ... Deployment, node adapter, identity delivery, Crier transport and gateway configuration remain UNIMPLEMENTED / BLOCKED\"), :40-46 (127.0.0.1-only bind, no remote bind switch), :61 (\"Issuance/delivery/enrollment are unimplemented\"), :120-122 (\"Attestor qualification, private authenticated remote TLS termination, network topology, node adapter, Crier transport ... remain BLOCKED\"); docs/THREAT-MODEL.md:18-20, :38 (\"Local HTTP only ... No issuance/node adapter/installer/Crier integration\"), :40 (\"Local fake attestor is not remote model proof\"), :84-89 (\"not pro[truncated]"
+          },
+          {
+            "id": "stage-tier1",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10"
+          },
+          {
+            "id": "stage-tier2",
+            "outcome": "pass",
+            "passed": true,
+            "summary": "COMPLETE\n  \u2713 CF-002 local criterion 5: Read specs/HARNESS.md host-only custody/protocol and docs/THREAT-MODEL.md, with NODE/ENVELOPE/DESIGN references: all distinguish the implemented host-local loopback proxy from UNIMPLEMENTED live node adapter/token delivery/Crier/TLS/qualified attestor. Run python3 -B tests/inference-contract.py InferenceContract.test_installer_sentinel_and_no_transport_copy. Require PASS; git diff 683fca1 HEAD -- scripts/harness/install-hermes.sh must be empty. No provisioning/live credentials/service change is claimed, and CF-002 board remains in_progress for original live criterion 5.: (a) Test PASS: `python3 -B tests/inference-contract.py InferenceContract.test_installer_sentinel_and_no_transport_copy` -> \"test_installer_sentinel_and_no_transport_copy ... ok / Ran 1 test in 1.305s / OK\", exit_code 0. Test body at tests/inference-contract.py:719-760 asserts installer --apply/--check exit 1 with \"FAIL  inference_integration\", sentinel absent from stdout+stderr, .env bytes unchanged, no .node dir, sentinel absent from all evidence rows. Full suite also green: `bash tests/selftest.sh` -> \"Ran 16 tests ... OK / PASS  inference contract / SELFTEST: PASS\", exit 0. (b) `git diff 683fca1 HEAD -- scripts/harness/install-hermes.sh` produced empty output, exit 0 (diffstat confirms the file is not among the 14 changed files). (c) Docs distinguish implemented loopback proxy from UNIMPLEMENTED items: specs/HARNESS.md:20-27 (\"loopback-only host proxy ... Deployment, node adapter, identity delivery, Crier transport and gateway configuration remain UNIMPLEMENTED / BLOCKED\"), :40-46 (127.0.0.1-only bind, no remote bind switch), :61 (\"Issuance/delivery/enrollment are unimplemented\"), :120-122 (\"Attestor qualification, private authenticated remote TLS termination, network topology, node adapter, Crier transport ... remain BLOCKED\"); docs/THREAT-MODEL.md:18-20, :38 (\"Local HTTP only ... No issuance/node adapter/installer/Crier integration\"), :40 (\"Local fake attestor is not remote model proof\"), :84[truncated]"
+          }
+        ],
+        "command": "judge",
+        "generatedAt": "2026-10-30T10:57:06.756743+00:00",
+        "metadata": {
+          "checkCount": 3,
+          "criterionCount": 1,
+          "ephemeral": true,
+          "historyPersisted": false,
+          "redacted": true,
+          "redactionsApplied": false,
+          "truncated": true
+        },
+        "outcome": "pass",
+        "passed": true,
+        "producer": {
+          "name": "gitreins",
+          "version": "0.17.1"
+        },
+        "schemaVersion": "1.0",
+        "scope": "working-tree",
+        "subject": {
+          "ephemeral": true,
+          "taskId": "ephemeral:cf002-0937-contract-boundary",
+          "title": "CF002-0937-contract-boundary"
+        },
+        "summary": "Judge Result: ephemeral:cf002-0937-contract-boundary\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 CF-002 local criterion 5: Read specs/HARNESS.md host-only custody/protocol and docs/THREAT-MODEL.md, with NODE/ENVELOPE/DESIGN references: all distinguish the implemented host-local loopback proxy from UNIMPLEMENTED live node adapter/token delivery/Crier/TLS/qualified attestor. Run python3 -B tests/inference-contract.py InferenceContract.test_installer_sentinel_and_no_transport_copy. Require PASS; git diff 683fca1 HEAD -- scripts/harness/install-hermes.sh must be empty. No provisioning/live credentials/service change is claimed, and CF-002 board remains in_progress for original live criterion 5.: (a) Test PASS: `python3 -B tests/inference-contract.py InferenceContract.test_installer_sentinel_and_no_transport_copy` -> \"test_installer_sentinel_and_no_transport_copy ... ok / Ran 1 test in 1.305s / OK\", exit_code 0. Test body at tests/inference-contract.py:719-760 asserts installer --apply/--check exit 1 with \"FAIL  inference_integration\", sentinel absent from stdout+stderr, .env bytes unchanged, no .node dir, sentinel absent from all evidence rows. Full suite also green: `bash tests/selftest.sh` -> \"Ran 16 tests ... OK / PASS  inference contract / SELFTEST: PASS\", exit 0. (b) `git diff 683fca1 HEAD -- scripts/harness/install-hermes.sh` produced empty output, exit 0 (diffstat confirms the file is not among the 14 changed files). (c) Docs distinguish implemented loopback proxy from UNIMPLEMENTED items: specs/HARNESS.md:20-27 (\"loopback-only host proxy ... Deployment, node adapter, identity delivery, Crier transport and gateway configuration remain UNIMPLEMENTED / BLOCKED\"), :40-46 (127.0.0.1-only bind, no remote bind switch), :61 (\"Issuance/delivery/enrollment are unimplemented\"), :120-122 (\"Attestor qualification, private authenticated remote TLS ter[truncated]"
+      },
+      "stderr": "gitreins.evaluator: WARNING: jev pre-screen unavailable (hilo-not-initialized) \u2014 tier-2 judge runs at full authority\n"
+    },
+    {
+      "index": 6,
+      "name": "tests-trace",
+      "criterion": "CF-002 local criterion 6: Run bash tests/selftest.sh and scripts/boardctl validate; require PASS/OK (headerless-board warning allowed). Read docs/audits/code-factory-CF-002-local-0937.md and code-factory-CF-002-foreman-0937.md: reproducible 16 HTTP/CLI tests, 16 assertion-based semantic mutations plus selftest failure propagation, unchanged positive control, no fake bootstrap failures counted, and complete row/spec/test/evidence trace. Verify source test/mutation runner and that implementation 114cc2c is an ancestor of HEAD. Trace pending verdict is honest; parent CF-002 stays open. This is only a local tranche, not remote acceptance.",
+      "command": [
+        "gitreins",
+        "judge",
+        "--ephemeral",
+        "--scope",
+        "working-tree",
+        "--title",
+        "CF002-0937-tests-trace",
+        "--criterion",
+        "CF-002 local criterion 6: Run bash tests/selftest.sh and scripts/boardctl validate; require PASS/OK (headerless-board warning allowed). Read docs/audits/code-factory-CF-002-local-0937.md and code-factory-CF-002-foreman-0937.md: reproducible 16 HTTP/CLI tests, 16 assertion-based semantic mutations plus selftest failure propagation, unchanged positive control, no fake bootstrap failures counted, and complete row/spec/test/evidence trace. Verify source test/mutation runner and that implementation 114cc2c is an ancestor of HEAD. Trace pending verdict is honest; parent CF-002 stays open. This is only a local tranche, not remote acceptance.",
+        "--json"
+      ],
+      "exit_code": 1,
+      "passed": false,
+      "evidence": {
+        "$schema": "https://gitreins.dev/schemas/evidence/v1.json",
+        "checks": [
+          {
+            "id": "criterion-1",
+            "outcome": "fail",
+            "passed": false,
+            "summary": "CF-002 local criterion 6: Run bash tests/selftest.sh and scripts/boardctl validate; require PASS/OK (headerless-board warning allowed). Read docs/audits/code-factory-CF-002-local-0937.md and code-factory-CF-002-foreman-0937.md: reproducible 16 HTTP/CLI tests, 16 assertion-based semantic mutations plus selftest failure propagation, unchanged positive control, no fake bootstrap failures counted, and complete row/spec/test/evidence trace. Verify source test/mutation runner and that implementation 114cc2c is an ancestor of HEAD. Trace pending verdict is honest; parent CF-002 stays open. This is only a local tranche, not remote acceptance.: selftest: SELFTEST: PASS (16 inference tests OK, 10 build tests OK, 7 node mutations PASS). boardctl validate: RESULT: OK (1 warning: headerless board). 114cc2c is ancestor of HEAD (exit 0). Audits read: local + foreman. Remaining: verify mutation runner source (16 semantic mutants, assertion-based, no bootstrap failures), positive control unchanged, trace honesty, CF-002 open."
+          },
+          {
+            "id": "stage-tier1",
+            "outcome": "fail",
+            "passed": false,
+            "summary": "\u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  ~ tests: Command timed out after 120s (step budget)\nDEGRADED \u2014 did no work: tests"
+          },
+          {
+            "id": "stage-tier2",
+            "outcome": "fail",
+            "passed": false,
+            "summary": "INCOMPLETE\n  \u2717 CF-002 local criterion 6: Run bash tests/selftest.sh and scripts/boardctl validate; require PASS/OK (headerless-board warning allowed). Read docs/audits/code-factory-CF-002-local-0937.md and code-factory-CF-002-foreman-0937.md: reproducible 16 HTTP/CLI tests, 16 assertion-based semantic mutations plus selftest failure propagation, unchanged positive control, no fake bootstrap failures counted, and complete row/spec/test/evidence trace. Verify source test/mutation runner and that implementation 114cc2c is an ancestor of HEAD. Trace pending verdict is honest; parent CF-002 stays open. This is only a local tranche, not remote acceptance.: selftest: SELFTEST: PASS (16 inference tests OK, 10 build tests OK, 7 node mutations PASS). boardctl validate: RESULT: OK (1 warning: headerless board). 114cc2c is ancestor of HEAD (exit 0). Audits read: local + foreman. Remaining: verify mutation runner source (16 semantic mutants, assertion-based, no bootstrap failures), positive control unchanged, trace honesty, CF-002 open.\nPartial verdict \u2014 evaluation hit resource cap before all criteria verified"
+          }
+        ],
+        "command": "judge",
+        "generatedAt": "2026-10-30T11:15:02.825204+00:00",
+        "metadata": {
+          "checkCount": 3,
+          "criterionCount": 1,
+          "ephemeral": true,
+          "historyPersisted": false,
+          "redacted": true,
+          "redactionsApplied": false,
+          "truncated": false
+        },
+        "outcome": "fail",
+        "passed": false,
+        "producer": {
+          "name": "gitreins",
+          "version": "0.17.1"
+        },
+        "schemaVersion": "1.0",
+        "scope": "working-tree",
+        "subject": {
+          "ephemeral": true,
+          "taskId": "ephemeral:cf002-0937-tests-trace",
+          "title": "CF002-0937-tests-trace"
+        },
+        "summary": "Judge Result: ephemeral:cf002-0937-tests-trace\n\nStage tier1: FAIL\n  WARNING: coverage is secrets+lint+tests \u2014 tests did not run (skipped at runtime \u2014 tests: timed out after 120s (step budget)); run `gitreins guard` for the full gate\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  ~ tests: Command timed out after 120s (step budget)\n\nStage tier2: FAIL\n  INCOMPLETE\n  \u2717 CF-002 local criterion 6: Run bash tests/selftest.sh and scripts/boardctl validate; require PASS/OK (headerless-board warning allowed). Read docs/audits/code-factory-CF-002-local-0937.md and code-factory-CF-002-foreman-0937.md: reproducible 16 HTTP/CLI tests, 16 assertion-based semantic mutations plus selftest failure propagation, unchanged positive control, no fake bootstrap failures counted, and complete row/spec/test/evidence trace. Verify source test/mutation runner and that implementation 114cc2c is an ancestor of HEAD. Trace pending verdict is honest; parent CF-002 stays open. This is only a local tranche, not remote acceptance.: selftest: SELFTEST: PASS (16 inference tests OK, 10 build tests OK, 7 node mutations PASS). boardctl validate: RESULT: OK (1 warning: headerless board). 114cc2c is ancestor of HEAD (exit 0). Audits read: local + foreman. Remaining: verify mutation runner source (16 semantic mutants, assertion-based, no bootstrap failures), positive control unchanged, trace honesty, CF-002 open.\nPartial verdict \u2014 evaluation hit resource cap before all criteria verified\n\nOverall: FAIL \u2717 [DEGRADED \u2014 skipped: tier1(tests)=skipped at runtime \u2014 tests: timed out after 120s (step budget)]"
+      },
+      "stderr": "gitreins.evaluator: WARNING: jev pre-screen unavailable (hilo-not-initialized) \u2014 tier-2 judge runs at full authority\ngitreins.evaluator: WARNING: Eval cap exceeded during tool call: Iteration cap (30) reached (30.5 used). Increase max_iterations or split criteria.\n",
+      "prior_attempts": [
+        {
+          "index": 6,
+          "name": "tests-trace",
+          "criterion": "CF-002 local criterion 6: Run bash tests/selftest.sh and scripts/boardctl validate; require PASS/OK (headerless-board warning allowed). Read docs/audits/code-factory-CF-002-local-0937.md and code-factory-CF-002-foreman-0937.md: reproducible 16 HTTP/CLI tests, 16 assertion-based semantic mutations plus selftest failure propagation, unchanged positive control, no fake bootstrap failures counted, and complete row/spec/test/evidence trace. Verify source test/mutation runner and that implementation 114cc2c is an ancestor of HEAD. Trace pending verdict is honest; parent CF-002 stays open. This is only a local tranche, not remote acceptance.",
+          "command": [
+            "gitreins",
+            "judge",
+            "--ephemeral",
+            "--scope",
+            "working-tree",
+            "--title",
+            "CF002-0937-tests-trace",
+            "--criterion",
+            "CF-002 local criterion 6: Run bash tests/selftest.sh and scripts/boardctl validate; require PASS/OK (headerless-board warning allowed). Read docs/audits/code-factory-CF-002-local-0937.md and code-factory-CF-002-foreman-0937.md: reproducible 16 HTTP/CLI tests, 16 assertion-based semantic mutations plus selftest failure propagation, unchanged positive control, no fake bootstrap failures counted, and complete row/spec/test/evidence trace. Verify source test/mutation runner and that implementation 114cc2c is an ancestor of HEAD. Trace pending verdict is honest; parent CF-002 stays open. This is only a local tranche, not remote acceptance.",
+            "--json"
+          ],
+          "exit_code": 1,
+          "passed": false,
+          "evidence": {
+            "$schema": "https://gitreins.dev/schemas/evidence/v1.json",
+            "checks": [
+              {
+                "id": "stage-tier1",
+                "outcome": "pass",
+                "passed": true,
+                "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10"
+              },
+              {
+                "id": "stage-tier2",
+                "outcome": "fail",
+                "passed": false,
+                "summary": "INCOMPLETE\n\nCap exceeded: Iteration cap (30) reached (30.8 used). Increase max_iterations or split criteria."
+              }
+            ],
+            "command": "judge",
+            "generatedAt": "2026-10-30T11:04:38.612903+00:00",
+            "metadata": {
+              "checkCount": 2,
+              "criterionCount": 0,
+              "ephemeral": true,
+              "historyPersisted": false,
+              "redacted": true,
+              "redactionsApplied": false,
+              "truncated": false
+            },
+            "outcome": "fail",
+            "passed": false,
+            "producer": {
+              "name": "gitreins",
+              "version": "0.17.1"
+            },
+            "schemaVersion": "1.0",
+            "scope": "working-tree",
+            "subject": {
+              "ephemeral": true,
+              "taskId": "ephemeral:cf002-0937-tests-trace",
+              "title": "CF002-0937-tests-trace"
+            },
+            "summary": "Judge Result: ephemeral:cf002-0937-tests-trace\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: FAIL\n  INCOMPLETE\n\nCap exceeded: Iteration cap (30) reached (30.8 used). Increase max_iterations or split criteria.\n\nOverall: FAIL \u2717"
+          },
+          "stderr": "gitreins.evaluator: WARNING: jev pre-screen unavailable (hilo-not-initialized) \u2014 tier-2 judge runs at full authority\ngitreins.evaluator: WARNING: Eval cap exceeded during tool call: Iteration cap (30) reached (30.8 used). Increase max_iterations or split criteria.\n"
+        }
+      ]
+    }
+  ],
+  "passing_criteria_count": 5,
+  "outcome": "partial-not-accepted-as-complete",
+  "capped_lifecycle_runs": [
+    {
+      "cli_verdict_id": "23721bbc",
+      "history_directory": "94db1665",
+      "verdict": {
+        "task_id": "CF-002",
+        "task_title": "Host-side inference credential boundary: repository-local implementation tranche",
+        "task_criteria": [
+          "Implement and test a host-only authenticated inference gateway/proxy with node/project/repository-bound revocable expiring service identities and explicit model allowlists. Reject missing, malformed, expired, revoked, wrong-scope and disallowed-model requests before upstream credential resolution. Synthetic sentinels and negative controls must demonstrate no upstream key forwarding or leakage into node installers, argv, errors, logs, artifacts or responses.",
+          "Persist trustworthy requested-versus-served model/provider evidence and test that fallback cannot escape the authorized allowlist; do not infer actual served identity from request/config labels. Add reproducible hermetic tests with semantic negative controls, integrate into tests/selftest.sh, and run full selftest and board validation.",
+          "Update the governing specs/HARNESS.md and docs/THREAT-MODEL.md (and related references as needed) before code, with implemented vs unimplemented boundaries and runnable check commands. Do not provision a node, read real credentials, change live services or enable the blocked Hermes installer; live node acceptance is explicitly excluded from this local tranche and CF-002 must remain open for original live criterion 5.",
+          "Repository-local worker trace and audit resolve CF-002, governing spec, test and observed evidence at the published implementation commit; no claim that a future judge verdict exists. Foreman verifies source/tests and commit before board closure. This tranche verdict is not completion of the full CF-002 board acceptance."
+        ],
+        "passed": false,
+        "worktree": "~/proj-wt-code-factory-bankai-20261030",
+        "branch": "feat/code-factory-bankai-20261030",
+        "commit": "200af57de4872044dec1ff0e6367c1b7607732a5",
+        "items": [],
+        "stages": {
+          "tier1": {
+            "id": "tier1",
+            "passed": true,
+            "any_failed": false,
+            "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10",
+            "steps": [
+              {
+                "id": "lint",
+                "type": "script",
+                "passed": true,
+                "output": "scanners: nice=nice -n 10\n",
+                "error": "",
+                "data": {
+                  "exit_code": 0,
+                  "guard_log": "~/proj-wt-code-factory-bankai-20261030/.gitreins/logs/guard-20261030T103012.536280Z.log"
+                }
+              },
+              {
+                "id": "secrets",
+                "type": "script",
+                "passed": true,
+                "output": "secrets: harness state excluded from gitleaks scope (.gitreins/**)\nsecrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n5:31AM INF scanned ~265066 bytes (265.07 KB) in 90.3ms\n5:31AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 72 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+                "error": "",
+                "data": {
+                  "exit_code": 0,
+                  "guard_log": "~/proj-wt-code-factory-bankai-20261030/.gitreins/logs/guard-20261030T103012.536280Z.log",
+                  "secrets_scanners": [
+                    "gitleaks",
+                    "builtin"
+                  ]
+                }
+              },
+              {
+                "id": "tests",
+                "type": "script",
+                "passed": true,
+                "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n build-contract.sh\n  PASS  bash -n selftest.sh\n2. node --check has exactly the controlled named failure (local fixtures)\ntest_named_check (__main__.NodeContract.test_named_check) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.110s\n\nOK\n  PASS  nonzero exit and anchored exact FAIL crier_url; no bootstrap decoy\n3. specs and scripts expose the same node contract\n  PASS  required contract NODE.md exists\n  PASS  required contract ENVELOPE.md exists\n  PASS  required contract HARNESS.md exists\n  PASS  required contract DESIGN.md exists\n  PASS  required contract THREAT-MODEL.md exists\n  PASS  DESIGN names project-node.sh --check|--apply\n  PASS  DESIGN names node-create.sh --project P --repo URL --harness H\n  PASS  DESIGN names verify-node.sh --agent ID --artifact PATH\n  PASS  envelope declares idempotency_key\n4. focused node contracts and executable mutation controls (local, not live)\ntest_artifact_denials_before_remote_shell (__main__.NodeContract.test_artifact_denials_before_remote_shell) ... ok\ntest_artifact_symlink_hardlink_and_positive (__main__.NodeContract.test_artifact_symlink_hardlink_and_positive) ... ok\ntest_creator_preconditions_and_exact_triple (__main__.NodeContract.test_creator_preconditions_and_exact_triple) ... ok\ntest_creator_stops_on_provision_failure (__main__.NodeContract.test_creator_stops_on_provision_failure) ... ok\ntest_forbidden_manifest_paths_without_dispatch_option (__main__.NodeContract.test_forbidden_manifest_paths_without_dispatch_option) ... ok\ntest_hermes_inference_blocked_without_reading_keys (__main__.NodeContract.test_hermes_inference_blocked_without_reading_keys) ... ok\ntest_manifest_identity_and_byte_idempotence (__main__.NodeContract.test_manifest_identity_and_byte_idempotence) ... ok\ntest_manifest_write_failure (__main__.NodeContract.test_manifest_write_failure) ... ok\ntest_manifest_writer_error_is_not_pass (__main__.NodeContract.test_manifest_writer_error_is_not_pass) ... ok\n\n\u2026 [3517 chars omitted \u2014 52 line(s)] \u2026\ntest_existing_route_disallowed_before_keys (__main__.InferenceContract.test_existing_route_disallowed_before_keys) ... ok\ntest_fallback_authorized_and_disallowed (__main__.InferenceContract.test_fallback_authorized_and_disallowed) ... ok\ntest_host_files_and_policy_fail_closed (__main__.InferenceContract.test_host_files_and_policy_fail_closed) ... ok\ntest_http_success_and_evidence (__main__.InferenceContract.test_http_success_and_evidence) ... ok\ntest_installer_sentinel_and_no_transport_copy (__main__.InferenceContract.test_installer_sentinel_and_no_transport_copy) ... ok\ntest_no_fallback_on_attestation_or_auth_error (__main__.InferenceContract.test_no_fallback_on_attestation_or_auth_error) ... ok\ntest_real_cli_invocation_and_redacted_logs (__main__.InferenceContract.test_real_cli_invocation_and_redacted_logs) ... ok\ntest_redirect_and_environment_proxy_not_forwarded (__main__.InferenceContract.test_redirect_and_environment_proxy_not_forwarded) ... ok\ntest_request_and_upstream_socket_timeouts (__main__.InferenceContract.test_request_and_upstream_socket_timeouts) ... ok\ntest_restart_revocation_rotation_and_corruption (__main__.InferenceContract.test_restart_revocation_rotation_and_corruption) ... ok\ntest_schema_and_override_denials (__main__.InferenceContract.test_schema_and_override_denials) ... ok\n\n----------------------------------------------------------------------\nRan 16 tests in 16.190s\n\nOK\n  PASS  inference contract\nSELFTEST: PASS\n",
+                "error": "",
+                "data": {
+                  "exit_code": 0,
+                  "guard_log": "~/proj-wt-code-factory-bankai-20261030/.gitreins/logs/guard-20261030T103012.536280Z.log"
+                }
+              }
+            ],
+            "coverage": "secrets+lint+tests"
+          },
+          "tier2": {
+            "id": "tier2",
+            "passed": false,
+            "any_failed": true,
+            "summary": "INCOMPLETE\n\nCap exceeded: Iteration cap (30) reached (30.5 used). Increase max_iterations or split criteria.",
+            "steps": [
+              {
+                "id": "tier2",
+                "type": "ai_eval",
+                "passed": false,
+                "output": "INCOMPLETE\n\nCap exceeded: Iteration cap (30) reached (30.5 used). Increase max_iterations or split criteria.",
+                "error": "",
+                "data": {
+                  "verdict": "INCOMPLETE",
+                  "items": [],
+                  "summary": "Cap exceeded: Iteration cap (30) reached (30.5 used). Increase max_iterations or split criteria.",
+                  "provenance": {
+                    "model": "deepseek-v4-flash",
+                    "base_url_source": "GITREINS_LLM_BASE_URL",
+                    "api_key_source": "GITREINS_LLM_API_KEY"
+                  }
+                }
+              }
+            ],
+            "model": "deepseek-v4-flash",
+            "base_url_source": "GITREINS_LLM_BASE_URL",
+            "api_key_source": "GITREINS_LLM_API_KEY"
+          }
+        },
+        "summary": "Judge Result: CF-002\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: FAIL\n  INCOMPLETE\n\nCap exceeded: Iteration cap (30) reached (30.5 used). Increase max_iterations or split criteria.\n\nOverall: FAIL \u2717",
+        "evaluated_at": "2026-10-30T10:35:41.474985",
+        "supersedes": null,
+        "superseded_by": null,
+        "evidence": {
+          "collected_at": "2026-10-30T10:35:41.489768+00:00",
+          "items": [
+            {
+              "name": "patch",
+              "label": "Landed commit patch",
+              "file": "commit.patch",
+              "bytes": 10595,
+              "truncated": false,
+              "source": "git show 200af57de487"
+            }
+          ],
+          "task_id": "CF-002"
+        }
+      }
+    },
+    {
+      "cli_verdict_id": "0540aea2",
+      "history_directory": "dd42ccf9",
+      "verdict": {
+        "task_id": "CF-002",
+        "task_title": "Host-side inference credential boundary: repository-local implementation tranche",
+        "task_criteria": [
+          "Implement and test a host-only authenticated inference gateway/proxy with node/project/repository-bound revocable expiring service identities and explicit model allowlists. Reject missing, malformed, expired, revoked, wrong-scope and disallowed-model requests before upstream credential resolution. Synthetic sentinels and negative controls must demonstrate no upstream key forwarding or leakage into node installers, argv, errors, logs, artifacts or responses.",
+          "Persist trustworthy requested-versus-served model/provider evidence and test that fallback cannot escape the authorized allowlist; do not infer actual served identity from request/config labels. Add reproducible hermetic tests with semantic negative controls, integrate into tests/selftest.sh, and run full selftest and board validation.",
+          "Update the governing specs/HARNESS.md and docs/THREAT-MODEL.md (and related references as needed) before code, with implemented vs unimplemented boundaries and runnable check commands. Do not provision a node, read real credentials, change live services or enable the blocked Hermes installer; live node acceptance is explicitly excluded from this local tranche and CF-002 must remain open for original live criterion 5.",
+          "Repository-local worker trace and audit resolve CF-002, governing spec, test and observed evidence at the published implementation commit; no claim that a future judge verdict exists. Foreman verifies source/tests and commit before board closure. This tranche verdict is not completion of the full CF-002 board acceptance."
+        ],
+        "passed": false,
+        "worktree": "~/proj-wt-code-factory-bankai-20261030",
+        "branch": "feat/code-factory-bankai-20261030",
+        "commit": "200af57de4872044dec1ff0e6367c1b7607732a5",
+        "items": [],
+        "stages": {
+          "tier1": {
+            "id": "tier1",
+            "passed": true,
+            "any_failed": false,
+            "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10",
+            "steps": [
+              {
+                "id": "lint",
+                "type": "script",
+                "passed": true,
+                "output": "scanners: nice=nice -n 10\n",
+                "error": "",
+                "data": {
+                  "exit_code": 0,
+                  "guard_log": "~/proj-wt-code-factory-bankai-20261030/.gitreins/logs/guard-20261030T103416.997641Z.log"
+                }
+              },
+              {
+                "id": "secrets",
+                "type": "script",
+                "passed": true,
+                "output": "secrets: harness state excluded from gitleaks scope (.gitreins/**)\nsecrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n5:36AM INF scanned ~268660 bytes (268.66 KB) in 114ms\n5:36AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 72 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+                "error": "",
+                "data": {
+                  "exit_code": 0,
+                  "guard_log": "~/proj-wt-code-factory-bankai-20261030/.gitreins/logs/guard-20261030T103416.997641Z.log",
+                  "secrets_scanners": [
+                    "gitleaks",
+                    "builtin"
+                  ]
+                }
+              },
+              {
+                "id": "tests",
+                "type": "script",
+                "passed": true,
+                "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n build-contract.sh\n  PASS  bash -n selftest.sh\n2. node --check has exactly the controlled named failure (local fixtures)\ntest_named_check (__main__.NodeContract.test_named_check) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.080s\n\nOK\n  PASS  nonzero exit and anchored exact FAIL crier_url; no bootstrap decoy\n3. specs and scripts expose the same node contract\n  PASS  required contract NODE.md exists\n  PASS  required contract ENVELOPE.md exists\n  PASS  required contract HARNESS.md exists\n  PASS  required contract DESIGN.md exists\n  PASS  required contract THREAT-MODEL.md exists\n  PASS  DESIGN names project-node.sh --check|--apply\n  PASS  DESIGN names node-create.sh --project P --repo URL --harness H\n  PASS  DESIGN names verify-node.sh --agent ID --artifact PATH\n  PASS  envelope declares idempotency_key\n4. focused node contracts and executable mutation controls (local, not live)\ntest_artifact_denials_before_remote_shell (__main__.NodeContract.test_artifact_denials_before_remote_shell) ... ok\ntest_artifact_symlink_hardlink_and_positive (__main__.NodeContract.test_artifact_symlink_hardlink_and_positive) ... ok\ntest_creator_preconditions_and_exact_triple (__main__.NodeContract.test_creator_preconditions_and_exact_triple) ... ok\ntest_creator_stops_on_provision_failure (__main__.NodeContract.test_creator_stops_on_provision_failure) ... ok\ntest_forbidden_manifest_paths_without_dispatch_option (__main__.NodeContract.test_forbidden_manifest_paths_without_dispatch_option) ... ok\ntest_hermes_inference_blocked_without_reading_keys (__main__.NodeContract.test_hermes_inference_blocked_without_reading_keys) ... ok\ntest_manifest_identity_and_byte_idempotence (__main__.NodeContract.test_manifest_identity_and_byte_idempotence) ... ok\ntest_manifest_write_failure (__main__.NodeContract.test_manifest_write_failure) ... ok\ntest_manifest_writer_error_is_not_pass (__main__.NodeContract.test_manifest_writer_error_is_not_pass) ... ok\n\n\u2026 [3517 chars omitted \u2014 52 line(s)] \u2026\ntest_existing_route_disallowed_before_keys (__main__.InferenceContract.test_existing_route_disallowed_before_keys) ... ok\ntest_fallback_authorized_and_disallowed (__main__.InferenceContract.test_fallback_authorized_and_disallowed) ... ok\ntest_host_files_and_policy_fail_closed (__main__.InferenceContract.test_host_files_and_policy_fail_closed) ... ok\ntest_http_success_and_evidence (__main__.InferenceContract.test_http_success_and_evidence) ... ok\ntest_installer_sentinel_and_no_transport_copy (__main__.InferenceContract.test_installer_sentinel_and_no_transport_copy) ... ok\ntest_no_fallback_on_attestation_or_auth_error (__main__.InferenceContract.test_no_fallback_on_attestation_or_auth_error) ... ok\ntest_real_cli_invocation_and_redacted_logs (__main__.InferenceContract.test_real_cli_invocation_and_redacted_logs) ... ok\ntest_redirect_and_environment_proxy_not_forwarded (__main__.InferenceContract.test_redirect_and_environment_proxy_not_forwarded) ... ok\ntest_request_and_upstream_socket_timeouts (__main__.InferenceContract.test_request_and_upstream_socket_timeouts) ... ok\ntest_restart_revocation_rotation_and_corruption (__main__.InferenceContract.test_restart_revocation_rotation_and_corruption) ... ok\ntest_schema_and_override_denials (__main__.InferenceContract.test_schema_and_override_denials) ... ok\n\n----------------------------------------------------------------------\nRan 16 tests in 16.380s\n\nOK\n  PASS  inference contract\nSELFTEST: PASS\n",
+                "error": "",
+                "data": {
+                  "exit_code": 0,
+                  "guard_log": "~/proj-wt-code-factory-bankai-20261030/.gitreins/logs/guard-20261030T103416.997641Z.log"
+                }
+              }
+            ],
+            "coverage": "secrets+lint+tests"
+          },
+          "tier2": {
+            "id": "tier2",
+            "passed": false,
+            "any_failed": true,
+            "summary": "INCOMPLETE\n\nCap exceeded: Iteration cap (30) reached (30.8 used). Increase max_iterations or split criteria.",
+            "steps": [
+              {
+                "id": "tier2",
+                "type": "ai_eval",
+                "passed": false,
+                "output": "INCOMPLETE\n\nCap exceeded: Iteration cap (30) reached (30.8 used). Increase max_iterations or split criteria.",
+                "error": "",
+                "data": {
+                  "verdict": "INCOMPLETE",
+                  "items": [],
+                  "summary": "Cap exceeded: Iteration cap (30) reached (30.8 used). Increase max_iterations or split criteria.",
+                  "provenance": {
+                    "model": "deepseek-v4-flash",
+                    "base_url_source": "GITREINS_LLM_BASE_URL",
+                    "api_key_source": "GITREINS_LLM_API_KEY"
+                  }
+                }
+              }
+            ],
+            "model": "deepseek-v4-flash",
+            "base_url_source": "GITREINS_LLM_BASE_URL",
+            "api_key_source": "GITREINS_LLM_API_KEY"
+          }
+        },
+        "summary": "Judge Result: CF-002\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: FAIL\n  INCOMPLETE\n\nCap exceeded: Iteration cap (30) reached (30.8 used). Increase max_iterations or split criteria.\n\nOverall: FAIL \u2717",
+        "evaluated_at": "2026-10-30T10:40:25.981841",
+        "supersedes": null,
+        "superseded_by": null,
+        "evidence": {
+          "collected_at": "2026-10-30T10:40:25.994746+00:00",
+          "items": [
+            {
+              "name": "patch",
+              "label": "Landed commit patch",
+              "file": "commit.patch",
+              "bytes": 10595,
+              "truncated": false,
+              "source": "git show 200af57de487"
+            }
+          ],
+          "task_id": "CF-002"
+        }
+      }
+    }
+  ],
+  "source_equivalence_note": "Native ephemeral evidence omits commit. External binding records grading-root HEAD/tree and tracked bytes before/after each run. Transport judge prose cites worker checkout 114cc2c; git diff independently confirms scripts/tests/specs/DESIGN/THREAT-MODEL are byte-identical between 114cc2c and frozen published 200af57. This is not a native per-command commit attestation.",
+  "disposition": "Five bounded Tier2 criteria passed; tests-trace remains iteration-cap incomplete after unchanged retry. No monolithic or full local-tranche PASS. Parent CF-002 stays in_progress for evaluator residual plus live integration/authorization blockers. Independent local tests/mutations/full selftest/full guard passed."
+}

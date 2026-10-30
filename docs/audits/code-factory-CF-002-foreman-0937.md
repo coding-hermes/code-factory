@@ -103,3 +103,62 @@ ch:trace row=CF-002 spec=specs/HARNESS.md#host-only-inference-custody wave=.codi
 The foreman will run GitReins task complete CF-002 on the published merged tree
 with this pre-judge evidence. A later verdict/closeout is a separate commit; no
 future verdict or self-referential commit hash is asserted here.
+
+## Final evaluation and disposition
+
+No monolithic Tier-2 PASS was obtained. Both `gitreins task complete CF-002`
+and its unchanged `--force` retry ran Tier 1 successfully, then hit the per-process
+iteration cap 30 (30.5 and 30.8 used). CLI ids 23721bbc / 0540aea2 map to
+history directories 94db1665 / dd42ccf9. Their exact verdicts are preserved in
+`code-factory-CF-002-split-judges-0937.json`, not relabeled as merits failures or
+passes. The task lifecycle flips complete before judging; that state is not
+acceptance evidence. The completed local-tranche task is retained for audit.
+
+During the first run a sibling PM writer added CF-025 and CF-026 in board-only
+commit 200af57de4872044dec1ff0e6367c1b7607732a5. No source/spec/test/gate config
+changed relative to pre-judge 09ab9e8; both full verdicts identify 200af57.
+The sibling commit was preserved and published, not reverted or attributed to
+this tick. Current board therefore has 26 rows, not the initial 24. Only CF-002
+was advanced by this foreman tick.
+
+Six bounded criteria were then collected sequentially in an isolated checkout of
+published 200af57, with HEAD/tree and tracked-byte fingerprints checked before
+and after every judge. Five passed Tier 1/Tier 2 COMPLETE: identity, transport,
+served-identity/fallback, journal, contract/installer boundary. Journal's first
+cap-starved attempt was retained; unchanged retry passed. The sixth, tests-trace,
+remained iteration-cap incomplete after an unchanged retry (30.8 then 30.5 used).
+Its retry additionally reports Tier-1 tests timed out at the evaluator's 120-second
+step budget, so that run is DEGRADED/FAIL at Tier 1, not a clean gate. The exact
+failure is retained; it does not override or erase independent full-guard passes.
+Its final partial text verifies selftest/board/implementation ancestry, but leaves
+mutation-source/trace review unfinished. This is not a sixth PASS and not a
+fully accepted local tranche. Independent foreman execution of all 16 semantic
+mutants and the full selftest is separate passing evidence, not a replacement
+for the incomplete evaluator. No repeated cap raise or gate-config edit was made.
+
+The aggregate retains native bounded/redacted evidence and each truncation flag,
+plus earlier journal/tests-trace attempts and both full capped verdicts. Its
+commit binding is explicitly external; the ephemeral schema has no native commit
+field. Transport judge prose cites the worker checkout; source equivalence with
+the frozen published tree was independently checked, rather than claiming a native
+per-command frozen-checkout attestation.
+
+The foreman then reran `bash tests/selftest.sh` and
+`timeout 300 gitreins guard --full --scope working-tree` on the final bookkeeping
+candidate: SELFTEST: PASS (16 inference tests in 18.236 seconds), full guard PASS,
+and board validation OK (26 tasks / 47 events, existing headerless warning).
+A comparison against 200af57 confirms all task rows other than CF-002 are
+unchanged. These fresh independent passes do not relabel the evaluator's timeout.
+Concurrent readme-probe artifacts and runtime history/bytecode are left unstaged.
+
+CF-002 remains in_progress. Local code/tests are delivered, but tests-trace merits
+and the previously named authorized live node/TLS/attestor/adapter/token/Crier
+acceptance remain open. Existing CF-002 owns those follow-ups; no duplicate row
+was manufactured. CI remains absent, not green. Final board bookkeeping is a
+separate published commit and must have its own remote parity/check-run readback.
+
+STATUS: partial
+TIER: T3 local executed; five of six bounded Tier2 criteria passed, one capped
+EVIDENCE: docs/audits/code-factory-CF-002-split-judges-0937.json
+
+ch:trace row=CF-002 spec=specs/HARNESS.md#host-only-inference-custody wave=.coding-hermes/waves/code-factory-2026-10-30-09-37-27.json#CF-002 test=tests/inference-contract.py::InferenceContract.test_http_success_and_evidence doc=docs/THREAT-MODEL.md prompt=none:transient-worker-brief evidence=docs/audits/code-factory-CF-002-split-judges-0937.json witness=none:hermetic-local-only verdict=run:CF002-SPLIT-0937 commit=200af57de4872044dec1ff0e6367c1b7607732a5 memory=/project/code-factory/status
