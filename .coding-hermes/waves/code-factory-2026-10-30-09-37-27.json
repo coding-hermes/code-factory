@@ -17,7 +17,13 @@
       "branch": "wt/CF-002-0937",
       "worker_model": "gpt-6.1-sol",
       "worker_provider": "openai-codex",
-      "status": "prepared",
+      "status": "implemented-local-tranche-awaiting-judge",
+      "session_id": "20261030_045943_8a6c76",
+      "worker_exit_code": 0,
+      "implementation_commit": "114cc2c97d2be3343c7197f05ffeccc025e92e47",
+      "merged": true,
+      "merged_into": "feat/code-factory-bankai-20261030",
+      "evidence": "docs/audits/code-factory-CF-002-foreman-0937.md",
       "scope": "Host inference proxy contract, local implementation and hermetic safety tests only; no live deployment, provisioning, provider credential reads or transfers, or installer enablement. Parent row cannot complete without its original live acceptance."
     }
   ]
