@@ -71,7 +71,7 @@ instead of implying it works.
 | Piece | State | Command that can contradict it |
 |---|---|---|
 | Hermes in a bunker + HTTP gateway over tailnet | **works** — observed on a live node in October 2026 (32 s install, `/api/status` 200, 133 JSON-RPC methods); not reproducible from this repo alone | `scripts/harness/install-hermes.sh --check` names the version, port and key it measured |
-| Repo clone in a node | **works** for public https — measured this month: `PASS repo_clone … @ 47c9b1c`. **No build step yet**: layer 40 clones only, so the build cache `specs/NODE.md` asks for is not established (CF-032). Private repos are **blocked** — a deploy key has no tested procedure yet | `./scripts/project-node.sh --apply --project myproject --repo https://github.com/you/myrepo` |
+| Repo clone in a node | **works** for public https — `PASS repo_clone … @ 9402f6a` on 2026-10-30; the cloned repo's own HEAD moves, so re-run to re-derive. **No build step yet**: layer 40 clones only, so the build cache `specs/NODE.md` asks for is not established (CF-032). Private repos are **blocked** — a deploy key has no tested procedure yet | `./scripts/project-node.sh --apply --project myproject --repo https://github.com/you/myrepo` |
 | Node inference credential | **missing** — a turn dies at `No inference provider configured`; the node needs its own key, never an operator key | `scripts/harness/install-hermes.sh --check` -> `FAIL inference_key` |
 | crier identity in a node | **missing** — no `~/.node/crier.json` yet | `./scripts/project-node.sh --check --project myproject` -> `FAIL crier_identity` |
 | Scheduler → crier dispatch | **built, disarmed** — needs 2 env vars, 1 target row, `payload.text` (CF-001) | not armed, so nothing to run |
