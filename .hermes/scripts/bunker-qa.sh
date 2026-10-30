@@ -363,6 +363,63 @@ bunker_capacity() {
   printf '%s %s\n' "$used" "$max"
 }
 
+# ─── server disk-capacity preflight (QA-AUGER-15, 2026-10-30) ───
+# A server whose root filesystem has no room for the agent AND its CI workspace
+# does not fail the battery cleanly — it fails it MISLEADINGLY. auger QA-AUGER-15
+# (bunker-mvp at 95% used, 7.5 GB free of 149.9 GB) recorded:
+#   * the agent-side qa-run.log first dying `mkdir: cannot create directory
+#     'qa-act-wf': No space left on device`, before any command output existed;
+#   * `ci-pass FAIL native rc=120` and `upgrade FAIL rc=120` with EMPTY output
+#     (bash cannot allocate a redirect/command-substitution temp file either);
+#   * `chaos-resource UNVERIFIED` because its 3 GiB cap was never applied.
+# Every one of those rows reads exactly like a product defect, and a foreman who
+# trusts the headline files a product finding against a healthy repo. Grade the
+# HOST before the spawn instead: refuse a low-disk server with ONE harness-class
+# `run_battery` row (same shape as the capacity gate) and spawn nothing.
+#
+# Delay-to-spawn gate, never a hard runbook rule: bunkerd recycles agent homes on
+# several hosts, so free space moves minute-to-minute. The floor is deliberately
+# a single absolute GB number (default 10) rather than a percentage — a 2 TB host
+# at 95% still has 100 GB, while a 150 GB host at 90% has 15 GB and a Go/pnpm CI
+# workspace can eat that in one leg. Override with BUNKER_QA_MIN_FREE_GB.
+#
+# parse_disk_free_gb <df -Pk output> → "<free_gb> <pct_used>" | "" (unparseable)
+# Pure (text in, text out) so the verdict is provable without a live host.
+parse_disk_free_gb() {
+  local out="$1" avail pct free_gb
+  [ -n "$out" ] || return 0
+  # `df -Pk` guarantees ONE record per filesystem; skip the header and take the
+  # first data record's 4th (available KB) + 5th (capacity) columns.
+  avail=$(printf '%s\n' "$out" | awk '$1 !~ /^Filesystem$/ && NF >= 6 {print $4; exit}')
+  pct=$(printf '%s\n' "$out"   | awk '$1 !~ /^Filesystem$/ && NF >= 6 {print $5; exit}')
+  case "$avail" in ''|*[!0-9]*) return 0 ;; esac
+  pct="${pct%\%}"   # df prints "59%"; keep the number, "?" when unreadable
+  case "$pct"   in ''|*[!0-9]*) pct="?" ;; esac
+  free_gb=$(( avail / 1048576 ))
+  printf '%s %s\n' "$free_gb" "$pct"
+}
+
+# bunker_disk <srv> → "<free_gb> <pct_used>" | "" (probe failed / unparseable)
+# One cheap ssh probe, no spawn, no polling. Callers must treat an empty result
+# as UNKNOWN and proceed (same policy as the capacity probe): refusing on a
+# probe hiccup would wedge the QA lane for every project on that host.
+bunker_disk() {
+  local srv="$1" out
+  out=$(timeout "${BUNKER_QA_DISK_TIMEOUT:-25}" ssh -i "$BUNKER_QA_HOST_KEY" ${BUNKER_QA_HOST_KEY:+-o IdentitiesOnly=yes} -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o BatchMode=yes "$srv" 'df -Pk / 2>/dev/null' 2>/dev/null) || out=""
+  parse_disk_free_gb "$out"
+}
+
+# disk_gate_verdict <free_gb> <floor_gb> → OK | LOW | UNKNOWN
+# The DECISION half of the disk gate, kept pure so it is provable offline (a
+# production run only ever shows one of the three arms). An unparseable/absent
+# reading is UNKNOWN, never LOW: a probe hiccup must not manufacture a refusal.
+disk_gate_verdict() {
+  local free="${1:-}" floor="${2:-}"
+  case "$free" in ''|*[!0-9]*) echo UNKNOWN; return 0 ;; esac
+  case "$floor" in ''|*[!0-9]*) floor=10 ;; esac
+  if [ "$free" -lt "$floor" ]; then echo LOW; else echo OK; fi
+}
+
 # ─── write_fail_if_empty — never leave a 0-byte evidence file ───
 # Now top-level (2026-09-15) because run() AND launch() share it. Rationale
 # unchanged from 2026-09-07 (QA-DEXDAT-CORE-1): a tool-level SIGTERM (Hermes
@@ -426,6 +483,34 @@ preflights() {
         echo "HINT (QA-BUNKER-39): a stale QA temp agent may still hold a slot — list with: bunker list --server $SERVER; free it with: bunker destroy <id> --server $SERVER (temp agents reap after the ~4h TTL)" >&2
         exit 2
       fi
+    fi
+  fi
+  # Disk preflight (QA-AUGER-15): see the block above parse_disk_free_gb for the
+  # measured failure this gates. Same policy edges as the capacity gate — a
+  # probe that cannot read the filesystem is UNKNOWN and proceeds with a WARN;
+  # a readable reading BELOW the floor is a deterministic harness-class refusal
+  # (ONE run_battery row, no spawn, no product cells). BUNKER_QA_SKIP_PREFLIGHT=1
+  # disables it together with the capacity probe (it is one preflight switch).
+  if [ "${BUNKER_QA_SKIP_PREFLIGHT:-0}" = "1" ]; then
+    log "disk preflight skipped (BUNKER_QA_SKIP_PREFLIGHT=1)"
+  else
+    local dk dk_free dk_pct dk_floor
+    dk_floor="${BUNKER_QA_MIN_FREE_GB:-10}"
+    case "$dk_floor" in ''|*[!0-9]*) dk_floor=10 ;; esac
+    dk=$(bunker_disk "$SERVER")
+    if [ -z "$dk" ]; then
+      echo "WARN: bunker disk free space unknown on $SERVER (df probe failed) — proceeding without disk preflight" >&2
+    else
+      dk_free="${dk%% *}"; dk_pct="${dk##* }"
+      case "$(disk_gate_verdict "$dk_free" "$dk_floor")" in
+      LOW)
+        printf '{"cell":"run_battery","status":"FAIL","detail":"server %s is LOW ON DISK (%s GB free, %s used on /; floor %s GB) — refusing to spawn (disk-capacity preflight, QA-AUGER-15). A battery on a full server dies ENOSPC and records rc=120 cells with EMPTY output plus an unapplied memory cap, which reads as a product FAIL; this row is HARNESS-class and no product cell was produced. Free space on %s (or set BUNKER_QA_MIN_FREE_GB) and re-run","ts":"%s"}\n' \
+          "$SERVER" "$dk_free" "$dk_pct" "$dk_floor" "$SERVER" "$(date -u +%FT%TZ)" >> "$EVIDENCE"
+        echo "PREFLIGHT FAIL: $SERVER has $dk_free GB free ($dk_pct used) — below the $dk_floor GB floor; refusing to spawn (disk-capacity error, QA-AUGER-15)" >&2
+        exit 2 ;;
+      *)
+        log "disk preflight ok: $dk_free GB free ($dk_pct used) on $SERVER (floor $dk_floor GB)" ;;
+      esac
     fi
   fi
 }
@@ -3666,5 +3751,19 @@ case "${1:-}" in
   # controller-side substitution — the class that aborted the render to a
   # 0-byte battery (QA-BUNKER-B21 regression). Run after ANY heredoc edit.
   __fence-check) fence_check ;;
+  # QA-AUGER-15: offline proof seams for the disk-capacity preflight. Both are
+  # pure text-in/text-out — no ssh, no spawn, no evidence write — so the gate's
+  # three arms (OK / LOW / UNKNOWN) are provable without a live host:
+  #   __parse-disk-free <df -Pk text>   → "<free_gb> <pct_used>" | (empty)
+  #   __disk-gate <df -Pk text> [floor] → "<OK|LOW|UNKNOWN> <free_gb> <pct>"
+  __parse-disk-free) parse_disk_free_gb "${2:-}" ;;
+  __disk-gate)
+    _qadk=$(parse_disk_free_gb "${2:-}")
+    if [ -z "$_qadk" ]; then
+      echo "UNKNOWN - -"
+    else
+      _qafree="${_qadk%% *}"; _qapct="${_qadk##* }"
+      echo "$(disk_gate_verdict "$_qafree" "${3:-10}") $_qafree $_qapct"
+    fi ;;
   *) echo "usage: bunker-qa.sh status | run <repo-dir> [--keep] | launch <repo-dir> [--keep] | collect --evidence <path>" ;;
 esac
