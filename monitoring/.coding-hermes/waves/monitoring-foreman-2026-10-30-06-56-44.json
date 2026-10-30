@@ -1,0 +1,23 @@
+{
+  "tick_id": "monitoring-foreman-2026-10-30-06-56-44",
+  "project": "monitoring",
+  "mode": "serial-verification-only",
+  "budget": 5,
+  "base": "origin/master@e808e1a860",
+  "workers": [],
+  "census": {
+    "drained_appended": 0,
+    "drained_skipped": 1189,
+    "unwritable": 0,
+    "open_critical_rows": 0,
+    "firing_alerts": ["OOMKillsLowPressure/bunker-mvp"]
+  },
+  "selected": {
+    "task_id": "MON-MONITORING-403C290E-20261029",
+    "classification": "verification-only",
+    "result": "complete",
+    "reason": "Prometheus ALERTS query returned zero and bunker-mvp df reports 59G available; no worker or GitReins lifecycle required."
+  },
+  "status": "closed",
+  "outcome": "verification-only-closeout"
+}
