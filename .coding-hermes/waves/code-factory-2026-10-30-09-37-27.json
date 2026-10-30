@@ -1,0 +1,24 @@
+{
+  "scheduler_tick_id": "code-factory-2026-10-30-09-37-27",
+  "project": "code-factory",
+  "mode": "serial",
+  "wave_budget": 12,
+  "selection_limit": 1,
+  "reason": "Project lane requires exactly one board row per tick. CF-001 needs external scheduler/Crier changes and authorized live infrastructure. CF-002 is the highest-priority repository-local implementation seam; full live acceptance remains blocked.",
+  "integration_branch": "feat/code-factory-bankai-20261030",
+  "base_commit": "233d98e",
+  "tasks": [
+    {
+      "id": "CF-002",
+      "gitreins_task": "CF-002",
+      "depends_on": [],
+      "dependency_source": "Row has no depends_on field; normalized to empty array.",
+      "worktree": "../worktrees/code-factory-CF-002-0937",
+      "branch": "wt/CF-002-0937",
+      "worker_model": "gpt-6.1-sol",
+      "worker_provider": "openai-codex",
+      "status": "prepared",
+      "scope": "Host inference proxy contract, local implementation and hermetic safety tests only; no live deployment, provisioning, provider credential reads or transfers, or installer enablement. Parent row cannot complete without its original live acceptance."
+    }
+  ]
+}
