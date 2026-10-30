@@ -76,4 +76,10 @@ if bash "$HERE/tests/build-contract.sh"; then
 else
   say "  FAIL  build contract"; fails=$((fails+1))
 fi
+say "10. host-local inference boundary (no deployment or remote acceptance)"
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/inference-contract.py"; then
+  say "  PASS  inference contract"
+else
+  say "  FAIL  inference contract"; fails=$((fails+1))
+fi
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

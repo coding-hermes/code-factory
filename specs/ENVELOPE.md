@@ -4,8 +4,10 @@ Planned wire contract between the control host and a node. Versioned, small, and
 ambiguity. No tracked Crier pull worker, gateway dispatch integration, result publisher,
 ack/replay implementation or quarantine loop implements this envelope yet. Requirements below
 are normative for future integration, not claims of shipped behavior. CF-002 owns host-only
-inference credentials and the host proxy; node-side provider keys are unsupported and that
-integration remains UNIMPLEMENTED / BLOCKED.
+inference credentials: the host-local loopback proxy is implemented and hermetically
+tested (HARNESS.md#host-only-inference-custody), while deployment, node adapter and
+Crier transport integration remain UNIMPLEMENTED / BLOCKED. Provider keys are
+unsupported on nodes. No service credential belongs in dispatch/result envelopes.
 
 ## Dispatch (control host → node inbox)
 
@@ -52,6 +54,12 @@ node got the task it was given; a mismatch is a refusal, not a warning.
 `host_identity` is the node's hostname, **not** the control host's. The control host recomputes
 every digest from the bytes it pulls; a reported digest that cannot be recomputed is unverified,
 and unverified is FAIL.
+
+The illustrative harness.served_model above is a node claim, not authoritative
+model provenance. Host-local CF-002 evidence records requested/attested served
+provider/model under a host request UUID, using the qualified-upstream HMAC
+contract in HARNESS.md. Linking those UUIDs to authenticated dispatch/results is
+not implemented. A response label or node self-report never upgrades this boundary.
 
 ## Artifact mapping (implemented subset)
 

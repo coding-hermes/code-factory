@@ -5,8 +5,9 @@
 Control-host foreman → scheduler/task-router → Crier → one-project node
 (repo + harness) → result message → independent control-host verification.
 Provider keys remain on the control host. CF-002 owns the host inference proxy
-and node-scoped service identity. That integration is UNIMPLEMENTED / BLOCKED;
-CF-005 does not implement its architecture or use node-local provider keys.
+and node-scoped service identity. A loopback-only stdlib host proxy is now locally
+implemented/tested. Deployment, node adapter and Crier transport integration are
+UNIMPLEMENTED / BLOCKED; CF-005 still refuses rather than using node provider keys.
 
 One node per project is the intended isolation/accounting unit. It is not proof
 of an OS sandbox, resource quotas, secret isolation or safe repository code.
@@ -42,6 +43,7 @@ pinned checkout. These are blocked integration requirements, not effects of
 | `scripts/project-node.sh --check|--apply` | Preflight, tool probes, adapter, existing bus identity mode, repo directory/clone, manifest. Existing identity checked before apply mutations; atomic publication checks status; identical reuse preserves bytes. |
 | `scripts/node-create.sh --project P --repo URL --harness H` | Validates complete triple/options before any Bunker operation; stages provisioner/helper/adapter, executes quoted validated values, stops on failure, verifies exact manifest path. |
 | `scripts/verify-node.sh --agent ID --artifact PATH` | Locally rejects paths outside NODE.md's manifest/dispatch namespace; non-shell no-follow remote snapshot read before any remote shell health probe; control-host digest, status/auth/unauthenticated stats checks. |
+| `scripts/inference-proxy.py --state-dir DIR --port 0` | Host-local loopback HTTP boundary: strict scoped bearer policy before host-key resolution, explicit pair/fallback authorization, trusted upstream attestation, fsynced hash-chained evidence. No installer/node/Crier integration. |
 
 NODE.md defines exact input/path grammars and manifest fields. ENVELOPE.md defines
 the future protocol and its limited implemented artifact mapping. HARNESS.md
@@ -75,6 +77,9 @@ remove that named failure and inject `FAILED: unbound variable`; both must turn
 that same test red. Other mutations exercise input, artifact and manifest controls.
 
 No live Bunker/Crier/gateway/inference/artifact work round trip or provider-key
-transfer is claimed. A real authenticated deployment, host-only inference path,
-Crier worker, dispatch execution/result publishing and provenance verification
+transfer is claimed. A real authenticated deployment, remote host-only inference path,
+Crier worker, dispatch execution/result publishing and remote provenance verification
 remain NOT VERIFIED / BLOCKED. Local fixture success is never live acceptance.
+The host-only local path is exercised by tests/inference-contract.py and semantic
+private-copy mutants in tests/inference-mutations.py. HARNESS.md defines its narrow
+non-stream text protocol, attestor trust and restart/write-failure semantics.

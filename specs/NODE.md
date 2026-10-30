@@ -89,8 +89,10 @@ to a gateway or validate a result envelope.
 
 ## Laws and failure semantics
 
-- No root or provider keys on nodes. CF-002 owns the host inference proxy and
-  node-scoped service identity; that integration is UNIMPLEMENTED / BLOCKED.
+- No root or provider keys on nodes. CF-002 supplies a host-local loopback proxy
+  and scoped service-token enforcement (HARNESS.md#host-only-inference-custody).
+  Deployment, node adapter, token issuance/delivery and transport integration are
+  UNIMPLEMENTED / BLOCKED; the local proxy is not a provisioned node capability.
   Hermes adapter apply/check currently refuses before installation or gateway start.
 - Every check names its measured value and can fail. Local fake adapters test
   provisioning mechanics, not a working Hermes/inference node.

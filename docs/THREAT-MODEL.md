@@ -15,8 +15,9 @@ here and their deployment security is unverified.
 
 Provider credentials stay on the control host. Node-side provider key files are
 unsupported, never a PASS prerequisite and never read by the Hermes adapter.
-CF-002 owns the host inference proxy and node-scoped identity; integration is
-UNIMPLEMENTED / BLOCKED. Existing policy text about a node credential bundle
+CF-002 implements a host-local loopback proxy and scoped-token enforcement;
+deployment/node adapter/Crier transport integration is UNIMPLEMENTED / BLOCKED.
+Existing policy text about a node credential bundle
 applies only to future authorized node-scoped service identities, not provider
 keys. Bundle issuance/intake/deletion/rotation is not implemented in this path.
 
@@ -34,6 +35,10 @@ keys. Bundle issuance/intake/deletion/rotation is not implemented in this path.
 | Download → execution | `lib.sh` `fetch_verified` rejects wrong digest and deletes bad temporary bytes. | Does not establish provenance of every dependency. Historical pip version pin is not artifact-hash enforcement; current Hermes adapter refuses install. |
 | Resource checks → provision | `require_disk` measures free GiB and floor; project-node checks memory and provisioning reachability. | No per-job admission, CPU/memory/artifact quota enforcement or runtime disk checks. |
 | State → bus | Existing `.node/crier.json` must be mode 600 and bus base supplied. | File presence/mode does not authenticate Crier identity or establish worker operation. |
+| Node-like client → local host inference | `inference-proxy.py`: exact body/header schema, dedicated bearer digest, scope/node/project/repository/expiry/revocation and all primary/fallback pairs authorized before host credential resolution. | Local HTTP only; bearer possession is not physical-node proof. No issuance/node adapter/installer/Crier integration. |
+| Host credentials → upstream | Private uid-owned regular single-link mode-600 files, no-follow opens; fixed host-policy endpoint and headers; no redirects/environment proxies; bounded non-stream text projection and fixed errors. | Host owner is trusted. Output substring checks only catch known resolved credentials, not arbitrary secrets intentionally disclosed by an upstream. |
+| Upstream → model evidence | Per-attempt nonce/body-bound HMAC over actual-served assertion, exact pair check; append/fsync evidence before 200. | Trusted attestor must independently observe actual serving identity. Labels alone never qualify; generic OpenAI providers fail without attestation. Local fake attestor is not remote model proof. |
+| Evidence → restart | Exclusive journal lock, full chain/schema/sequence validation on startup, no repair/truncate; short write/fsync failure poisons process. | Host owner can delete/rollback/rewrite full chain; not OS-immutable or independently witnessed. Crash may leave intent without terminal result. |
 
 ## Planned controls, explicitly unimplemented
 
@@ -66,9 +71,29 @@ failure from the mutant, not a parser/bootstrap failure of the test runner.
 These are local tests, never live Bunker/Crier/provider proof. The literal-assignment
 scan is not a complete secret scanner or proof of runtime/history hygiene.
 
+CF-002 additionally runs real loopback HTTP and real CLI startup with temporary
+synthetic credentials and fake upstreams. Resolver spies assert zero upstream key
+reads for invalid auth/schema/scope/model/fallback requests. Tests cover upstream
+error sentinel/header overrides, attestation failure/replay/mismatched identity,
+authorized fallback, redirect/environment proxy isolation, restart/revocation,
+unsafe host files, corruption and evidence write failure. Private-copy semantic
+mutants must fail behavioral assertions, never import/bootstrap errors. The real
+Hermes adapter remains blocked, including with a legacy credential FIFO present;
+no fake adapter result claims proxy configuration support.
+
+HARNESS.md#host-only-inference-custody governs the local transport. Single-threaded
+stdlib HTTP is not production TLS ingress or DoS resistance: socket deadlines are
+per operation, no rate/quota sandbox exists, and the trusted host state directory
+is not protected against its owning account. In-flight authorization is a policy
+snapshot; revocation affects the next request. Internal provider rerouting remains
+unverifiable unless the separately qualified attestor truthfully observes it.
+
 ## Residual risks and readiness decisions
 
-- Provider proxy/node identity/auth integration remains CF-002's live blocker.
+- Host-local proxy enforcement is not deployment. Owner-authorized disposable
+  remote node, private authenticated TLS endpoint/topology, attestor qualification,
+  node identity issuance/delivery, adapter and Crier integration remain CF-002's
+  live blockers. No provisioning or key transfer is authorized by this tranche.
 - External gateway auth, Bunker exec semantics, Crier guard behavior and transport
   policy need independent live evidence from the exact deployed revision.
 - Git clone/build/harness work is untrusted code; no runtime sandbox/egress policy
