@@ -26,7 +26,7 @@ scripts/bunker-server-install.sh --check
 ./scripts/project-node.sh --check --project myproject
 
 # 3. make one, from the control host
-scripts/node-create.sh --project crier --repo https://github.com/you/myrepo --harness hermes
+scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes
 ```
 
 On a host with no bunker server, no Crier and no repo, all three commands reach their checkers and
@@ -36,13 +36,19 @@ tells you which value to supply.
 ## Layout
 
 ```
-docs/            DESIGN.md, PRD-code-factory.md, OPERATIONS.md; audits/ holds tick evidence
+docs/            DESIGN.md, PRD-code-factory.md, OPERATIONS.md, BOARD.md; audits/ holds tick evidence
 specs/           NODE.md (what a node is), ENVELOPE.md (dispatch/result), HARNESS.md (adapters)
-scripts/         bunker-server-install.sh, project-node.sh, node-create.sh, verify-node.sh, lib.sh
+scripts/         node checks and provisioners: bunker-server-install.sh, project-node.sh,
+                 node-create.sh, verify-node.sh, lib.sh
 scripts/harness/ install-<harness>.sh — shipped: hermes, claude-code, opencode.
                  codex, aider, goose and pi-agent are documented in specs/HARNESS.md and ship
                  no installer yet (CF-006)
+scripts/ (lanes) load_lane_config.py, add_family_lanes.py, clone_lane.py, configure_family.py —
+                 configure this repo's lane family in the scheduler; see "The lanes" below
+scripts/boardctl the board entrypoint (docs/BOARD.md); fails closed when the fleet boardctl is
+                 not on PATH
 .coding-hermes/board/  tasks.jsonl (JSONL, git-tracked) + events.jsonl
+prompts/         one role file per job; lanes share them (see "The lanes")
 tests/           selftest.sh — proves the checkers FAIL when they should
 ```
 
@@ -65,11 +71,16 @@ instead of implying it works.
 | Piece | State | Command that can contradict it |
 |---|---|---|
 | Hermes in a bunker + HTTP gateway over tailnet | **works** — observed on a live node in October 2026 (32 s install, `/api/status` 200, 133 JSON-RPC methods); not reproducible from this repo alone | `scripts/harness/install-hermes.sh --check` names the version, port and key it measured |
-| Repo clone + build in a node | **works** for public https; private repos are **blocked** — a deploy key has no tested procedure yet | `./scripts/project-node.sh --apply --project myproject --repo https://…` |
+| Repo clone in a node | **works** for public https — measured this month: `PASS repo_clone … @ 47c9b1c`. **No build step yet**: layer 40 clones only, so the build cache `specs/NODE.md` asks for is not established (CF-032). Private repos are **blocked** — a deploy key has no tested procedure yet | `./scripts/project-node.sh --apply --project myproject --repo https://github.com/you/myrepo` |
 | Node inference credential | **missing** — a turn dies at `No inference provider configured`; the node needs its own key, never an operator key | `scripts/harness/install-hermes.sh --check` -> `FAIL inference_key` |
 | crier identity in a node | **missing** — no `~/.node/crier.json` yet | `./scripts/project-node.sh --check --project myproject` -> `FAIL crier_identity` |
 | Scheduler → crier dispatch | **built, disarmed** — needs 2 env vars, 1 target row, `payload.text` (CF-001) | not armed, so nothing to run |
 | Round trip through the node's own gateway | **not yet** — no checked-in command proves it; the one attempt used a bespoke poller rather than the node's gateway (CF-004) | no command exists to fail |
+
+Two things the commands above do not show. `--ref` defaults to `main`, so a public repo whose
+default branch is named differently fails the clone until you pass `--ref <branch>`. And a failed
+clone always appends the `private repos need a deploy key` hint, even when the real cause is a
+missing branch (CF-034).
 
 See `.coding-hermes/board/tasks.jsonl` for the work items and their acceptance criteria.
 
@@ -115,28 +126,30 @@ scheduler's `projects.parent`); the root foreman has no parent. The list below i
 lane family; verify the live namespace, admission mode, and workdir with the scheduler's
 project inventory before relying on a current deployment count.
 
-| Lane | Job | Admission |
-|---|---|---|
-| `code-factory` | foreman — one board row forward per tick | tasks |
-| `code-factory-docs` | documentation truth | cooldown |
-| `code-factory-readme` | stranger-facing README path | cooldown |
-| `code-factory-releng` | release and public-posture checks | cooldown |
-| `code-factory-perf` | measurements and regressions | cooldown |
-| `code-factory-review` | review and evidence reconciliation | cooldown |
-| `code-factory-qa` | re-run completed evidence, re-open what does not reproduce | cooldown |
-| `code-factory-pm` | tighten requirements into falsifiable criteria | cooldown |
-| `code-factory-dogfood` | walk the documented path as a user and report friction | cooldown |
-| `code-factory-sync` | board/repo/doc drift | cooldown |
-| `code-factory-duckbrain` | dated decision records | cooldown |
-| `code-factory-docs-qa` | QA for the docs lane | cooldown |
-| `code-factory-readme-qa` | QA for the README lane | cooldown |
-| `code-factory-releng-qa` | QA for the release lane | cooldown |
+| Lane | Job | Prompt | Admission |
+|---|---|---|---|
+| `code-factory` | foreman — one board row forward per tick | `prompts/foreman.md` | tasks |
+| `code-factory-docs` | documentation truth | `prompts/docs.md` | cooldown |
+| `code-factory-readme` | stranger-facing README path | `prompts/readme.md` | cooldown |
+| `code-factory-releng` | release and public-posture checks | `prompts/releng.md` | cooldown |
+| `code-factory-perf` | measurements and regressions | `prompts/perf.md` | cooldown |
+| `code-factory-review` | review and evidence reconciliation | `prompts/review.md` | cooldown |
+| `code-factory-qa` | re-run completed evidence, re-open what does not reproduce | `prompts/qa.md` | cooldown |
+| `code-factory-pm` | tighten requirements into falsifiable criteria | `prompts/pm.md` | cooldown |
+| `code-factory-dogfood` | walk the documented path as a user and report friction | `prompts/dogfood.md` | cooldown |
+| `code-factory-sync` | board/repo/doc drift | `prompts/sync.md` | cooldown |
+| `code-factory-duckbrain` | dated decision records | `prompts/duckbrain.md` | cooldown |
+| `code-factory-docs-qa` | QA for the docs lane | `prompts/qa.md` | cooldown |
+| `code-factory-readme-qa` | QA for the README lane | `prompts/qa.md` | cooldown |
+| `code-factory-releng-qa` | QA for the release lane | `prompts/qa.md` | cooldown |
 
 The six core lane rows are configured by `scripts/load_lane_config.py`; the eight added family rows
 (workdir, parent, admission mode) by `scripts/add_family_lanes.py`. Prompts are role files, not
-lane files: `prompts/` ships eleven of them and lanes share one — all three QA lanes load `qa.md`.
-The loader copies the prompt text into the scheduler's project row at setup, so edit the file in
-`prompts/` and re-run the loader; the database row is only a copy of it.
+lane files: `prompts/` ships eleven files for fourteen lanes, and every QA-job lane (the three QA
+satellites and `code-factory-qa` itself) loads the same `prompts/qa.md`. The loader copies the
+prompt text into the scheduler's project row at setup, so edit the file in `prompts/` and re-run
+the loader; the database row is only a copy of it. `tests/selftest.sh` refuses a README that names
+a prompt file the tree does not ship.
 
 The scheduler also carries disabled `code-factory-duckbrain-*` rows. They are not part of the
 shipped family above and are not counted in the fourteen.

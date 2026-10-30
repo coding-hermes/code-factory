@@ -51,5 +51,31 @@ else
   say "  FAIL  missing dependency was not surfaced"; fails=$((fails+1))
 fi
 
+say "7. every prompt file the README relies on exists"
+# The README's lane section names prompts/<name>.md files and the loaders copy them into the
+# scheduler. A rename that misses one side leaves a lane loading a prompt that is not shipped.
+prompt_refs_missing() {  # $1=README $2=repo root -> prints each absent prompt, returns 1 if any
+  local readme="$1" root="$2" rc=0 p
+  for p in $(grep -oE 'prompts/[a-z0-9-]+\.md' "$readme" | sort -u); do
+    [ -f "$root/$p" ] || { echo "absent: $p"; rc=1; }
+  done
+  return $rc
+}
+if prompt_refs_missing "$HERE/README.md" "$HERE" >/dev/null; then
+  say "  PASS  every prompts/*.md named by README.md exists"
+else
+  say "  FAIL  README names a prompt file that is not shipped: $(prompt_refs_missing "$HERE/README.md" "$HERE" | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+# negative fixture: a README that names a prompt nobody ships must be refused
+tmpd=$(mktemp -d)
+sed 's#prompts/qa\.md#prompts/ghost-lane.md#' "$HERE/README.md" > "$tmpd/README.md"
+if prompt_refs_missing "$tmpd/README.md" "$HERE" >/dev/null; then
+  say "  FAIL  a README naming an absent prompt was accepted"; fails=$((fails+1))
+else
+  say "  PASS  absent prompt refused ($(prompt_refs_missing "$tmpd/README.md" "$HERE" | head -1))"
+fi
+rm -rf "$tmpd"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
