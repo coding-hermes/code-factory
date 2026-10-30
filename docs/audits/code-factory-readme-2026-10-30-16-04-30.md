@@ -1,6 +1,6 @@
 # code-factory README audit — 2026-10-30 16:04:30
 
-Target: fresh published-tip checkout at `origin/main` SHA `3ebf9f06ce7baa03fc62844f7aecd71aac4c17b2`. The scheduler stand-in `/home/kara/.hermes/stand-in/readme/code-factory` was not a repository and was not used as the audit target. The canonical checkout is `/home/kara/code-factory`; it had unrelated dirty board/audit state, so this audit used a detached worktree at the published tip.
+Target: fresh published-tip checkout at `origin/main` SHA `3ebf9f06ce7baa03fc62844f7aecd71aac4c17b2`. The scheduler stand-in was not a repository and was not used as the audit target. The canonical checkout had unrelated dirty board/audit state, so this audit used a detached worktree at the published tip.
 
 ## Commands tested
 
