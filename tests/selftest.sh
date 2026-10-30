@@ -88,4 +88,10 @@ if python3 -B "$HERE/tests/recovery-contract.py" RecoveryContract; then
 else
   say "  FAIL  recovery contract"; fails=$((fails+1))
 fi
+say "12. scheduler lane census (hermetic fixtures, no dispatch or policy writes)"
+if python3 -B "$HERE/tests/lane-contract.py"; then
+  say "  PASS  lane census positive, drift and missing/bad-input controls"
+else
+  say "  FAIL  lane census contract"; fails=$((fails+1))
+fi
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
