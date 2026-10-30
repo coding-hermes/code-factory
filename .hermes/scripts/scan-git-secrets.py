@@ -371,6 +371,17 @@ FP_PATTERNS = [
     # no base64 body on the line — documentation, not material. Narrow like the
     # straight-quote rule: header must END the backtick span immediately.
     re.compile(r'`\+?-----BEGIN [A-Z ]*(?:PRIVATE KEY|PRIVATE KEY BLOCK|KEY BLOCK)-----`'),
+    # ── Single-quoted PEM BEGIN-header quoted in PROSE (scan #165, 2026-10-30) ──
+    # warpfs `.coding-hermes/board/tasks.jsonl` row DF-WARPFS-151 describes a
+    # sandbox probe: cat ~/.ssh/back-office.key prints '-----BEGIN OPENSSH
+    # PRIVATE KEY-----'. Single-quote sibling of the straight-quote rule above:
+    # the header is a COMPLETE quoted string, i.e. the closing quote follows the
+    # header immediately, so no base64 body sits on the line — prose about a leak,
+    # not material. Real key material still flags: a committed key file's header
+    # line is bare (no closing quote) and a header+body one-liner has the body
+    # between header and quote, so neither can match. Both carriers in the
+    # 10-30 16:02Z fire were this one row (raw + JSON-escaped duplicate hunk).
+    re.compile(r"'-----BEGIN [A-Z ]*(?:PRIVATE KEY|PRIVATE KEY BLOCK|KEY BLOCK)-----'"),
     # (d) literal alphabet run as an assigned value (Go byte-set const: setToken = "ABC…XYZabc…xyz0-9")
     re.compile(r'"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'),
     # ── Secret-store KEY-NAME constants (scan #93, 2026-09-17) ──
@@ -598,10 +609,33 @@ def is_false_positive(line, file_path):
 # (base62/hex, mixed case, no such words) can never match; non-placeholder lookalikes
 # (`sk-test-abc123`, `test-token-abc`, `test-token-1234567`) still fire. Canary 12/12;
 # pre/post real-diff on the carrier path 1 → 0; whole-repo `scan_repo('/home/kara')` 1 → 0.
+#
+# Scan #178 (2026-10-29T16:02Z): wojons-mythos `scripts/dogfood-short-story.mjs:23`
+#   const LOCAL_API_KEY = "dogfood-local-only";
+# is a guard value fed to a LOOPBACK fake provider (OPENROUTER_BASE_URL: fake.baseUrl,
+# OPENAI/ANTHROPIC/GEMINI keys blanked) so the dogfood harness can never reach a real
+# endpoint. It re-fired CRITICAL → exit(1) → cron wrapper "Script Error", the same
+# failure mode as #103/#116/#122/#138. The start-anchored marker above cannot match it:
+# the marker must be the FIRST word and the value must END in token|key|secret, while
+# this one starts with `dogfood` and ends with `only`.
+#
+# Fix: a SECOND, independent alternation — the value may be an all-benign WORD CHAIN
+# ("dogfood-local-only", "fixture-only-private", "e2e-dummy-sample"). Narrow by
+# construction: EVERY segment must come from the benign vocabulary and there must be
+# at least two of them, so the whole value is a phrase that names itself. Real key
+# material is a single random base62/hex/mixed-case run and can never decompose into
+# 2+ lowercase English segments from this list (canary: 4/4 live shapes still fire).
 PLACEHOLDER_VALUES = re.compile(
-    r'(?i)^(?:[a-z]{2,10}[-_]?\d{1,6}[-_])?'          # optional ticket-id prefix: gap017-, abc-12-, T-123-
+    r'(?i)^(?:'
+    r'(?:[a-z]{2,10}[-_]?\d{1,6}[-_])?'          # optional ticket-id prefix: gap017-, abc-12-, T-123-
     r'(?:e2e|battery|test|dummy|local|scratch|fake)[-_][a-z0-9_-]*(?:token|key|secret)'
-    r'(?:[-_]?\d{1,6})?$'
+    r'(?:[-_]?\d{1,6})?'
+    r'|'
+    r'(?:(?:e2e|battery|test|dummy|local|scratch|fake|dogfood|fixture|private|only|'
+    r'no|not|sentinel|placeholder|sample|example|redacted|dev|nonce|none)[-_.]){2,5}'
+    r'(?:token|key|secret|value|string|only|private|placeholder|sample|dummy|'
+    r'redacted|none|fake|local)'
+    r')$'
 )
 
 
