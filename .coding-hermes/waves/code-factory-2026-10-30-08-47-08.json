@@ -9,7 +9,7 @@
   "selection": "P0 reopened source-safety row, no depends_on edges; previous implementation and quorum reviewed, revised acceptance remains unmet. CF-001/004 need live authorization; CF-002 host proxy is separate architecture; CF-020/023/024 have unmet dependencies.",
   "base_ref": "origin/feat/code-factory-bankai-20261030",
   "base_commit": "b2c315e",
-  "state": "awaiting_judge",
+  "state": "closed",
   "workers": [{
     "task_id": "CF-005",
     "gitreins_task": "CF-005-REWORK-0847",
@@ -21,6 +21,13 @@
     "session_id": "20261030_034911_a5a859",
     "implementation_commit": "c1a51ae08b97be61ab15491836cdb0fce65c8407",
     "exit_code": 0,
-    "state": "merged_awaiting_judge"
+    "state": "complete",
+    "judged_commit": "8fac34384a818b538fcc9bb9d11c301b26388895",
+    "evidence_run_id": "CF005-SPLIT-0847",
+    "verdict": "six-bounded-tier2-passes",
+    "monolithic_verdicts": "7e3cd68c,a6185692:iteration-cap-INCOMPLETE",
+    "lifecycle_bookkeeping": "c5336ce8:tier1-only-complete",
+    "ci": "absent:zero-workflows-runs-checks",
+    "next": "CF-002-host-inference-boundary;live-remote-proof-still-unverified"
   }]
 }

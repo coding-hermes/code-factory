@@ -1,0 +1,314 @@
+{
+  "run_id": "CF005-SPLIT-0847",
+  "task_id": "CF-005",
+  "gitreins_lifecycle_task": "CF-005-REWORK-0847",
+  "evaluated_commit": "8fac34384a818b538fcc9bb9d11c301b26388895",
+  "implementation_commit": "c1a51ae08b97be61ab15491836cdb0fce65c8407",
+  "commit_binding": "Foreman observed the same published HEAD before dispatch and after all serial judges; ephemeral CLI schema itself omits commit. No source/config/criteria changes during this batch.",
+  "scope": "Six bounded per-criterion ephemeral Tier-2 judges, not a monolithic lifecycle PASS; some evidence strings are truncated by the CLI schema as indicated in each metadata object.",
+  "passed": true,
+  "judge_count": 6,
+  "earlier_monolithic_verdicts": [
+    {
+      "id": "7e3cd68c",
+      "history_directory": "ac359841",
+      "tier1": true,
+      "tier2": "INCOMPLETE: iteration cap 30, used 30.1"
+    },
+    {
+      "id": "a6185692",
+      "tier1": true,
+      "tier2": "INCOMPLETE: iteration cap 30, used 30.2"
+    }
+  ],
+  "results": [
+    {
+      "$schema": "https://gitreins.dev/schemas/evidence/v1.json",
+      "checks": [
+        {
+          "id": "criterion-1",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "CF-005 AC1: At published HEAD 8fac34384a818b538fcc9bb9d11c301b26388895, inspect specs/NODE.md, specs/ENVELOPE.md, specs/HARNESS.md, docs/DESIGN.md and docs/THREAT-MODEL.md against scripts/project-node.sh, scripts/node-create.sh, scripts/verify-node.sh and scripts/harness/install-hermes.sh. These five docs accurately describe the implemented local input, artifact, manifest and refusal boundaries; Crier pull/reply, secure identity provisioning, real host inference integration, quarantine and dirty-repo behavior not implemented are explicitly planned/unimplemented. No doc in that set claims a live deployment or node provider-key requirement. Decide this source/docs criterion only; other acceptance tests are judged separately.: HEAD confirmed 8fac343. Tests: `bash tests/selftest.sh` -> EXIT=0, tail 'SELFTEST: PASS'; lint `bash -n $(git ls-files '*.sh')` -> LINT_OK. Doc/code agreement verified: (1) specs/NODE.md layer table (lines 22-33) matches scripts/project-node.sh layers 00 preflight (arch/mem/disk/crier health+pypi), 10 base tools, 20 harness adapter requiring measured `PASS  version`, 30 bus existing .node/crier.json, 40 repo dir/clone, 90 manifest; its 'Not implemented' column (Go proxy probe, per-job admission, inference integration, identity issuance, Crier pull worker, dirty-repo warnings, quarantine, scheduler registration) matches the absence of such logic in the scripts. (2) NODE.md manifest example matches scripts/node-contract.py identity()/manifest-write keys (node_id, project, repo{origin,ref,path}, harness{name,port,version}, bus{agent_id,base}, created_by, created_at). (3) NODE.md input grammar matches node-contract.py IDENT/SEGMENT/HOST/REPO regexes and create-input ref/port/TTL rules; node-create.sh validates via create-input before any bunker call (node-create.sh:27-33). (4) NODE.md artifact boundary matches artifact_path() (node-contract.py:55-74): exact ~/.node/node.json or ~/.node/jobs/ID/artifacts/NAME with --dispatch-id, name regex, '..' denial, config|secret|credential|token|key[truncated]"
+        },
+        {
+          "id": "stage-tier1",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "  ✓ lint: scanners: nice=nice -n 10\n  ✓ secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  ✓ tests: scanners: nice=nice -n 10"
+        },
+        {
+          "id": "stage-tier2",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "COMPLETE\n  ✓ CF-005 AC1: At published HEAD 8fac34384a818b538fcc9bb9d11c301b26388895, inspect specs/NODE.md, specs/ENVELOPE.md, specs/HARNESS.md, docs/DESIGN.md and docs/THREAT-MODEL.md against scripts/project-node.sh, scripts/node-create.sh, scripts/verify-node.sh and scripts/harness/install-hermes.sh. These five docs accurately describe the implemented local input, artifact, manifest and refusal boundaries; Crier pull/reply, secure identity provisioning, real host inference integration, quarantine and dirty-repo behavior not implemented are explicitly planned/unimplemented. No doc in that set claims a live deployment or node provider-key requirement. Decide this source/docs criterion only; other acceptance tests are judged separately.: HEAD confirmed 8fac343. Tests: `bash tests/selftest.sh` -> EXIT=0, tail 'SELFTEST: PASS'; lint `bash -n $(git ls-files '*.sh')` -> LINT_OK. Doc/code agreement verified: (1) specs/NODE.md layer table (lines 22-33) matches scripts/project-node.sh layers 00 preflight (arch/mem/disk/crier health+pypi), 10 base tools, 20 harness adapter requiring measured `PASS  version`, 30 bus existing .node/crier.json, 40 repo dir/clone, 90 manifest; its 'Not implemented' column (Go proxy probe, per-job admission, inference integration, identity issuance, Crier pull worker, dirty-repo warnings, quarantine, scheduler registration) matches the absence of such logic in the scripts. (2) NODE.md manifest example matches scripts/node-contract.py identity()/manifest-write keys (node_id, project, repo{origin,ref,path}, harness{name,port,version}, bus{agent_id,base}, created_by, created_at). (3) NODE.md input grammar matches node-contract.py IDENT/SEGMENT/HOST/REPO regexes and create-input ref/port/TTL rules; node-create.sh validates via create-input before any bunker call (node-create.sh:27-33). (4) NODE.md artifact boundary matches artifact_path() (node-contract.py:55-74): exact ~/.node/node.json or ~/.node/jobs/ID/artifacts/NAME with --dispatch-id, name regex, '..' denial, config|secret|credent[truncated]"
+        }
+      ],
+      "command": "judge",
+      "generatedAt": "2026-10-30T09:16:43.257704+00:00",
+      "metadata": {
+        "checkCount": 3,
+        "criterionCount": 1,
+        "ephemeral": true,
+        "historyPersisted": false,
+        "redacted": true,
+        "redactionsApplied": false,
+        "truncated": true
+      },
+      "outcome": "pass",
+      "passed": true,
+      "producer": {
+        "name": "gitreins",
+        "version": "0.17.1"
+      },
+      "schemaVersion": "1.0",
+      "scope": "staged",
+      "subject": {
+        "ephemeral": true,
+        "taskId": "ephemeral:cf-005-rework-0847-ac1",
+        "title": "CF-005-REWORK-0847-AC1"
+      },
+      "summary": "Judge Result: ephemeral:cf-005-rework-0847-ac1\n\nStage tier1: PASS\n    ✓ lint: scanners: nice=nice -n 10\n  ✓ secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  ✓ tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  ✓ CF-005 AC1: At published HEAD 8fac34384a818b538fcc9bb9d11c301b26388895, inspect specs/NODE.md, specs/ENVELOPE.md, specs/HARNESS.md, docs/DESIGN.md and docs/THREAT-MODEL.md against scripts/project-node.sh, scripts/node-create.sh, scripts/verify-node.sh and scripts/harness/install-hermes.sh. These five docs accurately describe the implemented local input, artifact, manifest and refusal boundaries; Crier pull/reply, secure identity provisioning, real host inference integration, quarantine and dirty-repo behavior not implemented are explicitly planned/unimplemented. No doc in that set claims a live deployment or node provider-key requirement. Decide this source/docs criterion only; other acceptance tests are judged separately.: HEAD confirmed 8fac343. Tests: `bash tests/selftest.sh` -> EXIT=0, tail 'SELFTEST: PASS'; lint `bash -n $(git ls-files '*.sh')` -> LINT_OK. Doc/code agreement verified: (1) specs/NODE.md layer table (lines 22-33) matches scripts/project-node.sh layers 00 preflight (arch/mem/disk/crier health+pypi), 10 base tools, 20 harness adapter requiring measured `PASS  version`, 30 bus existing .node/crier.json, 40 repo dir/clone, 90 manifest; its 'Not implemented' column (Go proxy probe, per-job admission, inference integration, identity issuance, Crier pull worker, dirty-repo warnings, quarantine, scheduler registration) matches the absence of such logic in the scripts. (2) NODE.md manifest example matches scripts/node-contract.py identity()/manifest-write keys (node_id, project, repo{origin,ref,path}, harness{name,port,version}, bus{agent_id,base}, created_by, created_at). (3) NODE.md input grammar matches node-contract.py IDENT/SEGMENT/HOST/REPO regexes and create-input ref/port/TTL rules; node-create.sh validates via create-input before an[truncated]"
+    },
+    {
+      "$schema": "https://gitreins.dev/schemas/evidence/v1.json",
+      "checks": [
+        {
+          "id": "criterion-1",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "CF-005 AC2: Run python3 tests/node-contract.py NodeContract.test_named_check and python3 tests/node-mutations.py. Inspect test_named_check and the named-failure-removed/bootstrap-error-decoy mutations. With valid bootstrap PATH and healthy local fixtures, missing only CRIER_URL must produce nonzero and exactly the anchored named FAIL crier_url row; FAILED: unbound variable cannot satisfy the oracle. Both corresponding semantic mutations must make that same test fail by AssertionError after the unchanged control passes. Decide from these bounded source and test commands; do not require live infrastructure.: Ran both commands fresh: `python3 tests/node-contract.py NodeContract.test_named_check` -> exit 0, 'Ran 1 test in 0.087s / OK'; `python3 tests/node-mutations.py` -> exit 0, 'PASS local mutation named-failure-removed: control=0 mutant=1 assertion=test_named_check', 'PASS local mutation bootstrap-error-decoy: control=0 mutant=1 assertion=test_named_check', 'MUTATIONS: PASS (7 local executable controls; no live proof)'. Source: tests/node-contract.py:132-146 test_named_check deletes only CRIER_URL from the healthy fixture env (PATH=bin:/usr/bin:/bin, HOME fixture, BUNKER_SERVER, CRIER_BASE, NODE_DISK_FLOOR=0), asserts returncode != 0, FAIL rows == exactly ['  FAIL  crier_url'], assertNotIn 'unbound variable', and assertRegex r'(?m)^  FAIL  crier_url — .+$'. Manual replay of that env: returncode 1, exactly one '  FAIL  crier_url — CRIER_URL unset ...' row, every other layer PASS, 'NODE: FAIL (1)', no 'unbound variable' in stdout/stderr. scripts/project-node.sh:11 uses `set -uo pipefail` (no -e), :65-66 calls bad \"crier_url\"; scripts/lib.sh:7 bad() prints '  FAIL  name — msg' and increments FAILED; project-node.sh:155 exits 1 when FAILED>0. Independent mutation replay on private copies: named-failure-removed (bad->ok) -> exit 1 with 'FAIL: test_named_check' + AssertionError; bootstrap-error-decoy (script replaced by `echo \"FAILED: unbound variable\" >&2; exit 1`) -> exit 1 with AssertionError \"Lists differ[truncated]"
+        },
+        {
+          "id": "stage-tier1",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "  ✓ lint: scanners: nice=nice -n 10\n  ✓ secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  ✓ tests: scanners: nice=nice -n 10"
+        },
+        {
+          "id": "stage-tier2",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "COMPLETE\n  ✓ CF-005 AC2: Run python3 tests/node-contract.py NodeContract.test_named_check and python3 tests/node-mutations.py. Inspect test_named_check and the named-failure-removed/bootstrap-error-decoy mutations. With valid bootstrap PATH and healthy local fixtures, missing only CRIER_URL must produce nonzero and exactly the anchored named FAIL crier_url row; FAILED: unbound variable cannot satisfy the oracle. Both corresponding semantic mutations must make that same test fail by AssertionError after the unchanged control passes. Decide from these bounded source and test commands; do not require live infrastructure.: Ran both commands fresh: `python3 tests/node-contract.py NodeContract.test_named_check` -> exit 0, 'Ran 1 test in 0.087s / OK'; `python3 tests/node-mutations.py` -> exit 0, 'PASS local mutation named-failure-removed: control=0 mutant=1 assertion=test_named_check', 'PASS local mutation bootstrap-error-decoy: control=0 mutant=1 assertion=test_named_check', 'MUTATIONS: PASS (7 local executable controls; no live proof)'. Source: tests/node-contract.py:132-146 test_named_check deletes only CRIER_URL from the healthy fixture env (PATH=bin:/usr/bin:/bin, HOME fixture, BUNKER_SERVER, CRIER_BASE, NODE_DISK_FLOOR=0), asserts returncode != 0, FAIL rows == exactly ['  FAIL  crier_url'], assertNotIn 'unbound variable', and assertRegex r'(?m)^  FAIL  crier_url — .+$'. Manual replay of that env: returncode 1, exactly one '  FAIL  crier_url — CRIER_URL unset ...' row, every other layer PASS, 'NODE: FAIL (1)', no 'unbound variable' in stdout/stderr. scripts/project-node.sh:11 uses `set -uo pipefail` (no -e), :65-66 calls bad \"crier_url\"; scripts/lib.sh:7 bad() prints '  FAIL  name — msg' and increments FAILED; project-node.sh:155 exits 1 when FAILED>0. Independent mutation replay on private copies: named-failure-removed (bad->ok) -> exit 1 with 'FAIL: test_named_check' + AssertionError; bootstrap-error-decoy (script replaced by `echo \"FAILED: unbound variable\" >&2; exit 1`) -> exit 1 with AssertionError [truncated]"
+        }
+      ],
+      "command": "judge",
+      "generatedAt": "2026-10-30T09:17:36.805639+00:00",
+      "metadata": {
+        "checkCount": 3,
+        "criterionCount": 1,
+        "ephemeral": true,
+        "historyPersisted": false,
+        "redacted": true,
+        "redactionsApplied": false,
+        "truncated": true
+      },
+      "outcome": "pass",
+      "passed": true,
+      "producer": {
+        "name": "gitreins",
+        "version": "0.17.1"
+      },
+      "schemaVersion": "1.0",
+      "scope": "staged",
+      "subject": {
+        "ephemeral": true,
+        "taskId": "ephemeral:cf-005-rework-0847-ac2",
+        "title": "CF-005-REWORK-0847-AC2"
+      },
+      "summary": "Judge Result: ephemeral:cf-005-rework-0847-ac2\n\nStage tier1: PASS\n    ✓ lint: scanners: nice=nice -n 10\n  ✓ secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  ✓ tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  ✓ CF-005 AC2: Run python3 tests/node-contract.py NodeContract.test_named_check and python3 tests/node-mutations.py. Inspect test_named_check and the named-failure-removed/bootstrap-error-decoy mutations. With valid bootstrap PATH and healthy local fixtures, missing only CRIER_URL must produce nonzero and exactly the anchored named FAIL crier_url row; FAILED: unbound variable cannot satisfy the oracle. Both corresponding semantic mutations must make that same test fail by AssertionError after the unchanged control passes. Decide from these bounded source and test commands; do not require live infrastructure.: Ran both commands fresh: `python3 tests/node-contract.py NodeContract.test_named_check` -> exit 0, 'Ran 1 test in 0.087s / OK'; `python3 tests/node-mutations.py` -> exit 0, 'PASS local mutation named-failure-removed: control=0 mutant=1 assertion=test_named_check', 'PASS local mutation bootstrap-error-decoy: control=0 mutant=1 assertion=test_named_check', 'MUTATIONS: PASS (7 local executable controls; no live proof)'. Source: tests/node-contract.py:132-146 test_named_check deletes only CRIER_URL from the healthy fixture env (PATH=bin:/usr/bin:/bin, HOME fixture, BUNKER_SERVER, CRIER_BASE, NODE_DISK_FLOOR=0), asserts returncode != 0, FAIL rows == exactly ['  FAIL  crier_url'], assertNotIn 'unbound variable', and assertRegex r'(?m)^  FAIL  crier_url — .+$'. Manual replay of that env: returncode 1, exactly one '  FAIL  crier_url — CRIER_URL unset ...' row, every other layer PASS, 'NODE: FAIL (1)', no 'unbound variable' in stdout/stderr. scripts/project-node.sh:11 uses `set -uo pipefail` (no -e), :65-66 calls bad \"crier_url\"; scripts/lib.sh:7 bad() prints '  FAIL  name — msg' and increments FAILED; project-node.sh:155 exits 1 when FAILED>0. Independent mu[truncated]"
+    },
+    {
+      "$schema": "https://gitreins.dev/schemas/evidence/v1.json",
+      "checks": [
+        {
+          "id": "criterion-1",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "CF-005 AC3: Run python3 tests/node-contract.py NodeContract.test_creator_preconditions_and_exact_triple NodeContract.test_creator_stops_on_provision_failure. Inspect scripts/node-create.sh and the create-input/identity validator in scripts/node-contract.py: missing or invalid project, repo or harness is refused before any remote operation; fake Bunker records zero calls for invalid inputs and captures the exact valid triple. Provision failure stops before verification. Decide only this creator boundary from those commands and source; fake fixtures are not live nodes.: Test command run fresh: `python3 tests/node-contract.py NodeContract.test_creator_preconditions_and_exact_triple NodeContract.test_creator_stops_on_provision_failure` -> 'test_creator_preconditions_and_exact_triple ... ok', 'test_creator_stops_on_provision_failure ... ok', 'Ran 2 tests in 1.079s / OK'. Full suite `bash tests/selftest.sh` -> 'SELFTEST: PASS', exit 0. Source confirms the boundary: scripts/node-create.sh:30-36 runs `node-contract.py create-input \"$PROJECT\" \"$REPO\" \"$HARNESS\" ...` with the comment 'Validate before discovery, spawn, staging, exec, or any remote operation' and exits 2 on refusal — this precedes the `have bunker` check (line 38), spawn (line 47), staging (lines 55-70) and exec/provision (line 83). scripts/node-contract.py:26-36 identity() enforces `re.fullmatch(IDENT, project)`, `re.fullmatch(REPO, repo)` (REPO at line 17 allows only https://HOST/OWNER/REPO or git@HOST:OWNER/REPO, rejecting empty, userinfo, '..', ';', '-u', file://, '$(id)'), and `harness == \"hermes\"`; create-input (lines 131-135) additionally validates server/ttl. Tests: tests/node-contract.py:157-179 build 15 invalid arg sets (missing project/repo/harness, traversal, injection, unsupported harness 'opencode') and assert returncode != 0 AND `self.recorded() == []` (fake Bunker log empty = zero calls). Lines 180-193 then run the valid triple and assert a 'spawn' call plus exactly one `project-node.sh --apply` invocation whose --project/--repo/--[truncated]"
+        },
+        {
+          "id": "stage-tier1",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "  ✓ lint: scanners: nice=nice -n 10\n  ✓ secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  ✓ tests: scanners: nice=nice -n 10"
+        },
+        {
+          "id": "stage-tier2",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "COMPLETE\n  ✓ CF-005 AC3: Run python3 tests/node-contract.py NodeContract.test_creator_preconditions_and_exact_triple NodeContract.test_creator_stops_on_provision_failure. Inspect scripts/node-create.sh and the create-input/identity validator in scripts/node-contract.py: missing or invalid project, repo or harness is refused before any remote operation; fake Bunker records zero calls for invalid inputs and captures the exact valid triple. Provision failure stops before verification. Decide only this creator boundary from those commands and source; fake fixtures are not live nodes.: Test command run fresh: `python3 tests/node-contract.py NodeContract.test_creator_preconditions_and_exact_triple NodeContract.test_creator_stops_on_provision_failure` -> 'test_creator_preconditions_and_exact_triple ... ok', 'test_creator_stops_on_provision_failure ... ok', 'Ran 2 tests in 1.079s / OK'. Full suite `bash tests/selftest.sh` -> 'SELFTEST: PASS', exit 0. Source confirms the boundary: scripts/node-create.sh:30-36 runs `node-contract.py create-input \"$PROJECT\" \"$REPO\" \"$HARNESS\" ...` with the comment 'Validate before discovery, spawn, staging, exec, or any remote operation' and exits 2 on refusal — this precedes the `have bunker` check (line 38), spawn (line 47), staging (lines 55-70) and exec/provision (line 83). scripts/node-contract.py:26-36 identity() enforces `re.fullmatch(IDENT, project)`, `re.fullmatch(REPO, repo)` (REPO at line 17 allows only https://HOST/OWNER/REPO or git@HOST:OWNER/REPO, rejecting empty, userinfo, '..', ';', '-u', file://, '$(id)'), and `harness == \"hermes\"`; create-input (lines 131-135) additionally validates server/ttl. Tests: tests/node-contract.py:157-179 build 15 invalid arg sets (missing project/repo/harness, traversal, injection, unsupported harness 'opencode') and assert returncode != 0 AND `self.recorded() == []` (fake Bunker log empty = zero calls). Lines 180-193 then run the valid triple and assert a 'spawn' call plus exactly one `project-node.sh --apply` invocation whose --proj[truncated]"
+        }
+      ],
+      "command": "judge",
+      "generatedAt": "2026-10-30T09:18:34.660369+00:00",
+      "metadata": {
+        "checkCount": 3,
+        "criterionCount": 1,
+        "ephemeral": true,
+        "historyPersisted": false,
+        "redacted": true,
+        "redactionsApplied": false,
+        "truncated": true
+      },
+      "outcome": "pass",
+      "passed": true,
+      "producer": {
+        "name": "gitreins",
+        "version": "0.17.1"
+      },
+      "schemaVersion": "1.0",
+      "scope": "staged",
+      "subject": {
+        "ephemeral": true,
+        "taskId": "ephemeral:cf-005-rework-0847-ac3",
+        "title": "CF-005-REWORK-0847-AC3"
+      },
+      "summary": "Judge Result: ephemeral:cf-005-rework-0847-ac3\n\nStage tier1: PASS\n    ✓ lint: scanners: nice=nice -n 10\n  ✓ secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  ✓ tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  ✓ CF-005 AC3: Run python3 tests/node-contract.py NodeContract.test_creator_preconditions_and_exact_triple NodeContract.test_creator_stops_on_provision_failure. Inspect scripts/node-create.sh and the create-input/identity validator in scripts/node-contract.py: missing or invalid project, repo or harness is refused before any remote operation; fake Bunker records zero calls for invalid inputs and captures the exact valid triple. Provision failure stops before verification. Decide only this creator boundary from those commands and source; fake fixtures are not live nodes.: Test command run fresh: `python3 tests/node-contract.py NodeContract.test_creator_preconditions_and_exact_triple NodeContract.test_creator_stops_on_provision_failure` -> 'test_creator_preconditions_and_exact_triple ... ok', 'test_creator_stops_on_provision_failure ... ok', 'Ran 2 tests in 1.079s / OK'. Full suite `bash tests/selftest.sh` -> 'SELFTEST: PASS', exit 0. Source confirms the boundary: scripts/node-create.sh:30-36 runs `node-contract.py create-input \"$PROJECT\" \"$REPO\" \"$HARNESS\" ...` with the comment 'Validate before discovery, spawn, staging, exec, or any remote operation' and exits 2 on refusal — this precedes the `have bunker` check (line 38), spawn (line 47), staging (lines 55-70) and exec/provision (line 83). scripts/node-contract.py:26-36 identity() enforces `re.fullmatch(IDENT, project)`, `re.fullmatch(REPO, repo)` (REPO at line 17 allows only https://HOST/OWNER/REPO or git@HOST:OWNER/REPO, rejecting empty, userinfo, '..', ';', '-u', file://, '$(id)'), and `harness == \"hermes\"`; create-input (lines 131-135) additionally validates server/ttl. Tests: tests/node-contract.py:157-179 build 15 invalid arg sets (missing project/repo/harness, traversal, injection, unsupported har[truncated]"
+    },
+    {
+      "$schema": "https://gitreins.dev/schemas/evidence/v1.json",
+      "checks": [
+        {
+          "id": "criterion-1",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "CF-005 AC4: Run python3 tests/node-contract.py NodeContract.test_artifact_denials_before_remote_shell NodeContract.test_forbidden_manifest_paths_without_dispatch_option NodeContract.test_artifact_symlink_hardlink_and_positive NodeContract.test_verifier_auth_and_digest_fail_closed. Inspect scripts/verify-node.sh and artifact_path/read_beneath in scripts/node-contract.py: only exact bootstrap manifest or matching dispatch artifact namespace; credential/config/traversal paths including ~/.hermes/.env denied before any remote shell; lexical invalid paths make zero remote calls; symlinks/hardlinks/nonregular files denied before shell probes; valid artifacts pass and auth/digest failures fail closed. Decide this bounded artifact/auth criterion, not live provenance.: Ran `python3 tests/node-contract.py NodeContract.test_artifact_denials_before_remote_shell NodeContract.test_forbidden_manifest_paths_without_dispatch_option NodeContract.test_artifact_symlink_hardlink_and_positive NodeContract.test_verifier_auth_and_digest_fail_closed` -> exit_code=0, output 'Ran 4 tests in 2.076s / OK' (all four 'ok'). Code: scripts/node-contract.py artifact_path (lines 55-73) permits only the exact '~/.node/node.json' bootstrap manifest or '~/.node/jobs/<IDENT dispatch>/artifacts/<name>' with filename regex, explicit '..' traversal denial and config|secret|credential|token|key|env denial; read_beneath (lines 75-99) walks with O_NOFOLLOW|O_DIRECTORY dir fds, opens leaf with O_NOFOLLOW|O_NONBLOCK, requires stat.S_ISREG and st_nlink==1 (denies symlink/hardlink/fifo) and caps at 16 MiB. scripts/verify-node.sh lines 20-24 run verify-input + artifact-path and exit 2 before any `bunker exec`, so lexical invalid paths make zero remote calls; the remote no-follow read (line 30) precedes the ALIVE/hostname shell probes (lines 40-46); artifact-verify recomputes sha256 and fails closed (lines 33-38), and auth_gate/unauth_refused checks fail closed (lines 55-68). Tests confirm: tests/node-contract.py:195-220 asserts nonzero exit and `self.[truncated]"
+        },
+        {
+          "id": "stage-tier1",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "  ✓ lint: scanners: nice=nice -n 10\n  ✓ secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  ✓ tests: scanners: nice=nice -n 10"
+        },
+        {
+          "id": "stage-tier2",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "COMPLETE\n  ✓ CF-005 AC4: Run python3 tests/node-contract.py NodeContract.test_artifact_denials_before_remote_shell NodeContract.test_forbidden_manifest_paths_without_dispatch_option NodeContract.test_artifact_symlink_hardlink_and_positive NodeContract.test_verifier_auth_and_digest_fail_closed. Inspect scripts/verify-node.sh and artifact_path/read_beneath in scripts/node-contract.py: only exact bootstrap manifest or matching dispatch artifact namespace; credential/config/traversal paths including ~/.hermes/.env denied before any remote shell; lexical invalid paths make zero remote calls; symlinks/hardlinks/nonregular files denied before shell probes; valid artifacts pass and auth/digest failures fail closed. Decide this bounded artifact/auth criterion, not live provenance.: Ran `python3 tests/node-contract.py NodeContract.test_artifact_denials_before_remote_shell NodeContract.test_forbidden_manifest_paths_without_dispatch_option NodeContract.test_artifact_symlink_hardlink_and_positive NodeContract.test_verifier_auth_and_digest_fail_closed` -> exit_code=0, output 'Ran 4 tests in 2.076s / OK' (all four 'ok'). Code: scripts/node-contract.py artifact_path (lines 55-73) permits only the exact '~/.node/node.json' bootstrap manifest or '~/.node/jobs/<IDENT dispatch>/artifacts/<name>' with filename regex, explicit '..' traversal denial and config|secret|credential|token|key|env denial; read_beneath (lines 75-99) walks with O_NOFOLLOW|O_DIRECTORY dir fds, opens leaf with O_NOFOLLOW|O_NONBLOCK, requires stat.S_ISREG and st_nlink==1 (denies symlink/hardlink/fifo) and caps at 16 MiB. scripts/verify-node.sh lines 20-24 run verify-input + artifact-path and exit 2 before any `bunker exec`, so lexical invalid paths make zero remote calls; the remote no-follow read (line 30) precedes the ALIVE/hostname shell probes (lines 40-46); artifact-verify recomputes sha256 and fails closed (lines 33-38), and auth_gate/unauth_refused checks fail closed (lines 55-68). Tests confirm: tests/node-contract.py:195-220 asserts nonzero ex[truncated]"
+        }
+      ],
+      "command": "judge",
+      "generatedAt": "2026-10-30T09:19:16.515580+00:00",
+      "metadata": {
+        "checkCount": 3,
+        "criterionCount": 1,
+        "ephemeral": true,
+        "historyPersisted": false,
+        "redacted": true,
+        "redactionsApplied": false,
+        "truncated": true
+      },
+      "outcome": "pass",
+      "passed": true,
+      "producer": {
+        "name": "gitreins",
+        "version": "0.17.1"
+      },
+      "schemaVersion": "1.0",
+      "scope": "staged",
+      "subject": {
+        "ephemeral": true,
+        "taskId": "ephemeral:cf-005-rework-0847-ac4",
+        "title": "CF-005-REWORK-0847-AC4"
+      },
+      "summary": "Judge Result: ephemeral:cf-005-rework-0847-ac4\n\nStage tier1: PASS\n    ✓ lint: scanners: nice=nice -n 10\n  ✓ secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  ✓ tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  ✓ CF-005 AC4: Run python3 tests/node-contract.py NodeContract.test_artifact_denials_before_remote_shell NodeContract.test_forbidden_manifest_paths_without_dispatch_option NodeContract.test_artifact_symlink_hardlink_and_positive NodeContract.test_verifier_auth_and_digest_fail_closed. Inspect scripts/verify-node.sh and artifact_path/read_beneath in scripts/node-contract.py: only exact bootstrap manifest or matching dispatch artifact namespace; credential/config/traversal paths including ~/.hermes/.env denied before any remote shell; lexical invalid paths make zero remote calls; symlinks/hardlinks/nonregular files denied before shell probes; valid artifacts pass and auth/digest failures fail closed. Decide this bounded artifact/auth criterion, not live provenance.: Ran `python3 tests/node-contract.py NodeContract.test_artifact_denials_before_remote_shell NodeContract.test_forbidden_manifest_paths_without_dispatch_option NodeContract.test_artifact_symlink_hardlink_and_positive NodeContract.test_verifier_auth_and_digest_fail_closed` -> exit_code=0, output 'Ran 4 tests in 2.076s / OK' (all four 'ok'). Code: scripts/node-contract.py artifact_path (lines 55-73) permits only the exact '~/.node/node.json' bootstrap manifest or '~/.node/jobs/<IDENT dispatch>/artifacts/<name>' with filename regex, explicit '..' traversal denial and config|secret|credential|token|key|env denial; read_beneath (lines 75-99) walks with O_NOFOLLOW|O_DIRECTORY dir fds, opens leaf with O_NOFOLLOW|O_NONBLOCK, requires stat.S_ISREG and st_nlink==1 (denies symlink/hardlink/fifo) and caps at 16 MiB. scripts/verify-node.sh lines 20-24 run verify-input + artifact-path and exit 2 before any `bunker exec`, so lexical invalid paths make zero remote calls; the remote no-follow read (line 30) precede[truncated]"
+    },
+    {
+      "$schema": "https://gitreins.dev/schemas/evidence/v1.json",
+      "checks": [
+        {
+          "id": "criterion-1",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "CF-005 AC5: Run python3 tests/node-contract.py NodeContract.test_manifest_write_failure NodeContract.test_manifest_writer_error_is_not_pass NodeContract.test_manifest_identity_and_byte_idempotence. Inspect project-node manifest writer and node-contract manifest_check: writer failure or project/repo/harness identity mismatch fails closed without manifest PASS; malformed manifest refused; identical reapply leaves bytes unchanged. Decide only this bounded manifest criterion; no deployment required.: Test run: `python3 tests/node-contract.py NodeContract.test_manifest_write_failure NodeContract.test_manifest_writer_error_is_not_pass NodeContract.test_manifest_identity_and_byte_idempotence` -> EXIT=0, output 'test_manifest_write_failure ... ok / test_manifest_writer_error_is_not_pass ... ok / test_manifest_identity_and_byte_idempotence ... ok / Ran 3 tests in 0.745s / OK'. Full suite `bash tests/selftest.sh` -> 'SELFTEST: PASS'. Tests are non-vacuous: tests/node-contract.py:331-336 (node.json as dir -> nonzero rc, no 'PASS  manifest', regex FAIL manifest_(identity|write)); :338-350 (fake python3 exiting 19 on manifest-write -> 'FAIL  manifest_write', no PASS, node.json absent); :352-376 (reapply byte-identical, then project/repo.origin/harness.name mutations each -> nonzero rc, 'FAIL  manifest_identity', no 'PASS  manifest', bytes unchanged, plus malformed '{broken' refused). Implementation matches: scripts/node-contract.py:103-125 manifest_check refuses symlinked .node dir, json.loads raises on malformed, requires node_id/project/bus and repo{origin,ref,path}/harness{name,port} equality; :165-186 manifest-write only writes when identity absent, atomic mkstemp+fsync+os.link, exceptions -> exit 1; scripts/project-node.sh:50-51 pre-apply manifest-check -> bad manifest_identity + exit 1, :143-147 writer failure -> bad manifest_write (lib.sh:6-7 ok/bad emit PASS/FAIL). Independent probes confirmed: project/repo.origin/harness.name/node_id/bus.base mutations each rc=1 'manifest identity mismatch: <key>' with byt[truncated]"
+        },
+        {
+          "id": "stage-tier1",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "  ✓ lint: scanners: nice=nice -n 10\n  ✓ secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  ✓ tests: scanners: nice=nice -n 10"
+        },
+        {
+          "id": "stage-tier2",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "COMPLETE\n  ✓ CF-005 AC5: Run python3 tests/node-contract.py NodeContract.test_manifest_write_failure NodeContract.test_manifest_writer_error_is_not_pass NodeContract.test_manifest_identity_and_byte_idempotence. Inspect project-node manifest writer and node-contract manifest_check: writer failure or project/repo/harness identity mismatch fails closed without manifest PASS; malformed manifest refused; identical reapply leaves bytes unchanged. Decide only this bounded manifest criterion; no deployment required.: Test run: `python3 tests/node-contract.py NodeContract.test_manifest_write_failure NodeContract.test_manifest_writer_error_is_not_pass NodeContract.test_manifest_identity_and_byte_idempotence` -> EXIT=0, output 'test_manifest_write_failure ... ok / test_manifest_writer_error_is_not_pass ... ok / test_manifest_identity_and_byte_idempotence ... ok / Ran 3 tests in 0.745s / OK'. Full suite `bash tests/selftest.sh` -> 'SELFTEST: PASS'. Tests are non-vacuous: tests/node-contract.py:331-336 (node.json as dir -> nonzero rc, no 'PASS  manifest', regex FAIL manifest_(identity|write)); :338-350 (fake python3 exiting 19 on manifest-write -> 'FAIL  manifest_write', no PASS, node.json absent); :352-376 (reapply byte-identical, then project/repo.origin/harness.name mutations each -> nonzero rc, 'FAIL  manifest_identity', no 'PASS  manifest', bytes unchanged, plus malformed '{broken' refused). Implementation matches: scripts/node-contract.py:103-125 manifest_check refuses symlinked .node dir, json.loads raises on malformed, requires node_id/project/bus and repo{origin,ref,path}/harness{name,port} equality; :165-186 manifest-write only writes when identity absent, atomic mkstemp+fsync+os.link, exceptions -> exit 1; scripts/project-node.sh:50-51 pre-apply manifest-check -> bad manifest_identity + exit 1, :143-147 writer failure -> bad manifest_write (lib.sh:6-7 ok/bad emit PASS/FAIL). Independent probes confirmed: project/repo.origin/harness.name/node_id/bus.base mutations each rc=1 'manifest identity mismatch: <k[truncated]"
+        }
+      ],
+      "command": "judge",
+      "generatedAt": "2026-10-30T09:20:26.122371+00:00",
+      "metadata": {
+        "checkCount": 3,
+        "criterionCount": 1,
+        "ephemeral": true,
+        "historyPersisted": false,
+        "redacted": true,
+        "redactionsApplied": false,
+        "truncated": true
+      },
+      "outcome": "pass",
+      "passed": true,
+      "producer": {
+        "name": "gitreins",
+        "version": "0.17.1"
+      },
+      "schemaVersion": "1.0",
+      "scope": "staged",
+      "subject": {
+        "ephemeral": true,
+        "taskId": "ephemeral:cf-005-rework-0847-ac5",
+        "title": "CF-005-REWORK-0847-AC5"
+      },
+      "summary": "Judge Result: ephemeral:cf-005-rework-0847-ac5\n\nStage tier1: PASS\n    ✓ lint: scanners: nice=nice -n 10\n  ✓ secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  ✓ tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  ✓ CF-005 AC5: Run python3 tests/node-contract.py NodeContract.test_manifest_write_failure NodeContract.test_manifest_writer_error_is_not_pass NodeContract.test_manifest_identity_and_byte_idempotence. Inspect project-node manifest writer and node-contract manifest_check: writer failure or project/repo/harness identity mismatch fails closed without manifest PASS; malformed manifest refused; identical reapply leaves bytes unchanged. Decide only this bounded manifest criterion; no deployment required.: Test run: `python3 tests/node-contract.py NodeContract.test_manifest_write_failure NodeContract.test_manifest_writer_error_is_not_pass NodeContract.test_manifest_identity_and_byte_idempotence` -> EXIT=0, output 'test_manifest_write_failure ... ok / test_manifest_writer_error_is_not_pass ... ok / test_manifest_identity_and_byte_idempotence ... ok / Ran 3 tests in 0.745s / OK'. Full suite `bash tests/selftest.sh` -> 'SELFTEST: PASS'. Tests are non-vacuous: tests/node-contract.py:331-336 (node.json as dir -> nonzero rc, no 'PASS  manifest', regex FAIL manifest_(identity|write)); :338-350 (fake python3 exiting 19 on manifest-write -> 'FAIL  manifest_write', no PASS, node.json absent); :352-376 (reapply byte-identical, then project/repo.origin/harness.name mutations each -> nonzero rc, 'FAIL  manifest_identity', no 'PASS  manifest', bytes unchanged, plus malformed '{broken' refused). Implementation matches: scripts/node-contract.py:103-125 manifest_check refuses symlinked .node dir, json.loads raises on malformed, requires node_id/project/bus and repo{origin,ref,path}/harness{name,port} equality; :165-186 manifest-write only writes when identity absent, atomic mkstemp+fsync+os.link, exceptions -> exit 1; scripts/project-node.sh:50-51 pre-apply manifest-check -> bad[truncated]"
+    },
+    {
+      "$schema": "https://gitreins.dev/schemas/evidence/v1.json",
+      "checks": [
+        {
+          "id": "criterion-1",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "CF-005 AC6 and traceability: Run bash tests/selftest.sh and scripts/boardctl validate on published HEAD 8fac34384a818b538fcc9bb9d11c301b26388895. Require SELFTEST PASS including existing build tests and executable node mutation controls, board valid with inherited headerless warning allowed. Inspect docs/audits/code-factory-CF-005-rework-0847.md and CF-005 worker_summary: ch:trace resolves row CF-005, specs/NODE.md anchor, tests/node-contract.py test, committed audit and .coding-hermes/waves/code-factory-2026-10-30-08-47-08.json. Implementation c1a51ae08b97be61ab15491836cdb0fce65c8407 is ancestor of evaluated HEAD. Evidence is explicitly local fixtures, not live Bunker/Crier/inference or provider-key transfer. A future judge id is not required. Decide this bounded gates/trace criterion only.: HEAD confirmed 8fac34384a818b538fcc9bb9d11c301b26388895 (git rev-parse HEAD). GATES (fresh): `bash tests/selftest.sh` exit_code=0, output line 86 'SELFTEST: PASS' with 29 PASS lines, including line 84 'BUILD CONTRACT: PASS (10 tests; hermetic policy only)' (existing build tests) and line 54 'MUTATIONS: PASS (7 local executable controls; no live proof)' plus line 55 'PASS node contracts and mutation controls' (executable node mutation controls). `scripts/boardctl validate` exit_code=0, 'RESULT: OK (1 warning(s))' where the sole warning is the permitted inherited one: '[warn] headerless board (no board.jsonl): tasks.jsonl line 1 is a task row, not board metadata'; 24 tasks/40 events, 24/24 canon keys, 0 drift. ANCESTRY: `git merge-base --is-ancestor c1a51ae08b97be61ab15491836cdb0fce65c8407 HEAD` -> ANCESTOR=YES (object type commit). TRACE resolves in both docs/audits/code-factory-CF-005-rework-0847.md:177 and the CF-005 worker_summary: row=CF-005 -> .coding-hermes/board/tasks.jsonl line 5 (id=CF-005, commit_hash=c1a51ae..., guard_result=PASS); spec=specs/NODE.md#script-boundary-and-manifest-mapping -> specs/NODE.md:20 '## Script boundary and manifest mapping'; test=tests/node-contract.py::NodeContract.test_named_che[truncated]"
+        },
+        {
+          "id": "stage-tier1",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "  ✓ lint: scanners: nice=nice -n 10\n  ✓ secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  ✓ tests: scanners: nice=nice -n 10"
+        },
+        {
+          "id": "stage-tier2",
+          "outcome": "pass",
+          "passed": true,
+          "summary": "COMPLETE\n  ✓ CF-005 AC6 and traceability: Run bash tests/selftest.sh and scripts/boardctl validate on published HEAD 8fac34384a818b538fcc9bb9d11c301b26388895. Require SELFTEST PASS including existing build tests and executable node mutation controls, board valid with inherited headerless warning allowed. Inspect docs/audits/code-factory-CF-005-rework-0847.md and CF-005 worker_summary: ch:trace resolves row CF-005, specs/NODE.md anchor, tests/node-contract.py test, committed audit and .coding-hermes/waves/code-factory-2026-10-30-08-47-08.json. Implementation c1a51ae08b97be61ab15491836cdb0fce65c8407 is ancestor of evaluated HEAD. Evidence is explicitly local fixtures, not live Bunker/Crier/inference or provider-key transfer. A future judge id is not required. Decide this bounded gates/trace criterion only.: HEAD confirmed 8fac34384a818b538fcc9bb9d11c301b26388895 (git rev-parse HEAD). GATES (fresh): `bash tests/selftest.sh` exit_code=0, output line 86 'SELFTEST: PASS' with 29 PASS lines, including line 84 'BUILD CONTRACT: PASS (10 tests; hermetic policy only)' (existing build tests) and line 54 'MUTATIONS: PASS (7 local executable controls; no live proof)' plus line 55 'PASS node contracts and mutation controls' (executable node mutation controls). `scripts/boardctl validate` exit_code=0, 'RESULT: OK (1 warning(s))' where the sole warning is the permitted inherited one: '[warn] headerless board (no board.jsonl): tasks.jsonl line 1 is a task row, not board metadata'; 24 tasks/40 events, 24/24 canon keys, 0 drift. ANCESTRY: `git merge-base --is-ancestor c1a51ae08b97be61ab15491836cdb0fce65c8407 HEAD` -> ANCESTOR=YES (object type commit). TRACE resolves in both docs/audits/code-factory-CF-005-rework-0847.md:177 and the CF-005 worker_summary: row=CF-005 -> .coding-hermes/board/tasks.jsonl line 5 (id=CF-005, commit_hash=c1a51ae..., guard_result=PASS); spec=specs/NODE.md#script-boundary-and-manifest-mapping -> specs/NODE.md:20 '## Script boundary and manifest mapping'; test=tests/node-contract.py::NodeContract.t[truncated]"
+        }
+      ],
+      "command": "judge",
+      "generatedAt": "2026-10-30T09:21:52.767994+00:00",
+      "metadata": {
+        "checkCount": 3,
+        "criterionCount": 1,
+        "ephemeral": true,
+        "historyPersisted": false,
+        "redacted": true,
+        "redactionsApplied": false,
+        "truncated": true
+      },
+      "outcome": "pass",
+      "passed": true,
+      "producer": {
+        "name": "gitreins",
+        "version": "0.17.1"
+      },
+      "schemaVersion": "1.0",
+      "scope": "staged",
+      "subject": {
+        "ephemeral": true,
+        "taskId": "ephemeral:cf-005-rework-0847-ac6",
+        "title": "CF-005-REWORK-0847-AC6"
+      },
+      "summary": "Judge Result: ephemeral:cf-005-rework-0847-ac6\n\nStage tier1: PASS\n    ✓ lint: scanners: nice=nice -n 10\n  ✓ secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  ✓ tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  ✓ CF-005 AC6 and traceability: Run bash tests/selftest.sh and scripts/boardctl validate on published HEAD 8fac34384a818b538fcc9bb9d11c301b26388895. Require SELFTEST PASS including existing build tests and executable node mutation controls, board valid with inherited headerless warning allowed. Inspect docs/audits/code-factory-CF-005-rework-0847.md and CF-005 worker_summary: ch:trace resolves row CF-005, specs/NODE.md anchor, tests/node-contract.py test, committed audit and .coding-hermes/waves/code-factory-2026-10-30-08-47-08.json. Implementation c1a51ae08b97be61ab15491836cdb0fce65c8407 is ancestor of evaluated HEAD. Evidence is explicitly local fixtures, not live Bunker/Crier/inference or provider-key transfer. A future judge id is not required. Decide this bounded gates/trace criterion only.: HEAD confirmed 8fac34384a818b538fcc9bb9d11c301b26388895 (git rev-parse HEAD). GATES (fresh): `bash tests/selftest.sh` exit_code=0, output line 86 'SELFTEST: PASS' with 29 PASS lines, including line 84 'BUILD CONTRACT: PASS (10 tests; hermetic policy only)' (existing build tests) and line 54 'MUTATIONS: PASS (7 local executable controls; no live proof)' plus line 55 'PASS node contracts and mutation controls' (executable node mutation controls). `scripts/boardctl validate` exit_code=0, 'RESULT: OK (1 warning(s))' where the sole warning is the permitted inherited one: '[warn] headerless board (no board.jsonl): tasks.jsonl line 1 is a task row, not board metadata'; 24 tasks/40 events, 24/24 canon keys, 0 drift. ANCESTRY: `git merge-base --is-ancestor c1a51ae08b97be61ab15491836cdb0fce65c8407 HEAD` -> ANCESTOR=YES (object type commit). TRACE resolves in both docs/audits/code-factory-CF-005-rework-0847.md:177 and the CF-005 worker_summary: row=CF-005 -> .coding-hermes/b[truncated]"
+    }
+  ]
+}
