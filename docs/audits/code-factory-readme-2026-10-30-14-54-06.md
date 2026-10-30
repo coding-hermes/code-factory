@@ -4,7 +4,7 @@ Target: canonical code-factory checkout (resolved by `git rev-parse --show-tople
 
 ## Commands tested
 
-The exact README fenced commands were enumerated and executed from a fresh shallow clone with a fresh HOME where safe. The complete exact transcript is stored at `/home/kara/.hermes/cache/scratch/code-factory-readme-20261030-cxgXq1/probe.txt` during this audit; this durable artifact preserves the decisive outputs and the stable command forms.
+The exact README fenced commands were enumerated and executed from a fresh shallow clone with a fresh HOME where safe. The decisive producer output is preserved in the committed companion artifact `docs/audits/code-factory-readme-2026-10-30-14-54-06.probe.txt`; the durable audit preserves the stable command forms and relevant output.
 
 - `scripts/bunker-server-install.sh --check` with `BUNKER_SERVER` unset: exit 1; `set BUNKER_SERVER to your bunker server name` before the checker ran.
 - `./scripts/project-node.sh --check --project <project>` literally: shell exit 2; the angle-bracket placeholder is shell syntax, not a literal argument.
@@ -44,4 +44,4 @@ ch:trace row=CF-015 spec=none:repository-contract-absent wave=code-factory-readm
 
 STATUS: PARTIAL
 TIER: T4 -- executed the documented README commands in a fresh clone and read back the clone files and exact probe transcript; live bunker, Crier, gateway, release, and anonymous-render boundaries were unavailable
-EVIDENCE: docs/audits/code-factory-readme-2026-10-30-14-54-06.md; /home/kara/.hermes/cache/scratch/code-factory-readme-20261030-cxgXq1/probe.txt
+EVIDENCE: docs/audits/code-factory-readme-2026-10-30-14-54-06.md; docs/audits/code-factory-readme-2026-10-30-14-54-06.probe.txt
