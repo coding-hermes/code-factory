@@ -1,7 +1,11 @@
 # SPEC — dispatch and result envelope
 
-The one wire contract between the control host and a node. Versioned, small, and hostile to
-ambiguity.
+Planned wire contract between the control host and a node. Versioned, small, and hostile to
+ambiguity. No tracked Crier pull worker, gateway dispatch integration, result publisher,
+ack/replay implementation or quarantine loop implements this envelope yet. Requirements below
+are normative for future integration, not claims of shipped behavior. CF-002 owns host-only
+inference credentials and the host proxy; node-side provider keys are unsupported and that
+integration remains UNIMPLEMENTED / BLOCKED.
 
 ## Dispatch (control host → node inbox)
 
@@ -48,6 +52,16 @@ node got the task it was given; a mismatch is a refusal, not a warning.
 `host_identity` is the node's hostname, **not** the control host's. The control host recomputes
 every digest from the bytes it pulls; a reported digest that cannot be recomputed is unverified,
 and unverified is FAIL.
+
+## Artifact mapping (implemented subset)
+
+Result `artifacts[].path` is a relative filename NAME, never an arbitrary node path.
+The verifier maps it to `~/.node/jobs/ID/artifacts/NAME` only with explicit
+`--dispatch-id ID`. The exact `~/.node/node.json` path is a separate provisioning
+manifest exception, not a dispatch result. NODE.md defines the strict path grammar,
+symlink/hardlink/type/size denials and the non-shell read before any shell probes.
+Digest equality verifies transferred bytes only. Result parsing, authenticated
+correlation/freshness and automatic artifact production remain unimplemented.
 
 ## Reserved field names (crier guard)
 

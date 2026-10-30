@@ -1,79 +1,68 @@
 #!/usr/bin/env bash
-# verify-node.sh — control host: is this node actually usable?
-#
-#   ./verify-node.sh --agent <id> [--server <name>] [--port 10800] --artifact <path-on-node>
-#
-# Checks, in order of what they prove:
-#   1. the agent is alive and exec-able
-#   2. the gateway answers from HERE over the tailnet (not from inside itself)
-#   3. the gateway's auth gate is closed (unauthenticated request must be 401/302)
-#   4. (optional) an artifact on the node hashes the same on both sides
-# A version string is not evidence: step 2 must be a live HTTP answer from this host.
+# Control-host plumbing checks and scoped artifact snapshot; not a work round trip.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
-
-AGENT="" SERVER="${BUNKER_SERVER:?set BUNKER_SERVER to your bunker server name}" PORT=10800 ARTIFACT=""
+AGENT="" SERVER="${BUNKER_SERVER:-}" PORT=10800 ARTIFACT="" DISPATCH=""
 while [ $# -gt 0 ]; do
+  [ $# -ge 2 ] || { echo "missing value: $1" >&2; exit 2; }
   case "$1" in
-    --agent) AGENT="$2"; shift 2 ;;
-    --server) SERVER="$2"; shift 2 ;;
-    --port) PORT="$2"; shift 2 ;;
-    --artifact) ARTIFACT="$2"; shift 2 ;;
+    --agent) AGENT="$2" ;;
+    --server) SERVER="$2" ;;
+    --port) PORT="$2" ;;
+    --artifact) ARTIFACT="$2" ;;
+    --dispatch-id) DISPATCH="$2" ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
+  shift 2
 done
-[ -z "$AGENT" ] && { echo "usage: $0 --agent ID [--port P] --artifact PATH"; exit 2; }
-[ -z "$ARTIFACT" ] && { echo "--artifact is required: verification must include a control-host digest" >&2; exit 2; }
+if ! python3 "$HERE/node-contract.py" verify-input "$AGENT" "$SERVER" "$PORT" ||
+   ! python3 "$HERE/node-contract.py" artifact-path "$ARTIFACT" "$DISPATCH"; then
+  bad "artifact_scope" "invalid options or path outside dispatch/manifest contract"; exit 2
+fi
 
+scratch=$(mktemp -d) || exit 1
+trap 'rm -rf "$scratch"' EXIT
 say "verify node $AGENT"
+# Before ANY remote shell command, inspect and read through no-follow directory
+# descriptors using a direct python argv. Send source, not a path to an untrusted helper.
+if ! bunker exec --server "$SERVER" "$AGENT" --raw -- python3 -c "$(<"$HERE/node-contract.py")" \
+    artifact-read "$ARTIFACT" "$DISPATCH" >"$scratch/artifact.json"; then
+  bad "artifact_scope" "remote no-follow read refused or transfer failed"; exit 1
+fi
+if local_h=$(python3 "$HERE/node-contract.py" artifact-verify "$scratch/artifact.json"); then
+  ok "artifact_digest" "${local_h:0:12} recomputed from transferred snapshot"
+else
+  bad "artifact_digest" "invalid snapshot or bytes differ"; exit 1
+fi
 
-# 1. alive
 out=$(bunker exec --server "$SERVER" "$AGENT" -- bash -lc 'echo ALIVE $(hostname)' 2>&1)
 case "$out" in
   ALIVE*) ok "agent_alive" "$(printf '%s' "$out" | head -1)" ;;
-  *) bad "agent_alive" "$(printf '%s' "$out" | head -1)"; say ""; say "RESULT: FAIL"; exit 1 ;;
+  *) bad "agent_alive" "$(printf '%s' "$out" | head -1)"; exit 1 ;;
 esac
-
-# 2. gateway reachable from the control host
 ip=$(bunker exec --server "$SERVER" "$AGENT" -- bash -lc 'hostname -I' 2>/dev/null | awk '{print $1}')
-if [ -z "$ip" ]; then bad "node_ip" "could not read hostname -I"; else ok "node_ip" "$ip"; fi
+if [ -z "$ip" ]; then bad "node_ip" "could not read hostname -I"; exit 1; else ok "node_ip" "$ip"; fi
 url="http://$ip:$PORT/api/status"
-code=$(curl -s -o /tmp/node-status.json -w '%{http_code}' --max-time 8 "$url" 2>/dev/null || echo 000)
+code=$(curl -s -o "$scratch/status.json" -w '%{http_code}' --max-time 8 "$url" 2>/dev/null || echo 000)
 if [ "$code" = 200 ]; then
   ok "gateway_reachable" "$url -> 200"
-  grep -q '"auth_required":true' /tmp/node-status.json 2>/dev/null \
-    && ok "auth_gate" "auth_required:true (a public bind must not be open)" \
-    || bad "auth_gate" "auth_required is not true — check dashboard.basic_auth"
+  python3 - "$scratch/status.json" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1]) as stream:
+        valid = json.load(stream).get('auth_required') is True
+except (ValueError, OSError, AttributeError):
+    valid = False
+sys.exit(0 if valid else 1)
+PY
+  [ "$?" -eq 0 ] && ok "auth_gate" "auth_required:true" || bad "auth_gate" "auth_required is not true"
 else
-  bad "gateway_reachable" "$url -> $code (is the harness running on 0.0.0.0:$PORT?)"
+  bad "gateway_reachable" "$url -> $code"
 fi
-
-# 3. unauthenticated access must be refused
 code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "http://$ip:$PORT/api/system/stats" 2>/dev/null || echo 000)
 case "$code" in
   401|302|403) ok "unauth_refused" "/api/system/stats -> $code" ;;
-  200) bad "unauth_refused" "/api/system/stats -> 200 — the node is OPEN to the tailnet" ;;
   *) bad "unauth_refused" "/api/system/stats -> $code — expected 401, 302, or 403" ;;
 esac
-
-# 4. artifact integrity: the node-reported hash is compared with bytes pulled here.
-case "$ARTIFACT" in
-  *[!A-Za-z0-9_./~:-]*) echo "--artifact contains unsupported shell characters" >&2; exit 2 ;;
-esac
-remote=$(bunker exec --server "$SERVER" "$AGENT" -- bash -lc "sha256sum -- $ARTIFACT 2>/dev/null | cut -d' ' -f1")
-tmp=$(mktemp)
-if bunker exec --server "$SERVER" "$AGENT" --raw -- bash -lc "cat -- $ARTIFACT" > "$tmp" 2>/dev/null; then
-  local_h=$(sha256sum "$tmp" | cut -d' ' -f1)
-else
-  local_h=""
-fi
-rm -f "$tmp"
-if [ -n "$remote" ] && [ "$remote" = "$local_h" ]; then
-  ok "artifact_digest" "$(basename "$ARTIFACT") ${local_h:0:12} on both sides"
-else
-  bad "artifact_digest" "node ${remote:0:12} vs host ${local_h:0:12} — bytes differ or file missing"
-fi
-
-say ""
 if [ "$FAILED" -eq 0 ]; then say "VERIFY: PASS"; exit 0; else say "VERIFY: FAIL ($FAILED)"; exit 1; fi

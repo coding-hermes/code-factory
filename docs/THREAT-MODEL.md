@@ -1,111 +1,82 @@
 # Threat model — public code-factory
 
-**Status:** Source-grounded design assessment, not a penetration test or deployment attestation. This repository is public; this model assumes no private repository data. No secrets, private hostnames, or private IPs are included. Statements marked **Existing (source)** are controls present in the inspected repository. Statements marked **Recorded measurement** are results documented by the repository but were not independently reproduced for this assessment. **Recommendation** means a proposed control, not a deployed fact.
+Status: source-grounded and hermetic-local assessment, not deployment attestation.
+No live credentials or services were inspected. NODE.md, ENVELOPE.md, HARNESS.md
+and DESIGN.md are the authority for current versus planned behavior.
 
-## Scope and security objective
+## Assets, actors and trust boundaries
 
-Code-factory provisions a one-project/one-repository execution node, receives work via Crier, runs a harness, and returns evidence for control-host verification. Its security objective is that only intended work runs in the intended repository, credentials remain protected, and untrusted node claims do not become trusted results without independent verification.
+Protect control-host authority and provider credentials, node identity/project
+binding, repository/branch integrity, result/artifact provenance, and shared disk
+and compute availability. Briefs, repo code, model output, supplied paths and
+node claims are untrusted. A compromised node can fabricate every response.
+The external scheduler, Crier, task-router, Bunker and gateway are not implemented
+here and their deployment security is unverified.
 
-The repository owns the node specs, dispatch/result envelope, board and provisioning scripts; it consumes (does not implement) the Hermes gateway, Crier, scheduler, and task-router. See `AGENTS.md` (“What it is”), `docs/PRD-code-factory.md` (out of scope), and `docs/DESIGN.md` §4. Those external services and any live fleet deployment are outside what repository source alone can prove.
+Provider credentials stay on the control host. Node-side provider key files are
+unsupported, never a PASS prerequisite and never read by the Hermes adapter.
+CF-002 owns the host inference proxy and node-scoped identity; integration is
+UNIMPLEMENTED / BLOCKED. Existing policy text about a node credential bundle
+applies only to future authorized node-scoped service identities, not provider
+keys. Bundle issuance/intake/deletion/rotation is not implemented in this path.
 
-## Assets and security properties
+## Existing controls (source, not live proof)
 
-| Asset | Security property / impact if lost | Evidence boundary |
+| Boundary | Implemented control | Limitation |
 |---|---|---|
-| Provider and Crier credentials | Confidentiality; prevent unauthorized inference, message delivery, and node impersonation | Credential handling expectations are specified in `AGENTS.md` rules 8 and PRD CF-108; no live credential custody was inspected. |
-| Control-host authority and scheduler/Crier messages | Integrity and authorization of dispatched work | Contract/design in `specs/ENVELOPE.md`, `docs/DESIGN.md` §3; scheduler and Crier implementation are not in this repo. |
-| Node identity, manifest, repo and harness | Integrity/isolation; prevent cross-project access and untrusted execution | `specs/NODE.md`; provisioning implementation in `scripts/project-node.sh`. |
-| Repository source, branches, commits and build outputs | Integrity and provenance; malicious changes could be accepted or propagated | `specs/ENVELOPE.md` result fields; `scripts/verify-node.sh`; the node's claim is not proof of correctness. |
-| Result envelope, artifacts, gate result and digests | Integrity, freshness, correct dispatch association | `specs/ENVELOPE.md`; `scripts/verify-node.sh` implements optional byte digest comparison. |
-| Node/control-host disk and compute | Availability; exhaustion can disrupt other work or the host | `specs/NODE.md` disk-floor law; `scripts/lib.sh` `require_disk`; `scripts/project-node.sh` preflight. |
-| Logs, manifests and board rows | Confidentiality and integrity; may expose credentials or misleading claims | Credential non-disclosure policy: `AGENTS.md` rule 8; self-test scan: `tests/selftest.sh`; these do not prove runtime log hygiene. |
+| Public input → creator | `node-create.sh` + `node-contract.py`: required project/repo/harness and options validated before any Bunker call; only explicit hermes for creation, narrow Git origin grammar from NODE.md. Values still cross `bash -lc` using Bash `%q`. | This is quoted/validated shell construction, not absence of shell strings or a general Git URL parser. Fake Bunker captures exact triple; no live API compatibility proof. |
+| Node reuse → apply | `project-node.sh` calls `manifest-check` before adapter/clone; mismatched or malformed project/repo/harness (and other stable identity fields) refuses. | Matching manifest is not attestation of an existing repo's remote, revision or cleanliness. Dirty-repo warnings/handling unimplemented. |
+| Layers → manifest | Required checks must pass; `manifest-write` publishes a mode-600 temporary file atomically without overwriting an existing identity; writer failure becomes FAIL, not PASS. | Node account controls state and can lie; no signed manifest. Existing-state precheck is not an OS sandbox. |
+| Artifact input → remote work | Exact manifest exception or `~/.node/jobs/ID/artifacts/NAME` with matching dispatch id; strict filename and sensitive-name denial locally before any Bunker operation. | Lexical dispatch binding is not authenticated envelope validation. Arbitrary config/secret files cannot be requested, but an allowed log can still contain sensitive content. |
+| Remote path → file read | Direct Python argv, no remote shell until successful artifact snapshot. Directory-fd walk uses `O_NOFOLLOW`; final file must be regular with one link, <=16 MiB. Reject symlinks, hardlinks, FIFOs and traversal. | HOME is a trusted account root. A compromised account/node can copy or forge contents and change files; the read is a bounded snapshot, not provenance. |
+| Node bytes → control host | Remote snapshot reports SHA-256 plus base64 bytes; local verifier recomputes SHA-256 and fails on malformed snapshot, transfer error or mismatch. | Equal hashes establish byte consistency only, not actual gate execution, freshness, branch/commit identity, safety or authenticity. |
+| Gateway → acceptance | `verify-node.sh` requires 200 status, JSON boolean `auth_required:true`, and 401/302/403 for unauthenticated stats. Missing auth and unknown outcomes are FAIL, never WARN. | Probes are not complete effective-auth validation. Hermes apply/check is blocked before gateway start pending CF-002, rather than trusting a `basic_auth` substring. |
+| Download → execution | `lib.sh` `fetch_verified` rejects wrong digest and deletes bad temporary bytes. | Does not establish provenance of every dependency. Historical pip version pin is not artifact-hash enforcement; current Hermes adapter refuses install. |
+| Resource checks → provision | `require_disk` measures free GiB and floor; project-node checks memory and provisioning reachability. | No per-job admission, CPU/memory/artifact quota enforcement or runtime disk checks. |
+| State → bus | Existing `.node/crier.json` must be mode 600 and bus base supplied. | File presence/mode does not authenticate Crier identity or establish worker operation. |
 
-## Actors and trust boundaries
+## Planned controls, explicitly unimplemented
 
-**Actors:** project owner/operator; control-host foreman and verifier; scheduler; Crier transport; node agent and harness; public repository contributor; repository/installer/package source; compromised node or harness; malicious or compromised model/provider; an attacker able to submit or influence a brief, repo, artifact path, or delivery.
+ENVELOPE.md specifies text/brief digest, reserved key behavior, result correlation,
+idempotency and ack-after-result-delivery. There is no tracked Crier pull worker,
+message signature verifier, gateway dispatch execution, result publisher, lease
+loop, deduplication store, quarantine or scheduler exclusion in these scripts.
+No bus/gateway/inference work round trip is demonstrated here.
 
-**Boundaries (trust must not flow implicitly):**
+Future runtime integration must authenticate dispatch/result provenance and bind
+expected project, repo, commit and artifact set; independently rerun gates; enforce
+resource admission and sandbox repository/harness execution with limited egress.
+One project per node alone is not filesystem/credential isolation. Quarantine and
+dirty-repo handling are planned policies, not consequences of a verifier failure.
 
-1. **Public input → control host:** project/repo/harness and task text may be attacker-controlled. Validate before shell, filesystem, or network use.
-2. **Control host → scheduler/Crier → node:** message transport and scheduler routing are external dependencies. A signed pull worker and digest-checked brief are described in `docs/DESIGN.md` §3, but their implementation is not in this repository; `specs/ENVELOPE.md` defines contract expectations only.
-3. **Node process → repository/harness:** repository code and model-generated commands are untrusted execution. One repo per node is the intended containment boundary (`specs/NODE.md`); no OS sandbox, filesystem confinement, or network egress policy is established by the inspected scripts.
-4. **Node → control-host results:** node-reported status, host identity, commit, gate result, and digest are claims until independently checked. `specs/ENVELOPE.md` requires host-side digest recomputation; `scripts/verify-node.sh` implements it only when `--artifact` is supplied.
-5. **Control host → external gateway:** Hermes is bound to `0.0.0.0` by `scripts/harness/install-hermes.sh`; it relies on configured gateway authentication and network exposure controls. `scripts/verify-node.sh` probes unauthenticated access, but an unrecognized result is WARN rather than a hard failure (lines 52–58).
-6. **Repository → third-party downloads and package registries:** downloads and package installs are supply-chain inputs. `scripts/lib.sh` provides digest verification for files fetched through `fetch_verified`, but the Hermes adapter installs `hermes-agent==$PIN` through pip without invoking that helper (`scripts/harness/install-hermes.sh`, lines 50–57).
+## Hermetic proof and mutation boundary
 
-## Existing controls and proof status
+`tests/selftest.sh` executes `tests/node-contract.py`: fake Bunker/curl/git/adapter,
+temporary HOME and harmless local artifact bytes. Invalid creation input records
+zero Bunker calls. Artifact lexical denials record zero Bunker calls; unsafe
+filesystem types never reach remote shell probes. Exact project/repo/harness argv,
+valid manifest and dispatch artifact, identity mismatch, writer error and identical
+re-apply are tested. Existing auth/digest/provision failure tests remain fail-closed.
 
-“Proof” below means the repository-local evidence available; it is not a claim that the whole deployment is secure. Source anchors are exact paths and line ranges where implementation exists.
+`tests/node-mutations.py` executes altered private copies: named failure removed,
+bootstrap-error decoy, repo validation removed, local artifact scope removed,
+no-follow removed, manifest write status ignored and identity check ignored.
+Each first runs an unchanged positive control and then requires an assertion
+failure from the mutant, not a parser/bootstrap failure of the test runner.
+These are local tests, never live Bunker/Crier/provider proof. The literal-assignment
+scan is not a complete secret scanner or proof of runtime/history hygiene.
 
-| Control | Classification and source | Proof / limitation |
-|---|---|---|
-| Pinned file download with SHA-256 check; mismatch deletes temporary file and refuses use | **Existing (source):** `scripts/lib.sh` lines 15–29 | `tests/selftest.sh` lines 19–24 exercises both matching and deliberately wrong digest using a local file. This does not cover all installer/package downloads. |
-| Disk floor reports measured free space and fails below threshold | **Existing (source):** `scripts/lib.sh` lines 31–44; caller `scripts/project-node.sh` lines 42–47 | `tests/selftest.sh` lines 14–17 checks a fail path for empty PATH, not the disk-floor boundary despite PRD CF-109; do not treat that test as disk-boundary proof. |
-| No-root, user-space, idempotence and credential-bundle requirements | **Specified policy, not established enforcement:** `AGENTS.md` rules 4, 5, 6, 8; `specs/NODE.md` laws N-1/N-2 | The inspected scripts run user-level commands and do not call sudo/apt in the relevant path, but no runtime privilege audit or credential-bundle round trip was performed. `scripts/project-node.sh` checks `crier.json` mode 600 (lines 77–84), but does not show bundle deletion. |
-| Layer checks and manifest withheld until provisioning checks pass | **Existing (source):** `scripts/project-node.sh` lines 42–56, 58–84, 104–124 | The script gates manifest creation on `$FAILED -eq 0`; however, the manifest is opened directly rather than atomically, and existing manifest acceptance is not proof of current health. |
-| Hermes adapter checks a provider-key presence without printing the value and refuses gateway start without `basic_auth` | **Existing (source):** `scripts/harness/install-hermes.sh` lines 43–48, 61–69 | Source behavior only. A substring `grep basic_auth` is not validation of effective configuration; no deployed gateway or firewall was independently checked. |
-| Gateway verification checks status, auth marker, and unauthenticated stats response | **Existing (source):** `scripts/verify-node.sh` lines 38–58 | **Fail-closed gap:** missing auth marker is WARN (lines 45–47); unexpected stats response is WARN (lines 54–58); the command may still exit zero if no other failure was recorded. Thus this is not a reliable hard auth gate. |
-| Optional host-side artifact digest comparison | **Existing (source):** `scripts/verify-node.sh` lines 60–71 | Computes remote and locally downloaded SHA-256, rejects mismatch. It runs only with `--artifact`; artifact path is interpolated into a remote `bash -lc` string (line 62), and transfer exit status is not separately checked. |
-| Result contract requires control host to recompute artifact digests; mismatch is FAIL | **Specified contract:** `specs/ENVELOPE.md` “Result”; **implementation:** `scripts/verify-node.sh` lines 60–71 | Contract is broader than script: verifier does not parse a result envelope, bind result to `dispatch_id`, verify freshness, or require `--artifact` by default. |
-| Brief digest mismatch is a refusal; Crier rejects reserved prompt-control keys | **Specified external behavior:** `specs/ENVELOPE.md` “Dispatch” and “Reserved field names” | Crier implementation is not present, so enforcement and proof are external/unverified here. `tests/selftest.sh` does not exercise Crier. |
-| Retry/redelivery idempotency and ack only after result delivery | **Specified protocol requirement:** `specs/ENVELOPE.md` “Correlation and idempotency” | No dispatcher, Crier worker, lease, or ack implementation in this repository; behavior is not verified here. |
-| Unmeasured harness installers refuse `--apply` | **Existing (source):** `scripts/harness/install-opencode.sh` lines 1–6, 31–34; `scripts/harness/install-claude-code.sh` lines 1–6, 33–40 | Explicitly fail-closed for those adapters. `specs/HARNESS.md` marks other adapters unmeasured; the current adapter inventory itself is limited. |
-| Repository self-test parses shell scripts, checks a failing provisioning case, digest mismatch, and literal credential patterns | **Existing (source):** `tests/selftest.sh` lines 9–54 | It was run for this change and passed, including its new board-wrapper missing-dependency case. This remains a narrow local suite: static grep is not a secret scanner and cannot establish secrets are absent from history, generated files, runtime state, or logs. The test helper uses `eval`, so tests are not a sandbox for untrusted inputs. |
-| Hermes install/version and live status measurement | **Recorded measurement (not independently re-run):** `specs/HARNESS.md` “Adapters and their measured state”; `scripts/harness/install-hermes.sh` lines 4–5 | Docs record a 32-second install and `/api/status` 200 on a test node. This does not establish current production configuration, network exposure, or fleet-wide health. |
+## Residual risks and readiness decisions
 
-## Abuse cases and disposition
-
-| Abuse case | Threat and consequence | Existing mitigation / proof | Residual risk and recommendation |
-|---|---|---|---|
-| Prompt injection or hostile envelope directs tools, changes system instructions, or exploits reserved keys | Public task/repo text can attempt to override agent policy or induce unsafe tool use | **Specified:** Crier rejects selected control-like JSON keys (`specs/ENVELOPE.md`, reserved names). | This is key-name filtering, not semantic prompt-injection defense; guard is external and not tested here. **Recommendation:** treat all brief/repo content as untrusted data, preserve fixed envelope schema, add adversarial tests, and enforce tool/command policy in the harness. Fail on missing/invalid brief digest. |
-| Malicious project/repo/harness values reach remote shell | Shell metacharacters in values can change the command executed on the node. `scripts/node-create.sh` embeds `PROJECT`, `PORT`, `HARNESS`, and `REPO` inside a `bash -lc` command string (lines 50–56). | No input validation or safe argv boundary is visible in that construction. | **High-priority recommendation:** avoid shell-string construction; send validated values as argv or a safely encoded file, allowlist harness/project identifiers, validate numeric port, and test injection payloads. Never dispatch from untrusted values until fixed. |
-| Malicious repo executes commands, reads secrets, or exfiltrates data | The harness is intended to work in the repo; source/tests/build scripts can execute with the node account and access readable files/network. | Intended one-project-per-node boundary (`specs/NODE.md`); node identity file mode check in `scripts/project-node.sh` lines 77–84. | One project per node limits cross-project blast radius only if node isolation is real. No sandbox, secret isolation from jobs, or egress restriction is demonstrated. **Recommendation:** ephemeral per-dispatch workspace/agent, minimal credentials, restricted egress, and OS-level isolation; do not place provider credentials where repository code can read them. |
-| Compromised node lies about status, commit, host, or artifact | Forged success could cause unreviewed or malicious changes to be accepted | Envelope says control host recomputes digest and treats mismatch as FAIL (`specs/ENVELOPE.md`); optional local digest implementation (`scripts/verify-node.sh`, lines 60–71). | Matching digest proves byte consistency, not benign contents, correct dispatch association, or gate execution. **Recommendation:** verify signed/provenanced result tied to dispatch and expected commit; retrieve artifacts from a trusted path; independently rerun gates and review diffs. |
-| Artifact path injection or symlink/path confusion | A crafted artifact path may alter remote shell parsing or read unintended files | Optional verifier compares bytes (`scripts/verify-node.sh`, lines 60–71). | Path is embedded in `bash -lc`; no canonical-root or traversal check. **Recommendation:** restrict artifacts to a dispatch-scoped directory, validate canonical path and file type, and transfer by a safe non-shell interface. |
-| Gateway exposed without effective authentication | Any reachable client may inspect/control work or consume compute | Hermes installer refuses start unless `basic_auth` text occurs in config (`scripts/harness/install-hermes.sh`, lines 61–69); verifier probes an unauthenticated stats endpoint (`scripts/verify-node.sh`, lines 52–58). | Text presence is weak config validation; verifier warns on inconclusive responses and doesn't fail on missing `auth_required`. **Recommendation:** require parsed effective auth config and explicit 401/403 for unauthenticated protected endpoints; fail installation/verification on any uncertainty; verify firewall and bind scope in deployment. |
-| Replay, duplicate dispatch, or confused-deputy routing | Replayed messages can run work twice or on the wrong project/node | Idempotency key and correlation are required in `specs/ENVELOPE.md`; manifest binds project/repo in `specs/NODE.md`. | Those semantics are not implemented in this repo; `node-create.sh` reuses an explicitly supplied agent without checking that it belongs to the requested project (`scripts/node-create.sh`, lines 31–39). **Recommendation:** validate manifest identity before reuse; bind and deduplicate every dispatch by dispatch and idempotency keys; reject stale/mismatched correlation. |
-| Supply-chain replacement or compromised package | A mutable or compromised source can deliver malicious harness/binary | `fetch_verified` checks expected SHA-256 (`scripts/lib.sh`, lines 15–29); Hermes package version is pinned (`scripts/harness/install-hermes.sh`, line 17 and lines 50–57). | Version pin is not artifact digest verification; network/package index and other downloads are not covered by helper. **Recommendation:** lock hashes/artifact provenance for every installer and dependency, verify signatures where available, and regularly review pins. |
-| Credential leakage through arguments, logs, manifest, or repo | Provider/API credentials allow impersonation or unbounded usage | Policy forbids arguments/logs/board/specs and calls for one mode-600 bundle deleted after provisioning (`AGENTS.md` rule 8; PRD CF-108). `scripts/harness/install-hermes.sh` reports key presence, not value (lines 43–48). | No bundle intake/deletion implementation appears in inspected provisioning path; installer requires `~/.hermes/.env`. **Recommendation:** implement secure one-time delivery, redact output, restrict file permissions, ensure job processes cannot read provider credentials, rotate on node destruction, and test logs/argv. |
-| Disk/resource exhaustion and denial of service | Long or repeated jobs fill disk or consume shared compute | Disk check with floor and numeric refusal (`scripts/lib.sh`, lines 31–44; `scripts/project-node.sh`, lines 42–47); wall/artifact limits are in envelope example (`specs/ENVELOPE.md`). | `limits` in sample contract are not shown enforced here; disk check runs at provisioning, not demonstrably before each job. **Recommendation:** enforce per-dispatch CPU, memory, wall-time, artifact-size, concurrency, and disk quotas at runtime; fail closed before accepting work under pressure. |
-| Failed gate or partial provisioning is reported as success | Incomplete or unsafe node might receive work | Script uses `FAILED` and only writes manifest when zero (`scripts/project-node.sh`, lines 104–124); selftest checks a failure path (`tests/selftest.sh`, lines 14–17). | Individual commands are not uniformly guarded with `set -e`; some failures may not increment `FAILED`. **Recommendation:** explicitly check every mutation/transfer, verify installed state after each step, and run fail-path tests for each layer. |
-
-## Fail-closed rules
-
-These are the required operational rules for safe use. Rules described as recommendations are not evidence that deployed systems currently comply.
-
-1. Reject missing, malformed, unsupported-version, or digest-mismatched dispatches; never infer a directive from an incomplete message. The contract basis is `specs/ENVELOPE.md` (“text is mandatory”, brief digest).
-2. Do not run work unless node identity, project binding, repo, harness health, Crier identity, and disk/resource checks all pass. **Recommendation:** enforce these at job acceptance, not only provisioning; basis `specs/NODE.md` laws N-4/N-5 and `scripts/project-node.sh`.
-3. Treat repo code, prompts, returned paths, and node output as hostile. No secrets should be readable by untrusted job code. **Recommendation:** sandbox and restrict egress; this is not currently proven by source.
-4. Reject unknown harnesses and refuse apply for adapters whose install/runtime path is unmeasured. Existing refusal examples: `scripts/harness/install-opencode.sh` lines 31–34 and `scripts/harness/install-claude-code.sh` lines 33–40.
-5. Never accept a result solely because the node says `completed`, a gate exit is zero, or a digest matches. Require trusted dispatch binding and independent control-host verification. Contract basis `specs/ENVELOPE.md`; partial digest mechanism `scripts/verify-node.sh` lines 60–71.
-6. Gateway auth uncertainty is failure, not warning: missing auth marker, unrecognized unauthenticated status, or unverified effective config must stop node acceptance. **Recommendation:** strengthen `scripts/verify-node.sh` lines 45–58 and Hermes configuration validation.
-7. Any shell-boundary input must be validated and passed without shell interpolation. **Recommendation:** fix the command construction in `scripts/node-create.sh` lines 50–56 and artifact handling in `scripts/verify-node.sh` lines 60–65 before accepting untrusted values.
-8. On mismatch, timeout, missing artifact, failed gate, lost bus identity, or repeated delivery with unresolved idempotency, mark the job/node failed or quarantined; do not downgrade to warning or continue scheduling. Policy basis: `specs/NODE.md` failure semantics and `specs/ENVELOPE.md` idempotency requirement. External scheduler enforcement remains unverified.
-9. Do not treat an installer exit code or source assertion as deployment proof. Require a live check with a measured value and, for end-to-end confidence, a round trip whose artifact digest is recomputed on the control host. Policy basis `AGENTS.md` rules 3–4 and PRD CF-107.
-
-## Residual risks and decisions required
-
-### Residual risks
-
-- The scheduler, Crier, task-router, bunker platform, Hermes gateway, network policy, and control-host verification workflow are external to this repository; their runtime security state is **unverified**.
-- The local verifier's artifact check is optional and not a complete result-envelope validator; it does not authenticate claims or establish content safety.
-- Shell interpolation in node creation and artifact verification creates an input-injection risk until changed and tested.
-- Auth checks can warn and still pass; a config substring is not proof that effective authentication is enabled.
-- Repo/harness execution has no demonstrated sandbox or secret/egress isolation.
-- Package pins, scripts, and repository content remain subject to supply-chain compromise; a version pin alone does not prove artifact provenance.
-- `tests/selftest.sh` is a narrow local suite. It passed for this change, but does not prove end-to-end service security.
-
-### Decisions required before claiming production readiness
-
-1. **Control ownership:** Who enforces authorization, idempotency, replay protection, and quarantine across scheduler and Crier? Identify the code/runtime owner and the acceptance evidence.
-2. **Execution isolation:** Is one node per project sufficient, or is a disposable per-dispatch sandbox required? Define filesystem, network-egress, process, and secret-access boundaries.
-3. **Credential lifecycle:** Specify bundle creation, delivery, mode/ownership, consumption, deletion, rotation, and how job code is prevented from reading control-plane credentials. Do not place credential designs or values in this public repository.
-4. **Result trust:** Define authenticated result provenance and dispatch binding, mandatory artifact set, gate rerun policy, and how the verifier handles transfer errors and missing artifacts.
-5. **Gateway exposure:** Define supported bind/network scope, effective auth configuration validation, and the required negative auth probe; decide whether any node gateway should be reachable beyond a private overlay.
-6. **Supply-chain policy:** Decide accepted pin/hash/signature evidence for installers, dependencies, and updates, and establish a maintenance cadence.
-7. **Resource policy:** Specify enforceable runtime wall-time, artifact count/size, concurrency, disk, CPU, memory, and cost limits; example envelope limits are not proof of enforcement.
-8. **Readiness gate:** Require live end-to-end evidence from the exact deployed revision, not only source/spec claims or the recorded Hermes test-node measurement.
-
-## Evidence boundary
-
-This document was produced by source inspection of the cited repository files. It does not claim a live Crier/scheduler/node deployment was exercised, that current credentials were inspected, or that external controls are enabled. The Hermes measurement is reported only as a **recorded measurement** from `specs/HARNESS.md`, not as a newly reproduced result. Recommendations above must remain labeled as recommendations until implemented and independently verified.
+- Provider proxy/node identity/auth integration remains CF-002's live blocker.
+- External gateway auth, Bunker exec semantics, Crier guard behavior and transport
+  policy need independent live evidence from the exact deployed revision.
+- Git clone/build/harness work is untrusted code; no runtime sandbox/egress policy
+  or quotas are established. SSH access, if separately authorized, is not installed
+  or copied here. Repo inputs exclude embedded HTTPS credentials.
+- Artifact filename/symlink limits prevent accidental verifier overreach but do
+  not detect secrets deliberately copied into an allowed artifact by job code.
+- A file snapshot and matching manifest cannot prove an honest node, current
+  checkout or successful job. Complete result validation is unimplemented.
+- No live provisioning, service change, provider-key transfer, inference call,
+  Crier round trip, quarantine or production readiness is claimed by this review.

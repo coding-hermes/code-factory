@@ -24,6 +24,10 @@ STATE="$HOME/.node"
 
 while [ $# -gt 0 ]; do
   case "$1" in
+    --project|--node-id|--harness|--repo|--ref|--port)
+      [ $# -ge 2 ] || { echo "missing value: $1" >&2; exit 2; } ;;
+  esac
+  case "$1" in
     --check) MODE=check; shift ;;
     --apply) MODE=apply; shift ;;
     --project) PROJECT="$2"; shift 2 ;;
@@ -36,9 +40,19 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -z "$MODE" ] && { echo "usage: $0 --check|--apply [--project P] [--harness H] [--repo URL] [--ref R]"; exit 2; }
+case "$HARNESS" in hermes|opencode|claude-code) ;; *) echo "unsupported harness" >&2; exit 2 ;; esac
 [ -z "$PROJECT" ] && { echo "--project is required (a node belongs to exactly one project)"; exit 2; }
+BUS_AGENT_ID="${CRIER_AGENT_ID:-$NODE_ID}"
+BUS_BASE="${CRIER_BASE:-${CRIER_URL:-}}"
+# Reuse must be refused before adapter apply, clone or other mutations.
+if [ "$MODE" = apply ]; then
+  identity=("$PROJECT" "$REPO" "$HARNESS" "$NODE_ID" "$REF" "$PORT" "$BUS_AGENT_ID" "$BUS_BASE")
+  if ! python3 "$HERE/node-contract.py" manifest-check "${identity[@]}"; then
+    bad "manifest_identity" "invalid request or existing manifest identity/type mismatch"; exit 1
+  fi
+fi
 
-mkdir -p "$STATE"
+mkdir -p "$STATE" || { bad "state" "cannot create node state directory"; exit 1; }
 say "node provisioning — project=$PROJECT harness=$HARNESS host=$(hostname)"
 
 # ---------------------------------------------------------------- 00 preflight
@@ -126,32 +140,13 @@ fi
 # ---------------------------------------------------------------- manifest
 say "[90] manifest"
 if [ "$MODE" = apply ] && [ "$FAILED" -eq 0 ]; then
-  RP="$HOME/repo"
-  repo_origin="$REPO"
-  if [ -z "$repo_origin" ] && [ -d "$RP/.git" ]; then
-    repo_origin=$(git -C "$RP" remote get-url origin 2>/dev/null || true)
-  fi
-  if [ -f "$STATE/node.json" ]; then
-    ok "manifest" "$STATE/node.json unchanged"
-    note "idempotent apply: preserving created_at and manifest bytes"
+  if python3 "$HERE/node-contract.py" manifest-write "${identity[@]}" "${harness_version:-unknown}"; then
+    ok "manifest" "$STATE/node.json (identity checked; identical re-apply preserves bytes)"
   else
-    python3 - "$STATE/node.json" "$NODE_ID" "$PROJECT" "$HARNESS" "${harness_version:-unknown}" "$PORT" "$repo_origin" "$REF" "$BUS_AGENT_ID" "$BUS_BASE" <<'PY'
-import json, sys, time
-path, node_id, project, harness, version, port, repo, ref, bus_agent_id, bus_base = sys.argv[1:11]
-import os
-json.dump({"node_id": node_id, "project": project,
-           "repo": {"origin": repo, "ref": ref, "path": os.path.abspath(os.path.expanduser("~/repo"))},
-           "harness": {"name": harness, "version": version, "port": int(port)},
-           "bus": {"agent_id": bus_agent_id, "base": bus_base},
-           "created_by": "project-node.sh v1",
-           "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
-          open(path, "w"), indent=1)
-print("wrote", path)
-PY
-    ok "manifest" "$STATE/node.json"
+    bad "manifest_write" "atomic manifest publication failed"
   fi
 elif [ -f "$STATE/node.json" ]; then
-  ok "manifest" "$STATE/node.json"
+  note "manifest exists; no publication attempted (check mode or failed layers)"
 else
   note "manifest is written only when every layer passes"
 fi

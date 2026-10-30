@@ -1,102 +1,80 @@
 # DESIGN — the factory
 
-## 1. Shape
+## 1. Target topology (planned, not deployed proof)
 
-```
-                    control host (this machine)
-   ┌──────────────────────────────────────────────────────────┐
-   │  Hermes foreman  ── designs work, verifies results       │
-   │        │                                                 │
-   │  task-router     ── ranks model + provider per lane      │
-   │        │                                                 │
-   │  scheduler       ── decides whose turn, records the tick │
-   │        │                                                 │
-   │  crier           ── carries the command (durable inbox)  │
-   └────────┼─────────────────────────────────────────────────┘
-            │  tailnet
-   ┌────────┴──────────┐   ┌──────────────────┐   ┌──────────────────┐
-   │ node: crier       │   │ node: scheduler  │   │ node: task-router│
-   │ repo + harness    │   │ repo + harness   │   │ repo + harness   │
-   │ gateway :10800    │   │ gateway :10801   │   │ gateway :10802   │
-   └───────────────────┘   └──────────────────┘   └──────────────────┘
-```
+Control-host foreman → scheduler/task-router → Crier → one-project node
+(repo + harness) → result message → independent control-host verification.
+Provider keys remain on the control host. CF-002 owns the host inference proxy
+and node-scoped service identity. That integration is UNIMPLEMENTED / BLOCKED;
+CF-005 does not implement its architecture or use node-local provider keys.
 
-**Not** a dispatcher of sessions. A node is a place where a repo lives and a harness runs;
-the command arrives as a message and the answer comes back as a message.
+One node per project is the intended isolation/accounting unit. It is not proof
+of an OS sandbox, resource quotas, secret isolation or safe repository code.
 
-## 2. Why one node per project
+## 2. Planned work lifecycle
 
-- A node can be destroyed without touching another project's state.
-- The repo cache, module cache and build cache belong to one project, so disk pressure is
-  attributable.
-- A node's failure is local: the scheduler marks one lane degraded, not the fleet.
+The scheduler should render the ENVELOPE.md directive; a signed Crier pull worker
+should validate the brief digest, dispatch to the harness/gateway in the intended
+workspace, run the gate, publish result provenance and artifacts, then ack after
+delivery. The control host should independently verify provenance and bytes.
 
-## 3. The path of one unit of work
+None of the pull worker, gateway dispatch integration, lease/replay/idempotency,
+result publishing, runtime disk admission, quarantine or scheduler exclusion is
+implemented by the provisioning scripts. Dirty-repo warning/handling is also
+unimplemented; an existing `.git` directory is not proof of a clean or correctly
+pinned checkout. These are blocked integration requirements, not effects of
+`project-node.sh` or `verify-node.sh`.
 
-1. Foreman writes a brief; the scheduler decides the lane's turn.
-2. Scheduler renders a directive (`payload.text`) and dispatches through crier to the node's
-   inbox. If no target is declared for the lane, nothing changes — the local path runs.
-3. The node's bus worker pulls the message (signed), verifies the brief digest, hands the
-   directive to the harness (Hermes gateway, or a foreign CLI).
-4. The harness works in the repo, commits to a branch, runs the gate.
-5. The node returns a result envelope: host identity, artifact digests, gate exit, branch,
-   commit. It **acks** the message only after the result is delivered.
-6. The control host pulls the artifacts, recomputes the digests, and only then records the run.
-   A mismatch is a failed run, not a warning.
+## 3. Ownership
 
-## 4. What runs where
+| Concern | Owner |
+|---|---|
+| Turn/admission/quarantine | scheduler (external) |
+| Route and actual inference service | task-router + CF-002 host integration |
+| Message transport | Crier (external) |
+| Node inputs/provisioning checks | this repository |
+| Work correctness and result acceptance | control-host foreman, never node self-report |
 
-| Concern | Owner | Not this |
-|---|---|---|
-| Which project works next | scheduler | the node |
-| Which model answers | task-router | crier ("crier must not embed vendor harness logic") |
-| Which harness executes | node manifest + scheduler target | crier |
-| Whether the work is correct | foreman, verified on the control host | the node's own claim |
-| Transport | crier | the scheduler's business logic |
+## 4. Executable repository contract
 
-## 5. Failure model
+| Surface | Implemented boundary |
+|---|---|
+| `scripts/project-node.sh --check|--apply` | Preflight, tool probes, adapter, existing bus identity mode, repo directory/clone, manifest. Existing identity checked before apply mutations; atomic publication checks status; identical reuse preserves bytes. |
+| `scripts/node-create.sh --project P --repo URL --harness H` | Validates complete triple/options before any Bunker operation; stages provisioner/helper/adapter, executes quoted validated values, stops on failure, verifies exact manifest path. |
+| `scripts/verify-node.sh --agent ID --artifact PATH` | Locally rejects paths outside NODE.md's manifest/dispatch namespace; non-shell no-follow remote snapshot read before any remote shell health probe; control-host digest, status/auth/unauthenticated stats checks. |
 
-- **Node unreachable** → message stays in the inbox; the lane is degraded after N misses.
-- **Node dies mid-job** → the lease expires and the message is redelivered; jobs must be
-  idempotent (a fresh branch per attempt, or a worktree per dispatch id).
-- **Result digest mismatch** → run FAILS; the node is quarantined until `--check` passes.
-- **Bus guard blocks the envelope** → the envelope is at fault, not the guard; see
-  `specs/ENVELOPE.md` for the reserved key names.
-- **Disk exhaustion** → the node refuses new work at the floor rather than filling the host.
+NODE.md defines exact input/path grammars and manifest fields. ENVELOPE.md defines
+the future protocol and its limited implemented artifact mapping. HARNESS.md
+distinguishes historical measurements from current adapter status. The Hermes
+adapter deliberately fails `inference_integration` before installation, config/key
+reads or gateway startup. Local fake adapters can exercise manifest logic but
+cannot remove that live blocker. Crier identity issuance and secure bundle
+handling are not implemented; no credential transfer occurs in this path.
 
-## 6. What this design deliberately does not do
+Artifact example (planned dispatch producer, implemented verifier mapping):
+`~/.node/jobs/local-example/artifacts/test.log` with `--dispatch-id local-example`.
+Only `~/.node/node.json` is accepted without a dispatch id. Direct Python argv
+opens directory descriptors with `O_NOFOLLOW` and rejects symlink components,
+hardlinks, non-regular files and oversized data. Locally recomputing the snapshot
+digest proves byte consistency, not authentic dispatch association or safe content.
 
-- It does not put vendor harness logic in crier.
-- It does not let a node grade its own homework.
-- It does not hold a request open for the length of a job (crier's delivery budget is 30 s;
-  work takes minutes to hours).
-- It does not require root anywhere.
+## 5. Failure model and evidence boundary
 
-## 7. Executable repository contract
+Implemented failures return nonzero: invalid creation input before remote work;
+unsafe artifact before shell probes; missing/uncertain auth, transfer/digest error;
+manifest identity mismatch/write failure; adapter refusal or other required layer
+failure. No scheduler quarantine is performed. The manifest must not be mistaken
+for current health, and provisioning's disk check does not enforce per-job quotas.
 
-The checked-in implementation has three deliberately separate surfaces:
+`tests/selftest.sh`, `tests/node-contract.py` and `tests/node-mutations.py` use
+local fake commands and temporary HOME/repository/adapter state. The named checker
+fixture has a working bootstrap PATH and exactly one intentional missing input,
+CRIER_URL (CRIER_BASE remains set). It requires nonzero exit and the anchored exact
+`  FAIL  crier_url — ` row, and rejects bootstrap errors. Executable mutations
+remove that named failure and inject `FAILED: unbound variable`; both must turn
+that same test red. Other mutations exercise input, artifact and manifest controls.
 
-| Surface | Script | Contract |
-|---|---|---|
-| Node-side layers | `scripts/project-node.sh --check|--apply` | Measures preflight, base, harness, bus identity, and repo layers. `--check` can fail and never writes a manifest. `--apply` writes `$HOME/.node/node.json` only after all required layers pass. |
-| Control-host creation | `scripts/node-create.sh --project P --repo URL --harness H` | Reuses or spawns an agent, stages the selected adapter, passes the triple plus ref/id into the node-side script, stops on staging/provision failure, and invokes verification with the manifest artifact. |
-| Control-host verification | `scripts/verify-node.sh --agent ID --artifact PATH` | Requires agent reachability, HTTP 200, an explicit `auth_required:true` status, rejected unauthenticated stats, and a recomputed control-host digest equal to the node-side digest. |
-
-The node manifest mirrors `specs/NODE.md`: node id, project, repo origin/ref/path, harness name,
-measured adapter version/port, bus agent id/base, creator, and creation time. A second apply keeps
-the existing manifest bytes unchanged. The envelope fields and reserved names are defined only by
-`specs/ENVELOPE.md`; harness adapter behavior is defined only by `specs/HARNESS.md`.
-
-The repository self-test uses hermetic command fixtures to exercise both green and red arms of the
-node creator and verifier. Those fixtures prove control flow and failure semantics only. They do
-not impersonate a live bunker, crier, gateway, credential, scheduler tick, or round trip.
-
-## 8. Evidence boundary
-
-Local evidence is limited to shell parsing, source-contract assertions, hermetic node-check failure
-fixtures, and fake-command tests for creator/verifier failure handling. A configured bunker server,
-crier identity/worker, inference credential, reachable gateway, and production artifact round trip
-are unavailable in this worktree. Therefore node creation and end-to-end verification remain
-**NOT VERIFIED / BLOCKED** until an operator runs the documented commands on an authorized node and
-recomputes the artifact digest from transferred bytes. A fake fixture must never be reported as
-live acceptance.
+No live Bunker/Crier/gateway/inference/artifact work round trip or provider-key
+transfer is claimed. A real authenticated deployment, host-only inference path,
+Crier worker, dispatch execution/result publishing and provenance verification
+remain NOT VERIFIED / BLOCKED. Local fixture success is never live acceptance.

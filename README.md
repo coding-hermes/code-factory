@@ -53,9 +53,9 @@ tests/           selftest.sh — proves the checkers FAIL when they should
 
 | Piece | State |
 |---|---|
-| Hermes in a bunker + HTTP gateway over tailnet | **works** — 32 s install, `/api/status` 200, 133 JSON-RPC methods |
+| Hermes in a bunker + HTTP gateway over tailnet | **historical measurement only** — current adapter refuses pending CF-002 host-only inference integration |
 | Repo clone + build in a node | **works** for public https; private needs a deploy key |
-| Node inference credential | **missing** — a turn dies at `No inference provider configured` |
+| Host inference proxy + node-scoped service identity | **unimplemented / blocked (CF-002)** — provider keys stay on the control host, never on nodes |
 | crier identity in a node | **missing** — no `~/.node/crier.json` yet |
 | Scheduler → crier dispatch | **built, disarmed** — needs 2 env vars, 1 target row, `payload.text` |
 | Round trip through the node's own gateway | **not yet** — MDP-1 used a bespoke poller |
@@ -81,9 +81,10 @@ scripts/node-create.sh --project myrepo \
     --repo https://github.com/you/myrepo --harness hermes
 ```
 
-A node needs a repo it is allowed to clone and an inference credential of its own — never an
-operator key. `specs/HARNESS.md` records which harness ladders are measured and which are only
-documented; an unmeasured adapter refuses `--apply` rather than pretending.
+A node needs a repo it is allowed to clone and a future node-scoped service identity for the
+CF-002 host inference proxy. Node-side provider keys are unsupported. That integration is
+unimplemented / blocked; the Hermes adapter now refuses before installation or gateway start.
+`specs/HARNESS.md` distinguishes historical measurements from current acceptance.
 
 ## Contributing
 

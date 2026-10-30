@@ -1,46 +1,36 @@
 # SPEC — harness adapters
 
-A **harness** is whatever runs the work inside a node. The factory must not care which.
-
-## The contract (every adapter)
-
-| Obligation | How |
-|---|---|
-| Install | `scripts/harness/install-<name>.sh --check` reports absence; `--apply` installs user-space. |
-| Version | `--check` prints the resolved binary and version, not just "ok". |
-| Invoke | Accepts a directive (text) and a working directory; runs unattended. |
-| Report | Emits the model it actually served (requested vs served), when it has one. |
-| Fail | Non-zero exit on failure; never a silent success. |
-| Idempotent | Re-running install changes nothing. |
+A harness executes work inside a node. The intended interface is install/check,
+measured version, unattended directive+cwd invocation, requested/served model
+reporting, explicit nonzero failure and idempotent install. The tracked adapters
+are installation/check probes, not implementations of dispatch invocation or
+result reporting. See NODE.md and ENVELOPE.md for that boundary.
 
 ## Adapters and their measured state
 
-| Harness | Method | State (2026-10-29) |
-|---|---|---|
-| **hermes** | `python3 -m venv` + `pip install hermes-agent==0.19.0`; `hermes serve --host 0.0.0.0 --port P --skip-build` | **MEASURED working**: 32 s install, `/api/status` 200 over tailnet, 133 JSON-RPC methods, `session.create` + `prompt.submit`. Needs a provider key in `~/.hermes/.env`. |
-| **opencode** | standalone binary; `opencode` CLI or server mode | not measured here — the fleet's `examples/agent-ecosystem` runs it in a container |
-| **claude-code** | `npm i -g @anthropic-ai/claude-code` (needs node) | not measured here; node absent in base image |
-| **codex** | binary; app-server over stdio | not measured here; the scheduler's connector expects an app-server sidecar |
-| **aider** | `pip install aider-chat` (venv) | not measured |
-| **goose** | binary | not measured |
-| **pi-agent** | binary | not measured |
+| Harness | Historical method / current state |
+|---|---|
+| hermes | Historical record: python venv + pip `hermes-agent==0.19.0`, 32 s install, 248 MB venv, `serve --skip-build`, `/api/status` 200 and JSON-RPC probes on an earlier test node. Not reproduced by CF-005 rework; not current inference acceptance. Adapter check/apply now fails `inference_integration` before installation, config/key reads or gateway startup. |
+| opencode | Standalone CLI/server method documented; apply refuses as unverified. |
+| claude-code | npm method documented; apply refuses as unverified. |
+| codex / aider / goose / pi-agent | Planned methods only; no tracked install adapter. |
 
-Only **hermes** has a measured install ladder in this repo. The others ship a documented
-`--check` and a method, and are marked `UNVERIFIED` until someone runs them — an unverified
-installer is not a supported installer, and the script says so out loud.
+## Host-only inference custody
 
-## Why hermes first
+Provider keys stay on the control host. No node-side provider key file is required,
+read, copied or supported by this provisioning path. CF-002 owns the host inference
+proxy and node-scoped service identity. That integration and gateway configuration
+are UNIMPLEMENTED / BLOCKED here; do not interpret a node-local provider key as a
+workaround. The fail-closed Hermes adapter is deliberate, not a successful install.
 
-- It needs no node/npm (the backend runs `--skip-build`), and node is absent from the base image.
-- It already exposes a gateway, so the same code path serves "local CLI" and "remote command".
-- Its failure mode is explicit (`No inference provider configured`), not a half-run.
+The earlier measured ladder is retained as historical evidence only. It is not a
+claim that a safe provider path or authenticated gateway is currently deployed.
+A future adapter must validate effective auth configuration, verify startup and
+inference through the authorized host service, and expose requested/served identity
+before node acceptance. No proxy architecture is implemented by CF-005.
 
-## What a foreign harness must gain to be first-class
+## Local fixtures
 
-1. A way to accept a directive without a human TTY (no interactive prompts).
-2. A machine-readable completion (exit code + files, or a JSON result) — not a pretty-printed
-   transcript.
-3. A deterministic workspace: it must not roam outside the repo it was given.
-4. A version probe that does not require a login.
-
-Until an adapter has those, the node should not be created with it.
+Tests substitute an executable adapter reporting `PASS  version` solely to exercise
+manifest and provisioning control flow. They cannot certify Hermes, Crier, Bunker,
+gateway auth, provider routing or a live inference/artifact round trip.

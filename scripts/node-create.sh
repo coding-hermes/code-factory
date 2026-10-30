@@ -9,9 +9,10 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
 
-PROJECT="" REPO="" HARNESS="hermes" AGENT="" TTL="6h" REF="main" SERVER="${BUNKER_SERVER:?set BUNKER_SERVER to your bunker server name}" PORT=10800
+PROJECT="" REPO="" HARNESS="" AGENT="" TTL="6h" REF="main" SERVER="${BUNKER_SERVER:-}" PORT=10800
 
 while [ $# -gt 0 ]; do
+  [ $# -ge 2 ] || { echo "missing value: $1" >&2; exit 2; }
   case "$1" in
     --project) PROJECT="$2"; shift 2 ;;
     --repo) REPO="$2"; shift 2 ;;
@@ -23,7 +24,12 @@ while [ $# -gt 0 ]; do
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
-[ -z "$PROJECT" ] && { echo "usage: $0 --project P --repo URL [--harness H] [--agent ID]"; exit 2; }
+# Validate before discovery, spawn, staging, exec, or any remote operation.
+if ! python3 "$HERE/node-contract.py" create-input "$PROJECT" "$REPO" "$HARNESS" \
+    "${AGENT:-node-$PROJECT}" "$REF" "$PORT" "${CRIER_AGENT_ID:-}" \
+    "${CRIER_BASE:-${CRIER_URL:-}}" "$SERVER" "$TTL"; then
+  bad "input" "invalid project/repo/harness or node options; see specs/NODE.md"; exit 2
+fi
 
 b=$(have bunker)
 [ -n "$b" ] || { echo "bunker client missing" >&2; exit 1; }
@@ -48,6 +54,9 @@ if ! "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'mkdir -p ~/node-scripts/
 fi
 if ! "$b" cp "$HERE/project-node.sh" "$AGENT:node-scripts/project-node.sh" --server "$SERVER" >/dev/null 2>&1; then
   bad "stage_project_node" "copy failed"; exit 1
+fi
+if ! "$b" cp "$HERE/node-contract.py" "$AGENT:node-scripts/node-contract.py" --server "$SERVER" >/dev/null 2>&1; then
+  bad "stage_contract" "copy failed"; exit 1
 fi
 if ! "$b" cp "$HERE/lib.sh" "$AGENT:node-scripts/lib.sh" --server "$SERVER" >/dev/null 2>&1; then
   bad "stage_lib" "copy failed"; exit 1

@@ -44,19 +44,19 @@ The node contract requires architecture, disk at or above the configured floor, 
 ### Exact available entry points
 
 - Control-host qualification: `scripts/bunker-server-install.sh --check`.
-- Node creation orchestrator: `scripts/node-create.sh --project P --repo URL [--harness H] [--agent ID] [--ref REF] [--ttl 6h] [--port 10800]`; requires `BUNKER_SERVER` in the environment. Defaults are harness `hermes`, ref `main`, TTL `6h`, port `10800`; if no agent ID is given, its code generates `node-P-<time>` and attempts to spawn/reuse it.
+- Node creation orchestrator: `scripts/node-create.sh --project P --repo URL --harness hermes [--agent ID] [--ref REF] [--ttl 6h] [--port 10800]`; requires `BUNKER_SERVER` in the environment. Project/repo/harness are mandatory and validated before any remote operation; see NODE.md for the narrow supported grammar. Defaults are ref `main`, TTL `6h`, port `10800`; without an agent ID it generates `node-P-<time>`.
 - In-node provisioning/check: `project-node.sh --apply|--check --project P [--harness H] [--repo URL] [--ref main] [--port 10800]`. `scripts/node-create.sh` stages and calls this command remotely. `project-node.sh` defaults to ref `main`, port `10800`, disk floor 5 GB, and repo path `$HOME/repo`.
 - From the repository root, the script is also invoked as `scripts/project-node.sh --check --project P` (or `--apply` with the required arguments). The README's quick start's `--agent` argument is not accepted by `project-node.sh`; `--agent` belongs to `node-create.sh`.
 
-Do not put a literal private URL, host, key, or ID into this public runbook. Substitute operator-owned values at execution time. Never put secrets into arguments, shell history, logs, task rows, manifest, or source control. The repository scripts quote some values into a remote shell command; only pass values that have been validated for safe syntax and never credentials. The current scripts have not demonstrated a hardened quoting/validation contract for arbitrary input.
+Do not put a literal private URL, host, key, or ID into this public runbook. Substitute operator-owned values at execution time. Never put secrets into arguments, shell history, logs, task rows, manifest, or source control. The creator validates the documented narrow input grammar and uses Bash `%q` for the provisioning shell string; this does not support arbitrary Git URL forms. Local fake-command tests are not live Bunker API proof.
 
 ### BLOCKED provisioning path
 
 `node-create.sh` is not a complete safe production provisioner yet:
 
 - It does not transfer the required `$HOME/.node/crier.json` identity bundle or configure crier's pull worker.
-- It does not establish an inference credential. The Hermes installer only checks for a provider-key assignment in `~/.hermes/.env` and intentionally does not read the value; a Hermes turn without one fails with `No inference provider configured`.
-- `project-node.sh` writes a manifest only when all its layers pass and records the supplied node id, repo/ref, measured harness version, and bus identity/base. A second apply preserves the existing manifest bytes.
+- Provider keys stay on the control host. CF-002 owns the unimplemented host inference proxy and node-scoped service identity. Hermes check/apply now refuses `inference_integration` before installation, config/key reads or gateway start; node-side provider keys are unsupported.
+- `project-node.sh` checks existing manifest identity before apply mutations and publishes atomically only when all layers pass. Writer failure is FAIL; identical identity re-apply preserves bytes, while project/repo/harness mismatch refuses.
 - `node-create.sh` passes the explicit ref and node id, stops on staging/provisioning failure, and verifies the node manifest as the required artifact. A failed/incomplete node must be treated as quarantined, not scheduled.
 - It creates a node using a default `--ttl 6h`; no measured renewal/lease procedure is provided here.
 
@@ -77,11 +77,11 @@ scripts/harness/install-hermes.sh --check
 scripts/harness/install-hermes.sh --apply
 ```
 
-The script defaults to pin `0.19.0`, overridable with `HERMES_PIN`, uses `$HOME/hermes-venv`, and port `10800`, overridable with `NODE_GATEWAY_PORT`. It runs `hermes serve --host 0.0.0.0 --port PORT --skip-build` under `nohup`, logging to `$HOME/.node-serve-PORT.log`. It refuses to start a public bind unless `$HOME/.hermes/config.yaml` contains `basic_auth`. An inference provider key must be configured out of band in `$HOME/.hermes/.env`; never print or transmit its value. `--check` verifies presence but does not prove the provider can complete an inference request.
+The earlier pip/venv and `serve --skip-build` ladder is historical only. Current check/apply deliberately returns nonzero `FAIL  inference_integration` before installing anything, reading provider key/config files or starting a gateway. CF-002 must supply the authorized host-only inference integration; copying a provider key to a node is not a workaround.
 
-After apply, check again and require `/api/status -> 200`. The current implementation uses a substring check for `basic_auth`; it does not independently validate the strength or correctness of the configured secret. `verify-node.sh` checks status and tests that unauthenticated `/api/system/stats` is refused with 401, 302, or 403. Require this test to pass before admitting work. A `WARN` is not approval to expose the gateway.
+Until CF-002 is implemented, adapter apply cannot qualify a node. The standalone verifier checks status, a JSON boolean `auth_required:true`, and unauthenticated stats rejection with 401/302/403; missing auth and unknown responses are FAIL, not WARN. These probes still do not validate every aspect of effective authentication or complete a job.
 
-**Network boundary:** the gateway binds `0.0.0.0`; restrict access at the network/firewall layer to the approved private overlay and intended control host. Do not expose it to the public internet. Tailnet reachability is not authentication. Keep basic-auth credentials and inference keys distinct, scoped, rotated, and out of argv/logs. If unauthenticated stats returns 200, quarantine the node immediately and close access before further testing.
+**Network boundary (future deployment requirement):** no gateway is started by the current adapter. A future gateway must use reviewed bind/firewall scope and effective authentication; overlay reachability is not authentication. Provider keys remain on the control host, separate from any authorized node-scoped service identity. Quarantine/network closure requires the external operator; these scripts do not enforce it.
 
 ### Other adapters
 
@@ -109,7 +109,7 @@ Until the end-to-end path exists:
 
 1. Keep the scheduler target disarmed; do not dispatch real work through a bespoke poller and report it as proof of the intended system.
 2. On a designated test node only, verify node/harness state with `scripts/project-node.sh --check --project P` and the selected adapter's `--check`.
-3. Use `scripts/verify-node.sh --agent ID --server NAME --port PORT --artifact PATH` from the control host to check agent exec, gateway `/api/status`, the explicit `auth_required:true` gate, unauthenticated stats rejection, and a downloaded artifact's SHA-256 equality. Required environment: `BUNKER_SERVER` unless `--server` is supplied. This does **not** prove crier delivery, inference, task execution, result envelope, or scheduler admission.
+3. Use `scripts/verify-node.sh --agent ID --server NAME --port PORT --artifact PATH` with exact `~/.node/node.json`, or `~/.node/jobs/DISPATCH/artifacts/NAME` plus `--dispatch-id DISPATCH`. NODE.md defines path/name restrictions. Local lexical denials and a non-shell no-follow snapshot read precede any remote shell health probes. Then check agent exec, status/auth, stats rejection and the control-host recomputed digest. This does **not** prove Crier delivery, inference, task execution, authenticated dispatch association or scheduler admission.
 4. Mark a node **verified for work** only after a real dispatch/result round trip has completed, the control host has recomputed each digest from received bytes, and the foreman independently accepts the work. No current repository command demonstrates that full criterion.
 
 Do not accept the node's self-reported digest as proof. A digest mismatch is FAIL and the node stays quarantined until investigation and a fresh passing `--check` plus round trip.
