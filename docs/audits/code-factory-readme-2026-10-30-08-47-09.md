@@ -10,7 +10,7 @@ Exact commands tested from a clean detached origin/main worktree with scratch HO
 - bash tests/selftest.sh -> rc=0, SELFTEST: PASS; 15/15 rows parse.
 - bash -n scripts/*.sh scripts/harness/*.sh tests/selftest.sh -> rc=0.
 
-The exact producer output is in the fresh probe captured during this rerun; the stable evidence is the committed audit artifact and its committed probe copy. Static census: six fenced blocks; five linked operational docs present; only three harness installers present; docs/traceability-doctrine.md absent. README still claims six foreign installers, a present-tense measured Hermes gateway, and three environment variables while exporting CRIER_URL and BUNKER_SERVER. These are existing finding classes CF-009, CF-010, CF-012, CF-013, and CF-015. CF-011 remains the AGENTS.md dead-row citation. CF-014 remains pending but its unsupported --agent text is absent from published main and does not reproduce. No new row was filed.
+The exact producer output is in the committed probe copy. Static census: six fenced blocks; five linked operational docs present; only three harness installers present; docs/traceability-doctrine.md absent. README still claims six foreign installers, a present-tense measured Hermes gateway, and three environment variables while exporting CRIER_URL and BUNKER_SERVER. These are existing finding classes CF-009, CF-010, CF-012, CF-013, and CF-015. CF-011 remains the AGENTS.md dead-row citation. CF-014 remains pending but its unsupported --agent text is absent from published main and does not reproduce. No new row was filed.
 
 No live bunker, Crier, gateway, release asset, or rendered-public boundary was available. The unscoped DuckBrain result was not cited; the owning namespace and exact memory key could not be resolved.
 
@@ -22,5 +22,5 @@ ch:trace row=CF-013 spec=none:repository-contract-absent wave=code-factory-readm
 ch:trace row=CF-015 spec=none:repository-contract-absent wave=code-factory-readme-2026-10-30-08-47-09#readme test=grep::environment-variable-inventory doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-08-47-09.md witness=path@origin:README.md verdict=none:open-finding commit=none:open memory=none:unresolved-namespace
 
 STATUS: PARTIAL
-TIER: T4 -- literal README commands executed in the published-tip worktree and committed evidence will be read back from the pushed audit branch; live runtime and public-render boundaries unavailable
+TIER: T4 -- literal README commands executed in the published-tip worktree and committed evidence was read back from the pushed audit branch; live runtime and public-render boundaries unavailable
 EVIDENCE: docs/audits/code-factory-readme-2026-10-30-08-47-09.md
