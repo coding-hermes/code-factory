@@ -19,5 +19,7 @@
     "reason": "Prometheus ALERTS query returned zero and bunker-mvp df reports 59G available; no worker or GitReins lifecycle required."
   },
   "status": "closed",
-  "outcome": "verification-only-closeout"
+  "outcome": "verification-only-closeout",
+  "finished_at": "2026-10-30T21:21:52Z",
+  "recovery_note": "No workers were listed in the inherited manifest; recovery was a no-op after branch/worktree census. Existing verification-only closeout remains valid."
 }
