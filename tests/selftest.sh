@@ -74,6 +74,42 @@ if [ "$rc" -ne 0 ] && printf '%s\n' "$private_repo" | grep -Fq 'private repos ne
 else
   say "  FAIL  repository access failure lost deploy-key hint"; fails=$((fails+1))
 fi
+# CF-039 regression: ls-remote can resolve the requested ref even when clone fails.
+# The wrapper is network-free and records both calls so this cannot pass by skipping the
+# ref-resolution probe.
+mkdir "$tmpd/resolved-bin"
+cat > "$tmpd/resolved-bin/git" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${GIT_FIXTURE_LOG:?}"
+case "$1" in
+  clone)
+    echo 'fatal: simulated clone failure for fixture' >&2
+    exit 1
+    ;;
+  ls-remote)
+    printf '%s\n' '0123456789abcdef0123456789abcdef01234567 refs/heads/main'
+    exit 0
+    ;;
+  *) exec "${REAL_GIT:?}" "$@" ;;
+esac
+EOF
+chmod +x "$tmpd/resolved-bin/git"
+resolved_clone=$(env PATH="$tmpd/resolved-bin:$PATH" REAL_GIT="$(command -v git)" \
+  GIT_FIXTURE_LOG="$tmpd/resolved-git.log" HOME="$tmpd/resolved-home" NODE_PROJECT=demo \
+  /bin/bash "$HERE/scripts/project-node.sh" --apply --project demo --harness fixture \
+  --repo https://resolved.fixture.invalid/repo.git 2>&1); rc=$?
+resolved_clone_expected="  FAIL  repo_clone — fatal: simulated clone failure for fixture (clone failed after ref 'main' resolved)"
+if [ "$rc" -ne 0 ] \
+  && [ "$(printf '%s\n' "$resolved_clone" | grep -Fxc -- "$resolved_clone_expected")" = 1 ] \
+  && ! printf '%s\n' "$resolved_clone" | grep -Fq 'ref '\''main'\'' was not found' \
+  && ! printf '%s\n' "$resolved_clone" | grep -Fq 'private repos need a deploy key' \
+  && grep -Fq 'clone --depth 1 --branch main' "$tmpd/resolved-git.log" \
+  && grep -Fq 'ls-remote --exit-code' "$tmpd/resolved-git.log" \
+  && grep -Fq 'refs/heads/main' "$tmpd/resolved-git.log"; then
+  say "  PASS  resolved main ref is distinguished from clone and private-repo failures"
+else
+  say "  FAIL  resolved main ref was not distinguished from clone failure"; fails=$((fails+1))
+fi
 rm -rf "$tmpd"
 
 say "5. fetch_verified refuses a wrong digest"
