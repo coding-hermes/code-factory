@@ -63,6 +63,16 @@ For every new satellite lane:
 
 ## Provenance and open caveat
 
+For the rerunnable read-only census, safe output contract, policy-writer boundary
+and sync consumption/orientation requirements, see
+[SCHEDULER-LANE-VERIFICATION](SCHEDULER-LANE-VERIFICATION.md). The earlier primary
+six-hour observation below is historical: CF-022 observes an explicit operator
+`cooldown_s=60` on the primary and has no authority to change it. Its live
+satellite alignment remains open; the current findings are recorded in
+[the CF-022 audit](audits/code-factory-CF-022-140811.md). Consult actual checker/API
+source before applying family policy; a successful policy dry-run is not a
+family-parity verdict.
+
 The family roots and pins above come from scheduler commit `7d5b8d25` and its parity test, not from
 a guess or a generic stand-in convention. The code-factory foreman's current six-hour fallback was
 verified in the live scheduler DB/API, but a matching durable project pin in the loaded

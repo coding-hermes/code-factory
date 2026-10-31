@@ -75,6 +75,19 @@ manifest identity mismatch/write failure; adapter refusal or other required laye
 failure. No scheduler quarantine is performed. The manifest must not be mistaken
 for current health, and provisioning's disk check does not enforce per-job quotas.
 
+CF-007's local admission gate now refuses invalid/unknown/below-floor observations
+before state creation, adapter installation or cloning. Integer KiB/byte arithmetic
+does not round a near-boundary observation up. The default 5 GiB remains provisional;
+the historical ~1.5 GB estimate is not a current role footprint measurement.
+Explicit `--apply --reclaim-disposable` can reclaim only the fixed flat
+`.node/disposable-cache-v1` namespace defined in NODE's laws, then remeasure.
+STORAGE's cache/scratch classification does not make `.node/jobs`, evidence,
+repositories, manifests or credentials disposable. Check mode never reclaims.
+No live node measurement, Bunker orphan/user/key cleanup, runtime job quota or
+external scheduler admission is implemented or certified by this tranche.
+`tests/disk-contract.py` uses fake df/adapter/Git commands and disposable private
+HOME trees; its behavioral refusal mutant must fail the same ordinary regression.
+
 `tests/selftest.sh`, `tests/node-contract.py` and `tests/node-mutations.py` use
 local fake commands and temporary HOME/repository/adapter state. The named checker
 fixture has a working bootstrap PATH and exactly one intentional missing input,

@@ -1,0 +1,174 @@
+{
+  "artifact_type": "redacted-native-verdict-projection",
+  "implementation_commit": "fb677f3acbf5ebf62654d74a2e78c18aea2f77cd",
+  "records": [
+    {
+      "task_id": "CF-022",
+      "commit": "fb677f3acbf5ebf62654d74a2e78c18aea2f77cd",
+      "passed": false,
+      "summary": "Judge Result: CF-022\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: FAIL\n  INCOMPLETE\n\nCap exceeded: Iteration cap (60) reached (60.9 used). Increase max_iterations or split criteria.\n\nOverall: FAIL \u2717",
+      "native_history_id": "af460f17",
+      "native_sha256": "3707c156bc045499e89191a7f9bcfed255c8b53e8433de3468c2a1d365035805",
+      "stages": {
+        "tier1": {
+          "id": "tier1",
+          "passed": true,
+          "any_failed": false,
+          "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10",
+          "steps": [
+            {
+              "id": "lint",
+              "type": "script",
+              "passed": true,
+              "output": "scanners: nice=nice -n 10\n",
+              "error": "",
+              "data": {
+                "exit_code": 0,
+                "guard_log": "$CONTROL_ROOT/.gitreins/logs/guard-20261030T143405.546308Z.log"
+              }
+            },
+            {
+              "id": "secrets",
+              "type": "script",
+              "passed": true,
+              "output": "secrets: harness state excluded from gitleaks scope (.gitreins/**)\nsecrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n9:41AM INF scanned ~279130 bytes (279.13 KB) in 168ms\n9:41AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 93 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+              "error": "",
+              "data": {
+                "exit_code": 0,
+                "guard_log": "$CONTROL_ROOT/.gitreins/logs/guard-20261030T143405.546308Z.log",
+                "secrets_scanners": [
+                  "gitleaks",
+                  "builtin"
+                ]
+              }
+            },
+            {
+              "id": "tests",
+              "type": "script",
+              "passed": true,
+              "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n readme-audit-20261030-110314.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n build-contract.sh\n  PASS  bash -n selftest.sh\n2. node --check has exactly the controlled named failure (local fixtures)\ntest_named_check (__main__.NodeContract.test_named_check) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.090s\n\nOK\n  PASS  nonzero exit and anchored exact FAIL crier_url; no bootstrap decoy\n3. specs and scripts expose the same node contract\n  PASS  required contract NODE.md exists\n  PASS  required contract ENVELOPE.md exists\n  PASS  required contract HARNESS.md exists\n  PASS  required contract DESIGN.md exists\n  PASS  required contract THREAT-MODEL.md exists\n  PASS  DESIGN names project-node.sh --check|--apply\n  PASS  DESIGN names node-create.sh --project P --repo URL --harness H\n  PASS  DESIGN names verify-node.sh --agent ID --artifact PATH\n  PASS  envelope declares idempotency_key\n4. focused node contracts and executable mutation controls (local, not live)\ntest_artifact_denials_before_remote_shell (__main__.NodeContract.test_artifact_denials_before_remote_shell) ... ok\ntest_artifact_symlink_hardlink_and_positive (__main__.NodeContract.test_artifact_symlink_hardlink_and_positive) ... ok\ntest_creator_preconditions_and_exact_triple (__main__.NodeContract.test_creator_preconditions_and_exact_triple) ... ok\ntest_creator_stops_on_provision_failure (__main__.NodeContract.test_creator_stops_on_provision_failure) ... ok\ntest_forbidden_manifest_paths_without_dispatch_option (__main__.NodeContract.test_forbidden_manifest_paths_without_dispatch_option) ... ok\ntest_hermes_inference_blocked_without_reading_keys (__main__.NodeContract.test_hermes_inference_blocked_without_reading_keys) ... ok\ntest_manifest_identity_and_byte_idempotence (__main__.NodeContract.test_manifest_identity_and_byte_idempotence) ... ok\ntest_manifest_write_failure (__main__.NodeContract.test_manifest_write_failure) ... ok\n\n\u2026 [6097 chars omitted \u2014 84 line(s)] \u2026\nok\ntest_missing_artifact (__main__.RecoveryContract.test_missing_artifact) ... observed rejection=artifact_missing exit=1\nok\ntest_missing_commit (__main__.RecoveryContract.test_missing_commit) ... observed rejection=commit_missing exit=1\nok\ntest_missing_metadata (__main__.RecoveryContract.test_missing_metadata) ... observed rejection=metadata_missing exit=1\nok\ntest_pinned_but_invalid_metadata (__main__.RecoveryContract.test_pinned_but_invalid_metadata) ... observed rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nok\ntest_recover_after_loss_and_repeat (__main__.RecoveryContract.test_recover_after_loss_and_repeat) ... observed recovery commit=67a2627aef7b33c0771bee0e05e429ca5e6d258f sha256=b1330093b2bcc4d946a4f85ebf8ad9dabef6d5b81ff81fa003de883752663338 bytes=33 repeat=unchanged fresh=recovered pending=unknown unpublished=unrecoverable\nok\n\n----------------------------------------------------------------------\nRan 11 tests in 1.647s\n\nOK\n  PASS  recovery contract\n12. scheduler lane census (hermetic fixtures, no dispatch or policy writes)\n...............\n----------------------------------------------------------------------\nRan 15 tests in 3.272s\n\nOK\n  PASS  lane census positive, drift and missing/bad-input controls\nSELFTEST: PASS\n",
+              "error": "",
+              "data": {
+                "exit_code": 0,
+                "guard_log": "$CONTROL_ROOT/.gitreins/logs/guard-20261030T143405.546308Z.log"
+              }
+            }
+          ],
+          "coverage": "secrets+lint+tests"
+        },
+        "tier2": {
+          "id": "tier2",
+          "passed": false,
+          "any_failed": true,
+          "summary": "INCOMPLETE\n\nCap exceeded: Iteration cap (60) reached (60.9 used). Increase max_iterations or split criteria.",
+          "steps": [
+            {
+              "id": "tier2",
+              "type": "ai_eval",
+              "passed": false,
+              "output": "INCOMPLETE\n\nCap exceeded: Iteration cap (60) reached (60.9 used). Increase max_iterations or split criteria.",
+              "error": "",
+              "data": {
+                "verdict": "INCOMPLETE",
+                "items": [],
+                "summary": "Cap exceeded: Iteration cap (60) reached (60.9 used). Increase max_iterations or split criteria.",
+                "provenance": {
+                  "model": "deepseek-v4-flash",
+                  "base_url_source": "GITREINS_LLM_BASE_URL",
+                  "api_key_source": "GITREINS_LLM_API_KEY"
+                }
+              }
+            }
+          ],
+          "model": "deepseek-v4-flash",
+          "base_url_source": "GITREINS_LLM_BASE_URL",
+          "api_key_source": "GITREINS_LLM_API_KEY"
+        }
+      }
+    },
+    {
+      "task_id": "CF-022",
+      "commit": "fb677f3acbf5ebf62654d74a2e78c18aea2f77cd",
+      "passed": false,
+      "summary": "Judge Result: CF-022\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: FAIL\n  INCOMPLETE\n\nCap exceeded: Iteration cap (15) reached (15.8 used). Increase max_iterations or split criteria.\n\nOverall: FAIL \u2717",
+      "native_history_id": "f918d77c",
+      "native_sha256": "de8dcf0cb2817e05a45c2136df54e2ff4dd80e4ef167f4bca8a8159027a1f677",
+      "stages": {
+        "tier1": {
+          "id": "tier1",
+          "passed": true,
+          "any_failed": false,
+          "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10",
+          "steps": [
+            {
+              "id": "lint",
+              "type": "script",
+              "passed": true,
+              "output": "scanners: nice=nice -n 10\n",
+              "error": "",
+              "data": {
+                "exit_code": 0,
+                "guard_log": "$CONTROL_ROOT/.gitreins/logs/guard-20261030T143405.546308Z.log"
+              }
+            },
+            {
+              "id": "secrets",
+              "type": "script",
+              "passed": true,
+              "output": "secrets: harness state excluded from gitleaks scope (.gitreins/**)\nsecrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n9:38AM INF scanned ~279130 bytes (279.13 KB) in 157ms\n9:38AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 93 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+              "error": "",
+              "data": {
+                "exit_code": 0,
+                "guard_log": "$CONTROL_ROOT/.gitreins/logs/guard-20261030T143405.546308Z.log",
+                "secrets_scanners": [
+                  "gitleaks",
+                  "builtin"
+                ]
+              }
+            },
+            {
+              "id": "tests",
+              "type": "script",
+              "passed": true,
+              "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n readme-audit-20261030-110314.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n build-contract.sh\n  PASS  bash -n selftest.sh\n2. node --check has exactly the controlled named failure (local fixtures)\ntest_named_check (__main__.NodeContract.test_named_check) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.089s\n\nOK\n  PASS  nonzero exit and anchored exact FAIL crier_url; no bootstrap decoy\n3. specs and scripts expose the same node contract\n  PASS  required contract NODE.md exists\n  PASS  required contract ENVELOPE.md exists\n  PASS  required contract HARNESS.md exists\n  PASS  required contract DESIGN.md exists\n  PASS  required contract THREAT-MODEL.md exists\n  PASS  DESIGN names project-node.sh --check|--apply\n  PASS  DESIGN names node-create.sh --project P --repo URL --harness H\n  PASS  DESIGN names verify-node.sh --agent ID --artifact PATH\n  PASS  envelope declares idempotency_key\n4. focused node contracts and executable mutation controls (local, not live)\ntest_artifact_denials_before_remote_shell (__main__.NodeContract.test_artifact_denials_before_remote_shell) ... ok\ntest_artifact_symlink_hardlink_and_positive (__main__.NodeContract.test_artifact_symlink_hardlink_and_positive) ... ok\ntest_creator_preconditions_and_exact_triple (__main__.NodeContract.test_creator_preconditions_and_exact_triple) ... ok\ntest_creator_stops_on_provision_failure (__main__.NodeContract.test_creator_stops_on_provision_failure) ... ok\ntest_forbidden_manifest_paths_without_dispatch_option (__main__.NodeContract.test_forbidden_manifest_paths_without_dispatch_option) ... ok\ntest_hermes_inference_blocked_without_reading_keys (__main__.NodeContract.test_hermes_inference_blocked_without_reading_keys) ... ok\ntest_manifest_identity_and_byte_idempotence (__main__.NodeContract.test_manifest_identity_and_byte_idempotence) ... ok\ntest_manifest_write_failure (__main__.NodeContract.test_manifest_write_failure) ... ok\n\n\u2026 [6097 chars omitted \u2014 84 line(s)] \u2026\nok\ntest_missing_artifact (__main__.RecoveryContract.test_missing_artifact) ... observed rejection=artifact_missing exit=1\nok\ntest_missing_commit (__main__.RecoveryContract.test_missing_commit) ... observed rejection=commit_missing exit=1\nok\ntest_missing_metadata (__main__.RecoveryContract.test_missing_metadata) ... observed rejection=metadata_missing exit=1\nok\ntest_pinned_but_invalid_metadata (__main__.RecoveryContract.test_pinned_but_invalid_metadata) ... observed rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nobserved rejection=metadata_schema exit=1\nok\ntest_recover_after_loss_and_repeat (__main__.RecoveryContract.test_recover_after_loss_and_repeat) ... observed recovery commit=ae05bea3e8084824944ca663bde6f6e037b913c1 sha256=b1330093b2bcc4d946a4f85ebf8ad9dabef6d5b81ff81fa003de883752663338 bytes=33 repeat=unchanged fresh=recovered pending=unknown unpublished=unrecoverable\nok\n\n----------------------------------------------------------------------\nRan 11 tests in 1.486s\n\nOK\n  PASS  recovery contract\n12. scheduler lane census (hermetic fixtures, no dispatch or policy writes)\n...............\n----------------------------------------------------------------------\nRan 15 tests in 3.191s\n\nOK\n  PASS  lane census positive, drift and missing/bad-input controls\nSELFTEST: PASS\n",
+              "error": "",
+              "data": {
+                "exit_code": 0,
+                "guard_log": "$CONTROL_ROOT/.gitreins/logs/guard-20261030T143405.546308Z.log"
+              }
+            }
+          ],
+          "coverage": "secrets+lint+tests"
+        },
+        "tier2": {
+          "id": "tier2",
+          "passed": false,
+          "any_failed": true,
+          "summary": "INCOMPLETE\n\nCap exceeded: Iteration cap (15) reached (15.8 used). Increase max_iterations or split criteria.",
+          "steps": [
+            {
+              "id": "tier2",
+              "type": "ai_eval",
+              "passed": false,
+              "output": "INCOMPLETE\n\nCap exceeded: Iteration cap (15) reached (15.8 used). Increase max_iterations or split criteria.",
+              "error": "",
+              "data": {
+                "verdict": "INCOMPLETE",
+                "items": [],
+                "summary": "Cap exceeded: Iteration cap (15) reached (15.8 used). Increase max_iterations or split criteria.",
+                "provenance": {
+                  "model": "deepseek-v4-flash",
+                  "base_url_source": "GITREINS_LLM_BASE_URL",
+                  "api_key_source": "GITREINS_LLM_API_KEY"
+                }
+              }
+            }
+          ],
+          "model": "deepseek-v4-flash",
+          "base_url_source": "GITREINS_LLM_BASE_URL",
+          "api_key_source": "GITREINS_LLM_API_KEY"
+        }
+      }
+    }
+  ]
+}

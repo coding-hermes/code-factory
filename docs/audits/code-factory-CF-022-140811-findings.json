@@ -1,0 +1,165 @@
+{
+  "checker_exit": 1,
+  "lane_findings": [
+    {
+      "class": "namespace-membership",
+      "subject": "code-factory-sync",
+      "detail": "namespace_id='coding-hermes' but the 'sync' family convention is 'duckbrain-sync' (satellites live in the shared family namespace, cf. SCHED-GAP-1604)"
+    },
+    {
+      "class": "namespace-membership",
+      "subject": "code-factory-pm",
+      "detail": "namespace_id='coding-hermes' but the 'pm' family convention is 'pm' (satellites live in the shared family namespace, cf. SCHED-GAP-1604)"
+    },
+    {
+      "class": "namespace-membership",
+      "subject": "code-factory-duckbrain-pm",
+      "detail": "namespace_id='coding-hermes' but the 'pm' family convention is 'pm' (satellites live in the shared family namespace, cf. SCHED-GAP-1604)"
+    },
+    {
+      "class": "namespace-membership",
+      "subject": "code-factory-duckbrain-sync",
+      "detail": "namespace_id='coding-hermes' but the 'sync' family convention is 'duckbrain-sync' (satellites live in the shared family namespace, cf. SCHED-GAP-1604)"
+    },
+    {
+      "class": "cooldown",
+      "subject": "code-factory",
+      "detail": "cooldown_s=60 below the 21600s (6h) floor \u2014 sub-6h pins are retired"
+    },
+    {
+      "class": "cooldown",
+      "subject": "code-factory-sync",
+      "detail": "cooldown_s=900 below the 21600s (6h) floor \u2014 sub-6h pins are retired"
+    },
+    {
+      "class": "cooldown",
+      "subject": "code-factory-duckbrain",
+      "detail": "cooldown_s=900 below the 21600s (6h) floor \u2014 sub-6h pins are retired"
+    },
+    {
+      "class": "cooldown",
+      "subject": "code-factory-qa",
+      "detail": "cooldown_s=900 below the 21600s (6h) floor \u2014 sub-6h pins are retired"
+    },
+    {
+      "class": "cooldown",
+      "subject": "code-factory-pm",
+      "detail": "cooldown_s=900 below the 21600s (6h) floor \u2014 sub-6h pins are retired"
+    },
+    {
+      "class": "cooldown",
+      "subject": "code-factory-dogfood",
+      "detail": "cooldown_s=900 below the 21600s (6h) floor \u2014 sub-6h pins are retired"
+    },
+    {
+      "class": "cooldown",
+      "subject": "code-factory-docs-qa",
+      "detail": "cooldown_s=900 below the 21600s (6h) floor \u2014 sub-6h pins are retired"
+    },
+    {
+      "class": "cooldown",
+      "subject": "code-factory-readme",
+      "detail": "cooldown_s=900 below the 21600s (6h) floor \u2014 sub-6h pins are retired"
+    },
+    {
+      "class": "cooldown",
+      "subject": "code-factory-readme-qa",
+      "detail": "cooldown_s=900 below the 21600s (6h) floor \u2014 sub-6h pins are retired"
+    },
+    {
+      "class": "cooldown",
+      "subject": "code-factory-releng",
+      "detail": "cooldown_s=900 below the 21600s (6h) floor \u2014 sub-6h pins are retired"
+    },
+    {
+      "class": "cooldown",
+      "subject": "code-factory-releng-qa",
+      "detail": "cooldown_s=900 below the 21600s (6h) floor \u2014 sub-6h pins are retired"
+    },
+    {
+      "class": "cooldown",
+      "subject": "code-factory-perf",
+      "detail": "cooldown_s=900 below the 21600s (6h) floor \u2014 sub-6h pins are retired"
+    },
+    {
+      "class": "cooldown",
+      "subject": "code-factory-review",
+      "detail": "cooldown_s=900 below the 21600s (6h) floor \u2014 sub-6h pins are retired"
+    },
+    {
+      "class": "boards",
+      "subject": "code-factory-docs-qa",
+      "detail": "board does not resolve in '$HERMES_HOME/stand-in/pm/code-factory-docs' while its target 'code-factory-docs' exists"
+    },
+    {
+      "class": "boards",
+      "subject": "code-factory-readme-qa",
+      "detail": "board does not resolve in '$HERMES_HOME/stand-in/pm/code-factory-readme' while its target 'code-factory-readme' exists"
+    },
+    {
+      "class": "boards",
+      "subject": "code-factory-releng-qa",
+      "detail": "board does not resolve in '$HERMES_HOME/stand-in/pm/code-factory-releng' while its target 'code-factory-releng' exists"
+    },
+    {
+      "class": "family-floor",
+      "subject": "code-factory-sync",
+      "detail": "cooldown_s=900 \u2014 satellite family expects 21600 for sync (see SATELLITE_FAMILY_PINS, also mirrored in fleet-cooldown-policy.py as FAMILY_CANONICAL)"
+    },
+    {
+      "class": "family-floor",
+      "subject": "code-factory-qa",
+      "detail": "cooldown_s=900 \u2014 satellite family expects 43200 for qa (see SATELLITE_FAMILY_PINS, also mirrored in fleet-cooldown-policy.py as FAMILY_CANONICAL)"
+    },
+    {
+      "class": "family-floor",
+      "subject": "code-factory-pm",
+      "detail": "cooldown_s=900 \u2014 satellite family expects 86400 for pm (see SATELLITE_FAMILY_PINS, also mirrored in fleet-cooldown-policy.py as FAMILY_CANONICAL)"
+    },
+    {
+      "class": "family-floor",
+      "subject": "code-factory-dogfood",
+      "detail": "cooldown_s=900 \u2014 satellite family expects 259200 for dogfood (see SATELLITE_FAMILY_PINS, also mirrored in fleet-cooldown-policy.py as FAMILY_CANONICAL)"
+    },
+    {
+      "class": "family-floor",
+      "subject": "code-factory-docs-qa",
+      "detail": "cooldown_s=900 \u2014 satellite family expects 43200 for qa (see SATELLITE_FAMILY_PINS, also mirrored in fleet-cooldown-policy.py as FAMILY_CANONICAL)"
+    },
+    {
+      "class": "family-floor",
+      "subject": "code-factory-readme",
+      "detail": "cooldown_s=900 \u2014 satellite family expects 604800 for readme (see SATELLITE_FAMILY_PINS, also mirrored in fleet-cooldown-policy.py as FAMILY_CANONICAL)"
+    },
+    {
+      "class": "family-floor",
+      "subject": "code-factory-readme-qa",
+      "detail": "cooldown_s=900 \u2014 satellite family expects 43200 for qa (see SATELLITE_FAMILY_PINS, also mirrored in fleet-cooldown-policy.py as FAMILY_CANONICAL)"
+    },
+    {
+      "class": "family-floor",
+      "subject": "code-factory-releng",
+      "detail": "cooldown_s=900 \u2014 satellite family expects 86400 or 259200 for releng (see SATELLITE_FAMILY_PINS, also mirrored in fleet-cooldown-policy.py as FAMILY_CANONICAL)"
+    },
+    {
+      "class": "family-floor",
+      "subject": "code-factory-releng-qa",
+      "detail": "cooldown_s=900 \u2014 satellite family expects 43200 for qa (see SATELLITE_FAMILY_PINS, also mirrored in fleet-cooldown-policy.py as FAMILY_CANONICAL)"
+    },
+    {
+      "class": "family-floor",
+      "subject": "code-factory-perf",
+      "detail": "cooldown_s=900 \u2014 satellite family expects 604800 for perf (see SATELLITE_FAMILY_PINS, also mirrored in fleet-cooldown-policy.py as FAMILY_CANONICAL)"
+    },
+    {
+      "class": "family-floor",
+      "subject": "code-factory-review",
+      "detail": "cooldown_s=900 \u2014 satellite family expects 604800 for review (see SATELLITE_FAMILY_PINS, also mirrored in fleet-cooldown-policy.py as FAMILY_CANONICAL)"
+    },
+    {
+      "class": "sync-orientation",
+      "subject": "code-factory-sync",
+      "detail": "no README.md in '$HERMES_HOME/sync-workdirs/code-factory-sync' \u2014 a picker/dogfood agent cannot orient this -sync shell; no consumption contract findable \u2014 expected a code-factory-sync-data skill under '$HERMES_HOME/skills' or a README pointer to one (/sync/ marker, /api/ route, or the skill name)"
+    }
+  ]
+}
