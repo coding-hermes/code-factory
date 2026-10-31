@@ -160,5 +160,48 @@ else
 fi
 rm -rf "$tmpd"
 
+say "11. the README's first evidence artifact carries the claims it is cited for"
+# The evidence line names the artifact a reader is meant to trust first; that artifact must
+# exist and contain the tokens the current README's claims rest on: repo_clone (status row),
+# 9402f6a (the measured clone sha), Prompt (prompt-file section) and eleven (prompts/ file
+# count). CF-038/CF-039: the first-named artifact had zero case-sensitive counts for Prompt
+# and eleven — evidence named first but not carried.
+# ch:trace row=CF-039 spec=README.md#the-lanes wave=none:serial test=tests/selftest.sh::evidence-pointer doc=README.md prompt=prompts/qa.md evidence=docs/audits/code-factory-CF-039.md witness=none:local-fixture verdict=none:open-finding commit=none:self-referential-hash memory=none:unresolved-namespace
+evidence_first() {  # $1=README -> first `path` after the evidence marker (empty if none)
+  grep -m1 'Evidence for the state of this README' "$1" | grep -oE '`[^`]+`' | head -1 | tr -d '`'
+}
+evidence_deficiency() {  # $1=README $2=repo root -> prints why the first artifact is deficient; rc 1 when it carries every token
+  local art tok miss="" root="$2"
+  art=$(evidence_first "$1")
+  [ -n "$art" ] || { echo "no evidence pointer"; return 0; }
+  [ -f "$root/$art" ] || { echo "absent artifact: $art"; return 0; }
+  for tok in repo_clone 9402f6a Prompt eleven; do
+    grep -qF -- "$tok" "$root/$art" || miss="$miss $tok"
+  done
+  [ -n "$miss" ] && { echo "$art lacks:$miss"; return 0; }
+  return 1
+}
+if deficiency=$(evidence_deficiency "$HERE/README.md" "$HERE"); then
+  say "  FAIL  first README evidence artifact cannot support the README: $deficiency"
+  fails=$((fails+1))
+else
+  say "  PASS  $(evidence_first "$HERE/README.md") exists and carries every claim token"
+fi
+# negative fixture: the same README against a copy of the artifact with the claim tokens stripped
+tmpd=$(mktemp -d)
+art=$(evidence_first "$HERE/README.md")
+if [ -n "$art" ] && [ -f "$HERE/$art" ]; then
+  mkdir -p "$tmpd/$(dirname "$art")"
+  grep -vE 'repo_clone|9402f6a|Prompt|eleven' "$HERE/$art" > "$tmpd/$art"
+  if deficiency=$(evidence_deficiency "$HERE/README.md" "$tmpd"); then
+    say "  PASS  token-stripped artifact refused ($deficiency)"
+  else
+    say "  FAIL  a first evidence artifact lacking claim tokens was accepted"; fails=$((fails+1))
+  fi
+else
+  say "  FAIL  negative fixture skipped: no readable artifact"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
