@@ -34,7 +34,49 @@ else
 fi
 rm -rf "$tmpd"
 
-say "4. fetch_verified refuses a wrong digest"
+# ch:trace row=CF-034 spec=README.md#status wave=none:serial test=tests/selftest.sh::clone-error-classification doc=README.md prompt=prompts/readme.md evidence=tests/selftest.sh::clone-error-classification witness=none:local-fixture verdict=none:open-finding commit=none:self-referential-hash memory=none:unresolved-namespace
+say "4. clone errors distinguish missing refs from repository access"
+tmpd=$(mktemp -d)
+git init -q -b trunk "$tmpd/work"
+git -C "$tmpd/work" config user.email fixture@example.invalid
+git -C "$tmpd/work" config user.name fixture
+echo fixture > "$tmpd/work/README"
+git -C "$tmpd/work" add README
+git -C "$tmpd/work" commit -qm fixture
+git clone -q --bare "$tmpd/work" "$tmpd/origin.git"
+missing_ref=$(env HOME="$tmpd/missing-home" NODE_PROJECT=demo \
+  /bin/bash "$HERE/scripts/project-node.sh" --apply --project demo --harness fixture \
+  --repo "file://$tmpd/origin.git" 2>&1); rc=$?
+expected="  FAIL  repo_clone — ref 'main' was not found; pass --ref <branch-or-tag>"
+if [ "$rc" -ne 0 ] && [ "$(printf '%s\n' "$missing_ref" | grep -Fxc -- "$expected")" = 1 ] \
+  && ! printf '%s\n' "$missing_ref" | grep -Fq 'private repos need a deploy key'; then
+  say "  PASS  missing ref names main and --ref without a private-repo hint"
+else
+  say "  FAIL  missing ref was not distinguished from repository access"; fails=$((fails+1))
+fi
+mkdir "$tmpd/bin"
+cat > "$tmpd/bin/git" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  clone|ls-remote)
+    echo 'fatal: Authentication required for fixture' >&2
+    exit 128
+    ;;
+  *) exec "${REAL_GIT:?}" "$@" ;;
+esac
+EOF
+chmod +x "$tmpd/bin/git"
+private_repo=$(env PATH="$tmpd/bin:$PATH" REAL_GIT="$(command -v git)" HOME="$tmpd/private-home" NODE_PROJECT=demo \
+  /bin/bash "$HERE/scripts/project-node.sh" --apply --project demo --harness fixture \
+  --repo https://private.fixture.invalid/repo.git 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$private_repo" | grep -Fq 'private repos need a deploy key'; then
+  say "  PASS  repository access failure retains deploy-key hint"
+else
+  say "  FAIL  repository access failure lost deploy-key hint"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+
+say "5. fetch_verified refuses a wrong digest"
 tmpd=$(mktemp -d); echo hello > "$tmpd/src"
 want=$(sha256sum "$tmpd/src" | cut -d' ' -f1)
 fetch_verified "file://$tmpd/src" "$tmpd/out" "$want" && say "  PASS  correct digest accepted" || { say "  FAIL  correct digest refused"; fails=$((fails+1)); }
@@ -42,14 +84,14 @@ fetch_verified "file://$tmpd/src" "$tmpd/out2" "00000000000000000000000000000000
   && { say "  FAIL  wrong digest accepted"; fails=$((fails+1)); } || say "  PASS  wrong digest refused"
 rm -rf "$tmpd"
 
-say "5. no literal credential assignments"
+say "6. no literal credential assignments"
 if grep -rnE '^[A-Z_]*(API_KEY|TOKEN|SECRET)=[^$"[:space:]]' "$HERE"/scripts "$HERE"/specs "$HERE"/docs 2>/dev/null | grep -v 'example' | head -3 | grep -q .; then
   say "  FAIL  a literal credential assignment is in the tree"; fails=$((fails+1))
 else
   say "  PASS  none found"
 fi
 
-say "6. the board is valid JSONL"
+say "7. the board is valid JSONL"
 b="$HERE/.coding-hermes/board/tasks.jsonl"
 if [ -f "$b" ]; then
   n=$(wc -l < "$b"); good=0
@@ -59,7 +101,7 @@ else
   say "  FAIL  board missing"; fails=$((fails+1))
 fi
 
-say "7. project board entrypoint is real and fails closed without dependency"
+say "8. project board entrypoint is real and fails closed without dependency"
 bash -n "$HERE/scripts/boardctl" && say "  PASS  bash -n scripts/boardctl" || { say "  FAIL  bash syntax"; fails=$((fails+1)); }
 "$HERE/scripts/boardctl" --help >/dev/null 2>&1 && say "  PASS  local help" || { say "  FAIL  help"; fails=$((fails+1)); }
 missing=$(env -i PATH=/usr/bin:/bin HOME="$HOME" /bin/bash "$HERE/scripts/boardctl" list 2>&1); rc=$?
@@ -69,7 +111,7 @@ else
   say "  FAIL  missing dependency was not surfaced"; fails=$((fails+1))
 fi
 
-say "7. every prompt file the README relies on exists"
+say "9. every prompt file the README relies on exists"
 # The README's lane section names prompts/<name>.md files and the loaders copy them into the
 # scheduler. A rename that misses one side leaves a lane loading a prompt that is not shipped.
 prompt_refs_missing() {  # $1=README $2=repo root -> prints each absent prompt, returns 1 if any
