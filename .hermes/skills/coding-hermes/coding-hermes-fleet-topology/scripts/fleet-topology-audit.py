@@ -114,6 +114,14 @@ def classify(all_rows):
             if n.endswith(DOCS_LANE_SUFFIXES):
                 debris[n] = r
                 continue
+            # a COMMAND-driven row with no prompt is DEBRIS, not a planet: skill-driven lanes
+            # keep `command` empty by design, so a row like `project-sitrep-print`
+            # (command=bash .../project-sitrep-print.sh, workdir=/home/kara, prompt='') is a
+            # one-off utility — it has no board and no repo, and demanding 5 moons for it
+            # manufactured 5 junk lanes on the 2026-10-31 audit.
+            if (r.get("command") or "").strip() and not (r.get("prompt") or "").strip():
+                debris[n] = r
+                continue
             # planets are rows named <base>, <base>-foreman (or <base>-worker);
             # key them by base so moon lookup matches
             base = re.sub(r"-(?:foreman|worker)$", "", n)
@@ -350,6 +358,11 @@ def main():
                 if not row["enabled"]:
                     continue
                 if moon_workdir_state(row, pwd) != "ok":
+                    # --dry must not mutate the filesystem: a dry run on 2026-10-31 silently
+                    # created stand-in/releng-lane/9router/.coding-hermes/board.
+                    if dry:
+                        print(f"  WOULD PROVISION {p}-{lane:9s} wd={row['workdir']}")
+                        continue
                     msg = provision_moon(row, pwd)
                     print(f"  {p}-{lane:9s} {msg or 'already provisioned'}")
     return 0
