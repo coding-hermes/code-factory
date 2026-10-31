@@ -29,9 +29,11 @@ scripts/bunker-server-install.sh --check
 scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes
 ```
 
-On a host with no bunker server, no Crier and no repo, all three commands reach their checkers and
-fail with the missing value named. That is the honest result on a fresh host, and every message
-tells you which value to supply.
+On a host with no configured bunker server, no Crier and no repo, all three commands are expected to
+fail; this is a diagnostic path, not a successful installation. The probes below reach their
+checkers and report the first missing configuration or dependency. Some lower-level diagnostics
+remain imperfect: an unreachable Crier URL currently renders as `-> 000000` (CF-037), and a clone
+failure can include a misleading deploy-key hint when the real cause is a missing branch (CF-034).
 
 ## Layout
 
