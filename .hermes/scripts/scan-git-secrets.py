@@ -317,6 +317,14 @@ FP_PATTERNS = [
     re.compile(r'(?i)sk-(?:or-v1-)?1234567890'),
     re.compile(r'sk-(?:A1){3,}'),
     re.compile(r'sk-(?:abc|a1b2c3)[a-z0-9]*\b'),
+    # Mid-word prose false positive (scan #147, 2026-10-31): boardctl's BT-83 regression
+    # test asserts the deployed sk-api-key regex does NOT match mid-word prose, and its
+    # own fixture is `"mask=flask-01234567890123456789"` — `flask-` ends in `sk-`, and the
+    # body is a sequential-digit run starting at 0. That fixture lives in a gitreins
+    # commit.patch, so it re-fires CRITICAL every day and drives exit(1) -> "Script Error".
+    # Narrow by construction: keyed on sequential digits from 0 (no real key body carries
+    # them), plus the report-redacted form the telemetry ledger echoes back.
+    re.compile(r'sk-012(?:3456789\d*|…)'),
     # Alphabet-run GitHub PAT example: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij
     re.compile(r'ghp_ABCDEFGHI'),
     # Documented FP class: `ghp_invalid…` (scan #102, 2026-09-19). The corpus and the
