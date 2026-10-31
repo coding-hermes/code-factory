@@ -77,5 +77,28 @@ else
 fi
 rm -rf "$tmpd"
 
+say "8. layer 40 remains a clone-only contract"
+# Layer 40 is generic across arbitrary repositories. A build/cache claim needs a project-specific
+# protocol and measured artifact, so the spec must name only the pinned clone until one exists.
+layer_40_clone_only() {  # $1=NODE.md -> returns 0 only for the measured clone-only contract
+  grep -qFx '| 40 repo | the repo cloned at a pinned ref | base |' "$1" && \
+    ! grep -qE '^\| 40 repo \|.*build cache' "$1"
+}
+if layer_40_clone_only "$HERE/specs/NODE.md"; then
+  say "  PASS  layer 40 names only the pinned repo clone"
+else
+  say "  FAIL  layer 40 claims an unmeasured build cache or differs from the clone contract"; fails=$((fails+1))
+fi
+# negative fixture: restore the old cache claim and prove the contract checker refuses it.
+tmpd=$(mktemp -d)
+sed 's#the repo cloned at a pinned ref | base#the repo cloned at a pinned ref, build cache present | base#' \
+  "$HERE/specs/NODE.md" > "$tmpd/NODE.md"
+if layer_40_clone_only "$tmpd/NODE.md"; then
+  say "  FAIL  layer 40 build-cache claim was accepted"; fails=$((fails+1))
+else
+  say "  PASS  layer 40 build-cache claim refused"
+fi
+rm -rf "$tmpd"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

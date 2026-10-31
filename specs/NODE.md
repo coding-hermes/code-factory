@@ -27,7 +27,7 @@ the manifest to know where the artifacts are.
 | 10 base | python3 + venv, git, curl, tar, sha256sum; optionally jq, rg, node | preflight |
 | 20 harness | the chosen harness + its gateway/CLI | base |
 | 30 bus | a crier identity file (600) and a pull worker | harness |
-| 40 repo | the repo cloned at a pinned ref, build cache present | base |
+| 40 repo | the repo cloned at a pinned ref | base |
 | 90 verify | one round trip whose digest is recomputed on the control host | all |
 
 ## Laws
