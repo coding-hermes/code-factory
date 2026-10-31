@@ -37,3 +37,5 @@
 {"id":37,"timestamp":"2026-10-31T10:47:18.103599+00:00","event_type":"task_completed","task_id":"CF-012","actor":"foreman","detail":"{\"status\":\"complete\"}","tick_number":null}
 {"id":38,"timestamp":"2026-10-31T12:41:32.113747+00:00","event_type":"task_completed","task_id":"CF-011","actor":"foreman","detail":"{\"status\":\"complete\"}","tick_number":null}
 {"id":39,"timestamp":"2026-10-31T12:42:22.051145+00:00","event_type":"task_completed","task_id":"CF-013","actor":"foreman","detail":"{\"status\":\"complete\"}","tick_number":null}
+{"id":40,"timestamp":"2026-10-31T13:16:46.000694+00:00","event_type":"task_updated","task_id":"CF-032","actor":"foreman","detail":"{\"status\":\"in_progress\"}","tick_number":null}
+{"id":41,"timestamp":"2026-10-31T13:39:04.431811+00:00","event_type":"task_completed","task_id":"CF-032","actor":"foreman","detail":"{\"status\":\"complete\"}","tick_number":null}

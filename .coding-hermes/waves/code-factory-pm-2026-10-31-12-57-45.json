@@ -1,0 +1,18 @@
+{
+  "tick_id": "code-factory-pm-2026-10-31-12-57-45",
+  "project": "code-factory",
+  "mode": "serial",
+  "base_sha": "097c96930fa4b82e955a73af18c907bee76df6da",
+  "workers": [
+    {
+      "task_id": "CF-032",
+      "worktree": "/home/kara/worktrees/code-factory-cf032-pm-1257",
+      "branch": "wt/cf032-pm-1257",
+      "gitreins_task": "CF-032",
+      "step": 1,
+      "status": "complete",
+      "verified_tree_sha": "125d83e52e1318bf81b5adc05a183274bec3f306",
+      "closeout_commit_sha": "pending:commit"
+    }
+  ]
+}
