@@ -77,10 +77,9 @@ instead of implying it works.
 | Scheduler → crier dispatch | **built, disarmed** — needs 2 env vars, 1 target row, `payload.text` (CF-001) | not armed, so nothing to run |
 | Round trip through the node's own gateway | **not yet** — no checked-in command proves it; the one attempt used a bespoke poller rather than the node's gateway (CF-004) | no command exists to fail |
 
-Two things the commands above do not show. `--ref` defaults to `main`, so a public repo whose
-default branch is named differently fails the clone until you pass `--ref <branch>`. And a failed
-clone always appends the `private repos need a deploy key` hint, even when the real cause is a
-missing branch (CF-034).
+`--ref` defaults to `main`, so a public repo whose default branch is named differently needs
+`--ref <branch>`. A missing ref reports that ref and the `--ref` flag; a repository-access failure
+retains the deploy-key hint for private repositories (CF-034).
 
 See `.coding-hermes/board/tasks.jsonl` for the work items and their acceptance criteria.
 

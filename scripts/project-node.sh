@@ -93,11 +93,23 @@ if [ -d "$RP/.git" ]; then
 else
   if [ "$MODE" = apply ] && [ -n "$REPO" ]; then
     say "  ..    cloning $REPO @ $REF"
-    if git clone --depth 1 --branch "$REF" "$REPO" "$RP" >/tmp/clone.log 2>&1; then
+    clone_log="$STATE/clone.log"
+    if git clone --depth 1 --branch "$REF" "$REPO" "$RP" >"$clone_log" 2>&1; then
       ok "repo_clone" "$RP @ $(git -C "$RP" rev-parse --short HEAD)"
     else
-      bad "repo_clone" "$(tail -1 /tmp/clone.log) (private repos need a deploy key)"
+      clone_error="$(tail -1 "$clone_log")"
+      if git ls-remote --exit-code "$REPO" "refs/heads/$REF" "refs/tags/$REF" >/dev/null 2>&1; then
+        bad "repo_clone" "${clone_error:-git clone failed} (clone failed after ref '$REF' resolved)"
+      else
+        remote_rc=$?
+        if [ "$remote_rc" -eq 2 ]; then
+          bad "repo_clone" "ref '$REF' was not found; pass --ref <branch-or-tag>"
+        else
+          bad "repo_clone" "${clone_error:-git clone failed} (repository access failed; private repos need a deploy key)"
+        fi
+      fi
     fi
+    rm -f "$clone_log"
   else
     bad "repo" "$RP absent (pass --repo to clone)"
   fi
