@@ -21,5 +21,8 @@
       "evidence": "docs/audits/code-factory-CF-007-160038.md",
       "live_acceptance": "UNVERIFIED: role sizing and authorized orphan cleanup remain open"
     }
-  ]
+  ],
+  "finished_at": "2026-10-31T22:29:43Z",
+  "closed": true,
+  "recovery_evidence": "No unfinished workers: workers=[]; recorded CF-007 review branch is 0 commits ahead of delivery HEAD 6c9808054b55afb7c491c4fd9e552f3b44e91d5c and implementation 19f5038 is already an ancestor. Canonical checkout retains unclassified inherited evidence files; no new wave dispatched."
 }
