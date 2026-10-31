@@ -2712,6 +2712,59 @@ elif [ -f go.mod ] && ui_go_http_source; then
     [ "\$UI_C" = "000" ] && UI_C=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 1 "http://127.0.0.1:\$p/docs" 2>/dev/null)
     if [ -n "\$UI_C" ] && [ "\$UI_C" != "000" ]; then UI_OCCUPIED="\$UI_OCCUPIED\$p "; fi
   done
+  # QA-OFF-BY-ONE-20-R3 (2026-10-31): scratch-port start path. When the repo's
+  # declared default port is held by a FOREIGN listener at baseline (shared
+  # host netns — off-by-one's live dev service holds 127.0.0.1:8766 while the
+  # battery probes the same repo), the plain start dies with
+  # 'bind: address already in use' and the cell mis-graded INFO "go-native
+  # start command is not a long-running server". Fix: pick a FREE loopback
+  # scratch port (not in UI_OCCUPIED, not answering) and start the server WITH
+  # a bounded port override from the FIRST attempt, so no bind error is ever
+  # logged. The accepted attempt's log replaces ui-probe.log, so the grading
+  # log genuinely lacks the bind line. ui_probe_scratch_start sets UIPID +
+  # UI_LISTEN=scratch on accept and returns 0; on total failure it returns 1
+  # and the caller falls through to the plain start — the current grading
+  # branches then behave exactly as before (never fabricate an OK).
+  ui_probe_scratch_start() {
+    local _b=\$1 _try=0 _spell _log _pid _c _ok
+    [ -n "\$UI_SCRATCH_PORT" ] || return 1
+    for _spell in long short env; do
+      _try=\$((_try + 1))
+      _log=\$LOGD/ui-probe-try\${_try}.log
+      case "\$_spell" in
+        long)  ( setsid timeout 45 \$_b --port \$UI_SCRATCH_PORT ) </dev/null >\$_log 2>&1 & ;;
+        short) ( setsid timeout 45 \$_b -port \$UI_SCRATCH_PORT ) </dev/null >\$_log 2>&1 & ;;
+        env)   ( setsid timeout 45 env OFF_BY_ONE_PORT=\$UI_SCRATCH_PORT \$_b ) </dev/null >\$_log 2>&1 & ;;
+      esac
+      _pid=\$!
+      _ok=""
+      for _w in 1 2 3 4 5; do
+        kill -0 \$_pid 2>/dev/null || break
+        _c=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:\$UI_SCRATCH_PORT/" 2>/dev/null)
+        case "\$_c" in 000|"") sleep 1 ;; *) _ok=1; break ;; esac
+      done
+      if [ -n "\$_ok" ] && kill -0 \$_pid 2>/dev/null; then
+        cp "\$_log" \$LOGD/ui-probe.log
+        UIPID=\$_pid
+        UI_LISTEN=\$UI_SCRATCH_PORT
+        return 0
+      fi
+      kill -- -\$_pid 2>/dev/null; kill \$_pid 2>/dev/null; sleep 1
+      kill -9 -- -\$_pid 2>/dev/null; kill -9 \$_pid 2>/dev/null
+    done
+    return 1
+  }
+  # Pick the scratch port BEFORE the first server start whenever any declared
+  # candidate port answers at baseline (= a foreign listener holds it).
+  UI_SCRATCH_PORT=""
+  if [ "\$UI_OCCUPIED" != " " ]; then
+    for _sp_try in \$(seq 1 200); do
+      _sp_cand=\$((20000 + RANDOM % 20001))
+      case "\$UI_OCCUPIED" in *" \$_sp_cand "*) continue ;; esac
+      if ! port_is_occupied "\$_sp_cand"; then UI_SCRATCH_PORT=\$_sp_cand; break; fi
+    done
+    [ -n "\$UI_SCRATCH_PORT" ] && UI_PORTS="\$UI_PORTS \$UI_SCRATCH_PORT"
+  fi
   # QA-CRIER-19-R2 (2026-10-20): probe the documented SURFACE LIST, not just
   # /docs then /, and name every text/html answer with URL + status +
   # content-type + size. crier's operator panel is /chat (87,584 B) while / is
@@ -2729,9 +2782,16 @@ elif [ -f go.mod ] && ui_go_http_source; then
   esac
   UI_SURFACES=""; UI_OTHER=""; UI_PROBED=" "; UI_HIT=""; UI_LISTEN=""
   for UI_B in "\${UI_LIST[@]}"; do
-    ( setsid timeout 45 \$UI_B ) </dev/null >\$LOGD/ui-probe.log 2>&1 &
-    UIPID=\$!
     UI_SURFACES=""; UI_OTHER=""; UI_LISTEN=""
+    if [ -n "\$UI_SCRATCH_PORT" ]; then
+      # QA-OFF-BY-ONE-20-R3: conflict pre-detected at baseline — start WITH the
+      # port override from the first attempt, so no bind error is ever logged.
+      ui_probe_scratch_start "\$UI_B" || true
+    fi
+    if [ -z "\$UI_LISTEN" ]; then
+      ( setsid timeout 45 \$UI_B ) </dev/null >\$LOGD/ui-probe.log 2>&1 &
+      UIPID=\$!
+    fi
     # 1 · wait for a listener on a port nobody else held before we started
     for i in \$(seq 1 20); do
       kill -0 \$UIPID 2>/dev/null || break
@@ -2744,6 +2804,23 @@ elif [ -f go.mod ] && ui_go_http_source; then
       [ -n "\$UI_LISTEN" ] && break
       sleep 1
     done
+    # QA-OFF-BY-ONE-20-R3 · recovery arm: the conflict was NOT pre-detectable
+    # at baseline (the server binds an undocumented port that a foreign
+    # listener holds). The plain start died on 'address already in use' —
+    # retry once on a scratch port with the same bounded override spellings;
+    # the accepted run's log replaces ui-probe.log. If no spelling keeps the
+    # server alive the current grading branches run exactly as before.
+    if [ -z "\$UI_LISTEN" ] && ! kill -0 \$UIPID 2>/dev/null && grep -q 'address already in use' \$LOGD/ui-probe.log 2>/dev/null; then
+      if [ -z "\$UI_SCRATCH_PORT" ]; then
+        for _sp_try in \$(seq 1 200); do
+          _sp_cand=\$((20000 + RANDOM % 20001))
+          case "\$UI_OCCUPIED" in *" \$_sp_cand "*) continue ;; esac
+          if ! port_is_occupied "\$_sp_cand"; then UI_SCRATCH_PORT=\$_sp_cand; break; fi
+        done
+        [ -n "\$UI_SCRATCH_PORT" ] && UI_PORTS="\$UI_PORTS \$UI_SCRATCH_PORT"
+      fi
+      ui_probe_scratch_start "\$UI_B" || true
+    fi
     # 2 · sweep every documented path on the port that answered
     if [ -n "\$UI_LISTEN" ]; then
       UI_HIT=\$UI_LISTEN
@@ -3802,7 +3879,12 @@ PY
     verify_list=$(timeout 10 bunker list --server "$SERVER" 2>/dev/null)
     verify_rc=$?
     if [ "$verify_rc" -eq 0 ] && ! printf '%s' "$verify_list" | grep -qF -- "$agent"; then
-      printf '{"cell":"run_battery","status":"OK","detail":"battery complete rc=0 — full cell set","ts":"%s"}\n' "$(date -u +%FT%TZ)" >> "$evidence"
+      local env_rows env_ok env_fail env_other
+      env_rows=$(grep -c '' "$evidence" || true)
+      env_ok=$(grep -cE '"status": ?"OK"' "$evidence" || true)
+      env_fail=$(grep -cE '"status": ?"FAIL"' "$evidence" || true)
+      env_other=$((env_rows - env_ok - env_fail))
+      printf '{"cell":"run_battery","status":"OK","detail":"battery run complete and collected — rows=%s ok=%s fail=%s other=%s (cell verdicts above; envelope covers the run lifecycle only)","ts":"%s"}\n' "$env_rows" "$env_ok" "$env_fail" "$env_other" "$(date -u +%FT%TZ)" >> "$evidence"
       printf '{"cell":"destroy","status":"OK","detail":"agent %s destroyed on %s; server list shows no leaked agents","ts":"%s"}\n' "$agent" "$SERVER" "$(date -u +%FT%TZ)" >> "$evidence"
     fi
   fi
