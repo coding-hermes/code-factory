@@ -50,7 +50,9 @@ if [ -z "$CRIER" ]; then
   bad "crier_url" "CRIER_URL unset — the node has nothing to connect to (export CRIER_URL=http://crier.example:8767)"
 else
   for u in "$CRIER/health" https://pypi.org/simple/; do
-    c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$u" 2>/dev/null || echo 000)
+    if ! c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$u" 2>/dev/null); then
+      c=000
+    fi
     [ "$c" = 200 ] && ok "reach:$u" "200" || bad "reach:$u" "-> $c"
   done
 fi

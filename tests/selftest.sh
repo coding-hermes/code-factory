@@ -16,7 +16,25 @@ out=$(env -i PATH=/nonexistent HOME="$HOME" NODE_PROJECT=t /bin/bash "$HERE/scri
 [ "$rc" -ne 0 ] && say "  PASS  empty PATH -> exit $rc" || { say "  FAIL  empty PATH reported success"; fails=$((fails+1)); }
 printf '%s' "$out" | grep -q 'FAIL' && say "  PASS  report contains FAIL rows" || { say "  FAIL  no FAIL rows"; fails=$((fails+1)); }
 
-say "3. fetch_verified refuses a wrong digest"
+say "3. unreachable Crier reports one HTTP status code"
+tmpd=$(mktemp -d)
+cat > "$tmpd/curl" <<'EOF'
+#!/usr/bin/env bash
+printf '000'
+exit 7
+EOF
+chmod +x "$tmpd/curl"
+out=$(env PATH="$tmpd:$PATH" HOME="$tmpd/home" NODE_PROJECT=demo CRIER_URL=http://closed.test:8767 \
+  /bin/bash "$HERE/scripts/project-node.sh" --check --project demo 2>&1); rc=$?
+expected='  FAIL  reach:http://closed.test:8767/health — -> 000'
+if [ "$rc" -ne 0 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ]; then
+  say "  PASS  unreachable URL -> one 000 status"
+else
+  say "  FAIL  unreachable URL status was duplicated or missing"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+
+say "4. fetch_verified refuses a wrong digest"
 tmpd=$(mktemp -d); echo hello > "$tmpd/src"
 want=$(sha256sum "$tmpd/src" | cut -d' ' -f1)
 fetch_verified "file://$tmpd/src" "$tmpd/out" "$want" && say "  PASS  correct digest accepted" || { say "  FAIL  correct digest refused"; fails=$((fails+1)); }
@@ -24,14 +42,14 @@ fetch_verified "file://$tmpd/src" "$tmpd/out2" "00000000000000000000000000000000
   && { say "  FAIL  wrong digest accepted"; fails=$((fails+1)); } || say "  PASS  wrong digest refused"
 rm -rf "$tmpd"
 
-say "4. no literal credential assignments"
+say "5. no literal credential assignments"
 if grep -rnE '^[A-Z_]*(API_KEY|TOKEN|SECRET)=[^$"[:space:]]' "$HERE"/scripts "$HERE"/specs "$HERE"/docs 2>/dev/null | grep -v 'example' | head -3 | grep -q .; then
   say "  FAIL  a literal credential assignment is in the tree"; fails=$((fails+1))
 else
   say "  PASS  none found"
 fi
 
-say "5. the board is valid JSONL"
+say "6. the board is valid JSONL"
 b="$HERE/.coding-hermes/board/tasks.jsonl"
 if [ -f "$b" ]; then
   n=$(wc -l < "$b"); good=0
@@ -41,7 +59,7 @@ else
   say "  FAIL  board missing"; fails=$((fails+1))
 fi
 
-say "6. project board entrypoint is real and fails closed without dependency"
+say "7. project board entrypoint is real and fails closed without dependency"
 bash -n "$HERE/scripts/boardctl" && say "  PASS  bash -n scripts/boardctl" || { say "  FAIL  bash syntax"; fails=$((fails+1)); }
 "$HERE/scripts/boardctl" --help >/dev/null 2>&1 && say "  PASS  local help" || { say "  FAIL  help"; fails=$((fails+1)); }
 missing=$(env -i PATH=/usr/bin:/bin HOME="$HOME" /bin/bash "$HERE/scripts/boardctl" list 2>&1); rc=$?
