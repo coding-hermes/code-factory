@@ -1,0 +1,109 @@
+{
+  "task_id": "CF-013",
+  "task_title": "Make README works evidence rerunnable",
+  "task_criteria": [
+    "1. Each works row in README status table has a pointer to a rerunnable command or stored artifact. 2. Following each pointer reproduces or re-derives the claimed figure, or the row states when and where it was measured. 3. bash tests/selftest.sh exits 0 and prints SELFTEST: PASS."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory-review-2026-10-30-2035",
+  "branch": "main",
+  "commit": "f7fe6fe278cd74ad17881f36917f7593da5b88fc",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: harness state excluded from gitleaks scope (.gitreins/**)\nsecrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n7:38AM INF scanned ~132240 bytes (132.24 KB) in 79.5ms\n7:38AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 57 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains FAIL rows\n3. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.HZI5vqYibb/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n4. no literal credential assignments\n  PASS  none found\n5. the board is valid JSONL\n  PASS  24/24 rows parse\n6. project board entrypoint is real and fails closed without dependency\n  PASS  bash -n scripts/boardctl\n  PASS  local help\n  PASS  missing boardctl -> explicit FAIL, exit 127\n7. every prompt file the README relies on exists\n  PASS  every prompts/*.md named by README.md exists\n  PASS  absent prompt refused (absent: prompts/ghost-lane.md)\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 1. Each works row in README status table has a pointer to a rerunnable command or stored artifact. 2. Following each pointer reproduces or re-derives the claimed figure, or the row states when and where it was measured. 3. bash tests/selftest.sh exits 0 and prints SELFTEST: PASS.: PASS: README.md:73-79 status table. Row1 (Hermes) -> `scripts/harness/install-hermes.sh --check` (ran: exit 1, prints PASS binary/version, FAIL port, PASS inference_key) + committed artifacts specs/HARNESS.md:16-24 and docs/audits/code-factory-readme-2026-10-30-20-29-25.md#2. Row2 (repo clone) -> rerunnable command with mktemp HOME + gitignore fixture + rev-parse readback (ran: PASS repo_clone @ 6bb5af7, readback 6bb5af7a1b05...). Rows 3-6 (missing/disarmed/not yet) each name a command or explicitly state no command exists.\nPartial verdict \u2014 all verified criteria passed",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 1. Each works row in README status table has a pointer to a rerunnable command or stored artifact. 2. Following each pointer reproduces or re-derives the claimed figure, or the row states when and where it was measured. 3. bash tests/selftest.sh exits 0 and prints SELFTEST: PASS.: PASS: README.md:73-79 status table. Row1 (Hermes) -> `scripts/harness/install-hermes.sh --check` (ran: exit 1, prints PASS binary/version, FAIL port, PASS inference_key) + committed artifacts specs/HARNESS.md:16-24 and docs/audits/code-factory-readme-2026-10-30-20-29-25.md#2. Row2 (repo clone) -> rerunnable command with mktemp HOME + gitignore fixture + rev-parse readback (ran: PASS repo_clone @ 6bb5af7, readback 6bb5af7a1b05...). Rows 3-6 (missing/disarmed/not yet) each name a command or explicitly state no command exists.\nPartial verdict \u2014 all verified criteria passed",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "1. Each works row in README status table has a pointer to a rerunnable command or stored artifact. 2. Following each pointer reproduces or re-derives the claimed figure, or the row states when and where it was measured. 3. bash tests/selftest.sh exits 0 and prints SELFTEST: PASS.",
+                "status": "PASS",
+                "detail": "PASS: README.md:73-79 status table. Row1 (Hermes) -> `scripts/harness/install-hermes.sh --check` (ran: exit 1, prints PASS binary/version, FAIL port, PASS inference_key) + committed artifacts specs/HARNESS.md:16-24 and docs/audits/code-factory-readme-2026-10-30-20-29-25.md#2. Row2 (repo clone) -> rerunnable command with mktemp HOME + gitignore fixture + rev-parse readback (ran: PASS repo_clone @ 6bb5af7, readback 6bb5af7a1b05...). Rows 3-6 (missing/disarmed/not yet) each name a command or explicitly state no command exists."
+              }
+            ],
+            "summary": "Partial verdict \u2014 all verified criteria passed",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-013\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 1. Each works row in README status table has a pointer to a rerunnable command or stored artifact. 2. Following each pointer reproduces or re-derives the claimed figure, or the row states when and where it was measured. 3. bash tests/selftest.sh exits 0 and prints SELFTEST: PASS.: PASS: README.md:73-79 status table. Row1 (Hermes) -> `scripts/harness/install-hermes.sh --check` (ran: exit 1, prints PASS binary/version, FAIL port, PASS inference_key) + committed artifacts specs/HARNESS.md:16-24 and docs/audits/code-factory-readme-2026-10-30-20-29-25.md#2. Row2 (repo clone) -> rerunnable command with mktemp HOME + gitignore fixture + rev-parse readback (ran: PASS repo_clone @ 6bb5af7, readback 6bb5af7a1b05...). Rows 3-6 (missing/disarmed/not yet) each name a command or explicitly state no command exists.\nPartial verdict \u2014 all verified criteria passed\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-10-31T12:39:12.533641",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-10-31T12:39:12.548062+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 462,
+        "truncated": false,
+        "source": "git show f7fe6fe278cd"
+      }
+    ],
+    "task_id": "CF-013"
+  }
+}
