@@ -1,47 +1,59 @@
 # code-factory README audit — 2026-10-30 14:54:06
 
-Target: canonical code-factory checkout (resolved by `git rev-parse --show-toplevel`), published `origin/main` at `b433e0d6f714615b361b3a02848cf250c5a79133`. This audit did not edit README.md. The scheduler stand-in was not treated as the repository.
+Publication boundary: `origin/main` resolved to `b433e0d6f714615b361b3a02848cf250c5a79133` via `git ls-remote --symref origin HEAD`. The scheduler stand-in directory is not the product repository; this audit ran from a fresh archive of that published tip with an isolated temporary HOME. No README or source file was edited. The repository does not contain `docs/traceability-doctrine.md`; this audit therefore uses `spec=none:repo-contains-no-docs-traceability-doctrine` for the local contract boundary.
 
 ## Commands tested
 
-The exact README fenced commands were enumerated and executed from a fresh shallow clone with a fresh HOME where safe. The decisive producer output is preserved in the committed companion artifact `docs/audits/code-factory-readme-2026-10-30-14-54-06.probe.txt`; the durable audit preserves the stable command forms and relevant output.
+All commands below were run from the fresh published-tip archive. Placeholder angle-bracket values were not passed literally because the shell would interpret them as redirection; safe representative values were used where required.
 
-- `scripts/bunker-server-install.sh --check` with `BUNKER_SERVER` unset: exit 1; `set BUNKER_SERVER to your bunker server name` before the checker ran.
-- `./scripts/project-node.sh --check --project <project>` literally: shell exit 2; the angle-bracket placeholder is shell syntax, not a literal argument.
-- `BUNKER_SERVER=your-bunker-server CRIER_URL=http://crier.example:8767 scripts/bunker-server-install.sh --check`: exit 1; `RESULT: FAIL (2)` because the placeholder server was not configured or reachable.
-- `BUNKER_SERVER=your-bunker-server CRIER_URL=http://crier.example:8767 scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes`: exit 1; `bunker: server "your-bunker-server" not found in config`; no agent was created.
-- `bash tests/selftest.sh`: exit 0; `SELFTEST: PASS`, with `15/15 rows parse` on the published clone.
-- `gitreins guard` on the clean clone: exit 2; `DEGRADED PASS` with lint and tests skipped because no files were staged. This is not a product-gate pass.
+1. `env -u BUNKER_SERVER -u CRIER_URL bash scripts/bunker-server-install.sh --check`
+   Exit 1. Output: `BUNKER_SERVER: set BUNKER_SERVER to your bunker server name`.
 
-## Surface checks
+2. `env -u BUNKER_SERVER -u CRIER_URL bash scripts/project-node.sh --check --project demo`
+   Exit 1. The command reached the supported parser and ended `NODE: FAIL (3)`, reporting absent Crier identity, absent node repository, and the other missing node prerequisites.
 
-- Current README status and lane text were read from the canonical checkout and compared with `origin/main`.
-- The README-referenced docs `docs/BOARD.md`, `docs/ACCEPTANCE-PLAN.md`, `docs/OPERATIONS.md`, `docs/THREAT-MODEL.md`, and `docs/SCHEDULER-ADMISSION.md` exist in the canonical current tree and published tree.
-- The published harness inventory is three files: `install-claude-code.sh`, `install-hermes.sh`, and `install-opencode.sh`; the README still lists six foreign-agent installers.
-- `docs/traceability-doctrine.md` is absent from the canonical checkout and `origin/main`.
-- The published board rows CF-009, CF-010, CF-011, CF-012, CF-013, and CF-015 already own the measured README findings; this tick files no duplicate row. The local board contains concurrent/unpublished changes and was not staged or rewritten.
-- The scheduler inventory query for `code-factory%` returned 14 enabled lanes in the local scheduler database, including the root and support/QA lanes. The README's lane table is therefore a local deployment claim, not a proof about every published installation.
+3. `bash tests/selftest.sh`
+   Exit 0. Output ended `SELFTEST: PASS` and `PASS 15/15 rows parse`.
 
-## Findings and overpromising wording
+4. `env BUNKER_SERVER=your-bunker-server CRIER_URL=http://crier.example:8767 bash scripts/bunker-server-install.sh --check`
+   Exit 1. Output ended `RESULT: FAIL (2)` because the placeholder bunker server was not configured/reachable. This is an infrastructure-boundary refusal, not evidence that the script syntax is broken.
 
-No new canonical row was filed. Existing published findings remain live or unverified:
+5. `env BUNKER_SERVER=your-bunker-server CRIER_URL=http://crier.example:8767 bash scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes`
+   Exit 1 at the safe provisioning boundary. Output: `bunker: server "your-bunker-server" not found in config`. No agent was retained.
 
-- CF-009: the first Quick start command requires `BUNKER_SERVER` before the README introduces it.
-- CF-010: the layout promises installers for six foreign agents while only three installer files are shipped.
-- CF-011: AGENTS.md cites the dead board id CF-108.
-- CF-012: the repository-local traceability doctrine is absent.
-- CF-013: the Hermes status row retains historical `32 s`, `/api/status 200`, and `133 JSON-RPC methods` without a current repository-rerunnable live artifact.
-- CF-015: the infrastructure section says “Three environment variables” but documents only CRIER_URL and BUNKER_SERVER; the provider credential is file-based.
+6. `env HOME=<isolated-home> NODE_GATEWAY_PORT=10800 bash scripts/harness/install-hermes.sh --check`
+   Exit 1. Output ended `HERMES: FAIL (2)` because port `10800` was empty and no provider key was configured; the local binary and version checks passed.
 
-Additional command observations are not new rows: the literal placeholder `<project>` is not executable without substitution, and the clean-clone GitReins result is degraded because no files were staged. The documented live bunker, Crier dispatch, node gateway round trip, release asset, and anonymous rendered README boundaries were not available and are explicitly unverified.
+7. `bash -n scripts/*.sh scripts/harness/*.sh tests/selftest.sh`
+   Exit 0.
 
-ch:trace row=CF-009 spec=none:repository-contract-absent wave=code-factory-readme-2026-10-30-14-54-06#readme test=scripts/bunker-server-install.sh::check doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-14-54-06.md witness=none:placeholder-infrastructure-and-fresh-clone-only verdict=none:open-finding commit=none:open memory=none:exact-key-not-found
-ch:trace row=CF-010 spec=none:repository-contract-absent wave=code-factory-readme-2026-10-30-14-54-06#readme test=git-ls-tree::harness-installer-inventory doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-14-54-06.md witness=path@origin:scripts/harness verdict=none:open-finding commit=none:open memory=none:exact-key-not-found
-ch:trace row=CF-011 spec=none:repository-contract-absent wave=code-factory-readme-2026-10-30-14-54-06#readme test=jq::board-id-census doc=AGENTS.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-14-54-06.md witness=path@origin:AGENTS.md verdict=none:open-finding commit=none:open memory=none:exact-key-not-found
-ch:trace row=CF-012 spec=none:repository-contract-absent wave=code-factory-readme-2026-10-30-14-54-06#readme test=test::docs/traceability-doctrine.md doc=docs/traceability-doctrine.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-14-54-06.md witness=none:repository-contract-file-absent verdict=none:open-finding commit=none:open memory=none:exact-key-not-found
-ch:trace row=CF-013 spec=none:repository-contract-absent wave=code-factory-readme-2026-10-30-14-54-06#readme test=scripts/harness/install-hermes.sh::check doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-14-54-06.md witness=none:no-live-bunker-or-gateway-available verdict=none:open-finding commit=none:open memory=none:exact-key-not-found
-ch:trace row=CF-015 spec=none:repository-contract-absent wave=code-factory-readme-2026-10-30-14-54-06#readme test=grep::environment-variable-inventory doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-14-54-06.md witness=path@origin:README.md verdict=none:open-finding commit=none:open memory=none:exact-key-not-found
+8. `scripts/boardctl validate`
+   Exit 0. Output: `RESULT: OK (1 warning(s))`; the warning is the pre-existing headerless-board topology. This audit did not repair that unrelated warning.
+
+## README claims and wording that overpromise
+
+No new canonical finding was filed. The current published board already owns every measured finding class:
+
+- CF-009: Quick start invokes `bunker-server-install.sh --check` before introducing the required `BUNKER_SERVER`; the literal clean-environment command exits 1 before the host check.
+- CF-010: The layout says there is one installer per named foreign agent, but the published tree contains only `install-claude-code.sh`, `install-hermes.sh`, and `install-opencode.sh`; codex, aider, goose, and pi-agent installers are absent.
+- CF-011: `AGENTS.md` cites nonexistent board row `CF-108`; the published board has no such id.
+- CF-012: `docs/traceability-doctrine.md` is absent from the published tree.
+- CF-013: The status table calls the Hermes bunker/gateway path **works** and repeats historical `32 s`, `/api/status 200`, and `133 JSON-RPC methods`, but the fresh-HOME adapter check failed and no live bunker/gateway boundary was available for this sweep. The historical figures remain unverified, not disproven.
+- CF-015: The infrastructure section says “Three environment variables” but names only `CRIER_URL` and `BUNKER_SERVER`; the node's inference credential is file-based and no third exported variable appears in the documented block.
+
+The former unsupported `--agent` quick-start invocation is absent from the published tip, so the earlier CF-014 finding was not re-filed.
+
+## Unverified boundaries
+
+No release asset, anonymous rendered public README, live Crier dispatch, node gateway round trip, or external deployment boundary was exercised. Those are evidence limits, not additional failures. No README wording was changed by this lane.
+
+ch:trace row=CF-009 spec=README.md#quick-start wave=code-factory-readme-2026-10-30-14-54-06#readme test=scripts/bunker-server-install.sh::check doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-14-54-06.md witness=none:placeholder-infrastructure-and-fresh-archive-only verdict=none:existing-open-finding commit=b433e0d6f714615b361b3a02848cf250c5a79133 memory=none:namespace-read-failed
+ch:trace row=CF-010 spec=README.md#layout wave=code-factory-readme-2026-10-30-14-54-06#readme test=git-ls-tree::harness-installer-inventory doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-14-54-06.md witness=path@origin:scripts/harness verdict=none:existing-open-finding commit=b433e0d6f714615b361b3a02848cf250c5a79133 memory=none:namespace-read-failed
+ch:trace row=CF-011 spec=AGENTS.md#rules wave=code-factory-readme-2026-10-30-14-54-06#readme test=jq::board-id-census doc=AGENTS.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-14-54-06.md witness=path@origin:AGENTS.md verdict=none:existing-open-finding commit=b433e0d6f714615b361b3a02848cf250c5a79133 memory=none:namespace-read-failed
+ch:trace row=CF-012 spec=none:repo-contains-no-docs-traceability-doctrine wave=code-factory-readme-2026-10-30-14-54-06#readme test=test::docs-traceability-doctrine-absent doc=docs/traceability-doctrine.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-14-54-06.md witness=none:published-tip-path-absent verdict=none:existing-open-finding commit=b433e0d6f714615b361b3a02848cf250c5a79133 memory=none:namespace-read-failed
+ch:trace row=CF-013 spec=README.md#status wave=code-factory-readme-2026-10-30-14-54-06#readme test=scripts/harness/install-hermes.sh::check doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-14-54-06.md witness=none:no-live-bunker-or-gateway-available verdict=none:existing-open-finding commit=b433e0d6f714615b361b3a02848cf250c5a79133 memory=none:namespace-read-failed
+ch:trace row=CF-015 spec=README.md#running-it-against-your-own-infrastructure wave=code-factory-readme-2026-10-30-14-54-06#readme test=grep::environment-variable-inventory doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-14-54-06.md witness=path@origin:README.md verdict=none:existing-open-finding commit=b433e0d6f714615b361b3a02848cf250c5a79133 memory=none:namespace-read-failed
 
 STATUS: PARTIAL
-TIER: T4 -- executed the documented README commands in a fresh clone and read back the clone files and exact probe transcript; live bunker, Crier, gateway, release, and anonymous-render boundaries were unavailable
-EVIDENCE: docs/audits/code-factory-readme-2026-10-30-14-54-06.md; docs/audits/code-factory-readme-2026-10-30-14-54-06.probe.txt
+TIER: T4 -- executed every safe README command from a fresh published-tip archive, read outputs back, and validated the published board; live bunker/Crier/gateway/release-render boundaries were unavailable
+EVIDENCE: docs/audits/code-factory-readme-2026-10-30-14-54-06.md

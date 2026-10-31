@@ -6,7 +6,7 @@ Source commit window: `git log --since='7 days ago' --all --oneline` at local HE
 
 README.md:98 previously said: "Six lanes run this repo." The lane-family implementation added docs, README, release, performance, and review lanes plus their QA lanes in `bf7464c` (`scripts/add_family_lanes.py:36-46`). The live scheduler project inventory contains 14 matching projects, not six:
 
-`sqlite3 "$HOME/.hermes/coding-hermes/scheduler.db" "select count(*) from projects where name='code-factory' or name like 'code-factory-%';"` → `14`
+`sqlite3 ~/.hermes/coding-hermes/scheduler.db "select count(*) from projects where name='code-factory' or name like 'code-factory-%';"` → `14`
 
 The matching names are:
 
@@ -27,8 +27,8 @@ Source/runtime checks run:
 
 The selftest proves the repository's current shell and board checks; it does not prove a live remote dispatch, node provisioning, or crier round trip. Those claims remain not measured by this correction.
 
-ch:trace row=CF-005 spec=docs/PRD-code-factory.md#requirements wave=code-factory-docs-2026-10-29-20-26-27#docs test=tests/selftest.sh::selftest doc=README.md prompt=prompts/docs.md evidence=docs/audits/code-factory-docs-2026-10-29-20-26-27.md witness=none:source-and-local-scheduler-db-only verdict=none:open-finding commit=none:open memory=none:unresolved-namespace
+ch:trace row=CF-005 spec=docs/PRD-code-factory.md#requirements wave=code-factory-docs-2026-10-29-20-26-27#docs test=tests/selftest.sh::selftest doc=README.md prompt=prompts/docs.md evidence=docs/audits/code-factory-docs-2026-10-29-20-26-27.md witness=none:source-and-local-scheduler-db-only verdict=none:open-finding commit=7ee8d7bf6e703870bcd59fab78e9e86fd33d0e1a memory=none:unresolved-namespace
 
 STATUS: PASS
 TIER: T4 -- queried the real local scheduler SQLite project inventory and ran the repository selftest
-EVIDENCE: sqlite3 "$HOME/.hermes/coding-hermes/scheduler.db" inventory query; bash tests/selftest.sh
+EVIDENCE: sqlite3 /home/kara/.hermes/coding-hermes/scheduler.db inventory query; bash tests/selftest.sh

@@ -1,0 +1,25 @@
+{
+  "tick": "code-factory-2026-10-30-11-51-49",
+  "project": "code-factory",
+  "mode": "serial",
+  "wave_budget": 12,
+  "selection_limit": 1,
+  "reason": "Project lane requires exactly one row per tick. CF-019 is the earliest fully repository-local P1 row; higher-priority live rows require authorization or unfinished prerequisites.",
+  "base_branch": "feat/code-factory-bankai-20261030",
+  "base_commit": "24d1980",
+  "status": "prepared",
+  "workers": [
+    {
+      "task_id": "CF-019",
+      "depends_on": ["CF-016"],
+      "dependency_status": {"CF-016": "complete"},
+      "worktree": "../worktrees/code-factory-CF-019-1151",
+      "branch": "wt/CF-019-1151",
+      "model": "gpt-6.1-sol",
+      "provider": "openai-codex",
+      "brief": "none:transient-task-scoped-file",
+      "status": "prepared"
+    }
+  ],
+  "safety": "No live provisioning, credentials, storage mounts, node cleanup or service changes. Existing unrelated QA event and audit scratch remain owned by sibling sessions."
+}

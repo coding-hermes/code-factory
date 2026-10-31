@@ -1,0 +1,25 @@
+# code-factory README audit — ch:trace marker ledger (2026-10-30 20:29)
+
+This file is the marker surface, kept separate from the frozen transcript
+`docs/audits/code-factory-readme-2026-10-30-20-29-25.md` so that binding a commit never rewrites
+the evidence a board row cites. Board rows CF-009/010/014/015/030/033/035 were closed against that
+frozen artifact; CF-032, CF-034 and CF-031 stay open with `verdict=none:open-finding`.
+
+Closed rows bind `commit=3604569a654f2e8d11426e86bfdd8546e0c90a39` (the README + selftest + evidence
+change). `verdict=none:author-closed-pending-readme-qa` states the honesty position: this lane
+closed its own rows on re-runnable commands, and `code-factory-readme-qa` is the independent check
+that can re-open them.
+
+The sweep itself is recorded as board event id 31 (`.coding-hermes/board/events.jsonl`, type
+`audit`, actor `readme-lane`) with the same ten markers in its detail.
+
+ch:trace row=CF-009 spec=README.md#quick-start wave=code-factory-readme-2026-10-30-20-29-25#readme test=scripts/bunker-server-install.sh::check doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-20-29-25.md witness=path@origin:README.md verdict=none:author-closed-pending-readme-qa commit=3604569a654f2e8d11426e86bfdd8546e0c90a39 memory=/project/code-factory/readme-audit-2026-10-30-20-29-25
+ch:trace row=CF-010 spec=README.md#layout wave=code-factory-readme-2026-10-30-20-29-25#readme test=git-ls-tree::scripts-harness doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-20-29-25.md witness=path@origin:scripts/harness verdict=none:author-closed-pending-readme-qa commit=3604569a654f2e8d11426e86bfdd8546e0c90a39 memory=/project/code-factory/readme-audit-2026-10-30-20-29-25
+ch:trace row=CF-014 spec=README.md#quick-start wave=code-factory-readme-2026-10-30-20-29-25#readme test=scripts/project-node.sh::check-project-myproject doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-20-29-25.md witness=path@origin:README.md verdict=none:author-closed-pending-readme-qa commit=3604569a654f2e8d11426e86bfdd8546e0c90a39 memory=/project/code-factory/readme-audit-2026-10-30-20-29-25
+ch:trace row=CF-015 spec=README.md#running-it-against-your-own-infrastructure wave=code-factory-readme-2026-10-30-20-29-25#readme test=grep::required-env-reads doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-20-29-25.md witness=path@origin:README.md verdict=none:author-closed-pending-readme-qa commit=3604569a654f2e8d11426e86bfdd8546e0c90a39 memory=/project/code-factory/readme-audit-2026-10-30-20-29-25
+ch:trace row=CF-030 spec=README.md#the-lanes wave=code-factory-readme-2026-10-30-20-29-25#readme test=tests/selftest.sh::check-7-prompt-census doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-20-29-25.md witness=live:scheduler.db/projects?name=like-code-factory% verdict=none:author-closed-pending-readme-qa commit=3604569a654f2e8d11426e86bfdd8546e0c90a39 memory=/project/code-factory/readme-audit-2026-10-30-20-29-25
+ch:trace row=CF-032 spec=specs/NODE.md#layers wave=code-factory-readme-2026-10-30-20-29-25#readme test=scripts/project-node.sh::apply-build-cache doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-20-29-25.md witness=none:no-build-layer-exists verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-20-29-25
+ch:trace row=CF-033 spec=README.md#status wave=code-factory-readme-2026-10-30-20-29-25#readme test=grep::literal-ellipsis-command doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-20-29-25.md witness=path@origin:README.md verdict=none:author-closed-pending-readme-qa commit=3604569a654f2e8d11426e86bfdd8546e0c90a39 memory=/project/code-factory/readme-audit-2026-10-30-20-29-25
+ch:trace row=CF-034 spec=README.md#status wave=code-factory-readme-2026-10-30-20-29-25#readme test=scripts/project-node.sh::missing-ref-message doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-20-29-25.md witness=none:message-not-yet-fixed verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-20-29-25
+ch:trace row=CF-035 spec=README.md#layout wave=code-factory-readme-2026-10-30-20-29-25#readme test=git-ls-tree::scripts-inventory doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-20-29-25.md witness=path@origin:README.md verdict=none:author-closed-pending-readme-qa commit=3604569a654f2e8d11426e86bfdd8546e0c90a39 memory=/project/code-factory/readme-audit-2026-10-30-20-29-25
+ch:trace row=CF-031 spec=.gitreins/config.yaml#guards wave=code-factory-readme-2026-10-30-20-29-25#readme test=gitreins-guard::lint-scope doc=tests/selftest.sh prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-20-29-25.md witness=none:guard-refuses-own-docs-commits verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-20-29-25

@@ -38,7 +38,7 @@ constraint, tokens are not, so work is moved to nodes rather than queued on this
    is wrong: use a user-space artifact under `$HOME`.
 7. **Downloads are pinned and digest-checked before use** (`fetch_verified`). Never `curl | sh`.
 8. **Credentials never travel as arguments** and never appear in a log, a board row, a spec or a
-   test. A node gets one bundle file, mode 600, deleted after provisioning (`CF-108`).
+   test. A node gets one bundle file, mode 600, deleted after provisioning (`CF-002`).
 9. **Bus before workspace.** A node that can receive a command but has no repo is diagnosable; a
    node with a repo and no bus is invisible.
 10. **Do not grade your own homework.** The node reports what it did; the control host decides

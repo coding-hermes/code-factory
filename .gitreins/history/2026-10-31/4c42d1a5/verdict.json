@@ -1,0 +1,119 @@
+{
+  "task_id": "CF-011",
+  "task_title": "Repair AGENTS credential rule trace",
+  "task_criteria": [
+    "1. Every row id cited in AGENTS.md resolves to a row in .coding-hermes/board/tasks.jsonl. 2. The corrected citation points at the row carrying credential acceptance criteria. 3. bash tests/selftest.sh exits 0 and prints SELFTEST: PASS."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory-review-2026-10-30-2035",
+  "branch": "main",
+  "commit": "f7fe6fe278cd74ad17881f36917f7593da5b88fc",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: harness state excluded from gitleaks scope (.gitreins/**)\nsecrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n7:38AM INF scanned ~132240 bytes (132.24 KB) in 91.9ms\n7:38AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 57 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains FAIL rows\n3. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.JGhaBfykvN/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n4. no literal credential assignments\n  PASS  none found\n5. the board is valid JSONL\n  PASS  24/24 rows parse\n6. project board entrypoint is real and fails closed without dependency\n  PASS  bash -n scripts/boardctl\n  PASS  local help\n  PASS  missing boardctl -> explicit FAIL, exit 127\n7. every prompt file the README relies on exists\n  PASS  every prompts/*.md named by README.md exists\n  PASS  absent prompt refused (absent: prompts/ghost-lane.md)\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 1. Every row id cited in AGENTS.md resolves to a row in .coding-hermes/board/tasks.jsonl.: AGENTS.md:41 cites `CF-002`, the only concrete row id in the file. A Python census over AGENTS.md vs tasks.jsonl returned cited=['CF-00','CF-002'] with CF-002 -> RESOLVES; the 'CF-00' hit is the template placeholder `CF-00N` at AGENTS.md:56 and :79, not a row id. Board contains 24 rows (CF-001..CF-015, CF-030..CF-038). `grep -rn CF-108` finds no occurrence in AGENTS.md (only historical docs/audits/*.md and docs/ACCEPTANCE-PLAN.md).\n  \u2713 2. The corrected citation points at the row carrying credential acceptance criteria.: `git show 2630c3e -- AGENTS.md` shows the credential rule line changed from `CF-108` to `CF-002`. tasks.jsonl row CF-002 is \"Node inference credential: restricted inference key, fail-closed on revoke\" with acceptance_criteria: restricted key limited to needed models, ~/.hermes/.env mode 600 never in argv or a log, revoke fails closed, no operator credential copied to any agent \u2014 exactly the subject of AGENTS.md rule 8 (\"one bundle file, mode 600, deleted after provisioning\").\n  \u2713 3. bash tests/selftest.sh exits 0 and prints SELFTEST: PASS.: Ran `bash tests/selftest.sh` in /home/kara/code-factory-review-2026-10-30-2035: exit_code 0, final line `SELFTEST: PASS`. All 7 sections PASS, including `5. the board is valid JSONL  PASS  24/24 rows parse` and `4. no literal credential assignments  PASS  none found`.\nAGENTS.md's dead CF-108 credential citation was corrected to CF-002 (the board row that owns credential acceptance criteria), all cited row ids resolve, and tests/selftest.sh exits 0 printing SELFTEST: PASS.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 1. Every row id cited in AGENTS.md resolves to a row in .coding-hermes/board/tasks.jsonl.: AGENTS.md:41 cites `CF-002`, the only concrete row id in the file. A Python census over AGENTS.md vs tasks.jsonl returned cited=['CF-00','CF-002'] with CF-002 -> RESOLVES; the 'CF-00' hit is the template placeholder `CF-00N` at AGENTS.md:56 and :79, not a row id. Board contains 24 rows (CF-001..CF-015, CF-030..CF-038). `grep -rn CF-108` finds no occurrence in AGENTS.md (only historical docs/audits/*.md and docs/ACCEPTANCE-PLAN.md).\n  \u2713 2. The corrected citation points at the row carrying credential acceptance criteria.: `git show 2630c3e -- AGENTS.md` shows the credential rule line changed from `CF-108` to `CF-002`. tasks.jsonl row CF-002 is \"Node inference credential: restricted inference key, fail-closed on revoke\" with acceptance_criteria: restricted key limited to needed models, ~/.hermes/.env mode 600 never in argv or a log, revoke fails closed, no operator credential copied to any agent \u2014 exactly the subject of AGENTS.md rule 8 (\"one bundle file, mode 600, deleted after provisioning\").\n  \u2713 3. bash tests/selftest.sh exits 0 and prints SELFTEST: PASS.: Ran `bash tests/selftest.sh` in /home/kara/code-factory-review-2026-10-30-2035: exit_code 0, final line `SELFTEST: PASS`. All 7 sections PASS, including `5. the board is valid JSONL  PASS  24/24 rows parse` and `4. no literal credential assignments  PASS  none found`.\nAGENTS.md's dead CF-108 credential citation was corrected to CF-002 (the board row that owns credential acceptance criteria), all cited row ids resolve, and tests/selftest.sh exits 0 printing SELFTEST: PASS.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "1. Every row id cited in AGENTS.md resolves to a row in .coding-hermes/board/tasks.jsonl.",
+                "status": "PASS",
+                "detail": "AGENTS.md:41 cites `CF-002`, the only concrete row id in the file. A Python census over AGENTS.md vs tasks.jsonl returned cited=['CF-00','CF-002'] with CF-002 -> RESOLVES; the 'CF-00' hit is the template placeholder `CF-00N` at AGENTS.md:56 and :79, not a row id. Board contains 24 rows (CF-001..CF-015, CF-030..CF-038). `grep -rn CF-108` finds no occurrence in AGENTS.md (only historical docs/audits/*.md and docs/ACCEPTANCE-PLAN.md)."
+              },
+              {
+                "criterion": "2. The corrected citation points at the row carrying credential acceptance criteria.",
+                "status": "PASS",
+                "detail": "`git show 2630c3e -- AGENTS.md` shows the credential rule line changed from `CF-108` to `CF-002`. tasks.jsonl row CF-002 is \"Node inference credential: restricted inference key, fail-closed on revoke\" with acceptance_criteria: restricted key limited to needed models, ~/.hermes/.env mode 600 never in argv or a log, revoke fails closed, no operator credential copied to any agent \u2014 exactly the subject of AGENTS.md rule 8 (\"one bundle file, mode 600, deleted after provisioning\")."
+              },
+              {
+                "criterion": "3. bash tests/selftest.sh exits 0 and prints SELFTEST: PASS.",
+                "status": "PASS",
+                "detail": "Ran `bash tests/selftest.sh` in /home/kara/code-factory-review-2026-10-30-2035: exit_code 0, final line `SELFTEST: PASS`. All 7 sections PASS, including `5. the board is valid JSONL  PASS  24/24 rows parse` and `4. no literal credential assignments  PASS  none found`."
+              }
+            ],
+            "summary": "AGENTS.md's dead CF-108 credential citation was corrected to CF-002 (the board row that owns credential acceptance criteria), all cited row ids resolve, and tests/selftest.sh exits 0 printing SELFTEST: PASS.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-011\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 1. Every row id cited in AGENTS.md resolves to a row in .coding-hermes/board/tasks.jsonl.: AGENTS.md:41 cites `CF-002`, the only concrete row id in the file. A Python census over AGENTS.md vs tasks.jsonl returned cited=['CF-00','CF-002'] with CF-002 -> RESOLVES; the 'CF-00' hit is the template placeholder `CF-00N` at AGENTS.md:56 and :79, not a row id. Board contains 24 rows (CF-001..CF-015, CF-030..CF-038). `grep -rn CF-108` finds no occurrence in AGENTS.md (only historical docs/audits/*.md and docs/ACCEPTANCE-PLAN.md).\n  \u2713 2. The corrected citation points at the row carrying credential acceptance criteria.: `git show 2630c3e -- AGENTS.md` shows the credential rule line changed from `CF-108` to `CF-002`. tasks.jsonl row CF-002 is \"Node inference credential: restricted inference key, fail-closed on revoke\" with acceptance_criteria: restricted key limited to needed models, ~/.hermes/.env mode 600 never in argv or a log, revoke fails closed, no operator credential copied to any agent \u2014 exactly the subject of AGENTS.md rule 8 (\"one bundle file, mode 600, deleted after provisioning\").\n  \u2713 3. bash tests/selftest.sh exits 0 and prints SELFTEST: PASS.: Ran `bash tests/selftest.sh` in /home/kara/code-factory-review-2026-10-30-2035: exit_code 0, final line `SELFTEST: PASS`. All 7 sections PASS, including `5. the board is valid JSONL  PASS  24/24 rows parse` and `4. no literal credential assignments  PASS  none found`.\nAGENTS.md's dead CF-108 credential citation was corrected to CF-002 (the board row that owns credential acceptance criteria), all cited row ids resolve, and tests/selftest.sh exits 0 printing SELFTEST: PASS.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-10-31T12:38:58.179609",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-10-31T12:38:58.194295+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 462,
+        "truncated": false,
+        "source": "git show f7fe6fe278cd"
+      }
+    ],
+    "task_id": "CF-011"
+  }
+}

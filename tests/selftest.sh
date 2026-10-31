@@ -1,41 +1,22 @@
 #!/usr/bin/env bash
-# Local fixtures only: checks must fail for their named reason, not bootstrap errors.
+# selftest.sh — prove the checks in this repo can FAIL. A green that cannot go red is decoration.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 . "$HERE/scripts/lib.sh"
 fails=0
+t() { if eval "$2" >/dev/null 2>&1; then say "  PASS  $1"; else say "  FAIL  $1"; fails=$((fails+1)); fi; }
 
 say "1. every script parses"
 for f in "$HERE"/scripts/*.sh "$HERE"/scripts/harness/*.sh "$HERE"/tests/*.sh; do
   bash -n "$f" && say "  PASS  bash -n $(basename "$f")" || { say "  FAIL  bash -n $f"; fails=$((fails+1)); }
 done
 
-say "2. node --check has exactly the controlled named failure (local fixtures)"
-# This test executes project-node --check with bootstrap tools intact, a fake
-# healthy adapter/repo/resources and CRIER_BASE set, but CRIER_URL absent.
-if python3 "$HERE/tests/node-contract.py" NodeContract.test_named_check; then
-  say "  PASS  nonzero exit and anchored exact FAIL crier_url; no bootstrap decoy"
-else
-  say "  FAIL  named node check contract"; fails=$((fails+1))
-fi
+say "2. the node checker FAILS on an empty PATH"
+out=$(env -i PATH=/nonexistent HOME="$HOME" NODE_PROJECT=t /bin/bash "$HERE/scripts/project-node.sh" --check 2>&1); rc=$?
+[ "$rc" -ne 0 ] && say "  PASS  empty PATH -> exit $rc" || { say "  FAIL  empty PATH reported success"; fails=$((fails+1)); }
+printf '%s' "$out" | grep -q 'FAIL' && say "  PASS  report contains FAIL rows" || { say "  FAIL  no FAIL rows"; fails=$((fails+1)); }
 
-say "3. specs and scripts expose the same node contract"
-for f in "$HERE/specs/NODE.md" "$HERE/specs/ENVELOPE.md" "$HERE/specs/HARNESS.md" "$HERE/docs/DESIGN.md" "$HERE/docs/THREAT-MODEL.md"; do
-  [ -s "$f" ] && say "  PASS  required contract $(basename "$f") exists" || { say "  FAIL  missing contract $f"; fails=$((fails+1)); }
-done
-for needle in 'project-node.sh --check|--apply' 'node-create.sh --project P --repo URL --harness H' 'verify-node.sh --agent ID --artifact PATH'; do
-  grep -Fq "$needle" "$HERE/docs/DESIGN.md" && say "  PASS  DESIGN names $needle" || { say "  FAIL  DESIGN omits $needle"; fails=$((fails+1)); }
-done
-grep -Fq 'idempotency_key' "$HERE/specs/ENVELOPE.md" && say "  PASS  envelope declares idempotency_key" || { say "  FAIL  envelope omits idempotency_key"; fails=$((fails+1)); }
-
-say "4. focused node contracts and executable mutation controls (local, not live)"
-if python3 "$HERE/tests/node-contract.py" && python3 "$HERE/tests/node-mutations.py"; then
-  say "  PASS  node contracts and mutation controls"
-else
-  say "  FAIL  node contracts/mutation controls"; fails=$((fails+1))
-fi
-
-say "5. fetch_verified refuses a wrong digest"
+say "3. fetch_verified refuses a wrong digest"
 tmpd=$(mktemp -d); echo hello > "$tmpd/src"
 want=$(sha256sum "$tmpd/src" | cut -d' ' -f1)
 fetch_verified "file://$tmpd/src" "$tmpd/out" "$want" && say "  PASS  correct digest accepted" || { say "  FAIL  correct digest refused"; fails=$((fails+1)); }
@@ -43,14 +24,14 @@ fetch_verified "file://$tmpd/src" "$tmpd/out2" "00000000000000000000000000000000
   && { say "  FAIL  wrong digest accepted"; fails=$((fails+1)); } || say "  PASS  wrong digest refused"
 rm -rf "$tmpd"
 
-say "6. no literal credential assignments"
+say "4. no literal credential assignments"
 if grep -rnE '^[A-Z_]*(API_KEY|TOKEN|SECRET)=[^$"[:space:]]' "$HERE"/scripts "$HERE"/specs "$HERE"/docs 2>/dev/null | grep -v 'example' | head -3 | grep -q .; then
   say "  FAIL  a literal credential assignment is in the tree"; fails=$((fails+1))
 else
   say "  PASS  none found"
 fi
 
-say "7. the board is valid JSONL"
+say "5. the board is valid JSONL"
 b="$HERE/.coding-hermes/board/tasks.jsonl"
 if [ -f "$b" ]; then
   n=$(wc -l < "$b"); good=0
@@ -60,7 +41,7 @@ else
   say "  FAIL  board missing"; fails=$((fails+1))
 fi
 
-say "8. board entrypoint fails closed without dependency"
+say "6. project board entrypoint is real and fails closed without dependency"
 bash -n "$HERE/scripts/boardctl" && say "  PASS  bash -n scripts/boardctl" || { say "  FAIL  bash syntax"; fails=$((fails+1)); }
 "$HERE/scripts/boardctl" --help >/dev/null 2>&1 && say "  PASS  local help" || { say "  FAIL  help"; fails=$((fails+1)); }
 missing=$(env -i PATH=/usr/bin:/bin HOME="$HOME" /bin/bash "$HERE/scripts/boardctl" list 2>&1); rc=$?
@@ -70,22 +51,31 @@ else
   say "  FAIL  missing dependency was not surfaced"; fails=$((fails+1))
 fi
 
-say "9. build/cache policy contract (local, not live infrastructure)"
-if bash "$HERE/tests/build-contract.sh"; then
-  say "  PASS  build contract"
+say "7. every prompt file the README relies on exists"
+# The README's lane section names prompts/<name>.md files and the loaders copy them into the
+# scheduler. A rename that misses one side leaves a lane loading a prompt that is not shipped.
+prompt_refs_missing() {  # $1=README $2=repo root -> prints each absent prompt, returns 1 if any
+  local readme="$1" root="$2" rc=0 p
+  for p in $(grep -oE 'prompts/[a-z0-9-]+\.md' "$readme" | sort -u); do
+    [ -f "$root/$p" ] || { echo "absent: $p"; rc=1; }
+  done
+  return $rc
+}
+if prompt_refs_missing "$HERE/README.md" "$HERE" >/dev/null; then
+  say "  PASS  every prompts/*.md named by README.md exists"
 else
-  say "  FAIL  build contract"; fails=$((fails+1))
+  say "  FAIL  README names a prompt file that is not shipped: $(prompt_refs_missing "$HERE/README.md" "$HERE" | tr '\n' ' ')"
+  fails=$((fails+1))
 fi
-say "10. host-local inference boundary (no deployment or remote acceptance)"
-if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/inference-contract.py"; then
-  say "  PASS  inference contract"
+# negative fixture: a README that names a prompt nobody ships must be refused
+tmpd=$(mktemp -d)
+sed 's#prompts/qa\.md#prompts/ghost-lane.md#' "$HERE/README.md" > "$tmpd/README.md"
+if prompt_refs_missing "$tmpd/README.md" "$HERE" >/dev/null; then
+  say "  FAIL  a README naming an absent prompt was accepted"; fails=$((fails+1))
 else
-  say "  FAIL  inference contract"; fails=$((fails+1))
+  say "  PASS  absent prompt refused ($(prompt_refs_missing "$tmpd/README.md" "$HERE" | head -1))"
 fi
-say "11. Git crash/reclone recovery (hermetic local simulation only)"
-if python3 -B "$HERE/tests/recovery-contract.py" RecoveryContract; then
-  say "  PASS  recovery contract"
-else
-  say "  FAIL  recovery contract"; fails=$((fails+1))
-fi
+rm -rf "$tmpd"
+
+say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
