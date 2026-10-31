@@ -1,86 +1,48 @@
 # CF-039 verification audit
 
-Task: add a falsifiable QA regression for the evidence-pointer gap found in completed row
-CF-038 — the README's first-named evidence artifact (`docs/audits/code-factory-readme-2026-10-30-20-29-25.md`)
-did not contain the tokens the current README's claims rest on, so the first-named evidence
-could not independently support the README.
+Row: CF-039 — prove the resolved-ref clone-failure branch is distinct from missing-ref and repository-access failures.
 
-Baseline before this change: `8a6b7e3` (origin/main). Implemented and verified in worktree
-branch `wt/CF-039-20261031-154958`; the shared checkout was mid-rebase and its README predates
-the evidence line, so it could not host this change. This file is committed with the fix and is
-the fixed-tip evidence artifact.
+## Baseline and red control
 
-## The gap, measured on the pre-fix tree
-
-Case-sensitive `grep -c` of each required token in the two artifacts the README cited:
-
-| token | 20-29-25.md | 23-28-00.md |
-|---|---|---|
-| repo_clone | 4 | 3 |
-| 9402f6a | 2 | 1 |
-| Prompt | 0 | 1 |
-| eleven | 0 | 2 |
-
-The first-named artifact carried zero `Prompt` and zero `eleven` counts — CF-038's finding.
-
-## Red arm — pre-fix tree (test added, README unchanged)
-
-Command:
+The pre-CF-034 baseline is commit `792e687cd68db4f60f795752894ce0cd66db5069`. A scratch archive of that tree received the CF-039 selftest fixture without any other source changes. Command:
 
     bash tests/selftest.sh
 
-Section 11 output (exact):
+Observed on the baseline-plus-fixture tree:
 
-    11. the README's first evidence artifact carries the claims it is cited for
-      FAIL  first README evidence artifact cannot support the README: docs/audits/code-factory-readme-2026-10-30-20-29-25.md lacks: Prompt eleven
-      PASS  token-stripped artifact refused (docs/audits/code-factory-readme-2026-10-30-20-29-25.md lacks: repo_clone 9402f6a Prompt eleven)
+    4. clone errors distinguish missing refs from repository access
+      FAIL  resolved main ref was not distinguished from clone failure
+    SELFTEST: FAIL (4)
 
-    SELFTEST: FAIL (1)
+The fixture uses a fake `git` executable. Its `ls-remote --exit-code` returns `refs/heads/main`, while its `clone` command fails with `fatal: simulated clone failure for fixture`. This is network-free and proves the ref-resolution branch is exercised.
 
-Exit code: 1. Sections 1–10 (the existing negative controls) all PASS on this run; only the new
-section fails, and it names the deficient artifact and the missing tokens.
+## Fixed control
 
-## The fix
-
-The README evidence line is reordered so the first-named artifact is the one that carries every
-claim token (`…23-28-00.md`, the latest command-by-command re-run). Both citations are kept; no
-artifact content was altered.
-
-## Green arm — fixed tree
+Fixed commit: `fa48e14349ae468fe1cfc6cf2d0943fcac1922f3`.
 
 Commands:
 
-    bash -n tests/selftest.sh        # exit 0, no output
+    bash -n tests/selftest.sh scripts/project-node.sh
     bash tests/selftest.sh
 
-Section 11 output (exact):
+Observed:
 
-    11. the README's first evidence artifact carries the claims it is cited for
-      PASS  docs/audits/code-factory-readme-2026-10-30-23-28-00.md exists and carries every claim token
-      PASS  token-stripped artifact refused (docs/audits/code-factory-readme-2026-10-30-23-28-00.md lacks: repo_clone 9402f6a Prompt eleven)
-
+    4. clone errors distinguish missing refs from repository access
+      PASS  resolved main ref is distinguished from clone and private-repo failures
     SELFTEST: PASS
 
-Exit code: 0. 26 PASS rows, 0 FAIL rows. The negative fixture proves the check can fail: a copy
-of the cited artifact with the claim tokens stripped is refused.
+The fixture asserts all of the following:
 
-## Fresh-archive determinism
+- `ls-remote` was called for `refs/heads/main` and returned success.
+- `clone --depth 1 --branch main` was called and failed.
+- Output contains `clone failed after ref 'main' resolved`.
+- Output does not claim `ref 'main' was not found`.
+- Output does not claim `private repos need a deploy key`.
 
-The staged tree was exported with `git write-tree` → `git archive b82feead6fec314890683b6af60f02c5e1c73608`
-and extracted to a scratch directory; the selftest there uses only repository files (no network,
-no private endpoints, no absolute home paths — `grep -rn '/home/kara' tests/selftest.sh` is empty
-for the new section).
+## Scope and traceability
 
-- Archive of the fixed tree: `SELFTEST: PASS`, exit 0.
-- Same archive with the README evidence line restored to the pre-fix order: section 11
-  `FAIL  first README evidence artifact cannot support the README: docs/audits/code-factory-readme-2026-10-30-20-29-25.md lacks: Prompt eleven`,
-  `SELFTEST: FAIL (1)`, exit 1.
+The production classification already exists in `scripts/project-node.sh`: after clone fails, a successful `ls-remote` produces the resolved-ref message; exit code 2 identifies a missing ref; other failures retain the deploy-key hint. CF-039 adds the previously missing regression fixture in `tests/selftest.sh`.
 
-## Scope
+ch:trace row=CF-039 spec=scripts/project-node.sh#clone-error-classification wave=none:serial test=tests/selftest.sh::clone-error-classification doc=docs/audits/code-factory-CF-039.md prompt=prompts/qa.md evidence=docs/audits/code-factory-CF-039.md witness=none:local-fixture verdict=7daf0f06 commit=fa48e14349ae468fe1cfc6cf2d0943fcac1922f3 memory=none:unresolved-namespace
 
-- `tests/selftest.sh`: new section 11 (helper `evidence_first`, checker `evidence_deficiency`,
-  positive assertion, token-stripped negative fixture). Existing sections and the final
-  `SELFTEST: PASS`/`FAIL` output are unchanged.
-- `README.md`: evidence line reordered only (first-named artifact now `…23-28-00.md`).
-- `docs/audits/code-factory-CF-039.md`: this artifact.
-- Board files untouched; nothing pushed.
+No network, credentials, private endpoints, or live infrastructure are required.
