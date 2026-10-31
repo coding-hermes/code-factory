@@ -293,6 +293,34 @@ else
   check "invalid lifecycle flag is rejected" yes yes
 fi
 
+echo "=== act failure evidence (AUG-116)"
+if [ -f "$HARNESS" ]; then
+  GEN=$(bash "$HARNESS" __gen-remote act-evidence 2>/dev/null)
+  if [[ "$GEN" == *"act_failure_context()"* ]]; then
+    ACT_FN="$TMPD/act-failure-context.sh"
+    printf '%s\n' "$GEN" | sed -n '/^act_failure_context()/,/^}/p' > "$ACT_FN"
+    source "$ACT_FN"
+    ACT_LOG="$TMPD/act.log"
+    {
+      echo '[CI/gate] ⭐ Run Main run the gate'
+      for i in $(seq 1 25); do echo "[CI/gate] preceding output $i"; done
+      echo '[CI/gate] DUCKBRAIN URL missing: exact failing-step diagnostic'
+      echo '[CI/gate] ❌ Failure - Main run the gate [38s]'
+    } > "$ACT_LOG"
+    ACT_CONTEXT=$(act_failure_context "$ACT_LOG")
+    case "$ACT_CONTEXT" in
+      *"DUCKBRAIN URL missing: exact failing-step diagnostic"*) check "failed step output retained beyond the old 18-line window" yes yes ;;
+      *) check "failed step output retained beyond the old 18-line window" yes no ;;
+    esac
+    case "$GEN" in
+      *'~/bin/act -q --pull'*) check "act invocation exposes step output" no yes ;;
+      *) check "act invocation exposes step output" yes yes ;;
+    esac
+  else
+    check "generated battery includes act_failure_context" yes no
+  fi
+fi
+
 echo
-echo "RESULT: $pass passed, $fail failed"
+printf 'RESULT: %s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

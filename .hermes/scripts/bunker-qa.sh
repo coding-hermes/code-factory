@@ -748,7 +748,7 @@ detect_cmds() {
       # hand on the same agent, same tree, completed the job. The -W now comes
       # from the shared staging block like every other workflow: select ci.yml,
       # keep ci_cmd bare, let ACT_WF_DIR staging supply the single -W target.
-      ci_cmd="DOCKER_HOST=unix:///run/bunker/$agent/docker.sock ~/bin/act -q --pull"
+      ci_cmd="DOCKER_HOST=unix:///run/bunker/$agent/docker.sock ~/bin/act --pull"
       DETECT_CI_FILES=" .github/workflows/ci.yml"
     else
       # Select the workflows whose `on:` can fire for a push to the branch the
@@ -831,7 +831,7 @@ detect_cmds() {
       done
       if [ -n "$ci_select" ]; then
         DETECT_CI_FILES="$ci_select"           # baked, leading space, repo-relative
-        ci_cmd="DOCKER_HOST=unix:///run/bunker/$agent/docker.sock ~/bin/act -q --pull"
+        ci_cmd="DOCKER_HOST=unix:///run/bunker/$agent/docker.sock ~/bin/act --pull"
       else
         # No workflow can fire on a push to this branch ⇒ act has nothing that
         # says anything about the repo, and its unfiltered run grades the
@@ -1302,13 +1302,22 @@ fail_detail() { # <rc> <logfile> <cmd...> — ACTIONABLE-FAILURE CONTRACT
   printf 'rc=%s cmd=[%s] — %s' "\$frc" "\$*" "\$(grep -v '^[[:space:]]*\$' "\$flog" 2>/dev/null | head -40 | tr '\n' '|' | cut -c1-1500)"
 }
 # act_failure_context — act's '❌ Failure - Main <step> [Xs]' line names the step
-# but never the cause; the step's own output is printed ABOVE the marker, so
-# return the 18 lines preceding the first ❌ plus the marker itself.
+# but not the cause. Run act without --quiet so step output reaches ci.log, then
+# retain the complete failing Main step (not an arbitrary tail of prior output).
 act_failure_context() { # <act log>
-  local lf="\$1" n
-  n=\$(grep -n '❌' "\$lf" 2>/dev/null | head -1 | cut -d: -f1)
-  if [ -n "\$n" ]; then sed -n "\$(( n > 18 ? n - 18 : 1 )),\${n}p" "\$lf" | tr '\n' '|' | cut -c1-1400
-  else tail -8 "\$lf" 2>/dev/null | tr '\n' '|' | cut -c1-1400; fi
+  local lf="\$1" n start
+  n=\$(grep -n '❌ Failure - Main' "\$lf" 2>/dev/null | head -1 | cut -d: -f1)
+  if [ -z "\$n" ]; then n=\$(grep -n '❌' "\$lf" 2>/dev/null | head -1 | cut -d: -f1); fi
+  if [ -n "\$n" ]; then
+    start=\$(sed -n "1,\${n}p" "\$lf" | grep -n '⭐ Run Main' | tail -1 | cut -d: -f1)
+    if [ -n "\$start" ]; then
+      sed -n "\${start},\${n}p" "\$lf" | tr '\n' '|' | cut -c1-6000
+    else
+      sed -n "\$(( n > 40 ? n - 40 : 1 )),\${n}p" "\$lf" | tr '\n' '|' | cut -c1-6000
+    fi
+  else
+    tail -40 "\$lf" 2>/dev/null | tr '\n' '|' | cut -c1-6000
+  fi
 }
 # build_env_failure — is this failure the AGENT's missing C toolchain instead of a
 # repo defect? (QA-WARPFS-9, 2026-09-19.) rust links EVERY crate build script
@@ -2951,6 +2960,31 @@ fi  # end project-probe hook (corruption)
 # the suite ran uncapped while the cell still reported a result. Record the cap
 # AND prove it inside the capped child (ulimit -v read back from the child, not
 # from the parent), then require that evidence in the verdict.
+# Project-probe hook (QA-DUCKBRAIN-FOREMAN-3): same opt-in, fully generic
+# contract as the chaos-corruption / chaos-errorpath cells — a repo-owned
+# .qa/chaos-probes/resource.sh REPLACES the generic ulimit -v probe for this
+# run (0=OK, 1=FAIL memory budget exceeded or suite failed, 2=INFO environment
+# gap, 124=FAIL HANGS, other=INFO rc). Absent probe → the generic cell below
+# runs byte-identically.
+#
+# WHY IT EXISTS: 'ulimit -v' bounds VIRTUAL ADDRESS SPACE, not memory. A Node
+# suite is rejected before it starts — V8 reserves roughly 10 GiB of VA per
+# WebAssembly memory instance while RSS stays flat, and the vitest/vite/
+# es-module-lexer/undici toolchain instantiates WASM during startup. duckbrain
+# therefore reported "OOM under cap" for a suite whose real peak aggregate RSS
+# is 1.7 GiB. The probe keeps the same 3 GiB budget and enforces it on RSS.
+if [ -x .qa/chaos-probes/resource.sh ]; then
+  pp_out=\$(timeout 960 .qa/chaos-probes/resource.sh 2>&1); pp_rc=\$?
+  pp_first=\$(printf '%s' "\$pp_out" | head -1 | cut -c1-300)
+  pp_more=\$(printf '%s' "\$pp_out" | tail -n +2 | tr '\n' ' ' | cut -c1-500)
+  case "\$pp_rc" in
+    0)   cell chaos-resource OK "project probe: \$pp_first \$pp_more" ;;
+    1)   cell chaos-resource FAIL "project probe: \$pp_first \$pp_more" ;;
+    2)   cell chaos-resource INFO "project probe: environment gap, probe skipped (\$pp_first \$pp_more)" ;;
+    124) cell chaos-resource FAIL "project probe HANGS (>960s): \$pp_first \$pp_more" ;;
+    *)   cell chaos-resource INFO "project probe rc=\$pp_rc: \$pp_first \$pp_more" ;;
+  esac
+else
 CAP_KB=3145728
 export CAP_KB   # the single-quoted probe expands CAP_KB inside \`bash -c\`, so it must be in the child env
 # Single-quoted on purpose: the \$(ulimit -v) must expand INSIDE the capped
@@ -3002,6 +3036,7 @@ elif native_runner_missing \$LOGD/res.log; then cell chaos-resource UNVERIFIED "
 elif go_toolchain_oom \$LOGD/res.log; then cell chaos-resource INFO "ENV-BLOCKED: the go toolchain itself failed to build under the 3G cap (SystemResources/address-space) — no suite result either way, the cap-vs-toolchain interaction is not a memory verdict about the code (\$cap_note, rc=\$res_rc): \$(go_toolchain_oom_cause \$LOGD/res.log)"
 elif go_panic_timeout \$LOGD/res.log; then cell chaos-resource INFO "SUITE-PANIC: go test hit its own 10m timeout and panicked under the cap — the suite has NO clean failure mode at its worst-case memory ceiling (QA-HERMES-CANOPY-38): \$(go_panic_timeout_cause \$LOGD/res.log) | failing: \$(capped_fail_summary \$LOGD/res.log)"
 else cell chaos-resource FAIL "rc=\$res_rc under cap (\$cap_note): \$(capped_fail_summary \$LOGD/res.log)"; fi
+fi  # end project-probe hook (resource) — QA-DUCKBRAIN-FOREMAN-3
 
 # 10 · chaos-errorpath — missing config: clean usage or panic?
 # Project-probe hook (SDKTS-QA-H3-SDK-TYPESCRIPT-FOREMAN-7): same opt-in, fully
