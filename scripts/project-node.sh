@@ -49,8 +49,13 @@ CRIER="${CRIER_URL:-}"
 if [ -z "$CRIER" ]; then
   bad "crier_url" "CRIER_URL unset — the node has nothing to connect to (export CRIER_URL=http://crier.example:8767)"
 else
+  # preflight-reach: report exactly one status code per URL (CF-037). curl -w '%{http_code}'
+  # already prints 000 when a connection gets no HTTP response; a failure fallback here
+  # would append a second code ('-> 000000') and hide the real cause. Only a missing
+  # capture (no curl on PATH) defaults to 000.
   for u in "$CRIER/health" https://pypi.org/simple/; do
-    c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$u" 2>/dev/null || echo 000)
+    c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$u" 2>/dev/null)
+    [ -n "$c" ] || c=000
     [ "$c" = 200 ] && ok "reach:$u" "200" || bad "reach:$u" "-> $c"
   done
 fi
