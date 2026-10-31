@@ -91,6 +91,11 @@ disk as the dashboards the fleet needs during an incident.
 - **No Kubernetes.** These are a few dozen machines, not a fleet needing a control plane.
 - **No distributed Prometheus.** One TSDB with a 30-day window answers every question this fleet
   currently asks; a Thanos/Mimir layer would be cost without a question behind it.
-- **No tracing.** Nothing here is a request-path system; the traces would be empty.
+- **No tracing.** Nothing here is a request-path system; the traces would be empty. The Tempo
+  stack and Grafana's trace→log correlation (tracesToLogs) are provisioned as future-facing
+  infrastructure, but they remain inert until fleet applications are instrumented to emit
+  trace ids into their log lines. No producer currently attaches trace ids, so the Grafana
+  links are dead UI. Wiring real correlation requires either app-side trace id injection or
+  an Alloy otelcol.exporter.loki pipeline that derives log lines from spans.
 - **No multi-tenancy.** `auth_enabled: false` in Loki and a single Grafana org. Adding tenancy
   before there is a second tenant is configuration nobody exercises and therefore nobody fixes.
