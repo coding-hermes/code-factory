@@ -137,5 +137,28 @@ else
 fi
 rm -rf "$tmpd"
 
+say "10. Hermes refuses an unsupported Python without pip or network"
+tmpd=$(mktemp -d)
+cat > "$tmpd/python-3.14" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = "--version" ]; then
+  printf '%s\n' 'Python 3.14.9'
+  exit 0
+fi
+printf 'unexpected interpreter invocation: %s\n' "$*" >&2
+exit 1
+EOF
+chmod +x "$tmpd/python-3.14"
+out=$(env HOME="$tmpd/home" HERMES_PYTHON_BIN="$tmpd/python-3.14" \
+  /bin/bash "$HERE/scripts/harness/install-hermes.sh" --apply 2>&1); rc=$?
+if [ "$rc" -ne 0 ] \
+  && printf '%s\n' "$out" | grep -Fq 'hermes-agent 0.19.0 requires python >=3.11,<3.14; found 3.14.9' \
+  && ! printf '%s\n' "$out" | grep -Fq 'pip failed'; then
+  say "  PASS  Python 3.14 refusal names the supported range without pip"
+else
+  say "  FAIL  unsupported Python refusal was missing or reached pip"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

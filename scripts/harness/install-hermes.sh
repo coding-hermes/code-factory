@@ -16,11 +16,43 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 PORT="${NODE_GATEWAY_PORT:-10800}"
 PIN="${HERMES_PIN:-0.19.0}"
 VENV="$HOME/hermes-venv"
+PYTHON_BIN="${HERMES_PYTHON_BIN:-python3}"
+PYTHON_MIN_MAJOR=3
+PYTHON_MIN_MINOR=11
+PYTHON_MAX_MAJOR=3
+PYTHON_MAX_MINOR=14
 MODE="${1:---check}"
 
 hb() { [ -x "$VENV/bin/hermes" ] && echo "$VENV/bin/hermes" || have hermes; }
 
+check_python_compatibility() {
+  local raw version py_major py_minor
+  raw=$("$PYTHON_BIN" --version 2>&1) || {
+    bad "python" "unable to run $PYTHON_BIN --version"
+    return 1
+  }
+  version=$(printf '%s\n' "$raw" | sed -nE 's/.*Python ([0-9]+\.[0-9]+(\.[0-9]+)?).*/\1/p' | head -1)
+  if [ -z "$version" ]; then
+    bad "python" "unable to determine interpreter version from: $raw"
+    return 1
+  fi
+  IFS=. read -r py_major py_minor _ <<< "$version"
+  if ! [[ "$py_major" =~ ^[0-9]+$ && "$py_minor" =~ ^[0-9]+$ ]]; then
+    bad "python" "unable to parse interpreter version: $version"
+    return 1
+  fi
+  if (( py_major < PYTHON_MIN_MAJOR ||
+        (py_major == PYTHON_MIN_MAJOR && py_minor < PYTHON_MIN_MINOR) ||
+        py_major > PYTHON_MAX_MAJOR ||
+        (py_major == PYTHON_MAX_MAJOR && py_minor >= PYTHON_MAX_MINOR) )); then
+    bad "python" "hermes-agent $PIN requires python >=3.11,<3.14; found $version"
+    return 1
+  fi
+  ok "python" "$version (hermes-agent $PIN requires >=3.11,<3.14)"
+}
+
 say "harness: hermes (pin $PIN, port $PORT)"
+check_python_compatibility || exit 1
 
 h=$(hb)
 if [ -n "$h" ]; then
@@ -50,7 +82,7 @@ fi
 if [ "$MODE" = "--apply" ]; then
   say "apply"
   if [ -z "$h" ]; then
-    python3 -m venv "$VENV" || { bad "venv" "creation failed"; exit 1; }
+    "$PYTHON_BIN" -m venv "$VENV" || { bad "venv" "creation failed"; exit 1; }
     "$VENV/bin/python" -m pip install --no-cache-dir "hermes-agent==$PIN" >/tmp/hermes-install.log 2>&1 \
       && ok "install" "$("$VENV/bin/hermes" --version 2>/dev/null | head -1)" \
       || { bad "install" "pip failed — /tmp/hermes-install.log"; exit 1; }
