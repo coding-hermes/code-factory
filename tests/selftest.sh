@@ -32,6 +32,20 @@ if [ "$rc" -ne 0 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1
 else
   say "  FAIL  unreachable URL status was duplicated or missing"; fails=$((fails+1))
 fi
+cat > "$tmpd/curl" <<'EOF'
+#!/usr/bin/env bash
+printf '200'
+exit 0
+EOF
+chmod +x "$tmpd/curl"
+out=$(env PATH="$tmpd:$PATH" HOME="$tmpd/reachable-home" NODE_PROJECT=demo CRIER_URL=http://reachable.test:8767 \
+  /bin/bash "$HERE/scripts/project-node.sh" --check --project demo 2>&1); rc=$?
+expected='  PASS  reach:http://reachable.test:8767/health — 200'
+if [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ]; then
+  say "  PASS  reachable URL -> 200 status"
+else
+  say "  FAIL  reachable URL did not retain 200 status"; fails=$((fails+1))
+fi
 rm -rf "$tmpd"
 
 # ch:trace row=CF-034 spec=README.md#status wave=none:serial test=tests/selftest.sh::clone-error-classification doc=README.md prompt=prompts/readme.md evidence=tests/selftest.sh::clone-error-classification witness=none:local-fixture verdict=none:open-finding commit=none:self-referential-hash memory=none:unresolved-namespace
