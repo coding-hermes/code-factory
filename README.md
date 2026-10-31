@@ -70,7 +70,7 @@ instead of implying it works.
 
 | Piece | State | Command that can contradict it |
 |---|---|---|
-| Hermes in a bunker + HTTP gateway over tailnet | **works** — observed on a live node in October 2026 (32 s install, `/api/status` 200, 133 JSON-RPC methods); not reproducible from this repo alone | `scripts/harness/install-hermes.sh --check` names the version, port and key it measured |
+| Hermes in a bunker + HTTP gateway over tailnet | **works** — observed on a live node in October 2026 (32 s install, `/api/status` 200, 133 JSON-RPC methods); not reproducible from this repo alone, and `--apply` needs python 3.11–3.13 — the pinned `hermes-agent==0.19.0` declares `Requires-Python >=3.11,<3.14`, so a host whose `python3` is 3.14 stops at `FAIL install — pip failed` (CF-036) | `scripts/harness/install-hermes.sh --check` names the version, port and key it measured |
 | Repo clone in a node | **works** for public https — `PASS repo_clone … @ 9402f6a` on 2026-10-30; the cloned repo's own HEAD moves, so re-run to re-derive. **No build step yet**: layer 40 clones only, so the build cache `specs/NODE.md` asks for is not established (CF-032). Private repos are **blocked** — a deploy key has no tested procedure yet | `./scripts/project-node.sh --apply --project myproject --repo https://github.com/you/myrepo` |
 | Node inference credential | **missing** — a turn dies at `No inference provider configured`; the node needs its own key, never an operator key | `scripts/harness/install-hermes.sh --check` -> `FAIL inference_key` |
 | crier identity in a node | **missing** — no `~/.node/crier.json` yet | `./scripts/project-node.sh --check --project myproject` -> `FAIL crier_identity` |
@@ -154,7 +154,7 @@ a prompt file the tree does not ship.
 The scheduler also carries disabled `code-factory-duckbrain-*` rows. They are not part of the
 shipped family above and are not counted in the fourteen.
 
-Evidence for the state of this README: `docs/audits/code-factory-readme-2026-10-30-18-28-33.md`.
+Evidence for the state of this README: `docs/audits/code-factory-readme-2026-10-30-20-29-25.md` for how the rows, layout and lane table were written, and `docs/audits/code-factory-readme-2026-10-30-23-28-00.md` for the latest command-by-command re-run (its transcript is the `.probe.txt` beside it).
 
 ch:trace row=CF-014 spec=README.md#quick-start wave=code-factory-readme-2026-10-30-18-28-33#readme test=scripts/project-node.sh::check-project-demo doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=path@origin:README.md verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-18-28-33
 ch:trace row=CF-013 spec=README.md#status wave=code-factory-readme-2026-10-30-18-28-33#readme test=scripts/harness/install-hermes.sh::check doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=none:no-live-bunker-or-gateway-available verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-18-28-33
