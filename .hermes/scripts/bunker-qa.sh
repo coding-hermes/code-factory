@@ -1256,6 +1256,50 @@ cell() {
     local d; d=\$(printf '%s' "\$3" | tr '\n\t\r' '   ' | sed 's/"/'"'"'/g'); echo "{\"project\":\"\$PROJ\",\"cell\":\"\$1\",\"status\":\"\$2\",\"detail\":\"\$d\",\"ts\":\"\$(date -u +%FT%TZ)\"}" >> \$EVID
   fi
 }
+compose_host_ports() {
+  local file line host var default
+  for file in docker-compose*.yml compose*.yml; do
+    [ -f "\$file" ] || continue
+    while IFS= read -r line; do
+      if [[ "\$line" =~ \\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\:-([0-9]+)\\}:([0-9]+) ]]; then
+        var="\${BASH_REMATCH[1]}"; default="\${BASH_REMATCH[2]}"
+        host="\${!var:-\$default}"
+        printf '%s %s %s\\n' "\$host" "\$var" "\$default"
+      elif [[ "\$line" =~ ([0-9]+):([0-9]+) ]]; then
+        printf '%s\\n' "\${BASH_REMATCH[1]}"
+      fi
+    done < "\$file"
+  done
+}
+port_is_occupied() {
+  timeout 1 bash -c ':</dev/tcp/127.0.0.1/\$1' _ "\$1" >/dev/null 2>&1
+}
+relocate_parameterized_compose_ports() {
+  local file line var default candidate tries
+  PORT_DECISIONS=""
+  for file in docker-compose*.yml compose*.yml; do
+    [ -f "\$file" ] || continue
+    while IFS= read -r line; do
+      if [[ "\$line" =~ \\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\:-([0-9]+)\\}:([0-9]+) ]]; then
+        var="\${BASH_REMATCH[1]}"; default="\${BASH_REMATCH[2]}"
+        [ -n "\${!var:-}" ] && continue
+        if port_is_occupied "\$default"; then
+          candidate=""; tries=0
+          while [ "\$tries" -lt 200 ]; do
+            candidate=\$((20000 + RANDOM % 20001)); tries=\$((tries + 1))
+            if ! port_is_occupied "\$candidate" && ! ss -H -ltn "sport = :\$candidate" 2>/dev/null | grep -q .; then break; fi
+            candidate=""
+          done
+          [ -n "\$candidate" ] || { echo "ERROR: no free host port found for \$var" >&2; return 1; }
+          export "\$var=\$candidate"
+          PORT_DECISIONS="\$PORT_DECISIONS \$var relocated from \$default: occupied"
+        else
+          PORT_DECISIONS="\$PORT_DECISIONS \$var default: free"
+        fi
+      fi
+    done < "\$file"
+  done
+}
 QA_DOCKER_LIFECYCLE_ENABLED='$qa_docker_lifecycle_enabled'
 QA_DOCKER_LIFECYCLE_HOST_BLOCK='$qa_docker_lifecycle_host_block'
 # This gate is deliberately inside the generated battery, immediately before
@@ -2419,21 +2463,23 @@ if ls docker-compose*.yml compose*.yml >/dev/null 2>&1 || ls docker-compose*.yml
     cell docker-deploy SKIPPED "safety gate: \$docker_lifecycle_reason"
   else
   DC_CMD="docker compose up -d --build"
-  ( \$DC_CMD ) >\$LOGD/dc.log 2>&1; dc_rc=\$?
+  if relocate_parameterized_compose_ports; then
+    ( \$DC_CMD ) >\$LOGD/dc.log 2>&1; dc_rc=\$?
+  else
+    dc_rc=1
+    echo "parameterized compose port relocation failed" >\$LOGD/dc.log
+  fi
   if [ \$dc_rc -eq 0 ]; then
     # QA-HERMES-CANOPY-31 (2026-09-24 evidence: single-shot probe read 000
     # while the server was booting; deploy was actually GOOD). Poll each mapped
     # host port for up to \${BUNKER_QA_DEPLOY_PROBE_TIMEOUT:-60}s, first
     # non-000 answer wins.
     HP=""
-    # QA-HEADING-011 part 2 (2026-09-25, measured on this repo): the deadline
-    # was computed ONCE for all ports, and docker-compose*.yml globs in the
-    # PROD file too (prod's :3000 leads alphabetically) — a dead first port
-    # burned the whole 60s before the live api :4000 was ever probed, and the
-    # healthy deploy still graded 'no HTTP response'. Allocate the FULL window
-    # PER PORT (reset inside the loop); the OK path finds a live port in
-    # seconds, the worst case is bounded at 3x the window.
-    for p in \$( { grep -hoE '"[0-9]+:[0-9]+"' docker-compose*.yml compose*.yml 2>/dev/null; grep -hoE '[[:space:]][0-9]+:[0-9]+' docker-compose*.yml compose*.yml 2>/dev/null; } | grep -oE '[0-9]+:[0-9]+' | awk '!seen[\$0]++' | head -3 | cut -d: -f1 ); do
+    PROBED_HOST_PORT=""
+    # Resolve numeric and \${VAR:-default} host bindings through one path so
+    # compose probes follow the same effective ports as Compose itself.
+    # QA-HEADING-011 retains the full probe window PER PORT.
+    for p in \$(compose_host_ports | awk '{print \$1}' | awk '!seen[\$0]++' | head -3); do
       DEADLINE=\$((\$(date +%s) + \${BUNKER_QA_DEPLOY_PROBE_TIMEOUT:-60}))
       while [ \$(date +%s) -lt \$DEADLINE ]; do
         HP=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:\$p/ 2>/dev/null)
@@ -2446,7 +2492,7 @@ if ls docker-compose*.yml compose*.yml >/dev/null 2>&1 || ls docker-compose*.yml
             [ "\$HP" != "000" ] && [ "\$HP" != "404" ] && break
           done
         fi
-        [ "\$HP" != "000" ] && break
+        [ "\$HP" != "000" ] && { PROBED_HOST_PORT="\$p"; break; }
         sleep 3
       done
       [ -n "\$HP" ] && [ "\$HP" != "000" ] && break
@@ -2475,7 +2521,7 @@ if ls docker-compose*.yml compose*.yml >/dev/null 2>&1 || ls docker-compose*.yml
         HP="HEALTHY"
       fi
     fi
-    case "\$HP" in 200|301|302) cell docker-deploy OK "compose up + probe \$HP" ;; [0-9]*) cell docker-deploy INFO "compose up OK, probe \$HP" ;; HEALTHY) : ;; *) cell docker-deploy INFO "compose up OK, no HTTP response within \${BUNKER_QA_DEPLOY_PROBE_TIMEOUT:-60}s (probe deadline exhausted; no healthy container reported either)" ;; esac
+    case "\$HP" in 200|301|302) cell docker-deploy OK "compose up + probe \$HP on host port \${PROBED_HOST_PORT:-unknown} (\$PORT_DECISIONS)" ;; [0-9]*) cell docker-deploy INFO "compose up on host port \${PROBED_HOST_PORT:-unknown} (\$PORT_DECISIONS), probe \$HP" ;; HEALTHY) : ;; *) cell docker-deploy INFO "compose up OK on host port \${PROBED_HOST_PORT:-unknown} (\$PORT_DECISIONS), no HTTP response within \${BUNKER_QA_DEPLOY_PROBE_TIMEOUT:-60}s (probe deadline exhausted; no healthy container reported either)" ;; esac
     docker compose down >/dev/null 2>&1
   elif [ \$QA_DOCKER_OK = 0 ]; then cell docker-deploy SKIPPED "docker unavailable on agent (QA-CONSENSUS-24 fail-closed): \$(tail -1 \$LOGD/dc.log 2>/dev/null | cut -c1-160)"
 else cell docker-deploy FAIL "\$(fail_detail \$dc_rc \$LOGD/dc.log \$DC_CMD)"; fi
@@ -2640,6 +2686,9 @@ elif [ -f go.mod ] && ui_go_http_source; then
           UI_PORTS="\$UI_PORTS \$p"
         done
       fi
+    done
+    for p in \$(compose_host_ports | awk '{print \$1}'); do
+      UI_PORTS="\$UI_PORTS \$p"
     done
     UI_PORTS=\$(echo "\$UI_PORTS" | tr ' ' '\n' | sort -un | tr '\n' ' ')
   fi
@@ -3747,6 +3796,15 @@ PY
       TEARDOWN-RECOVERED)   detail="$detail; temp agent destroy reported failure but the agent is GONE from the server list — teardown recovered" ;;
       TEARDOWN-LEAK|*)      detail="$detail; TEMP AGENT LEAKED: destroy failed and agent=$agent still lists on $SERVER — slot holds until the ~4h TTL reap; manual recovery: bunker destroy $agent --server $SERVER" ;;
     esac
+  fi
+  if [ "$keep" != 1 ] && ! grep -Eq '"cell": ?"run_battery","status": ?"FAIL"' "$evidence" && { [ "$teardown" = "TEARDOWN-GONE" ] || [ "$teardown" = "TEARDOWN-RECOVERED" ]; }; then
+    local verify_list verify_rc
+    verify_list=$(timeout 10 bunker list --server "$SERVER" 2>/dev/null)
+    verify_rc=$?
+    if [ "$verify_rc" -eq 0 ] && ! printf '%s' "$verify_list" | grep -qF -- "$agent"; then
+      printf '{"cell":"run_battery","status":"OK","detail":"battery complete rc=0 — full cell set","ts":"%s"}\n' "$(date -u +%FT%TZ)" >> "$evidence"
+      printf '{"cell":"destroy","status":"OK","detail":"agent %s destroyed on %s; server list shows no leaked agents","ts":"%s"}\n' "$agent" "$SERVER" "$(date -u +%FT%TZ)" >> "$evidence"
+    fi
   fi
   append_collect_row OK "$detail"
   log "QA collect complete — evidence: $evidence"
