@@ -130,7 +130,7 @@ It is written to be followed by someone who has never seen this repo.
 
 | Path | What |
 |---|---|
-| `stack/` | docker compose + component configs (prometheus, loki, alloy, alertmanager, grafana provisioning, **tempo**) |
+| `stack/` | docker compose + component configs (prometheus, loki, **tempo**, alloy, alertmanager, grafana provisioning) |
 | `dashboards/` | Grafana dashboard JSON, provisioned on boot |
 | `alerts/` | Prometheus alert rules, lane-labelled |
 | `terraform/` | hcloud: outbound-only firewall, optional server, ssh key |
