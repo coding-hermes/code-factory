@@ -36,7 +36,13 @@ SERVICE_BASES = {re.sub(r"-(?:foreman|worker)$", "", n) for n in SERVICE_ROWS} |
 # Satellite LANES that are themselves per-project rows: a -review or -perf row is a MOON of its
 # planet (per fleet.toml), never a planet needing moons of its own. classify() excludes rows
 # whose namespace_id is one of these, so enabled review/perf lanes stop spawning fake gaps.
+# 2026-11-01: namespace is a PROXY that drifts. `code-factory-perf` / `code-factory-review`
+# (created 10-29) carry namespace_id='code-factory', so the namespace test alone re-flagged
+# them as planets missing all 5 moons and --apply would have manufactured 10 junk lanes.
+# The row SUFFIX is the direct rule: any -perf/-review row is a lane -> debris, whatever its
+# namespace (same shape as the -docs/-readme rule below).
 LANE_NAMESPACES = {"review", "perf"}
+LANE_ROW_SUFFIXES = ("-perf", "-review")
 
 # Docs/readme LANE families (deployed 2026-09-23): <base>-docs and <base>-readme rows live in
 # the docs namespace, run from stand-in docs|readme/<base> workdirs, and file DOC-*/README-*
@@ -105,8 +111,11 @@ def classify(all_rows):
                     moons.setdefault(base, {})[lane] = r
                 break
         else:
-            # a -review / -perf row is itself a satellite lane of its planet — not a planet
-            if (r.get("namespace_id") or "") in LANE_NAMESPACES:
+            # a -review / -perf row is itself a satellite lane of its planet — not a planet.
+            # Match on the namespace OR the row suffix: the suffix is the direct rule and
+            # survives rows cloned with the planet's namespace (see LANE_ROW_SUFFIXES).
+            if ((r.get("namespace_id") or "") in LANE_NAMESPACES
+                    or n.endswith(LANE_ROW_SUFFIXES)):
                 debris[n] = r
                 continue
             # a -docs / -readme row is the docs/readme LANE of its base planet
