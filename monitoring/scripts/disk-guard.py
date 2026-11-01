@@ -154,8 +154,7 @@ def reclaim_hard() -> list[str]:
     return acts
 
 
-def pause_scheduler(reason: str) -> str:
-    """Stop the producer: under disk pressure spawning more work makes it worse."""
+def _read_operator_token() -> str:
     auth = HOME / ".hermes" / "scheduler-auth.env"
     token = ""
     try:
@@ -166,14 +165,27 @@ def pause_scheduler(reason: str) -> str:
                     token = v.strip().strip('"').strip("'")
     except Exception:
         pass
+    return token
+
+
+def _list_enabled_lanes() -> tuple[list[str], str]:
     try:
         con = sqlite3.connect(f"file:{HOME}/.hermes/coding-hermes/scheduler.db?mode=ro", uri=True)
         rows = con.execute("SELECT name FROM projects WHERE enabled=1").fetchall()
         con.close()
+        return [r[0] for r in rows], ""
     except Exception as e:
-        return f"could not list lanes to pause: {e}"
+        return [], f"could not list lanes: {e}"
+
+
+def pause_scheduler(reason: str) -> str:
+    """Stop the producer: under disk pressure spawning more work makes it worse."""
+    token = _read_operator_token()
+    lanes, err = _list_enabled_lanes()
+    if err:
+        return err
     paused = 0
-    for (name,) in rows:
+    for name in lanes:
         try:
             req = urllib.request.Request(
                 f"http://127.0.0.1:9090/api/v1/projects/{name}/pause", method="POST",
@@ -182,7 +194,33 @@ def pause_scheduler(reason: str) -> str:
             paused += 1
         except Exception:
             continue
-    return f"scheduler shedding: paused {paused}/{len(rows)} enabled lanes ({reason})"
+    return f"scheduler shedding: paused {paused}/{len(lanes)} enabled lanes ({reason})"
+
+
+def resume_scheduler(reason: str) -> str:
+    """Restore lanes that disk-guard previously paused. Reads the same token source."""
+    token = _read_operator_token()
+    if not token:
+        return "resume: no operator token found in ~/.hermes/scheduler-auth.env"
+    # Query ALL projects (not just enabled=1, since paused ones have enabled=0)
+    try:
+        con = sqlite3.connect(f"file:{HOME}/.hermes/coding-hermes/scheduler.db?mode=ro", uri=True)
+        rows = con.execute("SELECT name FROM projects").fetchall()
+        con.close()
+    except Exception as e:
+        return f"resume: could not list lanes: {e}"
+    resumed = 0
+    for (name,) in rows:
+        try:
+            req = urllib.request.Request(
+                f"http://127.0.0.1:9090/api/v1/projects/{name}/resume", method="POST",
+                headers={"X-Operator-Token": token, "Content-Type": "application/json"})
+            resp = urllib.request.urlopen(req, timeout=15)
+            if resp.status == 200:
+                resumed += 1
+        except Exception:
+            continue
+    return f"scheduler restore: resumed {resumed}/{len(rows)} lanes ({reason})"
 
 
 def report() -> int:
@@ -200,10 +238,19 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--report", action="store_true", help="print undelivered events and exit")
     ap.add_argument("--dry-run", action="store_true", help="show thresholds/space, change nothing")
+    ap.add_argument("--resume", action="store_true",
+                    help="restore all scheduler lanes (reverse a previous HARD shed)")
     args = ap.parse_args()
 
     if args.report:
         return report()
+
+    if args.resume:
+        msg = resume_scheduler("manual --resume")
+        log(f"  {msg}")
+        note_event(msg)
+        print(msg)
+        return 0
 
     free = free_gb("/")
     if args.dry_run:
