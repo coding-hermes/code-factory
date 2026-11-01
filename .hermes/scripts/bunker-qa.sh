@@ -52,15 +52,25 @@ esac
 # A controller on the live Hermes host must never enable Compose lifecycle
 # tests, even if an inherited environment sets the opt-in flag. This is a
 # host-side hard stop; the remote battery repeats its own target-side checks.
-BUNKER_QA_DOCKER_LIFECYCLE_HOST_BLOCK=0
-if [ -f "$HOME/.hermes/state.db" ]; then
-  _qa_controller_pwd=$(pwd -P)
-  case "$_qa_controller_pwd/" in
-    "$HOME/.hermes/"*) BUNKER_QA_DOCKER_LIFECYCLE_HOST_BLOCK=1 ;;
-  esac
-fi
-if XDG_RUNTIME_DIR="/run/user/$(id -u)" systemctl --user is-active --quiet hermes-gateway.service 2>/dev/null; then
-  BUNKER_QA_DOCKER_LIFECYCLE_HOST_BLOCK=1
+# Override (DF-HIVEMIND-WORK-58, 2026-10-31): the auto-detection below vetoes
+# compose cells whenever the CONTROLLER is a live Hermes host — even when the
+# battery's compose cells target a disposable REMOTE agent (compose up/down runs
+# in ~/qa-<proj> on the JIT agent, never on the controller). An explicit
+# BUNKER_QA_DOCKER_LIFECYCLE_HOST_BLOCK=0 (or =1) in the launch environment
+# overrides auto-detection: use 0 ONLY for batteries whose compose cells target
+# disposable agents. The remote battery's own target-side gates (agent gateway,
+# ~/.hermes compose bind) still refuse destructive cells where they should.
+if [ "${BUNKER_QA_DOCKER_LIFECYCLE_HOST_BLOCK:-auto}" = "auto" ]; then
+  BUNKER_QA_DOCKER_LIFECYCLE_HOST_BLOCK=0
+  if [ -f "$HOME/.hermes/state.db" ]; then
+    _qa_controller_pwd=$(pwd -P)
+    case "$_qa_controller_pwd/" in
+      "$HOME/.hermes/"*) BUNKER_QA_DOCKER_LIFECYCLE_HOST_BLOCK=1 ;;
+    esac
+  fi
+  if XDG_RUNTIME_DIR="/run/user/$(id -u)" systemctl --user is-active --quiet hermes-gateway.service 2>/dev/null; then
+    BUNKER_QA_DOCKER_LIFECYCLE_HOST_BLOCK=1
+  fi
 fi
 if [ "$BUNKER_QA_DOCKER_LIFECYCLE_HOST_BLOCK" = "1" ]; then
   BUNKER_QA_ENABLE_DOCKER_LIFECYCLE=0
