@@ -139,6 +139,15 @@ printf '%s\\n' 'Filesystem 1024-blocks Used Available Capacity Mounted on' "fixt
             p = self.apply()
             self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
             self.assertIn("PASS  manifest", p.stdout)
+        # CLI floor overrides the environment and uses the same admission seam.
+        self.df("5242880")
+        self.env["NODE_DISK_FLOOR"] = "0"
+        self.effects.unlink()
+        (self.home / ".node/node.json").unlink()
+        self.refused(self.apply("--disk-floor", "5.000000001"))
+        p = self.apply("--disk-floor", "5")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("floor 5 GiB", p.stdout)
         self.assertIn("adapter", self.effects.read_text())
         self.assertIn("git", self.effects.read_text())
 
@@ -233,7 +242,8 @@ printf '%s\\n' 'Filesystem 1024-blocks Used Available Capacity Mounted on' "fixt
         self.refused(self.apply("--reclaim-disposable"))
         self.assertFalse(blob.exists())
         self.assertEqual(
-            self.observations.read_text().splitlines(), ["1048576", "1048576"]
+            self.observations.read_text().splitlines(),
+            ["1048576", "1048576", "1048576"],
         )
         for path in sentinels:
             self.assertEqual(path.read_bytes(), b"must survive")
@@ -244,8 +254,10 @@ printf '%s\\n' 'Filesystem 1024-blocks Used Available Capacity Mounted on' "fixt
         p = self.apply("--reclaim-disposable")
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         self.assertFalse(blob.exists())
+        # Each reclaim now observes initial, locked and post-reclaim capacity.
         self.assertEqual(
-            self.observations.read_text().splitlines(), ["1048576", "5242880"]
+            self.observations.read_text().splitlines(),
+            ["1048576", "1048576", "5242880"],
         )
         manifest = self.home / ".node/node.json"
         original = manifest.read_bytes()
@@ -425,7 +437,9 @@ printf '%s\\n' 'Filesystem 1024-blocks Used Available Capacity Mounted on' "fixt
         self.df("1048576", "bad")
         self.refused(self.apply("--reclaim-disposable"))
         self.assertFalse(blob.exists())
-        self.assertEqual(self.observations.read_text().splitlines(), ["1048576", "bad"])
+        self.assertEqual(
+            self.observations.read_text().splitlines(), ["1048576", "1048576", "bad"]
+        )
 
     def df_sequence(self, *readings):
         self.env["DF_SEQUENCE"] = ",".join(readings)
@@ -471,8 +485,12 @@ print('fixture 20000000 1 ' + free + ' 1% /')
     def test_creator_forwards_floor_and_reclaim_before_remote_install(self):
         (self.home / ".node/node.json").write_text("{}")
         args = (
-            "--project", "fixture", "--repo",
-            "https://example.invalid/team/repo.git", "--harness", "hermes",
+            "--project",
+            "fixture",
+            "--repo",
+            "https://example.invalid/team/repo.git",
+            "--harness",
+            "hermes",
         )
         for flags, floor, reclaim in (
             ((), "5", False),
@@ -492,11 +510,18 @@ print('fixture 20000000 1 ' + free + ' 1% /')
         self.calls.unlink(missing_ok=True)
         p = self.run_script("node-create.sh", *args)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        command = next(a[-1] for a in fixture.NodeContract.recorded(self)
-                       if "project-node.sh --apply" in a[-1])
+        command = next(
+            a[-1]
+            for a in fixture.NodeContract.recorded(self)
+            if "project-node.sh --apply" in a[-1]
+        )
         self.assertIn("NODE_DISK_FLOOR=6.5", shlex.split(command))
-        for flags in (("--disk-floor", "bad"), ("--disk-floor",),
-                      ("--disk-floor", ""), ("--disk-floor", "5;id")):
+        for flags in (
+            ("--disk-floor", "bad"),
+            ("--disk-floor",),
+            ("--disk-floor", ""),
+            ("--disk-floor", "5;id"),
+        ):
             with self.subTest(flags=flags):
                 self.calls.unlink(missing_ok=True)
                 p = self.run_script("node-create.sh", *args, *flags)
@@ -526,20 +551,54 @@ print('fixture 20000000 1 ' + free + ' 1% /')
         )
         self.calls.unlink()
         path = self.bin / "bunker"
-        text = path.read_text().replace(
-            "if a[0] in ('spawn','cp'):",
-            "if a[0] == 'cp' and a[1].endswith('/disk-policy.py'): sys.exit(19)\nif a[0] in ('spawn','cp'):",
-        )
-        self.executable(path, text)
-        p = self.run_script("node-create.sh", *args)
-        self.assertNotEqual(p.returncode, 0)
-        self.assertIn("FAIL  stage_disk_policy", p.stdout)
-        self.assertFalse(
-            any(
-                "project-node.sh --apply" in a[-1]
-                for a in fixture.NodeContract.recorded(self)
+        original = path.read_text()
+        failures = [
+            (
+                "directory",
+                "if a[0] == 'exec' and 'mkdir -p' in a[-1]: sys.exit(19)",
+                "stage_dir",
+            ),
+            (
+                "mode",
+                "if a[0] == 'exec' and 'chmod +x' in a[-1]: sys.exit(19)",
+                "stage_mode",
+            ),
+        ]
+        for source in (
+            "project-node.sh",
+            "lib.sh",
+            "node-contract.py",
+            "disk-policy.py",
+            "install-hermes.sh",
+        ):
+            failures.append(
+                (
+                    source,
+                    f"if a[0] == 'cp' and a[1].endswith('/{source}'): sys.exit(19)",
+                    "stage_disk_policy"
+                    if source == "disk-policy.py"
+                    else "stage_script",
+                )
             )
-        )
+        for name, failure, label in failures:
+            with self.subTest(staging=name):
+                self.calls.unlink(missing_ok=True)
+                self.executable(
+                    path,
+                    original.replace(
+                        "if a[0] in ('spawn','cp'):",
+                        failure + "\nif a[0] in ('spawn','cp'):",
+                    ),
+                )
+                p = self.run_script("node-create.sh", *args)
+                self.assertNotEqual(p.returncode, 0, p.stdout + p.stderr)
+                self.assertIn(f"FAIL  {label}", p.stdout)
+                self.assertFalse(
+                    any(
+                        "project-node.sh --apply" in a[-1]
+                        for a in fixture.NodeContract.recorded(self)
+                    )
+                )
 
     def test_refusal_removal_mutation_breaks_exact_regression(self):
         # Change only the caller's refusal, retaining real FAIL output/counter.
@@ -572,6 +631,27 @@ print('fixture 20000000 1 ' + free + ' 1% /')
         self.assertIn("PASS  harness_check", p.stderr)
         self.assertIn("PASS  repo_clone", p.stderr)
         self.assertNotIn("SyntaxError", p.stderr)
+        # The broad gate must propagate a real disk-suite process failure.
+        broad = self.root / "selftest-mutation"
+        shutil.copytree(
+            fixture.ROOT,
+            broad,
+            ignore=shutil.ignore_patterns(".git", ".gitreins", "__pycache__"),
+        )
+        (broad / "tests/disk-contract.py").write_text(
+            'import sys\nprint("FAIL injected disk-contract")\nsys.exit(23)\n'
+        )
+        p = subprocess.run(
+            ["bash", str(broad / "tests/selftest.sh")],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("FAIL injected disk-contract", p.stdout)
+        self.assertIn("FAIL  disk contract", p.stdout)
+        self.assertIn("SELFTEST: FAIL (1)", p.stdout)
+        print("  PASS  selftest mutation: disk-suite exit 23 propagated as exit 1")
         print(
             "  PASS  disk mutation: exact regression caught adapter/clone fall-through"
         )

@@ -41,9 +41,32 @@ the manifest to know where the artifacts are.
 
 ## Disk floor
 
-Measured footprint per repo node: ~1.5 GB (97 MB repo + 656 MB module cache + ~520 MB build
-cache + toolchain, plus harness). Floor = repo + harness + 2 GB working room. The ladder reads
-free space and refuses below the floor **with the number in the refusal**.
+The historical estimate per repo node is ~1.5 GB (97 MB repo + 656 MB module cache +
+~520 MB build cache + toolchain, plus harness). This is not a current measurement per
+role. Role sizing and justified role-specific floors remain open under CF-007.
+
+The provisioning default is a provisional 5 GiB, overridden by `NODE_DISK_FLOOR` or
+`--disk-floor` on `project-node.sh` and `node-create.sh`. Floors are unsigned decimal
+GiB, with 1–9 digits per part. Invalid floors or malformed/failed `df -Pk` observations
+fail closed, even at floor zero. Integer KiB and rational arithmetic admit equality
+and refuse strictly below the floor; output names both measured KiB and exact GiB.
+Admission precedes node-state creation, adapter execution, clone and manifest writes.
+`--check` does not create node state.
+
+Reclaim is disabled by default. Only `--apply --reclaim-disposable` may reclaim, only
+when below the floor, and only flat enrolled `cache-*.bin` files in the fixed
+`$HOME/.node/disposable-cache-v1` namespace. Home, directories, names, regular-file
+type, ownership, permissions, link count and device checks fail closed; no caller-
+selected root or recursive cleanup is allowed. The helper takes an exclusive lock,
+remeasures before deleting (skipping deletion if capacity recovered), validates the
+whole namespace before unlinking and remeasures after reclaim before admission.
+Checks never reclaim, even when the flag is supplied. Missing namespaces are not
+created by reclaim. Broad build-cache/job/stale-clone cleanup and owner-authorized
+live Bunker orphan-home/key/user inventory and reaping are not verified.
+
+This is a provisioning admission gate, not a runtime quota or scheduler disk guard.
+The control host validates the floor before Bunker operations and stages the policy
+helper before invoking the remote provisioner; staging failures stop the flow.
 
 ## Failure semantics
 

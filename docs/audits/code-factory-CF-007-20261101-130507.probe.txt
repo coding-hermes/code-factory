@@ -1,0 +1,276 @@
+CF-007 local fixture verification; no live Bunker operations.
+
+$ git rev-parse HEAD
+c0789062a33913eb33037c586a4eb6d387618b11
+EXIT: 0
+
+$ git branch --show-current
+foreman/code-factory-20261101-130507
+EXIT: 0
+
+$ python3 -B tests/disk-contract.py DiskContract.test_low_disk_stops_before_install_clone_and_state DiskContract.test_boundary_exact_above_and_fractional_floor DiskContract.test_capacity_recovered_under_lock_skips_deletion DiskContract.test_locked_measurement_error_refuses_without_deletion DiskContract.test_creator_stages_helper_and_stops_on_copy_failure DiskContract.test_refusal_removal_mutation_breaks_exact_regression
+test_low_disk_stops_before_install_clone_and_state (__main__.DiskContract.test_low_disk_stops_before_install_clone_and_state) ... ok
+test_boundary_exact_above_and_fractional_floor (__main__.DiskContract.test_boundary_exact_above_and_fractional_floor) ... ok
+test_capacity_recovered_under_lock_skips_deletion (__main__.DiskContract.test_capacity_recovered_under_lock_skips_deletion) ... ok
+test_locked_measurement_error_refuses_without_deletion (__main__.DiskContract.test_locked_measurement_error_refuses_without_deletion) ... ok
+test_creator_stages_helper_and_stops_on_copy_failure (__main__.DiskContract.test_creator_stages_helper_and_stops_on_copy_failure) ... ok
+test_refusal_removal_mutation_breaks_exact_regression (__main__.DiskContract.test_refusal_removal_mutation_breaks_exact_regression) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 12.671s
+
+OK
+  PASS  selftest mutation: disk-suite exit 23 propagated as exit 1
+  PASS  disk mutation: exact regression caught adapter/clone fall-through
+EXIT: 0
+
+$ python3 -B tests/disk-contract.py
+test_absent_namespace_remeasures_without_creating_it (__main__.DiskContract.test_absent_namespace_remeasures_without_creating_it) ... ok
+test_boundary_exact_above_and_fractional_floor (__main__.DiskContract.test_boundary_exact_above_and_fractional_floor) ... ok
+test_capacity_recovered_under_lock_skips_deletion (__main__.DiskContract.test_capacity_recovered_under_lock_skips_deletion) ... ok
+test_check_and_default_apply_do_not_reclaim (__main__.DiskContract.test_check_and_default_apply_do_not_reclaim) ... ok
+test_creator_forwards_floor_and_reclaim_before_remote_install (__main__.DiskContract.test_creator_forwards_floor_and_reclaim_before_remote_install) ... ok
+test_creator_stages_helper_and_stops_on_copy_failure (__main__.DiskContract.test_creator_stages_helper_and_stops_on_copy_failure) ... ok
+test_df_timeout_fails_closed (__main__.DiskContract.test_df_timeout_fails_closed) ... ok
+test_failed_and_malformed_df_even_at_zero (__main__.DiskContract.test_failed_and_malformed_df_even_at_zero) ... ok
+test_helper_rejects_caller_selected_reclaim_root (__main__.DiskContract.test_helper_rejects_caller_selected_reclaim_root) ... ok
+test_locked_measurement_error_refuses_without_deletion (__main__.DiskContract.test_locked_measurement_error_refuses_without_deletion) ... ok
+test_locked_namespace_refuses (__main__.DiskContract.test_locked_namespace_refuses) ... ok
+test_low_disk_stops_before_install_clone_and_state (__main__.DiskContract.test_low_disk_stops_before_install_clone_and_state) ... ok
+test_malformed_floors_never_measure_or_reclaim (__main__.DiskContract.test_malformed_floors_never_measure_or_reclaim) ... ok
+test_reclaim_enables_admission_and_repeat_is_idempotent (__main__.DiskContract.test_reclaim_enables_admission_and_repeat_is_idempotent) ... ok
+test_reclaim_still_low_remeasures_and_preserves_outside (__main__.DiskContract.test_reclaim_still_low_remeasures_and_preserves_outside) ... ok
+test_refusal_removal_mutation_breaks_exact_regression (__main__.DiskContract.test_refusal_removal_mutation_breaks_exact_regression) ... ok
+test_second_measurement_failure_refuses_after_reclaim (__main__.DiskContract.test_second_measurement_failure_refuses_after_reclaim) ... ok
+test_unsafe_names_types_links_modes_and_paths_refuse_without_deletion (__main__.DiskContract.test_unsafe_names_types_links_modes_and_paths_refuse_without_deletion) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 10.041s
+
+OK
+  PASS  selftest mutation: disk-suite exit 23 propagated as exit 1
+  PASS  disk mutation: exact regression caught adapter/clone fall-through
+EXIT: 0
+
+$ bash tests/selftest.sh
+1. every script parses
+  PASS  bash -n bunker-server-install.sh
+  PASS  bash -n lib.sh
+  PASS  bash -n node-create.sh
+  PASS  bash -n project-node.sh
+  PASS  bash -n readme-audit-20261030-110314.sh
+  PASS  bash -n verify-node.sh
+  PASS  bash -n install-claude-code.sh
+  PASS  bash -n install-hermes.sh
+  PASS  bash -n install-opencode.sh
+  PASS  bash -n build-contract.sh
+  PASS  bash -n selftest.sh
+2. the node checker FAILS on an empty PATH
+  PASS  empty PATH -> exit 1
+  PASS  report contains FAIL rows
+3. unreachable Crier reports one HTTP status code
+  PASS  unreachable URL -> one 000 status
+4. clone errors distinguish missing refs from repository access
+  PASS  missing ref names main and --ref without a private-repo hint
+  PASS  repository access failure retains deploy-key hint
+5. fetch_verified refuses a wrong digest
+  PASS  correct digest accepted
+digest mismatch for file:///var/tmp/hermes-scratch/tmp.B9wLMgvSLD/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03
+  PASS  wrong digest refused
+6. no literal credential assignments
+  PASS  none found
+7. the board is valid JSONL
+  PASS  36/36 rows parse
+8. project board entrypoint is real and fails closed without dependency
+  PASS  bash -n scripts/boardctl
+  PASS  local help
+  PASS  missing boardctl -> explicit FAIL, exit 127
+9. every prompt file the README relies on exists
+  PASS  every prompts/*.md named by README.md exists
+  PASS  absent prompt refused (absent: prompts/ghost-lane.md)
+10. Hermes refuses an unsupported Python without pip or network
+  PASS  Python 3.14 refusal names the supported range without pip
+11. precise pre-install disk admission and bounded opt-in reclaim (local fixtures)
+test_absent_namespace_remeasures_without_creating_it (__main__.DiskContract.test_absent_namespace_remeasures_without_creating_it) ... ok
+test_boundary_exact_above_and_fractional_floor (__main__.DiskContract.test_boundary_exact_above_and_fractional_floor) ... ok
+test_capacity_recovered_under_lock_skips_deletion (__main__.DiskContract.test_capacity_recovered_under_lock_skips_deletion) ... ok
+test_check_and_default_apply_do_not_reclaim (__main__.DiskContract.test_check_and_default_apply_do_not_reclaim) ... ok
+test_creator_forwards_floor_and_reclaim_before_remote_install (__main__.DiskContract.test_creator_forwards_floor_and_reclaim_before_remote_install) ... ok
+test_creator_stages_helper_and_stops_on_copy_failure (__main__.DiskContract.test_creator_stages_helper_and_stops_on_copy_failure) ... ok
+test_df_timeout_fails_closed (__main__.DiskContract.test_df_timeout_fails_closed) ... ok
+test_failed_and_malformed_df_even_at_zero (__main__.DiskContract.test_failed_and_malformed_df_even_at_zero) ... ok
+test_helper_rejects_caller_selected_reclaim_root (__main__.DiskContract.test_helper_rejects_caller_selected_reclaim_root) ... ok
+test_locked_measurement_error_refuses_without_deletion (__main__.DiskContract.test_locked_measurement_error_refuses_without_deletion) ... ok
+test_locked_namespace_refuses (__main__.DiskContract.test_locked_namespace_refuses) ... ok
+test_low_disk_stops_before_install_clone_and_state (__main__.DiskContract.test_low_disk_stops_before_install_clone_and_state) ... ok
+test_malformed_floors_never_measure_or_reclaim (__main__.DiskContract.test_malformed_floors_never_measure_or_reclaim) ... ok
+test_reclaim_enables_admission_and_repeat_is_idempotent (__main__.DiskContract.test_reclaim_enables_admission_and_repeat_is_idempotent) ... ok
+test_reclaim_still_low_remeasures_and_preserves_outside (__main__.DiskContract.test_reclaim_still_low_remeasures_and_preserves_outside) ... ok
+test_refusal_removal_mutation_breaks_exact_regression (__main__.DiskContract.test_refusal_removal_mutation_breaks_exact_regression) ... ok
+test_second_measurement_failure_refuses_after_reclaim (__main__.DiskContract.test_second_measurement_failure_refuses_after_reclaim) ... ok
+test_unsafe_names_types_links_modes_and_paths_refuse_without_deletion (__main__.DiskContract.test_unsafe_names_types_links_modes_and_paths_refuse_without_deletion) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 40.998s
+
+OK
+  PASS  selftest mutation: disk-suite exit 23 propagated as exit 1
+  PASS  disk mutation: exact regression caught adapter/clone fall-through
+  PASS  disk contract and behavioral refusal mutation
+
+SELFTEST: PASS
+EXIT: 0
+
+$ scripts/boardctl validate
+board: /home/kara/proj-wt-code-factory-20261101-130507/.coding-hermes/board (topology B)
+rows: 36 tasks, 66 events, 0 fixtures
+key uniformity: 36/36 rows carry only canon keys (0 drift)
+[warn] events.jsonl line 61: event has no id field (legacy shape tolerated)
+[warn] headerless board (no board.jsonl): tasks.jsonl line 1 is a task row, not board metadata — no header to validate; header counter checks skipped
+RESULT: OK (2 warning(s))
+EXIT: 0
+
+$ git diff --check
+EXIT: 0
+
+No live role sizing or Bunker orphan inventory/reaping was executed. CF-007 remains in_progress.
+
+Post-format verification after the commit guard requested ruff formatting of tests/disk-contract.py.
+$ ruff format --check scripts/disk-policy.py tests/disk-contract.py
+2 files already formatted
+CF-007 local fixture verification; no live Bunker operations.
+
+$ git rev-parse HEAD
+c0789062a33913eb33037c586a4eb6d387618b11
+EXIT: 0
+
+$ git branch --show-current
+foreman/code-factory-20261101-130507
+EXIT: 0
+
+$ python3 -B tests/disk-contract.py DiskContract.test_low_disk_stops_before_install_clone_and_state DiskContract.test_boundary_exact_above_and_fractional_floor DiskContract.test_capacity_recovered_under_lock_skips_deletion DiskContract.test_locked_measurement_error_refuses_without_deletion DiskContract.test_creator_stages_helper_and_stops_on_copy_failure DiskContract.test_refusal_removal_mutation_breaks_exact_regression
+test_low_disk_stops_before_install_clone_and_state (__main__.DiskContract.test_low_disk_stops_before_install_clone_and_state) ... ok
+test_boundary_exact_above_and_fractional_floor (__main__.DiskContract.test_boundary_exact_above_and_fractional_floor) ... ok
+test_capacity_recovered_under_lock_skips_deletion (__main__.DiskContract.test_capacity_recovered_under_lock_skips_deletion) ... ok
+test_locked_measurement_error_refuses_without_deletion (__main__.DiskContract.test_locked_measurement_error_refuses_without_deletion) ... ok
+test_creator_stages_helper_and_stops_on_copy_failure (__main__.DiskContract.test_creator_stages_helper_and_stops_on_copy_failure) ... ok
+test_refusal_removal_mutation_breaks_exact_regression (__main__.DiskContract.test_refusal_removal_mutation_breaks_exact_regression) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 16.628s
+
+OK
+  PASS  selftest mutation: disk-suite exit 23 propagated as exit 1
+  PASS  disk mutation: exact regression caught adapter/clone fall-through
+EXIT: 0
+
+$ python3 -B tests/disk-contract.py
+test_absent_namespace_remeasures_without_creating_it (__main__.DiskContract.test_absent_namespace_remeasures_without_creating_it) ... ok
+test_boundary_exact_above_and_fractional_floor (__main__.DiskContract.test_boundary_exact_above_and_fractional_floor) ... ok
+test_capacity_recovered_under_lock_skips_deletion (__main__.DiskContract.test_capacity_recovered_under_lock_skips_deletion) ... ok
+test_check_and_default_apply_do_not_reclaim (__main__.DiskContract.test_check_and_default_apply_do_not_reclaim) ... ok
+test_creator_forwards_floor_and_reclaim_before_remote_install (__main__.DiskContract.test_creator_forwards_floor_and_reclaim_before_remote_install) ... ok
+test_creator_stages_helper_and_stops_on_copy_failure (__main__.DiskContract.test_creator_stages_helper_and_stops_on_copy_failure) ... ok
+test_df_timeout_fails_closed (__main__.DiskContract.test_df_timeout_fails_closed) ... ok
+test_failed_and_malformed_df_even_at_zero (__main__.DiskContract.test_failed_and_malformed_df_even_at_zero) ... ok
+test_helper_rejects_caller_selected_reclaim_root (__main__.DiskContract.test_helper_rejects_caller_selected_reclaim_root) ... ok
+test_locked_measurement_error_refuses_without_deletion (__main__.DiskContract.test_locked_measurement_error_refuses_without_deletion) ... ok
+test_locked_namespace_refuses (__main__.DiskContract.test_locked_namespace_refuses) ... ok
+test_low_disk_stops_before_install_clone_and_state (__main__.DiskContract.test_low_disk_stops_before_install_clone_and_state) ... ok
+test_malformed_floors_never_measure_or_reclaim (__main__.DiskContract.test_malformed_floors_never_measure_or_reclaim) ... ok
+test_reclaim_enables_admission_and_repeat_is_idempotent (__main__.DiskContract.test_reclaim_enables_admission_and_repeat_is_idempotent) ... ok
+test_reclaim_still_low_remeasures_and_preserves_outside (__main__.DiskContract.test_reclaim_still_low_remeasures_and_preserves_outside) ... ok
+test_refusal_removal_mutation_breaks_exact_regression (__main__.DiskContract.test_refusal_removal_mutation_breaks_exact_regression) ... ok
+test_second_measurement_failure_refuses_after_reclaim (__main__.DiskContract.test_second_measurement_failure_refuses_after_reclaim) ... ok
+test_unsafe_names_types_links_modes_and_paths_refuse_without_deletion (__main__.DiskContract.test_unsafe_names_types_links_modes_and_paths_refuse_without_deletion) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 34.286s
+
+OK
+  PASS  selftest mutation: disk-suite exit 23 propagated as exit 1
+  PASS  disk mutation: exact regression caught adapter/clone fall-through
+EXIT: 0
+
+$ bash tests/selftest.sh
+1. every script parses
+  PASS  bash -n bunker-server-install.sh
+  PASS  bash -n lib.sh
+  PASS  bash -n node-create.sh
+  PASS  bash -n project-node.sh
+  PASS  bash -n readme-audit-20261030-110314.sh
+  PASS  bash -n verify-node.sh
+  PASS  bash -n install-claude-code.sh
+  PASS  bash -n install-hermes.sh
+  PASS  bash -n install-opencode.sh
+  PASS  bash -n build-contract.sh
+  PASS  bash -n selftest.sh
+2. the node checker FAILS on an empty PATH
+  PASS  empty PATH -> exit 1
+  PASS  report contains FAIL rows
+3. unreachable Crier reports one HTTP status code
+  PASS  unreachable URL -> one 000 status
+4. clone errors distinguish missing refs from repository access
+  PASS  missing ref names main and --ref without a private-repo hint
+  PASS  repository access failure retains deploy-key hint
+5. fetch_verified refuses a wrong digest
+  PASS  correct digest accepted
+digest mismatch for file:///var/tmp/hermes-scratch/tmp.OSWnbX4HC6/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03
+  PASS  wrong digest refused
+6. no literal credential assignments
+  PASS  none found
+7. the board is valid JSONL
+  PASS  36/36 rows parse
+8. project board entrypoint is real and fails closed without dependency
+  PASS  bash -n scripts/boardctl
+  PASS  local help
+  PASS  missing boardctl -> explicit FAIL, exit 127
+9. every prompt file the README relies on exists
+  PASS  every prompts/*.md named by README.md exists
+  PASS  absent prompt refused (absent: prompts/ghost-lane.md)
+10. Hermes refuses an unsupported Python without pip or network
+  PASS  Python 3.14 refusal names the supported range without pip
+11. precise pre-install disk admission and bounded opt-in reclaim (local fixtures)
+test_absent_namespace_remeasures_without_creating_it (__main__.DiskContract.test_absent_namespace_remeasures_without_creating_it) ... ok
+test_boundary_exact_above_and_fractional_floor (__main__.DiskContract.test_boundary_exact_above_and_fractional_floor) ... ok
+test_capacity_recovered_under_lock_skips_deletion (__main__.DiskContract.test_capacity_recovered_under_lock_skips_deletion) ... ok
+test_check_and_default_apply_do_not_reclaim (__main__.DiskContract.test_check_and_default_apply_do_not_reclaim) ... ok
+test_creator_forwards_floor_and_reclaim_before_remote_install (__main__.DiskContract.test_creator_forwards_floor_and_reclaim_before_remote_install) ... ok
+test_creator_stages_helper_and_stops_on_copy_failure (__main__.DiskContract.test_creator_stages_helper_and_stops_on_copy_failure) ... ok
+test_df_timeout_fails_closed (__main__.DiskContract.test_df_timeout_fails_closed) ... ok
+test_failed_and_malformed_df_even_at_zero (__main__.DiskContract.test_failed_and_malformed_df_even_at_zero) ... ok
+test_helper_rejects_caller_selected_reclaim_root (__main__.DiskContract.test_helper_rejects_caller_selected_reclaim_root) ... ok
+test_locked_measurement_error_refuses_without_deletion (__main__.DiskContract.test_locked_measurement_error_refuses_without_deletion) ... ok
+test_locked_namespace_refuses (__main__.DiskContract.test_locked_namespace_refuses) ... ok
+test_low_disk_stops_before_install_clone_and_state (__main__.DiskContract.test_low_disk_stops_before_install_clone_and_state) ... ok
+test_malformed_floors_never_measure_or_reclaim (__main__.DiskContract.test_malformed_floors_never_measure_or_reclaim) ... ok
+test_reclaim_enables_admission_and_repeat_is_idempotent (__main__.DiskContract.test_reclaim_enables_admission_and_repeat_is_idempotent) ... ok
+test_reclaim_still_low_remeasures_and_preserves_outside (__main__.DiskContract.test_reclaim_still_low_remeasures_and_preserves_outside) ... ok
+test_refusal_removal_mutation_breaks_exact_regression (__main__.DiskContract.test_refusal_removal_mutation_breaks_exact_regression) ... ok
+test_second_measurement_failure_refuses_after_reclaim (__main__.DiskContract.test_second_measurement_failure_refuses_after_reclaim) ... ok
+test_unsafe_names_types_links_modes_and_paths_refuse_without_deletion (__main__.DiskContract.test_unsafe_names_types_links_modes_and_paths_refuse_without_deletion) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 25.262s
+
+OK
+  PASS  selftest mutation: disk-suite exit 23 propagated as exit 1
+  PASS  disk mutation: exact regression caught adapter/clone fall-through
+  PASS  disk contract and behavioral refusal mutation
+
+SELFTEST: PASS
+EXIT: 0
+
+$ scripts/boardctl validate
+board: /home/kara/proj-wt-code-factory-20261101-130507/.coding-hermes/board (topology B)
+rows: 36 tasks, 66 events, 0 fixtures
+key uniformity: 36/36 rows carry only canon keys (0 drift)
+[warn] events.jsonl line 61: event has no id field (legacy shape tolerated)
+[warn] headerless board (no board.jsonl): tasks.jsonl line 1 is a task row, not board metadata — no header to validate; header counter checks skipped
+RESULT: OK (2 warning(s))
+EXIT: 0
+
+$ git diff --check
+EXIT: 0
+
+No live role sizing or Bunker orphan inventory/reaping was executed. CF-007 remains in_progress.

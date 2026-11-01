@@ -62,7 +62,10 @@ the command arrives as a message and the answer comes back as a message.
 - **Result digest mismatch** → run FAILS; the node is quarantined until `--check` passes.
 - **Bus guard blocks the envelope** → the envelope is at fault, not the guard; see
   `specs/ENVELOPE.md` for the reserved key names.
-- **Disk exhaustion** → the node refuses new work at the floor rather than filling the host.
+- **Disk exhaustion** → the node must refuse new work below its floor rather than filling the
+  host. The local provisioning gate implements this before installation (provisional 5 GiB,
+  exact measured comparison; see `specs/NODE.md#disk-floor`). Runtime enforcement, current
+  role sizing and live Bunker residue reaping remain unverified under CF-007.
 
 ## 6. What this design deliberately does not do
 

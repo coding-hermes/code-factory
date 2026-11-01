@@ -24,7 +24,8 @@ printf '000'
 exit 7
 EOF
 chmod +x "$tmpd/curl"
-out=$(env PATH="$tmpd:$PATH" HOME="$tmpd/home" NODE_PROJECT=demo CRIER_URL=http://closed.test:8767 \
+mkdir "$tmpd/home"
+out=$(env PATH="$tmpd:$PATH" HOME="$tmpd/home" NODE_DISK_FLOOR=0 NODE_PROJECT=demo CRIER_URL=http://closed.test:8767 \
   /bin/bash "$HERE/scripts/project-node.sh" --check --project demo 2>&1); rc=$?
 expected='  FAIL  reach:http://closed.test:8767/health — -> 000'
 if [ "$rc" -ne 0 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ]; then
@@ -44,7 +45,8 @@ echo fixture > "$tmpd/work/README"
 git -C "$tmpd/work" add README
 git -C "$tmpd/work" commit -qm fixture
 git clone -q --bare "$tmpd/work" "$tmpd/origin.git"
-missing_ref=$(env HOME="$tmpd/missing-home" NODE_PROJECT=demo \
+mkdir "$tmpd/missing-home" "$tmpd/private-home"
+missing_ref=$(env HOME="$tmpd/missing-home" NODE_DISK_FLOOR=0 NODE_PROJECT=demo \
   /bin/bash "$HERE/scripts/project-node.sh" --apply --project demo --harness fixture \
   --repo "file://$tmpd/origin.git" 2>&1); rc=$?
 expected="  FAIL  repo_clone — ref 'main' was not found; pass --ref <branch-or-tag>"
@@ -66,7 +68,7 @@ case "$1" in
 esac
 EOF
 chmod +x "$tmpd/bin/git"
-private_repo=$(env PATH="$tmpd/bin:$PATH" REAL_GIT="$(command -v git)" HOME="$tmpd/private-home" NODE_PROJECT=demo \
+private_repo=$(env PATH="$tmpd/bin:$PATH" REAL_GIT="$(command -v git)" HOME="$tmpd/private-home" NODE_DISK_FLOOR=0 NODE_PROJECT=demo \
   /bin/bash "$HERE/scripts/project-node.sh" --apply --project demo --harness fixture \
   --repo https://private.fixture.invalid/repo.git 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$private_repo" | grep -Fq 'private repos need a deploy key'; then
@@ -159,6 +161,13 @@ else
   say "  FAIL  unsupported Python refusal was missing or reached pip"; fails=$((fails+1))
 fi
 rm -rf "$tmpd"
+
+say "11. precise pre-install disk admission and bounded opt-in reclaim (local fixtures)"
+if python3 -B "$HERE/tests/disk-contract.py" DiskContract; then
+  say "  PASS  disk contract and behavioral refusal mutation"
+else
+  say "  FAIL  disk contract"; fails=$((fails+1))
+fi
 
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

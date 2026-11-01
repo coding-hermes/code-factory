@@ -84,7 +84,7 @@ def snapshot(info):
     )
 
 
-def reclaim(home):
+def reclaim(home, enough):
     """No recursion or caller-selected target. Account and producers are trusted."""
     require(
         home == os.environ.get("HOME")
@@ -121,6 +121,11 @@ def reclaim(home):
                 "unsafe reclaim directory ownership/mode/device",
             )
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # Capacity may recover while admission waits to reach the namespace.
+        # An invalid observation must fail before any eligible blob is removed.
+        if enough(available_kib(home)):
+            print("  ..    capacity recovered under reclaim lock; skipping deletion")
+            return 0
         entries = []
         with os.scandir(fd) as iterator:
             for entry in iterator:
@@ -165,7 +170,7 @@ def admission(path, floor, cleanup=False):
     free = available_kib(path)
     if not enough(free) and cleanup:
         print(f"  WARN  disk — {values(free)}; attempting opted-in disposable reclaim")
-        count = reclaim(path)
+        count = reclaim(path, enough)
         print(f"  ..    disposable reclaim: {count} cache blobs removed")
         free = available_kib(path)
     if not enough(free):

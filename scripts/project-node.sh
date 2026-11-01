@@ -4,12 +4,12 @@
 # Runs on the agent, not on the control host (node-create.sh stages it).
 #
 #   project-node.sh --check   [--project P] [--harness hermes] [--repo URL] [--ref main]
-#   project-node.sh --apply   [same args]
+#   project-node.sh --apply   [same args] [--disk-floor GiB] [--reclaim-disposable]
 #
 # Layers: 00 preflight, 10 base, 20 harness, 30 bus, 40 repo, 90 verify (verify is the
 # control host's job; here we only prove the node-side plumbing exists).
 set -uo pipefail
-HERE="$(cd "$(dirname "$0")" && pwd)"
+HERE="$(cd -- "${BASH_SOURCE[0]%/*}" && pwd)"
 . "$HERE/lib.sh"
 
 PROJECT="${NODE_PROJECT:-}"
@@ -17,14 +17,21 @@ HARNESS="${NODE_HARNESS:-hermes}"
 REPO=""
 REF="${NODE_REF:-main}"
 PORT="${NODE_GATEWAY_PORT:-10800}"
-FLOOR="${NODE_DISK_FLOOR:-5}"
+FLOOR="${NODE_DISK_FLOOR-5}"
 MODE=""
+RECLAIM=0
 STATE="$HOME/.node"
 
 while [ $# -gt 0 ]; do
   case "$1" in
+    --project|--harness|--repo|--ref|--port|--disk-floor)
+      [ $# -ge 2 ] || { echo "missing value: $1" >&2; exit 2; } ;;
+  esac
+  case "$1" in
     --check) MODE=check; shift ;;
     --apply) MODE=apply; shift ;;
+    --disk-floor) FLOOR="$2"; shift 2 ;;
+    --reclaim-disposable) RECLAIM=1; shift ;;
     --project) PROJECT="$2"; shift 2 ;;
     --harness) HARNESS="$2"; shift 2 ;;
     --repo) REPO="$2"; shift 2 ;;
@@ -33,16 +40,22 @@ while [ $# -gt 0 ]; do
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
-[ -z "$MODE" ] && { echo "usage: $0 --check|--apply [--project P] [--harness H] [--repo URL] [--ref R]"; exit 2; }
+[ -z "$MODE" ] && { echo "usage: $0 --check|--apply [--project P] [--harness H] [--repo URL] [--ref R] [--disk-floor GiB] [--reclaim-disposable]"; exit 2; }
 [ -z "$PROJECT" ] && { echo "--project is required (a node belongs to exactly one project)"; exit 2; }
 
-mkdir -p "$STATE"
 say "node provisioning — project=$PROJECT harness=$HARNESS host=$(hostname)"
 
 # ---------------------------------------------------------------- 00 preflight
 say "[00] preflight"
 arch=$(uname -m); ok "arch" "$arch ($(uname -sr))"
-require_disk "$HOME" "$FLOOR" || true
+disk_args=("$HOME" "$FLOOR")
+if [ "$MODE" = apply ] && [ "$RECLAIM" -eq 1 ]; then
+  disk_args+=(--reclaim-disposable)
+fi
+require_disk "${disk_args[@]}" || { say "NODE: FAIL (disk admission)"; exit 1; }
+if [ "$MODE" = apply ] && [ ! -d "$STATE" ]; then
+  mkdir -m 700 "$STATE" || { bad "state" "cannot create node state directory"; exit 1; }
+fi
 mem=$(awk '/MemAvailable/{printf "%d", $2/1024}' /proc/meminfo)
 [ "${mem:-0}" -ge 1024 ] && ok "mem" "${mem} MB" || bad "mem" "${mem} MB < 1024"
 CRIER="${CRIER_URL:-}"
@@ -73,7 +86,13 @@ inst="$HERE/harness/install-$HARNESS.sh"
 if [ ! -x "$inst" ]; then
   bad "harness:$HARNESS" "no adapter at scripts/harness/install-$HARNESS.sh"
 else
-  if [ "$MODE" = apply ]; then NODE_GATEWAY_PORT="$PORT" "$inst" --apply; else NODE_GATEWAY_PORT="$PORT" "$inst" --check; fi
+  if [ "$MODE" = apply ]; then
+    NODE_GATEWAY_PORT="$PORT" "$inst" --apply
+  else
+    NODE_GATEWAY_PORT="$PORT" "$inst" --check
+  fi
+  hrc=$?
+  [ "$hrc" -eq 0 ] && ok "harness_check" "$HARNESS adapter exited 0" || bad "harness_check" "$HARNESS adapter exited $hrc"
 fi
 
 # ---------------------------------------------------------------- 30 bus
@@ -118,19 +137,14 @@ fi
 # ---------------------------------------------------------------- manifest
 say "[90] manifest"
 if [ "$MODE" = apply ] && [ "$FAILED" -eq 0 ]; then
-  python3 - "$STATE/node.json" "$PROJECT" "$HARNESS" "$PORT" "$REPO" "$REF" "$(hostname)" <<'PY'
-import json, sys, time
-path, project, harness, port, repo, ref, host = sys.argv[1:8]
-json.dump({"node_id": host, "project": project,
-           "repo": {"origin": repo, "ref": ref, "path": "/home/" + __import__("os").environ.get("USER", "node") + "/repo"},
-           "harness": {"name": harness, "port": int(port)},
-           "bus": {"base": __import__("os").environ.get("CRIER_BASE", "http://crier.example:8767")},
-           "created_by": "project-node.sh v1",
-           "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
-          open(path, "w"), indent=1)
-print("wrote", path)
-PY
-  ok "manifest" "$STATE/node.json"
+  # Reuse the identity-checked writer so admitted re-apply preserves manifest bytes.
+  if python3 -B "$HERE/node-contract.py" manifest-write "$PROJECT" "$REPO" "$HARNESS" \
+      "${NODE_ID:-$(hostname)}" "$REF" "$PORT" "${CRIER_AGENT_ID:-${NODE_ID:-$(hostname)}}" \
+      "${CRIER_BASE:-${CRIER_URL:-}}" unknown; then
+    ok "manifest" "$STATE/node.json (identical re-apply preserves bytes)"
+  else
+    bad "manifest_write" "atomic manifest publication failed"
+  fi
 elif [ -f "$STATE/node.json" ]; then
   ok "manifest" "$STATE/node.json"
 else

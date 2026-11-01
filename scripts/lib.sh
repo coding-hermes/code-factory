@@ -28,17 +28,10 @@ fetch_verified() {
   chmod +x "$dest" 2>/dev/null || true
 }
 
-# Free space in GB at a path.
-free_gb() { df -Pk "$1" | awk 'NR==2{printf "%.1f", $4/1048576}'; }
-
-# Refuse below the floor, naming the number (CF-109 / N-5).
+# The policy owns exact floor validation, measurement and guarded opt-in reclaim.
 require_disk() {
-  local path="$1" floor="$2" free
-  free=$(free_gb "$path")
-  if awk -v f="$free" -v m="$floor" 'BEGIN{exit !(f>=m)}'; then
-    ok "disk" "${free} GB free (floor ${floor} GB)"
-  else
-    bad "disk" "${free} GB free < floor ${floor} GB at ${path}"
+  if ! python3 -B "${BASH_SOURCE[0]%/*}/disk-policy.py" "$@"; then
+    FAILED=$((FAILED+1))
     return 1
   fi
 }

@@ -10,9 +10,17 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
 
 PROJECT="" REPO="" HARNESS="hermes" AGENT="" TTL="6h" SERVER="${BUNKER_SERVER:?set BUNKER_SERVER to your bunker server name}" PORT=10800
+FLOOR="${NODE_DISK_FLOOR-5}"
+RECLAIM=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
+    --project|--repo|--harness|--agent|--ttl|--port|--disk-floor)
+      [ $# -ge 2 ] || { echo "missing value: $1" >&2; exit 2; } ;;
+  esac
+  case "$1" in
+    --disk-floor) FLOOR="$2"; shift 2 ;;
+    --reclaim-disposable) RECLAIM=1; shift ;;
     --project) PROJECT="$2"; shift 2 ;;
     --repo) REPO="$2"; shift 2 ;;
     --harness) HARNESS="$2"; shift 2 ;;
@@ -22,7 +30,11 @@ while [ $# -gt 0 ]; do
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
-[ -z "$PROJECT" ] && { echo "usage: $0 --project P --repo URL [--harness H] [--agent ID]"; exit 2; }
+[ -z "$PROJECT" ] && { echo "usage: $0 --project P --repo URL [--harness H] [--agent ID] [--disk-floor GiB] [--reclaim-disposable]"; exit 2; }
+# Match disk-policy.py's bounded decimal grammar before any remote operation.
+if ! [[ "$FLOOR" =~ ^[0-9]{1,9}(\.[0-9]{1,9})?$ ]]; then
+  bad "disk" "invalid floor; expected unsigned decimal GiB (1-9 digits per part)"; exit 2
+fi
 
 b=$(have bunker) || { echo "bunker client missing" >&2; exit 1; }
 
@@ -40,17 +52,34 @@ fi
 
 # 2. stage the provisioner INTO the node (scripts run there, they do not reach back)
 say "  ..    staging scripts"
-"$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'mkdir -p ~/node-scripts/harness' >/dev/null 2>&1
-"$b" cp "$HERE/project-node.sh" "$AGENT:node-scripts/project-node.sh" --server "$SERVER" >/dev/null 2>&1
-"$b" cp "$HERE/lib.sh" "$AGENT:node-scripts/lib.sh" --server "$SERVER" >/dev/null 2>&1
-"$b" cp "$HERE/harness/install-$HARNESS.sh" "$AGENT:node-scripts/harness/install-$HARNESS.sh" --server "$SERVER" >/dev/null 2>&1
-"$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'chmod +x ~/node-scripts/project-node.sh ~/node-scripts/harness/*.sh' >/dev/null 2>&1
+if ! "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'mkdir -p ~/node-scripts/harness' >/dev/null 2>&1; then
+  bad "stage_dir" "could not create ~/node-scripts/harness"; exit 1
+fi
+for source in project-node.sh lib.sh node-contract.py disk-policy.py "harness/install-$HARNESS.sh"; do
+  if ! "$b" cp "$HERE/$source" "$AGENT:node-scripts/$source" --server "$SERVER" >/dev/null 2>&1; then
+    if [ "$source" = disk-policy.py ]; then
+      bad "stage_disk_policy" "copy failed"
+    else
+      bad "stage_script" "copy failed: $source"
+    fi
+    exit 1
+  fi
+done
+if ! "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'chmod +x ~/node-scripts/project-node.sh ~/node-scripts/harness/*.sh' >/dev/null 2>&1; then
+  bad "stage_mode" "could not mark staged scripts executable"; exit 1
+fi
 ok "staged" "project-node.sh + harness/install-$HARNESS.sh"
 
 # 3. provision inside
 say "  ..    provisioning inside the node"
-if "$b" exec --server "$SERVER" "$AGENT" -- bash -lc \
-     "NODE_PROJECT='$PROJECT' NODE_GATEWAY_PORT='$PORT' ~/node-scripts/project-node.sh --apply --project '$PROJECT' --harness '$HARNESS' --repo '$REPO'"; then
+printf -v q_project '%q' "$PROJECT"
+printf -v q_harness '%q' "$HARNESS"
+printf -v q_repo '%q' "$REPO"
+printf -v q_port '%q' "$PORT"
+printf -v q_floor '%q' "$FLOOR"
+provision_cmd="NODE_PROJECT=$q_project NODE_GATEWAY_PORT=$q_port NODE_DISK_FLOOR=$q_floor ~/node-scripts/project-node.sh --apply --project $q_project --harness $q_harness --repo $q_repo"
+[ "$RECLAIM" -eq 0 ] || provision_cmd+=" --reclaim-disposable"
+if "$b" exec --server "$SERVER" "$AGENT" -- bash -lc "$provision_cmd"; then
   ok "provision" "node reports PASS"
 else
   bad "provision" "node reported FAIL — see the output above"
