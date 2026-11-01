@@ -158,18 +158,20 @@ qa_battery_lock_keep_for_launch() {
   # this short-lived launch process lets the next launch wait on the keeper.
   exec 9>&-
 }
-# QA-HIVEMIND-WORK-18(a): the agent SSH port is SERVER-SPECIFIC (bunker-mvp
-# answers on 22; las-fleet agents answer on 2223). The old blanket bare-port
-# default made the post-spawn probe fail on mvp and the
-# retry loop DESTROY a healthy fresh agent. Known-server table; an explicit
-# BUNKER_QA_SSH_PORT export still overrides everything.
+# QA-HIVEMIND-WORK-18(a): the agent SSH port is SERVER-SPECIFIC — table updated
+# 2026-11-01 (qa-foreman tick): ALL reachable fleet hosts now answer agent SSH on
+# 22. TCP probe 2026-11-01 across ~/.bunker/config.yaml: 13/14 hosts 22=OPEN
+# 2223=closed (hermes-fleet-03 answers BOTH; bunker-las-04 + cube-las-00 fully
+# unreachable). The old "las-fleet → 2223" default went stale and burned 3
+# batteries (las-02/las-03 repo-sync "connection refused") plus 2 false
+# "server unreachable" preflights (hermes-fleet-05 is UP on 22) on 2026-11-01
+# alone. Default is now 22 for every host; an explicit BUNKER_QA_SSH_PORT
+# export still overrides everything, and a future per-host exception only
+# needs a case arm again.
 server_ssh_port() {
   local srv="${1:-$SERVER}"
   [ -n "${BUNKER_QA_SSH_PORT:-}" ] && { echo "$BUNKER_QA_SSH_PORT"; return; }
-  case "$srv" in
-    mvp|bunker-mvp) echo 22 ;;
-    *) echo 2223 ;;
-  esac
+  echo 22
 }
 # QA-keyfix 2026-09-30: ~/.ssh/id_ed25519_bunker was clobbered by an ELF binary
 # (2026-09-28), so any ssh carrying it as the ONLY IdentitiesOnly identity fails
