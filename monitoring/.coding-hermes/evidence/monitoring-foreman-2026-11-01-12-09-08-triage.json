@@ -1,0 +1,35 @@
+{
+  "tick": "monitoring-foreman-2026-11-01-12-09-08",
+  "captured_at_utc": "2026-11-01T17:15:00Z",
+  "witness": "live:fleet-monitor:9090",
+  "board": "/home/kara/monitoring/.coding-hermes/board/tasks.jsonl",
+  "verdict_class": "STALE-RESOLVED",
+  "probes": {
+    "alerts_api_total_entries": 0,
+    "alerts_api_firing_fleetwide": 0,
+    "alerts_query_diskfull_diskwillfill_host_karahermes": 0,
+    "node_filesystem_avail_bytes_host_karahermes_root": 139574173696,
+    "node_filesystem_size_bytes_host_karahermes_root": 1966736678912,
+    "avail_ratio": 0.0710,
+    "diskfull_threshold": 0.05,
+    "predict_linear_6h_to_86400_bytes": 339091342957.2375,
+    "diskwillfill_expression_result": "empty vector (forecast positive AND ratio 0.0710 >= 0.25 false) — alert cannot hold",
+    "bunker_mvp_oom_kill_delta_15m": 0,
+    "bunker_mvp_mem_available_ratio": 0.8814432022504096,
+    "capacity_rule_exists": "alert: DiskFull at alerts/rules/capacity.yml line 10 (both subtree copy and canonical repo)"
+  },
+  "resolution_events_events_jsonl": [
+    {"id": "MON-MONITORING-5439C9BE-20261101-RESOLVED", "endsAt": "2026-11-01T01:08:45.919Z", "resolved_at": "2026-11-01 01:09:55"},
+    {"id": "MON-MONITORING-EE32DFF5-20261101-RESOLVED", "endsAt": "2026-11-01T02:03:45.919Z", "resolved_at": "2026-11-01 02:08:15"},
+    {"id": "MON-MONITORING-FA5F538B-20261101-RESOLVED", "endsAt": "2026-11-01T05:04:08.579Z", "resolved_at": "2026-11-01 05:05:08"}
+  ],
+  "rows_closed": [
+    {"id": "MON-MONITORING-5439C9BE-20261101", "verdict": "STALE-RESOLVED", "measured": "ratio 0.0710 (130.0GiB free of 1831.7GiB) >= 0.05; ALERTS DiskFull series=0"},
+    {"id": "MON-MONITORING-EE32DFF5-20261101", "verdict": "STALE-RESOLVED", "measured": "predict_linear 24h = +339GB; own expression empty; ALERTS series=0"},
+    {"id": "MON-MONITORING-FA5F538B-20261101", "verdict": "STALE-RESOLVED", "measured": "delta(node_vmstat_oom_kill{host=bunker-mvp}[15m])=0; MemAvailable/MemTotal=0.8814; ALERTS series=0"},
+    {"id": "MON-MONITORING-5439C9BE-20261031", "occurrence": "3rd physical line, created_at 2026-10-31 23:23:55, status pending", "verdict": "STALE-RESOLVED", "measured": "same live probes as -20261101; alert quiet since 01:08:45Z"}
+  ],
+  "drain": {"appended": 0, "skipped": 1268, "refire": 0, "olddate_suppressed": 88, "unwritable": 0, "live_ok": true},
+  "ci": "absent: gh run list --repo totalwindupflightsystems/fleet-monitoring returns [] (workflow count 0)",
+  "note": "Dup-id row edited by predicate (id + status=pending + created_at), not by boardctl id lookup, per MON-GAP-033 duplicate-id producer defect."
+}
