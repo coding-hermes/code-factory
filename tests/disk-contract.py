@@ -6,6 +6,7 @@ import importlib.util
 import os
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
 import unittest
 
@@ -425,6 +426,87 @@ printf '%s\\n' 'Filesystem 1024-blocks Used Available Capacity Mounted on' "fixt
         self.refused(self.apply("--reclaim-disposable"))
         self.assertFalse(blob.exists())
         self.assertEqual(self.observations.read_text().splitlines(), ["1048576", "bad"])
+
+    def df_sequence(self, *readings):
+        self.env["DF_SEQUENCE"] = ",".join(readings)
+        self.executable(
+            self.bin / "df",
+            """#!/usr/bin/python3
+import os
+from pathlib import Path
+log = Path(os.environ['OBSERVATIONS'])
+index = len(log.read_text().splitlines()) if log.exists() else 0
+readings = os.environ['DF_SEQUENCE'].split(',')
+assert index < len(readings), 'unexpected extra disk observation'
+free = readings[index]
+with log.open('a') as stream: stream.write(free + '\\n')
+print('Filesystem 1024-blocks Used Available Capacity Mounted on')
+print('fixture 20000000 1 ' + free + ' 1% /')
+""",
+        )
+
+    def test_capacity_recovered_under_lock_skips_deletion(self):
+        directory, blob = self.cache()
+        stamp = directory.stat().st_mtime_ns
+        self.df_sequence("1048576", "5242880", "5242880")
+        p = self.apply("--reclaim-disposable")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("capacity recovered under reclaim lock", p.stdout)
+        self.assertIn("0 cache blobs removed", p.stdout)
+        self.assertTrue(blob.exists(), p.stdout + p.stderr)
+        self.assertEqual(directory.stat().st_mtime_ns, stamp)
+        self.assertEqual(
+            self.observations.read_text().splitlines(),
+            ["1048576", "5242880", "5242880"],
+        )
+        self.assertIn("adapter", self.effects.read_text())
+
+    def test_locked_measurement_error_refuses_without_deletion(self):
+        _, blob = self.cache()
+        self.df_sequence("1048576", "bad")
+        self.refused(self.apply("--reclaim-disposable"))
+        self.assertTrue(blob.exists())
+        self.assertEqual(self.observations.read_text().splitlines(), ["1048576", "bad"])
+
+    def test_creator_forwards_floor_and_reclaim_before_remote_install(self):
+        (self.home / ".node/node.json").write_text("{}")
+        args = (
+            "--project", "fixture", "--repo",
+            "https://example.invalid/team/repo.git", "--harness", "hermes",
+        )
+        for flags, floor, reclaim in (
+            ((), "5", False),
+            (("--disk-floor", "7.25", "--reclaim-disposable"), "7.25", True),
+        ):
+            with self.subTest(flags=flags):
+                self.calls.unlink(missing_ok=True)
+                p = self.run_script("node-create.sh", *args, *flags)
+                self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+                calls = fixture.NodeContract.recorded(self)
+                commands = [a[-1] for a in calls if "project-node.sh --apply" in a[-1]]
+                self.assertEqual(len(commands), 1)
+                words = shlex.split(commands[0])
+                self.assertIn(f"NODE_DISK_FLOOR={floor}", words)
+                self.assertEqual("--reclaim-disposable" in words, reclaim)
+        self.env["NODE_DISK_FLOOR"] = "6.5"
+        self.calls.unlink(missing_ok=True)
+        p = self.run_script("node-create.sh", *args)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        command = next(a[-1] for a in fixture.NodeContract.recorded(self)
+                       if "project-node.sh --apply" in a[-1])
+        self.assertIn("NODE_DISK_FLOOR=6.5", shlex.split(command))
+        for flags in (("--disk-floor", "bad"), ("--disk-floor",),
+                      ("--disk-floor", ""), ("--disk-floor", "5;id")):
+            with self.subTest(flags=flags):
+                self.calls.unlink(missing_ok=True)
+                p = self.run_script("node-create.sh", *args, *flags)
+                self.assertNotEqual(p.returncode, 0, p.stdout + p.stderr)
+                self.assertEqual(fixture.NodeContract.recorded(self), [])
+        self.env["NODE_DISK_FLOOR"] = "not-a-floor"
+        self.calls.unlink(missing_ok=True)
+        p = self.run_script("node-create.sh", *args)
+        self.assertNotEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(fixture.NodeContract.recorded(self), [])
 
     def test_creator_stages_helper_and_stops_on_copy_failure(self):
         (self.home / ".node/node.json").write_text("{}")
