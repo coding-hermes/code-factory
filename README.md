@@ -70,17 +70,16 @@ instead of implying it works.
 
 | Piece | State | Command that can contradict it |
 |---|---|---|
-| Hermes in a bunker + HTTP gateway over tailnet | **works (historical measurement)** — observed on a live node on 2026-10-29: 32 s install, `/api/status` 200, 133 JSON-RPC methods. The recorded measurement is in `specs/HARNESS.md#adapters-and-their-measured-state` and the repo-local audit `docs/audits/code-factory-readme-2026-10-30-20-29-25.md#2-status-table-both-command-bearing-rows`; it is not reproducible from this repo alone. Current local evidence is only `scripts/harness/install-hermes.sh --check`, which reports the pinned version, port and inference-key state. `--apply` needs Python 3.11–3.13 — the pinned `hermes-agent==0.19.0` declares `Requires-Python >=3.11,<3.14`, so Python 3.14 stops at `FAIL install — pip failed` (CF-036). | Re-run the current local check: `scripts/harness/install-hermes.sh --check`. For the historical figures, read the committed artifact named in the state cell; no live endpoint or credential is claimed here. |
+| Hermes in a bunker + HTTP gateway over tailnet | **works (historical measurement)** — observed on a live node on 2026-10-29: 32 s install, `/api/status` 200, 133 JSON-RPC methods. The recorded measurement is in `specs/HARNESS.md#adapters-and-their-measured-state` and the repo-local audit `docs/audits/code-factory-readme-2026-10-30-20-29-25.md#2-status-table-both-command-bearing-rows`; it is not reproducible from this repo alone. Current local evidence is only `scripts/harness/install-hermes.sh --check`, which reports the pinned version, port and inference-key state. `--apply` needs Python `>=3.11,<3.14` — the pinned `hermes-agent==0.19.0` declares that range, and the installer now refuses Python 3.14 before pip with the detected version. The exact selftest/check output is recorded in `docs/audits/code-factory-CF-036.md` (CF-036). | Re-run the current local check: `scripts/harness/install-hermes.sh --check`. For the historical figures, read the committed artifact named in the state cell; no live endpoint or credential is claimed here. |
 | Repo clone in a node | **works (historical local measurement)** for public HTTPS — `PASS repo_clone … @ 9402f6a` was measured on 2026-10-30 with `https://github.com/github/gitignore` and is recorded in `docs/audits/code-factory-readme-2026-10-30-20-29-25.md#2-status-table-both-command-bearing-rows`. A re-run derives the current HEAD, which may move. **No build step yet**: layer 40 clones only, so the build cache `specs/NODE.md` asks for is not established (CF-032). Private repos are **blocked** — a deploy key has no tested procedure yet. | Re-run with a temporary HOME and the same public fixture: `home=$(mktemp -d); HOME="$home" ./scripts/project-node.sh --apply --project myproject --repo https://github.com/github/gitignore --ref main; git -C "$home/repo" rev-parse HEAD`. The committed audit records the historical output and read-back command. |
 | Node inference credential | **missing** — a turn dies at `No inference provider configured`; the node needs its own key, never an operator key | `scripts/harness/install-hermes.sh --check` -> `FAIL inference_key` |
 | crier identity in a node | **missing** — no `~/.node/crier.json` yet | `./scripts/project-node.sh --check --project myproject` -> `FAIL crier_identity` |
 | Scheduler → crier dispatch | **built, disarmed** — needs 2 env vars, 1 target row, `payload.text` (CF-001) | not armed, so nothing to run |
 | Round trip through the node's own gateway | **not yet** — no checked-in command proves it; the one attempt used a bespoke poller rather than the node's gateway (CF-004) | no command exists to fail |
 
-Two things the commands above do not show. `--ref` defaults to `main`, so a public repo whose
-default branch is named differently fails the clone until you pass `--ref <branch>`. And a failed
-clone always appends the `private repos need a deploy key` hint, even when the real cause is a
-missing branch (CF-034).
+`--ref` defaults to `main`, so a public repo whose default branch is named differently needs
+`--ref <branch>`. A missing ref reports that ref and the `--ref` flag; a repository-access failure
+retains the deploy-key hint for private repositories (CF-034).
 
 See `.coding-hermes/board/tasks.jsonl` for the work items and their acceptance criteria.
 
@@ -154,7 +153,9 @@ a prompt file the tree does not ship.
 The scheduler also carries disabled `code-factory-duckbrain-*` rows. They are not part of the
 shipped family above and are not counted in the fourteen.
 
-Evidence for the state of this README: `docs/audits/code-factory-readme-2026-10-30-20-29-25.md` for how the rows, layout and lane table were written, and `docs/audits/code-factory-readme-2026-10-30-23-28-00.md` for the latest command-by-command re-run (its transcript is the `.probe.txt` beside it).
+Evidence for the state of this README: the clone figure is covered by the published audit `docs/audits/code-factory-readme-2026-10-30-20-29-25.md`; the prompt column and the eleven-file/layout census are covered by the published audit `docs/audits/code-factory-readme-2026-10-30-23-28-00.md` (whose command transcript is the `.probe.txt` beside it).
+
+ch:trace row=CF-038 spec=README.md#evidence wave=none:serial test=bash-tests/selftest.sh doc=README.md evidence=docs/audits/code-factory-readme-2026-10-30-23-28-00.md witness=path@origin:README.md verdict=none:foreman-judges-after-merge commit=none:self-referential-hash memory=none:not-written
 
 ch:trace row=CF-014 spec=README.md#quick-start wave=code-factory-readme-2026-10-30-18-28-33#readme test=scripts/project-node.sh::check-project-demo doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=path@origin:README.md verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-18-28-33
 ch:trace row=CF-013 spec=README.md#status wave=code-factory-readme-2026-10-30-18-28-33#readme test=scripts/harness/install-hermes.sh::check doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=none:no-live-bunker-or-gateway-available verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-18-28-33
