@@ -254,3 +254,4 @@
 {"id":411,"timestamp":"2026-11-02 09:10:24","event_type":"task_created","task_id":"MON-GAP-043","actor":"foreman","detail":"{\"id\":\"MON-GAP-043\",\"status\":\"pending\"}"}
 {"id":412,"timestamp":"2026-11-02 09:59:50","event_type":"task_completed","task_id":"MON-GAP-043","actor":"foreman","detail":"{\"id\":\"MON-GAP-043\",\"status\":\"complete\",\"commit\":\"9750317212\",\"verdict\":\"7d5e3f1a\"}"}
 {"id":413,"timestamp":"2026-11-02 10:06:00","event_type":"task_created","task_id":"MON-GAP-044","actor":"foreman","detail":"{\"id\":\"MON-GAP-044\",\"status\":\"pending\"}"}
+{"id":414,"timestamp":"2026-11-02 10:14:00","event_type":"task_completed","task_id":"MON-MONITORING-5439C9BE-20261102","actor":"foreman","detail":"{\"id\":\"MON-MONITORING-5439C9BE-20261102\",\"status\":\"complete\",\"evidence_fingerprint\":\"ffb06deabdae03d24e579c99d26044bd77131553659393261e1eaa0cded17a34\"}"}

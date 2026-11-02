@@ -1,0 +1,103 @@
+{
+  "captured_at": "2026-11-02T10:14:00Z",
+  "tick": "monitoring-foreman-2026-11-02-09-16-29",
+  "row": "MON-MONITORING-5439C9BE-20261102",
+  "probe": "DiskFull alert-state + node_filesystem ratio on fleet-monitor:9090",
+  "diskfull_alerts_total": 0,
+  "diskfull_firing": [],
+  "all_firing": [],
+  "ratio_query": [
+    {
+      "metric": {
+        "device": "/dev/sda1",
+        "environment": "prod",
+        "fstype": "ext4",
+        "host": "fleet-monitor",
+        "instance": "fleet-monitor",
+        "job": "integrations/unix",
+        "mountpoint": "/"
+      },
+      "value": [
+        1793614157.755,
+        "0.8307187443986457"
+      ]
+    },
+    {
+      "metric": {
+        "device": "/dev/sda1",
+        "environment": "prod",
+        "fstype": "ext4",
+        "host": "backoffice-coolify",
+        "instance": "backoffice-coolify",
+        "job": "integrations/unix",
+        "mountpoint": "/"
+      },
+      "value": [
+        1793614157.755,
+        "0.8987577818029477"
+      ]
+    },
+    {
+      "metric": {
+        "device": "/dev/nvme0n1p2",
+        "environment": "prod",
+        "fstype": "ext4",
+        "host": "karahermes-mde-7840hs",
+        "instance": "karahermes-mde-7840hs",
+        "job": "integrations/unix",
+        "mountpoint": "/"
+      },
+      "value": [
+        1793614157.755,
+        "0.10208752317522812"
+      ]
+    },
+    {
+      "metric": {
+        "device": "/dev/sda1",
+        "environment": "prod",
+        "fstype": "ext4",
+        "host": "bunker-mvp",
+        "instance": "bunker-mvp",
+        "job": "integrations/unix",
+        "mountpoint": "/"
+      },
+      "value": [
+        1793614157.755,
+        "0.571058753231328"
+      ]
+    },
+    {
+      "metric": {
+        "device": "/dev/nvme0n1p2",
+        "environment": "prod",
+        "fstype": "ext4",
+        "host": "bunker-las-02",
+        "instance": "bunker-las-02",
+        "job": "integrations/unix",
+        "mountpoint": "/"
+      },
+      "value": [
+        1793614157.755,
+        "0.4697343435170226"
+      ]
+    },
+    {
+      "metric": {
+        "device": "/dev/nvme0n1p2",
+        "environment": "prod",
+        "fstype": "ext4",
+        "host": "bunker-las-03",
+        "instance": "bunker-las-03",
+        "job": "integrations/unix",
+        "mountpoint": "/"
+      },
+      "value": [
+        1793614157.755,
+        "0.21880492811565316"
+      ]
+    }
+  ],
+  "direct_host_df": "karaHermes-mde-7840hs /dev/nvme0n1p2 1.8T total, 191G avail, 90% used (df at 2026-11-02T09:24Z)",
+  "threshold": "ratio < 0.05 fires DiskFull; observed ratio healthy (>0.05) and ALERTS{alertname=DiskFull} series absent"
+}
