@@ -1,0 +1,34 @@
+{
+  "run_id": "monitoring-foreman-2026-11-02-11-20-06-R1",
+  "row_id": "MON-MONITORING-5439C9BE-20261102",
+  "captured_at": "2026-11-02T12:45:00Z",
+  "context": "Remediation round after gitreins verdict 5a6dd7f9 (merit FAIL/INCOMPLETE on task MON-MONITORING-5439C9BE-20261102: the 11:55Z close rode a transient 11:53Z flap and the criterion's >=20G reclaim clause was unmet). Verdict preserved at .gitreins/history (id 5a6dd7f9).",
+  "reclaim_executed": {
+    "at": "2026-11-02T12:33Z",
+    "policy": "only lsof-clean, >24h-idle analysis copies and concluded build targets; backup and evidence trees excluded and preserved",
+    "deleted": [
+      "/tmp/arming-tripwire-snap.db (10.0G) + /tmp/arming-tripwire-snap.db-wal (6.5G) - snapshot analysis copies, mtime 2026-10-29/10-31",
+      "/tmp/sched.db (9.9G) - analysis copy, mtime 2026-10-28; live scheduler DBs are ~/.hermes/coding-hermes/scheduler.db and ~/.hermes/test-sched/scheduler.db",
+      "/tmp/sched-snap.db (616M) + /tmp/sched-bench.db (1.4G) - snapshot/bench copies",
+      "/tmp/qa49-a3-modcache.tgz (4.3G) + /tmp/qa49-a3-module-cache-selected.tgz (652M) - regenerable module caches",
+      "~/.hermes/cache/scratch/scheduler-releng-read.db (13G) - releng analysis copy",
+      "~/.hermes/cache/scratch/hermes-rs-releng-20261101-2312-target (8.1G) - cargo target of concluded releng run",
+      "~/.hermes/cache/scratch/wojons-mythos-releng-2026-11-01-23-12-01 (2.1G) - concluded releng artifacts"
+    ],
+    "reclaimed_approx": "53-55G (df: 59G mid-staging -> 112G free)",
+    "preserved_excluded": ["qa-clean", "MY-CI-001-R3-fresh-43515dd71", "/tmp/duckbrain-namespaces-*.tar.xz (backups)", "/tmp/hermes-chrome-profile", "/tmp/logsey-index-bak.duckdb", "/tmp/dogfood024*.db", "/tmp/hilo-baseline", "/tmp/hilo-new", "/tmp/r11wt", "/tmp/r12wt"],
+    "pre_delete_checks": "lsof on all 7 files empty (only earlyoom pattern text matched the cargo/rustc ps grep, not a live build); pre-deletion inventory at scratch/pre-delete-inventory.txt"
+  },
+  "post_reclaim_witnesses": {
+    "at": "2026-11-02T12:44Z",
+    "alerts_api": "[] (zero alerts)",
+    "alerts_series": "ALERTS{alertname=DiskFull,host=karahermes-mde-7840hs} -> [] (inactive)",
+    "exact_expression": "node_filesystem_avail_bytes/node_filesystem_size_bytes (mountpoint /) = 0.06105388691404618 > 0.05 threshold",
+    "local_df": "/dev/nvme0n1p2 1.8T 1.6T 112G 94% /",
+    "flap_margin_note": "baseline free ~209G (112G reading taken during the 06:00-local backup-tiered.sh staging window); staging peak ~= 97G (48.6G state.db x2 per MON-GAP-043) leaves ~112G = 5.9% > 5% threshold, so re-fires should stop until state.db growth eats the ~20G margin; structural fix remains MON-GAP-031 (staging-reaper 203/EXEC) and MON-GAP-043 (backup staging on same fs as root)."
+  },
+  "board_actions": {
+    "close": "5th copy (created_at 2026-11-02 12:25:55, FIRED 12:25:45.919Z, 3.309% free) closed line-wise with this artifact as evidence bundle iff alert inactive AND ratio > 0.05 (verified at 12:44Z)",
+    "annotate": "4th copy (created_at 2026-11-02 11:22:55) foreman_note gains a SUPERSEDED note: its 11:55Z close was premature per judge verdict 5a6dd7f9; live item became the 12:25:55 copy, resolved in R1"
+  }
+}
