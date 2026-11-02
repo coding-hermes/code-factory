@@ -50,6 +50,19 @@ SCRATCH_GLOBS = [
     # not /tmp — measured 95GiB of >24h-old runs (81 dirs) while free space was
     # still above SOFT, i.e. invisible to the guard's soft pool until too late.
     ("/var/tmp/hermes-scratch/pytest-of-*", 24 * 3600),
+    # 2026-11-02 (MON-GAP-043): the HARD shed at 03:42 local reclaimed 0 B because
+    # /var/tmp build scratch was not in the sweep list. Measured live this day:
+    # /var/tmp/hermes-cargo-target/debug 28G of stale cargo artifacts, and 33G of
+    # >28h per-task clones (/var/tmp/*-clone-*) reaped by hand. All rebuildable.
+    # Backup staging debris (tmp_legacy_/verify_ staging .db) is deliberately NOT
+    # here — that is staging-reaper.sh's job (MON-GAP-031), whose proven-dead rule
+    # (producing pid dead + no live holder) cannot be expressed as an age glob.
+    ("/var/tmp/hermes-cargo-target/debug/*", 48 * 3600),
+    ("/var/tmp/hermes-cargo-target/release/*", 48 * 3600),
+    ("/var/tmp/*-clone-*", 28 * 3600),
+    # Scratch-root children: dirs only — regular files at this level are evidence
+    # receipts (e.g. *-blocked-receipt.json) and are never sweep material.
+    ("/var/tmp/hermes-scratch/*", 24 * 3600),
 ]
 
 
@@ -118,6 +131,10 @@ def reclaim_soft() -> list[str]:
         for p in glob.glob(pattern):
             try:
                 if os.path.islink(p):
+                    continue
+                # sweep pools are directories only: regular files are receipts or
+                # staged evidence (rmtree would no-op on them anyway) — skip early
+                if not os.path.isdir(p):
                     continue
                 if (now - os.path.getmtime(p)) < age:
                     continue
