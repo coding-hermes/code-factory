@@ -1,0 +1,63 @@
+{
+  "run_id": "monitoring-foreman-2026-11-02-11-20-06",
+  "row_id": "MON-MONITORING-5439C9BE-20261102",
+  "captured_at": "2026-11-02T11:55:00Z",
+  "alert": {
+    "alertname": "DiskFull",
+    "host": "karahermes-mde-7840hs",
+    "rule_query": "(node_filesystem_avail_bytes{fstype!~\"tmpfs|ramfs|overlay\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|ramfs|overlay\"}) < 0.05"
+  },
+  "fire": {
+    "activeAt": "2026-11-02T11:17:45.919282479Z",
+    "spool_row_created_at": "2026-11-02 11:22:55 (UTC-naive per board convention)",
+    "row_shape": "drain intake copy (no closeout fields); landed 11:30:11 local by an unattributed second drain pass; reconciled as this lane's own intake output by idempotent drain pass 2 (skipped 1291->1292)"
+  },
+  "witnesses": {
+    "alert_api_1": {
+      "at": "2026-11-02T11:41Z",
+      "surface": "ssh fleet-monitor curl http://localhost:9090/api/v1/alerts",
+      "result": "1 alert: {name: DiskFull, host: karahermes-mde-7840hs, state: firing, activeAt: 2026-11-02T11:17:45.919282479Z}"
+    },
+    "alert_api_2": {
+      "at": "2026-11-02T11:53Z",
+      "surface": "ssh fleet-monitor curl http://localhost:9090/api/v1/alerts",
+      "result": "[] (zero alerts firing; DiskFull inactive)"
+    },
+    "rules_api": {
+      "at": "2026-11-02T11:47Z",
+      "surface": "ssh fleet-monitor curl http://localhost:9090/api/v1/rules",
+      "result": "DiskFull state=firing at query time, query=avail/size < 0.05; DiskWillFillIn24h state=inactive"
+    },
+    "direct_host": {
+      "surface": "local df -h / on karahermes-mde-7840hs (this box is the monitored host)",
+      "timeline": [
+        {"at": "2026-11-02T11:38Z", "df": "/dev/nvme0n1p2 1.8T 1.7T 76G 96% /", "avail_ratio": 0.041, "verdict": "below 0.05 threshold, alert firing consistent"},
+        {"at": "2026-11-02T11:51Z", "df": "/dev/nvme0n1p2 1.8T 1.6T 163G 91% /", "avail_ratio": 0.089, "note": "~87G freed 11:38-11:51Z by unattributed concurrent host cleanup; /tmp (157G) and scratch (47G) trees unchanged, source not attributable this tick"},
+        {"at": "2026-11-02T11:53Z", "df": "/dev/nvme0n1p2 1.8T 1.6T 152G 92% /", "avail_ratio": 0.082, "verdict": "above threshold, alert resolved consistent"}
+      ]
+    }
+  },
+  "decision": "VERIFIED RESOLVED 2026-11-02T11:53Z: live Prometheus /api/v1/alerts returned 0 alerts (DiskFull inactive) and avail ratio 152G/1.8T=0.082 > 0.05 threshold. Flapping class (fires on avail<5% churn; 3 prior fires today closed the same way). No deletion performed by this tick: condition cleared mid-verification via unattributed concurrent host-space change.",
+  "reclaim_menu_owner_disposition": {
+    "purpose": "sustained headroom to stop the DiskFull flap-wake cycle (daily re-fires since 2026-10-07; forecast twin EE32DFF5 fired daily through 2026-11-01)",
+    "verified_safe_candidates": [
+      {"path": "/tmp/arming-tripwire-snap.db (+ -wal)", "size": "15.5G", "age": "2026-10-29/10-31", "why_safe": "snapshot analysis copies; no open handles (lsof)"},
+      {"path": "/tmp/sched.db", "size": "9.2G", "age": "2026-10-28", "why_safe": "analysis copy; live scheduler DBs are ~/.hermes/coding-hermes/scheduler.db and ~/.hermes/test-sched/scheduler.db; no handles, no cmdline refs"},
+      {"path": "/tmp/sched-snap.db, /tmp/sched-bench.db", "size": "1.9G", "age": "2026-10-03 / 2026-09-30", "why_safe": "snapshot/bench copies"},
+      {"path": "/tmp/qa49-a3-modcache.tgz (+ module-cache-selected.tgz)", "size": "4.7G", "age": "2026-10-31", "why_safe": "regenerable module caches"},
+      {"path": "~/.hermes/cache/scratch/scheduler-releng-read.db", "size": "13G", "age": "2026-11-01", "why_safe": "releng analysis copy; no open handles"},
+      {"path": "~/.hermes/cache/scratch/hermes-rs-releng-20261101-2312-target", "size": "8.1G", "age": "2026-11-01", "why_safe": "cargo build target of concluded releng run"},
+      {"path": "~/.hermes/cache/scratch/wojons-mythos-releng-2026-11-01-23-12-01", "size": "2.1G", "age": "2026-11-01", "why_safe": "concluded releng run artifacts"}
+    ],
+    "excluded_do_not_delete": ["qa-clean (5h old, possible live QA env)", "MY-CI-001-R3-fresh-43515dd71 (QA evidence)", "/tmp/duckbrain-namespaces-*.tar.xz (backup archives)", "/tmp/hermes-chrome-profile (live browser)", "/tmp/logsey-index-bak.duckdb (backup)", "/tmp/dogfood024*.db, /tmp/hilo-baseline, /tmp/hilo-new, /tmp/r11wt, /tmp/r12wt (evidence fixtures; owner disposition needed)"]
+  },
+  "intake_integrity": {
+    "duplicate_ids_on_board": 8,
+    "classification": "RE-FIRE pairs (terminal copy = history, newest pending copy = live item): MON-MONITORING-403C290E-20261020, -52548650-20261021, -AC991D47-20261020, -B316017D-20261020, -EE32DFF5-20261020, -5439C9BE-20261102 (4 copies); CLOSEOUT-COPY pairs (enriched copy authoritative, stale twin keeps bytes): MON-DOGFOOD-041, -EE32DFF5-20261102",
+    "tracking_row": "MON-GAP-033 (alert-router appends duplicate rows on re-fire) — cited, not re-filed"
+  },
+  "unverified": [
+    "source of the ~87G host-space change 11:38-11:51Z (outside /tmp and scratch trees; no candidate process identified)",
+    "exact writer of the 11:30:11 local intake append (reconciled as lane drain output via idempotent pass 2, but no producing process observed)"
+  ]
+}
