@@ -1,0 +1,41 @@
+{
+  "tick": "monitoring-foreman-2026-11-02-05-53-13",
+  "row": "MON-MONITORING-5439C9BE-20261102",
+  "closed_occurrence": "tasks.jsonl line 661 (pending copy appended 2026-11-02 05:45:11Z by the MON-GAP-030 re-fire rule)",
+  "alert": {
+    "alertname": "DiskFull",
+    "host": "karahermes-mde-7840hs",
+    "severity": "critical",
+    "device": "/dev/nvme0n1p2",
+    "mountpoint": "/",
+    "fired_at": "2026-11-02T05:38:45.919Z",
+    "spooled_at": "2026-11-02T05:38:55Z"
+  },
+  "witnesses": {
+    "alert_series": "ALERTS{alertname=\"DiskFull\",host=\"karahermes-mde-7840hs\"} -> 1 series alertstate=firing at 2026-11-02T06:00:11Z; EMPTY at 2026-11-02T06:2x:xxZ (re-check)",
+    "alertmanager": "GET :9093/api/v2/alerts?filter=alertname=DiskFull -> [] (nothing active)",
+    "metric_ratio": "node_filesystem_avail_bytes/node_filesystem_size_bytes{host=karahermes-mde-7840hs,mountpoint=/}: 0.0696 at 06:00:29Z, 0.0627 at closeout (6.27% free, threshold 0.05)",
+    "direct_host": "df / on karahermes-mde-7840hs: 0.0450 (83G/1831G) at 05:55Z during the firing window; 118-120G free at closeout. Host identity: hostname == karaHermes-mde-7840hs == alert host label",
+    "resolution_event": "first-firing resolution already in events.jsonl (id MON-MONITORING-5439C9BE-20261102-RESOLVED, endsAt 2026-11-02T01:14:45.919Z); the re-fire's resolution event will arrive on a later drain (Alertmanager resolved it after 06:14Z)"
+  },
+  "root_cause": {
+    "producer": "bash /home/kara/.hermes/scripts/backup-tiered.sh (PID 373256, started 2026-11-02 00:00 local, midnight timer; 113.4GB written this run; /var/tmp/hermes-backup-staging/.backup.lock held; idle in compress/upload phase at triage)",
+    "staging": "/var/tmp/hermes-backup-staging = 67G on the ROOT fs (tmp_373256.db 48.5GB state.db snapshot copy + hermes-main/ compressed artifacts)",
+    "pendulum": "root / oscillates across the 5% alert line: 79-83G free at firing (05:38-05:55Z) -> 127G at 06:13Z (+45G freed) -> 118-120G at closeout; prior same-day cycle: DiskFull fired 2026-11-02T00:32:45.919Z (4.582% free) and auto-resolved 01:14:45.919Z",
+    "idle_capacity": "/mnt/bulk (/dev/sdc2, 3.6T) = 3.4T free (5% used) while / oscillates at 4-7% free",
+    "disk_guard_gap": "monitoring/scripts/disk-guard.py SOFT pools reclaim 0B against this consumer: SCRATCH_GLOBS names /tmp/kara-backup-stage/* (nonexistent) and misses /var/tmp/hermes-backup-staging entirely (2026-11-02 01:01/01:11 SHED passes reclaimed 0B)",
+    "history": "MON-GAP-024 (complete 2026-10-13) fixed post-run debris in the same dir via hermes-scratch-cleanup.sh; MON-GAP-031 (pending) covers SIGKILL stranding in the same dir; this tick folds the recurrence + relocation criterion + guard-glob gap into MON-GAP-031 instead of minting a new row",
+    "off_by_one_lab": "POST /api/v1/problems/discover for classes disk-pressure-backup-staging and disk-full -> not_found (no cached answer; diagnosis fresh)"
+  },
+  "actions": {
+    "closed": "row 661 closed VERIFIED RESOLVED (alert vector empty + Alertmanager empty + ratio 0.0627 above 0.05 threshold)",
+    "kept_pending": "none for this alert; MON-GAP-031 extended via tick-note with relocation acceptance criterion (stage on /mnt/bulk or another non-root fs) and disk-guard glob fix",
+    "not_done": "no destructive cleanup performed: backup run was mid-flight (killing strands staging per MON-GAP-031); disk-guard SOFT pools had nothing safe to reclaim"
+  },
+  "surfaces": {
+    "lane_board": "monitoring/.coding-hermes/board (this home mega-repo, s3 origin)",
+    "live_deployment": "fleet-monitor /root/fleet-monitoring (git-less) — Prometheus v3.15.0, Alertmanager queried live",
+    "product_tree": "totalwindupflightsystems/fleet-monitoring (NOT touched this tick)",
+    "hosted_ci": "checked separately this tick"
+  }
+}
