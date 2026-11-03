@@ -1,0 +1,34 @@
+# CF-092 probe transcript — regenerate with: bash docs/audits/cf092-arms.sh
+# tree: a2cc8b83d4e97491d68618fdfd693b8dc7f9d9dc (branch cf/cf-092-install-check-interpreter)
+# host: Linux 7.0.0-38-generic x86_64
+# python3 as the authoring shell sees it: 3.14.9
+# python3 as the graded arms see it (PATH=/usr/local/bin:/usr/bin:/bin): 3.14.4
+# command under test: README Status row 1 re-run cell, scripts/harness/install-hermes.sh --check
+
+## arm 1 — the host's default python3 (outside the pin's range)
+$ env -i HOME="$home" PATH=/usr/local/bin:/usr/bin:/bin bash scripts/harness/install-hermes.sh --check
+harness: hermes (pin 0.19.0, port 10800)
+  FAIL  python — hermes-agent 0.19.0 requires python >=3.11,<3.14; found 3.14.4
+EXIT: 1
+gate rows printed: 1
+gate rows naming binary: 0
+gate rows naming port: 0
+
+## arm 2 — an interpreter inside the pin's range (HERMES_PYTHON_BIN=python3.12)
+$ env -i HOME="$home" PATH=/usr/local/bin:/usr/bin:/bin HERMES_PYTHON_BIN=python3.12 bash scripts/harness/install-hermes.sh --check
+harness: hermes (pin 0.19.0, port 10800)
+  PASS  python — 3.12.13 (hermes-agent 0.19.0 requires >=3.11,<3.14)
+  FAIL  binary — absent — run --apply
+  FAIL  port — nothing on :10800
+  FAIL  inference_key — no provider key — a turn dies at 'No inference provider configured'
+
+HERMES: FAIL (3)
+EXIT: 1
+gate rows printed: 4
+gate rows naming binary: 1
+gate rows naming port: 1
+
+# read: arm 1 prints ONE gate row (python) and never reaches the binary or port arms.
+# arm 2 prints FOUR gate rows, including binary and port. The README row 1 re-run cell
+# names the qualified form and states the precondition; the state cell no longer claims
+# binary/port gates for the unqualified command (CF-092).
