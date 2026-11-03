@@ -1,0 +1,127 @@
+{
+  "task_id": "CF-114",
+  "task_title": "Board publish-drift check: the registered workdir board must be byte-identical to the published board, and the check must be able to fail",
+  "task_criteria": [
+    "scripts/board_drift.py compares a workdir board (tasks.jsonl and events.jsonl) against a published ref (default origin/main), prints PASS with measured sha256 and row counts on parity, and FAILs with named divergent row ids (status differs or row missing) plus a row-count delta",
+    "Fail-closed: a missing board file, an unreadable file, a missing git, or a bad ref prints a named FAIL and exits nonzero; a zero-row board is a named FAIL, never a silent pass",
+    "tests/selftest.sh gains an arm that proves the check RED against a fixture whose rows were re-opened/missing and GREEN against a matching fixture, plus the fail-closed states; SELFTEST: PASS and scripts/boardctl validate RESULT: OK at the fixed tip",
+    "docs/BOARD.md documents the re-runnable census command and the measured pre-fix drift (61 vs 88 rows; CF-053/CF-064/CF-065/CF-075/PERF-014 pending in the stale copy while complete at origin/main)"
+  ],
+  "passed": true,
+  "worktree": "/home/kara/.hermes/cache/scratch/cf114-tick-20261103-2000/repo",
+  "branch": "main",
+  "commit": "75e94a3bf5d54902ffe8253f5cbd548b4768b3c8",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n3:14PM INF scanned ~545534 bytes (545.53 KB) in 503ms\n3:14PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 97 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.SxZXVFkKNm/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  89/89 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [4039 chars omitted \u2014 64 line(s)] \u2026\n22. census refuses a failed fetch at a later offset\n  PASS  census fetch failure -> offset=500, exit 1, no census printed\n23. census refuses a non-2xx page\n  PASS  census HTTP 502 -> offset=500, exit 1, no census printed\n24. census requires a projects array even on HTTP 200\n  PASS  census missing-projects -> named .projects refusal, exit 1, no census printed\n  PASS  census wrong-projects -> named .projects refusal, exit 1, no census printed\n  PASS  census nonjson -> named .projects refusal, exit 1, no census printed\n25. census compares all received rows with the first reported total\n  PASS  census short page -> rows received=865, total reported=866, exit 1, no census printed\n26. healthy census counts matching rows on both sides of the page boundary\n  PASS  census healthy -> 2 matching rows, exact row format, exit 0\n27. census still refuses a missing total\n  PASS  census missing total -> named refusal, exit 1, no census printed\n28. README census and executable mirror agree except for BASE\n  PASS  census README/mirror byte parity (BASE parameterisation only)\n29. a workdir board that is not the published board is named as drift (CF-114)\n  PASS  publish-drift red fixture, exit 1\n  PASS  publish-drift green fixture, exit 0\n  PASS  publish-drift zero fixture, exit 1\n  PASS  publish-drift missing fixture, exit 1\n  PASS  publish-drift malformed fixture, exit 1\n  PASS  publish-drift nonobject fixture, exit 1\n  PASS  publish-drift event-drift fixture, exit 1\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 scripts/board_drift.py compares a workdir board (tasks.jsonl and events.jsonl) against a published ref (default origin/main), prints PASS with measured sha256 and row counts on parity, and FAILs with named divergent row ids (status differs or row missing) plus a row-count delta: scripts/board_drift.py:186 defaults --ref to origin/main; parity run printed 'PASS sha256 workdir tasks.jsonl \u2014 ff5d74cf...' / 'PASS sha256 published tasks.jsonl \u2014 ff5d74cf...' (same for events.jsonl e386f82f...) and 'PASS board rows \u2014 89 vs 89 rows; 0 divergent ids: none' -> RESULT: OK, exit 0. Mutated fixture (CF-009 complete->pending, CF-099 row deleted) printed 'FAIL board status \u2014 CF-009: workdir=pending published=complete', 'FAIL board missing ids \u2014 CF-099', 'FAIL board rows \u2014 88 vs 89 rows; 2 divergent ids: CF-009,CF-099' -> RESULT: DRIFT (4 failed), exit 1. Real repo run against origin/main: RESULT: OK, exit 0.\n  \u2713 Fail-closed: a missing board file, an unreadable file, a missing git, or a bad ref prints a named FAIL and exits nonzero; a zero-row board is a named FAIL, never a silent pass: Direct runs: zero-row tasks.jsonl -> 'FAIL board rows \u2014 tasks.jsonl has 0 rows', RESULT: DRIFT (4 failed), exit 1 (board_drift.py:104-106 refuses before resolving published side). Missing events.jsonl -> 'FAIL workdir files \u2014 events.jsonl: [Errno 2] No such file or directory', exit 1. chmod 000 tasks.jsonl -> 'FAIL workdir files \u2014 tasks.jsonl: [Errno 13] Permission denied', exit 1. Bad ref nosuchref -> 'FAIL published ref \u2014 git show nosuchref:... exit 128', exit 1. PATH=/nonexistent (no git) -> 'FAIL published ref \u2014 ... [Errno 2] No such file or directory: git', exit 1. Bad workdir -> named FAILs, exit 1. main() wraps everything in try/except Exception -> report.row(False,'input',...) so no tracebacks.\n  \u2713 tests/selftest.sh gains an arm that proves the check RED against a fixture whose rows were re-opened/missing and GREEN against a matching fixture, plus the fail-closed states; SELFTEST: PASS and scripts/boardctl validate RESULT: OK at the fixed tip: tests/selftest.sh:885-965 arm 29 builds 7 fixtures (red = one complete row flipped to pending + one row deleted, green, zero, missing, malformed, nonobject, event-drift) and asserts exit codes, named FAIL lines, RESULT: DRIFT, and no traceback. Ran `bash tests/selftest.sh` (guards.test_command): output ends 'SELFTEST: PASS', grep -a -c FAIL = 0, with 'PASS publish-drift red fixture, exit 1', 'PASS publish-drift green fixture, exit 0', and PASS for zero/missing/malformed/nonobject/event-drift. `bash scripts/boardctl validate` -> 'RESULT: OK (30 warning(s))', exit 0.\n  \u2713 docs/BOARD.md documents the re-runnable census command and the measured pre-fix drift (61 vs 88 rows; CF-053/CF-064/CF-065/CF-075/PERF-014 pending in the stale copy while complete at origin/main): docs/BOARD.md:42-63 '## Publish-drift census' gives the re-runnable command `python3 scripts/board_drift.py check --workdir <path> --ref origin/main`, PASS/FAIL semantics, and the measured pre-fix drift: 'carried 61 tasks rows / 66 events rows against 88 / 124 at origin/main 6e8621f. CF-053, CF-064, CF-065, CF-075 and PERF-014 read pending there while complete at origin/main.'\nAll four criteria verified: board_drift.py measures sha256/row parity and names divergent ids, fails closed on every degraded input, selftest arm 29 proves RED/GREEN plus fail-closed states with SELFTEST: PASS and boardctl RESULT: OK, and docs/BOARD.md records the command and the 61-vs-88 pre-fix drift.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 scripts/board_drift.py compares a workdir board (tasks.jsonl and events.jsonl) against a published ref (default origin/main), prints PASS with measured sha256 and row counts on parity, and FAILs with named divergent row ids (status differs or row missing) plus a row-count delta: scripts/board_drift.py:186 defaults --ref to origin/main; parity run printed 'PASS sha256 workdir tasks.jsonl \u2014 ff5d74cf...' / 'PASS sha256 published tasks.jsonl \u2014 ff5d74cf...' (same for events.jsonl e386f82f...) and 'PASS board rows \u2014 89 vs 89 rows; 0 divergent ids: none' -> RESULT: OK, exit 0. Mutated fixture (CF-009 complete->pending, CF-099 row deleted) printed 'FAIL board status \u2014 CF-009: workdir=pending published=complete', 'FAIL board missing ids \u2014 CF-099', 'FAIL board rows \u2014 88 vs 89 rows; 2 divergent ids: CF-009,CF-099' -> RESULT: DRIFT (4 failed), exit 1. Real repo run against origin/main: RESULT: OK, exit 0.\n  \u2713 Fail-closed: a missing board file, an unreadable file, a missing git, or a bad ref prints a named FAIL and exits nonzero; a zero-row board is a named FAIL, never a silent pass: Direct runs: zero-row tasks.jsonl -> 'FAIL board rows \u2014 tasks.jsonl has 0 rows', RESULT: DRIFT (4 failed), exit 1 (board_drift.py:104-106 refuses before resolving published side). Missing events.jsonl -> 'FAIL workdir files \u2014 events.jsonl: [Errno 2] No such file or directory', exit 1. chmod 000 tasks.jsonl -> 'FAIL workdir files \u2014 tasks.jsonl: [Errno 13] Permission denied', exit 1. Bad ref nosuchref -> 'FAIL published ref \u2014 git show nosuchref:... exit 128', exit 1. PATH=/nonexistent (no git) -> 'FAIL published ref \u2014 ... [Errno 2] No such file or directory: git', exit 1. Bad workdir -> named FAILs, exit 1. main() wraps everything in try/except Exception -> report.row(False,'input',...) so no tracebacks.\n  \u2713 tests/selftest.sh gains an arm that proves the check RED against a fixture whose rows were re-opened/missing and GREEN against a matching fixture, plus the fail-closed states; SELFTEST: PASS and scripts/boardctl validate RESULT: OK at the fixed tip: tests/selftest.sh:885-965 arm 29 builds 7 fixtures (red = one complete row flipped to pending + one row deleted, green, zero, missing, malformed, nonobject, event-drift) and asserts exit codes, named FAIL lines, RESULT: DRIFT, and no traceback. Ran `bash tests/selftest.sh` (guards.test_command): output ends 'SELFTEST: PASS', grep -a -c FAIL = 0, with 'PASS publish-drift red fixture, exit 1', 'PASS publish-drift green fixture, exit 0', and PASS for zero/missing/malformed/nonobject/event-drift. `bash scripts/boardctl validate` -> 'RESULT: OK (30 warning(s))', exit 0.\n  \u2713 docs/BOARD.md documents the re-runnable census command and the measured pre-fix drift (61 vs 88 rows; CF-053/CF-064/CF-065/CF-075/PERF-014 pending in the stale copy while complete at origin/main): docs/BOARD.md:42-63 '## Publish-drift census' gives the re-runnable command `python3 scripts/board_drift.py check --workdir <path> --ref origin/main`, PASS/FAIL semantics, and the measured pre-fix drift: 'carried 61 tasks rows / 66 events rows against 88 / 124 at origin/main 6e8621f. CF-053, CF-064, CF-065, CF-075 and PERF-014 read pending there while complete at origin/main.'\nAll four criteria verified: board_drift.py measures sha256/row parity and names divergent ids, fails closed on every degraded input, selftest arm 29 proves RED/GREEN plus fail-closed states with SELFTEST: PASS and boardctl RESULT: OK, and docs/BOARD.md records the command and the 61-vs-88 pre-fix drift.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "scripts/board_drift.py compares a workdir board (tasks.jsonl and events.jsonl) against a published ref (default origin/main), prints PASS with measured sha256 and row counts on parity, and FAILs with named divergent row ids (status differs or row missing) plus a row-count delta",
+                "status": "PASS",
+                "detail": "scripts/board_drift.py:186 defaults --ref to origin/main; parity run printed 'PASS sha256 workdir tasks.jsonl \u2014 ff5d74cf...' / 'PASS sha256 published tasks.jsonl \u2014 ff5d74cf...' (same for events.jsonl e386f82f...) and 'PASS board rows \u2014 89 vs 89 rows; 0 divergent ids: none' -> RESULT: OK, exit 0. Mutated fixture (CF-009 complete->pending, CF-099 row deleted) printed 'FAIL board status \u2014 CF-009: workdir=pending published=complete', 'FAIL board missing ids \u2014 CF-099', 'FAIL board rows \u2014 88 vs 89 rows; 2 divergent ids: CF-009,CF-099' -> RESULT: DRIFT (4 failed), exit 1. Real repo run against origin/main: RESULT: OK, exit 0."
+              },
+              {
+                "criterion": "Fail-closed: a missing board file, an unreadable file, a missing git, or a bad ref prints a named FAIL and exits nonzero; a zero-row board is a named FAIL, never a silent pass",
+                "status": "PASS",
+                "detail": "Direct runs: zero-row tasks.jsonl -> 'FAIL board rows \u2014 tasks.jsonl has 0 rows', RESULT: DRIFT (4 failed), exit 1 (board_drift.py:104-106 refuses before resolving published side). Missing events.jsonl -> 'FAIL workdir files \u2014 events.jsonl: [Errno 2] No such file or directory', exit 1. chmod 000 tasks.jsonl -> 'FAIL workdir files \u2014 tasks.jsonl: [Errno 13] Permission denied', exit 1. Bad ref nosuchref -> 'FAIL published ref \u2014 git show nosuchref:... exit 128', exit 1. PATH=/nonexistent (no git) -> 'FAIL published ref \u2014 ... [Errno 2] No such file or directory: git', exit 1. Bad workdir -> named FAILs, exit 1. main() wraps everything in try/except Exception -> report.row(False,'input',...) so no tracebacks."
+              },
+              {
+                "criterion": "tests/selftest.sh gains an arm that proves the check RED against a fixture whose rows were re-opened/missing and GREEN against a matching fixture, plus the fail-closed states; SELFTEST: PASS and scripts/boardctl validate RESULT: OK at the fixed tip",
+                "status": "PASS",
+                "detail": "tests/selftest.sh:885-965 arm 29 builds 7 fixtures (red = one complete row flipped to pending + one row deleted, green, zero, missing, malformed, nonobject, event-drift) and asserts exit codes, named FAIL lines, RESULT: DRIFT, and no traceback. Ran `bash tests/selftest.sh` (guards.test_command): output ends 'SELFTEST: PASS', grep -a -c FAIL = 0, with 'PASS publish-drift red fixture, exit 1', 'PASS publish-drift green fixture, exit 0', and PASS for zero/missing/malformed/nonobject/event-drift. `bash scripts/boardctl validate` -> 'RESULT: OK (30 warning(s))', exit 0."
+              },
+              {
+                "criterion": "docs/BOARD.md documents the re-runnable census command and the measured pre-fix drift (61 vs 88 rows; CF-053/CF-064/CF-065/CF-075/PERF-014 pending in the stale copy while complete at origin/main)",
+                "status": "PASS",
+                "detail": "docs/BOARD.md:42-63 '## Publish-drift census' gives the re-runnable command `python3 scripts/board_drift.py check --workdir <path> --ref origin/main`, PASS/FAIL semantics, and the measured pre-fix drift: 'carried 61 tasks rows / 66 events rows against 88 / 124 at origin/main 6e8621f. CF-053, CF-064, CF-065, CF-075 and PERF-014 read pending there while complete at origin/main.'"
+              }
+            ],
+            "summary": "All four criteria verified: board_drift.py measures sha256/row parity and names divergent ids, fails closed on every degraded input, selftest arm 29 proves RED/GREEN plus fail-closed states with SELFTEST: PASS and boardctl RESULT: OK, and docs/BOARD.md records the command and the 61-vs-88 pre-fix drift.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-114\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 scripts/board_drift.py compares a workdir board (tasks.jsonl and events.jsonl) against a published ref (default origin/main), prints PASS with measured sha256 and row counts on parity, and FAILs with named divergent row ids (status differs or row missing) plus a row-count delta: scripts/board_drift.py:186 defaults --ref to origin/main; parity run printed 'PASS sha256 workdir tasks.jsonl \u2014 ff5d74cf...' / 'PASS sha256 published tasks.jsonl \u2014 ff5d74cf...' (same for events.jsonl e386f82f...) and 'PASS board rows \u2014 89 vs 89 rows; 0 divergent ids: none' -> RESULT: OK, exit 0. Mutated fixture (CF-009 complete->pending, CF-099 row deleted) printed 'FAIL board status \u2014 CF-009: workdir=pending published=complete', 'FAIL board missing ids \u2014 CF-099', 'FAIL board rows \u2014 88 vs 89 rows; 2 divergent ids: CF-009,CF-099' -> RESULT: DRIFT (4 failed), exit 1. Real repo run against origin/main: RESULT: OK, exit 0.\n  \u2713 Fail-closed: a missing board file, an unreadable file, a missing git, or a bad ref prints a named FAIL and exits nonzero; a zero-row board is a named FAIL, never a silent pass: Direct runs: zero-row tasks.jsonl -> 'FAIL board rows \u2014 tasks.jsonl has 0 rows', RESULT: DRIFT (4 failed), exit 1 (board_drift.py:104-106 refuses before resolving published side). Missing events.jsonl -> 'FAIL workdir files \u2014 events.jsonl: [Errno 2] No such file or directory', exit 1. chmod 000 tasks.jsonl -> 'FAIL workdir files \u2014 tasks.jsonl: [Errno 13] Permission denied', exit 1. Bad ref nosuchref -> 'FAIL published ref \u2014 git show nosuchref:... exit 128', exit 1. PATH=/nonexistent (no git) -> 'FAIL published ref \u2014 ... [Errno 2] No such file or directory: git', exit 1. Bad workdir -> named FAILs, exit 1. main() wraps everything in try/except Exception -> report.row(False,'input',...) so no tracebacks.\n  \u2713 tests/selftest.sh gains an arm that proves the check RED against a fixture whose rows were re-opened/missing and GREEN against a matching fixture, plus the fail-closed states; SELFTEST: PASS and scripts/boardctl validate RESULT: OK at the fixed tip: tests/selftest.sh:885-965 arm 29 builds 7 fixtures (red = one complete row flipped to pending + one row deleted, green, zero, missing, malformed, nonobject, event-drift) and asserts exit codes, named FAIL lines, RESULT: DRIFT, and no traceback. Ran `bash tests/selftest.sh` (guards.test_command): output ends 'SELFTEST: PASS', grep -a -c FAIL = 0, with 'PASS publish-drift red fixture, exit 1', 'PASS publish-drift green fixture, exit 0', and PASS for zero/missing/malformed/nonobject/event-drift. `bash scripts/boardctl validate` -> 'RESULT: OK (30 warning(s))', exit 0.\n  \u2713 docs/BOARD.md documents the re-runnable census command and the measured pre-fix drift (61 vs 88 rows; CF-053/CF-064/CF-065/CF-075/PERF-014 pending in the stale copy while complete at origin/main): docs/BOARD.md:42-63 '## Publish-drift census' gives the re-runnable command `python3 scripts/board_drift.py check --workdir <path> --ref origin/main`, PASS/FAIL semantics, and the measured pre-fix drift: 'carried 61 tasks rows / 66 events rows against 88 / 124 at origin/main 6e8621f. CF-053, CF-064, CF-065, CF-075 and PERF-014 read pending there while complete at origin/main.'\nAll four criteria verified: board_drift.py measures sha256/row parity and names divergent ids, fails closed on every degraded input, selftest arm 29 proves RED/GREEN plus fail-closed states with SELFTEST: PASS and boardctl RESULT: OK, and docs/BOARD.md records the command and the 61-vs-88 pre-fix drift.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-03T20:16:42.779165",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-03T20:16:42.812396+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 15148,
+        "truncated": false,
+        "source": "git show 75e94a3bf5d5"
+      }
+    ],
+    "task_id": "CF-114"
+  }
+}
