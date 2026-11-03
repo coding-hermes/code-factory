@@ -1,0 +1,317 @@
+code-factory dogfood walk — 2026-11-03T20:47:54Z (lane code-factory-dogfood)
+================================================================================
+Path walked: README.md "Quick start" (lines 15-34), then AGENTS.md "Commands" and
+"Harness support", from a clean state: a fresh `mktemp -d` HOME, CRIER_URL and
+BUNKER_SERVER unset unless the command below shows them set.
+
+Tip: origin/main 01eb0cf (main, parity 0/0 with origin, board byte-identical to
+origin at walk start: tasks 96 rows, events 136 rows).
+
+Provenance: every block below is the literal stdout/stderr of the command on the
+line above it, captured in one run on the control host. Nothing here is
+reconstructed from memory. Redaction is stated at the end of this file: this
+repository is public, so control-host names, node-host names, LAN addresses and
+absolute operator paths are replaced with <angle-bracket> placeholders; no other
+edit was made to the captured text.
+
+Row ids, as filed: section 6 is CF-125, section 7b is CF-126, section 7a is
+CF-127. The first draft of this filing used CF-123/CF-124; a sibling foreman lane
+landed its own CF-123 and CF-124 on origin/main (5fe6189, tip e42f267) while this
+walk was in progress, so both ids moved up by two and CF-125 stayed free. The
+renumbering is recorded in each row's task_created event.
+
+--------------------------------------------------------------------------------
+1. README Quick start step 1, environment unset
+--------------------------------------------------------------------------------
+$ scripts/bunker-server-install.sh --check
+scripts/bunker-server-install.sh: line 14: BUNKER_SERVER: set BUNKER_SERVER to your bunker server name
+rc=1
+
+README.md:32-34 promises "all three commands reach their checkers and fail with
+the missing value named". The value IS named; the checker is never reached: the
+output is a raw bash parameter-expansion abort prefixed with the script's own
+line number, not a PASS/FAIL row in the shape AGENTS.md:78 requires. Same shape
+is already recorded for this script inside CF-063's reasoning (line 14) and for
+verify-node.sh by CF-063's acceptance criteria; not re-filed.
+
+--------------------------------------------------------------------------------
+2. README Quick start step 2, environment unset
+--------------------------------------------------------------------------------
+$ ./scripts/project-node.sh --check --project myproject
+  PASS  disk_floor — 5 GiB from role-default
+node provisioning — project=myproject harness=hermes host=<control-host>
+[00] preflight
+  PASS  arch — x86_64 (Linux 7.0.0-38-generic)
+  PASS  role — worker (floor 5 GiB from role-default)
+  PASS  disk — 87.1 GB free (floor 5 GB)
+  PASS  mem — 44614 MB
+  FAIL  crier_url — CRIER_URL unset — the node has nothing to connect to (export CRIER_URL=http://crier.example:8767)
+[10] base
+  PASS  tool:python3 — <operator-venv>/bin/python3
+  PASS  tool:git — /usr/bin/git
+  ...
+  PASS  tool:node — <operator-bin>/node
+[20] harness
+harness: hermes (pin 0.19.0, port 10800)
+  FAIL  python — hermes-agent 0.19.0 requires python >=3.11,<3.14; found 3.14.9
+[30] bus
+  FAIL  crier_identity — absent — stage a bundle and re-run; a node without an identity is invisible
+[40] repo
+  FAIL  repo — <clean-home>/repo absent (pass --repo to clone)
+[90] manifest
+  ..    manifest is written only when every layer passes
+
+NODE: FAIL (4)
+rc=1
+
+This matches README.md:32-34. Two observations, neither filed as a row:
+- `tool:python3` resolves to a venv that lives under the OPERATOR's HOME even
+  though HOME is a fresh temp directory: the tool layer grades the inherited
+  PATH, so "clean state" for the tool layer is a claim about the caller.
+- AGENTS.md rule 5 (idempotence) holds: two consecutive `--check` runs differ
+  only in the measured `mem` value (`diff` shows one line, 44402 MB vs
+  44210 MB); no state changed and both exited 1.
+
+--------------------------------------------------------------------------------
+3. README Quick start step 3, environment unset
+--------------------------------------------------------------------------------
+$ scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes
+scripts/node-create.sh: line 70: SERVER: set BUNKER_SERVER to your bunker server name
+rc=1
+
+Same class as section 1: named value, no checker row.
+
+--------------------------------------------------------------------------------
+4. The three commands with exactly the two documented example values exported
+--------------------------------------------------------------------------------
+$ CRIER_URL=http://crier.example:8767 BUNKER_SERVER=<placeholder> scripts/bunker-server-install.sh --check
+bunker server: <placeholder>
+  PASS  bunker_client — bunker 0.2.0
+  FAIL  bunker_config — missing (<clean-home>/.config/bunker/config.yaml) — the client has no server to talk to
+  FAIL  server_reachable — <placeholder> did not answer: bunker: reading server "<placeholder>"
+  PASS  tool:python3 — <operator-venv>/bin/python3
+  PASS  tool:git — /usr/bin/git
+  PASS  tool:curl — /usr/bin/curl
+  PASS  tool:jq — /usr/bin/jq
+  PASS  disk — 87.1 GB free (floor 5 GB)
+
+RESULT: FAIL (2)
+rc=1
+
+$ CRIER_URL=... BUNKER_SERVER=... ./scripts/project-node.sh --check --project myproject
+  FAIL  reach:http://crier.example:8767/health — -> 000
+  FAIL  crier_url / python / crier_identity / repo  (as in section 2)
+
+NODE: FAIL (4)
+rc=1
+
+$ CRIER_URL=... BUNKER_SERVER=... scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes
+node-create — project=myrepo harness=hermes server=<placeholder>
+  ..    spawning node-myrepo-154948 (ttl 6h)
+  FAIL  spawn — bunker: server "<placeholder>" not found in config
+rc=1
+
+--------------------------------------------------------------------------------
+5. `--help` across the entry points (AGENTS.md:64-71 "Commands")
+--------------------------------------------------------------------------------
+$ scripts/bunker-server-install.sh --help
+scripts/bunker-server-install.sh: line 14: BUNKER_SERVER: set BUNKER_SERVER to your bunker server name
+rc=1
+
+$ scripts/verify-node.sh --help
+scripts/verify-node.sh: line 17: BUNKER_SERVER: set BUNKER_SERVER to your bunker server name
+rc=1
+
+$ scripts/node-create.sh --help
+unknown arg: --help
+rc=2
+
+$ ./scripts/project-node.sh --help
+unknown arg: --help
+rc=2
+$ ./scripts/project-node.sh
+usage: ./scripts/project-node.sh --check|--apply [--project P] [--harness H] [--repo URL] [--ref R] [--role worker|builder|full] [--disk-floor GIB] [--layers 00,10,20,30,40]
+rc=2
+
+$ BUNKER_SERVER=<placeholder> scripts/verify-node.sh
+usage: scripts/verify-node.sh --agent ID [--port P] [--artifact PATH]
+rc=2
+
+Four of the five entry points reject `--help`; two of them print their usage only
+on a bare invocation, and node-create.sh prints nothing without arguments other
+than the "set BUNKER_SERVER" abort at line 70. node-create.sh's own header
+(scripts/node-create.sh:4) lists --project/--repo/--harness/--agent/--ttl and
+omits --port and --staged-files, which its parser accepts (lines 57-63).
+CF-063 owns the help/usage class for verify-node.sh; recorded here as an
+observation, not filed as a separate row.
+
+--------------------------------------------------------------------------------
+6. Harness selection: a typo and a documented-but-unmeasured adapter
+--------------------------------------------------------------------------------
+$ BUNKER_SERVER=<placeholder> CRIER_URL=... scripts/node-create.sh --project p2 --repo https://github.com/github/gitignore --harness codex
+  FAIL  staged_set — missing scripts/harness/install-codex.sh
+rc=1
+
+$ BUNKER_SERVER=<placeholder> scripts/node-create.sh --project p2 --repo https://github.com/github/gitignore --harness not-a-harness
+  FAIL  staged_set — missing scripts/harness/install-not-a-harness.sh
+rc=1
+
+`codex` is declared in specs/HARNESS.md:23 and named by README.md:44-45 as
+shipping no installer yet (CF-006); `not-a-harness` is a typo. The tool emits the
+same row and the same exit for both, names neither the spec nor CF-006, and never
+consults the adapter set. A new user reads both as "my checkout is incomplete".
+Filed as CF-125.
+
+$ ./scripts/project-node.sh --check --project p3 --harness codex
+[20] harness
+  FAIL  harness:codex — no adapter at scripts/harness/install-codex.sh
+NODE: FAIL (4)
+
+The node-side checker at least names the layer. Filed with CF-125.
+
+--------------------------------------------------------------------------------
+7. A real node, real public repo (README Quick start step 3 as documented)
+--------------------------------------------------------------------------------
+Node host: an ONLINE bunkerd server with 1/8 agents and 47.8 GB free on the node.
+CRIER_URL was exported on the control host exactly as README.md:19 shows.
+
+$ BUNKER_SERVER=<node-host> CRIER_URL=http://crier.example:8767 scripts/node-create.sh --project dogfood-public --repo https://github.com/github/gitignore --harness hermes --ttl 2h
+node-create — project=dogfood-public harness=hermes server=<node-host>
+  ..    spawning node-dogfood-public-155153 (ttl 2h)
+  PASS  spawn — node-dogfood-public-155153
+  ..    staging scripts
+Copied ... project-node.sh, lib.sh, disk_floor.py, reclaim_disk.py, harness/install-hermes.sh
+  PASS  staged — project-node.sh + lib.sh + disk_floor.py + reclaim_disk.py + harness/install-hermes.sh
+  ..    provisioning inside the node
+  PASS  disk_floor — 5 GiB from role-default
+node provisioning — project=dogfood-public harness=hermes host=<node-host>
+[00] preflight
+  PASS  arch — x86_64 (Linux 6.12.111+deb13-amd64)
+  PASS  role — worker (floor 5 GiB from role-default)
+  PASS  disk — 47.8 GB free (floor 5 GB)
+  PASS  mem — 29681 MB
+  FAIL  crier_url — CRIER_URL unset — the node has nothing to connect to (export CRIER_URL=http://crier.example:8767)
+[10] base
+  PASS  tool:python3 — /usr/bin/python3
+  PASS  tool:git — /usr/bin/git
+  PASS  tool:curl — /usr/bin/curl
+  PASS  tool:tar — /usr/bin/tar
+  PASS  tool:sha256sum — /usr/bin/sha256sum
+  PASS  python:venv — importable
+  PASS  tool:jq — /usr/bin/jq
+  WARN  tool:rg — missing (some repos' tests need node)
+  PASS  tool:node — /usr/bin/node
+[20] harness
+harness: hermes (pin 0.19.0, port 10800)
+  PASS  python — 3.13.5 (hermes-agent 0.19.0 requires >=3.11,<3.14)
+  FAIL  binary — absent — run --apply
+  FAIL  port — nothing on :10800
+  FAIL  inference_key — no provider key — a turn dies at 'No inference provider configured'
+apply
+/home/<node-agent>/node-scripts/harness/install-hermes.sh: line 86: /tmp/hermes-install.log: Permission denied
+  FAIL  install — pip failed — /tmp/hermes-install.log
+[30] bus
+  FAIL  crier_identity — absent — stage a bundle and re-run; a node without an identity is invisible
+[40] repo
+  ..    cloning https://github.com/github/gitignore @ main
+  PASS  repo_clone — /home/<node-agent>/repo @ df40870
+[90] manifest
+  ..    manifest is written only when every layer passes
+
+NODE: FAIL (6)
+  FAIL  provision — node reported FAIL — see the output above
+  ..    verifying from the control host
+verify node node-dogfood-public-155153
+  PASS  agent_alive — ALIVE <node-host>
+  PASS  node_ip — <node-lan-ip>
+  FAIL  gateway_reachable — http://<node-lan-ip>:10800/api/status -> 000000 (is the harness running on 0.0.0.0:10800?)
+  FAIL  unauth_refused — /api/system/stats -> 000000 — auth refusal not verified
+
+VERIFY: FAIL (2)
+  FAIL  verify — round trip failed — node remains unverified
+NODE INCOMPLETE (2)
+cleanup required: bunker destroy node-dogfood-public-155153 --server <node-host>
+rc=1
+
+### 7a. Why the harness install failed (the reported cause is wrong)
+
+Inside the same node, after the run:
+
+$ bunker exec --server <node-host> node-dogfood-public-155153 -- bash -lc 'ls -l /tmp/hermes-install.log; id; touch /tmp/hermes-install.log && echo TOUCH-OK || echo TOUCH-DENIED'
+-rw-rw-r-- 1 bunker-cf-node bunker-cf-node 16395 Nov  3 08:22 /tmp/hermes-install.log
+uid=1002(bunker-node-dogfood-public-155153) gid=1002(...) groups=1002(...),989(bunker-agents)
+touch: cannot touch '/tmp/hermes-install.log': Permission denied
+TOUCH-DENIED
+
+The file is a leftover from a DIFFERENT agent (`bunker-cf-node`, 08:22 the same
+day, 16395 bytes). install-hermes.sh:86 redirects pip's output to that fixed
+path, so the shell fails at the redirection before pip starts, and the FAIL row
+reports "pip failed". The node host itself warns that private /tmp is not
+active ("agent sessions share the host /tmp"), and no shipped document requires
+private /tmp. Filed as CF-127.
+
+### 7b. CRIER_URL never reaches the node
+
+CRIER_URL was exported on the control host before the run; the node's layer 00
+still reports it unset, because scripts/node-create.sh:102 runs
+`bunker exec ... bash -lc "NODE_PROJECT='...' NODE_GATEWAY_PORT='...' ~/node-scripts/project-node.sh --apply ..."`
+and forwards only those two variables. The bus layer then fails too. Filed as
+CF-126.
+
+### 7c. The '-> 000000' deformation is still live
+
+verify-node.sh printed `-> 000000` (section 7), which is the CF-037/CF-072
+deformation CF-072 says survives in verify-node.sh:42,53 and
+install-hermes.sh:68,97. Reproduced at this tip; not re-filed.
+
+### 7d. A WARN whose hint names the wrong tool
+
+`WARN  tool:rg — missing (some repos' tests need node)` — the missing tool is
+`rg`; the hint names `node`. Observed once; recorded here, not filed (cosmetic
+hint text, one line in project-node.sh).
+
+### 7e. Cleanup
+
+$ bunker destroy node-dogfood-public-155153 --server <node-host>
+Destroying agent node-dogfood-public-155153 (home 256.9 MB; archiving before delete)…
+Agent node-dogfood-public-155153 destroyed.
+$ bunker list --server <node-host>
+1 agent (the pre-existing cf-node); the dogfood node is gone.
+
+The public-repo clone leg worked: `PASS repo_clone — ... @ df40870`, matching
+README.md:74's claim that layer 40 clones only.
+
+--------------------------------------------------------------------------------
+8. AGENTS.md:64-71 commands
+--------------------------------------------------------------------------------
+$ bash tests/selftest.sh
+... 29 arms, 0 FAIL rows ...
+SELFTEST: PASS
+rc=0
+
+$ bash scripts/boardctl validate
+board: <repo>/.coding-hermes/board (topology B)
+rows: 96 tasks, 136 events, 0 fixtures
+key uniformity: 62/96 rows carry only canon keys; drift 34 row(s): probe(34) — 0 fixable by 'boardctl update <id> --normalize'
+[warn] ... 34 rows: key(s) {probe} outside the declared canon ...
+[warn] headerless board (no board.jsonl): tasks.jsonl line 1 is a task row, not board metadata — no header to validate; header counter checks skipped
+RESULT: OK (37 warning(s))
+rc=0
+
+Two observations, both already owned:
+- The counts (96/136/37) contradict docs/BOARD.md's "Current measured state"
+  (61/66/17) — that is CF-081's defect.
+- 34 rows carry a `probe` key that the fleet validator calls non-canon while
+  the message itself reports "0 fixable": a warning class with no repair path.
+  Not filed here; it lives in the external coding-hermes boardctl package, not
+  in this repository (docs/BOARD.md:76-78), so a code-factory row could not
+  close it.
+
+--------------------------------------------------------------------------------
+Redaction
+--------------------------------------------------------------------------------
+Replaced with placeholders, nothing else altered: the control-host name
+(`host=` field in project-node's banner), the node-host name and bunkerd server
+name, the node's LAN IPv4 address, the operator's absolute HOME paths (venv,
+node binary, home-relative repo path) and the scratch/home directory of this
+walk. No credential, token or endpoint is present in any block above.
