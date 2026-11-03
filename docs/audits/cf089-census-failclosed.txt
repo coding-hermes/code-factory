@@ -1,0 +1,302 @@
+CF-089 — README lanes census fail-closed evidence
+Base: af67c3b, readme-audit-20261103-183418. All repository commands ran in the
+brief's isolated worktree. No canonical checkout or other worktree was used.
+
+1. BEFORE ANY SOURCE EDIT: default fixture, broken second page
+
+The terminal harness rejects inline shell backgrounding. The requested probe was
+therefore run as two terminal tool commands, with the same server and recipe:
+
+terminal(command="python3 docs/audits/cf089-census-standin.py", background=true)
+  -> pid 2252357
+$ sleep 1; BASE=http://127.0.0.1:18999 bash docs/audits/cf089-census-recipe.sh; echo "rc=$?"; kill 2252357
+jq: error (at <stdin>:0): Cannot iterate over null (null)
+1
+code-factory enabled=true admission=cooldown parent=x
+rc=0
+
+Fixture truth: TOTAL=866; row(0) and row(600) are code-factory rows. The first
+500-row page contains one match. The second page answers HTTP 502. The old
+recipe silently presented the first-page-only census as success.
+
+2. AFTER FIX: same default fixture and recipe command
+
+terminal(command="timeout 60s python3 docs/audits/cf089-census-standin.py", background=true)
+  -> pid 2301248
+$ sleep 1; BASE=http://127.0.0.1:18999 bash docs/audits/cf089-census-recipe.sh; echo "rc=$?"; kill 2301248
+census: HTTP 502 at offset=500; refusing to count
+rc=1
+
+No count and no family rows were printed. The fixture's default mode, default
+port and /nototal behavior remain unchanged. Added --mode/--port options only
+select test cases. The healthy fixture still has 866 rows and two matches.
+
+3. FALSIFIABILITY: actual temporary mutations, each restored before the next
+
+The edits below were applied with the patch tool to the actual recipe mirror,
+not to a mock of its behavior. Each red run executes the corresponding real
+selftest arm extracted from tests/selftest.sh. The exact narrow runner is in
+section 5; it was saved as ../cf089-probe.py (untracked scratch file). It extracts
+the helper and requested arm between the census-fail-closed markers, supplies
+HERE/fails/lib.sh, and exits 1 on any arm FAIL. It does not rewrite assertions.
+
+Each fixture invocation in these arms starts its own timeout-20s Python server,
+waits for readiness, runs the real recipe under timeout 10s, captures stdout and
+stderr separately, then kills/waits for the server in that same invocation.
+Ports: fetch=19022, HTTP=19023, missing-projects=19024, wrong-projects=19025,
+nonjson=19026, short=19027, healthy=19028, nototal=19029.
+
+For every red command below, the outer `test "$rc" -eq 1` exited 0, confirming
+that the arm really failed. For every restored command, the outer
+`test "$rc" -eq 0` exited 0, confirming that the same arm passed again.
+The recipe's own exit code is shown inside the arm message; arm_rc is the
+selftest harness exit code. Layered guards may still refuse a bad page after
+one guard is removed, but losing its required named diagnostic fails the arm.
+
+3a. Fetch guard removed -> arm 22 FAIL; restored -> PASS
+
+Patch: replace this exact span:
+    -w '%{http_code}' "$BASE/api/v1/projects?$1") || {
+    echo "census: fetch failed at offset=$2" >&2; exit 1;
+  }
+with:
+    -w '%{http_code}' "$BASE/api/v1/projects?$1")
+
+$ python3 ../cf089-probe.py --arm 22 > ../cf089-mut-22.log 2>&1; rc=$?; cat ../cf089-mut-22.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 1
+22. census refuses a failed fetch at a later offset
+  FAIL  census fetch guard (exit 1): curl: (52) Empty reply from server
+census: HTTP 000 at offset=500; refusing to count
+CENSUS SELFTEST: FAIL (1)
+arm_rc=1
+
+Restore the original span (including the following case statement).
+$ python3 ../cf089-probe.py --arm 22 > ../cf089-restored-22.log 2>&1; rc=$?; cat ../cf089-restored-22.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 0
+22. census refuses a failed fetch at a later offset
+  PASS  census fetch failure -> offset=500, exit 1, no census printed
+CENSUS SELFTEST: PASS
+arm_rc=0
+
+3b. HTTP guard removed -> arm 23 FAIL; restored -> PASS
+
+Patch: replace this exact span:
+  case "$status" in
+    2??) ;;
+    *) echo "census: HTTP $status at offset=$2; refusing to count" >&2; exit 1 ;;
+  esac
+with:
+  : # HTTP guard temporarily removed for CF-089 red proof
+
+$ python3 ../cf089-probe.py --arm 23 > ../cf089-mut-23.log 2>&1; rc=$?; cat ../cf089-mut-23.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 1
+23. census refuses a non-2xx page
+  FAIL  census HTTP guard (exit 1): census: missing or invalid .projects array at offset=500
+CENSUS SELFTEST: FAIL (1)
+arm_rc=1
+
+Restore the original span.
+$ python3 ../cf089-probe.py --arm 23 > ../cf089-restored-23.log 2>&1; rc=$?; cat ../cf089-restored-23.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 0
+23. census refuses a non-2xx page
+  PASS  census HTTP 502 -> offset=500, exit 1, no census printed
+CENSUS SELFTEST: PASS
+arm_rc=0
+
+3c. Projects-array guard removed -> arm 24 FAIL; restored -> PASS
+
+Patch: replace this exact span:
+  jq -e '.projects | type == "array"' "$tmpd/page.json" >/dev/null 2>&1 || {
+    echo "census: missing or invalid .projects array at offset=$2" >&2; exit 1;
+  }
+with:
+  : # projects-array guard temporarily removed for CF-089 red proof
+
+$ python3 ../cf089-probe.py --arm 24 > ../cf089-mut-24.log 2>&1; rc=$?; cat ../cf089-mut-24.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 1
+24. census requires a projects array even on HTTP 200
+  FAIL  census .projects guard (missing-projects, exit 1): jq: error (at /var/tmp/hermes-scratch/tmp.4avJVwWWHW/page.json:0): Cannot iterate over null (null)
+census: cannot collect offset=500
+  FAIL  census .projects guard (wrong-projects, exit 1): census: rows received=500 != total reported=866; refusing to count
+  FAIL  census .projects guard (nonjson, exit 1): jq: parse error: Invalid numeric literal at line 1, column 10
+census: cannot count offset=500
+CENSUS SELFTEST: FAIL (3)
+arm_rc=1
+
+Restore the original span.
+$ python3 ../cf089-probe.py --arm 24 > ../cf089-restored-24.log 2>&1; rc=$?; cat ../cf089-restored-24.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 0
+24. census requires a projects array even on HTTP 200
+  PASS  census missing-projects -> named .projects refusal, exit 1, no census printed
+  PASS  census wrong-projects -> named .projects refusal, exit 1, no census printed
+  PASS  census nonjson -> named .projects refusal, exit 1, no census printed
+CENSUS SELFTEST: PASS
+arm_rc=0
+
+3d. Unfiltered received-total guard removed -> arm 25 FAIL; restored -> PASS
+
+Patch: replace this exact span:
+[ "$received" -eq "$total" ] || {
+  echo "census: rows received=$received != total reported=$total; refusing to count" >&2; exit 1;
+}
+with:
+: # received-total guard temporarily removed for CF-089 red proof
+
+$ python3 ../cf089-probe.py --arm 25 > ../cf089-mut-25.log 2>&1; rc=$?; cat ../cf089-mut-25.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 1
+25. census compares all received rows with the first reported total
+  FAIL  census row-total guard (exit 0): 
+CENSUS SELFTEST: FAIL (1)
+arm_rc=1
+
+Restore the original span.
+$ python3 ../cf089-probe.py --arm 25 > ../cf089-restored-25.log 2>&1; rc=$?; cat ../cf089-restored-25.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 0
+25. census compares all received rows with the first reported total
+  PASS  census short page -> rows received=865, total reported=866, exit 1, no census printed
+CENSUS SELFTEST: PASS
+arm_rc=0
+
+The short fixture removes the final nonmatching row. Both matching family rows
+remain, so checking only the filtered census count cannot detect this loss.
+The received=865 vs reported=866 assertion measures the unfiltered inventory.
+
+3e. Missing-total guard removed -> arm 27 FAIL; restored -> PASS
+
+Patch: replace this exact line:
+[ -n "$total" ] || { echo 'census: the scheduler answered without a total; refusing to count' >&2; exit 1; }
+with:
+: # missing-total guard temporarily removed for CF-089 red proof
+
+$ python3 ../cf089-probe.py --arm 27 > ../cf089-mut-27.log 2>&1; rc=$?; cat ../cf089-mut-27.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 1
+27. census still refuses a missing total
+  FAIL  census missing-total guard (exit 1): census: invalid total ''; refusing to count
+CENSUS SELFTEST: FAIL (1)
+arm_rc=1
+
+Restore the original line.
+$ python3 ../cf089-probe.py --arm 27 > ../cf089-restored-27.log 2>&1; rc=$?; cat ../cf089-restored-27.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 0
+27. census still refuses a missing total
+  PASS  census missing total -> named refusal, exit 1, no census printed
+CENSUS SELFTEST: PASS
+arm_rc=0
+
+3f. Happy row format broken -> arm 26 FAIL; restored -> PASS
+
+Patch: replace the literal `enabled=\(.enabled)` in the formatting expression
+with `enabled:\(.enabled)`; leave everything else unchanged.
+
+$ python3 ../cf089-probe.py --arm 26 > ../cf089-mut-26.log 2>&1; rc=$?; cat ../cf089-mut-26.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 1
+26. healthy census counts matching rows on both sides of the page boundary
+  FAIL  census healthy path (exit 0):  / 2
+code-factory enabled:true admission=cooldown parent=x
+code-factory enabled:true admission=cooldown parent=x
+CENSUS SELFTEST: FAIL (1)
+arm_rc=1
+
+Restore the original expression.
+$ python3 ../cf089-probe.py --arm 26 > ../cf089-restored-26.log 2>&1; rc=$?; cat ../cf089-restored-26.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 0
+26. healthy census counts matching rows on both sides of the page boundary
+  PASS  census healthy -> 2 matching rows, exact row format, exit 0
+CENSUS SELFTEST: PASS
+arm_rc=0
+
+3g. Mirror drift introduced -> arm 28 FAIL; restored -> PASS
+
+Patch: replace the exact line `census_page 'limit=1' 0` with
+`census_page 'limit=1' 0 # deliberate mirror drift` in the mirror only.
+
+$ python3 ../cf089-probe.py --arm 28 > ../cf089-mut-28.log 2>&1; rc=$?; cat ../cf089-mut-28.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 1
+28. README census and executable mirror agree except for BASE
+Traceback (most recent call last):
+  File "<stdin>", line 13, in <module>
+AssertionError: README census differs from executable mirror
+  FAIL  census README/mirror drift
+CENSUS SELFTEST: FAIL (1)
+arm_rc=1
+
+Restore the original line.
+$ python3 ../cf089-probe.py --arm 28 > ../cf089-restored-28.log 2>&1; rc=$?; cat ../cf089-restored-28.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 0
+28. README census and executable mirror agree except for BASE
+  PASS  census README/mirror byte parity (BASE parameterisation only)
+CENSUS SELFTEST: PASS
+arm_rc=0
+
+4. ACCEPTANCE COMMANDS (real output excerpts; exit statuses explicitly measured)
+
+$ bash tests/selftest.sh > ../cf089-selftest.log 2>&1; rc=$?; cat ../cf089-selftest.log; printf 'selftest_rc=%s\n' "$rc"; exit "$rc"
+[Earlier arms also passed; retained excerpt starts at the census arms.]
+22. census refuses a failed fetch at a later offset
+  PASS  census fetch failure -> offset=500, exit 1, no census printed
+23. census refuses a non-2xx page
+  PASS  census HTTP 502 -> offset=500, exit 1, no census printed
+24. census requires a projects array even on HTTP 200
+  PASS  census missing-projects -> named .projects refusal, exit 1, no census printed
+  PASS  census wrong-projects -> named .projects refusal, exit 1, no census printed
+  PASS  census nonjson -> named .projects refusal, exit 1, no census printed
+25. census compares all received rows with the first reported total
+  PASS  census short page -> rows received=865, total reported=866, exit 1, no census printed
+26. healthy census counts matching rows on both sides of the page boundary
+  PASS  census healthy -> 2 matching rows, exact row format, exit 0
+27. census still refuses a missing total
+  PASS  census missing total -> named refusal, exit 1, no census printed
+28. README census and executable mirror agree except for BASE
+  PASS  census README/mirror byte parity (BASE parameterisation only)
+
+SELFTEST: PASS
+selftest_rc=0
+
+$ ruff check . && ruff format --check .; printf 'ruff_rc=%s\n' "$?"
+All checks passed!
+Would reformat: scripts/lane_target.py
+Would reformat: tests/test_lane_target.py
+2 files would be reformatted, 9 files already formatted
+ruff_rc=1
+
+$ bash -n tests/selftest.sh docs/audits/cf089-census-recipe.sh; printf 'bash_n_rc=%s\n' "$?"
+bash_n_rc=0
+
+The formatting failure is pre-existing, not a claim of a clean tree:
+$ git show HEAD:scripts/lane_target.py | ruff format --check --stdin-filename scripts/lane_target.py -; printf 'baseline_lane_target_format_rc=%s\n' "$?"
+baseline_lane_target_format_rc=1
+$ git show HEAD:tests/test_lane_target.py | ruff format --check --stdin-filename tests/test_lane_target.py -; printf 'baseline_test_lane_target_format_rc=%s\n' "$?"
+baseline_test_lane_target_format_rc=1
+$ git diff --exit-code HEAD -- scripts/lane_target.py tests/test_lane_target.py; printf 'untouched_baseline_files_rc=%s\n' "$?"
+untouched_baseline_files_rc=0
+$ ruff format --check scripts/lane_target.py tests/test_lane_target.py; printf 'baseline_format_rc=%s\n' "$?"
+Would reformat: scripts/lane_target.py
+Would reformat: tests/test_lane_target.py
+2 files would be reformatted
+baseline_format_rc=1
+
+$ scripts/boardctl validate; printf 'boardctl_rc=%s\n' "$?"
+[Output excerpt; the existing warnings were not edited.]
+rows: 82 tasks, 109 events, 0 fixtures
+key uniformity: 59/82 rows carry only canon keys; drift 23 row(s): probe(23) — 0 fixable by 'boardctl update <id> --normalize'
+RESULT: OK (26 warning(s))
+boardctl_rc=0
+
+No board file was changed. No push was attempted. The tree-wide formatting gate
+could not be made green without touching the two unrelated files; they were
+left byte-identical to HEAD. All requested functional and syntax checks passed.
+
+5. EXACT NARROW RUNNER SOURCE (saved as ../cf089-probe.py for section 3)
+
+"""Run selected real CF-089 selftest arms without unrelated repo arms."""
+import argparse
+import subprocess
+from pathlib import Path
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--arm", type=int)
+args = parser.parse_args()
+text = Path("tests/selftest.sh").read_text()
+block = text.split("# BEGIN census-fail-closed\n", 1)[1].split(
+    "# END census-fail-closed", 1
+)[0]
+if args.arm is not None:
+    helpers = block.split('say "22.', 1)[0]
+    marker = f'say "{args.arm}.'
+    arm = marker + block.split(marker, 1)[1]
+    arm = arm.split(f'say "{args.arm + 1}.', 1)[0]
+    block = helpers + arm
+script = (
+    'set -uo pipefail\nHERE="$PWD"\n. "$HERE/scripts/lib.sh"\nfails=0\n'
+    + block
+    + '\n[ "$fails" -eq 0 ] && { say "CENSUS SELFTEST: PASS"; exit 0; }\n'
+    + 'say "CENSUS SELFTEST: FAIL ($fails)"; exit 1\n'
+)
+result = subprocess.run(["bash"], input=script, text=True, check=False)
+raise SystemExit(result.returncode)

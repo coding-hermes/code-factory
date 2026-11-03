@@ -155,23 +155,52 @@ the loaders write at setup. A live scheduler can differ in both directions: a ro
 after setup, and rows this repo does not configure can exist. Read the state, do not infer it:
 
 ```bash
-total=$(curl -s 'http://127.0.0.1:9090/api/v1/projects?limit=1' | jq -r '.total // empty')
+(
+BASE=http://127.0.0.1:9090
+tmpd=$(mktemp -d) || { echo 'census: cannot create temporary directory' >&2; exit 1; }
+trap 'rm -rf "$tmpd"' EXIT
+census_page() {
+  status=$(curl -sS --connect-timeout 5 --max-time 15 -o "$tmpd/page.json" \
+    -w '%{http_code}' "$BASE/api/v1/projects?$1") || {
+    echo "census: fetch failed at offset=$2" >&2; exit 1;
+  }
+  case "$status" in
+    2??) ;;
+    *) echo "census: HTTP $status at offset=$2; refusing to count" >&2; exit 1 ;;
+  esac
+  jq -e '.projects | type == "array"' "$tmpd/page.json" >/dev/null 2>&1 || {
+    echo "census: missing or invalid .projects array at offset=$2" >&2; exit 1;
+  }
+}
+census_page 'limit=1' 0
+total=$(jq -r '.total // empty' "$tmpd/page.json")
 [ -n "$total" ] || { echo 'census: the scheduler answered without a total; refusing to count' >&2; exit 1; }
-off=0; : > /tmp/cf-lanes.txt
+[[ "$total" =~ ^[0-9]+$ ]] || { echo "census: invalid total '$total'; refusing to count" >&2; exit 1; }
+total=$((10#$total))
+off=0; received=0; : > "$tmpd/rows.jsonl"
 while [ "$off" -lt "$total" ]; do
-  curl -s "http://127.0.0.1:9090/api/v1/projects?limit=500&offset=$off" \
-    | jq -r '.projects[] | select(.name|startswith("code-factory"))
-             | "\(.name) enabled=\(.enabled) admission=\(.admission_mode) parent=\(.parent // "-")"' \
-    >> /tmp/cf-lanes.txt
+  census_page "limit=500&offset=$off" "$off"
+  n=$(jq '.projects | length' "$tmpd/page.json") || { echo "census: cannot count offset=$off" >&2; exit 1; }
+  received=$((received + n))
+  jq -c '.projects[]' "$tmpd/page.json" >> "$tmpd/rows.jsonl" || { echo "census: cannot collect offset=$off" >&2; exit 1; }
   off=$((off + 500))
 done
-wc -l < /tmp/cf-lanes.txt; cat /tmp/cf-lanes.txt
+[ "$received" -eq "$total" ] || {
+  echo "census: rows received=$received != total reported=$total; refusing to count" >&2; exit 1;
+}
+jq -r 'select(.name|startswith("code-factory"))
+       | "\(.name) enabled=\(.enabled) admission=\(.admission_mode) parent=\(.parent // "-")"' \
+  "$tmpd/rows.jsonl" > "$tmpd/lanes.txt" || { echo 'census: cannot format rows' >&2; exit 1; }
+wc -l < "$tmpd/lanes.txt"; cat "$tmpd/lanes.txt"
+)
 ```
 
 The inventory endpoint pages: it caps a page at 500 rows and answers `{projects,total,limit,offset}`, and
 a whole fleet is larger than one page. Read `total` first and walk the pages, as above — a single
 `limit=500` request inspects only its own page, so a family whose rows sort past the page boundary
-prints an empty or short census without any error.
+prints an empty or short census without any error. The recipe above refuses failed fetches,
+non-2xx responses, missing or invalid `.projects` arrays, and an unfiltered row count that differs
+from the first reported `total`; it prints no family census until all pages pass.
 
 On the reference deployment that prints nineteen rows: the fourteen above, all `enabled=true`, plus
 five `code-factory-duckbrain-*` satellites whose rows this repo does not create (they are not part
