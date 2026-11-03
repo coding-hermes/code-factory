@@ -1,0 +1,112 @@
+{
+  "task_id": "CF-077",
+  "task_title": "verify-node.sh auth probe fails open: 404/000/500 are WARN and VERIFY PASS; node-create.sh admits the node",
+  "task_criteria": [
+    "Fix is present in the graded tree: scripts/verify-node.sh exits non-zero and prints a FAIL naming the measured status code when /api/system/stats answers anything other than 401, 302 or 403 (404, 000 and 500 all FAIL); the auth_gate leg fails closed when /api/status lacks auth_required true; scripts/node-create.sh exits 1 and prints NODE INCOMPLETE when the auth probe is inconclusive and prints NODE CREATED only when every auth leg passed; tests/selftest.sh carries stub-curl fixture sections asserting both directions (401 and 403 pass, 404, 000 and 500 fail with a named FAIL row) and the suite prints SELFTEST: PASS; docs/OPERATIONS.md and docs/THREAT-MODEL.md state the enforced behaviour."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/proj-wt-cf-077-20261103",
+  "branch": "cf-077-20261103",
+  "commit": "1dfb58b8aac966fa858e274992e01bad27d0632b",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/proj-wt-cf-077-20261103/.gitreins/logs/guard-20261103T162929.675343Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n11:32AM INF scanned ~377145 bytes (377.14 KB) in 431ms\n11:32AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 75 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/proj-wt-cf-077-20261103/.gitreins/logs/guard-20261103T162929.675343Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.uaR9hZI0iE/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  69/69 rows parse\n8. project board entrypoint is real and fails closed without dependency\n  PASS  bash -n scripts/boardctl\n  PASS  local help\n  PASS  missing boardctl -> explicit FAIL, exit 127\n9. every prompt file the README relies on exists\n  PASS  every prompts/*.md named by README.md exists\n  PASS  absent prompt refused (absent: prompts/ghost-lane.md)\n10. Hermes refuses an unsupported Python without pip or network\n  PASS  Python 3.14 refusal names the supported range without pip\n11. lane workdir targets: local paths AND remote user@host/scheme targets\n  PASS  lane target parse/validate, home-repo rejection, remote structural-only\n12. node disk floor resolves from CLI/env/config with fail-closed values\n  PASS  floor precedence, role defaults, malformed values refused\n13. node provisioning names its resolved floor and refuses below it\n  PASS  malformed floor refused before any install\n14. harness-adapter FAIL rows are counted in the node summary (CF-055)\n\n\u2026 [558 chars omitted \u2014 8 line(s)] \u2026\n  PASS  staged disk floor resolves: 4096 GiB from env; admission refuses before installs\n  PASS  missing disk floor -> one countable FAIL row, NODE: FAIL (1), exit 1\n  FAIL  disk_floor \u2014 resolver missing or unreadable: /var/tmp/hermes-scratch/tmp.JNtCXUbPNj/scripts/disk_floor.py\nNODE: FAIL (1)\n  PASS  disk floor omitted from scratch manifest -> validation exit 1\n  PASS  owned failure names spawned agent and explicit-server destroy command\n  PASS  reused agent failure does not request destruction\n  PASS  copy-failure failure names spawned agent and explicit-server destroy command\n17. auth verification fails closed, with a pre-fix detector control\n  PASS  pre-fix 404 incorrectly passes: fixture detects CF-077\n  PASS  auth stats 401 -> PASS, exit 0\n  PASS  auth stats 302 -> PASS, exit 0\n  PASS  auth stats 403 -> PASS, exit 0\n  PASS  auth stats 404 -> FAIL, exit 1\n  PASS  auth stats 000 -> FAIL, exit 1\n  PASS  auth stats 500 -> FAIL, exit 1\n  PASS  auth stats 200 -> FAIL, exit 1\n  PASS  auth marker {\"status\":\"ok\"} -> named auth_gate FAIL, exit 1\n  PASS  auth marker {\"auth_required\":false} -> named auth_gate FAIL, exit 1\n  PASS  auth marker {\"auth_required\":trueish} -> named auth_gate FAIL, exit 1\n18. node creation requires both auth legs, not just successful provisioning\n  PASS  node-create refused -> NODE INCOMPLETE (1), exit 1\n  PASS  node-create missing-marker -> NODE INCOMPLETE (1), exit 1\n  PASS  node-create closed -> NODE CREATED: f, exit 0\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/proj-wt-cf-077-20261103/.gitreins/logs/guard-20261103T162929.675343Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 Fix is present in the graded tree: scripts/verify-node.sh exits non-zero and prints a FAIL naming the measured status code when /api/system/stats answers anything other than 401, 302 or 403 (404, 000 and 500 all FAIL); the auth_gate leg fails closed when /api/status lacks auth_required true; scripts/node-create.sh exits 1 and prints NODE INCOMPLETE when the auth probe is inconclusive and prints NODE CREATED only when every auth leg passed; tests/selftest.sh carries stub-curl fixture sections asserting both directions (401 and 403 pass, 404, 000 and 500 fail with a named FAIL row) and the suite prints SELFTEST: PASS; docs/OPERATIONS.md and docs/THREAT-MODEL.md state the enforced behaviour.: scripts/verify-node.sh:53-58 \u2014 case 401|302|403 -> ok; 200 -> bad; *) -> bad \"unauth_refused \u2014 /api/system/stats -> $code \u2014 auth refusal not verified\" (so 404/000/500 are named FAIL rows), and line 74 exits 1 when FAILED>0. auth_gate leg verify-node.sh:43-47 requires the boolean auth_required:true regex, else bad \"auth_gate\" (fails closed). scripts/node-create.sh:111-116 \u2014 verify-node.sh failure calls incomplete() which prints \"NODE INCOMPLETE ($FAILED)\" and exits 1; \"NODE CREATED: $AGENT\" only on FAILED==0. tests/selftest.sh:482-546 (section 17) builds stub bunker+curl fixtures and asserts 401/302/403 -> PASS exit 0, 404/000/500/200 -> named FAIL row + 'VERIFY: FAIL (1)' exit 1, plus a pre-fix (bbb0719) detector control and auth-marker negatives; :548-566 (section 18) asserts node-create refused/missing-marker -> 'NODE INCOMPLETE (1)' exit 1 and closed -> 'NODE CREATED: f' exit 0. Ran `bash tests/selftest.sh` (guards.test_command): exit=0, output ends 'SELFTEST: PASS', with 'PASS auth stats 401/302/403 -> PASS, exit 0', 'PASS auth stats 404/000/500 -> FAIL, exit 1', 'PASS node-create refused/missing-marker -> NODE INCOMPLETE (1), exit 1', 'PASS node-create closed -> NODE CREATED: f, exit 0'. docs/OPERATIONS.md:82,84 and docs/THREAT-MODEL.md:33,47,65,93 document the enforced fail-closed behaviour (no WARN path, both legs mandatory, NODE INCOMPLETE vs NODE CREATED).\nAll fail-closed auth-probe changes are present in verify-node.sh, node-create.sh, selftest.sh and both docs, and `bash tests/selftest.sh` exits 0 printing SELFTEST: PASS with both directions asserted.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 Fix is present in the graded tree: scripts/verify-node.sh exits non-zero and prints a FAIL naming the measured status code when /api/system/stats answers anything other than 401, 302 or 403 (404, 000 and 500 all FAIL); the auth_gate leg fails closed when /api/status lacks auth_required true; scripts/node-create.sh exits 1 and prints NODE INCOMPLETE when the auth probe is inconclusive and prints NODE CREATED only when every auth leg passed; tests/selftest.sh carries stub-curl fixture sections asserting both directions (401 and 403 pass, 404, 000 and 500 fail with a named FAIL row) and the suite prints SELFTEST: PASS; docs/OPERATIONS.md and docs/THREAT-MODEL.md state the enforced behaviour.: scripts/verify-node.sh:53-58 \u2014 case 401|302|403 -> ok; 200 -> bad; *) -> bad \"unauth_refused \u2014 /api/system/stats -> $code \u2014 auth refusal not verified\" (so 404/000/500 are named FAIL rows), and line 74 exits 1 when FAILED>0. auth_gate leg verify-node.sh:43-47 requires the boolean auth_required:true regex, else bad \"auth_gate\" (fails closed). scripts/node-create.sh:111-116 \u2014 verify-node.sh failure calls incomplete() which prints \"NODE INCOMPLETE ($FAILED)\" and exits 1; \"NODE CREATED: $AGENT\" only on FAILED==0. tests/selftest.sh:482-546 (section 17) builds stub bunker+curl fixtures and asserts 401/302/403 -> PASS exit 0, 404/000/500/200 -> named FAIL row + 'VERIFY: FAIL (1)' exit 1, plus a pre-fix (bbb0719) detector control and auth-marker negatives; :548-566 (section 18) asserts node-create refused/missing-marker -> 'NODE INCOMPLETE (1)' exit 1 and closed -> 'NODE CREATED: f' exit 0. Ran `bash tests/selftest.sh` (guards.test_command): exit=0, output ends 'SELFTEST: PASS', with 'PASS auth stats 401/302/403 -> PASS, exit 0', 'PASS auth stats 404/000/500 -> FAIL, exit 1', 'PASS node-create refused/missing-marker -> NODE INCOMPLETE (1), exit 1', 'PASS node-create closed -> NODE CREATED: f, exit 0'. docs/OPERATIONS.md:82,84 and docs/THREAT-MODEL.md:33,47,65,93 document the enforced fail-closed behaviour (no WARN path, both legs mandatory, NODE INCOMPLETE vs NODE CREATED).\nAll fail-closed auth-probe changes are present in verify-node.sh, node-create.sh, selftest.sh and both docs, and `bash tests/selftest.sh` exits 0 printing SELFTEST: PASS with both directions asserted.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "Fix is present in the graded tree: scripts/verify-node.sh exits non-zero and prints a FAIL naming the measured status code when /api/system/stats answers anything other than 401, 302 or 403 (404, 000 and 500 all FAIL); the auth_gate leg fails closed when /api/status lacks auth_required true; scripts/node-create.sh exits 1 and prints NODE INCOMPLETE when the auth probe is inconclusive and prints NODE CREATED only when every auth leg passed; tests/selftest.sh carries stub-curl fixture sections asserting both directions (401 and 403 pass, 404, 000 and 500 fail with a named FAIL row) and the suite prints SELFTEST: PASS; docs/OPERATIONS.md and docs/THREAT-MODEL.md state the enforced behaviour.",
+                "status": "PASS",
+                "detail": "scripts/verify-node.sh:53-58 \u2014 case 401|302|403 -> ok; 200 -> bad; *) -> bad \"unauth_refused \u2014 /api/system/stats -> $code \u2014 auth refusal not verified\" (so 404/000/500 are named FAIL rows), and line 74 exits 1 when FAILED>0. auth_gate leg verify-node.sh:43-47 requires the boolean auth_required:true regex, else bad \"auth_gate\" (fails closed). scripts/node-create.sh:111-116 \u2014 verify-node.sh failure calls incomplete() which prints \"NODE INCOMPLETE ($FAILED)\" and exits 1; \"NODE CREATED: $AGENT\" only on FAILED==0. tests/selftest.sh:482-546 (section 17) builds stub bunker+curl fixtures and asserts 401/302/403 -> PASS exit 0, 404/000/500/200 -> named FAIL row + 'VERIFY: FAIL (1)' exit 1, plus a pre-fix (bbb0719) detector control and auth-marker negatives; :548-566 (section 18) asserts node-create refused/missing-marker -> 'NODE INCOMPLETE (1)' exit 1 and closed -> 'NODE CREATED: f' exit 0. Ran `bash tests/selftest.sh` (guards.test_command): exit=0, output ends 'SELFTEST: PASS', with 'PASS auth stats 401/302/403 -> PASS, exit 0', 'PASS auth stats 404/000/500 -> FAIL, exit 1', 'PASS node-create refused/missing-marker -> NODE INCOMPLETE (1), exit 1', 'PASS node-create closed -> NODE CREATED: f, exit 0'. docs/OPERATIONS.md:82,84 and docs/THREAT-MODEL.md:33,47,65,93 document the enforced fail-closed behaviour (no WARN path, both legs mandatory, NODE INCOMPLETE vs NODE CREATED)."
+              }
+            ],
+            "summary": "All fail-closed auth-probe changes are present in verify-node.sh, node-create.sh, selftest.sh and both docs, and `bash tests/selftest.sh` exits 0 printing SELFTEST: PASS with both directions asserted.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-077\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 Fix is present in the graded tree: scripts/verify-node.sh exits non-zero and prints a FAIL naming the measured status code when /api/system/stats answers anything other than 401, 302 or 403 (404, 000 and 500 all FAIL); the auth_gate leg fails closed when /api/status lacks auth_required true; scripts/node-create.sh exits 1 and prints NODE INCOMPLETE when the auth probe is inconclusive and prints NODE CREATED only when every auth leg passed; tests/selftest.sh carries stub-curl fixture sections asserting both directions (401 and 403 pass, 404, 000 and 500 fail with a named FAIL row) and the suite prints SELFTEST: PASS; docs/OPERATIONS.md and docs/THREAT-MODEL.md state the enforced behaviour.: scripts/verify-node.sh:53-58 \u2014 case 401|302|403 -> ok; 200 -> bad; *) -> bad \"unauth_refused \u2014 /api/system/stats -> $code \u2014 auth refusal not verified\" (so 404/000/500 are named FAIL rows), and line 74 exits 1 when FAILED>0. auth_gate leg verify-node.sh:43-47 requires the boolean auth_required:true regex, else bad \"auth_gate\" (fails closed). scripts/node-create.sh:111-116 \u2014 verify-node.sh failure calls incomplete() which prints \"NODE INCOMPLETE ($FAILED)\" and exits 1; \"NODE CREATED: $AGENT\" only on FAILED==0. tests/selftest.sh:482-546 (section 17) builds stub bunker+curl fixtures and asserts 401/302/403 -> PASS exit 0, 404/000/500/200 -> named FAIL row + 'VERIFY: FAIL (1)' exit 1, plus a pre-fix (bbb0719) detector control and auth-marker negatives; :548-566 (section 18) asserts node-create refused/missing-marker -> 'NODE INCOMPLETE (1)' exit 1 and closed -> 'NODE CREATED: f' exit 0. Ran `bash tests/selftest.sh` (guards.test_command): exit=0, output ends 'SELFTEST: PASS', with 'PASS auth stats 401/302/403 -> PASS, exit 0', 'PASS auth stats 404/000/500 -> FAIL, exit 1', 'PASS node-create refused/missing-marker -> NODE INCOMPLETE (1), exit 1', 'PASS node-create closed -> NODE CREATED: f, exit 0'. docs/OPERATIONS.md:82,84 and docs/THREAT-MODEL.md:33,47,65,93 document the enforced fail-closed behaviour (no WARN path, both legs mandatory, NODE INCOMPLETE vs NODE CREATED).\nAll fail-closed auth-probe changes are present in verify-node.sh, node-create.sh, selftest.sh and both docs, and `bash tests/selftest.sh` exits 0 printing SELFTEST: PASS with both directions asserted.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-03T16:32:37.977297",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-03T16:32:37.994003+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 32375,
+        "truncated": false,
+        "source": "git show 1dfb58b8aac9"
+      }
+    ],
+    "task_id": "CF-077"
+  }
+}

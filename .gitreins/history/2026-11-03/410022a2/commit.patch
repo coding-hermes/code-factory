@@ -1,0 +1,312 @@
+commit 1dfb58b8aac966fa858e274992e01bad27d0632b
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Tue Nov 3 11:29:19 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Tue Nov 3 11:29:50 2026 -0500
+
+    fix: fail closed when the auth probe cannot prove the gateway is closed. Addresses CF-077.
+    
+    Enforce AGENTS.md rule 2 (every check must be able to fail): both auth
+    legs now contribute named FAIL rows on uncertainty, and node creation
+    stops at incomplete on verifier failure. Correct the documented warning-only
+    auth gap and enumerate every remaining pre-admission warning site.
+    
+    Local fixtures reproduce bbb0719's false PASS for 404 and prove the fixed
+    failure paths and successful 401/302/403 controls. Selftest PASS rows rise
+    from 40 to 54; boardctl validates with existing legacy warnings.
+    The supplied probe's invalid case pattern was corrected before measurement.
+    
+    Commit-hook bypass (CF-031 precedent): the guard refused with
+    "Tier 1: DEGRADED PASS (skips: lint=no staged files)  (test mode: full)".
+    Secrets were clean and tests (full) passed; lint skipped because no staged
+    files matched its lint gate. No failure named a changed file. Shell syntax,
+    full selftest, and board validation were independently run and passed.
+    
+    Message-only amend was also refused with
+    "Tier 1: DEGRADED PASS (skips: lint=no staged files, tests=no staged files)  (test mode: full)".
+    Its one retry uses the same explicit hook bypass; no content changes are
+    staged, and the previously tested tree is retained byte-for-byte.
+    
+    Trace commit below identifies the identical-tree pre-amend content commit;
+    a commit cannot embed its own final hash. Only the message is amended.
+    
+    ch:trace row=CF-077 spec=specs/NODE.md wave=none:serial test=tests/selftest.sh doc=docs/OPERATIONS.md evidence=docs/audits/code-factory-foreman-2026-11-03-cf077.probe.txt verdict=pending commit=1b5d4a388341f9dd824ba7216f1bf11c814dc966 memory=none:no-lane-role-token
+---
+ docs/OPERATIONS.md                                 | 17 ++++-
+ docs/THREAT-MODEL.md                               | 11 +--
+ ...code-factory-foreman-2026-11-03-cf077.probe.txt | 42 +++++++++++
+ scripts/node-create.sh                             |  3 +-
+ scripts/verify-node.sh                             |  8 +-
+ tests/selftest.sh                                  | 86 ++++++++++++++++++++++
+ 6 files changed, 156 insertions(+), 11 deletions(-)
+
+diff --git a/docs/OPERATIONS.md b/docs/OPERATIONS.md
+index a7f2279..e2b94b8 100644
+--- a/docs/OPERATIONS.md
++++ b/docs/OPERATIONS.md
+@@ -79,7 +79,22 @@ scripts/harness/install-hermes.sh --apply
+ 
+ The script defaults to pin `0.19.0`, overridable with `HERMES_PIN`, uses `$HOME/hermes-venv`, and port `10800`, overridable with `NODE_GATEWAY_PORT`. It runs `hermes serve --host 0.0.0.0 --port PORT --skip-build` under `nohup`, logging to `$HOME/.node-serve-PORT.log`. It refuses to start a public bind unless `$HOME/.hermes/config.yaml` contains `basic_auth`. An inference provider key must be configured out of band in `$HOME/.hermes/.env`; never print or transmit its value. `--check` verifies presence but does not prove the provider can complete an inference request.
+ 
+-After apply, check again and require `/api/status -> 200`. The current implementation uses a substring check for `basic_auth`; it does not independently validate the strength or correctness of the configured secret. `verify-node.sh` checks status and tests that unauthenticated `/api/system/stats` is refused with 401, 302, or 403. Require this test to pass before admitting work. A `WARN` is not approval to expose the gateway.
++After apply, check again and require `/api/status -> 200`. The current implementation uses a substring check for `basic_auth`; it does not independently validate the strength or correctness of the configured secret. `verify-node.sh:43–49` requires the status body to report boolean `auth_required: true`; absence or a non-true value prints a measured `FAIL auth_gate` and exits non-zero. `verify-node.sh:53–58` accepts unauthenticated `/api/system/stats` only with 401, 302, or 403; every other code (including 000, 404, 500 and 200) is a named `FAIL unauth_refused`. There is no auth opt-out. Require both legs to pass before admitting work. A WARN is not approval to expose the gateway: neither auth leg can warn and pass. `node-create.sh:111–116` prints `NODE INCOMPLETE` and exits 1 on failed verification; `NODE CREATED` requires verification and provisioning to pass. These probes do not prove effective config correctness or a full dispatch round trip.
++
++### Remaining warning sites before readiness/admission decisions (CF-077)
++
++`lib.sh:8` defines `warn()` as output only: it does not increment `FAILED` and never blocks by itself. All remaining callers in `scripts/` are listed below; none is an auth exception for `verify-node.sh`.
++
++| Call site | Measured warning | Does it block? |
++|---|---|---|
++| `scripts/bunker-server-install.sh:56` | `residue`: orphan homes/keys in server status | No; qualification can still pass. Operator must resolve before scaling. |
++| `scripts/bunker-server-install.sh:61` | `tool:$t`: missing python3/git/curl/jq | No; qualification can still pass. Missing tools still need resolution before their dependent operations. |
++| `scripts/project-node.sh:176` | `tool:$t`: missing optional jq/rg/node | No; node checks and manifest creation can pass if required layers pass. Repository-specific prerequisites remain operator gates. |
++| `scripts/harness/install-opencode.sh:22` | `user_space_binary`: binary not under HOME | No for `--check`; `--apply` separately refuses at lines 31–34. |
++| `scripts/harness/install-opencode.sh:28` | `non_interactive`: run/exec/serve mode not confirmed | No for `--check`; `--apply` separately refuses at lines 31–34. |
++| `scripts/harness/install-claude-code.sh:30` | `auth`: no credential surface | No for `--check`; `--apply` separately refuses at lines 33–39. This is harness inference/login auth, not gateway auth. |
++
++Do not equate these advisory checks with production readiness. In particular, adapter `--check` can pass with warnings, but the unmeasured adapters cannot be provisioned through their refusing `--apply` path. The independent gateway auth legs remain mandatory.
+ 
+ **Network boundary:** the gateway binds `0.0.0.0`; restrict access at the network/firewall layer to the approved private overlay and intended control host. Do not expose it to the public internet. Tailnet reachability is not authentication. Keep basic-auth credentials and inference keys distinct, scoped, rotated, and out of argv/logs. If unauthenticated stats returns 200, quarantine the node immediately and close access before further testing.
+ 
+diff --git a/docs/THREAT-MODEL.md b/docs/THREAT-MODEL.md
+index b676fc6..80180ba 100644
+--- a/docs/THREAT-MODEL.md
++++ b/docs/THREAT-MODEL.md
+@@ -30,7 +30,7 @@ The repository owns the node specs, dispatch/result envelope, board and provisio
+ 2. **Control host → scheduler/Crier → node:** message transport and scheduler routing are external dependencies. A signed pull worker and digest-checked brief are described in `docs/DESIGN.md` §3, but their implementation is not in this repository; `specs/ENVELOPE.md` defines contract expectations only.
+ 3. **Node process → repository/harness:** repository code and model-generated commands are untrusted execution. One repo per node is the intended containment boundary (`specs/NODE.md`); no OS sandbox, filesystem confinement, or network egress policy is established by the inspected scripts.
+ 4. **Node → control-host results:** node-reported status, host identity, commit, gate result, and digest are claims until independently checked. `specs/ENVELOPE.md` requires host-side digest recomputation; `scripts/verify-node.sh` implements it only when `--artifact` is supplied.
+-5. **Control host → external gateway:** Hermes is bound to `0.0.0.0` by `scripts/harness/install-hermes.sh`; it relies on configured gateway authentication and network exposure controls. `scripts/verify-node.sh` probes unauthenticated access, but an unrecognized result is WARN rather than a hard failure (lines 52–58).
++5. **Control host → external gateway:** Hermes is bound to `0.0.0.0` by `scripts/harness/install-hermes.sh`; it relies on configured gateway authentication and network exposure controls. `scripts/verify-node.sh:43–58` requires an affirmative auth marker and a 401/302/403 unauthenticated stats response; every other measured response fails verification (CF-077).
+ 6. **Repository → third-party downloads and package registries:** downloads and package installs are supply-chain inputs. `scripts/lib.sh` provides digest verification for files fetched through `fetch_verified`, but the Hermes adapter installs `hermes-agent==$PIN` through pip without invoking that helper (`scripts/harness/install-hermes.sh`, lines 50–57).
+ 
+ ## Existing controls and proof status
+@@ -44,7 +44,7 @@ The repository owns the node specs, dispatch/result envelope, board and provisio
+ | No-root, user-space, idempotence and credential-bundle requirements | **Specified policy, not established enforcement:** `AGENTS.md` rules 4, 5, 6, 8; `specs/NODE.md` laws N-1/N-2 | The inspected scripts run user-level commands and do not call sudo/apt in the relevant path, but no runtime privilege audit or credential-bundle round trip was performed. `scripts/project-node.sh` checks `crier.json` mode 600 (lines 77–84), but does not show bundle deletion. |
+ | Layer checks and manifest withheld until provisioning checks pass | **Existing (source):** `scripts/project-node.sh` lines 42–56, 58–84, 104–124 | The script gates manifest creation on `$FAILED -eq 0`; however, the manifest is opened directly rather than atomically, and existing manifest acceptance is not proof of current health. |
+ | Hermes adapter checks a provider-key presence without printing the value and refuses gateway start without `basic_auth` | **Existing (source):** `scripts/harness/install-hermes.sh` lines 43–48, 61–69 | Source behavior only. A substring `grep basic_auth` is not validation of effective configuration; no deployed gateway or firewall was independently checked. |
+-| Gateway verification checks status, auth marker, and unauthenticated stats response | **Existing (source):** `scripts/verify-node.sh` lines 38–58 | **Fail-closed gap:** missing auth marker is WARN (lines 45–47); unexpected stats response is WARN (lines 54–58); the command may still exit zero if no other failure was recorded. Thus this is not a reliable hard auth gate. |
++| Gateway verification checks status, auth marker, and unauthenticated stats response | **Existing (source):** `scripts/verify-node.sh:38–58,73–74`; `scripts/node-create.sh:111–116` | **CF-077 enforced:** missing/non-true auth marker is `FAIL auth_gate`; stats outside 401/302/403 (including 000) is `FAIL unauth_refused` naming the code. Either leg makes verification exit 1 and node creation print `NODE INCOMPLETE`, never `NODE CREATED`. No opt-out. `tests/selftest.sh` sections 17–18 exercise both legs, successful controls and pre-fix 404 false success. This is local fixture evidence, not a deployment attestation. |
+ | Optional host-side artifact digest comparison | **Existing (source):** `scripts/verify-node.sh` lines 60–71 | Computes remote and locally downloaded SHA-256, rejects mismatch. It runs only with `--artifact`; artifact path is interpolated into a remote `bash -lc` string (line 62), and transfer exit status is not separately checked. |
+ | Result contract requires control host to recompute artifact digests; mismatch is FAIL | **Specified contract:** `specs/ENVELOPE.md` “Result”; **implementation:** `scripts/verify-node.sh` lines 60–71 | Contract is broader than script: verifier does not parse a result envelope, bind result to `dispatch_id`, verify freshness, or require `--artifact` by default. |
+ | Brief digest mismatch is a refusal; Crier rejects reserved prompt-control keys | **Specified external behavior:** `specs/ENVELOPE.md` “Dispatch” and “Reserved field names” | Crier implementation is not present, so enforcement and proof are external/unverified here. `tests/selftest.sh` does not exercise Crier. |
+@@ -62,7 +62,7 @@ The repository owns the node specs, dispatch/result envelope, board and provisio
+ | Malicious repo executes commands, reads secrets, or exfiltrates data | The harness is intended to work in the repo; source/tests/build scripts can execute with the node account and access readable files/network. | Intended one-project-per-node boundary (`specs/NODE.md`); node identity file mode check in `scripts/project-node.sh` lines 77–84. | One project per node limits cross-project blast radius only if node isolation is real. No sandbox, secret isolation from jobs, or egress restriction is demonstrated. **Recommendation:** ephemeral per-dispatch workspace/agent, minimal credentials, restricted egress, and OS-level isolation; do not place provider credentials where repository code can read them. |
+ | Compromised node lies about status, commit, host, or artifact | Forged success could cause unreviewed or malicious changes to be accepted | Envelope says control host recomputes digest and treats mismatch as FAIL (`specs/ENVELOPE.md`); optional local digest implementation (`scripts/verify-node.sh`, lines 60–71). | Matching digest proves byte consistency, not benign contents, correct dispatch association, or gate execution. **Recommendation:** verify signed/provenanced result tied to dispatch and expected commit; retrieve artifacts from a trusted path; independently rerun gates and review diffs. |
+ | Artifact path injection or symlink/path confusion | A crafted artifact path may alter remote shell parsing or read unintended files | Optional verifier compares bytes (`scripts/verify-node.sh`, lines 60–71). | Path is embedded in `bash -lc`; no canonical-root or traversal check. **Recommendation:** restrict artifacts to a dispatch-scoped directory, validate canonical path and file type, and transfer by a safe non-shell interface. |
+-| Gateway exposed without effective authentication | Any reachable client may inspect/control work or consume compute | Hermes installer refuses start unless `basic_auth` text occurs in config (`scripts/harness/install-hermes.sh`, lines 61–69); verifier probes an unauthenticated stats endpoint (`scripts/verify-node.sh`, lines 52–58). | Text presence is weak config validation; verifier warns on inconclusive responses and doesn't fail on missing `auth_required`. **Recommendation:** require parsed effective auth config and explicit 401/403 for unauthenticated protected endpoints; fail installation/verification on any uncertainty; verify firewall and bind scope in deployment. |
++| Gateway exposed without effective authentication | Any reachable client may inspect/control work or consume compute | Hermes installer refuses start unless `basic_auth` text occurs in config (`scripts/harness/install-hermes.sh`, lines 61–69); verifier probes an unauthenticated stats endpoint (`scripts/verify-node.sh`, lines 52–58). | Text presence remains weak config validation, but CF-077 makes both verifier auth legs mandatory: missing/non-true `auth_required` and stats outside 401/302/403 now fail (`scripts/verify-node.sh:43–58`). **Recommendation:** require parsed effective auth config; verify firewall and bind scope in deployment. |
+ | Replay, duplicate dispatch, or confused-deputy routing | Replayed messages can run work twice or on the wrong project/node | Idempotency key and correlation are required in `specs/ENVELOPE.md`; manifest binds project/repo in `specs/NODE.md`. | Those semantics are not implemented in this repo; `node-create.sh` reuses an explicitly supplied agent without checking that it belongs to the requested project (`scripts/node-create.sh`, lines 31–39). **Recommendation:** validate manifest identity before reuse; bind and deduplicate every dispatch by dispatch and idempotency keys; reject stale/mismatched correlation. |
+ | Supply-chain replacement or compromised package | A mutable or compromised source can deliver malicious harness/binary | `fetch_verified` checks expected SHA-256 (`scripts/lib.sh`, lines 15–29); Hermes package version is pinned (`scripts/harness/install-hermes.sh`, line 17 and lines 50–57). | Version pin is not artifact digest verification; network/package index and other downloads are not covered by helper. **Recommendation:** lock hashes/artifact provenance for every installer and dependency, verify signatures where available, and regularly review pins. |
+ | Credential leakage through arguments, logs, manifest, or repo | Provider/API credentials allow impersonation or unbounded usage | Policy forbids arguments/logs/board/specs and calls for one mode-600 bundle deleted after provisioning (`AGENTS.md` rule 8; PRD CF-108). `scripts/harness/install-hermes.sh` reports key presence, not value (lines 43–48). | No bundle intake/deletion implementation appears in inspected provisioning path; installer requires `~/.hermes/.env`. **Recommendation:** implement secure one-time delivery, redact output, restrict file permissions, ensure job processes cannot read provider credentials, rotate on node destruction, and test logs/argv. |
+@@ -78,7 +78,7 @@ These are the required operational rules for safe use. Rules described as recomm
+ 3. Treat repo code, prompts, returned paths, and node output as hostile. No secrets should be readable by untrusted job code. **Recommendation:** sandbox and restrict egress; this is not currently proven by source.
+ 4. Reject unknown harnesses and refuse apply for adapters whose install/runtime path is unmeasured. Existing refusal examples: `scripts/harness/install-opencode.sh` lines 31–34 and `scripts/harness/install-claude-code.sh` lines 33–40.
+ 5. Never accept a result solely because the node says `completed`, a gate exit is zero, or a digest matches. Require trusted dispatch binding and independent control-host verification. Contract basis `specs/ENVELOPE.md`; partial digest mechanism `scripts/verify-node.sh` lines 60–71.
+-6. Gateway auth uncertainty is failure, not warning: missing auth marker, unrecognized unauthenticated status, or unverified effective config must stop node acceptance. **Recommendation:** strengthen `scripts/verify-node.sh` lines 45–58 and Hermes configuration validation.
++6. Gateway auth uncertainty is failure, not warning: **enforced for the measured probes** at `scripts/verify-node.sh:43–58,73–74` and `scripts/node-create.sh:111–116`. Missing/non-true auth marker or stats outside 401/302/403 prints named FAIL and stops node creation with exit 1. There is no opt-out. **Recommendation:** independently validate effective Hermes auth configuration; the installer substring check is still insufficient.
+ 7. Any shell-boundary input must be validated and passed without shell interpolation. **Recommendation:** fix the command construction in `scripts/node-create.sh` lines 50–56 and artifact handling in `scripts/verify-node.sh` lines 60–65 before accepting untrusted values.
+ 8. On mismatch, timeout, missing artifact, failed gate, lost bus identity, or repeated delivery with unresolved idempotency, mark the job/node failed or quarantined; do not downgrade to warning or continue scheduling. Policy basis: `specs/NODE.md` failure semantics and `specs/ENVELOPE.md` idempotency requirement. External scheduler enforcement remains unverified.
+ 9. Do not treat an installer exit code or source assertion as deployment proof. Require a live check with a measured value and, for end-to-end confidence, a round trip whose artifact digest is recomputed on the control host. Policy basis `AGENTS.md` rules 3–4 and PRD CF-107.
+@@ -90,7 +90,8 @@ These are the required operational rules for safe use. Rules described as recomm
+ - The scheduler, Crier, task-router, bunker platform, Hermes gateway, network policy, and control-host verification workflow are external to this repository; their runtime security state is **unverified**.
+ - The local verifier's artifact check is optional and not a complete result-envelope validator; it does not authenticate claims or establish content safety.
+ - Shell interpolation in node creation and artifact verification creates an input-injection risk until changed and tested.
+-- Auth checks can warn and still pass; a config substring is not proof that effective authentication is enabled.
++- CF-077 closes warning-only gateway verification, but a config substring and a self-reported auth marker do not prove effective authentication. Independent network/config verification remains required.
++- Remaining `warn()` callers before readiness/admission are `scripts/bunker-server-install.sh:56` (`residue`) and `:61` (`tool:$t`), `scripts/project-node.sh:176` (`tool:$t`), `scripts/harness/install-opencode.sh:22` (`user_space_binary`) and `:28` (`non_interactive`), and `scripts/harness/install-claude-code.sh:30` (`auth`). None of these warnings increments `FAILED` (`scripts/lib.sh:8`), so none blocks its check summary by itself. The OpenCode and Claude Code `--apply` paths separately refuse at lines 31–34 and 33–39 respectively. Other warning sites can precede a passing qualification/node check; resolve prerequisites externally. See `docs/OPERATIONS.md` §3 for the per-site disposition. There are no remaining `warn()` calls in `verify-node.sh`; advisory warnings elsewhere cannot waive its gateway auth checks.
+ - Repo/harness execution has no demonstrated sandbox or secret/egress isolation.
+ - Package pins, scripts, and repository content remain subject to supply-chain compromise; a version pin alone does not prove artifact provenance.
+ - `tests/selftest.sh` is a narrow local suite. It passed for this change, but does not prove end-to-end service security.
+diff --git a/docs/audits/code-factory-foreman-2026-11-03-cf077.probe.txt b/docs/audits/code-factory-foreman-2026-11-03-cf077.probe.txt
+new file mode 100644
+index 0000000..e1828a7
+--- /dev/null
++++ b/docs/audits/code-factory-foreman-2026-11-03-cf077.probe.txt
+@@ -0,0 +1,42 @@
++CF-077 local admission probe evidence
++Base: bbb0719
++Scope: PATH-local curl and bunker fixtures; no live node or credentials.
++
++Probe correction: the supplied bunker stub's case pattern '*hostname* -I*'
++is invalid bash syntax (unescaped space). The measured probe uses
++'*hostname\ -I*' to match the actual 'hostname -I' command. The literal
++supplied stub produced rc=1 with no VERIFY/auth rows, so was not a detector.
++The same corrected staged .sh probe was run before and after the source fix.
++The node-create probe additionally runs the requested 401 control arm.
++
++PROBE BEFORE
++verify stats=401 rc=0 VERIFY: PASS | PASS  auth_gate — auth_required:true (a public bind must not be open) PASS  unauth_refused — /api/system/stats -> 401
++verify stats=403 rc=0 VERIFY: PASS | PASS  auth_gate — auth_required:true (a public bind must not be open) PASS  unauth_refused — /api/system/stats -> 403
++verify stats=404 rc=0 VERIFY: PASS | PASS  auth_gate — auth_required:true (a public bind must not be open) WARN  unauth_refused — /api/system/stats -> 404
++verify stats=000 rc=0 VERIFY: PASS | PASS  auth_gate — auth_required:true (a public bind must not be open) WARN  unauth_refused — /api/system/stats -> 000
++verify stats=500 rc=0 VERIFY: PASS | PASS  auth_gate — auth_required:true (a public bind must not be open) WARN  unauth_refused — /api/system/stats -> 500
++node-create stats=404 rc=0 NODE CREATED: f
++node-create stats=401 rc=0 NODE CREATED: f
++
++PROBE AFTER
++verify stats=401 rc=0 VERIFY: PASS | PASS  auth_gate — auth_required:true (a public bind must not be open) PASS  unauth_refused — /api/system/stats -> 401
++verify stats=403 rc=0 VERIFY: PASS | PASS  auth_gate — auth_required:true (a public bind must not be open) PASS  unauth_refused — /api/system/stats -> 403
++verify stats=404 rc=1 VERIFY: FAIL (1) | PASS  auth_gate — auth_required:true (a public bind must not be open) FAIL  unauth_refused — /api/system/stats -> 404 — auth refusal not verified
++verify stats=000 rc=1 VERIFY: FAIL (1) | PASS  auth_gate — auth_required:true (a public bind must not be open) FAIL  unauth_refused — /api/system/stats -> 000 — auth refusal not verified
++verify stats=500 rc=1 VERIFY: FAIL (1) | PASS  auth_gate — auth_required:true (a public bind must not be open) FAIL  unauth_refused — /api/system/stats -> 500 — auth refusal not verified
++node-create stats=404 rc=1 NODE INCOMPLETE (1)
++node-create stats=401 rc=0 NODE CREATED: f
++
++Acceptance commands (repository root)
++bash -n scripts/verify-node.sh scripts/node-create.sh tests/selftest.sh
++  exit 0
++bash tests/selftest.sh
++  before: exit 0, 40 PASS rows, SELFTEST: PASS
++  after: exit 0, 54 PASS rows, SELFTEST: PASS
++  new sections also cover 302, 200, absent/false/malformed auth marker,
++  node-create missing-marker refusal, and pre-fix bbb0719 404 false success.
++./scripts/boardctl validate
++  exit 0, RESULT: OK (22 warning(s)); existing legacy vocabulary/schema warnings.
++
++Boundary: local fixture evidence only. No live deployment, external scheduler
++admission or inference proved; no push (foreman owns publication).
+diff --git a/scripts/node-create.sh b/scripts/node-create.sh
+index 8b0546d..491ee38 100755
+--- a/scripts/node-create.sh
++++ b/scripts/node-create.sh
+@@ -108,7 +108,8 @@ fi
+ 
+ # 4. verify from here
+ say "  ..    verifying from the control host"
+-"$HERE/verify-node.sh" --agent "$AGENT" --server "$SERVER" --port "$PORT" || bad "verify" "round trip failed"
++"$HERE/verify-node.sh" --agent "$AGENT" --server "$SERVER" --port "$PORT" \
++  || { bad "verify" "round trip failed — node remains unverified"; incomplete; }
+ 
+ say ""
+ [ "$FAILED" -eq 0 ] && { say "NODE CREATED: $AGENT"; say "manifest: /home/<uid>/.node/node.json"; exit 0; }
+diff --git a/scripts/verify-node.sh b/scripts/verify-node.sh
+index 1da7b77..e332e3a 100755
+--- a/scripts/verify-node.sh
++++ b/scripts/verify-node.sh
+@@ -7,7 +7,7 @@
+ # Checks, in order of what they prove:
+ #   1. the agent is alive and exec-able
+ #   2. the gateway answers from HERE over the tailnet (not from inside itself)
+-#   3. the gateway's auth gate is closed (unauthenticated request must be 401/302)
++#   3. the gateway's auth gate is closed (unauthenticated request must be 401/302/403)
+ #   4. (optional) an artifact on the node hashes the same on both sides
+ # A version string is not evidence: step 2 must be a live HTTP answer from this host.
+ set -uo pipefail
+@@ -42,9 +42,9 @@ url="http://$ip:$PORT/api/status"
+ code=$(curl -s -o /tmp/node-status.json -w '%{http_code}' --max-time 8 "$url" 2>/dev/null || echo 000)
+ if [ "$code" = 200 ]; then
+   ok "gateway_reachable" "$url -> 200"
+-  grep -q '"auth_required":true' /tmp/node-status.json 2>/dev/null \
++  grep -Eq '"auth_required"[[:space:]]*:[[:space:]]*true[[:space:]]*[,}]' /tmp/node-status.json 2>/dev/null \
+     && ok "auth_gate" "auth_required:true (a public bind must not be open)" \
+-    || warn "auth_gate" "auth_required not reported — check dashboard.basic_auth"
++    || bad "auth_gate" "/api/status -> $code; auth_required:true not measured — check dashboard.basic_auth"
+ else
+   bad "gateway_reachable" "$url -> $code (is the harness running on 0.0.0.0:$PORT?)"
+ fi
+@@ -54,7 +54,7 @@ code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "http://$ip:$PORT/api
+ case "$code" in
+   401|302|403) ok "unauth_refused" "/api/system/stats -> $code" ;;
+   200) bad "unauth_refused" "/api/system/stats -> 200 — the node is OPEN to the tailnet" ;;
+-  *) warn "unauth_refused" "/api/system/stats -> $code" ;;
++  *) bad "unauth_refused" "/api/system/stats -> $code — auth refusal not verified" ;;
+ esac
+ 
+ # 4. optional artifact integrity
+diff --git a/tests/selftest.sh b/tests/selftest.sh
+index fe16e80..78e4e93 100755
+--- a/tests/selftest.sh
++++ b/tests/selftest.sh
+@@ -478,5 +478,91 @@ for arm in owned reused copy-failure; do
+ done
+ rm -rf "$tmpd"
+ 
++# CF-077: stub transport only; exercise the real verifier and node-create admission.
++say "17. auth verification fails closed, with a pre-fix detector control"
++tmpd=$(mktemp -d)
++mkdir -p "$tmpd/bin" "$tmpd/before"
++cp "$HERE/scripts/lib.sh" "$tmpd/before/"
++cat > "$tmpd/bin/bunker" <<'EOF'
++#!/usr/bin/env bash
++for a in "$@"; do
++  case "$a" in *hostname\ -I*) echo 127.0.0.1; exit 0 ;; esac
++done
++echo ALIVE fixture
++EOF
++cat > "$tmpd/bin/curl" <<'EOF'
++#!/usr/bin/env bash
++o="" u=""
++while [ $# -gt 0 ]; do
++  case "$1" in
++    -o) o="$2"; shift 2 ;;
++    -*) shift ;;
++    *) u="$1"; shift ;;
++  esac
++done
++case "$u" in */api/system/stats) c="${STATS_CODE:-404}" ;; *) c=200 ;; esac
++if [ -n "$o" ] && [ "$o" != /dev/null ]; then
++  printf '%s' "${STATUS_BODY:?}" > "$o"
++fi
++printf '%s' "$c"
++EOF
++chmod +x "$tmpd/bin/bunker" "$tmpd/bin/curl"
++cf077_run() {
++  env PATH="$tmpd/bin:$PATH" BUNKER_SERVER=fixture STATS_CODE="$1" STATUS_BODY="$2" \
++    /bin/bash "$3" "${@:4}" 2>&1
++}
++body='{"status":"ok","auth_required":true}'
++# Immutable pre-fix source, not a mock of the failure or the current implementation.
++if git -C "$HERE" show bbb0719:scripts/verify-node.sh > "$tmpd/before/verify-node.sh"; then
++  out=$(cf077_run 404 "$body" "$tmpd/before/verify-node.sh" --agent f); rc=$?
++  if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
++    && printf '%s\n' "$out" | grep -Eq '^  WARN  unauth_refused — /api/system/stats -> 404$'; then
++    say "  PASS  pre-fix 404 incorrectly passes: fixture detects CF-077"
++  else
++    say "  FAIL  pre-fix 404 detector control (exit $rc)"; fails=$((fails+1))
++  fi
++else
++  say "  FAIL  pre-fix source unavailable"; fails=$((fails+1))
++fi
++for c in 401 302 403 404 000 500 200; do
++  out=$(cf077_run "$c" "$body" "$HERE/scripts/verify-node.sh" --agent f); rc=$?
++  case "$c" in 401|302|403) want=0; row=PASS; summary='VERIFY: PASS' ;; *) want=1; row=FAIL; summary='VERIFY: FAIL (1)' ;; esac
++  if [ "$rc" -eq "$want" ] && printf '%s\n' "$out" | grep -Fxq "$summary" \
++    && printf '%s\n' "$out" | grep -Eq "^  $row  unauth_refused — /api/system/stats -> $c( |$)" \
++    && printf '%s\n' "$out" | grep -Eq '^  PASS  auth_gate'; then
++    say "  PASS  auth stats $c -> $row, exit $rc"
++  else
++    say "  FAIL  auth stats $c did not produce named $row (exit $rc)"; fails=$((fails+1))
++  fi
++done
++for body in '{"status":"ok"}' '{"auth_required":false}' '{"auth_required":trueish}'; do
++  out=$(cf077_run 401 "$body" "$HERE/scripts/verify-node.sh" --agent f); rc=$?
++  if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Eq '^  FAIL  auth_gate — /api/status -> 200;' \
++    && printf '%s\n' "$out" | grep -Fxq 'VERIFY: FAIL (1)' \
++    && printf '%s\n' "$out" | grep -Eq '^  PASS  unauth_refused'; then
++    say "  PASS  auth marker $body -> named auth_gate FAIL, exit $rc"
++  else
++    say "  FAIL  auth marker $body was not refused (exit $rc)"; fails=$((fails+1))
++  fi
++done
++say "18. node creation requires both auth legs, not just successful provisioning"
++for arm in refused missing-marker closed; do
++  c=401; body='{"auth_required":true}'; want=0; summary='NODE CREATED: f'
++  [ "$arm" = refused ] && c=404
++  [ "$arm" = missing-marker ] && body='{"status":"ok"}'
++  [ "$arm" != closed ] && { want=1; summary='NODE INCOMPLETE (1)'; }
++  out=$(cf077_run "$c" "$body" "$HERE/scripts/node-create.sh" --project f \
++    --repo git@example.invalid:x/y.git --harness hermes --agent f); rc=$?
++  row=unauth_refused; [ "$arm" = missing-marker ] && row=auth_gate
++  if [ "$rc" -eq "$want" ] && printf '%s\n' "$out" | grep -Fxq "$summary" \
++    && { [ "$want" -eq 0 ] || { printf '%s\n' "$out" | grep -Eq "^  FAIL  $row" \
++      && ! printf '%s\n' "$out" | grep -q '^NODE CREATED:'; }; }; then
++    say "  PASS  node-create $arm -> $summary, exit $rc"
++  else
++    say "  FAIL  node-create $arm admitted an unverified node or rejected control (exit $rc)"; fails=$((fails+1))
++  fi
++done
++rm -rf "$tmpd"
++
+ say ""
+ [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
