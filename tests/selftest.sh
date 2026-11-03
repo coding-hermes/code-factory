@@ -317,5 +317,69 @@ else
 fi
 rm -rf "$tmpd"
 
+# ch:trace row=CF-054 spec=README.md#status wave=none:serial test=tests/selftest.sh::readme-rerun-line-carries-status doc=README.md prompt=prompts/readme.md evidence=tests/selftest.sh::readme-rerun-line-carries-status witness=none:local-fixture verdict=none:open-finding commit=none:self-referential-hash memory=none:unresolved-namespace
+say "15. the README status re-run line carries the node check's exit status (CF-054)"
+# The documented re-run used to end in `; git -C "$home/repo" rev-parse HEAD`, so a run that
+# printed NODE: FAIL still exited 0 — the read-back's status became the line's status. This
+# probe binds the documented command span and then proves the masking on a local fixture:
+# the clone succeeds (so the read-back would succeed) while the bus layer fails.
+doc_cmd=$(tr '`' '\n' < "$HERE/README.md" | grep -F 'project-node.sh --apply --project myproject' | head -1)
+if [ -n "$doc_cmd" ] && printf '%s' "$doc_cmd" | grep -Fq 'CRIER_URL=' \
+  && ! printf '%s' "$doc_cmd" | grep -Fq 'rev-parse'; then
+  say "  PASS  documented line carries CRIER_URL= and no trailing read-back"
+else
+  say "  FAIL  documented line still relies on an export it does not carry, or ends in a read-back"; fails=$((fails+1))
+fi
+tmpd=$(mktemp -d)
+mkdir -p "$tmpd/scripts/harness" "$tmpd/bin"
+cp "$HERE/scripts/project-node.sh" "$HERE/scripts/lib.sh" "$HERE/scripts/disk_floor.py" "$tmpd/scripts/"
+cat > "$tmpd/bin/curl" <<'EOF'
+#!/usr/bin/env bash
+printf '200'
+EOF
+cat > "$tmpd/scripts/harness/install-fixture.sh" <<'EOF'
+#!/usr/bin/env bash
+. "$(dirname "$0")/../lib.sh"
+say "harness: fixture (cf-054)"
+ok "harness:fixture" "simulated passing adapter"
+exit 0
+EOF
+chmod +x "$tmpd/bin/curl" "$tmpd/scripts/harness/install-fixture.sh"
+git init -q -b main "$tmpd/work"
+git -C "$tmpd/work" -c user.email=fixture@example.invalid -c user.name=fixture commit -qm fixture --allow-empty
+git clone -q --bare "$tmpd/work" "$tmpd/origin.git"
+# $1 = line shape, $2 = HOME, $3 = green (stage a 600 crier bundle) | red
+cf054_run() {
+  [ "$3" = green ] && { mkdir -p "$2/.node"; printf '{"agent":"fixture"}' > "$2/.node/crier.json"; chmod 600 "$2/.node/crier.json"; }
+  env -i HOME="$2" PATH="$tmpd/bin:/usr/local/bin:/usr/bin:/bin" NODE_DISK_FLOOR=1 \
+    NODE_PROJECT=myproject NODE_HARNESS=fixture CRIER_URL=http://fixture.invalid:8767 \
+    /bin/bash -c "$1" >"$2/out.log" 2>&1
+  echo $?
+}
+node_call="bash '$tmpd/scripts/project-node.sh' --apply --project myproject --repo file://$tmpd/origin.git --ref main"
+h=$(mktemp -d); rc=$(cf054_run "$node_call; git -C '$h/repo' rev-parse HEAD" "$h" red)
+old_summary=$(grep -E '^NODE: ' "$h/out.log" | tail -1)
+if [ "$rc" = 0 ] && printf '%s' "$old_summary" | grep -Fq 'NODE: FAIL' \
+  && git -C "$h/repo" rev-parse HEAD >/dev/null 2>&1; then
+  say "  PASS  old shape exits 0 on a failed check ($old_summary) — the defect is real"
+else
+  say "  FAIL  old shape no longer masks a failed check; re-measure CF-054"; fails=$((fails+1))
+fi
+h=$(mktemp -d); rc=$(cf054_run "$node_call" "$h" red)
+red_summary=$(grep -E '^NODE: ' "$h/out.log" | tail -1)
+if [ "$rc" = 1 ] && printf '%s' "$red_summary" | grep -Fq 'NODE: FAIL'; then
+  say "  PASS  documented shape exits $rc on a failed check ($red_summary)"
+else
+  say "  FAIL  documented shape exited $rc on a failed check"; fails=$((fails+1))
+fi
+h=$(mktemp -d); rc=$(cf054_run "$node_call" "$h" green)
+green_summary=$(grep -E '^NODE: ' "$h/out.log" | tail -1)
+if [ "$rc" = 0 ] && printf '%s' "$green_summary" | grep -Fq 'NODE: PASS'; then
+  say "  PASS  documented shape exits 0 on a passing fixture ($green_summary)"
+else
+  say "  FAIL  documented shape exited $rc on a passing fixture ($green_summary)"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
