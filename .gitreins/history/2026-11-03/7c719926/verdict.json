@@ -1,0 +1,112 @@
+{
+  "task_id": "PERF-014",
+  "task_title": "tests/test_lane_target.py stops rebuilding its fixture repo per test (PERF-014)",
+  "task_criteria": [
+    "At the pushed tip: (1) three consecutive runs of 'for i in 1 2 3; do /usr/bin/time -p python3 -B tests/test_lane_target.py; done' report user+sys <= 0.12 s each with the suite reporting OK and 22 tests, the same test count and assertions as 0aadc9e^ (git diff 0aadc9e^ 0aadc9e -- tests/test_lane_target.py is a fixture-sharing refactor, no assertion deleted); (2) 'strace -f -c -e trace=execve python3 -B tests/test_lane_target.py' reports <= 15 successful git execs, down from 38 before the change; (3) 'bash tests/selftest.sh' prints SELFTEST: PASS and still contains every PASS row that existed at 400a5ab (34 of them) plus the rows later commits added; (4) docs/audits/code-factory-perf-2026-11-03-PERF-014.md records both arm numbers, the interleaved A/B pair tables and the exact commands, and names the arms that cannot move without weakening a check."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "91316564f387c92f2797cc179737a8366592b729",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T162908.666481Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n11:29AM INF scanned ~387186 bytes (387.19 KB) in 486ms\n11:29AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 75 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T162908.666481Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.Pcu3vfRCmT/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  73/73 rows parse\n8. project board entrypoint is real and fails closed without dependency\n  PASS  bash -n scripts/boardctl\n  PASS  local help\n  PASS  missing boardctl -> explicit FAIL, exit 127\n9. every prompt file the README relies on exists\n  PASS  every prompts/*.md named by README.md exists\n  PASS  absent prompt refused (absent: prompts/ghost-lane.md)\n10. Hermes refuses an unsupported Python without pip or network\n  PASS  Python 3.14 refusal names the supported range without pip\n11. lane workdir targets: local paths AND remote user@host/scheme targets\n  PASS  lane target parse/validate, home-repo rejection, remote structural-only\n12. node disk floor resolves from CLI/env/config with fail-closed values\n  PASS  floor precedence, role defaults, malformed values refused\n13. node provisioning names its resolved floor and refuses below it\n  PASS  malformed floor refused before any install\n14. harness-adapter FAIL rows are counted in the node summary (CF-055)\n  PASS  adapter FAIL rows counted: 2 rows -> NODE: FAIL (2)\n  PASS  passing adapter keeps NODE: PASS and exit 0\n15. the README status re-run line carries the node check's exit status (CF-054)\n  PASS  documented line carries CRIER_URL= and no trailing read-back\n  PASS  old shape exits 0 on a failed check (NODE: FAIL (1)) \u2014 the defect is real\n  PASS  documented shape exits 1 on a failed check (NODE: FAIL (1))\n  PASS  documented shape exits 0 on a passing fixture (NODE: PASS)\n16. node-create staged set covers the disk floor and names missing dependencies\n  PASS  staged disk floor resolves: 4096 GiB from env; admission refuses before installs\n  PASS  missing disk floor -> one countable FAIL row, NODE: FAIL (1), exit 1\n  FAIL  disk_floor \u2014 resolver missing or unreadable: /var/tmp/hermes-scratch/tmp.xSaZp4BauP/scripts/disk_floor.py\nNODE: FAIL (1)\n  PASS  disk floor omitted from scratch manifest -> validation exit 1\n  PASS  owned failure names spawned agent and explicit-server destroy command\n  PASS  reused agent failure does not request destruction\n  PASS  copy-failure failure names spawned agent and explicit-server destroy command\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T162908.666481Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 At the pushed tip: (1) three consecutive runs of 'for i in 1 2 3; do /usr/bin/time -p python3 -B tests/test_lane_target.py; done' report user+sys <= 0.12 s each with the suite reporting OK and 22 tests, the same test count and assertions as 0aadc9e^ (git diff 0aadc9e^ 0aadc9e -- tests/test_lane_target.py is a fixture-sharing refactor, no assertion deleted); (2) 'strace -f -c -e trace=execve python3 -B tests/test_lane_target.py' reports <= 15 successful git execs, down from 38 before the change; (3) 'bash tests/selftest.sh' prints SELFTEST: PASS and still contains every PASS row that existed at 400a5ab (34 of them) plus the rows later commits added; (4) docs/audits/code-factory-perf-2026-11-03-PERF-014.md records both arm numbers, the interleaved A/B pair tables and the exact commands, and names the arms that cannot move without weakening a check.: (1) TIMING: 3 runs at tip 9131656 -> user+sys = 0.07+0.03=0.10, 0.07+0.04=0.11, 0.07+0.04=0.11 s (all <=0.12); each printed 'Ran 22 tests in 0.076s / OK'. A second 3-run set gave 0.10/0.11/0.11. Test inventory: `git show 0aadc9e^:tests/test_lane_target.py | grep -c 'def test_'` = 22 vs HEAD = 22; `grep -c 'self\\.assert'` = 36 before and 36 after. `git diff 0aadc9e^ 0aadc9e -- tests/test_lane_target.py` shows only setUp->fixture() sharing, black reflow of assertEqual lines (same arguments), and `git remote add origin` replaced by appending the identical [remote \"origin\"] stanza to .git/config \u2014 still proven through git by test_real_checkout_verifies (asserts remotes[\"origin\"] == ORIGIN_URL) and scan's has_remote. No assertion deleted. (2) STRACE: `strace -f -c -e trace=execve python3 -B tests/test_lane_target.py` -> 451 execve calls, 435 errors => 16 successful = 15 git + 1 python3; `strace -f -e trace=execve` breakdown: 15 /usr/bin/git, 0 git-core children (<=15). Before-arm measured by checking out 0aadc9e^'s test file: 33 /usr/bin/git + 5 /usr/lib/git-core/git = 38. (3) SELFTEST: `bash tests/selftest.sh` ends with 'SELFTEST: PASS' and emits 40 PASS rows. Template comparison of `say \"  PASS  ...\"` strings: 400a5ab has 27 templates, HEAD has 32; `comm -23` (old templates absent at HEAD) is EMPTY, and 5 new templates were added (staged disk floor, missing disk floor, disk floor omitted, reused-agent, $arm failure). All 27 pre-existing rows survive (9 interpolate runtime values, hence the template form). (4) DOC: docs/audits/code-factory-perf-2026-11-03-PERF-014.md (405 lines, tracked) records both arm numbers (0.213 s -> 0.105-0.11 s median 0.105, -46 %; 38 -> 15 git execs), interleaved A/B pair tables (6-rep section-11 new-vs-old median 0.105/0.195; 5-pair whole-gate 1.70/1.74/1.80/1.98/2.00 vs 1.77/2.05/1.88/1.90/1.84; plus an era-1 5-run paired table), the exact commands in a '## Reproduction' block (for-loop, `strace -f -c -e trace=execve`, `strace -f -o` + grep, `git archive` before-tree, mutation recipe, EPOCHREALTIME say() stamper), and a '## Honest floor \u2014 what cannot move' section naming the arms that cannot move without weakening a check (fixed ~0.05 s interpreter base, 12 of 15 spawns are the code under test, sharing verification between test_real_checkout_verifies and test_scan_mixed_rows 'would ... remove the only proof that scan actually verifies each local row; that is a weakening, so it was not done', irreducible init+commit), with the per-arm table marking \u00a715 documented-shape arms 'protected: run the documented command unscoped'.\n",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 At the pushed tip: (1) three consecutive runs of 'for i in 1 2 3; do /usr/bin/time -p python3 -B tests/test_lane_target.py; done' report user+sys <= 0.12 s each with the suite reporting OK and 22 tests, the same test count and assertions as 0aadc9e^ (git diff 0aadc9e^ 0aadc9e -- tests/test_lane_target.py is a fixture-sharing refactor, no assertion deleted); (2) 'strace -f -c -e trace=execve python3 -B tests/test_lane_target.py' reports <= 15 successful git execs, down from 38 before the change; (3) 'bash tests/selftest.sh' prints SELFTEST: PASS and still contains every PASS row that existed at 400a5ab (34 of them) plus the rows later commits added; (4) docs/audits/code-factory-perf-2026-11-03-PERF-014.md records both arm numbers, the interleaved A/B pair tables and the exact commands, and names the arms that cannot move without weakening a check.: (1) TIMING: 3 runs at tip 9131656 -> user+sys = 0.07+0.03=0.10, 0.07+0.04=0.11, 0.07+0.04=0.11 s (all <=0.12); each printed 'Ran 22 tests in 0.076s / OK'. A second 3-run set gave 0.10/0.11/0.11. Test inventory: `git show 0aadc9e^:tests/test_lane_target.py | grep -c 'def test_'` = 22 vs HEAD = 22; `grep -c 'self\\.assert'` = 36 before and 36 after. `git diff 0aadc9e^ 0aadc9e -- tests/test_lane_target.py` shows only setUp->fixture() sharing, black reflow of assertEqual lines (same arguments), and `git remote add origin` replaced by appending the identical [remote \"origin\"] stanza to .git/config \u2014 still proven through git by test_real_checkout_verifies (asserts remotes[\"origin\"] == ORIGIN_URL) and scan's has_remote. No assertion deleted. (2) STRACE: `strace -f -c -e trace=execve python3 -B tests/test_lane_target.py` -> 451 execve calls, 435 errors => 16 successful = 15 git + 1 python3; `strace -f -e trace=execve` breakdown: 15 /usr/bin/git, 0 git-core children (<=15). Before-arm measured by checking out 0aadc9e^'s test file: 33 /usr/bin/git + 5 /usr/lib/git-core/git = 38. (3) SELFTEST: `bash tests/selftest.sh` ends with 'SELFTEST: PASS' and emits 40 PASS rows. Template comparison of `say \"  PASS  ...\"` strings: 400a5ab has 27 templates, HEAD has 32; `comm -23` (old templates absent at HEAD) is EMPTY, and 5 new templates were added (staged disk floor, missing disk floor, disk floor omitted, reused-agent, $arm failure). All 27 pre-existing rows survive (9 interpolate runtime values, hence the template form). (4) DOC: docs/audits/code-factory-perf-2026-11-03-PERF-014.md (405 lines, tracked) records both arm numbers (0.213 s -> 0.105-0.11 s median 0.105, -46 %; 38 -> 15 git execs), interleaved A/B pair tables (6-rep section-11 new-vs-old median 0.105/0.195; 5-pair whole-gate 1.70/1.74/1.80/1.98/2.00 vs 1.77/2.05/1.88/1.90/1.84; plus an era-1 5-run paired table), the exact commands in a '## Reproduction' block (for-loop, `strace -f -c -e trace=execve`, `strace -f -o` + grep, `git archive` before-tree, mutation recipe, EPOCHREALTIME say() stamper), and a '## Honest floor \u2014 what cannot move' section naming the arms that cannot move without weakening a check (fixed ~0.05 s interpreter base, 12 of 15 spawns are the code under test, sharing verification between test_real_checkout_verifies and test_scan_mixed_rows 'would ... remove the only proof that scan actually verifies each local row; that is a weakening, so it was not done', irreducible init+commit), with the per-arm table marking \u00a715 documented-shape arms 'protected: run the documented command unscoped'.\n",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "At the pushed tip: (1) three consecutive runs of 'for i in 1 2 3; do /usr/bin/time -p python3 -B tests/test_lane_target.py; done' report user+sys <= 0.12 s each with the suite reporting OK and 22 tests, the same test count and assertions as 0aadc9e^ (git diff 0aadc9e^ 0aadc9e -- tests/test_lane_target.py is a fixture-sharing refactor, no assertion deleted); (2) 'strace -f -c -e trace=execve python3 -B tests/test_lane_target.py' reports <= 15 successful git execs, down from 38 before the change; (3) 'bash tests/selftest.sh' prints SELFTEST: PASS and still contains every PASS row that existed at 400a5ab (34 of them) plus the rows later commits added; (4) docs/audits/code-factory-perf-2026-11-03-PERF-014.md records both arm numbers, the interleaved A/B pair tables and the exact commands, and names the arms that cannot move without weakening a check.",
+                "status": "PASS",
+                "detail": "(1) TIMING: 3 runs at tip 9131656 -> user+sys = 0.07+0.03=0.10, 0.07+0.04=0.11, 0.07+0.04=0.11 s (all <=0.12); each printed 'Ran 22 tests in 0.076s / OK'. A second 3-run set gave 0.10/0.11/0.11. Test inventory: `git show 0aadc9e^:tests/test_lane_target.py | grep -c 'def test_'` = 22 vs HEAD = 22; `grep -c 'self\\.assert'` = 36 before and 36 after. `git diff 0aadc9e^ 0aadc9e -- tests/test_lane_target.py` shows only setUp->fixture() sharing, black reflow of assertEqual lines (same arguments), and `git remote add origin` replaced by appending the identical [remote \"origin\"] stanza to .git/config \u2014 still proven through git by test_real_checkout_verifies (asserts remotes[\"origin\"] == ORIGIN_URL) and scan's has_remote. No assertion deleted. (2) STRACE: `strace -f -c -e trace=execve python3 -B tests/test_lane_target.py` -> 451 execve calls, 435 errors => 16 successful = 15 git + 1 python3; `strace -f -e trace=execve` breakdown: 15 /usr/bin/git, 0 git-core children (<=15). Before-arm measured by checking out 0aadc9e^'s test file: 33 /usr/bin/git + 5 /usr/lib/git-core/git = 38. (3) SELFTEST: `bash tests/selftest.sh` ends with 'SELFTEST: PASS' and emits 40 PASS rows. Template comparison of `say \"  PASS  ...\"` strings: 400a5ab has 27 templates, HEAD has 32; `comm -23` (old templates absent at HEAD) is EMPTY, and 5 new templates were added (staged disk floor, missing disk floor, disk floor omitted, reused-agent, $arm failure). All 27 pre-existing rows survive (9 interpolate runtime values, hence the template form). (4) DOC: docs/audits/code-factory-perf-2026-11-03-PERF-014.md (405 lines, tracked) records both arm numbers (0.213 s -> 0.105-0.11 s median 0.105, -46 %; 38 -> 15 git execs), interleaved A/B pair tables (6-rep section-11 new-vs-old median 0.105/0.195; 5-pair whole-gate 1.70/1.74/1.80/1.98/2.00 vs 1.77/2.05/1.88/1.90/1.84; plus an era-1 5-run paired table), the exact commands in a '## Reproduction' block (for-loop, `strace -f -c -e trace=execve`, `strace -f -o` + grep, `git archive` before-tree, mutation recipe, EPOCHREALTIME say() stamper), and a '## Honest floor \u2014 what cannot move' section naming the arms that cannot move without weakening a check (fixed ~0.05 s interpreter base, 12 of 15 spawns are the code under test, sharing verification between test_real_checkout_verifies and test_scan_mixed_rows 'would ... remove the only proof that scan actually verifies each local row; that is a weakening, so it was not done', irreducible init+commit), with the per-arm table marking \u00a715 documented-shape arms 'protected: run the documented command unscoped'."
+              }
+            ],
+            "summary": "",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: PERF-014\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 At the pushed tip: (1) three consecutive runs of 'for i in 1 2 3; do /usr/bin/time -p python3 -B tests/test_lane_target.py; done' report user+sys <= 0.12 s each with the suite reporting OK and 22 tests, the same test count and assertions as 0aadc9e^ (git diff 0aadc9e^ 0aadc9e -- tests/test_lane_target.py is a fixture-sharing refactor, no assertion deleted); (2) 'strace -f -c -e trace=execve python3 -B tests/test_lane_target.py' reports <= 15 successful git execs, down from 38 before the change; (3) 'bash tests/selftest.sh' prints SELFTEST: PASS and still contains every PASS row that existed at 400a5ab (34 of them) plus the rows later commits added; (4) docs/audits/code-factory-perf-2026-11-03-PERF-014.md records both arm numbers, the interleaved A/B pair tables and the exact commands, and names the arms that cannot move without weakening a check.: (1) TIMING: 3 runs at tip 9131656 -> user+sys = 0.07+0.03=0.10, 0.07+0.04=0.11, 0.07+0.04=0.11 s (all <=0.12); each printed 'Ran 22 tests in 0.076s / OK'. A second 3-run set gave 0.10/0.11/0.11. Test inventory: `git show 0aadc9e^:tests/test_lane_target.py | grep -c 'def test_'` = 22 vs HEAD = 22; `grep -c 'self\\.assert'` = 36 before and 36 after. `git diff 0aadc9e^ 0aadc9e -- tests/test_lane_target.py` shows only setUp->fixture() sharing, black reflow of assertEqual lines (same arguments), and `git remote add origin` replaced by appending the identical [remote \"origin\"] stanza to .git/config \u2014 still proven through git by test_real_checkout_verifies (asserts remotes[\"origin\"] == ORIGIN_URL) and scan's has_remote. No assertion deleted. (2) STRACE: `strace -f -c -e trace=execve python3 -B tests/test_lane_target.py` -> 451 execve calls, 435 errors => 16 successful = 15 git + 1 python3; `strace -f -e trace=execve` breakdown: 15 /usr/bin/git, 0 git-core children (<=15). Before-arm measured by checking out 0aadc9e^'s test file: 33 /usr/bin/git + 5 /usr/lib/git-core/git = 38. (3) SELFTEST: `bash tests/selftest.sh` ends with 'SELFTEST: PASS' and emits 40 PASS rows. Template comparison of `say \"  PASS  ...\"` strings: 400a5ab has 27 templates, HEAD has 32; `comm -23` (old templates absent at HEAD) is EMPTY, and 5 new templates were added (staged disk floor, missing disk floor, disk floor omitted, reused-agent, $arm failure). All 27 pre-existing rows survive (9 interpolate runtime values, hence the template form). (4) DOC: docs/audits/code-factory-perf-2026-11-03-PERF-014.md (405 lines, tracked) records both arm numbers (0.213 s -> 0.105-0.11 s median 0.105, -46 %; 38 -> 15 git execs), interleaved A/B pair tables (6-rep section-11 new-vs-old median 0.105/0.195; 5-pair whole-gate 1.70/1.74/1.80/1.98/2.00 vs 1.77/2.05/1.88/1.90/1.84; plus an era-1 5-run paired table), the exact commands in a '## Reproduction' block (for-loop, `strace -f -c -e trace=execve`, `strace -f -o` + grep, `git archive` before-tree, mutation recipe, EPOCHREALTIME say() stamper), and a '## Honest floor \u2014 what cannot move' section naming the arms that cannot move without weakening a check (fixed ~0.05 s interpreter base, 12 of 15 spawns are the code under test, sharing verification between test_real_checkout_verifies and test_scan_mixed_rows 'would ... remove the only proof that scan actually verifies each local row; that is a weakening, so it was not done', irreducible init+commit), with the per-arm table marking \u00a715 documented-shape arms 'protected: run the documented command unscoped'.\n\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-03T16:30:44.371118",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-03T16:30:44.390118+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 57936,
+        "truncated": false,
+        "source": "git show 91316564f387"
+      }
+    ],
+    "task_id": "PERF-014"
+  }
+}
