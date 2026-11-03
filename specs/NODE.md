@@ -27,7 +27,7 @@ the manifest to know where the artifacts are.
 | 10 base | python3 + venv, git, curl, tar, sha256sum; optionally jq, rg, node | preflight |
 | 20 harness | the chosen harness + its gateway/CLI | base |
 | 30 bus | a crier identity file (600) and a pull worker | harness |
-| 40 repo | the repo cloned at a pinned ref, build cache present | base |
+| 40 repo | the repo cloned at a pinned ref | base |
 | 90 verify | one round trip whose digest is recomputed on the control host | all |
 
 ## Laws
@@ -41,9 +41,9 @@ the manifest to know where the artifacts are.
 
 ## Disk floor
 
-Measured footprint per repo node: ~1.5 GB (97 MB repo + 656 MB module cache + ~520 MB build
-cache + toolchain, plus harness). Floor = repo + harness + 2 GB working room. The ladder reads
-free space and refuses below the floor **with the number in the refusal**.
+Measured components per repo node: 97 MB repo + 656 MB module cache + toolchain + harness. Build cache is not provisioned by shipped scripts and is excluded.
+
+Floor = repo + harness + 2 GB working room. The ladder reads free space and refuses below the floor **with the number in the refusal**.
 
 ## Failure semantics
 
