@@ -61,7 +61,7 @@ same exit codes.
 - **N-2** Idempotent. A second `--apply` changes nothing and exits 0.
 - **N-3** Every check names the measured value.
 - **N-4** The manifest is written only after each layer's check passes.
-- **N-5** A node refuses to start work below the disk floor, and says the number.
+- **N-5** A node refuses to start work below the disk floor, and says the number; reap before refusing.
 - **N-6** Destroying the agent destroys the node; the scripts must rebuild it exactly.
 
 ## Disk floor
@@ -69,6 +69,18 @@ same exit codes.
 Measured components per repo node: 97 MB repo + 656 MB module cache + toolchain + harness. Build cache is not provisioned by shipped scripts and is excluded.
 
 Floor = repo + harness + 2 GB working room. The ladder reads free space and refuses below the floor **with the number in the refusal**.
+
+Before refusing, `--apply` runs `scripts/reclaim_disk.py run --root "$HOME" --json`
+against bounded user-space targets: `.cache/pip`, `.cache/uv`, `.cache/pre-commit`,
+`.cache/go-build`, and `.npm/_cacache` are removed whole; immediate job directories
+under `.node/jobs` and stale clones under `.node/clones` are removed only when their
+mtime exceeds the TTL (default 24 hours, configurable with `--job-ttl-hours`).
+Targets are fixed, resolved inside the real root, and symlinks are never followed.
+The repo and node identity/configuration files are never targets. The reclaimer
+refuses `/` and non-directory roots, supports `--dry-run`, and reports reclaimed bytes.
+The ladder re-measures free space after reclaim and refuses only if still below the
+floor. `--check` never reclaims: it reports the existing disk failure, explains what
+`--apply` would reap first, and keeps measuring the other layers.
 
 ### Configurable floors (roles)
 

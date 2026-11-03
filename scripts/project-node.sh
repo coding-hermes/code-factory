@@ -145,9 +145,41 @@ if in_scope 00; then
   say "[00] preflight"
   arch=$(uname -m); ok "arch" "$arch ($(uname -sr))"
   ok "role" "$ROLE (floor ${FLOOR_GIB} GiB from ${FLOOR_SRC})"
-  # apply refuses immediately; check keeps measuring the other layers so one run
-  # reports every reason the node is unusable (CF-102).
-  require_disk "$HOME" "$FLOOR_GIB" || { [ "$MODE" = apply ] && { say "NODE: FAIL (disk admission)"; exit 1; }; }
+  # Check stays read-only and keeps measuring; apply reclaims before a final verdict.
+  if [ "$MODE" = check ]; then
+    require_disk "$HOME" "$FLOOR_GIB" || say "  note reclaim — --apply would reap build caches, job dirs and stale clones first (check mode never mutates)"
+  else
+    free=$(free_gb "$HOME")
+    if awk -v f="$free" -v m="$FLOOR_GIB" 'BEGIN{exit !(f>=m)}'; then
+      ok "disk" "${free} GB free (floor ${FLOOR_GIB} GB)"
+    else
+      say "  note reclaim — below floor; reaping build caches, job dirs and stale clones before refusing"
+      if [ ! -r "$HERE/reclaim_disk.py" ]; then
+        bad "disk_floor" "reclaimer missing or unreadable: $HERE/reclaim_disk.py"
+        say "NODE: FAIL ($FAILED)"
+        exit 1
+      fi
+      if ! RECLAIM="$(python3 "$HERE/reclaim_disk.py" run --root "$HOME" --json 2>&1)"; then
+        bad "disk_floor" "reclaim failed: $RECLAIM"
+        say "NODE: FAIL ($FAILED)"
+        exit 1
+      fi
+      say "${RECLAIM%$'\n'*}"
+      freed=$(printf '%s\n' "${RECLAIM##*$'\n'}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["reclaimed_mib"])' 2>/dev/null) || {
+        bad "disk_floor" "reclaimer returned no reclaimed size"
+        say "NODE: FAIL ($FAILED)"
+        exit 1
+      }
+      free=$(free_gb "$HOME")
+      if awk -v f="$free" -v m="$FLOOR_GIB" 'BEGIN{exit !(f>=m)}'; then
+        ok "disk" "${free} GB free after reclaim (freed ${freed} MiB; floor ${FLOOR_GIB} GB)"
+      else
+        bad "disk" "${free} GB free after reclaim < floor ${FLOOR_GIB} GB at $HOME (freed ${freed} MiB)"
+        say "NODE: FAIL (disk admission)"
+        exit 1
+      fi
+    fi
+  fi
   mem=$(awk '/MemAvailable/{printf "%d", $2/1024}' /proc/meminfo)
   [ "${mem:-0}" -ge 1024 ] && ok "mem" "${mem} MB" || bad "mem" "${mem} MB < 1024"
   CRIER="${CRIER_URL:-}"

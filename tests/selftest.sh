@@ -584,5 +584,79 @@ else
 fi
 rm -rf "$tmpd"
 
+# CF-007 AC3: reclaim-before-refusal, using the shipped scripts in a local HOME.
+say "20. reclaim runs before disk refusal, while check never reaps"
+tmpd=$(mktemp -d)
+mkdir -p "$tmpd/scripts" "$tmpd/bin" "$tmpd/home/.cache/pip"
+cp "$HERE/scripts/project-node.sh" "$HERE/scripts/lib.sh" "$HERE/scripts/disk_floor.py" \
+  "$HERE/scripts/reclaim_disk.py" "$tmpd/scripts/"
+dd if=/dev/zero of="$tmpd/home/.cache/pip/payload" bs=4096 count=2 2>/dev/null
+cat > "$tmpd/bin/curl" <<'EOF'
+#!/usr/bin/env bash
+printf '200'
+EOF
+chmod +x "$tmpd/bin/curl"
+out=$(env -i PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_DISK_FLOOR=4096 \
+  CRIER_URL=http://fixture.invalid /bin/bash "$tmpd/scripts/project-node.sh" \
+  --apply --project fixture --layers 00 2>&1); rc=$?
+reap_line=$(printf '%s\n' "$out" | awk '/^  reap  .cache\/pip —/{print NR; exit}')
+fail_line=$(printf '%s\n' "$out" | awk '/^  FAIL  disk —/{print NR; exit}')
+if [ "$rc" -ne 0 ] && [ -n "$reap_line" ] && [ -n "$fail_line" ] \
+  && [ "$reap_line" -lt "$fail_line" ] && [ ! -e "$tmpd/home/.cache/pip" ] \
+  && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL  disk —')" = 1 ] \
+  && printf '%s\n' "$out" | grep -Fxq 'NODE: FAIL (disk admission)'; then
+  say "  PASS  pip cache reaped before one final disk FAIL; admission still refuses"
+else
+  say "  FAIL  reclaim-before-refusal ordering or deletion (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out"
+fi
+mkdir -p "$tmpd/home/.cache/pip"
+dd if=/dev/zero of="$tmpd/home/.cache/pip/payload" bs=4096 count=2 2>/dev/null
+out=$(env -i PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_DISK_FLOOR=4096 \
+  CRIER_URL=http://fixture.invalid /bin/bash "$tmpd/scripts/project-node.sh" \
+  --check --project fixture --layers 00 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && [ -f "$tmpd/home/.cache/pip/payload" ] \
+  && [ "$(wc -c < "$tmpd/home/.cache/pip/payload")" = 8192 ] \
+  && printf '%s\n' "$out" | grep -Fq 'check mode never mutates' \
+  && printf '%s\n' "$out" | grep -Fxq 'NODE: FAIL (1)' \
+  && printf '%s\n' "$out" | grep -Fq '  PASS  reach:https://pypi.org/simple/'; then
+  say "  PASS  check preserves pip bytes, counts one disk failure and continues preflight"
+else
+  say "  FAIL  check mutated the cache or stopped measuring (exit $rc)"; fails=$((fails+1))
+fi
+# Positive control: df becomes green only after the real reclaimer removes pip.
+cat > "$tmpd/bin/df" <<'EOF'
+#!/usr/bin/env bash
+blocks=0
+[ ! -e "$HOME/.cache/pip" ] && blocks=2097152
+printf '%s\n' 'Filesystem 1024-blocks Used Available Capacity Mounted on' "fixture 2097152 0 $blocks 0% /"
+EOF
+chmod +x "$tmpd/bin/df"
+out=$(env -i PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_DISK_FLOOR=1 \
+  CRIER_URL=http://fixture.invalid /bin/bash "$tmpd/scripts/project-node.sh" \
+  --apply --project fixture --layers 00 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '2.0 GB free after reclaim (freed ' \
+  && printf '%s\n' "$out" | grep -Fxq 'NODE: PASS' \
+  && ! printf '%s\n' "$out" | grep -q '^  FAIL'; then
+  say "  PASS  re-measure admits a recovered node without a stale FAIL row"
+else
+  say "  FAIL  recovered node was not admitted (exit $rc)"; fails=$((fails+1))
+fi
+rm "$tmpd/scripts/reclaim_disk.py"
+out=$(env -i PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_DISK_FLOOR=4096 \
+  /bin/bash "$tmpd/scripts/project-node.sh" --apply --project fixture --layers 00 2>&1); rc=$?
+if [ "$rc" -eq 1 ] && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL  disk_floor — reclaimer missing or unreadable:')" = 1 ] \
+  && printf '%s\n' "$out" | grep -Fxq 'NODE: FAIL (1)'; then
+  say "  PASS  missing reclaimer fails closed with one counted row"
+else
+  say "  FAIL  missing reclaimer escaped counting (exit $rc)"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_reclaim.py" >/dev/null 2>&1; then
+  say "  PASS  reclaim targets, TTL, symlink safety, protected files, dry-run and idempotence"
+else
+  say "  FAIL  reclaim contract"; fails=$((fails+1))
+fi
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
