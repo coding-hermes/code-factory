@@ -81,3 +81,4 @@
 {"id":81,"timestamp":"2026-11-03T16:25:42+00:00","event_type":"task_created","task_id":"CF-086","actor":"foreman","detail":"{\"id\":\"CF-086\",\"status\":\"pending\"}","tick_number":null}
 {"id":82,"timestamp":"2026-11-03T16:28:24+00:00","event_type":"task_created","task_id":"PERF-015","actor":"foreman","detail":"{\"id\":\"PERF-015\",\"status\":\"pending\"}","tick_number":null}
 {"id":83,"timestamp":"2026-11-03T16:28:33+00:00","event_type":"task_completed","task_id":"PERF-014","actor":"foreman","detail":"{\"status\":\"complete\"}","tick_number":null}
+{"id":84,"timestamp":"2026-11-03T16:31:30+00:00","event_type":"task_created","task_id":"CF-087","actor":"readme-qa-2026-11-03-16-28-23","detail":"{\"id\":\"CF-087\",\"status\":\"pending\",\"title\":\"P3 \\u2014 node-create's staged-set validator reads one spelling in two of its four staged files: a ${HERE}/ reference in the \"}","tick_number":null}
