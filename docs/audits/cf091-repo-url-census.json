@@ -1,0 +1,26 @@
+{
+  "audit": "cf091-repo-url-census",
+  "measured_at": "2026-11-03T17:44:39Z",
+  "tip_commit": "d107ac40965eabac139ed60f9f5b474f7df63ba2",
+  "totals": {
+    "rows": 866,
+    "rejected": 384,
+    "accepted": 482,
+    "exit_code": 2
+  },
+  "classes": {
+    "not-a-git-root-standin-toplevel": 253,
+    "unsupported-scheme-https": 76,
+    "path-does-not-exist": 38,
+    "not-a-git-repository": 15,
+    "relative-path": 1,
+    "diverges-from-primary": 1
+  },
+  "control": {
+    "family": "the repository's own lane family",
+    "rows": 19,
+    "rejected": 0,
+    "accepted": 19,
+    "exit_code": 0
+  }
+}

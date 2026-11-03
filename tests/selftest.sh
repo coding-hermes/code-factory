@@ -657,6 +657,35 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_reclaim.py" >/dev/null
 else
   say "  FAIL  reclaim contract"; fails=$((fails+1))
 fi
+# CF-091 intra-family repo_url agreement: satellites of one family must carry the
+# primary's repo_url, not just any valid git root (two different-but-valid roots
+# both PASS per row, which is the defect this arm pins).
+say "21. project repo_url satellites must agree with their primary (CF-091)"
+tmpd=$(mktemp -d)
+git init -q -b main "$tmpd/repo-a"
+git -C "$tmpd/repo-a" -c user.email=fixture@example.invalid -c user.name=fixture \
+  commit -qm fixture --allow-empty
+git init -q -b main "$tmpd/repo-b"
+git -C "$tmpd/repo-b" -c user.email=fixture@example.invalid -c user.name=fixture \
+  commit -qm fixture --allow-empty
+printf '[{"name":"fixture-primary","repo_url":"local:%s"},{"name":"fixture-primary-qa","repo_url":"local:%s"}]' \
+  "$tmpd/repo-a" "$tmpd/repo-b" > "$tmpd/diverged.json"
+printf '[{"name":"fixture-primary","repo_url":"local:%s"},{"name":"fixture-primary-qa","repo_url":"local:%s"}]' \
+  "$tmpd/repo-a" "$tmpd/repo-a" > "$tmpd/aligned.json"
+diverged=$(python3 -B "$HERE/scripts/lane_target.py" repo-url --row "$tmpd/diverged.json" 2>&1); diverged_rc=$?
+aligned=$(python3 -B "$HERE/scripts/lane_target.py" repo-url --row "$tmpd/aligned.json" 2>&1); aligned_rc=$?
+if [ "$diverged_rc" -ne 0 ] \
+  && printf '%s\n' "$diverged" | grep -Fq "repo_url diverges from primary 'fixture-primary'" \
+  && printf '%s\n' "$diverged" | grep -Fq '[fixture-primary]' \
+  && printf '%s\n' "$diverged" | grep -Fq '[fixture-primary-qa]' \
+  && [ "$aligned_rc" -eq 0 ] \
+  && printf '%s\n' "$aligned" | grep -Fq 'repo_url: 0 rejected, 2 accepted'; then
+  say "  PASS  repo_url family agreement: diverged fixture rejected naming both lanes, aligned accepted"
+else
+  say "  FAIL  repo_url family agreement (diverged exit $diverged_rc, aligned exit $aligned_rc)"
+  fails=$((fails+1))
+fi
+rm -rf "$tmpd"
 
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

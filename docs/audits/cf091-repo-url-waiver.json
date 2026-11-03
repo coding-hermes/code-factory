@@ -1,0 +1,48 @@
+{
+  "waiver": "cf091-repo-url-waiver",
+  "note": "Operator-owned repo_url rejections left standing after CF-091. The guard is read-only; fixing these rows is a scheduler-operator write, not a repository change. Counts are from docs/audits/cf091-repo-url-census.json.",
+  "entries": [
+    {
+      "class": "not-a-git-root-standin-toplevel",
+      "count": 253,
+      "owner": "scheduler-operator (fleet-ops)",
+      "re_check": "2026-12-01",
+      "why": "Stand-in lane directories whose git top level resolves to the operator's home meta-repo instead of a project checkout."
+    },
+    {
+      "class": "unsupported-scheme-https",
+      "count": 76,
+      "owner": "scheduler-operator (fleet-ops)",
+      "re_check": "2026-12-01",
+      "why": "Placeholder https:// roots that the lane target parser does not support and that were never real checkouts."
+    },
+    {
+      "class": "path-does-not-exist",
+      "count": 38,
+      "owner": "scheduler-operator (fleet-ops)",
+      "re_check": "2026-12-01",
+      "why": "The repo_url names a path that does not exist or is not a directory on the operator host."
+    },
+    {
+      "class": "not-a-git-repository",
+      "count": 15,
+      "owner": "scheduler-operator (fleet-ops)",
+      "re_check": "2026-12-01",
+      "why": "The repo_url names a real directory that is a plain non-git directory."
+    },
+    {
+      "class": "relative-path",
+      "count": 1,
+      "owner": "scheduler-operator (fleet-ops)",
+      "re_check": "2026-12-01",
+      "why": "A relative repo_url that resolves differently per lane cwd and must be made absolute."
+    },
+    {
+      "class": "diverges-from-primary",
+      "count": 1,
+      "owner": "scheduler-operator (fleet-ops)",
+      "re_check": "2026-12-01",
+      "why": "One satellite carries a different valid git root than its family primary; the operator must reconcile the family per docs/SCHEDULER-ADMISSION.md."
+    }
+  ]
+}

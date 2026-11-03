@@ -81,6 +81,27 @@ not permitted, and 4 local verification failed. Recognized remote targets requir
 `--allow-remote` and are only `remote-structural-only`, never proof of reachability. For mixed
 rows, exit 2 takes precedence over 3, then 4. The summary counts rejected and accepted rows.
 
+Since CF-091, `repo-url --row` also enforces step 1's value comparison itself: rows supplied
+by `--row` are grouped into families using the suffix table above (for a non-sync lane the
+primary is the lane name with its recognized suffix removed; for `-sync` the leaf is the full
+lane name, so sync lanes are never grouped with siblings), and every family with at least two
+rows is compared on a normalized `repo_url` (local targets by realpath, remote targets by the
+parser's display form, trailing slash stripped). A row whose normalized value differs from the
+family's reference (the row named exactly `<primary>`, else the lexicographically first name
+in the family) is rejected with exit 4 and a line naming both lanes:
+`FAIL repo_url '<raw>' — repo_url diverges from primary '<primary>': '<observed>' != '<reference>' [name]`.
+Rows in different families are never compared, and the single-target call is byte-identical to
+before.
+
+The live rejection classes and totals are measured and recorded in
+`docs/audits/cf091-repo-url-census.md` / `.json` (public-safe: class totals only), and the
+operator-owned remainder is tracked with owners and re-check dates in
+`docs/audits/cf091-repo-url-waiver.json`. Measured 2026-11-03 at tip `d107ac4` over 866 rows:
+384 rejected / 482 accepted (exit 2), by class — 253 stand-in top level (home meta-repo),
+76 unsupported `https` scheme, 38 missing path, 15 non-git directory, 1 relative path,
+1 diverges-from-primary (a live finding of this check). The repository's own lane family
+passed 19/19.
+
 Operator-side reconciliation is mandatory whenever a primary's `repo_url` changes. Satellites
 inherit the value when minted, not dynamically: changing the primary alone does not fan it out.
 The guard does not write the scheduler or edit `fleet.toml`.

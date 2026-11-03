@@ -350,6 +350,54 @@ def scan(projects_jsonl: str, allow_remote: bool, home: Optional[str] = None) ->
     return {"file": projects_jsonl, "rows": rows, "bad": bad, "ok": bad == 0}
 
 
+# Satellite-family suffixes, from docs/SCHEDULER-ADMISSION.md's family table (the
+# scheduler's `satelliteLaneSuffixes`). For a non-sync lane the primary is the lane
+# name with the recognized suffix removed; for -sync the leaf is the full lane
+# name, so sync lanes are never grouped with siblings.
+FAMILY_SUFFIXES = (
+    "-qa",
+    "-pm",
+    "-sync",
+    "-dogfood",
+    "-releng",
+    "-docs",
+    "-readme",
+    "-perf",
+    "-review",
+)
+
+
+def family_key(name: str) -> str:
+    """A row's family grouping key: its primary's name (full name for -sync)."""
+    for suffix in FAMILY_SUFFIXES:
+        if name.endswith(suffix):
+            if suffix == "-sync":
+                return name
+            return name[: -len(suffix)]
+    return name
+
+
+def normalized_repo_url(raw: str) -> Optional[str]:
+    """Comparable form of a repo_url; None when it does not parse at all.
+
+    Local targets compare by their realpath (so `~`, `local:`, `file:`, symlinks
+    and trailing slashes that name the same checkout agree); remote targets
+    compare by the parser's display form.
+    """
+    spelling = raw.strip()
+    if spelling.startswith("file:") and not spelling.startswith("file://"):
+        spelling = "file://" + spelling[len("file:") :]
+    try:
+        t = parse(spelling)
+    except TargetError:
+        return None
+    if t.is_local:
+        value = os.path.realpath(os.path.expanduser(t.path))
+    else:
+        value = t.display()
+    return value.rstrip("/")
+
+
 def check_repo_url(raw: str, allow_remote: bool) -> str:
     """Reuse target parsing and checkout probes; require a root with a HEAD."""
     # Accept file:<path> here without changing the older parse/verify contract.
@@ -399,10 +447,16 @@ def repo_urls(
 
     rejected = 0
     codes = set()
+    names: list[Optional[str]] = []
+    raws: list[object] = []
+    ok_row: list[bool] = []
     for row in rows:
         raw = row.get("repo_url") if isinstance(row, dict) else None
         name = (row.get("name") or row.get("id")) if isinstance(row, dict) else None
         label = f" [{name}]" if name else ""
+        names.append(name if isinstance(name, str) else None)
+        raws.append(raw)
+        ok_row.append(True)
         try:
             if not isinstance(raw, str):
                 raise TargetError("project row requires a string repo_url")
@@ -423,8 +477,44 @@ def repo_urls(
                 else 4
             )
             codes.add(code)
-            rejected += 1
+            ok_row[-1] = False
             print(f"FAIL repo_url {raw!r} — {exc}{label}")
+
+    # Intra-family agreement (CF-091): satellites of one family must carry the
+    # primary's repo_url. Two different-but-valid roots both PASS per row, so the
+    # value comparison documented in docs/SCHEDULER-ADMISSION.md step 1 is
+    # enforced here. Only --row input carries names; single-target calls are
+    # untouched, and a row whose repo_url does not parse at all was already
+    # rejected above and has nothing comparable.
+    if row_file is not None:
+        families: dict[str, list[tuple[int, str, str, str]]] = {}
+        for idx, (name, raw, ok) in enumerate(zip(names, raws, ok_row)):
+            if not ok or not name or not isinstance(raw, str):
+                continue
+            normalized = normalized_repo_url(raw)
+            if normalized is not None:
+                families.setdefault(family_key(name), []).append(
+                    (idx, name, raw, normalized)
+                )
+        for primary, members in families.items():
+            if len(members) < 2:
+                continue
+            reference_row = next((m for m in members if m[1] == primary), None)
+            reference = (
+                reference_row[3]
+                if reference_row is not None
+                else min(members, key=lambda m: m[1])[3]
+            )
+            for idx, name, raw, normalized in members:
+                if normalized == reference:
+                    continue
+                codes.add(4)
+                ok_row[idx] = False
+                print(
+                    f"FAIL repo_url {raw!r} — repo_url diverges from primary "
+                    f"{primary!r}: {normalized!r} != {reference!r} [{name}]"
+                )
+    rejected = ok_row.count(False)
     print(f"repo_url: {rejected} rejected, {len(rows) - rejected} accepted")
     # Invalid input takes precedence, then denied remote verification, then local failure.
     return next((code for code in (2, 3, 4) if code in codes), 0)

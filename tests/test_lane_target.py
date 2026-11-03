@@ -303,6 +303,100 @@ class RepoURL(unittest.TestCase):
         self.assertIn("cannot classify target", out.stdout)
 
 
+def two_roots() -> dict[str, str]:
+    """Two real, different git roots for the CF-091 family-agreement tests."""
+    root = tempfile.mkdtemp(prefix="lane-family-")
+    atexit.register(shutil.rmtree, root, ignore_errors=True)
+    made = {"root": root}
+    for name in ("repo-a", "repo-b"):
+        path = os.path.join(root, name)
+        os.makedirs(path)
+        _git(path, "init", "-q", "-b", "main")
+        _git(path, "commit", "-q", "--allow-empty", "-m", "init")
+        made[name] = path
+    return made
+
+
+class RepoURLFamilyAgreement(unittest.TestCase):
+    """CF-091: a satellite's repo_url must agree with its family primary."""
+
+    def run_check(self, *args, rows=None):
+        return subprocess.run(
+            [sys.executable, "-B", str(lane_target.__file__), "repo-url", *args],
+            input=json.dumps(rows) if rows is not None else None,
+            capture_output=True,
+            text=True,
+        )
+
+    def test_diverged_satellite_is_rejected_naming_both_lanes(self):
+        roots = two_roots()
+        rows = [
+            {"name": "proj", "repo_url": "local:" + roots["repo-a"]},
+            {"name": "proj-qa", "repo_url": "local:" + roots["repo-b"]},
+        ]
+        out = self.run_check("--row", "-", rows=rows)
+        self.assertEqual(out.returncode, 4, out.stdout)
+        self.assertIn("repo_url diverges from primary 'proj'", out.stdout)
+        # Both lanes of the family are named in the output.
+        self.assertIn("[proj]", out.stdout)
+        self.assertIn("[proj-qa]", out.stdout)
+        self.assertIn("1 rejected, 1 accepted", out.stdout)
+
+    def test_aligned_satellite_passes(self):
+        roots = two_roots()
+        rows = [
+            {"name": "proj", "repo_url": "local:" + roots["repo-a"]},
+            {"name": "proj-qa", "repo_url": "local:" + roots["repo-a"]},
+        ]
+        out = self.run_check("--row", "-", rows=rows)
+        self.assertEqual(out.returncode, 0, out.stdout)
+        self.assertIn("0 rejected, 2 accepted", out.stdout)
+        self.assertNotIn("diverges", out.stdout)
+
+    def test_spelling_normalization_agrees(self):
+        # ~, local:, file: and a trailing slash naming the same checkout agree.
+        path = fixture()["repo"]
+        relative = "local:~/" + os.path.relpath(path, os.path.expanduser("~"))
+        rows = [
+            {"name": "proj", "repo_url": path + "/"},
+            {"name": "proj-perf", "repo_url": relative},
+        ]
+        out = self.run_check("--row", "-", rows=rows)
+        self.assertEqual(out.returncode, 0, out.stdout)
+        self.assertIn("0 rejected, 2 accepted", out.stdout)
+
+    def test_sync_pair_is_not_grouped(self):
+        # A -sync lane's leaf is its full lane name, so two sync lanes with
+        # different roots must never be compared.
+        roots = two_roots()
+        rows = [
+            {"name": "aa-sync", "repo_url": "local:" + roots["repo-a"]},
+            {"name": "bb-sync", "repo_url": "local:" + roots["repo-b"]},
+        ]
+        out = self.run_check("--row", "-", rows=rows)
+        self.assertEqual(out.returncode, 0, out.stdout)
+        self.assertIn("0 rejected, 2 accepted", out.stdout)
+        self.assertNotIn("diverges", out.stdout)
+
+    def test_unrelated_lanes_with_different_roots_pass(self):
+        roots = two_roots()
+        rows = [
+            {"name": "one", "repo_url": "local:" + roots["repo-a"]},
+            {"name": "two", "repo_url": "local:" + roots["repo-b"]},
+        ]
+        out = self.run_check("--row", "-", rows=rows)
+        self.assertEqual(out.returncode, 0, out.stdout)
+        self.assertIn("0 rejected, 2 accepted", out.stdout)
+        self.assertNotIn("diverges", out.stdout)
+
+    def test_single_target_call_unchanged(self):
+        roots = two_roots()
+        out = self.run_check("local:" + roots["repo-a"])
+        self.assertEqual(out.returncode, 0, out.stdout)
+        self.assertIn("0 rejected, 1 accepted", out.stdout)
+        self.assertNotIn("diverges", out.stdout)
+
+
 class ScanProjects(unittest.TestCase):
     def test_scan_mixed_rows(self):
         f = fixture()
