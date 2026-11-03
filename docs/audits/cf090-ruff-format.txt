@@ -1,0 +1,50 @@
+# CF-090 — the tree-wide lint arm is green at this tip
+
+Rows: CF-090. Reproduce with the three commands below, verbatim, from the root of a
+checkout of the commit that carries this file (`ruff format --check .` needs nothing else;
+`ruff check .` reads the repo's own ruff defaults).
+
+    $ ruff check .
+    All checks passed!
+    EXIT: 0
+
+    $ ruff format --check .
+    9 files already formatted
+    EXIT: 0
+
+    $ bash tests/selftest.sh   # tail -3
+      PASS  repo_url guard rejects a phantom local: root (1 rejected, 1 accepted)
+
+    SELFTEST: PASS
+    EXIT: 0
+
+Tool: `ruff 0.15.22` (host `~/.local/bin/ruff`).
+
+## Control — the same two commands on the parent commit, before this change
+
+Measured on a pristine `git archive a3efee1 | tar -x` export (the commit this file's parent
+lands on), same host and same ruff:
+
+    $ ruff check .
+    All checks passed!
+    EXIT: 0
+
+    $ ruff format --check .
+    Would reformat: docs/audits/cf089-census-standin.py
+    Would reformat: scripts/disk_floor.py
+    Would reformat: tests/test_disk_floor.py
+    3 files would be reformatted, 6 files already formatted
+    EXIT: 1
+
+So the change is scoped to those three files and to formatting only: a blank line after each
+module docstring and call-argument wrapping. `ruff check .` was already clean before it (the
+two E702 findings in `docs/audits/cf089-census-standin.py` were fixed by 02e4ae7); the
+surviving failure was `ruff format --check .` alone.
+
+## Why it is a row and not a style nit
+
+The Tier-1 guard's lint arm scans the whole tree, so any commit — including a docs-only one
+that touches no Python — inherits this failure. CF-064's README commit `d26f269` touched
+none of the three files and was still judged `stage tier1 FAIL (lint)` with `stage tier2
+PASS` (verdict `cddf1a3d`). Not CF-031: CF-031 is the commit hook reporting DEGRADED PASS for
+docs-only diffs, whereas this is real formatter output against committed files.

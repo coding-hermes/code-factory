@@ -23,6 +23,7 @@ Usage:
                         [--config PATH] [--explain]
   disk_floor.py roles
 """
+
 from __future__ import annotations
 
 import argparse
@@ -129,10 +130,14 @@ def resolve(
     disk = load_config(config_path or default_config_path())
     key = f"{role}_gib"
     if key in disk:
-        return parse_value(disk[key], f"{config_path or default_config_path()} [disk] {key}"), "config-role"
+        return parse_value(
+            disk[key], f"{config_path or default_config_path()} [disk] {key}"
+        ), "config-role"
     if "default" in disk or "default_gib" in disk:
         raw = disk.get("default", disk.get("default_gib"))
-        return parse_value(raw, f"{config_path or default_config_path()} [disk] default"), "config-default"
+        return parse_value(
+            raw, f"{config_path or default_config_path()} [disk] default"
+        ), "config-default"
     return ROLE_DEFAULTS[role], "role-default"
 
 

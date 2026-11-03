@@ -5,6 +5,7 @@ The floor must be configurable AND unambiguous: every precedence rung wins over 
 one below it, and a malformed value fails closed instead of silently falling back
 to a default (a typo must never lower a floor).
 """
+
 from __future__ import annotations
 
 import os
@@ -12,7 +13,9 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+)
 import disk_floor  # noqa: E402
 
 
@@ -50,27 +53,33 @@ class Resolve(unittest.TestCase):
             self.assertEqual((gib, source), (expected, "role-default"))
 
     def test_cli_beats_env_and_config(self):
-        cfg = self._cfg("[disk]\ndefault_gib = \"20\"\nworker_gib = \"15\"\n")
+        cfg = self._cfg('[disk]\ndefault_gib = "20"\nworker_gib = "15"\n')
         gib, source = disk_floor.resolve("worker", cli="3", env="9", config_path=cfg)
         self.assertEqual((gib, source), (3, "cli"))
 
     def test_env_beats_config(self):
-        cfg = self._cfg("[disk]\nworker_gib = \"15\"\n")
+        cfg = self._cfg('[disk]\nworker_gib = "15"\n')
         gib, source = disk_floor.resolve("worker", env="9", config_path=cfg)
         self.assertEqual((gib, source), (9, "env"))
 
     def test_config_role_beats_default(self):
-        cfg = self._cfg("[disk]\nworker_gib = \"15\"\ndefault_gib = \"20\"\n")
-        self.assertEqual(disk_floor.resolve("worker", config_path=cfg), (15, "config-role"))
+        cfg = self._cfg('[disk]\nworker_gib = "15"\ndefault_gib = "20"\n')
+        self.assertEqual(
+            disk_floor.resolve("worker", config_path=cfg), (15, "config-role")
+        )
         # a role with no explicit key falls to [disk] default
-        self.assertEqual(disk_floor.resolve("builder", config_path=cfg), (20, "config-default"))
+        self.assertEqual(
+            disk_floor.resolve("builder", config_path=cfg), (20, "config-default")
+        )
 
     def test_missing_config_is_not_an_error(self):
-        gib, source = disk_floor.resolve("full", config_path=os.path.join(self.tmp, "absent.toml"))
+        gib, source = disk_floor.resolve(
+            "full", config_path=os.path.join(self.tmp, "absent.toml")
+        )
         self.assertEqual((gib, source), (20, "role-default"))
 
     def test_bad_config_value_fails_closed(self):
-        cfg = self._cfg("[disk]\nworker_gib = \"plenty\"\n")
+        cfg = self._cfg('[disk]\nworker_gib = "plenty"\n')
         with self.assertRaises(disk_floor.FloorError):
             disk_floor.resolve("worker", config_path=cfg)
 
