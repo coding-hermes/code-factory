@@ -1,0 +1,26 @@
+# CF-064 probe transcript — generated 2026-11-03T16:54:14Z
+# tree: 247103c123f0cb1f5bb5c3e659663d2ccf070407 (readme-audit-20261103-165121)
+# host: Linux 7.0.0-38-generic x86_64; default python3: Python 3.14.4
+
+## arm 1 — the host's default python3 (outside the pin's range)
+$ home=$(mktemp -d); env -i HOME="$home" PATH=/usr/local/bin:/usr/bin:/bin scripts/harness/install-hermes.sh --check
+harness: hermes (pin 0.19.0, port 10800)
+  FAIL  python — hermes-agent 0.19.0 requires python >=3.11,<3.14; found 3.14.4
+EXIT: 1
+rows naming inference_key: 0
+
+## arm 2 — an interpreter inside the pin's range
+$ HERMES_PYTHON_BIN=python3.12 env -i HOME="$home" PATH=/usr/local/bin:/usr/bin:/bin HERMES_PYTHON_BIN=python3.12 bash scripts/harness/install-hermes.sh --check
+harness: hermes (pin 0.19.0, port 10800)
+  PASS  python — 3.12.13 (hermes-agent 0.19.0 requires >=3.11,<3.14)
+  FAIL  binary — absent — run --apply
+  FAIL  port — nothing on :10800
+  FAIL  inference_key — no provider key — a turn dies at 'No inference provider configured'
+
+HERMES: FAIL (3)
+EXIT: 1
+rows naming inference_key: 1
+
+# read: the inference_key row is reachable only in arm 2, and only once the interpreter is
+# inside the pin's range. That precondition is what the README status table now states
+# beside the command.
