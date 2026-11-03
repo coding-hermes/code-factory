@@ -146,8 +146,24 @@ fi
 say "7. the board is valid JSONL"
 b="$HERE/.coding-hermes/board/tasks.jsonl"
 if [ -f "$b" ]; then
-  n=$(wc -l < "$b"); good=0
-  while IFS= read -r line; do printf '%s' "$line" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null && good=$((good+1)); done < "$b"
+  # One parser process for the whole board. A python3 per row cost ~37 ms of wait4 per row
+  # (PERF-012: 669 wait4 calls / 1.805 s on a 30-row board). The slice keeps the old
+  # `while read` semantics exactly: only newline-terminated records count, so an unterminated
+  # last line is skipped and an empty file is 0/0.
+  read -r good n < <(python3 - "$b" <<'PY'
+import json, sys
+data = open(sys.argv[1], "rb").read()
+rows = data.split(b"\n")[:-1]
+good = 0
+for row in rows:
+    try:
+        json.loads(row.decode("utf-8"))
+        good += 1
+    except Exception:
+        pass
+print(good, len(rows))
+PY
+)
   [ "$good" = "$n" ] && say "  PASS  $good/$n rows parse" || { say "  FAIL  $good of $n rows parse"; fails=$((fails+1)); }
 else
   say "  FAIL  board missing"; fails=$((fails+1))
