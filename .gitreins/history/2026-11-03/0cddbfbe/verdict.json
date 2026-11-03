@@ -1,0 +1,112 @@
+{
+  "task_id": "CF-125-DOG1",
+  "task_title": "Dogfood walk: node-create cannot distinguish a typo'd harness from a documented-but-unmeasured one",
+  "task_criteria": [
+    "The dogfood lane's walk of README.md Quick start on a clean HOME filed three net-new rows on origin/main at 8df6b38 with a committed transcript, docs/audits/code-factory-dogfood-2026-11-03-20-47-54.probe.txt. For CF-125 (the row this task is named for): the transcript's section 6 must show both commands and both outputs ('--harness codex' and '--harness not-a-harness') producing the same 'FAIL staged_set \u2014 missing scripts/harness/install-<name>.sh' shape, and the row's premise must be visible in the tree at scripts/node-create.sh lines 20-22, where the staged set is built as harness/install-$HARNESS.sh with no validation of the harness name against specs/HARNESS.md's adapter table. CF-126 and CF-127 ride the same committed artifact (sections 7b and 7a)."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "8df6b3844247ef7ce1cffa3fe5ef56dec2195451",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T205712.996946Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n3:58PM INF scanned ~612367 bytes (612.37 KB) in 528ms\n3:58PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 101 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T205712.996946Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.FIMTMO6PGH/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  101/101 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [4039 chars omitted \u2014 64 line(s)] \u2026\n22. census refuses a failed fetch at a later offset\n  PASS  census fetch failure -> offset=500, exit 1, no census printed\n23. census refuses a non-2xx page\n  PASS  census HTTP 502 -> offset=500, exit 1, no census printed\n24. census requires a projects array even on HTTP 200\n  PASS  census missing-projects -> named .projects refusal, exit 1, no census printed\n  PASS  census wrong-projects -> named .projects refusal, exit 1, no census printed\n  PASS  census nonjson -> named .projects refusal, exit 1, no census printed\n25. census compares all received rows with the first reported total\n  PASS  census short page -> rows received=865, total reported=866, exit 1, no census printed\n26. healthy census counts matching rows on both sides of the page boundary\n  PASS  census healthy -> 2 matching rows, exact row format, exit 0\n27. census still refuses a missing total\n  PASS  census missing total -> named refusal, exit 1, no census printed\n28. README census and executable mirror agree except for BASE\n  PASS  census README/mirror byte parity (BASE parameterisation only)\n29. a workdir board that is not the published board is named as drift (CF-114)\n  PASS  publish-drift red fixture, exit 1\n  PASS  publish-drift green fixture, exit 0\n  PASS  publish-drift zero fixture, exit 1\n  PASS  publish-drift missing fixture, exit 1\n  PASS  publish-drift malformed fixture, exit 1\n  PASS  publish-drift nonobject fixture, exit 1\n  PASS  publish-drift event-drift fixture, exit 1\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T205712.996946Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 The dogfood lane's walk of README.md Quick start on a clean HOME filed three net-new rows on origin/main at 8df6b38 with a committed transcript, docs/audits/code-factory-dogfood-2026-11-03-20-47-54.probe.txt. For CF-125 (the row this task is named for): the transcript's section 6 must show both commands and both outputs ('--harness codex' and '--harness not-a-harness') producing the same 'FAIL staged_set \u2014 missing scripts/harness/install-<name>.sh' shape, and the row's premise must be visible in the tree at scripts/node-create.sh lines 20-22, where the staged set is built as harness/install-$HARNESS.sh with no validation of the harness name against specs/HARNESS.md's adapter table. CF-126 and CF-127 ride the same committed artifact (sections 7b and 7a).: Commit 8df6b38 (HEAD) adds docs/audits/code-factory-dogfood-2026-11-03-20-47-54.probe.txt (317 lines), 3 net-new rows in .coding-hermes/board/tasks.jsonl lines 99-101 (CF-125/CF-126/CF-127, board 98->101) and 3 task_created events at events.jsonl:141-143 (140->143), no existing line touched. Transcript section 6 (lines 149-171) shows both commands and both outputs: `--harness codex` -> 'FAIL staged_set \u2014 missing scripts/harness/install-codex.sh' rc=1, and `--harness not-a-harness` -> 'FAIL staged_set \u2014 missing scripts/harness/install-not-a-harness.sh' rc=1 \u2014 same shape. Reproduced live: `BUNKER_SERVER=fake scripts/node-create.sh ... --harness codex` and `--harness not-a-harness` both printed exactly those FAIL staged_set lines with rc=1. Premise visible in tree: scripts/node-create.sh:20 `local -a staged=(project-node.sh lib.sh disk_floor.py reclaim_disk.py \"harness/install-$HARNESS.sh\")`, :23 `bad \"staged_set\" \"missing scripts/$file\"`; grep of HARNESS in node-create.sh shows no lookup of specs/HARNESS.md or any adapter allowlist (only :15 default, :20/:27/:35 interpolation, :60 parse, :103 forward). specs/HARNESS.md:23 declares codex ('not measured here'), while scripts/harness/ contains only install-claude-code.sh, install-hermes.sh, install-opencode.sh. Sections 7a (CF-127: /tmp/hermes-install.log Permission denied, leftover from bunker-cf-node) and 7b (CF-126: CRIER_URL unset at layer 00; node-create.sh:103 forwards only NODE_PROJECT/NODE_GATEWAY_PORT) are present in the same artifact. Tests: `bash tests/selftest.sh` -> 'SELFTEST: PASS', exit 0.\nCommit 8df6b38 commits the dogfood transcript with section 6 showing byte-identical staged_set refusals for codex and not-a-harness, the premise is confirmed at scripts/node-create.sh:20-23 with no adapter-table validation, sections 7a/7b carry CF-127/CF-126, and the selftest passes (exit 0).",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 The dogfood lane's walk of README.md Quick start on a clean HOME filed three net-new rows on origin/main at 8df6b38 with a committed transcript, docs/audits/code-factory-dogfood-2026-11-03-20-47-54.probe.txt. For CF-125 (the row this task is named for): the transcript's section 6 must show both commands and both outputs ('--harness codex' and '--harness not-a-harness') producing the same 'FAIL staged_set \u2014 missing scripts/harness/install-<name>.sh' shape, and the row's premise must be visible in the tree at scripts/node-create.sh lines 20-22, where the staged set is built as harness/install-$HARNESS.sh with no validation of the harness name against specs/HARNESS.md's adapter table. CF-126 and CF-127 ride the same committed artifact (sections 7b and 7a).: Commit 8df6b38 (HEAD) adds docs/audits/code-factory-dogfood-2026-11-03-20-47-54.probe.txt (317 lines), 3 net-new rows in .coding-hermes/board/tasks.jsonl lines 99-101 (CF-125/CF-126/CF-127, board 98->101) and 3 task_created events at events.jsonl:141-143 (140->143), no existing line touched. Transcript section 6 (lines 149-171) shows both commands and both outputs: `--harness codex` -> 'FAIL staged_set \u2014 missing scripts/harness/install-codex.sh' rc=1, and `--harness not-a-harness` -> 'FAIL staged_set \u2014 missing scripts/harness/install-not-a-harness.sh' rc=1 \u2014 same shape. Reproduced live: `BUNKER_SERVER=fake scripts/node-create.sh ... --harness codex` and `--harness not-a-harness` both printed exactly those FAIL staged_set lines with rc=1. Premise visible in tree: scripts/node-create.sh:20 `local -a staged=(project-node.sh lib.sh disk_floor.py reclaim_disk.py \"harness/install-$HARNESS.sh\")`, :23 `bad \"staged_set\" \"missing scripts/$file\"`; grep of HARNESS in node-create.sh shows no lookup of specs/HARNESS.md or any adapter allowlist (only :15 default, :20/:27/:35 interpolation, :60 parse, :103 forward). specs/HARNESS.md:23 declares codex ('not measured here'), while scripts/harness/ contains only install-claude-code.sh, install-hermes.sh, install-opencode.sh. Sections 7a (CF-127: /tmp/hermes-install.log Permission denied, leftover from bunker-cf-node) and 7b (CF-126: CRIER_URL unset at layer 00; node-create.sh:103 forwards only NODE_PROJECT/NODE_GATEWAY_PORT) are present in the same artifact. Tests: `bash tests/selftest.sh` -> 'SELFTEST: PASS', exit 0.\nCommit 8df6b38 commits the dogfood transcript with section 6 showing byte-identical staged_set refusals for codex and not-a-harness, the premise is confirmed at scripts/node-create.sh:20-23 with no adapter-table validation, sections 7a/7b carry CF-127/CF-126, and the selftest passes (exit 0).",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "The dogfood lane's walk of README.md Quick start on a clean HOME filed three net-new rows on origin/main at 8df6b38 with a committed transcript, docs/audits/code-factory-dogfood-2026-11-03-20-47-54.probe.txt. For CF-125 (the row this task is named for): the transcript's section 6 must show both commands and both outputs ('--harness codex' and '--harness not-a-harness') producing the same 'FAIL staged_set \u2014 missing scripts/harness/install-<name>.sh' shape, and the row's premise must be visible in the tree at scripts/node-create.sh lines 20-22, where the staged set is built as harness/install-$HARNESS.sh with no validation of the harness name against specs/HARNESS.md's adapter table. CF-126 and CF-127 ride the same committed artifact (sections 7b and 7a).",
+                "status": "PASS",
+                "detail": "Commit 8df6b38 (HEAD) adds docs/audits/code-factory-dogfood-2026-11-03-20-47-54.probe.txt (317 lines), 3 net-new rows in .coding-hermes/board/tasks.jsonl lines 99-101 (CF-125/CF-126/CF-127, board 98->101) and 3 task_created events at events.jsonl:141-143 (140->143), no existing line touched. Transcript section 6 (lines 149-171) shows both commands and both outputs: `--harness codex` -> 'FAIL staged_set \u2014 missing scripts/harness/install-codex.sh' rc=1, and `--harness not-a-harness` -> 'FAIL staged_set \u2014 missing scripts/harness/install-not-a-harness.sh' rc=1 \u2014 same shape. Reproduced live: `BUNKER_SERVER=fake scripts/node-create.sh ... --harness codex` and `--harness not-a-harness` both printed exactly those FAIL staged_set lines with rc=1. Premise visible in tree: scripts/node-create.sh:20 `local -a staged=(project-node.sh lib.sh disk_floor.py reclaim_disk.py \"harness/install-$HARNESS.sh\")`, :23 `bad \"staged_set\" \"missing scripts/$file\"`; grep of HARNESS in node-create.sh shows no lookup of specs/HARNESS.md or any adapter allowlist (only :15 default, :20/:27/:35 interpolation, :60 parse, :103 forward). specs/HARNESS.md:23 declares codex ('not measured here'), while scripts/harness/ contains only install-claude-code.sh, install-hermes.sh, install-opencode.sh. Sections 7a (CF-127: /tmp/hermes-install.log Permission denied, leftover from bunker-cf-node) and 7b (CF-126: CRIER_URL unset at layer 00; node-create.sh:103 forwards only NODE_PROJECT/NODE_GATEWAY_PORT) are present in the same artifact. Tests: `bash tests/selftest.sh` -> 'SELFTEST: PASS', exit 0."
+              }
+            ],
+            "summary": "Commit 8df6b38 commits the dogfood transcript with section 6 showing byte-identical staged_set refusals for codex and not-a-harness, the premise is confirmed at scripts/node-create.sh:20-23 with no adapter-table validation, sections 7a/7b carry CF-127/CF-126, and the selftest passes (exit 0).",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-125-DOG1\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 The dogfood lane's walk of README.md Quick start on a clean HOME filed three net-new rows on origin/main at 8df6b38 with a committed transcript, docs/audits/code-factory-dogfood-2026-11-03-20-47-54.probe.txt. For CF-125 (the row this task is named for): the transcript's section 6 must show both commands and both outputs ('--harness codex' and '--harness not-a-harness') producing the same 'FAIL staged_set \u2014 missing scripts/harness/install-<name>.sh' shape, and the row's premise must be visible in the tree at scripts/node-create.sh lines 20-22, where the staged set is built as harness/install-$HARNESS.sh with no validation of the harness name against specs/HARNESS.md's adapter table. CF-126 and CF-127 ride the same committed artifact (sections 7b and 7a).: Commit 8df6b38 (HEAD) adds docs/audits/code-factory-dogfood-2026-11-03-20-47-54.probe.txt (317 lines), 3 net-new rows in .coding-hermes/board/tasks.jsonl lines 99-101 (CF-125/CF-126/CF-127, board 98->101) and 3 task_created events at events.jsonl:141-143 (140->143), no existing line touched. Transcript section 6 (lines 149-171) shows both commands and both outputs: `--harness codex` -> 'FAIL staged_set \u2014 missing scripts/harness/install-codex.sh' rc=1, and `--harness not-a-harness` -> 'FAIL staged_set \u2014 missing scripts/harness/install-not-a-harness.sh' rc=1 \u2014 same shape. Reproduced live: `BUNKER_SERVER=fake scripts/node-create.sh ... --harness codex` and `--harness not-a-harness` both printed exactly those FAIL staged_set lines with rc=1. Premise visible in tree: scripts/node-create.sh:20 `local -a staged=(project-node.sh lib.sh disk_floor.py reclaim_disk.py \"harness/install-$HARNESS.sh\")`, :23 `bad \"staged_set\" \"missing scripts/$file\"`; grep of HARNESS in node-create.sh shows no lookup of specs/HARNESS.md or any adapter allowlist (only :15 default, :20/:27/:35 interpolation, :60 parse, :103 forward). specs/HARNESS.md:23 declares codex ('not measured here'), while scripts/harness/ contains only install-claude-code.sh, install-hermes.sh, install-opencode.sh. Sections 7a (CF-127: /tmp/hermes-install.log Permission denied, leftover from bunker-cf-node) and 7b (CF-126: CRIER_URL unset at layer 00; node-create.sh:103 forwards only NODE_PROJECT/NODE_GATEWAY_PORT) are present in the same artifact. Tests: `bash tests/selftest.sh` -> 'SELFTEST: PASS', exit 0.\nCommit 8df6b38 commits the dogfood transcript with section 6 showing byte-identical staged_set refusals for codex and not-a-harness, the premise is confirmed at scripts/node-create.sh:20-23 with no adapter-table validation, sections 7a/7b carry CF-127/CF-126, and the selftest passes (exit 0).\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-03T20:59:08.453486",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-03T20:59:08.508106+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 52856,
+        "truncated": false,
+        "source": "git show 8df6b3844247"
+      }
+    ],
+    "task_id": "CF-125-DOG1"
+  }
+}
