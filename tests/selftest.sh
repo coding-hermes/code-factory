@@ -882,5 +882,89 @@ else
 fi
 # END census-fail-closed
 
+say "29. a workdir board that is not the published board is named as drift (CF-114)"
+tmpd=$(mktemp -d)
+if python3 - "$HERE" "$tmpd" <<'PY'
+from pathlib import Path
+import json
+import shutil
+import sys
+
+root, fixture = map(Path, sys.argv[1:])
+board = Path(".coding-hermes/board")
+published = fixture / "published"
+published.mkdir()
+for name in ("tasks.jsonl", "events.jsonl"):
+    shutil.copyfile(root / board / name, published / name)
+lines = (published / "tasks.jsonl").read_bytes().splitlines(keepends=True)
+records = [json.loads(line) for line in lines]
+flipped = next(i for i, row in enumerate(records) if row["status"] == "complete")
+deleted = next(i for i in reversed(range(len(records))) if i != flipped)
+(fixture / "expected").write_text(
+    f"{records[flipped]['id']} {records[deleted]['id']} {len(lines) - 1} {len(lines)}\n"
+)
+for arm in ("red", "green", "zero", "missing", "malformed", "nonobject", "event-drift"):
+    target = fixture / arm / board
+    target.mkdir(parents=True)
+    for name in ("tasks.jsonl", "events.jsonl"):
+        shutil.copyfile(published / name, target / name)
+    if arm == "red":
+        mutated = lines.copy()
+        row = dict(records[flipped], status="pending")
+        mutated[flipped] = (json.dumps(row) + "\n").encode()
+        del mutated[deleted]
+        (target / "tasks.jsonl").write_bytes(b"".join(mutated))
+    elif arm == "zero":
+        (target / "tasks.jsonl").write_bytes(b"")
+    elif arm == "missing":
+        (target / "events.jsonl").unlink()
+    elif arm in ("malformed", "nonobject"):
+        mutated = lines.copy()
+        mutated[1] = b"{\n" if arm == "malformed" else b"null\n"
+        (target / "tasks.jsonl").write_bytes(b"".join(mutated))
+    elif arm == "event-drift":
+        with (target / "events.jsonl").open("ab") as stream:
+            stream.write(b"\n")
+PY
+then
+  read -r flipped deleted red_count published_count < "$tmpd/expected"
+  for arm in red green zero missing malformed nonobject event-drift; do
+    expected_rc=1
+    expected_result='RESULT: DRIFT ('
+    case "$arm" in
+      red) expected="FAIL  board rows — $red_count vs $published_count rows; 2 divergent ids: " ;;
+      green) expected_rc=0; expected_result='RESULT: OK'; expected="PASS  board rows — $published_count vs $published_count rows; 0 divergent ids: none" ;;
+      zero) expected='FAIL  board rows — tasks.jsonl has 0 rows' ;;
+      missing) expected='FAIL  workdir files — events.jsonl:' ;;
+      malformed) expected='FAIL  workdir tasks.jsonl line 2 — invalid JSON:' ;;
+      nonobject) expected='FAIL  workdir tasks.jsonl line 2 — expected JSON object' ;;
+      event-drift) expected='FAIL  byte parity events.jsonl — bytes differ' ;;
+    esac
+    out=$(python3 -B "$HERE/scripts/board_drift.py" check --workdir "$tmpd/$arm" \
+      --published-dir "$tmpd/published" 2>&1); rc=$?
+    if [ "$rc" -eq "$expected_rc" ] \
+      && printf '%s\n' "$out" | grep -Fq "$expected" \
+      && printf '%s\n' "$out" | grep -Fq "$expected_result" \
+      && ! printf '%s\n' "$out" | grep -Fq 'Traceback (most recent call last)'; then
+      if [ "$arm" = red ] \
+        && { ! printf '%s\n' "$out" | grep -Fq "$flipped: workdir=pending published=complete" \
+          || ! printf '%s\n' "$out" | grep -Fxq "FAIL  board missing ids — $deleted" \
+          || ! printf '%s\n' "$out" | grep -E "^FAIL  board rows —" | grep -Fq "$flipped" \
+          || ! printf '%s\n' "$out" | grep -E "^FAIL  board rows —" | grep -Fq "$deleted"; }; then
+        say "  FAIL  publish-drift red fixture omitted a divergent id"; fails=$((fails+1))
+        printf '%s\n' "$out"
+      else
+        say "  PASS  publish-drift $arm fixture, exit $rc"
+      fi
+    else
+      say "  FAIL  publish-drift $arm fixture (exit $rc)"; fails=$((fails+1))
+      printf '%s\n' "$out"
+    fi
+  done
+else
+  say "  FAIL  publish-drift fixture setup"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

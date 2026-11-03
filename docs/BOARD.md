@@ -38,6 +38,29 @@ public repo.
 5. Keep task IDs unique and acceptance criteria falsifiable. `tests/selftest.sh` checks row parsing;
    the boardctl validator is the schema/consistency gate.
 
+## Publish-drift census
+
+Before editing a checkout's board, run the offline, read-only repository check (local refs
+must already be current; the check never fetches):
+
+```sh
+python3 scripts/board_drift.py check --workdir <path> --ref origin/main
+```
+
+PASS means both board files are readable and byte-identical to the published ref, the task
+census agrees, and the checkout's HEAD is an ancestor of that ref. FAIL names the measured
+mismatch, divergent task IDs, missing files or invalid line numbers; a zero-row task board
+is always a FAIL. The final verdict is `RESULT: OK` (exit 0) or `RESULT: DRIFT` with a failure
+count (exit 1). `--repo <path>` selects the repository resolving the ref; `--no-head` skips
+ancestry. `--published-dir <dir>` reads fixture files instead of Git and implies `--no-head`.
+
+Observed on 2026-11-03 before the workdir repair: the registered code-factory workdir
+(`~/proj-wt-code-factory-bankai-20261030`) carried 61 tasks rows / 66 events rows against
+88 / 124 at `origin/main` `6e8621f`. CF-053, CF-064, CF-065, CF-075 and PERF-014 read
+`pending` there while `complete` at `origin/main`. This is a dated observation, not a current
+health claim. `scripts/board_drift.py` is the re-runnable tool; `tests/selftest.sh` arm 29
+proves its divergent, identical, empty, missing-file and malformed-record fixture paths.
+
 ## Current measured state (2026-11-03)
 
 - `scripts/boardctl validate`: 61 task rows, 66 events, `RESULT: OK (17 warning(s))`; the warnings are
