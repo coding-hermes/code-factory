@@ -76,6 +76,58 @@ else
 fi
 rm -rf "$tmpd"
 
+# CF-039 resolved-ref-clone-failure: exercise the real node script with local git only.
+# BEGIN resolved-ref-clone-failure
+say "4b. clone failure after successful ref resolution is not an access failure"
+tmpd=$(mktemp -d)
+mkdir "$tmpd/bin"
+cat > "$tmpd/bin/git" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  clone)
+    [ "$#" -eq 7 ] && [ "$2" = --depth ] && [ "$3" = 1 ] \
+      && [ "$4" = --branch ] && [ "$5" = main ] && [ "$6" = "${FIXTURE_REPO:?}" ] || exit 99
+    "${REAL_GIT:?}" ls-remote --exit-code "$6" refs/heads/main refs/tags/main >/dev/null || exit 99
+    printf '%s\n' 'clone: refs/heads/main resolved; refusing clone' >> "${FIXTURE_LOG:?}"
+    echo 'fatal: fixture checkout write failed' >&2
+    exit 128
+    ;;
+  ls-remote)
+    [ "$#" -eq 5 ] && [ "$2" = --exit-code ] && [ "$3" = "${FIXTURE_REPO:?}" ] \
+      && [ "$4" = refs/heads/main ] && [ "$5" = refs/tags/main ] || exit 99
+    "${REAL_GIT:?}" "$@" || exit 99
+    printf '%s\n' 'ls-remote: refs/heads/main refs/tags/main resolved' >> "${FIXTURE_LOG:?}"
+    ;;
+  *) exec "${REAL_GIT:?}" "$@" ;;
+esac
+EOF
+chmod +x "$tmpd/bin/git"
+git init -q -b main "$tmpd/work"
+git -C "$tmpd/work" config user.email fixture@example.invalid
+git -C "$tmpd/work" config user.name fixture
+echo fixture > "$tmpd/work/README"
+git -C "$tmpd/work" add README
+git -C "$tmpd/work" commit -qm fixture
+resolved_ref=$(env PATH="$tmpd/bin:$PATH" REAL_GIT="$(command -v git)" \
+  FIXTURE_REPO="file://$tmpd/work" FIXTURE_LOG="$tmpd/git.log" \
+  HOME="$tmpd/resolved-home" NODE_PROJECT=demo CRIER_URL= \
+  /bin/bash "$HERE/scripts/project-node.sh" --apply --project demo --harness fixture \
+  --repo "file://$tmpd/work" --ref main 2>&1); rc=$?
+expected="  FAIL  repo_clone — fatal: fixture checkout write failed (clone failed after ref 'main' resolved)"
+expected_calls=$(printf '%s\n' 'clone: refs/heads/main resolved; refusing clone' \
+  'ls-remote: refs/heads/main refs/tags/main resolved')
+if [ "$rc" -ne 0 ] && [ "$(printf '%s\n' "$resolved_ref" | grep -Fxc -- "$expected")" = 1 ] \
+  && [ "$(cat "$tmpd/git.log" 2>/dev/null)" = "$expected_calls" ] \
+  && ! printf '%s\n' "$resolved_ref" | grep -Fq "ref 'main' was not found" \
+  && ! printf '%s\n' "$resolved_ref" | grep -Fq 'private repos need a deploy key'; then
+  say "  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints"
+else
+  say "  FAIL  resolved-ref clone failure was misclassified"; fails=$((fails+1))
+  printf '%s\n' "$resolved_ref" | grep -F 'repo_clone'
+fi
+rm -rf "$tmpd"
+# END resolved-ref-clone-failure
+
 say "5. fetch_verified refuses a wrong digest"
 tmpd=$(mktemp -d); echo hello > "$tmpd/src"
 want=$(sha256sum "$tmpd/src" | cut -d' ' -f1)
