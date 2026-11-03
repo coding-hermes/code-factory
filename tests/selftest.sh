@@ -392,5 +392,91 @@ else
 fi
 rm -rf "$tmpd"
 
+# CF-075 node-create-staged-set: real entry point and adapter, no network or installs.
+say "16. node-create staged set covers the disk floor and names missing dependencies"
+tmpd=$(mktemp -d)
+mkdir -p "$tmpd/scripts/harness" "$tmpd/bin"
+staged=$(bash "$HERE/scripts/node-create.sh" --staged-files); rc=$?
+if [ "$rc" -eq 0 ]; then
+  while IFS= read -r file; do
+    cp "$HERE/scripts/$file" "$tmpd/scripts/$file" || fails=$((fails+1))
+  done <<< "$staged"
+else
+  say "  FAIL  staging manifest validation exited $rc"; fails=$((fails+1))
+fi
+# Layer 00 resolves the real floor, but an impossible admission floor prevents installs.
+# Both runs use fresh HOME and a deterministic df, regardless of host free space.
+cat > "$tmpd/bin/df" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' 'Filesystem 1024-blocks Used Available Capacity Mounted on' 'fixture 1048576 0 1048576 0% /'
+EOF
+chmod +x "$tmpd/bin/df"
+out=$(env -i HOME="$tmpd/home" PATH="$tmpd/bin:$PATH" NODE_DISK_FLOOR=4096 \
+  /bin/bash "$tmpd/scripts/project-node.sh" --apply --project fixture --harness hermes 2>&1); rc=$?
+if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fq '  PASS  disk_floor — 4096 GiB from env' \
+  && printf '%s\n' "$out" | grep -Fq 'NODE: FAIL (disk admission)' \
+  && ! printf '%s\n' "$out" | grep -Fq "can't open file"; then
+  say "  PASS  staged disk floor resolves: 4096 GiB from env; admission refuses before installs"
+else
+  say "  FAIL  staged disk floor missing or not named (exit $rc)"; fails=$((fails+1))
+fi
+rm "$tmpd/scripts/disk_floor.py"
+out=$(env -i HOME="$tmpd/missing-home" PATH="$tmpd/bin:$PATH" \
+  /bin/bash "$tmpd/scripts/project-node.sh" --apply --project fixture --harness hermes 2>&1); rc=$?
+if [ "$rc" -eq 1 ] && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL  disk_floor — resolver missing or unreadable:')" = 1 ] \
+  && printf '%s\n' "$out" | grep -Fxq 'NODE: FAIL (1)' \
+  && ! printf '%s\n' "$out" | grep -Fq "can't open file"; then
+  say "  PASS  missing disk floor -> one countable FAIL row, NODE: FAIL (1), exit $rc"
+  printf '%s\n' "$out"
+else
+  say "  FAIL  missing disk floor crashed or escaped counting (exit $rc)"; fails=$((fails+1))
+fi
+# Mutation: keep the dependency on disk, remove it ONLY from a scratch manifest.
+cp "$HERE/scripts/disk_floor.py" "$tmpd/scripts/"
+sed 's/lib.sh disk_floor.py/lib.sh/' "$HERE/scripts/node-create.sh" > "$tmpd/scripts/node-create.sh"
+out=$(bash "$tmpd/scripts/node-create.sh" --staged-files 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -Fq 'references unstaged disk_floor.py'; then
+  say "  PASS  disk floor omitted from scratch manifest -> validation exit $rc"
+else
+  say "  FAIL  incomplete staging manifest accepted (exit $rc)"; fails=$((fails+1))
+fi
+# Stub only the bunker transport and control-host verifier. Provisioning fails, while
+# staging succeeds (or cp fails explicitly); cleanup must identify only owned agents.
+cp "$HERE/scripts/node-create.sh" "$tmpd/scripts/"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$tmpd/scripts/verify-node.sh"
+chmod +x "$tmpd/scripts/verify-node.sh"
+cat > "$tmpd/bin/bunker" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  spawn) printf '%s\n' "$2" > "$FIXTURE_AGENT" ;;
+  cp) [ "${FIXTURE_CP_FAIL:-0}" = 0 ] || { echo 'fixture copy refused' >&2; exit 1; } ;;
+  exec) case "$*" in *NODE_PROJECT=*) exit 1 ;; esac ;;
+  *) echo 'unexpected bunker command' >&2; exit 99 ;;
+esac
+EOF
+chmod +x "$tmpd/bin/bunker"
+for arm in owned reused copy-failure; do
+  agent_args=()
+  cp_fail=0
+  [ "$arm" = reused ] && agent_args=(--agent fixture-existing)
+  [ "$arm" = copy-failure ] && cp_fail=1
+  out=$(env -i HOME="$tmpd/control-home" PATH="$tmpd/bin:$PATH" BUNKER_SERVER=fixture-server \
+    FIXTURE_AGENT="$tmpd/agent" FIXTURE_CP_FAIL="$cp_fail" \
+    /bin/bash "$tmpd/scripts/node-create.sh" --project fixture "${agent_args[@]}" 2>&1); rc=$?
+  if [ "$arm" = reused ]; then
+    if [ "$rc" -eq 1 ] && ! printf '%s\n' "$out" | grep -Fq 'bunker destroy'; then
+      say "  PASS  reused agent failure does not request destruction"
+    else
+      say "  FAIL  reused agent cleanup ownership (exit $rc)"; fails=$((fails+1))
+    fi
+  elif [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq "cleanup required: bunker destroy $(cat "$tmpd/agent") --server fixture-server" \
+    && { [ "$arm" != copy-failure ] || printf '%s\n' "$out" | grep -Fq '  FAIL  staged — copy failed:'; }; then
+    say "  PASS  $arm failure names spawned agent and explicit-server destroy command"
+  else
+    say "  FAIL  $arm failure lost cleanup command or staging error (exit $rc)"; fails=$((fails+1))
+  fi
+done
+rm -rf "$tmpd"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

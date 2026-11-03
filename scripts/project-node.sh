@@ -113,20 +113,26 @@ elif ! command -v python3 >/dev/null 2>&1; then
   FLOOR_SRC="role-default(no-python3)"
   echo "  WARN  disk_floor — python3 absent, using built-in ${ROLE} default ${FLOOR_GIB} GiB"
 else
+  if [ ! -r "$HERE/disk_floor.py" ]; then
+    bad "disk_floor" "resolver missing or unreadable: $HERE/disk_floor.py"
+    say "NODE: FAIL ($FAILED)"
+    exit 1
+  fi
   floor_args=(resolve --role "$ROLE")
   [ -n "$FLOOR_CLI" ] && floor_args+=(--cli "$FLOOR_CLI")
   if ! FLOOR="$(python3 "$HERE/disk_floor.py" "${floor_args[@]}" --explain 2>&1)"; then
-    say "$FLOOR"
-    say "NODE: FAIL (disk floor)"
+    bad "disk_floor" "$FLOOR"
+    say "NODE: FAIL ($FAILED)"
     exit 1
   fi
   FLOOR_GIB="$(printf '%s' "$FLOOR" | python3 -c 'import json,sys; print(json.load(sys.stdin)["floor_gib"])' 2>/dev/null || true)"
   FLOOR_SRC="$(printf '%s' "$FLOOR" | python3 -c 'import json,sys; print(json.load(sys.stdin)["source"])' 2>/dev/null || true)"
   if [ -z "${FLOOR_GIB:-}" ]; then
-    say "  FAIL  disk_floor — resolver returned no number: $FLOOR"
-    say "NODE: FAIL (disk floor)"
+    bad "disk_floor" "resolver returned no number: $FLOOR"
+    say "NODE: FAIL ($FAILED)"
     exit 1
   fi
+  ok "disk_floor" "${FLOOR_GIB} GiB from ${FLOOR_SRC}"
 fi
 
 mkdir -p "$STATE"
