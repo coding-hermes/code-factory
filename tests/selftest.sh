@@ -14,7 +14,15 @@ done
 say "2. the node checker FAILS on an empty PATH"
 out=$(env -i PATH=/nonexistent HOME="$HOME" NODE_PROJECT=t /bin/bash "$HERE/scripts/project-node.sh" --check 2>&1); rc=$?
 [ "$rc" -ne 0 ] && say "  PASS  empty PATH -> exit $rc" || { say "  FAIL  empty PATH reported success"; fails=$((fails+1)); }
-printf '%s' "$out" | grep -q 'FAIL' && say "  PASS  report contains FAIL rows" || { say "  FAIL  no FAIL rows"; fails=$((fails+1)); }
+# The rows must be REAL named checks, not a bootstrap crash that happens to contain
+# the substring FAIL (CF-005 AC2: "FAILED: unbound variable" is not a FAIL row).
+if printf '%s' "$out" | grep -q 'unbound variable'; then
+  say "  FAIL  report is a bootstrap crash, not named FAIL rows"; fails=$((fails+1))
+elif printf '%s' "$out" | grep -Eq '^  FAIL  tool:'; then
+  say "  PASS  report contains named FAIL rows"
+else
+  say "  FAIL  no FAIL rows"; fails=$((fails+1))
+fi
 
 say "3. unreachable Crier reports one HTTP status code"
 tmpd=$(mktemp -d)
@@ -225,6 +233,28 @@ if [ "$rc" -ne 0 ] \
   say "  PASS  Python 3.14 refusal names the supported range without pip"
 else
   say "  FAIL  unsupported Python refusal was missing or reached pip"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+
+say "11. lane workdir targets: local paths AND remote user@host/scheme targets"
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_lane_target.py" >/dev/null 2>&1; then
+  say "  PASS  lane target parse/validate, home-repo rejection, remote structural-only"
+else
+  say "  FAIL  lane target contract"; fails=$((fails+1))
+fi
+say "12. node disk floor resolves from CLI/env/config with fail-closed values"
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_disk_floor.py" >/dev/null 2>&1; then
+  say "  PASS  floor precedence, role defaults, malformed values refused"
+else
+  say "  FAIL  disk floor contract"; fails=$((fails+1))
+fi
+say "13. node provisioning names its resolved floor and refuses below it"
+tmpd=$(mktemp -d)
+out=$(env HOME="$tmpd/home" NODE_DISK_FLOOR=999999 /bin/bash "$HERE/scripts/project-node.sh" --check --project fixture 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -Fq 'FAIL disk-floor'; then
+  say "  PASS  malformed floor refused before any install"
+else
+  say "  FAIL  malformed floor was accepted or not named"; fails=$((fails+1))
 fi
 rm -rf "$tmpd"
 

@@ -9,8 +9,12 @@ Idempotent: an existing lane is configured, not duplicated.
 import json
 import os
 import sqlite3
+import sys
 import urllib.error
 import urllib.request
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import lane_target  # noqa: E402  (same directory, keeps the target model in one place)
 
 DB = os.path.expanduser("~/.hermes/coding-hermes/scheduler.db")
 API = "http://127.0.0.1:9090"
@@ -137,7 +141,22 @@ created, configured, failed = [], [], []
 for suffix, (ns, mode, floor, wd_tmpl) in sorted(shape.items()):
     name = f"code-factory-{suffix}"
     workdir = wd_tmpl.replace("<p>", "code-factory")
-    os.makedirs(workdir, exist_ok=True)
+    # A workdir is a TARGET, not necessarily a local directory: it may be
+    # user@host:/path, ssh://user@host:port/path, sftp://..., ftp://..., or
+    # bunker://<agent>/path. Only a local target gets mkdir'd; a remote target is
+    # registered as-is and left for the node side to materialise (CF-046).
+    try:
+        target = lane_target.parse(workdir)
+    except lane_target.TargetError as exc:
+        failed.append(f"{name}: invalid workdir target {workdir!r}: {exc}")
+        continue
+    if target.is_local:
+        os.makedirs(target.path, exist_ok=True)
+        workdir = target.path
+        remote_note = ""
+    else:
+        remote_note = f" remote={target.display()} (no local mkdir)"
+        print(f"note: {name} workdir is remote: {target.display()}")
     st, d = api(
         "POST",
         "/api/v1/projects",
@@ -166,7 +185,7 @@ for suffix, (ns, mode, floor, wd_tmpl) in sorted(shape.items()):
             name,
         ),
     )
-    configured.append(f"{name} ns={ns} mode={mode} floor={floor}")
+    configured.append(f"{name} ns={ns} mode={mode} floor={floor}{remote_note}")
 con.commit()
 
 print("\ncreated:", ", ".join(created) or "none")
