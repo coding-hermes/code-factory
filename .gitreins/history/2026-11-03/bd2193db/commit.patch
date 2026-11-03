@@ -1,0 +1,12 @@
+commit 8f1e8c18e2e121e1e7db9801652c09cae1001f9b
+Merge: 0959258 6f75e28
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Tue Nov 3 03:39:28 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Tue Nov 3 03:39:28 2026 -0500
+
+    merge: integrate CF-032 clone-only layer 40 narrowing
+
+ README.md     | 2 +-
+ specs/NODE.md | 8 ++++----
+ 2 files changed, 5 insertions(+), 5 deletions(-)

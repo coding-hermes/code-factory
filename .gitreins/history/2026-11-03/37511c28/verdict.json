@@ -1,0 +1,78 @@
+{
+  "task_id": "CF-039",
+  "task_title": "CF-039 resolved-ref clone-failure regression fixture",
+  "task_criteria": [
+    "1. tests/selftest.sh contains a network-free fixture where ls-remote resolves refs/heads/main but clone fails, asserting the output names the resolved ref without claiming the ref is missing or the repo is private. 2. The fixture passes on the fixed tree and fails against the pre-CF-034 source (commit 792e687cd68db4f60f795752894ce0cd66db5069), with bash tests/selftest.sh printing SELFTEST: PASS on the fixed tree. 3. docs/audits/code-factory-CF-039.md records the pre-fix failure and fixed output and the commit message cites it. 4. bash -n tests/selftest.sh scripts/project-node.sh passes."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/.hermes/cache/scratch/cf039-20261103-hyBIzY/merge",
+  "branch": "foreman/cf039-20261103",
+  "commit": "a2db9624485a0fe2c4ae85fb701fbeae4093d453",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/.hermes/cache/scratch/cf039-20261103-hyBIzY/merge/.gitreins/logs/guard-20261103T093457.430357Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n4:44AM INF scanned ~152116 bytes (152.12 KB) in 87.1ms\n4:44AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 61 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/.hermes/cache/scratch/cf039-20261103-hyBIzY/merge/.gitreins/logs/guard-20261103T093457.430357Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.gUMQ6TsFSQ/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  27/27 rows parse\n8. project board entrypoint is real and fails closed without dependency\n  PASS  bash -n scripts/boardctl\n  PASS  local help\n  PASS  missing boardctl -> explicit FAIL, exit 127\n9. every prompt file the README relies on exists\n  PASS  every prompts/*.md named by README.md exists\n  PASS  absent prompt refused (absent: prompts/ghost-lane.md)\n10. Hermes refuses an unsupported Python without pip or network\n  PASS  Python 3.14 refusal names the supported range without pip\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/.hermes/cache/scratch/cf039-20261103-hyBIzY/merge/.gitreins/logs/guard-20261103T093457.430357Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    }
+  },
+  "summary": "Judge Result: CF-039\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-03T09:44:24.540506",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-03T09:44:24.553943+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 16163,
+        "truncated": false,
+        "source": "git show a2db9624485a"
+      }
+    ],
+    "task_id": "CF-039"
+  }
+}
