@@ -211,6 +211,98 @@ class VerifyRemote(unittest.TestCase):
         self.assertIn("NOT checked", out["note"])
 
 
+class RepoURL(unittest.TestCase):
+    def run_check(self, *args, rows=None):
+        return subprocess.run(
+            [sys.executable, "-B", str(lane_target.__file__), "repo-url", *args],
+            input=json.dumps(rows) if rows is not None else None,
+            capture_output=True,
+            text=True,
+        )
+
+    def test_phantom_root(self):
+        path = os.path.join(fixture()["root"], "phantom")
+        out = self.run_check("local:" + path)
+        self.assertEqual(out.returncode, 4, out.stderr)
+        self.assertIn(f"FAIL repo_url 'local:{path}' — path does not exist", out.stdout)
+        self.assertIn("1 rejected, 0 accepted", out.stdout)
+
+    def test_non_git_directory(self):
+        path = fixture()["home"]
+        out = self.run_check(path)
+        self.assertEqual(out.returncode, 4, out.stderr)
+        self.assertIn(
+            f"FAIL repo_url '{path}' — not a git root (git: fatal:", out.stdout
+        )
+
+    def test_subdirectory(self):
+        path = os.path.join(fixture()["repo"], "subdir")
+        os.makedirs(path, exist_ok=True)
+        out = self.run_check("local:" + path)
+        self.assertEqual(out.returncode, 4, out.stderr)
+        self.assertIn(
+            f"not a git root (git: top level is '{fixture()['repo']}')", out.stdout
+        )
+
+    def test_real_root_spellings(self):
+        path = fixture()["repo"]
+        head = lane_target._git(path, "rev-parse", "HEAD").stdout.strip()
+        for raw in (path, "local:" + path, "file:" + path, "file://" + path):
+            with self.subTest(raw=raw):
+                out = self.run_check(raw)
+                self.assertEqual(out.returncode, 0, out.stderr)
+                self.assertIn(
+                    f"PASS repo_url {raw!r} — root {path!r} HEAD {head}", out.stdout
+                )
+                self.assertIn("0 rejected, 1 accepted", out.stdout)
+
+    def test_home_relative_and_symlink(self):
+        path = fixture()["repo"]
+        relative = "~/" + os.path.relpath(path, os.path.expanduser("~"))
+        link = os.path.join(fixture()["root"], "link")
+        os.symlink(path, link)
+        for raw in (relative, link):
+            out = self.run_check(raw)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertIn(f"root {path!r} HEAD", out.stdout)
+
+    def test_remote_requires_optin(self):
+        raw = "ssh://u@example.invalid/srv/repo"
+        out = self.run_check(raw)
+        self.assertEqual(out.returncode, 3, out.stderr)
+        self.assertIn(f"FAIL repo_url {raw!r} — target", out.stdout)
+        self.assertIn("Re-run with --allow-remote", out.stdout)
+        out = self.run_check(raw, "--allow-remote")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("remote-structural-only", out.stdout)
+
+    def test_rows_stdin_and_file(self):
+        rows = [
+            {"name": "primary", "repo_url": fixture()["repo"]},
+            {"name": "primary-qa", "repo_url": "local:" + fixture()["root"]},
+        ]
+        out = self.run_check("--row", "-", rows=rows)
+        self.assertEqual(out.returncode, 4, out.stderr)
+        self.assertIn("1 rejected, 1 accepted", out.stdout)
+        self.assertIn("[primary-qa]", out.stdout)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as fh:
+            json.dump(rows[0], fh)
+            fh.flush()
+            out = self.run_check("--row", fh.name)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("[primary]", out.stdout)
+
+    def test_invalid_rows(self):
+        for rows in ({}, {"repo_url": 42}, [None], "not a row", []):
+            with self.subTest(rows=rows):
+                out = self.run_check("--row", "-", rows=rows)
+                self.assertEqual(out.returncode, 2, out.stderr)
+                self.assertIn("FAIL repo_url", out.stdout)
+        out = self.run_check("--row", "-", rows={"repo_url": "relative/path"})
+        self.assertEqual(out.returncode, 2, out.stderr)
+        self.assertIn("cannot classify target", out.stdout)
+
+
 class ScanProjects(unittest.TestCase):
     def test_scan_mixed_rows(self):
         f = fixture()

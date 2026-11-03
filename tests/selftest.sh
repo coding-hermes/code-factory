@@ -564,5 +564,25 @@ for arm in refused missing-marker closed; do
 done
 rm -rf "$tmpd"
 
+say "19. project repo_url must name a real git root (CF-085)"
+tmpd=$(mktemp -d)
+git init -q -b main "$tmpd/repo"
+git -C "$tmpd/repo" -c user.email=fixture@example.invalid -c user.name=fixture \
+  commit -qm fixture --allow-empty
+accepted=$(python3 -B "$HERE/scripts/lane_target.py" repo-url "local:$tmpd/repo" 2>&1); accepted_rc=$?
+rejected=$(python3 -B "$HERE/scripts/lane_target.py" repo-url "local:$tmpd/phantom" 2>&1); rejected_rc=$?
+head=$(git -C "$tmpd/repo" rev-parse HEAD)
+if [ "$accepted_rc" -eq 0 ] && [ "$rejected_rc" -eq 4 ] \
+  && printf '%s\n' "$accepted" | grep -Fxq "PASS repo_url 'local:$tmpd/repo' — root '$tmpd/repo' HEAD $head" \
+  && printf '%s\n' "$accepted" | grep -Fxq 'repo_url: 0 rejected, 1 accepted' \
+  && printf '%s\n' "$rejected" | grep -Fxq "FAIL repo_url 'local:$tmpd/phantom' — path does not exist or is not a directory" \
+  && printf '%s\n' "$rejected" | grep -Fxq 'repo_url: 1 rejected, 0 accepted'; then
+  say "  PASS  repo_url guard rejects a phantom local: root (1 rejected, 1 accepted)"
+else
+  say "  FAIL  repo_url guard fixture (accepted exit $accepted_rc, rejected exit $rejected_rc)"
+  fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

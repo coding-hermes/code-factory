@@ -60,6 +60,51 @@ For every new satellite lane:
    cooldown bounds, prompt, and delivery target.
 6. Run the scheduler's family-constant parity test and `ops/check-fleet-invariants.py`; do not
    infer success from a successful API response alone.
+7. Check the primary and every satellite's `repo_url` with the repo-side guard below before arming.
+
+## Repo URL guard and primary-family reconciliation (CF-085)
+
+Repo-side, read-only guard (stdlib, no network or writes):
+
+```bash
+python3 -B scripts/lane_target.py repo-url 'local:~/work/project'
+python3 -B scripts/lane_target.py repo-url --row projects.json
+# projects.json is a JSON project object or array, not JSONL; stdin is --row -.
+```
+
+Each row must have a string `repo_url`. `local:`, `file:`/`file://`, absolute and `~` paths
+reuse the lane target parser and checkout probe. The resolved path must exist and equal
+`git -C <path> rev-parse --show-toplevel`: a missing path, plain directory, or checkout
+subdirectory is rejected. PASS names the resolved root and observed HEAD; no remote or
+attached branch is required. Exit codes are 0 accepted, 2 invalid input, 3 remote verification
+not permitted, and 4 local verification failed. Recognized remote targets require
+`--allow-remote` and are only `remote-structural-only`, never proof of reachability. For mixed
+rows, exit 2 takes precedence over 3, then 4. The summary counts rejected and accepted rows.
+
+Operator-side reconciliation is mandatory whenever a primary's `repo_url` changes. Satellites
+inherit the value when minted, not dynamically: changing the primary alone does not fan it out.
+The guard does not write the scheduler or edit `fleet.toml`.
+
+1. Read fresh scheduler project rows and inventory the primary plus every `<primary>-<family>`
+   satellite, across all families in the table above. Include disabled lanes and nested primaries
+   with their own satellites; do not select only the currently failing family. Compare each
+   satellite's `repo_url` with its primary's value to detect divergence. Run the guard over that
+   JSON array (`repo-url --row projects.json`) to identify phantom roots by named lane. Root
+   validity alone does not detect divergence between two different valid git roots: both the
+   value comparison and the root check are required. Do not confuse stand-in `workdir` with
+   `repo_url`; keep valid stand-in workdirs unchanged.
+2. Validate the proposed primary root with `repo-url` first. Then, using the supported scheduler
+   API and its operator authentication (never credentials in arguments), issue a partial PUT
+   containing only `{"repo_url":"<validated-primary-repo_url>"}` for the primary and update its
+   matching `repo_url` line in the loaded `fleet.toml` project stanza immediately afterward.
+   Repeat that exact partial PUT, then matching `fleet.toml` line update, for every satellite.
+   Do not replace whole project rows or change their other admission fields. Repeating these
+   assignments is idempotent. These are operator-side writes, not actions performed by this repo.
+3. Read every affected scheduler row back, verify equality with the new primary value and the
+   matching `fleet.toml` stanza, and export a fresh JSON array. Re-run
+   `python3 -B scripts/lane_target.py repo-url --row projects.json` over the entire affected family.
+   Verification must be re-run and must print `0 rejected` (exit 0); a successful PUT alone is
+   not evidence. Resolve any partial update before re-arming the lanes.
 
 ## Provenance and open caveat
 
