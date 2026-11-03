@@ -1,0 +1,33 @@
+# CF-089 probe — README census recipe vs a failed page
+# tree: d00577e branch=main
+# date: 2026-11-03T11:54:03-05:00
+# recipe: README.md 'The lanes' block, verbatim, $BASE parameterised only
+
+$ bash tests/selftest.sh | tail -1
+SELFTEST: PASS
+
+$ bash docs/audits/cf089-census-standin.py &   # total=866; page offset=0 -> 500 rows; page offset=500 -> 502
+
+$ curl -s "$BASE/api/v1/projects?limit=500&offset=0" | jq -r ".total as \$t | \"total=\(\$t) page0=\(.projects|length)\""
+total=866 page0=500
+
+$ curl -s -o /dev/null -w "http=%{http_code}\n" "$BASE/api/v1/projects?limit=500&offset=500"
+http=502
+
+# ground truth: the stand-in holds exactly TWO code-factory rows, at index 0 and 600.
+# row 600 is reachable only through the page that answers 502.
+
+$ BASE=http://127.0.0.1:18999 bash docs/audits/cf089-census-recipe.sh   # README recipe, verbatim
+jq: error (at <stdin>:0): Cannot iterate over null (null)
+1
+code-factory enabled=true admission=cooldown parent=x
+RC=0
+
+# => one row printed, RC=0: the census under-counts (2 -> 1) and reports success.
+#    The only signal is a jq stderr line, which changes neither the count nor the exit code.
+
+$ BASE=http://127.0.0.1:18999/nototal bash docs/audits/cf089-census-recipe.sh   # CF-065 control
+census: the scheduler answered without a total; refusing to count
+RC=1
+
+# => the no-total control CF-065 shipped does fail loudly. The per-page failure does not.
