@@ -150,8 +150,21 @@ prompt text into the scheduler's project row at setup, so edit the file in `prom
 the loader; the database row is only a copy of it. `tests/selftest.sh` refuses a README that names
 a prompt file the tree does not ship.
 
-The scheduler also carries disabled `code-factory-duckbrain-*` rows. They are not part of the
-shipped family above and are not counted in the fourteen.
+The table above is the family these two loaders configure, and its admission column is the value
+the loaders write at setup. A live scheduler can differ in both directions: a row can be flipped
+after setup, and rows this repo does not configure can exist. Read the state, do not infer it:
+
+```bash
+curl -s 'http://127.0.0.1:9090/api/v1/projects?limit=500' \
+  | jq -r '.projects[] | select(.name|startswith("code-factory"))
+           | "\(.name) enabled=\(.enabled) admission=\(.admission_mode) parent=\(.parent // "-")"'
+```
+
+On the reference deployment that prints nineteen rows: the fourteen above, all `enabled=true`, plus
+five `code-factory-duckbrain-*` satellites whose rows this repo does not create (they are not part
+of the shipped family and are not counted in the fourteen) and whose `enabled` state and admission
+mode live only in that scheduler. It also prints `code-factory-duckbrain admission=tasks` against
+the `cooldown` the loader writes — the drift the command exists to expose.
 
 Evidence for the state of this README: the clone figure is covered by the published audit `docs/audits/code-factory-readme-2026-10-30-20-29-25.md`; the prompt column and the eleven-file/layout census are covered by the published audit `docs/audits/code-factory-readme-2026-10-30-23-28-00.md` (whose command transcript is the `.probe.txt` beside it).
 
