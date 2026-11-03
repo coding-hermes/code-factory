@@ -283,3 +283,13 @@ Deterministic single-port proofs (pre-fix and post-fix) live in
 `~/.hermes/cache/scratch/cfp-20261103/cf117-prefix-proof.sh`, the two-arm census
 identity run in `cf117-leg1.sh`, and the §17 injection proof in
 `cf117-evidence.sh`.
+
+## ID note (post-merge)
+
+This work was filed, implemented, judged and closed under the lane-local id **CF-117** in the perf
+lane's worktree (GitReins task `CF-117`, verdict `24f2abbb`, commit `2ab0f85`). While the tick was in
+flight a sibling lane published its own `CF-117` to `origin/main`, so on merge the board row is
+`CF-123` and the two events were renumbered to 137/138. The GitReins task id and verdict keep the
+`-117` spelling: `.gitreins/tasks.yaml` is deliberately untracked (`.gitignore:8`), so the task
+namespace is per-checkout and cannot collide across lanes. Row `CF-123` carries the renumber
+disclosure in its `reasoning` and `worker_summary` fields.
