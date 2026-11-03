@@ -772,16 +772,20 @@ rm -rf "$tmpd"
 
 # BEGIN census-fail-closed
 # CF-089: exercise the mirrored README recipe through real curl/jq, not stubs.
-# Each invocation owns a separate port, a timeout-bounded server, and its cleanup.
+# Each invocation owns a timeout-bounded server and its cleanup.
+# CF-117: the fixture binds an EPHEMERAL port and publishes it via --port-file, so two
+# gate instances running in the same scheduler slot cannot bind, or answer, each other's port.
 cf089_run() {
-  local mode="$1" port="$2" fixture ready=0 attempt
+  local mode="$1" fixture ready=0 attempt port=
   local tmpd
   tmpd=$(mktemp -d)
   timeout 20s python3 -B "$HERE/docs/audits/cf089-census-standin.py" \
-    --mode "$mode" --port "$port" >"$tmpd/server.log" 2>&1 &
+    --mode "$mode" --port 0 --port-file "$tmpd/port" >"$tmpd/server.log" 2>&1 &
   fixture=$!
   for attempt in {1..50}; do
-    if curl -fsS --max-time 1 "http://127.0.0.1:$port/api/v1/projects?limit=1" >/dev/null 2>&1; then
+    port=$(head -n 1 "$tmpd/port" 2>/dev/null || :)
+    if [ -n "$port" ] \
+      && curl -fsS --max-time 1 "http://127.0.0.1:$port/api/v1/projects?limit=1" >/dev/null 2>&1; then
       ready=1; break
     fi
     kill -0 "$fixture" 2>/dev/null || break
@@ -793,7 +797,8 @@ cf089_run() {
     census_stdout=$(cat "$tmpd/stdout")
     out=$(cat "$tmpd/stderr")
   else
-    rc=99; census_stdout=; out="fixture did not start: $(cat "$tmpd/server.log")"
+    rc=99; census_stdout=
+    out="fixture did not start on port ${port:-unknown}: $(cat "$tmpd/server.log")"
   fi
   kill "$fixture" 2>/dev/null || :
   wait "$fixture" 2>/dev/null || :
@@ -801,7 +806,7 @@ cf089_run() {
 }
 
 say "22. census refuses a failed fetch at a later offset"
-cf089_run fetch 19022
+cf089_run fetch
 if [ "$rc" -eq 1 ] && [ -z "$census_stdout" ] \
   && printf '%s\n' "$out" | grep -Fxq 'census: fetch failed at offset=500'; then
   say "  PASS  census fetch failure -> offset=500, exit $rc, no census printed"
@@ -810,7 +815,7 @@ else
 fi
 
 say "23. census refuses a non-2xx page"
-cf089_run broken 19023
+cf089_run broken
 if [ "$rc" -eq 1 ] && [ -z "$census_stdout" ] \
   && [ "$out" = 'census: HTTP 502 at offset=500; refusing to count' ]; then
   say "  PASS  census HTTP 502 -> offset=500, exit $rc, no census printed"
@@ -819,20 +824,18 @@ else
 fi
 
 say "24. census requires a projects array even on HTTP 200"
-port=19024
 for mode in missing-projects wrong-projects nonjson; do
-  cf089_run "$mode" "$port"
+  cf089_run "$mode"
   if [ "$rc" -eq 1 ] && [ -z "$census_stdout" ] \
     && [ "$out" = 'census: missing or invalid .projects array at offset=500' ]; then
     say "  PASS  census $mode -> named .projects refusal, exit $rc, no census printed"
   else
     say "  FAIL  census .projects guard ($mode, exit $rc): $out"; fails=$((fails+1))
   fi
-  port=$((port+1))
 done
 
 say "25. census compares all received rows with the first reported total"
-cf089_run short 19027
+cf089_run short
 if [ "$rc" -eq 1 ] && [ -z "$census_stdout" ] \
   && [ "$out" = 'census: rows received=865 != total reported=866; refusing to count' ]; then
   say "  PASS  census short page -> rows received=865, total reported=866, exit $rc, no census printed"
@@ -841,7 +844,7 @@ else
 fi
 
 say "26. healthy census counts matching rows on both sides of the page boundary"
-cf089_run healthy 19028
+cf089_run healthy
 expected=$(printf '%s\n' 2 'code-factory enabled=true admission=cooldown parent=x' \
   'code-factory enabled=true admission=cooldown parent=x')
 if [ "$rc" -eq 0 ] && [ -z "$out" ] && [ "$census_stdout" = "$expected" ]; then
@@ -851,7 +854,7 @@ else
 fi
 
 say "27. census still refuses a missing total"
-cf089_run nototal 19029
+cf089_run nototal
 if [ "$rc" -eq 1 ] && [ -z "$census_stdout" ] \
   && [ "$out" = 'census: the scheduler answered without a total; refusing to count' ]; then
   say "  PASS  census missing total -> named refusal, exit $rc, no census printed"

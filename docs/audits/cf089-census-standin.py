@@ -6,6 +6,7 @@ restarting scheduler. Truth: exactly TWO code-factory rows exist (index 0 and 60
 
 import argparse
 import json
+import os
 import socket
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -74,7 +75,10 @@ class H(BaseHTTPRequestHandler):
 
 
 parser = argparse.ArgumentParser(description=__doc__)
+# CF-117: four lanes run this suite in one scheduler slot, so a literal port is a shared
+# resource. --port 0 binds an ephemeral port and --port-file publishes the chosen one.
 parser.add_argument("--port", type=int, default=18999)
+parser.add_argument("--port-file", default=None)
 parser.add_argument(
     "--mode",
     choices=(
@@ -90,4 +94,14 @@ parser.add_argument(
     default="broken",
 )
 args = parser.parse_args()
-HTTPServer(("127.0.0.1", args.port), H).serve_forever()
+server = HTTPServer(("127.0.0.1", args.port), H)
+if args.port_file:
+    # Publish the bound port atomically: a reader never sees a half-written file.
+    staging = args.port_file + ".tmp"
+    with open(staging, "w") as stream:
+        stream.write("%d\n" % server.server_port)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(staging, args.port_file)
+print(server.server_port, flush=True)
+server.serve_forever()
