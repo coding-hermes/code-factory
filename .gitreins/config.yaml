@@ -7,7 +7,11 @@ guards:
   lint_command: bash -n $(git ls-files "*.sh")
   allow_skips: false
 evaluator:
-  max_iterations: 15
+  # 15 was gitreins init's default and starved the first real multi-part Tier-2 judge on this
+  # repo (`Iteration cap (15) reached (15.9 used)` -> INCOMPLETE, tier1 PASS, run 74fe8232).
+  # Raised one rung per the cap-sizing rule; no pipeline.stages[] pin exists, so this is the
+  # effective value (MIN(stage, evaluator) collapses to it).
+  max_iterations: 40
   static_analysis_diagnostics: false
 history:
   enabled: true
