@@ -1,0 +1,80 @@
+commit a5e7754dbe924b82ff86f2add1daaffdd0b4975b
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Tue Nov 3 10:08:59 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Tue Nov 3 10:09:53 2026 -0500
+
+    docs: correct the two drifted status snapshots — the board carries 60 rows, not 24 or 8
+    
+    Sync lane tick code-factory-sync-2026-11-03-14-58-43. The registered candidate
+    ~/code-factory was clean and attached at b430bed (0/0 vs origin/main, no operation
+    markers), but four sibling lanes were mid-tick and a concurrent append landed on the
+    canonical board while this tick ran (PERF-013, uncommitted in the shared checkout), so
+    the work was done from a dedicated clone of origin/main (the releng clone precedent).
+    
+    Drift found and fixed. Both docs status snapshots had drifted from the board:
+    - docs/BOARD.md "Current measured state" claimed 24 task rows, 37 events and
+      `PASS 24/24 rows parse`; measured at e21f2ce: 60 task rows, 64 events,
+      `RESULT: OK (16 warning(s))` (13 free-form `probe` keys, two free-form
+      guard/ci values on CF-034, headerless board) and `PASS 60/60 rows parse`.
+    - docs/ACCEPTANCE-PLAN.md evidence snapshot claimed 8/8 board rows parsed; it now
+      states the measured 60/60 at the same tip, with the PASS/FAIL row counts.
+    
+    Duplicate disclosure. This tick independently measured the closure-evidence class and
+    found it slightly wider than the row the review lane filed: 21 of the 22 complete rows
+    carry at least one detail.evidence[].tree_fp that `git cat-file -t` cannot resolve, and
+    one (CF-034) stores a commit oid where a tree is expected. Sixteen of those rows are
+    named by neither CF-067 nor CF-073. The review lane's CF-074 landed first (d82b4d6) and
+    its acceptance is a class-level gate (a committed closure audit that exits 1 while any
+    complete row has no resolvable evidence entry), which supersedes a narrower per-row
+    list; a second row for the same class would split the closure, so this tick filed
+    nothing and its draft row is recorded in the lane evidence file only. The board diff in
+    this commit is empty by construction — only the two docs files change.
+    
+    Gate: a clone carries no installed hooks, so the configured checks were run manually —
+    `bash -n $(git ls-files "*.sh")` OK, `bash tests/selftest.sh` SELFTEST: PASS (60/60 rows
+    parse, 34 PASS rows, 0 FAIL rows), `scripts/boardctl validate` RESULT: OK, and
+    `gitreins guard` run by hand: Tier 1 DEGRADED PASS with lint skipped (no shell stage),
+    secrets clean, tests (full) pass — the CF-031 docs-only precedent, disclosed here.
+    
+    ch:trace row=CF-074 spec=docs/traceability-doctrine.md wave=none:serial test=tests/selftest.sh::selftest doc=docs/BOARD.md prompt=prompts/sync.md evidence=code-factory-sync-2026-11-03-14-58-43.md witness=cmd:boardctl-validate-and-selftest verdict=none:duplicate-superseded-by-CF-074 commit=pending:self-referential memory=none:no-code-factory-token
+---
+ docs/ACCEPTANCE-PLAN.md |  2 +-
+ docs/BOARD.md           | 10 ++++++----
+ 2 files changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/docs/ACCEPTANCE-PLAN.md b/docs/ACCEPTANCE-PLAN.md
+index 5e24b5f..8fbc7aa 100644
+--- a/docs/ACCEPTANCE-PLAN.md
++++ b/docs/ACCEPTANCE-PLAN.md
+@@ -2,7 +2,7 @@
+ 
+ **Scope:** CF-101–CF-112 in [`PRD-code-factory.md`](PRD-code-factory.md), with contract details in `specs/NODE.md`, `specs/HARNESS.md`, and `specs/ENVELOPE.md`. This plan distinguishes source-level evidence from tests actually run. A passing repository self-test is not proof that every requirement is accepted.
+ 
+-**Evidence snapshot:** `tests/selftest.sh` was run from the repository root on this worktree and exited 0 (`SELFTEST: PASS`, 8/8 board rows parsed). It checks shell syntax, one failing node-check path, `fetch_verified` digest acceptance/rejection, a credential-assignment grep, and JSONL parsing. It does not exercise the full node creation, destruction/recreation, real harness parity, scheduler dispatch, credentials lifecycle, or control-host artifact round trip. Other commands below are proposed reproducible checks, not tests claimed to have run.
++**Evidence snapshot:** `tests/selftest.sh` was run from the repository root at tip `e21f2ce` on 2026-11-03 and exited 0 (`SELFTEST: PASS`, 60/60 board rows parsed, 34 `PASS` rows, no `FAIL` rows). It checks shell syntax, one failing node-check path, `fetch_verified` digest acceptance/rejection, a credential-assignment grep, and JSONL parsing. It does not exercise the full node creation, destruction/recreation, real harness parity, scheduler dispatch, credentials lifecycle, or control-host artifact round trip. Other commands below are proposed reproducible checks, not tests claimed to have run.
+ 
+ ## Requirement-to-test matrix
+ 
+diff --git a/docs/BOARD.md b/docs/BOARD.md
+index 657c361..04d19c4 100644
+--- a/docs/BOARD.md
++++ b/docs/BOARD.md
+@@ -38,11 +38,13 @@ public repo.
+ 5. Keep task IDs unique and acceptance criteria falsifiable. `tests/selftest.sh` checks row parsing;
+    the boardctl validator is the schema/consistency gate.
+ 
+-## Current measured state (2026-10-31)
++## Current measured state (2026-11-03)
+ 
+-- `scripts/boardctl validate`: 24 task rows, 37 events, no key drift, `RESULT: OK`; warning: the
+-  board has no optional header, so header-counter checks are skipped.
+-- `tests/selftest.sh`: `PASS 24/24 rows parse` and `SELFTEST: PASS`.
++- `scripts/boardctl validate`: 60 task rows, 64 events, `RESULT: OK (16 warning(s))`; the warnings are
++  13 rows carrying a free-form `probe` key, two free-form `guard_result`/`ci_result` values on
++  CF-034, and the headerless board (no `board.jsonl`), so header-counter checks are skipped.
++- `tests/selftest.sh`: `PASS 60/60 rows parse` and `SELFTEST: PASS` (34 `PASS` rows, no `FAIL` rows)
++  at tip `e21f2ce`.
+ - CF-012 is complete on the published tip with `docs/traceability-doctrine.md` and its committed
+   evidence artifact; the row's closeout is bound to the board evidence record and GitReins verdict.
+ - The project wrapper is a dispatch shim; the authoritative board implementation remains the
