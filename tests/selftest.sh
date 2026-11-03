@@ -156,31 +156,114 @@ else
   say "  PASS  none found"
 fi
 
+# BEGIN board-arm
+# CF-088: share the actual gate with fixtures, without requiring boardctl.
+board_arm() {
+  local b="$1"
+  if [ ! -f "$b" ]; then
+    say "  FAIL  board missing"
+    return 1
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
+    say "  FAIL  board parser: python3 missing"
+    return 1
+  fi
+  # One parser process for the whole board (PERF-012), not python3 per row.
+  # Preserve `while read` semantics: skip an unterminated last line; empty is 0/0.
+  python3 - "$b" <<'PY'
+import json, sys
+try:
+    data = open(sys.argv[1], "rb").read()
+except OSError as exc:
+    print(f"  FAIL  board unreadable: {exc}")
+    sys.exit(1)
+rows = data.split(b"\n")[:-1]
+statuses = ("pending", "in_progress", "blocked", "complete")
+seen = {}
+good = 0
+for line, row in enumerate(rows, 1):
+    try:
+        record = json.loads(row.decode("utf-8"))
+    except (ValueError, UnicodeError) as exc:
+        print(f"  FAIL  board line {line}: invalid JSON: {exc}")
+        continue
+    if not isinstance(record, dict):
+        print(f"  FAIL  board line {line}: expected JSON object, got {json.dumps(record)}")
+        continue
+    valid = True
+    if "id" not in record:
+        print(f"  FAIL  board line {line}: missing id")
+        valid = False
+    elif not isinstance(record["id"], str) or not record["id"]:
+        print(f"  FAIL  board line {line}: invalid id {json.dumps(record['id'])}")
+        valid = False
+    elif record["id"] in seen:
+        print(f"  FAIL  board duplicate id {record['id']!r}: lines {seen[record['id']]} and {line}")
+        valid = False
+    else:
+        seen[record["id"]] = line
+    if "status" not in record:
+        print(f"  FAIL  board line {line}: missing status")
+        valid = False
+    elif record["status"] not in statuses:
+        print(f"  FAIL  board line {line}: invalid status {json.dumps(record['status'])}")
+        valid = False
+    good += valid
+if good != len(rows):
+    print(f"  FAIL  {good} of {len(rows)} rows parse")
+    sys.exit(1)
+print(f"  PASS  {good}/{len(rows)} rows parse")
+PY
+}
+# END board-arm
+
 say "7. the board is valid JSONL"
 b="$HERE/.coding-hermes/board/tasks.jsonl"
-if [ -f "$b" ]; then
-  # One parser process for the whole board. A python3 per row cost ~37 ms of wait4 per row
-  # (PERF-012: 669 wait4 calls / 1.805 s on a 30-row board). The slice keeps the old
-  # `while read` semantics exactly: only newline-terminated records count, so an unterminated
-  # last line is skipped and an empty file is 0/0.
-  read -r good n < <(python3 - "$b" <<'PY'
-import json, sys
-data = open(sys.argv[1], "rb").read()
-rows = data.split(b"\n")[:-1]
-good = 0
-for row in rows:
-    try:
-        json.loads(row.decode("utf-8"))
-        good += 1
-    except Exception:
-        pass
-print(good, len(rows))
-PY
-)
-  [ "$good" = "$n" ] && say "  PASS  $good/$n rows parse" || { say "  FAIL  $good of $n rows parse"; fails=$((fails+1)); }
+board_arm "$b" || fails=$((fails+1))
+
+say "7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)"
+tmpd=$(mktemp -d)
+# Every fixture has the same valid first/last rows; only the middle record changes.
+for arm in null array string number missing-id duplicate-id bad-status missing-status invalid-json; do
+  case "$arm" in
+    null) middle='null'; expected='board line 2: expected JSON object, got null' ;;
+    array) middle='[]'; expected='board line 2: expected JSON object, got []' ;;
+    string) middle='"fixture"'; expected='board line 2: expected JSON object, got "fixture"' ;;
+    number) middle='42'; expected='board line 2: expected JSON object, got 42' ;;
+    missing-id) middle='{"status":"pending"}'; expected='board line 2: missing id' ;;
+    duplicate-id) middle='{"id":"CF-001","status":"pending"}'; expected="board duplicate id 'CF-001': lines 1 and 2" ;;
+    bad-status) middle='{"id":"CF-002","status":"done"}'; expected='board line 2: invalid status "done"' ;;
+    missing-status) middle='{"id":"CF-002"}'; expected='board line 2: missing status' ;;
+    invalid-json) middle='{'; expected='board line 2: invalid JSON:' ;;
+  esac
+  printf '%s\n' '{"id":"CF-001","status":"pending"}' "$middle" \
+    '{"id":"CF-003","status":"complete"}' > "$tmpd/$arm.jsonl"
+  out=$(board_arm "$tmpd/$arm.jsonl" 2>&1); rc=$?
+  if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fq "  FAIL  $expected" \
+    && printf '%s\n' "$out" | grep -Fxq '  FAIL  2 of 3 rows parse' \
+    && ! printf '%s\n' "$out" | grep -q '^  PASS'; then
+    say "  PASS  $arm fixture rejected, exit $rc"
+    printf '%s\n' "$out"
+  else
+    say "  FAIL  $arm fixture escaped the board gate (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out"
+  fi
+done
+# A single run must report every bad record, not stop at the first one.
+printf '%s\n' null '[]' '"fixture"' 42 > "$tmpd/multiple.jsonl"
+out=$(board_arm "$tmpd/multiple.jsonl" 2>&1); rc=$?
+if [ "$rc" -eq 1 ] && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL  board line [1-4]: expected JSON object,')" = 4 ]; then
+  say "  PASS  all four offending line numbers reported in one board run"
 else
-  say "  FAIL  board missing"; fails=$((fails+1))
+  say "  FAIL  board gate skipped offending records (exit $rc)"; fails=$((fails+1))
 fi
+out=$(PATH=/nonexistent board_arm "$b" 2>&1); rc=$?
+if [ "$rc" -eq 1 ] && [ "$out" = '  FAIL  board parser: python3 missing' ]; then
+  say "  PASS  missing python3 -> named FAIL, exit $rc"
+else
+  say "  FAIL  missing python3 escaped the board gate (exit $rc)"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
 
 say "8. project board entrypoint is real and fails closed without dependency"
 bash -n "$HERE/scripts/boardctl" && say "  PASS  bash -n scripts/boardctl" || { say "  FAIL  bash syntax"; fails=$((fails+1)); }
