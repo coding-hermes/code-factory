@@ -1,0 +1,48 @@
+# CF-096 — ruff-format drift at origin/main `af67c3b`
+
+Measured 2026-11-03 from `readme-audit-20261103-183418-land` (base `af67c3b`,
+ruff 0.15.22). Reproduce with `ruff format --check .` at the named commit.
+
+## Parent / tip control — drift predates the fix
+
+Pristine export of the tip commit:
+
+    $ git -C /home/kara/code-factory archive af67c3b | tar -x -C parent
+    $ (cd parent && ruff format --check .)
+    Would reformat: scripts/lane_target.py
+    Would reformat: tests/test_lane_target.py
+    2 files would be reformatted, 9 files already formatted
+    rc=1
+
+Both files were last changed by `af67c3b` ("docs: document bunker:// targets and how they are
+proved on the agent"), so the drift is the tip's own, not the graded lane's diff.
+
+## The change is formatting only
+
+    $ ruff format --diff scripts/lane_target.py tests/test_lane_target.py
+    --- scripts/lane_target.py
+    +++ scripts/lane_target.py
+    @@ -315,7 +315,9 @@
+    -def verify_bunker(target: Target, server: Optional[str] = None, timeout: int = 60) -> dict:
+    +def verify_bunker(
+    +    target: Target, server: Optional[str] = None, timeout: int = 60
+    +) -> dict:
+    ...
+    -        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+    +        proc = subprocess.run(
+    +            cmd, capture_output=True, text=True, timeout=timeout, check=False
+    +        )
+
+Argument wrapping and CLI flag wrapping only; no statement, name or value changes.
+
+## After the fix (commit `2f24e54`)
+
+    $ ruff check .
+    All checks passed!
+    $ ruff format --check .
+    11 files already formatted
+    $ python3 -B tests/test_lane_target.py
+    rc=0
+    $ bash tests/selftest.sh
+    SELFTEST: PASS
+    SELFTEST_RC=0

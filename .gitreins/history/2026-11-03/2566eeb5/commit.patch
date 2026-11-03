@@ -1,0 +1,698 @@
+commit 61db6f7d6fc6324c2af29aec8ff9033c5f5d01ae
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Tue Nov 3 13:47:06 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Tue Nov 3 13:50:48 2026 -0500
+
+    fix(docs): make README lanes census fail closed on a bad page (CF-089)
+    
+    README.md: capture each page body/status, refuse fetch/HTTP/schema failures,
+    check unfiltered received rows against the initial total before printing,
+    and isolate temporary files and cleanup in a copy-pasteable subshell.
+    
+    docs/audits/cf089-census-recipe.sh: mirror the README census verbatim apart
+    from the parameterised BASE assignment; preserve output row/count format.
+    docs/audits/cf089-census-standin.py: retain default 866-row/502 and /nototal
+    behavior, add bounded-test port/mode selection for fetch/schema/short/healthy
+    and missing-total fixtures.
+    tests/selftest.sh: add arms 22-28 for named fail-closed cases, exact healthy
+    output, missing total, and README/mirror byte parity; own timeout-bounded
+    servers on separate ports and clean each up in its arm.
+    docs/audits/cf089-census-failclosed.txt: record exact before/after commands,
+    real mutation FAIL/restoration PASS transcripts, and acceptance output.
+    
+    Measured before: jq Cannot iterate over null, count=1, one family row,
+    recipe exit 0 despite two matching rows in the inventory. After: named
+    HTTP 502 at offset=500, no census rows/count, recipe exit 1. Healthy fixture:
+    count=2, exact two row strings, exit 0. Short page: 865 received vs 866
+    reported, no census, exit 1. Full selftest PASS; bash syntax and boardctl
+    validation PASS. Ruff check PASS; tree format check remains exit 1 on
+    unchanged scripts/lane_target.py and tests/test_lane_target.py, reproduced
+    from HEAD. Changed Python fixture passes both ruff checks.
+    
+    ch:trace row=CF-089 spec=README.md#the-lanes test=tests/selftest.sh::census-fail-closed doc=README.md evidence=docs/audits/cf089-census-failclosed.txt witness=cmd:census-rc/selftest verdict=none:judged-after-commit commit=none:self-referential-hash memory=none:foreman-writes
+---
+ README.md                               |  45 ++++-
+ docs/audits/cf089-census-failclosed.txt | 302 ++++++++++++++++++++++++++++++++
+ docs/audits/cf089-census-recipe.sh      |  42 ++++-
+ docs/audits/cf089-census-standin.py     |  75 +++++---
+ tests/selftest.sh                       | 112 ++++++++++++
+ 5 files changed, 537 insertions(+), 39 deletions(-)
+
+diff --git a/README.md b/README.md
+index c0c20dc..9ab4114 100644
+--- a/README.md
++++ b/README.md
+@@ -155,23 +155,52 @@ the loaders write at setup. A live scheduler can differ in both directions: a ro
+ after setup, and rows this repo does not configure can exist. Read the state, do not infer it:
+ 
+ ```bash
+-total=$(curl -s 'http://127.0.0.1:9090/api/v1/projects?limit=1' | jq -r '.total // empty')
++(
++BASE=http://127.0.0.1:9090
++tmpd=$(mktemp -d) || { echo 'census: cannot create temporary directory' >&2; exit 1; }
++trap 'rm -rf "$tmpd"' EXIT
++census_page() {
++  status=$(curl -sS --connect-timeout 5 --max-time 15 -o "$tmpd/page.json" \
++    -w '%{http_code}' "$BASE/api/v1/projects?$1") || {
++    echo "census: fetch failed at offset=$2" >&2; exit 1;
++  }
++  case "$status" in
++    2??) ;;
++    *) echo "census: HTTP $status at offset=$2; refusing to count" >&2; exit 1 ;;
++  esac
++  jq -e '.projects | type == "array"' "$tmpd/page.json" >/dev/null 2>&1 || {
++    echo "census: missing or invalid .projects array at offset=$2" >&2; exit 1;
++  }
++}
++census_page 'limit=1' 0
++total=$(jq -r '.total // empty' "$tmpd/page.json")
+ [ -n "$total" ] || { echo 'census: the scheduler answered without a total; refusing to count' >&2; exit 1; }
+-off=0; : > /tmp/cf-lanes.txt
++[[ "$total" =~ ^[0-9]+$ ]] || { echo "census: invalid total '$total'; refusing to count" >&2; exit 1; }
++total=$((10#$total))
++off=0; received=0; : > "$tmpd/rows.jsonl"
+ while [ "$off" -lt "$total" ]; do
+-  curl -s "http://127.0.0.1:9090/api/v1/projects?limit=500&offset=$off" \
+-    | jq -r '.projects[] | select(.name|startswith("code-factory"))
+-             | "\(.name) enabled=\(.enabled) admission=\(.admission_mode) parent=\(.parent // "-")"' \
+-    >> /tmp/cf-lanes.txt
++  census_page "limit=500&offset=$off" "$off"
++  n=$(jq '.projects | length' "$tmpd/page.json") || { echo "census: cannot count offset=$off" >&2; exit 1; }
++  received=$((received + n))
++  jq -c '.projects[]' "$tmpd/page.json" >> "$tmpd/rows.jsonl" || { echo "census: cannot collect offset=$off" >&2; exit 1; }
+   off=$((off + 500))
+ done
+-wc -l < /tmp/cf-lanes.txt; cat /tmp/cf-lanes.txt
++[ "$received" -eq "$total" ] || {
++  echo "census: rows received=$received != total reported=$total; refusing to count" >&2; exit 1;
++}
++jq -r 'select(.name|startswith("code-factory"))
++       | "\(.name) enabled=\(.enabled) admission=\(.admission_mode) parent=\(.parent // "-")"' \
++  "$tmpd/rows.jsonl" > "$tmpd/lanes.txt" || { echo 'census: cannot format rows' >&2; exit 1; }
++wc -l < "$tmpd/lanes.txt"; cat "$tmpd/lanes.txt"
++)
+ ```
+ 
+ The inventory endpoint pages: it caps a page at 500 rows and answers `{projects,total,limit,offset}`, and
+ a whole fleet is larger than one page. Read `total` first and walk the pages, as above — a single
+ `limit=500` request inspects only its own page, so a family whose rows sort past the page boundary
+-prints an empty or short census without any error.
++prints an empty or short census without any error. The recipe above refuses failed fetches,
++non-2xx responses, missing or invalid `.projects` arrays, and an unfiltered row count that differs
++from the first reported `total`; it prints no family census until all pages pass.
+ 
+ On the reference deployment that prints nineteen rows: the fourteen above, all `enabled=true`, plus
+ five `code-factory-duckbrain-*` satellites whose rows this repo does not create (they are not part
+diff --git a/docs/audits/cf089-census-failclosed.txt b/docs/audits/cf089-census-failclosed.txt
+new file mode 100644
+index 0000000..199ad7b
+--- /dev/null
++++ b/docs/audits/cf089-census-failclosed.txt
+@@ -0,0 +1,302 @@
++CF-089 — README lanes census fail-closed evidence
++Base: af67c3b, readme-audit-20261103-183418. All repository commands ran in the
++brief's isolated worktree. No canonical checkout or other worktree was used.
++
++1. BEFORE ANY SOURCE EDIT: default fixture, broken second page
++
++The terminal harness rejects inline shell backgrounding. The requested probe was
++therefore run as two terminal tool commands, with the same server and recipe:
++
++terminal(command="python3 docs/audits/cf089-census-standin.py", background=true)
++  -> pid 2252357
++$ sleep 1; BASE=http://127.0.0.1:18999 bash docs/audits/cf089-census-recipe.sh; echo "rc=$?"; kill 2252357
++jq: error (at <stdin>:0): Cannot iterate over null (null)
++1
++code-factory enabled=true admission=cooldown parent=x
++rc=0
++
++Fixture truth: TOTAL=866; row(0) and row(600) are code-factory rows. The first
++500-row page contains one match. The second page answers HTTP 502. The old
++recipe silently presented the first-page-only census as success.
++
++2. AFTER FIX: same default fixture and recipe command
++
++terminal(command="timeout 60s python3 docs/audits/cf089-census-standin.py", background=true)
++  -> pid 2301248
++$ sleep 1; BASE=http://127.0.0.1:18999 bash docs/audits/cf089-census-recipe.sh; echo "rc=$?"; kill 2301248
++census: HTTP 502 at offset=500; refusing to count
++rc=1
++
++No count and no family rows were printed. The fixture's default mode, default
++port and /nototal behavior remain unchanged. Added --mode/--port options only
++select test cases. The healthy fixture still has 866 rows and two matches.
++
++3. FALSIFIABILITY: actual temporary mutations, each restored before the next
++
++The edits below were applied with the patch tool to the actual recipe mirror,
++not to a mock of its behavior. Each red run executes the corresponding real
++selftest arm extracted from tests/selftest.sh. The exact narrow runner is in
++section 5; it was saved as ../cf089-probe.py (untracked scratch file). It extracts
++the helper and requested arm between the census-fail-closed markers, supplies
++HERE/fails/lib.sh, and exits 1 on any arm FAIL. It does not rewrite assertions.
++
++Each fixture invocation in these arms starts its own timeout-20s Python server,
++waits for readiness, runs the real recipe under timeout 10s, captures stdout and
++stderr separately, then kills/waits for the server in that same invocation.
++Ports: fetch=19022, HTTP=19023, missing-projects=19024, wrong-projects=19025,
++nonjson=19026, short=19027, healthy=19028, nototal=19029.
++
++For every red command below, the outer `test "$rc" -eq 1` exited 0, confirming
++that the arm really failed. For every restored command, the outer
++`test "$rc" -eq 0` exited 0, confirming that the same arm passed again.
++The recipe's own exit code is shown inside the arm message; arm_rc is the
++selftest harness exit code. Layered guards may still refuse a bad page after
++one guard is removed, but losing its required named diagnostic fails the arm.
++
++3a. Fetch guard removed -> arm 22 FAIL; restored -> PASS
++
++Patch: replace this exact span:
++    -w '%{http_code}' "$BASE/api/v1/projects?$1") || {
++    echo "census: fetch failed at offset=$2" >&2; exit 1;
++  }
++with:
++    -w '%{http_code}' "$BASE/api/v1/projects?$1")
++
++$ python3 ../cf089-probe.py --arm 22 > ../cf089-mut-22.log 2>&1; rc=$?; cat ../cf089-mut-22.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 1
++22. census refuses a failed fetch at a later offset
++  FAIL  census fetch guard (exit 1): curl: (52) Empty reply from server
++census: HTTP 000 at offset=500; refusing to count
++CENSUS SELFTEST: FAIL (1)
++arm_rc=1
++
++Restore the original span (including the following case statement).
++$ python3 ../cf089-probe.py --arm 22 > ../cf089-restored-22.log 2>&1; rc=$?; cat ../cf089-restored-22.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 0
++22. census refuses a failed fetch at a later offset
++  PASS  census fetch failure -> offset=500, exit 1, no census printed
++CENSUS SELFTEST: PASS
++arm_rc=0
++
++3b. HTTP guard removed -> arm 23 FAIL; restored -> PASS
++
++Patch: replace this exact span:
++  case "$status" in
++    2??) ;;
++    *) echo "census: HTTP $status at offset=$2; refusing to count" >&2; exit 1 ;;
++  esac
++with:
++  : # HTTP guard temporarily removed for CF-089 red proof
++
++$ python3 ../cf089-probe.py --arm 23 > ../cf089-mut-23.log 2>&1; rc=$?; cat ../cf089-mut-23.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 1
++23. census refuses a non-2xx page
++  FAIL  census HTTP guard (exit 1): census: missing or invalid .projects array at offset=500
++CENSUS SELFTEST: FAIL (1)
++arm_rc=1
++
++Restore the original span.
++$ python3 ../cf089-probe.py --arm 23 > ../cf089-restored-23.log 2>&1; rc=$?; cat ../cf089-restored-23.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 0
++23. census refuses a non-2xx page
++  PASS  census HTTP 502 -> offset=500, exit 1, no census printed
++CENSUS SELFTEST: PASS
++arm_rc=0
++
++3c. Projects-array guard removed -> arm 24 FAIL; restored -> PASS
++
++Patch: replace this exact span:
++  jq -e '.projects | type == "array"' "$tmpd/page.json" >/dev/null 2>&1 || {
++    echo "census: missing or invalid .projects array at offset=$2" >&2; exit 1;
++  }
++with:
++  : # projects-array guard temporarily removed for CF-089 red proof
++
++$ python3 ../cf089-probe.py --arm 24 > ../cf089-mut-24.log 2>&1; rc=$?; cat ../cf089-mut-24.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 1
++24. census requires a projects array even on HTTP 200
++  FAIL  census .projects guard (missing-projects, exit 1): jq: error (at /var/tmp/hermes-scratch/tmp.4avJVwWWHW/page.json:0): Cannot iterate over null (null)
++census: cannot collect offset=500
++  FAIL  census .projects guard (wrong-projects, exit 1): census: rows received=500 != total reported=866; refusing to count
++  FAIL  census .projects guard (nonjson, exit 1): jq: parse error: Invalid numeric literal at line 1, column 10
++census: cannot count offset=500
++CENSUS SELFTEST: FAIL (3)
++arm_rc=1
++
++Restore the original span.
++$ python3 ../cf089-probe.py --arm 24 > ../cf089-restored-24.log 2>&1; rc=$?; cat ../cf089-restored-24.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 0
++24. census requires a projects array even on HTTP 200
++  PASS  census missing-projects -> named .projects refusal, exit 1, no census printed
++  PASS  census wrong-projects -> named .projects refusal, exit 1, no census printed
++  PASS  census nonjson -> named .projects refusal, exit 1, no census printed
++CENSUS SELFTEST: PASS
++arm_rc=0
++
++3d. Unfiltered received-total guard removed -> arm 25 FAIL; restored -> PASS
++
++Patch: replace this exact span:
++[ "$received" -eq "$total" ] || {
++  echo "census: rows received=$received != total reported=$total; refusing to count" >&2; exit 1;
++}
++with:
++: # received-total guard temporarily removed for CF-089 red proof
++
++$ python3 ../cf089-probe.py --arm 25 > ../cf089-mut-25.log 2>&1; rc=$?; cat ../cf089-mut-25.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 1
++25. census compares all received rows with the first reported total
++  FAIL  census row-total guard (exit 0): 
++CENSUS SELFTEST: FAIL (1)
++arm_rc=1
++
++Restore the original span.
++$ python3 ../cf089-probe.py --arm 25 > ../cf089-restored-25.log 2>&1; rc=$?; cat ../cf089-restored-25.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 0
++25. census compares all received rows with the first reported total
++  PASS  census short page -> rows received=865, total reported=866, exit 1, no census printed
++CENSUS SELFTEST: PASS
++arm_rc=0
++
++The short fixture removes the final nonmatching row. Both matching family rows
++remain, so checking only the filtered census count cannot detect this loss.
++The received=865 vs reported=866 assertion measures the unfiltered inventory.
++
++3e. Missing-total guard removed -> arm 27 FAIL; restored -> PASS
++
++Patch: replace this exact line:
++[ -n "$total" ] || { echo 'census: the scheduler answered without a total; refusing to count' >&2; exit 1; }
++with:
++: # missing-total guard temporarily removed for CF-089 red proof
++
++$ python3 ../cf089-probe.py --arm 27 > ../cf089-mut-27.log 2>&1; rc=$?; cat ../cf089-mut-27.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 1
++27. census still refuses a missing total
++  FAIL  census missing-total guard (exit 1): census: invalid total ''; refusing to count
++CENSUS SELFTEST: FAIL (1)
++arm_rc=1
++
++Restore the original line.
++$ python3 ../cf089-probe.py --arm 27 > ../cf089-restored-27.log 2>&1; rc=$?; cat ../cf089-restored-27.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 0
++27. census still refuses a missing total
++  PASS  census missing total -> named refusal, exit 1, no census printed
++CENSUS SELFTEST: PASS
++arm_rc=0
++
++3f. Happy row format broken -> arm 26 FAIL; restored -> PASS
++
++Patch: replace the literal `enabled=\(.enabled)` in the formatting expression
++with `enabled:\(.enabled)`; leave everything else unchanged.
++
++$ python3 ../cf089-probe.py --arm 26 > ../cf089-mut-26.log 2>&1; rc=$?; cat ../cf089-mut-26.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 1
++26. healthy census counts matching rows on both sides of the page boundary
++  FAIL  census healthy path (exit 0):  / 2
++code-factory enabled:true admission=cooldown parent=x
++code-factory enabled:true admission=cooldown parent=x
++CENSUS SELFTEST: FAIL (1)
++arm_rc=1
++
++Restore the original expression.
++$ python3 ../cf089-probe.py --arm 26 > ../cf089-restored-26.log 2>&1; rc=$?; cat ../cf089-restored-26.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 0
++26. healthy census counts matching rows on both sides of the page boundary
++  PASS  census healthy -> 2 matching rows, exact row format, exit 0
++CENSUS SELFTEST: PASS
++arm_rc=0
++
++3g. Mirror drift introduced -> arm 28 FAIL; restored -> PASS
++
++Patch: replace the exact line `census_page 'limit=1' 0` with
++`census_page 'limit=1' 0 # deliberate mirror drift` in the mirror only.
++
++$ python3 ../cf089-probe.py --arm 28 > ../cf089-mut-28.log 2>&1; rc=$?; cat ../cf089-mut-28.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 1
++28. README census and executable mirror agree except for BASE
++Traceback (most recent call last):
++  File "<stdin>", line 13, in <module>
++AssertionError: README census differs from executable mirror
++  FAIL  census README/mirror drift
++CENSUS SELFTEST: FAIL (1)
++arm_rc=1
++
++Restore the original line.
++$ python3 ../cf089-probe.py --arm 28 > ../cf089-restored-28.log 2>&1; rc=$?; cat ../cf089-restored-28.log; printf 'arm_rc=%s\n' "$rc"; test "$rc" -eq 0
++28. README census and executable mirror agree except for BASE
++  PASS  census README/mirror byte parity (BASE parameterisation only)
++CENSUS SELFTEST: PASS
++arm_rc=0
++
++4. ACCEPTANCE COMMANDS (real output excerpts; exit statuses explicitly measured)
++
++$ bash tests/selftest.sh > ../cf089-selftest.log 2>&1; rc=$?; cat ../cf089-selftest.log; printf 'selftest_rc=%s\n' "$rc"; exit "$rc"
++[Earlier arms also passed; retained excerpt starts at the census arms.]
++22. census refuses a failed fetch at a later offset
++  PASS  census fetch failure -> offset=500, exit 1, no census printed
++23. census refuses a non-2xx page
++  PASS  census HTTP 502 -> offset=500, exit 1, no census printed
++24. census requires a projects array even on HTTP 200
++  PASS  census missing-projects -> named .projects refusal, exit 1, no census printed
++  PASS  census wrong-projects -> named .projects refusal, exit 1, no census printed
++  PASS  census nonjson -> named .projects refusal, exit 1, no census printed
++25. census compares all received rows with the first reported total
++  PASS  census short page -> rows received=865, total reported=866, exit 1, no census printed
++26. healthy census counts matching rows on both sides of the page boundary
++  PASS  census healthy -> 2 matching rows, exact row format, exit 0
++27. census still refuses a missing total
++  PASS  census missing total -> named refusal, exit 1, no census printed
++28. README census and executable mirror agree except for BASE
++  PASS  census README/mirror byte parity (BASE parameterisation only)
++
++SELFTEST: PASS
++selftest_rc=0
++
++$ ruff check . && ruff format --check .; printf 'ruff_rc=%s\n' "$?"
++All checks passed!
++Would reformat: scripts/lane_target.py
++Would reformat: tests/test_lane_target.py
++2 files would be reformatted, 9 files already formatted
++ruff_rc=1
++
++$ bash -n tests/selftest.sh docs/audits/cf089-census-recipe.sh; printf 'bash_n_rc=%s\n' "$?"
++bash_n_rc=0
++
++The formatting failure is pre-existing, not a claim of a clean tree:
++$ git show HEAD:scripts/lane_target.py | ruff format --check --stdin-filename scripts/lane_target.py -; printf 'baseline_lane_target_format_rc=%s\n' "$?"
++baseline_lane_target_format_rc=1
++$ git show HEAD:tests/test_lane_target.py | ruff format --check --stdin-filename tests/test_lane_target.py -; printf 'baseline_test_lane_target_format_rc=%s\n' "$?"
++baseline_test_lane_target_format_rc=1
++$ git diff --exit-code HEAD -- scripts/lane_target.py tests/test_lane_target.py; printf 'untouched_baseline_files_rc=%s\n' "$?"
++untouched_baseline_files_rc=0
++$ ruff format --check scripts/lane_target.py tests/test_lane_target.py; printf 'baseline_format_rc=%s\n' "$?"
++Would reformat: scripts/lane_target.py
++Would reformat: tests/test_lane_target.py
++2 files would be reformatted
++baseline_format_rc=1
++
++$ scripts/boardctl validate; printf 'boardctl_rc=%s\n' "$?"
++[Output excerpt; the existing warnings were not edited.]
++rows: 82 tasks, 109 events, 0 fixtures
++key uniformity: 59/82 rows carry only canon keys; drift 23 row(s): probe(23) — 0 fixable by 'boardctl update <id> --normalize'
++RESULT: OK (26 warning(s))
++boardctl_rc=0
++
++No board file was changed. No push was attempted. The tree-wide formatting gate
++could not be made green without touching the two unrelated files; they were
++left byte-identical to HEAD. All requested functional and syntax checks passed.
++
++5. EXACT NARROW RUNNER SOURCE (saved as ../cf089-probe.py for section 3)
++
++"""Run selected real CF-089 selftest arms without unrelated repo arms."""
++import argparse
++import subprocess
++from pathlib import Path
++
++parser = argparse.ArgumentParser(description=__doc__)
++parser.add_argument("--arm", type=int)
++args = parser.parse_args()
++text = Path("tests/selftest.sh").read_text()
++block = text.split("# BEGIN census-fail-closed\n", 1)[1].split(
++    "# END census-fail-closed", 1
++)[0]
++if args.arm is not None:
++    helpers = block.split('say "22.', 1)[0]
++    marker = f'say "{args.arm}.'
++    arm = marker + block.split(marker, 1)[1]
++    arm = arm.split(f'say "{args.arm + 1}.', 1)[0]
++    block = helpers + arm
++script = (
++    'set -uo pipefail\nHERE="$PWD"\n. "$HERE/scripts/lib.sh"\nfails=0\n'
++    + block
++    + '\n[ "$fails" -eq 0 ] && { say "CENSUS SELFTEST: PASS"; exit 0; }\n'
++    + 'say "CENSUS SELFTEST: FAIL ($fails)"; exit 1\n'
++)
++result = subprocess.run(["bash"], input=script, text=True, check=False)
++raise SystemExit(result.returncode)
+diff --git a/docs/audits/cf089-census-recipe.sh b/docs/audits/cf089-census-recipe.sh
+index 88b99ad..0bb976b 100755
+--- a/docs/audits/cf089-census-recipe.sh
++++ b/docs/audits/cf089-census-recipe.sh
+@@ -1,14 +1,40 @@
+ #!/usr/bin/env bash
+-# Verbatim README.md "The lanes" census recipe (README.md lines 155-169), base URL parameterised only.
++# Verbatim README.md "The lanes" census recipe, base URL parameterised only.
++(
+ BASE="${BASE:-http://127.0.0.1:9090}"
+-total=$(curl -s "$BASE/api/v1/projects?limit=1" | jq -r '.total // empty')
++tmpd=$(mktemp -d) || { echo 'census: cannot create temporary directory' >&2; exit 1; }
++trap 'rm -rf "$tmpd"' EXIT
++census_page() {
++  status=$(curl -sS --connect-timeout 5 --max-time 15 -o "$tmpd/page.json" \
++    -w '%{http_code}' "$BASE/api/v1/projects?$1") || {
++    echo "census: fetch failed at offset=$2" >&2; exit 1;
++  }
++  case "$status" in
++    2??) ;;
++    *) echo "census: HTTP $status at offset=$2; refusing to count" >&2; exit 1 ;;
++  esac
++  jq -e '.projects | type == "array"' "$tmpd/page.json" >/dev/null 2>&1 || {
++    echo "census: missing or invalid .projects array at offset=$2" >&2; exit 1;
++  }
++}
++census_page 'limit=1' 0
++total=$(jq -r '.total // empty' "$tmpd/page.json")
+ [ -n "$total" ] || { echo 'census: the scheduler answered without a total; refusing to count' >&2; exit 1; }
+-off=0; : > /tmp/cf-lanes.txt
++[[ "$total" =~ ^[0-9]+$ ]] || { echo "census: invalid total '$total'; refusing to count" >&2; exit 1; }
++total=$((10#$total))
++off=0; received=0; : > "$tmpd/rows.jsonl"
+ while [ "$off" -lt "$total" ]; do
+-  curl -s "$BASE/api/v1/projects?limit=500&offset=$off" \
+-    | jq -r '.projects[] | select(.name|startswith("code-factory"))
+-             | "\(.name) enabled=\(.enabled) admission=\(.admission_mode) parent=\(.parent // "-")"' \
+-    >> /tmp/cf-lanes.txt
++  census_page "limit=500&offset=$off" "$off"
++  n=$(jq '.projects | length' "$tmpd/page.json") || { echo "census: cannot count offset=$off" >&2; exit 1; }
++  received=$((received + n))
++  jq -c '.projects[]' "$tmpd/page.json" >> "$tmpd/rows.jsonl" || { echo "census: cannot collect offset=$off" >&2; exit 1; }
+   off=$((off + 500))
+ done
+-wc -l < /tmp/cf-lanes.txt; cat /tmp/cf-lanes.txt
++[ "$received" -eq "$total" ] || {
++  echo "census: rows received=$received != total reported=$total; refusing to count" >&2; exit 1;
++}
++jq -r 'select(.name|startswith("code-factory"))
++       | "\(.name) enabled=\(.enabled) admission=\(.admission_mode) parent=\(.parent // "-")"' \
++  "$tmpd/rows.jsonl" > "$tmpd/lanes.txt" || { echo 'census: cannot format rows' >&2; exit 1; }
++wc -l < "$tmpd/lanes.txt"; cat "$tmpd/lanes.txt"
++)
+diff --git a/docs/audits/cf089-census-standin.py b/docs/audits/cf089-census-standin.py
+index 1351f45..5969004 100755
+--- a/docs/audits/cf089-census-standin.py
++++ b/docs/audits/cf089-census-standin.py
+@@ -4,7 +4,9 @@ per-page failure path. Serves 866 rows; page offset=500 answers HTTP 502 like a
+ restarting scheduler. Truth: exactly TWO code-factory rows exist (index 0 and 600).
+ """
+ 
++import argparse
+ import json
++import socket
+ from http.server import BaseHTTPRequestHandler, HTTPServer
+ from urllib.parse import urlparse, parse_qs
+ 
+@@ -20,16 +22,19 @@ class H(BaseHTTPRequestHandler):
+     def log_message(self, *a):
+         pass
+ 
++    def reply(self, status, payload):
++        body = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
++        self.send_response(status)
++        self.send_header("Content-Type", "application/json")
++        self.send_header("Content-Length", str(len(body)))
++        self.end_headers()
++        self.wfile.write(body)
++
+     def do_GET(self):
+         u = urlparse(self.path)
+         q = parse_qs(u.query)
+-        if u.path.startswith("/nototal"):
+-            body = json.dumps({"projects": []}).encode()
+-            self.send_response(200)
+-            self.send_header("Content-Type", "application/json")
+-            self.send_header("Content-Length", str(len(body)))
+-            self.end_headers()
+-            self.wfile.write(body)
++        if u.path.startswith("/nototal") or args.mode == "nototal":
++            self.reply(200, {"projects": []})
+             return
+         if not u.path.startswith("/api/v1/projects"):
+             self.send_response(404)
+@@ -38,27 +43,51 @@ class H(BaseHTTPRequestHandler):
+         limit = int(q.get("limit", ["200"])[0])
+         offset = int(q.get("offset", ["0"])[0])
+         if offset >= 500:
+-            body = json.dumps({"error": "upstream timeout"}).encode()
+-            self.send_response(502)
+-            self.send_header("Content-Type", "application/json")
+-            self.send_header("Content-Length", str(len(body)))
+-            self.end_headers()
+-            self.wfile.write(body)
+-            return
++            if args.mode == "broken":
++                self.reply(502, {"error": "upstream timeout"})
++                return
++            if args.mode == "fetch":
++                self.connection.shutdown(socket.SHUT_RDWR)
++                self.connection.close()
++                return
++            if args.mode == "missing-projects":
++                self.reply(200, {"total": TOTAL})
++                return
++            if args.mode == "wrong-projects":
++                self.reply(200, {"total": TOTAL, "projects": {}})
++                return
++            if args.mode == "nonjson":
++                self.reply(200, b"scheduler restarting")
++                return
+         n = min(limit, 500, TOTAL - offset)
+-        body = json.dumps(
++        if offset >= 500 and args.mode == "short":
++            n -= 1
++        self.reply(
++            200,
+             {
+                 "total": TOTAL,
+                 "limit": limit,
+                 "offset": offset,
+                 "projects": [row(i) for i in range(offset, offset + n)],
+-            }
+-        ).encode()
+-        self.send_response(200)
+-        self.send_header("Content-Type", "application/json")
+-        self.send_header("Content-Length", str(len(body)))
+-        self.end_headers()
+-        self.wfile.write(body)
++            },
++        )
+ 
+ 
+-HTTPServer(("127.0.0.1", 18999), H).serve_forever()
++parser = argparse.ArgumentParser(description=__doc__)
++parser.add_argument("--port", type=int, default=18999)
++parser.add_argument(
++    "--mode",
++    choices=(
++        "broken",
++        "fetch",
++        "missing-projects",
++        "wrong-projects",
++        "nonjson",
++        "short",
++        "healthy",
++        "nototal",
++    ),
++    default="broken",
++)
++args = parser.parse_args()
++HTTPServer(("127.0.0.1", args.port), H).serve_forever()
+diff --git a/tests/selftest.sh b/tests/selftest.sh
+index 7598dce..7f92d9f 100755
+--- a/tests/selftest.sh
++++ b/tests/selftest.sh
+@@ -687,5 +687,117 @@ else
+ fi
+ rm -rf "$tmpd"
+ 
++# BEGIN census-fail-closed
++# CF-089: exercise the mirrored README recipe through real curl/jq, not stubs.
++# Each invocation owns a separate port, a timeout-bounded server, and its cleanup.
++cf089_run() {
++  local mode="$1" port="$2" fixture ready=0 attempt
++  local tmpd
++  tmpd=$(mktemp -d)
++  timeout 20s python3 -B "$HERE/docs/audits/cf089-census-standin.py" \
++    --mode "$mode" --port "$port" >"$tmpd/server.log" 2>&1 &
++  fixture=$!
++  for attempt in {1..50}; do
++    if curl -fsS --max-time 1 "http://127.0.0.1:$port/api/v1/projects?limit=1" >/dev/null 2>&1; then
++      ready=1; break
++    fi
++    kill -0 "$fixture" 2>/dev/null || break
++    sleep 0.05
++  done
++  if [ "$ready" -eq 1 ] && kill -0 "$fixture" 2>/dev/null; then
++    BASE="http://127.0.0.1:$port" timeout 10s bash "$HERE/docs/audits/cf089-census-recipe.sh" \
++      >"$tmpd/stdout" 2>"$tmpd/stderr"; rc=$?
++    census_stdout=$(cat "$tmpd/stdout")
++    out=$(cat "$tmpd/stderr")
++  else
++    rc=99; census_stdout=; out="fixture did not start: $(cat "$tmpd/server.log")"
++  fi
++  kill "$fixture" 2>/dev/null || :
++  wait "$fixture" 2>/dev/null || :
++  rm -rf "$tmpd"
++}
++
++say "22. census refuses a failed fetch at a later offset"
++cf089_run fetch 19022
++if [ "$rc" -eq 1 ] && [ -z "$census_stdout" ] \
++  && printf '%s\n' "$out" | grep -Fxq 'census: fetch failed at offset=500'; then
++  say "  PASS  census fetch failure -> offset=500, exit $rc, no census printed"
++else
++  say "  FAIL  census fetch guard (exit $rc): $out"; fails=$((fails+1))
++fi
++
++say "23. census refuses a non-2xx page"
++cf089_run broken 19023
++if [ "$rc" -eq 1 ] && [ -z "$census_stdout" ] \
++  && [ "$out" = 'census: HTTP 502 at offset=500; refusing to count' ]; then
++  say "  PASS  census HTTP 502 -> offset=500, exit $rc, no census printed"
++else
++  say "  FAIL  census HTTP guard (exit $rc): $out"; fails=$((fails+1))
++fi
++
++say "24. census requires a projects array even on HTTP 200"
++port=19024
++for mode in missing-projects wrong-projects nonjson; do
++  cf089_run "$mode" "$port"
++  if [ "$rc" -eq 1 ] && [ -z "$census_stdout" ] \
++    && [ "$out" = 'census: missing or invalid .projects array at offset=500' ]; then
++    say "  PASS  census $mode -> named .projects refusal, exit $rc, no census printed"
++  else
++    say "  FAIL  census .projects guard ($mode, exit $rc): $out"; fails=$((fails+1))
++  fi
++  port=$((port+1))
++done
++
++say "25. census compares all received rows with the first reported total"
++cf089_run short 19027
++if [ "$rc" -eq 1 ] && [ -z "$census_stdout" ] \
++  && [ "$out" = 'census: rows received=865 != total reported=866; refusing to count' ]; then
++  say "  PASS  census short page -> rows received=865, total reported=866, exit $rc, no census printed"
++else
++  say "  FAIL  census row-total guard (exit $rc): $out"; fails=$((fails+1))
++fi
++
++say "26. healthy census counts matching rows on both sides of the page boundary"
++cf089_run healthy 19028
++expected=$(printf '%s\n' 2 'code-factory enabled=true admission=cooldown parent=x' \
++  'code-factory enabled=true admission=cooldown parent=x')
++if [ "$rc" -eq 0 ] && [ -z "$out" ] && [ "$census_stdout" = "$expected" ]; then
++  say "  PASS  census healthy -> 2 matching rows, exact row format, exit $rc"
++else
++  say "  FAIL  census healthy path (exit $rc): $out / $census_stdout"; fails=$((fails+1))
++fi
++
++say "27. census still refuses a missing total"
++cf089_run nototal 19029
++if [ "$rc" -eq 1 ] && [ -z "$census_stdout" ] \
++  && [ "$out" = 'census: the scheduler answered without a total; refusing to count' ]; then
++  say "  PASS  census missing total -> named refusal, exit $rc, no census printed"
++else
++  say "  FAIL  census missing-total guard (exit $rc): $out"; fails=$((fails+1))
++fi
++
++say "28. README census and executable mirror agree except for BASE"
++if python3 - "$HERE" <<'PY'
++from pathlib import Path
++import sys
++
++root = Path(sys.argv[1])
++lanes = (root / "README.md").read_text().split("## The lanes\n", 1)[1]
++block = lanes.split("```bash\n", 1)[1].split("\n```", 1)[0]
++mirror = (root / "docs/audits/cf089-census-recipe.sh").read_text().splitlines()
++assert mirror[0] == "#!/usr/bin/env bash"
++assert mirror[1].startswith('# Verbatim README.md "The lanes" census recipe')
++assert block.splitlines()[1] == "BASE=http://127.0.0.1:9090"
++assert mirror[3] == 'BASE="${BASE:-http://127.0.0.1:9090}"'
++mirror[3] = "BASE=http://127.0.0.1:9090"
++assert "\n".join(mirror[2:]) == block, "README census differs from executable mirror"
++PY
++then
++  say "  PASS  census README/mirror byte parity (BASE parameterisation only)"
++else
++  say "  FAIL  census README/mirror drift"; fails=$((fails+1))
++fi
++# END census-fail-closed
++
+ say ""
+ [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
