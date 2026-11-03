@@ -29,7 +29,9 @@ class H(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
         if not u.path.startswith("/api/v1/projects"):
-            self.send_response(404); self.end_headers(); return
+            self.send_response(404)
+            self.end_headers()
+            return
         limit = int(q.get("limit", ["200"])[0])
         offset = int(q.get("offset", ["0"])[0])
         if offset >= 500:
