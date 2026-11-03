@@ -83,6 +83,8 @@ Rules:
 - `scripts/lane_target.py parse <target>` structurally validates and emits the components as JSON; unparseable or relative local paths exit 2.
 - `verify` on a **local** target proves it is a real checkout: directory exists, `git rev-parse --show-toplevel` succeeds, the top level is **not `$HOME`** (the stand-in locator defect where a lane reads the home repo's board), the top level matches the target, a remote exists, and HEAD is an attached branch.
 - `verify` on a **remote** target is `remote-structural-only`: reachability and existence are NOT checked locally, and that must be requested explicitly with `--allow-remote` (exit 3 otherwise). A remote target is never silently treated as verified.
+- `verify --exec-bunker [--bunker-server S]` on a **bunker** target proves it against the agent itself: `bunker exec <agent> -- sh -lc 'echo $HOME; test -d <path>'` must return a home and an existing directory. Checks recorded: `bunker_cli`, `agent_reachable`, `path_exists`.
+- `lane_target.py plan <projects.jsonl> --agent <id> --server <server> [--suffix /repo] [--prefix P]` emits the intended `bunker://<agent>/<home><suffix>` target per lane. The agent's home is **resolved from the agent**, never templated: homes are `/home/bunker-<full-id>`, so a `{agent}` template builds a wrong path that still parses.
 - `lane_target.py scan <projects.jsonl> [--allow-remote]` checks every row and exits nonzero if any target is invalid.
 - Lane writers (`scripts/configure_family.py`) only `mkdir` a **local** target; a remote target is registered verbatim and materialised by the node side.
 

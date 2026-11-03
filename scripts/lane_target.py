@@ -252,12 +252,7 @@ def verify_local(path: str, home: Optional[str] = None) -> dict:
     return result
 
 
-def verify(target: Target, allow_remote: bool, home: Optional[str] = None) -> dict:
-    if target.is_local:
-        out = verify_local(target.path, home=home)
-        out["resolved"] = target.display()
-        out["verified"] = "local"
-        return out
+def verify_remote(target: Target, allow_remote: bool) -> dict:
     if not allow_remote:
         raise PermissionError(
             f"target {target.display()} is remote; local verification is impossible. "
@@ -276,6 +271,83 @@ def verify(target: Target, allow_remote: bool, home: Optional[str] = None) -> di
         "ok": True,
         "note": "address is structurally valid; reachability and existence are NOT checked here",
     }
+
+
+def verify_bunker(target: Target, server: Optional[str] = None, timeout: int = 60) -> dict:
+    """Prove a bunker:// target exists by asking the agent itself.
+
+    A bunker target is only meaningful if the agent is reachable and the path is
+    really inside it. That is checkable without mounting anything:
+    `bunker exec <agent> -- sh -lc 'echo $HOME; test -d <path>'`.
+    """
+    if target.scheme != "bunker" or not target.agent:
+        raise TargetError("verify_bunker needs a bunker://<agent>/<path> target")
+
+    cmd = ["bunker"]
+    if server:
+        cmd += ["--server", server]
+    cmd += [
+        "exec",
+        target.agent,
+        "--",
+        "sh",
+        "-lc",
+        f'echo "HOME=$HOME"; if [ -d "{target.path}" ]; then echo "PATH_EXISTS=1"; else echo "PATH_EXISTS=0"; fi',
+    ]
+    result = {
+        "resolved": target.display(),
+        "kind": "remote",
+        "scheme": "bunker",
+        "agent": target.agent,
+        "path": target.path,
+        "verified": "bunker-exec",
+        "checks": [],
+        "ok": False,
+    }
+
+    def add(name: str, ok: bool, value: str) -> None:
+        result["checks"].append({"check": name, "ok": ok, "value": value})
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+    except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+        add("agent_reachable", False, f"{type(exc).__name__}: {exc}")
+        return result
+
+    out = f"{proc.stdout}\n{proc.stderr}"
+    add("bunker_cli", proc.returncode == 0, f"exit={proc.returncode}")
+
+    home = ""
+    for line in proc.stdout.splitlines():
+        if line.startswith("HOME="):
+            home = line.split("=", 1)[1].strip()
+    add("agent_reachable", bool(home), home or out.strip()[:200])
+
+    exists = "PATH_EXISTS=1" in proc.stdout
+    add("path_exists", exists, f"{target.path} inside {target.agent}")
+
+    if home:
+        result["agent_home"] = home
+        result["resolved"] = f"bunker://{target.agent}{target.path}"
+    result["ok"] = all(c["ok"] for c in result["checks"])
+    return result
+
+
+def verify(
+    target: Target,
+    allow_remote: bool,
+    home: Optional[str] = None,
+    exec_bunker: bool = False,
+    bunker_server: Optional[str] = None,
+) -> dict:
+    if target.is_local:
+        out = verify_local(target.path, home=home)
+        out["resolved"] = target.display()
+        out["verified"] = "local"
+        return out
+    if exec_bunker and target.scheme == "bunker":
+        return verify_bunker(target, server=bunker_server)
+    return verify_remote(target, allow_remote)
 
 
 def scan(projects_jsonl: str, allow_remote: bool, home: Optional[str] = None) -> dict:
@@ -316,12 +388,26 @@ def main(argv: Optional[list] = None) -> int:
     v = sub.add_parser("verify", help="verify one target")
     v.add_argument("target")
     v.add_argument("--allow-remote", action="store_true")
+    v.add_argument("--exec-bunker", action="store_true")
+    v.add_argument("--bunker-server", default=None)
     v.add_argument("--home", default=None)
 
     s = sub.add_parser("scan", help="verify every workdir in a projects JSONL")
     s.add_argument("file")
     s.add_argument("--allow-remote", action="store_true")
+    s.add_argument("--exec-bunker", action="store_true")
+    s.add_argument("--bunker-server", default=None)
     s.add_argument("--home", default=None)
+
+    p2 = sub.add_parser(
+        "plan", help="emit bunker:// targets for every lane in a JSONL (writes nothing)"
+    )
+    p2.add_argument("file")
+    p2.add_argument("--agent", required=True, help="bunker agent id that hosts the lane")
+    p2.add_argument("--server", default=None, help="bunker server name (needed to resolve the agent home)")
+    p2.add_argument("--suffix", default="/repo", help="path inside the agent home (default /repo, per specs/NODE.md)")
+    p2.add_argument("--path", default=None, help="explicit in-agent path (skips home resolution)")
+    p2.add_argument("--prefix", default=None, help="lane-name prefix to keep (e.g. code-factory)")
 
     a = ap.parse_args(argv)
     try:
@@ -330,12 +416,48 @@ def main(argv: Optional[list] = None) -> int:
             return 0
         if a.cmd == "verify":
             t = parse(a.target)
-            out = verify(t, allow_remote=a.allow_remote, home=a.home)
+            out = verify(
+                t,
+                allow_remote=a.allow_remote,
+                home=a.home,
+                exec_bunker=a.exec_bunker,
+                bunker_server=a.bunker_server,
+            )
             print(json.dumps(out, indent=2))
             return 0 if out.get("ok") else 4
-        out = scan(a.file, allow_remote=a.allow_remote, home=a.home)
-        print(json.dumps(out, indent=2))
-        return 0 if out["ok"] else 4
+        if a.cmd == "scan":
+            out = scan(a.file, allow_remote=a.allow_remote, home=a.home)
+            print(json.dumps(out, indent=2))
+            return 0 if out["ok"] else 4
+        plan = []
+        in_path = a.path
+        if in_path is None:
+            # Resolve the agent's real home instead of guessing a path: an agent's
+            # home is /home/bunker-<id> today, which a template silently mis-guesses.
+            probe = verify_bunker(
+                Target(raw=f"bunker://{a.agent}/", kind="remote", scheme="bunker",
+                       path="/", agent=a.agent),
+                server=a.server,
+            )
+            home = probe.get("agent_home") or ""
+            if not home:
+                raise TargetError(
+                    f"cannot resolve the home of agent {a.agent!r}; pass --server, or --path explicitly"
+                )
+            in_path = home.rstrip("/") + a.suffix
+        with open(a.file, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                row = json.loads(line)
+                name = row.get("name") or row.get("id") or ""
+                if a.prefix and not name.startswith(a.prefix):
+                    continue
+                target = f"bunker://{a.agent}{in_path}"
+                plan.append({"name": name, "workdir": target, "parsed": asdict(parse(target))})
+        print(json.dumps(plan, indent=2))
+        return 0
     except TargetError as exc:
         print(f"FAIL lane-target: {exc}", file=sys.stderr)
         return 2

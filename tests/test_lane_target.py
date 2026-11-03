@@ -180,5 +180,73 @@ class ScanProjects(unittest.TestCase):
         self.assertFalse(names["bad-relative"])
 
 
+class VerifyBunker(unittest.TestCase):
+    """bunker:// targets are proved by asking the agent, never assumed."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="bunker-shim-")
+        self.bin = os.path.join(self.tmp, "bin")
+        os.makedirs(self.bin)
+
+    def _shim(self, home="/home/bunker-abc", exists=True, exit_code=0):
+        path = os.path.join(self.bin, "bunker")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(
+                "#!/usr/bin/env bash\n"
+                f'echo "HOME={home}"\n'
+                f'echo "PATH_EXISTS={"1" if exists else "0"}"\n'
+                f"exit {exit_code}\n"
+            )
+        os.chmod(path, 0o755)
+        return path
+
+    def test_existing_path_verifies(self):
+        self._shim(exists=True)
+        t = lane_target.parse("bunker://abc/home/bunker-abc/repo")
+        old = os.environ["PATH"]
+        os.environ["PATH"] = self.bin + os.pathsep + old
+        try:
+            out = lane_target.verify_bunker(t)
+        finally:
+            os.environ["PATH"] = old
+        self.assertTrue(out["ok"], json.dumps(out, indent=2))
+        self.assertEqual(out["verified"], "bunker-exec")
+        self.assertEqual(out["agent_home"], "/home/bunker-abc")
+
+    def test_missing_path_fails(self):
+        self._shim(exists=False)
+        t = lane_target.parse("bunker://abc/home/bunker-abc/nope")
+        old = os.environ["PATH"]
+        os.environ["PATH"] = self.bin + os.pathsep + old
+        try:
+            out = lane_target.verify_bunker(t)
+        finally:
+            os.environ["PATH"] = old
+        self.assertFalse(out["ok"])
+        checks = {c["check"]: c["ok"] for c in out["checks"]}
+        self.assertFalse(checks["path_exists"])
+
+    def test_unreachable_agent_fails(self):
+        t = lane_target.parse("bunker://abc/home/bunker-abc/repo")
+        old = os.environ["PATH"]
+        os.environ["PATH"] = os.path.join(self.tmp, "empty")
+        try:
+            out = lane_target.verify_bunker(t)
+        finally:
+            os.environ["PATH"] = old
+        self.assertFalse(out["ok"])
+        self.assertEqual(out["checks"][0]["check"], "agent_reachable")
+
+    def test_plan_refuses_nothing_but_emits_targets(self):
+        path = os.path.join(self.tmp, "lanes.jsonl")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"name": "code-factory-docs"}) + "\n")
+            fh.write(json.dumps({"name": "other-lane"}) + "\n")
+        rc = lane_target.main(
+            ["plan", path, "--agent", "abc", "--path", "/home/{agent}/repo", "--prefix", "code-factory"]
+        )
+        self.assertEqual(rc, 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
