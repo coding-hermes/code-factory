@@ -483,7 +483,16 @@ class VerifyBunker(unittest.TestCase):
             fh.write(json.dumps({"name": "code-factory-docs"}) + "\n")
             fh.write(json.dumps({"name": "other-lane"}) + "\n")
         rc = lane_target.main(
-            ["plan", path, "--agent", "abc", "--path", "/home/{agent}/repo", "--prefix", "code-factory"]
+            [
+                "plan",
+                path,
+                "--agent",
+                "abc",
+                "--path",
+                "/home/{agent}/repo",
+                "--prefix",
+                "code-factory",
+            ]
         )
         self.assertEqual(rc, 0)
 

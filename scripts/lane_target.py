@@ -315,7 +315,9 @@ def verify_remote(target: Target, allow_remote: bool) -> dict:
     }
 
 
-def verify_bunker(target: Target, server: Optional[str] = None, timeout: int = 60) -> dict:
+def verify_bunker(
+    target: Target, server: Optional[str] = None, timeout: int = 60
+) -> dict:
     """Prove a bunker:// target exists by asking the agent itself.
 
     A bunker target is only meaningful if the agent is reachable and the path is
@@ -351,7 +353,9 @@ def verify_bunker(target: Target, server: Optional[str] = None, timeout: int = 6
         result["checks"].append({"check": name, "ok": ok, "value": value})
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout, check=False
+        )
     except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
         add("agent_reachable", False, f"{type(exc).__name__}: {exc}")
         return result
@@ -625,11 +629,25 @@ def main(argv: Optional[list] = None) -> int:
         "plan", help="emit bunker:// targets for every lane in a JSONL (writes nothing)"
     )
     p2.add_argument("file")
-    p2.add_argument("--agent", required=True, help="bunker agent id that hosts the lane")
-    p2.add_argument("--server", default=None, help="bunker server name (needed to resolve the agent home)")
-    p2.add_argument("--suffix", default="/repo", help="path inside the agent home (default /repo, per specs/NODE.md)")
-    p2.add_argument("--path", default=None, help="explicit in-agent path (skips home resolution)")
-    p2.add_argument("--prefix", default=None, help="lane-name prefix to keep (e.g. code-factory)")
+    p2.add_argument(
+        "--agent", required=True, help="bunker agent id that hosts the lane"
+    )
+    p2.add_argument(
+        "--server",
+        default=None,
+        help="bunker server name (needed to resolve the agent home)",
+    )
+    p2.add_argument(
+        "--suffix",
+        default="/repo",
+        help="path inside the agent home (default /repo, per specs/NODE.md)",
+    )
+    p2.add_argument(
+        "--path", default=None, help="explicit in-agent path (skips home resolution)"
+    )
+    p2.add_argument(
+        "--prefix", default=None, help="lane-name prefix to keep (e.g. code-factory)"
+    )
 
     a = ap.parse_args(argv)
     try:
@@ -659,8 +677,13 @@ def main(argv: Optional[list] = None) -> int:
             # Resolve the agent's real home instead of guessing a path: an agent's
             # home is /home/bunker-<id> today, which a template silently mis-guesses.
             probe = verify_bunker(
-                Target(raw=f"bunker://{a.agent}/", kind="remote", scheme="bunker",
-                       path="/", agent=a.agent),
+                Target(
+                    raw=f"bunker://{a.agent}/",
+                    kind="remote",
+                    scheme="bunker",
+                    path="/",
+                    agent=a.agent,
+                ),
                 server=a.server,
             )
             home = probe.get("agent_home") or ""
@@ -679,7 +702,9 @@ def main(argv: Optional[list] = None) -> int:
                 if a.prefix and not name.startswith(a.prefix):
                     continue
                 target = f"bunker://{a.agent}{in_path}"
-                plan.append({"name": name, "workdir": target, "parsed": asdict(parse(target))})
+                plan.append(
+                    {"name": name, "workdir": target, "parsed": asdict(parse(target))}
+                )
         print(json.dumps(plan, indent=2))
         return 0
     except TargetError as exc:
