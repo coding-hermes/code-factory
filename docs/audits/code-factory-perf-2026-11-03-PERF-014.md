@@ -344,3 +344,62 @@ say() { local _now=${EPOCHREALTIME//[.,]/}; \
 ```
 
 and run `bash <copy>/tests/selftest.sh 2>&1 | grep '^\[delta'`.
+
+## Foreman verification (independent of the worker's runs)
+
+Measured by the foreman after commit `0aadc9e`, on the 40-row tree, with the old and new test file
+alternated in the same minute so host load hits both equally. The host was under a sibling lane's
+load (loadavg 11–20) throughout, which is why the paired columns — not the absolutes — are the
+evidence.
+
+Section 11, six interleaved reps of `python3 -B tests/test_lane_target.py` (new = `HEAD`,
+old = `git show 0aadc9e^:tests/test_lane_target.py` dropped into a `git archive HEAD` copy):
+
+```text
+rep   new (this file)   old (pre-PERF-014)
+1     0.10              0.22
+2     0.12              0.20
+3     0.10              0.19
+4     0.11              0.19
+5     0.10              0.19
+6     0.11              0.21
+median 0.105           0.195      (−0.09 s, −46 %)
+```
+
+Whole gate, five interleaved pairs of `bash tests/selftest.sh` on the same pair of trees (each
+1.70–2.05 s CPU, 40 `PASS` rows and `SELFTEST: PASS` in all ten runs):
+
+```text
+pair   new     old
+1      1.70    1.77
+2      1.74    2.05
+3      1.80    1.88
+4      1.98    1.90
+5      2.00    1.84
+min/median   1.70 / 1.80     1.77 / 1.88
+```
+
+The new tree is cheaper in 4 of 5 pairs; the delta is ~0.08 s of CPU, i.e. the section-11 cut
+minus the noise the current host adds to both sides.
+
+Per-arm attribution of the 40-row gate (bash `times` stamps before every output row, one run at
+loadavg 19, total 1.735 s — shares are the signal, absolutes track host load):
+
+| Section | CPU (s) | Note |
+|---|---|---|
+| §15 documented-shape arms (0.238 green + 0.194 red + 0.082 masking) | 0.524 | protected: run the documented command unscoped |
+| §16 node-create staged-set rows (6 rows, from `77caa02`) | 0.345 | added by a foreign commit mid-tick; filed as PERF-015 |
+| §3 layer-00 unreachable-crier fixture | 0.133 | |
+| §11 lane-target suite | 0.106 | was 0.213 before this change |
+| §14 adapter red + green | 0.103 | |
+| §4 + §4b clone classification | 0.162 | |
+| §1 `bash -n` × 10 | 0.054 | |
+| §12 / §13 disk-floor suites | 0.098 | |
+| §5 / §10 / §8 / §9 / §2 / §6 / §7 | 0.122 | |
+
+Conclusion: the cut this row asked for is real and measured (−0.09 s on the arm, −46 %, 38 → 15 git
+execs, and the full gate cheaper in 4 of 5 paired runs with the assertions unchanged). The gate's
+absolute number is now set by two things this diff does not touch: the two documented-command arms
+that must stay unscoped (0.524 s) and §16, which a sibling commit added while this row ran at ~3×
+this cut (0.345 s, PERF-015).
+
