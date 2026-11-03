@@ -108,7 +108,8 @@ fi
 
 # 4. verify from here
 say "  ..    verifying from the control host"
-"$HERE/verify-node.sh" --agent "$AGENT" --server "$SERVER" --port "$PORT" || bad "verify" "round trip failed"
+"$HERE/verify-node.sh" --agent "$AGENT" --server "$SERVER" --port "$PORT" \
+  || { bad "verify" "round trip failed — node remains unverified"; incomplete; }
 
 say ""
 [ "$FAILED" -eq 0 ] && { say "NODE CREATED: $AGENT"; say "manifest: /home/<uid>/.node/node.json"; exit 0; }

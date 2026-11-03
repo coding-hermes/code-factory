@@ -7,7 +7,7 @@
 # Checks, in order of what they prove:
 #   1. the agent is alive and exec-able
 #   2. the gateway answers from HERE over the tailnet (not from inside itself)
-#   3. the gateway's auth gate is closed (unauthenticated request must be 401/302)
+#   3. the gateway's auth gate is closed (unauthenticated request must be 401/302/403)
 #   4. (optional) an artifact on the node hashes the same on both sides
 # A version string is not evidence: step 2 must be a live HTTP answer from this host.
 set -uo pipefail
@@ -42,9 +42,9 @@ url="http://$ip:$PORT/api/status"
 code=$(curl -s -o /tmp/node-status.json -w '%{http_code}' --max-time 8 "$url" 2>/dev/null || echo 000)
 if [ "$code" = 200 ]; then
   ok "gateway_reachable" "$url -> 200"
-  grep -q '"auth_required":true' /tmp/node-status.json 2>/dev/null \
+  grep -Eq '"auth_required"[[:space:]]*:[[:space:]]*true[[:space:]]*[,}]' /tmp/node-status.json 2>/dev/null \
     && ok "auth_gate" "auth_required:true (a public bind must not be open)" \
-    || warn "auth_gate" "auth_required not reported — check dashboard.basic_auth"
+    || bad "auth_gate" "/api/status -> $code; auth_required:true not measured — check dashboard.basic_auth"
 else
   bad "gateway_reachable" "$url -> $code (is the harness running on 0.0.0.0:$PORT?)"
 fi
@@ -54,7 +54,7 @@ code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "http://$ip:$PORT/api
 case "$code" in
   401|302|403) ok "unauth_refused" "/api/system/stats -> $code" ;;
   200) bad "unauth_refused" "/api/system/stats -> 200 — the node is OPEN to the tailnet" ;;
-  *) warn "unauth_refused" "/api/system/stats -> $code" ;;
+  *) bad "unauth_refused" "/api/system/stats -> $code — auth refusal not verified" ;;
 esac
 
 # 4. optional artifact integrity

@@ -79,7 +79,22 @@ scripts/harness/install-hermes.sh --apply
 
 The script defaults to pin `0.19.0`, overridable with `HERMES_PIN`, uses `$HOME/hermes-venv`, and port `10800`, overridable with `NODE_GATEWAY_PORT`. It runs `hermes serve --host 0.0.0.0 --port PORT --skip-build` under `nohup`, logging to `$HOME/.node-serve-PORT.log`. It refuses to start a public bind unless `$HOME/.hermes/config.yaml` contains `basic_auth`. An inference provider key must be configured out of band in `$HOME/.hermes/.env`; never print or transmit its value. `--check` verifies presence but does not prove the provider can complete an inference request.
 
-After apply, check again and require `/api/status -> 200`. The current implementation uses a substring check for `basic_auth`; it does not independently validate the strength or correctness of the configured secret. `verify-node.sh` checks status and tests that unauthenticated `/api/system/stats` is refused with 401, 302, or 403. Require this test to pass before admitting work. A `WARN` is not approval to expose the gateway.
+After apply, check again and require `/api/status -> 200`. The current implementation uses a substring check for `basic_auth`; it does not independently validate the strength or correctness of the configured secret. `verify-node.sh:43–49` requires the status body to report boolean `auth_required: true`; absence or a non-true value prints a measured `FAIL auth_gate` and exits non-zero. `verify-node.sh:53–58` accepts unauthenticated `/api/system/stats` only with 401, 302, or 403; every other code (including 000, 404, 500 and 200) is a named `FAIL unauth_refused`. There is no auth opt-out. Require both legs to pass before admitting work. A WARN is not approval to expose the gateway: neither auth leg can warn and pass. `node-create.sh:111–116` prints `NODE INCOMPLETE` and exits 1 on failed verification; `NODE CREATED` requires verification and provisioning to pass. These probes do not prove effective config correctness or a full dispatch round trip.
+
+### Remaining warning sites before readiness/admission decisions (CF-077)
+
+`lib.sh:8` defines `warn()` as output only: it does not increment `FAILED` and never blocks by itself. All remaining callers in `scripts/` are listed below; none is an auth exception for `verify-node.sh`.
+
+| Call site | Measured warning | Does it block? |
+|---|---|---|
+| `scripts/bunker-server-install.sh:56` | `residue`: orphan homes/keys in server status | No; qualification can still pass. Operator must resolve before scaling. |
+| `scripts/bunker-server-install.sh:61` | `tool:$t`: missing python3/git/curl/jq | No; qualification can still pass. Missing tools still need resolution before their dependent operations. |
+| `scripts/project-node.sh:176` | `tool:$t`: missing optional jq/rg/node | No; node checks and manifest creation can pass if required layers pass. Repository-specific prerequisites remain operator gates. |
+| `scripts/harness/install-opencode.sh:22` | `user_space_binary`: binary not under HOME | No for `--check`; `--apply` separately refuses at lines 31–34. |
+| `scripts/harness/install-opencode.sh:28` | `non_interactive`: run/exec/serve mode not confirmed | No for `--check`; `--apply` separately refuses at lines 31–34. |
+| `scripts/harness/install-claude-code.sh:30` | `auth`: no credential surface | No for `--check`; `--apply` separately refuses at lines 33–39. This is harness inference/login auth, not gateway auth. |
+
+Do not equate these advisory checks with production readiness. In particular, adapter `--check` can pass with warnings, but the unmeasured adapters cannot be provisioned through their refusing `--apply` path. The independent gateway auth legs remain mandatory.
 
 **Network boundary:** the gateway binds `0.0.0.0`; restrict access at the network/firewall layer to the approved private overlay and intended control host. Do not expose it to the public internet. Tailnet reachability is not authentication. Keep basic-auth credentials and inference keys distinct, scoped, rotated, and out of argv/logs. If unauthenticated stats returns 200, quarantine the node immediately and close access before further testing.
 

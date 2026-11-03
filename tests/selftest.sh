@@ -478,5 +478,91 @@ for arm in owned reused copy-failure; do
 done
 rm -rf "$tmpd"
 
+# CF-077: stub transport only; exercise the real verifier and node-create admission.
+say "17. auth verification fails closed, with a pre-fix detector control"
+tmpd=$(mktemp -d)
+mkdir -p "$tmpd/bin" "$tmpd/before"
+cp "$HERE/scripts/lib.sh" "$tmpd/before/"
+cat > "$tmpd/bin/bunker" <<'EOF'
+#!/usr/bin/env bash
+for a in "$@"; do
+  case "$a" in *hostname\ -I*) echo 127.0.0.1; exit 0 ;; esac
+done
+echo ALIVE fixture
+EOF
+cat > "$tmpd/bin/curl" <<'EOF'
+#!/usr/bin/env bash
+o="" u=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o) o="$2"; shift 2 ;;
+    -*) shift ;;
+    *) u="$1"; shift ;;
+  esac
+done
+case "$u" in */api/system/stats) c="${STATS_CODE:-404}" ;; *) c=200 ;; esac
+if [ -n "$o" ] && [ "$o" != /dev/null ]; then
+  printf '%s' "${STATUS_BODY:?}" > "$o"
+fi
+printf '%s' "$c"
+EOF
+chmod +x "$tmpd/bin/bunker" "$tmpd/bin/curl"
+cf077_run() {
+  env PATH="$tmpd/bin:$PATH" BUNKER_SERVER=fixture STATS_CODE="$1" STATUS_BODY="$2" \
+    /bin/bash "$3" "${@:4}" 2>&1
+}
+body='{"status":"ok","auth_required":true}'
+# Immutable pre-fix source, not a mock of the failure or the current implementation.
+if git -C "$HERE" show bbb0719:scripts/verify-node.sh > "$tmpd/before/verify-node.sh"; then
+  out=$(cf077_run 404 "$body" "$tmpd/before/verify-node.sh" --agent f); rc=$?
+  if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
+    && printf '%s\n' "$out" | grep -Eq '^  WARN  unauth_refused — /api/system/stats -> 404$'; then
+    say "  PASS  pre-fix 404 incorrectly passes: fixture detects CF-077"
+  else
+    say "  FAIL  pre-fix 404 detector control (exit $rc)"; fails=$((fails+1))
+  fi
+else
+  say "  FAIL  pre-fix source unavailable"; fails=$((fails+1))
+fi
+for c in 401 302 403 404 000 500 200; do
+  out=$(cf077_run "$c" "$body" "$HERE/scripts/verify-node.sh" --agent f); rc=$?
+  case "$c" in 401|302|403) want=0; row=PASS; summary='VERIFY: PASS' ;; *) want=1; row=FAIL; summary='VERIFY: FAIL (1)' ;; esac
+  if [ "$rc" -eq "$want" ] && printf '%s\n' "$out" | grep -Fxq "$summary" \
+    && printf '%s\n' "$out" | grep -Eq "^  $row  unauth_refused — /api/system/stats -> $c( |$)" \
+    && printf '%s\n' "$out" | grep -Eq '^  PASS  auth_gate'; then
+    say "  PASS  auth stats $c -> $row, exit $rc"
+  else
+    say "  FAIL  auth stats $c did not produce named $row (exit $rc)"; fails=$((fails+1))
+  fi
+done
+for body in '{"status":"ok"}' '{"auth_required":false}' '{"auth_required":trueish}'; do
+  out=$(cf077_run 401 "$body" "$HERE/scripts/verify-node.sh" --agent f); rc=$?
+  if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Eq '^  FAIL  auth_gate — /api/status -> 200;' \
+    && printf '%s\n' "$out" | grep -Fxq 'VERIFY: FAIL (1)' \
+    && printf '%s\n' "$out" | grep -Eq '^  PASS  unauth_refused'; then
+    say "  PASS  auth marker $body -> named auth_gate FAIL, exit $rc"
+  else
+    say "  FAIL  auth marker $body was not refused (exit $rc)"; fails=$((fails+1))
+  fi
+done
+say "18. node creation requires both auth legs, not just successful provisioning"
+for arm in refused missing-marker closed; do
+  c=401; body='{"auth_required":true}'; want=0; summary='NODE CREATED: f'
+  [ "$arm" = refused ] && c=404
+  [ "$arm" = missing-marker ] && body='{"status":"ok"}'
+  [ "$arm" != closed ] && { want=1; summary='NODE INCOMPLETE (1)'; }
+  out=$(cf077_run "$c" "$body" "$HERE/scripts/node-create.sh" --project f \
+    --repo git@example.invalid:x/y.git --harness hermes --agent f); rc=$?
+  row=unauth_refused; [ "$arm" = missing-marker ] && row=auth_gate
+  if [ "$rc" -eq "$want" ] && printf '%s\n' "$out" | grep -Fxq "$summary" \
+    && { [ "$want" -eq 0 ] || { printf '%s\n' "$out" | grep -Eq "^  FAIL  $row" \
+      && ! printf '%s\n' "$out" | grep -q '^NODE CREATED:'; }; }; then
+    say "  PASS  node-create $arm -> $summary, exit $rc"
+  else
+    say "  FAIL  node-create $arm admitted an unverified node or rejected control (exit $rc)"; fails=$((fails+1))
+  fi
+done
+rm -rf "$tmpd"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

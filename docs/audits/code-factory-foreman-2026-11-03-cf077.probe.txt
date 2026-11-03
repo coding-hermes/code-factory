@@ -1,0 +1,42 @@
+CF-077 local admission probe evidence
+Base: bbb0719
+Scope: PATH-local curl and bunker fixtures; no live node or credentials.
+
+Probe correction: the supplied bunker stub's case pattern '*hostname* -I*'
+is invalid bash syntax (unescaped space). The measured probe uses
+'*hostname\ -I*' to match the actual 'hostname -I' command. The literal
+supplied stub produced rc=1 with no VERIFY/auth rows, so was not a detector.
+The same corrected staged .sh probe was run before and after the source fix.
+The node-create probe additionally runs the requested 401 control arm.
+
+PROBE BEFORE
+verify stats=401 rc=0 VERIFY: PASS | PASS  auth_gate — auth_required:true (a public bind must not be open) PASS  unauth_refused — /api/system/stats -> 401
+verify stats=403 rc=0 VERIFY: PASS | PASS  auth_gate — auth_required:true (a public bind must not be open) PASS  unauth_refused — /api/system/stats -> 403
+verify stats=404 rc=0 VERIFY: PASS | PASS  auth_gate — auth_required:true (a public bind must not be open) WARN  unauth_refused — /api/system/stats -> 404
+verify stats=000 rc=0 VERIFY: PASS | PASS  auth_gate — auth_required:true (a public bind must not be open) WARN  unauth_refused — /api/system/stats -> 000
+verify stats=500 rc=0 VERIFY: PASS | PASS  auth_gate — auth_required:true (a public bind must not be open) WARN  unauth_refused — /api/system/stats -> 500
+node-create stats=404 rc=0 NODE CREATED: f
+node-create stats=401 rc=0 NODE CREATED: f
+
+PROBE AFTER
+verify stats=401 rc=0 VERIFY: PASS | PASS  auth_gate — auth_required:true (a public bind must not be open) PASS  unauth_refused — /api/system/stats -> 401
+verify stats=403 rc=0 VERIFY: PASS | PASS  auth_gate — auth_required:true (a public bind must not be open) PASS  unauth_refused — /api/system/stats -> 403
+verify stats=404 rc=1 VERIFY: FAIL (1) | PASS  auth_gate — auth_required:true (a public bind must not be open) FAIL  unauth_refused — /api/system/stats -> 404 — auth refusal not verified
+verify stats=000 rc=1 VERIFY: FAIL (1) | PASS  auth_gate — auth_required:true (a public bind must not be open) FAIL  unauth_refused — /api/system/stats -> 000 — auth refusal not verified
+verify stats=500 rc=1 VERIFY: FAIL (1) | PASS  auth_gate — auth_required:true (a public bind must not be open) FAIL  unauth_refused — /api/system/stats -> 500 — auth refusal not verified
+node-create stats=404 rc=1 NODE INCOMPLETE (1)
+node-create stats=401 rc=0 NODE CREATED: f
+
+Acceptance commands (repository root)
+bash -n scripts/verify-node.sh scripts/node-create.sh tests/selftest.sh
+  exit 0
+bash tests/selftest.sh
+  before: exit 0, 40 PASS rows, SELFTEST: PASS
+  after: exit 0, 54 PASS rows, SELFTEST: PASS
+  new sections also cover 302, 200, absent/false/malformed auth marker,
+  node-create missing-marker refusal, and pre-fix bbb0719 404 false success.
+./scripts/boardctl validate
+  exit 0, RESULT: OK (22 warning(s)); existing legacy vocabulary/schema warnings.
+
+Boundary: local fixture evidence only. No live deployment, external scheduler
+admission or inference proved; no push (foreman owns publication).
