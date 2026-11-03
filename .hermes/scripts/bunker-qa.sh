@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Controller-side orchestration only; generated test battery is fenced to bunker-* JIT users.
 # bunker-qa.sh — QA FOREMAN pipeline: FULL fresh-system CI pass on a JIT bunker agent.
 # The stand-in PM's sibling: where the PM finds work/gaps on boards, this finds
 # BRITTLENESS by running the project on a CLEAN machine (Bane doctrine 08-24:
 # "not just we have valid code but does that code give us things that are brittle").
 #
-# Cells: fresh-install · ci-pass (act --bind) · docker-deploy · ui-probe · upgrade
+# Cells: fresh install · ci-pass (act --bind) · docker-deploy · ui-probe · upgrade
 #        chaos-disconnect · chaos-shutdown · chaos-corruption · chaos-resource · chaos-errorpath
 #
 # Architecture: ALL remote commands run from a generated script (qa-run.sh) shipped
@@ -21,16 +20,24 @@
 #                                               START the battery DETACHED on the
 #                                               agent (~60-120s). Writes $EVIDENCE.meta
 #                                               and one launch cell. Waits on NO cells.
-#   bunker-qa.sh collect --evidence <path>    — PHASE B: poll → pull → destroy.
-#                                               Idempotent; prints RUNNING (rc=0, no
-#                                               destroy) while the battery is alive.
+#   bunker-qa.sh collect --evidence <path>    — PHASE B: poll → sync → pull →
+#                                               destroy. Idempotent; prints RUNNING
+#                                               (rc=0, no destroy) while the battery
+#                                               is alive, syncing its evidence rows
+#                                               incrementally (QA-BUNKER-77). On a
+#                                               FINISHED agent it pulls the per-cell
+#                                               logs BEFORE destroy; an agent reaped
+#                                               before the logs could be pulled is
+#                                               graded agent-gone (rc=0) when its
+#                                               rows were already synced.
+#   bunker-qa.sh resolve <repo-dir>           — SAFE PROBE (QA-BUNKER-REVIEW-3):
+#                                               print the product root run/launch
+#                                               would sync/grade for <repo-dir> —
+#                                               stand-in board-symlink resolution,
+#                                               explicit BUNKER_QA_SUBDIR override,
+#                                               or the named refusal. NO agent, NO
+#                                               battery, NO network.
 #   bunker-qa.sh status
-#
-# Docker lifecycle cells (`docker-deploy`, `chaos-shutdown`) are opt-in because
-# `docker compose down/stop/kill` can affect an existing stack. Enable them only
-# for a disposable QA target with `BUNKER_QA_ENABLE_DOCKER_LIFECYCLE=1`.
-# The generated remote battery also refuses an active Hermes gateway or a
-# compose file that binds the persistent `~/.hermes` home to `/opt/data`.
 #
 # WHY THE SPLIT (QA-HERMES-CANOPY-8, 2026-09-15): a full fresh-system battery
 # (spawn, sync, toolchain bootstrap, act CI, native suite, compose, 4 chaos
@@ -43,136 +50,15 @@
 # NOTE: NO `set -e` on purpose — every cell records its own status via RC echoes.
 set -uo pipefail
 
-BUNKER_QA_ENABLE_DOCKER_LIFECYCLE="${BUNKER_QA_ENABLE_DOCKER_LIFECYCLE:-0}"
-case "$BUNKER_QA_ENABLE_DOCKER_LIFECYCLE" in
-  0|1) ;;
-  *) echo "ERROR: BUNKER_QA_ENABLE_DOCKER_LIFECYCLE must be 0 or 1" >&2; exit 2 ;;
-esac
-
-# A controller on the live Hermes host must never enable Compose lifecycle
-# tests, even if an inherited environment sets the opt-in flag. This is a
-# host-side hard stop; the remote battery repeats its own target-side checks.
-# Override (DF-HIVEMIND-WORK-58, 2026-10-31): the auto-detection below vetoes
-# compose cells whenever the CONTROLLER is a live Hermes host — even when the
-# battery's compose cells target a disposable REMOTE agent (compose up/down runs
-# in ~/qa-<proj> on the JIT agent, never on the controller). An explicit
-# BUNKER_QA_DOCKER_LIFECYCLE_HOST_BLOCK=0 (or =1) in the launch environment
-# overrides auto-detection: use 0 ONLY for batteries whose compose cells target
-# disposable agents. The remote battery's own target-side gates (agent gateway,
-# ~/.hermes compose bind) still refuse destructive cells where they should.
-if [ "${BUNKER_QA_DOCKER_LIFECYCLE_HOST_BLOCK:-auto}" = "auto" ]; then
-  BUNKER_QA_DOCKER_LIFECYCLE_HOST_BLOCK=0
-  if [ -f "$HOME/.hermes/state.db" ]; then
-    _qa_controller_pwd=$(pwd -P)
-    case "$_qa_controller_pwd/" in
-      "$HOME/.hermes/"*) BUNKER_QA_DOCKER_LIFECYCLE_HOST_BLOCK=1 ;;
-    esac
-  fi
-  if XDG_RUNTIME_DIR="/run/user/$(id -u)" systemctl --user is-active --quiet hermes-gateway.service 2>/dev/null; then
-    BUNKER_QA_DOCKER_LIFECYCLE_HOST_BLOCK=1
-  fi
-fi
-if [ "$BUNKER_QA_DOCKER_LIFECYCLE_HOST_BLOCK" = "1" ]; then
-  BUNKER_QA_ENABLE_DOCKER_LIFECYCLE=0
-fi
-
 # Default server: bunker-las-03 was REMOVED from ~/.bunker/config.yaml
 # (stale default produced 4 consecutive days of P1 "spawn failed" findings,
 # 27+ re-files — QA-DAGGER-GUARD 2026-09-10), then re-registered 2026-09-10
 # and live-probe-verified 2026-09-22 (spawn/exec/destroy green, tick 547
 # QA-HERMES-CANOPY-19). bunker-las-02 remains the verified default.
-# Override with BUNKER_QA_SERVER.
-SERVER="${BUNKER_QA_SERVER:-bunker-mvp}"
-# QA-DEXDAT-CORE-17: controller-side launch/run serialization is keyed by the
-# target server. The lock is held with flock on fd 9; launch hands that fd to a
-# detached keeper until the remote battery finishes, so launch's short-lived
-# controller process cannot release the lock while its battery is still active.
-QA_BATTERY_LOCK_DIR="${BUNKER_QA_LOCK_DIR:-/tmp}"
-QA_BATTERY_LOCK_FD=9
-QA_BATTERY_LOCK_PATH=""
-qa_battery_lock_path() {
-  local srv="${1:-$SERVER}" key
-  key=$(printf '%s' "$srv" | LC_ALL=C tr -c 'A-Za-z0-9_.-' '_')
-  printf '%s/bunker-qa-%s.battery.lock\n' "$QA_BATTERY_LOCK_DIR" "$key"
-}
-qa_battery_lock_log() {
-  printf '[%s] %s\n' "$(date -u +%FT%TZ)" "$*"
-}
-qa_battery_lock_acquire() {
-  QA_BATTERY_LOCK_PATH=$(qa_battery_lock_path "$SERVER")
-  mkdir -p "$QA_BATTERY_LOCK_DIR"
-  exec 9>>"$QA_BATTERY_LOCK_PATH"
-  if flock -n "$QA_BATTERY_LOCK_FD"; then
-    qa_battery_lock_log "acquired battery lock on $SERVER ($QA_BATTERY_LOCK_PATH)"
-  else
-    qa_battery_lock_log "waiting for battery lock on $SERVER ($QA_BATTERY_LOCK_PATH)"
-    flock "$QA_BATTERY_LOCK_FD"
-    qa_battery_lock_log "acquired battery lock on $SERVER ($QA_BATTERY_LOCK_PATH)"
-  fi
-}
-# launch() must retain the per-server lock after this controller process exits.
-# The keeper polls the marker/process on the spawned JIT agent and exits only
-# when the detached battery is finished or the agent is gone; fd 9 is inherited
-# by the detached process, so flock releases automatically with its exit.
-qa_battery_lock_keeper() {
-  local agent_id="$1" srv="$2" ssh_port="$3" host_key="$4"
-  local state seen_running=0 gone_streak=0 start_deadline
-  # Allow the detached remote shell to publish qa-run.sh and its process before
-  # the first poll; otherwise a launch/startup race could release the lock early.
-  start_deadline=$(( $(date +%s) + ${BUNKER_QA_LOCK_KEEPER_START_TIMEOUT:-600} ))
-  sleep "${QA_BATTERY_LOCK_KEEPER_START_GRACE:-5}"
-  while :; do
-    state=$(timeout "${BUNKER_QA_LOCK_KEEPER_SSH_TIMEOUT:-30}" \
-      ssh -p "$ssh_port" -i "$host_key" -i "$HOME/.bunker/keys/$agent_id" \
-        -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o BatchMode=yes \
-        "bunker-$agent_id@$srv" \
-        "if [ -f ~/qa-run.finished ]; then echo FINISHED; elif pgrep -f '[q]a-run[.]sh' >/dev/null 2>&1; then echo RUNNING; else echo GONE; fi" \
-        2>/dev/null | tail -1 || true)
-    case "$state" in
-      FINISHED) return 0 ;;
-      RUNNING) seen_running=1; gone_streak=0 ;;
-      *)
-        if [ "$seen_running" -eq 1 ]; then
-          gone_streak=$((gone_streak + 1))
-          if [ "$gone_streak" -ge "${BUNKER_QA_LOCK_KEEPER_GONE_STREAK:-3}" ]; then
-            return 0
-          fi
-        elif [ "$(date +%s)" -ge "$start_deadline" ]; then
-          qa_battery_lock_log "keeper: battery never observed RUNNING within ${BUNKER_QA_LOCK_KEEPER_START_TIMEOUT:-600}s start window (agent $agent_id) — releasing lock as failed-start escape"
-          return 0
-        fi ;;
-    esac
-  done
-}
-qa_battery_lock_keep_for_launch() {
-  local agent_id="$1" srv="$2" ssh_port="$3" host_key="$4" keeper_log
-  keeper_log="${QA_BATTERY_LOCK_PATH}.keeper.log"
-  export -f qa_battery_lock_keeper
-  nohup setsid bash -c '
-    qa_battery_lock_keeper "$1" "$2" "$3" "$4"
-  ' _ "$agent_id" "$srv" "$ssh_port" "$host_key" \
-    >"$keeper_log" 2>&1 &
-  local keeper_pid=$!
-  qa_battery_lock_log "battery lock keeper pid=$keeper_pid server=$srv agent=$agent_id"
-  # The keeper now owns the inherited open file description. Closing fd 9 in
-  # this short-lived launch process lets the next launch wait on the keeper.
-  exec 9>&-
-}
-# QA-HIVEMIND-WORK-18(a): the agent SSH port is SERVER-SPECIFIC — table updated
-# 2026-11-01 (qa-foreman tick): ALL reachable fleet hosts now answer agent SSH on
-# 22. TCP probe 2026-11-01 across ~/.bunker/config.yaml: 13/14 hosts 22=OPEN
-# 2223=closed (hermes-fleet-03 answers BOTH; bunker-las-04 + cube-las-00 fully
-# unreachable). The old "las-fleet → 2223" default went stale and burned 3
-# batteries (las-02/las-03 repo-sync "connection refused") plus 2 false
-# "server unreachable" preflights (hermes-fleet-05 is UP on 22) on 2026-11-01
-# alone. Default is now 22 for every host; an explicit BUNKER_QA_SSH_PORT
-# export still overrides everything, and a future per-host exception only
-# needs a case arm again.
-server_ssh_port() {
-  local srv="${1:-$SERVER}"
-  [ -n "${BUNKER_QA_SSH_PORT:-}" ] && { echo "$BUNKER_QA_SSH_PORT"; return; }
-  echo 22
-}
+# Override with BUNKER_QA_SERVER; BUNKER_QA_HOST is accepted as an alias
+# (QA-BUNKER-B20, 2026-10-10) so callers that name the variable after the
+# CONCEPT (host) rather than the bunker CLI's config key get the same lever.
+SERVER="${BUNKER_QA_SERVER:-${BUNKER_QA_HOST:-bunker-mvp}}"
 # QA-keyfix 2026-09-30: ~/.ssh/id_ed25519_bunker was clobbered by an ELF binary
 # (2026-09-28), so any ssh carrying it as the ONLY IdentitiesOnly identity fails
 # auth and every preflight graded its server "unreachable". BUNKER_QA_HOST_KEY
@@ -192,6 +78,119 @@ EVIDENCE="${BUNKER_QA_EVIDENCE:-/tmp/bunker-qa-evidence.jsonl}"
 if [ -z "${BUNKER_QA_EVIDENCE:-}" ] && [ "${BUNKER_QA_ALLOW_SHARED_EVIDENCE:-0}" != "1" ]; then
   EVIDENCE="/tmp/bunker-qa-evidence-$(date -u +%Y%m%dT%H%M%SZ)-$$.jsonl"
 fi
+
+# ─── QA-BUNKER-60 (2026-10-07): slice sizing + repo-weight preflight ───
+# JIT QA agents spawned with the DEFAULT slice (2 of 16 host cores, 4G) took
+# ~5% CPU per rustc process on a heavy workspace (wasmtime + arrow + tree-sitter
+# C parsers): the install leg ran 2h+ and the battery was salvaged at ~3h
+# with cells unwritten — the TTL window cannot fit heavy workspaces on a 2-CPU
+# slice. Three levers, all opt-in-by-shape (default slice preserved for light
+# repos; nothing else about the spawn contract changes):
+#   1. qa_slice_args(): BUNKER_QA_CPUS (default 4.0 ONLY for cargo/go
+#      workspaces) + BUNKER_QA_MEM (bytes, only when set) → `bunker spawn
+#      --cpu/--memory` (flags verified against internal/cli/spawn.go:369-370:
+#      --cpu float64 cores, --memory uint64 bytes).
+#   2. qa_repo_dep_count(): dependency weight for the preflight WARN
+#      (Cargo.lock `name = ` rows; go.mod `=>` indirect arrows).
+#   3. qa_repo_weight_warn(): fires the slice-too-small WARN (stderr + a
+#      launch-evidence note cell) when the repo is heavy AND the resolved CPU
+#      quota is still the 2-CPU host default.
+# Both entry paths (run/launch) call qa_preflight_repo_weight() so a heavy repo
+# warns BEFORE any spawn burns a TTL on an undersized slice.
+qa_slice_cpus() { # stdout: resolved CPU quota string, "" = keep bunkerd default
+  if [ -n "${BUNKER_QA_CPUS:-}" ]; then printf '%s' "$BUNKER_QA_CPUS"; return 0; fi
+  # Only cargo/go workspaces get an automatic bump — the 2-CPU default slice is
+  # the right size for everything else (npm/pip/make repos measured fine).
+  if [ -f "$1/Cargo.toml" ] || [ -f "$1/go.mod" ]; then printf '4.0'; fi
+  return 0
+}
+qa_slice_args() { # <repo-dir> — stdout: spawn flags ("" = none; keep contract)
+  local cpus; cpus=$(qa_slice_cpus "$1")
+  [ -n "$cpus" ] && printf -- '--cpu %s' "$cpus"
+  [ -n "${BUNKER_QA_MEM:-}" ] && printf ' --memory %s' "$BUNKER_QA_MEM"
+  return 0
+}
+qa_repo_dep_count() { # <repo-dir> — stdout: dependency count, "" = not counted
+  if [ -f "$1/Cargo.lock" ]; then grep -c 'name = ' "$1/Cargo.lock" || true
+  # go.mod direct+indirect: count tab-indented `module vX.Y.Z` require lines.
+  # (A `grep -c '=>'` counts only `replace a => b` directives — near-zero on a
+  # normal go.mod — so the WARN would never fire for go workspaces. The pattern
+  # is ANSI-C quoted: glibc grep ERE treats a literal-backslash `\t` as `t`,
+  # which matches nothing — probe-verified 2026-10-07, QA-BUNKER-60.)
+  elif [ -f "$1/go.mod" ]; then grep -cE $'^\t\\S+ v[0-9]' "$1/go.mod" || true; fi
+  return 0
+}
+qa_repo_weight_warn() { # <repo-dir> <evidence-file> — WARN when heavy AND 2-CPU default
+  local repo="$1" evfile="$2" deps cpus
+  deps=$(qa_repo_dep_count "$repo")
+  [ -n "$deps" ] || return 0
+  [ "$deps" -gt 200 ] || return 0
+  cpus=$(qa_slice_cpus "$repo")
+  # Warn only when the resolved quota is still the 2-CPU HOST default — an
+  # explicit BUNKER_QA_CPUS (even 2.0) is an operator decision, not an oversight.
+  [ -n "${BUNKER_QA_CPUS:-}" ] && return 0
+  [ "$cpus" = "4.0" ] && return 0
+  echo "WARN: slice too small for this workspace ($deps deps) — set BUNKER_QA_CPUS>=4" >&2
+  if [ -n "$evfile" ] && [ -f "$evfile" ]; then
+    printf '{"project":"%s","cell":"launch-note","status":"INFO","detail":"slice too small for this workspace (%s deps) — set BUNKER_QA_CPUS>=4 (cargo/go workspaces need more than the 2-CPU default slice; heavy rust builds measured 2h+ on install)","ts":"%s"}\n' \
+      "$(basename "$repo")" "$deps" "$(date -u +%FT%TZ)" >> "$evfile"
+  fi
+  return 0
+}
+qa_preflight_repo_weight() { # <repo-dir> — evidence not yet open here: stderr only
+  qa_repo_weight_warn "$1" ""
+}
+
+# ─── qa_run_summary (QA-BUNKER-B20, 2026-10-10) — the HONEST verdict line ───
+# The old run printed ONLY wrapper-step counts, so "all steps passed" could
+# coexist with "audited nothing" (the dropped-default-server class this task
+# files): every fleet-side parser (dagger-role-report.py greps
+# `Total time: .* | Passed: (\d+) | Failed: (\d+)` from pipeline logs) then
+# reported SUCCESS over a run that audited zero cells. Pure (text in → text +
+# rc out) so the regression test drives the REAL accounting without a host:
+#   * audited  = AUDIT cells with an actual verdict: PASS/OK/FAIL + INFO
+#                (ENV-BLOCKED/"agent lacks X" grades audit the ENVIRONMENT —
+#                discarding them would re-open the audited-nothing hole);
+#   * findings = FAIL verdicts on AUDIT cells (wrapper FAILs — spawn/sync/
+#                collect refusals — are refusal bookkeeping, not repo
+#                findings; they stay visible in the evidence file and, when
+#                they leave zero audit cells, drive the NOTHING-AUDITED rc);
+#   * wrapper cells (run_battery, launch, launch-note, collect,
+#     destroy-verify) are excluded BY NAME — a wrapper-only evidence file is
+#     exactly the "audited nothing" shape, whatever its statuses say;
+#   * not-verified = UNVERIFIED/SKIP/unknown statuses (never findings, never
+#                audited);
+#   * ZERO audited rows ⇒ nonzero rc + the line still carries
+#     "NOTHING AUDITED" — a caller that ignores the rc can no longer read a
+#     success from the text. Additive format; "Passed:"/"Failed:" fields keep
+#     their positions and meanings (existing consumers survive).
+# Per-row cell+status extraction is line-scoped (cell() writes one JSON object
+# per line; the collect merge re-serializes json.dumps → one line per row), so
+# a status string quoted inside a detail of ANOTHER row can never cross rows.
+qa_run_summary() { # <evidence-jsonl> — prints summary; rc 0 = honest PASS verdict
+  local ev="$1" audited=0 findings=0 nv=0 line pair cell status
+  while IFS= read -r line; do
+    pair=$(printf '%s\n' "$line" | sed -nE 's/.*"cell":"([a-z_-]+)".*"status":"([A-Za-z-]+)".*/\1 \2/p' | head -1)
+    [ -n "$pair" ] || continue
+    cell="${pair%% *}"; status="${pair#* }"
+    case "$cell" in
+      run_battery|launch|launch-note|collect|destroy-verify) continue ;;
+    esac
+    case "$status" in
+      FAIL) findings=$((findings+1)); audited=$((audited+1)) ;;
+      PASS|OK|INFO) audited=$((audited+1)) ;;
+      *) nv=$((nv+1)) ;;   # UNVERIFIED / SKIP / anything unknown: no verdict
+    esac
+  done < "$ev" 2>/dev/null
+  printf 'Total time: ? | Passed: %d | Failed: %d | Audited: %d | Findings: %d | NotVerified: %d' \
+    "$((audited - findings))" "$findings" "$audited" "$findings" "$nv"
+  if [ "$audited" -eq 0 ]; then
+    printf ' — NOTHING AUDITED (0 cells with a verdict; wrapper steps do not count)\n'
+    return 1
+  fi
+  printf '\n'
+  [ "$findings" -eq 0 ]
+}
 
 log()  { echo "→ $*"; }
 
@@ -261,6 +260,166 @@ qa_destroy_agent() {
   return 0
 }
 
+# ─── tick-death watchdog (QA-BUNKER-75) ─────────────────────────────────────
+# launch() and run() persist a small controller-side lock as soon as the bunker
+# returns an agent id.  The lock binds that agent to the process that owns the
+# QA tick (BUNKER_QA_TICK_PID, or the invoking shell's PPID for compatibility).
+# A detached qa-run.sh cannot tell whether its controller died, so collect()
+# checks this lock before its first SSH probe.  Dead locks are also swept before
+# every new battery starts.  The lock directory is deliberately outside the
+# repository and mode 0700: it contains only lifecycle metadata, never secrets.
+qa_orphan_lock_dir() {
+  local dir="${BUNKER_QA_ORPHAN_LOCK_DIR:-/tmp/bunker-qa-orphans}"
+  mkdir -p "$dir" 2>/dev/null || return 1
+  chmod 700 "$dir" 2>/dev/null || return 1
+  printf '%s\n' "$dir"
+}
+
+qa_agent_lock_path() {
+  local id="$1" dir
+  dir=$(qa_orphan_lock_dir) || return 1
+  printf '%s/%s.lock\n' "$dir" "$id"
+}
+
+qa_write_agent_lock() { # <agent-id> <tick-pid> <server> <evidence> -> path
+  local id="$1" tick_pid="${2:-${BUNKER_QA_TICK_PID:-$$}}" server="$3" evidence="$4" path tmp
+  [[ "$id" =~ ^[a-z0-9-]{1,64}$ ]] || return 1
+  [[ "$tick_pid" =~ ^[0-9]+$ ]] || return 1
+  path=$(qa_agent_lock_path "$id") || return 1
+  tmp=$(mktemp "${path}.tmp.XXXXXX") || return 1
+  umask 077
+  printf 'format=1\nagent=%s\ntick_pid=%s\nserver=%s\nevidence=%s\ncreated=%s\n' "$id" "$tick_pid" "$server" "$evidence" "$(date -u +%FT%TZ)" > "$tmp" || { rm -f "$tmp"; return 1; }
+  chmod 600 "$tmp" 2>/dev/null || { rm -f "$tmp"; return 1; }
+  mv -f "$tmp" "$path" || return 1
+  printf '%s\n' "$path"
+}
+
+qa_remove_agent_lock() {
+  local id="$1" path
+  path=$(qa_agent_lock_path "$id") || return 1
+  rm -f "$path"
+}
+
+qa_tick_pid_alive() {
+  local pid="$1"
+  [[ "$pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$pid" 2>/dev/null
+}
+
+qa_tick_watchdog_state() { # <agent-id>: 0=alive/legacy, 1=expired dead, 2=invalid, 3=recent dead
+  local id="$1" path tick_pid now age ttl
+  path=$(qa_agent_lock_path "$id") || return 2
+  # No controller-side lock is the explicitly supported legacy shape. Older
+  # launch records remain collectible because there is no tick ownership to
+  # evaluate; only a present lock can impose the watchdog policy.
+  [ -f "$path" ] || return 0
+  tick_pid=$(sed -n 's/^tick_pid=//p' "$path" 2>/dev/null | head -1)
+  [[ "$tick_pid" =~ ^[1-9][0-9]*$ ]] || return 2
+  qa_tick_pid_alive "$tick_pid" && return 0
+  now=$(date -u +%s)
+  ttl=$(qa_watchdog_ttl_seconds) || return 2
+  age=$(qa_lock_age_seconds "$path" "$now") || return 2
+  [ "$age" -lt "$ttl" ] && return 3
+  return 1
+}
+
+qa_lock_value() { # <lock> <key>
+  sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1
+}
+
+qa_watchdog_ttl_seconds() { # <ttl> -> seconds; invalid values are fail-closed
+  local ttl="${1:-${BUNKER_QA_ORPHAN_TTL:-2h}}" n unit
+  n="${ttl%[smhd]}"; unit="${ttl#$n}"
+  [[ "$n" =~ ^[1-9][0-9]*$ ]] || return 1
+  case "$unit" in
+    s) printf '%s\n' "$n" ;;
+    m) printf '%s\n' "$((n * 60))" ;;
+    h) printf '%s\n' "$((n * 3600))" ;;
+    d) printf '%s\n' "$((n * 86400))" ;;
+    *) return 1 ;;
+  esac
+}
+
+qa_lock_age_seconds() { # <lock> <now-epoch> -> age; invalid timestamps fail closed
+  local lock="$1" now="$2" created created_epoch
+  created=$(qa_lock_value "$lock" created)
+  [ -n "$created" ] || return 1
+  created_epoch=$(date -u -d "$created" +%s 2>/dev/null) || return 1
+  [ "$created_epoch" -le "$now" ] || return 1
+  printf '%s\n' "$((now - created_epoch))"
+}
+
+# Preserve the evidence before destroying an orphan. The command seam keeps the
+# watchdog testable without a live bunker; production copies the agent's logs
+# into the quarantine directory over SSH. A local evidence file is copied first
+# because it survives even when the agent's SSH endpoint died with the tick.
+qa_quarantine_orphan_evidence() { # <agent-id> <server> <evidence> -> destination
+  local id="$1" server="$2" evidence="${3:-}" root stamp destination
+  root="${BUNKER_QA_QUARANTINE_DIR:-/var/lib/bunker-qa/quarantine}"
+  stamp=$(date -u +%Y%m%dT%H%M%SZ)
+  destination="$root/${id}-${stamp}"
+  mkdir -p "$destination" 2>/dev/null || return 1
+  if [ -n "$evidence" ] && [ -f "$evidence" ]; then
+    cp -p "$evidence" "$destination/evidence.jsonl" 2>/dev/null || return 1
+  fi
+  if [ -n "${BUNKER_QA_QUARANTINE_CMD:-}" ]; then
+    "$BUNKER_QA_QUARANTINE_CMD" "$id" "$server" "$destination" "$evidence" || return 1
+  else
+    local port="${BUNKER_QA_SSH_PORT:-2223}"
+    timeout "${BUNKER_QA_QUARANTINE_TIMEOUT:-30}" ssh -p "$port" \
+      -i "$BUNKER_QA_HOST_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no \
+      -o BatchMode=yes "bunker-$id@$server" \
+      "set -eu; d=$(printf '%q' "$destination"); s=$(printf '%q' "/var/log/bunker-qa/$id"); mkdir -p \"\$d\"; found=0; for f in \"\$s\"/*.log; do [ -f \"\$f\" ] || continue; cp -p \"\$f\" \"\$d/\"; found=1; done; [ \"\$found\" -eq 1 ]" \
+      >/dev/null 2>&1 || return 1
+  fi
+  printf '%s\n' "$destination"
+}
+
+qa_orphan_lock_eligible() { # <lock> <now-epoch>: dead tick and older than watchdog TTL
+  local lock="$1" now="$2" tick_pid age ttl
+  tick_pid=$(qa_lock_value "$lock" tick_pid)
+  qa_tick_pid_alive "$tick_pid" && return 1
+  ttl=$(qa_watchdog_ttl_seconds) || return 1
+  age=$(qa_lock_age_seconds "$lock" "$now") || return 1
+  [ "$age" -ge "$ttl" ]
+}
+
+# Destroy dead-tick agents without using agent_ssh.  The bunker CLI talks to
+# the daemon directly, so this remains safe even when the agent's SSH endpoint
+# is already gone.  A lock is retained when the daemon cannot prove absence;
+# the next battery gets another chance instead of silently losing the handle.
+qa_cleanup_orphan_agents() {
+  local dir lock agent tick_pid server evidence listed destroy_rc list_rc now quarantine
+  dir=$(qa_orphan_lock_dir) || return 0
+  now=$(date -u +%s)
+  for lock in "$dir"/*.lock; do
+    [ -f "$lock" ] || continue
+    agent=$(qa_lock_value "$lock" agent)
+    tick_pid=$(qa_lock_value "$lock" tick_pid)
+    server=$(qa_lock_value "$lock" server)
+    evidence=$(qa_lock_value "$lock" evidence)
+    [[ "$agent" =~ ^[a-z0-9-]{1,64}$ ]] || continue
+    [[ "$server" != *$'\n'* ]] || continue
+    qa_orphan_lock_eligible "$lock" "$now" || continue
+    echo "WATCHDOG: reaping tick-death-orphan agent=$agent server=$server tick_pid=$tick_pid" >&2
+    quarantine=$(qa_quarantine_orphan_evidence "$agent" "$server" "$evidence") || {
+      echo "WATCHDOG: evidence preservation failed for agent=$agent — retaining lock and refusing destroy" >&2
+      continue
+    }
+    destroy_rc=0
+    bunker destroy "$agent" --server "$server" >/dev/null 2>&1 || destroy_rc=$?
+    listed=""
+    list_rc=0
+    listed=$(bunker list --server "$server" 2>/dev/null) || list_rc=$?
+    if [ "$list_rc" -eq 0 ] && ! printf '%s\n' "$listed" | grep -qF -- "$agent"; then
+      rm -f "$lock"
+      echo "WATCHDOG: orphan reaped agent=$agent destroy_rc=$destroy_rc evidence=$quarantine" >&2
+    else
+      echo "WATCHDOG: orphan remains agent=$agent destroy_rc=$destroy_rc list_rc=$list_rc evidence=$quarantine — retaining lock" >&2
+    fi
+  done
+  return 0
+}
+
 spawn_agent() {
   # QA-HERMES-CANOPY-16 (2026-09-21): an agent that spawns server-side but is
   # unreachable for the launch is an ORPHAN (holds a slot until TTL, no
@@ -270,29 +429,74 @@ spawn_agent() {
   # fails), DESTROY that id before retrying or failing.
   # stdout contract unchanged: success prints ONLY the agent id, rc 0;
   # total failure prints nothing on stdout, rc 1.
-  local out id drc
+  local out id drc slice_args
+  # QA-BUNKER-60 (2026-10-07): a cargo/go workspace builds on 4 CPUs by default
+  # (BUNKER_QA_CPUS/BUNKER_QA_MEM override; empty = the 2-CPU/4G host default,
+  # flags omitted — see qa_slice_args()). stdout contract unchanged: success
+  # still prints ONLY the agent id (spawn output is captured, never relayed).
+  slice_args=$(qa_slice_args "$repo")
   for attempt in 1 2 3; do
-    out=$(bunker spawn --server "$SERVER" --ttl "$TTL" 2>&1)
-    id=$(echo "$out" | grep -oP 'keys/\K[a-f0-9]+' | head -1)
+    out=$(timeout "${BUNKER_QA_SPAWN_TIMEOUT:-45}" bunker spawn --server "$SERVER" --ttl "$TTL" $slice_args 2>&1)
+    spawn_rc=$?
+    if [ "$spawn_rc" -eq 124 ]; then
+      echo "spawn attempt $attempt timed out after ${BUNKER_QA_SPAWN_TIMEOUT:-45}s on $SERVER" >&2
+    fi
+    # PERF-002 (2026-10-25): id extraction must survive CLI output changes.
+    # Primary: the bundle's key-path line ("SSH Key: (saved to ~/.bunker/keys/<id> ...").
+    # Charset widened from hex-only [a-f0-9]+ to the CLI's documented agent-id
+    # charset ^[a-z0-9-]{1,64}$ — the old class SILENTLY TRUNCATED non-hex ids
+    # (e.g. keys/dec-1 → "dec"), which ssh-probes a nonexistent id while the
+    # REAL agent leaks to TTL: the exact orphan class QA-HERMES-CANOPY-16
+    # guards. Fallbacks cover the same id reworded (no keys/ prefix, different
+    # label) so a CLI phrasing change degrades to a retry/FAIL, never a
+    # wrong-id handoff.
+    id=$(echo "$out" | grep -oE 'keys/[a-z0-9-]+' | head -1 | cut -d/ -f2)
+    if [ -z "$id" ]; then
+      id=$(echo "$out" | grep -oE '\bAgent created: [a-z0-9-]+' | head -1 | awk '{print $3}')
+    fi
+    if [ -z "$id" ]; then
+      id=$(echo "$out" | grep -oE '\bagent [a-z0-9-]+ (created|spawned)\b' | head -1 | awk '{print $2}')
+    fi
+    # Non-negotiable shape gate (bunker CLI: ^[a-z0-9-]{1,64}$): a reworded
+    # output must never hand a garbage extraction to the ssh probe.
+    [[ "$id" =~ ^[a-z0-9-]{1,64}$ ]] || id=""
     if [ -z "$id" ]; then
       [ $attempt -lt 3 ] && { echo "  spawn attempt $attempt failed: $(echo "$out" | tail -1)" >&2; sleep "${BUNKER_QA_RETRY_SLEEP:-5}"; }
       continue
     fi
+    # Keep the spawn transcript as local spawn metadata. Newer daemon/CLI
+    # versions may include the agent's SSH port there; agent_ssh_port() prefers
+    # that per-agent value and keeps the environment/default fallback for older
+    # output shapes.
+    if [ -n "${EVIDENCE:-}" ]; then
+      printf '%s\n' "$out" > "${EVIDENCE}.agent-${id}.spawn"
+    fi
     # Reachability gate: the agent must answer ssh BEFORE it is handed off,
     # so an unreachable spawn never leaks to the caller as a "success".
-    if timeout "${BUNKER_QA_PROBE_TIMEOUT:-180}" ssh -p "$(server_ssh_port "$SERVER")" -i "$BUNKER_QA_HOST_KEY" -i "$HOME/.bunker/keys/$id" -o IdentitiesOnly=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=no -o BatchMode=yes "bunker-$id@$SERVER" true 2>/dev/null; then
+    # QA-BUNKER-75: persist ownership immediately after spawn id extraction,
+    # before the reachability probe. A controller death during that probe must
+    # still leave enough metadata for the next battery to reap this agent.
+    if ! qa_write_agent_lock "$id" "${BUNKER_QA_TICK_PID:-$PPID}" "$SERVER" "${EVIDENCE:-}" >/dev/null; then
+      echo "spawn attempt $attempt could not write tick watchdog lock for agent $id — destroying before retry" >&2
+      bunker destroy "$id" --server "$SERVER" >/dev/null 2>&1 || true
+      [ "$attempt" -lt 3 ] && sleep "${BUNKER_QA_RETRY_SLEEP:-5}"
+      continue
+    fi
+    # Reachability gate: the agent must answer ssh BEFORE it is handed off,
+    # so an unreachable spawn never leaks to the caller as a "success".
+    # A single probe must leave room for the launch failure path to record the
+    # cause before the caller's 180s ceiling. The old 180s default could consume
+    # that entire ceiling inside one attempt, before LAUNCHED or ERROR was
+    # emitted. Operators can raise it explicitly when diagnosing slow hosts.
+    probe_rc=0
+    if timeout "${BUNKER_QA_PROBE_TIMEOUT:-30}" ssh -p "$(agent_ssh_port "$id")" -i "$BUNKER_QA_HOST_KEY" -i "$HOME/.bunker/keys/$id" -o IdentitiesOnly=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=no -o BatchMode=yes "bunker-$id@$SERVER" true 2>/dev/null; then
       echo "$id"
       return 0
+    else
+      probe_rc=$?
+      echo "spawn attempt $attempt produced agent $id but ssh reachability probe failed (rc=$probe_rc; timeout=${BUNKER_QA_PROBE_TIMEOUT:-30}s) — destroying before retry" >&2
     fi
-    # QA-HIVEMIND-WORK-18(a): port-22 fallback BEFORE any destroy — the table
-    # may be wrong for a new server, and a healthy fresh agent must never be
-    # destroyed over a wrong port guess. Destroy only when BOTH ports fail.
-    if timeout "${BUNKER_QA_PROBE_TIMEOUT:-180}" ssh -p 22 -i "$BUNKER_QA_HOST_KEY" -i "$HOME/.bunker/keys/$id" -o IdentitiesOnly=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=no -o BatchMode=yes "bunker-$id@$SERVER" true 2>/dev/null; then
-      echo "  primary agent port $(server_ssh_port "$SERVER") failed but port 22 answered — using 22 (attempt $attempt)" >&2
-      echo "$id"
-      return 0
-    fi
-    echo "spawn attempt $attempt produced agent $id but was unusable on BOTH ports ($(server_ssh_port "$SERVER") and 22) — destroyed before retry" >&2
+    qa_remove_agent_lock "$id" >/dev/null 2>&1 || true
     # QA-BUNKER-19 b+c: surfaced, not swallowed — stderr only (no evidence file
     # is open inside spawn_agent, and the retry loop needs no extra list
     # round-trip); rc captured so `set -o pipefail` alone can never see it as
@@ -305,7 +509,37 @@ spawn_agent() {
   echo "$out" | tail -3 >&2
   return 1
 }
-agent_ssh() { timeout "${BUNKER_QA_SSH_TIMEOUT:-1800}" ssh -p "$(server_ssh_port "$SERVER")" -i "$BUNKER_QA_HOST_KEY" -i "$key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o BatchMode=yes "bunker-$agent@$SERVER" "$@"; }
+
+# agent_ssh_port <agent-id> — resolve the port for this agent's sshd.
+# The spawn transcript is per-agent metadata: when it carries an explicit SSH
+# port, use it. Current CLI bundles identify the agent's SSH connection but omit
+# the port because it is the normal SSH port (22); recognize that shape too.
+# BUNKER_QA_SSH_PORT is an explicit operator override and therefore wins over
+# discovered metadata; the historical 2223 fallback remains for no metadata.
+agent_ssh_port() {
+  local id="$1" spawn_file="${EVIDENCE:-}.agent-${1}.spawn" port=""
+  if [ -n "${BUNKER_QA_SSH_PORT:-}" ]; then
+    printf '%s\n' "$BUNKER_QA_SSH_PORT"
+    return 0
+  fi
+  if [ -n "${EVIDENCE:-}" ] && [ -f "$spawn_file" ]; then
+    port=$(grep -ioE '(ssh[-_ ]*port|--ssh-port)[=: ]+[0-9]{1,5}' "$spawn_file" 2>/dev/null \
+      | grep -oE '[0-9]{1,5}$' | head -1)
+    # A normal spawn bundle is itself the per-agent transport record. Its
+    # omitted port means the agent sshd is on the standard SSH port, 22 — not
+    # the daemon's unrelated 2223 service port.
+    if [ -z "$port" ] && grep -qE 'Agent created:|SSH Key:|SSHFS Mount:|Docker SSH:' "$spawn_file" 2>/dev/null; then
+      port=22
+    fi
+  fi
+  printf '%s\n' "${port:-2223}"
+}
+
+agent_ssh() {
+  local port
+  port=$(agent_ssh_port "$agent")
+  timeout "${BUNKER_QA_SSH_TIMEOUT:-1800}" ssh -p "$port" -i "$BUNKER_QA_HOST_KEY" -i "$key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o BatchMode=yes "bunker-$agent@$SERVER" "$@"
+}
 
 status() {
   echo "BUNKER QA — $(date -u +%Y-%m-%dT%H:%M:%SZ) — server $SERVER"
@@ -375,63 +609,6 @@ bunker_capacity() {
   printf '%s %s\n' "$used" "$max"
 }
 
-# ─── server disk-capacity preflight (QA-AUGER-15, 2026-10-30) ───
-# A server whose root filesystem has no room for the agent AND its CI workspace
-# does not fail the battery cleanly — it fails it MISLEADINGLY. auger QA-AUGER-15
-# (bunker-mvp at 95% used, 7.5 GB free of 149.9 GB) recorded:
-#   * the agent-side qa-run.log first dying `mkdir: cannot create directory
-#     'qa-act-wf': No space left on device`, before any command output existed;
-#   * `ci-pass FAIL native rc=120` and `upgrade FAIL rc=120` with EMPTY output
-#     (bash cannot allocate a redirect/command-substitution temp file either);
-#   * `chaos-resource UNVERIFIED` because its 3 GiB cap was never applied.
-# Every one of those rows reads exactly like a product defect, and a foreman who
-# trusts the headline files a product finding against a healthy repo. Grade the
-# HOST before the spawn instead: refuse a low-disk server with ONE harness-class
-# `run_battery` row (same shape as the capacity gate) and spawn nothing.
-#
-# Delay-to-spawn gate, never a hard runbook rule: bunkerd recycles agent homes on
-# several hosts, so free space moves minute-to-minute. The floor is deliberately
-# a single absolute GB number (default 10) rather than a percentage — a 2 TB host
-# at 95% still has 100 GB, while a 150 GB host at 90% has 15 GB and a Go/pnpm CI
-# workspace can eat that in one leg. Override with BUNKER_QA_MIN_FREE_GB.
-#
-# parse_disk_free_gb <df -Pk output> → "<free_gb> <pct_used>" | "" (unparseable)
-# Pure (text in, text out) so the verdict is provable without a live host.
-parse_disk_free_gb() {
-  local out="$1" avail pct free_gb
-  [ -n "$out" ] || return 0
-  # `df -Pk` guarantees ONE record per filesystem; skip the header and take the
-  # first data record's 4th (available KB) + 5th (capacity) columns.
-  avail=$(printf '%s\n' "$out" | awk '$1 !~ /^Filesystem$/ && NF >= 6 {print $4; exit}')
-  pct=$(printf '%s\n' "$out"   | awk '$1 !~ /^Filesystem$/ && NF >= 6 {print $5; exit}')
-  case "$avail" in ''|*[!0-9]*) return 0 ;; esac
-  pct="${pct%\%}"   # df prints "59%"; keep the number, "?" when unreadable
-  case "$pct"   in ''|*[!0-9]*) pct="?" ;; esac
-  free_gb=$(( avail / 1048576 ))
-  printf '%s %s\n' "$free_gb" "$pct"
-}
-
-# bunker_disk <srv> → "<free_gb> <pct_used>" | "" (probe failed / unparseable)
-# One cheap ssh probe, no spawn, no polling. Callers must treat an empty result
-# as UNKNOWN and proceed (same policy as the capacity probe): refusing on a
-# probe hiccup would wedge the QA lane for every project on that host.
-bunker_disk() {
-  local srv="$1" out
-  out=$(timeout "${BUNKER_QA_DISK_TIMEOUT:-25}" ssh -i "$BUNKER_QA_HOST_KEY" ${BUNKER_QA_HOST_KEY:+-o IdentitiesOnly=yes} -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o BatchMode=yes "$srv" 'df -Pk / 2>/dev/null' 2>/dev/null) || out=""
-  parse_disk_free_gb "$out"
-}
-
-# disk_gate_verdict <free_gb> <floor_gb> → OK | LOW | UNKNOWN
-# The DECISION half of the disk gate, kept pure so it is provable offline (a
-# production run only ever shows one of the three arms). An unparseable/absent
-# reading is UNKNOWN, never LOW: a probe hiccup must not manufacture a refusal.
-disk_gate_verdict() {
-  local free="${1:-}" floor="${2:-}"
-  case "$free" in ''|*[!0-9]*) echo UNKNOWN; return 0 ;; esac
-  case "$floor" in ''|*[!0-9]*) floor=10 ;; esac
-  if [ "$free" -lt "$floor" ]; then echo LOW; else echo OK; fi
-}
-
 # ─── write_fail_if_empty — never leave a 0-byte evidence file ───
 # Now top-level (2026-09-15) because run() AND launch() share it. Rationale
 # unchanged from 2026-09-07 (QA-DEXDAT-CORE-1): a tool-level SIGTERM (Hermes
@@ -458,17 +635,102 @@ write_fail_if_empty() {
 #   ssh     : the host must answer over tailscale before any spawn
 #   capacity: a FULL pool fails spawn deterministically (QA-OFF-BY-ONE-9 09-15);
 #             BUNKER_QA_SKIP_PREFLIGHT=1 bypasses THIS probe only.
-preflights() {
+# QA-BUNKER-B20 (2026-10-10): the target-host gates (config + ssh) moved into
+# qa_target_preflight() — a PURE function that PRINTS its named cause and
+# returns nonzero on failure — so run()/launch() call ONE gate before any step
+# and the regression test can exercise the real refusal logic without a live
+# host. Cause strings (task-named, stable for parsers):
+#   "target host <name> not configured in ~/.bunker/config.yaml"
+#   "SSH probe failed: target host <name> unreachable (exit=N)"
+qa_target_preflight() { # [server] — 0 = reachable; nonzero = refusal (cause on stdout)
+  # PERF-002 (2026-10-25): the target binds to the canonical name ($SERVER,
+  # arg-or-default) so the config gate is the literal `grep -qE "^ +$SERVER:"`
+  # shape the PERF-002 criterion pins. The local shadows the global ONLY
+  # inside this function; callers pass the host as $1 (tests) or rely on the
+  # default, exactly as with the previous $srv binding.
+  local SERVER="${1:-$SERVER}"
+  # A missing/blank server name is the same refusal as an unknown one: there is
+  # no target to probe, so continuing would be the QA-BUNKER-B20 silent-drift
+  # class with no name to print.
+  if [ -z "$SERVER" ]; then
+    echo "target host <empty> not configured in ~/.bunker/config.yaml (set BUNKER_QA_SERVER)"
+    return 1
+  fi
+  # The host must exist in the bunker CLI's config (or be passed explicitly) —
+  # grep is anchored like the original preflights() arm: an indented `name:`
+  # key, so comment/substring matches cannot sneak a dead name past the gate.
+  # PERF-002 (2026-10-25): accept ANY leading indent on the YAML server key,
+  # not the rigid 4-space form — a 2-space-indented ~/.bunker/config.yaml is
+  # valid YAML and must not read as "not configured" (repro 2026-09-25).
   if ! grep -qE "^ +$SERVER:" "$HOME/.bunker/config.yaml" 2>/dev/null; then
-    printf '{"cell":"run_battery","status":"FAIL","detail":"server %s not present in ~/.bunker/config.yaml — stale BUNKER_QA_SERVER default; run bunker config / pick a live server (no spawn attempted)","ts":"%s"}\n' \
-      "$SERVER" "$(date -u +%FT%TZ)" >> "$EVIDENCE"
-    echo "ERROR: server '$SERVER' not in ~/.bunker/config.yaml — refusing to spawn (deterministic config error)" >&2
+    echo "target host $SERVER not configured in ~/.bunker/config.yaml"
+    return 1
+  fi
+  # SSH probe: same invocation the harness has always used (IdentitiesOnly +
+  # BatchMode + 20s ConnectTimeout, hard-bounded at 30s), so a configured-but-
+  # dead box cannot eat the battery's TTL on retry ladders. rc is captured via
+  # `|| prc=$?` — inside `if ! cmd; then`, `$?` would report the INVERTED
+  # status (always 0) and the named cause would lie about the failure mode.
+  local prc=0
+  timeout 30 ssh -i "$BUNKER_QA_HOST_KEY" -o IdentitiesOnly=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=no -o BatchMode=yes "$SERVER" 'true' 2>/dev/null || prc=$?
+  if [ "$prc" -ne 0 ]; then
+    echo "SSH probe failed: target host $SERVER unreachable (exit=$prc)"
+    return 1
+  fi
+  return 0
+}
+
+# qa_disk_preflight [server] — reject a target host whose root filesystem is
+# above the launch safety threshold before spawn/sync/compile can cascade into
+# ENOSPC. The df command deliberately runs through the server SSH connection:
+# the local controller's disk is not the bunker host that will run act/images.
+# A missing or malformed reading is also a refusal; continuing would make the
+# preflight claim protection it did not actually establish.
+qa_disk_preflight() { # 0 = <=94%; nonzero = named refusal on stdout
+  local SERVER="${1:-$SERVER}" disk_out="" usage="" prc=0
+  disk_out=$(timeout "${BUNKER_QA_DISK_TIMEOUT:-30}" ssh -i "$BUNKER_QA_HOST_KEY" \
+    -o IdentitiesOnly=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=no \
+    -o BatchMode=yes "$SERVER" 'df -P /' 2>/dev/null)
+  prc=$?
+  if [ "$prc" -ne 0 ]; then
+    echo "target host $SERVER disk preflight failed (df -P exit=$prc)"
+    return 1
+  fi
+  usage=$(printf '%s\n' "$disk_out" | awk '
+    NR > 1 && $5 ~ /^[0-9]+%$/ { sub(/%$/, "", $5); print $5; exit }
+  ')
+  case "$usage" in
+    ''|*[!0-9]*)
+      echo "target host $SERVER disk preflight returned no usable df -P use%"
+      return 1
+      ;;
+  esac
+  if [ "$usage" -gt 94 ]; then
+    echo "target host $SERVER disk usage ${usage}% exceeds 94% launch threshold"
+    return 1
+  fi
+  echo "target host $SERVER disk usage ${usage}% is within 94% launch threshold"
+  return 0
+}
+
+preflights() {
+  # QA-BUNKER-B20: prove the target host exists AND answers BEFORE any step
+  # runs — a dropped/stale default must be a NAMED refusal, never a silent
+  # continuation onto a dead box (the harness audited nothing while printing
+  # pass counts for wrapper steps). One FAIL row + exit 2, same contract as
+  # the other deterministic gates.
+  local tgt_err
+  if ! tgt_err=$(qa_target_preflight); then
+    printf '{"cell":"run_battery","status":"FAIL","detail":"%s — no spawn attempted","ts":"%s"}\n' \
+      "$tgt_err" "$(date -u +%FT%TZ)" >> "$EVIDENCE"
+    echo "ERROR: $tgt_err — refusing to run (deterministic config/reachability error)" >&2
     exit 2
   fi
-  if ! timeout 30 ssh -i "$BUNKER_QA_HOST_KEY" -o IdentitiesOnly=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=no -o BatchMode=yes "$SERVER" 'true' 2>/dev/null; then
-    printf '{"cell":"run_battery","status":"FAIL","detail":"server %s unreachable via ssh (tailscale) preflight — no spawn attempted","ts":"%s"}\n' \
-      "$SERVER" "$(date -u +%FT%TZ)" >> "$EVIDENCE"
-    echo "ERROR: server '$SERVER' unreachable — refusing to spawn (deterministic reachability error)" >&2
+  local disk_err
+  if ! disk_err=$(qa_disk_preflight); then
+    printf '{"cell":"launch","status":"FAIL","detail":"%s — no spawn attempted","ts":"%s"}\n' \
+      "$disk_err" "$(date -u +%FT%TZ)" >> "$EVIDENCE"
+    echo "PREFLIGHT FAIL: $disk_err" >&2
     exit 2
   fi
   # Capacity preflight: a FULL pool is a deterministic spawn failure, so the
@@ -497,65 +759,9 @@ preflights() {
       fi
     fi
   fi
-  # Disk preflight (QA-AUGER-15): see the block above parse_disk_free_gb for the
-  # measured failure this gates. Same policy edges as the capacity gate — a
-  # probe that cannot read the filesystem is UNKNOWN and proceeds with a WARN;
-  # a readable reading BELOW the floor is a deterministic harness-class refusal
-  # (ONE run_battery row, no spawn, no product cells). BUNKER_QA_SKIP_PREFLIGHT=1
-  # disables it together with the capacity probe (it is one preflight switch).
-  if [ "${BUNKER_QA_SKIP_PREFLIGHT:-0}" = "1" ]; then
-    log "disk preflight skipped (BUNKER_QA_SKIP_PREFLIGHT=1)"
-  else
-    local dk dk_free dk_pct dk_floor
-    dk_floor="${BUNKER_QA_MIN_FREE_GB:-10}"
-    case "$dk_floor" in ''|*[!0-9]*) dk_floor=10 ;; esac
-    dk=$(bunker_disk "$SERVER")
-    if [ -z "$dk" ]; then
-      echo "WARN: bunker disk free space unknown on $SERVER (df probe failed) — proceeding without disk preflight" >&2
-    else
-      dk_free="${dk%% *}"; dk_pct="${dk##* }"
-      case "$(disk_gate_verdict "$dk_free" "$dk_floor")" in
-      LOW)
-        printf '{"cell":"run_battery","status":"FAIL","detail":"server %s is LOW ON DISK (%s GB free, %s used on /; floor %s GB) — refusing to spawn (disk-capacity preflight, QA-AUGER-15). A battery on a full server dies ENOSPC and records rc=120 cells with EMPTY output plus an unapplied memory cap, which reads as a product FAIL; this row is HARNESS-class and no product cell was produced. Free space on %s (or set BUNKER_QA_MIN_FREE_GB) and re-run","ts":"%s"}\n' \
-          "$SERVER" "$dk_free" "$dk_pct" "$dk_floor" "$SERVER" "$(date -u +%FT%TZ)" >> "$EVIDENCE"
-        echo "PREFLIGHT FAIL: $SERVER has $dk_free GB free ($dk_pct used) — below the $dk_floor GB floor; refusing to spawn (disk-capacity error, QA-AUGER-15)" >&2
-        exit 2 ;;
-      *)
-        log "disk preflight ok: $dk_free GB free ($dk_pct used) on $SERVER (floor $dk_floor GB)" ;;
-      esac
-    fi
-  fi
 }
 
 # ─── detect_cmds <repo> <agent> → DETECT_INSTALL / DETECT_NATIVE / DETECT_CI / DETECT_BIN ───
-# is_pytest_repo <repo> — does this directory declare a pytest suite WITHOUT a
-# heavier manifest (go.mod/package.json/Cargo.toml/pyproject.toml already won
-# earlier arms)? QA-AUGER-1 (2026-10-10): the 09-26 arm covered pytest.ini and
-# root conftest.py only, but pytest suites are equally declared via
-#   setup.cfg / tox.ini  → [pytest] section
-#   pyproject.toml       → [tool.pytest...] / [tool.pytest.ini_options]
-#   tests/conftest.py    → rootdir-adjacent conftest inside the tests dir
-# and any of those shapes falling through to `echo no-test-path` grades the
-# battery's ci-pass cell OK in milliseconds with ZERO tests run — the vacuous
-# pass this predicate exists to kill. Only the [pytest]/[tool.pytest] SECTION
-# counts (a pyproject with no pytest section is not a pytest repo; a setup.cfg
-# without [pytest] neither) — bare filename matching would claim build configs.
-is_pytest_repo() { # <repo> -> 0 when a pytest-suite declaration is present
-  local repo="$1"
-  [ -f "$repo/pytest.ini" ] && return 0
-  [ -f "$repo/conftest.py" ] && return 0
-  [ -f "$repo/setup.cfg" ] && grep -qs '^\[pytest\]' "$repo/setup.cfg" && return 0
-  [ -f "$repo/tox.ini" ] && grep -qs '^\[pytest\]' "$repo/tox.ini" && return 0
-  if [ -f "$repo/pyproject.toml" ]; then
-    grep -qsE '^\[tool\.pytest' "$repo/pyproject.toml" && return 0
-  fi
-  local d
-  for d in tests test; do
-    [ -f "$repo/$d/conftest.py" ] && return 0
-  done
-  return 1
-}
-
 # Extracted verbatim from run() (2026-09-15) so run() and launch() can never
 # drift on the command set they ship to the agent. Globals, because
 # build_remote_script() bakes them (and $agent) into the generated script.
@@ -568,11 +774,17 @@ is_pytest_repo() { # <repo> -> 0 when a pytest-suite declaration is present
 detect_cmds() {
   local repo="$1" agent="$2"
   local tpkg="" start_script="" gofirst=""
-  DETECT_PYTEST_REPO=0   # QA-AUGER-1: baked into the render for the pytest venv bootstrap
   # escape hatches when the auto-detect guesses wrong (e.g. suite needs extras)
   DETECT_INSTALL="${BUNKER_QA_INSTALL_CMD:-}"
   if [ -z "$DETECT_INSTALL" ]; then
-  if [ -f "$repo/pnpm-lock.yaml" ]; then DETECT_INSTALL="corepack enable 2>/dev/null; corepack prepare --activate 2>/dev/null; pnpm install --frozen-lockfile"
+  # QA-BUNKER-32 (2026-10-10): go.mod is checked BEFORE package.json/pnpm-lock
+  # in both ladders below. A Go repo carrying any root package.json (docs
+  # tooling, heredoc generators) is primarily Go; the npm manifest is
+  # incidental. The old order graded such repos 'npm ci' + 'npm test' and the
+  # real Go suite never ran (dexdat-memory: 479 _test.go files, native.log
+  # 'npm error Missing script: "test"').
+  if [ -f "$repo/go.mod" ]; then DETECT_INSTALL="go build ./..."
+  elif [ -f "$repo/pnpm-lock.yaml" ]; then DETECT_INSTALL="corepack enable 2>/dev/null; corepack prepare --activate 2>/dev/null; pnpm install --frozen-lockfile"
   elif [ -f "$repo/package.json" ]; then
     # QA-9ROUTER-26 (2026-09-21): the old branch installed ONLY the root
     # package, so a repo with an INDEPENDENT test package (tests/ or test/
@@ -593,15 +805,7 @@ detect_cmds() {
         break
       fi
     done
-  elif [ -f "$repo/go.mod" ]; then DETECT_INSTALL="go build ./..."
-  elif [ -f "$repo/pyproject.toml" ]; then
-    # QA-HIVEMIND-WORK-25 (2026-10-13): Python 3.12+ images (3.14 on bunker-mvp
-    # agent 6a748db5) are PEP 668 externally-managed — bare `pip install`
-    # refuses with 'externally-managed-environment' and fresh-install graded
-    # FAIL on a harness env, not a repo defect. toolchain-bootstrap guarantees
-    # ~/tools/venv for every pyproject repo BEFORE the cells run, so prefer its
-    # pip; fall back to bare pip only if the venv is somehow missing.
-    DETECT_INSTALL="if [ -x ~/tools/venv/bin/pip ]; then ~/tools/venv/bin/pip install -e '.[dev]' || ~/tools/venv/bin/pip install -e .; else pip install -e '.[dev]' 2>/dev/null || pip install -e .; fi"
+  elif [ -f "$repo/pyproject.toml" ]; then DETECT_INSTALL="pip install -e .[dev] 2>/dev/null || pip install -e ."
   elif [ -f "$repo/Cargo.toml" ]; then DETECT_INSTALL="cargo build --workspace"
   # QA-H3-14 (2026-09-21): a Makefile-only repo (no package manifest) gets a
   # make-based default only when make actually exists on the agent — JIT agents
@@ -635,7 +839,11 @@ detect_cmds() {
   [ "$branch_name" = "HEAD" ] && branch_name="master"
   [ -n "$branch_name" ] || branch_name="master"
   if [ -z "$native_cmd" ]; then
-  if [ -f "$repo/pnpm-lock.yaml" ]; then native_cmd="pnpm test"
+  # QA-BUNKER-32: same go-first precedence as the install ladder above — a
+  # go.mod + package.json repo must get its Go suite, not an npm test that
+  # doesn't exist.
+  if [ -f "$repo/go.mod" ]; then native_cmd="go test ./... -count=1"
+  elif [ -f "$repo/pnpm-lock.yaml" ]; then native_cmd="pnpm test"
   elif [ -f "$repo/package.json" ]; then
   # --runInBand is a Jest flag; vitest dies with CACError on it (proven 9router
   # 2026-09-15: `cd tests && npx vitest run --runInBand` rc=1, zero tests ran).
@@ -645,18 +853,9 @@ detect_cmds() {
   # belongs to the project (file a board row, do not mask it here).
   if jq -r '.scripts.test // ""' "$repo/package.json" 2>/dev/null | grep -q vitest || ls "$repo"/vitest.config.* >/dev/null 2>&1; then
     native_cmd="npm test -- --no-file-parallelism"
-  elif jq -r '.scripts.test // ""' "$repo/package.json" 2>/dev/null | grep -qE '(^|[[:space:]&])go test([[:space:]]|$)'; then
-    # QA-DM-RUNINBAND (2026-10-13): an npm shim whose test script wraps
-    # `go test` must NOT get Jest's --runInBand appended — npm forwards it and
-    # go test dies at flag-parse ("flag provided but not defined: -runInBand")
-    # in EVERY package before a single test runs (proven dexdat-memory: 76
-    # packages failed in ~0.01s each, zero tests executed). go test is already
-    # package-serial — pass the script through bare.
-    native_cmd="npm test"
   else
     native_cmd="npm test -- --runInBand"
   fi
-  elif [ -f "$repo/go.mod" ]; then native_cmd="go test ./... -count=1"
   elif [ -f "$repo/pyproject.toml" ]; then
     # QA-DIGEST-022 (2026-10-03, digest chaos-resource): a pyproject repo whose
     # pytest lives in a PEP-735 dependency-group gets rc=127 'pytest: command
@@ -670,23 +869,43 @@ detect_cmds() {
     else
       native_cmd="pytest -x -q"
     fi
-  # QA-AUGER-1 (2026-10-10): pytest-declared repos are now recognized by the
-  # is_pytest_repo predicate (pytest.ini / conftest.py / tox.ini or setup.cfg
-  # [pytest] / pyproject [tool.pytest...] / tests/conftest.py) instead of the
-  # two-filename arm that missed setup.cfg and pyproject-config suites and let
-  # them fall through to the vacuous `echo no-test-path` (57ms OK with zero
-  # tests run). The raw repo files keep deciding; DETECT_PYTEST_REPO carries
-  # the verdict into the generated battery so the agent-side toolchain
-  # bootstrap provisions pytest for exactly these repos.
-  elif is_pytest_repo "$repo"; then
-    DETECT_PYTEST_REPO=1
-    native_cmd="python3 -m pytest -q"
+  # Mirror the pyproject arm (QA-BUNKER-24, 2026-10-07): the venv-pytest guard
+  # must apply here too — a toolchain-bootstrap'd agent whose PATH lacks pytest
+  # but has ~/tools/venv/bin/pytest otherwise gets no pytest at all, and the
+  # cell grades FAIL/native-runner-missing for an environment gap the harness
+  # already solved for pyproject repos.
+  # QA-FOREMAN-2026-09-26 (auger): pytest.ini/conftest.py-only repos matched NO
+  # shape and got the vacuous `echo no-test-path` — the battery graded
+  # ci-pass OK in 57ms with zero tests run while the repo carries 210 tests.
+  # If pytest itself is absent (both PATH and venv) the suite NEVER RAN
+  # and native_runner_missing grades UNVERIFIED (honest), never OK.
+  elif [ -f "$repo/pytest.ini" ] || [ -f "$repo/conftest.py" ]; then
+    if ! command -v pytest >/dev/null 2>&1 && [ -x "$HOME/tools/venv/bin/pytest" ]; then
+      native_cmd="$HOME/tools/venv/bin/pytest -x -q"
+    else
+      native_cmd="python3 -m pytest -q"
+    fi
   elif [ -f "$repo/Cargo.toml" ]; then native_cmd="cargo test --workspace"
   elif [ -f "$repo/Makefile" ]; then
     # QA-H3-14: native leg mirrors the install-leg target probe — a Makefile
     # with no `test:` target (h3: verify-* only) gets `make verify` instead of
     # a guaranteed-fail `make test` on agents where make was bootstrapped.
+    # QA-BUNKER-82 (2026-11-01): the bare `make verify` fallback is CHECKS-ONLY.
+    # h3's verify runs docs+repo-consistency guards that legitimately run ZERO
+    # tests, and the QA-AUGER-1 vacuity grader then graded that checks-only
+    # pass as FAIL "native runner exited 0 but ZERO tests ran" while the
+    # repo's real code-level suite (`make verify-roundtrip`, 6/6 PASSED on the
+    # same agent) was never discovered — the default SUITE CHOICE was the
+    # defect, not the vacuity grader. Probe the repo's real suite target,
+    # most-conventional first: `test:`, then `check:` (the automake
+    # convention), then an explicit named suite target like
+    # `verify-roundtrip:` (h3's cross-language round-trip suite), and keep
+    # checks-only `make verify` as the last resort for verify-only Makefiles
+    # (backward compatible: h3's install leg and the QA-H3-14 no-test-target
+    # guarantee are unchanged).
     if grep -qE '^test:' "$repo/Makefile"; then native_cmd="make test"
+    elif grep -qE '^check:' "$repo/Makefile"; then native_cmd="make check"
+    elif grep -qE '^verify-roundtrip:' "$repo/Makefile"; then native_cmd="make verify-roundtrip"
     else native_cmd="make verify"; fi
   else native_cmd="echo no-test-path"
   fi
@@ -760,7 +979,7 @@ detect_cmds() {
       # hand on the same agent, same tree, completed the job. The -W now comes
       # from the shared staging block like every other workflow: select ci.yml,
       # keep ci_cmd bare, let ACT_WF_DIR staging supply the single -W target.
-      ci_cmd="DOCKER_HOST=unix:///run/bunker/$agent/docker.sock ~/bin/act --pull"
+      ci_cmd="DOCKER_HOST=unix:///run/bunker/$agent/docker.sock ~/bin/act -q --pull"
       DETECT_CI_FILES=" .github/workflows/ci.yml"
     else
       # Select the workflows whose `on:` can fire for a push to the branch the
@@ -843,7 +1062,7 @@ detect_cmds() {
       done
       if [ -n "$ci_select" ]; then
         DETECT_CI_FILES="$ci_select"           # baked, leading space, repo-relative
-        ci_cmd="DOCKER_HOST=unix:///run/bunker/$agent/docker.sock ~/bin/act --pull"
+        ci_cmd="DOCKER_HOST=unix:///run/bunker/$agent/docker.sock ~/bin/act -q --pull"
       else
         # No workflow can fire on a push to this branch ⇒ act has nothing that
         # says anything about the repo, and its unfiltered run grades the
@@ -1006,19 +1225,6 @@ detect_upgrade_inputs() {
     DETECT_PKG_ECOSYSTEM="pip"
     DETECT_PKG_NAME=$(sed -n 's/^[[:space:]]*name[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$repo/pyproject.toml" | head -1)
     [ -z "$DETECT_PKG_NAME" ] && DETECT_PKG_NAME=$(sed -n "s/^[[:space:]]*name[[:space:]]*=[[:space:]]*'\([^']*\)'.*/\1/p" "$repo/pyproject.toml" | head -1)
-    # QA-TERMINAL-JAIL-19 (2026-10-12): a pip repo that is NOT published to PyPI
-    # has NO registry artifact — the pip arm's `pip install <name>==<prev>` can
-    # only ever die "No matching distribution found", a harness premise failure
-    # graded as a product verdict (terminal-jail: versions: none, upgrade cell
-    # FAIL with the tag v1.0.0 present). Mirror the QA-HEADING-009 npm shape:
-    # mark the repo for the tree-upgrade arm; ship_prev_tag_tree streams the
-    # previous tag's tree and the cell upgrades the checked-out tree.
-    DETECT_UP_PREV_DIR=""
-    if [ -n "$DETECT_PREV_TAG" ] && [ -n "$DETECT_PKG_NAME" ]; then
-      if ! curl -fsS --max-time 10 "https://pypi.org/pypi/${DETECT_PKG_NAME}/json" >/dev/null 2>&1; then
-        DETECT_UP_PREV_DIR="~/qa-up-prev-pip"
-      fi
-    fi
   elif [ -f "$repo/package.json" ]; then
     # QA-9ROUTER-20: publishable name, not the private root name.
     DETECT_PKG_ECOSYSTEM="npm"
@@ -1085,11 +1291,6 @@ ship_prev_tag_tree() {
     # foreign repo's leftovers.
     agent_ssh "rm -rf ~/qa-up-prev-npm ~/qa-up-prev-npm.absent" >/dev/null 2>&1 || true
     agent_dir="$DETECT_UP_PREV_DIR"; verify_path="package.json"
-  elif [ "$DETECT_PKG_ECOSYSTEM" = "pip" ] && [ -n "$DETECT_UP_PREV_DIR" ] && [ -n "$DETECT_PREV_TAG" ]; then
-    # QA-TERMINAL-JAIL-19: previous tag's tree for the pip arm when the package
-    # is NOT on PyPI — verified by pyproject.toml. Same shared-agent hygiene.
-    agent_ssh "rm -rf ~/qa-up-prev-pip ~/qa-up-prev-pip.absent" >/dev/null 2>&1 || true
-    agent_dir="$DETECT_UP_PREV_DIR"; verify_path="pyproject.toml"
   else
     return 0
   fi
@@ -1205,43 +1406,57 @@ sync_repo() {
   return 0
 }
 
+# ─── artifact expectation (QA-BUNKER-078) ───
+# artifact_expectation <install-command> — WHAT the fresh-install leg must leave
+# behind, derived from the install shape instead of a literal tool name:
+#   binary  the leg packages/installs an executable, so fresh-install FAILs when
+#           nothing new appears in a bin dir;
+#   none    the leg only compiles or installs dependencies (`go build ./...`,
+#           `npm ci`, `pip install -e .`, `cargo build`, `make verify`) — a
+#           compile/verify leg PROMISES NO BINARY, so the cell says "no artifact
+#           expected for [<cmd>]" instead of failing on a name it never
+#           mentioned (the QA-BUNKER-078 defect: `go build ./...` graded FAIL
+#           "no artifact found (toolsd ...)" on every Go repo);
+#   name:<t> the operator opted in with QA_EXPECTED_ARTIFACT=<t> — assert that
+#           exact executable was installed (works for any repo shape).
+# Only an explicit packaging target is required to produce an artifact: `make
+# build|install|all|…` and `go/cargo/pipx install`, `npm i -g`.  A make target
+# that only tests/verifies (make verify/test/check/lint/fmt/vet/docs) installs
+# nothing by contract, so it is graded 'none' — QA-BUNKER-81's arm was reaching
+# for a binary a `make verify` never promised.
+artifact_expectation() {
+  local cmd="${1//\'/}"
+  if [ -n "${QA_EXPECTED_ARTIFACT:-}" ]; then printf 'name:%s' "$QA_EXPECTED_ARTIFACT"; return 0; fi
+  case "$cmd" in
+    make|make\ *)
+      case "$cmd" in
+        *test*|*check*|*verify*|*lint*|*fmt*|*vet*|*doc*|*clean*) printf 'none' ;;
+        *) printf 'binary' ;;
+      esac ;;
+    *"go install"*|*"cargo install"*|*"pipx install"*|*"npm install -g"*|*"npm i -g"*|*"pnpm add -g"*|*"yarn global add"*)
+      printf 'binary' ;;
+    *) printf 'none' ;;
+  esac
+}
+
 # ─── build the remote cell script (all quoting handled HERE, once) ───
 build_remote_script() { # args: proj install_cmd ci_cmd native_cmd
   local proj="$1" install_cmd="$2" ci_cmd="$3" native_cmd="$4"
-  local install_cmd_q; install_cmd_q=$(printf '%q' "$install_cmd")
-  local qa_docker_lifecycle_enabled="${BUNKER_QA_ENABLE_DOCKER_LIFECYCLE:-0}"
-  local qa_docker_lifecycle_host_block="${BUNKER_QA_DOCKER_LIFECYCLE_HOST_BLOCK:-0}"
-  # QA-BUNKER-65: the unquoted heredoc below expands $QA_HEAD_SHA/$QA_HEAD_PULL.
-  # launch() sets them (real sha, QA-HERMES-DAGGER-26); any other caller — run()
-  # or the __gen-remote/__gen-remote-detected test hooks — would abort the whole
-  # render under set -u ("unbound variable") without a default. Callers that set
-  # real values keep them; the defaults only fire when unset/empty.
-  QA_HEAD_SHA="${QA_HEAD_SHA:-unknown}"
-  QA_HEAD_PULL="${QA_HEAD_PULL:-none}"
-  # QA-RENDER-FENCE (2026-10-13): the unquoted heredoc below is the whole
-  # render — its $-expansions are intentional, but ANY unescaped `...` or
-  # $(...) anywhere in the body (INCLUDING lines that look like shell
-  # comments: a heredoc has no comments) executes ON THE CONTROLLER during
-  # this cat. Proven live 2026-10-13: raw backticks in render-body comments
-  # ran `docker compose up -d`, `go build`, `go test`, `run` (the runner
-  # itself, twice) and a python probe in the CALLER'S cwd at render time —
-  # the mechanism behind the 2026-10-12 chown-of-~/.hermes incident
-  # (launch cwd ~/.hermes/hermes-agent rendered a compose-up into that
-  # directory). Two-part fence: (1) all substitutions in the body are now
-  # escaped; (2) the render runs in a subshell pinned to / so any future
-  # unescaped fragment can never see a project/Hermes directory.
-  ( cd / && cat <<EOF
+  local artifact_expect artifact_cmd
+  artifact_expect="$(artifact_expectation "$install_cmd")"
+  # Messaging copy of the install command: quotes stripped (it is interpolated
+  # into a single-quoted assignment below) and truncated — it is a label, never
+  # something the generated script executes.
+  artifact_cmd="$(printf '%s' "$install_cmd" | tr -d "'" | cut -c1-160)"
+  cat <<EOF
 #!/usr/bin/env bash
 # qa-run.sh — generated by bunker-qa.sh for $proj (do not edit)
 PROJ='$proj'
-# Hard fence: the test battery runs ONLY inside a per-run Bunker JIT agent.
-# If a cwd/config mistake starts this generated script on the controller, fail
-# before installing tools, tests, or touching Docker/Compose.
-QA_RUN_USER=\$(id -un 2>/dev/null || true)
-case "\$QA_RUN_USER" in
-  bunker-*) ;;
-  *) printf 'FATAL: QA battery must run on a remote Bunker JIT agent; got local user %s (host=%s cwd=%s)\\n' "\$QA_RUN_USER" "\$(hostname)" "\$(pwd -P)" >&2; exit 90 ;;
-esac
+# QA-BUNKER-078: the install command and its DERIVED artifact expectation are
+# baked here by the generator.  The previous form read them from a shell
+# variable the generated script never defines, so the check was inert.
+ARTIFACT_EXPECT='$artifact_expect'
+ARTIFACT_CMD='$artifact_cmd'
 EVID=~/qa-evidence.jsonl
 # Per-run log dir in HOME — /tmp/*.log is shared across agents and the
 # sticky bit makes a fresh agent uid unable to overwrite a previous
@@ -1249,12 +1464,6 @@ EVID=~/qa-evidence.jsonl
 # run-unique dir sidesteps both.
 LOGD=~/qa-logs-\$\$
 mkdir -p \$LOGD
-# QA-CONSENSUS-24 (c): serialize per-agent scratch — /tmp is SHARED across
-# sibling agents on a server (sticky bit + per-agent uids made concurrent
-# batteries corrupt each other's go-build dirs and log files). A per-agent
-# TMPDIR inside HOME keeps every scratch path private to this battery.
-export TMPDIR=~/qa-tmp-\$\$
-mkdir -p \$TMPDIR
 : > \$EVID
 # Completion marker (QA-HERMES-CANOPY-8): collect()'s cheap probe — present ⇒
 # the battery is DONE (whichever exit path it took), absent + no live process
@@ -1268,112 +1477,29 @@ cell() {
     local d; d=\$(printf '%s' "\$3" | tr '\n\t\r' '   ' | sed 's/"/'"'"'/g'); echo "{\"project\":\"\$PROJ\",\"cell\":\"\$1\",\"status\":\"\$2\",\"detail\":\"\$d\",\"ts\":\"\$(date -u +%FT%TZ)\"}" >> \$EVID
   fi
 }
-compose_host_ports() {
-  local file line host var default
-  for file in docker-compose*.yml compose*.yml; do
-    [ -f "\$file" ] || continue
-    while IFS= read -r line; do
-      if [[ "\$line" =~ \\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\:-([0-9]+)\\}:([0-9]+) ]]; then
-        var="\${BASH_REMATCH[1]}"; default="\${BASH_REMATCH[2]}"
-        host="\${!var:-\$default}"
-        printf '%s %s %s\\n' "\$host" "\$var" "\$default"
-      elif [[ "\$line" =~ ([0-9]+):([0-9]+) ]]; then
-        printf '%s\\n' "\${BASH_REMATCH[1]}"
-      fi
-    done < "\$file"
-  done
-}
-port_is_occupied() {
-  timeout 1 bash -c ':</dev/tcp/127.0.0.1/\$1' _ "\$1" >/dev/null 2>&1
-}
-relocate_parameterized_compose_ports() {
-  local file line var default candidate tries
-  PORT_DECISIONS=""
-  for file in docker-compose*.yml compose*.yml; do
-    [ -f "\$file" ] || continue
-    while IFS= read -r line; do
-      if [[ "\$line" =~ \\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\:-([0-9]+)\\}:([0-9]+) ]]; then
-        var="\${BASH_REMATCH[1]}"; default="\${BASH_REMATCH[2]}"
-        [ -n "\${!var:-}" ] && continue
-        if port_is_occupied "\$default"; then
-          candidate=""; tries=0
-          while [ "\$tries" -lt 200 ]; do
-            candidate=\$((20000 + RANDOM % 20001)); tries=\$((tries + 1))
-            if ! port_is_occupied "\$candidate" && ! ss -H -ltn "sport = :\$candidate" 2>/dev/null | grep -q .; then break; fi
-            candidate=""
-          done
-          [ -n "\$candidate" ] || { echo "ERROR: no free host port found for \$var" >&2; return 1; }
-          export "\$var=\$candidate"
-          PORT_DECISIONS="\$PORT_DECISIONS \$var relocated from \$default: occupied"
-        else
-          PORT_DECISIONS="\$PORT_DECISIONS \$var default: free"
-        fi
-      fi
-    done < "\$file"
-  done
-}
-QA_DOCKER_LIFECYCLE_ENABLED='$qa_docker_lifecycle_enabled'
-QA_DOCKER_LIFECYCLE_HOST_BLOCK='$qa_docker_lifecycle_host_block'
-# This gate is deliberately inside the generated battery, immediately before
-# either compose lifecycle cell. The feature remains testable on an isolated
-# QA agent, but the default is no destructive compose actions.
-qa_docker_lifecycle_block_reason() {
-  if [ "\$QA_DOCKER_LIFECYCLE_HOST_BLOCK" = "1" ]; then
-    printf '%s' 'controller is the live Hermes host; Compose lifecycle cells are forced off'
-    return 0
-  fi
-  if [ "\$QA_DOCKER_LIFECYCLE_ENABLED" != "1" ]; then
-    printf '%s' 'disabled by default; opt in only on a disposable QA target with BUNKER_QA_ENABLE_DOCKER_LIFECYCLE=1'
-    return 0
-  fi
-  if command -v systemctl >/dev/null 2>&1 && systemctl --user is-active --quiet hermes-gateway.service; then
-    printf '%s' 'active hermes-gateway.service detected; refusing Docker lifecycle test on a running Hermes system'
-    return 0
-  fi
-  if [ -e "\$HOME/.hermes/state.db" ]; then
-    for _compose_file in docker-compose*.yml compose*.yml; do
-      [ -f "\$_compose_file" ] || continue
-      if grep -Fq '~/.hermes:/opt/data' "\$_compose_file" || grep -Fq "\$HOME/.hermes:/opt/data" "\$_compose_file"; then
-        printf 'compose file %s binds persistent Hermes storage to /opt/data' "\$_compose_file"
-        return 0
-      fi
-    done
-  fi
-  return 1
-}
-# QA-HERMES-DAGGER-26: HEAD the payload was synced from, recorded on the agent
-# next to the logs so a ci-pass verdict is traceable to a commit.
-QA_HEAD_SHA='$QA_HEAD_SHA'
-# QA-AUGER-1 (2026-10-10): host detection's pytest-repo verdict (is_pytest_repo).
-# Drives the toolchain bootstrap's pytest provisioning below — a pytest.ini/
-# tox.ini/setup.cfg/conftest.py repo gets a pytest-bearing venv even though it
-# has no pyproject.toml for the old bootstrap arm to see.
-QA_PYTEST_REPO='$DETECT_PYTEST_REPO'
-QA_HEAD_PULL='$QA_HEAD_PULL'
-echo "QA-HEAD=\$QA_HEAD_SHA (pull: \$QA_HEAD_PULL)" | tee \$LOGD/qa-head.txt
-cell repo-head OK "tested HEAD=\$QA_HEAD_SHA (pull: \$QA_HEAD_PULL)"
-
 fail_detail() { # <rc> <logfile> <cmd...> — ACTIONABLE-FAILURE CONTRACT
   local frc="\$1" flog="\$2"; shift 2
   printf 'rc=%s cmd=[%s] — %s' "\$frc" "\$*" "\$(grep -v '^[[:space:]]*\$' "\$flog" 2>/dev/null | head -40 | tr '\n' '|' | cut -c1-1500)"
 }
+# qa_have_pip — QA-BUNKER-57 (2026-10-04): a fresh JIT agent's ensurepip can
+# fail (no sudo, broken venv), leaving NO pip anywhere; the old harness then
+# cascaded rc=127 'pip: command not found' through fresh-install, upgrade and
+# chaos-resource as FAIL/ENV-BLOCKED with zero repo signal. Every leg that
+# invokes pip must call this first and grade UNVERIFIED instead.
+qa_have_pip() { # 0 when pip is usable (PATH pip, python3 -m pip, or the venv interpreter)
+  command -v pip >/dev/null 2>&1 && return 0
+  python3 -m pip --version >/dev/null 2>&1 && return 0
+  [ -x "\$HOME/tools/venv/bin/python3" ] && "\$HOME/tools/venv/bin/python3" -m pip --version >/dev/null 2>&1 && return 0
+  return 1
+}
 # act_failure_context — act's '❌ Failure - Main <step> [Xs]' line names the step
-# but not the cause. Run act without --quiet so step output reaches ci.log, then
-# retain the complete failing Main step (not an arbitrary tail of prior output).
+# but never the cause; the step's own output is printed ABOVE the marker, so
+# return the 18 lines preceding the first ❌ plus the marker itself.
 act_failure_context() { # <act log>
-  local lf="\$1" n start
-  n=\$(grep -n '❌ Failure - Main' "\$lf" 2>/dev/null | head -1 | cut -d: -f1)
-  if [ -z "\$n" ]; then n=\$(grep -n '❌' "\$lf" 2>/dev/null | head -1 | cut -d: -f1); fi
-  if [ -n "\$n" ]; then
-    start=\$(sed -n "1,\${n}p" "\$lf" | grep -n '⭐ Run Main' | tail -1 | cut -d: -f1)
-    if [ -n "\$start" ]; then
-      sed -n "\${start},\${n}p" "\$lf" | tr '\n' '|' | cut -c1-6000
-    else
-      sed -n "\$(( n > 40 ? n - 40 : 1 )),\${n}p" "\$lf" | tr '\n' '|' | cut -c1-6000
-    fi
-  else
-    tail -40 "\$lf" 2>/dev/null | tr '\n' '|' | cut -c1-6000
-  fi
+  local lf="\$1" n
+  n=\$(grep -n '❌' "\$lf" 2>/dev/null | head -1 | cut -d: -f1)
+  if [ -n "\$n" ]; then sed -n "\$(( n > 18 ? n - 18 : 1 )),\${n}p" "\$lf" | tr '\n' '|' | cut -c1-1400
+  else tail -8 "\$lf" 2>/dev/null | tr '\n' '|' | cut -c1-1400; fi
 }
 # build_env_failure — is this failure the AGENT's missing C toolchain instead of a
 # repo defect? (QA-WARPFS-9, 2026-09-19.) rust links EVERY crate build script
@@ -1449,7 +1575,7 @@ build_incomplete() { # <logfile> — 0 when the log shows the build never comple
 # stamps the symbols the binary reads" shells to \`make -n build\`, the JIT
 # agent's PATH has no make, and the suite dies with
 #   --- FAIL: TestServerVersionCLIFlags ...
-#   main_test.go:1358: make -n build: exec: "make": executable file not found in \$PATH
+#   main_test.go:1358: make -n build: exec: "make": executable file not found in $PATH
 # while hosted CI is GREEN at that exact HEAD and the same test PASSES on any
 # host with make. A tool-less host says NOTHING about the code, so the two
 # chaos cells must not grade this shape and ci-pass must NAME what failed.)
@@ -1470,22 +1596,6 @@ go_toolchain_oom_cause() { # <logfile> - print the line proving the toolchain fa
   grep -m1 -E 'SystemResources|cannot allocate memory|out of memory \(Go toolchain\)|failed to initialize build cache.*address space' "\$1" 2>/dev/null | cut -c1-220
 }
 go_toolchain_oom() { [ -n "\$(go_toolchain_oom_cause "\$1")" ]; }
-# go_toolchain_floor_failure — did the go suite refuse to run because the
-# PROVISIONED toolchain is older than the repo's go.mod floor? (QA-GUARD-005,
-# 2026-10-20.) chaos-disconnect runs GOTOOLCHAIN=local (offline by design: a
-# toolchain download would defeat the network cut), so a repo whose go.mod
-# floor exceeds the toolchain the fresh-install cell installed dies BEFORE any
-# test with the refusal
-#   go: go.mod requires go >= 1.26.9 (running go 1.26.5; GOTOOLCHAIN=local)
-# That refusal is an environment gap (harness provisioned below-floor), never
-# a disconnect finding, and the network cut was never exercised — grade
-# UNVERIFIED naming the real refusal instead of a blind rc shape.
-go_toolchain_floor_failure_cause() { # <logfile> — print the line proving the floor refusal
-  grep -m1 -E '^go: go\.mod requires go >= [0-9][0-9.]+ \(running go [0-9][0-9.]*; GOTOOLCHAIN=local\)' "\$1" 2>/dev/null | cut -c1-220
-}
-go_toolchain_floor_failure() { # <logfile> — 0 when the log carries the toolchain-floor refusal
-  [ -n "\$(go_toolchain_floor_failure_cause "\$1")" ]
-}
 # go_panic_timeout — did go test hit its own 10m timeout and PANIC under the cap?
 # (QA-HERMES-CANOPY-38.) internal/session on a 3G cap panics 'test timed out
 # after 10m0s' instead of failing a package: the suite has NO clean failure mode
@@ -1558,9 +1668,6 @@ suite_deps_missing() { # <logfile> — 0 when the log carries the missing-test-d
 # is vacuous when it carries the marker itself, or has zero non-whitespace
 # content besides the cap-probe lines (PARENT_CAP=/SUBSHELL_CAP=/CAP_EFFECTIVE=)
 # that the chaos-resource wrapper adds around the command.
-# QA-AUGER-1 (2026-10-10): "ran but collected nothing" is the SAME vacuity —
-# a pytest invocation that prints its banner and "no tests ran" exercised no
-# test either. native_zero_tests() below grades that shape now.
 vacuous_native_suite() { # <logfile> -> 0 when the log proves no suite ran
   local f="\$1"
   [ -f "\$f" ] || return 0
@@ -1568,57 +1675,6 @@ vacuous_native_suite() { # <logfile> -> 0 when the log proves no suite ran
   local rest
   rest=\$(grep -vE '^[[:space:]]*\$|^(PARENT_CAP|SUBSHELL_CAP|CAP_EFFECTIVE)=' "\$f")
   [ -z "\$rest" ]
-}
-# pytest_zero_collected — did a pytest invocation RUN but collect ZERO tests?
-# (QA-AUGER-1, 2026-10-10.) A pytest that exits 0 after printing its header
-# and "no tests ran" is a vacuous pass indistinguishable from a green suite
-# on rc alone — the exact class that graded auger's ci-pass OK in 57ms with
-# zero tests run. Count the summary line's integers: "3 passed", "2 failed",
-# "1 skipped", "1 error", "1 warning" all carry counts; a log without any
-# count-bearing summary is treated as non-pytest output and NOT flagged (the
-# runner-missing / vacuous-echo classifiers own those shapes).
-pytest_zero_collected() { # <logfile> -> 0 when the log proves zero tests ran
-  local f="\$1" line
-  [ -f "\$f" ] || return 1
-  line=\$(grep -E '(passed|failed|error|no tests ran)' "\$f" | tail -1)
-  case "\$line" in
-    *"no tests ran"*) return 0 ;;
-  esac
-  [ -n "\$line" ] || return 1
-  printf '%s' "\$line" | grep -oE '[0-9]+ (passed|failed|error)' >/dev/null 2>&1 && return 1
-  return 0
-}
-# go_zero_tests — zero-test vacuity for GO test logs (QA-ASCE-8, 2026-10-18).
-# Non-verbose go test ./... emits one result line per package: an ok line
-# (pkg + duration = tests ran), a FAIL line (tests or build failed), and a
-# question-mark line (pkg + [no test files] = nothing to run there). A
-# repo-wide run executed at least one test iff an ok/FAIL result line exists;
-# a log with only question-mark lines ran zero tests repo-wide.
-go_zero_tests() { # <logfile> -> 0 when a go-test log proves zero tests ran
-  local f="\$1"
-  [ -f "\$f" ] || return 1
-  grep -qE '^(ok[[:space:]]|FAIL|--- FAIL)' "\$f" && return 1
-  return 0
-}
-# native_zero_tests — harness-shaped zero-test vacuity across runners. A pytest
-# whose summary shows no collected tests is graded FAIL on ci-pass (a suite
-# that runs nothing must never grade OK/PASS) and UNVERIFIED on chaos-resource
-# (the cap was never exercised by any test).
-# QA-ASCE-8 (2026-10-18): go-test logs classify FIRST. pytest_zero_collected
-# greps the last line matching (passed|failed|error|no tests ran) and demands
-# an N-count; the go line 'ok    <module>/internal/errors  0.108s' matches via
-# the substring 'error' in the PACKAGE PATH and carries no count, so every Go
-# module with 'error' in any package path graded false 'ZERO tests ran'
-# (asce ci-pass FAIL two cycles running; QA-ASCE-7 born false 2026-10-17,
-# retired premise-false 2026-10-18).
-native_zero_tests() { # <logfile> -> 0 when the native leg provably ran zero tests
-  local f="\$1"
-  [ -f "\$f" ] || return 1
-  if grep -qE '^(ok[[:space:]]|FAIL|^\?[[:space:]]{2,})' "\$f"; then
-    go_zero_tests "\$f"
-  else
-    pytest_zero_collected "\$f"
-  fi
 }
 # corr_grade — pure chaos-corruption decision. The caller owns truncation,
 # restart, and restoration; this function only grades the observed evidence.
@@ -1640,28 +1696,22 @@ corr_grade() { # <rc> <logfile> <state_file> <ref_note> <tracked_yes_no>
 }
 # ep_grade — pure chaos-errorpath decision. probe_started=yes is required for
 # a non-zero exit to be a product result; build/toolchain refusals stay INFO.
-ep_grade() { # <rc> <logfile> <probe_started_yes_no> [probed_bin]
-  local rc="\$1" logfile="\$2" probe_started_yes_no="\$3" ep_bin="\${4:-}" refusal
+ep_grade() { # <rc> <logfile> <probe_started_yes_no>
+  local rc="\$1" logfile="\$2" probe_started_yes_no="\$3" refusal
   if [ "\$probe_started_yes_no" = na ]; then
-    printf '%s\\t%s\\n' N/A 'no start command was detected'
+    printf '%s\t%s\n' N/A 'no start command was detected'
   elif grep -qiE '^.*panic|traceback \\(most recent|segmentation fault|core dumped' "\$logfile"; then
-    printf '%s\\t%s\\n' FAIL "crash on the missing-config probe: \$(grep -m1 -iE 'panic|traceback|segmentation fault|core dumped' "\$logfile")"
+    printf '%s\t%s\n' FAIL "crash on the missing-config probe: \$(grep -m1 -iE 'panic|traceback|segmentation fault|core dumped' "\$logfile")"
   elif refusal=\$(grep -m1 -iE 'go\\.mod file not found|cannot find main module|no Go files|not a valid module|build constraints exclude|cannot find package|build failed|fatal error' "\$logfile"); [ -n "\$refusal" ]; then
-    printf '%s\\t%s\\n' INFO "start probe did not run the application (refusal: \$refusal) — missing-config behavior UNVERIFIED"
+    printf '%s\t%s\n' INFO "start probe did not run the application (refusal: \$refusal) — missing-config behavior UNVERIFIED"
   elif [ "\$rc" -eq 124 ]; then
-    printf '%s\\t%s\\n' INFO "missing-config start probe timed out (rc=124) — error-path behavior UNVERIFIED: \$(head -2 "\$logfile" | tr '\\n' ' ')"
+    printf '%s\t%s\n' INFO "missing-config start probe timed out (rc=124) — error-path behavior UNVERIFIED: \$(head -2 "\$logfile" | tr '\\n' ' ')"
   elif [ "\$probe_started_yes_no" != yes ]; then
-    printf '%s\\t%s\\n' INFO "start probe did not run the application (probe_started=\$probe_started_yes_no) — missing-config behavior UNVERIFIED: \$(head -2 "\$logfile" | tr '\\n' ' ')"
+    printf '%s\t%s\n' INFO "start probe did not run the application (probe_started=\$probe_started_yes_no) — missing-config behavior UNVERIFIED: \$(head -2 "\$logfile" | tr '\\n' ' ')"
   elif [ "\$rc" -gt 0 ]; then
-    printf '%s\\t%s\\n' OK "clean error on missing config (rc=\$rc)"
-  elif head -8 "\$logfile" | grep -q '^Usage:'; then
-    # QA-CHIMERA-V2-42 (2026-10-11): an rc=0 whose output is a usage banner is
-    # the CLI-help arm, NOT a missing-config observation — never grade a help
-    # banner as "application started but exited cleanly" (the recurring
-    # QA-CHIMERA-V2-36 INFO was exactly this misread of a bare-script probe).
-    printf '%s\\t%s\\n' INFO "probe invoked CLI-help arm (rc=0, usage banner, argv: \${ep_bin:-unknown}) — not the missing-config path: \$(grep -m1 '^Usage:' "\$logfile")"
+    printf '%s\t%s\n' OK "clean error on missing config (rc=\$rc)"
   else
-    printf '%s\\t%s\\n' INFO "unexpected: application started but exited cleanly on missing config (rc=\$rc)"
+    printf '%s\t%s\n' INFO "unexpected: application started but exited cleanly on missing config (rc=\$rc)"
   fi
 }
 # ep_probe — run the errorpath probe and report whether the application itself ran.
@@ -1682,6 +1732,10 @@ ep_probe() { # <bin> <ep_dir> <logdir> -> <started>\t<rc>
       fi
       ;;
     *)
+      if [ "\$bin" = "npm start" ] && [ -f package.json ]; then
+        printf '%s\\n' '{"name":"bunker-ep-probe","scripts":{"start":"node server.js"}}' > "\$ep_dir/package.json"
+        printf '%s\\n' 'require("http").createServer((_, res) => res.end("ok")).listen(0)' > "\$ep_dir/server.js"
+      fi
       ( cd "\$ep_dir" && timeout 15 \$bin ) >"\$logdir/ep.log" 2>&1
       ep_rc=\$?
       if [ \$ep_rc -ne 127 ] && ! grep -qiE 'go\\.mod file not found|cannot find main module|no Go files|not a valid module|build constraints exclude|cannot find package|build failed|fatal error|cannot find module|module not found|no such file or directory' "\$logdir/ep.log"; then
@@ -1699,45 +1753,9 @@ cd ~/qa-$proj || { echo "no repo dir"; exit 1; }
 #    (user-space tarballs) BEFORE the cells, so fresh-install tests the
 #    project's own install step on a genuinely fresh system.
 mkdir -p ~/tools
-# QA-MISCHIEF-003 (2026-10-15): the old gate installed ~/tools/go ONLY when the
-# agent had NO go on PATH. An agent with a distro go BELOW the repo's go.mod
-# floor (e.g. /usr/bin/go 1.22.2 vs 'go 1.24') kept that go for every leg —
-# the upgrade cell's streamed-tree build died 'go1.24: toolchain not
-# available' and the agent has no GOTOOLCHAIN=auto net path. New gate: install
-# (or refresh) the user-space toolchain whenever ~/tools/go is missing OR its
-# version is below the go.mod floor; the unconditional PATH prepend below then
-# shadows the distro go for all cells.
-ver_ge() { # <a> <b> — rc 0 when numeric-dotted version a >= b (malformed -> not >=)
-  [ "\$1" = "\$2" ] && return 0
-  local mn
-  mn="\$(printf '%s\n%s\n' \"\$1\" \"\$2\" | sort -t. -k1,1n -k2,2n -k3,3n | head -1)"
-  [ "\$mn" != "\$1" ]
-}
-GO_FLOOR=""
-[ -f go.mod ] && GO_FLOOR="\$(sed -n 's/^go \\([0-9][0-9.]*\\).*/\\1/p' go.mod | head -1)"
-TOOLS_GO_V=""
-[ -x ~/tools/go/bin/go ] && TOOLS_GO_V="\$( ~/tools/go/bin/go version | sed 's/.*go\\([0-9][0-9.]*\\).*/\\1/' )"
-GO_NEED_INSTALL=0
-if [ ! -x ~/tools/go/bin/go ]; then
-  GO_NEED_INSTALL=1
-elif [ -n "\$GO_FLOOR" ] && ! ver_ge "\$TOOLS_GO_V" "\$GO_FLOOR"; then
-  GO_NEED_INSTALL=1
-fi
-if [ "\$GO_NEED_INSTALL" = "1" ]; then
-  # QA-GUARD-005 (2026-10-20): the pinned go1.26.5 tarball sits BELOW current
-  # go.mod floors already shipping in fleet repos (go 1.26.9), so an
-  # above-floor repo got a provisioned toolchain that its own go.mod refuses
-  # — every GOTOOLCHAIN=local leg (chaos-disconnect is offline by design)
-  # died before a single test. The bootstrap now tracks the FLOOR: resolve the
-  # newest patch of the requested minor (go.dev/dl/?mode=json), prefer it, and
-  # fall back to the pin when the discovery call fails (no network surprises,
-  # same URL channel as before). TOOLS_GO_V is re-derived after install so the
-  # OK line reports the toolchain the cells will actually run.
-  GO_BOOT_V="\$(curl -s --max-time 15 'https://go.dev/dl/?mode=json' 2>/dev/null | grep -oE 'go[0-9]+\\.[0-9]+(\\.[0-9]+)?' | head -1 | sed 's/^go//')"
-  case "\$GO_BOOT_V" in *[!0-9.]*|"") GO_BOOT_V="1.26.5" ;; esac
-  ( curl -sL -o ~/tools/go.tgz "https://go.dev/dl/go\${GO_BOOT_V}.linux-amd64.tar.gz" && rm -rf ~/tools/go && tar -C ~/tools -xzf ~/tools/go.tgz && rm ~/tools/go.tgz ) >\$LOGD/toolchain.log 2>&1 \\
-    && TOOLS_GO_V="\$( ~/tools/go/bin/go version | sed 's/.*go\\([0-9][0-9.]*\\).*/\\1/' )" \\
-    && cell toolchain-bootstrap OK "go \$GO_BOOT_V installed (~/tools/go; floor=\${GO_FLOOR:-none} distro=\${TOOLS_GO_V:-absent})" \\
+if [ -f go.mod ] && ! command -v go >/dev/null 2>&1 && [ ! -x ~/tools/go/bin/go ]; then
+  ( curl -sL -o ~/tools/go.tgz https://go.dev/dl/go1.26.5.linux-amd64.tar.gz && tar -C ~/tools -xzf ~/tools/go.tgz && rm ~/tools/go.tgz ) >\$LOGD/toolchain.log 2>&1 \
+    && cell toolchain-bootstrap OK "go 1.26.5 installed (~/tools/go)" \
     || cell toolchain-bootstrap FAIL "\$(tail -2 \$LOGD/toolchain.log)"
 fi
 if [ -f package.json ] && ! command -v node >/dev/null 2>&1 && [ ! -x ~/tools/node/bin/node ]; then
@@ -1746,20 +1764,32 @@ if [ -f package.json ] && ! command -v node >/dev/null 2>&1 && [ ! -x ~/tools/no
     || cell toolchain-bootstrap FAIL "\$(tail -2 \$LOGD/toolchain.log)"
 fi
 if [ -f pyproject.toml ] && [ ! -x ~/tools/venv/bin/python ]; then
-  ( python3 -m venv ~/tools/venv && ~/tools/venv/bin/pip install --upgrade pip setuptools wheel && ~/tools/venv/bin/pip install pytest ) >\$LOGD/venv.log 2>&1 \
-    && cell toolchain-bootstrap OK "python venv ready + pytest (~/tools/venv)" \
-    || cell toolchain-bootstrap FAIL "\$(tail -2 \$LOGD/venv.log)"
-fi
-# QA-AUGER-1 (2026-10-10): pytest-declared repos WITHOUT pyproject.toml
-# (pytest.ini / tox.ini / setup.cfg / conftest.py — the shapes is_pytest_repo
-# detects host-side) previously got NO venv bootstrap at all, so the native
-# leg died \`/usr/bin/python3: No module named pytest\` and chaos-resource
-# burned UNVERIFIED cycles (QA-AUGER-4/10). Same arm, same venv, gated on the
-# baked QA_PYTEST_REPO verdict instead of the pyproject filename.
-if [ "\$QA_PYTEST_REPO" = "1" ] && [ ! -x ~/tools/venv/bin/python ]; then
-  ( python3 -m venv ~/tools/venv && ~/tools/venv/bin/pip install --upgrade pip setuptools wheel && ~/tools/venv/bin/pip install pytest ) >\$LOGD/venv.log 2>&1 \
-    && cell toolchain-bootstrap OK "python venv ready + pytest (~/tools/venv; pytest-config repo, QA-AUGER-1)" \
-    || cell toolchain-bootstrap FAIL "\$(tail -2 \$LOGD/venv.log)"
+  # QA-BUNKER-57 (2026-10-04): a fresh JIT agent's ensurepip can fail (broken
+  # venv, no sudo to fix it), leaving NO pip in the venv — the old chain then
+  # died at the first \`pip install\` and four battery cells cascaded rc=127
+  # 'pip: command not found' as FAIL/ENV-BLOCKED with zero signal. Verify pip
+  # after venv creation and recover (ensurepip retry, then get-pip.py), logging
+  # which path was used to venv.log. If pip is still absent the venv itself is
+  # still graded honestly (toolchain-bootstrap FAIL names the ensurepip failure)
+  # and every pip-dependent cell grades UNVERIFIED via qa_have_pip below.
+  if ( python3 -m venv ~/tools/venv ) >\$LOGD/venv.log 2>&1; then
+    if "\$HOME/tools/venv/bin/python3" -m pip --version >>\$LOGD/venv.log 2>&1; then
+      echo "pip already present in venv (ensurepip path OK)" >>\$LOGD/venv.log
+    elif "\$HOME/tools/venv/bin/python3" -m ensurepip --upgrade >>\$LOGD/venv.log 2>&1; then
+      echo "pip recovered via python3 -m ensurepip" >>\$LOGD/venv.log
+    elif curl -sS https://bootstrap.pypa.io/get-pip.py | "\$HOME/tools/venv/bin/python3" >>\$LOGD/venv.log 2>&1; then
+      echo "pip recovered via bootstrap.pypa.io/get-pip.py" >>\$LOGD/venv.log
+    else
+      echo "pip recovery FAILED (ensurepip + get-pip.py both failed) — pip-dependent cells will grade UNVERIFIED" >>\$LOGD/venv.log
+    fi
+    if ( "\$HOME/tools/venv/bin/python3" -m pip install --upgrade pip setuptools wheel && "\$HOME/tools/venv/bin/python3" -m pip install pytest ) >>\$LOGD/venv.log 2>&1; then
+      cell toolchain-bootstrap OK "python venv ready + pytest (~/tools/venv)"
+    else
+      cell toolchain-bootstrap FAIL "\$(tail -2 \$LOGD/venv.log)"
+    fi
+  else
+    cell toolchain-bootstrap FAIL "\$(tail -2 \$LOGD/venv.log)"
+  fi
 fi
 # QA-TERMINAL-JAIL-9 (2026-09-25): the harness's own runner detection picks
 # pytest -x -q for every pyproject repo, but a pip install -e . install
@@ -1770,9 +1800,13 @@ fi
 # created before this fix or on agents where the fresh install could not
 # reach the network: offline agents log a WARN and the native-runner guard
 # in the ci-pass cell grades the affected legs UNVERIFIED.
-# QA-AUGER-1 (2026-10-10): the same top-up now also serves pytest-config
-# repos without pyproject.toml (QA_PYTEST_REPO=1 from is_pytest_repo).
-if { [ -f pyproject.toml ] || [ "\$QA_PYTEST_REPO" = "1" ]; } && [ -x ~/tools/venv/bin/python ] && [ ! -x ~/tools/venv/bin/pytest ]; then
+# QA-BUNKER-26 (2026-10-09): detection also selects pytest.ini/conftest.py-only
+# repos (QA-FOREMAN-2026-09-26), so the top-up guard must arm for those too —
+# a venv created before that fix or offline at venv-build time left such repos
+# with no pytest at all and every suite leg died 'No module named pytest'
+# (auger chaos-resource UNVERIFIED 2026-09-27).
+if { [ -f pyproject.toml ] || [ -f pytest.ini ] || [ -f conftest.py ]; } \
+   && [ -x ~/tools/venv/bin/python ] && [ ! -x ~/tools/venv/bin/pytest ]; then
   ( ~/tools/venv/bin/pip install pytest ) >\$LOGD/venv-pytest.log 2>&1 \
     && cell toolchain-bootstrap OK "pytest topped up into ~/tools/venv (QA-TERMINAL-JAIL-9)" \
     || echo "WARN: pytest top-up failed (offline agent?) - native/chaos legs will grade UNVERIFIED 'runner missing': \$(tail -1 \$LOGD/venv-pytest.log 2>/dev/null)" >&2
@@ -1839,7 +1873,7 @@ fi
         ld)
           # QA-H3-14 v3 (2026-09-21, battery 23ae94ab): bare agents lack binutils
           # entirely and GNU make's ./configure aborts with "no acceptable ld
-          # found in \$PATH" — ld is NOT a zig subcommand, so it cannot ride the
+          # found in $PATH" — ld is NOT a zig subcommand, so it cannot ride the
           # plain-forward *) branch. zig serves lld as \`zig ld.lld\`. Live-proven
           # on the kept battery agent: with this wrapper configure passes,
           # build.sh produces GNU Make 4.4.1, and a toy target runs (TOY_OK).
@@ -1859,11 +1893,11 @@ fi
     cell toolchain-bootstrap INFO "no C toolchain on agent (no sudo) and zig install failed - C-toolchain-dependent cells (make bootstrap, rust build scripts) grade ENV-BLOCKED (\$(tail -2 \$LOGD/zig.log))"
   fi
 # QA-H3-14 v2 (2026-09-21, tick h3-2026-09-21-11-07-15): battery 8ff078b2 re-run FALSIFIED v1 — the make
-# bootstrap ran BEFORE the zig C-toolchain leg and defaulted CC=\${CC:-cc}; on an agent with NEITHER make NOR cc
+# bootstrap ran BEFORE the zig C-toolchain leg and defaulted CC=${CC:-cc}; on an agent with NEITHER make NOR cc
 # configure died instantly and make.log stayed EMPTY (silent). v2: the zig leg moves ABOVE the make bootstrap
 # and becomes UNCONDITIONAL (a user-space C toolchain serves make configure AND rust build scripts; re-verified
 # locally with cc masked: zig 0.15.2 bootstraps, make 4.4.1 builds a toy target). The make subshell drops its
-# CC=\${CC:-cc} default — CC arrives from the zig export or the cell grades ENV-BLOCKED with the real cause.
+# CC=${CC:-cc} default — CC arrives from the zig export or the cell grades ENV-BLOCKED with the real cause.
 # v3 (same tick, battery 23ae94ab kept-agent autopsy): configure failed on bare agents with "no acceptable ld
 # found in \$PATH" (no binutils) — the zig loop now also emits an ld wrapper (zig ld.lld), and configure/build.sh
 # output is captured into make.log (the inner >/dev/null redirects made every failure an EMPTY, undiagnosable log).
@@ -1924,8 +1958,98 @@ fi
 export RUST_MISSING_SYS_DEPS
 command -v go >/dev/null 2>&1 && command -v node >/dev/null 2>&1 && cell toolchain-bootstrap OK "go+node ready"
 
+# QA-BUNKER-078 (2026-10-30): the fresh-install artifact expectation is DERIVED
+# from the install leg, never from a literal tool name.  Three couplings to
+# toolsd survived QA-BUNKER-81: a toolsd-named install command forced the
+# requirement, a PRE-EXISTING toolsd in PATH satisfied it (so a leg that
+# installed nothing passed), and artifact_check read the install command from
+# a shell variable this generated script never defines — it was empty,
+# artifact_required was always 0, and the check could not fire at all.
+# Now: the generator bakes ARTIFACT_EXPECT/ARTIFACT_CMD (see
+# artifact_expectation), the scan also covers GOPATH/bin and the repo-local
+# ./bin a Makefile build writes to, and QA_EXPECTED_ARTIFACT=<name> opts a repo
+# into a named-artifact assertion.  A compile/dependency-install leg grades OK
+# with a NAMED "no artifact expected" reason instead of failing on a binary it
+# never promised — the acceptance shape is a Go repo (cmd/ = bunker, bunkerd,
+# docs-drift) whose install is 'go build ./...'.
+install_artifact_dirs() {
+  local p gobin
+  IFS=: read -r -a install_path_dirs <<< "\$PATH"
+  gobin=""
+  command -v go >/dev/null 2>&1 && gobin="\$(go env GOPATH 2>/dev/null)/bin"
+  for p in "\${install_path_dirs[@]}" "\$HOME/bin" "\$HOME/.local/bin" "\$gobin" "\$PWD/bin"; do
+    [ -n "\$p" ] || continue
+    [ -d "\$p" ] || continue
+    # Every PATH/bin directory is eligible: the before snapshot excludes the
+    # harness' pre-existing tools, while a newly placed executable anywhere in
+    # PATH — or in GOPATH/bin, or in the repo's own ./bin — is the install
+    # leg's artifact regardless of its name or prefix.
+    printf '%s\\n' "\$p"
+  done | sort -u
+}
+install_artifact_snapshot() {
+  local p
+  while IFS= read -r p; do
+    find "\$p" -maxdepth 1 -type f -perm -u+x -print 2>/dev/null
+  done < <(install_artifact_dirs)
+}
+artifact_check() { # <before-snapshot> <after-snapshot> <log>
+  local before="\$1" after="\$2" log="\$3"
+  local install_artifacts expect expected_artifact
+  # LC_ALL=C on BOTH snapshots: comm(1) only reports correctly when the two
+  # inputs share a collation, and a UTF-8 agent locale silently produced
+  # "not in sorted order" here.
+  install_artifact_snapshot | LC_ALL=C sort -u > "\$after"
+  install_artifacts="\$(comm -13 "\$before" "\$after" | tr '\\n' ' ' | sed 's/[[:space:]]*\$//' )"
+  # A runtime QA_EXPECTED_ARTIFACT (agent-side override) wins over the
+  # generator's derivation so an operator can assert a named binary without
+  # editing the harness.
+  expect="\$ARTIFACT_EXPECT"
+  [ -n "\${QA_EXPECTED_ARTIFACT:-}" ] && expect="name:\$QA_EXPECTED_ARTIFACT"
+  case "\$expect" in
+    name:*)
+      expected_artifact="\${expect#name:}"
+      if printf '%s\\n' "\$install_artifacts" | tr ' ' '\\n' | sed 's#.*/##' | grep -qx "\$expected_artifact"; then
+        cell fresh-install OK "\$(tail -1 "\$log"); artifact: \$expected_artifact (QA_EXPECTED_ARTIFACT asserted, installed by this leg)"
+      else
+        cell fresh-install FAIL "rc=1: install rc=0 but no artifact found — QA_EXPECTED_ARTIFACT=\$expected_artifact was not installed into PATH/bin, \$HOME/bin, \$HOME/.local/bin, GOPATH/bin or ./bin"
+      fi ;;
+    binary)
+      if [ -n "\$install_artifacts" ]; then
+        cell fresh-install OK "\$(tail -1 "\$log"); artifact(s): \$install_artifacts"
+      else
+        cell fresh-install FAIL "rc=1: install rc=0 but no artifact found — the install leg [\$ARTIFACT_CMD] is a packaging build/install and must leave a NEW executable in PATH/bin, \$HOME/bin, \$HOME/.local/bin, GOPATH/bin or ./bin (set QA_EXPECTED_ARTIFACT=<name> to assert one by name)"
+      fi ;;
+    *)
+      cell fresh-install OK "\$(tail -1 "\$log"); no artifact expected for [\$ARTIFACT_CMD] — a compile/dependency-install leg ships code, not binaries (set QA_EXPECTED_ARTIFACT=<name> to assert one)\${install_artifacts:+; artifact(s): \$install_artifacts}"
+      ;;
+  esac
+}
+INSTALL_ARTIFACT_BEFORE="\$LOGD/install-artifacts.before"
+INSTALL_ARTIFACT_AFTER="\$LOGD/install-artifacts.after"
+install_artifact_snapshot | LC_ALL=C sort -u > "\$INSTALL_ARTIFACT_BEFORE"
+
 # 1 · fresh-install — REAL rc through a log file
-( $install_cmd ) >\$LOGD/inst.log 2>&1; inst_rc=\$?
+# QA-BUNKER-57 (2026-10-04): a pyproject repo's DETECT_INSTALL is pip; on an
+# agent where ensurepip failed there is no pip at all and the leg would die
+# rc=127 as a false repo FAIL. Grade UNVERIFIED before running anything.
+# (QA_ECOSYSTEM is only assigned later, in the upgrade block — test the
+# ecosystem here the same way the installer is picked, from $install_cmd.)
+if printf '%s' "$install_cmd" | grep -q pip && ! qa_have_pip; then
+  cell fresh-install UNVERIFIED "pip absent on agent (ensurepip failed; no sudo) — the install step was never run, so the repo is untested by this cell"
+else
+# QA-BUNKER-60 (2026-10-07): the install leg is bounded by a host-tunable
+# ceiling (BUNKER_QA_INSTALL_TIMEOUT_S, default 3600) instead of running
+# unbounded — a heavy workspace (wasmtime + arrow + tree-sitter C parsers) on
+# the 2-CPU default slice measured 2h+ on fresh-install, so the battery TTL
+# expired before later cells could write and the run was salvaged UNVERIFIED.
+# rc=124 grades SKIP (UNVERIFIED upstream), never OK/FAIL: a timeout is a
+# slice/window outcome, not a repo verdict. bash -c (not a bare eval) keeps the
+# compound installer a single killable child; the agent has bash by definition
+# (qa-run.sh itself runs under it), and coreutils timeout is already a
+# dependency of the chaos cells below.
+INST_TIMEOUT_S="\${BUNKER_QA_INSTALL_TIMEOUT_S:-${BUNKER_QA_INSTALL_TIMEOUT_S:-3600}}"
+( timeout "\$INST_TIMEOUT_S" bash -c '$install_cmd' ) >\$LOGD/inst.log 2>&1; inst_rc=\$?
 # FIX 2 / QA-WARPFS-9 rework 3 (2026-09-19): the condition above catches the bare
 # C toolchain. The OTHER environment failure the live agent produced is a rust
 # repo whose crates link a system library (openssl via git2, fuse3 via hilo-fuse):
@@ -1934,11 +2058,21 @@ command -v go >/dev/null 2>&1 && command -v node >/dev/null 2>&1 && cell toolcha
 # ENV-BLOCKED fires only when BOTH halves hold — the probe found missing system
 # deps (RUST_MISSING_SYS_DEPS) AND the log carries the *-sys build-script shape —
 # and the INFO detail names the missing list so the row is actionable.
-if [ \$inst_rc -eq 0 ]; then cell fresh-install OK "\$(tail -1 \$LOGD/inst.log)"
+# rc=124 = timeout(1)'s own exit code — grade BEFORE the OK branch so a ceiling
+# hit can never fall through to OK/FAIL (QA-BUNKER-60).
+if [ \$inst_rc -eq 124 ]; then cell fresh-install SKIP "install exceeded \${INST_TIMEOUT_S}s timeout (slice/cpu too small for this workspace or genuine hang) — grade UNVERIFIED upstream"
+elif [ \$inst_rc -eq 0 ]; then
+  # QA-BUNKER-078: the install command and its derived expectation are baked by
+  # the generator (ARTIFACT_EXPECT/ARTIFACT_CMD) — this generated script has no
+  # install_cmd variable, which is why the pre-QA-BUNKER-078 call could never
+  # fire.  Compare against the pre-install snapshot so bootstrap tools cannot
+  # masquerade as project artifacts.
+  artifact_check "\$INSTALL_ARTIFACT_BEFORE" "\$INSTALL_ARTIFACT_AFTER" "\$LOGD/inst.log"
 elif [ \$inst_rc -eq 127 ] || grep -qi 'command not found' \$LOGD/inst.log; then cell fresh-install INFO "ENV-BLOCKED: the agent lacks a build tool the install step calls (\$(grep -m1 -oE '[a-zA-Z0-9_.-]+: command not found' \$LOGD/inst.log || echo rc=\$inst_rc)) and has no sudo to install it — harness env, not a repo defect: \$(tail -1 \$LOGD/inst.log)"
 elif build_env_failure \$LOGD/inst.log; then cell fresh-install INFO "ENV-BLOCKED: agent has no C toolchain (build-script link failure) — not a repo defect; README documents build-essential"
 elif [ -n "\$RUST_MISSING_SYS_DEPS" ] && build_sys_dep_failure \$LOGD/inst.log; then cell fresh-install INFO "ENV-BLOCKED: agent is missing system deps [\$RUST_MISSING_SYS_DEPS] and the build died in a *-sys build script — no sudo to apt install, not a repo defect; README documents the full dependency set: \$( { grep -m1 -E 'failed to run custom build command' \$LOGD/inst.log 2>/dev/null || grep -m1 'development packages' \$LOGD/inst.log 2>/dev/null; } | cut -c1-200 )"
 else cell fresh-install FAIL "rc=\$inst_rc: \$(tail -2 \$LOGD/inst.log)"; fi
+fi # QA-BUNKER-57 pip-absent gate
 
 # Shared "start the project" command — used by chaos-corruption and
 # chaos-errorpath. QA-GITREINS-POC-6/004 (2026-09-17): the old inline detection
@@ -2001,29 +2135,97 @@ elif [ -f go.mod ]; then
   fi
 elif [ -f pyproject.toml ]; then
   BIN=\$(grep -A6 '^\[project\.scripts\]' pyproject.toml 2>/dev/null | grep -oE '^[A-Za-z0-9_.-]+[[:space:]]*=' | head -1 | tr -d ' =')
-  # QA-CHIMERA-V2-42 (2026-10-10/11): the FIRST console script is often a bare
-  # multi-command CLI whose no-args run prints the usage banner and exits 0 —
-  # the missing-config probe then graded a HELP banner as 'application started
-  # but exited cleanly'. Discover a config-requiring subcommand from the
-  # binary's own --help and probe THAT, in TWO passes: long-running daemons
-  # first (serve/server/daemon/start), \`run\` LAST — a bare \`run\` subcommand is
-  # often argv-hungry (chimera run with no PROMPT prints ITS OWN usage banner
-  # at rc=0: the same misclassification one level deeper; verified live
-  # 2026-10-11), so it is used only when no long-running command exists. Fall
-  # back to the bare script when help lists neither (ep_grade's usage-banner
-  # guard covers that arm honestly).
-  if [ -n "\$BIN" ] && command -v \$BIN >/dev/null 2>&1; then
-    EP_HELP=\$(timeout 10 \$BIN --help 2>/dev/null)
-    EP_SUB=\$(printf '%s\\n' "\$EP_HELP" | grep -oE '^[[:space:]]{2,}(serve|server|daemon|start)[[:space:]]' | awk '{print \$1}' | head -1)
-    if [ -z "\$EP_SUB" ]; then
-      EP_SUB=\$(printf '%s\\n' "\$EP_HELP" | grep -oE '^[[:space:]]{2,}run[[:space:]]' | awk '{print \$1}' | head -1)
-    fi
-    if [ -n "\$EP_SUB" ]; then BIN="\$BIN \$EP_SUB"; fi
-  fi
 fi
 if [ -n "\$BIN" ] && ! command -v \${BIN%% *} >/dev/null 2>&1; then BIN=""; fi
 
-# 2 · ci-pass — act first (simulated GH runner); NATIVE suite is the authoritative
+# Mandatory stage cells (QA-BUNKER-31): keep the direct battery's evidence
+# contract aligned with the retired QA path. These cells are deliberately
+# emitted in a fixed order before ci-pass: lint, tests, docker_build,
+# compose_config. A missing artifact is N/A; an unavailable runner is INFO so
+# the evidence distinguishes an environment gap from a repository result.
+# The trigger scans are bounded to the synced tree and avoid dependency dirs.
+#
+# 1 · lint — use the repository's declared linter when present, otherwise the
+#     standard tool for the detected language.
+LINT_CMD=""
+if [ -f .golangci.yml ] || [ -f .golangci.yaml ]; then LINT_CMD="golangci-lint run"
+elif [ -f Makefile ] && grep -qE '^lint:' Makefile 2>/dev/null; then LINT_CMD="make lint"
+elif [ -f package.json ] && command -v node >/dev/null 2>&1 && node -e 'const p=require("./package.json"); process.exit(p.scripts && p.scripts.lint ? 0 : 1)' 2>/dev/null; then LINT_CMD="npm run lint"
+elif [ -f pyproject.toml ] && command -v ruff >/dev/null 2>&1; then LINT_CMD="ruff check ."
+elif find . -maxdepth 4 -type f -name '*.go' -not -path './.git/*' -not -path './node_modules/*' -print -quit 2>/dev/null | grep -q .; then LINT_CMD="go vet ./..."
+fi
+if [ -n "\$LINT_CMD" ]; then
+  if ! command -v "\${LINT_CMD%% *}" >/dev/null 2>&1; then
+    cell lint INFO "lint runner unavailable on agent: \${LINT_CMD%% *} — lint was not run"
+  else
+    ( \$LINT_CMD ) >\$LOGD/lint.log 2>&1; lint_rc=\$?
+    if [ \$lint_rc -eq 0 ]; then cell lint OK "\$LINT_CMD (rc=0)"
+    else cell lint FAIL "\$(fail_detail \$lint_rc \$LOGD/lint.log \$LINT_CMD)"; fi
+  fi
+else
+  cell lint N/A "no supported lint trigger (declared linter, Makefile lint target, package lint script, ruff, or Go files)"
+fi
+
+# 2 · tests — run the same detected native suite used by ci-pass. This is a
+#     dedicated evidence cell; ci-pass retains its existing act/native fallback
+#     behavior below so the two cells remain independently attributable.
+TEST_RC=skip
+if [ "\$native_cmd" = "echo no-test-path" ]; then
+  cell tests N/A "no native test command detected"
+elif printf '%s' "\$native_cmd" | grep -q pytest && ! qa_have_pip; then
+  cell tests UNVERIFIED "pip absent on agent — the detected pytest suite was not run"
+else
+  ( $native_cmd ) >\$LOGD/tests.log 2>&1; TEST_RC=\$?
+  if [ \$TEST_RC -eq 0 ] && ! vacuous_native_suite \$LOGD/tests.log; then
+    cell tests OK "\$native_cmd (rc=0)"
+  elif [ \$TEST_RC -eq 0 ]; then
+    cell tests UNVERIFIED "detected native command produced no test result (vacuous suite)"
+  elif native_runner_missing \$LOGD/tests.log; then
+    cell tests UNVERIFIED "native test runner unavailable — suite never ran: \$(native_runner_missing_cause \$LOGD/tests.log)"
+  else
+    cell tests FAIL "\$(fail_detail \$TEST_RC \$LOGD/tests.log \$native_cmd)"
+  fi
+fi
+
+# 3 · docker_build — build the first repository Dockerfile when one exists.
+DOCKERFILE_PATH=\$(find . -maxdepth 4 -type f -name 'Dockerfile*' \
+  -not -path './.git/*' -not -path './node_modules/*' -not -path './.venv/*' \
+  -not -path './vendor/*' 2>/dev/null | sort | head -1)
+if [ -n "\$DOCKERFILE_PATH" ]; then
+  if ! command -v docker >/dev/null 2>&1; then
+    cell docker_build INFO "docker unavailable on agent — Dockerfile \$DOCKERFILE_PATH was not built"
+  else
+    DOCKER_CONTEXT=\$(dirname "\$DOCKERFILE_PATH")
+    ( docker build -f "\$DOCKERFILE_PATH" "\$DOCKER_CONTEXT" ) >\$LOGD/docker-build.log 2>&1; docker_build_rc=\$?
+    if [ \$docker_build_rc -eq 0 ]; then cell docker_build OK "docker build -f \$DOCKERFILE_PATH \$DOCKER_CONTEXT (rc=0)"
+    else cell docker_build FAIL "\$(fail_detail \$docker_build_rc \$LOGD/docker-build.log docker build -f \$DOCKERFILE_PATH \$DOCKER_CONTEXT)"; fi
+  fi
+else
+  cell docker_build N/A "no Dockerfile trigger"
+fi
+
+# 4 · compose_config — validate the first compose file without starting it.
+COMPOSE_FILE_PATH=\$(find . -maxdepth 4 -type f \( -name 'docker-compose*.yml' -o -name 'docker-compose*.yaml' -o -name 'compose*.yml' -o -name 'compose*.yaml' \) \
+  -not -path './.git/*' -not -path './node_modules/*' -not -path './.venv/*' \
+  -not -path './vendor/*' 2>/dev/null | sort | head -1)
+if [ -n "\$COMPOSE_FILE_PATH" ]; then
+  if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    ( docker compose -f "\$COMPOSE_FILE_PATH" config ) >\$LOGD/compose-config.log 2>&1; compose_config_rc=\$?
+    compose_config_cmd="docker compose -f \$COMPOSE_FILE_PATH config"
+  elif command -v docker-compose >/dev/null 2>&1; then
+    ( docker-compose -f "\$COMPOSE_FILE_PATH" config ) >\$LOGD/compose-config.log 2>&1; compose_config_rc=\$?
+    compose_config_cmd="docker-compose -f \$COMPOSE_FILE_PATH config"
+  else
+    cell compose_config INFO "compose runner unavailable on agent — compose file \$COMPOSE_FILE_PATH was not validated"
+    compose_config_rc=skip; compose_config_cmd=""
+  fi
+  if [ "\$compose_config_rc" = "0" ]; then cell compose_config OK "\$compose_config_cmd (rc=0)"
+  elif [ "\$compose_config_rc" != "skip" ]; then cell compose_config FAIL "\$(fail_detail \$compose_config_rc \$LOGD/compose-config.log \$compose_config_cmd)"; fi
+else
+  cell compose_config N/A "no compose file trigger"
+fi
+
+# 5 · ci-pass — act first (simulated GH runner); NATIVE suite is the authoritative
 #    fallback (act + rootless dockerd = fatal EOF observed 2026-08-27 on las-03)
 #
 # QA-9ROUTER-19 (2026-09-23) — TWO false-verdict classes in this cell, both
@@ -2180,26 +2382,6 @@ fi
 # user-socket guess /run/user/\$UID/docker.sock (proven chimera-v2 run 09-01).
 [ -x ~/bin/docker ] && export DOCKER_HOST="unix:///run/bunker/$agent/docker.sock"
 for i in \$(seq 1 20); do [ -S /run/bunker/$agent/docker.sock ] && break; sleep 2; done
-# QA-CONSENSUS-24 (2026-10-10): when the agent's docker socket never appears
-# (rootless daemon never came up), the old script CONTINUED into docker legs
-# that all fail on "Cannot connect" - or worse, aborted under set -u/pipefail
-# after the upgrade cell, TRUNCATING the battery silently (docker-deploy,
-# ui-probe and all 4 chaos cells never ran, evidence incomplete). Gate every
-# docker leg on one probe and grade them SKIPPED-with-reason instead.
-QA_DOCKER_OK=0
-if [ -x ~/bin/docker ] && ~/bin/docker version >/dev/null 2>&1; then QA_DOCKER_OK=1; fi
-if [ \$QA_DOCKER_OK = 0 ]; then
-  echo "QA-CONSENSUS-24: docker daemon/socket UNAVAILABLE - docker-dependent cells grade SKIPPED (environment, not the repo)"
-  cell toolchain-bootstrap INFO "docker daemon/socket UNAVAILABLE after the 40s wait - docker-dependent cells grade SKIPPED (agent environment gap, not a repo defect)"
-  cell docker-deploy SKIPPED "agent docker socket never appeared - daemon not up on this agent (QA-CONSENSUS-24 fail-closed)"
-  cell chaos-shutdown SKIPPED "agent docker socket never appeared - compose chain NOT exercised (QA-CONSENSUS-24 fail-closed)"
-  cell chaos-corruption SKIPPED "agent docker socket never appeared - probe never ran (QA-CONSENSUS-24 fail-closed)"
-  cell chaos-resource SKIPPED "agent docker socket never appeared - suite not re-run under cap (QA-CONSENSUS-24 fail-closed)"
-  cell chaos-errorpath SKIPPED "agent docker socket never appeared - errorpath probe never ran (QA-CONSENSUS-24 fail-closed)"
-  echo CELLS-DONE
-  touch ~/qa-run.finished
-  exit 2
-fi
 # CI-only failure classification (QA-9ROUTER-19 class 2). Pure log predicate:
 # 0 ⇒ every failure act reported is the workflow's own registry/package
 # coordinates (a private image login/pull outside a real runner), i.e. an
@@ -2253,29 +2435,47 @@ ACT_WF_COUNT=\$(ls -1 \$ACT_WF_DIR 2>/dev/null | wc -l)
 QA_CI_CMD="$ci_cmd"
 if [ "\$ACT_WF_COUNT" -gt 0 ]; then QA_CI_CMD="\$QA_CI_CMD -W \$ACT_WF_DIR"; fi
 if [ "\$ACT_WF_COUNT" -gt 0 ]; then
-( timeout -k 30 \${BUNKER_QA_ACT_TIMEOUT:-2400} bash -c "\$QA_CI_CMD" ) >\$LOGD/ci.log 2>&1; ci_rc=\$?
+( timeout \${BUNKER_QA_ACT_TIMEOUT:-2400} bash -c "\$QA_CI_CMD" ) >\$LOGD/ci.log 2>&1; ci_rc=\$?
 else
 : > \$LOGD/ci.log
 ci_rc=skip   # no triggerable workflow: act never ran, so it has no verdict
 fi
 #QA-CELL:ci-pass:start
-# NOTE: the first test is a STRING compare on purpose — ci_rc is the literal
-# "skip" when there was no triggerable workflow, and \`[ skip -eq 0 ]\` makes bash
-# print "integer expression expected" and take the wrong branch.
-if [ "\$ci_rc" = "0" ]; then
-  cell ci-pass OK "act: \$(grep -cE 'Job succeeded|✅ Success' \$LOGD/ci.log || true) jobs green — rc=0 (\$ACT_WF_COUNT triggerable workflow(s))"
+# QA-BUNKER-41 (2026-10-30): the act leg's OWN result is a GRADED participant,
+# not decoration. ci_rc is raw and sometimes NON-NUMERIC (the literal "skip"
+# when no workflow can fire), so normalize it ONCE into act_result —
+# pass | skip | timeout | fail — and let the cell grade on that token.
+# Pre-fix the act leg reached the grade only as free-text detail on a cell
+# whose OK/FAIL the NATIVE suite decided: battery 2026-09-30, JIT agent
+# 67928b30 @ bunker-las-03 HEAD 47377c3, ci-pass graded with "act failed (rc=1:
+# [CI/gitreins-guard] Run Complete job|Cleaning up container for job
+# gitreins-)" + "native suite PASS" — so the workflow that gates every bunker
+# push was never verified end-to-end from the clean box, and the graded leg was
+# the native go suite only. The rail now:
+#   pass    -> ci-pass OK on the act leg itself (the native suite never needed);
+#   skip    -> no triggerable workflow: act has no verdict, native decides;
+#   timeout -> ci-pass FAIL naming the BUNKER_QA_ACT_TIMEOUT budget (a harness
+#              budget, not a repo defect — but never a green either);
+#   fail    -> ci-pass FAIL; a passing native suite is DETAIL ONLY.
+# Every detail below names act_result AND its rc so the deciding leg is never
+# ambiguous. The regression guard for this wiring is
+# .hermes/scripts/test_bunker_qa_act_grade.sh (guard: act_rc1_fails_grade) — it
+# renders the real generated script, drives THIS block with act rc=1 and
+# requires the battery's graded summary (qa_run_summary) to come back non-zero.
+case "\$ci_rc" in
+  0)    act_result=pass ;;
+  skip) act_result=skip ;;
+  124)  act_result=timeout ;;   # timeout(1)'s own rc — the act leg hit its wall budget
+  *)    act_result=fail ;;
+esac
+# NOTE: the test is a STRING compare on purpose — act_result is the literal
+# "pass" only when act exited 0, and \`[ skip -eq 0 ]\` would make bash print
+# "integer expression expected" and take the wrong branch.
+if [ "\$act_result" = "pass" ]; then
+  cell ci-pass OK "act: \$(grep -cE 'Job succeeded|✅ Success' \$LOGD/ci.log || true) jobs green — act_result=pass rc=0 (\$ACT_WF_COUNT triggerable workflow(s))"
 else
   suite_start=\$(date +%s)
-  # QA-HIVEMIND-WORK-18(c): the native leg previously had NO timeout at all —
-  # a hung go/cargo/npm suite ran until the agent TTL. term+kill enforcement:
-  # TERM at BUNKER_QA_NATIVE_TEST_TIMEOUT (default 5400s), KILL 30s later.
-  # QA-GUARD-005 (2026-10-20): PATH pin mirrors the chaos-disconnect arm — the
-  # subshell must resolve the go binary from the provisioned ~/tools/go, not
-  # from the image's distro go. The pin rides through env(1) because timeout
-  # execs its COMMAND verbatim: a bare VAR=val prefix after the duration is
-  # treated as the command name (measured: "failed to execute process" rc=127,
-  # 2026-10-20 verification battery).
-  ( timeout -k 30 \${BUNKER_QA_NATIVE_TEST_TIMEOUT:-5400} env PATH="\$HOME/tools/go/bin:\$PATH" $native_cmd ) >\$LOGD/native.log 2>&1; nat_rc=\$?
+  ( $native_cmd ) >\$LOGD/native.log 2>&1; nat_rc=\$?
   suite_end=\$(date +%s)
   suite_dur=\$(( suite_end - suite_start ))
   if [ \$nat_rc -eq 0 ]; then
@@ -2284,29 +2484,28 @@ else
     # (or any other empty suite output) is NOT a suite result — nothing ran.
     # Grade UNVERIFIED before the OK, never a false green on a suite that
     # never ran. Non-vacuous rc=0 path is unchanged.
-    # QA-AUGER-1 (2026-10-10): a pytest that exits 0 having collected ZERO
-    # tests is the same vacuity one step later — the suite "ran" but no test
-    # did. A vacuous pass is WORSE than an honest skip (it reads as repo
-    # evidence), so this shape grades FAIL, not UNVERIFIED, and names the
-    # summary line so the row is diagnosable without the agent.
     if vacuous_native_suite \$LOGD/native.log; then
-      cell ci-pass UNVERIFIED "native suite NEVER RAN (vacuous no-test-path placeholder) — no repo signal"
-    elif native_zero_tests \$LOGD/native.log; then
-      cell ci-pass FAIL "vacuous pass: native runner exited 0 but ZERO tests ran (summary: \$(grep -E '(passed|failed|error|no tests ran)' \$LOGD/native.log | tail -1 | cut -c1-160)) — a zero-test suite is never repo evidence (QA-AUGER-1)"
-    elif [ "\$ci_rc" = "skip" ]; then
-      cell ci-pass OK "act: no triggerable workflow\$QA_ACT_NOTE — native suite PASS"
+      cell ci-pass UNVERIFIED "native suite NEVER RAN (vacuous no-test-path placeholder) — no repo signal; act_result=\$act_result rc=\$ci_rc"
+    elif [ "\$act_result" = "skip" ]; then
+      cell ci-pass OK "act: no triggerable workflow\$QA_ACT_NOTE (act_result=skip, act never ran so it carries no verdict) — native suite PASS"
     else
-      # QA-CHIMERA-V2-39 (2026-10-04): an act leg that FAILED (e.g. every job
-      # dying at 'Set up Python' inside act) must NOT be folded into a single
-      # OK cell — a stage that did not genuinely run is UNVERIFIED, not part of
-      # a pass. Emit the native verdict on ci-pass and the act leg separately
-      # as ci-act, so an act-leg failure can never read OK.
-      if [ "\$ci_rc" = "skip" ]; then
-        cell ci-pass OK "act: no triggerable workflow\$QA_ACT_NOTE — native suite PASS"
-      else
-        cell ci-pass OK "native suite PASS (see ci-act for the act leg)"
-        cell ci-act UNVERIFIED "act failed rc=\$ci_rc: \$(act_failure_context \$LOGD/ci.log)\$ACTCTXOK — a failed act leg is never graded OK; hosted CI is authoritative for the workflow verdict"
-      fi
+      # QA-CHIMERA-V2-39 (2026-10-04) + QA-BUNKER-B1 (2026-10-06): an act leg
+      # that FAILED must NOT be folded into a single OK cell. The 10-04 change
+      # split the leg out as ci-act, but still graded ci-pass OK "native suite
+      # PASS (see ci-act ...)" — so a CI simulation that died rc=1
+      # (level=fatal msg=EOF, las-03 2026-08-31; recurred on batteries since)
+      # read OK against its own ci.log. act is this cell's PRIMARY check: a
+      # non-zero act rc is a FAIL, and the native suite (which DID run) is
+      # carried as detail only — never a status flipper. act SKIPPED entirely
+      # (no triggerable workflow) is not a failed act and keeps the
+      # native-suite OK. The ci-act row below keeps the act leg's own
+      # UNVERIFIED detail; it is never graded OK either.
+      # QA-BUNKER-41: act_result is the rail now, so the skip arm is decided
+      # ABOVE — the old inner re-test for it was unreachable dead code and is
+      # gone. Reaching here means act_result=fail|timeout, and the native leg
+      # (which DID run) is detail only, never a status flipper.
+      cell ci-pass FAIL "act rc=\$ci_rc: \$(act_failure_context \$LOGD/ci.log)\$ACTCTXOK — act CI simulation FAILED (act_result=\$act_result; native suite PASS is detail only)"
+      cell ci-act UNVERIFIED "act failed rc=\$ci_rc act_result=\$act_result: \$(act_failure_context \$LOGD/ci.log)\$ACTCTXOK — a failed act leg is never graded OK; hosted CI is authoritative for the workflow verdict"
     fi
   else
     NCTX=""; build_env_failure \$LOGD/native.log && NCTX=" (environment: no C toolchain)"
@@ -2326,16 +2525,16 @@ else
       # picked the runner by repo shape but could not provision it (PEP-735
       # dependency-group repos); grade the environment gap, not a repo defect.
       cell ci-pass UNVERIFIED "native runner missing (rc=\$nat_rc) - the suite NEVER RAN, no repo signal; INFRA-FAIL, not a result: \$(native_runner_missing_cause \$LOGD/native.log)"
-    elif [ "\$ci_rc" = "skip" ]; then
-      cell ci-pass FAIL "no triggerable workflow\$QA_ACT_NOTE — native rc=\$nat_rc: \$NFAIL\$NCTX\$GOCTX"
+    elif [ "\$act_result" = "skip" ]; then
+      cell ci-pass FAIL "no triggerable workflow\$QA_ACT_NOTE (act_result=skip, act never ran so it carries no verdict) — native rc=\$nat_rc: \$NFAIL\$NCTX\$GOCTX"
     elif ci_only_failure \$LOGD/ci.log; then
       # QA-9ROUTER-19 class 2: the act leg's ONLY failures are the workflow's own
       # registry/package coordinates (a private image login/pull outside a real
       # runner) — never a branch-push regression. Grade it INFO with the reason
       # named, so the row is informational instead of a false product FAIL.
-      cell ci-pass INFO "act's failures are the workflow's own registry/package coordinates, not a branch-push regression (\$(act_failure_context \$LOGD/ci.log)) — native rc=\$nat_rc: \$NFAIL\$NCTX\$GOCTX\$ACTCTX"
+      cell ci-pass INFO "act's failures are the workflow's own registry/package coordinates, not a branch-push regression (act_result=\$act_result rc=\$ci_rc: \$(act_failure_context \$LOGD/ci.log)) — native rc=\$nat_rc: \$NFAIL\$NCTX\$GOCTX\$ACTCTX"
     else
-      cell ci-pass FAIL "native rc=\$nat_rc: \$NFAIL\$NCTX\$GOCTX\$ACTCTX (act leg rc=\$ci_rc: \$(act_failure_context \$LOGD/ci.log))"
+      cell ci-pass FAIL "native rc=\$nat_rc: \$NFAIL\$NCTX\$GOCTX\$ACTCTX (act leg act_result=\$act_result rc=\$ci_rc: \$(act_failure_context \$LOGD/ci.log))"
     fi
   fi
 fi
@@ -2421,12 +2620,6 @@ elif [ "\$QA_TAG_COUNT" != "0" ] && [ "\$QA_ECOSYSTEM" = "rust" ] && [ -n "\$QA_
   # no installable index package; the tree-stream is the only real
   # previous->HEAD upgrade path for rust).
   if [ -f "\$HOME/qa-up-prev/Cargo.toml" ]; then UP_PREV="\$HOME/qa-up-prev"; fi
-elif [ "\$QA_TAG_COUNT" != "0" ] && [ "\$QA_ECOSYSTEM" = "pip" ] && [ -n "\$QA_UP_PREV_DIR" ] && [ -n "\$QA_PREV_TAG" ]; then
-  # QA-TERMINAL-JAIL-19: host-streamed previous-tag tree (~/qa-up-prev-pip) for
-  # pip packages NOT published to PyPI — verified by pyproject.toml, no clone
-  # fallback (bunker agents carry no forge auth; the host stream is the only
-  # source). Same shape as the QA-HEADING-009 npm arm.
-  if [ -f "\$HOME/qa-up-prev-pip/pyproject.toml" ]; then UP_PREV="\$HOME/qa-up-prev-pip"; fi
 elif [ "\$QA_TAG_COUNT" != "0" ] && [ "\$QA_ECOSYSTEM" = "npm" ] && [ -n "\$QA_UP_PREV_DIR" ] && [ -n "\$QA_PREV_TAG" ]; then
   # QA-HEADING-009: host-streamed previous-tag tree (~/qa-up-prev-npm) for
   # non-publishable npm repos — verified by package.json, no clone fallback
@@ -2444,22 +2637,28 @@ elif [ -n "\$UP_PREV" ]; then
   ( $install_cmd ) >\$LOGD/up2.log 2>&1; up2_rc=\$?
   rm -rf ~/qa-up-prev ~/qa-up-prev.bak ~/qa-up-prev-clone ~/qa-up-prev-npm ~/qa-up-prev-npm.bak 2>/dev/null
   if [ \$up1_rc -eq 0 ] && [ \$up2_rc -eq 0 ]; then cell upgrade OK "previous release \$QA_PREV_TAG (tree via git archive) → HEAD reinstall clean"
-  elif [ \$up1_rc -ne 0 ]; then cell upgrade FAIL "previous release \$QA_PREV_TAG would not build (streamed tree): \$(fail_detail \$up1_rc \$LOGD/up1.log $install_cmd_q)"
-  else cell upgrade FAIL "upgrade from \$QA_PREV_TAG (streamed tree) to HEAD failed: \$(fail_detail \$up2_rc \$LOGD/up2.log $install_cmd_q)"; fi
+  elif [ \$up1_rc -ne 0 ]; then cell upgrade FAIL "previous release \$QA_PREV_TAG would not build (streamed tree): \$(fail_detail \$up1_rc \$LOGD/up1.log "$install_cmd")"
+  else cell upgrade FAIL "upgrade from \$QA_PREV_TAG (streamed tree) to HEAD failed: \$(fail_detail \$up2_rc \$LOGD/up2.log "$install_cmd")"; fi
 elif [ "\$QA_ECOSYSTEM" = "go" ]; then
   cell upgrade FAIL "upgrade path UNVERIFIED: repo has \$QA_TAG_COUNT release tag(s), previous \$QA_PREV_TAG, but the host's streamed previous-release tree is missing (~/qa-up-prev) and \$QA_GO_URL is not cloneable from the agent (bunker agents carry no clone auth) — re-run the battery so ship_prev_tag_tree can stream it"
 elif [ "\$QA_ECOSYSTEM" = "pip" ] && [ -n "\$QA_PKG_NAME" ] && [ -n "\$QA_PREV_VERSION" ]; then
+  # QA-BUNKER-57 (2026-10-04): no pip on the agent ⇒ the upgrade leg would die
+  # rc=127 'pip: command not found' and grade FAIL against the repo. UNVERIFIED.
+  if ! qa_have_pip; then
+    cell upgrade UNVERIFIED "pip absent on agent (ensurepip failed; no sudo) — previous-release install \$QA_PKG_NAME==\$QA_PREV_VERSION never ran, so the upgrade path is untested by this cell"
+  else
   ( pip install "\$QA_PKG_NAME==\$QA_PREV_VERSION" ) >\$LOGD/up1.log 2>&1; up1_rc=\$?
   ( $install_cmd ) >\$LOGD/up2.log 2>&1; up2_rc=\$?
   if [ \$up1_rc -eq 0 ] && [ \$up2_rc -eq 0 ]; then cell upgrade OK "pip \$QA_PKG_NAME==\$QA_PREV_VERSION (tag \$QA_PREV_TAG, the previous release) → HEAD install clean"
   elif [ \$up1_rc -ne 0 ]; then cell upgrade FAIL "previous release \$QA_PKG_NAME==\$QA_PREV_VERSION would not install (tag \$QA_PREV_TAG): \$(fail_detail \$up1_rc \$LOGD/up1.log "pip install \$QA_PKG_NAME==\$QA_PREV_VERSION")"
-  else cell upgrade FAIL "upgrade install from \$QA_PKG_NAME==\$QA_PREV_VERSION to HEAD failed: \$(fail_detail \$up2_rc \$LOGD/up2.log $install_cmd_q)"; fi
+  else cell upgrade FAIL "upgrade install from \$QA_PKG_NAME==\$QA_PREV_VERSION to HEAD failed: \$(fail_detail \$up2_rc \$LOGD/up2.log "$install_cmd")"; fi
+  fi
 elif [ "\$QA_ECOSYSTEM" = "npm" ] && [ -n "\$QA_PKG_NAME" ] && [ -n "\$QA_PREV_VERSION" ]; then
   ( npm install -g "\$QA_PKG_NAME@\$QA_PREV_VERSION" ) >\$LOGD/up1.log 2>&1; up1_rc=\$?
   ( $install_cmd ) >\$LOGD/up2.log 2>&1; up2_rc=\$?
   if [ \$up1_rc -eq 0 ] && [ \$up2_rc -eq 0 ]; then cell upgrade OK "npm -g \$QA_PKG_NAME@\$QA_PREV_VERSION (tag \$QA_PREV_TAG, the previous release) → HEAD install clean"
   elif [ \$up1_rc -ne 0 ]; then cell upgrade FAIL "previous release \$QA_PKG_NAME@\$QA_PREV_VERSION would not install (tag \$QA_PREV_TAG): \$(fail_detail \$up1_rc \$LOGD/up1.log "npm install -g \$QA_PKG_NAME@\$QA_PREV_VERSION")"
-  else cell upgrade FAIL "upgrade install from \$QA_PKG_NAME@\$QA_PREV_VERSION to HEAD failed: \$(fail_detail \$up2_rc \$LOGD/up2.log $install_cmd_q)"; fi
+  else cell upgrade FAIL "upgrade install from \$QA_PKG_NAME@\$QA_PREV_VERSION to HEAD failed: \$(fail_detail \$up2_rc \$LOGD/up2.log "$install_cmd")"; fi
 else cell upgrade FAIL "upgrade path UNVERIFIED: the repo has \$QA_TAG_COUNT release tag(s) (previous \$QA_PREV_TAG) but the synced tree carries no history to check out and no installable previous release was detected (ecosystem='\$QA_ECOSYSTEM' package='\$QA_PKG_NAME') — treat the cell as untested, not as not-applicable"; fi
 
 # 4 · docker-deploy — compose up + probe + down
@@ -2469,75 +2668,65 @@ else cell upgrade FAIL "upgrade path UNVERIFIED: the repo has \$QA_TAG_COUNT rel
 # — docker prints the REAL error FIRST and the footer LAST, so the cell read FAIL
 # with no diagnosis and the deployment stayed unverified. FAIL now names the
 # command, its rc, and the log's leading lines via fail_detail().
-if ls docker-compose*.yml compose*.yml >/dev/null 2>&1 || ls docker-compose*.yml 2>/dev/null | grep -q . || ls compose*.yml 2>/dev/null | grep -q .; then
-  docker_lifecycle_reason=\$(qa_docker_lifecycle_block_reason || true)
-  if [ -n "\$docker_lifecycle_reason" ]; then
-    cell docker-deploy SKIPPED "safety gate: \$docker_lifecycle_reason"
-  else
+# QA-BUNKER-38 (2026-10-30): root-only ls missed nested compose files
+# (stack/docker-compose.yml) — compose_config already used find, align here.
+COMPOSE_FILES=\$(find . -maxdepth 4 -type f \( -name 'docker-compose*.yml' -o -name 'docker-compose*.yaml' -o -name 'compose*.yml' -o -name 'compose*.yaml' \) 2>/dev/null | head -5)
+if [ -n "\$COMPOSE_FILES" ]; then
   DC_CMD="docker compose up -d --build"
-  if relocate_parameterized_compose_ports; then
-    ( \$DC_CMD ) >\$LOGD/dc.log 2>&1; dc_rc=\$?
-  else
-    dc_rc=1
-    echo "parameterized compose port relocation failed" >\$LOGD/dc.log
-  fi
+  ( \$DC_CMD ) >\$LOGD/dc.log 2>&1; dc_rc=\$?
   if [ \$dc_rc -eq 0 ]; then
     # QA-HERMES-CANOPY-31 (2026-09-24 evidence: single-shot probe read 000
     # while the server was booting; deploy was actually GOOD). Poll each mapped
     # host port for up to \${BUNKER_QA_DEPLOY_PROBE_TIMEOUT:-60}s, first
     # non-000 answer wins.
     HP=""
-    PROBED_HOST_PORT=""
-    # Resolve numeric and \${VAR:-default} host bindings through one path so
-    # compose probes follow the same effective ports as Compose itself.
-    # QA-HEADING-011 retains the full probe window PER PORT.
-    for p in \$(compose_host_ports | awk '{print \$1}' | awk '!seen[\$0]++' | head -3); do
+    # QA-HEADING-011 part 2 (2026-09-25, measured on this repo): the deadline
+    # was computed ONCE for all ports, and docker-compose*.yml globs in the
+    # PROD file too (prod's :3000 leads alphabetically) — a dead first port
+    # burned the whole 60s before the live api :4000 was ever probed, and the
+    # healthy deploy still graded 'no HTTP response'. Allocate the FULL window
+    # PER PORT (reset inside the loop); the OK path finds a live port in
+    # seconds, the worst case is bounded at 3x the window.
+    # QA-BUNKER-27 (2026-10-29): the old two-pattern extraction (quote-adjacent
+    # bare digits:digits, whitespace-adjacent bare digits:digits) matched NEITHER
+    # arm of a bind-address-qualified mapping ("127.0.0.1:31299:80") — zero ports
+    # probed, healthy deploys graded 'no HTTP response' (duckbrain 2026-09-27).
+    # ONE alternation now consumes each whole mapping (optional quote, optional
+    # dotted-quad host, host:container); leftmost-longest stops the bare arm from
+    # re-biting inside a consumed mapping. The dotted host survives dedupe and is
+    # normalized to host/port per token below (bare tokens probe 127.0.0.1; the
+    # numeric guard skips non-numeric noise — e.g. an [ipv6]-bracket leftover —
+    # while still probing its host port). A zero-probed-port run grades
+    # UNVERIFIED, never a deploy success.
+    # Generator escaping (unquoted heredoc): \$0 in the awk is BACKSLASHED — a
+    # bare \$0 here is generation-expanded to THIS script's path in the emitted
+    # bytes (a seen[<host-script-path>] contamination of the generated script).
+    # QA-BUNKER-38: iterate over found compose files, not root-only glob.
+    probed_n=0; probed_ports=" "
+    for m in \$( { for f in \$COMPOSE_FILES; do grep -hoE '"?([0-9]{1,3}\.){3}[0-9]+:[0-9]+:[0-9]+"?|"?[0-9]+:[0-9]+"?' "\$f" 2>/dev/null; done; } | grep -oE '([0-9]{1,3}\.){3}[0-9]+:[0-9]+|[0-9]+:[0-9]+' | awk '!seen[\$0]++' | head -3 ); do
+      case "\$m" in
+        *.*:*) hp_host=\${m%%:*}; hp_port=\${m#*:} ;;
+        *) hp_host=127.0.0.1; hp_port=\$m ;;
+      esac
+      case "\$hp_port" in *[!0-9]*|"") continue ;; esac
+      case "\$probed_ports" in *" \$hp_port "*) continue ;; esac
+      probed_ports="\$probed_ports\$hp_port "
+      probed_n=\$((\$probed_n + 1))
       DEADLINE=\$((\$(date +%s) + \${BUNKER_QA_DEPLOY_PROBE_TIMEOUT:-60}))
       while [ \$(date +%s) -lt \$DEADLINE ]; do
-        HP=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:\$p/ 2>/dev/null)
-        # QA-TROUBLE-20 (2026-10-06, trouble evidence): root-path probes 404 on
-        # APIs that only route /health.json etc. Try well-known health endpoints
-        # before declaring the port dead.
-        if [ "\$HP" = "404" ] || [ "\$HP" = "000" ]; then
-          for hp_ in /health.json /health /healthz /api/health; do
-            HP=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:\$p\$hp_" 2>/dev/null)
-            [ "\$HP" != "000" ] && [ "\$HP" != "404" ] && break
-          done
-        fi
-        [ "\$HP" != "000" ] && { PROBED_HOST_PORT="\$p"; break; }
+        HP=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://\$hp_host:\$hp_port/" 2>/dev/null)
+        [ "\$HP" != "000" ] && break
         sleep 3
       done
       [ -n "\$HP" ] && [ "\$HP" != "000" ] && break
     done
-    # QA-HIVEMIND-WORK-15 (2026-10-07, recurred 3x): an app that is healthy but
-    # only binds a port outside the derived list (or answers only on its
-    # in-container healthcheck target) graded 'no HTTP response ... probe
-    # deadline exhausted' while \`docker compose up -d\` had actually brought a
-    # verified-good deploy up. Before declaring the probe dead, ask docker
-    # itself: if the compose project reports at least one container with
-    # health=healthy, the deploy is up — grade OK with the healthcheck as the
-    # witness instead of masking it as INFO.
-    if [ -z "\$HP" ] || [ "\$HP" = "000" ]; then
-      # Poll the healthcheck too (QA-HIVEMIND-WORK-15 lesson: a zero/short port
-      # list reaches this branch seconds after start, before any healthcheck
-      # can report healthy — a one-shot check graded a booting deploy INFO).
-      HC=\$(docker compose ps --format '{{.Name}} {{.Health}}' 2>/dev/null | grep -m1 healthy | awk '{print \$1}')
-      HCD=\$((\$(date +%s) + \${BUNKER_QA_DEPLOY_PROBE_TIMEOUT:-60}))
-      while [ -z "\$HC" ] && [ \$(date +%s) -lt \$HCD ]; do
-        sleep 3
-        HC=\$(docker compose ps --format '{{.Name}} {{.Health}}' 2>/dev/null | grep -m1 healthy | awk '{print \$1}')
-      done
-      if [ -n "\$HC" ]; then
-        cell docker-deploy OK "compose up + container healthcheck healthy (\$HC) — probe ports unreachable but deploy verified good (QA-HIVEMIND-WORK-15)"
-        docker compose down >/dev/null 2>&1
-        HP="HEALTHY"
-      fi
+    if [ "\$probed_n" -eq 0 ]; then
+      cell docker-deploy UNVERIFIED "compose up OK but no probed host port (no parseable host:container mapping in compose files) — serving state UNVERIFIED, not a deploy success"
+    else
+      case "\$HP" in 200|301|302) cell docker-deploy OK "compose up + probe \$HP on \$hp_host:\$hp_port" ;; [0-9]*) cell docker-deploy INFO "compose up OK, probe \$HP" ;; *) cell docker-deploy INFO "compose up OK, no HTTP response within \${BUNKER_QA_DEPLOY_PROBE_TIMEOUT:-60}s (probe deadline exhausted)" ;; esac
     fi
-    case "\$HP" in 200|301|302) cell docker-deploy OK "compose up + probe \$HP on host port \${PROBED_HOST_PORT:-unknown} (\$PORT_DECISIONS)" ;; [0-9]*) cell docker-deploy INFO "compose up on host port \${PROBED_HOST_PORT:-unknown} (\$PORT_DECISIONS), probe \$HP" ;; HEALTHY) : ;; *) cell docker-deploy INFO "compose up OK on host port \${PROBED_HOST_PORT:-unknown} (\$PORT_DECISIONS), no HTTP response within \${BUNKER_QA_DEPLOY_PROBE_TIMEOUT:-60}s (probe deadline exhausted; no healthy container reported either)" ;; esac
     docker compose down >/dev/null 2>&1
-  elif [ \$QA_DOCKER_OK = 0 ]; then cell docker-deploy SKIPPED "docker unavailable on agent (QA-CONSENSUS-24 fail-closed): \$(tail -1 \$LOGD/dc.log 2>/dev/null | cut -c1-160)"
-else cell docker-deploy FAIL "\$(fail_detail \$dc_rc \$LOGD/dc.log \$DC_CMD)"; fi
-  fi
+  else cell docker-deploy FAIL "\$(fail_detail \$dc_rc \$LOGD/dc.log \$DC_CMD)"; fi
 else cell docker-deploy N/A "no compose file"; fi
 
 # 5 · ui-probe
@@ -2560,40 +2749,6 @@ else cell docker-deploy N/A "no compose file"; fi
 # credited the foreign server to the repo under test, and a bare fuser -k on
 # an answering port kills unrelated socket-holders (measured: it killed a
 # process that merely HELD A CONNECTION to :5173).
-# ── QA-CRIER-19-R2 (2026-10-20): THE DETECTION GATE MUST NOT FAIL SILENT ──────
-# The Go-HTTP precondition below is what lets the strongest ui-probe arm run,
-# and it silently stopped being satisfiable: QA-BUNKER-B21 shipped the ERE term
-# '\.Serve(' — an UNTERMINATED GROUP — so grep -qRE exited 2 with
-# "grep: Unmatched ( or \(". In an && chain rc=2 is a false condition exactly
-# like rc=1 ("no match"), so the whole arm was skipped and the battery fell
-# through to the final N/A "no web UI detected" for crier — a Go server serving
-# 87,584 B of text/html at /chat plus /docs at 11,732 B. Measured 2026-10-20 on
-# the emitted qa-run.sh at HEAD 2f68709: gate rc=2, cell N/A, product UI up
-# (QA-CRIER-19-R2). A broken or blank panel was therefore invisible to every
-# cycle: precisely the surface the battery exists to watch.
-# Two rules now hold for this gate:
-#   (1) the pattern is COMPILED before it is trusted — a pattern grep rejects is
-#       a HARNESS fault, never evidence about the repo; and
-#   (2) when the ERE is unusable the scan degrades to fixed-string terms, says so
-#       in the cell it grades, and a degraded scan that finds nothing grades
-#       HARNESS-DEGRADED — never N/A.
-ui_pat_compiles() { # 0 = grep accepts this ERE (match or no-match), 1 = grep rejects it
-  printf '\n' | grep -qE "\$1" 2>/dev/null
-  [ \$? -le 1 ]
-}
-UI_HTTP_PAT='http\.ListenAndServe|http\.Server|http\.ServeMux|http\.HandleFunc|http\.Handler|chi\.NewRouter|mux\.NewRouter|gin\.Default|echo\.New|fiber\.New|fasthttp|gorilla/mux|net/http|\.Serve\('
-UI_HTTP_SCAN='not-scanned'
-ui_go_http_source() { # 0 = tree has HTTP-serving Go source, 1 = none, 2 = scan untrustworthy
-  if ui_pat_compiles "\$UI_HTTP_PAT"; then
-    if grep -rqE "\$UI_HTTP_PAT" . --include='*.go' 2>/dev/null; then UI_HTTP_SCAN='found'; return 0; fi
-    UI_HTTP_SCAN='none'; return 1
-  fi
-  # ERE rejected by grep: same intent, fixed-string terms (grep -F cannot return 2)
-  if grep -rqF -e 'net/http' -e 'http.Server' -e 'http.ListenAndServe' -e 'http.ServeMux' -e 'http.HandleFunc' -e 'http.Handler' -e 'chi.NewRouter' -e 'mux.NewRouter' -e 'gin.Default' -e 'echo.New' -e 'fiber.New' -e 'fasthttp' -e '.Serve(' --include='*.go' . 2>/dev/null; then
-    UI_HTTP_SCAN='found-degraded'; return 0
-  fi
-  UI_HTTP_SCAN='degraded'; return 2
-}
 if [ -f package.json ] && grep -qE '"dev"|"start"' package.json; then
   # QA-9ROUTER-21 (2026-09-21): the old probe curled / with NO -L and accepted
   # only 200, so any redirect-first UI graded a guaranteed false FAIL —
@@ -2680,32 +2835,19 @@ elif [ -f frontend/package.json ] && grep -qE '"dev"|"start"' frontend/package.j
       *) cell ui-probe FAIL "frontend/ UI not serving (http=\$UP\${LAND:+, landed: \$LAND}): \$(tail -2 \$LOGD/ui.log)" ;;
     esac
   fi
-elif [ -f go.mod ] && ui_go_http_source; then
-  # QA-BUNKER-B21 (2026-10-19): broadened Go HTTP detection + port discovery.
-  # coding-hermes-scheduler serves an htmx dashboard on :9090 (documented in
-  # docs/reference/flags.md --listen 127.0.0.1:9090) but the old arm missed it:
-  # (a) grep only scanned *.go at repo root (scheduler HTTP is in cmd/schedulerd/),
-  # (b) :9090 was not in the default port list, (c) no doc-parsing for listen ports.
-  # Fix: recursive grep with --include, parse README/flags docs for --listen/--port,
-  # add 9090 to defaults, support BUNKER_QA_UI_PORTS override. N/A only when no
-  # listen flag exists at all.
-  UI_PORTS="\${BUNKER_QA_UI_PORTS:-}"
-  if [ -z "\$UI_PORTS" ]; then
-    UI_PORTS="3000 5173 8000 8080 8081 8766 8767 9000 9090"
-    for doc in README.md docs/reference/flags.md docs/flags.md docs/reference/cli.md; do
-      if [ -f "\$doc" ]; then
-        for p in \$(grep -oE '(--listen|--port|--addr|listen|port)[= :]+[^,;"]*' "\$doc" 2>/dev/null | grep -oE '[0-9]{4,5}' | sort -u); do
-          UI_PORTS="\$UI_PORTS \$p"
-        done
-      fi
-    done
-    for p in \$(compose_host_ports | awk '{print \$1}'); do
-      UI_PORTS="\$UI_PORTS \$p"
-    done
-    UI_PORTS=\$(echo "\$UI_PORTS" | tr ' ' '\n' | sort -un | tr '\n' ' ')
-  fi
-  UI_BINS="\${BIN:-go run .}"
-  case "\${BIN:-}" in
+  # FIX · ui-probe Go-native gate (QA-BUNKER-33, 2026-11-01): the server-pattern
+  # grep globbed ONLY root-level *.go, so a standard-layout repo (entrypoint
+  # cmd/main.go, pkg/…, internal/…) matched nothing and fell through to N/A
+  # "no web UI detected" — even though the arm below already resolves
+  # go run ./cmd/<pkg> (BIN detection, cmd/ fallback queue). Now scans the tree
+  # recursively, so HTTP idioms under cmd/ pkg/ internal/ enter the arm; root
+  # level mains still match (backward compatible); .git/vendor/node_modules are
+  # skipped so vendored server libraries cannot fake the trigger (mirrors the
+  # bounded trigger scan of the lint cell above).
+elif [ -f go.mod ] && grep -qrE 'http\.ListenAndServe|http\.Server|chi\.NewRouter|mux\.NewRouter|gin\.Default|echo\.New|gorilla/mux' --include='*.go' --exclude-dir=.git --exclude-dir=vendor --exclude-dir=node_modules . 2>/dev/null; then
+  UI_PORTS=${BUNKER_QA_UI_PORTS:-3000 5173 8000 8080 8081 8766 8767 9000}
+  UI_BINS="${BIN:-go run .}"
+  case "${BIN:-}" in
     "go run ./cmd/"*)
       # start-cmd fallback queue: when the detected cmd/ binary is not the HTTP
       # server (see comment above), the remaining cmd/ main packages get one
@@ -2724,159 +2866,38 @@ elif [ -f go.mod ] && ui_go_http_source; then
     [ "\$UI_C" = "000" ] && UI_C=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 1 "http://127.0.0.1:\$p/docs" 2>/dev/null)
     if [ -n "\$UI_C" ] && [ "\$UI_C" != "000" ]; then UI_OCCUPIED="\$UI_OCCUPIED\$p "; fi
   done
-  # QA-OFF-BY-ONE-20-R3 (2026-10-31): scratch-port start path. When the repo's
-  # declared default port is held by a FOREIGN listener at baseline (shared
-  # host netns — off-by-one's live dev service holds 127.0.0.1:8766 while the
-  # battery probes the same repo), the plain start dies with
-  # 'bind: address already in use' and the cell mis-graded INFO "go-native
-  # start command is not a long-running server". Fix: pick a FREE loopback
-  # scratch port (not in UI_OCCUPIED, not answering) and start the server WITH
-  # a bounded port override from the FIRST attempt, so no bind error is ever
-  # logged. The accepted attempt's log replaces ui-probe.log, so the grading
-  # log genuinely lacks the bind line. ui_probe_scratch_start sets UIPID +
-  # UI_LISTEN=scratch on accept and returns 0; on total failure it returns 1
-  # and the caller falls through to the plain start — the current grading
-  # branches then behave exactly as before (never fabricate an OK).
-  ui_probe_scratch_start() {
-    local _b=\$1 _try=0 _spell _log _pid _c _ok
-    [ -n "\$UI_SCRATCH_PORT" ] || return 1
-    for _spell in long short env; do
-      _try=\$((_try + 1))
-      _log=\$LOGD/ui-probe-try\${_try}.log
-      case "\$_spell" in
-        long)  ( setsid timeout 45 \$_b --port \$UI_SCRATCH_PORT ) </dev/null >\$_log 2>&1 & ;;
-        short) ( setsid timeout 45 \$_b -port \$UI_SCRATCH_PORT ) </dev/null >\$_log 2>&1 & ;;
-        env)   ( setsid timeout 45 env OFF_BY_ONE_PORT=\$UI_SCRATCH_PORT \$_b ) </dev/null >\$_log 2>&1 & ;;
-      esac
-      _pid=\$!
-      _ok=""
-      for _w in 1 2 3 4 5; do
-        kill -0 \$_pid 2>/dev/null || break
-        _c=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:\$UI_SCRATCH_PORT/" 2>/dev/null)
-        case "\$_c" in 000|"") sleep 1 ;; *) _ok=1; break ;; esac
-      done
-      if [ -n "\$_ok" ] && kill -0 \$_pid 2>/dev/null; then
-        cp "\$_log" \$LOGD/ui-probe.log
-        UIPID=\$_pid
-        UI_LISTEN=\$UI_SCRATCH_PORT
-        return 0
-      fi
-      kill -- -\$_pid 2>/dev/null; kill \$_pid 2>/dev/null; sleep 1
-      kill -9 -- -\$_pid 2>/dev/null; kill -9 \$_pid 2>/dev/null
-    done
-    return 1
-  }
-  # Pick the scratch port BEFORE the first server start whenever any declared
-  # candidate port answers at baseline (= a foreign listener holds it).
-  UI_SCRATCH_PORT=""
-  if [ "\$UI_OCCUPIED" != " " ]; then
-    for _sp_try in \$(seq 1 200); do
-      _sp_cand=\$((20000 + RANDOM % 20001))
-      case "\$UI_OCCUPIED" in *" \$_sp_cand "*) continue ;; esac
-      if ! port_is_occupied "\$_sp_cand"; then UI_SCRATCH_PORT=\$_sp_cand; break; fi
-    done
-    [ -n "\$UI_SCRATCH_PORT" ] && UI_PORTS="\$UI_PORTS \$UI_SCRATCH_PORT"
-  fi
-  # QA-CRIER-19-R2 (2026-10-20): probe the documented SURFACE LIST, not just
-  # /docs then /, and name every text/html answer with URL + status +
-  # content-type + size. crier's operator panel is /chat (87,584 B) while / is
-  # 404 application/json and /docs is only the 11,732 B OpenAPI page: a probe
-  # that stops at /docs — or at a 404 / — can still miss the largest surface it
-  # is here to watch, and a cell reading only "responded, port 8767" leaves the
-  # finding unreadable six cycles later.
-  # Listening detection is now SEPARATE from HTML detection: any non-000 status
-  # proves the port answers (crier's / is 404), so a server whose landing page is
-  # JSON or 404 is awaited properly instead of being treated as dead.
-  UI_PATHS="\${BUNKER_QA_UI_PATHS:-/chat /docs / /ui /dashboard /app /index.html}"
-  UI_DEGRADE_NOTE=""
-  case "\${UI_HTTP_SCAN:-}" in
-    found-degraded) UI_DEGRADE_NOTE=" (HARNESS-DEGRADED: the detection ERE was rejected by grep — the arm ran on fixed-string terms)" ;;
-  esac
-  UI_SURFACES=""; UI_OTHER=""; UI_PROBED=" "; UI_HIT=""; UI_LISTEN=""
+  UI_HIT=""; UI_OTHER=""; UI_PROBED=" "
   for UI_B in "\${UI_LIST[@]}"; do
-    UI_SURFACES=""; UI_OTHER=""; UI_LISTEN=""
-    if [ -n "\$UI_SCRATCH_PORT" ]; then
-      # QA-OFF-BY-ONE-20-R3: conflict pre-detected at baseline — start WITH the
-      # port override from the first attempt, so no bind error is ever logged.
-      ui_probe_scratch_start "\$UI_B" || true
-    fi
-    if [ -z "\$UI_LISTEN" ]; then
-      ( setsid timeout 45 \$UI_B ) </dev/null >\$LOGD/ui-probe.log 2>&1 &
-      UIPID=\$!
-    fi
-    # 1 · wait for a listener on a port nobody else held before we started
+    ( setsid timeout 45 \$UI_B ) </dev/null >\$LOGD/ui-probe.log 2>&1 &
+    UIPID=\$!
+    UI_HIT=""; UI_OTHER=""
     for i in \$(seq 1 20); do
       kill -0 \$UIPID 2>/dev/null || break
       for p in \$UI_PORTS; do
         case "\$UI_OCCUPIED" in *" \$p "*) continue ;; esac
-        UI_C=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:\$p/" 2>/dev/null)
-        [ "\$UI_C" = "000" ] && UI_C=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://127.0.0.1:\$p/chat" 2>/dev/null)
-        case "\$UI_C" in 000|"") : ;; *) UI_LISTEN=\$p; break ;; esac
+        UI_R=\$(curl -s -o /dev/null -w '%{http_code} %{content_type}' --max-time 2 "http://127.0.0.1:\$p/docs" 2>/dev/null)
+        case "\$UI_R" in "200 text/html"*) UI_HIT=\$p; break 2 ;; 000*|"") : ;; *) case "\$UI_PROBED" in *" \$p "*) : ;; *) UI_PROBED="\$UI_PROBED\$p "; UI_OTHER="\$UI_OTHER \${p}=[\$UI_R]" ;; esac ;; esac
+        UI_R=\$(curl -s -o /dev/null -w '%{http_code} %{content_type}' --max-time 2 "http://127.0.0.1:\$p/" 2>/dev/null)
+        case "\$UI_R" in "200 text/html"*) UI_HIT=\$p; break 2 ;; 000*|"") : ;; *) case "\$UI_PROBED" in *" \$p "*) : ;; *) UI_PROBED="\$UI_PROBED\$p "; UI_OTHER="\$UI_OTHER \${p}=[\$UI_R]" ;; esac ;; esac
       done
-      [ -n "\$UI_LISTEN" ] && break
       sleep 1
     done
-    # QA-OFF-BY-ONE-20-R3 · recovery arm: the conflict was NOT pre-detectable
-    # at baseline (the server binds an undocumented port that a foreign
-    # listener holds). The plain start died on 'address already in use' —
-    # retry once on a scratch port with the same bounded override spellings;
-    # the accepted run's log replaces ui-probe.log. If no spelling keeps the
-    # server alive the current grading branches run exactly as before.
-    if [ -z "\$UI_LISTEN" ] && ! kill -0 \$UIPID 2>/dev/null && grep -q 'address already in use' \$LOGD/ui-probe.log 2>/dev/null; then
-      if [ -z "\$UI_SCRATCH_PORT" ]; then
-        for _sp_try in \$(seq 1 200); do
-          _sp_cand=\$((20000 + RANDOM % 20001))
-          case "\$UI_OCCUPIED" in *" \$_sp_cand "*) continue ;; esac
-          if ! port_is_occupied "\$_sp_cand"; then UI_SCRATCH_PORT=\$_sp_cand; break; fi
-        done
-        [ -n "\$UI_SCRATCH_PORT" ] && UI_PORTS="\$UI_PORTS \$UI_SCRATCH_PORT"
-      fi
-      ui_probe_scratch_start "\$UI_B" || true
-    fi
-    # 2 · sweep every documented path on the port that answered
-    if [ -n "\$UI_LISTEN" ]; then
-      UI_HIT=\$UI_LISTEN
-      for path in \$UI_PATHS; do
-        UI_R=\$(curl -s -o /dev/null -w '%{http_code}|%{content_type}|%{size_download}' --max-time 3 "http://127.0.0.1:\$UI_LISTEN\$path" 2>/dev/null)
-        IFS='|' read -r UI_C UI_CT UI_SZ <<< "\$UI_R"
-        case "\$UI_C" in
-          2??) case "\$UI_CT" in
-                 text/html*) UI_SURFACES="\$UI_SURFACES http://127.0.0.1:\$UI_LISTEN\$path \$UI_C \$UI_CT \${UI_SZ}B" ;;
-                 *) UI_OTHER="\$UI_OTHER \$path=[\$UI_C \$UI_CT \${UI_SZ}B]" ;;
-               esac ;;
-          000|"") : ;;
-          *) UI_OTHER="\$UI_OTHER \$path=[\$UI_C \$UI_CT]" ;;
-        esac
-      done
-    fi
-    if [ -n "\$UI_SURFACES" ] || [ -n "\$UI_OTHER" ] || kill -0 \$UIPID 2>/dev/null; then break; fi
+    if [ -n "\$UI_HIT" ] || [ -n "\$UI_OTHER" ] || kill -0 \$UIPID 2>/dev/null; then break; fi
   done
-  if [ -n "\$UI_SURFACES" ]; then
-    cell ui-probe OK "UI serves text/html:\${UI_SURFACES} (start: \$UI_B)\${UI_OTHER:+, other paths:\$UI_OTHER}\${UI_DEGRADE_NOTE}"
+  if [ -n "\$UI_HIT" ]; then
+    cell ui-probe OK "go-native http server responded (pattern: \$UI_B, port \$UI_HIT)"
   elif [ -n "\$UI_OTHER" ]; then
-    cell ui-probe INFO "go-native server answers on :\$UI_LISTEN but NO 2xx text/html surface on any probed path [\$UI_PATHS] — exact answers:\$UI_OTHER (start: \$UI_B)\${UI_DEGRADE_NOTE}"
+    cell ui-probe INFO "go-native server serves but no 200 text/html surface found on probed ports [\$UI_PORTS]:\$UI_OTHER"
   elif ! kill -0 \$UIPID 2>/dev/null; then
-    cell ui-probe INFO "go-native start command is not a long-running server (rc/exit in log) — no HTML surface to probe: \$(tail -2 \$LOGD/ui-probe.log)\${UI_DEGRADE_NOTE}"
+    cell ui-probe INFO "go-native start command is not a long-running server (rc/exit in log) — no HTML surface to probe: \$(tail -2 \$LOGD/ui-probe.log)"
   else
-    cell ui-probe INFO "go-native server ran 20s, no probed port answered [\$UI_PORTS] — surface may be on an unlisted port: \$(tail -2 \$LOGD/ui-probe.log)\${UI_DEGRADE_NOTE}"
+    cell ui-probe INFO "go-native server ran 20s, no probed port answered [\$UI_PORTS] — surface may be on an unlisted port: \$(tail -2 \$LOGD/ui-probe.log)"
   fi
   kill -- -\$UIPID 2>/dev/null; sleep 1; kill -9 -- -\$UIPID 2>/dev/null
   kill \$UIPID 2>/dev/null; sleep 1; kill -9 \$UIPID 2>/dev/null
-  for p in \$UI_LISTEN; do fuser -k \$p/tcp >/dev/null 2>&1; done
+  for p in \$UI_PROBED; do fuser -k \$p/tcp >/dev/null 2>&1; done
   true
-else
-  # QA-CRIER-19-R2 · AC-3: N/A stays for a repo with NO HTML route, but it NAMES
-  # what the gate scanned, so a reader can tell "looked, found none" from "never
-  # looked" — the exact defect this row exists for. A scan that could not be
-  # trusted grades HARNESS-DEGRADED, never N/A: an unknown is not a product fact.
-  if [ "\${UI_HTTP_SCAN:-not-scanned}" = 'degraded' ]; then
-    cell ui-probe INFO "HARNESS-DEGRADED: go.mod repo, but the HTTP-detection scan was UNTRUSTWORTHY (grep rejected the ERE and no fixed-string HTTP term matched) — a harness fault, not a no-UI verdict; re-run before reading anything into it"
-  elif [ -f go.mod ]; then
-    cell ui-probe N/A "no web UI detected: go.mod repo with no HTTP-serving source in *.go (scanned: net/http, http.Server, ListenAndServe, ServeMux, HandleFunc, chi/mux/gin/echo/fiber routers, .Serve() ) and no package.json dev/start script"
-  else
-    cell ui-probe N/A "no web UI detected: no npm dev/start script (package.json or frontend/package.json) and no go.mod HTTP server source"
-  fi
-fi
+else cell ui-probe N/A "no web UI detected"; fi
 
 # 6 · chaos-disconnect — network cut via dead proxy: clean fail or HANG?
 # Window is sized from the NATIVE SUITE's observed duration (suite_dur, timed
@@ -2886,106 +2907,48 @@ fi
 # window is APPLIED to the timeout invocation below — not merely named.
 disc_window=\$(( \${suite_dur:-0} * 2 + 30 ))
 [ "\$disc_window" -lt \${BUNKER_QA_DISCONNECT_TIMEOUT:-240} ] && disc_window=\${BUNKER_QA_DISCONNECT_TIMEOUT:-240}
-# QA-HERMES-DAGGER-13: hermes-dagger has NO vendor/ dir and GOPROXY defaults to
-# the module proxy — when the network is cut every \`go build\`/\`go test\` in the
-# suite blocks on the proxy handshake until some layer's 120s timeout fires, so
-# the 240s+ window always burned out and graded HANG even for a fixable cause.
-# Hardening (both):
-#  - GOPROXY=off + GOFLAGS=-mod=mod: with the warm module cache from the native
-#    run the build succeeds offline; a truly missing dep fails IMMEDIATELY
-#    ("module lookup disabled") instead of blocking on the dead proxy.
-#  - \`timeout \$disc_window\`: hard backstop so the cell can never hang past the
-#    window no matter what the suite does (toolchain probes, plugins, etc.).
-# GOTOOLCHAIN=local prevents a toolchain download attempt. These env vars are
-# harmless for non-Go native_cmd values (npm/pytest/cargo ignore them).
-# QA-GUARD-005 (2026-10-20): PATH is pinned to ~/tools/go/bin INSIDE the
-# subshell. Without it the arm resolves the go binary from the DISTRO
-# (go 1.26.5 on the image), not the toolchain the fresh-install cell
-# provisioned, so any repo whose go.mod floor exceeds the image toolchain
-# died BEFORE a single test with 'go.mod requires go >= X (running
-# go 1.26.5; GOTOOLCHAIN=local)' — classifier unreachable, cell graded
-# UNVERIFIED. ~/tools/go always exists on Go repos (the bootstrap above
-# guarantees it; the subshell pin below leaves the outer PATH untouched for
-# every other consumer and is a no-op when the file is absent). The same pin
-# rides the native leg above.
-( HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 ALL_PROXY=http://127.0.0.1:9 PATH="\$HOME/tools/go/bin:\$PATH" GOFLAGS=-mod=mod GOPROXY=off GOSUMDB=off timeout \$disc_window bash -c "\$native_cmd" ) >\$LOGD/disc.log 2>&1; disc_rc=\$?
+# QA-HERMES-DAGGER-13: GOPROXY=off makes module fetch fail fast instead of
+# blocking on the dead proxy; with the warm cache from the native run the
+# build succeeds offline, so the disconnect cut is exercised against a real
+# build. GOTOOLCHAIN=local prevents a toolchain download attempt. These env
+# vars are harmless for non-Go native_cmd values (npm/pytest/cargo ignore them).
+( HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 ALL_PROXY=http://127.0.0.1:9 GOFLAGS=-mod=mod GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local timeout \$disc_window bash -c "\${native_cmd:-$native_cmd}" ) >\$LOGD/disc.log 2>&1; disc_rc=\$?
+# QA-BUNKER-56-R2: this whole ladder is AGENT-side — suite_dur/LOGD/disc_rc are
+# assigned by the rendered script (above), so their refs stay escaped for the
+# heredoc (36dbac06 un-escaped three of them and the generator's own set -u
+# killed every render at "suite_dur: unbound variable" — 0-byte qa-run.sh).
+# The bash -c payload stays GENERATOR-side (same style as the res leg): the
+# render bakes the detected suite into an agent-side default guard, so the
+# cut actually runs the suite. Pre-fix the leg shipped a bare agent-side
+# native_cmd ref that nothing assigned: bash -c got an empty payload, exited
+# 0 instantly, and disc.log stayed 0 bytes on every repo.
 native_dur=\$suite_dur
-if [ -n "\${nat_rc:-}" ] && [ "\$nat_rc" -ne 0 ] 2>/dev/null; then cell chaos-disconnect UNVERIFIED "ci-pass native suite FAILED first (nat_rc=\$nat_rc) — the disconnect verdict is not derivable from a failing suite; fix the ci-pass failure before reading this cell (QA-HERMES-DAGGER-26); disconnect probe rc=\$disc_rc: \$(head -2 \$LOGD/disc.log)"
-elif vacuous_native_suite \$LOGD/disc.log; then cell chaos-disconnect UNVERIFIED "disc.log is EMPTY (0 bytes) or never-ran (no-test-path marker) -- the suite produced NO output, so the network cut was NEVER exercised; rc=\$disc_rc is not a disconnect result (QA-WARPFS-17; QA-BUNKER-29 vacuity class)"
+# QA-BUNKER-78 / LORE-058: an empty disc.log means the wheel-install path
+# produced no suite to cut (wheel ships only runtime deps; pytest lives in the
+# source tree's dev extra). Empty log ≠ "passes with network cut" — grade N/A.
+if [ ! -s "\$LOGD/disc.log" ]; then
+  cell chaos-disconnect N/A "no suite installed with the wheel — the disconnect cut was never exercised"
 elif [ \$disc_rc -eq 0 ]; then cell chaos-disconnect INFO "passes with network cut (no network dep)"
 elif [ \$disc_rc -eq 124 ]; then cell chaos-disconnect FAIL "HANGS when network is cut (timeout \${disc_window}s, sized from the \${native_dur}s suite: 2x+30s; override floor BUNKER_QA_DISCONNECT_TIMEOUT=\${BUNKER_QA_DISCONNECT_TIMEOUT:-240}s) — \$(head -3 \$LOGD/disc.log)"
 elif [ \$disc_rc -eq 127 ]; then cell chaos-disconnect UNVERIFIED "command not found (rc=127) — the suite NEVER RAN, so the network cut was never exercised; INFRA-FAIL, not a disconnect result: \$(tail -2 \$LOGD/disc.log)"
 elif build_incomplete \$LOGD/disc.log; then cell chaos-disconnect INFO "disconnect UNVERIFIED: the build never completed, so the network cut was NEVER exercised — no disconnect finding either way (rc=\$disc_rc; environment or code, never network): \$(build_incomplete_cause \$LOGD/disc.log)"
 elif go_suite_env_failure \$LOGD/disc.log; then cell chaos-disconnect INFO "ENV-BLOCKED: the go suite failed because the test host lacks a build tool (\`make\` on JIT agents, measured 2026-09-19) — the disconnect cut was exercised against a broken build, no disconnect finding (rc=\$disc_rc): \$(grep -m1 -E 'exec: .* executable file not found' \$LOGD/disc.log)"
-elif go_toolchain_floor_failure \$LOGD/disc.log; then cell chaos-disconnect UNVERIFIED "toolchain-floor refusal (QA-GUARD-005): the suite NEVER RAN — the go binary on PATH is older than the repo's go.mod floor and GOTOOLCHAIN=local forbids the offline switch, so the network cut was never exercised; INFRA-FAIL, not a disconnect result: \$(go_toolchain_floor_failure_cause \$LOGD/disc.log)"
 elif suite_deps_missing \$LOGD/disc.log; then cell chaos-disconnect UNVERIFIED "missing test dependencies — the suite NEVER RAN, so the network cut was never exercised; INFRA-FAIL, not a disconnect result (rc=\$disc_rc): \$(suite_deps_missing_cause \$LOGD/disc.log)"
 elif native_runner_missing \$LOGD/disc.log; then cell chaos-disconnect UNVERIFIED "native runner missing (rc=\$disc_rc) - the suite NEVER RAN, so the network cut was never exercised; INFRA-FAIL, not a disconnect result: \$(native_runner_missing_cause \$LOGD/disc.log)"
-elif native_zero_tests \$LOGD/disc.log; then cell chaos-disconnect UNVERIFIED "zero tests ran under the network cut (QA-AUGER-1 vacuity class) — the disconnect was never exercised by any test: \$(grep -E '(passed|failed|error|no tests ran)' \$LOGD/disc.log | tail -1 | cut -c1-160)"
-else cell chaos-disconnect OK "fails fast on disconnect (rc=\$disc_rc): \$(head -2 \$LOGD/disc.log)"; fi
+else cell chaos-disconnect OK "chaos-disconnect tests: fails fast on disconnect (rc=\$disc_rc): \$(head -2 \$LOGD/disc.log)"; fi
 
 # 7 · chaos-shutdown — SIGTERM stop/restart + SIGKILL recovery (docker path)
-if ls docker-compose*.yml compose*.yml >/dev/null 2>&1 || ls docker-compose*.yml 2>/dev/null | grep -q . || ls compose*.yml 2>/dev/null | grep -q .; then
-  docker_lifecycle_reason=\$(qa_docker_lifecycle_block_reason || true)
-  if [ -n "\$docker_lifecycle_reason" ]; then
-    cell chaos-shutdown SKIPPED "safety gate: \$docker_lifecycle_reason"
-  else
+# QA-BUNKER-38 (2026-10-30): root-only ls missed nested compose files — align
+# with compose_config and docker-deploy using find.
+COMPOSE_FILES=\$(find . -maxdepth 4 -type f \( -name 'docker-compose*.yml' -o -name 'docker-compose*.yaml' -o -name 'compose*.yml' -o -name 'compose*.yaml' \) 2>/dev/null | head -5)
+if [ -n "\$COMPOSE_FILES" ]; then
   # QA-HEADING-010 (2026-09-25): the && chain short-circuited BEFORE its echo
   # markers, so a first-verb failure left sd.log EMPTY and the cell graded
   # FAIL "rc=1" with no attribution. Run EVERY verb unconditionally, echo each
   # step's rc, and derive sd_rc as the FIRST failing step — the trace names
   # the failing verb; grading below still keys on the STOP=/KILLRECOVER= markers.
-  # QA-HEADING-017 (2026-09-26 attribution): rootless dockerd can DIE between
-  # cells (socket file gone, daemon journal silent) — compose up then rc=1 with
-  # no diagnostics and the cell graded FAIL blaming shutdown logic. Probe the
-  # daemon BEFORE the chain, attempt one recovery (systemctl --user start
-  # docker; proven to revive it on dedi-2 2026-09-26, state lost), and re-probe
-  # AFTER the chain so a mid-cell daemon death is attributed to the DAEMON, not
-  # to a compose verb.
-  docker version --format '{{.Server.Version}}' >\$LOGD/daemon-pre.log 2>&1
-  daemon_pre_rc=\$?
-  if [ \$daemon_pre_rc -eq 0 ]; then
-    echo "DAEMON_PRE=up" >>\$LOGD/sd.log
-  else
-    echo "DAEMON_PRE=down \$(tr '\n' ' ' < \$LOGD/daemon-pre.log | cut -c1-160)" >>\$LOGD/sd.log
-    systemctl --user start docker >/dev/null 2>&1 || true
-    for i in \$(seq 1 10); do docker version >/dev/null 2>&1 && break; sleep 2; done
-    if docker version --format '{{.Server.Version}}' >>\$LOGD/daemon-pre.log 2>&1; then
-      echo "DAEMON_RECOVERED=yes" >>\$LOGD/sd.log
-      daemon_pre_rc=0
-    else
-      echo "DAEMON_RECOVERED=no" >>\$LOGD/sd.log
-    fi
-  fi
-  if [ \$daemon_pre_rc -ne 0 ]; then
-    cell chaos-shutdown UNVERIFIED "rootless dockerd DEAD before the cell (socket/daemon unreachable; recovery attempt failed) — compose chain NOT exercised, daemon lifecycle issue not a shutdown defect: \$(tail -1 \$LOGD/daemon-pre.log | cut -c1-200)"
-  elif [ -x .qa/chaos-probes/shutdown.sh ]; then
-    # QA-HEADING-013 (2026-10-06): the repo's own shutdown probe REPLACES the
-    # generic chain (same opt-in contract as corruption.sh/errorpath.sh:
-    # 0=OK, 1=FAIL, 2=INFO env gap, 124=FAIL HANG, other=INFO). The probe
-    # preflights exactly the causes the generic cell could not attribute —
-    # compose config parse, image presence (cold cache), host port 4000/3101
-    # collisions from the battery's own earlier legs — and state-verifies
-    # every stop/kill step instead of trusting verb rc alone.
-    pp_out=\$(timeout 120 .qa/chaos-probes/shutdown.sh 2>&1); pp_rc=\$?
-    pp_first=\$(printf '%s' "\$pp_out" | head -1 | cut -c1-300)
-    pp_more=\$(printf '%s' "\$pp_out" | tail -n +2 | tr '\n' ' ' | cut -c1-500)
-    case "\$pp_rc" in
-      0)   cell chaos-shutdown OK "project probe: \$pp_first \$pp_more" ;;
-      1)   cell chaos-shutdown FAIL "project probe reports shutdown-chain misbehavior: \$pp_first \$pp_more" ;;
-      2)   cell chaos-shutdown INFO "project probe: environment gap, probe skipped (\$pp_first \$pp_more)" ;;
-      124) cell chaos-shutdown FAIL "project probe HANGS (>120s): \$pp_first \$pp_more" ;;
-      *)   cell chaos-shutdown INFO "project probe rc=\$pp_rc: \$pp_first \$pp_more" ;;
-    esac
-  else
-  # QA-HEADING-013 (2026-10-06): measured across 4 runs (09-25/09-26/10-05/10-06
-  # evidence), each verb's stderr went to /dev/null INSIDE the group — sd.log
-  # carried only the UP=1|STOP=0|... markers, so a first-verb failure could
-  # never say WHY (port collision from the battery's own docker-deploy stack,
-  # daemon trouble, missing image — all indistinguishable). The up verb's
-  # stderr now lands in up.log and the up branch quotes its first lines.
-  up_err="\$LOGD/up.log"; : >"\$up_err"
   up_rc=0; stop_rc=0; start1_rc=0; kill_rc=0; start2_rc=0; down_rc=0
-  { docker compose up -d >>"\$up_err" 2>&1; up_rc=\$?; echo UP=\$up_rc
+  { docker compose up -d >/dev/null 2>&1; up_rc=\$?; echo UP=\$up_rc
     docker compose stop >/dev/null 2>&1; stop_rc=\$?; echo STOP=\$stop_rc
     [ \$stop_rc -eq 0 ] && sleep 4
     docker compose start >/dev/null 2>&1; start1_rc=\$?; echo RESTART=\$start1_rc
@@ -3000,7 +2963,7 @@ if ls docker-compose*.yml compose*.yml >/dev/null 2>&1 || ls docker-compose*.yml
   [ "\$sd_rc" -eq 0 ] && sd_rc=\$kill_rc
   [ "\$sd_rc" -eq 0 ] && sd_rc=\$start2_rc
   [ "\$sd_rc" -eq 0 ] && sd_rc=\$down_rc
-  if [ "\$up_rc" -ne 0 ]; then cell chaos-shutdown FAIL "compose up failed before the stop/kill chain — \$(fail_detail \$up_rc \$LOGD/sd.log 'docker compose up -d'); up stderr: \$(head -3 "\$up_err" 2>/dev/null | tr '\n' '|' | cut -c1-400)"
+  if [ "\$up_rc" -ne 0 ]; then cell chaos-shutdown FAIL "compose up failed before the stop/kill chain — \$(fail_detail \$up_rc \$LOGD/sd.log 'docker compose up -d')"
   elif [ "\$stop_rc" -ne 0 ]; then cell chaos-shutdown FAIL "compose stop failed rc=\$stop_rc (chain rc=\$sd_rc) — \$(cat \$LOGD/sd.log)"
   elif [ "\$start1_rc" -ne 0 ]; then cell chaos-shutdown FAIL "compose start (post-stop) failed rc=\$start1_rc (chain rc=\$sd_rc) — \$(cat \$LOGD/sd.log)"
   elif [ "\$kill_rc" -ne 0 ]; then cell chaos-shutdown INFO "graceful ok, kill step failed rc=\$kill_rc (chain rc=\$sd_rc) — \$(cat \$LOGD/sd.log)"
@@ -3008,21 +2971,7 @@ if ls docker-compose*.yml compose*.yml >/dev/null 2>&1 || ls docker-compose*.yml
   elif [ "\$down_rc" -ne 0 ]; then cell chaos-shutdown OK "SIGTERM + SIGKILL recovery clean (down rc=\$down_rc ignored)"
   elif grep -qE 'STOP=0' \$LOGD/sd.log && grep -qE 'KILLRECOVER=0' \$LOGD/sd.log; then cell chaos-shutdown OK "SIGTERM + SIGKILL recovery clean"
   elif grep -qE 'STOP=0' \$LOGD/sd.log; then cell chaos-shutdown INFO "graceful ok, kill-recovery issue: \$(cat \$LOGD/sd.log)"
-  else
-    # QA-HEADING-017: before grading FAIL on a dead verb, check whether the
-    # daemon died MID-CELL (post-chain probe) — that is daemon lifecycle, not
-    # shutdown logic.
-    daemon_post_rc=0
-    docker version --format '{{.Server.Version}}' >\$LOGD/daemon-post.log 2>&1 || daemon_post_rc=\$?
-    if [ \$daemon_post_rc -ne 0 ]; then
-      echo "DAEMON_POST=down \$(tr '\n' ' ' < \$LOGD/daemon-post.log | cut -c1-160)" >>\$LOGD/sd.log
-      cell chaos-shutdown UNVERIFIED "rootless dockerd DIED during/after the compose chain (post-chain daemon probe failed, chain rc vector: \$(grep -E '^(UP|STOP|RESTART|KILL|KILLRECOVER|DOWN)=' \$LOGD/sd.log | tr '\n' ' ')) — daemon lifecycle issue, not a shutdown defect: \$(tail -1 \$LOGD/daemon-post.log | cut -c1-200)"
-    else
-      cell chaos-shutdown FAIL "\$(fail_detail \$sd_rc \$LOGD/sd.log 'docker compose up -d; stop; start; kill; start; down')"
-    fi
-  fi
-  fi
-  fi
+  else cell chaos-shutdown FAIL "\$(fail_detail \$sd_rc \$LOGD/sd.log 'docker compose up -d; stop; start; kill; start; down')"; fi
 else cell chaos-shutdown N/A "no compose file"; fi
 
 # 8 · chaos-corruption — truncate a state file, OBSERVE the next start, restore
@@ -3098,34 +3047,9 @@ fi  # end project-probe hook (corruption)
 # the suite ran uncapped while the cell still reported a result. Record the cap
 # AND prove it inside the capped child (ulimit -v read back from the child, not
 # from the parent), then require that evidence in the verdict.
-# Project-probe hook (QA-DUCKBRAIN-FOREMAN-3): same opt-in, fully generic
-# contract as the chaos-corruption / chaos-errorpath cells — a repo-owned
-# .qa/chaos-probes/resource.sh REPLACES the generic ulimit -v probe for this
-# run (0=OK, 1=FAIL memory budget exceeded or suite failed, 2=INFO environment
-# gap, 124=FAIL HANGS, other=INFO rc). Absent probe → the generic cell below
-# runs byte-identically.
-#
-# WHY IT EXISTS: 'ulimit -v' bounds VIRTUAL ADDRESS SPACE, not memory. A Node
-# suite is rejected before it starts — V8 reserves roughly 10 GiB of VA per
-# WebAssembly memory instance while RSS stays flat, and the vitest/vite/
-# es-module-lexer/undici toolchain instantiates WASM during startup. duckbrain
-# therefore reported "OOM under cap" for a suite whose real peak aggregate RSS
-# is 1.7 GiB. The probe keeps the same 3 GiB budget and enforces it on RSS.
-if [ -x .qa/chaos-probes/resource.sh ]; then
-  pp_out=\$(timeout 960 .qa/chaos-probes/resource.sh 2>&1); pp_rc=\$?
-  pp_first=\$(printf '%s' "\$pp_out" | head -1 | cut -c1-300)
-  pp_more=\$(printf '%s' "\$pp_out" | tail -n +2 | tr '\n' ' ' | cut -c1-500)
-  case "\$pp_rc" in
-    0)   cell chaos-resource OK "project probe: \$pp_first \$pp_more" ;;
-    1)   cell chaos-resource FAIL "project probe: \$pp_first \$pp_more" ;;
-    2)   cell chaos-resource INFO "project probe: environment gap, probe skipped (\$pp_first \$pp_more)" ;;
-    124) cell chaos-resource FAIL "project probe HANGS (>960s): \$pp_first \$pp_more" ;;
-    *)   cell chaos-resource INFO "project probe rc=\$pp_rc: \$pp_first \$pp_more" ;;
-  esac
-else
 CAP_KB=3145728
 export CAP_KB   # the single-quoted probe expands CAP_KB inside \`bash -c\`, so it must be in the child env
-# Single-quoted on purpose: the \$(ulimit -v) must expand INSIDE the capped
+# Single-quoted on purpose: the $(ulimit -v) must expand INSIDE the capped
 # child, not at assignment time in the uncapped parent. The old double-quoted
 # form froze "CAP_EFFECTIVE=unlimited" into the probe text before the cap was
 # set, so every run reported "cap NOT applied" regardless of the real limit
@@ -3137,6 +3061,14 @@ cap_probe='echo CAP_EFFECTIVE=\$(ulimit -v) CAP_REQUESTED=\$CAP_KB'
 # first. Probe EVERY layer so the next run names where the cap is lost:
 # parent shell -> subshell right after ulimit -> the capped child itself.
 echo PARENT_CAP=\$(ulimit -v) >\$LOGD/res.log
+# QA-BUNKER-57 (2026-10-04): the pytest leg invokes pip-installed tooling; on an
+# agent where ensurepip failed there is no pip and the leg would die rc=127
+# 'pip: command not found' under the cap — vacuous noise graded FAIL. Grade
+# UNVERIFIED before running anything. (Go/npm legs are unaffected: pip absent
+# is irrelevant to them and qa_have_pip only gates the pip-native runner.)
+if echo "$native_cmd" | grep -q pytest && ! qa_have_pip; then
+  cell chaos-resource UNVERIFIED "pip absent on agent (ensurepip failed; no sudo) — the pytest suite never ran under the cap, so no memory finding either way (\$cap_note)"
+else
 ( ulimit -v \$CAP_KB; echo SUBSHELL_CAP=\$(ulimit -v); bash -c "\$cap_probe; $native_cmd" ) >>\$LOGD/res.log 2>&1; res_rc=\$?
 # QA-H3-16 (2026-09-21): the child's cap_probe echoes CAP_EFFECTIVE and
 # CAP_REQUESTED on ONE line, so the bare 's/^CAP_EFFECTIVE=//p' capture pulled
@@ -3160,8 +3092,6 @@ elif [ \$res_rc -eq 0 ]; then
   # path unchanged.
   if vacuous_native_suite \$LOGD/res.log; then
     cell chaos-resource UNVERIFIED "suite NEVER RAN under the cap (vacuous no-test-path) — the cap was never exercised by any test (\$cap_note)"
-  elif native_zero_tests \$LOGD/res.log; then
-    cell chaos-resource UNVERIFIED "vacuous pass under the cap: ZERO tests ran (summary: \$(grep -E '(passed|failed|error|no tests ran)' \$LOGD/res.log | tail -1 | cut -c1-160)) — the cap was never exercised by any test (\$cap_note, QA-AUGER-1)"
   else
     cell chaos-resource PASS "suite survives 3G memory cap (\$cap_note)"
   fi
@@ -3174,7 +3104,7 @@ elif native_runner_missing \$LOGD/res.log; then cell chaos-resource UNVERIFIED "
 elif go_toolchain_oom \$LOGD/res.log; then cell chaos-resource INFO "ENV-BLOCKED: the go toolchain itself failed to build under the 3G cap (SystemResources/address-space) — no suite result either way, the cap-vs-toolchain interaction is not a memory verdict about the code (\$cap_note, rc=\$res_rc): \$(go_toolchain_oom_cause \$LOGD/res.log)"
 elif go_panic_timeout \$LOGD/res.log; then cell chaos-resource INFO "SUITE-PANIC: go test hit its own 10m timeout and panicked under the cap — the suite has NO clean failure mode at its worst-case memory ceiling (QA-HERMES-CANOPY-38): \$(go_panic_timeout_cause \$LOGD/res.log) | failing: \$(capped_fail_summary \$LOGD/res.log)"
 else cell chaos-resource FAIL "rc=\$res_rc under cap (\$cap_note): \$(capped_fail_summary \$LOGD/res.log)"; fi
-fi  # end project-probe hook (resource) — QA-DUCKBRAIN-FOREMAN-3
+fi # QA-BUNKER-57 pip-absent gate (pytest legs only)
 
 # 10 · chaos-errorpath — missing config: clean usage or panic?
 # Project-probe hook (SDKTS-QA-H3-SDK-TYPESCRIPT-FOREMAN-7): same opt-in, fully
@@ -3211,98 +3141,77 @@ fi
 echo CELLS-DONE
 touch ~/qa-run.finished
 EOF
-  )
 }
 
-# ─── fence_check — static guard for the render fence (QA-RENDER-FENCE) ───
-# The unquoted heredoc above is expanded by the CONTROLLER at render time, so an
-# UNESCAPED `$...` on a remote-side line is never a runtime variable there: it is
-# either an unbound-variable abort (`set -u` kills the whole cat → a 0-byte
-# battery shipped fleet-wide; GUARD-DF-009: `$UI_PORTS`, line 1061) or a silent
-# rewrite of the script that ships (`${BIN:-}` collapsed the remote's
-# start-command case; `$PATH` re-rendered a diagnostic comment). Nothing gated
-# that class and it regressed once — QA-BUNKER-B21 shipped the ui-probe port
-# list unescaped. This scan walks the heredoc body and FAILS on any unescaped
-# `$`/backtick whose token is not in the render's intended-substitution contract.
-# Run it after ANY edit inside the heredoc body: bunker-qa.sh __fence-check
-fence_check() {
-  local self="${BASH_SOURCE[0]}"
-  # Intended controller-side substitutions (the render's own inputs). Everything
-  # else in the body must carry a backslash so the remote script sees a variable.
-  local -a fence_allow=(
-    proj agent install_cmd install_cmd_q ci_cmd native_cmd
-    QA_HEAD_SHA QA_HEAD_PULL QA_HEAD_TS ACT_URL MAKE_URL
-    qa_docker_lifecycle_enabled qa_docker_lifecycle_host_block
-    DETECT_INSTALL DETECT_CI DETECT_NATIVE DETECT_BIN DETECT_TAG_COUNT
-    DETECT_PREV_TAG DETECT_PREV_VERSION DETECT_PKG_NAME DETECT_PKG_ECOSYSTEM
-    DETECT_GO_URL DETECT_CI_FILES DETECT_ACT_NOTE DETECT_UP_PREV_DIR
-    DETECT_PYTEST_REPO
-  )
-  awk -v allow="${fence_allow[*]}" '
-    BEGIN {
-      n = split(allow, a, " ")
-      for (i = 1; i <= n; i++) ALLOW[a[i]] = 1
-      started = 0; bad = 0; nsub = 0; nbody = 0; found = 0
-    }
-    !started {
-      if (index($0, "cat <<EOF") > 0) { started = 1; found = 1 }
-      next
-    }
-    $0 == "EOF" { started = 0; exit }
-    {
-      nbody++
-      line = $0
-      i = 1
-      L = length(line)
-      while (i <= L) {
-        c = substr(line, i, 1)
-        if (c == "\\" && i < L) { i += 2; continue }
-        if (c == "`") {
-          printf "FENCE-VIOLATION line %d: unescaped backtick runs on the controller at render time: %s\n", NR, line
-          bad++; i++; continue
-        }
-        if (c == "$") {
-          rest = substr(line, i + 1)
-          name = ""
-          if (match(rest, /^[A-Za-z_][A-Za-z0-9_]*/)) name = substr(rest, 1, RLENGTH)
-          else if (substr(rest, 1, 1) == "{") {
-            r2 = substr(rest, 2)
-            if (match(r2, /^[A-Za-z_][A-Za-z0-9_]*/)) name = substr(r2, 1, RLENGTH)
-          }
-          if (name != "") {
-            if (name in ALLOW) nsub++
-            else {
-              printf "FENCE-VIOLATION line %d: unescaped $%s expands on the controller at render time: %s\n", NR, name, line
-              bad++
-            }
-          } else if (substr(rest, 1, 1) == "(") {
-            printf "FENCE-VIOLATION line %d: unescaped $( ) executes on the controller at render time: %s\n", NR, line
-            bad++
-          }
-        }
-        i++
-      }
-    }
-    END {
-      if (!found) { print "FENCE-CHECK ERROR: heredoc opener (cat <<EOF) not found — cannot scan"; exit 3 }
-      printf "FENCE-CHECK body_lines=%d intended_substitutions=%d violations=%d\n", nbody, nsub, bad
-      exit (bad ? 1 : 0)
-    }
-  ' "$self"
+# ─── QA-BUNKER-REVIEW-3 (2026-11-02): repo sanity + product-root resolution ───
+# The QA cell hit: /home/kara/.hermes/stand-in/review/bunker is a SUBDIRECTORY
+# of the /home/kara home meta-repo — pre-guard behavior synced the WHOLE parent
+# and graded the wrong product. The fleet copy has carried the refuse-unless-
+# BUNKER_QA_SUBDIR guard since QA-HARNESS-SCOPE-20261004; this port adds the
+# missing half: a stand-in dir documents the product it stands in for — its
+# .coding-hermes/board SYMLINKS into the real product repo (scheduler
+# review-namespace contract) — so when that symlink resolves into a DIFFERENT
+# git repo, resolve and use that repo's root instead of refusing.
+# Contract (run() and launch() call this AFTER truncate+traps, so a refusal
+# still records its row — QA-GITREINS-POC-QA-1):
+#   $1 repo-dir   $2 phase ("run" | "launch" | "probe"; evidence detail prefix)
+#   stdout: the EFFECTIVE repo dir to sync/grade (one line)
+#   refusal: named ERROR on stderr + ONE FAIL row in $EVIDENCE, rc=1
+#   Precedence: explicit BUNKER_QA_SUBDIR > board-symlink resolution > refusal.
+qa_repo_sanity() {
+  local repo="$1" phase="$2"
+  if [ -d "$repo/.git" ]; then
+    printf '%s\n' "$repo"; return 0
+  fi
+  local git_top
+  git_top=$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null || true)
+  # QA-HARNESS-SCOPE-20261004 (fleet parity): an explicit subdirectory scope
+  # ALWAYS wins — over stand-in resolution and over both refusals below.
+  if [ -n "${BUNKER_QA_SUBDIR:-}" ]; then
+    repo="$repo/${BUNKER_QA_SUBDIR%/}"
+    printf '%s\n' "$repo"; return 0
+  fi
+  # Stand-in product-root resolution: <repo>/.coding-hermes/board is a symlink
+  # into a DIFFERENT git repo -> that repo is the product. Same-parent or
+  # non-repo targets fall through to the refusal (no bogus resolution).
+  local board_link resolved_target product_top product_check
+  board_link="$repo/.coding-hermes/board"
+  if [ -L "$board_link" ]; then
+    resolved_target=$(readlink -f "$board_link" 2>/dev/null || true)
+    if [ -n "$resolved_target" ]; then
+      # git -C needs a DIRECTORY and the board link resolves to the board file
+      # itself — probe the repo from the target's directory (or the target when
+      # it is a dir symlink).
+      local target_dir
+      if [ -d "$resolved_target" ]; then target_dir="$resolved_target"; else target_dir=$(dirname "$resolved_target"); fi
+      product_top=$(git -C "$target_dir" rev-parse --show-toplevel 2>/dev/null || true)
+      # Verify the resolved root is a REAL git toplevel before trusting it.
+      if [ -n "$product_top" ]; then
+        product_check=$(git -C "$product_top" rev-parse --show-toplevel 2>/dev/null || true)
+        if [ "$product_check" = "$product_top" ] && [ "$product_top" != "$git_top" ]; then
+          echo "NOTE: $repo is a stand-in; resolving product root $product_top (board symlink -> $resolved_target)" >&2
+          printf '%s\n' "$product_top"; return 0
+        fi
+      fi
+    fi
+  fi
+  if [ -n "$git_top" ] && [ "$git_top" != "$(cd "$repo" && pwd)" ]; then
+    echo "ERROR: $repo is a SUBDIRECTORY of git repo $git_top — bunker-qa.sh would sync the whole parent repo and grade the wrong product. Set BUNKER_QA_SUBDIR=<subdir-relative-to-repo> (e.g. BUNKER_QA_SUBDIR=monitoring/fleet-monitoring) or dispatch against the real product git root." >&2
+    printf '{"cell":"run_battery","status":"FAIL","detail":"%s refused: %s is a subdirectory of git repo %s — syncing the parent would grade the wrong product (project=%s). Set BUNKER_QA_SUBDIR=<relative subdir> or use the product git root","ts":"%s"}\n' \
+      "$phase" "$repo" "$git_top" "$(basename "$repo")" "$(date -u +%FT%TZ)" >> "$EVIDENCE"
+    return 1
+  fi
+  echo "ERROR: $repo is not a git repo (git resolves toplevel: ${git_top:-none}) — dispatch against the primary repo workdir" >&2
+  printf '{"cell":"run_battery","status":"FAIL","detail":"%s refused: %s is not a git repo (git resolves toplevel: %s) — a role-lane workdir was dispatched instead of the primary repo; re-dispatch against the real workdir","ts":"%s"}\n' \
+    "$phase" "$repo" "${git_top:-none}" "$(date -u +%FT%TZ)" >> "$EVIDENCE"
+  return 1
 }
 
 run() {
   local repo="${1:?usage: bunker-qa.sh run <repo-dir> [--keep]}"
   shift
   local keep=0
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --keep) keep=1; shift ;;
-      --server) SERVER="${2:?--server requires a value}"; shift 2 ;;
-      --server=*) SERVER="${1#--server=}"; shift ;;
-      *) shift ;;
-    esac
-  done
+  for a in "$@"; do [ "$a" = "--keep" ] && keep=1; done
 
   local PROJ; PROJ=$(basename "$repo")
   : > "$EVIDENCE"
@@ -3318,36 +3227,27 @@ run() {
   trap 'write_fail_if_empty "battery terminated by SIGTERM (tool timeout) before any cell recorded"; exit 124' TERM
   trap 'write_fail_if_empty "battery interrupted by SIGINT before any cell recorded"; exit 130' INT
   trap 'write_fail_if_empty "battery exited rc=$? before any cell recorded"' EXIT
-  qa_battery_lock_acquire
 
-  if [ ! -d "$repo/.git" ]; then
-    local git_top
-    git_top=$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null || true)
-    # QA-HARNESS-SCOPE-20261004: same subdir-of-git-repo guard as launch() — a
-    # project dir that is a SUBDIRECTORY of a git repo used to fall through here
-    # and sync the WHOLE parent repo. Mirror launch(): BUNKER_QA_SUBDIR opts into
-    # subdirectory scoping, otherwise refuse with the product-mismatch message.
-    if [ -n "${BUNKER_QA_SUBDIR:-}" ]; then
-      repo="$repo/${BUNKER_QA_SUBDIR%/}"
-      PROJ=$(basename "$repo")
-    elif [ -n "$git_top" ] && [ "$git_top" != "$(cd "$repo" && pwd)" ]; then
-      echo "ERROR: $repo is a SUBDIRECTORY of git repo $git_top — bunker-qa.sh would sync the whole parent repo and grade the wrong product. Set BUNKER_QA_SUBDIR=<subdir-relative-to-repo> (e.g. BUNKER_QA_SUBDIR=monitoring/fleet-monitoring) or dispatch against the real product git root." >&2
-      printf '{"cell":"run_battery","status":"FAIL","detail":"run refused: %s is a subdirectory of git repo %s — syncing the parent would grade the wrong product (project=%s). Set BUNKER_QA_SUBDIR=<relative subdir> or use the product git root","ts":"%s"}\n' \
-        "$repo" "$git_top" "$PROJ" "$(date -u +%FT%TZ)" >> "$EVIDENCE"
-      exit 1
-    else
-      echo "ERROR: $repo is not a git repo (git resolves toplevel: ${git_top:-none}) — dispatch against the primary repo workdir" >&2
-      printf '{"cell":"run_battery","status":"FAIL","detail":"run refused: %s is not a git repo (git resolves toplevel: %s) — a role-lane workdir was dispatched instead of the primary repo; re-dispatch against the real workdir","ts":"%s"}\n' \
-        "$repo" "${git_top:-none}" "$(date -u +%FT%TZ)" >> "$EVIDENCE"
-      exit 1
-    fi
-  fi
+  # QA-BUNKER-REVIEW-3: repo sanity + stand-in product-root resolution — shared
+  # with launch() via qa_repo_sanity (fleet parity with QA-HARNESS-SCOPE-20261004:
+  # refuse subdirectory-of-parent targets unless BUNKER_QA_SUBDIR opts in, and
+  # resolve a stand-in dir whose .coding-hermes/board symlinks into a different
+  # product repo). Traps precede this: a refusal still records its row.
+  repo=$(qa_repo_sanity "$repo" run) || exit 1
+  PROJ=$(basename "$repo")
 
   log "QA project: $PROJ — fresh-system pass on $SERVER (ttl $TTL)"
 
   # Deterministic-failure preflights (config / ssh / capacity) — SHARED with
   # launch(); see preflights() for the record-one-FAIL-row + rc=2 contract.
   preflights
+  # QA-BUNKER-75: reclaim agents whose detached controller died before collect.
+  # This runs before spawn so an abandoned slot cannot block the new battery.
+  qa_cleanup_orphan_agents
+  # QA-BUNKER-60 (2026-10-07): repo-weight preflight — WARN (stderr only; no
+  # evidence file is open here yet) when the workspace is heavy AND the
+  # resolved slice is still the 2-CPU default, BEFORE a spawn burns a TTL on it.
+  qa_preflight_repo_weight "$repo"
 
   local agent key spawn_err
   spawn_err=$(mktemp)
@@ -3361,17 +3261,6 @@ run() {
     local err_detail
     err_detail=$(tail -3 "$spawn_err" | tr '\n' ' ' | cut -c1-300)
     rm -f "$spawn_err"
-    # QA-CHIMERA-V2-40: an unreachable agent SSH port is the reachability
-    # gate failing, not a docker fault — name it so interpreters see the
-    # root cause (and the port-22 escape hatch) directly in the FAIL cell.
-    local qaprobe; qaprobe=$(server_ssh_port "$SERVER")
-    if ! timeout 10 ssh -p "$qaprobe" -o ConnectTimeout=8 -o BatchMode=yes -o StrictHostKeyChecking=no "bunker-probe-qa40@$SERVER" true 2>/dev/null; then
-      if timeout 10 ssh -p 22 -o ConnectTimeout=8 -o BatchMode=yes -o StrictHostKeyChecking=no "bunker-probe-qa40@$SERVER" true 2>/dev/null; then
-        err_detail="$err_detail [root cause: agent ssh port $qaprobe unreachable on $SERVER but port 22 answers - set BUNKER_QA_SSH_PORT=22]"
-      else
-        err_detail="$err_detail [root cause: agent ssh port $qaprobe AND port 22 unreachable on $SERVER - server/network down, not a docker fault]"
-      fi
-    fi
     echo "ERROR: spawn failed on $SERVER: $err_detail" >&2
     printf '{"cell":"run_battery","status":"FAIL","detail":"spawn failed on %s: %s","ts":"%s"}\n' \
       "$SERVER" "$err_detail" "$(date -u +%FT%TZ)" >> "$EVIDENCE"
@@ -3386,8 +3275,10 @@ run() {
   # run log). qa_destroy_agent() emits "destroy FAILED"/"STILL PRESENT AFTER
   # DESTROY" on stderr + a FAIL evidence row; the evidence path is the $EVIDENCE
   # global so the EXIT trap needs nothing captured at definition time.
-  cleanup() { log "destroying temp agent $BUNKER_QA_AGENT"; qa_destroy_agent "$BUNKER_QA_AGENT" "$EVIDENCE"; }
+  cleanup() { log "destroying temp agent $BUNKER_QA_AGENT"; qa_destroy_agent "$BUNKER_QA_AGENT" "$EVIDENCE"; qa_remove_agent_lock "$BUNKER_QA_AGENT" >/dev/null 2>&1 || true; }
   [ "$keep" = 1 ] || trap cleanup EXIT
+  # The synchronous path owns the whole tick, so its normal EXIT cleanup above
+  # also removes the watchdog lock. Detached launch leaves the lock to collect.
   log "agent=$agent @ $SERVER (tailscale)"
 
   # Pre-flight hygiene (2026-08-31): temp-agent homes PERSIST across runs
@@ -3420,27 +3311,52 @@ run() {
   # `echo '$b64' | base64 -d` embedded the whole script in one ssh argv word —
   # past ~131KB base64 that exceeds the kernel MAX_ARG_STRLEN (E2BIG:
   # "Argument list too long"). stdin is quoting-safe AND argv-unbounded.
-  set +o pipefail   # QA-CONSENSUS-24: capture the battery rc without pipefail masking it through tail
   build_remote_script "$PROJ" "$install_cmd" "$ci_cmd" "$native_cmd" \
     | agent_ssh "cat > ~/qa-run.sh && bash ~/qa-run.sh" | tail -1
-  battery_rc=${PIPESTATUS[0]}
-  set -o pipefail
-  # QA-CONSENSUS-24 fail-closed: rc=2 = the battery graded docker legs
-  # SKIPPED-with-reason (agent docker socket never appeared) or otherwise
-  # ended short of a full cell set. The evidence is still pulled (partial
-  # rows are real data), but run() exits NONZERO — the caller/DAG must see
-  # the run was incomplete, never a green EVIDENCE= over a truncated battery.
-  agent_ssh "cat ~/qa-evidence.jsonl 2>/dev/null" >> "$EVIDENCE" || true
-  if [ "$battery_rc" -ne 0 ]; then
-    log "QA battery INCOMPLETE on agent (rc=$battery_rc) — evidence pulled with SKIPPED/absent cells; run FAILED closed"
-    printf '{"cell":"run_battery","status":"FAIL","detail":"battery rc=%s — run ended short of a full cell set (QA-CONSENSUS-24 fail-closed; see SKIPPED/UNVERIFIED cells in the evidence)","ts":"%s"}\n' \
-      "$battery_rc" "$(date -u +%FT%TZ)" >> "$EVIDENCE"
-    echo "EVIDENCE=$EVIDENCE battery_rc=$battery_rc"
-    exit "$battery_rc"
-  fi
 
+  # pull evidence back
+  agent_ssh "cat ~/qa-evidence.jsonl 2>/dev/null" >> "$EVIDENCE" || true
+
+  # QA-BUNKER-B20: the run ends with an HONEST verdict line — wrapper steps
+  # (spawn/sync/launch/collect) never counted as audit signal, so the old
+  # "4 wrapper steps ok" shape could read as SUCCESS over a run that audited
+  # nothing. Zero verdict-bearing cells ⇒ the summary carries "NOTHING
+  # AUDITED" and run() exits nonzero (rc=3 = verdicts verdict, not a refusal
+  # class like preflight's rc=2).
+  local summary
+  summary=$(qa_run_summary "$EVIDENCE")
+  qa_run_summary_rc=$?
+  echo "$summary"
+  [ "$qa_run_summary_rc" -eq 0 ] || exit 3
   log "QA pass complete — evidence: $EVIDENCE"
   echo "EVIDENCE=$EVIDENCE"
+}
+
+# ─── QA-BUNKER-47 (2026-10-30): launch-record (.meta) staging ───
+# $EVIDENCE.meta is collect()'s ONLY pointer to the spawned agent, and two
+# conflicting requirements decide WHEN it may exist:
+#   * TR-085: a launch killed mid-flight (tool cap, SIGTERM, crash) must leave a
+#     record behind, or collect falls back to whatever STALE record the path
+#     already held and probes a stranger's agent id.
+#   * QA-BUNKER-47: a run refused BEFORE spawn (config/ssh/reachability rc=2)
+#     must leave NO launch record. The old prologue wrote one unconditionally,
+#     so a follow-up collect graded a healthy refusal as "launch was killed
+#     before the agent id was recorded" — a crash story for a run that never
+#     spawned anything, and exactly the shape TR-085 warns about.
+# Resolution: reset the path first (kills the stale record), then write the
+# record only AFTER preflights pass, stamped with a phase= header so collect can
+# tell a spawn-time kill (phase=spawning, agent= still empty) from a completed
+# spawn. Phase values: spawning | running | launched.
+qa_launch_meta_reset() { # <meta> — drop a PREVIOUS run's record at this path
+  rm -f "${1:?qa_launch_meta_reset: meta path required}"
+}
+
+qa_launch_meta_write() { # <meta> <evidence> <phase> <agent> <server> <keep> <project> [launched]
+  local meta="${1:?qa_launch_meta_write: meta path required}" evidence="${2:-}" phase="${3:-}"
+  local agent="${4:-}" server="${5:-}" keep="${6:-0}" project="${7:-}"
+  local launched="${8:-$(date -u +%FT%TZ)}"
+  printf 'agent=%s\nserver=%s\nevidence=%s\nlaunched=%s\nkeep=%s\nproject=%s\nphase=%s\n' \
+    "$agent" "$server" "$evidence" "$launched" "$keep" "$project" "$phase" > "$meta"
 }
 
 # ─── launch — PHASE A: preflights + spawn + sync + START the battery DETACHED ───
@@ -3449,20 +3365,14 @@ run() {
 # cap that killed the synchronous battery (QA-HERMES-CANOPY-8).
 # Side effects: spawns the temp agent (it OUTLIVES this call by design — collect
 # or its TTL tears it down), syncs the repo, writes $EVIDENCE.meta (agent=,
-# server=, evidence=, launched=, keep=) and the ONE launch cell that makes a
-# 0-byte evidence file impossible.
+# server=, evidence=, launched=, keep=, project=, phase=) and the ONE launch
+# cell that makes a 0-byte evidence file impossible. The record is written only
+# once preflights pass — a pre-spawn refusal leaves none (QA-BUNKER-47).
 launch() {
   local repo="${1:?usage: bunker-qa.sh launch <repo-dir> [--keep]}"
   shift
   local keep=0
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --keep) keep=1; shift ;;
-      --server) SERVER="${2:?--server requires a value}"; shift 2 ;;
-      --server=*) SERVER="${1#--server=}"; shift ;;
-      *) shift ;;
-    esac
-  done
+  for a in "$@"; do [ "$a" = "--keep" ] && keep=1; done
 
   local PROJ; PROJ=$(basename "$repo")
   : > "$EVIDENCE"
@@ -3471,14 +3381,14 @@ launch() {
   # leave NO record at all — the meta file was written only on the success path,
   # so `collect` fell back to the shared default evidence path and probed whatever
   # agent id that STALE meta named (dogfood 2026-09-20: collect probed a 2-day-old
-  # agent while the real one ran on unrecorded). Write an EARLY record now, and
-  # keep it up to date as the id becomes known. collect() refuses a mismatch.
+  # agent while the real one ran on unrecorded).
+  # QA-BUNKER-47: the record is now staged — RESET here (a previous run's record
+  # at this path must never survive into this one) and WRITTEN only after
+  # preflights pass, so a pre-spawn refusal (config/ssh/reachability rc=2) leaves
+  # no launch record at all instead of an empty-agent= one that collect graded
+  # "launch was killed before the agent id was recorded".
   local meta="$EVIDENCE.meta"
-  write_meta() { # agent server keep project
-    printf 'agent=%s\nserver=%s\nevidence=%s\nlaunched=%s\nkeep=%s\nproject=%s\n' \
-      "${1:-}" "${2:-}" "$EVIDENCE" "${3:-$(date -u +%FT%TZ)}" "${4:-0}" "${5:-$PROJ}" > "$meta"
-  }
-  write_meta "" "$SERVER" "$(date -u +%FT%TZ)" 0 "$PROJ"
+  qa_launch_meta_reset "$meta"
 
   # Traps + evidence truncate MUST precede the repo sanity check: a
   # stand-in-workdir dispatch (no .git — QA-GITREINS-POC-QA-1, 2026-09-17)
@@ -3487,57 +3397,31 @@ launch() {
   trap 'write_fail_if_empty "launch terminated by SIGTERM (tool timeout) before the launch cell was recorded"; exit 124' TERM
   trap 'write_fail_if_empty "launch interrupted by SIGINT before the launch cell was recorded"; exit 130' INT
   trap 'write_fail_if_empty "launch exited rc=$? before the launch cell was recorded"' EXIT
-  qa_battery_lock_acquire
 
-  if [ ! -d "$repo/.git" ]; then
-    local git_top
-    git_top=$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null || true)
-    # QA-HARNESS-SCOPE-20261004: a project dir that is a SUBDIRECTORY of a git
-    # repo (git resolves toplevel != repo) used to pass this check and sync the
-    # WHOLE parent repo (monitoring lane: /home/kara/monitoring resolved to the
-    # kara-hermes home meta-repo; battery graded the wrong product as
-    # project=kara). Refuse with the product-mismatch message unless the caller
-    # names the real product dir via BUNKER_QA_SUBDIR (relative to repo).
-    if [ -n "${BUNKER_QA_SUBDIR:-}" ]; then
-      repo="$repo/${BUNKER_QA_SUBDIR%/}"
-      PROJ=$(basename "$repo")
-    elif [ -n "$git_top" ] && [ "$git_top" != "$(cd "$repo" && pwd)" ]; then
-      echo "ERROR: $repo is a SUBDIRECTORY of git repo $git_top — bunker-qa.sh would sync the whole parent repo and grade the wrong product. Set BUNKER_QA_SUBDIR=<subdir-relative-to-repo> (e.g. BUNKER_QA_SUBDIR=monitoring/fleet-monitoring) or dispatch against the real product git root." >&2
-      printf '{"cell":"run_battery","status":"FAIL","detail":"launch refused: %s is a subdirectory of git repo %s — syncing the parent would grade the wrong product (project=%s). Set BUNKER_QA_SUBDIR=<relative subdir> or use the product git root","ts":"%s"}\n' \
-        "$repo" "$git_top" "$PROJ" "$(date -u +%FT%TZ)" >> "$EVIDENCE"
-      exit 1
-    else
-      echo "ERROR: $repo is not a git repo (git resolves toplevel: ${git_top:-none}) — dispatch against the primary repo workdir" >&2
-      printf '{"cell":"run_battery","status":"FAIL","detail":"launch refused: %s is not a git repo (git resolves toplevel: %s) — a role-lane workdir was dispatched instead of the primary repo; re-dispatch against the real workdir","ts":"%s"}\n' \
-        "$repo" "${git_top:-none}" "$(date -u +%FT%TZ)" >> "$EVIDENCE"
-      exit 1
-    fi
-  fi
-
-  # QA-HERMES-DAGGER-26: the ci-pass leg must test a TRACEABLE commit. Record
-  # the checked-out HEAD BEFORE the battery, try to fast-forward a stale clone
-  # (pull is best-effort; a diverged/dirty clone is recorded, never silently
-  # tested as if fresh), and carry the sha into the payload + evidence.
-  QA_HEAD_SHA=$(git -C "$repo" rev-parse HEAD 2>/dev/null || echo unknown)
-  QA_HEAD_TS=$(date -u +%FT%TZ)
-  QA_HEAD_PULL=not-attempted
-  if [ "$QA_HEAD_SHA" != "unknown" ]; then
-    if [ -z "$(git -C "$repo" status --porcelain 2>/dev/null)" ]; then
-      if pull_out=$(git -C "$repo" pull --ff-only 2>&1); then
-        QA_HEAD_PULL="ff-only ok"
-        QA_HEAD_SHA=$(git -C "$repo" rev-parse HEAD)
-      else
-        QA_HEAD_PULL="pull failed (non-clean/diverged clone; testing recorded sha): $(printf '%s' "$pull_out" | tr '\n' ' ' | tail -1 | cut -c1-200)"
-      fi
-    else
-      QA_HEAD_PULL="clone dirty — pull skipped, testing recorded sha"
-    fi
-  fi
-  echo "QA-HEAD=$QA_HEAD_SHA pull=$QA_HEAD_PULL"
-  log "QA HEAD: $QA_HEAD_SHA ($QA_HEAD_PULL)"
+  # QA-BUNKER-REVIEW-3: repo sanity + stand-in product-root resolution — shared
+  # with run() via qa_repo_sanity (fleet parity with QA-HARNESS-SCOPE-20261004:
+  # refuse subdirectory-of-parent targets unless BUNKER_QA_SUBDIR opts in, and
+  # resolve a stand-in dir whose .coding-hermes/board symlinks into a different
+  # product repo). Traps precede this: a refusal still records its row.
+  repo=$(qa_repo_sanity "$repo" launch) || exit 1
+  PROJ=$(basename "$repo")
 
   log "QA LAUNCH project: $PROJ — detached battery on $SERVER (ttl $TTL)"
   preflights
+  # QA-BUNKER-75: reclaim agents whose detached controller died before collect.
+  # This runs before spawn so an abandoned slot cannot block the new battery.
+  qa_cleanup_orphan_agents
+  # QA-BUNKER-60 (2026-10-07): repo-weight preflight — WARN (stderr only; no
+  # evidence file is open here yet) when the workspace is heavy AND the
+  # resolved slice is still the 2-CPU default, BEFORE a spawn burns a TTL on it.
+  qa_preflight_repo_weight "$repo"
+
+  # QA-BUNKER-47: preflights PASSED — this is the first point where a spawn can
+  # happen, so record the attempt now (phase=spawning, agent= still empty) and
+  # keep it current as the id becomes known. A kill inside spawn_agent therefore
+  # still leaves collect a record it can trust (TR-085), while a preflight
+  # refusal above left none.
+  qa_launch_meta_write "$meta" "$EVIDENCE" spawning "" "$SERVER" "$keep" "$PROJ"
 
   local spawn_err
   spawn_err=$(mktemp)
@@ -3548,17 +3432,6 @@ launch() {
     local err_detail
     err_detail=$(tail -3 "$spawn_err" | tr '\n' ' ' | cut -c1-300)
     rm -f "$spawn_err"
-    # QA-CHIMERA-V2-40: an unreachable agent SSH port is the reachability
-    # gate failing, not a docker fault — name it so interpreters see the
-    # root cause (and the port-22 escape hatch) directly in the FAIL cell.
-    local qaprobe; qaprobe=$(server_ssh_port "$SERVER")
-    if ! timeout 10 ssh -p "$qaprobe" -o ConnectTimeout=8 -o BatchMode=yes -o StrictHostKeyChecking=no "bunker-probe-qa40@$SERVER" true 2>/dev/null; then
-      if timeout 10 ssh -p 22 -o ConnectTimeout=8 -o BatchMode=yes -o StrictHostKeyChecking=no "bunker-probe-qa40@$SERVER" true 2>/dev/null; then
-        err_detail="$err_detail [root cause: agent ssh port $qaprobe unreachable on $SERVER but port 22 answers - set BUNKER_QA_SSH_PORT=22]"
-      else
-        err_detail="$err_detail [root cause: agent ssh port $qaprobe AND port 22 unreachable on $SERVER - server/network down, not a docker fault]"
-      fi
-    fi
     echo "ERROR: spawn failed on $SERVER: $err_detail" >&2
     printf '{"cell":"run_battery","status":"FAIL","detail":"spawn failed on %s: %s","ts":"%s"}\n' \
       "$SERVER" "$err_detail" "$(date -u +%FT%TZ)" >> "$EVIDENCE"
@@ -3569,7 +3442,7 @@ launch() {
   BUNKER_QA_AGENT="$agent"
   # TR-085: record the real agent id the moment it is known, so a kill anywhere
   # after this point leaves collect() a CORRECT id to poll (or destroy).
-  write_meta "$agent" "$SERVER" "$(date -u +%FT%TZ)" "$keep" "$PROJ"
+  qa_launch_meta_write "$meta" "$EVIDENCE" running "$agent" "$SERVER" "$keep" "$PROJ"
   # NO destroy trap here ON PURPOSE: the agent must outlive this call — that is
   # the entire point of the split. collect() destroys it once the battery has
   # finished; otherwise its TTL does.
@@ -3619,46 +3492,54 @@ launch() {
     exit 1
   fi
 
-  # QA-DF-CHIMERA-V2-51 (2026-10-07): a LAUNCHED marker over a 0-byte
-  # ~/qa-run.sh is the silent-battery-death failure mode from dogfood run 14 —
-  # generation aborted mid-heredoc, the agent ran an empty file, produced no
-  # evidence, and collect misreported the death as pull-failed. Refuse to
-  # declare success when the agent confirms it received an empty script.
-  local launched script_bytes
-  script_bytes=$(printf '%s' "$launch_out" | sed -n 's/^SCRIPT_BYTES=//p' | tail -1)
-  if [ -n "$script_bytes" ] && [ "$script_bytes" -eq 0 ] 2>/dev/null; then
-    echo "ERROR: battery shipped EMPTY (~/qa-run.sh 0 bytes) on agent=$agent ($SERVER) — script generation failed; NOT launching (a 'LAUNCHED' over a dead battery misleads collect)" >&2
-    printf '{"cell":"run_battery","status":"FAIL","detail":"battery script empty (0 bytes) on agent=%s (%s) — qa-run.sh generation failed on the host; launch refused instead of shipping a dead battery","ts":"%s"}\n' \
-      "$agent" "$SERVER" "$(date -u +%FT%TZ)" >> "$EVIDENCE"
-    exit 1
-  fi
-
-  local launched meta
+  local launched meta script_bytes
   launched=$(date -u +%FT%TZ)
   script_bytes=$(printf '%s' "$launch_out" | sed -n 's/^SCRIPT_BYTES=//p' | tail -1)
-  write_meta "$agent" "$SERVER" "$launched" "$keep" "$PROJ"
-  # QA-HERMES-DAGGER-26: every evidence file carries the exact commit the
-  # battery tests, so a finding is traceable to a commit (QA-HERMES-DAGGER-25
-  # false P1 was untraceable: stale clone, HEAD never recorded).
-  printf '{"project":"%s","cell":"repo-head","status":"OK","detail":"tested HEAD=%s at launch=%s (pull=%s)","ts":"%s"}\n' \
-    "$PROJ" "$QA_HEAD_SHA" "$launched" "$(printf '%s' "$QA_HEAD_PULL" | tr '\n' ' ' | cut -c1-260)" "$QA_HEAD_TS" >> "$EVIDENCE"
-  printf '{"project":"%s","cell":"launch","status":"OK","detail":"agent=%s server=%s ttl=%s script_bytes=%s — battery started detached (qa-run.sh); phase B: bunker-qa.sh collect --evidence %s","ts":"%s"}\n' \
-    "$PROJ" "$agent" "$SERVER" "$TTL" "${script_bytes:-unknown}" "${EVIDENCE}" "$launched" >> "$EVIDENCE"
-  qa_battery_lock_keep_for_launch "$agent" "$SERVER" "$(server_ssh_port "$SERVER")" "$BUNKER_QA_HOST_KEY"
-  log "QA launch complete — no cells waited on locally (phase B: bunker-qa.sh collect --evidence $EVIDENCE)"
+  qa_launch_meta_write "$meta" "$EVIDENCE" launched "$agent" "$SERVER" "$keep" "$PROJ" "$launched"
+  # QA-BUNKER-60 (2026-10-07): the evidence names its slice — a 3h battery is
+  # unreadable after the fact without knowing whether it ran on the 2-CPU
+  # default or a bumped quota. agent= stays first (evidence contract).
+  # QA-BUNKER-B20: summary computed AFTER the launch row is appended (the row
+  # is wrapper bookkeeping and intentionally not audit signal).
+  printf '{"project":"%s","cell":"launch","status":"OK","detail":"agent=%s server=%s ttl=%s cpu=%s memory=%s script_bytes=%s — battery started detached (qa-run.sh); phase B: bunker-qa.sh collect --evidence %s","ts":"%s"}\n' \
+    "$PROJ" "$agent" "$SERVER" "$TTL" "${BUNKER_QA_CPUS:-$(qa_slice_cpus "$repo")}" "${BUNKER_QA_MEM:-default}" "${script_bytes:-unknown}" "$EVIDENCE" "$launched" >> "$EVIDENCE"
+  local summary
+  summary=$(qa_run_summary "$EVIDENCE")
+  log "QA launch complete — no cells waited on locally (phase B: collect --evidence $EVIDENCE)"
+  # QA-BUNKER-B20: additive honest verdict line at the END of the log. Zero
+  # verdict-bearing cells is the EXPECTED shape for a detached launch (the
+  # battery runs on the agent; collect merges them later), so launch never
+  # fails the run for it — the line names the count and the phase split.
+  echo "$summary"
   echo "LAUNCHED agent=$agent evidence=$EVIDENCE"
 }
 
-# ─── collect — PHASE B: poll → pull → destroy (idempotent) ───
+# ─── collect — PHASE B: poll → sync → pull → destroy (idempotent) ───
 # While the battery is still alive on the agent this prints RUNNING, exits 0 and
 # DESTROYS NOTHING, so a short-poll loop can call it repeatedly until the
-# 7-15 min battery finishes. Once it is done: merge-dedupe the agent's
-# ~/qa-evidence.jsonl into the local evidence file (idempotent on the row "ts"
-# field), append ONE collect cell, destroy the temp agent, print COLLECTED.
-# Failures (no launch record / unreachable agent / pull failed) record a collect
-# FAIL cell and exit 0 — collect is a poll, not the battery's verdict.
+# 7-15 min battery finishes. QA-BUNKER-77: each RUNNING poll ALSO syncs the
+# agent's ~/qa-evidence.jsonl rows into the local evidence file (merge-deduped,
+# best-effort) — the agent user can be reaped server-side long before the 4h TTL
+# (~35min post-launch observed on bunker-mvp), and synced rows are what lets a
+# later collect grade the loss agent-gone instead of aborting. Once the battery
+# is done: merge-dedupe ~/qa-evidence.jsonl, pull the per-cell log dir
+# (~/qa-logs-*) to <evidence>.logs/ BEFORE the destroy — the only place they
+# survive the user reap — then append ONE collect cell, destroy the temp agent,
+# print COLLECTED. Failures (no launch record / unreachable agent with NOTHING
+# synced / pull failed with nothing synced) record a collect FAIL plus an INFO
+# harness-failure row, then abort immediately after that bounded attempt; a
+# failed collect must not ride the battery wall-clock TTL. An unreachable agent
+# whose rows WERE already synced is graded agent-gone (collect row
+# status=agent-gone, stdout AGENT-GONE, rc=0): the run is not lost, only the
+# per-cell logs are.
 collect() {
   local evidence=""
+  # QA-BUNKER-45: one collect invocation is one bounded harness attempt. Keep
+  # the timing on the evidence row itself so a dead host is distinguishable
+  # from a slow harness without reconstructing SSH history.
+  local attempt_started_at attempt_started_ms
+  attempt_started_at=$(date -u +%FT%T.%3NZ)
+  attempt_started_ms=$(date +%s%3N)
   while [ $# -gt 0 ]; do
     case "$1" in
       --evidence|-e) evidence="${2:-}"; shift 2 ;;
@@ -3672,142 +3553,37 @@ collect() {
   local meta="$evidence.meta"
 
   append_collect_row() { # <status> <detail>
-    printf '{"cell":"collect","status":"%s","detail":"%s","ts":"%s"}\n' \
-      "$1" "$(printf '%s' "$2" | tr '\n' ' ' | cut -c1-300)" "$(date -u +%FT%TZ)" >> "$evidence"
+    local row_status="$1" row_detail="$2" duration_ms finished_at
+    duration_ms=$(( $(date +%s%3N) - attempt_started_ms ))
+    finished_at=$(date -u +%FT%T.%3NZ)
+    printf '{"cell":"collect","status":"%s","detail":"%s","host":"%s","collect_attempt":1,"attempt_started":"%s","attempt_finished":"%s","duration_ms":%s,"ts":"%s"}\n' \
+      "$row_status" "$(printf '%s' "$row_detail" | tr '\n' ' ' | cut -c1-300)" "$SERVER" \
+      "$attempt_started_at" "$finished_at" "$duration_ms" "$(date -u +%FT%TZ)" >> "$evidence"
   }
 
-  if [ ! -f "$meta" ]; then
-    append_collect_row FAIL "no launch record at $meta — nothing to collect (launch phase never ran, or a different evidence path)"
-    echo "COLLECT-FAIL no-launch-record"
-    exit 0
-  fi
-  # Idempotency: a successful collect already recorded its cell — re-calling is a
-  # no-op instead of a spurious "unreachable agent" FAIL (the agent is destroyed
-  # by then, so the probe below would be empty).
-  if grep -q '"cell":"collect","status":"OK"' "$evidence" 2>/dev/null; then
-    echo "COLLECTED already-collected"
-    exit 0
-  fi
+  # QA-BUNKER-45: abort is the primary policy, not an unbounded retry or a
+  # retarget claim. One failed collect records both the failed attempt timing
+  # and an explicit INFO harness-failure attributed to the configured host.
+  # The caller exits nonzero immediately; there is no second collect attempt.
+  abort_collect() { # <reason> — one failed collect terminates the harness
+    local reason="$1" duration_ms finished_at
+    duration_ms=$(( $(date +%s%3N) - attempt_started_ms ))
+    finished_at=$(date -u +%FT%T.%3NZ)
+    append_collect_row FAIL "$reason"
+    printf '{"cell":"harness-failure","status":"INFO","detail":"harness abort after one failed collect: %s","attributed_host":"%s","host":"%s","collect_attempt":1,"attempt_started":"%s","attempt_finished":"%s","duration_ms":%s,"ts":"%s"}\n' \
+      "$(printf '%s' "$reason" | tr '\n' ' ' | cut -c1-300)" "$SERVER" "$SERVER" \
+      "$attempt_started_at" "$finished_at" "$duration_ms" "$(date -u +%FT%TZ)" >> "$evidence"
+    echo "COLLECT-ABORT host=$SERVER reason=$(printf '%s' "$reason" | tr '\n' ' ' | cut -c1-240)" >&2
+    return 2
+  }
 
-  local agent="" server="" ev="" keep=0
-  agent=$(sed -n 's/^agent=//p' "$meta" | head -1)
-  server=$(sed -n 's/^server=//p' "$meta" | head -1)
-  ev=$(sed -n 's/^evidence=//p' "$meta" | head -1)
-  [ "$(sed -n 's/^keep=//p' "$meta" | head -1)" = "1" ] && keep=1
-  [ -n "$server" ] && SERVER="$server"
-  [ -n "$ev" ] && [ "$ev" != "$evidence" ] && echo "WARN: launch record names evidence=$ev but collect was asked for $evidence (using $evidence)" >&2
-  if [ -z "$agent" ]; then
-    append_collect_row FAIL "launch record $meta has no agent= line — cannot poll the battery (the launch was killed before the agent id was recorded; check \`bunker list --server $server\` for an orphan and destroy it)"
-    echo "COLLECT-FAIL no-agent"
-    exit 0
-  fi
-  # TR-085: the meta names an agent that is not OURS. A stale meta from an earlier
-  # run (or a different evidence path) makes collect probe/destroy the wrong
-  # machine while the real agent runs unrecorded. Refuse loudly instead.
-  if [ -n "$ev" ] && [ "$ev" != "$evidence" ]; then
-    append_collect_row FAIL "launch record $meta belongs to a different run: it names evidence=$ev but collect was asked for $evidence (agent=$agent NOT probed or destroyed — verify with \`bunker list --server $server\`)"
-    echo "COLLECT-FAIL evidence-mismatch"
-    exit 0
-  fi
-  # An agent id only exists for runs that reached the spawn step. If the record
-  # predates this collect by more than the TTL the id cannot be live any more.
-  local rec_launched rec_age
-  rec_launched=$(sed -n 's/^launched=//p' "$meta" | head -1)
-  if [ -n "$rec_launched" ]; then
-    rec_age=$(python3 - "$rec_launched" <<'PY' 2>/dev/null || echo ""
-import sys, datetime
-try:
-    t = datetime.datetime.strptime(sys.argv[1], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=datetime.timezone.utc)
-    print(int((datetime.datetime.now(datetime.timezone.utc) - t).total_seconds()))
-except Exception:
-    print("")
-PY
-)
-    if [ -n "$rec_age" ] && [ "$rec_age" -gt 86400 ]; then
-      append_collect_row FAIL "launch record $meta is ${rec_age}s old (>24h, TTL=$TTL) — agent=$agent cannot still be live; refusing to probe a stale id. Check \`bunker list --server $server\` and re-launch if the battery never ran"
-      echo "COLLECT-FAIL stale-record"
-      exit 0
-    fi
-  fi
-  key="$HOME/.bunker/keys/$agent"
-  # collect must stay SHORT: bound the agent ssh at BUNKER_QA_COLLECT_SSH_TIMEOUT
-  # (120s) instead of agent_ssh's 1800s battery default, so a wedged host cannot
-  # blow the tool cap again.
-  local ssh_to="${BUNKER_QA_COLLECT_SSH_TIMEOUT:-120}"
-
-  # ONE cheap probe classifies the remote state. The pgrep pattern is
-  # bracket-escaped ([q]a-run\.sh) so this PROBE's own shell argv — which
-  # contains the pattern text — can never match itself and report RUNNING forever.
-  #
-  # QA-OFF-BY-ONE-BATTERY-LOST (2026-10-04, off-by-one on dedi-2): the probe is
-  # ONE ssh connection, and a TRANSIENT ssh failure (connection refused while
-  # sshd restarts, auth hiccup, host under load) returned no state — collect
-  # recorded "cannot reach agent … agent left intact" and EXITED while the
-  # battery was still producing evidence. The agent died at TTL with a finished
-  # battery on it; only a manual probe recovered the rows. The probe is now a
-  # 3-attempt ladder with backoff: a real state (FINISHED/GONE/RUNNING) wins on
-  # the first try (zero change to the happy path); only 3 consecutive empty
-  # probes (~3+ min window) classify unreachable, and the FAIL row then names
-  # the transient-probe suspicion and the recovery path instead of implying the
-  # agent is gone.
-  local probe="" attempt
-  for attempt in 1 2 3; do
-    probe=$(BUNKER_QA_SSH_TIMEOUT="$ssh_to" agent_ssh "if [ -f ~/qa-run.finished ]; then echo FINISHED; elif pgrep -f '[q]a-run\.sh' >/dev/null 2>&1; then echo RUNNING; else echo GONE; fi" 2>/dev/null | tail -1)
-    case "$probe" in
-      FINISHED|GONE|RUNNING) break ;;
-    esac
-    # transient (empty/refused/denied): back off and re-probe; the state probe
-    # is cheap and idempotent, so re-running it cannot disturb the battery.
-    [ "$attempt" -lt 3 ] && sleep $((attempt * 30))
-  done
-
-  case "$probe" in
-    RUNNING)
-      log "battery still running on agent=$agent ($SERVER) — agent left intact"
-      echo "RUNNING agent=$agent evidence=$evidence"
-      exit 0
-      ;;
-    FINISHED|GONE)
-      : ;;  # marker present, or the process is gone → pull what it produced
-    *)
-      # QA-OFF-BY-ONE-BATTERY-LOST: empty after the 3-attempt ladder is most
-      # often a TRANSIENT ssh/auth failure, not a dead agent (a finished battery
-      # died with its agent at TTL this way). Name the suspicion + recovery path.
-      append_collect_row FAIL "cannot reach agent=$agent on $SERVER after 3 probe attempts (last: $(printf '%s' "$probe" | tr '\n' ' ' | cut -c1-80)) — may be TRANSIENT ssh/auth, NOT a dead agent. Recover: bunker-qa.sh collect --evidence $evidence (idempotent re-probe), or manual ssh probe of the agent before TTL; agent left intact"
-      echo "COLLECT-FAIL unreachable-agent"
-      exit 0
-      ;;
-  esac
-
-  local tmp errf pull_rc
-  tmp=$(mktemp); errf=$(mktemp)
-  BUNKER_QA_SSH_TIMEOUT="$ssh_to" agent_ssh "cat ~/qa-evidence.jsonl 2>/dev/null" > "$tmp" 2>"$errf"
-  pull_rc=$?
-  if [ "$pull_rc" -ne 0 ] && [ ! -s "$tmp" ]; then
-    append_collect_row FAIL "could not pull ~/qa-evidence.jsonl from agent=$agent ($SERVER) rc=$pull_rc: $(head -1 "$errf")"
-    rm -f "$tmp" "$errf"
-    echo "COLLECT-FAIL pull-failed"
-    exit 0
-  fi
-  rm -f "$errf"
-
-  # QA-DF-CHIMERA-V2-51 (2026-10-07): a SUCCESSFUL pull of a ZERO-ROW
-  # qa-evidence.jsonl is the "battery never ran" signature (empty/aborted
-  # ~/qa-run.sh — dogfood run 14), NOT a healthy collect. Every real battery
-  # writes cells from its first lines; zero rows must not merge silently and
-  # print COLLECTED over a dead battery.
-  if [ ! -s "$tmp" ]; then
-    append_collect_row FAIL "battery produced ZERO evidence rows on agent=$agent ($SERVER) — qa-run.sh never ran (empty or aborted generation), NOT a pull failure. Recover: re-launch with bunker-qa.sh launch (launch now refuses to ship a 0-byte script)"
-    rm -f "$tmp"
-    echo "COLLECT-FAIL battery-empty"
-    exit 0
-  fi
-
-  # Merge-dedupe on the row "ts" field: re-calling collect after a successful
-  # pull adds nothing. The merge is atomic (temp file + os.replace) so a crash
-  # mid-merge cannot truncate the local evidence file.
-  if [ -s "$tmp" ] && command -v python3 >/dev/null 2>&1; then
-    python3 - "$evidence" "$tmp" <<'PY' || cat "$tmp" >> "$evidence"
+  # QA-BUNKER-77 (2026-11-01): shared merge — used by the RUNNING incremental
+  # sync and the FINISHED pull. Idempotent on the row "ts" field, atomic (temp
+  # file + os.replace) so a crash mid-merge cannot truncate the evidence file.
+  merge_agent_rows() { # <src> — merge-dedupe <src>'s rows into $evidence
+    local src="$1"
+    if [ -s "$src" ] && command -v python3 >/dev/null 2>&1; then
+      python3 - "$evidence" "$src" <<'PY' || cat "$src" >> "$evidence"
 import json, os, sys
 
 dest, src = sys.argv[1], sys.argv[2]
@@ -3836,37 +3612,259 @@ with open(tmp_dest, "w") as fh:
     fh.write("\n".join(out) + ("\n" if out else ""))
 os.replace(tmp_dest, dest)
 PY
-  elif [ -s "$tmp" ]; then
-    cat "$tmp" >> "$evidence"   # no python3: a duplicate row beats an unpulled battery
+    elif [ -s "$src" ]; then
+      cat "$src" >> "$evidence"   # no python3: a duplicate row beats an unpulled battery
+    fi
+  }
+
+  # QA-BUNKER-77: persist the already-synced marker once rows from this agent
+  # are on local disk. It is what makes a later unreachable collect grade
+  # agent-gone (run preserved) instead of aborting (run lost).
+  mark_rows_synced() { # <count>
+    [ "${1:-0}" -gt 0 ] && printf 'synced_rows=%s ts=%s\n' "$1" "$(date -u +%FT%TZ)" > "$evidence.synced-$agent"
+  }
+
+  # QA-BUNKER-77: pull the agent's per-cell log dirs (~/qa-logs-*) to
+  # <evidence>.logs/ BEFORE the destroy — after the agent user is reaped or
+  # destroyed they are unrecoverable, and the evidence rows carry only 40-line
+  # log tails. Sets $log_note (caller local) on every outcome.
+  pull_agent_logs() { # -> 0 when logs were saved
+    local log_kb tarf
+    log_kb=$(BUNKER_QA_SSH_TIMEOUT="$ssh_to" agent_ssh "du -sk ~/qa-logs-* 2>/dev/null | awk '{s+=\$1} END{print s+0}'" 2>/dev/null | tail -1)
+    case "$log_kb" in ''|*[!0-9]*) log_note="no per-cell logs found on agent"; return 1 ;; esac
+    if [ "$log_kb" -eq 0 ]; then log_note="no per-cell logs found on agent"; return 1; fi
+    if [ "$log_kb" -gt "${BUNKER_QA_LOG_PULL_MAX_KB:-524288}" ]; then
+      log_note="per-cell logs NOT pulled: ${log_kb}KB exceeds BUNKER_QA_LOG_PULL_MAX_KB=${BUNKER_QA_LOG_PULL_MAX_KB:-524288} cap"
+      return 1
+    fi
+    tarf=$(mktemp)
+    if BUNKER_QA_SSH_TIMEOUT="$ssh_to" agent_ssh "cd ~ && tar -czf - qa-logs-* 2>/dev/null" > "$tarf" 2>/dev/null && [ -s "$tarf" ]; then
+      if mkdir -p "$logs_dir" && tar -xzf "$tarf" -C "$logs_dir" 2>/dev/null; then
+        rm -f "$tarf"
+        return 0
+      fi
+    fi
+    rm -f "$tarf"
+    log_note="per-cell logs could not be pulled from agent=$agent (tar pull failed)"
+    return 1
+  }
+
+  # QA-BUNKER-77: the named, non-fatal outcome for an agent that is
+  # FINISHED/destroyed (or reaped ~35min post-launch in the field) before its
+  # per-cell logs could be pulled, PROVIDED the battery's rows were already
+  # synced into the local evidence file. The run is not lost: rows stay, the
+  # collect row records status=agent-gone, stdout names AGENT-GONE, rc=0.
+  emit_agent_gone() { # <reason>
+    local reason="$1" synced_rows
+    synced_rows=$(sed -n 's/^synced_rows=//p' "$evidence.synced-$agent" 2>/dev/null | tail -1)
+    append_collect_row agent-gone "$reason"
+    qa_remove_agent_lock "$agent" >/dev/null 2>&1 || true
+    echo "AGENT-GONE agent=$agent rows=${synced_rows:-0} evidence=$evidence"
+    return 0
+  }
+
+  if [ ! -f "$meta" ]; then
+    abort_collect "no launch record at $meta — nothing to collect (launch phase never ran, or a different evidence path)"
+    exit $?
   fi
+  # Idempotency: a successful collect already recorded its cell — re-calling is a
+  # no-op instead of a spurious "unreachable agent" FAIL (the agent is destroyed
+  # by then, so the probe below would be empty).
+  if grep -q '"cell":"collect","status":"OK"' "$evidence" 2>/dev/null; then
+    echo "COLLECTED already-collected"
+    exit 0
+  fi
+  # QA-BUNKER-77: an agent-gone collect is likewise terminal — the agent user
+  # is gone; re-probing can only append duplicate noise.
+  if grep -q '"cell":"collect","status":"agent-gone"' "$evidence" 2>/dev/null; then
+    echo "AGENT-GONE already-recorded"
+    exit 0
+  fi
+
+  local agent="" server="" ev="" keep=0 phase=""
+  agent=$(sed -n 's/^agent=//p' "$meta" | head -1)
+  server=$(sed -n 's/^server=//p' "$meta" | head -1)
+  ev=$(sed -n 's/^evidence=//p' "$meta" | head -1)
+  phase=$(sed -n 's/^phase=//p' "$meta" | head -1)
+  [ "$(sed -n 's/^keep=//p' "$meta" | head -1)" = "1" ] && keep=1
+  [ -n "$server" ] && SERVER="$server"
+  [ -n "$ev" ] && [ "$ev" != "$evidence" ] && echo "WARN: launch record names evidence=$ev but collect was asked for $evidence (using $evidence)" >&2
+  if [ -z "$agent" ]; then
+    # QA-BUNKER-47: an empty agent= is NOT one story. launch() writes the record
+    # only after preflights pass and stamps the phase, so:
+    #   phase=spawning  -> the run reached spawn and died there (TR-085 shape:
+    #                      the tool cap killed spawn before the id was recorded);
+    #   phase=preflight*-> defensive: a record stamped by a pre-spawn refusal —
+    #                      no agent ever existed, so there is nothing to collect
+    #                      and NOTHING was killed;
+    #   no phase=       -> a legacy/foreign record; keep the historical wording.
+    case "$phase" in
+      spawning)
+        abort_collect "launch record $meta is phase=spawning with no agent= line — the launch died INSIDE spawn, before the agent id was recorded; check \`bunker list --server $server\` for an orphan and destroy it"
+        ;;
+      preflight*)
+        abort_collect "launch record $meta is phase=$phase — the run was REFUSED before spawn (no agent was ever created, nothing to collect); the verdict is the pre-spawn FAIL row in $evidence"
+        ;;
+      *)
+        abort_collect "launch record $meta has no agent= line — cannot poll the battery (the launch was killed before the agent id was recorded; check \`bunker list --server $server\` for an orphan and destroy it)"
+        ;;
+    esac
+    exit $?
+  fi
+  # TR-085: the meta names an agent that is not OURS. A stale meta from an earlier
+  # run (or a different evidence path) makes collect probe/destroy the wrong
+  # machine while the real agent runs unrecorded. Refuse loudly instead.
+  if [ -n "$ev" ] && [ "$ev" != "$evidence" ]; then
+    abort_collect "launch record $meta belongs to a different run: it names evidence=$ev but collect was asked for $evidence (agent=$agent NOT probed or destroyed — verify with \`bunker list --server $server\`)"
+    exit $?
+  fi
+  # An agent id only exists for runs that reached the spawn step. If the record
+  # predates this collect by more than the TTL the id cannot be live any more.
+  local rec_launched rec_age
+  rec_launched=$(sed -n 's/^launched=//p' "$meta" | head -1)
+  if [ -n "$rec_launched" ]; then
+    rec_age=$(python3 - "$rec_launched" <<'PY' 2>/dev/null || echo ""
+import sys, datetime
+try:
+    t = datetime.datetime.strptime(sys.argv[1], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=datetime.timezone.utc)
+    print(int((datetime.datetime.now(datetime.timezone.utc) - t).total_seconds()))
+except Exception:
+    print("")
+PY
+)
+    if [ -n "$rec_age" ] && [ "$rec_age" -gt 86400 ]; then
+      abort_collect "launch record $meta is ${rec_age}s old (>24h, TTL=$TTL) — agent=$agent cannot still be live; refusing to probe a stale id. Check \`bunker list --server $server\` and re-launch if the battery never ran"
+      exit $?
+    fi
+  fi
+  # QA-BUNKER-75: never communicate with an agent owned by a dead tick.
+  # The lock is checked after all metadata validation but before SSH/poll/pull.
+  # A dead tick is a harness failure, not a product battery result; destroy it
+  # immediately and leave a FAIL row naming the stable reason.
+  watchdog_state=0
+  qa_tick_watchdog_state "$agent" || watchdog_state=$?
+  case "$watchdog_state" in
+    1)
+      orphan_lock=$(qa_agent_lock_path "$agent" 2>/dev/null || true)
+      orphan_server=$(qa_lock_value "$orphan_lock" server 2>/dev/null || true)
+      [ -n "$orphan_server" ] || orphan_server="$server"
+      orphan_tick_pid=$(qa_lock_value "$orphan_lock" tick_pid 2>/dev/null || true)
+      orphan_evidence=$(qa_lock_value "$orphan_lock" evidence 2>/dev/null || true)
+      orphan_quarantine=$(qa_quarantine_orphan_evidence "$agent" "$orphan_server" "$orphan_evidence" 2>/dev/null || true)
+      if [ -z "$orphan_quarantine" ]; then
+        abort_collect "tick-death-orphan: agent=$agent server=$orphan_server tick_pid=$orphan_tick_pid — evidence preservation failed; destroy refused and lock retained"
+        exit $?
+      fi
+      orphan_destroy=0
+      bunker destroy "$agent" --server "$orphan_server" >/dev/null 2>&1 || orphan_destroy=$?
+      if [ "$orphan_destroy" -eq 0 ]; then
+        qa_remove_agent_lock "$agent" >/dev/null 2>&1 || true
+        orphan_lock_detail="lock removed after destroy"
+      else
+        orphan_lock_detail="lock retained after destroy failure"
+      fi
+      abort_collect "tick-death-orphan: agent=$agent server=$orphan_server tick_pid=$orphan_tick_pid — evidence=$orphan_quarantine; orphan handling requested destroy (rc=$orphan_destroy, $orphan_lock_detail); no agent communication attempted"
+      exit $?
+      ;;
+    2)
+      abort_collect "invalid tick watchdog lock for agent=$agent — refusing agent communication"
+      exit $?
+      ;;
+    3)
+      abort_collect "recent tick-death-orphan: agent=$agent server=$server — lock is younger than BUNKER_QA_ORPHAN_TTL=${BUNKER_QA_ORPHAN_TTL:-2h}; retry collect later, preserving lock and refusing agent communication"
+      exit $?
+      ;;
+  esac
+  key="$HOME/.bunker/keys/$agent"
+  # collect must stay SHORT: bound the agent ssh at BUNKER_QA_COLLECT_SSH_TIMEOUT
+  # (120s) instead of agent_ssh's 1800s battery default, so a wedged host cannot
+  # blow the tool cap again.
+  local ssh_to="${BUNKER_QA_COLLECT_SSH_TIMEOUT:-120}"
+
+  # ONE cheap probe classifies the remote state. The pgrep pattern is
+  # bracket-escaped ([q]a-run\.sh) so this PROBE's own shell argv — which
+  # contains the pattern text — can never match itself and report RUNNING forever.
+  local probe
+  probe=$(BUNKER_QA_SSH_TIMEOUT="$ssh_to" agent_ssh "if [ -f ~/qa-run.finished ]; then echo FINISHED; elif pgrep -f '[q]a-run\.sh' >/dev/null 2>&1; then echo RUNNING; else echo GONE; fi" 2>/dev/null | tail -1)
+
+  case "$probe" in
+    RUNNING)
+      # QA-BUNKER-77: incremental evidence sync while the battery runs. The
+      # agent user can be reaped server-side long before the 4h TTL (~35min
+      # post-launch observed), so waiting for FINISHED to pull is exactly the
+      # window that lost the field logs. Best-effort: a failed sync never
+      # fails the poll.
+      local sync_tmp synced
+      sync_tmp=$(mktemp)
+      BUNKER_QA_SSH_TIMEOUT="$ssh_to" agent_ssh "cat ~/qa-evidence.jsonl 2>/dev/null" > "$sync_tmp" 2>/dev/null
+      if [ -s "$sync_tmp" ]; then
+        merge_agent_rows "$sync_tmp"
+        synced=$(grep -c '^{' "$sync_tmp" 2>/dev/null || true)
+        if [ "${synced:-0}" -gt 0 ]; then
+          mark_rows_synced "$synced"
+          log "synced ${synced} evidence row(s) from agent=$agent (battery still running)"
+        fi
+      fi
+      rm -f "$sync_tmp"
+      log "battery still running on agent=$agent ($SERVER) — agent left intact"
+      echo "RUNNING agent=$agent evidence=$evidence"
+      exit 0
+      ;;
+    FINISHED|GONE)
+      : ;;  # marker present, or the process is gone → pull what it produced
+    *)
+      # QA-BUNKER-77: an unreachable probe is a harness abort only when the run
+      # would be lost. Rows already synced by the RUNNING polls ⇒ the run
+      # survives: record the named agent-gone outcome with rc=0.
+      if [ -s "$evidence.synced-$agent" ]; then
+        emit_agent_gone "cannot reach agent=$agent on $SERVER (ssh probe returned no state) — battery rows were already synced by incremental collect ($evidence.synced-$agent); per-cell logs lost with the agent user"
+        exit 0
+      fi
+      abort_collect "cannot reach agent=$agent on $SERVER (ssh probe returned no state) — agent left intact"
+      exit $?
+      ;;
+  esac
+
+  local tmp errf pull_rc
+  tmp=$(mktemp); errf=$(mktemp)
+  BUNKER_QA_SSH_TIMEOUT="$ssh_to" agent_ssh "cat ~/qa-evidence.jsonl 2>/dev/null" > "$tmp" 2>"$errf"
+  pull_rc=$?
+  if [ "$pull_rc" -ne 0 ] && [ ! -s "$tmp" ]; then
+    # QA-BUNKER-77: the agent vanished between the probe and the pull. Rows
+    # already synced ⇒ the run survives as agent-gone (rc=0); nothing synced
+    # ⇒ genuine loss — keep the QA-BUNKER-45 abort.
+    if [ -s "$evidence.synced-$agent" ]; then
+      rm -f "$tmp" "$errf"
+      emit_agent_gone "agent=$agent ($SERVER) unreachable at the evidence pull — battery rows were already synced by incremental collect ($evidence.synced-$agent); per-cell logs lost with the agent user"
+      exit 0
+    fi
+    local pull_reason="could not pull ~/qa-evidence.jsonl from agent=$agent ($SERVER) rc=$pull_rc: $(head -1 "$errf")"
+    rm -f "$tmp" "$errf"
+    abort_collect "$pull_reason"
+    exit $?
+  fi
+  rm -f "$errf"
+
+  # Merge-dedupe on the row "ts" field: re-calling collect after a successful
+  # pull adds nothing (QA-BUNKER-77: helper shared with the RUNNING sync).
+  merge_agent_rows "$tmp"
   local pulled
   pulled=$(grep -c '^{' "$tmp" 2>/dev/null || true)
-  # QA-CONSENSUS-24 (2026-10-10) fail-closed: a battery whose generated script
-  # died mid-way (docker socket never appeared killed the docker legs after the
-  # upgrade cell) still writes SOME rows — the old collector merged them and
-  # printed COLLECTED, grading docker-deploy/ui-probe/all chaos cells as
-  # silently ABSENT. Detect the truncation signature: a battery with NO
-  # chaos-errorpath row and NO qa-run.finished marker content in the last
-  # pulled rows. chaos-errorpath is the LAST cell in the generated flow, so a
-  # complete battery always carries it (any status); its absence means the
-  # script died before CELLS-DONE. The collect row then FAILs (nonzero rc)
-  # instead of printing a green COLLECTED over an incomplete battery.
-  # 2026-10-14 second defect in the same line: `printf '%s' "$tmp" | grep`
-  # greps the temp file's PATH STRING (38 chars, never contains the pattern),
-  # so the detector matched NOTHING for any battery and every COMPLETED run
-  # was flagged TRUNCATED (logsey e9035321+505b30e8, terminal-jail 9a6cdffe
-  # on 2026-10-14 — all with the errorpath row present + qa-run.finished).
-  # Grep the FILE, and match both compact and spaced JSON (the agent-side
-  # cell() writer uses python3 json.dumps = spaced separators).
-  LAST_CELL_SEEN=$(grep -Ec '"cell": ?"chaos-errorpath"' "$tmp" || true)
-  if [ "${LAST_CELL_SEEN:-0}" -eq 0 ]; then
-    append_collect_row FAIL "battery TRUNCATED on agent=$agent ($SERVER): pulled ${pulled:-0} rows and NONE is the final chaos-errorpath cell — qa-run.sh died mid-battery (known cause: docker socket never appeared pre-QA-CONSENSUS-24 fix; also SIGTERM/SIGKILL mid-run). Evidence merged but the run is INCOMPLETE — recover: re-launch (post-fix batteries grade docker legs SKIPPED instead of dying). agent left intact if still live"
-    echo "COLLECT-FAIL battery-truncated"
-    exit 2
-  fi
   rm -f "$tmp"
+  # QA-BUNKER-77: the agent's rows are on local disk — persist the already-
+  # synced marker so a later unreachable collect grades agent-gone, not abort.
+  mark_rows_synced "${pulled:-0}"
+
+  # QA-BUNKER-77: pull the per-cell logs BEFORE the destroy/keep decision —
+  # after the agent user is gone they are unrecoverable (the field loss this
+  # row fixes: ci.log/native.log/res.log/disc.log died with the user).
+  local logs_dir="$evidence.logs" log_note=""
+  if pull_agent_logs; then
+    log_note="per-cell logs saved to $logs_dir"
+  fi
 
   local detail="agent=$agent ($SERVER) — pulled ${pulled:-0} evidence row(s), merge-deduped by ts"
+  [ -n "$log_note" ] && detail="$detail; $log_note"
   if [ "$keep" = 1 ]; then
     detail="$detail; agent KEPT (launched with --keep) — destroy it manually"
   else
@@ -3886,21 +3884,8 @@ PY
       TEARDOWN-LEAK|*)      detail="$detail; TEMP AGENT LEAKED: destroy failed and agent=$agent still lists on $SERVER — slot holds until the ~4h TTL reap; manual recovery: bunker destroy $agent --server $SERVER" ;;
     esac
   fi
-  if [ "$keep" != 1 ] && ! grep -Eq '"cell": ?"run_battery","status": ?"FAIL"' "$evidence" && { [ "$teardown" = "TEARDOWN-GONE" ] || [ "$teardown" = "TEARDOWN-RECOVERED" ]; }; then
-    local verify_list verify_rc
-    verify_list=$(timeout 10 bunker list --server "$SERVER" 2>/dev/null)
-    verify_rc=$?
-    if [ "$verify_rc" -eq 0 ] && ! printf '%s' "$verify_list" | grep -qF -- "$agent"; then
-      local env_rows env_ok env_fail env_other
-      env_rows=$(grep -c '' "$evidence" || true)
-      env_ok=$(grep -cE '"status": ?"OK"' "$evidence" || true)
-      env_fail=$(grep -cE '"status": ?"FAIL"' "$evidence" || true)
-      env_other=$((env_rows - env_ok - env_fail))
-      printf '{"cell":"run_battery","status":"OK","detail":"battery run complete and collected — rows=%s ok=%s fail=%s other=%s (cell verdicts above; envelope covers the run lifecycle only)","ts":"%s"}\n' "$env_rows" "$env_ok" "$env_fail" "$env_other" "$(date -u +%FT%TZ)" >> "$evidence"
-      printf '{"cell":"destroy","status":"OK","detail":"agent %s destroyed on %s; server list shows no leaked agents","ts":"%s"}\n' "$agent" "$SERVER" "$(date -u +%FT%TZ)" >> "$evidence"
-    fi
-  fi
   append_collect_row OK "$detail"
+  qa_remove_agent_lock "$agent" >/dev/null 2>&1 || true
   log "QA collect complete — evidence: $evidence"
   echo "COLLECTED agent=$agent rows=${pulled:-0} evidence=$evidence"
 }
@@ -3910,6 +3895,13 @@ case "${1:-}" in
   run) run "$2" "${@:3}" ;;
   launch) launch "$2" "${@:3}" ;;
   collect) collect "${@:2}" ;;
+  # QA-BUNKER-REVIEW-3 safe probe: print the product root qa_repo_sanity would
+  # sync/grade for <repo-dir> (stand-in board-symlink resolution, explicit
+  # BUNKER_QA_SUBDIR override, or the named refusal) and exit — NO server
+  # contact, NO agent spawn, NO battery. rc=0 = would proceed with the printed
+  # root; rc=1 = refused (named ERROR on stderr). The refusal's evidence row
+  # goes to a throwaway file so a probe never touches the default evidence path.
+  resolve) EVIDENCE="$(mktemp "${TMPDIR:-/tmp}/bunker-qa-resolve-probe.XXXXXX")"; qa_repo_sanity "${2:?usage: bunker-qa.sh resolve <repo-dir>}" probe ;;
   # test hook: print the generated script. `agent` is a placeholder here — the
   # real caller (run/launch) sets it before build_remote_script, and without a
   # default `set -u` aborts the heredoc expansion entirely (no output at all).
@@ -3917,7 +3909,7 @@ case "${1:-}" in
   # re-detects the start command on the agent (the agent-side ladder is the
   # authoritative runtime detection); the hook's default keeps the variable
   # contract complete for tests.
-  __gen-remote) agent="${agent:-test-agent-0000}" DETECT_INSTALL=":" DETECT_CI=":" DETECT_NATIVE=":" DETECT_BIN="" DETECT_TAG_COUNT=0 DETECT_PREV_TAG="" DETECT_PREV_VERSION="" DETECT_PKG_NAME="" DETECT_PKG_ECOSYSTEM="" DETECT_GO_URL="" DETECT_CI_FILES="" DETECT_ACT_NOTE="" DETECT_UP_PREV_DIR="" DETECT_PYTEST_REPO="${DETECT_PYTEST_REPO:-0}" QA_HEAD_SHA="${QA_HEAD_SHA:-unknown}" QA_HEAD_PULL="${QA_HEAD_PULL:-none}" build_remote_script "$2" "${3:-true}" "${4:-true}" "${5:-true}" ;;
+  __gen-remote) agent="${agent:-test-agent-0000}" DETECT_INSTALL=":" DETECT_CI=":" DETECT_NATIVE=":" DETECT_BIN="" DETECT_TAG_COUNT=0 DETECT_PREV_TAG="" DETECT_PREV_VERSION="" DETECT_PKG_NAME="" DETECT_PKG_ECOSYSTEM="" DETECT_GO_URL="" DETECT_CI_FILES="" DETECT_ACT_NOTE="" DETECT_UP_PREV_DIR="" build_remote_script "$2" "${3:-true}" "${4:-true}" "${5:-true}" ;;
   # QA-CRIER-20 test hook: detect_cmds is a pure function of the repo dir
   # (reads files, sets DETECT_* globals), so this is safe to run against any
   # directory. "$3" defaults to the same placeholder agent __gen-remote uses.
@@ -3929,28 +3921,9 @@ case "${1:-}" in
   # actual QA_CI_SELECT / QA_ACT_NOTE / QA_PKG_NAME a battery run would ship.
   # Opt-in on purpose — the default hook stays a fixed-placeholder render so
   # existing callers keep byte-identical output.
-  __detect-cmds) detect_cmds "$2" "${3:-test-agent-0000}"; printf 'DETECT_INSTALL=%s\nDETECT_NATIVE=%s\nDETECT_CI=%s\nDETECT_BIN=%s\nDETECT_PKG_NAME=%s\nDETECT_PKG_ECOSYSTEM=%s\nDETECT_CI_SELECT=%s\nDETECT_ACT_NOTE=%s\nDETECT_PYTEST_REPO=%s\n' "$DETECT_INSTALL" "$DETECT_NATIVE" "$DETECT_CI" "$DETECT_BIN" "$DETECT_PKG_NAME" "$DETECT_PKG_ECOSYSTEM" "$DETECT_CI_FILES" "$DETECT_ACT_NOTE" "$DETECT_PYTEST_REPO" ;;
+  __detect-cmds) detect_cmds "$2" "${3:-test-agent-0000}"; printf 'DETECT_INSTALL=%s\nDETECT_NATIVE=%s\nDETECT_CI=%s\nDETECT_BIN=%s\nDETECT_PKG_NAME=%s\nDETECT_PKG_ECOSYSTEM=%s\nDETECT_CI_SELECT=%s\nDETECT_ACT_NOTE=%s\n' "$DETECT_INSTALL" "$DETECT_NATIVE" "$DETECT_CI" "$DETECT_BIN" "$DETECT_PKG_NAME" "$DETECT_PKG_ECOSYSTEM" "$DETECT_CI_FILES" "$DETECT_ACT_NOTE" ;;
   # QA-9ROUTER-19/20: render with the REAL detection for $2, so a test can
   # assert what a battery run would actually ship (see the hook's comment).
   __gen-remote-detected) agent="${agent:-test-agent-0000}"; detect_cmds "$2" "${3:-test-agent-0000}"; build_remote_script "$2" "$DETECT_INSTALL" "$DETECT_CI" "$DETECT_NATIVE" ;;
-  # GUARD-DF-009: static guard for the render fence. Fails (rc=1) on any
-  # unescaped $.../backtick in the heredoc body whose token is not an intended
-  # controller-side substitution — the class that aborted the render to a
-  # 0-byte battery (QA-BUNKER-B21 regression). Run after ANY heredoc edit.
-  __fence-check) fence_check ;;
-  # QA-AUGER-15: offline proof seams for the disk-capacity preflight. Both are
-  # pure text-in/text-out — no ssh, no spawn, no evidence write — so the gate's
-  # three arms (OK / LOW / UNKNOWN) are provable without a live host:
-  #   __parse-disk-free <df -Pk text>   → "<free_gb> <pct_used>" | (empty)
-  #   __disk-gate <df -Pk text> [floor] → "<OK|LOW|UNKNOWN> <free_gb> <pct>"
-  __parse-disk-free) parse_disk_free_gb "${2:-}" ;;
-  __disk-gate)
-    _qadk=$(parse_disk_free_gb "${2:-}")
-    if [ -z "$_qadk" ]; then
-      echo "UNKNOWN - -"
-    else
-      _qafree="${_qadk%% *}"; _qapct="${_qadk##* }"
-      echo "$(disk_gate_verdict "$_qafree" "${3:-10}") $_qafree $_qapct"
-    fi ;;
-  *) echo "usage: bunker-qa.sh status | run <repo-dir> [--keep] | launch <repo-dir> [--keep] | collect --evidence <path>" ;;
+  *) echo "usage: bunker-qa.sh status | run <repo-dir> [--keep] | launch <repo-dir> [--keep] | collect --evidence <path> | resolve <repo-dir>" ;;
 esac
