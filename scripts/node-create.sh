@@ -17,7 +17,7 @@ LIST_STAGED=0 SPAWNED=0
 
 staged_files() {
   local file source line ref base rest
-  local -a staged=(project-node.sh lib.sh disk_floor.py "harness/install-$HARNESS.sh")
+  local -a staged=(project-node.sh lib.sh disk_floor.py reclaim_disk.py "harness/install-$HARNESS.sh")
   local pattern='\$HERE/([a-zA-Z0-9_./$-]+)'
   for file in "${staged[@]}"; do
     [ -f "$HERE/$file" ] || { bad "staged_set" "missing scripts/$file" >&2; return 1; }
