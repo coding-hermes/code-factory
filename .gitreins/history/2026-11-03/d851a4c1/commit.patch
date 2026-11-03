@@ -1,0 +1,122 @@
+commit d088bc6c3158ebadf32a83ec216b31c911c768ba
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Tue Nov 3 08:03:30 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Tue Nov 3 08:03:30 2026 -0500
+
+    fix: the README status re-run line now exits with the node check's status. Addresses CF-054.
+    
+    The documented re-run ended in `; git -C "$home/repo" rev-parse HEAD`, so a run that
+    printed NODE: FAIL still exited 0 — the read-back's status became the line's status. It
+    also depended on a CRIER_URL export it never carried, so a reader without the Quick-start
+    exports died at layer 00 and never got as far as the clone the row is about.
+    
+    - README.md: the command span carries CRIER_URL=http://crier.example:8767 and ends with the
+      node check; the clone read-back is a second, separate command.
+    - tests/selftest.sh: section 15 binds the documented command span (must carry the export,
+      must not end in a read-back) and then proves the masking on a local fixture: old shape
+      exits 0 on NODE: FAIL, the documented shape exits 1, a passing fixture exits 0.
+    
+    Measured at this tip with the literal command and an isolated HOME: NODE: FAIL (3),
+    LINE_RC=1, PASS repo_clone @ 6bb5af7, read-back 6bb5af7a1b05 in a separate command.
+    Selftest: SELFTEST: PASS.
+    
+    Guard: gitreins guard --full scores tests (full) PASS and secrets PASS; its lint arm fails
+    on four pre-existing ruff-format files (scripts/disk_floor.py, scripts/lane_target.py,
+    tests/test_disk_floor.py, tests/test_lane_target.py) that this change does not touch —
+    reproduced on a pristine export of origin/main 3793dee. Committed with
+    core.hooksPath=/dev/null per CF-031; the hook is not reported as a pass.
+    
+    # ch:trace row=CF-054 spec=README.md#status wave=none:serial test=tests/selftest.sh::readme-rerun-line-carries-status doc=README.md prompt=prompts/readme.md evidence=tests/selftest.sh::readme-rerun-line-carries-status witness=none:local-fixture verdict=pending:gitreins-tier2 commit=pending:self-referential
+---
+ README.md         |  2 +-
+ tests/selftest.sh | 64 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 65 insertions(+), 1 deletion(-)
+
+diff --git a/README.md b/README.md
+index 0ecf486..ffcbae6 100644
+--- a/README.md
++++ b/README.md
+@@ -71,7 +71,7 @@ instead of implying it works.
+ | Piece | State | Command that can contradict it |
+ |---|---|---|
+ | Hermes in a bunker + HTTP gateway over tailnet | **works (historical measurement)** — observed on a live node on 2026-10-29: 32 s install, `/api/status` 200, 133 JSON-RPC methods. The recorded measurement is in `specs/HARNESS.md#adapters-and-their-measured-state` and the repo-local audit `docs/audits/code-factory-readme-2026-10-30-20-29-25.md#2-status-table-both-command-bearing-rows`; it is not reproducible from this repo alone. Current local evidence is only `scripts/harness/install-hermes.sh --check`, which reports the pinned version, port and inference-key state. `--apply` needs Python `>=3.11,<3.14` — the pinned `hermes-agent==0.19.0` declares that range, and the installer now refuses Python 3.14 before pip with the detected version. The exact selftest/check output is recorded in `docs/audits/code-factory-CF-036.md` (CF-036). | Re-run the current local check: `scripts/harness/install-hermes.sh --check`. For the historical figures, read the committed artifact named in the state cell; no live endpoint or credential is claimed here. |
+-| Repo clone in a node | **works (historical local measurement)** for public HTTPS — `PASS repo_clone … @ 9402f6a` was measured on 2026-10-30 with `https://github.com/github/gitignore` and is recorded in `docs/audits/code-factory-readme-2026-10-30-20-29-25.md#2-status-table-both-command-bearing-rows`. A re-run derives the current HEAD, which may move. Layer 40 clones only; no build step is shipped. Private repos are **blocked** — a deploy key has no tested procedure yet. | Re-run with a temporary HOME and the same public fixture: `home=$(mktemp -d); HOME="$home" ./scripts/project-node.sh --apply --project myproject --repo https://github.com/github/gitignore --ref main; git -C "$home/repo" rev-parse HEAD`. The committed audit records the historical output and read-back command. |
++| Repo clone in a node | **works (historical local measurement)** for public HTTPS — `PASS repo_clone … @ 9402f6a` was measured on 2026-10-30 with `https://github.com/github/gitignore` and is recorded in `docs/audits/code-factory-readme-2026-10-30-20-29-25.md#2-status-table-both-command-bearing-rows`. A re-run derives the current HEAD, which may move. Layer 40 clones only; no build step is shipped. Private repos are **blocked** — a deploy key has no tested procedure yet. | Re-run with a temporary HOME and the same public fixture: `home=$(mktemp -d); CRIER_URL=http://crier.example:8767 HOME="$home" ./scripts/project-node.sh --apply --project myproject --repo https://github.com/github/gitignore --ref main`. The node check is the last command on that line, so the line's exit status is the check's: `NODE: FAIL` exits nonzero. Read the clone back in a second command, not the same line: `git -C "$home/repo" rev-parse HEAD`. The committed audit records the historical output. |
+ | Node inference credential | **missing** — a turn dies at `No inference provider configured`; the node needs its own key, never an operator key | `scripts/harness/install-hermes.sh --check` -> `FAIL inference_key` |
+ | crier identity in a node | **missing** — no `~/.node/crier.json` yet | `./scripts/project-node.sh --check --project myproject` -> `FAIL crier_identity` |
+ | Scheduler → crier dispatch | **built, disarmed** — needs 2 env vars, 1 target row, `payload.text` (CF-001) | not armed, so nothing to run |
+diff --git a/tests/selftest.sh b/tests/selftest.sh
+index 39c5350..dacfb64 100755
+--- a/tests/selftest.sh
++++ b/tests/selftest.sh
+@@ -317,5 +317,69 @@ else
+ fi
+ rm -rf "$tmpd"
+ 
++# ch:trace row=CF-054 spec=README.md#status wave=none:serial test=tests/selftest.sh::readme-rerun-line-carries-status doc=README.md prompt=prompts/readme.md evidence=tests/selftest.sh::readme-rerun-line-carries-status witness=none:local-fixture verdict=none:open-finding commit=none:self-referential-hash memory=none:unresolved-namespace
++say "15. the README status re-run line carries the node check's exit status (CF-054)"
++# The documented re-run used to end in `; git -C "$home/repo" rev-parse HEAD`, so a run that
++# printed NODE: FAIL still exited 0 — the read-back's status became the line's status. This
++# probe binds the documented command span and then proves the masking on a local fixture:
++# the clone succeeds (so the read-back would succeed) while the bus layer fails.
++doc_cmd=$(tr '`' '\n' < "$HERE/README.md" | grep -F 'project-node.sh --apply --project myproject' | head -1)
++if [ -n "$doc_cmd" ] && printf '%s' "$doc_cmd" | grep -Fq 'CRIER_URL=' \
++  && ! printf '%s' "$doc_cmd" | grep -Fq 'rev-parse'; then
++  say "  PASS  documented line carries CRIER_URL= and no trailing read-back"
++else
++  say "  FAIL  documented line still relies on an export it does not carry, or ends in a read-back"; fails=$((fails+1))
++fi
++tmpd=$(mktemp -d)
++mkdir -p "$tmpd/scripts/harness" "$tmpd/bin"
++cp "$HERE/scripts/project-node.sh" "$HERE/scripts/lib.sh" "$HERE/scripts/disk_floor.py" "$tmpd/scripts/"
++cat > "$tmpd/bin/curl" <<'EOF'
++#!/usr/bin/env bash
++printf '200'
++EOF
++cat > "$tmpd/scripts/harness/install-fixture.sh" <<'EOF'
++#!/usr/bin/env bash
++. "$(dirname "$0")/../lib.sh"
++say "harness: fixture (cf-054)"
++ok "harness:fixture" "simulated passing adapter"
++exit 0
++EOF
++chmod +x "$tmpd/bin/curl" "$tmpd/scripts/harness/install-fixture.sh"
++git init -q -b main "$tmpd/work"
++git -C "$tmpd/work" -c user.email=fixture@example.invalid -c user.name=fixture commit -qm fixture --allow-empty
++git clone -q --bare "$tmpd/work" "$tmpd/origin.git"
++# $1 = line shape, $2 = HOME, $3 = green (stage a 600 crier bundle) | red
++cf054_run() {
++  [ "$3" = green ] && { mkdir -p "$2/.node"; printf '{"agent":"fixture"}' > "$2/.node/crier.json"; chmod 600 "$2/.node/crier.json"; }
++  env -i HOME="$2" PATH="$tmpd/bin:/usr/local/bin:/usr/bin:/bin" NODE_DISK_FLOOR=1 \
++    NODE_PROJECT=myproject NODE_HARNESS=fixture CRIER_URL=http://fixture.invalid:8767 \
++    /bin/bash -c "$1" >"$2/out.log" 2>&1
++  echo $?
++}
++node_call="bash '$tmpd/scripts/project-node.sh' --apply --project myproject --repo file://$tmpd/origin.git --ref main"
++h=$(mktemp -d); rc=$(cf054_run "$node_call; git -C '$h/repo' rev-parse HEAD" "$h" red)
++old_summary=$(grep -E '^NODE: ' "$h/out.log" | tail -1)
++if [ "$rc" = 0 ] && printf '%s' "$old_summary" | grep -Fq 'NODE: FAIL' \
++  && git -C "$h/repo" rev-parse HEAD >/dev/null 2>&1; then
++  say "  PASS  old shape exits 0 on a failed check ($old_summary) — the defect is real"
++else
++  say "  FAIL  old shape no longer masks a failed check; re-measure CF-054"; fails=$((fails+1))
++fi
++h=$(mktemp -d); rc=$(cf054_run "$node_call" "$h" red)
++red_summary=$(grep -E '^NODE: ' "$h/out.log" | tail -1)
++if [ "$rc" = 1 ] && printf '%s' "$red_summary" | grep -Fq 'NODE: FAIL'; then
++  say "  PASS  documented shape exits $rc on a failed check ($red_summary)"
++else
++  say "  FAIL  documented shape exited $rc on a failed check"; fails=$((fails+1))
++fi
++h=$(mktemp -d); rc=$(cf054_run "$node_call" "$h" green)
++green_summary=$(grep -E '^NODE: ' "$h/out.log" | tail -1)
++if [ "$rc" = 0 ] && printf '%s' "$green_summary" | grep -Fq 'NODE: PASS'; then
++  say "  PASS  documented shape exits 0 on a passing fixture ($green_summary)"
++else
++  say "  FAIL  documented shape exited $rc on a passing fixture ($green_summary)"; fails=$((fails+1))
++fi
++rm -rf "$tmpd"
++
+ say ""
+ [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
