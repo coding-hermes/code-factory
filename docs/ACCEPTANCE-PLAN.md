@@ -2,7 +2,7 @@
 
 **Scope:** CF-101–CF-112 in [`PRD-code-factory.md`](PRD-code-factory.md), with contract details in `specs/NODE.md`, `specs/HARNESS.md`, and `specs/ENVELOPE.md`. This plan distinguishes source-level evidence from tests actually run. A passing repository self-test is not proof that every requirement is accepted.
 
-**Evidence snapshot:** `tests/selftest.sh` was run from the repository root on this worktree and exited 0 (`SELFTEST: PASS`, 8/8 board rows parsed). It checks shell syntax, one failing node-check path, `fetch_verified` digest acceptance/rejection, a credential-assignment grep, and JSONL parsing. It does not exercise the full node creation, destruction/recreation, real harness parity, scheduler dispatch, credentials lifecycle, or control-host artifact round trip. Other commands below are proposed reproducible checks, not tests claimed to have run.
+**Evidence snapshot:** `tests/selftest.sh` was run from the repository root at tip `e21f2ce` on 2026-11-03 and exited 0 (`SELFTEST: PASS`, 60/60 board rows parsed, 34 `PASS` rows, no `FAIL` rows). It checks shell syntax, one failing node-check path, `fetch_verified` digest acceptance/rejection, a credential-assignment grep, and JSONL parsing. It does not exercise the full node creation, destruction/recreation, real harness parity, scheduler dispatch, credentials lifecycle, or control-host artifact round trip. Other commands below are proposed reproducible checks, not tests claimed to have run.
 
 ## Requirement-to-test matrix
 

@@ -38,11 +38,13 @@ public repo.
 5. Keep task IDs unique and acceptance criteria falsifiable. `tests/selftest.sh` checks row parsing;
    the boardctl validator is the schema/consistency gate.
 
-## Current measured state (2026-10-31)
+## Current measured state (2026-11-03)
 
-- `scripts/boardctl validate`: 24 task rows, 37 events, no key drift, `RESULT: OK`; warning: the
-  board has no optional header, so header-counter checks are skipped.
-- `tests/selftest.sh`: `PASS 24/24 rows parse` and `SELFTEST: PASS`.
+- `scripts/boardctl validate`: 60 task rows, 64 events, `RESULT: OK (16 warning(s))`; the warnings are
+  13 rows carrying a free-form `probe` key, two free-form `guard_result`/`ci_result` values on
+  CF-034, and the headerless board (no `board.jsonl`), so header-counter checks are skipped.
+- `tests/selftest.sh`: `PASS 60/60 rows parse` and `SELFTEST: PASS` (34 `PASS` rows, no `FAIL` rows)
+  at tip `e21f2ce`.
 - CF-012 is complete on the published tip with `docs/traceability-doctrine.md` and its committed
   evidence artifact; the row's closeout is bound to the board evidence record and GitReins verdict.
 - The project wrapper is a dispatch shim; the authoritative board implementation remains the
