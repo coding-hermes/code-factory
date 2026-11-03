@@ -1,0 +1,120 @@
+{
+  "task_id": "CF-075",
+  "task_title": "P2 \u2014 node-create.sh stages project-node.sh without scripts/disk_floor.py so every documented node creation dies on its first line (and leaves the spawned agent alive)",
+  "task_criteria": [
+    "CF-075: node-create.sh must stage every file project-node.sh executes at runtime (scripts/disk_floor.py included) so the documented node-creation path no longer dies on a raw interpreter error, and a failed provision must not leave the spawned agent alive. Grade at the judged commit by running: (1) bash -n scripts/node-create.sh scripts/project-node.sh tests/selftest.sh exits 0; (2) grep -c disk_floor.py scripts/node-create.sh is greater than 0 AND the staged set is derived with a check that exits nonzero when a file project-node.sh references via $HERE is missing from it; (3) bash tests/selftest.sh prints SELFTEST: PASS and its output contains a new staged-set fixture that stages exactly node-create.sh declared staged set into a temp dir, shows NO \"can't open file\" interpreter error and DOES show a named disk-floor row; (4) the negative control with disk_floor.py removed from that staged copy FAILs with a countable FAIL row naming the disk floor instead of a raw interpreter error; (5) node-create.sh destroys the agent it spawned on a FAIL provisioning run, or prints the exact bunker destroy <id> --server <host> command (mutating bunker commands must not rely on the default-server fallback); (6) the commit message carries \"Addresses CF-075.\" and a ch:trace line naming row=CF-075. Not graded: live-host node creation (no host required for this row) and any repair of other board rows."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "77caa02876732b83d87dc2ac7c509b0e535b25b3",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T161044.953336Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n11:17AM INF scanned ~372078 bytes (372.08 KB) in 398ms\n11:17AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 73 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T161044.953336Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.kuPukzhIZv/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  69/69 rows parse\n8. project board entrypoint is real and fails closed without dependency\n  PASS  bash -n scripts/boardctl\n  PASS  local help\n  PASS  missing boardctl -> explicit FAIL, exit 127\n9. every prompt file the README relies on exists\n  PASS  every prompts/*.md named by README.md exists\n  PASS  absent prompt refused (absent: prompts/ghost-lane.md)\n10. Hermes refuses an unsupported Python without pip or network\n  PASS  Python 3.14 refusal names the supported range without pip\n11. lane workdir targets: local paths AND remote user@host/scheme targets\n  PASS  lane target parse/validate, home-repo rejection, remote structural-only\n12. node disk floor resolves from CLI/env/config with fail-closed values\n  PASS  floor precedence, role defaults, malformed values refused\n13. node provisioning names its resolved floor and refuses below it\n  PASS  malformed floor refused before any install\n14. harness-adapter FAIL rows are counted in the node summary (CF-055)\n  PASS  adapter FAIL rows counted: 2 rows -> NODE: FAIL (2)\n  PASS  passing adapter keeps NODE: PASS and exit 0\n15. the README status re-run line carries the node check's exit status (CF-054)\n  PASS  documented line carries CRIER_URL= and no trailing read-back\n  PASS  old shape exits 0 on a failed check (NODE: FAIL (1)) \u2014 the defect is real\n  PASS  documented shape exits 1 on a failed check (NODE: FAIL (1))\n  PASS  documented shape exits 0 on a passing fixture (NODE: PASS)\n16. node-create staged set covers the disk floor and names missing dependencies\n  PASS  staged disk floor resolves: 4096 GiB from env; admission refuses before installs\n  PASS  missing disk floor -> one countable FAIL row, NODE: FAIL (1), exit 1\n  FAIL  disk_floor \u2014 resolver missing or unreadable: /var/tmp/hermes-scratch/tmp.rlbWGsqd6K/scripts/disk_floor.py\nNODE: FAIL (1)\n  PASS  disk floor omitted from scratch manifest -> validation exit 1\n  PASS  owned failure names spawned agent and explicit-server destroy command\n  PASS  reused agent failure does not request destruction\n  PASS  copy-failure failure names spawned agent and explicit-server destroy command\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T161044.953336Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 CF-075: node-create.sh must stage every file project-node.sh executes at runtime (scripts/disk_floor.py included) so the documented node-creation path no longer dies on a raw interpreter error, and a failed provision must not leave the spawned agent alive. Grade at the judged commit by running: (1) bash -n scripts/node-create.sh scripts/project-node.sh tests/selftest.sh exits 0; (2) grep -c disk_floor.py scripts/node-create.sh is greater than 0 AND the staged set is derived with a check that exits nonzero when a file project-node.sh references via $HERE is missing from it; (3) bash tests/selftest.sh prints SELFTEST: PASS and its output contains a new staged-set fixture that stages exactly node-create.sh declared staged set into a temp dir, shows NO \"can't open file\" interpreter error and DOES show a named disk-floor row; (4) the negative control with disk_floor.py removed from that staged copy FAILs with a countable FAIL row naming the disk floor instead of a raw interpreter error; (5) node-create.sh destroys the agent it spawned on a FAIL provisioning run, or prints the exact bunker destroy <id> --server <host> command (mutating bunker commands must not rely on the default-server fallback); (6) the commit message carries \"Addresses CF-075.\" and a ch:trace line naming row=CF-075. Not graded: live-host node creation (no host required for this row) and any repair of other board rows.: (1) `bash -n scripts/node-create.sh scripts/project-node.sh tests/selftest.sh` -> EXIT=0. (2) `grep -c disk_floor.py scripts/node-create.sh` = 1; staged_files() (scripts/node-create.sh:18-46) declares staged=(project-node.sh lib.sh disk_floor.py harness/install-$HARNESS.sh), verifies each exists (line 23) and scans every $HERE/ reference in project-node.sh + harness/install-$HARNESS.sh, returning 1 with 'references unstaged <ref>' (line 40). Live run `bash scripts/node-create.sh --staged-files` -> project-node.sh, lib.sh, disk_floor.py, harness/install-hermes.sh, EXIT=0. (3) `bash tests/selftest.sh` -> EXIT=0, stdout ends 'SELFTEST: PASS'; section 16 (tests/selftest.sh:395-422) copies exactly the declared manifest into a mktemp dir and asserts rc==1, '  PASS  disk_floor \u2014 4096 GiB from env', 'NODE: FAIL (disk admission)', and `! grep -Fq \"can't open file\"`; observed output line 52 'PASS  staged disk floor resolves: 4096 GiB from env; admission refuses before installs'. (4) Negative control (tests/selftest.sh:423-433) removes disk_floor.py from the staged copy and asserts exactly one '^  FAIL  disk_floor \u2014 resolver missing or unreadable:' row plus 'NODE: FAIL (1)' and no \"can't open file\"; observed output line 54 'FAIL  disk_floor \u2014 resolver missing or unreadable: /var/tmp/.../scripts/disk_floor.py' and 'PASS  missing disk floor -> one countable FAIL row, NODE: FAIL (1), exit 1'. (5) incomplete() (scripts/node-create.sh:48-54) prints `cleanup required: bunker destroy %q --server %q` when SPAWNED=1; selftest asserts the exact line 'cleanup required: bunker destroy <id> --server fixture-server' for the owned and copy-failure arms and asserts the reused (--agent) arm prints no destroy \u2014 all three PASS in the run. (6) Commit 77caa02 message contains 'Addresses CF-075.' and 'ch:trace row=CF-075 spec=specs/NODE.md#disk-floor ...'.\nAll six CF-075 sub-checks verified at commit 77caa02: syntax clean, disk_floor.py staged with a nonzero-exit reference validator, selftest PASS with a staged-set fixture and a countable disk-floor negative control, explicit-server destroy command for spawned agents only, and the required commit-message trace.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 CF-075: node-create.sh must stage every file project-node.sh executes at runtime (scripts/disk_floor.py included) so the documented node-creation path no longer dies on a raw interpreter error, and a failed provision must not leave the spawned agent alive. Grade at the judged commit by running: (1) bash -n scripts/node-create.sh scripts/project-node.sh tests/selftest.sh exits 0; (2) grep -c disk_floor.py scripts/node-create.sh is greater than 0 AND the staged set is derived with a check that exits nonzero when a file project-node.sh references via $HERE is missing from it; (3) bash tests/selftest.sh prints SELFTEST: PASS and its output contains a new staged-set fixture that stages exactly node-create.sh declared staged set into a temp dir, shows NO \"can't open file\" interpreter error and DOES show a named disk-floor row; (4) the negative control with disk_floor.py removed from that staged copy FAILs with a countable FAIL row naming the disk floor instead of a raw interpreter error; (5) node-create.sh destroys the agent it spawned on a FAIL provisioning run, or prints the exact bunker destroy <id> --server <host> command (mutating bunker commands must not rely on the default-server fallback); (6) the commit message carries \"Addresses CF-075.\" and a ch:trace line naming row=CF-075. Not graded: live-host node creation (no host required for this row) and any repair of other board rows.: (1) `bash -n scripts/node-create.sh scripts/project-node.sh tests/selftest.sh` -> EXIT=0. (2) `grep -c disk_floor.py scripts/node-create.sh` = 1; staged_files() (scripts/node-create.sh:18-46) declares staged=(project-node.sh lib.sh disk_floor.py harness/install-$HARNESS.sh), verifies each exists (line 23) and scans every $HERE/ reference in project-node.sh + harness/install-$HARNESS.sh, returning 1 with 'references unstaged <ref>' (line 40). Live run `bash scripts/node-create.sh --staged-files` -> project-node.sh, lib.sh, disk_floor.py, harness/install-hermes.sh, EXIT=0. (3) `bash tests/selftest.sh` -> EXIT=0, stdout ends 'SELFTEST: PASS'; section 16 (tests/selftest.sh:395-422) copies exactly the declared manifest into a mktemp dir and asserts rc==1, '  PASS  disk_floor \u2014 4096 GiB from env', 'NODE: FAIL (disk admission)', and `! grep -Fq \"can't open file\"`; observed output line 52 'PASS  staged disk floor resolves: 4096 GiB from env; admission refuses before installs'. (4) Negative control (tests/selftest.sh:423-433) removes disk_floor.py from the staged copy and asserts exactly one '^  FAIL  disk_floor \u2014 resolver missing or unreadable:' row plus 'NODE: FAIL (1)' and no \"can't open file\"; observed output line 54 'FAIL  disk_floor \u2014 resolver missing or unreadable: /var/tmp/.../scripts/disk_floor.py' and 'PASS  missing disk floor -> one countable FAIL row, NODE: FAIL (1), exit 1'. (5) incomplete() (scripts/node-create.sh:48-54) prints `cleanup required: bunker destroy %q --server %q` when SPAWNED=1; selftest asserts the exact line 'cleanup required: bunker destroy <id> --server fixture-server' for the owned and copy-failure arms and asserts the reused (--agent) arm prints no destroy \u2014 all three PASS in the run. (6) Commit 77caa02 message contains 'Addresses CF-075.' and 'ch:trace row=CF-075 spec=specs/NODE.md#disk-floor ...'.\nAll six CF-075 sub-checks verified at commit 77caa02: syntax clean, disk_floor.py staged with a nonzero-exit reference validator, selftest PASS with a staged-set fixture and a countable disk-floor negative control, explicit-server destroy command for spawned agents only, and the required commit-message trace.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "CF-075: node-create.sh must stage every file project-node.sh executes at runtime (scripts/disk_floor.py included) so the documented node-creation path no longer dies on a raw interpreter error, and a failed provision must not leave the spawned agent alive. Grade at the judged commit by running: (1) bash -n scripts/node-create.sh scripts/project-node.sh tests/selftest.sh exits 0; (2) grep -c disk_floor.py scripts/node-create.sh is greater than 0 AND the staged set is derived with a check that exits nonzero when a file project-node.sh references via $HERE is missing from it; (3) bash tests/selftest.sh prints SELFTEST: PASS and its output contains a new staged-set fixture that stages exactly node-create.sh declared staged set into a temp dir, shows NO \"can't open file\" interpreter error and DOES show a named disk-floor row; (4) the negative control with disk_floor.py removed from that staged copy FAILs with a countable FAIL row naming the disk floor instead of a raw interpreter error; (5) node-create.sh destroys the agent it spawned on a FAIL provisioning run, or prints the exact bunker destroy <id> --server <host> command (mutating bunker commands must not rely on the default-server fallback); (6) the commit message carries \"Addresses CF-075.\" and a ch:trace line naming row=CF-075. Not graded: live-host node creation (no host required for this row) and any repair of other board rows.",
+                "status": "PASS",
+                "detail": "(1) `bash -n scripts/node-create.sh scripts/project-node.sh tests/selftest.sh` -> EXIT=0. (2) `grep -c disk_floor.py scripts/node-create.sh` = 1; staged_files() (scripts/node-create.sh:18-46) declares staged=(project-node.sh lib.sh disk_floor.py harness/install-$HARNESS.sh), verifies each exists (line 23) and scans every $HERE/ reference in project-node.sh + harness/install-$HARNESS.sh, returning 1 with 'references unstaged <ref>' (line 40). Live run `bash scripts/node-create.sh --staged-files` -> project-node.sh, lib.sh, disk_floor.py, harness/install-hermes.sh, EXIT=0. (3) `bash tests/selftest.sh` -> EXIT=0, stdout ends 'SELFTEST: PASS'; section 16 (tests/selftest.sh:395-422) copies exactly the declared manifest into a mktemp dir and asserts rc==1, '  PASS  disk_floor \u2014 4096 GiB from env', 'NODE: FAIL (disk admission)', and `! grep -Fq \"can't open file\"`; observed output line 52 'PASS  staged disk floor resolves: 4096 GiB from env; admission refuses before installs'. (4) Negative control (tests/selftest.sh:423-433) removes disk_floor.py from the staged copy and asserts exactly one '^  FAIL  disk_floor \u2014 resolver missing or unreadable:' row plus 'NODE: FAIL (1)' and no \"can't open file\"; observed output line 54 'FAIL  disk_floor \u2014 resolver missing or unreadable: /var/tmp/.../scripts/disk_floor.py' and 'PASS  missing disk floor -> one countable FAIL row, NODE: FAIL (1), exit 1'. (5) incomplete() (scripts/node-create.sh:48-54) prints `cleanup required: bunker destroy %q --server %q` when SPAWNED=1; selftest asserts the exact line 'cleanup required: bunker destroy <id> --server fixture-server' for the owned and copy-failure arms and asserts the reused (--agent) arm prints no destroy \u2014 all three PASS in the run. (6) Commit 77caa02 message contains 'Addresses CF-075.' and 'ch:trace row=CF-075 spec=specs/NODE.md#disk-floor ...'."
+              }
+            ],
+            "summary": "All six CF-075 sub-checks verified at commit 77caa02: syntax clean, disk_floor.py staged with a nonzero-exit reference validator, selftest PASS with a staged-set fixture and a countable disk-floor negative control, explicit-server destroy command for spawned agents only, and the required commit-message trace.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-075\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 CF-075: node-create.sh must stage every file project-node.sh executes at runtime (scripts/disk_floor.py included) so the documented node-creation path no longer dies on a raw interpreter error, and a failed provision must not leave the spawned agent alive. Grade at the judged commit by running: (1) bash -n scripts/node-create.sh scripts/project-node.sh tests/selftest.sh exits 0; (2) grep -c disk_floor.py scripts/node-create.sh is greater than 0 AND the staged set is derived with a check that exits nonzero when a file project-node.sh references via $HERE is missing from it; (3) bash tests/selftest.sh prints SELFTEST: PASS and its output contains a new staged-set fixture that stages exactly node-create.sh declared staged set into a temp dir, shows NO \"can't open file\" interpreter error and DOES show a named disk-floor row; (4) the negative control with disk_floor.py removed from that staged copy FAILs with a countable FAIL row naming the disk floor instead of a raw interpreter error; (5) node-create.sh destroys the agent it spawned on a FAIL provisioning run, or prints the exact bunker destroy <id> --server <host> command (mutating bunker commands must not rely on the default-server fallback); (6) the commit message carries \"Addresses CF-075.\" and a ch:trace line naming row=CF-075. Not graded: live-host node creation (no host required for this row) and any repair of other board rows.: (1) `bash -n scripts/node-create.sh scripts/project-node.sh tests/selftest.sh` -> EXIT=0. (2) `grep -c disk_floor.py scripts/node-create.sh` = 1; staged_files() (scripts/node-create.sh:18-46) declares staged=(project-node.sh lib.sh disk_floor.py harness/install-$HARNESS.sh), verifies each exists (line 23) and scans every $HERE/ reference in project-node.sh + harness/install-$HARNESS.sh, returning 1 with 'references unstaged <ref>' (line 40). Live run `bash scripts/node-create.sh --staged-files` -> project-node.sh, lib.sh, disk_floor.py, harness/install-hermes.sh, EXIT=0. (3) `bash tests/selftest.sh` -> EXIT=0, stdout ends 'SELFTEST: PASS'; section 16 (tests/selftest.sh:395-422) copies exactly the declared manifest into a mktemp dir and asserts rc==1, '  PASS  disk_floor \u2014 4096 GiB from env', 'NODE: FAIL (disk admission)', and `! grep -Fq \"can't open file\"`; observed output line 52 'PASS  staged disk floor resolves: 4096 GiB from env; admission refuses before installs'. (4) Negative control (tests/selftest.sh:423-433) removes disk_floor.py from the staged copy and asserts exactly one '^  FAIL  disk_floor \u2014 resolver missing or unreadable:' row plus 'NODE: FAIL (1)' and no \"can't open file\"; observed output line 54 'FAIL  disk_floor \u2014 resolver missing or unreadable: /var/tmp/.../scripts/disk_floor.py' and 'PASS  missing disk floor -> one countable FAIL row, NODE: FAIL (1), exit 1'. (5) incomplete() (scripts/node-create.sh:48-54) prints `cleanup required: bunker destroy %q --server %q` when SPAWNED=1; selftest asserts the exact line 'cleanup required: bunker destroy <id> --server fixture-server' for the owned and copy-failure arms and asserts the reused (--agent) arm prints no destroy \u2014 all three PASS in the run. (6) Commit 77caa02 message contains 'Addresses CF-075.' and 'ch:trace row=CF-075 spec=specs/NODE.md#disk-floor ...'.\nAll six CF-075 sub-checks verified at commit 77caa02: syntax clean, disk_floor.py staged with a nonzero-exit reference validator, selftest PASS with a staged-set fixture and a countable disk-floor negative control, explicit-server destroy command for spawned agents only, and the required commit-message trace.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-03T16:18:12.851069",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-03T16:18:12.879351+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 12287,
+        "truncated": false,
+        "source": "git show 77caa0287673"
+      },
+      {
+        "name": "worktree",
+        "label": "Working-tree diff (graded)",
+        "file": "worktree.patch",
+        "bytes": 7679,
+        "truncated": false,
+        "source": "git diff HEAD (working tree)"
+      }
+    ],
+    "task_id": "CF-075"
+  }
+}
