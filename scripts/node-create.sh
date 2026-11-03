@@ -10,6 +10,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
 
 PROJECT="" REPO="" HARNESS="hermes" AGENT="" TTL="6h" SERVER="${BUNKER_SERVER:?set BUNKER_SERVER to your bunker server name}" PORT=10800
+FLOOR="${NODE_DISK_FLOOR-5}" RECLAIM=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -19,10 +20,17 @@ while [ $# -gt 0 ]; do
     --agent) AGENT="$2"; shift 2 ;;
     --ttl) TTL="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
+    --disk-floor)
+      [ $# -ge 2 ] || { echo "missing value: $1" >&2; exit 2; }
+      FLOOR="$2"; shift 2 ;;
+    --reclaim-disposable) RECLAIM=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
-[ -z "$PROJECT" ] && { echo "usage: $0 --project P --repo URL [--harness H] [--agent ID]"; exit 2; }
+[ -z "$PROJECT" ] && { echo "usage: $0 --project P --repo URL [--harness H] [--agent ID] [--disk-floor GiB] [--reclaim-disposable]"; exit 2; }
+if [[ ! "$FLOOR" =~ ^[0-9]{1,9}(\.[0-9]{1,9})?$ ]]; then
+  bad "disk" "invalid floor; expected unsigned decimal GiB (1-9 digits per part)"; exit 2
+fi
 
 b=$(have bunker) || { echo "bunker client missing" >&2; exit 1; }
 
@@ -43,14 +51,19 @@ say "  ..    staging scripts"
 "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'mkdir -p ~/node-scripts/harness' >/dev/null 2>&1
 "$b" cp "$HERE/project-node.sh" "$AGENT:node-scripts/project-node.sh" --server "$SERVER" >/dev/null 2>&1
 "$b" cp "$HERE/lib.sh" "$AGENT:node-scripts/lib.sh" --server "$SERVER" >/dev/null 2>&1
+if ! "$b" cp "$HERE/disk-policy.py" "$AGENT:node-scripts/disk-policy.py" --server "$SERVER" >/dev/null 2>&1; then
+  bad "stage_disk_policy" "copy failed"; exit 1
+fi
 "$b" cp "$HERE/harness/install-$HARNESS.sh" "$AGENT:node-scripts/harness/install-$HARNESS.sh" --server "$SERVER" >/dev/null 2>&1
 "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'chmod +x ~/node-scripts/project-node.sh ~/node-scripts/harness/*.sh' >/dev/null 2>&1
 ok "staged" "project-node.sh + harness/install-$HARNESS.sh"
 
 # 3. provision inside
 say "  ..    provisioning inside the node"
+reclaim_arg=""
+[ "$RECLAIM" -eq 1 ] && reclaim_arg=" --reclaim-disposable"
 if "$b" exec --server "$SERVER" "$AGENT" -- bash -lc \
-     "NODE_PROJECT='$PROJECT' NODE_GATEWAY_PORT='$PORT' ~/node-scripts/project-node.sh --apply --project '$PROJECT' --harness '$HARNESS' --repo '$REPO'"; then
+     "NODE_PROJECT='$PROJECT' NODE_GATEWAY_PORT='$PORT' NODE_DISK_FLOOR='$FLOOR' ~/node-scripts/project-node.sh --apply --project '$PROJECT' --harness '$HARNESS' --repo '$REPO'$reclaim_arg"; then
   ok "provision" "node reports PASS"
 else
   bad "provision" "node reported FAIL — see the output above"

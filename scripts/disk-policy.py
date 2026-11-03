@@ -38,7 +38,7 @@ def available_kib(path):
         timeout=10,
         check=False,
     )
-    require(result.returncode == 0, "df failed; free GiB unknown")
+    result.check_returncode()
     require(len(result.stdout) <= 65536, "invalid df measurement; free GiB unknown")
     rows = result.stdout.splitlines()
     require(
@@ -84,7 +84,7 @@ def snapshot(info):
     )
 
 
-def reclaim(home):
+def reclaim(home, enough):
     """No recursion or caller-selected target. Account and producers are trusted."""
     require(
         home == os.environ.get("HOME")
@@ -109,8 +109,9 @@ def reclaim(home):
             "unsafe reclaim HOME ownership/mode",
         )
         for part in (".node", "disposable-cache-v1"):
+            parent = fd
             try:
-                fd = opened(part, fd)
+                fd = opened(part, parent)
             except FileNotFoundError:
                 return 0
             info = os.fstat(fd)
@@ -120,7 +121,37 @@ def reclaim(home):
                 and info.st_dev == base.st_dev,
                 "unsafe reclaim directory ownership/mode/device",
             )
+        # Keep the namespace lock for existing producers; put the shared reclaim
+        # lock in .node so taking it never changes the cache directory's mtime.
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock = os.open(
+            ".reclaim.lock",
+            os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
+            0o600,
+            dir_fd=parent,
+        )
+        stack.callback(os.close, lock)
+        info = os.fstat(lock)
+        require(
+            stat.S_ISREG(info.st_mode)
+            and stat.S_IMODE(info.st_mode) == 0o600
+            and info.st_uid == os.getuid()
+            and info.st_nlink == 1
+            and info.st_dev == base.st_dev,
+            "unsafe reclaim lock type/ownership/mode/links/device",
+        )
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            recovered = available_kib(
+                os.path.join(home, ".node", "disposable-cache-v1")
+            )
+        except subprocess.CalledProcessError:
+            # A failed df has no recovery information. Malformed successful
+            # output, timeouts and other measurement errors still fail closed.
+            recovered = None
+        if recovered is not None and enough(recovered):
+            print("  ..    capacity recovered under reclaim lock")
+            return 0
         entries = []
         with os.scandir(fd) as iterator:
             for entry in iterator:
@@ -165,7 +196,7 @@ def admission(path, floor, cleanup=False):
     free = available_kib(path)
     if not enough(free) and cleanup:
         print(f"  WARN  disk — {values(free)}; attempting opted-in disposable reclaim")
-        count = reclaim(path)
+        count = reclaim(path, enough)
         print(f"  ..    disposable reclaim: {count} cache blobs removed")
         free = available_kib(path)
     if not enough(free):

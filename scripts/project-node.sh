@@ -4,12 +4,14 @@
 # Runs on the agent, not on the control host (node-create.sh stages it).
 #
 #   project-node.sh --check   [--project P] [--harness hermes] [--repo URL] [--ref main]
-#   project-node.sh --apply   [same args]
+#   project-node.sh --apply   [same args] [--reclaim-disposable]
 #
 # Layers: 00 preflight, 10 base, 20 harness, 30 bus, 40 repo, 90 verify (verify is the
 # control host's job; here we only prove the node-side plumbing exists).
 set -uo pipefail
-HERE="$(cd "$(dirname "$0")" && pwd)"
+HERE="${BASH_SOURCE[0]}"
+case "$HERE" in */*) HERE="${HERE%/*}" ;; *) HERE=. ;; esac
+HERE="$(cd -- "$HERE" && pwd)" || { printf '%s\n' 'NODE: FAIL (script directory unavailable)'; exit 1; }
 . "$HERE/lib.sh"
 
 PROJECT="${NODE_PROJECT:-}"
@@ -17,14 +19,16 @@ HARNESS="${NODE_HARNESS:-hermes}"
 REPO=""
 REF="${NODE_REF:-main}"
 PORT="${NODE_GATEWAY_PORT:-10800}"
-FLOOR="${NODE_DISK_FLOOR:-5}"
+FLOOR="${NODE_DISK_FLOOR-5}"
 MODE=""
+RECLAIM=0
 STATE="$HOME/.node"
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --check) MODE=check; shift ;;
     --apply) MODE=apply; shift ;;
+    --reclaim-disposable) RECLAIM=1; shift ;;
     --project) PROJECT="$2"; shift 2 ;;
     --harness) HARNESS="$2"; shift 2 ;;
     --repo) REPO="$2"; shift 2 ;;
@@ -33,16 +37,22 @@ while [ $# -gt 0 ]; do
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
-[ -z "$MODE" ] && { echo "usage: $0 --check|--apply [--project P] [--harness H] [--repo URL] [--ref R]"; exit 2; }
+[ -z "$MODE" ] && { echo "usage: $0 --check|--apply [--project P] [--harness H] [--repo URL] [--ref R] [--reclaim-disposable]"; exit 2; }
 [ -z "$PROJECT" ] && { echo "--project is required (a node belongs to exactly one project)"; exit 2; }
 
-mkdir -p "$STATE"
 say "node provisioning — project=$PROJECT harness=$HARNESS host=$(hostname)"
 
 # ---------------------------------------------------------------- 00 preflight
 say "[00] preflight"
 arch=$(uname -m); ok "arch" "$arch ($(uname -sr))"
-require_disk "$HOME" "$FLOOR" || true
+disk_args=("$HOME" "$FLOOR")
+if [ "$MODE" = apply ] && [ "$RECLAIM" -eq 1 ]; then
+  disk_args+=(--reclaim-disposable)
+fi
+require_disk "${disk_args[@]}" || { say "NODE: FAIL (disk admission)"; exit 1; }
+if [ "$MODE" = apply ] && [ ! -d "$STATE" ]; then
+  mkdir -m 700 "$STATE" || { bad "state" "cannot create node state directory"; exit 1; }
+fi
 mem=$(awk '/MemAvailable/{printf "%d", $2/1024}' /proc/meminfo)
 [ "${mem:-0}" -ge 1024 ] && ok "mem" "${mem} MB" || bad "mem" "${mem} MB < 1024"
 CRIER="${CRIER_URL:-}"
@@ -73,7 +83,23 @@ inst="$HERE/harness/install-$HARNESS.sh"
 if [ ! -x "$inst" ]; then
   bad "harness:$HARNESS" "no adapter at scripts/harness/install-$HARNESS.sh"
 else
-  if [ "$MODE" = apply ]; then NODE_GATEWAY_PORT="$PORT" "$inst" --apply; else NODE_GATEWAY_PORT="$PORT" "$inst" --check; fi
+  hlog=$(mktemp "${TMPDIR:-/tmp}/project-node-harness.XXXXXX")
+  if [ "$MODE" = apply ]; then
+    NODE_GATEWAY_PORT="$PORT" "$inst" --apply >"$hlog" 2>&1
+  else
+    NODE_GATEWAY_PORT="$PORT" "$inst" --check >"$hlog" 2>&1
+  fi
+  hrc=$?
+  cat "$hlog"
+  harness_version=$(awk -F ' — ' '/PASS  version/{v=$2} END{print v}' "$hlog")
+  if [ "$hrc" -eq 0 ] && [ -n "$harness_version" ]; then
+    ok "harness_check" "$HARNESS version $harness_version"
+  elif [ "$hrc" -eq 0 ]; then
+    bad "harness_check" "$HARNESS adapter passed without a measured version"
+  else
+    bad "harness_check" "$HARNESS adapter exited $hrc"
+  fi
+  rm -f "$hlog"
 fi
 
 # ---------------------------------------------------------------- 30 bus
@@ -119,18 +145,42 @@ fi
 say "[90] manifest"
 if [ "$MODE" = apply ] && [ "$FAILED" -eq 0 ]; then
   python3 - "$STATE/node.json" "$PROJECT" "$HARNESS" "$PORT" "$REPO" "$REF" "$(hostname)" <<'PY'
-import json, sys, time
+import json, os, stat, sys, tempfile, time
 path, project, harness, port, repo, ref, host = sys.argv[1:8]
-json.dump({"node_id": host, "project": project,
-           "repo": {"origin": repo, "ref": ref, "path": "/home/" + __import__("os").environ.get("USER", "node") + "/repo"},
-           "harness": {"name": harness, "port": int(port)},
-           "bus": {"base": __import__("os").environ.get("CRIER_BASE", "http://crier.example:8767")},
-           "created_by": "project-node.sh v1",
-           "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
-          open(path, "w"), indent=1)
-print("wrote", path)
+manifest = {"node_id": host, "project": project,
+            "repo": {"origin": repo, "ref": ref, "path": "/home/" + os.environ.get("USER", "node") + "/repo"},
+            "harness": {"name": harness, "port": int(port)},
+            "bus": {"base": os.environ.get("CRIER_BASE", "http://crier.example:8767")},
+            "created_by": "project-node.sh v1",
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+try:
+    with open(path) as source:
+        existing = json.load(source)
+except (FileNotFoundError, json.JSONDecodeError, UnicodeDecodeError):
+    existing = None
+if isinstance(existing, dict) and (
+    {key: value for key, value in existing.items() if key != "created_at"}
+    == {key: value for key, value in manifest.items() if key != "created_at"}
+):
+    print("unchanged", path)
+else:
+    mode = stat.S_IMODE(os.stat(path).st_mode) if os.path.exists(path) else 0o600
+    fd, temporary = tempfile.mkstemp(prefix=".node.json.", dir=os.path.dirname(path))
+    try:
+        with os.fdopen(fd, "w") as target:
+            os.fchmod(target.fileno(), mode)
+            json.dump(manifest, target, indent=1)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+    print("wrote", path)
 PY
-  ok "manifest" "$STATE/node.json"
+  if [ "$?" -eq 0 ]; then
+    ok "manifest" "$STATE/node.json"
+  else
+    bad "manifest" "cannot write $STATE/node.json"
+  fi
 elif [ -f "$STATE/node.json" ]; then
   ok "manifest" "$STATE/node.json"
 else
