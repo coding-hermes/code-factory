@@ -2,14 +2,23 @@
 
 **Scope:** CF-101–CF-112 in [`PRD-code-factory.md`](PRD-code-factory.md), with contract details in `specs/NODE.md`, `specs/HARNESS.md`, and `specs/ENVELOPE.md`. This plan distinguishes source-level evidence from tests actually run. A passing repository self-test is not proof that every requirement is accepted.
 
-**Evidence snapshot (re-measured 2026-11-03 at tip `400a5ab`):** `tests/selftest.sh` was run from
-the repository root and exited 0 (`SELFTEST: PASS`, 34 `PASS` rows, 0 `FAIL` rows); the board at
-that tip carries 68 task rows and 74 events. The previous snapshot in this file (`e21f2ce`,
-60/60 rows) was hand-typed and had drifted by 8 rows — the same class `CF-081` tracks for
-`docs/BOARD.md`, and the numbers here are re-derived on every edit, never carried forward.
+**Evidence snapshot (re-measured 2026-11-03 at tip `80fca8b`):** `tests/selftest.sh` was run from
+the repository root and exited 0 (`SELFTEST: PASS`, 70 `PASS` rows, suite counter `fails=0`) over
+28 sections; `scripts/boardctl validate` prints `RESULT: OK (28 warning(s))`; the board at that tip
+carries 85 task rows and 115 events. One `  FAIL  disk_floor — resolver missing or unreadable: …`
+line is printed *inside* §16 — that arm asserts the pre-fix staging manifest is rejected, so it is
+expected fixture output, not a suite failure; count `SELFTEST:` and the suite's counter, never a raw
+`grep -c '^  FAIL'`. Timing is not a portable number: 7.70 s CPU (`user 4.30` + `sys 3.40`) at
+loadavg 16.0, `real 9.45` — quote CPU, not wall.
+The previous snapshot (`400a5ab`: 15 sections, 68 task rows, 74 events) still reproduces at that tip
+and is kept only as history: six selftest commits landed after it (§16–§28, rows `CF-075`, `CF-077`,
+`CF-085`, `CF-007` AC3, `CF-091`, `CF-089`), which is why the section count moved from 15 to 28. No
+number in this file is carried forward without re-running the command that produced it.
 The selftest checks shell syntax, one failing node-check path, `fetch_verified` digest
-acceptance/rejection, a credential-assignment grep, JSONL parsing, lane-target parsing and
-disk-floor resolution. It does not exercise node creation, idempotence, the no-root rule, harness
+acceptance/rejection, a credential-assignment grep, JSONL parsing, lane-target parsing,
+disk-floor resolution and refusal, the node-create staged set, auth fail-closed behaviour with a
+pre-fix control, repo-url root/agreement guards, reclaim-before-refusal, and the README census
+fail-closed arms. It does not exercise node creation, idempotence, the no-root rule, harness
 parity, credentials lifecycle, the manifest schema, destruction/recreation, scheduler dispatch, or
 the control-host artifact round trip — those cells say **no test** on purpose.
 
@@ -35,21 +44,35 @@ Status definitions: **PASS** = requirement's acceptance behavior was exercised a
 ### The other direction: test sections with no PRD requirement
 
 A green suite is not PRD coverage, and the reverse gap matters as much as the forward one. At
-`400a5ab`, `tests/selftest.sh` has 15 sections and 34 `PASS` rows; only three requirements have an
+`80fca8b`, `tests/selftest.sh` has 28 sections and 70 `PASS` rows; only three requirements have an
 arm that can fail on them (`CF-102` ← §2 and §14, `CF-105` ← §5, `CF-109` ← §12 and §13 partially).
+Every other section is governed by a spec, a rule or a board row — the mapping below is exhaustive so
+that a new section cannot arrive without a named authority.
 
 | Selftest section | What governs it instead of a PRD requirement |
 |---|---|
 | §1 every script parses | `AGENTS.md` conventions (`bash -n` clean) |
-| §3 unreachable crier, one status code | `specs/NODE.md` layer 00 row shape |
-| §4 / §4b clone-error classification | `specs/NODE.md` layer 40 failure semantics (board CF-034, CF-039) |
-| §6 no literal credential assignments | `AGENTS.md` rule 8 — a tree-hygiene grep, **not** the CF-108 bundle life cycle |
+| §2 the node checker fails on an empty PATH | `CF-102` (this one *is* a requirement arm) + board `CF-005` AC2 (a `FAILED: unbound variable` crash is not a `FAIL` row) |
+| §3 unreachable crier, one status code | `specs/NODE.md` layer 00 row shape (`--layers 00`, exactly one `FAIL reach:` row) |
+| §4 / §4b clone-error classification | `specs/NODE.md` layer 40 failure semantics (board `CF-034`, `CF-039`) |
+| §5 `fetch_verified` refuses a wrong digest | `CF-105` (this one *is* a requirement arm) |
+| §6 no literal credential assignments | `AGENTS.md` rule 8 — a tree-hygiene grep, **not** the `CF-108` bundle life cycle |
 | §7 the board is valid JSONL | `docs/BOARD.md` write rules |
 | §8 boardctl fails closed without its dependency | `docs/BOARD.md` entrypoint contract |
 | §9 every prompt the README names exists | README lane tables / the family loaders |
 | §10 Hermes refuses an unsupported Python | `specs/HARNESS.md` install obligation (adapter contract, not harness parity) |
-| §11 lane workdir targets parse and verify | `specs/NODE.md` workdir targets — parsing only, not CF-112 dispatch |
-| §15 the README status re-run line carries the check's exit status | documentation honesty (CF-054) |
+| §11 lane workdir targets parse and verify | `specs/NODE.md` workdir targets — parsing only, not `CF-112` dispatch |
+| §12 node disk floor resolves from CLI/env/config | `CF-109` (requirement arm — resolution only) |
+| §13 provisioning names its floor and refuses below it | `CF-109` (requirement arm — malformed-value refusal; the below-floor boundary is still untested) |
+| §14 harness-adapter FAIL rows counted in the summary | board `CF-055` + `CF-102`'s `NODE: FAIL (n)` equality |
+| §15 the README status re-run line carries the exit status | documentation honesty, board `CF-054` (`--layers 30,40`) |
+| §16 node-create staged set covers the disk floor | board `CF-075` (staged entry point, disk admission, cleanup ownership) |
+| §17 auth verification fails closed, pre-fix control | board `CF-077` AC1/AC2 |
+| §18 node creation requires both auth legs | board `CF-077` AC3 (`NODE CREATED` only after every auth leg passes) |
+| §19 project repo_url must name a real git root | board `CF-085` |
+| §20 reclaim runs before disk refusal, check never reaps | board `CF-007` AC3 + `specs/NODE.md` disk floor |
+| §21 satellite repo_urls must agree with their primary | board `CF-091` |
+| §22–§28 census fail-closed arms and README/mirror parity | board `CF-089` (fetch/HTTP/schema/short-count/missing-total arms, healthy output, README↔mirror byte parity apart from `BASE`) |
 
 These sections are legitimate and must not be deleted to "clean up" the mapping: they serve
 `AGENTS.md` rules, the specs and this board. They must not be counted as acceptance of
@@ -92,18 +115,24 @@ Remote acceptance commands in the matrix are templates: substitute only authoriz
 
 ## Current acceptance summary
 
-Measured at `400a5ab` (2026-11-03): the local self-test passes (34 `PASS`, 0 `FAIL`), and acceptance
-is **incomplete**. Split by what the tree can actually demonstrate:
+Measured at `80fca8b` (2026-11-03): the local self-test passes (70 `PASS`, suite counter 0, rc 0),
+and acceptance is **incomplete**. Split by what the tree can actually demonstrate:
 
-- **Requirements with a test that can fail on them (3):** `CF-102` (§2, §14), `CF-105` (§5),
-  `CF-109` (§12, §13 — resolution and malformed-value refusal only; the below-floor boundary arm
-  is still missing).
+- **Requirements with a test that can fail on them (3):** `CF-102` (§2, §14 — and the per-layer arms
+  named in the PRD cell), `CF-105` (§5), `CF-109` (§12, §13 — resolution and malformed-value
+  refusal only; the below-floor boundary arm is still missing).
 - **Requirements with no test in the tree (9):** `CF-101`, `CF-103`, `CF-104`, `CF-106`, `CF-107`,
-  `CF-108`, `CF-110`, `CF-111`, `CF-112`. `CF-083` tracks the arms to add.
+  `CF-108`, `CF-110`, `CF-111`, `CF-112`. Re-verified at `80fca8b` by grep, not by argument:
+  `grep -rniE 'sudo|apt-get' tests/` = 0 (CF-104), `grep -rln 'node\.json' tests/` = 0 (CF-111),
+  `grep -rl 'dispatch-targets' scripts tests` = 0 (CF-112), no artifact-digest arm (CF-107), no
+  two-run digest comparison (CF-103), and `chmod 600` appears only as fixture setup, never as a
+  credential-bundle assertion (CF-108). `CF-083` tracks the arms to add.
 - **Requirements that cannot pass until code that does not ship lands (3 of the nine):** `CF-110`
   (no destroy path exists), `CF-112` (no `dispatch-targets.jsonl` consumer exists), `CF-106`
   (`opencode` is unmeasured and its `--apply` refuses by design).
-- **End-to-end first milestone:** not met. No directive/commit/artifact round trip is recorded, and
-  three of its legs are blocked by open defects (CF-075, CF-077, CF-080) rather than by environment.
+- **End-to-end first milestone:** not met. No directive/commit/artifact round trip is recorded. Of
+  the defects the previous summary named, `CF-075` and `CF-077` are now **closed** (`77caa02`,
+  `1232f7a`, each with selftest arms §16–§18); the legs still blocked by an open defect are `CF-080`
+  plus the never-exercised `CF-001`, `CF-004`, `CF-110` and `CF-112`.
 
 No row above may be counted as PASS on the strength of the green self-test alone.

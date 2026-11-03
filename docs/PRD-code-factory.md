@@ -14,8 +14,8 @@ column exists to prevent.
 
 | ID | Requirement | Verified by |
 |---|---|---|
-| CF-101 | A node is created by one command from a project + repo + harness triple. | **No test.** `scripts/project-node.sh --apply --project X --repo Y --harness hermes` must exit 0 and leave `$HOME/.node/node.json` parseable. Today the documented create path stages no `scripts/disk_floor.py`, so the run dies at layer 00 before any check (CF-075, point 1 of this row's status); the cell is unproven, not green. |
-| CF-102 | Every layer reports `PASS`/`FAIL` with the value it measured. | `bash tests/selftest.sh` §2 (exit nonzero with named `  FAIL  tool:` rows — a `FAILED: unbound variable` bootstrap crash is a FAIL of the test itself) and §14 (`NODE: FAIL (n)` equals the printed `  FAIL` row count). No arm covers layers 00, 10, 20, 30 or 40 individually. |
+| CF-101 | A node is created by one command from a project + repo + harness triple. | **No test.** `scripts/project-node.sh --apply --project X --repo Y --harness hermes` must exit 0 and leave `$HOME/.node/node.json` parseable. The staging gap that used to kill this path at layer 00 is closed (`CF-075`, commit `77caa02`; selftest §16 runs `node-create.sh --staged-files` and the staged entry point, and fails when `scripts/disk_floor.py` is dropped from the manifest), so nothing shipped dies there any more — but no end-to-end creation is recorded either. The open defect on this path is `CF-080` (`--apply` clones after the bus layer has already failed), so the cell is unproven, not green. |
+| CF-102 | Every layer reports `PASS`/`FAIL` with the value it measured. | `bash tests/selftest.sh` §2 (exit nonzero with named `  FAIL  tool:` rows — a `FAILED: unbound variable` bootstrap crash is a FAIL of the test itself) and §14 (`NODE: FAIL (n)` equals the printed `  FAIL` row count). Per-layer arms, measured at `80fca8b`: layer 00 by §3 (`--layers 00`, exactly one `FAIL reach:` row) and §20 (apply-mode reclaim-then-refuse), layer 20 by §14 (`--layers 20`), layer 40 by §4/§4b (`--layers 40`), layer 30 only inside §15's `--layers 30,40` pair. **Layer 10 (base) has no arm**, and nothing asserts the layer 90 verify row, so the requirement is PARTIAL, never satisfied. |
 | CF-103 | Creation is idempotent; a second run changes nothing. | **No test.** Required: two `--apply` runs in one fixed `$HOME`; the second exits 0 and `find "$HOME/.node/node.json" "$HOME/repo" -type f -exec sha256sum {} +` is byte-identical across the pair. A second run that rewrites `node.json`'s `created_at` fails. The previous wording ("second run prints `unchanged` per layer") named an output no shipped script emits — `grep -rn unchanged scripts/` returns only two comments. |
 | CF-104 | No root, no apt: all artifacts user-space under `$HOME`. | **No test.** No `sudo`/`apt` gate exists in the tree (`grep -rniE 'sudo|apt-get' tests/` = 0 hits), so the requirement is currently unfalsifiable. Required: a committed check that fails on uid 0 or on any `sudo`/`apt` invocation in the ladder transcript, plus a red arm that plants one. |
 | CF-105 | Downloads are pinned and digest-checked before use. | `bash tests/selftest.sh` §5: `fetch_verified` accepts the matching sha256 and refuses the all-zero digest (both arms must appear as `  PASS`). Covers the helper only — no installer's own download is audited. |
@@ -39,10 +39,16 @@ One project (crier), one node, one directive that travelled over crier and reach
 gateway, one commit produced there, one artifact digest verified back on the control host, and a
 recorded FAIL when the gate is made to fail.
 
-**Status 2026-11-03 (measured at `400a5ab`): NOT MET.** Nothing in this paragraph has been
-observed end to end, and three legs are blocked by open defects rather than by environment:
-the documented creation path dies at layer 00 because the staging list predates
-`scripts/disk_floor.py` (CF-075); `--apply` clones the repo after the bus layer has already failed
-(CF-080); and `verify-node.sh` reports `VERIFY: PASS` on an inconclusive auth probe (CF-077), so a
-"verified" node can carry an unproven identity. `docs/ACCEPTANCE-PLAN.md` records per-requirement
-state; its summary is the authority for what has actually run.
+**Status 2026-11-03 (re-measured at `80fca8b`): NOT MET.** No crier directive has been observed
+arriving at a gateway, no commit has been produced on a node, and no artifact digest has been
+recomputed on the control host, so nothing in the paragraph above is demonstrated end to end.
+Two of the three defects the previous status cited were closed after its `400a5ab` measurement and
+are no longer blockers: `CF-075` (the documented create path staged no `scripts/disk_floor.py`, so
+it died at layer 00 — fixed in `77caa02`, proven by selftest §16) and `CF-077` (an inconclusive auth
+probe still reported `VERIFY: PASS` — fixed in `1232f7a`, proven by §17 and §18). The confirmed
+open defects on this path are `CF-080` (`--apply` clones the workspace after the bus layer has
+already FAILED, manufacturing the repo-with-no-bus node `AGENTS.md` rule 9 forbids) and the
+never-exercised legs `CF-001` (scheduler→crier dispatch is built but has never run), `CF-004` (no
+round trip through the node's own gateway), `CF-110` (no destroy path ships) and `CF-112` (no
+`dispatch-targets.jsonl` consumer ships). `docs/ACCEPTANCE-PLAN.md` records per-requirement state;
+its summary is the authority for what has actually run.
