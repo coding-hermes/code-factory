@@ -130,14 +130,25 @@ Exit code 0.
 
 ## Defect that is still live (filed separately)
 
-`verify-node.sh`'s usage line cannot be reached without `BUNKER_SERVER`, because the variable is
-expanded with the `${VAR:?}` abort form before argument parsing:
+`verify-node.sh` expands `${BUNKER_SERVER:?}` at line 17, before it parses arguments, and it has no
+`--help` flag. Three measurements on the same export:
 
+    # BUNKER_SERVER unset
     ./scripts/verify-node.sh --help
     ./scripts/verify-node.sh: line 17: BUNKER_SERVER: set BUNKER_SERVER to your bunker server name
 
-Exit code 1. `bunker-server-install.sh` behaves the same way at line 14, but there the README supplies
-the export; `verify-node.sh` has no README coverage and no way to print its own usage. Filed as CF-063.
+    # BUNKER_SERVER set
+    ./scripts/verify-node.sh --help
+    unknown arg: --help
+
+    # BUNKER_SERVER set, no arguments — the usage line is reachable only this way
+    ./scripts/verify-node.sh
+    usage: ./scripts/verify-node.sh --agent ID [--port P] [--artifact PATH]
+
+Exit codes 1, 2 and 2. So the script can print its usage, but only after the caller has already
+supplied the server it is asking about, and `--help` is rejected as an unknown argument.
+`bunker-server-install.sh` has the same `${VAR:?}` placement at line 14, but the README supplies that
+export three lines above the command; `verify-node.sh` has no README coverage. Filed as CF-063.
 
 ## What this sweep did not exercise
 
