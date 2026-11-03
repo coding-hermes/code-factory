@@ -9,7 +9,11 @@
 # Layers: 00 preflight, 10 base, 20 harness, 30 bus, 40 repo, 90 verify (verify is the
 # control host's job; here we only prove the node-side plumbing exists).
 set -uo pipefail
-HERE="$(cd "$(dirname "$0")" && pwd)"
+# Resolve HERE with shell builtins only: this script must still report real FAIL rows
+# when PATH is broken (that is exactly what tests/selftest.sh section 2 exercises).
+HERE="${0%/*}"
+case "$HERE" in "$0") HERE=. ;; esac
+HERE="$(cd "$HERE" 2>/dev/null && pwd)" || HERE=.
 . "$HERE/lib.sh"
 
 PROJECT="${NODE_PROJECT:-}"
@@ -17,7 +21,8 @@ HARNESS="${NODE_HARNESS:-hermes}"
 REPO=""
 REF="${NODE_REF:-main}"
 PORT="${NODE_GATEWAY_PORT:-10800}"
-FLOOR="${NODE_DISK_FLOOR:-5}"
+ROLE="${NODE_ROLE:-worker}"
+FLOOR_CLI=""
 MODE=""
 STATE="$HOME/.node"
 
@@ -30,11 +35,45 @@ while [ $# -gt 0 ]; do
     --repo) REPO="$2"; shift 2 ;;
     --ref) REF="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
+    --role) ROLE="$2"; shift 2 ;;
+    --disk-floor) FLOOR_CLI="$2"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
-[ -z "$MODE" ] && { echo "usage: $0 --check|--apply [--project P] [--harness H] [--repo URL] [--ref R]"; exit 2; }
+[ -z "$MODE" ] && { echo "usage: $0 --check|--apply [--project P] [--harness H] [--repo URL] [--ref R] [--role worker|builder|full] [--disk-floor GIB]"; exit 2; }
 [ -z "$PROJECT" ] && { echo "--project is required (a node belongs to exactly one project)"; exit 2; }
+
+# Disk floor is operator policy, resolved by one ordered chain:
+#   --disk-floor > NODE_DISK_FLOOR > config [disk] > role default.
+# A malformed value fails closed here, before any install or clone. A host without
+# python3 cannot read config, so it falls back to the built-in role default and says
+# so — the missing-toolchain case still reaches the [10] base layer and fails loudly.
+case "$ROLE" in
+  worker) FLOOR_BUILTIN=5 ;;
+  builder) FLOOR_BUILTIN=10 ;;
+  full) FLOOR_BUILTIN=20 ;;
+  *) echo "unknown role: $ROLE (expected worker|builder|full)" >&2; exit 2 ;;
+esac
+if ! command -v python3 >/dev/null 2>&1; then
+  FLOOR_GIB="$FLOOR_BUILTIN"
+  FLOOR_SRC="role-default(no-python3)"
+  echo "  WARN  disk_floor — python3 absent, using built-in ${ROLE} default ${FLOOR_GIB} GiB"
+else
+  floor_args=(resolve --role "$ROLE")
+  [ -n "$FLOOR_CLI" ] && floor_args+=(--cli "$FLOOR_CLI")
+  if ! FLOOR="$(python3 "$HERE/disk_floor.py" "${floor_args[@]}" --explain 2>&1)"; then
+    say "$FLOOR"
+    say "NODE: FAIL (disk floor)"
+    exit 1
+  fi
+  FLOOR_GIB="$(printf '%s' "$FLOOR" | python3 -c 'import json,sys; print(json.load(sys.stdin)["floor_gib"])' 2>/dev/null || true)"
+  FLOOR_SRC="$(printf '%s' "$FLOOR" | python3 -c 'import json,sys; print(json.load(sys.stdin)["source"])' 2>/dev/null || true)"
+  if [ -z "${FLOOR_GIB:-}" ]; then
+    say "  FAIL  disk_floor — resolver returned no number: $FLOOR"
+    say "NODE: FAIL (disk floor)"
+    exit 1
+  fi
+fi
 
 mkdir -p "$STATE"
 say "node provisioning — project=$PROJECT harness=$HARNESS host=$(hostname)"
@@ -42,7 +81,10 @@ say "node provisioning — project=$PROJECT harness=$HARNESS host=$(hostname)"
 # ---------------------------------------------------------------- 00 preflight
 say "[00] preflight"
 arch=$(uname -m); ok "arch" "$arch ($(uname -sr))"
-require_disk "$HOME" "$FLOOR" || true
+ok "role" "$ROLE (floor ${FLOOR_GIB} GiB from ${FLOOR_SRC})"
+# apply refuses immediately; check keeps measuring the other layers so one run
+# reports every reason the node is unusable (CF-102).
+require_disk "$HOME" "$FLOOR_GIB" || { [ "$MODE" = apply ] && { say "NODE: FAIL (disk admission)"; exit 1; }; }
 mem=$(awk '/MemAvailable/{printf "%d", $2/1024}' /proc/meminfo)
 [ "${mem:-0}" -ge 1024 ] && ok "mem" "${mem} MB" || bad "mem" "${mem} MB < 1024"
 CRIER="${CRIER_URL:-}"

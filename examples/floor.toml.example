@@ -1,0 +1,12 @@
+# Node disk floors — copy to ~/.node/floor.toml (or point NODE_DISK_FLOOR_CONFIG at it).
+#
+# Precedence, highest first:
+#   --disk-floor  >  NODE_DISK_FLOOR  >  [disk] <role>_gib  >  [disk] default_gib  >  role default
+# Values are whole GiB; "8", "8G", "8GiB" and "1.5G" are all accepted. Anything
+# else fails closed before any install runs, so a typo cannot lower a floor.
+
+[disk]
+default_gib = "6"
+worker_gib  = "5"
+builder_gib = "12"
+full_gib    = "24"
