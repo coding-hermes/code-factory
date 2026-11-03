@@ -1,0 +1,83 @@
+CF-075 — node-create.sh stages project-node.sh without scripts/disk_floor.py
+Evidence for row closure. Foreman tick code-factory-2026-11-03-16-06-24.
+Implementation commit: 77caa02876732b83d87dc2ac7c509b0e535b25b3 (rebased from 74f5414 onto ec6a842)
+GitReins: task CF-075, tier1 PASS, tier2 PASS, verdict dir .gitreins/history/2026-11-03/ad52e74b, envelope commit 77caa02, passed=true
+
+DEFECT (before, at 400a5ab): scripts/node-create.sh staged only project-node.sh, lib.sh and
+harness/install-<h>.sh; scripts/project-node.sh:118 executes "$HERE/disk_floor.py", which was
+never staged, so the documented creation path died on a raw interpreter error:
+
+  $ d=$(mktemp -d); mkdir -p "$d/harness" "$d/home"; cp scripts/project-node.sh scripts/lib.sh "$d/"; \
+    cp scripts/harness/install-hermes.sh "$d/harness/"; chmod +x "$d/project-node.sh"; \
+    HOME="$d/home" "$d/project-node.sh" --apply --project cfprobe --harness hermes \
+    --repo https://github.com/github/gitignore; echo rc=$?
+  python3: can't open file '/var/tmp/.../disk_floor.py': [Errno 2] No such file or directory
+  NODE: FAIL (disk floor)
+  rc=1
+
+AFTER (same probe verbatim, at 77caa02): the missing dependency is now a NAMED, counted row
+instead of an interpreter error, and the staged set that node-create.sh ships carries the
+resolver, so the documented path reaches the disk layer:
+
+  $ <same probe>
+  FAIL  disk_floor — resolver missing or unreadable: /var/tmp/.../disk_floor.py
+  NODE: FAIL (1)
+  rc=1
+
+WHY THE SAME PROBE STILL FAILS: it reproduces the OLD hand-written staging on purpose (criterion 0
+of the row). The fix is that node-create.sh no longer hand-writes that set.
+
+STAGED SET IS NOW DERIVED AND VALIDATED (criterion 1):
+
+  $ bash scripts/node-create.sh --staged-files
+  project-node.sh
+  lib.sh
+  disk_floor.py
+  harness/install-hermes.sh
+  manifest_rc=0
+
+  $ grep -c disk_floor.py scripts/node-create.sh
+  1
+
+  staged_files() (scripts/node-create.sh:18-46) declares the set, verifies every entry exists, and
+  scans every $HERE/ reference in project-node.sh and harness/install-$HARNESS.sh, exiting nonzero
+  with "references unstaged <ref>" when a runtime dependency is missing from the manifest.
+
+NEGATIVE CONTROL — the check can fail (criterion 2, and selftest section 16):
+
+  $ sed 's/lib.sh disk_floor.py/lib.sh/' scripts/node-create.sh > scratch/node-create.sh
+  $ bash scratch/node-create.sh --staged-files
+    FAIL  staged_set — project-node.sh references unstaged disk_floor.py
+  rc=1
+
+FAILED PROVISION NO LONGER LOSES THE AGENT (criterion 4): scripts/node-create.sh:48-54 prints, when
+and only when the script spawned the agent itself:
+
+  cleanup required: bunker destroy <agent> --server <server>
+
+The explicit --server is used because mutating bunker commands refuse the default-server fallback;
+an agent supplied with --agent is never offered for destruction.
+
+GATE at the judged commit 77caa02 (worktree /home/kara/proj-wt-cf-075-20261103, rebased onto
+origin/main ec6a842, clean porcelain):
+
+  $ bash -n scripts/node-create.sh scripts/project-node.sh tests/selftest.sh   -> rc=0
+  $ bash tests/selftest.sh                                                     -> SELFTEST: PASS, rc=0
+      16. node-create staged set covers the disk floor and names missing dependencies
+        PASS  staged disk floor resolves: 4096 GiB from env; admission refuses before installs
+        PASS  missing disk floor -> one countable FAIL row, NODE: FAIL (1), exit 1
+        PASS  disk floor omitted from scratch manifest -> validation exit 1
+        PASS  owned failure names spawned agent and explicit-server destroy command
+        PASS  reused agent failure does not request destruction
+        PASS  copy-failure failure names spawned agent and explicit-server destroy command
+
+SCOPE: scripts/node-create.sh, scripts/project-node.sh, tests/selftest.sh (154 insertions,
+12 deletions). No board files, no other rows, no new dependency, no root.
+
+NOT EXERCISED: a live node creation against a bunker host (criterion 3 of the row). The row states
+this fix is about staging, not about a node being complete; the staged-set reproduction above is
+host-independent and is the same file set node-create.sh copies. A live run remains available to any
+tick that has a reachable host and is expected to show no "can't open file" line.
+
+TRACE:
+ch:trace row=CF-075 spec=specs/NODE.md#disk-floor wave=none:serial test=tests/selftest.sh::node-create-staged-set doc=README.md prompt=none:worker-brief evidence=docs/audits/code-factory-foreman-2026-11-03-cf075.probe.txt witness=path@origin:tests/selftest.sh verdict=pass:ad52e74b commit=77caa02876732b83d87dc2ac7c509b0e535b25b3 memory=none:no-lane-role-token
