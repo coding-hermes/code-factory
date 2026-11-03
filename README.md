@@ -155,10 +155,23 @@ the loaders write at setup. A live scheduler can differ in both directions: a ro
 after setup, and rows this repo does not configure can exist. Read the state, do not infer it:
 
 ```bash
-curl -s 'http://127.0.0.1:9090/api/v1/projects?limit=500' \
-  | jq -r '.projects[] | select(.name|startswith("code-factory"))
-           | "\(.name) enabled=\(.enabled) admission=\(.admission_mode) parent=\(.parent // "-")"'
+total=$(curl -s 'http://127.0.0.1:9090/api/v1/projects?limit=1' | jq -r '.total // empty')
+[ -n "$total" ] || { echo 'census: the scheduler answered without a total; refusing to count' >&2; exit 1; }
+off=0; : > /tmp/cf-lanes.txt
+while [ "$off" -lt "$total" ]; do
+  curl -s "http://127.0.0.1:9090/api/v1/projects?limit=500&offset=$off" \
+    | jq -r '.projects[] | select(.name|startswith("code-factory"))
+             | "\(.name) enabled=\(.enabled) admission=\(.admission_mode) parent=\(.parent // "-")"' \
+    >> /tmp/cf-lanes.txt
+  off=$((off + 500))
+done
+wc -l < /tmp/cf-lanes.txt; cat /tmp/cf-lanes.txt
 ```
+
+The inventory endpoint pages: it caps a page at 500 rows and answers `{projects,total,limit,offset}`, and
+a whole fleet is larger than one page. Read `total` first and walk the pages, as above — a single
+`limit=500` request inspects only its own page, so a family whose rows sort past the page boundary
+prints an empty or short census without any error.
 
 On the reference deployment that prints nineteen rows: the fourteen above, all `enabled=true`, plus
 five `code-factory-duckbrain-*` satellites whose rows this repo does not create (they are not part
@@ -172,3 +185,5 @@ ch:trace row=CF-038 spec=README.md#evidence wave=none:serial test=bash-tests/sel
 
 ch:trace row=CF-014 spec=README.md#quick-start wave=code-factory-readme-2026-10-30-18-28-33#readme test=scripts/project-node.sh::check-project-demo doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=path@origin:README.md verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-18-28-33
 ch:trace row=CF-013 spec=README.md#status wave=code-factory-readme-2026-10-30-18-28-33#readme test=scripts/harness/install-hermes.sh::check doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-10-30-18-28-33.md witness=none:no-live-bunker-or-gateway-available verdict=none:open-finding commit=none:open memory=/project/code-factory/readme-audit-2026-10-30-18-28-33
+ch:trace row=CF-065 spec=README.md#the-lanes wave=none:serial test=tests/selftest.sh::selftest doc=README.md prompt=prompts/readme.md evidence=docs/audits/code-factory-readme-2026-11-03-15-41-00-cf065.probe.txt witness=path@origin:README.md verdict=none:judged-after-commit commit=none:self-referential-hash memory=none:no-lane-role-token
+
