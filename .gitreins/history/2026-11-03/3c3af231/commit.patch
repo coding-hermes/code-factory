@@ -1,0 +1,354 @@
+commit a9d0cc8759f686db14cd3f2d7a4d8b1538cc5847
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Tue Nov 3 14:40:10 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Tue Nov 3 14:40:10 2026 -0500
+
+    docs: correct the PRD milestone and the acceptance plan to the 28-section tree — the PRD cited two closed defects as live blockers and the plan still described a 15-section suite. Addresses CF-099.
+    
+    Measured at 80fca8b from the repository root:
+      tests/selftest.sh -> SELFTEST: PASS, exit 0, 70 PASS rows over 28 sections
+      scripts/boardctl validate -> RESULT: OK (28 warning(s))
+      board -> 85 task rows, 115 events
+    
+    The PRD milestone block still named CF-075 and CF-077 as open blockers; both are
+    complete (77caa02 with selftest section 16, 1232f7a with sections 17-18), so the
+    paragraph told a reader the documented create path was dead when the staged-set
+    gap has been closed and is now gated. CF-080 remains the open defect on that path,
+    alongside the never-exercised CF-001, CF-004, CF-110 and CF-112.
+    
+    The CF-102 cell said no arm covers layers 00, 10, 20, 30 or 40 individually. That
+    understates the gate: section 3 runs the real script with --layers 00, section 14
+    with --layers 20, sections 4/4b with --layers 40, section 15 with the 30,40 pair
+    and section 20 in apply mode. Layer 10 (base) is the one layer with no arm, and
+    nothing asserts the layer 90 row; the cell now says exactly that.
+    
+    docs/ACCEPTANCE-PLAN.md snapshot re-anchored to 80fca8b (28 sections, 70 PASS,
+    85/115 board rows, 28 validator warnings, CPU-time note so wall time is not quoted
+    across hosts) and its reverse-direction table extended from 10 to all 28 sections,
+    so no test section is unattributed. Its no-test list was re-verified by grep at
+    this tip rather than carried forward: sudo|apt-get in tests = 0, node.json in
+    tests = 0, dispatch-targets in code = 0, no artifact-digest arm, no two-run digest
+    comparison, chmod 600 only as fixture setup.
+    
+    docs/audits/cf099-prd-drift-probe.sh is the re-runnable probe. On the pre-fix tree
+    80fca8b it exits 1 with:
+      DRIFT: plan says 15 sections, tests/selftest.sh has 28
+      DRIFT: PRD milestone block does not name the tip it was re-measured at
+      DRIFT: milestone lists CF-075 as an open blocker, board says complete
+      DRIFT: milestone lists CF-077 as an open blocker, board says complete
+      DRIFT: CF-102 layer-arm cell does not name §3 / §4 / §15 / §20 / layer 10
+    On this tree it exits 0 and prints the measured tip, row/event counts, section
+    count and the open-blocker set.
+    
+    No requirement was added, removed or weakened: the change is confined to
+    "Verified by" cells, the milestone status and the acceptance plan.
+    
+    Guard disclosure: gitreins guard returned Tier 1 DEGRADED PASS (lint=no staged
+    files) — the documented CF-031 behaviour for a documentation-only diff, where the
+    lint arm's scope is the changed *.sh set. The configured checks were run manually
+    at this tree instead: tests (full) green inside the guard run (selftest PASS),
+    secrets clean, plus boardctl validate RESULT: OK. This clone carries no installed
+    hooks, so no core.hooksPath bypass was needed; the DEGRADED PASS is disclosed
+    rather than presented as a green gate.
+    
+    ch:trace row=CF-099 spec=docs/PRD-code-factory.md#acceptance-for-the-first-milestone wave=none:serial test=docs/audits/cf099-prd-drift-probe.sh::prd-plan-drift doc=docs/ACCEPTANCE-PLAN.md prompt=prompts/pm.md evidence=docs/audits/code-factory-pm-2026-11-03-19-32-27.md witness=none:docs-only verdict=none:pending-foreman commit=none:open memory=none:closeout-pending
+---
+ docs/ACCEPTANCE-PLAN.md                            | 71 ++++++++++++-----
+ docs/PRD-code-factory.md                           | 24 +++---
+ docs/audits/cf099-prd-drift-probe.sh               | 40 ++++++++++
+ docs/audits/code-factory-pm-2026-11-03-19-32-27.md | 91 ++++++++++++++++++++++
+ 4 files changed, 196 insertions(+), 30 deletions(-)
+
+diff --git a/docs/ACCEPTANCE-PLAN.md b/docs/ACCEPTANCE-PLAN.md
+index 8e01efb..0097456 100644
+--- a/docs/ACCEPTANCE-PLAN.md
++++ b/docs/ACCEPTANCE-PLAN.md
+@@ -2,14 +2,23 @@
+ 
+ **Scope:** CF-101–CF-112 in [`PRD-code-factory.md`](PRD-code-factory.md), with contract details in `specs/NODE.md`, `specs/HARNESS.md`, and `specs/ENVELOPE.md`. This plan distinguishes source-level evidence from tests actually run. A passing repository self-test is not proof that every requirement is accepted.
+ 
+-**Evidence snapshot (re-measured 2026-11-03 at tip `400a5ab`):** `tests/selftest.sh` was run from
+-the repository root and exited 0 (`SELFTEST: PASS`, 34 `PASS` rows, 0 `FAIL` rows); the board at
+-that tip carries 68 task rows and 74 events. The previous snapshot in this file (`e21f2ce`,
+-60/60 rows) was hand-typed and had drifted by 8 rows — the same class `CF-081` tracks for
+-`docs/BOARD.md`, and the numbers here are re-derived on every edit, never carried forward.
++**Evidence snapshot (re-measured 2026-11-03 at tip `80fca8b`):** `tests/selftest.sh` was run from
++the repository root and exited 0 (`SELFTEST: PASS`, 70 `PASS` rows, suite counter `fails=0`) over
++28 sections; `scripts/boardctl validate` prints `RESULT: OK (28 warning(s))`; the board at that tip
++carries 85 task rows and 115 events. One `  FAIL  disk_floor — resolver missing or unreadable: …`
++line is printed *inside* §16 — that arm asserts the pre-fix staging manifest is rejected, so it is
++expected fixture output, not a suite failure; count `SELFTEST:` and the suite's counter, never a raw
++`grep -c '^  FAIL'`. Timing is not a portable number: 7.70 s CPU (`user 4.30` + `sys 3.40`) at
++loadavg 16.0, `real 9.45` — quote CPU, not wall.
++The previous snapshot (`400a5ab`: 15 sections, 68 task rows, 74 events) still reproduces at that tip
++and is kept only as history: six selftest commits landed after it (§16–§28, rows `CF-075`, `CF-077`,
++`CF-085`, `CF-007` AC3, `CF-091`, `CF-089`), which is why the section count moved from 15 to 28. No
++number in this file is carried forward without re-running the command that produced it.
+ The selftest checks shell syntax, one failing node-check path, `fetch_verified` digest
+-acceptance/rejection, a credential-assignment grep, JSONL parsing, lane-target parsing and
+-disk-floor resolution. It does not exercise node creation, idempotence, the no-root rule, harness
++acceptance/rejection, a credential-assignment grep, JSONL parsing, lane-target parsing,
++disk-floor resolution and refusal, the node-create staged set, auth fail-closed behaviour with a
++pre-fix control, repo-url root/agreement guards, reclaim-before-refusal, and the README census
++fail-closed arms. It does not exercise node creation, idempotence, the no-root rule, harness
+ parity, credentials lifecycle, the manifest schema, destruction/recreation, scheduler dispatch, or
+ the control-host artifact round trip — those cells say **no test** on purpose.
+ 
+@@ -35,21 +44,35 @@ Status definitions: **PASS** = requirement's acceptance behavior was exercised a
+ ### The other direction: test sections with no PRD requirement
+ 
+ A green suite is not PRD coverage, and the reverse gap matters as much as the forward one. At
+-`400a5ab`, `tests/selftest.sh` has 15 sections and 34 `PASS` rows; only three requirements have an
++`80fca8b`, `tests/selftest.sh` has 28 sections and 70 `PASS` rows; only three requirements have an
+ arm that can fail on them (`CF-102` ← §2 and §14, `CF-105` ← §5, `CF-109` ← §12 and §13 partially).
++Every other section is governed by a spec, a rule or a board row — the mapping below is exhaustive so
++that a new section cannot arrive without a named authority.
+ 
+ | Selftest section | What governs it instead of a PRD requirement |
+ |---|---|
+ | §1 every script parses | `AGENTS.md` conventions (`bash -n` clean) |
+-| §3 unreachable crier, one status code | `specs/NODE.md` layer 00 row shape |
+-| §4 / §4b clone-error classification | `specs/NODE.md` layer 40 failure semantics (board CF-034, CF-039) |
+-| §6 no literal credential assignments | `AGENTS.md` rule 8 — a tree-hygiene grep, **not** the CF-108 bundle life cycle |
++| §2 the node checker fails on an empty PATH | `CF-102` (this one *is* a requirement arm) + board `CF-005` AC2 (a `FAILED: unbound variable` crash is not a `FAIL` row) |
++| §3 unreachable crier, one status code | `specs/NODE.md` layer 00 row shape (`--layers 00`, exactly one `FAIL reach:` row) |
++| §4 / §4b clone-error classification | `specs/NODE.md` layer 40 failure semantics (board `CF-034`, `CF-039`) |
++| §5 `fetch_verified` refuses a wrong digest | `CF-105` (this one *is* a requirement arm) |
++| §6 no literal credential assignments | `AGENTS.md` rule 8 — a tree-hygiene grep, **not** the `CF-108` bundle life cycle |
+ | §7 the board is valid JSONL | `docs/BOARD.md` write rules |
+ | §8 boardctl fails closed without its dependency | `docs/BOARD.md` entrypoint contract |
+ | §9 every prompt the README names exists | README lane tables / the family loaders |
+ | §10 Hermes refuses an unsupported Python | `specs/HARNESS.md` install obligation (adapter contract, not harness parity) |
+-| §11 lane workdir targets parse and verify | `specs/NODE.md` workdir targets — parsing only, not CF-112 dispatch |
+-| §15 the README status re-run line carries the check's exit status | documentation honesty (CF-054) |
++| §11 lane workdir targets parse and verify | `specs/NODE.md` workdir targets — parsing only, not `CF-112` dispatch |
++| §12 node disk floor resolves from CLI/env/config | `CF-109` (requirement arm — resolution only) |
++| §13 provisioning names its floor and refuses below it | `CF-109` (requirement arm — malformed-value refusal; the below-floor boundary is still untested) |
++| §14 harness-adapter FAIL rows counted in the summary | board `CF-055` + `CF-102`'s `NODE: FAIL (n)` equality |
++| §15 the README status re-run line carries the exit status | documentation honesty, board `CF-054` (`--layers 30,40`) |
++| §16 node-create staged set covers the disk floor | board `CF-075` (staged entry point, disk admission, cleanup ownership) |
++| §17 auth verification fails closed, pre-fix control | board `CF-077` AC1/AC2 |
++| §18 node creation requires both auth legs | board `CF-077` AC3 (`NODE CREATED` only after every auth leg passes) |
++| §19 project repo_url must name a real git root | board `CF-085` |
++| §20 reclaim runs before disk refusal, check never reaps | board `CF-007` AC3 + `specs/NODE.md` disk floor |
++| §21 satellite repo_urls must agree with their primary | board `CF-091` |
++| §22–§28 census fail-closed arms and README/mirror parity | board `CF-089` (fetch/HTTP/schema/short-count/missing-total arms, healthy output, README↔mirror byte parity apart from `BASE`) |
+ 
+ These sections are legitimate and must not be deleted to "clean up" the mapping: they serve
+ `AGENTS.md` rules, the specs and this board. They must not be counted as acceptance of
+@@ -92,18 +115,24 @@ Remote acceptance commands in the matrix are templates: substitute only authoriz
+ 
+ ## Current acceptance summary
+ 
+-Measured at `400a5ab` (2026-11-03): the local self-test passes (34 `PASS`, 0 `FAIL`), and acceptance
+-is **incomplete**. Split by what the tree can actually demonstrate:
++Measured at `80fca8b` (2026-11-03): the local self-test passes (70 `PASS`, suite counter 0, rc 0),
++and acceptance is **incomplete**. Split by what the tree can actually demonstrate:
+ 
+-- **Requirements with a test that can fail on them (3):** `CF-102` (§2, §14), `CF-105` (§5),
+-  `CF-109` (§12, §13 — resolution and malformed-value refusal only; the below-floor boundary arm
+-  is still missing).
++- **Requirements with a test that can fail on them (3):** `CF-102` (§2, §14 — and the per-layer arms
++  named in the PRD cell), `CF-105` (§5), `CF-109` (§12, §13 — resolution and malformed-value
++  refusal only; the below-floor boundary arm is still missing).
+ - **Requirements with no test in the tree (9):** `CF-101`, `CF-103`, `CF-104`, `CF-106`, `CF-107`,
+-  `CF-108`, `CF-110`, `CF-111`, `CF-112`. `CF-083` tracks the arms to add.
++  `CF-108`, `CF-110`, `CF-111`, `CF-112`. Re-verified at `80fca8b` by grep, not by argument:
++  `grep -rniE 'sudo|apt-get' tests/` = 0 (CF-104), `grep -rln 'node\.json' tests/` = 0 (CF-111),
++  `grep -rl 'dispatch-targets' scripts tests` = 0 (CF-112), no artifact-digest arm (CF-107), no
++  two-run digest comparison (CF-103), and `chmod 600` appears only as fixture setup, never as a
++  credential-bundle assertion (CF-108). `CF-083` tracks the arms to add.
+ - **Requirements that cannot pass until code that does not ship lands (3 of the nine):** `CF-110`
+   (no destroy path exists), `CF-112` (no `dispatch-targets.jsonl` consumer exists), `CF-106`
+   (`opencode` is unmeasured and its `--apply` refuses by design).
+-- **End-to-end first milestone:** not met. No directive/commit/artifact round trip is recorded, and
+-  three of its legs are blocked by open defects (CF-075, CF-077, CF-080) rather than by environment.
++- **End-to-end first milestone:** not met. No directive/commit/artifact round trip is recorded. Of
++  the defects the previous summary named, `CF-075` and `CF-077` are now **closed** (`77caa02`,
++  `1232f7a`, each with selftest arms §16–§18); the legs still blocked by an open defect are `CF-080`
++  plus the never-exercised `CF-001`, `CF-004`, `CF-110` and `CF-112`.
+ 
+ No row above may be counted as PASS on the strength of the green self-test alone.
+diff --git a/docs/PRD-code-factory.md b/docs/PRD-code-factory.md
+index 44189c0..fcb1702 100644
+--- a/docs/PRD-code-factory.md
++++ b/docs/PRD-code-factory.md
+@@ -14,8 +14,8 @@ column exists to prevent.
+ 
+ | ID | Requirement | Verified by |
+ |---|---|---|
+-| CF-101 | A node is created by one command from a project + repo + harness triple. | **No test.** `scripts/project-node.sh --apply --project X --repo Y --harness hermes` must exit 0 and leave `$HOME/.node/node.json` parseable. Today the documented create path stages no `scripts/disk_floor.py`, so the run dies at layer 00 before any check (CF-075, point 1 of this row's status); the cell is unproven, not green. |
+-| CF-102 | Every layer reports `PASS`/`FAIL` with the value it measured. | `bash tests/selftest.sh` §2 (exit nonzero with named `  FAIL  tool:` rows — a `FAILED: unbound variable` bootstrap crash is a FAIL of the test itself) and §14 (`NODE: FAIL (n)` equals the printed `  FAIL` row count). No arm covers layers 00, 10, 20, 30 or 40 individually. |
++| CF-101 | A node is created by one command from a project + repo + harness triple. | **No test.** `scripts/project-node.sh --apply --project X --repo Y --harness hermes` must exit 0 and leave `$HOME/.node/node.json` parseable. The staging gap that used to kill this path at layer 00 is closed (`CF-075`, commit `77caa02`; selftest §16 runs `node-create.sh --staged-files` and the staged entry point, and fails when `scripts/disk_floor.py` is dropped from the manifest), so nothing shipped dies there any more — but no end-to-end creation is recorded either. The open defect on this path is `CF-080` (`--apply` clones after the bus layer has already failed), so the cell is unproven, not green. |
++| CF-102 | Every layer reports `PASS`/`FAIL` with the value it measured. | `bash tests/selftest.sh` §2 (exit nonzero with named `  FAIL  tool:` rows — a `FAILED: unbound variable` bootstrap crash is a FAIL of the test itself) and §14 (`NODE: FAIL (n)` equals the printed `  FAIL` row count). Per-layer arms, measured at `80fca8b`: layer 00 by §3 (`--layers 00`, exactly one `FAIL reach:` row) and §20 (apply-mode reclaim-then-refuse), layer 20 by §14 (`--layers 20`), layer 40 by §4/§4b (`--layers 40`), layer 30 only inside §15's `--layers 30,40` pair. **Layer 10 (base) has no arm**, and nothing asserts the layer 90 verify row, so the requirement is PARTIAL, never satisfied. |
+ | CF-103 | Creation is idempotent; a second run changes nothing. | **No test.** Required: two `--apply` runs in one fixed `$HOME`; the second exits 0 and `find "$HOME/.node/node.json" "$HOME/repo" -type f -exec sha256sum {} +` is byte-identical across the pair. A second run that rewrites `node.json`'s `created_at` fails. The previous wording ("second run prints `unchanged` per layer") named an output no shipped script emits — `grep -rn unchanged scripts/` returns only two comments. |
+ | CF-104 | No root, no apt: all artifacts user-space under `$HOME`. | **No test.** No `sudo`/`apt` gate exists in the tree (`grep -rniE 'sudo|apt-get' tests/` = 0 hits), so the requirement is currently unfalsifiable. Required: a committed check that fails on uid 0 or on any `sudo`/`apt` invocation in the ladder transcript, plus a red arm that plants one. |
+ | CF-105 | Downloads are pinned and digest-checked before use. | `bash tests/selftest.sh` §5: `fetch_verified` accepts the matching sha256 and refuses the all-zero digest (both arms must appear as `  PASS`). Covers the helper only — no installer's own download is audited. |
+@@ -39,10 +39,16 @@ One project (crier), one node, one directive that travelled over crier and reach
+ gateway, one commit produced there, one artifact digest verified back on the control host, and a
+ recorded FAIL when the gate is made to fail.
+ 
+-**Status 2026-11-03 (measured at `400a5ab`): NOT MET.** Nothing in this paragraph has been
+-observed end to end, and three legs are blocked by open defects rather than by environment:
+-the documented creation path dies at layer 00 because the staging list predates
+-`scripts/disk_floor.py` (CF-075); `--apply` clones the repo after the bus layer has already failed
+-(CF-080); and `verify-node.sh` reports `VERIFY: PASS` on an inconclusive auth probe (CF-077), so a
+-"verified" node can carry an unproven identity. `docs/ACCEPTANCE-PLAN.md` records per-requirement
+-state; its summary is the authority for what has actually run.
++**Status 2026-11-03 (re-measured at `80fca8b`): NOT MET.** No crier directive has been observed
++arriving at a gateway, no commit has been produced on a node, and no artifact digest has been
++recomputed on the control host, so nothing in the paragraph above is demonstrated end to end.
++Two of the three defects the previous status cited were closed after its `400a5ab` measurement and
++are no longer blockers: `CF-075` (the documented create path staged no `scripts/disk_floor.py`, so
++it died at layer 00 — fixed in `77caa02`, proven by selftest §16) and `CF-077` (an inconclusive auth
++probe still reported `VERIFY: PASS` — fixed in `1232f7a`, proven by §17 and §18). The confirmed
++open defects on this path are `CF-080` (`--apply` clones the workspace after the bus layer has
++already FAILED, manufacturing the repo-with-no-bus node `AGENTS.md` rule 9 forbids) and the
++never-exercised legs `CF-001` (scheduler→crier dispatch is built but has never run), `CF-004` (no
++round trip through the node's own gateway), `CF-110` (no destroy path ships) and `CF-112` (no
++`dispatch-targets.jsonl` consumer ships). `docs/ACCEPTANCE-PLAN.md` records per-requirement state;
++its summary is the authority for what has actually run.
+diff --git a/docs/audits/cf099-prd-drift-probe.sh b/docs/audits/cf099-prd-drift-probe.sh
+new file mode 100755
+index 0000000..f74f530
+--- /dev/null
++++ b/docs/audits/cf099-prd-drift-probe.sh
+@@ -0,0 +1,40 @@
++#!/usr/bin/env bash
++# CF-099 probe — do the PRD milestone block and the acceptance plan still describe this tree?
++# Contract enforced: (1) the milestone names the tip it was measured at and every CF-id listed
++# after "open defects" is NOT complete on the board; (2) the plan's snapshot counts reproduce at
++# the tip the plan names; (3) the plan's section count matches tests/selftest.sh; (4) the PRD's
++# CF-102 cell names the per-layer arms that exist.
++# Usage: bash docs/audits/cf099-prd-drift-probe.sh   (cwd: the repository root; exits 1 on drift)
++set -uo pipefail
++cd "$(git rev-parse --show-toplevel)" || exit 2
++P=docs/ACCEPTANCE-PLAN.md
++R=docs/PRD-code-factory.md
++d=0
++tip=$(grep -oE 'at tip `[0-9a-f]{7,40}`' "$P" | head -1 | grep -oE '[0-9a-f]{7,40}')
++srow=$(grep -oE '[0-9]+ task rows' "$P" | head -1 | grep -oE '[0-9]+')
++sev=$(grep -oE '[0-9]+ events' "$P" | head -1 | grep -oE '[0-9]+')
++nsec=$(grep -oE '[0-9]+ sections' "$P" | head -1 | grep -oE '[0-9]+')
++if [ -z "$tip" ] || ! git cat-file -e "$tip:.coding-hermes/board/tasks.jsonl" 2>/dev/null; then
++  echo "DRIFT: acceptance plan names no resolvable tip"; d=1
++else
++  mrow=$(git show "$tip:.coding-hermes/board/tasks.jsonl" | wc -l)
++  mev=$(git show "$tip:.coding-hermes/board/events.jsonl" | wc -l)
++  [ "${srow:-x}" = "$mrow" ] || { echo "DRIFT: plan says ${srow:-none} task rows, $tip carries $mrow"; d=1; }
++  [ "${sev:-x}" = "$mev" ] || { echo "DRIFT: plan says ${sev:-none} events, $tip carries $mev"; d=1; }
++fi
++msec=$(grep -cE '^say "[0-9]+\.' tests/selftest.sh)
++[ "${nsec:-x}" = "$msec" ] || { echo "DRIFT: plan says ${nsec:-none} sections, tests/selftest.sh has $msec"; d=1; }
++block=$(awk '/^\*\*Status 20/{f=1} f&&/^$/{exit} f' "$R" | tr '\n' ' ')
++printf '%s' "$block" | grep -qE 're-measured at `[0-9a-f]{7,40}`' \
++  || { echo "DRIFT: PRD milestone block does not name the tip it was re-measured at"; d=1; }
++open_part=$(printf '%s' "$block" | sed -n 's/.*open defects//p')
++for id in $(printf '%s' "$open_part" | grep -oE 'CF-[0-9]{3}' | sort -u); do
++  st=$(jq -r --arg i "$id" 'select(.id==$i)|.status' .coding-hermes/board/tasks.jsonl)
++  [ "$st" = complete ] && { echo "DRIFT: milestone lists $id as an open blocker, board says complete"; d=1; }
++done
++for t in '§3' '§4' '§14' '§15' '§20' 'layer 10'; do
++  grep -qiF -- "$t" "$R" || { echo "DRIFT: CF-102 layer-arm cell does not name $t"; d=1; }
++done
++echo "measured: tip=${tip:-none} rows=${mrow:-?} events=${mev:-?} sections=$msec open_blockers=$(printf '%s' "$open_part" | grep -oE 'CF-[0-9]{3}' | sort -u | tr '\n' ' ')"
++[ "$d" -eq 0 ] && echo "OK: milestone, plan snapshot and layer arms agree at $(git rev-parse --short HEAD)"
++exit "$d"
+diff --git a/docs/audits/code-factory-pm-2026-11-03-19-32-27.md b/docs/audits/code-factory-pm-2026-11-03-19-32-27.md
+new file mode 100644
+index 0000000..f845c9a
+--- /dev/null
++++ b/docs/audits/code-factory-pm-2026-11-03-19-32-27.md
+@@ -0,0 +1,91 @@
++# PM lane — 2026-11-03T19:32:27Z tick (CF-099)
++
++Lane: `code-factory-pm`. Work done in a clean clone of `origin/main` at `80fca8b` (the shared
++checkout was left untouched: four sibling lanes were `running` at tick start). Paths here are
++repo-relative; no host paths or worktree names are recorded.
++
++## What the PRD/plan claimed, and what the tree actually is
++
++Measured at `80fca8b`:
++
++| Claim | Source | Measured | Verdict |
++|---|---|---|---|
++| 15 selftest sections | `docs/ACCEPTANCE-PLAN.md` snapshot | 28 sections (`grep -cE '^say "[0-9]+\.' tests/selftest.sh`) | stale |
++| 34 `PASS` rows | same | 70 `PASS` rows, suite counter `fails=0`, rc 0 | stale |
++| 68 task rows / 74 events | same | 85 rows / 115 events at `80fca8b` | stale (true only at its pinned tip) |
++| three legs blocked by `CF-075`, `CF-077`, `CF-080` | `docs/PRD-code-factory.md` milestone block | `CF-075` **complete** (`77caa02`, selftest §16), `CF-077` **complete** (`1232f7a`, §17/§18), `CF-080` pending | two of three false |
++| "No arm covers layers 00, 10, 20, 30 or 40 individually" (`CF-102`) | PRD requirement table | layer 00 ← §3 and §20, layer 20 ← §14, layer 40 ← §4/§4b, layer 30 ← §15 pair; **layer 10 has no arm** | understated coverage |
++
++The plan's numbers reproduce at the tip it pinned (`400a5ab`), so they were honest when written and
++became stale when six selftest commits landed (§16–§28). The PRD milestone block was the real defect:
++it still cited two closed rows as live blockers, which makes a reader think the create path is broken
++when the staged-set gap has been closed and proven in the gate.
++
++The `docs/BOARD.md` "Current measured state" block is stale in the same way (61 rows / 66 events /
++17 warnings claimed; 85 / 115 / 28 measured). That is already row `CF-081`, which requires a
++*committed check* plus a red arm, so this tick did not restate it.
++
++## What changed
++
++- `docs/PRD-code-factory.md` — milestone block re-measured at `80fca8b`: `CF-075` and `CF-077` named
++  as closed (with the fixing commits and the selftest sections that prove them), `CF-080` plus the
++  never-exercised `CF-001`, `CF-004`, `CF-110`, `CF-112` named as the open legs.
++- `docs/PRD-code-factory.md` — `CF-101` cell no longer claims the create path dies at layer 00; it
++  cites `CF-075`/`77caa02` as the fix and `CF-080` as the open defect on the path.
++- `docs/PRD-code-factory.md` — `CF-102` cell replaced its blanket "no arm covers layers 00…40" with
++  the per-layer arm list (§3/§20 00, §14 20, §4/§4b 40, §15 30-pair) and names the single uncovered
++  layer (10).
++- `docs/ACCEPTANCE-PLAN.md` — snapshot re-anchored to `80fca8b` (28 sections, 70 `PASS`, 85/115
++  board rows, `RESULT: OK (28 warning(s))`, CPU-time note), previous snapshot kept as history.
++- `docs/ACCEPTANCE-PLAN.md` — reverse-direction table extended from 10 to all 28 sections, so no
++  selftest section is unattributed; §12/§13 and §2/§5/§14 are now marked as requirement arms.
++- `docs/ACCEPTANCE-PLAN.md` — acceptance summary re-anchored; the no-test list re-verified by grep
++  (`sudo|apt-get` = 0, `node.json` in tests = 0, `dispatch-targets` in code = 0, no artifact-digest
++  arm, no two-run digest comparison, `chmod 600` only as fixture setup).
++- `docs/audits/cf099-prd-drift-probe.sh` — new re-runnable probe; exits 1 while the milestone or the
++  plan snapshot disagrees with the tree.
++
++No PRD requirement was added, removed or weakened; the tightening is in the "Verified by" cells.
++
++## Probe evidence (same probe, two trees)
++
++Pre-fix tree `80fca8b` (`git worktree add --detach … 80fca8b`), `bash docs/audits/cf099-prd-drift-probe.sh`
++→ rc 1:
++
++```text
++DRIFT: plan says 15 sections, tests/selftest.sh has 28
++DRIFT: PRD milestone block does not name the tip it was re-measured at
++DRIFT: milestone lists CF-075 as an open blocker, board says complete
++DRIFT: milestone lists CF-077 as an open blocker, board says complete
++DRIFT: CF-102 layer-arm cell does not name §3
++DRIFT: CF-102 layer-arm cell does not name §4
++DRIFT: CF-102 layer-arm cell does not name §15
++DRIFT: CF-102 layer-arm cell does not name §20
++DRIFT: CF-102 layer-arm cell does not name layer 10
++measured: tip=400a5ab rows=68 events=74 sections=28 open_blockers=CF-075 CF-077 CF-080
++```
++
++Post-fix tree (the same clone with these doc edits uncommitted, so `HEAD` is still `80fca8b`), same
++command → rc 0 — the printed sha is `HEAD`, which is the pre-commit tree by construction:
++
++```text
++measured: tip=80fca8b rows=85 events=115 sections=28 open_blockers=CF-001 CF-004 CF-080 CF-110 CF-112
++OK: milestone, plan snapshot and layer arms agree at 80fca8b
++```
++
++## Gates at the fixed tree
++
++```text
++bash tests/selftest.sh        -> SELFTEST: PASS (rc 0), 70 PASS rows, 28 sections
++bash scripts/boardctl validate -> RESULT: OK (28 warning(s))
++```
++
++The one `  FAIL  disk_floor — resolver missing or unreadable` line printed by the run belongs to §16's
++pre-fix fixture; the suite's own counter is 0 and the summary line is `SELFTEST: PASS`.
++
++## Left open (not this tick's work)
++
++- `CF-080` — `--apply` still clones after the bus layer failed.
++- `CF-083` — the nine requirements without arms (verified still absent at `80fca8b`).
++- `CF-081` — `docs/BOARD.md` hand-typed state needs a committed gate, not another restatement.
++- `CF-050`/`CF-086` — absolute host paths and worktree names still tracked elsewhere in the repo.
