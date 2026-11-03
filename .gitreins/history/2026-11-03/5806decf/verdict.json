@@ -1,0 +1,112 @@
+{
+  "task_id": "CF-115-QA1",
+  "task_title": "QA filing check: CF-115 carries a re-runnable fail-open probe for the CF-099 drift probe",
+  "task_criteria": [
+    "Filing only - do NOT evaluate or implement the underlying fix. At the pushed HEAD: (1) git show --stat HEAD names .coding-hermes/board/tasks.jsonl with insertions and zero deletions; (2) git show HEAD:.coding-hermes/board/tasks.jsonl piped to jq -e with filter select(.id==\"CF-115\") | .status==\"pending\" and (.probe|length>0) exits 0, and the probe value is a single line beginning with: d=$(mktemp -d) && git clone (3) that exact probe, run from the repository root, prints a measured line whose open_blockers= value is empty and then probe_rc=0 - the fail-open reproduction; (4) bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at that HEAD."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "c534baea8ebb550d53a8e23d98438aa434f31991",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T200546.317881Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n3:06PM INF scanned ~535118 bytes (535.12 KB) in 648ms\n3:06PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 97 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T200546.317881Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.0pyKqFsH0L/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  89/89 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [3656 chars omitted \u2014 59 line(s)] \u2026\n  PASS  re-measure admits a recovered node without a stale FAIL row\n  PASS  missing reclaimer fails closed with one counted row\n  PASS  reclaim targets, TTL, symlink safety, protected files, dry-run and idempotence\n21. project repo_url satellites must agree with their primary (CF-091)\n  PASS  repo_url family agreement: diverged fixture rejected naming both lanes, aligned accepted\n22. census refuses a failed fetch at a later offset\n  PASS  census fetch failure -> offset=500, exit 1, no census printed\n23. census refuses a non-2xx page\n  PASS  census HTTP 502 -> offset=500, exit 1, no census printed\n24. census requires a projects array even on HTTP 200\n  PASS  census missing-projects -> named .projects refusal, exit 1, no census printed\n  PASS  census wrong-projects -> named .projects refusal, exit 1, no census printed\n  PASS  census nonjson -> named .projects refusal, exit 1, no census printed\n25. census compares all received rows with the first reported total\n  PASS  census short page -> rows received=865, total reported=866, exit 1, no census printed\n26. healthy census counts matching rows on both sides of the page boundary\n  PASS  census healthy -> 2 matching rows, exact row format, exit 0\n27. census still refuses a missing total\n  PASS  census missing total -> named refusal, exit 1, no census printed\n28. README census and executable mirror agree except for BASE\n  PASS  census README/mirror byte parity (BASE parameterisation only)\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T200546.317881Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 Filing only - do NOT evaluate or implement the underlying fix. At the pushed HEAD: (1) git show --stat HEAD names .coding-hermes/board/tasks.jsonl with insertions and zero deletions; (2) git show HEAD:.coding-hermes/board/tasks.jsonl piped to jq -e with filter select(.id==\"CF-115\") | .status==\"pending\" and (.probe|length>0) exits 0, and the probe value is a single line beginning with: d=$(mktemp -d) && git clone (3) that exact probe, run from the repository root, prints a measured line whose open_blockers= value is empty and then probe_rc=0 - the fail-open reproduction; (4) bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at that HEAD.: Filing-only confirmed: HEAD=c534bae is pushed (git rev-parse @{u}==HEAD, rev-list --left-right --count @{u}...HEAD => '0 0', origin/main contains HEAD) and the diff touches only board files. (1) git show --numstat HEAD => '1\\t0\\t.coding-hermes/board/events.jsonl' and '1\\t0\\t.coding-hermes/board/tasks.jsonl' \u2014 1 insertion, 0 deletions on tasks.jsonl (git show --stat: '2 files changed, 2 insertions(+)'). (2) git show HEAD:.coding-hermes/board/tasks.jsonl | jq -e 'select(.id==\"CF-115\") | .status==\"pending\" and (.probe|length>0)' printed 'true' with JQ_EXIT=0; probe value is strictly one line (wc -l=1, 364 bytes, python check newline_count=1, no_embedded_newline=True) and starts_ok=True for prefix 'd=$(mktemp -d) && git clone '. (3) Ran the exact probe from repo root: output line 1 = 'measured: tip=80fca8b rows=85 events=115 sections=28 open_blockers=' (matched regex ^measured: .*open_blockers=$ => OPEN_BLOCKERS_EMPTY_OK), followed by 'probe_rc=0' (PROBE_RC_0_OK), script exit=0 \u2014 the fail-open reproduction is live. Probe is non-destructive: git status --porcelain --untracked-files=no empty after the run. (4) bash tests/selftest.sh => SELFTEST_REAL_EXIT=0 and prints 'SELFTEST: PASS' (grep -c = 1); bash scripts/boardctl validate => VALIDATE_EXIT=0 with line 34 'RESULT: OK (30 warning(s))'. (An earlier exit_code=2 was my own ${PIPESTATUS[0]} expansion under sh, not the selftest.)\nAll four filing sub-criteria verified at pushed HEAD c534bae: board-only 1-insertion/0-deletion diff, jq -e exits 0 with a single-line mktemp/git-clone probe, that probe reproduces the fail-open (open_blockers= empty, probe_rc=0), and both SELFTEST: PASS and RESULT: OK print with exit 0.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 Filing only - do NOT evaluate or implement the underlying fix. At the pushed HEAD: (1) git show --stat HEAD names .coding-hermes/board/tasks.jsonl with insertions and zero deletions; (2) git show HEAD:.coding-hermes/board/tasks.jsonl piped to jq -e with filter select(.id==\"CF-115\") | .status==\"pending\" and (.probe|length>0) exits 0, and the probe value is a single line beginning with: d=$(mktemp -d) && git clone (3) that exact probe, run from the repository root, prints a measured line whose open_blockers= value is empty and then probe_rc=0 - the fail-open reproduction; (4) bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at that HEAD.: Filing-only confirmed: HEAD=c534bae is pushed (git rev-parse @{u}==HEAD, rev-list --left-right --count @{u}...HEAD => '0 0', origin/main contains HEAD) and the diff touches only board files. (1) git show --numstat HEAD => '1\\t0\\t.coding-hermes/board/events.jsonl' and '1\\t0\\t.coding-hermes/board/tasks.jsonl' \u2014 1 insertion, 0 deletions on tasks.jsonl (git show --stat: '2 files changed, 2 insertions(+)'). (2) git show HEAD:.coding-hermes/board/tasks.jsonl | jq -e 'select(.id==\"CF-115\") | .status==\"pending\" and (.probe|length>0)' printed 'true' with JQ_EXIT=0; probe value is strictly one line (wc -l=1, 364 bytes, python check newline_count=1, no_embedded_newline=True) and starts_ok=True for prefix 'd=$(mktemp -d) && git clone '. (3) Ran the exact probe from repo root: output line 1 = 'measured: tip=80fca8b rows=85 events=115 sections=28 open_blockers=' (matched regex ^measured: .*open_blockers=$ => OPEN_BLOCKERS_EMPTY_OK), followed by 'probe_rc=0' (PROBE_RC_0_OK), script exit=0 \u2014 the fail-open reproduction is live. Probe is non-destructive: git status --porcelain --untracked-files=no empty after the run. (4) bash tests/selftest.sh => SELFTEST_REAL_EXIT=0 and prints 'SELFTEST: PASS' (grep -c = 1); bash scripts/boardctl validate => VALIDATE_EXIT=0 with line 34 'RESULT: OK (30 warning(s))'. (An earlier exit_code=2 was my own ${PIPESTATUS[0]} expansion under sh, not the selftest.)\nAll four filing sub-criteria verified at pushed HEAD c534bae: board-only 1-insertion/0-deletion diff, jq -e exits 0 with a single-line mktemp/git-clone probe, that probe reproduces the fail-open (open_blockers= empty, probe_rc=0), and both SELFTEST: PASS and RESULT: OK print with exit 0.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "Filing only - do NOT evaluate or implement the underlying fix. At the pushed HEAD: (1) git show --stat HEAD names .coding-hermes/board/tasks.jsonl with insertions and zero deletions; (2) git show HEAD:.coding-hermes/board/tasks.jsonl piped to jq -e with filter select(.id==\"CF-115\") | .status==\"pending\" and (.probe|length>0) exits 0, and the probe value is a single line beginning with: d=$(mktemp -d) && git clone (3) that exact probe, run from the repository root, prints a measured line whose open_blockers= value is empty and then probe_rc=0 - the fail-open reproduction; (4) bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at that HEAD.",
+                "status": "PASS",
+                "detail": "Filing-only confirmed: HEAD=c534bae is pushed (git rev-parse @{u}==HEAD, rev-list --left-right --count @{u}...HEAD => '0 0', origin/main contains HEAD) and the diff touches only board files. (1) git show --numstat HEAD => '1\\t0\\t.coding-hermes/board/events.jsonl' and '1\\t0\\t.coding-hermes/board/tasks.jsonl' \u2014 1 insertion, 0 deletions on tasks.jsonl (git show --stat: '2 files changed, 2 insertions(+)'). (2) git show HEAD:.coding-hermes/board/tasks.jsonl | jq -e 'select(.id==\"CF-115\") | .status==\"pending\" and (.probe|length>0)' printed 'true' with JQ_EXIT=0; probe value is strictly one line (wc -l=1, 364 bytes, python check newline_count=1, no_embedded_newline=True) and starts_ok=True for prefix 'd=$(mktemp -d) && git clone '. (3) Ran the exact probe from repo root: output line 1 = 'measured: tip=80fca8b rows=85 events=115 sections=28 open_blockers=' (matched regex ^measured: .*open_blockers=$ => OPEN_BLOCKERS_EMPTY_OK), followed by 'probe_rc=0' (PROBE_RC_0_OK), script exit=0 \u2014 the fail-open reproduction is live. Probe is non-destructive: git status --porcelain --untracked-files=no empty after the run. (4) bash tests/selftest.sh => SELFTEST_REAL_EXIT=0 and prints 'SELFTEST: PASS' (grep -c = 1); bash scripts/boardctl validate => VALIDATE_EXIT=0 with line 34 'RESULT: OK (30 warning(s))'. (An earlier exit_code=2 was my own ${PIPESTATUS[0]} expansion under sh, not the selftest.)"
+              }
+            ],
+            "summary": "All four filing sub-criteria verified at pushed HEAD c534bae: board-only 1-insertion/0-deletion diff, jq -e exits 0 with a single-line mktemp/git-clone probe, that probe reproduces the fail-open (open_blockers= empty, probe_rc=0), and both SELFTEST: PASS and RESULT: OK print with exit 0.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-115-QA1\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 Filing only - do NOT evaluate or implement the underlying fix. At the pushed HEAD: (1) git show --stat HEAD names .coding-hermes/board/tasks.jsonl with insertions and zero deletions; (2) git show HEAD:.coding-hermes/board/tasks.jsonl piped to jq -e with filter select(.id==\"CF-115\") | .status==\"pending\" and (.probe|length>0) exits 0, and the probe value is a single line beginning with: d=$(mktemp -d) && git clone (3) that exact probe, run from the repository root, prints a measured line whose open_blockers= value is empty and then probe_rc=0 - the fail-open reproduction; (4) bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at that HEAD.: Filing-only confirmed: HEAD=c534bae is pushed (git rev-parse @{u}==HEAD, rev-list --left-right --count @{u}...HEAD => '0 0', origin/main contains HEAD) and the diff touches only board files. (1) git show --numstat HEAD => '1\\t0\\t.coding-hermes/board/events.jsonl' and '1\\t0\\t.coding-hermes/board/tasks.jsonl' \u2014 1 insertion, 0 deletions on tasks.jsonl (git show --stat: '2 files changed, 2 insertions(+)'). (2) git show HEAD:.coding-hermes/board/tasks.jsonl | jq -e 'select(.id==\"CF-115\") | .status==\"pending\" and (.probe|length>0)' printed 'true' with JQ_EXIT=0; probe value is strictly one line (wc -l=1, 364 bytes, python check newline_count=1, no_embedded_newline=True) and starts_ok=True for prefix 'd=$(mktemp -d) && git clone '. (3) Ran the exact probe from repo root: output line 1 = 'measured: tip=80fca8b rows=85 events=115 sections=28 open_blockers=' (matched regex ^measured: .*open_blockers=$ => OPEN_BLOCKERS_EMPTY_OK), followed by 'probe_rc=0' (PROBE_RC_0_OK), script exit=0 \u2014 the fail-open reproduction is live. Probe is non-destructive: git status --porcelain --untracked-files=no empty after the run. (4) bash tests/selftest.sh => SELFTEST_REAL_EXIT=0 and prints 'SELFTEST: PASS' (grep -c = 1); bash scripts/boardctl validate => VALIDATE_EXIT=0 with line 34 'RESULT: OK (30 warning(s))'. (An earlier exit_code=2 was my own ${PIPESTATUS[0]} expansion under sh, not the selftest.)\nAll four filing sub-criteria verified at pushed HEAD c534bae: board-only 1-insertion/0-deletion diff, jq -e exits 0 with a single-line mktemp/git-clone probe, that probe reproduces the fail-open (open_blockers= empty, probe_rc=0), and both SELFTEST: PASS and RESULT: OK print with exit 0.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-03T20:07:05.084951",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-03T20:07:05.111562+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 19692,
+        "truncated": false,
+        "source": "git show c534baea8ebb"
+      }
+    ],
+    "task_id": "CF-115-QA1"
+  }
+}
