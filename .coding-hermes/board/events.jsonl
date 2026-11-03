@@ -126,3 +126,4 @@
 {"id":126,"timestamp":"2026-11-03T20:20:00+00:00","event_type":"task_created","task_id":"CF-116","actor":"foreman","detail":"{\"id\":\"CF-116\",\"status\":\"pending\",\"filed_by\":\"code-factory-docs-qa-2026-11-03-19-51-49\",\"class\":\"coverage assertion counts rows, not identities\",\"why\":\"mid-run insert: received == total while one row is never served and one is served twice\"}","tick_number":null}
 {"id":127,"timestamp":"2026-11-03T20:18:44+00:00","event_type":"task_completed","task_id":"CF-114","actor":"foreman","detail":"{\"status\":\"complete\"}","tick_number":null}
 {"id":128,"timestamp":"2026-11-03T20:33:26+00:00","event_type":"task_created","task_id":"CF-117","actor":"foreman","detail":"{\"id\":\"CF-117\",\"status\":\"pending\"}","tick_number":null}
+{"id":129,"timestamp":"2026-11-03T20:49:27+00:00","event_type":"task_completed","task_id":"CF-117","actor":"foreman","detail":"{\"status\":\"complete\"}","tick_number":null}
