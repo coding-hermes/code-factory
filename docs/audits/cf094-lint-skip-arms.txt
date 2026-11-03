@@ -1,0 +1,40 @@
+# CF-094 probe transcript — regenerate with: bash docs/audits/cf094-lint-skip-arms.sh
+# tree: edc8e36924b86709589620762a89213cce99384d
+# host: Linux 7.0.0-38-generic x86_64
+# gitreins: gitreins 0.17.1
+# fixture: scripts/qa_cf094_ruff_violation.py — a Python file ruff format rejects (spaced args, dict padding, extra blanks)
+
+## control — the fixture really is a violation
+$ ruff format --check scripts/qa_cf094_ruff_violation.py
+Would reformat: scripts/qa_cf094_ruff_violation.py
+1 file would be reformatted
+EXIT: 1
+
+## arm 1 — ruff present on PATH
+$ gitreins guard --full --json     # with $(command -v ruff) on PATH
+GUARD_EXIT: 1
+lint.outcome: fail
+lint.passed: false
+lint.summary: ruff format --check: 1 file(s) would be reformatted — run `ruff format scripts/qa_cf094_ruff_violation.py`
+Would reformat: scripts/qa_cf094_ruff_violation.py
+1 file would be reformatted
+
+guard.passed: false
+guard.outcome: fail
+
+## arm 2 — same staged fixture, PATH without ruff
+$ PATH=/usr/local/bin:/usr/bin:/bin gitreins guard --full --json
+GUARD_EXIT: 0
+lint.outcome: unknown
+lint.passed: null
+lint.summary: skipped — no linter on PATH
+guard.passed: true
+guard.outcome: pass
+
+## config declares allow_skips (read from the tree under test)
+8:  allow_skips: false
+
+# read: arm 1 fails the lint check with a named reformat instruction, so the arm CAN fail.
+# arm 2 reports lint outcome 'unknown' ('skipped — no linter on PATH') and the guard still
+# returns PASS with the same violating file staged, so on any host without ruff the
+# tree-wide lint arm degrades to a silent skip (CF-094).
