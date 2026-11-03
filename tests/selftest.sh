@@ -32,8 +32,11 @@ printf '000'
 exit 7
 EOF
 chmod +x "$tmpd/curl"
+# The row under test is layer 00's `reach:` FAIL — one row per unreachable URL, not two.
+# PERF-013: a full run (base/harness/bus/repo) costs several times the CPU of the row it
+# proves here, so the fixture runs only that layer.
 out=$(env PATH="$tmpd:$PATH" HOME="$tmpd/home" NODE_PROJECT=demo CRIER_URL=http://closed.test:8767 \
-  /bin/bash "$HERE/scripts/project-node.sh" --check --project demo 2>&1); rc=$?
+  /bin/bash "$HERE/scripts/project-node.sh" --check --project demo --layers 00 2>&1); rc=$?
 expected='  FAIL  reach:http://closed.test:8767/health — -> 000'
 if [ "$rc" -ne 0 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ]; then
   say "  PASS  unreachable URL -> one 000 status"
@@ -44,6 +47,8 @@ rm -rf "$tmpd"
 
 # ch:trace row=CF-034 spec=README.md#status wave=none:serial test=tests/selftest.sh::clone-error-classification doc=README.md prompt=prompts/readme.md evidence=tests/selftest.sh::clone-error-classification witness=none:local-fixture verdict=none:open-finding commit=none:self-referential-hash memory=none:unresolved-namespace
 say "4. clone errors distinguish missing refs from repository access"
+# Both arms assert the classification of a layer-40 `repo_clone` row; no other layer can
+# change that verdict, so each runs only layer 40 (PERF-013).
 tmpd=$(mktemp -d)
 git init -q -b trunk "$tmpd/work"
 git -C "$tmpd/work" config user.email fixture@example.invalid
@@ -54,7 +59,7 @@ git -C "$tmpd/work" commit -qm fixture
 git clone -q --bare "$tmpd/work" "$tmpd/origin.git"
 missing_ref=$(env HOME="$tmpd/missing-home" NODE_PROJECT=demo \
   /bin/bash "$HERE/scripts/project-node.sh" --apply --project demo --harness fixture \
-  --repo "file://$tmpd/origin.git" 2>&1); rc=$?
+  --repo "file://$tmpd/origin.git" --layers 40 2>&1); rc=$?
 expected="  FAIL  repo_clone — ref 'main' was not found; pass --ref <branch-or-tag>"
 if [ "$rc" -ne 0 ] && [ "$(printf '%s\n' "$missing_ref" | grep -Fxc -- "$expected")" = 1 ] \
   && ! printf '%s\n' "$missing_ref" | grep -Fq 'private repos need a deploy key'; then
@@ -76,7 +81,7 @@ EOF
 chmod +x "$tmpd/bin/git"
 private_repo=$(env PATH="$tmpd/bin:$PATH" REAL_GIT="$(command -v git)" HOME="$tmpd/private-home" NODE_PROJECT=demo \
   /bin/bash "$HERE/scripts/project-node.sh" --apply --project demo --harness fixture \
-  --repo https://private.fixture.invalid/repo.git 2>&1); rc=$?
+  --repo https://private.fixture.invalid/repo.git --layers 40 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$private_repo" | grep -Fq 'private repos need a deploy key'; then
   say "  PASS  repository access failure retains deploy-key hint"
 else
@@ -120,7 +125,7 @@ resolved_ref=$(env PATH="$tmpd/bin:$PATH" REAL_GIT="$(command -v git)" \
   FIXTURE_REPO="file://$tmpd/work" FIXTURE_LOG="$tmpd/git.log" \
   HOME="$tmpd/resolved-home" NODE_PROJECT=demo CRIER_URL= \
   /bin/bash "$HERE/scripts/project-node.sh" --apply --project demo --harness fixture \
-  --repo "file://$tmpd/work" --ref main 2>&1); rc=$?
+  --repo "file://$tmpd/work" --ref main --layers 40 2>&1); rc=$?
 expected="  FAIL  repo_clone — fatal: fixture checkout write failed (clone failed after ref 'main' resolved)"
 expected_calls=$(printf '%s\n' 'clone: refs/heads/main resolved; refusing clone' \
   'ls-remote: refs/heads/main refs/tags/main resolved')
@@ -268,8 +273,9 @@ say "14. harness-adapter FAIL rows are counted in the node summary (CF-055)"
 tmpd=$(mktemp -d)
 mkdir -p "$tmpd/scripts/harness" "$tmpd/home/.node" "$tmpd/home/repo" "$tmpd/bin"
 cp "$HERE/scripts/project-node.sh" "$HERE/scripts/lib.sh" "$HERE/scripts/disk_floor.py" "$tmpd/scripts/"
-# green node inputs: bus identity, a local repo, and a fake curl answering 200,
-# so the only failures in the red arm come from the adapter itself.
+# green node inputs: bus identity, a local repo, and a fake curl answering 200. Layers
+# 00/10/30/40 are out of scope (PERF-013: only layer 20 rows are asserted here), but the
+# inputs stay staged so this fixture still works as written if it is ever unscoped.
 printf '{"agent":"fixture"}' > "$tmpd/home/.node/crier.json"; chmod 600 "$tmpd/home/.node/crier.json"
 git -C "$tmpd/home/repo" init -q -b main
 git -C "$tmpd/home/repo" -c user.email=fixture@example.invalid -c user.name=fixture commit -qm fixture --allow-empty
@@ -291,7 +297,7 @@ EOF
 chmod +x "$tmpd/scripts/harness/install-fixture.sh"
 out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_PROJECT=fixture \
   NODE_HARNESS=fixture CRIER_URL=http://fixture.invalid:8767 NODE_DISK_FLOOR=1 \
-  /bin/bash "$tmpd/scripts/project-node.sh" --check 2>&1); rc=$?
+  /bin/bash "$tmpd/scripts/project-node.sh" --check --layers 20 2>&1); rc=$?
 fail_rows=$(printf '%s\n' "$out" | grep -c '^  FAIL')
 summary=$(printf '%s\n' "$out" | grep -oE '^NODE: FAIL \([0-9]+\)$' | grep -oE '[0-9]+')
 if [ "$rc" -ne 0 ] && [ -n "$summary" ] && [ "$summary" = "$fail_rows" ] && [ "$fail_rows" -ge 2 ] \
@@ -308,7 +314,7 @@ mv "$tmpd/scripts/harness/install-fixture.sh.new" "$tmpd/scripts/harness/install
 chmod +x "$tmpd/scripts/harness/install-fixture.sh"
 out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_PROJECT=fixture \
   NODE_HARNESS=fixture CRIER_URL=http://fixture.invalid:8767 NODE_DISK_FLOOR=1 \
-  /bin/bash "$tmpd/scripts/project-node.sh" --check 2>&1); rc=$?
+  /bin/bash "$tmpd/scripts/project-node.sh" --check --layers 20 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL')" = 0 ] \
   && printf '%s\n' "$out" | grep -Fq 'NODE: PASS'; then
   say "  PASS  passing adapter keeps NODE: PASS and exit 0"
@@ -357,7 +363,12 @@ cf054_run() {
   echo $?
 }
 node_call="bash '$tmpd/scripts/project-node.sh' --apply --project myproject --repo file://$tmpd/origin.git --ref main"
-h=$(mktemp -d); rc=$(cf054_run "$node_call; git -C '$h/repo' rev-parse HEAD" "$h" red)
+# The masking arm proves the trailing read-back's status wins over a NODE: FAIL. It needs
+# the clone to succeed (layer 40) and the bus to fail (layer 30); 00/10/20 cannot change
+# either outcome, so that arm runs 30,40 only (PERF-013). The two documented-shape arms
+# below run the documented command as written and stay unscoped on purpose.
+node_call_masking="$node_call --layers 30,40"
+h=$(mktemp -d); rc=$(cf054_run "$node_call_masking; git -C '$h/repo' rev-parse HEAD" "$h" red)
 old_summary=$(grep -E '^NODE: ' "$h/out.log" | tail -1)
 if [ "$rc" = 0 ] && printf '%s' "$old_summary" | grep -Fq 'NODE: FAIL' \
   && git -C "$h/repo" rev-parse HEAD >/dev/null 2>&1; then

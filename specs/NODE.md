@@ -30,6 +30,31 @@ the manifest to know where the artifacts are.
 | 40 repo | the repo cloned at a pinned ref | base |
 | 90 verify | one round trip whose digest is recomputed on the control host | all |
 
+### Fixture scope (`--layers`)
+
+A run costs every layer's work, but a test that asserts one layer's row needs that layer only.
+`project-node.sh --layers 00,10,20,30,40` runs only the named check layers: a comma-separated
+subset of `00,10,20,30,40`, where a single value is a list of one. An unknown element, an empty
+list or a stray comma prints the usage line to stderr and exits 2 before any layer runs, so a
+half-applied scope can never reach layer 00.
+
+A scoped run is a **fixture**, never a certification:
+
+- it prints one `SCOPE: layers <list> (fixture mode — not a node certification)` line before
+  layer 00, and `  SKIP  layer NN (out of scope)` in the position each skipped layer would have
+  taken;
+- it never writes `$HOME/.node/node.json`, even under `--apply` with every in-scope layer green:
+  layer 90 reports `  SKIP  layer 90 (fixture mode: no manifest)` instead, so **N-4** holds by
+  construction — no manifest, no node identity;
+- it does not resolve the disk floor when `00` is out of scope, because nothing measures or
+  consumes it and a fixture installs nothing (the fail-closed floor path keeps its coverage on
+  unscoped runs, `tests/selftest.sh` section 13);
+- the summary line keeps its existing shape (`NODE: PASS` / `NODE: FAIL (n)`); the absence of a
+  manifest, not the summary, is what makes a scoped run non-certifying.
+
+An unscoped run is unchanged in every respect: same rows, same order, same manifest behaviour,
+same exit codes.
+
 ## Laws
 
 - **N-1** No root. Any step needing sudo is wrong.
