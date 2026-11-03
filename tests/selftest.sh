@@ -258,5 +258,64 @@ else
 fi
 rm -rf "$tmpd"
 
+say "14. harness-adapter FAIL rows are counted in the node summary (CF-055)"
+# The adapter runs as a child process, so the FAILED counter it increments
+# (lib.sh) never reached the parent: a run could print k FAIL rows and
+# summarise a smaller number — or even NODE: PASS. The fixture copies the real
+# scripts into a temp tree (so project-node.sh resolves its own $HERE) and
+# points them at a fixture adapter that fails through the real lib.sh bad()
+# path; the counted rows are the real failure path, not a mock of the counter.
+tmpd=$(mktemp -d)
+mkdir -p "$tmpd/scripts/harness" "$tmpd/home/.node" "$tmpd/home/repo" "$tmpd/bin"
+cp "$HERE/scripts/project-node.sh" "$HERE/scripts/lib.sh" "$HERE/scripts/disk_floor.py" "$tmpd/scripts/"
+# green node inputs: bus identity, a local repo, and a fake curl answering 200,
+# so the only failures in the red arm come from the adapter itself.
+printf '{"agent":"fixture"}' > "$tmpd/home/.node/crier.json"; chmod 600 "$tmpd/home/.node/crier.json"
+git -C "$tmpd/home/repo" init -q -b main
+git -C "$tmpd/home/repo" -c user.email=fixture@example.invalid -c user.name=fixture commit -qm fixture --allow-empty
+cat > "$tmpd/bin/curl" <<'EOF'
+#!/usr/bin/env bash
+printf '200'
+EOF
+chmod +x "$tmpd/bin/curl"
+cat > "$tmpd/scripts/harness/install-fixture.sh" <<'EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$HERE/../lib.sh"
+say "harness: fixture (cf-055)"
+bad "harness:fixture/a" "simulated adapter failure one"
+bad "harness:fixture/b" "simulated adapter failure two"
+exit 1
+EOF
+chmod +x "$tmpd/scripts/harness/install-fixture.sh"
+out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_PROJECT=fixture \
+  NODE_HARNESS=fixture CRIER_URL=http://fixture.invalid:8767 NODE_DISK_FLOOR=1 \
+  /bin/bash "$tmpd/scripts/project-node.sh" --check 2>&1); rc=$?
+fail_rows=$(printf '%s\n' "$out" | grep -c '^  FAIL')
+summary=$(printf '%s\n' "$out" | grep -oE '^NODE: FAIL \([0-9]+\)$' | grep -oE '[0-9]+')
+if [ "$rc" -ne 0 ] && [ -n "$summary" ] && [ "$summary" = "$fail_rows" ] && [ "$fail_rows" -ge 2 ] \
+  && printf '%s\n' "$out" | grep -Fq '  FAIL  harness:fixture/a — simulated adapter failure one'; then
+  say "  PASS  adapter FAIL rows counted: $fail_rows rows -> NODE: FAIL ($summary)"
+else
+  say "  FAIL  summary said $summary but the run printed $fail_rows FAIL rows"; fails=$((fails+1))
+fi
+# the same fixture goes green: a passing adapter must keep NODE: PASS and exit 0
+sed -e 's/^bad /ok /' -e 's/failure one/pass one/' -e 's/failure two/pass two/' \
+  -e 's/^exit 1$/exit 0/' "$tmpd/scripts/harness/install-fixture.sh" \
+  > "$tmpd/scripts/harness/install-fixture.sh.new"
+mv "$tmpd/scripts/harness/install-fixture.sh.new" "$tmpd/scripts/harness/install-fixture.sh"
+chmod +x "$tmpd/scripts/harness/install-fixture.sh"
+out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_PROJECT=fixture \
+  NODE_HARNESS=fixture CRIER_URL=http://fixture.invalid:8767 NODE_DISK_FLOOR=1 \
+  /bin/bash "$tmpd/scripts/project-node.sh" --check 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL')" = 0 ] \
+  && printf '%s\n' "$out" | grep -Fq 'NODE: PASS'; then
+  say "  PASS  passing adapter keeps NODE: PASS and exit 0"
+else
+  say "  FAIL  passing adapter produced FAIL rows or a nonzero exit"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

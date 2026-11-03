@@ -115,7 +115,21 @@ inst="$HERE/harness/install-$HARNESS.sh"
 if [ ! -x "$inst" ]; then
   bad "harness:$HARNESS" "no adapter at scripts/harness/install-$HARNESS.sh"
 else
-  if [ "$MODE" = apply ]; then NODE_GATEWAY_PORT="$PORT" "$inst" --apply; else NODE_GATEWAY_PORT="$PORT" "$inst" --check; fi
+  # CF-055: the adapter is a child process, so its own FAILED counter (lib.sh)
+  # never reaches ours. Capture its output, echo it through unchanged, and add
+  # the `  FAIL` rows it printed to the parent counter so the NODE: FAIL (n)
+  # summary equals every FAIL row the run printed.
+  adapter_log="$(mktemp)"
+  if [ "$MODE" = apply ]; then
+    NODE_GATEWAY_PORT="$PORT" "$inst" --apply >"$adapter_log" 2>&1
+  else
+    NODE_GATEWAY_PORT="$PORT" "$inst" --check >"$adapter_log" 2>&1
+  fi
+  rc=$?
+  adapter_fails="$(grep -c '^  FAIL' "$adapter_log")" || true
+  cat "$adapter_log"
+  rm -f "$adapter_log"
+  FAILED=$((FAILED + adapter_fails))
 fi
 
 # ---------------------------------------------------------------- 30 bus
