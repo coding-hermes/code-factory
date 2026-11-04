@@ -1,0 +1,124 @@
+{
+  "task_id": "CF-129",
+  "task_title": "docs/BOARD.md: state which flag each board_drift.py leg reads, and prove it",
+  "task_criteria": [
+    "docs/BOARD.md no longer claims that --repo selects the repository resolving the ref: it states that --repo selects where the published bytes are read (scripts/board_drift.py:98,111) while HEAD and the ref resolve in --workdir (scripts/board_drift.py:167-172).",
+    "A workdir without an origin/main ref, run as 'python3 scripts/board_drift.py check --workdir <A> --repo <repo-with-origin/main> --ref origin/main', prints 'FAIL HEAD ancestry' and 'RESULT: DRIFT'; the same run with --no-head prints 'RESULT: OK'. Transcript committed at docs/audits/code-factory-docs-2026-11-04-CF-129.md.",
+    "tests/selftest.sh exits 0 after the change."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "27e007cc762efd83a1760409f75d3c0ec2e078ac",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T025710.660964Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n9:57PM INF scanned ~739555 bytes (739.55 KB) in 734ms\n9:57PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 114 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T025710.660964Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.J89KZBYo07/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  127/127 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [4467 chars omitted \u2014 71 line(s)] \u2026\n  PASS  census missing-projects -> named .projects refusal, exit 1, no census printed\n  PASS  census wrong-projects -> named .projects refusal, exit 1, no census printed\n  PASS  census nonjson -> named .projects refusal, exit 1, no census printed\n25. census compares all received rows with the first reported total\n  PASS  census short page -> rows received=865, total reported=866, exit 1, no census printed\n26. healthy census counts matching rows on both sides of the page boundary\n  PASS  census healthy -> 2 matching rows, exact row format, exit 0\n27. census still refuses a missing total\n  PASS  census missing total -> named refusal, exit 1, no census printed\n28. README census and executable mirror agree except for BASE\n  PASS  census README/mirror byte parity (BASE parameterisation only)\n29. a workdir board that is not the published board is named as drift (CF-114)\n  PASS  publish-drift red fixture, exit 1\n  PASS  publish-drift green fixture, exit 0\n  PASS  publish-drift zero fixture, exit 1\n  PASS  publish-drift missing fixture, exit 1\n  PASS  publish-drift malformed fixture, exit 1\n  PASS  publish-drift nonobject fixture, exit 1\n  PASS  publish-drift event-drift fixture, exit 1\n30. README Status rows 1 and 3 cite the interpreter-qualified --check\n  PASS  README Status rows 1 and 3 cite the interpreter-qualified --check\n  PASS  unqualified Status rows refused (missing-qualifier: Hermes in a bunker + HTTP gateway over tailnet missing-qualifier: Node inference credential )\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T025710.660964Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 docs/BOARD.md no longer claims that --repo selects the repository resolving the ref: it states that --repo selects where the published bytes are read (scripts/board_drift.py:98,111) while HEAD and the ref resolve in --workdir (scripts/board_drift.py:167-172).: docs/BOARD.md:58-59 now reads 'the **published bytes** come from `--repo <path>` \u2014 `git -C <repo> show <ref>:<file>` (`scripts/board_drift.py:98,111`); `--repo` defaults to the workdir'; docs/BOARD.md:60-62 reads 'the **HEAD/ancestry leg** is measured in `--workdir` \u2014 `git rev-parse HEAD`, `git rev-parse --verify <ref>^{commit}` and `git merge-base --is-ancestor HEAD <ref>` all run with `-C <workdir>` (`scripts/board_drift.py:167\u2013172`)'. Line 51 also now qualifies 'as resolved in the workdir'. The old false sentence is gone from BOARD.md/README.md (grep 'selects the repository resolving' and 'resolving the ref' -> no matches in docs/BOARD.md or README.md; the only hit is the audit doc quoting the old text as the claim being corrected). Code confirms the doc: scripts/board_drift.py:98 `repo = Path(args.repo)... if args.repo else workdir`, :111 `git(repo, \"show\", f\"{args.ref}:{BOARD / name}\")`, :165-172 ancestry probes all use `workdir`.\n  \u2713 A workdir without an origin/main ref, run as 'python3 scripts/board_drift.py check --workdir <A> --repo <repo-with-origin/main> --ref origin/main', prints 'FAIL HEAD ancestry' and 'RESULT: DRIFT'; the same run with --no-head prints 'RESULT: OK'. Transcript committed at docs/audits/code-factory-docs-2026-11-04-CF-129.md.: Independently reproduced: fixture /tmp/cf129eval/workdir built from origin/main board bytes, `git -C A rev-parse --verify origin/main` -> 'fatal: Needed a single revision'. ARM1 `python3 -B scripts/board_drift.py check --workdir A --repo /home/kara/code-factory --ref origin/main` printed 'FAIL  HEAD ancestry \u2014 git rev-parse --verify origin/main^{commit}: exit 128; fatal: Needed a single revision' and 'RESULT: DRIFT (1 failed)', ARM1_RC=1. ARM2 identical plus --no-head printed 'RESULT: OK', ARM2_RC=0. Transcript committed at docs/audits/code-factory-docs-2026-11-04-CF-129.md (section 3 'Measurement' contains the reproduction script and the ARM 1/ARM 2/ARM 3 transcript blocks matching the observed output).\n  \u2713 tests/selftest.sh exits 0 after the change.: Ran fresh: `bash tests/selftest.sh` in /home/kara/code-factory -> SELFTEST_RC=0, output tail 'SELFTEST: PASS' (arm 29 'a workdir board that is not the published board is named as drift (CF-114)' all sub-cases PASS).\nAll three criteria verified: BOARD.md now correctly splits --repo (published bytes, board_drift.py:98,111) from --workdir (HEAD/ancestry, :167-172), the DRIFT/OK arms reproduce exactly as documented with a committed transcript, and tests/selftest.sh exits 0.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 docs/BOARD.md no longer claims that --repo selects the repository resolving the ref: it states that --repo selects where the published bytes are read (scripts/board_drift.py:98,111) while HEAD and the ref resolve in --workdir (scripts/board_drift.py:167-172).: docs/BOARD.md:58-59 now reads 'the **published bytes** come from `--repo <path>` \u2014 `git -C <repo> show <ref>:<file>` (`scripts/board_drift.py:98,111`); `--repo` defaults to the workdir'; docs/BOARD.md:60-62 reads 'the **HEAD/ancestry leg** is measured in `--workdir` \u2014 `git rev-parse HEAD`, `git rev-parse --verify <ref>^{commit}` and `git merge-base --is-ancestor HEAD <ref>` all run with `-C <workdir>` (`scripts/board_drift.py:167\u2013172`)'. Line 51 also now qualifies 'as resolved in the workdir'. The old false sentence is gone from BOARD.md/README.md (grep 'selects the repository resolving' and 'resolving the ref' -> no matches in docs/BOARD.md or README.md; the only hit is the audit doc quoting the old text as the claim being corrected). Code confirms the doc: scripts/board_drift.py:98 `repo = Path(args.repo)... if args.repo else workdir`, :111 `git(repo, \"show\", f\"{args.ref}:{BOARD / name}\")`, :165-172 ancestry probes all use `workdir`.\n  \u2713 A workdir without an origin/main ref, run as 'python3 scripts/board_drift.py check --workdir <A> --repo <repo-with-origin/main> --ref origin/main', prints 'FAIL HEAD ancestry' and 'RESULT: DRIFT'; the same run with --no-head prints 'RESULT: OK'. Transcript committed at docs/audits/code-factory-docs-2026-11-04-CF-129.md.: Independently reproduced: fixture /tmp/cf129eval/workdir built from origin/main board bytes, `git -C A rev-parse --verify origin/main` -> 'fatal: Needed a single revision'. ARM1 `python3 -B scripts/board_drift.py check --workdir A --repo /home/kara/code-factory --ref origin/main` printed 'FAIL  HEAD ancestry \u2014 git rev-parse --verify origin/main^{commit}: exit 128; fatal: Needed a single revision' and 'RESULT: DRIFT (1 failed)', ARM1_RC=1. ARM2 identical plus --no-head printed 'RESULT: OK', ARM2_RC=0. Transcript committed at docs/audits/code-factory-docs-2026-11-04-CF-129.md (section 3 'Measurement' contains the reproduction script and the ARM 1/ARM 2/ARM 3 transcript blocks matching the observed output).\n  \u2713 tests/selftest.sh exits 0 after the change.: Ran fresh: `bash tests/selftest.sh` in /home/kara/code-factory -> SELFTEST_RC=0, output tail 'SELFTEST: PASS' (arm 29 'a workdir board that is not the published board is named as drift (CF-114)' all sub-cases PASS).\nAll three criteria verified: BOARD.md now correctly splits --repo (published bytes, board_drift.py:98,111) from --workdir (HEAD/ancestry, :167-172), the DRIFT/OK arms reproduce exactly as documented with a committed transcript, and tests/selftest.sh exits 0.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "docs/BOARD.md no longer claims that --repo selects the repository resolving the ref: it states that --repo selects where the published bytes are read (scripts/board_drift.py:98,111) while HEAD and the ref resolve in --workdir (scripts/board_drift.py:167-172).",
+                "status": "PASS",
+                "detail": "docs/BOARD.md:58-59 now reads 'the **published bytes** come from `--repo <path>` \u2014 `git -C <repo> show <ref>:<file>` (`scripts/board_drift.py:98,111`); `--repo` defaults to the workdir'; docs/BOARD.md:60-62 reads 'the **HEAD/ancestry leg** is measured in `--workdir` \u2014 `git rev-parse HEAD`, `git rev-parse --verify <ref>^{commit}` and `git merge-base --is-ancestor HEAD <ref>` all run with `-C <workdir>` (`scripts/board_drift.py:167\u2013172`)'. Line 51 also now qualifies 'as resolved in the workdir'. The old false sentence is gone from BOARD.md/README.md (grep 'selects the repository resolving' and 'resolving the ref' -> no matches in docs/BOARD.md or README.md; the only hit is the audit doc quoting the old text as the claim being corrected). Code confirms the doc: scripts/board_drift.py:98 `repo = Path(args.repo)... if args.repo else workdir`, :111 `git(repo, \"show\", f\"{args.ref}:{BOARD / name}\")`, :165-172 ancestry probes all use `workdir`."
+              },
+              {
+                "criterion": "A workdir without an origin/main ref, run as 'python3 scripts/board_drift.py check --workdir <A> --repo <repo-with-origin/main> --ref origin/main', prints 'FAIL HEAD ancestry' and 'RESULT: DRIFT'; the same run with --no-head prints 'RESULT: OK'. Transcript committed at docs/audits/code-factory-docs-2026-11-04-CF-129.md.",
+                "status": "PASS",
+                "detail": "Independently reproduced: fixture /tmp/cf129eval/workdir built from origin/main board bytes, `git -C A rev-parse --verify origin/main` -> 'fatal: Needed a single revision'. ARM1 `python3 -B scripts/board_drift.py check --workdir A --repo /home/kara/code-factory --ref origin/main` printed 'FAIL  HEAD ancestry \u2014 git rev-parse --verify origin/main^{commit}: exit 128; fatal: Needed a single revision' and 'RESULT: DRIFT (1 failed)', ARM1_RC=1. ARM2 identical plus --no-head printed 'RESULT: OK', ARM2_RC=0. Transcript committed at docs/audits/code-factory-docs-2026-11-04-CF-129.md (section 3 'Measurement' contains the reproduction script and the ARM 1/ARM 2/ARM 3 transcript blocks matching the observed output)."
+              },
+              {
+                "criterion": "tests/selftest.sh exits 0 after the change.",
+                "status": "PASS",
+                "detail": "Ran fresh: `bash tests/selftest.sh` in /home/kara/code-factory -> SELFTEST_RC=0, output tail 'SELFTEST: PASS' (arm 29 'a workdir board that is not the published board is named as drift (CF-114)' all sub-cases PASS)."
+              }
+            ],
+            "summary": "All three criteria verified: BOARD.md now correctly splits --repo (published bytes, board_drift.py:98,111) from --workdir (HEAD/ancestry, :167-172), the DRIFT/OK arms reproduce exactly as documented with a committed transcript, and tests/selftest.sh exits 0.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-129\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 docs/BOARD.md no longer claims that --repo selects the repository resolving the ref: it states that --repo selects where the published bytes are read (scripts/board_drift.py:98,111) while HEAD and the ref resolve in --workdir (scripts/board_drift.py:167-172).: docs/BOARD.md:58-59 now reads 'the **published bytes** come from `--repo <path>` \u2014 `git -C <repo> show <ref>:<file>` (`scripts/board_drift.py:98,111`); `--repo` defaults to the workdir'; docs/BOARD.md:60-62 reads 'the **HEAD/ancestry leg** is measured in `--workdir` \u2014 `git rev-parse HEAD`, `git rev-parse --verify <ref>^{commit}` and `git merge-base --is-ancestor HEAD <ref>` all run with `-C <workdir>` (`scripts/board_drift.py:167\u2013172`)'. Line 51 also now qualifies 'as resolved in the workdir'. The old false sentence is gone from BOARD.md/README.md (grep 'selects the repository resolving' and 'resolving the ref' -> no matches in docs/BOARD.md or README.md; the only hit is the audit doc quoting the old text as the claim being corrected). Code confirms the doc: scripts/board_drift.py:98 `repo = Path(args.repo)... if args.repo else workdir`, :111 `git(repo, \"show\", f\"{args.ref}:{BOARD / name}\")`, :165-172 ancestry probes all use `workdir`.\n  \u2713 A workdir without an origin/main ref, run as 'python3 scripts/board_drift.py check --workdir <A> --repo <repo-with-origin/main> --ref origin/main', prints 'FAIL HEAD ancestry' and 'RESULT: DRIFT'; the same run with --no-head prints 'RESULT: OK'. Transcript committed at docs/audits/code-factory-docs-2026-11-04-CF-129.md.: Independently reproduced: fixture /tmp/cf129eval/workdir built from origin/main board bytes, `git -C A rev-parse --verify origin/main` -> 'fatal: Needed a single revision'. ARM1 `python3 -B scripts/board_drift.py check --workdir A --repo /home/kara/code-factory --ref origin/main` printed 'FAIL  HEAD ancestry \u2014 git rev-parse --verify origin/main^{commit}: exit 128; fatal: Needed a single revision' and 'RESULT: DRIFT (1 failed)', ARM1_RC=1. ARM2 identical plus --no-head printed 'RESULT: OK', ARM2_RC=0. Transcript committed at docs/audits/code-factory-docs-2026-11-04-CF-129.md (section 3 'Measurement' contains the reproduction script and the ARM 1/ARM 2/ARM 3 transcript blocks matching the observed output).\n  \u2713 tests/selftest.sh exits 0 after the change.: Ran fresh: `bash tests/selftest.sh` in /home/kara/code-factory -> SELFTEST_RC=0, output tail 'SELFTEST: PASS' (arm 29 'a workdir board that is not the published board is named as drift (CF-114)' all sub-cases PASS).\nAll three criteria verified: BOARD.md now correctly splits --repo (published bytes, board_drift.py:98,111) from --workdir (HEAD/ancestry, :167-172), the DRIFT/OK arms reproduce exactly as documented with a committed transcript, and tests/selftest.sh exits 0.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-04T02:58:32.867071",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-04T02:58:32.883540+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 13247,
+        "truncated": false,
+        "source": "git show 27e007cc762e"
+      }
+    ],
+    "task_id": "CF-129"
+  }
+}

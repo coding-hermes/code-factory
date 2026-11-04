@@ -1,0 +1,275 @@
+commit da4c5fd6fbe9f77bd7162258a0ff6942fa5ba840
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Tue Nov 3 22:07:32 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Tue Nov 3 22:07:41 2026 -0500
+
+    docs(node): layer 20 does not establish a started gateway (CF-150)
+    
+    The layer table's `20 harness` cell claimed the ladder establishes "the chosen
+    harness + its gateway/CLI". It does not: the adapter starts `hermes serve` only
+    when ~/.hermes/config.yaml already carries dashboard.basic_auth
+    (scripts/harness/install-hermes.sh:93-102), and no shipped stage writes that
+    file — `node-create.sh --staged-files` prints five files and no config.yaml, and
+    no script under scripts/ redirects into it.
+    
+    On a node created by scripts/node-create.sh the layer therefore ends
+    `HERMES: FAIL (n)` and the ladder `NODE: FAIL (n)`; NODE: PASS is unreachable.
+    The cell now names only the rows the adapter prints, and a third bullet under
+    the table records the unbuilt capability, names CF-150 as its owner, and marks
+    the agent-image case `not measured`. docs/OPERATIONS.md §1's create-path
+    boundary carries the same statement.
+    
+    Evidence: docs/audits/code-factory-docs-2026-11-04-layer20.md plus the two
+    committed arm transcripts. Gate: bash tests/selftest.sh -> SELFTEST: PASS.
+---
+ docs/OPERATIONS.md                                 |   2 +-
+ docs/audits/code-factory-CF-150-DOC1.layer20.txt   |  22 ++++
+ docs/audits/code-factory-CF-150-DOC1.probe.txt     |  42 ++++++++
+ .../audits/code-factory-docs-2026-11-04-layer20.md | 116 +++++++++++++++++++++
+ specs/NODE.md                                      |  15 ++-
+ 5 files changed, 194 insertions(+), 3 deletions(-)
+
+diff --git a/docs/OPERATIONS.md b/docs/OPERATIONS.md
+index e2b94b8..8172f2e 100644
+--- a/docs/OPERATIONS.md
++++ b/docs/OPERATIONS.md
+@@ -8,7 +8,7 @@ One isolated bunker agent is one project node: one repo, one harness, one crier
+ 
+ The intended lifecycle is: qualify control host → create and provision a node → establish gateway and bus identity → attach repo/harness → arm scheduler target only after checks → dispatch one bounded task → independently verify artifacts → recover or rebuild from evidence → revoke and remove all state on teardown.
+ 
+-**Current implementation boundary:** the checked-in scripts do not yet implement that complete lifecycle. In particular, `scripts/node-create.sh` stages scripts and calls node provisioning, but does not stage the required crier identity bundle; `project-node.sh` therefore fails its bus layer on a fresh node. README also records node inference credentials missing, crier identity missing, scheduler→crier dispatch built but disarmed, and a round trip through the node's own gateway not yet proven. Treat creation, dispatch, rebuild, and end-to-end operations as **BLOCKED / NOT YET** until the gates below have been implemented and observed. Do not call them live operations.
++**Current implementation boundary:** the checked-in scripts do not yet implement that complete lifecycle. In particular, `scripts/node-create.sh` stages scripts and calls node provisioning, but does not stage the required crier identity bundle; `project-node.sh` therefore fails its bus layer on a fresh node. The create path also stages no `~/.hermes/config.yaml`, so the Hermes adapter refuses the public bind (`FAIL gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml`, `scripts/harness/install-hermes.sh:100`) and layer 20 fails on any node that does not already carry that file (CF-150; `specs/NODE.md` § Layers). README also records node inference credentials missing, crier identity missing, scheduler→crier dispatch built but disarmed, and a round trip through the node's own gateway not yet proven. Treat creation, dispatch, rebuild, and end-to-end operations as **BLOCKED / NOT YET** until the gates below have been implemented and observed. Do not call them live operations.
+ 
+ ## Readiness labels
+ 
+diff --git a/docs/audits/code-factory-CF-150-DOC1.layer20.txt b/docs/audits/code-factory-CF-150-DOC1.layer20.txt
+new file mode 100644
+index 0000000..2008e96
+--- /dev/null
++++ b/docs/audits/code-factory-CF-150-DOC1.layer20.txt
+@@ -0,0 +1,22 @@
++node provisioning — project=probe harness=hermes host=karaHermes-mde-7840hs
++SCOPE: layers 20 (fixture mode — not a node certification)
++  SKIP  layer 00 (out of scope)
++  SKIP  layer 10 (out of scope)
++[20] harness
++harness: hermes (pin 0.19.0, port 18993)
++  PASS  python — 3.12.13 (hermes-agent 0.19.0 requires >=3.11,<3.14)
++  PASS  binary — $HOME/hermes-venv/bin/hermes
++  PASS  version — hermes 0.19.0
++  FAIL  port — nothing on :18993
++  FAIL  inference_key — no provider key — a turn dies at 'No inference provider configured'
++apply
++  ..    already installed: hermes 0.19.0
++  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml
++
++HERMES: FAIL (3)
++  SKIP  layer 30 (out of scope)
++  SKIP  layer 40 (out of scope)
++  SKIP  layer 90 (fixture mode: no manifest)
++
++NODE: FAIL (3)
++layer20_rc=1
+diff --git a/docs/audits/code-factory-CF-150-DOC1.probe.txt b/docs/audits/code-factory-CF-150-DOC1.probe.txt
+new file mode 100644
+index 0000000..66f31a4
+--- /dev/null
++++ b/docs/audits/code-factory-CF-150-DOC1.probe.txt
+@@ -0,0 +1,42 @@
++=== ARM A_create_path_state (config=none, port=18991) ===
++harness: hermes (pin 0.19.0, port 18991)
++  PASS  python — 3.12.13 (hermes-agent 0.19.0 requires >=3.11,<3.14)
++  PASS  binary — $HOME/hermes-venv/bin/hermes
++  PASS  version — hermes 0.19.0
++  FAIL  port — nothing on :18991
++  FAIL  inference_key — no provider key — a turn dies at 'No inference provider configured'
++apply
++  ..    already installed: hermes 0.19.0
++  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml
++
++HERMES: FAIL (3)
++arm_rc=1
++
++=== ARM B_control_basic_auth_present (config=basic_auth, port=18992) ===
++harness: hermes (pin 0.19.0, port 18992)
++  PASS  python — 3.12.13 (hermes-agent 0.19.0 requires >=3.11,<3.14)
++  PASS  binary — $HOME/hermes-venv/bin/hermes
++  PASS  version — hermes 0.19.0
++  FAIL  port — nothing on :18992
++  FAIL  inference_key — no provider key — a turn dies at 'No inference provider configured'
++apply
++  ..    already installed: hermes 0.19.0
++  FAIL  gateway_start — -> 000000 (see ~/.node-serve-18992.log)
++
++HERMES: FAIL (3)
++arm_rc=1
++
++=== STAGED FILE LIST (shipped code, create path) ===
++project-node.sh
++lib.sh
++disk_floor.py
++reclaim_disk.py
++harness/install-hermes.sh
++staged_rows=5
++staged_config_yaml=0
++
++=== WRITERS OF ~/.hermes/config.yaml ANYWHERE IN scripts/ ===
++scripts/bunker-server-install.sh:30:cfg="${BUNKER_CONFIG:-$HOME/.config/bunker/config.yaml}"
++scripts/harness/install-hermes.sh:94:    if grep -q 'basic_auth' "$HOME/.hermes/config.yaml" 2>/dev/null; then
++scripts/harness/install-hermes.sh:100:      bad "gateway_start" "refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml"
++config_yaml_write_ops=0
+diff --git a/docs/audits/code-factory-docs-2026-11-04-layer20.md b/docs/audits/code-factory-docs-2026-11-04-layer20.md
+new file mode 100644
+index 0000000..6bd8810
+--- /dev/null
++++ b/docs/audits/code-factory-docs-2026-11-04-layer20.md
+@@ -0,0 +1,116 @@
++# code-factory docs tick — 2026-11-04T02:39:16-05:00 (layer 20)
++
++Lane: `code-factory-docs`. Baseline HEAD at selection: `4bf29e9`. Sibling lanes land on this
++checkout continuously; the binding SHA is the implementation commit named in the tray below.
++
++Filename note: `docs/audits/code-factory-docs-2026-11-04.md` already exists in-tree from `2c48149`
++(committed 2026-11-03 21:46, header naming this same tick id) and records the **CF-079** correction
++to layers 30 and 90. This file is the same tick id's separate correction and does not overwrite it.
++
++## 1. The claim corrected
++
++`specs/NODE.md` layer table row **20 harness** claimed the ladder *establishes* "the chosen harness
+++ its gateway/CLI". The shipped create path cannot reach a started gateway: the Hermes adapter starts
++`hermes serve` only when `~/.hermes/config.yaml` already carries `dashboard.basic_auth`, and no
++shipped stage writes that file. This is the last cell of the class that `6f75e28` (layer 40) and
++`2c48149` (layers 30, 90) narrowed. Row `CF-150` records the same defect as a create-path bug and
++named the missing documentation half ("and no doc says how").
++
++| # | File:line | Claim (before) | Correction (after) |
++|---|---|---|---|
++| 1 | `specs/NODE.md:28` | "the chosen harness + its gateway/CLI" | the harness binary plus the adapter's own gate rows, printed verbatim (`python`, `binary`, `version`, `port`, `inference_key`, `gateway_start`); `gateway_start` is a **refusal** on a node whose `~/.hermes/config.yaml` carries no `dashboard.basic_auth` |
++| 2 | `specs/NODE.md:33-45` | "Two capabilities … not established by any shipped layer" | "Three capabilities …", new first bullet **A started gateway on a freshly created node**: the create path, the adapter gate, `HERMES: FAIL (n)` → `NODE: FAIL (n)`, `NODE: PASS` unreachable, and "not measured" for the agent image |
++| 3 | `docs/OPERATIONS.md:11` | create-path boundary named only the missing crier identity bundle | adds: the create path stages no `~/.hermes/config.yaml`, so the adapter refuses the public bind and layer 20 fails (CF-150) |
++
++Nothing else in either file was touched: `git diff --stat` → `docs/OPERATIONS.md | 2 +-`,
++`specs/NODE.md | 15 +++++++++++++--`.
++
++## 2. The code path that proves the new statement
++
++| Evidence | Path | What it shows |
++|---|---|---|
++| The gate | `scripts/harness/install-hermes.sh:93-102` | `if ! (ss … grep -q ":$PORT ")` → `if grep -q 'basic_auth' "$HOME/.hermes/config.yaml"` → start `hermes serve`; **else** `bad "gateway_start" "refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml"` (line 100) |
++| The caller | `scripts/project-node.sh:228`, `:233-236`, `:318` | layer 20 runs the adapter with `--apply`; the adapter's `  FAIL` rows are counted into the parent counter, so the refusal reaches `NODE: FAIL (n)` |
++| The create path | `scripts/node-create.sh` (`--staged-files`) | stages exactly five files: `project-node.sh`, `lib.sh`, `disk_floor.py`, `reclaim_disk.py`, `harness/install-hermes.sh` — no `config.yaml` |
++| No writer anywhere | `grep -rnE 'config\.yaml"?[[:space:]]*>>?\|tee .*config\.yaml\|write_text.*config\.yaml\|safe_dump' scripts/` | 0 hits: the file is only read (`install-hermes.sh:94`) |
++
++## 3. Literal command output
++
++Transcripts committed beside this file: `docs/audits/code-factory-CF-150-DOC1.probe.txt` (arms A/B,
++staged-file census, writer grep) and `docs/audits/code-factory-CF-150-DOC1.layer20.txt` (the ladder).
++
++Arm A — create-path state (throwaway `HOME`, no `config.yaml`, stub `$HOME/hermes-venv/bin/hermes`
++so no network or pip is involved):
++
++```
++apply
++  ..    already installed: hermes 0.19.0
++  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml
++
++HERMES: FAIL (3)
++arm_rc=1
++```
++
++Arm B — control, same fixture plus a `dashboard.basic_auth` block: the refusal row is gone and the
++branch runs (`FAIL gateway_start — -> 000000` comes from the stub exiting immediately; the doubled
++`000` is the shipped `curl … || echo 000` at line 97 firing after curl itself wrote `000`). This is
++what proves the gate is exactly the `basic_auth` grep and not something else.
++
++Arm C — the ladder's own end, scoped to layer 20:
++
++```
++[20] harness
++…
++  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml
++
++HERMES: FAIL (3)
++  SKIP  layer 30 (out of scope)
++  SKIP  layer 40 (out of scope)
++  SKIP  layer 90 (fixture mode: no manifest)
++
++NODE: FAIL (3)
++layer20_rc=1
++```
++
++Staged-file census, printed by the shipped code:
++
++```
++project-node.sh
++lib.sh
++disk_floor.py
++reclaim_disk.py
++harness/install-hermes.sh
++staged_rows=5
++staged_config_yaml=0
++```
++
++Re-run the whole set from the repository root: `bash tests/selftest.sh`,
++`bash scripts/node-create.sh --staged-files`, and the two committed transcripts (each is the saved
++stdout of a staged probe script quoted in §2).
++
++## 4. Claims I could not verify
++
++- Whether a bunker agent image already ships `~/.hermes/config.yaml` with `dashboard.basic_auth` —
++  **not measured**. No agent was spawned by this tick; the correction says so in the same sentence.
++- Whether layer 20 succeeds on a node that *does* carry the file — **not measured**. Arm B only
++  proves the branch is taken; the stub is not a gateway, so it cannot prove `-> 200`.
++- Whether the adapter's `basic_auth` check validates the secret's strength — already stated as
++  unvalidated in `docs/OPERATIONS.md` §3; **not measured** by this tick either.
++
++## 5. Found but not fixed (owned elsewhere)
++
++- `CF-150` — the create-path code fix itself (stage the config, or add the operator step to the
++  create path). This tick corrected only the spec/runbook side.
++- `CF-153` — `scripts/node-create.sh` accepts no `--ref`, while `README.md:80-82` tells a reader to
++  use one; the flag exists on `project-node.sh` only. README is the readme lane's surface.
++- `CF-145` — the README's fresh-host promise for Quick start; README lane.
++- `CF-154` — `docs/BOARD.md`'s census block quotes a warning count that is not a function of the
++  tree; docs-side, but a count, and it needs a stable `boardctl` binary to be provable.
++- `docs/audits/code-factory-docs-2026-11-04.md` was committed on 2026-11-03 21:46 carrying this
++  tick's id in its header (`2c48149`) — an evidence file that names a tick before it fired. Not
++  corrected here; it is the kind of claim this lane exists to catch and needs an owner.
++
++ch:trace row=CF-150 spec=specs/NODE.md#layers run=code-factory-docs-2026-11-04-02-39-16 test=bash tests/selftest.sh doc=specs/NODE.md prompt=prompts/docs.md evidence=docs/audits/code-factory-docs-2026-11-04-layer20.md witness=docs/audits/code-factory-CF-150-DOC1.layer20.txt verdict=none:judged-after-commit
++
++STATUS: PASS (documentation correction) · TIER: T3 — each corrected cell executed against the
++shipped ladder · EVIDENCE: re-runnable commands + committed transcripts
+diff --git a/specs/NODE.md b/specs/NODE.md
+index d89d7a1..0fc6b29 100644
+--- a/specs/NODE.md
++++ b/specs/NODE.md
+@@ -25,14 +25,25 @@ the manifest to know where the artifacts are.
+ |---|---|---|
+ | 00 preflight | arch, disk ≥ floor, memory, reachability to crier / PyPI / Go proxy | — |
+ | 10 base | python3 + venv, git, curl, tar, sha256sum; optionally jq, rg, node | preflight |
+-| 20 harness | the chosen harness + its gateway/CLI | base |
++| 20 harness | the harness binary plus the adapter's own gate rows, printed verbatim (`python`, `binary`, `version`, `port`, `inference_key`, and `gateway_start` when that block runs); `gateway_start` is a refusal on any node whose `~/.hermes/config.yaml` carries no `dashboard.basic_auth` | base |
+ | 30 bus | a crier identity file at `$HOME/.node/crier.json` and its mode 600 | harness |
+ | 40 repo | the repo cloned at a pinned ref | base |
+ | 90 verify | the node manifest (`$HOME/.node/node.json`), written only when every layer passed | all |
+ 
+-Two capabilities that the design describes are **not** established by any shipped layer, and this
++Three capabilities that the design describes are **not** established by any shipped layer, and this
+ table no longer claims them:
+ 
++- **A started gateway on a freshly created node.** Layer 20 runs the adapter with `--apply`
++  (`scripts/project-node.sh:228`), and the adapter starts `hermes serve` only when
++  `~/.hermes/config.yaml` already carries `dashboard.basic_auth`
++  (`scripts/harness/install-hermes.sh:93-102`); otherwise it prints
++  `FAIL gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml`.
++  No shipped stage writes that file — `scripts/node-create.sh --staged-files` prints five files
++  (`project-node.sh`, `lib.sh`, `disk_floor.py`, `reclaim_disk.py`, `harness/install-hermes.sh`) and
++  no `config.yaml`, and no script under `scripts/` redirects into it — so on a node created by
++  `scripts/node-create.sh` layer 20 ends `HERMES: FAIL (n)`, the ladder ends `NODE: FAIL (n)`, and
++  `NODE: PASS` is unreachable. Whether a bunker agent image already ships that file is **not
++  measured** by this repo. CF-150 owns the create-path fix; it is the source of this cell.
+ - **A node-side bus worker.** Layer 30 starts and checks no process and opens no socket:
+   `scripts/project-node.sh:244-249` tests `-f $STATE/crier.json`, then `stat -c '%a'` against `600`,
+   and prints `crier_identity` / `crier_mode`. Whether a worker is running on the node is unmeasured
