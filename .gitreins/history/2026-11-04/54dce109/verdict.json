@@ -1,0 +1,112 @@
+{
+  "task_id": "CF-127",
+  "task_title": "Hermes install logs are per-run under HOME, not a shared /tmp file",
+  "task_criteria": [
+    "install-hermes.sh writes its pip log under the node HOME with mode 600 via mktemp; a pre-existing unwritable /tmp/hermes-install.log no longer affects the install; a genuine pip failure reports pip's exit status and the log actually written; install-hermes.sh --check writes no log; tests/selftest.sh carries the arm (\u00a731) that reds on the old shape and greens on the new one; bash tests/selftest.sh prints SELFTEST: PASS and scripts/boardctl validate prints RESULT: OK"
+  ],
+  "passed": true,
+  "worktree": "/home/kara/.hermes/cache/scratch/cf-foreman-20261104-023916/land",
+  "branch": "",
+  "commit": "875bc7224d1d0dd0fd6c468ebda7075fbc77a55f",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/.hermes/cache/scratch/cf-foreman-20261104-023916/land/.gitreins/logs/guard-20261104T031005.543848Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n10:10PM INF scanned ~759981 bytes (759.98 KB) in 721ms\n10:10PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 115 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/.hermes/cache/scratch/cf-foreman-20261104-023916/land/.gitreins/logs/guard-20261104T031005.543848Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.1716UclNTQ/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  129/129 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [5133 chars omitted \u2014 80 line(s)] \u2026\n28. README census and executable mirror agree except for BASE\n  PASS  census README/mirror byte parity (BASE parameterisation only)\n29. a workdir board that is not the published board is named as drift (CF-114)\n  PASS  publish-drift red fixture, exit 1\n  PASS  publish-drift green fixture, exit 0\n  PASS  publish-drift zero fixture, exit 1\n  PASS  publish-drift missing fixture, exit 1\n  PASS  publish-drift malformed fixture, exit 1\n  PASS  publish-drift nonobject fixture, exit 1\n  PASS  publish-drift event-drift fixture, exit 1\n30. README Status rows 1 and 3 cite the interpreter-qualified --check\n  PASS  README Status rows 1 and 3 cite the interpreter-qualified --check\n  PASS  unqualified Status rows refused (missing-qualifier: Hermes in a bunker + HTTP gateway over tailnet missing-qualifier: Node inference credential )\n31. Hermes pip logs are private per run and distinguish filesystem failures (CF-127)\n  PASS  pip-log old shape: permission denied, exact misleading row, pip not invoked\n  PASS  pip-log --check: unchanged absent-binary rows, no log or pip invocation\n  PASS  pip-log new shape run 1: pip rc 23, distinct HOME log mode 600, fixed file untouched\n  PASS  pip-log new shape run 2: pip rc 23, distinct HOME log mode 600, fixed file untouched\n  PASS  pip-log creation failure: exact filesystem row, pip not invoked\n  PASS  pip-log successful install proceeds despite the unwritable fixed file\n  PASS  pip-log installed --check: unchanged binary rows, no new log or pip invocation\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/.hermes/cache/scratch/cf-foreman-20261104-023916/land/.gitreins/logs/guard-20261104T031005.543848Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 install-hermes.sh writes its pip log under the node HOME with mode 600 via mktemp; a pre-existing unwritable /tmp/hermes-install.log no longer affects the install; a genuine pip failure reports pip's exit status and the log actually written; install-hermes.sh --check writes no log; tests/selftest.sh carries the arm (\u00a731) that reds on the old shape and greens on the new one; bash tests/selftest.sh prints SELFTEST: PASS and scripts/boardctl validate prints RESULT: OK: scripts/harness/install-hermes.sh:83-96: log_template=\"$HOME/.hermes-install-$PORT.XXXXXXXX.log\"; `if pip_log=$(umask 077; mktemp \"$log_template\" 2>&1)` (mode 600, per-run under HOME, no /tmp/hermes-install.log reference anywhere in the file); creation failure -> `bad \"install_log\" \"cannot create $log_template \u2014 $pip_log\"`; genuine pip failure -> `bad \"install\" \"pip exited $rc \u2014 log: $pip_log\"` (reports pip's exit status and the actual log path). Log creation lives only inside `if [ \"$MODE\" = \"--apply\" ]` (line 81), so --check writes no log. tests/selftest.sh:1082-1215 carries \u00a731 'pip-log-path' with 7 arms: old-shape red fixture (permission denied on the fixed file, exact misleading row, pip not invoked), --check no-log/no-pip, two new-shape runs (distinct HOME logs, `stat -c %a` = 600, fixed file untouched), mktemp-denied creation-failure row, successful install despite unwritable fixed file, and installed --check unchanged. Test run: `bash tests/selftest.sh` -> EXIT=0, output '31. Hermes pip logs are private per run and distinguish filesystem failures (CF-127)' with all 7 arms PASS and final line 'SELFTEST: PASS'. `bash scripts/boardctl validate` -> EXIT=0, 'RESULT: OK (3 warning(s))' (warnings are pre-existing free-form CF-034 rows, not failures).\nPer-run HOME pip log via umask 077 mktemp with mode 600, accurate pip-exit reporting, no log on --check, and a \u00a731 selftest arm that reds on the old shape and greens on the new \u2014 verified by a green selftest and boardctl validate.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 install-hermes.sh writes its pip log under the node HOME with mode 600 via mktemp; a pre-existing unwritable /tmp/hermes-install.log no longer affects the install; a genuine pip failure reports pip's exit status and the log actually written; install-hermes.sh --check writes no log; tests/selftest.sh carries the arm (\u00a731) that reds on the old shape and greens on the new one; bash tests/selftest.sh prints SELFTEST: PASS and scripts/boardctl validate prints RESULT: OK: scripts/harness/install-hermes.sh:83-96: log_template=\"$HOME/.hermes-install-$PORT.XXXXXXXX.log\"; `if pip_log=$(umask 077; mktemp \"$log_template\" 2>&1)` (mode 600, per-run under HOME, no /tmp/hermes-install.log reference anywhere in the file); creation failure -> `bad \"install_log\" \"cannot create $log_template \u2014 $pip_log\"`; genuine pip failure -> `bad \"install\" \"pip exited $rc \u2014 log: $pip_log\"` (reports pip's exit status and the actual log path). Log creation lives only inside `if [ \"$MODE\" = \"--apply\" ]` (line 81), so --check writes no log. tests/selftest.sh:1082-1215 carries \u00a731 'pip-log-path' with 7 arms: old-shape red fixture (permission denied on the fixed file, exact misleading row, pip not invoked), --check no-log/no-pip, two new-shape runs (distinct HOME logs, `stat -c %a` = 600, fixed file untouched), mktemp-denied creation-failure row, successful install despite unwritable fixed file, and installed --check unchanged. Test run: `bash tests/selftest.sh` -> EXIT=0, output '31. Hermes pip logs are private per run and distinguish filesystem failures (CF-127)' with all 7 arms PASS and final line 'SELFTEST: PASS'. `bash scripts/boardctl validate` -> EXIT=0, 'RESULT: OK (3 warning(s))' (warnings are pre-existing free-form CF-034 rows, not failures).\nPer-run HOME pip log via umask 077 mktemp with mode 600, accurate pip-exit reporting, no log on --check, and a \u00a731 selftest arm that reds on the old shape and greens on the new \u2014 verified by a green selftest and boardctl validate.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "install-hermes.sh writes its pip log under the node HOME with mode 600 via mktemp; a pre-existing unwritable /tmp/hermes-install.log no longer affects the install; a genuine pip failure reports pip's exit status and the log actually written; install-hermes.sh --check writes no log; tests/selftest.sh carries the arm (\u00a731) that reds on the old shape and greens on the new one; bash tests/selftest.sh prints SELFTEST: PASS and scripts/boardctl validate prints RESULT: OK",
+                "status": "PASS",
+                "detail": "scripts/harness/install-hermes.sh:83-96: log_template=\"$HOME/.hermes-install-$PORT.XXXXXXXX.log\"; `if pip_log=$(umask 077; mktemp \"$log_template\" 2>&1)` (mode 600, per-run under HOME, no /tmp/hermes-install.log reference anywhere in the file); creation failure -> `bad \"install_log\" \"cannot create $log_template \u2014 $pip_log\"`; genuine pip failure -> `bad \"install\" \"pip exited $rc \u2014 log: $pip_log\"` (reports pip's exit status and the actual log path). Log creation lives only inside `if [ \"$MODE\" = \"--apply\" ]` (line 81), so --check writes no log. tests/selftest.sh:1082-1215 carries \u00a731 'pip-log-path' with 7 arms: old-shape red fixture (permission denied on the fixed file, exact misleading row, pip not invoked), --check no-log/no-pip, two new-shape runs (distinct HOME logs, `stat -c %a` = 600, fixed file untouched), mktemp-denied creation-failure row, successful install despite unwritable fixed file, and installed --check unchanged. Test run: `bash tests/selftest.sh` -> EXIT=0, output '31. Hermes pip logs are private per run and distinguish filesystem failures (CF-127)' with all 7 arms PASS and final line 'SELFTEST: PASS'. `bash scripts/boardctl validate` -> EXIT=0, 'RESULT: OK (3 warning(s))' (warnings are pre-existing free-form CF-034 rows, not failures)."
+              }
+            ],
+            "summary": "Per-run HOME pip log via umask 077 mktemp with mode 600, accurate pip-exit reporting, no log on --check, and a \u00a731 selftest arm that reds on the old shape and greens on the new \u2014 verified by a green selftest and boardctl validate.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-127\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 install-hermes.sh writes its pip log under the node HOME with mode 600 via mktemp; a pre-existing unwritable /tmp/hermes-install.log no longer affects the install; a genuine pip failure reports pip's exit status and the log actually written; install-hermes.sh --check writes no log; tests/selftest.sh carries the arm (\u00a731) that reds on the old shape and greens on the new one; bash tests/selftest.sh prints SELFTEST: PASS and scripts/boardctl validate prints RESULT: OK: scripts/harness/install-hermes.sh:83-96: log_template=\"$HOME/.hermes-install-$PORT.XXXXXXXX.log\"; `if pip_log=$(umask 077; mktemp \"$log_template\" 2>&1)` (mode 600, per-run under HOME, no /tmp/hermes-install.log reference anywhere in the file); creation failure -> `bad \"install_log\" \"cannot create $log_template \u2014 $pip_log\"`; genuine pip failure -> `bad \"install\" \"pip exited $rc \u2014 log: $pip_log\"` (reports pip's exit status and the actual log path). Log creation lives only inside `if [ \"$MODE\" = \"--apply\" ]` (line 81), so --check writes no log. tests/selftest.sh:1082-1215 carries \u00a731 'pip-log-path' with 7 arms: old-shape red fixture (permission denied on the fixed file, exact misleading row, pip not invoked), --check no-log/no-pip, two new-shape runs (distinct HOME logs, `stat -c %a` = 600, fixed file untouched), mktemp-denied creation-failure row, successful install despite unwritable fixed file, and installed --check unchanged. Test run: `bash tests/selftest.sh` -> EXIT=0, output '31. Hermes pip logs are private per run and distinguish filesystem failures (CF-127)' with all 7 arms PASS and final line 'SELFTEST: PASS'. `bash scripts/boardctl validate` -> EXIT=0, 'RESULT: OK (3 warning(s))' (warnings are pre-existing free-form CF-034 rows, not failures).\nPer-run HOME pip log via umask 077 mktemp with mode 600, accurate pip-exit reporting, no log on --check, and a \u00a731 selftest arm that reds on the old shape and greens on the new \u2014 verified by a green selftest and boardctl validate.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-04T03:11:19.087810",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-04T03:11:19.114880+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 43730,
+        "truncated": false,
+        "source": "git show 875bc7224d1d"
+      }
+    ],
+    "task_id": "CF-127"
+  }
+}
