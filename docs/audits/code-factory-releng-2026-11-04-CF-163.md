@@ -63,7 +63,7 @@ master_top_tree=.gitreins .hermes crier-fleet crier-interface docs get-h3 gitrei
 
 ## Scope correction to the previous arm of this tick
 
-The earlier execution of this tick recorded a gitleaks arm as "418 commits, 8.73 MB, no leaks found".
+The earlier execution of this tick recorded the arm `gitleaks detect -c .gitleaks.toml --redact` — no `--log-opts`, so no scope — as "418 commits, 8.73 MB, no leaks found"; that reading is not a scope claim, and the scoped arms in the table above follow.
 That reading is reproducible only for a main-scoped scan (`--log-opts="origin/main"` → 300 commits,
 0 findings at `c4fe94f`); the whole-ref scan is 1152 commits / 57.39 MB / 547 findings. A clean posture
 claim therefore has to name its `--log-opts`. Recorded as acceptance criterion 3 on CF-163, and in an

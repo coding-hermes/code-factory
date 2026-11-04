@@ -22,7 +22,12 @@ written, and not cleaned.
 | Board validity | `bash scripts/boardctl validate` | `RESULT: OK (3 warning(s))` — CF-034's two free-form fields + the headerless board, both pre-existing |
 | Board census | `wc -l`, `jq -r .id \| sort \| uniq -d` | 134 rows before this row, 0 duplicate ids, 45 `complete` / 6 `in_progress` / 83 `pending` |
 | GitHub Actions | `gh run list --repo coding-hermes/code-factory --limit 3` | `[]` — documented healthy no-Actions state, nothing to flag |
-| Secrets in history | `gitleaks detect -c .gitleaks.toml --redact` | 418 commits, 8.73 MB, **no leaks found** |
+| Secrets in history | `gitleaks detect -c .gitleaks.toml --redact --log-opts="--all"` | 547 findings in 64 commits, all 64 not ancestors of main; the `--log-opts="origin/main"` arm reports 0 findings |
+
+> Correction (CF-163 AC3): the original arm above recorded no `--log-opts`, so the number it
+> printed (418 commits, 8.73 MB) is not reproducible as a scope. Re-measured by the releng tick at
+> `main` = `1aeb0c7` (2026-11-04) with the two arms above (`--log-opts="--all"` → the 547 findings
+> cell above; `--log-opts="origin/main"` → 0 findings). The row that owns the rule is **CF-163** (AC3).
 
 ## Public posture
 

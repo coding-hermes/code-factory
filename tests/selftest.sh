@@ -1313,6 +1313,42 @@ else
 fi
 rm -rf "$tmpd"
 
+# CF-163 AC3: a secret-scan claim must name its scope. The public repo also publishes
+# an unrelated `master` lineage (547 gitleaks findings on 64 commits, none an ancestor
+# of main), so a green with no recorded --log-opts is not a posture claim. Arm 1
+# measures the real tree; arms 2 and 3 red/green one fixture line.
+say "34. a posture doc's gitleaks claim names its scan scope (CF-163 AC3)"
+out=$(python3 -B "$HERE/scripts/check_scan_scope.py" "$HERE" 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: OK'; then
+  say "  PASS  posture docs name their scan scope"
+else
+  say "  FAIL  posture docs scan-scope checker not green (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out"
+fi
+tmpd=$(mktemp -d)
+mkdir -p "$tmpd/docs/audits"
+printf '%s\n' '| Secrets | `gitleaks detect -c .gitleaks.toml --redact` | clean |' \
+  > "$tmpd/docs/audits/code-factory-releng-fixture.md"
+out=$(python3 -B "$HERE/scripts/check_scan_scope.py" "$tmpd" 2>&1); rc=$?
+if [ "$rc" -eq 1 ] \
+  && printf '%s\n' "$out" | grep -Eq '^  FAIL  audit-scope: .*:1 gitleaks claim names no --log-opts'; then
+  say "  PASS  unscoped claim -> FAIL audit-scope"
+else
+  say "  FAIL  unscoped claim escaped the scan-scope gate (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out"
+fi
+sed 's/--redact`/ --log-opts="--all"`/' "$tmpd/docs/audits/code-factory-releng-fixture.md" \
+  > "$tmpd/docs/audits/code-factory-releng-fixture.md.new"
+mv "$tmpd/docs/audits/code-factory-releng-fixture.md.new" \
+  "$tmpd/docs/audits/code-factory-releng-fixture.md"
+out=$(python3 -B "$HERE/scripts/check_scan_scope.py" "$tmpd" 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: OK'; then
+  say "  PASS  scoped claim -> OK"
+else
+  say "  FAIL  scoped claim not accepted (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out"
+fi
+rm -rf "$tmpd"
 
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
