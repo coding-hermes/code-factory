@@ -1913,5 +1913,32 @@ fi
 rm -rf "$tmpd"
 # END cf182-milestone-blockers
 
+say "39. acceptance-plan section mapping covers the tree (CF-198)"
+out=$(bash "$HERE/docs/audits/cf198-section-mapping.sh" 2>&1); rc=$?
+counts=$(printf '%s\n' "$out" | sed -n 's/^arms_plan=\([0-9][0-9]*\) arms_tree=\([0-9][0-9]*\)$/\1 \2/p')
+ap=${counts%% *}
+at=${counts##* }
+# Compare the two DERIVED counts against each other, never against a frozen literal:
+# a hard-coded total turns every legitimate section addition (mapping row + prose both
+# updated, checker green) into a red arm and pushes the next agent to edit the number.
+if [ "$rc" -eq 0 ] && [ -n "$counts" ] && [ "${ap:-0}" -gt 0 ] && [ "$ap" = "$at" ] \
+  && printf '%s\n' "$out" | grep -qx 'RESULT: OK'; then
+  say "  PASS  section-mapping-real — green verdict, arms_plan=$ap arms_tree=$at"
+else
+  say "  FAIL  section-mapping-real — expected RESULT: OK with arms_plan == arms_tree (exit $rc): $(printf '%s\n' "$out" | tail -3 | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+tmpd=$(mktemp -d)
+awk '!/^\| §38 /' "$HERE/docs/ACCEPTANCE-PLAN.md" > "$tmpd/plan-missing-row"
+out=$(bash "$HERE/docs/audits/cf198-section-mapping.sh" --plan "$tmpd/plan-missing-row" 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && ! printf '%s\n' "$out" | grep -qi 'unbound variable' \
+  && printf '%s\n' "$out" | grep -Eq '^  FAIL  section-mapping.*§38.*plan'; then
+  say "  PASS  section-mapping-red — missing §38 names plan side, exit $rc"
+else
+  say "  FAIL  section-mapping-red — missing §38 was not named as plan-side drift (exit $rc): $(printf '%s\n' "$out" | tail -3 | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
