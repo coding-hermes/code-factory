@@ -9,6 +9,13 @@ the repository root and exited 0 (`SELFTEST: PASS`, 88 `PASS` rows, suite counte
 29 sections — plus two lettered sub-arms, §4b and §7b, which the section regex `^say "[0-9]+\.` does
 not count, so the tree carries 31 arms; `scripts/boardctl validate` prints `RESULT: OK (48 warning(s))`;
 the board at that tip carries 117 task rows and 171 events (38 complete, 75 pending, 4 in_progress).
+**Delta measured 2026-11-04 04:03 at tip `79e9b59` (sync lane):** 134 task rows and 219 events
+(45 `complete`, 83 `pending`, 6 `in_progress`); `scripts/boardctl validate` prints
+`RESULT: OK (3 warning(s))` — CF-034's two free-form fields plus the headerless board;
+`tests/selftest.sh` prints `SELFTEST: PASS` with 103 `PASS` rows over 33 numbered sections at that
+head, loadavg 8.39. The published board bytes are identical to the checkout's
+(`sha256 05e5b2f3…a820a1` on both sides) and the tip is in parity with `origin/main` (0/0). Every
+number in this block was produced by the commands named in it at that tip; re-measure before quoting.
 **Delta measured 2026-11-04 03:02 at tip `2c48149`:** 125 task rows and 185 events before this tick's
 own audit event (186 at the landing commit) — 38 complete, 82 pending, 5 in_progress.
 `scripts/boardctl validate` prints `RESULT: OK (54 warning(s))`;
