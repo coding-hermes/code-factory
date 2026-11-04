@@ -38,6 +38,35 @@ public repo.
 5. Keep task IDs unique and acceptance criteria falsifiable. `tests/selftest.sh` checks row parsing;
    the boardctl validator is the schema/consistency gate.
 
+## Board lock adjudication
+
+`.coding-hermes/board/.lock` can exist in a working tree as untracked 0-byte residue. A
+present lock file is **not** proof of a held lock: no shipped script opens it, board
+commits land straight through it, and lanes that stand down on the file alone lose whole
+ticks to a barrier nobody enforces (CF-119). Before treating the path as held, classify it
+with the shipped adjudicator:
+
+```sh
+python3 scripts/board_lock.py            # default path .coding-hermes/board/.lock
+python3 scripts/board_lock.py <path>     # any lock path
+```
+
+It prints exactly one verdict line and exits 0, and never creates, truncates or deletes
+the lock:
+
+- `ABSENT` — nothing exists at the path.
+- `HELD holder=<pid>` — a live process holds an open fd on the path, or a non-blocking
+  exclusive `flock` probe failed with `EWOULDBLOCK`. A held lock means wait.
+- `RESIDUE consumers=<n> commits_after_mtime=<n|unknown>` — no holder is proven. Proceed
+  with the board write, and **do not delete the file**: residue is recorded, not removed
+  (CF-049 tracks the separate handoff that clears it from the registered workdir).
+
+`commits_after_mtime` counts board commits whose commit time is after the lock's mtime —
+the number that proves the file never excluded a writer (`unknown` when Git cannot
+answer). The file is git-ignored so a clone never carries it as untracked noise.
+`tests/selftest.sh` arm 33 proves both arms on fixtures: an unheld 0-byte lock reports
+`RESIDUE`, and a lock held by a live `flock` reports `HELD`.
+
 ## Publish-drift census
 
 Before editing a checkout's board, run the offline, read-only repository check (local refs

@@ -17,3 +17,4 @@ key*
 .gitreins/tasks.yaml.lock
 .gitreins/verdicts/
 .gitreins/quality.json
+.coding-hermes/board/.lock

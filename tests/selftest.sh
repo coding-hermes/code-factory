@@ -1257,5 +1257,62 @@ for arm in bunker-server-install node-create; do
 done
 rm -rf "$tmpd"
 
+say "33. the board lock adjudicator proves a holder before calling a lock held (CF-119)"
+# `.coding-hermes/board/.lock` is 0-byte residue with no shipped consumer and, before
+# CF-119, no ignore rule, yet lanes stood down on its presence. scripts/board_lock.py
+# must classify an unheld file as RESIDUE, call a lock HELD only when a live process
+# proves it, and never mutate the file (a classifier that deletes would be a second
+# defect). Verdict token is asserted, not the counts: the fixture lock lives outside a
+# git repository, so commits_after_mtime is honestly `unknown` there.
+tmpd=$(mktemp -d)
+mkdir -p "$tmpd/board"
+: > "$tmpd/board/.lock"
+size_before=$(stat -c %s "$tmpd/board/.lock")
+out=$(python3 -B "$HERE/scripts/board_lock.py" "$tmpd/board/.lock" 2>&1); rc=$?
+if [ "$rc" -eq 0 ] \
+  && [ "$(printf '%s\n' "$out" | wc -l)" -eq 1 ] \
+  && printf '%s\n' "$out" | grep -Eq '^RESIDUE consumers=[0-9]+ commits_after_mtime=' \
+  && [ "$(stat -c %s "$tmpd/board/.lock")" = "$size_before" ]; then
+  say "  PASS  unheld 0-byte lock -> RESIDUE, file untouched ($out)"
+else
+  say "  FAIL  unheld 0-byte lock not classified RESIDUE (rc=$rc): $out"; fails=$((fails+1))
+fi
+# HELD arm: a live process takes an exclusive flock and stays alive until reaped; the
+# adjudicator must prove the holder (fd scan or EWOULDBLOCK), not the file's presence.
+ready="$tmpd/ready"
+python3 -B - "$tmpd/board/.lock" "$ready" <<'PY' &
+import fcntl
+import os
+import sys
+import time
+
+lock, ready = sys.argv[1], sys.argv[2]
+fd = os.open(lock, os.O_RDONLY)
+fcntl.flock(fd, fcntl.LOCK_EX)
+with open(ready, "w") as stream:
+    stream.write("held\n")
+deadline = time.time() + 10
+while os.path.exists(ready) and time.time() < deadline:
+    time.sleep(0.05)
+PY
+holder=$!
+holder_ready=no
+for _ in $(seq 1 30); do [ -f "$ready" ] && { holder_ready=yes; break; }; sleep 0.1; done
+out=$(python3 -B "$HERE/scripts/board_lock.py" "$tmpd/board/.lock" 2>&1); rc=$?
+rm -f "$ready"
+kill "$holder" 2>/dev/null
+wait "$holder" 2>/dev/null
+if [ "$holder_ready" = yes ] \
+  && [ "$rc" -eq 0 ] \
+  && [ "$(printf '%s\n' "$out" | wc -l)" -eq 1 ] \
+  && printf '%s\n' "$out" | grep -Eq '^HELD holder='; then
+  say "  PASS  flock-held lock -> HELD ($out)"
+else
+  say "  FAIL  flock-held lock not classified HELD (holder_ready=$holder_ready rc=$rc): $out"
+  fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
