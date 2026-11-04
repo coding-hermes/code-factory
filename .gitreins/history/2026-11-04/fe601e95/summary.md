@@ -1,0 +1,32 @@
+# Verdict: CF-DOCS-20261104-0812-R3b
+
+**Task:** Docs lane third execution addendum: re-judge of the verification-events commit against the published remote
+**Evaluated:** 2026-11-04T09:17:19.655340
+**Result:** ✓ PASS
+
+## Pipeline Stages
+
+- ✓ **tier1**
+  -   ✓ lint: scanners: nice=nice -n 10
+  ✓ secrets: secrets: scanners=gitleaks+builtin cross-check
+  ✓ tests: scanners: nice=nice -n 10
+- ✓ **tier2**
+  - COMPLETE
+  ✓ At this control root (HEAD 13f6d7da), .coding-hermes/board/events.jsonl carries audit event 312 (task_id CF-155) naming tick code-factory-docs-2026-11-04-08-12-52 as a third-execution verification addendum that records CF-155 complete at 32f38a5 with verdict dir 69407914 and CF-176 complete at e0ff859 with verdict dir d731d2df, and audit event 313 (task_id CF-136) printing that tick's ticks row (status failed, commits 0) beside the two closures; bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK here; the commit touches .coding-hermes/board/events.jsonl only and mints no new row id; and it is published on the configured GitHub remote: git fetch gh main then git merge-base --is-ancestor HEAD gh/main succeeds with git rev-list --count gh/main..HEAD = 0. The clone's local 'origin' points at the filesystem workdir and is NOT the publication ref; publication is graded only against gh/main.: HEAD=13f6d7dabe58871cc936587a664185378e8852db (matches 13f6d7da). Event 312 (task_id=CF-155, event_type=audit) has tick=code-factory-docs-2026-11-04-08-12-52 and execution="third execution of this tick id — verification addendum only"; rows_verified_at_tip records CF-155 status=complete commit_hash=32f38a511a5a089f80be23413a0e41a368128b49 with verdict .gitreins/history/2026-11-04/69407914/verdict.json and CF-176 status=complete commit_hash=e0ff859867f840425f63b41ad3b25cc056685167 with verdict .gitreins/history/2026-11-04/d731d2df/verdict.json — both dirs exist on disk and both are tracked at gh/main (git ls-tree -r gh/main lists 69407914/verdict.json and d731d2df/verdict.json); both commits resolve (git cat-file -t => commit). Event 313 (task_id=CF-136) prints ticks_row "id=code-factory-docs-2026-11-04-08-12-52 ... status=failed outcome=failed ... commits=0 cost_usd=0.0 error='gateway HTTP 502...'" beside the contradiction naming both closures (CF-176 e0ff859 events 289-291, CF-155 32f38a5 events 306-308). Gates run fresh here: `bash tests/selftest.sh` => "SELFTEST: PASS", exit 0; `bash scripts/boardctl validate` => "RESULT: OK (3 warning(s))", exit 0. Commit scope: `git show --name-only HEAD` => only .coding-hermes/board/events.jsonl (2 insertions); tasks.jsonl diff HEAD~1..HEAD is empty (159 rows before and after) so no new row id was minted; event ids max=313, count=313, 0 duplicates. Publication: `git fetch gh main` => "13f6d7d..1cf0638 main -> gh/main" exit 0; `git merge-base --is-ancestor HEAD gh/main` => exit 0; `git rev-list --count gh/main..HEAD` => 0 (gh/main=1cf0638). Local origin=/home/kara/code-factory (filesystem workdir) was correctly not used for grading.
+All elements verified: events 312/313 carry the required addendum and CF-136 ticks-row evidence, selftest and boardctl validate both pass, the commit is events.jsonl-only with no new row id, and HEAD is fully published on gh/main (count 0).
+
+## Summary
+
+Judge Result: CF-DOCS-20261104-0812-R3b
+
+Stage tier1: PASS
+    ✓ lint: scanners: nice=nice -n 10
+  ✓ secrets: secrets: scanners=gitleaks+builtin cross-check
+  ✓ tests: scanners: nice=nice -n 10
+
+Stage tier2: PASS
+  COMPLETE
+  ✓ At this control root (HEAD 13f6d7da), .coding-hermes/board/events.jsonl carries audit event 312 (task_id CF-155) naming tick code-factory-docs-2026-11-04-08-12-52 as a third-execution verification addendum that records CF-155 complete at 32f38a5 with verdict dir 69407914 and CF-176 complete at e0ff859 with verdict dir d731d2df, and audit event 313 (task_id CF-136) printing that tick's ticks row (status failed, commits 0) beside the two closures; bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK here; the commit touches .coding-hermes/board/events.jsonl only and mints no new row id; and it is published on the configured GitHub remote: git fetch gh main then git merge-base --is-ancestor HEAD gh/main succeeds with git rev-list --count gh/main..HEAD = 0. The clone's local 'origin' points at the filesystem workdir and is NOT the publication ref; publication is graded only against gh/main.: HEAD=13f6d7dabe58871cc936587a664185378e8852db (matches 13f6d7da). Event 312 (task_id=CF-155, event_type=audit) has tick=code-factory-docs-2026-11-04-08-12-52 and execution="third execution of this tick id — verification addendum only"; rows_verified_at_tip records CF-155 status=complete commit_hash=32f38a511a5a089f80be23413a0e41a368128b49 with verdict .gitreins/history/2026-11-04/69407914/verdict.json and CF-176 status=complete commit_hash=e0ff859867f840425f63b41ad3b25cc056685167 with verdict .gitreins/history/2026-11-04/d731d2df/verdict.json — both dirs exist on disk and both are tracked at gh/main (git ls-tree -r gh/main lists 69407914/verdict.json and d731d2df/verdict.json); both commits resolve (git cat-file -t => commit). Event 313 (task_id=CF-136) prints ticks_row "id=code-factory-docs-2026-11-04-08-12-52 ... status=failed outcome=failed ... commits=0 cost_usd=0.0 error='gateway HTTP 502...'" beside the contradiction naming both closures (CF-176 e0ff859 events 289-291, CF-155 32f38a5 events 306-308). Gates run fresh here: `bash tests/selftest.sh` => "SELFTEST: PASS", exit 0; `bash scripts/boardctl validate` => "RESULT: OK (3 warning(s))", exit 0. Commit scope: `git show --name-only HEAD` => only .coding-hermes/board/events.jsonl (2 insertions); tasks.jsonl diff HEAD~1..HEAD is empty (159 rows before and after) so no new row id was minted; event ids max=313, count=313, 0 duplicates. Publication: `git fetch gh main` => "13f6d7d..1cf0638 main -> gh/main" exit 0; `git merge-base --is-ancestor HEAD gh/main` => exit 0; `git rev-list --count gh/main..HEAD` => 0 (gh/main=1cf0638). Local origin=/home/kara/code-factory (filesystem workdir) was correctly not used for grading.
+All elements verified: events 312/313 carry the required addendum and CF-136 ticks-row evidence, selftest and boardctl validate both pass, the commit is events.jsonl-only with no new row id, and HEAD is fully published on gh/main (count 0).
+
+Overall: PASS ✓
