@@ -100,7 +100,9 @@ def main(argv: list[str] | None = None) -> int:
         print("RESULT: FAIL (unreadable path)")
         return 2
     for relpath, lineno in violations:
-        print(f"  FAIL  audit-scope: {relpath}:{lineno} gitleaks claim names no {SCOPE_FLAG}")
+        print(
+            f"  FAIL  audit-scope: {relpath}:{lineno} gitleaks claim names no {SCOPE_FLAG}"
+        )
     if violations:
         print(f"RESULT: FAIL ({len(violations)} violation(s))")
         return 1
