@@ -46,9 +46,10 @@ One project (crier), one node, one directive that travelled over crier and reach
 gateway, one commit produced there, one artifact digest verified back on the control host, and a
 recorded FAIL when the gate is made to fail.
 
-**Status 2026-11-04T09:05Z (board re-measured at `171bf23` — 158 task rows, 308 events: 52 complete,
-8 in_progress, 98 pending; the previous snapshot, `bc68e59`, carried 148 rows / 273 events at
-49/8/91 and still reproduces at that tip; the node-run evidence below is the 02:35Z measurement at `d02916e`): NOT MET.** One leg moved since the `80fca8b`
+**Status 2026-11-04T09:34Z (board re-measured at `aef18d2` — 161 task rows, 322 events: 54 complete,
+8 in_progress, 99 pending; the previous snapshots still reproduce at the tips they name — `171bf23`
+carried 158 rows / 308 events at 52/8/98 and `bc68e59` 148 / 273 at 49/8/91; the node-run evidence
+below is the 02:35Z measurement at `d02916e`): NOT MET.** One leg moved since the `80fca8b`
 measurement: a directive is now recorded arriving at a node and executing there. The dispatch at
 19:37:51 handed the node the envelope itself as its prompt (`CF-139`, P0, open), and two later node
 runs ended `exit 124` at a 32.1 s caller-derived kill instead of the old 243.4 s constant, with the
@@ -62,10 +63,13 @@ a deliberately broken gate there. `CF-075` and `CF-077` remain closed (`77caa02`
 same fix, and no branch contains that object; the closure stands on the row's `commit_hash`
 `1232f7a`, which is an ancestor of `origin/main` (`CF-181`, open, owns the repair of that pointer). The other row this list gained on 2026-11-04, the node-create `CRIER_URL` gap
 `CF-126`, was closed at `85f852b` on the `dd7f64bc` verdict, so it is not listed among the blockers.
-Rows that are open, leg-adjacent and deliberately EXCLUDED from the blocker list, one clause each so membership stays decidable at `171bf23`: `CF-162` (verify-node.sh has no bus leg) and `CF-163` (the public `master` lineage) stop none of the four legs and stay board-only, as do the three rows the dogfood lane filed after the `1aeb0c7` measurement — `CF-172` (a layer-40 message tells the caller to pass `--repo` it already passed), `CF-173` (the layer-00 reach probe records `000` when `--max-time` cuts a transfer, so a URL that answered 200 reads unreachable) and `CF-174` (a harness `version` row prints `PASS` with an empty measurement) — plus `CF-183` (the
-adapter certifies any `hermes` on `PATH` as the pin, so the harness-identity row cannot fail; the
-directive leg needs a gateway that answers, not a certified pin, so the row qualifies a harness the
-leg already exercises rather than stopping it). Every other open row is outside these legs by subject — v1-scope features (`CF-003`, `CF-006`), node sizing (`CF-007`), scheduler throughput (`CF-134`) and the repository/tooling rows below `P1`. The open defects this milestone's legs depend on are `CF-080` (`--apply` clones
+Rows that are open, leg-adjacent and deliberately EXCLUDED from the blocker list, one clause each so membership stays decidable at `aef18d2`: `CF-162` (verify-node.sh has no bus leg) and `CF-163` (the public `master` lineage) stop none of the four legs and stay board-only, as do the three rows the dogfood lane filed after the `1aeb0c7` measurement — `CF-172` (a layer-40 message tells the caller to pass `--repo` it already passed), `CF-173` (the layer-00 reach probe records `000` when `--max-time` cuts a transfer, so a URL that answered 200 reads unreachable) and `CF-174` (a harness `version` row prints `PASS` with an empty measurement) — plus `CF-183` (the
+adapter certified any `hermes` on `PATH` as the pin, so the harness-identity row could not fail; it
+CLOSED at `5069c0a` on verdict `a539f890`, so it is no longer an open row and leaves this list — the
+reason it was never a leg blocker stands: the directive leg needs a gateway that answers, not a
+certified pin). The list is open rows only, and that is checkable rather than editorial:
+`jq -r 'select(.id=="CF-183")|.status' .coding-hermes/board/tasks.jsonl` printed `complete` at
+`aef18d2`, which is why it moved here. Every other open row is outside these legs by subject — v1-scope features (`CF-003`, `CF-006`), node sizing (`CF-007`), scheduler throughput (`CF-134`) and the repository/tooling rows below `P1`. The open defects this milestone's legs depend on are `CF-080` (`--apply` clones
 the workspace after the bus layer has already FAILED, manufacturing the repo-with-no-bus node
 `AGENTS.md` rule 9 forbids), the never-exercised legs `CF-001` (scheduler→crier dispatch has never
 completed a full arm/tick cycle), `CF-004` (no round trip through the node's own gateway), requirement
