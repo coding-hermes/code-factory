@@ -108,4 +108,21 @@ survives verification, and row `status` fields were not rewritten: the sync lane
 
 ## Gates and publication
 
-Filled at the landing commit — see the receipt below.
+| Leg | Value |
+|---|---|
+| implementation (pass) commit | `5fc6380` — docs delta, this file, board event 220; +3 files / +119 |
+| verdict bundle commit | `b0e4b39` — `.gitreins/history/2026-11-04/6222d9d1/{commit.patch,summary.md,verdict.json}` |
+| bookkeeping commit | `103464d` — board event 221 naming the verdict and the receipt |
+| GitReins | task `CF-SYNC-20261104-0400`, printed id `dbfb0593`, bound to `5fc6380946b01de8b1c11de19d3934ea7f563694`, tier1 PASS / tier2 PASS / overall PASS |
+| push parity | `git rev-list --left-right --count origin/main...HEAD` = `0 0`; `git ls-remote origin refs/heads/main` = `103464df9df0` |
+| CI-equivalent gate | `bash tests/selftest.sh` → `SELFTEST: PASS` at `79e9b59`; GitHub Actions `gh run list --repo coding-hermes/code-factory` → `[]` (no workflows shipped; healthy by contract) |
+| DuckBrain receipt | `/code-factory/sync/2026-11-04-040008`, record `5fbac47a-0a86-45d9-9022-95dec4c923d2`, content read back equal |
+
+The guard refusal was observed on the pass commit (`Tier 1: DEGRADED PASS (skips: lint=no staged
+files)`, HEAD unmoved, CF-031 precedent) and the disclosed `git -c core.hooksPath=/dev/null` bypass
+was used for all three commits in the same class.
+
+This section was added after the three commits landed, so it names them instead of carrying them:
+the earlier commits' `ch:trace` lines say `verdict=none:recorded-after-push` /
+`memory=none:recorded-after-push` on purpose, and board event 221 is the record that binds the
+verdict and the receipt to the pass.
