@@ -1,0 +1,114 @@
+{
+  "task_id": "CF-DOG-2026-11-04C",
+  "task_title": "File CF-179: node-create success line names a literal <uid> placeholder",
+  "task_criteria": [
+    "Filing-only scope: row CF-179 is present and pending in .coding-hermes/board/tasks.jsonl at this commit, carries acceptance_criteria and a re-runnable probe, and the probe's reproduction (grep shows the /home/<uid> line; test -e on the named path exits 1) is quoted verbatim in the commit body. The repair is future work tracked by the pending row and is NOT expected at this commit."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "409b07b9e85e5aec458cd6e909434cfa2aac7ce9",
+  "working_tree_content_fingerprint": "1482d9259ecbffbb0fb60522d4caf4f204d3fb22c0ce3bf589d185dd6f103b65",
+  "working_tree_dirty_path_count": 56,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T080938.023409Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n3:10AM INF scanned ~994364 bytes (994.36 KB) in 1.1s\n3:10AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 136 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T080938.023409Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.bzG6KNdU7U/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  153/153 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [6048 chars omitted \u2014 94 line(s)] \u2026\n  PASS  pip-log old shape: permission denied, exact misleading row, pip not invoked\n  PASS  pip-log --check: unchanged absent-binary rows, no log or pip invocation\n  PASS  pip-log new shape run 1: pip rc 23, distinct HOME log mode 600, fixed file untouched\n  PASS  pip-log new shape run 2: pip rc 23, distinct HOME log mode 600, fixed file untouched\n  PASS  pip-log creation failure: exact filesystem row, pip not invoked\n  PASS  pip-log successful install proceeds despite the unwritable fixed file\n  PASS  pip-log installed --check: unchanged binary rows, no new log or pip invocation\n32. the Quick start control-host commands name BUNKER_SERVER in a check row (CF-145)\n  PASS  bunker-server-install without BUNKER_SERVER -> named FAIL row, exit 1\n  PASS  node-create without BUNKER_SERVER -> named FAIL row, exit 1\n33. the board lock adjudicator proves a holder before calling a lock held (CF-119)\n  PASS  unheld 0-byte lock -> RESIDUE, file untouched (RESIDUE consumers=0 commits_after_mtime=unknown)\n  PASS  flock-held lock -> HELD (HELD holder=pid-3990872)\n34. a posture doc's gitleaks claim names its scan scope (CF-163 AC3)\n  PASS  posture docs name their scan scope\n  PASS  unscoped claim -> FAIL audit-scope\n  PASS  scoped claim -> OK\n35. node-create accepts and forwards --ref (CF-153)\n  PASS  --staged-files --ref master -> exit 0, same five-file staged set\n  PASS  ref 'master' crosses the transport as --ref 'master'\n  PASS  ref 're'lease' crosses the transport as --ref 're'\\''lease'\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T080938.023409Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 Filing-only scope: row CF-179 is present and pending in .coding-hermes/board/tasks.jsonl at this commit, carries acceptance_criteria and a re-runnable probe, and the probe's reproduction (grep shows the /home/<uid> line; test -e on the named path exits 1) is quoted verbatim in the commit body. The repair is future work tracked by the pending row and is NOT expected at this commit.: Row present: .coding-hermes/board/tasks.jsonl:153 (added by HEAD 409b07b, which changes only tasks.jsonl + events.jsonl). Parsed the added JSON line: id=CF-179, status=\"pending\", keys include acceptance_criteria (1479 chars, 5 numbered items) and probe=\"grep -n 'manifest: /home/<uid>' scripts/node-create.sh && test -e '/home/<uid>/.node/node.json'; echo \\\"named_path_exists=$?\\\"\" (re-runnable). events.jsonl adds task_created event id=281 for CF-179 with detail {\"id\":\"CF-179\",\"status\":\"pending\"}. I re-ran the probe: grep printed `130:[ \"$FAILED\" -eq 0 ] && { say \"NODE CREATED: $AGENT\"; say \"manifest: /home/<uid>/.node/node.json\"; exit 0; }` with G1_RC=0, and `test -e '/home/<uid>/.node/node.json'` gave named_path_exists=1. Commit body lines 14-20 quote this verbatim (including the `130:` grep prefix, `G1_RC=0` and `named_path_exists=1`); diff of the quoted line against scripts/node-create.sh:130 is byte-identical after stripping the grep prefix. Repair correctly absent: scripts/node-create.sh:130 still contains the literal /home/<uid>, `git diff HEAD -- scripts/node-create.sh` is empty, and the commit touches no source files \u2014 the fix is tracked as future work by the pending row.\nCF-179 is filed as a pending board row with acceptance_criteria and a re-runnable probe whose reproduction I re-verified and which is quoted verbatim in the commit body, while the actual repair is correctly left as future work.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 Filing-only scope: row CF-179 is present and pending in .coding-hermes/board/tasks.jsonl at this commit, carries acceptance_criteria and a re-runnable probe, and the probe's reproduction (grep shows the /home/<uid> line; test -e on the named path exits 1) is quoted verbatim in the commit body. The repair is future work tracked by the pending row and is NOT expected at this commit.: Row present: .coding-hermes/board/tasks.jsonl:153 (added by HEAD 409b07b, which changes only tasks.jsonl + events.jsonl). Parsed the added JSON line: id=CF-179, status=\"pending\", keys include acceptance_criteria (1479 chars, 5 numbered items) and probe=\"grep -n 'manifest: /home/<uid>' scripts/node-create.sh && test -e '/home/<uid>/.node/node.json'; echo \\\"named_path_exists=$?\\\"\" (re-runnable). events.jsonl adds task_created event id=281 for CF-179 with detail {\"id\":\"CF-179\",\"status\":\"pending\"}. I re-ran the probe: grep printed `130:[ \"$FAILED\" -eq 0 ] && { say \"NODE CREATED: $AGENT\"; say \"manifest: /home/<uid>/.node/node.json\"; exit 0; }` with G1_RC=0, and `test -e '/home/<uid>/.node/node.json'` gave named_path_exists=1. Commit body lines 14-20 quote this verbatim (including the `130:` grep prefix, `G1_RC=0` and `named_path_exists=1`); diff of the quoted line against scripts/node-create.sh:130 is byte-identical after stripping the grep prefix. Repair correctly absent: scripts/node-create.sh:130 still contains the literal /home/<uid>, `git diff HEAD -- scripts/node-create.sh` is empty, and the commit touches no source files \u2014 the fix is tracked as future work by the pending row.\nCF-179 is filed as a pending board row with acceptance_criteria and a re-runnable probe whose reproduction I re-verified and which is quoted verbatim in the commit body, while the actual repair is correctly left as future work.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "Filing-only scope: row CF-179 is present and pending in .coding-hermes/board/tasks.jsonl at this commit, carries acceptance_criteria and a re-runnable probe, and the probe's reproduction (grep shows the /home/<uid> line; test -e on the named path exits 1) is quoted verbatim in the commit body. The repair is future work tracked by the pending row and is NOT expected at this commit.",
+                "status": "PASS",
+                "detail": "Row present: .coding-hermes/board/tasks.jsonl:153 (added by HEAD 409b07b, which changes only tasks.jsonl + events.jsonl). Parsed the added JSON line: id=CF-179, status=\"pending\", keys include acceptance_criteria (1479 chars, 5 numbered items) and probe=\"grep -n 'manifest: /home/<uid>' scripts/node-create.sh && test -e '/home/<uid>/.node/node.json'; echo \\\"named_path_exists=$?\\\"\" (re-runnable). events.jsonl adds task_created event id=281 for CF-179 with detail {\"id\":\"CF-179\",\"status\":\"pending\"}. I re-ran the probe: grep printed `130:[ \"$FAILED\" -eq 0 ] && { say \"NODE CREATED: $AGENT\"; say \"manifest: /home/<uid>/.node/node.json\"; exit 0; }` with G1_RC=0, and `test -e '/home/<uid>/.node/node.json'` gave named_path_exists=1. Commit body lines 14-20 quote this verbatim (including the `130:` grep prefix, `G1_RC=0` and `named_path_exists=1`); diff of the quoted line against scripts/node-create.sh:130 is byte-identical after stripping the grep prefix. Repair correctly absent: scripts/node-create.sh:130 still contains the literal /home/<uid>, `git diff HEAD -- scripts/node-create.sh` is empty, and the commit touches no source files \u2014 the fix is tracked as future work by the pending row."
+              }
+            ],
+            "summary": "CF-179 is filed as a pending board row with acceptance_criteria and a re-runnable probe whose reproduction I re-verified and which is quoted verbatim in the commit body, while the actual repair is correctly left as future work.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-DOG-2026-11-04C\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 Filing-only scope: row CF-179 is present and pending in .coding-hermes/board/tasks.jsonl at this commit, carries acceptance_criteria and a re-runnable probe, and the probe's reproduction (grep shows the /home/<uid> line; test -e on the named path exits 1) is quoted verbatim in the commit body. The repair is future work tracked by the pending row and is NOT expected at this commit.: Row present: .coding-hermes/board/tasks.jsonl:153 (added by HEAD 409b07b, which changes only tasks.jsonl + events.jsonl). Parsed the added JSON line: id=CF-179, status=\"pending\", keys include acceptance_criteria (1479 chars, 5 numbered items) and probe=\"grep -n 'manifest: /home/<uid>' scripts/node-create.sh && test -e '/home/<uid>/.node/node.json'; echo \\\"named_path_exists=$?\\\"\" (re-runnable). events.jsonl adds task_created event id=281 for CF-179 with detail {\"id\":\"CF-179\",\"status\":\"pending\"}. I re-ran the probe: grep printed `130:[ \"$FAILED\" -eq 0 ] && { say \"NODE CREATED: $AGENT\"; say \"manifest: /home/<uid>/.node/node.json\"; exit 0; }` with G1_RC=0, and `test -e '/home/<uid>/.node/node.json'` gave named_path_exists=1. Commit body lines 14-20 quote this verbatim (including the `130:` grep prefix, `G1_RC=0` and `named_path_exists=1`); diff of the quoted line against scripts/node-create.sh:130 is byte-identical after stripping the grep prefix. Repair correctly absent: scripts/node-create.sh:130 still contains the literal /home/<uid>, `git diff HEAD -- scripts/node-create.sh` is empty, and the commit touches no source files \u2014 the fix is tracked as future work by the pending row.\nCF-179 is filed as a pending board row with acceptance_criteria and a re-runnable probe whose reproduction I re-verified and which is quoted verbatim in the commit body, while the actual repair is correctly left as future work.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-04T08:10:56.766483",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-04T08:10:56.793731+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 18826,
+        "truncated": false,
+        "source": "git show 409b07b9e85e"
+      }
+    ],
+    "task_id": "CF-DOG-2026-11-04C"
+  }
+}
