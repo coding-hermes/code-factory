@@ -2,7 +2,7 @@
 
 **Scope:** CF-101–CF-112 in [`PRD-code-factory.md`](PRD-code-factory.md), with contract details in `specs/NODE.md`, `specs/HARNESS.md`, and `specs/ENVELOPE.md`. This plan distinguishes source-level evidence from tests actually run. A passing repository self-test is not proof that every requirement is accepted.
 
-**Current state (re-measured 2026-11-04 22:43 at tip `7989ba3`):** `tests/selftest.sh` carries 33 sections — numbered 1 through 33 — plus two lettered sub-arms, §4b and §7b, which the section regex `^say "[0-9]+\.` does not count, so the tree carries 35 arms — and exits 0 (`SELFTEST: PASS`, 103 `PASS` rows, 19 intentional negative-fixture `FAIL` rows, suite counter `fails=0`) at loadavg 7.91. The board at tip `7989ba3` carries 130 task rows and 209 events. Every snapshot total that follows is pinned to the tip it names and is historical, not current.
+**Current state (re-measured 2026-11-04T06:15Z at tip `1aeb0c7`):** `tests/selftest.sh` carries 33 sections — numbered 1 through 33 — plus two lettered sub-arms, §4b and §7b, which the section regex `^say "[0-9]+\."` does not count, so the tree carries 35 arms — and exits 0 (`SELFTEST: PASS`, 103 `PASS` rows, 19 intentional negative-fixture `FAIL` rows, suite counter `fails=0`) at loadavg 8.56. The board at tip `1aeb0c7` carries 137 task rows and 233 events. Every snapshot total that follows is pinned to the tip it names and is historical, not current. The stamp this line used to carry (`2026-11-04 22:43` at `7989ba3`) mixed the 2026-11-03 local clock with the next day's UTC date, so it named a measurement ~18 h in the tick's future; stamps in this file are UTC, written `T…Z`, and name the tip they were measured at.
 
 **Evidence snapshot (re-measured 2026-11-04 02:35 at tip `d02916e`):** `tests/selftest.sh` was run from
 the repository root and exited 0 (`SELFTEST: PASS`, 88 `PASS` rows, suite counter `fails=0`) over
@@ -197,5 +197,17 @@ rc 0), and acceptance is **incomplete**. Split by what the tree can actually dem
   19:37:51 dispatch handing the node the envelope as its prompt). The milestone block in the PRD is
   the authority for that sentence — no commit produced on a node and no control-host artifact digest
   has been recorded, so the first-milestone gate stays open.
+- **Correction, 2026-11-04T06:26Z (sync lane, below `1aeb0c7`):** two statuses in the milestone
+  bullet above have moved since its `04:14` correction. Both `CF-001` and `CF-002` read
+  `status: in_progress` on the board at this tip — `CF-001` since `2026-11-04T05:54:41Z`, `CF-002`
+  since `2026-11-04T05:35:55Z` — so the `pending` wording no longer holds for either. `CF-001` is
+  therefore not "never-exercised" any more: `1aeb0c7` records the first scheduler-originated remote
+  dispatch accepted by the relay at `00:53:34` (message `7f4bc40b`), after 82 consecutive `403`
+  refusals, with AC6 and AC7 still open. `CF-002`'s parenthetical "a node turn cannot start
+  inference, so the commit leg is unreachable" is superseded as a *blocker* by `3c78dd1`, which
+  records a live probe on the node token (allowed model `200`, other model `403`, no model `400`,
+  unknown token `401`, revoked sub-token `401` with no restart) and a completing turn (`hermes chat`
+  -> `AC1-NODE-OK`). Neither row is `complete`, so the end-to-end commit leg is still **not**
+  demonstrated here, and this correction claims no such thing.
 
 No row above may be counted as PASS on the strength of the green self-test alone.
