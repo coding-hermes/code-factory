@@ -141,3 +141,21 @@ line-wise merge from a slurp/dump resolver.
 | `/code-factory/decisions/2026-11-04-pm-milestone-reanchor` | `8915336e-ef5a-4edc-a0a1-4f0a4daabf27` |
 | `/code-factory/findings/2026-11-04-append-only-reserialization` | `6194c660-a32c-49ad-ba80-c25c6bc135c3` |
 | `/code-factory/findings/2026-11-04-checkout-barrier-recurrence` | `d8473191-099f-4aca-94c3-31a1c8c38d9d` |
+| `/code-factory/findings/2026-11-04-append-only-reserialization-correction` | `4dcf1418-08b2-4dbd-9809-9cc9ac855e50` |
+
+### Verdicts on this filing
+
+The row was drafted `CF-142` and filed `CF-143`: a board read taken minutes before the append
+still said `CF-142` free, and the sync lane consumed it at `b5cf33a` for an unrelated flake
+finding. A draft id is not a reservation.
+
+| task | history dir | passed | commit | mode |
+|---|---|---|---|---|
+| `CF-142-DUCK1` | `.gitreins/history/2026-11-04/11b28235` | no | `4b24e84` | instrument: tier-2 output truncated at char 2500, `items: []`, no criterion graded |
+| `CF-143-DUCK2` | `.gitreins/history/2026-11-04/2b57ca8b` | yes | `4b24e84` | tier1 PASS, tier2 PASS (printed run id `d747ab6b`) |
+
+The truncated run is preserved, not deleted. Its cause was the criterion's own length: the
+criterion is echoed verbatim into the judge's JSON response, and the ~1000-character five-part
+version pushed that response past the parser's window. The same commit re-judged with a
+~390-character criterion passed cleanly, so the lesson is to keep filing criteria short and let
+the board row carry the detail.
