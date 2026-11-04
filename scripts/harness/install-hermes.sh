@@ -83,9 +83,21 @@ if [ "$MODE" = "--apply" ]; then
   say "apply"
   if [ -z "$h" ]; then
     "$PYTHON_BIN" -m venv "$VENV" || { bad "venv" "creation failed"; exit 1; }
-    "$VENV/bin/python" -m pip install --no-cache-dir "hermes-agent==$PIN" >/tmp/hermes-install.log 2>&1 \
-      && ok "install" "$("$VENV/bin/hermes" --version 2>/dev/null | head -1)" \
-      || { bad "install" "pip failed — /tmp/hermes-install.log"; exit 1; }
+    log_template="$HOME/.hermes-install-$PORT.XXXXXXXX.log"
+    if pip_log=$(umask 077; mktemp "$log_template" 2>&1); then
+      : # mktemp creates a private log before pip is invoked.
+    else
+      bad "install_log" "cannot create $log_template — $pip_log"
+      exit 1
+    fi
+    "$VENV/bin/python" -m pip install --no-cache-dir "hermes-agent==$PIN" >"$pip_log" 2>&1
+    rc=$?
+    if [ "$rc" -eq 0 ]; then
+      ok "install" "$("$VENV/bin/hermes" --version 2>/dev/null | head -1)"
+    else
+      bad "install" "pip exited $rc — log: $pip_log"
+      exit 1
+    fi
   else
     note "already installed: $("$h" --version 2>/dev/null | head -1)"
   fi

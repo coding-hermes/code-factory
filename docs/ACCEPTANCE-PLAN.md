@@ -2,6 +2,8 @@
 
 **Scope:** CF-101–CF-112 in [`PRD-code-factory.md`](PRD-code-factory.md), with contract details in `specs/NODE.md`, `specs/HARNESS.md`, and `specs/ENVELOPE.md`. This plan distinguishes source-level evidence from tests actually run. A passing repository self-test is not proof that every requirement is accepted.
 
+**Current state (measured 2026-11-04 for the CF-127 landing):** `tests/selftest.sh` carries 31 sections — numbered 1 through 31 — plus two lettered sub-arms, §4b and §7b, which the section regex `^say "[0-9]+\.` does not count, so the tree carries 33 arms — and exits 0 (`SELFTEST: PASS`, 99 `PASS` rows, 19 intentional negative-fixture `FAIL` rows, suite counter `fails=0`). The board at tip `4bf29e9` carries 129 task rows and 199 events. Every snapshot total that follows is pinned to the tip it names and is historical, not current.
+
 **Evidence snapshot (re-measured 2026-11-04 02:35 at tip `d02916e`):** `tests/selftest.sh` was run from
 the repository root and exited 0 (`SELFTEST: PASS`, 88 `PASS` rows, suite counter `fails=0`) over
 29 sections — plus two lettered sub-arms, §4b and §7b, which the section regex `^say "[0-9]+\.` does
@@ -65,8 +67,9 @@ Status definitions: **PASS** = requirement's acceptance behavior was exercised a
 A green suite is not PRD coverage, and the reverse gap matters as much as the forward one. At
 `d02916e`, `tests/selftest.sh` has 29 numbered sections plus two lettered sub-arms (§4b, §7b) —
 31 arms, 88 `PASS` rows — and only three requirements have an arm that can fail on them (`CF-102` ←
-§2 and §14, `CF-105` ← §5, `CF-109` ← §12 and §13 partially). Every other arm is governed by a spec, a
-rule or a board row, and the mapping below names all 31 so that a new arm cannot arrive without a
+§2 and §14, `CF-105` ← §5, `CF-109` ← §12 and §13 partially, plus `CF-127` ← §31 as of the CF-127
+landing). Every other arm is governed by a spec, a
+rule or a board row, and the mapping below names all 33 arms in the current tree (31 at that tip) so that a new arm cannot arrive without a
 named authority. The mapping is a promise this table keeps, not one the tooling enforces: the
 section census in `docs/audits/cf099-prd-drift-probe.sh` counts only numbered lines, so a lettered arm
 lands uncounted (`CF-113`, pending, owns that fix).
@@ -97,6 +100,8 @@ lands uncounted (`CF-113`, pending, owns that fix).
 | §21 satellite repo_urls must agree with their primary | board `CF-091` |
 | §22–§28 census fail-closed arms and README/mirror parity | board `CF-089` (fetch/HTTP/schema/short-count/missing-total arms, healthy output, README↔mirror byte parity apart from `BASE`) |
 | §29 a workdir board that is not the published board is named as drift | board `CF-114` (a stale workdir copy silently reopened five closures; the arm prints `DRIFT` naming both boards) |
+| §30 README Status rows 1 and 3 cite the interpreter-qualified `--check` | board `CF-093` (a renamed Status row must be re-bound, not silently dropped; the unqualified command stops at `FAIL python`) |
+| §31 Hermes pip logs are private per run and distinguish filesystem failures | board `CF-127` (a fixed `/tmp/hermes-install.log` blocked the second node on a shared-`/tmp` host and reported the redirection failure as `pip failed`) |
 
 These sections are legitimate and must not be deleted to "clean up" the mapping: they serve
 `AGENTS.md` rules, the specs and this board. They must not be counted as acceptance of

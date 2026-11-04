@@ -1077,6 +1077,153 @@ else
   say "  PASS  unqualified Status rows refused ($(status_rows_missing_qualifier "$tmpd/README.md" "$HERE" | tr '\n' ' '))"
 fi
 rm -rf "$tmpd"
+# ch:trace row=CF-127 spec=specs/HARNESS.md wave=none:serial test=tests/selftest.sh::pip-log-path doc=docs/audits/code-factory-CF-127-fix-2026-11-03.md prompt=none:foreman-brief evidence=docs/audits/code-factory-CF-127-fix-2026-11-03.md witness=tests/selftest.sh::pip-log-path verdict=none:foreman-judges commit=none:self-referential-hash memory=none:foreman-writes
+# BEGIN pip-log-path
+say "31. Hermes pip logs are private per run and distinguish filesystem failures (CF-127)"
+tmpd=$(mktemp -d)
+# Use a private equivalent of /tmp/hermes-install.log here: the suite must not
+# modify a host's existing log. The audit captures the literal /tmp reproduction.
+if python3 - "$HERE" "$tmpd" <<'PY'
+from pathlib import Path
+import shutil
+import sys
+
+root, fixture = map(Path, sys.argv[1:])
+(fixture / "bin").mkdir()
+(fixture / "home").mkdir()
+(fixture / "scripts" / "harness").mkdir(parents=True)
+shutil.copyfile(root / "scripts/lib.sh", fixture / "scripts/lib.sh")
+source = (root / "scripts/harness/install-hermes.sh").read_text()
+start = source.index('    "$PYTHON_BIN" -m venv')
+end = source.index('\n  else\n    note "already installed:', start)
+legacy = '''    "$PYTHON_BIN" -m venv "$VENV" || { bad "venv" "creation failed"; exit 1; }
+    "$VENV/bin/python" -m pip install --no-cache-dir "hermes-agent==$PIN" >"$PIP_FIXTURE/hermes-install.log" 2>&1 \\
+      && ok "install" "$("$VENV/bin/hermes" --version 2>/dev/null | head -1)" \\
+      || { bad "install" "pip failed — /tmp/hermes-install.log"; exit 1; }'''
+(fixture / "scripts/harness/old.sh").write_text(source[:start] + legacy + source[end:])
+fixed = fixture / "hermes-install.log"
+fixed.touch(mode=0o600)
+fixed.chmod(0o444)
+stubs = {
+    "python3": '''#!/usr/bin/env bash
+set -uo pipefail
+case "$*" in
+  --version) echo 'Python 3.12.3' ;;
+  '-m venv '*)
+    mkdir -p "$3/bin"
+    cp "$PIP_FIXTURE/bin/python3" "$3/bin/python"
+    ;;
+  '-m pip install --no-cache-dir hermes-agent==0.19.0')
+    echo 'pip invoked' >> "$PIP_FIXTURE/pip.calls"
+    echo 'fixture pip output'
+    if [ "${FIXTURE_PIP_RC:-23}" -eq 0 ]; then
+      cp "$PIP_FIXTURE/bin/hermes.stub" "$HOME/hermes-venv/bin/hermes"
+    fi
+    exit "${FIXTURE_PIP_RC:-23}"
+    ;;
+  *) exit 99 ;;
+esac
+''',
+    "hermes.stub": "#!/usr/bin/env bash\necho 'hermes fixture 0.19.0'\n",
+    "ss": "#!/usr/bin/env bash\nexit 1\n",
+    "mktemp": '''#!/usr/bin/env bash
+if [ "${FIXTURE_LOG_DENY:-0}" = 1 ]; then
+  echo "fixture: $1: Permission denied" >&2
+  exit 1
+fi
+exec /usr/bin/mktemp "$@"
+''',
+}
+for name, text in stubs.items():
+    path = fixture / "bin" / name
+    path.write_text(text)
+    path.chmod(0o755)
+PY
+then
+  pip_fixture_run() {
+    env LC_ALL=C PATH="$tmpd/bin:/usr/bin:/bin" HOME="$tmpd/home" \
+      PIP_FIXTURE="$tmpd" HERMES_PYTHON_BIN=python3 HERMES_PIN=0.19.0 \
+      NODE_GATEWAY_PORT=10800 FAILED=0 FIXTURE_PIP_RC="${pip_fixture_rc:-23}" \
+      FIXTURE_LOG_DENY="${pip_fixture_deny:-0}" /bin/bash "$@"
+  }
+  old_out=$(pip_fixture_run "$tmpd/scripts/harness/old.sh" --apply 2>&1); rc=$?
+  expected="$(grep -nF '>"$PIP_FIXTURE/hermes-install.log"' "$tmpd/scripts/harness/old.sh" | cut -d: -f1)"
+  expected="$tmpd/scripts/harness/old.sh: line $expected: $tmpd/hermes-install.log: Permission denied"
+  if [ "$rc" -eq 1 ] && [ ! -e "$tmpd/pip.calls" ] \
+    && [ "$(printf '%s\n' "$old_out" | grep -Fxc -- "$expected")" = 1 ] \
+    && [ "$(printf '%s\n' "$old_out" | grep -Fxc '  FAIL  install — pip failed — /tmp/hermes-install.log')" = 1 ]; then
+    say "  PASS  pip-log old shape: permission denied, exact misleading row, pip not invoked"
+  else
+    say "  FAIL  pip-log old shape did not reproduce the red fixture"; fails=$((fails+1))
+  fi
+  before_check=$(pip_fixture_run "$HERE/scripts/harness/install-hermes.sh" --check 2>&1); rc=$?
+  shopt -s nullglob
+  logs=("$tmpd/home"/.hermes-install-*.log)
+  expected='  FAIL  binary — absent — run --apply'
+  if [ "$rc" -eq 1 ] && [ "${#logs[@]}" -eq 0 ] && [ ! -e "$tmpd/pip.calls" ] \
+    && [ "$(printf '%s\n' "$before_check" | grep -Fxc -- "$expected")" = 1 ] \
+    && [ "$(printf '%s\n' "$before_check" | grep -Fxc 'HERMES: FAIL (3)')" = 1 ]; then
+    say "  PASS  pip-log --check: unchanged absent-binary rows, no log or pip invocation"
+  else
+    say "  FAIL  pip-log --check wrote a log or changed check behaviour"; fails=$((fails+1))
+  fi
+  for run in 1 2; do
+    out=$(pip_fixture_run "$HERE/scripts/harness/install-hermes.sh" --apply 2>&1); rc=$?
+    logs=("$tmpd/home"/.hermes-install-*.log)
+    pip_log=$(printf '%s\n' "$out" | sed -n 's/^  FAIL  install — pip exited 23 — log: //p')
+    expected="  FAIL  install — pip exited 23 — log: $pip_log"
+    if [ "$rc" -eq 1 ] && [ "${#logs[@]}" -eq "$run" ] \
+      && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ] \
+      && [[ "$pip_log" == "$tmpd/home/.hermes-install-10800."*.log ]] \
+      && [ "$(stat -c %a "$pip_log" 2>/dev/null)" = 600 ] \
+      && [ "$(grep -Fxc 'fixture pip output' "$pip_log" 2>/dev/null)" = 1 ] \
+      && [ "$(grep -Fxc 'pip invoked' "$tmpd/pip.calls" 2>/dev/null)" -eq "$run" ] \
+      && [ "$(stat -c %a "$tmpd/hermes-install.log")" = 444 ]; then
+      say "  PASS  pip-log new shape run $run: pip rc 23, distinct HOME log mode 600, fixed file untouched"
+    else
+      say "  FAIL  pip-log new shape run $run did not distinguish pip's failure"; fails=$((fails+1))
+    fi
+  done
+  pip_fixture_deny=1
+  out=$(pip_fixture_run "$HERE/scripts/harness/install-hermes.sh" --apply 2>&1); rc=$?
+  template="$tmpd/home/.hermes-install-10800.XXXXXXXX.log"
+  expected="  FAIL  install_log — cannot create $template — fixture: $template: Permission denied"
+  if [ "$rc" -eq 1 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ] \
+    && [ "$(grep -Fxc 'pip invoked' "$tmpd/pip.calls")" = 2 ]; then
+    say "  PASS  pip-log creation failure: exact filesystem row, pip not invoked"
+  else
+    say "  FAIL  pip-log creation failure was misreported"; fails=$((fails+1))
+  fi
+  pip_fixture_deny=0
+  pip_fixture_rc=0
+  out=$(pip_fixture_run "$HERE/scripts/harness/install-hermes.sh" --apply 2>&1); rc=$?
+  expected='  PASS  install — hermes fixture 0.19.0'
+  logs=("$tmpd/home"/.hermes-install-*.log)
+  if [ "$rc" -eq 1 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ] \
+    && [ "${#logs[@]}" -eq 3 ] && [ "$(grep -Fxc 'pip invoked' "$tmpd/pip.calls")" = 3 ]; then
+    say "  PASS  pip-log successful install proceeds despite the unwritable fixed file"
+  else
+    say "  FAIL  pip-log successful install did not proceed"; fails=$((fails+1))
+  fi
+  after_check=$(pip_fixture_run "$HERE/scripts/harness/install-hermes.sh" --check 2>&1); rc=$?
+  logs=("$tmpd/home"/.hermes-install-*.log)
+  expected="  PASS  binary — $tmpd/home/hermes-venv/bin/hermes"
+  if [ "$rc" -eq 1 ] && [ "${#logs[@]}" -eq 3 ] \
+    && [ "$(grep -Fxc 'pip invoked' "$tmpd/pip.calls")" = 3 ] \
+    && [ "$(printf '%s\n' "$after_check" | grep -Fxc -- "$expected")" = 1 ] \
+    && [ "$(printf '%s\n' "$after_check" | grep -Fxc 'HERMES: FAIL (2)')" = 1 ]; then
+    say "  PASS  pip-log installed --check: unchanged binary rows, no new log or pip invocation"
+  else
+    say "  FAIL  pip-log installed --check changed behaviour"; fails=$((fails+1))
+  fi
+  shopt -u nullglob
+  unset -f pip_fixture_run
+  unset pip_fixture_rc pip_fixture_deny
+else
+  say "  FAIL  pip-log fixture setup"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+# END pip-log-path
 
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

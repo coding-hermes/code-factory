@@ -48,16 +48,16 @@ Those runs are the board's and the implementing commits' record; no re-runnable 
 them ships in this repository, so the leg is named, not certified. Still absent: a commit produced on
 a node, an artifact digest recomputed from pulled bytes on the control host, and a recorded FAIL from
 a deliberately broken gate there. `CF-075` and `CF-077` remain closed (`77caa02` + selftest §16;
-`1232f7a` + §17/§18). The open defects this milestone's legs depend on are `CF-080` (`--apply` clones
+`1232f7a` + §17/§18). The other row this list gained on 2026-11-04, the node-create `CRIER_URL` gap
+`CF-126`, was closed at `85f852b` on the `dd7f64bc` verdict, so it is not listed among the blockers.
+The open defects this milestone's legs depend on are `CF-080` (`--apply` clones
 the workspace after the bus layer has already FAILED, manufacturing the repo-with-no-bus node
 `AGENTS.md` rule 9 forbids), the never-exercised legs `CF-001` (scheduler→crier dispatch has never
 completed a full arm/tick cycle), `CF-004` (no round trip through the node's own gateway), `CF-110`
-(no destroy path ships) and `CF-112` (no `dispatch-targets.jsonl` consumer ships), two rows that stop
-a leg and were missing from this list before 2026-11-04 — `CF-002` (P0: a node turn dies at
+(no destroy path ships) and `CF-112` (no `dispatch-targets.jsonl` consumer ships), one row that stops
+a leg and was missing from this list before 2026-11-04 — `CF-002` (P0: a node turn dies at
 `agent init failed: No inference provider configured`, so the "commit produced on a node" leg cannot
-be reached) and `CF-126` (P2: `scripts/node-create.sh:102` forwards only `NODE_PROJECT` and
-`NODE_GATEWAY_PORT`, so a node created exactly as the README documents prints
-`FAIL  crier_url — CRIER_URL unset` at layer 00 and can never reach the bus leg) — plus the dispatch
+be reached) — plus the dispatch
 defects the live runs exposed: `CF-131` (a completion reply that echoes the task body is refused
 `403 GUARD_BLOCKED`), `CF-132` (no receive-side idempotency key), `CF-133` (a result dialect
 `specs/ENVELOPE.md` does not define), `CF-136` (a dispatch row never reaches a terminal state when its
