@@ -236,3 +236,30 @@ tree, and both are fixed or superseded here rather than argued with:
 
 Lesson kept for the lane: quote a census with its SCOPE in the cell (`task ids` vs `event ids`), and
 never put a predicted count into an acceptance criterion — put the observed one, or none.
+
+### Fourth pass — re-fire of this tick, verification only (tip `27938ca`)
+
+The scheduler delivered tick `code-factory-releng-2026-11-04-10-22-25` again at 06:35-05:00, after
+passes 1–3 had already landed. Nothing was re-reviewed: the third pass's claims were checked against
+the surviving artifacts, and because the published tip moved past this lane's last gate
+(`b16efce` → `27938ca`, two docs/board commits from the CF-202 closure), the gate was re-run at the
+new tip instead of being asserted from the older record.
+
+| Leg | Command | Result at `27938ca` |
+|---|---|---|
+| gate | `bash tests/selftest.sh` | `SELFTEST: PASS`, rc=0, 195 `^  PASS` rows |
+| board validity | `bash scripts/boardctl validate` | `RESULT: OK (4 warning(s))` — CF-034 free-form `guard_result`/`ci_result`, duplicate EVENT id 336 (CF-196), headerless board |
+| board census | `wc -l .coding-hermes/board/{tasks,events}.jsonl` | 177 task rows / 361 events |
+| CI | `gh run list --repo coding-hermes/code-factory --limit 3` | `[]` — no workflows ship, so selftest is the CI-equivalent gate; nothing to file |
+| parity | `git rev-list --left-right --count origin/main...HEAD` | `0 0` before and after this pass |
+| CF-202 | `jq -c 'select(.id=="CF-202")' .coding-hermes/board/tasks.jsonl` | `complete`, `commit_hash=4fd46d6` — the row the two newer commits closed |
+
+Public posture re-probed at 06:36-05:00 and unchanged from the third pass: `public`, `license=MIT`,
+`archived=false`, `default_branch=main`; `secret_scanning=enabled`, `push_protection=enabled`;
+secret-scanning alerts = **1 total, `state: resolved`** (Slack token, 2026-11-02), **0 open**; branch
+protection **404 "Branch not protected"** and rulesets **0** (CF-120 carries it); **0 published tags**.
+
+Release decision unchanged: **NO TAG**. No version artifact, no CHANGELOG, CF-161 still `pending`.
+
+Negatives scoped to this pass: no board row created or closed, no board event appended, no worker
+dispatched, no release tag pushed, no write to any other checkout.
