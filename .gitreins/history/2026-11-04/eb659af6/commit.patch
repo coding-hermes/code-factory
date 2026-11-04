@@ -1,0 +1,48 @@
+commit 1d632d973fb2f86d63d6bef37388b9073f6361fd
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Wed Nov 4 04:37:47 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Wed Nov 4 04:37:47 2026 -0500
+
+    fix(CF-071): pin the auth fixture's stub version so the merged adapter never installs
+    
+    CF-071's selftest arms were all red (39 failures) after this branch was rebased
+    onto main. The cause is not the gate: 5069c0a changed install-hermes.sh's apply
+    path from "is a binary on PATH?" to "is the pinned venv version == HERMES_PIN?",
+    so the fixture's stub, which answered `--version` with `hermes auth fixture`,
+    failed the pin comparison. The adapter then took the install branch
+    (`python -m venv` + `pip install hermes-agent==0.19.0`) and exited there, before
+    any gateway_start row was emitted — which the arms read as "expected gateway_start
+    row missing" for every fixture, refusal arms included.
+    
+    The stub now reports `hermes 0.19.0`, matching HERMES_PIN, so the pinned-venv
+    check passes and the arms grade the gate again.
+    
+    Measured: `bash tests/selftest.sh` -> SELFTEST: PASS, and the CF-071 arm count
+    goes 38 FAIL -> 0 FAIL. Foreman-authored, one line, in the fixture only; the
+    gate under test (scripts/harness/install-hermes.sh) is unchanged by this commit.
+    
+    Side effect found and cleared while verifying: an end-to-end `--apply` run of
+    the adapter in a throwaway HOME really does pip-install the pinned wheel and
+    start `hermes serve --host 0.0.0.0`, so an unkilled probe leaves a public-bind
+    gateway behind. One such leftover (pid 2487758, :10883) was killed before the
+    green run.
+    
+    Addresses CF-071.
+---
+ tests/selftest.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/selftest.sh b/tests/selftest.sh
+index 4425372..10f188b 100755
+--- a/tests/selftest.sh
++++ b/tests/selftest.sh
+@@ -379,7 +379,7 @@ if [ "$1" = --version ]; then echo 'Python 3.12.3'; exit 0; fi
+ exec "${AUTH_PYTHON:?}" "$@"
+ ''',
+     "hermes": '''#!/usr/bin/env bash
+-if [ "$1" = --version ]; then echo 'hermes auth fixture'; exit 0; fi
++if [ "$1" = --version ]; then echo 'hermes 0.19.0'; exit 0; fi
+ [ "$*" = 'serve --host 0.0.0.0 --port 10800 --skip-build' ] || exit 99
+ printf '%s\\n' 'serve launch reached' > "${AUTH_FIXTURE:?}/launch"
+ ''',
