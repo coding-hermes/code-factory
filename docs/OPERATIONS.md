@@ -21,7 +21,7 @@ The intended lifecycle is: qualify control host → create and provision a node 
 
 ### Control host
 
-1. Set `BUNKER_SERVER` to the operator's configured bunker server name; configure the bunker client and credentials out of band. These values are environment-specific and must not be committed or pasted into tickets.
+1. Set `BUNKER_SERVER` to the operator's configured bunker server name; configure the bunker client and credentials out of band. These values are environment-specific and must not be committed or pasted into tickets. Node creation (§2) additionally requires `CRIER_URL`, the bus URL the node probes at layer 00: `scripts/node-create.sh` refuses before any bunker call when it is unset or empty, printing `  FAIL  crier_url — …` and exiting 1 (`scripts/node-create.sh:69-72`).
 2. Run the repository's actual control-host check:
 
    ```bash
@@ -44,7 +44,7 @@ The node contract requires architecture, disk at or above the configured floor, 
 ### Exact available entry points
 
 - Control-host qualification: `scripts/bunker-server-install.sh --check`.
-- Node creation orchestrator: `scripts/node-create.sh --project P --repo URL [--harness H] [--agent ID] [--ttl 6h] [--port 10800]`; requires `BUNKER_SERVER` in the environment. Defaults are harness `hermes`, TTL `6h`, port `10800`; if no agent ID is given, its code generates `node-P-<time>` and attempts to spawn/reuse it.
+- Node creation orchestrator: `scripts/node-create.sh --project P --repo URL [--harness H] [--agent ID] [--ttl 6h] [--port 10800]`; requires both `BUNKER_SERVER` and `CRIER_URL` in the environment. The gate order is `crier_url` first, then `server_declared` (`scripts/node-create.sh:69-79`): without `CRIER_URL` the script prints `  FAIL  crier_url — …`, exits 1 and spawns nothing even when `BUNKER_SERVER` is set; with `CRIER_URL` set and `BUNKER_SERVER` unset it prints `  FAIL  server_declared — …` plus `NODE INCOMPLETE (1)` and exits 1. `CRIER_URL` is forwarded into the in-node provisioning exec as a single-quoted assignment (`:112`), where layer 00 prints `  PASS  crier_url — <value>` and probes `<value>/health`; whether anything else on the node consumes the value is **not measured** — no bus worker ships (`specs/NODE.md` § Layers). Defaults are harness `hermes`, TTL `6h`, port `10800`; if no agent ID is given, its code generates `node-P-<time>` and attempts to spawn/reuse it.
 - In-node provisioning/check: `project-node.sh --apply|--check --project P [--harness H] [--repo URL] [--ref main] [--port 10800]`. `scripts/node-create.sh` stages and calls this command remotely. `project-node.sh` defaults to ref `main`, port `10800`, disk floor 5 GB, and repo path `$HOME/repo`.
 - From the repository root, the script is also invoked as `scripts/project-node.sh --check --project P` (or `--apply` with the required arguments). The README's quick start's `--agent` argument is not accepted by `project-node.sh`; `--agent` belongs to `node-create.sh`.
 
@@ -191,7 +191,7 @@ No teardown script is currently tracked. Until one is added and verified, teardo
 | `scripts/bunker-server-install.sh --check` | Control host/client/server qualification; requires `BUNKER_SERVER` | Check-only; no server install operation. |
 | `scripts/project-node.sh --check --project P` | In-node layer checks | Creates `$HOME/.node`; requires crier URL and identity; not pure read-only. |
 | `scripts/project-node.sh --apply --project P --harness hermes --repo URL --ref REF` | In-node provisioning | Requires bus identity and provider/auth preconfiguration; do not use for production until secure path exists. |
-| `scripts/node-create.sh --project P --repo URL --harness hermes [--agent ID] [--ttl 6h] [--port 10800]` | Control-host spawn/stage/provision/verify orchestrator | Incomplete: no secure bus bundle, no full lifecycle or round trip. |
+| `scripts/node-create.sh --project P --repo URL --harness hermes [--agent ID] [--ttl 6h] [--port 10800]` | Control-host spawn/stage/provision/verify orchestrator; requires `BUNKER_SERVER` **and** `CRIER_URL` (refuses on either before any bunker call) | Incomplete: no secure bus bundle, no full lifecycle or round trip. |
 | `scripts/verify-node.sh --agent ID --server NAME --port 10800 [--artifact PATH]` | Gateway/auth and optional artifact byte digest checks | Does not verify crier, scheduler, inference, or task completion. |
 | `scripts/harness/install-hermes.sh --check\|--apply` | Hermes adapter check/install/start | Must configure basic auth and inference key out of band; current check may fail if gateway is not already running. |
 | `scripts/harness/install-opencode.sh --check\|--apply` | OpenCode adapter check/refusal | `--apply` refuses until ladder is measured. |
