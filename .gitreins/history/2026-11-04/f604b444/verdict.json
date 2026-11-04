@@ -1,0 +1,111 @@
+{
+  "task_id": "CF-202-DOC1",
+  "task_title": "docs/DESIGN.md must not present unshipped legs of the work path as current behaviour",
+  "task_criteria": [
+    "docs/DESIGN.md at this commit annotates every step of section 3 with an explicit shipped / not shipped verdict, and section 5's failure bullets carry the same annotation; each \"not shipped\" verdict is backed by a re-runnable command or a cited file:line in this tree (no envelope/ack/inbox consumer exists under scripts/, the bus layer only stats $HOME/.node/crier.json at scripts/project-node.sh:245-249, and specs/NODE.md states no bus worker ships); the prose names the owning board rows CF-001, CF-004, CF-068 and CF-107 and says \"not measured\" wherever behaviour is unmeasured; docs/audits/code-factory-docs-2026-11-04-10-01-07.md carries the before/after table with file:line, the literal command output, and a not-verified list; bash tests/selftest.sh prints SELFTEST: PASS at this commit. The board closure of CF-202 (its status field) is OUT OF SCOPE for this task: it is written after this verdict exists and is not part of the graded work."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/.hermes/cache/scratch/cf-docs-20261104-1001/wt",
+  "branch": "main",
+  "commit": "4fd46d69f1c208844bf6eb36050c7cd066961f66",
+  "working_tree_content_fingerprint": "584667735a8ee2e459c8521a9a71225d7a9baa85b0483279b2dc9082185d26db",
+  "working_tree_dirty_path_count": 6,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n6:29AM INF scanned ~1249999 bytes (1.25 MB) in 696ms\n6:29AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 157 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.bLxO14Iikr/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  177/177 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [16579 chars omitted \u2014 217 line(s)] \u2026\n  PASS  cf159 node-create project payload is data, not code\n  PASS  cf159 positive control NODE_PROJECT=my proj's --project=my proj's\n  PASS  cf159 node-create port payload is data, not code\n  PASS  cf159 node-create harness payload is data, not code\n  PASS  cf159 node-create repo payload is data, not code\n  PASS  cf159 node-create ref payload is data, not code\n  PASS  cf159 node-create crier payload is data, not code\n  PASS  cf159 verify-node artifact payload is data, not code; digest intact\n  PASS  cf159 bunker_exec trusted command text preserves quoted values and literal pipelines\n  PASS  cf159-escaping all remote-command sites\n37. the node credential row scopes its contradiction to the node (CF-151)\n  PASS  node credential row labels control-host evidence and names the node measurement\n  PASS  pre-fix node credential row refused (unlabelled-control-host-fail: Node inference credential missing-control-host-label: Node inference credential missing-node-scoped-measurement: Node inference credential )\n38. the milestone blocker list resolves every cited id in one namespace (CF-182)\n  PASS  prd-blocker \u2014 14 cited ids, 12 rows, 2 requirement-only, exit 0\n  PASS  prd-blocker-red \u2014 CF-999 unresolved, exit 1\n  PASS  prd-blocker-closed \u2014 CF-009 complete, exit 1\n39. acceptance-plan section mapping covers the tree (CF-198)\n  PASS  section-mapping-real \u2014 green verdict, arms_plan=42 arms_tree=42\n  PASS  section-mapping-red \u2014 missing \u00a738 names plan side, exit 1\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 docs/DESIGN.md at this commit annotates every step of section 3 with an explicit shipped / not shipped verdict, and section 5's failure bullets carry the same annotation; each \"not shipped\" verdict is backed by a re-runnable command or a cited file:line in this tree (no envelope/ack/inbox consumer exists under scripts/, the bus layer only stats $HOME/.node/crier.json at scripts/project-node.sh:245-249, and specs/NODE.md states no bus worker ships); the prose names the owning board rows CF-001, CF-004, CF-068 and CF-107 and says \"not measured\" wherever behaviour is unmeasured; docs/audits/code-factory-docs-2026-11-04-10-01-07.md carries the before/after table with file:line, the literal command output, and a not-verified list; bash tests/selftest.sh prints SELFTEST: PASS at this commit. The board closure of CF-202 (its status field) is OUT OF SCOPE for this task: it is written after this verdict exists and is not part of the graded work.: \u00a73 table docs/DESIGN.md:43-49 annotates all six steps: step1 :44 \"Not this repo.\", step2 :45 \"Not this repo.\" + re-runnable grep (I ran `grep -rniE 'envelope|\\back\\b|inbox|lease|redeliver' scripts/ --include=*.sh --include=*.py` -> exactly 4 hits: board_lock.py:77, add_family_lanes.py:59, configure_family.py:84, :89, none a consumer), step3 :46 \"Not shipped.\" citing scripts/project-node.sh:245-249 (verified: `if [ -f \"$STATE/crier.json\" ]` + `stat -c '%a'`==600, starts nothing) and specs/NODE.md \u00a7Layers (verified specs/NODE.md:47-50 \"Layer 30 starts and checks no process and opens no socket\"), step4 :47 \"Partly shipped.\", step5 :48 \"Not shipped.\" (specs/ENVELOPE.md defines shape, nothing produces/consumes/acks), step6 :49 \"Not shipped as a gate.\" citing scripts/verify-node.sh:60-70 (verified: optional --artifact sha256 compare, records nothing). \u00a75 bullets docs/DESIGN.md:70-88 each carry a verdict (\"No inbox is shipped here (\u00a73 step 2) ... neither half is measured\"; \"No lease or redelivery consumer exists under scripts/\"; \"Not shipped: scripts/verify-node.sh:60-70 ... No quarantine path exists \u2014 not measured\"; \"Disk exhaustion \u2192 shipped: ... scripts/project-node.sh:144-176\"). Board rows named: CF-001 (:45), CF-004 (:48,:81), CF-068 (:46), CF-107 (:49,:81); \"not measured\" appears 3x. Audit docs/audits/code-factory-docs-2026-11-04-10-01-07.md has the before/after table with file:line (docs/DESIGN.md:36, :38-45, :59), literal command-output blocks (the 4-hit grep, `sed -n '245,249p' scripts/project-node.sh`, `sed -n '60,70p' scripts/verify-node.sh`), and a \"## Not verified\" list of three bullets. Tests: `bash tests/selftest.sh` (the configured test_command) run at this commit \u2014 run 2 and run 3 both exit_code=0 with \"SELFTEST: PASS\" (195 PASS rows); run 1 exited 1 with \"SELFTEST: FAIL (1)\" on arm 17 (\"auth marker {\\\"status\\\":\\\"ok\\\"} was not refused (exit 0)\"), which I reproduced standalone and it passes (rc=1, VERIFY: FAIL (1), named auth_gate FAIL, PASS unauth_refused), so that was a flake, not a code defect.\ndocs/DESIGN.md \u00a73/\u00a75 now carry explicit shipped/not-shipped verdicts backed by verified file:line citations and a re-runnable grep, the audit file has the before/after table with literal output and a not-verified list, and bash tests/selftest.sh prints SELFTEST: PASS (exit 0) at this commit.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 docs/DESIGN.md at this commit annotates every step of section 3 with an explicit shipped / not shipped verdict, and section 5's failure bullets carry the same annotation; each \"not shipped\" verdict is backed by a re-runnable command or a cited file:line in this tree (no envelope/ack/inbox consumer exists under scripts/, the bus layer only stats $HOME/.node/crier.json at scripts/project-node.sh:245-249, and specs/NODE.md states no bus worker ships); the prose names the owning board rows CF-001, CF-004, CF-068 and CF-107 and says \"not measured\" wherever behaviour is unmeasured; docs/audits/code-factory-docs-2026-11-04-10-01-07.md carries the before/after table with file:line, the literal command output, and a not-verified list; bash tests/selftest.sh prints SELFTEST: PASS at this commit. The board closure of CF-202 (its status field) is OUT OF SCOPE for this task: it is written after this verdict exists and is not part of the graded work.: \u00a73 table docs/DESIGN.md:43-49 annotates all six steps: step1 :44 \"Not this repo.\", step2 :45 \"Not this repo.\" + re-runnable grep (I ran `grep -rniE 'envelope|\\back\\b|inbox|lease|redeliver' scripts/ --include=*.sh --include=*.py` -> exactly 4 hits: board_lock.py:77, add_family_lanes.py:59, configure_family.py:84, :89, none a consumer), step3 :46 \"Not shipped.\" citing scripts/project-node.sh:245-249 (verified: `if [ -f \"$STATE/crier.json\" ]` + `stat -c '%a'`==600, starts nothing) and specs/NODE.md \u00a7Layers (verified specs/NODE.md:47-50 \"Layer 30 starts and checks no process and opens no socket\"), step4 :47 \"Partly shipped.\", step5 :48 \"Not shipped.\" (specs/ENVELOPE.md defines shape, nothing produces/consumes/acks), step6 :49 \"Not shipped as a gate.\" citing scripts/verify-node.sh:60-70 (verified: optional --artifact sha256 compare, records nothing). \u00a75 bullets docs/DESIGN.md:70-88 each carry a verdict (\"No inbox is shipped here (\u00a73 step 2) ... neither half is measured\"; \"No lease or redelivery consumer exists under scripts/\"; \"Not shipped: scripts/verify-node.sh:60-70 ... No quarantine path exists \u2014 not measured\"; \"Disk exhaustion \u2192 shipped: ... scripts/project-node.sh:144-176\"). Board rows named: CF-001 (:45), CF-004 (:48,:81), CF-068 (:46), CF-107 (:49,:81); \"not measured\" appears 3x. Audit docs/audits/code-factory-docs-2026-11-04-10-01-07.md has the before/after table with file:line (docs/DESIGN.md:36, :38-45, :59), literal command-output blocks (the 4-hit grep, `sed -n '245,249p' scripts/project-node.sh`, `sed -n '60,70p' scripts/verify-node.sh`), and a \"## Not verified\" list of three bullets. Tests: `bash tests/selftest.sh` (the configured test_command) run at this commit \u2014 run 2 and run 3 both exit_code=0 with \"SELFTEST: PASS\" (195 PASS rows); run 1 exited 1 with \"SELFTEST: FAIL (1)\" on arm 17 (\"auth marker {\\\"status\\\":\\\"ok\\\"} was not refused (exit 0)\"), which I reproduced standalone and it passes (rc=1, VERIFY: FAIL (1), named auth_gate FAIL, PASS unauth_refused), so that was a flake, not a code defect.\ndocs/DESIGN.md \u00a73/\u00a75 now carry explicit shipped/not-shipped verdicts backed by verified file:line citations and a re-runnable grep, the audit file has the before/after table with literal output and a not-verified list, and bash tests/selftest.sh prints SELFTEST: PASS (exit 0) at this commit.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "docs/DESIGN.md at this commit annotates every step of section 3 with an explicit shipped / not shipped verdict, and section 5's failure bullets carry the same annotation; each \"not shipped\" verdict is backed by a re-runnable command or a cited file:line in this tree (no envelope/ack/inbox consumer exists under scripts/, the bus layer only stats $HOME/.node/crier.json at scripts/project-node.sh:245-249, and specs/NODE.md states no bus worker ships); the prose names the owning board rows CF-001, CF-004, CF-068 and CF-107 and says \"not measured\" wherever behaviour is unmeasured; docs/audits/code-factory-docs-2026-11-04-10-01-07.md carries the before/after table with file:line, the literal command output, and a not-verified list; bash tests/selftest.sh prints SELFTEST: PASS at this commit. The board closure of CF-202 (its status field) is OUT OF SCOPE for this task: it is written after this verdict exists and is not part of the graded work.",
+                "status": "PASS",
+                "detail": "\u00a73 table docs/DESIGN.md:43-49 annotates all six steps: step1 :44 \"Not this repo.\", step2 :45 \"Not this repo.\" + re-runnable grep (I ran `grep -rniE 'envelope|\\back\\b|inbox|lease|redeliver' scripts/ --include=*.sh --include=*.py` -> exactly 4 hits: board_lock.py:77, add_family_lanes.py:59, configure_family.py:84, :89, none a consumer), step3 :46 \"Not shipped.\" citing scripts/project-node.sh:245-249 (verified: `if [ -f \"$STATE/crier.json\" ]` + `stat -c '%a'`==600, starts nothing) and specs/NODE.md \u00a7Layers (verified specs/NODE.md:47-50 \"Layer 30 starts and checks no process and opens no socket\"), step4 :47 \"Partly shipped.\", step5 :48 \"Not shipped.\" (specs/ENVELOPE.md defines shape, nothing produces/consumes/acks), step6 :49 \"Not shipped as a gate.\" citing scripts/verify-node.sh:60-70 (verified: optional --artifact sha256 compare, records nothing). \u00a75 bullets docs/DESIGN.md:70-88 each carry a verdict (\"No inbox is shipped here (\u00a73 step 2) ... neither half is measured\"; \"No lease or redelivery consumer exists under scripts/\"; \"Not shipped: scripts/verify-node.sh:60-70 ... No quarantine path exists \u2014 not measured\"; \"Disk exhaustion \u2192 shipped: ... scripts/project-node.sh:144-176\"). Board rows named: CF-001 (:45), CF-004 (:48,:81), CF-068 (:46), CF-107 (:49,:81); \"not measured\" appears 3x. Audit docs/audits/code-factory-docs-2026-11-04-10-01-07.md has the before/after table with file:line (docs/DESIGN.md:36, :38-45, :59), literal command-output blocks (the 4-hit grep, `sed -n '245,249p' scripts/project-node.sh`, `sed -n '60,70p' scripts/verify-node.sh`), and a \"## Not verified\" list of three bullets. Tests: `bash tests/selftest.sh` (the configured test_command) run at this commit \u2014 run 2 and run 3 both exit_code=0 with \"SELFTEST: PASS\" (195 PASS rows); run 1 exited 1 with \"SELFTEST: FAIL (1)\" on arm 17 (\"auth marker {\\\"status\\\":\\\"ok\\\"} was not refused (exit 0)\"), which I reproduced standalone and it passes (rc=1, VERIFY: FAIL (1), named auth_gate FAIL, PASS unauth_refused), so that was a flake, not a code defect."
+              }
+            ],
+            "summary": "docs/DESIGN.md \u00a73/\u00a75 now carry explicit shipped/not-shipped verdicts backed by verified file:line citations and a re-runnable grep, the audit file has the before/after table with literal output and a not-verified list, and bash tests/selftest.sh prints SELFTEST: PASS (exit 0) at this commit.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-202-DOC1\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 docs/DESIGN.md at this commit annotates every step of section 3 with an explicit shipped / not shipped verdict, and section 5's failure bullets carry the same annotation; each \"not shipped\" verdict is backed by a re-runnable command or a cited file:line in this tree (no envelope/ack/inbox consumer exists under scripts/, the bus layer only stats $HOME/.node/crier.json at scripts/project-node.sh:245-249, and specs/NODE.md states no bus worker ships); the prose names the owning board rows CF-001, CF-004, CF-068 and CF-107 and says \"not measured\" wherever behaviour is unmeasured; docs/audits/code-factory-docs-2026-11-04-10-01-07.md carries the before/after table with file:line, the literal command output, and a not-verified list; bash tests/selftest.sh prints SELFTEST: PASS at this commit. The board closure of CF-202 (its status field) is OUT OF SCOPE for this task: it is written after this verdict exists and is not part of the graded work.: \u00a73 table docs/DESIGN.md:43-49 annotates all six steps: step1 :44 \"Not this repo.\", step2 :45 \"Not this repo.\" + re-runnable grep (I ran `grep -rniE 'envelope|\\back\\b|inbox|lease|redeliver' scripts/ --include=*.sh --include=*.py` -> exactly 4 hits: board_lock.py:77, add_family_lanes.py:59, configure_family.py:84, :89, none a consumer), step3 :46 \"Not shipped.\" citing scripts/project-node.sh:245-249 (verified: `if [ -f \"$STATE/crier.json\" ]` + `stat -c '%a'`==600, starts nothing) and specs/NODE.md \u00a7Layers (verified specs/NODE.md:47-50 \"Layer 30 starts and checks no process and opens no socket\"), step4 :47 \"Partly shipped.\", step5 :48 \"Not shipped.\" (specs/ENVELOPE.md defines shape, nothing produces/consumes/acks), step6 :49 \"Not shipped as a gate.\" citing scripts/verify-node.sh:60-70 (verified: optional --artifact sha256 compare, records nothing). \u00a75 bullets docs/DESIGN.md:70-88 each carry a verdict (\"No inbox is shipped here (\u00a73 step 2) ... neither half is measured\"; \"No lease or redelivery consumer exists under scripts/\"; \"Not shipped: scripts/verify-node.sh:60-70 ... No quarantine path exists \u2014 not measured\"; \"Disk exhaustion \u2192 shipped: ... scripts/project-node.sh:144-176\"). Board rows named: CF-001 (:45), CF-004 (:48,:81), CF-068 (:46), CF-107 (:49,:81); \"not measured\" appears 3x. Audit docs/audits/code-factory-docs-2026-11-04-10-01-07.md has the before/after table with file:line (docs/DESIGN.md:36, :38-45, :59), literal command-output blocks (the 4-hit grep, `sed -n '245,249p' scripts/project-node.sh`, `sed -n '60,70p' scripts/verify-node.sh`), and a \"## Not verified\" list of three bullets. Tests: `bash tests/selftest.sh` (the configured test_command) run at this commit \u2014 run 2 and run 3 both exit_code=0 with \"SELFTEST: PASS\" (195 PASS rows); run 1 exited 1 with \"SELFTEST: FAIL (1)\" on arm 17 (\"auth marker {\\\"status\\\":\\\"ok\\\"} was not refused (exit 0)\"), which I reproduced standalone and it passes (rc=1, VERIFY: FAIL (1), named auth_gate FAIL, PASS unauth_refused), so that was a flake, not a code defect.\ndocs/DESIGN.md \u00a73/\u00a75 now carry explicit shipped/not-shipped verdicts backed by verified file:line citations and a re-runnable grep, the audit file has the before/after table with literal output and a not-verified list, and bash tests/selftest.sh prints SELFTEST: PASS (exit 0) at this commit.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-04T11:32:47.910944",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-04T11:32:47.929384+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 6518,
+        "truncated": false,
+        "source": "git show 4fd46d69f1c2"
+      }
+    ],
+    "task_id": "CF-202-DOC1"
+  }
+}
