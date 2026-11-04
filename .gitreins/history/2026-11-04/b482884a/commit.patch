@@ -1,0 +1,239 @@
+commit 5794a4927f60d35e35d51bf4cc54377e6902da1f
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Wed Nov 4 01:23:20 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Wed Nov 4 01:23:20 2026 -0500
+
+    docs(posture): a gitleaks claim must name its scan scope (CF-163 AC3)
+    
+    The public repo also publishes an unrelated `master` lineage (772 commits,
+    547 gitleaks findings on 64 commits, none an ancestor of main), so a
+    main-scoped scan reads green while the whole published surface is not. Two
+    published releng posture docs stated a clean gitleaks result naming NO
+    --log-opts, so a reader could not tell which surface the green covered.
+    
+    Adds scripts/check_scan_scope.py: every line in docs/audits/code-factory-releng-*.md
+    and docs/SECURITY-TRIAGE.md that mentions gitleaks must carry --log-opts on
+    the same line (exit 1 with a named FAIL row per violation, 2 on an unreadable
+    path). tests/selftest.sh gains three arms: green on the real tree, named red
+    on a fixture with an unscoped claim, green once the fixture names its scope.
+    
+    Corrects both docs in place, disclosing the correction instead of rewriting
+    history: CF-161's Secrets-in-history row now records the all-refs arm (547
+    findings in 64 commits, 64/64 not ancestors of main) beside the main-only arm
+    (0 findings), and CF-163's scope note names that its historical arm carried no
+    --log-opts.
+    
+    Verified at main 1aeb0c7: check_scan_scope.py -> RESULT: OK rc=0; /nonexistent
+    -> rc=2; selftest SELFTEST: PASS rc=0 (103 -> 106 PASS rows). CF-163 stays
+    pending: AC1/AC4/AC5 (retire the published `master` branch, disclose the
+    residual) need the owner's call.
+    
+    ch:trace row=CF-163 spec=none:row-carries-no-spec-anchor test=tests/selftest.sh::cf-163-scan-scope doc=docs/audits/code-factory-releng-2026-11-04-CF-161.md,evidence=docs/audits/code-factory-releng-2026-11-04-CF-163.md prompt=brief-CF-163-L2 verdict=judged-after-commit commit=none:self-referential memory=none:foreman-writes-it
+---
+ .../code-factory-releng-2026-11-04-CF-161.md       |   7 +-
+ .../code-factory-releng-2026-11-04-CF-163.md       |   2 +-
+ scripts/check_scan_scope.py                        | 116 +++++++++++++++++++++
+ tests/selftest.sh                                  |  36 +++++++
+ 4 files changed, 159 insertions(+), 2 deletions(-)
+
+diff --git a/docs/audits/code-factory-releng-2026-11-04-CF-161.md b/docs/audits/code-factory-releng-2026-11-04-CF-161.md
+index c4dd33a..c0f4ab6 100644
+--- a/docs/audits/code-factory-releng-2026-11-04-CF-161.md
++++ b/docs/audits/code-factory-releng-2026-11-04-CF-161.md
+@@ -22,7 +22,12 @@ written, and not cleaned.
+ | Board validity | `bash scripts/boardctl validate` | `RESULT: OK (3 warning(s))` — CF-034's two free-form fields + the headerless board, both pre-existing |
+ | Board census | `wc -l`, `jq -r .id \| sort \| uniq -d` | 134 rows before this row, 0 duplicate ids, 45 `complete` / 6 `in_progress` / 83 `pending` |
+ | GitHub Actions | `gh run list --repo coding-hermes/code-factory --limit 3` | `[]` — documented healthy no-Actions state, nothing to flag |
+-| Secrets in history | `gitleaks detect -c .gitleaks.toml --redact` | 418 commits, 8.73 MB, **no leaks found** |
++| Secrets in history | `gitleaks detect -c .gitleaks.toml --redact --log-opts="--all"` | 547 findings in 64 commits, all 64 not ancestors of main; the `--log-opts="origin/main"` arm reports 0 findings |
++
++> Correction (CF-163 AC3): the original arm above recorded no `--log-opts`, so the number it
++> printed (418 commits, 8.73 MB) is not reproducible as a scope. Re-measured by the releng tick at
++> `main` = `1aeb0c7` (2026-11-04) with the two arms above (`--log-opts="--all"` → the 547 findings
++> cell above; `--log-opts="origin/main"` → 0 findings). The row that owns the rule is **CF-163** (AC3).
+ 
+ ## Public posture
+ 
+diff --git a/docs/audits/code-factory-releng-2026-11-04-CF-163.md b/docs/audits/code-factory-releng-2026-11-04-CF-163.md
+index a1514f4..dc89d12 100644
+--- a/docs/audits/code-factory-releng-2026-11-04-CF-163.md
++++ b/docs/audits/code-factory-releng-2026-11-04-CF-163.md
+@@ -63,7 +63,7 @@ master_top_tree=.gitreins .hermes crier-fleet crier-interface docs get-h3 gitrei
+ 
+ ## Scope correction to the previous arm of this tick
+ 
+-The earlier execution of this tick recorded a gitleaks arm as "418 commits, 8.73 MB, no leaks found".
++The earlier execution of this tick recorded the arm `gitleaks detect -c .gitleaks.toml --redact` — no `--log-opts`, so no scope — as "418 commits, 8.73 MB, no leaks found"; that reading is not a scope claim, and the scoped arms in the table above follow.
+ That reading is reproducible only for a main-scoped scan (`--log-opts="origin/main"` → 300 commits,
+ 0 findings at `c4fe94f`); the whole-ref scan is 1152 commits / 57.39 MB / 547 findings. A clean posture
+ claim therefore has to name its `--log-opts`. Recorded as acceptance criterion 3 on CF-163, and in an
+diff --git a/scripts/check_scan_scope.py b/scripts/check_scan_scope.py
+new file mode 100644
+index 0000000..287f66f
+--- /dev/null
++++ b/scripts/check_scan_scope.py
+@@ -0,0 +1,116 @@
++#!/usr/bin/env python3
++"""check_scan_scope.py — a secret-scan claim in a posture doc must name its scope.
++
++Rule: any line in a scanned posture doc that contains the literal string
++``gitleaks`` must also contain the literal string ``--log-opts`` on that same
++line. A clean scan without a recorded scope is not a posture claim: with no
++``--log-opts`` the revision range gitleaks scans is undefined at the claim
++site, so the same repository can read green on ``main`` while other published
++refs carry findings (CF-163 AC3 — this repo also publishes an unrelated
++``master`` lineage with 547 findings on 64 commits, none an ancestor of
++``main``). A reader must be able to tell which surface a green covered.
++
++Scanned files, relative to the repo root (default: the directory containing
++this script's ``scripts/`` parent): ``docs/audits/code-factory-releng-*.md``
++and ``docs/SECURITY-TRIAGE.md``. A missing file is skipped; when nothing
++matches there is nothing to police and the run is OK.
++
++Usage:
++  python3 scripts/check_scan_scope.py [<repo-root>]
++
++Exit codes: 0 clean, 1 any violation, 2 when a scanned path is unreadable
++(e.g. the root does not exist or is not a directory).
++"""
++
++from __future__ import annotations
++
++import argparse
++import sys
++from pathlib import Path
++
++AUDIT_GLOB = "docs/audits/code-factory-releng-*.md"
++FIXED_FILES = ("docs/SECURITY-TRIAGE.md",)
++CLAIM = "gitleaks"
++SCOPE_FLAG = "--log-opts"
++
++
++class UnreadablePath(Exception):
++    """A scanned path exists but cannot be read."""
++
++
++def scanned_files(root: Path) -> list[Path]:
++    paths = sorted(root.glob(AUDIT_GLOB))
++    for rel in FIXED_FILES:
++        candidate = root / rel
++        if candidate.exists():
++            paths.append(candidate)
++    return paths
++
++
++def scan(root: Path) -> tuple[list[tuple[str, int]], int, bool]:
++    """Return (violations, gitleaks claim count, any file scanned).
++
++    Violations are (relpath, lineno) pairs, sorted by path then line number.
++    """
++    violations: list[tuple[str, int]] = []
++    claims = 0
++    paths = scanned_files(root)
++    for path in paths:
++        relpath = path.relative_to(root).as_posix()
++        try:
++            text = path.read_text(encoding="utf-8", errors="replace")
++        except OSError as exc:
++            raise UnreadablePath(f"{relpath} unreadable ({exc})") from exc
++        for lineno, line in enumerate(text.splitlines(), 1):
++            if CLAIM in line:
++                claims += 1
++                if SCOPE_FLAG not in line:
++                    violations.append((relpath, lineno))
++    violations.sort()
++    return violations, claims, bool(paths)
++
++
++def main(argv: list[str] | None = None) -> int:
++    parser = argparse.ArgumentParser(
++        description=(
++            "Posture-doc gate: every line naming gitleaks must also name"
++            " --log-opts on the same line — a clean scan without a recorded"
++            " scope is not a posture claim (CF-163 AC3)."
++        )
++    )
++    parser.add_argument(
++        "root",
++        nargs="?",
++        default=None,
++        help="repo root to scan (default: the directory containing scripts/)",
++    )
++    args = parser.parse_args(argv)
++    if args.root:
++        root = Path(args.root).resolve()
++    else:
++        root = Path(__file__).resolve().parent.parent
++    if not root.is_dir():
++        print(f"  FAIL  audit-scope: {root} is not a readable directory")
++        print("RESULT: FAIL (unreadable path)")
++        return 2
++    try:
++        violations, claims, scanned_any = scan(root)
++    except UnreadablePath as exc:
++        print(f"  FAIL  audit-scope: {exc}")
++        print("RESULT: FAIL (unreadable path)")
++        return 2
++    for relpath, lineno in violations:
++        print(f"  FAIL  audit-scope: {relpath}:{lineno} gitleaks claim names no {SCOPE_FLAG}")
++    if violations:
++        print(f"RESULT: FAIL ({len(violations)} violation(s))")
++        return 1
++    if not scanned_any:
++        print("  OK  audit-scope: no posture docs found")
++    else:
++        print(f"  OK  audit-scope: {claims} gitleaks claim(s) name their {SCOPE_FLAG}")
++    print("RESULT: OK")
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/tests/selftest.sh b/tests/selftest.sh
+index fe5bbd3..dd4b844 100755
+--- a/tests/selftest.sh
++++ b/tests/selftest.sh
+@@ -1313,6 +1313,42 @@ else
+ fi
+ rm -rf "$tmpd"
+ 
++# CF-163 AC3: a secret-scan claim must name its scope. The public repo also publishes
++# an unrelated `master` lineage (547 gitleaks findings on 64 commits, none an ancestor
++# of main), so a green with no recorded --log-opts is not a posture claim. Arm 1
++# measures the real tree; arms 2 and 3 red/green one fixture line.
++say "34. a posture doc's gitleaks claim names its scan scope (CF-163 AC3)"
++out=$(python3 -B "$HERE/scripts/check_scan_scope.py" "$HERE" 2>&1); rc=$?
++if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: OK'; then
++  say "  PASS  posture docs name their scan scope"
++else
++  say "  FAIL  posture docs scan-scope checker not green (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out"
++fi
++tmpd=$(mktemp -d)
++mkdir -p "$tmpd/docs/audits"
++printf '%s\n' '| Secrets | `gitleaks detect -c .gitleaks.toml --redact` | clean |' \
++  > "$tmpd/docs/audits/code-factory-releng-fixture.md"
++out=$(python3 -B "$HERE/scripts/check_scan_scope.py" "$tmpd" 2>&1); rc=$?
++if [ "$rc" -eq 1 ] \
++  && printf '%s\n' "$out" | grep -Eq '^  FAIL  audit-scope: .*:1 gitleaks claim names no --log-opts'; then
++  say "  PASS  unscoped claim -> FAIL audit-scope"
++else
++  say "  FAIL  unscoped claim escaped the scan-scope gate (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out"
++fi
++sed 's/--redact`/ --log-opts="--all"`/' "$tmpd/docs/audits/code-factory-releng-fixture.md" \
++  > "$tmpd/docs/audits/code-factory-releng-fixture.md.new"
++mv "$tmpd/docs/audits/code-factory-releng-fixture.md.new" \
++  "$tmpd/docs/audits/code-factory-releng-fixture.md"
++out=$(python3 -B "$HERE/scripts/check_scan_scope.py" "$tmpd" 2>&1); rc=$?
++if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: OK'; then
++  say "  PASS  scoped claim -> OK"
++else
++  say "  FAIL  scoped claim not accepted (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out"
++fi
++rm -rf "$tmpd"
+ 
+ say ""
+ [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
