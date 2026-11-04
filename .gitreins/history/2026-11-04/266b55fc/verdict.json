@@ -1,0 +1,111 @@
+{
+  "task_id": "CF-151",
+  "task_title": "README Status row 3 must state a node-scoped credential state and cite a command that measures the node, not the control host's key",
+  "task_criteria": [
+    "README.md Status row 3 no longer asserts FAIL inference_key as the contradicting measurement of a NODE state without labelling the control-host scope; the row names a node-scoped measurement (or explicitly separates control-host from node state); tests/selftest.sh carries a new arm (numbered past 36) that FAILs on the pre-fix wording and PASSes on the reworded README; bash tests/selftest.sh prints SELFTEST: PASS rc 0; scripts/boardctl validate prints RESULT: OK; no secrets, endpoints or personal data added to this public repo"
+  ],
+  "passed": true,
+  "worktree": "/home/kara/.hermes/cache/scratch/cfreadme-20261104.9iWqGz/pub",
+  "branch": "readme/cf-151-20261104-085233",
+  "commit": "6cc02346abf73ca7fe0de1ecc35d84c1f4e920a5",
+  "working_tree_content_fingerprint": "31f5e54be296fe38a5df09929c97a2f37d7527161098dd8d1e4f95194643a1c8",
+  "working_tree_dirty_path_count": 0,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n4:08AM INF scanned ~1054204 bytes (1.05 MB) in 495ms\n4:08AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 144 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.BKh21dsxLp/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  158/158 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [7111 chars omitted \u2014 107 line(s)] \u2026\n34. a posture doc's gitleaks claim names its scan scope (CF-163 AC3)\n  PASS  posture docs name their scan scope\n  PASS  unscoped claim -> FAIL audit-scope\n  PASS  scoped claim -> OK\n35. node-create accepts and forwards --ref (CF-153)\n  PASS  --staged-files --ref master -> exit 0, same five-file staged set\n  PASS  ref 'master' crosses the transport as --ref 'master'\n  PASS  ref 're'lease' crosses the transport as --ref 're'\\''lease'\n36. remote shell payloads preserve data without executing it (CF-159)\n  PASS  cf159 node-create project payload is data, not code\n  PASS  cf159 positive control NODE_PROJECT=my proj's --project=my proj's\n  PASS  cf159 node-create port payload is data, not code\n  PASS  cf159 node-create harness payload is data, not code\n  PASS  cf159 node-create repo payload is data, not code\n  PASS  cf159 node-create ref payload is data, not code\n  PASS  cf159 node-create crier payload is data, not code\n  PASS  cf159 verify-node artifact payload is data, not code; digest intact\n  PASS  cf159 bunker_exec trusted command text preserves quoted values and literal pipelines\n  PASS  cf159-escaping all remote-command sites\n37. the node credential row scopes its contradiction to the node (CF-151)\n  PASS  node credential row labels control-host evidence and names the node measurement\n  PASS  pre-fix node credential row refused (unlabelled-control-host-fail: Node inference credential missing-control-host-label: Node inference credential missing-node-scoped-measurement: Node inference credential )\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 README.md Status row 3 no longer asserts FAIL inference_key as the contradicting measurement of a NODE state without labelling the control-host scope; the row names a node-scoped measurement (or explicitly separates control-host from node state); tests/selftest.sh carries a new arm (numbered past 36) that FAILs on the pre-fix wording and PASSes on the reworded README; bash tests/selftest.sh prints SELFTEST: PASS rc 0; scripts/boardctl validate prints RESULT: OK; no secrets, endpoints or personal data added to this public repo: README.md:77 reworded: opens 'This is a NODE state, not measurable from the control host', names the node-scoped measurement 'the node's ~/node-scripts/project-node.sh --check --project <p> echoes the adapter's rows through its layer 20, so an unkeyed node prints FAIL inference_key for its own missing key', and explicitly separates scope: 'Run on the control host, the same gate measures this host's own key, not a node's \u2014 control-host evidence only ... prints PASS inference_key ... so a PASS there cannot witness the node's missing key.' tests/selftest.sh:1547-1593 adds section 37 'the node credential row scopes its contradiction to the node (CF-151)' (numbered past 36) with cf151_row_scope() plus a verbatim pre-fix fixture. RED proof reproduced by running the arm's function directly: pre-fix row from 276b0b0 -> rc=1 emitting 'unlabelled-control-host-fail / missing-control-host-label / missing-node-scoped-measurement'; current README.md -> rc=0. Fresh test run: `bash tests/selftest.sh` -> exit_code 0, output '37. the node credential row scopes its contradiction to the node (CF-151) / PASS node credential row labels control-host evidence and names the node measurement / PASS pre-fix node credential row refused' and 'SELFTEST: PASS' (122 PASS lines). `bash scripts/boardctl validate` -> exit_code 0, 'RESULT: OK (3 warning(s))' (warnings are pre-existing CF-034 free-form fields, unrelated). Lint guard `bash -n $(git ls-files '*.sh')` -> LINT OK. Secret/endpoint scan of the new row (sed -n '77p' README.md | grep -oiE 'https?://|email|sk-|ghp_|IPv4') returned no matches; the only path cited is the in-repo docs/audits/code-factory-CF-064.probe.txt, and the added ch:trace line at README.md:227 contains no credentials.\nREADME Status row 3 now scopes the inference_key contradiction to the node with the control-host run explicitly labelled, selftest section 37 proves RED on the pre-fix wording and GREEN on the reword, and both bash tests/selftest.sh (SELFTEST: PASS, rc 0) and scripts/boardctl validate (RESULT: OK) pass with no secrets added.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 README.md Status row 3 no longer asserts FAIL inference_key as the contradicting measurement of a NODE state without labelling the control-host scope; the row names a node-scoped measurement (or explicitly separates control-host from node state); tests/selftest.sh carries a new arm (numbered past 36) that FAILs on the pre-fix wording and PASSes on the reworded README; bash tests/selftest.sh prints SELFTEST: PASS rc 0; scripts/boardctl validate prints RESULT: OK; no secrets, endpoints or personal data added to this public repo: README.md:77 reworded: opens 'This is a NODE state, not measurable from the control host', names the node-scoped measurement 'the node's ~/node-scripts/project-node.sh --check --project <p> echoes the adapter's rows through its layer 20, so an unkeyed node prints FAIL inference_key for its own missing key', and explicitly separates scope: 'Run on the control host, the same gate measures this host's own key, not a node's \u2014 control-host evidence only ... prints PASS inference_key ... so a PASS there cannot witness the node's missing key.' tests/selftest.sh:1547-1593 adds section 37 'the node credential row scopes its contradiction to the node (CF-151)' (numbered past 36) with cf151_row_scope() plus a verbatim pre-fix fixture. RED proof reproduced by running the arm's function directly: pre-fix row from 276b0b0 -> rc=1 emitting 'unlabelled-control-host-fail / missing-control-host-label / missing-node-scoped-measurement'; current README.md -> rc=0. Fresh test run: `bash tests/selftest.sh` -> exit_code 0, output '37. the node credential row scopes its contradiction to the node (CF-151) / PASS node credential row labels control-host evidence and names the node measurement / PASS pre-fix node credential row refused' and 'SELFTEST: PASS' (122 PASS lines). `bash scripts/boardctl validate` -> exit_code 0, 'RESULT: OK (3 warning(s))' (warnings are pre-existing CF-034 free-form fields, unrelated). Lint guard `bash -n $(git ls-files '*.sh')` -> LINT OK. Secret/endpoint scan of the new row (sed -n '77p' README.md | grep -oiE 'https?://|email|sk-|ghp_|IPv4') returned no matches; the only path cited is the in-repo docs/audits/code-factory-CF-064.probe.txt, and the added ch:trace line at README.md:227 contains no credentials.\nREADME Status row 3 now scopes the inference_key contradiction to the node with the control-host run explicitly labelled, selftest section 37 proves RED on the pre-fix wording and GREEN on the reword, and both bash tests/selftest.sh (SELFTEST: PASS, rc 0) and scripts/boardctl validate (RESULT: OK) pass with no secrets added.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "README.md Status row 3 no longer asserts FAIL inference_key as the contradicting measurement of a NODE state without labelling the control-host scope; the row names a node-scoped measurement (or explicitly separates control-host from node state); tests/selftest.sh carries a new arm (numbered past 36) that FAILs on the pre-fix wording and PASSes on the reworded README; bash tests/selftest.sh prints SELFTEST: PASS rc 0; scripts/boardctl validate prints RESULT: OK; no secrets, endpoints or personal data added to this public repo",
+                "status": "PASS",
+                "detail": "README.md:77 reworded: opens 'This is a NODE state, not measurable from the control host', names the node-scoped measurement 'the node's ~/node-scripts/project-node.sh --check --project <p> echoes the adapter's rows through its layer 20, so an unkeyed node prints FAIL inference_key for its own missing key', and explicitly separates scope: 'Run on the control host, the same gate measures this host's own key, not a node's \u2014 control-host evidence only ... prints PASS inference_key ... so a PASS there cannot witness the node's missing key.' tests/selftest.sh:1547-1593 adds section 37 'the node credential row scopes its contradiction to the node (CF-151)' (numbered past 36) with cf151_row_scope() plus a verbatim pre-fix fixture. RED proof reproduced by running the arm's function directly: pre-fix row from 276b0b0 -> rc=1 emitting 'unlabelled-control-host-fail / missing-control-host-label / missing-node-scoped-measurement'; current README.md -> rc=0. Fresh test run: `bash tests/selftest.sh` -> exit_code 0, output '37. the node credential row scopes its contradiction to the node (CF-151) / PASS node credential row labels control-host evidence and names the node measurement / PASS pre-fix node credential row refused' and 'SELFTEST: PASS' (122 PASS lines). `bash scripts/boardctl validate` -> exit_code 0, 'RESULT: OK (3 warning(s))' (warnings are pre-existing CF-034 free-form fields, unrelated). Lint guard `bash -n $(git ls-files '*.sh')` -> LINT OK. Secret/endpoint scan of the new row (sed -n '77p' README.md | grep -oiE 'https?://|email|sk-|ghp_|IPv4') returned no matches; the only path cited is the in-repo docs/audits/code-factory-CF-064.probe.txt, and the added ch:trace line at README.md:227 contains no credentials."
+              }
+            ],
+            "summary": "README Status row 3 now scopes the inference_key contradiction to the node with the control-host run explicitly labelled, selftest section 37 proves RED on the pre-fix wording and GREEN on the reword, and both bash tests/selftest.sh (SELFTEST: PASS, rc 0) and scripts/boardctl validate (RESULT: OK) pass with no secrets added.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-151\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 README.md Status row 3 no longer asserts FAIL inference_key as the contradicting measurement of a NODE state without labelling the control-host scope; the row names a node-scoped measurement (or explicitly separates control-host from node state); tests/selftest.sh carries a new arm (numbered past 36) that FAILs on the pre-fix wording and PASSes on the reworded README; bash tests/selftest.sh prints SELFTEST: PASS rc 0; scripts/boardctl validate prints RESULT: OK; no secrets, endpoints or personal data added to this public repo: README.md:77 reworded: opens 'This is a NODE state, not measurable from the control host', names the node-scoped measurement 'the node's ~/node-scripts/project-node.sh --check --project <p> echoes the adapter's rows through its layer 20, so an unkeyed node prints FAIL inference_key for its own missing key', and explicitly separates scope: 'Run on the control host, the same gate measures this host's own key, not a node's \u2014 control-host evidence only ... prints PASS inference_key ... so a PASS there cannot witness the node's missing key.' tests/selftest.sh:1547-1593 adds section 37 'the node credential row scopes its contradiction to the node (CF-151)' (numbered past 36) with cf151_row_scope() plus a verbatim pre-fix fixture. RED proof reproduced by running the arm's function directly: pre-fix row from 276b0b0 -> rc=1 emitting 'unlabelled-control-host-fail / missing-control-host-label / missing-node-scoped-measurement'; current README.md -> rc=0. Fresh test run: `bash tests/selftest.sh` -> exit_code 0, output '37. the node credential row scopes its contradiction to the node (CF-151) / PASS node credential row labels control-host evidence and names the node measurement / PASS pre-fix node credential row refused' and 'SELFTEST: PASS' (122 PASS lines). `bash scripts/boardctl validate` -> exit_code 0, 'RESULT: OK (3 warning(s))' (warnings are pre-existing CF-034 free-form fields, unrelated). Lint guard `bash -n $(git ls-files '*.sh')` -> LINT OK. Secret/endpoint scan of the new row (sed -n '77p' README.md | grep -oiE 'https?://|email|sk-|ghp_|IPv4') returned no matches; the only path cited is the in-repo docs/audits/code-factory-CF-064.probe.txt, and the added ch:trace line at README.md:227 contains no credentials.\nREADME Status row 3 now scopes the inference_key contradiction to the node with the control-host run explicitly labelled, selftest section 37 proves RED on the pre-fix wording and GREEN on the reword, and both bash tests/selftest.sh (SELFTEST: PASS, rc 0) and scripts/boardctl validate (RESULT: OK) pass with no secrets added.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-04T09:09:36.086581",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-04T09:09:36.109776+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 11639,
+        "truncated": false,
+        "source": "git show 6cc02346abf7"
+      }
+    ],
+    "task_id": "CF-151"
+  }
+}
