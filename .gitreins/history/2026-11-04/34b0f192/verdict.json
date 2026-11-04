@@ -1,0 +1,112 @@
+{
+  "task_id": "RELENG-R4",
+  "task_title": "Resumed releng verification for tick code-factory-duckbrain-releng-2026-11-04-06-11-13",
+  "task_criteria": [
+    "This task grades a VERIFICATION AND RECORD-KEEPING commit, not a fix. The rows it touches (CF-163, CF-168) stay pending by design; do NOT expect them repaired. Criteria, all re-runnable at the graded commit: (1) 'git show HEAD:.coding-hermes/board/events.jsonl | jq -s length' prints 259 and 'jq -s [.[\"id\"]]|group_by(.)|map(select(length>1))|length' prints 0 (no duplicate ids); (2) the last event's detail parses as JSON and carries tick code-factory-duckbrain-releng-2026-11-04-06-11-13 plus the selftest result; (3) docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md contains a section naming the fourth execution of that tick id; (4) 'bash tests/selftest.sh' prints SELFTEST: PASS and exits 0; (5) 'bash scripts/boardctl validate' prints RESULT: OK; (6) git status --porcelain --untracked-files=no is empty and HEAD is an ancestor of origin/main."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "b3922d6cea86630334b5ccd39814f183ee33677e",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T070659.832226Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n2:07AM INF scanned ~925224 bytes (925.22 KB) in 975ms\n2:07AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 134 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T070659.832226Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.leXYfS8WmM/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  142/142 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [5809 chars omitted \u2014 92 line(s)] \u2026\n  PASS  unqualified Status rows refused (missing-qualifier: Hermes in a bunker + HTTP gateway over tailnet missing-qualifier: Node inference credential )\n31. Hermes pip logs are private per run and distinguish filesystem failures (CF-127)\n  PASS  pip-log old shape: permission denied, exact misleading row, pip not invoked\n  PASS  pip-log --check: unchanged absent-binary rows, no log or pip invocation\n  PASS  pip-log new shape run 1: pip rc 23, distinct HOME log mode 600, fixed file untouched\n  PASS  pip-log new shape run 2: pip rc 23, distinct HOME log mode 600, fixed file untouched\n  PASS  pip-log creation failure: exact filesystem row, pip not invoked\n  PASS  pip-log successful install proceeds despite the unwritable fixed file\n  PASS  pip-log installed --check: unchanged binary rows, no new log or pip invocation\n32. the Quick start control-host commands name BUNKER_SERVER in a check row (CF-145)\n  PASS  bunker-server-install without BUNKER_SERVER -> named FAIL row, exit 1\n  PASS  node-create without BUNKER_SERVER -> named FAIL row, exit 1\n33. the board lock adjudicator proves a holder before calling a lock held (CF-119)\n  PASS  unheld 0-byte lock -> RESIDUE, file untouched (RESIDUE consumers=0 commits_after_mtime=unknown)\n  PASS  flock-held lock -> HELD (HELD holder=pid-2743669)\n34. a posture doc's gitleaks claim names its scan scope (CF-163 AC3)\n  PASS  posture docs name their scan scope\n  PASS  unscoped claim -> FAIL audit-scope\n  PASS  scoped claim -> OK\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T070659.832226Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 This task grades a VERIFICATION AND RECORD-KEEPING commit, not a fix. The rows it touches (CF-163, CF-168) stay pending by design; do NOT expect them repaired. Criteria, all re-runnable at the graded commit: (1) 'git show HEAD:.coding-hermes/board/events.jsonl | jq -s length' prints 259 and 'jq -s [.[\"id\"]]|group_by(.)|map(select(length>1))|length' prints 0 (no duplicate ids); (2) the last event's detail parses as JSON and carries tick code-factory-duckbrain-releng-2026-11-04-06-11-13 plus the selftest result; (3) docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md contains a section naming the fourth execution of that tick id; (4) 'bash tests/selftest.sh' prints SELFTEST: PASS and exits 0; (5) 'bash scripts/boardctl validate' prints RESULT: OK; (6) git status --porcelain --untracked-files=no is empty and HEAD is an ancestor of origin/main.: Commit b3922d6 touches only .coding-hermes/board/events.jsonl (+1) and docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md (+30) \u2014 record-keeping, no fix. (1) `git show HEAD:.coding-hermes/board/events.jsonl | jq -s length` -> 259. The literal dup-check `jq -s '[.[\"id\"]]|...'` errors ('Cannot index array with string \"id\"') because it indexes the array rather than its elements; the intended semantics `jq -s '[.[].id]|group_by(.)|map(select(length>1))|length'` -> 0 and `jq -s 'map(.id)|group_by(.)|map(select(length>1))|length'` -> 0, i.e. no duplicate ids. (2) Last event id=259; `jq -r '.detail' | jq .` parses cleanly and yields .tick=\"code-factory-duckbrain-releng-2026-11-04-06-11-13\" and .gate_at_tip.selftest=\"bash tests/selftest.sh -> SELFTEST: PASS, rc=0, 106 PASS rows, 19 FAIL rows (all documented negative fixtures)\". (3) docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md:258 heading '### Fourth execution of tick `code-factory-duckbrain-releng-2026-11-04-06-11-13` \u2014 resumed verification', with a claim/command/result table at lines 266-279. (4) `bash tests/selftest.sh` -> EXIT=0, tail prints 'SELFTEST: PASS' (107 PASS lines). (5) `bash scripts/boardctl validate` -> 'rows: 142 tasks, 259 events, 0 fixtures', 'key uniformity: 142/142 rows carry only canon keys (0 drift)', 'RESULT: OK (3 warning(s))' (warnings are pre-existing CF-034 free-form fields + headerless board). (6) `git status --porcelain --untracked-files=no | wc -l` -> 0; `git merge-base --is-ancestor HEAD origin/main` -> exit 0; HEAD == origin/main == b3922d6cea86630334b5ccd39814f183ee33677e. CF-163/CF-168 remain pending by design, as the criterion states.\nAll six re-runnable checks pass at HEAD b3922d6: 259 events with 0 duplicate ids, last event's JSON detail carries the tick id and SELFTEST: PASS, the audit doc has a 'Fourth execution' section, selftest exits 0 with SELFTEST: PASS, boardctl validate prints RESULT: OK, and the tree is clean with HEAD an ancestor of origin/main.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 This task grades a VERIFICATION AND RECORD-KEEPING commit, not a fix. The rows it touches (CF-163, CF-168) stay pending by design; do NOT expect them repaired. Criteria, all re-runnable at the graded commit: (1) 'git show HEAD:.coding-hermes/board/events.jsonl | jq -s length' prints 259 and 'jq -s [.[\"id\"]]|group_by(.)|map(select(length>1))|length' prints 0 (no duplicate ids); (2) the last event's detail parses as JSON and carries tick code-factory-duckbrain-releng-2026-11-04-06-11-13 plus the selftest result; (3) docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md contains a section naming the fourth execution of that tick id; (4) 'bash tests/selftest.sh' prints SELFTEST: PASS and exits 0; (5) 'bash scripts/boardctl validate' prints RESULT: OK; (6) git status --porcelain --untracked-files=no is empty and HEAD is an ancestor of origin/main.: Commit b3922d6 touches only .coding-hermes/board/events.jsonl (+1) and docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md (+30) \u2014 record-keeping, no fix. (1) `git show HEAD:.coding-hermes/board/events.jsonl | jq -s length` -> 259. The literal dup-check `jq -s '[.[\"id\"]]|...'` errors ('Cannot index array with string \"id\"') because it indexes the array rather than its elements; the intended semantics `jq -s '[.[].id]|group_by(.)|map(select(length>1))|length'` -> 0 and `jq -s 'map(.id)|group_by(.)|map(select(length>1))|length'` -> 0, i.e. no duplicate ids. (2) Last event id=259; `jq -r '.detail' | jq .` parses cleanly and yields .tick=\"code-factory-duckbrain-releng-2026-11-04-06-11-13\" and .gate_at_tip.selftest=\"bash tests/selftest.sh -> SELFTEST: PASS, rc=0, 106 PASS rows, 19 FAIL rows (all documented negative fixtures)\". (3) docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md:258 heading '### Fourth execution of tick `code-factory-duckbrain-releng-2026-11-04-06-11-13` \u2014 resumed verification', with a claim/command/result table at lines 266-279. (4) `bash tests/selftest.sh` -> EXIT=0, tail prints 'SELFTEST: PASS' (107 PASS lines). (5) `bash scripts/boardctl validate` -> 'rows: 142 tasks, 259 events, 0 fixtures', 'key uniformity: 142/142 rows carry only canon keys (0 drift)', 'RESULT: OK (3 warning(s))' (warnings are pre-existing CF-034 free-form fields + headerless board). (6) `git status --porcelain --untracked-files=no | wc -l` -> 0; `git merge-base --is-ancestor HEAD origin/main` -> exit 0; HEAD == origin/main == b3922d6cea86630334b5ccd39814f183ee33677e. CF-163/CF-168 remain pending by design, as the criterion states.\nAll six re-runnable checks pass at HEAD b3922d6: 259 events with 0 duplicate ids, last event's JSON detail carries the tick id and SELFTEST: PASS, the audit doc has a 'Fourth execution' section, selftest exits 0 with SELFTEST: PASS, boardctl validate prints RESULT: OK, and the tree is clean with HEAD an ancestor of origin/main.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "This task grades a VERIFICATION AND RECORD-KEEPING commit, not a fix. The rows it touches (CF-163, CF-168) stay pending by design; do NOT expect them repaired. Criteria, all re-runnable at the graded commit: (1) 'git show HEAD:.coding-hermes/board/events.jsonl | jq -s length' prints 259 and 'jq -s [.[\"id\"]]|group_by(.)|map(select(length>1))|length' prints 0 (no duplicate ids); (2) the last event's detail parses as JSON and carries tick code-factory-duckbrain-releng-2026-11-04-06-11-13 plus the selftest result; (3) docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md contains a section naming the fourth execution of that tick id; (4) 'bash tests/selftest.sh' prints SELFTEST: PASS and exits 0; (5) 'bash scripts/boardctl validate' prints RESULT: OK; (6) git status --porcelain --untracked-files=no is empty and HEAD is an ancestor of origin/main.",
+                "status": "PASS",
+                "detail": "Commit b3922d6 touches only .coding-hermes/board/events.jsonl (+1) and docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md (+30) \u2014 record-keeping, no fix. (1) `git show HEAD:.coding-hermes/board/events.jsonl | jq -s length` -> 259. The literal dup-check `jq -s '[.[\"id\"]]|...'` errors ('Cannot index array with string \"id\"') because it indexes the array rather than its elements; the intended semantics `jq -s '[.[].id]|group_by(.)|map(select(length>1))|length'` -> 0 and `jq -s 'map(.id)|group_by(.)|map(select(length>1))|length'` -> 0, i.e. no duplicate ids. (2) Last event id=259; `jq -r '.detail' | jq .` parses cleanly and yields .tick=\"code-factory-duckbrain-releng-2026-11-04-06-11-13\" and .gate_at_tip.selftest=\"bash tests/selftest.sh -> SELFTEST: PASS, rc=0, 106 PASS rows, 19 FAIL rows (all documented negative fixtures)\". (3) docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md:258 heading '### Fourth execution of tick `code-factory-duckbrain-releng-2026-11-04-06-11-13` \u2014 resumed verification', with a claim/command/result table at lines 266-279. (4) `bash tests/selftest.sh` -> EXIT=0, tail prints 'SELFTEST: PASS' (107 PASS lines). (5) `bash scripts/boardctl validate` -> 'rows: 142 tasks, 259 events, 0 fixtures', 'key uniformity: 142/142 rows carry only canon keys (0 drift)', 'RESULT: OK (3 warning(s))' (warnings are pre-existing CF-034 free-form fields + headerless board). (6) `git status --porcelain --untracked-files=no | wc -l` -> 0; `git merge-base --is-ancestor HEAD origin/main` -> exit 0; HEAD == origin/main == b3922d6cea86630334b5ccd39814f183ee33677e. CF-163/CF-168 remain pending by design, as the criterion states."
+              }
+            ],
+            "summary": "All six re-runnable checks pass at HEAD b3922d6: 259 events with 0 duplicate ids, last event's JSON detail carries the tick id and SELFTEST: PASS, the audit doc has a 'Fourth execution' section, selftest exits 0 with SELFTEST: PASS, boardctl validate prints RESULT: OK, and the tree is clean with HEAD an ancestor of origin/main.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: RELENG-R4\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 This task grades a VERIFICATION AND RECORD-KEEPING commit, not a fix. The rows it touches (CF-163, CF-168) stay pending by design; do NOT expect them repaired. Criteria, all re-runnable at the graded commit: (1) 'git show HEAD:.coding-hermes/board/events.jsonl | jq -s length' prints 259 and 'jq -s [.[\"id\"]]|group_by(.)|map(select(length>1))|length' prints 0 (no duplicate ids); (2) the last event's detail parses as JSON and carries tick code-factory-duckbrain-releng-2026-11-04-06-11-13 plus the selftest result; (3) docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md contains a section naming the fourth execution of that tick id; (4) 'bash tests/selftest.sh' prints SELFTEST: PASS and exits 0; (5) 'bash scripts/boardctl validate' prints RESULT: OK; (6) git status --porcelain --untracked-files=no is empty and HEAD is an ancestor of origin/main.: Commit b3922d6 touches only .coding-hermes/board/events.jsonl (+1) and docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md (+30) \u2014 record-keeping, no fix. (1) `git show HEAD:.coding-hermes/board/events.jsonl | jq -s length` -> 259. The literal dup-check `jq -s '[.[\"id\"]]|...'` errors ('Cannot index array with string \"id\"') because it indexes the array rather than its elements; the intended semantics `jq -s '[.[].id]|group_by(.)|map(select(length>1))|length'` -> 0 and `jq -s 'map(.id)|group_by(.)|map(select(length>1))|length'` -> 0, i.e. no duplicate ids. (2) Last event id=259; `jq -r '.detail' | jq .` parses cleanly and yields .tick=\"code-factory-duckbrain-releng-2026-11-04-06-11-13\" and .gate_at_tip.selftest=\"bash tests/selftest.sh -> SELFTEST: PASS, rc=0, 106 PASS rows, 19 FAIL rows (all documented negative fixtures)\". (3) docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md:258 heading '### Fourth execution of tick `code-factory-duckbrain-releng-2026-11-04-06-11-13` \u2014 resumed verification', with a claim/command/result table at lines 266-279. (4) `bash tests/selftest.sh` -> EXIT=0, tail prints 'SELFTEST: PASS' (107 PASS lines). (5) `bash scripts/boardctl validate` -> 'rows: 142 tasks, 259 events, 0 fixtures', 'key uniformity: 142/142 rows carry only canon keys (0 drift)', 'RESULT: OK (3 warning(s))' (warnings are pre-existing CF-034 free-form fields + headerless board). (6) `git status --porcelain --untracked-files=no | wc -l` -> 0; `git merge-base --is-ancestor HEAD origin/main` -> exit 0; HEAD == origin/main == b3922d6cea86630334b5ccd39814f183ee33677e. CF-163/CF-168 remain pending by design, as the criterion states.\nAll six re-runnable checks pass at HEAD b3922d6: 259 events with 0 duplicate ids, last event's JSON detail carries the tick id and SELFTEST: PASS, the audit doc has a 'Fourth execution' section, selftest exits 0 with SELFTEST: PASS, boardctl validate prints RESULT: OK, and the tree is clean with HEAD an ancestor of origin/main.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-04T07:07:56.455845",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-04T07:07:56.476300+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 15724,
+        "truncated": false,
+        "source": "git show b3922d6cea86"
+      }
+    ],
+    "task_id": "RELENG-R4"
+  }
+}
