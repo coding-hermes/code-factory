@@ -26,9 +26,25 @@ the manifest to know where the artifacts are.
 | 00 preflight | arch, disk ≥ floor, memory, reachability to crier / PyPI / Go proxy | — |
 | 10 base | python3 + venv, git, curl, tar, sha256sum; optionally jq, rg, node | preflight |
 | 20 harness | the chosen harness + its gateway/CLI | base |
-| 30 bus | a crier identity file (600) and a pull worker | harness |
+| 30 bus | a crier identity file at `$HOME/.node/crier.json` and its mode 600 | harness |
 | 40 repo | the repo cloned at a pinned ref | base |
-| 90 verify | one round trip whose digest is recomputed on the control host | all |
+| 90 verify | the node manifest (`$HOME/.node/node.json`), written only when every layer passed | all |
+
+Two capabilities that the design describes are **not** established by any shipped layer, and this
+table no longer claims them:
+
+- **A node-side bus worker.** Layer 30 starts and checks no process and opens no socket:
+  `scripts/project-node.sh:244-249` tests `-f $STATE/crier.json`, then `stat -c '%a'` against `600`,
+  and prints `crier_identity` / `crier_mode`. Whether a worker is running on the node is unmeasured
+  by this ladder; CF-068 owns the file-existence weakness this layer still has.
+- **A round trip whose digest is recomputed on the control host.** Layer 90 prints `[90] manifest`
+  and writes `$HOME/.node/node.json` (`scripts/project-node.sh:294-312`); it recomputes no artifact
+  digest and consults no control host. That criterion is what the runbook calls NOT YET
+  (`docs/OPERATIONS.md` §6), CF-004 owns building it, and `AGENTS.md` rule 4 keeps it as the proof
+  a node works — it is the standard layer 90 is graded against, not something layer 90 delivers.
+
+Layer 40's cell was narrowed to the clone alone for the same reason (`6f75e28`, CF-032). Every cell
+in this table now names only something the shipped script measures or prints.
 
 ### Fixture scope (`--layers`)
 
