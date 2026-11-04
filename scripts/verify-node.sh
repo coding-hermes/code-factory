@@ -59,7 +59,7 @@ esac
 
 # 4. optional artifact integrity
 if [ -n "$ARTIFACT" ]; then
-  remote=$(bunker exec --server "$SERVER" "$AGENT" -- bash -lc "sha256sum '$ARTIFACT' 2>/dev/null | cut -d' ' -f1")
+  remote=$(bunker exec --server "$SERVER" "$AGENT" -- bash -lc "sha256sum $(shq "$ARTIFACT") 2>/dev/null | cut -d' ' -f1")
   tmp=$(mktemp)
   bunker exec --server "$SERVER" "$AGENT" --raw -- cat "$ARTIFACT" > "$tmp" 2>/dev/null
   local_h=$(sha256sum "$tmp" | cut -d' ' -f1); rm -f "$tmp"

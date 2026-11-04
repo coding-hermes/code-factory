@@ -50,6 +50,15 @@ once() {
   "$@" && mkdir -p "$(dirname "$sentinel")" && date -u +%FT%TZ > "$sentinel"
 }
 
+# Quote one data value for a remote shell, including empty strings and apostrophes.
+shq() {
+  local value="${1//\'/\'\\\'\'}"
+  printf "'%s'" "$value"
+}
+
+# Accept trusted shell command text, not an argv array: remaining arguments are joined
+# with spaces for bash -lc. Callers must pass every interpolated data value through
+# shq before composing that text; literal shell commands retain their semantics.
 bunker_exec() {  # bunker_exec <server> <agent> <cmd...>
   local server="$1" agent="$2"; shift 2
   bunker exec --server "$server" "$agent" -- bash -lc "$*"
