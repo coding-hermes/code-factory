@@ -146,9 +146,17 @@ locations, and adds the measured consequence: a workdir without `<ref>` prints
   present in the workdir and only the **published** side is missing. The message names the wrong
   file; the failure verdict is correct. Not covered by CF-129's criterion, so not changed here.
 - The census block below the section (`Current measured state`) was measured at 116 rows / 168
-  events / `RESULT: OK (47 warning(s))`; at this tip the same commands print 126 rows / 190
-  events / `RESULT: OK (55 warning(s))`. The block self-qualifies ("measure it instead of quoting
-  an older snapshot") and is owned by the sync lane's census reconciliation (CF-121/CF-122
-  family), so this tick did not restate it.
+  events / `RESULT: OK (47 warning(s))`; at this tip the same board bytes are 127 rows / 193
+  events, so the block is 11 rows / 25 events stale. Its warning count is worse than stale — it
+  is **instrument-dependent**: `~/.local/bin/boardctl` was replaced mid-tick (mtime
+  `2026-11-03 21:56:15 -05:00`). Before the replacement the same 126-row bytes printed
+  `RESULT: OK (55 warning(s))` with the free-form `probe` key warned per row; after it the same
+  bytes print `RESULT: OK (3 warning(s))` although 53 rows still carry `probe` — the newer binary
+  emits no `probe`-canon warning class at all. The block's explanation "44 rows carrying a
+  free-form `probe` key" therefore names a warning the current instrument cannot produce, and no
+  dated warning count in this document can be re-checked without naming the binary that printed
+  it (`boardctl version` reports `dev`, so the only available handle is the file mtime/hash).
+  Not restated here: the block is owned by the sync lane's census reconciliation (CF-121/CF-122
+  family); filed as CF-154 for the unversioned-instrument defect.
 
 ch:trace row=CF-129 spec=docs/BOARD.md#publish-drift-census test=scripts/board_drift.py::check doc=docs/BOARD.md prompt=prompts/docs.md evidence=docs/audits/code-factory-docs-2026-11-04-CF-129.md witness=cmd:arm1-DRIFT-arm2-OK verdict=none:judged-after-commit commit=none:self-referential-hash memory=none:written-after-push
