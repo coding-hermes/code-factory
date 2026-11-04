@@ -237,3 +237,24 @@ remaining warnings are CF-034's two free-form fields and the headerless board.
 |---|---|---|
 | writes in `/home/kara/code-factory` | not run | sibling lanes `running` on the shared checkout in the same slot; all writes went to a fresh clone |
 | worker dispatch | not run | this lane's deliverable is reconciliation; no implementation was needed |
+
+### Landing-tip delta — the board moved during this tick's rebase
+
+The rebase onto `origin/main` picked up four sibling commits (`dae4e7a` → `e9f3085`) that filed CF-154,
+CF-155, reopened CF-079 and recorded a DuckBrain receipt. Measured again at `e9f3085`:
+
+| Check | At `e9f3085` |
+|---|---|
+| tasks.jsonl | 129 rows parse, no duplicate ids — 39 `complete`, 6 `in_progress`, 84 `pending` |
+| events.jsonl | 197 rows parse |
+| `bash scripts/boardctl validate` | `RESULT: OK (3 warning(s))` — unchanged: CF-034's two free-form fields plus the headerless board |
+| `bash tests/selftest.sh` | `SELFTEST: PASS`, `PASS 129/129 rows parse`, 92 `PASS` rows, 30 numbered sections, loadavg 9.49 |
+
+Two consequences, both recorded rather than chased:
+
+- The measured deltas appended to `docs/BOARD.md` and `docs/ACCEPTANCE-PLAN.md` are labelled at
+  `dae4e7a` (127 rows / 193 events) and are stale by two folded rows at the landed tip. That is the
+  documented moving-target class, not a defect this lane closes by typing a third number.
+- **CF-154** ("the census block's warning count does not follow from the board") and **CF-155**
+  ("plan stale by one selftest section") own the structural fix. This tick named both inside the
+  corrected docs text and filed nothing for the same class.

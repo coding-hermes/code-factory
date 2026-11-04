@@ -93,7 +93,9 @@ bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
   (CF-034's free-form `guard_result`/`ci_result` plus the headerless board); the 44 `probe`-key
   warnings are gone because CF-129 relanded canon keys (`key uniformity: 127/127 rows`).
   `tests/selftest.sh` prints `SELFTEST: PASS`, `PASS 127/127 rows parse`, 92 `PASS` rows, 30
-  numbered sections plus lettered arms `4b`/`7b`, at loadavg 15.60.
+  numbered sections plus lettered arms `4b`/`7b`, at loadavg 15.60. Two sibling rows own the
+  structural fix for this block: **CF-154** (the warning count does not follow from the board) and
+  **CF-155** (the plan is stale by one selftest section).
 - At this tree (earlier snapshot, 116 task rows, 168 events): `scripts/boardctl validate` prints
   `RESULT: OK (47 warning(s))` — 44 rows carrying a free-form `probe` key, CF-034's free-form
   `guard_result`/`ci_result` prose, and the headerless board (no `board.jsonl`), so header-counter

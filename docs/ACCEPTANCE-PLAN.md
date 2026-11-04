@@ -19,7 +19,7 @@ Re-measure this block rather than trusting either snapshot.
 5 in_progress, 82 pending); `scripts/boardctl validate` prints `RESULT: OK (3 warning(s))` — CF-034's
 two free-form fields plus the headerless board, down from 54 because CF-129 relanded canon keys;
 `tests/selftest.sh` prints `SELFTEST: PASS` with 92 `PASS` rows and `PASS 127/127 rows parse` at
-loadavg 15.60.
+loadavg 15.60. CF-154 and CF-155 own the structural fix for this block.
 Nineteen `  FAIL` lines are printed *inside* the suite by fixtures that assert a rejection (§16's
 pre-fix manifest, the disk-floor refusal, the census fail-closed arms, …), so count `SELFTEST:` and
 the suite's counter, never a raw `grep -c '^  FAIL'`. Timing is not a portable number: 9.32 s CPU
