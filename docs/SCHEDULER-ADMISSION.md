@@ -52,7 +52,13 @@ reintroduce that state. The gate's error response should list the accepted paths
   (`internal/database/models.go:39,47-52`, multiplier 8). A row that already carries any non-zero
   bound is written as given and is never refused for its ratio. Measured 2026-11-04: the live family
   carried ceiling/floor ratios of 8× (`docs`, `perf`, `qa`, `readme`, `review`), 16×, 48×, 192×, 224×
-  and 576×, every row enabled. Read the pair back after arming; the API will not check it for you.
+  and 576×, across 17 ceiling-bearing rows of which 16 were enabled: `code-factory-qa` read
+  `enabled=0`, set by `auto-disable` on `failure rate 91.3% (84/92 ticks, window 100, threshold
+  0.90)`. Arm state is a per-row fact, not a family property — an auto-disable can land minutes
+  before or after a census, so read the flags back alongside the pair and report the disabled rows
+  instead of summarising the family as armed: `sqlite3 ~/.hermes/coding-hermes/scheduler.db "select
+  name, enabled, cooldown_floor_s, cooldown_ceiling_s, disabled_by from projects where name like
+  '<family>%' and cooldown_ceiling_s>0;"`. The API will not check the ratio for you.
   The cadence numbers themselves are owned by CF-134, not by this gate.
 - Scheduler namespace/global concurrency and load gates are runtime admission controls, not
   workdir allowlist rules. A lane may be configured correctly and still remain queued for capacity.
