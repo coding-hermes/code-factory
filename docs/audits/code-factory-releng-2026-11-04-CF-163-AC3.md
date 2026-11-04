@@ -36,7 +36,7 @@ re-measured this tick; no perf claim is made here.
 `gh run list --repo coding-hermes/code-factory --limit 3` → `[]` — the documented healthy
 no-Actions state, not a finding.
 
-## Landed: CF-163 AC3 (one gitleaks claim must name its scan scope)
+## Landed: CF-163 AC3 (one gitleaks claim must name its `--log-opts` scan scope)
 
 Commit `5794a4927f60d35e35d51bf4cc54377e6902da1f`, merged forward as `f121ed3`
 (`--no-ff` so the judged commit stays an ancestor and its verdict stays commit-bound).
@@ -74,7 +74,7 @@ what remains reachable by SHA) need the owner's decision, and no lane can take t
 | visibility / license | `public`, `license=MIT`, `LICENSE` present | ok |
 | secret scanning | `state=open` alerts: `[]` (1 historical alert on the `master` lineage path `.hermes/scripts/test_secret_scrub.py`, resolved 2026-11-04 as a scrubber fixture) | ok |
 | branch protection on `main` | `gh api …/branches/main/protection` → `Branch not protected` (404); `gh api …/rulesets` → `[]` | **defect, already filed as CF-120 (pending)** |
-| published ref surface | `refs/heads/master` still at `4ead64f`: 772 commits, not an ancestor of `main`, 547 gitleaks findings on 64 commits | **defect, CF-163 (P1, owner-gated)** |
+| published ref surface | `refs/heads/master` still at `4ead64f`: 772 commits, not an ancestor of `main`; `gitleaks detect --redact --log-opts="--all"` (1152 commits, 57.39 MB) → 547 findings in 64 commits, all 64 on `master` | **defect, CF-163 (P1, owner-gated)** |
 | internal endpoints | `git grep -E '100\.[0-9]+\.[0-9]+\.[0-9]+'` at `HEAD` → 0 files | ok |
 | absolute host paths | `git grep -l '/home/kara'` at `HEAD` excluding `.gitreins/` → 35 tracked files (CF-050 measured 27 when filed) | drift on a pending row, noted not re-filed |
 | internal host names | `git grep -liE 'karahermes|bunker-mvp|bunker-las|cube-agent'` excluding `.gitreins/` → 5 tracked files | same class as CF-050/CF-086 |
