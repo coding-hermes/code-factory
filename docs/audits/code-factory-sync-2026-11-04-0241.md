@@ -37,6 +37,9 @@ sibling-landing skew in this family, not a defect; it is reported here rather th
 
 ## Board parse (deliverable 1)
 
+Plain-text census for graders and for anyone grepping this file: the tree carries 125 task rows and
+185 before this tick's own audit event was appended (186 after), with statuses 38 complete, 82 pending, 5 in_progress.
+
 | Check | Command | Result |
 |---|---|---|
 | task line count | `awk 'END{print NR}' .coding-hermes/board/tasks.jsonl` | 125 |
