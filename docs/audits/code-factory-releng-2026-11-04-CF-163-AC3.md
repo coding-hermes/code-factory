@@ -96,3 +96,109 @@ consumer would read it to mean.
 - CF-161/CF-120 not implemented: both need an owner decision (adopt a version scheme; enable
   branch protection/ruleset policy) that a lane cannot take.
 - The `master` branch was not deleted: CF-163 AC1 is explicitly an owner call.
+
+## Verification addendum — third execution of tick `code-factory-duckbrain-releng-2026-11-04-06-11-13`
+
+`2026-11-04T01:52-05:00` (`date -Is`), loadavg `34.0 22.0 15.0` (host load, shared box).
+A prior execution of this tick id landed CF-163 AC3 (`5794a49`/`f121ed3`); a second execution found
+the published tip red on this doc's own gate and repaired it (`8995064`, verdict `CF-163-L3`, receipt
+`8c6ef7e7`). This pass **verified those claims instead of re-executing them**, then produced two new
+findings of its own. Nothing was re-judged, re-filed or cleaned on the strength of a prior note.
+
+### Prior claims re-verified against artifacts
+
+| Claim | Command (this pass) | Result |
+|---|---|---|
+| Verdict bundle published | `git show HEAD:.gitreins/history/2026-11-04/f09c06d5/verdict.json` | `task_id=CF-163-L3`, `commit=8995064…`, `passed=true`, `evaluated_at=06:39:39` ✓ |
+| Close-out events committed | `git show HEAD:.coding-hermes/board/events.jsonl \| jq 'select(.id==246 or .id==247)'` | 246 `task_evidence`, 247 `audit` (memory binding) ✓ |
+| Receipt readable | `GET /api/memories/key//code-factory/lanes/releng/2026-11-04-06-11-13?namespace=code-factory` | HTTP 200, record `8c6ef7e7`, body names this tick and names `2ceeb95b` as superseded ✓ |
+| Candidate at parity at pass start | `git rev-list --left-right --count origin/main...HEAD` | `0 0` at `a6911d1` ✓ |
+| Gate at the pass-start tip | fresh clone at `a6911d1`, `bash tests/selftest.sh` | `SELFTEST: PASS`, 106 PASS rows ✓ |
+
+### New finding 1 — the releng format leg was red (fixed at `5fc2cbd`)
+
+`ruff format --check .` answered **“1 file would be reformatted”**: `scripts/check_scan_scope.py`,
+introduced by `5794a49` (CF-163 AC3), carried one `print(f"  FAIL  audit-scope: …")` line over the
+default 88-column budget. Fixed as a whitespace-only reflow (`5fc2cbd`, AST-identical; the graded
+judge re-checked this with an AST comparison). Verdict `CF-163-FMT`, run `8f9396cb`, `passed=true`,
+`commit=5fc2cbd…`; bundle published in the bookkeeping commit that carries this addendum.
+
+**Disclosure:** ruff is *not* a declared gate in this repo — there is no `pyproject.toml`/`ruff.toml`,
+no `selftest.sh` arm and no `AGENTS.md` line for it. The format leg belongs to the releng checklist,
+so this is lane hygiene, not a repo gate failure, and a green format leg must not be read as evidence
+that the repo ships a formatter check.
+
+### New finding 2 — `selftest.sh` section 7b can report a FALSE red (filed `CF-168`)
+
+One suite run at the fix tree graded the 7b `number` arm FAIL — `FAIL  number fixture escaped the
+board gate (exit 1)` — while printing output that satisfies every condition the arm tests (rc=1, the
+expected `board line 2: expected JSON object, got 42` row, the `2 of 3 rows parse` row, no `PASS`
+line). Two further runs at the same tree answered `SELFTEST: PASS` / 106 rows, and 20 isolated
+iterations of the same fixture never reproduced it.
+
+Mechanism: `tests/selftest.sh:3` sets `set -uo pipefail`, and the arm asserts with
+`printf '%s\n' "$out" | grep -Fq …` (`tests/selftest.sh:242-244`). When `grep -q` exits after its
+match, `printf`'s remaining write takes SIGPIPE; `pipefail` propagates 141 and the `&&` chain grades
+the arm FAIL. Deterministic demonstration — the row's probe prints `assert_rc=141` on three
+consecutive runs:
+
+```
+t=$(mktemp -d); printf '%s\n' 'set -uo pipefail' 'w() { printf "%s\n" "MATCH-LINE"; seq 1 200000; }' 'out=$(w)' 'printf "%s\n" "$out" | grep -Fq "MATCH-LINE"; echo "assert_rc=$?"' > "$t/a.sh"; bash "$t/a.sh"; rm -r -- "$t"
+```
+
+Filed as `CF-168` (P3) with that probe as acceptance criterion 0; deliberately **not** fixed in this
+tick, whose scope is the format leg.
+
+### Gate battery at the published tip `5fc2cbd` (fresh clone, not the candidate)
+
+| Leg | Command | Result |
+|---|---|---|
+| CI-equivalent | `bash tests/selftest.sh` | `SELFTEST: PASS`, rc 0, 106 `PASS` rows, 19 `FAIL` rows — all negative fixtures (board-parser malformed rows, `disk_floor` resolver-removal arm) |
+| Board | `bash scripts/boardctl validate` | `RESULT: OK (3 warning(s))` — pre-existing free-form vocabulary ×2 + headerless-board note |
+| Python syntax | `python3 -m py_compile $(git ls-files '*.py')` | rc 0, silent |
+| Lint | `ruff check .` | `All checks passed!` |
+| Format | `ruff format --check .` | `15 files already formatted` |
+| Shell parse | `for f in $(git ls-files '*.sh') scripts/boardctl; do bash -n "$f"; done` | 0 failures |
+| Secret scan (working tree) | `gitleaks detect -c .gitleaks.toml --redact --no-git` — files-only mode, so no `--log-opts` range applies | `no leaks found`, 1.07 MB scanned |
+| Actions | `gh run list --repo coding-hermes/code-factory --limit 3` | `[]` — the documented no-Actions state, not a failure |
+
+### Public posture, re-measured at review time
+
+| item | measured | verdict |
+|---|---|---|
+| visibility / licence | `public`, `license=MIT`, `archived=false` | ok |
+| secret scanning | `secret_scanning=enabled`, `push_protection=enabled`; alerts: **0 open**, 1 resolved | ok — the earlier open alert is now triaged; CF-156 is `complete` |
+| branch protection on `main` | `gh api …/branches/main/protection` → 404 `Branch not protected`; `gh api …/rulesets` → 0 | defect, already filed as CF-120 (pending, owner setting) |
+| absolute host paths | `git grep -Il '/home/kara' -- . ':!.gitreins'` → **38** tracked files (CF-050 measured 27 when filed) | drift on a pending row, reported not re-filed |
+| published ref surface | `refs/heads/master` unchanged (CF-163 AC1, owner-gated) | defect, CF-163 (P1, owner-gated) |
+
+### Release decision — re-measured, unchanged: NOT DUE
+
+No published tags (`git ls-remote --tags` empty), no `VERSION`/`CHANGELOG` in the tree, no version
+scheme in `specs/` (CF-161 pending), and open work still includes **5 P0** and 11 P1 rows. Nothing
+was tagged, and no version scheme was invented.
+
+### Candidate state at close (`/home/kara/code-factory`, untouched by this pass)
+
+`HEAD=0b34155`, attached `refs/heads/main`, **3 behind** / 0 ahead of `origin/main`, 0 tracked edits,
+53 untracked paths (`.gitreins/history/**` bundles), `NO_ACTIVE_OP_DIRS` (no `rebase-merge` /
+`rebase-apply` / `MERGE_HEAD` / `CHERRY_PICK_HEAD`), 0-byte `.coding-hermes/board/.lock`.
+
+- The bare `.git/REBASE_HEAD` seen at the gate is **STALE**: the reflog records `rebase (finish)` at
+  `01:24:43` returning to `refs/heads/main`, the operation directories are absent, and a cwd census
+  (`checkout-writer-census.sh`) finds no writer. Left in place, not deleted.
+- **CF-049 premise re-check:** its AC2 is met (no rebase dirs, HEAD attached), but AC4 still fails on
+  the 0-byte `board/.lock` (adjudicated RESIDUE by `scripts/board_lock.py`, CF-119), untracked
+  GitReins bundles remain, and the candidate lags the tip — so the row stays **pending**.
+- The behind-count is the sibling lanes' landing pace, not a repair performed on a shared checkout.
+
+### Lifecycle, memory, and what this pass did not do
+
+- GitReins: `CF-163-FMT` created → started → `task complete`; Tier 1 + Tier 2 `PASS`
+  (`8f9396cb`) bound to `5fc2cbd`. The prior execution's `CF-163-L3` remains the closure for its own
+  work; no second judge was fired on an unchanged tree.
+- Memory: **no new record written** — `8c6ef7e7` already covers this tick id and was read back here.
+  This addendum is the third pass's durable record.
+- Not done: CF-161/CF-120 (owner decisions), `master` retirement (CF-163 AC1, owner), the 7b pipefail
+  fix (`CF-168`, filed), and any cleanup of the candidate's untracked residue (another lane's
+  unpublished bundles).

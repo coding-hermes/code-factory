@@ -1,0 +1,56 @@
+commit 5fc2cbdfbae999730e317b90b14c88f1568f881d
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Wed Nov 4 01:45:42 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Wed Nov 4 01:49:23 2026 -0500
+
+    style(scan-scope): wrap the audit-scope FAIL print for ruff format (CF-163)
+    
+    The tree's only ruff-unformatted file was introduced by 5794a49 (CF-163 AC3):
+    one `print(f"  FAIL  audit-scope: ...")` line does not fit the default 88-column
+    budget, so `ruff format --check .` answered "1 file would be reformatted"
+    on every releng pass since. Whitespace only — the same f-string, the same
+    exit codes, no behaviour change.
+    
+    Re-run:
+      ruff format --check .                      -> 15 files already formatted
+      ruff check .                               -> All checks passed!
+      python3 scripts/check_scan_scope.py        -> OK  audit-scope: 7 claims,
+                                                    RESULT: OK, rc 0
+      bash tests/selftest.sh                     -> SELFTEST: PASS, rc 0 (106 rows)
+    
+    Note: ruff is not a declared gate in this repo (no pyproject/ruff.toml, no
+    selftest arm, no AGENTS.md line). This is lane-checklist conformance from the
+    releng gate battery, not a repo gate failure; disclosed so nobody reads a
+    green format leg as evidence the repo ships a formatter check.
+    
+    Suite flake observed while gating this commit: one run at this exact tree
+    graded section 7b's `number` arm FAIL ("number fixture escaped the board gate
+    (exit 1)") while printing an output that satisfies every condition the arm
+    tests; two further runs at the same tree answered SELFTEST: PASS / 106 rows.
+    The arm did not reproduce in 20 isolated iterations. Assertion sites are
+    tests/selftest.sh:242-244, which run `printf | grep -q` under `set -uo
+    pipefail` — a construct that can return 141 when grep exits before printf
+    finishes writing. Filed as a board row rather than fixed here (this commit is
+    the format leg only).
+    
+    Co-Authored-By: Alexis Okuwa <wojonstech@gmail.com>
+---
+ scripts/check_scan_scope.py | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/scripts/check_scan_scope.py b/scripts/check_scan_scope.py
+index 287f66f..119cdce 100644
+--- a/scripts/check_scan_scope.py
++++ b/scripts/check_scan_scope.py
+@@ -100,7 +100,9 @@ def main(argv: list[str] | None = None) -> int:
+         print("RESULT: FAIL (unreadable path)")
+         return 2
+     for relpath, lineno in violations:
+-        print(f"  FAIL  audit-scope: {relpath}:{lineno} gitleaks claim names no {SCOPE_FLAG}")
++        print(
++            f"  FAIL  audit-scope: {relpath}:{lineno} gitleaks claim names no {SCOPE_FLAG}"
++        )
+     if violations:
+         print(f"RESULT: FAIL ({len(violations)} violation(s))")
+         return 1
