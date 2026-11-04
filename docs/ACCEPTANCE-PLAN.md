@@ -2,7 +2,7 @@
 
 **Scope:** CF-101–CF-112 in [`PRD-code-factory.md`](PRD-code-factory.md), with contract details in `specs/NODE.md`, `specs/HARNESS.md`, and `specs/ENVELOPE.md`. This plan distinguishes source-level evidence from tests actually run. A passing repository self-test is not proof that every requirement is accepted.
 
-**Current state (measured 2026-11-04 for the CF-127 landing):** `tests/selftest.sh` carries 31 sections — numbered 1 through 31 — plus two lettered sub-arms, §4b and §7b, which the section regex `^say "[0-9]+\.` does not count, so the tree carries 33 arms — and exits 0 (`SELFTEST: PASS`, 99 `PASS` rows, 19 intentional negative-fixture `FAIL` rows, suite counter `fails=0`). The board at tip `4bf29e9` carries 129 task rows and 199 events. Every snapshot total that follows is pinned to the tip it names and is historical, not current.
+**Current state (re-measured 2026-11-04 22:43 at tip `7989ba3`):** `tests/selftest.sh` carries 33 sections — numbered 1 through 33 — plus two lettered sub-arms, §4b and §7b, which the section regex `^say "[0-9]+\.` does not count, so the tree carries 35 arms — and exits 0 (`SELFTEST: PASS`, 103 `PASS` rows, 19 intentional negative-fixture `FAIL` rows, suite counter `fails=0`) at loadavg 7.91. The board at tip `7989ba3` carries 130 task rows and 209 events. Every snapshot total that follows is pinned to the tip it names and is historical, not current.
 
 **Evidence snapshot (re-measured 2026-11-04 02:35 at tip `d02916e`):** `tests/selftest.sh` was run from
 the repository root and exited 0 (`SELFTEST: PASS`, 88 `PASS` rows, suite counter `fails=0`) over
@@ -42,6 +42,20 @@ pre-fix control, repo-url root/agreement guards, reclaim-before-refusal, and the
 fail-closed arms. It does not exercise node creation, idempotence, the no-root rule, harness
 parity, credentials lifecycle, the manifest schema, destruction/recreation, scheduler dispatch, or
 the control-host artifact round trip — those cells say **no test** on purpose.
+
+**Sections with no requirement (the reverse direction).** A section serves a requirement only if that
+requirement's `Verified by` cell above names it. Twelve of the 35 arms are named: §2, §3, §4, §4b, §5,
+§6, §12, §13, §14, §15, §16 and §20 (the ids are collected mechanically with
+`grep -oE '§[0-9]+[a-z]?' docs/PRD-code-factory.md | sort -u`). The remaining 23 — §1, §7, §7b, §8,
+§9, §10, §11, §17, §18, §19, §21, §22–§27, §28, §29, §30, §31, §32 and §33 — test repository and
+fleet tooling (board parsing and the board gate, prompt inventory, lane targets, repo-url guards, the
+census and README arms), not a CF-101–CF-112 requirement, and each is governed by the board row it
+names: §7b `CF-088`, §19 `CF-085`, §21 `CF-091`, §29 `CF-114`, §31 `CF-127`, §30 `CF-093`, §32
+`CF-145`, §33 `CF-119`, §17–§18 `CF-077`. Some of these overlap a requirement's subject without
+deciding it (§10 exercises the Hermes adapter's Python refusal, which is CF-106 evidence but not the
+two-adapter contract CF-106 demands); the cell stays the authority, so the overlap is recorded here
+rather than promoted into it. A section that is neither named by a `Verified by` cell nor by a board
+row is untracked test surface: give it one or delete it.
 
 ## Requirement-to-test matrix
 

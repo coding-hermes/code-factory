@@ -39,7 +39,8 @@ One project (crier), one node, one directive that travelled over crier and reach
 gateway, one commit produced there, one artifact digest verified back on the control host, and a
 recorded FAIL when the gate is made to fail.
 
-**Status 2026-11-04 02:35 (re-measured at `d02916e`): NOT MET.** One leg moved since the `80fca8b`
+**Status 2026-11-04 22:45 (board re-measured at `7989ba3`; the node-run evidence below is the 02:35
+measurement at `d02916e`): NOT MET.** One leg moved since the `80fca8b`
 measurement: a directive is now recorded arriving at a node and executing there. The dispatch at
 19:37:51 handed the node the envelope itself as its prompt (`CF-139`, P0, open), and two later node
 runs ended `exit 124` at a 32.1 s caller-derived kill instead of the old 243.4 s constant, with the
@@ -61,7 +62,9 @@ be reached) — plus the dispatch
 defects the live runs exposed: `CF-131` (a completion reply that echoes the task body is refused
 `403 GUARD_BLOCKED`), `CF-132` (no receive-side idempotency key), `CF-133` (a result dialect
 `specs/ENVELOPE.md` does not define), `CF-136` (a dispatch row never reaches a terminal state when its
-tick times out) and `CF-139`. The list is decidable, not editorial: read
+tick times out), `CF-137` (a failed dispatch is never acked, so it redelivers the same failure
+forever) and `CF-138` (the dispatcher kills every real task at 243 s while the scheduler budgets
+15 m 40 s for it) — then `CF-139`. The list is decidable, not editorial: read
 `jq -r 'select(.status!="complete") | [.id,.priority] | @tsv' .coding-hermes/board/tasks.jsonl`, then
 require every open row whose failure stops one of the four legs named above to appear here; rows
 outside those legs (v1 scope features such as foreign harnesses or the deploy-key lane) belong to the
