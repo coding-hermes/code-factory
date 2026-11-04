@@ -116,7 +116,9 @@ taken whole (291 events, max id 291) and this tick's own `task_created` line re-
 **292** — its pre-rebase id 287 was already taken by a sibling's verification addendum. `tasks.jsonl`
 merged insert-only (`CF-181` present once, 155 rows, no duplicate ids) and every line re-parses in
 both files. Figures above stay pinned to the tip they were measured at; the board at the landing
-commit carries 155 rows and 292 events.
+commit carries 155 rows and 292 events. The published tip `a5564a6` carries 156 rows / 294 events:
+a sibling PM lane filed CF-182 (requirement-id versus task-id namespace) with its event between this
+tick's two pushes, and the merge reconciler kept this tick's row as CF-181.
 
 ## Second rebase and the section-count drift it exposed
 
