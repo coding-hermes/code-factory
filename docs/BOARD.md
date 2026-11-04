@@ -61,7 +61,7 @@ Observed on 2026-11-03 before the workdir repair: the registered code-factory wo
 health claim. `scripts/board_drift.py` is the re-runnable tool; `tests/selftest.sh` arm 29
 proves its divergent, identical, empty, missing-file and malformed-record fixture paths.
 
-## Current measured state (measured 2026-11-04T01:36Z at tip `f49d85b`)
+## Current measured state (measured 2026-11-04T01:58Z, on the tree this commit lands)
 
 Every count below is an output value that moves with each folded row, so measure it instead of
 quoting an older snapshot. The numbers are still typed by hand — CF-081 tracks replacing this block
@@ -73,14 +73,26 @@ scripts/boardctl validate
 bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 ```
 
-- At tip `f49d85b`: 114 task rows, 162 events. `scripts/boardctl validate` prints
-  `RESULT: OK (46 warning(s))` — 43 rows carrying a free-form `probe` key, CF-034's free-form
+- At this tree: 116 task rows, 168 events. `scripts/boardctl validate` prints
+  `RESULT: OK (47 warning(s))` — 44 rows carrying a free-form `probe` key, CF-034's free-form
   `guard_result`/`ci_result` prose, and the headerless board (no `board.jsonl`), so header-counter
   checks are skipped.
-- `tests/selftest.sh` prints `PASS 114/114 rows parse` and `SELFTEST: PASS` (exit 0; 29 numbered
+- `tests/selftest.sh` prints `PASS 116/116 rows parse` and `SELFTEST: PASS` (exit 0; 29 numbered
   sections plus lettered arms 4b and 7b — 31 arms).
   Nineteen `  FAIL` lines appear *inside* negative fixtures that assert a failure arm; count
   `SELFTEST:` and the per-section verdicts, never a raw `grep -c '^  FAIL'`.
+- A `complete` row must bind the commit that carried it, not only an evidence artifact: CF-053
+  reached `complete` with `commit_hash: null` and `worker_status: pending`, and now carries
+  `80fca8b` (the commit that closed it) with the repoint re-verified by
+  `scripts/lane_target.py scan` over the 19 code-factory lanes (`bad: 0`, `ok: true`).
+- Two rows (CF-034, CF-041) are `complete` and commit-bound but carry no `task_completed` event;
+  event 168 (audit, 2026-11-04) records the gap and CF-130 owns the reconciliation. No completion
+  transition was minted for either id, because the log must not record a transition its writer did
+  not witness.
+- The CI-equivalent gate is not deterministic under load: `tests/selftest.sh` returned
+  `SELFTEST: FAIL (1)` once in four runs at one tip on an unchanged tree, on the auth-marker arm.
+  CF-142 tracks the reproduction and requires 20 consecutive agreeing runs plus a recorded loadavg.
+  Before believing a single red, re-run it; before believing a single green, note the load.
 - Completion evidence must live in this repository. Two rows (CF-011, CF-013) once cited an
   absolute scratch log outside the tree; the sync lane rebound them to a committed artifact —
   `docs/audits/code-factory-sync-2026-11-03-evidence-rebind.md` records the re-run commands and
