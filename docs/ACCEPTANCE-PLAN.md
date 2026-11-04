@@ -103,10 +103,9 @@ A green suite is not PRD coverage, and the reverse gap matters as much as the fo
 31 arms, 88 `PASS` rows — and only three requirements have an arm that can fail on them (`CF-102` ←
 §2 and §14, `CF-105` ← §5, `CF-109` ← §12 and §13 partially, plus `CF-127` ← §31 as of the CF-127
 landing). Every other arm is governed by a spec, a
-rule or a board row, and the mapping below names every numbered section in the current tree — 38, plus three lettered arms (§4b, §7b, §31b), so 41 arms, and 31 arms at the `d02916e` tip — so that a new arm cannot arrive without a
-named authority. It did not keep that promise at `7ec7137`: §36 was missing from the table until this pass — found by counting the table rows against `grep -cE '^say "[0-9]+\.' tests/selftest.sh`, not by reading either — §31b arrived with `CF-183` at `5069c0a` and is named below for the first time here, and §7c was listed as a current arm after `4ce1e48` had deleted it (`CF-186` restores the arm; the tree therefore carries 41 arms without it and 42 once it lands). The mapping is a promise this table keeps, not one the tooling enforces: the
-section census in `docs/audits/cf099-prd-drift-probe.sh` counts only numbered lines, so a lettered arm
-lands uncounted (`CF-113`, pending, owns that fix).
+rule or a board row, and the mapping below names every numbered section in the current tree. The current tree carries 42 arms: 39 numbered sections and three lettered arms (§4b, §7b, §31b). These counts are derived by `bash docs/audits/cf198-section-mapping.sh`, which also enforces the table's numbered-section coverage both ways — a section the tree carries and the table omits is a named plan-side failure, and a row the table names with no such section is a named tree-side one — so the next section that lands cannot leave the table or the count behind. The older
+section census in `docs/audits/cf099-prd-drift-probe.sh` still counts only numbered lines, so a lettered arm
+lands uncounted (`CF-113`, pending, owns that separate fix).
 
 | Selftest section | What governs it instead of a PRD requirement |
 |---|---|
@@ -144,6 +143,7 @@ lands uncounted (`CF-113`, pending, owns that fix).
 | §36 remote shell payloads preserve data without executing it | board `CF-159` (a quote in `--project`/`--repo`/`--harness` reached a remote `bash -lc` unescaped and ran code on the node; the arm pins the escaping at `8b81369`) |
 | §37 the node credential row scopes its contradiction to the node | board `CF-151` (README Status row 3 asserted a NODE state whose cited measurement was the control host's own `~/.hermes/.env`; on a keyed host that gate prints `PASS inference_key`, the opposite of the row — the arm refuses the verbatim pre-fix row and requires the control-host label plus a node-scoped measurement) |
 | §38 the milestone blocker list resolves every cited id in one namespace | board `CF-182` (`docs/audits/prd-blocker-resolution.sh`, landed at `b626238`, decides each `CF-nnn` cited between the milestone-blockers markers as `row=<status>` from the board or `requirement-only` from the PRD's requirements table, and exits 1 on an unresolved id, a cited row that is already complete, or a requirement-only row with no `Verified by` cell; three arms — the real PRD, an unresolved `CF-999`, a cited-but-complete row — each able to red on its own) |
+| §39 acceptance-plan section mapping covers the tree and fails on a missing row | board `CF-198` (`docs/audits/cf198-section-mapping.sh` derives both sides — numbered sections from `^say "N.`, lettered arms from `^say "N<l>.`, mapping rows from `^\| §N`, and the prose count — and exits nonzero naming the section and the side that lacks it; the arm's red leg strips §38 from a fixture copy of this plan and requires the named plan-side failure while the real tree stays green) |
 
 These sections are legitimate and must not be deleted to "clean up" the mapping: they serve
 `AGENTS.md` rules, the specs and this board. They must not be counted as acceptance of
