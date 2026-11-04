@@ -61,14 +61,24 @@ Observed on 2026-11-03 before the workdir repair: the registered code-factory wo
 health claim. `scripts/board_drift.py` is the re-runnable tool; `tests/selftest.sh` arm 29
 proves its divergent, identical, empty, missing-file and malformed-record fixture paths.
 
-## Current measured state (2026-11-03)
+## Current measured state (snapshot 2026-11-03, tip `21d3265`)
 
-- `scripts/boardctl validate`: 61 task rows, 66 events, `RESULT: OK (17 warning(s))`; the warnings are
-  14 rows carrying a free-form `probe` key, two free-form `guard_result`/`ci_result` values on
-  CF-034, and the headerless board (no `board.jsonl`), so header-counter checks are skipped.
-- `tests/selftest.sh`: `PASS 61/61 rows parse` and `SELFTEST: PASS` (no `FAIL` rows) at tip
-  `d4eec41`, the tip these counts were measured at. Re-run both commands before quoting these
-  numbers; they move with every folded row.
+Every count below is an output value that moves with each folded row, so measure it instead of
+quoting an older snapshot:
+
+```sh
+wc -l .coding-hermes/board/tasks.jsonl .coding-hermes/board/events.jsonl
+scripts/boardctl validate
+bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
+```
+
+- At tip `21d3265`: 104 task rows, 148 events. `scripts/boardctl validate` prints
+  `RESULT: OK (45 warning(s))` — 42 rows carrying a free-form `probe` key, CF-034's free-form
+  `guard_result`/`ci_result` prose, and the headerless board (no `board.jsonl`), so header-counter
+  checks are skipped.
+- `tests/selftest.sh` prints `PASS 104/104 rows parse` and `SELFTEST: PASS` (exit 0, 29 sections).
+  Nineteen `  FAIL` lines appear *inside* negative fixtures that assert a failure arm; count
+  `SELFTEST:` and the per-section verdicts, never a raw `grep -c '^  FAIL'`.
 - Completion evidence must live in this repository. Two rows (CF-011, CF-013) once cited an
   absolute scratch log outside the tree; the sync lane rebound them to a committed artifact —
   `docs/audits/code-factory-sync-2026-11-03-evidence-rebind.md` records the re-run commands and
