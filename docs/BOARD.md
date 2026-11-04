@@ -109,7 +109,10 @@ proves its divergent, identical, empty, missing-file and malformed-record fixtur
 
 Every count below is an output value that moves with each folded row, so measure it instead of
 quoting an older snapshot. The numbers are still typed by hand — CF-081 tracks replacing this block
-with a committed check that derives them and fails on a mismatch.
+with a committed check that derives them and fails on a mismatch. The tip label is typed by hand as
+well, so check that it resolves before trusting the block: the 2026-11-04T23:40Z revision cited
+`ac844cb`, which is not an object in this repository — the commit that wrote it (`6da74d3`) has
+parent `1124ae0`, and the 180 rows it reported are that parent's board, not a tip of its own.
 
 ```sh
 wc -l .coding-hermes/board/tasks.jsonl .coding-hermes/board/events.jsonl
@@ -117,20 +120,21 @@ scripts/boardctl validate
 bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 ```
 
-- **Re-measured 2026-11-04T23:40Z at tip `ac844cb`:** 180 task rows, 365 events (max event id 364;
-  one benign duplicate id 336, owned by **CF-196**) — 62 `complete`, 9 `in_progress`, 109 `pending`,
+- **Re-measured 2026-11-04T23:53Z at tip `3f6115e`:** 181 task rows, 366 events (max event id 365;
+  one benign duplicate id 336, owned by **CF-196**) — 62 `complete`, 9 `in_progress`, 110 `pending`,
   no duplicate task ids. Both board files are byte-identical to their `origin/main` copies
-  (`python3 scripts/board_drift.py check --workdir . --ref main` prints `RESULT: OK`, 180 vs 180 rows,
+  (`python3 scripts/board_drift.py check --workdir . --ref main` prints `RESULT: OK`, 181 vs 181 rows,
   0 divergent ids). `scripts/boardctl validate` prints `RESULT: OK (4 warning(s))` (CF-034's free-form
   `guard_result`/`ci_result`, the duplicate event id 336 and the headerless board) and
-  `key uniformity: 180/180 rows carry only canon keys (0 drift)`. `tests/selftest.sh` prints
-  `SELFTEST: PASS` (exit 0), `PASS 180/180 rows parse`, 195 `PASS` rows and 50 `FAIL` rows that all sit
+  `key uniformity: 181/181 rows carry only canon keys (0 drift)`. `tests/selftest.sh` prints
+  `SELFTEST: PASS` (exit 0), `PASS 181/181 rows parse`, 195 `PASS` rows and 50 `FAIL` rows that all sit
   inside negative fixtures (gateway public-bind refusals, the board-gate rejects, `2 of 3 rows parse`,
   the disk-floor empty-PATH arm) over 39 numbered sections plus lettered arms `4b`/`7b`/`31b`
-  (42 arms; derived by `bash docs/audits/cf198-section-mapping.sh`), at loadavg 24.15 (1 min; sibling
+  (42 arms; `bash docs/audits/cf198-section-mapping.sh` prints `arms_plan=42 arms_tree=42`,
+  `RESULT: OK`), at loadavg 26.37 (1 min; sibling
   lanes and judges on this host, not a suite property). Three sibling rows still own the structural
-  fixes for this block: **CF-081** (the hand-typed counts), **CF-154** (the warning count does not
-  follow from the board) and **CF-196** (duplicate event ids).
+  fixes for this block: **CF-081** (the hand-typed counts and the hand-typed tip label), **CF-154**
+  (the warning count does not follow from the board) and **CF-196** (duplicate event ids).
 - **Earlier snapshot, 2026-11-04T08:52Z at tip `7232954` (historical, not current):** 158 task rows, 300 events — 51 `complete`,
   8 `in_progress`, 99 `pending`, no duplicate task or event ids. `scripts/boardctl validate` prints
   `RESULT: OK (3 warning(s))` (CF-034's free-form `guard_result`/`ci_result` plus the headerless

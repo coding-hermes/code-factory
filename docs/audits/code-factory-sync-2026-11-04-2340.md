@@ -101,3 +101,52 @@ immediate re-run on the same unchanged tree printed `SELFTEST: PASS` (rc 0) with
 nondeterministic-under-load class already owned by **CF-142** ("before believing a single red,
 re-run it; before believing a single green, note the load") — no new row was filed for it, and the
 snapshot records the green run with its loadavg.
+
+## Addendum — re-execution of the same tick: the cited tip did not resolve
+
+Tick `code-factory-sync-2026-11-04-23-34-25` ran a second time (the scheduler row still reads
+`status=running` for that id, and the first execution's commits `6da74d3` and this file are on
+`origin/main`, so this is the same tick resumed, not a new lane). The durable claims above were
+verified rather than re-derived, and one of them did not hold.
+
+**The tip label above was wrong.** `ac844cb` resolves to no object in this repository:
+
+```sh
+$ git cat-file -e 'ac844cb^{commit}'; echo rc=$?
+fatal: Not a valid object name ac844cb^{commit}
+rc=128
+$ git cat-file --batch-all-objects --batch-check | grep -c '^ac844c'
+0
+$ git rev-parse 6da74d3^
+1124ae0c7e457dd2c80ea9196c84eb37709b385f      # the commit that wrote the block
+$ git show 1124ae0:.coding-hermes/board/tasks.jsonl | wc -l
+180                                            # so the 180 rows it reported were 1124ae0's board
+```
+
+It is the pre-rebase local tip that `git pull --rebase` discarded: real at measurement time, never
+published, and unverifiable to every later reader. The counts were honest; the label was not, and the
+same phantom SHA appears in the addendum above (a historical record, left as written).
+
+**Correction.** "Current measured state" is re-measured at published tip `3f6115e` — 181 task rows,
+366 events (max id 365, one benign duplicate 336 owned by CF-196), 62 `complete` / 9 `in_progress` /
+110 `pending` — and the block now says the tip label is hand-typed too, with **CF-081** owning both
+the counters and the label (a derived check emits the measured tip and asserts it resolves, so the
+existing row covers this instance; no second row was filed).
+
+Re-verified at `3f6115e` in a fresh clone, porcelain 0:
+
+| Check | Command | Result |
+|---|---|---|
+| board parses | `bash scripts/boardctl validate` | `RESULT: OK (4 warning(s))`; `key uniformity: 181/181 rows carry only canon keys (0 drift)` |
+| board = published | `python3 scripts/board_drift.py check --workdir . --ref main` | `RESULT: OK`, `181 vs 181 rows; 0 divergent ids` |
+| gate | `bash tests/selftest.sh` | `SELFTEST: PASS` (rc 0), `PASS 181/181 rows parse`, 195 PASS / 50 FAIL rows (all in negative fixtures) |
+| arms | `bash docs/audits/cf198-section-mapping.sh` | `arms_plan=42 arms_tree=42`, `RESULT: OK` |
+| complete rows bind real commits | `git cat-file -e <sha>^{commit}` + `git merge-base --is-ancestor <sha> origin/main` over all 62 | 62/62 present, 62/62 ancestors of `origin/main` |
+| completion evidence is in-tree | artifacts test over all 75 evidence entries | 0 rows whose artifacts are all prunable scratch paths; CF-011/CF-013 rebind (2026-11-03) still holds |
+| cited tip resolves | `git cat-file -e 3f6115e^{commit}` | exit 0; `git show 3f6115e:.coding-hermes/board/{tasks,events}.jsonl \| wc -l` = 181 / 366 |
+
+Residual, not filed (each already owned): 35 of 62 `complete` rows carry no `probe` (the
+convention gap behind CF-074), one evidence entry on CF-153 lacks `tree_fp` while 74 of 75 peers
+carry one, and CF-032/CF-041 each carry one artifact-less entry beside artifact-bearing ones.
+Loadavg at measurement: 26.37 (1 min); sibling lanes on this host.
+
