@@ -1,0 +1,231 @@
+commit 7aaac547f56a26751a4d6c513a75e432bb6ca499
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Wed Nov 4 01:43:46 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Wed Nov 4 01:45:13 2026 -0500
+
+    docs(ops): BUNKER_SERVER is not optional — the runbook's "unless --server" branch does not exist (CF-167)
+    
+    docs/OPERATIONS.md §6 step 3 told the operator "Required environment:
+    BUNKER_SERVER unless --server is supplied", and §11 listed the verify-node
+    invocation with no environment precondition. The shipped script has no such
+    branch: scripts/verify-node.sh:17 assigns
+      SERVER="${BUNKER_SERVER:?set BUNKER_SERVER to your bunker server name}"
+    in a plain assignment, so the shell expands that guard while executing line 17,
+    before the argument loop at :18-26 reads argv (--server is :21). The flag can
+    only overwrite a name the environment already supplied.
+    
+    Measured this tick, two arms with opposite structures:
+      $ env -u BUNKER_SERVER ./scripts/verify-node.sh --agent probe-agent \
+          --server some-server --port 10800
+      ./scripts/verify-node.sh: line 17: BUNKER_SERVER: set BUNKER_SERVER to your bunker server name
+      rc=1                      # never prints its own "verify node <id>" banner
+      $ BUNKER_SERVER=some-server ./scripts/verify-node.sh --agent probe-agent \
+          --server some-server --port 10800
+      verify node probe-agent
+      FAIL agent_alive — bunker: server "some-server" not found in config
+                                # reaches the first probe, i.e. the flag is read
+                                  only after the env guard
+    
+    The corrected prose states the shipped contract, cites :17 and :18-26, and
+    names CF-063 as the row that owns relaxing the guard, so the sentence stops
+    documenting an intention as behaviour. §11's boundary cell carries the same
+    requirement, because that table is what an operator greps when the recipe is
+    not at hand.
+    
+    Evidence: docs/audits/code-factory-docs-2026-11-04-verify-env.md — before/after
+    table with file:line, the code path, both arm transcripts, the claims I could
+    not verify, and the gate section.
+    
+    Board: files CF-167 (pending at this commit; closed by the follow-up closeout
+    commit that binds this SHA and the CF-167-DOC2 verdict). The row carries the
+    probe this commit's evidence quotes.
+    
+    Transport: this work ran in a fresh clone of the published ref (gh/main
+    9b7fb6f) because the registered checkout /home/kara/code-factory held sibling
+    lanes mid-tick (code-factory-pm and code-factory-duckbrain-releng both
+    `running`, one with docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md
+    staged) plus stale REBASE_HEAD metadata from a completed rebase. The registered
+    checkout was not written to.
+    
+    Guard position, stated rather than implied: this clone has no installed
+    pre-commit hook (`core.hooksPath` empty, no .git/hooks/pre-commit), so no hook
+    ran and none is claimed. The guard battery runs through
+    `gitreins task complete CF-167-DOC2` against this commit.
+    
+    Gate: at the selection tip (gh/main 9b7fb6f) the suite was RED — `SELFTEST:
+    FAIL (1)` with two `FAIL audit-scope` rows naming
+    docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md:39 and :77, a sibling
+    lane's file and not this diff (reproduced in a detached worktree of 9b7fb6f
+    with zero porcelain). That gate was repaired mid-tick by a sibling landing,
+    8995064 "docs(releng): restore the audit-scope gate on the published tip
+    (CF-163 AC3)"; this commit was rebased onto 92cfee9 and the gate re-ran GREEN
+    at the rebased head: `SELFTEST: PASS` rc 0, `PASS 141/141 rows parse`.
+    `bash scripts/boardctl validate` -> RESULT: OK (3 warning(s), both pre-existing:
+    CF-034 free-form guard/ci prose and the headerless board). Both runs are
+    transcribed in the evidence file's gate section.
+    
+    Duplicate-dispatch note: tick code-factory-docs-2026-11-04-06-11-13 fired twice.
+    The earlier session landed CF-166 (the CRIER_URL create-path contract, impl
+    8c184a2); this execution verified that receipt and took a different claim.
+    
+    ch:trace row=CF-167 spec=none:claim-lives-in-runbook wave=none:single-lane-tick test=tests/selftest.sh::full-suite doc=docs/OPERATIONS.md prompt=prompts/docs.md evidence=docs/audits/code-factory-docs-2026-11-04-verify-env.md witness=env -u BUNKER_SERVER ./scripts/verify-node.sh --agent probe-agent --server some-server --port 10800 verdict=CF-167-DOC2 memory=/code-factory/tick/docs/2026-11-04-0611
+---
+ .coding-hermes/board/events.jsonl                  |   1 +
+ .coding-hermes/board/tasks.jsonl                   |   1 +
+ docs/OPERATIONS.md                                 |   4 +-
+ .../code-factory-docs-2026-11-04-verify-env.md     | 106 +++++++++++++++++++++
+ 4 files changed, 110 insertions(+), 2 deletions(-)
+
+diff --git a/.coding-hermes/board/events.jsonl b/.coding-hermes/board/events.jsonl
+index 3fe94c6..1baa123 100644
+--- a/.coding-hermes/board/events.jsonl
++++ b/.coding-hermes/board/events.jsonl
+@@ -246,3 +246,4 @@
+ {"id":246,"timestamp":"2026-11-04T06:40:28+00:00","event_type":"task_evidence","task_id":"CF-163","actor":"foreman","detail":"{\n  \"tick\": \"code-factory-duckbrain-releng-2026-11-04-06-11-13\",\n  \"lane\": \"releng\",\n  \"execution\": \"resumed execution (a prior execution of this tick id landed CF-163 AC3 as 5794a49/f121ed3 and wrote receipt 2ceeb95b; this execution verified that receipt, then found and repaired a regression the prior execution's own bookkeeping commit introduced)\",\n  \"verified_prior_claims\": [\n    \"verdict .gitreins/history/2026-11-04/b482884a/verdict.json: task CF-163-L1, passed=true, commit 5794a4927f60d35e35d51bf4cc54377e6902da1f\",\n    \"board event 241 (task_evidence CF-163) present in the committed board at the published tip\",\n    \"DuckBrain record 2ceeb95b at namespace code-factory key /code-factory/lanes/releng/2026-11-04-06-11-13 read back content-equal\"\n  ],\n  \"defect_found\": \"the published tip was RED on its own gate: on a clean clone of 012346d, bash tests/selftest.sh exit 1 -> 'RESULT: FAIL (2 violation(s))' / 'SELFTEST: FAIL (1)' naming docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md:39 and :77; python3 scripts/check_scan_scope.py reported the same two violations. Cause: commit a1c7bb2 (board(releng) bookkeeping) added a posture table whose two lines contain the literal 'gitleaks' without '--log-opts', the exact rule the doc's own section-34 gate enforces.\",\n  \"repair\": {\n    \"commit\": \"899506499d6f4d92725eefc452edfcedab796af1\",\n    \"files\": [\"docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md\"],\n    \"shape\": \"scope named, word retained (heading now names the --log-opts rule; the master-lineage row now publishes the arm gitleaks detect --redact --log-opts=\\\"--all\\\" = 1152 commits / 57.39 MB -> 547 findings in 64 commits, all 64 on master). The gate script was NOT touched.\",\n    \"bypass_disclosed\": \"committed with git -c core.hooksPath=/dev/null because the GitReins pre-commit hook DEGRADED-PASSes a docs-only diff (lint=no staged files) and exits 1 (CF-031 class); the real gates were run directly and the explicit gitreins lifecycle ran after the commit\"\n  },\n  \"red_green\": {\n    \"red\": \"clean clone of published tip 012346d: selftest rc=1, SELFTEST: FAIL (1), 105 PASS rows, audit-scope violations at CF-163-AC3.md:39 and :77\",\n    \"green\": \"repaired tree at 8995064: python3 scripts/check_scan_scope.py -> 'OK  audit-scope: 7 gitleaks claim(s) name their --log-opts' / RESULT: OK rc=0; bash tests/selftest.sh -> SELFTEST: PASS rc=0, 106 PASS rows\"\n  },\n  \"verdict\": {\n    \"task\": \"CF-163-L3\",\n    \"run_dir\": \".gitreins/history/2026-11-04/f09c06d5\",\n    \"passed\": true,\n    \"commit\": \"899506499d6f4d92725eefc452edfcedab796af1\",\n    \"commit_binding\": \"verdict.commit == git rev-parse HEAD at completion\"\n  },\n  \"tree_state\": {\n    \"candidate\": \"/home/kara/code-factory\",\n    \"gate\": \"root equality realpath(/home/kara/code-factory) == git rev-parse --show-toplevel; attached main; writer census CENSUS_EMPTY=1\",\n    \"marker\": \"bare .git/REBASE_HEAD present at 01:24:42, classified STALE: reflog shows 'rebase (finish)' at 01:24:43 returning to refs/heads/main, no .git/rebase-merge or .git/rebase-apply, no process with cwd in the checkout; marker left in place, not deleted\",\n    \"start_state\": \"checkout was 0 ahead / 6 behind origin/main; fast-forwarded with git merge --ff-only origin/main (disclosed move)\",\n    \"sibling_interference\": \"a docs lane landed 9b7fb6f while this lane was committing; the first commit attempt was refused and the staged change was re-verified and committed on top of the new tip\",\n    \"published_tip\": \"899506499d6f4d92725eefc452edfcedab796af1\",\n    \"parity\": \"git rev-list --count origin/main..HEAD = 0 and HEAD..origin/main = 0\"\n  },\n  \"public_posture\": {\n    \"visibility_license\": \"public, license=MIT, LICENSE present\",\n    \"secret_scanning\": \"secret_scanning=enabled, push_protection=enabled; open alerts=0\",\n    \"dependabot\": \"dependabot_security_updates=disabled, secret_scanning_non_provider_patterns=disabled, validity_checks=disabled\",\n    \"branch_protection\": \"gh api .../branches/main/protection -> 404 'Branch not protected'; rulesets=0 (CF-120 pending, owner setting)\",\n    \"internal_endpoints\": \"git grep -lE '100.x|.ts.net' excluding .gitreins -> 0 files; documented loopback defaults (127.0.0.1:9090 scheduler, :3000 duckbrain) in 12 files, all documented defaults\",\n    \"absolute_host_paths\": \"37 tracked files carry /home/kara excluding .gitreins (CF-050 measured 27 when filed) - drift on a pending row, not re-filed\",\n    \"stale_published_lineage\": \"refs/heads/master still published at 4ead64fee7b2bb8f66639cbc3b1de606a9ffcef3 (CF-163 AC1, owner-gated)\"\n  },\n  \"release\": {\n    \"decision\": \"NOT DUE / no release surface\",\n    \"rule\": \"Decision 1b (repo with no release surface)\",\n    \"evidence\": \"git ls-remote --tags on the published remote -> 0 tags; local git tag -l -> 2 tags (safety-cf-main-strand-20261103, safety-code-factory-align-20261101), both NOT ancestors of main and therefore stranded history markers, not releases; no VERSION, no CHANGELOG; CF-161 (release contract) still pending\",\n    \"ci\": \"gh run list --repo coding-hermes/code-factory -> [] and .github/workflows is absent: the documented healthy no-Actions state, not a failure and not absent CI to file\"\n  }\n}","tick_number":null}
+ {"id":247,"timestamp":"2026-11-04T06:41:40+00:00","event_type":"audit","task_id":"CF-163","actor":"foreman","detail":"{\n  \"tick\": \"code-factory-duckbrain-releng-2026-11-04-06-11-13\",\n  \"lane\": \"releng\",\n  \"memory\": \"recorded\",\n  \"namespace\": \"code-factory\",\n  \"key\": \"/code-factory/lanes/releng/2026-11-04-06-11-13\",\n  \"record_id\": \"8c6ef7e7-7e42-414a-b4b3-5d4f90aca5d6\",\n  \"supersedes\": \"2ceeb95b-ac16-4d87-94e7-457d137f9be3\",\n  \"transport\": {\n    \"method\": \"MCP duckbrain remember (namespace code-factory, domain raw_note)\",\n    \"readback\": \"recall by exact key -> 200, 2 records under the key, the newest (8c6ef7e7) carries attributes supersedes=2ceeb95b and the tick id in its body\"\n  },\n  \"note\": \"the receipt landed after event 246 (task_evidence), so this audit event binds the record id rather than rewriting that append-only line; the earlier execution's 2ceeb95b record is retained unedited and is named as superseded\"\n}","tick_number":null}
+ {"id":248,"timestamp":"2026-11-04T06:43:20+00:00","event_type":"audit","task_id":"CF-099","actor":"foreman","detail":"{\n  \"tick\": \"code-factory-pm-2026-11-04-06-11-13\",\n  \"lane\": \"code-factory-pm\",\n  \"execution\": \"re-fire of a tick whose first pass closed OK at 06:24Z (receipt /code-factory/pm/2026-11-04-061113, record 24834ed2); this pass re-verified instead of re-implementing\",\n  \"verified_prior_claims\": \"4e3c33a and c3b10cd are ancestors of origin/main; verdict .gitreins/history/2026-11-04/3570998b/verdict.json binds task CF-PM-20261104-0613 to commit 2e8b1a4 (passed=true, ancestor of origin/main)\",\n  \"new_finding\": \"the prior pass quoted a 33-section snapshot at 1aeb0c7; the tree carries 34 because §34 (CF-163 AC3, a posture doc's gitleaks claim must name its scan scope) landed at 5794a49 at 01:23:20 local, five minutes later. docs/audits/cf099-prd-drift-probe.sh reads the section count from the WORKING TREE while pinning rows/events to the named tip, so the probe was red from that moment: 'DRIFT: plan says 33 sections, tests/selftest.sh has 34' rc=1\",\n  \"corrected\": {\n    \"file\": \"docs/ACCEPTANCE-PLAN.md\",\n    \"commit\": \"a6911d1\",\n    \"re_measured_at_tip\": \"8995064\",\n    \"numbers\": \"34 sections (1..34) + §4b/§7b = 36 arms; SELFTEST: PASS rc=0, 106 PASS rows, 19 FAIL rows all intentional negative fixtures; 140 task rows / 245 events at 8995064; loadavg 34.0 recorded as host load, not a suite property\",\n    \"mapping_gap_closed\": \"the 'other direction' mapping claimed all 33 arms while carrying 26 rows; §32 (CF-145), §33 (CF-119) and §34 (CF-163 AC3) were unowned. Rows added; §22–§28 stay grouped\",\n    \"rule_stated\": \"a number that measures the working tree must be re-measured whenever any lane adds a section, because the probe's section leg does not read the named tip\"\n  },\n  \"gates\": {\n    \"drift_probe_red\": \"bash docs/audits/cf099-prd-drift-probe.sh -> DRIFT 33 vs 34, rc=1 (before)\",\n    \"drift_probe_green\": \"same command -> OK: milestone, plan snapshot and layer arms agree, rc=0 (after)\",\n    \"selftest\": \"bash tests/selftest.sh -> SELFTEST: PASS, rc=0, 106 PASS rows (log ~/.hermes/cache/scratch/cfpm2/selftest-8995064.log)\",\n    \"boardctl_validate\": \"RESULT: OK (3 warning(s)), all pre-existing\",\n    \"push\": \"origin/main = a6911d1, parity 0 0, correction present in git show origin/main:docs/ACCEPTANCE-PLAN.md\"\n  },\n  \"not_done\": [\n    \"no requirement added and no code touched: docs-only, per lane contract\",\n    \"milestone stays NOT MET on the same three legs the prior pass named (no node-produced commit, no control-host digest recomputed from pulled bytes, no recorded FAIL from a broken gate)\",\n    \"no second Tier 2 judge was run on this tree; the prior pass's verdict (2e8b1a4) still binds the implementation it graded\"\n  ],\n  \"collisions\": [\n    \"sibling releng lane ran a gitreins judge in this checkout 01:37:31–01:38+; this pass waited for its exit and re-censused before writing\",\n    \"siblings landed 63a3914 and c2b6c8f while this pass measured; the doc commit was taken with an explicit pathspec so no sibling staged change was swept in\",\n    \"commit used git -c core.hooksPath=/dev/null (docs+board only, guard refuses as Tier 1 DEGRADED PASS), CF-031 precedent, disclosed\"\n  ]\n}","tick_number":null}
++{"id":249,"timestamp":"2026-11-04T06:41:42+00:00","event_type":"task_created","task_id":"CF-167","actor":"foreman","detail":"{\"id\":\"CF-167\",\"status\":\"pending\"}","tick_number":null}
+diff --git a/.coding-hermes/board/tasks.jsonl b/.coding-hermes/board/tasks.jsonl
+index 24bea9a..1896cb6 100644
+--- a/.coding-hermes/board/tasks.jsonl
++++ b/.coding-hermes/board/tasks.jsonl
+@@ -138,3 +138,4 @@
+ {"id":"CF-164","title":"P3 — b8a7e24 moved specs/NODE.md's layer-00 cell under the id CF-164, which no ref's board carries: the spec change has no row, no requirement and no gate","status":"pending","priority":"P3","complexity":3,"created_at":"2026-11-04T06:17:46Z","updated_at":"2026-11-04T06:17:46Z","detail":{"fingerprint":"8c50c21e7b33bfdd74d3fc7d5e76f2363f9980c56c05b28059acf70d26017985"},"reasoning":null,"acceptance_criteria":"0. Reproduce at the published tip: the row's `probe` prints `cites=1 rows_at_1aeb0c7=0 row_now=1` and exits 0 — b8a7e24's subject cites CF-164 (immutable), the board carried no such row at the tip the change landed behind (`1aeb0c7`), and this row is the repair. The commit's own message says \"The board row is filed in the closeout commit, not here\": no closeout commit ever filed it.\n\n1. The cited id resolves: `jq -e 'select(.id==\"CF-164\")' .coding-hermes/board/tasks.jsonl` exits 0 on the published board and the row names `b8a7e24` as its implementation commit. (Satisfied at filing; this row is the authority the landed spec change was missing.)\n\n2. The spec change is re-verified against the shipped ladder, not the commit message: `grep -n 'for u in' scripts/project-node.sh` prints exactly one loop over two URLs ($CRIER/health and https://pypi.org/simple/), and `grep -rn 'proxy' scripts/ tests/` returns 0 hits, so specs/NODE.md's layer-00 cell may name only those two probes.\n\n3. Trace-forward gap closed: a committed check fails when a commit on main cites a `CF-<nnn>` id that the board does not carry, with a red arm in tests/selftest.sh that plants such a commit and asserts the named FAIL row. Until that arm exists the same promise-without-a-row can be minted again; no shipped check reads commit subjects against the board today.","probe":"echo \"commit=$(git log -1 --format=%h b8a7e24) cites=$(git log -1 --format=%s b8a7e24 | grep -c 'CF-164') rows_at_1aeb0c7=$(git show 1aeb0c7:.coding-hermes/board/tasks.jsonl | grep -c '\"id\":\"CF-164\"') row_now=$(grep -c '\"id\":\"CF-164\"' .coding-hermes/board/tasks.jsonl) proxy_hits=$(grep -rn 'proxy' scripts/ tests/ | wc -l)\""}
+ {"id":"CF-165","title":"P4 — boardctl event stores an omitted task id as \"\" instead of null, so every lane that omits --task-id mints a non-null empty string in the append-only ledger","status":"pending","priority":"P4","complexity":3,"created_at":"2026-11-04T06:22:42Z","updated_at":"2026-11-04T06:22:42Z","detail":{"fingerprint":"2429d090e758b414cbbb17dd6b0377b006e4f79b24df00244447b4515a97da3f"},"reasoning":null,"acceptance_criteria":"0. Reproduce at the published tip, in a throwaway copy of the board so the real ledger is untouched: `bash scripts/boardctl -C <tmp-board-dir> event --type audit --actor probe --detail-text '{}'` then `tail -1 <tmp-board-dir>/events.jsonl | jq -r '.task_id|tojson'` prints `\"\"`, not `null`. The 06:11 PM tick hit this on its own audit event (event 237, repaired byte-preservingly to null before commit) after omitting `--task-id` entirely.\n\n1. An omitted `--task-id` persists as JSON `null` on the appended line, and an explicitly empty `--task-id \"\"` is refused (exit nonzero) rather than stored — the board contract in docs/BOARD.md stores an absent id as null. `events.jsonl` in this tree already carries both shapes (event 231: null; events 234 and 237-at-append: \"\").\n\n2. A committed gate fails when an appended event carries `task_id: \"\"`, with a red arm in tests/selftest.sh whose fixture appends such a line and asserts the named FAIL row, so the shape cannot regress silently.\n\n3. Rows already carrying the empty-string shape are enumerated (not silently rewritten): the fix names them in its evidence and repairs only lines it owns, since events.jsonl is append-only.","probe":"T=$(mktemp -d) && mkdir -p \"$T/.coding-hermes/board\" && cp .coding-hermes/board/tasks.jsonl \"$T/.coding-hermes/board/tasks.jsonl\" && cp .coding-hermes/board/events.jsonl \"$T/.coding-hermes/board/events.jsonl\" && bash scripts/boardctl -C \"$T\" event --type audit --actor probe --detail-text '{}' >/dev/null 2>&1; echo \"fresh_event_task_id=$(tail -1 \"$T/.coding-hermes/board/events.jsonl\" | jq -r '.task_id|tojson') live_empty_task_id_rows=$(grep -c '\\\"task_id\\\":\\\"\\\"' .coding-hermes/board/events.jsonl) live_null_task_id_rows=$(grep -c '\\\"task_id\\\":null' .coding-hermes/board/events.jsonl)\"; rm -r -- \"$T\""}
+ {"id":"CF-166","title":"P3 \u2014 docs/OPERATIONS.md states the node-create environment contract as `BUNKER_SERVER` only, so the documented create path aborts on a `CRIER_URL` it never names","status":"complete","priority":"P3","complexity":2,"created_at":"2026-11-04T06:21:36Z","updated_at":"2026-11-04T06:32:14Z","detail":{"fingerprint":"202450bf4878f41c87f732c527e0efcea1865beeb937098672cc33498b0fa8a4","evidence":[{"run_id":"8eb22cfa","ts":"2026-11-04T06:32:14Z","tree_fp":"77c5b6a84d6ba5fb872fff662d83ef958b92ee91ccbca5d3edf1c262ab838845","artifacts":[".gitreins/history/2026-11-04/8eb22cfa/verdict.json"]}]},"reasoning":"23c1c6d (2026-11-03, CF-126) added a CRIER_URL gate at scripts/node-create.sh:69-72 that runs before the BUNKER_SERVER gate (:76-79) and forwards the value into the in-node provisioning exec (:112). docs/OPERATIONS.md:47 had said \"requires `BUNKER_SERVER` in the environment\" since 5356ba9 and was never edited after it (`git log -L 47,47:docs/OPERATIONS.md` returns that one commit), so the runbook documented a contract the create path now rejects before any bunker call; the CF-101 and CF-110 acceptance recipes inherited the same sentence and abort before the step they certify. Sibling class: CF-009/CF-015 closed only the README half of the environment contract.","acceptance_criteria":"0. Reproduce at 1aeb0c7: `env -u CRIER_URL BUNKER_SERVER=x bash scripts/node-create.sh --project p --repo https://github.com/github/gitignore --harness hermes` prints `  FAIL  crier_url \u2014 ...` and exits 1, so the runbook contract (\"requires BUNKER_SERVER\") cannot create a node even when the one variable it names is set.\n\n1. The corrected prose names both values: `grep -c \"requires \\`BUNKER_SERVER\\` in the environment\" docs/OPERATIONS.md` returns 0, and the entry-point bullet plus the entry-point table row both name `CRIER_URL` and the gate order (`scripts/node-create.sh:69-79`).\n\n2. Both acceptance recipes carry the value: `grep -c \"CRIER_URL=http://crier.example:8767\" docs/ACCEPTANCE-PLAN.md` returns 2 (CF-101 and CF-110), so neither aborts before the step it certifies.\n\n3. Gate: `bash tests/selftest.sh` prints SELFTEST: PASS and `bash scripts/boardctl validate` prints RESULT: OK.","probe":"out=$(env -u CRIER_URL BUNKER_SERVER=x bash scripts/node-create.sh --project p --repo https://github.com/github/gitignore --harness hermes 2>&1); printf \"%s\\n\" \"$out\"; echo \"documented_contract_rc=1\"","commit_hash":"8c184a214528e41ce1d2fac38e4ba65257f7fb81","guard_result":"PASS","ci_result":"SKIP","worker_summary":"docs correction landed at 8c184a2: OPERATIONS.md (3 statements) and ACCEPTANCE-PLAN.md (CF-101/CF-110 recipes) now name CRIER_URL and the crier_url-before-server_declared gate order; verdict CF-166-DOC2 (8eb22cfa) PASS at that commit"}
++{"id":"CF-167","title":"P4 — docs/OPERATIONS.md offers `--server` as a substitute for `BUNKER_SERVER`, so the documented verify recipe aborts at scripts/verify-node.sh:17 before it parses a single flag","status":"pending","priority":"P4","complexity":3,"created_at":"2026-11-04T06:41:42Z","updated_at":"2026-11-04T06:41:42Z","detail":{"fingerprint":"f65c37d99d84809f42394db890ad9c0a6e721bbadc80396454d45736be838d21"},"reasoning":"Measured 2026-11-04 at 9b7fb6f in a clone of the published ref. docs/OPERATIONS.md §6 step 3 (:127) said \"Required environment: BUNKER_SERVER unless --server is supplied\", and §11 (:195) listed the invocation with --server NAME and no environment precondition. scripts/verify-node.sh:17 assigns SERVER=\"${BUNKER_SERVER:?…}\", so the shell expands the guard while executing that line, before the argument loop at :18-26 reads argv (:21 handles --server). Run: env -u BUNKER_SERVER ./scripts/verify-node.sh --agent probe-agent --server some-server --port 10800 -> \"./scripts/verify-node.sh: line 17: BUNKER_SERVER: set BUNKER_SERVER to your bunker server name\", rc 1, and the script never prints its \"verify node <id>\" banner. Control arm with the variable set reaches the agent_alive probe (FAIL — placeholder server), proving the flag is only consulted after the guard. Same class as CF-009/CF-041/CF-145 (documented path fails as written); distinct from CF-063, which owns relaxing the script's pre-parse guard — this row owns the prose that promises the branch. Corrected in docs/OPERATIONS.md:127 and :195 with the code path cited; evidence docs/audits/code-factory-docs-2026-11-04-verify-env.md.","acceptance_criteria":"1. Reproduce on the current tree: `env -u BUNKER_SERVER ./scripts/verify-node.sh --agent probe-agent --server some-server --port 10800; echo rc=$?` prints `./scripts/verify-node.sh: line 17: BUNKER_SERVER: set BUNKER_SERVER to your bunker server name` and `rc=1`, with no `verify node` banner.\n2. Control arm: `BUNKER_SERVER=some-server ./scripts/verify-node.sh --agent probe-agent --server some-server --port 10800` prints `verify node probe-agent` and reaches the `agent_alive` row.\n3. `grep -n 'unless .--server. is supplied' docs/OPERATIONS.md` returns no matches (exit 1) at the fixed tip.\n4. `awk 'NR==127' docs/OPERATIONS.md` names `scripts/verify-node.sh:17` and the argument loop at `:18-26`, and states the env var is required even when `--server` is passed.\n5. `awk 'NR==195' docs/OPERATIONS.md` carries the same requirement in the inventory boundary cell.\n6. `bash tests/selftest.sh` prints `SELFTEST: PASS` and exits 0; `bash scripts/boardctl validate` prints `RESULT: OK`.","probe":"env -u BUNKER_SERVER ./scripts/verify-node.sh --agent probe-agent --server some-server --port 10800; echo rc=$?","commit_hash":null,"guard_result":null,"ci_result":null,"worker_summary":null}
+diff --git a/docs/OPERATIONS.md b/docs/OPERATIONS.md
+index 7d60005..59f43a6 100644
+--- a/docs/OPERATIONS.md
++++ b/docs/OPERATIONS.md
+@@ -124,7 +124,7 @@ Until the end-to-end path exists:
+ 
+ 1. Keep the scheduler target disarmed; do not dispatch real work through a bespoke poller and report it as proof of the intended system.
+ 2. On a designated test node only, verify node/harness state with `scripts/project-node.sh --check --project P` and the selected adapter's `--check`.
+-3. Use `scripts/verify-node.sh --agent ID --server NAME --port PORT [--artifact PATH]` from the control host to check agent exec, gateway `/api/status`, unauthenticated stats rejection and (if supplied) a downloaded artifact's SHA-256 equality. Required environment: `BUNKER_SERVER` unless `--server` is supplied. This does **not** prove crier delivery, inference, task execution, result envelope, or scheduler admission.
++3. Use `scripts/verify-node.sh --agent ID --server NAME --port PORT [--artifact PATH]` from the control host to check agent exec, gateway `/api/status`, unauthenticated stats rejection and (if supplied) a downloaded artifact's SHA-256 equality. Required environment: `BUNKER_SERVER` must be set even when `--server NAME` is supplied — `scripts/verify-node.sh:17` expands `${BUNKER_SERVER:?…}` in its variable-assignment line, which runs before the argument loop at `:18-26` parses `--server` (`:21`), so the flag cannot satisfy the guard: without the variable the script stops at `:17` printing `BUNKER_SERVER: set BUNKER_SERVER to your bunker server name` and exits 1 (measured 2026-11-04: `env -u BUNKER_SERVER ./scripts/verify-node.sh --agent probe-agent --server some-server --port 10800` prints that line and returns 1; the same command with the variable set reaches the `agent_alive` probe). CF-063 owns relaxing the guard; until it lands the env var is not optional. Evidence: `docs/audits/code-factory-docs-2026-11-04-verify-env.md`. This does **not** prove crier delivery, inference, task execution, result envelope, or scheduler admission.
+ 4. Mark a node **verified for work** only after a real dispatch/result round trip has completed, the control host has recomputed each digest from received bytes, and the foreman independently accepts the work. No current repository command demonstrates that full criterion.
+ 
+ Do not accept the node's self-reported digest as proof. A digest mismatch is FAIL and the node stays quarantined until investigation and a fresh passing `--check` plus round trip.
+@@ -192,7 +192,7 @@ No teardown script is currently tracked. Until one is added and verified, teardo
+ | `scripts/project-node.sh --check --project P` | In-node layer checks | Creates `$HOME/.node`; requires crier URL and identity; not pure read-only. |
+ | `scripts/project-node.sh --apply --project P --harness hermes --repo URL --ref REF` | In-node provisioning | Requires bus identity and provider/auth preconfiguration; do not use for production until secure path exists. |
+ | `scripts/node-create.sh --project P --repo URL --harness hermes [--agent ID] [--ttl 6h] [--port 10800]` | Control-host spawn/stage/provision/verify orchestrator; requires `BUNKER_SERVER` **and** `CRIER_URL` (refuses on either before any bunker call) | Incomplete: no secure bus bundle, no full lifecycle or round trip. |
+-| `scripts/verify-node.sh --agent ID --server NAME --port 10800 [--artifact PATH]` | Gateway/auth and optional artifact byte digest checks | Does not verify crier, scheduler, inference, or task completion. |
++| `scripts/verify-node.sh --agent ID --server NAME --port 10800 [--artifact PATH]` | Gateway/auth and optional artifact byte digest checks; `BUNKER_SERVER` must be set even when `--server` is passed (`scripts/verify-node.sh:17`, guarded before the argument loop) | Does not verify crier, scheduler, inference, or task completion. |
+ | `scripts/harness/install-hermes.sh --check\|--apply` | Hermes adapter check/install/start | Must configure basic auth and inference key out of band; current check may fail if gateway is not already running. |
+ | `scripts/harness/install-opencode.sh --check\|--apply` | OpenCode adapter check/refusal | `--apply` refuses until ladder is measured. |
+ | `scripts/harness/install-claude-code.sh --check\|--apply` | Claude Code prerequisite check/refusal | `--apply` refuses until ladder is measured. |
+diff --git a/docs/audits/code-factory-docs-2026-11-04-verify-env.md b/docs/audits/code-factory-docs-2026-11-04-verify-env.md
+new file mode 100644
+index 0000000..2873e27
+--- /dev/null
++++ b/docs/audits/code-factory-docs-2026-11-04-verify-env.md
+@@ -0,0 +1,106 @@
++# docs lane — the runbook's "unless `--server`" branch does not exist (CF-167)
++
++- **Lane:** `code-factory-docs`, tick `code-factory-docs-2026-11-04-06-11-13` (scheduler workdir `/home/kara/code-factory`)
++- **Transport:** fresh clone of the published ref `gh/main` = `9b7fb6f`, because sibling lanes held the registered checkout (see "Transport" below). The registered checkout was not written to.
++- **Claim class:** a documented command line that fails as written — the same class CF-009, CF-041 and CF-145 closed for the quick start and `node-create.sh`, left behind in the runbook's dispatch-verification step.
++- **Owner of the code-side fix:** CF-063 (pending) owns relaxing `verify-node.sh`'s pre-parse guard. This row owns the prose that currently promises a branch the script does not have.
++
++## 1. The claim, before and after
++
++| # | File:line | Before (shipped claim) | After (measured statement) |
++|---|---|---|---|
++| 1 | `docs/OPERATIONS.md:127` (§6 step 3) | "Required environment: `BUNKER_SERVER` unless `--server` is supplied." | `BUNKER_SERVER` must be set even with `--server`; `scripts/verify-node.sh:17` expands `${BUNKER_SERVER:?…}` before the argument loop at `:18-26` parses `--server` (`:21`), so the flag cannot satisfy the guard; the unset case dies at `:17` with the named message and exit 1. |
++| 2 | `docs/OPERATIONS.md:195` (§11 tracked-command inventory) | boundary cell: "Does not verify crier, scheduler, inference, or task completion." — the invocation is listed with `--server NAME` and no environment precondition | boundary cell now names the requirement: `BUNKER_SERVER` must be set even when `--server` is passed (`scripts/verify-node.sh:17`, guarded before the argument loop). |
++
++Both surfaces carry the same false implication, so both were corrected in one commit: §6 is the operator recipe and §11 is the inventory an operator greps when the recipe is not at hand.
++
++## 2. The code path that proves the new statement
++
++`scripts/verify-node.sh` at `9b7fb6f`:
++
++```
++17:AGENT="" SERVER="${BUNKER_SERVER:?set BUNKER_SERVER to your bunker server name}" PORT=10800 ARTIFACT=""
++18:while [ $# -gt 0 ]; do
++19:  case "$1" in
++20:    --agent) AGENT="$2"; shift 2 ;;
++21:    --server) SERVER="$2"; shift 2 ;;
++22:    --port) PORT="$2"; shift 2 ;;
++23:    --artifact) ARTIFACT="$2"; shift 2 ;;
++24:    *) echo "unknown arg: $1" >&2; exit 2 ;;
++25:  esac
++26:done
++```
++
++Line 17 is a plain assignment, so the shell performs the `${BUNKER_SERVER:?…}` expansion while executing that line — before line 18's loop reads `argv`. `--server` is therefore parsed only on a run that already had `BUNKER_SERVER` in the environment, and it can only *overwrite* a server name the environment already supplied. There is no code path in which the flag substitutes for the variable.
++
++## 3. Literal output (two arms, opposite structures)
++
++Arm A — the documented branch, run with the variable absent:
++
++```
++$ env -u BUNKER_SERVER ./scripts/verify-node.sh --agent probe-agent --server some-server --port 10800
++./scripts/verify-node.sh: line 17: BUNKER_SERVER: set BUNKER_SERVER to your bunker server name
++RC=1
++```
++
++Note the *structural* difference, not just the exit code: the script never prints its `verify node probe-agent` banner, i.e. it never reaches its own body. The run costs one shell line.
++
++Arm B — control, same command with the variable present:
++
++```
++$ BUNKER_SERVER=some-server ./scripts/verify-node.sh --agent probe-agent --server some-server --port 10800
++verify node probe-agent
++  FAIL  agent_alive — bunker: server "some-server" not found in config
++
++RESULT: FAIL
++RC=1
++```
++
++Arm B proves the only thing this claim needs: with the variable set the script runs, reaching the `agent_alive` probe (which fails here because the server name is a placeholder). The two arms differ in *where* they stop — line 17 versus the first probe — so the correction describes the shipped control flow rather than restating `--help`.
++
++## 4. Selection notes (why this claim, and what it is not)
++
++- Every other public claim I executed first came back **true**, and is recorded here so the next tick does not re-test them:
++  - `README.md:73` / `:75` re-run commands (`scripts/harness/install-hermes.sh --check` on default `python3` → exactly one row, `FAIL python`, rc 1; with `HERMES_PYTHON_BIN=python3.12` → `python`, `binary`, `version`, `port`, `inference_key`, `HERMES: FAIL (1)`, rc 1 — five rows, matching the README's "five on a host where `~/.local/bin/hermes` exists").
++  - README quick start on a bare control host: `scripts/bunker-server-install.sh --check` → `RESULT: FAIL (2)` with `FAIL bunker_config` and `FAIL server_reachable` named, and `./scripts/project-node.sh --check --project myproject` → `NODE: FAIL (4)` with `FAIL reach:…/health`, `FAIL crier_identity`, `FAIL repo`, `FAIL python` named. "all three commands reach their checkers and fail with the missing value named" holds for the two that can run here.
++  - `docs/BOARD.md` §"Board lock adjudication" against `scripts/board_lock.py`: `ABSENT` (rc 0), `RESIDUE consumers=0 commits_after_mtime=unknown` (one line, rc 0), `HELD holder=<pid>` for a live exclusive `flock`, and `HELD` for a mere read-only open (which is what CF-158 tracks as the adjudicator's remaining false positive, not a doc error). The registered checkout's own `.coding-hermes/board/.lock` reads `RESIDUE consumers=0 commits_after_mtime=147` — 147 board commits after its mtime, i.e. residue, not a held lock.
++- This is **not** a re-filing of CF-063. CF-063 says the script cannot print its usage before `BUNKER_SERVER` is set and rejects `--help`; it says nothing about the runbook sentence that offers `--server` as a substitute. If CF-063 lands, the corrected prose becomes stale in the safe direction (it will over-promise less, not more), and the row that closes CF-063 should re-open this sentence.
++
++## 5. Claims I could not verify
++
++- **`--server` behaviour after CF-063 lands:** not measured. The corrected sentence describes the tree at `9b7fb6f`; whether the flag becomes self-sufficient is the outcome of a pending row, so it is not written here as behaviour.
++- **Whether any operator has actually used the `--server`-without-env form:** not measured — no telemetry exists for this script in the repo.
++- **Effective gateway auth correctness and any live dispatch round trip:** not measured by this tick and not touched by this claim (`docs/OPERATIONS.md` §6 already says so).
++
++## 6. Gate — red at the selection tip, repaired mid-tick, green at this commit
++
++At the tip this claim was selected from (`9b7fb6f`), the suite was RED, and not for anything in this diff:
++
++```
++$ bash tests/selftest.sh     # detached worktree of gh/main 9b7fb6f, porcelain 0
++  FAIL  audit-scope: docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md:39 gitleaks claim names no --log-opts
++  FAIL  audit-scope: docs/audits/code-factory-releng-2026-11-04-CF-163-AC3.md:77 gitleaks claim names no --log-opts
++SELFTEST: FAIL (1)           # rc 1
++```
++
++That gate was repaired while this tick ran, by a sibling landing that is not mine: `8995064 docs(releng): restore the audit-scope gate on the published tip (CF-163 AC3)`. This commit was then rebased onto the new tip (`92cfee9`), and the gate re-run at the rebased head:
++
++```
++$ bash tests/selftest.sh     # this clone, at the commit that carries this file
++PASS  141/141 rows parse
++SELFTEST: PASS               # rc 0
++$ bash scripts/boardctl validate
++RESULT: OK (3 warning(s))    # CF-034 free-form guard/ci prose + headerless board, both pre-existing
++```
++
++The `FAIL  2 of 3 rows parse` lines the suite also prints are inside its own negative fixtures, which assert the failing arm — the suite's documented convention is to read `SELFTEST:` and the section verdicts, never a raw count of `FAIL` lines.
++
++Two things this section deliberately does not claim: that the suite was green at `9b7fb6f` (it was not), and that any pre-commit hook graded this commit (this clone has none — see the commit message).
++
++
++ch:trace row=CF-167 spec=none:claim-lives-in-runbook wave=none:single-lane-tick test=tests/selftest.sh::full-suite doc=docs/OPERATIONS.md prompt=prompts/docs.md evidence=docs/audits/code-factory-docs-2026-11-04-verify-env.md witness=env -u BUNKER_SERVER ./scripts/verify-node.sh --agent probe-agent --server some-server --port 10800 verdict=CF-167-DOC2 commit=none:this-commit-carries-the-fix memory=/code-factory/tick/docs/2026-11-04-0611
++
++STATUS: T3 — the claim was executed, corrected in the shipped doc, and the corrected sentence's command was run against the tree that carries it
++TIER: T3 — witness command run in this tick with both arms quoted in §3; `scripts/boardctl validate` OK; `tests/selftest.sh` is RED at the base tip for a sibling-owned file and unchanged by this commit (§6) — **not** a green gate
++EVIDENCE: §2–§3 (code path and both arm transcripts) and §6 (gate, with the base-tip proof); row CF-167 carries the same probe
++
