@@ -80,3 +80,57 @@ needs explicit authorization naming target, version and baseline SHA. Recorded a
 | `git push` from the registered checkout | not the lane's root this tick; all writes happen in the clone |
 | Release tag / CHANGELOG | no release contract (CF-161) and no owner authorization |
 | GitHub Actions CI | no workflows exist in this repository |
+
+## Verification addendum — resumed pass (`2026-11-04T05:56-05:00`)
+
+This pass resumed tick `code-factory-releng-2026-11-04-10-22-25` **after** the first execution of the
+same tick id had already landed and recorded its receipt (`/code-factory/status/2026-11-04-releng`,
+DuckBrain record `ccd77cf6-77f5-411d-b5a2-e3a349b47f0b`, tip `ed883b2`). A resumed tick verifies and
+reports; it does not re-execute. So this pass selected no row, dispatched no worker, filed no row,
+and minted no second GitReins task for the closed work. It re-measured the receipt's claims at a
+**newer** published tip and added the legs the first pass did not run.
+
+Re-verified at published `main` = `d93d98b` (`board: event 354 — QA re-verification of CF-195 at the
+published tip`), measured from a throwaway clone; the registered checkout `/home/kara/code-factory`
+was again left untouched (it is behind the published tip and still carries untracked
+`.gitreins/history/**` bundles; a `gitreins guard` process from a sibling lane was live on the host
+during this pass).
+
+| Claim from the first pass | Command (this pass, at `d93d98b`) | Result |
+|---|---|---|
+| Gate green at the graded tree | `bash tests/selftest.sh` | **`SELFTEST: PASS`, rc=0**, 195 `PASS` rows, 50 intentional negative-fixture `FAIL` rows (~18 s) — also green at `8571bfc` |
+| Board valid | `bash scripts/boardctl validate` | `RESULT: OK (4 warning(s))`; the duplicate-event-id 336 warning is the documented legacy residue owned by **CF-196** |
+| Evidence artifact published | `git cat-file -e c2e9d43^{commit}`, `git merge-base --is-ancestor c2e9d43 HEAD` | present, ancestor, rc=0 |
+| Verdict bundle published | `.gitreins/history/2026-11-04/b4c0b5c4/verdict.json` | `task_id=RELENG-2026-11-04`, `passed=true`, commit `c2e9d43` — resolves from `origin` |
+| Branch protection absent (CF-120) | `gh api repos/coding-hermes/code-factory/branches/main/protection` | `HTTP 404 "Branch not protected"`; `rulesets` → `0` |
+| Secret scanning on (posture) | `gh api repos/coding-hermes/code-factory --jq '.security_and_analysis'` | `secret_scanning=enabled`, `push_protection=enabled`; non-provider patterns / validity checks / dependabot `disabled` |
+| License / visibility | same API call | `license=MIT`, `private=false`, `visibility=public` |
+| Zero release tags (CF-161) | `git ls-remote --tags origin \| wc -l` | **0**; no `VERSION`, no `CHANGELOG*` in the tree |
+| `master` lineage still published (CF-163) | `git ls-remote origin refs/heads/master` | `4ead64f` — unchanged; 60 published heads |
+| CI state | `gh run list --repo coding-hermes/code-factory --limit 3 --json …` | `[]` — no workflows in the repo; the gate is the CI-equivalent |
+| Board census | `wc -l` + `jq -r .id \| sort \| uniq -d` | 176 task rows / 355 events; 61 `complete` / 8 `in_progress` / 107 `pending`; **0 duplicate ids** |
+
+### Legs this pass added
+
+1. **The committed credential-shape arm is unusable as written — corrected here.** A bare `sk-`
+   pattern matches **275** substrings in the published tree at `d93d98b`, all inside board JSONL
+   words (`task-`, `risk-`), so the "0 hits" cell in the first pass cannot be reproduced from its
+   own command. The bounded key shapes
+   (`ghp_[A-Za-z0-9]{20,}`, `github_pat_[A-Za-z0-9_]{20,}`, `sk-[A-Za-z0-9]{20,}`,
+   `AKIA[0-9A-Z]{16}`, `xoxb-[0-9A-Za-z-]{20,}`, `BEGIN [A-Z ]*PRIVATE KEY`) return **0 hits** at
+   `d93d98b` — that is the arm to quote from now on (RE2 has no lookbehind, so bound the key shape
+   rather than prefixing the pattern).
+2. **Absolute host paths, same class, re-measured**: 349 files / 1304 hits across the whole tree;
+   **48 files** excluding `.gitreins` and the board (first pass: 331 / 1267 and 46 at `a564cda`).
+   Growth is driven by published `chore(gitreins)` bundles. Owned by **CF-050** / **CF-086** — not
+   re-filed.
+3. **CF-190 reproduced live**: `git ls-remote git@github.com:coding-hermes/code-factory.git
+   refs/heads/main` → `git@github.com: Permission denied (publickey)`. Every leg of this pass used
+   the https remote instead (clone, fetch, push). Row stays `pending`; no refile — liveness
+   confirmation only.
+4. **Release decision unchanged**: `NO TAG / KEEP PENDING`. Zero published tags, no version
+   artifact, **CF-161** still `pending`, and tag/cut rows remain owner-gated decision work naming
+   target, version and baseline SHA.
+
+Negative claims scoped to this pass: no board row created, no worker dispatched, no new GitReins
+task, no release tag, no write to the registered checkout.
