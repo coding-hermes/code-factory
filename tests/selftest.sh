@@ -379,7 +379,7 @@ if [ "$1" = --version ]; then echo 'Python 3.12.3'; exit 0; fi
 exec "${AUTH_PYTHON:?}" "$@"
 ''',
     "hermes": '''#!/usr/bin/env bash
-if [ "$1" = --version ]; then echo 'hermes auth fixture'; exit 0; fi
+if [ "$1" = --version ]; then echo 'hermes 0.19.0'; exit 0; fi
 [ "$*" = 'serve --host 0.0.0.0 --port 10800 --skip-build' ] || exit 99
 printf '%s\\n' 'serve launch reached' > "${AUTH_FIXTURE:?}/launch"
 ''',
