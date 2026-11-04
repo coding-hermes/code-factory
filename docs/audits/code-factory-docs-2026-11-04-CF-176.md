@@ -39,7 +39,7 @@ _, err = ae.db.ExecContext(ctx,
 | | File:line | Text |
 |---|---|---|
 | Before | `docs/SCHEDULER-ADMISSION.md:55` | `and 576×, every row enabled. Read the pair back after arming; the API will not check it for you.` |
-| After | `docs/SCHEDULER-ADMISSION.md:55-61` | `… and 576×, across 17 ceiling-bearing rows of which 16 were enabled: code-factory-qa read enabled=0, set by auto-disable on failure rate 91.3% (84/92 ticks, window 100, threshold 0.90). Arm state is a per-row fact, not a family property — an auto-disable can land minutes before or after a census, so read the flags back alongside the pair and report the disabled rows instead of summarising the family as armed: sqlite3 … "select name, enabled, cooldown_floor_s, cooldown_ceiling_s, disabled_by from projects where name like '<family>%' and cooldown_ceiling_s>0;". The API will not check the ratio for you.` |
+| After | `docs/SCHEDULER-ADMISSION.md:55-63` | `… and 576×, across 17 ceiling-bearing rows of which 16 were enabled: code-factory-qa read enabled=0, set by auto-disable on failure rate 91.3% (84/92 ticks, window 100, threshold 0.90). Arm state is a per-row fact, not a family property — an auto-disable can land minutes before or after a census, so read the flags back alongside the pair and report the disabled rows instead of summarising the family as armed: sqlite3 … "select name, case when cooldown_floor_s>0 then cooldown_ceiling_s/cooldown_floor_s end ratio, enabled, coalesce(disabled_by,'-') disabled_by from projects where name like '<family>%' and cooldown_ceiling_s>0;". The API will not check the ratio for you.` |
 
 The replacement names the capability in different words rather than negating the removed sentence,
 so the row's literal acceptance grep cannot match it.
@@ -95,6 +95,45 @@ code-factory-qa|0|auto-disable|failure rate 91.3% (84/92 ticks, window 100, thre
 
 Rows with a non-zero ceiling: 17. Enabled among them: 16.
 
+The one query the corrected paragraph now prescribes — ratios and arm flags in the same output, so
+the two numbers cannot drift apart again:
+
+```
+$ sqlite3 -header -column ~/.hermes/coding-hermes/scheduler.db "select name, case when cooldown_floor_s>0 then cooldown_ceiling_s/cooldown_floor_s end ratio, enabled, coalesce(disabled_by,'-') disabled_by from projects where name like 'code-factory%' and cooldown_ceiling_s>0 order by ratio, name;"
+name               ratio  enabled  disabled_by
+-----------------------------  -----  -------  ------------
+code-factory-docs                   8        1  -
+code-factory-perf                   8        1  -
+code-factory-qa                     8        0  auto-disable
+code-factory-readme                 8        1  -
+code-factory-review                 8        1  -
+code-factory-duckbrain-dogfood     16        1  -
+code-factory-duckbrain-pm          16        1  -
+code-factory-duckbrain-qa          16        1  -
+code-factory-duckbrain-releng      16        1  -
+code-factory-duckbrain-sync        16        1  -
+code-factory-readme-qa             16        1  -
+code-factory-releng-qa             16        1  -
+code-factory-sync                  48        1  -
+code-factory-pm                   192        1  -
+code-factory-releng               192        1  -
+code-factory-docs-qa              224        1  -
+code-factory-dogfood              576        1  -
+```
+
+## 3b. The sibling artifact that carried the same false measurement
+
+CF-176 acceptance criterion 3 required the closed row's own evidence file to stop repeating the
+false value. `docs/audits/code-factory-docs-2026-11-04-cf169-validator-claim.md:89` read:
+
+> Every one of those rows is `enabled=1`, and none of the non-8× rows is refused …
+
+It now reads `At that same measurement 16 of those 17 rows were enabled=1: code-factory-qa was
+already enabled=0 (disabled_by=auto-disable, failure rate 91.3%). An earlier wording of this
+section described the whole set as enabled; that sentence was wrong and is superseded by CF-176 …`.
+The sibling's numbers (ratios, refusal reasoning) are left intact — only the arm claim is corrected
+and attributed.
+
 Claims in the same sentence that came back **true** (re-tested, not repeated):
 
 | Claim | Verdict | Instrument |
@@ -110,9 +149,19 @@ Claims in the same sentence that came back **true** (re-tested, not repeated):
 | Commit | Result |
 |---|---|
 | `1fea92d` (base, before the edit) | `SELFTEST: PASS`, exit 0 — log `selftest-base.log` |
-| this commit (after the edit) | `SELFTEST: PASS`, exit 0 — log `selftest-head.log` |
+| `9149ff8` (first implementation commit) | `SELFTEST: PASS`, exit 0 — log `selftest-head.log` |
+| this commit (second, satisfies AC2 and AC3) | `SELFTEST: PASS`, exit 0 — log `selftest-head2.log` |
 
-The suite reads neither this paragraph nor the scheduler DB, so a PASS at both tips is the expected
+`bash scripts/boardctl validate` at this commit: `RESULT: OK (3 warning(s))` — the three warnings are
+pre-existing (`CF-034`'s free-form guard/ci values and the headerless board), not introduced here.
+
+Two implementation commits, disclosed rather than squashed: the first (`9149ff8`) corrected the
+paragraph and carried a verdict (`CF-176-DOC2`, PASS, bound to that SHA); re-reading the row's
+acceptance criteria afterwards surfaced AC2 (one query printing ratios *and* enabled together) and
+AC3 (the sibling artifact still carrying the false value), which this second commit satisfies. The
+row's closure binds to the second commit's own verdict, not to the first one.
+
+The suite reads neither this paragraph nor the scheduler DB, so a PASS at every tip is the expected
 result; it is quoted to show the correction adds no new failure, not to claim the gate covers it.
 
 ## 5. Claims I could not verify
