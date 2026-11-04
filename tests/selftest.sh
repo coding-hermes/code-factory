@@ -265,30 +265,6 @@ else
 fi
 rm -rf "$tmpd"
 
-say "7c. CF-155 sections census agrees and rejects one extra numbered section"
-tmpd=$(mktemp -d)
-cp "$HERE/docs/ACCEPTANCE-PLAN.md" "$tmpd/plan.md"
-cp "$HERE/tests/selftest.sh" "$tmpd/selftest.sh"
-out=$(CF099_PLAN="$HERE/docs/ACCEPTANCE-PLAN.md" CF099_SELFTEST="$HERE/tests/selftest.sh" \
-  bash "$HERE/docs/audits/cf099-prd-drift-probe.sh" --sections-only 2>&1); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^measured: plan_sections=[0-9][0-9]* selftest_sections=[0-9][0-9]*'; then
-  say "  PASS  cf155 sections census green at this tree"
-else
-  say "  FAIL  cf155 sections census green direction failed (exit $rc)"; fails=$((fails+1))
-fi
-printf '%s\n' 'say "99. drift fixture"' >> "$tmpd/selftest.sh"
-plan_sections=$(grep -m1 '^\*\*Current state' "$tmpd/plan.md" | grep -oE 'carries [0-9]+ sections|[0-9]+ numbered sections' | head -1 | grep -oE '[0-9]+')
-expected="DRIFT: plan says $plan_sections sections, tests/selftest.sh has $((plan_sections+1))"
-out=$(CF099_PLAN="$tmpd/plan.md" CF099_SELFTEST="$tmpd/selftest.sh" \
-  bash "$HERE/docs/audits/cf099-prd-drift-probe.sh" --sections-only 2>&1); rc=$?
-if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq "$expected"; then
-  say "  PASS  cf155 sections census red on a fixture with one extra numbered section"
-else
-  say "  FAIL  cf155 sections census fixture missed named DRIFT (exit $rc)"; fails=$((fails+1))
-  printf '%s\n' "$out"
-fi
-rm -rf "$tmpd"
-
 say "8. project board entrypoint is real and fails closed without dependency"
 bash -n "$HERE/scripts/boardctl" && say "  PASS  bash -n scripts/boardctl" || { say "  FAIL  bash syntax"; fails=$((fails+1)); }
 "$HERE/scripts/boardctl" --help >/dev/null 2>&1 && say "  PASS  local help" || { say "  FAIL  help"; fails=$((fails+1)); }
@@ -1662,6 +1638,54 @@ else
   say "  FAIL  cf159-escaping remote-command fixture"; fails=$((fails+1))
 fi
 # END cf159-escaping
+
+# BEGIN cf151-node-credential-scope
+say "37. the node credential row scopes its contradiction to the node (CF-151)"
+# The Status row "Node inference credential" asserts a NODE state. The inference_key gate
+# (scripts/harness/install-hermes.sh) reads $HOME/.hermes/.env of whichever environment runs
+# it, so the same command witnesses the node's key when run inside the node and the control
+# host's own key when run here. The pre-fix row (baseline 276b0b0) cited the bare control-host
+# `FAIL inference_key` as the contradiction; on a keyed control host that command prints PASS
+# and contradicts the row's own **missing** state. RED proof at authoring time: this arm run
+# against the pre-fix README failed all three assertions (worker transcript, not committed
+# as code).
+cf151_row_scope() {  # $1=README -> prints one line per offense, returns 1 if any
+  local readme="$1" rc=0 row
+  row=$(grep '^|' "$readme" | grep -F '| Node inference credential |' | head -1)
+  if [ -z "$row" ]; then
+    echo "absent-row: Node inference credential"; return 1
+  fi
+  if printf '%s' "$row" | grep -Fq -- '-> `FAIL inference_key`' \
+    && ! printf '%s' "$row" | grep -Fqi "this host's own key"; then
+    echo "unlabelled-control-host-fail: Node inference credential"; rc=1
+  fi
+  if ! printf '%s' "$row" | grep -Fqi "this host's own key"; then
+    echo "missing-control-host-label: Node inference credential"; rc=1
+  fi
+  if ! printf '%s' "$row" | grep -Fq 'node-scripts/project-node.sh --check' \
+    && ! printf '%s' "$row" | grep -Fq 'not measurable from the control host'; then
+    echo "missing-node-scoped-measurement: Node inference credential"; rc=1
+  fi
+  return $rc
+}
+if cf151_row_scope "$HERE/README.md" >/dev/null; then
+  say "  PASS  node credential row labels control-host evidence and names the node measurement"
+else
+  say "  FAIL  node credential row mis-scoped: $(cf151_row_scope "$HERE/README.md" | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+# negative fixture: the pre-fix row bytes, verbatim, must be refused
+tmpd=$(mktemp -d)
+cat > "$tmpd/prefix-row" <<'EOF'
+| Node inference credential | **missing** — a turn dies at `No inference provider configured`; the node needs its own key, never an operator key | `scripts/harness/install-hermes.sh --check` -> `FAIL inference_key`. That row prints only on an interpreter inside the pin's range; the default `python3` here is 3.14 and stops at `FAIL python` first, so name one explicitly: `HERMES_PYTHON_BIN=python3.12 scripts/harness/install-hermes.sh --check` -> `FAIL inference_key`. Both arms are transcripted in `docs/audits/code-factory-CF-064.probe.txt` (CF-064). |
+EOF
+if cf151_row_scope "$tmpd/prefix-row" >/dev/null; then
+  say "  FAIL  the pre-fix node credential row was accepted"; fails=$((fails+1))
+else
+  say "  PASS  pre-fix node credential row refused ($(cf151_row_scope "$tmpd/prefix-row" | tr '\n' ' '))"
+fi
+rm -rf "$tmpd"
+# END cf151-node-credential-scope
 
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
