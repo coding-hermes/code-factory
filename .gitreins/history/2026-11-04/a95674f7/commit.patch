@@ -1,0 +1,12 @@
+commit 837a43e42a37d4481aa671a36fc247a98e765e57
+Merge: 724407f 7232954
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Wed Nov 4 03:47:47 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Wed Nov 4 03:47:47 2026 -0500
+
+    merge: land the reverse-mapping arm census over the next published tip
+
+ .coding-hermes/board/events.jsonl | 2 ++
+ .coding-hermes/board/tasks.jsonl  | 2 ++
+ 2 files changed, 4 insertions(+)

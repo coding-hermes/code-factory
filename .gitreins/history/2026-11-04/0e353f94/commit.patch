@@ -1,0 +1,20 @@
+commit 724407fdb56f8d39a1baa01cbd3e67cd13780327
+Merge: bbf3df7 d8ceb51
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Wed Nov 4 03:45:51 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Wed Nov 4 03:45:51 2026 -0500
+
+    merge: land the reverse-mapping arm census over the published tip
+
+ .coding-hermes/board/events.jsonl                  |   3 +
+ .coding-hermes/board/tasks.jsonl                   |   2 +-
+ .gitreins/history/2026-11-04/ac2d64d2/commit.patch | 170 +++++++++++++++
+ .gitreins/history/2026-11-04/ac2d64d2/summary.md   |  40 ++++
+ .gitreins/history/2026-11-04/ac2d64d2/verdict.json | 131 +++++++++++
+ .gitreins/history/2026-11-04/f5fd4864/commit.patch | 240 +++++++++++++++++++++
+ .gitreins/history/2026-11-04/f5fd4864/summary.md   |  32 +++
+ .gitreins/history/2026-11-04/f5fd4864/verdict.json | 111 ++++++++++
+ docs/BOARD.md                                      |  16 +-
+ .../code-factory-sync-2026-11-04-0842-refire.md    |  87 ++++++++
+ 10 files changed, 826 insertions(+), 6 deletions(-)
