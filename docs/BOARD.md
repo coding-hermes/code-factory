@@ -61,10 +61,11 @@ Observed on 2026-11-03 before the workdir repair: the registered code-factory wo
 health claim. `scripts/board_drift.py` is the re-runnable tool; `tests/selftest.sh` arm 29
 proves its divergent, identical, empty, missing-file and malformed-record fixture paths.
 
-## Current measured state (snapshot 2026-11-03, tip `21d3265`)
+## Current measured state (measured 2026-11-04T01:36Z at tip `f49d85b`)
 
 Every count below is an output value that moves with each folded row, so measure it instead of
-quoting an older snapshot:
+quoting an older snapshot. The numbers are still typed by hand — CF-081 tracks replacing this block
+with a committed check that derives them and fails on a mismatch.
 
 ```sh
 wc -l .coding-hermes/board/tasks.jsonl .coding-hermes/board/events.jsonl
@@ -72,11 +73,12 @@ scripts/boardctl validate
 bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 ```
 
-- At tip `21d3265`: 104 task rows, 148 events. `scripts/boardctl validate` prints
-  `RESULT: OK (45 warning(s))` — 42 rows carrying a free-form `probe` key, CF-034's free-form
+- At tip `f49d85b`: 114 task rows, 162 events. `scripts/boardctl validate` prints
+  `RESULT: OK (46 warning(s))` — 43 rows carrying a free-form `probe` key, CF-034's free-form
   `guard_result`/`ci_result` prose, and the headerless board (no `board.jsonl`), so header-counter
   checks are skipped.
-- `tests/selftest.sh` prints `PASS 104/104 rows parse` and `SELFTEST: PASS` (exit 0, 29 sections).
+- `tests/selftest.sh` prints `PASS 114/114 rows parse` and `SELFTEST: PASS` (exit 0; 29 numbered
+  sections plus lettered arms 4b and 7b — 31 arms).
   Nineteen `  FAIL` lines appear *inside* negative fixtures that assert a failure arm; count
   `SELFTEST:` and the per-section verdicts, never a raw `grep -c '^  FAIL'`.
 - Completion evidence must live in this repository. Two rows (CF-011, CF-013) once cited an
