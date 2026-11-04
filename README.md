@@ -202,10 +202,13 @@ prints an empty or short census without any error. The recipe above refuses fail
 non-2xx responses, missing or invalid `.projects` arrays, and an unfiltered row count that differs
 from the first reported `total`; it prints no family census until all pages pass.
 
-On the reference deployment that prints nineteen rows: the fourteen above, all `enabled=true`, plus
-five `code-factory-duckbrain-*` satellites whose rows this repo does not create (they are not part
-of the shipped family and are not counted in the fourteen) and whose `enabled` state and admission
-mode live only in that scheduler. It also prints `code-factory-duckbrain admission=tasks` against
+That command is the authority, not this paragraph. On the reference deployment, on 2026-11-04, it
+printed nineteen rows: the fourteen above plus five `code-factory-duckbrain-*` satellites whose rows
+this repo does not create (they are not part of the shipped family and are not counted in the
+fourteen) and whose `enabled` state and admission mode live only in that scheduler. Of the fourteen,
+thirteen carried `enabled=true` and `code-factory-qa` carried `enabled=false` — the scheduler had
+disabled that lane on its own failure rate, which is the kind of drift a census catches and a
+hand-written count does not. The same run printed `code-factory-duckbrain admission=tasks` against
 the `cooldown` the loader writes — the drift the command exists to expose.
 
 Evidence for the state of this README: the clone figure is covered by the published audit `docs/audits/code-factory-readme-2026-10-30-20-29-25.md`; the prompt column and the eleven-file/layout census are covered by the published audit `docs/audits/code-factory-readme-2026-10-30-23-28-00.md` (whose command transcript is the `.probe.txt` beside it).
