@@ -24,6 +24,17 @@ PYTHON_MAX_MINOR=14
 MODE="${1:---check}"
 
 hb() { [ -x "$VENV/bin/hermes" ] && echo "$VENV/bin/hermes" || have hermes; }
+hv() {
+  local raw
+  raw=$("$1" --version 2>/dev/null) || return 1
+  raw=${raw%%$'\n'*}
+  if [[ "$raw" =~ (^|[[:space:]])v?([0-9]+\.[0-9]+\.[0-9]+[^[:space:]]*) ]]; then
+    printf '%s\n' "${BASH_REMATCH[2]}"
+  else
+    printf '%s\n' "$raw"
+    return 1
+  fi
+}
 
 check_python_compatibility() {
   local raw version py_major py_minor
@@ -55,9 +66,16 @@ say "harness: hermes (pin $PIN, port $PORT)"
 check_python_compatibility || exit 1
 
 h=$(hb)
+version=
 if [ -n "$h" ]; then
-  ok "binary" "$h"
-  ok "version" "$("$h" --version 2>/dev/null | head -1)"
+  if [ -x "$VENV/bin/hermes" ]; then
+    ok "binary" "$h"
+  else
+    bad "binary" "host-provided $h (not installed by this adapter — run --apply)"
+  fi
+  version=$(hv "$h")
+  [ "$version" = "$PIN" ] && ok "version" "$version (pin $PIN)" \
+    || bad "version" "${version:-unknown} != pin $PIN"
 else
   bad "binary" "absent — run --apply"
 fi
@@ -81,7 +99,10 @@ fi
 
 if [ "$MODE" = "--apply" ]; then
   say "apply"
-  if [ -z "$h" ]; then
+  if [ ! -x "$VENV/bin/hermes" ] || [ "$version" != "$PIN" ]; then
+    if [ -x "$VENV/bin/hermes" ]; then
+      note "venv version ${version:-unknown} != pin $PIN — installing pin"
+    fi
     "$PYTHON_BIN" -m venv "$VENV" || { bad "venv" "creation failed"; exit 1; }
     log_template="$HOME/.hermes-install-$PORT.XXXXXXXX.log"
     if pip_log=$(umask 077; mktemp "$log_template" 2>&1); then

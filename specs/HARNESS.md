@@ -7,7 +7,7 @@ A **harness** is whatever runs the work inside a node. The factory must not care
 | Obligation | How |
 |---|---|
 | Install | `scripts/harness/install-<name>.sh --check` reports absence; `--apply` installs user-space. |
-| Version | `--check` prints the resolved binary and version, not just "ok". |
+| Version | `--check` prints the binary's ownership and measured version; a version mismatch names both the measured value and the pin and FAILs, not just "ok". |
 | Invoke | Accepts a directive (text) and a working directory; runs unattended. |
 | Report | Emits the model it actually served (requested vs served), when it has one. |
 | Fail | Non-zero exit on failure; never a silent success. |
@@ -24,6 +24,12 @@ A **harness** is whatever runs the work inside a node. The factory must not care
 | **aider** | `pip install aider-chat` (venv) | not measured |
 | **goose** | binary | not measured |
 | **pi-agent** | binary | not measured |
+
+Hermes certifies only `$HOME/hermes-venv/bin/hermes` at `HERMES_PIN` (default `0.19.0`).
+A PATH-provided binary is labelled host-provided and FAILs the binary row, even if its
+version matches. `--apply` creates the venv and installs `hermes-agent==$HERMES_PIN`
+when the venv binary is absent, regardless of PATH. A venv version mismatch is named
+and reinstalls the pin; only a matching venv binary earns "already installed".
 
 Only **hermes** has a measured install ladder in this repo. The others ship a documented
 `--check` and a method, and are marked `UNVERIFIED` until someone runs them — an unverified

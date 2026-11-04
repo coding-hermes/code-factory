@@ -1249,6 +1249,101 @@ fi
 rm -rf "$tmpd"
 # END pip-log-path
 
+# BEGIN cf183-pinned-harness
+say "31b. Hermes certifies the pinned venv binary, not a host-provided command (CF-183)"
+tmpd=$(mktemp -d)
+mkdir -p "$tmpd/bin"
+cat > "$tmpd/bin/hermes" <<'EOF'
+#!/bin/sh
+echo 'Hermes Agent v9.9.9-not-the-pin'
+EOF
+cat > "$tmpd/bin/hermes.pin" <<'EOF'
+#!/bin/sh
+echo 'hermes fixture 0.19.0'
+EOF
+cat > "$tmpd/bin/python" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  --version) echo 'Python 3.12.3' ;;
+  '-m venv '*)
+    echo venv >> "$CF183_FIXTURE/calls"
+    mkdir -p "$3/bin"
+    cp "$CF183_FIXTURE/bin/python" "$3/bin/python"
+    ;;
+  '-m pip install --no-cache-dir hermes-agent==0.19.0')
+    echo 'pip hermes-agent==0.19.0' >> "$CF183_FIXTURE/calls"
+    cp "$CF183_FIXTURE/bin/hermes.pin" "$HOME/hermes-venv/bin/hermes"
+    ;;
+  *) exit 99 ;;
+esac
+EOF
+printf '#!/bin/sh\nexit 1\n' > "$tmpd/bin/ss"
+chmod +x "$tmpd/bin/"*
+cf183_run() {
+  env -i PATH="$tmpd/bin:/usr/bin:/bin" HOME="$cf183_home" TMPDIR="$tmpd" \
+    HERMES_PYTHON_BIN="$tmpd/bin/python" HERMES_PIN=0.19.0 \
+    NODE_GATEWAY_PORT=10800 CF183_FIXTURE="$tmpd" \
+    /bin/bash "$HERE/scripts/harness/install-hermes.sh" "$@"
+}
+for arm in host-mismatch host-pin venv-mismatch venv-pin host-banner venv-banner; do
+  cf183_home="$tmpd/$arm"
+  mkdir -p "$cf183_home"
+  : > "$tmpd/calls"
+  cp "$tmpd/bin/hermes.pin" "$tmpd/bin/hermes"
+  if [[ "$arm" = *mismatch ]]; then
+    printf '#!/bin/sh\necho "Hermes Agent v9.9.9-not-the-pin"\n' > "$tmpd/bin/hermes"
+  elif [[ "$arm" = *banner ]]; then
+    printf '#!/bin/sh\necho "Hermes Agent v0.19.0 (2026.7.20) · upstream c419cf7c · local 770a952c (+1 carried commit)"\n' > "$tmpd/bin/hermes"
+  fi
+  if [[ "$arm" = venv-* ]]; then
+    mkdir -p "$cf183_home/hermes-venv/bin"
+    cp "$tmpd/bin/hermes" "$cf183_home/hermes-venv/bin/hermes"
+    expected="  PASS  binary — $cf183_home/hermes-venv/bin/hermes"
+  else
+    expected="  FAIL  binary — host-provided $tmpd/bin/hermes (not installed by this adapter — run --apply)"
+  fi
+  out=$(cf183_run --check 2>&1); rc=$?
+  if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq "$expected" \
+    && { if [[ "$arm" = *mismatch ]]; then
+      printf '%s\n' "$out" | grep -Fxq '  FAIL  version — 9.9.9-not-the-pin != pin 0.19.0' \
+        && ! printf '%s\n' "$out" | grep -q '^  PASS  version'
+    else
+      printf '%s\n' "$out" | grep -Fxq '  PASS  version — 0.19.0 (pin 0.19.0)'
+    fi; }; then
+    say "  PASS  cf183 $arm --check: ownership and measured version vs pin"
+  else
+    say "  FAIL  cf183 $arm --check (exit $rc): $out"; fails=$((fails+1))
+  fi
+  out=$(cf183_run --apply 2>&1); rc=$?
+  if [ "$rc" -eq 1 ] && [ -x "$cf183_home/hermes-venv/bin/hermes" ] \
+    && { if [ "$arm" = venv-pin ] || [ "$arm" = venv-banner ]; then
+      [ ! -s "$tmpd/calls" ] && printf '%s\n' "$out" | grep -Fq 'already installed:'
+    else
+      [ "$(grep -Fxc venv "$tmpd/calls")" = 1 ] \
+        && [ "$(grep -Fxc 'pip hermes-agent==0.19.0' "$tmpd/calls")" = 1 ] \
+        && ! printf '%s\n' "$out" | grep -Fq 'already installed:' \
+        && { [ "$arm" != venv-mismatch ] \
+          || printf '%s\n' "$out" | grep -Fq 'venv version 9.9.9-not-the-pin != pin 0.19.0 — installing pin'; }
+    fi; }; then
+    say "  PASS  cf183 $arm --apply: pinned venv installed or matching venv retained"
+  else
+    say "  FAIL  cf183 $arm --apply (exit $rc): $out"; fails=$((fails+1))
+  fi
+  out=$(cf183_run --check 2>&1); rc=$?
+  if [ "$rc" -eq 1 ] \
+    && printf '%s\n' "$out" | grep -Fxq "  PASS  binary — $cf183_home/hermes-venv/bin/hermes" \
+    && printf '%s\n' "$out" | grep -Fxq '  PASS  version — 0.19.0 (pin 0.19.0)' \
+    && printf '%s\n' "$out" | grep -Fxq 'HERMES: FAIL (2)'; then
+    say "  PASS  cf183 $arm installed --check: owned pin passes, missing port/key still fail"
+  else
+    say "  FAIL  cf183 $arm installed --check (exit $rc): $out"; fails=$((fails+1))
+  fi
+done
+unset -f cf183_run
+unset cf183_home
+rm -rf "$tmpd"
+# END cf183-pinned-harness
+
 # ch:trace row=CF-145 spec=README.md#quick-start test=tests/selftest.sh::quick-start-names-bunker-server doc=README.md prompt=prompts/readme.md evidence=tests/selftest.sh §32 witness=none:local-fixture verdict=none:open-until-judged commit=none:self-referential-hash memory=none:no-lane-role-token
 say "32. the Quick start control-host commands name BUNKER_SERVER in a check row (CF-145)"
 # README's fresh-host promise: with no bunker server, no Crier and no repo, all three Quick
