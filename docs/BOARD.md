@@ -88,7 +88,13 @@ scripts/boardctl validate
 bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 ```
 
-- At this tree: 116 task rows, 168 events. `scripts/boardctl validate` prints
+- **Re-measured 2026-11-04T03:01Z at tip `dae4e7a`:** 127 task rows, 193 events — 40 `complete`,
+  5 `in_progress`, 82 `pending`. `scripts/boardctl validate` prints `RESULT: OK (3 warning(s))`
+  (CF-034's free-form `guard_result`/`ci_result` plus the headerless board); the 44 `probe`-key
+  warnings are gone because CF-129 relanded canon keys (`key uniformity: 127/127 rows`).
+  `tests/selftest.sh` prints `SELFTEST: PASS`, `PASS 127/127 rows parse`, 92 `PASS` rows, 30
+  numbered sections plus lettered arms `4b`/`7b`, at loadavg 15.60.
+- At this tree (earlier snapshot, 116 task rows, 168 events): `scripts/boardctl validate` prints
   `RESULT: OK (47 warning(s))` — 44 rows carrying a free-form `probe` key, CF-034's free-form
   `guard_result`/`ci_result` prose, and the headerless board (no `board.jsonl`), so header-counter
   checks are skipped.

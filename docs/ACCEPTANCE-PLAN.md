@@ -15,6 +15,11 @@ this snapshot without any closure being lost: **CF-053** was deliberately reopen
 02:39 by the QA lane's isolation re-verification (event 181 records the transition; commit `6d801c7`
 names it), and **CF-093** closed in the same window, which is why the `complete` count still reads 38.
 Re-measure this block rather than trusting either snapshot.
+**Delta measured 2026-11-04 03:01 at tip `dae4e7a`:** 127 task rows and 193 events (40 complete,
+5 in_progress, 82 pending); `scripts/boardctl validate` prints `RESULT: OK (3 warning(s))` — CF-034's
+two free-form fields plus the headerless board, down from 54 because CF-129 relanded canon keys;
+`tests/selftest.sh` prints `SELFTEST: PASS` with 92 `PASS` rows and `PASS 127/127 rows parse` at
+loadavg 15.60.
 Nineteen `  FAIL` lines are printed *inside* the suite by fixtures that assert a rejection (§16's
 pre-fix manifest, the disk-floor refusal, the census fail-closed arms, …), so count `SELFTEST:` and
 the suite's counter, never a raw `grep -c '^  FAIL'`. Timing is not a portable number: 9.32 s CPU
