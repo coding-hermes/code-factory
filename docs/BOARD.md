@@ -105,7 +105,7 @@ Observed on 2026-11-03 before the workdir repair: the registered code-factory wo
 health claim. `scripts/board_drift.py` is the re-runnable tool; `tests/selftest.sh` arm 29
 proves its divergent, identical, empty, missing-file and malformed-record fixture paths.
 
-## Current measured state (measured 2026-11-04T08:42Z, on the tree this commit lands)
+## Current measured state (newest snapshot names the tip it was measured at)
 
 Every count below is an output value that moves with each folded row, so measure it instead of
 quoting an older snapshot. The numbers are still typed by hand — CF-081 tracks replacing this block
@@ -117,7 +117,16 @@ scripts/boardctl validate
 bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 ```
 
-- **Re-measured 2026-11-04T08:42Z at tip `202fb61`:** 156 task rows, 295 events — 50 `complete`,
+- **Re-measured 2026-11-04T08:52Z at tip `7232954`:** 158 task rows, 300 events — 51 `complete`,
+  8 `in_progress`, 99 `pending`, no duplicate task or event ids. `scripts/boardctl validate` prints
+  `RESULT: OK (3 warning(s))` (CF-034's free-form `guard_result`/`ci_result` plus the headerless
+  board) and `key uniformity: 158/158 rows carry only canon keys (0 drift)`. `tests/selftest.sh`
+  prints `SELFTEST: PASS` (exit 0), `PASS 158/158 rows parse`, 119 `PASS` rows and 19
+  intentional-fixture `FAIL` rows, 36 numbered sections plus lettered arms `4b`/`7b` (38 arms), at
+  loadavg 6.77 (1 min; host load, not a suite property). Three sibling rows own the structural
+  fixes for this block: **CF-081** (the hand-typed counts), **CF-154** (the warning count does not
+  follow from the board) and **CF-155** (the plan's section count).
+- **Earlier snapshot, 2026-11-04T08:42Z at tip `202fb61` (historical, not current):** 156 task rows, 295 events — 50 `complete`,
   8 `in_progress`, 98 `pending`. `scripts/boardctl validate` prints `RESULT: OK (3 warning(s))`
   (CF-034's free-form `guard_result`/`ci_result` plus the headerless board) and
   `key uniformity: 156/156 rows carry only canon keys (0 drift)`. `tests/selftest.sh` prints
