@@ -329,13 +329,12 @@ rm -rf "$tmpd"
 # Part of section 10: no new numbered section or census change.
 tmpd=$(mktemp -d)
 auth_python=$(command -v python3)
-if "$auth_python" - "$tmpd" <<'PY'
+if "$auth_python" - "$tmpd" "$HERE" <<'PY'
 import os
 from pathlib import Path
 import sys
 
-import yaml
-
+# Fixture generation must work on the same stdlib-only hosts as the gate.
 root = Path(sys.argv[1])
 (root / "bin").mkdir()
 home = root / "home"
@@ -343,22 +342,36 @@ home = root / "home"
 (home / "hermes-venv/bin").mkdir(parents=True)
 # Random throwaway values stay in the private fixture, never in output or argv.
 username, password = (os.urandom(16).hex() for _ in range(2))
-auth = {"username": username, "password": password}
+auth = f"    username: '{username}'\n    password: '{password}'\n"
 configs = {
     "commented": "# dashboard:\n#   basic_auth:\n#     username: ignored\n#     password: ignored\n",
     "empty-value": "dashboard:\n  basic_auth:\n",
-    "real-value": yaml.safe_dump({"dashboard": {"basic_auth": auth}}),
+    "real-value": "dashboard:\n  basic_auth:\n" + auth,
     "block-absent": "dashboard: {}\n",
-    "wrong-key": yaml.safe_dump({"other": {"basic_auth": auth}}),
-    "empty-username": yaml.safe_dump({"dashboard": {"basic_auth": dict(auth, username=" ")}}),
-    "empty-password": yaml.safe_dump({"dashboard": {"basic_auth": dict(auth, password="")}}),
+    "wrong-key": "other:\n  basic_auth:\n" + auth,
+    "empty-username": f'dashboard:\n  basic_auth:\n    username: ""\n    password: \'{password}\'\n',
+    "empty-password": f'dashboard:\n  basic_auth:\n    username: \'{username}\'\n    password: ""\n',
+    "missing-password": f"dashboard:\n  basic_auth:\n    username: '{username}'\n",
+    "missing-username": f"dashboard:\n  basic_auth:\n    password: '{password}'\n",
+    "wrong-indent": "dashboard:\nother:\n  basic_auth:\n" + auth,
     "invalid-yaml": "dashboard: [\n",
+    "invalid-scalar": f"dashboard:\n  basic_auth:\n    username: - invalid\n    password: '{password}'\n",
+    "duplicate-key": "dashboard:\n  basic_auth:\n" + auth + '    username: ""\n',
+    "bad-indent": "dashboard:\n  basic_auth:\n" + auth + "   extra: invalid\n",
+    "tab-indent": "dashboard:\n\tbasic_auth:\n" + auth,
+    "non-string": f"dashboard:\n  basic_auth:\n    username: true\n    password: '{password}'\n",
+    "trailing-comments": "dashboard: # comment\n  basic_auth: # comment\n" + auth.replace("\n", " # comment\n"),
+    "quoted-hash": f'dashboard:\n  basic_auth:\n    username: "{username} # literal" # comment\n    password: \'{password} # literal\' # comment\n',
+    "plain-value": f"dashboard:\n  basic_auth:\n    username: u{username}\n    password: p{password}\n",
 }
 for name, text in configs.items():
     (root / name).write_text(text)
 (root / "credentials").write_text(username + "\n" + password + "\n")
 python = home / "hermes-venv/bin/python"
-python.write_text('#!/usr/bin/env bash\nexec "${AUTH_PYTHON:?}" "$@"\n')
+python.write_text('''#!/usr/bin/env bash
+if [ "${AUTH_ISOLATED:-0}" = 1 ]; then exec "${AUTH_PYTHON:?}" -I -S "$@"; fi
+exec "${AUTH_PYTHON:?}" "$@"
+''')
 python.chmod(0o755)
 stubs = {
     "python": '''#!/usr/bin/env bash
@@ -386,6 +399,26 @@ for name, text in stubs.items():
     path.write_text(text)
     path.chmod(0o755)
 (home / "hermes-venv/bin/hermes").symlink_to(root / "bin/hermes")
+# Exercise the historical bypass and an always-refuse mutation through the same oracle.
+repo = Path(sys.argv[2])
+source = (repo / "scripts/harness/install-hermes.sh").read_text()
+start = source.index("check_public_bind_auth() {")
+end = source.index('\nsay "harness:', start)
+for name, body in {
+    "grep-bypass": '''check_public_bind_auth() {
+  grep -q 'basic_auth:' "$HOME/.hermes/config.yaml"
+}
+''',
+    "always-refuse": '''check_public_bind_auth() {
+  echo 'block absent'
+  return 1
+}
+''',
+}.items():
+    scripts = root / name / "scripts"
+    (scripts / "harness").mkdir(parents=True)
+    (scripts / "harness/install-hermes.sh").write_text(source[:start] + body + source[end:])
+    (scripts / "lib.sh").write_text((repo / "scripts/lib.sh").read_text())
 PY
 then
   auth_fixture_run() {
@@ -393,37 +426,62 @@ then
     rm -f "$tmpd/launch"
     env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" HERMES_PYTHON_BIN="$tmpd/bin/python" \
       HERMES_PIN=0.19.0 NODE_GATEWAY_PORT=10800 FAILED=0 AUTH_FIXTURE="$tmpd" \
-      AUTH_PYTHON="$auth_python" AUTH_HTTP_CODE="${2:-200}" \
-      /bin/bash "$HERE/scripts/harness/install-hermes.sh" --apply
+      AUTH_PYTHON="$auth_python" AUTH_ISOLATED="$auth_isolated" AUTH_HTTP_CODE="${2:-200}" \
+      /bin/bash "${3:-$HERE/scripts/harness/install-hermes.sh}" --apply
   }
-  for arm in commented empty-value real-value block-absent wrong-key empty-username empty-password invalid-yaml; do
-    out=$(auth_fixture_run "$arm" 2>&1); rc=$?
+  auth_fixture_check() {
+    local arm="$1" out rc reason expected launch_expected expected_rc launch_observed
+    out=$(auth_fixture_run "$arm" 200 "${2:-$HERE/scripts/harness/install-hermes.sh}" 2>&1); rc=$?
     case "$arm" in
       commented) reason=commented ;;
-      block-absent|wrong-key) reason='block absent' ;;
-      invalid-yaml) reason='block absent (invalid YAML)' ;;
+      block-absent|wrong-key|wrong-indent) reason='block absent' ;;
+      invalid-yaml|invalid-scalar|duplicate-key|bad-indent|tab-indent) reason='block absent (invalid YAML)' ;;
       *) reason='empty value (username and password must both be non-empty)' ;;
     esac
-    if [ "$arm" = real-value ]; then
-      expected='  PASS  gateway_start — /api/status -> 200'
-      launch_expected='serve launch reached'
-      expected_rc=1  # The initial port check sees no listener; gateway_start itself is green.
-    else
-      expected="  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — $reason"
-      launch_expected=''
-      expected_rc=1
-    fi
+    case "$arm" in
+      real-value|trailing-comments|quoted-hash|plain-value)
+        expected='  PASS  gateway_start — /api/status -> 200'
+        launch_expected='serve launch reached' ;;
+      *)
+        expected="  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — $reason"
+        launch_expected='' ;;
+    esac
+    expected_rc=1  # Initial port check has no listener; grade gateway_start and launch separately.
     launch_observed=$(cat "$tmpd/launch" 2>/dev/null || true)
     if [ "$rc" -eq "$expected_rc" ] \
       && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ] \
       && [ "$launch_observed" = "$launch_expected" ] \
       && ! printf '%s\n' "$out" | grep -Fqf "$tmpd/credentials"; then
-      say "  PASS  CF-071 $arm: exit $rc, launch=${launch_observed:-not reached}"
+      say "  PASS  CF-071 $auth_mode $arm: exit $rc, launch=${launch_observed:-not reached}"
       printf '%s\n' "$expected"
     else
-      say "  FAIL  CF-071 $arm: exit $rc, launch=${launch_observed:-not reached}, expected gateway_start row missing or credentials exposed"
-      fails=$((fails+1))
+      say "  FAIL  CF-071 $auth_mode $arm: exit $rc, launch=${launch_observed:-not reached}, expected gateway_start row missing or credentials exposed"
+      return 1
     fi
+  }
+  auth_default_python="$auth_python"
+  for auth_mode in no-PyYAML installed; do
+    auth_python="$auth_default_python"
+    auth_isolated=0
+    if [ "$auth_mode" = no-PyYAML ]; then
+      # Prefer the stock supported interpreter; -I -S makes this deterministic on all hosts.
+      auth_python=$(command -v python3.12 || printf '%s' "$auth_default_python")
+      auth_isolated=1
+    fi
+    for arm in commented empty-value real-value block-absent wrong-key empty-username empty-password \
+      missing-password missing-username wrong-indent invalid-yaml invalid-scalar duplicate-key bad-indent tab-indent \
+      non-string trailing-comments quoted-hash plain-value; do
+      auth_fixture_check "$arm" || fails=$((fails+1))
+    done
+    for mutation in grep-bypass always-refuse; do
+      arm=commented
+      [ "$mutation" != always-refuse ] || arm=real-value
+      if auth_fixture_check "$arm" "$tmpd/$mutation/scripts/harness/install-hermes.sh" >/dev/null; then
+        say "  FAIL  CF-071 $auth_mode accepted $mutation mutation"; fails=$((fails+1))
+      else
+        say "  PASS  CF-071 $auth_mode rejected $mutation mutation"
+      fi
+    done
   done
   # The same valid config must produce a red measured gateway_start when HTTP is 503.
   out=$(auth_fixture_run real-value 503 2>&1); rc=$?
@@ -435,9 +493,9 @@ then
   else
     say "  FAIL  CF-071 real-value red control did not fail on HTTP 503 (exit $rc)"; fails=$((fails+1))
   fi
-  unset -f auth_fixture_run
+  unset -f auth_fixture_run auth_fixture_check
 else
-  say "  FAIL  CF-071 public-bind-auth fixture setup (Python with PyYAML required)"; fails=$((fails+1))
+  say "  FAIL  CF-071 public-bind-auth fixture setup (stdlib Python required)"; fails=$((fails+1))
 fi
 rm -rf "$tmpd"
 # END public-bind-auth

@@ -67,6 +67,7 @@ check_public_bind_auth() {
   local config_python="$PYTHON_BIN"
   [ ! -x "$VENV/bin/python" ] || config_python="$VENV/bin/python"
   "$config_python" - "$HOME/.hermes/config.yaml" 2>/dev/null <<'PY'
+import json
 import re
 import sys
 from pathlib import Path
@@ -77,17 +78,100 @@ def refuse(reason):
     sys.exit(1)
 
 
-try:
-    import yaml
-except ImportError:
-    refuse("block absent (YAML parser unavailable)")
+# Deliberately accept a strict YAML subset, identically with or without PyYAML.
+# Unsupported syntax (aliases, tags, flow collections, multiline scalars) refuses.
+# No parser dependency may turn a valid block into an unavailable-parser refusal.
+
+
+def content(line):
+    quote = None
+    i = 0
+    while i < len(line):
+        char = line[i]
+        if quote == '"' and char == "\\":
+            i += 2
+            continue
+        if quote == "'" and line[i:i + 2] == "''":
+            i += 2
+            continue
+        if quote:
+            if char == quote:
+                quote = None
+        elif char == "#" and (i == 0 or line[i - 1].isspace()):
+            return line[:i].rstrip()
+        elif char in "\"'" and (i == 0 or line[i - 1].isspace()):
+            quote = char
+        i += 1
+    if quote:
+        raise ValueError
+    return line.rstrip()
+
+
+def scalar(value):
+    if value.startswith('"'):
+        result = json.loads(value)
+        if not isinstance(result, str):
+            raise ValueError
+        return result
+    if value.startswith("'"):
+        if not re.fullmatch(r"'(?:[^']|'')*'", value):
+            raise ValueError
+        return value[1:-1].replace("''", "'")
+    if value == "{}":
+        return {}
+    if (value[0] in "[]{}&*!|>@`%"
+            or re.match(r"[-?:](?:\s|$)", value)
+            or re.search(r":(?:\s|$)", value)):
+        raise ValueError
+    # Plain YAML booleans, nulls, numbers and timestamps are not string scalars.
+    if value.lower() in {"null", "~", "true", "false", "yes", "no", "on", "off"}:
+        return None
+    if re.fullmatch(
+        r"[-+]?(?:[0-9][0-9_]*(?:\.[0-9_]*)?(?:[eE][-+]?[0-9]+)?"
+        r"|\.[0-9_]+(?:[eE][-+]?[0-9]+)?|0[xX][0-9a-fA-F_]+"
+        r"|0[bBoO][0-9_]+|[0-9_]+(?::[0-9_]+)+(?:\.[0-9_]*)?"
+        r"|\.(?:inf|Inf|INF|nan|NaN|NAN))", value
+    ) or re.match(r"[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:$|[Tt\s])", value):
+        return None
+    return value
+
+
+def mapping(lines, index, indent):
+    result = {}
+    while index < len(lines):
+        depth, line = lines[index]
+        if depth < indent:
+            break
+        match = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_.-]*):(?:\s+(.*))?", line)
+        if depth != indent or not match or match[1] in result:
+            raise ValueError
+        key, value = match[1], match[2]
+        index += 1
+        if index < len(lines) and lines[index][0] > indent:
+            if value:
+                raise ValueError
+            result[key], index = mapping(lines, index, lines[index][0])
+        else:
+            result[key] = scalar(value) if value else None
+    return result, index
+
+
 try:
     text = Path(sys.argv[1]).read_text(encoding="utf-8")
 except (OSError, UnicodeError):
     refuse("block absent (config unreadable)")
 try:
-    config = yaml.safe_load(text)
-except yaml.YAMLError:
+    lines = []
+    for raw in text.splitlines():
+        if "\t" in raw or any(ord(char) < 32 for char in raw):
+            raise ValueError
+        line = content(raw)
+        if line.strip():
+            lines.append((len(line) - len(line.lstrip(" ")), line.lstrip(" ")))
+    config, end = mapping(lines, 0, 0)
+    if end != len(lines):
+        raise ValueError
+except (ValueError, RecursionError):
     refuse("block absent (invalid YAML)")
 dashboard = config.get("dashboard") if isinstance(config, dict) else None
 if not isinstance(dashboard, dict) or "basic_auth" not in dashboard:
