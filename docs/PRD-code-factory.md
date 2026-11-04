@@ -23,7 +23,7 @@ column exists to prevent.
 | CF-107 | A node proves itself with a round trip whose artifact digest is recomputed on the control host. | **No test.** Required: `scripts/verify-node.sh --agent A --server S --port P --artifact PATH` exits 0 with matching 64-hex digests, and exits nonzero after one byte of the pulled artifact is mutated. A node-reported digest alone is never a pass (`specs/ENVELOPE.md`, `AGENTS.md` rule 10). |
 | CF-108 | Credentials arrive as one bundle, mode 600, never as an argument; deleted after use. | **No test.** `tests/selftest.sh` §6 only greps for literal `KEY=` assignments in the tree; it proves nothing about argv, logs, mode or deletion. Required: `stat -c '%a' <bundle>` = `600`, zero occurrences of the synthetic value in the provisioning transcript and `/proc/<pid>/cmdline`, and `test ! -e <bundle>` after provisioning. |
 | CF-109 | A node refuses work below a measured disk floor, naming the number. | **Partial test.** `bash tests/selftest.sh` §12 (floor resolution and malformed-value refusal) and §13 (`FAIL disk-floor` before any install). The **below-floor boundary is untested** — no arm forces free space under the floor and asserts the refusal names both the measured free space and the floor. The arm is cheap and needs no real disk: `free_gb` is `df -Pk "$1" | awk 'NR==2{printf "%.1f", $4/1048576}'` (`scripts/lib.sh:32`), so a PATH-local `df` stub whose second line carries `1048576` in column 4 must make `bash -c '. scripts/lib.sh; require_disk . 5'` exit 1 and print exactly `  FAIL  disk — 1.0 GB free < floor 5 GB at .` (measured at `f49d85b` with that stub), while the same stub at `5242880` (5.0 GB) must print the `PASS disk` row and exit 0. |
-| CF-110 | Destroying a node and re-running creation reproduces it with no manual step. | **No test — and no destroy path ships** (`grep -rn destroy scripts/*.sh` = 0 hits), so the requirement is unsatisfiable in v1. Blocked on CF-008; until that lands this row must be reported BLOCKED, never PASS. |
+| CF-110 | Destroying a node and re-running creation reproduces it with no manual step. | **No test — and no destroy path ships** (`grep -rn destroy scripts/*.sh` = 2 hits at `bc68e59`, both advisory rather than code paths: the comment at `scripts/node-create.sh:12` and the `printf 'cleanup required: bunker destroy …'` at `:54`, which hands the operator a manual command instead of destroying anything), so the requirement is unsatisfiable in v1. Blocked on CF-008; until that lands this row must be reported BLOCKED, never PASS. |
 | CF-111 | A node's manifest records project, repo, ref, harness, gateway port, node id, created-by. | **No test, and the field list contradicted `specs/NODE.md`.** The spec's manifest requires ten fields — `node_id`, `project`, `repo.{origin,ref,path}`, `harness.{name,version,port}`, `bus.{agent_id,base}`, `created_by`, `created_at` — and the spec is the design authority (`AGENTS.md` rule 1), so this row now names the same ten. Required: a parse-and-assert check over `$HOME/.node/node.json` that fails naming each absent key; none ships today (`grep -rln node.json tests/` = 0) and the writer currently omits two of them (CF-078). |
 | CF-112 | The scheduler can target a node by lane; removing the target returns the lane to the local path with no code change. | **No test.** The requirement names `dispatch-targets.jsonl`, but no script or test references that file (`grep -rl dispatch-targets scripts tests` = 0 hits) — the artifact does not exist in the shipped code. Required: add the target, run one real tick and record its id plus the delivered directive; remove it, run a second real tick, and show the lane ran locally with `git diff` on the repo empty between the two ticks. |
 
@@ -39,8 +39,8 @@ One project (crier), one node, one directive that travelled over crier and reach
 gateway, one commit produced there, one artifact digest verified back on the control host, and a
 recorded FAIL when the gate is made to fail.
 
-**Status 2026-11-04T06:20Z (board re-measured at `1aeb0c7` — 137 task rows, 233 events; the node-run
-evidence below is the 02:35Z measurement at `d02916e`): NOT MET.** One leg moved since the `80fca8b`
+**Status 2026-11-04T07:38Z (board re-measured at `bc68e59` — 148 task rows, 273 events: 49 complete,
+8 in_progress, 91 pending; the node-run evidence below is the 02:35Z measurement at `d02916e`): NOT MET.** One leg moved since the `80fca8b`
 measurement: a directive is now recorded arriving at a node and executing there. The dispatch at
 19:37:51 handed the node the envelope itself as its prompt (`CF-139`, P0, open), and two later node
 runs ended `exit 124` at a 32.1 s caller-derived kill instead of the old 243.4 s constant, with the
@@ -51,7 +51,7 @@ a node, an artifact digest recomputed from pulled bytes on the control host, and
 a deliberately broken gate there. `CF-075` and `CF-077` remain closed (`77caa02` + selftest §16;
 `1232f7a` + §17/§18). The other row this list gained on 2026-11-04, the node-create `CRIER_URL` gap
 `CF-126`, was closed at `85f852b` on the `dd7f64bc` verdict, so it is not listed among the blockers.
-The open defects this milestone's legs depend on are `CF-080` (`--apply` clones
+Rows that are open, leg-adjacent and deliberately EXCLUDED from the blocker list, one clause each so membership stays decidable at `bc68e59`: `CF-162` (verify-node.sh has no bus leg) and `CF-163` (the public `master` lineage) stop none of the four legs and stay board-only, as do the three rows the dogfood lane filed after the `1aeb0c7` measurement — `CF-172` (a layer-40 message tells the caller to pass `--repo` it already passed), `CF-173` (the layer-00 reach probe records `000` when `--max-time` cuts a transfer, so a URL that answered 200 reads unreachable) and `CF-174` (a harness `version` row prints `PASS` with an empty measurement). Every other open row is outside these legs by subject — v1-scope features (`CF-003`, `CF-006`), node sizing (`CF-007`), scheduler throughput (`CF-134`) and the repository/tooling rows below `P1`. The open defects this milestone's legs depend on are `CF-080` (`--apply` clones
 the workspace after the bus layer has already FAILED, manufacturing the repo-with-no-bus node
 `AGENTS.md` rule 9 forbids), the never-exercised legs `CF-001` (scheduler→crier dispatch has never
 completed a full arm/tick cycle), `CF-004` (no round trip through the node's own gateway), `CF-110`
@@ -70,10 +70,7 @@ scripts/ specs/` = 0 hits) far below the 15 m 40 s the scheduler budgets for the
 `dashboard.basic_auth`, so `install-hermes.sh:112` refuses the public bind and a node created by the
 documented path never starts the gateway the directive leg has to reach. Reproduced 2026-11-04T06:13Z:
 `installer_basic_auth=3 create_path_basic_auth=scripts/node-create.sh:0,scripts/project-node.sh:0,`
-plus `refused: a public bind needs dashboard.basic_auth`, probe exit 0). Membership was tested for
-every open row at `1aeb0c7`: `CF-162` (verify-node.sh has no bus leg) and `CF-163` (the public
-`master` lineage) are open and leg-adjacent but neither stops one of the four legs, so both stay
-board-only. The list is decidable, not editorial: read
+plus `refused: a public bind needs dashboard.basic_auth`, probe exit 0). The list is decidable, not editorial: read
 `jq -r 'select(.status!="complete") | [.id,.priority] | @tsv' .coding-hermes/board/tasks.jsonl`, then
 require every open row whose failure stops one of the four legs named above to appear here; rows
 outside those legs (v1 scope features such as foreign harnesses or the deploy-key lane) belong to the

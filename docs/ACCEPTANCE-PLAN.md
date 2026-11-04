@@ -2,7 +2,7 @@
 
 **Scope:** CF-101–CF-112 in [`PRD-code-factory.md`](PRD-code-factory.md), with contract details in `specs/NODE.md`, `specs/HARNESS.md`, and `specs/ENVELOPE.md`. This plan distinguishes source-level evidence from tests actually run. A passing repository self-test is not proof that every requirement is accepted.
 
-**Current state (re-measured 2026-11-04T07:25Z at tip `20f93ad`):** `tests/selftest.sh` carries 35 sections — numbered 1 through 35 — plus two lettered sub-arms, §4b and §7b, which the section regex `^say "[0-9]+\.` does not count, so the tree carries 37 arms — and exits 0 (`SELFTEST: PASS`, 109 `PASS` rows, 19 `FAIL` rows, every one an intentional negative fixture) at loadavg 9.72, which measures the sibling lanes and judges sharing this host, not a suite property. The board at tip `20f93ad` carries 144 task rows and 264 events. §34 landed at `5794a49` (CF-163 AC3) five minutes after the 33-section snapshot at `1aeb0c7`; §35 (CF-153 — node-create accepts and forwards `--ref`) is this change's arm and is governed by board row CF-153, and the same tree measured 34 sections with 106 `PASS` rows at `20f93ad` before it landed. The census in `docs/audits/cf099-prd-drift-probe.sh` compares this number against the WORKING TREE rather than the tip it names, so any lane that adds a section turns this line red until the count is re-measured — which is exactly how the stale 33 was found. Every snapshot total that follows is pinned to the tip it names and is historical, not current. The stamp this line used to carry (`2026-11-04 22:43` at `7989ba3`) mixed the 2026-11-03 local clock with the next day's UTC date, so it named a measurement ~18 h in the tick's future; stamps in this file are UTC, written `T…Z`, and name the tip they were measured at.
+**Current state (re-measured 2026-11-04T07:38Z at tip `bc68e59`):** `tests/selftest.sh` carries 35 sections — numbered 1 through 35 — plus two lettered sub-arms, §4b and §7b, which the section regex `^say "[0-9]+\.` does not count, so the tree carries 37 arms — and exits 0 (`SELFTEST: PASS`, 109 `PASS` rows, 19 `FAIL` rows, every one an intentional negative fixture) at loadavg 11.60 (1 min), which measures the sibling lanes and judges sharing this host, not a suite property. The board at tip `bc68e59` carries 148 task rows and 273 events. §34 landed at `5794a49` (CF-163 AC3) five minutes after the 33-section snapshot at `1aeb0c7`; §35 (CF-153 — node-create accepts and forwards `--ref`) landed at `a112726` and is governed by board row CF-153. Sections, rows and events on this line are measured at ONE tip and quoted for that tip only: the `20f93ad` snapshot this line used to carry paired 35 working-tree sections with a tip that carries 34 (`git show 20f93ad:tests/selftest.sh | grep -cE '^say "[0-9]+\.'` = 34; 144 task rows and 264 events), so it named a measurement no reader could reproduce from the tip printed beside it. The census in `docs/audits/cf099-prd-drift-probe.sh` compares this number against the WORKING TREE rather than the tip it names, so any lane that adds a section turns this line red until the count is re-measured — which is exactly how the stale 33 was found. Every snapshot total that follows is pinned to the tip it names and is historical, not current. The stamp this line used to carry (`2026-11-04 22:43` at `7989ba3`) mixed the 2026-11-03 local clock with the next day's UTC date, so it named a measurement ~18 h in the tick's future; stamps in this file are UTC, written `T…Z`, and name the tip they were measured at.
 
 **Evidence snapshot (re-measured 2026-11-04 02:35 at tip `d02916e`):** `tests/selftest.sh` was run from
 the repository root and exited 0 (`SELFTEST: PASS`, 88 `PASS` rows, suite counter `fails=0`) over
@@ -51,14 +51,17 @@ parity, credentials lifecycle, the manifest schema, destruction/recreation, sche
 the control-host artifact round trip — those cells say **no test** on purpose.
 
 **Sections with no requirement (the reverse direction).** A section serves a requirement only if that
-requirement's `Verified by` cell above names it. Twelve of the 35 arms are named: §2, §3, §4, §4b, §5,
-§6, §12, §13, §14, §15, §16 and §20 (the ids are collected mechanically with
-`grep -oE '§[0-9]+[a-z]?' docs/PRD-code-factory.md | sort -u`). The remaining 23 — §1, §7, §7b, §8,
-§9, §10, §11, §17, §18, §19, §21, §22–§27, §28, §29, §30, §31, §32 and §33 — test repository and
+requirement's `Verified by` cell above names it. Twelve of the 37 arms are named: §2, §3, §4, §4b, §5,
+§6, §12, §13, §14, §15, §16 and §20. The mechanical sweep over the whole document,
+`grep -oE '§[0-9]+[a-z]?' docs/PRD-code-factory.md | sort -u`, returns **14** ids rather than 12: it
+also catches §17 and §18, which are named only in the milestone block, where they certify `CF-077`
+(a board row, not a `CF-101`–`CF-112` requirement) — so they count as unnamed for this total and
+carry their own row below. The remaining 25 — §1, §7, §7b, §8,
+§9, §10, §11, §17, §18, §19, §21, §22–§27, §28, §29, §30, §31, §32, §33, §34 and §35 — test repository and
 fleet tooling (board parsing and the board gate, prompt inventory, lane targets, repo-url guards, the
 census and README arms), not a CF-101–CF-112 requirement, and each is governed by the board row it
 names: §7b `CF-088`, §19 `CF-085`, §21 `CF-091`, §29 `CF-114`, §31 `CF-127`, §30 `CF-093`, §32
-`CF-145`, §33 `CF-119`, §17–§18 `CF-077`. Some of these overlap a requirement's subject without
+`CF-145`, §33 `CF-119`, §34 `CF-163` AC3, §35 `CF-153`, §17–§18 `CF-077`. Some of these overlap a requirement's subject without
 deciding it (§10 exercises the Hermes adapter's Python refusal, which is CF-106 evidence but not the
 two-adapter contract CF-106 demands); the cell stays the authority, so the overlap is recorded here
 rather than promoted into it. A section that is neither named by a `Verified by` cell nor by a board
@@ -90,7 +93,7 @@ A green suite is not PRD coverage, and the reverse gap matters as much as the fo
 31 arms, 88 `PASS` rows — and only three requirements have an arm that can fail on them (`CF-102` ←
 §2 and §14, `CF-105` ← §5, `CF-109` ← §12 and §13 partially, plus `CF-127` ← §31 as of the CF-127
 landing). Every other arm is governed by a spec, a
-rule or a board row, and the mapping below names every numbered section in the current tree — 34, plus both lettered arms, so 36 arms, and 31 arms at that tip — so that a new arm cannot arrive without a
+rule or a board row, and the mapping below names every numbered section in the current tree — 35, plus both lettered arms, so 37 arms, and 31 arms at the `d02916e` tip — so that a new arm cannot arrive without a
 named authority. The mapping is a promise this table keeps, not one the tooling enforces: the
 section census in `docs/audits/cf099-prd-drift-probe.sh` counts only numbered lines, so a lettered arm
 lands uncounted (`CF-113`, pending, owns that fix).
@@ -126,6 +129,7 @@ lands uncounted (`CF-113`, pending, owns that fix).
 | §32 the Quick start control-host commands name `BUNKER_SERVER` in a check row | board `CF-145` (README's fresh-host promise was false for two of three commands; the arm pins the env name in the check row) |
 | §33 the board-lock adjudicator proves a holder before calling a lock held | board `CF-119` (a 0-byte `.lock` with no consumer and no holder stood every lane down; the arm demands a proven holder) |
 | §34 a posture doc's gitleaks claim names its scan scope | board `CF-163` AC3 + `scripts/check_scan_scope.py` (a main-scoped scan reads green while the published `master` lineage carried 547 findings in 64 commits, so the claim must name its `--log-opts`) |
+| §35 node-create accepts and forwards `--ref` | board `CF-153` (README step 3 passes a ref; before `a112726` the flag reached no staged command — the arm runs `node-create.sh --staged-files --ref master` and requires exit 0, a byte-identical five-file staged set and no `unknown arg:` row) |
 
 These sections are legitimate and must not be deleted to "clean up" the mapping: they serve
 `AGENTS.md` rules, the specs and this board. They must not be counted as acceptance of
