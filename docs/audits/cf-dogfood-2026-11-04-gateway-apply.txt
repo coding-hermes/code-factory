@@ -1,0 +1,57 @@
+Dogfood walk — node harness --apply, gateway leg — 2026-11-04
+=============================================================
+
+Tick:      code-factory-duckbrain-dogfood-2026-11-04-02-20-15
+Lane:      code-factory-duckbrain / dogfood
+Tree:      clean copy of origin/main @ 1da7f24302965e27c0010e0e8704558733c9e560
+           (git archive of the published ref; the canonical checkout was not written)
+Host:      control host only — no bunker agent was spawned for this arm
+
+Command (run from the repo root, fresh empty HOME, nothing inherited):
+
+    env -i HOME="$HOME_FRESH" PATH=/usr/local/bin:/usr/bin:/bin \
+      HERMES_PYTHON_BIN=/usr/bin/python3.12 \
+      bash scripts/harness/install-hermes.sh --apply
+
+Transcript (verbatim, no paths rewritten — the run emitted none):
+
+    harness: hermes (pin 0.19.0, port 10800)
+      PASS  python — 3.12.13 (hermes-agent 0.19.0 requires >=3.11,<3.14)
+      FAIL  binary — absent — run --apply
+      FAIL  port — nothing on :10800
+      FAIL  inference_key — no provider key — a turn dies at 'No inference provider configured'
+    apply
+      PASS  install — Hermes Agent v0.19.0 (2026.7.20)
+      FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml
+
+    HERMES: FAIL (4)
+
+Reading
+-------
+
+The install succeeded and the gateway was refused in the same run. The refusal is
+`scripts/harness/install-hermes.sh:100`, reached because line 94 greps
+`~/.hermes/config.yaml` for `basic_auth` and the file does not exist in a fresh HOME.
+
+Nothing in the documented create path produces that file:
+
+    $ grep -c basic_auth scripts/node-create.sh scripts/project-node.sh
+    scripts/node-create.sh:0
+    scripts/project-node.sh:0
+    $ grep -c hermes/config.yaml scripts/node-create.sh scripts/project-node.sh
+    scripts/node-create.sh:0
+    scripts/project-node.sh:0
+
+`node-create.sh --staged-files` stages `project-node.sh`, `lib.sh`, `disk_floor.py`,
+`reclaim_disk.py` and `harness/install-<harness>.sh` — no config. `docs/OPERATIONS.md:80`
+states the requirement ("It refuses to start a public bind unless `$HOME/.hermes/config.yaml`
+contains `basic_auth`") but names no command that stages the block, and the README's step 3
+("make one") does not mention it.
+
+Consequence for a reader following the README: step 3 ends `NODE INCOMPLETE` with the gateway
+refused, `verify-node.sh gateway_reachable` cannot pass, and the Status table's "Round trip
+through the node's own gateway" (CF-004) is unreachable by the documented path. The
+remaining 3 FAIL rows in the transcript are the documented fresh-node state (binary, port,
+inference key); `gateway_start` is the one no documented action clears.
+
+Filed as board row CF-150 (filed by this tick).
