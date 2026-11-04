@@ -1,0 +1,15 @@
+commit 72329546435a861b5b196864c07f589acd6cb078
+Merge: 7d36b30 d8ceb51
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Wed Nov 4 03:46:25 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Wed Nov 4 03:46:25 2026 -0500
+
+    merge: land the CF-183/CF-184 filing over the docs/sync tip
+
+ .gitreins/history/2026-11-04/ac2d64d2/commit.patch | 170 +++++++++++++++++++++
+ .gitreins/history/2026-11-04/ac2d64d2/summary.md   |  40 +++++
+ .gitreins/history/2026-11-04/ac2d64d2/verdict.json | 131 ++++++++++++++++
+ docs/BOARD.md                                      |  16 +-
+ .../code-factory-sync-2026-11-04-0842-refire.md    |  87 +++++++++++
+ 5 files changed, 439 insertions(+), 5 deletions(-)

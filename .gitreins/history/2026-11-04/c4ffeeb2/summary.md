@@ -1,0 +1,32 @@
+# Verdict: CF-DOGFOOD-20261104-0841
+
+**Task:** dogfood walk: file two re-measured friction rows for the Hermes adapter pin and the optional-tool hint
+**Evaluated:** 2026-11-04T08:48:38.669383
+**Result:** ✓ PASS
+
+## Pipeline Stages
+
+- ✓ **tier1**
+  -   ✓ lint: scanners: nice=nice -n 10
+  ✓ secrets: secrets: scanners=gitleaks+builtin cross-check
+  ✓ tests: scanners: nice=nice -n 10
+- ✓ **tier2**
+  - COMPLETE
+  ✓ The board at the published tip gains exactly two rows (adapter certifies any hermes on PATH as the pin and --apply never installs it; project-node reports jq and rg as 'some repos tests need node'), each with a probe that reproduces its own finding from the repo alone, one task_created event per row, no duplicate ids, every line parses under jq, bash scripts/boardctl validate prints RESULT: OK, and bash tests/selftest.sh prints SELFTEST: PASS with rc 0 at the judged commit.: Exactly two rows added by 9456e75 (`git show 9456e75 -- .coding-hermes/board/tasks.jsonl | grep -c '^+{'` = 2): CF-183 "install-hermes.sh certifies ANY `hermes` on PATH as the pinned harness ... --apply then reports the pin 'already installed' and never creates the venv" and CF-184 "project-node.sh reports every missing optional tool as 'some repos' tests need node', so jq and rg both tell the operator to install node" — both match the criterion's two findings; both carry the same canon key set as sibling rows (probe, acceptance_criteria, reasoning, detail, ...). Exactly two events added (`grep -c '^+{'` on events.jsonl = 2): id 298 task_created CF-183, id 299 task_created CF-184 (jq-verified). Probes reproduce their own findings from the repo alone, run at both HEAD and 9456e75: CF-183 -> `PASS binary — <tmp>/hermes`, `PASS version — Hermes Agent v9.9.9-not-the-pin`, `HERMES: FAIL (1)`, `.. already installed: Hermes Agent v9.9.9-not-the-pin`, `VENV_PRESENT=no`; CF-184 -> prints scripts/project-node.sh:208-209 `for t in jq rg node` / `warn "tool:$t" "missing (some repos' tests need node)"` then `WARN tool:jq — missing (some repos' tests need node)`, `WARN tool:rg — missing (some repos' tests need node)`, `NODE: PASS`. No duplicate ids: `jq -r .id tasks.jsonl | sort | uniq -d` and same for events.jsonl both empty. Every line parses under jq: `jq -e . tasks.jsonl` and `jq -e . events.jsonl` both exit 0. `bash scripts/boardctl validate` -> `rows: 158 tasks, 300 events, 0 fixtures`, `key uniformity: 158/158 rows carry only canon keys (0 drift)`, `RESULT: OK (3 warning(s))`, RC=0 (the 3 warnings are pre-existing CF-034 free-form guard_result/ci_result plus the headerless board). `bash tests/selftest.sh` -> RC=0, tail `SELFTEST: PASS`, `PASS 158/158 rows parse`, 119 PASS rows / 19 intentional-fixture FAIL rows, 36 numbered sections. (Note: the BOARD.md measured-state block landed by d1342ac still quotes 156 rows/295 events at tip 202fb61 — accurate for that pre-filing tip, stale by the two new rows at the judged commit — but the criterion's stated gates, validate RESULT: OK and SELFTEST: PASS rc 0, both hold.)
+The judged commit adds exactly the two required friction rows (CF-183 adapter pin, CF-184 jq/rg hint) with self-reproducing probes and one task_created event each, no duplicate ids, all lines jq-parseable, boardctl validate RESULT: OK and selftest SELFTEST: PASS rc 0.
+
+## Summary
+
+Judge Result: CF-DOGFOOD-20261104-0841
+
+Stage tier1: PASS
+    ✓ lint: scanners: nice=nice -n 10
+  ✓ secrets: secrets: scanners=gitleaks+builtin cross-check
+  ✓ tests: scanners: nice=nice -n 10
+
+Stage tier2: PASS
+  COMPLETE
+  ✓ The board at the published tip gains exactly two rows (adapter certifies any hermes on PATH as the pin and --apply never installs it; project-node reports jq and rg as 'some repos tests need node'), each with a probe that reproduces its own finding from the repo alone, one task_created event per row, no duplicate ids, every line parses under jq, bash scripts/boardctl validate prints RESULT: OK, and bash tests/selftest.sh prints SELFTEST: PASS with rc 0 at the judged commit.: Exactly two rows added by 9456e75 (`git show 9456e75 -- .coding-hermes/board/tasks.jsonl | grep -c '^+{'` = 2): CF-183 "install-hermes.sh certifies ANY `hermes` on PATH as the pinned harness ... --apply then reports the pin 'already installed' and never creates the venv" and CF-184 "project-node.sh reports every missing optional tool as 'some repos' tests need node', so jq and rg both tell the operator to install node" — both match the criterion's two findings; both carry the same canon key set as sibling rows (probe, acceptance_criteria, reasoning, detail, ...). Exactly two events added (`grep -c '^+{'` on events.jsonl = 2): id 298 task_created CF-183, id 299 task_created CF-184 (jq-verified). Probes reproduce their own findings from the repo alone, run at both HEAD and 9456e75: CF-183 -> `PASS binary — <tmp>/hermes`, `PASS version — Hermes Agent v9.9.9-not-the-pin`, `HERMES: FAIL (1)`, `.. already installed: Hermes Agent v9.9.9-not-the-pin`, `VENV_PRESENT=no`; CF-184 -> prints scripts/project-node.sh:208-209 `for t in jq rg node` / `warn "tool:$t" "missing (some repos' tests need node)"` then `WARN tool:jq — missing (some repos' tests need node)`, `WARN tool:rg — missing (some repos' tests need node)`, `NODE: PASS`. No duplicate ids: `jq -r .id tasks.jsonl | sort | uniq -d` and same for events.jsonl both empty. Every line parses under jq: `jq -e . tasks.jsonl` and `jq -e . events.jsonl` both exit 0. `bash scripts/boardctl validate` -> `rows: 158 tasks, 300 events, 0 fixtures`, `key uniformity: 158/158 rows carry only canon keys (0 drift)`, `RESULT: OK (3 warning(s))`, RC=0 (the 3 warnings are pre-existing CF-034 free-form guard_result/ci_result plus the headerless board). `bash tests/selftest.sh` -> RC=0, tail `SELFTEST: PASS`, `PASS 158/158 rows parse`, 119 PASS rows / 19 intentional-fixture FAIL rows, 36 numbered sections. (Note: the BOARD.md measured-state block landed by d1342ac still quotes 156 rows/295 events at tip 202fb61 — accurate for that pre-filing tip, stale by the two new rows at the judged commit — but the criterion's stated gates, validate RESULT: OK and SELFTEST: PASS rc 0, both hold.)
+The judged commit adds exactly the two required friction rows (CF-183 adapter pin, CF-184 jq/rg hint) with self-reproducing probes and one task_created event each, no duplicate ids, all lines jq-parseable, boardctl validate RESULT: OK and selftest SELFTEST: PASS rc 0.
+
+Overall: PASS ✓
