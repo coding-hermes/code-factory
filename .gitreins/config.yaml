@@ -11,7 +11,15 @@ evaluator:
   # repo (`Iteration cap (15) reached (15.9 used)` -> INCOMPLETE, tier1 PASS, run 74fe8232).
   # Raised one rung per the cap-sizing rule; no pipeline.stages[] pin exists, so this is the
   # effective value (MIN(stage, evaluator) collapses to it).
-  max_iterations: 40
+  #
+  # 40 starved twice on CF-159 (2026-11-04): two runs bound to 8b81369 ended INCOMPLETE with
+  # "Partial verdict — evaluation hit resource cap before all criteria verified" and no
+  # cap-named line, elapsed ~2-3 min (well under max_time), tier1 PASS, every merits item it
+  # DID grade positive; the only unverified item was the final "run tests/selftest.sh" leg.
+  # Measured tier-2 input tokens at this cap: 515,807 (run b6c85e4e) and 1,197,393 (run
+  # 606d010f) over 40 iterations = 13k-30k tokens/iteration burn, so the binding rung is
+  # iteration count, not the time or input-token budget. Raised one rung (40 -> 100).
+  max_iterations: 100
   static_analysis_diagnostics: false
 history:
   enabled: true
