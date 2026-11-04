@@ -2,7 +2,7 @@
 
 **Scope:** CF-101–CF-112 in [`PRD-code-factory.md`](PRD-code-factory.md), with contract details in `specs/NODE.md`, `specs/HARNESS.md`, and `specs/ENVELOPE.md`. This plan distinguishes source-level evidence from tests actually run. A passing repository self-test is not proof that every requirement is accepted.
 
-**Current state (re-measured 2026-11-04T06:15Z at tip `1aeb0c7`):** `tests/selftest.sh` carries 33 sections — numbered 1 through 33 — plus two lettered sub-arms, §4b and §7b, which the section regex `^say "[0-9]+\.` does not count, so the tree carries 35 arms — and exits 0 (`SELFTEST: PASS`, 103 `PASS` rows, 19 intentional negative-fixture `FAIL` rows, suite counter `fails=0`) at loadavg 8.56. The board at tip `1aeb0c7` carries 137 task rows and 233 events. Every snapshot total that follows is pinned to the tip it names and is historical, not current. The stamp this line used to carry (`2026-11-04 22:43` at `7989ba3`) mixed the 2026-11-03 local clock with the next day's UTC date, so it named a measurement ~18 h in the tick's future; stamps in this file are UTC, written `T…Z`, and name the tip they were measured at.
+**Current state (re-measured 2026-11-04T06:41Z at tip `8995064`):** `tests/selftest.sh` carries 34 sections — numbered 1 through 34 — plus two lettered sub-arms, §4b and §7b, which the section regex `^say "[0-9]+\.` does not count, so the tree carries 36 arms — and exits 0 (`SELFTEST: PASS`, 103 `PASS` rows, 19 `FAIL` rows, every one an intentional negative fixture) at loadavg 34.0, which measures the sibling lanes and judges sharing this host, not a suite property. The board at tip `8995064` carries 140 task rows and 245 events. §34 landed at `5794a49` (CF-163 AC3) five minutes after the 33-section snapshot at `1aeb0c7`, and the census in `docs/audits/cf099-prd-drift-probe.sh` compares this number against the WORKING TREE rather than the tip it names, so any lane that adds a section turns this line red until the count is re-measured — which is exactly how the stale 33 was found. Every snapshot total that follows is pinned to the tip it names and is historical, not current. The stamp this line used to carry (`2026-11-04 22:43` at `7989ba3`) mixed the 2026-11-03 local clock with the next day's UTC date, so it named a measurement ~18 h in the tick's future; stamps in this file are UTC, written `T…Z`, and name the tip they were measured at.
 
 **Evidence snapshot (re-measured 2026-11-04 02:35 at tip `d02916e`):** `tests/selftest.sh` was run from
 the repository root and exited 0 (`SELFTEST: PASS`, 88 `PASS` rows, suite counter `fails=0`) over
@@ -90,7 +90,7 @@ A green suite is not PRD coverage, and the reverse gap matters as much as the fo
 31 arms, 88 `PASS` rows — and only three requirements have an arm that can fail on them (`CF-102` ←
 §2 and §14, `CF-105` ← §5, `CF-109` ← §12 and §13 partially, plus `CF-127` ← §31 as of the CF-127
 landing). Every other arm is governed by a spec, a
-rule or a board row, and the mapping below names all 33 arms in the current tree (31 at that tip) so that a new arm cannot arrive without a
+rule or a board row, and the mapping below names every numbered section in the current tree — 34, plus both lettered arms, so 36 arms, and 31 arms at that tip — so that a new arm cannot arrive without a
 named authority. The mapping is a promise this table keeps, not one the tooling enforces: the
 section census in `docs/audits/cf099-prd-drift-probe.sh` counts only numbered lines, so a lettered arm
 lands uncounted (`CF-113`, pending, owns that fix).
@@ -123,6 +123,9 @@ lands uncounted (`CF-113`, pending, owns that fix).
 | §29 a workdir board that is not the published board is named as drift | board `CF-114` (a stale workdir copy silently reopened five closures; the arm prints `DRIFT` naming both boards) |
 | §30 README Status rows 1 and 3 cite the interpreter-qualified `--check` | board `CF-093` (a renamed Status row must be re-bound, not silently dropped; the unqualified command stops at `FAIL python`) |
 | §31 Hermes pip logs are private per run and distinguish filesystem failures | board `CF-127` (a fixed `/tmp/hermes-install.log` blocked the second node on a shared-`/tmp` host and reported the redirection failure as `pip failed`) |
+| §32 the Quick start control-host commands name `BUNKER_SERVER` in a check row | board `CF-145` (README's fresh-host promise was false for two of three commands; the arm pins the env name in the check row) |
+| §33 the board-lock adjudicator proves a holder before calling a lock held | board `CF-119` (a 0-byte `.lock` with no consumer and no holder stood every lane down; the arm demands a proven holder) |
+| §34 a posture doc's gitleaks claim names its scan scope | board `CF-163` AC3 + `scripts/check_scan_scope.py` (a main-scoped scan reads green while the published `master` lineage carried 547 findings in 64 commits, so the claim must name its `--log-opts`) |
 
 These sections are legitimate and must not be deleted to "clean up" the mapping: they serve
 `AGENTS.md` rules, the specs and this board. They must not be counted as acceptance of
