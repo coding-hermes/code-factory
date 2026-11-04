@@ -1,0 +1,114 @@
+{
+  "task_id": "PERF-016-RESTORE",
+  "task_title": "restore the PERF-016 row wiped by a sibling board write",
+  "task_criteria": [
+    "PERF-016 is present in .coding-hermes/board/tasks.jsonl at HEAD with status pending, a non-null probe field, and scripts/boardctl validate answering RESULT: OK"
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "c5f7b2ff8393bd869c2ea0a5bd6f103c72893529",
+  "working_tree_content_fingerprint": "8fac8b063eddadb3df5cf2b9c42c5179d6301669eb37cab53f7a21de1415d047",
+  "working_tree_dirty_path_count": 88,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T101828.303086Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n5:21AM INF scanned ~1201340 bytes (1.20 MB) in 1.57s\n5:21AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 151 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T101828.303086Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.bQyjfPivEP/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  173/173 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [16380 chars omitted \u2014 214 line(s)] \u2026\n  PASS  ref 'master' crosses the transport as --ref 'master'\n  PASS  ref 're'lease' crosses the transport as --ref 're'\\''lease'\n36. remote shell payloads preserve data without executing it (CF-159)\n  PASS  cf159 node-create project payload is data, not code\n  PASS  cf159 positive control NODE_PROJECT=my proj's --project=my proj's\n  PASS  cf159 node-create port payload is data, not code\n  PASS  cf159 node-create harness payload is data, not code\n  PASS  cf159 node-create repo payload is data, not code\n  PASS  cf159 node-create ref payload is data, not code\n  PASS  cf159 node-create crier payload is data, not code\n  PASS  cf159 verify-node artifact payload is data, not code; digest intact\n  PASS  cf159 bunker_exec trusted command text preserves quoted values and literal pipelines\n  PASS  cf159-escaping all remote-command sites\n37. the node credential row scopes its contradiction to the node (CF-151)\n  PASS  node credential row labels control-host evidence and names the node measurement\n  PASS  pre-fix node credential row refused (unlabelled-control-host-fail: Node inference credential missing-control-host-label: Node inference credential missing-node-scoped-measurement: Node inference credential )\n38. the milestone blocker list resolves every cited id in one namespace (CF-182)\n  PASS  prd-blocker \u2014 14 cited ids, 12 rows, 2 requirement-only, exit 0\n  PASS  prd-blocker-red \u2014 CF-999 unresolved, exit 1\n  PASS  prd-blocker-closed \u2014 CF-009 complete, exit 1\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T101828.303086Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 PERF-016 is present in .coding-hermes/board/tasks.jsonl at HEAD with status pending, a non-null probe field, and scripts/boardctl validate answering RESULT: OK: All four sub-conditions verified against HEAD (c5f7b2f), not just the worktree. (1) PRESENT: `git show HEAD:.coding-hermes/board/tasks.jsonl | grep -c '\"id\":\"PERF-016\"'` => 1 (exactly one row, no duplicate), at line 74 of the file. (2) STATUS: parsed JSON at HEAD gives status='pending'. (3) PROBE: probe is a str of length 191, non-null and non-empty \u2014 the strace execve/ENOENT measurement command; `boardctl show PERF-016` echoes it. (4) VALIDATOR: `./scripts/boardctl validate` => 'RESULT: OK (4 warning(s))', exit_code=0. The 4 warnings are pre-existing and unrelated to PERF-016 (CF-034 free-form guard_result/ci_result vocabulary at line 20, benign legacy duplicate event id 336 in events.jsonl, headerless board). Commit scope matches the claim: `git show --stat HEAD` = '.coding-hermes/board/tasks.jsonl | 3 ++- (2 insertions, 1 deletion)', and `git diff HEAD -- .coding-hermes/board/tasks.jsonl` is empty, confirming the row is committed rather than left uncommitted (the exact failure mode being repaired). Note: scripts/boardctl is a bash wrapper, so it must be invoked as ./scripts/boardctl (python3 invocation yields a SyntaxError, which is a harness artifact, not a defect).\nPERF-016 is committed at HEAD with status pending and a non-null 191-char probe, and scripts/boardctl validate returns RESULT: OK (exit 0) with only pre-existing unrelated warnings.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 PERF-016 is present in .coding-hermes/board/tasks.jsonl at HEAD with status pending, a non-null probe field, and scripts/boardctl validate answering RESULT: OK: All four sub-conditions verified against HEAD (c5f7b2f), not just the worktree. (1) PRESENT: `git show HEAD:.coding-hermes/board/tasks.jsonl | grep -c '\"id\":\"PERF-016\"'` => 1 (exactly one row, no duplicate), at line 74 of the file. (2) STATUS: parsed JSON at HEAD gives status='pending'. (3) PROBE: probe is a str of length 191, non-null and non-empty \u2014 the strace execve/ENOENT measurement command; `boardctl show PERF-016` echoes it. (4) VALIDATOR: `./scripts/boardctl validate` => 'RESULT: OK (4 warning(s))', exit_code=0. The 4 warnings are pre-existing and unrelated to PERF-016 (CF-034 free-form guard_result/ci_result vocabulary at line 20, benign legacy duplicate event id 336 in events.jsonl, headerless board). Commit scope matches the claim: `git show --stat HEAD` = '.coding-hermes/board/tasks.jsonl | 3 ++- (2 insertions, 1 deletion)', and `git diff HEAD -- .coding-hermes/board/tasks.jsonl` is empty, confirming the row is committed rather than left uncommitted (the exact failure mode being repaired). Note: scripts/boardctl is a bash wrapper, so it must be invoked as ./scripts/boardctl (python3 invocation yields a SyntaxError, which is a harness artifact, not a defect).\nPERF-016 is committed at HEAD with status pending and a non-null 191-char probe, and scripts/boardctl validate returns RESULT: OK (exit 0) with only pre-existing unrelated warnings.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "PERF-016 is present in .coding-hermes/board/tasks.jsonl at HEAD with status pending, a non-null probe field, and scripts/boardctl validate answering RESULT: OK",
+                "status": "PASS",
+                "detail": "All four sub-conditions verified against HEAD (c5f7b2f), not just the worktree. (1) PRESENT: `git show HEAD:.coding-hermes/board/tasks.jsonl | grep -c '\"id\":\"PERF-016\"'` => 1 (exactly one row, no duplicate), at line 74 of the file. (2) STATUS: parsed JSON at HEAD gives status='pending'. (3) PROBE: probe is a str of length 191, non-null and non-empty \u2014 the strace execve/ENOENT measurement command; `boardctl show PERF-016` echoes it. (4) VALIDATOR: `./scripts/boardctl validate` => 'RESULT: OK (4 warning(s))', exit_code=0. The 4 warnings are pre-existing and unrelated to PERF-016 (CF-034 free-form guard_result/ci_result vocabulary at line 20, benign legacy duplicate event id 336 in events.jsonl, headerless board). Commit scope matches the claim: `git show --stat HEAD` = '.coding-hermes/board/tasks.jsonl | 3 ++- (2 insertions, 1 deletion)', and `git diff HEAD -- .coding-hermes/board/tasks.jsonl` is empty, confirming the row is committed rather than left uncommitted (the exact failure mode being repaired). Note: scripts/boardctl is a bash wrapper, so it must be invoked as ./scripts/boardctl (python3 invocation yields a SyntaxError, which is a harness artifact, not a defect)."
+              }
+            ],
+            "summary": "PERF-016 is committed at HEAD with status pending and a non-null 191-char probe, and scripts/boardctl validate returns RESULT: OK (exit 0) with only pre-existing unrelated warnings.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: PERF-016-RESTORE\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 PERF-016 is present in .coding-hermes/board/tasks.jsonl at HEAD with status pending, a non-null probe field, and scripts/boardctl validate answering RESULT: OK: All four sub-conditions verified against HEAD (c5f7b2f), not just the worktree. (1) PRESENT: `git show HEAD:.coding-hermes/board/tasks.jsonl | grep -c '\"id\":\"PERF-016\"'` => 1 (exactly one row, no duplicate), at line 74 of the file. (2) STATUS: parsed JSON at HEAD gives status='pending'. (3) PROBE: probe is a str of length 191, non-null and non-empty \u2014 the strace execve/ENOENT measurement command; `boardctl show PERF-016` echoes it. (4) VALIDATOR: `./scripts/boardctl validate` => 'RESULT: OK (4 warning(s))', exit_code=0. The 4 warnings are pre-existing and unrelated to PERF-016 (CF-034 free-form guard_result/ci_result vocabulary at line 20, benign legacy duplicate event id 336 in events.jsonl, headerless board). Commit scope matches the claim: `git show --stat HEAD` = '.coding-hermes/board/tasks.jsonl | 3 ++- (2 insertions, 1 deletion)', and `git diff HEAD -- .coding-hermes/board/tasks.jsonl` is empty, confirming the row is committed rather than left uncommitted (the exact failure mode being repaired). Note: scripts/boardctl is a bash wrapper, so it must be invoked as ./scripts/boardctl (python3 invocation yields a SyntaxError, which is a harness artifact, not a defect).\nPERF-016 is committed at HEAD with status pending and a non-null 191-char probe, and scripts/boardctl validate returns RESULT: OK (exit 0) with only pre-existing unrelated warnings.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-04T10:22:19.220742",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-04T10:22:19.249244+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 31783,
+        "truncated": false,
+        "source": "git show c5f7b2ff8393"
+      }
+    ],
+    "task_id": "PERF-016-RESTORE"
+  }
+}
