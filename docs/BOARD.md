@@ -48,11 +48,26 @@ python3 scripts/board_drift.py check --workdir <path> --ref origin/main
 ```
 
 PASS means both board files are readable and byte-identical to the published ref, the task
-census agrees, and the checkout's HEAD is an ancestor of that ref. FAIL names the measured
-mismatch, divergent task IDs, missing files or invalid line numbers; a zero-row task board
-is always a FAIL. The final verdict is `RESULT: OK` (exit 0) or `RESULT: DRIFT` with a failure
-count (exit 1). `--repo <path>` selects the repository resolving the ref; `--no-head` skips
-ancestry. `--published-dir <dir>` reads fixture files instead of Git and implies `--no-head`.
+census agrees, and the workdir's HEAD is an ancestor of that ref **as resolved in the workdir**.
+FAIL names the measured mismatch, divergent task IDs, missing files or invalid line numbers; a
+zero-row task board is always a FAIL. The final verdict is `RESULT: OK` (exit 0) or
+`RESULT: DRIFT` with a failure count (exit 1).
+
+The two legs read Git from two different flags, and naming one does not satisfy the other:
+
+- the **published bytes** come from `--repo <path>` — `git -C <repo> show <ref>:<file>`
+  (`scripts/board_drift.py:98,111`); `--repo` defaults to the workdir;
+- the **HEAD/ancestry leg** is measured in `--workdir` — `git rev-parse HEAD`,
+  `git rev-parse --verify <ref>^{commit}` and `git merge-base --is-ancestor HEAD <ref>` all run
+  with `-C <workdir>` (`scripts/board_drift.py:167–172`).
+
+So a workdir that carries no ref named `<ref>` prints `FAIL HEAD ancestry — git rev-parse
+--verify origin/main^{commit}: exit 128` and `RESULT: DRIFT (1 failed)` even when `--repo` names
+a repository that has the ref; the identical run with `--no-head` prints `RESULT: OK`. Measured
+on 2026-11-04 against a workdir fixture holding byte-identical 126-row board files with no
+`origin/main` ref (CF-129; transcript `docs/audits/code-factory-docs-2026-11-04-CF-129.md`).
+Pass `--no-head` when the ref lives only in `--repo`. `--published-dir <dir>` reads fixture files
+instead of Git and implies `--no-head`.
 
 Observed on 2026-11-03 before the workdir repair: the registered code-factory workdir
 (`~/proj-wt-code-factory-bankai-20261030`) carried 61 tasks rows / 66 events rows against
