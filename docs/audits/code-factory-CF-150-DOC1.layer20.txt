@@ -1,0 +1,22 @@
+node provisioning — project=probe harness=hermes host=karaHermes-mde-7840hs
+SCOPE: layers 20 (fixture mode — not a node certification)
+  SKIP  layer 00 (out of scope)
+  SKIP  layer 10 (out of scope)
+[20] harness
+harness: hermes (pin 0.19.0, port 18993)
+  PASS  python — 3.12.13 (hermes-agent 0.19.0 requires >=3.11,<3.14)
+  PASS  binary — $HOME/hermes-venv/bin/hermes
+  PASS  version — hermes 0.19.0
+  FAIL  port — nothing on :18993
+  FAIL  inference_key — no provider key — a turn dies at 'No inference provider configured'
+apply
+  ..    already installed: hermes 0.19.0
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml
+
+HERMES: FAIL (3)
+  SKIP  layer 30 (out of scope)
+  SKIP  layer 40 (out of scope)
+  SKIP  layer 90 (fixture mode: no manifest)
+
+NODE: FAIL (3)
+layer20_rc=1

@@ -25,14 +25,25 @@ the manifest to know where the artifacts are.
 |---|---|---|
 | 00 preflight | arch, disk ≥ floor, memory, reachability to crier / PyPI / Go proxy | — |
 | 10 base | python3 + venv, git, curl, tar, sha256sum; optionally jq, rg, node | preflight |
-| 20 harness | the chosen harness + its gateway/CLI | base |
+| 20 harness | the harness binary plus the adapter's own gate rows, printed verbatim (`python`, `binary`, `version`, `port`, `inference_key`, and `gateway_start` when that block runs); `gateway_start` is a refusal on any node whose `~/.hermes/config.yaml` carries no `dashboard.basic_auth` | base |
 | 30 bus | a crier identity file at `$HOME/.node/crier.json` and its mode 600 | harness |
 | 40 repo | the repo cloned at a pinned ref | base |
 | 90 verify | the node manifest (`$HOME/.node/node.json`), written only when every layer passed | all |
 
-Two capabilities that the design describes are **not** established by any shipped layer, and this
+Three capabilities that the design describes are **not** established by any shipped layer, and this
 table no longer claims them:
 
+- **A started gateway on a freshly created node.** Layer 20 runs the adapter with `--apply`
+  (`scripts/project-node.sh:228`), and the adapter starts `hermes serve` only when
+  `~/.hermes/config.yaml` already carries `dashboard.basic_auth`
+  (`scripts/harness/install-hermes.sh:93-102`); otherwise it prints
+  `FAIL gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml`.
+  No shipped stage writes that file — `scripts/node-create.sh --staged-files` prints five files
+  (`project-node.sh`, `lib.sh`, `disk_floor.py`, `reclaim_disk.py`, `harness/install-hermes.sh`) and
+  no `config.yaml`, and no script under `scripts/` redirects into it — so on a node created by
+  `scripts/node-create.sh` layer 20 ends `HERMES: FAIL (n)`, the ladder ends `NODE: FAIL (n)`, and
+  `NODE: PASS` is unreachable. Whether a bunker agent image already ships that file is **not
+  measured** by this repo. CF-150 owns the create-path fix; it is the source of this cell.
 - **A node-side bus worker.** Layer 30 starts and checks no process and opens no socket:
   `scripts/project-node.sh:244-249` tests `-f $STATE/crier.json`, then `stat -c '%a'` against `600`,
   and prints `crier_identity` / `crier_mode`. Whether a worker is running on the node is unmeasured

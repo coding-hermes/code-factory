@@ -1,0 +1,217 @@
+commit c9848d7ef11360ea4259553b3f15bcc5889fc7c0
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Tue Nov 3 21:48:24 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Tue Nov 3 21:48:41 2026 -0500
+
+    docs(sync): reconcile the board census and the ACCEPTANCE-PLAN snapshot at 2c48149
+    
+    Sync lane pass for tick code-factory-duckbrain-sync-2026-11-04-02-39-26. Four sibling
+    code-factory lanes were running on the shared checkout and a sibling lane held a live
+    `gitreins task complete CF-147-RV1` grading that working tree, so the whole tick ran in a
+    throwaway clone of origin/main and the registered checkout was read only (its staged
+    docs/audits file and unpublished .gitreins bundles are untouched).
+    
+    Board at 2c48149: 125 task rows and 185 events before this tick's own audit event — every
+    line parses, no duplicate task or event ids, statuses 38 complete / 82 pending / 5
+    in_progress. scripts/boardctl validate -> RESULT: OK (54 warning(s)). All 38 complete rows
+    bind a commit that exists and is reachable from the published tip. Two historical absolute
+    -path artifacts remain on CF-011 and CF-013, each already superseded by a committed
+    docs/audits rebind entry, so nothing was erased or re-filed.
+    
+    New check this tick: every complete row's evidence names a re-runnable command (38/38,
+    rows_naming_no_command=0). The check was proven able to fail on a fixture built from the
+    real board (NOCMD for the stripped row, control row clean) before being quoted green.
+    
+    Drift fixed: docs/ACCEPTANCE-PLAN.md's evidence block was exact at d02916e and stale at the
+    current tip. It keeps the sibling's d02916e numbers and gains the 2c48149 delta plus the
+    reason the complete count moved (CF-053 reopened for QA re-verification, event 181; CF-093
+    closed in the same window) so a reader does not read a lost closure.
+    
+    Ledger conditions CF-130 already owns were re-measured and deliberately not re-filed:
+    completion-event gaps CF-034 and CF-041, stale in_progress CF-005, no complete row with
+    worker_status pending. CF-142 (selftest nondeterminism) stays pending; one passing run at
+    loadavg 19 is a sample, not a closure.
+    
+    Evidence: docs/audits/code-factory-sync-2026-11-04-0241.md
+    
+    Guard position disclosed: this clone has no core.hooksPath and no installed pre-commit hook,
+    so no repository guard ran on this commit and none is claimed — the graded evidence for this
+    change is the explicit GitReins verdict published in the following commit, not this message.
+    
+    tasks.jsonl is unchanged; events.jsonl gains exactly one line (id 186, task_id null).
+---
+ .coding-hermes/board/events.jsonl                |   1 +
+ docs/ACCEPTANCE-PLAN.md                          |   8 ++
+ docs/audits/code-factory-sync-2026-11-04-0241.md | 135 +++++++++++++++++++++++
+ 3 files changed, 144 insertions(+)
+
+diff --git a/.coding-hermes/board/events.jsonl b/.coding-hermes/board/events.jsonl
+index 629aff6..e1df04c 100644
+--- a/.coding-hermes/board/events.jsonl
++++ b/.coding-hermes/board/events.jsonl
+@@ -183,3 +183,4 @@
+ {"id":183,"timestamp":"2026-11-04T02:43:07+00:00","event_type":"task_completed","task_id":"CF-093","actor":"foreman","detail":"{\"status\":\"complete\"}","tick_number":null}
+ {"id":184,"timestamp":"2026-11-04T02:43:34+00:00","event_type":"task_created","task_id":"CF-151","actor":"foreman","detail":"{\"id\":\"CF-150\",\"status\":\"pending\"}","tick_number":null}
+ {"id":185,"timestamp":"2026-11-04T02:43:47+00:00","event_type":"audit","task_id":"CF-093","actor":"readme","detail":"{\"tick\": \"code-factory-readme-2026-11-04-02-20-15\", \"lane\": \"readme\", \"repo_remote\": \"git@github.com:coding-hermes/code-factory.git\", \"published_tip_at_start\": \"d02916e16ebad155c91f6e928e0f719f58e6f8b8\", \"judged_commit\": \"1b4b0b6f62ded1141954999827e324773ad4c12a\", \"merge_commit\": \"1abe4e24a1ec67e882eba2c91c6d4ea659268ea3\", \"row_closed\": {\"id\": \"CF-093\", \"arm\": \"tests/selftest.sh §30 status_rows_missing_qualifier\", \"green\": \"SELFTEST: PASS exit 0 at 1b4b0b6 and at the merged tip\", \"red\": \"stripped copy -> FAIL (1), MUTATED_EXIT=1, names both Status rows\", \"verdict_run\": \"b08448b0\", \"verdict_commit_bound\": true}, \"row_filed\": {\"id\": \"CF-151\", \"why\": \"README Status row 3 cites a control-host check for a node-state cell: the same command prints PASS inference_key on a keyed host, so the row's 'missing' state can never be contradicted there\"}, \"commands_tested\": [\"bash tests/selftest.sh -> SELFTEST: PASS (exit 0), 30 arms\", \"scripts/harness/install-hermes.sh --check (default python3 3.14.9) -> 1 gate row FAIL python, rc 1\", \"HERMES_PYTHON_BIN=python3.12 scripts/harness/install-hermes.sh --check -> 5 gate rows (python, binary, version, port, inference_key), HERMES: FAIL (1), rc 1\", \"scripts/project-node.sh --check --project myproject (fresh HOME) -> NODE: FAIL (4), names CRIER_URL and crier_identity, rc 1\", \"scripts/project-node.sh --apply --harness codex (fresh HOME) -> FAIL harness:codex 'no adapter at scripts/harness/install-codex.sh', rc 1\", \"scripts/bunker-server-install.sh --check (fresh HOME, no env) -> rc 1, 'line 14: BUNKER_SERVER: set BUNKER_SERVER to your bunker server name'\", \"scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes (fresh HOME) -> rc 1, 'line 70: SERVER: set BUNKER_SERVER to your bunker server name'\", \"scripts/boardctl validate -> RESULT: OK (48 warnings at d02916e, 53 at the merged tip)\", \"ruff format --check . and ruff check . -> clean (13 files, exit 0)\", \"README path census: 20 Layout paths exist; scripts/harness holds exactly hermes, claude-code, opencode; prompts/ holds 11 files for 14 lanes\", \"README citation census: 27 path/anchor citations, slugified-heading resolution, 0 unresolved\", \"live scheduler census (scheduler.db read-only) -> 19 code-factory* rows: 14 shipped lanes all enabled + 5 code-factory-duckbrain-* satellites; code-factory-duckbrain admission=tasks against the loader's cooldown\"], \"commands_failed\": [\"scripts/bunker-server-install.sh --check dies in ${VAR:?} (line 14) instead of printing a repo-convention FAIL row\", \"scripts/node-create.sh dies in ${VAR:?} (line 70) instead of printing a repo-convention FAIL row\", \"both are the pending CF-145 premise; re-measured here at d02916e and NOT re-filed\"], \"wording_checks\": [\"README:32-34 'all three commands reach their checkers and fail with the missing value named' is false for two of three: the value is named, but by a bash expansion abort, not a checker (CF-145)\", \"README Status row 3 command measures the control host, not the node (CF-150, filed)\", \"README:101-102 'an unmeasured adapter refuses --apply rather than pretending' holds: --harness codex fails at layer 20 with no adapter, rc 1\", \"Layout, harness installer list, lane table, eleven-prompt census, and the nineteen-row reference census all reproduce\"], \"not_run\": [\"live bunker node / gateway round trip (no node reachable from this surface; README already labels it not-yet)\", \"scheduler -> crier dispatch (README: disarmed)\", \"gh CLI CI probe returns [] with no .github/workflows in the tree — the documented healthy state for this repo\"], \"memory\": \"none:no-lane-role-token\", \"report\": \"code-factory-readme-2026-11-04-02-20-15.md (stand-in lane dir; not a repository artifact)\"}","tick_number":null}
++{"id":186,"timestamp":"2026-11-04T02:48:00Z","event_type":"audit","task_id":null,"actor":"code-factory-sync","detail":"{\n  \"lane\": \"code-factory-duckbrain-sync\",\n  \"tick\": \"code-factory-duckbrain-sync-2026-11-04-02-39-26\",\n  \"tip_measured\": \"2c48149a7778730cc2593e16755a7138df306144\",\n  \"tip_moved_during_tick\": \"the tip advanced 6d801c7 -> e657d98 -> 0e16e63 -> 2c48149 -> 2c48149 while this tick ran (CF-150, a CF-093 selftest fix and CF-093's closure) so every number below was re-measured and the gate re-run at 0e16e63\",\n  \"board\": {\n    \"tasks\": 125,\n    \"events\": 185,\n    \"events_note\": \"185 before this audit event was appended; 186 at the landing commit\",\n    \"statuses\": {\"complete\": 38, \"pending\": 82, \"in_progress\": 5},\n    \"parse_failures\": 0,\n    \"duplicate_ids\": 0,\n    \"boardctl_validate\": \"RESULT: OK (54 warning(s)) rc 0\"\n  },\n  \"complete_row_audit\": {\n    \"rows\": 38,\n    \"commit_hash_null\": 0,\n    \"commit_object_missing\": 0,\n    \"commit_not_ancestor_of_tip\": 0,\n    \"unresolvable_artifacts\": \"2 historical absolute paths, CF-011 and CF-013, each already superseded by docs/audits/code-factory-sync-2026-11-03-evidence-rebind.md; preserved, not erased\",\n    \"rows_naming_no_command\": 0,\n    \"command_named_check_red_arm\": \"fixture built from the real board with one row's command-bearing fields replaced by prose: rows_naming_no_command=1, NOCMD CF-009, control CF-010 clean. Both arms run this tick.\"\n  },\n  \"ledger_conditions_owned_by_CF-130\": {\n    \"complete_without_completion_event\": [\"CF-034\", \"CF-041\"],\n    \"complete_with_worker_status_pending\": [],\n    \"stale_in_progress\": [\"CF-005\"],\n    \"refiled\": false,\n    \"reason\": \"CF-130 already names all three; an append-only log must not be given a transition its writer did not witness\"\n  },\n  \"CF-053_reopen\": \"audited by event 181 (task_updated status=in_progress, 2026-11-04T02:39:15Z) and named in commit 6d801c7; the complete census is 38 here because CF-093 closed at this tip, not because CF-053 came back\",\n  \"docs_drift_fixed\": \"docs/ACCEPTANCE-PLAN.md evidence block was exact at d02916e and stale at the landing tip; appended the delta and kept the sibling's numbers instead of restating them, and explained the CF-053 reopen so a fall in the complete count is not read as a lost closure\",\n  \"gates\": {\n    \"selftest\": \"SELFTEST: PASS rc 0, 90 PASS rows, 19 FAIL lines inside negative fixtures, loadavg 19.25\",\n    \"github_actions\": \"gh run list -> [] (repository ships no workflows)\",\n    \"selftest_nondeterminism\": \"CF-142 remains pending; a passing run is a sample, not a closure\"\n  },\n  \"barrier\": {\n    \"sibling_lanes_running\": [\"code-factory\", \"code-factory-docs\", \"code-factory-docs-qa\", \"code-factory-dogfood\"],\n    \"live_judge_in_canonical_checkout\": \"gitreins task complete CF-147-RV1 pid 1141363\",\n    \"staged_sibling_file\": \"docs/audits/code-factory-qa-duckbrain-2026-11-04.md\",\n    \"board_lock\": \"residue: 0 bytes, mtime 2026-11-03T07:40:02, no holder (fuser), no consumer (grep flock/fcntl in scripts/boardctl*)\",\n    \"canonical_head_vs_origin_main\": \"bdadeb9 while origin/main reached 0e16e63\"\n  },\n  \"not_run\": [\"writes in the registered checkout\", \"repair of the checkout's skew\", \"worker dispatch\"],\n  \"evidence\": \"docs/audits/code-factory-sync-2026-11-04-0241.md\"\n}\n","tick_number":null}
+diff --git a/docs/ACCEPTANCE-PLAN.md b/docs/ACCEPTANCE-PLAN.md
+index 5837d47..b64da13 100644
+--- a/docs/ACCEPTANCE-PLAN.md
++++ b/docs/ACCEPTANCE-PLAN.md
+@@ -7,6 +7,14 @@ the repository root and exited 0 (`SELFTEST: PASS`, 88 `PASS` rows, suite counte
+ 29 sections — plus two lettered sub-arms, §4b and §7b, which the section regex `^say "[0-9]+\.` does
+ not count, so the tree carries 31 arms; `scripts/boardctl validate` prints `RESULT: OK (48 warning(s))`;
+ the board at that tip carries 117 task rows and 171 events (38 complete, 75 pending, 4 in_progress).
++**Delta measured 2026-11-04 03:02 at tip `2c48149`:** 125 task rows and 185 events before this tick's
++own audit event (186 at the landing commit) — 38 complete, 82 pending, 5 in_progress.
++`scripts/boardctl validate` prints `RESULT: OK (54 warning(s))`;
++`tests/selftest.sh` still prints `SELFTEST: PASS` (90 `PASS` rows) at loadavg 19.25. Two rows moved under
++this snapshot without any closure being lost: **CF-053** was deliberately reopened to `in_progress` at
++02:39 by the QA lane's isolation re-verification (event 181 records the transition; commit `6d801c7`
++names it), and **CF-093** closed in the same window, which is why the `complete` count still reads 38.
++Re-measure this block rather than trusting either snapshot.
+ Nineteen `  FAIL` lines are printed *inside* the suite by fixtures that assert a rejection (§16's
+ pre-fix manifest, the disk-floor refusal, the census fail-closed arms, …), so count `SELFTEST:` and
+ the suite's counter, never a raw `grep -c '^  FAIL'`. Timing is not a portable number: 9.32 s CPU
+diff --git a/docs/audits/code-factory-sync-2026-11-04-0241.md b/docs/audits/code-factory-sync-2026-11-04-0241.md
+new file mode 100644
+index 0000000..de7c03a
+--- /dev/null
++++ b/docs/audits/code-factory-sync-2026-11-04-0241.md
+@@ -0,0 +1,135 @@
++# Sync lane evidence — 2026-11-04T02:41-05:00 (tick `code-factory-duckbrain-sync-2026-11-04-02-39-26`)
++
++Board/repo consistency pass for code-factory. Four sibling code-factory lanes were `running` on the
++shared checkout at tick start and a sibling lane had a live `gitreins task complete` grading the
++canonical working tree, so nothing was written in `/home/kara/code-factory`: the whole tick ran in a
++dedicated clone of `origin/main` in the tick scratch. The registered checkout was read only.
++
++The tip moved three times while this tick ran — `6d801c7` → `e657d98` → `0e16e63` → `2c48149` (a dogfood filing of CF-150, a
++CF-093 `tests/selftest.sh` fix and CF-093's own closure landed mid-audit). Every number below was re-measured and the
++CI-equivalent gate re-run at the tip in `Landing tip` below; the earlier measurement is not carried.
++
++## Identity and barrier
++
++| Check | Measured |
++|---|---|
++| `realpath /home/kara/code-factory` vs `git -C … rev-parse --show-toplevel` | equal (`/home/kara/code-factory`) |
++| registered `workdir` / `repo_url` (scheduler project row) | `/home/kara/code-factory` / `local:/home/kara/code-factory` — matches the locator |
++| branch / operation markers | `main`, attached; no `rebase-merge`/`rebase-apply`/`MERGE_HEAD`/`REBASE_HEAD`/`CHERRY_PICK_HEAD`/`BISECT_LOG` |
++| canonical `HEAD` vs `origin/main` at start | `bdadeb9` behind by 1 commit, ahead 0 |
++| staged index | `A docs/audits/code-factory-qa-duckbrain-2026-11-04.md` — a sibling QA lane's in-flight work, never touched |
++| board lock | `.coding-hermes/board/.lock`, 0 bytes, mtime `2026-11-03 07:40:02` — residue, not a barrier: `fuser -v` reports no holder and `grep -rn 'flock\|fcntl' scripts/boardctl*` returns no consumer |
++| unpublished `.gitreins/history/2026-11-03/*` | 47 untracked paths from the 2026-11-03 series; not read, not cleaned |
++| sibling lanes `running` on this repo | `code-factory`, `code-factory-docs`, `code-factory-docs-qa`, `code-factory-dogfood` (all spawned 21:39:16) |
++| live judge in the canonical checkout | `gitreins task complete CF-147-RV1` (pid 1141363, launched 21:41 from `cf-review-msgs/`) — a WRITER that snapshots the working tree it grades |
++| host load beside the gate | loadavg 13.69 at tick start; 19.25 during the landing-tip gate run |
++
++The barrier is the live judge plus four running siblings, not the lock file. Every write below is in a
++throwaway clone of `origin/main`; the canonical checkout keeps its staged sibling file and its
++unpublished bundles exactly as found. The canonical checkout being behind `origin/main` is ordinary
++sibling-landing skew in this family, not a defect; it is reported here rather than repaired mid-judge.
++
++## Landing tip
++
++`2c48149a7778730cc2593e16755a7138df306144`
++(`merge: land the CF-093 closure and the README row over sibling board commits`), cloned from
++`https://github.com/coding-hermes/code-factory.git`, measured 2026-11-04 03:02.
++
++## Board parse (deliverable 1)
++
++| Check | Command | Result |
++|---|---|---|
++| task line count | `awk 'END{print NR}' .coding-hermes/board/tasks.jsonl` | 125 |
++| per-line JSON | `jq -c . <board>` | parses, exit 0 |
++| duplicate task ids | `jq -r .id \| sort \| uniq -d` | none |
++| status census | `jq -r .status \| sort \| uniq -c` | 38 `complete`, 82 `pending`, 5 `in_progress` |
++| event line count | `awk 'END{print NR}' .coding-hermes/board/events.jsonl` | 185 before this tick's own audit event, 186 at the landing commit |
++| per-line JSON / duplicate event ids | `jq -c .`, `jq -r .id \| sort \| uniq -d` | parses, exit 0 / none |
++| board equals the committed tree | clone porcelain clean before the two doc files below | line count and ids are the committed ones |
++| schema gate | `bash scripts/boardctl validate` | `RESULT: OK (54 warning(s))`, rc 0 — 51 `probe` keys outside the declared canon, CF-034's free-form `guard_result` and `ci_result`, and the headerless board |
++
++## Complete-row evidence audit (deliverable 2)
++
++Every `complete` row was resolved with `git cat-file -e <sha>^{commit}` and
++`git merge-base --is-ancestor <sha> HEAD` at the landing tip.
++
++| Check | Result |
++|---|---|
++| `complete` rows | 38 |
++| `commit_hash` null | 0 |
++| commit object missing | 0 |
++| commit not reachable from the published tip | 0 |
++| `detail.evidence[].artifacts` unresolvable in the tree | 2 entries on 2 rows, both the historical first-run log `/home/kara/.hermes/cache/scratch/code-factory-pm-20261031-114422-final-selftest.log` on CF-011 and CF-013 |
++
++The two absolute-path artifacts are unchanged from the 2026-11-04T01:21 pass: each row already carries
++a superseding `sync-20261103-*` entry pointing at the committed
++`docs/audits/code-factory-sync-2026-11-03-evidence-rebind.md`, so the dead entry is preserved history,
++not an open gap. Nothing was erased and no row was re-filed for it.
++
++**New this tick — "the evidence names a command":** the lane contract asks that every `complete` row's
++evidence name a re-runnable command, which prior passes did not measure. All 38 rows name at least one
++(`bash`, `python3`, `scripts/…`, `tests/…`, `git …`, `jq`, `curl`, `sqlite3`, `gh run`, `pytest`) across
++`worker_summary`/`foreman_note`/`reasoning`/`acceptance_criteria`/`detail.evidence` →
++`rows_naming_no_command=0`.
++
++The check can fail: on a fixture built from the real board with one row's command-bearing fields
++replaced by prose and the other row left intact, it prints `rows_naming_no_command=1` / `NOCMD CF-009`
++with CF-010 (the control) still clean. Both arms were run this tick; the GREEN arm is the real board,
++the RED arm is `red-arm/` in the tick scratch. Scripts: `audit_command_named.py`, `make_red_arm.py`.
++
++## Ledger conditions already owned by CF-130
++
++Re-measured, not re-filed:
++
++| Condition | At this tip |
++|---|---|
++| `complete` rows with no `task_completed` event | `CF-034 CF-041` — unchanged; an append-only log must not record a transition its writer did not witness |
++| `complete` with `worker_status: pending` | none |
++| stale `in_progress` | `CF-005` (updated 2026-10-29T18:40:00Z, untouched since); `CF-137`, `CF-138`, `CF-139` are a live sibling lane's work in progress; `CF-053` was reopened deliberately — see below |
++
++**CF-053 reopen is audited, not lost.** The row was `complete` with a bound commit at `d02916e` and
++reads `in_progress` at this tip (updated `2026-11-04T02:39:15Z`), with event 181
++`task_updated {"status":"in_progress"}` recording the transition and commit `6d801c7`
++(`docs(qa): record the CF-053 isolation re-verification…`) naming the re-verification. That is why the
++`complete` census fell to 37 at `e657d98` and reads 38 at this tip only because CF-093's own closure
++landed in the same window: a reopened closure, not a row deleted or re-minted.
++
++## Docs status tables (deliverable 3)
++
++`docs/ACCEPTANCE-PLAN.md`'s evidence block was **exact at its own tip**: `d02916e` really carries 117
++tasks / 171 events (38 complete, 75 pending, 4 in_progress), and its gate numbers (`SELFTEST: PASS`,
++88 `PASS` rows, 31 arms, `RESULT: OK (48 warning(s))`) reproduce. It is stale only because the tip
++moved: `d02916e..2c48149` is 19 commits and the board grew to 125 / 185.
++
++Fixed by **delta, not restatement** — the sibling's `d02916e` numbers stand and this tick appends the
++landing-tip measurement (125 rows / 185 events / 38-82-5, `RESULT: OK (54 warning(s))`,
++`SELFTEST: PASS` with 90 `PASS` rows) plus the CF-053 reopen explanation, so a reader comparing the two
++blocks sees a moved tip rather than a lost closure.
++
++`docs/ACCEPTANCE-PLAN.md` cites `CF-101…CF-112`; those are PRD requirement numbers, not board rows
++(`jq` for `^CF-1(0[1-9]|1[12])$` over the board returns no rows), so no row was filed for them.
++
++## Gates at the landing tip
++
++| Gate | Command | Result |
++|---|---|---|
++| board schema | `bash scripts/boardctl validate` | `RESULT: OK (54 warning(s))`, rc 0 |
++| CI-equivalent | `bash tests/selftest.sh` | `SELFTEST: PASS`, rc 0, 90 `PASS` rows, 30 numbered section headers, 19 `FAIL` lines inside negative fixtures, loadavg 19.25 during the run |
++| GitHub Actions | `gh run list --repo coding-hermes/code-factory --limit 3 --json …` | `[]` — the repository ships no workflows; the no-workflow state is healthy by documented contract |
++
++`tests/selftest.sh` changed under this tick (`1b4b0b6 fix(selftest): enforce the interpreter-qualified
++--check on README Status rows 1 and 3`), which is why the gate was re-run after the fast-forward
++instead of being quoted from the earlier measurement. The suite's nondeterminism is already filed as
++**CF-142** (one non-reproducing auth-marker FAIL in four runs at 2026-11-04T01:21, loadavg 30–36). One
++passing run at loadavg 19.25 is a sample, not a closure of CF-142; CF-142 stays pending.
++
++## Not run, and why
++
++| Leg | Status | Reason |
++|---|---|---|
++| writes in `/home/kara/code-factory` | not run | live sibling judge (`CF-147-RV1`) grading that working tree, four sibling lanes running, one sibling file staged in the index |
++| repair of the registered checkout's skew | not run | same barrier: a pull mid-judge mutates the tree being graded |
++| worker dispatch | not run | this lane's deliverable is reconciliation; no implementation was needed |
++
++The clone used is `cf-sync-20261104-0241.stoNIb/audit` under the session scratch root; every number
++above was produced there and re-read from the output files saved beside it.

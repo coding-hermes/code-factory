@@ -530,10 +530,24 @@ printf '#!/usr/bin/env bash\nexit 0\n' > "$tmpd/scripts/verify-node.sh"
 chmod +x "$tmpd/scripts/verify-node.sh"
 cat > "$tmpd/bin/bunker" <<'EOF'
 #!/usr/bin/env bash
+if [ -n "${FIXTURE_LOG:-}" ]; then
+  printf '%s\0' "$@" >> "$FIXTURE_LOG"
+  printf '\n' >> "$FIXTURE_LOG"
+fi
 case "$1" in
   spawn) printf '%s\n' "$2" > "$FIXTURE_AGENT" ;;
   cp) [ "${FIXTURE_CP_FAIL:-0}" = 0 ] || { echo 'fixture copy refused' >&2; exit 1; } ;;
-  exec) case "$*" in *NODE_PROJECT=*) exit 1 ;; esac ;;
+  exec) case "$*" in *NODE_PROJECT=*)
+    if [ -n "${FIXTURE_SCRIPTS:-}" ]; then
+      cmd="${!#}"
+      cmd="${cmd/\~\/node-scripts\/project-node.sh/\'$FIXTURE_SCRIPTS\/project-node.sh\'}"
+      # Model a separate node environment: the control host's export cannot leak in.
+      env -u CRIER_URL HOME="$FIXTURE_NODE_HOME" /bin/bash -c \
+        "$cmd --check --layers 00 --disk-floor 1"
+      exit $?
+    fi
+    exit 1 ;;
+  esac ;;
   *) echo 'unexpected bunker command' >&2; exit 99 ;;
 esac
 EOF
@@ -544,7 +558,7 @@ for arm in owned reused copy-failure; do
   [ "$arm" = reused ] && agent_args=(--agent fixture-existing)
   [ "$arm" = copy-failure ] && cp_fail=1
   out=$(env -i HOME="$tmpd/control-home" PATH="$tmpd/bin:$PATH" BUNKER_SERVER=fixture-server \
-    FIXTURE_AGENT="$tmpd/agent" FIXTURE_CP_FAIL="$cp_fail" \
+    FIXTURE_AGENT="$tmpd/agent" FIXTURE_CP_FAIL="$cp_fail" CRIER_URL=http://fixture.invalid:8767 \
     /bin/bash "$tmpd/scripts/node-create.sh" --project fixture "${agent_args[@]}" 2>&1); rc=$?
   if [ "$arm" = reused ]; then
     if [ "$rc" -eq 1 ] && ! printf '%s\n' "$out" | grep -Fq 'bunker destroy'; then
@@ -559,6 +573,65 @@ for arm in owned reused copy-failure; do
     say "  FAIL  $arm failure lost cleanup command or staging error (exit $rc)"; fails=$((fails+1))
   fi
 done
+
+# CF-126 ARM A: the same transport fixture executes the real, staged layer 00.
+# No install or network access: only the scoped checker runs, with curl stubbed.
+cat > "$tmpd/bin/curl" <<'EOF'
+#!/usr/bin/env bash
+printf '200'
+EOF
+chmod +x "$tmpd/bin/curl"
+handoff_ok=1
+for crier_value in 'http://fixture.invalid:8767' \
+  "http://fixture.invalid:8767/a'b?x=\$(touch '$tmpd/injected')&y=one;two"; do
+  : > "$tmpd/bunker-handoff.log"
+  out=$(env -i HOME="$tmpd/control-home" PATH="$tmpd/bin:$PATH" BUNKER_SERVER=fixture-server \
+    CRIER_URL="$crier_value" FIXTURE_LOG="$tmpd/bunker-handoff.log" FIXTURE_AGENT="$tmpd/agent" \
+    FIXTURE_SCRIPTS="$tmpd/scripts" FIXTURE_NODE_HOME="$tmpd/node-home" \
+    /bin/bash "$tmpd/scripts/node-create.sh" --project fixture 2>&1); rc=$?
+  if [ "$rc" -eq 0 ] \
+    && grep -aFq "CRIER_URL=" "$tmpd/bunker-handoff.log" \
+    && { [ "$crier_value" != http://fixture.invalid:8767 ] \
+      || grep -aFq "CRIER_URL='$crier_value'" "$tmpd/bunker-handoff.log"; } \
+    && printf '%s\n' "$out" | grep -Eq '^  PASS  crier_url — ' \
+    && printf '%s\n' "$out" | grep -Fxq "  PASS  crier_url — $crier_value" \
+    && printf '%s\n' "$out" | grep -Eq '^NODE CREATED: node-fixture-' \
+    && [ ! -e "$tmpd/injected" ]; then
+    :
+  else
+    handoff_ok=0
+    printf '%s\n' "$out"
+  fi
+done
+if [ "$handoff_ok" -eq 1 ]; then
+  say "  PASS  crier_url handoff preserves exported URL and shell metacharacters"
+else
+  say "  FAIL  crier_url handoff missing assignment or named node PASS"; fails=$((fails+1))
+fi
+
+# CF-126 ARM B: neither an unset nor an empty bus may cost a bunker invocation.
+refusal_ok=1
+for bus_state in unset empty; do
+  bus_args=()
+  [ "$bus_state" = empty ] && bus_args=(CRIER_URL=)
+  : > "$tmpd/bunker-refusal.log"
+  out=$(env -i HOME="$tmpd/control-home" PATH="$tmpd/bin:$PATH" BUNKER_SERVER=fixture-server \
+    FIXTURE_LOG="$tmpd/bunker-refusal.log" FIXTURE_AGENT="$tmpd/agent" "${bus_args[@]}" \
+    /bin/bash "$tmpd/scripts/node-create.sh" --project fixture 2>&1); rc=$?
+  if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Eq '^  FAIL  crier_url — CRIER_URL (unset|empty)' \
+    && [ ! -s "$tmpd/bunker-refusal.log" ] \
+    && ! grep -aEq '^(spawn|create|exec)' "$tmpd/bunker-refusal.log"; then
+    :
+  else
+    refusal_ok=0
+    printf '%s\n' "$out"
+  fi
+done
+if [ "$refusal_ok" -eq 1 ]; then
+  say "  PASS  crier_url refusal rejects unset and empty bus before bunker invocation"
+else
+  say "  FAIL  crier_url refusal missing named FAIL or invoked bunker"; fails=$((fails+1))
+fi
 rm -rf "$tmpd"
 
 # CF-077: stub transport only; exercise the real verifier and node-create admission.
@@ -591,7 +664,8 @@ printf '%s' "$c"
 EOF
 chmod +x "$tmpd/bin/bunker" "$tmpd/bin/curl"
 cf077_run() {
-  env PATH="$tmpd/bin:$PATH" BUNKER_SERVER=fixture STATS_CODE="$1" STATUS_BODY="$2" \
+  env PATH="$tmpd/bin:$PATH" BUNKER_SERVER=fixture CRIER_URL=http://fixture.invalid:8767 \
+    STATS_CODE="$1" STATUS_BODY="$2" \
     /bin/bash "$3" "${@:4}" 2>&1
 }
 body='{"status":"ok","auth_required":true}'

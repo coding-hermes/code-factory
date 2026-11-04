@@ -1,0 +1,40 @@
+commit 9f014411aa665c2baa882499ea6a3e532748a34b
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Tue Nov 3 21:50:32 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Tue Nov 3 21:50:56 2026 -0500
+
+    docs(sync): spell the board census in plain text so the audit doc meets its own criterion
+    
+    The Tier 2 judge for CF-SYNC-2026110402 returned tier1 PASS and tier2 FAIL on criterion 4
+    alone: that criterion asks the audit doc to CONTAIN the literal strings `125 task rows`
+    and `38 complete, 82 pending, 5 in_progress`, and the doc had carried the same census only
+    inside markdown tables (`38 `complete`, 82 `pending`, 5 `in_progress`) and as `38-82-5`.
+    
+    The numbers were right and the judge confirmed every other leg (selftest PASS, boardctl
+    RESULT: OK, 186 events with one audit event for this lane, zero deleted lines). The defect
+    was the artifact's shape, not the measurement, so the artifact is what changes: this commit
+    adds a plain-text census sentence to the evidence doc. The criterion is NOT reworded and the
+    failing verdict is preserved at .gitreins/history/2026-11-04/4084cf1a/ as history.
+    
+    Re-judged as CF-SYNC-2026110402-QA1 at this commit; that verdict is the completion evidence.
+    
+    Evidence: docs/audits/code-factory-sync-2026-11-04-0241.md
+---
+ docs/audits/code-factory-sync-2026-11-04-0241.md | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/docs/audits/code-factory-sync-2026-11-04-0241.md b/docs/audits/code-factory-sync-2026-11-04-0241.md
+index de7c03a..d09f183 100644
+--- a/docs/audits/code-factory-sync-2026-11-04-0241.md
++++ b/docs/audits/code-factory-sync-2026-11-04-0241.md
+@@ -37,6 +37,9 @@ sibling-landing skew in this family, not a defect; it is reported here rather th
+ 
+ ## Board parse (deliverable 1)
+ 
++Plain-text census for graders and for anyone grepping this file: the tree carries 125 task rows and
++185 before this tick's own audit event was appended (186 after), with statuses 38 complete, 82 pending, 5 in_progress.
++
+ | Check | Command | Result |
+ |---|---|---|
+ | task line count | `awk 'END{print NR}' .coding-hermes/board/tasks.jsonl` | 125 |

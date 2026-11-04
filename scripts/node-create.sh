@@ -66,6 +66,12 @@ while [ $# -gt 0 ]; do
   esac
 done
 if [ "$LIST_STAGED" -eq 1 ]; then staged_files; exit $?; fi
+if [ -z "${CRIER_URL:-}" ]; then
+  bad "crier_url" "CRIER_URL unset or empty — export CRIER_URL=http://crier.example:8767"
+  exit 1
+fi
+# Preserve the URL as one single-quoted environment assignment in the remote shell.
+CRIER_QUOTED="${CRIER_URL//\'/\'\\\'\'}"
 STAGED="$(staged_files)" || exit 1
 if [ -z "$SERVER" ]; then
   bad "server_declared" "BUNKER_SERVER unset — no agent host to create the node on"
@@ -103,7 +109,7 @@ ok "staged" "${STAGED//$'\n'/ + }"
 # 3. provision inside
 say "  ..    provisioning inside the node"
 if "$b" exec --server "$SERVER" "$AGENT" -- bash -lc \
-     "NODE_PROJECT='$PROJECT' NODE_GATEWAY_PORT='$PORT' ~/node-scripts/project-node.sh --apply --project '$PROJECT' --harness '$HARNESS' --repo '$REPO'"; then
+     "NODE_PROJECT='$PROJECT' NODE_GATEWAY_PORT='$PORT' CRIER_URL='$CRIER_QUOTED' ~/node-scripts/project-node.sh --apply --project '$PROJECT' --harness '$HARNESS' --repo '$REPO'"; then
   ok "provision" "node reports PASS"
 else
   bad "provision" "node reported FAIL — see the output above"
