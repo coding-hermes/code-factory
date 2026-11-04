@@ -41,9 +41,19 @@ reintroduce that state. The gate's error response should list the accepted paths
   cadence. `cooldown_s=21600` is the desired fallback value.
 - A satellite uses the cooldown admission model, not tasks admission: its board path can resolve to
   the primary board, so it must not interpret the primary backlog as independently owned work.
-- An enabled satellite must have an explicit family floor and ceiling (`8 × floor`) and remain
-  disarmed from adaptive cooldown. The scheduler/API validates the row before it is written or
-  enabled.
+- An enabled satellite is expected to carry an explicit family floor and a ceiling of eight times
+  that floor, and to remain disarmed from adaptive cooldown. That is a provisioning expectation, not
+  a gate: the shipped API refuses only the fully unarmed state. `laneIsUnarmed` is true when
+  `adaptive_cooldown=0` **and** `floor<=0` **and** `ceiling<=0`
+  (`coding-hermes/scheduler` `internal/api/lane_onboarding.go:269-271`), and `validateLaneArming`
+  refuses exactly that state and nothing else (`:303-310`). The arming writer fills the pair only on
+  a disable→enable transition of an unarmed row (`laneAutoArm`, `:389-403`), taking the floor from
+  `satelliteFamilyPins` and the ceiling from `DefaultAdaptiveCooldownCeiling`
+  (`internal/database/models.go:39,47-52`, multiplier 8). A row that already carries any non-zero
+  bound is written as given and is never refused for its ratio. Measured 2026-11-04: the live family
+  carried ceiling/floor ratios of 8× (`docs`, `perf`, `qa`, `readme`, `review`), 16×, 48×, 192×, 224×
+  and 576×, every row enabled. Read the pair back after arming; the API will not check it for you.
+  The cadence numbers themselves are owned by CF-134, not by this gate.
 - Scheduler namespace/global concurrency and load gates are runtime admission controls, not
   workdir allowlist rules. A lane may be configured correctly and still remain queued for capacity.
 
@@ -130,8 +140,10 @@ The guard does not write the scheduler or edit `fleet.toml`.
 ## Provenance and open caveat
 
 The family roots and pins above come from scheduler commit `7d5b8d25` and its parity test, not from
-a guess or a generic stand-in convention. The code-factory foreman's current six-hour fallback was
-verified in the live scheduler DB/API, but a matching durable project pin in the loaded
-`~/.hermes/fleet.toml` was not found during the audit. Restart persistence therefore remains
-unverified until the supported fleet policy generator reconciles that project and the parity check
-passes.
+a guess or a generic stand-in convention. The earlier note here — that the code-factory foreman ran
+a six-hour fallback with no matching durable project pin — no longer holds. Measured 2026-11-04: the
+live scheduler DB/API carries `code-factory` at `cooldown_s=1800` with `admission_mode=tasks`, and
+the loaded `~/.hermes/fleet.toml` carries a `code-factory` stanza with `cooldown_s = 1800`,
+`namespace_id = "code-factory"` and `enabled = true`, so the DB value has a durable pin behind it.
+The live satellite rows still do not carry the family pins from the table above; that divergence is
+CF-134's subject, and it is not evidence about restart persistence.
