@@ -13,6 +13,7 @@ Defaults: repo=".", board=".coding-hermes/board/tasks.jsonl", ref="origin/main".
 Prints one ORPHANED line per offending evidence entry, then `orphan_count=N`. Exit 0 always:
 it is an instrument, not a gate. A clean board prints `orphan_count=0`.
 """
+
 import json
 import subprocess
 import sys
@@ -55,7 +56,10 @@ for row in complete:
                 continue
             checked += 1
             commit = rec["commit"] or ""
-            if not commit or git("merge-base", "--is-ancestor", commit, ref).returncode != 0:
+            if (
+                not commit
+                or git("merge-base", "--is-ancestor", commit, ref).returncode != 0
+            ):
                 orphans.append(
                     "%s run=%s artifact=%s commit=%s passed=%s"
                     % (
