@@ -7,6 +7,14 @@ the repository root and exited 0 (`SELFTEST: PASS`, 88 `PASS` rows, suite counte
 29 sections — plus two lettered sub-arms, §4b and §7b, which the section regex `^say "[0-9]+\.` does
 not count, so the tree carries 31 arms; `scripts/boardctl validate` prints `RESULT: OK (48 warning(s))`;
 the board at that tip carries 117 task rows and 171 events (38 complete, 75 pending, 4 in_progress).
+**Delta measured 2026-11-04 03:02 at tip `2c48149`:** 125 task rows and 185 events before this tick's
+own audit event (186 at the landing commit) — 38 complete, 82 pending, 5 in_progress.
+`scripts/boardctl validate` prints `RESULT: OK (54 warning(s))`;
+`tests/selftest.sh` still prints `SELFTEST: PASS` (90 `PASS` rows) at loadavg 19.25. Two rows moved under
+this snapshot without any closure being lost: **CF-053** was deliberately reopened to `in_progress` at
+02:39 by the QA lane's isolation re-verification (event 181 records the transition; commit `6d801c7`
+names it), and **CF-093** closed in the same window, which is why the `complete` count still reads 38.
+Re-measure this block rather than trusting either snapshot.
 Nineteen `  FAIL` lines are printed *inside* the suite by fixtures that assert a rejection (§16's
 pre-fix manifest, the disk-floor refusal, the census fail-closed arms, …), so count `SELFTEST:` and
 the suite's counter, never a raw `grep -c '^  FAIL'`. Timing is not a portable number: 9.32 s CPU
