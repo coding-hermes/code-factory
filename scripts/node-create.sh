@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # node-create.sh — control host: create a node from a project + repo + harness triple.
 #
-#   ./node-create.sh --project crier --repo git@… --harness hermes [--agent <id>] [--ttl 6h]
+#   ./node-create.sh --project crier --repo git@… --harness hermes [--ref <branch-or-tag>] \
+#                    [--agent <id>] [--ttl 6h]
 #
 # Spawns the agent if needed, stages the scripts into it, runs project-node.sh --apply inside,
 # then runs verify-node.sh. Idempotent: an existing agent is reused, not respawned.
+# --ref is the branch or tag the node clones; it defaults to main (or $NODE_REF) and is the
+# remedy project-node.sh names when a repo's default branch is not main.
 # On failure, retain a newly spawned agent for diagnosis and print its exact, explicit-server
 # destroy command. Never suggest destroying an agent supplied with --agent.
 # --staged-files validates runtime references and prints the staging manifest without bunker.
@@ -12,7 +15,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
 
-PROJECT="" REPO="" HARNESS="hermes" AGENT="" TTL="6h" SERVER="${BUNKER_SERVER:-}" PORT=10800
+PROJECT="" REPO="" REF="${NODE_REF:-main}" HARNESS="hermes" AGENT="" TTL="6h" SERVER="${BUNKER_SERVER:-}" PORT=10800
 LIST_STAGED=0 SPAWNED=0
 
 staged_files() {
@@ -57,6 +60,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --project) PROJECT="$2"; shift 2 ;;
     --repo) REPO="$2"; shift 2 ;;
+    --ref) REF="$2"; shift 2 ;;
     --harness) HARNESS="$2"; shift 2 ;;
     --agent) AGENT="$2"; shift 2 ;;
     --ttl) TTL="$2"; shift 2 ;;
@@ -72,12 +76,14 @@ if [ -z "${CRIER_URL:-}" ]; then
 fi
 # Preserve the URL as one single-quoted environment assignment in the remote shell.
 CRIER_QUOTED="${CRIER_URL//\'/\'\\\'\'}"
+# Same escaping for the ref: it crosses into the node's shell inside single quotes.
+REF_QUOTED="${REF//\'/\'\\\'\'}"
 STAGED="$(staged_files)" || exit 1
 if [ -z "$SERVER" ]; then
   bad "server_declared" "BUNKER_SERVER unset — no agent host to create the node on"
   incomplete
 fi
-[ -z "$PROJECT" ] && { echo "usage: $0 --project P --repo URL [--harness H] [--agent ID]"; exit 2; }
+[ -z "$PROJECT" ] && { echo "usage: $0 --project P --repo URL [--ref R] [--harness H] [--agent ID]"; exit 2; }
 
 b=$(have bunker) || { echo "bunker client missing" >&2; exit 1; }
 
@@ -109,7 +115,7 @@ ok "staged" "${STAGED//$'\n'/ + }"
 # 3. provision inside
 say "  ..    provisioning inside the node"
 if "$b" exec --server "$SERVER" "$AGENT" -- bash -lc \
-     "NODE_PROJECT='$PROJECT' NODE_GATEWAY_PORT='$PORT' CRIER_URL='$CRIER_QUOTED' ~/node-scripts/project-node.sh --apply --project '$PROJECT' --harness '$HARNESS' --repo '$REPO'"; then
+     "NODE_PROJECT='$PROJECT' NODE_GATEWAY_PORT='$PORT' CRIER_URL='$CRIER_QUOTED' ~/node-scripts/project-node.sh --apply --project '$PROJECT' --harness '$HARNESS' --repo '$REPO' --ref '$REF_QUOTED'"; then
   ok "provision" "node reports PASS"
 else
   bad "provision" "node reported FAIL — see the output above"

@@ -1350,5 +1350,65 @@ else
 fi
 rm -rf "$tmpd"
 
+# CF-153: the node-side checker tells the operator to "pass --ref <branch-or-tag>", so the
+# documented control-host create command must accept that exact flag and carry it across the
+# transport. Pre-fix, node-create.sh printed `unknown arg: --ref` and exited 2, so arm (a) below
+# was red on that tree; the remedy its own error printed could not be followed.
+say "35. node-create accepts and forwards --ref (CF-153)"
+tmpd=$(mktemp -d)
+mkdir -p "$tmpd/scripts/harness" "$tmpd/bin"
+no_ref=$(bash "$HERE/scripts/node-create.sh" --staged-files 2>&1); no_rc=$?
+with_ref=$(bash "$HERE/scripts/node-create.sh" --staged-files --ref master 2>&1); ref_rc=$?
+if [ "$no_rc" -eq 0 ] && [ "$ref_rc" -eq 0 ] && [ "$with_ref" = "$no_ref" ] \
+  && [ "$(printf '%s\n' "$with_ref" | grep -c .)" -eq 5 ] \
+  && ! printf '%s\n' "$with_ref" | grep -Fq 'unknown arg:'; then
+  say "  PASS  --staged-files --ref master -> exit 0, same five-file staged set"
+else
+  say "  FAIL  --ref rejected or changed the staged set (exit $no_rc/$ref_rc)"; fails=$((fails+1))
+fi
+# Stub transport only: the same node-create.sh the operator runs, a bunker that records argv
+# and keeps the payload it was handed. No network, no agent, no installation.
+while IFS= read -r file; do
+  cp "$HERE/scripts/$file" "$tmpd/scripts/$file" || fails=$((fails+1))
+done <<< "$no_ref"
+cp "$HERE/scripts/node-create.sh" "$tmpd/scripts/" || fails=$((fails+1))
+printf '#!/usr/bin/env bash\nexit 0\n' > "$tmpd/scripts/verify-node.sh"
+chmod +x "$tmpd/scripts/verify-node.sh"
+cat > "$tmpd/bin/bunker" <<'EOF'
+#!/usr/bin/env bash
+if [ -n "${FIXTURE_LOG:-}" ]; then
+  printf '%s\n' "$*" >> "$FIXTURE_LOG"
+fi
+case "$1" in
+  spawn) printf '%s\n' "$2" > "$FIXTURE_AGENT" ;;
+  cp) exit 0 ;;
+  exec) case "${!#}" in *NODE_PROJECT=*) printf '%s\n' "${!#}" > "$FIXTURE_PAYLOAD" ;; esac ;;
+  *) echo 'unexpected bunker command' >&2; exit 99 ;;
+esac
+EOF
+chmod +x "$tmpd/bin/bunker"
+for ref_value in master "re'lease"; do
+  # A plain assertion on the recorded bytes: the expected quoting is written literally, so
+  # this never executes anything the fixture supplied.
+  case "$ref_value" in
+    master) want_ref="--ref 'master'" ;;
+    *) want_ref="--ref 're'\''lease'" ;;
+  esac
+  : > "$tmpd/payload"
+  out=$(env -i HOME="$tmpd/control-home" PATH="$tmpd/bin:$PATH" BUNKER_SERVER=fixture-server \
+    CRIER_URL=http://fixture.invalid:8767 FIXTURE_LOG="$tmpd/bunker.log" \
+    FIXTURE_AGENT="$tmpd/agent" FIXTURE_PAYLOAD="$tmpd/payload" \
+    /bin/bash "$tmpd/scripts/node-create.sh" --project fixture \
+    --repo https://github.com/git/git --harness hermes --ref "$ref_value" 2>&1); rc=$?
+  if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Eq '^NODE CREATED: node-fixture-' \
+    && grep -aFq -- "--repo 'https://github.com/git/git' $want_ref" "$tmpd/payload"; then
+    say "  PASS  ref '$ref_value' crosses the transport as $want_ref"
+  else
+    say "  FAIL  ref '$ref_value' was dropped or unquoted in the payload (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out"
+  fi
+done
+rm -rf "$tmpd"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

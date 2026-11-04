@@ -26,6 +26,8 @@ scripts/bunker-server-install.sh --check
 ./scripts/project-node.sh --check --project myproject
 
 # 3. make one, from the control host
+#    (a repo whose default branch is not main: add --ref <branch-or-tag> here — node-create.sh
+#    forwards it, and it is the same flag the node's own check tells you to pass)
 scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes
 ```
 
@@ -78,8 +80,10 @@ instead of implying it works.
 | Round trip through the node's own gateway | **not yet** — no checked-in command proves it; the one attempt used a bespoke poller rather than the node's gateway (CF-004) | no command exists to fail |
 
 `--ref` defaults to `main`, so a public repo whose default branch is named differently needs
-`--ref <branch>`. A missing ref reports that ref and the `--ref` flag; a repository-access failure
-retains the deploy-key hint for private repositories (CF-034).
+`--ref <branch>` on the step 3 create command; `scripts/node-create.sh` forwards it and the node
+clones that branch or tag (`scripts/project-node.sh` accepts the same flag directly). A missing ref
+reports that ref and the `--ref` flag; a repository-access failure retains the deploy-key hint for
+private repositories (CF-034).
 
 See `.coding-hermes/board/tasks.jsonl` for the work items and their acceptance criteria.
 
