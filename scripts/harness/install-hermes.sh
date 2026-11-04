@@ -62,6 +62,47 @@ check_python_compatibility() {
   ok "python" "$version (hermes-agent $PIN requires >=3.11,<3.14)"
 }
 
+# Read only the configured credentials; never echo values or YAML parser diagnostics.
+check_public_bind_auth() {
+  local config_python="$PYTHON_BIN"
+  [ ! -x "$VENV/bin/python" ] || config_python="$VENV/bin/python"
+  "$config_python" - "$HOME/.hermes/config.yaml" 2>/dev/null <<'PY'
+import re
+import sys
+from pathlib import Path
+
+
+def refuse(reason):
+    print(reason)
+    sys.exit(1)
+
+
+try:
+    import yaml
+except ImportError:
+    refuse("block absent (YAML parser unavailable)")
+try:
+    text = Path(sys.argv[1]).read_text(encoding="utf-8")
+except (OSError, UnicodeError):
+    refuse("block absent (config unreadable)")
+try:
+    config = yaml.safe_load(text)
+except yaml.YAMLError:
+    refuse("block absent (invalid YAML)")
+dashboard = config.get("dashboard") if isinstance(config, dict) else None
+if not isinstance(dashboard, dict) or "basic_auth" not in dashboard:
+    # Comments explain a refusal only; they can never authorize a public bind.
+    commented = re.search(r"^\s*#\s*basic_auth\s*:", text, re.MULTILINE)
+    refuse("commented" if commented else "block absent")
+auth = dashboard["basic_auth"]
+if not isinstance(auth, dict) or not all(
+    isinstance(auth.get(key), str) and auth[key].strip()
+    for key in ("username", "password")
+):
+    refuse("empty value (username and password must both be non-empty)")
+PY
+}
+
 say "harness: hermes (pin $PIN, port $PORT)"
 check_python_compatibility || exit 1
 
@@ -124,13 +165,13 @@ if [ "$MODE" = "--apply" ]; then
   fi
 
   if ! (command -v ss >/dev/null && ss -tln 2>/dev/null | grep -q ":$PORT ") 2>/dev/null; then
-    if grep -q 'basic_auth' "$HOME/.hermes/config.yaml" 2>/dev/null; then
+    if auth_reason=$(check_public_bind_auth); then
       nohup "$VENV/bin/hermes" serve --host 0.0.0.0 --port "$PORT" --skip-build >"$HOME/.node-serve-$PORT.log" 2>&1 &
       sleep 6
       code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$PORT/api/status" 2>/dev/null || echo 000)
       [ "$code" = 200 ] && ok "gateway_start" "/api/status -> 200" || bad "gateway_start" "-> $code (see ~/.node-serve-$PORT.log)"
     else
-      bad "gateway_start" "refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml"
+      bad "gateway_start" "refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — ${auth_reason:-block absent (config check failed)}"
     fi
   fi
 fi
