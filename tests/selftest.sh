@@ -1225,8 +1225,8 @@ fi
 rm -rf "$tmpd"
 # END pip-log-path
 
-# ch:trace row=CF-145 spec=README.md#quick-start test=tests/selftest.sh::quick-start-names-bunker-server doc=README.md prompt=prompts/readme.md evidence=tests/selftest.sh §31 witness=none:local-fixture verdict=none:open-until-judged commit=none:self-referential-hash memory=none:no-lane-role-token
-say "31. the Quick start control-host commands name BUNKER_SERVER in a check row (CF-145)"
+# ch:trace row=CF-145 spec=README.md#quick-start test=tests/selftest.sh::quick-start-names-bunker-server doc=README.md prompt=prompts/readme.md evidence=tests/selftest.sh §32 witness=none:local-fixture verdict=none:open-until-judged commit=none:self-referential-hash memory=none:no-lane-role-token
+say "32. the Quick start control-host commands name BUNKER_SERVER in a check row (CF-145)"
 # README's fresh-host promise: with no bunker server, no Crier and no repo, all three Quick
 # start commands reach their checkers and fail with the missing value named. The first and
 # third used to die in ${BUNKER_SERVER:?} expansion before any checker ran — the value was
