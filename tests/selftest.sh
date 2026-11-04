@@ -277,7 +277,7 @@ else
   say "  FAIL  cf155 sections census green direction failed (exit $rc)"; fails=$((fails+1))
 fi
 printf '%s\n' 'say "99. drift fixture"' >> "$tmpd/selftest.sh"
-plan_sections=$(awk 'index($0, "**Current state") == 1 {if (match($0, /[0-9]+ numbered sections/)) {print substr($0, RSTART, RLENGTH); exit}}' "$tmpd/plan.md" | grep -oE '[0-9]+')
+plan_sections=$(grep -m1 '^\*\*Current state' "$tmpd/plan.md" | grep -oE 'carries [0-9]+ sections|[0-9]+ numbered sections' | head -1 | grep -oE '[0-9]+')
 expected="DRIFT: plan says $plan_sections sections, tests/selftest.sh has $((plan_sections+1))"
 out=$(CF099_PLAN="$tmpd/plan.md" CF099_SELFTEST="$tmpd/selftest.sh" \
   bash "$HERE/docs/audits/cf099-prd-drift-probe.sh" --sections-only 2>&1); rc=$?

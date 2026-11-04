@@ -9,8 +9,15 @@ cd "$(git rev-parse --show-toplevel)" || exit 2
 P=${CF099_PLAN:-docs/ACCEPTANCE-PLAN.md}
 S=${CF099_SELFTEST:-tests/selftest.sh}
 R=docs/PRD-code-factory.md
+# Phrasing-tolerant readers for the single "Current state" line. The plan has been written two
+# ways ("carries N sections — numbered 1 through N" and "N numbered sections"), and a parser that
+# only understands one of them reads the other as "none" and reports drift that is not there.
+cs_line() { grep -m1 '^\*\*Current state' "$1"; }
+n_sections() { cs_line "$1" | grep -oE 'carries [0-9]+ sections|[0-9]+ numbered sections' | head -1 | grep -oE '[0-9]+'; }
+n_rows() { cs_line "$1" | grep -oE '[0-9]+ task rows|tasks\.jsonl` has [0-9]+ lines' | head -1 | grep -oE '[0-9]+'; }
+n_events() { cs_line "$1" | grep -oE '[0-9]+ events|events\.jsonl` has [0-9]+ lines' | head -1 | grep -oE '[0-9]+'; }
 if [ "${1:-}" = --sections-only ]; then
-  nsec=$(awk 'index($0, "**Current state") == 1 {if (match($0, /[0-9]+ numbered sections/)) {print substr($0, RSTART, RLENGTH); exit}}' "$P" | grep -oE '[0-9]+')
+  nsec=$(n_sections "$P")
   msec=$(grep -cE '^say "[0-9]+\.' "$S")
   [ "${nsec:-x}" = "$msec" ] || { echo "DRIFT: plan says ${nsec:-none} sections, tests/selftest.sh has $msec"; d=1; }
   d=${d:-0}
@@ -19,9 +26,9 @@ if [ "${1:-}" = --sections-only ]; then
 fi
 d=0
 tip=$(grep -oE 'at tip `[0-9a-f]{7,40}`' "$P" | head -1 | grep -oE '[0-9a-f]{7,40}')
-srow=$(awk 'index($0, "**Current state") == 1 {if (match($0, /tasks.jsonl` has [0-9]+ lines/)) {print substr($0, RSTART, RLENGTH); exit}}' "$P" | grep -oE '[0-9]+' | tail -1)
-sev=$(awk 'index($0, "**Current state") == 1 {if (match($0, /events.jsonl` has [0-9]+ lines/)) {print substr($0, RSTART, RLENGTH); exit}}' "$P" | grep -oE '[0-9]+' | tail -1)
-  nsec=$(awk 'index($0, "**Current state") == 1 {if (match($0, /[0-9]+ numbered sections/)) {print substr($0, RSTART, RLENGTH); exit}}' "$P" | grep -oE '[0-9]+')
+srow=$(n_rows "$P")
+sev=$(n_events "$P")
+nsec=$(n_sections "$P")
 if [ -z "$tip" ] || ! git cat-file -e "$tip:.coding-hermes/board/tasks.jsonl" 2>/dev/null; then
   echo "DRIFT: acceptance plan names no resolvable tip"; d=1
 else

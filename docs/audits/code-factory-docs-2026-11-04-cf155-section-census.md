@@ -9,9 +9,32 @@ Claim corrected: current acceptance-plan selftest section count; add a regressio
 | Location | Before | After |
 |---|---|---|
 | `docs/ACCEPTANCE-PLAN.md:5` | Current state was pinned to `bc68e59`: 35 numbered sections, 37 arms, 109 PASS rows, 19 fixture FAIL rows, 148 board rows, 273 events. | Re-measured at `8b81369`: 36 numbered sections plus §4b/§7b/§7c = 39 arms; 121 PASS rows and 19 intentional fixture FAIL rows; loadavg 7.43; 154 task-file lines and 291 event-file lines. §36 landed in 8b81369 for CF-159, falsifying the 35-section line. The filed 29-vs-30 premise moved to 35-vs-36; this closes the current drift. |
-| `docs/ACCEPTANCE-PLAN.md:60-61` | 37 arms, 25 unnamed arms, enumeration ended at §35 and omitted §7c. | 39 total arms; 12 named and 27 unnamed; enumeration includes §7c and §36. |
-| `docs/ACCEPTANCE-PLAN.md:65` | Governing-row map ended at §35 / CF-153. | Adds §36 / CF-159 and §7c / CF-155. |
-| `docs/ACCEPTANCE-PLAN.md:97` | Current tree claimed 35 numbered + two lettered = 37 arms. | Corrected to 36 numbered + three lettered = 39; historical 31-arm d02916e count unchanged. |
+| `docs/ACCEPTANCE-PLAN.md:57-67` | 37 arms in the reverse-direction paragraph, enumeration ended at §35, §7c absent. | 39 arms total (36 numbered + §4b/§7b/§7c); 12 named and 27 unnamed; enumeration carries §7c and §36, and the governing map adds §7c `CF-155` beside §36 `CF-159`. |
+| `docs/ACCEPTANCE-PLAN.md:67` | Governing-row map ended at §36 / CF-159. | Adds §7c / CF-155. |
+| `docs/ACCEPTANCE-PLAN.md:99` | Current tree claimed 36 numbered + two lettered = 38 arms. | Corrected to 36 numbered + three lettered = 39; historical 31-arm d02916e count unchanged. |
+| `docs/ACCEPTANCE-PLAN.md:5` | Census was a diagnostic: "any lane that adds a section turns this line red until the count is re-measured". | Same sentence now names the gate: `--sections-only` plus selftest §7c, green on this tree and red on a one-extra-section fixture. |
+
+### Sibling correction this commit does not repeat
+
+A sync-lane tick re-pinned the same "Current state" line at `8b81369` (stamp `08:36Z`) about ten minutes before
+this tick's commit, so the 35-vs-36 count was already corrected on the fetched tip. This commit therefore does
+not restate that measurement as its own finding: it keeps the sibling's numbers, RE-DERIVES them after adding
+§7c (three lettered arms, 39 arms, 121 `PASS` rows), and adds the part that was still missing — the committed
+gate. The rebase over the sibling commits conflicted in this one file (both sides had rewritten line 5 and the
+reverse-direction paragraph); resolution took the published sentence as the base and applied only the §7c /
+39-arm / §7c-CF-155 / gate-sentence deltas.
+
+### Merge-time finding: the first version of the gate could not read the published sentence
+
+The first rebased tree ran red for a reason worth recording, because it is the failure mode the gate exists to
+catch and it caught itself: the arm's parser matched only `[0-9]+ numbered sections`, the phrasing this tick's
+worker had written, while the published line reads `carries 36 sections — numbered 1 through 36 —`. The arm
+therefore printed `DRIFT: plan says none sections, tests/selftest.sh has 37` and `SELFTEST: FAIL (2)` at
+`740ed6d`. A gate that only understands one phrasing of the sentence it grades reports drift on a tree that is
+correct, and the next lane would have "fixed" the count instead of the parser. `docs/audits/cf099-prd-drift-probe.sh`
+now carries four phrasing-tolerant readers (`cs_line`, `n_sections`, `n_rows`, `n_events`) that accept both
+forms the plan has used, and `tests/selftest.sh` §7c computes its fixture expectation with the same pattern.
+Re-run at the merged tree: sections-only rc 0, full probe rc 0, `SELFTEST: PASS`.
 
 Historical snapshots explicitly pinned to old tips were preserved, including the d02916e 29-section snapshot and the `Previous snapshots` list.
 
