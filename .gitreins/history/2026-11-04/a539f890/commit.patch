@@ -1,0 +1,236 @@
+commit 5069c0a9148c0d9d8a6c6a48cfd5d6711a570570
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Wed Nov 4 04:12:11 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Wed Nov 4 04:12:11 2026 -0500
+
+    fix(CF-183): certify the pinned harness, not any hermes on PATH
+    
+    The PATH fallback was silently treated as adapter-owned, the version row
+    accepted any banner without comparing HERMES_PIN, and --apply used binary
+    presence rather than venv ownership and the measured pin to skip install.
+    Distinguish host-provided binaries, compare the measured version token with
+    the pin, and install when the venv binary is missing or mismatched. Preserve
+    build-metadata banners and the existing absent/installed fixture rows.
+    
+    Selftest section 31b is RED against the original script and GREEN with this
+    fix. It covers host and venv ownership, matching and mismatched versions,
+    real Hermes banner metadata, exact pinned pip arguments, fresh-HOME venv
+    creation despite PATH hermes, and retention only of a matching owned pin.
+    Correct README's host-binary claim and the harness spec in the same change.
+    
+    Full selftest and board validation pass. Ruff lint passes; format check
+    flags the unchanged cf181-verdict-binding-sweep.py at the original tip too.
+    The real Python 3.12 probe creates a venv and installs 0.19.0; its subsequent
+    check passes binary/version and still fails the absent port/provider key.
+    
+    A commit cannot embed its own SHA: commit=none:self-referential-hash is
+    explicit because this delivery requires one commit and forbids amending.
+    The actual commit SHA is reported separately.
+    
+    ch:trace row=CF-183 spec=specs/HARNESS.md wave=none:serial test=tests/selftest.sh::31b doc=README.md evidence=none:pending-judge witness=cmd:cf183-probe verdict=pending commit=none:self-referential-hash
+---
+ README.md                         |  2 +-
+ scripts/harness/install-hermes.sh | 27 +++++++++--
+ specs/HARNESS.md                  |  8 +++-
+ tests/selftest.sh                 | 95 +++++++++++++++++++++++++++++++++++++++
+ 4 files changed, 127 insertions(+), 5 deletions(-)
+
+diff --git a/README.md b/README.md
+index 73cdb83..4b4deae 100644
+--- a/README.md
++++ b/README.md
+@@ -72,7 +72,7 @@ instead of implying it works.
+ 
+ | Piece | State | Command that can contradict it |
+ |---|---|---|
+-| Hermes in a bunker + HTTP gateway over tailnet | **works (historical measurement)** — observed on a live node on 2026-10-29: 32 s install, `/api/status` 200, 133 JSON-RPC methods. The recorded measurement is in `specs/HARNESS.md#adapters-and-their-measured-state` and the repo-local audit `docs/audits/code-factory-readme-2026-10-30-20-29-25.md#2-status-table-both-command-bearing-rows`; it is not reproducible from this repo alone. Current local evidence is only `scripts/harness/install-hermes.sh --check`. On this host's default `python3` (3.14) that command prints exactly one gate row — `FAIL python` — and never reaches the binary or port arms; the binary, port and `inference_key` rows print only on an interpreter inside the pin's range (`HERMES_PYTHON_BIN=python3.12` prints four when no `hermes` binary is installed — that is the recorded arm — and five on a host where `~/.local/bin/hermes` exists, because a `version` row is added; re-measured on this host on 2026-11-03: rows python, binary, version, port, `inference_key`, `HERMES: FAIL (1)`, rc 1). Both arms, with the measured gate-row counts (1 vs 4), the binary/port rows they carry (0/1) and both exit codes, are in `docs/audits/cf092-install-check-arms.txt`; the `inference_key` pair is also in `docs/audits/code-factory-CF-064.probe.txt` (CF-064, CF-092). `--apply` needs Python `>=3.11,<3.14` — the pinned `hermes-agent==0.19.0` declares that range, and the installer now refuses Python 3.14 before pip with the detected version. The exact selftest/check output is recorded in `docs/audits/code-factory-CF-036.md` (CF-036). | Re-run the current local check with an interpreter inside the pin's range — `HERMES_PYTHON_BIN=python3.12 scripts/harness/install-hermes.sh --check` — which prints four gate rows when no `hermes` binary is installed (python, binary, port, `inference_key`) and five on a host where `~/.local/bin/hermes` exists (adds `version`). The unqualified `scripts/harness/install-hermes.sh --check` is the same command on the default `python3`, and there it prints one row: `FAIL python`. For the historical figures, read the committed artifact named in the state cell; no live endpoint or credential is claimed here. |
++| Hermes in a bunker + HTTP gateway over tailnet | **works (historical measurement)** — observed on a live node on 2026-10-29: 32 s install, `/api/status` 200, 133 JSON-RPC methods. The recorded measurement is in `specs/HARNESS.md#adapters-and-their-measured-state` and the repo-local audit `docs/audits/code-factory-readme-2026-10-30-20-29-25.md#2-status-table-both-command-bearing-rows`; it is not reproducible from this repo alone. Current local evidence is only `scripts/harness/install-hermes.sh --check`. On this host's default `python3` (3.14) that command prints exactly one gate row — `FAIL python` — and never reaches the binary or port arms; the binary, port and `inference_key` rows print only on an interpreter inside the pin's range (`HERMES_PYTHON_BIN=python3.12` prints four when no `hermes` binary is installed — that is the recorded arm — and five when a binary is found, because a `version` row is added. The 2026-11-03 host-provided `hermes` result was historical, not certification of the pinned venv install: CF-183 now FAILs host-provided binaries and compares the measured version against the pin). Both arms, with the measured gate-row counts (1 vs 4), the binary/port rows they carry (0/1) and both exit codes, are in `docs/audits/cf092-install-check-arms.txt`; the `inference_key` pair is also in `docs/audits/code-factory-CF-064.probe.txt` (CF-064, CF-092). `--apply` needs Python `>=3.11,<3.14` — the pinned `hermes-agent==0.19.0` declares that range, and the installer now refuses Python 3.14 before pip with the detected version. The exact selftest/check output is recorded in `docs/audits/code-factory-CF-036.md` (CF-036). | Re-run the current local check with an interpreter inside the pin's range — `HERMES_PYTHON_BIN=python3.12 scripts/harness/install-hermes.sh --check` — which prints four gate rows when no `hermes` binary is installed (python, binary, port, `inference_key`) and five when a binary is found (adds `version`). Only `$HOME/hermes-venv/bin/hermes` passes the binary row; a PATH-provided binary is reported as host-provided, not certified. The version row compares the measured value against `HERMES_PIN` (default `0.19.0`); a mismatch FAILs and prints both values. `--apply` installs the pin when the venv binary is missing or mismatched, even if `hermes` exists on PATH. The unqualified `scripts/harness/install-hermes.sh --check` is the same command on the default `python3`, and there it prints one row: `FAIL python`. For the historical figures, read the committed artifact named in the state cell; no live endpoint or credential is claimed here. |
+ | Repo clone in a node | **works (historical local measurement)** for public HTTPS — `PASS repo_clone … @ 9402f6a` was measured on 2026-10-30 with `https://github.com/github/gitignore` and is recorded in `docs/audits/code-factory-readme-2026-10-30-20-29-25.md#2-status-table-both-command-bearing-rows`. A re-run derives the current HEAD, which may move. Layer 40 clones only; no build step is shipped. Private repos are **blocked** — a deploy key has no tested procedure yet. | Re-run with a temporary HOME and the same public fixture: `home=$(mktemp -d); CRIER_URL=http://crier.example:8767 HOME="$home" ./scripts/project-node.sh --apply --project myproject --repo https://github.com/github/gitignore --ref main`. The node check is the last command on that line, so the line's exit status is the check's: `NODE: FAIL` exits nonzero. Read the clone back in a second command, not the same line: `git -C "$home/repo" rev-parse HEAD`. The committed audit records the historical output. |
+ | Node inference credential | **missing** — a turn dies at `No inference provider configured`; the node needs its own key, never an operator key | `scripts/harness/install-hermes.sh --check` -> `FAIL inference_key`. That row prints only on an interpreter inside the pin's range; the default `python3` here is 3.14 and stops at `FAIL python` first, so name one explicitly: `HERMES_PYTHON_BIN=python3.12 scripts/harness/install-hermes.sh --check` -> `FAIL inference_key`. Both arms are transcripted in `docs/audits/code-factory-CF-064.probe.txt` (CF-064). |
+ | crier identity in a node | **missing** — no `~/.node/crier.json` yet | `./scripts/project-node.sh --check --project myproject` -> `FAIL crier_identity` |
+diff --git a/scripts/harness/install-hermes.sh b/scripts/harness/install-hermes.sh
+index cdced59..918e85e 100755
+--- a/scripts/harness/install-hermes.sh
++++ b/scripts/harness/install-hermes.sh
+@@ -24,6 +24,17 @@ PYTHON_MAX_MINOR=14
+ MODE="${1:---check}"
+ 
+ hb() { [ -x "$VENV/bin/hermes" ] && echo "$VENV/bin/hermes" || have hermes; }
++hv() {
++  local raw
++  raw=$("$1" --version 2>/dev/null) || return 1
++  raw=${raw%%$'\n'*}
++  if [[ "$raw" =~ (^|[[:space:]])v?([0-9]+\.[0-9]+\.[0-9]+[^[:space:]]*) ]]; then
++    printf '%s\n' "${BASH_REMATCH[2]}"
++  else
++    printf '%s\n' "$raw"
++    return 1
++  fi
++}
+ 
+ check_python_compatibility() {
+   local raw version py_major py_minor
+@@ -55,9 +66,16 @@ say "harness: hermes (pin $PIN, port $PORT)"
+ check_python_compatibility || exit 1
+ 
+ h=$(hb)
++version=
+ if [ -n "$h" ]; then
+-  ok "binary" "$h"
+-  ok "version" "$("$h" --version 2>/dev/null | head -1)"
++  if [ -x "$VENV/bin/hermes" ]; then
++    ok "binary" "$h"
++  else
++    bad "binary" "host-provided $h (not installed by this adapter — run --apply)"
++  fi
++  version=$(hv "$h")
++  [ "$version" = "$PIN" ] && ok "version" "$version (pin $PIN)" \
++    || bad "version" "${version:-unknown} != pin $PIN"
+ else
+   bad "binary" "absent — run --apply"
+ fi
+@@ -81,7 +99,10 @@ fi
+ 
+ if [ "$MODE" = "--apply" ]; then
+   say "apply"
+-  if [ -z "$h" ]; then
++  if [ ! -x "$VENV/bin/hermes" ] || [ "$version" != "$PIN" ]; then
++    if [ -x "$VENV/bin/hermes" ]; then
++      note "venv version ${version:-unknown} != pin $PIN — installing pin"
++    fi
+     "$PYTHON_BIN" -m venv "$VENV" || { bad "venv" "creation failed"; exit 1; }
+     log_template="$HOME/.hermes-install-$PORT.XXXXXXXX.log"
+     if pip_log=$(umask 077; mktemp "$log_template" 2>&1); then
+diff --git a/specs/HARNESS.md b/specs/HARNESS.md
+index f645740..4be469c 100644
+--- a/specs/HARNESS.md
++++ b/specs/HARNESS.md
+@@ -7,7 +7,7 @@ A **harness** is whatever runs the work inside a node. The factory must not care
+ | Obligation | How |
+ |---|---|
+ | Install | `scripts/harness/install-<name>.sh --check` reports absence; `--apply` installs user-space. |
+-| Version | `--check` prints the resolved binary and version, not just "ok". |
++| Version | `--check` prints the binary's ownership and measured version; a version mismatch names both the measured value and the pin and FAILs, not just "ok". |
+ | Invoke | Accepts a directive (text) and a working directory; runs unattended. |
+ | Report | Emits the model it actually served (requested vs served), when it has one. |
+ | Fail | Non-zero exit on failure; never a silent success. |
+@@ -25,6 +25,12 @@ A **harness** is whatever runs the work inside a node. The factory must not care
+ | **goose** | binary | not measured |
+ | **pi-agent** | binary | not measured |
+ 
++Hermes certifies only `$HOME/hermes-venv/bin/hermes` at `HERMES_PIN` (default `0.19.0`).
++A PATH-provided binary is labelled host-provided and FAILs the binary row, even if its
++version matches. `--apply` creates the venv and installs `hermes-agent==$HERMES_PIN`
++when the venv binary is absent, regardless of PATH. A venv version mismatch is named
++and reinstalls the pin; only a matching venv binary earns "already installed".
++
+ Only **hermes** has a measured install ladder in this repo. The others ship a documented
+ `--check` and a method, and are marked `UNVERIFIED` until someone runs them — an unverified
+ installer is not a supported installer, and the script says so out loud.
+diff --git a/tests/selftest.sh b/tests/selftest.sh
+index 8e55c29..84ba540 100755
+--- a/tests/selftest.sh
++++ b/tests/selftest.sh
+@@ -1249,6 +1249,101 @@ fi
+ rm -rf "$tmpd"
+ # END pip-log-path
+ 
++# BEGIN cf183-pinned-harness
++say "31b. Hermes certifies the pinned venv binary, not a host-provided command (CF-183)"
++tmpd=$(mktemp -d)
++mkdir -p "$tmpd/bin"
++cat > "$tmpd/bin/hermes" <<'EOF'
++#!/bin/sh
++echo 'Hermes Agent v9.9.9-not-the-pin'
++EOF
++cat > "$tmpd/bin/hermes.pin" <<'EOF'
++#!/bin/sh
++echo 'hermes fixture 0.19.0'
++EOF
++cat > "$tmpd/bin/python" <<'EOF'
++#!/usr/bin/env bash
++case "$*" in
++  --version) echo 'Python 3.12.3' ;;
++  '-m venv '*)
++    echo venv >> "$CF183_FIXTURE/calls"
++    mkdir -p "$3/bin"
++    cp "$CF183_FIXTURE/bin/python" "$3/bin/python"
++    ;;
++  '-m pip install --no-cache-dir hermes-agent==0.19.0')
++    echo 'pip hermes-agent==0.19.0' >> "$CF183_FIXTURE/calls"
++    cp "$CF183_FIXTURE/bin/hermes.pin" "$HOME/hermes-venv/bin/hermes"
++    ;;
++  *) exit 99 ;;
++esac
++EOF
++printf '#!/bin/sh\nexit 1\n' > "$tmpd/bin/ss"
++chmod +x "$tmpd/bin/"*
++cf183_run() {
++  env -i PATH="$tmpd/bin:/usr/bin:/bin" HOME="$cf183_home" TMPDIR="$tmpd" \
++    HERMES_PYTHON_BIN="$tmpd/bin/python" HERMES_PIN=0.19.0 \
++    NODE_GATEWAY_PORT=10800 CF183_FIXTURE="$tmpd" \
++    /bin/bash "$HERE/scripts/harness/install-hermes.sh" "$@"
++}
++for arm in host-mismatch host-pin venv-mismatch venv-pin host-banner venv-banner; do
++  cf183_home="$tmpd/$arm"
++  mkdir -p "$cf183_home"
++  : > "$tmpd/calls"
++  cp "$tmpd/bin/hermes.pin" "$tmpd/bin/hermes"
++  if [[ "$arm" = *mismatch ]]; then
++    printf '#!/bin/sh\necho "Hermes Agent v9.9.9-not-the-pin"\n' > "$tmpd/bin/hermes"
++  elif [[ "$arm" = *banner ]]; then
++    printf '#!/bin/sh\necho "Hermes Agent v0.19.0 (2026.7.20) · upstream c419cf7c · local 770a952c (+1 carried commit)"\n' > "$tmpd/bin/hermes"
++  fi
++  if [[ "$arm" = venv-* ]]; then
++    mkdir -p "$cf183_home/hermes-venv/bin"
++    cp "$tmpd/bin/hermes" "$cf183_home/hermes-venv/bin/hermes"
++    expected="  PASS  binary — $cf183_home/hermes-venv/bin/hermes"
++  else
++    expected="  FAIL  binary — host-provided $tmpd/bin/hermes (not installed by this adapter — run --apply)"
++  fi
++  out=$(cf183_run --check 2>&1); rc=$?
++  if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq "$expected" \
++    && { if [[ "$arm" = *mismatch ]]; then
++      printf '%s\n' "$out" | grep -Fxq '  FAIL  version — 9.9.9-not-the-pin != pin 0.19.0' \
++        && ! printf '%s\n' "$out" | grep -q '^  PASS  version'
++    else
++      printf '%s\n' "$out" | grep -Fxq '  PASS  version — 0.19.0 (pin 0.19.0)'
++    fi; }; then
++    say "  PASS  cf183 $arm --check: ownership and measured version vs pin"
++  else
++    say "  FAIL  cf183 $arm --check (exit $rc): $out"; fails=$((fails+1))
++  fi
++  out=$(cf183_run --apply 2>&1); rc=$?
++  if [ "$rc" -eq 1 ] && [ -x "$cf183_home/hermes-venv/bin/hermes" ] \
++    && { if [ "$arm" = venv-pin ] || [ "$arm" = venv-banner ]; then
++      [ ! -s "$tmpd/calls" ] && printf '%s\n' "$out" | grep -Fq 'already installed:'
++    else
++      [ "$(grep -Fxc venv "$tmpd/calls")" = 1 ] \
++        && [ "$(grep -Fxc 'pip hermes-agent==0.19.0' "$tmpd/calls")" = 1 ] \
++        && ! printf '%s\n' "$out" | grep -Fq 'already installed:' \
++        && { [ "$arm" != venv-mismatch ] \
++          || printf '%s\n' "$out" | grep -Fq 'venv version 9.9.9-not-the-pin != pin 0.19.0 — installing pin'; }
++    fi; }; then
++    say "  PASS  cf183 $arm --apply: pinned venv installed or matching venv retained"
++  else
++    say "  FAIL  cf183 $arm --apply (exit $rc): $out"; fails=$((fails+1))
++  fi
++  out=$(cf183_run --check 2>&1); rc=$?
++  if [ "$rc" -eq 1 ] \
++    && printf '%s\n' "$out" | grep -Fxq "  PASS  binary — $cf183_home/hermes-venv/bin/hermes" \
++    && printf '%s\n' "$out" | grep -Fxq '  PASS  version — 0.19.0 (pin 0.19.0)' \
++    && printf '%s\n' "$out" | grep -Fxq 'HERMES: FAIL (2)'; then
++    say "  PASS  cf183 $arm installed --check: owned pin passes, missing port/key still fail"
++  else
++    say "  FAIL  cf183 $arm installed --check (exit $rc): $out"; fails=$((fails+1))
++  fi
++done
++unset -f cf183_run
++unset cf183_home
++rm -rf "$tmpd"
++# END cf183-pinned-harness
++
+ # ch:trace row=CF-145 spec=README.md#quick-start test=tests/selftest.sh::quick-start-names-bunker-server doc=README.md prompt=prompts/readme.md evidence=tests/selftest.sh §32 witness=none:local-fixture verdict=none:open-until-judged commit=none:self-referential-hash memory=none:no-lane-role-token
+ say "32. the Quick start control-host commands name BUNKER_SERVER in a check row (CF-145)"
+ # README's fresh-host promise: with no bunker server, no Crier and no repo, all three Quick
