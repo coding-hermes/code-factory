@@ -126,3 +126,47 @@ This section was added after the three commits landed, so it names them instead 
 the earlier commits' `ch:trace` lines say `verdict=none:recorded-after-push` /
 `memory=none:recorded-after-push` on purpose, and board event 221 is the record that binds the
 verdict and the receipt to the pass.
+
+## Addendum — verification pass, this execution (added 2026-11-04T04:1xZ)
+
+This tick fired again on the same id (`code-factory-sync-2026-11-04-04-00-08`). The sections above
+were written by an earlier execution of that tick, so this execution **verified** them against the
+surviving artifacts and **implemented nothing**. No second GitReins task was minted.
+
+| Claim in the receipt | Re-measured by this execution | Verdict |
+|---|---|---|
+| receipt key `/code-factory/sync/2026-11-04-040008`, record `5fbac47a-0a86-45d9-9022-95dec4c923d2` | `GET /api/memories/key/…?namespace=code-factory` → same record id; content matches the numbers below | holds |
+| verdict `dbfb0593`, tier1/tier2 PASS, bound to `5fc6380` | `.gitreins/history/2026-11-04/6222d9d1/verdict.json`: `passed: true`, `commit: 5fc6380946b01de8b1c11de19d3934ea7f563694` | holds |
+| GitReins task lifecycle closed | `.gitreins/tasks.yaml` `id: CF-SYNC-20261104-0400` → `status: complete` | holds |
+| `selftest` PASS, 103 `PASS` rows, 33 numbered sections | `bash tests/selftest.sh` re-run at the new tip: `SELFTEST: PASS`, rc 0, **103** `PASS` rows, 33 numbered sections, 30 intentional negative-fixture `FAIL` rows | holds |
+| pair `134 / 219` at `79e9b59` | reproduced as the parent state; the published tip has moved (below) | holds |
+| CI healthy by contract | `gh run list --repo coding-hermes/code-factory` → `[]` (no workflows shipped) | holds |
+
+### State this execution changed, and why
+
+The registered checkout was **one commit behind** the published ref when this execution started:
+`HEAD 702a3e5`, `origin/main c2a6a45` — the releng lane filed `CF-161` at 04:09:58, after the pass
+sections above. The candidate was attached `main`, marker-free, and carried **zero tracked edits**
+(untracked residue was `.gitreins/history/*` only); `git diff HEAD origin/main` was exactly
+`+1` task row, `+1` event, `+1` audit doc. That is the stale-checkout case, not the clone case, so
+it was fast-forwarded rather than cloned around:
+
+```
+git merge --ff-only origin/main      # Updating 702a3e5..c2a6a45, Fast-forward, 3 files / +66
+```
+
+Post-move re-measurement at `c2a6a45`:
+
+| Check | Value |
+|---|---|
+| board rows / events | 135 / 222 |
+| status census | 45 `complete`, 84 `pending`, 6 `in_progress` |
+| per-line JSON, duplicate ids | 0 bad lines, 0 duplicates |
+| `bash scripts/boardctl validate` | `RESULT: OK (3 warning(s))` — CF-034's two free-form fields + headerless board, unchanged |
+| `tests/selftest.sh` | `SELFTEST: PASS`, rc 0, 103 `PASS` rows |
+
+The `deltas` in `docs/ACCEPTANCE-PLAN.md` remain **pinned snapshots** — the newest block names
+`79e9b59 / 134 / 219` on purpose, and the one-row move since then is a sibling lane's filing, not a
+drift: no `complete` row's status is contradicted by the doc. Left standing rather than appending a
+third block for a single sibling row.
+
