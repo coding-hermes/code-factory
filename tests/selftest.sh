@@ -1087,11 +1087,15 @@ say "31. the Quick start control-host commands name BUNKER_SERVER in a check row
 # PATH and HOME so the arm measures the script, not the host's tools (section 2's pattern).
 tmpd=$(mktemp -d)
 for arm in bunker-server-install node-create; do
+  extra=()
   case "$arm" in
     bunker-server-install) args=(--check); closing='RESULT: FAIL (' ;;
-    node-create) args=(--project myrepo --repo https://github.com/you/myrepo --harness hermes); closing='NODE INCOMPLETE (' ;;
+    # node-create refuses an unset CRIER_URL before it reaches the server gate (CF-126),
+    # so pin the bus to isolate the value this arm measures.
+    node-create) args=(--project myrepo --repo https://github.com/you/myrepo --harness hermes);
+                 closing='NODE INCOMPLETE ('; extra=(CRIER_URL=http://crier.example:8767) ;;
   esac
-  out=$(env -i PATH=/usr/local/bin:/usr/bin:/bin HOME="$tmpd/home" \
+  out=$(env -i PATH=/usr/local/bin:/usr/bin:/bin HOME="$tmpd/home" "${extra[@]}" \
     /bin/bash "$HERE/scripts/$arm.sh" "${args[@]}" 2>&1); rc=$?
   if [ "$rc" -ne 0 ] \
     && printf '%s\n' "$out" | grep -Eq '^  FAIL  .*BUNKER_SERVER' \
