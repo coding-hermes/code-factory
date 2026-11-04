@@ -134,3 +134,84 @@ during this pass).
 
 Negative claims scoped to this pass: no board row created, no worker dispatched, no new GitReins
 task, no release tag, no write to the registered checkout.
+
+## Verification addendum — third pass (`2026-11-04T06:00–06:15-05:00`)
+
+This is a **third** execution of tick `code-factory-releng-2026-11-04-10-22-25` (the first execution
+landed `c2e9d43` + verdict `RELENG-2026-11-04`; the second wrote the "resumed pass" addendum above and
+published verdict `RELENG-ADD-2026-11-04-1022` at `ef9003b`). It resumed after context compaction with
+no report emitted, so it **verified and reported** rather than re-executing: no row selected, no worker
+dispatched, no row filed, no release tag, no write to the registered checkout.
+
+Measured from a fresh clone of the **https** remote at published `main` = `3f9eb7b`
+(`chore(gitreins): publish the RELENG-ADD-2026-11-04-1022 verdict (PASS at ef9003b)`), loadavg
+`13.66 10.47 9.50` (host busy — the timing note matters only for wall-clock claims, none are made here).
+
+| Leg | Command (this pass) | Result |
+|---|---|---|
+| Gate at the graded tree | `bash tests/selftest.sh` | **`SELFTEST: PASS`, rc=0**, **195** `^  PASS` rows, **50** `^  FAIL` rows — every FAIL is a negative fixture (board-parser red proofs, `disk_floor` resolver-removal arm), not a product red |
+| Board valid | `bash scripts/boardctl validate` | `RESULT: OK (4 warning(s))`, rc=0 — CF-034 free-form `ci_result`, duplicate event id 336 (CF-196), headerless board, probe outside canon |
+| Board census | `wc -l` + `jq -r .id \| sort \| uniq -d` | **176** task rows / **356** events; `complete=61 in_progress=8 pending=107`; **0 duplicate ids** |
+| Published tip moved during the tick | `git fetch origin`, `git log HEAD..origin/main` | `3f9eb7b` → **`fe4a24ee`** (`docs(DESIGN): stop presenting three unshipped legs … Addresses CF-202`) — `git diff --name-only 3f9eb7b fe4a24ee -- tests/ scripts/ specs/` = **0**, so the gate numbers above hold at `fe4a24ee` too |
+| Release tags | `git ls-remote --tags origin \| wc -l`; `ls VERSION CHANGELOG*` | **0** tags; no `VERSION`, no `CHANGELOG*` |
+| CI | `gh run list --repo coding-hermes/code-factory --limit 3 --json …` | `[]` — no workflows ship in this repo; the selftest is the CI-equivalent. **Nothing to flag.** |
+| Posture | `gh api repos/coding-hermes/code-factory` | `public`, `private=false`, `license=MIT`, `archived=false`, `default_branch=main` |
+| Secret scanning | `--jq .security_and_analysis` | `secret_scanning=enabled`, `push_protection=enabled`; non-provider patterns / validity checks / dependabot security updates `disabled` |
+| Open secret-scanning alerts | `… /secret-scanning/alerts?state=open --jq length` | **0** |
+| Branch protection / rulesets | `… /branches/main/protection`; `… /rulesets --jq length` | **HTTP 404 "Branch not protected"**; rulesets **0** — reproduces **CF-120** |
+| Unrelated lineage | `git ls-remote https://github.com/coding-hermes/code-factory.git refs/heads/master` | `4ead64f` still published; **60** published heads — reproduces **CF-163** (P1) |
+| Absolute host paths | `git grep -oIE '/home/[a-z][a-z0-9_-]*/' HEAD` | **1311** hits whole tree, **162** excluding `.gitreins` and the board (last pass: 1304 / 157) — reproduces **CF-050 / CF-086**, not re-filed |
+
+Open rows this pass re-confirmed without refiling: **CF-050** (P3), **CF-120** (P3), **CF-161** (P3,
+no release contract), **CF-163** (P1, public `master` lineage), **CF-190** (P4, publish transport).
+
+### New leg 1 — the corrected credential arm still self-matches; scope it, don't widen it
+
+The previous addendum replaced the bare `sk-` pattern with bounded key shapes and quoted **0 hits**.
+Re-running that exact combined pattern at `3f9eb7b` returns **2 hits**, and both are the phrase
+`BEGIN PRIVATE KEY` with **no key body**:
+
+```
+git grep -oIE '(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|xoxb-[0-9A-Za-z-]{20,}|BEGIN [A-Z ]*PRIVATE KEY)' HEAD
+HEAD:.coding-hermes/board/events.jsonl:BEGIN PRIVATE KEY
+HEAD:.gitreins/history/2026-11-04/65139ce7/commit.patch:BEGIN PRIVATE KEY
+```
+
+Both are this lane's own audit text quoting the pattern (event 355's `detail` and the patch that
+publishes it) — the probe matches its own subject. The arm to quote from now on requires the PEM
+header with its dashes (`-----BEGIN [A-Z ]*PRIVATE KEY-----`), which returns **0 hits** at `3f9eb7b`;
+authored-source credential shapes are therefore **0**, and the class of "audit text poisons its own
+probe" is the recurring defect worth naming. No row filed: the posture leg is green, the defect was in
+this lane's probe.
+
+### New leg 2 — the publish transport is INTERMITTENT, not deterministically unauthenticated (CF-190 widened)
+
+CF-190 asserts the configured SSH remote exits non-zero with `Permission denied (publickey)` while
+https reaches the remote. Eleven probes of the same command at this tip, in two spellings, show
+**three outcomes**, so the row's premise is only partly reproducible and the failure mode is wider
+than filed:
+
+| Probe form (20 s cap) | Runs | Outcomes |
+|---|---|---|
+| `git ls-remote git@github.com:coding-hermes/code-factory.git refs/heads/main` (plain) | 6 | 1 × rc=0 success, 1 × rc=128 `Permission denied (publickey)`, 4 × rc=124 (hung, cut by `timeout`) |
+| `GIT_SSH_COMMAND='ssh -o BatchMode=yes' …` | 5 | 2 × rc=0, 1 × rc=128 `Permission denied (publickey)`, 2 × rc=124 |
+| `https://github.com/…` | 4 | rc=0 on every attempt |
+| **Total over `git@github.com`** | **11** | **3 success, 2 auth refusals, 6 hangs** |
+
+`ssh -G github.com` resolves to the host's default identity files, `SSH_AUTH_SOCK` is
+`/run/user/1000/openssh_agent` and `ssh-add -l` answers **"The agent has no identities"**, so identity
+selection depends on files under a load-saturated host; `core.sshCommand` is unset and no `url.*.insteadOf`
+rewrite exists. This clone itself succeeded over `git@github.com` at 05:58, which is why "SSH is broken"
+must not be recorded as a boolean. Practical rule for lanes: publish over the **https** remote, always
+re-verify `rev-list --left-right --count origin/main...HEAD`, and never read a successful `git push`
+invocation as proof of a landed commit. Recorded against CF-190 (widened by the hangs); **no new row**.
+
+### Release decision (unchanged): NO TAG / KEEP PENDING
+
+Zero published tags, no version artifact, and **CF-161** remains `pending`. A tag/cut is owner-gated
+decision work naming target, version and baseline SHA; inventing a version from this tree would be a
+release claim with no contract behind it.
+
+Negatives scoped to this pass: no board row created, no worker dispatched, no release tag pushed, no
+write to the registered checkout `/home/kara/code-factory` (left with its untracked `.gitreins/history`
+bundles and 25-commit lag, untouched by this lane).
