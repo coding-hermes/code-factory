@@ -117,7 +117,21 @@ scripts/boardctl validate
 bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 ```
 
-- **Re-measured 2026-11-04T08:52Z at tip `7232954`:** 158 task rows, 300 events — 51 `complete`,
+- **Re-measured 2026-11-04T23:40Z at tip `ac844cb`:** 180 task rows, 365 events (max event id 364;
+  one benign duplicate id 336, owned by **CF-196**) — 62 `complete`, 9 `in_progress`, 109 `pending`,
+  no duplicate task ids. Both board files are byte-identical to their `origin/main` copies
+  (`python3 scripts/board_drift.py check --workdir . --ref main` prints `RESULT: OK`, 180 vs 180 rows,
+  0 divergent ids). `scripts/boardctl validate` prints `RESULT: OK (4 warning(s))` (CF-034's free-form
+  `guard_result`/`ci_result`, the duplicate event id 336 and the headerless board) and
+  `key uniformity: 180/180 rows carry only canon keys (0 drift)`. `tests/selftest.sh` prints
+  `SELFTEST: PASS` (exit 0), `PASS 180/180 rows parse`, 195 `PASS` rows and 50 `FAIL` rows that all sit
+  inside negative fixtures (gateway public-bind refusals, the board-gate rejects, `2 of 3 rows parse`,
+  the disk-floor empty-PATH arm) over 39 numbered sections plus lettered arms `4b`/`7b`/`31b`
+  (42 arms; derived by `bash docs/audits/cf198-section-mapping.sh`), at loadavg 24.15 (1 min; sibling
+  lanes and judges on this host, not a suite property). Three sibling rows still own the structural
+  fixes for this block: **CF-081** (the hand-typed counts), **CF-154** (the warning count does not
+  follow from the board) and **CF-196** (duplicate event ids).
+- **Earlier snapshot, 2026-11-04T08:52Z at tip `7232954` (historical, not current):** 158 task rows, 300 events — 51 `complete`,
   8 `in_progress`, 99 `pending`, no duplicate task or event ids. `scripts/boardctl validate` prints
   `RESULT: OK (3 warning(s))` (CF-034's free-form `guard_result`/`ci_result` plus the headerless
   board) and `key uniformity: 158/158 rows carry only canon keys (0 drift)`. `tests/selftest.sh`
