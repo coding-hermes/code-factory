@@ -12,6 +12,13 @@ today; `CF-083` tracks the gap and `docs/ACCEPTANCE-PLAN.md` carries the per-req
 Quoting a green selftest as proof of a requirement it does not exercise is the failure mode this
 column exists to prevent.
 
+The `ID` column is a **requirement namespace**, not the board's task-id namespace. `CF-101`–`CF-112`
+identify requirements in this document; the board need carry no row for them, and at `171bf23` it
+carries none (`jq -r 'select(.id=="CF-110") | .id' .coding-hermes/board/tasks.jsonl` prints nothing).
+The board's own rows use the same `CF-nnn` spelling, so a citation is resolved by its namespace,
+never by its shape, and an id that resolves to neither a row nor a row of the table below is drift —
+`CF-182` owns the committed resolution check and its gate arm.
+
 | ID | Requirement | Verified by |
 |---|---|---|
 | CF-101 | A node is created by one command from a project + repo + harness triple. | **No test.** `scripts/project-node.sh --apply --project X --repo Y --harness hermes` must exit 0 and leave `$HOME/.node/node.json` parseable. The staging gap that used to kill this path at layer 00 is closed (`CF-075`, commit `77caa02`; selftest §16 runs `node-create.sh --staged-files` and the staged entry point, and fails when `scripts/disk_floor.py` is dropped from the manifest), so nothing shipped dies there any more — but no end-to-end creation is recorded either. The open defect on this path is `CF-080` (`--apply` clones after the bus layer has already failed), so the cell is unproven, not green. |
@@ -39,8 +46,9 @@ One project (crier), one node, one directive that travelled over crier and reach
 gateway, one commit produced there, one artifact digest verified back on the control host, and a
 recorded FAIL when the gate is made to fail.
 
-**Status 2026-11-04T07:38Z (board re-measured at `bc68e59` — 148 task rows, 273 events: 49 complete,
-8 in_progress, 91 pending; the node-run evidence below is the 02:35Z measurement at `d02916e`): NOT MET.** One leg moved since the `80fca8b`
+**Status 2026-11-04T09:05Z (board re-measured at `171bf23` — 158 task rows, 308 events: 52 complete,
+8 in_progress, 98 pending; the previous snapshot, `bc68e59`, carried 148 rows / 273 events at
+49/8/91 and still reproduces at that tip; the node-run evidence below is the 02:35Z measurement at `d02916e`): NOT MET.** One leg moved since the `80fca8b`
 measurement: a directive is now recorded arriving at a node and executing there. The dispatch at
 19:37:51 handed the node the envelope itself as its prompt (`CF-139`, P0, open), and two later node
 runs ended `exit 124` at a 32.1 s caller-derived kill instead of the old 243.4 s constant, with the
@@ -49,13 +57,21 @@ Those runs are the board's and the implementing commits' record; no re-runnable 
 them ships in this repository, so the leg is named, not certified. Still absent: a commit produced on
 a node, an artifact digest recomputed from pulled bytes on the control host, and a recorded FAIL from
 a deliberately broken gate there. `CF-075` and `CF-077` remain closed (`77caa02` + selftest §16;
-`1232f7a` + §17/§18). The other row this list gained on 2026-11-04, the node-create `CRIER_URL` gap
+`1232f7a` + §17/§18) — with one reader trap disclosed rather than hidden: `CF-077`'s verdict artifact
+(`.gitreins/history/2026-11-03/410022a2/verdict.json`) binds `1dfb58b8`, the pre-rewrite copy of the
+same fix, and no branch contains that object; the closure stands on the row's `commit_hash`
+`1232f7a`, which is an ancestor of `origin/main` (`CF-181`, open, owns the repair of that pointer). The other row this list gained on 2026-11-04, the node-create `CRIER_URL` gap
 `CF-126`, was closed at `85f852b` on the `dd7f64bc` verdict, so it is not listed among the blockers.
-Rows that are open, leg-adjacent and deliberately EXCLUDED from the blocker list, one clause each so membership stays decidable at `bc68e59`: `CF-162` (verify-node.sh has no bus leg) and `CF-163` (the public `master` lineage) stop none of the four legs and stay board-only, as do the three rows the dogfood lane filed after the `1aeb0c7` measurement — `CF-172` (a layer-40 message tells the caller to pass `--repo` it already passed), `CF-173` (the layer-00 reach probe records `000` when `--max-time` cuts a transfer, so a URL that answered 200 reads unreachable) and `CF-174` (a harness `version` row prints `PASS` with an empty measurement). Every other open row is outside these legs by subject — v1-scope features (`CF-003`, `CF-006`), node sizing (`CF-007`), scheduler throughput (`CF-134`) and the repository/tooling rows below `P1`. The open defects this milestone's legs depend on are `CF-080` (`--apply` clones
+Rows that are open, leg-adjacent and deliberately EXCLUDED from the blocker list, one clause each so membership stays decidable at `171bf23`: `CF-162` (verify-node.sh has no bus leg) and `CF-163` (the public `master` lineage) stop none of the four legs and stay board-only, as do the three rows the dogfood lane filed after the `1aeb0c7` measurement — `CF-172` (a layer-40 message tells the caller to pass `--repo` it already passed), `CF-173` (the layer-00 reach probe records `000` when `--max-time` cuts a transfer, so a URL that answered 200 reads unreachable) and `CF-174` (a harness `version` row prints `PASS` with an empty measurement) — plus `CF-183` (the
+adapter certifies any `hermes` on `PATH` as the pin, so the harness-identity row cannot fail; the
+directive leg needs a gateway that answers, not a certified pin, so the row qualifies a harness the
+leg already exercises rather than stopping it). Every other open row is outside these legs by subject — v1-scope features (`CF-003`, `CF-006`), node sizing (`CF-007`), scheduler throughput (`CF-134`) and the repository/tooling rows below `P1`. The open defects this milestone's legs depend on are `CF-080` (`--apply` clones
 the workspace after the bus layer has already FAILED, manufacturing the repo-with-no-bus node
 `AGENTS.md` rule 9 forbids), the never-exercised legs `CF-001` (scheduler→crier dispatch has never
-completed a full arm/tick cycle), `CF-004` (no round trip through the node's own gateway), `CF-110`
-(no destroy path ships) and `CF-112` (no `dispatch-targets.jsonl` consumer ships), one row that stops
+completed a full arm/tick cycle), `CF-004` (no round trip through the node's own gateway), requirement
+`CF-110` (no destroy path ships — a requirement id from the table above, so no board row exists or
+need exist for it) and requirement `CF-112` (no `dispatch-targets.jsonl` consumer ships — likewise
+requirement-only), one row that stops
 a leg and was missing from this list before 2026-11-04 — `CF-002` (P0: a node turn dies at
 `agent init failed: No inference provider configured`, so the "commit produced on a node" leg cannot
 be reached) — plus the dispatch
@@ -70,8 +86,11 @@ scripts/ specs/` = 0 hits) far below the 15 m 40 s the scheduler budgets for the
 `dashboard.basic_auth`, so `install-hermes.sh:112` refuses the public bind and a node created by the
 documented path never starts the gateway the directive leg has to reach. Reproduced 2026-11-04T06:13Z:
 `installer_basic_auth=3 create_path_basic_auth=scripts/node-create.sh:0,scripts/project-node.sh:0,`
-plus `refused: a public bind needs dashboard.basic_auth`, probe exit 0). The list is decidable, not editorial: read
-`jq -r 'select(.status!="complete") | [.id,.priority] | @tsv' .coding-hermes/board/tasks.jsonl`, then
+plus `refused: a public bind needs dashboard.basic_auth`, probe exit 0). The list is decidable, not editorial: every id cited in it resolves to exactly one of two
+namespaces — `row=<status>` from `jq -r 'select(.id=="<id>") | .status' .coding-hermes/board/tasks.jsonl`,
+or `requirement-only` when the id names a row of the requirements table above and no board row carries
+it (at `171bf23`: `CF-110` and `CF-112`, which have never been rows). Then read
+`jq -r 'select(.status!="complete") | [.id,.priority] | @tsv' .coding-hermes/board/tasks.jsonl`, and
 require every open row whose failure stops one of the four legs named above to appear here; rows
 outside those legs (v1 scope features such as foreign harnesses or the deploy-key lane) belong to the
 board, not the milestone. The milestone cannot be claimed while any row above is open.
