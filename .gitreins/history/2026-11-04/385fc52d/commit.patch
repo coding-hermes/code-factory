@@ -1,0 +1,47 @@
+commit 095e5eafdaed8c4cea47a160c89d16143e525e71
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Tue Nov 3 22:10:48 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Tue Nov 3 22:10:48 2026 -0500
+
+    test(selftest): §31 pins CRIER_URL so the node-create arm measures BUNKER_SERVER (CF-145)
+    
+    Sibling commit 23c1c6d (CF-126) added a crier_url gate ahead of node-create.sh's
+    server gate, so on the merged tree §31's node-create arm failed naming CRIER_URL
+    instead of the value it exists to measure: the arm varied both env values at once.
+    The arm now pins CRIER_URL to the README's own placeholder and leaves only
+    BUNKER_SERVER unset, which is what the row is about.
+    
+    Verified on the merged head: `bash tests/selftest.sh` -> SELFTEST: PASS, both §31
+    arms PASS. Red re-proved by restoring `${SERVER:?}` inside node-create.sh in this
+    worktree: §31 FAILs as a NAMED row ("FAIL node-create aborted or did not name
+    BUNKER_SERVER (exit 1)"), SELFTEST: FAIL (1), rc=1; file restored via
+    git checkout and its sha256 verified identical.
+    
+    ch:trace row=CF-145 spec=README.md#quick-start test=tests/selftest.sh::quick-start-names-bunker-server doc=README.md prompt=prompts/readme.md evidence=tests/selftest.sh witness=none:local-fixture verdict=none:open-until-judged commit=none:self-referential-hash memory=none:no-lane-role-token
+---
+ tests/selftest.sh | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/tests/selftest.sh b/tests/selftest.sh
+index 21f6361..5ad7c6e 100755
+--- a/tests/selftest.sh
++++ b/tests/selftest.sh
+@@ -1087,11 +1087,15 @@ say "31. the Quick start control-host commands name BUNKER_SERVER in a check row
+ # PATH and HOME so the arm measures the script, not the host's tools (section 2's pattern).
+ tmpd=$(mktemp -d)
+ for arm in bunker-server-install node-create; do
++  extra=()
+   case "$arm" in
+     bunker-server-install) args=(--check); closing='RESULT: FAIL (' ;;
+-    node-create) args=(--project myrepo --repo https://github.com/you/myrepo --harness hermes); closing='NODE INCOMPLETE (' ;;
++    # node-create refuses an unset CRIER_URL before it reaches the server gate (CF-126),
++    # so pin the bus to isolate the value this arm measures.
++    node-create) args=(--project myrepo --repo https://github.com/you/myrepo --harness hermes);
++                 closing='NODE INCOMPLETE ('; extra=(CRIER_URL=http://crier.example:8767) ;;
+   esac
+-  out=$(env -i PATH=/usr/local/bin:/usr/bin:/bin HOME="$tmpd/home" \
++  out=$(env -i PATH=/usr/local/bin:/usr/bin:/bin HOME="$tmpd/home" "${extra[@]}" \
+     /bin/bash "$HERE/scripts/$arm.sh" "${args[@]}" 2>&1); rc=$?
+   if [ "$rc" -ne 0 ] \
+     && printf '%s\n' "$out" | grep -Eq '^  FAIL  .*BUNKER_SERVER' \
