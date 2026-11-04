@@ -265,6 +265,30 @@ else
 fi
 rm -rf "$tmpd"
 
+say "7c. CF-155 sections census agrees and rejects one extra numbered section"
+tmpd=$(mktemp -d)
+cp "$HERE/docs/ACCEPTANCE-PLAN.md" "$tmpd/plan.md"
+cp "$HERE/tests/selftest.sh" "$tmpd/selftest.sh"
+out=$(CF099_PLAN="$HERE/docs/ACCEPTANCE-PLAN.md" CF099_SELFTEST="$HERE/tests/selftest.sh" \
+  bash "$HERE/docs/audits/cf099-prd-drift-probe.sh" --sections-only 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^measured: plan_sections=[0-9][0-9]* selftest_sections=[0-9][0-9]*'; then
+  say "  PASS  cf155 sections census green at this tree"
+else
+  say "  FAIL  cf155 sections census green direction failed (exit $rc)"; fails=$((fails+1))
+fi
+printf '%s\n' 'say "99. drift fixture"' >> "$tmpd/selftest.sh"
+plan_sections=$(awk 'index($0, "**Current state") == 1 {if (match($0, /[0-9]+ numbered sections/)) {print substr($0, RSTART, RLENGTH); exit}}' "$tmpd/plan.md" | grep -oE '[0-9]+')
+expected="DRIFT: plan says $plan_sections sections, tests/selftest.sh has $((plan_sections+1))"
+out=$(CF099_PLAN="$tmpd/plan.md" CF099_SELFTEST="$tmpd/selftest.sh" \
+  bash "$HERE/docs/audits/cf099-prd-drift-probe.sh" --sections-only 2>&1); rc=$?
+if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq "$expected"; then
+  say "  PASS  cf155 sections census red on a fixture with one extra numbered section"
+else
+  say "  FAIL  cf155 sections census fixture missed named DRIFT (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out"
+fi
+rm -rf "$tmpd"
+
 say "8. project board entrypoint is real and fails closed without dependency"
 bash -n "$HERE/scripts/boardctl" && say "  PASS  bash -n scripts/boardctl" || { say "  FAIL  bash syntax"; fails=$((fails+1)); }
 "$HERE/scripts/boardctl" --help >/dev/null 2>&1 && say "  PASS  local help" || { say "  FAIL  help"; fails=$((fails+1)); }

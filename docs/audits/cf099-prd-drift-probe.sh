@@ -1,19 +1,27 @@
 #!/usr/bin/env bash
 # CF-099 probe — do the PRD milestone block and the acceptance plan still describe this tree?
-# Contract enforced: (1) the milestone names the tip it was measured at and every CF-id listed
-# after "open defects" is NOT complete on the board; (2) the plan's snapshot counts reproduce at
-# the tip the plan names; (3) the plan's section count matches tests/selftest.sh; (4) the PRD's
-# CF-102 cell names the per-layer arms that exist.
-# Usage: bash docs/audits/cf099-prd-drift-probe.sh   (cwd: the repository root; exits 1 on drift)
+# Contract enforced: default mode checks the milestone/open blockers, tip-pinned board snapshot,
+# section census and PRD CF-102 layer arms; --sections-only checks only the plan/selftest census.
+# CF099_PLAN and CF099_SELFTEST override the two census inputs for fixture testing.
+# Usage: bash docs/audits/cf099-prd-drift-probe.sh [--sections-only] (cwd: repository root)
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 2
-P=docs/ACCEPTANCE-PLAN.md
+P=${CF099_PLAN:-docs/ACCEPTANCE-PLAN.md}
+S=${CF099_SELFTEST:-tests/selftest.sh}
 R=docs/PRD-code-factory.md
+if [ "${1:-}" = --sections-only ]; then
+  nsec=$(awk 'index($0, "**Current state") == 1 {if (match($0, /[0-9]+ numbered sections/)) {print substr($0, RSTART, RLENGTH); exit}}' "$P" | grep -oE '[0-9]+')
+  msec=$(grep -cE '^say "[0-9]+\.' "$S")
+  [ "${nsec:-x}" = "$msec" ] || { echo "DRIFT: plan says ${nsec:-none} sections, tests/selftest.sh has $msec"; d=1; }
+  d=${d:-0}
+  echo "measured: plan_sections=${nsec:-none} selftest_sections=$msec plan=$P selftest=$S"
+  exit "$d"
+fi
 d=0
 tip=$(grep -oE 'at tip `[0-9a-f]{7,40}`' "$P" | head -1 | grep -oE '[0-9a-f]{7,40}')
-srow=$(grep -oE '[0-9]+ task rows' "$P" | head -1 | grep -oE '[0-9]+')
-sev=$(grep -oE '[0-9]+ events' "$P" | head -1 | grep -oE '[0-9]+')
-nsec=$(grep -oE '[0-9]+ sections' "$P" | head -1 | grep -oE '[0-9]+')
+srow=$(awk 'index($0, "**Current state") == 1 {if (match($0, /tasks.jsonl` has [0-9]+ lines/)) {print substr($0, RSTART, RLENGTH); exit}}' "$P" | grep -oE '[0-9]+' | tail -1)
+sev=$(awk 'index($0, "**Current state") == 1 {if (match($0, /events.jsonl` has [0-9]+ lines/)) {print substr($0, RSTART, RLENGTH); exit}}' "$P" | grep -oE '[0-9]+' | tail -1)
+  nsec=$(awk 'index($0, "**Current state") == 1 {if (match($0, /[0-9]+ numbered sections/)) {print substr($0, RSTART, RLENGTH); exit}}' "$P" | grep -oE '[0-9]+')
 if [ -z "$tip" ] || ! git cat-file -e "$tip:.coding-hermes/board/tasks.jsonl" 2>/dev/null; then
   echo "DRIFT: acceptance plan names no resolvable tip"; d=1
 else
@@ -22,7 +30,7 @@ else
   [ "${srow:-x}" = "$mrow" ] || { echo "DRIFT: plan says ${srow:-none} task rows, $tip carries $mrow"; d=1; }
   [ "${sev:-x}" = "$mev" ] || { echo "DRIFT: plan says ${sev:-none} events, $tip carries $mev"; d=1; }
 fi
-msec=$(grep -cE '^say "[0-9]+\.' tests/selftest.sh)
+msec=$(grep -cE '^say "[0-9]+\.' "$S")
 [ "${nsec:-x}" = "$msec" ] || { echo "DRIFT: plan says ${nsec:-none} sections, tests/selftest.sh has $msec"; d=1; }
 block=$(awk '/^\*\*Status 20/{f=1} f&&/^$/{exit} f' "$R" | tr '\n' ' ')
 printf '%s' "$block" | grep -qE 're-measured at `[0-9a-f]{7,40}`' \
