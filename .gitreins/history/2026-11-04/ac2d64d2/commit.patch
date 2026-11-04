@@ -1,0 +1,170 @@
+commit d1342acd0c0c0aadee01a3db062bbcd60b212729
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Wed Nov 4 03:42:55 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Wed Nov 4 03:42:55 2026 -0500
+
+    docs(sync): re-measure the BOARD.md measured-state block at 202fb61
+    
+    The block still carried the 03:01Z snapshot (127 rows / 193 events, 40
+    complete, 5 in_progress, 82 pending at dae4e7a) while the published tip
+    carries 156 / 295, 50 / 8 / 98. A reader had no way to tell the number was
+    a day-part old: the stamp named a tip, but the section is titled "Current
+    measured state".
+    
+    Recorded the current values above the old bullet and relabelled that bullet
+    as a historical snapshot instead of deleting a dated measurement. Every
+    figure in the new bullet is an output of the three commands the block itself
+    lists; the evidence artifact records their raw output.
+    
+    This is the sync lane's re-fire of tick code-factory-sync-2026-11-04-08-24-10,
+    whose first fire landed its own receipt at docs/audits/code-factory-sync-2026-11-04-0824.md.
+    It corrects the numbers, not the class: CF-081 still owns replacing this
+    hand-typed block with a committed check that fails on a mismatch, and CF-154
+    still owns the warning-count claim. No board row was closed by this commit.
+    
+    Measured: wc -l tasks.jsonl=156 events.jsonl=295; jq census 50 complete /
+    8 in_progress / 98 pending; scripts/boardctl validate -> RESULT: OK (3
+    warning(s)); bash tests/selftest.sh -> SELFTEST: PASS, PASS 156/156 rows
+    parse, 119 PASS / 19 fixture FAIL, 36 numbered sections + 4b/7b.
+    
+    ch:trace row=none(docs-reconcile) spec=docs/BOARD.md#current-measured-state
+    wave=code-factory-sync-2026-11-04-08-24-10 test=selftest
+    doc=docs/audits/code-factory-sync-2026-11-04-0842-refire.md
+    evidence=docs/audits/code-factory-sync-2026-11-04-0842-refire.md
+---
+ docs/BOARD.md                                      | 16 ++--
+ .../code-factory-sync-2026-11-04-0842-refire.md    | 87 ++++++++++++++++++++++
+ 2 files changed, 98 insertions(+), 5 deletions(-)
+
+diff --git a/docs/BOARD.md b/docs/BOARD.md
+index 7241755..3e54efa 100644
+--- a/docs/BOARD.md
++++ b/docs/BOARD.md
+@@ -105,7 +105,7 @@ Observed on 2026-11-03 before the workdir repair: the registered code-factory wo
+ health claim. `scripts/board_drift.py` is the re-runnable tool; `tests/selftest.sh` arm 29
+ proves its divergent, identical, empty, missing-file and malformed-record fixture paths.
+ 
+-## Current measured state (measured 2026-11-04T01:58Z, on the tree this commit lands)
++## Current measured state (measured 2026-11-04T08:42Z, on the tree this commit lands)
+ 
+ Every count below is an output value that moves with each folded row, so measure it instead of
+ quoting an older snapshot. The numbers are still typed by hand — CF-081 tracks replacing this block
+@@ -117,14 +117,20 @@ scripts/boardctl validate
+ bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
+ ```
+ 
+-- **Re-measured 2026-11-04T03:01Z at tip `dae4e7a`:** 127 task rows, 193 events — 40 `complete`,
++- **Re-measured 2026-11-04T08:42Z at tip `202fb61`:** 156 task rows, 295 events — 50 `complete`,
++  8 `in_progress`, 98 `pending`. `scripts/boardctl validate` prints `RESULT: OK (3 warning(s))`
++  (CF-034's free-form `guard_result`/`ci_result` plus the headerless board) and
++  `key uniformity: 156/156 rows carry only canon keys (0 drift)`. `tests/selftest.sh` prints
++  `SELFTEST: PASS`, `PASS 156/156 rows parse`, 119 `PASS` rows and 19 intentional-fixture `FAIL`
++  rows, 36 numbered sections plus lettered arms `4b`/`7b` (38 arms), at loadavg 6.79 (1 min; host
++  load, not a suite property). Two sibling rows own the structural fix for this block: **CF-154**
++  (the warning count does not follow from the board) and **CF-155** (the plan's section count).
++- **Earlier snapshot, 2026-11-04T03:01Z at tip `dae4e7a` (historical, not current):** 127 task rows, 193 events — 40 `complete`,
+   5 `in_progress`, 82 `pending`. `scripts/boardctl validate` prints `RESULT: OK (3 warning(s))`
+   (CF-034's free-form `guard_result`/`ci_result` plus the headerless board); the 44 `probe`-key
+   warnings are gone because CF-129 relanded canon keys (`key uniformity: 127/127 rows`).
+   `tests/selftest.sh` prints `SELFTEST: PASS`, `PASS 127/127 rows parse`, 92 `PASS` rows, 30
+-  numbered sections plus lettered arms `4b`/`7b`, at loadavg 15.60. Two sibling rows own the
+-  structural fix for this block: **CF-154** (the warning count does not follow from the board) and
+-  **CF-155** (the plan is stale by one selftest section).
++  numbered sections plus lettered arms `4b`/`7b`, at loadavg 15.60.
+ - At this tree (earlier snapshot, 116 task rows, 168 events): `scripts/boardctl validate` prints
+   `RESULT: OK (47 warning(s))` — 44 rows carrying a free-form `probe` key, CF-034's free-form
+   `guard_result`/`ci_result` prose, and the headerless board (no `board.jsonl`), so header-counter
+diff --git a/docs/audits/code-factory-sync-2026-11-04-0842-refire.md b/docs/audits/code-factory-sync-2026-11-04-0842-refire.md
+new file mode 100644
+index 0000000..c012b35
+--- /dev/null
++++ b/docs/audits/code-factory-sync-2026-11-04-0842-refire.md
+@@ -0,0 +1,87 @@
++# Sync lane re-fire evidence — 2026-11-04T08:42Z (tick `code-factory-sync-2026-11-04-08-24-10`)
++
++Re-fire of a tick whose first fire landed its receipt at `docs/audits/code-factory-sync-2026-11-04-0824.md`
++(published tip `202fb61`). This pass re-ran the lane's checks independently at the published tip and
++fixed the one figure the first fire left stale.
++
++## Where the checks ran
++
++`/home/kara/code-factory` was **not** written, fetched into, or cleaned. It is behind the published tip
++and carries a sibling lane's unpublished work: `docs/ACCEPTANCE-PLAN.md`,
++`docs/audits/cf099-prd-drift-probe.sh` and `tests/selftest.sh` are modified in the worktree by the
++`code-factory-docs` lane's in-flight CF-155 worker (scratch
++`~/.hermes/cache/scratch/cf-docs-20261104.feoD6j`, no exit marker yet), and a `code-factory-dogfood`
++tick holds another worker. All measurements below are from a scratch clone of the published tip:
++
++```sh
++git clone /home/kara/code-factory land && cd land
++git remote add gh git@github.com:coding-hermes/code-factory.git
++git fetch gh main && git checkout -B main gh/main    # 202fb61, porcelain 0
++```
++
++## Deliverable 1 — the board parses and the row count matches the commit
++
++| Check | Command | Result |
++|---|---|---|
++| per-line JSON, tasks | `jq -c . .coding-hermes/board/tasks.jsonl >/dev/null` | rc 0 |
++| per-line JSON, events | `jq -c . .coding-hermes/board/events.jsonl >/dev/null` | rc 0 |
++| task rows | `wc -l < .coding-hermes/board/tasks.jsonl` | 156 (= the committed copy; tree is clean at `202fb61`) |
++| event rows | `wc -l < .coding-hermes/board/events.jsonl` | 295, max id 295, no gap-free claim made |
++| duplicate task ids | `jq -r .id … \| sort \| uniq -d` | none |
++| duplicate event ids | `jq -r .id … \| sort -n \| uniq -d` | none |
++| status census | `jq -r .status … \| sort \| uniq -c` | 50 `complete`, 8 `in_progress`, 98 `pending` |
++| schema gate | `bash scripts/boardctl validate` | `RESULT: OK (3 warning(s))`, rc 0; `key uniformity: 156/156 rows carry only canon keys (0 drift)` |
++
++## Deliverable 2 — every `complete` row's evidence resolves
++
++- `commit_hash`: 50 of 50 `complete` rows carry one, and all 50 resolve with `git cat-file -e <sha>^{commit}`.
++  No `NULL`, no unresolved object.
++- completion events: 48 of 50 carry a `task_completed` event. The two without one are `CF-034` and
++  `CF-041`, already measured by the `01:21` tick (event 168) and owned by **CF-130**; not re-filed,
++  and no completion transition was minted for either id.
++- approval-shape events are real reopens, not drift: `CF-053` (event 115 complete → event 181
++  `task_updated` `in_progress`) and `CF-079` (event 188 complete → event 197 `in_progress`) both carry
++  a later `task_updated` that the row's `updated_at` matches. A census keyed only on "has a
++  `task_completed` event" reads them as closed; the row is the authority and it says open.
++- the standing completion command still runs: `bash tests/selftest.sh` → exit 0, `SELFTEST: PASS`,
++  `PASS 156/156 rows parse`, 119 `PASS` rows, 19 `FAIL` rows (every one an intentional negative
++  fixture), 36 numbered sections + `4b`/`7b` = 38 arms, loadavg 6.79 (1 min) at run time.
++- verdict binding (`docs/audits/cf181-verdict-binding-sweep.py . .coding-hermes/board/tasks.jsonl main`):
++  `verdict_artifacts_checked=22`, `orphan_count=1` — `CF-077` still binds pre-rewrite `1dfb58b8`, which
++  no branch contains. Already filed as **CF-181** (pending); not re-filed.
++
++## Deliverable 3 — docs against the board
++
++| Doc | Claim | Measured at `202fb61` | Disposition |
++|---|---|---|---|
++| `docs/BOARD.md` "Current measured state" | 127 rows / 193 events / 40 complete / 5 in_progress / 82 pending at `dae4e7a` | 156 rows / 295 events / 50 / 8 / 98 | **Fixed this commit** — the stale bullet is re-labelled historical and a current named-tip snapshot sits above it |
++| `docs/ACCEPTANCE-PLAN.md` "Current state" | 36 sections, 38 arms, 119 `PASS`, 154 rows / 291 events at `8b81369` | 36 sections, 38 arms, 119 `PASS` at `202fb61`; that tip's board is 154 / 291 | **No change** — internally correct at the tip it names; a moved tip is not drift |
++| `docs/audits/cf099-prd-drift-probe.sh` | plan snapshot vs working tree | `OK: milestone, plan snapshot and layer arms agree at 202fb61`, rc 0 | **No change** |
++
++No requirement table maps a board task id to a status word, so the "complete row, pending table"
++case does not occur in this tree. Note for any future checker: `CF-101`–`CF-112` in
++`docs/PRD-code-factory.md` and `docs/ACCEPTANCE-PLAN.md` are *requirement* ids, not task ids — joining
++them to board rows by id produces false drift, which is what **CF-182** (pending) records.
++
++The `docs/BOARD.md` block stays hand-typed after this commit: **CF-081** still owns replacing it with
++a committed check that fails on a mismatch, and **CF-154** still owns the warning-count claim. This
++commit corrects the numbers, not the class.
++
++## Gates at the landing tree
++
++```
++bash tests/selftest.sh                    -> SELFTEST: PASS (exit 0)
++bash scripts/boardctl validate            -> RESULT: OK (3 warning(s)) (exit 0)
++bash docs/audits/cf099-prd-drift-probe.sh -> OK at 202fb61 (exit 0)
++python3 docs/audits/cf181-verdict-binding-sweep.py … -> verdict_artifacts_checked=22, orphan_count=1
++gh run list --repo coding-hermes/code-factory --limit 3 -> [] (no GitHub Actions in this repo; the
++  CI-equivalent gate is tests/selftest.sh plus the gitreins guard, and an empty run list is not
++  evidence of health)
++```
++
++## Residue (disclosed, not cleaned)
++
++- `/home/kara/code-factory` remains behind the published tip with a sibling's three modified files and
++  its untracked `.gitreins/history/` bundles; none were read as this tick's evidence or touched.
++- `docs/BOARD.md` keeps its older 116-row/168-event bullet verbatim; it is labelled an earlier
++  snapshot, and CF-154 owns the `44 probe rows` sentence it quotes.
