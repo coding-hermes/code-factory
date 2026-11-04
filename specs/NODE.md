@@ -25,7 +25,7 @@ the manifest to know where the artifacts are.
 |---|---|---|
 | 00 preflight | arch, disk ≥ floor, memory, and HTTP 200 from the only two endpoints this layer probes — `$CRIER_URL/health` and `https://pypi.org/simple/` (`scripts/project-node.sh:190`). With `CRIER_URL` unset the reach block is skipped entirely and the layer prints `FAIL crier_url` instead of two probe rows. Reachability to a Go module proxy is **not measured** by this or any shipped layer: no probe row is emitted for one, and `GOPROXY` / `GOPRIVATE` appear nowhere under `scripts/` (CF-164) | — |
 | 10 base | python3 + venv, git, curl, tar, sha256sum; optionally jq, rg, node | preflight |
-| 20 harness | the harness binary plus the adapter's own gate rows, printed verbatim (`python`, `binary`, `version`, `port`, `inference_key`, and `gateway_start` when that block runs); `gateway_start` is a refusal on any node whose `~/.hermes/config.yaml` carries no `dashboard.basic_auth` | base |
+| 20 harness | the harness binary plus the adapter's own gate rows, printed verbatim (`python`, `binary`, `version`, `port`, `inference_key`, and `gateway_start` when that block runs); `gateway_start` is a refusal on any node whose `~/.hermes/config.yaml` does not parse to a non-empty `dashboard.basic_auth` username and password (`scripts/harness/install-hermes.sh:66–186`) | base |
 | 30 bus | a crier identity file at `$HOME/.node/crier.json` and its mode 600 | harness |
 | 40 repo | the repo cloned at a pinned ref | base |
 | 90 verify | the node manifest (`$HOME/.node/node.json`), written only when every layer passed | all |
@@ -35,8 +35,8 @@ table no longer claims them:
 
 - **A started gateway on a freshly created node.** Layer 20 runs the adapter with `--apply`
   (`scripts/project-node.sh:228`), and the adapter starts `hermes serve` only when
-  `~/.hermes/config.yaml` already carries `dashboard.basic_auth`
-  (`scripts/harness/install-hermes.sh:93-102`); otherwise it prints
+  `~/.hermes/config.yaml` already parses to a non-empty `dashboard.basic_auth` username and password
+  (`scripts/harness/install-hermes.sh:66–186`, gate at `:251–258`); otherwise it prints
   `FAIL gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml`.
   No shipped stage writes that file — `scripts/node-create.sh --staged-files` prints five files
   (`project-node.sh`, `lib.sh`, `disk_floor.py`, `reclaim_disk.py`, `harness/install-hermes.sh`) and
