@@ -1410,5 +1410,139 @@ for ref_value in master "re'lease"; do
 done
 rm -rf "$tmpd"
 
+# BEGIN cf159-escaping
+say "36. remote shell payloads preserve data without executing it (CF-159)"
+# The foreman's retained RED at 1fea92d printed INJECTION_EXECUTED=yes.
+# Capture transport text, then execute it only against disposable node-side stubs.
+if python3 -B - "$HERE" <<'PY'
+import hashlib
+import os
+from pathlib import Path
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+
+root = Path(sys.argv[1])
+
+
+def run(argv, env, cwd):
+    return subprocess.run(argv, env=env, cwd=cwd, text=True, capture_output=True)
+
+
+with tempfile.TemporaryDirectory(prefix="cf159-") as directory:
+    fixture = Path(directory)
+    home = fixture / "home"
+    scripts = fixture / "scripts"
+    binary = fixture / "bin"
+    for path in (home / "node-scripts", scripts / "harness", binary):
+        path.mkdir(parents=True)
+
+    def executable(path, text):
+        path.write_text(text)
+        path.chmod(0o755)
+
+    for name in ("node-create.sh", "lib.sh", "project-node.sh", "disk_floor.py", "reclaim_disk.py"):
+        shutil.copyfile(root / "scripts" / name, scripts / name)
+    shutil.copyfile(root / "scripts/harness/install-hermes.sh", scripts / "harness/install-hermes.sh")
+    executable(scripts / "verify-node.sh", "#!/bin/bash\nexit 0\n")
+    executable(binary / "bunker", '''#!/bin/bash
+case "$1" in
+  cp) exit 0 ;;
+  exec)
+    case "${!#}" in
+      *NODE_PROJECT=*|sha256sum*) printf '%s' "${!#}" > "$FIXTURE_PAYLOAD" ;;
+      'echo ALIVE '*) printf 'ALIVE fixture\\n' ;;
+      'hostname -I') printf '127.0.0.1\\n' ;;
+    esac ;;
+  *) exit 99 ;;
+esac
+''')
+    executable(binary / "curl", "#!/bin/bash\nprintf 000\n")
+    executable(home / "node-scripts/project-node.sh", '''#!/bin/bash
+printf '%s\\0' "$NODE_PROJECT" "$NODE_GATEWAY_PORT" "$CRIER_URL" "$@" > "$FIXTURE_VALUES"
+''')
+    env = dict(os.environ, HOME=str(home), PATH=f"{binary}:/usr/bin:/bin",
+               BUNKER_SERVER="fixture-server", CRIER_URL="http://fixture.invalid:8767",
+               FIXTURE_PAYLOAD=str(fixture / "payload"), FIXTURE_VALUES=str(fixture / "values"))
+    malicious = "p'; touch $HOME/PWNED; echo '"
+    normal = dict(project="fixture", port="10800", harness="hermes",
+                  repo="https://fixture.invalid/repo.git", ref="main", crier=env["CRIER_URL"])
+    # Include every data field, not just the reported project exploit. A harmless
+    # adapter fixture lets an unusual harness name pass the staging precondition.
+    for field, value in [("project", malicious), ("project", "my proj's")] + [
+        (field, malicious) for field in ("port", "harness", "repo", "ref", "crier")
+    ]:
+        values = dict(normal, **{field: value})
+        adapter = scripts / f"harness/install-{values['harness']}.sh"
+        if not adapter.exists():
+            adapter.parent.mkdir(parents=True, exist_ok=True)
+            adapter.write_text("# fixture adapter: no provisioning\n")
+        env["CRIER_URL"] = values["crier"]
+        payload_path = fixture / "payload"
+        payload_path.unlink(missing_ok=True)
+        args = ["bash", str(scripts / "node-create.sh"), "--agent", "fixture-agent"]
+        for flag in ("project", "port", "harness", "repo", "ref"):
+            args.extend([f"--{flag}", values[flag]])
+        created = run(args, env, fixture)
+        assert created.returncode == 0, created.stdout + created.stderr
+        payload = payload_path.read_text()
+        # Independent token oracle: no quote may expose an extra shell command.
+        assert shlex.split(payload) == [
+            f"NODE_PROJECT={values['project']}", f"NODE_GATEWAY_PORT={values['port']}",
+            f"CRIER_URL={values['crier']}", "~/node-scripts/project-node.sh", "--apply",
+            "--project", values["project"], "--harness", values["harness"],
+            "--repo", values["repo"], "--ref", values["ref"],
+        ], payload
+        executed = run(["bash", "-lc", payload], env, fixture)
+        assert executed.returncode == 0, executed.stderr
+        assert not (home / "PWNED").exists(), "node-create injection executed"
+        expected = [values["project"], values["port"], values["crier"], "--apply",
+                    "--project", values["project"], "--harness", values["harness"],
+                    "--repo", values["repo"], "--ref", values["ref"]]
+        arrived = (fixture / "values").read_bytes().split(b"\0")[:-1]
+        assert arrived == [item.encode() for item in expected], arrived
+        if field == "project" and value != malicious:
+            print(f"  PASS  cf159 positive control NODE_PROJECT={arrived[0].decode()} --project={arrived[5].decode()}")
+        else:
+            print(f"  PASS  cf159 node-create {field} payload is data, not code")
+
+    # Exercise the real optional-artifact branch with transport and HTTP stubbed.
+    artifact = "artifact'; touch $HOME/PWNED; echo '"
+    artifact_path = fixture / artifact
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text("fixture artifact\n")
+    verified = run(["bash", str(root / "scripts/verify-node.sh"), "--agent", "fixture-agent",
+                    "--artifact", artifact], env, fixture)
+    assert verified.returncode == 1 and "gateway_reachable" in verified.stdout, verified
+    payload = (fixture / "payload").read_text()
+    assert shlex.split(payload) == ["sha256sum", artifact, "2>/dev/null", "|", "cut", "-d ", "-f1"], payload
+    executed = run(["bash", "-lc", payload], env, fixture)
+    assert executed.returncode == 0 and executed.stdout.strip() == hashlib.sha256(b"fixture artifact\n").hexdigest(), executed
+    assert not (home / "PWNED").exists(), "artifact injection executed"
+    print("  PASS  cf159 verify-node artifact payload is data, not code; digest intact")
+
+    # bunker_exec deliberately accepts shell text: compose values with shq while
+    # retaining pipelines and literal commands. Also pin empty/multiline values.
+    helper = r'''. "$1"
+bunker_exec fixture-server fixture-agent "printf '%s' $(shq "$2") | cat"
+'''
+    executable(binary / "bunker", '#!/bin/bash\nprintf "%s" "${!#}" > "$FIXTURE_PAYLOAD"\n')
+    for value in (malicious, "my proj's", "", "line\n'\\$();\n"):
+        captured = run(["bash", "-c", helper, "cf159", str(root / "scripts/lib.sh"), value], env, fixture)
+        assert captured.returncode == 0, captured.stderr
+        executed = run(["bash", "-lc", (fixture / "payload").read_text()], env, fixture)
+        assert executed.returncode == 0 and executed.stdout == value, executed
+        assert not (home / "PWNED").exists(), "bunker_exec injection executed"
+    print("  PASS  cf159 bunker_exec trusted command text preserves quoted values and literal pipelines")
+PY
+then
+  say "  PASS  cf159-escaping all remote-command sites"
+else
+  say "  FAIL  cf159-escaping remote-command fixture"; fails=$((fails+1))
+fi
+# END cf159-escaping
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

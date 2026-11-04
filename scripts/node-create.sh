@@ -74,10 +74,13 @@ if [ -z "${CRIER_URL:-}" ]; then
   bad "crier_url" "CRIER_URL unset or empty — export CRIER_URL=http://crier.example:8767"
   exit 1
 fi
-# Preserve the URL as one single-quoted environment assignment in the remote shell.
-CRIER_QUOTED="${CRIER_URL//\'/\'\\\'\'}"
-# Same escaping for the ref: it crosses into the node's shell inside single quotes.
-REF_QUOTED="${REF//\'/\'\\\'\'}"
+# Every data value crossing into the node's shell uses the shared escaper.
+PROJECT_QUOTED=$(shq "$PROJECT")
+PORT_QUOTED=$(shq "$PORT")
+CRIER_QUOTED=$(shq "$CRIER_URL")
+HARNESS_QUOTED=$(shq "$HARNESS")
+REPO_QUOTED=$(shq "$REPO")
+REF_QUOTED=$(shq "$REF")
 STAGED="$(staged_files)" || exit 1
 if [ -z "$SERVER" ]; then
   bad "server_declared" "BUNKER_SERVER unset — no agent host to create the node on"
@@ -115,7 +118,7 @@ ok "staged" "${STAGED//$'\n'/ + }"
 # 3. provision inside
 say "  ..    provisioning inside the node"
 if "$b" exec --server "$SERVER" "$AGENT" -- bash -lc \
-     "NODE_PROJECT='$PROJECT' NODE_GATEWAY_PORT='$PORT' CRIER_URL='$CRIER_QUOTED' ~/node-scripts/project-node.sh --apply --project '$PROJECT' --harness '$HARNESS' --repo '$REPO' --ref '$REF_QUOTED'"; then
+     "NODE_PROJECT=$PROJECT_QUOTED NODE_GATEWAY_PORT=$PORT_QUOTED CRIER_URL=$CRIER_QUOTED ~/node-scripts/project-node.sh --apply --project $PROJECT_QUOTED --harness $HARNESS_QUOTED --repo $REPO_QUOTED --ref $REF_QUOTED"; then
   ok "provision" "node reports PASS"
 else
   bad "provision" "node reported FAIL — see the output above"
