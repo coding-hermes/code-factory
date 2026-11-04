@@ -186,6 +186,12 @@ rc 0), and acceptance is **incomplete**. Split by what the tree can actually dem
   and since 2026-11-04 the PRD block also names `CF-002` (a node turn cannot start inference, so the
   commit leg is unreachable) and `CF-126` (a README-created node fails layer 00 on `CRIER_URL`, so the
   bus leg is unreachable) — both were open and absent from the milestone list before this tick.
+  **Correction, 2026-11-04T04:14Z (sync lane, below `c2a6a45`):** the `CF-126` clause is stale as of
+  the board. CF-126 reached `complete` at `2026-11-04T02:56:26Z` on commit `23c1c6d`
+  (`85f852b` records the closure on verdict `dd7f64bc`; `git merge-base --is-ancestor 23c1c6d
+  origin/main` exits 0), so that defect no longer blocks the bus leg. Whether the leg is now
+  exercised end to end is not measured here. The `CF-002` clause still stands (`status: pending`).
+  The snapshot above is left as measured at `d02916e` so the move is visible.
   One leg moved: a directive is now recorded arriving at a node and executing there (`CF-137`,
   `CF-138` live runs ending `exit 124` at a caller-derived 32.1 s kill; `CF-139` records the
   19:37:51 dispatch handing the node the envelope as its prompt). The milestone block in the PRD is
