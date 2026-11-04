@@ -969,5 +969,40 @@ else
 fi
 rm -rf "$tmpd"
 
+say "30. README Status rows 1 and 3 cite the interpreter-qualified --check"
+# Status rows "Hermes in a bunker + HTTP gateway over tailnet" and "Node inference credential"
+# bind to `HERMES_PYTHON_BIN=python3.12 scripts/harness/install-hermes.sh --check`: on this
+# host's default python3 (3.14) the unqualified command stops at `FAIL python` and never
+# reaches the `inference_key` row they are cited for. A row's prose may also mention the bare
+# variable — only the qualified command binds the row, so that is what this arm requires.
+# A renamed row must be re-bound, not silently dropped (CF-093).
+status_rows_missing_qualifier() {  # $1=README $2=repo root -> prints one line per offending Status row, returns 1 if any
+  local readme="$1" rc=0 label row
+  for label in 'Hermes in a bunker + HTTP gateway over tailnet' 'Node inference credential'; do
+    row=$(grep '^|' "$readme" | grep -F "$label" | head -1)
+    if [ -z "$row" ]; then
+      echo "absent-row: $label"; rc=1
+    elif ! printf '%s' "$row" | grep -Fq 'HERMES_PYTHON_BIN=python3.12 scripts/harness/install-hermes.sh --check'; then
+      echo "missing-qualifier: $label"; rc=1
+    fi
+  done
+  return $rc
+}
+if status_rows_missing_qualifier "$HERE/README.md" "$HERE" >/dev/null; then
+  say "  PASS  README Status rows 1 and 3 cite the interpreter-qualified --check"
+else
+  say "  FAIL  README Status row lost its interpreter-qualified --check: $(status_rows_missing_qualifier "$HERE/README.md" "$HERE" | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+# negative fixture: a README whose Status rows lost the qualified command must be refused
+tmpd=$(mktemp -d)
+sed 's/HERMES_PYTHON_BIN=python3\.12 //g' "$HERE/README.md" > "$tmpd/README.md"
+if status_rows_missing_qualifier "$tmpd/README.md" "$HERE" >/dev/null; then
+  say "  FAIL  a README whose Status rows lost the qualified command was accepted"; fails=$((fails+1))
+else
+  say "  PASS  unqualified Status rows refused ($(status_rows_missing_qualifier "$tmpd/README.md" "$HERE" | tr '\n' ' '))"
+fi
+rm -rf "$tmpd"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
