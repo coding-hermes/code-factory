@@ -1,0 +1,189 @@
+commit cdc926d87433820c074f260c076d305159f70deb
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Wed Nov 4 05:38:28 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Wed Nov 4 05:38:41 2026 -0500
+
+    docs(CF-189): destroying an agent is a measured step, not BLOCKED
+    
+    docs/OPERATIONS.md told operators, in four places, that destroying a bunker
+    agent is unmeasured / BLOCKED / NOT YET and that its CLI verb must not be
+    guessed. Both halves are false at this tip:
+    
+      * scripts/node-create.sh:54 (inside incomplete(), guarded by
+        [ "$SPAWNED" -eq 1 ]) prints the exact line
+        `cleanup required: bunker destroy <agent> --server <server>` when a
+        provisioning run leaves an agent behind - the create path never
+        destroys anything itself, it hands the operator that command.
+      * docs/audits/code-factory-dogfood-2026-11-04-02-20-15.md section 2c
+        records that exact verb being run to completion on 2026-11-04: home
+        256.9 MB archived before delete, "Agent ... destroyed.", local SSH key
+        removed, rc=0, and bunker list back to the pre-existing agent count.
+    
+    So the runbook forbade the one lifecycle step its own tooling instructs the
+    operator to perform, leaving the reader unable to tell whether following the
+    printed command was supported.
+    
+    Corrected (docs/OPERATIONS.md:63,167,171,175,205): destroy is documented as a
+    measured operator step citing the code path and the committed transcript;
+    renewing a TTL, rebuilding from a manifest, credential revocation, the
+    destroy-then-recreate round trip and every teardown step other than destroy
+    stay BLOCKED / NOT YET and are labelled not measured. CF-110's recreate gate
+    is unchanged.
+    
+    Evidence and both probe arms (6 stale claims before, 0 after) are in
+    docs/audits/code-factory-docs-2026-11-04-cf189-destroy-prose.md.
+    
+    Gates at this commit: bash tests/selftest.sh -> SELFTEST: PASS, rc=0
+    (193 PASS / 50 intentional-negative FAIL rows, loadavg 13.23);
+    bash scripts/boardctl validate -> RESULT: OK (4 pre-existing warnings).
+    
+    Landed from a throwaway clone of the published remote (the registered
+    checkout /home/kara/code-factory is being written by sibling lanes: a live
+    gitreins judge plus uncommitted board appends), so it is left untouched.
+    No pre-commit hook is installed in a fresh clone, so no hook ran and none was
+    bypassed; the Tier 1 guard battery runs through `gitreins task complete`.
+    
+    ch:trace row=CF-189 spec=docs/OPERATIONS.md#8-failure-recovery-renew-destroy-rebuild test=none:docs-prose-grep-probe doc=docs/OPERATIONS.md evidence=docs/audits/code-factory-docs-2026-11-04-cf189-destroy-prose.md witness=tests/selftest.sh verdict=CF-189-DOC1 commit=HEAD memory=none:recorded-at-closeout
+---
+ docs/OPERATIONS.md                                 | 12 +--
+ ...-factory-docs-2026-11-04-cf189-destroy-prose.md | 93 ++++++++++++++++++++++
+ 2 files changed, 100 insertions(+), 5 deletions(-)
+
+diff --git a/docs/OPERATIONS.md b/docs/OPERATIONS.md
+index 2695061..8beba13 100644
+--- a/docs/OPERATIONS.md
++++ b/docs/OPERATIONS.md
+@@ -60,7 +60,7 @@ Do not put a literal private URL, host, key, or ID into this public runbook. Sub
+ - `node-create.sh` continues to verification after provisioning failure, and only logs spawn output to `/tmp/spawn.log`; a failed/incomplete node must be treated as quarantined, not scheduled.
+ - It creates a node using a default `--ttl 6h`; no measured renewal/lease procedure is provided here.
+ 
+-Accordingly, **do not use `scripts/node-create.sh` to create a production node until the secure bus identity and inference setup path is completed and the whole round trip is verified.** There is no separate checked-in renew, destroy, or rebuild command. Those lifecycle actions are **BLOCKED / NOT YET**; see §8.
++Accordingly, **do not use `scripts/node-create.sh` to create a production node until the secure bus identity and inference setup path is completed and the whole round trip is verified.** There is no checked-in renew or rebuild command: renewal, rebuild and credential revocation are **BLOCKED / NOT YET**. Destroying an agent is a separate case — it is a measured operator step (§8), and when provisioning fails the create path prints the exact command to run instead of destroying anything itself (`scripts/node-create.sh:54`). See §8 and §9.
+ 
+ ### Private repositories
+ 
+@@ -164,13 +164,15 @@ It checks shell syntax, a node-checker failure path, `fetch_verified` digest mis
+ 
+ ### Renew / destroy / rebuild
+ 
+-There is no checked-in command or measured procedure for renewing a bunker agent TTL, destroying an agent, preserving/revoking credentials, or rebuilding from a manifest. The default node-create TTL is `6h`; that is not a renewal workflow. These steps are **BLOCKED / NOT YET**. Do not guess bunker CLI flags, manually delete homes, or assume deleting the agent revokes external keys.
++**Destroying an agent is a measured operator step.** The bunker control plane's destroy verb was run to completion on 2026-11-04 against a real host and a real agent: `bunker destroy node-dogfood-public-20261104-212331 --server <node-host>` printed `Destroying agent node-dogfood-public-20261104-212331 (home 256.9 MB; archiving before delete, deadline 12m0s)…`, then `Agent node-dogfood-public-20261104-212331 destroyed.`, then `Removed local SSH key …`, and exited 0; `bunker list --server <node-host>` afterwards showed only the pre-existing agent. The transcript is committed at `docs/audits/code-factory-dogfood-2026-11-04-02-20-15.md` §2c. Pass `--server` explicitly — that is the form the create path prints (`scripts/node-create.sh:54`, inside `incomplete()`, guarded by `[ "$SPAWNED" -eq 1 ]`) — and note the CLI archives the home before deleting it, so the archive is the CLI's behaviour, not an operator step. Destroy does **not** revoke external credentials (crier identity, inference key), does not disarm a scheduler target, and is not a renewal or rebuild workflow.
+ 
+-A future approved lifecycle procedure must: disarm scheduler target first; drain or preserve inbox/result state; stop the node worker/gateway; record required repo branch/commit and evidence; revoke node-only crier/inference/deploy credentials; destroy only that node; verify the old identity cannot authenticate; provision a fresh isolated node; re-issue a new identity; run all checks and a fresh round trip; then re-arm the scheduler target. Destruction/rebuild was not performed or tested here.
++**Still BLOCKED / NOT YET — renewal, rebuild, credential revocation.** There is no checked-in command or measured procedure for renewing a bunker agent TTL, preserving or revoking credentials, or rebuilding from a manifest. The default node-create TTL is `6h`; that is not a renewal workflow. Do not guess bunker CLI flags for those steps, manually delete homes, or assume deleting the agent revokes external keys.
++
++A future approved lifecycle procedure must: disarm scheduler target first; drain or preserve inbox/result state; stop the node worker/gateway; record required repo branch/commit and evidence; revoke node-only crier/inference/deploy credentials; destroy only that node; verify the old identity cannot authenticate; provision a fresh isolated node; re-issue a new identity; run all checks and a fresh round trip; then re-arm the scheduler target. Of that sequence only the destroy step has been performed and recorded (§2c of the transcript above); the rebuild half, the credential-revocation step and the destroy-then-recreate round trip are **not measured**.
+ 
+ ## 9. Teardown
+ 
+-No teardown script is currently tracked. Until one is added and verified, teardown is a **manual, operator-owned, BLOCKED** change—not a guessed command. Required teardown outcomes are: scheduler target disarmed and read back; crier identity/permissions revoked; node pull worker and gateway stopped; bunker agent destroyed through the documented bunker control plane; node-specific credentials revoked; retained work/artifacts archived or explicitly discarded; and a final check that the old endpoint and identity no longer work. Verify each external state change by reading it back. Preserve the repo and evidence unless the operator explicitly authorizes deletion.
++Teardown as a whole is **BLOCKED / NOT YET**. No teardown script is tracked, so until one is added and verified, teardown is a **manual, operator-owned** change—not a guessed command. One step of it is the exception and is measured: destroying the agent (§8). Required teardown outcomes are: scheduler target disarmed and read back; crier identity/permissions revoked; node pull worker and gateway stopped; bunker agent destroyed through the documented bunker control plane; node-specific credentials revoked; retained work/artifacts archived or explicitly discarded; and a final check that the old endpoint and identity no longer work. Verify each external state change by reading it back. Preserve the repo and evidence unless the operator explicitly authorizes deletion.
+ 
+ ## 10. Security boundaries
+ 
+@@ -200,4 +202,4 @@ No teardown script is currently tracked. Until one is added and verified, teardo
+ | `scripts/add_family_lanes.py` | Add eight locally named family scheduler lanes through local API/DB | Reads scheduler process token and mutates local API/DB; NOT a public provisioning command. Review before execution. |
+ | `scripts/clone_lane.py`, `scripts/configure_family.py` | Present in source inventory | Purpose/operational contract not verified in this runbook; do not infer CLI. |
+ 
+-Scripts without a documented/help-verified interface are intentionally not given guessed commands here. `--help` is not generally implemented; inspect source before invoking unfamiliar scripts. There is no tracked crier node-worker, credential-bundle delivery, scheduler target enable/disable, node renewal, destroy, rebuild, or teardown command.
++Scripts without a documented/help-verified interface are intentionally not given guessed commands here. `--help` is not generally implemented; inspect source before invoking unfamiliar scripts. There is no tracked crier node-worker, credential-bundle delivery, scheduler target enable/disable, node renewal, rebuild, or teardown command. No script destroys an agent for the operator either: `incomplete()` in the create path prints the exact `bunker destroy <agent> --server <server>` line to run (`scripts/node-create.sh:54`), and that verb is a measured operator step (§8).
+diff --git a/docs/audits/code-factory-docs-2026-11-04-cf189-destroy-prose.md b/docs/audits/code-factory-docs-2026-11-04-cf189-destroy-prose.md
+new file mode 100644
+index 0000000..0e98886
+--- /dev/null
++++ b/docs/audits/code-factory-docs-2026-11-04-cf189-destroy-prose.md
+@@ -0,0 +1,93 @@
++# code-factory docs lane — tick `code-factory-docs-2026-11-04-10-01-07` (claim: destroy is BLOCKED)
++
++Third execution of this tick id, and it is a duplicate dispatch: the same id fired more than once
++and each session took a different claim. Left unclaimed and unmodified here:
++
++- first execution → `CF-197` (public-bind auth-gate prose), evidence `docs/audits/code-factory-docs-2026-11-04-cf071-auth-prose.md`
++- second execution → `CF-198` (acceptance-plan section mapping), evidence `docs/audits/code-factory-docs-2026-11-04-cf198-section-map.md`
++
++This file covers a distinct claim and a distinct board row (`CF-189`).
++
++## Claim corrected
++
++`docs/OPERATIONS.md` asserted, in four places, that **destroying a bunker agent is an unmeasured,
++BLOCKED / NOT YET action and that its CLI verb must not be guessed** — while the shipped create path
++prints that exact verb to the operator on a failed provision, and a committed run in this same tree
++records the verb being run to completion with `rc=0`. The runbook therefore forbade the one lifecycle
++step its own tooling instructs the operator to perform, and a reader could not tell whether following
++the printed command was supported.
++
++Two sources falsify the old text, both in the tree at the same commit:
++
++1. **Code path** — `scripts/node-create.sh:50-57`, `incomplete()`: when `$SPAWNED -eq 1` it prints
++   `cleanup required: bunker destroy <agent> --server <server>` (line 54) and exits 1. The create
++   path never destroys anything itself; it hands the operator the exact command.
++2. **Recorded measurement** — `docs/audits/code-factory-dogfood-2026-11-04-02-20-15.md` §2c: the
++   command was run on 2026-11-04 and destroyed a real agent (`home 256.9 MB; archiving before
++   delete`; `Agent … destroyed.`; local SSH key removed; `rc=0`; `bunker list` back to the
++   pre-existing count).
++
++| Where | Before | After |
++|---|---|---|
++| `docs/OPERATIONS.md:63` | "There is no separate checked-in renew, destroy, or rebuild command. Those lifecycle actions are **BLOCKED / NOT YET**" | renew/rebuild/revocation stay BLOCKED; destroy named as a measured operator step (§8) that the create path prints (`scripts/node-create.sh:54`) |
++| `docs/OPERATIONS.md:167` | destroy listed among the unmeasured actions; "These steps are **BLOCKED / NOT YET**" | new paragraph "Destroying an agent is a measured operator step" quoting the verb, its output, `rc=0` and the committed transcript; a separate paragraph keeps renewal / rebuild / credential revocation BLOCKED / NOT YET |
++| `docs/OPERATIONS.md:171` | "Destruction/rebuild was not performed or tested here" | "only the destroy step has been performed and recorded"; rebuild, credential revocation and destroy-then-recreate are **not measured** |
++| `docs/OPERATIONS.md:175` (§9 Teardown) | teardown marked "manual, operator-owned, BLOCKED", with destroy folded into the blocked set | teardown as a whole stays BLOCKED / NOT YET; its agent-destroy step is called out as the measured exception |
++| `docs/OPERATIONS.md:205` | "There is no tracked … node renewal, destroy, rebuild, or teardown command" | list drops destroy; "No script destroys an agent for the operator either … prints the exact `bunker destroy … --server …` line to run (`scripts/node-create.sh:54`)" |
++
++## What the corrected prose now says, and what it refuses to claim
++
++Stated as measured: the destroy verb, the `--server` form, the CLI's archive-before-delete
++behaviour, `rc=0`, and the post-destroy agent count — all quoted from the committed transcript.
++
++Explicitly **not measured** (unchanged or newly labelled):
++
++- renewing a TTL — no command or measured procedure exists; `--ttl 6h` is a creation default, not a renewal;
++- rebuilding from a manifest, and the destroy-then-recreate round trip (`CF-110` remains BLOCKED);
++- credential revocation — deleting the agent does not revoke a crier identity or inference key;
++- destroying an agent that still has running jobs;
++- any teardown step other than destroy (disarm, drain, credential revoke, final identity check).
++
++## The re-runnable check (red before, green after)
++
++`cf189-probe.sh <doc>` greps the doc for the six stale assertions. Run in the tick clone:
++
++```
++$ git show HEAD:docs/OPERATIONS.md > before.md && cf189-probe.sh before.md    # pre-fix arm
++STALE  line 63: 'no separate checked-in renew, destroy, or rebuild command' …
++STALE  line 203: 'node renewal, destroy, rebuild, or teardown command' …
++stale_destroy_claims=6
++
++$ cf189-probe.sh docs/OPERATIONS.md                                          # post-fix arm
++OK     line 63: 'no separate checked-in renew, destroy, or rebuild command'
++… (six OK rows)
++stale_destroy_claims=0
++```
++
++The same assertions can be re-run without the helper:
++
++```
++grep -c 'no separate checked-in renew, destroy, or rebuild command' docs/OPERATIONS.md   # 0
++grep -c 'destruction/rebuild was not performed'                     docs/OPERATIONS.md   # 0
++grep -n 'cleanup required: bunker destroy'                    scripts/node-create.sh     # 1 hit, :54
++git show HEAD:docs/audits/code-factory-dogfood-2026-11-04-02-20-15.md | grep -c 'Agent node-dogfood-public-20261104-212331 destroyed'   # 1
++```
++
++## Claims I could not verify
++
++- The **live** destroy behaviour was not re-run by this tick — no bunker host was touched. The
++  paragraph quotes the committed 2026-11-04 transcript and says so; anything beyond that run is
++  `not measured`.
++- The second measurement recorded in `CF-189`'s row text (home 435.2 MB, agent `node-myrepo-042342`)
++  has **no committed transcript** in this tree, so it is not cited in the prose.
++- Whether the `bunker` client refuses `--server`-less destroy (the printed form always carries
++  `%q --server %q`) is `not measured`.
++- `docs/ACCEPTANCE-PLAN.md:93` (`CF-110`) still reads "BLOCKED … no destroy-and-recreate path or
++  evidence is present in the inspected flow". Its gate is destroy **and recreate**, which is still
++  unmeasured, so the cell was left untouched — its wording about "no evidence" is looser than the
++  tree now supports and is left for `CF-110`'s owner rather than silently re-scoped here.
++
++ch:trace row=CF-189 spec=docs/OPERATIONS.md#8-failure-recovery-renew-destroy-rebuild test=none:docs-prose-grep-probe doc=docs/OPERATIONS.md evidence=docs/audits/code-factory-docs-2026-11-04-cf189-destroy-prose.md witness=tests/selftest.sh verdict=CF-189-DOC1 commit=HEAD memory=none:recorded-at-closeout
++STATUS: done
++TIER: T3
++EVIDENCE: cf189-probe.sh — 6 stale destroy claims at HEAD 2bb114f, 0 in this tree; node-create.sh:54 and the §2c transcript both resolve at this commit; `bash tests/selftest.sh` PASS
