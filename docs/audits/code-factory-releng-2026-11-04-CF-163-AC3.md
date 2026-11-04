@@ -254,3 +254,33 @@ close (`2026-11-04T02:00:32-05:00`):
 
 So no second `255` was minted, the fast-forward that the staged index had blocked is no longer needed
 (the candidate is at parity by that lane's own push), and this lane changed nothing in the candidate.
+
+### Fourth execution of tick `code-factory-duckbrain-releng-2026-11-04-06-11-13` — resumed verification
+
+Written 2026-11-04T02:06-05:00 (host clock), `loadavg` `9.6 10.4 9.7`.
+
+The scheduler row for this tick reads `failed` (`gateway HTTP 502` at `2026-11-04T01:51:39-05:00`) while the
+work above had already landed — the third execution committed through `ef222d1` and pushed. This pass
+therefore **verified the durable claims from artifacts instead of re-executing them**, then re-ran the
+lane's own gate at the published tip. Nothing was repaired and nothing was re-filed.
+
+| Claim | Command | Result |
+|---|---|---|
+| Candidate at parity | `git -C /home/kara/code-factory rev-parse HEAD`, `git rev-list --left-right --count origin/main...HEAD` | `ef222d1` = `origin/main`; **`0 0`**; 0 tracked edits |
+| Board integrity | `git show origin/main:.coding-hermes/board/events.jsonl \| jq -s` | **258 events, 0 duplicate ids**, 142 task rows |
+| Rows filed by this tick | `jq -r 'select(.id=="CF-163" or .id=="CF-168")\|.status'` | both **`pending`** on the published ref (correct — the fix work is not this tick's) |
+| Format-leg verdict | `git show origin/main:.gitreins/history/2026-11-04/8f9396cb/verdict.json` | `task_id=CF-163-FMT`, `passed=true`, `commit=5fc2cbd…`, `evaluated_at=2026-11-04T06:50:41` |
+| Memory leg | `GET /api/memories/key/%2Fcode-factory%2Flanes%2Freleng%2F2026-11-04-06-11-13?namespace=code-factory` | HTTP **200**, record **`48fb5fe9`**, 2336 chars, names this tick — read back, **no parallel receipt minted** |
+| Gate at `ef222d1` | `bash tests/selftest.sh` | **`SELFTEST: PASS`**, rc=0, **106 PASS rows**, 19 `FAIL` rows (all documented negative fixtures) |
+| Board validity | `bash scripts/boardctl validate` | `RESULT: OK (3 warning(s))` — CF-034 free-form fields + headerless board, pre-existing |
+| Actions | `gh run list --repo coding-hermes/code-factory --limit 3` | `[]` — documented no-workflow state (this repo's CI-equivalent gate is `tests/selftest.sh`) |
+| Public posture | `gh api repos/coding-hermes/code-factory` | public, `license=MIT`, `archived=false`, secret scanning **enabled**, push protection **enabled**, **0 open alerts**, branch protection still `404` (CF-120, owner setting) |
+| Release | `git ls-remote --tags` | **0 published tags**; 2 local safety tags (neither an ancestor of `main`); no `VERSION`/`CHANGELOG`/version scheme → **no tag cut, release not due** (CF-161 pending) |
+| Writer census | `/proc/*/cwd` scan of the checkout | empty apart from this tick's own probe; no live `gitreins` judge in the checkout |
+
+**Resolution of the previous pass's open hazard:** the foreign staged `events.jsonl` line recorded as
+event 256 was committed by the docs lane as event **257** (`664a446`), so no duplicate `255` exists on the
+published board — confirmed above (0 duplicate ids across 259 events after this pass's own append).
+
+This pass appended exactly one audit event (**259**, insert-only: prefix `cmp`-identical, 259 lines,
+0 duplicate ids) and this section; the row set is unchanged (142 rows, no new ids).
