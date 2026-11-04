@@ -1,0 +1,131 @@
+{
+  "task_id": "CF-SYNC-1104-DELTA",
+  "task_title": "Re-measure the acceptance-plan snapshot at the current tip and record the ledger content loss",
+  "task_criteria": [
+    "1. docs/ACCEPTANCE-PLAN.md carries a dated delta bullet naming the tip it measured (a SHA that git cat-file -t resolves) and the task/event counts measured at that tip. 2. The bullet names the four events present at commit aead5f5 whose content is absent at the named tip and assigns each consequence to the owning board row (CF-143, CF-196, CF-130). 3. bash scripts/boardctl validate prints RESULT: OK at the landed commit. 4. bash tests/selftest.sh prints SELFTEST: PASS at the landed commit. 5. bash docs/audits/cf099-prd-drift-probe.sh exits 0 at the landed commit."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/.hermes/cache/scratch/cf-sync-20261104-095351.Bq87aO/clone",
+  "branch": "main",
+  "commit": "093cdaa82a64dffb94415fc8ec2fc4dd29d931e6",
+  "working_tree_content_fingerprint": "0d4fc42c8dd2093d4bcedf5b1ae8c1eb120ff7aab303cd23642adaa030dac7f8",
+  "working_tree_dirty_path_count": 0,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n5:40AM INF scanned ~1215359 bytes (1.22 MB) in 707ms\n5:40AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 154 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.llX5IBl0VD/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  175/175 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [16379 chars omitted \u2014 214 line(s)] \u2026\n  PASS  ref 'master' crosses the transport as --ref 'master'\n  PASS  ref 're'lease' crosses the transport as --ref 're'\\''lease'\n36. remote shell payloads preserve data without executing it (CF-159)\n  PASS  cf159 node-create project payload is data, not code\n  PASS  cf159 positive control NODE_PROJECT=my proj's --project=my proj's\n  PASS  cf159 node-create port payload is data, not code\n  PASS  cf159 node-create harness payload is data, not code\n  PASS  cf159 node-create repo payload is data, not code\n  PASS  cf159 node-create ref payload is data, not code\n  PASS  cf159 node-create crier payload is data, not code\n  PASS  cf159 verify-node artifact payload is data, not code; digest intact\n  PASS  cf159 bunker_exec trusted command text preserves quoted values and literal pipelines\n  PASS  cf159-escaping all remote-command sites\n37. the node credential row scopes its contradiction to the node (CF-151)\n  PASS  node credential row labels control-host evidence and names the node measurement\n  PASS  pre-fix node credential row refused (unlabelled-control-host-fail: Node inference credential missing-control-host-label: Node inference credential missing-node-scoped-measurement: Node inference credential )\n38. the milestone blocker list resolves every cited id in one namespace (CF-182)\n  PASS  prd-blocker \u2014 14 cited ids, 12 rows, 2 requirement-only, exit 0\n  PASS  prd-blocker-red \u2014 CF-999 unresolved, exit 1\n  PASS  prd-blocker-closed \u2014 CF-009 complete, exit 1\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 1. docs/ACCEPTANCE-PLAN.md carries a dated delta bullet naming the tip it measured (a SHA that git cat-file -t resolves) and the task/event counts measured at that tip.: docs/ACCEPTANCE-PLAN.md:20 begins \"**Delta measured 2026-11-04T10:37Z at tip `c47fe93` (sync lane):** the board carries 175 task rows and 344 events (59 `complete`, 108 `pending`, 8 `in_progress`)\". `git cat-file -t c47fe93` -> `commit` (exit 0). Counts are internally consistent with the appended ledger event id 344 (\"board 175 rows / 344 events (59 complete, 108 pending, 8 in_progress)\").\n  \u2713 2. The bullet names the four events present at commit aead5f5 whose content is absent at the named tip and assigns each consequence to the owning board row (CF-143, CF-196, CF-130).: docs/ACCEPTANCE-PLAN.md:20 names all four: \"id 339 `task_completed CF-197` (10:16:57Z), id 340 `audit CF-197` (10:17:07Z, the docs-lane correction detail), id 341 `audit CF-197` (10:17:43Z, the memory pointer) and id 342 `task_completed CF-182` (10:15:23Z)\", with `git cat-file -t aead5f5` -> `commit`. Consequences assigned to all three owning rows: \"`CF-182` and `CF-197` now join `CF-034`/`CF-041` in `CF-130`'s first leg (complete rows with no completion transition)\", \"the deletions themselves are `CF-143`'s detector class\", and \"a verbatim re-append would duplicate ids \u2014 the class `CF-196` owns\". The bullet also explains why the loss is invisible to a line count (343 \u2212 4 + 5 = 344).\n  \u2713 3. bash scripts/boardctl validate prints RESULT: OK at the landed commit.: Ran `bash scripts/boardctl validate` at HEAD 093cdaa: exit_code 0, output tail \"RESULT: OK (4 warning(s))\" with \"rows: 175 tasks, 345 events, 0 fixtures\" and \"key uniformity: 175/175 rows carry only canon keys (0 drift)\". The 4 warnings are the documented ones (CF-034 free-form guard_result/ci_result, duplicate event id 336, headerless board).\n  \u2713 4. bash tests/selftest.sh prints SELFTEST: PASS at the landed commit.: Ran `bash tests/selftest.sh` at HEAD 093cdaa: exit_code 0, line 288 of output is \"SELFTEST: PASS\"; grep counts 193 \"  PASS\" rows and 50 \"  FAIL\" rows (the intentional negative fixtures, matching the bullet's claim of 193 PASS / 50 FAIL).\n  \u2713 5. bash docs/audits/cf099-prd-drift-probe.sh exits 0 at the landed commit.: Ran `bash docs/audits/cf099-prd-drift-probe.sh` at HEAD 093cdaa: exit_code 0, output \"OK: milestone, plan snapshot and layer arms agree at 093cdaa\" (measured: tip=aead5f5 rows=171 events=343 sections=38).\nAll five criteria pass: the dated delta bullet at docs/ACCEPTANCE-PLAN.md:20 names the resolvable tip c47fe93 with measured counts, names the four aead5f5 events lost by content and assigns consequences to CF-143/CF-196/CF-130, and boardctl validate (RESULT: OK), selftest (SELFTEST: PASS, exit 0) and the cf099 drift probe (exit 0) all pass at the landed commit.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 1. docs/ACCEPTANCE-PLAN.md carries a dated delta bullet naming the tip it measured (a SHA that git cat-file -t resolves) and the task/event counts measured at that tip.: docs/ACCEPTANCE-PLAN.md:20 begins \"**Delta measured 2026-11-04T10:37Z at tip `c47fe93` (sync lane):** the board carries 175 task rows and 344 events (59 `complete`, 108 `pending`, 8 `in_progress`)\". `git cat-file -t c47fe93` -> `commit` (exit 0). Counts are internally consistent with the appended ledger event id 344 (\"board 175 rows / 344 events (59 complete, 108 pending, 8 in_progress)\").\n  \u2713 2. The bullet names the four events present at commit aead5f5 whose content is absent at the named tip and assigns each consequence to the owning board row (CF-143, CF-196, CF-130).: docs/ACCEPTANCE-PLAN.md:20 names all four: \"id 339 `task_completed CF-197` (10:16:57Z), id 340 `audit CF-197` (10:17:07Z, the docs-lane correction detail), id 341 `audit CF-197` (10:17:43Z, the memory pointer) and id 342 `task_completed CF-182` (10:15:23Z)\", with `git cat-file -t aead5f5` -> `commit`. Consequences assigned to all three owning rows: \"`CF-182` and `CF-197` now join `CF-034`/`CF-041` in `CF-130`'s first leg (complete rows with no completion transition)\", \"the deletions themselves are `CF-143`'s detector class\", and \"a verbatim re-append would duplicate ids \u2014 the class `CF-196` owns\". The bullet also explains why the loss is invisible to a line count (343 \u2212 4 + 5 = 344).\n  \u2713 3. bash scripts/boardctl validate prints RESULT: OK at the landed commit.: Ran `bash scripts/boardctl validate` at HEAD 093cdaa: exit_code 0, output tail \"RESULT: OK (4 warning(s))\" with \"rows: 175 tasks, 345 events, 0 fixtures\" and \"key uniformity: 175/175 rows carry only canon keys (0 drift)\". The 4 warnings are the documented ones (CF-034 free-form guard_result/ci_result, duplicate event id 336, headerless board).\n  \u2713 4. bash tests/selftest.sh prints SELFTEST: PASS at the landed commit.: Ran `bash tests/selftest.sh` at HEAD 093cdaa: exit_code 0, line 288 of output is \"SELFTEST: PASS\"; grep counts 193 \"  PASS\" rows and 50 \"  FAIL\" rows (the intentional negative fixtures, matching the bullet's claim of 193 PASS / 50 FAIL).\n  \u2713 5. bash docs/audits/cf099-prd-drift-probe.sh exits 0 at the landed commit.: Ran `bash docs/audits/cf099-prd-drift-probe.sh` at HEAD 093cdaa: exit_code 0, output \"OK: milestone, plan snapshot and layer arms agree at 093cdaa\" (measured: tip=aead5f5 rows=171 events=343 sections=38).\nAll five criteria pass: the dated delta bullet at docs/ACCEPTANCE-PLAN.md:20 names the resolvable tip c47fe93 with measured counts, names the four aead5f5 events lost by content and assigns consequences to CF-143/CF-196/CF-130, and boardctl validate (RESULT: OK), selftest (SELFTEST: PASS, exit 0) and the cf099 drift probe (exit 0) all pass at the landed commit.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "1. docs/ACCEPTANCE-PLAN.md carries a dated delta bullet naming the tip it measured (a SHA that git cat-file -t resolves) and the task/event counts measured at that tip.",
+                "status": "PASS",
+                "detail": "docs/ACCEPTANCE-PLAN.md:20 begins \"**Delta measured 2026-11-04T10:37Z at tip `c47fe93` (sync lane):** the board carries 175 task rows and 344 events (59 `complete`, 108 `pending`, 8 `in_progress`)\". `git cat-file -t c47fe93` -> `commit` (exit 0). Counts are internally consistent with the appended ledger event id 344 (\"board 175 rows / 344 events (59 complete, 108 pending, 8 in_progress)\")."
+              },
+              {
+                "criterion": "2. The bullet names the four events present at commit aead5f5 whose content is absent at the named tip and assigns each consequence to the owning board row (CF-143, CF-196, CF-130).",
+                "status": "PASS",
+                "detail": "docs/ACCEPTANCE-PLAN.md:20 names all four: \"id 339 `task_completed CF-197` (10:16:57Z), id 340 `audit CF-197` (10:17:07Z, the docs-lane correction detail), id 341 `audit CF-197` (10:17:43Z, the memory pointer) and id 342 `task_completed CF-182` (10:15:23Z)\", with `git cat-file -t aead5f5` -> `commit`. Consequences assigned to all three owning rows: \"`CF-182` and `CF-197` now join `CF-034`/`CF-041` in `CF-130`'s first leg (complete rows with no completion transition)\", \"the deletions themselves are `CF-143`'s detector class\", and \"a verbatim re-append would duplicate ids \u2014 the class `CF-196` owns\". The bullet also explains why the loss is invisible to a line count (343 \u2212 4 + 5 = 344)."
+              },
+              {
+                "criterion": "3. bash scripts/boardctl validate prints RESULT: OK at the landed commit.",
+                "status": "PASS",
+                "detail": "Ran `bash scripts/boardctl validate` at HEAD 093cdaa: exit_code 0, output tail \"RESULT: OK (4 warning(s))\" with \"rows: 175 tasks, 345 events, 0 fixtures\" and \"key uniformity: 175/175 rows carry only canon keys (0 drift)\". The 4 warnings are the documented ones (CF-034 free-form guard_result/ci_result, duplicate event id 336, headerless board)."
+              },
+              {
+                "criterion": "4. bash tests/selftest.sh prints SELFTEST: PASS at the landed commit.",
+                "status": "PASS",
+                "detail": "Ran `bash tests/selftest.sh` at HEAD 093cdaa: exit_code 0, line 288 of output is \"SELFTEST: PASS\"; grep counts 193 \"  PASS\" rows and 50 \"  FAIL\" rows (the intentional negative fixtures, matching the bullet's claim of 193 PASS / 50 FAIL)."
+              },
+              {
+                "criterion": "5. bash docs/audits/cf099-prd-drift-probe.sh exits 0 at the landed commit.",
+                "status": "PASS",
+                "detail": "Ran `bash docs/audits/cf099-prd-drift-probe.sh` at HEAD 093cdaa: exit_code 0, output \"OK: milestone, plan snapshot and layer arms agree at 093cdaa\" (measured: tip=aead5f5 rows=171 events=343 sections=38)."
+              }
+            ],
+            "summary": "All five criteria pass: the dated delta bullet at docs/ACCEPTANCE-PLAN.md:20 names the resolvable tip c47fe93 with measured counts, names the four aead5f5 events lost by content and assigns consequences to CF-143/CF-196/CF-130, and boardctl validate (RESULT: OK), selftest (SELFTEST: PASS, exit 0) and the cf099 drift probe (exit 0) all pass at the landed commit.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-SYNC-1104-DELTA\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 1. docs/ACCEPTANCE-PLAN.md carries a dated delta bullet naming the tip it measured (a SHA that git cat-file -t resolves) and the task/event counts measured at that tip.: docs/ACCEPTANCE-PLAN.md:20 begins \"**Delta measured 2026-11-04T10:37Z at tip `c47fe93` (sync lane):** the board carries 175 task rows and 344 events (59 `complete`, 108 `pending`, 8 `in_progress`)\". `git cat-file -t c47fe93` -> `commit` (exit 0). Counts are internally consistent with the appended ledger event id 344 (\"board 175 rows / 344 events (59 complete, 108 pending, 8 in_progress)\").\n  \u2713 2. The bullet names the four events present at commit aead5f5 whose content is absent at the named tip and assigns each consequence to the owning board row (CF-143, CF-196, CF-130).: docs/ACCEPTANCE-PLAN.md:20 names all four: \"id 339 `task_completed CF-197` (10:16:57Z), id 340 `audit CF-197` (10:17:07Z, the docs-lane correction detail), id 341 `audit CF-197` (10:17:43Z, the memory pointer) and id 342 `task_completed CF-182` (10:15:23Z)\", with `git cat-file -t aead5f5` -> `commit`. Consequences assigned to all three owning rows: \"`CF-182` and `CF-197` now join `CF-034`/`CF-041` in `CF-130`'s first leg (complete rows with no completion transition)\", \"the deletions themselves are `CF-143`'s detector class\", and \"a verbatim re-append would duplicate ids \u2014 the class `CF-196` owns\". The bullet also explains why the loss is invisible to a line count (343 \u2212 4 + 5 = 344).\n  \u2713 3. bash scripts/boardctl validate prints RESULT: OK at the landed commit.: Ran `bash scripts/boardctl validate` at HEAD 093cdaa: exit_code 0, output tail \"RESULT: OK (4 warning(s))\" with \"rows: 175 tasks, 345 events, 0 fixtures\" and \"key uniformity: 175/175 rows carry only canon keys (0 drift)\". The 4 warnings are the documented ones (CF-034 free-form guard_result/ci_result, duplicate event id 336, headerless board).\n  \u2713 4. bash tests/selftest.sh prints SELFTEST: PASS at the landed commit.: Ran `bash tests/selftest.sh` at HEAD 093cdaa: exit_code 0, line 288 of output is \"SELFTEST: PASS\"; grep counts 193 \"  PASS\" rows and 50 \"  FAIL\" rows (the intentional negative fixtures, matching the bullet's claim of 193 PASS / 50 FAIL).\n  \u2713 5. bash docs/audits/cf099-prd-drift-probe.sh exits 0 at the landed commit.: Ran `bash docs/audits/cf099-prd-drift-probe.sh` at HEAD 093cdaa: exit_code 0, output \"OK: milestone, plan snapshot and layer arms agree at 093cdaa\" (measured: tip=aead5f5 rows=171 events=343 sections=38).\nAll five criteria pass: the dated delta bullet at docs/ACCEPTANCE-PLAN.md:20 names the resolvable tip c47fe93 with measured counts, names the four aead5f5 events lost by content and assigns consequences to CF-143/CF-196/CF-130, and boardctl validate (RESULT: OK), selftest (SELFTEST: PASS, exit 0) and the cf099 drift probe (exit 0) all pass at the landed commit.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-04T10:41:51.048064",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-04T10:41:51.067848+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 17359,
+        "truncated": false,
+        "source": "git show 093cdaa82a64"
+      }
+    ],
+    "task_id": "CF-SYNC-1104-DELTA"
+  }
+}
