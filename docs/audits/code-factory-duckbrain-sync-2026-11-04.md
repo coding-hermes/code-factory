@@ -85,3 +85,59 @@ CF-130 (completion-transition gaps, CF-053 stale closure, CF-005 stale `in_progr
 (hand-typed measured-state block), CF-086 (absolute host paths in board rows) remain pending and are
 the owning lanes' work. This repo runs no GitHub Actions; the CI-equivalent gate is the selftest
 above.
+
+## Verification addendum — 2026-11-04T02:05Z–02:20Z (same tick id, second session)
+
+The prior session of this tick id (`code-factory-duckbrain-2026-11-04-01-21-33`) completed its
+work and died before reporting; the scheduler record reads `failed` (a spawn artifact — the
+`latest_tick.id` for this lane is still this tick id, so no second instance exists). Its durable
+claims verify: `ceff295`, `82d8819` and `d59f87b` are on `origin/main`, and the DuckBrain record
+`/code-factory/sync/2026-11-04-duckbrain-tick` reads back `200` with the content quoted in event
+164. The work was NOT re-executed.
+
+### What changed after that record (measured here)
+
+| Fact | Value |
+|---|---|
+| published tip | `2a3d357` (was `f49d85b` when the record was measured) |
+| commits after the record | `df0c8fc` PM re-anchor + CF-141, `2a3d357` verdict bundle |
+| census at `2a3d357` | 115 task rows, 165 events, 0 duplicate ids (38 complete / 4 in_progress / 73 pending) |
+| `bash scripts/boardctl validate` | `RESULT: OK (47 warning(s))`, rc=0 |
+| `bash tests/selftest.sh` | `PASS 115/115 rows parse`, `SELFTEST: PASS`, rc=0 |
+| parity | `git rev-list --left-right --count origin/main...HEAD` = `0 0`, tracked porcelain empty |
+
+### Barrier, seen and lifted inside this session
+
+At 20:51:29 -05 the canonical root entered an interactive rebase (`refs/heads/main` onto
+`d59f87b`, msgnum 1/1). At 20:53:57 HEAD was detached with `.git/rebase-merge` present and
+`UU .coding-hermes/board/events.jsonl` staged, so the operation gate failed. At 20:55 the marker
+was gone, `main` was attached at `df0c8fc`, the tracked tree was clean and parity was `0 0`. The
+resolution was performed by the rebase's owner, not by this tick, and no owner authorization for
+it is recorded on CF-049 — which names this class and its earlier lift (06:57 the same morning).
+The 01-21-15 slot fired eight sibling `code-factory*` lanes; all read `failed` afterwards.
+
+### Finding filed
+
+`df0c8fc` rewrote 35 pre-existing lines of `.coding-hermes/board/events.jsonl`
+(`git show --numstat df0c8fc -- .coding-hermes/board/events.jsonl` = 36 insertions / 35
+deletions) while resolving the rebase. The content is intact: normalising both sides with `jq -c`
+and sorting shows old ⊂ new, additions only (event ids 163–165), zero events lost. What changed is
+the raw bytes of historical lines — the legacy `"id": 1` separator style became compact — so an
+append-only ledger was rewritten in place and no gate notices. Filed as **CF-143** with this
+re-runnable detector as acceptance criterion 0:
+
+```
+git log --format='commit %h' --numstat -- .coding-hermes/board/events.jsonl | awk '/^commit /{c=$2; next} NF==3 && $2+0>0 {print c": "$0}'
+```
+
+It prints exactly one line today (`df0c8fc: 36	35	.coding-hermes/board/events.jsonl`). No claim is
+made about which resolution step produced the rewrite; the commit shape cannot distinguish a
+line-wise merge from a slurp/dump resolver.
+
+### Memory written this session (namespace `code-factory`, content-equality readback)
+
+| key | record id |
+|---|---|
+| `/code-factory/decisions/2026-11-04-pm-milestone-reanchor` | `8915336e-ef5a-4edc-a0a1-4f0a4daabf27` |
+| `/code-factory/findings/2026-11-04-append-only-reserialization` | `6194c660-a32c-49ad-ba80-c25c6bc135c3` |
+| `/code-factory/findings/2026-11-04-checkout-barrier-recurrence` | `d8473191-099f-4aca-94c3-31a1c8c38d9d` |
