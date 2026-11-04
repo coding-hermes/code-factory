@@ -86,7 +86,11 @@ code-factory-review             604800  4838400      8
 code-factory-sync                 3600   172800     48
 ```
 
-Every one of those rows is `enabled=1`, and none of the non-8× rows is refused — which is the whole
+At that same measurement 16 of those 17 rows were `enabled=1`: `code-factory-qa` was already
+`enabled=0` (`disabled_by=auto-disable`, failure rate 91.3%). An earlier wording of this section
+described the whole set as enabled; that sentence was wrong and is **superseded by CF-176**
+(`docs/audits/code-factory-docs-2026-11-04-CF-176.md`), which also corrected the same claim in
+`docs/SCHEDULER-ADMISSION.md`. None of the non-8× rows is refused — which is the whole
 correction: 12 of 17 rows carry 16×, 48×, 192×, 224× or 576×.
 
 Foreman fallback and its durable pin:

@@ -57,8 +57,10 @@ reintroduce that state. The gate's error response should list the accepted paths
   0.90)`. Arm state is a per-row fact, not a family property — an auto-disable can land minutes
   before or after a census, so read the flags back alongside the pair and report the disabled rows
   instead of summarising the family as armed: `sqlite3 ~/.hermes/coding-hermes/scheduler.db "select
-  name, enabled, cooldown_floor_s, cooldown_ceiling_s, disabled_by from projects where name like
-  '<family>%' and cooldown_ceiling_s>0;"`. The API will not check the ratio for you.
+  name, case when cooldown_floor_s>0 then cooldown_ceiling_s/cooldown_floor_s end ratio, enabled,
+  coalesce(disabled_by,'-') disabled_by from projects where name like '<family>%' and
+  cooldown_ceiling_s>0;"` — one query that prints each ratio and its arm flag side by side, so the
+  two numbers cannot drift apart in the telling. The API will not check the ratio for you.
   The cadence numbers themselves are owned by CF-134, not by this gate.
 - Scheduler namespace/global concurrency and load gates are runtime admission controls, not
   workdir allowlist rules. A lane may be configured correctly and still remain queued for capacity.
