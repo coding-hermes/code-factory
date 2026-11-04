@@ -69,7 +69,9 @@ CLOSED at `5069c0a` on verdict `a539f890`, so it is no longer an open row and le
 reason it was never a leg blocker stands: the directive leg needs a gateway that answers, not a
 certified pin). The list is open rows only, and that is checkable rather than editorial:
 `jq -r 'select(.id=="CF-183")|.status' .coding-hermes/board/tasks.jsonl` printed `complete` at
-`aef18d2`, which is why it moved here. Every other open row is outside these legs by subject — v1-scope features (`CF-003`, `CF-006`), node sizing (`CF-007`), scheduler throughput (`CF-134`) and the repository/tooling rows below `P1`. The open defects this milestone's legs depend on are `CF-080` (`--apply` clones
+`aef18d2`, which is why it moved here. Every other open row is outside these legs by subject — v1-scope features (`CF-003`, `CF-006`), node sizing (`CF-007`), scheduler throughput (`CF-134`) and the repository/tooling rows below `P1`.
+<!-- milestone-blockers:begin -->
+The open defects this milestone's legs depend on are `CF-080` (`--apply` clones
 the workspace after the bus layer has already FAILED, manufacturing the repo-with-no-bus node
 `AGENTS.md` rule 9 forbids), the never-exercised legs `CF-001` (scheduler→crier dispatch has never
 completed a full arm/tick cycle), `CF-004` (no round trip through the node's own gateway), requirement
@@ -90,10 +92,12 @@ scripts/ specs/` = 0 hits) far below the 15 m 40 s the scheduler budgets for the
 `dashboard.basic_auth`, so `install-hermes.sh:112` refuses the public bind and a node created by the
 documented path never starts the gateway the directive leg has to reach. Reproduced 2026-11-04T06:13Z:
 `installer_basic_auth=3 create_path_basic_auth=scripts/node-create.sh:0,scripts/project-node.sh:0,`
-plus `refused: a public bind needs dashboard.basic_auth`, probe exit 0). The list is decidable, not editorial: every id cited in it resolves to exactly one of two
+plus `refused: a public bind needs dashboard.basic_auth`, probe exit 0).
+<!-- milestone-blockers:end -->
+The list is decidable, not editorial: every id cited in it resolves to exactly one of two
 namespaces — `row=<status>` from `jq -r 'select(.id=="<id>") | .status' .coding-hermes/board/tasks.jsonl`,
 or `requirement-only` when the id names a row of the requirements table above and no board row carries
-it (at `171bf23`: `CF-110` and `CF-112`, which have never been rows). Then read
+it (at `171bf23`: `CF-110` and `CF-112`, which have never been rows). The check is `bash docs/audits/prd-blocker-resolution.sh`: it prints `row=<status>` or `requirement-only` for every id in the list above and exits 0 only when each resolves, is still open, and carries a `Verified by` cell (`CF-182`). Then read
 `jq -r 'select(.status!="complete") | [.id,.priority] | @tsv' .coding-hermes/board/tasks.jsonl`, and
 require every open row whose failure stops one of the four legs named above to appear here; rows
 outside those legs (v1 scope features such as foreign harnesses or the deploy-key lane) belong to the

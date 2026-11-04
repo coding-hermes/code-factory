@@ -1863,5 +1863,55 @@ fi
 rm -rf "$tmpd"
 # END cf151-node-credential-scope
 
+say "38. the milestone blocker list resolves every cited id in one namespace (CF-182)"
+# docs/audits/prd-blocker-resolution.sh decides each CF-nnn cited between the
+# milestone-blockers markers as `row=<status>` (board) or `requirement-only` (the PRD's
+# requirements table), and exits 1 on an unresolved id, a cited row that is already
+# complete, or a requirement-only row with no `Verified by` cell. Three arms, each able to
+# fail on its own: an absent script or an unconditional exit 0 reds (b) and (c), while a
+# checker that never looks at the requirements table reds the real arm on CF-110/CF-112.
+out=$(bash "$HERE/docs/audits/prd-blocker-resolution.sh" 2>&1); rc=$?
+summary=$(printf '%s\n' "$out" | sed -n 's/^RESULT: OK (\([0-9][0-9]*\) ids: \([0-9][0-9]*\) rows, \([0-9][0-9]*\) requirement-only)$/\1 cited ids, \2 rows, \3 requirement-only/p')
+if [ "$rc" -eq 0 ] && [ -n "$summary" ]; then
+  say "  PASS  prd-blocker — $summary, exit $rc"
+else
+  say "  FAIL  prd-blocker — exit $rc: $(printf '%s\n' "$out" | tail -3 | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+tmpd=$(mktemp -d)
+# (b) an id in neither namespace, cited inside its own marker pair on a copy of the real PRD
+cp "$HERE/docs/PRD-code-factory.md" "$tmpd/prd-unresolved"
+printf '<!-- milestone-blockers:begin -->\n%s\n<!-- milestone-blockers:end -->\n' '`CF-999`' >> "$tmpd/prd-unresolved"
+out=$(bash "$HERE/docs/audits/prd-blocker-resolution.sh" "$tmpd/prd-unresolved" \
+  "$HERE/.coding-hermes/board/tasks.jsonl" 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^FAIL prd-blocker: CF-999 '; then
+  say "  PASS  prd-blocker-red — CF-999 unresolved, exit $rc"
+else
+  say "  FAIL  prd-blocker-red — CF-999 accepted or not named (exit $rc): $(printf '%s\n' "$out" | tail -2 | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+# (c) a region that cites a row the board already closed — a stale citation, not a blocker
+closed=$(jq -r 'select(.status=="complete")|.id' "$HERE/.coding-hermes/board/tasks.jsonl" 2>/dev/null | head -1)
+if [ -z "$closed" ]; then
+  say "  FAIL  prd-blocker-closed — the board carries no complete row to cite"
+  fails=$((fails+1))
+else
+  awk -v id="$closed" '
+    /^<!-- milestone-blockers:begin -->$/ { print; print "`" id "`"; inb=1; next }
+    /^<!-- milestone-blockers:end -->$/   { inb=0; print; next }
+    !inb { print }
+  ' "$HERE/docs/PRD-code-factory.md" > "$tmpd/prd-closed"
+  out=$(bash "$HERE/docs/audits/prd-blocker-resolution.sh" "$tmpd/prd-closed" \
+    "$HERE/.coding-hermes/board/tasks.jsonl" 2>&1); rc=$?
+  if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q "^FAIL prd-blocker: $closed "; then
+    say "  PASS  prd-blocker-closed — $closed complete, exit $rc"
+  else
+    say "  FAIL  prd-blocker-closed — $closed accepted as a blocker (exit $rc): $(printf '%s\n' "$out" | tail -2 | tr '\n' ' ')"
+    fails=$((fails+1))
+  fi
+fi
+rm -rf "$tmpd"
+# END cf182-milestone-blockers
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
