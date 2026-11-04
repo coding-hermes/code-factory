@@ -97,7 +97,7 @@ plus `refused: a public bind needs dashboard.basic_auth`, probe exit 0).
 The list is decidable, not editorial: every id cited in it resolves to exactly one of two
 namespaces — `row=<status>` from `jq -r 'select(.id=="<id>") | .status' .coding-hermes/board/tasks.jsonl`,
 or `requirement-only` when the id names a row of the requirements table above and no board row carries
-it (at `171bf23`: `CF-110` and `CF-112`, which have never been rows). The check is `bash docs/audits/prd-blocker-resolution.sh`: it prints `row=<status>` or `requirement-only` for every id in the list above and exits 0 only when each resolves, is still open, and carries a `Verified by` cell (`CF-182`). Then read
+it (at `171bf23`: `CF-110` and `CF-112`, which have never been rows). The check is `bash docs/audits/prd-blocker-resolution.sh`: it prints `row=<status>` or `requirement-only` for every id in the list above and exits 0 only when each resolves, is still open, and carries a `Verified by` cell. Then read
 `jq -r 'select(.status!="complete") | [.id,.priority] | @tsv' .coding-hermes/board/tasks.jsonl`, and
 require every open row whose failure stops one of the four legs named above to appear here; rows
 outside those legs (v1 scope features such as foreign harnesses or the deploy-key lane) belong to the
