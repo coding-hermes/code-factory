@@ -23,7 +23,7 @@ the manifest to know where the artifacts are.
 
 | Layer | Establishes | Depends on |
 |---|---|---|
-| 00 preflight | arch, disk ≥ floor, memory, reachability to crier / PyPI / Go proxy | — |
+| 00 preflight | arch, disk ≥ floor, memory, and HTTP 200 from the only two endpoints this layer probes — `$CRIER_URL/health` and `https://pypi.org/simple/` (`scripts/project-node.sh:190`). With `CRIER_URL` unset the reach block is skipped entirely and the layer prints `FAIL crier_url` instead of two probe rows. Reachability to a Go module proxy is **not measured** by this or any shipped layer: no probe row is emitted for one, and `GOPROXY` / `GOPRIVATE` appear nowhere under `scripts/` (CF-164) | — |
 | 10 base | python3 + venv, git, curl, tar, sha256sum; optionally jq, rg, node | preflight |
 | 20 harness | the harness binary plus the adapter's own gate rows, printed verbatim (`python`, `binary`, `version`, `port`, `inference_key`, and `gateway_start` when that block runs); `gateway_start` is a refusal on any node whose `~/.hermes/config.yaml` carries no `dashboard.basic_auth` | base |
 | 30 bus | a crier identity file at `$HOME/.node/crier.json` and its mode 600 | harness |
