@@ -1,0 +1,132 @@
+{
+  "task_id": "CF-152-QA1",
+  "task_title": "QA filing: CF-152 \u2014 verify-node.sh certifies the auth gate from a fixed /tmp path a second run rewrites (open gateway prints auth_gate PASS)",
+  "task_criteria": [
+    "Filing-only task for board row CF-152. Do NOT evaluate the underlying fix: the row is pending by definition, and no repair of scripts/verify-node.sh is expected in this commit.\n\n1. `git show --stat --format= HEAD` names `.coding-hermes/board/tasks.jsonl` and `.coding-hermes/board/events.jsonl`, and the tasks.jsonl diff is insert-only (+1/-0).\n2. `git show HEAD:.coding-hermes/board/tasks.jsonl | jq -r 'select(.id==\"CF-152\") | [.id,.status,((.probe//\"\")|length)] | @tsv'` prints `CF-152\tpending\t<n>` with n greater than 500.\n3. Extract the probe with `jq -r 'select(.id==\"CF-152\").probe' .coding-hermes/board/tasks.jsonl > /tmp/cf152-probe.sh` and run `bash /tmp/cf152-probe.sh` from the repository root. It must print `armA_rc=1`, `armB_rc=0`, and the line `  PASS  auth_gate \u2014 auth_required:true (a public bind must not be open)`, and must exit 0.\n4. `bash scripts/boardctl validate` prints `RESULT: OK` and `bash tests/selftest.sh` prints `SELFTEST: PASS`.\n5. The row carries non-empty `reasoning`, `acceptance_criteria` and `probe` fields, and the board has no duplicate ids."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "f26a608ef6ec20ed9b5780c43fe39c5b3a46a9d5",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T024844.538786Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n9:49PM INF scanned ~721729 bytes (721.73 KB) in 939ms\n9:49PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 112 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T024844.538786Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.5eudCq53R6/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  126/126 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [4314 chars omitted \u2014 69 line(s)] \u2026\n  PASS  census missing-projects -> named .projects refusal, exit 1, no census printed\n  PASS  census wrong-projects -> named .projects refusal, exit 1, no census printed\n  PASS  census nonjson -> named .projects refusal, exit 1, no census printed\n25. census compares all received rows with the first reported total\n  PASS  census short page -> rows received=865, total reported=866, exit 1, no census printed\n26. healthy census counts matching rows on both sides of the page boundary\n  PASS  census healthy -> 2 matching rows, exact row format, exit 0\n27. census still refuses a missing total\n  PASS  census missing total -> named refusal, exit 1, no census printed\n28. README census and executable mirror agree except for BASE\n  PASS  census README/mirror byte parity (BASE parameterisation only)\n29. a workdir board that is not the published board is named as drift (CF-114)\n  PASS  publish-drift red fixture, exit 1\n  PASS  publish-drift green fixture, exit 0\n  PASS  publish-drift zero fixture, exit 1\n  PASS  publish-drift missing fixture, exit 1\n  PASS  publish-drift malformed fixture, exit 1\n  PASS  publish-drift nonobject fixture, exit 1\n  PASS  publish-drift event-drift fixture, exit 1\n30. README Status rows 1 and 3 cite the interpreter-qualified --check\n  PASS  README Status rows 1 and 3 cite the interpreter-qualified --check\n  PASS  unqualified Status rows refused (missing-qualifier: Hermes in a bunker + HTTP gateway over tailnet missing-qualifier: Node inference credential )\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T024844.538786Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 Filing-only task for board row CF-152. Do NOT evaluate the underlying fix: the row is pending by definition, and no repair of scripts/verify-node.sh is expected in this commit.\n\n1. `git show --stat --format= HEAD` names `.coding-hermes/board/tasks.jsonl` and `.coding-hermes/board/events.jsonl`, and the tasks.jsonl diff is insert-only (+1/-0).: `git show --stat --format= HEAD` -> `.coding-hermes/board/events.jsonl | 1 +` and `.coding-hermes/board/tasks.jsonl | 1 +`, 2 files changed, 2 insertions(+). `git show --numstat --format= HEAD` -> `1\\t0\\t.coding-hermes/board/events.jsonl` and `1\\t0\\t.coding-hermes/board/tasks.jsonl`, i.e. insert-only +1/-0. Diff hunk is `@@ -123,3 +123,4 @@` (one appended line). No scripts/verify-node.sh change in the commit, consistent with filing-only.\n  \u2713 2. `git show HEAD:.coding-hermes/board/tasks.jsonl | jq -r 'select(.id==\"CF-152\") | [.id,.status,((.probe//\"\")|length)] | @tsv'` prints `CF-152\tpending\t<n>` with n greater than 500.: Command output: `CF-152\\tpending\\t1088` \u2014 status is `pending` and probe length 1088 > 500.\n  \u2713 3. Extract the probe with `jq -r 'select(.id==\"CF-152\").probe' .coding-hermes/board/tasks.jsonl > /tmp/cf152-probe.sh` and run `bash /tmp/cf152-probe.sh` from the repository root. It must print `armA_rc=1`, `armB_rc=0`, and the line `  PASS  auth_gate \u2014 auth_required:true (a public bind must not be open)`, and must exit 0.: Probe extracted to /tmp/cf152-probe.sh and run from repo root. Output: `ARM_A_no_second_writer:` / `  FAIL  auth_gate \u2014 /api/status -> 200; auth_required:true not measured` / `VERIFY: FAIL (1)` / `armA_rc=1`; `ARM_B_shared_path_rewritten:` / `  PASS  auth_gate \u2014 auth_required:true (a public bind must not be open)` / `VERIFY: PASS` / `armB_rc=0`; `PROBE_EXIT=0`. All three required strings present and exit 0.\n  \u2713 4. `bash scripts/boardctl validate` prints `RESULT: OK` and `bash tests/selftest.sh` prints `SELFTEST: PASS`.: `bash scripts/boardctl validate` -> `RESULT: OK (55 warning(s))`, exit 0 (warnings are pre-existing canon-drift notes, e.g. `tasks.jsonl line 126 (task CF-152): key(s) {probe} outside the declared canon`, not errors). `bash tests/selftest.sh` -> final line `SELFTEST: PASS`, exit 0 (verified with a clean redirect run: SELFTEST_EXIT=0; an earlier exit 2 came from my own `${PIPESTATUS[0]}` under sh, not the suite).\n  \u2713 5. The row carries non-empty `reasoning`, `acceptance_criteria` and `probe` fields, and the board has no duplicate ids.: jq on CF-152: reasoning_len=1450, acceptance_criteria_len=951, probe_len=1088 \u2014 all non-empty. `jq -r '.id' .coding-hermes/board/tasks.jsonl | sort | uniq -d` produced no output, so no duplicate ids (boardctl also reports 126 tasks, 187 events, 0 fixtures).\nAll five criteria verified: the commit is an insert-only board filing (+1 tasks.jsonl, +1 events.jsonl), CF-152 is pending with a 1088-char probe that reproduces armA_rc=1/armB_rc=0 and the auth_gate PASS line with exit 0, boardctl validate prints RESULT: OK, selftest prints SELFTEST: PASS, and the row has non-empty reasoning/acceptance_criteria/probe with no duplicate ids.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 Filing-only task for board row CF-152. Do NOT evaluate the underlying fix: the row is pending by definition, and no repair of scripts/verify-node.sh is expected in this commit.\n\n1. `git show --stat --format= HEAD` names `.coding-hermes/board/tasks.jsonl` and `.coding-hermes/board/events.jsonl`, and the tasks.jsonl diff is insert-only (+1/-0).: `git show --stat --format= HEAD` -> `.coding-hermes/board/events.jsonl | 1 +` and `.coding-hermes/board/tasks.jsonl | 1 +`, 2 files changed, 2 insertions(+). `git show --numstat --format= HEAD` -> `1\\t0\\t.coding-hermes/board/events.jsonl` and `1\\t0\\t.coding-hermes/board/tasks.jsonl`, i.e. insert-only +1/-0. Diff hunk is `@@ -123,3 +123,4 @@` (one appended line). No scripts/verify-node.sh change in the commit, consistent with filing-only.\n  \u2713 2. `git show HEAD:.coding-hermes/board/tasks.jsonl | jq -r 'select(.id==\"CF-152\") | [.id,.status,((.probe//\"\")|length)] | @tsv'` prints `CF-152\tpending\t<n>` with n greater than 500.: Command output: `CF-152\\tpending\\t1088` \u2014 status is `pending` and probe length 1088 > 500.\n  \u2713 3. Extract the probe with `jq -r 'select(.id==\"CF-152\").probe' .coding-hermes/board/tasks.jsonl > /tmp/cf152-probe.sh` and run `bash /tmp/cf152-probe.sh` from the repository root. It must print `armA_rc=1`, `armB_rc=0`, and the line `  PASS  auth_gate \u2014 auth_required:true (a public bind must not be open)`, and must exit 0.: Probe extracted to /tmp/cf152-probe.sh and run from repo root. Output: `ARM_A_no_second_writer:` / `  FAIL  auth_gate \u2014 /api/status -> 200; auth_required:true not measured` / `VERIFY: FAIL (1)` / `armA_rc=1`; `ARM_B_shared_path_rewritten:` / `  PASS  auth_gate \u2014 auth_required:true (a public bind must not be open)` / `VERIFY: PASS` / `armB_rc=0`; `PROBE_EXIT=0`. All three required strings present and exit 0.\n  \u2713 4. `bash scripts/boardctl validate` prints `RESULT: OK` and `bash tests/selftest.sh` prints `SELFTEST: PASS`.: `bash scripts/boardctl validate` -> `RESULT: OK (55 warning(s))`, exit 0 (warnings are pre-existing canon-drift notes, e.g. `tasks.jsonl line 126 (task CF-152): key(s) {probe} outside the declared canon`, not errors). `bash tests/selftest.sh` -> final line `SELFTEST: PASS`, exit 0 (verified with a clean redirect run: SELFTEST_EXIT=0; an earlier exit 2 came from my own `${PIPESTATUS[0]}` under sh, not the suite).\n  \u2713 5. The row carries non-empty `reasoning`, `acceptance_criteria` and `probe` fields, and the board has no duplicate ids.: jq on CF-152: reasoning_len=1450, acceptance_criteria_len=951, probe_len=1088 \u2014 all non-empty. `jq -r '.id' .coding-hermes/board/tasks.jsonl | sort | uniq -d` produced no output, so no duplicate ids (boardctl also reports 126 tasks, 187 events, 0 fixtures).\nAll five criteria verified: the commit is an insert-only board filing (+1 tasks.jsonl, +1 events.jsonl), CF-152 is pending with a 1088-char probe that reproduces armA_rc=1/armB_rc=0 and the auth_gate PASS line with exit 0, boardctl validate prints RESULT: OK, selftest prints SELFTEST: PASS, and the row has non-empty reasoning/acceptance_criteria/probe with no duplicate ids.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "Filing-only task for board row CF-152. Do NOT evaluate the underlying fix: the row is pending by definition, and no repair of scripts/verify-node.sh is expected in this commit.\n\n1. `git show --stat --format= HEAD` names `.coding-hermes/board/tasks.jsonl` and `.coding-hermes/board/events.jsonl`, and the tasks.jsonl diff is insert-only (+1/-0).",
+                "status": "PASS",
+                "detail": "`git show --stat --format= HEAD` -> `.coding-hermes/board/events.jsonl | 1 +` and `.coding-hermes/board/tasks.jsonl | 1 +`, 2 files changed, 2 insertions(+). `git show --numstat --format= HEAD` -> `1\\t0\\t.coding-hermes/board/events.jsonl` and `1\\t0\\t.coding-hermes/board/tasks.jsonl`, i.e. insert-only +1/-0. Diff hunk is `@@ -123,3 +123,4 @@` (one appended line). No scripts/verify-node.sh change in the commit, consistent with filing-only."
+              },
+              {
+                "criterion": "2. `git show HEAD:.coding-hermes/board/tasks.jsonl | jq -r 'select(.id==\"CF-152\") | [.id,.status,((.probe//\"\")|length)] | @tsv'` prints `CF-152\tpending\t<n>` with n greater than 500.",
+                "status": "PASS",
+                "detail": "Command output: `CF-152\\tpending\\t1088` \u2014 status is `pending` and probe length 1088 > 500."
+              },
+              {
+                "criterion": "3. Extract the probe with `jq -r 'select(.id==\"CF-152\").probe' .coding-hermes/board/tasks.jsonl > /tmp/cf152-probe.sh` and run `bash /tmp/cf152-probe.sh` from the repository root. It must print `armA_rc=1`, `armB_rc=0`, and the line `  PASS  auth_gate \u2014 auth_required:true (a public bind must not be open)`, and must exit 0.",
+                "status": "PASS",
+                "detail": "Probe extracted to /tmp/cf152-probe.sh and run from repo root. Output: `ARM_A_no_second_writer:` / `  FAIL  auth_gate \u2014 /api/status -> 200; auth_required:true not measured` / `VERIFY: FAIL (1)` / `armA_rc=1`; `ARM_B_shared_path_rewritten:` / `  PASS  auth_gate \u2014 auth_required:true (a public bind must not be open)` / `VERIFY: PASS` / `armB_rc=0`; `PROBE_EXIT=0`. All three required strings present and exit 0."
+              },
+              {
+                "criterion": "4. `bash scripts/boardctl validate` prints `RESULT: OK` and `bash tests/selftest.sh` prints `SELFTEST: PASS`.",
+                "status": "PASS",
+                "detail": "`bash scripts/boardctl validate` -> `RESULT: OK (55 warning(s))`, exit 0 (warnings are pre-existing canon-drift notes, e.g. `tasks.jsonl line 126 (task CF-152): key(s) {probe} outside the declared canon`, not errors). `bash tests/selftest.sh` -> final line `SELFTEST: PASS`, exit 0 (verified with a clean redirect run: SELFTEST_EXIT=0; an earlier exit 2 came from my own `${PIPESTATUS[0]}` under sh, not the suite)."
+              },
+              {
+                "criterion": "5. The row carries non-empty `reasoning`, `acceptance_criteria` and `probe` fields, and the board has no duplicate ids.",
+                "status": "PASS",
+                "detail": "jq on CF-152: reasoning_len=1450, acceptance_criteria_len=951, probe_len=1088 \u2014 all non-empty. `jq -r '.id' .coding-hermes/board/tasks.jsonl | sort | uniq -d` produced no output, so no duplicate ids (boardctl also reports 126 tasks, 187 events, 0 fixtures)."
+              }
+            ],
+            "summary": "All five criteria verified: the commit is an insert-only board filing (+1 tasks.jsonl, +1 events.jsonl), CF-152 is pending with a 1088-char probe that reproduces armA_rc=1/armB_rc=0 and the auth_gate PASS line with exit 0, boardctl validate prints RESULT: OK, selftest prints SELFTEST: PASS, and the row has non-empty reasoning/acceptance_criteria/probe with no duplicate ids.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-152-QA1\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 Filing-only task for board row CF-152. Do NOT evaluate the underlying fix: the row is pending by definition, and no repair of scripts/verify-node.sh is expected in this commit.\n\n1. `git show --stat --format= HEAD` names `.coding-hermes/board/tasks.jsonl` and `.coding-hermes/board/events.jsonl`, and the tasks.jsonl diff is insert-only (+1/-0).: `git show --stat --format= HEAD` -> `.coding-hermes/board/events.jsonl | 1 +` and `.coding-hermes/board/tasks.jsonl | 1 +`, 2 files changed, 2 insertions(+). `git show --numstat --format= HEAD` -> `1\\t0\\t.coding-hermes/board/events.jsonl` and `1\\t0\\t.coding-hermes/board/tasks.jsonl`, i.e. insert-only +1/-0. Diff hunk is `@@ -123,3 +123,4 @@` (one appended line). No scripts/verify-node.sh change in the commit, consistent with filing-only.\n  \u2713 2. `git show HEAD:.coding-hermes/board/tasks.jsonl | jq -r 'select(.id==\"CF-152\") | [.id,.status,((.probe//\"\")|length)] | @tsv'` prints `CF-152\tpending\t<n>` with n greater than 500.: Command output: `CF-152\\tpending\\t1088` \u2014 status is `pending` and probe length 1088 > 500.\n  \u2713 3. Extract the probe with `jq -r 'select(.id==\"CF-152\").probe' .coding-hermes/board/tasks.jsonl > /tmp/cf152-probe.sh` and run `bash /tmp/cf152-probe.sh` from the repository root. It must print `armA_rc=1`, `armB_rc=0`, and the line `  PASS  auth_gate \u2014 auth_required:true (a public bind must not be open)`, and must exit 0.: Probe extracted to /tmp/cf152-probe.sh and run from repo root. Output: `ARM_A_no_second_writer:` / `  FAIL  auth_gate \u2014 /api/status -> 200; auth_required:true not measured` / `VERIFY: FAIL (1)` / `armA_rc=1`; `ARM_B_shared_path_rewritten:` / `  PASS  auth_gate \u2014 auth_required:true (a public bind must not be open)` / `VERIFY: PASS` / `armB_rc=0`; `PROBE_EXIT=0`. All three required strings present and exit 0.\n  \u2713 4. `bash scripts/boardctl validate` prints `RESULT: OK` and `bash tests/selftest.sh` prints `SELFTEST: PASS`.: `bash scripts/boardctl validate` -> `RESULT: OK (55 warning(s))`, exit 0 (warnings are pre-existing canon-drift notes, e.g. `tasks.jsonl line 126 (task CF-152): key(s) {probe} outside the declared canon`, not errors). `bash tests/selftest.sh` -> final line `SELFTEST: PASS`, exit 0 (verified with a clean redirect run: SELFTEST_EXIT=0; an earlier exit 2 came from my own `${PIPESTATUS[0]}` under sh, not the suite).\n  \u2713 5. The row carries non-empty `reasoning`, `acceptance_criteria` and `probe` fields, and the board has no duplicate ids.: jq on CF-152: reasoning_len=1450, acceptance_criteria_len=951, probe_len=1088 \u2014 all non-empty. `jq -r '.id' .coding-hermes/board/tasks.jsonl | sort | uniq -d` produced no output, so no duplicate ids (boardctl also reports 126 tasks, 187 events, 0 fixtures).\nAll five criteria verified: the commit is an insert-only board filing (+1 tasks.jsonl, +1 events.jsonl), CF-152 is pending with a 1088-char probe that reproduces armA_rc=1/armB_rc=0 and the auth_gate PASS line with exit 0, boardctl validate prints RESULT: OK, selftest prints SELFTEST: PASS, and the row has non-empty reasoning/acceptance_criteria/probe with no duplicate ids.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-04T02:50:48.599113",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-04T02:50:48.615427+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 39108,
+        "truncated": false,
+        "source": "git show f26a608ef6ec"
+      }
+    ],
+    "task_id": "CF-152-QA1"
+  }
+}
