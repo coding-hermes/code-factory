@@ -230,3 +230,27 @@ reads `failed`, so the staged line is likely orphaned. The actionable next step 
 the next lane that owns a board write — to renumber the line past `origin/main`'s maximum event id
 and run `bash scripts/boardctl validate` before committing. Untracked residue is unchanged
 (53 `.gitreins/history/**` paths). Writer census at this time: `CENSUS_EMPTY=1`.
+
+### Resolution at final close — and a timestamp correction
+
+**Correction first:** the section above stamps its observation `2026-11-04T02:03-05:00`. That was
+written from a mis-read clock; the observation actually happened at **`01:58–01:59-05:00`**, in the
+minute before the docs lane committed at `01:59:14`. The observation content is unchanged — one staged
+`events.jsonl` line, event id 255, actor `docs-lane`, task CF-167 — only the time was wrong, and the
+audit event that carries this is corrected in the same commit that appends this section.
+
+**Resolution:** the hazard is historical, not live. The docs lane committed and pushed
+`664a446` — *board(docs): verify the tick 06-11-13 docs receipt at 17dc63c (event 257)* — which
+renumbered its staged line to event **257** instead of colliding with this tick's 255. Measured at
+close (`2026-11-04T02:00:32-05:00`):
+
+| probe | result |
+|---|---|
+| `git rev-parse HEAD` vs `origin/main` in `/home/kara/code-factory` | `664a446` = `664a446`, `rev-list --left-right --count` → `0 0` |
+| tracked edits in the candidate | 0 (index and worktree) |
+| published board | 257 events, **0 duplicate ids**, 142 rows |
+| untracked residue | 53 `.gitreins/history/**` paths, unchanged |
+| writer census | `CENSUS_EMPTY=1` |
+
+So no second `255` was minted, the fast-forward that the staged index had blocked is no longer needed
+(the candidate is at parity by that lane's own push), and this lane changed nothing in the candidate.
