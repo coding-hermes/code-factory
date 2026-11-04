@@ -1,0 +1,111 @@
+{
+  "task_id": "CF-SYNC-20261104-0958-A1",
+  "task_title": "sync lane addendum: re-pin the ACCEPTANCE-PLAN current-state block at a published tip and file the recurrence guard",
+  "task_criteria": [
+    "At the commit this task lands in: docs/ACCEPTANCE-PLAN.md's current-state line names a tip that 'git merge-base --is-ancestor <tip> origin/main' accepts, and states the task-row and event counts that 'git show <tip>:.coding-hermes/board/tasks.jsonl | wc -l' and the events equivalent measure at that tip (173 and 340 respectively); 'bash docs/audits/cf099-prd-drift-probe.sh' prints OK and exits 0 at that commit; .coding-hermes/board/tasks.jsonl carries one new pending row whose probe field, run from the repo root, prints containment_refs=0 and probe_rc=0 on this tree; 'bash scripts/boardctl validate' prints RESULT: OK; 'bash tests/selftest.sh' prints SELFTEST: PASS. The repair of that filed row is future work and is NOT expected at this commit - do not grade it."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/.hermes/cache/scratch/cf-sync-20261104-095351/cf",
+  "branch": "sync-repin",
+  "commit": "4aca706952f4210d6a833dc34e0cd4e935d07428",
+  "working_tree_content_fingerprint": "019d290a86d732fd82d93ba8bc7db2e85854dfc52cf8d681dafa5c331db7caa3",
+  "working_tree_dirty_path_count": 0,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n5:23AM INF scanned ~1203470 bytes (1.20 MB) in 655ms\n5:23AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 151 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.EVFyFjkPtp/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  174/174 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [16380 chars omitted \u2014 214 line(s)] \u2026\n  PASS  ref 'master' crosses the transport as --ref 'master'\n  PASS  ref 're'lease' crosses the transport as --ref 're'\\''lease'\n36. remote shell payloads preserve data without executing it (CF-159)\n  PASS  cf159 node-create project payload is data, not code\n  PASS  cf159 positive control NODE_PROJECT=my proj's --project=my proj's\n  PASS  cf159 node-create port payload is data, not code\n  PASS  cf159 node-create harness payload is data, not code\n  PASS  cf159 node-create repo payload is data, not code\n  PASS  cf159 node-create ref payload is data, not code\n  PASS  cf159 node-create crier payload is data, not code\n  PASS  cf159 verify-node artifact payload is data, not code; digest intact\n  PASS  cf159 bunker_exec trusted command text preserves quoted values and literal pipelines\n  PASS  cf159-escaping all remote-command sites\n37. the node credential row scopes its contradiction to the node (CF-151)\n  PASS  node credential row labels control-host evidence and names the node measurement\n  PASS  pre-fix node credential row refused (unlabelled-control-host-fail: Node inference credential missing-control-host-label: Node inference credential missing-node-scoped-measurement: Node inference credential )\n38. the milestone blocker list resolves every cited id in one namespace (CF-182)\n  PASS  prd-blocker \u2014 14 cited ids, 12 rows, 2 requirement-only, exit 0\n  PASS  prd-blocker-red \u2014 CF-999 unresolved, exit 1\n  PASS  prd-blocker-closed \u2014 CF-009 complete, exit 1\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 At the commit this task lands in: docs/ACCEPTANCE-PLAN.md's current-state line names a tip that 'git merge-base --is-ancestor <tip> origin/main' accepts, and states the task-row and event counts that 'git show <tip>:.coding-hermes/board/tasks.jsonl | wc -l' and the events equivalent measure at that tip (173 and 340 respectively); 'bash docs/audits/cf099-prd-drift-probe.sh' prints OK and exits 0 at that commit; .coding-hermes/board/tasks.jsonl carries one new pending row whose probe field, run from the repo root, prints containment_refs=0 and probe_rc=0 on this tree; 'bash scripts/boardctl validate' prints RESULT: OK; 'bash tests/selftest.sh' prints SELFTEST: PASS. The repair of that filed row is future work and is NOT expected at this commit - do not grade it.: docs/ACCEPTANCE-PLAN.md:5 names tip `c5f7b2f` and states 'The board at tip `c5f7b2f` carries 173 task rows and 340 events'. Verified: `git merge-base --is-ancestor c5f7b2f origin/main` -> rc=0; `git show c5f7b2f:.coding-hermes/board/tasks.jsonl | wc -l` -> 173; `git show c5f7b2f:.coding-hermes/board/events.jsonl | wc -l` -> 340. `bash docs/audits/cf099-prd-drift-probe.sh` -> 'measured: tip=c5f7b2f rows=173 events=340 sections=38 ...' / 'OK: milestone, plan snapshot and layer arms agree at 4aca706', exit_code=0. Board diff at HEAD 4aca706 is insert-only: tasks.jsonl +1 line = CF-199 (status 'pending', priority P3, created_at 2026-11-04T10:22:19Z) and events.jsonl +1 line (id 340, task_created CF-199). Running CF-199's probe field verbatim from the repo root: `f=docs/audits/cf099-prd-drift-probe.sh; echo containment_refs=$(grep -cE 'origin/main|is-ancestor' \"$f\"); bash \"$f\" >/dev/null 2>&1; echo probe_rc=$?` -> 'containment_refs=0' / 'probe_rc=0'. `bash scripts/boardctl validate` -> 'rows: 174 tasks, 341 events, 0 fixtures' ... 'RESULT: OK (4 warning(s))', exit_code=0. `bash tests/selftest.sh` -> 'SELFTEST: PASS', exit_code=0, with 193 '  PASS' rows and 50 '  FAIL' (intentional fixture) rows, matching the plan's stated 193/50. The CF-199 repair itself was not graded, per instruction.\nAll five legs verified at commit 4aca706: the plan's current-state line pins c5f7b2f (an ancestor of origin/main) with the exact 173/340 counts measured at that tip, the CF-099 drift probe prints OK and exits 0, CF-199 is filed as a new pending row whose probe prints containment_refs=0/probe_rc=0, boardctl validate prints RESULT: OK, and selftest prints SELFTEST: PASS.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 At the commit this task lands in: docs/ACCEPTANCE-PLAN.md's current-state line names a tip that 'git merge-base --is-ancestor <tip> origin/main' accepts, and states the task-row and event counts that 'git show <tip>:.coding-hermes/board/tasks.jsonl | wc -l' and the events equivalent measure at that tip (173 and 340 respectively); 'bash docs/audits/cf099-prd-drift-probe.sh' prints OK and exits 0 at that commit; .coding-hermes/board/tasks.jsonl carries one new pending row whose probe field, run from the repo root, prints containment_refs=0 and probe_rc=0 on this tree; 'bash scripts/boardctl validate' prints RESULT: OK; 'bash tests/selftest.sh' prints SELFTEST: PASS. The repair of that filed row is future work and is NOT expected at this commit - do not grade it.: docs/ACCEPTANCE-PLAN.md:5 names tip `c5f7b2f` and states 'The board at tip `c5f7b2f` carries 173 task rows and 340 events'. Verified: `git merge-base --is-ancestor c5f7b2f origin/main` -> rc=0; `git show c5f7b2f:.coding-hermes/board/tasks.jsonl | wc -l` -> 173; `git show c5f7b2f:.coding-hermes/board/events.jsonl | wc -l` -> 340. `bash docs/audits/cf099-prd-drift-probe.sh` -> 'measured: tip=c5f7b2f rows=173 events=340 sections=38 ...' / 'OK: milestone, plan snapshot and layer arms agree at 4aca706', exit_code=0. Board diff at HEAD 4aca706 is insert-only: tasks.jsonl +1 line = CF-199 (status 'pending', priority P3, created_at 2026-11-04T10:22:19Z) and events.jsonl +1 line (id 340, task_created CF-199). Running CF-199's probe field verbatim from the repo root: `f=docs/audits/cf099-prd-drift-probe.sh; echo containment_refs=$(grep -cE 'origin/main|is-ancestor' \"$f\"); bash \"$f\" >/dev/null 2>&1; echo probe_rc=$?` -> 'containment_refs=0' / 'probe_rc=0'. `bash scripts/boardctl validate` -> 'rows: 174 tasks, 341 events, 0 fixtures' ... 'RESULT: OK (4 warning(s))', exit_code=0. `bash tests/selftest.sh` -> 'SELFTEST: PASS', exit_code=0, with 193 '  PASS' rows and 50 '  FAIL' (intentional fixture) rows, matching the plan's stated 193/50. The CF-199 repair itself was not graded, per instruction.\nAll five legs verified at commit 4aca706: the plan's current-state line pins c5f7b2f (an ancestor of origin/main) with the exact 173/340 counts measured at that tip, the CF-099 drift probe prints OK and exits 0, CF-199 is filed as a new pending row whose probe prints containment_refs=0/probe_rc=0, boardctl validate prints RESULT: OK, and selftest prints SELFTEST: PASS.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "At the commit this task lands in: docs/ACCEPTANCE-PLAN.md's current-state line names a tip that 'git merge-base --is-ancestor <tip> origin/main' accepts, and states the task-row and event counts that 'git show <tip>:.coding-hermes/board/tasks.jsonl | wc -l' and the events equivalent measure at that tip (173 and 340 respectively); 'bash docs/audits/cf099-prd-drift-probe.sh' prints OK and exits 0 at that commit; .coding-hermes/board/tasks.jsonl carries one new pending row whose probe field, run from the repo root, prints containment_refs=0 and probe_rc=0 on this tree; 'bash scripts/boardctl validate' prints RESULT: OK; 'bash tests/selftest.sh' prints SELFTEST: PASS. The repair of that filed row is future work and is NOT expected at this commit - do not grade it.",
+                "status": "PASS",
+                "detail": "docs/ACCEPTANCE-PLAN.md:5 names tip `c5f7b2f` and states 'The board at tip `c5f7b2f` carries 173 task rows and 340 events'. Verified: `git merge-base --is-ancestor c5f7b2f origin/main` -> rc=0; `git show c5f7b2f:.coding-hermes/board/tasks.jsonl | wc -l` -> 173; `git show c5f7b2f:.coding-hermes/board/events.jsonl | wc -l` -> 340. `bash docs/audits/cf099-prd-drift-probe.sh` -> 'measured: tip=c5f7b2f rows=173 events=340 sections=38 ...' / 'OK: milestone, plan snapshot and layer arms agree at 4aca706', exit_code=0. Board diff at HEAD 4aca706 is insert-only: tasks.jsonl +1 line = CF-199 (status 'pending', priority P3, created_at 2026-11-04T10:22:19Z) and events.jsonl +1 line (id 340, task_created CF-199). Running CF-199's probe field verbatim from the repo root: `f=docs/audits/cf099-prd-drift-probe.sh; echo containment_refs=$(grep -cE 'origin/main|is-ancestor' \"$f\"); bash \"$f\" >/dev/null 2>&1; echo probe_rc=$?` -> 'containment_refs=0' / 'probe_rc=0'. `bash scripts/boardctl validate` -> 'rows: 174 tasks, 341 events, 0 fixtures' ... 'RESULT: OK (4 warning(s))', exit_code=0. `bash tests/selftest.sh` -> 'SELFTEST: PASS', exit_code=0, with 193 '  PASS' rows and 50 '  FAIL' (intentional fixture) rows, matching the plan's stated 193/50. The CF-199 repair itself was not graded, per instruction."
+              }
+            ],
+            "summary": "All five legs verified at commit 4aca706: the plan's current-state line pins c5f7b2f (an ancestor of origin/main) with the exact 173/340 counts measured at that tip, the CF-099 drift probe prints OK and exits 0, CF-199 is filed as a new pending row whose probe prints containment_refs=0/probe_rc=0, boardctl validate prints RESULT: OK, and selftest prints SELFTEST: PASS.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-SYNC-20261104-0958-A1\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 At the commit this task lands in: docs/ACCEPTANCE-PLAN.md's current-state line names a tip that 'git merge-base --is-ancestor <tip> origin/main' accepts, and states the task-row and event counts that 'git show <tip>:.coding-hermes/board/tasks.jsonl | wc -l' and the events equivalent measure at that tip (173 and 340 respectively); 'bash docs/audits/cf099-prd-drift-probe.sh' prints OK and exits 0 at that commit; .coding-hermes/board/tasks.jsonl carries one new pending row whose probe field, run from the repo root, prints containment_refs=0 and probe_rc=0 on this tree; 'bash scripts/boardctl validate' prints RESULT: OK; 'bash tests/selftest.sh' prints SELFTEST: PASS. The repair of that filed row is future work and is NOT expected at this commit - do not grade it.: docs/ACCEPTANCE-PLAN.md:5 names tip `c5f7b2f` and states 'The board at tip `c5f7b2f` carries 173 task rows and 340 events'. Verified: `git merge-base --is-ancestor c5f7b2f origin/main` -> rc=0; `git show c5f7b2f:.coding-hermes/board/tasks.jsonl | wc -l` -> 173; `git show c5f7b2f:.coding-hermes/board/events.jsonl | wc -l` -> 340. `bash docs/audits/cf099-prd-drift-probe.sh` -> 'measured: tip=c5f7b2f rows=173 events=340 sections=38 ...' / 'OK: milestone, plan snapshot and layer arms agree at 4aca706', exit_code=0. Board diff at HEAD 4aca706 is insert-only: tasks.jsonl +1 line = CF-199 (status 'pending', priority P3, created_at 2026-11-04T10:22:19Z) and events.jsonl +1 line (id 340, task_created CF-199). Running CF-199's probe field verbatim from the repo root: `f=docs/audits/cf099-prd-drift-probe.sh; echo containment_refs=$(grep -cE 'origin/main|is-ancestor' \"$f\"); bash \"$f\" >/dev/null 2>&1; echo probe_rc=$?` -> 'containment_refs=0' / 'probe_rc=0'. `bash scripts/boardctl validate` -> 'rows: 174 tasks, 341 events, 0 fixtures' ... 'RESULT: OK (4 warning(s))', exit_code=0. `bash tests/selftest.sh` -> 'SELFTEST: PASS', exit_code=0, with 193 '  PASS' rows and 50 '  FAIL' (intentional fixture) rows, matching the plan's stated 193/50. The CF-199 repair itself was not graded, per instruction.\nAll five legs verified at commit 4aca706: the plan's current-state line pins c5f7b2f (an ancestor of origin/main) with the exact 173/340 counts measured at that tip, the CF-099 drift probe prints OK and exits 0, CF-199 is filed as a new pending row whose probe prints containment_refs=0/probe_rc=0, boardctl validate prints RESULT: OK, and selftest prints SELFTEST: PASS.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-04T10:25:08.555189",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-04T10:25:08.590824+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 33818,
+        "truncated": false,
+        "source": "git show 4aca706952f4"
+      }
+    ],
+    "task_id": "CF-SYNC-20261104-0958-A1"
+  }
+}
