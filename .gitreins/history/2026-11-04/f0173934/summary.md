@@ -1,0 +1,32 @@
+# Verdict: CF-DOG-2026-11-04
+
+**Task:** code-factory dogfood 2026-11-04: file three friction rows (project-node --repo remedy, reach-probe 000 on a reachable URL, empty PASS version row)
+**Evaluated:** 2026-11-04T07:37:51.409225
+**Result:** ✓ PASS
+
+## Pipeline Stages
+
+- ✓ **tier1**
+  -   ✓ lint: scanners: nice=nice -n 10
+  ✓ secrets: secrets: scanners=gitleaks+builtin cross-check
+  ✓ tests: scanners: nice=nice -n 10
+- ✓ **tier2**
+  - COMPLETE
+  ✓ Three dogfood friction rows are appended to .coding-hermes/board/tasks.jsonl on the published tree (CF-172, CF-173, CF-174), each with the measured mechanism, a runnable probe and numbered falsifiable acceptance criteria: (1) scripts/project-node.sh --check with --repo supplied still prints 'repo absent (pass --repo to clone)', naming a flag the caller already passed; (2) scripts/project-node.sh's layer-00 reach probe records 000 for a URL that answered 200 when --max-time cuts the body transfer (portable fixture: curl_printed_code=200 curl_rc=28 script_value=000); (3) scripts/harness/install-hermes.sh prints 'PASS version — ' with an empty measurement for a hermes binary that exits non-zero. The tick's own gates must hold on the committed tree: bash scripts/boardctl validate prints RESULT: OK and bash tests/selftest.sh prints SELFTEST: PASS with rc 0. THE REPAIRS THEMSELVES ARE FUTURE WORK tracked by these pending rows and are NOT expected at this commit; the criterion grades the FILING only, not the fix.: FILING: HEAD efa3d71 (working tree clean) appends exactly 3 rows to .coding-hermes/board/tasks.jsonl (145->148, +3/-0 insert-only; 148 unique ids, 0 dupes) plus 3 task_created events 269-271 in events.jsonl. All three rows are status=pending with reasoning (measured mechanism + file:line), a runnable probe, and 5 numbered acceptance criteria (0..4) each. PROBE (1) re-run by evaluator: `HOME=$(mktemp -d) bash scripts/project-node.sh --check --project myproject --repo https://github.com/github/gitignore` -> '[40] repo' / 'FAIL  repo — /var/tmp/.../repo absent (pass --repo to clone)' — matches scripts/project-node.sh:281 `bad "repo" "$RP absent (pass --repo to clone)"`, reached because the clone branch at :260 requires MODE=apply. PROBE (2) re-run verbatim: output 'curl_printed_code=200 curl_rc=28 script_value=000' exactly as filed; mechanism confirmed at scripts/project-node.sh:190-195 `if ! c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$u" 2>/dev/null); then c=000; fi`. PROBE (3) re-run: fake hermes exiting 1 -> '  PASS  version — ' (cat -A confirms trailing space, empty measurement); mechanism confirmed at scripts/harness/install-hermes.sh:60 `ok "version" "$("$h" --version 2>/dev/null | head -1)"`. GATES on committed tree: `bash scripts/boardctl validate` -> 'RESULT: OK (3 warning(s))' exit_code 0 (warnings are pre-existing CF-034 free-form fields + headerless board, as the commit message states); `bash tests/selftest.sh` -> 'SELFTEST: PASS' exit_code 0. Repairs correctly left as future work per the criterion.
+CF-172/173/174 are committed as pending rows with measured mechanisms, runnable probes and numbered falsifiable ACs; all three probes reproduce exactly (including curl_printed_code=200 curl_rc=28 script_value=000 and the empty 'PASS version — ' row) and both gates pass on the committed tree (RESULT: OK rc 0, SELFTEST: PASS rc 0).
+
+## Summary
+
+Judge Result: CF-DOG-2026-11-04
+
+Stage tier1: PASS
+    ✓ lint: scanners: nice=nice -n 10
+  ✓ secrets: secrets: scanners=gitleaks+builtin cross-check
+  ✓ tests: scanners: nice=nice -n 10
+
+Stage tier2: PASS
+  COMPLETE
+  ✓ Three dogfood friction rows are appended to .coding-hermes/board/tasks.jsonl on the published tree (CF-172, CF-173, CF-174), each with the measured mechanism, a runnable probe and numbered falsifiable acceptance criteria: (1) scripts/project-node.sh --check with --repo supplied still prints 'repo absent (pass --repo to clone)', naming a flag the caller already passed; (2) scripts/project-node.sh's layer-00 reach probe records 000 for a URL that answered 200 when --max-time cuts the body transfer (portable fixture: curl_printed_code=200 curl_rc=28 script_value=000); (3) scripts/harness/install-hermes.sh prints 'PASS version — ' with an empty measurement for a hermes binary that exits non-zero. The tick's own gates must hold on the committed tree: bash scripts/boardctl validate prints RESULT: OK and bash tests/selftest.sh prints SELFTEST: PASS with rc 0. THE REPAIRS THEMSELVES ARE FUTURE WORK tracked by these pending rows and are NOT expected at this commit; the criterion grades the FILING only, not the fix.: FILING: HEAD efa3d71 (working tree clean) appends exactly 3 rows to .coding-hermes/board/tasks.jsonl (145->148, +3/-0 insert-only; 148 unique ids, 0 dupes) plus 3 task_created events 269-271 in events.jsonl. All three rows are status=pending with reasoning (measured mechanism + file:line), a runnable probe, and 5 numbered acceptance criteria (0..4) each. PROBE (1) re-run by evaluator: `HOME=$(mktemp -d) bash scripts/project-node.sh --check --project myproject --repo https://github.com/github/gitignore` -> '[40] repo' / 'FAIL  repo — /var/tmp/.../repo absent (pass --repo to clone)' — matches scripts/project-node.sh:281 `bad "repo" "$RP absent (pass --repo to clone)"`, reached because the clone branch at :260 requires MODE=apply. PROBE (2) re-run verbatim: output 'curl_printed_code=200 curl_rc=28 script_value=000' exactly as filed; mechanism confirmed at scripts/project-node.sh:190-195 `if ! c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$u" 2>/dev/null); then c=000; fi`. PROBE (3) re-run: fake hermes exiting 1 -> '  PASS  version — ' (cat -A confirms trailing space, empty measurement); mechanism confirmed at scripts/harness/install-hermes.sh:60 `ok "version" "$("$h" --version 2>/dev/null | head -1)"`. GATES on committed tree: `bash scripts/boardctl validate` -> 'RESULT: OK (3 warning(s))' exit_code 0 (warnings are pre-existing CF-034 free-form fields + headerless board, as the commit message states); `bash tests/selftest.sh` -> 'SELFTEST: PASS' exit_code 0. Repairs correctly left as future work per the criterion.
+CF-172/173/174 are committed as pending rows with measured mechanisms, runnable probes and numbered falsifiable ACs; all three probes reproduce exactly (including curl_printed_code=200 curl_rc=28 script_value=000 and the empty 'PASS version — ' row) and both gates pass on the committed tree (RESULT: OK rc 0, SELFTEST: PASS rc 0).
+
+Overall: PASS ✓
