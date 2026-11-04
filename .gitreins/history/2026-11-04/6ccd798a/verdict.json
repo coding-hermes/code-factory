@@ -1,0 +1,112 @@
+{
+  "task_id": "CF-157",
+  "task_title": "README asserts all fourteen shipped lanes are enabled=true, but the shipped census recipe prints code-factory-qa enabled=false",
+  "task_criteria": [
+    "README.md no longer asserts that the fourteen shipped lanes are all enabled on the live deployment: the sentence must present the enabled state as a dated measurement and point the reader at the census command as the authority. Verify: bash tests/selftest.sh prints SELFTEST: PASS; grep -c 'all .enabled=true' README.md returns 0 on the committed tree; bash docs/audits/cf089-census-recipe.sh still prints 19 rows."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/.hermes/cache/scratch/cf-readme-20261104/wt",
+  "branch": "",
+  "commit": "7c51fbe34a60cdfbf84c350de1ff5b701a684888",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/.hermes/cache/scratch/cf-readme-20261104/wt/.gitreins/logs/guard-20261104T034656.536406Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n10:48PM INF scanned ~796019 bytes (796.02 KB) in 672ms\n10:48PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 122 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/.hermes/cache/scratch/cf-readme-20261104/wt/.gitreins/logs/guard-20261104T034656.536406Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.L5yQnyGeFx/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  131/131 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [5615 chars omitted \u2014 89 line(s)] \u2026\n  PASS  publish-drift event-drift fixture, exit 1\n30. README Status rows 1 and 3 cite the interpreter-qualified --check\n  PASS  README Status rows 1 and 3 cite the interpreter-qualified --check\n  PASS  unqualified Status rows refused (missing-qualifier: Hermes in a bunker + HTTP gateway over tailnet missing-qualifier: Node inference credential )\n31. Hermes pip logs are private per run and distinguish filesystem failures (CF-127)\n  PASS  pip-log old shape: permission denied, exact misleading row, pip not invoked\n  PASS  pip-log --check: unchanged absent-binary rows, no log or pip invocation\n  PASS  pip-log new shape run 1: pip rc 23, distinct HOME log mode 600, fixed file untouched\n  PASS  pip-log new shape run 2: pip rc 23, distinct HOME log mode 600, fixed file untouched\n  PASS  pip-log creation failure: exact filesystem row, pip not invoked\n  PASS  pip-log successful install proceeds despite the unwritable fixed file\n  PASS  pip-log installed --check: unchanged binary rows, no new log or pip invocation\n32. the Quick start control-host commands name BUNKER_SERVER in a check row (CF-145)\n  PASS  bunker-server-install without BUNKER_SERVER -> named FAIL row, exit 1\n  PASS  node-create without BUNKER_SERVER -> named FAIL row, exit 1\n33. the board lock adjudicator proves a holder before calling a lock held (CF-119)\n  PASS  unheld 0-byte lock -> RESIDUE, file untouched (RESIDUE consumers=0 commits_after_mtime=unknown)\n  PASS  flock-held lock -> HELD (HELD holder=pid-2864471)\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/.hermes/cache/scratch/cf-readme-20261104/wt/.gitreins/logs/guard-20261104T034656.536406Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 README.md no longer asserts that the fourteen shipped lanes are all enabled on the live deployment: the sentence must present the enabled state as a dated measurement and point the reader at the census command as the authority. Verify: bash tests/selftest.sh prints SELFTEST: PASS; grep -c 'all .enabled=true' README.md returns 0 on the committed tree; bash docs/audits/cf089-census-recipe.sh still prints 19 rows.: All three verification steps confirmed on the committed tree (HEAD 7c51fbe). (1) `bash tests/selftest.sh` -> exit_code 0, final line `SELFTEST: PASS`; section 28 'README census and executable mirror agree except for BASE' -> `PASS  census README/mirror byte parity (BASE parameterisation only)`, proving the census code block was untouched. The 19 `FAIL` lines in the log are expected negative-fixture output inside passing sections (e.g. section 7b 'board gate rejects invalid records with line-numbered FAIL rows (CF-088)' -> `PASS  null fixture rejected, exit 1`), not suite failures. (2) `grep -c 'all .enabled=true' README.md` -> `0` (grep exit 1, no match); the only surviving enabled=true mention is README.md:209 `thirteen carried \\`enabled=true\\` and \\`code-factory-qa\\` carried \\`enabled=false\\``. (3) `bash docs/audits/cf089-census-recipe.sh` -> prints `19` followed by 19 code-factory rows, including `code-factory-qa enabled=false admission=cooldown parent=code-factory`. Wording at README.md:205-212 reads 'That command is the authority, not this paragraph. On the reference deployment, on 2026-11-04, it printed nineteen rows: ... Of the fourteen, thirteen carried `enabled=true` and `code-factory-qa` carried `enabled=false` ...' \u2014 a dated measurement that names the census command as the authority.\nREADME.md now dates the enabled-state measurement (2026-11-04) and defers to the census command as authority; selftest passes (exit 0, SELFTEST: PASS), the 'all enabled=true' assertion is gone (grep count 0), and the census recipe still prints 19 rows with code-factory-qa enabled=false.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 README.md no longer asserts that the fourteen shipped lanes are all enabled on the live deployment: the sentence must present the enabled state as a dated measurement and point the reader at the census command as the authority. Verify: bash tests/selftest.sh prints SELFTEST: PASS; grep -c 'all .enabled=true' README.md returns 0 on the committed tree; bash docs/audits/cf089-census-recipe.sh still prints 19 rows.: All three verification steps confirmed on the committed tree (HEAD 7c51fbe). (1) `bash tests/selftest.sh` -> exit_code 0, final line `SELFTEST: PASS`; section 28 'README census and executable mirror agree except for BASE' -> `PASS  census README/mirror byte parity (BASE parameterisation only)`, proving the census code block was untouched. The 19 `FAIL` lines in the log are expected negative-fixture output inside passing sections (e.g. section 7b 'board gate rejects invalid records with line-numbered FAIL rows (CF-088)' -> `PASS  null fixture rejected, exit 1`), not suite failures. (2) `grep -c 'all .enabled=true' README.md` -> `0` (grep exit 1, no match); the only surviving enabled=true mention is README.md:209 `thirteen carried \\`enabled=true\\` and \\`code-factory-qa\\` carried \\`enabled=false\\``. (3) `bash docs/audits/cf089-census-recipe.sh` -> prints `19` followed by 19 code-factory rows, including `code-factory-qa enabled=false admission=cooldown parent=code-factory`. Wording at README.md:205-212 reads 'That command is the authority, not this paragraph. On the reference deployment, on 2026-11-04, it printed nineteen rows: ... Of the fourteen, thirteen carried `enabled=true` and `code-factory-qa` carried `enabled=false` ...' \u2014 a dated measurement that names the census command as the authority.\nREADME.md now dates the enabled-state measurement (2026-11-04) and defers to the census command as authority; selftest passes (exit 0, SELFTEST: PASS), the 'all enabled=true' assertion is gone (grep count 0), and the census recipe still prints 19 rows with code-factory-qa enabled=false.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "README.md no longer asserts that the fourteen shipped lanes are all enabled on the live deployment: the sentence must present the enabled state as a dated measurement and point the reader at the census command as the authority. Verify: bash tests/selftest.sh prints SELFTEST: PASS; grep -c 'all .enabled=true' README.md returns 0 on the committed tree; bash docs/audits/cf089-census-recipe.sh still prints 19 rows.",
+                "status": "PASS",
+                "detail": "All three verification steps confirmed on the committed tree (HEAD 7c51fbe). (1) `bash tests/selftest.sh` -> exit_code 0, final line `SELFTEST: PASS`; section 28 'README census and executable mirror agree except for BASE' -> `PASS  census README/mirror byte parity (BASE parameterisation only)`, proving the census code block was untouched. The 19 `FAIL` lines in the log are expected negative-fixture output inside passing sections (e.g. section 7b 'board gate rejects invalid records with line-numbered FAIL rows (CF-088)' -> `PASS  null fixture rejected, exit 1`), not suite failures. (2) `grep -c 'all .enabled=true' README.md` -> `0` (grep exit 1, no match); the only surviving enabled=true mention is README.md:209 `thirteen carried \\`enabled=true\\` and \\`code-factory-qa\\` carried \\`enabled=false\\``. (3) `bash docs/audits/cf089-census-recipe.sh` -> prints `19` followed by 19 code-factory rows, including `code-factory-qa enabled=false admission=cooldown parent=code-factory`. Wording at README.md:205-212 reads 'That command is the authority, not this paragraph. On the reference deployment, on 2026-11-04, it printed nineteen rows: ... Of the fourteen, thirteen carried `enabled=true` and `code-factory-qa` carried `enabled=false` ...' \u2014 a dated measurement that names the census command as the authority."
+              }
+            ],
+            "summary": "README.md now dates the enabled-state measurement (2026-11-04) and defers to the census command as authority; selftest passes (exit 0, SELFTEST: PASS), the 'all enabled=true' assertion is gone (grep count 0), and the census recipe still prints 19 rows with code-factory-qa enabled=false.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-157\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 README.md no longer asserts that the fourteen shipped lanes are all enabled on the live deployment: the sentence must present the enabled state as a dated measurement and point the reader at the census command as the authority. Verify: bash tests/selftest.sh prints SELFTEST: PASS; grep -c 'all .enabled=true' README.md returns 0 on the committed tree; bash docs/audits/cf089-census-recipe.sh still prints 19 rows.: All three verification steps confirmed on the committed tree (HEAD 7c51fbe). (1) `bash tests/selftest.sh` -> exit_code 0, final line `SELFTEST: PASS`; section 28 'README census and executable mirror agree except for BASE' -> `PASS  census README/mirror byte parity (BASE parameterisation only)`, proving the census code block was untouched. The 19 `FAIL` lines in the log are expected negative-fixture output inside passing sections (e.g. section 7b 'board gate rejects invalid records with line-numbered FAIL rows (CF-088)' -> `PASS  null fixture rejected, exit 1`), not suite failures. (2) `grep -c 'all .enabled=true' README.md` -> `0` (grep exit 1, no match); the only surviving enabled=true mention is README.md:209 `thirteen carried \\`enabled=true\\` and \\`code-factory-qa\\` carried \\`enabled=false\\``. (3) `bash docs/audits/cf089-census-recipe.sh` -> prints `19` followed by 19 code-factory rows, including `code-factory-qa enabled=false admission=cooldown parent=code-factory`. Wording at README.md:205-212 reads 'That command is the authority, not this paragraph. On the reference deployment, on 2026-11-04, it printed nineteen rows: ... Of the fourteen, thirteen carried `enabled=true` and `code-factory-qa` carried `enabled=false` ...' \u2014 a dated measurement that names the census command as the authority.\nREADME.md now dates the enabled-state measurement (2026-11-04) and defers to the census command as authority; selftest passes (exit 0, SELFTEST: PASS), the 'all enabled=true' assertion is gone (grep count 0), and the census recipe still prints 19 rows with code-factory-qa enabled=false.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-04T03:49:14.428936",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-04T03:49:14.453744+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 22292,
+        "truncated": false,
+        "source": "git show 7c51fbe34a60"
+      }
+    ],
+    "task_id": "CF-157"
+  }
+}
