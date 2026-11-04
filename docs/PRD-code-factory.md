@@ -39,7 +39,7 @@ One project (crier), one node, one directive that travelled over crier and reach
 gateway, one commit produced there, one artifact digest verified back on the control host, and a
 recorded FAIL when the gate is made to fail.
 
-**Status 2026-11-03 20:35 (re-measured at `f49d85b`): NOT MET.** One leg moved since the `80fca8b`
+**Status 2026-11-04 02:35 (re-measured at `d02916e`): NOT MET.** One leg moved since the `80fca8b`
 measurement: a directive is now recorded arriving at a node and executing there. The dispatch at
 19:37:51 handed the node the envelope itself as its prompt (`CF-139`, P0, open), and two later node
 runs ended `exit 124` at a 32.1 s caller-derived kill instead of the old 243.4 s constant, with the
@@ -48,14 +48,23 @@ Those runs are the board's and the implementing commits' record; no re-runnable 
 them ships in this repository, so the leg is named, not certified. Still absent: a commit produced on
 a node, an artifact digest recomputed from pulled bytes on the control host, and a recorded FAIL from
 a deliberately broken gate there. `CF-075` and `CF-077` remain closed (`77caa02` + selftest §16;
-`1232f7a` + §17/§18). The confirmed open defects on this path are `CF-080` (`--apply` clones the
-workspace after the bus layer has already FAILED, manufacturing the repo-with-no-bus node
-`AGENTS.md` rule 9 forbids) and the never-exercised legs `CF-001` (scheduler→crier dispatch has never
+`1232f7a` + §17/§18). The open defects this milestone's legs depend on are `CF-080` (`--apply` clones
+the workspace after the bus layer has already FAILED, manufacturing the repo-with-no-bus node
+`AGENTS.md` rule 9 forbids), the never-exercised legs `CF-001` (scheduler→crier dispatch has never
 completed a full arm/tick cycle), `CF-004` (no round trip through the node's own gateway), `CF-110`
-(no destroy path ships) and `CF-112` (no `dispatch-targets.jsonl` consumer ships), plus the dispatch
+(no destroy path ships) and `CF-112` (no `dispatch-targets.jsonl` consumer ships), two rows that stop
+a leg and were missing from this list before 2026-11-04 — `CF-002` (P0: a node turn dies at
+`agent init failed: No inference provider configured`, so the "commit produced on a node" leg cannot
+be reached) and `CF-126` (P2: `scripts/node-create.sh:102` forwards only `NODE_PROJECT` and
+`NODE_GATEWAY_PORT`, so a node created exactly as the README documents prints
+`FAIL  crier_url — CRIER_URL unset` at layer 00 and can never reach the bus leg) — plus the dispatch
 defects the live runs exposed: `CF-131` (a completion reply that echoes the task body is refused
 `403 GUARD_BLOCKED`), `CF-132` (no receive-side idempotency key), `CF-133` (a result dialect
 `specs/ENVELOPE.md` does not define), `CF-136` (a dispatch row never reaches a terminal state when its
-tick times out) and `CF-139`. The milestone cannot be claimed while any of those is open.
+tick times out) and `CF-139`. The list is decidable, not editorial: read
+`jq -r 'select(.status!="complete") | [.id,.priority] | @tsv' .coding-hermes/board/tasks.jsonl`, then
+require every open row whose failure stops one of the four legs named above to appear here; rows
+outside those legs (v1 scope features such as foreign harnesses or the deploy-key lane) belong to the
+board, not the milestone. The milestone cannot be claimed while any row above is open.
 `docs/ACCEPTANCE-PLAN.md` records per-requirement state; its summary is the authority for what has
 actually run.

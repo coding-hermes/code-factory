@@ -2,20 +2,23 @@
 
 **Scope:** CF-101–CF-112 in [`PRD-code-factory.md`](PRD-code-factory.md), with contract details in `specs/NODE.md`, `specs/HARNESS.md`, and `specs/ENVELOPE.md`. This plan distinguishes source-level evidence from tests actually run. A passing repository self-test is not proof that every requirement is accepted.
 
-**Evidence snapshot (re-measured 2026-11-03 20:35 at tip `f49d85b`):** `tests/selftest.sh` was run from
+**Evidence snapshot (re-measured 2026-11-04 02:35 at tip `d02916e`):** `tests/selftest.sh` was run from
 the repository root and exited 0 (`SELFTEST: PASS`, 88 `PASS` rows, suite counter `fails=0`) over
 29 sections — plus two lettered sub-arms, §4b and §7b, which the section regex `^say "[0-9]+\.` does
-not count, so the tree carries 31 arms; `scripts/boardctl validate` prints `RESULT: OK (46 warning(s))`;
-the board at that tip carries 114 task rows and 162 events (38 complete, 72 pending, 4 in_progress).
+not count, so the tree carries 31 arms; `scripts/boardctl validate` prints `RESULT: OK (48 warning(s))`;
+the board at that tip carries 117 task rows and 171 events (38 complete, 75 pending, 4 in_progress).
 Nineteen `  FAIL` lines are printed *inside* the suite by fixtures that assert a rejection (§16's
 pre-fix manifest, the disk-floor refusal, the census fail-closed arms, …), so count `SELFTEST:` and
-the suite's counter, never a raw `grep -c '^  FAIL'`. Timing is not a portable number: 9.70 s CPU
-(`user 5.45` + `sys 4.25`) at loadavg 33.7 with sibling lanes active, `real 28.20` — quote CPU and the
-load regime, not wall.
-Previous snapshots (`80fca8b`: 28 sections, 70 `PASS`, 85/115, `OK (28 warning(s))`; `400a5ab`: 15
-sections, 68 task rows, 74 events) still reproduce at the tips they name and are kept only as
-history: the count moved because §7b (`CF-088`, the board gate rejects invalid records) and §29
-(`CF-114`, a workdir board that is not the published board) landed after the `80fca8b` measurement.
+the suite's counter, never a raw `grep -c '^  FAIL'`. Timing is not a portable number: 9.32 s CPU
+(`user 5.44` + `sys 3.88`) at loadavg 13.24, `real 10.86` — quote CPU and the load regime, not wall.
+Previous snapshots (`f49d85b`: 29 sections, 88 `PASS`, 114/162, `OK (46 warning(s))`; `80fca8b`:
+28 sections, 70 `PASS`, 85/115, `OK (28 warning(s))`; `400a5ab`: 15 sections, 68 task rows, 74 events)
+still reproduce at the tips they name and are kept only as history: the count moved because §7b
+(`CF-088`, the board gate rejects invalid records) and §29 (`CF-114`, a workdir board that is not the
+published board) landed after the `80fca8b` measurement, and the board itself gained three rows and
+nine events between `f49d85b` and `d02916e` (`CF-141` filed by the previous PM tick, `CF-142`,
+`CF-143`) while no selftest arm changed (`git log --oneline f49d85b..d02916e -- tests/selftest.sh` is
+empty).
 No number in this file is carried forward without re-running the command that produced it.
 The selftest checks shell syntax, one failing node-check path, `fetch_verified` digest
 acceptance/rejection, a credential-assignment grep, JSONL parsing, lane-target parsing,
@@ -47,7 +50,7 @@ Status definitions: **PASS** = requirement's acceptance behavior was exercised a
 ### The other direction: test sections with no PRD requirement
 
 A green suite is not PRD coverage, and the reverse gap matters as much as the forward one. At
-`f49d85b`, `tests/selftest.sh` has 29 numbered sections plus two lettered sub-arms (§4b, §7b) —
+`d02916e`, `tests/selftest.sh` has 29 numbered sections plus two lettered sub-arms (§4b, §7b) —
 31 arms, 88 `PASS` rows — and only three requirements have an arm that can fail on them (`CF-102` ←
 §2 and §14, `CF-105` ← §5, `CF-109` ← §12 and §13 partially). Every other arm is governed by a spec, a
 rule or a board row, and the mapping below names all 31 so that a new arm cannot arrive without a
@@ -123,14 +126,14 @@ Remote acceptance commands in the matrix are templates: substitute only authoriz
 
 ## Current acceptance summary
 
-Measured at `f49d85b` (2026-11-03 20:35): the local self-test passes (88 `PASS`, suite counter 0,
+Measured at `d02916e` (2026-11-04 02:35): the local self-test passes (88 `PASS`, suite counter 0,
 rc 0), and acceptance is **incomplete**. Split by what the tree can actually demonstrate:
 
 - **Requirements with a test that can fail on them (3):** `CF-102` (§2, §14 — and the per-layer arms
   named in the PRD cell), `CF-105` (§5), `CF-109` (§12, §13 — resolution and malformed-value
   refusal only; the below-floor boundary arm is still missing).
 - **Requirements with no test in the tree (9):** `CF-101`, `CF-103`, `CF-104`, `CF-106`, `CF-107`,
-  `CF-108`, `CF-110`, `CF-111`, `CF-112`. Re-verified at `f49d85b` by grep, not by argument:
+  `CF-108`, `CF-110`, `CF-111`, `CF-112`. Re-verified at `d02916e` by grep, not by argument:
   `grep -rniE 'sudo|apt-get' tests/` = 0 (CF-104), `grep -rln 'node\.json' tests/` = 0 (CF-111),
   `grep -rl 'dispatch-targets' scripts tests` = 0 (CF-112), no artifact-digest arm (CF-107), no
   two-run digest comparison (CF-103), and `chmod 600` appears only as fixture setup, never as a
@@ -140,7 +143,10 @@ rc 0), and acceptance is **incomplete**. Split by what the tree can actually dem
   (`opencode` is unmeasured and its `--apply` refuses by design).
 - **End-to-end first milestone:** not met. Of the defects the previous summary named, `CF-075` and
   `CF-077` are closed (`77caa02`, `1232f7a`, each with selftest arms §16–§18); the legs still blocked
-  by an open defect are `CF-080` plus the never-exercised `CF-001`, `CF-004`, `CF-110` and `CF-112`.
+  by an open defect are `CF-080` plus the never-exercised `CF-001`, `CF-004`, `CF-110` and `CF-112`,
+  and since 2026-11-04 the PRD block also names `CF-002` (a node turn cannot start inference, so the
+  commit leg is unreachable) and `CF-126` (a README-created node fails layer 00 on `CRIER_URL`, so the
+  bus leg is unreachable) — both were open and absent from the milestone list before this tick.
   One leg moved: a directive is now recorded arriving at a node and executing there (`CF-137`,
   `CF-138` live runs ending `exit 124` at a caller-derived 32.1 s kill; `CF-139` records the
   19:37:51 dispatch handing the node the envelope as its prompt). The milestone block in the PRD is
