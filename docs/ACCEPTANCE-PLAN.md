@@ -54,17 +54,17 @@ parity, credentials lifecycle, the manifest schema, destruction/recreation, sche
 the control-host artifact round trip — those cells say **no test** on purpose.
 
 **Sections with no requirement (the reverse direction).** A section serves a requirement only if that
-requirement's `Verified by` cell above names it. Twelve of the 37 arms are named: §2, §3, §4, §4b, §5,
+requirement's `Verified by` cell above names it. Twelve of the 38 arms are named: §2, §3, §4, §4b, §5,
 §6, §12, §13, §14, §15, §16 and §20. The mechanical sweep over the whole document,
 `grep -oE '§[0-9]+[a-z]?' docs/PRD-code-factory.md | sort -u`, returns **14** ids rather than 12: it
 also catches §17 and §18, which are named only in the milestone block, where they certify `CF-077`
 (a board row, not a `CF-101`–`CF-112` requirement) — so they count as unnamed for this total and
-carry their own row below. The remaining 25 — §1, §7, §7b, §8,
-§9, §10, §11, §17, §18, §19, §21, §22–§27, §28, §29, §30, §31, §32, §33, §34 and §35 — test repository and
+carry their own row below. The remaining 26 — §1, §7, §7b, §8,
+§9, §10, §11, §17, §18, §19, §21, §22–§27, §28, §29, §30, §31, §32, §33, §34, §35 and §36 — test repository and
 fleet tooling (board parsing and the board gate, prompt inventory, lane targets, repo-url guards, the
 census and README arms), not a CF-101–CF-112 requirement, and each is governed by the board row it
 names: §7b `CF-088`, §19 `CF-085`, §21 `CF-091`, §29 `CF-114`, §31 `CF-127`, §30 `CF-093`, §32
-`CF-145`, §33 `CF-119`, §34 `CF-163` AC3, §35 `CF-153`, §17–§18 `CF-077`. Some of these overlap a requirement's subject without
+`CF-145`, §33 `CF-119`, §34 `CF-163` AC3, §35 `CF-153`, §36 `CF-159`, §17–§18 `CF-077`. Some of these overlap a requirement's subject without
 deciding it (§10 exercises the Hermes adapter's Python refusal, which is CF-106 evidence but not the
 two-adapter contract CF-106 demands); the cell stays the authority, so the overlap is recorded here
 rather than promoted into it. A section that is neither named by a `Verified by` cell nor by a board
@@ -96,7 +96,7 @@ A green suite is not PRD coverage, and the reverse gap matters as much as the fo
 31 arms, 88 `PASS` rows — and only three requirements have an arm that can fail on them (`CF-102` ←
 §2 and §14, `CF-105` ← §5, `CF-109` ← §12 and §13 partially, plus `CF-127` ← §31 as of the CF-127
 landing). Every other arm is governed by a spec, a
-rule or a board row, and the mapping below names every numbered section in the current tree — 35, plus both lettered arms, so 37 arms, and 31 arms at the `d02916e` tip — so that a new arm cannot arrive without a
+rule or a board row, and the mapping below names every numbered section in the current tree — 36, plus both lettered arms, so 38 arms, and 31 arms at the `d02916e` tip — so that a new arm cannot arrive without a
 named authority. The mapping is a promise this table keeps, not one the tooling enforces: the
 section census in `docs/audits/cf099-prd-drift-probe.sh` counts only numbered lines, so a lettered arm
 lands uncounted (`CF-113`, pending, owns that fix).
