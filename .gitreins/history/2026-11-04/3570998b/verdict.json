@@ -1,0 +1,137 @@
+{
+  "task_id": "CF-PM-20261104-0613",
+  "task_title": "PM re-measure: correct the future-dated status stamps, the stale CF-002 status, the CF-138 description and the milestone blocker membership",
+  "task_criteria": [
+    "1. docs/PRD-code-factory.md's milestone status line carries a UTC timestamp that is not in the future at the tick clock, and names the tip it was re-measured at (1aeb0c7) with that tip's own row and event counts.\n2. The milestone blocker list names CF-150 and every open blocker it names is non-complete on the board; no complete row id appears after the phrase 'open defects'.\n3. docs/ACCEPTANCE-PLAN.md's current-state block names tip 1aeb0c7 with 137 task rows and 233 events, and its CF-002 status clause matches the board (in_progress, not pending).\n4. bash docs/audits/cf099-prd-drift-probe.sh exits 0 at the edited tree and prints OK.\n5. bash tests/selftest.sh exits 0 with SELFTEST: PASS at the landed tree.\n6. The board carries a CF-164 row whose implementation commit is b8a7e24 and whose acceptance commands are re-runnable at the published tip."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "2e8b1a470030791c71845e4a03d9a747e5b619b7",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T061641.588869Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n1:19AM INF scanned ~860787 bytes (860.79 KB) in 1.17s\n1:19AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 130 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T061641.588869Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.D1sntafV8E/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  138/138 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [5615 chars omitted \u2014 89 line(s)] \u2026\n  PASS  publish-drift event-drift fixture, exit 1\n30. README Status rows 1 and 3 cite the interpreter-qualified --check\n  PASS  README Status rows 1 and 3 cite the interpreter-qualified --check\n  PASS  unqualified Status rows refused (missing-qualifier: Hermes in a bunker + HTTP gateway over tailnet missing-qualifier: Node inference credential )\n31. Hermes pip logs are private per run and distinguish filesystem failures (CF-127)\n  PASS  pip-log old shape: permission denied, exact misleading row, pip not invoked\n  PASS  pip-log --check: unchanged absent-binary rows, no log or pip invocation\n  PASS  pip-log new shape run 1: pip rc 23, distinct HOME log mode 600, fixed file untouched\n  PASS  pip-log new shape run 2: pip rc 23, distinct HOME log mode 600, fixed file untouched\n  PASS  pip-log creation failure: exact filesystem row, pip not invoked\n  PASS  pip-log successful install proceeds despite the unwritable fixed file\n  PASS  pip-log installed --check: unchanged binary rows, no new log or pip invocation\n32. the Quick start control-host commands name BUNKER_SERVER in a check row (CF-145)\n  PASS  bunker-server-install without BUNKER_SERVER -> named FAIL row, exit 1\n  PASS  node-create without BUNKER_SERVER -> named FAIL row, exit 1\n33. the board lock adjudicator proves a holder before calling a lock held (CF-119)\n  PASS  unheld 0-byte lock -> RESIDUE, file untouched (RESIDUE consumers=0 commits_after_mtime=unknown)\n  PASS  flock-held lock -> HELD (HELD holder=pid-1737559)\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T061641.588869Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 1. docs/PRD-code-factory.md's milestone status line carries a UTC timestamp that is not in the future at the tick clock, and names the tip it was re-measured at (1aeb0c7) with that tip's own row and event counts.: docs/PRD-code-factory.md:42 reads '**Status 2026-11-04T06:20Z (board re-measured at `1aeb0c7` \u2014 137 task rows, 233 events; ...)'. Tick clock `date -u` = 'Wed Nov 4 06:20:06 AM UTC 2026', so the stamp is not in the future. Counts verified against the tip itself: `git show 1aeb0c7:.coding-hermes/board/tasks.jsonl | wc -l` = 137 and `... events.jsonl | wc -l` = 233.\n  \u2713 2. The milestone blocker list names CF-150 and every open blocker it names is non-complete on the board; no complete row id appears after the phrase 'open defects'.: docs/PRD-code-factory.md:54 'The open defects this milestone's legs depend on are ...' and the list names CF-150 at lines 68-69 ('one row this re-measure added: `CF-150`'). Every id appearing after that phrase \u2014 CF-001, CF-002, CF-004, CF-080, CF-110, CF-112, CF-131, CF-132, CF-133, CF-136, CF-137, CF-138, CF-139, CF-150, CF-162, CF-163 \u2014 is non-complete on the board (jq: in_progress/pending). The only complete ids (CF-075, CF-077, CF-126) appear at lines 51-53, i.e. BEFORE the phrase, as explicitly closed rows. The drift probe independently prints the same open_blockers set including CF-150.\n  \u2713 3. docs/ACCEPTANCE-PLAN.md's current-state block names tip 1aeb0c7 with 137 task rows and 233 events, and its CF-002 status clause matches the board (in_progress, not pending).: docs/ACCEPTANCE-PLAN.md:5 '**Current state (re-measured 2026-11-04T06:15Z at tip `1aeb0c7`)...** The board at tip `1aeb0c7` carries 137 task rows and 233 events.' CF-002 clause: lines 200-205 correction states 'Both `CF-001` and `CF-002` read `status: in_progress` on the board at this tip \u2014 ... `CF-002` since `2026-11-04T05:35:55Z` \u2014 so the `pending` wording no longer holds for either.' Board confirms: jq CF-002 -> status=in_progress, updated_at=2026-11-04T05:35:55Z.\n  \u2713 4. bash docs/audits/cf099-prd-drift-probe.sh exits 0 at the edited tree and prints OK.: Ran `bash docs/audits/cf099-prd-drift-probe.sh` -> exit code 0; output: 'measured: tip=1aeb0c7 rows=137 events=233 sections=33 open_blockers=CF-001 CF-002 CF-004 CF-080 CF-110 CF-112 CF-131 CF-132 CF-133 CF-136 CF-137 CF-138 CF-139 CF-150 CF-162 CF-163' and 'OK: milestone, plan snapshot and layer arms agree at 4e3c33a'.\n  \u2713 5. bash tests/selftest.sh exits 0 with SELFTEST: PASS at the landed tree.: Ran `bash tests/selftest.sh > /tmp/st.log 2>&1; echo RC=$?` -> RC=0; tail shows 'SELFTEST: PASS'; 103 '  PASS' rows and 19 intentional negative-fixture '  FAIL' rows, matching the commit message's claim.\n  \u2713 6. The board carries a CF-164 row whose implementation commit is b8a7e24 and whose acceptance commands are re-runnable at the published tip.: .coding-hermes/board/tasks.jsonl carries a CF-164 row (status pending) whose title and AC1 name implementation commit b8a7e24. Re-ran the row's own probe at the published tip: 'commit=b8a7e24 cites=1 rows_at_1aeb0c7=0 row_now=1 proxy_hits=0', rc=0. AC2 commands re-run cleanly: `grep -n 'for u in' scripts/project-node.sh` -> line 190 'for u in \"$CRIER/health\" https://pypi.org/simple/; do' (single loop, two URLs) and `grep -rn 'proxy' scripts/ tests/ | wc -l` -> 0.\nAll six criteria verified: the PRD status stamp is 2026-11-04T06:20Z (not future) naming tip 1aeb0c7 with its own 137 rows/233 events, the blocker list names CF-150 with no complete id after 'open defects', the plan names 1aeb0c7/137/233 and CF-002 as in_progress, the drift probe exits 0 printing OK, selftest exits 0 with SELFTEST: PASS, and the CF-164 row cites b8a7e24 with re-runnable acceptance commands.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 1. docs/PRD-code-factory.md's milestone status line carries a UTC timestamp that is not in the future at the tick clock, and names the tip it was re-measured at (1aeb0c7) with that tip's own row and event counts.: docs/PRD-code-factory.md:42 reads '**Status 2026-11-04T06:20Z (board re-measured at `1aeb0c7` \u2014 137 task rows, 233 events; ...)'. Tick clock `date -u` = 'Wed Nov 4 06:20:06 AM UTC 2026', so the stamp is not in the future. Counts verified against the tip itself: `git show 1aeb0c7:.coding-hermes/board/tasks.jsonl | wc -l` = 137 and `... events.jsonl | wc -l` = 233.\n  \u2713 2. The milestone blocker list names CF-150 and every open blocker it names is non-complete on the board; no complete row id appears after the phrase 'open defects'.: docs/PRD-code-factory.md:54 'The open defects this milestone's legs depend on are ...' and the list names CF-150 at lines 68-69 ('one row this re-measure added: `CF-150`'). Every id appearing after that phrase \u2014 CF-001, CF-002, CF-004, CF-080, CF-110, CF-112, CF-131, CF-132, CF-133, CF-136, CF-137, CF-138, CF-139, CF-150, CF-162, CF-163 \u2014 is non-complete on the board (jq: in_progress/pending). The only complete ids (CF-075, CF-077, CF-126) appear at lines 51-53, i.e. BEFORE the phrase, as explicitly closed rows. The drift probe independently prints the same open_blockers set including CF-150.\n  \u2713 3. docs/ACCEPTANCE-PLAN.md's current-state block names tip 1aeb0c7 with 137 task rows and 233 events, and its CF-002 status clause matches the board (in_progress, not pending).: docs/ACCEPTANCE-PLAN.md:5 '**Current state (re-measured 2026-11-04T06:15Z at tip `1aeb0c7`)...** The board at tip `1aeb0c7` carries 137 task rows and 233 events.' CF-002 clause: lines 200-205 correction states 'Both `CF-001` and `CF-002` read `status: in_progress` on the board at this tip \u2014 ... `CF-002` since `2026-11-04T05:35:55Z` \u2014 so the `pending` wording no longer holds for either.' Board confirms: jq CF-002 -> status=in_progress, updated_at=2026-11-04T05:35:55Z.\n  \u2713 4. bash docs/audits/cf099-prd-drift-probe.sh exits 0 at the edited tree and prints OK.: Ran `bash docs/audits/cf099-prd-drift-probe.sh` -> exit code 0; output: 'measured: tip=1aeb0c7 rows=137 events=233 sections=33 open_blockers=CF-001 CF-002 CF-004 CF-080 CF-110 CF-112 CF-131 CF-132 CF-133 CF-136 CF-137 CF-138 CF-139 CF-150 CF-162 CF-163' and 'OK: milestone, plan snapshot and layer arms agree at 4e3c33a'.\n  \u2713 5. bash tests/selftest.sh exits 0 with SELFTEST: PASS at the landed tree.: Ran `bash tests/selftest.sh > /tmp/st.log 2>&1; echo RC=$?` -> RC=0; tail shows 'SELFTEST: PASS'; 103 '  PASS' rows and 19 intentional negative-fixture '  FAIL' rows, matching the commit message's claim.\n  \u2713 6. The board carries a CF-164 row whose implementation commit is b8a7e24 and whose acceptance commands are re-runnable at the published tip.: .coding-hermes/board/tasks.jsonl carries a CF-164 row (status pending) whose title and AC1 name implementation commit b8a7e24. Re-ran the row's own probe at the published tip: 'commit=b8a7e24 cites=1 rows_at_1aeb0c7=0 row_now=1 proxy_hits=0', rc=0. AC2 commands re-run cleanly: `grep -n 'for u in' scripts/project-node.sh` -> line 190 'for u in \"$CRIER/health\" https://pypi.org/simple/; do' (single loop, two URLs) and `grep -rn 'proxy' scripts/ tests/ | wc -l` -> 0.\nAll six criteria verified: the PRD status stamp is 2026-11-04T06:20Z (not future) naming tip 1aeb0c7 with its own 137 rows/233 events, the blocker list names CF-150 with no complete id after 'open defects', the plan names 1aeb0c7/137/233 and CF-002 as in_progress, the drift probe exits 0 printing OK, selftest exits 0 with SELFTEST: PASS, and the CF-164 row cites b8a7e24 with re-runnable acceptance commands.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "1. docs/PRD-code-factory.md's milestone status line carries a UTC timestamp that is not in the future at the tick clock, and names the tip it was re-measured at (1aeb0c7) with that tip's own row and event counts.",
+                "status": "PASS",
+                "detail": "docs/PRD-code-factory.md:42 reads '**Status 2026-11-04T06:20Z (board re-measured at `1aeb0c7` \u2014 137 task rows, 233 events; ...)'. Tick clock `date -u` = 'Wed Nov 4 06:20:06 AM UTC 2026', so the stamp is not in the future. Counts verified against the tip itself: `git show 1aeb0c7:.coding-hermes/board/tasks.jsonl | wc -l` = 137 and `... events.jsonl | wc -l` = 233."
+              },
+              {
+                "criterion": "2. The milestone blocker list names CF-150 and every open blocker it names is non-complete on the board; no complete row id appears after the phrase 'open defects'.",
+                "status": "PASS",
+                "detail": "docs/PRD-code-factory.md:54 'The open defects this milestone's legs depend on are ...' and the list names CF-150 at lines 68-69 ('one row this re-measure added: `CF-150`'). Every id appearing after that phrase \u2014 CF-001, CF-002, CF-004, CF-080, CF-110, CF-112, CF-131, CF-132, CF-133, CF-136, CF-137, CF-138, CF-139, CF-150, CF-162, CF-163 \u2014 is non-complete on the board (jq: in_progress/pending). The only complete ids (CF-075, CF-077, CF-126) appear at lines 51-53, i.e. BEFORE the phrase, as explicitly closed rows. The drift probe independently prints the same open_blockers set including CF-150."
+              },
+              {
+                "criterion": "3. docs/ACCEPTANCE-PLAN.md's current-state block names tip 1aeb0c7 with 137 task rows and 233 events, and its CF-002 status clause matches the board (in_progress, not pending).",
+                "status": "PASS",
+                "detail": "docs/ACCEPTANCE-PLAN.md:5 '**Current state (re-measured 2026-11-04T06:15Z at tip `1aeb0c7`)...** The board at tip `1aeb0c7` carries 137 task rows and 233 events.' CF-002 clause: lines 200-205 correction states 'Both `CF-001` and `CF-002` read `status: in_progress` on the board at this tip \u2014 ... `CF-002` since `2026-11-04T05:35:55Z` \u2014 so the `pending` wording no longer holds for either.' Board confirms: jq CF-002 -> status=in_progress, updated_at=2026-11-04T05:35:55Z."
+              },
+              {
+                "criterion": "4. bash docs/audits/cf099-prd-drift-probe.sh exits 0 at the edited tree and prints OK.",
+                "status": "PASS",
+                "detail": "Ran `bash docs/audits/cf099-prd-drift-probe.sh` -> exit code 0; output: 'measured: tip=1aeb0c7 rows=137 events=233 sections=33 open_blockers=CF-001 CF-002 CF-004 CF-080 CF-110 CF-112 CF-131 CF-132 CF-133 CF-136 CF-137 CF-138 CF-139 CF-150 CF-162 CF-163' and 'OK: milestone, plan snapshot and layer arms agree at 4e3c33a'."
+              },
+              {
+                "criterion": "5. bash tests/selftest.sh exits 0 with SELFTEST: PASS at the landed tree.",
+                "status": "PASS",
+                "detail": "Ran `bash tests/selftest.sh > /tmp/st.log 2>&1; echo RC=$?` -> RC=0; tail shows 'SELFTEST: PASS'; 103 '  PASS' rows and 19 intentional negative-fixture '  FAIL' rows, matching the commit message's claim."
+              },
+              {
+                "criterion": "6. The board carries a CF-164 row whose implementation commit is b8a7e24 and whose acceptance commands are re-runnable at the published tip.",
+                "status": "PASS",
+                "detail": ".coding-hermes/board/tasks.jsonl carries a CF-164 row (status pending) whose title and AC1 name implementation commit b8a7e24. Re-ran the row's own probe at the published tip: 'commit=b8a7e24 cites=1 rows_at_1aeb0c7=0 row_now=1 proxy_hits=0', rc=0. AC2 commands re-run cleanly: `grep -n 'for u in' scripts/project-node.sh` -> line 190 'for u in \"$CRIER/health\" https://pypi.org/simple/; do' (single loop, two URLs) and `grep -rn 'proxy' scripts/ tests/ | wc -l` -> 0."
+              }
+            ],
+            "summary": "All six criteria verified: the PRD status stamp is 2026-11-04T06:20Z (not future) naming tip 1aeb0c7 with its own 137 rows/233 events, the blocker list names CF-150 with no complete id after 'open defects', the plan names 1aeb0c7/137/233 and CF-002 as in_progress, the drift probe exits 0 printing OK, selftest exits 0 with SELFTEST: PASS, and the CF-164 row cites b8a7e24 with re-runnable acceptance commands.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-PM-20261104-0613\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 1. docs/PRD-code-factory.md's milestone status line carries a UTC timestamp that is not in the future at the tick clock, and names the tip it was re-measured at (1aeb0c7) with that tip's own row and event counts.: docs/PRD-code-factory.md:42 reads '**Status 2026-11-04T06:20Z (board re-measured at `1aeb0c7` \u2014 137 task rows, 233 events; ...)'. Tick clock `date -u` = 'Wed Nov 4 06:20:06 AM UTC 2026', so the stamp is not in the future. Counts verified against the tip itself: `git show 1aeb0c7:.coding-hermes/board/tasks.jsonl | wc -l` = 137 and `... events.jsonl | wc -l` = 233.\n  \u2713 2. The milestone blocker list names CF-150 and every open blocker it names is non-complete on the board; no complete row id appears after the phrase 'open defects'.: docs/PRD-code-factory.md:54 'The open defects this milestone's legs depend on are ...' and the list names CF-150 at lines 68-69 ('one row this re-measure added: `CF-150`'). Every id appearing after that phrase \u2014 CF-001, CF-002, CF-004, CF-080, CF-110, CF-112, CF-131, CF-132, CF-133, CF-136, CF-137, CF-138, CF-139, CF-150, CF-162, CF-163 \u2014 is non-complete on the board (jq: in_progress/pending). The only complete ids (CF-075, CF-077, CF-126) appear at lines 51-53, i.e. BEFORE the phrase, as explicitly closed rows. The drift probe independently prints the same open_blockers set including CF-150.\n  \u2713 3. docs/ACCEPTANCE-PLAN.md's current-state block names tip 1aeb0c7 with 137 task rows and 233 events, and its CF-002 status clause matches the board (in_progress, not pending).: docs/ACCEPTANCE-PLAN.md:5 '**Current state (re-measured 2026-11-04T06:15Z at tip `1aeb0c7`)...** The board at tip `1aeb0c7` carries 137 task rows and 233 events.' CF-002 clause: lines 200-205 correction states 'Both `CF-001` and `CF-002` read `status: in_progress` on the board at this tip \u2014 ... `CF-002` since `2026-11-04T05:35:55Z` \u2014 so the `pending` wording no longer holds for either.' Board confirms: jq CF-002 -> status=in_progress, updated_at=2026-11-04T05:35:55Z.\n  \u2713 4. bash docs/audits/cf099-prd-drift-probe.sh exits 0 at the edited tree and prints OK.: Ran `bash docs/audits/cf099-prd-drift-probe.sh` -> exit code 0; output: 'measured: tip=1aeb0c7 rows=137 events=233 sections=33 open_blockers=CF-001 CF-002 CF-004 CF-080 CF-110 CF-112 CF-131 CF-132 CF-133 CF-136 CF-137 CF-138 CF-139 CF-150 CF-162 CF-163' and 'OK: milestone, plan snapshot and layer arms agree at 4e3c33a'.\n  \u2713 5. bash tests/selftest.sh exits 0 with SELFTEST: PASS at the landed tree.: Ran `bash tests/selftest.sh > /tmp/st.log 2>&1; echo RC=$?` -> RC=0; tail shows 'SELFTEST: PASS'; 103 '  PASS' rows and 19 intentional negative-fixture '  FAIL' rows, matching the commit message's claim.\n  \u2713 6. The board carries a CF-164 row whose implementation commit is b8a7e24 and whose acceptance commands are re-runnable at the published tip.: .coding-hermes/board/tasks.jsonl carries a CF-164 row (status pending) whose title and AC1 name implementation commit b8a7e24. Re-ran the row's own probe at the published tip: 'commit=b8a7e24 cites=1 rows_at_1aeb0c7=0 row_now=1 proxy_hits=0', rc=0. AC2 commands re-run cleanly: `grep -n 'for u in' scripts/project-node.sh` -> line 190 'for u in \"$CRIER/health\" https://pypi.org/simple/; do' (single loop, two URLs) and `grep -rn 'proxy' scripts/ tests/ | wc -l` -> 0.\nAll six criteria verified: the PRD status stamp is 2026-11-04T06:20Z (not future) naming tip 1aeb0c7 with its own 137 rows/233 events, the blocker list names CF-150 with no complete id after 'open defects', the plan names 1aeb0c7/137/233 and CF-002 as in_progress, the drift probe exits 0 printing OK, selftest exits 0 with SELFTEST: PASS, and the CF-164 row cites b8a7e24 with re-runnable acceptance commands.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-04T06:21:28.753672",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-04T06:21:28.773660+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 7994,
+        "truncated": false,
+        "source": "git show 2e8b1a470030"
+      }
+    ],
+    "task_id": "CF-PM-20261104-0613"
+  }
+}
