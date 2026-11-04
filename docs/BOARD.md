@@ -105,7 +105,7 @@ Observed on 2026-11-03 before the workdir repair: the registered code-factory wo
 health claim. `scripts/board_drift.py` is the re-runnable tool; `tests/selftest.sh` arm 29
 proves its divergent, identical, empty, missing-file and malformed-record fixture paths.
 
-## Current measured state (measured 2026-11-04T01:58Z, on the tree this commit lands)
+## Current measured state (measured 2026-11-04T08:42Z, on the tree this commit lands)
 
 Every count below is an output value that moves with each folded row, so measure it instead of
 quoting an older snapshot. The numbers are still typed by hand — CF-081 tracks replacing this block
@@ -117,14 +117,20 @@ scripts/boardctl validate
 bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 ```
 
-- **Re-measured 2026-11-04T03:01Z at tip `dae4e7a`:** 127 task rows, 193 events — 40 `complete`,
+- **Re-measured 2026-11-04T08:42Z at tip `202fb61`:** 156 task rows, 295 events — 50 `complete`,
+  8 `in_progress`, 98 `pending`. `scripts/boardctl validate` prints `RESULT: OK (3 warning(s))`
+  (CF-034's free-form `guard_result`/`ci_result` plus the headerless board) and
+  `key uniformity: 156/156 rows carry only canon keys (0 drift)`. `tests/selftest.sh` prints
+  `SELFTEST: PASS`, `PASS 156/156 rows parse`, 119 `PASS` rows and 19 intentional-fixture `FAIL`
+  rows, 36 numbered sections plus lettered arms `4b`/`7b` (38 arms), at loadavg 6.79 (1 min; host
+  load, not a suite property). Two sibling rows own the structural fix for this block: **CF-154**
+  (the warning count does not follow from the board) and **CF-155** (the plan's section count).
+- **Earlier snapshot, 2026-11-04T03:01Z at tip `dae4e7a` (historical, not current):** 127 task rows, 193 events — 40 `complete`,
   5 `in_progress`, 82 `pending`. `scripts/boardctl validate` prints `RESULT: OK (3 warning(s))`
   (CF-034's free-form `guard_result`/`ci_result` plus the headerless board); the 44 `probe`-key
   warnings are gone because CF-129 relanded canon keys (`key uniformity: 127/127 rows`).
   `tests/selftest.sh` prints `SELFTEST: PASS`, `PASS 127/127 rows parse`, 92 `PASS` rows, 30
-  numbered sections plus lettered arms `4b`/`7b`, at loadavg 15.60. Two sibling rows own the
-  structural fix for this block: **CF-154** (the warning count does not follow from the board) and
-  **CF-155** (the plan is stale by one selftest section).
+  numbered sections plus lettered arms `4b`/`7b`, at loadavg 15.60.
 - At this tree (earlier snapshot, 116 task rows, 168 events): `scripts/boardctl validate` prints
   `RESULT: OK (47 warning(s))` — 44 rows carrying a free-form `probe` key, CF-034's free-form
   `guard_result`/`ci_result` prose, and the headerless board (no `board.jsonl`), so header-counter

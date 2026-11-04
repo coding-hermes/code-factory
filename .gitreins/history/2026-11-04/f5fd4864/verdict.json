@@ -1,0 +1,111 @@
+{
+  "task_id": "CF-159",
+  "task_title": "node-create/verify-node/lib.sh interpolate values into remote bash -lc unescaped (shell injection on the node)",
+  "task_criteria": [
+    "The row's bound probe prints INJECTION_EXECUTED=no at the fix commit (was yes), every remote-command interpolation site is escaped, tests/selftest.sh carries a RED-at-pre-fix/GREEN-at-fix arm naming the row, and bash tests/selftest.sh prints SELFTEST: PASS."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/.hermes/cache/scratch/cf-dogfood-1104/land",
+  "branch": "",
+  "commit": "8b8136934b15aad6f021ec0b66c3c951c2105689",
+  "working_tree_content_fingerprint": "49ab0e64f23090ac85559cf95a8cb664b254497689c6ccbf5f7dbf7a4f02bbec",
+  "working_tree_dirty_path_count": 0,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n3:38AM INF scanned ~1018770 bytes (1.02 MB) in 883ms\n3:38AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 138 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.3OJmw62Irt/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  154/154 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [6720 chars omitted \u2014 102 line(s)] \u2026\n  PASS  bunker-server-install without BUNKER_SERVER -> named FAIL row, exit 1\n  PASS  node-create without BUNKER_SERVER -> named FAIL row, exit 1\n33. the board lock adjudicator proves a holder before calling a lock held (CF-119)\n  PASS  unheld 0-byte lock -> RESIDUE, file untouched (RESIDUE consumers=0 commits_after_mtime=unknown)\n  PASS  flock-held lock -> HELD (HELD holder=pid-716131)\n34. a posture doc's gitleaks claim names its scan scope (CF-163 AC3)\n  PASS  posture docs name their scan scope\n  PASS  unscoped claim -> FAIL audit-scope\n  PASS  scoped claim -> OK\n35. node-create accepts and forwards --ref (CF-153)\n  PASS  --staged-files --ref master -> exit 0, same five-file staged set\n  PASS  ref 'master' crosses the transport as --ref 'master'\n  PASS  ref 're'lease' crosses the transport as --ref 're'\\''lease'\n36. remote shell payloads preserve data without executing it (CF-159)\n  PASS  cf159 node-create project payload is data, not code\n  PASS  cf159 positive control NODE_PROJECT=my proj's --project=my proj's\n  PASS  cf159 node-create port payload is data, not code\n  PASS  cf159 node-create harness payload is data, not code\n  PASS  cf159 node-create repo payload is data, not code\n  PASS  cf159 node-create ref payload is data, not code\n  PASS  cf159 node-create crier payload is data, not code\n  PASS  cf159 verify-node artifact payload is data, not code; digest intact\n  PASS  cf159 bunker_exec trusted command text preserves quoted values and literal pipelines\n  PASS  cf159-escaping all remote-command sites\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 The row's bound probe prints INJECTION_EXECUTED=no at the fix commit (was yes), every remote-command interpolation site is escaped, tests/selftest.sh carries a RED-at-pre-fix/GREEN-at-fix arm naming the row, and bash tests/selftest.sh prints SELFTEST: PASS.: (1) Bound probe: extracted CF-159.probe verbatim from .coding-hermes/board/tasks.jsonl and ran it. At HEAD 8b81369 it prints `payload= NODE_PROJECT='p'\\''; touch $HOME/PWNED; echo '\\''' ...` then `INJECTION_EXECUTED=no` (rc=0). Same probe against a git-archive of pre-fix 1fea92d prints `NODE_PROJECT='p'; touch $HOME/PWNED; echo ''` and `INJECTION_EXECUTED=yes` (rc=0) \u2014 RED->GREEN confirmed. (2) Escaping: scripts/lib.sh:54-58 adds shq() (verified: shq \"a'b\" -> 'a'\\''b', shq \"\" -> '', shq \"x y\" -> 'x y'); scripts/node-create.sh:78-83 quotes PROJECT/PORT/CRIER_URL/HARNESS/REPO/REF and :120-121 uses only the *_QUOTED forms; scripts/verify-node.sh:62 uses `sha256sum $(shq \"$ARTIFACT\")`. Remaining `bash -lc` sites (verify-node.sh:32,39; node-create.sh:108,114) are literal constant commands with no interpolation. scripts/lane_target.py:325 interpolates target.path into sh -lc but _check_remote_path (lane_target.py:111-118) rejects quotes/backticks/control chars and agent is validated by _USER_RE (:54). `bash -n $(git ls-files '*.sh')` rc=0. (3) Arm: tests/selftest.sh:1413-1533 section 36 'remote shell payloads preserve data without executing it (CF-159)' names the row, with the retained RED documented at :1415; pre-fix tree has 0 cf159 occurrences (grep -c = 0) and node-create.sh:118 interpolated '$PROJECT' raw, so the arm is RED there and GREEN here. (4) `bash tests/selftest.sh` at HEAD: EXIT=0, tail shows 'PASS  cf159-escaping all remote-command sites' and 'SELFTEST: PASS' (10 cf159 PASS lines).\nBound probe flips INJECTION_EXECUTED=yes at 1fea92d to no at 8b81369, every interpolated remote-command value now goes through shq, the CF-159 selftest arm exists and is RED pre-fix/GREEN at fix, and bash tests/selftest.sh exits 0 with SELFTEST: PASS.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 The row's bound probe prints INJECTION_EXECUTED=no at the fix commit (was yes), every remote-command interpolation site is escaped, tests/selftest.sh carries a RED-at-pre-fix/GREEN-at-fix arm naming the row, and bash tests/selftest.sh prints SELFTEST: PASS.: (1) Bound probe: extracted CF-159.probe verbatim from .coding-hermes/board/tasks.jsonl and ran it. At HEAD 8b81369 it prints `payload= NODE_PROJECT='p'\\''; touch $HOME/PWNED; echo '\\''' ...` then `INJECTION_EXECUTED=no` (rc=0). Same probe against a git-archive of pre-fix 1fea92d prints `NODE_PROJECT='p'; touch $HOME/PWNED; echo ''` and `INJECTION_EXECUTED=yes` (rc=0) \u2014 RED->GREEN confirmed. (2) Escaping: scripts/lib.sh:54-58 adds shq() (verified: shq \"a'b\" -> 'a'\\''b', shq \"\" -> '', shq \"x y\" -> 'x y'); scripts/node-create.sh:78-83 quotes PROJECT/PORT/CRIER_URL/HARNESS/REPO/REF and :120-121 uses only the *_QUOTED forms; scripts/verify-node.sh:62 uses `sha256sum $(shq \"$ARTIFACT\")`. Remaining `bash -lc` sites (verify-node.sh:32,39; node-create.sh:108,114) are literal constant commands with no interpolation. scripts/lane_target.py:325 interpolates target.path into sh -lc but _check_remote_path (lane_target.py:111-118) rejects quotes/backticks/control chars and agent is validated by _USER_RE (:54). `bash -n $(git ls-files '*.sh')` rc=0. (3) Arm: tests/selftest.sh:1413-1533 section 36 'remote shell payloads preserve data without executing it (CF-159)' names the row, with the retained RED documented at :1415; pre-fix tree has 0 cf159 occurrences (grep -c = 0) and node-create.sh:118 interpolated '$PROJECT' raw, so the arm is RED there and GREEN here. (4) `bash tests/selftest.sh` at HEAD: EXIT=0, tail shows 'PASS  cf159-escaping all remote-command sites' and 'SELFTEST: PASS' (10 cf159 PASS lines).\nBound probe flips INJECTION_EXECUTED=yes at 1fea92d to no at 8b81369, every interpolated remote-command value now goes through shq, the CF-159 selftest arm exists and is RED pre-fix/GREEN at fix, and bash tests/selftest.sh exits 0 with SELFTEST: PASS.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "The row's bound probe prints INJECTION_EXECUTED=no at the fix commit (was yes), every remote-command interpolation site is escaped, tests/selftest.sh carries a RED-at-pre-fix/GREEN-at-fix arm naming the row, and bash tests/selftest.sh prints SELFTEST: PASS.",
+                "status": "PASS",
+                "detail": "(1) Bound probe: extracted CF-159.probe verbatim from .coding-hermes/board/tasks.jsonl and ran it. At HEAD 8b81369 it prints `payload= NODE_PROJECT='p'\\''; touch $HOME/PWNED; echo '\\''' ...` then `INJECTION_EXECUTED=no` (rc=0). Same probe against a git-archive of pre-fix 1fea92d prints `NODE_PROJECT='p'; touch $HOME/PWNED; echo ''` and `INJECTION_EXECUTED=yes` (rc=0) \u2014 RED->GREEN confirmed. (2) Escaping: scripts/lib.sh:54-58 adds shq() (verified: shq \"a'b\" -> 'a'\\''b', shq \"\" -> '', shq \"x y\" -> 'x y'); scripts/node-create.sh:78-83 quotes PROJECT/PORT/CRIER_URL/HARNESS/REPO/REF and :120-121 uses only the *_QUOTED forms; scripts/verify-node.sh:62 uses `sha256sum $(shq \"$ARTIFACT\")`. Remaining `bash -lc` sites (verify-node.sh:32,39; node-create.sh:108,114) are literal constant commands with no interpolation. scripts/lane_target.py:325 interpolates target.path into sh -lc but _check_remote_path (lane_target.py:111-118) rejects quotes/backticks/control chars and agent is validated by _USER_RE (:54). `bash -n $(git ls-files '*.sh')` rc=0. (3) Arm: tests/selftest.sh:1413-1533 section 36 'remote shell payloads preserve data without executing it (CF-159)' names the row, with the retained RED documented at :1415; pre-fix tree has 0 cf159 occurrences (grep -c = 0) and node-create.sh:118 interpolated '$PROJECT' raw, so the arm is RED there and GREEN here. (4) `bash tests/selftest.sh` at HEAD: EXIT=0, tail shows 'PASS  cf159-escaping all remote-command sites' and 'SELFTEST: PASS' (10 cf159 PASS lines)."
+              }
+            ],
+            "summary": "Bound probe flips INJECTION_EXECUTED=yes at 1fea92d to no at 8b81369, every interpolated remote-command value now goes through shq, the CF-159 selftest arm exists and is RED pre-fix/GREEN at fix, and bash tests/selftest.sh exits 0 with SELFTEST: PASS.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-159\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 The row's bound probe prints INJECTION_EXECUTED=no at the fix commit (was yes), every remote-command interpolation site is escaped, tests/selftest.sh carries a RED-at-pre-fix/GREEN-at-fix arm naming the row, and bash tests/selftest.sh prints SELFTEST: PASS.: (1) Bound probe: extracted CF-159.probe verbatim from .coding-hermes/board/tasks.jsonl and ran it. At HEAD 8b81369 it prints `payload= NODE_PROJECT='p'\\''; touch $HOME/PWNED; echo '\\''' ...` then `INJECTION_EXECUTED=no` (rc=0). Same probe against a git-archive of pre-fix 1fea92d prints `NODE_PROJECT='p'; touch $HOME/PWNED; echo ''` and `INJECTION_EXECUTED=yes` (rc=0) \u2014 RED->GREEN confirmed. (2) Escaping: scripts/lib.sh:54-58 adds shq() (verified: shq \"a'b\" -> 'a'\\''b', shq \"\" -> '', shq \"x y\" -> 'x y'); scripts/node-create.sh:78-83 quotes PROJECT/PORT/CRIER_URL/HARNESS/REPO/REF and :120-121 uses only the *_QUOTED forms; scripts/verify-node.sh:62 uses `sha256sum $(shq \"$ARTIFACT\")`. Remaining `bash -lc` sites (verify-node.sh:32,39; node-create.sh:108,114) are literal constant commands with no interpolation. scripts/lane_target.py:325 interpolates target.path into sh -lc but _check_remote_path (lane_target.py:111-118) rejects quotes/backticks/control chars and agent is validated by _USER_RE (:54). `bash -n $(git ls-files '*.sh')` rc=0. (3) Arm: tests/selftest.sh:1413-1533 section 36 'remote shell payloads preserve data without executing it (CF-159)' names the row, with the retained RED documented at :1415; pre-fix tree has 0 cf159 occurrences (grep -c = 0) and node-create.sh:118 interpolated '$PROJECT' raw, so the arm is RED there and GREEN here. (4) `bash tests/selftest.sh` at HEAD: EXIT=0, tail shows 'PASS  cf159-escaping all remote-command sites' and 'SELFTEST: PASS' (10 cf159 PASS lines).\nBound probe flips INJECTION_EXECUTED=yes at 1fea92d to no at 8b81369, every interpolated remote-command value now goes through shq, the CF-159 selftest arm exists and is RED pre-fix/GREEN at fix, and bash tests/selftest.sh exits 0 with SELFTEST: PASS.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-04T08:40:43.103712",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-04T08:40:43.119722+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 13631,
+        "truncated": false,
+        "source": "git show 8b8136934b15"
+      }
+    ],
+    "task_id": "CF-159"
+  }
+}
