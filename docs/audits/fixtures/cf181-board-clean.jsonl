@@ -1,0 +1,1 @@
+{"id":"CF-009","title":"fixture: verdict commit is an ancestor of the ref","status":"complete","priority":"P4","complexity":1,"detail":{"evidence":[{"run_id":"fixture","ts":"2026-11-04T00:00:00Z","artifacts":["docs/audits/fixtures/cf181-verdict-on-ref.json"]}]}}
