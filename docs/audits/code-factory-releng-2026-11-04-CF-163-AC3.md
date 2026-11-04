@@ -202,3 +202,31 @@ was tagged, and no version scheme was invented.
 - Not done: CF-161/CF-120 (owner decisions), `master` retirement (CF-163 AC1, owner), the 7b pipefail
   fix (`CF-168`, filed), and any cleanup of the candidate's untracked residue (another lane's
   unpublished bundles).
+
+### Post-closeout observation — the candidate holds a foreign STAGED event that collides with this tick's `255`
+
+At `2026-11-04T02:03-05:00`, the registered candidate `/home/kara/code-factory` (HEAD `7400036`,
+the tip this tick published before its memory appendix) carried exactly **one** dirty path, staged in
+the index and not in the worktree:
+
+```
+M  .coding-hermes/board/events.jsonl   (+1 line)
++ {"id":255,"timestamp":"2026-11-04T06:57:46+00:00","event_type":"audit","task_id":"CF-167",
++  "actor":"docs-lane", … "tick":"code-factory-docs-2026-11-04-06-11-13" …}
+```
+
+Two consequences, neither repaired here:
+
+1. **It blocks a fast-forward.** The index is dirty, so the candidate stays behind the published tip
+   (1 behind at observation time). A lane does not fast-forward a checkout that holds another lane's
+   staged bytes, and it does not adopt or clean them either.
+2. **The id collides.** This tick published **event 255** (`audit`, CF-163, the DuckBrain record
+   binding) in `a0abbfe`. Committing the docs lane's staged line would mint a second `255` on the
+   published board, which `scripts/boardctl`'s duplicate-id gate and the suite's board arm both
+   reject — the next lane to write the board would inherit a red gate it did not cause.
+
+Disposition: **left untouched.** The docs lane's scheduler record for `code-factory-docs-2026-11-04-06-11-13`
+reads `failed`, so the staged line is likely orphaned. The actionable next step is for that lane — or
+the next lane that owns a board write — to renumber the line past `origin/main`'s maximum event id
+and run `bash scripts/boardctl validate` before committing. Untracked residue is unchanged
+(53 `.gitreins/history/**` paths). Writer census at this time: `CENSUS_EMPTY=1`.
