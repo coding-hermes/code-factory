@@ -1,0 +1,192 @@
+commit d27c499306026f75677f8c5dd465dd9e75c252d6
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Tue Nov 3 21:56:02 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Tue Nov 3 21:56:41 2026 -0500
+
+    board: file CF-153 — the create path cannot honour the remedy its own error prints
+    
+    scripts/node-create.sh has no --ref flag and forwards no ref, so the node-side
+    remedy it prints (`ref 'main' was not found; pass --ref <branch-or-tag>`) is a
+    flag the only documented create command rejects with `unknown arg: --ref`.
+    
+    Measured on a clean clone of origin/main c29c024 (arms re-checked against
+    f26a608; git diff --name-only -- scripts/ README.md = 0 files between them), and
+    re-run unchanged after rebinding onto 23c1c6d, the sibling's CF-126 fix:
+    
+      BUNKER_SERVER=no-such-server bash scripts/node-create.sh --project p \
+        --repo https://github.com/git/git --harness hermes --ref master
+      -> unknown arg: --ref   rc=2
+    
+      HOME=$(mktemp -d) bash scripts/project-node.sh --apply --layers 40 \
+        --project refproof --repo https://github.com/git/git
+      -> FAIL  repo_clone — ref 'main' was not found; pass --ref <branch-or-tag>
+    
+    README.md:80-81 offers `--ref <branch>` as what a non-main default branch needs;
+    project-node.sh:33/:53 support it; node-create.sh:56-67 has no such flag and :103
+    forwards only NODE_PROJECT and NODE_GATEWAY_PORT, so NODE_REF cannot cross either.
+    
+    Filing only: the repair is future work tracked by the pending row, not in this
+    commit. This diff touches the board and one audit file; no script and no README,
+    so the CF-126 fix on the base commit is unaffected by it.
+    
+    Walked under the family barrier (sibling lane code-factory status=running) from a
+    throwaway clone; the dirty candidate checkout was never read or written, and no
+    agent was spawned (the probe pins a nonexistent server).
+    
+    Addresses: CF-153
+---
+ .coding-hermes/board/events.jsonl                  |   1 +
+ .coding-hermes/board/tasks.jsonl                   |   1 +
+ .../code-factory-dogfood-2026-11-04-02-39-16.md    | 125 +++++++++++++++++++++
+ 3 files changed, 127 insertions(+)
+
+diff --git a/.coding-hermes/board/events.jsonl b/.coding-hermes/board/events.jsonl
+index 4aceaec..79be3c0 100644
+--- a/.coding-hermes/board/events.jsonl
++++ b/.coding-hermes/board/events.jsonl
+@@ -188,3 +188,4 @@
+ {"id":188,"timestamp":"2026-11-04T02:48:30+00:00","event_type":"task_completed","task_id":"CF-079","actor":"foreman","detail":"{\"status\":\"complete\"}","tick_number":null}
+ {"id":189,"timestamp":"2026-11-04T02:48:53+00:00","event_type":"audit","task_id":"CF-079","actor":"docs","detail":"{\n  \"tick\": \"code-factory-docs-2026-11-04-02-39-16\",\n  \"lane\": \"docs\",\n  \"repo_remote\": \"git@github.com:coding-hermes/code-factory.git\",\n  \"published_tip_read\": \"1384404ec4d1fb56962d026e2b57fef7cf26df3e\",\n  \"judged_commit\": \"2c48149a7778730cc2593e16755a7138df306144\",\n  \"transport\": \"fresh clone of origin/main, pushed HEAD:main; the registered checkout carried four concurrent sibling lanes, so the lane used the clone transport and disclosed it\",\n  \"row_closed\": {\n    \"id\": \"CF-079\",\n    \"claim\": \"specs/NODE.md layer 30 claimed 'a crier identity file (600) and a pull worker'; layer 90 claimed 'one round trip whose digest is recomputed on the control host'\",\n    \"correction\": \"layer 30 names the crier identity file and its mode 600; layer 90 names the node manifest; a new paragraph hands the unshipped round trip to CF-004 and the file-existence weakness to CF-068 and records the node-side worker as not measured\",\n    \"verdict_run\": \"3202393f\",\n    \"verdict_commit_bound\": true\n  },\n  \"commands_tested\": [\n    \"grep -n 'pull worker' specs/NODE.md -> no output, 0 matching lines, rc 1\",\n    \"HOME=$H ./scripts/project-node.sh --check --project p --layers 30 -> FAIL crier_identity, NODE: FAIL (1), rc 1 (no worker row)\",\n    \"same arm with crier.json mode 600 -> PASS crier_identity, PASS crier_mode 600, NODE: PASS, rc 0\",\n    \"same arm with crier.json mode 644 -> PASS crier_identity, FAIL crier_mode 644 (must be 600), NODE: FAIL (1), rc 1\",\n    \"HOME=$H ./scripts/project-node.sh --check --project p -> '[90] manifest' plus 'manifest is written only when every layer passes', NODE: FAIL (4), no digest row\",\n    \"grep -c digest scripts/project-node.sh -> 0\",\n    \"bash tests/selftest.sh -> SELFTEST: PASS, rc 0 (at 1384404, at e657d98 and at the rebased landing tree)\",\n    \"bash scripts/boardctl validate -> RESULT: OK (54 warnings), rc 0\",\n    \"gitreins task complete CF-079-DOC1 -> tier1 PASS, tier2 PASS, overall PASS, verdict bound to 2c48149\",\n    \"git push gh HEAD:main -> 2c48149, then 860cc78 for the verdict bundle; parity 0/0 twice\"\n  ],\n  \"could_not_verify\": [\n    \"whether a bus worker runs on any node: not measured, the ladder has no probe and this lane had no node access\",\n    \"the control-host digest round trip: no shipped command, CF-004 owns it\",\n    \"layer 00's reachability cell: live-network claim, not re-measured here (CF-124)\",\n    \"layer 40's clone claim: read from 6f75e28 and the cell only, not re-run\"\n  ],\n  \"claims_corrected\": 1,\n  \"claims_unverifiable\": 4,\n  \"push_verification\": \"git rev-list --left-right --count gh/main...HEAD -> 0 0 after both commits\",\n  \"ci\": \"gh run list --repo coding-hermes/code-factory -> [] (no workflows in the tree; the documented healthy state, gate is tests/selftest.sh plus the gitreins battery)\",\n  \"memory\": \"recorded in the code-factory DuckBrain namespace under this tick id\",\n  \"report\": \"docs/audits/code-factory-docs-2026-11-04.md\"\n}","tick_number":null}
+ {"id":190,"timestamp":"2026-11-04T02:51:22+00:00","event_type":"audit","task_id":"CF-079","actor":"docs","detail":"{\"tick\":\"code-factory-docs-2026-11-04-02-39-16\",\"memory\":{\"namespace\":\"code-factory\",\"key\":\"/code-factory/tick/docs/2026-11-04-0239\",\"record_id\":\"c656d6f8-f138-4d21-ba44-2dc47f5d3506\",\"readback\":\"content match, HTTP 200\"},\"note\":\"receipt written after event 189; namespace field null on the record route is the known shape, content equality is the proof\"}","tick_number":null}
++{"id":191,"timestamp":"2026-11-04T02:55:17+00:00","event_type":"task_created","task_id":"CF-153","actor":"dogfood","detail":"{\"id\":\"CF-153\",\"status\":\"pending\",\"title\":\"P3 \\u2014 the create path cannot honour the remedy its own error prints: node-create.sh has no --ref flag, so a repo whose de\"}","tick_number":null}
+diff --git a/.coding-hermes/board/tasks.jsonl b/.coding-hermes/board/tasks.jsonl
+index 3b46ecf..d62b453 100644
+--- a/.coding-hermes/board/tasks.jsonl
++++ b/.coding-hermes/board/tasks.jsonl
+@@ -124,3 +124,4 @@
+ {"id":"CF-150","title":"P3 \u2014 the documented node create path can never start its gateway: no step in node-create.sh, project-node.sh or install-hermes.sh stages dashboard.basic_auth, and no doc says how","status":"pending","priority":"P3","complexity":3,"created_at":"2026-11-04T02:43:03Z","updated_at":"2026-11-04T02:43:03Z","detail":null,"reasoning":"Dogfood walk 2026-11-04 (tick code-factory-duckbrain-dogfood-2026-11-04-02-20-15) from a clean copy of origin/main @ 1da7f24, control host only. scripts/harness/install-hermes.sh:94 greps ~/.hermes/config.yaml for basic_auth and :100 refuses gateway_start when it is absent; nothing in the create path writes that file (grep -c basic_auth and grep -c hermes/config.yaml are 0 for scripts/node-create.sh and scripts/project-node.sh), and node-create.sh --staged-files stages only project-node.sh, lib.sh, disk_floor.py, reclaim_disk.py and harness/install-<harness>.sh. Measured, verbatim transcript in docs/audits/cf-dogfood-2026-11-04-gateway-apply.txt: fresh HOME, env -i, HERMES_PYTHON_BIN=/usr/bin/python3.12, `bash scripts/harness/install-hermes.sh --apply` prints `PASS  install \u2014 Hermes Agent v0.19.0 (2026.7.20)` followed by `FAIL  gateway_start \u2014 refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml` and `HERMES: FAIL (4)` rc=1. docs/OPERATIONS.md:80 states the requirement but names no command that stages the block; the README's step 3 ('make one') does not mention it. Consequence: a reader following README step 3 ends NODE INCOMPLETE, verify-node.sh gateway_reachable cannot pass, and the Status table's round trip (CF-004) is unreachable by the documented path. Distinct from CF-071 (that row is about the gate's substring validation being too LENIENT once a config exists; this row is that no documented step produces the config at all).","acceptance_criteria":"0. Reproduce on the current tree (from the repo root): `jq -r 'select(.id==\"CF-150\").probe' .coding-hermes/board/tasks.jsonl > p.sh && bash p.sh` prints `installer_basic_auth=3 create_path_basic_auth=scripts/node-create.sh:0,scripts/project-node.sh:0, create_path_config_yaml=scripts/node-create.sh:0,scripts/project-node.sh:0,`, prints the `scripts/harness/install-hermes.sh:100` refusal line, and exits 0 today.\n1. One documented, scripted step stages a node `~/.hermes/config.yaml` carrying a non-empty `dashboard.basic_auth` block, with the credential supplied as a mode-600 file (never an argument, per AGENTS.md rule 8), so `install-hermes.sh --apply` in a fresh HOME reaches the launch path instead of the refusal: the run prints a launch or reachability row for `gateway_start` rather than `refused: a public bind needs dashboard.basic_auth`.\n2. Negative control in the same run: with the staged block removed, `--apply` still prints the exact refusal wording and exits nonzero, so the new step is a producer and not a weakened gate.\n3. `README.md` (step 3 or the Status table) and `docs/OPERATIONS.md` name who stages the block and with which command, and state what a freshly created node is expected to reach; the text matches the command the tree ships.\n4. `bash tests/selftest.sh` prints `SELFTEST: PASS` at the fixed tip, with a numbered section that fails on the pre-fix tree (fixture: staged config present -> gate passes; absent -> named refusal), and `scripts/boardctl validate` prints `RESULT: OK`.","probe":"echo \"installer_basic_auth=$(grep -c basic_auth scripts/harness/install-hermes.sh) create_path_basic_auth=$(grep -c basic_auth scripts/node-create.sh scripts/project-node.sh | tr '\\n' ',') create_path_config_yaml=$(grep -c hermes/config.yaml scripts/node-create.sh scripts/project-node.sh | tr '\\n' ',') \"; grep -n 'refused: a public bind needs dashboard.basic_auth' scripts/harness/install-hermes.sh; echo rc=0"}
+ {"id":"CF-151","title":"P4 — README Status row 3's cited command measures the CONTROL host's key, so the row's 'missing' state can never be contradicted there","status":"pending","priority":"P4","complexity":3,"created_at":"2026-11-04T02:43:34Z","updated_at":"2026-11-04T02:43:34Z","detail":{"fingerprint":"d99436d0e7b59bf5412c23c9fe8deecdcb13bc068c2761e3afe86082a2d2fb0b","renumbered_from":"CF-150","renumbered_reason":"sibling dogfood commit e657d98 filed CF-150 on the published board first; this row moved to the next free id rather than splitting the closure"},"reasoning":"README Status row 3 (Node inference credential) states '**missing**' and cites `HERMES_PYTHON_BIN=python3.12 scripts/harness/install-hermes.sh --check` -> `FAIL inference_key`. Measured at d02916e on 2026-11-04: on this control host the same command prints 5 gate rows and `PASS  inference_key — a provider key is present in ~/.hermes/.env`, so the row's cited command contradicts the row's own state cell on any keyed host. The row describes a node's credential; the command inspects the control host's ~/.hermes/.env. Nothing in the tree measures a NODE's inference credential, so the state can neither be reproduced nor refuted by the command the status table promises.","acceptance_criteria":"1. Reproduce at the fixed tree: print Status row 3 verbatim, then run HERMES_PYTHON_BIN=python3.12 scripts/harness/install-hermes.sh --check on a host whose ~/.hermes/.env carries a provider key and show 'PASS  inference_key' (5 gate rows, rc 1 from the port arm) beside the row's '**missing**' claim.\n2. Reword row 3 so its re-run cell measures what the State cell asserts: either a node-scoped command (executed on the node, e.g. through the bunker client) that fails when the node has no credential, or an explicit statement that the state is a node-state not measurable from the control host plus the command that would measure it. A control-host key check may stay, but must be labelled as such.\n3. If any new check is added it carries a fixture proving it can FAIL (AGENTS.md rule 2), and a tests/selftest.sh arm binds the rewording so the row cannot silently regain a command that measures a different host.\n4. bash tests/selftest.sh prints SELFTEST: PASS; scripts/boardctl validate prints RESULT: OK."}
+ {"id":"CF-152","title":"P3 — verify-node.sh certifies the auth gate from /tmp/node-status.json, a fixed path a second run rewrites: an OPEN gateway prints auth_gate PASS","status":"pending","priority":"P3","complexity":2,"created_at":"2026-11-04T02:58:00Z","updated_at":"2026-11-04T02:58:00Z","detail":{"evidence":[{"run_id":"code-factory-docs-qa-2026-11-04-02-39-16","ts":"2026-11-04T02:58:00Z","artifacts":["~/.hermes/stand-in/docs/code-factory/qa-2026-11-03-evidence.md"]}]},"reasoning":"Re-run by the QA lane at origin/main 2c48149 (scripts/verify-node.sh md5 6b370f4f6c365cd806bdcb3058e1fb7f). CF-077 closed the STATUS-CODE domain of verify-node.sh's auth arms (only 401/302/403 may pass) and reproduces green across 401/302/403/200/404/000/500; nothing tested where the body it greps comes from. scripts/verify-node.sh:42 writes the /api/status body to the fixed path /tmp/node-status.json and :45-47 greps that same path, so the graded bytes are not bound to the response this run received. node-create.sh:110 calls verify-node.sh from the control host, and the fleet already carries the sibling defect CF-123 ('two gate runs at one HEAD red each other') for shared host artifacts, so a second run — or any other writer — can substitute the body between the script's own curl and its grep. The probe below holds the response constant (auth_required:false, an OPEN gateway) and varies only whether a second writer rewrites the file: arm A prints 'FAIL  auth_gate … auth_required:true not measured' and VERIFY: FAIL (1) (correct), arm B prints 'PASS  auth_gate — auth_required:true' and VERIFY: PASS on the same response, certifying an open node. Boundary vs CF-077: the refusal CODE set is correct today; the body's provenance is unverified. Boundary vs CF-127 (install-hermes.sh pipes into a fixed /tmp/hermes-install.log): that row is diagnosability of an install log; this one is a security verdict sourced from another run's bytes.","acceptance_criteria":"0. Reproduce on the current tree: the probe below prints armA_rc=1 with 'FAIL  auth_gate — /api/status -> 200; auth_required:true not measured' and armB_rc=0 with 'PASS  auth_gate — auth_required:true (a public bind must not be open)' plus 'VERIFY: PASS', although the /api/status body this run received says auth_required:false in both arms.\n1. The /api/status body is captured to a path unique to the run (mktemp) or consumed without a second reader, so no other process can substitute the bytes being graded; after the fix arm B prints 'FAIL  auth_gate' and 'VERIFY: FAIL (1)'.\n2. tests/selftest.sh carries one falsifiable arm per shape: (a) HTTP 200 with auth_required:false and no interleave FAILs auth_gate; (b) HTTP 200 with auth_required:true PASSes it; (c) a file left at the path the script uses cannot green (a); reverting the unique-path change reds (c) with the named row.\n3. bash tests/selftest.sh prints SELFTEST: PASS at the fixed tip.","probe":"d=$(mktemp -d); mkdir -p \"$d/bin\"; printf '%s\\n' '#!/bin/sh' 'case \"$*\" in *ALIVE*) echo \"ALIVE probe-host\";; *\"hostname -I\"*) echo 127.0.0.1;; *) :;; esac' > \"$d/bin/bunker\"; printf '%s\\n' '#!/bin/sh' 'out=\"\"; prev=\"\"; for a in \"$@\"; do [ \"$prev\" = \"-o\" ] && out=\"$a\"; prev=\"$a\"; done' \"case \\\"\\$*\\\" in *api/status*) [ -n \\\"\\$out\\\" ] && printf '%s' '{\\\"auth_required\\\":false}' > \\\"\\$out\\\"; [ \\\"\\${SECOND:-0}\\\" = 1 ] && printf '%s' '{\\\"auth_required\\\":true}' > \\\"\\$out\\\"; printf 200;; *api/system/stats*) printf 401;; *) printf 000;; esac\" > \"$d/bin/curl\"; chmod +x \"$d/bin/bunker\" \"$d/bin/curl\"; rm -f /tmp/node-status.json; echo ARM_A_no_second_writer:; SECOND=0 PATH=\"$d/bin:$PATH\" BUNKER_SERVER=p bash scripts/verify-node.sh --agent qa-probe --server p | grep -E 'auth_gate|VERIFY'; echo \"armA_rc=${PIPESTATUS[0]}\"; rm -f /tmp/node-status.json; echo ARM_B_shared_path_rewritten:; SECOND=1 PATH=\"$d/bin:$PATH\" BUNKER_SERVER=p bash scripts/verify-node.sh --agent qa-probe --server p | grep -E 'auth_gate|VERIFY'; echo \"armB_rc=${PIPESTATUS[0]}\"; rm -f /tmp/node-status.json; rm -rf \"$d\""}
++{"id":"CF-153","title":"P3 \u2014 the create path cannot honour the remedy its own error prints: node-create.sh has no --ref flag, so a repo whose default branch is not 'main' can never be created by README step 3","status":"pending","priority":"P3","complexity":2,"created_at":"2026-11-04T02:55:17Z","updated_at":"2026-11-04T02:55:17Z","detail":{"evidence":[{"run_id":"code-factory-dogfood-2026-11-04-02-39-16","ts":"2026-11-04T03:20:00Z","artifacts":["docs/audits/code-factory-dogfood-2026-11-04-02-39-16.md"]}]},"reasoning":"Dogfood walk 2026-11-04 (tick code-factory-dogfood-2026-11-04-02-39-16) at the published tip c29c024, under the family barrier (sibling lane code-factory status=running), from a throwaway clone: `git diff --name-only f26a608 c29c024 -- scripts/ README.md` = 0 files, so the arms hold at both tips.\n\nARM A (the control-host create path), verbatim:\n  $ BUNKER_SERVER=no-such-server bash scripts/node-create.sh --project p --repo https://github.com/git/git --harness hermes --ref master\n  unknown arg: --ref\n  rc=2\n\nARM B (the node-side entry point, layer 40 only, fresh HOME):\n  $ HOME=$(mktemp -d) bash scripts/project-node.sh --apply --layers 40 --project refproof --repo https://github.com/git/git\n  [40] repo\n    ..    cloning https://github.com/git/git @ main\n    FAIL  repo_clone \u2014 ref 'main' was not found; pass --ref <branch-or-tag>\n  NODE: FAIL (1)\n\nThe node's failure text names `--ref` as the remedy; the only documented control-host command that creates a node rejects that exact flag, and does not say which command accepts it. Mechanism, from the tree: scripts/project-node.sh:33 `REF=\"${NODE_REF:-main}\"` and :53 `--ref) REF=\"$2\"` (the node side supports the selection); scripts/node-create.sh:56-67 parses --project/--repo/--harness/--agent/--ttl/--port/--staged-files only, so --ref falls to the `*)` arm at :65; :103 forwards exactly NODE_PROJECT and NODE_GATEWAY_PORT into the node's `bash -lc` and passes --project/--harness/--repo, never a ref, so NODE_REF cannot cross either and there is no second route. README.md:80-81 states \"`--ref` defaults to `main`, so a public repo whose default branch is named differently needs `--ref <branch>`\". Consequence: a repo whose default branch is not main (git.git, linux, a large share of GitHub) cannot be turned into a node by README step 3, and the operator's only feedback is a rejection of the flag the previous error told them to use.\n\nNot a duplicate, checked row by row on the c29c024 board: CF-034 (complete) is --ref on project-node.sh plus clone-failure wording, not the control-host create path having no flag; CF-126 (pending) is CRIER_URL not handed to the node \u2014 same control\u2192node handoff family, different variable, different layer (00 vs 40), different remedy; CF-125 (pending) is --harness typo vs unmeasured adapter; CF-041 (complete) is Quick start env-ordering and a nonexistent --agent.","acceptance_criteria":"0. Reproduce on the current tree from the repo root: the probe below prints `unknown arg: --ref` with arm_create_rc=2 and prints `FAIL  repo_clone \u2014 ref 'main' was not found; pass --ref <branch-or-tag>` in the layer-40 arm, and leaves no agent behind (BUNKER_SERVER is deliberately a nonexistent server).\n1. scripts/node-create.sh accepts a ref selection \u2014 a `--ref <branch-or-tag>` flag, or documented NODE_REF forwarding \u2014 and passes it through to the node's `project-node.sh --ref`, so a node created for a public repo whose default branch is not `main` reaches `PASS  repo_clone` naming the branch it cloned instead of `ref 'main' was not found`.\n2. The self-contradiction is closed in the same commit, one of two ways, and the commit message says which: the flag exists and README.md:80-81's advice is reachable from step 3, or README.md:80-81 stops offering `--ref` as the create-path remedy and names the command that does take it.\n3. Negative control: on the pre-fix tree the probe's two arms disagree exactly as recorded here (a command tells the operator to pass a flag; the command the operator is told to run rejects it). The new gate arm must fail on that tree.\n4. `bash scripts/node-create.sh --staged-files` stays at its shipped five-file set and rc=0 (the ref must not change the staged set), and a failed create still prints the explicit-server destroy command naming the agent it spawned.\n5. `bash tests/selftest.sh` prints `SELFTEST: PASS` at the fixed tip with the new arm visible as a named PASS row (AGENTS.md rule 2), and `bash scripts/boardctl validate` prints `RESULT: OK`.","probe":"cd \"$(git rev-parse --show-toplevel)\" || exit 99; echo ARM_create_path:; BUNKER_SERVER=no-such-server bash scripts/node-create.sh --project p --repo https://github.com/git/git --harness hermes --ref master 2>&1 | head -2; echo \"arm_create_rc=${PIPESTATUS[0]}\"; echo ARM_node_layer40:; H=$(mktemp -d); HOME=\"$H\" bash scripts/project-node.sh --apply --layers 40 --project p --repo https://github.com/git/git 2>&1 | tail -3; rm -rf \"$H\"; echo \"pre-fix: 'unknown arg: --ref' (rc=2) + \\\"ref 'main' was not found; pass --ref <branch-or-tag>\\\"\""}
+diff --git a/docs/audits/code-factory-dogfood-2026-11-04-02-39-16.md b/docs/audits/code-factory-dogfood-2026-11-04-02-39-16.md
+new file mode 100644
+index 0000000..929d70a
+--- /dev/null
++++ b/docs/audits/code-factory-dogfood-2026-11-04-02-39-16.md
+@@ -0,0 +1,125 @@
++# code-factory dogfood walk — 2026-11-04 (tick code-factory-dogfood-2026-11-04-02-39-16)
++
++Lane: `code-factory-dogfood`. Job: walk the documented path as a user would, from a clean state,
++and report where the docs and the behaviour disagree.
++
++Published tip walked: **c29c024**. The first arms ran at f26a608;
++`git diff --name-only f26a608 c29c024 -- scripts/ README.md` returns **0 files**, so every
++measurement below holds at c29c024 too. Only board, docs and verdict files moved between the two.
++A sibling then landed `23c1c6d fix(node-create): forward CRIER_URL into the node and refuse an
++unset bus before spawn` (CF-126) while this row was being filed; the row was rebound onto that tip
++and **both arms were re-run at 23c1c6d, unchanged** (`unknown arg: --ref`, rc=2; `NODE: FAIL (1)`
++with `ref 'main' was not found`). This commit's diff touches only the board and this audit file —
++no script — so the CF-126 fix is not part of it and its own claim is unaffected.
++
++Result this tick: **one new row filed, CF-153**; no defect found in the other legs walked.
++
++## 0. Identity and policy position
++
++- Locator `/home/kara/code-factory`: `realpath` = `git rev-parse --show-toplevel` = the locator.
++  Root equality PASS. Branch `main` attached; no `MERGE_HEAD`/`REBASE_HEAD`/`CHERRY_PICK_HEAD`/
++  `REVERT_HEAD`/sequencer. `.git/AUTO_MERGE` (41 bytes, tree d2834400…, 2026-11-03 21:49:57) is
++  residue from the merge that produced f26a608, recorded and left in place.
++- `.coding-hermes/board/.lock`: 0 bytes, mtime 2026-11-03 07:40, `fuser` → **no holder**,
++  `grep -rn 'flock\|fcntl' scripts/boardctl*` → **no consumer**. By this repo's own test that is
++  residue, not an ownership barrier.
++- Porcelain `--untracked-files=all`: 51 paths, every one `??` — `.coding-hermes/board/.lock` plus
++  50 `.gitreins/history/**` bundles. **Zero tracked edits.**
++- **Family barrier:** sibling lane `code-factory` is `status=running` in this same checkout
++  (`latest_tick.id=code-factory-2026-11-04-02-39-16`) and landed four commits on origin/main
++  during this walk; `code-factory-docs` was also `running` at close. Nothing in this tick read
++  project state from the dirty candidate: the walk ran from `git archive origin/main` plus one
++  clean `git clone`, and the board row was filed in that clone and pushed to the published remote.
++
++## 1. Quick start, verbatim, with the two exported values the README tells you to set
++
++README.md:17-30, run under `env -i` with a fresh empty HOME and the README's own example values.
++
++| Step | Command | Result | Names the missing value? |
++|---|---|---|---|
++| 1 | `scripts/bunker-server-install.sh --check` | rc=1, `RESULT: FAIL (2)` | Yes — `FAIL bunker_config — missing (…/config.yaml)`, `FAIL server_reachable — your-bunker-server did not answer` |
++| 2 | `./scripts/project-node.sh --check --project myproject` | rc=1, `NODE: FAIL (4)` | Yes — `reach:http://crier.example:8767/health -> 000`, `python`, `crier_identity`, `repo absent (pass --repo to clone)` |
++| 3 | `scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes` | rc=1 | Yes — `FAIL spawn — bunker: server "your-bunker-server" not found in config` |
++
++With the variables set as README.md:19-20 instructs, all three reach a checker and name the value
++they lack. CF-145 owns the other env state (variables unset → `${VAR:?}` aborts at
++`bunker-server-install.sh:14` and `node-create.sh:70`); that abort does not reproduce when the
++operator does what the README says, so this walk does not re-file it.
++
++Step 2 output ordering, not filed: `PASS disk_floor — 5 GiB from role-default` prints before the
++`node provisioning — project=…` header.
++
++## 2. Filed: CF-153 — the create path cannot honour the remedy its own error prints
++
++```
++$ BUNKER_SERVER=no-such-server bash scripts/node-create.sh --project p \
++      --repo https://github.com/git/git --harness hermes --ref master
++unknown arg: --ref
++rc=2
++```
++
++```
++$ HOME=$(mktemp -d) bash scripts/project-node.sh --apply --layers 40 --project refproof \
++      --repo https://github.com/git/git
++[40] repo
++  ..    cloning https://github.com/git/git @ main
++  FAIL  repo_clone — ref 'main' was not found; pass --ref <branch-or-tag>
++NODE: FAIL (1)
++```
++
++The node names `--ref` as the remedy; the control-host command the README gives for creating a node
++rejects that flag. From the tree: `project-node.sh:33` reads `NODE_REF` (default `main`) and `:53`
++accepts `--ref`; `node-create.sh:56-67` parses no ref at all, and `:103` forwards only
++`NODE_PROJECT` and `NODE_GATEWAY_PORT` into the node, so neither the flag nor the variable can
++cross. `README.md:80-81` tells the reader `--ref <branch>` is what a non-`main` default branch
++needs.
++
++Both arms above are the row's own probe, run from the repo root; it prints
++`unknown arg: --ref`, `arm_create_rc=2`, and `NODE: FAIL (1)` on the current tree.
++
++## 3. Node-creation leg — host answered, leg not driven
++
++`bunker info dogfood-reachability-probe-nonexistent --server bunker-las-03` →
++`bunker: get agent: not_found` ⇒ the server is reachable. The real-node create was still not
++driven: CF-126 already carries a full real-node transcript for the `CRIER_URL` handoff (2026-11-03,
++01eb0cf), and a second create here would spend a remote agent to re-measure a row that is already
++pending. CF-075 (disk_floor.py not staged) is **verified fixed** without a host:
++`scripts/node-create.sh --staged-files` prints exactly `project-node.sh`, `lib.sh`,
++`disk_floor.py`, `reclaim_disk.py`, `harness/install-hermes.sh`, rc=0.
++
++## 4. Gate
++
++- `bash tests/selftest.sh` at c29c024 in the `git clone`: **`SELFTEST: PASS`**, rc=0. The 19
++  `  FAIL` lines in the output are the named negative-fixture rows, which is the point of the gate.
++- The same gate in the `git archive` copy: `SELFTEST: FAIL (1)` — §17's pre-fix detector control
++  needs history and prints `fatal: not a git repository` → `FAIL pre-fix source unavailable`.
++  That is a property of the archive transport, **not** a product defect; it is why this audit's
++  gate reading comes from the clone.
++- `scripts/boardctl validate` with no fleet `boardctl` on PATH: rc=127,
++  `FAIL boardctl: coding-hermes boardctl executable not found on PATH` plus a pointer to
++  `docs/BOARD.md`. Matches the layout table's "fails closed" claim — no finding.
++- `scripts/boardctl validate` after the filing: `RESULT: OK (56 warning(s))`, the `probe`-key
++  warnings being this board's documented shape.
++
++## 5. Filing invariants (quoted from the appender)
++
++`append_board_rows.py` against the clean clone reported:
++
++```
++delta=0 width=3 assigning ['CF-153']
++rows 126 -> 127 (+1)
++prefix_bytes_identical=True unique_ids=127 duplicates=0
++readback CF-153 status=pending probe_len=537 ac_len=1598
++events=191 last=task_created task=CF-153
++```
++
++Next free id was re-verified against the published board immediately before the append
++(max `CF-` id = 152, no duplicate ids).
++
++## 6. What a new user would have done next
++
++Nothing on this path is silent — that is the repo's real strength. The trap is narrower and worse:
++the messages are right, but the next command does not exist. Step 3 cannot take `--ref`, and the
++node's own failure hands the operator a flag only the in-node script understands. A stranger with a
++`master`-default repo would try `--ref` on step 3, read `unknown arg`, and conclude the factory
++cannot host their repository.
