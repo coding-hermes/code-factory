@@ -42,9 +42,12 @@ _GIT_CONFIG = {
 }
 
 
+GIT_BIN = shutil.which("git") or "git"
+
+
 def _git(cwd: str, *args: str) -> None:
     subprocess.run(
-        ["git", "-C", cwd, *args],
+        [GIT_BIN, "-C", cwd, *args],
         check=True,
         capture_output=True,
         env={

@@ -37,6 +37,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
@@ -219,9 +220,12 @@ def parse(raw: str) -> Target:
     )
 
 
+GIT_BIN = shutil.which("git") or "git"
+
+
 def _git(root: str, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["git", "-C", root, *args],
+        [GIT_BIN, "-C", root, *args],
         capture_output=True,
         text=True,
         timeout=30,
