@@ -76,6 +76,24 @@ if [ -n "$ARTIFACT" ]; then
 | `README.md`: adapter `--check` prints five gate rows when a binary is found | `HERMES_PYTHON_BIN=python3.12 bash scripts/harness/install-hermes.sh --check` | `PASS python`, `FAIL binary — host-provided … (not installed by this adapter)`, `FAIL version — 0.22.5+3030.g770a952 != pin 0.19.0`, `FAIL port — nothing on :10800`, `PASS inference_key`, `HERMES: FAIL (3)`, rc 1 |
 | `README.md`: the 13 satellites are nested under the root lane | live census `curl -s "http://127.0.0.1:9090/api/v1/projects?limit=500"` | 19 `code-factory*` rows; every satellite carries `parent=code-factory`; only `code-factory-qa` is `enabled=false` |
 
+## Judge round (verdicts preserved verbatim, instrument and merit)
+
+Three GitReins runs graded this work; keeping all three is the point:
+
+1. `607247dd` — **FAIL, instrument.** Tier 1 completed lint and secrets but the `tests` step was cut
+   at its 120 s step budget while the host sat at loadavg 18.33 (the same `bash tests/selftest.sh`
+   takes 29 s measured immediately afterwards, and returns `SELFTEST: PASS`). Tier 2 content was
+   positive. Not a statement about the change.
+2. `ccdd5597` — **FAIL, merit, narrow.** Tier 1 green. Tier 2 verified every other leg and refuted
+   one: `docs/DESIGN.md` step 2 cited `grep -rniE 'envelope|ack|inbox|lease|redeliver' scripts/` as
+   returning "four hits", but that verbatim form returns **12** hits (the extra ones are substrings:
+   `back`, `backend`, `fall back`). Only the narrow form — `grep -rniE 'envelope|\back\b|inbox|lease|redeliver' scripts/ --include=*.sh --include=*.py`
+   — returns four, which is the form this audit file quotes. The cited command was corrected to the
+   reproducing form (with the `\b` and `--include` filters spelled out in the prose) and the judge was
+   re-run.
+3. The run that closes the row: `.gitreins/history/2026-11-04/<dir>/verdict.json` next to this file's
+   closure record — `task_id` `CF-202-DOC1`, `commit` = the pushed implementation SHA, `passed` true.
+
 ## Claims found false but NOT fixed here (owned elsewhere)
 
 - `docs/OPERATIONS.md:90` cites `scripts/bunker-server-install.sh:56` for the `residue` warn row —
