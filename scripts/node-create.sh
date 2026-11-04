@@ -67,7 +67,10 @@ while [ $# -gt 0 ]; do
 done
 if [ "$LIST_STAGED" -eq 1 ]; then staged_files; exit $?; fi
 STAGED="$(staged_files)" || exit 1
-: "${SERVER:?set BUNKER_SERVER to your bunker server name}"
+if [ -z "$SERVER" ]; then
+  bad "server_declared" "BUNKER_SERVER unset — no agent host to create the node on"
+  incomplete
+fi
 [ -z "$PROJECT" ] && { echo "usage: $0 --project P --repo URL [--harness H] [--agent ID]"; exit 2; }
 
 b=$(have bunker) || { echo "bunker client missing" >&2; exit 1; }

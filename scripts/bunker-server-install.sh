@@ -11,9 +11,16 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=lib.sh
 . "$HERE/lib.sh"
 
-SERVER="${BUNKER_SERVER:?set BUNKER_SERVER to your bunker server name}"
+SERVER="${BUNKER_SERVER:-}"
 JSON=0
 [ "${1:-}" = "--json" ] && JSON=1
+
+if [ -z "$SERVER" ]; then
+  bad "server_declared" "BUNKER_SERVER unset — the client has no server to talk to"
+  say ""
+  say "RESULT: FAIL ($FAILED)"
+  exit 1
+fi
 
 say "bunker server: $SERVER"
 

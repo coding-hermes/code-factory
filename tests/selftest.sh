@@ -1004,5 +1004,33 @@ else
 fi
 rm -rf "$tmpd"
 
+# ch:trace row=CF-145 spec=README.md#quick-start test=tests/selftest.sh::quick-start-names-bunker-server doc=README.md prompt=prompts/readme.md evidence=tests/selftest.sh §31 witness=none:local-fixture verdict=none:open-until-judged commit=none:self-referential-hash memory=none:no-lane-role-token
+say "31. the Quick start control-host commands name BUNKER_SERVER in a check row (CF-145)"
+# README's fresh-host promise: with no bunker server, no Crier and no repo, all three Quick
+# start commands reach their checkers and fail with the missing value named. The first and
+# third used to die in ${BUNKER_SERVER:?} expansion before any checker ran — the value was
+# named, but as a bash abort ("line N:") that no PASS/FAIL parser can see. The fixture pins
+# PATH and HOME so the arm measures the script, not the host's tools (section 2's pattern).
+tmpd=$(mktemp -d)
+for arm in bunker-server-install node-create; do
+  case "$arm" in
+    bunker-server-install) args=(--check); closing='RESULT: FAIL (' ;;
+    node-create) args=(--project myrepo --repo https://github.com/you/myrepo --harness hermes); closing='NODE INCOMPLETE (' ;;
+  esac
+  out=$(env -i PATH=/usr/local/bin:/usr/bin:/bin HOME="$tmpd/home" \
+    /bin/bash "$HERE/scripts/$arm.sh" "${args[@]}" 2>&1); rc=$?
+  if [ "$rc" -ne 0 ] \
+    && printf '%s\n' "$out" | grep -Eq '^  FAIL  .*BUNKER_SERVER' \
+    && printf '%s\n' "$out" | grep -Fq "$closing" \
+    && ! printf '%s\n' "$out" | grep -Eq 'line [0-9]+:' \
+    && ! printf '%s\n' "$out" | grep -Fq 'unbound variable'; then
+    say "  PASS  $arm without BUNKER_SERVER -> named FAIL row, exit $rc"
+  else
+    say "  FAIL  $arm aborted or did not name BUNKER_SERVER (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out"
+  fi
+done
+rm -rf "$tmpd"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
