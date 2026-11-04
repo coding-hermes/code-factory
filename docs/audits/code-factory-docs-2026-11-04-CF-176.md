@@ -64,6 +64,11 @@ $ grep -rc 'every row enabled' docs/*.md README.md specs/*.md | grep -v ':0$' ||
 NO_MATCHES_ANY_DOC
 ```
 
+That glob covers the top level of `docs/`, `specs/` and the README — the shipped prose an operator
+reads. This audit file is under `docs/audits/` and deliberately quotes the removed sentence and the
+grep command above, so a recursive `grep -rc … docs` will report hits here and nowhere else
+(`grep -c 'every row enabled' docs/audits/code-factory-docs-2026-11-04-CF-176.md` -> 6).
+
 Census (the read-back the corrected prose prescribes), run at 2026-11-04T03:2x-05:00 against the
 live scheduler DB:
 
