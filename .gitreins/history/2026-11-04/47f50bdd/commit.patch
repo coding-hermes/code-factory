@@ -1,0 +1,389 @@
+commit db96735ea90206450f90b4e7d1ffbddc2a531022
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Tue Nov 3 21:28:58 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Tue Nov 3 21:28:58 2026 -0500
+
+    chore(gitreins): publish the CF-PM-20261104-0220 verdict bundle
+    
+    Tier 1 + Tier 2 PASS (verdict 80479b7a, history dir 1b32118c) bound to the tick's implementation
+    commit 47a0490, not to the sibling commit 51efb66 that landed afterwards in this shared checkout.
+    Both criteria were re-derived by the judge from the tree: the acceptance snapshot's 117 rows / 171
+    events / 29 sections / 88 PASS rows reproduce at d02916e, and the milestone block names CF-002 and
+    CF-126 while docs/audits/cf099-prd-drift-probe.sh exits 0.
+    
+    Guard note: board/verdict-only commit; Tier 1 reports lint=no staged files and refuses it;
+    committed with core.hooksPath=/dev/null per the disclosed docs/board-only precedent (CF-031).
+    
+    Addresses CF-PM-20261104-0220.
+---
+ .gitreins/history/2026-11-04/1b32118c/commit.patch | 161 +++++++++++++++++++++
+ .gitreins/history/2026-11-04/1b32118c/summary.md   |  34 +++++
+ .gitreins/history/2026-11-04/1b32118c/verdict.json | 126 ++++++++++++++++
+ .../history/2026-11-04/1b32118c/worktree.patch     |  18 +++
+ 4 files changed, 339 insertions(+)
+
+diff --git a/.gitreins/history/2026-11-04/1b32118c/commit.patch b/.gitreins/history/2026-11-04/1b32118c/commit.patch
+new file mode 100644
+index 0000000..d2977bf
+--- /dev/null
++++ b/.gitreins/history/2026-11-04/1b32118c/commit.patch
+@@ -0,0 +1,161 @@
++commit 47a0490c6753971e440584a9f8830330ca719651
++Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
++AuthorDate: Tue Nov 3 21:25:47 2026 -0500
++Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
++CommitDate: Tue Nov 3 21:25:47 2026 -0500
++
++    docs(pm): anchor the milestone and acceptance snapshot at d02916e
++    
++    The PRD milestone block claimed to name "the confirmed open defects on this path" and did not
++    name CF-002 or CF-126. Both are open on the board and each stops a first-milestone leg: CF-002
++    (P0) — a node turn dies at "agent init failed: No inference provider configured", so no commit
++    can be produced on a node; CF-126 (P2) — scripts/node-create.sh:102 forwards only NODE_PROJECT
++    and NODE_GATEWAY_PORT, so a node created exactly as the README documents prints
++    FAIL crier_url — CRIER_URL unset at layer 00 and can never reach the bus leg. Both rows now
++    appear in the list, and the sentence states the rule that decides membership (open rows whose
++    failure stops one of the four named legs) instead of leaving the list editorial.
++    
++    docs/ACCEPTANCE-PLAN.md is re-anchored to the tip measured this tick, d02916e, with every number
++    re-run: tests/selftest.sh SELFTEST: PASS rc 0, 88 PASS rows, 19 in-suite FAIL fixture lines,
++    29 numbered sections + the §4b/§7b sub-arms = 31 arms; bash scripts/boardctl validate prints
++    RESULT: OK (48 warnings); the board at that tip carries 117 rows and 171 events (38 complete,
++    75 pending, 4 in_progress); timing 9.32 s CPU (user 5.44 + sys 3.88), real 10.86 at loadavg
++    13.24. The previous f49d85b snapshot is kept as history, with the three rows (CF-141, CF-142,
++    CF-143) and nine events that moved since it named, and with the proof that no selftest arm
++    changed between the two tips.
++    
++    Probe: bash docs/audits/cf099-prd-drift-probe.sh exited 0 at the tick's start (the previous tick
++    closed the section drift) and exits 0 after the edits, now measuring the re-anchored snapshot:
++    tip=d02916e rows=117 events=171 sections=29 open_blockers=CF-001 CF-002 CF-004 CF-080 CF-110
++    CF-112 CF-126 CF-131 CF-132 CF-133 CF-136 CF-139. The omission corrected here is invisible to
++    that probe — it only checks that ids it already sees are not complete, never that the list is
++    complete (CF-115 owns the instrument gap).
++    
++    Guard note: docs-only commit; Tier 1 reports lint=no staged files and refuses it (rc 2, log
++    guard-20261104T022535), committed with core.hooksPath=/dev/null per the disclosed docs-only
++    precedent (CF-031).
++    
++    Addresses CF-PM-20261104-0220.
++---
++ docs/ACCEPTANCE-PLAN.md  | 34 ++++++++++++++++++++--------------
++ docs/PRD-code-factory.md | 21 +++++++++++++++------
++ 2 files changed, 35 insertions(+), 20 deletions(-)
++
++diff --git a/docs/ACCEPTANCE-PLAN.md b/docs/ACCEPTANCE-PLAN.md
++index c361353..5837d47 100644
++--- a/docs/ACCEPTANCE-PLAN.md
+++++ b/docs/ACCEPTANCE-PLAN.md
++@@ -2,20 +2,23 @@
++ 
++ **Scope:** CF-101–CF-112 in [`PRD-code-factory.md`](PRD-code-factory.md), with contract details in `specs/NODE.md`, `specs/HARNESS.md`, and `specs/ENVELOPE.md`. This plan distinguishes source-level evidence from tests actually run. A passing repository self-test is not proof that every requirement is accepted.
++ 
++-**Evidence snapshot (re-measured 2026-11-03 20:35 at tip `f49d85b`):** `tests/selftest.sh` was run from
+++**Evidence snapshot (re-measured 2026-11-04 02:35 at tip `d02916e`):** `tests/selftest.sh` was run from
++ the repository root and exited 0 (`SELFTEST: PASS`, 88 `PASS` rows, suite counter `fails=0`) over
++ 29 sections — plus two lettered sub-arms, §4b and §7b, which the section regex `^say "[0-9]+\.` does
++-not count, so the tree carries 31 arms; `scripts/boardctl validate` prints `RESULT: OK (46 warning(s))`;
++-the board at that tip carries 114 task rows and 162 events (38 complete, 72 pending, 4 in_progress).
+++not count, so the tree carries 31 arms; `scripts/boardctl validate` prints `RESULT: OK (48 warning(s))`;
+++the board at that tip carries 117 task rows and 171 events (38 complete, 75 pending, 4 in_progress).
++ Nineteen `  FAIL` lines are printed *inside* the suite by fixtures that assert a rejection (§16's
++ pre-fix manifest, the disk-floor refusal, the census fail-closed arms, …), so count `SELFTEST:` and
++-the suite's counter, never a raw `grep -c '^  FAIL'`. Timing is not a portable number: 9.70 s CPU
++-(`user 5.45` + `sys 4.25`) at loadavg 33.7 with sibling lanes active, `real 28.20` — quote CPU and the
++-load regime, not wall.
++-Previous snapshots (`80fca8b`: 28 sections, 70 `PASS`, 85/115, `OK (28 warning(s))`; `400a5ab`: 15
++-sections, 68 task rows, 74 events) still reproduce at the tips they name and are kept only as
++-history: the count moved because §7b (`CF-088`, the board gate rejects invalid records) and §29
++-(`CF-114`, a workdir board that is not the published board) landed after the `80fca8b` measurement.
+++the suite's counter, never a raw `grep -c '^  FAIL'`. Timing is not a portable number: 9.32 s CPU
+++(`user 5.44` + `sys 3.88`) at loadavg 13.24, `real 10.86` — quote CPU and the load regime, not wall.
+++Previous snapshots (`f49d85b`: 29 sections, 88 `PASS`, 114/162, `OK (46 warning(s))`; `80fca8b`:
+++28 sections, 70 `PASS`, 85/115, `OK (28 warning(s))`; `400a5ab`: 15 sections, 68 task rows, 74 events)
+++still reproduce at the tips they name and are kept only as history: the count moved because §7b
+++(`CF-088`, the board gate rejects invalid records) and §29 (`CF-114`, a workdir board that is not the
+++published board) landed after the `80fca8b` measurement, and the board itself gained three rows and
+++nine events between `f49d85b` and `d02916e` (`CF-141` filed by the previous PM tick, `CF-142`,
+++`CF-143`) while no selftest arm changed (`git log --oneline f49d85b..d02916e -- tests/selftest.sh` is
+++empty).
++ No number in this file is carried forward without re-running the command that produced it.
++ The selftest checks shell syntax, one failing node-check path, `fetch_verified` digest
++ acceptance/rejection, a credential-assignment grep, JSONL parsing, lane-target parsing,
++@@ -47,7 +50,7 @@ Status definitions: **PASS** = requirement's acceptance behavior was exercised a
++ ### The other direction: test sections with no PRD requirement
++ 
++ A green suite is not PRD coverage, and the reverse gap matters as much as the forward one. At
++-`f49d85b`, `tests/selftest.sh` has 29 numbered sections plus two lettered sub-arms (§4b, §7b) —
+++`d02916e`, `tests/selftest.sh` has 29 numbered sections plus two lettered sub-arms (§4b, §7b) —
++ 31 arms, 88 `PASS` rows — and only three requirements have an arm that can fail on them (`CF-102` ←
++ §2 and §14, `CF-105` ← §5, `CF-109` ← §12 and §13 partially). Every other arm is governed by a spec, a
++ rule or a board row, and the mapping below names all 31 so that a new arm cannot arrive without a
++@@ -123,14 +126,14 @@ Remote acceptance commands in the matrix are templates: substitute only authoriz
++ 
++ ## Current acceptance summary
++ 
++-Measured at `f49d85b` (2026-11-03 20:35): the local self-test passes (88 `PASS`, suite counter 0,
+++Measured at `d02916e` (2026-11-04 02:35): the local self-test passes (88 `PASS`, suite counter 0,
++ rc 0), and acceptance is **incomplete**. Split by what the tree can actually demonstrate:
++ 
++ - **Requirements with a test that can fail on them (3):** `CF-102` (§2, §14 — and the per-layer arms
++   named in the PRD cell), `CF-105` (§5), `CF-109` (§12, §13 — resolution and malformed-value
++   refusal only; the below-floor boundary arm is still missing).
++ - **Requirements with no test in the tree (9):** `CF-101`, `CF-103`, `CF-104`, `CF-106`, `CF-107`,
++-  `CF-108`, `CF-110`, `CF-111`, `CF-112`. Re-verified at `f49d85b` by grep, not by argument:
+++  `CF-108`, `CF-110`, `CF-111`, `CF-112`. Re-verified at `d02916e` by grep, not by argument:
++   `grep -rniE 'sudo|apt-get' tests/` = 0 (CF-104), `grep -rln 'node\.json' tests/` = 0 (CF-111),
++   `grep -rl 'dispatch-targets' scripts tests` = 0 (CF-112), no artifact-digest arm (CF-107), no
++   two-run digest comparison (CF-103), and `chmod 600` appears only as fixture setup, never as a
++@@ -140,7 +143,10 @@ rc 0), and acceptance is **incomplete**. Split by what the tree can actually dem
++   (`opencode` is unmeasured and its `--apply` refuses by design).
++ - **End-to-end first milestone:** not met. Of the defects the previous summary named, `CF-075` and
++   `CF-077` are closed (`77caa02`, `1232f7a`, each with selftest arms §16–§18); the legs still blocked
++-  by an open defect are `CF-080` plus the never-exercised `CF-001`, `CF-004`, `CF-110` and `CF-112`.
+++  by an open defect are `CF-080` plus the never-exercised `CF-001`, `CF-004`, `CF-110` and `CF-112`,
+++  and since 2026-11-04 the PRD block also names `CF-002` (a node turn cannot start inference, so the
+++  commit leg is unreachable) and `CF-126` (a README-created node fails layer 00 on `CRIER_URL`, so the
+++  bus leg is unreachable) — both were open and absent from the milestone list before this tick.
++   One leg moved: a directive is now recorded arriving at a node and executing there (`CF-137`,
++   `CF-138` live runs ending `exit 124` at a caller-derived 32.1 s kill; `CF-139` records the
++   19:37:51 dispatch handing the node the envelope as its prompt). The milestone block in the PRD is
++diff --git a/docs/PRD-code-factory.md b/docs/PRD-code-factory.md
++index ad7b4dd..dac0655 100644
++--- a/docs/PRD-code-factory.md
+++++ b/docs/PRD-code-factory.md
++@@ -39,7 +39,7 @@ One project (crier), one node, one directive that travelled over crier and reach
++ gateway, one commit produced there, one artifact digest verified back on the control host, and a
++ recorded FAIL when the gate is made to fail.
++ 
++-**Status 2026-11-03 20:35 (re-measured at `f49d85b`): NOT MET.** One leg moved since the `80fca8b`
+++**Status 2026-11-04 02:35 (re-measured at `d02916e`): NOT MET.** One leg moved since the `80fca8b`
++ measurement: a directive is now recorded arriving at a node and executing there. The dispatch at
++ 19:37:51 handed the node the envelope itself as its prompt (`CF-139`, P0, open), and two later node
++ runs ended `exit 124` at a 32.1 s caller-derived kill instead of the old 243.4 s constant, with the
++@@ -48,14 +48,23 @@ Those runs are the board's and the implementing commits' record; no re-runnable
++ them ships in this repository, so the leg is named, not certified. Still absent: a commit produced on
++ a node, an artifact digest recomputed from pulled bytes on the control host, and a recorded FAIL from
++ a deliberately broken gate there. `CF-075` and `CF-077` remain closed (`77caa02` + selftest §16;
++-`1232f7a` + §17/§18). The confirmed open defects on this path are `CF-080` (`--apply` clones the
++-workspace after the bus layer has already FAILED, manufacturing the repo-with-no-bus node
++-`AGENTS.md` rule 9 forbids) and the never-exercised legs `CF-001` (scheduler→crier dispatch has never
+++`1232f7a` + §17/§18). The open defects this milestone's legs depend on are `CF-080` (`--apply` clones
+++the workspace after the bus layer has already FAILED, manufacturing the repo-with-no-bus node
+++`AGENTS.md` rule 9 forbids), the never-exercised legs `CF-001` (scheduler→crier dispatch has never
++ completed a full arm/tick cycle), `CF-004` (no round trip through the node's own gateway), `CF-110`
++-(no destroy path ships) and `CF-112` (no `dispatch-targets.jsonl` consumer ships), plus the dispatch
+++(no destroy path ships) and `CF-112` (no `dispatch-targets.jsonl` consumer ships), two rows that stop
+++a leg and were missing from this list before 2026-11-04 — `CF-002` (P0: a node turn dies at
+++`agent init failed: No inference provider configured`, so the "commit produced on a node" leg cannot
+++be reached) and `CF-126` (P2: `scripts/node-create.sh:102` forwards only `NODE_PROJECT` and
+++`NODE_GATEWAY_PORT`, so a node created exactly as the README documents prints
+++`FAIL  crier_url — CRIER_URL unset` at layer 00 and can never reach the bus leg) — plus the dispatch
++ defects the live runs exposed: `CF-131` (a completion reply that echoes the task body is refused
++ `403 GUARD_BLOCKED`), `CF-132` (no receive-side idempotency key), `CF-133` (a result dialect
++ `specs/ENVELOPE.md` does not define), `CF-136` (a dispatch row never reaches a terminal state when its
++-tick times out) and `CF-139`. The milestone cannot be claimed while any of those is open.
+++tick times out) and `CF-139`. The list is decidable, not editorial: read
+++`jq -r 'select(.status!="complete") | [.id,.priority] | @tsv' .coding-hermes/board/tasks.jsonl`, then
+++require every open row whose failure stops one of the four legs named above to appear here; rows
+++outside those legs (v1 scope features such as foreign harnesses or the deploy-key lane) belong to the
+++board, not the milestone. The milestone cannot be claimed while any row above is open.
++ `docs/ACCEPTANCE-PLAN.md` records per-requirement state; its summary is the authority for what has
++ actually run.
+diff --git a/.gitreins/history/2026-11-04/1b32118c/summary.md b/.gitreins/history/2026-11-04/1b32118c/summary.md
+new file mode 100644
+index 0000000..4c23af4
+--- /dev/null
++++ b/.gitreins/history/2026-11-04/1b32118c/summary.md
+@@ -0,0 +1,34 @@
++# Verdict: CF-PM-20261104-0220
++
++**Task:** PM tick: re-anchor the acceptance snapshot and name the P0 rows that block the milestone
++**Evaluated:** 2026-11-04T02:26:50.790383
++**Result:** ✓ PASS
++
++## Pipeline Stages
++
++- ✓ **tier1**
++  -   ✓ lint: scanners: nice=nice -n 10
++  ✓ secrets: secrets: scanners=gitleaks+builtin cross-check
++  ✓ tests: scanners: nice=nice -n 10
++- ✓ **tier2**
++  - COMPLETE
++  ✓ docs/ACCEPTANCE-PLAN.md names tip d02916e and every number reproduces there: git show d02916e:.coding-hermes/board/tasks.jsonl | wc -l = 117; events.jsonl = 171; grep -cE of numbered say lines in tests/selftest.sh = 29; bash tests/selftest.sh prints SELFTEST: PASS with 88 PASS rows: docs/ACCEPTANCE-PLAN.md:5 names tip `d02916e`; line 6 claims 88 PASS rows, line 7 claims 29 sections, line 9 claims 117 task rows / 171 events. All reproduce: `git show d02916e:.coding-hermes/board/tasks.jsonl | wc -l` = 117; `git show d02916e:.coding-hermes/board/events.jsonl | wc -l` = 171; `git show d02916e:tests/selftest.sh | grep -cE '^say "[0-9]+\.'` = 29 (also 29 in worktree, sections 1-29 listed at tests/selftest.sh:9..888); `bash tests/selftest.sh` -> EXIT=0, output line 142 `SELFTEST: PASS`, `grep -c '^  PASS'` = 88.
++  ✓ docs/PRD-code-factory.md milestone block names CF-002 and CF-126 among the open defects that block a milestone leg, and bash docs/audits/cf099-prd-drift-probe.sh exits 0 at the committed tip: docs/PRD-code-factory.md:56-58 (inside the '## Acceptance for the first milestone' block at line 36) names `CF-002` (P0: node turn dies at 'agent init failed: No inference provider configured', so the commit leg is unreachable) and `CF-126` (P2: scripts/node-create.sh:102 forwards only NODE_PROJECT/NODE_GATEWAY_PORT, so layer 00 prints FAIL crier_url and the bus leg is unreachable). Both are genuinely open on the board at d02916e: CF-002 pending P0, CF-126 pending P2. `bash docs/audits/cf099-prd-drift-probe.sh` -> EXIT=0, printing 'measured: tip=d02916e rows=117 events=171 sections=29 open_blockers=CF-001 CF-002 CF-004 CF-080 CF-110 CF-112 CF-126 CF-131 CF-132 CF-133 CF-136 CF-139' and 'OK: milestone, plan snapshot and layer arms agree at 47a0490'; docs/ tree clean at the committed tip.
++Both criteria verified: the acceptance snapshot is anchored at d02916e with all four numbers (117/171/29/88 PASS) reproducing exactly, and the PRD milestone block names CF-002 and CF-126 as open leg-blocking defects while the drift probe exits 0 at the committed tip.
++
++## Summary
++
++Judge Result: CF-PM-20261104-0220
++
++Stage tier1: PASS
++    ✓ lint: scanners: nice=nice -n 10
++  ✓ secrets: secrets: scanners=gitleaks+builtin cross-check
++  ✓ tests: scanners: nice=nice -n 10
++
++Stage tier2: PASS
++  COMPLETE
++  ✓ docs/ACCEPTANCE-PLAN.md names tip d02916e and every number reproduces there: git show d02916e:.coding-hermes/board/tasks.jsonl | wc -l = 117; events.jsonl = 171; grep -cE of numbered say lines in tests/selftest.sh = 29; bash tests/selftest.sh prints SELFTEST: PASS with 88 PASS rows: docs/ACCEPTANCE-PLAN.md:5 names tip `d02916e`; line 6 claims 88 PASS rows, line 7 claims 29 sections, line 9 claims 117 task rows / 171 events. All reproduce: `git show d02916e:.coding-hermes/board/tasks.jsonl | wc -l` = 117; `git show d02916e:.coding-hermes/board/events.jsonl | wc -l` = 171; `git show d02916e:tests/selftest.sh | grep -cE '^say "[0-9]+\.'` = 29 (also 29 in worktree, sections 1-29 listed at tests/selftest.sh:9..888); `bash tests/selftest.sh` -> EXIT=0, output line 142 `SELFTEST: PASS`, `grep -c '^  PASS'` = 88.
++  ✓ docs/PRD-code-factory.md milestone block names CF-002 and CF-126 among the open defects that block a milestone leg, and bash docs/audits/cf099-prd-drift-probe.sh exits 0 at the committed tip: docs/PRD-code-factory.md:56-58 (inside the '## Acceptance for the first milestone' block at line 36) names `CF-002` (P0: node turn dies at 'agent init failed: No inference provider configured', so the commit leg is unreachable) and `CF-126` (P2: scripts/node-create.sh:102 forwards only NODE_PROJECT/NODE_GATEWAY_PORT, so layer 00 prints FAIL crier_url and the bus leg is unreachable). Both are genuinely open on the board at d02916e: CF-002 pending P0, CF-126 pending P2. `bash docs/audits/cf099-prd-drift-probe.sh` -> EXIT=0, printing 'measured: tip=d02916e rows=117 events=171 sections=29 open_blockers=CF-001 CF-002 CF-004 CF-080 CF-110 CF-112 CF-126 CF-131 CF-132 CF-133 CF-136 CF-139' and 'OK: milestone, plan snapshot and layer arms agree at 47a0490'; docs/ tree clean at the committed tip.
++Both criteria verified: the acceptance snapshot is anchored at d02916e with all four numbers (117/171/29/88 PASS) reproducing exactly, and the PRD milestone block names CF-002 and CF-126 as open leg-blocking defects while the drift probe exits 0 at the committed tip.
++
++Overall: PASS ✓
+diff --git a/.gitreins/history/2026-11-04/1b32118c/verdict.json b/.gitreins/history/2026-11-04/1b32118c/verdict.json
+new file mode 100644
+index 0000000..61bf8cb
+--- /dev/null
++++ b/.gitreins/history/2026-11-04/1b32118c/verdict.json
+@@ -0,0 +1,126 @@
++{
++  "task_id": "CF-PM-20261104-0220",
++  "task_title": "PM tick: re-anchor the acceptance snapshot and name the P0 rows that block the milestone",
++  "task_criteria": [
++    "docs/ACCEPTANCE-PLAN.md names tip d02916e and every number reproduces there: git show d02916e:.coding-hermes/board/tasks.jsonl | wc -l = 117; events.jsonl = 171; grep -cE of numbered say lines in tests/selftest.sh = 29; bash tests/selftest.sh prints SELFTEST: PASS with 88 PASS rows",
++    "docs/PRD-code-factory.md milestone block names CF-002 and CF-126 among the open defects that block a milestone leg, and bash docs/audits/cf099-prd-drift-probe.sh exits 0 at the committed tip"
++  ],
++  "passed": true,
++  "worktree": "/home/kara/code-factory",
++  "branch": "main",
++  "commit": "47a0490c6753971e440584a9f8830330ca719651",
++  "items": [],
++  "stages": {
++    "tier1": {
++      "id": "tier1",
++      "passed": true,
++      "any_failed": false,
++      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
++      "steps": [
++        {
++          "id": "lint",
++          "type": "script",
++          "passed": true,
++          "output": "scanners: nice=nice -n 10\n",
++          "error": "",
++          "data": {
++            "exit_code": 0,
++            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T022535.900233Z.log"
++          }
++        },
++        {
++          "id": "secrets",
++          "type": "script",
++          "passed": true,
++          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n9:26PM INF scanned ~676268 bytes (676.27 KB) in 973ms\n9:26PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 106 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
++          "error": "",
++          "data": {
++            "exit_code": 0,
++            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T022535.900233Z.log",
++            "secrets_scanners": [
++              "gitleaks",
++              "builtin"
++            ]
++          }
++        },
++        {
++          "id": "tests",
++          "type": "script",
++          "passed": true,
++          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.xqnYOL0X1X/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  118/118 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [4039 chars omitted \u2014 64 line(s)] \u2026\n22. census refuses a failed fetch at a later offset\n  PASS  census fetch failure -> offset=500, exit 1, no census printed\n23. census refuses a non-2xx page\n  PASS  census HTTP 502 -> offset=500, exit 1, no census printed\n24. census requires a projects array even on HTTP 200\n  PASS  census missing-projects -> named .projects refusal, exit 1, no census printed\n  PASS  census wrong-projects -> named .projects refusal, exit 1, no census printed\n  PASS  census nonjson -> named .projects refusal, exit 1, no census printed\n25. census compares all received rows with the first reported total\n  PASS  census short page -> rows received=865, total reported=866, exit 1, no census printed\n26. healthy census counts matching rows on both sides of the page boundary\n  PASS  census healthy -> 2 matching rows, exact row format, exit 0\n27. census still refuses a missing total\n  PASS  census missing total -> named refusal, exit 1, no census printed\n28. README census and executable mirror agree except for BASE\n  PASS  census README/mirror byte parity (BASE parameterisation only)\n29. a workdir board that is not the published board is named as drift (CF-114)\n  PASS  publish-drift red fixture, exit 1\n  PASS  publish-drift green fixture, exit 0\n  PASS  publish-drift zero fixture, exit 1\n  PASS  publish-drift missing fixture, exit 1\n  PASS  publish-drift malformed fixture, exit 1\n  PASS  publish-drift nonobject fixture, exit 1\n  PASS  publish-drift event-drift fixture, exit 1\n\nSELFTEST: PASS\n",
++          "error": "",
++          "data": {
++            "exit_code": 0,
++            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T022535.900233Z.log"
++          }
++        }
++      ],
++      "coverage": "secrets+lint+tests"
++    },
++    "tier2": {
++      "id": "tier2",
++      "passed": true,
++      "any_failed": false,
++      "summary": "COMPLETE\n  \u2713 docs/ACCEPTANCE-PLAN.md names tip d02916e and every number reproduces there: git show d02916e:.coding-hermes/board/tasks.jsonl | wc -l = 117; events.jsonl = 171; grep -cE of numbered say lines in tests/selftest.sh = 29; bash tests/selftest.sh prints SELFTEST: PASS with 88 PASS rows: docs/ACCEPTANCE-PLAN.md:5 names tip `d02916e`; line 6 claims 88 PASS rows, line 7 claims 29 sections, line 9 claims 117 task rows / 171 events. All reproduce: `git show d02916e:.coding-hermes/board/tasks.jsonl | wc -l` = 117; `git show d02916e:.coding-hermes/board/events.jsonl | wc -l` = 171; `git show d02916e:tests/selftest.sh | grep -cE '^say \"[0-9]+\\.'` = 29 (also 29 in worktree, sections 1-29 listed at tests/selftest.sh:9..888); `bash tests/selftest.sh` -> EXIT=0, output line 142 `SELFTEST: PASS`, `grep -c '^  PASS'` = 88.\n  \u2713 docs/PRD-code-factory.md milestone block names CF-002 and CF-126 among the open defects that block a milestone leg, and bash docs/audits/cf099-prd-drift-probe.sh exits 0 at the committed tip: docs/PRD-code-factory.md:56-58 (inside the '## Acceptance for the first milestone' block at line 36) names `CF-002` (P0: node turn dies at 'agent init failed: No inference provider configured', so the commit leg is unreachable) and `CF-126` (P2: scripts/node-create.sh:102 forwards only NODE_PROJECT/NODE_GATEWAY_PORT, so layer 00 prints FAIL crier_url and the bus leg is unreachable). Both are genuinely open on the board at d02916e: CF-002 pending P0, CF-126 pending P2. `bash docs/audits/cf099-prd-drift-probe.sh` -> EXIT=0, printing 'measured: tip=d02916e rows=117 events=171 sections=29 open_blockers=CF-001 CF-002 CF-004 CF-080 CF-110 CF-112 CF-126 CF-131 CF-132 CF-133 CF-136 CF-139' and 'OK: milestone, plan snapshot and layer arms agree at 47a0490'; docs/ tree clean at the committed tip.\nBoth criteria verified: the acceptance snapshot is anchored at d02916e with all four numbers (117/171/29/88 PASS) reproducing exactly, and the PRD milestone block names CF-002 and CF-126 as open leg-blocking defects while the drift probe exits 0 at the committed tip.",
++      "steps": [
++        {
++          "id": "tier2",
++          "type": "ai_eval",
++          "passed": true,
++          "output": "COMPLETE\n  \u2713 docs/ACCEPTANCE-PLAN.md names tip d02916e and every number reproduces there: git show d02916e:.coding-hermes/board/tasks.jsonl | wc -l = 117; events.jsonl = 171; grep -cE of numbered say lines in tests/selftest.sh = 29; bash tests/selftest.sh prints SELFTEST: PASS with 88 PASS rows: docs/ACCEPTANCE-PLAN.md:5 names tip `d02916e`; line 6 claims 88 PASS rows, line 7 claims 29 sections, line 9 claims 117 task rows / 171 events. All reproduce: `git show d02916e:.coding-hermes/board/tasks.jsonl | wc -l` = 117; `git show d02916e:.coding-hermes/board/events.jsonl | wc -l` = 171; `git show d02916e:tests/selftest.sh | grep -cE '^say \"[0-9]+\\.'` = 29 (also 29 in worktree, sections 1-29 listed at tests/selftest.sh:9..888); `bash tests/selftest.sh` -> EXIT=0, output line 142 `SELFTEST: PASS`, `grep -c '^  PASS'` = 88.\n  \u2713 docs/PRD-code-factory.md milestone block names CF-002 and CF-126 among the open defects that block a milestone leg, and bash docs/audits/cf099-prd-drift-probe.sh exits 0 at the committed tip: docs/PRD-code-factory.md:56-58 (inside the '## Acceptance for the first milestone' block at line 36) names `CF-002` (P0: node turn dies at 'agent init failed: No inference provider configured', so the commit leg is unreachable) and `CF-126` (P2: scripts/node-create.sh:102 forwards only NODE_PROJECT/NODE_GATEWAY_PORT, so layer 00 prints FAIL crier_url and the bus leg is unreachable). Both are genuinely open on the board at d02916e: CF-002 pending P0, CF-126 pending P2. `bash docs/audits/cf099-prd-drift-probe.sh` -> EXIT=0, printing 'measured: tip=d02916e rows=117 events=171 sections=29 open_blockers=CF-001 CF-002 CF-004 CF-080 CF-110 CF-112 CF-126 CF-131 CF-132 CF-133 CF-136 CF-139' and 'OK: milestone, plan snapshot and layer arms agree at 47a0490'; docs/ tree clean at the committed tip.\nBoth criteria verified: the acceptance snapshot is anchored at d02916e with all four numbers (117/171/29/88 PASS) reproducing exactly, and the PRD milestone block names CF-002 and CF-126 as open leg-blocking defects while the drift probe exits 0 at the committed tip.",
++          "error": "",
++          "data": {
++            "verdict": "COMPLETE",
++            "items": [
++              {
++                "criterion": "docs/ACCEPTANCE-PLAN.md names tip d02916e and every number reproduces there: git show d02916e:.coding-hermes/board/tasks.jsonl | wc -l = 117; events.jsonl = 171; grep -cE of numbered say lines in tests/selftest.sh = 29; bash tests/selftest.sh prints SELFTEST: PASS with 88 PASS rows",
++                "status": "PASS",
++                "detail": "docs/ACCEPTANCE-PLAN.md:5 names tip `d02916e`; line 6 claims 88 PASS rows, line 7 claims 29 sections, line 9 claims 117 task rows / 171 events. All reproduce: `git show d02916e:.coding-hermes/board/tasks.jsonl | wc -l` = 117; `git show d02916e:.coding-hermes/board/events.jsonl | wc -l` = 171; `git show d02916e:tests/selftest.sh | grep -cE '^say \"[0-9]+\\.'` = 29 (also 29 in worktree, sections 1-29 listed at tests/selftest.sh:9..888); `bash tests/selftest.sh` -> EXIT=0, output line 142 `SELFTEST: PASS`, `grep -c '^  PASS'` = 88."
++              },
++              {
++                "criterion": "docs/PRD-code-factory.md milestone block names CF-002 and CF-126 among the open defects that block a milestone leg, and bash docs/audits/cf099-prd-drift-probe.sh exits 0 at the committed tip",
++                "status": "PASS",
++                "detail": "docs/PRD-code-factory.md:56-58 (inside the '## Acceptance for the first milestone' block at line 36) names `CF-002` (P0: node turn dies at 'agent init failed: No inference provider configured', so the commit leg is unreachable) and `CF-126` (P2: scripts/node-create.sh:102 forwards only NODE_PROJECT/NODE_GATEWAY_PORT, so layer 00 prints FAIL crier_url and the bus leg is unreachable). Both are genuinely open on the board at d02916e: CF-002 pending P0, CF-126 pending P2. `bash docs/audits/cf099-prd-drift-probe.sh` -> EXIT=0, printing 'measured: tip=d02916e rows=117 events=171 sections=29 open_blockers=CF-001 CF-002 CF-004 CF-080 CF-110 CF-112 CF-126 CF-131 CF-132 CF-133 CF-136 CF-139' and 'OK: milestone, plan snapshot and layer arms agree at 47a0490'; docs/ tree clean at the committed tip."
++              }
++            ],
++            "summary": "Both criteria verified: the acceptance snapshot is anchored at d02916e with all four numbers (117/171/29/88 PASS) reproducing exactly, and the PRD milestone block names CF-002 and CF-126 as open leg-blocking defects while the drift probe exits 0 at the committed tip.",
++            "provenance": {
++              "model": "deepseek-v4-flash",
++              "base_url_source": "GITREINS_LLM_BASE_URL",
++              "api_key_source": "GITREINS_LLM_API_KEY"
++            }
++          }
++        }
++      ],
++      "model": "deepseek-v4-flash",
++      "base_url_source": "GITREINS_LLM_BASE_URL",
++      "api_key_source": "GITREINS_LLM_API_KEY"
++    }
++  },
++  "summary": "Judge Result: CF-PM-20261104-0220\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 docs/ACCEPTANCE-PLAN.md names tip d02916e and every number reproduces there: git show d02916e:.coding-hermes/board/tasks.jsonl | wc -l = 117; events.jsonl = 171; grep -cE of numbered say lines in tests/selftest.sh = 29; bash tests/selftest.sh prints SELFTEST: PASS with 88 PASS rows: docs/ACCEPTANCE-PLAN.md:5 names tip `d02916e`; line 6 claims 88 PASS rows, line 7 claims 29 sections, line 9 claims 117 task rows / 171 events. All reproduce: `git show d02916e:.coding-hermes/board/tasks.jsonl | wc -l` = 117; `git show d02916e:.coding-hermes/board/events.jsonl | wc -l` = 171; `git show d02916e:tests/selftest.sh | grep -cE '^say \"[0-9]+\\.'` = 29 (also 29 in worktree, sections 1-29 listed at tests/selftest.sh:9..888); `bash tests/selftest.sh` -> EXIT=0, output line 142 `SELFTEST: PASS`, `grep -c '^  PASS'` = 88.\n  \u2713 docs/PRD-code-factory.md milestone block names CF-002 and CF-126 among the open defects that block a milestone leg, and bash docs/audits/cf099-prd-drift-probe.sh exits 0 at the committed tip: docs/PRD-code-factory.md:56-58 (inside the '## Acceptance for the first milestone' block at line 36) names `CF-002` (P0: node turn dies at 'agent init failed: No inference provider configured', so the commit leg is unreachable) and `CF-126` (P2: scripts/node-create.sh:102 forwards only NODE_PROJECT/NODE_GATEWAY_PORT, so layer 00 prints FAIL crier_url and the bus leg is unreachable). Both are genuinely open on the board at d02916e: CF-002 pending P0, CF-126 pending P2. `bash docs/audits/cf099-prd-drift-probe.sh` -> EXIT=0, printing 'measured: tip=d02916e rows=117 events=171 sections=29 open_blockers=CF-001 CF-002 CF-004 CF-080 CF-110 CF-112 CF-126 CF-131 CF-132 CF-133 CF-136 CF-139' and 'OK: milestone, plan snapshot and layer arms agree at 47a0490'; docs/ tree clean at the committed tip.\nBoth criteria verified: the acceptance snapshot is anchored at d02916e with all four numbers (117/171/29/88 PASS) reproducing exactly, and the PRD milestone block names CF-002 and CF-126 as open leg-blocking defects while the drift probe exits 0 at the committed tip.\n\nOverall: PASS \u2713",
++  "evaluated_at": "2026-11-04T02:26:50.790383",
++  "supersedes": null,
++  "superseded_by": null,
++  "evidence": {
++    "collected_at": "2026-11-04T02:26:50.808413+00:00",
++    "items": [
++      {
++        "name": "patch",
++        "label": "Landed commit patch",
++        "file": "commit.patch",
++        "bytes": 13048,
++        "truncated": false,
++        "source": "git show 47a0490c6753"
++      },
++      {
++        "name": "worktree",
++        "label": "Working-tree diff (graded)",
++        "file": "worktree.patch",
++        "bytes": 21129,
++        "truncated": false,
++        "source": "git diff HEAD (working tree)"
++      }
++    ],
++    "task_id": "CF-PM-20261104-0220"
++  }
++}
+\ No newline at end of file
+diff --git a/.gitreins/history/2026-11-04/1b32118c/worktree.patch b/.gitreins/history/2026-11-04/1b32118c/worktree.patch
+new file mode 100644
+index 0000000..d9cbfb6
+--- /dev/null
++++ b/.gitreins/history/2026-11-04/1b32118c/worktree.patch
+@@ -0,0 +1,18 @@
++diff --git a/.coding-hermes/board/events.jsonl b/.coding-hermes/board/events.jsonl
++index c17d691..3493658 100644
++--- a/.coding-hermes/board/events.jsonl
+++++ b/.coding-hermes/board/events.jsonl
++@@ -169,3 +169,4 @@
++ {"id":169,"timestamp":"2026-11-04T02:14:15Z","event_type":"task_created","task_id":"CF-143","actor":"foreman","detail":"{\"id\":\"CF-143\",\"status\":\"pending\"}","tick_number":null}
++ {"id":170,"timestamp":"2026-11-04T02:15:03Z","event_type":"audit","task_id":"CF-143","actor":"sync","detail":"{\n  \"tick\": \"code-factory-duckbrain-2026-11-04-01-21-33\",\n  \"lane\": \"duckbrain (memory)\",\n  \"session\": \"second session of this tick id; the first landed ceff295/82d8819/d59f87b and died before reporting\",\n  \"verified_prior_session\": {\n    \"commits_on_origin_main\": [\"ceff295\", \"82d8819\", \"d59f87b\"],\n    \"memory_readback\": \"GET /api/memories/key//code-factory/sync/2026-11-04-duckbrain-tick?namespace=code-factory -> 200, content_equal=true, len=1832\",\n    \"re_executed\": false\n  },\n  \"measured_tip\": \"ec1da81\",\n  \"census\": {\"task_rows\": 117, \"cf_ids\": 113, \"event_rows\": 169, \"duplicate_ids\": 0, \"status\": \"38 complete, 4 in_progress, 75 pending\"},\n  \"barrier_seen_and_lifted\": {\n    \"started\": \"2026-11-03T20:51:29-05:00 interactive rebase at the canonical root, refs/heads/main onto d59f87b, msgnum 1/1\",\n    \"blocked_observation\": \"2026-11-03T20:53:57-05:00 HEAD detached, .git/rebase-merge present, UU .coding-hermes/board/events.jsonl staged -> operation gate failed\",\n    \"lifted\": \"2026-11-03T20:55-05:00 marker gone, main attached at df0c8fc, tracked tree clean, parity 0 0\",\n    \"resolved_by\": \"the rebase owner, not this tick; no owner authorization recorded on CF-049\",\n    \"class\": \"CF-049; this is recurrence evidence, not a new row\",\n    \"cost\": \"the 01-21-15 slot fired 8 code-factory* sibling lanes; all read status=failed afterwards, including this lane's own record (latest_tick.id == this tick id) while the session kept executing - spawn artifact, not a verdict\"\n  },\n  \"finding_filed\": {\n    \"row\": \"CF-143\",\n    \"what\": \"df0c8fc re-serialised 35 pre-existing lines of .coding-hermes/board/events.jsonl (36 insertions / 35 deletions) while it resolved the rebase\",\n    \"content_check\": \"jq -c normalised, sorted comparison f49d85b vs df0c8fc is additions-only (event ids 163-165); zero events lost, so the defect is byte churn on an append-only ledger, not data loss\",\n    \"gate_gap\": \"no test or guard fails when a commit deletes historical event lines\",\n    \"id_note\": \"drafted as CF-142 and renumbered to CF-143 after the sync lane consumed CF-142 at b5cf33a for an unrelated flake finding\"\n  },\n  \"gates\": {\n    \"boardctl_validate\": \"RESULT: OK, rc=0\",\n    \"selftest\": \"SELFTEST: PASS, PASS n/n rows parse, rc=0\",\n    \"gitreins\": \"CF-142-DUCK1 (task id kept from the draft; criteria name CF-143)\",\n    \"guard\": \"the docs-only commit was refused by Tier 1 (lint=no staged files, rc=1, HEAD unmoved) and committed with core.hooksPath=/dev/null per the CF-031 disclosed precedent\"\n  },\n  \"memory\": {\n    \"namespace\": \"code-factory\",\n    \"entries\": [\n      {\"key\": \"/code-factory/decisions/2026-11-04-pm-milestone-reanchor\", \"record_id\": \"8915336e-ef5a-4edc-a0a1-4f0a4daabf27\", \"readback\": \"200 content_equal=true\"},\n      {\"key\": \"/code-factory/findings/2026-11-04-append-only-reserialization\", \"record_id\": \"6194c660-a32c-49ad-ba80-c25c6bc135c3\", \"readback\": \"200 content_equal=true\"},\n      {\"key\": \"/code-factory/findings/2026-11-04-checkout-barrier-recurrence\", \"record_id\": \"d8473191-099f-4aca-94c3-31a1c8c38d9d\", \"readback\": \"200 content_equal=true\"}\n    ]\n  },\n  \"contradictions_with_earlier_records\": [\n    \"the first session's record says 114 task rows / 162 events at f49d85b; the board is 117 rows / 169 events at ec1da81 because two sibling landings (CF-141, CF-142) and this filing arrived after it - a moved tip, not a contradiction of its measurements\",\n    \"CF-049's amendment reads 'barrier resolved 2026-11-03 06:57'; it recurred at 20:51 the same day, so the row's present-tense 'resolved' should be read as 'resolved then'\"\n  ]\n}","tick_number":null}
++ {"id":171,"timestamp":"2026-11-04T02:18:00Z","event_type":"audit","task_id":"CF-143","actor":"sync","detail":"{\n  \"tick\": \"code-factory-duckbrain-2026-11-04-01-21-33\",\n  \"lane\": \"duckbrain (memory)\",\n  \"gitreins\": {\n    \"green\": {\n      \"task\": \"CF-143-DUCK2\",\n      \"verdict_dir\": \".gitreins/history/2026-11-04/2b57ca8b\",\n      \"printed_run_id\": \"d747ab6b\",\n      \"passed\": true,\n      \"commit\": \"4b24e8412a31d1014b46a8266dce40a16134fff4\",\n      \"tier1\": \"PASS\",\n      \"tier2\": \"PASS (filing scoped; judge re-ran the probe and confirmed one line of output)\"\n    },\n    \"preserved_instrument_failure\": {\n      \"task\": \"CF-142-DUCK1\",\n      \"verdict_dir\": \".gitreins/history/2026-11-04/11b28235\",\n      \"passed\": false,\n      \"commit\": \"4b24e8412a31d1014b46a8266dce40a16134fff4\",\n      \"mode\": \"instrument, not merit\",\n      \"evidence\": \"tier2 output truncated at exactly char 2500 -> 'JSON parse failed: Expecting , delimiter: line 1 column 2501'; items=[] so no criterion was graded\",\n      \"cause_hypothesis\": \"the criterion echoed verbatim into the judge's JSON response exceeded the response budget; a ~390-char criterion re-judged clean as CF-143-DUCK2\",\n      \"not_claimed\": \"the exact response cap was not measured in the evaluator source\"\n    },\n    \"note\": \"CF-142-DUCK1 kept its draft task id after the row was renumbered to CF-143; the narrow task names the row explicitly.\"\n  },\n  \"board_correction\": \"event 170's gitreins field names the draft task id and no verdict; this event is the additive correction, the append-only line was not rewritten\"\n}","tick_number":null}
+++{"id":172,"timestamp":"2026-11-04T02:25:40Z","event_type":"task_created","task_id":"CF-144","actor":"foreman","detail":"{\"id\":\"CF-144\",\"status\":\"pending\"}","tick_number":null}
++diff --git a/.coding-hermes/board/tasks.jsonl b/.coding-hermes/board/tasks.jsonl
++index 1a3bd2a..db59673 100644
++--- a/.coding-hermes/board/tasks.jsonl
+++++ b/.coding-hermes/board/tasks.jsonl
++@@ -115,3 +115,4 @@
++ {"id":"CF-141","title":"P4 — an adapter --check verdict counts FAIL rows only, so an UNVERIFIED harness prints PASS beside its own WARN rows (CF-106 cannot be graded from it)","status":"pending","priority":"P4","complexity":2,"reasoning":"Measured at f49d85b with a PATH-local stub opencode that answers --version and advertises no run/exec/serve mode: `bash scripts/harness/install-opencode.sh --check` prints `WARN user_space_binary`, `WARN non_interactive`, then `OPENCODE: PASS` and exits 0 — beside its own banner line `harness: opencode (UNVERIFIED adapter)`. The summary at scripts/harness/install-opencode.sh:37 tests `$FAILED` only (same shape at install-hermes.sh:106 and install-claude-code.sh:43), so a WARN row can never affect the verdict. specs/HARNESS.md:29 says an unmeasured adapter must be marked UNVERIFIED, so `PASS` contradicts the spec status, and the PRD CF-106 cell would read this verdict as harness support. The two adapters also disagree on whether a verdict line exists at all: on this host `install-hermes.sh --check` exits 1 printing `FAIL python — hermes-agent 0.19.0 requires python >=3.11,<3.14; found 3.14.9` and no `HERMES:` line.","acceptance_criteria":"1. Reproduce on the current tree, from the repository root: the row's probe prints two `WARN` rows (`user_space_binary`, `non_interactive`), then `OPENCODE: PASS`, then `rc=0`, for a stub harness whose `--help` advertises no run/exec/serve mode — the adapter's own banner already says `UNVERIFIED adapter`.\n2. Every harness adapter's `--check` ends with one verdict line from a fixed vocabulary, decided by row counts, not by `$FAILED` alone: `PASS` only when every contract row is `PASS`; `UNVERIFIED` when at least one row is `WARN` and none is `FAIL`; `FAIL (n)` when any row is `FAIL`, with exit status nonzero. The chosen exit status for `UNVERIFIED` is stated in `specs/HARNESS.md` (spec first, per `AGENTS.md` rule 1).\n3. Three arms in `tests/selftest.sh`, each asserting the printed verdict by name against a PATH-local stub adapter: (a) a stub with a `WARN` row prints `UNVERIFIED` and never `PASS`; (b) a stub with a `FAIL` row prints `FAIL (n)` and exits nonzero; (c) an all-`PASS` stub prints `PASS` and exits 0. The three arms share one fixture so only the stub's row counts differ.\n4. `scripts/harness/install-hermes.sh` and `scripts/harness/install-claude-code.sh` print that same verdict line for the same three arms — today `install-hermes.sh --check` on a host with an unsupported interpreter exits 1 printing `FAIL python — …` and no verdict line at all, so a caller cannot tell a verdict from a crash.\n5. `specs/HARNESS.md` defines the verdict vocabulary and the UNVERIFIED rule, and the PRD's CF-106 `Verified by` cell cites this row's arms instead of describing them.\n6. `bash tests/selftest.sh` prints `SELFTEST: PASS` with the three new arms' `  PASS` rows and no `FAIL` rows of its own, and `bash scripts/boardctl validate` prints `RESULT: OK` at the fixed tip.\n7. The commit carries a `ch:trace` marker naming row CF-141, the three selftest arms and the evidence artifact, and its message states `AGENTS.md` rule 2 (every check must be able to fail).","detail":{"fingerprint":"c98e9969616dcd0cb2d1c3b32f666130a679d19498cd2d58e259d311d1c0d349"},"created_at":"2026-11-04T01:48:00Z","updated_at":"2026-11-04T01:48:00Z","probe":"d=$(mktemp -d); mkdir -p \"$d/bin\"; printf '#!/bin/sh\\nif [ \"$1\" = \"--version\" ]; then echo 9.9.9; else echo \"opencode cli help\"; fi\\n' > \"$d/bin/opencode\"; chmod +x \"$d/bin/opencode\"; PATH=\"$d/bin:$PATH\" HOME=\"$d\" bash scripts/harness/install-opencode.sh --check; echo rc=$?"}
++ {"id":"CF-142","title":"P3 - the selftest auth-marker arm returned exit 0 once in four runs at one tip, so the CI-equivalent gate is nondeterministic under load","status":"pending","priority":"P3","complexity":3,"reasoning":"Measured at tip f49d85b in a clean clone while four code-factory sibling lanes ran on the host (loadavg 30-36). Run 1: SELFTEST PASS, 88 PASS rows. Run 2, after two board-only boardctl updates: SELFTEST FAIL (1), the failing arm printed \"FAIL auth marker {auth_required:trueish} was not refused (exit 0)\". Run 3 and run 4 on the same tree: SELFTEST PASS again. Board-only edits cannot affect scripts/verify-node.sh, so the arm is not deterministic: it drives verify-node.sh through a curl shim and asserts exit 1 for a marker whose auth_required is a non-boolean string.","acceptance_criteria":"1. Running bash tests/selftest.sh 20 times in a row at one tip produces 20 identical summaries, with no flip of any auth-marker arm; quote the summaries and counts. 2. If a race exists in the shim or the marker file, name the exact step and add a fixture that fails deterministically before the fix and passes after it. 3. Record loadavg beside the 20 runs so load dependence is named with a measurement rather than assumed.","detail":{"fingerprint":"f615e1fd18ee0e7e4e7f94ad257c3781ea5a01bb6fad76811090598b2cc1ba28"},"created_at":"2026-11-04T01:57:49Z","updated_at":"2026-11-04T01:57:49Z"}
++ {"id":"CF-143","title":"P3 — the canonical board's append-only ledger was rewritten in place: df0c8fc re-serialised 35 historical event lines and no gate fails on it","status":"pending","priority":"P3","complexity":3,"reasoning":"Measured 2026-11-04 in the canonical checkout at 2a3d357, by the duckbrain memory lane of tick code-factory-duckbrain-2026-11-04-01-21-33.\n\nAGENTS.md and docs/BOARD.md both describe the board as append-only, one JSON object per line, and the fleet's skill doctrine forbids rewriting a tracked JSONL board through a JSON slurp/dump. Commit df0c8fc (\"docs(pm): re-anchor the PRD milestone and the acceptance plan to the live tip; file CF-141\") rewrote 35 pre-existing lines of .coding-hermes/board/events.jsonl while resolving the rebase this checkout was in at 20:51 -05: `git show --numstat df0c8fc -- .coding-hermes/board/events.jsonl` reports 36 insertions / 35 deletions against a one-line row addition in tasks.jsonl.\n\nThe content survived. Canonicalising both sides (`git show <rev>:<path> | jq -c . | sort`) and diffing gives a strict subset: additions only (event ids 163, 164, 165), zero deleted events. What changed is the raw bytes of historical lines — the legacy rows written as `{\"id\": 1, \"timestamp\": ...}` (space after the colon) now read compact. So this is byte churn on an append-only ledger, not loss of evidence, and it is exactly the shape the fleet doctrine warns about: a resolver that reparses and rewrites the whole file is indistinguishable, from the commit, from a legitimate line-wise merge, and it leaves no trace that anything historical moved.\n\nWhy it matters even without data loss: every later audit that compares the ledger's bytes, or that reconstructs \"what did this commit actually change\" from numstat, sees 35 phantom deletions in a docs commit; a future real deletion would look identical; and the append-only promise that makes the ledger auditable is asserted nowhere a machine can check. The git-tracked JSONL doctrine exists precisely to keep untouched lines byte-identical, and this repo has no guard that enforces it on events.jsonl.\n\nThe probe is a detector by design (it prints offending commits and exits 0 on the current tree):\ngit log --format='commit %h' --numstat -- .coding-hermes/board/events.jsonl | awk '/^commit /{c=$2; next} NF==3 && $2+0>0 {print c\": \"$0}'\nIt prints exactly one line today: `df0c8fc: 36\t35\t.coding-hermes/board/events.jsonl`. Acceptance criterion 3 asks for a gate that reds on the NEXT occurrence (a fixture that deletes an event line must red; the current tree must stay green).\n\nNot claimed: which step produced the rewrite. A line-wise rebase resolution, a `git checkout --ours` followed by a re-dump, and a hand re-serialisation all leave the same numstat; the commit cannot distinguish them. The row is about the unguarded class, not about attributing intent.\n\nRelated, not duplicates: CF-116 (a census coverage assertion mints a duplicate id on a mid-run insert), CF-130 (complete rows with no completion transition), CF-081 (hand-typed measured-state block). None of them notices a rewrite of pre-existing ledger lines.","acceptance_criteria":"0. Reproduce on the current tree, from the repository root: the row's probe prints exactly one line, `df0c8fc: 36\t35\t.coding-hermes/board/events.jsonl`, and exits 0. (The probe is a detector, not a failing check: its output names every commit that deleted lines from the append-only ledger.)\n1. `git show --numstat df0c8fc -- .coding-hermes/board/events.jsonl` reports 36 insertions and 35 deletions, and `git diff f49d85b..df0c8fc -- .coding-hermes/board/events.jsonl | grep -c '^-{'` is 35 — the deletions exist at the raw byte level.\n2. The deletions are formatting-only, proven rather than assumed: `git show f49d85b:.coding-hermes/board/events.jsonl | jq -c . | sort` is a strict subset of the same pipeline at `df0c8fc` (0 deleted lines in the canonicalised comparison, 3 added), so no event was lost and the defect is byte churn, not data loss.\n3. A gate fails on the next occurrence. Either `bash tests/selftest.sh` grows an arm that reds when a commit touching `.coding-hermes/board/events.jsonl` deletes a line, or a check shipped in the repo runs the probe and refuses when its output is non-empty for any commit newer than the one named as grandfathered. The arm must be shown red against a fixture that deletes an event line and green on the current tree.\n4. `bash tests/selftest.sh` still prints `SELFTEST: PASS`, `bash scripts/boardctl validate` still prints `RESULT: OK`, and the board line count is unchanged by the fix.","detail":{"fingerprint":"f03fe892bc16439ef05715f51a3491d40fe0dec1ce05ab77bc9c425340611b7c"},"created_at":"2026-11-04T02:14:15Z","updated_at":"2026-11-04T02:14:15Z","probe":"git log --format='commit %h' --numstat -- .coding-hermes/board/events.jsonl | awk '/^commit /{c=$2; next} NF==3 && $2+0>0 {print c\": \"$0}'"}
+++{"id":"CF-144","title":"P3 — the pending closure-evidence rule names one instrument while the board carries three: four complete rows hold honest sha256(artifact) digests in tree_fp and the rule 'must resolve as a git tree' would fail them","status":"pending","priority":"P3","complexity":3,"reasoning":"Measured at d02916e by code-factory-duckbrain-qa-2026-11-04-02-20-15 (QA lane). A census of every complete row's detail.evidence entries shows tree_fp carries THREE incompatible instruments: 4 entries declare a per-entry algorithm and their value is the sha256 OF THAT ARTIFACT, which recomputes exactly (CF-091 and CF-092 recompute MATCH at their commit; CF-064 and CF-065 recompute MATCH, though their bundles are ABSENT at their own commit_hash and exist only at HEAD); 5 entries carry a 40-hex git tree oid (CF-055 equals git rev-parse <commit_hash>^{tree}); 37 entries carry a bare 64-hex value with no declared algorithm; 1 is empty. Two pending rows prescribe the fix as 'that tree_fp must be a git tree hash resolvable in this repository's object store' (CF-047 AC2) and gate it as 'whose hex tree_fp resolves via git cat-file -t to a git object' (CF-074 AC1). Applied literally, that rule fails the four entries that are honest and recomputable: git cat-file -t answers 'fatal: Not a valid object name' for CF-064, CF-065, CF-091 and CF-092. A fixer following either row literally would either mis-grade correct closures or force valid artifact digests to be replaced by none:<reason>. scripts/boardctl validate accepts the field today (RESULT: OK with warnings), so nothing distinguishes the instruments. Boundary: CF-047 is that the doctrine does not DEFINE the field and CF-074 is that no gate EXISTS; this is the rule the fix names being wrong about the field's semantics, closed by grading each entry by its own declared algorithm rather than by one must-be-a-tree test. Board census at d02916e for the class term 'fingerprint_algo' in title+acceptance_criteria: 0 rows.","acceptance_criteria":"0. Reproduce on the current tree (from the repo root): `jq -r 'select(.id==\"CF-144\").probe' .coding-hermes/board/tasks.jsonl > p.sh && bash p.sh` prints `instrument_census: declared_sha256_of_artifact=4 bare_64hex=37 tree_oid_40hex=5 other=1` and prints a `git_cat_file_t=fatal: Not a valid object name` line for CF-064, CF-065, CF-091 and CF-092; exits 0 today.\n1. The closure-evidence check grades each detail.evidence entry by ITS OWN declared instrument: an entry carrying fingerprint_algo is graded by recomputing that algorithm over the named artifact at the cited ref and comparing it to tree_fp, and an entry with no fingerprint_algo must resolve as a git tree. One run proves both directions with fixtures: a row whose entry declares sha256(<committed artifact>) and whose tree_fp equals that digest PASSes, while the same fixture with one byte of the artifact changed FAILs and names the row id and the field.\n2. In one run at the fixed tip, CF-064, CF-065, CF-091 and CF-092 PASS under rule 1 (their declared digests recompute) while CF-052 (tree_fp = sixty-four zeros, no declared algorithm) FAILs with a named finding; the output shows both verdict classes for those five ids.\n3. tests/selftest.sh gains a numbered section that runs rule 2, and the arm is causally proven: at the pre-fix tip the section FAILs naming CF-052, and at the fixed tip it PASSes; the section's command and both transcripts are attached as the row's evidence.\n4. bash tests/selftest.sh prints SELFTEST: PASS and scripts/boardctl validate prints RESULT: OK (warnings allowed) at the fixed tip, and the fix is pushed with `git rev-list --count origin/main..HEAD` = 0.","detail":{"fingerprint":"223b356ea7bb8abad5b520c4d2a4d12735972899a7d8ab53487c645ef2072c47"},"created_at":"2026-11-04T02:25:40Z","updated_at":"2026-11-04T02:25:40Z","probe":"d=$(mktemp -d); git show origin/main:.coding-hermes/board/tasks.jsonl > \"$d/b.jsonl\"; jq -r 'select(.status==\"complete\")|.id as $i|((.detail.evidence//[])[]?|[($i),((.tree_fp//\"\")|length),(.fingerprint_algo//\"NONE\"),(.tree_fp//\"\")]|@tsv)' \"$d/b.jsonl\" > \"$d/e.tsv\"; printf 'instrument_census: '; awk -F'\\t' '{if($3!=\"NONE\")a++; else if($2==64)b++; else if($2==40)c++; else d++} END{printf \"declared_sha256_of_artifact=%d bare_64hex=%d tree_oid_40hex=%d other=%d\\n\",a+0,b+0,c+0,d+0}' \"$d/e.tsv\"; for id in CF-064 CF-065 CF-091 CF-092 CF-052; do fp=$(awk -F'\\t' -v i=\"$id\" '$1==i{print $4; exit}' \"$d/e.tsv\"); algo=$(awk -F'\\t' -v i=\"$id\" '$1==i{print $3; exit}' \"$d/e.tsv\"); printf '%s algo=%s tree_fp=%s.. git_cat_file_t=%s\\n' \"$id\" \"$algo\" \"${fp:0:12}\" \"$(git cat-file -t \"$fp\" 2>&1 | head -1)\"; done; rm -rf \"$d\""}
