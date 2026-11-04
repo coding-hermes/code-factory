@@ -1,0 +1,42 @@
+=== ARM A_create_path_state (config=none, port=18991) ===
+harness: hermes (pin 0.19.0, port 18991)
+  PASS  python — 3.12.13 (hermes-agent 0.19.0 requires >=3.11,<3.14)
+  PASS  binary — $HOME/hermes-venv/bin/hermes
+  PASS  version — hermes 0.19.0
+  FAIL  port — nothing on :18991
+  FAIL  inference_key — no provider key — a turn dies at 'No inference provider configured'
+apply
+  ..    already installed: hermes 0.19.0
+  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml
+
+HERMES: FAIL (3)
+arm_rc=1
+
+=== ARM B_control_basic_auth_present (config=basic_auth, port=18992) ===
+harness: hermes (pin 0.19.0, port 18992)
+  PASS  python — 3.12.13 (hermes-agent 0.19.0 requires >=3.11,<3.14)
+  PASS  binary — $HOME/hermes-venv/bin/hermes
+  PASS  version — hermes 0.19.0
+  FAIL  port — nothing on :18992
+  FAIL  inference_key — no provider key — a turn dies at 'No inference provider configured'
+apply
+  ..    already installed: hermes 0.19.0
+  FAIL  gateway_start — -> 000000 (see ~/.node-serve-18992.log)
+
+HERMES: FAIL (3)
+arm_rc=1
+
+=== STAGED FILE LIST (shipped code, create path) ===
+project-node.sh
+lib.sh
+disk_floor.py
+reclaim_disk.py
+harness/install-hermes.sh
+staged_rows=5
+staged_config_yaml=0
+
+=== WRITERS OF ~/.hermes/config.yaml ANYWHERE IN scripts/ ===
+scripts/bunker-server-install.sh:30:cfg="${BUNKER_CONFIG:-$HOME/.config/bunker/config.yaml}"
+scripts/harness/install-hermes.sh:94:    if grep -q 'basic_auth' "$HOME/.hermes/config.yaml" 2>/dev/null; then
+scripts/harness/install-hermes.sh:100:      bad "gateway_start" "refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml"
+config_yaml_write_ops=0
