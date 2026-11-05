@@ -59,6 +59,20 @@ the files you edited no longer appear as modified.
 - Say it plainly in the close commit: which commit you verified, that a twin produced it, and
   that the judge ran once.
 
+## Dispatch on an unattended surface
+
+Stage the brief with a file write and launch a wrapper script that runs `hermes chat --query-file
+<brief> --oneshot -Q -m <model> --provider <provider> -s coding-hermes-worker --ignore-rules`,
+invoked as `bash <wrapper>` in background+pty. The inline `bash -lic '… hermes chat …'` form and
+`-q "$(cat brief)"` are gated or mangled when no user is present; `--query-file` is neither.
+
+A worker can COMMIT and then hang on its final turn: no exit marker, ~0% CPU, log frozen, and a clean
+porcelain tree because the work is committed. Classify from `git log --oneline -1` and
+`git show --stat`, never from porcelain alone. The deliverable is already on disk — read the diff
+against the row's criteria, run the gate yourself, terminate your own launcher, and say in the
+closing event that the launcher hung after committing. Do not re-dispatch the brief on the
+assumption nothing landed.
+
 ## Closeout readback (the writer accepts what it does not store)
 
 `boardctl update <id> --status complete` can return exit 0 and still persist a row with
