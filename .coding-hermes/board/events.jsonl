@@ -455,3 +455,4 @@
 {"id": 454, "event_type": "task_created", "task_id": "CF-367", "tick_number": null, "timestamp": "2026-11-05T21:10:11Z", "actor": "foreman", "detail": "{\"id\":\"CF-367\",\"status\":\"pending\"}"}
 {"id": 455, "event_type": "task_created", "task_id": "CF-368", "tick_number": null, "timestamp": "2026-11-05T21:10:14Z", "actor": "foreman", "detail": "{\"id\":\"CF-368\",\"status\":\"pending\"}"}
 {"id": 456, "event_type": "task_created", "task_id": "CF-369", "tick_number": null, "timestamp": "2026-11-05T21:10:19Z", "actor": "foreman", "detail": "{\"id\":\"CF-369\",\"status\":\"pending\"}"}
+{"id": 457, "event_type": "task_completed", "task_id": "CF-230", "tick_number": null, "timestamp": "2026-11-05T22:57:50Z", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
