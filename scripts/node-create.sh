@@ -126,8 +126,13 @@ fi
 
 # 4. verify from here
 say "  ..    verifying from the control host"
-"$HERE/verify-node.sh" --agent "$AGENT" --server "$SERVER" --port "$PORT" \
-  || { bad "verify" "round trip failed — node remains unverified"; incomplete; }
+verify_rc=0
+"$HERE/verify-node.sh" --agent "$AGENT" --server "$SERVER" --port "$PORT" || verify_rc=$?
+case "$verify_rc" in
+  0) ok "verify" "round trip proven from the control host" ;;
+  3) warn "verify" "UNVERIFIED — the node answers inside itself but this host has no transport to it (CF-224); the node is not marked failed" ;;
+  *) bad "verify" "round trip failed — node remains unverified"; incomplete ;;
+esac
 
 say ""
 [ "$FAILED" -eq 0 ] && { say "NODE CREATED: $AGENT"; say "manifest: /home/<uid>/.node/node.json"; exit 0; }
