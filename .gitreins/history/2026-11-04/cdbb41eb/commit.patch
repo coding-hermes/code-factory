@@ -1,0 +1,149 @@
+commit 4ec363b51dc277347ca3ecaf18a7fc51bc3947a2
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Wed Nov 4 18:57:05 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Wed Nov 4 18:57:17 2026 -0500
+
+    docs(sync): rebind the BOARD.md measured-state block to a tip that resolves
+    
+    The block's 2026-11-04T23:40Z revision cited tip `ac844cb`, which resolves to no
+    object in this repository: `git cat-file -e ac844cb^{commit}` exits 128 and
+    `git cat-file --batch-all-objects --batch-check | grep -c '^ac844c'` is 0. It was
+    the pre-rebase local tip that `git pull --rebase origin main` discarded, so the
+    counts were honest for the tree measured but the label is unverifiable to every
+    later reader. The commit that wrote it (`6da74d3`) has parent `1124ae0`, whose
+    board is exactly the 180 rows it reported.
+    
+    Re-measured at published tip `3f6115e`: 181 task rows, 366 events (max id 365,
+    one benign duplicate 336 owned by CF-196), 62 complete / 9 in_progress / 110
+    pending; `board_drift.py check` RESULT: OK, 181 vs 181 rows, 0 divergent ids;
+    `boardctl validate` RESULT: OK (4 warnings) and key uniformity 181/181;
+    `tests/selftest.sh` SELFTEST: PASS (rc 0), PASS 181/181 rows parse, 195 PASS /
+    50 FAIL rows (all inside negative fixtures), 42 arms (section mapping OK).
+    
+    The block now states that the tip label is hand-typed too and that CF-081 owns
+    both the counters and the label, so the derived check it asks for also asserts
+    the cited tip resolves. No second row was filed: CF-081 already covers the
+    class, and a new id would split its closure.
+    
+    docs/audits/code-factory-sync-2026-11-04-2340.md gains an addendum recording that
+    the same tick re-ran, verifying the prior execution's durable claims rather than
+    re-deriving them: all 62 complete rows bind commits that exist and are ancestors
+    of origin/main, and no completion evidence points only at prunable scratch
+    (the 2026-11-03 CF-011/CF-013 rebind still holds).
+    
+    Gate: `bash tests/selftest.sh` prints SELFTEST: PASS (rc 0) at the edited tree;
+    `bash scripts/boardctl validate` prints RESULT: OK (4 warnings).
+    Guard: docs-only diff authored in a throwaway clone of origin/main, which ships
+    no installed hooks, so the configured checks above were run manually (the CF-031
+    precedent for docs-only commits). Disclosed, not silent.
+    
+    ch:trace row=CF-081 spec=docs/BOARD.md#current-measured-state wave=none:serial test=tests/selftest.sh::selftest doc=docs/BOARD.md prompt=prompts/sync.md evidence=docs/audits/code-factory-sync-2026-11-04-2340.md witness=cmd:git-cat-file-exit-128-on-ac844cb verdict=none:open-finding commit=none:self-referential-hash memory=none:pending
+---
+ docs/BOARD.md                                    | 22 ++++++-----
+ docs/audits/code-factory-sync-2026-11-04-2340.md | 49 ++++++++++++++++++++++++
+ 2 files changed, 62 insertions(+), 9 deletions(-)
+
+diff --git a/docs/BOARD.md b/docs/BOARD.md
+index 55b1c7d..2911c6b 100644
+--- a/docs/BOARD.md
++++ b/docs/BOARD.md
+@@ -109,7 +109,10 @@ proves its divergent, identical, empty, missing-file and malformed-record fixtur
+ 
+ Every count below is an output value that moves with each folded row, so measure it instead of
+ quoting an older snapshot. The numbers are still typed by hand — CF-081 tracks replacing this block
+-with a committed check that derives them and fails on a mismatch.
++with a committed check that derives them and fails on a mismatch. The tip label is typed by hand as
++well, so check that it resolves before trusting the block: the 2026-11-04T23:40Z revision cited
++`ac844cb`, which is not an object in this repository — the commit that wrote it (`6da74d3`) has
++parent `1124ae0`, and the 180 rows it reported are that parent's board, not a tip of its own.
+ 
+ ```sh
+ wc -l .coding-hermes/board/tasks.jsonl .coding-hermes/board/events.jsonl
+@@ -117,20 +120,21 @@ scripts/boardctl validate
+ bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
+ ```
+ 
+-- **Re-measured 2026-11-04T23:40Z at tip `ac844cb`:** 180 task rows, 365 events (max event id 364;
+-  one benign duplicate id 336, owned by **CF-196**) — 62 `complete`, 9 `in_progress`, 109 `pending`,
++- **Re-measured 2026-11-04T23:53Z at tip `3f6115e`:** 181 task rows, 366 events (max event id 365;
++  one benign duplicate id 336, owned by **CF-196**) — 62 `complete`, 9 `in_progress`, 110 `pending`,
+   no duplicate task ids. Both board files are byte-identical to their `origin/main` copies
+-  (`python3 scripts/board_drift.py check --workdir . --ref main` prints `RESULT: OK`, 180 vs 180 rows,
++  (`python3 scripts/board_drift.py check --workdir . --ref main` prints `RESULT: OK`, 181 vs 181 rows,
+   0 divergent ids). `scripts/boardctl validate` prints `RESULT: OK (4 warning(s))` (CF-034's free-form
+   `guard_result`/`ci_result`, the duplicate event id 336 and the headerless board) and
+-  `key uniformity: 180/180 rows carry only canon keys (0 drift)`. `tests/selftest.sh` prints
+-  `SELFTEST: PASS` (exit 0), `PASS 180/180 rows parse`, 195 `PASS` rows and 50 `FAIL` rows that all sit
++  `key uniformity: 181/181 rows carry only canon keys (0 drift)`. `tests/selftest.sh` prints
++  `SELFTEST: PASS` (exit 0), `PASS 181/181 rows parse`, 195 `PASS` rows and 50 `FAIL` rows that all sit
+   inside negative fixtures (gateway public-bind refusals, the board-gate rejects, `2 of 3 rows parse`,
+   the disk-floor empty-PATH arm) over 39 numbered sections plus lettered arms `4b`/`7b`/`31b`
+-  (42 arms; derived by `bash docs/audits/cf198-section-mapping.sh`), at loadavg 24.15 (1 min; sibling
++  (42 arms; `bash docs/audits/cf198-section-mapping.sh` prints `arms_plan=42 arms_tree=42`,
++  `RESULT: OK`), at loadavg 26.37 (1 min; sibling
+   lanes and judges on this host, not a suite property). Three sibling rows still own the structural
+-  fixes for this block: **CF-081** (the hand-typed counts), **CF-154** (the warning count does not
+-  follow from the board) and **CF-196** (duplicate event ids).
++  fixes for this block: **CF-081** (the hand-typed counts and the hand-typed tip label), **CF-154**
++  (the warning count does not follow from the board) and **CF-196** (duplicate event ids).
+ - **Earlier snapshot, 2026-11-04T08:52Z at tip `7232954` (historical, not current):** 158 task rows, 300 events — 51 `complete`,
+   8 `in_progress`, 99 `pending`, no duplicate task or event ids. `scripts/boardctl validate` prints
+   `RESULT: OK (3 warning(s))` (CF-034's free-form `guard_result`/`ci_result` plus the headerless
+diff --git a/docs/audits/code-factory-sync-2026-11-04-2340.md b/docs/audits/code-factory-sync-2026-11-04-2340.md
+index 7402cd6..93bd5c9 100644
+--- a/docs/audits/code-factory-sync-2026-11-04-2340.md
++++ b/docs/audits/code-factory-sync-2026-11-04-2340.md
+@@ -101,3 +101,52 @@ immediate re-run on the same unchanged tree printed `SELFTEST: PASS` (rc 0) with
+ nondeterministic-under-load class already owned by **CF-142** ("before believing a single red,
+ re-run it; before believing a single green, note the load") — no new row was filed for it, and the
+ snapshot records the green run with its loadavg.
++
++## Addendum — re-execution of the same tick: the cited tip did not resolve
++
++Tick `code-factory-sync-2026-11-04-23-34-25` ran a second time (the scheduler row still reads
++`status=running` for that id, and the first execution's commits `6da74d3` and this file are on
++`origin/main`, so this is the same tick resumed, not a new lane). The durable claims above were
++verified rather than re-derived, and one of them did not hold.
++
++**The tip label above was wrong.** `ac844cb` resolves to no object in this repository:
++
++```sh
++$ git cat-file -e 'ac844cb^{commit}'; echo rc=$?
++fatal: Not a valid object name ac844cb^{commit}
++rc=128
++$ git cat-file --batch-all-objects --batch-check | grep -c '^ac844c'
++0
++$ git rev-parse 6da74d3^
++1124ae0c7e457dd2c80ea9196c84eb37709b385f      # the commit that wrote the block
++$ git show 1124ae0:.coding-hermes/board/tasks.jsonl | wc -l
++180                                            # so the 180 rows it reported were 1124ae0's board
++```
++
++It is the pre-rebase local tip that `git pull --rebase` discarded: real at measurement time, never
++published, and unverifiable to every later reader. The counts were honest; the label was not, and the
++same phantom SHA appears in the addendum above (a historical record, left as written).
++
++**Correction.** "Current measured state" is re-measured at published tip `3f6115e` — 181 task rows,
++366 events (max id 365, one benign duplicate 336 owned by CF-196), 62 `complete` / 9 `in_progress` /
++110 `pending` — and the block now says the tip label is hand-typed too, with **CF-081** owning both
++the counters and the label (a derived check emits the measured tip and asserts it resolves, so the
++existing row covers this instance; no second row was filed).
++
++Re-verified at `3f6115e` in a fresh clone, porcelain 0:
++
++| Check | Command | Result |
++|---|---|---|
++| board parses | `bash scripts/boardctl validate` | `RESULT: OK (4 warning(s))`; `key uniformity: 181/181 rows carry only canon keys (0 drift)` |
++| board = published | `python3 scripts/board_drift.py check --workdir . --ref main` | `RESULT: OK`, `181 vs 181 rows; 0 divergent ids` |
++| gate | `bash tests/selftest.sh` | `SELFTEST: PASS` (rc 0), `PASS 181/181 rows parse`, 195 PASS / 50 FAIL rows (all in negative fixtures) |
++| arms | `bash docs/audits/cf198-section-mapping.sh` | `arms_plan=42 arms_tree=42`, `RESULT: OK` |
++| complete rows bind real commits | `git cat-file -e <sha>^{commit}` + `git merge-base --is-ancestor <sha> origin/main` over all 62 | 62/62 present, 62/62 ancestors of `origin/main` |
++| completion evidence is in-tree | artifacts test over all 75 evidence entries | 0 rows whose artifacts are all prunable scratch paths; CF-011/CF-013 rebind (2026-11-03) still holds |
++| cited tip resolves | `git cat-file -e 3f6115e^{commit}` | exit 0; `git show 3f6115e:.coding-hermes/board/{tasks,events}.jsonl \| wc -l` = 181 / 366 |
++
++Residual, not filed (each already owned): 35 of 62 `complete` rows carry no `probe` (the
++convention gap behind CF-074), one evidence entry on CF-153 lacks `tree_fp` while 74 of 75 peers
++carry one, and CF-032/CF-041 each carry one artifact-less entry beside artifact-bearing ones.
++Loadavg at measurement: 26.37 (1 min); sibling lanes on this host.
++
