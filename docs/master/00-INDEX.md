@@ -21,7 +21,7 @@ not a section that is merely unwritten. A section turns green by running a comma
 | 14 | [`scripts/github-app-token.py`](14-scripts-github-app-token-py.md) | code-factory | RED |
 | 15 | [`scripts/harness/install-claude-code.sh`](15-scripts-harness-install-claude-code-sh.md) | code-factory | VERIFIED |
 | 16 | [`scripts/harness/install-codex.sh`](16-scripts-harness-install-codex-sh.md) | code-factory | VERIFIED |
-| 17 | [`scripts/harness/install-hermes.sh`](17-scripts-harness-install-hermes-sh.md) | code-factory | RED |
+| 17 | [`scripts/harness/install-hermes.sh`](17-scripts-harness-install-hermes-sh.md) | code-factory | VERIFIED |
 | 18 | [`scripts/harness/install-opencode.sh`](18-scripts-harness-install-opencode-sh.md) | code-factory | RED |
 | 19 | [`scripts/install-gitreins.sh`](19-scripts-install-gitreins-sh.md) | code-factory | VERIFIED |
 | 20 | [`scripts/land-node-branch.sh`](20-scripts-land-node-branch-sh.md) | code-factory | RED |

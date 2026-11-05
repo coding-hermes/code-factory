@@ -1,0 +1,1103 @@
+{
+  "modules": [
+    "/home/kara/code-factory/docs/master/03-scripts-board-lock-py.md",
+    "/home/kara/code-factory/docs/master/04-scripts-bunker-crier-connect-sh.md",
+    "/home/kara/code-factory/docs/master/05-scripts-bunker-provision-sh.md",
+    "/home/kara/code-factory/docs/master/11-scripts-disk-floor-py.md",
+    "/home/kara/code-factory/docs/master/33-scripts-project-node-sh.md"
+  ],
+  "seats": {
+    "sol": {
+      "verdict": {
+        "modules": [
+          {
+            "file": "03-scripts-board-lock-py.md",
+            "sections": [
+              {
+                "n": 1,
+                "verdict": "OK",
+                "why": "Purpose, risks, and measured contradictions are tied to source, board facts, or reproduced probes.",
+                "evidence": "scripts/board_lock.py:149-158"
+              },
+              {
+                "n": 2,
+                "verdict": "OK",
+                "why": "Runtime, library, and local Git contracts name dependencies, directions, degradation, and relevant source lines.",
+                "evidence": "scripts/board_lock.py:33-57"
+              },
+              {
+                "n": 3,
+                "verdict": "OK",
+                "why": "Verification includes runnable positive and negative probes, expected outputs, exit codes, and recorded failures.",
+                "evidence": "scripts/board_lock.py:149-173"
+              },
+              {
+                "n": 4,
+                "verdict": "OK",
+                "why": "Correctly distinguishes absent metrics from the two transient counts embedded in verdict output.",
+                "evidence": "scripts/board_lock.py:118-146"
+              },
+              {
+                "n": 5,
+                "verdict": "OK",
+                "why": "Lists normal verdicts, parser diagnostics, discarded probe errors, and traceback conditions with emission triggers.",
+                "evidence": "scripts/board_lock.py:149-172"
+              },
+              {
+                "n": 6,
+                "verdict": "OK",
+                "why": "Failure table accurately distinguishes false holders, probe errors, degraded Git counts, invalid paths, and scoped consumer evidence.",
+                "evidence": "scripts/board_lock.py:73-94"
+              },
+              {
+                "n": 7,
+                "verdict": "OK",
+                "why": "Documents derived repository paths, positional input, inherited PATH, help behavior, and absence of configuration files.",
+                "evidence": "scripts/board_lock.py:44,161-172"
+              },
+              {
+                "n": 8,
+                "verdict": "OK",
+                "why": "Evidence records reproducible commands, observed output shapes, known defects, and date-sensitive measurements.",
+                "evidence": "scripts/board_lock.py:118-146"
+              }
+            ],
+            "verdict": "PASS",
+            "worst": "All sections are source-grounded; known defects are explicitly identified and reproduced."
+          },
+          {
+            "file": "04-scripts-bunker-crier-connect-sh.md",
+            "sections": [
+              {
+                "n": 1,
+                "verdict": "OK",
+                "why": "Modes, purpose, signed-read requirement, and documented contradictions match the implementation and cited probes.",
+                "evidence": "scripts/bunker-crier-connect.sh:33-105"
+              },
+              {
+                "n": 2,
+                "verdict": "OK",
+                "why": "Dependencies and helper contracts accurately describe fallback behavior, exit handling, and command shapes.",
+                "evidence": "scripts/bunker-crier-connect.sh:19-80"
+              },
+              {
+                "n": 3,
+                "verdict": "OK",
+                "why": "Syntax, argument, verdict, and idempotence checks specify commands, expected results, and observed outcomes.",
+                "evidence": "scripts/bunker-crier-connect.sh:142-157"
+              },
+              {
+                "n": 4,
+                "verdict": "OK",
+                "why": "Correctly states that no persistent metrics exist and identifies exit codes and failure tally as output signals.",
+                "evidence": "scripts/bunker-crier-connect.sh:90-104"
+              },
+              {
+                "n": 5,
+                "verdict": "OK",
+                "why": "Log formats and emission conditions match lib.sh, the verdict branches, and the source literals.",
+                "evidence": "scripts/bunker-crier-connect.sh:33-43,90-104"
+              },
+              {
+                "n": 6,
+                "verdict": "OK",
+                "why": "Failure modes accurately cover unsigned probes, missing tools, identity mismatches, writes, and degraded fallback behavior.",
+                "evidence": "scripts/bunker-crier-connect.sh:46-104"
+              },
+              {
+                "n": 7,
+                "verdict": "WRONG",
+                "why": "The script reads HOME in remediation output and PATH through command lookup; claiming no environment variable is read is false.",
+                "evidence": "scripts/bunker-crier-connect.sh:51-53,99-100"
+              },
+              {
+                "n": 8,
+                "verdict": "OK",
+                "why": "The hermetic five-case probe and two-write idempotence probe provide reproducible evidence tied to source branches.",
+                "evidence": "scripts/bunker-crier-connect.sh:94-104"
+              }
+            ],
+            "verdict": "FAIL",
+            "worst": "Section 7 falsely says no environment variables are read."
+          },
+          {
+            "file": "05-scripts-bunker-provision-sh.md",
+            "sections": [
+              {
+                "n": 1,
+                "verdict": "WRONG",
+                "why": "Without lib.sh, have and row helpers are undefined; check/apply fail before reaching the claimed exit-0 false green.",
+                "evidence": "scripts/bunker-provision.sh:34-36,181-182"
+              },
+              {
+                "n": 2,
+                "verdict": "WRONG",
+                "why": "The missing-library contract claims exit 0, but undefined have causes early failure before the final tally.",
+                "evidence": "scripts/bunker-provision.sh:36,181-182,303-304"
+              },
+              {
+                "n": 3,
+                "verdict": "WRONG",
+                "why": "The documented check output claims credential modes are measured, but the probe tests only file non-emptiness.",
+                "evidence": "scripts/bunker-provision.sh:213-220"
+              },
+              {
+                "n": 4,
+                "verdict": "OK",
+                "why": "Correctly distinguishes absent metrics from transient failure counts, exit status, and persisted identity state.",
+                "evidence": "scripts/bunker-provision.sh:303-304,546-547"
+              },
+              {
+                "n": 5,
+                "verdict": "WRONG",
+                "why": "Check rows claim mode 600 for credentials, but the staged probe never calls stat or validates modes.",
+                "evidence": "scripts/bunker-provision.sh:213-220"
+              },
+              {
+                "n": 6,
+                "verdict": "WRONG",
+                "why": "The stated missing-lib false-green direction is wrong; undefined helpers and FAILED handling do not yield the claimed normal pass.",
+                "evidence": "scripts/bunker-provision.sh:34-36,181-182,303-304"
+              },
+              {
+                "n": 7,
+                "verdict": "WRONG",
+                "why": "The table says --config reads nothing, directly contradicting argument parsing and load_config execution.",
+                "evidence": "scripts/bunker-provision.sh:562-590"
+              },
+              {
+                "n": 8,
+                "verdict": "WRONG",
+                "why": "The no-lib exit-0 evidence is not supported: missing have causes early failure before the reported summary.",
+                "evidence": "scripts/bunker-provision.sh:36,181-182"
+              }
+            ],
+            "verdict": "FAIL",
+            "worst": "Missing-library behavior, credential-mode measurement, and --config documentation contradict the source."
+          },
+          {
+            "file": "11-scripts-disk-floor-py.md",
+            "sections": [
+              {
+                "n": 1,
+                "verdict": "OK",
+                "why": "Correctly frames the file as a resolver and traces admission, staging, and policy consequences to callers.",
+                "evidence": "scripts/disk_floor.py:115-141"
+              },
+              {
+                "n": 2,
+                "verdict": "WRONG",
+                "why": "It calls the duplicate role tables byte-equal, but one is Python data and the other is shell case syntax.",
+                "evidence": "scripts/disk_floor.py:36; scripts/project-node.sh:150-155"
+              },
+              {
+                "n": 3,
+                "verdict": "WRONG",
+                "why": "The parity command compares sorted output with source code text, so it cannot establish identical triples as claimed.",
+                "evidence": "scripts/project-node.sh:150-155"
+              },
+              {
+                "n": 4,
+                "verdict": "OK",
+                "why": "Correctly identifies that the resolver emits no counters or metrics and that callers own admission counts.",
+                "evidence": "scripts/disk_floor.py:157-171"
+              },
+              {
+                "n": 5,
+                "verdict": "OK",
+                "why": "Resolver outputs and caller rows correspond to the print sites, error branches, and captured JSON contract.",
+                "evidence": "scripts/disk_floor.py:157-171"
+              },
+              {
+                "n": 6,
+                "verdict": "OK",
+                "why": "Failure table accurately documents grammar, bounds, config, fallback, fractional truncation, and interpreter cases.",
+                "evidence": "scripts/disk_floor.py:47-141"
+              },
+              {
+                "n": 7,
+                "verdict": "OK",
+                "why": "Environment defaults, precedence, config lookup, accepted grammar, and bounds match the implementation.",
+                "evidence": "scripts/disk_floor.py:111-152"
+              },
+              {
+                "n": 8,
+                "verdict": "OK",
+                "why": "Evidence includes executable unit, integration, malformed-input, staging, and provenance references with limitations disclosed.",
+                "evidence": "scripts/disk_floor.py:157-171"
+              }
+            ],
+            "verdict": "FAIL",
+            "worst": "Parity verification is invalid, and the document falsely calls unlike source representations byte-equal."
+          },
+          {
+            "file": "33-scripts-project-node-sh.md",
+            "sections": [
+              {
+                "n": 1,
+                "verdict": "OK",
+                "why": "Purpose, layer ordering, staging boundary, fail-closed cases, and historical rationale are source-supported.",
+                "evidence": "scripts/project-node.sh:1-35,106-154"
+              },
+              {
+                "n": 2,
+                "verdict": "OK",
+                "why": "Dependencies and peer contracts accurately name conditional tools, helper semantics, transports, payloads, and degradation.",
+                "evidence": "scripts/project-node.sh:328-458"
+              },
+              {
+                "n": 3,
+                "verdict": "OK",
+                "why": "Verification covers full, scoped, dirty, stale, malformed, missing-tool, and kind-validation paths with outcomes.",
+                "evidence": "scripts/project-node.sh:691-826"
+              },
+              {
+                "n": 4,
+                "verdict": "OK",
+                "why": "Correctly distinguishes no exported metrics from in-process counters and persisted state records.",
+                "evidence": "scripts/project-node.sh:754-826"
+              },
+              {
+                "n": 5,
+                "verdict": "OK",
+                "why": "Listed usage, layer, verdict, skip, warning, and failure lines match source branches and templates.",
+                "evidence": "scripts/project-node.sh:55-82,743-826"
+              },
+              {
+                "n": 6,
+                "verdict": "WRONG",
+                "why": "Missing lib.sh does not fail open silently: unset FAILED triggers a nounset error at the final summary.",
+                "evidence": "scripts/project-node.sh:29,35,825-826"
+              },
+              {
+                "n": 7,
+                "verdict": "OK",
+                "why": "Variables, defaults, lookup sites, and unset effects match initialization, adapter, probe, and manifest code.",
+                "evidence": "scripts/project-node.sh:37-53,781-814"
+              },
+              {
+                "n": 8,
+                "verdict": "OK",
+                "why": "Evidence records source revision, reproducible runs, self-test gates, credential handling, and known scope boundaries.",
+                "evidence": "scripts/project-node.sh:731-826"
+              }
+            ],
+            "verdict": "FAIL",
+            "worst": "Missing lib.sh aborts at unset FAILED; it is not a fail-open silent continuation."
+          }
+        ],
+        "seat_note": "Three modules fail on concrete source contradictions; board-lock documentation passes, with known defects honestly disclosed."
+      },
+      "note": "ok"
+    },
+    "k3": {
+      "verdict": {
+        "modules": [
+          {
+            "file": "03-scripts-board-lock-py.md",
+            "sections": [
+              {
+                "n": 1,
+                "verdict": "OK",
+                "why": "Lock 0 bytes, .gitignore:20, consumers=0, stale header claim all verified live",
+                "evidence": ".gitignore:20; scripts/board_lock.py:4"
+              },
+              {
+                "n": 2,
+                "verdict": "OK",
+                "why": "Every sampled locator matches source lines exactly",
+                "evidence": "scripts/board_lock.py:33-177"
+              },
+              {
+                "n": 3,
+                "verdict": "OK",
+                "why": "Reproduced RESIDUE, ABSENT, one-line exit 0, argparse exit 2",
+                "evidence": "scripts/board_lock.py:149-173"
+              },
+              {
+                "n": 4,
+                "verdict": "OK",
+                "why": "No metrics in source; justification matches single-print design",
+                "evidence": "scripts/board_lock.py:172"
+              },
+              {
+                "n": 5,
+                "verdict": "OK",
+                "why": "Verdict strings and discarded error branch match code",
+                "evidence": "scripts/board_lock.py:83,151-158"
+              },
+              {
+                "n": 6,
+                "verdict": "OK",
+                "why": "Fail-open chmod case confirmed by code path error->RESIDUE",
+                "evidence": "scripts/board_lock.py:83,155-158"
+              },
+              {
+                "n": 7,
+                "verdict": "OK",
+                "why": "Argparse defaults, no env reads, 30s timeout at :139 all confirmed",
+                "evidence": "scripts/board_lock.py:139,167-169"
+              },
+              {
+                "n": 8,
+                "verdict": "OK",
+                "why": "Evidence items rerunnable; count-now-301 vs documented 298/299 as predicted",
+                "evidence": "scripts/board_lock.py:146"
+              }
+            ],
+            "verdict": "PASS",
+            "worst": "Nothing material; probe letters A/H/K described but not shipped as scripts"
+          },
+          {
+            "file": "04-scripts-bunker-crier-connect-sh.md",
+            "sections": [
+              {
+                "n": 1,
+                "verdict": "WRONG",
+                "why": "Claims case 5 health row read FAIL->404; own verbatim evidence shows PASS bus_health; :244-249 is reach loop not identity check",
+                "evidence": "scripts/bunker-crier-connect.sh:43 vs doc line 297; scripts/project-node.sh:467-469"
+              },
+              {
+                "n": 2,
+                "verdict": "OK",
+                "why": "Dependency rows and lib.sh contracts verified line by line",
+                "evidence": "scripts/lib.sh:5-13; scripts/bunker-crier-connect.sh:51-55"
+              },
+              {
+                "n": 3,
+                "verdict": "OK",
+                "why": "Five-case ladder, guards, exit codes match code",
+                "evidence": "scripts/bunker-crier-connect.sh:94-104,155-156"
+              },
+              {
+                "n": 4,
+                "verdict": "OK",
+                "why": "No metrics; exit-code ledger 0/1/2/3 verified",
+                "evidence": "scripts/bunker-crier-connect.sh:97-104"
+              },
+              {
+                "n": 5,
+                "verdict": "OK",
+                "why": "Verbatim lines match source interpolations",
+                "evidence": "scripts/bunker-crier-connect.sh:35-101"
+              },
+              {
+                "n": 6,
+                "verdict": "OK",
+                "why": "Failure directions match case arms and node-bus-worker meanings",
+                "evidence": "scripts/node-bus-worker.py:556-560"
+              },
+              {
+                "n": 7,
+                "verdict": "OK",
+                "why": "Flags, defaults, 10s/45s timeouts, mode-600 chmod verified",
+                "evidence": "scripts/bunker-crier-connect.sh:23,52,115,148"
+              },
+              {
+                "n": 8,
+                "verdict": "OK",
+                "why": "Probe harness is hermetic and outputs match source behaviour",
+                "evidence": "scripts/bunker-crier-connect.sh:129-132"
+              }
+            ],
+            "verdict": "FAIL",
+            "worst": "Section 1 invents a case-5 health-row measurement its own transcript contradicts"
+          },
+          {
+            "file": "05-scripts-bunker-provision-sh.md",
+            "sections": [
+              {
+                "n": 1,
+                "verdict": "WRONG",
+                "why": "lib.sh-absent run reproduced today: exits 1 (ok/have/bad undefined, bunker_cli return 1), not 0",
+                "evidence": "scripts/bunker-provision.sh:36,181-182"
+              },
+              {
+                "n": 2,
+                "verdict": "OK",
+                "why": "Config parser, env_lint exits, seed/identity/gateway contracts verified",
+                "evidence": "scripts/bunker-provision.sh:96-153,446-528"
+              },
+              {
+                "n": 3,
+                "verdict": "OK",
+                "why": "Fixtures match selftest \u00a740 arms and parser code",
+                "evidence": "tests/selftest.sh:1971-1997,2055-2060"
+              },
+              {
+                "n": 4,
+                "verdict": "OK",
+                "why": "No metrics; exit semantics and timeout caps verified",
+                "evidence": "scripts/bunker-provision.sh:187,226,268,303-304"
+              },
+              {
+                "n": 5,
+                "verdict": "OK",
+                "why": "Row templates and verdict lines match source and lib.sh",
+                "evidence": "scripts/bunker-provision.sh:303,546,552-557"
+              },
+              {
+                "n": 6,
+                "verdict": "WRONG",
+                "why": "Same false claim: missing lib.sh yields exit 1 with shell errors, never exit 0; recovery advice moot",
+                "evidence": "scripts/bunker-provision.sh:36,181-182,304"
+              },
+              {
+                "n": 7,
+                "verdict": "OK",
+                "why": "All keys/flags, tilde asymmetry, CLI-wins precedence verified",
+                "evidence": "scripts/bunker-provision.sh:562-609,576-581"
+              },
+              {
+                "n": 8,
+                "verdict": "WRONG",
+                "why": "Transcript claim 'exited 0' for no-lib.sh copy not reproducible; measured exit 1",
+                "evidence": "scripts/bunker-provision.sh:36; live repro 2026-11-05"
+              }
+            ],
+            "verdict": "FAIL",
+            "worst": "False-green 'missing lib.sh exits 0' claim measured three times; actually exits 1"
+          },
+          {
+            "file": "11-scripts-disk-floor-py.md",
+            "sections": [
+              {
+                "n": 1,
+                "verdict": "OK",
+                "why": "Resolver role, CF-007/CF-075 rows, N-5, staging validator all verified",
+                "evidence": ".coding-hermes/board/tasks.jsonl:7; scripts/node-create.sh:23-26"
+              },
+              {
+                "n": 2,
+                "verdict": "OK",
+                "why": "Imports, regex, tomllib guard, exit contract match source",
+                "evidence": "scripts/disk_floor.py:40,81-89,169-171"
+              },
+              {
+                "n": 3,
+                "verdict": "OK",
+                "why": "All checks reproduced: roles, rungs 1-5, 12 unit tests OK, both ladder arms",
+                "evidence": "tests/test_disk_floor.py; scripts/disk_floor.py:126-141"
+              },
+              {
+                "n": 4,
+                "verdict": "OK",
+                "why": "No metrics confirmed; four print sites enumerated correctly",
+                "evidence": "scripts/disk_floor.py:161-170"
+              },
+              {
+                "n": 5,
+                "verdict": "OK",
+                "why": "Every verbatim line matches source strings exactly",
+                "evidence": "scripts/disk_floor.py:63-71,122-125"
+              },
+              {
+                "n": 6,
+                "verdict": "OK",
+                "why": "Reproduced: corrupt TOML traceback exit 1, silent missing config, 1.9G->1",
+                "evidence": "scripts/disk_floor.py:67,79-86"
+              },
+              {
+                "n": 7,
+                "verdict": "OK",
+                "why": "Env defaults, bounds, grammar incl 7GIB rejection verified live",
+                "evidence": "scripts/disk_floor.py:38-40,149-152"
+              },
+              {
+                "n": 8,
+                "verdict": "OK",
+                "why": "Provenance, spec basis, per-unit table verified; defects filed honestly",
+                "evidence": "specs/NODE.md:107-146; examples/floor.toml.example:7-11"
+              }
+            ],
+            "verdict": "PASS",
+            "worst": "Header Status line still carries unfilled placeholder '__N__ locators'"
+          },
+          {
+            "file": "33-scripts-project-node-sh.md",
+            "sections": [
+              {
+                "n": 1,
+                "verdict": "OK",
+                "why": "Layer set, staging contract, fail-closed claims verified; :11-12 says '90 verify' not 'manifest' (code prints manifest at :779)",
+                "evidence": "scripts/project-node.sh:11-12,779; scripts/node-create.sh:23"
+              },
+              {
+                "n": 2,
+                "verdict": "OK",
+                "why": "All sampled deps and contracts resolve; adapter-counts-rows claim confirmed (rc at :454 unused)",
+                "evidence": "scripts/project-node.sh:330-331,444-458"
+              },
+              {
+                "n": 3,
+                "verdict": "OK",
+                "why": "Live run reproduces NODE: FAIL (4) verbatim incl python 3.14.9 pin refusal",
+                "evidence": "scripts/project-node.sh:826; scripts/harness/install-hermes.sh:17-22"
+              },
+              {
+                "n": 4,
+                "verdict": "OK",
+                "why": "No metrics structural; only off-locator: 30s bound cited :306, actually :315",
+                "evidence": "scripts/project-node.sh:315,826"
+              },
+              {
+                "n": 5,
+                "verdict": "OK",
+                "why": "Log lines match source interpolations and lib.sh shapes",
+                "evidence": "scripts/project-node.sh:164-185,346,748-756"
+              },
+              {
+                "n": 6,
+                "verdict": "OK",
+                "why": "Failure directions verified incl no-row mktemp hole and unborn-HEAD repo PASS",
+                "evidence": "scripts/project-node.sh:448-458,695-696"
+              },
+              {
+                "n": 7,
+                "verdict": "OK",
+                "why": "Env table verified; USER default node, CRIER_BASE example URL, GO_INSTALL_ROOT all match",
+                "evidence": "scripts/project-node.sh:37-50,414,808-810"
+              },
+              {
+                "n": 8,
+                "verdict": "OK",
+                "why": "826-line claim, selftest sections 2/13/14/20/47/49, master_doc_check.py all exist as cited",
+                "evidence": "tests/selftest.sh:14,518,528,938,2829,3284"
+              }
+            ],
+            "verdict": "PASS",
+            "worst": "Two off-by-one locators (Go-probe bound :306 vs :315; '90 verify' vs manifest wording)"
+          }
+        ],
+        "seat_note": "04 fabricates a probe measurement its own evidence contradicts; 05's thrice-claimed exit-0-on-missing-lib.sh reproduces as exit 1; 03/11/33 verified end-to-end, 11 has an unfilled __N__ placeholder."
+      },
+      "note": "ok"
+    },
+    "flash": {
+      "verdict": null,
+      "note": "no JSON verdict in the reply (14219 chars)"
+    }
+  },
+  "tally": {
+    "03-scripts-board-lock-py.md": {
+      "module_verdicts": {
+        "sol": "PASS",
+        "k3": "PASS"
+      },
+      "sections": {
+        "1": {
+          "sol": [
+            "OK",
+            "Purpose, risks, and measured contradictions are tied to source, board facts, or reproduced probes.",
+            "scripts/board_lock.py:149-158"
+          ],
+          "k3": [
+            "OK",
+            "Lock 0 bytes, .gitignore:20, consumers=0, stale header claim all verified live",
+            ".gitignore:20; scripts/board_lock.py:4"
+          ]
+        },
+        "2": {
+          "sol": [
+            "OK",
+            "Runtime, library, and local Git contracts name dependencies, directions, degradation, and relevant source lines.",
+            "scripts/board_lock.py:33-57"
+          ],
+          "k3": [
+            "OK",
+            "Every sampled locator matches source lines exactly",
+            "scripts/board_lock.py:33-177"
+          ]
+        },
+        "3": {
+          "sol": [
+            "OK",
+            "Verification includes runnable positive and negative probes, expected outputs, exit codes, and recorded failures.",
+            "scripts/board_lock.py:149-173"
+          ],
+          "k3": [
+            "OK",
+            "Reproduced RESIDUE, ABSENT, one-line exit 0, argparse exit 2",
+            "scripts/board_lock.py:149-173"
+          ]
+        },
+        "4": {
+          "sol": [
+            "OK",
+            "Correctly distinguishes absent metrics from the two transient counts embedded in verdict output.",
+            "scripts/board_lock.py:118-146"
+          ],
+          "k3": [
+            "OK",
+            "No metrics in source; justification matches single-print design",
+            "scripts/board_lock.py:172"
+          ]
+        },
+        "5": {
+          "sol": [
+            "OK",
+            "Lists normal verdicts, parser diagnostics, discarded probe errors, and traceback conditions with emission triggers.",
+            "scripts/board_lock.py:149-172"
+          ],
+          "k3": [
+            "OK",
+            "Verdict strings and discarded error branch match code",
+            "scripts/board_lock.py:83,151-158"
+          ]
+        },
+        "6": {
+          "sol": [
+            "OK",
+            "Failure table accurately distinguishes false holders, probe errors, degraded Git counts, invalid paths, and scoped consumer evidence.",
+            "scripts/board_lock.py:73-94"
+          ],
+          "k3": [
+            "OK",
+            "Fail-open chmod case confirmed by code path error->RESIDUE",
+            "scripts/board_lock.py:83,155-158"
+          ]
+        },
+        "7": {
+          "sol": [
+            "OK",
+            "Documents derived repository paths, positional input, inherited PATH, help behavior, and absence of configuration files.",
+            "scripts/board_lock.py:44,161-172"
+          ],
+          "k3": [
+            "OK",
+            "Argparse defaults, no env reads, 30s timeout at :139 all confirmed",
+            "scripts/board_lock.py:139,167-169"
+          ]
+        },
+        "8": {
+          "sol": [
+            "OK",
+            "Evidence records reproducible commands, observed output shapes, known defects, and date-sensitive measurements.",
+            "scripts/board_lock.py:118-146"
+          ],
+          "k3": [
+            "OK",
+            "Evidence items rerunnable; count-now-301 vs documented 298/299 as predicted",
+            "scripts/board_lock.py:146"
+          ]
+        }
+      }
+    },
+    "04-scripts-bunker-crier-connect-sh.md": {
+      "module_verdicts": {
+        "sol": "FAIL",
+        "k3": "FAIL"
+      },
+      "sections": {
+        "1": {
+          "sol": [
+            "OK",
+            "Modes, purpose, signed-read requirement, and documented contradictions match the implementation and cited probes.",
+            "scripts/bunker-crier-connect.sh:33-105"
+          ],
+          "k3": [
+            "WRONG",
+            "Claims case 5 health row read FAIL->404; own verbatim evidence shows PASS bus_health; :244-249 is reach loop not identity check",
+            "scripts/bunker-crier-connect.sh:43 vs doc line 297; scripts/project-node.sh:467-469"
+          ]
+        },
+        "2": {
+          "sol": [
+            "OK",
+            "Dependencies and helper contracts accurately describe fallback behavior, exit handling, and command shapes.",
+            "scripts/bunker-crier-connect.sh:19-80"
+          ],
+          "k3": [
+            "OK",
+            "Dependency rows and lib.sh contracts verified line by line",
+            "scripts/lib.sh:5-13; scripts/bunker-crier-connect.sh:51-55"
+          ]
+        },
+        "3": {
+          "sol": [
+            "OK",
+            "Syntax, argument, verdict, and idempotence checks specify commands, expected results, and observed outcomes.",
+            "scripts/bunker-crier-connect.sh:142-157"
+          ],
+          "k3": [
+            "OK",
+            "Five-case ladder, guards, exit codes match code",
+            "scripts/bunker-crier-connect.sh:94-104,155-156"
+          ]
+        },
+        "4": {
+          "sol": [
+            "OK",
+            "Correctly states that no persistent metrics exist and identifies exit codes and failure tally as output signals.",
+            "scripts/bunker-crier-connect.sh:90-104"
+          ],
+          "k3": [
+            "OK",
+            "No metrics; exit-code ledger 0/1/2/3 verified",
+            "scripts/bunker-crier-connect.sh:97-104"
+          ]
+        },
+        "5": {
+          "sol": [
+            "OK",
+            "Log formats and emission conditions match lib.sh, the verdict branches, and the source literals.",
+            "scripts/bunker-crier-connect.sh:33-43,90-104"
+          ],
+          "k3": [
+            "OK",
+            "Verbatim lines match source interpolations",
+            "scripts/bunker-crier-connect.sh:35-101"
+          ]
+        },
+        "6": {
+          "sol": [
+            "OK",
+            "Failure modes accurately cover unsigned probes, missing tools, identity mismatches, writes, and degraded fallback behavior.",
+            "scripts/bunker-crier-connect.sh:46-104"
+          ],
+          "k3": [
+            "OK",
+            "Failure directions match case arms and node-bus-worker meanings",
+            "scripts/node-bus-worker.py:556-560"
+          ]
+        },
+        "7": {
+          "sol": [
+            "WRONG",
+            "The script reads HOME in remediation output and PATH through command lookup; claiming no environment variable is read is false.",
+            "scripts/bunker-crier-connect.sh:51-53,99-100"
+          ],
+          "k3": [
+            "OK",
+            "Flags, defaults, 10s/45s timeouts, mode-600 chmod verified",
+            "scripts/bunker-crier-connect.sh:23,52,115,148"
+          ]
+        },
+        "8": {
+          "sol": [
+            "OK",
+            "The hermetic five-case probe and two-write idempotence probe provide reproducible evidence tied to source branches.",
+            "scripts/bunker-crier-connect.sh:94-104"
+          ],
+          "k3": [
+            "OK",
+            "Probe harness is hermetic and outputs match source behaviour",
+            "scripts/bunker-crier-connect.sh:129-132"
+          ]
+        }
+      }
+    },
+    "05-scripts-bunker-provision-sh.md": {
+      "module_verdicts": {
+        "sol": "FAIL",
+        "k3": "FAIL"
+      },
+      "sections": {
+        "1": {
+          "sol": [
+            "WRONG",
+            "Without lib.sh, have and row helpers are undefined; check/apply fail before reaching the claimed exit-0 false green.",
+            "scripts/bunker-provision.sh:34-36,181-182"
+          ],
+          "k3": [
+            "WRONG",
+            "lib.sh-absent run reproduced today: exits 1 (ok/have/bad undefined, bunker_cli return 1), not 0",
+            "scripts/bunker-provision.sh:36,181-182"
+          ]
+        },
+        "2": {
+          "sol": [
+            "WRONG",
+            "The missing-library contract claims exit 0, but undefined have causes early failure before the final tally.",
+            "scripts/bunker-provision.sh:36,181-182,303-304"
+          ],
+          "k3": [
+            "OK",
+            "Config parser, env_lint exits, seed/identity/gateway contracts verified",
+            "scripts/bunker-provision.sh:96-153,446-528"
+          ]
+        },
+        "3": {
+          "sol": [
+            "WRONG",
+            "The documented check output claims credential modes are measured, but the probe tests only file non-emptiness.",
+            "scripts/bunker-provision.sh:213-220"
+          ],
+          "k3": [
+            "OK",
+            "Fixtures match selftest \u00a740 arms and parser code",
+            "tests/selftest.sh:1971-1997,2055-2060"
+          ]
+        },
+        "4": {
+          "sol": [
+            "OK",
+            "Correctly distinguishes absent metrics from transient failure counts, exit status, and persisted identity state.",
+            "scripts/bunker-provision.sh:303-304,546-547"
+          ],
+          "k3": [
+            "OK",
+            "No metrics; exit semantics and timeout caps verified",
+            "scripts/bunker-provision.sh:187,226,268,303-304"
+          ]
+        },
+        "5": {
+          "sol": [
+            "WRONG",
+            "Check rows claim mode 600 for credentials, but the staged probe never calls stat or validates modes.",
+            "scripts/bunker-provision.sh:213-220"
+          ],
+          "k3": [
+            "OK",
+            "Row templates and verdict lines match source and lib.sh",
+            "scripts/bunker-provision.sh:303,546,552-557"
+          ]
+        },
+        "6": {
+          "sol": [
+            "WRONG",
+            "The stated missing-lib false-green direction is wrong; undefined helpers and FAILED handling do not yield the claimed normal pass.",
+            "scripts/bunker-provision.sh:34-36,181-182,303-304"
+          ],
+          "k3": [
+            "WRONG",
+            "Same false claim: missing lib.sh yields exit 1 with shell errors, never exit 0; recovery advice moot",
+            "scripts/bunker-provision.sh:36,181-182,304"
+          ]
+        },
+        "7": {
+          "sol": [
+            "WRONG",
+            "The table says --config reads nothing, directly contradicting argument parsing and load_config execution.",
+            "scripts/bunker-provision.sh:562-590"
+          ],
+          "k3": [
+            "OK",
+            "All keys/flags, tilde asymmetry, CLI-wins precedence verified",
+            "scripts/bunker-provision.sh:562-609,576-581"
+          ]
+        },
+        "8": {
+          "sol": [
+            "WRONG",
+            "The no-lib exit-0 evidence is not supported: missing have causes early failure before the reported summary.",
+            "scripts/bunker-provision.sh:36,181-182"
+          ],
+          "k3": [
+            "WRONG",
+            "Transcript claim 'exited 0' for no-lib.sh copy not reproducible; measured exit 1",
+            "scripts/bunker-provision.sh:36; live repro 2026-11-05"
+          ]
+        }
+      }
+    },
+    "11-scripts-disk-floor-py.md": {
+      "module_verdicts": {
+        "sol": "FAIL",
+        "k3": "PASS"
+      },
+      "sections": {
+        "1": {
+          "sol": [
+            "OK",
+            "Correctly frames the file as a resolver and traces admission, staging, and policy consequences to callers.",
+            "scripts/disk_floor.py:115-141"
+          ],
+          "k3": [
+            "OK",
+            "Resolver role, CF-007/CF-075 rows, N-5, staging validator all verified",
+            ".coding-hermes/board/tasks.jsonl:7; scripts/node-create.sh:23-26"
+          ]
+        },
+        "2": {
+          "sol": [
+            "WRONG",
+            "It calls the duplicate role tables byte-equal, but one is Python data and the other is shell case syntax.",
+            "scripts/disk_floor.py:36; scripts/project-node.sh:150-155"
+          ],
+          "k3": [
+            "OK",
+            "Imports, regex, tomllib guard, exit contract match source",
+            "scripts/disk_floor.py:40,81-89,169-171"
+          ]
+        },
+        "3": {
+          "sol": [
+            "WRONG",
+            "The parity command compares sorted output with source code text, so it cannot establish identical triples as claimed.",
+            "scripts/project-node.sh:150-155"
+          ],
+          "k3": [
+            "OK",
+            "All checks reproduced: roles, rungs 1-5, 12 unit tests OK, both ladder arms",
+            "tests/test_disk_floor.py; scripts/disk_floor.py:126-141"
+          ]
+        },
+        "4": {
+          "sol": [
+            "OK",
+            "Correctly identifies that the resolver emits no counters or metrics and that callers own admission counts.",
+            "scripts/disk_floor.py:157-171"
+          ],
+          "k3": [
+            "OK",
+            "No metrics confirmed; four print sites enumerated correctly",
+            "scripts/disk_floor.py:161-170"
+          ]
+        },
+        "5": {
+          "sol": [
+            "OK",
+            "Resolver outputs and caller rows correspond to the print sites, error branches, and captured JSON contract.",
+            "scripts/disk_floor.py:157-171"
+          ],
+          "k3": [
+            "OK",
+            "Every verbatim line matches source strings exactly",
+            "scripts/disk_floor.py:63-71,122-125"
+          ]
+        },
+        "6": {
+          "sol": [
+            "OK",
+            "Failure table accurately documents grammar, bounds, config, fallback, fractional truncation, and interpreter cases.",
+            "scripts/disk_floor.py:47-141"
+          ],
+          "k3": [
+            "OK",
+            "Reproduced: corrupt TOML traceback exit 1, silent missing config, 1.9G->1",
+            "scripts/disk_floor.py:67,79-86"
+          ]
+        },
+        "7": {
+          "sol": [
+            "OK",
+            "Environment defaults, precedence, config lookup, accepted grammar, and bounds match the implementation.",
+            "scripts/disk_floor.py:111-152"
+          ],
+          "k3": [
+            "OK",
+            "Env defaults, bounds, grammar incl 7GIB rejection verified live",
+            "scripts/disk_floor.py:38-40,149-152"
+          ]
+        },
+        "8": {
+          "sol": [
+            "OK",
+            "Evidence includes executable unit, integration, malformed-input, staging, and provenance references with limitations disclosed.",
+            "scripts/disk_floor.py:157-171"
+          ],
+          "k3": [
+            "OK",
+            "Provenance, spec basis, per-unit table verified; defects filed honestly",
+            "specs/NODE.md:107-146; examples/floor.toml.example:7-11"
+          ]
+        }
+      }
+    },
+    "33-scripts-project-node-sh.md": {
+      "module_verdicts": {
+        "sol": "FAIL",
+        "k3": "PASS"
+      },
+      "sections": {
+        "1": {
+          "sol": [
+            "OK",
+            "Purpose, layer ordering, staging boundary, fail-closed cases, and historical rationale are source-supported.",
+            "scripts/project-node.sh:1-35,106-154"
+          ],
+          "k3": [
+            "OK",
+            "Layer set, staging contract, fail-closed claims verified; :11-12 says '90 verify' not 'manifest' (code prints manifest at :779)",
+            "scripts/project-node.sh:11-12,779; scripts/node-create.sh:23"
+          ]
+        },
+        "2": {
+          "sol": [
+            "OK",
+            "Dependencies and peer contracts accurately name conditional tools, helper semantics, transports, payloads, and degradation.",
+            "scripts/project-node.sh:328-458"
+          ],
+          "k3": [
+            "OK",
+            "All sampled deps and contracts resolve; adapter-counts-rows claim confirmed (rc at :454 unused)",
+            "scripts/project-node.sh:330-331,444-458"
+          ]
+        },
+        "3": {
+          "sol": [
+            "OK",
+            "Verification covers full, scoped, dirty, stale, malformed, missing-tool, and kind-validation paths with outcomes.",
+            "scripts/project-node.sh:691-826"
+          ],
+          "k3": [
+            "OK",
+            "Live run reproduces NODE: FAIL (4) verbatim incl python 3.14.9 pin refusal",
+            "scripts/project-node.sh:826; scripts/harness/install-hermes.sh:17-22"
+          ]
+        },
+        "4": {
+          "sol": [
+            "OK",
+            "Correctly distinguishes no exported metrics from in-process counters and persisted state records.",
+            "scripts/project-node.sh:754-826"
+          ],
+          "k3": [
+            "OK",
+            "No metrics structural; only off-locator: 30s bound cited :306, actually :315",
+            "scripts/project-node.sh:315,826"
+          ]
+        },
+        "5": {
+          "sol": [
+            "OK",
+            "Listed usage, layer, verdict, skip, warning, and failure lines match source branches and templates.",
+            "scripts/project-node.sh:55-82,743-826"
+          ],
+          "k3": [
+            "OK",
+            "Log lines match source interpolations and lib.sh shapes",
+            "scripts/project-node.sh:164-185,346,748-756"
+          ]
+        },
+        "6": {
+          "sol": [
+            "WRONG",
+            "Missing lib.sh does not fail open silently: unset FAILED triggers a nounset error at the final summary.",
+            "scripts/project-node.sh:29,35,825-826"
+          ],
+          "k3": [
+            "OK",
+            "Failure directions verified incl no-row mktemp hole and unborn-HEAD repo PASS",
+            "scripts/project-node.sh:448-458,695-696"
+          ]
+        },
+        "7": {
+          "sol": [
+            "OK",
+            "Variables, defaults, lookup sites, and unset effects match initialization, adapter, probe, and manifest code.",
+            "scripts/project-node.sh:37-53,781-814"
+          ],
+          "k3": [
+            "OK",
+            "Env table verified; USER default node, CRIER_BASE example URL, GO_INSTALL_ROOT all match",
+            "scripts/project-node.sh:37-50,414,808-810"
+          ]
+        },
+        "8": {
+          "sol": [
+            "OK",
+            "Evidence records source revision, reproducible runs, self-test gates, credential handling, and known scope boundaries.",
+            "scripts/project-node.sh:731-826"
+          ],
+          "k3": [
+            "OK",
+            "826-line claim, selftest sections 2/13/14/20/47/49, master_doc_check.py all exist as cited",
+            "tests/selftest.sh:14,518,528,938,2829,3284"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -2,15 +2,23 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/harness/install-hermes.sh` |
+| Path | `/home/kara/code-factory/scripts/harness/install-hermes.sh` — 307 lines, one file, two modes (`--check` is the default) [scripts/harness/install-hermes.sh:1] [scripts/harness/install-hermes.sh:24] |
 | Repository | `code-factory` |
-| Revision | `3c4c639` |
-| Status | **RED — no verification recorded** |
+| Revision | `b31c232` |
+| Status | **VERIFIED** — `--check` executed in four arms on 2026-11-05 (§3), 247 locator citations (127 distinct) resolving, `scripts/master_doc_check.py --only 17- --strict` → `MASTER-DOC: PASS` |
 
 ## 1. Purpose and why it matters
 
-- What breaks if this module is absent: **UNKNOWN** (fill from behaviour, prove it).
-- What breaks if it lies: **UNKNOWN** (every self-reporting component has this failure mode).
+- What it is: the **measured** Hermes adapter — the only harness in this repo whose install ladder has actually been walked [AGENTS.md:87]. `--check` prints one named row per gate it can measure on the current host: `python`, `binary`, `version`, `port`, `status_probe`, `inference_key` [scripts/harness/install-hermes.sh:215-254]. `--apply` installs `hermes-agent==$PIN` into `$HOME/hermes-venv` from the index and then starts `hermes serve --host 0.0.0.0 --port $PORT --skip-build` under `nohup` [scripts/harness/install-hermes.sh:256-304].
+- Why this installer is not equivalent to the others: the foreman is always Hermes, on the project's node, because a harness that cannot write the board cannot grade a row [specs/HARNESS-MATRIX.md:18] (fact: FACT-01). So a node without this adapter is not a node with a weaker harness — it is a node with no foreman at all. Its absence is graded mechanically by the parent layer, which refuses to run when the adapter file is missing: `FAIL  harness:$HARNESS — no adapter at scripts/harness/install-$HARNESS.sh` [scripts/project-node.sh:440-442].
+- What breaks if it is ABSENT: `project-node.sh` layer 20 emits one FAIL and the node has no gateway, so no `/api/status`, no tick, no board write [scripts/project-node.sh:442]. The provisioning wrapper still reports success for everything else, which is why the missing-adapter row is the only signal.
+- What breaks if it LIES — the gateway question, answered exactly:
+  - **This installer never writes `dashboard.basic_auth`.** All five occurrences in the file are reads or text: the header comment [scripts/harness/install-hermes.sh:11], three inside the embedded parser that *demands* the key [scripts/harness/install-hermes.sh:202] [scripts/harness/install-hermes.sh:204] [scripts/harness/install-hermes.sh:206], and the refusal row [scripts/harness/install-hermes.sh:301]. The only access to the config is `Path(...).read_text()` inside the same parser, invoked at [scripts/harness/install-hermes.sh:69]; there is no write to `config.yaml` anywhere in the file.
+  - **Auth is written by a separate script, and only by the provisioning wrapper.** `scripts/node_gateway_auth.py` appends the block atomically at mode 600 [scripts/node_gateway_auth.py:74-83]. Its only caller in the tree is `scripts/bunker-provision.sh`, gated to the hermes harness [scripts/bunker-provision.sh:480], staging the script at mode 600 [scripts/bunker-provision.sh:483], running it against `$HOME/.hermes/config.yaml` with the password landing in `$HOME/.node/auth/gateway.pass` [scripts/bunker-provision.sh:487], then deleting the staged copy [scripts/bunker-provision.sh:495], all **before** node plumbing calls `node-create.sh` [scripts/bunker-provision.sh:500-504].
+  - **CF-150 is still true in the code.** The standalone create path still has no auth writer: `basic_auth` appears 0 times in `scripts/node-create.sh` and `scripts/project-node.sh`, and 0 times as a write in this installer. A node created by `node-create.sh` → `project-node.sh --apply` therefore reaches the gateway start with no credentials and is refused (§6), so `NODE: PASS` is unreachable by that route. The row's premise is now half-overtaken: the *wrapper* path does write the block, so the defect belongs to the standalone paths, not to provisioning through `bunker-provision.sh`. Board status at this revision: `CF-150` = `pending`.
+  - **The auth check runs only where a listener is about to be started.** `check_public_bind_auth` is called from exactly one place, inside `--apply`, inside the branch that fires only when nothing is listening on the port [scripts/harness/install-hermes.sh:256] [scripts/harness/install-hermes.sh:282-283]. A gateway that is *already* listening is never auth-checked: the occupied-port arm prints `PASS  port` and `PASS  status_probe` and continues [scripts/harness/install-hermes.sh:234-238]. `--check` cannot report "the gateway is up and unauthenticated" — it has no row for it at all. That is the live exposure this module owns, and it is `CF-192`, `pending` at this revision (§6, D-2).
+  - **What the status probe does and does not measure.** It is a liveness probe: `GET http://127.0.0.1:$PORT/api/status`, expecting `200` [scripts/harness/install-hermes.sh:236] [scripts/harness/install-hermes.sh:286], chosen because `hermes serve` has no `/health` (it 302s to login) [scripts/harness/install-hermes.sh:237]. A 200 proves a process answered; it proves nothing about whether auth is enforced, and no authenticated-route probe exists in this file.
+  - **Credential handling.** The password is read from `dashboard.basic_auth.username|password` and never echoed; the parser writes only a reason string to stdout [scripts/harness/install-hermes.sh:206-211] [scripts/harness/install-hermes.sh:69]. That matches the fleet rule that credentials travel as file paths at mode 600, not argv values [docs/master/_facts.md:16] (fact: FACT-05).
 
 ## 2. Dependencies and library contracts
 
@@ -18,69 +26,206 @@
 
 | Dependency | Version | Where it must exist | Absence detected by |
 |---|---|---|---|
-| — | — | — | **RED: none identified mechanically** |
+| `bash` | needs `set -uo pipefail` and `local` [scripts/harness/install-hermes.sh:12] | the shebang interpreter [scripts/harness/install-hermes.sh:1] | **not detected** — the shell is already running; a `sh` fails on line 12 before any row prints |
+| `scripts/lib.sh` | the repo's own 65-line file [scripts/lib.sh:1] | beside the script, `$HERE/../lib.sh` [scripts/harness/install-hermes.sh:13-14] | **measured**: sourcing is unguarded, so a lone copy prints `install-hermes.sh: line 14: …/lib.sh: No such file or directory`, then `say: command not found`, then `ok: command not found`, exit 1 (§3, check 7) |
+| python interpreter, 3.11 ≤ v < 3.14 | `$HERMES_PYTHON_BIN`, default `python3` [scripts/harness/install-hermes.sh:19]; bounds hard-coded [scripts/harness/install-hermes.sh:20-23] | on `PATH` (or an absolute path in the variable) | `FAIL  python — unable to run python3 --version` [scripts/harness/install-hermes.sh:41-43]; unparseable output → `unable to determine interpreter version from: …` [scripts/harness/install-hermes.sh:45-48]; out of range → `hermes-agent 0.19.0 requires python >=3.11,<3.14; found <v>` [scripts/harness/install-hermes.sh:55-60]. This gate is **fatal**: `check_python_compatibility \|\| exit 1` [scripts/harness/install-hermes.sh:216] |
+| `venv` module of that interpreter | stdlib | same interpreter | `FAIL  venv — creation failed` then `exit 1` [scripts/harness/install-hermes.sh:262] |
+| `pip` of the venv interpreter, with index access | unpinned; whatever `python -m venv` seeds | `$VENV/bin/python -m pip` [scripts/harness/install-hermes.sh:270] | `FAIL  install — pip exited <n> — log: <path>` [scripts/harness/install-hermes.sh:275]; the reason is only in the log |
+| `hermes-agent` at the pin | `0.19.0` default [scripts/harness/install-hermes.sh:17] | `$VENV/bin/hermes` [scripts/harness/install-hermes.sh:18] | `FAIL  binary — absent — run --apply` [scripts/harness/install-hermes.sh:230]; wrong version → `FAIL  version — <v> != pin <PIN>` [scripts/harness/install-hermes.sh:227-228] |
+| `hermes` on `PATH` | 0.22.5+3030.g770a952 measured here | `command -v hermes` through `have` [scripts/harness/install-hermes.sh:26] [scripts/lib.sh:13] | reported as **host-provided**, not certified: `FAIL  binary — host-provided <path> (not installed by this adapter — run --apply)` [scripts/harness/install-hermes.sh:224] |
+| `curl` | 8.x, unpinned | `PATH` | not detected directly: `-w '%{http_code}'` failure renders `000` and the `\|\| echo 000` fallback appends a second one, i.e. `000000` (§6, D-5) [scripts/harness/install-hermes.sh:236] |
+| `ss` | iproute2, unpinned | `PATH` | **optional**: absent → the port row degrades to `WARN  port — ss unavailable — listener unconfirmed; /api/status 200 is the evidence` [scripts/harness/install-hermes.sh:291-295] |
+| `mktemp` | coreutils | `PATH` | `FAIL  install_log — cannot create <template> — <error>` then `exit 1`, before pip is invoked [scripts/harness/install-hermes.sh:264-268] |
+| `nohup`, `sleep`, `grep`, `sed`, `head` | coreutils / grep / sed | `PATH` | not detected; `nohup` absence makes the start row fail with a shell error, `sleep` provides the fixed 6 s wait [scripts/harness/install-hermes.sh:284-285] |
+| Node/npm | **not required** | — | the backend starts with `--skip-build` [scripts/harness/install-hermes.sh:284]; the file's own measurement header records "no node/npm" [scripts/harness/install-hermes.sh:5] |
+| `~/.hermes/config.yaml`, `~/.hermes/.env` | input data, not packages | `$HOME` | config: five refusal reasons [scripts/harness/install-hermes.sh:184-211]; env: `FAIL  inference_key — no provider key — a turn dies at 'No inference provider configured'` [scripts/harness/install-hermes.sh:250-253] |
 
 ### 2b. Library contracts
 
 | Import | Provider | Contract relied on | If it changes |
 |---|---|---|---|
-| `json` | — | **UNKNOWN** | **UNKNOWN** |
-| `pathlib` | — | **UNKNOWN** | **UNKNOWN** |
-| `re` | — | **UNKNOWN** | **UNKNOWN** |
-| `sys` | — | **UNKNOWN** | **UNKNOWN** |
+| `. "$HERE/../lib.sh"` [scripts/harness/install-hermes.sh:14] | `scripts/lib.sh` | Six helpers and one shared counter: `say` = `printf '%s\n'` [scripts/lib.sh:5]; `ok` = `  PASS  %s — %s` [scripts/lib.sh:6]; `bad` = `  FAIL  %s — %s` **and** `FAILED=$((FAILED+1))` [scripts/lib.sh:7]; `warn` = `  WARN  %s — %s` [scripts/lib.sh:8]; `note` = `  ..    %s` [scripts/lib.sh:9]; `FAILED=${FAILED:-0}` [scripts/lib.sh:11]; `have` = `command -v` passthrough [scripts/lib.sh:13] | The module's only verdict is `[ "$FAILED" -eq 0 ]` [scripts/harness/install-hermes.sh:307], and the only tally is `bad`'s side effect: dropping the increment turns `HERMES: FAIL (n)` into `HERMES: PASS` with the FAIL rows still printed. The row **format** is separately load-bearing: the parent counts `^  FAIL` in this output [scripts/project-node.sh:455] |
+| `json`, `re`, `sys`, `pathlib` inside the embedded parser [scripts/harness/install-hermes.sh:70-73] | Python stdlib, on `$config_python` — the venv interpreter when it exists, else `$PYTHON_BIN` [scripts/harness/install-hermes.sh:67-68] | `json.loads` for double-quoted scalars [scripts/harness/install-hermes.sh:110-115]; `re.fullmatch` and `re.search` for the key grammar and the commented-block detection [scripts/harness/install-hermes.sh:117] [scripts/harness/install-hermes.sh:204]; `Path.read_text` for the file [scripts/harness/install-hermes.sh:185] | The parser is **deliberately PyYAML-free**: it accepts a strict YAML subset identically with or without PyYAML, and "no parser dependency may turn a valid block into an unavailable-parser refusal" [scripts/harness/install-hermes.sh:81-83]. Any config syntax outside that subset (aliases, tags, flow collections, multiline scalars) is refused as `block absent (invalid YAML)` [scripts/harness/install-hermes.sh:199-200] |
+| the same parser's indentation model [scripts/harness/install-hermes.sh:139-181] | `~/.hermes/config.yaml` as the node's own tooling writes it | A block sequence written at the **same** indent as its key (`custom_providers:` followed by `- name: …`) must parse without invalidating the file [scripts/harness/install-hermes.sh:160-178] — the comment records the measured cost of getting this wrong: every node carrying a list reported "block absent (invalid YAML)" and never started a gateway [scripts/harness/install-hermes.sh:166-168] | Tightening it re-breaks every config the node writes; the failure is silent (no gateway, `FAIL  gateway_start — refused`) |
+| `"$VENV/bin/hermes" --version` [scripts/harness/install-hermes.sh:27-37] | the pinned CLI | First line contains a semver; the first `v?N.N.N…` token is taken and the rest is kept, so `0.22.5+3030.g770a952` survives the match [scripts/harness/install-hermes.sh:31-33]; no match → raw line, `return 1` [scripts/harness/install-hermes.sh:34-36] | A build that prints a bare `v0.19.0` still matches; one that prints `0.19` does not, and the row reads `unknown != pin 0.19.0` [scripts/harness/install-hermes.sh:228] |
+| `pip install --no-cache-dir "hermes-agent==$PIN"` [scripts/harness/install-hermes.sh:270] | the index through the venv's pip | Exit status is the whole install verdict; stdout and stderr are swallowed into a private 600 log [scripts/harness/install-hermes.sh:264-275] | On failure the operator sees only `pip exited <n> — log: <path>` [scripts/harness/install-hermes.sh:275]; the log name carries the port, so two ports produce two logs [scripts/harness/install-hermes.sh:263] |
 
-### 2c. Service contracts (both sides must be named)
+### 2c. Service contracts (both sides named)
 
 | Peer | Direction | Transport | Payload | Other side (file:function) |
 |---|---|---|---|---|
-| **UNKNOWN** | — | — | — | **RED** |
+| `hermes serve` HTTP server | this script → the CLI it starts, then a loopback GET back into it | process start under `nohup`, bind `0.0.0.0:$PORT` [scripts/harness/install-hermes.sh:284]; then `curl http://127.0.0.1:$PORT/api/status` [scripts/harness/install-hermes.sh:286] | argv exactly `serve --host 0.0.0.0 --port <PORT> --skip-build`; response must be HTTP `200` | the `hermes` CLI in the pinned package: `hermes serve` owns the route, the bind and the auth enforcement. The suite pins the argv contract with a stub that exits 99 on any other argv [tests/selftest.sh:383] |
+| `~/.hermes/config.yaml` | this script → file (read only); `node_gateway_auth.py` → file (write); the gateway → file (read) | local file, UTF-8, parsed by a private YAML subset [scripts/harness/install-hermes.sh:69-213] | `dashboard.basic_auth.username` and `.password`, both non-empty strings [scripts/harness/install-hermes.sh:206-211] | writer: `scripts/node_gateway_auth.py` [scripts/node_gateway_auth.py:74-83], called only from [scripts/bunker-provision.sh:487]; reader and enforcer: `hermes serve`. This installer is a **third** reader that can refuse, never repair |
+| Python package index | `pip` inside the venv → index | HTTPS, pip's own configuration; no URL in this file | `hermes-agent==0.19.0` [scripts/harness/install-hermes.sh:270] | the venv's pip resolver; the only module in this repo that installs a package for the node's foreman |
+| `scripts/project-node.sh` layer 20 | parent → this script (child process) | `"$inst" --apply` or `--check` with `NODE_GATEWAY_PORT="$PORT"` exported; output captured to a temp file and echoed unchanged [scripts/project-node.sh:450-456] | argv `--apply` / `--check`; env `NODE_GATEWAY_PORT` | parent counts `grep -c '^  FAIL'` on this script's output and adds it to its own `FAILED` [scripts/project-node.sh:455-458]. The parent captures `rc` [scripts/project-node.sh:454] and then does not use it: the child's **exit code is ignored**, only its FAIL rows count — the row format, not the exit status, is the contract |
+| `scripts/node-create.sh` | control host → node | stages `harness/install-$HARNESS.sh` into `~/node-scripts/harness/` and chmods it executable [scripts/node-create.sh:23] [scripts/node-create.sh:30] | the file itself | the staged copy is what layer 20 executes through `project-node.sh` [scripts/node-create.sh:121], so on a node this script runs from `~/node-scripts/harness/`, not from the repo |
+| `~/.hermes/.env` | this script → file (read) | `grep -qE '^[A-Z_]+_API_KEY='` — presence only, value never read [scripts/harness/install-hermes.sh:250] | any `*_API_KEY=` line | the agent runtime that fails a turn with `No inference provider configured`; nothing in this repo writes the key |
+| `tests/selftest.sh` | suite → this script | 19 config fixtures × 2 parser modes, plus 2 mutation oracles and a 503 red control, in a hermetic `HOME` with stubbed `hermes`/`curl`/`ss`/`sleep` [tests/selftest.sh:328-504]; a pip-failure battery [tests/selftest.sh:1336-1410] | `--apply` against a fixture `HOME` | asserts exact rows, e.g. `  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — <reason>` [tests/selftest.sh:446] and `  FAIL  install — pip exited 23 — log: <path>` [tests/selftest.sh:1366-1375] |
 
 ## 3. Verification
 
-| Check | Command | Expected | Last run | Result |
-|---|---|---|---|---|
-| — | **no check exists** | — | — | **RED** |
+Run in a clean worktree of `b31c232` (`~/proj-wt-md-17c`) on 2026-11-05. `PATH` is named in every command because the `binary` row reads it. The host has `python3` 3.14.9 (outside the pin's range), `python3.12` 3.12.13 at `~/.local/bin`, a pipx-style `hermes` 0.22.5 at `~/.local/bin`, no `$HOME/hermes-venv`, and nothing listening on `:10800`.
+
+| # | Check | Command | Expected | Last run | Result |
+|---|---|---|---|---|---|
+| 1 | The module's own gate as a stranger runs it | `bash scripts/harness/install-hermes.sh --check` | every row it can measure; non-zero if any failed [scripts/harness/install-hermes.sh:307] | 2026-11-05 | **exit 1**, one row: `FAIL  python` — the interpreter gate is fatal, so the binary/port/inference arms never run [scripts/harness/install-hermes.sh:216] |
+| 2 | Same gate on an in-range interpreter, `~/.local/bin` on `PATH` | `PATH=/home/kara/.local/bin:/usr/local/bin:/usr/bin:/bin HERMES_PYTHON_BIN=python3.12 bash scripts/harness/install-hermes.sh --check` | five rows, including a `version` row for the found binary [scripts/harness/install-hermes.sh:220-231] | 2026-11-05 | **exit 1**, `HERMES: FAIL (3)` — binary host-provided, version `0.22.5+3030.g770a952` ≠ pin, nothing on `:10800` |
+| 3 | Same gate with `~/.local/bin` off `PATH` | `PATH=/usr/local/bin:/usr/bin:/bin HERMES_PYTHON_BIN=python3.12 … --check` | four rows; no `version` row when no binary is found [scripts/harness/install-hermes.sh:229-231] | 2026-11-05 | **exit 1**, `HERMES: FAIL (2)` — `binary — absent`, `port — nothing on :10800` |
+| 4 | No provider key at all | `HOME=<empty scratch> HERMES_PYTHON_BIN=python3.12 … --check` | `FAIL  inference_key` [scripts/harness/install-hermes.sh:253] | 2026-11-05 | **exit 1**, `HERMES: FAIL (3)`, row printed verbatim |
+| 5 | A misspelled mode | `HERMES_PYTHON_BIN=python3.12 … --aply` | any mode other than `--apply` behaves as a check [scripts/harness/install-hermes.sh:24] [scripts/harness/install-hermes.sh:256] | 2026-11-05 | identical check rows, **no `apply` header**, exit 1 — the typo is silently a check (§6, D-4) |
+| 6 | The port setting is read, not assumed | `NODE_GATEWAY_PORT=10801 HERMES_PYTHON_BIN=python3.12 … --check` | header and port row both name 10801 [scripts/harness/install-hermes.sh:16] [scripts/harness/install-hermes.sh:234-245] | 2026-11-05 | `harness: hermes (pin 0.19.0, port 10801)` … `FAIL  port — nothing on :10801`, exit 1 |
+| 7 | The script without its library | copy the file alone into a scratch dir, run `--check` | crash, not rows | 2026-11-05 | `line 14: …/lib.sh: No such file or directory`, `line 215: say: command not found`, `line 62: ok: command not found`, exit 1 |
+| 8 | Syntax | `bash -n scripts/harness/install-hermes.sh` | 0 | 2026-11-05 | `syntax_exit=0` |
+| 9 | The `000` rendering premise | `curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://127.0.0.1:59999/api/status`, then the file's own fallback form | curl prints `000`; the `\|\| echo 000` form prints `000000` | 2026-11-05 | `000 curl_exit=7`, fallback rendered `[000000]` (§6, D-5) |
+| 10 | The doc gate | `python3 scripts/master_doc_check.py docs/master --only 17- --strict` | `MASTER-DOC: PASS` | 2026-11-05 | **PASS**, LOCATORCOUNT locators, 0 errors 0 warnings |
+
+Transcript 1 — check 1, on this host's default interpreter:
+
+```
+$ bash scripts/harness/install-hermes.sh --check; echo "EXIT=$?"
+harness: hermes (pin 0.19.0, port 10800)
+  FAIL  python — hermes-agent 0.19.0 requires python >=3.11,<3.14; found 3.14.9
+EXIT=1
+```
+
+Transcript 2 — check 2, the arm that reaches every row:
+
+```
+$ PATH=/home/kara/.local/bin:/usr/local/bin:/usr/bin:/bin HERMES_PYTHON_BIN=python3.12 bash scripts/harness/install-hermes.sh --check; echo "EXIT=$?"
+harness: hermes (pin 0.19.0, port 10800)
+  PASS  python — 3.12.13 (hermes-agent 0.19.0 requires >=3.11,<3.14)
+  FAIL  binary — host-provided /home/kara/.local/bin/hermes (not installed by this adapter — run --apply)
+  FAIL  version — 0.22.5+3030.g770a952 != pin 0.19.0
+  FAIL  port — nothing on :10800
+  PASS  inference_key — a provider key is present in ~/.hermes/.env (value not read)
+
+HERMES: FAIL (3)
+EXIT=1
+```
+
+Transcript 3 — checks 3 and 4 (isolated `PATH`, then isolated `HOME`):
+
+```
+$ PATH=/usr/local/bin:/usr/bin:/bin HERMES_PYTHON_BIN=python3.12 bash scripts/harness/install-hermes.sh --check; echo "EXIT=$?"
+harness: hermes (pin 0.19.0, port 10800)
+  PASS  python — 3.12.13 (hermes-agent 0.19.0 requires >=3.11,<3.14)
+  FAIL  binary — absent — run --apply
+  FAIL  port — nothing on :10800
+  PASS  inference_key — a provider key is present in ~/.hermes/.env (value not read)
+
+HERMES: FAIL (2)
+EXIT=1
+
+$ HOME=<empty scratch> HERMES_PYTHON_BIN=python3.12 bash scripts/harness/install-hermes.sh --check; echo "EXIT=$?"
+harness: hermes (pin 0.19.0, port 10800)
+  PASS  python — 3.12.13 (hermes-agent 0.19.0 requires >=3.11,<3.14)
+  FAIL  binary — absent — run --apply
+  FAIL  port — nothing on :10800
+  FAIL  inference_key — no provider key — a turn dies at 'No inference provider configured'
+
+HERMES: FAIL (3)
+EXIT=1
+```
+
+What these runs do **not** exercise, and why: no `--apply` was executed here (it creates a venv and installs from the index — out of scope for a documentation run), so `PASS  install`, `PASS  gateway_start`, `PASS  port — listening on :10800 (started by --apply)` and the refusal row are backed by the committed fixtures [tests/selftest.sh:474-495], not by this host. `GET /api/status` was never answered because nothing listens on `:10800`; the `status_probe` arm is source-read, and the fixture stub that returns a canned code [tests/selftest.sh:395] is the only executed evidence for that row in the tree.
 
 ## 4. Metrics emitted
 
-**NONE FOUND** — this is a RED field. Dispatch rate, latency, failure counts and liveness are all unanswerable without reading code or grepping logs.
+**NONE.** No counter, histogram, gauge, span or timing exists: the file has no `date`, no duration, no machine-readable output, and its whole vocabulary is `say`/`ok`/`bad`/`warn`/`note` text [scripts/harness/install-hermes.sh:215-307] over the `printf` formats in `lib.sh` [scripts/lib.sh:5-9]. The one countable quantity is `FAILED`, a shell variable incremented by `bad` [scripts/lib.sh:7] and consumed exactly twice: the verdict text `HERMES: FAIL ($FAILED)` and the exit status `[ "$FAILED" -eq 0 ]` [scripts/harness/install-hermes.sh:307]. Why none is appropriate: this is a one-shot installer/checker run by a provisioning step or by hand, with no rate, queue or latency to instrument; its durable records are the operator's terminal, the pip log at `$HOME/.hermes-install-$PORT.XXXXXXXX.log` [scripts/harness/install-hermes.sh:263] and the gateway's own `$HOME/.node-serve-$PORT.log` [scripts/harness/install-hermes.sh:284]. Whether a node's gateway is up is answerable only by re-running `--check` or by the parent's summary, which re-counts this script's FAIL rows [scripts/project-node.sh:455-458]; nothing aggregates across nodes.
 
 ## 5. Log lines it can generate
 
-| Level | Line (verbatim) | Emitted when | Kind |
-|---|---|---|---|
-| ? | `
-      exit 1
-    fi
-    ` | **UNKNOWN** | descriptive (**unverified as evidence**) |
-| ? | `
-      exit 1
-    fi
-  else
-    note ` | **UNKNOWN** | descriptive (**unverified as evidence**) |
-| ? | `
-    if pip_log=$(umask 077; mktemp ` | **UNKNOWN** | descriptive (**unverified as evidence**) |
-| ? | ` 2>&1
-    rc=$?
-    if [ ` | **UNKNOWN** | descriptive (**unverified as evidence**) |
-| ? | ` 2>&1 &
-      sleep 6
-      code=$(curl -s -o /dev/null -w ` | **UNKNOWN** | descriptive (**unverified as evidence**) |
-| ? | `$VENV/bin/hermes` | **UNKNOWN** | descriptive (**unverified as evidence**) |
+All rows are `printf` output; the format strings and the two-space gutter live in `lib.sh` [scripts/lib.sh:5-9]. Tag = **evidentiary** when the line appears in a run recorded in §3, **descriptive** when it is a literal string in the file that no recorded run reached.
+
+- `harness: hermes (pin 0.19.0, port 10800)` — **evidentiary**: the header, naming the two values every later row is judged against [scripts/harness/install-hermes.sh:215].
+- `  PASS  python — 3.12.13 (hermes-agent 0.19.0 requires >=3.11,<3.14)` — **evidentiary**: the interpreter is inside the pin's declared range [scripts/harness/install-hermes.sh:62].
+- `  FAIL  python — hermes-agent 0.19.0 requires python >=3.11,<3.14; found 3.14.9` — **evidentiary**: the fatal first row on this host [scripts/harness/install-hermes.sh:59].
+- `  FAIL  python — unable to run python3 --version` — **descriptive**: the interpreter could not be spawned [scripts/harness/install-hermes.sh:42].
+- `  FAIL  python — unable to determine interpreter version from: <raw>` — **descriptive**: the version regex found nothing [scripts/harness/install-hermes.sh:47].
+- `  FAIL  python — unable to parse interpreter version: <version>` — **descriptive**: the extracted version was not numeric [scripts/harness/install-hermes.sh:52].
+- `  PASS  binary — /home/kara/hermes-venv/bin/hermes` — **descriptive**: a venv-installed binary; the row that separates "installed by this adapter" from "on `PATH`" [scripts/harness/install-hermes.sh:222].
+- `  FAIL  binary — host-provided /home/kara/.local/bin/hermes (not installed by this adapter — run --apply)` — **evidentiary**: the CF-183 row [scripts/harness/install-hermes.sh:224].
+- `  FAIL  binary — absent — run --apply` — **evidentiary**: nothing in the venv and nothing on `PATH` [scripts/harness/install-hermes.sh:230].
+- `  PASS  version — 0.19.0 (pin 0.19.0)` — **descriptive**: the read-back agrees with the pin [scripts/harness/install-hermes.sh:227].
+- `  FAIL  version — 0.22.5+3030.g770a952 != pin 0.19.0` — **evidentiary**: the drift arm, naming both values [scripts/harness/install-hermes.sh:228].
+- `  PASS  port — listening on :10800` — **descriptive**: *something* holds the port; the row does not identify the process [scripts/harness/install-hermes.sh:235].
+- `  FAIL  port — nothing on :10800` — **evidentiary**: no listener [scripts/harness/install-hermes.sh:245].
+- `  PASS  status_probe — /api/status -> 200` — **descriptive**: liveness only, no auth claim [scripts/harness/install-hermes.sh:238].
+- `  FAIL  status_probe — /api/status -> 503` — **descriptive**: the non-200 arm; the same line carries any code [scripts/harness/install-hermes.sh:238].
+- `  ..    port — nothing on :10800 yet; --apply starts the gateway` — **descriptive**: the deliberate non-FAIL arm under `--apply` [scripts/harness/install-hermes.sh:243].
+- `  PASS  inference_key — a provider key is present in ~/.hermes/.env (value not read)` — **evidentiary**: the credential is never echoed [scripts/harness/install-hermes.sh:251].
+- `  FAIL  inference_key — no provider key — a turn dies at 'No inference provider configured'` — **evidentiary**: the node-side blocking state [scripts/harness/install-hermes.sh:253].
+- `apply` — **descriptive**: the mode banner, printed before the install block [scripts/harness/install-hermes.sh:257].
+- `  ..    venv version 0.22.5+3030.g770a952 != pin 0.19.0 — installing pin` — **descriptive**: the reinstall decision, naming both versions [scripts/harness/install-hermes.sh:260].
+- `  FAIL  venv — creation failed` — **descriptive**: `python -m venv` exited non-zero; the run ends [scripts/harness/install-hermes.sh:262].
+- `  FAIL  install_log — cannot create /home/kara/.hermes-install-10800.XXXXXXXX.log — <error>` — **descriptive**: the private log could not be made, so pip is never invoked [scripts/harness/install-hermes.sh:267].
+- `  PASS  install — Hermes Agent v0.19.0` — **descriptive**: the first line of the installed binary's own `--version`, passed through unparsed [scripts/harness/install-hermes.sh:273].
+- `  FAIL  install — pip exited 23 — log: /home/kara/.hermes-install-10800.abcd1234.log` — **descriptive here, evidentiary in the suite**: the fixture asserts this exact shape [scripts/harness/install-hermes.sh:275] [tests/selftest.sh:1366-1375].
+- `  ..    already installed: Hermes Agent v0.19.0` — **descriptive**: the branch that skips pip [scripts/harness/install-hermes.sh:279].
+- `  PASS  gateway_start — /api/status -> 200` — **descriptive**: the start succeeded [scripts/harness/install-hermes.sh:288].
+- `  PASS  port — listening on :10800 (started by --apply)` — **descriptive**: the port re-checked after the start, distinguished from the pre-existing-listener row [scripts/harness/install-hermes.sh:290].
+- `  FAIL  port — ss shows nothing on :10800 after a 200 from /api/status` — **descriptive**: contradictory evidence, reported rather than reconciled [scripts/harness/install-hermes.sh:292].
+- `  WARN  port — ss unavailable — listener unconfirmed; /api/status 200 is the evidence` — **descriptive**: the minimal-image arm [scripts/harness/install-hermes.sh:295].
+- `  FAIL  gateway_start — -> 503 (see ~/.node-serve-10800.log)` — **descriptive here, evidentiary in the suite**: the red control [scripts/harness/install-hermes.sh:298] [tests/selftest.sh:490-495].
+- `  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent` — **descriptive**: the refusal, with one of five reasons appended (`block absent`, `commented`, `block absent (config unreadable)`, `block absent (invalid YAML)`, `empty value (username and password must both be non-empty)`) [scripts/harness/install-hermes.sh:301] [scripts/harness/install-hermes.sh:184-211].
+- `HERMES: PASS` — **descriptive**: the all-clear verdict [scripts/harness/install-hermes.sh:307].
+- `HERMES: FAIL (3)` — **evidentiary**: the verdict carries the count, the only aggregate the script produces [scripts/harness/install-hermes.sh:307].
+
+No level, logger, timestamp or destination exists: every line above is stdout from `printf`, with two exceptions — the parser's reason strings are stdout from the embedded Python and reach the operator only through the refusal row, and the two log files are the only diagnostics this module produces without printing [scripts/harness/install-hermes.sh:263] [scripts/harness/install-hermes.sh:284].
 
 ## 6. Failure modes
 
-| Failure | Presents as | Distinguished from | Recovery |
-|---|---|---|---|
-| **UNKNOWN** | — | — | — |
+Direction is the module's measured or source-read behaviour. `fail closed` = the run stops or exits non-zero and does not start a gateway; `fail open` = a weaker state is reported as acceptable; `degraded` = the run continues with a missing or misleading row.
+
+| Failure | Presents as | Direction | Distinguished from | Recovery |
+|---|---|---|---|---|
+| Python outside `>=3.11,<3.14` | `  FAIL  python — … found 3.14.9` [scripts/harness/install-hermes.sh:59] | **fail closed, and diagnostics-degraded**: the gate is fatal, so on this host an operator sees one row for a node that may be missing everything else [scripts/harness/install-hermes.sh:216] | A python that runs but prints no parseable version gives the `unable to determine` row instead [scripts/harness/install-hermes.sh:45-48] | install or point at 3.11–3.13 (`HERMES_PYTHON_BIN`) and rerun |
+| `hermes` on `PATH` but not in the venv | `  FAIL  binary — host-provided …` plus `  FAIL  version — <v> != pin 0.19.0` [scripts/harness/install-hermes.sh:224] [scripts/harness/install-hermes.sh:228] | **degraded but honest**: two named FAILs, exit 1; the node is not certified (§3 check 2) | A binary absent from both places prints `absent — run --apply` and **no** `version` row [scripts/harness/install-hermes.sh:229-231] | `--apply`, which ignores the `PATH` binary and installs the pin into `$VENV` [scripts/harness/install-hermes.sh:258-277] |
+| A listener on `$PORT` that is not a hermes gateway | `  PASS  port — listening on :10800`, then whatever `/api/status` returns [scripts/harness/install-hermes.sh:234-238] | **fail open to any listener**: the row asserts a port, not a gateway, and the auth check is not reached | A hermes gateway answering 200 is indistinguishable from this case | identify the process that owns the port before trusting the node |
+| **D-2** An unauthenticated hermes gateway already listening | `  PASS  port` + `  PASS  status_probe — /api/status -> 200`, no auth row, and `HERMES: PASS` when the other rows pass [scripts/harness/install-hermes.sh:234-238] | **fail open — the live exposure**: `check_public_bind_auth` is only called in `--apply`'s not-listening branch [scripts/harness/install-hermes.sh:282-283], so a gateway bound to `0.0.0.0` without `dashboard.basic_auth` is certified by `--check` and left untouched by `--apply`. Board row `CF-192` = `pending` | The free-port `--apply` path refuses the same config loudly [scripts/harness/install-hermes.sh:300-301] — same state, opposite verdicts | treat `PASS  port` as "someone is listening" and probe a protected route yourself; this code cannot |
+| **D-1 / CF-150** Free port, no `dashboard.basic_auth` | `  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — <reason>` [scripts/harness/install-hermes.sh:301] | **fail closed, correctly — which is why the node never passes**: no stage of the standalone create path writes the block, so `NODE: PASS` is unreachable there. `CF-150` = `pending` | An existing `dashboard:` block *without* `basic_auth` is refused by name in `node_gateway_auth.py` (exit 2, left untouched) [scripts/node_gateway_auth.py:49-61], while this parser reports the same file as `block absent` [scripts/harness/install-hermes.sh:202-205] | run the writer before the adapter; `scripts/bunker-provision.sh` does exactly that [scripts/bunker-provision.sh:480-487] [scripts/bunker-provision.sh:500-504] |
+| `~/.hermes/config.yaml` unreadable, invalid, or commented out | `  FAIL  gateway_start — refused: … — block absent (config unreadable)` / `… (invalid YAML)` / `… commented` / `… block absent` [scripts/harness/install-hermes.sh:184-205] | **fail closed**, with four distinguishable reasons | A real block with an empty half says `empty value (username and password must both be non-empty)` [scripts/harness/install-hermes.sh:207-211] | fix the file; nothing here repairs it |
+| Config carries a block sequence at key indent | parses without error; the list's contents are dropped, not refused [scripts/harness/install-hermes.sh:160-178] | **degraded by design** — the installer needs only `dashboard`, and the comment records that refusing this shape made every such node report `block absent (invalid YAML)` and never start a gateway [scripts/harness/install-hermes.sh:166-168] | A genuinely invalid file yields `block absent (invalid YAML)` [scripts/harness/install-hermes.sh:199-200] | none needed; keep the parser's subset in sync with what the node writes |
+| `pip` fails or the pin is unresolvable | `  FAIL  install — pip exited <n> — log: <path>`, then `exit 1` [scripts/harness/install-hermes.sh:275-276] | **fail closed** — no gateway start is attempted from an unverified install | A log that cannot be created fails earlier, before pip, at `install_log` [scripts/harness/install-hermes.sh:264-268] | read the 600 log named in the row |
+| Gateway answers non-200 within 6 s | `  FAIL  gateway_start — -> 503 (see ~/.node-serve-10800.log)` [scripts/harness/install-hermes.sh:285-298] | **degraded**: the row fails, but the `nohup` process was already launched and is left running — a slow start and a broken start look identical, and the next `--check` may find a live listener | A refusal prints `refused:` and never launches [scripts/harness/install-hermes.sh:300-301] | read the serve log; the fixed 6 s wait is the only retry |
+| `curl` cannot connect | the code renders as `000000` — `-w` prints `000` and the `\|\| echo 000` fallback appends another (§3 check 9) [scripts/harness/install-hermes.sh:236] | **mislabelled detail only**: the row still fails, but the quoted number is not an HTTP status | A real HTTP answer renders three digits [scripts/harness/install-hermes.sh:238] | none; read the serve log |
+| No provider key | `  FAIL  inference_key — no provider key — a turn dies at 'No inference provider configured'` [scripts/harness/install-hermes.sh:253] | **fail open at install, fail closed at use**: the gateway still starts and passes its own rows, and the node dies on its first turn | A key line that does not match `^[A-Z_]+_API_KEY=` is invisible to the grep and reports as absent [scripts/harness/install-hermes.sh:250] | put the key in `~/.hermes/.env` on the node |
+| **D-4** Mode argument misspelled (`--aply`) | check rows only; no `apply` banner, exit 1 from `FAIL  port` [scripts/harness/install-hermes.sh:24] [scripts/harness/install-hermes.sh:256] | **degraded — a silent no-op**: nothing is installed and nothing says the mode was not understood | `--apply` prints `apply` before doing anything [scripts/harness/install-hermes.sh:257] | pass `--apply` exactly; the file has no argument parser and no usage block |
+| `ss` missing | `  WARN  port — ss unavailable — listener unconfirmed; /api/status 200 is the evidence` [scripts/harness/install-hermes.sh:295] | **degraded**: the listener is inferred from the HTTP answer alone | With `ss` present and a 200 but no listener, the module prints a FAIL instead [scripts/harness/install-hermes.sh:291-292] | install iproute2 |
+| `lib.sh` missing beside the script | `line 14: …/lib.sh: No such file or directory`, then `say: command not found`, `ok: command not found`, exit 1 (§3 check 7) [scripts/harness/install-hermes.sh:14] | **fail closed as a crash**, not as rows — including when the script runs from `~/node-scripts/harness/`, where the parent's staging list must carry `lib.sh` too [scripts/node-create.sh:23] | Every other failure in this table is a named `  FAIL  <key> —` row [scripts/lib.sh:7] | restage the script with `scripts/lib.sh` |
 
 ## 7. Environment and settings it reads
 
-| Variable | Default | Effect if unset |
-|---|---|---|
-| `HERMES_PIN` | unknown | **UNKNOWN** |
-| `HERMES_PYTHON_BIN` | unknown | **UNKNOWN** |
+| Setting | Where read | Default | Effect of missing |
+|---|---|---|---|
+| `$1` (mode) | `MODE="${1:---check}"` [scripts/harness/install-hermes.sh:24] | `--check` | only the literal string `--apply` changes behaviour [scripts/harness/install-hermes.sh:256]; anything else, including a typo, is a check |
+| `NODE_GATEWAY_PORT` | [scripts/harness/install-hermes.sh:16] | `10800` | the default port is used for the bind, the probe, and both log names [scripts/harness/install-hermes.sh:263] [scripts/harness/install-hermes.sh:284] |
+| `HERMES_PIN` | `PIN="${HERMES_PIN:-0.19.0}"` [scripts/harness/install-hermes.sh:17] | `0.19.0` | the default pin is installed and compared |
+| `HERMES_PYTHON_BIN` | `PYTHON_BIN="${HERMES_PYTHON_BIN:-python3}"` [scripts/harness/install-hermes.sh:19] | `python3` | the venv interpreter, the pip that installs, **and** the config parser (unless a venv python exists) are all this one binary [scripts/harness/install-hermes.sh:67-68] [scripts/harness/install-hermes.sh:262] [scripts/harness/install-hermes.sh:270] |
+| Version bounds | hard-coded, not settings: `PYTHON_MIN_MAJOR=3`, `PYTHON_MIN_MINOR=11`, `PYTHON_MAX_MAJOR=3`, `PYTHON_MAX_MINOR=14` [scripts/harness/install-hermes.sh:20-23] | `>=3.11,<3.14` | cannot be relaxed without editing the file; the upper bound is exclusive by construction [scripts/harness/install-hermes.sh:58] |
+| `$HOME` | every path below is derived from it [scripts/harness/install-hermes.sh:18] | the invoking user's home | an isolated `HOME` changes the whole measurement (§3 checks 3-4) |
+| `$HOME/hermes-venv` | `VENV="$HOME/hermes-venv"` [scripts/harness/install-hermes.sh:18] | hard-coded, no override | the only place a binary is certified from; a `PATH` binary is reported as host-provided [scripts/harness/install-hermes.sh:221-225] |
+| `$HOME/.hermes/config.yaml` | [scripts/harness/install-hermes.sh:69] | must already exist; this module never creates or repairs it | refusal row with a reason (§6), no gateway start |
+| `$HOME/.hermes/.env` | [scripts/harness/install-hermes.sh:250] | must already exist with a `*_API_KEY=` line | `FAIL  inference_key`; the value is never read, never printed |
+| `$HOME/.hermes-install-$PORT.XXXXXXXX.log` | `mktemp` under `umask 077` [scripts/harness/install-hermes.sh:263-264] | created per installing `--apply` | pip output is swallowed here and the path is printed only on failure [scripts/harness/install-hermes.sh:275] |
+| `$HOME/.node-serve-$PORT.log` | redirect target of the `nohup` start [scripts/harness/install-hermes.sh:284] | created per start | the only diagnostic for a gateway that exits after launch [scripts/harness/install-hermes.sh:298] |
+| Bind address | hard-coded `0.0.0.0` in the start argv [scripts/harness/install-hermes.sh:284] | public | **not settable**: there is no loopback-only mode, which is why the auth gate exists at all [scripts/harness/install-hermes.sh:10-11] |
+| Password source | `dashboard.basic_auth.username` and `.password`, both required non-empty strings [scripts/harness/install-hermes.sh:206-211] | none — the block must already exist | `refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml` [scripts/harness/install-hermes.sh:301]. The password **file** (`$HOME/.node/auth/gateway.pass`, mode 600) is written by `node_gateway_auth.py` [scripts/node_gateway_auth.py:63-68] and named only in the provisioning wrapper [scripts/bunker-provision.sh:487] — this module never reads it |
+| `PATH` | `have hermes` [scripts/harness/install-hermes.sh:26]; `ss`, `curl`, `grep`, `mktemp`, `nohup`, `sleep`, `sed`, `head` throughout [scripts/harness/install-hermes.sh:234-286] | inherited | changes the `binary` row between `absent` and `host-provided` (§3 checks 2-3) and can hide `ss` |
 
 ## 8. Evidence of record
 
-- none yet
+- **Measured 2026-11-05** in a clean worktree of `b31c232` (`~/proj-wt-md-17c`): every transcript in §3 is literal terminal output. Host: Linux 7.0.0-38-generic, `python3` 3.14.9, `python3.12` 3.12.13, `hermes` 0.22.5+3030.g770a952 at `/home/kara/.local/bin/hermes`, no `$HOME/hermes-venv`, nothing on `:10800`.
+- **What the runs establish**: the gate is real and exits non-zero on a host that is not a provisioned node; the interpreter gate is fatal and short-circuits the rest; the `binary` row splits into `absent` versus `host-provided` purely by `PATH`; the pin comparison catches a real version drift; `NODE_GATEWAY_PORT` and `HERMES_PIN` are read as documented; a misspelled mode is silently a check; the module cannot run without `scripts/lib.sh`.
+- **What these runs do not establish**: `--apply` was not executed here (it would create a venv and install from the index), so every start, install and refusal row is descriptive prose backed by the committed fixtures [tests/selftest.sh:328-504] [tests/selftest.sh:1336-1410], not by this host. `GET /api/status` was never answered on this host. No claim in this document rests on a live gateway.
+- **Automated coverage that exists**: `tests/selftest.sh` drives the public-bind gate with 19 config fixtures in two parser modes (`no-PyYAML` via `python3.12 -I -S`, and `installed`), two mutation oracles that must be rejected, and a 503 red control [tests/selftest.sh:466-495]; a separate battery covers pip failure (rc 23, a distinct mode-600 log, an unwritable fixed path, a successful install) [tests/selftest.sh:1366-1400]; the interpreter-range refusal is asserted by substring without reaching pip [tests/selftest.sh:305-325]. No arm covers an **already-listening** gateway — which is exactly D-2.
+- **Support is not install**: five green legs on a real node are what make a harness supported, and `--check` alone is not support [specs/HARNESS-MATRIX.md:35] (fact: FACT-08). This document records what the installer *measures*, and does not claim a supported harness from it.
+
+Defects found while filling this section (documented, **not** fixed — `scripts/` is out of scope for this task):
+
+1. **D-1 — CF-150 is still open in the code: the standalone create path cannot produce a startable gateway.** `dashboard.basic_auth` has no writer in `scripts/harness/install-hermes.sh` (5 occurrences, all reads) [scripts/harness/install-hermes.sh:202-211], none in `scripts/node-create.sh`, none in `scripts/project-node.sh`; the only writer is `scripts/node_gateway_auth.py` [scripts/node_gateway_auth.py:74-83], invoked solely by `scripts/bunker-provision.sh` before it calls `node-create.sh` [scripts/bunker-provision.sh:483-504]. Provisioning through `bunker-provision.sh` is covered; a node created by `node-create.sh` alone is not: the adapter refuses the public bind [scripts/harness/install-hermes.sh:301] and `NODE: PASS` is unreachable. The board still carries `CF-150` as `pending`; its title ("no step in node-create.sh, project-node.sh or install-hermes.sh stages dashboard.basic_auth") remains literally true, while its blast radius has narrowed to the standalone paths.
+2. **D-2 — CF-192 is still open in the code, and it is the live-exposure direction.** The auth gate is evaluated only inside `--apply`'s not-listening branch [scripts/harness/install-hermes.sh:282-283]; the occupied-port arm prints `  PASS  port` and `  PASS  status_probe` and never calls `check_public_bind_auth` [scripts/harness/install-hermes.sh:234-238]. Consequence: a gateway already bound to `0.0.0.0:$PORT` without `dashboard.basic_auth` is certified `PASS` by `--check` and left running by `--apply`. Reproduction needs `--apply`, or the fixture's stubbed `ss`/`curl` [tests/selftest.sh:386-395], because the branch is only reachable with a live listener; it was verified by reading the control flow, not executed on this host. Board row `CF-192` = `pending`.
+3. **D-3 — the `binary` row's verdict depends on `PATH`, not on the node's install.** With `~/.local/bin` present the row reads `host-provided …`; without it, `absent — run --apply` (§3 checks 2 and 3). Both are FAILs, so the gate is safe, but two operators on the same node can quote different rows for the same state, and a `PATH` that happens to carry a stale `hermes` adds a `version` row that a clean `PATH` never prints.
+4. **D-4 — the mode argument is not validated.** `MODE="${1:---check}"` [scripts/harness/install-hermes.sh:24] with comparisons against the literal `--apply` [scripts/harness/install-hermes.sh:256] means `--aply`, `apply`, `-a` or any typo runs a check and exits 1 on `FAIL  port` (measured, §3 check 5). An operator who believes they applied gets no error naming the problem, and there is no usage block to consult.
+5. **D-5 — a connection failure renders `000000`, not `000`.** `-w '%{http_code}'` prints `000` on failure and `|| echo 000` appends another [scripts/harness/install-hermes.sh:236] [scripts/harness/install-hermes.sh:286]; measured as `[000000]` (§3 check 9). The row still fails, but the quoted "status" is not a status. The suite's expectation for a real answer is the honest `-> 503` [tests/selftest.sh:491], so the ambiguity only bites on connection failures.
+6. **D-6 — an unsuccessful start leaves a process behind.** The `nohup` launch precedes the 6 s wait and the single probe [scripts/harness/install-hermes.sh:284-286]; a gateway that needs longer than 6 s is reported `FAIL  gateway_start` while its process keeps booting, so the module's verdict and the node's state diverge. Nothing re-probes or reaps.
