@@ -41,7 +41,7 @@ SERVER=<bunker server>
 REPO=git@github.com:<org>/<repo>.git
 REF=main
 HARNESS=hermes
-NAMESPACE=code-factory
+NAMESPACES=code-factory,coder   # one or more; the first is primary
 TTL=30d
 GITHUB_TOKEN_FILE=~/.config/code-factory/github.token
 DUCKBRAIN_TOKEN_FILE=~/.duckbrain/<role>.token
@@ -70,6 +70,11 @@ scripts/bunker-provision.sh --config ~/.config/code-factory/cf.conf --destroy --
 ```
 
 ## Credentials
+
+A project may need more than one namespace (a lane that reads another project's memory, or
+an app namespace beside the project one). List them: `NAMESPACES=code-factory,coder`. The primary
+is the first entry, and `--check` prints one `duckbrain:<ns>` row per namespace, so a token that
+reaches one and not another is visible instead of averaged away.
 
 The config names **files**; the provisioner reads them into one bundle of mode 600, copies it
 in, installs `$HOME/.node/auth/{github.token,duckbrain.token,s3.env}` at mode 600, points git

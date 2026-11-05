@@ -28,7 +28,8 @@ Read top-down: 1–4 are **missing**, 5–6 are **miswired**, 7–8 are **workin
 ### P0 — a node that can answer (exit test: `bunker-provision.sh --check` all green)
 
 1. `bunker-provision.sh --apply` on `cf-node`: identity, auth bundle, harness, clone at the
-   configured `REF`. (CF-214; the harness pin and the missing `dashboard.basic_auth` stay
+   configured `REF`, and every declared DuckBrain namespace (`NAMESPACES=a,b` — the first is
+   primary, each is probed). (CF-214; the harness pin and the missing `dashboard.basic_auth` stay
    open under CF-150.) The node environment is **declared**, not hand-edited: `NODE_ENV_FILE`
    plus `CONFIG_SET_*` name the provider key (by file path), the model pin, the bind and the
    port, and `scripts/node_env.py --apply` writes them before the harness layer starts a

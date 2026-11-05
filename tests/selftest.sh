@@ -1971,6 +1971,33 @@ else
   say "  FAIL  missing bunker client did not surface (exit $rc)"; fails=$((fails+1))
 fi
 
+# a namespace declaration is validated before any host is touched
+out=$(/bin/bash "$HERE/scripts/bunker-provision.sh" --check --project demo --agent a --server s --namespaces 'bad slug!' 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q "FAIL  namespaces — .* not a namespace slug"; then
+  say "  PASS  a bad namespace slug is refused before the host is touched, exit $rc"
+else
+  say "  FAIL  a bad namespace slug was accepted (exit $rc)"; fails=$((fails+1))
+fi
+
+# several namespaces are probed separately, and the merge writes them as a list
+tmpd=$(mktemp -d)
+printf '{"node_id":"h1","project":"demo"}\n' > "$tmpd/node.json"
+out=$(python3 "$HERE/scripts/node_identity.py" "$tmpd/node.json" 'duckbrain.namespaces[]=demo,coder' 2>&1); rc=$?
+listed=$(python3 -c 'import json,sys;print(",".join(json.load(open(sys.argv[1]))["duckbrain"]["namespaces"]))' "$tmpd/node.json" 2>/dev/null)
+out2=$(python3 "$HERE/scripts/node_identity.py" "$tmpd/node.json" 'duckbrain.namespaces[]=demo,coder' 2>&1); rc2=$?
+if [ "$rc" -eq 0 ] && [ "$listed" = "demo,coder" ] && [ "$rc2" -eq 0 ] && printf '%s\n' "$out2" | grep -q "already carries every value"; then
+  say "  PASS  node identity carries several namespaces as a list, idempotently ($listed)"
+else
+  say "  FAIL  multi-namespace identity merge ($listed, rc=$rc/$rc2)"; fails=$((fails+1))
+fi
+out=$(python3 "$HERE/scripts/node_identity.py" "$tmpd/node.json" 'duckbrain.namespaces[]=' 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q "declared empty"; then
+  say "  PASS  an empty namespace list is refused, exit $rc"
+else
+  say "  FAIL  an empty namespace list was accepted (exit $rc)"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+
 out=$(/bin/bash "$HERE/scripts/bunker-provision.sh" --destroy --project demo --agent a --server s 2>&1); rc=$?
 if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q 'refusing to destroy without --yes'; then
   say "  PASS  destroy without --yes is refused, exit $rc"

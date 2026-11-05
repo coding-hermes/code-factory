@@ -2,6 +2,10 @@
 """node_identity.py — merge keys into $HOME/.node/node.json without destroying its schema.
 
   node_identity.py <path> namespace=code-factory bus.base=http://host:8767 provisioned_by=...
+  node_identity.py <path> 'duckbrain.namespaces[]=code-factory,coder'
+
+A key ending in [] is written as a JSON ARRAY, split on commas, so a node that serves more than
+one DuckBrain namespace can say so without a second file.
 
 project-node.sh owns this file and writes node_id, project, repo{origin,ref,path},
 harness{name,port}, bus{base}, created_by, created_at. A provisioner that rewrote the file
@@ -20,6 +24,16 @@ import tempfile
 
 
 def set_path(doc: dict, dotted: str, value: str) -> bool:
+    as_list = dotted.endswith("[]")
+    if as_list:
+        dotted = dotted[:-2]
+        items = [part.strip() for part in value.split(",") if part.strip()]
+        if not items:
+            raise ValueError(f"{dotted}[] was declared empty")
+        new_value: object = items
+    else:
+        new_value = value
+
     parts = dotted.split(".")
     node = doc
     for part in parts[:-1]:
@@ -27,9 +41,9 @@ def set_path(doc: dict, dotted: str, value: str) -> bool:
             node[part] = {}
         node = node[part]
     leaf = parts[-1]
-    if node.get(leaf) == value:
+    if node.get(leaf) == new_value:
         return False
-    node[leaf] = value
+    node[leaf] = new_value
     return True
 
 
@@ -63,8 +77,12 @@ def main(argv: list) -> int:
     changed = []
     for p in pairs:
         key, value = p.split("=", 1)
-        if set_path(doc, key, value):
-            changed.append(key)
+        try:
+            if set_path(doc, key, value):
+                changed.append(key)
+        except ValueError as exc:
+            print(f"FAIL  identity — {exc}", file=sys.stderr)
+            return 2
 
     directory = os.path.dirname(os.path.abspath(path)) or "."
     os.makedirs(directory, exist_ok=True)

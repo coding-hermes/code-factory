@@ -14,7 +14,7 @@
 # both copies. No value is ever printed (CF-002).
 #
 # Keys (all optional except PROJECT and REPO):
-#   PROJECT  AGENT  SERVER  REPO  REF  HARNESS  NAMESPACE  TTL
+#   PROJECT  AGENT  SERVER  REPO  REF  HARNESS  NAMESPACES  TTL
 #   GITHUB_TOKEN_FILE  DUCKBRAIN_TOKEN_FILE  S3_ENV_FILE
 #   CRIER_URL  DUCKBRAIN_URL
 #   NODE_ENV_FILE  CONFIG_SET_MODEL_PROVIDER  CONFIG_SET_MODEL_NAME
@@ -32,19 +32,57 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
 
-CONFIG="" MODE="" AGENT="" PROJECT="" SERVER="" REPO="" REF="" HARNESS="" NAMESPACE="" TTL=""
+CONFIG="" MODE="" AGENT="" PROJECT="" SERVER="" REPO="" REF="" HARNESS="" NAMESPACE="" NAMESPACES="" TTL=""
 GITHUB_TOKEN_FILE="" DUCKBRAIN_TOKEN_FILE="" S3_ENV_FILE="" CRIER_URL="" DUCKBRAIN_URL=""
 NODE_ENV_FILE=""
 CONFIG_SET_MODEL_PROVIDER="" CONFIG_SET_MODEL_NAME="" CONFIG_SET_GATEWAY_BIND=""
 CONFIG_SET_GATEWAY_PORT="" CONFIG_SET_AGENT_MAX_ITERATIONS=""
 YES=0
-CLI_PROJECT="" CLI_AGENT="" CLI_SERVER="" CLI_REPO="" CLI_REF="" CLI_HARNESS="" CLI_NAMESPACE="" CLI_CRIER=""
+CLI_PROJECT="" CLI_AGENT="" CLI_SERVER="" CLI_REPO="" CLI_REF="" CLI_HARNESS="" CLI_NAMESPACE="" CLI_NAMESPACES="" CLI_CRIER=""
 CLI_NODE_ENV_FILE=""
 CLI_CONFIG_SET=()
 
 usage() {
   sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
   exit "${1:-2}"
+}
+
+# A CLI path with a leading ~/ is not expanded by the shell when it arrives as a quoted argument;
+# without this a --*-token-file ~/... silently reads as the literal string and the leg is skipped.
+expand_tilde() { case "$1" in "~/"*) printf '%s/%s' "$HOME" "${1#\~/}" ;; *) printf '%s' "$1" ;; esac }
+
+# --- namespaces: a project may need more than one DuckBrain namespace -------------------------
+# NAMESPACES is a comma list; NAMESPACE is the single-namespace alias kept for older configs.
+# The primary (first) entry is what NAMESPACE resolves to. Order is preserved: the first is
+# "the" namespace a component reaching for one without asking should get.
+resolve_namespaces() {
+  local raw ns out=""
+  raw="${NAMESPACES:-${NAMESPACE:-$PROJECT}}"
+  if [ -z "$raw" ]; then
+    bad "namespaces" "no namespace declared and PROJECT is unset — a node without one has no memory"
+    return 1
+  fi
+  local IFS=,
+  for ns in $raw; do
+    ns="$(printf '%s' "$ns" | tr -d '[:space:]')"
+    [ -n "$ns" ] || continue
+    case "$ns" in
+      [a-z0-9]*|[A-Z0-9]*) ;;
+      *) bad "namespaces" "'$ns' is not a namespace slug (expected letters, digits, dot, dash, underscore)"; return 1 ;;
+    esac
+    case "$ns" in
+      *[!A-Za-z0-9._-]*) bad "namespaces" "'$ns' is not a namespace slug (expected letters, digits, dot, dash, underscore)"; return 1 ;;
+    esac
+    case ",$out," in *",$ns,"*) warn "namespaces" "'$ns' declared twice — collapsed"; continue ;; esac
+    out="${out:+$out,}$ns"
+  done
+  if [ -z "$out" ]; then
+    bad "namespaces" "the declaration parsed to nothing"
+    return 1
+  fi
+  NAMESPACES="$out"
+  NAMESPACE="${NAMESPACES%%,*}"
+  return 0
 }
 
 # --- config: parse, never source ------------------------------------------------------------
@@ -62,7 +100,7 @@ load_config() {
     key="${BASH_REMATCH[1]}"; val="${BASH_REMATCH[2]}"
     val="${val%\"}"; val="${val#\"}"; val="${val%\'}"; val="${val#\'}"
     case "$key" in
-      PROJECT|AGENT|SERVER|REPO|REF|HARNESS|NAMESPACE|TTL|CRIER_URL|DUCKBRAIN_URL)
+      PROJECT|AGENT|SERVER|REPO|REF|HARNESS|NAMESPACE|NAMESPACES|TTL|CRIER_URL|DUCKBRAIN_URL)
         printf -v "$key" '%s' "$val" ;;
       CONFIG_SET_MODEL_PROVIDER|CONFIG_SET_MODEL_NAME|CONFIG_SET_GATEWAY_BIND|CONFIG_SET_GATEWAY_PORT|CONFIG_SET_AGENT_MAX_ITERATIONS)
         printf -v "$key" '%s' "$val" ;;
@@ -110,8 +148,9 @@ env_lint() {
 bunker_ok=0
 check() {
   local b info sha branch dirty harness_bin code
+  resolve_namespaces || return 1
   say "bunker-provision --check — project=${PROJECT:-<unset>} agent=${AGENT:-<unset>} server=${SERVER:-<unset>}"
-  note "resolved repo=${REPO:-<unset>} ref=${REF:-main} harness=${HARNESS:-hermes} ns=${NAMESPACE:-$PROJECT} ttl=${TTL:-default(6h)}"
+  note "resolved repo=${REPO:-<unset>} ref=${REF:-main} harness=${HARNESS:-hermes} namespaces=${NAMESPACES:-$PROJECT} (primary ${NAMESPACE:-$PROJECT}) ttl=${TTL:-default(6h)}"
 
   b=$(have bunker)
   [ -n "$b" ] || { bad "bunker_cli" "no bunker client on PATH"; return 1; }
@@ -175,22 +214,38 @@ check() {
     warn "env_profile" "no NODE_ENV_FILE or CONFIG_SET_* — the node's environment is declared nowhere"
   fi
 
-  # crier: the inbox route is the only thing that proves reachability
-  [ -n "$CRIER_URL" ] || { warn "crier" "CRIER_URL unset — reachability unproven"; return 0; }
-  code=$(curl -s -o /dev/null -m 8 -w '%{http_code}' "$CRIER_URL/agents/$AGENT/inbox?limit=1" 2>/dev/null || echo 000)
-  case "$code" in
-    200) ok "crier" "$CRIER_URL/agents/$AGENT/inbox -> 200" ;;
-    000) bad "crier" "$CRIER_URL unreachable (no answer in 8 s)" ;;
-    *)   bad "crier" "$CRIER_URL/agents/$AGENT/inbox -> $code (identity not accepted)" ;;
-  esac
+  # crier: the inbox route is the only thing that proves reachability. This used to `return 0`
+  # when the URL was unset, which silently skipped every check ordered after it (the namespace
+  # rows never ran on a config without CRIER_URL).
+  if [ -z "$CRIER_URL" ]; then
+    warn "crier" "CRIER_URL unset — reachability unproven"
+  else
+    code=$(curl -s -o /dev/null -m 8 -w '%{http_code}' "$CRIER_URL/agents/$AGENT/inbox?limit=1" 2>/dev/null || echo 000)
+    case "$code" in
+      200) ok "crier" "$CRIER_URL/agents/$AGENT/inbox -> 200" ;;
+      401) bad "crier" "$CRIER_URL/agents/$AGENT/inbox -> 401 (auth or per-agent signature missing — crier checks the signer before it looks the agent up, so this is not proof the id is unknown)" ;;
+      403) bad "crier" "$CRIER_URL/agents/$AGENT/inbox -> 403 (owner mismatch or guard refused)" ;;
+      404) bad "crier" "$CRIER_URL/agents/$AGENT/inbox -> 404 (agent genuinely not registered)" ;;
+      000) bad "crier" "$CRIER_URL unreachable (no answer in 8 s)" ;;
+      *)   bad "crier" "$CRIER_URL/agents/$AGENT/inbox -> $code" ;;
+    esac
+  fi
 
   if [ -n "$DUCKBRAIN_URL" ] && [ -r "$DUCKBRAIN_TOKEN_FILE" ]; then
-    code=$(curl -s -o /dev/null -m 8 -w '%{http_code}' -H "x-api-key: $(cat "$DUCKBRAIN_TOKEN_FILE")" \
-      "$DUCKBRAIN_URL/api/memories/key/x?namespace=$NAMESPACE" 2>/dev/null || echo 000)
-    case "$code" in
-      200|404) ok "duckbrain" "$DUCKBRAIN_URL namespace=$NAMESPACE -> $code" ;;
-      *) bad "duckbrain" "$DUCKBRAIN_URL namespace=$NAMESPACE -> $code" ;;
-    esac
+    local ns
+    local IFS=,
+    for ns in ${NAMESPACES:-$NAMESPACE}; do
+      case ",$NAMESPACES," in
+        *",$ns,"*) ;;
+        *) continue ;;
+      esac
+      code=$(curl -s -o /dev/null -m 8 -w '%{http_code}' -H "x-api-key: $(cat "$DUCKBRAIN_TOKEN_FILE")" \
+        "$DUCKBRAIN_URL/api/memories/key/x?namespace=$ns" 2>/dev/null || echo 000)
+      case "$code" in
+        200|404) ok "duckbrain:$ns" "$DUCKBRAIN_URL namespace=$ns -> $code" ;;
+        *) bad "duckbrain:$ns" "$DUCKBRAIN_URL namespace=$ns -> $code" ;;
+      esac
+    done
   else
     warn "duckbrain" "DUCKBRAIN_URL or token file unset — namespace unproven"
   fi
@@ -213,6 +268,7 @@ bundle_paths() {  # bundle_paths <dest-on-node-relative>
 
 apply() {
   local b tmp rc=0
+  resolve_namespaces || return 1
   say "bunker-provision --apply — project=$PROJECT agent=$AGENT server=$SERVER"
 
   [ -n "$PROJECT" ] || { bad "project" "PROJECT unset in config"; return 1; }
@@ -354,11 +410,11 @@ apply() {
   local ident_out ident_rc
   if "$b" cp "$tmp" "$AGENT:node_identity.py" --server "$SERVER" >/dev/null 2>&1; then
     ident_out=$("$b" exec --server "$SERVER" "$AGENT" -- bash -lc \
-      "python3 \$HOME/node_identity.py \$HOME/.node/node.json namespace='${NAMESPACE:-$PROJECT}' provisioned_by=bunker-provision provisioned_at='$(date -u +%Y-%m-%dT%H:%M:%SZ)'${CRIER_URL:+ bus.base='$CRIER_URL'}" 2>&1)
+      "python3 \$HOME/node_identity.py \$HOME/.node/node.json namespace='${NAMESPACE:-$PROJECT}' 'duckbrain.namespaces[]=${NAMESPACES:-$PROJECT}' provisioned_by=bunker-provision provisioned_at='$(date -u +%Y-%m-%dT%H:%M:%SZ)'${CRIER_URL:+ bus.base='$CRIER_URL'}" 2>&1)
     ident_rc=$?
     printf '%s\n' "$ident_out" | sed 's/^/  ..    /'
     if [ "$ident_rc" -eq 0 ]; then
-      ok "node_json" "merged namespace=${NAMESPACE:-$PROJECT} (schema preserved)"
+      ok "node_json" "merged namespaces=${NAMESPACES:-$PROJECT} (primary ${NAMESPACE:-$PROJECT}; schema preserved)"
     else
       bad "node_json" "merge refused by the node (exit $ident_rc)"; rc=1
     fi
@@ -405,11 +461,12 @@ while [ $# -gt 0 ]; do
     --ref) CLI_REF="$2"; shift 2 ;;
     --harness) CLI_HARNESS="$2"; shift 2 ;;
     --namespace) CLI_NAMESPACE="$2"; shift 2 ;;
+    --namespaces) CLI_NAMESPACES="$2"; shift 2 ;;
     --crier-url) CLI_CRIER="$2"; shift 2 ;;
     --duckbrain-url) DUCKBRAIN_URL="$2"; shift 2 ;;
-    --github-token-file) GITHUB_TOKEN_FILE="$2"; shift 2 ;;
-    --duckbrain-token-file) DUCKBRAIN_TOKEN_FILE="$2"; shift 2 ;;
-    --s3-env-file) S3_ENV_FILE="$2"; shift 2 ;;
+    --github-token-file) GITHUB_TOKEN_FILE="$(expand_tilde "$2")"; shift 2 ;;
+    --duckbrain-token-file) DUCKBRAIN_TOKEN_FILE="$(expand_tilde "$2")"; shift 2 ;;
+    --s3-env-file) S3_ENV_FILE="$(expand_tilde "$2")"; shift 2 ;;
     --node-env-file) CLI_NODE_ENV_FILE="$2"; shift 2 ;;
     --config-set) CLI_CONFIG_SET+=("$2"); shift 2 ;;
     --yes) YES=1; shift ;;
@@ -427,6 +484,7 @@ done
 [ -n "$CLI_REF" ] && REF="$CLI_REF"
 [ -n "$CLI_HARNESS" ] && HARNESS="$CLI_HARNESS"
 [ -n "$CLI_NAMESPACE" ] && NAMESPACE="$CLI_NAMESPACE"
+[ -n "$CLI_NAMESPACES" ] && NAMESPACES="$CLI_NAMESPACES"
 [ -n "$CLI_CRIER" ] && CRIER_URL="$CLI_CRIER"
 [ -n "$CLI_NODE_ENV_FILE" ] && NODE_ENV_FILE="$CLI_NODE_ENV_FILE"
 
