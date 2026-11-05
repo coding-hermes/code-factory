@@ -23,7 +23,7 @@ not a section that is merely unwritten. A section turns green by running a comma
 | 16 | [`scripts/harness/install-codex.sh`](16-scripts-harness-install-codex-sh.md) | code-factory | RED |
 | 17 | [`scripts/harness/install-hermes.sh`](17-scripts-harness-install-hermes-sh.md) | code-factory | RED |
 | 18 | [`scripts/harness/install-opencode.sh`](18-scripts-harness-install-opencode-sh.md) | code-factory | RED |
-| 19 | [`scripts/install-gitreins.sh`](19-scripts-install-gitreins-sh.md) | code-factory | RED |
+| 19 | [`scripts/install-gitreins.sh`](19-scripts-install-gitreins-sh.md) | code-factory | VERIFIED |
 | 20 | [`scripts/land-node-branch.sh`](20-scripts-land-node-branch-sh.md) | code-factory | RED |
 | 21 | [`scripts/lane_target.py`](21-scripts-lane-target-py.md) | code-factory | RED |
 | 22 | [`scripts/lib.sh`](22-scripts-lib-sh.md) | code-factory | RED |
@@ -31,7 +31,7 @@ not a section that is merely unwritten. A section turns green by running a comma
 | 24 | [`scripts/master_doc_skeleton.py`](24-scripts-master-doc-skeleton-py.md) | code-factory | RED |
 | 25 | [`scripts/node-bus-worker.py`](25-scripts-node-bus-worker-py.md) | code-factory | RED |
 | 26 | [`scripts/node-create.sh`](26-scripts-node-create-sh.md) | code-factory | RED |
-| 27 | [`scripts/node_env.py`](27-scripts-node-env-py.md) | code-factory | RED |
+| 27 | [`scripts/node_env.py`](27-scripts-node-env-py.md) | code-factory | VERIFIED |
 | 28 | [`scripts/node_freshness.py`](28-scripts-node-freshness-py.md) | code-factory | RED |
 | 29 | [`scripts/node_gateway_auth.py`](29-scripts-node-gateway-auth-py.md) | code-factory | RED |
 | 30 | [`scripts/node_identity.py`](30-scripts-node-identity-py.md) | code-factory | RED |
@@ -40,7 +40,7 @@ not a section that is merely unwritten. A section turns green by running a comma
 | 33 | [`scripts/project-node.sh`](33-scripts-project-node-sh.md) | code-factory | VERIFIED |
 | 34 | [`scripts/reclaim_disk.py`](34-scripts-reclaim-disk-py.md) | code-factory | RED |
 | 35 | [`scripts/repo_freshness.py`](35-scripts-repo-freshness-py.md) | code-factory | RED |
-| 36 | [`scripts/verify-node.sh`](36-scripts-verify-node-sh.md) | code-factory | RED |
+| 36 | [`scripts/verify-node.sh`](36-scripts-verify-node-sh.md) | code-factory | VERIFIED |
 | 37 | [`specs/ENVELOPE.md`](37-specs-envelope-md.md) | code-factory | RED |
 | 38 | [`specs/HARNESS-MATRIX.md`](38-specs-harness-matrix-md.md) | code-factory | RED |
 | 39 | [`specs/HARNESS.md`](39-specs-harness-md.md) | code-factory | RED |
