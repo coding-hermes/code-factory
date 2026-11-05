@@ -38,6 +38,27 @@ A recognized family with no canonical root is a scheduler defect: it must not tu
 
 The `code-factory` primary uses `admission_mode=tasks`. It should run when its own board has admissible work. Once the board is drained, its timer fallback is six hours (`cooldown_s=21600`). This is not a blanket delay between ticks while work remains. Verify the live row and durable fleet configuration separately; do not report DB state alone as restart-safe.
 
+## Duplicate execution in a shared checkout
+
+The same lane prompt can be dispatched twice into one workdir. The twin commits the patch you
+are holding — byte-identical, its own message — and pushes it while you are still measuring.
+Symptoms: `git log` shows a commit you never made whose message quotes your own evidence, and
+the files you edited no longer appear as modified.
+
+- Re-read `git log --oneline -3` and `git status` after any long step (a fill, a judge, a suite
+  run), before you commit. Compare `git rev-list --count <remote>/main..HEAD` on every remote
+  (`gh`, `origin` and `worker` can point at one GitHub repo, so "Everything up-to-date" on the
+  second push is normal, not a lost push).
+- If the landed commit is content-identical to your patch, keep theirs: verify the committed
+  tree against the row's criteria and discard your copy. Do not re-commit and do not open a
+  second `gitreins task complete` for the same row in one checkout — two judges in one tree
+  collide on the suite's shared paths and both verdicts become untrustworthy.
+- The half left to you is the part they did not do: the board close (`boardctl update`/the
+  row rewrite plus one appended event), the evidence bundle under `.gitreins/history/`, and a
+  drift check (`scripts/board_drift.py check --workdir . --ref origin/main`).
+- Say it plainly in the close commit: which commit you verified, that a twin produced it, and
+  that the judge ran once.
+
 ## Public-repository boundary
 
 Do not commit secrets, private hosts/URLs, personal data, or temporary credentials. The repo-owned `scripts/boardctl` is an entrypoint to the canonical external `boardctl` engine, not a bundled or independent implementation. Keep that dependency explicit.
