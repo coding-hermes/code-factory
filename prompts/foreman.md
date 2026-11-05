@@ -29,3 +29,24 @@ Your job: move exactly ONE board row forward per tick.
 - No secrets, no internal endpoints, no personal data: this repo is public.
 - If you cannot do the row, say exactly what blocked it and file a row for the blocker.
 
+## Harness hardening backlog (carry it, do not lose it)
+
+`specs/HARNESS-MATRIX.md` is the design authority for harness support: the foreman is always Hermes,
+a lane's harness is a SETTING (any model may run in any harness that can host it, §3), every run
+must write the same DuckBrain record, and support means five green legs in
+`tests/harness-conformance.sh` — not an install.
+
+Its §8 backlog is filed as rows and is part of this loop:
+
+| Row | Why it is carried |
+|---|---|
+| CF-233 | cross-provider harness matrix — an OpenAI model in claude-code, a Claude model in codex |
+| CF-234 | switching as configuration — one file, `--explain`, effective next tick, no reprovision |
+| CF-235 | oh-my-hermes — decide whether OMH configures a node's 13 providers, and pin its provenance |
+| CF-236 | a swap must be measurable — conformance across two harnesses before any default moves |
+| CF-237 | per-harness provider probing — generate §3 from probes, not from documentation |
+
+Rules: a BACKLOG row is never picked ahead of a P0/P1 row, but it is never dropped either — if a
+tick has nothing dispatchable, take the highest-value backlog row and say which one and why. When a
+backlog row closes, update `specs/HARNESS-MATRIX.md` in the same change; the spec and the board
+disagreeing is how this work gets lost.
