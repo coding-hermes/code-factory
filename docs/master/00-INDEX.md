@@ -45,6 +45,8 @@ not a section that is merely unwritten. A section turns green by running a comma
 | 38 | [`specs/HARNESS-MATRIX.md`](38-specs-harness-matrix-md.md) | code-factory | RED |
 | 39 | [`specs/HARNESS.md`](39-specs-harness-md.md) | code-factory | RED |
 | 40 | [`specs/NODE.md`](40-specs-node-md.md) | code-factory | RED |
+| 41 | [`specs/FLEET-MEMORY.md`](41-specs-fleet-memory-md.md) | code-factory | RED |
+| 42 | [`specs/TRACE.md`](42-specs-trace-md.md) | code-factory | RED |
 
 ## Counts
 
