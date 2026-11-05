@@ -1,0 +1,106 @@
+{
+  "task_id": "PERF-013",
+  "task_title": "Selftest gate spends ~85% of CPU on full node-provision runs that assert a single layer",
+  "task_criteria": [
+    "1. project-node.sh accepts --layers 20,40 and rejects an unknown layer with exit 2 and usage text. 2. A scoped run prints a SCOPE line and SKIP rows for unnamed layers, and never writes .node/node.json. 3. Unscoped behaviour unchanged: bash tests/selftest.sh prints SELFTEST: PASS with 34 PASS rows and the real provision still prints 3 FAIL rows -> NODE: FAIL (3). 4. Fixtures 4/4b/14/15 use --layers and their exact-row assertions are unchanged. 5. Measured: selftest user+sys below 1.2 s on three consecutive runs, from 2.49 s measured at d5f7fb2."
+  ],
+  "passed": false,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "e21f2ce790e6d595c3f13c559358e9b7817532fd",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T150610.003390Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n10:07AM INF scanned ~313390 bytes (313.39 KB) in 308ms\n10:07AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 71 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T150610.003390Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.FhV82u2g6T/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  60/60 rows parse\n8. project board entrypoint is real and fails closed without dependency\n  PASS  bash -n scripts/boardctl\n  PASS  local help\n  PASS  missing boardctl -> explicit FAIL, exit 127\n9. every prompt file the README relies on exists\n  PASS  every prompts/*.md named by README.md exists\n  PASS  absent prompt refused (absent: prompts/ghost-lane.md)\n10. Hermes refuses an unsupported Python without pip or network\n  PASS  Python 3.14 refusal names the supported range without pip\n11. lane workdir targets: local paths AND remote user@host/scheme targets\n  PASS  lane target parse/validate, home-repo rejection, remote structural-only\n12. node disk floor resolves from CLI/env/config with fail-closed values\n  PASS  floor precedence, role defaults, malformed values refused\n13. node provisioning names its resolved floor and refuses below it\n  PASS  malformed floor refused before any install\n14. harness-adapter FAIL rows are counted in the node summary (CF-055)\n  PASS  adapter FAIL rows counted: 2 rows -> NODE: FAIL (2)\n  PASS  passing adapter keeps NODE: PASS and exit 0\n15. the README status re-run line carries the node check's exit status (CF-054)\n  PASS  documented line carries CRIER_URL= and no trailing read-back\n  PASS  old shape exits 0 on a failed check (NODE: FAIL (1)) \u2014 the defect is real\n  PASS  documented shape exits 1 on a failed check (NODE: FAIL (1))\n  PASS  documented shape exits 0 on a passing fixture (NODE: PASS)\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T150610.003390Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": false,
+      "any_failed": true,
+      "summary": "INCOMPLETE\n\nCap exceeded: Iteration cap (15) reached (15.6 used). Increase max_iterations or split criteria.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": false,
+          "output": "INCOMPLETE\n\nCap exceeded: Iteration cap (15) reached (15.6 used). Increase max_iterations or split criteria.",
+          "error": "",
+          "data": {
+            "verdict": "INCOMPLETE",
+            "items": [],
+            "summary": "Cap exceeded: Iteration cap (15) reached (15.6 used). Increase max_iterations or split criteria.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: PERF-013\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: FAIL\n  INCOMPLETE\n\nCap exceeded: Iteration cap (15) reached (15.6 used). Increase max_iterations or split criteria.\n\nOverall: FAIL \u2717",
+  "evaluated_at": "2026-11-03T15:08:17.660067",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-03T15:08:17.680471+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 40138,
+        "truncated": false,
+        "source": "git show e21f2ce790e6"
+      }
+    ],
+    "task_id": "PERF-013"
+  }
+}

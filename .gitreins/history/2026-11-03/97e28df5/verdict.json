@@ -1,0 +1,120 @@
+{
+  "task_id": "CFDB-SYNC-20261103-1619",
+  "task_title": "Sync-lane tick: file CF-084/CF-085 on the canonical board and prove the committed tree carries them",
+  "task_criteria": [
+    "git show --name-only --format= HEAD lists exactly .coding-hermes/board/tasks.jsonl (no sibling staged paths ride along); git show HEAD:.coding-hermes/board/tasks.jsonl | jq -r 'select(.id==\"CF-084\" or .id==\"CF-085\") | .status' prints pending for both; both rows carry a non-empty acceptance_criteria field; scripts/boardctl validate prints RESULT: OK."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "798da195ab22e74dbfc9a4ae06bb58f1a7949eaa",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T162216.961111Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n11:24AM INF scanned ~379814 bytes (379.81 KB) in 346ms\n11:24AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 75 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T162216.961111Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.crsXCffJkS/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  71/71 rows parse\n8. project board entrypoint is real and fails closed without dependency\n  PASS  bash -n scripts/boardctl\n  PASS  local help\n  PASS  missing boardctl -> explicit FAIL, exit 127\n9. every prompt file the README relies on exists\n  PASS  every prompts/*.md named by README.md exists\n  PASS  absent prompt refused (absent: prompts/ghost-lane.md)\n10. Hermes refuses an unsupported Python without pip or network\n  PASS  Python 3.14 refusal names the supported range without pip\n11. lane workdir targets: local paths AND remote user@host/scheme targets\n  PASS  lane target parse/validate, home-repo rejection, remote structural-only\n12. node disk floor resolves from CLI/env/config with fail-closed values\n  PASS  floor precedence, role defaults, malformed values refused\n13. node provisioning names its resolved floor and refuses below it\n  PASS  malformed floor refused before any install\n14. harness-adapter FAIL rows are counted in the node summary (CF-055)\n  PASS  adapter FAIL rows counted: 2 rows -> NODE: FAIL (2)\n  PASS  passing adapter keeps NODE: PASS and exit 0\n15. the README status re-run line carries the node check's exit status (CF-054)\n  PASS  documented line carries CRIER_URL= and no trailing read-back\n  PASS  old shape exits 0 on a failed check (NODE: FAIL (1)) \u2014 the defect is real\n  PASS  documented shape exits 1 on a failed check (NODE: FAIL (1))\n  PASS  documented shape exits 0 on a passing fixture (NODE: PASS)\n16. node-create staged set covers the disk floor and names missing dependencies\n  PASS  staged disk floor resolves: 4096 GiB from env; admission refuses before installs\n  PASS  missing disk floor -> one countable FAIL row, NODE: FAIL (1), exit 1\n  FAIL  disk_floor \u2014 resolver missing or unreadable: /var/tmp/hermes-scratch/tmp.XynCAo4iE3/scripts/disk_floor.py\nNODE: FAIL (1)\n  PASS  disk floor omitted from scratch manifest -> validation exit 1\n  PASS  owned failure names spawned agent and explicit-server destroy command\n  PASS  reused agent failure does not request destruction\n  PASS  copy-failure failure names spawned agent and explicit-server destroy command\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T162216.961111Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 git show --name-only --format= HEAD lists exactly .coding-hermes/board/tasks.jsonl (no sibling staged paths ride along); git show HEAD:.coding-hermes/board/tasks.jsonl | jq -r 'select(.id==\"CF-084\" or .id==\"CF-085\") | .status' prints pending for both; both rows carry a non-empty acceptance_criteria field; scripts/boardctl validate prints RESULT: OK.: All four sub-checks verified at HEAD=798da19 ('board: file CF-084/CF-085 \u2014 dead evidence artifacts and a phantom satellite repo_url'). (1) `git show --name-only --format= HEAD` emits exactly one line, `.coding-hermes/board/tasks.jsonl` (exit 0); the unrelated staged paths docs/audits/code-factory-perf-2026-11-03-PERF-014.md and tests/test_lane_target.py appear in `git diff --cached --name-only` but are absent from the HEAD commit, so no sibling paths rode along. (2) `git show HEAD:.coding-hermes/board/tasks.jsonl | jq -r 'select(.id==\"CF-084\" or .id==\"CF-085\") | .status'` printed 'pending' then 'pending' (exit 0). (3) Both rows carry non-empty acceptance_criteria strings: CF-084 = 334 chars ('scripts/boardctl show CF-011 and scripts/boardctl show CF-013 each carry a NEWEST evidence entry whose every artifacts path resolves via git cat-file -e HEAD:<path> ... scripts/boardctl validate prints RESULT: OK.'), CF-085 = 479 chars ('A repo check rejects a project row whose local: repo_url does not resolve to a git root ... verified by bash tests/selftest.sh exiting 0 with the new case listed and scripts/boardctl validate printing RESULT: OK.'); jq ac_empty=false for both. (4) `scripts/boardctl validate` exited 0 with final line 'RESULT: OK (22 warning(s))' (grep -c '^RESULT: OK' = 1); the 22 warnings are pre-existing board hygiene (probe keys, CF-034 free-form guard_result) and do not alter the RESULT line. Additionally `git diff HEAD -- .coding-hermes/board/tasks.jsonl` is empty, confirming the committed tree carries exactly the working-tree board.\n",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 git show --name-only --format= HEAD lists exactly .coding-hermes/board/tasks.jsonl (no sibling staged paths ride along); git show HEAD:.coding-hermes/board/tasks.jsonl | jq -r 'select(.id==\"CF-084\" or .id==\"CF-085\") | .status' prints pending for both; both rows carry a non-empty acceptance_criteria field; scripts/boardctl validate prints RESULT: OK.: All four sub-checks verified at HEAD=798da19 ('board: file CF-084/CF-085 \u2014 dead evidence artifacts and a phantom satellite repo_url'). (1) `git show --name-only --format= HEAD` emits exactly one line, `.coding-hermes/board/tasks.jsonl` (exit 0); the unrelated staged paths docs/audits/code-factory-perf-2026-11-03-PERF-014.md and tests/test_lane_target.py appear in `git diff --cached --name-only` but are absent from the HEAD commit, so no sibling paths rode along. (2) `git show HEAD:.coding-hermes/board/tasks.jsonl | jq -r 'select(.id==\"CF-084\" or .id==\"CF-085\") | .status'` printed 'pending' then 'pending' (exit 0). (3) Both rows carry non-empty acceptance_criteria strings: CF-084 = 334 chars ('scripts/boardctl show CF-011 and scripts/boardctl show CF-013 each carry a NEWEST evidence entry whose every artifacts path resolves via git cat-file -e HEAD:<path> ... scripts/boardctl validate prints RESULT: OK.'), CF-085 = 479 chars ('A repo check rejects a project row whose local: repo_url does not resolve to a git root ... verified by bash tests/selftest.sh exiting 0 with the new case listed and scripts/boardctl validate printing RESULT: OK.'); jq ac_empty=false for both. (4) `scripts/boardctl validate` exited 0 with final line 'RESULT: OK (22 warning(s))' (grep -c '^RESULT: OK' = 1); the 22 warnings are pre-existing board hygiene (probe keys, CF-034 free-form guard_result) and do not alter the RESULT line. Additionally `git diff HEAD -- .coding-hermes/board/tasks.jsonl` is empty, confirming the committed tree carries exactly the working-tree board.\n",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "git show --name-only --format= HEAD lists exactly .coding-hermes/board/tasks.jsonl (no sibling staged paths ride along); git show HEAD:.coding-hermes/board/tasks.jsonl | jq -r 'select(.id==\"CF-084\" or .id==\"CF-085\") | .status' prints pending for both; both rows carry a non-empty acceptance_criteria field; scripts/boardctl validate prints RESULT: OK.",
+                "status": "PASS",
+                "detail": "All four sub-checks verified at HEAD=798da19 ('board: file CF-084/CF-085 \u2014 dead evidence artifacts and a phantom satellite repo_url'). (1) `git show --name-only --format= HEAD` emits exactly one line, `.coding-hermes/board/tasks.jsonl` (exit 0); the unrelated staged paths docs/audits/code-factory-perf-2026-11-03-PERF-014.md and tests/test_lane_target.py appear in `git diff --cached --name-only` but are absent from the HEAD commit, so no sibling paths rode along. (2) `git show HEAD:.coding-hermes/board/tasks.jsonl | jq -r 'select(.id==\"CF-084\" or .id==\"CF-085\") | .status'` printed 'pending' then 'pending' (exit 0). (3) Both rows carry non-empty acceptance_criteria strings: CF-084 = 334 chars ('scripts/boardctl show CF-011 and scripts/boardctl show CF-013 each carry a NEWEST evidence entry whose every artifacts path resolves via git cat-file -e HEAD:<path> ... scripts/boardctl validate prints RESULT: OK.'), CF-085 = 479 chars ('A repo check rejects a project row whose local: repo_url does not resolve to a git root ... verified by bash tests/selftest.sh exiting 0 with the new case listed and scripts/boardctl validate printing RESULT: OK.'); jq ac_empty=false for both. (4) `scripts/boardctl validate` exited 0 with final line 'RESULT: OK (22 warning(s))' (grep -c '^RESULT: OK' = 1); the 22 warnings are pre-existing board hygiene (probe keys, CF-034 free-form guard_result) and do not alter the RESULT line. Additionally `git diff HEAD -- .coding-hermes/board/tasks.jsonl` is empty, confirming the committed tree carries exactly the working-tree board."
+              }
+            ],
+            "summary": "",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CFDB-SYNC-20261103-1619\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 git show --name-only --format= HEAD lists exactly .coding-hermes/board/tasks.jsonl (no sibling staged paths ride along); git show HEAD:.coding-hermes/board/tasks.jsonl | jq -r 'select(.id==\"CF-084\" or .id==\"CF-085\") | .status' prints pending for both; both rows carry a non-empty acceptance_criteria field; scripts/boardctl validate prints RESULT: OK.: All four sub-checks verified at HEAD=798da19 ('board: file CF-084/CF-085 \u2014 dead evidence artifacts and a phantom satellite repo_url'). (1) `git show --name-only --format= HEAD` emits exactly one line, `.coding-hermes/board/tasks.jsonl` (exit 0); the unrelated staged paths docs/audits/code-factory-perf-2026-11-03-PERF-014.md and tests/test_lane_target.py appear in `git diff --cached --name-only` but are absent from the HEAD commit, so no sibling paths rode along. (2) `git show HEAD:.coding-hermes/board/tasks.jsonl | jq -r 'select(.id==\"CF-084\" or .id==\"CF-085\") | .status'` printed 'pending' then 'pending' (exit 0). (3) Both rows carry non-empty acceptance_criteria strings: CF-084 = 334 chars ('scripts/boardctl show CF-011 and scripts/boardctl show CF-013 each carry a NEWEST evidence entry whose every artifacts path resolves via git cat-file -e HEAD:<path> ... scripts/boardctl validate prints RESULT: OK.'), CF-085 = 479 chars ('A repo check rejects a project row whose local: repo_url does not resolve to a git root ... verified by bash tests/selftest.sh exiting 0 with the new case listed and scripts/boardctl validate printing RESULT: OK.'); jq ac_empty=false for both. (4) `scripts/boardctl validate` exited 0 with final line 'RESULT: OK (22 warning(s))' (grep -c '^RESULT: OK' = 1); the 22 warnings are pre-existing board hygiene (probe keys, CF-034 free-form guard_result) and do not alter the RESULT line. Additionally `git diff HEAD -- .coding-hermes/board/tasks.jsonl` is empty, confirming the committed tree carries exactly the working-tree board.\n\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-03T16:24:42.361337",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-03T16:24:42.378603+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 22004,
+        "truncated": false,
+        "source": "git show 798da195ab22"
+      },
+      {
+        "name": "worktree",
+        "label": "Working-tree diff (graded)",
+        "file": "worktree.patch",
+        "bytes": 31408,
+        "truncated": false,
+        "source": "git diff HEAD (working tree)"
+      }
+    ],
+    "task_id": "CFDB-SYNC-20261103-1619"
+  }
+}

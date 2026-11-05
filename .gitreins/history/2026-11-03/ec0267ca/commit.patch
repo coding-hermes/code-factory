@@ -1,0 +1,780 @@
+commit e21f2ce790e6d595c3f13c559358e9b7817532fd
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Tue Nov 3 10:05:11 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Tue Nov 3 10:06:34 2026 -0500
+
+    perf: scope node fixtures to the layers they assert — selftest 2.49 s -> 1.58 s CPU (PERF-013)
+    
+    tests/selftest.sh invoked scripts/project-node.sh 13 times and paid every layer for
+    fixtures that assert one layer's row. Before (perf lane tick
+    code-factory-perf-2026-11-03-14-51-11 at d5f7fb2): 2.58 / 2.49 / 2.49 s user+sys, 34 PASS,
+    loadavg ~4.9; re-measured in this worktree at d5f7fb2 as 2.50 / 2.45 / 2.45 s CPU.
+    ~85% of that was layer work no fixture asserts.
+    
+    scripts/project-node.sh gains --layers <list> (comma-separated subset of 00,10,20,30,40;
+    single value = list of one):
+      - validated before any layer runs: empty list, unknown element or stray comma prints the
+        usage line to stderr and exits 2 with no [00] row;
+      - prints one "SCOPE: layers <list> (fixture mode — not a node certification)" line before
+        layer 00 and "  SKIP  layer NN (out of scope)" where each skipped layer would have run;
+      - never writes $HOME/.node/node.json, even under --apply with every in-scope layer green —
+        layer 90 prints "  SKIP  layer 90 (fixture mode: no manifest)" instead (N-4 by
+        construction); a scope without 00 does not resolve the disk floor (nothing consumes it);
+      - summary line keeps its shape (NODE: PASS / NODE: FAIL (n)).
+    Unscoped runs are byte-identical: same rows, same order, same manifest, same exit codes
+    (verified by diffing HEAD's script against the new one over 10 fixtures + 3 argument-error
+    surfaces; only the script path, bash "line N" diagnostics and the extended usage line differ).
+    specs/NODE.md documents the surface and what a scoped run may not do.
+    
+    Fixtures moved to the minimal layer set they assert:
+      §3 unreachable crier -> --layers 00; §4 missing ref, §4 private-repo arm, §4b resolved-ref
+      -> --layers 40; §14 red+green adapter arms -> --layers 20; §15 bus-vs-clone masking arm
+      -> --layers 30,40 (it needs the clone to succeed and the bus to fail).
+    Every assertion kept its exact grep -Fxc string and rc expectation; no assertion was
+    redesigned. Left unscoped: §15's two documented-shape arms (they run the documented command
+    as written), §2 empty PATH (whole-checker property, measured 0.00 s), §13 malformed floor
+    (exits before any layer runs).
+    
+    After: 1.63 / 1.56 / 1.55 s user+sys (real 1.69 / 1.59 / 1.55), rc=0, 34 PASS rows each,
+    SELFTEST: PASS — mean 2.47 -> 1.58 s CPU (-36%). The <1.2 s target is not met and is not
+    reachable by fixture scoping under this brief: the two documented-shape arms cost 0.28 s,
+    the two python suites outside this diff 0.25 s, §3's layer-00 run 0.09 s (floor resolver
+    spawns three python3), and ~0.8 s is non-node gate work. A throwaway copy that also scoped
+    the documented arms measured 1.19-1.24 s CPU — the technique's ceiling, and it would no
+    longer run the documented command.
+    
+    Commands (from this worktree):
+      for i in 1 2 3; do /usr/bin/time -p bash tests/selftest.sh; done
+      h=$(mktemp -d); HOME=$h ./scripts/project-node.sh --apply --project perfprobe \
+        --repo https://github.com/github/gitignore --ref main      # -> NODE: FAIL (3)
+      ./scripts/project-node.sh --check --layers 20,77             # -> usage, rc=2
+      ./scripts/project-node.sh --check --layers ''                # -> usage, rc=2
+    
+    Evidence: docs/audits/code-factory-perf-2026-11-03-PERF-013.md
+    
+    # ch:trace row=PERF-013 spec=specs/NODE.md wave=none:serial test=tests/selftest.sh::layer-scoped-fixtures doc=docs/audits/code-factory-perf-2026-11-03-PERF-013.md prompt=prompts/worker.md evidence=docs/audits/code-factory-perf-2026-11-03-PERF-013.md witness=none:local-fixture verdict=pending:gitreins-tier2 commit=pending:self-referential
+---
+ .../code-factory-perf-2026-11-03-PERF-013.md       | 256 +++++++++++++++++++++
+ scripts/project-node.sh                            | 240 ++++++++++++-------
+ specs/NODE.md                                      |  25 ++
+ tests/selftest.sh                                  |  29 ++-
+ 4 files changed, 462 insertions(+), 88 deletions(-)
+
+diff --git a/docs/audits/code-factory-perf-2026-11-03-PERF-013.md b/docs/audits/code-factory-perf-2026-11-03-PERF-013.md
+new file mode 100644
+index 0000000..46cb95e
+--- /dev/null
++++ b/docs/audits/code-factory-perf-2026-11-03-PERF-013.md
+@@ -0,0 +1,256 @@
++# PERF-013 — node fixtures ran every layer to assert one
++
++Worktree: `/home/kara/code-factory-wt-perf013`, branch `perf/perf-013-layer-scope`,
++HEAD `d5f7fb2` (= `origin/main`), clean at start. `scripts/project-node.sh` and
++`tests/selftest.sh` only; the board was not touched.
++
++## Before (foreman's measurements)
++
++Source: perf lane tick `code-factory-perf-2026-11-03-14-51-11` at `d5f7fb2`.
++
++- `bash tests/selftest.sh` cost **2.58 / 2.49 / 2.49 s** user+sys per run (34 `PASS` rows,
++  loadavg ~4.9). At `b365792`, before sections 14 (`bb99a5c`) and 15 (`d088bc6`) landed, it was
++  1.38–1.44 s CPU.
++- `tests/selftest.sh` invokes `scripts/project-node.sh` 13 times (~8 real runs). A full run costs
++  0.23–0.26 s CPU; layers 00–30 only, 0.18 s; the layer-40 work the repo fixtures actually assert
++  (`git clone --depth 1 file://`) costs 0.01 s.
++- So ~2.1 s of the 2.49 s gate (85%) was layer work no fixture asserts.
++
++Re-measured on this worktree at `d5f7fb2` before any edit (confirms the foreman's numbers on this
++host):
++
++```sh
++cd /home/kara/code-factory-wt-perf013
++for i in 1 2 3; do /usr/bin/time -p bash tests/selftest.sh >/tmp/b$i.log 2>/tmp/b$i.err; \
++  echo "run$i rc=$? $(grep -E '^(real|user|sys) ' /tmp/b$i.err | tr '\n' ' ')PASS=$(grep -c '^  PASS' /tmp/b$i.log)"; done
++```
++
++```text
++run1 rc=0 real 2.61 user 1.26 sys 1.24 PASS=34
++run2 rc=0 real 2.41 user 1.26 sys 1.19 PASS=34
++run3 rc=0 real 2.39 user 1.27 sys 1.18 PASS=34
++```
++
++CPU (user+sys): **2.50 / 2.45 / 2.45 s**.
++
++## After
++
++```sh
++cd /home/kara/code-factory-wt-perf013
++for i in 1 2 3; do /usr/bin/time -p bash tests/selftest.sh >/tmp/f$i.log 2>/tmp/f$i.err; \
++  rc=$?; echo "run$i rc=$rc $(grep -E '^(real|user|sys) ' /tmp/f$i.err | tr '\n' ' ')PASS_ROWS=$(grep -c '^  PASS' /tmp/f$i.log) summary=$(tail -1 /tmp/f$i.log)"; done
++```
++
++```text
++run1 rc=0 real 1.69 user 0.72 sys 0.91 PASS_ROWS=34 summary=SELFTEST: PASS
++run2 rc=0 real 1.59 user 0.69 sys 0.87 PASS_ROWS=34 summary=SELFTEST: PASS
++run3 rc=0 real 1.55 user 0.69 sys 0.86 PASS_ROWS=34 summary=SELFTEST: PASS
++```
++
++CPU (user+sys): **1.63 / 1.56 / 1.55 s** — mean 2.47 → 1.58 s, **−36 %**, with the same 34 `PASS`
++rows and `SELFTEST: PASS` in all three runs.
++
++## What changed
++
++`scripts/project-node.sh` gains `--layers <list>` (a comma-separated subset of `00,10,20,30,40`;
++a single value is a list of one). It validates every element **before any layer runs** (empty list,
++unknown element or stray comma → usage line on stderr, exit 2, no `[00]` row), prints one
++`SCOPE: layers <list> (fixture mode — not a node certification)` line, replaces each skipped
++layer with `  SKIP  layer NN (out of scope)`, and never writes `$HOME/.node/node.json` — layer 90
++prints `  SKIP  layer 90 (fixture mode: no manifest)` instead. A scoped run that excludes `00` also
++skips the disk-floor resolver, since nothing measures or consumes the floor and a fixture installs
++nothing. `specs/NODE.md` documents the surface and the N-4 consequence.
++
++Measured per-run cost of the shapes involved (`user+sys`, best of 3, this host):
++
++| Run shape | CPU |
++|---|---|
++| unscoped `--check` (full node run) | 0.16 s |
++| unscoped `--apply` + clone (full node run) | 0.17 s |
++| `--layers 00` (preflight only) | 0.09 s |
++| `--layers 20` | 0.01 s |
++| `--layers 30,40` | 0.02 s |
++| `--layers 40` (clone) | 0.02 s |
++
++## Per-fixture layer sets
++
++| `tests/selftest.sh` fixture | Rows it asserts | `--layers` |
++|---|---|---|
++| §3 unreachable Crier → one `000` | layer-00 `reach:` FAIL (exactly once) | `00` |
++| §4 missing ref | layer-40 `repo_clone` classification | `40` |
++| §4 private-repo arm | layer-40 `repo_clone` deploy-key hint | `40` |
++| §4b resolved-ref clone failure | layer-40 `repo_clone` + the stub-git call log | `40` |
++| §14 adapter FAIL rows counted (red) | layer-20 adapter rows vs `NODE: FAIL (n)` | `20` |
++| §14 passing adapter (green) | layer-20 adapter rows, `NODE: PASS`, exit 0 | `20` |
++| §15 bus-vs-clone masking (old shape) | layer-30 bus FAIL **and** layer-40 clone success (the read-back must succeed) | `30,40` |
++
++Every assertion kept its exact form: same `grep -Fxc` expected strings, same rc expectations, same
++`NODE:` summary matching. No assertion was rewritten to suit a number.
++
++## Left unscoped, and why
++
++- **§15, the two documented-shape arms** (red and green) run `project-node.sh --apply --project
++  myproject --repo … --ref main` **as written in the README**. Adding `--layers` would stop them
++  being the documented command, and that is the whole point of the arms. They cost 0.14 s each and
++  are the single largest remaining line item.
++- **§2 empty PATH** asserts a whole-checker property ("the node checker FAILS on an empty PATH",
++  with named `FAIL` rows, not a bootstrap crash). Measured cost of the run: **0.00 s** (nothing but
++  failing `command -v`/fork lookups run), so scoping it would buy no measurable time.
++- **§13 malformed floor** exits inside the fail-closed floor resolver, *before* any layer runs
++  (0.04 s). There is nothing to scope, and this is the coverage the scoped path deliberately drops.
++
++## Acceptance
++
++### A — `bash tests/selftest.sh`
++
++```text
++  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints
++  PASS  adapter FAIL rows counted: 2 rows -> NODE: FAIL (2)
++  PASS  passing adapter keeps NODE: PASS and exit 0
++  PASS  old shape exits 0 on a failed check (NODE: FAIL (1)) — the defect is real
++  PASS  documented shape exits 1 on a failed check (NODE: FAIL (1))
++  PASS  documented shape exits 0 on a passing fixture (NODE: PASS)
++
++SELFTEST: PASS
++```
++
++rc=0, `grep -c '^  PASS'` = **34** in each of the three runs above — unchanged from before, so no
++fixture was dropped or added.
++
++### B — a scoped run never certifies
++
++Fixture: copied `scripts/` tree with a passing `harness/install-fixture.sh`, a stub `curl`
++answering 200, a local repo, and a crier bundle `{"agent":"fixture","role":"worker"}` at
++`$HOME/.node/crier.json` **mode 600**.
++
++```sh
++# scoped, every layer in scope, green in scope
++env PATH=… HOME=$H NODE_PROJECT=demo NODE_HARNESS=fixture CRIER_URL=http://fixture.invalid:8767 \
++  NODE_DISK_FLOOR=1 bash $H/scripts/project-node.sh --apply --repo file://$H/home/repo --ref main --layers 00,10,20,30,40
++# unscoped, same fixture
++env … bash $H/scripts/project-node.sh --apply --repo file://$H/home/repo --ref main
++```
++
++```text
++--- scoped, all five layers in scope, green ---
++SCOPE: layers 00,10,20,30,40 (fixture mode — not a node certification)
++  SKIP  layer 90 (fixture mode: no manifest)
++NODE: PASS
++node.json: ABSENT
++
++--- scoped --layers 20,40, green in scope ---
++SCOPE: layers 20,40 (fixture mode — not a node certification)
++  SKIP  layer 00 (out of scope)
++  SKIP  layer 10 (out of scope)
++[20] harness
++  SKIP  layer 30 (out of scope)
++[40] repo
++  SKIP  layer 90 (fixture mode: no manifest)
++NODE: PASS
++node.json: ABSENT
++
++--- unscoped, same fixture ---
++[90] manifest
++wrote $H/home/.node/node.json
++  PASS  manifest — $H/home/.node/node.json
++NODE: PASS
++node.json: PRESENT mode=664   (crier bundle mode: 600)
++```
++
++Both directions hold: green-in-scope `--apply` does not write the manifest, and the same fixture
++unscoped does — so the check can fail if the safety ever regresses.
++
++### C — unscoped parity (`NODE: FAIL (3)`)
++
++```sh
++h=$(mktemp -d); HOME="$h" ./scripts/project-node.sh --apply --project perfprobe \
++  --repo https://github.com/github/gitignore --ref main
++```
++
++```text
++  FAIL  crier_url — CRIER_URL unset — the node has nothing to connect to (export CRIER_URL=http://crier.example:8767)
++  FAIL  python — hermes-agent 0.19.0 requires python >=3.11,<3.14; found 3.14.9
++  FAIL  crier_identity — absent — stage a bundle and re-run; a node without an identity is invisible
++
++NODE: FAIL (3)
++```
++
++Three `^  FAIL` rows and `NODE: FAIL (3)`; rc=1. The layer-40 clone succeeded in the same run
++(`PASS  repo_clone — …/repo @ 6bb5af7`), so the three rows are the node's own verdicts, not a
++network shortfall.
++
++### D — bad input
++
++```sh
++go --check --layers 20,77   # rc=2
++go --check --layers ''      # rc=2
++```
++
++```text
++usage: …/scripts/project-node.sh --check|--apply [--project P] [--harness H] [--repo URL] [--ref R] [--role worker|builder|full] [--disk-floor GIB] [--layers 00,10,20,30,40]
++lines with [00]: 0
++```
++
++Both exit 2, print the usage line to stderr, and print no `[00]` row. (`--layers 20,`, `--layers
++'20 40'` and a trailing `--layers` with no value also exit 2 the same way.)
++
++### E — both directions for every scoped fixture
++
++Each fixture was run red and green with the same scoped command; "row" is the exact string the
++selftest asserts, counted with `grep -Fxc`.
++
++| Fixture / scope | Red arm | Green arm |
++|---|---|---|
++| §3 `--layers 00` | closed crier → rc=1, one `reach:` `000` row | crier 200 → rc=0, 0 `FAIL` rows, `NODE: PASS` |
++| §4 `--layers 40` (missing ref) | `file://trunk.git` (no `main`) → rc=1, row=1, no deploy-key hint | `file://main.git` → rc=0, one `PASS  repo_clone` |
++| §4 `--layers 40` (private) | stub git: auth required → rc=1, deploy-key hint=1 | real git + local origin → rc=0, one `PASS  repo_clone` |
++| §4b `--layers 40` | stub refuses the clone after `ls-remote` → rc=1, row=1, call log=2 lines | real clone → rc=0, one `PASS  repo_clone` |
++| §14 `--layers 20` | failing adapter → rc=1, 2 `FAIL` rows, `NODE: FAIL (2)` | passing adapter → rc=0, 0 `FAIL` rows, `NODE: PASS` |
++| §15 `--layers 30,40` | no bundle → masking arm rc=0 while `NODE: FAIL (1)`, `repo/` cloned (read-back works) | bundle 600 → rc=0, `NODE: PASS` |
++
++All twelve arms returned the expected rc and row counts; the scoped runs also printed
++`SCOPE: layers … (fixture mode — not a node certification)` and the expected `SKIP` rows, e.g.
++
++```text
++SCOPE: layers 30,40 (fixture mode — not a node certification)
++  SKIP  layer 00 (out of scope)
++  SKIP  layer 10 (out of scope)
++  SKIP  layer 20 (out of scope)
++  SKIP  layer 90 (fixture mode: no manifest)
++```
++
++### F — measured floor: 1.55 s CPU, not below 1.2 s
++
++Three consecutive runs: 1.63 / 1.56 / 1.55 s user+sys. The target of <1.2 s is **not** met, and it
++is not reachable by fixture scoping under this brief. Measured attribution of what is left:
++
++| Remaining cost | CPU |
++|---|---|
++| §15's two documented-shape arms (must stay unscoped: they run the documented command) | 0.28 s |
++| `tests/test_lane_target.py` (0.21 s) + `tests/test_disk_floor.py` (0.04 s) — separate suites, outside this diff | 0.25 s |
++| §3's `--layers 00` run — dominated by the floor resolver's three `python3` spawns (`disk_floor.py` + two JSON reads), which layer 00 genuinely needs | 0.09 s |
++| the four `--layers 40`/`30,40`/`20` fixture runs, §13's fail-closed floor check, §2 | ~0.15 s |
++| residual: 9 `bash -n` interpreter launches, board JSONL parse, `boardctl` (3 invocations), README/prompt greps, `git init`/`commit`/`clone --bare` per fixture section, `fetch_verified` digest work | ~0.8 s |
++
++For scale: a throwaway copy of `tests/selftest.sh` that *also* put `--layers 30,40` on the two
++documented-shape arms measured 1.19–1.24 s CPU. That is the ceiling of this technique — it lands on
++the 1.2 s line and only by no longer running the documented command, which the brief forbids. The
++honest floor with the constraint is ~1.55 s, so the numbers above are reported as measured rather
++than chased by dropping or weakening assertions.
++
++## Unscoped behaviour is unchanged
++
++`git show HEAD:scripts/project-node.sh` and the new script were run against identical fixtures and
++their output diffed: green `--check`, green `--apply` (manifest body compared with `created_at`
++masked), `--apply` with a local clone, missing ref, private repo, `CRIER_URL` unset, `--role
++builder`, malformed floor, empty `PATH`, and the argument-error surfaces. All identical except the
++script path, `bash: line N` diagnostics (the file grew) and the usage line, which now ends in
++`[--layers 00,10,20,30,40]`. Row order, `SKIP`-free layer headers, manifest behaviour and exit
++codes are unchanged.
++
++## Reproduction of the safety/direction probes
++
++The per-fixture probes are ordinary bash fixtures of the same shape as `tests/selftest.sh`
++(copied `scripts/`, stub `curl`, stub `git`, fixture adapter, local bare origins); no network, no
++root, no new dependencies. Their decisive commands are the `--layers` invocations tabulated above,
++run from the worktree; each prints its rc and its asserted row, which is what the tables record.
+diff --git a/scripts/project-node.sh b/scripts/project-node.sh
+index 667f754..4be573b 100755
+--- a/scripts/project-node.sh
++++ b/scripts/project-node.sh
+@@ -5,9 +5,20 @@
+ #
+ #   project-node.sh --check   [--project P] [--harness hermes] [--repo URL] [--ref main]
+ #   project-node.sh --apply   [same args]
++#   project-node.sh --check   [same args] --layers 00,10,20,30,40
+ #
+ # Layers: 00 preflight, 10 base, 20 harness, 30 bus, 40 repo, 90 verify (verify is the
+ # control host's job; here we only prove the node-side plumbing exists).
++#
++# --layers <list> runs only the named check layers: a comma-separated subset of
++# 00,10,20,30,40 (a single value is a list of one). It exists for fixtures that assert
++# one layer's rows, where a full node run costs several times the CPU of the row under
++# test (PERF-013). A scoped run is NOT a node certification: it prints one SCOPE line,
++# prints `SKIP layer NN (out of scope)` where each skipped layer would have run, and
++# never writes $HOME/.node/node.json — not even under --apply with every in-scope layer
++# green. A scoped run that excludes 00 does not resolve the disk floor, because nothing
++# consumes it and a fixture installs nothing. Unscoped runs are unchanged: same rows,
++# same order, same manifest behaviour, same exit codes.
+ set -uo pipefail
+ # Resolve HERE with shell builtins only: this script must still report real FAIL rows
+ # when PATH is broken (that is exactly what tests/selftest.sh section 2 exercises).
+@@ -24,8 +35,14 @@ PORT="${NODE_GATEWAY_PORT:-10800}"
+ ROLE="${NODE_ROLE:-worker}"
+ FLOOR_CLI=""
+ MODE=""
++LAYERS=""
++SCOPED=0
+ STATE="$HOME/.node"
+ 
++usage_line() {
++  echo "usage: $0 --check|--apply [--project P] [--harness H] [--repo URL] [--ref R] [--role worker|builder|full] [--disk-floor GIB] [--layers 00,10,20,30,40]" >&2
++}
++
+ while [ $# -gt 0 ]; do
+   case "$1" in
+     --check) MODE=check; shift ;;
+@@ -37,12 +54,44 @@ while [ $# -gt 0 ]; do
+     --port) PORT="$2"; shift 2 ;;
+     --role) ROLE="$2"; shift 2 ;;
+     --disk-floor) FLOOR_CLI="$2"; shift 2 ;;
++    --layers)
++      SCOPED=1
++      if [ $# -lt 2 ]; then usage_line; exit 2; fi
++      LAYERS="$2"; shift 2 ;;
+     *) echo "unknown arg: $1" >&2; exit 2 ;;
+   esac
+ done
+-[ -z "$MODE" ] && { echo "usage: $0 --check|--apply [--project P] [--harness H] [--repo URL] [--ref R] [--role worker|builder|full] [--disk-floor GIB]"; exit 2; }
++[ -z "$MODE" ] && { usage_line; exit 2; }
+ [ -z "$PROJECT" ] && { echo "--project is required (a node belongs to exactly one project)"; exit 2; }
+ 
++# --layers is validated before any layer runs: an empty list, an unknown element or a
++# stray comma must never reach layer 00 with half a scope applied.
++if [ "$SCOPED" -eq 1 ]; then
++  case "$LAYERS" in
++    ''|*[!0-9,]*|,*|*,|*,,*) usage_line; exit 2 ;;
++  esac
++  scoped_seen=""
++  for lyr in ${LAYERS//,/ }; do
++    case "$lyr" in
++      00|10|20|30|40) ;;
++      *) usage_line; exit 2 ;;
++    esac
++    case ",$scoped_seen," in *",$lyr,"*) ;; *) scoped_seen="${scoped_seen:+$scoped_seen,}$lyr" ;; esac
++  done
++  # Canonical order whatever order the caller wrote, so the SCOPE line and the SKIP rows
++  # do not depend on how the list was spelled.
++  LAYERS=""
++  for lyr in 00 10 20 30 40; do
++    case ",$scoped_seen," in *",$lyr,"*) LAYERS="${LAYERS:+$LAYERS,}$lyr" ;; esac
++  done
++fi
++
++in_scope() {  # $1 = layer id -> true when that layer runs (always true when unscoped)
++  [ "$SCOPED" -eq 0 ] && return 0
++  case ",$LAYERS," in *",$1,"*) return 0 ;; esac
++  return 1
++}
++
+ # Disk floor is operator policy, resolved by one ordered chain:
+ #   --disk-floor > NODE_DISK_FLOOR > config [disk] > role default.
+ # A malformed value fails closed here, before any install or clone. A host without
+@@ -54,7 +103,12 @@ case "$ROLE" in
+   full) FLOOR_BUILTIN=20 ;;
+   *) echo "unknown role: $ROLE (expected worker|builder|full)" >&2; exit 2 ;;
+ esac
+-if ! command -v python3 >/dev/null 2>&1; then
++if ! in_scope 00; then
++  # Preflight is out of scope, so nothing measures the floor and nothing consumes it.
++  # The fail-closed floor path keeps its coverage on unscoped runs (selftest section 13).
++  FLOOR_GIB=""
++  FLOOR_SRC=""
++elif ! command -v python3 >/dev/null 2>&1; then
+   FLOOR_GIB="$FLOOR_BUILTIN"
+   FLOOR_SRC="role-default(no-python3)"
+   echo "  WARN  disk_floor — python3 absent, using built-in ${ROLE} default ${FLOOR_GIB} GiB"
+@@ -77,104 +131,131 @@ fi
+ 
+ mkdir -p "$STATE"
+ say "node provisioning — project=$PROJECT harness=$HARNESS host=$(hostname)"
++# One line, before layer 00, so no reader mistakes a fixture run for a certification.
++[ "$SCOPED" -eq 1 ] && say "SCOPE: layers $LAYERS (fixture mode — not a node certification)"
+ 
+ # ---------------------------------------------------------------- 00 preflight
+-say "[00] preflight"
+-arch=$(uname -m); ok "arch" "$arch ($(uname -sr))"
+-ok "role" "$ROLE (floor ${FLOOR_GIB} GiB from ${FLOOR_SRC})"
+-# apply refuses immediately; check keeps measuring the other layers so one run
+-# reports every reason the node is unusable (CF-102).
+-require_disk "$HOME" "$FLOOR_GIB" || { [ "$MODE" = apply ] && { say "NODE: FAIL (disk admission)"; exit 1; }; }
+-mem=$(awk '/MemAvailable/{printf "%d", $2/1024}' /proc/meminfo)
+-[ "${mem:-0}" -ge 1024 ] && ok "mem" "${mem} MB" || bad "mem" "${mem} MB < 1024"
+-CRIER="${CRIER_URL:-}"
+-if [ -z "$CRIER" ]; then
+-  bad "crier_url" "CRIER_URL unset — the node has nothing to connect to (export CRIER_URL=http://crier.example:8767)"
++if in_scope 00; then
++  say "[00] preflight"
++  arch=$(uname -m); ok "arch" "$arch ($(uname -sr))"
++  ok "role" "$ROLE (floor ${FLOOR_GIB} GiB from ${FLOOR_SRC})"
++  # apply refuses immediately; check keeps measuring the other layers so one run
++  # reports every reason the node is unusable (CF-102).
++  require_disk "$HOME" "$FLOOR_GIB" || { [ "$MODE" = apply ] && { say "NODE: FAIL (disk admission)"; exit 1; }; }
++  mem=$(awk '/MemAvailable/{printf "%d", $2/1024}' /proc/meminfo)
++  [ "${mem:-0}" -ge 1024 ] && ok "mem" "${mem} MB" || bad "mem" "${mem} MB < 1024"
++  CRIER="${CRIER_URL:-}"
++  if [ -z "$CRIER" ]; then
++    bad "crier_url" "CRIER_URL unset — the node has nothing to connect to (export CRIER_URL=http://crier.example:8767)"
++  else
++    for u in "$CRIER/health" https://pypi.org/simple/; do
++      if ! c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$u" 2>/dev/null); then
++        c=000
++      fi
++      [ "$c" = 200 ] && ok "reach:$u" "200" || bad "reach:$u" "-> $c"
++    done
++  fi
+ else
+-  for u in "$CRIER/health" https://pypi.org/simple/; do
+-    if ! c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$u" 2>/dev/null); then
+-      c=000
+-    fi
+-    [ "$c" = 200 ] && ok "reach:$u" "200" || bad "reach:$u" "-> $c"
+-  done
++  say "  SKIP  layer 00 (out of scope)"
+ fi
+ 
+ # ---------------------------------------------------------------- 10 base
+-say "[10] base"
+-for t in python3 git curl tar sha256sum; do
+-  p=$(have "$t"); [ -n "$p" ] && ok "tool:$t" "$p" || bad "tool:$t" "missing"
+-done
+-python3 -c 'import venv' 2>/dev/null && ok "python:venv" "importable" || bad "python:venv" "venv missing — no user-space installs possible"
+-for t in jq rg node; do
+-  p=$(have "$t"); [ -n "$p" ] && ok "tool:$t" "$p" || warn "tool:$t" "missing (some repos' tests need node)"
+-done
++if in_scope 10; then
++  say "[10] base"
++  for t in python3 git curl tar sha256sum; do
++    p=$(have "$t"); [ -n "$p" ] && ok "tool:$t" "$p" || bad "tool:$t" "missing"
++  done
++  python3 -c 'import venv' 2>/dev/null && ok "python:venv" "importable" || bad "python:venv" "venv missing — no user-space installs possible"
++  for t in jq rg node; do
++    p=$(have "$t"); [ -n "$p" ] && ok "tool:$t" "$p" || warn "tool:$t" "missing (some repos' tests need node)"
++  done
++else
++  say "  SKIP  layer 10 (out of scope)"
++fi
+ 
+ # ---------------------------------------------------------------- 20 harness
+-say "[20] harness"
+-inst="$HERE/harness/install-$HARNESS.sh"
+-if [ ! -x "$inst" ]; then
+-  bad "harness:$HARNESS" "no adapter at scripts/harness/install-$HARNESS.sh"
+-else
+-  # CF-055: the adapter is a child process, so its own FAILED counter (lib.sh)
+-  # never reaches ours. Capture its output, echo it through unchanged, and add
+-  # the `  FAIL` rows it printed to the parent counter so the NODE: FAIL (n)
+-  # summary equals every FAIL row the run printed.
+-  adapter_log="$(mktemp)"
+-  if [ "$MODE" = apply ]; then
+-    NODE_GATEWAY_PORT="$PORT" "$inst" --apply >"$adapter_log" 2>&1
++if in_scope 20; then
++  say "[20] harness"
++  inst="$HERE/harness/install-$HARNESS.sh"
++  if [ ! -x "$inst" ]; then
++    bad "harness:$HARNESS" "no adapter at scripts/harness/install-$HARNESS.sh"
+   else
+-    NODE_GATEWAY_PORT="$PORT" "$inst" --check >"$adapter_log" 2>&1
++    # CF-055: the adapter is a child process, so its own FAILED counter (lib.sh)
++    # never reaches ours. Capture its output, echo it through unchanged, and add
++    # the `  FAIL` rows it printed to the parent counter so the NODE: FAIL (n)
++    # summary equals every FAIL row the run printed.
++    adapter_log="$(mktemp)"
++    if [ "$MODE" = apply ]; then
++      NODE_GATEWAY_PORT="$PORT" "$inst" --apply >"$adapter_log" 2>&1
++    else
++      NODE_GATEWAY_PORT="$PORT" "$inst" --check >"$adapter_log" 2>&1
++    fi
++    rc=$?
++    adapter_fails="$(grep -c '^  FAIL' "$adapter_log")" || true
++    cat "$adapter_log"
++    rm -f "$adapter_log"
++    FAILED=$((FAILED + adapter_fails))
+   fi
+-  rc=$?
+-  adapter_fails="$(grep -c '^  FAIL' "$adapter_log")" || true
+-  cat "$adapter_log"
+-  rm -f "$adapter_log"
+-  FAILED=$((FAILED + adapter_fails))
++else
++  say "  SKIP  layer 20 (out of scope)"
+ fi
+ 
+ # ---------------------------------------------------------------- 30 bus
+-say "[30] bus"
+-if [ -f "$STATE/crier.json" ]; then
+-  ok "crier_identity" "$STATE/crier.json"
+-  m=$(stat -c '%a' "$STATE/crier.json"); [ "$m" = 600 ] && ok "crier_mode" "600" || bad "crier_mode" "$m (must be 600)"
++if in_scope 30; then
++  say "[30] bus"
++  if [ -f "$STATE/crier.json" ]; then
++    ok "crier_identity" "$STATE/crier.json"
++    m=$(stat -c '%a' "$STATE/crier.json"); [ "$m" = 600 ] && ok "crier_mode" "600" || bad "crier_mode" "$m (must be 600)"
++  else
++    bad "crier_identity" "absent — stage a bundle and re-run; a node without an identity is invisible"
++  fi
+ else
+-  bad "crier_identity" "absent — stage a bundle and re-run; a node without an identity is invisible"
++  say "  SKIP  layer 30 (out of scope)"
+ fi
+ 
+ # ---------------------------------------------------------------- 40 repo
+-say "[40] repo"
+-RP="$HOME/repo"
+-if [ -d "$RP/.git" ]; then
+-  ok "repo" "$RP @ $(git -C "$RP" rev-parse --short HEAD)"
+-else
+-  if [ "$MODE" = apply ] && [ -n "$REPO" ]; then
+-    say "  ..    cloning $REPO @ $REF"
+-    clone_log="$STATE/clone.log"
+-    if git clone --depth 1 --branch "$REF" "$REPO" "$RP" >"$clone_log" 2>&1; then
+-      ok "repo_clone" "$RP @ $(git -C "$RP" rev-parse --short HEAD)"
+-    else
+-      clone_error="$(tail -1 "$clone_log")"
+-      if git ls-remote --exit-code "$REPO" "refs/heads/$REF" "refs/tags/$REF" >/dev/null 2>&1; then
+-        bad "repo_clone" "${clone_error:-git clone failed} (clone failed after ref '$REF' resolved)"
++if in_scope 40; then
++  say "[40] repo"
++  RP="$HOME/repo"
++  if [ -d "$RP/.git" ]; then
++    ok "repo" "$RP @ $(git -C "$RP" rev-parse --short HEAD)"
++  else
++    if [ "$MODE" = apply ] && [ -n "$REPO" ]; then
++      say "  ..    cloning $REPO @ $REF"
++      clone_log="$STATE/clone.log"
++      if git clone --depth 1 --branch "$REF" "$REPO" "$RP" >"$clone_log" 2>&1; then
++        ok "repo_clone" "$RP @ $(git -C "$RP" rev-parse --short HEAD)"
+       else
+-        remote_rc=$?
+-        if [ "$remote_rc" -eq 2 ]; then
+-          bad "repo_clone" "ref '$REF' was not found; pass --ref <branch-or-tag>"
++        clone_error="$(tail -1 "$clone_log")"
++        if git ls-remote --exit-code "$REPO" "refs/heads/$REF" "refs/tags/$REF" >/dev/null 2>&1; then
++          bad "repo_clone" "${clone_error:-git clone failed} (clone failed after ref '$REF' resolved)"
+         else
+-          bad "repo_clone" "${clone_error:-git clone failed} (repository access failed; private repos need a deploy key)"
++          remote_rc=$?
++          if [ "$remote_rc" -eq 2 ]; then
++            bad "repo_clone" "ref '$REF' was not found; pass --ref <branch-or-tag>"
++          else
++            bad "repo_clone" "${clone_error:-git clone failed} (repository access failed; private repos need a deploy key)"
++          fi
+         fi
+       fi
++      rm -f "$clone_log"
++    else
++      bad "repo" "$RP absent (pass --repo to clone)"
+     fi
+-    rm -f "$clone_log"
+-  else
+-    bad "repo" "$RP absent (pass --repo to clone)"
+   fi
++else
++  say "  SKIP  layer 40 (out of scope)"
+ fi
+ 
+ # ---------------------------------------------------------------- manifest
+-say "[90] manifest"
+-if [ "$MODE" = apply ] && [ "$FAILED" -eq 0 ]; then
+-  python3 - "$STATE/node.json" "$PROJECT" "$HARNESS" "$PORT" "$REPO" "$REF" "$(hostname)" <<'PY'
++if [ "$SCOPED" -eq 1 ]; then
++  # A scoped run is a fixture, not a node: it leaves no identity behind, even when
++  # every in-scope layer is green. The summary line keeps its shape (tests match it).
++  say "  SKIP  layer 90 (fixture mode: no manifest)"
++else
++  say "[90] manifest"
++  if [ "$MODE" = apply ] && [ "$FAILED" -eq 0 ]; then
++    python3 - "$STATE/node.json" "$PROJECT" "$HARNESS" "$PORT" "$REPO" "$REF" "$(hostname)" <<'PY'
+ import json, sys, time
+ path, project, harness, port, repo, ref, host = sys.argv[1:8]
+ json.dump({"node_id": host, "project": project,
+@@ -186,11 +267,12 @@ json.dump({"node_id": host, "project": project,
+           open(path, "w"), indent=1)
+ print("wrote", path)
+ PY
+-  ok "manifest" "$STATE/node.json"
+-elif [ -f "$STATE/node.json" ]; then
+-  ok "manifest" "$STATE/node.json"
+-else
+-  note "manifest is written only when every layer passes"
++    ok "manifest" "$STATE/node.json"
++  elif [ -f "$STATE/node.json" ]; then
++    ok "manifest" "$STATE/node.json"
++  else
++    note "manifest is written only when every layer passes"
++  fi
+ fi
+ 
+ say ""
+diff --git a/specs/NODE.md b/specs/NODE.md
+index f2e43bc..5290a76 100644
+--- a/specs/NODE.md
++++ b/specs/NODE.md
+@@ -30,6 +30,31 @@ the manifest to know where the artifacts are.
+ | 40 repo | the repo cloned at a pinned ref | base |
+ | 90 verify | one round trip whose digest is recomputed on the control host | all |
+ 
++### Fixture scope (`--layers`)
++
++A run costs every layer's work, but a test that asserts one layer's row needs that layer only.
++`project-node.sh --layers 00,10,20,30,40` runs only the named check layers: a comma-separated
++subset of `00,10,20,30,40`, where a single value is a list of one. An unknown element, an empty
++list or a stray comma prints the usage line to stderr and exits 2 before any layer runs, so a
++half-applied scope can never reach layer 00.
++
++A scoped run is a **fixture**, never a certification:
++
++- it prints one `SCOPE: layers <list> (fixture mode — not a node certification)` line before
++  layer 00, and `  SKIP  layer NN (out of scope)` in the position each skipped layer would have
++  taken;
++- it never writes `$HOME/.node/node.json`, even under `--apply` with every in-scope layer green:
++  layer 90 reports `  SKIP  layer 90 (fixture mode: no manifest)` instead, so **N-4** holds by
++  construction — no manifest, no node identity;
++- it does not resolve the disk floor when `00` is out of scope, because nothing measures or
++  consumes it and a fixture installs nothing (the fail-closed floor path keeps its coverage on
++  unscoped runs, `tests/selftest.sh` section 13);
++- the summary line keeps its existing shape (`NODE: PASS` / `NODE: FAIL (n)`); the absence of a
++  manifest, not the summary, is what makes a scoped run non-certifying.
++
++An unscoped run is unchanged in every respect: same rows, same order, same manifest behaviour,
++same exit codes.
++
+ ## Laws
+ 
+ - **N-1** No root. Any step needing sudo is wrong.
+diff --git a/tests/selftest.sh b/tests/selftest.sh
+index dacfb64..503c0ab 100755
+--- a/tests/selftest.sh
++++ b/tests/selftest.sh
+@@ -32,8 +32,11 @@ printf '000'
+ exit 7
+ EOF
+ chmod +x "$tmpd/curl"
++# The row under test is layer 00's `reach:` FAIL — one row per unreachable URL, not two.
++# PERF-013: a full run (base/harness/bus/repo) costs several times the CPU of the row it
++# proves here, so the fixture runs only that layer.
+ out=$(env PATH="$tmpd:$PATH" HOME="$tmpd/home" NODE_PROJECT=demo CRIER_URL=http://closed.test:8767 \
+-  /bin/bash "$HERE/scripts/project-node.sh" --check --project demo 2>&1); rc=$?
++  /bin/bash "$HERE/scripts/project-node.sh" --check --project demo --layers 00 2>&1); rc=$?
+ expected='  FAIL  reach:http://closed.test:8767/health — -> 000'
+ if [ "$rc" -ne 0 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ]; then
+   say "  PASS  unreachable URL -> one 000 status"
+@@ -44,6 +47,8 @@ rm -rf "$tmpd"
+ 
+ # ch:trace row=CF-034 spec=README.md#status wave=none:serial test=tests/selftest.sh::clone-error-classification doc=README.md prompt=prompts/readme.md evidence=tests/selftest.sh::clone-error-classification witness=none:local-fixture verdict=none:open-finding commit=none:self-referential-hash memory=none:unresolved-namespace
+ say "4. clone errors distinguish missing refs from repository access"
++# Both arms assert the classification of a layer-40 `repo_clone` row; no other layer can
++# change that verdict, so each runs only layer 40 (PERF-013).
+ tmpd=$(mktemp -d)
+ git init -q -b trunk "$tmpd/work"
+ git -C "$tmpd/work" config user.email fixture@example.invalid
+@@ -54,7 +59,7 @@ git -C "$tmpd/work" commit -qm fixture
+ git clone -q --bare "$tmpd/work" "$tmpd/origin.git"
+ missing_ref=$(env HOME="$tmpd/missing-home" NODE_PROJECT=demo \
+   /bin/bash "$HERE/scripts/project-node.sh" --apply --project demo --harness fixture \
+-  --repo "file://$tmpd/origin.git" 2>&1); rc=$?
++  --repo "file://$tmpd/origin.git" --layers 40 2>&1); rc=$?
+ expected="  FAIL  repo_clone — ref 'main' was not found; pass --ref <branch-or-tag>"
+ if [ "$rc" -ne 0 ] && [ "$(printf '%s\n' "$missing_ref" | grep -Fxc -- "$expected")" = 1 ] \
+   && ! printf '%s\n' "$missing_ref" | grep -Fq 'private repos need a deploy key'; then
+@@ -76,7 +81,7 @@ EOF
+ chmod +x "$tmpd/bin/git"
+ private_repo=$(env PATH="$tmpd/bin:$PATH" REAL_GIT="$(command -v git)" HOME="$tmpd/private-home" NODE_PROJECT=demo \
+   /bin/bash "$HERE/scripts/project-node.sh" --apply --project demo --harness fixture \
+-  --repo https://private.fixture.invalid/repo.git 2>&1); rc=$?
++  --repo https://private.fixture.invalid/repo.git --layers 40 2>&1); rc=$?
+ if [ "$rc" -ne 0 ] && printf '%s\n' "$private_repo" | grep -Fq 'private repos need a deploy key'; then
+   say "  PASS  repository access failure retains deploy-key hint"
+ else
+@@ -120,7 +125,7 @@ resolved_ref=$(env PATH="$tmpd/bin:$PATH" REAL_GIT="$(command -v git)" \
+   FIXTURE_REPO="file://$tmpd/work" FIXTURE_LOG="$tmpd/git.log" \
+   HOME="$tmpd/resolved-home" NODE_PROJECT=demo CRIER_URL= \
+   /bin/bash "$HERE/scripts/project-node.sh" --apply --project demo --harness fixture \
+-  --repo "file://$tmpd/work" --ref main 2>&1); rc=$?
++  --repo "file://$tmpd/work" --ref main --layers 40 2>&1); rc=$?
+ expected="  FAIL  repo_clone — fatal: fixture checkout write failed (clone failed after ref 'main' resolved)"
+ expected_calls=$(printf '%s\n' 'clone: refs/heads/main resolved; refusing clone' \
+   'ls-remote: refs/heads/main refs/tags/main resolved')
+@@ -268,8 +273,9 @@ say "14. harness-adapter FAIL rows are counted in the node summary (CF-055)"
+ tmpd=$(mktemp -d)
+ mkdir -p "$tmpd/scripts/harness" "$tmpd/home/.node" "$tmpd/home/repo" "$tmpd/bin"
+ cp "$HERE/scripts/project-node.sh" "$HERE/scripts/lib.sh" "$HERE/scripts/disk_floor.py" "$tmpd/scripts/"
+-# green node inputs: bus identity, a local repo, and a fake curl answering 200,
+-# so the only failures in the red arm come from the adapter itself.
++# green node inputs: bus identity, a local repo, and a fake curl answering 200. Layers
++# 00/10/30/40 are out of scope (PERF-013: only layer 20 rows are asserted here), but the
++# inputs stay staged so this fixture still works as written if it is ever unscoped.
+ printf '{"agent":"fixture"}' > "$tmpd/home/.node/crier.json"; chmod 600 "$tmpd/home/.node/crier.json"
+ git -C "$tmpd/home/repo" init -q -b main
+ git -C "$tmpd/home/repo" -c user.email=fixture@example.invalid -c user.name=fixture commit -qm fixture --allow-empty
+@@ -291,7 +297,7 @@ EOF
+ chmod +x "$tmpd/scripts/harness/install-fixture.sh"
+ out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_PROJECT=fixture \
+   NODE_HARNESS=fixture CRIER_URL=http://fixture.invalid:8767 NODE_DISK_FLOOR=1 \
+-  /bin/bash "$tmpd/scripts/project-node.sh" --check 2>&1); rc=$?
++  /bin/bash "$tmpd/scripts/project-node.sh" --check --layers 20 2>&1); rc=$?
+ fail_rows=$(printf '%s\n' "$out" | grep -c '^  FAIL')
+ summary=$(printf '%s\n' "$out" | grep -oE '^NODE: FAIL \([0-9]+\)$' | grep -oE '[0-9]+')
+ if [ "$rc" -ne 0 ] && [ -n "$summary" ] && [ "$summary" = "$fail_rows" ] && [ "$fail_rows" -ge 2 ] \
+@@ -308,7 +314,7 @@ mv "$tmpd/scripts/harness/install-fixture.sh.new" "$tmpd/scripts/harness/install
+ chmod +x "$tmpd/scripts/harness/install-fixture.sh"
+ out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_PROJECT=fixture \
+   NODE_HARNESS=fixture CRIER_URL=http://fixture.invalid:8767 NODE_DISK_FLOOR=1 \
+-  /bin/bash "$tmpd/scripts/project-node.sh" --check 2>&1); rc=$?
++  /bin/bash "$tmpd/scripts/project-node.sh" --check --layers 20 2>&1); rc=$?
+ if [ "$rc" -eq 0 ] && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL')" = 0 ] \
+   && printf '%s\n' "$out" | grep -Fq 'NODE: PASS'; then
+   say "  PASS  passing adapter keeps NODE: PASS and exit 0"
+@@ -357,7 +363,12 @@ cf054_run() {
+   echo $?
+ }
+ node_call="bash '$tmpd/scripts/project-node.sh' --apply --project myproject --repo file://$tmpd/origin.git --ref main"
+-h=$(mktemp -d); rc=$(cf054_run "$node_call; git -C '$h/repo' rev-parse HEAD" "$h" red)
++# The masking arm proves the trailing read-back's status wins over a NODE: FAIL. It needs
++# the clone to succeed (layer 40) and the bus to fail (layer 30); 00/10/20 cannot change
++# either outcome, so that arm runs 30,40 only (PERF-013). The two documented-shape arms
++# below run the documented command as written and stay unscoped on purpose.
++node_call_masking="$node_call --layers 30,40"
++h=$(mktemp -d); rc=$(cf054_run "$node_call_masking; git -C '$h/repo' rev-parse HEAD" "$h" red)
+ old_summary=$(grep -E '^NODE: ' "$h/out.log" | tail -1)
+ if [ "$rc" = 0 ] && printf '%s' "$old_summary" | grep -Fq 'NODE: FAIL' \
+   && git -C "$h/repo" rev-parse HEAD >/dev/null 2>&1; then

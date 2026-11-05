@@ -1,0 +1,68 @@
+diff --git a/docs/audits/cf099-prd-drift-probe.sh b/docs/audits/cf099-prd-drift-probe.sh
+index f74f530..db8a2c5 100755
+--- a/docs/audits/cf099-prd-drift-probe.sh
++++ b/docs/audits/cf099-prd-drift-probe.sh
+@@ -1,14 +1,22 @@
+ #!/usr/bin/env bash
+ # CF-099 probe — do the PRD milestone block and the acceptance plan still describe this tree?
+-# Contract enforced: (1) the milestone names the tip it was measured at and every CF-id listed
+-# after "open defects" is NOT complete on the board; (2) the plan's snapshot counts reproduce at
+-# the tip the plan names; (3) the plan's section count matches tests/selftest.sh; (4) the PRD's
+-# CF-102 cell names the per-layer arms that exist.
+-# Usage: bash docs/audits/cf099-prd-drift-probe.sh   (cwd: the repository root; exits 1 on drift)
++# Contract enforced: default mode checks the milestone/open blockers, tip-pinned board snapshot,
++# section census and PRD CF-102 layer arms; --sections-only checks only the plan/selftest census.
++# CF099_PLAN and CF099_SELFTEST override the two census inputs for fixture testing.
++# Usage: bash docs/audits/cf099-prd-drift-probe.sh [--sections-only] (cwd: repository root)
+ set -uo pipefail
+ cd "$(git rev-parse --show-toplevel)" || exit 2
+-P=docs/ACCEPTANCE-PLAN.md
++P=${CF099_PLAN:-docs/ACCEPTANCE-PLAN.md}
++S=${CF099_SELFTEST:-tests/selftest.sh}
+ R=docs/PRD-code-factory.md
++if [ "${1:-}" = --sections-only ]; then
++  nsec=$(awk '/^\*\*Current state/{if (match($0, /[0-9]+ sections/)) {print substr($0, RSTART, RLENGTH); exit}}' "$P" | grep -oE '[0-9]+')
++  msec=$(grep -cE '^say "[0-9]+\.' "$S")
++  [ "${nsec:-x}" = "$msec" ] || { echo "DRIFT: plan says ${nsec:-none} sections, tests/selftest.sh has $msec"; d=1; }
++  d=${d:-0}
++  echo "measured: plan_sections=${nsec:-none} selftest_sections=$msec plan=$P selftest=$S"
++  exit "$d"
++fi
+ d=0
+ tip=$(grep -oE 'at tip `[0-9a-f]{7,40}`' "$P" | head -1 | grep -oE '[0-9a-f]{7,40}')
+ srow=$(grep -oE '[0-9]+ task rows' "$P" | head -1 | grep -oE '[0-9]+')
+diff --git a/tests/selftest.sh b/tests/selftest.sh
+index 1ae9480..f15673a 100755
+--- a/tests/selftest.sh
++++ b/tests/selftest.sh
+@@ -265,6 +265,30 @@ else
+ fi
+ rm -rf "$tmpd"
+ 
++say "7c. CF-155 sections census agrees and rejects one extra numbered section"
++tmpd=$(mktemp -d)
++cp "$HERE/docs/ACCEPTANCE-PLAN.md" "$tmpd/plan.md"
++cp "$HERE/tests/selftest.sh" "$tmpd/selftest.sh"
++out=$(CF099_PLAN="$HERE/docs/ACCEPTANCE-PLAN.md" CF099_SELFTEST="$HERE/tests/selftest.sh" \
++  bash "$HERE/docs/audits/cf099-prd-drift-probe.sh" --sections-only 2>&1); rc=$?
++if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^measured: plan_sections=[0-9][0-9]* selftest_sections=[0-9][0-9]*'; then
++  say "  PASS  cf155 sections census green at this tree"
++else
++  say "  FAIL  cf155 sections census green direction failed (exit $rc)"; fails=$((fails+1))
++fi
++printf '%s\n' 'say "99. drift fixture"' >> "$tmpd/selftest.sh"
++plan_sections=$(grep -oE '[0-9]+ sections' "$tmpd/plan.md" | head -1 | grep -oE '[0-9]+')
++expected="DRIFT: plan says $plan_sections sections, tests/selftest.sh has $((plan_sections+1))"
++out=$(CF099_PLAN="$tmpd/plan.md" CF099_SELFTEST="$tmpd/selftest.sh" \
++  bash "$HERE/docs/audits/cf099-prd-drift-probe.sh" --sections-only 2>&1); rc=$?
++if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq "$expected"; then
++  say "  PASS  cf155 sections census red on a fixture with one extra numbered section"
++else
++  say "  FAIL  cf155 sections census fixture missed named DRIFT (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out"
++fi
++rm -rf "$tmpd"
++
+ say "8. project board entrypoint is real and fails closed without dependency"
+ bash -n "$HERE/scripts/boardctl" && say "  PASS  bash -n scripts/boardctl" || { say "  FAIL  bash syntax"; fails=$((fails+1)); }
+ "$HERE/scripts/boardctl" --help >/dev/null 2>&1 && say "  PASS  local help" || { say "  FAIL  help"; fails=$((fails+1)); }

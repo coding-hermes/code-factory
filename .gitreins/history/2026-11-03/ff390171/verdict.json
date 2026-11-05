@@ -1,0 +1,127 @@
+{
+  "task_id": "SYNC-20261103-2348",
+  "task_title": "Sync lane: rebind CF-077 completion evidence to the landed commit, correct the README gate-row count, and file the remaining board-lifecycle drift",
+  "task_criteria": [
+    "1. CF-077 commit_hash names 1232f7a04ce8bcfa94fd46166b3f05f1d1c55ffc, a commit that git merge-base --is-ancestor proves reaches origin/main, and no other row changes. 2. README.md's python3.12 gate-row claim matches what the command prints on this host. 3. docs/audits/code-factory-sync-2026-11-03-2348.md records rows parsed, drift found, fixes applied and the residue disclosed. 4. bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "21d326594361042020288c1e2da4b9e5dca7a2ff",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T235338.065196Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n6:55PM INF scanned ~627153 bytes (627.15 KB) in 673ms\n6:55PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 102 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T235338.065196Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.IPSopbG7m2/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  104/104 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [4039 chars omitted \u2014 64 line(s)] \u2026\n22. census refuses a failed fetch at a later offset\n  PASS  census fetch failure -> offset=500, exit 1, no census printed\n23. census refuses a non-2xx page\n  PASS  census HTTP 502 -> offset=500, exit 1, no census printed\n24. census requires a projects array even on HTTP 200\n  PASS  census missing-projects -> named .projects refusal, exit 1, no census printed\n  PASS  census wrong-projects -> named .projects refusal, exit 1, no census printed\n  PASS  census nonjson -> named .projects refusal, exit 1, no census printed\n25. census compares all received rows with the first reported total\n  PASS  census short page -> rows received=865, total reported=866, exit 1, no census printed\n26. healthy census counts matching rows on both sides of the page boundary\n  PASS  census healthy -> 2 matching rows, exact row format, exit 0\n27. census still refuses a missing total\n  PASS  census missing total -> named refusal, exit 1, no census printed\n28. README census and executable mirror agree except for BASE\n  PASS  census README/mirror byte parity (BASE parameterisation only)\n29. a workdir board that is not the published board is named as drift (CF-114)\n  PASS  publish-drift red fixture, exit 1\n  PASS  publish-drift green fixture, exit 0\n  PASS  publish-drift zero fixture, exit 1\n  PASS  publish-drift missing fixture, exit 1\n  PASS  publish-drift malformed fixture, exit 1\n  PASS  publish-drift nonobject fixture, exit 1\n  PASS  publish-drift event-drift fixture, exit 1\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T235338.065196Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 1. CF-077 commit_hash names 1232f7a04ce8bcfa94fd46166b3f05f1d1c55ffc, a commit that git merge-base --is-ancestor proves reaches origin/main, and no other row changes.: jq on .coding-hermes/board/tasks.jsonl: CF-077 commit_hash = 1232f7a04ce8bcfa94fd46166b3f05f1d1c55ffc. `git merge-base --is-ancestor 1232f7a04ce8bcfa94fd46166b3f05f1d1c55ffc origin/main` -> exit 0 (object is a commit: 'fix: fail closed when the auth probe cannot prove the gateway is closed. Addresses CF-077.'). Row-level diff HEAD~1..HEAD parsed as JSON: only CF-077 changed, and only field commit_hash (1dfb58b8aac966fa858e274992e01bad27d0632b -> 1232f7a0...); the sole other delta is the new CF-130 row (a filing, not a change to an existing row).\n  \u2713 2. README.md's python3.12 gate-row claim matches what the command prints on this host.: README.md:73 now states the pinned-interpreter check prints four rows when no hermes binary is installed and five on a host where ~/.local/bin/hermes exists (adds `version`), with the 2026-11-03 re-measurement: rows python, binary, version, port, inference_key, `HERMES: FAIL (1)`, rc 1. Measured here: `HERMES_PYTHON_BIN=python3.12 bash scripts/harness/install-hermes.sh --check` -> 5 gate rows (python, binary, version, port, inference_key), 'HERMES: FAIL (1)', rc=1; unqualified `bash scripts/harness/install-hermes.sh --check` (python3 3.14.9) -> 1 row 'FAIL python'. Both arms match the README text exactly.\n  \u2713 3. docs/audits/code-factory-sync-2026-11-03-2348.md records rows parsed, drift found, fixes applied and the residue disclosed.: docs/audits/code-factory-sync-2026-11-03-2348.md has a 'Board census' table ('Task rows parsed | 103', 'Events parsed | 146 (audit 25, task_completed 45, task_created 72, task_updated 4)', status split 38 complete/64 pending/1 in_progress) \u2014 all verified against HEAD~1 board files (103 rows/103 unique ids, 146 events with exactly those type counts, same status split). 'Drift found' table lists 5 numbered drifts (CF-077, README, CF-034/CF-041, CF-053, CF-005) plus a 'Checked and not drift' section; 'Fixes applied' lists the CF-077 rebind, the README both-arms correction and the CF-130 filing; 'Residue disclosed, not cleaned' table names .coding-hermes/board/.lock and the 13 untracked .gitreins/history/2026-11-03 bundles. (Minor: the 'Gates at this tree' block quotes 44 warnings while the tree now prints 45 \u2014 the doc explains the delta as CF-130's own probe warning and the commit message states 45.)\n  \u2713 4. bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK.: `bash tests/selftest.sh` -> exit_code 0, final line 'SELFTEST: PASS'. `bash scripts/boardctl validate` -> exit_code 0, final line 'RESULT: OK (45 warning(s))'.\nAll four criteria verified: CF-077 is rebound to an origin/main-reachable commit with only that field changed, the README gate-row claim matches the measured 5-row/1-row arms on this host, the audit doc records census/drift/fixes/residue, and both gates print SELFTEST: PASS and RESULT: OK.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 1. CF-077 commit_hash names 1232f7a04ce8bcfa94fd46166b3f05f1d1c55ffc, a commit that git merge-base --is-ancestor proves reaches origin/main, and no other row changes.: jq on .coding-hermes/board/tasks.jsonl: CF-077 commit_hash = 1232f7a04ce8bcfa94fd46166b3f05f1d1c55ffc. `git merge-base --is-ancestor 1232f7a04ce8bcfa94fd46166b3f05f1d1c55ffc origin/main` -> exit 0 (object is a commit: 'fix: fail closed when the auth probe cannot prove the gateway is closed. Addresses CF-077.'). Row-level diff HEAD~1..HEAD parsed as JSON: only CF-077 changed, and only field commit_hash (1dfb58b8aac966fa858e274992e01bad27d0632b -> 1232f7a0...); the sole other delta is the new CF-130 row (a filing, not a change to an existing row).\n  \u2713 2. README.md's python3.12 gate-row claim matches what the command prints on this host.: README.md:73 now states the pinned-interpreter check prints four rows when no hermes binary is installed and five on a host where ~/.local/bin/hermes exists (adds `version`), with the 2026-11-03 re-measurement: rows python, binary, version, port, inference_key, `HERMES: FAIL (1)`, rc 1. Measured here: `HERMES_PYTHON_BIN=python3.12 bash scripts/harness/install-hermes.sh --check` -> 5 gate rows (python, binary, version, port, inference_key), 'HERMES: FAIL (1)', rc=1; unqualified `bash scripts/harness/install-hermes.sh --check` (python3 3.14.9) -> 1 row 'FAIL python'. Both arms match the README text exactly.\n  \u2713 3. docs/audits/code-factory-sync-2026-11-03-2348.md records rows parsed, drift found, fixes applied and the residue disclosed.: docs/audits/code-factory-sync-2026-11-03-2348.md has a 'Board census' table ('Task rows parsed | 103', 'Events parsed | 146 (audit 25, task_completed 45, task_created 72, task_updated 4)', status split 38 complete/64 pending/1 in_progress) \u2014 all verified against HEAD~1 board files (103 rows/103 unique ids, 146 events with exactly those type counts, same status split). 'Drift found' table lists 5 numbered drifts (CF-077, README, CF-034/CF-041, CF-053, CF-005) plus a 'Checked and not drift' section; 'Fixes applied' lists the CF-077 rebind, the README both-arms correction and the CF-130 filing; 'Residue disclosed, not cleaned' table names .coding-hermes/board/.lock and the 13 untracked .gitreins/history/2026-11-03 bundles. (Minor: the 'Gates at this tree' block quotes 44 warnings while the tree now prints 45 \u2014 the doc explains the delta as CF-130's own probe warning and the commit message states 45.)\n  \u2713 4. bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK.: `bash tests/selftest.sh` -> exit_code 0, final line 'SELFTEST: PASS'. `bash scripts/boardctl validate` -> exit_code 0, final line 'RESULT: OK (45 warning(s))'.\nAll four criteria verified: CF-077 is rebound to an origin/main-reachable commit with only that field changed, the README gate-row claim matches the measured 5-row/1-row arms on this host, the audit doc records census/drift/fixes/residue, and both gates print SELFTEST: PASS and RESULT: OK.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "1. CF-077 commit_hash names 1232f7a04ce8bcfa94fd46166b3f05f1d1c55ffc, a commit that git merge-base --is-ancestor proves reaches origin/main, and no other row changes.",
+                "status": "PASS",
+                "detail": "jq on .coding-hermes/board/tasks.jsonl: CF-077 commit_hash = 1232f7a04ce8bcfa94fd46166b3f05f1d1c55ffc. `git merge-base --is-ancestor 1232f7a04ce8bcfa94fd46166b3f05f1d1c55ffc origin/main` -> exit 0 (object is a commit: 'fix: fail closed when the auth probe cannot prove the gateway is closed. Addresses CF-077.'). Row-level diff HEAD~1..HEAD parsed as JSON: only CF-077 changed, and only field commit_hash (1dfb58b8aac966fa858e274992e01bad27d0632b -> 1232f7a0...); the sole other delta is the new CF-130 row (a filing, not a change to an existing row)."
+              },
+              {
+                "criterion": "2. README.md's python3.12 gate-row claim matches what the command prints on this host.",
+                "status": "PASS",
+                "detail": "README.md:73 now states the pinned-interpreter check prints four rows when no hermes binary is installed and five on a host where ~/.local/bin/hermes exists (adds `version`), with the 2026-11-03 re-measurement: rows python, binary, version, port, inference_key, `HERMES: FAIL (1)`, rc 1. Measured here: `HERMES_PYTHON_BIN=python3.12 bash scripts/harness/install-hermes.sh --check` -> 5 gate rows (python, binary, version, port, inference_key), 'HERMES: FAIL (1)', rc=1; unqualified `bash scripts/harness/install-hermes.sh --check` (python3 3.14.9) -> 1 row 'FAIL python'. Both arms match the README text exactly."
+              },
+              {
+                "criterion": "3. docs/audits/code-factory-sync-2026-11-03-2348.md records rows parsed, drift found, fixes applied and the residue disclosed.",
+                "status": "PASS",
+                "detail": "docs/audits/code-factory-sync-2026-11-03-2348.md has a 'Board census' table ('Task rows parsed | 103', 'Events parsed | 146 (audit 25, task_completed 45, task_created 72, task_updated 4)', status split 38 complete/64 pending/1 in_progress) \u2014 all verified against HEAD~1 board files (103 rows/103 unique ids, 146 events with exactly those type counts, same status split). 'Drift found' table lists 5 numbered drifts (CF-077, README, CF-034/CF-041, CF-053, CF-005) plus a 'Checked and not drift' section; 'Fixes applied' lists the CF-077 rebind, the README both-arms correction and the CF-130 filing; 'Residue disclosed, not cleaned' table names .coding-hermes/board/.lock and the 13 untracked .gitreins/history/2026-11-03 bundles. (Minor: the 'Gates at this tree' block quotes 44 warnings while the tree now prints 45 \u2014 the doc explains the delta as CF-130's own probe warning and the commit message states 45.)"
+              },
+              {
+                "criterion": "4. bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK.",
+                "status": "PASS",
+                "detail": "`bash tests/selftest.sh` -> exit_code 0, final line 'SELFTEST: PASS'. `bash scripts/boardctl validate` -> exit_code 0, final line 'RESULT: OK (45 warning(s))'."
+              }
+            ],
+            "summary": "All four criteria verified: CF-077 is rebound to an origin/main-reachable commit with only that field changed, the README gate-row claim matches the measured 5-row/1-row arms on this host, the audit doc records census/drift/fixes/residue, and both gates print SELFTEST: PASS and RESULT: OK.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: SYNC-20261103-2348\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 1. CF-077 commit_hash names 1232f7a04ce8bcfa94fd46166b3f05f1d1c55ffc, a commit that git merge-base --is-ancestor proves reaches origin/main, and no other row changes.: jq on .coding-hermes/board/tasks.jsonl: CF-077 commit_hash = 1232f7a04ce8bcfa94fd46166b3f05f1d1c55ffc. `git merge-base --is-ancestor 1232f7a04ce8bcfa94fd46166b3f05f1d1c55ffc origin/main` -> exit 0 (object is a commit: 'fix: fail closed when the auth probe cannot prove the gateway is closed. Addresses CF-077.'). Row-level diff HEAD~1..HEAD parsed as JSON: only CF-077 changed, and only field commit_hash (1dfb58b8aac966fa858e274992e01bad27d0632b -> 1232f7a0...); the sole other delta is the new CF-130 row (a filing, not a change to an existing row).\n  \u2713 2. README.md's python3.12 gate-row claim matches what the command prints on this host.: README.md:73 now states the pinned-interpreter check prints four rows when no hermes binary is installed and five on a host where ~/.local/bin/hermes exists (adds `version`), with the 2026-11-03 re-measurement: rows python, binary, version, port, inference_key, `HERMES: FAIL (1)`, rc 1. Measured here: `HERMES_PYTHON_BIN=python3.12 bash scripts/harness/install-hermes.sh --check` -> 5 gate rows (python, binary, version, port, inference_key), 'HERMES: FAIL (1)', rc=1; unqualified `bash scripts/harness/install-hermes.sh --check` (python3 3.14.9) -> 1 row 'FAIL python'. Both arms match the README text exactly.\n  \u2713 3. docs/audits/code-factory-sync-2026-11-03-2348.md records rows parsed, drift found, fixes applied and the residue disclosed.: docs/audits/code-factory-sync-2026-11-03-2348.md has a 'Board census' table ('Task rows parsed | 103', 'Events parsed | 146 (audit 25, task_completed 45, task_created 72, task_updated 4)', status split 38 complete/64 pending/1 in_progress) \u2014 all verified against HEAD~1 board files (103 rows/103 unique ids, 146 events with exactly those type counts, same status split). 'Drift found' table lists 5 numbered drifts (CF-077, README, CF-034/CF-041, CF-053, CF-005) plus a 'Checked and not drift' section; 'Fixes applied' lists the CF-077 rebind, the README both-arms correction and the CF-130 filing; 'Residue disclosed, not cleaned' table names .coding-hermes/board/.lock and the 13 untracked .gitreins/history/2026-11-03 bundles. (Minor: the 'Gates at this tree' block quotes 44 warnings while the tree now prints 45 \u2014 the doc explains the delta as CF-130's own probe warning and the commit message states 45.)\n  \u2713 4. bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK.: `bash tests/selftest.sh` -> exit_code 0, final line 'SELFTEST: PASS'. `bash scripts/boardctl validate` -> exit_code 0, final line 'RESULT: OK (45 warning(s))'.\nAll four criteria verified: CF-077 is rebound to an origin/main-reachable commit with only that field changed, the README gate-row claim matches the measured 5-row/1-row arms on this host, the audit doc records census/drift/fixes/residue, and both gates print SELFTEST: PASS and RESULT: OK.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-03T23:56:36.591188",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-03T23:56:36.620124+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 76101,
+        "truncated": false,
+        "source": "git show 21d326594361"
+      }
+    ],
+    "task_id": "SYNC-20261103-2348"
+  }
+}

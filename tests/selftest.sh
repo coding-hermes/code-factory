@@ -2553,6 +2553,77 @@ else
   say "  FAIL  an unreachable bus was not refused by name (exit $rc)"; fails=$((fails+1))
 fi
 rm -rf "$buswtmp"
+# ch:trace row=CF-006 spec=specs/HARNESS.md#the-contract-every-adapter test=tests/selftest.sh::harness-conformance-battery doc=docs/HARNESS-CONFORMANCE.md prompt=none:fixture evidence=tests/harness-conformance.sh witness=none:local-fixture verdict=none:self-referential-hash commit=none:self-referential-hash memory=none:unresolved-namespace
+say "45. the harness conformance battery can go red (fixture mode)"
+# The battery is a checker; a checker that cannot print FAIL is decoration (AGENTS.md rule 2).
+# Every leg below runs it against a fixture adapter dir and a fixture HOME: no credential, no
+# network, no install. A green matrix is only worth the fixtures that can turn it red.
+tmpd=$(mktemp -d)
+mkdir -p "$tmpd/adapters" "$tmpd/empty" "$tmpd/home" "$tmpd/bin"
+# The fixture harness binary exists so the smoke leg gets past "binary absent" and reaches the
+# credential probe — that is the row under test in the first arm.
+cat > "$tmpd/bin/claude" <<'STUB'
+#!/usr/bin/env bash
+printf '9.9.9-fixture\n'
+STUB
+chmod +x "$tmpd/bin/claude"
+# A fixture adapter that measures something, so the same battery can also go GREEN.
+cat > "$tmpd/adapters/install-claude-code.sh" <<'FIX'
+#!/usr/bin/env bash
+case "${1:---check}" in
+  --check)
+    printf 'harness: claude-code (fixture)\n'
+    printf '  PASS  binary — %s/bin/claude\n' "$FIXTURE_BIN"
+    printf '  PASS  version — 9.9.9-fixture\n'
+    printf '\nCLAUDE-CODE: PASS\n' ;;
+  *) printf '  FAIL  apply — fixture adapter has no ladder\n'; exit 1 ;;
+esac
+FIX
+runb() {  # runb <adapter-dir> <only> [extra args...]
+  local dir="$1" only="$2"; shift 2
+  env -i PATH="$tmpd/bin:/usr/bin:/bin" HOME="$tmpd/home" FIXTURE_BIN="$tmpd" \
+    /bin/bash "$HERE/tests/harness-conformance.sh" --only "$only" --adapter-dir "$dir" "$@" 2>&1
+}
+out=$(runb "$tmpd/adapters" claude-code --write-doc --doc "$tmpd/doc.md")
+# (a) a credential that is absent is a SKIP naming it, never a PASS, and the fixture can go green.
+if printf '%s\n' "$out" | grep -q '^  PASS  claude-code:check — adapter exit 0 — version — 9.9.9-fixture$' \
+  && printf '%s\n' "$out" | grep -qE '^  SKIP  claude-code:smoke — ANTHROPIC_API_KEY or ~/\.claude/\.credentials\.json$' \
+  && ! printf '%s\n' "$out" | grep -q 'claude-code:smoke — .*PASS'; then
+  say "  PASS  absent credential -> SKIP naming it, while the same adapter's check leg goes green"
+else
+  say "  FAIL  an absent credential did not produce a named SKIP (or the fixture could not go green): $(printf '%s\n' "$out" | grep 'claude-code:' | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+# --write-doc must carry the matrix and the SKIP, not a claim of support.
+if [ -f "$tmpd/doc.md" ] && grep -q '^| harness | check | apply | smoke |$' "$tmpd/doc.md" \
+  && grep -qF 'ANTHROPIC_API_KEY or ~/.claude/.credentials.json' "$tmpd/doc.md"; then
+  say "  PASS  --write-doc wrote a matrix carrying the measured SKIP"
+else
+  say "  FAIL  --write-doc did not write a matrix carrying the SKIP"; fails=$((fails+1))
+fi
+# (b) a harness with no adapter is a FAIL, not a silent skip.
+out=$(runb "$tmpd/adapters" deepseek); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^  FAIL  deepseek:check — no adapter at ' \
+  && ! printf '%s\n' "$out" | grep -q '^  SKIP  deepseek:check'; then
+  say "  PASS  missing adapter -> FAIL 'no adapter at', exit $rc"
+else
+  say "  FAIL  a missing adapter was not a named FAIL (exit $rc)"; fails=$((fails+1))
+fi
+# (c) an adapter that prints PASS with an empty value is caught, not quoted.
+cat > "$tmpd/empty/install-hermes.sh" <<'FIX'
+#!/usr/bin/env bash
+printf 'harness: hermes (fixture)\n'
+printf '  PASS  version — \n'
+printf '\nHERMES: PASS\n'
+exit 0
+FIX
+out=$(runb "$tmpd/empty" hermes); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^  FAIL  hermes:check — adapter printed PASS with no measured value: version (empty)$'; then
+  say "  PASS  empty adapter value -> FAIL from the empty-value guard, exit $rc"
+else
+  say "  FAIL  a PASS with an empty value survived (exit $rc): $(printf '%s\n' "$out" | grep 'hermes:' | tr '\n' ' ')"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
 
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

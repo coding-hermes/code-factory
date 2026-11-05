@@ -1,0 +1,257 @@
+diff --git a/docs/ACCEPTANCE-PLAN.md b/docs/ACCEPTANCE-PLAN.md
+index 69df142..43ab1b5 100644
+--- a/docs/ACCEPTANCE-PLAN.md
++++ b/docs/ACCEPTANCE-PLAN.md
+@@ -2,7 +2,7 @@
+ 
+ **Scope:** CF-101–CF-112 in [`PRD-code-factory.md`](PRD-code-factory.md), with contract details in `specs/NODE.md`, `specs/HARNESS.md`, and `specs/ENVELOPE.md`. This plan distinguishes source-level evidence from tests actually run. A passing repository self-test is not proof that every requirement is accepted.
+ 
+-**Current state (re-measured 2026-11-04T07:38Z at tip `bc68e59`):** `tests/selftest.sh` carries 35 sections — numbered 1 through 35 — plus two lettered sub-arms, §4b and §7b, which the section regex `^say "[0-9]+\.` does not count, so the tree carries 37 arms — and exits 0 (`SELFTEST: PASS`, 109 `PASS` rows, 19 `FAIL` rows, every one an intentional negative fixture) at loadavg 11.60 (1 min), which measures the sibling lanes and judges sharing this host, not a suite property. The board at tip `bc68e59` carries 148 task rows and 273 events. §34 landed at `5794a49` (CF-163 AC3) five minutes after the 33-section snapshot at `1aeb0c7`; §35 (CF-153 — node-create accepts and forwards `--ref`) landed at `a112726` and is governed by board row CF-153. Sections, rows and events on this line are measured at ONE tip and quoted for that tip only: the `20f93ad` snapshot this line used to carry paired 35 working-tree sections with a tip that carries 34 (`git show 20f93ad:tests/selftest.sh | grep -cE '^say "[0-9]+\.'` = 34; 144 task rows and 264 events), so it named a measurement no reader could reproduce from the tip printed beside it. The census in `docs/audits/cf099-prd-drift-probe.sh` compares this number against the WORKING TREE rather than the tip it names, so any lane that adds a section turns this line red until the count is re-measured — which is exactly how the stale 33 was found. Every snapshot total that follows is pinned to the tip it names and is historical, not current. The stamp this line used to carry (`2026-11-04 22:43` at `7989ba3`) mixed the 2026-11-03 local clock with the next day's UTC date, so it named a measurement ~18 h in the tick's future; stamps in this file are UTC, written `T…Z`, and name the tip they were measured at.
++**Current state (re-measured 2026-11-04T08:46Z at tip `8b81369`):** `tests/selftest.sh` carries 36 numbered sections (1 through 36) plus three lettered sub-arms, §4b, §7b and §7c, for 39 arms total; it exits 0 (`SELFTEST: PASS`, 121 `PASS` rows, 19 intentional fixture `FAIL` rows) at loadavg 7.43 (1 min, observed after the selftest run; host load, not a suite property). At tip `8b81369`, `.coding-hermes/board/tasks.jsonl` has 154 lines and `.coding-hermes/board/events.jsonl` has 291 lines (`git show 8b81369:<path> | wc -l`); the section and sub-arm counts come from `grep -cE '^say "[0-9]+\.' tests/selftest.sh` (=36) and `grep -cE '^say "§?[0-9]+[a-z]\.' tests/selftest.sh` (=3). PASS/FAIL counts are from `grep -c '^  PASS'` / `grep -c '^  FAIL'` on the complete `bash tests/selftest.sh` transcript. The latest numbered section, §36, landed in commit `8b81369` for board row CF-159; that commit falsified the prior line's 35-section claim. The filed premise (29 vs 30) has moved: the immediately preceding line measured 35 vs 36 at this same tip, and this correction closes CF-155 on that current drift. The PRD citation inventory `grep -oE '§[0-9]+[a-z]?' docs/PRD-code-factory.md | sort -u` contains 14 distinct ids. Repository counts here are pinned to this one named tip; historical snapshots below remain pinned to their own tips. The new `--sections-only` mode measures the current section claim against the working tree and selftest exercises both a green run and a one-extra-section red fixture.
+ 
+ **Evidence snapshot (re-measured 2026-11-04 02:35 at tip `d02916e`):** `tests/selftest.sh` was run from
+ the repository root and exited 0 (`SELFTEST: PASS`, 88 `PASS` rows, suite counter `fails=0`) over
+@@ -52,17 +52,17 @@ parity, credentials lifecycle, the manifest schema, destruction/recreation, sche
+ the control-host artifact round trip — those cells say **no test** on purpose.
+ 
+ **Sections with no requirement (the reverse direction).** A section serves a requirement only if that
+-requirement's `Verified by` cell above names it. Twelve of the 37 arms are named: §2, §3, §4, §4b, §5,
++requirement's `Verified by` cell above names it. Twelve of the 39 arms are named: §2, §3, §4, §4b, §5,
+ §6, §12, §13, §14, §15, §16 and §20. The mechanical sweep over the whole document,
+ `grep -oE '§[0-9]+[a-z]?' docs/PRD-code-factory.md | sort -u`, returns **14** ids rather than 12: it
+ also catches §17 and §18, which are named only in the milestone block, where they certify `CF-077`
+ (a board row, not a `CF-101`–`CF-112` requirement) — so they count as unnamed for this total and
+-carry their own row below. The remaining 25 — §1, §7, §7b, §8,
+-§9, §10, §11, §17, §18, §19, §21, §22–§27, §28, §29, §30, §31, §32, §33, §34 and §35 — test repository and
++carry their own row below. The remaining 27 — §1, §7, §7b, §7c, §8,
++§9, §10, §11, §17, §18, §19, §21, §22–§27, §28, §29, §30, §31, §32, §33, §34, §35 and §36 — test repository and
+ fleet tooling (board parsing and the board gate, prompt inventory, lane targets, repo-url guards, the
+ census and README arms), not a CF-101–CF-112 requirement, and each is governed by the board row it
+ names: §7b `CF-088`, §19 `CF-085`, §21 `CF-091`, §29 `CF-114`, §31 `CF-127`, §30 `CF-093`, §32
+-`CF-145`, §33 `CF-119`, §34 `CF-163` AC3, §35 `CF-153`, §17–§18 `CF-077`. Some of these overlap a requirement's subject without
++`CF-145`, §33 `CF-119`, §34 `CF-163` AC3, §35 `CF-153`, §36 `CF-159`, §7c `CF-155`, §17–§18 `CF-077`. Some of these overlap a requirement's subject without
+ deciding it (§10 exercises the Hermes adapter's Python refusal, which is CF-106 evidence but not the
+ two-adapter contract CF-106 demands); the cell stays the authority, so the overlap is recorded here
+ rather than promoted into it. A section that is neither named by a `Verified by` cell nor by a board
+@@ -94,7 +94,7 @@ A green suite is not PRD coverage, and the reverse gap matters as much as the fo
+ 31 arms, 88 `PASS` rows — and only three requirements have an arm that can fail on them (`CF-102` ←
+ §2 and §14, `CF-105` ← §5, `CF-109` ← §12 and §13 partially, plus `CF-127` ← §31 as of the CF-127
+ landing). Every other arm is governed by a spec, a
+-rule or a board row, and the mapping below names every numbered section in the current tree — 35, plus both lettered arms, so 37 arms, and 31 arms at the `d02916e` tip — so that a new arm cannot arrive without a
++rule or a board row, and the mapping below names every numbered section in the current tree — 36, plus three lettered arms, so 39 arms total, and 31 arms at the `d02916e` tip — so that a new arm cannot arrive without a
+ named authority. The mapping is a promise this table keeps, not one the tooling enforces: the
+ section census in `docs/audits/cf099-prd-drift-probe.sh` counts only numbered lines, so a lettered arm
+ lands uncounted (`CF-113`, pending, owns that fix).
+diff --git a/docs/audits/cf099-prd-drift-probe.sh b/docs/audits/cf099-prd-drift-probe.sh
+index f74f530..24eca67 100755
+--- a/docs/audits/cf099-prd-drift-probe.sh
++++ b/docs/audits/cf099-prd-drift-probe.sh
+@@ -1,19 +1,27 @@
+ #!/usr/bin/env bash
+ # CF-099 probe — do the PRD milestone block and the acceptance plan still describe this tree?
+-# Contract enforced: (1) the milestone names the tip it was measured at and every CF-id listed
+-# after "open defects" is NOT complete on the board; (2) the plan's snapshot counts reproduce at
+-# the tip the plan names; (3) the plan's section count matches tests/selftest.sh; (4) the PRD's
+-# CF-102 cell names the per-layer arms that exist.
+-# Usage: bash docs/audits/cf099-prd-drift-probe.sh   (cwd: the repository root; exits 1 on drift)
++# Contract enforced: default mode checks the milestone/open blockers, tip-pinned board snapshot,
++# section census and PRD CF-102 layer arms; --sections-only checks only the plan/selftest census.
++# CF099_PLAN and CF099_SELFTEST override the two census inputs for fixture testing.
++# Usage: bash docs/audits/cf099-prd-drift-probe.sh [--sections-only] (cwd: repository root)
+ set -uo pipefail
+ cd "$(git rev-parse --show-toplevel)" || exit 2
+-P=docs/ACCEPTANCE-PLAN.md
++P=${CF099_PLAN:-docs/ACCEPTANCE-PLAN.md}
++S=${CF099_SELFTEST:-tests/selftest.sh}
+ R=docs/PRD-code-factory.md
++if [ "${1:-}" = --sections-only ]; then
++  nsec=$(awk 'index($0, "**Current state") == 1 {if (match($0, /[0-9]+ numbered sections/)) {print substr($0, RSTART, RLENGTH); exit}}' "$P" | grep -oE '[0-9]+')
++  msec=$(grep -cE '^say "[0-9]+\.' "$S")
++  [ "${nsec:-x}" = "$msec" ] || { echo "DRIFT: plan says ${nsec:-none} sections, tests/selftest.sh has $msec"; d=1; }
++  d=${d:-0}
++  echo "measured: plan_sections=${nsec:-none} selftest_sections=$msec plan=$P selftest=$S"
++  exit "$d"
++fi
+ d=0
+ tip=$(grep -oE 'at tip `[0-9a-f]{7,40}`' "$P" | head -1 | grep -oE '[0-9a-f]{7,40}')
+-srow=$(grep -oE '[0-9]+ task rows' "$P" | head -1 | grep -oE '[0-9]+')
+-sev=$(grep -oE '[0-9]+ events' "$P" | head -1 | grep -oE '[0-9]+')
+-nsec=$(grep -oE '[0-9]+ sections' "$P" | head -1 | grep -oE '[0-9]+')
++srow=$(awk 'index($0, "**Current state") == 1 {if (match($0, /tasks.jsonl` has [0-9]+ lines/)) {print substr($0, RSTART, RLENGTH); exit}}' "$P" | grep -oE '[0-9]+' | tail -1)
++sev=$(awk 'index($0, "**Current state") == 1 {if (match($0, /events.jsonl` has [0-9]+ lines/)) {print substr($0, RSTART, RLENGTH); exit}}' "$P" | grep -oE '[0-9]+' | tail -1)
++  nsec=$(awk 'index($0, "**Current state") == 1 {if (match($0, /[0-9]+ numbered sections/)) {print substr($0, RSTART, RLENGTH); exit}}' "$P" | grep -oE '[0-9]+')
+ if [ -z "$tip" ] || ! git cat-file -e "$tip:.coding-hermes/board/tasks.jsonl" 2>/dev/null; then
+   echo "DRIFT: acceptance plan names no resolvable tip"; d=1
+ else
+@@ -22,7 +30,7 @@ else
+   [ "${srow:-x}" = "$mrow" ] || { echo "DRIFT: plan says ${srow:-none} task rows, $tip carries $mrow"; d=1; }
+   [ "${sev:-x}" = "$mev" ] || { echo "DRIFT: plan says ${sev:-none} events, $tip carries $mev"; d=1; }
+ fi
+-msec=$(grep -cE '^say "[0-9]+\.' tests/selftest.sh)
++msec=$(grep -cE '^say "[0-9]+\.' "$S")
+ [ "${nsec:-x}" = "$msec" ] || { echo "DRIFT: plan says ${nsec:-none} sections, tests/selftest.sh has $msec"; d=1; }
+ block=$(awk '/^\*\*Status 20/{f=1} f&&/^$/{exit} f' "$R" | tr '\n' ' ')
+ printf '%s' "$block" | grep -qE 're-measured at `[0-9a-f]{7,40}`' \
+diff --git a/docs/audits/code-factory-docs-2026-11-04-cf155-section-census.md b/docs/audits/code-factory-docs-2026-11-04-cf155-section-census.md
+new file mode 100644
+index 0000000..04fcd09
+--- /dev/null
++++ b/docs/audits/code-factory-docs-2026-11-04-cf155-section-census.md
+@@ -0,0 +1,122 @@
++# CF-155 section census correction and gate
++
++Tick: `code-factory-docs-2026-11-04-08-12-52`
++Row: CF-155
++Claim corrected: current acceptance-plan selftest section count; add a regression gate for section drift.
++
++## Before / after
++
++| Location | Before | After |
++|---|---|---|
++| `docs/ACCEPTANCE-PLAN.md:5` | Current state was pinned to `bc68e59`: 35 numbered sections, 37 arms, 109 PASS rows, 19 fixture FAIL rows, 148 board rows, 273 events. | Re-measured at `8b81369`: 36 numbered sections plus §4b/§7b/§7c = 39 arms; 121 PASS rows and 19 intentional fixture FAIL rows; loadavg 7.43; 154 task-file lines and 291 event-file lines. §36 landed in 8b81369 for CF-159, falsifying the 35-section line. The filed 29-vs-30 premise moved to 35-vs-36; this closes the current drift. |
++| `docs/ACCEPTANCE-PLAN.md:60-61` | 37 arms, 25 unnamed arms, enumeration ended at §35 and omitted §7c. | 39 total arms; 12 named and 27 unnamed; enumeration includes §7c and §36. |
++| `docs/ACCEPTANCE-PLAN.md:65` | Governing-row map ended at §35 / CF-153. | Adds §36 / CF-159 and §7c / CF-155. |
++| `docs/ACCEPTANCE-PLAN.md:97` | Current tree claimed 35 numbered + two lettered = 37 arms. | Corrected to 36 numbered + three lettered = 39; historical 31-arm d02916e count unchanged. |
++
++Historical snapshots explicitly pinned to old tips were preserved, including the d02916e 29-section snapshot and the `Previous snapshots` list.
++
++## Implementation and proof paths
++
++- `docs/audits/cf099-prd-drift-probe.sh:2-6` documents default and `--sections-only` scope plus fixture overrides; lines 10-17 implement the isolated section census and measured output; default mode remains below that block and checks milestone, tip-pinned snapshot and PRD layer arms.
++- `tests/selftest.sh:270-290` contains lettered arm §7c. It runs the real-tree green direction and a fixture pair with exactly one additional numbered `say` section; each direction emits one named PASS row, and the red assertion requires the full `DRIFT:` line (not a bare `FAIL` substring).
++- The full mode reads the first Current state line for its pinned tip, row/event counts and section count; it does not pin mutable board counts as selftest fixtures.
++
++## Evidence transcripts
++
++Before the fix, `bash docs/audits/cf099-prd-drift-probe.sh` produced:
++
++```text
++DRIFT: plan says 35 sections, tests/selftest.sh has 36
++measured: tip=bc68e59 rows=148 events=273 sections=36 open_blockers=CF-001 CF-002 CF-004 CF-080 CF-110 CF-112 CF-131 CF-132 CF-133 CF-136 CF-137 CF-138 CF-139 CF-150
++probe_rc=1
++```
++
++After the fix, green section-only run:
++
++```text
++measured: plan_sections=36 selftest_sections=36 plan=docs/ACCEPTANCE-PLAN.md selftest=tests/selftest.sh
++sections_rc=0
++```
++
++Red one-extra-section fixture run (fixture directory `/var/tmp/cf155-fixture.fxN9q5`):
++
++```text
++DRIFT: plan says 36 sections, tests/selftest.sh has 37
++measured: plan_sections=36 selftest_sections=37 plan=/var/tmp/cf155-fixture.fxN9q5/plan.md selftest=/var/tmp/cf155-fixture.fxN9q5/selftest.sh
++fixture_path=/var/tmp/cf155-fixture.fxN9q5
++fixture_rc=1
++```
++
++Full probe at HEAD:
++
++```text
++measured: tip=8b81369 rows=154 events=291 sections=36 open_blockers=CF-001 CF-002 CF-004 CF-080 CF-110 CF-112 CF-131 CF-132 CF-133 CF-136 CF-137 CF-138 CF-139 CF-150
++OK: milestone, plan snapshot and layer arms agree at 8b81369
++full_rc=0
++```
++
++`bash tests/selftest.sh` completed with exit 0 and these final lines:
++
++```text
++  PASS  cf159 node-create repo payload is data, not code
++  PASS  cf159 node-create ref payload is data, not code
++  PASS  cf159 node-create crier payload is data, not code
++  PASS  cf159 verify-node artifact payload is data, not code; digest intact
++  PASS  cf159 bunker_exec trusted command text preserves quoted values and literal pipelines
++  PASS  cf159-escaping all remote-command sites
++
++SELFTEST: PASS
++```
++
++The run's complete transcript had 121 lines matching `grep -c '^  PASS'` and 19 matching `grep -c '^  FAIL'`; those FAIL rows are intentional negative-fixture output. The measured per-arm outputs were:
++
++```text
++PASS  cf155 sections census green at this tree
++PASS  cf155 sections census red on a fixture with one extra numbered section
++```
++
++Required command tails:
++
++```text
++$ bash -n docs/audits/cf099-prd-drift-probe.sh
++(exit 0; no output)
++$ bash docs/audits/cf099-prd-drift-probe.sh --sections-only
++measured: plan_sections=36 selftest_sections=36 plan=docs/ACCEPTANCE-PLAN.md selftest=tests/selftest.sh
++(exit 0)
++$ bash docs/audits/cf099-prd-drift-probe.sh
++measured: tip=8b81369 rows=154 events=291 sections=36 open_blockers=CF-001 CF-002 CF-004 CF-080 CF-110 CF-112 CF-131 CF-132 CF-133 CF-136 CF-137 CF-138 CF-139 CF-150
++OK: milestone, plan snapshot and layer arms agree at 8b81369
++(exit 0)
++$ bash scripts/boardctl validate
++RESULT: OK (3 warning(s))
++(exit 0)
++```
++
++`bash -n docs/audits/cf099-prd-drift-probe.sh` passed. `bash scripts/boardctl validate` warnings are CF-034's two free-form values and the headerless board.
++
++## Re-derived measurements
++
++All tree counts below refer to the named tip `8b81369` (confirmed before edits). Commands and values:
++
++- `git rev-parse --short HEAD` → `8b81369`; `git rev-list --left-right --count origin/main...HEAD` → `0 0`.
++- `grep -cE '^say "[0-9]+\.' tests/selftest.sh` → 36 numbered sections.
++- `grep -cE '^say "§?[0-9]+[a-z]\.' tests/selftest.sh` → 3 lettered arms (§4b, §7b, §7c).
++- Derived arms: 36 + 3 = 39.
++- `git show 8b81369:.coding-hermes/board/tasks.jsonl | wc -l` → 154; `git show 8b81369:.coding-hermes/board/events.jsonl | wc -l` → 291.
++- `grep -c '^  PASS' /tmp/cf155-final-selftest.txt` → 121; `grep -c '^  FAIL' /tmp/cf155-final-selftest.txt` → 19. Transcript produced by `bash tests/selftest.sh`.
++- `grep -oE '§[0-9]+[a-z]?' docs/PRD-code-factory.md | sort -u` → 14 unique ids.
++- `/proc/loadavg` first field after the selftest run → 7.43 (host load context only).
++- Falsifier: commit `8b81369` (`fix(node-scripts): escape every value interpolated into remote bash -lc`), which added §36 and addresses CF-159.
++
++## Claims I could not verify
++
++- not measured — no live/remote node provisioning or deployment was requested; the scope is local docs, audit and selftest only.
++- not measured — the exact load average at the instant the selftest process started; 7.43 was sampled after the successful run.
++
++## Trace and status
++
++ch:trace row=CF-155 spec=docs/ACCEPTANCE-PLAN.md wave=none:serial test=tests/selftest.sh::7c doc=docs/ACCEPTANCE-PLAN.md evidence=docs/audits/code-factory-docs-2026-11-04-cf155-section-census.md witness=cmd:cf099-sections-only-green-and-fixture-red verdict=none:pending-tier2 commit=self memory=none:foreman-writes-receipt
++
++STATUS: implemented and locally verified
++TIER: Tier 1 checks passed
++EVIDENCE: local probe, red fixture, selftest and board validation; commit pending
+diff --git a/tests/selftest.sh b/tests/selftest.sh
+index 1ae9480..406f8a6 100755
+--- a/tests/selftest.sh
++++ b/tests/selftest.sh
+@@ -265,6 +265,30 @@ else
+ fi
+ rm -rf "$tmpd"
+ 
++say "7c. CF-155 sections census agrees and rejects one extra numbered section"
++tmpd=$(mktemp -d)
++cp "$HERE/docs/ACCEPTANCE-PLAN.md" "$tmpd/plan.md"
++cp "$HERE/tests/selftest.sh" "$tmpd/selftest.sh"
++out=$(CF099_PLAN="$HERE/docs/ACCEPTANCE-PLAN.md" CF099_SELFTEST="$HERE/tests/selftest.sh" \
++  bash "$HERE/docs/audits/cf099-prd-drift-probe.sh" --sections-only 2>&1); rc=$?
++if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^measured: plan_sections=[0-9][0-9]* selftest_sections=[0-9][0-9]*'; then
++  say "  PASS  cf155 sections census green at this tree"
++else
++  say "  FAIL  cf155 sections census green direction failed (exit $rc)"; fails=$((fails+1))
++fi
++printf '%s\n' 'say "99. drift fixture"' >> "$tmpd/selftest.sh"
++plan_sections=$(awk 'index($0, "**Current state") == 1 {if (match($0, /[0-9]+ numbered sections/)) {print substr($0, RSTART, RLENGTH); exit}}' "$tmpd/plan.md" | grep -oE '[0-9]+')
++expected="DRIFT: plan says $plan_sections sections, tests/selftest.sh has $((plan_sections+1))"
++out=$(CF099_PLAN="$tmpd/plan.md" CF099_SELFTEST="$tmpd/selftest.sh" \
++  bash "$HERE/docs/audits/cf099-prd-drift-probe.sh" --sections-only 2>&1); rc=$?
++if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq "$expected"; then
++  say "  PASS  cf155 sections census red on a fixture with one extra numbered section"
++else
++  say "  FAIL  cf155 sections census fixture missed named DRIFT (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out"
++fi
++rm -rf "$tmpd"
++
+ say "8. project board entrypoint is real and fails closed without dependency"
+ bash -n "$HERE/scripts/boardctl" && say "  PASS  bash -n scripts/boardctl" || { say "  FAIL  bash syntax"; fails=$((fails+1)); }
+ "$HERE/scripts/boardctl" --help >/dev/null 2>&1 && say "  PASS  local help" || { say "  FAIL  help"; fails=$((fails+1)); }

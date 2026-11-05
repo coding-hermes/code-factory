@@ -1,0 +1,112 @@
+{
+  "task_id": "CF-091",
+  "task_title": "Enforce intra-family repo_url agreement and publish a public-safe rejection census + waiver",
+  "task_criteria": [
+    "In a worktree at origin/main d107ac4: (1) scripts/lane_target.py repo-url --row enforces intra-family repo_url agreement: a primary+satellite fixture whose rows carry two different VALID git roots exits nonzero and names both lanes, while the aligned fixture exits 0; (2) a public-safe census artifact under docs/audits/ records live-export rejection totals by class plus the exact reproduction commands, with no lane names and no host paths, and a committed waiver file lists every remaining rejection class with a named owner and a re-check date; (3) tests/selftest.sh gains an arm that fails on the diverged fixture and passes on the aligned one, and reverting the divergence check makes that arm fail; (4) bash tests/selftest.sh prints SELFTEST: PASS and ruff check . plus ruff format --check . both exit 0."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "edc8e36924b86709589620762a89213cce99384d",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T173910.298602Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n12:53PM INF scanned ~447681 bytes (447.68 KB) in 447ms\n12:53PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 88 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T173910.298602Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.2VOPqZxQ8e/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  80/80 rows parse\n8. project board entrypoint is real and fails closed without dependency\n  PASS  bash -n scripts/boardctl\n  PASS  local help\n  PASS  missing boardctl -> explicit FAIL, exit 127\n9. every prompt file the README relies on exists\n  PASS  every prompts/*.md named by README.md exists\n  PASS  absent prompt refused (absent: prompts/ghost-lane.md)\n10. Hermes refuses an unsupported Python without pip or network\n  PASS  Python 3.14 refusal names the supported range without pip\n11. lane workdir targets: local paths AND remote user@host/scheme targets\n  PASS  lane target parse/validate, home-repo rejection, remote structural-only\n12. node disk floor resolves from CLI/env/config with fail-closed values\n  PASS  floor precedence, role defaults, malformed values refused\n13. node provisioning names its resolved floor and refuses below it\n  PASS  malformed floor refused before any install\n14. harness-adapter FAIL rows are counted in the node summary (CF-055)\n\n\u2026 [1144 chars omitted \u2014 16 line(s)] \u2026\n17. auth verification fails closed, with a pre-fix detector control\n  PASS  pre-fix 404 incorrectly passes: fixture detects CF-077\n  PASS  auth stats 401 -> PASS, exit 0\n  PASS  auth stats 302 -> PASS, exit 0\n  PASS  auth stats 403 -> PASS, exit 0\n  PASS  auth stats 404 -> FAIL, exit 1\n  PASS  auth stats 000 -> FAIL, exit 1\n  PASS  auth stats 500 -> FAIL, exit 1\n  PASS  auth stats 200 -> FAIL, exit 1\n  PASS  auth marker {\"status\":\"ok\"} -> named auth_gate FAIL, exit 1\n  PASS  auth marker {\"auth_required\":false} -> named auth_gate FAIL, exit 1\n  PASS  auth marker {\"auth_required\":trueish} -> named auth_gate FAIL, exit 1\n18. node creation requires both auth legs, not just successful provisioning\n  PASS  node-create refused -> NODE INCOMPLETE (1), exit 1\n  PASS  node-create missing-marker -> NODE INCOMPLETE (1), exit 1\n  PASS  node-create closed -> NODE CREATED: f, exit 0\n19. project repo_url must name a real git root (CF-085)\n  PASS  repo_url guard rejects a phantom local: root (1 rejected, 1 accepted)\n20. reclaim runs before disk refusal, while check never reaps\n  PASS  pip cache reaped before one final disk FAIL; admission still refuses\n  PASS  check preserves pip bytes, counts one disk failure and continues preflight\n  PASS  re-measure admits a recovered node without a stale FAIL row\n  PASS  missing reclaimer fails closed with one counted row\n  PASS  reclaim targets, TTL, symlink safety, protected files, dry-run and idempotence\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T173910.298602Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 In a worktree at origin/main d107ac4: (1) scripts/lane_target.py repo-url --row enforces intra-family repo_url agreement: a primary+satellite fixture whose rows carry two different VALID git roots exits nonzero and names both lanes, while the aligned fixture exits 0; (2) a public-safe census artifact under docs/audits/ records live-export rejection totals by class plus the exact reproduction commands, with no lane names and no host paths, and a committed waiver file lists every remaining rejection class with a named owner and a re-check date; (3) tests/selftest.sh gains an arm that fails on the diverged fixture and passes on the aligned one, and reverting the divergence check makes that arm fail; (4) bash tests/selftest.sh prints SELFTEST: PASS and ruff check . plus ruff format --check . both exit 0.: (1) Manual fixture (two real git repos, rows fixture-primary / fixture-primary-qa): diverged -> exit 4 with \"FAIL repo_url '.../b' \u2014 repo_url diverges from primary 'fixture-primary': '.../b' != '.../a' [fixture-primary-qa]\" naming both lanes; aligned -> \"repo_url: 0 rejected, 2 accepted\", exit 0. Impl: scripts/lane_target.py:352-395 (FAMILY_SUFFIXES/family_key/normalized_repo_url) and :489-520 (family grouping, codes.add(4)). (2) docs/audits/cf091-repo-url-census.md records totals (866 rows / 384 rejected / 482 accepted / exit 2), 6 rejection classes with counts, and exact reproduction commands (sqlite3 read-only export + `python3 -B scripts/lane_target.py repo-url --row projects.json`); cf091-repo-url-census.json mirrors it machine-readably. grep for /home/, /Users/, /var/tmp, /tmp/, hermes-scratch, .hermes across census md/json/waiver returned no matches (RC=1) and no lane names appear. docs/audits/cf091-repo-url-waiver.json lists all 6 classes, each with owner \"scheduler-operator (fleet-ops)\" and re_check \"2026-12-01\". (3) tests/selftest.sh:587-615 adds arm 20; unmodified run prints \"PASS repo_url family agreement: diverged fixture rejected naming both lanes, aligned accepted\"; after reverting the check (scripts/lane_target.py:489 `if row_file is not None:` -> `if False:`) the arm prints \"FAIL repo_url family agreement (diverged exit 0, aligned exit 0)\" and \"SELFTEST: FAIL (2)\" with exit 1 (file restored, tree clean). (4) `bash tests/selftest.sh` -> exit 0, tail \"SELFTEST: PASS\"; `ruff check .` -> \"All checks passed!\" exit 0; `ruff format --check .` -> \"9 files already formatted\" exit 0. Also `python3 -m unittest tests.test_lane_target` -> Ran 36 tests, OK.\nAll four sub-criteria verified with live command output: family divergence is enforced (exit 4 naming both lanes vs exit 0 aligned), the public-safe census + waiver artifacts are complete and host-path/lane-name free, the new selftest arm fails when the check is reverted, and selftest plus both ruff commands exit 0.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 In a worktree at origin/main d107ac4: (1) scripts/lane_target.py repo-url --row enforces intra-family repo_url agreement: a primary+satellite fixture whose rows carry two different VALID git roots exits nonzero and names both lanes, while the aligned fixture exits 0; (2) a public-safe census artifact under docs/audits/ records live-export rejection totals by class plus the exact reproduction commands, with no lane names and no host paths, and a committed waiver file lists every remaining rejection class with a named owner and a re-check date; (3) tests/selftest.sh gains an arm that fails on the diverged fixture and passes on the aligned one, and reverting the divergence check makes that arm fail; (4) bash tests/selftest.sh prints SELFTEST: PASS and ruff check . plus ruff format --check . both exit 0.: (1) Manual fixture (two real git repos, rows fixture-primary / fixture-primary-qa): diverged -> exit 4 with \"FAIL repo_url '.../b' \u2014 repo_url diverges from primary 'fixture-primary': '.../b' != '.../a' [fixture-primary-qa]\" naming both lanes; aligned -> \"repo_url: 0 rejected, 2 accepted\", exit 0. Impl: scripts/lane_target.py:352-395 (FAMILY_SUFFIXES/family_key/normalized_repo_url) and :489-520 (family grouping, codes.add(4)). (2) docs/audits/cf091-repo-url-census.md records totals (866 rows / 384 rejected / 482 accepted / exit 2), 6 rejection classes with counts, and exact reproduction commands (sqlite3 read-only export + `python3 -B scripts/lane_target.py repo-url --row projects.json`); cf091-repo-url-census.json mirrors it machine-readably. grep for /home/, /Users/, /var/tmp, /tmp/, hermes-scratch, .hermes across census md/json/waiver returned no matches (RC=1) and no lane names appear. docs/audits/cf091-repo-url-waiver.json lists all 6 classes, each with owner \"scheduler-operator (fleet-ops)\" and re_check \"2026-12-01\". (3) tests/selftest.sh:587-615 adds arm 20; unmodified run prints \"PASS repo_url family agreement: diverged fixture rejected naming both lanes, aligned accepted\"; after reverting the check (scripts/lane_target.py:489 `if row_file is not None:` -> `if False:`) the arm prints \"FAIL repo_url family agreement (diverged exit 0, aligned exit 0)\" and \"SELFTEST: FAIL (2)\" with exit 1 (file restored, tree clean). (4) `bash tests/selftest.sh` -> exit 0, tail \"SELFTEST: PASS\"; `ruff check .` -> \"All checks passed!\" exit 0; `ruff format --check .` -> \"9 files already formatted\" exit 0. Also `python3 -m unittest tests.test_lane_target` -> Ran 36 tests, OK.\nAll four sub-criteria verified with live command output: family divergence is enforced (exit 4 naming both lanes vs exit 0 aligned), the public-safe census + waiver artifacts are complete and host-path/lane-name free, the new selftest arm fails when the check is reverted, and selftest plus both ruff commands exit 0.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "In a worktree at origin/main d107ac4: (1) scripts/lane_target.py repo-url --row enforces intra-family repo_url agreement: a primary+satellite fixture whose rows carry two different VALID git roots exits nonzero and names both lanes, while the aligned fixture exits 0; (2) a public-safe census artifact under docs/audits/ records live-export rejection totals by class plus the exact reproduction commands, with no lane names and no host paths, and a committed waiver file lists every remaining rejection class with a named owner and a re-check date; (3) tests/selftest.sh gains an arm that fails on the diverged fixture and passes on the aligned one, and reverting the divergence check makes that arm fail; (4) bash tests/selftest.sh prints SELFTEST: PASS and ruff check . plus ruff format --check . both exit 0.",
+                "status": "PASS",
+                "detail": "(1) Manual fixture (two real git repos, rows fixture-primary / fixture-primary-qa): diverged -> exit 4 with \"FAIL repo_url '.../b' \u2014 repo_url diverges from primary 'fixture-primary': '.../b' != '.../a' [fixture-primary-qa]\" naming both lanes; aligned -> \"repo_url: 0 rejected, 2 accepted\", exit 0. Impl: scripts/lane_target.py:352-395 (FAMILY_SUFFIXES/family_key/normalized_repo_url) and :489-520 (family grouping, codes.add(4)). (2) docs/audits/cf091-repo-url-census.md records totals (866 rows / 384 rejected / 482 accepted / exit 2), 6 rejection classes with counts, and exact reproduction commands (sqlite3 read-only export + `python3 -B scripts/lane_target.py repo-url --row projects.json`); cf091-repo-url-census.json mirrors it machine-readably. grep for /home/, /Users/, /var/tmp, /tmp/, hermes-scratch, .hermes across census md/json/waiver returned no matches (RC=1) and no lane names appear. docs/audits/cf091-repo-url-waiver.json lists all 6 classes, each with owner \"scheduler-operator (fleet-ops)\" and re_check \"2026-12-01\". (3) tests/selftest.sh:587-615 adds arm 20; unmodified run prints \"PASS repo_url family agreement: diverged fixture rejected naming both lanes, aligned accepted\"; after reverting the check (scripts/lane_target.py:489 `if row_file is not None:` -> `if False:`) the arm prints \"FAIL repo_url family agreement (diverged exit 0, aligned exit 0)\" and \"SELFTEST: FAIL (2)\" with exit 1 (file restored, tree clean). (4) `bash tests/selftest.sh` -> exit 0, tail \"SELFTEST: PASS\"; `ruff check .` -> \"All checks passed!\" exit 0; `ruff format --check .` -> \"9 files already formatted\" exit 0. Also `python3 -m unittest tests.test_lane_target` -> Ran 36 tests, OK."
+              }
+            ],
+            "summary": "All four sub-criteria verified with live command output: family divergence is enforced (exit 4 naming both lanes vs exit 0 aligned), the public-safe census + waiver artifacts are complete and host-path/lane-name free, the new selftest arm fails when the check is reverted, and selftest plus both ruff commands exit 0.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-091\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 In a worktree at origin/main d107ac4: (1) scripts/lane_target.py repo-url --row enforces intra-family repo_url agreement: a primary+satellite fixture whose rows carry two different VALID git roots exits nonzero and names both lanes, while the aligned fixture exits 0; (2) a public-safe census artifact under docs/audits/ records live-export rejection totals by class plus the exact reproduction commands, with no lane names and no host paths, and a committed waiver file lists every remaining rejection class with a named owner and a re-check date; (3) tests/selftest.sh gains an arm that fails on the diverged fixture and passes on the aligned one, and reverting the divergence check makes that arm fail; (4) bash tests/selftest.sh prints SELFTEST: PASS and ruff check . plus ruff format --check . both exit 0.: (1) Manual fixture (two real git repos, rows fixture-primary / fixture-primary-qa): diverged -> exit 4 with \"FAIL repo_url '.../b' \u2014 repo_url diverges from primary 'fixture-primary': '.../b' != '.../a' [fixture-primary-qa]\" naming both lanes; aligned -> \"repo_url: 0 rejected, 2 accepted\", exit 0. Impl: scripts/lane_target.py:352-395 (FAMILY_SUFFIXES/family_key/normalized_repo_url) and :489-520 (family grouping, codes.add(4)). (2) docs/audits/cf091-repo-url-census.md records totals (866 rows / 384 rejected / 482 accepted / exit 2), 6 rejection classes with counts, and exact reproduction commands (sqlite3 read-only export + `python3 -B scripts/lane_target.py repo-url --row projects.json`); cf091-repo-url-census.json mirrors it machine-readably. grep for /home/, /Users/, /var/tmp, /tmp/, hermes-scratch, .hermes across census md/json/waiver returned no matches (RC=1) and no lane names appear. docs/audits/cf091-repo-url-waiver.json lists all 6 classes, each with owner \"scheduler-operator (fleet-ops)\" and re_check \"2026-12-01\". (3) tests/selftest.sh:587-615 adds arm 20; unmodified run prints \"PASS repo_url family agreement: diverged fixture rejected naming both lanes, aligned accepted\"; after reverting the check (scripts/lane_target.py:489 `if row_file is not None:` -> `if False:`) the arm prints \"FAIL repo_url family agreement (diverged exit 0, aligned exit 0)\" and \"SELFTEST: FAIL (2)\" with exit 1 (file restored, tree clean). (4) `bash tests/selftest.sh` -> exit 0, tail \"SELFTEST: PASS\"; `ruff check .` -> \"All checks passed!\" exit 0; `ruff format --check .` -> \"9 files already formatted\" exit 0. Also `python3 -m unittest tests.test_lane_target` -> Ran 36 tests, OK.\nAll four sub-criteria verified with live command output: family divergence is enforced (exit 4 naming both lanes vs exit 0 aligned), the public-safe census + waiver artifacts are complete and host-path/lane-name free, the new selftest arm fails when the check is reverted, and selftest plus both ruff commands exit 0.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-03T17:54:44.349950",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-03T17:54:44.365308+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 51351,
+        "truncated": false,
+        "source": "git show edc8e36924b8"
+      }
+    ],
+    "task_id": "CF-091"
+  }
+}

@@ -1,0 +1,112 @@
+{
+  "task_id": "CF-088-QA1",
+  "task_title": "QA filing: the selftest board arm greens boards that scripts/boardctl validate rejects",
+  "task_criteria": [
+    "Append a pending board row measuring that tests/selftest.sh section 7 accepts any valid JSON line while scripts/boardctl validate rejects non-object rows, duplicate ids and out-of-vocabulary statuses, and that no automated check runs the validator against the real board; the row must carry a portable probe and land insert-only on main with parity 0/0."
+  ],
+  "passed": false,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "4976205ce9717bef8ae48f4a947a3b4e92d63ad8",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T163712.800411Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n11:37AM INF scanned ~396571 bytes (396.57 KB) in 406ms\n11:37AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 75 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T163712.800411Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.UUv4qThFmH/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  75/75 rows parse\n8. project board entrypoint is real and fails closed without dependency\n  PASS  bash -n scripts/boardctl\n  PASS  local help\n  PASS  missing boardctl -> explicit FAIL, exit 127\n9. every prompt file the README relies on exists\n  PASS  every prompts/*.md named by README.md exists\n  PASS  absent prompt refused (absent: prompts/ghost-lane.md)\n10. Hermes refuses an unsupported Python without pip or network\n  PASS  Python 3.14 refusal names the supported range without pip\n11. lane workdir targets: local paths AND remote user@host/scheme targets\n  PASS  lane target parse/validate, home-repo rejection, remote structural-only\n12. node disk floor resolves from CLI/env/config with fail-closed values\n  PASS  floor precedence, role defaults, malformed values refused\n13. node provisioning names its resolved floor and refuses below it\n  PASS  malformed floor refused before any install\n14. harness-adapter FAIL rows are counted in the node summary (CF-055)\n  PASS  adapter FAIL rows counted: 2 rows -> NODE: FAIL (2)\n  PASS  passing adapter keeps NODE: PASS and exit 0\n15. the README status re-run line carries the node check's exit status (CF-054)\n  PASS  documented line carries CRIER_URL= and no trailing read-back\n  PASS  old shape exits 0 on a failed check (NODE: FAIL (1)) \u2014 the defect is real\n  PASS  documented shape exits 1 on a failed check (NODE: FAIL (1))\n  PASS  documented shape exits 0 on a passing fixture (NODE: PASS)\n16. node-create staged set covers the disk floor and names missing dependencies\n  PASS  staged disk floor resolves: 4096 GiB from env; admission refuses before installs\n  PASS  missing disk floor -> one countable FAIL row, NODE: FAIL (1), exit 1\n  FAIL  disk_floor \u2014 resolver missing or unreadable: /var/tmp/hermes-scratch/tmp.nCsF27Iyqz/scripts/disk_floor.py\nNODE: FAIL (1)\n  PASS  disk floor omitted from scratch manifest -> validation exit 1\n  PASS  owned failure names spawned agent and explicit-server destroy command\n  PASS  reused agent failure does not request destruction\n  PASS  copy-failure failure names spawned agent and explicit-server destroy command\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261103T163712.800411Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": false,
+      "any_failed": true,
+      "summary": "INCOMPLETE\n  \u2717 Append a pending board row measuring that tests/selftest.sh section 7 accepts any valid JSON line while scripts/boardctl validate rejects non-object rows, duplicate ids and out-of-vocabulary statuses, and that no automated check runs the validator against the real board; the row must carry a portable probe and land insert-only on main with parity 0/0.: Most of the row is correct, but the parity requirement fails. Verified good: (a) .coding-hermes/board/tasks.jsonl line 75 is a new CF-088 row with \"status\":\"pending\", priority P3, detail {'source':'releng-qa','tick':'code-factory-releng-qa-2026-11-03-15-39-07','measured_at':'400a5ab'}, and a full portable bash probe (git rev-parse root, mktemp -d, git clone, six arms null/[]/\"just-a-string\"/duplicate-id/unknown-status/missing-status plus a clean-board control, `git checkout -q -- $B` restore between arms, no network, writes only in mktemp). (b) The measurement is accurate: tests/selftest.sh:159-183 section 7 counts a row whenever json.loads succeeds (so null/[]/string pass), `grep -n validate tests/selftest.sh` returns only line 246 (a lane-target label), .gitreins/config.yaml sets test_command: bash tests/selftest.sh, and no .github/workflows exists \u2014 so no automated check runs the validator against the real board. (c) Insert-only: `git show HEAD --numstat` = 1/0 for tasks.jsonl and 1/0 for events.jsonl, zero removed lines. (d) Fresh runs: `bash tests/selftest.sh` -> exit 0, 'PASS 75/75 rows parse', 'SELFTEST: PASS'; `bash scripts/boardctl validate` -> exit 0, 'RESULT: OK (24 warning(s))'. FAILING part: parity is 1/0, not 0/0. `git rev-list --count origin/main..HEAD` = 1 and `git rev-list --count HEAD..origin/main` = 0; `git ls-remote origin main` = f2b39fd0e565b2f4959b65411847109622cace7c while HEAD = 4976205, i.e. the filing commit was never pushed to origin/main. The row therefore did not 'land on main with parity 0/0'.\nThe CF-088 pending row is accurate, insert-only and carries a portable probe, but the commit was never pushed \u2014 origin/main is still f2b39fd, so parity is 1/0 rather than the required 0/0.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": false,
+          "output": "INCOMPLETE\n  \u2717 Append a pending board row measuring that tests/selftest.sh section 7 accepts any valid JSON line while scripts/boardctl validate rejects non-object rows, duplicate ids and out-of-vocabulary statuses, and that no automated check runs the validator against the real board; the row must carry a portable probe and land insert-only on main with parity 0/0.: Most of the row is correct, but the parity requirement fails. Verified good: (a) .coding-hermes/board/tasks.jsonl line 75 is a new CF-088 row with \"status\":\"pending\", priority P3, detail {'source':'releng-qa','tick':'code-factory-releng-qa-2026-11-03-15-39-07','measured_at':'400a5ab'}, and a full portable bash probe (git rev-parse root, mktemp -d, git clone, six arms null/[]/\"just-a-string\"/duplicate-id/unknown-status/missing-status plus a clean-board control, `git checkout -q -- $B` restore between arms, no network, writes only in mktemp). (b) The measurement is accurate: tests/selftest.sh:159-183 section 7 counts a row whenever json.loads succeeds (so null/[]/string pass), `grep -n validate tests/selftest.sh` returns only line 246 (a lane-target label), .gitreins/config.yaml sets test_command: bash tests/selftest.sh, and no .github/workflows exists \u2014 so no automated check runs the validator against the real board. (c) Insert-only: `git show HEAD --numstat` = 1/0 for tasks.jsonl and 1/0 for events.jsonl, zero removed lines. (d) Fresh runs: `bash tests/selftest.sh` -> exit 0, 'PASS 75/75 rows parse', 'SELFTEST: PASS'; `bash scripts/boardctl validate` -> exit 0, 'RESULT: OK (24 warning(s))'. FAILING part: parity is 1/0, not 0/0. `git rev-list --count origin/main..HEAD` = 1 and `git rev-list --count HEAD..origin/main` = 0; `git ls-remote origin main` = f2b39fd0e565b2f4959b65411847109622cace7c while HEAD = 4976205, i.e. the filing commit was never pushed to origin/main. The row therefore did not 'land on main with parity 0/0'.\nThe CF-088 pending row is accurate, insert-only and carries a portable probe, but the commit was never pushed \u2014 origin/main is still f2b39fd, so parity is 1/0 rather than the required 0/0.",
+          "error": "",
+          "data": {
+            "verdict": "INCOMPLETE",
+            "items": [
+              {
+                "criterion": "Append a pending board row measuring that tests/selftest.sh section 7 accepts any valid JSON line while scripts/boardctl validate rejects non-object rows, duplicate ids and out-of-vocabulary statuses, and that no automated check runs the validator against the real board; the row must carry a portable probe and land insert-only on main with parity 0/0.",
+                "status": "FAIL",
+                "detail": "Most of the row is correct, but the parity requirement fails. Verified good: (a) .coding-hermes/board/tasks.jsonl line 75 is a new CF-088 row with \"status\":\"pending\", priority P3, detail {'source':'releng-qa','tick':'code-factory-releng-qa-2026-11-03-15-39-07','measured_at':'400a5ab'}, and a full portable bash probe (git rev-parse root, mktemp -d, git clone, six arms null/[]/\"just-a-string\"/duplicate-id/unknown-status/missing-status plus a clean-board control, `git checkout -q -- $B` restore between arms, no network, writes only in mktemp). (b) The measurement is accurate: tests/selftest.sh:159-183 section 7 counts a row whenever json.loads succeeds (so null/[]/string pass), `grep -n validate tests/selftest.sh` returns only line 246 (a lane-target label), .gitreins/config.yaml sets test_command: bash tests/selftest.sh, and no .github/workflows exists \u2014 so no automated check runs the validator against the real board. (c) Insert-only: `git show HEAD --numstat` = 1/0 for tasks.jsonl and 1/0 for events.jsonl, zero removed lines. (d) Fresh runs: `bash tests/selftest.sh` -> exit 0, 'PASS 75/75 rows parse', 'SELFTEST: PASS'; `bash scripts/boardctl validate` -> exit 0, 'RESULT: OK (24 warning(s))'. FAILING part: parity is 1/0, not 0/0. `git rev-list --count origin/main..HEAD` = 1 and `git rev-list --count HEAD..origin/main` = 0; `git ls-remote origin main` = f2b39fd0e565b2f4959b65411847109622cace7c while HEAD = 4976205, i.e. the filing commit was never pushed to origin/main. The row therefore did not 'land on main with parity 0/0'."
+              }
+            ],
+            "summary": "The CF-088 pending row is accurate, insert-only and carries a portable probe, but the commit was never pushed \u2014 origin/main is still f2b39fd, so parity is 1/0 rather than the required 0/0.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-088-QA1\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: FAIL\n  INCOMPLETE\n  \u2717 Append a pending board row measuring that tests/selftest.sh section 7 accepts any valid JSON line while scripts/boardctl validate rejects non-object rows, duplicate ids and out-of-vocabulary statuses, and that no automated check runs the validator against the real board; the row must carry a portable probe and land insert-only on main with parity 0/0.: Most of the row is correct, but the parity requirement fails. Verified good: (a) .coding-hermes/board/tasks.jsonl line 75 is a new CF-088 row with \"status\":\"pending\", priority P3, detail {'source':'releng-qa','tick':'code-factory-releng-qa-2026-11-03-15-39-07','measured_at':'400a5ab'}, and a full portable bash probe (git rev-parse root, mktemp -d, git clone, six arms null/[]/\"just-a-string\"/duplicate-id/unknown-status/missing-status plus a clean-board control, `git checkout -q -- $B` restore between arms, no network, writes only in mktemp). (b) The measurement is accurate: tests/selftest.sh:159-183 section 7 counts a row whenever json.loads succeeds (so null/[]/string pass), `grep -n validate tests/selftest.sh` returns only line 246 (a lane-target label), .gitreins/config.yaml sets test_command: bash tests/selftest.sh, and no .github/workflows exists \u2014 so no automated check runs the validator against the real board. (c) Insert-only: `git show HEAD --numstat` = 1/0 for tasks.jsonl and 1/0 for events.jsonl, zero removed lines. (d) Fresh runs: `bash tests/selftest.sh` -> exit 0, 'PASS 75/75 rows parse', 'SELFTEST: PASS'; `bash scripts/boardctl validate` -> exit 0, 'RESULT: OK (24 warning(s))'. FAILING part: parity is 1/0, not 0/0. `git rev-list --count origin/main..HEAD` = 1 and `git rev-list --count HEAD..origin/main` = 0; `git ls-remote origin main` = f2b39fd0e565b2f4959b65411847109622cace7c while HEAD = 4976205, i.e. the filing commit was never pushed to origin/main. The row therefore did not 'land on main with parity 0/0'.\nThe CF-088 pending row is accurate, insert-only and carries a portable probe, but the commit was never pushed \u2014 origin/main is still f2b39fd, so parity is 1/0 rather than the required 0/0.\n\nOverall: FAIL \u2717",
+  "evaluated_at": "2026-11-03T16:38:03.008372",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-03T16:38:03.027794+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 15537,
+        "truncated": false,
+        "source": "git show 4976205ce971"
+      }
+    ],
+    "task_id": "CF-088-QA1"
+  }
+}

@@ -1,0 +1,331 @@
+commit 1384404ec4d1fb56962d026e2b57fef7cf26df3e
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Tue Nov 3 21:43:41 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Tue Nov 3 21:43:41 2026 -0500
+
+    chore(gitreins): publish the CF-148-QA1 filing verdict
+    
+    Verdict for the QA filing commit 6d801c7: tier1 PASS, tier2 PASS, overall PASS
+    (printed id ad432437, history dir 48f56516). The judge re-ran both filed probes and read the
+    board rows back from the committed tree.
+    
+    Docs/bundle-only commit: the installed guard returns DEGRADED PASS (lint=no staged files) on this
+    diff and refuses it, so it takes the CF-031 disclosed core.hooksPath=/dev/null bypass.
+    
+    Sibling bundle .gitreins/history/2026-11-04/903e7385 (CF-147-RV1, passed=false) is left
+    uncommitted: it is that lane's verdict to publish, not this lane's evidence.
+---
+ .gitreins/history/2026-11-04/48f56516/commit.patch | 145 +++++++++++++++++++++
+ .gitreins/history/2026-11-04/48f56516/summary.md   |  32 +++++
+ .gitreins/history/2026-11-04/48f56516/verdict.json | 112 ++++++++++++++++
+ 3 files changed, 289 insertions(+)
+
+diff --git a/.gitreins/history/2026-11-04/48f56516/commit.patch b/.gitreins/history/2026-11-04/48f56516/commit.patch
+new file mode 100644
+index 0000000..1f2cde9
+--- /dev/null
++++ b/.gitreins/history/2026-11-04/48f56516/commit.patch
+@@ -0,0 +1,145 @@
++commit 6d801c7f75cc178b39799a2f7f0086da358c34f8
++Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
++AuthorDate: Tue Nov 3 21:40:54 2026 -0500
++Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
++CommitDate: Tue Nov 3 21:41:01 2026 -0500
++
++    docs(qa): record the CF-053 isolation re-verification and file CF-148/CF-149
++    
++    QA lane code-factory-duckbrain-qa-2026-11-04-02-20-15. Re-verified two rows the foreman
++    marked complete and filed what each one could not show.
++    
++    CF-053 (P2, complete at 80fca8bf) — acceptance criteria 1-3 reproduce: lane_target.py scan over
++    the 19 enabled code-factory rows prints bad=0/ok=true, every workdir resolves to the project
++    checkout with the right remote and an attached main, and the scheduler rows and the fleet config
++    agree. Criterion 4 ("concurrent lanes do not share one mutable checkout") does not reproduce: the
++    closure repointed all 18 satellites onto one checkout, so the fleet measures 19 lanes / 1 distinct
++    workdir, and a sibling lane recorded a commit landing on main in that shared checkout while its
++    judge ran. Re-opened to in_progress pending an owner decision (per-lane worktrees, documented
++    remote targets, or an amended criterion that records the accepted risk).
++    
++    CF-148 files the missing instrument: lane_target.py scan certifies two lanes on one checkout as
++    ok (bad=0, rc=0), so the gate cannot fail on the configuration CF-053 shipped. CF-149 files the
++    instrument defect in CF-123's own concurrency probe: unique_red_rows=1 per arm against the probe's
++    documented 0, because the counter diffs raw FAIL-row text and the disk_floor negative fixture
++    embeds its arm's mktemp path. Both rows carry a re-runnable single-line probe as criterion 0.
++    
++    Board attribution — disclosed. This lane appended CF-148/CF-149, the CF-053 transition and events
++    179-181 to the shared checkout while a sibling lane (review) was filing CF-147 in the same file.
++    That lane's commit 691c892 swept this lane's board lines into its own commit, so the rows are
++    landed but their attribution rides in 691c892's message. Nothing was re-appended, renumbered or
++    rewritten to correct it: duplicating the rows to fix a message would double-count the ledger. The
++    same interleaving is the live evidence for CF-053 criterion 4.
++    
++    Guard: the installed pre-commit hook returned DEGRADED PASS (lint=no staged files) on this
++    docs-only diff and refused the commit; committed with core.hooksPath=/dev/null per the CF-031
++    disclosed precedent. tests/selftest.sh prints SELFTEST: PASS at this tree (19 FAIL lines are
++    negative-fixture arms), scripts/boardctl validate prints RESULT: OK (53 warnings).
++---
++ .../audits/code-factory-qa-duckbrain-2026-11-04.md | 98 ++++++++++++++++++++++
++ 1 file changed, 98 insertions(+)
++
++diff --git a/docs/audits/code-factory-qa-duckbrain-2026-11-04.md b/docs/audits/code-factory-qa-duckbrain-2026-11-04.md
++new file mode 100644
++index 0000000..fd1b38b
++--- /dev/null
+++++ b/docs/audits/code-factory-qa-duckbrain-2026-11-04.md
++@@ -0,0 +1,98 @@
+++# QA lane — tick `code-factory-duckbrain-qa-2026-11-04-02-20-15`
+++
+++Lane: `code-factory-duckbrain` / qa. Workdir `~/code-factory` — the registered workdir and the
+++repo's own Git root, `main` attached, parity `0 0` against `origin/main`.
+++All measurements below are read-only against the shared checkout; the one gate run executed was
+++CF-123's own recorded probe, which clones `HEAD` into `mktemp` directories.
+++
+++## 1. Ownership gate
+++
+++| Probe | Result |
+++|---|---|
+++| locator / realpath / `git rev-parse --show-toplevel` | `~/code-factory` — all three equal |
+++| registered project row `code-factory-duckbrain-qa` | `repo_url=local:~/code-factory`, `workdir=~/code-factory` |
+++| remotes | `origin`, `worker` — both `git@github.com:coding-hermes/code-factory.git` |
+++| branch / markers | `main` attached; no `rebase-merge`, `rebase-apply`, `MERGE_HEAD`, `CHERRY_PICK_HEAD` |
+++| tracked porcelain | 0 paths |
+++| start tip | `bafdb41` = `origin/main`, parity `0 0`; final tip `1da7f24` |
+++| `board/.lock` | 0 bytes, mtime 2026-11-03 07:40, no `fuser` holder, no `flock`/`fcntl` consumer in `scripts/boardctl*` → residue, recorded, not deleted |
+++| sibling lanes at start | three `running` (`readme`, `review`, `duckbrain-dogfood`) → all QA legs read-only until they exited; filing began only after `HEAD == origin/main` and a clean porcelain |
+++
+++## 2. CF-053 re-verified — AC1-AC3 hold, AC4 is false
+++
+++CF-053 was closed at `80fca8bf` ("18 satellite lanes now resolve to the project checkout").
+++
+++| AC | command | result |
+++|---|---|---|
+++| 1 — every enabled code-factory lane scans `bad: 0` | `sqlite3 -json ~/.hermes/coding-hermes/scheduler.db "select name, workdir, repo_url, enabled from projects where name like 'code-factory%'" > rows.json && jq -c '.[]' rows.json > lanes.jsonl && python3 scripts/lane_target.py scan lanes.jsonl` | `"bad": 0`, `"ok": true`, rc 0 (19 rows) — **reproduces** |
+++| 2 — every workdir is a real checkout, none resolves to `$HOME` | same scan: `target.resolved=~/code-factory`, `remotes.origin=git@github.com:coding-hermes/code-factory.git`, `branch=main` | **reproduces** |
+++| 3 — applied to scheduler row *and* fleet config | `select count(*), count(distinct workdir) …` → `19 1`; the family block in `~/.hermes/fleet.toml` names `workdir = "~/code-factory"` for every lane | **reproduces** (both surfaces agree) |
+++| 4 — "Concurrent lanes do not share one mutable checkout: two lanes must not write the same board from the same working tree" | 19 enabled lanes, **1 distinct workdir**; the closure evidence is the repoint of all 18 satellites onto that one checkout | **does not reproduce — the criterion is false in the fleet the row shipped** |
+++
+++The consequence is not hypothetical. A sibling lane of this same family recorded it mid-tick:
+++
+++> `docs/audits/code-factory-pm-2026-11-04-02-20-15.md`: "A sibling lane committed `51efb66`
+++> ("board: file CF-144 …") onto `main` in this shared checkout while this tick's judge ran, and a
+++> second `gitreins` process was live at that moment."
+++
+++`git log --since='2026-11-03 18:00'` shows `pm`, `sync`, `duckbrain`, `dogfood` and `qa` interleaving
+++commits into that one tree within minutes (`2404d60` 21:33, `d1c83a6` 21:32, `bafdb41` 21:30,
+++`0957094` 21:29, `51efb66` 21:27), and three sibling lanes were `running` on it simultaneously at
+++this tick's start.
+++
+++**Nothing can catch it.** The instrument that closed the row has no uniqueness leg: two lanes
+++pointed at the same checkout scan `bad: 0 / ok: true / rc=0` (CF-148's probe). `tests/selftest.sh`
+++§11 covers target parsing and home-repo rejection only, and `lane_target.py` carries no
+++`distinct`/duplicate-workdir check.
+++
+++Disposition: CF-053 re-opened to `in_progress` with a note naming AC4. The remedy is an owner
+++decision (per-lane worktrees, documented remote targets, or an amended AC that records the accepted
+++risk) — not a worker's default and not a side effect of the gate fix filed as CF-148.
+++
+++## 3. CF-123 re-verified — the port fix holds, the probe's discriminator does not
+++
+++CF-123's recorded `probe` was extracted from the committed board, `bash -n`-checked and run from
+++the repo root:
+++
+++```
+++a_rc=0 a_summary=SELFTEST: PASS unique_red_rows=1
+++    disk_floor — resolver missing or unreadable: /var/tmp/hermes-scratch/tmp.oDsqG9MUYE/scripts/disk_floor.py
+++b_rc=0 b_summary=SELFTEST: PASS unique_red_rows=1
+++    disk_floor — resolver missing or unreadable: /var/tmp/hermes-scratch/tmp.fqHgrJzWL0/scripts/disk_floor.py
+++port_red_lines=0
+++```
+++
+++AC1's operative claims hold: `a_rc=0`, `b_rc=0`, both `SELFTEST: PASS`, `port_red_lines=0`
+++(no `Address already in use`, no `Failed to connect to 127.0.0.1 port 190…`). The probe's own
+++documented post-fix expectation — `unique_red_rows=0 in both arms` — does not hold: each arm
+++prints 1, and the "unique" row is the same `disk_floor` negative-fixture message with a different
+++`mktemp` path (`tests/selftest.sh:509` asserts that fixture and its text embeds `$HERE`). The
+++discriminator is path-sensitive, so it cannot separate a real cross-arm race from a negative arm.
+++Filed as CF-149.
+++
+++## 4. Rows
+++
+++| id | priority | subject |
+++|---|---|---|
+++| CF-148 | P2 | CF-053 isolation criterion false in the live fleet; `lane_target.py scan` certifies a shared checkout |
+++| CF-149 | P4 | CF-123's concurrency probe counts a negative-fixture row as a cross-arm red |
+++| CF-053 | — | re-opened: acceptance criterion 4 unmet |
+++
+++Id note: this filing drafted CF-147/CF-148 against the published tip `bafdb41`; a sibling lane appended
+++its own `CF-147` to the shared board minutes later (uncommitted at `1da7f24`), so the append helper
+++renumbered these rows to `CF-148`/`CF-149` (`delta=1`). The sibling's row stays its own commit — this
+++one was built through a temp index that carries only these two rows, the CF-053 transition and this
+++document.
+++
+++Dedup: the class census (`shared workdir|same checkout|one mutable checkout|workdir uniqueness|distinct workdir`)
+++over the landed board returns only CF-053 itself and CF-097 (repo-url guard leg — a different
+++subject). No sibling row covers either finding.
+++
+++## 5. Marks
+++
+++```
+++ch:trace row=CF-148 spec=specs/NODE.md#lane-workdir wave=code-factory-duckbrain-qa-2026-11-04-02-20-15#qa test=tests/selftest.sh::11 doc=docs/audits/code-factory-qa-duckbrain-2026-11-04.md prompt=prompts/qa.md evidence=docs/audits/code-factory-qa-duckbrain-2026-11-04.md witness=live:scheduler.db/projects?name=like-code-factory%+scripts/lane_target.py-scan verdict=none:open-finding commit=none:this-commit-carries-the-doc memory=none:namespace-receipt-recorded-in-lane-evidence
+++```
+++
+++The same evidence, with local paths and the prunable scratch listing, is in the lane's staging
+++file `~/stand-in/qa/code-factory/qa-2026-11-03-21-20-15-evidence.md`.
+diff --git a/.gitreins/history/2026-11-04/48f56516/summary.md b/.gitreins/history/2026-11-04/48f56516/summary.md
+new file mode 100644
+index 0000000..7e440f2
+--- /dev/null
++++ b/.gitreins/history/2026-11-04/48f56516/summary.md
+@@ -0,0 +1,32 @@
++# Verdict: CF-148-QA1
++
++**Task:** QA filing: CF-053 isolation criterion false in the live fleet and uncatchable by the shipped scan; CF-123 probe discriminator is path-sensitive
++**Evaluated:** 2026-11-04T02:43:02.735430
++**Result:** ✓ PASS
++
++## Pipeline Stages
++
++- ✓ **tier1**
++  -   ✓ lint: scanners: nice=nice -n 10
++  ✓ secrets: secrets: scanners=gitleaks+builtin cross-check
++  ✓ tests: scanners: nice=nice -n 10
++- ✓ **tier2**
++  - COMPLETE
++  ✓ Scope: THE FILING, not the fix. Do NOT require or evaluate any change to lane config, lane_target.py, tests/selftest.sh or CF-123's probe. Verify only, from the committed tree: (1) the commit's stat is docs-only and adds docs/audits/code-factory-qa-duckbrain-2026-11-04.md; the board rows CF-148 and CF-149 are present in HEAD's .coding-hermes/board/tasks.jsonl (landed by an earlier sibling commit) each with a non-empty single-line probe; (2) CF-053 reads status in_progress in HEAD's board with a foreman_note naming unmet acceptance criterion 4; (3) running CF-148's probe field from the repo root prints "bad": 0, "ok": true and scan_rc=0 for two lanes sharing one workdir; (4) running CF-149's probe prints two arms with unique_red_rows=1 and two 'disk_floor — resolver missing or unreadable:' lines at different temp paths; (5) bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at this tree.: (1) `git show HEAD --name-only` => only `docs/audits/code-factory-qa-duckbrain-2026-11-04.md` (98 insertions, 1 file, docs-only; no lane config/lane_target.py/selftest.sh/CF-123 probe touched). `git show HEAD:.coding-hermes/board/tasks.jsonl` contains CF-148 (status pending) and CF-149 (status pending), each with a non-empty probe of exactly 1 line (verified via python: 'probe lines: 1' for both). (2) HEAD board CF-053: status='in_progress'; foreman_note contains "Criterion 4 does NOT reproduce: 'concurrent lanes do not share one mutable checkout' is false — ... the fleet measures 19 lanes / 1 distinct workdir ... Re-opened pending an owner decision". (3) CF-148 probe executed from repo root printed `  "bad": 0,` / `  "ok": true` / `scan_rc=0` (outer_rc=0) for lane-a and lane-b both with workdir=$PWD. (4) CF-149 probe executed twice cleanly: run1 `a_rc=0 a_summary=SELFTEST: PASS unique_red_rows=1` + `disk_floor — resolver missing or unreadable: /var/tmp/hermes-scratch/tmp.RdYb4x4qBD/scripts/disk_floor.py`, `b_rc=0 ... unique_red_rows=1` + `... tmp.OJXOX0kfSP/scripts/disk_floor.py`; run2 same shape with tmp.Af5nNJc1Y8 vs tmp.WLuflAqqdm (two arms, unique_red_rows=1 each, two disk_floor lines at different temp paths). (5) `bash tests/selftest.sh` tail => `SELFTEST: PASS`; `bash scripts/boardctl validate` tail => `RESULT: OK (53 warning(s))`. Audit doc content (docs/audits/code-factory-qa-duckbrain-2026-11-04.md §2/§3) matches the measured outputs.
++
++
++## Summary
++
++Judge Result: CF-148-QA1
++
++Stage tier1: PASS
++    ✓ lint: scanners: nice=nice -n 10
++  ✓ secrets: secrets: scanners=gitleaks+builtin cross-check
++  ✓ tests: scanners: nice=nice -n 10
++
++Stage tier2: PASS
++  COMPLETE
++  ✓ Scope: THE FILING, not the fix. Do NOT require or evaluate any change to lane config, lane_target.py, tests/selftest.sh or CF-123's probe. Verify only, from the committed tree: (1) the commit's stat is docs-only and adds docs/audits/code-factory-qa-duckbrain-2026-11-04.md; the board rows CF-148 and CF-149 are present in HEAD's .coding-hermes/board/tasks.jsonl (landed by an earlier sibling commit) each with a non-empty single-line probe; (2) CF-053 reads status in_progress in HEAD's board with a foreman_note naming unmet acceptance criterion 4; (3) running CF-148's probe field from the repo root prints "bad": 0, "ok": true and scan_rc=0 for two lanes sharing one workdir; (4) running CF-149's probe prints two arms with unique_red_rows=1 and two 'disk_floor — resolver missing or unreadable:' lines at different temp paths; (5) bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at this tree.: (1) `git show HEAD --name-only` => only `docs/audits/code-factory-qa-duckbrain-2026-11-04.md` (98 insertions, 1 file, docs-only; no lane config/lane_target.py/selftest.sh/CF-123 probe touched). `git show HEAD:.coding-hermes/board/tasks.jsonl` contains CF-148 (status pending) and CF-149 (status pending), each with a non-empty probe of exactly 1 line (verified via python: 'probe lines: 1' for both). (2) HEAD board CF-053: status='in_progress'; foreman_note contains "Criterion 4 does NOT reproduce: 'concurrent lanes do not share one mutable checkout' is false — ... the fleet measures 19 lanes / 1 distinct workdir ... Re-opened pending an owner decision". (3) CF-148 probe executed from repo root printed `  "bad": 0,` / `  "ok": true` / `scan_rc=0` (outer_rc=0) for lane-a and lane-b both with workdir=$PWD. (4) CF-149 probe executed twice cleanly: run1 `a_rc=0 a_summary=SELFTEST: PASS unique_red_rows=1` + `disk_floor — resolver missing or unreadable: /var/tmp/hermes-scratch/tmp.RdYb4x4qBD/scripts/disk_floor.py`, `b_rc=0 ... unique_red_rows=1` + `... tmp.OJXOX0kfSP/scripts/disk_floor.py`; run2 same shape with tmp.Af5nNJc1Y8 vs tmp.WLuflAqqdm (two arms, unique_red_rows=1 each, two disk_floor lines at different temp paths). (5) `bash tests/selftest.sh` tail => `SELFTEST: PASS`; `bash scripts/boardctl validate` tail => `RESULT: OK (53 warning(s))`. Audit doc content (docs/audits/code-factory-qa-duckbrain-2026-11-04.md §2/§3) matches the measured outputs.
++
++
++Overall: PASS ✓
+diff --git a/.gitreins/history/2026-11-04/48f56516/verdict.json b/.gitreins/history/2026-11-04/48f56516/verdict.json
+new file mode 100644
+index 0000000..b19a813
+--- /dev/null
++++ b/.gitreins/history/2026-11-04/48f56516/verdict.json
+@@ -0,0 +1,112 @@
++{
++  "task_id": "CF-148-QA1",
++  "task_title": "QA filing: CF-053 isolation criterion false in the live fleet and uncatchable by the shipped scan; CF-123 probe discriminator is path-sensitive",
++  "task_criteria": [
++    "Scope: THE FILING, not the fix. Do NOT require or evaluate any change to lane config, lane_target.py, tests/selftest.sh or CF-123's probe. Verify only, from the committed tree: (1) the commit's stat is docs-only and adds docs/audits/code-factory-qa-duckbrain-2026-11-04.md; the board rows CF-148 and CF-149 are present in HEAD's .coding-hermes/board/tasks.jsonl (landed by an earlier sibling commit) each with a non-empty single-line probe; (2) CF-053 reads status in_progress in HEAD's board with a foreman_note naming unmet acceptance criterion 4; (3) running CF-148's probe field from the repo root prints \"bad\": 0, \"ok\": true and scan_rc=0 for two lanes sharing one workdir; (4) running CF-149's probe prints two arms with unique_red_rows=1 and two 'disk_floor \u2014 resolver missing or unreadable:' lines at different temp paths; (5) bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at this tree."
++  ],
++  "passed": true,
++  "worktree": "/home/kara/code-factory",
++  "branch": "main",
++  "commit": "6d801c7f75cc178b39799a2f7f0086da358c34f8",
++  "items": [],
++  "stages": {
++    "tier1": {
++      "id": "tier1",
++      "passed": true,
++      "any_failed": false,
++      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
++      "steps": [
++        {
++          "id": "lint",
++          "type": "script",
++          "passed": true,
++          "output": "scanners: nice=nice -n 10\n",
++          "error": "",
++          "data": {
++            "exit_code": 0,
++            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T024044.749129Z.log"
++          }
++        },
++        {
++          "id": "secrets",
++          "type": "script",
++          "passed": true,
++          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n9:41PM INF scanned ~707217 bytes (707.22 KB) in 756ms\n9:41PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 110 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
++          "error": "",
++          "data": {
++            "exit_code": 0,
++            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T024044.749129Z.log",
++            "secrets_scanners": [
++              "gitleaks",
++              "builtin"
++            ]
++          }
++        },
++        {
++          "id": "tests",
++          "type": "script",
++          "passed": true,
++          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.Snm4p48cQ6/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  124/124 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n  FAIL  board duplicate id 'CF-001': lines 1 and 2\n  FAIL  2 of 3 rows parse\n  PASS  bad-status fixture rejected, exit 1\n  FAIL  board line 2: invalid status \"done\"\n  FAIL  2 of 3 rows parse\n  PASS  missing-status fixture rejected, exit 1\n  FAIL  board line 2: missing status\n\n\u2026 [4039 chars omitted \u2014 64 line(s)] \u2026\n22. census refuses a failed fetch at a later offset\n  PASS  census fetch failure -> offset=500, exit 1, no census printed\n23. census refuses a non-2xx page\n  PASS  census HTTP 502 -> offset=500, exit 1, no census printed\n24. census requires a projects array even on HTTP 200\n  PASS  census missing-projects -> named .projects refusal, exit 1, no census printed\n  PASS  census wrong-projects -> named .projects refusal, exit 1, no census printed\n  PASS  census nonjson -> named .projects refusal, exit 1, no census printed\n25. census compares all received rows with the first reported total\n  PASS  census short page -> rows received=865, total reported=866, exit 1, no census printed\n26. healthy census counts matching rows on both sides of the page boundary\n  PASS  census healthy -> 2 matching rows, exact row format, exit 0\n27. census still refuses a missing total\n  PASS  census missing total -> named refusal, exit 1, no census printed\n28. README census and executable mirror agree except for BASE\n  PASS  census README/mirror byte parity (BASE parameterisation only)\n29. a workdir board that is not the published board is named as drift (CF-114)\n  PASS  publish-drift red fixture, exit 1\n  PASS  publish-drift green fixture, exit 0\n  PASS  publish-drift zero fixture, exit 1\n  PASS  publish-drift missing fixture, exit 1\n  PASS  publish-drift malformed fixture, exit 1\n  PASS  publish-drift nonobject fixture, exit 1\n  PASS  publish-drift event-drift fixture, exit 1\n\nSELFTEST: PASS\n",
++          "error": "",
++          "data": {
++            "exit_code": 0,
++            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261104T024044.749129Z.log"
++          }
++        }
++      ],
++      "coverage": "secrets+lint+tests"
++    },
++    "tier2": {
++      "id": "tier2",
++      "passed": true,
++      "any_failed": false,
++      "summary": "COMPLETE\n  \u2713 Scope: THE FILING, not the fix. Do NOT require or evaluate any change to lane config, lane_target.py, tests/selftest.sh or CF-123's probe. Verify only, from the committed tree: (1) the commit's stat is docs-only and adds docs/audits/code-factory-qa-duckbrain-2026-11-04.md; the board rows CF-148 and CF-149 are present in HEAD's .coding-hermes/board/tasks.jsonl (landed by an earlier sibling commit) each with a non-empty single-line probe; (2) CF-053 reads status in_progress in HEAD's board with a foreman_note naming unmet acceptance criterion 4; (3) running CF-148's probe field from the repo root prints \"bad\": 0, \"ok\": true and scan_rc=0 for two lanes sharing one workdir; (4) running CF-149's probe prints two arms with unique_red_rows=1 and two 'disk_floor \u2014 resolver missing or unreadable:' lines at different temp paths; (5) bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at this tree.: (1) `git show HEAD --name-only` => only `docs/audits/code-factory-qa-duckbrain-2026-11-04.md` (98 insertions, 1 file, docs-only; no lane config/lane_target.py/selftest.sh/CF-123 probe touched). `git show HEAD:.coding-hermes/board/tasks.jsonl` contains CF-148 (status pending) and CF-149 (status pending), each with a non-empty probe of exactly 1 line (verified via python: 'probe lines: 1' for both). (2) HEAD board CF-053: status='in_progress'; foreman_note contains \"Criterion 4 does NOT reproduce: 'concurrent lanes do not share one mutable checkout' is false \u2014 ... the fleet measures 19 lanes / 1 distinct workdir ... Re-opened pending an owner decision\". (3) CF-148 probe executed from repo root printed `  \"bad\": 0,` / `  \"ok\": true` / `scan_rc=0` (outer_rc=0) for lane-a and lane-b both with workdir=$PWD. (4) CF-149 probe executed twice cleanly: run1 `a_rc=0 a_summary=SELFTEST: PASS unique_red_rows=1` + `disk_floor \u2014 resolver missing or unreadable: /var/tmp/hermes-scratch/tmp.RdYb4x4qBD/scripts/disk_floor.py`, `b_rc=0 ... unique_red_rows=1` + `... tmp.OJXOX0kfSP/scripts/disk_floor.py`; run2 same shape with tmp.Af5nNJc1Y8 vs tmp.WLuflAqqdm (two arms, unique_red_rows=1 each, two disk_floor lines at different temp paths). (5) `bash tests/selftest.sh` tail => `SELFTEST: PASS`; `bash scripts/boardctl validate` tail => `RESULT: OK (53 warning(s))`. Audit doc content (docs/audits/code-factory-qa-duckbrain-2026-11-04.md \u00a72/\u00a73) matches the measured outputs.\n",
++      "steps": [
++        {
++          "id": "tier2",
++          "type": "ai_eval",
++          "passed": true,
++          "output": "COMPLETE\n  \u2713 Scope: THE FILING, not the fix. Do NOT require or evaluate any change to lane config, lane_target.py, tests/selftest.sh or CF-123's probe. Verify only, from the committed tree: (1) the commit's stat is docs-only and adds docs/audits/code-factory-qa-duckbrain-2026-11-04.md; the board rows CF-148 and CF-149 are present in HEAD's .coding-hermes/board/tasks.jsonl (landed by an earlier sibling commit) each with a non-empty single-line probe; (2) CF-053 reads status in_progress in HEAD's board with a foreman_note naming unmet acceptance criterion 4; (3) running CF-148's probe field from the repo root prints \"bad\": 0, \"ok\": true and scan_rc=0 for two lanes sharing one workdir; (4) running CF-149's probe prints two arms with unique_red_rows=1 and two 'disk_floor \u2014 resolver missing or unreadable:' lines at different temp paths; (5) bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at this tree.: (1) `git show HEAD --name-only` => only `docs/audits/code-factory-qa-duckbrain-2026-11-04.md` (98 insertions, 1 file, docs-only; no lane config/lane_target.py/selftest.sh/CF-123 probe touched). `git show HEAD:.coding-hermes/board/tasks.jsonl` contains CF-148 (status pending) and CF-149 (status pending), each with a non-empty probe of exactly 1 line (verified via python: 'probe lines: 1' for both). (2) HEAD board CF-053: status='in_progress'; foreman_note contains \"Criterion 4 does NOT reproduce: 'concurrent lanes do not share one mutable checkout' is false \u2014 ... the fleet measures 19 lanes / 1 distinct workdir ... Re-opened pending an owner decision\". (3) CF-148 probe executed from repo root printed `  \"bad\": 0,` / `  \"ok\": true` / `scan_rc=0` (outer_rc=0) for lane-a and lane-b both with workdir=$PWD. (4) CF-149 probe executed twice cleanly: run1 `a_rc=0 a_summary=SELFTEST: PASS unique_red_rows=1` + `disk_floor \u2014 resolver missing or unreadable: /var/tmp/hermes-scratch/tmp.RdYb4x4qBD/scripts/disk_floor.py`, `b_rc=0 ... unique_red_rows=1` + `... tmp.OJXOX0kfSP/scripts/disk_floor.py`; run2 same shape with tmp.Af5nNJc1Y8 vs tmp.WLuflAqqdm (two arms, unique_red_rows=1 each, two disk_floor lines at different temp paths). (5) `bash tests/selftest.sh` tail => `SELFTEST: PASS`; `bash scripts/boardctl validate` tail => `RESULT: OK (53 warning(s))`. Audit doc content (docs/audits/code-factory-qa-duckbrain-2026-11-04.md \u00a72/\u00a73) matches the measured outputs.\n",
++          "error": "",
++          "data": {
++            "verdict": "COMPLETE",
++            "items": [
++              {
++                "criterion": "Scope: THE FILING, not the fix. Do NOT require or evaluate any change to lane config, lane_target.py, tests/selftest.sh or CF-123's probe. Verify only, from the committed tree: (1) the commit's stat is docs-only and adds docs/audits/code-factory-qa-duckbrain-2026-11-04.md; the board rows CF-148 and CF-149 are present in HEAD's .coding-hermes/board/tasks.jsonl (landed by an earlier sibling commit) each with a non-empty single-line probe; (2) CF-053 reads status in_progress in HEAD's board with a foreman_note naming unmet acceptance criterion 4; (3) running CF-148's probe field from the repo root prints \"bad\": 0, \"ok\": true and scan_rc=0 for two lanes sharing one workdir; (4) running CF-149's probe prints two arms with unique_red_rows=1 and two 'disk_floor \u2014 resolver missing or unreadable:' lines at different temp paths; (5) bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at this tree.",
++                "status": "PASS",
++                "detail": "(1) `git show HEAD --name-only` => only `docs/audits/code-factory-qa-duckbrain-2026-11-04.md` (98 insertions, 1 file, docs-only; no lane config/lane_target.py/selftest.sh/CF-123 probe touched). `git show HEAD:.coding-hermes/board/tasks.jsonl` contains CF-148 (status pending) and CF-149 (status pending), each with a non-empty probe of exactly 1 line (verified via python: 'probe lines: 1' for both). (2) HEAD board CF-053: status='in_progress'; foreman_note contains \"Criterion 4 does NOT reproduce: 'concurrent lanes do not share one mutable checkout' is false \u2014 ... the fleet measures 19 lanes / 1 distinct workdir ... Re-opened pending an owner decision\". (3) CF-148 probe executed from repo root printed `  \"bad\": 0,` / `  \"ok\": true` / `scan_rc=0` (outer_rc=0) for lane-a and lane-b both with workdir=$PWD. (4) CF-149 probe executed twice cleanly: run1 `a_rc=0 a_summary=SELFTEST: PASS unique_red_rows=1` + `disk_floor \u2014 resolver missing or unreadable: /var/tmp/hermes-scratch/tmp.RdYb4x4qBD/scripts/disk_floor.py`, `b_rc=0 ... unique_red_rows=1` + `... tmp.OJXOX0kfSP/scripts/disk_floor.py`; run2 same shape with tmp.Af5nNJc1Y8 vs tmp.WLuflAqqdm (two arms, unique_red_rows=1 each, two disk_floor lines at different temp paths). (5) `bash tests/selftest.sh` tail => `SELFTEST: PASS`; `bash scripts/boardctl validate` tail => `RESULT: OK (53 warning(s))`. Audit doc content (docs/audits/code-factory-qa-duckbrain-2026-11-04.md \u00a72/\u00a73) matches the measured outputs."
++              }
++            ],
++            "summary": "",
++            "provenance": {
++              "model": "deepseek-v4-flash",
++              "base_url_source": "GITREINS_LLM_BASE_URL",
++              "api_key_source": "GITREINS_LLM_API_KEY"
++            }
++          }
++        }
++      ],
++      "model": "deepseek-v4-flash",
++      "base_url_source": "GITREINS_LLM_BASE_URL",
++      "api_key_source": "GITREINS_LLM_API_KEY"
++    }
++  },
++  "summary": "Judge Result: CF-148-QA1\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 Scope: THE FILING, not the fix. Do NOT require or evaluate any change to lane config, lane_target.py, tests/selftest.sh or CF-123's probe. Verify only, from the committed tree: (1) the commit's stat is docs-only and adds docs/audits/code-factory-qa-duckbrain-2026-11-04.md; the board rows CF-148 and CF-149 are present in HEAD's .coding-hermes/board/tasks.jsonl (landed by an earlier sibling commit) each with a non-empty single-line probe; (2) CF-053 reads status in_progress in HEAD's board with a foreman_note naming unmet acceptance criterion 4; (3) running CF-148's probe field from the repo root prints \"bad\": 0, \"ok\": true and scan_rc=0 for two lanes sharing one workdir; (4) running CF-149's probe prints two arms with unique_red_rows=1 and two 'disk_floor \u2014 resolver missing or unreadable:' lines at different temp paths; (5) bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at this tree.: (1) `git show HEAD --name-only` => only `docs/audits/code-factory-qa-duckbrain-2026-11-04.md` (98 insertions, 1 file, docs-only; no lane config/lane_target.py/selftest.sh/CF-123 probe touched). `git show HEAD:.coding-hermes/board/tasks.jsonl` contains CF-148 (status pending) and CF-149 (status pending), each with a non-empty probe of exactly 1 line (verified via python: 'probe lines: 1' for both). (2) HEAD board CF-053: status='in_progress'; foreman_note contains \"Criterion 4 does NOT reproduce: 'concurrent lanes do not share one mutable checkout' is false \u2014 ... the fleet measures 19 lanes / 1 distinct workdir ... Re-opened pending an owner decision\". (3) CF-148 probe executed from repo root printed `  \"bad\": 0,` / `  \"ok\": true` / `scan_rc=0` (outer_rc=0) for lane-a and lane-b both with workdir=$PWD. (4) CF-149 probe executed twice cleanly: run1 `a_rc=0 a_summary=SELFTEST: PASS unique_red_rows=1` + `disk_floor \u2014 resolver missing or unreadable: /var/tmp/hermes-scratch/tmp.RdYb4x4qBD/scripts/disk_floor.py`, `b_rc=0 ... unique_red_rows=1` + `... tmp.OJXOX0kfSP/scripts/disk_floor.py`; run2 same shape with tmp.Af5nNJc1Y8 vs tmp.WLuflAqqdm (two arms, unique_red_rows=1 each, two disk_floor lines at different temp paths). (5) `bash tests/selftest.sh` tail => `SELFTEST: PASS`; `bash scripts/boardctl validate` tail => `RESULT: OK (53 warning(s))`. Audit doc content (docs/audits/code-factory-qa-duckbrain-2026-11-04.md \u00a72/\u00a73) matches the measured outputs.\n\n\nOverall: PASS \u2713",
++  "evaluated_at": "2026-11-04T02:43:02.735430",
++  "supersedes": null,
++  "superseded_by": null,
++  "evidence": {
++    "collected_at": "2026-11-04T02:43:02.750306+00:00",
++    "items": [
++      {
++        "name": "patch",
++        "label": "Landed commit patch",
++        "file": "commit.patch",
++        "bytes": 9996,
++        "truncated": false,
++        "source": "git show 6d801c7f75cc"
++      }
++    ],
++    "task_id": "CF-148-QA1"
++  }
++}
+\ No newline at end of file

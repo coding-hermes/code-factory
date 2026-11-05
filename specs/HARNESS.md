@@ -41,6 +41,19 @@ Only **hermes** has a measured install ladder in this repo. The others ship a do
 `--check` and a method, and are marked `UNVERIFIED` until someone runs them — an unverified
 installer is not a supported installer, and the script says so out loud.
 
+## Conformance is measured, not claimed
+
+`tests/harness-conformance.sh` runs three legs per harness — the adapter's own `--check`, a real
+smoke turn that must leave a file containing a token the battery chose (bytes re-read on the
+control host), and, only with `--install`, the adapter's `--apply` in a throwaway `$HOME` followed
+by a post-apply `--check`. It prints `PASS`/`FAIL`/`SKIP` with the measured value and regenerates
+`docs/HARNESS-CONFORMANCE.md` with `--write-doc`.
+
+A `SKIP` names the exact credential or binary that is missing, and it is not evidence of support:
+this spec's table is a claim about a method, the matrix is a measurement of a host, and only the
+matrix may be quoted as "works here". A harness named in the tables above with no adapter file is
+a `FAIL`, never a skip. `tests/selftest.sh` §44 keeps the battery itself able to fail.
+
 ## Why hermes first
 
 - It needs no node/npm (the backend runs `--skip-build`), and node is absent from the base image.

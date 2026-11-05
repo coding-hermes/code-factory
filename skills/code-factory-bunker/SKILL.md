@@ -234,6 +234,45 @@ signer before it looks the agent up. A `key_registry` FAIL is the other side of 
 the node signs with a key the bus does not have, so every request 401s while the node looks
 healthy. `--check` prints the public half precisely so that comparison is possible without
 touching key material.
+## Harness conformance: what actually works, per harness
+
+`tests/harness-conformance.sh` is the battery behind `docs/HARNESS-CONFORMANCE.md`. It answers one
+question per harness — hermes, claude-code, codex, opencode (`opencode` is the 1.x line),
+`opencode-v2`, deepseek, pi-agent — with three legs:
+
+```bash
+tests/harness-conformance.sh                  # check + smoke; installs nothing
+tests/harness-conformance.sh --write-doc      # regenerate docs/HARNESS-CONFORMANCE.md
+tests/harness-conformance.sh --install        # also --apply each adapter in a throwaway $HOME
+tests/harness-conformance.sh --only codex     # one harness
+HERMES_PYTHON_BIN=python3.12 tests/harness-conformance.sh   # when python3 is >=3.14
+```
+
+- **check** runs the adapter's own `--check` and quotes the value it measured. An adapter that
+  prints `PASS` with an empty value is rewritten to `FAIL` by the battery's single `emit()` — the
+  check is not trusted just because it exited 0.
+- **smoke** runs one real turn in a scratch directory and requires a file containing a token the
+  battery chose; the bytes are re-read and hashed on the control host. This is the only leg that
+  proves the harness *answers*, and it is the one that costs tokens.
+- **apply** runs `--apply` in a throwaway `$HOME` (only with `--install`) and then re-runs `--check`
+  in it, so a green install is always followed by the state it left behind.
+
+**A SKIP is not support.** A row like `SKIP  codex:smoke — binary \`codex\` absent from PATH` names
+exactly what would have to exist to test it; treat every SKIP as an untested harness. Today the
+foreign adapters (`claude-code`, `opencode`) refuse `--apply` until someone records a ladder, and
+`codex`/`deepseek`/`pi-agent` ship no adapter at all — the battery reports those as `FAIL no adapter
+at …` rather than skipping them, because "named but unmeasurable" is a defect, not a verdict.
+
+**What a green matrix proves:** each adapter, run as shipped, measured something and exited 0; each
+smoke leg produced a real artifact whose bytes the control host verified; with `--install`, each
+`--apply` reached exit 0 from a clean state and the post-apply `--check` agreed.
+**What it does not prove:** a node (no bundle, no crier, no repo layer, no scheduler), the pinned
+ladder on a clean node, autonomy under retries and timeouts, or anything about a harness that is a
+SKIP. Do not quote the matrix as "the fleet supports six harnesses".
+
+`tests/selftest.sh` §44 keeps the battery honest in fixture mode — absent credential ⇒ named SKIP,
+missing adapter ⇒ FAIL, empty adapter value ⇒ FAIL — so a regression that turns SKIPs into PASSes
+reds the suite.
 
 ## Rules that bite
 
