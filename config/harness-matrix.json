@@ -1,0 +1,18 @@
+{
+  "default": "hermes",
+  "by_family": {
+    "claude": "claude-code",
+    "openai": "codex",
+    "deepseek": "dsh",
+    "oss": "opencode"
+  },
+  "hosts": {
+    "hermes": ["*"],
+    "claude-code": ["claude"],
+    "codex": ["openai"],
+    "opencode": ["*"],
+    "omh": ["*"],
+    "dsh": ["deepseek"]
+  },
+  "shims": {}
+}

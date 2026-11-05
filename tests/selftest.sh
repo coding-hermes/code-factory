@@ -515,6 +515,15 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_disk_floor.py" >/dev/n
 else
   say "  FAIL  disk floor contract"; fails=$((fails+1))
 fi
+# CF-230: harness selection resolves in one place (specs/HARNESS-MATRIX.md §4). Part of
+# section 12: no new numbered section and no census change (arms_tree stays 55). The test
+# drives the real CLI and reads the shipped matrix, so a hardcoded table or a silent
+# fallback goes red here.
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_harness_resolve.py" >/dev/null 2>&1; then
+  say "  PASS  CF-230 harness resolution: directive > lane > matrix > hermes, every reason recorded"
+else
+  say "  FAIL  CF-230 harness resolution contract (refusals, order, spec sync)"; fails=$((fails+1))
+fi
 say "13. node provisioning names its resolved floor and refuses below it"
 tmpd=$(mktemp -d)
 out=$(env HOME="$tmpd/home" NODE_DISK_FLOOR=999999 /bin/bash "$HERE/scripts/project-node.sh" --check --project fixture 2>&1); rc=$?
