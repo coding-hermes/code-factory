@@ -1976,5 +1976,147 @@ else
 fi
 rm -rf "$tmpd"
 
+# CF-212: the control host dispatches into local workdirs that nothing refreshes, so a
+# lane can work a stale tree. The probe enumerates workdirs from the scheduler DB,
+# measures the lag, and refuses beyond a bound. Fixture: a trunk-default remote, one
+# clone 2 commits behind, one fresh, and every tolerated defect (detached HEAD, no
+# remote, non-git dir, missing path, a plain file, a disabled project sharing a workdir).
+say "41. repo freshness probe measures lag per workdir and refuses beyond the bound (CF-212)"
+FRESH="$HERE/scripts/repo_freshness.py"
+if python3 -B -c 'import ast,sys; ast.parse(open(sys.argv[1],encoding="utf-8").read())' "$FRESH"; then
+  say "  PASS  scripts/repo_freshness.py parses (python3 -B, stdlib only)"
+else
+  say "  FAIL  scripts/repo_freshness.py does not parse"; fails=$((fails+1))
+fi
+tmpd=$(mktemp -d)
+git init -q -b trunk "$tmpd/seed"
+git -C "$tmpd/seed" -c user.email=fixture@example.invalid -c user.name=fixture commit -qm one --allow-empty
+git init -q --bare "$tmpd/origin.git"
+git -C "$tmpd/origin.git" symbolic-ref HEAD refs/heads/trunk
+git -C "$tmpd/seed" push -q "$tmpd/origin.git" trunk
+git clone -q "$tmpd/origin.git" "$tmpd/stale"
+git -C "$tmpd/seed" -c user.email=fixture@example.invalid -c user.name=fixture commit -qm two --allow-empty
+git -C "$tmpd/seed" -c user.email=fixture@example.invalid -c user.name=fixture commit -qm three --allow-empty
+git -C "$tmpd/seed" push -q "$tmpd/origin.git" trunk
+git clone -q "$tmpd/origin.git" "$tmpd/fresh"
+git clone -q "$tmpd/origin.git" "$tmpd/det"
+git -C "$tmpd/det" checkout -q --detach HEAD
+git init -q -b main "$tmpd/lonely"
+git -C "$tmpd/lonely" -c user.email=fixture@example.invalid -c user.name=fixture commit -qm x --allow-empty
+mkdir -p "$tmpd/notgit"
+printf 'a workdir must be a directory\n' > "$tmpd/afile"
+git init -q --bare "$tmpd/bare.git"
+python3 -B - "$tmpd" <<'PY'
+import os, sqlite3, sys
+tmpd = sys.argv[1]
+con = sqlite3.connect(os.path.join(tmpd, "sched.db"))
+con.execute("create table projects (name text, workdir text, enabled integer)")
+rows = [
+    ("cf-stale", os.path.join(tmpd, "stale"), 1),
+    ("cf-fresh", os.path.join(tmpd, "fresh"), 1),
+    ("cf-fresh-qa", os.path.join(tmpd, "fresh"), 1),
+    ("cf-det", os.path.join(tmpd, "det"), 1),
+    ("cf-lonely", os.path.join(tmpd, "lonely"), 1),
+    ("cf-notgit", os.path.join(tmpd, "notgit"), 1),
+    ("cf-missing", os.path.join(tmpd, "absent"), 1),
+    ("cf-file", os.path.join(tmpd, "afile"), 1),
+    ("cf-bare", os.path.join(tmpd, "bare.git"), 1),
+    ("cf-disabled", os.path.join(tmpd, "stale"), 0),
+]
+con.executemany("insert into projects values (?,?,?)", rows)
+con.commit()
+PY
+
+out=$(python3 -B "$FRESH" --db "$tmpd/sched.db" --gate --jobs 2 2>&1); rc=$?
+fail_rows=$(printf '%s\n' "$out" | grep -c '^  FAIL  ')
+if [ "$rc" -eq 1 ] && [ "$fail_rows" = 1 ] \
+  && [ "$(printf '%s\n' "$out" | grep -Fc '  FAIL  cf-stale — lag 2 > bound 0 (trunk vs origin/trunk)')" = 1 ]; then
+  say "  PASS  workdir behind 2 commits -> one FAIL naming lag 2, --gate exit $rc"
+else
+  say "  FAIL  stale workdir was not refused with a lag row (exit $rc, $fail_rows FAIL rows)"; fails=$((fails+1))
+fi
+if printf '%s\n' "$out" | grep -Fq '  PASS  cf-fresh — lag 0, ahead 0, trunk vs origin/trunk'; then
+  say "  PASS  a non-main default branch (trunk) is measured against origin/trunk"
+else
+  say "  FAIL  non-main default branch was not measured"; fails=$((fails+1))
+fi
+warn_n=$(printf '%s\n' "$out" | grep -c '^  WARN  ')
+warn_missing=0
+for want in cf-det cf-lonely cf-notgit cf-missing cf-file cf-bare; do
+  printf '%s\n' "$out" | grep -Fq "  WARN  $want — " || warn_missing=$((warn_missing+1))
+done
+if [ "$warn_n" = 6 ] && [ "$warn_missing" = 0 ] \
+  && printf '%s\n' "$out" | grep -Fq '  WARN  cf-bare — bare repository at'; then
+  say "  PASS  detached HEAD, no remote, non-git, bare, missing and non-directory workdirs -> 6 named WARN rows, no crash"
+else
+  say "  FAIL  tolerated-defect rows were missing or duplicated ($warn_n WARN rows, $warn_missing unnamed)"; fails=$((fails+1))
+fi
+if printf '%s\n' "$out" | grep -Fq ', 9 enabled projects, 8 unique workdirs,' \
+  && printf '%s\n' "$out" | grep -Fq '[2 lanes: cf-fresh, cf-fresh-qa]' \
+  && ! printf '%s\n' "$out" | grep -Fq 'cf-disabled'; then
+  say "  PASS  workdirs enumerated from the DB: 9 enabled projects, 8 unique workdirs, disabled project skipped"
+else
+  say "  FAIL  DB enumeration/dedupe/enabled filter is wrong"; fails=$((fails+1))
+fi
+out=$(python3 -B "$FRESH" --db "$tmpd/sched.db" --no-fetch --gate --bound 5 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '  PASS  cf-stale — lag 2, ahead 0'; then
+  say "  PASS  the same workdir clears --bound 5 (bound is policy, not a constant), exit $rc"
+else
+  say "  FAIL  --bound 5 still refused the workdir (exit $rc)"; fails=$((fails+1))
+fi
+out=$(python3 -B "$FRESH" --workdir "$tmpd/stale" --no-fetch --gate 2>&1); rc=$?
+if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fq '  FAIL  stale — lag 2 > bound 0'; then
+  say "  PASS  one workdir probes on its own (--workdir) and refuses, exit $rc"
+else
+  say "  FAIL  --workdir mode did not measure $tmpd/stale (exit $rc)"; fails=$((fails+1))
+fi
+# --no-fetch must not touch the remote: move it away and the lag must still be counted.
+mv "$tmpd/origin.git" "$tmpd/origin.away"
+out=$(python3 -B "$FRESH" --db "$tmpd/sched.db" --no-fetch --jobs 2 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '  FAIL  cf-stale — lag 2 > bound 0' \
+  && ! printf '%s\n' "$out" | grep -Fq 'fetch failed:'; then
+  say "  PASS  --no-fetch measured lag 2 with the remote absent: no network call, exit $rc without --gate"
+else
+  say "  FAIL  --no-fetch reached for the absent remote (exit $rc)"; fails=$((fails+1))
+fi
+out=$(python3 -B "$FRESH" --workdir "$tmpd/stale" --jobs 1 2>&1); rc=$?
+if printf '%s\n' "$out" | grep -Fq 'fetch failed:'; then
+  say "  PASS  with the remote absent a fetch names the failure instead of inventing freshness"
+else
+  say "  FAIL  a failed fetch did not surface a named reason (exit $rc)"; fails=$((fails+1))
+fi
+mv "$tmpd/origin.away" "$tmpd/origin.git"
+out=$(python3 -B "$FRESH" --db "$tmpd/sched.db" --no-fetch --gate --strict --jobs 2 2>&1); rc=$?
+fail_rows=$(printf '%s\n' "$out" | grep -c '^  FAIL  ')
+if [ "$rc" -eq 1 ] && [ "$fail_rows" = 7 ]; then
+  say "  PASS  --strict escalates the 6 unmeasurable rows: $fail_rows FAIL, exit $rc"
+else
+  say "  FAIL  --strict did not refuse the unmeasurable workdirs ($fail_rows FAIL, exit $rc)"; fails=$((fails+1))
+fi
+if [ "$(python3 -B - "$tmpd" "$FRESH" <<'PY'
+import json, subprocess, sys
+tmpd, script = sys.argv[1], sys.argv[2]
+def run():
+    proc = subprocess.run([sys.executable, "-B", script, "--db", tmpd + "/sched.db",
+                           "--no-fetch", "--json"], capture_output=True, text=True, check=False)
+    data = json.loads(proc.stdout)
+    return [(w["name"], w["status"], w["lag"], w["fetch_ts"]) for w in data["workdirs"]], data
+first, payload = run()
+second, _ = run()
+print("ok" if first == second and len(first) == 8 and payload["failed"] == 1 else "diff")
+PY
+)" = ok ]; then
+  say "  PASS  --json is parseable, lists 8 workdirs, and two runs agree (idempotent)"
+else
+  say "  FAIL  --json output is unparseable, incomplete or not idempotent"; fails=$((fails+1))
+fi
+out=$(python3 -B "$FRESH" --db "$tmpd/absent.db" 2>&1); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -Fq '  FAIL  scheduler-db — scheduler database not found'; then
+  say "  PASS  an absent scheduler DB is a named FAIL, exit $rc"
+else
+  say "  FAIL  absent scheduler DB did not fail closed (exit $rc)"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
