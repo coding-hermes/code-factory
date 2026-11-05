@@ -1940,5 +1940,41 @@ else
 fi
 rm -rf "$tmpd"
 
+say "40. the bunker provisioner fails closed, and its config file is data not code (CF-214)"
+bash -n "$HERE/scripts/bunker-provision.sh" && say "  PASS  bash -n scripts/bunker-provision.sh" || { say "  FAIL  provision syntax"; fails=$((fails+1)); }
+bash -n "$HERE/scripts/bunker-crier-connect.sh" && say "  PASS  bash -n scripts/bunker-crier-connect.sh" || { say "  FAIL  crier-connect syntax"; fails=$((fails+1)); }
+
+out=$(/bin/bash "$HERE/scripts/bunker-provision.sh" --config /nonexistent.conf --check 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  config — cannot read'; then
+  say "  PASS  absent config -> named FAIL, exit $rc"
+else
+  say "  FAIL  absent config was not refused (exit $rc)"; fails=$((fails+1))
+fi
+
+tmpd=$(mktemp -d)
+printf 'PROJECT=demo\nrm -rf /tmp/should-never-run\n' > "$tmpd/shell.conf"
+out=$(/bin/bash "$HERE/scripts/bunker-provision.sh" --config "$tmpd/shell.conf" --check 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'is not KEY=VALUE'; then
+  say "  PASS  a shell line in the config is refused, never executed, exit $rc"
+else
+  say "  FAIL  config parser accepted a shell line (exit $rc)"; fails=$((fails+1))
+fi
+[ -e /tmp/should-never-run ] && { say "  FAIL  the config file was EXECUTED"; fails=$((fails+1)); rm -rf /tmp/should-never-run; }
+
+out=$(env -i PATH=/usr/bin:/bin HOME="$HOME" /bin/bash "$HERE/scripts/bunker-provision.sh" --check --project demo 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  bunker_cli'; then
+  say "  PASS  no bunker client -> named FAIL, exit $rc (a vacuous PASS would be the bug)"
+else
+  say "  FAIL  missing bunker client did not surface (exit $rc)"; fails=$((fails+1))
+fi
+
+out=$(/bin/bash "$HERE/scripts/bunker-provision.sh" --destroy --project demo --agent a --server s 2>&1); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q 'refusing to destroy without --yes'; then
+  say "  PASS  destroy without --yes is refused, exit $rc"
+else
+  say "  FAIL  destroy ran without confirmation (exit $rc)"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
