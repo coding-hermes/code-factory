@@ -168,7 +168,13 @@ contracts:
     carries: "reply: in_reply_to, corr_id, run_id, outcome"
     mode: async, signed
     state: broken
-    note: 4 requirements — sender, idempotency_key, audience, signature
+    note: audience is the header X-Crier-Audience, never a body field; sender is stored but not verified
+  - from: foreman
+    to: scheduler
+    carries: the lane's prompt text and skills it may load
+    mode: seeded config
+    state: broken
+    note: only 3 of 14 lanes match the shipped prompt; the live foreman prompt is 1,832 chars vs 3,390
   - from: crier
     to: scheduler
     carries: completion event for a finished run
@@ -212,7 +218,7 @@ contracts:
     carries: verdict that closes a row
     mode: human/foreman action
     state: broken
-    note: verdicts cite commits, rows are updated by hand
+    note: verdicts cite commits; boardctl takes an exclusive flock on .lock, and no verdict closes a row
   - from: foreman
     to: board
     carries: row created, row closed, evidence
