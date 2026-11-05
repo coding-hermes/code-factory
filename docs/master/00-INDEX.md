@@ -59,3 +59,31 @@ Regenerated from the module files by `scripts/gen_nasa_handbook.py`'s census —
 - Modules that emit metrics or state why not: **40** (the rest say `none` with a reason)
 - Modules whose §2 names both sides of a service contract: see each §2c
 
+## What this census does NOT cover — read this before trusting the count
+
+The module set is **file-shaped, not system-shaped**: the skeleton indexes `scripts/*.{py,sh}` and
+`specs/*.md`. Everything else in the repository — and every service the scripts talk to — is outside it.
+
+Measured on the tracked tree (2026-11-05), by area:
+
+| area | files | lines | modules |
+|---|---|---|---|
+| `scripts/` | 43 | 13,965 | 36 — five scripts still have none (`master_doc_fill.py`, `master_doc_panel.py`, `master_doc_check.py`, `install-go.sh`, `extract_owner_decisions.py`) |
+| `specs/` | 7 | 949 | 7 — complete |
+| `docs/` | 165 | 27,807 | **0** — including `OPERATIONS.md`, `BOARD.md`, `DESIGN.md`, `PRD-code-factory.md`, `THREAT-MODEL.md`, `ACCEPTANCE-PLAN.md`, `MVP-PLAN.md`, `SCHEDULER-ADMISSION.md`, `MASTER-DOC-SCHEMA.md`, `LOOP-CODEX.md` |
+| `tests/` | 7 | 5,507 | **0** — `selftest.sh` is 55 arms and gates every commit |
+| `prompts/` | 11 | 260 | **0** — the foreman's actual operating instruction |
+| `skills/` | 2 | 406 | **0** — the onboarding document agents read |
+| `config/` | 4 | 127 | **0** — the contracts a user must fill in |
+
+Six systems the docs describe only from the client side, with no page of their own: **scheduler**
+(admission modes, cooldowns, weights, its DB), **crier** (routes, guard, leases, service auth),
+**DuckBrain** (namespaces, token scoping, squash, embeds), **9router** (provider routing), **Hermes
+gateway** (sessions, `/api/status`, dashboard auth), **bunker daemon** (create/exec/cp, keys).
+
+Five flows have no end-to-end description: dispatch round-trip, node provisioning, memory export,
+onboarding a new project, and disaster recovery (node loss, key rotation, board or git corruption).
+
+Consequence for the count: 44 modules is **36 scripts + 7 specs + the pipeline page**, which is roughly
+30% of the tracked lines in the areas above. A reader must not read "44 VERIFIED" as "the system is
+documented".
