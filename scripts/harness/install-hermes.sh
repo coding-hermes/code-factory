@@ -237,7 +237,13 @@ if (command -v ss >/dev/null && ss -tln 2>/dev/null | grep -q ":$PORT ") 2>/dev/
   # NOTE: `hermes serve` has no /health (302 to login); /api/status is the probe.
   [ "$code" = 200 ] && ok "status_probe" "/api/status -> 200" || bad "status_probe" "/api/status -> $code"
 else
-  bad "port" "nothing on :$PORT"
+  if [ "$MODE" = "--apply" ]; then
+    # Do not count a FAIL for a state this run is about to change: --check still reports it
+    # (measured: a real apply started the gateway and the layer still said NODE: FAIL (1)).
+    note "port — nothing on :$PORT yet; --apply starts the gateway"
+  else
+    bad "port" "nothing on :$PORT"
+  fi
 fi
 
 # inference provider — the one thing install cannot supply
@@ -278,7 +284,19 @@ if [ "$MODE" = "--apply" ]; then
       nohup "$VENV/bin/hermes" serve --host 0.0.0.0 --port "$PORT" --skip-build >"$HOME/.node-serve-$PORT.log" 2>&1 &
       sleep 6
       code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$PORT/api/status" 2>/dev/null || echo 000)
-      [ "$code" = 200 ] && ok "gateway_start" "/api/status -> 200" || bad "gateway_start" "-> $code (see ~/.node-serve-$PORT.log)"
+      if [ "$code" = 200 ]; then
+        ok "gateway_start" "/api/status -> 200"
+        if (command -v ss >/dev/null && ss -tln 2>/dev/null | grep -q ":$PORT ") 2>/dev/null; then
+          ok "port" "listening on :$PORT (started by --apply)"
+        elif command -v ss >/dev/null 2>&1 && ss -tln >/dev/null 2>&1; then
+          bad "port" "ss shows nothing on :$PORT after a 200 from /api/status"
+        else
+          # A minimal image can lack a working ss; the 200 is then the only listener evidence.
+          warn "port" "ss unavailable — listener unconfirmed; /api/status 200 is the evidence"
+        fi
+      else
+        bad "gateway_start" "-> $code (see ~/.node-serve-$PORT.log)"
+      fi
     else
       bad "gateway_start" "refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — ${auth_reason:-block absent (config check failed)}"
     fi

@@ -446,7 +446,9 @@ then
         expected="  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — $reason"
         launch_expected='' ;;
     esac
-    expected_rc=1  # Initial port check has no listener; grade gateway_start and launch separately.
+    # Every arm exits 1: the fixture home carries no provider key, so `inference_key` fails
+    # whether or not the gateway starts. Grade gateway_start and launch separately.
+    expected_rc=1
     launch_observed=$(cat "$tmpd/launch" 2>/dev/null || true)
     if [ "$rc" -eq "$expected_rc" ] \
       && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ] \
@@ -456,6 +458,7 @@ then
       printf '%s\n' "$expected"
     else
       say "  FAIL  CF-071 $auth_mode $arm: exit $rc, launch=${launch_observed:-not reached}, expected gateway_start row missing or credentials exposed"
+      printf '%s\n' "$out" | grep -E "PASS|FAIL" | tail -4 | sed 's/^/          got: /' 
       return 1
     fi
   }
