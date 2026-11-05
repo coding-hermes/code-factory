@@ -1,0 +1,182 @@
+commit 50b5e2839d4e8f229953283b9d70ff0414a8f313
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Wed Nov 4 19:41:50 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Wed Nov 4 19:41:50 2026 -0500
+
+    docs(sync): re-measure the BOARD.md block at 84dadf3 — and name the gate that is not deterministic
+    
+    Third execution of tick `code-factory-sync-2026-11-04-23-34-25`. The two earlier passes closed
+    their work (`4ec363b` and the `3343b58` verdict bundle); this pass re-measured the tip that has
+    since moved twice, in a fresh clone of the published remote, and implemented nothing they closed.
+    
+    Drift fixed: `docs/BOARD.md` §"Current measured state" newest entry was `3f6115e` / 181 rows /
+    366 events / 62 `complete` while the published tip is `84dadf3` / 185 / 372 / 63. A fresh snapshot
+    was added above it and the `3f6115e` bullet was relabelled "Earlier snapshot … (historical, not
+    current)". No earlier bullet was edited and no board event was appended — the block publishes the
+    event count (372), so an `audit` event in this same commit would have moved the count past the
+    number the block states.
+    
+    Two findings recorded in `docs/audits/code-factory-sync-2026-11-04-2340.md` (Addendum 3), neither
+    repaired here because each class already has an owner:
+    
+    1. `tests/selftest.sh` is intermittent at `84dadf3`. Three back-to-back runs at loadavg 30 printed
+       PASS (rc 0), PASS (rc 0), FAIL (1). The failing arm is §18 `node-create missing-marker admitted
+       an unverified node or rejected control` — a `printf | grep -q` assertion that answers 141 on
+       SIGPIPE under `set -uo pipefail`. That is the CF-168 class, which names the same shape in §7b;
+       the new datum is that the hazard has a second site. No new row filed — a second id would split
+       CF-168's closure.
+    2. The verdict-binding sweep now reports `orphan_count=2`. The second orphan is `CF-206`, closed
+       `complete` at `d227eff` with a bundle that binds `dc9e0ea` — a commit superseded when the ops
+       lane re-landed the same patch onto the published tip. Consequence: pending CF-181's AC0 asserts
+       `orphan_count=1` and no longer reproduces. Not rewritten here; CF-181's fixer must re-measure.
+    
+    Measured at `84dadf3` (clone, porcelain 0): board parses 185/185 tasks and 372 events with 0
+    failures and one benign duplicate event id 336 (CF-196); `boardctl validate` → `RESULT: OK (4
+    warning(s))`, key uniformity 185/185; `board_drift check --ref origin/main` → `RESULT: OK`, 185 vs
+    185; 63/63 `complete` rows bind commits that exist and are ancestors of `origin/main`; 85 evidence
+    artifact pointers resolve with 0 missing committed artifacts; `cf198-section-mapping.sh` →
+    `arms_plan=42 arms_tree=42`; `cf099-prd-drift-probe.sh` → OK at `84dadf3`.
+    
+    Gates disclosed: this commit was authored in a throwaway clone of the published remote, which ships
+    no installed hooks (`git config --get core.hooksPath` empty, no `.git/hooks/pre-commit`), so no
+    pre-commit guard ran; `gitreins task complete` is the guard path for this change. `bash
+    tests/selftest.sh` passed twice and failed once in three runs on the CF-168 flake described above —
+    the tree is not proven green by a single run, which is the point of finding 1.
+    
+    ch:trace row=none:sync-addendum spec=docs/BOARD.md#current-measured-state wave=none:serial test=tests/selftest.sh::selftest doc=docs/BOARD.md prompt=prompts/sync.md evidence=docs/audits/code-factory-sync-2026-11-04-2340.md witness=cmd:boardctl-validate-ok verdict=pending:gitreins commit=HEAD memory=pending:tick-receipt
+---
+ docs/BOARD.md                                    | 22 +++++-
+ docs/audits/code-factory-sync-2026-11-04-2340.md | 89 ++++++++++++++++++++++++
+ 2 files changed, 110 insertions(+), 1 deletion(-)
+
+diff --git a/docs/BOARD.md b/docs/BOARD.md
+index 2911c6b..0929792 100644
+--- a/docs/BOARD.md
++++ b/docs/BOARD.md
+@@ -120,7 +120,27 @@ scripts/boardctl validate
+ bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
+ ```
+ 
+-- **Re-measured 2026-11-04T23:53Z at tip `3f6115e`:** 181 task rows, 366 events (max event id 365;
++- **Re-measured 2026-11-05T00:41Z at tip `84dadf3`:** 185 task rows, 372 events (max event id 371;
++  one benign duplicate id 336, owned by **CF-196**) — 63 `complete`, 9 `in_progress`, 113 `pending`,
++  no duplicate task ids. Both board files are byte-identical to their `origin/main` copies
++  (`python3 scripts/board_drift.py check --workdir . --ref origin/main` prints `RESULT: OK`,
++  185 vs 185 rows, 0 divergent ids). `scripts/boardctl validate` prints `RESULT: OK (4 warning(s))`
++  (CF-034's free-form `guard_result`/`ci_result`, the duplicate event id 336 and the headerless board)
++  and `key uniformity: 185/185 rows carry only canon keys (0 drift)`. 63/63 `complete` rows bind a
++  commit that exists and is an ancestor of `origin/main`, and 85 evidence artifact pointers resolve
++  in the tree (0 missing; the two prunable absolute scratch logs on **CF-011**/**CF-013** sit beside
++  committed artifacts on the same rows). `tests/selftest.sh` is **intermittent** at this tip: three
++  back-to-back runs printed `SELFTEST: PASS` (rc 0), `PASS` (rc 0), then `SELFTEST: FAIL (1)` on the
++  §18 arm `node-create missing-marker admitted an unverified node or rejected control` — a
++  `printf | grep -q` assertion that answers 141 on SIGPIPE under `set -uo pipefail`, the **CF-168**
++  class (which names the same shape in §7b). Read one red run as a candidate false red until it
++  repeats. The verdict-binding sweep prints `complete_rows=63 verdict_artifacts_checked=36
++  orphan_count=2`: **CF-077** (owned by pending **CF-181**) and **CF-206**, whose bundle binds
++  `dc9e0ea`, a commit the ops lane superseded with `d227eff` — so CF-181's own AC0, which asserts
++  `orphan_count=1`, no longer reproduces as written. Three sibling rows still own the structural
++  fixes for this block: **CF-081** (the hand-typed counts and the hand-typed tip label), **CF-154**
++  (the warning count does not follow from the board) and **CF-196** (duplicate event ids).
++- **Earlier snapshot, 2026-11-04T23:53Z at tip `3f6115e` (historical, not current):** 181 task rows, 366 events (max event id 365;
+   one benign duplicate id 336, owned by **CF-196**) — 62 `complete`, 9 `in_progress`, 110 `pending`,
+   no duplicate task ids. Both board files are byte-identical to their `origin/main` copies
+   (`python3 scripts/board_drift.py check --workdir . --ref main` prints `RESULT: OK`, 181 vs 181 rows,
+diff --git a/docs/audits/code-factory-sync-2026-11-04-2340.md b/docs/audits/code-factory-sync-2026-11-04-2340.md
+index 93bd5c9..12858bb 100644
+--- a/docs/audits/code-factory-sync-2026-11-04-2340.md
++++ b/docs/audits/code-factory-sync-2026-11-04-2340.md
+@@ -150,3 +150,92 @@ convention gap behind CF-074), one evidence entry on CF-153 lacks `tree_fp` whil
+ carry one, and CF-032/CF-041 each carry one artifact-less entry beside artifact-bearing ones.
+ Loadavg at measurement: 26.37 (1 min); sibling lanes on this host.
+ 
++---
++
++## Addendum 3 — 2026-11-05T00:41Z, third execution of the same tick id
++
++This tick id had already run twice (this document is the record of the second pass, and its
++DuckBrain receipt `14ef5f98-1121-4d8d-b889-fd0a9c273d88` names the first). This pass implemented
++nothing that a previous pass closed. It re-measured the **new** published tip, which neither
++earlier pass saw.
++
++Why a third sample was worth taking: the published tip moved twice while this session was
++measuring it. `3343b58` (the previous pass's verdict-bundle commit) was the tip at 00:33Z;
++the ops lane then landed `d227eff` (the CF-206 census fix, re-committed — the earlier local
++`dc9e0ea` never reached the remote) and `84dadf3` (CF-206 closure + verdict bundle). At 00:36Z
++the registered checkout read `0 0` against `origin/main` with a clean tracked tree, so the
++barrier that forced the clone transport on the previous pass had cleared.
++
++Method: a fresh `git clone` of the published remote into tick scratch, `HEAD` = `84dadf3`,
++porcelain 0. The registered checkout was **not** written to — it was dirty with four unpushed
++rows (`CF-207`–`CF-210`) and an active writer at the start of this pass, and a live sibling
++committed `d227eff` + `84dadf3` into it while this pass was running (board line counts sampled
++`185/369` at 00:32Z, `185/372` at 00:35Z — the events file grew under observation).
++
++| Check | Command | Result |
++|---|---|---|
++| board parses | `bash scripts/boardctl validate` | `RESULT: OK (4 warning(s))`, `key uniformity: 185/185 rows carry only canon keys (0 drift)` |
++| board = published | `python3 scripts/board_drift.py check --workdir . --ref origin/main` | `RESULT: OK`, `185 vs 185 rows; 0 divergent ids` |
++| line integrity | per-line `json.loads` over both files | tasks 185 parsed / 0 failures / 185 unique ids; events 372 parsed / 0 failures / max id 371 / one benign duplicate 336 (CF-196) |
++| status census | `jq` equivalent over `status` | 63 `complete`, 9 `in_progress`, 113 `pending` |
++| complete rows bind real commits | `git cat-file -e <sha>^{commit}` + `git merge-base --is-ancestor <sha> origin/main` over all 63 | 63/63 present, 63/63 ancestors of `origin/main` |
++| completion evidence resolves | artifact walk over every `detail.evidence[].artifacts` pointer | 85 pointers, **0** missing committed artifacts; 1 section reference (`CF-034` `tests/selftest.sh::clone-error-classification`, by design) |
++| verdict binding | `python3 docs/audits/cf181-verdict-binding-sweep.py` | `complete_rows=63 verdict_artifacts_checked=36 orphan_count=2` |
++| arms | `bash docs/audits/cf198-section-mapping.sh` | `arms_plan=42 arms_tree=42`, `RESULT: OK` |
++| PRD drift | `bash docs/audits/cf099-prd-drift-probe.sh` | `OK: milestone, plan snapshot and layer arms agree at 84dadf3` |
++| standing gate | `bash tests/selftest.sh`, three back-to-back runs | PASS (rc 0) / PASS (rc 0) / **FAIL (1)** — intermittent, see below |
++
++### Finding 1 — the standing gate is intermittent at the published tip
++
++Three consecutive runs of `bash tests/selftest.sh` at `84dadf3` (loadavg 30.5, 1 min) printed
++`SELFTEST: PASS`, `SELFTEST: PASS`, `SELFTEST: FAIL (1)`. The failing arm is §18:
++
++```
++  FAIL  node-create missing-marker admitted an unverified node or rejected control (exit 1)
++```
++
++That arm asserts through `printf '%s\n' "$out" | grep -q …` inside a `{ … }` condition
++(`tests/selftest.sh:890-892`). Under the suite's `set -uo pipefail`, a `grep -q` that matches and
++exits early can hand the writer a SIGPIPE and the pipeline status 141 — so a PASSING condition
++grades as a FAIL. This is exactly the class already filed as **CF-168** (pending), which names the
++same shape in §7b. **No new row was filed**: attaching a second id to a class CF-168 owns would
++split its closure. The concrete new datum for CF-168 is that the hazard is not confined to §7b —
++§18 is a second site, and it fires on a loaded host.
++
++Operational consequence, recorded here because the block above quotes this gate: a single red run
++of `tests/selftest.sh` on this tree is a candidate false red until it repeats.
++
++### Finding 2 — CF-181's acceptance criterion no longer reproduces
++
++The sweep now reports `orphan_count=2`, and the second orphan is new since the previous pass:
++
++```
++CF-077 run=410022a2 artifact=…/410022a2/verdict.json commit=1dfb58b8aa passed=True
++CF-206 run=18ef167d artifact=…/18ef167d/verdict.json commit=dc9e0eafa1 passed=True
++```
++
++`CF-206` closed as `complete` with `commit_hash=d227eff`, but its verdict bundle binds `dc9e0ea`,
++the local commit the ops lane discarded when it re-landed the same patch onto the published tip.
++`dc9e0ea` is not an ancestor of `origin/main`, so the closure evidence points at a commit no clone
++has — the precise failure mode CF-181 exists to catch.
++
++Pending **CF-181**'s AC0 asserts that the sweep "prints `verdict_artifacts_checked=21` … and
++`orphan_count=1`". Both literals are now false (`36`, `2`). Not repaired here: rewriting another
++live row's acceptance criteria is a design change, not a sync-lane bookkeeping fix, and CF-181's
++own fixer must re-measure anyway. Recorded so that fixer is not surprised by a criterion that
++cannot go green.
++
++### Drift found and fixed by this addendum
++
++`docs/BOARD.md` §"Current measured state" carried `3f6115e` / 181 rows / 366 events / 62 `complete`
++as its newest entry while the published tip was `84dadf3` / 185 / 372 / 63. A fresh snapshot for
++`84dadf3` was added above it and the `3f6115e` entry was relabelled "Earlier snapshot … (historical,
++not current)". No earlier bullet was edited. **No board event was appended**: the refreshed block
++cites the event count (372) and an `audit` event in the same commit would move that count past the
++number the block just published.
++
++Known residual, unchanged and already owned: 35 of 63 `complete` rows carry no `probe` field
++(CF-074 class); `CF-011`/`CF-013` each keep one absolute `/home/kara/.hermes/cache/scratch/…` log
++pointer that no longer exists beside a committed artifact.
++
++
