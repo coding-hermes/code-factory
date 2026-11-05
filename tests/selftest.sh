@@ -1648,9 +1648,9 @@ mkdir -p "$tmpd/scripts/harness" "$tmpd/bin"
 no_ref=$(bash "$HERE/scripts/node-create.sh" --staged-files 2>&1); no_rc=$?
 with_ref=$(bash "$HERE/scripts/node-create.sh" --staged-files --ref master 2>&1); ref_rc=$?
 if [ "$no_rc" -eq 0 ] && [ "$ref_rc" -eq 0 ] && [ "$with_ref" = "$no_ref" ] \
-  && [ "$(printf '%s\n' "$with_ref" | grep -c .)" -eq 5 ] \
+  && [ "$(printf '%s\n' "$with_ref" | grep -c .)" -eq 6 ] \
   && ! printf '%s\n' "$with_ref" | grep -Fq 'unknown arg:'; then
-  say "  PASS  --staged-files --ref master -> exit 0, same five-file staged set"
+  say "  PASS  --staged-files --ref master -> exit 0, same six-file staged set"
 else
   say "  FAIL  --ref rejected or changed the staged set (exit $no_rc/$ref_rc)"; fails=$((fails+1))
 fi
@@ -1731,7 +1731,7 @@ with tempfile.TemporaryDirectory(prefix="cf159-") as directory:
         path.write_text(text)
         path.chmod(0o755)
 
-    for name in ("node-create.sh", "lib.sh", "project-node.sh", "disk_floor.py", "reclaim_disk.py"):
+    for name in ("node-create.sh", "lib.sh", "project-node.sh", "install-go.sh", "disk_floor.py", "reclaim_disk.py"):
         shutil.copyfile(root / "scripts" / name, scripts / name)
     shutil.copyfile(root / "scripts/harness/install-hermes.sh", scripts / "harness/install-hermes.sh")
     executable(scripts / "verify-node.sh", "#!/bin/bash\nexit 0\n")
@@ -3434,6 +3434,61 @@ fi
 
 rm -rf "$tmpd"
 # END cf218-kinds
+
+# ch:trace row=CF-219 spec=specs/NODE.md#layer-10 test=tests/selftest.sh::install-go doc=specs/NODE.md evidence=tests/selftest.sh::install-go witness=none:fixture verdict=none:open-finding commit=none:self-referential-hash memory=none:unresolved-namespace
+# BEGIN install-go
+say "50. install-go.sh can go red, and its pin is a digest (CF-219)"
+tmpd=$(mktemp -d)
+go_pin=$(sed -n 's/^GO_PIN="\([^"]*\)"$/\1/p' "$HERE/scripts/install-go.sh")
+
+# NEGATIVE: a clean environment with no Go must produce one named FAIL row.
+negative_home="$tmpd/negative-home"
+out=$(env -i PATH=/usr/bin:/bin HOME="$negative_home" \
+  /bin/bash "$HERE/scripts/install-go.sh" --check 2>&1); rc=$?
+expected="  FAIL  go — missing: pinned $go_pin not found under $negative_home/go-toolchain"
+if [ "$rc" -eq 1 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ]; then
+  say "  PASS  install-go negative: no Go -> named FAIL, exit $rc"
+else
+  say "  FAIL  install-go negative did not name the absent pin (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# DIGEST: the shared verifier must reject wrong bytes without publishing a destination;
+# the same local fixture with its measured digest is the green control.
+printf 'cf219 fixture archive bytes\n' > "$tmpd/archive"
+wrong=0000000000000000000000000000000000000000000000000000000000000000
+if fetch_verified "file://$tmpd/archive" "$tmpd/wrong-dest" "$wrong" >/dev/null 2>&1 \
+  || [ -e "$tmpd/wrong-dest" ]; then
+  say "  FAIL  install-go digest: wrong sha256 accepted or destination published"; fails=$((fails+1))
+else
+  say "  PASS  install-go digest: wrong sha256 refused and destination absent"
+fi
+right=$(sha256sum "$tmpd/archive" | cut -d' ' -f1)
+if fetch_verified "file://$tmpd/archive" "$tmpd/right-dest" "$right" >/dev/null 2>&1 \
+  && [ "$(sha256sum "$tmpd/right-dest" | cut -d' ' -f1)" = "$right" ]; then
+  say "  PASS  install-go digest control: measured sha256 accepted"
+else
+  say "  FAIL  install-go digest control: correct sha256 refused"; fails=$((fails+1))
+fi
+
+# POSITIVE: this control host carries the same applied pin used by node provisioning.
+host_go=$(command -v go || true)
+if [ -n "$host_go" ]; then
+  host_path="${host_go%/*}:/usr/bin:/bin"
+  out=$(env -i PATH="$host_path" HOME="$tmpd/positive-home" \
+    /bin/bash "$HERE/scripts/install-go.sh" --check 2>&1); rc=$?
+else
+  out="host go missing"; rc=127
+fi
+if [ "$rc" -eq 0 ] \
+  && printf '%s\n' "$out" | grep -Eq "^  PASS  go — go version $go_pin [^[:space:]]+/[^[:space:]]+$"; then
+  say "  PASS  install-go positive: applied host pin read back ($out)"
+else
+  say "  FAIL  install-go positive: host toolchain did not read back $go_pin (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+rm -rf "$tmpd"
+# END install-go
 
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

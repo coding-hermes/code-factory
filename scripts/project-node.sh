@@ -320,6 +320,7 @@ go_proxy_row() {  # $1 = go binary -> one row: the node's own proxy resolves a p
     out="$(row_tail "$(cat "$dir/probe.log" 2>/dev/null)")"
     bad "go:proxy" "$GO_PROBE_MODULE@$GO_PROBE_VERSION via $proxy: ${out:-exit $rc with no output}"
   fi
+  chmod -R u+w "$dir" 2>/dev/null || true
   rm -rf "$dir"
   return 0
 }
@@ -389,7 +390,33 @@ if in_scope 10; then
   fi
 
   if has_kind go; then
-    gb=$(have go)
+    # A check remains read-only and grades the binary already present. Apply is the
+    # provisioning path: install the owned pin before grading it, and fold every
+    # installer FAIL row into this process's summary just like a harness adapter.
+    if [ "$MODE" = apply ]; then
+      if ! go_install_log="$(mktemp)"; then
+        bad "tool:go" "cannot create installer log"
+      elif [ ! -x "$HERE/install-go.sh" ]; then
+        bad "tool:go" "installer missing or not executable: $HERE/install-go.sh"
+        rm -f "$go_install_log"
+      else
+        "$HERE/install-go.sh" --apply >"$go_install_log" 2>&1
+        go_install_rc=$?
+        cat "$go_install_log"
+        go_install_fails="$(grep -c '^  FAIL' "$go_install_log")" || true
+        FAILED=$((FAILED + go_install_fails))
+        if [ "$go_install_rc" -ne 0 ] && [ "$go_install_fails" -eq 0 ]; then
+          bad "tool:go" "installer exited $go_install_rc without a FAIL row"
+        fi
+        rm -f "$go_install_log"
+      fi
+    fi
+    go_root="${GO_INSTALL_ROOT:-$HOME/go-toolchain}"
+    if [ -x "$go_root/current/bin/go" ]; then
+      gb="$go_root/current/bin/go"
+    else
+      gb=$(have go)
+    fi
     if [ -z "$gb" ]; then
       bad "tool:go" "missing — kind go needs a Go toolchain on PATH (go is the largest repo class in the fleet: 27 of 61 origins)"
     else
