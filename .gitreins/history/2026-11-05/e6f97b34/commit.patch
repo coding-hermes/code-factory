@@ -1,0 +1,153 @@
+commit ce86ca35c4ed566901fcf3acd8c72c9126d58cca
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Thu Nov 5 08:16:10 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Thu Nov 5 08:16:10 2026 -0500
+
+    docs: CF-220's seed contract proven live on cf-node — the closeout carried no artifact
+    
+    CF-220 was implemented at b3ed55c and left in_progress. This tick ran its
+    acceptance criteria instead of redispatching the work: cf-node carries 13 seeded
+    files plus a seed-applied.json written 2026-11-05T04:52:15Z, `node_seed.py check`
+    is green on that tree, red and named (`prompts/foreman.md drifted`) after one
+    appended line, and green again after the file was restored from a node-side
+    backup taken in the same run. The fixture gate is green at the judged tip:
+    tests/selftest.sh SELFTEST: PASS with the node_seed section's six arms.
+    
+    docs/audits/code-factory-cf220-2026-11-05.md is that evidence in the form a
+    stranger can re-run: every command, the verbatim output, and one table row per
+    acceptance criterion. The row on the board was closed by this tick but the close
+    itself rode into a concurrent lane's board commit (173a9f0, whose message names
+    CF-249 only); event 423 records that attribution rather than leaving the closeout
+    under a commit message that does not mention it.
+    
+    The residual this tick found and filed is CF-250: verify-node.sh has no seed leg,
+    so seed drift is visible only to someone who knows the record path and invokes
+    node_seed.py by hand. Node checkout freshness got exactly that control-host leg in
+    CF-244; the seed did not.
+    
+    This checkout had two sibling lane ticks writing it (bunker-foreman and
+    gitreins-foreman, both started 13:03:49Z), which is why the board file is shared
+    and why this commit stages explicit paths only.
+    
+    Addresses CF-220. Files CF-250.
+    
+    ch:trace CF-220 | docs/audits/code-factory-cf220-2026-11-05.md | specs/NODE.md#seeding | tests/selftest.sh#node_seed | evidence: live probe on cf-node (bunker-las-03), green/red/green, artifact committed here
+---
+ .coding-hermes/board/events.jsonl            |  1 +
+ docs/audits/code-factory-cf220-2026-11-05.md | 98 ++++++++++++++++++++++++++++
+ 2 files changed, 99 insertions(+)
+
+diff --git a/.coding-hermes/board/events.jsonl b/.coding-hermes/board/events.jsonl
+index 2704537..09d596a 100644
+--- a/.coding-hermes/board/events.jsonl
++++ b/.coding-hermes/board/events.jsonl
+@@ -421,3 +421,4 @@
+ {"id": 420, "event_type": "task_updated", "task_id": "CF-220", "tick_number": null, "timestamp": "2026-11-05T13:15:08Z", "actor": "foreman", "detail": "{\"status\": \"complete\", \"verification_only\": true, \"commit_hash\": \"b3ed55cd944bccece799be5f79d0895bd9881293\", \"guard_result\": \"PASS\", \"ci_result\": \"SKIP\", \"evidence\": [{\"run_id\": \"diag-node-1-2026-11-05-cf220-live\", \"ts\": \"2026-11-05T13:15:08Z\", \"tree_fp\": \"fd84f1db62e4b0f2dcdc9f06eeba50617f1473c4\", \"artifacts\": [\"docs/audits/code-factory-cf220-2026-11-05.md\"]}], \"live_probe\": {\"node\": \"cf-node\", \"server\": \"bunker-las-03\", \"green\": \"PASS seed_check — 13 files present and matching (exit 0)\", \"red\": \"FAIL seed_check — prompts/foreman.md drifted (75da16fb93fd != 82c020b6f316) (exit 1)\", \"restored\": \"PASS seed_check — 13 files present and matching (exit 0)\"}, \"artifact\": \"docs/audits/code-factory-cf220-2026-11-05.md\"}"}
+ {"id": 421, "event_type": "task_created", "task_id": "CF-250", "tick_number": null, "timestamp": "2026-11-05T13:15:08Z", "actor": "foreman", "detail": "{\"id\": \"CF-250\", \"status\": \"pending\"}"}
+ {"id": 422, "event_type": "task_updated", "task_id": "CF-249", "tick_number": null, "timestamp": "2026-11-05T13:15:31Z", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}"}
++{"id": 423, "event_type": "task_updated", "task_id": "CF-220", "tick_number": null, "timestamp": "2026-11-05T13:16:10Z", "actor": "foreman", "detail": "{\"attribution\": \"closeout commit\", \"landed_in\": \"173a9f06dab2edd2a00cdca0ebaf8ab67b5ec17f\", \"note\": \"The CF-220 closeout row, the CF-250 row and events 420/421 were written by the diag-node-1 tick at 13:15:08Z into the shared checkout and were committed 23 s later by a concurrent lane's board commit 173a9f0, whose message names CF-249 only. The closeout itself is unchanged and is visible in that commit's tasks.jsonl; this event exists so the attribution is not lost. The evidence artifact docs/audits/code-factory-cf220-2026-11-05.md is committed by the tick's own follow-up commit.\", \"evidence_artifact\": \"docs/audits/code-factory-cf220-2026-11-05.md\"}"}
+diff --git a/docs/audits/code-factory-cf220-2026-11-05.md b/docs/audits/code-factory-cf220-2026-11-05.md
+new file mode 100644
+index 0000000..39abe46
+--- /dev/null
++++ b/docs/audits/code-factory-cf220-2026-11-05.md
+@@ -0,0 +1,98 @@
++# CF-220 — the seed contract, proven on a real node
++
++Row: `CF-220` (P0) — *Nothing seeds the prompts or the skills into a bunker, so the foreman we
++now run there has neither.*
++
++Implementation: `b3ed55c` — *feat(seed): a node receives its procedure and skills,
++digest-recorded, or nothing (CF-220)*.
++
++This artifact exists so the row's acceptance criteria can be resolved by a stranger: every
++command below was run by the `diag-node-1` tick on 2026-11-05 between 13:12Z and 13:17Z, on the
++control host (`kara`) against the live node `cf-node` on `bunker-las-03`, and the outputs are
++quoted verbatim. The row was `in_progress` on the board at the time — the implementation had
++landed and been pushed, and no tick had closed it.
++
++## What the node actually has
++
++Measured with one `bunker exec` round trip:
++
++```
++$ bunker --server bunker-las-03 exec cf-node -- bash -lc 'ls -la $HOME/.hermes/seed-applied.json; find $HOME/.hermes/prompts $HOME/.hermes/skills -type f | wc -l'
++-rw-rw-r-- 1 bunker-cf-node bunker-cf-node 2251 Nov  4 20:52 /home/bunker-cf-node/.hermes/seed-applied.json
++14
++```
++
++The record declares what was applied, where, and when:
++
++```
++$ bunker --server bunker-las-03 exec cf-node -- bash -lc 'python3 - <<PY
++import json,os
++r=json.load(open(os.path.expanduser("~/.hermes/seed-applied.json")))
++print("applied_at=%s applied_to=%s files=%d" % (r.get("applied_at"), r.get("applied_to"), len(r.get("files",[]))))
++for f in r["files"][:3]: print("  %s %s" % (f["path"], f["sha256"][:12]))
++PY'
++applied_at=2026-11-05T04:52:15Z applied_to=/home/bunker-cf-node/.hermes files=13
++  prompts/docs.md 5d093e26d190
++  prompts/dogfood.md 2236c575ac71
++  prompts/duckbrain.md 587bffe05592
++```
++
++## The check can go red, and it names the drifted file
++
++`scripts/node_seed.py check` compares the node's installed tree against the applied record.
++Green on the untouched node, red on one appended line, green again after the file was restored
++from a backup taken on the node in the same script:
++
++```
++$ ssh-side: python3 $HOME/node_seed.py check --record $HOME/.hermes/seed-applied.json --home $HOME
++  PASS  seed_check — 13 files present and matching
++EXIT=0
++
++$ ssh-side: printf '\n<!-- drift probe -->\n' >> $HOME/.hermes/prompts/foreman.md
++$ ssh-side: python3 $HOME/node_seed.py check --record ... --home $HOME
++  FAIL  seed_check — prompts/foreman.md drifted (75da16fb93fd != 82c020b6f316)
++  FAIL  seed_check — 1 of 13 seeded files differ from the record
++EXIT=1
++
++$ ssh-side: cp $HOME/foreman.md.bak-cf220 $HOME/.hermes/prompts/foreman.md
++$ ssh-side: python3 $HOME/node_seed.py check --record ... --home $HOME
++  PASS  seed_check — 13 files present and matching
++EXIT=0
++```
++
++The tamper was reverted on the node in the same run and the restore was re-measured, so the node
++is left at the state the seed wrote. No repository file was touched by the probe.
++
++## The fixture gate, at the judged tip
++
++```
++$ bash tests/selftest.sh | tail -8
++node_seed — the declared seed, its digests, and what it refuses
++  PASS  build writes a record with a sha256 per declared file, exit 0
++  PASS  apply installs prompts and skills and a green check follows (exit 0, 0)
++  PASS  a tampered file fails the check and is named (exit 1)
++  PASS  a digest mismatch refuses the whole seed and installs nothing (exit 1)
++  PASS  a seed over the size budget is refused (exit 1)
++  PASS  a backup artefact declared as seedable is refused (exit 1)
++
++SELFTEST: PASS
++```
++
++## Criteria, one at a time
++
++| AC | What it asks | Evidence | Verdict |
++|---|---|---|---|
++| 1 | Seeding into `$HOME/.hermes`, digest-recorded, refuses a mismatched digest | 14 files seeded (13 declared + the record); `seed_digest` arm and "a digest mismatch refuses the whole seed and installs nothing (exit 1)" | met |
++| 2 | Declared list with a ~16 MB budget; reportable what/digest/when | `config/node-seed.txt` (13 lines, only `prompts/`, `skills/` globs); `DEFAULT_BUDGET = 16 * 1024 * 1024` and `seed_budget` refusal at `scripts/node_seed.py:39,128`; the node's `seed-applied.json` reports `applied_at`, `applied_to` and a sha256 per file | met |
++| 3 | A check row fails when the node differs from the declared digests | the live red arm above (`prompts/foreman.md drifted`, exit 1) plus the fixture tamper arm | met |
++| 4 | Backups and the full user skill library excluded by construction, and the row says how | inclusion is by exclusive declaration: only paths named in `config/node-seed.txt` are ever copied, so a pattern cannot sweep in a backup; the node carries 11 prompts and 2 skills and no tarball (`find $HOME/.hermes -maxdepth 1 -name '*.tar*' | wc -l` -> `0`); "a backup artefact declared as seedable is refused (exit 1)" | met |
++
++## Residual, named rather than hidden
++
++- `scripts/verify-node.sh` has no seed leg: the freshness comparison added by CF-244 is folded
++  into `VERIFY:`, but a stranger still has to know the record path and invoke `node_seed.py check`
++  by hand to see drift from the control host. Filed as `CF-250` with falsifiable criteria, in the
++  CF-244 idiom.
++- The record's per-file entries carry `path` and `sha256` but no `size`, so the budget is enforced
++  at build time (over the source tree) and not re-reportable at check time. Not a criterion; noted
++  so the next reader does not read `bytes=0` as a defect in the seed and chase it.
