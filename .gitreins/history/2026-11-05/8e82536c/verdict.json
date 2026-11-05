@@ -1,0 +1,114 @@
+{
+  "task_id": "SYNC-2026-11-05-2316",
+  "task_title": "Bind CF-302 completion evidence to its tracked verdict artifact (sync lane bookkeeping)",
+  "task_criteria": [
+    "Commit 7dde7da on origin/main carries a CF-302 row whose newest evidence entry names the artifact .gitreins/history/2026-11-05/85a546ff/verdict.json with tree_fp 297a0c26f425270093e635f6ff8c133b17d8feb206c0ba15552b9e22fcb94fcc, while the earlier run_id-only evidence entry is still present; the row still reads status complete, commit_hash f996376b1a318726de401228c2db7f58c3d79823, guard PASS, ci SKIP; the board holds 343 task rows and event 460 is an audit attributed to CF-302; board validation reports RESULT: OK and the repository selftest at f996376 reports SELFTEST: PASS. The landing-gate repair itself is out of scope: it was judged separately as run 85a546ff."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "7dde7dabc650f1542834ac00f9922750bc551249",
+  "working_tree_content_fingerprint": "91b9404f7080b4cca41feda9870ac71a60a98993cd7e59c9ebd9270490aef812",
+  "working_tree_dirty_path_count": 2357,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261105T234804.398505Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n6:50PM INF scanned ~2403396 bytes (2.40 MB) in 861ms\n6:50PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 258 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261105T234804.398505Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n install-go.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.pAazYmIAPV/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  343/343 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n\n\u2026 [29874 chars omitted \u2014 390 line(s)] \u2026\n  PASS  no evidence -> generic fallback is named on the row, and nothing else is graded\n  PASS  an unknown kind is a named FAIL before any layer runs (never a silent pass)\n50. install-go.sh can go red, and its pin is a digest (CF-219)\n  PASS  install-go negative: no Go -> named FAIL, exit 1\n  PASS  install-go digest: wrong sha256 refused and destination absent\n  PASS  install-go digest control: measured sha256 accepted\n  PASS  install-go positive: applied host pin read back (  PASS  go \u2014 go version go1.26.5 linux/amd64)\n\n51. the python lint lane can go red on one unused import, and green once it is removed (CF-254)\n  PASS  one unused import -> exit 1 naming F401\n  PASS  same file once the import is removed -> exit 0\n  PASS  tracked python surface clean: 37 files graded\n52. master-doc fills converge on runner-owned status without network (CF-257)\n  PASS  both fill writers stamp census/provider/UTC; missing status is rejected\n  PASS  local writer fixtures completed without provider calls\n  PASS  RED module selected, index and missing-Path document skipped\nskip 00-INDEX.md index\nskip 03-not-a-module.md no path field\ntodo=1 provider=deepseek workers=2\ncandidate 01-first.md\n  PASS  old selector would wrongly refill both completed modules\n  PASS  filled run 1: todo=0 exit=0 sha256sum unchanged\ntodo=0 provider=deepseek workers=2\n  PASS  filled run 2: todo=0 exit=0 sha256sum unchanged\ntodo=0 provider=deepseek workers=2\n  PASS  --force selects both filled modules, never the non-modules\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261105T234804.398505Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 Commit 7dde7da on origin/main carries a CF-302 row whose newest evidence entry names the artifact .gitreins/history/2026-11-05/85a546ff/verdict.json with tree_fp 297a0c26f425270093e635f6ff8c133b17d8feb206c0ba15552b9e22fcb94fcc, while the earlier run_id-only evidence entry is still present; the row still reads status complete, commit_hash f996376b1a318726de401228c2db7f58c3d79823, guard PASS, ci SKIP; the board holds 343 task rows and event 460 is an audit attributed to CF-302; board validation reports RESULT: OK and the repository selftest at f996376 reports SELFTEST: PASS. The landing-gate repair itself is out of scope: it was judged separately as run 85a546ff.: origin/main == 7dde7dabc650f1542834ac00f9922750bc551249 (git rev-parse origin/main). At 7dde7da, .coding-hermes/board/tasks.jsonl has 343 rows, no duplicate ids, one CF-302 row: detail.evidence[0]={run_id 85a546ff, ts 2026-11-05T23:44:41Z} (run_id-only entry preserved), evidence[1]={run_id 85a546ff, ts 2026-11-05T23:49:55Z, tree_fp 297a0c26f425270093e635f6ff8c133b17d8feb206c0ba15552b9e22fcb94fcc, artifacts [\".gitreins/history/2026-11-05/85a546ff/verdict.json\"]}; row reads status=complete, commit_hash=f996376b1a318726de401228c2db7f58c3d79823, guard_result=PASS, ci_result=SKIP. Artifact is tracked at 7dde7da (git ls-tree lists commit.patch, summary.md, verdict.json) and sha256sum of verdict.json == 297a0c26f425270093e635f6ff8c133b17d8feb206c0ba15552b9e22fcb94fcc; verdict.json content reads task_id=CF-302, commit=f996376b1a318726de401228c2db7f58c3d79823, passed=true. events.jsonl at 7dde7da has 461 events and id 460 = {\"event_type\":\"audit\",\"task_id\":\"CF-302\",\"actor\":\"sync-lane\"}. `bash scripts/boardctl validate` -> 'rows: 343 tasks, 461 events' and 'RESULT: OK (6 warning(s))', exit 0. `bash tests/selftest.sh` run fresh at 7dde7da -> 'SELFTEST: PASS' with 342 '  PASS' rows and 0 top-level FAIL rows (FAIL strings in the log are expected fixture output, e.g. section 7b). f996376 is an ancestor of origin/main (git merge-base --is-ancestor).\n",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 Commit 7dde7da on origin/main carries a CF-302 row whose newest evidence entry names the artifact .gitreins/history/2026-11-05/85a546ff/verdict.json with tree_fp 297a0c26f425270093e635f6ff8c133b17d8feb206c0ba15552b9e22fcb94fcc, while the earlier run_id-only evidence entry is still present; the row still reads status complete, commit_hash f996376b1a318726de401228c2db7f58c3d79823, guard PASS, ci SKIP; the board holds 343 task rows and event 460 is an audit attributed to CF-302; board validation reports RESULT: OK and the repository selftest at f996376 reports SELFTEST: PASS. The landing-gate repair itself is out of scope: it was judged separately as run 85a546ff.: origin/main == 7dde7dabc650f1542834ac00f9922750bc551249 (git rev-parse origin/main). At 7dde7da, .coding-hermes/board/tasks.jsonl has 343 rows, no duplicate ids, one CF-302 row: detail.evidence[0]={run_id 85a546ff, ts 2026-11-05T23:44:41Z} (run_id-only entry preserved), evidence[1]={run_id 85a546ff, ts 2026-11-05T23:49:55Z, tree_fp 297a0c26f425270093e635f6ff8c133b17d8feb206c0ba15552b9e22fcb94fcc, artifacts [\".gitreins/history/2026-11-05/85a546ff/verdict.json\"]}; row reads status=complete, commit_hash=f996376b1a318726de401228c2db7f58c3d79823, guard_result=PASS, ci_result=SKIP. Artifact is tracked at 7dde7da (git ls-tree lists commit.patch, summary.md, verdict.json) and sha256sum of verdict.json == 297a0c26f425270093e635f6ff8c133b17d8feb206c0ba15552b9e22fcb94fcc; verdict.json content reads task_id=CF-302, commit=f996376b1a318726de401228c2db7f58c3d79823, passed=true. events.jsonl at 7dde7da has 461 events and id 460 = {\"event_type\":\"audit\",\"task_id\":\"CF-302\",\"actor\":\"sync-lane\"}. `bash scripts/boardctl validate` -> 'rows: 343 tasks, 461 events' and 'RESULT: OK (6 warning(s))', exit 0. `bash tests/selftest.sh` run fresh at 7dde7da -> 'SELFTEST: PASS' with 342 '  PASS' rows and 0 top-level FAIL rows (FAIL strings in the log are expected fixture output, e.g. section 7b). f996376 is an ancestor of origin/main (git merge-base --is-ancestor).\n",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "Commit 7dde7da on origin/main carries a CF-302 row whose newest evidence entry names the artifact .gitreins/history/2026-11-05/85a546ff/verdict.json with tree_fp 297a0c26f425270093e635f6ff8c133b17d8feb206c0ba15552b9e22fcb94fcc, while the earlier run_id-only evidence entry is still present; the row still reads status complete, commit_hash f996376b1a318726de401228c2db7f58c3d79823, guard PASS, ci SKIP; the board holds 343 task rows and event 460 is an audit attributed to CF-302; board validation reports RESULT: OK and the repository selftest at f996376 reports SELFTEST: PASS. The landing-gate repair itself is out of scope: it was judged separately as run 85a546ff.",
+                "status": "PASS",
+                "detail": "origin/main == 7dde7dabc650f1542834ac00f9922750bc551249 (git rev-parse origin/main). At 7dde7da, .coding-hermes/board/tasks.jsonl has 343 rows, no duplicate ids, one CF-302 row: detail.evidence[0]={run_id 85a546ff, ts 2026-11-05T23:44:41Z} (run_id-only entry preserved), evidence[1]={run_id 85a546ff, ts 2026-11-05T23:49:55Z, tree_fp 297a0c26f425270093e635f6ff8c133b17d8feb206c0ba15552b9e22fcb94fcc, artifacts [\".gitreins/history/2026-11-05/85a546ff/verdict.json\"]}; row reads status=complete, commit_hash=f996376b1a318726de401228c2db7f58c3d79823, guard_result=PASS, ci_result=SKIP. Artifact is tracked at 7dde7da (git ls-tree lists commit.patch, summary.md, verdict.json) and sha256sum of verdict.json == 297a0c26f425270093e635f6ff8c133b17d8feb206c0ba15552b9e22fcb94fcc; verdict.json content reads task_id=CF-302, commit=f996376b1a318726de401228c2db7f58c3d79823, passed=true. events.jsonl at 7dde7da has 461 events and id 460 = {\"event_type\":\"audit\",\"task_id\":\"CF-302\",\"actor\":\"sync-lane\"}. `bash scripts/boardctl validate` -> 'rows: 343 tasks, 461 events' and 'RESULT: OK (6 warning(s))', exit 0. `bash tests/selftest.sh` run fresh at 7dde7da -> 'SELFTEST: PASS' with 342 '  PASS' rows and 0 top-level FAIL rows (FAIL strings in the log are expected fixture output, e.g. section 7b). f996376 is an ancestor of origin/main (git merge-base --is-ancestor)."
+              }
+            ],
+            "summary": "",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: SYNC-2026-11-05-2316\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 Commit 7dde7da on origin/main carries a CF-302 row whose newest evidence entry names the artifact .gitreins/history/2026-11-05/85a546ff/verdict.json with tree_fp 297a0c26f425270093e635f6ff8c133b17d8feb206c0ba15552b9e22fcb94fcc, while the earlier run_id-only evidence entry is still present; the row still reads status complete, commit_hash f996376b1a318726de401228c2db7f58c3d79823, guard PASS, ci SKIP; the board holds 343 task rows and event 460 is an audit attributed to CF-302; board validation reports RESULT: OK and the repository selftest at f996376 reports SELFTEST: PASS. The landing-gate repair itself is out of scope: it was judged separately as run 85a546ff.: origin/main == 7dde7dabc650f1542834ac00f9922750bc551249 (git rev-parse origin/main). At 7dde7da, .coding-hermes/board/tasks.jsonl has 343 rows, no duplicate ids, one CF-302 row: detail.evidence[0]={run_id 85a546ff, ts 2026-11-05T23:44:41Z} (run_id-only entry preserved), evidence[1]={run_id 85a546ff, ts 2026-11-05T23:49:55Z, tree_fp 297a0c26f425270093e635f6ff8c133b17d8feb206c0ba15552b9e22fcb94fcc, artifacts [\".gitreins/history/2026-11-05/85a546ff/verdict.json\"]}; row reads status=complete, commit_hash=f996376b1a318726de401228c2db7f58c3d79823, guard_result=PASS, ci_result=SKIP. Artifact is tracked at 7dde7da (git ls-tree lists commit.patch, summary.md, verdict.json) and sha256sum of verdict.json == 297a0c26f425270093e635f6ff8c133b17d8feb206c0ba15552b9e22fcb94fcc; verdict.json content reads task_id=CF-302, commit=f996376b1a318726de401228c2db7f58c3d79823, passed=true. events.jsonl at 7dde7da has 461 events and id 460 = {\"event_type\":\"audit\",\"task_id\":\"CF-302\",\"actor\":\"sync-lane\"}. `bash scripts/boardctl validate` -> 'rows: 343 tasks, 461 events' and 'RESULT: OK (6 warning(s))', exit 0. `bash tests/selftest.sh` run fresh at 7dde7da -> 'SELFTEST: PASS' with 342 '  PASS' rows and 0 top-level FAIL rows (FAIL strings in the log are expected fixture output, e.g. section 7b). f996376 is an ancestor of origin/main (git merge-base --is-ancestor).\n\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-05T23:54:58.372208",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-05T23:54:58.410171+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 16752,
+        "truncated": false,
+        "source": "git show 7dde7dabc650"
+      }
+    ],
+    "task_id": "SYNC-2026-11-05-2316"
+  }
+}
