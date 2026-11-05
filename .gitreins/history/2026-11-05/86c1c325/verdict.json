@@ -1,0 +1,114 @@
+{
+  "task_id": "CF-230",
+  "task_title": "Harness selection is data-driven (specs/HARNESS-MATRIX.md 4/6): scripts/harness_resolve.py resolves directive > lane > matrix > hermes, refuses foreman lanes off hermes and uninstalled harnesses with named failures, records harness_selected/harness_reason/model_requested",
+  "task_criteria": [
+    "python3 -B tests/test_harness_resolve.py exits 0; python3 scripts/harness_resolve.py --explain claude-sonnet-4 prints harness_selected=claude-code and harness_reason=matrix and exits 0; python3 scripts/harness_resolve.py --explain gpt-5 --lane code-factory exits nonzero and prints harness_foreman_requires_hermes; python3 scripts/harness_resolve.py --explain claude-sonnet-4 --node-harnesses hermes exits nonzero and prints 'harness_unsupported: claude-code'; bash tests/selftest.sh exits 0 with SELFTEST: PASS"
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "74d36cf2cfdae15680cbbffa7aa2167cf892a4f5",
+  "working_tree_content_fingerprint": "d42146678dbb710f81675254bbd26ee86d09928394ee18d54370bfb14a81977b",
+  "working_tree_dirty_path_count": 2357,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261105T222422.657808Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n5:52PM INF scanned ~2384567 bytes (2.38 MB) in 846ms\n5:52PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 258 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261105T222422.657808Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n install-go.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.0Sraqn0IWZ/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  343/343 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n\n\u2026 [28717 chars omitted \u2014 378 line(s)] \u2026\n  PASS  no evidence -> generic fallback is named on the row, and nothing else is graded\n  PASS  an unknown kind is a named FAIL before any layer runs (never a silent pass)\n50. install-go.sh can go red, and its pin is a digest (CF-219)\n  PASS  install-go negative: no Go -> named FAIL, exit 1\n  PASS  install-go digest: wrong sha256 refused and destination absent\n  PASS  install-go digest control: measured sha256 accepted\n  PASS  install-go positive: applied host pin read back (  PASS  go \u2014 go version go1.26.5 linux/amd64)\n\n51. the python lint lane can go red on one unused import, and green once it is removed (CF-254)\n  PASS  one unused import -> exit 1 naming F401\n  PASS  same file once the import is removed -> exit 0\n  PASS  tracked python surface clean: 37 files graded\n52. master-doc fills converge on runner-owned status without network (CF-257)\n  PASS  both fill writers stamp census/provider/UTC; missing status is rejected\n  PASS  local writer fixtures completed without provider calls\n  PASS  RED module selected, index and missing-Path document skipped\nskip 00-INDEX.md index\nskip 03-not-a-module.md no path field\ntodo=1 provider=deepseek workers=2\ncandidate 01-first.md\n  PASS  old selector would wrongly refill both completed modules\n  PASS  filled run 1: todo=0 exit=0 sha256sum unchanged\ntodo=0 provider=deepseek workers=2\n  PASS  filled run 2: todo=0 exit=0 sha256sum unchanged\ntodo=0 provider=deepseek workers=2\n  PASS  --force selects both filled modules, never the non-modules\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261105T222422.657808Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 python3 -B tests/test_harness_resolve.py exits 0; python3 scripts/harness_resolve.py --explain claude-sonnet-4 prints harness_selected=claude-code and harness_reason=matrix and exits 0; python3 scripts/harness_resolve.py --explain gpt-5 --lane code-factory exits nonzero and prints harness_foreman_requires_hermes; python3 scripts/harness_resolve.py --explain claude-sonnet-4 --node-harnesses hermes exits nonzero and prints 'harness_unsupported: claude-code'; bash tests/selftest.sh exits 0 with SELFTEST: PASS: All five legs verified with fresh command output. (1) `python3 -B tests/test_harness_resolve.py` -> 'Ran 28 tests in 0.883s / OK', EXIT=0. (2) `--explain claude-sonnet-4` -> 'PASS harness_selected=claude-code harness_reason=matrix model_requested=claude-sonnet-4 provider_family=claude model_served=<null-until-a-run> provider_binding=native', EXIT=0. (3) `--explain gpt-5 --lane code-factory` -> 'FAIL harness_foreman_requires_hermes: lane=code-factory harness=codex', EXIT=2 (nonzero). (4) `--explain claude-sonnet-4 --node-harnesses hermes` -> 'FAIL harness_unsupported: claude-code; node has: hermes', EXIT=2 (nonzero). (5) `bash tests/selftest.sh` -> line 163 'PASS  CF-230 harness resolution: directive > lane > matrix > hermes, every reason recorded', line 459 'SELFTEST: PASS', EXITCODE=0. Code corroboration: scripts/harness_resolve.py:230-232 select() implements directive>lane>matrix>fallback; :272/:278 raise harness_unsupported; :284 raises harness_foreman_requires_hermes; :296-299 records harness_selected/harness_reason/model_requested; config/harness-matrix.json supplies the data (default hermes, by_family claude->claude-code, openai->codex); tests/selftest.sh:522 wires the test into section 12. Precedence also spot-checked: `--lane-harness hermes` yields harness_reason=lane, confirming lane beats matrix.\nAll five required command legs pass with fresh output (28/28 unit tests OK, matrix resolution to claude-code, both named refusals exiting 2, and selftest SELFTEST: PASS with exit 0).",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 python3 -B tests/test_harness_resolve.py exits 0; python3 scripts/harness_resolve.py --explain claude-sonnet-4 prints harness_selected=claude-code and harness_reason=matrix and exits 0; python3 scripts/harness_resolve.py --explain gpt-5 --lane code-factory exits nonzero and prints harness_foreman_requires_hermes; python3 scripts/harness_resolve.py --explain claude-sonnet-4 --node-harnesses hermes exits nonzero and prints 'harness_unsupported: claude-code'; bash tests/selftest.sh exits 0 with SELFTEST: PASS: All five legs verified with fresh command output. (1) `python3 -B tests/test_harness_resolve.py` -> 'Ran 28 tests in 0.883s / OK', EXIT=0. (2) `--explain claude-sonnet-4` -> 'PASS harness_selected=claude-code harness_reason=matrix model_requested=claude-sonnet-4 provider_family=claude model_served=<null-until-a-run> provider_binding=native', EXIT=0. (3) `--explain gpt-5 --lane code-factory` -> 'FAIL harness_foreman_requires_hermes: lane=code-factory harness=codex', EXIT=2 (nonzero). (4) `--explain claude-sonnet-4 --node-harnesses hermes` -> 'FAIL harness_unsupported: claude-code; node has: hermes', EXIT=2 (nonzero). (5) `bash tests/selftest.sh` -> line 163 'PASS  CF-230 harness resolution: directive > lane > matrix > hermes, every reason recorded', line 459 'SELFTEST: PASS', EXITCODE=0. Code corroboration: scripts/harness_resolve.py:230-232 select() implements directive>lane>matrix>fallback; :272/:278 raise harness_unsupported; :284 raises harness_foreman_requires_hermes; :296-299 records harness_selected/harness_reason/model_requested; config/harness-matrix.json supplies the data (default hermes, by_family claude->claude-code, openai->codex); tests/selftest.sh:522 wires the test into section 12. Precedence also spot-checked: `--lane-harness hermes` yields harness_reason=lane, confirming lane beats matrix.\nAll five required command legs pass with fresh output (28/28 unit tests OK, matrix resolution to claude-code, both named refusals exiting 2, and selftest SELFTEST: PASS with exit 0).",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "python3 -B tests/test_harness_resolve.py exits 0; python3 scripts/harness_resolve.py --explain claude-sonnet-4 prints harness_selected=claude-code and harness_reason=matrix and exits 0; python3 scripts/harness_resolve.py --explain gpt-5 --lane code-factory exits nonzero and prints harness_foreman_requires_hermes; python3 scripts/harness_resolve.py --explain claude-sonnet-4 --node-harnesses hermes exits nonzero and prints 'harness_unsupported: claude-code'; bash tests/selftest.sh exits 0 with SELFTEST: PASS",
+                "status": "PASS",
+                "detail": "All five legs verified with fresh command output. (1) `python3 -B tests/test_harness_resolve.py` -> 'Ran 28 tests in 0.883s / OK', EXIT=0. (2) `--explain claude-sonnet-4` -> 'PASS harness_selected=claude-code harness_reason=matrix model_requested=claude-sonnet-4 provider_family=claude model_served=<null-until-a-run> provider_binding=native', EXIT=0. (3) `--explain gpt-5 --lane code-factory` -> 'FAIL harness_foreman_requires_hermes: lane=code-factory harness=codex', EXIT=2 (nonzero). (4) `--explain claude-sonnet-4 --node-harnesses hermes` -> 'FAIL harness_unsupported: claude-code; node has: hermes', EXIT=2 (nonzero). (5) `bash tests/selftest.sh` -> line 163 'PASS  CF-230 harness resolution: directive > lane > matrix > hermes, every reason recorded', line 459 'SELFTEST: PASS', EXITCODE=0. Code corroboration: scripts/harness_resolve.py:230-232 select() implements directive>lane>matrix>fallback; :272/:278 raise harness_unsupported; :284 raises harness_foreman_requires_hermes; :296-299 records harness_selected/harness_reason/model_requested; config/harness-matrix.json supplies the data (default hermes, by_family claude->claude-code, openai->codex); tests/selftest.sh:522 wires the test into section 12. Precedence also spot-checked: `--lane-harness hermes` yields harness_reason=lane, confirming lane beats matrix."
+              }
+            ],
+            "summary": "All five required command legs pass with fresh output (28/28 unit tests OK, matrix resolution to claude-code, both named refusals exiting 2, and selftest SELFTEST: PASS with exit 0).",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-230\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 python3 -B tests/test_harness_resolve.py exits 0; python3 scripts/harness_resolve.py --explain claude-sonnet-4 prints harness_selected=claude-code and harness_reason=matrix and exits 0; python3 scripts/harness_resolve.py --explain gpt-5 --lane code-factory exits nonzero and prints harness_foreman_requires_hermes; python3 scripts/harness_resolve.py --explain claude-sonnet-4 --node-harnesses hermes exits nonzero and prints 'harness_unsupported: claude-code'; bash tests/selftest.sh exits 0 with SELFTEST: PASS: All five legs verified with fresh command output. (1) `python3 -B tests/test_harness_resolve.py` -> 'Ran 28 tests in 0.883s / OK', EXIT=0. (2) `--explain claude-sonnet-4` -> 'PASS harness_selected=claude-code harness_reason=matrix model_requested=claude-sonnet-4 provider_family=claude model_served=<null-until-a-run> provider_binding=native', EXIT=0. (3) `--explain gpt-5 --lane code-factory` -> 'FAIL harness_foreman_requires_hermes: lane=code-factory harness=codex', EXIT=2 (nonzero). (4) `--explain claude-sonnet-4 --node-harnesses hermes` -> 'FAIL harness_unsupported: claude-code; node has: hermes', EXIT=2 (nonzero). (5) `bash tests/selftest.sh` -> line 163 'PASS  CF-230 harness resolution: directive > lane > matrix > hermes, every reason recorded', line 459 'SELFTEST: PASS', EXITCODE=0. Code corroboration: scripts/harness_resolve.py:230-232 select() implements directive>lane>matrix>fallback; :272/:278 raise harness_unsupported; :284 raises harness_foreman_requires_hermes; :296-299 records harness_selected/harness_reason/model_requested; config/harness-matrix.json supplies the data (default hermes, by_family claude->claude-code, openai->codex); tests/selftest.sh:522 wires the test into section 12. Precedence also spot-checked: `--lane-harness hermes` yields harness_reason=lane, confirming lane beats matrix.\nAll five required command legs pass with fresh output (28/28 unit tests OK, matrix resolution to claude-code, both named refusals exiting 2, and selftest SELFTEST: PASS with exit 0).\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-05T22:57:22.037332",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-05T22:57:22.057845+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 37515,
+        "truncated": false,
+        "source": "git show 74d36cf2cfda"
+      }
+    ],
+    "task_id": "CF-230"
+  }
+}
