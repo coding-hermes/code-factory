@@ -1,0 +1,123 @@
+--- a/fleet_ops_check.py
++++ b/fleet_ops_check.py
+@@ -31,6 +31,7 @@
+ import os
+ import re
+ import sqlite3
++import subprocess
+ import sys
+ 
+ DB = os.path.expanduser('~/.hermes/coding-hermes/scheduler.db')
+@@ -47,6 +48,15 @@
+               'docs/runbook.md', 'OPERATIONS.md', 'docs/operations.md')
+ BACKUP = ('backup', 'restore', 'snapshot')
+ 
++# A shell toolkit is a project whose operational surface IS its own scripts — an installer, a node
++# provisioner, an operator CLI — and which ships no language manifest for `classify()` to derive a
++# kind from. `docs_only` therefore called it a spec corpus and `ops_gaps()` returned ZERO checks
++# for it: the repo, its provisioners and every node they start sat outside the census while the
++# report read `docs` and clean (CF-206). Two tracked scripts under scripts/ or bin/, or the repo's
++# own tests/selftest.sh gate, is the evidence threshold.
++SHELL_TOOLKIT_DIRS = ('scripts', 'bin')
++SHELL_TOOLKIT_GATE = 'tests/selftest.sh'
++
+ SERVER_PAT = re.compile(
+     r'(ListenAndServe|http\.Server\{|net/http.*Handler|FastAPI\(|Flask\(|'
+     r'app\.listen\(|createServer\(|express\(\)|uvicorn\.run|serve\(\))')
+@@ -102,6 +112,25 @@
+     return None
+ 
+ 
++def exists_ci(root: str, names) -> str | None:
++    """`exists_any` with a case-insensitive basename match.
++
++    `docs/OPERATIONS.md` and `docs/operations.md` are the same doc; matching only the lowercase
++    spelling reported a `deploy-doc` gap against a repo whose operational doc the census had just
++    started reading (CF-206 turned this check on for five previously-unjudged families).
++    """
++    for n in names:
++        p = os.path.join(root, n)
++        parent, base = os.path.dirname(p) or root, os.path.basename(p)
++        try:
++            entries = os.listdir(parent)
++        except OSError:
++            continue
++        if base.lower() in {e.lower() for e in entries}:
++            return n
++    return None
++
++
+ def rel_hits(root: str, names, limit: int = 12) -> list[str]:
+     """Shallow, bounded search: `names` matched as path components anywhere under root."""
+     hits, root = [], os.path.realpath(root)
+@@ -153,6 +182,48 @@
+     return False
+ 
+ 
++def _tracked_paths(root: str):
++    """Repo-relative tracked paths, or None when root is not a git work tree (a fixture)."""
++    try:
++        out = subprocess.run(['git', '-C', root, 'ls-files', '-z'],
++                             capture_output=True, timeout=30)
++    except (OSError, subprocess.SubprocessError):
++        return None
++    if out.returncode != 0:
++        return None
++    return [p for p in out.stdout.decode('utf-8', 'replace').split('\0') if p]
++
++
++def shell_toolkit(root: str) -> tuple[int, str | None]:
++    """(tracked script count, gate) for a project that ships scripts instead of a manifest.
++
++    The question is what the project SHIPS, so an untracked scratch script does not count when
++    `root` is a work tree. A tree that is not under git (a fixture, an extracted tarball) has no
++    tracked set to consult and is counted from the filesystem instead.
++    """
++    files = _tracked_paths(root)
++    if files is None:
++        files = []
++        for d in SHELL_TOOLKIT_DIRS:
++            base = os.path.join(root, d)
++            if not os.path.isdir(base):
++                continue
++            for dirpath, dirnames, filenames in os.walk(base):
++                dirnames[:] = [x for x in dirnames
++                               if x not in ('.git', 'node_modules', '.venv')]
++                if dirpath[len(base):].count(os.sep) >= 2:
++                    dirnames[:] = []
++                    continue
++                files += [os.path.relpath(os.path.join(dirpath, f), root)
++                          for f in filenames if f.endswith('.sh')]
++    tracked = set(files)
++    scripts = {p for p in tracked
++               if p.endswith('.sh') and len(p.split('/')) <= 3
++               and p.split('/')[0] in SHELL_TOOLKIT_DIRS}
++    gate = SHELL_TOOLKIT_GATE if SHELL_TOOLKIT_GATE in tracked else None
++    return len(scripts), gate
++
++
+ def classify(root: str, docs_only: bool) -> tuple[str, dict]:
+     """(kind, evidence). kind in service | cli | library | docs | unknown."""
+     ev = {}
+@@ -170,6 +241,12 @@
+     has_manifest = has_go or has_py or has_js
+ 
+     if docs_only or not has_manifest:
++        if docs_only:
++            n_scripts, gate = shell_toolkit(root)
++            if n_scripts >= 2 or gate:
++                ev['kind_basis'] = 'shell-toolkit:%d' % n_scripts
++                ev['toolkit_gate'] = gate
++                return 'cli', ev
+         return ('docs' if docs_only else 'unknown'), ev
+     if container or orch or serv:
+         return 'service', ev
+@@ -186,7 +263,7 @@
+         gaps.append({'check': key, 'detail': detail, 'severity': severity})
+ 
+     if kind in ('service', 'cli', 'library'):
+-        if not exists_any(root, DEPLOY_DOC):
++        if not exists_any(root, DEPLOY_DOC) and not exists_ci(root, DEPLOY_DOC):
+             add('deploy-doc', 'no DEPLOY/RUNBOOK/OPERATIONS doc — the deploy path is tribal',
+                 'P2' if kind == 'service' else 'P3')
+ 
