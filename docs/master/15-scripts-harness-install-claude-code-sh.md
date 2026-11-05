@@ -9,8 +9,9 @@
 
 ## 1. Purpose and why it matters
 
-- What breaks if this module is absent: **UNKNOWN** (fill from behaviour, prove it).
-- What breaks if it lies: **UNKNOWN** (every self-reporting component has this failure mode).
+- The script is a “pinned, user-space installer and adapter probe for Claude Code (CF-225)”: `--check` is read-only, `--apply` installs the pin under `$HOME/.local/harness/npm`, and `--turn` runs one unattended turn in `CF_WORKDIR` (`install-claude-code.sh --check ... / --apply ... / --turn ...`).
+- What breaks if this module is absent: there is no installer/probe for the Claude Code pin; in `--turn` the script explicitly refuses when the pin is not installed: `bad "turn" "refused — the pin is not installed at $BIN; run --apply first"`.
+- What breaks if it lies: `UNKNOWN` — every self-reporting component has this failure mode. The script does provide its own read-back rule: “the version is read back from the installed binary after install, and a mismatch names both numbers” (`install-claude-code.sh` header).
 
 ## 2. Dependencies and library contracts
 
@@ -18,66 +19,28 @@
 
 | Dependency | Version | Where it must exist | Absence detected by |
 |---|---|---|---|
-| — | — | — | **RED: none identified mechanically** |
+| `bash` | not stated; shebang is `#!/usr/bin/env bash` | script interpreter on `PATH` | shell cannot run the script |
+| `node` | `>= 22` (`NODE_MIN_MAJOR=22`) | `have node` on `PATH` | `probe_node`: `bad "node" "absent — $CLAUDE_CODE_PKG needs node >= $NODE_MIN_MAJOR (its engines field)"` |
+| `npm` | not stated; only presence is checked | `have npm` on `PATH` | `probe_node`: `bad "npm" "absent — the pin is an npm package"` |
+| `timeout` | not stated | on `PATH` during `--turn` | not explicitly detected before use |
+| `stat` | not stated | on `PATH` | `mode_of()` uses `stat -c '%a' ... 2>/dev/null || echo '?'`; bad mode then fails key-file check |
+| `grep`, `sed`, `du`, `head`, `tail`, `tr`, `cut`, `mktemp`, `id`, `date`, `cat` | not stated | on `PATH` during relevant modes | not explicitly detected before use |
 
 ### 2b. Library contracts
 
 | Import | Provider | Contract relied on | If it changes |
 |---|---|---|---|
-| — | — | **RED: no imports detected** | — |
+| `"$HERE/../lib.sh"` | `scripts/lib.sh` in this repository | Functions/variables used by this script: `say`, `ok`, `bad`, `note`, `warn`, `have`, `FAILED`, `SKIPPED` | The script’s checks, exit-code reporting, and summary lines fail if names or exit/error semantics change |
 
 ### 2c. Service contracts (both sides must be named)
 
 | Peer | Direction | Transport | Payload | Other side (file:function) |
 |---|---|---|---|---|
-| **UNKNOWN** | — | — | — | **RED** |
+| `registry.npmjs.org` | outbound, this script is the client | `npm view ... --json` against the npm registry | Package metadata for `@anthropic-ai/claude-code@2.1.318`: `version`, `dist.integrity`, `dist.shasum` | `scripts/harness/install-claude-code.sh:provenance_check()` |
+| `@anthropic-ai/claude-code` CLI (`$BIN`) | outbound, this script is the caller | subprocess `timeout "$TIMEOUT_S" "$BIN" ...`, stdin/stdout | CLI flags `--print --output-format json --bare --setting-sources local --permission-mode acceptEdits --model ...`; JSON result parsed for `terminal_reason`, `api_error_status`, `result`, `modelUsage`, `model` | `scripts/harness/install-claude-code.sh:do_turn()` |
 
 ## 3. Verification
 
 | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|
-| — | **no check exists** | — | — | **RED** |
-
-## 4. Metrics emitted
-
-**NONE FOUND** — this is a RED field. Dispatch rate, latency, failure counts and liveness are all unanswerable without reading code or grepping logs.
-
-## 5. Log lines it can generate
-
-| Level | Line (verbatim) | Emitted when | Kind |
-|---|---|---|---|
-| ? | `
-    sed -n ` | **UNKNOWN** | descriptive (**unverified as evidence**) |
-| ? | ` 2>&1
-  rc=$?
-  if [ ` | **UNKNOWN** | descriptive (**unverified as evidence**) |
-| ? | `); then
-    bad ` | **UNKNOWN** | descriptive (**unverified as evidence**) |
-| ? | `contract:CF_WORKDIR` | **UNKNOWN** | descriptive (**unverified as evidence**) |
-
-## 6. Failure modes
-
-| Failure | Presents as | Distinguished from | Recovery |
-|---|---|---|---|
-| **UNKNOWN** | — | — | — |
-
-## 7. Environment and settings it reads
-
-| Variable | Default | Effect if unset |
-|---|---|---|
-| `CF_API_KEY` | unknown | **UNKNOWN** |
-| `CF_API_KEY_FILE` | unknown | **UNKNOWN** |
-| `CF_BASE_URL` | unknown | **UNKNOWN** |
-| `CF_HARNESS_OPTS` | unknown | **UNKNOWN** |
-| `CF_LANE` | unknown | **UNKNOWN** |
-| `CF_MAX_TURNS` | unknown | **UNKNOWN** |
-| `CF_MODEL` | unknown | **UNKNOWN** |
-| `CF_NAMESPACE` | unknown | **UNKNOWN** |
-| `CF_PROVIDER` | unknown | **UNKNOWN** |
-| `CF_RUN_ID` | unknown | **UNKNOWN** |
-| `CF_SKILLS_DIR` | unknown | **UNKNOWN** |
-| `CF_TIMEOUT_S` | unknown | **UNKNOWN** |
-
-## 8. Evidence of record
-
-- none yet
+| Source-defined `--check` | `scripts/harness/install-claude-code.sh --

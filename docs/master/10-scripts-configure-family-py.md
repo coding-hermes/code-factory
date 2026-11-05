@@ -9,8 +9,8 @@
 
 ## 1. Purpose and why it matters
 
-- What breaks if this module is absent: **UNKNOWN** (fill from behaviour, prove it).
-- What breaks if it lies: **UNKNOWN** (every self-reporting component has this failure mode).
+- What breaks if this module is absent: the `code-factory` lane family is not extended to the canonical shape derived from the two existing families `crier` and `9router` (`file:2`, `file:4-6`). No `code-factory-*` project rows are created via the HTTP API or configured in the scheduler SQLite database (`file:141-188`).
+- What breaks if it lies: the final `family now` report can show rows that do not match the intended canonical shape because the script both configures project rows in SQLite (`file:177-188`) and then reads them back for the report (`file:196-201`).
 
 ## 2. Dependencies and library contracts
 
@@ -18,55 +18,6 @@
 
 | Dependency | Version | Where it must exist | Absence detected by |
 |---|---|---|---|
-| — | — | — | **RED: none identified mechanically** |
-
-### 2b. Library contracts
-
-| Import | Provider | Contract relied on | If it changes |
-|---|---|---|---|
-| `json` | — | **UNKNOWN** | **UNKNOWN** |
-| `lane_target` | — | **UNKNOWN** | **UNKNOWN** |
-| `memory.` | — | **UNKNOWN** | **UNKNOWN** |
-| `os` | — | **UNKNOWN** | **UNKNOWN** |
-| `sqlite3` | — | **UNKNOWN** | **UNKNOWN** |
-| `sys` | — | **UNKNOWN** | **UNKNOWN** |
-| `urllib.error` | — | **UNKNOWN** | **UNKNOWN** |
-| `urllib.request` | — | **UNKNOWN** | **UNKNOWN** |
-
-### 2c. Service contracts (both sides must be named)
-
-| Peer | Direction | Transport | Payload | Other side (file:function) |
-|---|---|---|---|---|
-| **UNKNOWN** | — | — | — | **RED** |
-
-## 3. Verification
-
-| Check | Command | Expected | Last run | Result |
-|---|---|---|---|---|
-| — | **no check exists** | — | — | **RED** |
-
-## 4. Metrics emitted
-
-**NONE FOUND** — this is a RED field. Dispatch rate, latency, failure counts and liveness are all unanswerable without reading code or grepping logs.
-
-## 5. Log lines it can generate
-
-| Level | Line (verbatim) | Emitted when | Kind |
-|---|---|---|---|
-| ? | `\nconfigured:` | **UNKNOWN** | descriptive (**unverified as evidence**) |
-| ? | `\nfamily now:` | **UNKNOWN** | descriptive (**unverified as evidence**) |
-| ? | `derived shape from` | **UNKNOWN** | descriptive (**unverified as evidence**) |
-
-## 6. Failure modes
-
-| Failure | Presents as | Distinguished from | Recovery |
-|---|---|---|---|
-| **UNKNOWN** | — | — | — |
-
-## 7. Environment and settings it reads
-
-**NONE DETECTED**
-
-## 8. Evidence of record
-
-- none yet
+| `json` | UNKNOWN | Python import must resolve (`file:9`) | `import json` at `file:9` fails |
+| `os` | UNKNOWN | Python import must resolve (`file:10`) | `import os` at `file:10` fails |
+| `sqlite3` | UN
