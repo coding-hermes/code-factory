@@ -5,7 +5,15 @@ guards:
   test_mode: full
   test_command: bash tests/selftest.sh
   lint_command: bash -n $(git ls-files "*.sh")
-  allow_skips: false
+  # CF-031: the lint lane picks its scope from staged file EXTENSIONS and grades
+  # only *.py (engine/guard_manager.py:2823); lint_command above is never read by
+  # that lane. On this shell repo a commit staging no Python file therefore comes
+  # back as lint=skipped, Tier 1 is a DEGRADED PASS, and allow_skips: false turned
+  # that skip into exit 2 from the hook, so every docs/shell/board commit was
+  # refused while the run printed green. allow_skips: true accepts only a run where
+  # a gate had nothing to grade; a gate that FAILS still exits 1 and still blocks.
+  # Shell syntax is graded on every commit by the tests lane (selftest section 1).
+  allow_skips: true
 evaluator:
   # 15 was gitreins init's default and starved the first real multi-part Tier-2 judge on this
   # repo (`Iteration cap (15) reached (15.9 used)` -> INCOMPLETE, tier1 PASS, run 74fe8232).
