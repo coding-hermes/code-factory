@@ -181,7 +181,11 @@ check() {
 
   # repo, identity and harness, measured inside the node
   local probe
-  probe=$(timeout 60 "$b" exec --server "$SERVER" "$AGENT" -- bash -lc '
+  # The probe is STAGED, not inlined. A single-quoted heredoc full of escaped quotes shipped
+  # literal backslashes to the node, every path failed there, and the check reported a fully
+  # provisioned node as empty — a false negative that would have sent an operator to re-provision.
+  local pf; pf=$(mktemp)
+  cat > "$pf" <<'CFPROBE'
     cd "$HOME/repo" 2>/dev/null || { echo "repo=absent"; exit 0; }
     echo "repo=present"
     echo "sha=$(git rev-parse --short HEAD 2>/dev/null)"
@@ -194,11 +198,14 @@ check() {
     echo "crier_key=$([ -s "$HOME/.node/agent.key" ] && echo present || echo absent)"
     echo "crier_bearer=$([ -s "$HOME/.node/auth/crier.token" ] && echo present || echo absent)"
     echo "gitcred=$([ -s "$HOME/.git-credentials" ] && echo present || echo absent)"
-    echo "gitreins=$(command -v gitreins >/dev/null 2>&1 && gitreins --version 2>/dev/null | awk '{print $2}' || echo absent)"
+    echo "gitreins=$(if [ -x "$HOME/gitreins-venv/bin/gitreins" ]; then "$HOME/gitreins-venv/bin/gitreins" --version 2>/dev/null | awk '{print $2}'; elif command -v gitreins >/dev/null 2>&1; then gitreins --version 2>/dev/null | awk '{print $2}'; else echo absent; fi)"
     echo "precommit=$([ -x "$HOME/repo/.git/hooks/pre-commit" ] && echo present || echo absent)"
     echo "hermes=$(if [ -x "$HOME/hermes-venv/bin/hermes" ] || [ -x "$HOME/.local/bin/hermes" ] || command -v hermes >/dev/null 2>&1; then echo present; else echo absent; fi)"
-    echo "gw_auth=$(grep -q "basic_auth:" "$HOME/.hermes/config.yaml" 2>/dev/null && echo present || echo absent)"
-  ' 2>/dev/null) || true
+    echo "gw_auth=$(grep -q basic_auth: "$HOME/.hermes/config.yaml" 2>/dev/null && echo present || echo absent)"
+CFPROBE
+  timeout 60 "$b" cp "$pf" "$AGENT:cf-probe.sh" --server "$SERVER" >/dev/null 2>&1 || true
+  probe=$(timeout 60 "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'bash "$HOME/cf-probe.sh"' 2>/dev/null) || true
+  rm -f "$pf"
 
   case "$probe" in *repo=present*) ok "repo" "clone present ($(printf '%s' "$probe" | sed -n 's/^sha=//p') branch $(printf '%s' "$probe" | sed -n 's/^branch=//p'), $(printf '%s' "$probe" | sed -n 's/^dirty=//p') dirty)" ;;
     *) bad "repo" "no clone at \$HOME/repo — run --apply" ;; esac
@@ -233,20 +240,19 @@ check() {
     warn "env_profile" "no NODE_ENV_FILE or CONFIG_SET_* — the node's environment is declared nowhere"
   fi
 
-  # crier: the inbox route is the only thing that proves reachability. This used to `return 0`
-  # when the URL was unset, which silently skipped every check ordered after it (the namespace
-  # rows never ran on a config without CRIER_URL).
+  # crier: delegate to the one script that knows how to prove a signed read. This block used to
+  # re-implement the probe with a curl, which can only ever see 401 on a hardened bus (the signer is
+  # checked before the agent is looked up) and reported a wired node as not connected.
   if [ -z "$CRIER_URL" ]; then
     warn "crier" "CRIER_URL unset — reachability unproven"
   else
-    code=$(curl -s -o /dev/null -m 8 -w '%{http_code}' "$CRIER_URL/agents/$AGENT/inbox?limit=1" 2>/dev/null || echo 000)
-    case "$code" in
-      200) ok "crier" "$CRIER_URL/agents/$AGENT/inbox -> 200" ;;
-      401) bad "crier" "$CRIER_URL/agents/$AGENT/inbox -> 401 (auth or per-agent signature missing — crier checks the signer before it looks the agent up, so this is not proof the id is unknown)" ;;
-      403) bad "crier" "$CRIER_URL/agents/$AGENT/inbox -> 403 (owner mismatch or guard refused)" ;;
-      404) bad "crier" "$CRIER_URL/agents/$AGENT/inbox -> 404 (agent genuinely not registered)" ;;
-      000) bad "crier" "$CRIER_URL unreachable (no answer in 8 s)" ;;
-      *)   bad "crier" "$CRIER_URL/agents/$AGENT/inbox -> $code" ;;
+    crier_out=$(timeout 120 "$HERE/bunker-crier-connect.sh" --check \
+      --agent "$AGENT" --server "$SERVER" --url "$CRIER_URL" --project "$PROJECT" 2>&1) || true
+    case "$crier_out" in
+      *"CRIER: CONNECTED"*)
+        ok "crier" "signed read accepted: $(printf '%s' "$crier_out" | grep -E 'PASS  inbox' | head -1 | sed 's/^ *//')" ;;
+      *)
+        bad "crier" "$(printf '%s' "$crier_out" | grep -E 'FAIL ' | head -1 | sed 's/^ *//')" ;;
     esac
   fi
 
