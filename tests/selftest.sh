@@ -3274,5 +3274,166 @@ fi
 rm -rf "$tmpd"
 # END cf250-seed-drift
 
+# BEGIN cf218-kinds
+# CF-218: layer 10 graded a fixed list (python3+venv, git, curl, tar, sha256sum) and
+# warned on node, so a node with no Go toolchain printed PASS while unable to build the
+# fleet's largest repo class (61 distinct repo origins: go 27, node 22, python 16,
+# rust 5). This section proves the derived set can go RED and GREEN on the SAME tree,
+# that a refused module proxy is a named FAIL, and that the generic fallback names
+# itself instead of silently grading the old fixed list.
+say "49. layer 10 grades the toolchain the repository kind needs, Go included (CF-218)"
+tmpd=$(mktemp -d)
+# Layer 10 reads $HOME/repo for kind evidence, because it runs BEFORE layer 40 clones.
+# A fresh node has no clone, so the fixture only seeds the marker file.
+mkdir -p "$tmpd/home/repo"
+printf 'module fixture.example/demo\n\ngo 1.21\n' > "$tmpd/home/repo/go.mod"
+mkdir -p "$tmpd/bin" "$tmpd/empty"
+
+# A PATH with a named tool removed entirely, built by dropping every directory that
+# carries it: a fixture that hardcoded /usr/bin would assert nothing on a host where
+# the tool lives in ~/.local/bin or /usr/local/go/bin, and would lie on the other.
+path_without() {
+  local skip="$1" out="" d
+  IFS=: read -ra path_dirs <<< "$PATH"
+  for d in "${path_dirs[@]}"; do
+    [ -n "$d" ] || continue
+    [ -x "$d/$skip" ] && continue
+    out="${out:+$out:}$d"
+  done
+  printf '%s' "$out"
+}
+nogo_path=$(path_without go)
+if env PATH="$nogo_path" bash -c 'command -v go' >/dev/null 2>&1; then
+  say "  FAIL  fixture could not build a go-free PATH (go still resolvable)"; fails=$((fails+1))
+else
+  say "  PASS  fixture PATH carries no go"
+fi
+
+# --- arm RED: a go.mod workspace and no Go binary.
+out=$(env PATH="$nogo_path" HOME="$tmpd/home" NODE_PROJECT=demo \
+  /bin/bash "$HERE/scripts/project-node.sh" --check --project demo --layers 10 2>&1); rc=$?
+if [ "$rc" -ne 0 ] \
+  && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL  tool:go — ')" = 1 ] \
+  && printf '%s\n' "$out" | grep -Fq '  PASS  kinds — go (derived from workspace ' \
+  && printf '%s\n' "$out" | grep -Fq 'markers: go.mod' \
+  && ! printf '%s\n' "$out" | grep -q '^  WARN  tool:go'; then
+  say "  PASS  go.mod workspace without go -> exit $rc and ONE FAIL tool:go row (not a WARN)"
+else
+  say "  FAIL  a go.mod workspace without go did not FAIL the layer by name (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# --- arm GREEN: the same tree, with a stub go that answers version and the proxy probe.
+cat > "$tmpd/bin/go" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  version) printf 'go version go1.99.0 fixture/amd64\n' ;;
+  env) case "$2" in GOPROXY) printf 'https://proxy.fixture.invalid,direct\n' ;; *) printf '\n' ;; esac ;;
+  mod) case "$2" in init) : ;; download) printf '{"Path":"rsc.io/quote","Version":"v1.5.2"}\n' ;; esac ;;
+esac
+exit 0
+EOF
+chmod +x "$tmpd/bin/go"
+out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_PROJECT=demo \
+  /bin/bash "$HERE/scripts/project-node.sh" --check --project demo --layers 10 2>&1); rc=$?
+if [ "$rc" -eq 0 ] \
+  && printf '%s\n' "$out" | grep -Fq '  PASS  tool:go — ' \
+  && printf '%s\n' "$out" | grep -Fq 'go1.99.0 fixture/amd64' \
+  && printf '%s\n' "$out" | grep -Fxq '  PASS  go:proxy — rsc.io/quote@v1.5.2 resolved via https://proxy.fixture.invalid,direct' \
+  && ! printf '%s\n' "$out" | grep -q '^  FAIL  '; then
+  say "  PASS  the same tree with a go that resolves the pinned module -> go rows PASS, exit 0"
+else
+  say "  FAIL  the go-present arm did not go green (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# --- arm PROXY-RED: go present, the module proxy refuses -> named FAIL naming both.
+cat > "$tmpd/bin/go" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  version) printf 'go version go1.99.0 fixture/amd64\n' ;;
+  env) printf 'https://proxy.fixture.invalid,direct\n' ;;
+  mod) case "$2" in
+         init) : ;;
+         download) printf 'go: rsc.io/quote@v1.5.2: dial tcp: connection refused\n' >&2; exit 1 ;;
+       esac ;;
+esac
+exit 0
+EOF
+chmod +x "$tmpd/bin/go"
+out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_PROJECT=demo \
+  /bin/bash "$HERE/scripts/project-node.sh" --check --project demo --layers 10 2>&1); rc=$?
+if [ "$rc" -ne 0 ] \
+  && printf '%s\n' "$out" | grep -Fq '  PASS  tool:go — ' \
+  && printf '%s\n' "$out" | grep -Fq '  FAIL  go:proxy — rsc.io/quote@v1.5.2 via https://proxy.fixture.invalid,direct: go: rsc.io/quote@v1.5.2: dial tcp: connection refused'; then
+  say "  PASS  a proxy that refuses -> FAIL go:proxy naming the proxy and the error"
+else
+  say "  FAIL  an unresolvable module proxy was not a named FAIL (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# --- arm DECLARED: --kinds drives the set on a tree with NO marker at all, and the
+# set is not a fixed list: rust and node are graded, go is not.
+cat > "$tmpd/bin/cargo" <<'EOF'
+#!/usr/bin/env bash
+printf 'cargo 1.99.0 (fixture 2026-11-05)\n'
+EOF
+cat > "$tmpd/bin/node" <<'EOF'
+#!/usr/bin/env bash
+printf 'v99.0.0\n'
+EOF
+chmod +x "$tmpd/bin/cargo" "$tmpd/bin/node"
+out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/empty" NODE_PROJECT=demo \
+  /bin/bash "$HERE/scripts/project-node.sh" --check --project demo --layers 10 --kinds rust,node 2>&1); rc=$?
+if [ "$rc" -eq 0 ] \
+  && printf '%s\n' "$out" | grep -Fxq '  PASS  kinds — rust,node (declared via --kinds/NODE_KINDS)' \
+  && printf '%s\n' "$out" | grep -Fq '  PASS  tool:cargo — ' \
+  && printf '%s\n' "$out" | grep -Fq '  PASS  tool:node — ' \
+  && ! printf '%s\n' "$out" | grep -q 'tool:go'; then
+  say "  PASS  --kinds rust,node on a marker-less tree grades cargo and node, not go"
+else
+  say "  FAIL  --kinds did not drive the graded set (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# --- arm NODE-RED: node is the kind and there is no node -> FAIL, not the old WARN.
+nonode_path=$(path_without node)
+out=$(env PATH="$nonode_path" HOME="$tmpd/empty" NODE_PROJECT=demo \
+  /bin/bash "$HERE/scripts/project-node.sh" --check --project demo --layers 10 --kinds node 2>&1); rc=$?
+if [ "$rc" -ne 0 ] \
+  && printf '%s\n' "$out" | grep -Fq '  FAIL  tool:node — missing' \
+  && ! printf '%s\n' "$out" | grep -q '^  WARN  tool:node'; then
+  say "  PASS  a declared node kind with no node -> FAIL tool:node (the WARN shape is gone)"
+else
+  say "  FAIL  a declared node kind still warned instead of failing (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# --- arm GENERIC: no declaration and no marker => the fallback SAYS it is the fallback.
+out=$(env PATH="$nogo_path" HOME="$tmpd/empty" NODE_PROJECT=demo \
+  /bin/bash "$HERE/scripts/project-node.sh" --check --project demo --layers 10 2>&1); rc=$?
+if printf '%s\n' "$out" | grep -Fq '  WARN  kinds — generic fallback — no --kinds/NODE_KINDS and no kind marker in ' \
+  && ! printf '%s\n' "$out" | grep -q 'tool:go'; then
+  say "  PASS  no evidence -> generic fallback is named on the row, and nothing else is graded"
+else
+  say "  FAIL  the generic fallback was silent (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# --- arm UNKNOWN: a typo in the kind list is refused by name before any layer runs.
+out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/empty" NODE_PROJECT=demo \
+  /bin/bash "$HERE/scripts/project-node.sh" --check --project demo --layers 10 --kinds go,cobol 2>&1); rc=$?
+if [ "$rc" -ne 0 ] \
+  && printf '%s\n' "$out" | grep -Fq "  FAIL  kinds — unknown kind 'cobol'" \
+  && ! printf '%s\n' "$out" | grep -q '\[10\] base'; then
+  say "  PASS  an unknown kind is a named FAIL before any layer runs (never a silent pass)"
+else
+  say "  FAIL  an unknown kind was not refused by name (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+rm -rf "$tmpd"
+# END cf218-kinds
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

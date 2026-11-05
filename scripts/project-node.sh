@@ -6,9 +6,16 @@
 #   project-node.sh --check   [--project P] [--harness hermes] [--repo URL] [--ref main]
 #   project-node.sh --apply   [same args]
 #   project-node.sh --check   [same args] --layers 00,10,20,30,40
+#   project-node.sh --check   [same args] --kinds go,node
 #
 # Layers: 00 preflight, 10 base, 20 harness, 30 bus, 40 repo, 90 verify (verify is the
 # control host's job; here we only prove the node-side plumbing exists).
+#
+# --kinds <csv> (or NODE_KINDS) declares which project kinds layer 10 grades the
+# toolchain for: go, rust, node, python, generic. Without it layer 10 derives the
+# kinds from the workspace ($HOME/repo) when a clone is already present, and only
+# falls back to the fixed base set when there is no evidence at all — naming that
+# fallback on the row (CF-218). An unknown kind is a named FAIL before any layer runs.
 #
 # --layers <list> runs only the named check layers: a comma-separated subset of
 # 00,10,20,30,40 (a single value is a list of one). It exists for fixtures that assert
@@ -37,10 +44,16 @@ FLOOR_CLI=""
 MODE=""
 LAYERS=""
 SCOPED=0
+KINDS="${NODE_KINDS:-}"
+KINDS_SET=0
+[ -n "${NODE_KINDS+set}" ] && KINDS_SET=1
 STATE="$HOME/.node"
+# The checkout this script works, cloned by layer 40. Layer 10 reads it BEFORE the
+# clone for kind evidence (CF-218), so it is resolved here, once, for both layers.
+RP="$HOME/repo"
 
 usage_line() {
-  echo "usage: $0 --check|--apply [--project P] [--harness H] [--repo URL] [--ref R] [--role worker|builder|full] [--disk-floor GIB] [--layers 00,10,20,30,40]" >&2
+  echo "usage: $0 --check|--apply [--project P] [--harness H] [--repo URL] [--ref R] [--role worker|builder|full] [--disk-floor GIB] [--layers 00,10,20,30,40] [--kinds go,rust,node,python,generic]" >&2
 }
 
 while [ $# -gt 0 ]; do
@@ -58,6 +71,10 @@ while [ $# -gt 0 ]; do
       SCOPED=1
       if [ $# -lt 2 ]; then usage_line; exit 2; fi
       LAYERS="$2"; shift 2 ;;
+    --kinds)
+      KINDS_SET=1
+      if [ $# -lt 2 ]; then usage_line; exit 2; fi
+      KINDS="$2"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
@@ -83,6 +100,39 @@ if [ "$SCOPED" -eq 1 ]; then
   LAYERS=""
   for lyr in 00 10 20 30 40; do
     case ",$scoped_seen," in *",$lyr,"*) LAYERS="${LAYERS:+$LAYERS,}$lyr" ;; esac
+  done
+fi
+
+# --kinds (or NODE_KINDS) is validated the same way and before any layer runs: an
+# empty list or an unknown element is a NAMED FAIL and a non-zero exit, because a
+# typo that silently fell through to the fixed base set is exactly the bug CF-218
+# exists to fix — a node would print PASS while grading nothing the repo needs.
+if [ "$KINDS_SET" -eq 1 ]; then
+  if [ -z "$KINDS" ]; then
+    bad "kinds" "empty kind list — expected a subset of go,rust,node,python,generic"
+    say "NODE: FAIL ($FAILED)"
+    exit 1
+  fi
+  case "$KINDS" in
+    ,*|*,|*,,*)
+      bad "kinds" "empty element in '$KINDS' — expected a subset of go,rust,node,python,generic"
+      say "NODE: FAIL ($FAILED)"
+      exit 1 ;;
+  esac
+  kinds_seen=""
+  for knd in ${KINDS//,/ }; do
+    case "$knd" in
+      go|rust|node|python|generic) ;;
+      *)
+        bad "kinds" "unknown kind '$knd' — expected a subset of go,rust,node,python,generic"
+        say "NODE: FAIL ($FAILED)"
+        exit 1 ;;
+    esac
+    case ",$kinds_seen," in *",$knd,"*) ;; *) kinds_seen="${kinds_seen:+$kinds_seen,}$knd" ;; esac
+  done
+  KINDS=""
+  for knd in go rust node python generic; do
+    case ",$kinds_seen," in *",$knd,"*) KINDS="${KINDS:+$KINDS,}$knd" ;; esac
   done
 fi
 
@@ -205,15 +255,154 @@ else
 fi
 
 # ---------------------------------------------------------------- 10 base
+# CF-218: this layer used to grade a FIXED set (python3+venv, git, curl, tar, sha256sum)
+# with jq/rg/node as WARN-only, so a node could print PASS while unable to build the
+# largest class of repo in the fleet: a census of 61 distinct repo origins measured go 27,
+# node 22, python 16, rust 5, and cf-node measured 'go MISSING', 'rg MISSING' against a
+# PASS. The graded set is now derived from the project KIND.
+#
+# Layer 10 runs BEFORE layer 40 clones, so on a fresh node there is no workspace to
+# inspect. Evidence, first hit wins, and the `kinds` row names which one was used:
+#   a) declared  — --kinds / NODE_KINDS (validated before any layer ran, above)
+#   b) workspace — $RP already holds the clone: go.mod, Cargo.toml, package.json,
+#                  pyproject.toml | setup.py
+#   c) generic   — no evidence => the fixed base set, and the row SAYS it is the
+#                  fallback; a silent fall back to it is the bug this row exists to fix
+# Graded per kind: go (binary + version + the node's own GOPROXY resolving a pinned
+# module), rust (cargo --version), node (node --version), python (python3 + venv).
+KIND_EV_KINDS=""
+KIND_EV_MARKERS=""
+GO_PROBE_MODULE="rsc.io/quote"   # tiny, pinned, unchanged since 2019
+GO_PROBE_VERSION="v1.5.2"
+
+has_kind() {  # $1 = kind -> true when it is in the resolved set
+  case ",$KINDS," in *",$1,"*) return 0 ;; esac
+  return 1
+}
+
+kind_evidence() {  # sets KIND_EV_KINDS / KIND_EV_MARKERS from $RP; true when it found one
+  local kinds="" markers="" f k
+  for f in go.mod Cargo.toml package.json pyproject.toml setup.py; do
+    [ -f "$RP/$f" ] || continue
+    markers="${markers:+$markers,}$f"
+    case "$f" in
+      go.mod) k=go ;; Cargo.toml) k=rust ;; package.json) k=node ;; *) k=python ;;
+    esac
+    case ",$kinds," in *",$k,"*) ;; *) kinds="${kinds:+$kinds,}$k" ;; esac
+  done
+  KIND_EV_KINDS="$kinds"
+  KIND_EV_MARKERS="$markers"
+  [ -n "$kinds" ]
+}
+
+row_tail() {  # $1 text -> its last non-empty line, capped: one row stays one line
+  printf '%s\n' "$1" | awk 'NF { last=$0 } END { print last }' | cut -c1-240
+}
+
+go_proxy_row() {  # $1 = go binary -> one row: the node's own proxy resolves a pinned module
+  local gb="$1" proxy dir rc out tmo=""
+  proxy="$("$gb" env GOPROXY 2>/dev/null | head -1)"
+  [ -n "$proxy" ] || proxy="${GOPROXY:-unset}"
+  have timeout >/dev/null 2>&1 && tmo="timeout"
+  dir="$(mktemp -d)" || { bad "go:proxy" "$GO_PROBE_MODULE@$GO_PROBE_VERSION — no temp dir to probe in"; return 0; }
+  # Cold module cache inside the temp dir: a warm $GOPATH answers listing and download
+  # from cache/download, which would prove the cache and not the proxy. GOSUMDB=off
+  # because the checksum database is a second network, not the proxy under test;
+  # GOTOOLCHAIN=local so the probe never downloads a toolchain; the whole probe is
+  # bounded (30 s) and never runs `go get`.
+  ( cd "$dir" && "$gb" mod init cfproxy >/dev/null 2>&1 \
+    && GOPROXY="$proxy" GOMODCACHE="$dir/gomod" GOTOOLCHAIN=local GOFLAGS= GOSUMDB=off \
+       ${tmo:+$tmo 30} "$gb" mod download "$GO_PROBE_MODULE@$GO_PROBE_VERSION" ) >"$dir/probe.log" 2>&1
+  rc=$?
+  if [ "$rc" -eq 0 ]; then
+    ok "go:proxy" "$GO_PROBE_MODULE@$GO_PROBE_VERSION resolved via $proxy"
+  else
+    out="$(row_tail "$(cat "$dir/probe.log" 2>/dev/null)")"
+    bad "go:proxy" "$GO_PROBE_MODULE@$GO_PROBE_VERSION via $proxy: ${out:-exit $rc with no output}"
+  fi
+  rm -rf "$dir"
+  return 0
+}
+
 if in_scope 10; then
   say "[10] base"
   for t in python3 git curl tar sha256sum; do
     p=$(have "$t"); [ -n "$p" ] && ok "tool:$t" "$p" || bad "tool:$t" "missing"
   done
   python3 -c 'import venv' 2>/dev/null && ok "python:venv" "importable" || bad "python:venv" "venv missing — no user-space installs possible"
-  for t in jq rg node; do
-    p=$(have "$t"); [ -n "$p" ] && ok "tool:$t" "$p" || warn "tool:$t" "missing (some repos' tests need node)"
+
+  # Which kinds this layer grades, and which evidence said so (CF-218).
+  if [ "$KINDS_SET" -eq 1 ]; then
+    KIND_SRC="declared via --kinds/NODE_KINDS"
+  elif kind_evidence; then
+    KINDS="$KIND_EV_KINDS"
+    KIND_SRC="derived from workspace $RP (markers: $KIND_EV_MARKERS)"
+  else
+    KINDS="generic"
+    KIND_SRC="generic fallback — no --kinds/NODE_KINDS and no kind marker in $RP"
+  fi
+  if [ "$KINDS" = generic ]; then
+    warn "kinds" "$KIND_SRC — grading the fixed base set only, so a Go/Rust/Node repo would go ungraded"
+  else
+    ok "kinds" "$KINDS ($KIND_SRC)"
+  fi
+  # The row names its own census command: run this layer on each node and the kind set
+  # it prints (plus the markers above) is the census. CF-218 measured the fleet counts.
+  note "census: bash scripts/project-node.sh --check --project <p> --layers 10 grades one node — markers go.mod→go, Cargo.toml→rust, package.json→node, pyproject.toml|setup.py→python; CF-218 counted 61 distinct fleet repo origins: go 27, node 22, python 16, rust 5"
+
+  # Optional helpers stay WARN-only in every mode: their absence never fails a node.
+  for t in jq rg; do
+    p=$(have "$t"); [ -n "$p" ] && ok "tool:$t" "$p" || warn "tool:$t" "missing (optional — some repos' tests use them)"
   done
+
+  if has_kind node; then
+    p=$(have node)
+    if [ -z "$p" ]; then
+      bad "tool:node" "missing — kind node needs a Node runtime (a package.json repo cannot install or test here)"
+    else
+      nv="$("$p" --version 2>&1)"; nrc=$?
+      nv="$(row_tail "$nv")"
+      if [ "$nrc" -eq 0 ] && [ -n "$nv" ]; then
+        ok "tool:node" "$p ($nv)"
+      else
+        bad "tool:node" "$p — 'node --version' failed (exit $nrc): ${nv:-no output}"
+      fi
+    fi
+  elif has_kind generic; then
+    # The pre-CF-218 shape, kept only where the layer cannot know a node is needed.
+    p=$(have node); [ -n "$p" ] && ok "tool:node" "$p" || warn "tool:node" "missing (some repos' tests need node)"
+  fi
+
+  if has_kind rust; then
+    p=$(have cargo)
+    if [ -z "$p" ]; then
+      bad "tool:cargo" "missing — kind rust needs a Cargo toolchain (a Cargo.toml repo cannot build here)"
+    else
+      cv="$("$p" --version 2>&1)"; crc=$?
+      cv="$(row_tail "$cv")"
+      if [ "$crc" -eq 0 ] && [ -n "$cv" ]; then
+        ok "tool:cargo" "$p ($cv)"
+      else
+        bad "tool:cargo" "$p — 'cargo --version' failed (exit $crc): ${cv:-no output}"
+      fi
+    fi
+  fi
+
+  if has_kind go; then
+    gb=$(have go)
+    if [ -z "$gb" ]; then
+      bad "tool:go" "missing — kind go needs a Go toolchain on PATH (go is the largest repo class in the fleet: 27 of 61 origins)"
+    else
+      gv="$("$gb" version 2>&1)"; grc=$?
+      gv="$(row_tail "$gv")"
+      if [ "$grc" -eq 0 ] && [ -n "$gv" ]; then
+        ok "tool:go" "$gb ($gv)"
+        go_proxy_row "$gb"
+      else
+        bad "tool:go" "$gb — 'go version' failed (exit $grc): ${gv:-no output}"
+      fi
+    fi
+  fi
 else
   say "  SKIP  layer 10 (out of scope)"
 fi
@@ -474,7 +663,8 @@ PY
 REPO_READY=0
 if in_scope 40; then
   say "[40] repo"
-  RP="$HOME/repo"
+  # $RP was resolved once at the top (layer 10 reads it for kind evidence before the
+  # clone exists); the clone target is the same path layer 40 has always used.
   if [ -d "$RP/.git" ]; then
     ok "repo" "$RP @ $(git -C "$RP" rev-parse --short HEAD)"
     REPO_READY=1
