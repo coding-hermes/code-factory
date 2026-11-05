@@ -1,0 +1,288 @@
+# SYSTEM-MODEL — the system as components and contracts, not as files.
+#
+# The point of this file: a box here is a RESPONSIBILITY, not a path. Paths live in `impl` and are
+# marked volatile — if a script moves, the model does not change, only its implementation note does.
+#
+# Edit this, then run scripts/gen_system_views.py. Every diagram is generated from this file.
+
+doc:
+  id: CF2A-10
+  title: CODE-FACTORY SYSTEM VIEWS
+  subtitle: Components, contracts and flows
+
+layers:
+  - id: control
+    name: CONTROL PLANE
+    blurb: decides what should happen
+  - id: transport
+    name: TRANSPORT
+    blurb: carries the decision
+  - id: execution
+    name: EXECUTION
+    blurb: does the work
+  - id: memory
+    name: MEMORY
+    blurb: remembers what happened
+  - id: governance
+    name: GOVERNANCE
+    blurb: decides whether to believe it
+  - id: evidence
+    name: EVIDENCE
+    blurb: what a human reads
+
+components:
+  - id: owner
+    name: OPERATOR
+    role: intent and approval
+    layer: control
+    owns: Intent, priorities, approval
+    not: Does not execute work
+    impl: [human]
+  - id: scheduler
+    name: SCHEDULER
+    role: whose turn it is
+    layer: control
+    owns: Whose turn it is; lane admission (tasks vs cooldown); per-lane cadence, weight, pin
+    not: Does not run work, does not know what a diff contains
+    impl: [coding-hermes-scheduler]
+  - id: foreman
+    name: FOREMAN (Hermes)
+    role: turns a row into work
+    layer: control
+    owns: Turns a board row into a brief; verifies returned evidence; closes rows
+    not: Does not grade its own homework
+    impl: [prompts/foreman.md, skills/code-factory-foreman]
+  - id: crier
+    name: CRIER (bus)
+    role: carries and signs messages
+    layer: transport
+    owns: Delivery with per-agent signature, leases, replies, idempotency
+    not: Does not decide, does not execute
+    impl: [crier]
+  - id: router
+    name: TASK-ROUTER
+    role: picks the model
+    layer: transport
+    owns: Which model answers a prompt; lane chains, caps, PAYG ordering
+    not: Does not carry work
+    impl: [task-router]
+  - id: gateway
+    name: HERMES GATEWAY
+    role: session API
+    layer: transport
+    owns: Session API, /api/status, dashboard auth, session records
+    not: Does not schedule or store the ledger
+    impl: [hermes gateway]
+  - id: bunker
+    name: BUNKER DAEMON
+    role: hosts the containers
+    layer: execution
+    owns: Hosts agent containers; create/exec/cp; per-agent home
+    not: Does not own credentials or config
+    impl: [bunker]
+  - id: node
+    name: NODE
+    role: one project, one node
+    layer: execution
+    owns: One project per node; repo clone, seeded prompts/skills, env, identity, bus worker
+    not: Does not decide what to work on
+    impl: [scripts/project-node.sh, scripts/node-bus-worker.py]
+  - id: harness
+    name: HARNESS
+    role: the coding loop
+    layer: execution
+    owns: The coding loop inside the node (hermes, codex, claude-code, opencode, pi, dsh)
+    not: Does not write the board
+    impl: [scripts/harness/*]
+  - id: board
+    name: BOARD
+    role: the plan and its state
+    layer: memory
+    owns: Append-only record of work and its state; the fleet's plan
+    not: Not a run log; rows are reused across attempts
+    impl: [.coding-hermes/board/tasks.jsonl, scripts/boardctl]
+  - id: duckbrain
+    name: DUCKBRAIN
+    role: searchable memory
+    layer: memory
+    owns: Namespaced durable memory; run records, findings, recall
+    not: Does not own the plan or the code
+    impl: [duckbrain]
+  - id: sessionstore
+    name: SESSION STORE
+    role: every turn and its cost
+    layer: memory
+    owns: Every model turn, its model, tokens and cost
+    not: Not the plan, not the product
+    impl: [~/.hermes/state.db]
+  - id: gitreins
+    name: COMMIT GATE
+    role: grades the commit
+    layer: governance
+    owns: Pre-commit grading (secrets, lint, tests) and the verdict that lands work
+    not: Does not decide what to build
+    impl: [gitreins]
+  - id: docsgate
+    name: DOC GATE
+    role: grades the document
+    layer: governance
+    owns: Whether a document is citable (sections, locators, facts, earned VERIFIED)
+    not: Cannot tell whether a sentence is true
+    impl: [scripts/master_doc_check.py]
+  - id: conformance
+    name: CONFORMANCE BATTERY
+    role: grades the harness
+    layer: governance
+    owns: Whether a harness is supported, measured per leg on a real node
+    not: Does not install anything by itself
+    impl: [tests/harness-conformance.sh]
+  - id: handbook
+    name: HANDBOOK
+    role: what you approve
+    layer: evidence
+    owns: The readable system description plus its own deficiency register
+    not: Not the source of truth
+    impl: [scripts/gen_nasa_handbook.py]
+
+# Every edge is a CONTRACT: what crosses, in which direction, sync or async, and what the receiver
+# must be able to do with it. `state` is one of: works | broken | missing | external.
+contracts:
+  - from: owner
+    to: scheduler
+    carries: lane enabled, cadence, weight, pin
+    mode: config
+    state: works
+  - from: scheduler
+    to: crier
+    carries: "envelope: run_id, corr_id, lane, board_row, text_b64"
+    mode: async, bearer + signature
+    state: broken
+    note: crier rejects an unsigned or misnamed body; the scheduler sends text_b64
+  - from: crier
+    to: node
+    carries: inbox message + lease
+    mode: pull, 30 s lease
+    state: works
+  - from: node
+    to: crier
+    carries: "reply: in_reply_to, corr_id, run_id, outcome"
+    mode: async, signed
+    state: broken
+    note: 4 requirements — sender, idempotency_key, audience, signature
+  - from: crier
+    to: scheduler
+    carries: completion event for a finished run
+    mode: async
+    state: missing
+    note: CF-337 — nothing writes completions back
+  - from: router
+    to: gateway
+    carries: model choice for a prompt
+    mode: in-band
+    state: works
+  - from: crier
+    to: gateway
+    carries: hermes-session delivery (message becomes a session turn)
+    mode: sync, 30 s
+    state: works
+  - from: node
+    to: duckbrain
+    carries: "R1 run record, R2 fleet index"
+    mode: http, x-api-key
+    state: missing
+    note: node-bus-worker has zero DuckBrain calls (CF-329)
+  - from: node
+    to: board
+    carries: row event with run_id and outcome
+    mode: append
+    state: broken
+    note: no run_id exists; events do not name an attempt
+  - from: node
+    to: sessionstore
+    carries: every turn, model, tokens
+    mode: writes via gateway
+    state: works
+  - from: node
+    to: gitreins
+    carries: staged diff
+    mode: pre-commit hook
+    state: works
+  - from: gitreins
+    to: board
+    carries: verdict that closes a row
+    mode: human/foreman action
+    state: broken
+    note: verdicts cite commits, rows are updated by hand
+  - from: foreman
+    to: board
+    carries: row created, row closed, evidence
+    mode: boardctl
+    state: works
+  - from: foreman
+    to: duckbrain
+    carries: decisions, findings, goal
+    mode: mcp / http
+    state: works
+  - from: docsgate
+    to: handbook
+    carries: module status word
+    mode: read at build
+    state: works
+  - from: conformance
+    to: harness
+    carries: per-leg verdict (check, apply, smoke, vars, memory)
+    mode: executed
+    state: broken
+    note: vars and memory have no executor (CF-328)
+  - from: handbook
+    to: owner
+    carries: the approval artifact
+    mode: read
+    state: works
+
+flows:
+  - id: F1
+    name: DISPATCH
+    question: How does a board row become work?
+    steps:
+      - [scheduler, crier, "envelope with run_id"]
+      - [crier, node, "inbox pull, lease 30 s"]
+      - [node, harness, "brief + workdir + credentials"]
+      - [harness, node, "diff + evidence"]
+      - [node, crier, "reply: outcome + artifacts"]
+      - [crier, scheduler, "completion event"]
+      - [scheduler, board, "row state changes, attempt recorded"]
+  - id: F2
+    name: PROVISIONING
+    question: How does a bare host become a node?
+    steps:
+      - [owner, scheduler, "lane declared: project, harness, pin"]
+      - [node, bunker, "container created, home, keys"]
+      - [node, node, "layers: base, harness, bus, repo"]
+      - [node, duckbrain, "identity + namespace credential"]
+      - [owner, node, "verify-node measures the result"]
+  - id: F3
+    name: MEMORY
+    question: How does a run become searchable?
+    steps:
+      - [node, duckbrain, "R1 detail record"]
+      - [node, duckbrain, "R2 fleet index record"]
+      - [foreman, duckbrain, "R3 weekly rollup"]
+      - [owner, duckbrain, "recall by project, week, lane"]
+  - id: F4
+    name: DOCUMENTATION
+    question: How does a component become an approved document?
+    steps:
+      - [foreman, docsgate, "skeleton + source"]
+      - [foreman, docsgate, "seat fills, cites file:line"]
+      - [docsgate, foreman, "PASS or named refusals"]
+      - [foreman, foreman, "panel: 3 seats grade independently"]
+      - [handbook, owner, "PDF with status per module"]
+  - id: F5
+    name: LANDING
+    question: How does work reach main?
+    steps:
+      - [node, gitreins, "commit on a node branch"]
+      - [gitreins, foreman, "verdict"]
+      - [foreman, board, "row closed with evidence"]
+      - [foreman, crier, "completed work announced"]
