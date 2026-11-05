@@ -29,7 +29,10 @@ Read top-down: 1–4 are **missing**, 5–6 are **miswired**, 7–8 are **workin
 
 1. `bunker-provision.sh --apply` on `cf-node`: identity, auth bundle, harness, clone at the
    configured `REF`. (CF-214; the harness pin and the missing `dashboard.basic_auth` stay
-   open under CF-150.)
+   open under CF-150.) The node environment is **declared**, not hand-edited: `NODE_ENV_FILE`
+   plus `CONFIG_SET_*` name the provider key (by file path), the model pin, the bind and the
+   port, and `scripts/node_env.py --apply` writes them before the harness layer starts a
+   gateway, so a rebuilt node is the same node.
 2. `bunker-crier-connect.sh --apply`: inbox answers **200** for the project's agent id.
 3. Exit evidence: the `--check` output, pasted, with its five rows green.
 
@@ -65,6 +68,11 @@ scripts/bunker-provision.sh --config <project>.conf --apply     # idempotent
 scripts/bunker-crier-connect.sh --agent <a> --server <s> --url <crier> --check
 scripts/bunker-provision.sh --config <project>.conf --destroy --yes
 ```
+
+The same config declares the node's environment — `NODE_ENV_FILE` (a profile of
+`ENV_<NAME>=<value>` or `@<path>`, see `config/node.env.example`) and one `CONFIG_SET_*` key per
+config scalar — and the provisioner applies it on the node before the harness layer, so the
+environment is reviewable and a second run changes nothing.
 
 The config is data (`KEY=VALUE`, parsed, never sourced), names token **files** rather than
 values, and the command line always wins. See `skills/code-factory-bunker/SKILL.md`.

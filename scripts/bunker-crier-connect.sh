@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bunker-crier-connect.sh — control host: put ONE bunker agent on the crier bus and prove it.
 #
-#   bunker-crier-connect.sh --agent cf-node --server bunker-las-03 --url http://100.97.236.14:8767 \
+#   bunker-crier-connect.sh --agent cf-node --server bunker-las-03 --url http://<control-host>:8767 \
 #                           --project code-factory --check
 #   bunker-crier-connect.sh ... --apply
 #   bunker-crier-connect.sh ... --stage     (write the identity only; probe deferred)

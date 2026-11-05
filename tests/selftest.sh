@@ -2282,5 +2282,131 @@ unset -f cf213
 rm -rf "$tmpd"
 # END cf213-land-node-branch
 
+# A node's environment is declared data — the applier must refuse what cannot be
+# declared, diff what drifted, write nothing on --check, and be a no-op on the second run.
+say "43. the node environment profile applies idempotently and refuses what cannot be declared"
+bash -n "$HERE/scripts/bunker-provision.sh" && say "  PASS  bash -n scripts/bunker-provision.sh" || { say "  FAIL  provision syntax"; fails=$((fails+1)); }
+python3 -c 'import sys; compile(open(sys.argv[1], encoding="utf-8").read(), sys.argv[1], "exec")' "$HERE/scripts/node_env.py" \
+  && say "  PASS  scripts/node_env.py compiles" || { say "  FAIL  node_env.py does not compile"; fails=$((fails+1)); }
+
+envtmp=$(mktemp -d)
+mkdir -p "$envtmp/node"
+printf 'cf-selftest-secret-0001\n' > "$envtmp/secret"; chmod 600 "$envtmp/secret"
+printf 'ENV_CF_PROXY_API_KEY=@%s\nENV_MODEL_NAME=selftest-model\n' "$envtmp/secret" > "$envtmp/node.env"
+envrun() { env -i HOME="$envtmp/node" PATH="$PATH" python3 "$HERE/scripts/node_env.py" "$@"; }
+
+out=$(envrun --env-file "$envtmp/absent.env" --check 2>&1); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q 'FAIL  env — cannot read the profile'; then
+  say "  PASS  absent profile -> named FAIL, exit $rc"
+else
+  say "  FAIL  absent profile was not refused by name (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+fi
+
+printf 'ENV_CF_PROXY_API_KEY=cf-selftest-inline-0001\n' > "$envtmp/inline.env"
+out=$(envrun --env-file "$envtmp/inline.env" --check 2>&1); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q 'looks secret and carries a literal value' \
+  && printf '%s\n' "$out" | grep -q 'ENV_CF_PROXY_API_KEY' \
+  && ! printf '%s\n' "$out" | grep -q 'cf-selftest-inline-0001'; then
+  say "  PASS  a secret declared inline is refused by name, and the value is never echoed, exit $rc"
+else
+  say "  FAIL  an inline secret was accepted or echoed (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+fi
+
+out=$(envrun --config-set logging.level=debug --check 2>&1); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q "unknown config path 'logging.level'" \
+  && printf '%s\n' "$out" | grep -q 'model.provider'; then
+  say "  PASS  an unknown CONFIG_SET path is refused and the allowed set is named, exit $rc"
+else
+  say "  FAIL  an unknown config path was invented or accepted (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+fi
+
+# --check: drift measured, nothing written, and the secret only ever appears as ***
+out=$(envrun --env-file "$envtmp/node.env" --config-set model.provider=cf-proxy --config-set gateway.port=10800 --check 2>&1); rc=$?
+if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q 'DIFF  env:CF_PROXY_API_KEY' \
+  && printf '%s\n' "$out" | grep -q 'DIFF  config:gateway.port' \
+  && printf '%s\n' "$out" | grep -q 'ENV: DRIFT' \
+  && ! printf '%s\n' "$out" | grep -q 'cf-selftest-secret-0001' \
+  && [ ! -e "$envtmp/node/.hermes/.env" ] && [ ! -e "$envtmp/node/.hermes/config.yaml" ] && [ ! -d "$envtmp/node/.hermes" ]; then
+  say "  PASS  --check prints the diff (secret masked as ***), exits 1, and writes nothing"
+else
+  say "  FAIL  --check was not read-only or not diagnostic (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+fi
+
+# a pre-existing config the profile only partly owns: the unrelated keys must survive
+mkdir -p "$envtmp/node/.hermes"
+printf '# operator notes\nLEFTOVER_VAR=carry-forward\n' > "$envtmp/node/.hermes/.env"
+cat > "$envtmp/node/.hermes/config.yaml" <<'YAML'
+agent:
+  max_iterations: 40
+custom_providers:
+- name: cf-proxy
+  base_url: http://proxy.invalid:4000/v1
+model:
+  provider: openrouter
+  name: old-model
+YAML
+out=$(envrun --env-file "$envtmp/node.env" --config-set model.provider=cf-proxy --config-set gateway.port=10800 --config-set gateway.bind=0.0.0.0 --apply 2>&1); rc=$?
+first=$(sha256sum "$envtmp/node/.hermes/.env" "$envtmp/node/.hermes/config.yaml" 2>/dev/null | awk '{print $1}' | tr '\n' ' ')
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q 'ENV: APPLIED' \
+  && grep -q '^CF_PROXY_API_KEY=cf-selftest-secret-0001$' "$envtmp/node/.hermes/.env" \
+  && grep -q '^# operator notes$' "$envtmp/node/.hermes/.env" \
+  && grep -q '^LEFTOVER_VAR=carry-forward$' "$envtmp/node/.hermes/.env" \
+  && grep -q '^  base_url: http://proxy.invalid:4000/v1$' "$envtmp/node/.hermes/config.yaml" \
+  && grep -q '^  name: old-model$' "$envtmp/node/.hermes/config.yaml" \
+  && grep -q '^  provider: cf-proxy$' "$envtmp/node/.hermes/config.yaml" \
+  && [ "$(stat -c %a "$envtmp/node/.hermes/.env")" = 600 ] \
+  && [ "$(stat -c %a "$envtmp/node/.hermes/config.yaml")" = 600 ]; then
+  say "  PASS  --apply writes both files at mode 600 and keeps every line it does not own"
+else
+  say "  FAIL  --apply rewrote or lost state it does not own (exit $rc)"; fails=$((fails+1))
+fi
+
+# the second run must change nothing, exit 0, and still report the unmanaged var as a WARN
+out=$(envrun --env-file "$envtmp/node.env" --config-set model.provider=cf-proxy --config-set gateway.port=10800 --config-set gateway.bind=0.0.0.0 --apply 2>&1); rc=$?
+second=$(sha256sum "$envtmp/node/.hermes/.env" "$envtmp/node/.hermes/config.yaml" 2>/dev/null | awk '{print $1}' | tr '\n' ' ')
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q 'ENV: PASS — already matches (no change)' \
+  && [ "$first" = "$second" ] && [ -n "$first" ] \
+  && printf '%s\n' "$out" | grep -q 'WARN  unmanaged:LEFTOVER_VAR'; then
+  say "  PASS  a second --apply changes nothing (sha256 unchanged), exits 0, and names the unmanaged var"
+else
+  say "  FAIL  the second --apply was not a no-op or dropped the unmanaged report (exit $rc)"; fails=$((fails+1))
+fi
+
+out=$(envrun --env-file "$envtmp/node.env" --config-set model.provider=cf-proxy --config-set gateway.port=10800 --config-set gateway.bind=0.0.0.0 --check 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q 'ENV: PASS — declared environment matches'; then
+  say "  PASS  --check is green after --apply, and unmanaged vars alone are not drift (exit $rc)"
+else
+  say "  FAIL  --check after --apply was not green (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+fi
+
+# the provisioner must reach the same refusal locally, before it touches a host
+mkdir -p "$envtmp/bin"
+cat > "$envtmp/bin/bunker" <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+  list) echo "bunker-selftest-01" ;;
+  info) echo "agent selftest 6h" ;;
+  exec) exit 0 ;;
+  *) exit 1 ;;
+esac
+STUB
+chmod +x "$envtmp/bin/bunker"
+cat > "$envtmp/provision.conf" <<CONF
+PROJECT=demo
+AGENT=selftest
+SERVER=bunker-selftest-01
+REPO=git@example.invalid:org/repo.git
+CRIER_URL=http://crier.invalid:8767
+NODE_ENV_FILE=$envtmp/inline.env
+CONF
+out=$(env PATH="$envtmp/bin:$PATH" /bin/bash "$HERE/scripts/bunker-provision.sh" --config "$envtmp/provision.conf" --check 2>&1)
+if printf '%s\n' "$out" | grep -q 'FAIL  env_profile — ' \
+  && printf '%s\n' "$out" | grep -q 'looks secret and carries a literal value'; then
+  say "  PASS  NODE_ENV_FILE with an inline secret -> named env_profile FAIL from --check"
+else
+  say "  FAIL  the provisioner did not refuse an inline secret in NODE_ENV_FILE"; fails=$((fails+1))
+fi
+rm -rf "$envtmp"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

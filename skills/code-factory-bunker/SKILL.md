@@ -48,7 +48,18 @@ DUCKBRAIN_TOKEN_FILE=~/.duckbrain/<role>.token
 S3_ENV_FILE=~/.config/code-factory/s3.env
 CRIER_URL=http://<control-host>:8767
 DUCKBRAIN_URL=http://<control-host>:3000
+NODE_ENV_FILE=~/.config/code-factory/code-factory.node.env
+CONFIG_SET_MODEL_PROVIDER=cf-proxy
+CONFIG_SET_MODEL_NAME=<model-id>
+CONFIG_SET_GATEWAY_BIND=0.0.0.0
+CONFIG_SET_GATEWAY_PORT=10800
+CONFIG_SET_AGENT_MAX_ITERATIONS=40
 ```
+
+`NODE_ENV_FILE` and the five `CONFIG_SET_*` keys declare the node's **environment**; any other
+`CONFIG_SET_*` spelling is an unknown key and fails the parse, exactly like any other unknown key.
+They are applied on the node before the harness layer starts a gateway — see
+[Declared node environment](#declared-node-environment) and `config/node.env.example`.
 
 The command line always wins over the file:
 
@@ -65,14 +76,69 @@ in, installs `$HOME/.node/auth/{github.token,duckbrain.token,s3.env}` at mode 60
 at a credential store built from the token, and deletes the bundle on both sides. No value is
 ever printed, logged, or passed as an argument. `$HOME/.node/node.json` carries names only.
 
+## Declared node environment
+
+A node's environment — the variables in `~/.hermes/.env` and a handful of scalars in
+`~/.hermes/config.yaml` — is declared, not hand-edited, so it can be reviewed, diffed and
+re-applied. `scripts/node_env.py` runs **on the node**; the profile and the config keys are
+named in the provisioner config on the control host.
+
+```conf
+NODE_ENV_FILE=~/.config/code-factory/code-factory.node.env   # the profile to stage
+CONFIG_SET_MODEL_PROVIDER=cf-proxy                            # -> model.provider
+CONFIG_SET_MODEL_NAME=<model-id>                              # -> model.name
+CONFIG_SET_GATEWAY_BIND=0.0.0.0                               # -> gateway.bind
+CONFIG_SET_GATEWAY_PORT=10800                                 # -> gateway.port
+CONFIG_SET_AGENT_MAX_ITERATIONS=40                            # -> agent.max_iterations
+```
+
+**Profile grammar** (`config/node.env.example`): one declaration per line, comments with `#`,
+nothing else. `ENV_<NAME>=<value>` writes a literal into `~/.hermes/.env`;
+`ENV_<NAME>=@<path>` reads the value from a file on the node (a leading `~/` is the node's own
+`$HOME`).
+
+**Secrets.** A name matching `KEY|TOKEN|SECRET|PASS` must use the `@<path>` form. The profile is
+committed, copied to the node and quoted in diffs, so a literal secret in it is a leaked
+credential: `node_env.py` refuses that line by name and never echoes the value. Every row that
+describes a secret-named key prints `***`.
+
+**Only five config paths exist** — `model.provider`, `model.name`, `gateway.bind`,
+`gateway.port`, `agent.max_iterations`, spelled as the `CONFIG_SET_*` keys above. Any other
+dotted path is refused with the allowed set named; it does not get invented. Values are checked
+(`gateway.port` 1–65535, `agent.max_iterations` 1–100000, non-empty strings elsewhere).
+
+```bash
+# on the node
+scripts/node_env.py --env-file ~/node.env --config-set gateway.port=10800 --check   # diff, writes nothing
+scripts/node_env.py --env-file ~/node.env --config-set gateway.port=10800 --apply   # atomic, mode 600
+```
+
+| mode | exit 0 | exit 1 | exit 2 |
+|---|---|---|---|
+| `--check` | the node matches the declaration | drift, one `DIFF` row per key | the declaration is refused: unreadable profile, a non-`ENV_` line, a literal secret, an unknown path, an out-of-range value |
+| `--apply` | written, or already matching | — | the declaration is refused, or the write failed |
+
+`--apply` is idempotent: it rewrites only the lines it owns, keeps every comment and unrelated
+key, and a second run reports `already matches (no change)` and exits 0. A variable present in
+`~/.hermes/.env` that the profile does not declare is reported as `WARN unmanaged:<NAME>` with
+its value masked — visible so a re-provision's carry-forward is known, but never a drift and
+never deleted, because `--apply` does not own it.
+
+The provisioner runs the same file in `--check` locally against an empty `HOME` before it touches
+a host, so a refused declaration is a named `FAIL env_profile` row rather than a surprise mid-apply.
+
 ## Order of operations on `--apply`
 
-1. preflight — bunker client, server listed, config parsed
-2. node plumbing — `node-create.sh` (reuses an existing agent; spawns only if absent)
-3. auth bundle — one 600 file in, installed, deleted
-4. identity — `$HOME/.node/node.json` (project, agent, repo, ref, harness, namespace)
-5. crier — `bunker-crier-connect.sh --apply`, which only reports CONNECTED on a 200 inbox
-6. nothing else. Run `--check` yourself afterwards: `--apply` printing PASS is not evidence.
+1. preflight — the config parses, the bunker client exists, the server is listed, the agent is reachable
+2. agent — reused when present, spawned only when absent
+3. auth bundle — one 600 file in, installed under `~/.node/auth`, deleted on both sides
+4. crier identity staged — before the node's bus layer needs it
+5. **node environment** — `node_env.py --apply`, before the harness layer starts a gateway
+6. gateway auth — `dashboard.basic_auth` ensured, password generated on the node
+7. node plumbing — `node-create.sh` (repo, harness, layers) now that every input is in place
+8. identity — merge into `$HOME/.node/node.json`, preserving its schema
+9. crier proof — `bunker-crier-connect.sh --apply`, which only reports CONNECTED on a 200 inbox
+10. nothing else. Run `--check` yourself afterwards: `--apply` printing PASS is not evidence.
 
 ## Reading a failure
 
@@ -81,9 +147,10 @@ ever printed, logged, or passed as an argument. `$HOME/.node/node.json` carries 
 `bunker_cli` FAIL | no `bunker` client on PATH | install it; a node cannot be reached without it |
 `agent` FAIL | agent absent on that server | `--apply` (it will spawn one) |
 `repo` FAIL | no clone at `$HOME/repo` | `--apply`; check `REF` matches the repo's default branch |
-`node_json` FAIL | identity absent | `--apply` step 4 |
+`node_json` FAIL | identity absent | `--apply` step 8 |
 `auth_github` / `auth_duckbrain` FAIL | token file missing on the node | name the token file in the config, re-apply |
 `harness` FAIL | harness binary absent | run the harness adapter (`scripts/harness/install-<h>.sh --apply`) |
+`env_profile` FAIL | the declaration is refused — an unknown `CONFIG_SET_*` path, a literal secret, a non-`ENV_` line | fix the profile or the key; the row names the line and the allowed set |
 `crier` 401/403 | identity or guard refused | register the agent id with the bus; check the guard's reserved keys |
 `crier` 404 | agent unknown to the bus | connect the agent, do not invent a key |
 `crier` 000 | bus unreachable | the URL, not the node, is the problem |

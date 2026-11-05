@@ -17,21 +17,33 @@
 #   PROJECT  AGENT  SERVER  REPO  REF  HARNESS  NAMESPACE  TTL
 #   GITHUB_TOKEN_FILE  DUCKBRAIN_TOKEN_FILE  S3_ENV_FILE
 #   CRIER_URL  DUCKBRAIN_URL
+#   NODE_ENV_FILE  CONFIG_SET_MODEL_PROVIDER  CONFIG_SET_MODEL_NAME
+#   CONFIG_SET_GATEWAY_BIND  CONFIG_SET_GATEWAY_PORT  CONFIG_SET_AGENT_MAX_ITERATIONS
+#
+# NODE_ENV_FILE names a profile (ENV_<NAME>=<value> or @<path>, see config/node.env.example)
+# that scripts/node_env.py applies ON the node — the variables in ~/.hermes/.env plus the five
+# CONFIG_SET_* scalars in ~/.hermes/config.yaml — BEFORE the harness layer starts a gateway.
+# Without it a node's environment is hand-edited state that cannot be diffed or re-applied.
 #
 # Idempotent: an existing agent is reused, an existing clone is fast-forwarded, an existing
-# node.json is rewritten only when a value differs. --check is read-only and names every
-# measured value; it never writes.
+# node.json is rewritten only when a value differs, and a second profile apply changes nothing.
+# --check is read-only and names every measured value; it never writes.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
 
 CONFIG="" MODE="" AGENT="" PROJECT="" SERVER="" REPO="" REF="" HARNESS="" NAMESPACE="" TTL=""
 GITHUB_TOKEN_FILE="" DUCKBRAIN_TOKEN_FILE="" S3_ENV_FILE="" CRIER_URL="" DUCKBRAIN_URL=""
+NODE_ENV_FILE=""
+CONFIG_SET_MODEL_PROVIDER="" CONFIG_SET_MODEL_NAME="" CONFIG_SET_GATEWAY_BIND=""
+CONFIG_SET_GATEWAY_PORT="" CONFIG_SET_AGENT_MAX_ITERATIONS=""
 YES=0
 CLI_PROJECT="" CLI_AGENT="" CLI_SERVER="" CLI_REPO="" CLI_REF="" CLI_HARNESS="" CLI_NAMESPACE="" CLI_CRIER=""
+CLI_NODE_ENV_FILE=""
+CLI_CONFIG_SET=()
 
 usage() {
-  sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
   exit "${1:-2}"
 }
 
@@ -52,13 +64,46 @@ load_config() {
     case "$key" in
       PROJECT|AGENT|SERVER|REPO|REF|HARNESS|NAMESPACE|TTL|CRIER_URL|DUCKBRAIN_URL)
         printf -v "$key" '%s' "$val" ;;
-      GITHUB_TOKEN_FILE|DUCKBRAIN_TOKEN_FILE|S3_ENV_FILE)
+      CONFIG_SET_MODEL_PROVIDER|CONFIG_SET_MODEL_NAME|CONFIG_SET_GATEWAY_BIND|CONFIG_SET_GATEWAY_PORT|CONFIG_SET_AGENT_MAX_ITERATIONS)
+        printf -v "$key" '%s' "$val" ;;
+      GITHUB_TOKEN_FILE|DUCKBRAIN_TOKEN_FILE|S3_ENV_FILE|NODE_ENV_FILE)
         case "$val" in "~/"*) val="$HOME/${val#\~/}" ;; esac
         printf -v "$key" '%s' "$val" ;;
       *) bad "config" "$file:$n unknown key $key"; return 1 ;;
     esac
   done < "$file"
   ok "config" "$(basename "$file") — $n lines, KEY=VALUE only"
+}
+
+# The declared config.yaml scalars, one <dotted.key>=<value> per line. The file's values come
+# first and the command line's last, because node_env.py takes the last value for a repeated
+# path — so an override on the CLI wins without a second parser here.
+config_set_args() {
+  [ -n "$CONFIG_SET_MODEL_PROVIDER" ] && printf 'model.provider=%s\n' "$CONFIG_SET_MODEL_PROVIDER"
+  [ -n "$CONFIG_SET_MODEL_NAME" ] && printf 'model.name=%s\n' "$CONFIG_SET_MODEL_NAME"
+  [ -n "$CONFIG_SET_GATEWAY_BIND" ] && printf 'gateway.bind=%s\n' "$CONFIG_SET_GATEWAY_BIND"
+  [ -n "$CONFIG_SET_GATEWAY_PORT" ] && printf 'gateway.port=%s\n' "$CONFIG_SET_GATEWAY_PORT"
+  [ -n "$CONFIG_SET_AGENT_MAX_ITERATIONS" ] && printf 'agent.max_iterations=%s\n' "$CONFIG_SET_AGENT_MAX_ITERATIONS"
+  [ "${#CLI_CONFIG_SET[@]}" -gt 0 ] && printf '%s\n' "${CLI_CONFIG_SET[@]}"
+  return 0
+}
+
+# Parse the declaration against an EMPTY home, locally, before any host is touched: every key
+# must be declared, never inherited, and a refusal — an unknown config path, a literal secret,
+# a non-ENV line — is a config error. Exit 1 is drift, which is exactly what an empty home is.
+env_lint() {
+  local home out rc
+  local -a args=()
+  home=$(mktemp -d)
+  [ -n "$NODE_ENV_FILE" ] && args+=(--env-file "$NODE_ENV_FILE")
+  while IFS= read -r kv; do args+=(--config-set "$kv"); done < <(config_set_args)
+  out=$(env -i HOME="$home" PATH="$PATH" python3 "$HERE/node_env.py" "${args[@]}" --check 2>&1); rc=$?
+  rm -rf "$home"
+  case "$rc" in
+    0|1) ok "env_profile" "$(printf '%s\n' "$out" | sed -n 's/^  \.\.    declared /declared /p' | head -1) — applied on the node before the harness layer" ;;
+    2)   bad "env_profile" "$(printf '%s\n' "$out" | grep '^  FAIL' | head -1 | sed -e 's/^  FAIL  env — //' -e 's/^  FAIL  config — /config: /' -e 's/^  FAIL  //')" ;;
+    *)   bad "env_profile" "node_env.py --check exited $rc on the declaration" ;;
+  esac
 }
 
 # --- check: read-only, every row names what it measured --------------------------------------
@@ -119,6 +164,16 @@ check() {
     *) bad "gateway_auth" "no dashboard.basic_auth — the gateway will refuse to bind (CF-150)" ;; esac
   case "$probe" in *hermes=present*) ok "harness" "$HARNESS binary present" ;;
     *) bad "harness" "no $HARNESS binary on the node" ;; esac
+
+  # the declared environment: parsed here and applied on the node by --apply, so a refused
+  # declaration is named before a host is touched
+  if [ -n "$NODE_ENV_FILE" ] && [ ! -r "$NODE_ENV_FILE" ]; then
+    bad "env_profile" "NODE_ENV_FILE $NODE_ENV_FILE is unreadable"
+  elif [ -n "$NODE_ENV_FILE" ] || [ -n "$(config_set_args)" ]; then
+    env_lint
+  else
+    warn "env_profile" "no NODE_ENV_FILE or CONFIG_SET_* — the node's environment is declared nowhere"
+  fi
 
   # crier: the inbox route is the only thing that proves reachability
   [ -n "$CRIER_URL" ] || { warn "crier" "CRIER_URL unset — reachability unproven"; return 0; }
@@ -221,7 +276,47 @@ apply() {
       || { bad "crier_stage" "could not stage the crier identity"; rc=1; }
   fi
 
-  # 4. gateway auth BEFORE the harness layer: a public bind is refused without it (CF-150)
+  # 4. the declared node environment BEFORE the harness layer: the gateway reads ~/.hermes/.env
+  #    and config.yaml at start, so a profile applied afterwards is a profile the run contradicts.
+  #    The profile is data (a secret is only ever an @file path), so staging it in clear is safe
+  #    and both staged files are removed either way.
+  if [ -n "$NODE_ENV_FILE" ] || [ -n "$(config_set_args)" ]; then
+    say "  ..    node environment profile (before the harness layer)"
+    local prof_args="" env_out env_rc
+    if [ -n "$NODE_ENV_FILE" ]; then
+      if [ ! -r "$NODE_ENV_FILE" ]; then
+        bad "env_profile" "NODE_ENV_FILE $NODE_ENV_FILE is unreadable"; rc=1
+      elif "$b" cp "$NODE_ENV_FILE" "$AGENT:node.env" --server "$SERVER" >/dev/null 2>&1; then
+        prof_args+=" --env-file \$HOME/node.env"
+      else
+        bad "env_profile" "could not stage $NODE_ENV_FILE"; rc=1
+      fi
+    fi
+    while IFS= read -r kv; do prof_args+=" --config-set $(shq "$kv")"; done < <(config_set_args)
+    if [ -n "$prof_args" ]; then
+      tmp=$(mktemp); chmod 600 "$tmp"; cp "$HERE/node_env.py" "$tmp"
+      if "$b" cp "$tmp" "$AGENT:node_env.py" --server "$SERVER" >/dev/null 2>&1; then
+        env_out=$("$b" exec --server "$SERVER" "$AGENT" -- bash -lc "python3 \$HOME/node_env.py --apply$prof_args" 2>&1)
+        env_rc=$?
+        printf '%s\n' "$env_out" | sed 's/^/  ..    /'
+        if [ "$env_rc" -eq 0 ]; then
+          ok "env_profile" "declared environment applied (a second run reports no change)"
+        else
+          bad "env_profile" "node_env.py --apply exited $env_rc on the node — rows above"; rc=1
+        fi
+      else
+        bad "env_profile" "could not stage node_env.py"; rc=1
+      fi
+      rm -f "$tmp"
+    else
+      note "nothing stageable to apply — the profile above could not be read"
+    fi
+    "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'rm -f "$HOME/node_env.py" "$HOME/node.env"' >/dev/null 2>&1 || true
+  else
+    warn "env_profile" "no NODE_ENV_FILE or CONFIG_SET_* — the node's environment is declared nowhere"
+  fi
+
+  # 5. gateway auth BEFORE the harness layer: a public bind is refused without it (CF-150)
   if [ "${HARNESS:-hermes}" = "hermes" ]; then
     say "  ..    ensuring dashboard.basic_auth"
     tmp=$(mktemp); chmod 600 "$tmp"; cp "$HERE/node_gateway_auth.py" "$tmp"
@@ -240,7 +335,7 @@ apply() {
     rm -f "$tmp"
   fi
 
-  # 5. node plumbing: the tested path (repo + harness + layers), now with credentials in place
+  # 6. node plumbing: the tested path (repo + harness + layers), now with credentials in place
   say "  ..    node plumbing (node-create.sh)"
   local -a create_args=(--project "$PROJECT" --repo "$REPO" --ref "${REF:-main}"
                         --harness "${HARNESS:-hermes}" --agent "$AGENT")
@@ -251,7 +346,7 @@ apply() {
     bad "node_create" "node-create.sh failed — see its rows above"; return 1
   fi
 
-  # 6. identity: MERGE into node.json — project-node.sh owns that file's schema, so a
+  # 7. identity: MERGE into node.json — project-node.sh owns that file's schema, so a
   #    wholesale rewrite would delete node_id/repo/harness/bus and break its consumers.
   say "  ..    merging node identity"
   tmp=$(mktemp); chmod 600 "$tmp"
@@ -273,7 +368,7 @@ apply() {
   "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'rm -f "$HOME/node_identity.py"' >/dev/null 2>&1 || true
   rm -f "$tmp"
 
-  # 7. crier proof — a separate script, because connecting is its own failure surface
+  # 8. crier proof — a separate script, because connecting is its own failure surface
   if [ -n "$CRIER_URL" ]; then
     say "  ..    connecting to crier"
     "$HERE/bunker-crier-connect.sh" --agent "$AGENT" --server "$SERVER" --url "$CRIER_URL" --project "$PROJECT" --apply \
@@ -315,6 +410,8 @@ while [ $# -gt 0 ]; do
     --github-token-file) GITHUB_TOKEN_FILE="$2"; shift 2 ;;
     --duckbrain-token-file) DUCKBRAIN_TOKEN_FILE="$2"; shift 2 ;;
     --s3-env-file) S3_ENV_FILE="$2"; shift 2 ;;
+    --node-env-file) CLI_NODE_ENV_FILE="$2"; shift 2 ;;
+    --config-set) CLI_CONFIG_SET+=("$2"); shift 2 ;;
     --yes) YES=1; shift ;;
     -h|--help) usage 0 ;;
     *) say "unknown argument: $1"; usage 2 ;;
@@ -331,6 +428,7 @@ done
 [ -n "$CLI_HARNESS" ] && HARNESS="$CLI_HARNESS"
 [ -n "$CLI_NAMESPACE" ] && NAMESPACE="$CLI_NAMESPACE"
 [ -n "$CLI_CRIER" ] && CRIER_URL="$CLI_CRIER"
+[ -n "$CLI_NODE_ENV_FILE" ] && NODE_ENV_FILE="$CLI_NODE_ENV_FILE"
 
 [ -n "$MODE" ] || usage 2
 case "$MODE" in
