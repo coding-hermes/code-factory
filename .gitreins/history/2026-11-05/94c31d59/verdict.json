@@ -1,0 +1,108 @@
+{
+  "task_id": "CF-218",
+  "task_title": "Layer 10 grades the toolchain the repo kind needs, Go included",
+  "task_criteria": [
+    "At the worker's own commit: bash tests/selftest.sh exits 0 (full battery, SELFTEST: PASS). scripts/project-node.sh layer 10 grades a Go toolchain for a Go-kind workspace: the go binary, its version read back, and one module resolved through the configured GOPROXY, with a named FAIL row when go is absent instead of a WARN. The graded set is derived from the repository kind actually present (go.mod -> go, Cargo.toml -> cargo, package.json -> node, pyproject.toml/setup.py -> python) or from an explicit kind declaration when no workspace exists yet, never from the fixed list alone. A fixture in tests/selftest.sh proves the same tree FAILS without go on PATH and PASSES with a stub go on PATH. specs/NODE.md's layer 10 cell names the derived set and the Go proxy probe, and the layer 00 cell's claim that no shipped layer measures a Go module proxy is corrected in the same change."
+  ],
+  "passed": false,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "3c4c639d81c45eee24da6119c90ae7a3c6f627bc",
+  "working_tree_content_fingerprint": "9e2d551483e1f9b308c492b7f59af049ab39777ebcba96aa8950126daad83ce3",
+  "working_tree_dirty_path_count": 43,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": false,
+      "any_failed": true,
+      "summary": "  \u2717 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": false,
+          "output": "scanners: nice=nice -n 10\nF401 [*] `os` imported but unused\n  --> scripts/master_doc_fill.py:16:8\n   |\n14 | import argparse\n15 | import json\n16 | import os\n   |        ^^\n17 | import re\n18 | import subprocess\n   |\nhelp: Remove unused import: `os`\n\nF401 [*] `subprocess` imported but unused\n  --> scripts/master_doc_fill.py:18:8\n   |\n16 | import os\n17 | import re\n18 | import subprocess\n   |        ^^^^^^^^^^\n19 | import sys\n20 | import time\n   |\nhelp: Remove unused import: `subprocess`\n\nF401 [*] `sys` imported but unused\n  --> scripts/master_doc_fill.py:19:8\n   |\n17 | import re\n18 | import subprocess\n19 | import sys\n   |        ^^^\n20 | import time\n21 | import urllib.request\n   |\nhelp: Remove unused import: `sys`\n\nF401 [*] `os` imported but unused\n  --> scripts/master_doc_skeleton.py:10:8\n   |\n 8 | \"\"\"\n 9 | import json\n10 | import os\n   |        ^^\n11 | import re\n12 | import subprocess\n   |\nhelp: Remove unused import: `os`\n\n",
+          "error": "",
+          "data": {
+            "exit_code": 1,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261105T142217.783586Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n9:26AM INF scanned ~2019072 bytes (2.02 MB) in 715ms\n9:26AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 236 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261105T142217.783586Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.YtorTtAKfG/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  227/227 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n\n\u2026 [27217 chars omitted \u2014 359 line(s)] \u2026\n  PASS  the fixture seed record built (2 files, sha256 each)\n  PASS  the fixture node home carries the applied record at .hermes/seed-applied.json\n  PASS  a seed whose files match its record -> exit 0, RESULT: PASS, the row names the count\n  PASS  a tampered file -> exit 1, the path and both digest prefixes are named\n  PASS  the file restored -> exit 0, RESULT: PASS again (the red arm can go green)\n  PASS  a node with no seed record -> exit 3, the absent record's path is named\n  PASS  the SAME fixture under --strict-seed -> exit 1, FAIL (unknown is not a pass)\n  PASS  the record restored -> exit 0, RESULT: PASS again (the absent arm can go green)\n  PASS  bunker mode offline: ONE exec round trip stages the seeder, checks the node home, RESULT: PASS\n  PASS  bunker mode --json: status PASS, record_present true, file_count 2\n49. layer 10 grades the toolchain the repository kind needs, Go included (CF-218)\n  PASS  fixture PATH carries no go\n  PASS  go.mod workspace without go -> exit 1 and ONE FAIL tool:go row (not a WARN)\n  PASS  the same tree with a go that resolves the pinned module -> go rows PASS, exit 0\n  PASS  a proxy that refuses -> FAIL go:proxy naming the proxy and the error\n  PASS  --kinds rust,node on a marker-less tree grades cargo and node, not go\n  PASS  a declared node kind with no node -> FAIL tool:node (the WARN shape is gone)\n  PASS  no evidence -> generic fallback is named on the row, and nothing else is graded\n  PASS  an unknown kind is a named FAIL before any layer runs (never a silent pass)\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261105T142217.783586Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": false,
+      "any_failed": true,
+      "summary": "INCOMPLETE\n\nEvaluator error: LLM call failed: 402 Client Error: Payment Required for url: https://api.deepseek.com/v1/chat/completions (provider=openai model=deepseek-v4-flash url=https://api.deepseek.com/v1/chat/completions key=<GITREINS_LLM_API_KEY>)",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": false,
+          "output": "INCOMPLETE\n\nEvaluator error: LLM call failed: 402 Client Error: Payment Required for url: https://api.deepseek.com/v1/chat/completions (provider=openai model=deepseek-v4-flash url=https://api.deepseek.com/v1/chat/completions key=<GITREINS_LLM_API_KEY>)",
+          "error": "",
+          "data": {
+            "verdict": "INCOMPLETE",
+            "items": [],
+            "summary": "Evaluator error: LLM call failed: 402 Client Error: Payment Required for url: https://api.deepseek.com/v1/chat/completions (provider=openai model=deepseek-v4-flash url=https://api.deepseek.com/v1/chat/completions key=<GITREINS_LLM_API_KEY>)",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-218\n\nStage tier1: FAIL\n    \u2717 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: FAIL\n  INCOMPLETE\n\nEvaluator error: LLM call failed: 402 Client Error: Payment Required for url: https://api.deepseek.com/v1/chat/completions (provider=openai model=deepseek-v4-flash url=https://api.deepseek.com/v1/chat/completions key=<GITREINS_LLM_API_KEY>)\n\nOverall: FAIL \u2717",
+  "evaluated_at": "2026-11-05T14:26:34.712163",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-05T14:26:34.737634+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 42803,
+        "truncated": false,
+        "source": "git show 3c4c639d81c4"
+      }
+    ],
+    "task_id": "CF-218"
+  }
+}

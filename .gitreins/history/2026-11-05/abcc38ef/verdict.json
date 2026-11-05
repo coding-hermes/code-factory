@@ -1,0 +1,134 @@
+{
+  "task_id": "CF-254",
+  "task_title": "Clear the python lint red (F401) that refuses every python-staging commit in this family",
+  "task_criteria": [
+    "1. The guard lint lane is green on the tip: the exact command and its output are quoted, and no F401 finding remains for scripts/master_doc_fill.py or scripts/master_doc_skeleton.py.",
+    "2. A selftest arm fails when a python file carries one unused import and passes once it is removed, so the fix is re-measured rather than hand-edited.",
+    "3. The row records in one sentence why 52e1c4d reached the branch with failing python lint, naming the file:line of the scope rule it cites."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "0978d5879a0a016eacb68b2ad9b239048d226367",
+  "working_tree_content_fingerprint": "a95a03460d8728ecb858e6ae60e0ccd265b8de30b9aca0531e22a9d354885a14",
+  "working_tree_dirty_path_count": 24,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261105T152828.634206Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n10:28AM INF scanned ~2069790 bytes (2.07 MB) in 1.1s\n10:28AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 237 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261105T152828.634206Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n install-go.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.ggCkpeJ9IP/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  230/230 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n\n\u2026 [27917 chars omitted \u2014 368 line(s)] \u2026\n  PASS  bunker mode offline: ONE exec round trip stages the seeder, checks the node home, RESULT: PASS\n  PASS  bunker mode --json: status PASS, record_present true, file_count 2\n49. layer 10 grades the toolchain the repository kind needs, Go included (CF-218)\n  PASS  fixture PATH carries no go\n  PASS  go.mod workspace without go -> exit 1 and ONE FAIL tool:go row (not a WARN)\n  PASS  the same tree with a go that resolves the pinned module -> go rows PASS, exit 0\n  PASS  a proxy that refuses -> FAIL go:proxy naming the proxy and the error\n  PASS  --kinds rust,node on a marker-less tree grades cargo and node, not go\n  PASS  a declared node kind with no node -> FAIL tool:node (the WARN shape is gone)\n  PASS  no evidence -> generic fallback is named on the row, and nothing else is graded\n  PASS  an unknown kind is a named FAIL before any layer runs (never a silent pass)\n50. install-go.sh can go red, and its pin is a digest (CF-219)\n  PASS  install-go negative: no Go -> named FAIL, exit 1\n  PASS  install-go digest: wrong sha256 refused and destination absent\n  PASS  install-go digest control: measured sha256 accepted\n  PASS  install-go positive: applied host pin read back (  PASS  go \u2014 go version go1.26.5 linux/amd64)\n\n51. the python lint lane can go red on one unused import, and green once it is removed (CF-254)\n  PASS  one unused import -> exit 1 naming F401\n  PASS  same file once the import is removed -> exit 0\n  PASS  tracked python surface clean: 29 files graded\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261105T152828.634206Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 1. The guard lint lane is green on the tip: the exact command and its output are quoted, and no F401 finding remains for scripts/master_doc_fill.py or scripts/master_doc_skeleton.py.: Fresh run at tip 0978d58: `ruff check $(git ls-files '*.py')` -> \"All checks passed!\" rc=0; `ruff check scripts/master_doc_fill.py scripts/master_doc_skeleton.py` -> \"All checks passed!\" rc=0. Imports now: master_doc_fill.py:15-21 = argparse,json,re,time,urllib.request,ThreadPoolExecutor,Path; master_doc_skeleton.py:10-13 = json,re,subprocess,Path. Control: the same files at 52e1c4d produce 4 F401 (fill:16 os, :18 subprocess, :19 sys; skeleton:10 os), so the red is genuinely cleared. Commit 0978d58 message quotes the command and output: \"ruff check over `git ls-files '*.py'` -> All checks passed.\" and \"bash tests/selftest.sh -> SELFTEST: PASS, rc=0 (51 sections)\".\n  \u2713 2. A selftest arm fails when a python file carries one unused import and passes once it is removed, so the fix is re-measured rather than hand-edited.: tests/selftest.sh:3493-3533 adds \u00a751 (\"the python lint lane can go red on one unused import, and green once it is removed (CF-254)\") which writes a fixture with `import os`, asserts ruff exits nonzero naming F401, rewrites the same file without the import and asserts exit 0, then grades the tracked surface. Fresh run of `bash tests/selftest.sh` output: \"51. the python lint lane can go red on one unused import, and green once it is removed (CF-254)\" / \"  PASS  one unused import -> exit 1 naming F401\" / \"  PASS  same file once the import is removed -> exit 0\" / \"  PASS  tracked python surface clean: 29 files graded\" / \"SELFTEST: PASS\".\n  \u2713 3. The row records in one sentence why 52e1c4d reached the branch with failing python lint, naming the file:line of the scope rule it cites.: Commit 0978d58 body states in one sentence: \"52e1c4d added scripts/master_doc_fill.py and scripts/master_doc_skeleton.py with unused imports (subprocess, sys; os), and the Tier-1 lint lane reds on them because it scopes on staged file EXTENSIONS and grades only *.py (.gitreins/config.yaml:9-16, CF-031).\" The cited locator is verified: .gitreins/config.yaml:8-16 is exactly the CF-031 comment block explaining that the lint lane picks scope from staged file extensions and grades only *.py (engine/guard_manager.py:2823). The same mapping row is recorded at docs/ACCEPTANCE-PLAN.md:158.\nAll three criteria verified with fresh command output: ruff is clean on the tip (and demonstrably red at 52e1c4d), selftest \u00a751 pins both the red and green states and passes, and the commit row names the scope rule at .gitreins/config.yaml:9-16.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 1. The guard lint lane is green on the tip: the exact command and its output are quoted, and no F401 finding remains for scripts/master_doc_fill.py or scripts/master_doc_skeleton.py.: Fresh run at tip 0978d58: `ruff check $(git ls-files '*.py')` -> \"All checks passed!\" rc=0; `ruff check scripts/master_doc_fill.py scripts/master_doc_skeleton.py` -> \"All checks passed!\" rc=0. Imports now: master_doc_fill.py:15-21 = argparse,json,re,time,urllib.request,ThreadPoolExecutor,Path; master_doc_skeleton.py:10-13 = json,re,subprocess,Path. Control: the same files at 52e1c4d produce 4 F401 (fill:16 os, :18 subprocess, :19 sys; skeleton:10 os), so the red is genuinely cleared. Commit 0978d58 message quotes the command and output: \"ruff check over `git ls-files '*.py'` -> All checks passed.\" and \"bash tests/selftest.sh -> SELFTEST: PASS, rc=0 (51 sections)\".\n  \u2713 2. A selftest arm fails when a python file carries one unused import and passes once it is removed, so the fix is re-measured rather than hand-edited.: tests/selftest.sh:3493-3533 adds \u00a751 (\"the python lint lane can go red on one unused import, and green once it is removed (CF-254)\") which writes a fixture with `import os`, asserts ruff exits nonzero naming F401, rewrites the same file without the import and asserts exit 0, then grades the tracked surface. Fresh run of `bash tests/selftest.sh` output: \"51. the python lint lane can go red on one unused import, and green once it is removed (CF-254)\" / \"  PASS  one unused import -> exit 1 naming F401\" / \"  PASS  same file once the import is removed -> exit 0\" / \"  PASS  tracked python surface clean: 29 files graded\" / \"SELFTEST: PASS\".\n  \u2713 3. The row records in one sentence why 52e1c4d reached the branch with failing python lint, naming the file:line of the scope rule it cites.: Commit 0978d58 body states in one sentence: \"52e1c4d added scripts/master_doc_fill.py and scripts/master_doc_skeleton.py with unused imports (subprocess, sys; os), and the Tier-1 lint lane reds on them because it scopes on staged file EXTENSIONS and grades only *.py (.gitreins/config.yaml:9-16, CF-031).\" The cited locator is verified: .gitreins/config.yaml:8-16 is exactly the CF-031 comment block explaining that the lint lane picks scope from staged file extensions and grades only *.py (engine/guard_manager.py:2823). The same mapping row is recorded at docs/ACCEPTANCE-PLAN.md:158.\nAll three criteria verified with fresh command output: ruff is clean on the tip (and demonstrably red at 52e1c4d), selftest \u00a751 pins both the red and green states and passes, and the commit row names the scope rule at .gitreins/config.yaml:9-16.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "1. The guard lint lane is green on the tip: the exact command and its output are quoted, and no F401 finding remains for scripts/master_doc_fill.py or scripts/master_doc_skeleton.py.",
+                "status": "PASS",
+                "detail": "Fresh run at tip 0978d58: `ruff check $(git ls-files '*.py')` -> \"All checks passed!\" rc=0; `ruff check scripts/master_doc_fill.py scripts/master_doc_skeleton.py` -> \"All checks passed!\" rc=0. Imports now: master_doc_fill.py:15-21 = argparse,json,re,time,urllib.request,ThreadPoolExecutor,Path; master_doc_skeleton.py:10-13 = json,re,subprocess,Path. Control: the same files at 52e1c4d produce 4 F401 (fill:16 os, :18 subprocess, :19 sys; skeleton:10 os), so the red is genuinely cleared. Commit 0978d58 message quotes the command and output: \"ruff check over `git ls-files '*.py'` -> All checks passed.\" and \"bash tests/selftest.sh -> SELFTEST: PASS, rc=0 (51 sections)\"."
+              },
+              {
+                "criterion": "2. A selftest arm fails when a python file carries one unused import and passes once it is removed, so the fix is re-measured rather than hand-edited.",
+                "status": "PASS",
+                "detail": "tests/selftest.sh:3493-3533 adds \u00a751 (\"the python lint lane can go red on one unused import, and green once it is removed (CF-254)\") which writes a fixture with `import os`, asserts ruff exits nonzero naming F401, rewrites the same file without the import and asserts exit 0, then grades the tracked surface. Fresh run of `bash tests/selftest.sh` output: \"51. the python lint lane can go red on one unused import, and green once it is removed (CF-254)\" / \"  PASS  one unused import -> exit 1 naming F401\" / \"  PASS  same file once the import is removed -> exit 0\" / \"  PASS  tracked python surface clean: 29 files graded\" / \"SELFTEST: PASS\"."
+              },
+              {
+                "criterion": "3. The row records in one sentence why 52e1c4d reached the branch with failing python lint, naming the file:line of the scope rule it cites.",
+                "status": "PASS",
+                "detail": "Commit 0978d58 body states in one sentence: \"52e1c4d added scripts/master_doc_fill.py and scripts/master_doc_skeleton.py with unused imports (subprocess, sys; os), and the Tier-1 lint lane reds on them because it scopes on staged file EXTENSIONS and grades only *.py (.gitreins/config.yaml:9-16, CF-031).\" The cited locator is verified: .gitreins/config.yaml:8-16 is exactly the CF-031 comment block explaining that the lint lane picks scope from staged file extensions and grades only *.py (engine/guard_manager.py:2823). The same mapping row is recorded at docs/ACCEPTANCE-PLAN.md:158."
+              }
+            ],
+            "summary": "All three criteria verified with fresh command output: ruff is clean on the tip (and demonstrably red at 52e1c4d), selftest \u00a751 pins both the red and green states and passes, and the commit row names the scope rule at .gitreins/config.yaml:9-16.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-254\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 1. The guard lint lane is green on the tip: the exact command and its output are quoted, and no F401 finding remains for scripts/master_doc_fill.py or scripts/master_doc_skeleton.py.: Fresh run at tip 0978d58: `ruff check $(git ls-files '*.py')` -> \"All checks passed!\" rc=0; `ruff check scripts/master_doc_fill.py scripts/master_doc_skeleton.py` -> \"All checks passed!\" rc=0. Imports now: master_doc_fill.py:15-21 = argparse,json,re,time,urllib.request,ThreadPoolExecutor,Path; master_doc_skeleton.py:10-13 = json,re,subprocess,Path. Control: the same files at 52e1c4d produce 4 F401 (fill:16 os, :18 subprocess, :19 sys; skeleton:10 os), so the red is genuinely cleared. Commit 0978d58 message quotes the command and output: \"ruff check over `git ls-files '*.py'` -> All checks passed.\" and \"bash tests/selftest.sh -> SELFTEST: PASS, rc=0 (51 sections)\".\n  \u2713 2. A selftest arm fails when a python file carries one unused import and passes once it is removed, so the fix is re-measured rather than hand-edited.: tests/selftest.sh:3493-3533 adds \u00a751 (\"the python lint lane can go red on one unused import, and green once it is removed (CF-254)\") which writes a fixture with `import os`, asserts ruff exits nonzero naming F401, rewrites the same file without the import and asserts exit 0, then grades the tracked surface. Fresh run of `bash tests/selftest.sh` output: \"51. the python lint lane can go red on one unused import, and green once it is removed (CF-254)\" / \"  PASS  one unused import -> exit 1 naming F401\" / \"  PASS  same file once the import is removed -> exit 0\" / \"  PASS  tracked python surface clean: 29 files graded\" / \"SELFTEST: PASS\".\n  \u2713 3. The row records in one sentence why 52e1c4d reached the branch with failing python lint, naming the file:line of the scope rule it cites.: Commit 0978d58 body states in one sentence: \"52e1c4d added scripts/master_doc_fill.py and scripts/master_doc_skeleton.py with unused imports (subprocess, sys; os), and the Tier-1 lint lane reds on them because it scopes on staged file EXTENSIONS and grades only *.py (.gitreins/config.yaml:9-16, CF-031).\" The cited locator is verified: .gitreins/config.yaml:8-16 is exactly the CF-031 comment block explaining that the lint lane picks scope from staged file extensions and grades only *.py (engine/guard_manager.py:2823). The same mapping row is recorded at docs/ACCEPTANCE-PLAN.md:158.\nAll three criteria verified with fresh command output: ruff is clean on the tip (and demonstrably red at 52e1c4d), selftest \u00a751 pins both the red and green states and passes, and the commit row names the scope rule at .gitreins/config.yaml:9-16.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-05T15:31:26.767305",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-05T15:31:26.789727+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 32088,
+        "truncated": false,
+        "source": "git show 0978d5879a0a"
+      },
+      {
+        "name": "worktree",
+        "label": "Working-tree diff (graded)",
+        "file": "worktree.patch",
+        "bytes": 85453,
+        "truncated": false,
+        "source": "git diff HEAD (working tree)"
+      }
+    ],
+    "task_id": "CF-254"
+  }
+}

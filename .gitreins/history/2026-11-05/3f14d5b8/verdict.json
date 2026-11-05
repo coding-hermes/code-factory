@@ -1,0 +1,147 @@
+{
+  "task_id": "CF-219",
+  "task_title": "Go installer: pinned toolchain under $HOME, module-resolution proof, provisioning hook for Go-kind projects",
+  "task_criteria": [
+    "1. scripts/install-go.sh --check/--apply installs a pinned Go toolchain under $HOME with no root and no system package manager, and reads the version back with the binary's own 'go version'",
+    "2. --apply proves the toolchain beyond --version: it resolves a pinned module through the node's own GOPROXY configuration with a cold module cache, or FAILs naming the proxy",
+    "3. A second --apply changes nothing, prints that it is already at the pinned version, and exits 0",
+    "4. --check FAILS (exit 1, a row beginning 'FAIL' that names go) on a fixture with no toolchain and no PATH entry, and PASSES on a host with the applied toolchain",
+    "5. Provisioning invokes install-go.sh only for kind sets that include go, and layer 10 --check names go as missing for those",
+    "6. tests/selftest.sh carries a new numbered section that exercises both the failing and the passing arm, so neither can regress silently",
+    "7. specs/NODE.md layer-10 text names the installer and the pinned version, because AGENTS.md makes the spec the design authority"
+  ],
+  "passed": false,
+  "worktree": "/home/kara/proj-wt-cf219-20261105",
+  "branch": "wt/cf219-go-installer",
+  "commit": "50e5f5b29e24b3cf631ebc61c6d38ac137391661",
+  "working_tree_content_fingerprint": "89afa4e0fc824c9e8a81ffe1d2aec0491cadd7af072f43b787d9f200ed972f94",
+  "working_tree_dirty_path_count": 0,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": false,
+      "any_failed": true,
+      "summary": "  \u2717 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": false,
+          "output": "scanners: nice=nice -n 10\nF401 [*] `os` imported but unused\n  --> scripts/master_doc_fill.py:16:8\n   |\n14 | import argparse\n15 | import json\n16 | import os\n   |        ^^\n17 | import re\n18 | import subprocess\n   |\nhelp: Remove unused import: `os`\n\nF401 [*] `subprocess` imported but unused\n  --> scripts/master_doc_fill.py:18:8\n   |\n16 | import os\n17 | import re\n18 | import subprocess\n   |        ^^^^^^^^^^\n19 | import sys\n20 | import time\n   |\nhelp: Remove unused import: `subprocess`\n\nF401 [*] `sys` imported but unused\n  --> scripts/master_doc_fill.py:19:8\n   |\n17 | import re\n18 | import subprocess\n19 | import sys\n   |        ^^^\n20 | import time\n21 | import urllib.request\n   |\nhelp: Remove unused import: `sys`\n\nF401 [*] `os` imported but unused\n  --> scripts/master_doc_skeleton.py:10:8\n   |\n 8 | \"\"\"\n 9 | import json\n10 | import os\n   |        ^^\n11 | import re\n12 | import subprocess\n   |\nhelp: Remove unused import: `os`\n\n",
+          "error": "",
+          "data": {
+            "exit_code": 1
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n10:03AM INF scanned ~1972367 bytes (1.97 MB) in 880ms\n10:03AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 237 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n install-go.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.Cf9sX7Sb2P/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  229/229 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n\n\u2026 [27674 chars omitted \u2014 365 line(s)] \u2026\n  PASS  a node with no seed record -> exit 3, the absent record's path is named\n  PASS  the SAME fixture under --strict-seed -> exit 1, FAIL (unknown is not a pass)\n  PASS  the record restored -> exit 0, RESULT: PASS again (the absent arm can go green)\n  PASS  bunker mode offline: ONE exec round trip stages the seeder, checks the node home, RESULT: PASS\n  PASS  bunker mode --json: status PASS, record_present true, file_count 2\n49. layer 10 grades the toolchain the repository kind needs, Go included (CF-218)\n  PASS  fixture PATH carries no go\n  PASS  go.mod workspace without go -> exit 1 and ONE FAIL tool:go row (not a WARN)\n  PASS  the same tree with a go that resolves the pinned module -> go rows PASS, exit 0\n  PASS  a proxy that refuses -> FAIL go:proxy naming the proxy and the error\n  PASS  --kinds rust,node on a marker-less tree grades cargo and node, not go\n  PASS  a declared node kind with no node -> FAIL tool:node (the WARN shape is gone)\n  PASS  no evidence -> generic fallback is named on the row, and nothing else is graded\n  PASS  an unknown kind is a named FAIL before any layer runs (never a silent pass)\n50. install-go.sh can go red, and its pin is a digest (CF-219)\n  PASS  install-go negative: no Go -> named FAIL, exit 1\n  PASS  install-go digest: wrong sha256 refused and destination absent\n  PASS  install-go digest control: measured sha256 accepted\n  PASS  install-go positive: applied host pin read back (  PASS  go \u2014 go version go1.26.5 linux/amd64)\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 1. scripts/install-go.sh --check/--apply installs a pinned Go toolchain under $HOME with no root and no system package manager, and reads the version back with the binary's own 'go version': install-go.sh:7 GO_PIN=\"go1.26.5\"; ROOT=${GO_INSTALL_ROOT:-$HOME/go-toolchain}, TARGET=$ROOT/$GO_PIN. Downloads go.dev/dl tarball, verifies sha256 via fetch_verified, extracts, publishes, symlinks current \u2014 no sudo/apt/yum/dnf/apk anywhere (grep returned nothing). version_of() runs \"$binary\" version and is_pin() matches 'go version go1.26.5 '. Live: `GO_INSTALL_ROOT=/tmp/cf219/root bash scripts/install-go.sh --apply` -> 'PASS go \u2014 go version go1.26.5 linux/amd64', rc=0; /tmp/cf219/root/current/bin/go version -> 'go version go1.26.5 linux/amd64'.\n  \u2713 2. --apply proves the toolchain beyond --version: it resolves a pinned module through the node's own GOPROXY configuration with a cold module cache, or FAILs naming the proxy: install-go.sh:52-88 module_proof(): proxy from $GOPROXY or `go env GOPROXY`; runs `go mod download rsc.io/quote@v1.5.2` with GOMODCACHE=$probe/gomodcache (fresh mktemp dir = cold cache), GOTOOLCHAIN=local, GOSUMDB=off, GOFLAGS=, 30s timeout; failure path prints bad \"go:module\" \"... via $proxy: ...\" naming the proxy. Live apply output: 'PASS go:module \u2014 rsc.io/quote@v1.5.2 resolved via https://proxy.golang.org,direct'.\n  \u2713 3. A second --apply changes nothing, prints that it is already at the pinned version, and exits 0: install-go.sh:96-110 idempotence sentinel on $OWNED_GO. Second `GO_INSTALL_ROOT=/tmp/cf219/root bash scripts/install-go.sh --apply` -> '  PASS  go \u2014 already at go1.26.5 \u2014 go version go1.26.5 linux/amd64', rc=0; install root unchanged (only current symlink + go1.26.5 dir, no re-download/extract).\n  \u2713 4. --check FAILS (exit 1, a row beginning 'FAIL' that names go) on a fixture with no toolchain and no PATH entry, and PASSES on a host with the applied toolchain: Negative: `env -i PATH=/usr/bin:/bin HOME=/tmp/cf219/h bash scripts/install-go.sh --check` -> '  FAIL  go \u2014 missing: pinned go1.26.5 not found under /tmp/cf219/h/go-toolchain', rc=1. Positive: `bash scripts/install-go.sh --check` -> '  PASS  go \u2014 go version go1.26.5 linux/amd64', rc=0.\n  \u2713 5. Provisioning invokes install-go.sh only for kind sets that include go, and layer 10 --check names go as missing for those: project-node.sh:392-411 runs \"$HERE/install-go.sh\" --apply only inside `if has_kind go` (has_kind at :278 matches \",$KINDS,\"). Verified: `--kinds rust --layers 10` -> no go rows, only 'FAIL tool:cargo'; `--kinds go --apply` -> installer ran, installed $HOME/go-toolchain/go1.26.5, 'PASS tool:go \u2014 .../go-toolchain/current/bin/go'. Layer-10 --check with go absent from PATH (env -i PATH=/tmp/cf219/eb, no go) -> 'FAIL tool:go \u2014 missing \u2014 kind go needs a Go toolchain on PATH', NODE: FAIL (1).\n  \u2713 6. tests/selftest.sh carries a new numbered section that exercises both the failing and the passing arm, so neither can regress silently: tests/selftest.sh:3440 `say \"50. install-go.sh can go red, and its pin is a digest (CF-219)\"` \u2014 new section after 49 (:3284). Full suite run of the configured test_command `bash tests/selftest.sh` -> 'SELFTEST: PASS' (exit 0, log /tmp/cf219/selftest2.log), including 'PASS install-go negative: no Go -> named FAIL, exit 1' and 'PASS install-go positive: applied host pin read back (PASS go \u2014 go version go1.26.5 linux/amd64)' plus digest negative/control rows.\n  \u2713 7. specs/NODE.md layer-10 text names the installer and the pinned version, because AGENTS.md makes the spec the design authority: specs/NODE.md:40 layer-10 row: '`go`: `scripts/install-go.sh` installs the digest-pinned `go1.26.5` user-space archive during `--apply`, reads that binary's `go version` back, and resolves `rsc.io/quote@v1.5.2` through the node's own `GOPROXY` with a cold `GOMODCACHE`...' \u2014 names both installer and pin (matches install-go.sh:7).\nAll seven criteria verified: install-go.sh installs a digest-pinned go1.26.5 under $HOME without root, proves module resolution through GOPROXY with a cold cache, is idempotent, fails/passes --check correctly, is wired into layer 10 only for go kinds, is covered by new selftest section 50 (full suite SELFTEST: PASS), and is documented in specs/NODE.md layer 10.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 1. scripts/install-go.sh --check/--apply installs a pinned Go toolchain under $HOME with no root and no system package manager, and reads the version back with the binary's own 'go version': install-go.sh:7 GO_PIN=\"go1.26.5\"; ROOT=${GO_INSTALL_ROOT:-$HOME/go-toolchain}, TARGET=$ROOT/$GO_PIN. Downloads go.dev/dl tarball, verifies sha256 via fetch_verified, extracts, publishes, symlinks current \u2014 no sudo/apt/yum/dnf/apk anywhere (grep returned nothing). version_of() runs \"$binary\" version and is_pin() matches 'go version go1.26.5 '. Live: `GO_INSTALL_ROOT=/tmp/cf219/root bash scripts/install-go.sh --apply` -> 'PASS go \u2014 go version go1.26.5 linux/amd64', rc=0; /tmp/cf219/root/current/bin/go version -> 'go version go1.26.5 linux/amd64'.\n  \u2713 2. --apply proves the toolchain beyond --version: it resolves a pinned module through the node's own GOPROXY configuration with a cold module cache, or FAILs naming the proxy: install-go.sh:52-88 module_proof(): proxy from $GOPROXY or `go env GOPROXY`; runs `go mod download rsc.io/quote@v1.5.2` with GOMODCACHE=$probe/gomodcache (fresh mktemp dir = cold cache), GOTOOLCHAIN=local, GOSUMDB=off, GOFLAGS=, 30s timeout; failure path prints bad \"go:module\" \"... via $proxy: ...\" naming the proxy. Live apply output: 'PASS go:module \u2014 rsc.io/quote@v1.5.2 resolved via https://proxy.golang.org,direct'.\n  \u2713 3. A second --apply changes nothing, prints that it is already at the pinned version, and exits 0: install-go.sh:96-110 idempotence sentinel on $OWNED_GO. Second `GO_INSTALL_ROOT=/tmp/cf219/root bash scripts/install-go.sh --apply` -> '  PASS  go \u2014 already at go1.26.5 \u2014 go version go1.26.5 linux/amd64', rc=0; install root unchanged (only current symlink + go1.26.5 dir, no re-download/extract).\n  \u2713 4. --check FAILS (exit 1, a row beginning 'FAIL' that names go) on a fixture with no toolchain and no PATH entry, and PASSES on a host with the applied toolchain: Negative: `env -i PATH=/usr/bin:/bin HOME=/tmp/cf219/h bash scripts/install-go.sh --check` -> '  FAIL  go \u2014 missing: pinned go1.26.5 not found under /tmp/cf219/h/go-toolchain', rc=1. Positive: `bash scripts/install-go.sh --check` -> '  PASS  go \u2014 go version go1.26.5 linux/amd64', rc=0.\n\n\u2026 [622 chars omitted \u2014 1 line(s)] \u2026\n  \u2713 6. tests/selftest.sh carries a new numbered section that exercises both the failing and the passing arm, so neither can regress silently: tests/selftest.sh:3440 `say \"50. install-go.sh can go red, and its pin is a digest (CF-219)\"` \u2014 new section after 49 (:3284). Full suite run of the configured test_command `bash tests/selftest.sh` -> 'SELFTEST: PASS' (exit 0, log /tmp/cf219/selftest2.log), including 'PASS install-go negative: no Go -> named FAIL, exit 1' and 'PASS install-go positive: applied host pin read back (PASS go \u2014 go version go1.26.5 linux/amd64)' plus digest negative/control rows.\n  \u2713 7. specs/NODE.md layer-10 text names the installer and the pinned version, because AGENTS.md makes the spec the design authority: specs/NODE.md:40 layer-10 row: '`go`: `scripts/install-go.sh` installs the digest-pinned `go1.26.5` user-space archive during `--apply`, reads that binary's `go version` back, and resolves `rsc.io/quote@v1.5.2` through the node's own `GOPROXY` with a cold `GOMODCACHE`...' \u2014 names both installer and pin (matches install-go.sh:7).\nAll seven criteria verified: install-go.sh installs a digest-pinned go1.26.5 under $HOME without root, proves module resolution through GOPROXY with a cold cache, is idempotent, fails/passes --check correctly, is wired into layer 10 only for go kinds, is covered by new selftest section 50 (full suite SELFTEST: PASS), and is documented in specs/NODE.md layer 10.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "1. scripts/install-go.sh --check/--apply installs a pinned Go toolchain under $HOME with no root and no system package manager, and reads the version back with the binary's own 'go version'",
+                "status": "PASS",
+                "detail": "install-go.sh:7 GO_PIN=\"go1.26.5\"; ROOT=${GO_INSTALL_ROOT:-$HOME/go-toolchain}, TARGET=$ROOT/$GO_PIN. Downloads go.dev/dl tarball, verifies sha256 via fetch_verified, extracts, publishes, symlinks current \u2014 no sudo/apt/yum/dnf/apk anywhere (grep returned nothing). version_of() runs \"$binary\" version and is_pin() matches 'go version go1.26.5 '. Live: `GO_INSTALL_ROOT=/tmp/cf219/root bash scripts/install-go.sh --apply` -> 'PASS go \u2014 go version go1.26.5 linux/amd64', rc=0; /tmp/cf219/root/current/bin/go version -> 'go version go1.26.5 linux/amd64'."
+              },
+              {
+                "criterion": "2. --apply proves the toolchain beyond --version: it resolves a pinned module through the node's own GOPROXY configuration with a cold module cache, or FAILs naming the proxy",
+                "status": "PASS",
+                "detail": "install-go.sh:52-88 module_proof(): proxy from $GOPROXY or `go env GOPROXY`; runs `go mod download rsc.io/quote@v1.5.2` with GOMODCACHE=$probe/gomodcache (fresh mktemp dir = cold cache), GOTOOLCHAIN=local, GOSUMDB=off, GOFLAGS=, 30s timeout; failure path prints bad \"go:module\" \"... via $proxy: ...\" naming the proxy. Live apply output: 'PASS go:module \u2014 rsc.io/quote@v1.5.2 resolved via https://proxy.golang.org,direct'."
+              },
+              {
+                "criterion": "3. A second --apply changes nothing, prints that it is already at the pinned version, and exits 0",
+                "status": "PASS",
+                "detail": "install-go.sh:96-110 idempotence sentinel on $OWNED_GO. Second `GO_INSTALL_ROOT=/tmp/cf219/root bash scripts/install-go.sh --apply` -> '  PASS  go \u2014 already at go1.26.5 \u2014 go version go1.26.5 linux/amd64', rc=0; install root unchanged (only current symlink + go1.26.5 dir, no re-download/extract)."
+              },
+              {
+                "criterion": "4. --check FAILS (exit 1, a row beginning 'FAIL' that names go) on a fixture with no toolchain and no PATH entry, and PASSES on a host with the applied toolchain",
+                "status": "PASS",
+                "detail": "Negative: `env -i PATH=/usr/bin:/bin HOME=/tmp/cf219/h bash scripts/install-go.sh --check` -> '  FAIL  go \u2014 missing: pinned go1.26.5 not found under /tmp/cf219/h/go-toolchain', rc=1. Positive: `bash scripts/install-go.sh --check` -> '  PASS  go \u2014 go version go1.26.5 linux/amd64', rc=0."
+              },
+              {
+                "criterion": "5. Provisioning invokes install-go.sh only for kind sets that include go, and layer 10 --check names go as missing for those",
+                "status": "PASS",
+                "detail": "project-node.sh:392-411 runs \"$HERE/install-go.sh\" --apply only inside `if has_kind go` (has_kind at :278 matches \",$KINDS,\"). Verified: `--kinds rust --layers 10` -> no go rows, only 'FAIL tool:cargo'; `--kinds go --apply` -> installer ran, installed $HOME/go-toolchain/go1.26.5, 'PASS tool:go \u2014 .../go-toolchain/current/bin/go'. Layer-10 --check with go absent from PATH (env -i PATH=/tmp/cf219/eb, no go) -> 'FAIL tool:go \u2014 missing \u2014 kind go needs a Go toolchain on PATH', NODE: FAIL (1)."
+              },
+              {
+                "criterion": "6. tests/selftest.sh carries a new numbered section that exercises both the failing and the passing arm, so neither can regress silently",
+                "status": "PASS",
+                "detail": "tests/selftest.sh:3440 `say \"50. install-go.sh can go red, and its pin is a digest (CF-219)\"` \u2014 new section after 49 (:3284). Full suite run of the configured test_command `bash tests/selftest.sh` -> 'SELFTEST: PASS' (exit 0, log /tmp/cf219/selftest2.log), including 'PASS install-go negative: no Go -> named FAIL, exit 1' and 'PASS install-go positive: applied host pin read back (PASS go \u2014 go version go1.26.5 linux/amd64)' plus digest negative/control rows."
+              },
+              {
+                "criterion": "7. specs/NODE.md layer-10 text names the installer and the pinned version, because AGENTS.md makes the spec the design authority",
+                "status": "PASS",
+                "detail": "specs/NODE.md:40 layer-10 row: '`go`: `scripts/install-go.sh` installs the digest-pinned `go1.26.5` user-space archive during `--apply`, reads that binary's `go version` back, and resolves `rsc.io/quote@v1.5.2` through the node's own `GOPROXY` with a cold `GOMODCACHE`...' \u2014 names both installer and pin (matches install-go.sh:7)."
+              }
+            ],
+            "summary": "All seven criteria verified: install-go.sh installs a digest-pinned go1.26.5 under $HOME without root, proves module resolution through GOPROXY with a cold cache, is idempotent, fails/passes --check correctly, is wired into layer 10 only for go kinds, is covered by new selftest section 50 (full suite SELFTEST: PASS), and is documented in specs/NODE.md layer 10.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-219\n\nStage tier1: FAIL\n    \u2717 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 1. scripts/install-go.sh --check/--apply installs a pinned Go toolchain under $HOME with no root and no system package manager, and reads the version back with the binary's own 'go version': install-go.sh:7 GO_PIN=\"go1.26.5\"; ROOT=${GO_INSTALL_ROOT:-$HOME/go-toolchain}, TARGET=$ROOT/$GO_PIN. Downloads go.dev/dl tarball, verifies sha256 via fetch_verified, extracts, publishes, symlinks current \u2014 no sudo/apt/yum/dnf/apk anywhere (grep returned nothing). version_of() runs \"$binary\" version and is_pin() matches 'go version go1.26.5 '. Live: `GO_INSTALL_ROOT=/tmp/cf219/root bash scripts/install-go.sh --apply` -> 'PASS go \u2014 go version go1.26.5 linux/amd64', rc=0; /tmp/cf219/root/current/bin/go version -> 'go version go1.26.5 linux/amd64'.\n  \u2713 2. --apply proves the toolchain beyond --version: it resolves a pinned module through the node's own GOPROXY configuration with a cold module cache, or FAILs naming the proxy: install-go.sh:52-88 module_proof(): proxy from $GOPROXY or `go env GOPROXY`; runs `go mod download rsc.io/quote@v1.5.2` with GOMODCACHE=$probe/gomodcache (fresh mktemp dir = cold cache), GOTOOLCHAIN=local, GOSUMDB=off, GOFLAGS=, 30s timeout; failure path prints bad \"go:module\" \"... via $proxy: ...\" naming the proxy. Live apply output: 'PASS go:module \u2014 rsc.io/quote@v1.5.2 resolved via https://proxy.golang.org,direct'.\n  \u2713 3. A second --apply changes nothing, prints that it is already at the pinned version, and exits 0: install-go.sh:96-110 idempotence sentinel on $OWNED_GO. Second `GO_INSTALL_ROOT=/tmp/cf219/root bash scripts/install-go.sh --apply` -> '  PASS  go \u2014 already at go1.26.5 \u2014 go version go1.26.5 linux/amd64', rc=0; install root unchanged (only current symlink + go1.26.5 dir, no re-download/extract).\n  \u2713 4. --check FAILS (exit 1, a row beginning 'FAIL' that names go) on a fixture with no toolchain and no PATH entry, and PASSES on a host with the applied toolchain: Negative: `env -i PATH=/usr/bin:/bin HOME=/tmp/cf219/h bash scripts/install-go.sh --check` -> '  FAIL  go \u2014 missing: pinned go1.26.5 not found under /tmp/cf219/h/go-toolchain', rc=1. Positive: `bash scripts/install-go.sh --check` -> '  PASS  go \u2014 go version go1.26.5 linux/amd64', rc=0.\n  \u2713 5. Provisioning invokes install-go.sh only for kind sets that include go, and layer 10 --check names go as missing for those: project-node.sh:392-411 runs \"$HERE/install-go.sh\" --apply only inside `if has_kind go` (has_kind at :278 matches \",$KINDS,\"). Verified: `--kinds rust --layers 10` -> no go rows, only 'FAIL tool:cargo'; `--kinds go --apply` -> installer ran, installed $HOME/go-toolchain/go1.26.5, 'PASS tool:go \u2014 .../go-toolchain/current/bin/go'. Layer-10 --check with go absent from PATH (env -i PATH=/tmp/cf219/eb, no go) -> 'FAIL tool:go \u2014 missing \u2014 kind go needs a Go toolchain on PATH', NODE: FAIL (1).\n  \u2713 6. tests/selftest.sh carries a new numbered section that exercises both the failing and the passing arm, so neither can regress silently: tests/selftest.sh:3440 `say \"50. install-go.sh can go red, and its pin is a digest (CF-219)\"` \u2014 new section after 49 (:3284). Full suite run of the configured test_command `bash tests/selftest.sh` -> 'SELFTEST: PASS' (exit 0, log /tmp/cf219/selftest2.log), including 'PASS install-go negative: no Go -> named FAIL, exit 1' and 'PASS install-go positive: applied host pin read back (PASS go \u2014 go version go1.26.5 linux/amd64)' plus digest negative/control rows.\n  \u2713 7. specs/NODE.md layer-10 text names the installer and the pinned version, because AGENTS.md makes the spec the design authority: specs/NODE.md:40 layer-10 row: '`go`: `scripts/install-go.sh` installs the digest-pinned `go1.26.5` user-space archive during `--apply`, reads that binary's `go version` back, and resolves `rsc.io/quote@v1.5.2` through the node's own `GOPROXY` with a cold `GOMODCACHE`...' \u2014 names both installer and pin (matches install-go.sh:7).\nAll seven criteria verified: install-go.sh installs a digest-pinned go1.26.5 under $HOME without root, proves module resolution through GOPROXY with a cold cache, is idempotent, fails/passes --check correctly, is wired into layer 10 only for go kinds, is covered by new selftest section 50 (full suite SELFTEST: PASS), and is documented in specs/NODE.md layer 10.\n\nOverall: FAIL \u2717",
+  "evaluated_at": "2026-11-05T15:11:28.011712",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-05T15:11:28.035200+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 36646,
+        "truncated": false,
+        "source": "git show 50e5f5b29e24"
+      }
+    ],
+    "task_id": "CF-219"
+  }
+}
