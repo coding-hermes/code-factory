@@ -109,7 +109,9 @@ def call(provider, prompt, timeout=300, max_tokens=None):
         # One retry with double the budget, then give up honestly rather than write nothing.
         usage = (j.get("usage") or {}).get("completion_tokens_details") or {}
         if (max_tokens or 12000) < 48000:
-            return call(provider, prompt, timeout=timeout, max_tokens=(max_tokens or 12000) * 2)
+            return call(
+                provider, prompt, timeout=timeout, max_tokens=(max_tokens or 12000) * 2
+            )
         raise RuntimeError(
             "empty reply after retry; finish=%s reasoning_tokens=%s"
             % (fin, usage.get("reasoning_tokens"))
@@ -119,13 +121,14 @@ def call(provider, prompt, timeout=300, max_tokens=None):
     return txt, time.time() - t0
 
 
-
 def census(text):
     """Section headings and table rows — the shape a rewrite must not lose."""
     return {
         "h2": len(re.findall(r"^## ", text, re.M)),
         "lines": len(text.splitlines()),
-        "locators": len(re.findall(r"\b[\w./-]+\.(?:py|sh|md|go|yaml|jsonl|json):\d+", text)),
+        "locators": len(
+            re.findall(r"\b[\w./-]+\.(?:py|sh|md|go|yaml|jsonl|json):\d+", text)
+        ),
     }
 
 
@@ -158,7 +161,10 @@ def gate(before, after, out, repo_root):
     if a["h2"] < b["h2"]:
         return "rejected", "lost %d of %d sections" % (b["h2"] - a["h2"], b["h2"])
     if a["lines"] < b["lines"] * 0.70:
-        return "rejected", "shrank %d -> %d lines (>30%% deleted)" % (b["lines"], a["lines"])
+        return "rejected", "shrank %d -> %d lines (>30%% deleted)" % (
+            b["lines"],
+            a["lines"],
+        )
     if a["locators"] == 0:
         return "rejected", "no file:line locator anywhere"
     bad = locators_resolve(out, repo_root)
@@ -166,12 +172,16 @@ def gate(before, after, out, repo_root):
         return "rejected", "unresolvable locator(s): " + ", ".join(bad[:3])
     # VERIFIED is computed here, never taken from the model's own header.
     if "VERIFIED" in out:
-        out = out.replace("| Status | **VERIFIED — source reviewed; key claims carry `file:line` locators** |",
-                          "| Status | **VERIFIED — %d locators, all resolve; %d sections kept** |" % (a["locators"], a["h2"]))
+        out = out.replace(
+            "| Status | **VERIFIED — source reviewed; key claims carry `file:line` locators** |",
+            "| Status | **VERIFIED — %d locators, all resolve; %d sections kept** |"
+            % (a["locators"], a["h2"]),
+        )
     return "ok", "%d sections, %d locators" % (a["h2"], a["locators"])
 
 
 REPO_ROOT = pathlib.Path("/home/kara/code-factory")
+
 
 def resolve(path_field, repo):
     p = Path(path_field)
@@ -251,7 +261,6 @@ def fill_one(md, provider):
     return md.name, "filled", "%d chars in %.0fs" % (len(out), secs)
 
 
-
 HERMES_BRIEF = """You are filling ONE section of the code-factory operations master document.
 
 FILE TO EDIT (in place): {md}
@@ -289,7 +298,8 @@ def fill_one_hermes(md, provider, model, max_turns=40):
     The point of this mode over fill_one(): a seat can read the tree, run a command, recall the
     project's memory and refuse a section it cannot support. fill_one() cannot do any of those.
     """
-    import subprocess, tempfile
+    import subprocess
+    import tempfile
 
     text = md.read_text(encoding="utf-8")
     m = re.search(r"\| Path \| `([^`]+)` \|", text)
@@ -304,9 +314,22 @@ def fill_one_hermes(md, provider, model, max_turns=40):
         bpath = fh.name
     try:
         run = subprocess.run(
-            ["hermes", "chat", "-q", open(bpath).read(), "-m", model, "--provider", provider,
-             "-Q", "--max-turns", str(max_turns)],
-            capture_output=True, text=True, timeout=1800,
+            [
+                "hermes",
+                "chat",
+                "-q",
+                open(bpath).read(),
+                "-m",
+                model,
+                "--provider",
+                provider,
+                "-Q",
+                "--max-turns",
+                str(max_turns),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=1800,
         )
     except subprocess.TimeoutExpired:
         return md.name, "error", "hermes seat timed out"
@@ -317,9 +340,12 @@ def fill_one_hermes(md, provider, model, max_turns=40):
     now = md.read_text(encoding="utf-8")
     verdict, note = gate(text, text, now, REPO_ROOT)
     if verdict != "ok":
-        md.write_text(text, encoding="utf-8")          # revert: the gate is why this mode is safe
+        md.write_text(
+            text, encoding="utf-8"
+        )  # revert: the gate is why this mode is safe
         return md.name, "rejected", note
     return md.name, "filled", note
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -361,10 +387,12 @@ def main():
     if not todo:
         return
     with ThreadPoolExecutor(max_workers=a.workers) as ex:
+
         def run_one(f):
             if a.engine == "hermes":
                 return fill_one_hermes(f, a.provider, a.model or "openai/gpt-6.1-sol")
             return fill_one(f, a.provider)
+
         for name, status, note in ex.map(run_one, todo):
             print("%-52s %-9s %s" % (name[:52], status, note), flush=True)
 
