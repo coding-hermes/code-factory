@@ -3532,5 +3532,126 @@ else
 fi
 # END python-lint
 
+# BEGIN master-doc-selection
+say "52. master-doc fills converge on runner-owned status without network (CF-257)"
+tmpd=$(mktemp -d)
+if python3 - "$HERE/scripts/master_doc_fill.py" "$tmpd" <<'PY'
+import importlib.util
+import re
+import subprocess
+import sys
+from pathlib import Path
+from unittest.mock import patch
+
+spec = importlib.util.spec_from_file_location("master_doc_fill", sys.argv[1])
+runner = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(runner)
+root = Path(sys.argv[2])
+master = root / "master"
+master.mkdir()
+source = root / "fixture.py"
+source.write_text("# local fixture source\n")
+runner.STATE = root / "state.jsonl"
+runner.REPO_ROOT = root
+text = (
+    "# Fixture module\n\n"
+    f"| Path | `{source}` |\n"
+    "| Status | **RED — no verification recorded** |\n\n"
+    "## Source\n"
+    "The source is at fixture.py:1.\n"
+    + "Local fixture evidence stays unchanged.\n" * 12
+    + "\n## Unverified work\nRED — no verification recorded\n"
+)
+first = master / "01-first.md"
+second = master / "02-second.md"
+first.write_text(text)
+second.write_text(text)
+# Give the index a Path row too: its name must still exclude it, even with --force.
+(master / "00-INDEX.md").write_text(text)
+(master / "03-not-a-module.md").write_text("# Notes\n| Status | **RED** |\n")
+
+# Exercise BOTH accepted-output writers using only local stubs, never provider calls.
+with patch.object(runner, "call", return_value=(text, 0.0)):
+    assert runner.fill_one(first, "fixture-api")[1] == "filled"
+with patch("subprocess.run", return_value=subprocess.CompletedProcess([], 0)):
+    assert runner.fill_one_hermes(second, "fixture-hermes", "fixture-model")[1] == "filled"
+for md, provider in ((first, "fixture-api"), (second, "fixture-hermes")):
+    filled = md.read_text()
+    counts = runner.census(filled)
+    assert counts["h2"] == 2 and counts["locators"] == 1
+    status = runner.STATUS_ROW.findall(filled)
+    assert len(status) == 1
+    assert status[0].startswith(
+        f"**{runner.FILLED_MARKER}{counts['h2']} sections, "
+        f"{counts['locators']} locators, {provider}, "
+    )
+    assert re.search(r", \d{4}-\d{2}-\d{2} UTC\*\*$", status[0])
+    assert "RED — no verification recorded" in filled  # unresolved body stays RED
+
+# A missing status row must be refused, not silently recorded as a successful fill.
+bad = text.replace("| Status | **RED — no verification recorded** |\n", "")
+with patch.object(runner, "call", return_value=(bad, 0.0)):
+    assert runner.fill_one(first, "fixture-api")[1] == "rejected"
+assert runner.STATUS_ROW.findall(first.read_text())[0].startswith("**" + runner.FILLED_MARKER)
+with patch("subprocess.run", side_effect=lambda *a, **k: (
+    second.write_text(bad), subprocess.CompletedProcess([], 0)
+)[1]):
+    before = second.read_bytes()
+    assert runner.fill_one_hermes(second, "fixture-hermes", "fixture-model")[1] == "rejected"
+    assert second.read_bytes() == before
+
+(root / "filled-first.md").write_bytes(first.read_bytes())
+first.write_text(text)  # selection starts with exactly one unfinished module
+print("  PASS  both fill writers stamp census/provider/UTC; missing status is rejected")
+PY
+then
+  say "  PASS  local writer fixtures completed without provider calls"
+else
+  say "  FAIL  runner-owned status writer fixture"; fails=$((fails+1))
+fi
+out=$(CF_MASTER_DIR="$tmpd/master" python3 "$HERE/scripts/master_doc_fill.py" --dry-run 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^todo=1 ' \
+  && [ "$(printf '%s\n' "$out" | grep -c '^candidate ')" = 1 ] \
+  && printf '%s\n' "$out" | grep -Fxq 'candidate 01-first.md' \
+  && printf '%s\n' "$out" | grep -Fxq 'skip 00-INDEX.md index' \
+  && printf '%s\n' "$out" | grep -Fxq 'skip 03-not-a-module.md no path field'; then
+  say "  PASS  RED module selected, index and missing-Path document skipped"
+  printf '%s\n' "$out"
+else
+  say "  FAIL  RED/index/Path selection (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out"
+fi
+cp "$tmpd/filled-first.md" "$tmpd/master/01-first.md"
+# Negative control: the old body-string selector would select BOTH filled modules.
+if [ "$(grep -l 'RED — no verification recorded' "$tmpd/master"/0[12]-*.md | wc -l)" -eq 2 ]; then
+  say "  PASS  old selector would wrongly refill both completed modules"
+else
+  say "  FAIL  negative control no longer distinguishes the old selector"; fails=$((fails+1))
+fi
+before=$(sha256sum "$tmpd/master/"*.md)
+for pass in 1 2; do
+  out=$(CF_MASTER_DIR="$tmpd/master" python3 "$HERE/scripts/master_doc_fill.py" --dry-run 2>&1); rc=$?
+  after=$(sha256sum "$tmpd/master/"*.md)
+  if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^todo=0 ' \
+    && ! printf '%s\n' "$out" | grep -q '^candidate ' && [ "$before" = "$after" ]; then
+    say "  PASS  filled run $pass: todo=0 exit=0 sha256sum unchanged"
+    printf '%s\n' "$out" | grep '^todo='
+  else
+    say "  FAIL  filled run $pass did not converge or changed fixture bytes (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out"
+  fi
+done
+out=$(CF_MASTER_DIR="$tmpd/master" python3 "$HERE/scripts/master_doc_fill.py" --dry-run --force 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^todo=2 ' \
+  && [ "$(printf '%s\n' "$out" | grep -c '^candidate ')" = 2 ] \
+  && printf '%s\n' "$out" | grep -Fxq 'candidate 01-first.md' \
+  && printf '%s\n' "$out" | grep -Fxq 'candidate 02-second.md'; then
+  say "  PASS  --force selects both filled modules, never the non-modules"
+else
+  say "  FAIL  --force selection (exit $rc)"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+# END master-doc-selection
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

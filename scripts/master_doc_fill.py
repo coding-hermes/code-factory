@@ -8,20 +8,24 @@ section that is green without evidence is a lie the next reviewer will find.
 
 Usage:
   ./master_doc_fill.py --limit 3            # prove the loop on three modules
-  ./master_doc_fill.py                     # fill everything still RED
+  ./master_doc_fill.py                     # fill modules without a FILLED status
   ./master_doc_fill.py --workers 4         # parallel
 """
 
 import argparse
 import json
+import os
 import re
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 import pathlib
 from pathlib import Path
 
-MASTER = Path("/home/kara/code-factory/docs/master")
+MASTER = Path(os.environ.get("CF_MASTER_DIR") or "/home/kara/code-factory/docs/master")
+FILLED_MARKER = "FILLED — "
+STATUS_ROW = re.compile(r"^\| Status \| (.*?) \|[ \t]*$", re.MULTILINE)
 STATE = Path("/home/kara/.hermes/logs/master-doc-fill.jsonl")
 ENV = Path("/home/kara/.hermes/.env")
 
@@ -130,6 +134,19 @@ def census(text):
             re.findall(r"\b[\w./-]+\.(?:py|sh|md|go|yaml|jsonl|json):\d+", text)
         ),
     }
+
+
+def mark_filled(text, provider):
+    """Stamp accepted output with runner measurements, not a model status claim."""
+    if len(STATUS_ROW.findall(text)) != 1:
+        raise ValueError("expected exactly one Status row")
+    counts = census(text)
+    status = (
+        f"| Status | **{FILLED_MARKER}{counts['h2']} sections, "
+        f"{counts['locators']} locators, {provider}, "
+        f"{datetime.now(timezone.utc).date().isoformat()} UTC** |"
+    )
+    return STATUS_ROW.sub(lambda _: status, text)
 
 
 def locators_resolve(text, repo_root):
@@ -248,6 +265,10 @@ def fill_one(md, provider):
             "rejected",
             "narration in the document: %s" % ", ".join(hits)[:120],
         )
+    try:
+        out = mark_filled(out, provider)
+    except ValueError as e:
+        return md.name, "rejected", str(e)
     md.write_text(out.strip() + "\n", encoding="utf-8")
     rec = {
         "ts": time.time(),
@@ -339,11 +360,17 @@ def fill_one_hermes(md, provider, model, max_turns=40):
         return md.name, "error", (run.stderr or run.stdout).strip()[:160]
     now = md.read_text(encoding="utf-8")
     verdict, note = gate(text, text, now, REPO_ROOT)
+    if verdict == "ok":
+        try:
+            now = mark_filled(now, provider)
+        except ValueError as e:
+            verdict, note = "rejected", str(e)
     if verdict != "ok":
         md.write_text(
             text, encoding="utf-8"
         )  # revert: the gate is why this mode is safe
         return md.name, "rejected", note
+    md.write_text(now.strip() + "\n", encoding="utf-8")
     return md.name, "filled", note
 
 
@@ -353,7 +380,7 @@ def main():
     ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--provider", default="deepseek", choices=sorted(PROVIDERS))
     ap.add_argument(
-        "--force", action="store_true", help="refill modules that are no longer RED"
+        "--force", action="store_true", help="refill modules already marked FILLED"
     )
     ap.add_argument(
         "--only",
@@ -367,6 +394,11 @@ def main():
         help="api = one completions call; hermes = a real seat that can read the tree, run commands and recall memory",
     )
     ap.add_argument("--model", default="", help="model id for --engine hermes")
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="list candidates without provider calls or writes",
+    )
     a = ap.parse_args()
 
     files = sorted(MASTER.glob("[0-9][0-9]-*.md"))
@@ -376,7 +408,17 @@ def main():
         if only and not f.name.startswith(only):
             continue
         t = f.read_text(encoding="utf-8")
-        if a.force or "RED — no verification recorded" in t:
+        if f.name.lower().endswith("-index.md"):
+            print("skip %s index" % f.name, flush=True)
+            continue
+        if not re.search(r"\| Path \| `([^`]+)` \|", t):
+            print("skip %s no path field" % f.name, flush=True)
+            continue
+        statuses = STATUS_ROW.findall(t)
+        filled = len(statuses) == 1 and statuses[0].removeprefix("**").startswith(
+            FILLED_MARKER
+        )
+        if a.force or not filled:
             todo.append(f)
     if a.limit:
         todo = todo[: a.limit]
@@ -384,6 +426,10 @@ def main():
         "todo=%d provider=%s workers=%d" % (len(todo), a.provider, a.workers),
         flush=True,
     )
+    if a.dry_run:
+        for f in todo:
+            print("candidate %s" % f.name, flush=True)
+        return
     if not todo:
         return
     with ThreadPoolExecutor(max_workers=a.workers) as ex:
