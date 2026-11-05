@@ -1,4 +1,4 @@
-# 44. Documentation pipeline — how these 43 modules were made and graded
+# 44. Documentation pipeline — how these modules were made and graded
 
 | Field | Value |
 |---|---|
@@ -40,7 +40,7 @@ The pipeline's own acceptance is the gate, run over the whole set:
 python3 scripts/master_doc_check.py docs/master --strict
 ```
 
-Measured at `9f343f0`: **43 modules, 33 VERIFIED, 0 errors, `MASTER-DOC: PASS`**. The handbook build is
+Measured after this module was added (tip of 2026-11-05): **44 modules, 34 VERIFIED, 0 errors, `MASTER-DOC: PASS`**. The handbook build is
 verified by construction — `scripts/gen_nasa_handbook.py --out …` prints the page count, and the
 2026-11-05 build measured **273 pages** (10 design sheets + 3 deficiency pages + 260 module pages).
 
