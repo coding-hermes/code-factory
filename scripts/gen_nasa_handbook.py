@@ -168,6 +168,82 @@ def status_of(text):
     return m.group(1) if m else "RED"
 
 
+def deficiency_chapter(board_path, limit_per_priority=40):
+    """A problem report generated from the board, so the handbook states its own open defects.
+
+    Only rows that are NOT complete, ordered P1 first: a reader of the PDF should be able to see what
+    the document set admits is broken without opening the repository.
+    """
+    import json as _json
+
+    rows = []
+    try:
+        for line in pathlib.Path(board_path).read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = _json.loads(line)
+            except _json.JSONDecodeError:
+                continue
+            if r.get("status") == "complete":
+                continue
+            rows.append(r)
+    except OSError:
+        return ""
+    order = {"P1": 0, "P2": 1, "P3": 2}
+    rows.sort(key=lambda r: (order.get(r.get("priority", "P3"), 3), str(r.get("id"))))
+    out = [
+        "<div class='module'><div class='dochead'>CF2A-DR &middot; PROBLEM / DEFICIENCY REPORT</div>"
+        "<h1>Open deficiencies carried by this document set</h1>"
+        "<p>Generated from <code>.coding-hermes/board/tasks.jsonl</code>: every row not yet complete, "
+        "P1 first. Each one was measured by whoever documented the module it belongs to; none is a "
+        "projection. The counts below are the handbook's own statement of what it cannot yet "
+        "claim.</p>"
+    ]
+    counts = {}
+    for r in rows:
+        counts[r.get("priority", "P3")] = counts.get(r.get("priority", "P3"), 0) + 1
+    out.append(
+        "<p><b>%d open rows</b> &mdash; %s</p>"
+        % (
+            len(rows),
+            " &middot; ".join("%s: %d" % (k, counts[k]) for k in sorted(counts)),
+        )
+    )
+    current = None
+    shown = {}
+    for r in rows:
+        pri = r.get("priority", "P3")
+        shown[pri] = shown.get(pri, 0) + 1
+        if shown[pri] > limit_per_priority:
+            continue
+        if pri != current:
+            if current is not None:
+                out.append("</tbody></table>")
+            out.append(
+                "<h2>%s (%d open)</h2><table><thead><tr><th style='width:16mm'>Id</th>"
+                "<th>Deficiency</th><th style='width:22mm'>Status</th></tr></thead><tbody>"
+                % (pri, counts.get(pri, 0))
+            )
+            current = pri
+        out.append(
+            "<tr><td>%s</td><td>%s</td><td>%s</td></tr>"
+            % (
+                inline(str(r.get("id", ""))),
+                inline(str(r.get("title", ""))),
+                inline(str(r.get("status", ""))),
+            )
+        )
+    if current is not None:
+        out.append("</tbody></table>")
+    out.append(
+        "<p><i>Rows beyond %d per priority are omitted here; the board is authoritative.</i></p></div>"
+        % limit_per_priority
+    )
+    return "\n".join(out)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="/tmp/code-factory-handbook.pdf")
@@ -205,6 +281,9 @@ def main():
         )
     toc.append("</ol></div>")
     parts.append("\n".join(toc))
+    dr = deficiency_chapter(REPO / ".coding-hermes/board/tasks.jsonl")
+    if dr:
+        parts.append(dr)
 
     for p in mods:
         t = p.read_text(encoding="utf-8")
