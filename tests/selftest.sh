@@ -3146,5 +3146,133 @@ fi
 
 rm -rf "$seed_tmp" "$seed_home" "$seed_home2"
 
+# BEGIN cf250-seed-drift
+say "48. verify-node.sh folds the seed record: a node's seeded prompts and skills are the digests the seed named (CF-250)"
+# The failure this closes: node_seed.py check can refuse a drifted seed (CF-220) but nothing on
+# the control host ran it — provisioning deletes the node-side copy of the seeder after it
+# applies. verify-node.sh grew a seed_drift leg that stages the seeder and reads its verdict.
+# Each arm below builds the fixture with the REAL seeder (build + apply) and drives the REAL
+# wrapper offline; the bunker arm proves the one-round-trip staging against a stub node.
+NSD="$HERE/scripts/node_seed_drift.py"
+if python3 -B -c 'import ast,sys; ast.parse(open(sys.argv[1],encoding="utf-8").read())' "$NSD"; then
+  say "  PASS  scripts/node_seed_drift.py parses (python3 -B, stdlib only)"
+else
+  say "  FAIL  scripts/node_seed_drift.py does not parse"; fails=$((fails+1))
+fi
+tmpd=$(mktemp -d)
+mkdir -p "$tmpd/src/prompts" "$tmpd/src/skills"
+printf 'prompts/foreman.md\nskills/fake-skill.md\n' > "$tmpd/fixture.manifest"
+# The fixture's own green proof: the bytes the record will pin, applied by the real seeder.
+printf 'the foreman procedure\n' > "$tmpd/src/prompts/foreman.md"
+printf 'a declared skill\n' > "$tmpd/src/skills/fake-skill.md"
+out=$(python3 -B "$SEED" build --manifest "$tmpd/fixture.manifest" --repo-root "$tmpd/src" --out "$tmpd/seed.tar" 2>&1)
+if [ $? -eq 0 ] && [ -f "$tmpd/seed.tar.json" ]; then
+  say "  PASS  the fixture seed record built (2 files, sha256 each)"
+else
+  say "  FAIL  the fixture seed record did not build"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+out=$(python3 -B "$SEED" apply --tar "$tmpd/seed.tar" --record "$tmpd/seed.tar.json" --home "$tmpd/node-home" 2>&1)
+if [ $? -eq 0 ] && [ -f "$tmpd/node-home/.hermes/seed-applied.json" ]; then
+  say "  PASS  the fixture node home carries the applied record at .hermes/seed-applied.json"
+else
+  say "  FAIL  the seeder did not apply to the fixture node home"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# green: record and files agree — PASS and the row names the file count.
+out=$(python3 -B "$NSD" --home "$tmpd/node-home" 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: PASS' \
+  && printf '%s\n' "$out" | grep -Fq '  PASS  seed_drift — ' \
+  && printf '%s\n' "$out" | grep -Fq '2 seeded files present and matching'; then
+  say "  PASS  a seed whose files match its record -> exit $rc, RESULT: PASS, the row names the count"
+else
+  say "  FAIL  a matching seed did not pass with the file count named (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# red: one file tampered by hand — the drifted path and both digest prefixes are named.
+printf 'tampered by hand\n' >> "$tmpd/node-home/.hermes/prompts/foreman.md"
+out=$(python3 -B "$NSD" --home "$tmpd/node-home" 2>&1); rc=$?
+if [ "$rc" -eq 1 ] \
+  && printf '%s\n' "$out" | grep -Fq 'prompts/foreman.md drifted (expected ' \
+  && printf '%s\n' "$out" | grep -Eq '\(expected [0-9a-f]{12}, measured [0-9a-f]{12}\)' \
+  && printf '%s\n' "$out" | grep -Fxq 'RESULT: FAIL (1 seeded path(s) differ from the record)'; then
+  say "  PASS  a tampered file -> exit $rc, the path and both digest prefixes are named"
+else
+  say "  FAIL  a tampered seed did not fail with the path and prefixes named (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+printf 'the foreman procedure\n' > "$tmpd/node-home/.hermes/prompts/foreman.md"
+out=$(python3 -B "$NSD" --home "$tmpd/node-home" 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: PASS'; then
+  say "  PASS  the file restored -> exit $rc, RESULT: PASS again (the red arm can go green)"
+else
+  say "  FAIL  the restored file did not pass again (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# absent: no seed record — WARN naming the record's path; --strict-seed turns the SAME fixture into FAIL.
+rec="$tmpd/node-home/.hermes/seed-applied.json"
+mv "$rec" "$tmpd/record.bak"
+out=$(python3 -B "$NSD" --home "$tmpd/node-home" 2>&1); rc=$?
+if [ "$rc" -eq 3 ] \
+  && printf '%s\n' "$out" | grep -Fq '  WARN  seed_drift — no seed record at ' \
+  && printf '%s\n' "$out" | grep -Fq "$rec"; then
+  say "  PASS  a node with no seed record -> exit $rc, the absent record's path is named"
+else
+  say "  FAIL  an absent record was not a WARN naming its path (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+out=$(python3 -B "$NSD" --home "$tmpd/node-home" --strict-seed 2>&1); rs=$?
+if [ "$rs" -eq 1 ] \
+  && printf '%s\n' "$out" | grep -Fq '  FAIL  seed_drift — no seed record at ' \
+  && printf '%s\n' "$out" | grep -Fq 'an unknown seed is not a pass'; then
+  say "  PASS  the SAME fixture under --strict-seed -> exit $rs, FAIL (unknown is not a pass)"
+else
+  say "  FAIL  --strict-seed did not refuse the absent record (exit $rs)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+mv "$tmpd/record.bak" "$rec"
+out=$(python3 -B "$NSD" --home "$tmpd/node-home" 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: PASS'; then
+  say "  PASS  the record restored -> exit $rc, RESULT: PASS again (the absent arm can go green)"
+else
+  say "  FAIL  the restored record did not pass again (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# Bunker mode offline: the wrapper must stage the seeder to the "node", run its check, and clean
+# the staged file up — in ONE bunker exec round trip, exactly like the freshness arm's stub.
+mkdir -p "$tmpd/bin"
+cat > "$tmpd/bin/bunker" <<'EOF'
+#!/usr/bin/env bash
+printf 'exec\n' >> "${FIXTURE_LOG:?}"
+exec bash -c "${!#}"
+EOF
+chmod +x "$tmpd/bin/bunker"
+out=$(env PATH="$tmpd/bin:$PATH" FIXTURE_LOG="$tmpd/bunker.log" HOME="$tmpd/node-home" \
+  python3 -B "$NSD" --agent cf-fixture --server fixture 2>&1); rc=$?
+execs=$(wc -l < "$tmpd/bunker.log")
+if [ "$rc" -eq 0 ] && [ "$execs" = 1 ] \
+  && printf '%s\n' "$out" | grep -Fxq 'RESULT: PASS' \
+  && printf '%s\n' "$out" | grep -Fq 'agent cf-fixture via fixture' \
+  && printf '%s\n' "$out" | grep -Fq '2 seeded files present and matching'; then
+  say "  PASS  bunker mode offline: ONE exec round trip stages the seeder, checks the node home, RESULT: PASS"
+else
+  say "  FAIL  bunker mode did not measure the seeded home in one round trip ($execs execs, exit $rc)"
+  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+out=$(env PATH="$tmpd/bin:$PATH" FIXTURE_LOG="$tmpd/bunker.log" HOME="$tmpd/node-home" \
+  python3 -B "$NSD" --agent cf-fixture --server fixture --json 2>/dev/null); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" \
+  | python3 -B -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d["status"]=="PASS" and d["record_present"] is True and d["file_count"]==2 and d["home"]!="" else 1)'; then
+  say "  PASS  bunker mode --json: status PASS, record_present true, file_count 2"
+else
+  say "  FAIL  bunker mode --json did not carry the measurement (exit $rc)"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+# END cf250-seed-drift
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

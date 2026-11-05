@@ -11,12 +11,13 @@
 #   3. the gateway's auth gate is closed (unauthenticated request must be 401/302/403)
 #   4. (optional) an artifact on the node hashes the same on both sides
 #   5. the checkout the node will work is the tree origin/main has (CF-244)
+#   6. the seed the node carries is the digests its seed record still names (CF-250)
 # A version string is not evidence: step 2 must be a live HTTP answer from this host.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
 
-AGENT="" SERVER="${BUNKER_SERVER:-}" PORT=10800 ARTIFACT="" STRICT_FRESHNESS=0
+AGENT="" SERVER="${BUNKER_SERVER:-}" PORT=10800 ARTIFACT="" STRICT_FRESHNESS=0 STRICT_SEED=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --agent) AGENT="$2"; shift 2 ;;
@@ -24,10 +25,11 @@ while [ $# -gt 0 ]; do
     --port) PORT="$2"; shift 2 ;;
     --artifact) ARTIFACT="$2"; shift 2 ;;
     --strict-freshness) STRICT_FRESHNESS=1; shift ;;
+    --strict-seed) STRICT_SEED=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
-[ -z "$AGENT" ] && { echo "usage: $0 --agent ID [--server NAME] [--port P] [--artifact PATH] [--strict-freshness]"; exit 2; }
+[ -z "$AGENT" ] && { echo "usage: $0 --agent ID [--server NAME] [--port P] [--artifact PATH] [--strict-freshness] [--strict-seed]"; exit 2; }
 # The old guard used ${VAR:?} at assignment time, so --server could never be used without the
 # environment variable being set first: the documented flag was dead.
 [ -z "$SERVER" ] && { echo "set BUNKER_SERVER or pass --server <name>" >&2; exit 2; }
@@ -141,6 +143,48 @@ else
       ;;
   esac
   rm -f "$fresh_rows" "$fresh_json"
+fi
+
+# 6. the seeded prompts and skills are the digests the seed recorded (CF-250)
+# Steps 1-5 never open the seed record: a node whose agent answers, whose
+# gateway is up and whose gate is closed can still carry `prompts/foreman.md`
+# with a foreman's hand-edited procedure in it, because provisioning deletes
+# the node-side copy of the seeder after it applies. scripts/node_seed_drift.py
+# runs that seeder's own check — staged to the node in ONE bunker exec and
+# removed in the same one — and its verdict is folded in here, so a drifted
+# seed drives VERIFY: FAIL on its own.
+#
+# Default mapping: PASS -> PASS, drift -> FAIL, unmeasurable (or a node with no
+# seed record yet) -> WARN — "cannot measure" is not proof of a broken copy,
+# the same doctrine as the freshness leg above. With --strict-seed an
+# unmeasurable seed is a FAIL too, so a gate can refuse on "unknown".
+SEEDCHK="$HERE/node_seed_drift.py"
+if [ ! -r "$SEEDCHK" ]; then
+  bad "seed_drift" "$SEEDCHK missing — the node's seed is unmeasured"
+else
+  seed_rows=$(mktemp); seed_json=$(mktemp)
+  strict_seed_argv=""
+  [ "${STRICT_SEED:-0}" -eq 1 ] && strict_seed_argv="--strict-seed"
+  python3 -B "$SEEDCHK" --agent "$AGENT" --server "$SERVER" $strict_seed_argv --json >"$seed_json" 2>"$seed_rows"
+  src=$?
+  case "$src" in
+    0)
+      ok "seed_drift" "$(grep -F '  PASS  seed_drift — ' "$seed_rows" | sed -e 's/^  PASS  seed_drift — //' | head -1)"
+      ;;
+    1)
+      bad "seed_drift" "$(grep -E '^  FAIL  seed_drift — ' "$seed_rows" | sed -e 's/^ *FAIL  seed_drift — //' | paste -sd '|' - | sed -e 's/|/ | /g' | cut -c1-500)"
+      ;;
+    *)
+      detail=$(grep -E '^  WARN  seed_drift — ' "$seed_rows" | sed -e 's/^  WARN  seed_drift — //' | head -1)
+      [ -z "$detail" ] && detail=$(grep -E '^RESULT: ' "$seed_rows" | head -1 | sed -e 's/^RESULT: //')
+      if [ "${STRICT_SEED:-0}" -eq 1 ]; then
+        bad "seed_drift" "${detail:-unmeasurable} (--strict-seed: unknown is not a pass)"
+      else
+        warn "seed_drift" "${detail:-unmeasurable} — the seed could not be measured; pass --strict-seed to refuse it"
+      fi
+      ;;
+  esac
+  rm -f "$seed_rows" "$seed_json"
 fi
 
 say ""
