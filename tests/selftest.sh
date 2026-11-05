@@ -2117,6 +2117,167 @@ else
   say "  FAIL  absent scheduler DB did not fail closed (exit $rc)"; fails=$((fails+1))
 fi
 rm -rf "$tmpd"
+# BEGIN cf213-land-node-branch
+say "42. a node branch lands on main with real gates, or refuses naming the reason (CF-213)"
+# Nothing in this repo merged a result envelope's branch+commit, so a finished node task had no
+# path into origin/main. The arm builds a real local origin and drives the real script: every
+# refusal leg asserts the measured reason, and the success leg re-clones the remote to prove the
+# push, not the merge, is what the PASS row reports.
+bash -n "$HERE/scripts/land-node-branch.sh" \
+  && say "  PASS  bash -n scripts/land-node-branch.sh" \
+  || { say "  FAIL  land-node-branch syntax"; fails=$((fails+1)); }
+tmpd=$(mktemp -d)
+export GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.invalid
+export GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.invalid
+cf213() {  # cf213 <label> <expect-rc> <needle> [args...]
+  local label="$1" want="$2" needle="$3"; shift 3
+  out=$(/bin/bash "$HERE/scripts/land-node-branch.sh" "$@" 2>&1); rc=$?
+  if [ "$rc" -eq "$want" ] && printf '%s\n' "$out" | grep -Fq -- "$needle"; then
+    say "  PASS  $label -> exit $rc"
+    printf '%s\n' "$out" | grep -F -- "$needle"
+  else
+    say "  FAIL  $label -> exit $rc, expected '$needle'"; fails=$((fails+1))
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+}
+git init -q -b main "$tmpd/src"
+printf 'base\n' > "$tmpd/src/README"
+git -C "$tmpd/src" add README && git -C "$tmpd/src" commit -qm base
+git clone -q --bare "$tmpd/src" "$tmpd/origin.git"
+git clone -q "$tmpd/origin.git" "$tmpd/wd"
+git -C "$tmpd/src" remote add origin "$tmpd/origin.git"
+base=$(git -C "$tmpd/wd" rev-parse HEAD)
+# the node's branch, pushed the way a node pushes it
+git -C "$tmpd/wd" checkout -q -b node/crier/fixture
+printf 'node work\n' > "$tmpd/wd/node.txt"
+git -C "$tmpd/wd" add node.txt && git -C "$tmpd/wd" commit -qm "node: land this"
+node1=$(git -C "$tmpd/wd" rev-parse HEAD)
+git -C "$tmpd/wd" push -q origin node/crier/fixture:refs/heads/node/crier/fixture
+git -C "$tmpd/wd" checkout -q -b elsewhere main
+printf 'elsewhere\n' > "$tmpd/wd/elsewhere.txt"
+git -C "$tmpd/wd" add elsewhere.txt && git -C "$tmpd/wd" commit -qm elsewhere
+other=$(git -C "$tmpd/wd" rev-parse HEAD)
+git -C "$tmpd/wd" checkout -q main
+
+# a0. usage is not a landing
+cf213 "usage" 2 "usage: $HERE/scripts/land-node-branch.sh --workdir DIR" --branch node/crier/fixture
+
+# a. a dirty workdir is refused before anything is measured against the remote
+printf 'scratch\n' > "$tmpd/wd/untracked.txt"
+cf213 "dirty workdir" 1 "  FAIL  workdir_clean — 1 uncommitted path(s) in $tmpd/wd (first: ?? untracked.txt) — commit or stash them first" \
+  --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$node1"
+rm -f "$tmpd/wd/untracked.txt"
+
+# b. the envelope's commit must be on the envelope's branch
+cf213 "commit off the branch" 1 "  FAIL  commit_on_branch — $other is not reachable from refs/remotes/origin/node/crier/fixture (tip ${node1:0:12})" \
+  --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$other"
+# c. a commit this clone has never seen cannot be landed, and the row says so
+cf213 "unfetched commit" 1 "  FAIL  commit — 0123456789abcdef0123456789abcdef01234567 is not a commit in $tmpd/wd" \
+  --workdir "$tmpd/wd" --branch node/crier/fixture --commit 0123456789abcdef0123456789abcdef01234567
+
+# d. --ff-only is the default: local main ahead of the remote is not fast-forwardable
+printf 'local\n' > "$tmpd/wd/local.txt"
+git -C "$tmpd/wd" add local.txt && git -C "$tmpd/wd" commit -qm local
+local_sha=$(git -C "$tmpd/wd" rev-parse HEAD)
+cf213 "ff-only refused" 1 "  FAIL  ff_only — main at ${local_sha:0:12} is not an ancestor of $node1 (1 local commit(s) on main are not in the branch) — not fast-forwardable" \
+  --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$node1"
+git -C "$tmpd/wd" reset -q --hard "$base"
+
+# e. a branch that has not seen a newer main is refused, and the remedy is named
+printf 'sibling\n' > "$tmpd/src/sibling.txt"
+git -C "$tmpd/src" add sibling.txt && git -C "$tmpd/src" commit -qm sibling
+git -C "$tmpd/src" push -q origin main
+sibling=$(git -C "$tmpd/src" rev-parse HEAD)
+cf213 "stale branch" 1 "  FAIL  descendant — refs/remotes/origin/node/crier/fixture ${node1:0:12} is not a descendant of origin/main ${sibling:0:12} — 1 commit(s) on origin/main are not in the branch" \
+  --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$node1"
+
+# the refusal's own remedy, run for real
+git -C "$tmpd/wd" fetch -q origin
+git -C "$tmpd/wd" checkout -q node/crier/fixture
+git -C "$tmpd/wd" rebase -q origin/main
+node2=$(git -C "$tmpd/wd" rev-parse HEAD)
+git -C "$tmpd/wd" push -q --force-with-lease origin node/crier/fixture:refs/heads/node/crier/fixture
+git -C "$tmpd/wd" checkout -q main
+
+# f. a red gate lands nothing: neither ref moves
+cf213 "red gate" 1 "  FAIL  gate — 'echo fixture gate refused; exit 7' exited 7 at ${node2:0:12} — fixture gate refused" \
+  --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$node2" --gate-cmd 'echo fixture gate refused; exit 7'
+if [ "$(git -C "$tmpd/wd" rev-parse HEAD)" = "$base" ] \
+  && [ "$(git -C "$tmpd/origin.git" rev-parse refs/heads/main)" = "$sibling" ]; then
+  say "  PASS  red gate moved no ref — main ${base:0:12}, origin/main ${sibling:0:12}"
+else
+  say "  FAIL  red gate moved a ref"; fails=$((fails+1))
+fi
+
+# g. --dry-run predicts the exact commands and changes nothing
+wt_before=$(git -C "$tmpd/wd" worktree list | wc -l)
+cf213 "dry run" 0 "LAND: DRY-RUN — 0 commands run, nothing merged or pushed, no ref moved" \
+  --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$node2" --gate-cmd 'test -f node.txt' --dry-run
+if printf '%s\n' "$out" | grep -Fq "  git -C $tmpd/wd merge --ff-only $node2" \
+  && printf '%s\n' "$out" | grep -Fq "  git -C $tmpd/wd push origin HEAD:refs/heads/main" \
+  && [ "$(git -C "$tmpd/wd" rev-parse HEAD)" = "$base" ] \
+  && [ "$(git -C "$tmpd/origin.git" rev-parse refs/heads/main)" = "$sibling" ] \
+  && [ "$(git -C "$tmpd/wd" worktree list | wc -l)" = "$wt_before" ]; then
+  say "  PASS  dry run named the merge and the push; no ref or worktree moved"
+else
+  say "  FAIL  dry run mutated the tree or did not name its commands"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# h. the landing: the gate runs on the NODE's tree (node.txt exists on neither ref here)
+cf213 "landing" 0 "  PASS  landed — $node2 is an ancestor of origin/main" \
+  --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$node2" \
+  --gate-cmd 'test -f node.txt && grep -q "node work" node.txt'
+if printf '%s\n' "$out" | grep -Fq "  PASS  gate — 'test -f node.txt" \
+  && printf '%s\n' "$out" | grep -Fq "LANDED: node/crier/fixture @ $node2 in origin/main"; then
+  say "  PASS  the gate row and the LANDED line name the node commit"
+else
+  say "  FAIL  the landing did not report its gate row or its LANDED line"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+git clone -q "$tmpd/origin.git" "$tmpd/verify" 2>/dev/null
+if git -C "$tmpd/verify" merge-base --is-ancestor "$node2" HEAD 2>/dev/null \
+  && [ -f "$tmpd/verify/node.txt" ] && [ -f "$tmpd/verify/sibling.txt" ]; then
+  say "  PASS  a fresh clone of the remote contains $node2 and the node's file"
+else
+  say "  FAIL  the remote does not contain the landed commit"; fails=$((fails+1))
+fi
+
+# i. the same command twice changes nothing (the second run does not even run the gate)
+head_before=$(git -C "$tmpd/wd" rev-parse HEAD)
+cf213 "idempotent re-run" 0 "  PASS  landed — $node2 is an ancestor of origin/main" \
+  --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$node2" --gate-cmd 'exit 99'
+if printf '%s\n' "$out" | grep -Fq "LANDED (already)" \
+  && [ "$(git -C "$tmpd/wd" rev-parse HEAD)" = "$head_before" ]; then
+  say "  PASS  second run exited $rc with no merge and no push"
+else
+  say "  FAIL  second run changed the tree"; fails=$((fails+1))
+fi
+
+# j. a push the remote refuses must not print a success row: the merge is local, the landing not
+git -C "$tmpd/wd" checkout -q node/crier/fixture
+printf 'third\n' > "$tmpd/wd/third.txt"
+git -C "$tmpd/wd" add third.txt && git -C "$tmpd/wd" commit -qm "node: third"
+node3=$(git -C "$tmpd/wd" rev-parse HEAD)
+git -C "$tmpd/wd" push -q origin node/crier/fixture:refs/heads/node/crier/fixture
+git -C "$tmpd/wd" checkout -q main
+printf '#!/bin/sh\necho "rejected by fixture hook" >&2\nexit 1\n' > "$tmpd/origin.git/hooks/pre-receive"
+chmod +x "$tmpd/origin.git/hooks/pre-receive"
+cf213 "refused push" 1 "  FAIL  push — git push origin HEAD:refs/heads/main failed — remote: rejected by fixture hook" \
+  --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$node3"
+if printf '%s\n' "$out" | grep -Fq "merged locally, NOT landed" \
+  && ! printf '%s\n' "$out" | grep -q '^  PASS  landed' \
+  && ! printf '%s\n' "$out" | grep -q '^LANDED'; then
+  say "  PASS  refused push printed no landed row and no LANDED line"
+else
+  say "  FAIL  a failed push printed a success row"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+rm -f "$tmpd/origin.git/hooks/pre-receive"
+unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
+unset -f cf213
+rm -rf "$tmpd"
+# END cf213-land-node-branch
 
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

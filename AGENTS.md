@@ -68,6 +68,7 @@ tests/selftest.sh                       # parse every script, prove the checkers
 scripts/bunker-server-install.sh --check   # can this host run the factory?
 scripts/node-create.sh --project P --repo URL --harness hermes
 scripts/verify-node.sh --agent ID --artifact PATH
+scripts/land-node-branch.sh --workdir W --branch node/L/<id> --commit SHA --gate-cmd 'go test ./...'
 ```
 
 Inside a node the entry point is `project-node.sh --check|--apply`.

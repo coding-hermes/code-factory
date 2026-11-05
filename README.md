@@ -41,7 +41,7 @@ tells you which value to supply.
 docs/            DESIGN.md, PRD-code-factory.md, OPERATIONS.md, BOARD.md; audits/ holds tick evidence
 specs/           NODE.md (what a node is), ENVELOPE.md (dispatch/result), HARNESS.md (adapters)
 scripts/         node checks and provisioners: bunker-server-install.sh, project-node.sh,
-                 node-create.sh, verify-node.sh, lib.sh
+                 node-create.sh, verify-node.sh, land-node-branch.sh, lib.sh
 scripts/harness/ install-<harness>.sh — shipped: hermes, claude-code, opencode.
                  codex, aider, goose and pi-agent are documented in specs/HARNESS.md and ship
                  no installer yet (CF-006)
