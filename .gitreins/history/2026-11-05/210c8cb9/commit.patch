@@ -1,0 +1,1579 @@
+commit 8db72b393b6565887b68d9708df0b93e548a8fd8
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Thu Nov 5 07:43:28 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Thu Nov 5 07:43:28 2026 -0500
+
+    feat: prove a node checkout matches origin/main and name the drift — CF-244
+    
+    A node's clone printed PASS at every layer while it sat one commit behind
+    origin/main, because nothing measured the checkout's git state. Measured on
+    cf-node (bunker-las-03) before this change: HOME=/home/bunker-cf-node,
+    $HOME/repo on main at 7f22d02, tree clean, 1 behind origin/main 04fc398 —
+    invisible to verify-node.sh, which graded the agent, the gateway and the auth
+    gate and never the tree the node would actually work.
+    
+    - scripts/node_freshness.py (new, stdlib only): two modes, one classification.
+      --workdir measures a local checkout with no bunker, no network and no
+      database; --agent/--server resolves the agent's home from the agent and
+      measures its clone in ONE bunker exec round trip (the stream dies at 300 s,
+      so it is one fast read-only battery). Four arms each name their measured
+      value — branch, worktree, ancestor, sync — and the check fails on a detached
+      HEAD, an uncommitted path, a diverged HEAD, or any lag, naming the lag count
+      and the differing paths. Exit 0 PASS, 1 drift/dirty, 2 usage/unreachable: an
+      unmeasurable node is never a PASS. A checkout with no origin is a named FAIL,
+      not a crash.
+    - scripts/project-node.sh: layer 40 measures the checkout after the clone,
+      using the clone's own copy of the probe when it carries one and a node-side
+      inline fallback otherwise, so nothing depends on the control host's scripts
+      existing on the node. DIRTY is a WARN naming the paths (the node may be
+      mid-task, per specs/NODE.md); DRIFT is a FAIL, because a node working a tree
+      that no longer matches origin/main is the failure this row exists for.
+      --apply records the measurement on the node: $HOME/.node/freshness.json, and
+      layer 90 nests it into node.json.
+    - scripts/verify-node.sh: a fifth step folds freshness into VERIFY:, so a node
+      that answers HTTP but is behind origin/main can no longer print VERIFY: PASS.
+      Live: cf-node now prints FAIL checkout_freshness behind=1 / VERIFY: FAIL (1).
+    - specs/NODE.md: manifest `freshness` object, the layer-40 cell, and the
+      failure semantics (dirty WARN, drift FAIL, neither repaired silently) —
+      AGENTS.md rule 1, changed in the same commit as the script.
+    - tests/selftest.sh section 47: a real local origin, with the green arm first
+      so a red arm is the check refusing real drift rather than a broken fixture.
+      The probe rung gets its own seed and origin: an earlier draft committed the
+      probe into the seed the other rungs measure, which advanced their origin and
+      turned the dirty arm into drift — a fixture that graded itself.
+    - docs/ACCEPTANCE-PLAN.md: the §47 mapping row and the derived counts
+      (50 arms / 47 numbered / 36 unclaimed, 21 governed), which section 39
+      enforces both ways.
+    
+    Evidence at this tree: python3 -m py_compile scripts/node_freshness.py -> OK;
+    bash -n on all three shell files -> OK; bash tests/selftest.sh -> SELFTEST:
+    PASS (section 47: 13 arms green, including the two arms that must go red);
+    bash scripts/boardctl validate -> RESULT: OK (4 warnings); live probe
+    scripts/node_freshness.py --agent cf-node --server bunker-las-03 -> FAIL
+    sync behind=1 naming .coding-hermes/board/{events,tasks}.jsonl, exit 1, 0.96 s.
+    
+    ch:trace CF-244 | specs/NODE.md#layers | tests/selftest.sh#47 | evidence: scripts/node_freshness.py --agent cf-node --server bunker-las-03 -> RESULT: FAIL (behind 1 commit(s) vs origin/main), exit 1
+---
+ docs/ACCEPTANCE-PLAN.md   |  11 +-
+ scripts/node_freshness.py | 732 ++++++++++++++++++++++++++++++++++++++++++++++
+ scripts/project-node.sh   | 289 +++++++++++++++++-
+ scripts/verify-node.sh    |  46 ++-
+ specs/NODE.md             |  27 +-
+ tests/selftest.sh         | 238 +++++++++++++++
+ 6 files changed, 1331 insertions(+), 12 deletions(-)
+
+diff --git a/docs/ACCEPTANCE-PLAN.md b/docs/ACCEPTANCE-PLAN.md
+index 201f6f5..04837f2 100644
+--- a/docs/ACCEPTANCE-PLAN.md
++++ b/docs/ACCEPTANCE-PLAN.md
+@@ -66,12 +66,12 @@ requirement's `Verified by` cell above names it. Twelve of the 49 arms are named
+ `grep -oE '§[0-9]+[a-z]?' docs/PRD-code-factory.md | sort -u`, returns **14** ids rather than 12: it
+ also catches §17 and §18, which are named only in the milestone block, where they certify `CF-077`
+ (a board row, not a `CF-101`–`CF-112` requirement) — so they count as unnamed for this total and
+-carry their own row below. The remaining 35 — §1, §7, §7b, §31b, §8,
+-§9, §10, §11, §17, §18, §19, §21, §22–§27, §28, §29, §30, §31, §32, §33, §34, §35, §36, §37, §38, §39, §40, §41, §42, §43, §44, §45 and §46 — test repository and
++carry their own row below. The remaining 36 — §1, §7, §7b, §31b, §8,
++§9, §10, §11, §17, §18, §19, §21, §22–§27, §28, §29, §30, §31, §32, §33, §34, §35, §36, §37, §38, §39, §40, §41, §42, §43, §44, §45, §46 and §47 — test repository and
+ fleet tooling (board parsing and the board gate, prompt inventory, lane targets, repo-url guards, the
+-census and README arms), not a CF-101–CF-112 requirement, and 20 of the 35 carry a governing board row:
++census and README arms), not a CF-101–CF-112 requirement, and 21 of the 36 carry a governing board row:
+ §7b `CF-088`, §19 `CF-085`, §21 `CF-091`, §29 `CF-114`, §31 `CF-127`, §30 `CF-093`, §32
+-`CF-145`, §33 `CF-119`, §34 `CF-163` AC3, §35 `CF-153`, §36 `CF-159`, §37 `CF-151`, §31b `CF-183`, §17–§18 `CF-077`, §38 `CF-182`, §39 `CF-198`, §40 `CF-214`, §41 `CF-212`, §44 `CF-215`. The other 15 of the 35 — §1, §7, §8, §9, §10, §11, §22–§27, §28, §42 and §43 — carry no governing row, so by this paragraph's own rule they are untracked test surface (§42 is governed by `AGENTS.md` rule 2 and the SKILL section it quotes, and §43 by `AGENTS.md` rules 2, 5 and 8 and the SKILL section it quotes, not by a board row), and `CF-113` owns that exhaustiveness claim (§10 is the one exception of substance: it exercises the Hermes adapter's Python refusal, which is CF-106 evidence). §7c is not an arm at `7ec7137`: `CF-155` shipped it at `32f38a5` and the `CF-151` landing `4ce1e48` overwrote it, so it is excluded from both totals above rather than counted as governed, and `CF-186` restores it. Some of these overlap a requirement's subject without
++`CF-145`, §33 `CF-119`, §34 `CF-163` AC3, §35 `CF-153`, §36 `CF-159`, §37 `CF-151`, §31b `CF-183`, §17–§18 `CF-077`, §38 `CF-182`, §39 `CF-198`, §40 `CF-214`, §41 `CF-212`, §44 `CF-215`, §47 `CF-244`. The other 15 of the 36 — §1, §7, §8, §9, §10, §11, §22–§27, §28, §42 and §43 — carry no governing row, so by this paragraph's own rule they are untracked test surface (§42 is governed by `AGENTS.md` rule 2 and the SKILL section it quotes, and §43 by `AGENTS.md` rules 2, 5 and 8 and the SKILL section it quotes, not by a board row), and `CF-113` owns that exhaustiveness claim (§10 is the one exception of substance: it exercises the Hermes adapter's Python refusal, which is CF-106 evidence). §7c is not an arm at `7ec7137`: `CF-155` shipped it at `32f38a5` and the `CF-151` landing `4ce1e48` overwrote it, so it is excluded from both totals above rather than counted as governed, and `CF-186` restores it. Some of these overlap a requirement's subject without
+ deciding it (§10 exercises the Hermes adapter's Python refusal, which is CF-106 evidence but not the
+ two-adapter contract CF-106 demands); the cell stays the authority, so the overlap is recorded here
+ rather than promoted into it. A section that is neither named by a `Verified by` cell nor by a board
+@@ -103,7 +103,7 @@ A green suite is not PRD coverage, and the reverse gap matters as much as the fo
+ 31 arms, 88 `PASS` rows — and only three requirements have an arm that can fail on them (`CF-102` ←
+ §2 and §14, `CF-105` ← §5, `CF-109` ← §12 and §13 partially, plus `CF-127` ← §31 as of the CF-127
+ landing). Every other arm is governed by a spec, a
+-rule or a board row, and the mapping below names every numbered section in the current tree. The current tree carries 49 arms: 44 numbered sections and three lettered arms (§4b, §7b, §31b). These counts are derived by `bash docs/audits/cf198-section-mapping.sh`, which also enforces the table's numbered-section coverage both ways — a section the tree carries and the table omits is a named plan-side failure, and a row the table names with no such section is a named tree-side one — so the next section that lands cannot leave the table or the count behind. The older
++rule or a board row, and the mapping below names every numbered section in the current tree. The current tree carries 50 arms: 47 numbered sections and three lettered arms (§4b, §7b, §31b). These counts are derived by `bash docs/audits/cf198-section-mapping.sh`, which also enforces the table's numbered-section coverage both ways — a section the tree carries and the table omits is a named plan-side failure, and a row the table names with no such section is a named tree-side one — so the next section that lands cannot leave the table or the count behind. The older
+ section census in `docs/audits/cf099-prd-drift-probe.sh` still counts only numbered lines, so a lettered arm
+ lands uncounted (`CF-113`, pending, owns that separate fix).
+ 
+@@ -150,6 +150,7 @@ lands uncounted (`CF-113`, pending, owns that separate fix).
+ | §43 a node's environment is declared data and the applier refuses, diffs and idempotently applies it | `AGENTS.md` rules 2, 5 and 8 + `skills/code-factory-bunker/SKILL.md` § Declared node environment (ten legs, each able to red on its own: an absent profile is a named FAIL; a literal secret for a `KEY`-named variable is refused and never echoed; an unknown `CONFIG_SET` path is refused with the allowed set named; `--check` prints the diff with the secret masked, exits 1 and writes nothing — not even `~/.hermes`; `--apply` writes both files at mode 600 and keeps every unrelated line and key; a second `--apply` leaves both sha256s unchanged and exits 0; `--check` is then green, so unmanaged variables are a WARN and not drift; and the provisioner refuses the same profile through `FAIL env_profile` before it touches a host. Proved red by mutation: accepting a literal secret reds two legs, reporting a change when nothing differs reds the idempotence and post-apply legs) |
+ | §45 the harness conformance battery can go red (fixture mode) | `specs/HARNESS-MATRIX.md` §7 + `CF-225`/`CF-227` (five legs per harness; a harness counts as supported only when all five are PASS on a real node) |
+ | §46 a provisioning config is generated from the registry, or refused by name | `CF-214` + `skills/code-factory-bunker/SKILL.md` § Generating the config from the registry |
++| §47 a node checkout freshness check can go RED: drift and a local edit are named | board `CF-244` (`scripts/node_freshness.py` measures the checkout a node will actually work — branch, HEAD, whether HEAD is an ancestor of `origin/main`, the lag count, and the uncommitted and differing paths — in ONE `bunker exec` round trip with the agent's home resolved from the agent; `--workdir` measures a local checkout with no bunker, no network and no database; exit 0 PASS, 1 drift or dirty, 2 usage or unreachable. The fixture builds a real local origin: a clone in sync passes (the green proof), an origin that advanced is refused naming `behind=1` and the differing file, an uncommitted edit is refused naming the path and calling it upstream's, a detached HEAD and a checkout with no `origin` remote are refused by name rather than crashing, bunker mode proves one exec round trip and a `--json` object carrying `differing_files`, layer 40 of `scripts/project-node.sh` runs the check after the clone (DIRTY is WARN, DRIFT is FAIL, per `specs/NODE.md`), and `--apply` records `freshness` in `node.json` — `status` the check's own verdict, `ladder` how provisioning graded it) |
+ | §44 the node bus worker names the refusal it cannot proceed past | board `CF-215` (`scripts/node-bus-worker.py` is the missing consumer: a node provisioned onto the bus had nothing reading its inbox. It polls `/agents/<id>/inbox` with BOTH credentials crier demands — the shared bearer and the per-agent ed25519 signature, `X-Agent-ID`/`X-Agent-Ts`/`X-Agent-Sig` over the method, the raw path without its query and a unix timestamp, with the optional `X-Agent-Body-SHA256` extension when it binds a body — verifies `brief.digest` against `sha256(text)` before running anything, runs the harness in the clone, posts the result envelope with its `corr_id` to `reply_to`, and acks only after the result is delivered. Four legs, each able to red on its own: the two identity files disagreeing on the project (refused before any bus contact), an unreadable identity, an absent key — named by path, never invented, and refused before the network — and an unreachable bus (`000`). Proved red by mutation: letting a missing key fall through reds the third leg) |
+ 
+ These sections are legitimate and must not be deleted to "clean up" the mapping: they serve
+diff --git a/scripts/node_freshness.py b/scripts/node_freshness.py
+new file mode 100644
+index 0000000..326085b
+--- /dev/null
++++ b/scripts/node_freshness.py
+@@ -0,0 +1,732 @@
++#!/usr/bin/env python3
++"""node_freshness.py — prove a node's checkout is the tree origin/main has.
++
++A node is one bunker agent, one repo, one harness. Nothing in this repo measured
++the *git state* of that repo: `lane_target.py --exec-bunker` proves the agent
++answers and the path exists, `verify-node.sh` proves the transport and the auth
++gate, and `repo_freshness.py` measures local lane workdirs from the scheduler
++database only. So a node could sit one commit behind origin/main — or carry a
++local edit that silently blocks its own fast-forward pull — while every layer
++printed PASS (measured on cf-node, 2026-11-05: HEAD 7f22d02, origin/main
++04fc398, porcelain clean, and an earlier `.gitignore` edit had blocked the pull).
++
++This probe measures that checkout and names what is wrong with it. Four arms,
++each a row with its measured value:
++
++  branch    — an attached branch, or the detached/unborn state named
++  worktree  — `git status --porcelain`; every path is printed, because an
++              uncommitted edit on a node is a finding: the fix belongs upstream
++  ancestor  — `git merge-base --is-ancestor HEAD origin/main`
++  sync      — `git rev-list --count HEAD..origin/main` and the differing paths
++
++Modes (exactly one):
++
++  --workdir PATH                  a local checkout. No bunker, no network, no
++                                  database: this is the mode fixtures use.
++  --agent ID --server NAME        a node's checkout, probed through the agent.
++      [--path REMOTE_PATH]        Defaults to `repo` relative to the agent's
++                                  home, and the home is resolved FROM the agent
++                                  (`echo $HOME`) inside the same exec — never
++                                  templated as /home/bunker-<id>.
++
++The whole bunker battery is ONE `bunker exec` round trip: the remote side prints
++`key=value` lines and BEGIN/END blocks, the control host parses. The exec stream
++dies at 300 s, so the battery is a fast read-only measurement plus one
++`git fetch --quiet origin` (a ref-only update: the verdict is measured against
++the remote today instead of against refs nobody refreshed).
++
++The comparison ref is `origin/main`. A repo whose default branch is something
++else is measured against `origin/HEAD` and the ref that was used is printed, so
++the row never claims a comparison it did not make. A repo with no `origin`
++remote is a FAIL naming that, not a crash.
++
++Usage:
++  scripts/node_freshness.py --workdir ~/repo
++  scripts/node_freshness.py --agent cf-node --server bunker-las-03
++  scripts/node_freshness.py --agent cf-node --server bunker-las-03 --path src/cf --json
++
++Exit codes: 0 PASS, 1 drift or dirty, 2 usage or unreachable (an unmeasurable
++node is not a PASS). With --json the rows go to stderr and one JSON object goes
++to stdout, so a provisioner can store the measurement without parsing prose.
++
++stdlib + the git CLI only.
++"""
++
++from __future__ import annotations
++
++import argparse
++import json
++import os
++import shutil
++import subprocess
++import sys
++from dataclasses import dataclass, field
++from typing import Optional
++
++GIT_BIN = shutil.which("git") or "git"
++BUNKER_BIN = shutil.which("bunker") or "bunker"
++
++EXIT_OK = 0
++EXIT_DRIFT = 1
++EXIT_USAGE = 2
++
++# The ref a node's checkout is held to. Anything else is only a fallback that
++# the rows name explicitly.
++CMP_REF = "origin/main"
++
++# A drifted node can differ in hundreds of paths; print enough to act on and
++# point at --json for the rest. The lag count is always printed in full.
++MAX_SHOWN = 50
++
++
++class Res:
++    """One command's result. A timeout and a missing binary are results too."""
++
++    __slots__ = ("rc", "out", "err")
++
++    def __init__(self, rc: int, out: str, err: str) -> None:
++        self.rc = rc
++        self.out = out
++        self.err = err
++
++    @property
++    def ok(self) -> bool:
++        return self.rc == 0
++
++    def text(self) -> str:
++        return (self.out or "").strip()
++
++    def first_err(self) -> str:
++        text = (self.err or "").strip() or (self.out or "").strip()
++        for line in text.splitlines():
++            if line.strip():
++                return line.strip()[:300]
++        return f"exit {self.rc}"
++
++
++def git_env() -> dict:
++    """A git that never prompts: a probe must not hang on a credential dialog."""
++    env = dict(os.environ)
++    env.update(
++        {
++            "GIT_TERMINAL_PROMPT": "0",
++            "GIT_SSH_COMMAND": env.get("GIT_SSH_COMMAND")
++            or "ssh -o BatchMode=yes -o ConnectTimeout=10",
++            "LC_ALL": "C",
++            "LANG": "C",
++        }
++    )
++    return env
++
++
++def run(cmd: list, timeout: int) -> Res:
++    try:
++        proc = subprocess.run(
++            cmd,
++            capture_output=True,
++            text=True,
++            timeout=timeout,
++            env=git_env(),
++            check=False,
++        )
++    except subprocess.TimeoutExpired:
++        return Res(-9, "", f"timeout after {timeout}s: {' '.join(cmd[:4])}")
++    except OSError as exc:
++        return Res(-1, "", f"{type(exc).__name__}: {exc}")
++    return Res(proc.returncode, proc.stdout, proc.stderr)
++
++
++def git(root: str, *args: str, timeout: int = 60) -> Res:
++    return run([GIT_BIN, "-C", root, *args], timeout)
++
++
++def shq(value: str) -> str:
++    """One value quoted for a remote POSIX shell, apostrophes included."""
++    return "'" + value.replace("'", "'\\''") + "'"
++
++
++def strip_status(lines: list) -> list:
++    """`git status --porcelain` -> the paths, without the 3-char status prefix.
++
++    Entry format is XY<space>PATH (or `XY ORIG -> PATH` for a rename). The row
++    has to name files an operator can act on, so the status letters go away and
++    a rename keeps its arrow.
++    """
++    out = []
++    for line in lines:
++        if not line.strip():
++            continue
++        path = line[3:] if len(line) > 3 else line.strip()
++        out.append(path.strip())
++    return out
++
++
++@dataclass
++class Measurement:
++    """What was measured, before any judgement. Both modes fill this in."""
++
++    mode: str = "local"
++    target: str = ""  # workdir path, or the agent's resolved checkout
++    agent: str = ""
++    server: str = ""
++    home: str = ""
++    path: str = ""
++    exists: bool = True
++    is_git: bool = True
++    bare: bool = False
++    branch: str = ""
++    head: str = ""
++    comparison_ref: str = ""
++    origin_main: str = ""
++    has_origin: bool = True
++    remotes: list = field(default_factory=list)
++    ancestor: Optional[bool] = None
++    behind: Optional[int] = None
++    dirty_files: list = field(default_factory=list)
++    differing_files: list = field(default_factory=list)
++    fetch_error: str = ""
++    error: str = ""  # set when nothing could be measured
++    error_kind: str = ""  # "unreachable" (exit 2) or a checkout finding
++
++
++@dataclass
++class Row:
++    status: str
++    check: str
++    value: str
++
++
++@dataclass
++class Finding:
++    rows: list
++    status: str = "PASS"
++    reason: str = ""
++    exit_code: int = EXIT_OK
++    kind: str = ""
++
++    @property
++    def result(self) -> str:
++        return "PASS" if self.status == "PASS" else f"FAIL ({self.reason})"
++
++
++def named(items: list, cap: int = MAX_SHOWN) -> str:
++    """Render a path list for a single row, with an honest truncation marker."""
++    if not items:
++        return "none"
++    shown = ", ".join(items[:cap])
++    if len(items) > cap:
++        shown += f" (+{len(items) - cap} more, see --json)"
++    return shown
++
++
++def classify(m: Measurement) -> Finding:
++    """Turn one measurement into rows and a verdict.
++
++    Every arm that could be measured gets its own row, so a dirty-and-behind
++    checkout reports both rather than only the first one found. The arms are
++    independent on purpose: an operator needs the whole state, not its first
++    symptom.
++    """
++    rows: list = []
++
++    def add(status: str, check: str, value: str) -> None:
++        rows.append(Row(status, check, value))
++
++    # Nothing measured at all: usage or an agent that would not answer.
++    if m.error_kind == "unreachable":
++        add("FAIL", "unreachable", m.error)
++        return Finding(rows, "FAIL", m.error, EXIT_USAGE, "unreachable")
++
++    if not m.exists:
++        where = f" on agent {m.agent}" if m.mode == "bunker" else ""
++        add(
++            "FAIL",
++            "checkout",
++            f"{m.path or '(unknown path)'} does not exist{where} — "
++            f"there is no tree to measure",
++        )
++        return Finding(
++            rows,
++            "FAIL",
++            f"no checkout at {m.path or '(unknown path)'}",
++            EXIT_DRIFT,
++            "no-checkout",
++        )
++    if not m.is_git:
++        add(
++            "FAIL",
++            "checkout",
++            f"{m.path} is not a git checkout ({m.error or 'no work tree'}) — "
++            f"a node cannot work a tree it cannot fast-forward",
++        )
++        return Finding(
++            rows, "FAIL", f"{m.path} is not a git checkout", EXIT_DRIFT, "not-git"
++        )
++
++    failures: list = []
++
++    # 1. an attached branch: a detached HEAD cannot be fast-forwarded or pushed
++    if m.branch and m.branch != "HEAD":
++        add("PASS", "branch", f"branch={m.branch}")
++    else:
++        state = (
++            f"detached HEAD at {m.head[:12]}" if m.head else "unborn HEAD (no commits)"
++        )
++        add("FAIL", "branch", f"{state} — no attached branch to fast-forward")
++        failures.append(state)
++
++    # 2. uncommitted work: a local edit on a node blocks its own pull, and the
++    #    fix belongs upstream, not in the node's tree
++    if m.dirty_files:
++        add(
++            "FAIL",
++            "worktree",
++            f"{len(m.dirty_files)} uncommitted path(s): {named(m.dirty_files)} — "
++            f"a local edit on the node blocks its fast-forward; the fix belongs upstream",
++        )
++        failures.append(f"{len(m.dirty_files)} uncommitted path(s)")
++    else:
++        add("PASS", "worktree", "0 uncommitted paths")
++
++    # Without origin there is nothing to compare against: FAIL naming that.
++    if not m.has_origin:
++        add(
++            "FAIL",
++            "origin",
++            f"no 'origin' remote (remotes: {', '.join(m.remotes) or 'none'}) — "
++            f"cannot compare against {CMP_REF}",
++        )
++        failures.append("no origin remote")
++        return Finding(rows, "FAIL", "; ".join(failures), EXIT_DRIFT, "no-origin")
++
++    ref = m.comparison_ref or CMP_REF
++    ref_note = "" if ref == CMP_REF else f" ({ref} is this repo's default branch)"
++    origin_sha = m.origin_main[:12] if m.origin_main else "(unresolved)"
++
++    # 3. ancestry: HEAD must be behind or equal to origin/main, never beside it
++    if m.ancestor is True:
++        add(
++            "PASS",
++            "ancestor",
++            f"HEAD {m.head[:12] or '(unknown)'} is an ancestor of {ref} "
++            f"{origin_sha}{ref_note}",
++        )
++    elif m.ancestor is False:
++        add(
++            "FAIL",
++            "ancestor",
++            f"HEAD {m.head[:12] or '(unknown)'} is NOT an ancestor of {ref} "
++            f"{origin_sha}{ref_note} — the checkout has diverged",
++        )
++        failures.append(f"diverged from {ref}")
++    else:
++        add(
++            "FAIL",
++            "ancestor",
++            f"ancestry of HEAD against {ref} could not be measured "
++            f"({m.error or 'no comparison ref'})",
++        )
++        failures.append(f"ancestry against {ref} unmeasurable")
++
++    # 4. lag: how many commits, and which files differ
++    if m.behind is None:
++        add(
++            "FAIL",
++            "sync",
++            f"lag against {ref} could not be counted ({m.error or 'no comparison ref'})",
++        )
++        failures.append(f"lag against {ref} unmeasurable")
++    elif m.behind > 0:
++        add(
++            "FAIL",
++            "sync",
++            f"behind={m.behind} (HEAD..{ref} {origin_sha}): "
++            f"{len(m.differing_files)} differing path(s) — {named(m.differing_files)}",
++        )
++        failures.append(f"behind {m.behind} commit(s) vs {ref}")
++    else:
++        add("PASS", "sync", f"behind=0 (HEAD..{ref} {origin_sha})")
++
++    if m.fetch_error and m.behind is not None and m.behind == 0:
++        # The comparison ref is only as fresh as the fetch. A checkout that
++        # matches last-known origin/main is not proof it matches the remote
++        # today, so this is named rather than passed off as freshness.
++        add(
++            "FAIL",
++            "fetch",
++            f"git fetch origin failed: {m.fetch_error} — the comparison ref may be stale",
++        )
++        failures.append("origin unreachable (lag counted from stale refs)")
++
++    if failures:
++        return Finding(rows, "FAIL", "; ".join(failures), EXIT_DRIFT, "drift")
++
++    add(
++        "PASS",
++        "freshness",
++        f"branch={m.branch} head={m.head[:12]} origin_main={m.origin_main[:12]} "
++        f"ancestor=true behind=0",
++    )
++    return Finding(rows, "PASS", "", EXIT_OK, "fresh")
++
++
++# --------------------------------------------------------------- local mode
++
++
++def probe_local(path: str, timeout: int) -> Measurement:
++    """Measure a local checkout with the git CLI only."""
++    m = Measurement(mode="local", target=path, path=path)
++    root = os.path.expanduser(path.strip())
++
++    if not root:
++        m.exists = False
++        m.error = "empty workdir path"
++        return m
++    if not os.path.exists(root):
++        m.exists = False
++        m.error = f"{root} does not exist"
++        return m
++    if not os.path.isdir(root):
++        m.exists = False
++        m.error = f"{root} is not a directory"
++        return m
++
++    # A bare repo has no work tree, so --show-toplevel fails on it. Ask the
++    # bare question first or every bare checkout would read as "not git".
++    bare = git(root, "rev-parse", "--is-bare-repository", timeout=timeout)
++    if bare.ok and bare.text() == "true":
++        m.is_git = False
++        m.bare = True
++        m.error = "bare repository: no work tree"
++        return m
++    top = git(root, "rev-parse", "--show-toplevel", timeout=timeout)
++    if not top.ok:
++        m.is_git = False
++        m.error = top.first_err()
++        return m
++    m.path = top.text()
++
++    m.remotes = [n for n in git(root, "remote", timeout=timeout).text().split() if n]
++    m.has_origin = "origin" in m.remotes
++
++    branch = git(root, "rev-parse", "--abbrev-ref", "HEAD", timeout=timeout)
++    m.branch = branch.text() if branch.ok else ""
++    head = git(root, "rev-parse", "--verify", "HEAD", timeout=timeout)
++    m.head = head.text() if head.ok else ""
++
++    status = git(root, "status", "--porcelain", timeout=timeout)
++    if status.ok:
++        m.dirty_files = strip_status(status.out.splitlines())
++    else:
++        m.error = f"git status failed: {status.first_err()}"
++
++    if not m.has_origin:
++        return m
++
++    fetch = git(root, "fetch", "--quiet", "--no-tags", "origin", timeout=timeout)
++    if not fetch.ok:
++        m.fetch_error = fetch.first_err()
++
++    ref, sha, err = resolve_comparison_ref(lambda *a: git(root, *a, timeout=timeout))
++    m.comparison_ref, m.origin_main = ref, sha
++    if not ref:
++        m.error = err
++        return m
++
++    ancestor = git(root, "merge-base", "--is-ancestor", "HEAD", ref, timeout=timeout)
++    if ancestor.rc == 0:
++        m.ancestor = True
++    elif ancestor.rc == 1:
++        m.ancestor = False
++    else:
++        m.ancestor = None
++        m.error = ancestor.first_err()
++
++    behind = git(root, "rev-list", "--count", f"HEAD..{ref}", timeout=timeout)
++    if behind.ok and behind.text().isdigit():
++        m.behind = int(behind.text())
++    diff = git(root, "diff", "--name-only", "HEAD", ref, timeout=timeout)
++    if diff.ok:
++        m.differing_files = [p for p in diff.out.splitlines() if p.strip()]
++    return m
++
++
++def resolve_comparison_ref(gitfn) -> tuple:
++    """Return (ref, sha, error): origin/main, else origin/HEAD's target."""
++    sha = gitfn("rev-parse", "--verify", "--quiet", CMP_REF)
++    if sha.ok and sha.text():
++        return CMP_REF, sha.text(), ""
++    symbolic = gitfn("rev-parse", "--abbrev-ref", "--symbolic-full-name", "origin/HEAD")
++    candidate = symbolic.text() if symbolic.ok else ""
++    if (
++        candidate
++        and candidate not in ("origin/HEAD", "HEAD")
++        and candidate.startswith("origin/")
++    ):
++        sha = gitfn("rev-parse", "--verify", "--quiet", candidate)
++        if sha.ok and sha.text():
++            return candidate, sha.text(), ""
++    return "", "", f"no {CMP_REF} and no origin/HEAD on the checkout"
++
++
++# -------------------------------------------------------------- bunker mode
++
++
++REMOTE_BATTERY = r"""
++set -u
++export GIT_TERMINAL_PROMPT=0
++export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o BatchMode=yes -o ConnectTimeout=10}"
++REPO_ARG=__PATH__
++echo "HOME=$HOME"
++case "$REPO_ARG" in
++  /*) REPO="$REPO_ARG" ;;
++  '~/'*) REPO="$HOME/${REPO_ARG#\~/}" ;;
++  *) REPO="$HOME/$REPO_ARG" ;;
++esac
++echo "REPO=$REPO"
++if [ ! -d "$REPO" ]; then echo "EXISTS=0"; exit 0; fi
++echo "EXISTS=1"
++cd "$REPO" || { echo "CD=0"; exit 0; }
++echo "CD=1"
++if [ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" != "true" ]; then
++  echo "BARE=$(git rev-parse --is-bare-repository 2>/dev/null)"
++  exit 0
++fi
++echo "IS_GIT=1"
++echo "BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
++echo "HEAD_SHA=$(git rev-parse HEAD 2>/dev/null)"
++echo "REMOTES=$(git remote 2>/dev/null | tr '\n' ' ')"
++echo "DIRTY_BEGIN"
++git status --porcelain 2>/dev/null
++echo "DIRTY_END"
++if command -v timeout >/dev/null 2>&1; then
++  timeout 120 git fetch --quiet --no-tags origin >/dev/null 2>&1
++else
++  git fetch --quiet --no-tags origin >/dev/null 2>&1
++fi
++echo "FETCH_RC=$?"
++CMP=""
++if git rev-parse --verify --quiet __CMP__ >/dev/null 2>&1; then
++  CMP=__CMP__
++else
++  CAND="$(git rev-parse --abbrev-ref --symbolic-full-name origin/HEAD 2>/dev/null)"
++  case "$CAND" in origin/*HEAD*|"") CAND="" ;; esac
++  CMP="$CAND"
++fi
++echo "CMP_REF=$CMP"
++if [ -n "$CMP" ]; then
++  echo "ORIGIN_MAIN=$(git rev-parse --verify --quiet "$CMP" 2>/dev/null)"
++  git merge-base --is-ancestor HEAD "$CMP" >/dev/null 2>&1
++  echo "ANCESTOR_RC=$?"
++  echo "BEHIND=$(git rev-list --count "HEAD..$CMP" 2>/dev/null)"
++  echo "DIFF_BEGIN"
++  git diff --name-only HEAD "$CMP" 2>/dev/null
++  echo "DIFF_END"
++fi
++"""
++
++
++def parse_battery(text: str) -> dict:
++    """Parse the remote `key=value` lines and the two BEGIN/END blocks."""
++    data: dict = {"blocks": {"DIRTY": [], "DIFF": []}}
++    block = ""
++    for line in text.splitlines():
++        if line in ("DIRTY_BEGIN", "DIFF_BEGIN"):
++            block = line.split("_", 1)[0]
++            continue
++        if line in ("DIRTY_END", "DIFF_END"):
++            block = ""
++            continue
++        if block:
++            data["blocks"][block].append(line)
++            continue
++        if "=" in line:
++            key, value = line.split("=", 1)
++            # Only our own constants are `KEY=...`; anything else is remote text
++            # (git chatter) and must not be mistaken for a measurement.
++            if key.isupper() and key == key.strip():
++                data[key] = value
++    return data
++
++
++def probe_bunker(agent: str, server: str, path_arg: str, timeout: int) -> Measurement:
++    """Measure a node's checkout in ONE `bunker exec` round trip."""
++    m = Measurement(
++        mode="bunker",
++        agent=agent,
++        server=server,
++        path=path_arg,
++        target=f"{agent}:{path_arg}",
++    )
++    script = REMOTE_BATTERY.replace("__PATH__", shq(path_arg)).replace(
++        "__CMP__", CMP_REF
++    )
++    res = run(
++        [BUNKER_BIN, "--server", server, "exec", agent, "--", "sh", "-lc", script],
++        timeout,
++    )
++    if not res.ok:
++        m.error_kind = "unreachable"
++        m.error = f"bunker exec failed: {res.first_err()}"
++        return m
++
++    data = parse_battery(res.out)
++    m.home = data.get("HOME", "")
++    m.path = data.get("REPO", "") or (f"{m.home}/{path_arg}" if m.home else path_arg)
++    if not m.home:
++        # No home means the exec answered with something that is not our
++        # battery (or the stream was cut): nothing about the checkout is known.
++        m.error_kind = "unreachable"
++        m.error = (
++            f"bunker exec returned no HOME (first line: "
++            f"{(res.out.strip().splitlines() or ['(empty)'])[0][:160]})"
++        )
++        return m
++
++    if data.get("EXISTS") != "1":
++        m.exists = False
++        m.error = f"{m.path} does not exist on agent {agent}"
++        return m
++    if data.get("CD") != "1":
++        m.error_kind = "unreachable"
++        m.error = f"cannot enter {m.path} on agent {agent} (cd failed)"
++        return m
++    if data.get("IS_GIT") != "1":
++        m.is_git = False
++        m.bare = data.get("BARE", "") == "true"
++        m.error = "bare repository: no work tree" if m.bare else "no git work tree"
++        return m
++
++    m.branch = data.get("BRANCH", "")
++    m.head = data.get("HEAD_SHA", "")
++    m.remotes = [n for n in (data.get("REMOTES", "") or "").split() if n]
++    m.has_origin = "origin" in m.remotes
++    m.dirty_files = strip_status(data["blocks"]["DIRTY"])
++
++    if data.get("FETCH_RC") not in (None, "0"):
++        m.fetch_error = f"git fetch exited {data.get('FETCH_RC')}"
++    if not m.has_origin:
++        return m
++
++    m.comparison_ref = data.get("CMP_REF", "")
++    m.origin_main = data.get("ORIGIN_MAIN", "")
++    if not m.comparison_ref:
++        m.error = f"no {CMP_REF} and no origin/HEAD on the checkout"
++        return m
++    anc = data.get("ANCESTOR_RC")
++    if anc == "0":
++        m.ancestor = True
++    elif anc == "1":
++        m.ancestor = False
++    behind = data.get("BEHIND", "")
++    if behind.isdigit():
++        m.behind = int(behind)
++    m.differing_files = [p for p in data["blocks"]["DIFF"] if p.strip()]
++    return m
++
++
++# ------------------------------------------------------------------- report
++
++
++def header(m: Measurement) -> str:
++    if m.mode == "bunker":
++        return (
++            f"node-freshness — agent {m.agent} via {m.server}, "
++            f"checkout {m.path or '(unresolved)'} (home {m.home or '(unresolved)'})"
++        )
++    return f"node-freshness — workdir {m.path}"
++
++
++def as_dict(m: Measurement, f: Finding) -> dict:
++    """The object a provisioner stores. Keys the manifest names come first."""
++    return {
++        "mode": m.mode,
++        "status": f.status,
++        "result": f.result,
++        "reason": f.reason,
++        "kind": f.kind,
++        "exit_code": f.exit_code,
++        "agent": m.agent,
++        "server": m.server,
++        "home": m.home,
++        "path": m.path,
++        "branch": m.branch,
++        "head": m.head,
++        "origin_main": m.origin_main,
++        "comparison_ref": m.comparison_ref,
++        "ancestor": m.ancestor,
++        "behind": m.behind,
++        "dirty_files": m.dirty_files,
++        "differing_files": m.differing_files,
++        "remotes": m.remotes,
++        "fetch_error": m.fetch_error,
++        "error": m.error,
++        "rows": [
++            {"status": r.status, "check": r.check, "value": r.value} for r in f.rows
++        ],
++    }
++
++
++def main(argv: Optional[list] = None) -> int:
++    ap = argparse.ArgumentParser(
++        description="prove a node's checkout is the tree origin/main has"
++    )
++    ap.add_argument("--workdir", metavar="PATH", help="measure a local checkout")
++    ap.add_argument("--agent", metavar="ID", help="bunker agent id (bunker mode)")
++    ap.add_argument("--server", metavar="NAME", help="bunker server name (bunker mode)")
++    ap.add_argument(
++        "--path",
++        default="repo",
++        metavar="REMOTE_PATH",
++        help="path inside the agent, relative to its home (default: repo)",
++    )
++    ap.add_argument(
++        "--timeout",
++        type=int,
++        default=180,
++        help="per-command timeout in seconds; the bunker exec stream dies at 300 (default 180)",
++    )
++    ap.add_argument(
++        "--json",
++        action="store_true",
++        help="emit one JSON object on stdout (rows go to stderr)",
++    )
++    opts = ap.parse_args(argv)
++
++    def usage_error(message: str) -> int:
++        print(message, file=sys.stderr)
++        print(f"RESULT: FAIL (usage: {message})")
++        return EXIT_USAGE
++
++    if opts.timeout < 1:
++        return usage_error(f"--timeout must be >= 1, got {opts.timeout}")
++    local = bool(opts.workdir)
++    bunker = bool(opts.agent or opts.server)
++    if local and bunker:
++        return usage_error("--workdir and --agent/--server are exclusive")
++    if not local and not bunker:
++        return usage_error(
++            "one mode is required: --workdir PATH or --agent ID --server NAME"
++        )
++    if bunker and not (opts.agent and opts.server):
++        return usage_error("bunker mode needs both --agent ID and --server NAME")
++
++    if local:
++        m = probe_local(opts.workdir, opts.timeout)
++    else:
++        m = probe_bunker(opts.agent, opts.server, opts.path, opts.timeout)
++    finding = classify(m)
++
++    stream = sys.stderr if opts.json else sys.stdout
++    print(header(m), file=stream)
++    for row in finding.rows:
++        print(f"  {row.status}  {row.check} — {row.value}", file=stream)
++    print(f"RESULT: {finding.result}", file=stream)
++
++    if opts.json:
++        print(json.dumps(as_dict(m, finding), indent=2))
++    return finding.exit_code
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/scripts/project-node.sh b/scripts/project-node.sh
+index 44c17be..a415162 100755
+--- a/scripts/project-node.sh
++++ b/scripts/project-node.sh
+@@ -259,17 +259,232 @@ else
+ fi
+ 
+ # ---------------------------------------------------------------- 40 repo
++# Checkout freshness helpers (CF-244). The clone's git state is what the node
++# actually works, and nothing measured it: a node one commit behind origin/main,
++# or carrying a local edit that blocks its own fast-forward, printed PASS at
++# every layer (measured on cf-node, 2026-11-05: HEAD 7f22d02 vs origin/main
++# 04fc398, an earlier .gitignore edit having blocked the pull).
++#
++# Two rungs, same classification: the clone carries scripts/node_freshness.py
++# when the repo is this one, so use it; otherwise a checkout of another project
++# has no copy, and a node-side fallback measures the same four arms with the
++# git CLI alone. Nothing here depends on the control host's scripts existing on
++# the node.
++freshness_measure() {  # $1 repo, $2 json out, $3 stderr out -> exit code
++  local rp="$1" js="$2" er="$3"
++  if [ -r "$rp/scripts/node_freshness.py" ]; then
++    python3 "$rp/scripts/node_freshness.py" --workdir "$rp" --json >"$js" 2>"$er"
++    return $?
++  fi
++  python3 - "$rp" >"$js" 2>"$er" <<'PY'
++# Node-side fallback: the same four arms (branch, worktree, ancestor, sync),
++# the same row texts and the same exit codes as scripts/node_freshness.py.
++# It exists because the clone only carries the probe when the repo IS the
++# probe's repo. Keep the two in step: tests/selftest.sh section 47 drives this
++# path through project-node.sh --layers 40 with no probe in the clone.
++import json, os, subprocess, sys
++
++rp = sys.argv[1]
++res = {"mode": "inline", "path": rp, "status": "FAIL", "reason": "", "exit_code": 1,
++       "branch": "", "head": "", "origin_main": "", "comparison_ref": "",
++       "ancestor": None, "behind": None, "dirty_files": [], "differing_files": [],
++       "rows": []}
++
++
++def run(*args):
++    env = dict(os.environ, GIT_TERMINAL_PROMPT="0", LC_ALL="C")
++    try:
++        p = subprocess.run(["git", "-C", rp] + list(args), capture_output=True,
++                           text=True, timeout=120, env=env, check=False)
++    except Exception as exc:  # a probe never crashes the ladder
++        return 255, "", str(exc)
++    return p.returncode, p.stdout, p.stderr
++
++
++def row(status, check, value):
++    res["rows"].append({"status": status, "check": check, "value": value})
++
++
++def finish(reason, status="FAIL", code=1):
++    res["status"], res["reason"], res["exit_code"] = status, reason, code
++    res["result"] = "PASS" if status == "PASS" else "FAIL (%s)" % reason
++    print("node-freshness — workdir %s (inline: the clone carries no "
++          "scripts/node_freshness.py)" % rp, file=sys.stderr)
++    for r in res["rows"]:
++        print("  %s  %s — %s" % (r["status"], r["check"], r["value"]), file=sys.stderr)
++    print("RESULT: %s" % res["result"], file=sys.stderr)
++    print(json.dumps(res, indent=1))
++    raise SystemExit(code)
++
++
++top = run("rev-parse", "--show-toplevel")
++if top[0] != 0 or not os.path.isdir(rp):
++    row("FAIL", "checkout", "%s is not a git checkout (%s) — no tree to measure"
++        % (rp, (top[2].strip().splitlines() or ["no git"])[0][:160]))
++    finish("no checkout at %s" % rp)
++res["path"] = top[1].strip()
++
++branch = run("rev-parse", "--abbrev-ref", "HEAD")
++res["branch"] = branch[1].strip() if branch[0] == 0 else ""
++head = run("rev-parse", "--verify", "HEAD")
++res["head"] = head[1].strip() if head[0] == 0 else ""
++status = run("status", "--porcelain")
++if status[0] == 0:
++    res["dirty_files"] = [l[3:].strip() for l in status[1].splitlines() if l.strip()]
++
++failures = []
++if res["branch"] and res["branch"] != "HEAD":
++    row("PASS", "branch", "branch=%s" % res["branch"])
++else:
++    state = ("detached HEAD at " + res["head"][:12]) if res["head"] else "unborn HEAD (no commits)"
++    row("FAIL", "branch", "%s — no attached branch to fast-forward" % state)
++    failures.append(state)
++if res["dirty_files"]:
++    row("FAIL", "worktree", "%d uncommitted path(s): %s — a local edit on the node "
++        "blocks its fast-forward; the fix belongs upstream"
++        % (len(res["dirty_files"]), ", ".join(res["dirty_files"])))
++    failures.append("%d uncommitted path(s)" % len(res["dirty_files"]))
++else:
++    row("PASS", "worktree", "0 uncommitted paths")
++
++remotes = [r for r in run("remote")[1].split() if r]
++if "origin" not in remotes:
++    row("FAIL", "origin", "no 'origin' remote (remotes: %s) — cannot compare "
++        "against origin/main" % (", ".join(remotes) or "none"))
++    finish("; ".join(failures + ["no origin remote"]))
++
++fetch_rc = run("fetch", "--quiet", "--no-tags", "origin")[0]
++ref = ""
++sha = run("rev-parse", "--verify", "--quiet", "origin/main")
++if sha[0] == 0 and sha[1].strip():
++    ref, res["origin_main"] = "origin/main", sha[1].strip()
++else:
++    cand = run("rev-parse", "--abbrev-ref", "--symbolic-full-name", "origin/HEAD")[1].strip()
++    if cand.startswith("origin/") and "HEAD" not in cand:
++        found = run("rev-parse", "--verify", "--quiet", cand)
++        if found[0] == 0 and found[1].strip():
++            ref, res["origin_main"] = cand, found[1].strip()
++if not ref:
++    row("FAIL", "origin", "no origin/main and no origin/HEAD — nothing to compare against")
++    finish("; ".join(failures + ["no comparison ref"]))
++res["comparison_ref"] = ref
++
++anc = run("merge-base", "--is-ancestor", "HEAD", ref)[0]
++if anc == 0:
++    res["ancestor"] = True
++    row("PASS", "ancestor", "HEAD %s is an ancestor of %s %s"
++        % (res["head"][:12], ref, res["origin_main"][:12]))
++elif anc == 1:
++    res["ancestor"] = False
++    row("FAIL", "ancestor", "HEAD %s is NOT an ancestor of %s %s — the checkout has diverged"
++        % (res["head"][:12], ref, res["origin_main"][:12]))
++    failures.append("diverged from %s" % ref)
++else:
++    row("FAIL", "ancestor", "ancestry of HEAD against %s could not be measured" % ref)
++    failures.append("ancestry against %s unmeasurable" % ref)
++
++behind = run("rev-list", "--count", "HEAD..%s" % ref)
++if behind[0] == 0 and behind[1].strip().isdigit():
++    res["behind"] = int(behind[1].strip())
++    diff = run("diff", "--name-only", "HEAD", ref)
++    if diff[0] == 0:
++        res["differing_files"] = [d for d in diff[1].splitlines() if d.strip()]
++if res["behind"] is None:
++    row("FAIL", "sync", "lag against %s could not be counted" % ref)
++    failures.append("lag against %s unmeasurable" % ref)
++elif res["behind"] > 0:
++    row("FAIL", "sync", "behind=%d (HEAD..%s %s): %d differing path(s) — %s"
++        % (res["behind"], ref, res["origin_main"][:12], len(res["differing_files"]),
++           ", ".join(res["differing_files"]) or "none"))
++    failures.append("behind %d commit(s) vs %s" % (res["behind"], ref))
++else:
++    row("PASS", "sync", "behind=0 (HEAD..%s %s)" % (ref, res["origin_main"][:12]))
++    if fetch_rc != 0:
++        row("FAIL", "fetch", "git fetch origin failed (exit %d) — the comparison ref may be stale"
++            % fetch_rc)
++        failures.append("origin unreachable (lag counted from stale refs)")
++
++if failures:
++    finish("; ".join(failures))
++row("PASS", "freshness", "branch=%s head=%s origin_main=%s ancestor=true behind=0"
++    % (res["branch"], res["head"][:12], res["origin_main"][:12]))
++finish("", "PASS", 0)
++PY
++}
++
++# One TAB-separated line out of the freshness JSON, for the ladder's single row.
++freshness_fields() {  # $1 json, $2 captured stderr
++  python3 - "$1" "$2" <<'PY'
++import json, sys
++
++path, errpath = sys.argv[1], sys.argv[2]
++
++
++def cap(items, limit=10):
++    items = [str(i) for i in (items or [])]
++    if not items:
++        return "-"
++    shown = ", ".join(items[:limit])
++    if len(items) > limit:
++        shown += " (+%d more)" % (len(items) - limit)
++    return shown
++
++
++try:
++    d = json.load(open(path))
++except Exception as exc:
++    reason = "result unreadable (%s)" % exc
++    try:
++        lines = [l for l in open(errpath).read().splitlines() if l.strip()]
++        if lines:
++            reason += ": " + lines[-1][:200]
++    except OSError:
++        pass
++    print("\t".join(["-"] * 8 + [reason]))
++    raise SystemExit(0)
++
++anc = d.get("ancestor")
++print("\t".join([
++    str(d.get("branch") or "-"),
++    str(d.get("head") or "")[:12] or "-",
++    str(d.get("origin_main") or "")[:12] or "-",
++    "-" if d.get("behind") is None else str(d.get("behind")),
++    "-" if anc is None else ("true" if anc else "false"),
++    cap(d.get("dirty_files")),
++    cap(d.get("differing_files")),
++    str(d.get("result") or "-"),
++    str(d.get("reason") or "-"),
++]))
++PY
++}
++
++freshness_record_ladder() {  # $1 json, $2 ladder verdict (PASS|WARN|FAIL)
++  python3 - "$1" "$2" <<'PY'
++import json, sys
++
++try:
++    d = json.load(open(sys.argv[1]))
++except Exception:
++    raise SystemExit(0)
++d["ladder"] = sys.argv[2]
++json.dump(d, open(sys.argv[1], "w"), indent=1)
++PY
++}
++
++REPO_READY=0
+ if in_scope 40; then
+   say "[40] repo"
+   RP="$HOME/repo"
+   if [ -d "$RP/.git" ]; then
+     ok "repo" "$RP @ $(git -C "$RP" rev-parse --short HEAD)"
++    REPO_READY=1
+   else
+     if [ "$MODE" = apply ] && [ -n "$REPO" ]; then
+       say "  ..    cloning $REPO @ $REF"
+       clone_log="$STATE/clone.log"
+       if git clone --depth 1 --branch "$REF" "$REPO" "$RP" >"$clone_log" 2>&1; then
+         ok "repo_clone" "$RP @ $(git -C "$RP" rev-parse --short HEAD)"
++        REPO_READY=1
+       else
+         clone_error="$(tail -1 "$clone_log")"
+         if git ls-remote --exit-code "$REPO" "refs/heads/$REF" "refs/tags/$REF" >/dev/null 2>&1; then
+@@ -288,10 +503,56 @@ if in_scope 40; then
+       bad "repo" "$RP absent (pass --repo to clone)"
+     fi
+   fi
++
++  # The clone is not the deliverable: the TREE the node will work is. Measure it
++  # against origin/main here, after the clone/pull, and record the measurement.
++  # Verdict policy (specs/NODE.md, "Failure semantics"): a DIRTY checkout is a
++  # WARN — the node may be mid-task — while DRIFT (behind or diverged, so the
++  # pull cannot fast-forward) is a FAIL, because the node would then work a tree
++  # that no longer matches origin/main. Neither is repaired silently: the fix
++  # belongs upstream, which is what the recorded paths are for.
++  if [ "$REPO_READY" -eq 1 ]; then
++    if [ "$SCOPED" -eq 1 ]; then
++      fs_json="$(mktemp)"; fs_err="$(mktemp)"; fs_record=0
++    else
++      fs_json="$STATE/freshness.json"; fs_err="$(mktemp)"; fs_record=1
++    fi
++    freshness_measure "$RP" "$fs_json" "$fs_err"; frc=$?
++    IFS=$'\t' read -r fs_branch fs_head fs_origin fs_behind fs_anc fs_dirty fs_diff fs_result fs_reason \
++      < <(freshness_fields "$fs_json" "$fs_err")
++    fs_row="branch=${fs_branch:-?} head=${fs_head:-?} origin_main=${fs_origin:-?} behind=${fs_behind:-?} ancestor=${fs_anc:-?}"
++    case "${fs_dirty:--}" in -|'') ;; *) fs_row="$fs_row dirty=$fs_dirty" ;; esac
++    case "${fs_diff:--}" in -|'') ;; *) fs_row="$fs_row differing=$fs_diff" ;; esac
++    if [ "$frc" -eq 0 ]; then
++      ok "freshness" "$fs_row"
++      fs_ladder=PASS
++    elif [ "$frc" -eq 1 ] && [ "${fs_behind:-}" = "0" ] && [ "${fs_anc:-}" = "true" ] \
++      && [ -n "${fs_dirty:-}" ] && [ "${fs_dirty:--}" != "-" ]; then
++      warn "freshness" "$fs_row — a local edit on the node is a finding: it blocks the node's fast-forward and the fix belongs upstream (not repaired here)"
++      fs_ladder=WARN
++    else
++      bad "freshness" "$fs_row — ${fs_reason:-checkout freshness could not be measured}"
++      fs_ladder=FAIL
++    fi
++    if [ -n "$fs_result" ] && [ "$fs_result" != "-" ]; then
++      if [ "$fs_record" -eq 1 ]; then
++        say "  ..    check verdict: $fs_result — recorded in $STATE/freshness.json"
++      else
++        say "  ..    check verdict: $fs_result (fixture mode: nothing recorded)"
++      fi
++    fi
++    if [ "$fs_record" -eq 1 ]; then
++      freshness_record_ladder "$fs_json" "$fs_ladder"
++    else
++      rm -f "$fs_json"
++    fi
++    rm -f "$fs_err"
++  fi
+ else
+   say "  SKIP  layer 40 (out of scope)"
+ fi
+ 
++
+ # ---------------------------------------------------------------- manifest
+ if [ "$SCOPED" -eq 1 ]; then
+   # A scoped run is a fixture, not a node: it leaves no identity behind, even when
+@@ -300,13 +561,37 @@ if [ "$SCOPED" -eq 1 ]; then
+ else
+   say "[90] manifest"
+   if [ "$MODE" = apply ] && [ "$FAILED" -eq 0 ]; then
+-    python3 - "$STATE/node.json" "$PROJECT" "$HARNESS" "$PORT" "$REPO" "$REF" "$(hostname)" <<'PY'
++    python3 - "$STATE/node.json" "$PROJECT" "$HARNESS" "$PORT" "$REPO" "$REF" "$(hostname)" "$STATE/freshness.json" <<'PY'
+ import json, sys, time
+-path, project, harness, port, repo, ref, host = sys.argv[1:8]
++path, project, harness, port, repo, ref, host, fresh_path = sys.argv[1:9]
++# The checkout's measured state (CF-244). It is carried into the manifest so a
++# node can never claim an identity without saying which tree it holds: status is
++# the CHECK's own verdict (a dirty checkout is a FAIL there, because a local edit
++# on a node is a finding), `ladder` is how the provisioning ladder graded it
++# (DIRTY == WARN at provision time, per specs/NODE.md), and the paths are the
++# ones an operator has to take upstream.
++freshness = {"status": "FAIL", "reason": "checkout freshness was not measured by layer 40"}
++try:
++    measured = json.load(open(fresh_path))
++    freshness = {
++        "status": measured.get("status") or "FAIL",
++        "branch": measured.get("branch") or "",
++        "head": measured.get("head") or "",
++        "origin_main": measured.get("origin_main") or "",
++        "behind": measured.get("behind"),
++        "dirty_files": measured.get("dirty_files") or [],
++        "differing_files": measured.get("differing_files") or [],
++        "ladder": measured.get("ladder") or "",
++        "reason": measured.get("reason") or "",
++        "measured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
++    }
++except (OSError, ValueError) as exc:
++    freshness["reason"] = "checkout freshness was not measured by layer 40: %s" % exc
+ json.dump({"node_id": host, "project": project,
+            "repo": {"origin": repo, "ref": ref, "path": "/home/" + __import__("os").environ.get("USER", "node") + "/repo"},
+            "harness": {"name": harness, "port": int(port)},
+            "bus": {"base": __import__("os").environ.get("CRIER_BASE", "http://crier.example:8767")},
++           "freshness": freshness,
+            "created_by": "project-node.sh v1",
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
+           open(path, "w"), indent=1)
+diff --git a/scripts/verify-node.sh b/scripts/verify-node.sh
+index 7130f17..83669d2 100755
+--- a/scripts/verify-node.sh
++++ b/scripts/verify-node.sh
+@@ -3,28 +3,31 @@
+ #
+ #   ./verify-node.sh --agent <id> [--server <name>] [--port 10800]
+ #   ./verify-node.sh --agent <id> --artifact <path-on-node>
++#   ./verify-node.sh --agent <id> --strict-freshness
+ #
+ # Checks, in order of what they prove:
+ #   1. the agent is alive and exec-able
+ #   2. the gateway answers from HERE over the tailnet (not from inside itself)
+ #   3. the gateway's auth gate is closed (unauthenticated request must be 401/302/403)
+ #   4. (optional) an artifact on the node hashes the same on both sides
++#   5. the checkout the node will work is the tree origin/main has (CF-244)
+ # A version string is not evidence: step 2 must be a live HTTP answer from this host.
+ set -uo pipefail
+ HERE="$(cd "$(dirname "$0")" && pwd)"
+ . "$HERE/lib.sh"
+ 
+-AGENT="" SERVER="${BUNKER_SERVER:-}" PORT=10800 ARTIFACT=""
++AGENT="" SERVER="${BUNKER_SERVER:-}" PORT=10800 ARTIFACT="" STRICT_FRESHNESS=0
+ while [ $# -gt 0 ]; do
+   case "$1" in
+     --agent) AGENT="$2"; shift 2 ;;
+     --server) SERVER="$2"; shift 2 ;;
+     --port) PORT="$2"; shift 2 ;;
+     --artifact) ARTIFACT="$2"; shift 2 ;;
++    --strict-freshness) STRICT_FRESHNESS=1; shift ;;
+     *) echo "unknown arg: $1" >&2; exit 2 ;;
+   esac
+ done
+-[ -z "$AGENT" ] && { echo "usage: $0 --agent ID [--server NAME] [--port P] [--artifact PATH]"; exit 2; }
++[ -z "$AGENT" ] && { echo "usage: $0 --agent ID [--server NAME] [--port P] [--artifact PATH] [--strict-freshness]"; exit 2; }
+ # The old guard used ${VAR:?} at assignment time, so --server could never be used without the
+ # environment variable being set first: the documented flag was dead.
+ [ -z "$SERVER" ] && { echo "set BUNKER_SERVER or pass --server <name>" >&2; exit 2; }
+@@ -101,6 +104,45 @@ if [ -n "$ARTIFACT" ]; then
+   fi
+ fi
+ 
++# 5. the checkout the node will work (CF-244)
++# Steps 1-4 prove the agent answers, the gateway is up and the gate is closed —
++# none of them looks at the tree. A node one commit behind origin/main, or one
++# carrying a local edit that blocks its own fast-forward, passed every one of
++# them. scripts/node_freshness.py measures branch/HEAD/ancestor/lag/uncommitted
++# paths in ONE bunker exec and its verdict is folded in here, so `VERIFY: PASS`
++# is unreachable for a drifted node.
++#
++# Default mapping: PASS -> PASS, drift or dirty -> FAIL, unmeasurable -> WARN
++# (a node still being provisioned has no checkout yet, and "cannot measure" is
++# not proof of staleness — the same doctrine as repo_freshness.py). With
++# --strict-freshness an unmeasurable checkout is a FAIL, so a gate can refuse on
++# "unknown" as well as on "drifted".
++FRESH="$HERE/node_freshness.py"
++if [ ! -r "$FRESH" ]; then
++  bad "checkout_freshness" "$FRESH missing — the checkout's git state is unmeasured"
++else
++  fresh_rows=$(mktemp); fresh_json=$(mktemp)
++  python3 -B "$FRESH" --agent "$AGENT" --server "$SERVER" --json >"$fresh_json" 2>"$fresh_rows"
++  frc=$?
++  case "$frc" in
++    0)
++      ok "checkout_freshness" "$(grep -F '  PASS  freshness — ' "$fresh_rows" | sed -e 's/^  PASS  freshness — //' | head -1)"
++      ;;
++    1)
++      bad "checkout_freshness" "$(grep -E '^  FAIL  ' "$fresh_rows" | sed -e 's/^  *FAIL  //' | paste -sd '|' - | sed -e 's/|/ | /g' | cut -c1-500)"
++      ;;
++    *)
++      detail=$(grep -E '^RESULT: ' "$fresh_rows" | head -1 | sed -e 's/^RESULT: //')
++      if [ "${STRICT_FRESHNESS:-0}" -eq 1 ]; then
++        bad "checkout_freshness" "${detail:-unmeasurable} (--strict-freshness: unknown is not a pass)"
++      else
++        warn "checkout_freshness" "${detail:-unmeasurable} — the checkout could not be measured; pass --strict-freshness to refuse it"
++      fi
++      ;;
++  esac
++  rm -f "$fresh_rows" "$fresh_json"
++fi
++
+ say ""
+ if [ "$FAILED" -gt 0 ]; then say "VERIFY: FAIL ($FAILED)"; exit 1; fi
+ if [ "${UNVERIFIED:-0}" -gt 0 ]; then
+diff --git a/specs/NODE.md b/specs/NODE.md
+index 61e545e..97123f9 100644
+--- a/specs/NODE.md
++++ b/specs/NODE.md
+@@ -11,6 +11,11 @@ A **node** is the unit of execution: one bunker agent bound to one project and o
+   "repo": {"origin": "git@…", "ref": "main", "path": "/home/<uid>/repo"},
+   "harness": {"name": "hermes", "version": "0.19.0", "port": 10800},
+   "bus": {"agent_id": "node-crier", "base": "http://crier.example:8767"},
++  "freshness": {
++    "status": "PASS", "branch": "main", "head": "04fc3986f448", "origin_main": "04fc3986f448",
++    "behind": 0, "dirty_files": [], "differing_files": [],
++    "ladder": "PASS", "reason": "", "measured_at": "2026-11-05T18:40:00Z"
++  },
+   "created_by": "project-node.sh v1",
+   "created_at": "2026-10-29T18:40:00Z"
+ }
+@@ -19,6 +24,14 @@ A **node** is the unit of execution: one bunker agent bound to one project and o
+ The manifest is the node's identity: a scheduler target names `node_id`; the control host reads
+ the manifest to know where the artifacts are.
+ 
++`freshness` is the checkout the node will actually work, measured by layer 40 with
++`scripts/node_freshness.py` (`--workdir`) or the node-side fallback when the clone does not carry
++the probe (`scripts/project-node.sh`, `freshness_measure`). `status` is the **check's own**
++verdict — `FAIL` for a dirty checkout, because an uncommitted local edit on a node is a finding —
++while `ladder` is how the provisioning ladder graded it at provision time (`PASS`, `WARN`, `FAIL`).
++`dirty_files` and `differing_files` are the paths an operator has to act on, and they are the
++reason the object exists: the paths belong upstream, not in the node's tree.
++
+ ## Layers (each has a check that can fail)
+ 
+ | Layer | Establishes | Depends on |
+@@ -27,7 +40,7 @@ the manifest to know where the artifacts are.
+ | 10 base | python3 + venv, git, curl, tar, sha256sum; optionally jq, rg, node | preflight |
+ | 20 harness | the harness binary plus the adapter's own gate rows, printed verbatim (`python`, `binary`, `version`, `port`, `inference_key`, and `gateway_start` when that block runs); `gateway_start` is a refusal on any node whose `~/.hermes/config.yaml` does not parse to a non-empty `dashboard.basic_auth` username and password (`scripts/harness/install-hermes.sh:66–186`) | base |
+ | 30 bus | a crier identity file at `$HOME/.node/crier.json` and its mode 600 | harness |
+-| 40 repo | the repo cloned at a pinned ref | base |
++| 40 repo | the repo cloned at a pinned ref, and the checkout measured against `origin/main` by `scripts/node_freshness.py` (or its node-side fallback): branch, HEAD, ancestry, lag, uncommitted paths (`scripts/project-node.sh`, `freshness_measure`) | base |
+ | 90 verify | the node manifest (`$HOME/.node/node.json`), written only when every layer passed | all |
+ 
+ Three capabilities that the design describes are **not** established by any shipped layer, and this
+@@ -54,8 +67,10 @@ table no longer claims them:
+   (`docs/OPERATIONS.md` §6), CF-004 owns building it, and `AGENTS.md` rule 4 keeps it as the proof
+   a node works — it is the standard layer 90 is graded against, not something layer 90 delivers.
+ 
+-Layer 40's cell was narrowed to the clone alone for the same reason (`6f75e28`, CF-032). Every cell
+-in this table now names only something the shipped script measures or prints.
++Layer 40's cell was narrowed to the clone alone for the same reason (`6f75e28`, CF-032); CF-244
++widened it to the clone plus its measured freshness against `origin/main`, because a clone that is
++behind or dirty is a tree the node cannot fast-forward — the failure `verify-node.sh` had no arm
++for. Every cell in this table now names only something the shipped script measures or prints.
+ 
+ ### Fixture scope (`--layers`)
+ 
+@@ -150,6 +165,7 @@ Rules:
+ - `verify --exec-bunker [--bunker-server S]` on a **bunker** target proves it against the agent itself: `bunker exec <agent> -- sh -lc 'echo $HOME; test -d <path>'` must return a home and an existing directory. Checks recorded: `bunker_cli`, `agent_reachable`, `path_exists`.
+ - `lane_target.py plan <projects.jsonl> --agent <id> --server <server> [--suffix /repo] [--prefix P]` emits the intended `bunker://<agent>/<home><suffix>` target per lane. The agent's home is **resolved from the agent**, never templated: homes are `/home/bunker-<full-id>`, so a `{agent}` template builds a wrong path that still parses.
+ - `lane_target.py scan <projects.jsonl> [--allow-remote]` checks every row and exits nonzero if any target is invalid.
++- `scripts/node_freshness.py --agent A --server S [--path REL]` proves the **checkout** a node will work is the tree `origin/main` has: branch, HEAD, whether HEAD is an ancestor of `origin/main`, the lag count and the files that differ, plus every uncommitted path — gathered in ONE `bunker exec` round trip, with the agent's home resolved from the agent (never templated). `--workdir PATH` measures a local checkout with no bunker, no network and no database; `--json` emits the object layer 90 stores in the manifest. Exit codes: `0` PASS, `1` drift or dirty, `2` usage or unreachable — an unmeasurable node is not a PASS. A repo with no `origin` remote is a FAIL naming that, and the comparison ref falls back to `origin/HEAD` (named in the row) so a `trunk`-default repo is measured instead of mislabelled. `scripts/verify-node.sh` folds the verdict into `VERIFY:` (step 5; unmeasurable is WARN unless `--strict-freshness`).
+ - Lane writers (`scripts/configure_family.py`) only `mkdir` a **local** target; a remote target is registered verbatim and materialised by the node side.
+ 
+ ## Failure semantics
+@@ -157,4 +173,9 @@ Rules:
+ - Harness down → layer 20 FAIL; no work is accepted.
+ - Bus identity missing → layer 30 FAIL; the node is invisible, which is worse than empty.
+ - Repo dirty at provision time → WARN, not FAIL (the node may be mid-task); `verify` still runs.
++  The uncommitted paths are named and recorded (`$HOME/.node/freshness.json`, and the manifest's
++  `freshness` object), because the edit belongs upstream, not in the node's tree.
++- Repo drifted at provision time (behind or diverged from `origin/main`, i.e. the pull cannot
++  fast-forward) → FAIL under `--apply`: the node would work a tree that no longer matches
++  `origin/main`. Neither condition is repaired silently by the ladder.
+ - Round trip fails → the node is quarantined; the scheduler must not send it more work.
+diff --git a/tests/selftest.sh b/tests/selftest.sh
+index e9037d9..a02bdbc 100755
+--- a/tests/selftest.sh
++++ b/tests/selftest.sh
+@@ -2825,6 +2825,244 @@ else
+   printf '%s\n' "$out2" | sed 's/^/    | /'
+ fi
+ rm -rf "$tmpd"
++# BEGIN cf244-node-freshness
++say "47. a node checkout freshness check can go RED: drift and a local edit are named (CF-244)"
++# The failure this closes: a node's clone sat one commit behind origin/main while every layer
++# printed PASS, because nothing measured the checkout's git state. Each arm builds a real local
++# origin and drives the real scripts. The first arm is the fixture's own green proof — a clone in
++# sync with its origin — so a red arm below is the check refusing real drift, not a broken fixture.
++NF="$HERE/scripts/node_freshness.py"
++if python3 -B -c 'import ast,sys; ast.parse(open(sys.argv[1],encoding="utf-8").read())' "$NF"; then
++  say "  PASS  scripts/node_freshness.py parses (python3 -B, stdlib only)"
++else
++  say "  FAIL  scripts/node_freshness.py does not parse"; fails=$((fails+1))
++fi
++tmpd=$(mktemp -d)
++export GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.invalid
++export GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.invalid
++git init -q -b main "$tmpd/seed"
++printf 'one\n' > "$tmpd/seed/a.txt"
++git -C "$tmpd/seed" add a.txt
++git -C "$tmpd/seed" commit -qm one
++git init -q --bare "$tmpd/origin.git"
++git -C "$tmpd/origin.git" symbolic-ref HEAD refs/heads/main
++git -C "$tmpd/seed" push -q "$tmpd/origin.git" main
++# cloned BEFORE origin advances: this is the node that stayed behind
++git clone -q "$tmpd/origin.git" "$tmpd/behind"
++printf 'two\n' > "$tmpd/seed/b.txt"
++git -C "$tmpd/seed" add b.txt
++git -C "$tmpd/seed" commit -qm two
++git -C "$tmpd/seed" push -q "$tmpd/origin.git" main
++# cloned AFTER the last push: in sync, the fixture's proof that it can go green
++git clone -q "$tmpd/origin.git" "$tmpd/pass"
++git clone -q "$tmpd/origin.git" "$tmpd/dirty"
++git clone -q "$tmpd/origin.git" "$tmpd/det"
++git clone -q "$tmpd/origin.git" "$tmpd/noorigin"
++git -C "$tmpd/noorigin" remote remove origin
++git -C "$tmpd/det" checkout -q --detach HEAD
++printf 'a local edit\n' >> "$tmpd/dirty/a.txt"
++# Provisioning fixtures, cloned now so their clones do NOT carry scripts/node_freshness.py:
++# they exercise the node-side fallback (rung 2 of layer 40), not the clone's own copy.
++mkdir -p "$tmpd/pn-dirty" "$tmpd/pn-drift"
++git clone -q "$tmpd/origin.git" "$tmpd/pn-dirty/repo"
++git clone -q "$tmpd/origin.git" "$tmpd/pn-drift/repo"
++printf 'a local edit\n' >> "$tmpd/pn-dirty/repo/a.txt"
++
++out=$(python3 -B "$NF" --workdir "$tmpd/pass" 2>&1); rc=$?
++if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: PASS' \
++  && printf '%s\n' "$out" | grep -Fq 'branch=main' \
++  && printf '%s\n' "$out" | grep -Fq 'ancestor=true behind=0'; then
++  say "  PASS  a clone in sync with its origin -> RESULT: PASS, exit $rc (the fixture can go green)"
++else
++  say "  FAIL  a clean clone did not pass (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++
++out=$(python3 -B "$NF" --workdir "$tmpd/behind" 2>&1); rc=$?
++if [ "$rc" -eq 1 ] \
++  && printf '%s\n' "$out" | grep -Eq '^RESULT: FAIL \(behind 1 commit' \
++  && printf '%s\n' "$out" | grep -Fq 'behind=1' \
++  && printf '%s\n' "$out" | grep -Fq 'differing path(s) — b.txt'; then
++  say "  PASS  origin advances -> exit $rc, RESULT names the lag and the differing file b.txt"
++else
++  say "  FAIL  drift was not refused with the lag and the file named (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++
++out=$(python3 -B "$NF" --workdir "$tmpd/dirty" 2>&1); rc=$?
++if [ "$rc" -eq 1 ] \
++  && printf '%s\n' "$out" | grep -Eq '^RESULT: FAIL \(1 uncommitted path' \
++  && printf '%s\n' "$out" | grep -Fq 'uncommitted path(s): a.txt' \
++  && printf '%s\n' "$out" | grep -Fq 'the fix belongs upstream'; then
++  say "  PASS  an uncommitted edit -> exit $rc, the path is named and called upstream's problem"
++else
++  say "  FAIL  a local edit was not reported as a finding (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++
++out=$(python3 -B "$NF" --workdir "$tmpd/det" 2>&1); rc=$?
++if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fq 'detached HEAD at'; then
++  say "  PASS  a detached HEAD -> exit $rc, the branch state is named"
++else
++  say "  FAIL  a detached HEAD was not named (exit $rc)"; fails=$((fails+1))
++fi
++
++out=$(python3 -B "$NF" --workdir "$tmpd/noorigin" 2>&1); rc=$?
++if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fq "no 'origin' remote"; then
++  say "  PASS  a checkout with no origin -> exit $rc, the reason is named (no crash)"
++else
++  say "  FAIL  a missing origin crashed or was not refused (exit $rc)"; fails=$((fails+1))
++fi
++
++# Bunker mode: one exec round trip, home resolved from the agent, rows parsed on this host.
++mkdir -p "$tmpd/bin" "$tmpd/node/pass"
++git clone -q "$tmpd/origin.git" "$tmpd/node/pass/repo"
++cat > "$tmpd/bin/bunker" <<'EOF'
++#!/usr/bin/env bash
++printf 'exec\n' >> "${FIXTURE_LOG:?}"
++exec bash -c "${!#}"
++EOF
++chmod +x "$tmpd/bin/bunker"
++out=$(env PATH="$tmpd/bin:$PATH" FIXTURE_LOG="$tmpd/bunker.log" HOME="$tmpd/node/pass" \
++  python3 -B "$NF" --agent cf-fixture --server fixture 2>&1); rc=$?
++execs=$(wc -l < "$tmpd/bunker.log")
++if [ "$rc" -eq 0 ] && [ "$execs" = 1 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: PASS' \
++  && printf '%s\n' "$out" | grep -Fq 'agent cf-fixture via fixture' \
++  && printf '%s\n' "$out" | grep -Fq "checkout $tmpd/node/pass/repo"; then
++  say "  PASS  bunker mode: one exec round trip, home resolved from the agent, RESULT: PASS"
++else
++  say "  FAIL  bunker mode did not measure the agent's checkout ($execs execs, exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++out=$(env PATH="$tmpd/bin:$PATH" FIXTURE_LOG="$tmpd/bunker.log" HOME="$tmpd/node/pass" \
++  python3 -B "$NF" --agent cf-fixture --server fixture --path "$tmpd/behind" --json 2>/dev/null); rc=$?
++if [ "$rc" -eq 1 ] && printf '%s\n' "$out" \
++  | python3 -B -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d["status"]=="FAIL" and d["behind"]==1 and d["differing_files"]==["b.txt"] and d["branch"]=="main" else 1)'; then
++  say "  PASS  bunker mode --json: status FAIL, behind 1, differing_files [b.txt] (provisioning stores this)"
++else
++  say "  FAIL  bunker mode --json did not carry the measurement (exit $rc)"; fails=$((fails+1))
++fi
++
++# Provisioning: layer 40 measures the checkout after the clone. DIRTY is a WARN (the node may be
++# mid-task); DRIFT is a FAIL (the node would work a tree that no longer matches origin/main).
++pn40() {  # $1 home -> project-node.sh --check --layers 40 output+rc
++  env HOME="$1" NODE_PROJECT=demo NODE_DISK_FLOOR=1 CRIER_URL=http://fixture.invalid:8767 \
++    /bin/bash "$HERE/scripts/project-node.sh" --check --project demo --layers 40 2>&1
++}
++# rung 1: the clone carries the probe (a code-factory node). Its own seed and origin, because
++# the probe commit must not advance the origin rungs 2 and 3 measure against: a fixture ordering
++# that advances a shared origin turns the dirty arm into drift and grades the fixture, not the code.
++git init -q -b main "$tmpd/seed2"
++printf 'one\n' > "$tmpd/seed2/a.txt"
++git -C "$tmpd/seed2" add a.txt
++git -C "$tmpd/seed2" commit -qm one
++mkdir -p "$tmpd/seed2/scripts"
++cp "$NF" "$tmpd/seed2/scripts/node_freshness.py"
++git -C "$tmpd/seed2" add scripts/node_freshness.py
++git -C "$tmpd/seed2" commit -qm "carry the probe"
++git init -q --bare "$tmpd/origin2.git"
++git -C "$tmpd/origin2.git" symbolic-ref HEAD refs/heads/main
++git -C "$tmpd/seed2" push -q "$tmpd/origin2.git" main
++mkdir -p "$tmpd/pn-probe"
++git clone -q "$tmpd/origin2.git" "$tmpd/pn-probe/repo"
++out=$(pn40 "$tmpd/pn-probe"); rc=$?
++if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '  PASS  freshness — branch=main' \
++  && printf '%s\n' "$out" | grep -Fq 'behind=0 ancestor=true' \
++  && printf '%s\n' "$out" | grep -Fxq 'NODE: PASS'; then
++  say "  PASS  provisioning runs the clone's own probe after the clone -> PASS freshness, NODE: PASS"
++else
++  say "  FAIL  layer 40 did not measure the clone with the probe it carries (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++# rung 2: a clone of another project carries no probe -> the node-side fallback measures it
++out=$(pn40 "$tmpd/pn-dirty"); rc=$?
++if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '  WARN  freshness — ' \
++  && printf '%s\n' "$out" | grep -Fq 'dirty=a.txt' \
++  && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL')" = 0 ] \
++  && printf '%s\n' "$out" | grep -Fxq 'NODE: PASS'; then
++  say "  PASS  a dirty checkout at provision time -> WARN naming a.txt, no FAIL row, NODE: PASS"
++else
++  say "  FAIL  a dirty checkout was not a named WARN (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++# advance origin AFTER the clone, so the node's tree is behind its own remote
++git -C "$tmpd/seed" commit -qm three --allow-empty
++git -C "$tmpd/seed" push -q "$tmpd/origin.git" main
++out=$(pn40 "$tmpd/pn-drift"); rc=$?
++if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fq '  FAIL  freshness — ' \
++  && printf '%s\n' "$out" | grep -Fq 'behind=1' \
++  && printf '%s\n' "$out" | grep -Fxq 'NODE: FAIL (1)'; then
++  say "  PASS  a drifted checkout at provision time -> FAIL naming behind=1, NODE: FAIL (1), exit $rc"
++else
++  say "  FAIL  drift was not a FAIL row in layer 40 (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++
++# The manifest records the measurement (CF-244 AC3): node.json carries `freshness`.
++mkdir -p "$tmpd/pn-scripts/harness" "$tmpd/mf/.node"
++cp "$HERE/scripts/project-node.sh" "$HERE/scripts/lib.sh" "$HERE/scripts/disk_floor.py" "$tmpd/pn-scripts/"
++cat > "$tmpd/pn-scripts/harness/install-fixture.sh" <<'EOF'
++#!/usr/bin/env bash
++. "$(dirname "$0")/../lib.sh"
++say "harness: fixture (CF-244)"
++ok "harness:fixture" "simulated passing adapter"
++exit 0
++EOF
++chmod +x "$tmpd/pn-scripts/harness/install-fixture.sh"
++cat > "$tmpd/bin/curl" <<'EOF'
++#!/usr/bin/env bash
++o=""
++while [ $# -gt 0 ]; do
++  case "$1" in -o) o="$2"; shift 2 ;; -*) shift ;; *) shift ;; esac
++done
++[ -n "$o" ] && [ "$o" != /dev/null ] && printf '%s' '{"status":"ok","auth_required":true}' > "$o"
++printf '200'
++EOF
++chmod +x "$tmpd/bin/curl"
++printf '{"agent":"fixture"}' > "$tmpd/mf/.node/crier.json"
++chmod 600 "$tmpd/mf/.node/crier.json"
++git clone -q "$tmpd/origin.git" "$tmpd/mf/repo"
++full_apply() {  # $1 home
++  env PATH="$tmpd/bin:$PATH" HOME="$1" NODE_PROJECT=demo NODE_HARNESS=fixture \
++    CRIER_URL=http://fixture.invalid:8767 NODE_DISK_FLOOR=1 \
++    /bin/bash "$tmpd/pn-scripts/project-node.sh" --apply --project demo --harness fixture 2>&1
++}
++out=$(full_apply "$tmpd/mf"); rc=$?
++if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'NODE: PASS' \
++  && python3 -B - "$tmpd/mf/.node/node.json" <<'PY'
++import json, sys
++fresh = json.load(open(sys.argv[1]))["freshness"]
++assert fresh["status"] == "PASS", fresh
++assert fresh["ladder"] == "PASS", fresh
++assert fresh["branch"] == "main", fresh
++assert fresh["behind"] == 0, fresh
++assert fresh["dirty_files"] == [], fresh
++assert fresh["differing_files"] == [], fresh
++PY
++then
++  say "  PASS  --apply records freshness{status:PASS, ladder:PASS, behind:0} in node.json, exit $rc"
++else
++  say "  FAIL  node.json did not carry the measured freshness (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++printf 'a local edit\n' >> "$tmpd/mf/repo/a.txt"
++out=$(full_apply "$tmpd/mf"); rc=$?
++if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '  WARN  freshness — ' \
++  && python3 -B - "$tmpd/mf/.node/node.json" <<'PY'
++import json, sys
++fresh = json.load(open(sys.argv[1]))["freshness"]
++assert fresh["status"] == "FAIL", fresh
++assert fresh["ladder"] == "WARN", fresh
++assert fresh["dirty_files"] == ["a.txt"], fresh
++PY
++then
++  say "  PASS  a dirty checkout is recorded (status FAIL, ladder WARN, dirty_files [a.txt]) and the ladder still passes, exit $rc"
++else
++  say "  FAIL  a dirty checkout was not recorded as a finding (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++rm -rf "$tmpd"
++# END cf244-node-freshness
+ 
+ # --- node_seed.py: the seed contract (CF-220) ------------------------------------------------
+ # A seed that cannot refuse is a copy. Each arm below fails for a different

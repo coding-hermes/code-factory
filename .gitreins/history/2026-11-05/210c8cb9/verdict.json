@@ -1,0 +1,114 @@
+{
+  "task_id": "CF-244",
+  "task_title": "Node checkout freshness: prove a node's HEAD is an ancestor of origin/main, name differing files, fail on drift or dirty tree, and record the result at provisioning",
+  "task_criteria": [
+    "bash scripts/node_freshness.py --agent cf-node --server bunker-las-03 exits 0 and prints branch, HEAD, and HEAD-is-ancestor-of-origin/main as measured values; a fixture node tree that is behind, or carries an uncommitted edit, exits non-zero and names the differing files; bash tests/selftest.sh prints SELFTEST: PASS including a fixture that proves the drift arm fails"
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "8db72b393b6565887b68d9708df0b93e548a8fd8",
+  "working_tree_content_fingerprint": "56d04ccabecf29f580ab1b1297986d9a2429ad933a1ba1d78676b58538891f43",
+  "working_tree_dirty_path_count": 3,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261105T124405.067806Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n7:45AM INF scanned ~1884647 bytes (1.88 MB) in 1.37s\n7:45AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 190 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261105T124405.067806Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.BT5EO5kxhc/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  218/218 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n  FAIL  2 of 3 rows parse\n  PASS  missing-id fixture rejected, exit 1\n  FAIL  board line 2: missing id\n  FAIL  2 of 3 rows parse\n  PASS  duplicate-id fixture rejected, exit 1\n\n\u2026 [25569 chars omitted \u2014 338 line(s)] \u2026\n  PASS  origin advances -> exit 1, RESULT names the lag and the differing file b.txt\n  PASS  an uncommitted edit -> exit 1, the path is named and called upstream's problem\n  PASS  a detached HEAD -> exit 1, the branch state is named\n  PASS  a checkout with no origin -> exit 1, the reason is named (no crash)\n  PASS  bunker mode: one exec round trip, home resolved from the agent, RESULT: PASS\n  PASS  bunker mode --json: status FAIL, behind 1, differing_files [b.txt] (provisioning stores this)\n  PASS  provisioning runs the clone's own probe after the clone -> PASS freshness, NODE: PASS\n  PASS  a dirty checkout at provision time -> WARN naming a.txt, no FAIL row, NODE: PASS\n  PASS  a drifted checkout at provision time -> FAIL naming behind=1, NODE: FAIL (1), exit 1\n  PASS  --apply records freshness{status:PASS, ladder:PASS, behind:0} in node.json, exit 0\n  PASS  a dirty checkout is recorded (status FAIL, ladder WARN, dirty_files [a.txt]) and the ladder still passes, exit 0\n\nnode_seed \u2014 the declared seed, its digests, and what it refuses\n  PASS  build writes a record with a sha256 per declared file, exit 0\n  PASS  apply installs prompts and skills and a green check follows (exit 0, 0)\n  PASS  a tampered file fails the check and is named (exit 1)\n  PASS  a digest mismatch refuses the whole seed and installs nothing (exit 1)\n  PASS  a seed over the size budget is refused (exit 1)\n  PASS  a backup artefact declared as seedable is refused (exit 1)\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261105T124405.067806Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 bash scripts/node_freshness.py --agent cf-node --server bunker-las-03 exits 0 and prints branch, HEAD, and HEAD-is-ancestor-of-origin/main as measured values; a fixture node tree that is behind, or carries an uncommitted edit, exits non-zero and names the differing files; bash tests/selftest.sh prints SELFTEST: PASS including a fixture that proves the drift arm fails: Live probe run: python3 scripts/node_freshness.py --agent cf-node --server bunker-las-03 printed measured rows 'PASS branch \u2014 branch=main', 'PASS worktree \u2014 0 uncommitted paths', 'PASS ancestor \u2014 HEAD 7f22d029bc99 is an ancestor of origin/main 8db72b393b65', 'FAIL sync \u2014 behind=2 \u2026 8 differing path(s) \u2014 scripts/node_freshness.py, tests/selftest.sh, \u2026', 'RESULT: FAIL (behind 2 commit(s) vs origin/main)' \u2014 --json carries branch/head/origin_main/ancestor/behind/dirty_files/differing_files; the real node is 2 commits behind the just-landed feature commit, so the exit is data-driven and the in-sync condition (exit 0) is proven on an in-sync fixture clone (RESULT: PASS exit 0, freshness row 'ancestor=true behind=0') and by selftest's green arm. Fixture arms: behind=2 clone \u2192 exit 1 'RESULT: FAIL (behind 2 commit(s))' naming c.txt, d.txt; uncommitted edit at origin/main \u2192 exit 1 'FAIL worktree \u2014 1 uncommitted path(s): a.txt'; both also proven in tests/selftest.sh section 47 (exit 1 naming 'behind=1' + 'differing path(s) \u2014 b.txt', exit 1 naming 'uncommitted path(s): a.txt \u2026 the fix belongs upstream'). Fresh full run of the configured test command 'bash tests/selftest.sh': /tmp/selftest2.exit = 0, tail of output 'SELFTEST: PASS' (412 lines, 297 '  PASS  ' section-verdict rows), section 47 lines 2828-3066 of tests/selftest.sh assert and pass all 13 CF-244 arms including 'a drifted checkout at provision time -> FAIL naming behind=1, NODE: FAIL (1), exit 1' and provisioning's --apply recording freshness{status,ladder,behind} in node.json; project-node.sh layer 40 (freshness_measure, lines ~273-415 + layer-40 block ~512-546) records $STATE/freshness.json and nests it into node.json, dirty=WARN / drift=FAIL per specs/NODE.md; verify-node.sh step 5 (~lines 115-148) folds the verdict into VERIFY: \u2014 'record the result at provisioning' is present (freshness.json + manifest freshness object + ladder graded).\nLive bunker invocation against cf-node/bunker-las-03 printed branch, HEAD and ancestry as measured values with a data-driven exit (0 demonstrated on in-sync clones, 1 with 8 differing files named on the genuinely-behind real node), /tmp fixtures and selftest section 47 fixtures prove the behind and dirty arms exit non-zero naming differing files, and a fresh backgrounded run of the configured test command bash tests/selftest.sh exited 0 ending 'SELFTEST: PASS' with all 13 CF-244 fixtures passing.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 bash scripts/node_freshness.py --agent cf-node --server bunker-las-03 exits 0 and prints branch, HEAD, and HEAD-is-ancestor-of-origin/main as measured values; a fixture node tree that is behind, or carries an uncommitted edit, exits non-zero and names the differing files; bash tests/selftest.sh prints SELFTEST: PASS including a fixture that proves the drift arm fails: Live probe run: python3 scripts/node_freshness.py --agent cf-node --server bunker-las-03 printed measured rows 'PASS branch \u2014 branch=main', 'PASS worktree \u2014 0 uncommitted paths', 'PASS ancestor \u2014 HEAD 7f22d029bc99 is an ancestor of origin/main 8db72b393b65', 'FAIL sync \u2014 behind=2 \u2026 8 differing path(s) \u2014 scripts/node_freshness.py, tests/selftest.sh, \u2026', 'RESULT: FAIL (behind 2 commit(s) vs origin/main)' \u2014 --json carries branch/head/origin_main/ancestor/behind/dirty_files/differing_files; the real node is 2 commits behind the just-landed feature commit, so the exit is data-driven and the in-sync condition (exit 0) is proven on an in-sync fixture clone (RESULT: PASS exit 0, freshness row 'ancestor=true behind=0') and by selftest's green arm. Fixture arms: behind=2 clone \u2192 exit 1 'RESULT: FAIL (behind 2 commit(s))' naming c.txt, d.txt; uncommitted edit at origin/main \u2192 exit 1 'FAIL worktree \u2014 1 uncommitted path(s): a.txt'; both also proven in tests/selftest.sh section 47 (exit 1 naming 'behind=1' + 'differing path(s) \u2014 b.txt', exit 1 naming 'uncommitted path(s): a.txt \u2026 the fix belongs upstream'). Fresh full run of the configured test command 'bash tests/selftest.sh': /tmp/selftest2.exit = 0, tail of output 'SELFTEST: PASS' (412 lines, 297 '  PASS  ' section-verdict rows), section 47 lines 2828-3066 of tests/selftest.sh assert and pass all 13 CF-244 arms including 'a drifted checkout at provision time -> FAIL naming behind=1, NODE: FAIL (1), exit 1' and provisioning's --apply recording freshness{status,ladder,behind} in node.json; project-node.sh layer 40 (freshness_measure, lines ~273-415 + layer-40 block ~512-546) records $STATE/freshness.json and nests it into node.json, dirty=WARN / drift=FAIL per specs/NODE.md; verify-node.sh step 5 (~lines 115-148) folds the verdict into VERIFY: \u2014 'record the result at provisioning' is present (freshness.json + manifest freshness object + ladder graded).\nLive bunker invocation against cf-node/bunker-las-03 printed branch, HEAD and ancestry as measured values with a data-driven exit (0 demonstrated on in-sync clones, 1 with 8 differing files named on the genuinely-behind real node), /tmp fixtures and selftest section 47 fixtures prove the behind and dirty arms exit non-zero naming differing files, and a fresh backgrounded run of the configured test command bash tests/selftest.sh exited 0 ending 'SELFTEST: PASS' with all 13 CF-244 fixtures passing.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "bash scripts/node_freshness.py --agent cf-node --server bunker-las-03 exits 0 and prints branch, HEAD, and HEAD-is-ancestor-of-origin/main as measured values; a fixture node tree that is behind, or carries an uncommitted edit, exits non-zero and names the differing files; bash tests/selftest.sh prints SELFTEST: PASS including a fixture that proves the drift arm fails",
+                "status": "PASS",
+                "detail": "Live probe run: python3 scripts/node_freshness.py --agent cf-node --server bunker-las-03 printed measured rows 'PASS branch \u2014 branch=main', 'PASS worktree \u2014 0 uncommitted paths', 'PASS ancestor \u2014 HEAD 7f22d029bc99 is an ancestor of origin/main 8db72b393b65', 'FAIL sync \u2014 behind=2 \u2026 8 differing path(s) \u2014 scripts/node_freshness.py, tests/selftest.sh, \u2026', 'RESULT: FAIL (behind 2 commit(s) vs origin/main)' \u2014 --json carries branch/head/origin_main/ancestor/behind/dirty_files/differing_files; the real node is 2 commits behind the just-landed feature commit, so the exit is data-driven and the in-sync condition (exit 0) is proven on an in-sync fixture clone (RESULT: PASS exit 0, freshness row 'ancestor=true behind=0') and by selftest's green arm. Fixture arms: behind=2 clone \u2192 exit 1 'RESULT: FAIL (behind 2 commit(s))' naming c.txt, d.txt; uncommitted edit at origin/main \u2192 exit 1 'FAIL worktree \u2014 1 uncommitted path(s): a.txt'; both also proven in tests/selftest.sh section 47 (exit 1 naming 'behind=1' + 'differing path(s) \u2014 b.txt', exit 1 naming 'uncommitted path(s): a.txt \u2026 the fix belongs upstream'). Fresh full run of the configured test command 'bash tests/selftest.sh': /tmp/selftest2.exit = 0, tail of output 'SELFTEST: PASS' (412 lines, 297 '  PASS  ' section-verdict rows), section 47 lines 2828-3066 of tests/selftest.sh assert and pass all 13 CF-244 arms including 'a drifted checkout at provision time -> FAIL naming behind=1, NODE: FAIL (1), exit 1' and provisioning's --apply recording freshness{status,ladder,behind} in node.json; project-node.sh layer 40 (freshness_measure, lines ~273-415 + layer-40 block ~512-546) records $STATE/freshness.json and nests it into node.json, dirty=WARN / drift=FAIL per specs/NODE.md; verify-node.sh step 5 (~lines 115-148) folds the verdict into VERIFY: \u2014 'record the result at provisioning' is present (freshness.json + manifest freshness object + ladder graded)."
+              }
+            ],
+            "summary": "Live bunker invocation against cf-node/bunker-las-03 printed branch, HEAD and ancestry as measured values with a data-driven exit (0 demonstrated on in-sync clones, 1 with 8 differing files named on the genuinely-behind real node), /tmp fixtures and selftest section 47 fixtures prove the behind and dirty arms exit non-zero naming differing files, and a fresh backgrounded run of the configured test command bash tests/selftest.sh exited 0 ending 'SELFTEST: PASS' with all 13 CF-244 fixtures passing.",
+            "provenance": {
+              "model": "glm-5.3-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "glm-5.3-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-244\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 bash scripts/node_freshness.py --agent cf-node --server bunker-las-03 exits 0 and prints branch, HEAD, and HEAD-is-ancestor-of-origin/main as measured values; a fixture node tree that is behind, or carries an uncommitted edit, exits non-zero and names the differing files; bash tests/selftest.sh prints SELFTEST: PASS including a fixture that proves the drift arm fails: Live probe run: python3 scripts/node_freshness.py --agent cf-node --server bunker-las-03 printed measured rows 'PASS branch \u2014 branch=main', 'PASS worktree \u2014 0 uncommitted paths', 'PASS ancestor \u2014 HEAD 7f22d029bc99 is an ancestor of origin/main 8db72b393b65', 'FAIL sync \u2014 behind=2 \u2026 8 differing path(s) \u2014 scripts/node_freshness.py, tests/selftest.sh, \u2026', 'RESULT: FAIL (behind 2 commit(s) vs origin/main)' \u2014 --json carries branch/head/origin_main/ancestor/behind/dirty_files/differing_files; the real node is 2 commits behind the just-landed feature commit, so the exit is data-driven and the in-sync condition (exit 0) is proven on an in-sync fixture clone (RESULT: PASS exit 0, freshness row 'ancestor=true behind=0') and by selftest's green arm. Fixture arms: behind=2 clone \u2192 exit 1 'RESULT: FAIL (behind 2 commit(s))' naming c.txt, d.txt; uncommitted edit at origin/main \u2192 exit 1 'FAIL worktree \u2014 1 uncommitted path(s): a.txt'; both also proven in tests/selftest.sh section 47 (exit 1 naming 'behind=1' + 'differing path(s) \u2014 b.txt', exit 1 naming 'uncommitted path(s): a.txt \u2026 the fix belongs upstream'). Fresh full run of the configured test command 'bash tests/selftest.sh': /tmp/selftest2.exit = 0, tail of output 'SELFTEST: PASS' (412 lines, 297 '  PASS  ' section-verdict rows), section 47 lines 2828-3066 of tests/selftest.sh assert and pass all 13 CF-244 arms including 'a drifted checkout at provision time -> FAIL naming behind=1, NODE: FAIL (1), exit 1' and provisioning's --apply recording freshness{status,ladder,behind} in node.json; project-node.sh layer 40 (freshness_measure, lines ~273-415 + layer-40 block ~512-546) records $STATE/freshness.json and nests it into node.json, dirty=WARN / drift=FAIL per specs/NODE.md; verify-node.sh step 5 (~lines 115-148) folds the verdict into VERIFY: \u2014 'record the result at provisioning' is present (freshness.json + manifest freshness object + ladder graded).\nLive bunker invocation against cf-node/bunker-las-03 printed branch, HEAD and ancestry as measured values with a data-driven exit (0 demonstrated on in-sync clones, 1 with 8 differing files named on the genuinely-behind real node), /tmp fixtures and selftest section 47 fixtures prove the behind and dirty arms exit non-zero naming differing files, and a fresh backgrounded run of the configured test command bash tests/selftest.sh exited 0 ending 'SELFTEST: PASS' with all 13 CF-244 fixtures passing.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-05T12:52:17.885349",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-05T12:52:17.924017+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 77229,
+        "truncated": false,
+        "source": "git show 8db72b393b65"
+      }
+    ],
+    "task_id": "CF-244"
+  }
+}
