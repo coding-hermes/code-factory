@@ -3491,4 +3491,46 @@ rm -rf "$tmpd"
 # END install-go
 
 say ""
+say "51. the python lint lane can go red on one unused import, and green once it is removed (CF-254)"
+# CF-254: the Tier-1 lint lane takes its scope from staged file EXTENSIONS and grades
+# only *.py (.gitreins/config.yaml:9-16, naming engine/guard_manager.py:2823). This arm
+# pins both states of the checker that lane runs, so the finding cannot be hand-edited
+# away: the red that reached the branch is verdict
+# .gitreins/history/2026-11-05/0e9f844d (F401 at scripts/master_doc_fill.py:16,18,19
+# and scripts/master_doc_skeleton.py:10).
+if ! command -v ruff >/dev/null 2>&1; then
+  say "  FAIL  ruff is not on PATH, so the lint lane cannot be graded on this host"; fails=$((fails+1))
+else
+  tmpd=$(mktemp -d)
+  # RED: an unused import is a finding the lane fails on, and it is named F401.
+  printf 'import os\nprint("x")\n' > "$tmpd/one_unused.py"
+  out=$(ruff check "$tmpd/one_unused.py" 2>&1); rc=$?
+  if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'F401'; then
+    say "  PASS  one unused import -> exit $rc naming F401"
+  else
+    say "  FAIL  one unused import did not red (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+  # GREEN: the same file, same checker, one line removed.
+  printf 'print("x")\n' > "$tmpd/one_unused.py"
+  if out=$(ruff check "$tmpd/one_unused.py" 2>&1); then
+    say "  PASS  same file once the import is removed -> exit 0"
+  else
+    say "  FAIL  the clean file still reds, so the arm cannot go green"; fails=$((fails+1))
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+  # The tracked surface the lane grades must itself be clean.
+  tracked=$(git -C "$HERE" ls-files '*.py')
+  n_tracked=$(printf '%s\n' "$tracked" | grep -c . || true)
+  if out=$(ruff check $tracked 2>&1); then
+    say "  PASS  tracked python surface clean: $n_tracked files graded"
+  else
+    say "  FAIL  tracked python surface is red: a python-staging commit is refused"; fails=$((fails+1))
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+  rm -rf "$tmpd"
+fi
+# END python-lint
+
+say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
