@@ -15,7 +15,10 @@
 #
 # Keys (all optional except PROJECT and REPO):
 #   PROJECT  AGENT  SERVER  REPO  REF  HARNESS  NAMESPACES  TTL
+#   GIT_AUTHOR_NAME  GIT_AUTHOR_EMAIL  [GIT_CO_AUTHOR]   (required for --apply: the node commits)
 #   GITHUB_TOKEN_FILE  DUCKBRAIN_TOKEN_FILE  S3_ENV_FILE
+#   CRIER_AGENT_KEY_FILE  CRIER_AUTH_TOKEN_FILE   (the bus credentials: without them a node
+#                                                   cannot read its own inbox at all)
 #   CRIER_URL  DUCKBRAIN_URL
 #   NODE_ENV_FILE  CONFIG_SET_MODEL_PROVIDER  CONFIG_SET_MODEL_NAME
 #   CONFIG_SET_GATEWAY_BIND  CONFIG_SET_GATEWAY_PORT  CONFIG_SET_AGENT_MAX_ITERATIONS
@@ -33,7 +36,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
 
 CONFIG="" MODE="" AGENT="" PROJECT="" SERVER="" REPO="" REF="" HARNESS="" NAMESPACE="" NAMESPACES="" TTL=""
+GIT_AUTHOR_NAME="" GIT_AUTHOR_EMAIL="" GIT_CO_AUTHOR=""
 GITHUB_TOKEN_FILE="" DUCKBRAIN_TOKEN_FILE="" S3_ENV_FILE="" CRIER_URL="" DUCKBRAIN_URL=""
+CRIER_AGENT_KEY_FILE="" CRIER_AUTH_TOKEN_FILE=""
 NODE_ENV_FILE=""
 CONFIG_SET_MODEL_PROVIDER="" CONFIG_SET_MODEL_NAME="" CONFIG_SET_GATEWAY_BIND=""
 CONFIG_SET_GATEWAY_PORT="" CONFIG_SET_AGENT_MAX_ITERATIONS=""
@@ -184,7 +189,11 @@ check() {
     echo "github=$([ -s "$HOME/.node/auth/github.token" ] && echo present || echo absent)"
     echo "duckbrain=$([ -s "$HOME/.node/auth/duckbrain.token" ] && echo present || echo absent)"
     echo "crier_json=$([ -f "$HOME/.node/crier.json" ] && echo present || echo absent)"
+    echo "crier_key=$([ -s "$HOME/.node/agent.key" ] && echo present || echo absent)"
+    echo "crier_bearer=$([ -s "$HOME/.node/auth/crier.token" ] && echo present || echo absent)"
     echo "gitcred=$([ -s "$HOME/.git-credentials" ] && echo present || echo absent)"
+    echo "gitreins=$(command -v gitreins >/dev/null 2>&1 && gitreins --version 2>/dev/null | awk '{print $2}' || echo absent)"
+    echo "precommit=$([ -x "$HOME/repo/.git/hooks/pre-commit" ] && echo present || echo absent)"
     echo "hermes=$(if [ -x "$HOME/hermes-venv/bin/hermes" ] || [ -x "$HOME/.local/bin/hermes" ] || command -v hermes >/dev/null 2>&1; then echo present; else echo absent; fi)"
     echo "gw_auth=$(grep -q "basic_auth:" "$HOME/.hermes/config.yaml" 2>/dev/null && echo present || echo absent)"
   ' 2>/dev/null) || true
@@ -197,10 +206,18 @@ check() {
     *) bad "auth_github" "no \$HOME/.node/auth/github.token" ;; esac
   case "$probe" in *duckbrain=present*) ok "auth_duckbrain" "token file installed (value not read)" ;;
     *) bad "auth_duckbrain" "no \$HOME/.node/auth/duckbrain.token" ;; esac
+  case "$probe" in *crier_key=present*) ok "crier_key" "agent key installed at 600 (the bus verifies its signature)" ;;
+    *) bad "crier_key" "no \$HOME/.node/agent.key — the inbox answers 401 to every read" ;; esac
+  case "$probe" in *crier_bearer=present*) ok "crier_bearer" "bus bearer installed at 600" ;;
+    *) bad "crier_bearer" "no \$HOME/.node/auth/crier.token — a signed read still needs the bearer" ;; esac
   case "$probe" in *gitcred=present*) ok "git_credential" "\$HOME/.git-credentials present, mode 600 store" ;;
     *) bad "git_credential" "no \$HOME/.git-credentials — the clone cannot authenticate" ;; esac
   case "$probe" in *gw_auth=present*) ok "gateway_auth" "dashboard.basic_auth present — a public bind is legal" ;;
     *) bad "gateway_auth" "no dashboard.basic_auth — the gateway will refuse to bind (CF-150)" ;; esac
+  case "$probe" in *gitreins=absent*|*gitreins=) bad "gitreins" "absent on the node — commits from this host are ungraded" ;;
+    *gitreins=*) ok "gitreins" "version $(printf '%s' "$probe" | sed -n 's/^gitreins=//p')" ;; esac
+  case "$probe" in *precommit=present*) ok "commit_hook" "pre-commit installed in the clone" ;;
+    *) bad "commit_hook" "no pre-commit hook — the gate is not armed" ;; esac
   case "$probe" in *hermes=present*) ok "harness" "$HARNESS binary present" ;;
     *) bad "harness" "no $HARNESS binary on the node" ;; esac
 
@@ -260,6 +277,21 @@ bundle_paths() {  # bundle_paths <dest-on-node-relative>
   local dest="$1" out=""
   [ -n "$GITHUB_TOKEN_FILE" ] && [ -r "$GITHUB_TOKEN_FILE" ] && out+="github=$(head -c 4096 "$GITHUB_TOKEN_FILE" | tr -d '\r\n')"$'\n'
   [ -n "$DUCKBRAIN_TOKEN_FILE" ] && [ -r "$DUCKBRAIN_TOKEN_FILE" ] && out+="duckbrain=$(head -c 4096 "$DUCKBRAIN_TOKEN_FILE" | tr -d '\r\n')"$'\n' 
+  if [ -n "$CRIER_AGENT_KEY_FILE" ] && [ -r "$CRIER_AGENT_KEY_FILE" ]; then
+    out+="agentkey_b64=$(base64 -w0 "$CRIER_AGENT_KEY_FILE")"$'\n'
+  fi
+  if [ -n "$CRIER_AUTH_TOKEN_FILE" ] && [ -r "$CRIER_AUTH_TOKEN_FILE" ]; then
+    # The bearer may live in a plain token file OR in an EnvironmentFile that also holds other
+    # keys (the crier unit reads one). Extract the value in the second case rather than asking an
+    # operator to copy the secret to a second path.
+    local tok
+    tok=$(head -c 4096 "$CRIER_AUTH_TOKEN_FILE" | tr -d '\r')
+    case "$tok" in
+      *CR_AUTH_TOKEN=*) tok="${tok##*CR_AUTH_TOKEN=}"; tok="${tok%%$'\n'*}" ;;
+    esac
+    tok=$(printf '%s' "$tok" | tr -d '\n')
+    [ -n "$tok" ] && out+="crierbearer=$tok"$'\n'
+  fi
   if [ -n "$S3_ENV_FILE" ] && [ -r "$S3_ENV_FILE" ]; then
     out+="s3="$'\n'"$(sed -e 's/^/  /' "$S3_ENV_FILE")"$'\n'
   fi
@@ -309,6 +341,10 @@ apply() {
          [ -n "$d" ] && printf "%s\n" "$d" > "$HOME/.node/auth/duckbrain.token"
          sed -n "/^s3=$/,\$p" "$HOME/cf-auth.bundle" | tail -n +2 | sed "s/^  //" > "$HOME/.node/auth/s3.env" 2>/dev/null || true
          [ -s "$HOME/.node/auth/s3.env" ] || rm -f "$HOME/.node/auth/s3.env"
+         k=$(sed -n "s/^agentkey_b64=//p" "$HOME/cf-auth.bundle" | head -1)
+         [ -n "$k" ] && printf "%s" "$k" | base64 -d > "$HOME/.node/agent.key" && chmod 600 "$HOME/.node/agent.key"
+         t=$(sed -n "s/^crierbearer=//p" "$HOME/cf-auth.bundle" | head -1)
+         [ -n "$t" ] && printf "%s\n" "$t" > "$HOME/.node/auth/crier.token" && chmod 600 "$HOME/.node/auth/crier.token"
          chmod 600 "$HOME/.node/auth/"* 2>/dev/null || true
          if [ -s "$HOME/.node/auth/github.token" ]; then
            printf "https://x-access-token:%s@github.com\n" "$(cat "$HOME/.node/auth/github.token")" > "$HOME/.git-credentials"
@@ -466,6 +502,8 @@ while [ $# -gt 0 ]; do
     --duckbrain-url) DUCKBRAIN_URL="$2"; shift 2 ;;
     --github-token-file) GITHUB_TOKEN_FILE="$(expand_tilde "$2")"; shift 2 ;;
     --duckbrain-token-file) DUCKBRAIN_TOKEN_FILE="$(expand_tilde "$2")"; shift 2 ;;
+    --crier-agent-key-file) CRIER_AGENT_KEY_FILE="$(expand_tilde "$2")"; shift 2 ;;
+    --crier-auth-token-file) CRIER_AUTH_TOKEN_FILE="$(expand_tilde "$2")"; shift 2 ;;
     --s3-env-file) S3_ENV_FILE="$(expand_tilde "$2")"; shift 2 ;;
     --node-env-file) CLI_NODE_ENV_FILE="$2"; shift 2 ;;
     --config-set) CLI_CONFIG_SET+=("$2"); shift 2 ;;

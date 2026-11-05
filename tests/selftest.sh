@@ -1971,6 +1971,15 @@ else
   say "  FAIL  missing bunker client did not surface (exit $rc)"; fails=$((fails+1))
 fi
 
+# the node-side gate refuses to install without an identity to commit under
+bash -n "$HERE/scripts/install-gitreins.sh" || { say "  FAIL  install-gitreins syntax"; fails=$((fails+1)); }
+out=$(/bin/bash "$HERE/scripts/install-gitreins.sh" --apply --repo "$HERE" --author-name "" --author-email "" 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q "identity — --author-name and --author-email are required"; then
+  say "  PASS  gitreins installer refuses an anonymous node, exit $rc"
+else
+  say "  FAIL  gitreins installer accepted an empty identity (exit $rc)"; fails=$((fails+1))
+fi
+
 # a namespace declaration is validated before any host is touched
 out=$(/bin/bash "$HERE/scripts/bunker-provision.sh" --check --project demo --agent a --server s --namespaces 'bad slug!' 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q "FAIL  namespaces — .* not a namespace slug"; then

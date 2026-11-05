@@ -69,12 +69,27 @@ scripts/bunker-provision.sh --config ~/.config/code-factory/cf.conf --apply --ag
 scripts/bunker-provision.sh --config ~/.config/code-factory/cf.conf --destroy --yes
 ```
 
+## The commit gate lives on the node
+
+A remote foreman commits on the bunker, so gitreins is installed **there**, not only on the
+control host. `--apply` stages `scripts/install-gitreins.sh` into the agent and runs it after the
+clone exists: a venv under `$HOME` (Debian marks the system interpreter externally managed, so
+`pip install --user` is refused — PEP 668), the pin read back, a pre-commit hook written with the
+**absolute** venv path (`DF-011`: a bare `gitreins` on PATH can be a different version), and the
+git identity the node commits under. `--check` prints one row per piece and fails on any of them.
+
 ## Credentials
 
 A project may need more than one namespace (a lane that reads another project's memory, or
 an app namespace beside the project one). List them: `NAMESPACES=code-factory,coder`. The primary
 is the first entry, and `--check` prints one `duckbrain:<ns>` row per namespace, so a token that
 reaches one and not another is visible instead of averaged away.
+
+Two of those files are the **bus** credentials: the agent's ed25519 private key (the bus verifies a
+per-agent signature before it even looks the agent up) and the shared bearer. Without both, the
+node's inbox answers 401 to every read and no work can arrive. `CRIER_AUTH_TOKEN_FILE` may point
+at the crier unit's EnvironmentFile — the `CR_AUTH_TOKEN=` value is extracted, so the secret is not
+copied to a second path.
 
 The config names **files**; the provisioner reads them into one bundle of mode 600, copies it
 in, installs `$HOME/.node/auth/{github.token,duckbrain.token,s3.env}` at mode 600, points git
@@ -156,7 +171,7 @@ a host, so a refused declaration is a named `FAIL env_profile` row rather than a
 `auth_github` / `auth_duckbrain` FAIL | token file missing on the node | name the token file in the config, re-apply |
 `harness` FAIL | harness binary absent | run the harness adapter (`scripts/harness/install-<h>.sh --apply`) |
 `env_profile` FAIL | the declaration is refused — an unknown `CONFIG_SET_*` path, a literal secret, a non-`ENV_` line | fix the profile or the key; the row names the line and the allowed set |
-`crier` 401/403 | auth or per-agent signature missing, or owner/guard refused. crier checks the signer **before** it looks the agent up (`internal/auth/agentsig.go:167`), so 401 is **not** evidence the id is unknown | present the agent's bearer + signature, or register the sender |
+`crier` 401/403 | auth or per-agent signature missing, or owner/guard refused. crier checks the signer **before** it looks the agent up (`internal/registry/agentsig.go` (package `registry`)), so 401 is **not** evidence the id is unknown | present the agent's bearer + signature, or register the sender |
 `crier` 404 | the agent id is genuinely not registered | register it; do not invent a key |
 `crier` 000 | bus unreachable | the URL, not the node, is the problem |
 `duckbrain` FAIL | namespace unreachable with that key | check the token's namespace scope |
