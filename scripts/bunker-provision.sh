@@ -283,8 +283,13 @@ CFPROBE
         *",$ns,"*) ;;
         *) continue ;;
       esac
-      code=$(curl -s -o /dev/null -m 8 -w '%{http_code}' -H "x-api-key: $(cat "$DUCKBRAIN_TOKEN_FILE")" \
-        "$DUCKBRAIN_URL/api/memories/key/x?namespace=$ns" 2>/dev/null || echo 000)
+      # The token goes to curl on STDIN (-K -), never in argv: a header on the command line is
+      # visible to every local user through ps, which is exactly what "credentials never travel as
+      # arguments" forbids (AGENTS.md r8). Found by a quorum seat reading this line against the docs.
+      code=$(printf 'header = "x-api-key: %s"\nurl = "%s"\n' \
+               "$(head -c 4096 "$DUCKBRAIN_TOKEN_FILE" | tr -d '\r\n')" \
+               "$DUCKBRAIN_URL/api/memories/key/x?namespace=$ns" \
+             | curl -s -K - -o /dev/null -m 8 -w '%{http_code}' 2>/dev/null); code=${code:-000}
       case "$code" in
         200|404) ok "duckbrain:$ns" "$DUCKBRAIN_URL namespace=$ns -> $code" ;;
         *) bad "duckbrain:$ns" "$DUCKBRAIN_URL namespace=$ns -> $code" ;;
