@@ -107,9 +107,11 @@ load_config() {
     case "$key" in
       PROJECT|AGENT|SERVER|REPO|REF|HARNESS|NAMESPACE|NAMESPACES|TTL|CRIER_URL|DUCKBRAIN_URL)
         printf -v "$key" '%s' "$val" ;;
+      GIT_AUTHOR_NAME|GIT_AUTHOR_EMAIL|GIT_CO_AUTHOR)
+        printf -v "$key" '%s' "$val" ;;
       CONFIG_SET_MODEL_PROVIDER|CONFIG_SET_MODEL_NAME|CONFIG_SET_GATEWAY_BIND|CONFIG_SET_GATEWAY_PORT|CONFIG_SET_AGENT_MAX_ITERATIONS)
         printf -v "$key" '%s' "$val" ;;
-      GITHUB_TOKEN_FILE|DUCKBRAIN_TOKEN_FILE|S3_ENV_FILE|NODE_ENV_FILE)
+      GITHUB_TOKEN_FILE|DUCKBRAIN_TOKEN_FILE|S3_ENV_FILE|NODE_ENV_FILE|CRIER_AGENT_KEY_FILE|CRIER_AUTH_TOKEN_FILE)
         case "$val" in "~/"*) val="$HOME/${val#\~/}" ;; esac
         printf -v "$key" '%s' "$val" ;;
       *) bad "config" "$file:$n unknown key $key"; return 1 ;;
@@ -435,7 +437,11 @@ apply() {
   if BUNKER_SERVER="$SERVER" CRIER_URL="$CRIER_URL" "$HERE/node-create.sh" "${create_args[@]}"; then
     ok "node_create" "$AGENT provisioned by node-create.sh"
   else
-    bad "node_create" "node-create.sh failed — see its rows above"; return 1
+    # Keep going: node-create also owns the control-host round-trip check, and a node whose
+    # ladder is green but whose port is not reachable from here still deserves its identity
+    # written. The failure is carried to the exit status, not used to skip the rest.
+    bad "node_create" "node-create.sh reported FAIL — see its rows; continuing with the identity"
+    rc=1
   fi
 
   # 7. identity: MERGE into node.json — project-node.sh owns that file's schema, so a
