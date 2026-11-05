@@ -26,7 +26,7 @@ A **harness** is whatever runs the work inside a node. The factory must not care
 | **hermes** | Python `>=3.11,<3.14`; `python3 -m venv` + `pip install hermes-agent==0.19.0`; `hermes serve --host 0.0.0.0 --port P --skip-build` | **MEASURED working**: 32 s install, `/api/status` 200 over tailnet, 133 JSON-RPC methods, `session.create` + `prompt.submit`. Needs a provider key in `~/.hermes/.env`. |
 | **opencode** | standalone binary; `opencode` CLI or server mode | not measured here — the fleet's `examples/agent-ecosystem` runs it in a container |
 | **claude-code** | `npm i -g @anthropic-ai/claude-code` (needs node) | not measured here; node absent in base image |
-| **codex** | binary; app-server over stdio | not measured here; the scheduler's connector expects an app-server sidecar |
+| **codex** | release tarball `codex-x86_64-unknown-linux-musl.tar.gz` from `rust-v0.166.0`, sha256-pinned, installed under `$HOME/.local/codex/<pin>`; **exec** mode (`codex exec --json -s <mode> -m <model> -- <text>`, `exec resume <id>`) | **MEASURED** (CF-227, 2026-11-04, `scripts/harness/install-codex.sh`): 7 s install, version read back `codex-cli 0.166.0`, idempotent second `--apply`, and one real turn wrote a fixed token with `model_served` read from codex's own rollout record. The **app-server** sidecar is `[experimental]` and **nothing in crier uses it** — `codex.go` names "two verified surfaces: exec create / exec resume", and `grep -rn app-server` over crier is empty; `--app-server` probes it anyway (an `initialize` over stdio answers with a `userAgent`). |
 | **aider** | `pip install aider-chat` (venv) | not measured |
 | **goose** | binary | not measured |
 | **pi-agent** | binary | not measured |
@@ -37,7 +37,8 @@ version matches. `--apply` creates the venv and installs `hermes-agent==$HERMES_
 when the venv binary is absent, regardless of PATH. A venv version mismatch is named
 and reinstalls the pin; only a matching venv binary earns "already installed".
 
-Only **hermes** has a measured install ladder in this repo. The others ship a documented
+**hermes** and **codex** have measured install ladders in this repo (`install-hermes.sh`,
+`install-codex.sh`, both proved by a script that can go red). The others ship a documented
 `--check` and a method, and are marked `UNVERIFIED` until someone runs them — an unverified
 installer is not a supported installer, and the script says so out loud.
 
@@ -53,6 +54,12 @@ A `SKIP` names the exact credential or binary that is missing, and it is not evi
 this spec's table is a claim about a method, the matrix is a measurement of a host, and only the
 matrix may be quoted as "works here". A harness named in the tables above with no adapter file is
 a `FAIL`, never a skip. `tests/selftest.sh` §44 keeps the battery itself able to fail.
+
+Codex certifies only `$HOME/.local/codex/<pin>/bin/codex`; the same host-provided-versus-owned
+rule as hermes applies, and `--apply` refuses by name on any arch whose artefact digest it has
+not measured (the pin covers `x86_64-unknown-linux-musl` only). `tests/harness/codex-install-test.sh`
+is its proof: refusals, the digest floor, idempotence, the version-mismatch arm, and — when a
+credential exists — one real turn.
 
 ## Why hermes first
 

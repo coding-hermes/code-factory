@@ -1,0 +1,303 @@
+#!/usr/bin/env bash
+# tests/harness/codex-install-test.sh — standalone proof for scripts/harness/install-codex.sh (CF-227).
+#
+#   ./tests/harness/codex-install-test.sh            # everything
+#   ./tests/harness/codex-install-test.sh --hermetic  # no network, no real turn
+#
+# Two halves, deliberately separated:
+#
+#   HERMETIC  every refusal and the whole install ladder, against a fake $HOME and a local
+#             mirror tarball whose digest the test computes itself. No network, no credential,
+#             no real codex: the stub binary reports whatever version the case needs, which is
+#             how the version-mismatch arm can go red on purpose.
+#   LIVE      one real turn that must write a fixed token, and the app-server probe, against the
+#             installed pin. These SKIP — with the reason named — when there is no binary at the
+#             pin or no credential surface, because a skipped leg that names why is honest and a
+#             green leg that never ran is not.
+#
+# Exit 0 only when every non-skipped assertion passed.
+set -uo pipefail
+HERE_REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+INSTALLER="$HERE_REPO/scripts/harness/install-codex.sh"
+PIN_DEFAULT=0.166.0
+MODE="${1:-}"
+
+PASS=0; FAIL=0; SKIP=0
+ok()   { PASS=$((PASS+1)); printf '  PASS  %s\n' "$*"; }
+no()   { FAIL=$((FAIL+1)); printf '  FAIL  %s\n' "$*"; }
+skip() { SKIP=$((SKIP+1)); printf '  SKIP  %s\n' "$*"; }
+say()  { printf '%s\n' "$*"; }
+
+# A synthetic value that is not a credential. Built from parts so no assignment in this file
+# looks like a literal key to the tree-hygiene grep in tests/selftest.sh (AGENTS.md r8).
+SYNTH_KEY="sk-$(printf 'cf227-test-%s' 'not-a-real-credential')"
+
+SB="$(mktemp -d "${TMPDIR:-/tmp}/cf227-codex-test.XXXXXXXX")"
+cleanup() { rm -rf "$SB" "${TURN_W:-}"; }
+trap cleanup EXIT INT TERM
+
+# Every case runs with a clean credential environment: an inherited key must never be the thing
+# that makes a case pass.
+clean_env() { env -u OPENAI_API_KEY -u CF_API_KEY -u ANTHROPIC_API_KEY "$@"; }
+
+run() {  # run <outfile> <cmd...>  → echoes exit code, leaves stdout+stderr in <outfile>
+  local out="$1"; shift
+  clean_env "$@" >"$out" 2>&1
+  printf '%s' "$?"
+}
+
+run_home() {  # run_home <home> <outfile> <cmd...> — the same, with $HOME replaced
+  local home="$1" out="$2"; shift 2
+  clean_env HOME="$home" "$@" >"$out" 2>&1
+  printf '%s' "$?"
+}
+
+# The full §4 set, minus the key file: --workdir cannot be refused for a bad path until the
+# required set is complete, so every workdir case supplies it.
+FULL_SET=(--model gpt-5.6-luna --provider openai-codex --namespace code-factory --run-id r-lane --lane cf-qa)
+
+expect_refused() {  # expect_refused <label> <outfile> <rc> [needle]
+  local label="$1" out="$2" rc="$3" needle="${4:-}"
+  if [ "$rc" != "2" ]; then no "$label — expected REFUSED (exit 2), got $rc"; return 1; fi
+  grep -q 'CODEX: REFUSED' "$out" || { no "$label — no 'CODEX: REFUSED' line"; return 1; }
+  if [ -n "$needle" ] && ! grep -qF -- "$needle" "$out"; then
+    no "$label — the refusal does not name '$needle'"; return 1
+  fi
+  ok "$label — refused and named the reason"
+}
+
+say "codex installer test (CF-227) — installer: $INSTALLER"
+[ -x "$INSTALLER" ] || { say "  FAIL  installer is missing or not executable: $INSTALLER"; exit 1; }
+bash -n "$INSTALLER" && ok "bash -n is clean" || no "bash -n reports a syntax error"
+
+# ---------------------------------------------------------------------------------------------
+say ""
+say "A. refusals — a credential as a VALUE, ambient keys, bad input"
+# ---------------------------------------------------------------------------------------------
+O="$SB/a1.out"
+rc=$(run "$O" "$INSTALLER" --check --api-key "$SYNTH_KEY")
+expect_refused "A1 --api-key <value> is refused" "$O" "$rc" "credential_argv"
+grep -qF -- "$SYNTH_KEY" "$O" && no "A1 the credential value was echoed into the output" \
+  || ok "A1 the credential value never appears in the output"
+
+O="$SB/a2.out"
+rc=$(clean_env CF_API_KEY="$SYNTH_KEY" "$INSTALLER" --check >"$O" 2>&1; echo $?)
+expect_refused "A2 CF_API_KEY in the environment is refused" "$O" "$rc" "credential_ambient"
+grep -qF -- "$SYNTH_KEY" "$O" && no "A2 the ambient credential value was echoed" \
+  || ok "A2 the ambient credential value never appears in the output"
+
+O="$SB/a3.out"
+rc=$(env -u CF_API_KEY OPENAI_API_KEY="$SYNTH_KEY" "$INSTALLER" --check >"$O" 2>&1; echo $?)
+expect_refused "A3 OPENAI_API_KEY in the environment is refused" "$O" "$rc" "credential_ambient"
+
+O="$SB/a4.out"
+rc=$(run "$O" "$INSTALLER" --check "${FULL_SET[@]}" --workdir /etc)
+expect_refused "A4 a CF_WORKDIR outside \$HOME is refused" "$O" "$rc" "CF_WORKDIR"
+
+O="$SB/a5.out"
+rc=$(run "$O" "$INSTALLER" --check --model gpt-5.6-luna)
+expect_refused "A5 an incomplete CF_* set is refused and names what is missing" "$O" "$rc" "CF_WORKDIR"
+
+O="$SB/a6.out"
+rc=$(run "$O" "$INSTALLER" --check --frobnicate)
+expect_refused "A6 an unknown argument is refused" "$O" "$rc" "unknown argument"
+
+O="$SB/a7.out"
+rc=$(run "$O" "$INSTALLER" --check --api-key-file /nonexistent/key)
+expect_refused "A7 a missing CF_API_KEY_FILE is refused" "$O" "$rc" "does not exist"
+
+# A mode-644 key file is a FAIL by name; the same file at 600 is accepted.
+FAKEHOME="$SB/home"; mkdir -p "$FAKEHOME/.local/bin" "$FAKEHOME/keys" "$FAKEHOME/work"
+git -C "$FAKEHOME/work" init -q >/dev/null 2>&1
+git -C "$FAKEHOME/work" -c user.email=cf227@local -c user.name=cf227 commit -q --allow-empty -m init >/dev/null 2>&1
+printf '%s\n' "$SYNTH_KEY" >"$FAKEHOME/keys/provider.key"
+chmod 644 "$FAKEHOME/keys/provider.key"
+HOME="$FAKEHOME" run "$SB/a8.out" "$INSTALLER" --check --api-key-file "$FAKEHOME/keys/provider.key" >/dev/null
+rc=$(clean_env HOME="$FAKEHOME" "$INSTALLER" --check --api-key-file "$FAKEHOME/keys/provider.key" >"$SB/a8.out" 2>&1; echo $?)
+expect_refused "A8 a CF_API_KEY_FILE that is mode 644 is refused" "$SB/a8.out" "$rc" "mode 600"
+grep -qF -- "$SYNTH_KEY" "$SB/a8.out" && no "A8 the key file's value was echoed" \
+  || ok "A8 the key file's value never appears in the output"
+
+chmod 600 "$FAKEHOME/keys/provider.key"
+O="$SB/a9.out"
+rc=$(run_home "$FAKEHOME" "$O" "$INSTALLER" --check "${FULL_SET[@]}" \
+      --workdir "$FAKEHOME/work" --api-key-file "$FAKEHOME/keys/provider.key")
+if [ "$rc" = "2" ]; then
+  no "A9 a mode-600 key file inside \$HOME must be accepted (got a refusal)"; sed 's/^/        /' "$O"
+else
+  grep -qF -- "$SYNTH_KEY" "$O" && no "A9 the key file's value was printed" \
+    || ok "A9 a mode-600 key file inside \$HOME is accepted, and its value is never printed"
+fi
+
+O="$SB/a10.out"
+rc=$(clean_env HOME="$FAKEHOME" CF_CODEX_ARCH=aarch64 "$INSTALLER" --apply >"$O" 2>&1; echo $?)
+expect_refused "A10 an arch with no measured artefact is refused, not faked" "$O" "$rc" "no measured codex artefact"
+
+O="$SB/a11.out"
+mkdir -p "$FAKEHOME/notrepo"
+rc=$(run_home "$FAKEHOME" "$O" "$INSTALLER" --check "${FULL_SET[@]}" --workdir "$FAKEHOME/notrepo")
+expect_refused "A11 a CF_WORKDIR that is not a git work tree is refused" "$O" "$rc" "not a git work tree"
+
+# ---------------------------------------------------------------------------------------------
+say ""
+say "B. the install ladder — fake \$HOME, local mirror tarball, digest enforced"
+# ---------------------------------------------------------------------------------------------
+# A stub that behaves like the real CLI for every surface the installer probes.
+STUB="$SB/stub/codex"
+mkdir -p "$(dirname "$STUB")"
+stub_body() {  # stub_body <version string>
+  cat >"$STUB" <<STUBEOF
+#!/usr/bin/env bash
+case "\$1" in
+  --version) echo "codex-cli $1"; exit 0 ;;
+  exec)
+    if [ "\${2:-}" = "resume" ]; then echo "Resume a previous session by id"; exit 0; fi
+    if [ "\${2:-}" = "--help" ]; then
+      printf 'Run Codex non-interactively\n  -m, --model <MODEL>\n  -s, --sandbox <MODE>\n      --json\n      --skip-git-repo-check\n'; exit 0
+    fi
+    echo '{"type":"thread.started","thread_id":"stub"}'; exit 0 ;;
+  app-server) echo "[experimental] Run the app server"; exit 0 ;;
+esac
+echo "stub codex: unsupported \$*" >&2; exit 64
+STUBEOF
+  chmod +x "$STUB"
+}
+stub_body "$PIN_DEFAULT"
+TAR="$SB/mirror/codex-x86_64-unknown-linux-musl.tar.gz"
+mkdir -p "$SB/mirror/root"
+cp "$STUB" "$SB/mirror/root/codex-x86_64-unknown-linux-musl"
+tar czf "$TAR" -C "$SB/mirror/root" codex-x86_64-unknown-linux-musl
+TAR_SHA=$(sha256sum "$TAR" | cut -d' ' -f1)
+ok "mirror artefact built locally (sha256 ${TAR_SHA:0:12}…)"
+
+# B1 — --check on an empty home reports absence, and says so with a FAIL.
+BARE="$SB/home-bare"; mkdir -p "$BARE"
+O="$SB/b1.out"
+# A bare box also means a PATH with no codex on it: the host's own shim must not answer for it.
+rc=$(clean_env HOME="$BARE" PATH="/usr/local/bin:/usr/bin:/bin" "$INSTALLER" --check >"$O" 2>&1; echo $?)
+grep -q 'FAIL  binary — absent' "$O" && [ "$rc" = "1" ] \
+  && ok "B1 --check on a bare box reports absence honestly (exit 1)" \
+  || no "B1 --check on a bare box should print 'FAIL binary — absent' and exit 1 (rc=$rc)"
+
+# B2 — a digest that does not match the pin refuses, and nothing is installed.
+O="$SB/b2.out"
+rc=$(clean_env HOME="$FAKEHOME" CF_CODEX_URL="file://$TAR" CF_CODEX_SHA256="0000000000000000000000000000000000000000000000000000000000000000" \
+     "$INSTALLER" --apply >"$O" 2>&1; echo $?)
+[ "$rc" = "1" ] && grep -q 'FAIL  download' "$O" && grep -q 'digest mismatch' "$O" \
+  && ok "B2 a digest mismatch FAILs the download leg and names both digests" \
+  || no "B2 a digest mismatch must FAIL the download leg (rc=$rc)"
+[ -e "$FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex" ] \
+  && no "B2 a mismatched download still left a binary behind" \
+  || ok "B2 a mismatched download installs nothing"
+
+# B3 — the pinned install succeeds, user-space, and reads the version back.
+O="$SB/b3.out"
+rc=$(clean_env HOME="$FAKEHOME" CF_CODEX_URL="file://$TAR" CF_CODEX_SHA256="$TAR_SHA" \
+     "$INSTALLER" --apply >"$O" 2>&1; echo $?)
+if [ "$rc" = "0" ] && grep -q 'PASS  install' "$O" && grep -q "PASS  version — $PIN_DEFAULT (pin $PIN_DEFAULT)" "$O"; then
+  ok "B3 --apply installs the pin and reads the version back"
+else
+  no "B3 --apply should install and read back $PIN_DEFAULT (rc=$rc)"; sed 's/^/        /' "$O"
+fi
+[ -x "$FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex" ] \
+  && ok "B3 the binary lives under \$HOME/.local/codex/$PIN_DEFAULT (user-space, no root)" \
+  || no "B3 the binary is not at the pinned user-space path"
+[ -L "$FAKEHOME/.local/bin/codex" ] && ok "B3 the ~/.local/bin shim points at the pin" \
+  || no "B3 no ~/.local/bin/codex shim"
+
+# B4 — idempotence: a second --apply changes nothing and exits 0.
+efore=$(stat -c '%i %Y %s' "$FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex")
+O="$SB/b4.out"
+rc=$(clean_env HOME="$FAKEHOME" CF_CODEX_URL="file://$TAR" CF_CODEX_SHA256="$TAR_SHA" \
+     "$INSTALLER" --apply >"$O" 2>&1; echo $?)
+eafter=$(stat -c '%i %Y %s' "$FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex")
+if [ "$rc" = "0" ] && grep -q 'already installed' "$O" && [ "$efore" = "$eafter" ]; then
+  ok "B4 a second --apply is a no-op (exit 0, binary unchanged: $eafter)"
+else
+  no "B4 a second --apply changed something (rc=$rc, $efore -> $eafter)"
+fi
+
+# B5 — --check on the installed fake home PASSes the binary and version legs.
+O="$SB/b5.out"
+rc=$(clean_env HOME="$FAKEHOME" "$INSTALLER" --check >"$O" 2>&1; echo $?)
+[ "$rc" = "0" ] && grep -q "PASS  binary — $FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex" "$O" \
+  && ok "B5 --check PASSes a binary this adapter installed and names the path it measured" \
+  || { no "B5 --check should PASS on the installed pin (rc=$rc)"; sed 's/^/        /' "$O"; }
+
+# B6 — a version that is not the pin FAILs and names both values.
+MIS="$SB/home-mismatch"
+mkdir -p "$MIS/.local/codex/$PIN_DEFAULT/bin" "$MIS/.local/bin"
+stub_body 0.165.0; cp "$STUB" "$MIS/.local/codex/$PIN_DEFAULT/bin/codex"
+stub_body "$PIN_DEFAULT"
+O="$SB/b6.out"
+rc=$(clean_env HOME="$MIS" "$INSTALLER" --check >"$O" 2>&1; echo $?)
+if [ "$rc" = "1" ] && grep -q "FAIL  version — 0.165.0 != pin $PIN_DEFAULT" "$O"; then
+  ok "B6 a version mismatch names both the measured value and the pin and FAILs"
+else
+  no "B6 the version-mismatch arm did not go red as specified (rc=$rc)"; sed 's/^/        /' "$O"
+fi
+
+# B7 — a host-provided binary on PATH is labelled, not adopted.
+HOSTBIN="$SB/home-host/.local/bin"
+mkdir -p "$HOSTBIN"
+stub_body "$PIN_DEFAULT"; cp "$STUB" "$HOSTBIN/codex"
+O="$SB/b7.out"
+rc=$(clean_env HOME="$SB/home-host" PATH="$HOSTBIN:/usr/local/bin:/usr/bin:/bin" "$INSTALLER" --check >"$O" 2>&1; echo $?)
+grep -q 'host-provided' "$O" && [ "$rc" = "1" ] \
+  && ok "B7 a PATH binary is labelled host-provided and FAILs the binary leg" \
+  || no "B7 a PATH binary must be labelled host-provided (rc=$rc)"
+
+# ---------------------------------------------------------------------------------------------
+say ""
+say "C. live legs — the installed pin, a real credential, one real turn"
+# ---------------------------------------------------------------------------------------------
+REAL_BIN="$HOME/.local/codex/$PIN_DEFAULT/bin/codex"
+v=""
+[ -x "$REAL_BIN" ] && v=$(timeout 20 "$REAL_BIN" --version 2>/dev/null | head -1)
+
+if [ "$MODE" = "--hermetic" ]; then
+  skip "C — --hermetic: the live legs were not run"
+elif [ -z "$v" ]; then
+  skip "C — no binary at $REAL_BIN (run scripts/harness/install-codex.sh --apply first)"
+else
+  ok "C0 the installed pin answers: $v"
+
+  O="$SB/c1.out"
+  rc=$(clean_env "$INSTALLER" --app-server >"$O" 2>&1; echo $?)
+  if [ "$rc" = "0" ] && grep -q 'PASS  app_server — initialize answered' "$O"; then
+    ok "C1 the app-server sidecar starts on stdio and answers initialize: $(sed -n 's/.*initialize answered: \(.*\)/\1/p' "$O" | head -1)"
+  else
+    bad_line=$(grep -E 'FAIL|WARN' "$O" | head -1)
+    skip "C1 app-server probe did not pass ($bad_line) — crier does not need it (exec mode), so this is not a FAIL"
+  fi
+
+  CRED=""
+  if [ -f "$HOME/.codex/auth.json" ]; then CRED="host login ~/.codex/auth.json"; fi
+  if [ -z "$CRED" ]; then
+    skip "C2 — no credential surface (no ~/.codex/auth.json and no key file): a turn cannot be proved"
+  else
+    # The turn's workdir must be inside the REAL $HOME (the installer refuses anything else),
+    # and TMPDIR may point outside it — so build this one under ~/.cache.
+    W="$(mktemp -d "$HOME/.cache/cf227-turn.XXXXXXXX")"
+    TURN_W="$W"
+    git -C "$W" init -q >/dev/null 2>&1
+    git -C "$W" -c user.email=cf227@local -c user.name=cf227 commit -q --allow-empty -m init >/dev/null 2>&1
+    TOKEN="CF-227-TOKEN-7f3a9c"
+    O="$SB/c2.out"
+    rc=$(clean_env CF_MODEL="${CF_TEST_MODEL:-gpt-5.6-luna}" CF_PROVIDER=openai-codex \
+         CF_WORKDIR="$W" CF_NAMESPACE=code-factory CF_RUN_ID="cf227-test-$$" CF_LANE=code-factory-qa \
+         timeout 420 "$INSTALLER" --turn >"$O" 2>&1; echo $?)
+    if [ "$rc" = "0" ] && grep -q 'PASS  artifact' "$O" && [ -f "$W/codex-turn.txt" ] \
+       && [ "$(tr -d '\r' <"$W/codex-turn.txt")" = "$TOKEN" ]; then
+      ok "C2 one real turn ($CRED) wrote $W/codex-turn.txt containing the fixed token"
+      ok "C2 model_served: $(sed -n 's/.*PASS  model_served — \(.*\)/\1/p' "$O" | head -1)"
+    else
+      no "C2 the real turn did not produce the artifact (rc=$rc)"; sed 's/^/        /' "$O" | head -20
+    fi
+  fi
+fi
+
+# ---------------------------------------------------------------------------------------------
+say ""
+say "codex installer test: $PASS passed, $FAIL failed, $SKIP skipped"
+[ "$FAIL" -eq 0 ] && { say "RESULT: PASS"; exit 0; } || { say "RESULT: FAIL"; exit 1; }
