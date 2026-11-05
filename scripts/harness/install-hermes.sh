@@ -150,7 +150,32 @@ def mapping(lines, index, indent):
         if index < len(lines) and lines[index][0] > indent:
             if value:
                 raise ValueError
-            result[key], index = mapping(lines, index, lines[index][0])
+            child = lines[index][0]
+            if lines[index][1].startswith("- ") or lines[index][1] == "-":
+                result[key] = []
+                while index < len(lines) and lines[index][0] >= child:
+                    index += 1
+            else:
+                result[key], index = mapping(lines, index, child)
+        elif (index < len(lines) and lines[index][0] == indent
+              and (lines[index][1].startswith("- ") or lines[index][1] == "-")):
+            # A block sequence written at the SAME indent as its key, which is what the node's
+            # own config does:
+            #   custom_providers:
+            #   - name: cf-proxy
+            # Its content cannot authorize anything here, but refusing to parse it made every
+            # node carrying a list report "block absent (invalid YAML)" and never start a
+            # gateway (measured on cf-node 2026-11-05 against a valid 310-byte config).
+            if value:
+                raise ValueError
+            result[key] = []
+            while index < len(lines):
+                depth, item = lines[index]
+                if depth < indent:
+                    break
+                if depth == indent and not (item.startswith("- ") or item == "-"):
+                    break
+                index += 1
         else:
             result[key] = scalar(value) if value else None
     return result, index

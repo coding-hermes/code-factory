@@ -14,7 +14,7 @@
 # both copies. No value is ever printed (CF-002).
 #
 # Keys (all optional except PROJECT and REPO):
-#   PROJECT  AGENT  SERVER  REPO  REF  HARNESS  NAMESPACE  WORKDIR  TTL
+#   PROJECT  AGENT  SERVER  REPO  REF  HARNESS  NAMESPACE  TTL
 #   GITHUB_TOKEN_FILE  DUCKBRAIN_TOKEN_FILE  S3_ENV_FILE
 #   CRIER_URL  DUCKBRAIN_URL
 #
@@ -26,7 +26,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
 
 CONFIG="" MODE="" AGENT="" PROJECT="" SERVER="" REPO="" REF="" HARNESS="" NAMESPACE="" TTL=""
-WORKDIR="" GITHUB_TOKEN_FILE="" DUCKBRAIN_TOKEN_FILE="" S3_ENV_FILE="" CRIER_URL="" DUCKBRAIN_URL=""
+GITHUB_TOKEN_FILE="" DUCKBRAIN_TOKEN_FILE="" S3_ENV_FILE="" CRIER_URL="" DUCKBRAIN_URL=""
 YES=0
 CLI_PROJECT="" CLI_AGENT="" CLI_SERVER="" CLI_REPO="" CLI_REF="" CLI_HARNESS="" CLI_NAMESPACE="" CLI_CRIER=""
 
@@ -50,7 +50,7 @@ load_config() {
     key="${BASH_REMATCH[1]}"; val="${BASH_REMATCH[2]}"
     val="${val%\"}"; val="${val#\"}"; val="${val%\'}"; val="${val#\'}"
     case "$key" in
-      PROJECT|AGENT|SERVER|REPO|REF|HARNESS|NAMESPACE|WORKDIR|TTL|CRIER_URL|DUCKBRAIN_URL)
+      PROJECT|AGENT|SERVER|REPO|REF|HARNESS|NAMESPACE|TTL|CRIER_URL|DUCKBRAIN_URL)
         printf -v "$key" '%s' "$val" ;;
       GITHUB_TOKEN_FILE|DUCKBRAIN_TOKEN_FILE|S3_ENV_FILE)
         case "$val" in "~/"*) val="$HOME/${val#\~/}" ;; esac
@@ -66,6 +66,7 @@ bunker_ok=0
 check() {
   local b info sha branch dirty harness_bin code
   say "bunker-provision --check — project=${PROJECT:-<unset>} agent=${AGENT:-<unset>} server=${SERVER:-<unset>}"
+  note "resolved repo=${REPO:-<unset>} ref=${REF:-main} harness=${HARNESS:-hermes} ns=${NAMESPACE:-$PROJECT} ttl=${TTL:-default(6h)}"
 
   b=$(have bunker)
   [ -n "$b" ] || { bad "bunker_cli" "no bunker client on PATH"; return 1; }
@@ -99,7 +100,9 @@ check() {
     echo "github=$([ -s "$HOME/.node/auth/github.token" ] && echo present || echo absent)"
     echo "duckbrain=$([ -s "$HOME/.node/auth/duckbrain.token" ] && echo present || echo absent)"
     echo "crier_json=$([ -f "$HOME/.node/crier.json" ] && echo present || echo absent)"
-    echo "hermes=$(command -v hermes >/dev/null 2>&1 && echo present || { [ -x "$HOME/.hermes/bin/hermes" ] && echo present || echo absent; })"
+    echo "gitcred=$([ -s "$HOME/.git-credentials" ] && echo present || echo absent)"
+    echo "hermes=$(if [ -x "$HOME/hermes-venv/bin/hermes" ] || [ -x "$HOME/.local/bin/hermes" ] || command -v hermes >/dev/null 2>&1; then echo present; else echo absent; fi)"
+    echo "gw_auth=$(grep -q "basic_auth:" "$HOME/.hermes/config.yaml" 2>/dev/null && echo present || echo absent)"
   ' 2>/dev/null) || true
 
   case "$probe" in *repo=present*) ok "repo" "clone present ($(printf '%s' "$probe" | sed -n 's/^sha=//p') branch $(printf '%s' "$probe" | sed -n 's/^branch=//p'), $(printf '%s' "$probe" | sed -n 's/^dirty=//p') dirty)" ;;
@@ -110,6 +113,10 @@ check() {
     *) bad "auth_github" "no \$HOME/.node/auth/github.token" ;; esac
   case "$probe" in *duckbrain=present*) ok "auth_duckbrain" "token file installed (value not read)" ;;
     *) bad "auth_duckbrain" "no \$HOME/.node/auth/duckbrain.token" ;; esac
+  case "$probe" in *gitcred=present*) ok "git_credential" "\$HOME/.git-credentials present, mode 600 store" ;;
+    *) bad "git_credential" "no \$HOME/.git-credentials — the clone cannot authenticate" ;; esac
+  case "$probe" in *gw_auth=present*) ok "gateway_auth" "dashboard.basic_auth present — a public bind is legal" ;;
+    *) bad "gateway_auth" "no dashboard.basic_auth — the gateway will refuse to bind (CF-150)" ;; esac
   case "$probe" in *hermes=present*) ok "harness" "$HARNESS binary present" ;;
     *) bad "harness" "no $HARNESS binary on the node" ;; esac
 
@@ -156,24 +163,30 @@ apply() {
   [ -n "$PROJECT" ] || { bad "project" "PROJECT unset in config"; return 1; }
   [ -n "$REPO" ] || { bad "repo" "REPO unset in config"; return 1; }
   [ -n "$SERVER" ] || { bad "server" "SERVER unset"; return 1; }
-
-  # 1. node plumbing: the tested path, reused rather than re-implemented
-  say "  ..    node plumbing (node-create.sh)"
-  if BUNKER_SERVER="$SERVER" "$HERE/node-create.sh" --project "$PROJECT" --repo "$REPO" \
-       --ref "${REF:-main}" --harness "${HARNESS:-hermes}" --agent "$AGENT"; then
-    ok "node_create" "$AGENT provisioned by node-create.sh"
-  else
-    bad "node_create" "node-create.sh failed — see its rows above"; return 1
-  fi
+  # A node that cannot reach a bus is half a node: refuse before touching the host rather than
+  # provisioning something that has to be re-provisioned the moment it is used.
+  [ -n "$CRIER_URL" ] || { bad "crier_url" "CRIER_URL unset — a node must know its bus (set it in the config or --crier-url)"; return 1; }
 
   b=$(have bunker)
   [ -n "$b" ] || return 1
 
-  # 2. one auth bundle, mode 600, deleted on both sides (CF-002)
+  # 1. an agent to hold the rest — spawn only when absent, so a re-run never creates a second
+  if timeout 45 "$b" info "$AGENT" --server "$SERVER" >/dev/null 2>&1; then
+    ok "agent" "$AGENT reused (no second agent)"
+  else
+    say "  ..    spawning $AGENT (ttl ${TTL:-6h})"
+    if "$b" spawn "$AGENT" --server "$SERVER" --ttl "${TTL:-6h}" >/tmp/cf-spawn.log 2>&1; then
+      ok "agent" "$AGENT spawned on $SERVER"
+    else
+      bad "agent" "spawn failed: $(tail -1 /tmp/cf-spawn.log 2>/dev/null)"; return 1
+    fi
+  fi
+
+  # 2. credentials BEFORE the clone: the repo layer authenticates with what lands here
   tmp=$(mktemp); chmod 600 "$tmp"
   bundle_paths x > "$tmp"
   if [ -s "$tmp" ]; then
-    say "  ..    installing auth bundle"
+    say "  ..    installing auth bundle (before the clone)"
     if "$b" cp "$tmp" "$AGENT:cf-auth.bundle" --server "$SERVER" >/dev/null 2>&1 &&
        "$b" exec --server "$SERVER" "$AGENT" -- bash -lc '
          set -e
@@ -193,27 +206,74 @@ apply() {
          fi
          for f in "$HOME/.node/auth/"*; do [ -e "$f" ] && printf "  %s mode %s\n" "$(basename "$f")" "$(stat -c %a "$f")"; done
        ' 2>&1 | sed 's/^/  ..    /'
-    then ok "auth" "installed under \$HOME/.node/auth, mode 600"; else bad "auth" "bundle install failed"; rc=1; fi
+    then ok "auth" "installed under \$HOME/.node/auth, mode 600"
+    else bad "auth" "bundle install failed"; rc=1; fi
     "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'rm -f "$HOME/cf-auth.bundle"' >/dev/null 2>&1 || true
   else
-    warn "auth" "no token files named in config — node left without credentials"
+    warn "auth" "no token files named in config — the clone will run unauthenticated"
   fi
   rm -f "$tmp"
 
-  # 3. identity: node.json carries names, never secrets
-  say "  ..    writing node identity"
-  tmp=$(mktemp); chmod 600 "$tmp"
-  printf '{"project":"%s","agent":"%s","server":"%s","repo":"%s","ref":"%s","harness":"%s","namespace":"%s","crier_url":"%s","provisioned_at":"%s"}\n' \
-    "$PROJECT" "$AGENT" "$SERVER" "$REPO" "${REF:-main}" "${HARNESS:-hermes}" "${NAMESPACE:-$PROJECT}" "$CRIER_URL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$tmp"
-  if "$b" cp "$tmp" "$AGENT:.node/node.json" --server "$SERVER" >/dev/null 2>&1 &&
-     "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'chmod 600 "$HOME/.node/node.json" && cat "$HOME/.node/node.json" | head -1 >/dev/null' >/dev/null 2>&1; then
-    ok "node_json" "project=$PROJECT namespace=${NAMESPACE:-$PROJECT}"
+  # 3. crier identity BEFORE provisioning: the node's bus layer refuses without it
+  if [ -n "$CRIER_URL" ]; then
+    "$HERE/bunker-crier-connect.sh" --agent "$AGENT" --server "$SERVER" --url "$CRIER_URL" \
+      --project "$PROJECT" --stage 2>&1 | sed 's/^/  ..    /' \
+      || { bad "crier_stage" "could not stage the crier identity"; rc=1; }
+  fi
+
+  # 4. gateway auth BEFORE the harness layer: a public bind is refused without it (CF-150)
+  if [ "${HARNESS:-hermes}" = "hermes" ]; then
+    say "  ..    ensuring dashboard.basic_auth"
+    tmp=$(mktemp); chmod 600 "$tmp"; cp "$HERE/node_gateway_auth.py" "$tmp"
+    local gw_out gw_rc
+    if "$b" cp "$tmp" "$AGENT:node_gateway_auth.py" --server "$SERVER" >/dev/null 2>&1; then
+      gw_out=$("$b" exec --server "$SERVER" "$AGENT" -- bash -lc \
+        "python3 \$HOME/node_gateway_auth.py \$HOME/.hermes/config.yaml \$HOME/.node/auth/gateway.pass \$AGENT" 2>&1)
+      gw_rc=$?
+      printf '%s\n' "$gw_out" | sed 's/^/  ..    /'
+      [ "$gw_rc" -eq 0 ] && ok "gateway_auth" "dashboard.basic_auth ensured (password on the node only)" \
+                          || { bad "gateway_auth" "could not ensure dashboard.basic_auth (exit $gw_rc)"; rc=1; }
+    else
+      bad "gateway_auth" "could not stage node_gateway_auth.py"; rc=1
+    fi
+    "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'rm -f "$HOME/node_gateway_auth.py"' >/dev/null 2>&1 || true
+    rm -f "$tmp"
+  fi
+
+  # 5. node plumbing: the tested path (repo + harness + layers), now with credentials in place
+  say "  ..    node plumbing (node-create.sh)"
+  local -a create_args=(--project "$PROJECT" --repo "$REPO" --ref "${REF:-main}"
+                        --harness "${HARNESS:-hermes}" --agent "$AGENT")
+  [ -n "$TTL" ] && create_args+=(--ttl "$TTL")
+  if BUNKER_SERVER="$SERVER" CRIER_URL="$CRIER_URL" "$HERE/node-create.sh" "${create_args[@]}"; then
+    ok "node_create" "$AGENT provisioned by node-create.sh"
   else
-    bad "node_json" "could not write \$HOME/.node/node.json"; rc=1
+    bad "node_create" "node-create.sh failed — see its rows above"; return 1
   fi
+
+  # 6. identity: MERGE into node.json — project-node.sh owns that file's schema, so a
+  #    wholesale rewrite would delete node_id/repo/harness/bus and break its consumers.
+  say "  ..    merging node identity"
+  tmp=$(mktemp); chmod 600 "$tmp"
+  cp "$HERE/node_identity.py" "$tmp"
+  local ident_out ident_rc
+  if "$b" cp "$tmp" "$AGENT:node_identity.py" --server "$SERVER" >/dev/null 2>&1; then
+    ident_out=$("$b" exec --server "$SERVER" "$AGENT" -- bash -lc \
+      "python3 \$HOME/node_identity.py \$HOME/.node/node.json namespace='${NAMESPACE:-$PROJECT}' provisioned_by=bunker-provision provisioned_at='$(date -u +%Y-%m-%dT%H:%M:%SZ)'${CRIER_URL:+ bus.base='$CRIER_URL'}" 2>&1)
+    ident_rc=$?
+    printf '%s\n' "$ident_out" | sed 's/^/  ..    /'
+    if [ "$ident_rc" -eq 0 ]; then
+      ok "node_json" "merged namespace=${NAMESPACE:-$PROJECT} (schema preserved)"
+    else
+      bad "node_json" "merge refused by the node (exit $ident_rc)"; rc=1
+    fi
+  else
+    bad "node_json" "could not stage node_identity.py"; rc=1
+  fi
+  "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'rm -f "$HOME/node_identity.py"' >/dev/null 2>&1 || true
   rm -f "$tmp"
 
-  # 4. crier identity — a separate script, because connecting is its own failure surface
+  # 7. crier proof — a separate script, because connecting is its own failure surface
   if [ -n "$CRIER_URL" ]; then
     say "  ..    connecting to crier"
     "$HERE/bunker-crier-connect.sh" --agent "$AGENT" --server "$SERVER" --url "$CRIER_URL" --project "$PROJECT" --apply \

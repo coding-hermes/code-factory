@@ -4,6 +4,7 @@
 #   bunker-crier-connect.sh --agent cf-node --server bunker-las-03 --url http://100.97.236.14:8767 \
 #                           --project code-factory --check
 #   bunker-crier-connect.sh ... --apply
+#   bunker-crier-connect.sh ... --stage     (write the identity only; probe deferred)
 #
 # Separate from provisioning on purpose: connecting is its own failure surface (identity not
 # accepted, route missing, guard refusing) and it must be re-runnable without touching the
@@ -67,6 +68,22 @@ check() {
   [ "$FAILED" -eq 0 ]
 }
 
+stage() {
+  local b tmp
+  b=$(have bunker)
+  [ -n "$b" ] || { bad "bunker_cli" "no bunker client on PATH"; return 1; }
+  tmp=$(mktemp); chmod 600 "$tmp"
+  printf '{"agent":"%s","project":"%s","url":"%s","staged_at":"%s"}\n' \
+    "$AGENT" "${PROJECT:-$AGENT}" "$URL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$tmp"
+  if "$b" cp "$tmp" "$AGENT:.node/crier.json" --server "$SERVER" >/dev/null 2>&1 &&
+     "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'chmod 600 "$HOME/.node/crier.json"' >/dev/null 2>&1; then
+    ok "identity" "staged \$HOME/.node/crier.json (agent=$AGENT url=$URL)"
+  else
+    bad "identity" "could not stage \$HOME/.node/crier.json"; rm -f "$tmp"; return 1
+  fi
+  rm -f "$tmp"
+}
+
 apply() {
   local b tmp
   say "crier-connect --apply — agent=$AGENT url=$URL"
@@ -93,7 +110,7 @@ while [ $# -gt 0 ]; do
     --url|--crier-url) URL="$2"; shift 2 ;;
     --project) PROJECT="$2"; shift 2 ;;
     --timeout) TIMEOUT="$2"; shift 2 ;;
-    --check|--apply) MODE="${1#--}"; shift ;;
+    --check|--apply|--stage) MODE="${1#--}"; shift ;;
     -h|--help) usage 0 ;;
     *) say "unknown argument: $1"; usage 2 ;;
   esac
@@ -101,4 +118,4 @@ done
 
 [ -n "$MODE" ] || usage 2
 [ -n "$SERVER" ] || { say "--server is required (the agent's bunker host)"; exit 2; }
-case "$MODE" in check) check ;; apply) apply ;; esac
+case "$MODE" in check) check ;; apply) apply ;; stage) stage ;; esac

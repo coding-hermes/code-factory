@@ -187,9 +187,15 @@ if in_scope 00; then
     bad "crier_url" "CRIER_URL unset — the node has nothing to connect to (export CRIER_URL=http://crier.example:8767)"
   else
     ok "crier_url" "$CRIER"
+    # Method per endpoint, for two measured reasons (cf-node, 2026-11-05):
+    #   * pypi's /simple/ index is ~48 MB — a GET under an 8 s budget returns 000 on a healthy
+    #     link (44 MB received), while HEAD answers 200 in 0.29 s;
+    #   * crier /health is a GET-only handler — a HEAD there answers 405, which is not a fault.
     for u in "$CRIER/health" https://pypi.org/simple/; do
-      if ! c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$u" 2>/dev/null); then
-        c=000
+      if [ "$u" = "https://pypi.org/simple/" ]; then
+        c=$(curl -sI -o /dev/null -w '%{http_code}' --max-time 8 "$u" 2>/dev/null) || c=000
+      else
+        c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$u" 2>/dev/null) || c=000
       fi
       [ "$c" = 200 ] && ok "reach:$u" "200" || bad "reach:$u" "-> $c"
     done
