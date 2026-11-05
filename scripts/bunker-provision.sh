@@ -45,6 +45,8 @@ CONFIG_SET_GATEWAY_PORT="" CONFIG_SET_AGENT_MAX_ITERATIONS=""
 YES=0
 CLI_PROJECT="" CLI_AGENT="" CLI_SERVER="" CLI_REPO="" CLI_REF="" CLI_HARNESS="" CLI_NAMESPACE="" CLI_NAMESPACES="" CLI_CRIER=""
 CLI_NODE_ENV_FILE=""
+CLI_DUCKBRAIN_URL="" CLI_GITHUB_TOKEN_FILE="" CLI_DUCKBRAIN_TOKEN_FILE=""
+CLI_CRIER_AGENT_KEY_FILE="" CLI_CRIER_AUTH_TOKEN_FILE="" CLI_S3_ENV_FILE=""
 CLI_CONFIG_SET=()
 
 usage() {
@@ -154,6 +156,23 @@ env_lint() {
 # --- check: read-only, every row names what it measured --------------------------------------
 bunker_ok=0
 check() {
+  # Every credential and profile the apply will READ must exist here, now. Discovering it at bundle
+  # time is a failed provision ten minutes into a host touch, and it is also the only row that proves
+  # a --flag actually reached the variable (the flags used to be overwritten by the config file).
+  local missing=""
+  for pair in "GITHUB_TOKEN_FILE:$GITHUB_TOKEN_FILE" "DUCKBRAIN_TOKEN_FILE:$DUCKBRAIN_TOKEN_FILE" \
+              "CRIER_AGENT_KEY_FILE:$CRIER_AGENT_KEY_FILE" "CRIER_AUTH_TOKEN_FILE:$CRIER_AUTH_TOKEN_FILE" \
+              "S3_ENV_FILE:$S3_ENV_FILE" "NODE_ENV_FILE:$NODE_ENV_FILE"; do
+    local name="${pair%%:*}" f="${pair#*:}"
+    [ -z "$f" ] && continue
+    [ -r "$f" ] || missing="$missing $name($f)"
+  done
+  if [ -z "$missing" ]; then
+    ok "inputs" "every named credential and profile file is readable"
+  else
+    bad "inputs" "not readable:$missing"
+  fi
+
   local b info sha branch dirty harness_bin code
   resolve_namespaces || return 1
   say "bunker-provision --check — project=${PROJECT:-<unset>} agent=${AGENT:-<unset>} server=${SERVER:-<unset>}"
@@ -316,7 +335,10 @@ apply() {
   [ -n "$SERVER" ] || { bad "server" "SERVER unset"; return 1; }
   # A node that cannot reach a bus is half a node: refuse before touching the host rather than
   # provisioning something that has to be re-provisioned the moment it is used.
-  [ -n "$CRIER_URL" ] || { bad "crier_url" "CRIER_URL unset — a node must know its bus (set it in the config or --crier-url)"; return 1; }
+
+  # This used to `return 1` from the middle of check(), which skipped every row ordered after it —
+  # including the DuckBrain namespaces and the final tally. A missing bus is one FAIL, not an early exit.
+  [ -n "$CRIER_URL" ] || bad "crier_url" "CRIER_URL unset — a node must know its bus (set it in the config or --crier-url)"
 
   b=$(have bunker)
   [ -n "$b" ] || return 1
@@ -511,12 +533,12 @@ while [ $# -gt 0 ]; do
     --namespace) CLI_NAMESPACE="$2"; shift 2 ;;
     --namespaces) CLI_NAMESPACES="$2"; shift 2 ;;
     --crier-url) CLI_CRIER="$2"; shift 2 ;;
-    --duckbrain-url) DUCKBRAIN_URL="$2"; shift 2 ;;
-    --github-token-file) GITHUB_TOKEN_FILE="$(expand_tilde "$2")"; shift 2 ;;
-    --duckbrain-token-file) DUCKBRAIN_TOKEN_FILE="$(expand_tilde "$2")"; shift 2 ;;
-    --crier-agent-key-file) CRIER_AGENT_KEY_FILE="$(expand_tilde "$2")"; shift 2 ;;
-    --crier-auth-token-file) CRIER_AUTH_TOKEN_FILE="$(expand_tilde "$2")"; shift 2 ;;
-    --s3-env-file) S3_ENV_FILE="$(expand_tilde "$2")"; shift 2 ;;
+    --duckbrain-url) CLI_DUCKBRAIN_URL="$2"; shift 2 ;;
+    --github-token-file) CLI_GITHUB_TOKEN_FILE="$(expand_tilde "$2")"; shift 2 ;;
+    --duckbrain-token-file) CLI_DUCKBRAIN_TOKEN_FILE="$(expand_tilde "$2")"; shift 2 ;;
+    --crier-agent-key-file) CLI_CRIER_AGENT_KEY_FILE="$(expand_tilde "$2")"; shift 2 ;;
+    --crier-auth-token-file) CLI_CRIER_AUTH_TOKEN_FILE="$(expand_tilde "$2")"; shift 2 ;;
+    --s3-env-file) CLI_S3_ENV_FILE="$(expand_tilde "$2")"; shift 2 ;;
     --node-env-file) CLI_NODE_ENV_FILE="$2"; shift 2 ;;
     --config-set) CLI_CONFIG_SET+=("$2"); shift 2 ;;
     --yes) YES=1; shift ;;
@@ -537,6 +559,15 @@ done
 [ -n "$CLI_NAMESPACES" ] && NAMESPACES="$CLI_NAMESPACES"
 [ -n "$CLI_CRIER" ] && CRIER_URL="$CLI_CRIER"
 [ -n "$CLI_NODE_ENV_FILE" ] && NODE_ENV_FILE="$CLI_NODE_ENV_FILE"
+# These five were assigned during flag parsing and then overwritten by load_config, so a documented
+# flag was silently ignored whenever a config was also passed. They are applied AFTER the config now,
+# which is the precedence the SKILL claims: the command line wins.
+[ -n "$CLI_DUCKBRAIN_URL" ] && DUCKBRAIN_URL="$CLI_DUCKBRAIN_URL"
+[ -n "$CLI_GITHUB_TOKEN_FILE" ] && GITHUB_TOKEN_FILE="$CLI_GITHUB_TOKEN_FILE"
+[ -n "$CLI_DUCKBRAIN_TOKEN_FILE" ] && DUCKBRAIN_TOKEN_FILE="$CLI_DUCKBRAIN_TOKEN_FILE"
+[ -n "$CLI_CRIER_AGENT_KEY_FILE" ] && CRIER_AGENT_KEY_FILE="$CLI_CRIER_AGENT_KEY_FILE"
+[ -n "$CLI_CRIER_AUTH_TOKEN_FILE" ] && CRIER_AUTH_TOKEN_FILE="$CLI_CRIER_AUTH_TOKEN_FILE"
+[ -n "$CLI_S3_ENV_FILE" ] && S3_ENV_FILE="$CLI_S3_ENV_FILE"
 
 [ -n "$MODE" ] || usage 2
 case "$MODE" in

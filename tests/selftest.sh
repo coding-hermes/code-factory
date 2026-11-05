@@ -1971,6 +1971,24 @@ else
   say "  FAIL  missing bunker client did not surface (exit $rc)"; fails=$((fails+1))
 fi
 
+# a flag handler may only assign CLI_* variables: anything else is overwritten by load_config and the
+# documented flag silently does nothing (four of them did, including --github-token-file)
+direct=$(awk '/^while \[ \$# -gt 0 \]/,/^done/' "$HERE/scripts/bunker-provision.sh" \
+  | grep -E '^\s+--[a-z-]+\)' | grep -vE 'CLI_|usage|YES=|CONFIG=|MODE=' | head -3)
+if [ -z "$direct" ]; then
+  say "  PASS  every flag handler assigns only CLI_* (so the command line survives load_config)"
+else
+  say "  FAIL  a flag assigns a variable the config will overwrite: $(printf '%s' "$direct" | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+
+# the preflight must validate the credential FILES it will read, before it touches a host
+if grep -q 'every named credential and profile file is readable' "$HERE/scripts/bunker-provision.sh"; then
+  say "  PASS  the preflight names every credential file it cannot read"
+else
+  say "  FAIL  the preflight reads credential files it never validated"; fails=$((fails+1))
+fi
+
 # every documented config key must parse: a key that exists in the variables but not in the
 # parser's allowlist is a control that silently cannot be set (it happened twice)
 tmpd=$(mktemp -d)
