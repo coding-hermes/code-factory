@@ -59,6 +59,25 @@ the files you edited no longer appear as modified.
 - Say it plainly in the close commit: which commit you verified, that a twin produced it, and
   that the judge ran once.
 
+## Closeout readback (the writer accepts what it does not store)
+
+`boardctl update <id> --status complete` can return exit 0 and still persist a row with
+`commit_hash` set, `detail.evidence` empty and `completed_at` null — accepted payload, dropped
+fields. Never trust the command's echo:
+
+- After every close, read the stored row back (`jq 'select(.id=="<ID>")'` over
+  `.coding-hermes/board/tasks.jsonl`) and compare status, commit_hash, `detail.evidence[].run_id`
+  and `completed_at` against the payload. A complete row whose evidence list is empty claims a
+  completion no stranger can resolve.
+- Rebind with `boardctl update <ID> --status complete --evidence-run-id <run> --completed-at
+  <verdict evaluated_at>` and append one `audit` event naming the correction, then commit that
+  as a board-only bookkeeping commit. `--evidence-artifact` is refused without
+  `--evidence-fingerprint`, and this board documents no fingerprint derivation, so keep the
+  verdict path in the row note instead of inventing a value.
+- Bind the run that judged the exact commit: `task_id` matches, `commit` equals the row's
+  `commit_hash`, `passed` is true. A verdict directory name is the run id; the file carries no
+  `id` field.
+
 ## Public-repository boundary
 
 Do not commit secrets, private hosts/URLs, personal data, or temporary credentials. The repo-owned `scripts/boardctl` is an entrypoint to the canonical external `boardctl` engine, not a bundled or independent implementation. Keep that dependency explicit.
