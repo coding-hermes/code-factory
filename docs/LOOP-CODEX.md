@@ -14,13 +14,13 @@ re-measured, not quoted, before a row is closed.
 
 | Stage | Exit test (re-runnable) | State |
 |---|---|---|
-| **S0** control host | scheduler API answers; `curl -s -o /dev/null -w '%{http_code}' http://<crier>:8767/health` → 200; a DuckBrain write reads back | **CLOSED** |
+| **S0** control host | `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9090/health` = 200; `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8767/health` = 200; a DuckBrain POST of a key then GET of the same key returns the bytes | **CLOSED** |
 | **S1** node provisioned | `./scripts/bunker-provision.sh --config <conf> --check` → `BUNKER: PASS` | **CLOSED** (one WARN: no env file declared) |
 | **S2** node on the bus | `python3 ~/node-bus-worker.py --check` on the node → `BUS WORKER: READY` | **READY** — signed read 200; no production dispatch consumed yet |
-| **S3** foreman on the node | on the node, a lane opens a board row, does it, closes it with evidence — no control host involvement | **OPEN** — `CF-220` (prompts/skills seed) |
+| **S3** foreman on the node | with the control host unreachable, on the node: `boardctl create` a row, do it, close it with the acceptance command's output quoted in the row | **OPEN** — `CF-220` (prompts/skills seed) |
 | **S4** result lands | `./scripts/land-node-branch.sh …` proves the commit is an ancestor of `origin/main` **and** the file is in that tree | **CLOSED** |
 | **S5** harness matrix | `tests/harness-conformance.sh` prints five legs per harness, `PASS` or `SKIP` naming the missing credential | **1 of 7** — hermes measured; six in flight |
-| **S6** scale out | two projects each dispatch to their own bunker and both close a row | **OPEN** — `CF-210` (17 lanes, one node) |
+| **S6** scale out | two project lanes on two bunkers: each `/agents/<id>/inbox` answers 200 to a signed read, and each closes a row from inside its own node | **OPEN** — `CF-210` (17 lanes, one node) |
 
 **Do not start S6 before S3.** A foreman on a different machine from the work is grading a claim.
 
@@ -31,10 +31,10 @@ re-measured, not quoted, before a row is closed.
 | Flow | Carrier | Proof |
 |---|---|---|
 | 1 directive | scheduler → `POST /agents/{id}/inbox` → node signs (ed25519, ±30 s) and reads | `200` on a signed read; lease 30 s |
-| 2 result | node → reply with `corr_id` → scheduler correlates, acks, completes the tick | tick reaches `completed`; poll 10 s, lease 45 s |
+| 2 result | node → reply with `corr_id` → scheduler correlates, acks, completes the tick | tick reaches `completed`; poll 10 s, lease 45 s — measured in the scheduler's code, not in this repo |
 | 3 memory | node → DuckBrain, namespace = project, one record per run | read back byte-identical: `run_id, lane, harness, model_requested, model_served, provider_binding, commit` |
 | 4 credential | one bundle, mode 600, deleted both sides; paths only, never values | file present at 600 on the node; no value in any log |
-| 5 artifact | node → control host, with sha256 | digest recomputed on the control host — **no contract yet** (`CF-211`) |
+| 5 artifact | node → control host, with sha256 | **partial**: `verify-node.sh --artifact` returns ONE file and recomputes its digest; a run cannot yet declare its own artifact set (`CF-211`) |
 
 ---
 

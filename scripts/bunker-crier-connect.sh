@@ -31,7 +31,8 @@ probe() {  # probe -> prints the http code for this agent's inbox
 }
 
 check() {
-  say "crier-connect --check — agent=$AGENT url=$URL"
+  SIGNED_READ=0
+say "crier-connect --check — agent=$AGENT url=$URL"
   [ -n "$AGENT" ] || { bad "agent" "AGENT unset"; return 1; }
   [ -n "$URL" ] || { bad "url" "URL unset"; return 1; }
 
@@ -53,7 +54,7 @@ check() {
   fi
   if [ -n "$via_node" ]; then
     case "$via_node" in
-      *"PASS  inbox"*) ok "inbox" "signed read accepted on the node: $via_node" ;;
+      *"PASS  inbox"*) ok "inbox" "signed read accepted on the node: $via_node"; SIGNED_READ=1 ;;
       *)               bad "inbox" "the node's own signed probe failed: $via_node" ;;
     esac
     case "$via_node" in *"PASS  inbox"*) ;; *) : ;; esac
@@ -87,7 +88,19 @@ check() {
   esac
 
   say ""
-  if [ "$FAILED" -eq 0 ]; then say "CRIER: CONNECTED — $AGENT at $URL"; else say "CRIER: NOT CONNECTED ($FAILED)"; fi
+  # CONNECTED is a claim about a SIGNED read. An unsigned 200 (a bus without auth) and an unsigned 401
+  # (a hardened bus, which is the normal answer) both prove nothing about this agent's key, so neither
+  # may print CONNECTED: that would be the requirement weakened to fit a probe (quorum round 2, B3).
+  if [ "$FAILED" -ne 0 ]; then
+    say "CRIER: NOT CONNECTED ($FAILED)"
+  elif [ "${SIGNED_READ:-0}" -eq 1 ]; then
+    say "CRIER: CONNECTED — $AGENT at $URL (signed read accepted)"
+  else
+    say "CRIER: UNVERIFIED — $AGENT at $URL: the bus answered an UNSIGNED read, so this node's key and"
+    say "        bearer were not exercised. Install $HOME/.node/agent.key and ~/.node/auth/crier.token"
+    say "        and stage the bus worker, then re-run --check."
+    return 3
+  fi
   [ "$FAILED" -eq 0 ]
 }
 
