@@ -29,7 +29,10 @@ REQUIRED_SECTIONS = [
     "Evidence of record",
 ]
 
-LOCATOR = re.compile(r"\b([\w./-]+\.(?:py|sh|md|go|yaml|yml|jsonl|json|toml)):(\d+)")
+# The leading lookbehind must allow a DOT: `.coding-hermes/board/tasks.jsonl:7` is a real
+# locator, and a \b before the character class silently dropped the dot and reported a
+# missing file — a checker bug that failed a correct document.
+LOCATOR = re.compile(r"(?<![\w/.-])([\w./-]*\.(?:py|sh|md|go|yaml|yml|jsonl|json|toml)):(\d+)")
 FACT_REF = re.compile(r"\bfact:\s*(FACT-\d+)\b")
 STATUS = re.compile(r"\|\s*Status\s*\|\s*\*\*(VERIFIED|UNVERIFIED|FAILING|RED)[^*]*\*\*")
 

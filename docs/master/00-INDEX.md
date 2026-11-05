@@ -15,7 +15,7 @@ not a section that is merely unwritten. A section turns green by running a comma
 | 8 | [`scripts/check_scan_scope.py`](08-scripts-check-scan-scope-py.md) | code-factory | RED |
 | 9 | [`scripts/clone_lane.py`](09-scripts-clone-lane-py.md) | code-factory | RED |
 | 10 | [`scripts/configure_family.py`](10-scripts-configure-family-py.md) | code-factory | RED |
-| 11 | [`scripts/disk_floor.py`](11-scripts-disk-floor-py.md) | code-factory | RED |
+| 11 | [`scripts/disk_floor.py`](11-scripts-disk-floor-py.md) | code-factory | VERIFIED |
 | 12 | [`scripts/github-app-refresh.sh`](12-scripts-github-app-refresh-sh.md) | code-factory | RED |
 | 13 | [`scripts/github-app-setup.sh`](13-scripts-github-app-setup-sh.md) | code-factory | RED |
 | 14 | [`scripts/github-app-token.py`](14-scripts-github-app-token-py.md) | code-factory | RED |
@@ -37,7 +37,7 @@ not a section that is merely unwritten. A section turns green by running a comma
 | 30 | [`scripts/node_identity.py`](30-scripts-node-identity-py.md) | code-factory | RED |
 | 31 | [`scripts/node_seed.py`](31-scripts-node-seed-py.md) | code-factory | RED |
 | 32 | [`scripts/node_seed_drift.py`](32-scripts-node-seed-drift-py.md) | code-factory | RED |
-| 33 | [`scripts/project-node.sh`](33-scripts-project-node-sh.md) | code-factory | RED |
+| 33 | [`scripts/project-node.sh`](33-scripts-project-node-sh.md) | code-factory | VERIFIED |
 | 34 | [`scripts/reclaim_disk.py`](34-scripts-reclaim-disk-py.md) | code-factory | RED |
 | 35 | [`scripts/repo_freshness.py`](35-scripts-repo-freshness-py.md) | code-factory | RED |
 | 36 | [`scripts/verify-node.sh`](36-scripts-verify-node-sh.md) | code-factory | RED |
