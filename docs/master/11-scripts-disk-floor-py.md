@@ -5,7 +5,7 @@
 | Path | `/home/kara/code-factory/scripts/disk_floor.py` — 175 lines [scripts/disk_floor.py:1] |
 | Repository | `code-factory` [scripts/disk_floor.py:1] |
 | Revision | `f63acd3` — the `origin/main` tip every locator below was measured against; the file's own last-touching commit is `3b2c81e` (2026-11-03, ruff-format sweep) and it was introduced by `222a8b0` ("feat: lane workdir targets and configurable node disk floors") |
-| Status | **VERIFIED — __N__ locators, all resolve; facts cited** |
+| Status | **VERIFIED — 113 distinct locators (212 citations), all resolve; facts cited** |
 
 ## 1. Purpose and why it matters
 
@@ -47,11 +47,11 @@
 | `scripts/project-node.sh` layer-00 ladder | caller → resolver | argv, then captured stdout/exit status — no socket [scripts/project-node.sh:171-177] | `resolve --role <r> [--cli <v>] --explain` → `{"role":…,"floor_gib":…,"source":…}` [scripts/disk_floor.py:163-165] | `main()` / `resolve()` in the resolver [scripts/disk_floor.py:144-171]; caller side is `project-node.sh` top-level, no function [scripts/project-node.sh:166-185] |
 | `scripts/node-create.sh` staging manifest | control host → node | file copy into `~/node-scripts/` [scripts/node-create.sh:110-113] | `disk_floor.py` itself | `staged_files()` builds the set [scripts/node-create.sh:23], refuses a missing member [scripts/node-create.sh:25-26], and refuses a `$HERE` reference it did not stage [scripts/node-create.sh:43] |
 | Operator `[disk]` config | operator → resolver | TOML file read [scripts/disk_floor.py:85-86] | `worker_gib` / `builder_gib` / `full_gib` / `default` / `default_gib` [scripts/disk_floor.py:131-140] | Template ships at [examples/floor.toml.example:7-11] and is documented at [specs/NODE.md:144] |
-| Built-in role table (duplicate policy) | resolver ↔ ladder | none — two copies of the same numbers | worker 5 / builder 10 / full 20 | bash `case` in the ladder [scripts/project-node.sh:150-155] vs `ROLE_DEFAULTS` in the resolver [scripts/disk_floor.py:36]. Byte-equal today (§3 check 6); **nothing in the tree asserts it stays so** |
+| Built-in role table (duplicate policy) | resolver ↔ ladder | none — two copies of the same numbers | worker 5 / builder 10 / full 20 | bash `case` in the ladder [scripts/project-node.sh:150-155] vs `ROLE_DEFAULTS` in the resolver [scripts/disk_floor.py:36]. **Byte-equality is not a property these two can have** — one side is a Python dict literal, the other a bash `case` body, so their sources differ in syntax by construction and no byte or line comparison of the two can ever be equal. What holds is **pair parity**: the same three `(role, GiB)` pairs (worker 5, builder 10, full 20) and the same accepted role set (both refuse anything else). §3 check 6 measures exactly that and exits 1 when a pair changes on either side; nothing in the shipped suite runs it, so it is a check you *can* run, not a gate — §6 finding 5 |
 
 ## 3. Verification
 
-Run from a clean checkout of this tree (`f63acd3`) with no `NODE_*` variables exported. Every row below was executed on 2026-11-05; the transcript under the table is the literal terminal output.
+Run from a clean checkout of this tree (`f63acd3`) with no `NODE_*` variables exported. Every row below was executed on 2026-11-05; the transcripts under the table are the literal terminal output.
 
 | # | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|---|
@@ -60,7 +60,7 @@ Run from a clean checkout of this tree (`f63acd3`) with no `NODE_*` variables ex
 | 3 | Rung 5 (built-in default) | `env -u NODE_DISK_FLOOR -u NODE_ROLE -u NODE_DISK_FLOOR_CONFIG HOME=$(mktemp -d) python3 scripts/disk_floor.py resolve --role worker --explain` [scripts/disk_floor.py:141] | `{"role": "worker", "floor_gib": 5, "source": "role-default"}` | 2026-11-05 | **PASS** |
 | 4 | Rungs 3 and 4 (config) | `python3 scripts/disk_floor.py resolve --role worker` / `--role builder` `--config $F/floor.toml --explain` [scripts/disk_floor.py:131-140] | worker → `8`, `config-role`; builder → `6`, `config-default` | 2026-11-05 | **PASS** |
 | 5 | Precedence + fail-closed | `NODE_DISK_FLOOR=9 ... --cli 3G --config $F/floor.toml --explain` then `NODE_DISK_FLOOR=plenty ...` [scripts/disk_floor.py:126-129] [scripts/disk_floor.py:169-171] | CLI wins → `3`, `cli`; malformed → `FAIL disk-floor: …`, exit 2 | 2026-11-05 | **PASS** |
-| 6 | Duplicate-table parity | `python3 scripts/disk_floor.py roles \| sort` vs `sed -n '150,155p' scripts/project-node.sh` [scripts/project-node.sh:150-155] | identical triples | 2026-11-05 | **PASS** |
+| 6 | Duplicate-table parity — **pairs, not bytes** | `diff <(python3 scripts/disk_floor.py roles \| sort) <(sed -n '/^case "\$ROLE" in/,/^esac/p' scripts/project-node.sh \| sed -nE 's/^ *(worker\|builder\|full)\) FLOOR_BUILTIN=([0-9]+) ;;$/\1\t\2/p' \| sort)` — left side is the resolver's served table [scripts/disk_floor.py:159-161], right side the ladder's literals [scripts/project-node.sh:150-155] | no output, rc 0; any changed pair prints the differing line and rc 1 | 2026-11-05 | **PASS** — rc 0, and falsified on purpose against mutated copies (§8) |
 | 7 | Ladder integration, both arms | `NODE_DISK_FLOOR=plenty bash scripts/project-node.sh --check --project fixture --layers 00` and `… --disk-floor 1` [scripts/project-node.sh:173-185] | arm A: named FAIL row, `NODE: FAIL (1)`, rc 1; arm B: `PASS  disk_floor — 1 GiB from cli` | 2026-11-05 | **PASS** (arm B's total rc is 1 for an unrelated `CRIER_URL` FAIL — see note) |
 
 ```
@@ -86,6 +86,29 @@ rc=2
 ```
 
 `$F/floor.toml` above is `[disk]` with `default_gib = "6"` and `worker_gib = "8"` — the same shape the shipped template uses [examples/floor.toml.example:7-11].
+
+Check 6 compares a Python dict literal against bash `case` arms, so the two sources are never equal as text; the command parses the pairs out of both sides and diffs those. Its parity run, and then the same command rerun in two scratch copies with one pair deliberately changed on each side:
+
+```
+$ diff <(python3 scripts/disk_floor.py roles | sort) <(sed -n '/^case "\$ROLE" in/,/^esac/p' scripts/project-node.sh | sed -nE 's/^ *(worker|builder|full)\) FLOOR_BUILTIN=([0-9]+) ;;$/\1\t\2/p' | sort); echo rc=$?
+rc=0
+
+$ # same command, copy A: ladder changed, builder 10 -> 12
+1c1
+< builder	10
+---
+> builder	12
+rc=1
+
+$ # same command, copy B: resolver changed, ROLE_DEFAULTS full 20 -> 25
+2c2
+< full	25
+---
+> full	20
+rc=1
+```
+
+`diff` exit status is the assertion: 0 only when both tables carry the same three pairs. The parser is deliberately narrow — it matches `FLOOR_BUILTIN=<n>` inside `case "$ROLE" in … esac`, so a rewrite of that arm (renamed variable, different construct) yields an empty right-hand side and rc 1, or an `IndexError` and rc 1 when the `case` marker itself changes. It fails closed in every direction; it cannot pass while the tables disagree.
 
 ```
 $ env HOME=$(mktemp -d) NODE_DISK_FLOOR=plenty bash scripts/project-node.sh --check --project fixture --layers 00
@@ -186,7 +209,8 @@ Every one of these settings carries a size or a role name — no credential, tok
 
 ## 8. Evidence of record
 
-- **Measured 2026-11-05**, in a clean worktree of `f63acd3` (`~/proj-wt-md-11`), on Python 3.14.9 with `tomllib` present: the two transcripts in §3 are the literal terminal output of the eight checks above, run in that order.
+- **Measured 2026-11-05**, in a clean worktree of `f63acd3` (`~/proj-wt-md-11`), on Python 3.14.9 with `tomllib` present: the three transcripts in §3 are the literal terminal output of the eight checks above, run in that order.
+- **Parity claim re-measured 2026-11-05** in a second worktree, where `scripts/disk_floor.py`, `scripts/project-node.sh` and `tests/test_disk_floor.py` are byte-identical to `f63acd3` (`git diff --quiet f63acd3 HEAD -- <path>` for each). The command this document previously carried for check 6 — `diff` of `python3 scripts/disk_floor.py roles | sort` against `sed -n '150,155p' scripts/project-node.sh` — exits **1 on the unmodified tree** (3 lines versus 6, `1,3c1,6`), so it could never produce the "identical triples" it claimed: that row had been asserted, not run. The replacement exits 0 here and 1 in each deliberately mutated copy (§3). Same worktree, same day: changing `ROLE_DEFAULTS` from `{"worker": 5, …}` to `{"worker": 7, …}` in a scratch copy leaves `python3 -B tests/test_disk_floor.py` reporting `Ran 12 tests … OK`, because [tests/test_disk_floor.py:50-53] compares the dict against itself through `resolve()`.
 - **Unit coverage**: `tests/test_disk_floor.py` carries 12 tests over `parse_value` [tests/test_disk_floor.py:22-37] and `resolve` [tests/test_disk_floor.py:40-92], including the CLI-beats-env-beats-config ordering [tests/test_disk_floor.py:55-73], malformed config and CLI values [tests/test_disk_floor.py:81-88] and an unknown role [tests/test_disk_floor.py:90-92]. The suite gates on it in §12 [tests/selftest.sh:512-517].
 - **Integration coverage**: §13 proves a malformed `NODE_DISK_FLOOR` is refused before any install [tests/selftest.sh:518-526]; §16 proves the staged manifest contains the resolver and that its omission yields exactly one countable FAIL row [tests/selftest.sh:658-701].
 - **Provenance**: introduced by `222a8b0`, reformatted by `3b2c81e`. Row CF-007's foreman note records the delivery: "scripts/disk_floor.py resolves --disk-floor > NODE_DISK_FLOOR > [disk] config > role default (worker 5 / builder 10 / full 20 GiB) … tests/test_disk_floor.py 12 tests OK; selftest sections 12-13 PASS" [.coding-hermes/board/tasks.jsonl:7]. The row is still `pending` because its AC5 (live bunker residue reap) needs an authorized host — the resolver legs are the delivered part.
@@ -201,7 +225,7 @@ Per-unit assertion — what is measured and what is not:
 | `tomllib` config path [scripts/disk_floor.py:85-86] | **measured** — checks 4-5 read a real `[disk]` table on Python 3.14.9 |
 | `_load_config_minimal` fallback [scripts/disk_floor.py:93-108] | **ASSUMED-not-tested** — no interpreter below 3.11 exists on this host, so the branch at [scripts/disk_floor.py:83-84] never fires; nothing in the tree exercises it |
 | Ladder rows and refusals [scripts/project-node.sh:166-185] | **measured** — §3 check 7, both arms |
-| Duplicate role table parity [scripts/project-node.sh:150-155] vs [scripts/disk_floor.py:36] | **measured today** (check 6) — but **no test asserts it**; drift would be silent |
+| Duplicate role table parity [scripts/project-node.sh:150-155] vs [scripts/disk_floor.py:36] | **measured** — check 6: same three pairs today, and the command was falsified on purpose in both directions (ladder `builder` 10→12, resolver `full` 20→25), rc 1 each. **Not a gate**: it lives in this document, not in `tests/selftest.sh`, and `tests/test_disk_floor.py` cannot substitute — `test_role_defaults` [tests/test_disk_floor.py:50-53] compares `resolve()` against `ROLE_DEFAULTS`, i.e. the dict against itself, so changing a number keeps all 12 tests green (measured, §8) |
 | Reclaim-before-refusal interaction [scripts/project-node.sh:202-231] | **not this module's surface** — the resolver is called once, before the layer at [scripts/project-node.sh:171]; the reclaim path is graded elsewhere per CF-007's note [.coding-hermes/board/tasks.jsonl:7] |
 
 Defects measured while filling this section (filed, **not** fixed — `scripts/` is out of scope for this task):
@@ -210,4 +234,4 @@ Defects measured while filling this section (filed, **not** fixed — `scripts/`
 2. **A mistyped `--config` / `NODE_DISK_FLOOR_CONFIG` is silently ignored.** `load_config` returns `{}` for any non-existent path [scripts/disk_floor.py:79-80], so an operator policy file that was never read produces the built-in floor with no warning; only the `source` field betrays it [scripts/disk_floor.py:141].
 3. **Fractional values round *down*.** `int(float(...))` [scripts/disk_floor.py:67] turns `1.9G` into 1 GiB, i.e. a value typed above the intended floor lands below it — the opposite of the module's stated intent that "a typo must not lower a floor" [scripts/disk_floor.py:17-19].
 4. **Case handling is inconsistent.** The alternatives are literally `G|GiB|g|gib` [scripts/disk_floor.py:40], so `7GiB` and `7gib` are accepted while `7GIB` is a hard failure (measured, §7).
-5. **The role table exists twice with no parity assertion.** The ladder's `case` [scripts/project-node.sh:150-155] duplicates `ROLE_DEFAULTS` [scripts/disk_floor.py:36]; they are byte-equal today (§3 check 6) but nothing in the suite compares them, and the duplicate is exactly what admission uses when `python3` is missing [scripts/project-node.sh:161-163].
+5. **The role table exists twice, with parity that no gate checks.** The ladder's `case` [scripts/project-node.sh:150-155] duplicates `ROLE_DEFAULTS` [scripts/disk_floor.py:36]. They carry the same three pairs today, but they are **not byte-comparable** — a Python dict literal versus a bash `case` body — so the "byte-equal" wording this document previously used was itself a defect, and the command it cited could not pass or fail on anything. §3 check 6 now compares the pairs and exits 1 on drift either way; it is still only a documented command, so a change to either table ships silently unless someone runs it, and the duplicate is exactly what admission uses when `python3` is missing [scripts/project-node.sh:161-163]. Wiring check 6 into `tests/selftest.sh` is the fix; filed, not done.

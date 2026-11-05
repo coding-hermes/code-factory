@@ -5,7 +5,7 @@
 | Path | `/home/kara/code-factory/scripts/bunker-provision.sh` [scripts/bunker-provision.sh:1] |
 | Repository | `code-factory` [scripts/bunker-provision.sh:1] |
 | Revision | `b3ed55c` — last commit touching this file, on `main` @ `55ddb92`; blob sha256 prefix `981f9972ce7c2c47` [scripts/bunker-provision.sh:1] |
-| Status | **VERIFIED — 244 resolving locator references (154 distinct path:line pairs), re-run 2026-11-05, fact: FACT-05** |
+| Status | **VERIFIED — 278 resolving locator references (162 distinct path:line pairs), re-run 2026-11-05, fact: FACT-05** |
 
 ## 1. Purpose and why it matters
 
@@ -13,7 +13,7 @@
 - The config file is treated as DATA and is never sourced: a non-comment line must match `^([A-Z_][A-Z0-9_]*)=(.*)$` or the run is refused [scripts/bunker-provision.sh:9-10] [scripts/bunker-provision.sh:103-106]. A stray shell line therefore cannot execute [tests/selftest.sh:1971-1979].
 - What breaks if this module is absent: nothing else in the repository turns a project + repo + harness triple into a working node, and the file's own header states the consequence of the hand path — a node's environment becomes "hand-edited state that cannot be diffed or re-applied" [scripts/bunker-provision.sh:26-29], and a node with a harness and no declared procedure is "a node whose foreman reports 'this run's tools are on the host'" [scripts/bunker-provision.sh:446-449].
 - What breaks if it lies — three false reports are recorded in this file's own comments, each fixed: the inlined probe shipped literal backslashes and "reported a fully provisioned node as empty — a false negative that would have sent an operator to re-provision" [scripts/bunker-provision.sh:203-205]; a curl-only bus probe "reported a wired node as not connected" because a hardened bus checks the signature before the agent [scripts/bunker-provision.sh:262-264]; and four documented flags were "silently ignored whenever a config was also passed" [scripts/bunker-provision.sh:600-603].
-- A lying run is not hypothetical and is measurable today: with `scripts/lib.sh` absent, every row printer degrades to `command not found`, the `FAILED` tally never increments, and the script exits **0** [scripts/bunker-provision.sh:36] [scripts/lib.sh:7] [scripts/bunker-provision.sh:304] — measured, §8.
+- A lying run is not hypothetical, and its direction was measured rather than assumed: with `scripts/lib.sh` ABSENT the script exits **1**, not 0 — five `command not found` diagnostics, then it dies at the `bunker_cli` guard because `have` lives in the same library, so it prints no `PASS`/`FAIL` row and no `BUNKER:` verdict line at all [scripts/bunker-provision.sh:36] [scripts/lib.sh:13] [scripts/bunker-provision.sh:181-182] — measured, §8. The residual risk of a missing library is therefore **rows, not exit status**: the library is what names every row and what increments `FAILED`, so the same run against a PRESENT library whose `bad` does not increment (or that omits the `FAILED` initialisation) prints its FAIL rows, then `BUNKER: PASS — every row above measured`, and exits **0** [scripts/lib.sh:7] [scripts/lib.sh:11] [scripts/bunker-provision.sh:303-304] — also measured, §8.
 - Idempotence is a stated contract: an existing agent is reused, an existing clone fast-forwarded, `node.json` rewritten only on a difference [scripts/bunker-provision.sh:31-33] [scripts/bunker-provision.sh:352-353] [scripts/bunker-provision.sh:514-515].
 
 ## 2. Dependencies and library contracts
@@ -35,7 +35,7 @@
 
 | Import | Provider | Contract relied on | If it changes |
 |---|---|---|---|
-| `. "$HERE/lib.sh"` (sourced, not a package) [scripts/bunker-provision.sh:36] | `scripts/lib.sh` | five printers — `say`, `ok`, `bad`, `warn`, `note` — plus `have` and `shq` [scripts/lib.sh:5-13] [scripts/lib.sh:54-57]; `bad()` is the ONLY thing that increments `FAILED` [scripts/lib.sh:7], and `FAILED` is initialised by the library, not by the caller [scripts/lib.sh:11] | the verdict and the exit status change meaning: a missing or renamed `bad` leaves `FAILED` at 0 and the script exits 0 on a failed run [scripts/bunker-provision.sh:304] |
+| `. "$HERE/lib.sh"` (sourced, not a package) [scripts/bunker-provision.sh:36] | `scripts/lib.sh` | five printers — `say`, `ok`, `bad`, `warn`, `note` — plus `have` and `shq` [scripts/lib.sh:5-13] [scripts/lib.sh:54-57]; `bad()` is the ONLY thing that increments `FAILED` [scripts/lib.sh:7], and `FAILED` is initialised by the library, not by the caller [scripts/lib.sh:11] | two measured directions, and they are not the same one: an ABSENT `lib.sh` exits **1** — `have` is defined only there, so `b` comes back empty and the run returns at the `bunker_cli` guard without printing a single row [scripts/lib.sh:13] [scripts/bunker-provision.sh:181-182] — while a PRESENT library whose `bad` prints but does not increment `FAILED` prints every FAIL row and then still reaches `BUNKER: PASS — every row above measured` with exit **0** [scripts/lib.sh:7] [scripts/bunker-provision.sh:303-304]; drop only the `FAILED` initialisation and `[ "$FAILED" -eq 0 ]` aborts under `set -u` with `FAILED: unbound variable`, exit 127 [scripts/lib.sh:11] [scripts/bunker-provision.sh:34] [scripts/bunker-provision.sh:303] |
 | `python3 "$HERE/node_env.py" --check` [scripts/bunker-provision.sh:147] | `scripts/node_env.py` | a three-way exit contract: 0 and 1 both mean "the declaration parses" (1 = drift from an empty home), 2 is a refusal whose first `FAIL` line is quoted into the row, anything else is an unexpected exit [scripts/bunker-provision.sh:149-153] | a new exit code becomes `  FAIL  env_profile — node_env.py --check exited <rc> on the declaration`, and a shifted meaning of 1 would turn drift into a pass [scripts/bunker-provision.sh:150-152] |
 | `python3 "$HERE/node_seed.py" build` / `apply` [scripts/bunker-provision.sh:454] [scripts/bunker-provision.sh:459-460] | `scripts/node_seed.py` | `build` writes `seed.tar` + `seed.tar.json` into the out dir and refuses a file outside the manifest, over budget, or digest-mismatched; `apply` exits 0 only when the node accepted the seed [scripts/bunker-provision.sh:446-450] | a build refusal prints `  FAIL  node_seed — build refused the declared seed` plus the first five log lines [scripts/bunker-provision.sh:471-473]; an apply refusal prints the node's exit code [scripts/bunker-provision.sh:464] |
 | `python3 "$HERE/node_identity.py" <json> k=v ...` [scripts/bunker-provision.sh:521-522] | `scripts/node_identity.py` | MERGE semantics: the file's schema is owned elsewhere, so a wholesale rewrite would delete `node_id`/`repo`/`harness`/`bus` [scripts/bunker-provision.sh:514-515] | a schema change surfaces as `  FAIL  node_json — merge refused by the node (exit <rc>)` [scripts/bunker-provision.sh:528] |
@@ -65,6 +65,8 @@ All commands below are read-only. The first measures a live node; the rest are t
 | No bunker client on `PATH` | `env -i PATH=/usr/bin:/bin HOME="$HOME" bash scripts/bunker-provision.sh --check --project demo` [scripts/bunker-provision.sh:181-184] | `  FAIL  bunker_cli — no bunker client on PATH`, exit 1 | 2026-11-05T16:12Z | PASS (as expected) |
 | A bad namespace slug is refused before any host is touched | `bash scripts/bunker-provision.sh --check --project demo --agent a --server s --namespaces 'bad slug!'` [scripts/bunker-provision.sh:76-82] | `  FAIL  namespaces — 'badslug!' is not a namespace slug (expected letters, digits, dot, dash, underscore)`, exit 1 — whitespace is stripped before validation [scripts/bunker-provision.sh:74] | 2026-11-05T16:12Z | PASS (as expected); the same assertion is mechanised in `tests/selftest.sh` §40 [tests/selftest.sh:2055-2060] |
 
+The first row's four credential rows are **presence** rows, not permission rows: the probe tests `[ -s <path> ]` (exists and non-empty) and never a mode [scripts/bunker-provision.sh:214-219], so `auth_github`, `auth_duckbrain`, `crier_key` and `crier_bearer` passing says nothing about 600 — the `mode 600` in their printed text is wording, and the only mode measurement in the file happens inside `--apply` (§5) [scripts/bunker-provision.sh:233-241] [scripts/bunker-provision.sh:389].
+
 ## 4. Metrics emitted
 
 **NONE.** No counter, histogram, exporter, timer or metrics endpoint exists in this file; the only machine-readable outputs are the process exit status [scripts/bunker-provision.sh:304] [scripts/bunker-provision.sh:547] and the in-process `FAILED` tally that the verdict line interpolates [scripts/lib.sh:7] [scripts/bunker-provision.sh:303] [scripts/bunker-provision.sh:546].
@@ -90,7 +92,7 @@ Everything below is printed to stdout by this script or by `scripts/lib.sh` on i
 | info | `bunker-provision --apply — project=code-factory agent=cf-node server=bunker-las-03` | first line of an `--apply` run [scripts/bunker-provision.sh:336] | descriptive |
 | info | `  ..    resolved repo=<path> ref=main harness=hermes namespaces=code-factory (primary code-factory) ttl=6h` | after namespace resolution, before the host is touched [scripts/bunker-provision.sh:179] | descriptive |
 | info | `  PASS  config — code-factory.conf — 13 lines, KEY=VALUE only` | the config parsed; the count includes comment lines [scripts/bunker-provision.sh:122] | evidentiary |
-| info | `  <file> mode <mode>` (template `  %s mode %s\n`; e.g. `  github.token mode 600`) | one line per installed credential file, printed from inside the node [scripts/bunker-provision.sh:389] | evidentiary |
+| info | `  <file> mode <mode>` (template `  %s mode %s\n`; e.g. `  github.token mode 600`) | `--apply` only, after the auth bundle is installed: one line per entry under `~/.node/auth/`, stat'ed inside the node — `~/.node/agent.key` and `~/.git-credentials` sit outside that glob and get no line [scripts/bunker-provision.sh:389] | evidentiary |
 | verdict | `BUNKER: PASS — every row above measured` | `--check` with no FAIL row [scripts/bunker-provision.sh:303] | evidentiary |
 | verdict | `BUNKER: FAIL (<n>)` | `--check` with one or more FAIL rows; `<n>` is the tally [scripts/bunker-provision.sh:303] | evidentiary |
 | verdict | `BUNKER APPLIED: <agent>` | `--apply` with `rc` 0 AND no FAIL row [scripts/bunker-provision.sh:546] | evidentiary |
@@ -103,13 +105,16 @@ Everything below is printed to stdout by this script or by `scripts/lib.sh` on i
 
 Two lines are notable because they carry NO measured value and still count as evidence: `  FAIL  crier — ` (empty detail, when the bus probe produced no `FAIL ` line — e.g. a 120s timeout) [scripts/bunker-provision.sh:268-275], and `  ..    preflight rows were not all green; --apply repairs what it can`, which replaces the suppressed preflight output [scripts/bunker-provision.sh:617].
 
+One claim in that table is about `--apply` and must not be read as a `--check` result: `--check` measures **no file mode at all**. Its credential rows are the staged probe's `[ -s <path> ]` tests — exists and non-empty — and nothing else [scripts/bunker-provision.sh:214-219], so the `mode 600` wording inside `  PASS  auth_github — token file installed, mode 600 (value not read)` and `  PASS  crier_key — agent key installed at 600` is a literal string in the `printf`, not a measurement [scripts/bunker-provision.sh:233] [scripts/bunker-provision.sh:237]; likewise `mode 600 store` on the git-credential row is the contract the apply writes, not something the probe reads [scripts/bunker-provision.sh:241] [scripts/bunker-provision.sh:386]. The only `stat` in the file is the `--apply` line above, and it covers `~/.node/auth/*` only [scripts/bunker-provision.sh:389]. A mode regression on the node is therefore invisible to every check row.
+
 ## 6. Failure modes
 
 Direction: **local** = the failure is reported as something else on this host; **remote** = the failure lives on the node or a peer; **degraded** = the run continues with a weaker guarantee.
 
 | Failure | Presents as | Distinguished from | Recovery |
 |---|---|---|---|
-| `scripts/lib.sh` absent or renamed (degraded, false green) | every printer becomes `command not found`; `FAILED` stays 0, so the final test passes and the process exits **0** [scripts/bunker-provision.sh:36] [scripts/lib.sh:7] [scripts/bunker-provision.sh:304] — measured, §8 | nothing inside the script distinguishes it; only the shell's own `No such file or directory` on line 36 does [scripts/bunker-provision.sh:36] | restore `lib.sh` next to the script; treat exit 0 with no `PASS`/`FAIL` rows as a library failure, never a pass |
+| `scripts/lib.sh` absent or renamed (local, fail-closed but row-blind) | five `command not found` diagnostics and exit **1**; the run dies at the `bunker_cli` guard because `have` is defined in the same library, so it measures nothing, prints no `PASS`/`FAIL` row and no `BUNKER:` verdict line [scripts/bunker-provision.sh:36] [scripts/lib.sh:13] [scripts/bunker-provision.sh:181-182] — measured, §8; stdout is empty, so the whole diagnosis is on stderr | distinct from a genuinely missing client, which does print `  FAIL  bunker_cli — no bunker client on PATH`: here that row cannot print, because `bad` is gone too [scripts/bunker-provision.sh:182] | restore `lib.sh` next to the script; the exit status is safe, the *evidence* is not — a silent run is not a pass, and neither is exit 1 a measurement |
+| `lib.sh` present but `bad()` does not increment `FAILED`, or `FAILED` is never initialised (degraded, false green) | every row runs and every failure is printed, but nothing is counted: in the measured run eleven FAIL rows printed and the verdict still read `BUNKER: PASS — every row above measured`, exit **0** [scripts/lib.sh:7] [scripts/bunker-provision.sh:303-304] — measured, §8. If only the init line is gone, the run aborts instead: `FAILED: unbound variable`, exit 127 [scripts/lib.sh:11] [scripts/bunker-provision.sh:34] | a missing library cannot produce this — absent helpers exit 1 (row above) — so exit 0 is only reachable with a library that is present and wrong | never trust exit 0 from this script on its own: require `BUNKER: PASS` AND zero FAIL rows, because `FAILED` is the only counter and `lib.sh:7` is the line that feeds it |
 | `bunker` client absent (local, fail-closed) | `  FAIL  bunker_cli — no bunker client on PATH`, exit 1 before any host call [scripts/bunker-provision.sh:181-184] | distinct from an unreachable host, which fails the next row instead [scripts/bunker-provision.sh:187-191] | install the client on the control host `PATH` |
 | Host unreachable (local direction) | `--check`: `  FAIL  server — <server> not listed by 'bunker list'` after a 45s cap [scripts/bunker-provision.sh:187-191]. `--apply` NEVER consults that row: it goes to `bunker info`, then `spawn`, whose failure prints `  FAIL  agent — spawn failed: <last line of /tmp/cf-spawn.log>` [scripts/bunker-provision.sh:352-360] | a dead host and a server that does not exist produce the SAME row; a partition is reported as absence [scripts/bunker-provision.sh:190] | re-run `--check` once reachable; read `/tmp/cf-spawn.log` for the spawn arm [scripts/bunker-provision.sh:359] |
 | Server name is a substring of any `bunker list` line (local, false green) | `--server s` passes: measured `  PASS  server — s reachable` while no server named `s` exists [scripts/bunker-provision.sh:187-188] | distinguished only by reading the client's own list output; the test is `grep -q -- "$SERVER"`, not an exact match [scripts/bunker-provision.sh:187] | always pass the full server id; a short or generic name can never fail this row |
@@ -153,7 +158,7 @@ Every key the config parser accepts [scripts/bunker-provision.sh:109-120], every
 | `CONFIG_SET_GATEWAY_BIND` | none | omitted, so `gateway.bind` is untouched [scripts/bunker-provision.sh:131] |
 | `CONFIG_SET_GATEWAY_PORT` | none | omitted, so `gateway.port` is untouched [scripts/bunker-provision.sh:132] |
 | `CONFIG_SET_AGENT_MAX_ITERATIONS` | none | omitted, so `agent.max_iterations` is untouched [scripts/bunker-provision.sh:133] |
-| `--config` | none | no config is read; every value must come from a flag, and `--check --project demo` alone reaches `  FAIL  bunker_cli` or the next missing value [scripts/bunker-provision.sh:590] |
+| `--config <path>` | none | the flag only stores the path [scripts/bunker-provision.sh:564]; the file IS read, once, after the flags are parsed and before any mode runs [scripts/bunker-provision.sh:590]. Unreadable → `  FAIL  config — cannot read <path>` and exit 1 [scripts/bunker-provision.sh:98]; a non-`KEY=VALUE` line → refusal at that line number, exit 1 [scripts/bunker-provision.sh:103-106]. With the flag unset no config is read at all, so every value must come from a flag — `--check --project demo` alone then reaches `  FAIL  bunker_cli` or the next missing value |
 | `--config-set <dotted.key>=<value>` (repeatable) | none | each value is appended AFTER the config's own, so the command line's last value wins inside `node_env.py` [scripts/bunker-provision.sh:134] [scripts/bunker-provision.sh:582] |
 | `--check` / `--apply` / `--destroy` | none | no mode exits 2 through `usage` [scripts/bunker-provision.sh:611] |
 | `--yes` | 0 | `--destroy` refuses without it, exit 2 [scripts/bunker-provision.sh:552] |
@@ -196,6 +201,8 @@ bunker-provision --check — project=code-factory agent=cf-node server=bunker-la
 BUNKER: FAIL (1)
 # exit 1 — the single failure is the `inputs` row, naming three control-host token files
 # consumed and deleted after the node was provisioned; every node-side surface measured PASS.
+# The `mode 600` wording in the auth_github / crier_key / git_credential rows is the script's
+# own text, not a measurement: --check tests `-s` (exists, non-empty) and never stats a mode.
 ```
 
 - The same probe the script runs, issued by hand, to prove the DuckBrain contract accepts a missing key path as `404` rather than an error [scripts/bunker-provision.sh:289-296]:
@@ -232,7 +239,41 @@ $ bash scripts/bunker-provision.sh --check --project demo --agent a --server s -
 # exit 1
 ```
 
-- The false green in §1 and §6 was measured, not inferred: a copy of the script placed in a directory with no `lib.sh` printed `line 36: .../lib.sh: No such file or directory`, then `ok: command not found` and `bad: command not found` on every row, and exited **0** [scripts/bunker-provision.sh:36] [scripts/lib.sh:7]. That is why a reviewer must never accept a bare exit 0 without a `BUNKER: PASS` or `BUNKER APPLIED` line beside it [scripts/bunker-provision.sh:303] [scripts/bunker-provision.sh:546].
+- The missing-library direction was measured on 2026-11-05 by copying only `bunker-provision.sh` into a directory with no `lib.sh` — and the earlier claim in §1/§6 that this exits 0 was wrong, because the helpers are also the control flow. The real output, verbatim, from `$HOME/.hermes/cache/scratch/nolib-probe` (`bash ./bunker-provision.sh --check --project demo`):
+
+```
+./bunker-provision.sh: line 36: .../nolib-probe/lib.sh: No such file or directory
+./bunker-provision.sh: line 171: ok: command not found
+./bunker-provision.sh: line 178: say: command not found
+./bunker-provision.sh: line 179: note: command not found
+./bunker-provision.sh: line 181: have: command not found
+./bunker-provision.sh: line 182: bad: command not found
+# exit 1 — nothing on stdout, no PASS/FAIL row, no `BUNKER:` verdict line
+```
+
+  Five diagnostics, then `return 1` at the `bunker_cli` guard: `have` is defined in the same missing library, so `b="$()"` is empty and line 182 takes its refusal arm even though `bad` cannot print [scripts/lib.sh:13] [scripts/bunker-provision.sh:181-182]. The same exit 1 holds for `--apply`, which dies at its own `have` guard after the preflight subshell and before any host call [scripts/bunker-provision.sh:348-349], and for a readable config, where `load_config`'s `ok` at line 122 fails and the `|| exit 1` fires [scripts/bunker-provision.sh:122] [scripts/bunker-provision.sh:590]; only `-h` is still 0 and no-mode still 2 [scripts/bunker-provision.sh:584] [scripts/bunker-provision.sh:611]. So the residual risk of a missing library is **missing rows and a lost diagnosis**, not a green exit: an operator gets `command not found` lines and a bare 1, with no FAIL naming the cause.
+
+- The false green is real, but it belongs to a different shape and was measured separately: a `lib.sh` whose printers are byte-identical to the real ones except that `bad()` does not increment `FAILED` [scripts/lib.sh:7]. The same invocation then prints eleven FAIL rows and still ends green:
+
+```
+  PASS  inputs — every named credential and profile file is readable
+  FAIL  repo — no clone at $HOME/repo — run --apply
+  FAIL  node_json — $HOME/.node/node.json absent
+  FAIL  auth_github — no $HOME/.node/auth/github.token
+  FAIL  auth_duckbrain — no $HOME/.node/auth/duckbrain.token
+  FAIL  crier_key — no $HOME/.node/agent.key — the inbox answers 401 to every read
+  FAIL  crier_bearer — no $HOME/.node/auth/crier.token — a signed read still needs the bearer
+  FAIL  git_credential — no $HOME/.git-credentials — the clone cannot authenticate
+  FAIL  gateway_auth — no dashboard.basic_auth — the gateway will refuse to bind (CF-150)
+  FAIL  commit_hook — no pre-commit hook — the gate is not armed
+  FAIL  harness — no  binary on the node
+  WARN  env_profile — no NODE_ENV_FILE or CONFIG_SET_* — the node's environment is declared nowhere
+
+BUNKER: PASS — every row above measured
+# exit 0 — eleven printed FAIL rows, none of them counted
+```
+
+  `FAILED=0` is the only thing the verdict tests [scripts/lib.sh:7] [scripts/bunker-provision.sh:303-304], so a library that stops counting turns a run full of printed failures green. Drop only the `FAILED=${FAILED:-0}` initialisation and the run instead aborts under `set -u`: `FAILED: unbound variable`, exit 127 [scripts/lib.sh:11] [scripts/bunker-provision.sh:34]. That is why exit 0 is only evidence when the count is non-zero — the rows alone do not save you, the tally does.
 - The substring server test was measured too: `--server s` printed `  PASS  server — s reachable` on a host whose only agent belongs to `bunker-las-03` [scripts/bunker-provision.sh:187-188].
 - Standing mechanised checks: `tests/selftest.sh` §40 asserts the syntax, the absent-config refusal, the refusal to execute a shell line in the config, the empty-`PATH` FAIL, the `CLI_*`-only flag rule, the credential-file preflight row, that every documented config key parses, and the namespace-slug refusal [tests/selftest.sh:1960-2060].
-- Status is VERIFIED on the strength of the run above plus 244 resolving locator references (154 distinct path:line pairs, every one of them resolving against this revision); the residual risks are named in §6 instead of smoothed over — the two systemic ones being the missing-library exit 0 and the substring server match.
+- Status is VERIFIED on the strength of the runs above plus 278 resolving locator references (162 distinct path:line pairs, every one of them resolving against this revision); the residual risks are named in §6 instead of smoothed over — the three systemic ones being the present-but-non-incrementing `bad()` false green, the mode that `--check` never measures, and the substring server match.
