@@ -407,3 +407,5 @@
 {"id":406,"event_type":"task_created","task_id":"CF-242","tick_number":null,"timestamp":"2026-11-05T11:52:07Z","actor":"foreman","detail":"{\"id\":\"CF-242\",\"status\":\"pending\"}"}
 {"id":407,"event_type":"task_created","task_id":"CF-242","tick_number":null,"timestamp":"2026-11-05T11:52:15Z","actor":"foreman","detail":"{\"id\":\"CF-242\",\"source\":\"code-factory-duckbrain-qa\",\"tick\":\"code-factory-duckbrain-qa-2026-11-05-11-35-44\",\"finding\":\"section-mapping census counts DISTINCT numbers at column 0 only: a duplicate-numbered header and an indented header both leave the gate green\"}"}
 {"id":408,"event_type":"task_created","task_id":"CF-243","tick_number":null,"timestamp":"2026-11-05T12:01:46Z","actor":"foreman","detail":"{\"id\":\"CF-243\",\"status\":\"pending\"}"}
+{"id":409,"event_type":"task_updated","task_id":"CF-204","tick_number":null,"timestamp":"2026-11-05T12:06:53Z","actor":"foreman","detail":"{\"status\":\"in_progress\"}"}
+{"id":410,"event_type":"task_updated","task_id":"CF-138","tick_number":null,"timestamp":"2026-11-05T12:06:53Z","actor":"foreman","detail":"{\"status\":\"in_progress\"}"}
