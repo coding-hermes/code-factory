@@ -14,11 +14,11 @@ not a section that is merely unwritten. A section turns green by running a comma
 | 7 | [`scripts/bunker_config_gen.py`](07-scripts-bunker-config-gen-py.md) | code-factory | RED |
 | 8 | [`scripts/check_scan_scope.py`](08-scripts-check-scan-scope-py.md) | code-factory | RED |
 | 9 | [`scripts/clone_lane.py`](09-scripts-clone-lane-py.md) | code-factory | RED |
-| 10 | [`scripts/configure_family.py`](10-scripts-configure-family-py.md) | code-factory | RED |
+| 10 | [`scripts/configure_family.py`](10-scripts-configure-family-py.md) | code-factory | UNVERIFIED |
 | 11 | [`scripts/disk_floor.py`](11-scripts-disk-floor-py.md) | code-factory | VERIFIED |
-| 12 | [`scripts/github-app-refresh.sh`](12-scripts-github-app-refresh-sh.md) | code-factory | RED |
-| 13 | [`scripts/github-app-setup.sh`](13-scripts-github-app-setup-sh.md) | code-factory | RED |
-| 14 | [`scripts/github-app-token.py`](14-scripts-github-app-token-py.md) | code-factory | RED |
+| 12 | [`scripts/github-app-refresh.sh`](12-scripts-github-app-refresh-sh.md) | code-factory | VERIFIED |
+| 13 | [`scripts/github-app-setup.sh`](13-scripts-github-app-setup-sh.md) | code-factory | VERIFIED |
+| 14 | [`scripts/github-app-token.py`](14-scripts-github-app-token-py.md) | code-factory | VERIFIED |
 | 15 | [`scripts/harness/install-claude-code.sh`](15-scripts-harness-install-claude-code-sh.md) | code-factory | VERIFIED |
 | 16 | [`scripts/harness/install-codex.sh`](16-scripts-harness-install-codex-sh.md) | code-factory | VERIFIED |
 | 17 | [`scripts/harness/install-hermes.sh`](17-scripts-harness-install-hermes-sh.md) | code-factory | VERIFIED |
@@ -28,7 +28,7 @@ not a section that is merely unwritten. A section turns green by running a comma
 | 21 | [`scripts/lane_target.py`](21-scripts-lane-target-py.md) | code-factory | VERIFIED |
 | 22 | [`scripts/lib.sh`](22-scripts-lib-sh.md) | code-factory | VERIFIED |
 | 23 | [`scripts/load_lane_config.py`](23-scripts-load-lane-config-py.md) | code-factory | VERIFIED |
-| 24 | [`scripts/master_doc_skeleton.py`](24-scripts-master-doc-skeleton-py.md) | code-factory | RED |
+| 24 | [`scripts/master_doc_skeleton.py`](24-scripts-master-doc-skeleton-py.md) | code-factory | VERIFIED |
 | 25 | [`scripts/node-bus-worker.py`](25-scripts-node-bus-worker-py.md) | code-factory | RED |
 | 26 | [`scripts/node-create.sh`](26-scripts-node-create-sh.md) | code-factory | VERIFIED |
 | 27 | [`scripts/node_env.py`](27-scripts-node-env-py.md) | code-factory | VERIFIED |
@@ -42,8 +42,8 @@ not a section that is merely unwritten. A section turns green by running a comma
 | 35 | [`scripts/repo_freshness.py`](35-scripts-repo-freshness-py.md) | code-factory | VERIFIED |
 | 36 | [`scripts/verify-node.sh`](36-scripts-verify-node-sh.md) | code-factory | VERIFIED |
 | 37 | [`specs/ENVELOPE.md`](37-specs-envelope-md.md) | code-factory | RED |
-| 38 | [`specs/HARNESS-MATRIX.md`](38-specs-harness-matrix-md.md) | code-factory | RED |
-| 39 | [`specs/HARNESS.md`](39-specs-harness-md.md) | code-factory | RED |
+| 38 | [`specs/HARNESS-MATRIX.md`](38-specs-harness-matrix-md.md) | code-factory | FAILING |
+| 39 | [`specs/HARNESS.md`](39-specs-harness-md.md) | code-factory | VERIFIED |
 | 40 | [`specs/NODE.md`](40-specs-node-md.md) | code-factory | RED |
 | 41 | [`specs/FLEET-MEMORY.md`](41-specs-fleet-memory-md.md) | code-factory | RED |
 | 42 | [`specs/TRACE.md`](42-specs-trace-md.md) | code-factory | RED |
