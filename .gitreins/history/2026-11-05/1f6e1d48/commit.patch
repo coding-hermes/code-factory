@@ -1,0 +1,186 @@
+commit 12f3e8043eb9641acae9ccaaf1a4e05456f414f6
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Thu Nov 5 05:08:33 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Thu Nov 5 05:08:33 2026 -0500
+
+    docs(sync): re-measure the BOARD.md measured-state block at bc02e2c
+    
+    The block's newest snapshot still described 84dadf3 (185 rows / 372 events /
+    63 complete), 29 task rows and 31 events behind the published tip. This tick
+    re-ran every command the block cites at bc02e2c21eac and states only what the
+    runs printed: 214 rows / 403 events (max id 402, one benign duplicate 336),
+    63 complete / 11 in_progress / 140 pending, boardctl validate OK (4 warnings),
+    board_drift parity 214 vs 214, selftest PASS on three consecutive runs
+    (284 PASS / 57 FAIL rows, all in negative fixtures, loadavg 8.62/7.51/6.82),
+    63/63 complete rows bound to ancestors of origin/main, 71 artifact pointers
+    (62 unique) resolving in-tree.
+    
+    The previous bullet is relabelled "Earlier snapshot … (historical, not
+    current)"; no other bullet was edited and no number was carried over.
+    
+    Residual, each already owned and not re-filed: CF-081 (hand-typed counts and
+    tip label), CF-154 (warning count), CF-196 (duplicate event id 336), CF-130
+    (four complete rows without a completion event), CF-181 (orphaned verdict
+    envelopes — CF-077 and, as a second instance, CF-206 whose bundle binds the
+    superseded dc9e0ea).
+    
+    No board event is appended: the block publishes the event count, so an event
+    in this commit would re-stale it. The tick record is the audit file.
+---
+ docs/BOARD.md                                    |  21 ++++-
+ docs/audits/code-factory-sync-2026-11-05-1001.md | 114 +++++++++++++++++++++++
+ 2 files changed, 134 insertions(+), 1 deletion(-)
+
+diff --git a/docs/BOARD.md b/docs/BOARD.md
+index 0929792..aa615d8 100644
+--- a/docs/BOARD.md
++++ b/docs/BOARD.md
+@@ -120,7 +120,26 @@ scripts/boardctl validate
+ bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
+ ```
+ 
+-- **Re-measured 2026-11-05T00:41Z at tip `84dadf3`:** 185 task rows, 372 events (max event id 371;
++- **Re-measured 2026-11-05T10:07Z at tip `bc02e2c`:** 214 task rows, 403 events (max event id 402;
++  one benign duplicate id 336, owned by **CF-196**) — 63 `complete`, 11 `in_progress`, 140 `pending`,
++  no duplicate task ids. Both board files are byte-identical to their `origin/main` copies
++  (`python3 scripts/board_drift.py check --workdir . --ref origin/main` prints `RESULT: OK`,
++  214 vs 214 rows, 0 divergent ids). `scripts/boardctl validate` prints `RESULT: OK (4 warning(s))`
++  (CF-034's free-form `guard_result`/`ci_result`, the duplicate event id 336 and the headerless board)
++  and `key uniformity: 214/214 rows carry only canon keys (0 drift)`. 63/63 `complete` rows bind a
++  commit that exists and is an ancestor of `origin/main`, and 71 evidence artifact pointers
++  (62 unique paths) resolve in the tree (0 missing). `tests/selftest.sh` printed `SELFTEST: PASS`
++  (rc 0) on three consecutive runs, `PASS 214/214 rows parse`, 284 `PASS` rows and 57 `FAIL` rows that
++  all sit inside negative fixtures, at loadavg 8.62 / 7.51 / 6.82 (1 min) — deterministic at this tip,
++  unlike the intermittent runs recorded against `84dadf3`. The verdict-binding sweep prints
++  `complete_rows=63 verdict_artifacts_checked=36 orphan_count=2`: **CF-077** (owned by pending
++  **CF-181**) and **CF-206**, whose bundle binds `dc9e0ea`, a commit the ops lane superseded with
++  `d227eff` — so CF-181's own AC0, which asserts `orphan_count=1`, no longer reproduces as written.
++  Four `complete` rows (**CF-034**, **CF-041**, **CF-182**, **CF-197**) carry no `task_completed`
++  event, unchanged and owned by **CF-130**. Three sibling rows still own the structural fixes for this
++  block: **CF-081** (the hand-typed counts and the hand-typed tip label), **CF-154** (the warning
++  count does not follow from the board) and **CF-196** (duplicate event ids).
++- **Earlier snapshot, 2026-11-05T00:41Z at tip `84dadf3` (historical, not current):** 185 task rows, 372 events (max event id 371;
+   one benign duplicate id 336, owned by **CF-196**) — 63 `complete`, 9 `in_progress`, 113 `pending`,
+   no duplicate task ids. Both board files are byte-identical to their `origin/main` copies
+   (`python3 scripts/board_drift.py check --workdir . --ref origin/main` prints `RESULT: OK`,
+diff --git a/docs/audits/code-factory-sync-2026-11-05-1001.md b/docs/audits/code-factory-sync-2026-11-05-1001.md
+new file mode 100644
+index 0000000..b1753c8
+--- /dev/null
++++ b/docs/audits/code-factory-sync-2026-11-05-1001.md
+@@ -0,0 +1,114 @@
++# Sync lane tick — 2026-11-05T10:07Z (tick `code-factory-duckbrain-2026-11-05-10-01-04`)
++
++Lane: `code-factory-duckbrain` (dispatch prompt: sync; stored project prompt: memory). Both legs are
++run in this tick: the board/docs reconciliation below, and the dated DuckBrain record it ends with.
++
++Surface: unattended `api_server`. Canonical root gate ran first, in the registered checkout — no clone
++was needed, because the ownership census came back empty (see "Ownership").
++
++Every number below names the tip it was measured at: `bc02e2c21eac0b058ecb3eaf546d76d1992c8924`.
++
++## Ownership (no barrier, so the registered checkout was used)
++
++| Probe | Result |
++|---|---|
++| `realpath /home/kara/code-factory` vs `git rev-parse --show-toplevel` | equal — root equality proven before any other repo read |
++| `.coding-hermes/board` | a real directory here (not the bankai symlink) — canonical side |
++| branch / remotes | `main` attached; `origin`, `gh`, `worker` all `github.com/coding-hermes/code-factory` |
++| operation markers | none (`rebase-merge`, `rebase-apply`, `MERGE_HEAD`, `CHERRY_PICK_HEAD`, `index.lock` all absent) |
++| `git status --porcelain -uall` | 0 paths |
++| parity | `git rev-list --left-right --count origin/main...HEAD` = `0	0` |
++| writer census | no `hermes chat`, no `gitreins judge`/`task` process in this checkout; only this session's own shell has a cwd inside the repo |
++| sibling lanes | `code-factory-sync-2026-11-05-10-01-04` and `code-factory-pm-2026-11-05-10-01-04` are same-batch siblings that **failed at spawn** with gateway `HTTP 503 … unservable-rating` (`commits=0`), so they are dead records, not live writers |
++
++## Board integrity at `bc02e2c`
++
++| Check | Command | Result |
++|---|---|---|
++| every line parses | `jq -c . .coding-hermes/board/tasks.jsonl` | 214 lines, 0 failures |
++| events parse | `jq -c . .coding-hermes/board/events.jsonl` | 403 lines, max event id 402 |
++| row count = committed copy | `wc -l` vs `git show HEAD:<file> \| wc -l` | tasks 214 = 214, events 403 = 403 |
++| duplicate task ids | `jq -r .id \| sort \| uniq -d` | none |
++| duplicate event ids | same | 1 — id **336** (lines 336/337), the known benign legacy duplicate owned by **CF-196** |
++| schema gate | `bash scripts/boardctl validate` | `RESULT: OK (4 warning(s))`; `key uniformity: 214/214 rows carry only canon keys (0 drift)` |
++| published parity | `python3 scripts/board_drift.py check --workdir . --ref origin/main` | `RESULT: OK` — byte parity on both files, 214 vs 214 rows, 0 divergent ids, HEAD ancestry pass |
++| status census | `jq -r .status \| sort \| uniq -c` | 63 `complete`, 11 `in_progress`, 140 `pending` |
++
++The four validator warnings are the documented set: CF-034's free-form `guard_result` and `ci_result`
++(two warnings), the duplicate event id 336, and the headerless board. None is new.
++
++## Completion evidence at `bc02e2c`
++
++| Leg | Result |
++|---|---|
++| every `complete` row binds a real commit on the branch | `scripts/board-evidence-census.sh` → `complete_rows=63 finding_lines=0` (NO_SHA=0, NO_OBJECT=0, NOT_ON_REF=0) |
++| newest evidence entry names a resolving artifact | same census → `NO_EVIDENCE=0`, `NO_ARTIFACT_LATEST=0`, `ABSOLUTE_PATH=0`, `NOT_IN_TREE=0`; 71 artifact pointers across 62 unique paths, all resolve via `git cat-file -e HEAD:<path>` |
++| evidence names a re-runnable command | measured across **all** evidence-bearing fields (`probe`, `worker_summary`, `foreman_note`, string `detail`, `acceptance_criteria`), not one field: 56/63 name a command directly and the remaining 7 (**CF-032, CF-054, CF-058, CF-065, CF-092, CF-176, CF-202**) each name one in `acceptance_criteria` and carry a committed artifact — **0 unproven rows, nothing filed** |
++| completion-event coverage | 4 `complete` rows carry no `task_completed` event: **CF-034, CF-041, CF-182, CF-197** — unchanged from the previous tick, class owned by **CF-130**, not re-filed |
++| verdict-envelope ancestry | `verdict-binding-sweep.py` → `complete_rows=63 verdict_artifacts_checked=36 rows_citing_no_json_artifact=31` → `orphan_count=2` (below) |
++| standing gate | `bash tests/selftest.sh` → `SELFTEST: PASS`, rc 0, on **three consecutive runs**; `PASS 214/214 rows parse`, 284 `PASS` / 57 `FAIL` rows (all inside negative fixtures), loadavg 8.62 / 7.51 / 6.82 |
++| CI surface | `gh run list --repo coding-hermes/code-factory --limit 3 --json …` → `[]`, and `.github/workflows/` does not exist — this repo ships no GitHub Actions; the gate is `tests/selftest.sh` plus the gitreins guard. An empty list is not a green CI |
++
++### The two orphaned verdicts
++
++| Row | Verdict binds | Landed commit | Owner |
++|---|---|---|---|
++| **CF-077** | `1dfb58b8` | `1232f7a0` (row's `commit_hash`) | pending **CF-181** — unchanged, not re-filed |
++| **CF-206** | `dc9e0eaf` | `d227effd` (ops lane re-landed it) | new instance of the CF-181 class; recorded here, no second row filed |
++
++Both orphan SHAs resolve as objects but are contained by no ref (`git for-each-ref --contains` is
++empty), which is the pre-rewrite copy of a landed commit. CF-181's acceptance text pins
++`orphan_count=1`, so that criterion no longer reproduces as written; its text was **not** rewritten
++here — the owning row re-measures at its own tip.
++
++## Drift found
++
++`docs/BOARD.md` §"Current measured state" carried the **2026-11-05T00:41Z `84dadf3` snapshot**
++(185 task rows / 372 events / 63 `complete`, 9 `in_progress`, 113 `pending`) as its newest entry,
++while the published tip had moved to `bc02e2c` (214 / 403 / 63 / 11 / 140). The block's own
++instruction is to measure rather than quote an older snapshot, and its two previous entries had
++already been relabelled historical for the same reason.
++
++Frozen here before correction, so the stale values remain reproducible:
++
++```
++$ git show 84dadf3:docs/BOARD.md | grep -o '185 task rows, 372 events[^.]*' | head -1
++185 task rows, 372 events (max event id 371;
++```
++
++No other drift was found: no `complete` row is described as open by any status table, and every
++cited `CF-1NN` identifier in `docs/PRD-code-factory.md` / `docs/ACCEPTANCE-PLAN.md` maps to a PRD
++requirement, not to a board row, so no phantom-id row was filed for them.
++
++## Fix applied
++
++`docs/BOARD.md`: one new snapshot bullet for `bc02e2c2` added above the existing one, and the
++`84dadf3` bullet relabelled "Earlier snapshot … (historical, not current)". No earlier bullet was
++edited and no number was carried over without re-running its command.
++
++**No board event was appended.** This block publishes the event count (403), so an `audit` event
++appended in the same commit would move that count past the number the block states, re-staling the
++block inside its own commit. The tick record is this file. The structural fix for the hand-typed
++block remains **CF-081**.
++
++## Verification of the fix (re-runnable)
++
++```sh
++grep -c 'Re-measured 2026-11-05T10:07Z at tip `bc02e2c`' docs/BOARD.md              # 1
++grep -c 'Earlier snapshot, 2026-11-05T00:41Z at tip `84dadf3` (historical, not current)' docs/BOARD.md   # 1
++git cat-file -e bc02e2c^{commit}                                                    # exit 0
++wc -l .coding-hermes/board/tasks.jsonl .coding-hermes/board/events.jsonl            # 214 / 403
++jq -r .status .coding-hermes/board/tasks.jsonl | sort | uniq -c                     # 63 / 11 / 140
++bash scripts/boardctl validate                                                      # RESULT: OK (4 warnings)
++python3 scripts/board_drift.py check --workdir . --ref origin/main                  # RESULT: OK, 214 vs 214
++bash tests/selftest.sh                                                              # SELFTEST: PASS
++```
++
++## Residual (owned elsewhere, not filed)
++
++- **CF-081** — the measured-state block is hand-typed, counts and tip label.
++- **CF-154** — the validator's warning count does not follow from the board.
++- **CF-196** — duplicate event ids (id 336).
++- **CF-130** — four `complete` rows with no completion event.
++- **CF-181** — orphaned verdict envelopes (CF-077, and now CF-206 as a second instance).
++- **CF-200** — six rows store `detail` as null/bare string; this tick's instruments tolerate both.
