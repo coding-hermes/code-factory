@@ -18,6 +18,9 @@ Your job: move exactly ONE board row forward per tick.
   check must be able to fail, nothing is installed until `--check` names the measured value.
 - Load and follow [`skills/code-factory-foreman/SKILL.md`](../skills/code-factory-foreman/SKILL.md),
   including its scheduler lane family/workdir allowlist and task-admission cooldown rules.
+- Provisioning or destroying a node is
+  [`skills/code-factory-bunker/SKILL.md`](../skills/code-factory-bunker/SKILL.md) — one bunker per
+  project, driven from a config file, checked before work is dispatched, never hand-edited.
 - For scheduler lane creation, use [`docs/SCHEDULER-ADMISSION.md`](../docs/SCHEDULER-ADMISSION.md);
   do not treat the repo GitReins gate as the scheduler admission gate.
 - The board is `.coding-hermes/board/tasks.jsonl` — append only, one JSON object per line.

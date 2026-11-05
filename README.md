@@ -35,13 +35,79 @@ On a host with no bunker server, no Crier and no repo, all three commands reach 
 fail with the missing value named. That is the honest result on a fresh host, and every message
 tells you which value to supply.
 
+## Provisioning a node from a config file
+
+One project, one bunker. Every lane of a project enters through crier and lands in that project's
+single agent — one clone, one harness, one memory namespace. Two projects never share an agent:
+the bunker boundary is the isolation unit, so a second project gets a second agent and a second
+config file.
+
+`config/bunker.example.conf` is the template. Copy it, edit the values, and leave the token
+entries as **paths** — the file names credentials, it never holds them.
+
+```bash
+# read-only: every row names the value it measured, and nothing is written
+scripts/bunker-provision.sh --config ~/.config/code-factory/cf.conf --check
+
+# idempotent: reuses an existing agent and leaves an existing clone at its commit
+# (no fetch, no reset); node.json is rewritten with a fresh provisioned_at
+scripts/bunker-provision.sh --config ~/.config/code-factory/cf.conf --apply
+
+# crier identity, on its own failure surface: writes $HOME/.node/crier.json in the node,
+# then probes <crier>/agents/<agent>/inbox — only a 200 prints CONNECTED
+scripts/bunker-crier-connect.sh --agent cf-node --server "$BUNKER_SERVER" \
+    --url "$CRIER_URL" --project code-factory --check
+
+# refuses without --yes, and names the agent and server it would remove
+scripts/bunker-provision.sh --config ~/.config/code-factory/cf.conf --destroy --yes
+```
+
+The command line wins over the file — `--agent cf-node-2` overrides `AGENT=cf-node` — so one
+template can drive several nodes without editing. The config is data, not a script: every
+non-comment line must be `KEY=VALUE`, and a line that is not one is refused before a single bunker
+call (`scripts/bunker-provision.sh:39-62`):
+
+```
+FAIL  config — .../bad.conf:2 is not KEY=VALUE — refusing to run it
+```
+
+Credentials travel as files only. The config names `GITHUB_TOKEN_FILE`, `DUCKBRAIN_TOKEN_FILE` and
+`S3_ENV_FILE`; the provisioner reads them into one mode-600 bundle, copies it into the node,
+installs `$HOME/.node/auth/{github.token,duckbrain.token,s3.env}` at mode 600, points git at a
+credential store built from the token, and deletes both copies. No value is printed, logged or
+passed as an argument, and `$HOME/.node/node.json` carries names only
+(`scripts/bunker-provision.sh:172-214`).
+
+`--check` against the template, on a host that has the client but no such node:
+
+```
+PASS  config — bunker.example.conf — 25 lines, KEY=VALUE only
+bunker-provision --check — project=code-factory agent=cf-node server=bunker-node-01
+  PASS  bunker_cli — /home/kara/.local/bin/bunker
+  FAIL  server — bunker-node-01 not listed by 'bunker list'
+  FAIL  agent — cf-node absent — run --apply to create it
+```
+
+`--apply` printing PASS is not evidence; `--check` is. Against the reference deployment on
+2026-11-05 the same command printed `PASS  repo — clone present (af67c3b branch main, 0 dirty)`,
+four FAILs (`node_json`, `auth_github`, `auth_duckbrain`, `harness`) and a `crier` row reading
+`401 (identity not accepted)`: the node existed and was reachable, and its identity, credentials
+and harness were still missing. Every row and the fix it implies is tabulated in
+`skills/code-factory-bunker/SKILL.md`.
+
+`TTL` is forwarded to `node-create.sh` only when an agent is actually spawned — a re-run against
+an existing agent never renews it. `WORKDIR` was removed from the surface entirely: nothing consumed
+it, and a key that cannot change behaviour does not belong in a template. The environment a node
+runs with (`.env` values, model, bind, port) is declared in `config/node.env.example` and applied
+by `scripts/node_env.py` before the harness layer starts.
+
 ## Layout
 
 ```
 docs/            DESIGN.md, PRD-code-factory.md, OPERATIONS.md, BOARD.md; audits/ holds tick evidence
 specs/           NODE.md (what a node is), ENVELOPE.md (dispatch/result), HARNESS.md (adapters)
-scripts/         node checks and provisioners: bunker-server-install.sh, project-node.sh,
-                 node-create.sh, verify-node.sh, land-node-branch.sh, lib.sh
+scripts/         node checks and provisioners: bunker-server-install.sh, bunker-provision.sh,
+                 bunker-crier-connect.sh, project-node.sh, node-create.sh, verify-node.sh, lib.sh
 scripts/harness/ install-<harness>.sh — shipped: hermes, claude-code, opencode.
                  codex, aider, goose and pi-agent are documented in specs/HARNESS.md and ship
                  no installer yet (CF-006)
@@ -85,7 +151,9 @@ clones that branch or tag (`scripts/project-node.sh` accepts the same flag direc
 reports that ref and the `--ref` flag; a repository-access failure retains the deploy-key hint for
 private repositories (CF-034).
 
-See `.coding-hermes/board/tasks.jsonl` for the work items and their acceptance criteria.
+See `.coding-hermes/board/tasks.jsonl` for the work items and their acceptance criteria. The
+ordered path from this table to one landed result — P0 through P3, each with a command as its exit
+test — is `docs/MVP-PLAN.md`; P0's exit test is the `bunker-provision.sh --check` above going green.
 
 ## Running it against your own infrastructure
 
