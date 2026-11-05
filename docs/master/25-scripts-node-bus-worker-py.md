@@ -5,7 +5,7 @@
 | Path | `/home/kara/code-factory/scripts/node-bus-worker.py` — 1289 lines [scripts/node-bus-worker.py:1] |
 | Repository | `code-factory` [scripts/node-bus-worker.py:1] |
 | Revision | `e7cf075` — the `origin/main` tip every locator below was measured against; the file's own last-touching commit is `e149d1a` (2026-11-04, "feat(bus): the node consumes its own inbox — signer, brief digest, harness, reply with corr_id, ack") [scripts/node-bus-worker.py:1289] |
-| Status | **RED — rows 1-18 of §3 measured on 2026-11-05, including a signed read returning 200 and a complete `--once` cycle (execute → reply → ack) against a crier started on this host; row 19 — the same cycle on cf-node, against the deployed bus, with the harness gateway up — is UNKNOWN because no node key exists here** |
+| Status | **RED — rows 1-18 of §3 measured on 2026-11-05, including a signed read returning 200 and a complete `--once` cycle (execute → reply → ack) against a crier started on this host; row 19 — the same cycle on cf-node, against the deployed bus, with the harness gateway up — is UNKNOWN because the deployed `--once` cycle has never been recorded, not because the key is missing: cf-node holds `~/.node/agent.key`, `crier.json` and `node.json` at mode 0600 and `node.json` names the control-host crier as its bus (measured 2026-11-05 over `bunker exec --server bunker-las-03 cf-node`), so the probe is runnable and merely unrun** |
 
 ## 1. Purpose and why it matters
 
