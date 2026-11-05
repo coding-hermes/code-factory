@@ -120,7 +120,27 @@ scripts/boardctl validate
 bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 ```
 
-- **Re-measured 2026-11-04T23:53Z at tip `3f6115e`:** 181 task rows, 366 events (max event id 365;
+- **Re-measured 2026-11-05T00:41Z at tip `84dadf3`:** 185 task rows, 372 events (max event id 371;
+  one benign duplicate id 336, owned by **CF-196**) — 63 `complete`, 9 `in_progress`, 113 `pending`,
+  no duplicate task ids. Both board files are byte-identical to their `origin/main` copies
+  (`python3 scripts/board_drift.py check --workdir . --ref origin/main` prints `RESULT: OK`,
+  185 vs 185 rows, 0 divergent ids). `scripts/boardctl validate` prints `RESULT: OK (4 warning(s))`
+  (CF-034's free-form `guard_result`/`ci_result`, the duplicate event id 336 and the headerless board)
+  and `key uniformity: 185/185 rows carry only canon keys (0 drift)`. 63/63 `complete` rows bind a
+  commit that exists and is an ancestor of `origin/main`, and 85 evidence artifact pointers resolve
+  in the tree (0 missing; the two prunable absolute scratch logs on **CF-011**/**CF-013** sit beside
+  committed artifacts on the same rows). `tests/selftest.sh` is **intermittent** at this tip: three
+  back-to-back runs printed `SELFTEST: PASS` (rc 0), `PASS` (rc 0), then `SELFTEST: FAIL (1)` on the
+  §18 arm `node-create missing-marker admitted an unverified node or rejected control` — a
+  `printf | grep -q` assertion that answers 141 on SIGPIPE under `set -uo pipefail`, the **CF-168**
+  class (which names the same shape in §7b). Read one red run as a candidate false red until it
+  repeats. The verdict-binding sweep prints `complete_rows=63 verdict_artifacts_checked=36
+  orphan_count=2`: **CF-077** (owned by pending **CF-181**) and **CF-206**, whose bundle binds
+  `dc9e0ea`, a commit the ops lane superseded with `d227eff` — so CF-181's own AC0, which asserts
+  `orphan_count=1`, no longer reproduces as written. Three sibling rows still own the structural
+  fixes for this block: **CF-081** (the hand-typed counts and the hand-typed tip label), **CF-154**
+  (the warning count does not follow from the board) and **CF-196** (duplicate event ids).
+- **Earlier snapshot, 2026-11-04T23:53Z at tip `3f6115e` (historical, not current):** 181 task rows, 366 events (max event id 365;
   one benign duplicate id 336, owned by **CF-196**) — 62 `complete`, 9 `in_progress`, 110 `pending`,
   no duplicate task ids. Both board files are byte-identical to their `origin/main` copies
   (`python3 scripts/board_drift.py check --workdir . --ref main` prints `RESULT: OK`, 181 vs 181 rows,

@@ -150,3 +150,92 @@ convention gap behind CF-074), one evidence entry on CF-153 lacks `tree_fp` whil
 carry one, and CF-032/CF-041 each carry one artifact-less entry beside artifact-bearing ones.
 Loadavg at measurement: 26.37 (1 min); sibling lanes on this host.
 
+---
+
+## Addendum 3 — 2026-11-05T00:41Z, third execution of the same tick id
+
+This tick id had already run twice (this document is the record of the second pass, and its
+DuckBrain receipt `14ef5f98-1121-4d8d-b889-fd0a9c273d88` names the first). This pass implemented
+nothing that a previous pass closed. It re-measured the **new** published tip, which neither
+earlier pass saw.
+
+Why a third sample was worth taking: the published tip moved twice while this session was
+measuring it. `3343b58` (the previous pass's verdict-bundle commit) was the tip at 00:33Z;
+the ops lane then landed `d227eff` (the CF-206 census fix, re-committed — the earlier local
+`dc9e0ea` never reached the remote) and `84dadf3` (CF-206 closure + verdict bundle). At 00:36Z
+the registered checkout read `0 0` against `origin/main` with a clean tracked tree, so the
+barrier that forced the clone transport on the previous pass had cleared.
+
+Method: a fresh `git clone` of the published remote into tick scratch, `HEAD` = `84dadf3`,
+porcelain 0. The registered checkout was **not** written to — it was dirty with four unpushed
+rows (`CF-207`–`CF-210`) and an active writer at the start of this pass, and a live sibling
+committed `d227eff` + `84dadf3` into it while this pass was running (board line counts sampled
+`185/369` at 00:32Z, `185/372` at 00:35Z — the events file grew under observation).
+
+| Check | Command | Result |
+|---|---|---|
+| board parses | `bash scripts/boardctl validate` | `RESULT: OK (4 warning(s))`, `key uniformity: 185/185 rows carry only canon keys (0 drift)` |
+| board = published | `python3 scripts/board_drift.py check --workdir . --ref origin/main` | `RESULT: OK`, `185 vs 185 rows; 0 divergent ids` |
+| line integrity | per-line `json.loads` over both files | tasks 185 parsed / 0 failures / 185 unique ids; events 372 parsed / 0 failures / max id 371 / one benign duplicate 336 (CF-196) |
+| status census | `jq` equivalent over `status` | 63 `complete`, 9 `in_progress`, 113 `pending` |
+| complete rows bind real commits | `git cat-file -e <sha>^{commit}` + `git merge-base --is-ancestor <sha> origin/main` over all 63 | 63/63 present, 63/63 ancestors of `origin/main` |
+| completion evidence resolves | artifact walk over every `detail.evidence[].artifacts` pointer | 85 pointers, **0** missing committed artifacts; 1 section reference (`CF-034` `tests/selftest.sh::clone-error-classification`, by design) |
+| verdict binding | `python3 docs/audits/cf181-verdict-binding-sweep.py` | `complete_rows=63 verdict_artifacts_checked=36 orphan_count=2` |
+| arms | `bash docs/audits/cf198-section-mapping.sh` | `arms_plan=42 arms_tree=42`, `RESULT: OK` |
+| PRD drift | `bash docs/audits/cf099-prd-drift-probe.sh` | `OK: milestone, plan snapshot and layer arms agree at 84dadf3` |
+| standing gate | `bash tests/selftest.sh`, three back-to-back runs | PASS (rc 0) / PASS (rc 0) / **FAIL (1)** — intermittent, see below |
+
+### Finding 1 — the standing gate is intermittent at the published tip
+
+Three consecutive runs of `bash tests/selftest.sh` at `84dadf3` (loadavg 30.5, 1 min) printed
+`SELFTEST: PASS`, `SELFTEST: PASS`, `SELFTEST: FAIL (1)`. The failing arm is §18:
+
+```
+  FAIL  node-create missing-marker admitted an unverified node or rejected control (exit 1)
+```
+
+That arm asserts through `printf '%s\n' "$out" | grep -q …` inside a `{ … }` condition
+(`tests/selftest.sh:890-892`). Under the suite's `set -uo pipefail`, a `grep -q` that matches and
+exits early can hand the writer a SIGPIPE and the pipeline status 141 — so a PASSING condition
+grades as a FAIL. This is exactly the class already filed as **CF-168** (pending), which names the
+same shape in §7b. **No new row was filed**: attaching a second id to a class CF-168 owns would
+split its closure. The concrete new datum for CF-168 is that the hazard is not confined to §7b —
+§18 is a second site, and it fires on a loaded host.
+
+Operational consequence, recorded here because the block above quotes this gate: a single red run
+of `tests/selftest.sh` on this tree is a candidate false red until it repeats.
+
+### Finding 2 — CF-181's acceptance criterion no longer reproduces
+
+The sweep now reports `orphan_count=2`, and the second orphan is new since the previous pass:
+
+```
+CF-077 run=410022a2 artifact=…/410022a2/verdict.json commit=1dfb58b8aa passed=True
+CF-206 run=18ef167d artifact=…/18ef167d/verdict.json commit=dc9e0eafa1 passed=True
+```
+
+`CF-206` closed as `complete` with `commit_hash=d227eff`, but its verdict bundle binds `dc9e0ea`,
+the local commit the ops lane discarded when it re-landed the same patch onto the published tip.
+`dc9e0ea` is not an ancestor of `origin/main`, so the closure evidence points at a commit no clone
+has — the precise failure mode CF-181 exists to catch.
+
+Pending **CF-181**'s AC0 asserts that the sweep "prints `verdict_artifacts_checked=21` … and
+`orphan_count=1`". Both literals are now false (`36`, `2`). Not repaired here: rewriting another
+live row's acceptance criteria is a design change, not a sync-lane bookkeeping fix, and CF-181's
+own fixer must re-measure anyway. Recorded so that fixer is not surprised by a criterion that
+cannot go green.
+
+### Drift found and fixed by this addendum
+
+`docs/BOARD.md` §"Current measured state" carried `3f6115e` / 181 rows / 366 events / 62 `complete`
+as its newest entry while the published tip was `84dadf3` / 185 / 372 / 63. A fresh snapshot for
+`84dadf3` was added above it and the `3f6115e` entry was relabelled "Earlier snapshot … (historical,
+not current)". No earlier bullet was edited. **No board event was appended**: the refreshed block
+cites the event count (372) and an `audit` event in the same commit would move that count past the
+number the block just published.
+
+Known residual, unchanged and already owned: 35 of 63 `complete` rows carry no `probe` field
+(CF-074 class); `CF-011`/`CF-013` each keep one absolute `/home/kara/.hermes/cache/scratch/…` log
+pointer that no longer exists beside a committed artifact.
+
+
