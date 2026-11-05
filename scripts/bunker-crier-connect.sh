@@ -42,14 +42,36 @@ check() {
     *)   bad "bus_health" "$URL/health -> ${health:-000} (bus not answering)" ;;
   esac
 
+  # A hardened bus answers 401 to an unsigned GET by design, so an unsigned probe cannot
+  # distinguish "not registered" from "not signed". When the node holds its key and bearer,
+  # probe FROM the node with the worker, which signs; only fall back to the plain read when it
+  # cannot, and then 401 is a WARN with the reason rather than a failure.
+  local via_node=""
+  if [ -x "$(command -v bunker 2>/dev/null)" ] && [ -n "$SERVER" ]; then
+    via_node=$(timeout 45 bunker exec --server "$SERVER" "$AGENT" -- bash -lc \
+      'if [ -s "$HOME/.node/agent.key" ] && [ -s "$HOME/.node/auth/crier.token" ] && [ -f "$HOME/node-bus-worker.py" ]; then CRIER_URL='"$URL"' python3 "$HOME/node-bus-worker.py" --check 2>&1 | grep -E "PASS  inbox|FAIL  inbox" | head -1; fi' 2>/dev/null || true)
+  fi
+  if [ -n "$via_node" ]; then
+    case "$via_node" in
+      *"PASS  inbox"*) ok "inbox" "signed read accepted on the node: $via_node" ;;
+      *)               bad "inbox" "the node's own signed probe failed: $via_node" ;;
+    esac
+    case "$via_node" in *"PASS  inbox"*) ;; *) : ;; esac
+    if [ "${FAILED:-0}" -gt 0 ]; then
+      say ""
+      say "CRIER: NOT CONNECTED (${FAILED})"
+      return 1
+    fi
+  else
   code=$(probe)
   case "$code" in
     200) ok "inbox" "$URL/agents/$AGENT/inbox -> 200" ;;
-    401) bad "inbox" "$URL/agents/$AGENT/inbox -> 401 (auth or per-agent signature missing — crier checks the signer BEFORE it looks the agent up, so this is not proof the id is unknown)" ;;
+    401) warn "inbox" "$URL/agents/$AGENT/inbox -> 401 — expected for an unsigned read (crier checks the signer before it looks the agent up); the signed probe needs agent.key + crier.token on the node" ;;
     403) bad "inbox" "$URL/agents/$AGENT/inbox -> 403 (owner mismatch or guard refused)" ;;
     404) bad "inbox" "$URL/agents/$AGENT/inbox -> 404 (agent is genuinely not registered on the bus)" ;;
     *)   bad "inbox" "$URL/agents/$AGENT/inbox -> $code" ;;
   esac
+  fi
 
   # the node-side identity must agree with the host we just probed
   local b json

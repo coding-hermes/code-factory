@@ -535,6 +535,10 @@ done
 [ -n "$MODE" ] || usage 2
 case "$MODE" in
   check) check ;;
-  apply) check >/dev/null 2>&1 || note "preflight rows were not all green; --apply repairs what it can"; apply ;;
+  apply)
+    # Run the preflight in a SUBSHELL: its bad() rows must not land in this run's FAILED
+    # counter, or a repaired preflight still reports as thirteen failures at the end.
+    ( check >/dev/null 2>&1 ) || note "preflight rows were not all green; --apply repairs what it can"
+    apply ;;
   destroy) destroy ;;
 esac
