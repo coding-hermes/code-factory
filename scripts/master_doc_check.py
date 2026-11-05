@@ -10,6 +10,7 @@ VERIFIED without locators, or states a fact that is not in the ledger.
 
 Exit 0 = pass, 1 = at least one error (or a warning under --strict).
 """
+
 import argparse
 import pathlib
 import re
@@ -32,9 +33,13 @@ REQUIRED_SECTIONS = [
 # The leading lookbehind must allow a DOT: `.coding-hermes/board/tasks.jsonl:7` is a real
 # locator, and a \b before the character class silently dropped the dot and reported a
 # missing file — a checker bug that failed a correct document.
-LOCATOR = re.compile(r"(?<![\w/.-])([\w./-]*\.(?:py|sh|md|go|yaml|yml|jsonl|json|toml)):(\d+)")
+LOCATOR = re.compile(
+    r"(?<![\w/.-])([\w./-]*\.(?:py|sh|md|go|yaml|yml|jsonl|json|toml)):(\d+)"
+)
 FACT_REF = re.compile(r"\bfact:\s*(FACT-\d+)\b")
-STATUS = re.compile(r"\|\s*Status\s*\|\s*\*\*(VERIFIED|UNVERIFIED|FAILING|RED)[^*]*\*\*")
+STATUS = re.compile(
+    r"\|\s*Status\s*\|\s*\*\*(VERIFIED|UNVERIFIED|FAILING|RED)[^*]*\*\*"
+)
 
 
 def facts_ledger(root: pathlib.Path):
@@ -55,7 +60,9 @@ def check(path: pathlib.Path, repo: pathlib.Path, facts: dict):
     errs, warns = [], []
 
     # 1. structure: every required section present, in order-independent form
-    h2 = [m.group(1).strip() for m in re.finditer(r"^##\s+(?:\d+\.\s*)?(.+)$", text, re.M)]
+    h2 = [
+        m.group(1).strip() for m in re.finditer(r"^##\s+(?:\d+\.\s*)?(.+)$", text, re.M)
+    ]
     for want in REQUIRED_SECTIONS:
         if not any(want.lower() in h.lower() for h in h2):
             errs.append("missing section: %s" % want)
@@ -64,8 +71,13 @@ def check(path: pathlib.Path, repo: pathlib.Path, facts: dict):
     locs = LOCATOR.findall(text)
     for fname, line in locs:
         base = pathlib.Path(fname).name
-        cand = [repo / fname, repo / "specs" / base, repo / "docs" / base,
-                repo / "scripts" / base, pathlib.Path(fname)]
+        cand = [
+            repo / fname,
+            repo / "specs" / base,
+            repo / "docs" / base,
+            repo / "scripts" / base,
+            pathlib.Path(fname),
+        ]
         f = next((c for c in cand if c.is_file()), None)
         if f is None:
             errs.append("locator names no file: %s:%s" % (fname, line))
@@ -76,7 +88,9 @@ def check(path: pathlib.Path, repo: pathlib.Path, facts: dict):
             errs.append("locator file unreadable: %s" % fname)
             continue
         if int(line) > n:
-            errs.append("locator past EOF: %s:%s (file has %d lines)" % (fname, line, n))
+            errs.append(
+                "locator past EOF: %s:%s (file has %d lines)" % (fname, line, n)
+            )
 
     # 3. VERIFIED is earned: it needs locators and every cited fact must exist
     m = STATUS.search(text)
@@ -93,7 +107,11 @@ def check(path: pathlib.Path, repo: pathlib.Path, facts: dict):
 
     # 4. the field contract's hard rule: an empty required field is the finding, not a blank
     for heading in ("Failure modes", "Metrics emitted", "Log lines"):
-        block = re.search(r"^##\s+(?:\d+\.\s*)?%s.*?(?=^##\s|\Z)" % re.escape(heading), text, re.M | re.S)
+        block = re.search(
+            r"^##\s+(?:\d+\.\s*)?%s.*?(?=^##\s|\Z)" % re.escape(heading),
+            text,
+            re.M | re.S,
+        )
         if block:
             body = re.sub(r"^##.*$", "", block.group(0), flags=re.M).strip()
             if len(body) < 40:
@@ -119,26 +137,65 @@ def main():
     facts = facts_ledger(root)
     only = tuple(x.strip() for x in a.only.split(",") if x.strip())
 
-    files = [f for f in sorted(root.glob("[0-9][0-9]-*.md")) if not f.name.startswith("00-INDEX")]
+    files = [
+        f
+        for f in sorted(root.glob("[0-9][0-9]-*.md"))
+        if not f.name.startswith("00-INDEX")
+    ]
     if only:
         files = [f for f in files if f.name.startswith(only)]
     total_err = total_warn = 0
     verified = 0
+    computed = {}
     for f in files:
         status, errs, warns = check(f, repo, facts)
+        computed[f.name] = status
         verified += status == "VERIFIED"
         total_err += len(errs)
         total_warn += len(warns)
         if errs or warns:
-            print("%-46s %-10s %d error(s) %d warning(s)" % (f.name, status, len(errs), len(warns)))
+            print(
+                "%-46s %-10s %d error(s) %d warning(s)"
+                % (f.name, status, len(errs), len(warns))
+            )
             for e in errs:
                 print("   FAIL  %s" % e)
             for w in warns:
                 print("   WARN  %s" % w)
         else:
             print("%-46s %-10s ok" % (f.name, status))
-    print("\n%d module(s): %d VERIFIED, %d error(s), %d warning(s), %d fact(s) in the ledger"
-          % (len(files), verified, total_err, total_warn, len(facts)))
+
+    # The index is part of the document, not a summary of it: a status column that disagrees with the
+    # page it links to is the same lie as a page that stamps VERIFIED without earning it, and the gate
+    # used to accept it because it never read the index at all.
+    index = root / "00-INDEX.md"
+    if index.exists() and not only:
+        text = index.read_text(encoding="utf-8", errors="replace")
+        rows = re.findall(
+            r"\[`[^`]+`\]\((\d\d-[^)]+\.md)\)\s*\|\s*[^|]*\|\s*([A-Z]+)\s*\|", text
+        )
+        seen = set()
+        for name, claimed in rows:
+            seen.add(name)
+            actual = computed.get(name)
+            if actual and actual != claimed:
+                total_err += 1
+                print(
+                    "   FAIL  00-INDEX.md claims %s is %s; this gate computed %s"
+                    % (name, claimed, actual)
+                )
+        unlisted = sorted(set(computed) - seen)
+        if unlisted:
+            total_err += 1
+            print(
+                "   FAIL  00-INDEX.md has no row for %d module(s): %s"
+                % (len(unlisted), ", ".join(unlisted[:4]))
+            )
+
+    print(
+        "\n%d module(s): %d VERIFIED, %d error(s), %d warning(s), %d fact(s) in the ledger"
+        % (len(files), verified, total_err, total_warn, len(facts))
+    )
     bad = total_err or (a.strict and total_warn)
     print("MASTER-DOC: %s" % ("FAIL" if bad else "PASS"))
     return 1 if bad else 0

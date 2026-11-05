@@ -5,15 +5,15 @@ not a section that is merely unwritten. A section turns green by running a comma
 
 | # | Module | Repo | Status |
 |---|---|---|---|
-| 1 | [`scripts/add_family_lanes.py`](01-scripts-add-family-lanes-py.md) | code-factory | RED |
-| 2 | [`scripts/board_drift.py`](02-scripts-board-drift-py.md) | code-factory | RED |
+| 1 | [`scripts/add_family_lanes.py`](01-scripts-add-family-lanes-py.md) | code-factory | VERIFIED |
+| 2 | [`scripts/board_drift.py`](02-scripts-board-drift-py.md) | code-factory | VERIFIED |
 | 3 | [`scripts/board_lock.py`](03-scripts-board-lock-py.md) | code-factory | VERIFIED |
 | 4 | [`scripts/bunker-crier-connect.sh`](04-scripts-bunker-crier-connect-sh.md) | code-factory | VERIFIED |
 | 5 | [`scripts/bunker-provision.sh`](05-scripts-bunker-provision-sh.md) | code-factory | VERIFIED |
-| 6 | [`scripts/bunker-server-install.sh`](06-scripts-bunker-server-install-sh.md) | code-factory | RED |
-| 7 | [`scripts/bunker_config_gen.py`](07-scripts-bunker-config-gen-py.md) | code-factory | RED |
-| 8 | [`scripts/check_scan_scope.py`](08-scripts-check-scan-scope-py.md) | code-factory | RED |
-| 9 | [`scripts/clone_lane.py`](09-scripts-clone-lane-py.md) | code-factory | RED |
+| 6 | [`scripts/bunker-server-install.sh`](06-scripts-bunker-server-install-sh.md) | code-factory | VERIFIED |
+| 7 | [`scripts/bunker_config_gen.py`](07-scripts-bunker-config-gen-py.md) | code-factory | VERIFIED |
+| 8 | [`scripts/check_scan_scope.py`](08-scripts-check-scan-scope-py.md) | code-factory | VERIFIED |
+| 9 | [`scripts/clone_lane.py`](09-scripts-clone-lane-py.md) | code-factory | VERIFIED |
 | 10 | [`scripts/configure_family.py`](10-scripts-configure-family-py.md) | code-factory | VERIFIED |
 | 11 | [`scripts/disk_floor.py`](11-scripts-disk-floor-py.md) | code-factory | VERIFIED |
 | 12 | [`scripts/github-app-refresh.sh`](12-scripts-github-app-refresh-sh.md) | code-factory | VERIFIED |
@@ -54,7 +54,7 @@ not a section that is merely unwritten. A section turns green by running a comma
 
 Regenerated from the module files by `scripts/gen_nasa_handbook.py`'s census — never hand-edited.
 
-- Modules: **43** (33 VERIFIED, 10 not)
+- Modules: **44** (37 VERIFIED, 7 not)
 - Modules with a verification section: **33**
 - Modules that emit metrics or state why not: **40** (the rest say `none` with a reason)
 - Modules whose §2 names both sides of a service contract: see each §2c
