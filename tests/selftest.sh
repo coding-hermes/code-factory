@@ -2333,7 +2333,7 @@ wt_before=$(git -C "$tmpd/wd" worktree list | wc -l)
 cf213 "dry run" 0 "LAND: DRY-RUN — 0 commands run, nothing merged or pushed, no ref moved" \
   --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$node2" --gate-cmd 'test -f node.txt' --dry-run
 if printf '%s\n' "$out" | grep -Fq "  git -C $tmpd/wd merge --ff-only $node2" \
-  && printf '%s\n' "$out" | grep -Fq "  git -C $tmpd/wd push origin HEAD:refs/heads/main" \
+  && printf '%s\n' "$out" | grep -Fq "  git -C $tmpd/wd push origin $node2:refs/heads/main" \
   && [ "$(git -C "$tmpd/wd" rev-parse HEAD)" = "$base" ] \
   && [ "$(git -C "$tmpd/origin.git" rev-parse refs/heads/main)" = "$sibling" ] \
   && [ "$(git -C "$tmpd/wd" worktree list | wc -l)" = "$wt_before" ]; then
@@ -2348,8 +2348,9 @@ cf213 "landing" 0 "  PASS  landed — $node2 is an ancestor of origin/main" \
   --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$node2" \
   --gate-cmd 'test -f node.txt && grep -q "node work" node.txt'
 if printf '%s\n' "$out" | grep -Fq "  PASS  gate — 'test -f node.txt" \
-  && printf '%s\n' "$out" | grep -Fq "LANDED: node/crier/fixture @ $node2 in origin/main"; then
-  say "  PASS  the gate row and the LANDED line name the node commit"
+  && printf '%s\n' "$out" | grep -Fq "LANDED: node/crier/fixture @ $node2 in origin/main" \
+  && printf '%s\n' "$out" | grep -Fq "  PASS  push — origin refs/heads/main accepted $node2 (this run's merge tip)"; then
+  say "  PASS  the gate row and the LANDED line name the node commit, and the push row names the sha it pushed"
 else
   say "  FAIL  the landing did not report its gate row or its LANDED line"; fails=$((fails+1))
   printf '%s\n' "$out" | sed 's/^/    | /'
@@ -2382,7 +2383,7 @@ git -C "$tmpd/wd" push -q origin node/crier/fixture:refs/heads/node/crier/fixtur
 git -C "$tmpd/wd" checkout -q main
 printf '#!/bin/sh\necho "rejected by fixture hook" >&2\nexit 1\n' > "$tmpd/origin.git/hooks/pre-receive"
 chmod +x "$tmpd/origin.git/hooks/pre-receive"
-cf213 "refused push" 1 "  FAIL  push — git push origin HEAD:refs/heads/main failed — remote: rejected by fixture hook" \
+cf213 "refused push" 1 "  FAIL  push — git push origin ${node3}:refs/heads/main failed — remote: rejected by fixture hook" \
   --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$node3"
 if printf '%s\n' "$out" | grep -Fq "merged locally, NOT landed" \
   && ! printf '%s\n' "$out" | grep -q '^  PASS  landed' \
@@ -2393,6 +2394,95 @@ else
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 rm -f "$tmpd/origin.git/hooks/pre-receive"
+
+# k/l/m (CF-302). The push used to be `HEAD:refs/heads/<main>`, and under --no-ff HEAD is a merge
+# commit whose first parent is the control clone's main — so any commit sitting on local main but
+# not on origin/main rode into remote history. The guard is the only thing stopping that; these legs
+# prove it refuses, that the refusal is a real refusal (nothing merged, nothing pushed, a fresh clone
+# of the remote does not have the stray), and that a clean --no-ff lands by naming an explicit sha.
+n_src="$tmpd/noff-src"; n_origin="$tmpd/noff-origin.git"; n_wd="$tmpd/noff-wd"
+git init -q -b main "$n_src"
+printf 'base\n' > "$n_src/README"
+git -C "$n_src" add README && git -C "$n_src" commit -qm base
+git clone -q --bare "$n_src" "$n_origin"
+git clone -q "$n_origin" "$n_wd"
+n_base=$(git -C "$n_wd" rev-parse HEAD)
+git -C "$n_wd" checkout -q -b node/crier/noff
+printf 'no-ff work\n' > "$n_wd/noff.txt"
+git -C "$n_wd" add noff.txt && git -C "$n_wd" commit -qm "node: no-ff work"
+n_node=$(git -C "$n_wd" rev-parse HEAD)
+git -C "$n_wd" push -q origin node/crier/noff:refs/heads/node/crier/noff
+
+# k. --no-ff with a commit that exists nowhere but local main refuses before it merges anything
+git -C "$n_wd" checkout -q main
+printf 'stray\n' > "$n_wd/stray.txt"
+git -C "$n_wd" add stray.txt && git -C "$n_wd" commit -qm "control: stray"
+stray=$(git -C "$n_wd" rev-parse HEAD)
+cf213 "no-ff over a local-only main" 1 "  FAIL  no_ff_local — main at ${stray:0:12} is ahead of origin/main ${n_base:0:12} — 1 local commit(s) on main are not on origin/main (${stray:0:12}) and a --no-ff merge would publish them on its push; push or reset main, or land those commits first" \
+  --workdir "$n_wd" --branch node/crier/noff --commit "$n_node" --no-ff
+if [ "$(git -C "$n_origin" rev-parse refs/heads/main)" = "$n_base" ] \
+  && [ "$(git -C "$n_wd" rev-parse HEAD)" = "$stray" ] \
+  && [ ! -e "$n_wd/.git/MERGE_HEAD" ]; then
+  say "  PASS  no_ff_local merged nothing and moved no ref — origin/main ${n_base:0:12}, local main ${stray:0:12}"
+else
+  say "  FAIL  no_ff_local merged or pushed before refusing"; fails=$((fails+1))
+fi
+git clone -q "$n_origin" "$tmpd/noff-stray-clone"
+if git -C "$tmpd/noff-stray-clone" cat-file -e "$stray^{commit}" 2>/dev/null; then
+  say "  FAIL  a fresh clone of the remote contains the stray commit ${stray:0:12}"; fails=$((fails+1))
+else
+  say "  PASS  a fresh clone of the remote does not contain the stray commit ${stray:0:12}"
+fi
+
+# l. the same landing with local main == origin/main: --no-ff lands, and every claim names the sha
+# it pushed. The remedy the refusal names (reset main onto the remote) is run for real, as in leg e.
+git -C "$n_wd" reset -q --hard origin/main
+cf213 "dry run --no-ff" 0 "LAND: DRY-RUN — 0 commands run, nothing merged or pushed, no ref moved" \
+  --workdir "$n_wd" --branch node/crier/noff --commit "$n_node" --no-ff --dry-run
+if printf '%s\n' "$out" | grep -Fq "  merge_sha=\$(git -C $n_wd rev-parse --verify HEAD)" \
+  && printf '%s\n' "$out" | grep -Fq "  git -C $n_wd push origin \$merge_sha:refs/heads/main" \
+  && [ "$(git -C "$n_wd" rev-parse HEAD)" = "$n_base" ] \
+  && [ "$(git -C "$n_origin" rev-parse refs/heads/main)" = "$n_base" ]; then
+  say "  PASS  the --no-ff dry run named the capture and the explicit-sha push; no ref moved"
+else
+  say "  FAIL  the --no-ff dry run did not name the explicit-sha push or moved a ref"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+cf213 "no-ff landing" 0 "  PASS  landed — $n_node is an ancestor of origin/main" \
+  --workdir "$n_wd" --branch node/crier/noff --commit "$n_node" --no-ff
+n_merge=$(git -C "$n_wd" rev-parse HEAD)
+if printf '%s\n' "$out" | grep -Fq "  PASS  push — origin refs/heads/main accepted $n_merge (this run's merge tip)" \
+  && printf '%s\n' "$out" | grep -Fq "LANDED: node/crier/noff @ $n_node in origin/main (pushed $n_merge, tip $n_merge)" \
+  && [ "$(git -C "$n_wd" rev-parse HEAD^2)" = "$n_node" ] \
+  && [ "$(git -C "$n_origin" rev-parse refs/heads/main)" = "$n_merge" ]; then
+  say "  PASS  the push row and the LANDED line named ${n_merge:0:12}, and that is the remote's tip"
+else
+  say "  FAIL  the --no-ff landing did not name the sha it pushed, or pushed another object"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+git clone -q "$n_origin" "$tmpd/noff-verify"
+if git -C "$tmpd/noff-verify" cat-file -e "$n_merge^{commit}" 2>/dev/null \
+  && git -C "$tmpd/noff-verify" merge-base --is-ancestor "$n_node" HEAD \
+  && [ -f "$tmpd/noff-verify/noff.txt" ]; then
+  say "  PASS  a fresh clone of the remote contains the merge commit ${n_merge:0:12} and the node's file"
+else
+  say "  FAIL  the remote does not contain the --no-ff merge commit"; fails=$((fails+1))
+fi
+
+# m. the negative direction: the stray commit is in no remote ref at all. Remove the guard and this
+# arm goes red — with `HEAD:refs/heads/main` the stray was in origin's history at the landed tip.
+n_all=$(git -C "$n_origin" rev-list --all)
+# `case`, not `printf | grep -q`: under `set -o pipefail` an early-exiting grep can turn a match
+# into a failed pipeline, which would make this arm report a false PASS.
+stray_on_remote=0
+case "$n_all" in *"$stray"*) stray_on_remote=1 ;; esac
+if [ "$stray_on_remote" -eq 1 ]; then
+  say "  FAIL  the stray commit ${stray:0:12} is in the remote's history — the guard did not hold"; fails=$((fails+1))
+elif git -C "$tmpd/noff-verify" merge-base --is-ancestor "$stray" HEAD 2>/dev/null; then
+  say "  FAIL  the stray commit ${stray:0:12} is an ancestor of the landed tip"; fails=$((fails+1))
+else
+  say "  PASS  no ref in the remote ($(printf '%s\n' "$n_all" | wc -l | tr -d ' ') commits reachable from --all) carries ${stray:0:12}"
+fi
 unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
 unset -f cf213
 rm -rf "$tmpd"

@@ -13,15 +13,22 @@
 #   - <commit> is not a commit in this clone, or is not reachable from <branch>
 #   - <branch> is not a descendant of <remote>/<main> (rebase it, do not merge it)
 #   - --ff-only (the default) and <main> is not an ancestor of <commit>
+#   - --no-ff and the local <main> is not <remote>/<main>: the merge commit's first parent is
+#     that local tip, so pushing it would publish commits the node never made — row
+#     `no_ff_local` names how many, which, and the remedy; nothing is merged or pushed
 #   - the project gate exits nonzero on the node's own tree
 #   - the merge itself fails (a conflict aborts the merge and names the reason)
-# On success: fetch both refs, merge, push, re-fetch, and PROVE `git merge-base --is-ancestor <sha>
-# origin/<main>`. The PASS row belongs to that proof, never to the merge: a push that did
-# not land the commit prints FAIL and exits nonzero.
+# On success: fetch both refs, merge, capture the merge's tip as `merge_sha`, push
+# `<merge_sha>:refs/heads/<main>` — an explicit object, never `HEAD` — re-fetch, and PROVE
+# `git merge-base --is-ancestor <sha> origin/<main>`. The PASS row belongs to that proof, never
+# to the merge: a push that did not land the commit prints FAIL and exits nonzero. The `push`
+# row and the closing LANDED line both name the sha this run pushed, so the claim and the
+# object cannot drift apart.
 #
 # Idempotent: a commit already contained in <remote>/<main> is reported as landed, with no
 # merge and no push. --dry-run runs every read-only check, prints the exact commands it
-# would run, and changes nothing (no fetch, no gate worktree, no merge, no push).
+# would run — including the explicit-sha push, which on --no-ff can only be named after the
+# merge creates it — and changes nothing (no fetch, no gate worktree, no merge, no push).
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
@@ -191,15 +198,33 @@ if [ "$FF_ONLY" -eq 1 ] && ! git -C "$TOP" merge-base --is-ancestor "$head_sha" 
   refuse ff_only "$MAIN at ${head_sha:0:12} is not an ancestor of $commit_sha ($ahead local commit(s) on $MAIN are not in the branch) — not fast-forwardable; push or reset $MAIN, or pass --no-ff"
 fi
 
+# --no-ff exists to record a merge, not to widen what is published: the merge commit's first
+# parent is this local tip, so every commit that sits on the control clone's $MAIN but not on
+# $REMOTE/$MAIN rides into remote history on the push below. `--ff-only` refuses that case; this
+# is the same refusal for the other door, taken before anything is merged or pushed.
+if [ "$FF_ONLY" -eq 0 ] && [ "$head_sha" != "$main_sha" ]; then
+  strays=$(git -C "$TOP" rev-list "$main_sha..$head_sha" 2>/dev/null || true)
+  n=0
+  [ -n "$strays" ] && n=$(printf '%s\n' "$strays" | wc -l | tr -d ' ')
+  if [ "$n" -eq 0 ]; then
+    refuse no_ff_local "$MAIN at ${head_sha:0:12} has not caught up with $REMOTE/$MAIN ${main_sha:0:12} — 0 local commit(s) on $MAIN are missing from $REMOTE/$MAIN, but a --no-ff merge would start from a stale $MAIN and the push could not fast-forward the remote; fast-forward or reset $MAIN onto $REMOTE/$MAIN first"
+  fi
+  shorts=$(printf '%s\n' "$strays" | awk 'NR<=5 {printf "%s%s", sep, substr($0,1,12); sep=", "}')
+  more=""; [ "$n" -gt 5 ] && more=" (+$((n-5)) more)"
+  refuse no_ff_local "$MAIN at ${head_sha:0:12} is ahead of $REMOTE/$MAIN ${main_sha:0:12} — $n local commit(s) on $MAIN are not on $REMOTE/$MAIN (${shorts}${more}) and a --no-ff merge would publish them on its push; push or reset $MAIN, or land those commits first"
+fi
+
 if [ "$DRY" -eq 1 ]; then
   say ""
   say "dry-run: would run:"
   if [ "$FF_ONLY" -eq 1 ]; then
     say "  git -C $TOP merge --ff-only $commit_sha"
+    say "  git -C $TOP push $REMOTE $commit_sha:refs/heads/$MAIN   # an explicit object, never HEAD"
   else
     say "  git -C $TOP merge --no-ff -m 'merge: land $BRANCH at ${commit_sha:0:12} — the result envelope named this commit' $commit_sha"
+    say "  merge_sha=\$(git -C $TOP rev-parse --verify HEAD)   # the merge commit --no-ff just created"
+    say "  git -C $TOP push $REMOTE \$merge_sha:refs/heads/$MAIN   # an explicit object, never HEAD"
   fi
-  say "  git -C $TOP push $REMOTE HEAD:refs/heads/$MAIN"
   say "  git -C $TOP fetch $REMOTE +refs/heads/$MAIN:$MAIN_REF"
   say "  git -C $TOP merge-base --is-ancestor $commit_sha $MAIN_REF"
   say ""
@@ -226,14 +251,24 @@ else
 fi
 rm -f "$mergelog"
 
+# The object this run publishes. It is read back from the merge that just ran here, so the push
+# below names it explicitly instead of trusting whatever HEAD happens to be when the push starts.
+merge_sha=$(git -C "$TOP" rev-parse --verify HEAD 2>/dev/null || true)
+[ -n "$merge_sha" ] || refuse merge "cannot resolve HEAD in $TOP after the merge — nothing was pushed"
+if [ "$FF_ONLY" -eq 1 ] && [ "$merge_sha" != "$commit_sha" ]; then
+  refuse merge "the fast-forward left $MAIN at ${merge_sha:0:12}, not the envelope's $commit_sha — refusing to push a commit this run did not validate"
+fi
+
 # --- push ----------------------------------------------------------------------------------
-if ! push_out=$(git -C "$TOP" push --quiet "$REMOTE" "HEAD:refs/heads/$MAIN" 2>&1); then
-  bad push "git push $REMOTE HEAD:refs/heads/$MAIN failed — $(first_line "$push_out"); local $MAIN is now $(git -C "$TOP" rev-parse --short HEAD) and $REMOTE/$MAIN was not updated"
+# `<sha>:refs/heads/<main>` — never `HEAD`: a refspec of HEAD publishes whatever the checkout
+# points at, which is how a --no-ff landing used to carry local-only commits to the remote.
+if ! push_out=$(git -C "$TOP" push --quiet "$REMOTE" "$merge_sha:refs/heads/$MAIN" 2>&1); then
+  bad push "git push $REMOTE $merge_sha:refs/heads/$MAIN failed — $(first_line "$push_out"); local $MAIN is now ${merge_sha:0:12} and $REMOTE/$MAIN was not updated"
   say ""
   say "LAND: FAIL ($FAILED) — merged locally, NOT landed"
   exit 1
 fi
-ok push "$REMOTE refs/heads/$MAIN accepted $(git -C "$TOP" rev-parse --short HEAD)"
+ok push "$REMOTE refs/heads/$MAIN accepted $merge_sha (this run's merge tip)"
 
 # --- prove it ------------------------------------------------------------------------------
 # The push is a claim; the ancestry test against the re-fetched remote is the evidence.
@@ -253,7 +288,7 @@ fi
 
 say ""
 if [ "$FAILED" -eq 0 ]; then
-  say "LANDED: $BRANCH @ $commit_sha in $REMOTE/$MAIN (tip $(git -C "$TOP" rev-parse --short "$MAIN_REF"))"
+  say "LANDED: $BRANCH @ $commit_sha in $REMOTE/$MAIN (pushed $merge_sha, tip ${remote_tip:-unresolved})"
   exit 0
 fi
 say "LAND: FAIL ($FAILED)"
