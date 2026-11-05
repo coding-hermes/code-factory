@@ -18,3 +18,7 @@ key*
 .gitreins/verdicts/
 .gitreins/quality.json
 .coding-hermes/board/.lock
+
+# Python bytecode, kept out of every checkout including nodes
+__pycache__/
+*.pyc
