@@ -9,7 +9,7 @@ A module section may only cite a fact that exists here (`fact: FACT-nn`), and
 
 | id | claim | how measured | measured at | confidence |
 |---|---|---|---|---|
-| FACT-01 | The Hermes foreman runs on the project's bunker node, never on the control host | specs/HARNESS-MATRIX.md I1; owner correction 2026-11-05, twice | 2026-11-05 | told-by-operator |
+| FACT-01 | The Hermes foreman runs on the project's bunker node; **some projects still run on the control host** (the rule is the target topology, not a measured fact about every project today) | specs/HARNESS-MATRIX.md I1; owner 2026-11-05, session `20261104_135646_4f6de1` msg 6579783: "ther are some projects that we still run on the control host" | 2026-11-05 | told-by-operator |
 | FACT-02 | One bunker serves one project; every lane of that project enters it | specs/HARNESS-MATRIX.md I1; topology sheet 2.2 | 2026-11-05 | told-by-operator |
 | FACT-03 | crier verifies a per-agent ed25519 signature BEFORE it looks the agent up, so an unsigned read answers 401 by design | crier internal/registry/agentsig.go; measured ladder: no bearer 401 / wrong bearer 401 / bearer only 401 / bearer+key 200 on cf-node | 2026-11-05 | measured |
 | FACT-04 | A node's inbox read is 200 with a valid key+bearer | `python3 ~/node-bus-worker.py --check` on cf-node → "inbox — GET /agents/cf-node/inbox/stats -> 200" | 2026-11-05 | measured |

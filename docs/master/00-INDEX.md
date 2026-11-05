@@ -48,12 +48,14 @@ not a section that is merely unwritten. A section turns green by running a comma
 | 41 | [`specs/FLEET-MEMORY.md`](41-specs-fleet-memory-md.md) | code-factory | RED |
 | 42 | [`specs/TRACE.md`](42-specs-trace-md.md) | code-factory | RED |
 | 43 | [`specs/HARNESS-MEMORY.md`](43-specs-harness-memory-md.md) | code-factory | RED |
+| 44 | [`scripts/master_doc_*.py`](44-doc-pipeline.md) | code-factory | VERIFIED |
 
 ## Counts
 
-- Modules in skeleton: **40**
-- Modules with a verification command: **0**
-- Modules emitting metrics: **0**
-- Modules with a both-sided service contract: **0**
+Regenerated from the module files by `scripts/gen_nasa_handbook.py`'s census — never hand-edited.
 
-The zeros are the finding. They are what the fill pass must move, one command at a time.
+- Modules: **43** (33 VERIFIED, 10 not)
+- Modules with a verification section: **33**
+- Modules that emit metrics or state why not: **40** (the rest say `none` with a reason)
+- Modules whose §2 names both sides of a service contract: see each §2c
+

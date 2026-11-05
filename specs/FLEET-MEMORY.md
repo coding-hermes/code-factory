@@ -14,14 +14,29 @@ transcripts by hand.
 A run that is not written down did not happen as far as the fleet is concerned. Today the fleet's
 memory of a node run is the node's own scrollback, which dies with the container.
 
-## 2. Why not one namespace
+## 2. One namespace, as the operator specified — and what currently blocks it
 
-The obvious design — every node writes to one `factory` namespace — fails for one measured reason:
-DuckBrain's token is not namespace-scoped today (CF-208: the same token returns 200 for
-`code-factory` *and* `tatara`). A single shared namespace would therefore let any node read every
-project's work, including the security projects. Isolation has to come first, then aggregation.
+The design target is the operator's: **all factory nodes write to ONE namespace**, with the project and
+the ISO week carried in the key, so the control host can ask "what happened across the fleet last week"
+in a single query (owner, session `20261104_135659_747f8c` msg 6637174: *"all factory nodes write to the
+same namespace but different tables per project and might be different tables per week per project …
+the goal is that the main hermes can search for things that have hapend across the fleet"*).
 
-So: **three records, two namespaces.**
+    /factory/<project>/<YYYY-Www>/<lane>/<run_id>
+
+**The blocker is measured, not architectural.** DuckBrain's token is not scoped to a namespace today
+(CF-208: the same token returns 200 for `code-factory` *and* `tatara`). In a single shared namespace,
+any node holding a token could read every project's runs — including the security projects.
+
+So the implementation order is fixed:
+
+1. scope the token to a namespace (CF-208), then
+2. point every node at the one `factory` namespace, which is the design above.
+
+Until step 1 lands, a per-project namespace is a **temporary deviation**, not the design: R2 is written
+to `<project>`'s namespace and the query in §5 spans them by iterating namespaces. Any implementation
+that reads this page must say which of the two states it is in — `factory` (target) or
+`per-project` (interim) — in its own record, because the two produce different key spaces.
 
 ## 3. The three records
 
