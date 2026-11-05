@@ -1,0 +1,236 @@
+# UNIT-MAP — which MODULE and SUBMODULE each script serves, what triggers it, what it changes.
+#
+# The modules in docs/master answer "is this file described correctly". This file answers the question
+# that actually matters when you read one of them: WHICH PART OF THE SYSTEM IS THIS, what calls it, under
+# what condition, and what does it change.
+#
+# A unit is a script. A submodule is a responsibility inside a module. A module is a reason the system
+# exists. Nothing here is a path-shaped grouping: `node_seed.py` and `bunker-provision.sh` serve the same
+# module because provisioning without seeding produces a node that cannot work.
+#
+# `trigger` is not authored: scripts/gen_unit_map.py measures it (who references the unit, and the line
+# text that does the referencing). Authored fields are `effect` (what changes when it runs) and
+# `condition` only where the guard is not visible at the call site.
+
+modules:
+  - id: M0
+    name: SHARED CONTRACT
+    blurb: everything below depends on this; it changes alone at your peril
+    submodules:
+      - id: M0.S1
+        name: shell contract
+        units:
+          - unit: lib.sh
+            effect: defines ok/bad/warn/note, FAILED, fetch_verified (pinned + digest-checked) — twenty scripts source it
+
+  - id: M1
+    name: PROVISIONING
+    blurb: a bare host becomes a node with an identity, a bus membership and a seeded repo
+    submodules:
+      - id: M1.S1
+        name: qualify the host
+        units:
+          - unit: bunker-server-install.sh
+            effect: measures whether this host can host a node at all; refuses below the disk floor
+            condition: idempotent; --apply advertised in the header but never implemented (module 06)
+          - unit: disk_floor.py
+            effect: resolves the admission floor from --disk-floor > NODE_DISK_FLOOR > [disk] config > role default
+      - id: M1.S2
+        name: create the container and its config
+        units:
+          - unit: bunker-provision.sh
+            effect: the orchestrator — creates the agent, writes its config, connects the bus, seeds, verifies
+            condition: --check measures nothing destructive; --apply needs a KEY=VALUE config file
+          - unit: bunker_config_gen.py
+            effect: turns an operator's answers into the provisioner config
+          - unit: node-create.sh
+            effect: the older single-shot create path; does not run the auth gate the provisioner does (CF-192)
+          - unit: bunker-crier-connect.sh
+            effect: exchanges an agent token with crier, writes auth/crier.token at 0600
+      - id: M1.S3
+        name: identity and bus membership
+        units:
+          - unit: node_identity.py
+            effect: mints the ed25519 key pair and node.json, ADDING fields rather than rewriting the file
+          - unit: node_gateway_auth.py
+            effect: enforces dashboard basic_auth on the node's gateway — wired into bunker-provision only
+            condition: runs only on the provisioner path; the standalone create path never calls it (CF-192)
+      - id: M1.S4
+        name: seed prompts, skills and env
+        units:
+          - unit: node_seed.py
+            effect: builds a tar of prompts/skills, applies it on the node, records a digest per file in seed-applied.json
+            condition: requires config/node-seed.txt; runs inside bunker-provision --apply after the container exists and is reachable
+          - unit: node_seed_drift.py
+            effect: compares the applied seed's digests against the repo and reports which files drifted
+            condition: read-only; needs the node's seed-applied.json or a reachable node
+          - unit: node_env.py
+            effect: writes the node's .env and config.yaml at mode 600, refusing a credential-shaped value
+      - id: M1.S5
+        name: prove the node works
+        units:
+          - unit: verify-node.sh
+            effect: the control-host half of the ladder — agent, gateway, auth, artifact, tree, seed
+            condition: an unreachable port is UNVERIFIED (exit 3), not FAIL (CF-224)
+          - unit: node_freshness.py
+            effect: compares a node's declared harness/repo against what is actually there
+
+  - id: M2
+    name: DISPATCH
+    blurb: whose turn it is becomes a brief, a run and a reply
+    submodules:
+      - id: M2.S1
+        name: declare and configure lanes
+        units:
+          - unit: add_family_lanes.py
+            effect: adds a project's lane family to the scheduler, deriving qa/pm/sync satellites by name
+          - unit: configure_family.py
+            effect: writes each lane's prompt, workdir, cadence and namespace into the scheduler
+            condition: holds one SQLite write transaction from the first UPDATE — a real daemon answers BUSY for the rest (CF-355)
+          - unit: load_lane_config.py
+            effect: writes a lane's declared config into the scheduler DB
+      - id: M2.S2
+        name: resolve a target
+        units:
+          - unit: lane_target.py
+            effect: parses lane:// / bunker:// / local targets and resolves which host a lane runs on
+      - id: M2.S3
+        name: consume the inbox, sign, reply
+        units:
+          - unit: node-bus-worker.py
+            effect: fetch → verify → run harness → reply with corr_id → ack; the node half of the bus
+            condition: needs agent.key + crier.json at 0600; --check is the same ladder without side effects
+
+  - id: M3
+    name: REPOSITORY
+    blurb: the node has the right tree, and work can leave it
+    submodules:
+      - id: M3.S1
+        name: clone and track freshness
+        units:
+          - unit: clone_lane.py
+            effect: clones a lane's repo into its workdir at a named ref
+          - unit: repo_freshness.py
+            effect: measures whether a workdir is behind its remote, and by how much
+      - id: M3.S2
+        name: land a branch
+        units:
+          - unit: land-node-branch.sh
+            effect: merges a worker branch and proves the commit is an ancestor of origin/main
+            condition: asserts the commit, not the merge command's exit code (a failed --ff-only once printed success)
+
+  - id: M4
+    name: BOARD
+    blurb: the fleet remembers what it decided and what it proved
+    submodules:
+      - id: M4.S1
+        name: write and validate rows
+        units:
+          - unit: boardctl
+            effect: 21 verbs over tasks.jsonl + events.jsonl — create, update, validate, doctor, stats
+            condition: refuses a duplicate id and a duplicate finding fingerprint; takes an exclusive flock on .lock
+          - unit: board_lock.py
+            effect: adjudicates whether .lock is held and by whom, and prints one verdict line
+      - id: M4.S2
+        name: compare board copies
+        units:
+          - unit: board_drift.py
+            effect: compares a checkout's board against a ref and reports row-level drift
+
+  - id: M5
+    name: HARNESS
+    blurb: the agent inside the node can actually code, and its commits are graded
+    submodules:
+      - id: M5.S1
+        name: hermes
+        units:
+          - unit: install-hermes.sh
+            effect: installs Hermes in user space and certifies its gateway
+            condition: the auth gate only runs when nothing already listens on :10800 (CF-150/CF-192)
+      - id: M5.S2
+        name: foreign harnesses
+        units:
+          - unit: install-codex.sh
+            effect: installs codex at a pinned version with an isolated credential path
+          - unit: install-claude-code.sh
+            effect: installs claude-code at a pinned version and verified dist shasum
+          - unit: install-opencode.sh
+            effect: check-only by design — no download, pin or digest (module 18 RED)
+      - id: M5.S3
+        name: toolchain, gate and node entry
+        units:
+          - unit: install-go.sh
+            effect: installs the pinned Go toolchain, digest-checked, into user space
+          - unit: install-gitreins.sh
+            effect: installs the commit gate and writes the node's hook with the absolute venv path
+          - unit: project-node.sh
+            effect: the node's entry point — layers base, harness, bus, repo; --check / --apply
+            condition: reads $FAILED from lib.sh under set -u; a missing lib.sh aborts rather than reporting
+
+  - id: M6
+    name: DOCUMENTATION
+    blurb: the system describes itself, and someone can check the description
+    submodules:
+      - id: M6.S1
+        name: skeleton and census
+        units:
+          - unit: master_doc_skeleton.py
+            effect: enumerates the components the docs must cover and writes the module skeleton
+      - id: M6.S2
+        name: fill
+        units:
+          - unit: master_doc_fill.py
+            effect: fills a module from source, with a census, a deletion budget and computed VERIFIED
+            condition: --engine hermes runs a seat; --engine api is faster and once gutted a module while stamping VERIFIED
+      - id: M6.S3
+        name: gate
+        units:
+          - unit: master_doc_check.py
+            effect: recomputes VERIFIED from sections, locators, facts — and now checks the index against itself
+      - id: M6.S4
+        name: panel
+        units:
+          - unit: master_doc_panel.py
+            effect: three families grade a module independently; splits are reported, never voted away
+      - id: M6.S5
+        name: render
+        units:
+          - unit: gen_nasa_handbook.py
+            effect: renders the module set into one printable document with a generated deficiency chapter
+          - unit: gen_system_views.py
+            effect: draws components, contracts and flows from docs/SYSTEM-MODEL.yaml
+      - id: M6.S6
+        name: corpus
+        units:
+          - unit: extract_owner_decisions.py
+            effect: extracts operator-voice messages by session title to find requirements the docs missed
+
+  - id: M7
+    name: GITHUB
+    blurb: the fleet can authenticate to the forge without a long-lived token in argv
+    submodules:
+      - id: M7.S1
+        name: app credentials
+        units:
+          - unit: github-app-setup.sh
+            effect: creates and configures a GitHub App for a repo, writing an example env file
+          - unit: github-app-token.py
+            effect: mints an installation token, cached and refreshed; never prints the value
+          - unit: github-app-refresh.sh
+            effect: refreshes the cached installation token on a schedule
+
+  - id: M8
+    name: SAFETY
+    blurb: the checks that must be able to fail, and the disk they must not fill
+    submodules:
+      - id: M8.S1
+        name: disk
+        units:
+          - unit: reclaim_disk.py
+            effect: reaps build caches and job dirs whose roots it enumerates from source
+            condition: no age gate — it will delete a job dir that a module cites as evidence (CF-290, CF-368)
+      - id: M8.S2
+        name: scan scope
+        units:
+          - unit: check_scan_scope.py
+            effect: fails any repo line that states a gitleaks claim without --log-opts
