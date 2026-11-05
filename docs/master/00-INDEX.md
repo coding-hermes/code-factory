@@ -14,7 +14,7 @@ not a section that is merely unwritten. A section turns green by running a comma
 | 7 | [`scripts/bunker_config_gen.py`](07-scripts-bunker-config-gen-py.md) | code-factory | RED |
 | 8 | [`scripts/check_scan_scope.py`](08-scripts-check-scan-scope-py.md) | code-factory | RED |
 | 9 | [`scripts/clone_lane.py`](09-scripts-clone-lane-py.md) | code-factory | RED |
-| 10 | [`scripts/configure_family.py`](10-scripts-configure-family-py.md) | code-factory | UNVERIFIED |
+| 10 | [`scripts/configure_family.py`](10-scripts-configure-family-py.md) | code-factory | VERIFIED |
 | 11 | [`scripts/disk_floor.py`](11-scripts-disk-floor-py.md) | code-factory | VERIFIED |
 | 12 | [`scripts/github-app-refresh.sh`](12-scripts-github-app-refresh-sh.md) | code-factory | VERIFIED |
 | 13 | [`scripts/github-app-setup.sh`](13-scripts-github-app-setup-sh.md) | code-factory | VERIFIED |
@@ -41,7 +41,7 @@ not a section that is merely unwritten. A section turns green by running a comma
 | 34 | [`scripts/reclaim_disk.py`](34-scripts-reclaim-disk-py.md) | code-factory | VERIFIED |
 | 35 | [`scripts/repo_freshness.py`](35-scripts-repo-freshness-py.md) | code-factory | VERIFIED |
 | 36 | [`scripts/verify-node.sh`](36-scripts-verify-node-sh.md) | code-factory | VERIFIED |
-| 37 | [`specs/ENVELOPE.md`](37-specs-envelope-md.md) | code-factory | RED |
+| 37 | [`specs/ENVELOPE.md`](37-specs-envelope-md.md) | code-factory | VERIFIED |
 | 38 | [`specs/HARNESS-MATRIX.md`](38-specs-harness-matrix-md.md) | code-factory | FAILING |
 | 39 | [`specs/HARNESS.md`](39-specs-harness-md.md) | code-factory | VERIFIED |
 | 40 | [`specs/NODE.md`](40-specs-node-md.md) | code-factory | RED |
