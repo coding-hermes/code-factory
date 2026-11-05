@@ -77,6 +77,44 @@ clone exists: a venv under `$HOME` (Debian marks the system interpreter external
 `pip install --user` is refused — PEP 668), the pin read back, a pre-commit hook written with the
 **absolute** venv path (`DF-011`: a bare `gitreins` on PATH can be a different version), and the
 git identity the node commits under. `--check` prints one row per piece and fails on any of them.
+### Generating the config from the registry
+
+Hand-writing one config per project is how the same repo URL ends up spelled two ways and how two
+projects end up with one agent id. `scripts/bunker_config_gen.py` derives them from the scheduler's
+`projects` table instead (stdlib + `sqlite3`, read-only):
+
+```bash
+scripts/bunker_config_gen.py --server <bunker-host> --prefix code-factory   # write <project>.conf
+scripts/bunker_config_gen.py --server <s> --project code-factory --dry-run  # rows on stderr, configs on stdout
+scripts/bunker_config_gen.py --server <s> --prefix code-factory --check     # exit 1, names each drifted key
+scripts/bunker_config_gen.py --server <s> --prefix code-factory --force     # rewrite a differing file
+```
+
+**The clone is the project.** Lanes are grouped by resolved repo target (`local:<path>` → its real
+path, anything else → the URL as written), so 17 lanes over one checkout are one config, one
+bunker. Within a group the project is the shortest candidate that is a prefix of every other lane
+name, candidates being the lane names plus their family keys (one recognized suffix removed) — the
+fleet's `<project>-<suffix>` spelling, with the scheduler's nine suffixes (`-qa -pm -sync -dogfood
+-releng -docs -readme -perf -review`) — so a family whose primary row is `<project>-foreman` still
+derives `<project>`. A lane whose tail is not one of those is grouped when the prefix rule still
+settles it and reported as a `WARN suffix` row, and a lane whose family key is another project but
+whose `repo_url` names a different clone stays its own config with a `WARN repo_disagreement` row
+(the CF-091 disagreement, named rather than merged).
+
+`AGENT` is `cf-` plus the project, normalized to `[a-z0-9-]`; `NAMESPACE` is the registry's
+`namespace_id` when the lanes agree and the project name otherwise (both values named in a `WARN`);
+the three token keys are **paths** under `~/.config/code-factory/<project>/`.
+
+It refuses, with a named `FAIL` row and exit 2, and writes nothing at all: an absent or empty
+`repo_url`, a `local:` path that does not exist (`PHANTOM`), a group with no common name prefix
+(`AMBIGUOUS`), a name that is not a safe slug, two projects deriving one `AGENT`, and a directory
+it cannot write. A generated file is sorted by key and carries no timestamp, so a second run prints
+`unchanged` per file; a file that differs is never rewritten without `--force`, and the row names
+the keys that differ. `--check` is read-only and exits 1 with one `FAIL drift` row per key.
+
+A `REPO` that came from a `local:` path is a path on the **control host**: a remote node cannot
+clone it, and the run says so with a `WARN local_repo` row. Pass `--repo-url` with the URL the node
+can reach.
 
 ## Credentials
 

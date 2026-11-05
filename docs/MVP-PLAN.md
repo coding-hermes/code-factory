@@ -123,6 +123,9 @@ test, so a harness that stops working turns the document red.
 
 `prompts/foreman.md` names them, with the rule that a backlog row never displaces a P0/P1 but is
 never dropped either.
+The per-project configs are generated, not typed: `scripts/bunker_config_gen.py --server <host>
+--prefix code-factory` writes one `<project>.conf` from the scheduler's `projects` table, refuses
+a phantom repo or a duplicate agent by name, and `--check` names every drifted key.
 
 ## Out of scope for the MVP (explicitly deferred)
 

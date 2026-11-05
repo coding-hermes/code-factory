@@ -2641,6 +2641,175 @@ if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^  FAIL  hermes:check — 
 else
   say "  FAIL  a PASS with an empty value survived (exit $rc): $(printf '%s\n' "$out" | grep 'hermes:' | tr '\n' ' ')"; fails=$((fails+1))
 fi
+
+# One provisioning config per project, derived from the registry. Hand-written
+# configs drift (a typo in a repo URL, one agent name on two projects, a
+# namespace the registry no longer agrees with), so the configs are generated
+# from the sqlite `projects` table instead. Every leg below can red on its own:
+# the phantom repo, the duplicate agent, the ambiguous group, the idempotent
+# re-run, the mutated file and the --check row that has to name the drifted key.
+say "46. one provisioning config per project is generated from the registry, or refused"
+GEN="$HERE/scripts/bunker_config_gen.py"
+if python3 -B -c 'import ast,sys; ast.parse(open(sys.argv[1],encoding="utf-8").read())' "$GEN"; then
+  say "  PASS  scripts/bunker_config_gen.py parses (python3 -B, stdlib only)"
+else
+  say "  FAIL  scripts/bunker_config_gen.py does not parse"; fails=$((fails+1))
+fi
+
+tmpd=$(mktemp -d)
+mkdir -p "$tmpd/repo" "$tmpd/demoB" "$tmpd/demoC" "$tmpd/demoD"
+python3 -B - "$tmpd" <<'PY'
+import os, sqlite3, sys
+tmpd = sys.argv[1]
+schema = (
+    "create table projects (name text primary key, repo_url text not null, "
+    "workdir text not null, enabled integer not null default 1, "
+    "namespace_id text, parent text not null default '')"
+)
+repo = "local:" + os.path.join(tmpd, "repo")
+fixtures = {
+    # a healthy family: a primary and two satellites sharing one clone
+    "ok.db": [
+        ("demo", repo, os.path.join(tmpd, "repo"), 1, "demo", ""),
+        ("demo-qa", repo, os.path.join(tmpd, "repo"), 1, "demo", "demo"),
+        ("demo-docs", repo, os.path.join(tmpd, "repo"), 0, "demo", "demo"),
+    ],
+    # one lane whose repo_url names a path that does not exist
+    "phantom.db": [
+        ("demo", repo, os.path.join(tmpd, "repo"), 1, "demo", ""),
+        ("ghost", "local:" + os.path.join(tmpd, "gone"), tmpd, 1, "ghost", ""),
+    ],
+    # two projects whose names normalize to the same agent id
+    "dup.db": [
+        ("demo--alpha", "local:" + os.path.join(tmpd, "demoB"), tmpd, 1, "a", ""),
+        ("demo-alpha", "local:" + os.path.join(tmpd, "demoC"), tmpd, 1, "b", ""),
+    ],
+    # two lanes in one clone with no name that is a prefix of the other
+    "amb.db": [
+        ("beta-one", "local:" + os.path.join(tmpd, "demoD"), tmpd, 1, "beta", ""),
+        ("gamma-two", "local:" + os.path.join(tmpd, "demoD"), tmpd, 1, "gamma", ""),
+    ],
+}
+for leaf, rows in fixtures.items():
+    con = sqlite3.connect(os.path.join(tmpd, leaf))
+    # throwaway fixture: no journal, no fsync — a bulk-mounted TMPDIR makes four
+    # default-durability databases cost ~5 s each, and nothing here survives the arm
+    con.execute("pragma journal_mode=off")
+    con.execute("pragma synchronous=off")
+    con.execute(schema)
+    con.executemany("insert into projects values (?,?,?,?,?,?)", rows)
+    con.commit()
+    con.close()
+PY
+
+gen() {
+  local db="$1" out="$2"; shift 2
+  python3 -B "$GEN" --db "$db" --server bunker-01 --projects "$out" "$@"
+}
+
+# a dry run prints the config and creates nothing
+out=$(gen "$tmpd/ok.db" "$tmpd/out-dry" --dry-run 2>/dev/null); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -qx 'PROJECT=demo' \
+  && printf '%s\n' "$out" | grep -qx "REPO=$tmpd/repo" && [ ! -e "$tmpd/out-dry" ]; then
+  say "  PASS  --dry-run prints the config on stdout and creates no directory, exit $rc"
+else
+  say "  FAIL  --dry-run wrote something or printed no config (exit $rc)"; fails=$((fails+1))
+fi
+
+out=$(gen "$tmpd/ok.db" "$tmpd/out" 2>&1); rc=$?
+keys=$(grep -c '^[A-Z_][A-Z0-9_]*=' "$tmpd/out/demo.conf" 2>/dev/null || true)
+if [ "$rc" -eq 0 ] && [ -f "$tmpd/out/demo.conf" ] && [ "$keys" = 11 ] \
+  && grep -qx 'AGENT=cf-demo' "$tmpd/out/demo.conf" \
+  && grep -qx 'NAMESPACE=demo' "$tmpd/out/demo.conf" \
+  && grep -qx 'REF=main' "$tmpd/out/demo.conf" && grep -qx 'TTL=6h' "$tmpd/out/demo.conf" \
+  && grep -qx 'GITHUB_TOKEN_FILE=~/.config/code-factory/demo/github.token' "$tmpd/out/demo.conf" \
+  && [ "$(grep '^[A-Z_][A-Z0-9_]*=' "$tmpd/out/demo.conf" | LC_ALL=C sort -c 2>&1)" = "" ]; then
+  say "  PASS  one family -> demo.conf with 11 sorted keys, AGENT=cf-demo, token keys as paths"
+else
+  say "  FAIL  the generated config was wrong or absent (exit $rc, $keys keys)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# the real provisioner must parse it: KEY=VALUE only, no unknown key
+mkdir -p "$tmpd/bin"
+printf '#!/usr/bin/env bash\ncase "$1" in list) echo bunker-01 ;; info) echo "agent b 6h" ;; exec) exit 0 ;; *) exit 1 ;; esac\n' > "$tmpd/bin/bunker"
+chmod +x "$tmpd/bin/bunker"
+out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" /bin/bash "$HERE/scripts/bunker-provision.sh" \
+  --config "$tmpd/out/demo.conf" --check 2>&1)
+if printf '%s\n' "$out" | grep -q '  PASS  config — demo.conf — ' \
+  && ! printf '%s\n' "$out" | grep -q 'FAIL  config'; then
+  say "  PASS  bunker-provision.sh parses the generated config with no unknown key"
+else
+  say "  FAIL  the provisioner refused the generated config"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+out=$(gen "$tmpd/phantom.db" "$tmpd/out-phantom" 2>&1); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q '  FAIL  ghost — PHANTOM — repo_url names local:.*/gone' \
+  && [ ! -e "$tmpd/out-phantom" ]; then
+  say "  PASS  a PHANTOM repo_url is refused by name, exit $rc, nothing written"
+else
+  say "  FAIL  the phantom lane was not refused or something was written (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+out=$(gen "$tmpd/dup.db" "$tmpd/out-dup" 2>&1); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q "'cf-demo-alpha' derived by demo--alpha and demo-alpha" \
+  && [ ! -e "$tmpd/out-dup" ]; then
+  say "  PASS  two projects deriving one AGENT are refused by name, exit $rc, nothing written"
+else
+  say "  FAIL  the AGENT collision was not refused (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+out=$(gen "$tmpd/amb.db" "$tmpd/out-amb" 2>&1); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q 'AMBIGUOUS — no lane name or family key is a prefix' \
+  && [ ! -e "$tmpd/out-amb" ]; then
+  say "  PASS  a group with no common name prefix is refused as AMBIGUOUS, exit $rc"
+else
+  say "  FAIL  an ambiguous group was guessed instead of refused (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+before=$(sha256sum "$tmpd/out/demo.conf" | awk '{print $1}')
+out=$(gen "$tmpd/ok.db" "$tmpd/out" 2>&1); rc=$?
+after=$(sha256sum "$tmpd/out/demo.conf" | awk '{print $1}')
+if [ "$rc" -eq 0 ] && [ "$before" = "$after" ] \
+  && printf '%s\n' "$out" | grep -q '  PASS  unchanged — .*/demo.conf — byte-identical' \
+  && ! printf '%s\n' "$out" | grep -q 'PASS  wrote'; then
+  say "  PASS  a second run is byte-identical and reports unchanged, exit $rc"
+else
+  say "  FAIL  the second run rewrote the config or reported a write (exit $rc)"; fails=$((fails+1))
+fi
+
+sed -i 's/^SERVER=.*/SERVER=other-host/' "$tmpd/out/demo.conf"
+mutated=$(sha256sum "$tmpd/out/demo.conf" | awk '{print $1}')
+out=$(python3 -B "$GEN" --db "$tmpd/ok.db" --server bunker-01 --projects "$tmpd/out" --check 2>&1); rc=$?
+if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q "  FAIL  drift — .*/demo.conf — SERVER: file 'other-host' ≠ registry 'bunker-01'" \
+  && [ "$(sha256sum "$tmpd/out/demo.conf" | awk '{print $1}')" = "$mutated" ]; then
+  say "  PASS  --check names the drifted key, exits $rc and writes nothing"
+else
+  say "  FAIL  --check did not name the drifted SERVER key (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+out=$(gen "$tmpd/ok.db" "$tmpd/out" 2>&1); rc=$?
+if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q 'pass --force to rewrite' \
+  && grep -qx 'SERVER=other-host' "$tmpd/out/demo.conf"; then
+  say "  PASS  a differing config is not rewritten without --force, exit $rc"
+else
+  say "  FAIL  a differing config was rewritten without --force (exit $rc)"; fails=$((fails+1))
+fi
+
+out=$(gen "$tmpd/ok.db" "$tmpd/out" --force 2>&1); rc=$?
+out2=$(python3 -B "$GEN" --db "$tmpd/ok.db" --server bunker-01 --projects "$tmpd/out" --check 2>&1); rc2=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '  PASS  rewrote — ' \
+  && [ "$rc2" -eq 0 ] && printf '%s\n' "$out2" | grep -q 'BUNKER-CONFIG: PASS — 1 config checked, no drift'; then
+  say "  PASS  --force rewrites the file and --check is green afterwards (exit $rc2)"
+else
+  say "  FAIL  --force did not restore the file (rewrite exit $rc, check exit $rc2)"; fails=$((fails+1))
+  printf '%s\n' "$out2" | sed 's/^/    | /'
+fi
 rm -rf "$tmpd"
 
 say ""

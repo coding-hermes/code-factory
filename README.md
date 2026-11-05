@@ -107,7 +107,9 @@ by `scripts/node_env.py` before the harness layer starts.
 docs/            DESIGN.md, PRD-code-factory.md, OPERATIONS.md, BOARD.md; audits/ holds tick evidence
 specs/           NODE.md (what a node is), ENVELOPE.md (dispatch/result), HARNESS.md (adapters)
 scripts/         node checks and provisioners: bunker-server-install.sh, bunker-provision.sh,
-                 bunker-crier-connect.sh, project-node.sh, node-create.sh, verify-node.sh, lib.sh
+                 bunker-crier-connect.sh, bunker_config_gen.py (writes one provision config per
+                 project from the scheduler registry), project-node.sh, node-create.sh,
+                 verify-node.sh, lib.sh
 scripts/harness/ install-<harness>.sh — shipped: hermes, claude-code, opencode.
                  codex, aider, goose and pi-agent are documented in specs/HARNESS.md and ship
                  no installer yet (CF-006)
