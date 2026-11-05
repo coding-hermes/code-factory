@@ -1971,6 +1971,45 @@ else
   say "  FAIL  missing bunker client did not surface (exit $rc)"; fails=$((fails+1))
 fi
 
+# every documented config key must parse: a key that exists in the variables but not in the
+# parser's allowlist is a control that silently cannot be set (it happened twice)
+tmpd=$(mktemp -d)
+cat > "$tmpd/all.conf" <<'CONF'
+PROJECT=demo
+AGENT=demo-node
+SERVER=demo-server
+REPO=https://example.invalid/x.git
+REF=main
+HARNESS=hermes
+NAMESPACE=demo
+NAMESPACES=demo,extra
+TTL=1d
+GIT_AUTHOR_NAME=A
+GIT_AUTHOR_EMAIL=a@example.invalid
+GIT_CO_AUTHOR=B <b@example.invalid>
+GITHUB_TOKEN_FILE=/dev/null
+DUCKBRAIN_TOKEN_FILE=/dev/null
+S3_ENV_FILE=/dev/null
+NODE_ENV_FILE=/dev/null
+CRIER_AGENT_KEY_FILE=/dev/null
+CRIER_AUTH_TOKEN_FILE=/dev/null
+CRIER_URL=http://example.invalid:8767
+DUCKBRAIN_URL=http://example.invalid:3000
+CONFIG_SET_MODEL_PROVIDER=custom:x
+CONFIG_SET_MODEL_NAME=m
+CONFIG_SET_GATEWAY_BIND=0.0.0.0
+CONFIG_SET_GATEWAY_PORT=10800
+CONFIG_SET_AGENT_MAX_ITERATIONS=40
+CONF
+out=$(/bin/bash "$HERE/scripts/bunker-provision.sh" --config "$tmpd/all.conf" --check 2>&1)
+if printf '%s\n' "$out" | grep -q '  PASS  config' && ! printf '%s\n' "$out" | grep -q 'unknown key'; then
+  say "  PASS  every documented config key parses ($(grep -c '=' "$tmpd/all.conf") keys, no unknown-key row)"
+else
+  say "  FAIL  a documented config key is not accepted: $(printf '%s\n' "$out" | grep 'unknown key' | head -2 | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+
 # the node-side gate refuses to install without an identity to commit under
 bash -n "$HERE/scripts/install-gitreins.sh" || { say "  FAIL  install-gitreins syntax"; fails=$((fails+1)); }
 out=$(/bin/bash "$HERE/scripts/install-gitreins.sh" --apply --repo "$HERE" --author-name "" --author-email "" 2>&1); rc=$?
