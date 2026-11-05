@@ -7,9 +7,9 @@ not a section that is merely unwritten. A section turns green by running a comma
 |---|---|---|---|
 | 1 | [`scripts/add_family_lanes.py`](01-scripts-add-family-lanes-py.md) | code-factory | RED |
 | 2 | [`scripts/board_drift.py`](02-scripts-board-drift-py.md) | code-factory | RED |
-| 3 | [`scripts/board_lock.py`](03-scripts-board-lock-py.md) | code-factory | RED |
-| 4 | [`scripts/bunker-crier-connect.sh`](04-scripts-bunker-crier-connect-sh.md) | code-factory | RED |
-| 5 | [`scripts/bunker-provision.sh`](05-scripts-bunker-provision-sh.md) | code-factory | RED |
+| 3 | [`scripts/board_lock.py`](03-scripts-board-lock-py.md) | code-factory | VERIFIED |
+| 4 | [`scripts/bunker-crier-connect.sh`](04-scripts-bunker-crier-connect-sh.md) | code-factory | VERIFIED |
+| 5 | [`scripts/bunker-provision.sh`](05-scripts-bunker-provision-sh.md) | code-factory | VERIFIED |
 | 6 | [`scripts/bunker-server-install.sh`](06-scripts-bunker-server-install-sh.md) | code-factory | RED |
 | 7 | [`scripts/bunker_config_gen.py`](07-scripts-bunker-config-gen-py.md) | code-factory | RED |
 | 8 | [`scripts/check_scan_scope.py`](08-scripts-check-scan-scope-py.md) | code-factory | RED |
