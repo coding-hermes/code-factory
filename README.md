@@ -1,6 +1,6 @@
 # code-factory
 
-The distributed coding workforce: **one Hermes foreman on the control host** designs and
+The distributed coding workforce: **one Hermes foreman on each project's bunker** designs and
 organises work; **one bunker node per project** executes it; **crier** carries the work;
 **the scheduler** decides whose turn it is.
 

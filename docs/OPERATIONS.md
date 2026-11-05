@@ -4,7 +4,7 @@
 
 ## Operating model and ownership
 
-One isolated bunker agent is one project node: one repo, one harness, one crier identity. The control host's Hermes foreman defines work and verifies results; task-router selects model/provider; scheduler selects the lane and dispatch time; crier transports durable messages; the node runs the harness in its repo. The node reports evidence but does not grade itself. See [DESIGN](DESIGN.md), [NODE](../specs/NODE.md), and [ENVELOPE](../specs/ENVELOPE.md).
+One isolated bunker agent is one project node: one repo, one harness, one crier identity. The bunker's Hermes foreman defines work and verifies results; task-router selects model/provider; scheduler selects the lane and dispatch time; crier transports durable messages; the node runs the harness in its repo. The node reports evidence but does not grade itself. See [DESIGN](DESIGN.md), [NODE](../specs/NODE.md), and [ENVELOPE](../specs/ENVELOPE.md).
 
 The intended lifecycle is: qualify control host → create and provision a node → establish gateway and bus identity → attach repo/harness → arm scheduler target only after checks → dispatch one bounded task → independently verify artifacts → recover or rebuild from evidence → revoke and remove all state on teardown.
 

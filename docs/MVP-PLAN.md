@@ -18,8 +18,8 @@ lands the commit. Four moves, two of them wiring.
 | 4 | The node produced the result inside its own clone | clone present (`af67c3b`), no harness, no identity, no credentials | CF-150, CF-214 |
 | 5 | The directive reached the node with its lane identity | mapping keyed per lane, 1 of 17 wired; 82 × 403 on the only attempt | CF-210 |
 | 6 | crier routed the project to that bunker | crier up; routes per lane; guard refuses reserved keys | CF-210, CF-131 |
-| 7 | The scheduler chose the lane and recorded the tick | works today on the control host (local projects) | — |
-| 8 | The foreman wrote a brief the node can execute | works today | — |
+| 7 | The scheduler chose the lane and recorded the tick | works today for local projects — `sqlite3 ~/.hermes/coding-hermes/scheduler.db "select count(*) from ticks"` and a `tick_dispatch` row naming the lane; NOT proven for a remote lane | — |
+| 8 | The foreman wrote a brief the node can execute | the brief is written today, but the node cannot execute it end to end: no prompts or skills are seeded there, and no lane has consumed one (S3 remains OPEN in sheet 2.4) | CF-220 |
 
 Read top-down: 1–4 are **missing**, 5–6 are **miswired**, 7–8 are **working**.
 
@@ -101,7 +101,7 @@ Rows, in the order they unblock each other:
 | **CF-227** | codex: the adapter exists in crier, the binary and the installer do not |
 | **CF-225** | claude-code: no adapter in crier, no installer here |
 | **CF-228** | pi: the adapter is named `pi`; oh-my-pi needs bun |
-| **CF-226** | "deepseek harness" is not a thing — write the fallback down |
+| **CF-226** | deepseek-harness (`dsh`, npm `@deepseek-ai/dsh` 0.2.1-rc.5) is real and absent from both repos — installer at a pinned RC; the earlier "not a thing" was true of our trees, not of the world |
 | **CF-232** | the docs still said the foreman runs on the control host (fixed) |
 | `CRIER-HARNESS-9/10/11/12` | crier's side: the pi-agent alias, the opencode-v2 decision, claude-code, and unknown names failing at load |
 
