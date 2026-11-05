@@ -11,6 +11,11 @@ A **node** is the unit of execution: one bunker agent bound to one project and o
   "repo": {"origin": "git@…", "ref": "main", "path": "/home/<uid>/repo"},
   "harness": {"name": "hermes", "version": "0.19.0", "port": 10800},
   "bus": {"agent_id": "node-crier", "base": "http://crier.example:8767"},
+  "freshness": {
+    "status": "PASS", "branch": "main", "head": "04fc3986f448", "origin_main": "04fc3986f448",
+    "behind": 0, "dirty_files": [], "differing_files": [],
+    "ladder": "PASS", "reason": "", "measured_at": "2026-11-05T18:40:00Z"
+  },
   "created_by": "project-node.sh v1",
   "created_at": "2026-10-29T18:40:00Z"
 }
@@ -18,6 +23,14 @@ A **node** is the unit of execution: one bunker agent bound to one project and o
 
 The manifest is the node's identity: a scheduler target names `node_id`; the control host reads
 the manifest to know where the artifacts are.
+
+`freshness` is the checkout the node will actually work, measured by layer 40 with
+`scripts/node_freshness.py` (`--workdir`) or the node-side fallback when the clone does not carry
+the probe (`scripts/project-node.sh`, `freshness_measure`). `status` is the **check's own**
+verdict — `FAIL` for a dirty checkout, because an uncommitted local edit on a node is a finding —
+while `ladder` is how the provisioning ladder graded it at provision time (`PASS`, `WARN`, `FAIL`).
+`dirty_files` and `differing_files` are the paths an operator has to act on, and they are the
+reason the object exists: the paths belong upstream, not in the node's tree.
 
 ## Layers (each has a check that can fail)
 
@@ -27,7 +40,7 @@ the manifest to know where the artifacts are.
 | 10 base | python3 + venv, git, curl, tar, sha256sum; optionally jq, rg, node | preflight |
 | 20 harness | the harness binary plus the adapter's own gate rows, printed verbatim (`python`, `binary`, `version`, `port`, `inference_key`, and `gateway_start` when that block runs); `gateway_start` is a refusal on any node whose `~/.hermes/config.yaml` does not parse to a non-empty `dashboard.basic_auth` username and password (`scripts/harness/install-hermes.sh:66–186`) | base |
 | 30 bus | a crier identity file at `$HOME/.node/crier.json` and its mode 600 | harness |
-| 40 repo | the repo cloned at a pinned ref | base |
+| 40 repo | the repo cloned at a pinned ref, and the checkout measured against `origin/main` by `scripts/node_freshness.py` (or its node-side fallback): branch, HEAD, ancestry, lag, uncommitted paths (`scripts/project-node.sh`, `freshness_measure`) | base |
 | 90 verify | the node manifest (`$HOME/.node/node.json`), written only when every layer passed | all |
 
 Three capabilities that the design describes are **not** established by any shipped layer, and this
@@ -54,8 +67,10 @@ table no longer claims them:
   (`docs/OPERATIONS.md` §6), CF-004 owns building it, and `AGENTS.md` rule 4 keeps it as the proof
   a node works — it is the standard layer 90 is graded against, not something layer 90 delivers.
 
-Layer 40's cell was narrowed to the clone alone for the same reason (`6f75e28`, CF-032). Every cell
-in this table now names only something the shipped script measures or prints.
+Layer 40's cell was narrowed to the clone alone for the same reason (`6f75e28`, CF-032); CF-244
+widened it to the clone plus its measured freshness against `origin/main`, because a clone that is
+behind or dirty is a tree the node cannot fast-forward — the failure `verify-node.sh` had no arm
+for. Every cell in this table now names only something the shipped script measures or prints.
 
 ### Fixture scope (`--layers`)
 
@@ -150,6 +165,7 @@ Rules:
 - `verify --exec-bunker [--bunker-server S]` on a **bunker** target proves it against the agent itself: `bunker exec <agent> -- sh -lc 'echo $HOME; test -d <path>'` must return a home and an existing directory. Checks recorded: `bunker_cli`, `agent_reachable`, `path_exists`.
 - `lane_target.py plan <projects.jsonl> --agent <id> --server <server> [--suffix /repo] [--prefix P]` emits the intended `bunker://<agent>/<home><suffix>` target per lane. The agent's home is **resolved from the agent**, never templated: homes are `/home/bunker-<full-id>`, so a `{agent}` template builds a wrong path that still parses.
 - `lane_target.py scan <projects.jsonl> [--allow-remote]` checks every row and exits nonzero if any target is invalid.
+- `scripts/node_freshness.py --agent A --server S [--path REL]` proves the **checkout** a node will work is the tree `origin/main` has: branch, HEAD, whether HEAD is an ancestor of `origin/main`, the lag count and the files that differ, plus every uncommitted path — gathered in ONE `bunker exec` round trip, with the agent's home resolved from the agent (never templated). `--workdir PATH` measures a local checkout with no bunker, no network and no database; `--json` emits the object layer 90 stores in the manifest. Exit codes: `0` PASS, `1` drift or dirty, `2` usage or unreachable — an unmeasurable node is not a PASS. A repo with no `origin` remote is a FAIL naming that, and the comparison ref falls back to `origin/HEAD` (named in the row) so a `trunk`-default repo is measured instead of mislabelled. `scripts/verify-node.sh` folds the verdict into `VERIFY:` (step 5; unmeasurable is WARN unless `--strict-freshness`).
 - Lane writers (`scripts/configure_family.py`) only `mkdir` a **local** target; a remote target is registered verbatim and materialised by the node side.
 
 ## Failure semantics
@@ -157,4 +173,9 @@ Rules:
 - Harness down → layer 20 FAIL; no work is accepted.
 - Bus identity missing → layer 30 FAIL; the node is invisible, which is worse than empty.
 - Repo dirty at provision time → WARN, not FAIL (the node may be mid-task); `verify` still runs.
+  The uncommitted paths are named and recorded (`$HOME/.node/freshness.json`, and the manifest's
+  `freshness` object), because the edit belongs upstream, not in the node's tree.
+- Repo drifted at provision time (behind or diverged from `origin/main`, i.e. the pull cannot
+  fast-forward) → FAIL under `--apply`: the node would work a tree that no longer matches
+  `origin/main`. Neither condition is repaired silently by the ladder.
 - Round trip fails → the node is quarantined; the scheduler must not send it more work.

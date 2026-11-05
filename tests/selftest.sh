@@ -2825,6 +2825,244 @@ else
   printf '%s\n' "$out2" | sed 's/^/    | /'
 fi
 rm -rf "$tmpd"
+# BEGIN cf244-node-freshness
+say "47. a node checkout freshness check can go RED: drift and a local edit are named (CF-244)"
+# The failure this closes: a node's clone sat one commit behind origin/main while every layer
+# printed PASS, because nothing measured the checkout's git state. Each arm builds a real local
+# origin and drives the real scripts. The first arm is the fixture's own green proof — a clone in
+# sync with its origin — so a red arm below is the check refusing real drift, not a broken fixture.
+NF="$HERE/scripts/node_freshness.py"
+if python3 -B -c 'import ast,sys; ast.parse(open(sys.argv[1],encoding="utf-8").read())' "$NF"; then
+  say "  PASS  scripts/node_freshness.py parses (python3 -B, stdlib only)"
+else
+  say "  FAIL  scripts/node_freshness.py does not parse"; fails=$((fails+1))
+fi
+tmpd=$(mktemp -d)
+export GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.invalid
+export GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.invalid
+git init -q -b main "$tmpd/seed"
+printf 'one\n' > "$tmpd/seed/a.txt"
+git -C "$tmpd/seed" add a.txt
+git -C "$tmpd/seed" commit -qm one
+git init -q --bare "$tmpd/origin.git"
+git -C "$tmpd/origin.git" symbolic-ref HEAD refs/heads/main
+git -C "$tmpd/seed" push -q "$tmpd/origin.git" main
+# cloned BEFORE origin advances: this is the node that stayed behind
+git clone -q "$tmpd/origin.git" "$tmpd/behind"
+printf 'two\n' > "$tmpd/seed/b.txt"
+git -C "$tmpd/seed" add b.txt
+git -C "$tmpd/seed" commit -qm two
+git -C "$tmpd/seed" push -q "$tmpd/origin.git" main
+# cloned AFTER the last push: in sync, the fixture's proof that it can go green
+git clone -q "$tmpd/origin.git" "$tmpd/pass"
+git clone -q "$tmpd/origin.git" "$tmpd/dirty"
+git clone -q "$tmpd/origin.git" "$tmpd/det"
+git clone -q "$tmpd/origin.git" "$tmpd/noorigin"
+git -C "$tmpd/noorigin" remote remove origin
+git -C "$tmpd/det" checkout -q --detach HEAD
+printf 'a local edit\n' >> "$tmpd/dirty/a.txt"
+# Provisioning fixtures, cloned now so their clones do NOT carry scripts/node_freshness.py:
+# they exercise the node-side fallback (rung 2 of layer 40), not the clone's own copy.
+mkdir -p "$tmpd/pn-dirty" "$tmpd/pn-drift"
+git clone -q "$tmpd/origin.git" "$tmpd/pn-dirty/repo"
+git clone -q "$tmpd/origin.git" "$tmpd/pn-drift/repo"
+printf 'a local edit\n' >> "$tmpd/pn-dirty/repo/a.txt"
+
+out=$(python3 -B "$NF" --workdir "$tmpd/pass" 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: PASS' \
+  && printf '%s\n' "$out" | grep -Fq 'branch=main' \
+  && printf '%s\n' "$out" | grep -Fq 'ancestor=true behind=0'; then
+  say "  PASS  a clone in sync with its origin -> RESULT: PASS, exit $rc (the fixture can go green)"
+else
+  say "  FAIL  a clean clone did not pass (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+out=$(python3 -B "$NF" --workdir "$tmpd/behind" 2>&1); rc=$?
+if [ "$rc" -eq 1 ] \
+  && printf '%s\n' "$out" | grep -Eq '^RESULT: FAIL \(behind 1 commit' \
+  && printf '%s\n' "$out" | grep -Fq 'behind=1' \
+  && printf '%s\n' "$out" | grep -Fq 'differing path(s) — b.txt'; then
+  say "  PASS  origin advances -> exit $rc, RESULT names the lag and the differing file b.txt"
+else
+  say "  FAIL  drift was not refused with the lag and the file named (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+out=$(python3 -B "$NF" --workdir "$tmpd/dirty" 2>&1); rc=$?
+if [ "$rc" -eq 1 ] \
+  && printf '%s\n' "$out" | grep -Eq '^RESULT: FAIL \(1 uncommitted path' \
+  && printf '%s\n' "$out" | grep -Fq 'uncommitted path(s): a.txt' \
+  && printf '%s\n' "$out" | grep -Fq 'the fix belongs upstream'; then
+  say "  PASS  an uncommitted edit -> exit $rc, the path is named and called upstream's problem"
+else
+  say "  FAIL  a local edit was not reported as a finding (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+out=$(python3 -B "$NF" --workdir "$tmpd/det" 2>&1); rc=$?
+if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fq 'detached HEAD at'; then
+  say "  PASS  a detached HEAD -> exit $rc, the branch state is named"
+else
+  say "  FAIL  a detached HEAD was not named (exit $rc)"; fails=$((fails+1))
+fi
+
+out=$(python3 -B "$NF" --workdir "$tmpd/noorigin" 2>&1); rc=$?
+if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fq "no 'origin' remote"; then
+  say "  PASS  a checkout with no origin -> exit $rc, the reason is named (no crash)"
+else
+  say "  FAIL  a missing origin crashed or was not refused (exit $rc)"; fails=$((fails+1))
+fi
+
+# Bunker mode: one exec round trip, home resolved from the agent, rows parsed on this host.
+mkdir -p "$tmpd/bin" "$tmpd/node/pass"
+git clone -q "$tmpd/origin.git" "$tmpd/node/pass/repo"
+cat > "$tmpd/bin/bunker" <<'EOF'
+#!/usr/bin/env bash
+printf 'exec\n' >> "${FIXTURE_LOG:?}"
+exec bash -c "${!#}"
+EOF
+chmod +x "$tmpd/bin/bunker"
+out=$(env PATH="$tmpd/bin:$PATH" FIXTURE_LOG="$tmpd/bunker.log" HOME="$tmpd/node/pass" \
+  python3 -B "$NF" --agent cf-fixture --server fixture 2>&1); rc=$?
+execs=$(wc -l < "$tmpd/bunker.log")
+if [ "$rc" -eq 0 ] && [ "$execs" = 1 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: PASS' \
+  && printf '%s\n' "$out" | grep -Fq 'agent cf-fixture via fixture' \
+  && printf '%s\n' "$out" | grep -Fq "checkout $tmpd/node/pass/repo"; then
+  say "  PASS  bunker mode: one exec round trip, home resolved from the agent, RESULT: PASS"
+else
+  say "  FAIL  bunker mode did not measure the agent's checkout ($execs execs, exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+out=$(env PATH="$tmpd/bin:$PATH" FIXTURE_LOG="$tmpd/bunker.log" HOME="$tmpd/node/pass" \
+  python3 -B "$NF" --agent cf-fixture --server fixture --path "$tmpd/behind" --json 2>/dev/null); rc=$?
+if [ "$rc" -eq 1 ] && printf '%s\n' "$out" \
+  | python3 -B -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d["status"]=="FAIL" and d["behind"]==1 and d["differing_files"]==["b.txt"] and d["branch"]=="main" else 1)'; then
+  say "  PASS  bunker mode --json: status FAIL, behind 1, differing_files [b.txt] (provisioning stores this)"
+else
+  say "  FAIL  bunker mode --json did not carry the measurement (exit $rc)"; fails=$((fails+1))
+fi
+
+# Provisioning: layer 40 measures the checkout after the clone. DIRTY is a WARN (the node may be
+# mid-task); DRIFT is a FAIL (the node would work a tree that no longer matches origin/main).
+pn40() {  # $1 home -> project-node.sh --check --layers 40 output+rc
+  env HOME="$1" NODE_PROJECT=demo NODE_DISK_FLOOR=1 CRIER_URL=http://fixture.invalid:8767 \
+    /bin/bash "$HERE/scripts/project-node.sh" --check --project demo --layers 40 2>&1
+}
+# rung 1: the clone carries the probe (a code-factory node). Its own seed and origin, because
+# the probe commit must not advance the origin rungs 2 and 3 measure against: a fixture ordering
+# that advances a shared origin turns the dirty arm into drift and grades the fixture, not the code.
+git init -q -b main "$tmpd/seed2"
+printf 'one\n' > "$tmpd/seed2/a.txt"
+git -C "$tmpd/seed2" add a.txt
+git -C "$tmpd/seed2" commit -qm one
+mkdir -p "$tmpd/seed2/scripts"
+cp "$NF" "$tmpd/seed2/scripts/node_freshness.py"
+git -C "$tmpd/seed2" add scripts/node_freshness.py
+git -C "$tmpd/seed2" commit -qm "carry the probe"
+git init -q --bare "$tmpd/origin2.git"
+git -C "$tmpd/origin2.git" symbolic-ref HEAD refs/heads/main
+git -C "$tmpd/seed2" push -q "$tmpd/origin2.git" main
+mkdir -p "$tmpd/pn-probe"
+git clone -q "$tmpd/origin2.git" "$tmpd/pn-probe/repo"
+out=$(pn40 "$tmpd/pn-probe"); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '  PASS  freshness — branch=main' \
+  && printf '%s\n' "$out" | grep -Fq 'behind=0 ancestor=true' \
+  && printf '%s\n' "$out" | grep -Fxq 'NODE: PASS'; then
+  say "  PASS  provisioning runs the clone's own probe after the clone -> PASS freshness, NODE: PASS"
+else
+  say "  FAIL  layer 40 did not measure the clone with the probe it carries (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+# rung 2: a clone of another project carries no probe -> the node-side fallback measures it
+out=$(pn40 "$tmpd/pn-dirty"); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '  WARN  freshness — ' \
+  && printf '%s\n' "$out" | grep -Fq 'dirty=a.txt' \
+  && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL')" = 0 ] \
+  && printf '%s\n' "$out" | grep -Fxq 'NODE: PASS'; then
+  say "  PASS  a dirty checkout at provision time -> WARN naming a.txt, no FAIL row, NODE: PASS"
+else
+  say "  FAIL  a dirty checkout was not a named WARN (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+# advance origin AFTER the clone, so the node's tree is behind its own remote
+git -C "$tmpd/seed" commit -qm three --allow-empty
+git -C "$tmpd/seed" push -q "$tmpd/origin.git" main
+out=$(pn40 "$tmpd/pn-drift"); rc=$?
+if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fq '  FAIL  freshness — ' \
+  && printf '%s\n' "$out" | grep -Fq 'behind=1' \
+  && printf '%s\n' "$out" | grep -Fxq 'NODE: FAIL (1)'; then
+  say "  PASS  a drifted checkout at provision time -> FAIL naming behind=1, NODE: FAIL (1), exit $rc"
+else
+  say "  FAIL  drift was not a FAIL row in layer 40 (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# The manifest records the measurement (CF-244 AC3): node.json carries `freshness`.
+mkdir -p "$tmpd/pn-scripts/harness" "$tmpd/mf/.node"
+cp "$HERE/scripts/project-node.sh" "$HERE/scripts/lib.sh" "$HERE/scripts/disk_floor.py" "$tmpd/pn-scripts/"
+cat > "$tmpd/pn-scripts/harness/install-fixture.sh" <<'EOF'
+#!/usr/bin/env bash
+. "$(dirname "$0")/../lib.sh"
+say "harness: fixture (CF-244)"
+ok "harness:fixture" "simulated passing adapter"
+exit 0
+EOF
+chmod +x "$tmpd/pn-scripts/harness/install-fixture.sh"
+cat > "$tmpd/bin/curl" <<'EOF'
+#!/usr/bin/env bash
+o=""
+while [ $# -gt 0 ]; do
+  case "$1" in -o) o="$2"; shift 2 ;; -*) shift ;; *) shift ;; esac
+done
+[ -n "$o" ] && [ "$o" != /dev/null ] && printf '%s' '{"status":"ok","auth_required":true}' > "$o"
+printf '200'
+EOF
+chmod +x "$tmpd/bin/curl"
+printf '{"agent":"fixture"}' > "$tmpd/mf/.node/crier.json"
+chmod 600 "$tmpd/mf/.node/crier.json"
+git clone -q "$tmpd/origin.git" "$tmpd/mf/repo"
+full_apply() {  # $1 home
+  env PATH="$tmpd/bin:$PATH" HOME="$1" NODE_PROJECT=demo NODE_HARNESS=fixture \
+    CRIER_URL=http://fixture.invalid:8767 NODE_DISK_FLOOR=1 \
+    /bin/bash "$tmpd/pn-scripts/project-node.sh" --apply --project demo --harness fixture 2>&1
+}
+out=$(full_apply "$tmpd/mf"); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'NODE: PASS' \
+  && python3 -B - "$tmpd/mf/.node/node.json" <<'PY'
+import json, sys
+fresh = json.load(open(sys.argv[1]))["freshness"]
+assert fresh["status"] == "PASS", fresh
+assert fresh["ladder"] == "PASS", fresh
+assert fresh["branch"] == "main", fresh
+assert fresh["behind"] == 0, fresh
+assert fresh["dirty_files"] == [], fresh
+assert fresh["differing_files"] == [], fresh
+PY
+then
+  say "  PASS  --apply records freshness{status:PASS, ladder:PASS, behind:0} in node.json, exit $rc"
+else
+  say "  FAIL  node.json did not carry the measured freshness (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+printf 'a local edit\n' >> "$tmpd/mf/repo/a.txt"
+out=$(full_apply "$tmpd/mf"); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '  WARN  freshness — ' \
+  && python3 -B - "$tmpd/mf/.node/node.json" <<'PY'
+import json, sys
+fresh = json.load(open(sys.argv[1]))["freshness"]
+assert fresh["status"] == "FAIL", fresh
+assert fresh["ladder"] == "WARN", fresh
+assert fresh["dirty_files"] == ["a.txt"], fresh
+PY
+then
+  say "  PASS  a dirty checkout is recorded (status FAIL, ladder WARN, dirty_files [a.txt]) and the ladder still passes, exit $rc"
+else
+  say "  FAIL  a dirty checkout was not recorded as a finding (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+rm -rf "$tmpd"
+# END cf244-node-freshness
 
 # --- node_seed.py: the seed contract (CF-220) ------------------------------------------------
 # A seed that cannot refuse is a copy. Each arm below fails for a different

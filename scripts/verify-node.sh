@@ -3,28 +3,31 @@
 #
 #   ./verify-node.sh --agent <id> [--server <name>] [--port 10800]
 #   ./verify-node.sh --agent <id> --artifact <path-on-node>
+#   ./verify-node.sh --agent <id> --strict-freshness
 #
 # Checks, in order of what they prove:
 #   1. the agent is alive and exec-able
 #   2. the gateway answers from HERE over the tailnet (not from inside itself)
 #   3. the gateway's auth gate is closed (unauthenticated request must be 401/302/403)
 #   4. (optional) an artifact on the node hashes the same on both sides
+#   5. the checkout the node will work is the tree origin/main has (CF-244)
 # A version string is not evidence: step 2 must be a live HTTP answer from this host.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
 
-AGENT="" SERVER="${BUNKER_SERVER:-}" PORT=10800 ARTIFACT=""
+AGENT="" SERVER="${BUNKER_SERVER:-}" PORT=10800 ARTIFACT="" STRICT_FRESHNESS=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --agent) AGENT="$2"; shift 2 ;;
     --server) SERVER="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
     --artifact) ARTIFACT="$2"; shift 2 ;;
+    --strict-freshness) STRICT_FRESHNESS=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
-[ -z "$AGENT" ] && { echo "usage: $0 --agent ID [--server NAME] [--port P] [--artifact PATH]"; exit 2; }
+[ -z "$AGENT" ] && { echo "usage: $0 --agent ID [--server NAME] [--port P] [--artifact PATH] [--strict-freshness]"; exit 2; }
 # The old guard used ${VAR:?} at assignment time, so --server could never be used without the
 # environment variable being set first: the documented flag was dead.
 [ -z "$SERVER" ] && { echo "set BUNKER_SERVER or pass --server <name>" >&2; exit 2; }
@@ -99,6 +102,45 @@ if [ -n "$ARTIFACT" ]; then
   else
     bad "artifact_digest" "node ${remote:0:12} vs host ${local_h:0:12} — bytes differ or file missing"
   fi
+fi
+
+# 5. the checkout the node will work (CF-244)
+# Steps 1-4 prove the agent answers, the gateway is up and the gate is closed —
+# none of them looks at the tree. A node one commit behind origin/main, or one
+# carrying a local edit that blocks its own fast-forward, passed every one of
+# them. scripts/node_freshness.py measures branch/HEAD/ancestor/lag/uncommitted
+# paths in ONE bunker exec and its verdict is folded in here, so `VERIFY: PASS`
+# is unreachable for a drifted node.
+#
+# Default mapping: PASS -> PASS, drift or dirty -> FAIL, unmeasurable -> WARN
+# (a node still being provisioned has no checkout yet, and "cannot measure" is
+# not proof of staleness — the same doctrine as repo_freshness.py). With
+# --strict-freshness an unmeasurable checkout is a FAIL, so a gate can refuse on
+# "unknown" as well as on "drifted".
+FRESH="$HERE/node_freshness.py"
+if [ ! -r "$FRESH" ]; then
+  bad "checkout_freshness" "$FRESH missing — the checkout's git state is unmeasured"
+else
+  fresh_rows=$(mktemp); fresh_json=$(mktemp)
+  python3 -B "$FRESH" --agent "$AGENT" --server "$SERVER" --json >"$fresh_json" 2>"$fresh_rows"
+  frc=$?
+  case "$frc" in
+    0)
+      ok "checkout_freshness" "$(grep -F '  PASS  freshness — ' "$fresh_rows" | sed -e 's/^  PASS  freshness — //' | head -1)"
+      ;;
+    1)
+      bad "checkout_freshness" "$(grep -E '^  FAIL  ' "$fresh_rows" | sed -e 's/^  *FAIL  //' | paste -sd '|' - | sed -e 's/|/ | /g' | cut -c1-500)"
+      ;;
+    *)
+      detail=$(grep -E '^RESULT: ' "$fresh_rows" | head -1 | sed -e 's/^RESULT: //')
+      if [ "${STRICT_FRESHNESS:-0}" -eq 1 ]; then
+        bad "checkout_freshness" "${detail:-unmeasurable} (--strict-freshness: unknown is not a pass)"
+      else
+        warn "checkout_freshness" "${detail:-unmeasurable} — the checkout could not be measured; pass --strict-freshness to refuse it"
+      fi
+      ;;
+  esac
+  rm -f "$fresh_rows" "$fresh_json"
 fi
 
 say ""
