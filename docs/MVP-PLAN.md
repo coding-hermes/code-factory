@@ -42,7 +42,11 @@ Read top-down: 1–4 are **missing**, 5–6 are **miswired**, 7–8 are **workin
 1. Map the project (not the lane) to the bunker; carry the lane id inside the payload (CF-210).
 2. Send one directive through crier; the node pulls it, verifies the brief digest, writes the
    receipt. No model call — this proves routing, delivery and identity without the proxy.
-3. Exit evidence: scheduler tick row + node receipt + the digest recomputed on the control host.
+3. The node consumes it with its **own** credentials: `scripts/node-bus-worker.py` (CF-215) reads
+   `/agents/<id>/inbox` with the bearer *and* the per-agent ed25519 signature, verifies
+   `brief.digest`, runs the harness inside the clone, posts the result with its `corr_id` and
+   acks last. Its `--check` is the row-by-row evidence that the node can do this at all.
+4. Exit evidence: scheduler tick row + node receipt + the digest recomputed on the control host.
 
 ### P2 — one task, one result (exit test: tick completes from the node's own result)
 

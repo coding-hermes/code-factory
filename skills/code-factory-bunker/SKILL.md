@@ -171,10 +171,69 @@ a host, so a refused declaration is a named `FAIL env_profile` row rather than a
 `auth_github` / `auth_duckbrain` FAIL | token file missing on the node | name the token file in the config, re-apply |
 `harness` FAIL | harness binary absent | run the harness adapter (`scripts/harness/install-<h>.sh --apply`) |
 `env_profile` FAIL | the declaration is refused — an unknown `CONFIG_SET_*` path, a literal secret, a non-`ENV_` line | fix the profile or the key; the row names the line and the allowed set |
-`crier` 401/403 | auth or per-agent signature missing, or owner/guard refused. crier checks the signer **before** it looks the agent up (`internal/registry/agentsig.go` (package `registry`)), so 401 is **not** evidence the id is unknown | present the agent's bearer + signature, or register the sender |
-`crier` 404 | the agent id is genuinely not registered | register it; do not invent a key |
+`crier` 401/403 | auth or per-agent signature missing, or owner/guard refused. crier checks the signer **before** it looks the agent up (`internal/registry/agentsig.go`, `verifyAgentSignatureForKey`), so 401 is **not** evidence the id is unknown | present the agent's bearer + signature, or register the sender |`crier` 404 | the agent id is genuinely not registered | register it; do not invent a key |
 `crier` 000 | bus unreachable | the URL, not the node, is the problem |
 `duckbrain` FAIL | namespace unreachable with that key | check the token's namespace scope |
+
+## The node's bus worker
+
+`scripts/node-bus-worker.py` is the node side of the bus: the thing that consumes the inbox. It
+runs **on the node**, is stdlib-only, and every write it makes is under `$HOME`.
+
+```bash
+# on the node
+python3 ~/node-scripts/node-bus-worker.py --check          # measure, print rows, write nothing
+python3 ~/node-scripts/node-bus-worker.py --once           # fetch -> verify -> run -> reply -> ack
+python3 ~/node-scripts/node-bus-worker.py --loop 20 --interval 15
+python3 ~/node-scripts/node-bus-worker.py --once --dry-run # fetch, print the plan, run/post/ack nothing
+```
+
+It needs four things the provisioner installs, and names the first missing one:
+
+| on the node | what it is | created by |
+|---|---|---|
+`$HOME/.node/crier.json` | agent id, project, bus url (mode 600) | `bunker-crier-connect.sh --apply` |
+`$HOME/.node/node.json` | project, `repo.path` (the clone), `harness.cmd` (mode 600) | provisioner step 8 |
+`$HOME/.node/agent.key` | the agent's **own** PKCS#8 PEM ed25519 private key (mode 600) | key material held by whoever registered the agent — never generated here |
+`$HOME/.node/auth/crier.token` | the bus bearer token (mode 600), or `CRIER_AUTH_TOKEN` | the auth bundle |
+
+**The bus verifies two credentials, not one.** `CR_REQUIRE_AGENT_SIG=true` is the default, and a
+signed read also carries the shared bearer. The signature is exactly what crier's
+`internal/registry/agentsig.go` verifies: `X-Agent-ID`, `X-Agent-Ts` (unix seconds, ±30 s) and
+`X-Agent-Sig` = hex(ed25519(`METHOD\n<path>\n<ts>`)) over the raw path with the query string
+excluded, so a retrieve signature cannot be replayed on the ack. A body can opt into a fourth
+transcript line (`\nsha256:<hex>`) via `X-Agent-Body-SHA256`; the worker sends it on every POST.
+
+`--check` rows: `identity` (both files, modes, project), `project` (the two files agree),
+`signing_key` (present, mode 600, parses as PKCS#8 ed25519 — it prints the **public** half only),
+`bus_bearer`, `bus_health`, `inbox` (`/inbox/stats` — the signed read that leases nothing),
+`key_registry` (the node's public key must be the one the bus has on file), `harness`,
+`gateway`. Any FAIL exits 1.
+
+Refusals, in the order they are decided — none of them runs anything:
+
+| row | when | what it means |
+|---|---|---|
+`identity` | `node.json`/`crier.json` unreadable or not an object | nothing else can be measured |
+`project` | the two identity files name different projects | one of them is stale; fix it, do not guess |
+`signing_key` | the key file is absent, world-readable, encrypted, not PKCS#8 or not ed25519 | the node cannot sign; **do not invent a key and do not borrow another agent's** |
+`bus_bearer` | neither the token file nor `CRIER_AUTH_TOKEN` supplies a token | a signature alone is still a 401 |
+`bus_health` | `/health` answers `000` | the URL, or the route to it, is the problem |
+`brief_digest` | `brief.digest` ≠ sha256(`text`) | the brief was altered in flight: refused, result posted, message acked |
+`brief_project` | the dispatch names another project | the bus routed a directive to the wrong bunker |
+`brief_workdir` | the dispatch names a workdir outside the clone | refused; this node writes only inside its clone and `$HOME` |
+
+Order of operations in `--once` is the contract: verify the digest **before** running, post the
+result to `reply_to` with the dispatch's `corr_id` preserved, and **ack last** — a crash between
+execution and delivery leaves the message leased, so it comes back. A redelivered
+`idempotency_key`/`dispatch_id` replays the recorded result instead of running the harness twice
+(`$HOME/.node/bus-seen.json`, mode 600).
+
+Reading a failure: `401` on the inbox is **not** proof the agent is unknown — crier checks the
+signer before it looks the agent up. A `key_registry` FAIL is the other side of the same coin:
+the node signs with a key the bus does not have, so every request 401s while the node looks
+healthy. `--check` prints the public half precisely so that comparison is possible without
+touching key material.
 
 ## Rules that bite
 

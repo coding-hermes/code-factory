@@ -2444,5 +2444,76 @@ else
 fi
 rm -rf "$envtmp"
 
+say "44. the node bus worker names the refusal it cannot proceed past (CF-215)"
+python3 -c 'import sys; compile(open(sys.argv[1], encoding="utf-8").read(), sys.argv[1], "exec")' "$HERE/scripts/node-bus-worker.py" \
+  && say "  PASS  scripts/node-bus-worker.py compiles" || { say "  FAIL  node-bus-worker.py does not compile"; fails=$((fails+1)); }
+
+buswtmp=$(mktemp -d)
+worker="$HERE/scripts/node-bus-worker.py"
+# one throwaway PKCS#8 ed25519 key, generated here and nowhere committed: the worker never
+# invents key material, so a leg that needs a key has to supply one.
+busk() {
+  python3 - "$1" <<'PROBE'
+import base64, os, sys
+seed = os.urandom(32)
+der = bytes.fromhex("302e020100300506032b657004220420") + seed
+body = base64.b64encode(der).decode()
+open(sys.argv[1], "w").write("-----BEGIN PRIVATE KEY-----\n" + body + "\n-----END PRIVATE KEY-----\n")
+PROBE
+  chmod 600 "$1"
+}
+busfix() {  # busfix <home> <node-project> <bus-project> <url> [key|nokey]
+  rm -rf "$1"; mkdir -p "$1/.node/auth"
+  printf '{"node_id":"fixture","project":"%s","repo":{"path":"%s/repo"},"harness":{"name":"fixture"}}\n' "$2" "$1" > "$1/.node/node.json"
+  printf '{"agent":"fixture-node","project":"%s","url":"%s"}\n' "$3" "$4" > "$1/.node/crier.json"
+  chmod 600 "$1/.node/node.json" "$1/.node/crier.json"
+  printf 'fixture-token\n' > "$1/.node/auth/crier.token"; chmod 600 "$1/.node/auth/crier.token"
+  mkdir -p "$1/repo"
+  [ "${5:-nokey}" = key ] && busk "$1/.node/agent.key"
+}
+busrun() { env -i HOME="$1" PATH="$PATH" python3 "$worker" "${@:2}" 2>&1; }
+
+# (1) the two identity files disagree about the project
+busfix "$buswtmp/a" demo-a demo-b http://127.0.0.1:1
+out=$(busrun "$buswtmp/a" --once); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^  FAIL  project — ' \
+  && ! printf '%s\n' "$out" | grep -q '^  PASS  bus_health'; then
+  say "  PASS  project mismatch -> named FAIL, exit $rc, no bus contact"
+else
+  say "  FAIL  project mismatch was not refused before the network (exit $rc)"; fails=$((fails+1))
+fi
+
+# (2) an unreadable identity file
+busfix "$buswtmp/b" demo demo http://127.0.0.1:1 key
+printf 'not json at all\n' > "$buswtmp/b/.node/node.json"
+out=$(busrun "$buswtmp/b" --check); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^  FAIL  identity — .*not readable JSON'; then
+  say "  PASS  unreadable identity -> named FAIL, exit $rc"
+else
+  say "  FAIL  an unreadable identity was not refused by name (exit $rc)"; fails=$((fails+1))
+fi
+
+# (3) no key material on the node — the failure the bus makes unavoidable
+busfix "$buswtmp/c" demo demo http://127.0.0.1:1 nokey
+out=$(busrun "$buswtmp/c" --once); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^  FAIL  signing_key — .*agent.key absent' \
+  && ! printf '%s\n' "$out" | grep -q '^  PASS  bus_health' \
+  && ! printf '%s\n' "$out" | grep -q 'BEGIN PRIVATE KEY'; then
+  say "  PASS  absent key -> named FAIL naming the file, exit $rc, nothing invented, no bus contact"
+else
+  say "  FAIL  an absent key was not refused before the network (exit $rc)"; fails=$((fails+1))
+fi
+
+# (4) a bus that does not answer from this node
+busfix "$buswtmp/d" demo demo http://127.0.0.1:1 key
+out=$(busrun "$buswtmp/d" --once --timeout 2); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^  FAIL  bus_health — .*-> 000' \
+  && ! printf '%s\n' "$out" | grep -q '^  PASS  inbox'; then
+  say "  PASS  unreachable bus -> named FAIL with 000, exit $rc, no inbox read attempted"
+else
+  say "  FAIL  an unreachable bus was not refused by name (exit $rc)"; fails=$((fails+1))
+fi
+rm -rf "$buswtmp"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
