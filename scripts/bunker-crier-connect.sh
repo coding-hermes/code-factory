@@ -45,8 +45,9 @@ check() {
   code=$(probe)
   case "$code" in
     200) ok "inbox" "$URL/agents/$AGENT/inbox -> 200" ;;
-    401|403) bad "inbox" "$URL/agents/$AGENT/inbox -> $code (identity or guard refused)" ;;
-    404) bad "inbox" "$URL/agents/$AGENT/inbox -> 404 (agent not registered on the bus)" ;;
+    401) bad "inbox" "$URL/agents/$AGENT/inbox -> 401 (auth or per-agent signature missing — crier checks the signer BEFORE it looks the agent up, so this is not proof the id is unknown)" ;;
+    403) bad "inbox" "$URL/agents/$AGENT/inbox -> 403 (owner mismatch or guard refused)" ;;
+    404) bad "inbox" "$URL/agents/$AGENT/inbox -> 404 (agent is genuinely not registered on the bus)" ;;
     *)   bad "inbox" "$URL/agents/$AGENT/inbox -> $code" ;;
   esac
 

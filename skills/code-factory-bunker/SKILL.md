@@ -151,8 +151,8 @@ a host, so a refused declaration is a named `FAIL env_profile` row rather than a
 `auth_github` / `auth_duckbrain` FAIL | token file missing on the node | name the token file in the config, re-apply |
 `harness` FAIL | harness binary absent | run the harness adapter (`scripts/harness/install-<h>.sh --apply`) |
 `env_profile` FAIL | the declaration is refused — an unknown `CONFIG_SET_*` path, a literal secret, a non-`ENV_` line | fix the profile or the key; the row names the line and the allowed set |
-`crier` 401/403 | identity or guard refused | register the agent id with the bus; check the guard's reserved keys |
-`crier` 404 | agent unknown to the bus | connect the agent, do not invent a key |
+`crier` 401/403 | auth or per-agent signature missing, or owner/guard refused. crier checks the signer **before** it looks the agent up (`internal/auth/agentsig.go:167`), so 401 is **not** evidence the id is unknown | present the agent's bearer + signature, or register the sender |
+`crier` 404 | the agent id is genuinely not registered | register it; do not invent a key |
 `crier` 000 | bus unreachable | the URL, not the node, is the problem |
 `duckbrain` FAIL | namespace unreachable with that key | check the token's namespace scope |
 
