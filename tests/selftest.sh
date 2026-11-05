@@ -860,7 +860,21 @@ if git -C "$HERE" show bbb0719:scripts/verify-node.sh > "$tmpd/before/verify-nod
 else
   say "  FAIL  pre-fix source unavailable"; fails=$((fails+1))
 fi
-for c in 401 302 403 404 000 500 200; do
+# 000 is its own verdict now: an unreachable port with the gateway answering inside the node is
+# UNVERIFIED (exit 3), not FAIL — a transport gap is not a broken node, and calling it a failure is
+# what trained operators to ignore the last line (CF-224).
+out=$(cf077_run 000 "$body" "$HERE/scripts/verify-node.sh" --agent f); rc=$?
+if [ "$rc" -eq 3 ] \
+  && printf '%s\n' "$out" | grep -Eq '^  WARN  unauth_refused — unverified' \
+  && printf '%s\n' "$out" | grep -Eq '^VERIFY: UNVERIFIED' \
+  && printf '%s\n' "$out" | grep -Eq '^  PASS  agent_alive'; then
+  say "  PASS  auth stats 000 -> WARN gateway_reachable, exit $rc (UNVERIFIED, not FAIL)"
+else
+  say "  FAIL  auth stats 000 was not reported as UNVERIFIED (exit $rc): $(printf '%s\n' "$out" | grep -E '^  (PASS|FAIL|WARN)|^VERIFY' | head -4 | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+
+for c in 401 302 403 404 500 200; do
   out=$(cf077_run "$c" "$body" "$HERE/scripts/verify-node.sh" --agent f); rc=$?
   case "$c" in 401|302|403) want=0; row=PASS; summary='VERIFY: PASS' ;; *) want=1; row=FAIL; summary='VERIFY: FAIL (1)' ;; esac
   if [ "$rc" -eq "$want" ] && printf '%s\n' "$out" | grep -Fxq "$summary" \
