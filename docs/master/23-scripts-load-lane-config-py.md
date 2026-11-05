@@ -9,5 +9,55 @@
 
 ## 1. Purpose and why it matters
 
-- What breaks if this module is absent: The `UPDATE` at `scripts/load_lane_config.py:33-36` never runs. That statement is the only writer in the source for `namespace_id`, `admission_mode`, `prompt`, and `prompt_mode='append'` on the CFG project rows listed at `scripts/load_lane_config.py:20-27`. Without it, those lanes keep their previous values and the prompt files under `ROOT/prompts/<prompt_name>.md` are not copied into `projects.prompt`; the copy is the same `UPDATE`, using text read at `scripts/load_lane_config.py:32`.
-- What breaks if it lies: The
+- What breaks if this module is absent: **UNKNOWN** (fill from behaviour, prove it).
+- What breaks if it lies: **UNKNOWN** (every self-reporting component has this failure mode).
+
+## 2. Dependencies and library contracts
+
+### 2a. Runtime dependencies
+
+| Dependency | Version | Where it must exist | Absence detected by |
+|---|---|---|---|
+| — | — | — | **RED: none identified mechanically** |
+
+### 2b. Library contracts
+
+| Import | Provider | Contract relied on | If it changes |
+|---|---|---|---|
+| `os` | — | **UNKNOWN** | **UNKNOWN** |
+| `pathlib` | — | **UNKNOWN** | **UNKNOWN** |
+| `sqlite3` | — | **UNKNOWN** | **UNKNOWN** |
+
+### 2c. Service contracts (both sides must be named)
+
+| Peer | Direction | Transport | Payload | Other side (file:function) |
+|---|---|---|---|---|
+| **UNKNOWN** | — | — | — | **RED** |
+
+## 3. Verification
+
+| Check | Command | Expected | Last run | Result |
+|---|---|---|---|---|
+| — | **no check exists** | — | — | **RED** |
+
+## 4. Metrics emitted
+
+**NONE FOUND** — this is a RED field. Dispatch rate, latency, failure counts and liveness are all unanswerable without reading code or grepping logs.
+
+## 5. Log lines it can generate
+
+**NONE DETECTED** — RED: an operator has nothing to read when this fails.
+
+## 6. Failure modes
+
+| Failure | Presents as | Distinguished from | Recovery |
+|---|---|---|---|
+| **UNKNOWN** | — | — | — |
+
+## 7. Environment and settings it reads
+
+**NONE DETECTED**
+
+## 8. Evidence of record
+
+- none yet
