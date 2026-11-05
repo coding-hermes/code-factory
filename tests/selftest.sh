@@ -2826,5 +2826,87 @@ else
 fi
 rm -rf "$tmpd"
 
+# --- node_seed.py: the seed contract (CF-220) ------------------------------------------------
+# A seed that cannot refuse is a copy. Each arm below fails for a different
+# reason: a missing file in the record, a tampered file on disk, a budget
+# breach, and a backup artefact declared as seedable.
+
+say ""
+say "node_seed — the declared seed, its digests, and what it refuses"
+
+SEED="$(cd "$(dirname "$0")/.." && pwd)/scripts/node_seed.py"
+SEED_MANIFEST="$(cd "$(dirname "$0")/.." && pwd)/config/node-seed.txt"
+seed_tmp=$(mktemp -d); seed_home=$(mktemp -d)
+
+out=$(python3 -B "$SEED" build --manifest "$SEED_MANIFEST" --repo-root "$(cd "$(dirname "$0")/.." && pwd)" --out "$seed_tmp/seed.tar" 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && [ -f "$seed_tmp/seed.tar.json" ] \
+  && python3 - "$seed_tmp/seed.tar.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["files"], "record has no files"
+assert all(len(f["sha256"]) == 64 for f in d["files"]), "a digest is not sha256"
+assert any(f["path"].startswith("prompts/") for f in d["files"]), "no prompts declared"
+assert any(f["path"].startswith("skills/") for f in d["files"]), "no skills declared"
+PY
+then
+  say "  PASS  build writes a record with a sha256 per declared file, exit $rc"
+else
+  say "  FAIL  build did not produce a digest record (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+out=$(python3 -B "$SEED" apply --tar "$seed_tmp/seed.tar" --record "$seed_tmp/seed.tar.json" --home "$seed_home" 2>&1); rc=$?
+out2=$(python3 -B "$SEED" check --record "$seed_tmp/seed.tar.json" --home "$seed_home" 2>&1); rc2=$?
+if [ "$rc" -eq 0 ] && [ "$rc2" -eq 0 ] && [ -f "$seed_home/.hermes/prompts/foreman.md" ] \
+  && [ -f "$seed_home/.hermes/seed-applied.json" ]; then
+  say "  PASS  apply installs prompts and skills and a green check follows (exit $rc, $rc2)"
+else
+  say "  FAIL  apply/check did not land a usable seed (exit $rc, $rc2)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+printf 'tampered\n' >> "$seed_home/.hermes/prompts/foreman.md"
+out=$(python3 -B "$SEED" check --record "$seed_tmp/seed.tar.json" --home "$seed_home" 2>&1); rc=$?
+if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q 'prompts/foreman.md drifted'; then
+  say "  PASS  a tampered file fails the check and is named (exit $rc)"
+else
+  say "  FAIL  a tampered file did not fail the check (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# A record whose digest does not match the archive must install NOTHING.
+python3 - "$seed_tmp" <<'PY'
+import json, sys
+p = sys.argv[1] + "/seed.tar.json"
+d = json.load(open(p))
+d["files"][0]["sha256"] = "0" * 64
+json.dump(d, open(sys.argv[1] + "/bad.json", "w"))
+PY
+seed_home2=$(mktemp -d)
+out=$(python3 -B "$SEED" apply --tar "$seed_tmp/seed.tar" --record "$seed_tmp/bad.json" --home "$seed_home2" 2>&1); rc=$?
+if [ "$rc" -eq 1 ] && [ ! -d "$seed_home2/.hermes/prompts" ]; then
+  say "  PASS  a digest mismatch refuses the whole seed and installs nothing (exit $rc)"
+else
+  say "  FAIL  a digest mismatch was not refused, or files were installed anyway (exit $rc)"
+  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+out=$(python3 -B "$SEED" build --manifest "$SEED_MANIFEST" --repo-root "$(cd "$(dirname "$0")/.." && pwd)" --out "$seed_tmp/small.tar" --budget 100 2>&1); rc=$?
+if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q 'exceeds the declared ceiling'; then
+  say "  PASS  a seed over the size budget is refused (exit $rc)"
+else
+  say "  FAIL  the size budget did not refuse (exit $rc)"; fails=$((fails+1))
+fi
+
+printf 'backups/board.tar.gz\n' > "$seed_tmp/bad.manifest"
+out=$(python3 -B "$SEED" build --manifest "$seed_tmp/bad.manifest" --out "$seed_tmp/b.tar" 2>&1); rc=$?
+if [ "$rc" -ne 0 ]; then
+  say "  PASS  a backup artefact declared as seedable is refused (exit $rc)"
+else
+  say "  FAIL  a backup artefact was accepted as seed input (exit $rc)"; fails=$((fails+1))
+fi
+
+rm -rf "$seed_tmp" "$seed_home" "$seed_home2"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

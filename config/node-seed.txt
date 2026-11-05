@@ -1,0 +1,13 @@
+# node-seed manifest — what a node receives, and nothing else (CF-220).
+#
+# Every line is a path or glob relative to the repo root. A file that is not
+# named here is not seeded; that is the exclusion mechanism, so this list is the
+# whole story of what lands on a node.
+#
+# Deliberately absent: backup tarballs, wave logs, the user's full skill library,
+# and anything under .coding-hermes/ (board state is delivered by git, not a seed).
+
+prompts/*.md
+skills/**/*.md
+skills/**/*.sh
+skills/**/*.py

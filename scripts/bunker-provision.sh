@@ -443,6 +443,40 @@ apply() {
     warn "env_profile" "no NODE_ENV_FILE or CONFIG_SET_* — the node's environment is declared nowhere"
   fi
 
+  # 4b. seed the prompts and the declared skills (CF-220). A node with a harness
+  # and no procedure is a node whose foreman reports "this run's tools are on the
+  # host". The seed is a declared list with digests: it refuses a file outside
+  # the list, a file over the budget, and an archive whose digest disagrees.
+  seed_manifest="$HERE/../config/node-seed.txt"
+  if [ -f "$seed_manifest" ]; then
+    say "  ..    seeding prompts and skills"
+    seed_dir=$(mktemp -d)
+    if python3 "$HERE/node_seed.py" build --manifest "$seed_manifest" \
+         --repo-root "$HERE/.." --out "$seed_dir/seed.tar" >"$seed_dir/build.log" 2>&1; then
+      if "$b" cp "$seed_dir/seed.tar" "$AGENT:seed.tar" --server "$SERVER" >/dev/null 2>&1 \
+         && "$b" cp "$seed_dir/seed.tar.json" "$AGENT:seed.tar.json" --server "$SERVER" >/dev/null 2>&1 \
+         && "$b" cp "$HERE/node_seed.py" "$AGENT:node_seed.py" --server "$SERVER" >/dev/null 2>&1; then
+        seed_out=$("$b" exec --server "$SERVER" "$AGENT" -- bash -lc \
+          'python3 \$HOME/node_seed.py apply --tar \$HOME/seed.tar --record \$HOME/seed.tar.json --home \$HOME' 2>&1); seed_rc=$?
+        if [ "$seed_rc" -eq 0 ]; then
+          ok "node_seed" "$(printf '%s\n' "$seed_out" | grep -c '  PASS  ') rows passed on the node"
+        else
+          bad "node_seed" "apply exited $seed_rc on the node — rows above"
+        fi
+        "$b" exec --server "$SERVER" "$AGENT" -- bash -lc \
+          'rm -f \$HOME/seed.tar \$HOME/seed.tar.json \$HOME/node_seed.py' >/dev/null 2>&1 || true
+      else
+        bad "node_seed" "could not stage the seed"
+      fi
+    else
+      bad "node_seed" "build refused the declared seed — see the row above"
+      sed 's/^/    | /' "$seed_dir/build.log" | head -5
+    fi
+    rm -rf "$seed_dir"
+  else
+    warn "node_seed" "config/node-seed.txt is absent — nothing declares what a node receives"
+  fi
+
   # 5. gateway auth BEFORE the harness layer: a public bind is refused without it (CF-150)
   if [ "${HARNESS:-hermes}" = "hermes" ]; then
     say "  ..    ensuring dashboard.basic_auth"
