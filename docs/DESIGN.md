@@ -5,21 +5,28 @@
 ```
                     control host (this machine)
    ┌──────────────────────────────────────────────────────────┐
-   │  Hermes foreman  ── designs work, verifies results       │
-   │        │                                                 │
    │  task-router     ── ranks model + provider per lane      │
    │        │                                                 │
    │  scheduler       ── decides whose turn, records the tick │
    │        │                                                 │
    │  crier           ── carries the command (durable inbox)  │
+   │  DuckBrain       ── the memory every node writes to      │
+   │  board           ── what is done, and the evidence       │
    └────────┼─────────────────────────────────────────────────┘
-            │  tailnet
-   ┌────────┴──────────┐   ┌──────────────────┐   ┌──────────────────┐
-   │ node: crier       │   │ node: scheduler  │   │ node: task-router│
-   │ repo + harness    │   │ repo + harness   │   │ repo + harness   │
-   │ gateway :10800    │   │ gateway :10801   │   │ gateway :10802   │
-   └───────────────────┘   └──────────────────┘   └──────────────────┘
+            │  tailnet (one bunker per project)
+   ┌────────┴──────────────────────────────────────────────────┐
+   │ bunker node: <project>                                    │
+   │   Hermes foreman  ── runs HERE, with the coding-hermes    │
+   │        │              prompts and skills seeded on the node│
+   │   router :20128   ── picks the host/model for this project │
+   │   repo/<project>  ── the clone the lanes work in           │
+   │   gitreins        ── the commit gate, installed here       │
+   │   DuckBrain write ── namespace = this project              │
+   └───────────────────────────────────────────────────────────┘
 ```
+
+The foreman runs on the node, not here: it is the component that grades work, and grading from a
+host that cannot see the node's tree would be grading a claim. See `specs/HARNESS-MATRIX.md` I1.
 
 **Not** a dispatcher of sessions. A node is a place where a repo lives and a harness runs;
 the command arrives as a message and the answer comes back as a message.
@@ -61,7 +68,7 @@ about the scheduler → crier → node transport, not about either leg above.
 | Which project works next | scheduler | the node |
 | Which model answers | task-router | crier ("crier must not embed vendor harness logic") |
 | Which harness executes | node manifest + scheduler target | crier |
-| Whether the work is correct | foreman, verified on the control host | the node's own claim |
+| Whether the work is correct | foreman, on the node, and re-checked by the control host from the returned artifact digest | the node's own claim |
 | Transport | crier | the scheduler's business logic |
 
 ## 5. Failure model

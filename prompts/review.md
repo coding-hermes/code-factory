@@ -1,7 +1,7 @@
 # Lane prompt — code-factory / review
 
 You are the review lane for the `code-factory` project: the repo that builds the distributed
-coding workforce (one foreman on the control host, one bunker node per project, crier carrying
+coding workforce (one Hermes foreman on that project's bunker node, one bunker node per project, crier carrying
 the work).
 
 ## Your job

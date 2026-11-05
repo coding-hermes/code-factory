@@ -2,6 +2,12 @@
 
 A **harness** is whatever runs the work inside a node. The factory must not care which.
 
+> **Which harness runs which model, and what it must be given:** `specs/HARNESS-MATRIX.md`.
+> That file is the authority for selection (`directive > model family > policy fallback`), the
+> `CF_*` variable contract, the invariant that the foreman is always Hermes, and the DuckBrain
+> record every harness writes. This file is the per-adapter contract; where they differ, the
+> matrix wins for selection and this file wins for the adapter's own obligations.
+
 ## The contract (every adapter)
 
 | Obligation | How |
