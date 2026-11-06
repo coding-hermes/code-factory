@@ -23,3 +23,6 @@ key*
 __pycache__/
 *.pyc
 .gitreins/rescued-*/
+
+# Foreman ownership claim — the panel loop holds the checkout while it writes.
+.coding-hermes/panel.lock
