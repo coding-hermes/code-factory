@@ -140,7 +140,7 @@ in a second clean clone of the published remote at `2787611`:
 | Absolute host paths — all | **550 files / 2554 occurrences** | identical to the earlier pass |
 | … excluding `.gitreins` + board | **108 files / 703 occurrences** | identical |
 | Tracked judge bundles | `.gitreins` = 808 files | unchanged |
-| Working-tree secrets | `gitleaks detect --no-git --redact` → **0 findings** (2.53 MB) | unchanged |
+| Working-tree secrets | `gitleaks detect --no-git --redact` → **0 findings** (2.53 MB); working-tree scope only, so no `--log-opts` revision range is claimed for this row | unchanged |
 | Unrelated `master` lineage | `4ead64f`, `772 754` vs `main`, 441 files / 327 internal | unchanged (CF-163) |
 | **Anonymous reachability** | `raw.githubusercontent.com/.../master/.hermes/fleet.toml` → **200**; `.../master/monitoring/.coding-hermes/board/tasks.jsonl` → **200** (unauthenticated) | the board path is newly probed this pass, and it is live: a stranger can fetch the fleet's own operational board |
 | Published heads | **72** | unchanged |
