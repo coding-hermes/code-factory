@@ -2637,6 +2637,17 @@ say "44. the node bus worker names the refusal it cannot proceed past (CF-215)"
 python3 -c 'import sys; compile(open(sys.argv[1], encoding="utf-8").read(), sys.argv[1], "exec")' "$HERE/scripts/node-bus-worker.py" \
   && say "  PASS  scripts/node-bus-worker.py compiles" || { say "  FAIL  node-bus-worker.py does not compile"; fails=$((fails+1)); }
 
+# CF-229 AC4: the RECEIVING side of the §5 contract. The installers are held to it by the
+# conformance battery; the bus worker is held to it here — the directive's set reaches the harness
+# child, and the run records WHICH values it passed (name -> {set,len}) without recording them.
+# The two refusal arms are the failure path, so this arm can go red. Part of section 44 rather than
+# a new section: the drift probe compares the plan's section count against this file's.
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_section5_receipt.py" >/dev/null 2>&1; then
+  say "  PASS  §5 set accepted from the directive, receipt records name/set/len only, ambient CF_* scrubbed"
+else
+  say "  FAIL  the §5 contract on the receiving side (tests/test_section5_receipt.py)"; fails=$((fails+1))
+fi
+
 buswtmp=$(mktemp -d)
 worker="$HERE/scripts/node-bus-worker.py"
 # one throwaway PKCS#8 ed25519 key, generated here and nowhere committed: the worker never
