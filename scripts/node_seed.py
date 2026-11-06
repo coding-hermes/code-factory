@@ -122,7 +122,9 @@ def build(args: argparse.Namespace) -> int:
             bad("seed_manifest", "%s is a directory — declare files, not trees" % path)
             return 1
         rel = os.path.relpath(os.path.realpath(path), repo_root)
-        if args.exclude_backups and (rel.startswith("backups/") or rel.endswith(".tar.gz")):
+        if args.exclude_backups and (
+            rel.startswith("backups/") or rel.endswith(".tar.gz")
+        ):
             bad("seed_manifest", "%s is a backup artefact and may not be seeded" % rel)
             return 1
         digest = sha256_file(path)
@@ -131,10 +133,16 @@ def build(args: argparse.Namespace) -> int:
         records.append({"path": rel, "sha256": digest, "bytes": size})
 
     if total > args.budget:
-        bad("seed_budget", "%d bytes exceeds the declared ceiling of %d" % (total, args.budget))
+        bad(
+            "seed_budget",
+            "%d bytes exceeds the declared ceiling of %d" % (total, args.budget),
+        )
         return 1
 
-    ok("seed_manifest", "%d files declared, %d bytes (ceiling %d)" % (len(records), total, args.budget))
+    ok(
+        "seed_manifest",
+        "%d files declared, %d bytes (ceiling %d)" % (len(records), total, args.budget),
+    )
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)) or ".", exist_ok=True)
     with tarfile.open(args.out, "w:gz") as tar:
@@ -208,7 +216,10 @@ def apply_seed(args: argparse.Namespace) -> int:
             for member in tar.getmembers():
                 target = os.path.realpath(os.path.join(staging, member.name))
                 if not target.startswith(os.path.realpath(staging) + os.sep):
-                    bad("seed_extract", "refusing path traversal in archive: %s" % member.name)
+                    bad(
+                        "seed_extract",
+                        "refusing path traversal in archive: %s" % member.name,
+                    )
                     return 1
             tar.extractall(staging)
 
@@ -221,10 +232,17 @@ def apply_seed(args: argparse.Namespace) -> int:
                 continue
             got = sha256_file(staged)
             if got != rec["sha256"]:
-                bad("seed_digest", "%s digest %s != recorded %s" % (rec["path"], got[:12], rec["sha256"][:12]))
+                bad(
+                    "seed_digest",
+                    "%s digest %s != recorded %s"
+                    % (rec["path"], got[:12], rec["sha256"][:12]),
+                )
                 mismatches += 1
         if mismatches:
-            bad("seed_apply", "%d file(s) failed the digest check — nothing installed" % mismatches)
+            bad(
+                "seed_apply",
+                "%d file(s) failed the digest check — nothing installed" % mismatches,
+            )
             return 1
         ok("seed_digest", "all %d files match the record" % len(record["files"]))
 
@@ -249,7 +267,9 @@ def apply_seed(args: argparse.Namespace) -> int:
             for rel in sorted(src_files):
                 if rel not in dst_files:
                     new.append(rel)
-                elif sha256_file(os.path.join(src, rel)) != sha256_file(os.path.join(dst, rel)):
+                elif sha256_file(os.path.join(src, rel)) != sha256_file(
+                    os.path.join(dst, rel)
+                ):
                     changed.append(rel)
             for rel in sorted(dst_files - src_files):
                 if (top + "/" + rel) in previous:
@@ -276,13 +296,26 @@ def apply_seed(args: argparse.Namespace) -> int:
                     os.makedirs(os.path.dirname(target), exist_ok=True)
                     shutil.copy2(os.path.join(src, rel), target)
                 for rel in changed:
-                    note("preserved %s (changed locally; --force to replace)" % (top + "/" + rel))
+                    note(
+                        "preserved %s (changed locally; --force to replace)"
+                        % (top + "/" + rel)
+                    )
                 for rel in removed:
-                    note("preserved %s (removed from seed; --force to remove)" % (top + "/" + rel))
+                    note(
+                        "preserved %s (removed from seed; --force to remove)"
+                        % (top + "/" + rel)
+                    )
                 for rel in local_only:
-                    note("preserved %s (locally modified; --force to replace)" % (top + "/" + rel))
+                    note(
+                        "preserved %s (locally modified; --force to replace)"
+                        % (top + "/" + rel)
+                    )
 
-            ok("seed_install", "%s/ installed (%d files)" % (top, sum(len(f) for _, _, f in os.walk(dst))))
+            ok(
+                "seed_install",
+                "%s/ installed (%d files)"
+                % (top, sum(len(f) for _, _, f in os.walk(dst))),
+            )
 
         applied = dict(record)
         applied["applied_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -311,21 +344,32 @@ def check_seed(args: argparse.Namespace) -> int:
             continue
         got = sha256_file(path)
         if got != rec["sha256"]:
-            bad("seed_check", "%s drifted (%s != %s)" % (rec["path"], got[:12], rec["sha256"][:12]))
+            bad(
+                "seed_check",
+                "%s drifted (%s != %s)" % (rec["path"], got[:12], rec["sha256"][:12]),
+            )
             drift += 1
 
     if drift:
-        bad("seed_check", "%d of %d seeded files differ from the record" % (drift, len(record["files"])))
+        bad(
+            "seed_check",
+            "%d of %d seeded files differ from the record"
+            % (drift, len(record["files"])),
+        )
         return 1
     ok("seed_check", "%d files present and matching" % len(record["files"]))
     return 0
 
 
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(description="Seed a node's prompts and skills, digest-recorded (CF-220).")
+    ap = argparse.ArgumentParser(
+        description="Seed a node's prompts and skills, digest-recorded (CF-220)."
+    )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    b = sub.add_parser("build", help="control host: build the tarball and the digest record")
+    b = sub.add_parser(
+        "build", help="control host: build the tarball and the digest record"
+    )
     b.add_argument("--manifest", default=DEFAULT_MANIFEST)
     b.add_argument("--repo-root", default="")
     b.add_argument("--out", required=True)
@@ -336,8 +380,12 @@ def main(argv: list[str]) -> int:
     a.add_argument("--tar", required=True)
     a.add_argument("--record", required=True)
     a.add_argument("--home", default="~")
-    a.add_argument("--force", action="store_true", default=False,
-                   help="replace prompts/ and skills/ wholesale, overwriting node-local edits")
+    a.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="replace prompts/ and skills/ wholesale, overwriting node-local edits",
+    )
 
     c = sub.add_parser("check", help="compare the node against the record")
     c.add_argument("--record", required=True)
