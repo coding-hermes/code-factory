@@ -1,5 +1,25 @@
---- a/fleet_ops_check.py
-+++ b/fleet_ops_check.py
+# CF-206 / CF-241 — classify a manifest-less shell toolkit as `cli` in the fleet ops census
+#
+# Target:   patches/base/fleet_ops_check.py.orig — the PRISTINE census module, shipped here
+#           because the live script (~/.hermes/scripts/fleet_ops_check.py) is tracked in no commit.
+# Base:     sha256 b0054326771850a85e2240a00f89935a3817ab864d445779740a92c2de3f2e9d
+# Patched:  sha256 82a3bf3418f1f521e3941334d796e09e1088512eb0f75ddd89d468d36f81d976
+# Apply:    from the repository root,
+#             git apply --check patches/fleet-ops-shell-toolkit.patch
+#           (the target path above exists at HEAD, so the check runs against the shipped base).
+#           To materialise the module, apply into a scratch tree — never in place — as documented
+#           in patches/README.md; the later patches in the chain apply on this result.
+# Test:     python3 patches/fleet-ops-shell-toolkit.test.py [path-to-fleet_ops_check.py]
+# Chain:    patches/fleet-ops-chain.sha256, checked by `bash scripts/verify-patch.sh`
+#
+# The census derived "is this a spec corpus?" from the absence of a language manifest, so a repo
+# that ships only shell scripts (an installer, a node provisioner, an operator CLI) classified as
+# `docs` and was judged on NOTHING — no health, metrics, supervision, backup or deploy checks.
+# `classify()` now derives `cli` from two or more tracked scripts under scripts/ or bin/, or a
+# tests/selftest.sh gate, and records the basis as `shell-toolkit:<n>`.
+#
+--- a/patches/base/fleet_ops_check.py.orig
++++ b/patches/base/fleet_ops_check.py.orig
 @@ -31,6 +31,7 @@
  import os
  import re

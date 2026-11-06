@@ -1,0 +1,12 @@
+# fleet ops census — patch chain
+#
+# The census script runs live from ~/.hermes/scripts/fleet_ops_check.py and is tracked in no
+# commit anywhere (CF-241), so this directory IS its version history: a pristine base plus one
+# patch per landed change. Each line records the sha256 of the module AFTER that stage, so the
+# chain can be reproduced and drift detected without the live file.
+#
+# stage		patch						sha256 after stage
+base		-						b0054326771850a85e2240a00f89935a3817ab864d445779740a92c2de3f2e9d
+shell-toolkit	patches/fleet-ops-shell-toolkit.patch		82a3bf3418f1f521e3941334d796e09e1088512eb0f75ddd89d468d36f81d976
+backup-heuristic	patches/fleet-ops-backup-heuristic.patch	77d1deb2bd97e61f88b90497590f9d6601003584e380ac9fbc97ccc8d6cd7829
+ci-markers	patches/fleet-ops-ci-markers.patch		f393a681a59ef80d8386d00dd15074e78701d8244f5cd447544322785b2ef6e6
