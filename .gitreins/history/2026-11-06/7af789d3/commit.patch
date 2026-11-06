@@ -1,0 +1,1116 @@
+commit 9d6efc8050275079adae5b1f3a8273b9a51e99d0
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Fri Nov 6 09:36:32 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Fri Nov 6 09:36:32 2026 -0500
+
+    fix(verify-node): an unmeasurable seed is UNVERIFIED, not PASS (CF-291)
+    
+    scripts/verify-node.sh step 6 folds scripts/node_seed_drift.py's verdict into
+    VERIFY:, but its seed WARN branch only printed the row: it never set UNVERIFIED,
+    and the closing block refuses only on FAILED > 0 or UNVERIFIED > 0. So a seed
+    nobody could read ended in `VERIFY: PASS`, exit 0.
+    
+    Reproduced at 436def5 with an empty record:
+    
+        : > home/.hermes/seed-applied.json
+        python3 -B scripts/node_seed_drift.py --home home
+          WARN  seed_drift — the seed record at ... does not parse — nothing could be measured
+        RESULT: WARN, rc=3
+    
+    The same fixture through the verifier printed `VERIFY: PASS`, exit 0 — and so did
+    an absent record, a corrupt record and a missing sibling seeder.
+    
+    What changed:
+    
+    - scripts/verify-node.sh: a new `unverified()` records the reason each unmeasurable
+      leg contributes, and the non-strict seed WARN calls it, so the run now ends
+      `VERIFY: UNVERIFIED — seed_drift: <measured detail>`, exit 3. The transport legs
+      register their own reasons and the closing line prints them instead of asserting
+      the transport sentence for every cause (it stays the transport reason verbatim).
+      Non-negotiable behaviour is untouched: the --strict-seed FAIL and its wording, the
+      drift FAIL, the WARN of steps 2 and 3, the freshness leg, and PASS for a seed
+      whose files match its record.
+    - scripts/node_seed_drift.py:109 — the node-side record guard was dead code:
+      `python3 - "$REC" -c '<code>'` reads the PROGRAM from stdin ('-') and leaves the
+      code in argv, so an empty stdin was a valid empty program and every record, a
+      0-byte one included, was called parseable. The record then reached
+      `node_seed.py check`, which died on it and cost the operator the real cause. The
+      program now comes before the record, so an empty or corrupt record on a node is
+      `does not parse` — which is what AC 2 needs the fixture to show.
+    - scripts/node-create.sh:133 — its exit-3 warning no longer claims the cause is
+      always a transport gap.
+    - tests/selftest.sh §48 drives the REAL verifier over a fixture node (stub bunker
+      runs the "remote" command locally, stub curl answers the two gateway reads, the
+      fixture home carries the applied record and a clean checkout so step 5 is green):
+      a 0-byte, a corrupt and an absent record each end VERIFY: UNVERIFIED exit 3
+      naming seed_drift and the record's path; a missing seeder and the absent record
+      under --strict-seed end VERIFY: FAIL exit 1; the green control returns to
+      VERIFY: PASS exit 0. The pre-fix control — `git show
+      436def5:scripts/verify-node.sh` with byte-identical siblings, the same fixture —
+      still prints VERIFY: PASS exit 0, so the arms detect the defect rather than
+      agreeing with the fix. §17's fixture gained a measurable seed for the same
+      reason, keeping its auth arms about the auth legs.
+    - docs: the seed verdict mapping corrected where it contradicted the gate —
+      docs/ACCEPTANCE-PLAN.md §48, docs/handbook/appendices/units/32-scripts-node-seed-drift-py.md
+      and .../36-scripts-verify-node-sh.md (their 436def5 measurements are kept and
+      labelled pre-fix), and the locators of both appendices re-pointed to the shifted
+      source lines.
+    
+    Gates:
+    
+        $ bash -n scripts/verify-node.sh
+        (clean, exit 0)
+        $ bash tests/selftest.sh
+        SELFTEST: PASS
+        rc=0
+    
+    Residual, not touched here: a record whose `files` list is empty ({"files": []})
+    still passes as `0 seeded files present and matching` — a different hole from the
+    0-byte record this row closes, and it lives in the seeder's own contract.
+---
+ docs/ACCEPTANCE-PLAN.md                            |   2 +-
+ .../units/32-scripts-node-seed-drift-py.md         | 210 +++++++++---------
+ .../appendices/units/36-scripts-verify-node-sh.md  | 244 ++++++++++-----------
+ scripts/node-create.sh                             |   2 +-
+ scripts/node_seed_drift.py                         |   6 +-
+ scripts/verify-node.sh                             |  33 ++-
+ tests/selftest.sh                                  | 177 ++++++++++++++-
+ 7 files changed, 437 insertions(+), 237 deletions(-)
+
+diff --git a/docs/ACCEPTANCE-PLAN.md b/docs/ACCEPTANCE-PLAN.md
+index d957cfb..4024757 100644
+--- a/docs/ACCEPTANCE-PLAN.md
++++ b/docs/ACCEPTANCE-PLAN.md
+@@ -159,7 +159,7 @@ lands uncounted (`CF-113`, pending, owns that separate fix).
+ | §45 the harness conformance battery can go red (fixture mode) | `specs/HARNESS-MATRIX.md` §7 + `CF-225`/`CF-227` (five legs per harness; a harness counts as supported only when all five are PASS on a real node) |
+ | §46 a provisioning config is generated from the registry, or refused by name | `CF-214` + `skills/code-factory-bunker/SKILL.md` § Generating the config from the registry |
+ | §47 a node checkout freshness check can go RED: drift and a local edit are named | board `CF-244` (`scripts/node_freshness.py` measures the checkout a node will actually work — branch, HEAD, whether HEAD is an ancestor of `origin/main`, the lag count, and the uncommitted and differing paths — in ONE `bunker exec` round trip with the agent's home resolved from the agent; `--workdir` measures a local checkout with no bunker, no network and no database; exit 0 PASS, 1 drift or dirty, 2 usage or unreachable. The fixture builds a real local origin: a clone in sync passes (the green proof), an origin that advanced is refused naming `behind=1` and the differing file, an uncommitted edit is refused naming the path and calling it upstream's, a detached HEAD and a checkout with no `origin` remote are refused by name rather than crashing, bunker mode proves one exec round trip and a `--json` object carrying `differing_files`, layer 40 of `scripts/project-node.sh` runs the check after the clone (DIRTY is WARN, DRIFT is FAIL, per `specs/NODE.md`), and `--apply` records `freshness` in `node.json` — `status` the check's own verdict, `ladder` how provisioning graded it) |
+-| §48 the control host verifies a node's seed, not just its checkout | board `CF-250` (`scripts/node_seed_drift.py` runs `scripts/node_seed.py`'s own `check` where the node is and folds the verdict into `VERIFY:`: in ONE `bunker exec` round trip the seeder is staged to a temp path on the node, run with the record the seed left — `$HOME/.hermes/seed-applied.json`, home `$HOME` — and removed inside that same round trip, because provisioning deletes the node-side copy after it applies; `--home DIR` measures a local seed directory with no bunker, no network. The PASS row names the file count; the FAIL row names each drifted path with the expected and measured sha256 prefixes and each absent path; a node with no seed record is a WARN naming its path, and `--strict-seed` refuses that same case (exit 0 matched, 1 drift or absent-under-strict, 2 usage, 3 could not measure — an unmeasurable seed is not drift); `scripts/verify-node.sh` runs it as step 6, so a drifted seed alone drives `VERIFY: FAIL` while an unmeasurable seed is WARN) `tests/selftest.sh` §48 (four offline arms: green names the count, a tampered file is named with both digest prefixes and passes again once restored, an absent record is WARN and the same fixture FAILs under `--strict-seed`, and a stub-bunker arm proves the staging is one exec) |
++| §48 the control host verifies a node's seed, not just its checkout | board `CF-250` (`scripts/node_seed_drift.py` runs `scripts/node_seed.py`'s own `check` where the node is and folds the verdict into `VERIFY:`: in ONE `bunker exec` round trip the seeder is staged to a temp path on the node, run with the record the seed left — `$HOME/.hermes/seed-applied.json`, home `$HOME` — and removed inside that same round trip, because provisioning deletes the node-side copy after it applies; `--home DIR` measures a local seed directory with no bunker, no network. The PASS row names the file count; the FAIL row names each drifted path with the expected and measured sha256 prefixes and each absent path; a node with no seed record is a WARN naming its path, and `--strict-seed` refuses that same case (exit 0 matched, 1 drift or absent-under-strict, 2 usage, 3 could not measure — an unmeasurable seed is not drift); `scripts/verify-node.sh` runs it as step 6, so a drifted seed alone drives `VERIFY: FAIL` while an unmeasurable seed is a WARN row that also sets the run's UNVERIFIED verdict — `VERIFY: UNVERIFIED`, exit 3, never `VERIFY: PASS` (CF-291) — and `--strict-seed` makes that same case a FAIL) `tests/selftest.sh` §48 (four offline arms: green names the count, a tampered file is named with both digest prefixes and passes again once restored, an absent record is WARN and the same fixture FAILs under `--strict-seed`, and a stub-bunker arm proves the staging is one exec; then the CF-291 gate arms drive the real verifier over a fixture node — a 0-byte record, an unparseable record and an absent record each end `VERIFY: UNVERIFIED` exit 3 naming `seed_drift`, a missing seeder and the absent-record-under-`--strict-seed` case end `VERIFY: FAIL` exit 1, the same empty-record fixture prints `VERIFY: PASS` under the pre-fix `436def5` verifier, and the green control returns to `VERIFY: PASS` exit 0) |
+ | §44 the node bus worker names the refusal it cannot proceed past | board `CF-215` (`scripts/node-bus-worker.py` is the missing consumer: a node provisioned onto the bus had nothing reading its inbox. It polls `/agents/<id>/inbox` with BOTH credentials crier demands — the shared bearer and the per-agent ed25519 signature, `X-Agent-ID`/`X-Agent-Ts`/`X-Agent-Sig` over the method, the raw path without its query and a unix timestamp, with the optional `X-Agent-Body-SHA256` extension when it binds a body — verifies `brief.digest` against `sha256(text)` before running anything, runs the harness in the clone, posts the result envelope with its `corr_id` to `reply_to`, and acks only after the result is delivered. Four legs, each able to red on its own: the two identity files disagreeing on the project (refused before any bus contact), an unreadable identity, an absent key — named by path, never invented, and refused before the network — and an unreachable bus (`000`). Proved red by mutation: letting a missing key fall through reds the third leg) |
+ | §49 layer 10 grades the toolchain the repository kind needs, Go included | board `CF-218` (`scripts/project-node.sh` layer 10 graded a fixed base set with `node` WARN-only, so a node printed PASS while unable to build the fleet's largest repo class — a census of 61 distinct repo origins measures go 27, node 22, python 16, rust 5. The layer now derives the kind set from evidence and names it: `--kinds`/`NODE_KINDS` (validated before any layer runs, an unknown or empty element is a named `FAIL kinds` and exit 1), then the `$HOME/repo` workspace markers (`go.mod`, `Cargo.toml`, `package.json`, `pyproject.toml`\|`setup.py`), then a printed generic fallback. Per kind it grades the binary AND its version read back (`go version`, `cargo --version`, `node --version`) and, for Go, resolves the pinned `rsc.io/quote@v1.5.2` through the node's own `GOPROXY` with a cold module cache, a 30 s bound, and a FAIL naming the proxy and the error. Eight offline arms: a go-free PATH, a go.mod tree without go (RED, one `FAIL tool:go`), the same tree with a stub go that resolves the pin (GREEN, exit 0), a refusing proxy (named `FAIL go:proxy`), `--kinds rust,node` on a marker-less tree (grades cargo and node, never go), a declared node kind with no node (FAIL, not the old WARN), the generic fallback announcing itself, and a typo'd kind refused before any layer) |
+ | §50 `install-go.sh` can go red, and its pin is a digest | board `CF-219` (`scripts/install-go.sh` pins `go1.26.5` and published per-architecture SHA-256 values, installs below `$HOME`, reads the version back, and resolves `rsc.io/quote@v1.5.2` through the effective proxy with a cold module cache. The section's no-Go environment must exit 1 with a named `FAIL go`; its local wrong-digest fixture must be refused without publishing the destination and the measured digest must pass; the applied control-host pin must produce a non-empty `PASS go — go version ...` row) |
+diff --git a/docs/handbook/appendices/units/32-scripts-node-seed-drift-py.md b/docs/handbook/appendices/units/32-scripts-node-seed-drift-py.md
+index dbc95a2..29f669c 100644
+--- a/docs/handbook/appendices/units/32-scripts-node-seed-drift-py.md
++++ b/docs/handbook/appendices/units/32-scripts-node-seed-drift-py.md
+@@ -16,7 +16,7 @@
+   so the two cannot drift apart" [scripts/node_seed_drift.py:24-26].
+ - **What it compares against**: one file, the record the seeder left behind —
+   `$HOME/.hermes/seed-applied.json` [scripts/node_seed_drift.py:64], built as
+-  `os.path.join(home, RECORD_REL)` in local mode [scripts/node_seed_drift.py:287] and as
++  `os.path.join(home, RECORD_REL)` in local mode [scripts/node_seed_drift.py:291] and as
+   `"$HOME/.hermes/seed-applied.json"` on the node [scripts/node_seed_drift.py:107]. The comparison
+   itself is the seeder's: for every `record["files"][i]`, hash `$HOME/.hermes/<path>` and compare to
+   the recorded sha256 [scripts/node_seed.py:227-236]. The record's other keys — `built_at`,
+@@ -30,35 +30,35 @@
+ - Why it exists at all: the seeder could already refuse a drifted seed, "but nothing on the control
+   host ever ran it, and provisioning deletes the node-side copy of the seeder after it applies", so
+   a hand-edited prompt passed every arm `verify-node.sh` had [scripts/node_seed_drift.py:4-8]. The
+-  verifier now carries the leg as step 6 [scripts/verify-node.sh:148-161]. What the seed carries is
++  verifier now carries the leg as step 6 [scripts/verify-node.sh:157-172]. What the seed carries is
+   what the node's foreman runs, and the foreman runs on the node, never on the control host
+   (fact: FACT-01) — which is why the check has to execute over there.
+ - Two modes, one verdict: `--agent ID --server NAME` probes a real node through **one** `bunker
+   exec` round trip [scripts/node_seed_drift.py:13-19]; `--home DIR` measures a local seed directory
+   with "no bunker, no network, no database" [scripts/node_seed_drift.py:20-22]. Both funnel into the
+-  same finding constructors [scripts/node_seed_drift.py:190-278].
++  same finding constructors [scripts/node_seed_drift.py:194-282].
+ - **What breaks if it is absent**: the verifier's leg is guarded by `[ ! -r "$SEEDCHK" ]` and fails
+   closed with `  FAIL  seed_drift — $SEEDCHK missing — the node's seed is unmeasured`
+-  [scripts/verify-node.sh:161-164], which increments `FAILED` [scripts/lib.sh:7] and produces
+-  `VERIFY: FAIL (1)`, exit 1 [scripts/verify-node.sh:191]. Measured, §3 row 15.
++  [scripts/verify-node.sh:172-175], which increments `FAILED` [scripts/lib.sh:7] and produces
++  `VERIFY: FAIL (1)`, exit 1 [scripts/verify-node.sh:206]. Measured, §3 row 15.
+ - **What breaks if it lies**: the direction is two-sided, and that is the whole story here.
+   *Inside its own process* the tool cannot print `RESULT: PASS` without having counted files: PASS
+-  requires the child's exit 0 **and** a non-`None` count [scripts/node_seed_drift.py:334-335], and
++  requires the child's exit 0 **and** a non-`None` count [scripts/node_seed_drift.py:338-339], and
+   the count comes only from the seeder's own `N files present and matching` row
+-  [scripts/node_seed_drift.py:159] [scripts/node_seed_drift.py:172-175]; the remote path applies the
+-  same conjunction to `SEED_RC` [scripts/node_seed_drift.py:434-435]. *At the gate*, a WARN is not a
+-  failure: `warn` neither increments `FAILED` nor sets `UNVERIFIED` [scripts/lib.sh:8]
+-  [scripts/verify-node.sh:37], so a node whose seed record cannot be read produces
+-  `  WARN  seed_drift — …` and then **`VERIFY: PASS`, exit 0** [scripts/verify-node.sh:183]
+-  [scripts/verify-node.sh:197] — measured, §3 rows 22-24.
++  [scripts/node_seed_drift.py:163] [scripts/node_seed_drift.py:176-179]; the remote path applies the
++  same conjunction to `SEED_RC` [scripts/node_seed_drift.py:438-439]. *At the gate*, a WARN is not a
++  FAIL: `warn` does not increment `FAILED` [scripts/lib.sh:8]. Since CF-291 it is not a PASS
++  either — the seed leg's WARN calls `unverified()`, so a node whose seed record cannot be
++  read produces `  WARN  seed_drift — …` and then **`VERIFY: UNVERIFIED — seed_drift: …`, exit
++  3** [scripts/verify-node.sh:194] — it printed `VERIFY: PASS`, exit 0 before CF-291 (§8 row 2).
+ - **The green that is worse than a WARN**: a record whose `files` list is empty is a PASS. Measured
+   end to end from the real seeder: `build` prints `  PASS  seed_manifest — 0 files declared` when
+   every glob misses [scripts/node_seed.py:83-90] [scripts/node_seed.py:132], `apply` writes it, and
+   the drift tool then reports `  PASS  seed_drift — …: 0 seeded files present and matching`
+-  [scripts/node_seed_drift.py:190-194] — a drift check that has measured nothing, and says so only
++  [scripts/node_seed_drift.py:194-198] — a drift check that has measured nothing, and says so only
+   in the numeral. §3 row 8, §8 defect 4.
+ - Blast radius of one run: one `bunker exec`, two temp files created on the node and removed inside
+-  that same exec [scripts/node_seed_drift.py:114-125]; nothing is written on the control host.
++  that same exec [scripts/node_seed_drift.py:118-129]; nothing is written on the control host.
+ 
+ ## 2. Dependencies and library contracts
+ 
+@@ -67,34 +67,34 @@
+ | Dependency | Version | Where it must exist | Absence detected by |
+ |---|---|---|---|
+ | `python3` (stdlib only) | the interpreter running the wrapper; the file states "stdlib only" [scripts/node_seed_drift.py:42] | control host | a syntax/import failure is the only signal; nothing probes it |
+-| `scripts/node_seed.py` — the sibling seeder | in-tree | **the same directory as the wrapper**, resolved from `os.path.realpath(__file__)` [scripts/node_seed_drift.py:478-479] [scripts/node_seed_drift.py:72] | **mode-dependent, and only one side names it.** Bunker mode: probed with `os.path.isfile` and refused as `  WARN  seed_drift — %s is missing — the check could not be staged`, exit 3 [scripts/node_seed_drift.py:372-375]. Local mode: **not probed** — the child fails and the WARN says `node_seed.py check printed no verdict (exit 2)` [scripts/node_seed_drift.py:344-346]. Measured both ways, §3 rows 13 and 14 |
++| `scripts/node_seed.py` — the sibling seeder | in-tree | **the same directory as the wrapper**, resolved from `os.path.realpath(__file__)` [scripts/node_seed_drift.py:482-483] [scripts/node_seed_drift.py:72] | **mode-dependent, and only one side names it.** Bunker mode: probed with `os.path.isfile` and refused as `  WARN  seed_drift — %s is missing — the check could not be staged`, exit 3 [scripts/node_seed_drift.py:376-379]. Local mode: **not probed** — the child fails and the WARN says `node_seed.py check printed no verdict (exit 2)` [scripts/node_seed_drift.py:348-350]. Measured both ways, §3 rows 13 and 14 |
+ | `bunker` client | resolved once at import, by `shutil.which("bunker") or "bunker"` [scripts/node_seed_drift.py:56] | `PATH` on the control host, bunker mode only | `FileNotFoundError` from `subprocess.run` is caught as `OSError` [scripts/node_seed_drift.py:87-88], then reported as `  WARN  seed_drift — bunker exec failed: FileNotFoundError: …`, exit 3 — measured, §3 row 17. The `or "bunker"` fallback means `which` failing does not raise; the failure surfaces at exec time |
+-| `sh`, `python3`, `mktemp`, `cat`, `rm` **on the node** | POSIX | inside the agent, under `sh -lc` [scripts/node_seed_drift.py:379] | each is used unguarded in the remote template [scripts/node_seed_drift.py:105-126]; a missing `python3` makes the RECORD probe fail and is then reported as `does not parse` (the wrong reason — §8 defect 3) |
+-| `/tmp` writable **on the node** | — | inside the agent | `mktemp /tmp/node-seed-check-XXXXXX` is unguarded [scripts/node_seed_drift.py:114-115]; an unwritable `/tmp` leaves `STAGED` empty, the heredoc lands nowhere, and the check exits non-zero with shell text [scripts/node_seed_drift.py:116-121] |
++| `sh`, `python3`, `mktemp`, `cat`, `rm` **on the node** | POSIX | inside the agent, under `sh -lc` [scripts/node_seed_drift.py:383] | each is used unguarded in the remote template [scripts/node_seed_drift.py:105-130]; a missing `python3` makes the RECORD probe fail and is then reported as `does not parse` (the wrong reason — §8 defect 3) |
++| `/tmp` writable **on the node** | — | inside the agent | `mktemp /tmp/node-seed-check-XXXXXX` is unguarded [scripts/node_seed_drift.py:118-119]; an unwritable `/tmp` leaves `STAGED` empty, the heredoc lands nowhere, and the check exits non-zero with shell text [scripts/node_seed_drift.py:120-125] |
+ 
+ ### 2b. Library contracts
+ 
+ | Import | Provider | Contract relied on | If it changes |
+ |---|---|---|---|
+ | `__future__.annotations` | stdlib | postponed evaluation of `list` / `dict` / `tuple` annotations [scripts/node_seed_drift.py:45] | none at runtime |
+-| `argparse` | stdlib | parses the six flags, exits 2 on an unknown one, and `main` returns its own `EXIT_USAGE` for the five refusals it checks itself [scripts/node_seed_drift.py:481-525] | the wrapper's own exit 2 is what the gate folds into WARN [scripts/verify-node.sh:177-183], so a future flag rename degrades silently to "unmeasurable" |
+-| `json` | stdlib | `json.load` on the record; a malformed file raises `ValueError`, caught together with `OSError` as "not parseable" [scripts/node_seed_drift.py:309-314]; `json.dumps(…, sort_keys=True)` for `--json` [scripts/node_seed_drift.py:474] | a change in exception type would turn a corrupt record into a traceback instead of a WARN |
+-| `os` | stdlib | `expanduser` **is** the `~` contract (local mode reads `$HOME`) [scripts/node_seed_drift.py:286]; `path.join` builds the record path [scripts/node_seed_drift.py:287]; `path.isfile` separates absent from unreadable [scripts/node_seed_drift.py:304] | if `--home` stopped being expanded, `~` would become a literal directory name and the run would WARN `is not a directory` |
+-| `re` | stdlib | **the real contract with the seeder is textual.** Three anchored patterns consume exactly the seeder's row shapes — PASS [scripts/node_seed_drift.py:159], DRIFT [scripts/node_seed_drift.py:160-162], ABSENT [scripts/node_seed_drift.py:163] — against the seeder's printers [scripts/node_seed.py:46-51] | a reworded seeder row does not error: it matches nothing, `count` stays `None`, and the verdict degrades to WARN "no usable verdict" [scripts/node_seed_drift.py:338-346]. Measured with a `{}` record, §3 row 7 |
++| `argparse` | stdlib | parses the six flags, exits 2 on an unknown one, and `main` returns its own `EXIT_USAGE` for the five refusals it checks itself [scripts/node_seed_drift.py:485-529] | the wrapper's own exit 2 is what the gate folds into WARN [scripts/verify-node.sh:188-194], so a future flag rename degrades silently to "unmeasurable" |
++| `json` | stdlib | `json.load` on the record; a malformed file raises `ValueError`, caught together with `OSError` as "not parseable" [scripts/node_seed_drift.py:313-318]; `json.dumps(…, sort_keys=True)` for `--json` [scripts/node_seed_drift.py:478] | a change in exception type would turn a corrupt record into a traceback instead of a WARN |
++| `os` | stdlib | `expanduser` **is** the `~` contract (local mode reads `$HOME`) [scripts/node_seed_drift.py:290]; `path.join` builds the record path [scripts/node_seed_drift.py:291]; `path.isfile` separates absent from unreadable [scripts/node_seed_drift.py:308] | if `--home` stopped being expanded, `~` would become a literal directory name and the run would WARN `is not a directory` |
++| `re` | stdlib | **the real contract with the seeder is textual.** Three anchored patterns consume exactly the seeder's row shapes — PASS [scripts/node_seed_drift.py:163], DRIFT [scripts/node_seed_drift.py:164-166], ABSENT [scripts/node_seed_drift.py:167] — against the seeder's printers [scripts/node_seed.py:46-51] | a reworded seeder row does not error: it matches nothing, `count` stays `None`, and the verdict degrades to WARN "no usable verdict" [scripts/node_seed_drift.py:342-350]. Measured with a `{}` record, §3 row 7 |
+ | `shutil` | stdlib | `which` once, at import, so `PATH` is sampled before `main` runs [scripts/node_seed_drift.py:56] | a `PATH` export made later in the process would not be seen |
+ | `subprocess` | stdlib | `run(capture_output=True, text=True, check=False, timeout=…)` [scripts/node_seed_drift.py:78-84]; `TimeoutExpired` becomes `-9` and `OSError` becomes `-1` [scripts/node_seed_drift.py:85-88] | if `check` flipped to True, a drift (exit 1) would raise instead of being read |
+-| `sys` | stdlib | `sys.executable` runs the sibling locally [scripts/node_seed_drift.py:318]; `sys.stderr` carries the human rows under `--json` [scripts/node_seed_drift.py:543] | a frozen or embedded interpreter would run a different seeder than the one on disk |
++| `sys` | stdlib | `sys.executable` runs the sibling locally [scripts/node_seed_drift.py:322]; `sys.stderr` carries the human rows under `--json` [scripts/node_seed_drift.py:547] | a frozen or embedded interpreter would run a different seeder than the one on disk |
+ | `typing.Optional` | stdlib | annotation only [scripts/node_seed_drift.py:54] | none |
+ 
+ ### 2c. Service contracts (both sides named)
+ 
+ | Peer | Direction | Transport | Payload | Other side (file:function) |
+ |---|---|---|---|---|
+-| `scripts/node_seed.py check` (control host) | wrapper → child process | `argv`, no shell: `[sys.executable, "-B", seed_script, "check", "--record", record, "--home", home]` [scripts/node_seed_drift.py:316-328] | the record path, and the home to hash under | [scripts/node_seed.py:221-242] — `check_seed`; its three row shapes are the only thing the wrapper reads |
+-| **the node**, through the `bunker` client | wrapper → node, **one** round trip | `bunker --server S exec AGENT -- sh -lc <script>` [scripts/node_seed_drift.py:379] | the **entire seeder source**, embedded in a quoted heredoc, plus the record path and `$HOME` | the node's `sh` and `python3`; no file of ours survives the call — both temp paths are removed inside the same script [scripts/node_seed_drift.py:116-125] |
+-| the seed record `$HOME/.hermes/seed-applied.json` | read-only, both modes | file path [scripts/node_seed_drift.py:64] [scripts/node_seed_drift.py:287] | JSON with `files[].path` and `files[].sha256` | written by the seeder's `apply` [scripts/node_seed.py:208-215]; consumed by `check` [scripts/node_seed.py:227-235]. Its producer records paths relative to the repo root [scripts/node_seed.py:119], and `apply` installs only `prompts/` and `skills/` [scripts/node_seed.py:198-206] |
+-| `verify-node.sh` (the gate) | gate → wrapper | subprocess with `--json`; stdout is the JSON document, **stderr** carries the rows [scripts/node_seed_drift.py:543-549] | agent, server, and `--strict-seed` when `STRICT_SEED=1` [scripts/verify-node.sh:166-168] | the gate greps `^  PASS/FAIL/WARN  seed_drift — ` and maps exit 0→`ok`, 1→`bad`, **anything else→WARN, or `bad` under strict** [scripts/verify-node.sh:170-186]. This mapping, not the tool's own `--strict-seed`, is what makes a strict gate refuse a corrupt record (§6) |
+-| the node's stdout stream | node → wrapper | the same `exec`'s stdout, parsed line by line | `HOME=`, `RECORD=0|1|2`, `SEED_RC=`, and the check's output between `SEED_BEGIN`/`SEED_END` | [scripts/node_seed_drift.py:104-127] emits them; [scripts/node_seed_drift.py:137-154] parses them. The markers are the whole framing protocol, and a node that prints them itself is believed (§6) |
++| `scripts/node_seed.py check` (control host) | wrapper → child process | `argv`, no shell: `[sys.executable, "-B", seed_script, "check", "--record", record, "--home", home]` [scripts/node_seed_drift.py:320-332] | the record path, and the home to hash under | [scripts/node_seed.py:221-242] — `check_seed`; its three row shapes are the only thing the wrapper reads |
++| **the node**, through the `bunker` client | wrapper → node, **one** round trip | `bunker --server S exec AGENT -- sh -lc <script>` [scripts/node_seed_drift.py:383] | the **entire seeder source**, embedded in a quoted heredoc, plus the record path and `$HOME` | the node's `sh` and `python3`; no file of ours survives the call — both temp paths are removed inside the same script [scripts/node_seed_drift.py:120-129] |
++| the seed record `$HOME/.hermes/seed-applied.json` | read-only, both modes | file path [scripts/node_seed_drift.py:64] [scripts/node_seed_drift.py:291] | JSON with `files[].path` and `files[].sha256` | written by the seeder's `apply` [scripts/node_seed.py:208-215]; consumed by `check` [scripts/node_seed.py:227-235]. Its producer records paths relative to the repo root [scripts/node_seed.py:119], and `apply` installs only `prompts/` and `skills/` [scripts/node_seed.py:198-206] |
++| `verify-node.sh` (the gate) | gate → wrapper | subprocess with `--json`; stdout is the JSON document, **stderr** carries the rows [scripts/node_seed_drift.py:547-553] | agent, server, and `--strict-seed` when `STRICT_SEED=1` [scripts/verify-node.sh:177-179] | the gate greps `^  PASS/FAIL/WARN  seed_drift — ` and maps exit 0→`ok`, 1→`bad`, **anything else→WARN, or `bad` under strict** [scripts/verify-node.sh:181-201]. This mapping, not the tool's own `--strict-seed`, is what makes a strict gate refuse a corrupt record (§6) |
++| the node's stdout stream | node → wrapper | the same `exec`'s stdout, parsed line by line | `HOME=`, `RECORD=0|1|2`, `SEED_RC=`, and the check's output between `SEED_BEGIN`/`SEED_END` | [scripts/node_seed_drift.py:104-131] emits them; [scripts/node_seed_drift.py:141-158] parses them. The markers are the whole framing protocol, and a node that prints them itself is believed (§6) |
+ 
+ ## 3. Verification
+ 
+@@ -121,7 +121,7 @@ All rows were run on 2026-11-05 in `~/proj-wt-md-32d` at `d8c7796`, against one
+ | 9 | record absent | `mv .hermes/seed-applied.json aside` | WARN, exit 3, path named | **PASS** — `WARN  seed_drift — no seed record at <path> — nothing on this seed's home is digest-recorded; pass --strict-seed to refuse it` |
+ | 10 | same, `--strict-seed` | `--home <fixture> --strict-seed` | FAIL, exit 1 | **PASS** — `(--strict-seed: an unknown seed is not a pass)` |
+ | 11 | record is truncated JSON | `printf '{"files": [{"path": ' > …` | WARN, exit 3 | **PASS** — `the seed record at <path> does not parse — nothing could be measured` |
+-| 12 | **same corrupt record, `--strict-seed`** | as row 11 plus the flag | FAIL, per the flag's own help text [scripts/node_seed_drift.py:491-495] | **FAILS** — still `WARN`, still exit 3; `finding_corrupt` accepts `strict` and never reads it [scripts/node_seed_drift.py:267-278] (**defect 1**) |
++| 12 | **same corrupt record, `--strict-seed`** | as row 11 plus the flag | FAIL, per the flag's own help text [scripts/node_seed_drift.py:495-499] | **FAILS** — still `WARN`, still exit 3; `finding_corrupt` accepts `strict` and never reads it [scripts/node_seed_drift.py:271-282] (**defect 1**) |
+ | 13 | the sibling seeder missing, local mode | a copy of the wrapper alone in an empty dir | a named "cannot measure" | **WARN, exit 3** — `node_seed.py check printed no verdict (exit 2)` |
+ | 14 | the sibling seeder missing, bunker mode | same copy, `--agent/--server` | WARN naming the missing file | **WARN, exit 3** — `<dir>/node_seed.py is missing — the check could not be staged` |
+ | 15 | the module itself absent, gate level | `verify-node.sh` from a `scripts/` copy without it | FAIL, exit 1 | **PASS** — `FAIL  seed_drift — … missing — the node's seed is unmeasured`, `VERIFY: FAIL (1)` |
+@@ -234,7 +234,7 @@ EXIT=2
+ `verify-node.sh` was driven end to end with a stub `bunker` (answers `ALIVE`, answers
+ `hostname -I` with `127.0.0.1`, executes the remote command locally) and a real HTTP server on
+ `127.0.0.1:10800` answering `/api/status` 200 with `auth_required: true` and `/api/system/stats`
+-401 — so legs 1-5 are genuinely green [scripts/verify-node.sh:40-95] [scripts/verify-node.sh:109-146]
++401 — so legs 1-5 are genuinely green [scripts/verify-node.sh:49-104] [scripts/verify-node.sh:118-155]
+ and only the seed leg varies.
+ 
+ | # | Seed state | Tool run directly | Through the gate, default | Through the gate, `--strict-seed` |
+@@ -245,7 +245,9 @@ and only the seed leg varies.
+ | 23 | record corrupt | WARN, 3 | `WARN seed_drift`, **`VERIFY: PASS` 0** | `FAIL seed_drift`, `VERIFY: FAIL (1)` 1 |
+ | 24 | sibling seeder missing | WARN, 3 | `WARN seed_drift`, **`VERIFY: PASS` 0** | `FAIL seed_drift`, `VERIFY: FAIL (1)` 1 |
+ 
+-Transcript 5 (rows 20 and 23 — the fail-open, verbatim, seed row only):
++Rows 22-24 were measured at `436def5`: in every one of them a seed nobody read ended in `VERIFY: PASS`. CF-291 closes that — the same three states now end `VERIFY: UNVERIFIED`, exit 3, with `seed_drift:` and the measured detail named on the verdict line. The default-mode column above is therefore a **pre-fix** record of the defect, not current behaviour; `sibling seeder missing` is not the same case as `scripts/node_seed_drift.py` missing, which the gate has always failed closed.
++
++Transcript 5 (rows 20 and 23 — the fail-open, verbatim, seed row only, measured at `436def5`; CF-291 turns the second run's last line into `VERIFY: UNVERIFIED — seed_drift: … does not parse`, exit 3, and its row now reads `does not parse` rather than `gave no usable verdict`, because the node-side record guard was fixed with it):
+ 
+ ```
+ $ bash scripts/verify-node.sh --agent cf-fixture          # clean seed
+@@ -267,81 +269,83 @@ EXIT=1
+ ```
+ 
+ **Do the two sides agree on what drift means?** On the definition, yes, and by construction: the
+-gate never re-implements it, it folds the tool's exit code [scripts/verify-node.sh:170-186], and the
+-tool in turn folds the seeder's rows [scripts/node_seed_drift.py:166-187]. On the **mapping** they
++gate never re-implements it, it folds the tool's exit code [scripts/verify-node.sh:181-201], and the
++tool in turn folds the seeder's rows [scripts/node_seed_drift.py:170-191]. On the **mapping** they
+ agree for PASS (0→0) and drift (1→1). They disagree in two places:
+ 
+-1. **WARN is a pass at the gate.** The tool's exit 3 is explicitly "could not measure"
+-   [scripts/node_seed_drift.py:28-34], and a WARN leaves `FAILED` untouched [scripts/lib.sh:8], so
+-   `VERIFY: PASS` and exit 0 are reachable with the seed leg unresolved (rows 22-24, defect 2). The
+-   tool's own process never lies this way; the gate's summary line does.
++1. **WARN used to be a pass at the gate — closed by CF-291.** The tool's exit 3 is explicitly "could
++   not measure" [scripts/node_seed_drift.py:28-34], and a WARN leaves `FAILED` untouched
++   [scripts/lib.sh:8], so `VERIFY: PASS` and exit 0 were reachable with the seed leg unresolved (rows
++   22-24, defect 2, measured at `436def5`). The gate's seed leg now calls `unverified()`, so the same
++   WARN ends `VERIFY: UNVERIFIED`, exit 3; the tool's own process never lied this way, and the gate's
++   summary line no longer does either.
+ 2. **`--strict-seed` means two different things.** In the tool it converts *only* an absent record
+-   [scripts/node_seed_drift.py:229-240]; a corrupt record and a missing instrument stay WARN
+-   [scripts/node_seed_drift.py:253-278]. At the gate it converts **every** non-0/1 exit
+-   [scripts/verify-node.sh:177-183]. Measured: the same corrupt fixture is `WARN 3` when run
++   [scripts/node_seed_drift.py:233-244]; a corrupt record and a missing instrument stay WARN
++   [scripts/node_seed_drift.py:257-282]. At the gate it converts **every** non-0/1 exit
++   [scripts/verify-node.sh:188-194]. Measured: the same corrupt fixture is `WARN 3` when run
+    directly with the flag and `FAIL` through the gate with the flag (row 23, defect 1).
+ 
+ ## 4. Metrics emitted
+ 
+ **None.** The module writes no counter, no status file and no metric: local mode writes nothing at
+ all, and the node-side script creates two temp files and removes them in the same exec
+-[scripts/node_seed_drift.py:114-125], which was measured (no `/tmp/node-seed-check-*` survives,
+-§3 row 16). The gate then deletes both captured streams [scripts/verify-node.sh:187].
++[scripts/node_seed_drift.py:118-129], which was measured (no `/tmp/node-seed-check-*` survives,
++§3 row 16). The gate then deletes both captured streams [scripts/verify-node.sh:202].
+ 
+ The only machine-readable output is the per-run JSON document `--json` prints
+-[scripts/node_seed_drift.py:465-474] — `mode`, `home`, `record`, `record_present`, `file_count`,
++[scripts/node_seed_drift.py:469-478] — `mode`, `home`, `record`, `record_present`, `file_count`,
+ `drifted[]`, `absent[]`, `error`, `status`, `exit_code`, `reason`, `result`, `rows[]`. It is a
+ report, not a metric: nothing accumulates it, so the drift rate across nodes, the number of nodes
+ carrying no record at all, the number of seeded paths under management fleet-wide and the latency of
+ a check are all unanswerable from any store. `file_count` is the one quantity a monitor could scrape
+ today, one run at a time — and on the drift path it is `null`, because the count comes from a PASS
+-row that a drifting seed never prints [scripts/node_seed_drift.py:172-175]
+-[scripts/node_seed_drift.py:211-214]; that is why the FAIL row reads `%d seeded path(s) differ`
++row that a drifting seed never prints [scripts/node_seed_drift.py:176-179]
++[scripts/node_seed_drift.py:215-218]; that is why the FAIL row reads `%d seeded path(s) differ`
+ rather than `N of M` (measured, Transcript 1).
+ 
+ There is a second, subtler gap: `MAX_SHOWN = 20` truncates the FAIL row and points at `--json` for
+-the rest [scripts/node_seed_drift.py:68] [scripts/node_seed_drift.py:206-209], so on a seed with many
++the rest [scripts/node_seed_drift.py:68] [scripts/node_seed_drift.py:210-213], so on a seed with many
+ drifted paths even the report is a sample unless the consumer keeps the JSON — and the gate does
+-not: it greps the row and deletes the JSON [scripts/verify-node.sh:175] [scripts/verify-node.sh:187].
++not: it greps the row and deletes the JSON [scripts/verify-node.sh:186] [scripts/verify-node.sh:202].
+ 
+ ## 5. Log lines it can generate
+ 
+ Rows go to stdout, or to **stderr** when `--json` is set, in which case the JSON document is the only
+-thing on stdout [scripts/node_seed_drift.py:543-549]. There is no logging framework: the row prefix
++thing on stdout [scripts/node_seed_drift.py:547-553]. There is no logging framework: the row prefix
+ is the severity. **Kind** is assigned as *evidentiary* where the line reports something a child
+ process or a transport actually returned and could have failed, and *descriptive* where it restates a
+ decision the wrapper already made.
+ 
+ | Level | Line (verbatim) | Emitted when | Kind |
+ |---|---|---|---|
+-| — | `node-seed-drift — agent %s via %s (home %s)` | bunker mode, before any row; `(unresolved)` when no `HOME` came back [scripts/node_seed_drift.py:455-461] | descriptive |
+-| — | `node-seed-drift — home %s` | local mode [scripts/node_seed_drift.py:462] | descriptive |
+-| PASS | `  PASS  seed_drift — %s: %d seeded files present and matching` | the seeder exited 0 **and** printed its PASS row [scripts/node_seed_drift.py:190-194] | evidentiary — the count is the seeder's own measurement |
+-| FAIL | `  FAIL  seed_drift — %s: %s differ from the record: %s` | the seeder exited 1 and named at least one drifted or absent path [scripts/node_seed_drift.py:215-219] | evidentiary — names the paths and both digest prefixes |
+-| FAIL | `  FAIL  seed_drift — no seed record at %s (--strict-seed: an unknown seed is not a pass)` | no record, with `--strict-seed` [scripts/node_seed_drift.py:235-238] | evidentiary of absence |
+-| WARN | `  WARN  seed_drift — no seed record at %s — nothing on this seed's home is digest-recorded; pass --strict-seed to refuse it` | no record, default [scripts/node_seed_drift.py:245-248] | evidentiary of absence; **does not stop `VERIFY: PASS`** |
+-| WARN | `  WARN  seed_drift — %s — the seed could not be measured; pass --strict-seed to refuse it` | the child gave no verdict, the home is not a directory, the transport failed, `HOME` never came back, or `SEED_RC` was missing [scripts/node_seed_drift.py:253-264] | evidentiary of a failed measurement |
+-| WARN | `  WARN  seed_drift — the seed record at %s does not parse — nothing could be measured` | the record is not JSON, or cannot be opened [scripts/node_seed_drift.py:267-278] | evidentiary |
+-| — | `RESULT: PASS` | the PASS finding [scripts/node_seed_drift.py:200] | descriptive — restates `exit_code` |
+-| — | `RESULT: FAIL (%s differ from the record)` | the drift finding [scripts/node_seed_drift.py:225] | descriptive |
+-| — | `RESULT: WARN (no seed record at %s)` | the default-absent finding [scripts/node_seed_drift.py:249] | descriptive |
+-| — | `RESULT: FAIL (no seed record at %s)` | the strict-absent finding [scripts/node_seed_drift.py:239] | descriptive |
+-| — | `RESULT: FAIL (usage: %s)` | any of the five usage refusals; the message itself goes to stderr first [scripts/node_seed_drift.py:509-512] | descriptive |
+-| — | `--home and --agent/--server are exclusive` | both modes given [scripts/node_seed_drift.py:518-519] | descriptive |
+-| — | `one mode is required: --home DIR or --agent ID --server NAME` | neither mode given [scripts/node_seed_drift.py:520-523] | descriptive |
+-| — | `bunker mode needs both --agent ID and --server NAME` | one half of a bunker pair [scripts/node_seed_drift.py:524-525] | descriptive |
+-| — | `--timeout must be >= 1, got %d` | `--timeout 0` or negative [scripts/node_seed_drift.py:514-515] | descriptive |
++| — | `node-seed-drift — agent %s via %s (home %s)` | bunker mode, before any row; `(unresolved)` when no `HOME` came back [scripts/node_seed_drift.py:459-465] | descriptive |
++| — | `node-seed-drift — home %s` | local mode [scripts/node_seed_drift.py:466] | descriptive |
++| PASS | `  PASS  seed_drift — %s: %d seeded files present and matching` | the seeder exited 0 **and** printed its PASS row [scripts/node_seed_drift.py:194-198] | evidentiary — the count is the seeder's own measurement |
++| FAIL | `  FAIL  seed_drift — %s: %s differ from the record: %s` | the seeder exited 1 and named at least one drifted or absent path [scripts/node_seed_drift.py:219-223] | evidentiary — names the paths and both digest prefixes |
++| FAIL | `  FAIL  seed_drift — no seed record at %s (--strict-seed: an unknown seed is not a pass)` | no record, with `--strict-seed` [scripts/node_seed_drift.py:239-242] | evidentiary of absence |
++| WARN | `  WARN  seed_drift — no seed record at %s — nothing on this seed's home is digest-recorded; pass --strict-seed to refuse it` | no record, default [scripts/node_seed_drift.py:249-252] | evidentiary of absence; at the gate it **stops** `VERIFY: PASS` — the WARN sets UNVERIFIED, so the run ends `VERIFY: UNVERIFIED`, exit 3 (CF-291) |
++| WARN | `  WARN  seed_drift — %s — the seed could not be measured; pass --strict-seed to refuse it` | the child gave no verdict, the home is not a directory, the transport failed, `HOME` never came back, or `SEED_RC` was missing [scripts/node_seed_drift.py:257-268] | evidentiary of a failed measurement |
++| WARN | `  WARN  seed_drift — the seed record at %s does not parse — nothing could be measured` | the record is not JSON, or cannot be opened [scripts/node_seed_drift.py:271-282] | evidentiary |
++| — | `RESULT: PASS` | the PASS finding [scripts/node_seed_drift.py:204] | descriptive — restates `exit_code` |
++| — | `RESULT: FAIL (%s differ from the record)` | the drift finding [scripts/node_seed_drift.py:229] | descriptive |
++| — | `RESULT: WARN (no seed record at %s)` | the default-absent finding [scripts/node_seed_drift.py:253] | descriptive |
++| — | `RESULT: FAIL (no seed record at %s)` | the strict-absent finding [scripts/node_seed_drift.py:243] | descriptive |
++| — | `RESULT: FAIL (usage: %s)` | any of the five usage refusals; the message itself goes to stderr first [scripts/node_seed_drift.py:513-516] | descriptive |
++| — | `--home and --agent/--server are exclusive` | both modes given [scripts/node_seed_drift.py:522-523] | descriptive |
++| — | `one mode is required: --home DIR or --agent ID --server NAME` | neither mode given [scripts/node_seed_drift.py:524-527] | descriptive |
++| — | `bunker mode needs both --agent ID and --server NAME` | one half of a bunker pair [scripts/node_seed_drift.py:528-529] | descriptive |
++| — | `--timeout must be >= 1, got %d` | `--timeout 0` or negative [scripts/node_seed_drift.py:518-519] | descriptive |
+ | node stream | `HOME=$HOME` | first line of the remote script; the only source of the node's home [scripts/node_seed_drift.py:106] | descriptive — consumed by `parse_remote` |
+-| node stream | `RECORD=0` / `RECORD=1` / `RECORD=2` | no record / record present / record failed the JSON probe [scripts/node_seed_drift.py:108-113] | descriptive — `RECORD=2` is unreachable, §8 defect 3 |
+-| node stream | `SEED_RC=$SEED_RC` | immediately after the staged check finishes [scripts/node_seed_drift.py:120-121] | evidentiary — the child's real exit status |
+-| node stream | `SEED_BEGIN` / `SEED_END` | framing the check's own output, captured to a temp file first [scripts/node_seed_drift.py:122-125] | descriptive — the framing protocol |
+-| — | `node_seed.py check printed no verdict (exit %d)` | the seeder exited with anything but 0-with-a-PASS-row or 1-with-a-drift-row, local mode [scripts/node_seed_drift.py:344-346] | evidentiary — carries the child's exit code |
+-| — | `node_seed.py check on the node gave no usable verdict (exit %d)` | same, bunker mode [scripts/node_seed_drift.py:445-447] | evidentiary |
+-| — | `bunker exec failed: %s` | the transport returned non-zero, or could not be started [scripts/node_seed_drift.py:382-386] | evidentiary |
++| node stream | `RECORD=0` / `RECORD=1` / `RECORD=2` | no record / record present / record failed the JSON probe [scripts/node_seed_drift.py:108-117] | descriptive — `RECORD=2` is unreachable, §8 defect 3 |
++| node stream | `SEED_RC=$SEED_RC` | immediately after the staged check finishes [scripts/node_seed_drift.py:124-125] | evidentiary — the child's real exit status |
++| node stream | `SEED_BEGIN` / `SEED_END` | framing the check's own output, captured to a temp file first [scripts/node_seed_drift.py:126-129] | descriptive — the framing protocol |
++| — | `node_seed.py check printed no verdict (exit %d)` | the seeder exited with anything but 0-with-a-PASS-row or 1-with-a-drift-row, local mode [scripts/node_seed_drift.py:348-350] | evidentiary — carries the child's exit code |
++| — | `node_seed.py check on the node gave no usable verdict (exit %d)` | same, bunker mode [scripts/node_seed_drift.py:449-451] | evidentiary |
++| — | `bunker exec failed: %s` | the transport returned non-zero, or could not be started [scripts/node_seed_drift.py:386-390] | evidentiary |
+ 
+ The gate re-prints every one of these rows under its own prefix, and doubles the tail of a WARN row:
+ `  WARN  seed_drift — <row> — the seed could not be measured; pass --strict-seed to refuse it`
+-[scripts/verify-node.sh:183], where `<row>` already ends with that clause — measured, Transcript 5
++[scripts/verify-node.sh:194], where `<row>` already ends with that clause — measured, Transcript 5
+ (defect 5).
+ 
+ ## 6. Failure modes
+@@ -351,36 +355,36 @@ status, first at the tool, then at the gate.
+ 
+ | Failure | Direction | Presents as | Distinguished from | Recovery |
+ |---|---|---|---|---|
+-| A seeded file's content changes | **fail-closed** | `FAIL … <path> drifted (expected <12>, measured <12>)`, exit 1 [scripts/node_seed_drift.py:204-226] | an absent file says `absent on the node` instead | re-apply the seed from the control host; the row names the path |
+-| A seeded file is deleted | **fail-closed** | `FAIL … <path> absent on the node`, exit 1 [scripts/node_seed_drift.py:163] | a manifest typo removes the path from the record entirely, which is the record-absent story | re-apply |
++| A seeded file's content changes | **fail-closed** | `FAIL … <path> drifted (expected <12>, measured <12>)`, exit 1 [scripts/node_seed_drift.py:208-230] | an absent file says `absent on the node` instead | re-apply the seed from the control host; the row names the path |
++| A seeded file is deleted | **fail-closed** | `FAIL … <path> absent on the node`, exit 1 [scripts/node_seed_drift.py:167] | a manifest typo removes the path from the record entirely, which is the record-absent story | re-apply |
+ | **A file is added to `prompts/` or `skills/`** | **fail-open, silently** | nothing — PASS with the recorded count; only recorded paths are hashed [scripts/node_seed.py:227-236] | a drifted recorded file | re-applying replaces both directories wholesale [scripts/node_seed.py:198-206], which is the only thing that removes the ghost |
+ | **A recorded file's mode changes** | **fail-open, silently** | PASS | — | mode is never read; nothing can detect it |
+ | **The record's `files` list is empty** | **fail-open into a green** | `PASS seed_drift — …: 0 seeded files present and matching`, exit 0 (measured, §3 row 8) | a healthy seed names a count > 0 | a build whose globs matched nothing produces exactly this [scripts/node_seed.py:83-90] [scripts/node_seed.py:132]; `file_count == 0` is the only tell, and nothing refuses it |
+-| No record on the node | **fail-open at the gate, refuse-able on request** | `WARN … no seed record …`, exit 3, then **`VERIFY: PASS` 0**; `FAIL` 1 under `--strict-seed` (row 22) | a corrupt record names the record and says "does not parse" | a node still being provisioned is the legitimate case [scripts/node_seed_drift.py:28-34]; a gate that cares must pass `--strict-seed` |
+-| The record does not parse | **fail-open at the gate** | `WARN … does not parse …`, exit 3; the tool's own `--strict-seed` does **not** change it, the gate's does (rows 12 and 23) | a missing record says "no seed record at" | repair or re-apply the record; strictness has to live at the gate |
+-| The record parses but has no `files` key (a newer or foreign schema) | **fail-open at the gate, and misattributed** | `WARN … node_seed.py check printed no verdict (exit 1)` — it blames the seeder, not the record (measured, row 7) | the `does not parse` row, which is the honest one | treat any "no verdict" with a readable record as a schema problem; the wrapper never inspects the record's shape, only whether it parses [scripts/node_seed_drift.py:309-314] |
+-| **The sibling seeder is missing** | **fail-open at the gate; a green with no instrument** | bunker mode: `WARN … is missing — the check could not be staged`; local mode: `WARN … no verdict (exit 2)`; through the gate in default mode: **`VERIFY: PASS` 0** (rows 14 and 24) | the module itself missing, which the gate *does* fail [scripts/verify-node.sh:161-164] | restore `scripts/node_seed.py` — the gate has an existence check for the wrapper and none for its sibling [scripts/node_seed_drift.py:478-479] |
++| No record on the node | **unverified at the gate; fail-closed on request** | `WARN … no seed record …`, exit 3, then **`VERIFY: UNVERIFIED` 3** naming `seed_drift` (CF-291; `VERIFY: PASS` 0 before it); `FAIL` 1 under `--strict-seed` (row 22) | a corrupt record names the record and says "does not parse" | a node still being provisioned is the legitimate case [scripts/node_seed_drift.py:28-34]; `--strict-seed` turns the same state into a FAIL for a gate that must refuse outright |
++| The record does not parse | **unverified at the gate** | `WARN … does not parse …`, exit 3, then `VERIFY: UNVERIFIED` 3 (CF-291; `VERIFY: PASS` 0 before it); the tool's own `--strict-seed` does **not** change it, the gate's does (rows 12 and 23) | a missing record says "no seed record at" | repair or re-apply the record; strictness has to live at the gate |
++| The record parses but has no `files` key (a newer or foreign schema) | **fail-open at the gate, and misattributed** | `WARN … node_seed.py check printed no verdict (exit 1)` — it blames the seeder, not the record (measured, row 7) | the `does not parse` row, which is the honest one | treat any "no verdict" with a readable record as a schema problem; the wrapper never inspects the record's shape, only whether it parses [scripts/node_seed_drift.py:313-318] |
++| **The sibling seeder is missing** | **unverified at the gate since CF-291** | bunker mode: `WARN … is missing — the check could not be staged`; local mode: `WARN … no verdict (exit 2)`; through the gate in default mode: **`VERIFY: UNVERIFIED` 3** (rows 14 and 24; `VERIFY: PASS` 0 before CF-291) | the module itself missing, which the gate *does* fail [scripts/verify-node.sh:172-175] | restore `scripts/node_seed.py` — the gate has an existence check for the wrapper and none for its sibling [scripts/node_seed_drift.py:482-483] |
+ | The `bunker` client is absent, or the exec fails | **fail-closed to WARN** | `WARN … bunker exec failed: …`, exit 3 (measured, row 17) | a node that answers but has no record (`RECORD=0`) | install the client / reach the host; `(unresolved)` in the header is the tell |
+-| The node returns no `HOME` | **fail-closed to WARN** | `WARN … bunker exec returned no HOME (first line: …)`, exit 3 [scripts/node_seed_drift.py:394-399] | an empty stream | the exec stream was cut, or the shell is not POSIX |
+-| The node's answer carries no `RECORD` verdict | **fail-closed to WARN** | `WARN … the node's answer carried no RECORD verdict …` [scripts/node_seed_drift.py:410-420] | a stream truncated after `SEED_RC` | re-run; the framing is the protocol |
+-| The stream is cut after the check but before `SEED_RC` | **fail-closed to WARN** | `WARN … the node returned no SEED_RC verdict — the exec stream was cut` [scripts/node_seed_drift.py:423-428] | a check that ran and printed nothing | raise `--timeout` (default 180 s, while the exec stream dies at 300 [scripts/node_seed_drift.py:496-501]) |
++| The node returns no `HOME` | **fail-closed to WARN** | `WARN … bunker exec returned no HOME (first line: …)`, exit 3 [scripts/node_seed_drift.py:398-403] | an empty stream | the exec stream was cut, or the shell is not POSIX |
++| The node's answer carries no `RECORD` verdict | **fail-closed to WARN** | `WARN … the node's answer carried no RECORD verdict …` [scripts/node_seed_drift.py:414-424] | a stream truncated after `SEED_RC` | re-run; the framing is the protocol |
++| The stream is cut after the check but before `SEED_RC` | **fail-closed to WARN** | `WARN … the node returned no SEED_RC verdict — the exec stream was cut` [scripts/node_seed_drift.py:427-432] | a check that ran and printed nothing | raise `--timeout` (default 180 s, while the exec stream dies at 300 [scripts/node_seed_drift.py:500-505]) |
+ | **A corrupt record, seen from the node** | **misattributed, then fail-open at the gate** | `WARN … check on the node gave no usable verdict (exit 1)`, not `does not parse` — the remote JSON guard is a no-op (§8 defect 3) | local mode's honest `does not parse` row | same recovery; do not trust the row's noun |
+-| The node prints `SEED_BEGIN` / a PASS row / `SEED_END` itself | **fail-open by construction** | `PASS seed_drift — …: N seeded files present and matching` for any N the node chooses [scripts/node_seed_drift.py:137-154] | nothing distinguishes it — the stream is the only witness | out of scope for this tool: a compromised node can always lie about its own files |
+-| The seeder source contains a line exactly `SEED_PY_STAGED_EOF` | **fails closed, loudly** | the heredoc ends early, the staged file is a prefix, `python3` reports a syntax error, `SEED_RC` 1 → `WARN … gave no usable verdict` | a genuine seeder bug | rename the sentinel [scripts/node_seed_drift.py:116-118]; the marker is a fixed literal |
+-| A drifted seed with more than 20 paths | fail-closed but **truncated** | the row ends `(+N more — see --json)` [scripts/node_seed_drift.py:206-209] | the full set, in the JSON | keep the `--json` output; the gate deletes it [scripts/verify-node.sh:187] |
+-| Usage error (no mode, both modes, half a bunker pair, bad timeout) | fail-closed to exit 2 | the message on stderr plus `RESULT: FAIL (usage: …)`, exit 2 (measured, row 19) | a drift, which is exit 1 | fix the invocation; **at the gate** exit 2 falls into the `*)` arm and becomes a WARN [scripts/verify-node.sh:177-183] |
++| The node prints `SEED_BEGIN` / a PASS row / `SEED_END` itself | **fail-open by construction** | `PASS seed_drift — …: N seeded files present and matching` for any N the node chooses [scripts/node_seed_drift.py:141-158] | nothing distinguishes it — the stream is the only witness | out of scope for this tool: a compromised node can always lie about its own files |
++| The seeder source contains a line exactly `SEED_PY_STAGED_EOF` | **fails closed, loudly** | the heredoc ends early, the staged file is a prefix, `python3` reports a syntax error, `SEED_RC` 1 → `WARN … gave no usable verdict` | a genuine seeder bug | rename the sentinel [scripts/node_seed_drift.py:120-122]; the marker is a fixed literal |
++| A drifted seed with more than 20 paths | fail-closed but **truncated** | the row ends `(+N more — see --json)` [scripts/node_seed_drift.py:210-213] | the full set, in the JSON | keep the `--json` output; the gate deletes it [scripts/verify-node.sh:202] |
++| Usage error (no mode, both modes, half a bunker pair, bad timeout) | fail-closed to exit 2 | the message on stderr plus `RESULT: FAIL (usage: …)`, exit 2 (measured, row 19) | a drift, which is exit 1 | fix the invocation; **at the gate** exit 2 falls into the `*)` arm and becomes a WARN [scripts/verify-node.sh:188-194] |
+ 
+ ## 7. Environment and settings it reads
+ 
+ | Variable | Default | Effect if unset |
+ |---|---|---|
+ | `PATH` | inherits the caller's | sampled **once at import** for the `bunker` client [scripts/node_seed_drift.py:56]; the `or "bunker"` fallback defers the failure to exec time [scripts/node_seed_drift.py:87-88] |
+-| `HOME` (local mode) | inherits the caller's | expanded by `os.path.expanduser` on `--home` [scripts/node_seed_drift.py:286]; an unset `HOME` makes `~` unresolvable and the run WARNs `is not a directory` [scripts/node_seed_drift.py:301-303] |
+-| `HOME` (the node's) | set by the node's login shell | echoed as `HOME=` and used to build the record path [scripts/node_seed_drift.py:106-107]; a shell that does not export it produces the `returned no HOME` WARN [scripts/node_seed_drift.py:394-399] |
+-| `sys.executable` | the interpreter running the wrapper | runs `node_seed.py check` in local mode [scripts/node_seed_drift.py:318] — the sibling is executed by the *wrapper's* interpreter, not by `python3` from `PATH` |
+-| `TMPDIR` | **not read** | the node's temp files are hardcoded under `/tmp` [scripts/node_seed_drift.py:114-115], so a node with a small `/tmp` fails this leg regardless of `TMPDIR` |
+-| `python3` on the node | any | two uses: the record probe [scripts/node_seed_drift.py:109] and the staged check [scripts/node_seed_drift.py:119] |
+-| `sh` on the node | any POSIX shell | the remote command is `sh -lc` [scripts/node_seed_drift.py:379], not `bash`; nothing in the template needs bash |
++| `HOME` (local mode) | inherits the caller's | expanded by `os.path.expanduser` on `--home` [scripts/node_seed_drift.py:290]; an unset `HOME` makes `~` unresolvable and the run WARNs `is not a directory` [scripts/node_seed_drift.py:305-307] |
++| `HOME` (the node's) | set by the node's login shell | echoed as `HOME=` and used to build the record path [scripts/node_seed_drift.py:106-107]; a shell that does not export it produces the `returned no HOME` WARN [scripts/node_seed_drift.py:398-403] |
++| `sys.executable` | the interpreter running the wrapper | runs `node_seed.py check` in local mode [scripts/node_seed_drift.py:322] — the sibling is executed by the *wrapper's* interpreter, not by `python3` from `PATH` |
++| `TMPDIR` | **not read** | the node's temp files are hardcoded under `/tmp` [scripts/node_seed_drift.py:118-119], so a node with a small `/tmp` fails this leg regardless of `TMPDIR` |
++| `python3` on the node | any | two uses: the record probe [scripts/node_seed_drift.py:113] and the staged check [scripts/node_seed_drift.py:123] |
++| `sh` on the node | any POSIX shell | the remote command is `sh -lc` [scripts/node_seed_drift.py:383], not `bash`; nothing in the template needs bash |
+ 
+ There is no configuration file and no environment variable of its own: `RECORD_REL`, `MAX_SHOWN` and
+ `SEED_SIBLING_NAME` are constants [scripts/node_seed_drift.py:64] [scripts/node_seed_drift.py:68]
+@@ -388,11 +392,11 @@ There is no configuration file and no environment variable of its own: `RECORD_R
+ 
+ | Flag | Default | Meaning |
+ |---|---|---|
+-| `--agent ID` / `--server NAME` | none | bunker mode; both are required together [scripts/node_seed_drift.py:524-525] |
+-| `--home DIR` | none | local mode; exclusive with the pair above [scripts/node_seed_drift.py:516-519] |
+-| `--strict-seed` | off | per its help text, "an unmeasurable or absent seed record is a FAIL, not a WARN" [scripts/node_seed_drift.py:491-495] — but only the *absent* case is implemented [scripts/node_seed_drift.py:229-278] |
+-| `--timeout` | `180` | seconds for the child / the exec; the help notes the bunker exec stream dies at 300 [scripts/node_seed_drift.py:496-501]; `< 1` is a usage error [scripts/node_seed_drift.py:514-515] |
+-| `--json` | off | one JSON object on stdout, rows moved to stderr [scripts/node_seed_drift.py:502-506] [scripts/node_seed_drift.py:543-549] |
++| `--agent ID` / `--server NAME` | none | bunker mode; both are required together [scripts/node_seed_drift.py:528-529] |
++| `--home DIR` | none | local mode; exclusive with the pair above [scripts/node_seed_drift.py:520-523] |
++| `--strict-seed` | off | per its help text, "an unmeasurable or absent seed record is a FAIL, not a WARN" [scripts/node_seed_drift.py:495-499] — but only the *absent* case is implemented [scripts/node_seed_drift.py:233-282] |
++| `--timeout` | `180` | seconds for the child / the exec; the help notes the bunker exec stream dies at 300 [scripts/node_seed_drift.py:500-505]; `< 1` is a usage error [scripts/node_seed_drift.py:518-519] |
++| `--json` | off | one JSON object on stdout, rows moved to stderr [scripts/node_seed_drift.py:506-510] [scripts/node_seed_drift.py:547-553] |
+ 
+ ## 8. Evidence of record
+ 
+@@ -408,8 +412,8 @@ There is no configuration file and no environment variable of its own: `RECORD_R
+ - **The gate was measured live for legs 1-5**: a stub `bunker` answering `ALIVE` and
+   `hostname -I → 127.0.0.1`, a real HTTP server on `127.0.0.1:10800` (`/api/status` 200 with
+   `auth_required: true`, `/api/system/stats` 401), and a real local checkout with a fetchable origin
+-  so `checkout_freshness` passes on its own measurement [scripts/verify-node.sh:40-95]
+-  [scripts/verify-node.sh:109-146]. Transcript 5 is that run.
++  so `checkout_freshness` passes on its own measurement [scripts/verify-node.sh:49-104]
++  [scripts/verify-node.sh:118-155]. Transcript 5 is that run.
+ - **Existing suite coverage**: section 48 of `tests/selftest.sh` [tests/selftest.sh:3149-3275],
+   eleven green assertions, including the bunker one-round-trip arm [tests/selftest.sh:3245-3272]. It
+   does not cover a corrupt record, an empty record, or a missing seeder — the three arms that
+@@ -417,13 +421,13 @@ There is no configuration file and no environment variable of its own: `RECORD_R
+ - **§3 row 8's record was produced by the real builder**, not hand-written: a glob-only manifest that
+   matched nothing produced `0 files declared`, `apply` accepted it, and the drift leg reported PASS.
+   This is the shape the real manifest takes — `config/node-seed.txt` is glob-only [config/node-seed.txt:10-13].
+-- **Defects found while measuring** (nothing was fixed; this task touches one document):
++- **Defects found while measuring** (nothing was fixed by that task; it touches one document — CF-291 later fixed defects 2 and 3, and the rows below keep the evidence as measured at `436def5`):
+ 
+ | # | Defect | Evidence |
+ |---|---|---|
+-| 1 | **`--strict-seed` is half-implemented.** The flag advertises "an unmeasurable or absent seed record is a FAIL" [scripts/node_seed_drift.py:491-495], but only `finding_absent` reads it [scripts/node_seed_drift.py:229-240]; `finding_corrupt` takes `strict` and never uses it [scripts/node_seed_drift.py:267-278], and `finding_unmeasurable` has no such parameter at all [scripts/node_seed_drift.py:253-264]. Measured: a corrupt record with the flag → `WARN`, exit 3 (§3 row 12). The WARN rows also still say "pass --strict-seed to refuse it" when the caller already did | measured |
+-| 2 | **The gate passes a node whose seed it could not measure.** `warn` does not increment `FAILED` [scripts/lib.sh:8], so `VERIFY: PASS`, exit 0 is printed after `WARN seed_drift` [scripts/verify-node.sh:183] [scripts/verify-node.sh:197]. Measured for an absent record, a corrupt record and a missing seeder (§3 rows 22-24) — three states in which the node's seeded prompts are wholly unverified and the verifier says PASS | measured |
+-| 3 | **The node-side record guard is dead code.** `python3 - "$REC" -c 'import json,sys; json.load(open(sys.argv[1]))'` [scripts/node_seed_drift.py:109] puts `-c` *after* the script argument, so `-` runs stdin as the program (empty, since the exec stream forwards no stdin) and the rest becomes that program's argv: it exits 0 on any file. Measured: that exact argv form against a truncated record exits **0**, while `python3 -c '<same code>' <record>` exits 1. Consequence: `RECORD=2` [scripts/node_seed_drift.py:110-112] is unreachable, and a corrupt record on a node is reported as a seeder failure (`gave no usable verdict`) instead of `does not parse` | measured (row 7 vs row 11, plus the direct argv test) |
++| 1 | **`--strict-seed` is half-implemented.** The flag advertises "an unmeasurable or absent seed record is a FAIL" [scripts/node_seed_drift.py:495-499], but only `finding_absent` reads it [scripts/node_seed_drift.py:233-244]; `finding_corrupt` takes `strict` and never uses it [scripts/node_seed_drift.py:271-282], and `finding_unmeasurable` has no such parameter at all [scripts/node_seed_drift.py:257-268]. Measured: a corrupt record with the flag → `WARN`, exit 3 (§3 row 12). The WARN rows also still say "pass --strict-seed to refuse it" when the caller already did | measured |
++| 2 | **The gate passes a node whose seed it could not measure. Fixed by CF-291.** `warn` does not increment `FAILED` [scripts/lib.sh:8], so `VERIFY: PASS`, exit 0 was printed after `WARN seed_drift` [scripts/verify-node.sh:194] [scripts/verify-node.sh:214]. Measured for an absent record, a corrupt record and a missing seeder (§3 rows 22-24) — three states in which the node's seeded prompts are wholly unverified and the verifier said PASS. The seed leg's WARN now calls `unverified()` and the verdict line names it: `VERIFY: UNVERIFIED — seed_drift: …`, exit 3 | measured, then fixed 2026-11-06 |
++| 3 | **The node-side record guard is dead code.** `python3 - "$REC" -c 'import json,sys; json.load(open(sys.argv[1]))'` [scripts/node_seed_drift.py:113] puts `-c` *after* the script argument, so `-` runs stdin as the program (empty, since the exec stream forwards no stdin) and the rest becomes that program's argv: it exits 0 on any file. Measured: that exact argv form against a truncated record exits **0**, while `python3 -c '<same code>' <record>` exits 1. Consequence: `RECORD=2` [scripts/node_seed_drift.py:114-116] was unreachable, and a corrupt record on a node was reported as a seeder failure (`gave no usable verdict`) instead of `does not parse`. **Fixed by CF-291** — the program now comes before the record, so a 0-byte or unparseable record on a node is `RECORD=2` → `does not parse` | measured, then fixed 2026-11-06 |
+ | 4 | **An empty seed is a green.** `{"files": []}` → `PASS seed_drift — …: 0 seeded files present and matching`, exit 0, and the gate folds it into `VERIFY: PASS`. Reachable from the real builder whenever the manifest's globs match nothing — which is what the glob-only `config/node-seed.txt` [config/node-seed.txt:10-13] does on a tree without `prompts/` or `skills/` [scripts/node_seed.py:83-90] [scripts/node_seed.py:132]. Nothing anywhere treats `file_count == 0` as "nothing was seeded" | measured end to end (Transcript 2) |
+-| 5 | **The gate doubles the strict hint in every WARN row.** [scripts/verify-node.sh:183] appends "— the seed could not be measured; pass --strict-seed to refuse it" to a detail the tool already ends with those exact words [scripts/node_seed_drift.py:255-257]. Measured, Transcript 5 | measured |
+-| 6 | **The seeder runs under the wrapper's interpreter locally, and under `python3` on the node.** Local mode passes `sys.executable` [scripts/node_seed_drift.py:318] while the node path calls `python3` [scripts/node_seed_drift.py:119], so a wrapper run in a venv measures with a different Python than the node does — harmless today, since the seeder is stdlib-only [scripts/node_seed.py:26-36], but a silent asymmetry | read-from-code |
++| 5 | **The gate doubles the strict hint in every WARN row.** [scripts/verify-node.sh:194] appends "— the seed could not be measured; pass --strict-seed to refuse it" to a detail the tool already ends with those exact words [scripts/node_seed_drift.py:259-261]. Measured, Transcript 5 | measured |
++| 6 | **The seeder runs under the wrapper's interpreter locally, and under `python3` on the node.** Local mode passes `sys.executable` [scripts/node_seed_drift.py:322] while the node path calls `python3` [scripts/node_seed_drift.py:123], so a wrapper run in a venv measures with a different Python than the node does — harmless today, since the seeder is stdlib-only [scripts/node_seed.py:26-36], but a silent asymmetry | read-from-code |
+diff --git a/docs/handbook/appendices/units/36-scripts-verify-node-sh.md b/docs/handbook/appendices/units/36-scripts-verify-node-sh.md
+index 09bdba3..505deb4 100644
+--- a/docs/handbook/appendices/units/36-scripts-verify-node-sh.md
++++ b/docs/handbook/appendices/units/36-scripts-verify-node-sh.md
+@@ -10,12 +10,12 @@
+ ## 1. Purpose and why it matters
+ 
+ - What it is: the **control-host half** of the node ladder — "control host: is this node actually usable?" [scripts/verify-node.sh:2]. It runs where the operator sits, not on the node, and grades six things in the order they prove something: the agent answers [scripts/verify-node.sh:9], the gateway answers **from here** over the tailnet rather than from inside itself [scripts/verify-node.sh:10], the auth gate is closed [scripts/verify-node.sh:11], an optional artifact hashes the same on both sides [scripts/verify-node.sh:12], the checkout the node will work is the tree `origin/main` has (CF-244) [scripts/verify-node.sh:13], and the seed it carries is the digests its seed record still names (CF-250) [scripts/verify-node.sh:14].
+-- Why the boundary is the point: the foreman runs on the project's node and never on the control host [fact: FACT-01], so "usable" has to be measured from outside it. A bunker container has no address the control host can reach unless a transport is published, which is why the reachability verdict is decided where the gap is named [scripts/verify-node.sh:55] [scripts/verify-node.sh:57]. Its own header refuses the cheap substitute — "A version string is not evidence: step 2 must be a live HTTP answer from this host" [scripts/verify-node.sh:15].
+-- **The load-bearing distinction — three verdicts, not two.** A transport gap is `UNVERIFIED`, never `FAIL`: the node may be perfectly healthy behind a gap this host cannot see, and calling that FAIL "sends an operator to fix a node that works, PASS would be a lie" [scripts/verify-node.sh:57]. The verdict is its own exit code — `VERIFY: UNVERIFIED …` then `exit 3` [scripts/verify-node.sh:192] [scripts/verify-node.sh:193] [scripts/verify-node.sh:195] — and it names what it could not use. CF-224 was filed against the opposite behaviour: a `000` was once printed as `FAIL gateway_reachable — … -> 000000`, a code no HTTP server can return, for a node whose gateway was answering 200 [scripts/verify-node.sh:51] [scripts/verify-node.sh:57].
+-- **A 401 is never a failure signal here.** An unauthenticated request is *supposed* to be refused, so a measured 401/302/403 from this host is a `PASS` row [scripts/verify-node.sh:83], and a 401 observed only from inside the node (through the gap) is a `WARN` row with the run at exit 3 [scripts/verify-node.sh:88]. Nowhere in the file does 401 reach `bad` [scripts/lib.sh:7]. This is consistent with the bus's own design, where an unsigned read is a 401 by construction [fact: FACT-03] — a 401 is evidence the gate exists, not evidence the node is broken.
+-- What breaks if it is absent: `node-create.sh` loses its only outside-in proof and its `verify` row — its step 4 runs this file and maps `0` / `3` / anything else to `ok` / `warn` / `bad`+`incomplete` [scripts/node-create.sh:126] [scripts/node-create.sh:130] [scripts/node-create.sh:133] [scripts/node-create.sh:135]. Without step 5 and step 6 nobody measures the node's tree or seed at all: step 1–4 prove the agent answers, the gateway is up and the gate is closed, and "none of them looks at the tree" [scripts/verify-node.sh:110].
+-- What breaks if it lies: two opposite ways. A false FAIL trains an operator to ignore the last line, which is exactly the CF-224 defect [scripts/verify-node.sh:55]. A false PASS admits a node one commit behind `origin/main` or one carrying a hand-edited `prompts/foreman.md` — the states steps 5 and 6 were added to catch [scripts/verify-node.sh:109] [scripts/verify-node.sh:148]. Measured residual: `VERIFY: PASS` is still reachable while both of those legs are unmeasured, because an unmeasurable leg defaults to WARN (§6a).
+-- Scope it does **not** claim: no crier delivery, inference, task execution, result envelope or scheduler admission is proved here, and no crier code is touched by this file (the whole file is agent exec plus two HTTP GETs and two Python children) [docs/OPERATIONS.md:201] [scripts/verify-node.sh:41] [scripts/verify-node.sh:81].
++- Why the boundary is the point: the foreman runs on the project's node and never on the control host [fact: FACT-01], so "usable" has to be measured from outside it. A bunker container has no address the control host can reach unless a transport is published, which is why the reachability verdict is decided where the gap is named [scripts/verify-node.sh:64] [scripts/verify-node.sh:66]. Its own header refuses the cheap substitute — "A version string is not evidence: step 2 must be a live HTTP answer from this host" [scripts/verify-node.sh:15].
++- **The load-bearing distinction — three verdicts, not two.** A transport gap is `UNVERIFIED`, never `FAIL`: the node may be perfectly healthy behind a gap this host cannot see, and calling that FAIL "sends an operator to fix a node that works, PASS would be a lie" [scripts/verify-node.sh:66]. The verdict is its own exit code — `VERIFY: UNVERIFIED …` then `exit 3` [scripts/verify-node.sh:207] [scripts/verify-node.sh:210] [scripts/verify-node.sh:212] — and it names what it could not use. Since CF-291 that cause is not only transport: the seed leg's own WARN sets the same counter through `unverified()`, so an unmeasured seed reads `VERIFY: UNVERIFIED — seed_drift: …`. CF-224 was filed against the opposite behaviour: a `000` was once printed as `FAIL gateway_reachable — … -> 000000`, a code no HTTP server can return, for a node whose gateway was answering 200 [scripts/verify-node.sh:60] [scripts/verify-node.sh:66].
++- **A 401 is never a failure signal here.** An unauthenticated request is *supposed* to be refused, so a measured 401/302/403 from this host is a `PASS` row [scripts/verify-node.sh:92], and a 401 observed only from inside the node (through the gap) is a `WARN` row with the run at exit 3 [scripts/verify-node.sh:97]. Nowhere in the file does 401 reach `bad` [scripts/lib.sh:7]. This is consistent with the bus's own design, where an unsigned read is a 401 by construction [fact: FACT-03] — a 401 is evidence the gate exists, not evidence the node is broken.
++- What breaks if it is absent: `node-create.sh` loses its only outside-in proof and its `verify` row — its step 4 runs this file and maps `0` / `3` / anything else to `ok` / `warn` / `bad`+`incomplete` [scripts/node-create.sh:126] [scripts/node-create.sh:130] [scripts/node-create.sh:133] [scripts/node-create.sh:135]. Without step 5 and step 6 nobody measures the node's tree or seed at all: step 1–4 prove the agent answers, the gateway is up and the gate is closed, and "none of them looks at the tree" [scripts/verify-node.sh:119].
++- What breaks if it lies: two opposite ways. A false FAIL trains an operator to ignore the last line, which is exactly the CF-224 defect [scripts/verify-node.sh:64]. A false PASS admits a node one commit behind `origin/main` or one carrying a hand-edited `prompts/foreman.md` — the states steps 5 and 6 were added to catch [scripts/verify-node.sh:118] [scripts/verify-node.sh:157]. Measured residual: `VERIFY: PASS` is still reachable while the checkout leg is unmeasured, because that leg's WARN defaults to a warning (§6a); the seed leg no longer has that hole — its WARN sets UNVERIFIED, so the run ends `VERIFY: UNVERIFIED`, exit 3 (CF-291).
++- Scope it does **not** claim: no crier delivery, inference, task execution, result envelope or scheduler admission is proved here, and no crier code is touched by this file (the whole file is agent exec plus two HTTP GETs and two Python children) [docs/OPERATIONS.md:201] [scripts/verify-node.sh:50] [scripts/verify-node.sh:90].
+ 
+ ## 2. Dependencies and library contracts
+ 
+@@ -25,64 +25,64 @@
+ |---|---|---|---|
+ | `bash` | not pinned; this host 5.3.9 | the shebang [scripts/verify-node.sh:1] | no probe inside the script; measured under this host's `/bin/sh`→dash, where the observed path behaved identically (§3) |
+ | `scripts/lib.sh` | same revision as this file | `$HERE/lib.sh`, sourced unguarded [scripts/verify-node.sh:18] | **nothing inside the script can report it** — measured with the file copied away from its `lib.sh`: every row became `say: command not found` / `ok: command not found`, and the run died at `FAILED: unbound variable` with exit 1 (§3) |
+-| `bunker` CLI | not pinned; `/home/kara/.local/bin/bunker` on this host | `PATH`; every agent probe and the two inside-the-node fallbacks [scripts/verify-node.sh:41] [scripts/verify-node.sh:48] [scripts/verify-node.sh:59] [scripts/verify-node.sh:98] [scripts/verify-node.sh:100] | `FAIL agent_alive — <bunker's own first line>` then `RESULT: FAIL`, exit 1 [scripts/verify-node.sh:44] — measured: `bunker: server "no-such-server-fx36" not found in config` (§3) |
+-| `curl` | not pinned | `PATH`; the two outbound probes [scripts/verify-node.sh:53] [scripts/verify-node.sh:81] | no probe: a missing `curl` yields an empty capture, `code=${code:-000}` turns it into `000` [scripts/verify-node.sh:53], and the run takes the UNVERIFIED branch [scripts/verify-node.sh:66] — a silent degradation, named in §6 |
+-| `python3` | not pinned (this host 3.14.9); the children are stdlib-only | `PATH`; both Python legs [scripts/verify-node.sh:127] [scripts/verify-node.sh:168] | the leg's non-zero exit lands in the `*)` branch and prints `WARN … could not be measured` [scripts/verify-node.sh:141] [scripts/verify-node.sh:183] — measured (§3, the clean-pass row) |
+-| `scripts/node_freshness.py` | same revision | `$HERE/node_freshness.py`, readable [scripts/verify-node.sh:122] | `FAIL checkout_freshness — <path> missing — the checkout's git state is unmeasured` [scripts/verify-node.sh:124] |
+-| `scripts/node_seed_drift.py` | same revision | `$HERE/node_seed_drift.py`, readable [scripts/verify-node.sh:161] | `FAIL seed_drift — <path> missing — the node's seed is unmeasured` [scripts/verify-node.sh:163] |
+-| `mktemp` | not pinned | `PATH`; five scratch files [scripts/verify-node.sh:99] [scripts/verify-node.sh:126] [scripts/verify-node.sh:165] | no probe: an unusable temp yields an empty scratch path, the child writes nowhere, and the leg reads `WARN … could not be measured` [scripts/verify-node.sh:141] |
+-| `sha256sum` | not pinned | `PATH` on both sides; artifact leg [scripts/verify-node.sh:98] [scripts/verify-node.sh:101] | no probe: an empty remote digest with a non-empty local one fails the equality test `[ -n "$remote" ]` [scripts/verify-node.sh:102] — measured row `node  vs host e3b0c44298fc` (§3) |
+-| `awk`, `grep`, `sed`, `head`, `paste`, `cut`, `basename` | not pinned | `PATH`; row parsing [scripts/verify-node.sh:48] [scripts/verify-node.sh:131] [scripts/verify-node.sh:134] [scripts/verify-node.sh:103] | no probe: an absent parser prints an empty detail and the row becomes `… — ` with a blank value, still the same verdict |
+-| a writable `/tmp` | kernel | the status body path is **hard-coded** [scripts/verify-node.sh:53] [scripts/verify-node.sh:63] | no probe: an unwritable `/tmp` leaves no body, `grep` finds nothing, and `FAIL auth_gate` is printed [scripts/verify-node.sh:65] |
++| `bunker` CLI | not pinned; `/home/kara/.local/bin/bunker` on this host | `PATH`; every agent probe and the two inside-the-node fallbacks [scripts/verify-node.sh:50] [scripts/verify-node.sh:57] [scripts/verify-node.sh:68] [scripts/verify-node.sh:107] [scripts/verify-node.sh:109] | `FAIL agent_alive — <bunker's own first line>` then `RESULT: FAIL`, exit 1 [scripts/verify-node.sh:53] — measured: `bunker: server "no-such-server-fx36" not found in config` (§3) |
++| `curl` | not pinned | `PATH`; the two outbound probes [scripts/verify-node.sh:62] [scripts/verify-node.sh:90] | no probe: a missing `curl` yields an empty capture, `code=${code:-000}` turns it into `000` [scripts/verify-node.sh:62], and the run takes the UNVERIFIED branch [scripts/verify-node.sh:75] — a silent degradation, named in §6 |
++| `python3` | not pinned (this host 3.14.9); the children are stdlib-only | `PATH`; both Python legs [scripts/verify-node.sh:136] [scripts/verify-node.sh:179] | the leg's non-zero exit lands in the `*)` branch and prints `WARN … could not be measured` [scripts/verify-node.sh:150] [scripts/verify-node.sh:194] — measured (§3, the clean-pass row) |
++| `scripts/node_freshness.py` | same revision | `$HERE/node_freshness.py`, readable [scripts/verify-node.sh:131] | `FAIL checkout_freshness — <path> missing — the checkout's git state is unmeasured` [scripts/verify-node.sh:133] |
++| `scripts/node_seed_drift.py` | same revision | `$HERE/node_seed_drift.py`, readable [scripts/verify-node.sh:172] | `FAIL seed_drift — <path> missing — the node's seed is unmeasured` [scripts/verify-node.sh:174] |
++| `mktemp` | not pinned | `PATH`; five scratch files [scripts/verify-node.sh:108] [scripts/verify-node.sh:135] [scripts/verify-node.sh:176] | no probe: an unusable temp yields an empty scratch path, the child writes nowhere, and the leg reads `WARN … could not be measured` [scripts/verify-node.sh:150] |
++| `sha256sum` | not pinned | `PATH` on both sides; artifact leg [scripts/verify-node.sh:107] [scripts/verify-node.sh:110] | no probe: an empty remote digest with a non-empty local one fails the equality test `[ -n "$remote" ]` [scripts/verify-node.sh:111] — measured row `node  vs host e3b0c44298fc` (§3) |
++| `awk`, `grep`, `sed`, `head`, `paste`, `cut`, `basename` | not pinned | `PATH`; row parsing [scripts/verify-node.sh:57] [scripts/verify-node.sh:140] [scripts/verify-node.sh:143] [scripts/verify-node.sh:112] | no probe: an absent parser prints an empty detail and the row becomes `… — ` with a blank value, still the same verdict |
++| a writable `/tmp` | kernel | the status body path is **hard-coded** [scripts/verify-node.sh:62] [scripts/verify-node.sh:72] | no probe: an unwritable `/tmp` leaves no body, `grep` finds nothing, and `FAIL auth_gate` is printed [scripts/verify-node.sh:74] |
+ 
+ ### 2b. Library contracts
+ 
+ | Contract | Provider | Contract relied on | If it changes |
+ |---|---|---|---|
+-| row helpers | `scripts/lib.sh:5` | `say` prints a bare line, `ok` prints `  PASS  %s — %s`, `bad` prints `  FAIL  %s — %s` **and** increments `FAILED`, `warn` prints `  WARN  %s — %s` and increments nothing [scripts/lib.sh:6] [scripts/lib.sh:7] [scripts/lib.sh:8] | the final ladder reads `$FAILED` and `$UNVERIFIED` only [scripts/verify-node.sh:191] [scripts/verify-node.sh:192]; a `warn` that started counting would silently turn every transport gap into a FAIL |
+-| `FAILED` initialisation | `scripts/lib.sh:11` | `FAILED=${FAILED:-0}`, so a clean run starts at zero | the closing test is `[ "$FAILED" -gt 0 ]` under `set -u` [scripts/verify-node.sh:16] [scripts/verify-node.sh:191]; without the default the run aborts at the last line (measured, §3) |
+-| `shq` | `scripts/lib.sh:54` | single-quotes one data value for a remote shell | the artifact path is the only value passed through it [scripts/verify-node.sh:98]; `--port` is **not** (§6) |
+-| `node_freshness.py --agent --server --json` | `scripts/node_freshness.py:670` | rows on **stderr**, one JSON object on stdout [scripts/node_freshness.py:720] [scripts/node_freshness.py:727]; exit `0` fresh, `1` drift or dirty, `2` usage or unreachable [scripts/node_freshness.py:69] [scripts/node_freshness.py:238] | the parent greps the child's stderr: `  PASS  freshness — ` for the pass detail [scripts/verify-node.sh:131], any `^  FAIL  ` row for the fail detail [scripts/verify-node.sh:134], `^RESULT: ` for the unmeasurable detail [scripts/verify-node.sh:137]. A renamed pass row yields an empty PASS value; a renamed `RESULT:` line yields `unmeasurable` [scripts/verify-node.sh:139] |
++| row helpers | `scripts/lib.sh:5` | `say` prints a bare line, `ok` prints `  PASS  %s — %s`, `bad` prints `  FAIL  %s — %s` **and** increments `FAILED`, `warn` prints `  WARN  %s — %s` and increments nothing [scripts/lib.sh:6] [scripts/lib.sh:7] [scripts/lib.sh:8] | the final ladder reads `$FAILED` and `$UNVERIFIED` only [scripts/verify-node.sh:206] [scripts/verify-node.sh:207]; a `warn` that started counting would silently turn every transport gap into a FAIL |
++| `FAILED` initialisation | `scripts/lib.sh:11` | `FAILED=${FAILED:-0}`, so a clean run starts at zero | the closing test is `[ "$FAILED" -gt 0 ]` under `set -u` [scripts/verify-node.sh:16] [scripts/verify-node.sh:206]; without the default the run aborts at the last line (measured, §3) |
++| `shq` | `scripts/lib.sh:54` | single-quotes one data value for a remote shell | the artifact path is the only value passed through it [scripts/verify-node.sh:107]; `--port` is **not** (§6) |
++| `node_freshness.py --agent --server --json` | `scripts/node_freshness.py:670` | rows on **stderr**, one JSON object on stdout [scripts/node_freshness.py:720] [scripts/node_freshness.py:727]; exit `0` fresh, `1` drift or dirty, `2` usage or unreachable [scripts/node_freshness.py:69] [scripts/node_freshness.py:238] | the parent greps the child's stderr: `  PASS  freshness — ` for the pass detail [scripts/verify-node.sh:140], any `^  FAIL  ` row for the fail detail [scripts/verify-node.sh:143], `^RESULT: ` for the unmeasurable detail [scripts/verify-node.sh:146]. A renamed pass row yields an empty PASS value; a renamed `RESULT:` line yields `unmeasurable` [scripts/verify-node.sh:148] |
+ | the pass row's shape | `scripts/node_freshness.py:366` | `  PASS  freshness — branch=… head=… origin_main=… ancestor=true behind=0` | measured on this worktree: `branch=wt/md-36b head=e7cf075ffff4 origin_main=e7cf075ffff4 ancestor=true behind=0` (§3) |
+-| the drift row's shape | `scripts/node_freshness.py:340` | `  FAIL  sync — behind=N (HEAD..<ref> <sha>): K differing path(s) — <paths>` | the parent flattens every FAIL row with `paste -sd '\|'` and cuts at 500 characters [scripts/verify-node.sh:134], so a wide drift is named but truncated (§3) |
+-| `node_seed_drift.py --agent --server [--strict-seed] --json` | `scripts/node_seed_drift.py:477` | exit `0` matched, `1` drifted (or absent under `--strict-seed`), `2` usage, `3` could not measure [scripts/node_seed_drift.py:28] [scripts/node_seed_drift.py:58]; `3` is deliberately **not** drift [scripts/node_seed_drift.py:31] | the parent folds `0`→PASS, `1`→FAIL, everything else→WARN unless `--strict-seed` [scripts/verify-node.sh:170] [scripts/verify-node.sh:171] [scripts/verify-node.sh:180] |
+-| the seed pass row | `scripts/node_seed_drift.py:191` | `  PASS  seed_drift — <record>: N seeded files present and matching` | the parent strips that exact prefix [scripts/verify-node.sh:172] — measured on the live node: `… /home/bunker-cf-node/.hermes/seed-applied.json: 13 seeded files present and matching` (§3) |
+-| the seed warn row | `scripts/node_seed_drift.py:255` | `  WARN  seed_drift — <detail> — the seed could not be measured; pass --strict-seed to refuse it` | the parent lifts that whole sentence as `detail` and appends **the same sentence again** [scripts/verify-node.sh:178] [scripts/verify-node.sh:183] — measured duplication (§3, §6) |
++| the drift row's shape | `scripts/node_freshness.py:340` | `  FAIL  sync — behind=N (HEAD..<ref> <sha>): K differing path(s) — <paths>` | the parent flattens every FAIL row with `paste -sd '\|'` and cuts at 500 characters [scripts/verify-node.sh:143], so a wide drift is named but truncated (§3) |
++| `node_seed_drift.py --agent --server [--strict-seed] --json` | `scripts/node_seed_drift.py:477` | exit `0` matched, `1` drifted (or absent under `--strict-seed`), `2` usage, `3` could not measure [scripts/node_seed_drift.py:28] [scripts/node_seed_drift.py:58]; `3` is deliberately **not** drift [scripts/node_seed_drift.py:31] | the parent folds `0`→PASS, `1`→FAIL, everything else→WARN unless `--strict-seed` [scripts/verify-node.sh:181] [scripts/verify-node.sh:182] [scripts/verify-node.sh:191] |
++| the seed pass row | `scripts/node_seed_drift.py:191` | `  PASS  seed_drift — <record>: N seeded files present and matching` | the parent strips that exact prefix [scripts/verify-node.sh:183] — measured on the live node: `… /home/bunker-cf-node/.hermes/seed-applied.json: 13 seeded files present and matching` (§3) |
++| the seed warn row | `scripts/node_seed_drift.py:255` | `  WARN  seed_drift — <detail> — the seed could not be measured; pass --strict-seed to refuse it` | the parent lifts that whole sentence as `detail` and appends **the same sentence again** [scripts/verify-node.sh:189] [scripts/verify-node.sh:194] — measured duplication (§3, §6) |
+ 
+ ### 2c. Service contracts (both sides must be named)
+ 
+ | Peer | Direction | Transport | Payload | Other side (file:function) |
+ |---|---|---|---|---|
+-| bunker control plane → the node's shell | outbound, every probe | `bunker exec --server S AGENT -- bash -lc '<cmd>'` [scripts/verify-node.sh:41] [scripts/verify-node.sh:48] [scripts/verify-node.sh:59] [scripts/verify-node.sh:98] [scripts/verify-node.sh:100] | one remote command string per probe: `echo ALIVE $(hostname)`, `hostname -I`, a `curl -w '%{http_code}'`, `sha256sum`, `cat` [scripts/verify-node.sh:41] [scripts/verify-node.sh:48] [scripts/verify-node.sh:59] [scripts/verify-node.sh:98] [scripts/verify-node.sh:100] | the CLI's own config (`~/.bunker/config.yaml`, `active_server`, not tracked in this repo — this host resolves `bunker-las-03` from it); the same CLI contract is used by `node-create.sh` for staging and for the provisioner call [scripts/node-create.sh:110] [scripts/node-create.sh:121] |
+-| gateway route `GET /api/status` | outbound from **this** host, 8 s bound [scripts/verify-node.sh:50] [scripts/verify-node.sh:53] | plain HTTP to `http://<node-ip>:<port>/api/status` (no TLS, no credential) [scripts/verify-node.sh:50] | must answer `200` [scripts/verify-node.sh:61] and its JSON body must carry a true `auth_required` [scripts/verify-node.sh:63] | the route is served by the node's `hermes serve --host 0.0.0.0 --port "$PORT" --skip-build` [scripts/harness/install-hermes.sh:284], and the value read back is the consequence of `dashboard.basic_auth` in `$HOME/.hermes/config.yaml` — the adapter refuses a public bind without it [scripts/harness/install-hermes.sh:202] [scripts/harness/install-hermes.sh:301]. The handler itself ships inside the pinned `hermes-agent` package [scripts/harness/install-hermes.sh:17] and is not vendored in this tree, so only its effect is measured here; the adapter probes the same route from **inside** the node [scripts/harness/install-hermes.sh:238] |
+-| gateway route `GET /api/system/stats` | outbound from this host, 8 s bound, no credential [scripts/verify-node.sh:81] | plain HTTP [scripts/verify-node.sh:81] | must refuse with `401`, `302` or `403`; a `200` means the node is open to the tailnet [scripts/verify-node.sh:83] [scripts/verify-node.sh:84] | same gateway process and same basic-auth surface as above [scripts/harness/install-hermes.sh:284]; the refusal is the middleware inside the installed package, so the row records a measured code, not an inspected handler [scripts/verify-node.sh:93] |
+-| `scripts/node_freshness.py` | child process, one run | `python3 -B <script> --agent ID --server NAME --json`, stdout and stderr captured to two temp files [scripts/verify-node.sh:126] [scripts/verify-node.sh:127] | nine-key JSON on stdout, rows on stderr [scripts/node_freshness.py:640] | the child measures the node's checkout in **one** `bunker exec` round trip and compares against `origin/main` [scripts/node_freshness.py:426] [scripts/node_freshness.py:366] |
+-| `scripts/node_seed_drift.py` | child process, one run | `python3 -B <script> --agent ID --server NAME [--strict-seed] --json` [scripts/verify-node.sh:168] | exit code only — the parent never parses the JSON | the child stages `scripts/node_seed.py` onto the node, runs its `check` there and removes it in the same exec, because provisioning deletes the node-side seeder [scripts/verify-node.sh:152] [scripts/node_seed_drift.py:191] |
+-| `scripts/node-create.sh` (consumer) | this script is the child | direct invocation at step 4, then exit-code switch [scripts/node-create.sh:130] [scripts/node-create.sh:130] | exit `0` = round trip proven, `3` = UNVERIFIED and the node is **not** marked failed, anything else = `bad verify` + `incomplete` [scripts/node-create.sh:131] [scripts/node-create.sh:133] [scripts/node-create.sh:135] | the producer side of the same contract: `exit 0` / `exit 3` / `exit 1` at the end of this file [scripts/verify-node.sh:191] [scripts/verify-node.sh:195] [scripts/verify-node.sh:196] |
++| bunker control plane → the node's shell | outbound, every probe | `bunker exec --server S AGENT -- bash -lc '<cmd>'` [scripts/verify-node.sh:50] [scripts/verify-node.sh:57] [scripts/verify-node.sh:68] [scripts/verify-node.sh:107] [scripts/verify-node.sh:109] | one remote command string per probe: `echo ALIVE $(hostname)`, `hostname -I`, a `curl -w '%{http_code}'`, `sha256sum`, `cat` [scripts/verify-node.sh:50] [scripts/verify-node.sh:57] [scripts/verify-node.sh:68] [scripts/verify-node.sh:107] [scripts/verify-node.sh:109] | the CLI's own config (`~/.bunker/config.yaml`, `active_server`, not tracked in this repo — this host resolves `bunker-las-03` from it); the same CLI contract is used by `node-create.sh` for staging and for the provisioner call [scripts/node-create.sh:110] [scripts/node-create.sh:121] |
++| gateway route `GET /api/status` | outbound from **this** host, 8 s bound [scripts/verify-node.sh:59] [scripts/verify-node.sh:62] | plain HTTP to `http://<node-ip>:<port>/api/status` (no TLS, no credential) [scripts/verify-node.sh:59] | must answer `200` [scripts/verify-node.sh:70] and its JSON body must carry a true `auth_required` [scripts/verify-node.sh:72] | the route is served by the node's `hermes serve --host 0.0.0.0 --port "$PORT" --skip-build` [scripts/harness/install-hermes.sh:284], and the value read back is the consequence of `dashboard.basic_auth` in `$HOME/.hermes/config.yaml` — the adapter refuses a public bind without it [scripts/harness/install-hermes.sh:202] [scripts/harness/install-hermes.sh:301]. The handler itself ships inside the pinned `hermes-agent` package [scripts/harness/install-hermes.sh:17] and is not vendored in this tree, so only its effect is measured here; the adapter probes the same route from **inside** the node [scripts/harness/install-hermes.sh:238] |
++| gateway route `GET /api/system/stats` | outbound from this host, 8 s bound, no credential [scripts/verify-node.sh:90] | plain HTTP [scripts/verify-node.sh:90] | must refuse with `401`, `302` or `403`; a `200` means the node is open to the tailnet [scripts/verify-node.sh:92] [scripts/verify-node.sh:93] | same gateway process and same basic-auth surface as above [scripts/harness/install-hermes.sh:284]; the refusal is the middleware inside the installed package, so the row records a measured code, not an inspected handler [scripts/verify-node.sh:102] |
++| `scripts/node_freshness.py` | child process, one run | `python3 -B <script> --agent ID --server NAME --json`, stdout and stderr captured to two temp files [scripts/verify-node.sh:135] [scripts/verify-node.sh:136] | nine-key JSON on stdout, rows on stderr [scripts/node_freshness.py:640] | the child measures the node's checkout in **one** `bunker exec` round trip and compares against `origin/main` [scripts/node_freshness.py:426] [scripts/node_freshness.py:366] |
++| `scripts/node_seed_drift.py` | child process, one run | `python3 -B <script> --agent ID --server NAME [--strict-seed] --json` [scripts/verify-node.sh:179] | exit code only — the parent never parses the JSON | the child stages `scripts/node_seed.py` onto the node, runs its `check` there and removes it in the same exec, because provisioning deletes the node-side seeder [scripts/verify-node.sh:161] [scripts/node_seed_drift.py:195] |
++| `scripts/node-create.sh` (consumer) | this script is the child | direct invocation at step 4, then exit-code switch [scripts/node-create.sh:130] [scripts/node-create.sh:130] | exit `0` = round trip proven, `3` = UNVERIFIED and the node is **not** marked failed, anything else = `bad verify` + `incomplete` [scripts/node-create.sh:131] [scripts/node-create.sh:133] [scripts/node-create.sh:135] | the producer side of the same contract: `exit 0` / `exit 3` / `exit 1` at the end of this file [scripts/verify-node.sh:206] [scripts/verify-node.sh:212] [scripts/verify-node.sh:213] |
+ 
+ ## 3. Verification
+ 
+ | Check | Command | Expected | Last run | Result |
+ |---|---|---|---|---|
+ | `--check` (as briefed) | `bash scripts/verify-node.sh --agent cf-node --server bunker-las-03 --check` [scripts/verify-node.sh:29] | the module has **no** `--check` mode; an unparsed flag must be refused by name, exit 2 | 2026-11-05 | **measured `unknown arg: --check`, exit 2** — verbatim below |
+-| Real control-host run | `bash scripts/verify-node.sh --agent cf-node --server bunker-las-03` | a live answer for each measurable leg; UNVERIFIED rows where this host has no transport; the verdict is the first of FAIL > UNVERIFIED > PASS [scripts/verify-node.sh:191] [scripts/verify-node.sh:192] | 2026-11-05 | **measured `VERIFY: FAIL (1)`, exit 1** — two WARN transport rows, one FAIL freshness row, one PASS seed row (verbatim below) |
+-| Real run, artifact present on both sides | `… --artifact /etc/hostname` | `PASS artifact_digest` naming a 12-hex prefix, and the same `VERIFY: FAIL (1)` from the freshness leg [scripts/verify-node.sh:103] | 2026-11-05 | **measured `PASS artifact_digest — hostname 96aa37a6e3ab on both sides`, exit 1** |
+-| Real run, artifact missing on the node | `… --artifact /nonexistent-fx36` | `FAIL artifact_digest` with an empty node digest and the empty-input digest `e3b0c44298fc` on the host side [scripts/verify-node.sh:102] [scripts/verify-node.sh:105] | 2026-11-05 | **measured `node  vs host e3b0c44298fc — bytes differ or file missing`, `VERIFY: FAIL (2)`, exit 1** |
+-| Real run, unknown server | `bash scripts/verify-node.sh --agent cf-node --server no-such-server-fx36` | step 1 refuses before anything else can be graded [scripts/verify-node.sh:44] | 2026-11-05 | **measured `FAIL agent_alive — bunker: server "no-such-server-fx36" not found in config`, then `RESULT: FAIL`, exit 1** |
+-| Ladder arm: transport gap, gateway alive inside | fixture `bunker`+`curl`: status `000`, inside `200`; stats `000`, inside `401` | `WARN gateway_reachable` + `WARN unauth_refused`, then `VERIFY: UNVERIFIED`, **exit 3** [scripts/verify-node.sh:70] [scripts/verify-node.sh:88] [scripts/verify-node.sh:195] | 2026-11-05 | **measured exit 3** (verbatim below) |
+-| Ladder arm: nothing answers anywhere | fixture: status `000`, inside `000` for both routes | still `VERIFY: UNVERIFIED`, exit 3 — a dead harness is not called FAIL [scripts/verify-node.sh:72] [scripts/verify-node.sh:193] | 2026-11-05 | **measured exit 3**, row `… the gateway does not answer inside the node either (000) — the harness is not up` |
+-| Ladder arm: real HTTP answer, not 200 | fixture: status and stats `502` | `FAIL gateway_reachable` + `FAIL unauth_refused`, **not** UNVERIFIED — a real answer is evidence [scripts/verify-node.sh:76] [scripts/verify-node.sh:93] | 2026-11-05 | **measured `VERIFY: FAIL (2)`, exit 1** |
+-| Ladder arm: gate open | fixture: status `200` with `auth_required:true`, stats `200` | `FAIL unauth_refused … the node is OPEN` [scripts/verify-node.sh:84] | 2026-11-05 | **measured `VERIFY: FAIL (1)`, exit 1** |
+-| Ladder arm: `auth_required` absent | fixture: status `200`, body `{"status":"ok"}` | `FAIL auth_gate` [scripts/verify-node.sh:65] | 2026-11-05 | **measured `VERIFY: FAIL (1)`, exit 1** |
+-| Ladder arm: clean pass | fixture: status `200` + `auth_required:true`, stats `401`, both Python legs unmeasurable | `VERIFY: PASS`, exit 0 — with two WARN legs [scripts/verify-node.sh:196] | 2026-11-05 | **measured exit 0** — the residual in §6 |
+-| `--strict-freshness` | the gap arm plus the flag | an unmeasurable checkout becomes a `FAIL`, so the verdict flips to `VERIFY: FAIL (1)` [scripts/verify-node.sh:139] | 2026-11-05 | **measured exit 1** |
+-| `--strict-seed` | a 200/401 arm plus the flag | `FAIL seed_drift` carrying `(--strict-seed: unknown is not a pass)` [scripts/verify-node.sh:181] | 2026-11-05 | **measured `VERIFY: FAIL (1)`, exit 1** |
+-| Both strict flags | the gap arm plus both flags | two FAIL rows, `VERIFY: FAIL (2)` — FAIL outranks UNVERIFIED [scripts/verify-node.sh:191] | 2026-11-05 | **measured exit 1** |
++| Real control-host run | `bash scripts/verify-node.sh --agent cf-node --server bunker-las-03` | a live answer for each measurable leg; UNVERIFIED rows where this host has no transport; the verdict is the first of FAIL > UNVERIFIED > PASS [scripts/verify-node.sh:206] [scripts/verify-node.sh:207] | 2026-11-05 | **measured `VERIFY: FAIL (1)`, exit 1** — two WARN transport rows, one FAIL freshness row, one PASS seed row (verbatim below) |
++| Real run, artifact present on both sides | `… --artifact /etc/hostname` | `PASS artifact_digest` naming a 12-hex prefix, and the same `VERIFY: FAIL (1)` from the freshness leg [scripts/verify-node.sh:112] | 2026-11-05 | **measured `PASS artifact_digest — hostname 96aa37a6e3ab on both sides`, exit 1** |
++| Real run, artifact missing on the node | `… --artifact /nonexistent-fx36` | `FAIL artifact_digest` with an empty node digest and the empty-input digest `e3b0c44298fc` on the host side [scripts/verify-node.sh:111] [scripts/verify-node.sh:114] | 2026-11-05 | **measured `node  vs host e3b0c44298fc — bytes differ or file missing`, `VERIFY: FAIL (2)`, exit 1** |
++| Real run, unknown server | `bash scripts/verify-node.sh --agent cf-node --server no-such-server-fx36` | step 1 refuses before anything else can be graded [scripts/verify-node.sh:53] | 2026-11-05 | **measured `FAIL agent_alive — bunker: server "no-such-server-fx36" not found in config`, then `RESULT: FAIL`, exit 1** |
++| Ladder arm: transport gap, gateway alive inside | fixture `bunker`+`curl`: status `000`, inside `200`; stats `000`, inside `401` | `WARN gateway_reachable` + `WARN unauth_refused`, then `VERIFY: UNVERIFIED`, **exit 3** [scripts/verify-node.sh:79] [scripts/verify-node.sh:97] [scripts/verify-node.sh:212] | 2026-11-05 | **measured exit 3** (verbatim below) |
++| Ladder arm: nothing answers anywhere | fixture: status `000`, inside `000` for both routes | still `VERIFY: UNVERIFIED`, exit 3 — a dead harness is not called FAIL [scripts/verify-node.sh:81] [scripts/verify-node.sh:208] | 2026-11-05 | **measured exit 3**, row `… the gateway does not answer inside the node either (000) — the harness is not up` |
++| Ladder arm: real HTTP answer, not 200 | fixture: status and stats `502` | `FAIL gateway_reachable` + `FAIL unauth_refused`, **not** UNVERIFIED — a real answer is evidence [scripts/verify-node.sh:85] [scripts/verify-node.sh:102] | 2026-11-05 | **measured `VERIFY: FAIL (2)`, exit 1** |
++| Ladder arm: gate open | fixture: status `200` with `auth_required:true`, stats `200` | `FAIL unauth_refused … the node is OPEN` [scripts/verify-node.sh:93] | 2026-11-05 | **measured `VERIFY: FAIL (1)`, exit 1** |
++| Ladder arm: `auth_required` absent | fixture: status `200`, body `{"status":"ok"}` | `FAIL auth_gate` [scripts/verify-node.sh:74] | 2026-11-05 | **measured `VERIFY: FAIL (1)`, exit 1** |
++| Ladder arm: clean pass | fixture: status `200` + `auth_required:true`, stats `401`, a seed matching its record and a checkout level with its origin | `VERIFY: PASS`, exit 0 [scripts/verify-node.sh:214] | 2026-11-05; green-seed fixture re-measured 2026-11-06 | **measured exit 0**; the same fixture with the seed leg unmeasurable is `VERIFY: UNVERIFIED`, exit 3 since CF-291 (§6a) |
++| `--strict-freshness` | the gap arm plus the flag | an unmeasurable checkout becomes a `FAIL`, so the verdict flips to `VERIFY: FAIL (1)` [scripts/verify-node.sh:148] | 2026-11-05 | **measured exit 1** |
++| `--strict-seed` | a 200/401 arm plus the flag | `FAIL seed_drift` carrying `(--strict-seed: unknown is not a pass)` [scripts/verify-node.sh:192] | 2026-11-05 | **measured `VERIFY: FAIL (1)`, exit 1** |
++| Both strict flags | the gap arm plus both flags | two FAIL rows, `VERIFY: FAIL (2)` — FAIL outranks UNVERIFIED [scripts/verify-node.sh:206] | 2026-11-05 | **measured exit 1** |
+ | No `--agent` | `bash scripts/verify-node.sh --server fx` | the usage line naming every flag, exit 2 [scripts/verify-node.sh:32] | 2026-11-05 | **measured exit 2** |
+ | No `--agent` and no `--server` | `bash scripts/verify-node.sh` | agent is checked first, so the usage line wins over the server message [scripts/verify-node.sh:32] [scripts/verify-node.sh:35] | 2026-11-05 | **measured usage line, exit 2** |
+ | `--server` omitted, `BUNKER_SERVER` unset | `env -u BUNKER_SERVER bash scripts/verify-node.sh --agent fx` | `set BUNKER_SERVER or pass --server <name>` on stderr, exit 2 [scripts/verify-node.sh:35] | 2026-11-05 | **measured exit 2** — not the `:?` abort `docs/OPERATIONS.md` still describes (§6b) |
+ | `--server` supplied, `BUNKER_SERVER` unset | `env -u BUNKER_SERVER … --server fx` | the flag alone is sufficient and step 1 runs [scripts/verify-node.sh:20] [scripts/verify-node.sh:24] | 2026-11-05 | **measured: rows printed, exit 3** — both real runs above also ran with the variable unset in this shell |
+-| Checkout leg's own pass row | `python3 scripts/node_freshness.py --workdir .` in this worktree | `PASS freshness — branch=… head=… origin_main=… ancestor=true behind=0`, exit 0 [scripts/node_freshness.py:366] | 2026-11-05 | **measured `RESULT: PASS`, exit 0** — the exact text step 5 greps [scripts/verify-node.sh:131] |
++| Checkout leg's own pass row | `python3 scripts/node_freshness.py --workdir .` in this worktree | `PASS freshness — branch=… head=… origin_main=… ancestor=true behind=0`, exit 0 [scripts/node_freshness.py:366] | 2026-11-05 | **measured `RESULT: PASS`, exit 0** — the exact text step 5 greps [scripts/verify-node.sh:140] |
+ | `lib.sh` absent | the script copied to a directory with no `lib.sh` | nothing can print a row; the run must not report PASS [scripts/verify-node.sh:18] | 2026-11-05 | **measured: six `command not found` lines, then `FAILED: unbound variable`, exit 1** — no row, no PASS |
+ | Interpreter is `sh`, not `bash` | `sh scripts/verify-node.sh --agent cf-node --server no-such-server-fx36` | the shebang pins bash [scripts/verify-node.sh:1]; this host's `/bin/sh` is dash, which accepts `pipefail` here (measured), and the observed path was identical | 2026-11-05 | **measured: the same `FAIL agent_alive` + `RESULT: FAIL`, exit 1** — no bash-only construct is load-bearing on the path exercised here |
+ 
+@@ -106,7 +106,7 @@ verify node cf-node
+ VERIFY: FAIL (1)
+ ```
+ 
+-That run is the ladder working, not a defect: the node answered inside itself (200 / 401), this host has no transport to `192.168.123.66:10800`, and the checkout is 26 commits behind `origin/main` — the FAIL outranks the UNVERIFIED exactly as coded [scripts/verify-node.sh:191] [scripts/verify-node.sh:192]. The `checkout_freshness` row is cut at 500 characters by the parent [scripts/verify-node.sh:134].
++That run is the ladder working, not a defect: the node answered inside itself (200 / 401), this host has no transport to `192.168.123.66:10800`, and the checkout is 26 commits behind `origin/main` — the FAIL outranks the UNVERIFIED exactly as coded [scripts/verify-node.sh:206] [scripts/verify-node.sh:207]. The `checkout_freshness` row is cut at 500 characters by the parent [scripts/verify-node.sh:143].
+ 
+ The pure UNVERIFIED arm (fixture peers: this host's `bunker` and `curl` replaced by stubs that answer the two fixed probes and nothing else; verbatim, `EXIT=3`):
+ 
+@@ -136,52 +136,52 @@ VERIFY: FAIL (2)
+ 
+ **NONE** — and the reason is structural, not an omission.
+ 
+-- No counter, histogram, timestamp, duration or gauge leaves the process. The only counter is in-process — `FAILED`, incremented by `bad()` [scripts/lib.sh:7] [scripts/lib.sh:11] — and it leaves exactly once, inside the closing line `VERIFY: FAIL ($FAILED)` [scripts/verify-node.sh:191]. `UNVERIFIED` is a 0/1 flag, not a count [scripts/verify-node.sh:37].
+-- The exit code is the only machine-readable signal that is stable across runs: `1` FAIL, `3` UNVERIFIED, `0` PASS, `2` refused usage [scripts/verify-node.sh:191] [scripts/verify-node.sh:195] [scripts/verify-node.sh:196] [scripts/verify-node.sh:29] [scripts/verify-node.sh:32]. A consumer that wants per-leg data must parse prose.
+-- The files it touches are state, not metrics: `/tmp/node-status.json`, the raw `/api/status` body, overwritten every run and read once [scripts/verify-node.sh:53] [scripts/verify-node.sh:63]; five `mktemp` scratch files, all removed before the verdict [scripts/verify-node.sh:99] [scripts/verify-node.sh:126] [scripts/verify-node.sh:145] [scripts/verify-node.sh:187].
+-- The only time bounds are refusal budgets, never reported as latencies: `--max-time 8` on each outbound probe and `--max-time 5` on each inside-the-node probe [scripts/verify-node.sh:53] [scripts/verify-node.sh:59] [scripts/verify-node.sh:81].
++- No counter, histogram, timestamp, duration or gauge leaves the process. The only counter is in-process — `FAILED`, incremented by `bad()` [scripts/lib.sh:7] [scripts/lib.sh:11] — and it leaves exactly once, inside the closing line `VERIFY: FAIL ($FAILED)` [scripts/verify-node.sh:206]. `UNVERIFIED` is a 0/1 flag, not a count [scripts/verify-node.sh:41].
++- The exit code is the only machine-readable signal that is stable across runs: `1` FAIL, `3` UNVERIFIED, `0` PASS, `2` refused usage [scripts/verify-node.sh:206] [scripts/verify-node.sh:212] [scripts/verify-node.sh:213] [scripts/verify-node.sh:29] [scripts/verify-node.sh:32]. A consumer that wants per-leg data must parse prose.
++- The files it touches are state, not metrics: `/tmp/node-status.json`, the raw `/api/status` body, overwritten every run and read once [scripts/verify-node.sh:62] [scripts/verify-node.sh:72]; five `mktemp` scratch files, all removed before the verdict [scripts/verify-node.sh:108] [scripts/verify-node.sh:135] [scripts/verify-node.sh:154] [scripts/verify-node.sh:202].
++- The only time bounds are refusal budgets, never reported as latencies: `--max-time 8` on each outbound probe and `--max-time 5` on each inside-the-node probe [scripts/verify-node.sh:62] [scripts/verify-node.sh:68] [scripts/verify-node.sh:90].
+ - Consequence: verification rate, per-leg failure distribution, mean time to verify and node availability over time cannot be answered from this module; they would have to be reconstructed from the closing line and the shell's own timing.
+ 
+ ## 5. Log lines it can generate
+ 
+ | Level | Line (verbatim) | Emitted when | Kind |
+ |---|---|---|---|
+-| stdout | `verify node $AGENT` [scripts/verify-node.sh:38] | always, after the arguments parse | descriptive |
++| stdout | `verify node $AGENT` [scripts/verify-node.sh:47] | always, after the arguments parse | descriptive |
+ | stderr | `unknown arg: $1` [scripts/verify-node.sh:29] | an argument matches no case, before anything runs; exit 2 | descriptive |
+ | stderr | `usage: $0 --agent ID [--server NAME] [--port P] [--artifact PATH] [--strict-freshness] [--strict-seed]` [scripts/verify-node.sh:32] | no `--agent`; exit 2 | descriptive |
+ | stderr | `set BUNKER_SERVER or pass --server <name>` [scripts/verify-node.sh:35] | no server from flag or environment; exit 2 | descriptive |
+-| PASS | `  PASS  agent_alive — ALIVE <hostname>` [scripts/verify-node.sh:43] | the agent's first output line starts with `ALIVE` | evidentiary |
+-| FAIL | `  FAIL  agent_alive — <first line of the exec output>` [scripts/verify-node.sh:44] | the agent did not answer; the run stops here | evidentiary |
+-| — | `RESULT: FAIL` [scripts/verify-node.sh:44] | immediately after `agent_alive` fails — **not** `VERIFY:` (see §6) | evidentiary |
+-| PASS | `  PASS  node_ip — <ip>` [scripts/verify-node.sh:49] | `hostname -I` produced a first field | evidentiary |
+-| FAIL | `  FAIL  node_ip — could not read hostname -I` [scripts/verify-node.sh:49] | the same read produced nothing; the run continues with an empty host | evidentiary |
+-| PASS | `  PASS  gateway_reachable — <url> -> 200` [scripts/verify-node.sh:62] | `/api/status` answered 200 from this host | evidentiary |
+-| PASS | `  PASS  auth_gate — auth_required:true (a public bind must not be open)` [scripts/verify-node.sh:64] | that 200 body carries a boolean true `auth_required` | evidentiary |
+-| FAIL | `  FAIL  auth_gate — /api/status -> 200; auth_required:true not measured — check dashboard.basic_auth` [scripts/verify-node.sh:65] | the body does not carry it — a 200 alone is not a closed gate | evidentiary |
+-| WARN | `  WARN  gateway_reachable — no transport from this host to <ip>:<port> — the gateway answers 200 INSIDE the node, so this is unverified, not failed (CF-224: publish a port or define the transport)` [scripts/verify-node.sh:70] | `000` outside, `200` from inside — the node is healthy behind a gap | evidentiary |
+-| WARN | `  WARN  gateway_reachable — no transport to <ip>:<port>, and the gateway does not answer inside the node either (<code>) — the harness is not up` [scripts/verify-node.sh:73] | `000` outside and anything but `200` inside | evidentiary |
+-| FAIL | `  FAIL  gateway_reachable — <url> -> <code> (is the harness running on 0.0.0.0:<port>?)` [scripts/verify-node.sh:77] | a real HTTP answer that is not `200` | evidentiary |
+-| PASS | `  PASS  unauth_refused — /api/system/stats -> 401` [scripts/verify-node.sh:83] | the gate refused an unauthenticated request with 401, 302 or 403 | evidentiary |
+-| FAIL | `  FAIL  unauth_refused — /api/system/stats -> 200 — the node is OPEN to the tailnet` [scripts/verify-node.sh:84] | the gate answered the unauthenticated request | evidentiary |
+-| WARN | `  WARN  unauth_refused — unverified from here (no transport); inside the node it answers 401` [scripts/verify-node.sh:88] | `000` outside, a refusal code inside — the load-bearing WARN of this module | evidentiary |
+-| FAIL | `  FAIL  unauth_refused — /api/system/stats -> 200 INSIDE the node — the gateway is open` [scripts/verify-node.sh:89] | `000` outside but the node's own gateway serves stats unauthenticated | evidentiary |
+-| WARN | `  WARN  unauth_refused — unverified: no transport from here, and <code> inside the node` [scripts/verify-node.sh:90] | `000` outside and a non-refusal, non-200 code inside | evidentiary |
+-| FAIL | `  FAIL  unauth_refused — /api/system/stats -> <code> — auth refusal not verified` [scripts/verify-node.sh:93] | any other real code, e.g. `404` or `500` — uncertainty is not a pass [scripts/verify-node.sh:93] | evidentiary |
+-| PASS | `  PASS  artifact_digest — <basename> <sha12> on both sides` [scripts/verify-node.sh:103] | `--artifact` given and both digests match and are non-empty | evidentiary |
+-| FAIL | `  FAIL  artifact_digest — node <sha12> vs host <sha12> — bytes differ or file missing` [scripts/verify-node.sh:105] | digests differ, or the node's digest is empty | evidentiary |
+-| FAIL | `  FAIL  checkout_freshness — <path> missing — the checkout's git state is unmeasured` [scripts/verify-node.sh:124] | `scripts/node_freshness.py` is not readable | evidentiary |
+-| PASS | `  PASS  checkout_freshness — branch=… head=… origin_main=… ancestor=true behind=0` [scripts/verify-node.sh:131] | the child exited 0 and printed its `freshness` row | evidentiary |
+-| FAIL | `  FAIL  checkout_freshness — <child FAIL rows joined by ' \| '>` [scripts/verify-node.sh:134] | the child exited 1 — drift, dirty, no origin, not a checkout [scripts/node_freshness.py:362] | evidentiary |
+-| WARN | `  WARN  checkout_freshness — <child RESULT detail> — the checkout could not be measured; pass --strict-freshness to refuse it` [scripts/verify-node.sh:141] | the child exited anything but 0 or 1 (unreachable, usage, crash) | evidentiary |
+-| FAIL | `  FAIL  checkout_freshness — <detail> (--strict-freshness: unknown is not a pass)` [scripts/verify-node.sh:139] | the same case with `--strict-freshness` | evidentiary |
+-| PASS | `  PASS  seed_drift — <record>: N seeded files present and matching` [scripts/verify-node.sh:172] | the child exited 0 | evidentiary |
+-| FAIL | `  FAIL  seed_drift — <drifted paths with both digest prefixes>` [scripts/verify-node.sh:175] | the child exited 1 — a seeded file drifted or is absent | evidentiary |
+-| FAIL | `  FAIL  seed_drift — <detail> (--strict-seed: unknown is not a pass)` [scripts/verify-node.sh:181] | no record or unmeasurable, with `--strict-seed` | evidentiary |
+-| WARN | `  WARN  seed_drift — <detail> — the seed could not be measured; pass --strict-seed to refuse it` [scripts/verify-node.sh:183] | no record or unmeasurable, default mode | evidentiary |
+-| — | `VERIFY: PASS` [scripts/verify-node.sh:196] | last line, nothing failed and nothing was unverified; exit 0 | evidentiary |
+-| — | `VERIFY: FAIL ($FAILED)` [scripts/verify-node.sh:191] | last line, at least one FAIL row; exit 1 | evidentiary |
+-| — | `VERIFY: UNVERIFIED — the node answered inside itself, but this host has no transport to it` [scripts/verify-node.sh:193] | last line, no FAIL row and at least one transport gap; exit 3 | evidentiary |
+-| — | `        (distinct from FAIL on purpose: nothing is broken and nothing is proven — CF-224)` [scripts/verify-node.sh:194] | always the line after the UNVERIFIED verdict | descriptive |
++| PASS | `  PASS  agent_alive — ALIVE <hostname>` [scripts/verify-node.sh:52] | the agent's first output line starts with `ALIVE` | evidentiary |
++| FAIL | `  FAIL  agent_alive — <first line of the exec output>` [scripts/verify-node.sh:53] | the agent did not answer; the run stops here | evidentiary |
++| — | `RESULT: FAIL` [scripts/verify-node.sh:53] | immediately after `agent_alive` fails — **not** `VERIFY:` (see §6) | evidentiary |
++| PASS | `  PASS  node_ip — <ip>` [scripts/verify-node.sh:58] | `hostname -I` produced a first field | evidentiary |
++| FAIL | `  FAIL  node_ip — could not read hostname -I` [scripts/verify-node.sh:58] | the same read produced nothing; the run continues with an empty host | evidentiary |
++| PASS | `  PASS  gateway_reachable — <url> -> 200` [scripts/verify-node.sh:71] | `/api/status` answered 200 from this host | evidentiary |
++| PASS | `  PASS  auth_gate — auth_required:true (a public bind must not be open)` [scripts/verify-node.sh:73] | that 200 body carries a boolean true `auth_required` | evidentiary |
++| FAIL | `  FAIL  auth_gate — /api/status -> 200; auth_required:true not measured — check dashboard.basic_auth` [scripts/verify-node.sh:74] | the body does not carry it — a 200 alone is not a closed gate | evidentiary |
++| WARN | `  WARN  gateway_reachable — no transport from this host to <ip>:<port> — the gateway answers 200 INSIDE the node, so this is unverified, not failed (CF-224: publish a port or define the transport)` [scripts/verify-node.sh:79] | `000` outside, `200` from inside — the node is healthy behind a gap | evidentiary |
++| WARN | `  WARN  gateway_reachable — no transport to <ip>:<port>, and the gateway does not answer inside the node either (<code>) — the harness is not up` [scripts/verify-node.sh:82] | `000` outside and anything but `200` inside | evidentiary |
++| FAIL | `  FAIL  gateway_reachable — <url> -> <code> (is the harness running on 0.0.0.0:<port>?)` [scripts/verify-node.sh:86] | a real HTTP answer that is not `200` | evidentiary |
++| PASS | `  PASS  unauth_refused — /api/system/stats -> 401` [scripts/verify-node.sh:92] | the gate refused an unauthenticated request with 401, 302 or 403 | evidentiary |
++| FAIL | `  FAIL  unauth_refused — /api/system/stats -> 200 — the node is OPEN to the tailnet` [scripts/verify-node.sh:93] | the gate answered the unauthenticated request | evidentiary |
++| WARN | `  WARN  unauth_refused — unverified from here (no transport); inside the node it answers 401` [scripts/verify-node.sh:97] | `000` outside, a refusal code inside — the load-bearing WARN of this module | evidentiary |
++| FAIL | `  FAIL  unauth_refused — /api/system/stats -> 200 INSIDE the node — the gateway is open` [scripts/verify-node.sh:98] | `000` outside but the node's own gateway serves stats unauthenticated | evidentiary |
++| WARN | `  WARN  unauth_refused — unverified: no transport from here, and <code> inside the node` [scripts/verify-node.sh:99] | `000` outside and a non-refusal, non-200 code inside | evidentiary |
++| FAIL | `  FAIL  unauth_refused — /api/system/stats -> <code> — auth refusal not verified` [scripts/verify-node.sh:102] | any other real code, e.g. `404` or `500` — uncertainty is not a pass [scripts/verify-node.sh:102] | evidentiary |
++| PASS | `  PASS  artifact_digest — <basename> <sha12> on both sides` [scripts/verify-node.sh:112] | `--artifact` given and both digests match and are non-empty | evidentiary |
++| FAIL | `  FAIL  artifact_digest — node <sha12> vs host <sha12> — bytes differ or file missing` [scripts/verify-node.sh:114] | digests differ, or the node's digest is empty | evidentiary |
++| FAIL | `  FAIL  checkout_freshness — <path> missing — the checkout's git state is unmeasured` [scripts/verify-node.sh:133] | `scripts/node_freshness.py` is not readable | evidentiary |
++| PASS | `  PASS  checkout_freshness — branch=… head=… origin_main=… ancestor=true behind=0` [scripts/verify-node.sh:140] | the child exited 0 and printed its `freshness` row | evidentiary |
++| FAIL | `  FAIL  checkout_freshness — <child FAIL rows joined by ' \| '>` [scripts/verify-node.sh:143] | the child exited 1 — drift, dirty, no origin, not a checkout [scripts/node_freshness.py:362] | evidentiary |
++| WARN | `  WARN  checkout_freshness — <child RESULT detail> — the checkout could not be measured; pass --strict-freshness to refuse it` [scripts/verify-node.sh:150] | the child exited anything but 0 or 1 (unreachable, usage, crash) | evidentiary |
++| FAIL | `  FAIL  checkout_freshness — <detail> (--strict-freshness: unknown is not a pass)` [scripts/verify-node.sh:148] | the same case with `--strict-freshness` | evidentiary |
++| PASS | `  PASS  seed_drift — <record>: N seeded files present and matching` [scripts/verify-node.sh:183] | the child exited 0 | evidentiary |
++| FAIL | `  FAIL  seed_drift — <drifted paths with both digest prefixes>` [scripts/verify-node.sh:186] | the child exited 1 — a seeded file drifted or is absent | evidentiary |
++| FAIL | `  FAIL  seed_drift — <detail> (--strict-seed: unknown is not a pass)` [scripts/verify-node.sh:192] | no record or unmeasurable, with `--strict-seed` | evidentiary |
++| WARN | `  WARN  seed_drift — <detail> — the seed could not be measured; pass --strict-seed to refuse it` [scripts/verify-node.sh:194] | no record or unmeasurable, default mode | evidentiary — and since CF-291 it also sets UNVERIFIED, so the run cannot end `VERIFY: PASS` |
++| — | `VERIFY: PASS` [scripts/verify-node.sh:213] | last line, nothing failed and nothing was unverified; exit 0 | evidentiary |
++| — | `VERIFY: FAIL ($FAILED)` [scripts/verify-node.sh:206] | last line, at least one FAIL row; exit 1 | evidentiary |
++| — | `VERIFY: UNVERIFIED — <the reason(s) that produced it>` [scripts/verify-node.sh:210] | last line, no FAIL row and at least one leg that could not be measured; exit 3. Since CF-291 the reasons are listed instead of a fixed transport sentence: the transport gap (step 2), the auth gate (step 3), `seed_drift: <detail>` (step 6) | evidentiary |
++| — | `        (distinct from FAIL on purpose: nothing is broken and nothing is proven — CF-224)` [scripts/verify-node.sh:211] | always the line after the UNVERIFIED verdict | descriptive |
+ 
+ ## 6. Failure modes
+ 
+@@ -192,23 +192,23 @@ Direction: **fail-closed** = the node is not blessed and the exit is non-zero, *
+ | Failure | Presents as | Direction | Distinguished from | Recovery |
+ |---|---|---|---|---|
+ | No `--agent` | the `usage:` line on stderr, exit 2 [scripts/verify-node.sh:32] | fail-closed | an unknown flag, which prints `unknown arg:` and also exits 2 [scripts/verify-node.sh:29] | pass `--agent ID` |
+-| No server anywhere | `set BUNKER_SERVER or pass --server <name>`, exit 2 [scripts/verify-node.sh:35] | fail-closed | a server name that does not exist, which fails at step 1 instead [scripts/verify-node.sh:44] | export `BUNKER_SERVER` or pass `--server` |
+-| Agent dead or unreachable | `FAIL agent_alive`, then `RESULT: FAIL`, exit 1, and **no `VERIFY:` line at all** [scripts/verify-node.sh:44] | fail-closed, but with a different closing vocabulary (§6c) | a live agent whose gateway is down, which still prints a `VERIFY:` line [scripts/verify-node.sh:77] | fix the agent; nothing else is graded |
+-| `hostname -I` unreadable | `FAIL node_ip` and the run continues with an empty host in every later URL [scripts/verify-node.sh:49] [scripts/verify-node.sh:50] | fail-closed by accumulation (FAILED is already ≥1), no-row for the address itself | a reachable node, which prints the address [scripts/verify-node.sh:49] | fix the agent's networking |
+-| Transport gap, gateway alive inside | two WARN rows, `VERIFY: UNVERIFIED`, exit 3 [scripts/verify-node.sh:70] [scripts/verify-node.sh:88] [scripts/verify-node.sh:195] | **unverified** — the whole point of CF-224 | a real non-200 answer, which is FAIL [scripts/verify-node.sh:77] | publish the port or define the transport; do not "fix" the node |
+-| Transport gap, nothing answers inside | `… the harness is not up`, still UNVERIFIED, exit 3 [scripts/verify-node.sh:73] | **unverified, and this is the softest edge in the file** — a harness that is provably not running is not called FAIL | the inside-200 case, which is a healthy node behind a gap [scripts/verify-node.sh:70] | start the harness inside the node, then re-run; a gate that only reads "not 1" treats this run as admission-worthy |
+-| Real HTTP code that is not 200 | `FAIL gateway_reachable — … -> 502` [scripts/verify-node.sh:77] | fail-closed | the `000` branches, which are unverified [scripts/verify-node.sh:66] | read the code: 5xx is the harness, 404 is a wrong port |
+-| Gate open to the tailnet | `FAIL unauth_refused — … 200 — the node is OPEN` [scripts/verify-node.sh:84] | fail-closed | a refusal code, which passes [scripts/verify-node.sh:83] | quarantine the node before anything else [docs/OPERATIONS.md:101] |
+-| `auth_required` absent from a 200 body | `FAIL auth_gate` [scripts/verify-node.sh:65] | fail-closed | a body that reports it true [scripts/verify-node.sh:64] | check `dashboard.basic_auth` in the node's config [scripts/harness/install-hermes.sh:202] |
+-| Refusal code the node only shows from inside | `WARN unauth_refused — unverified from here … it answers 401` [scripts/verify-node.sh:88] | **unverified** | `200` inside, which is FAIL [scripts/verify-node.sh:89] | no action on the node; the gap is the finding |
+-| Artifact differs or is missing on the node | `FAIL artifact_digest — node <sha> vs host <sha>` [scripts/verify-node.sh:105] | fail-closed (empty remote digest cannot match) [scripts/verify-node.sh:102] | an unreadable artifact, which lands in the same row because stderr is suppressed [scripts/verify-node.sh:98] | re-transfer the bytes and compare again |
+-| `node_freshness.py` missing | `FAIL checkout_freshness — <path> missing` [scripts/verify-node.sh:124] | fail-closed | an unmeasurable checkout, which is a WARN [scripts/verify-node.sh:141] | restore the file; it is part of the tree |
+-| Checkout drifted or dirty | `FAIL checkout_freshness` naming `sync — behind=N` and the differing paths [scripts/verify-node.sh:134] [scripts/node_freshness.py:340] | fail-closed | an unmeasurable checkout, which defaults to WARN | land the node's tree on `origin/main`; a dirty tree is a finding whose fix belongs upstream [scripts/node_freshness.py:285] |
+-| Checkout unmeasurable | `WARN checkout_freshness — … could not be measured` [scripts/verify-node.sh:141] | **fail-open by default**, fail-closed under `--strict-freshness` [scripts/verify-node.sh:139] | drift, which is FAIL | pass `--strict-freshness` in a gate that must refuse unknowns |
+-| Seed drifted | `FAIL seed_drift` naming each path with both digest prefixes [scripts/verify-node.sh:175] | fail-closed | no record yet, which is a WARN | re-seed the node |
+-| Seed unmeasurable or unrecorded | `WARN seed_drift — … could not be measured` (sentence printed twice) [scripts/verify-node.sh:183] | **fail-open by default**, fail-closed under `--strict-seed` [scripts/verify-node.sh:181] | drift, which is FAIL | pass `--strict-seed`, or apply the seed |
+-| Both legs unmeasurable, everything else green | `VERIFY: PASS`, exit 0, with two WARN rows [scripts/verify-node.sh:196] | **fail-open** — `PASS` while the newest two legs measured nothing (measured: §3 clean-pass row, and again with `--strict-seed` where it becomes FAIL) | the same run under `--strict-*`, which is FAIL | a gate must use the strict flags if "unmeasured" must not pass |
+-| A leg warns under `--strict-*` and another leg fails | `VERIFY: FAIL (n)` — FAIL outranks UNVERIFIED [scripts/verify-node.sh:191] | fail-closed | a pure gap, which is exit 3 [scripts/verify-node.sh:192] | fix the FAIL; the gap still needs a transport |
++| No server anywhere | `set BUNKER_SERVER or pass --server <name>`, exit 2 [scripts/verify-node.sh:35] | fail-closed | a server name that does not exist, which fails at step 1 instead [scripts/verify-node.sh:53] | export `BUNKER_SERVER` or pass `--server` |
++| Agent dead or unreachable | `FAIL agent_alive`, then `RESULT: FAIL`, exit 1, and **no `VERIFY:` line at all** [scripts/verify-node.sh:53] | fail-closed, but with a different closing vocabulary (§6c) | a live agent whose gateway is down, which still prints a `VERIFY:` line [scripts/verify-node.sh:86] | fix the agent; nothing else is graded |
++| `hostname -I` unreadable | `FAIL node_ip` and the run continues with an empty host in every later URL [scripts/verify-node.sh:58] [scripts/verify-node.sh:59] | fail-closed by accumulation (FAILED is already ≥1), no-row for the address itself | a reachable node, which prints the address [scripts/verify-node.sh:58] | fix the agent's networking |
++| Transport gap, gateway alive inside | two WARN rows, `VERIFY: UNVERIFIED`, exit 3 [scripts/verify-node.sh:79] [scripts/verify-node.sh:97] [scripts/verify-node.sh:212] | **unverified** — the whole point of CF-224 | a real non-200 answer, which is FAIL [scripts/verify-node.sh:86] | publish the port or define the transport; do not "fix" the node |
++| Transport gap, nothing answers inside | `… the harness is not up`, still UNVERIFIED, exit 3 [scripts/verify-node.sh:82] | **unverified, and this is the softest edge in the file** — a harness that is provably not running is not called FAIL | the inside-200 case, which is a healthy node behind a gap [scripts/verify-node.sh:79] | start the harness inside the node, then re-run; a gate that only reads "not 1" treats this run as admission-worthy |
++| Real HTTP code that is not 200 | `FAIL gateway_reachable — … -> 502` [scripts/verify-node.sh:86] | fail-closed | the `000` branches, which are unverified [scripts/verify-node.sh:75] | read the code: 5xx is the harness, 404 is a wrong port |
++| Gate open to the tailnet | `FAIL unauth_refused — … 200 — the node is OPEN` [scripts/verify-node.sh:93] | fail-closed | a refusal code, which passes [scripts/verify-node.sh:92] | quarantine the node before anything else [docs/OPERATIONS.md:101] |
++| `auth_required` absent from a 200 body | `FAIL auth_gate` [scripts/verify-node.sh:74] | fail-closed | a body that reports it true [scripts/verify-node.sh:73] | check `dashboard.basic_auth` in the node's config [scripts/harness/install-hermes.sh:202] |
++| Refusal code the node only shows from inside | `WARN unauth_refused — unverified from here … it answers 401` [scripts/verify-node.sh:97] | **unverified** | `200` inside, which is FAIL [scripts/verify-node.sh:98] | no action on the node; the gap is the finding |
++| Artifact differs or is missing on the node | `FAIL artifact_digest — node <sha> vs host <sha>` [scripts/verify-node.sh:114] | fail-closed (empty remote digest cannot match) [scripts/verify-node.sh:111] | an unreadable artifact, which lands in the same row because stderr is suppressed [scripts/verify-node.sh:107] | re-transfer the bytes and compare again |
++| `node_freshness.py` missing | `FAIL checkout_freshness — <path> missing` [scripts/verify-node.sh:133] | fail-closed | an unmeasurable checkout, which is a WARN [scripts/verify-node.sh:150] | restore the file; it is part of the tree |
++| Checkout drifted or dirty | `FAIL checkout_freshness` naming `sync — behind=N` and the differing paths [scripts/verify-node.sh:143] [scripts/node_freshness.py:340] | fail-closed | an unmeasurable checkout, which defaults to WARN | land the node's tree on `origin/main`; a dirty tree is a finding whose fix belongs upstream [scripts/node_freshness.py:285] |
++| Checkout unmeasurable | `WARN checkout_freshness — … could not be measured` [scripts/verify-node.sh:150] | **fail-open by default**, fail-closed under `--strict-freshness` [scripts/verify-node.sh:148] | drift, which is FAIL | pass `--strict-freshness` in a gate that must refuse unknowns |
++| Seed drifted | `FAIL seed_drift` naming each path with both digest prefixes [scripts/verify-node.sh:186] | fail-closed | no record yet, which is a WARN | re-seed the node |
++| Seed unmeasurable or unrecorded | `WARN seed_drift — … could not be measured` (sentence printed twice) [scripts/verify-node.sh:194] | **unverified, not a pass** — the WARN also sets UNVERIFIED, so the run ends `VERIFY: UNVERIFIED`, exit 3 (CF-291); fail-closed as FAIL under `--strict-seed` [scripts/verify-node.sh:192] | drift, which is FAIL | pass `--strict-seed`, or apply the seed |
++| Both legs unmeasurable, everything else green | `VERIFY: UNVERIFIED`, exit 3, naming both legs [scripts/verify-node.sh:210] | **unverified** — the seed WARN sets UNVERIFIED since CF-291; before that row the same run printed `VERIFY: PASS`, exit 0 (`--strict-seed` turns the seed leg into a FAIL) | a FAIL row, which outranks UNVERIFIED | pass `--strict-seed` if an unknown seed must not pass at all; the checkout leg still only warns |
++| A leg warns under `--strict-*` and another leg fails | `VERIFY: FAIL (n)` — FAIL outranks UNVERIFIED [scripts/verify-node.sh:206] | fail-closed | a pure gap, which is exit 3 [scripts/verify-node.sh:207] | fix the FAIL; the gap still needs a transport |
+ 
+ ### 6b. Where `docs/OPERATIONS.md` contradicts this script
+ 
+@@ -218,40 +218,40 @@ The runbook was written before the ladder changed: it is wrong in four rows —
+ |---|---|---|
+ | "`BUNKER_SERVER` must be set even when `--server NAME` is supplied — `scripts/verify-node.sh:17` expands `${BUNKER_SERVER:?…}` … so the flag cannot satisfy the guard … exits 1" [docs/OPERATIONS.md:129] | the assignment uses `${BUNKER_SERVER:-}` and the guard runs **after** parsing, so `--server` alone is sufficient; the message is `set BUNKER_SERVER or pass --server <name>` and the exit is **2**, not 1 [scripts/verify-node.sh:20] [scripts/verify-node.sh:24] [scripts/verify-node.sh:33] [scripts/verify-node.sh:35] | both real runs above ran with `BUNKER_SERVER` unset; the fixture arm reproduced the message and exit 2 |
+ | the same claim repeated in the command inventory [docs/OPERATIONS.md:201] | same as above [scripts/verify-node.sh:20] | same arms |
+-| "`verify-node.sh:53–58` accepts unauthenticated `/api/system/stats` only with 401, 302, or 403; every other code (including 000, 404, 500 and 200) is a named `FAIL unauth_refused`" [docs/OPERATIONS.md:84] | `000` is handled as its own branch: a refusal inside the node is a **WARN + UNVERIFIED**, `200` inside is FAIL, and only other real codes reach the plain FAIL [scripts/verify-node.sh:85] [scripts/verify-node.sh:88] [scripts/verify-node.sh:89] [scripts/verify-node.sh:93] | §3 gap arm: `WARN unauth_refused — unverified from here …` and exit 3 |
+-| "`verify-node.sh:43–49` requires the status body to report boolean `auth_required: true`" [docs/OPERATIONS.md:84] | the gate is graded at `:61–65` [scripts/verify-node.sh:61] [scripts/verify-node.sh:65], and only when `/api/status` answered 200 — during a transport gap no `auth_gate` row is printed at all | the real run above has no `auth_gate` row |
+-| "no auth exception for `verify-node.sh`" and a CF-077 warn table with no row for this file [docs/OPERATIONS.md:88] | the script has six `warn` sites: gateway gap, dead-inside, refusal-inside, other-inside, unmeasurable checkout, unmeasurable seed [scripts/verify-node.sh:70] [scripts/verify-node.sh:73] [scripts/verify-node.sh:88] [scripts/verify-node.sh:90] [scripts/verify-node.sh:141] [scripts/verify-node.sh:183] | every fixture arm shows at least one WARN row |
+-| step 3 of the dispatch section describes four probes and no exit code but "non-zero" [docs/OPERATIONS.md:129] | there are six legs and three outcomes: PASS 0, FAIL 1, UNVERIFIED 3 [scripts/verify-node.sh:191] [scripts/verify-node.sh:195] [scripts/verify-node.sh:196] | §3 |
++| "`verify-node.sh:53–58` accepts unauthenticated `/api/system/stats` only with 401, 302, or 403; every other code (including 000, 404, 500 and 200) is a named `FAIL unauth_refused`" [docs/OPERATIONS.md:84] | `000` is handled as its own branch: a refusal inside the node is a **WARN + UNVERIFIED**, `200` inside is FAIL, and only other real codes reach the plain FAIL [scripts/verify-node.sh:94] [scripts/verify-node.sh:97] [scripts/verify-node.sh:98] [scripts/verify-node.sh:102] | §3 gap arm: `WARN unauth_refused — unverified from here …` and exit 3 |
++| "`verify-node.sh:43–49` requires the status body to report boolean `auth_required: true`" [docs/OPERATIONS.md:84] | the gate is graded at `:61–65` [scripts/verify-node.sh:70] [scripts/verify-node.sh:74], and only when `/api/status` answered 200 — during a transport gap no `auth_gate` row is printed at all | the real run above has no `auth_gate` row |
++| "no auth exception for `verify-node.sh`" and a CF-077 warn table with no row for this file [docs/OPERATIONS.md:88] | the script has six `warn` sites: gateway gap, dead-inside, refusal-inside, other-inside, unmeasurable checkout, unmeasurable seed [scripts/verify-node.sh:79] [scripts/verify-node.sh:82] [scripts/verify-node.sh:97] [scripts/verify-node.sh:99] [scripts/verify-node.sh:150] [scripts/verify-node.sh:194] | every fixture arm shows at least one WARN row |
++| step 3 of the dispatch section describes four probes and no exit code but "non-zero" [docs/OPERATIONS.md:129] | there are six legs and three outcomes: PASS 0, FAIL 1, UNVERIFIED 3 [scripts/verify-node.sh:206] [scripts/verify-node.sh:212] [scripts/verify-node.sh:213] | §3 |
+ 
+-One runbook sentence survives intact and is worth keeping: "A WARN is not approval to expose the gateway: neither auth leg can warn and pass" [docs/OPERATIONS.md:84] — the rows can warn, but a warning leg sets `UNVERIFIED`, so exit 0 becomes unreachable [scripts/verify-node.sh:92] [scripts/verify-node.sh:192].
++One runbook sentence survives intact and is worth keeping: "A WARN is not approval to expose the gateway: neither auth leg can warn and pass" [docs/OPERATIONS.md:84] — the rows can warn, but a warning leg sets `UNVERIFIED`, so exit 0 becomes unreachable [scripts/verify-node.sh:101] [scripts/verify-node.sh:207].
+ 
+ ### 6c. Defects found in this module
+ 
+ | Defect | Presents as | Direction | Evidence |
+ |---|---|---|---|
+-| `--port` is interpolated unescaped into a remote `bash -lc` string | the remote command text becomes `curl … 'http://127.0.0.1:10800';echo …;'/api/status'` — a quote in `--port` closes the quoted URL and starts a new command on the node [scripts/verify-node.sh:59] | **fail-open** (arbitrary command on the node from a control-host flag); the same class CF-159 fixed elsewhere, and the helper that exists for exactly this is `shq` [scripts/lib.sh:54] | measured with a tracing `bunker` stub: the exact remote text was captured verbatim (§8). `--port` is never validated and is also spliced into both URLs [scripts/verify-node.sh:50] [scripts/verify-node.sh:81]. Only `--artifact` goes through `shq` [scripts/verify-node.sh:98] |
+-| `/tmp/node-status.json` is a fixed, shared path | two concurrent verifies on one control host can grade `auth_gate` from the other run's body [scripts/verify-node.sh:53] [scripts/verify-node.sh:63] | **fail-open** — a stale body carrying `auth_required:true` passes a node that never sent it | measured: with the file pre-seeded and a peer that wrote nothing, the run printed `PASS auth_gate — auth_required:true` (§8). `mktemp` is used everywhere else in the file [scripts/verify-node.sh:99] |
+-| The early abort prints `RESULT: FAIL`, not `VERIFY: FAIL` | a parser watching for `^VERIFY:` sees nothing on an agent-dead run, though the exit is 1 [scripts/verify-node.sh:44] | fail-closed, but a **silent gap for the consumer** | measured: `  FAIL  agent_alive — …` then `RESULT: FAIL`, exit 1 |
+-| The seed WARN repeats its own sentence | `… the seed could not be measured; pass --strict-seed to refuse it — the seed could not be measured; pass --strict-seed to refuse it` [scripts/verify-node.sh:178] [scripts/verify-node.sh:183] | cosmetic, verdict unaffected | measured in five fixture arms |
+-| Under `--strict-seed` the FAIL still advises the flag that was just used | `… pass --strict-seed to refuse it (--strict-seed: unknown is not a pass)` [scripts/verify-node.sh:181] | cosmetic | measured (§3, the `--strict-seed` row) |
+-| A WARN row can begin its detail with the word `FAIL` | `WARN checkout_freshness — FAIL (bunker exec failed: …)` because the parent lifts the child's `RESULT:` line verbatim [scripts/verify-node.sh:137] [scripts/verify-node.sh:141] | cosmetic, but a `grep FAIL` census miscounts it | measured in the gap arm |
+-| A checkout leg that exits 2 because *the parent's own argv* is wrong reads as "could not be measured" | `WARN … could not be measured` instead of a usage error [scripts/verify-node.sh:136] [scripts/node_freshness.py:238] | hides a caller bug behind a WARN | read-from-code; the child returns `2` for a usage error and for unreachability alike [scripts/node_freshness.py:238] [scripts/node_freshness.py:699] |
+-| `lib.sh` absent removes every row | six `command not found` lines and `FAILED: unbound variable`, exit 1 [scripts/verify-node.sh:18] [scripts/verify-node.sh:191] | no-row (with a non-zero exit by accident) | measured (§3) |
+-| A missing `curl` silently becomes a transport gap | the probe yields `000`, so an absent client reads exactly like an unreachable node [scripts/verify-node.sh:53] [scripts/verify-node.sh:66] | **unverified** in the wrong direction — the control host's own defect is reported as the node's transport | read-from-code; nothing checks that `curl` exists |
++| `--port` is interpolated unescaped into a remote `bash -lc` string | the remote command text becomes `curl … 'http://127.0.0.1:10800';echo …;'/api/status'` — a quote in `--port` closes the quoted URL and starts a new command on the node [scripts/verify-node.sh:68] | **fail-open** (arbitrary command on the node from a control-host flag); the same class CF-159 fixed elsewhere, and the helper that exists for exactly this is `shq` [scripts/lib.sh:54] | measured with a tracing `bunker` stub: the exact remote text was captured verbatim (§8). `--port` is never validated and is also spliced into both URLs [scripts/verify-node.sh:59] [scripts/verify-node.sh:90]. Only `--artifact` goes through `shq` [scripts/verify-node.sh:107] |
++| `/tmp/node-status.json` is a fixed, shared path | two concurrent verifies on one control host can grade `auth_gate` from the other run's body [scripts/verify-node.sh:62] [scripts/verify-node.sh:72] | **fail-open** — a stale body carrying `auth_required:true` passes a node that never sent it | measured: with the file pre-seeded and a peer that wrote nothing, the run printed `PASS auth_gate — auth_required:true` (§8). `mktemp` is used everywhere else in the file [scripts/verify-node.sh:108] |
++| The early abort prints `RESULT: FAIL`, not `VERIFY: FAIL` | a parser watching for `^VERIFY:` sees nothing on an agent-dead run, though the exit is 1 [scripts/verify-node.sh:53] | fail-closed, but a **silent gap for the consumer** | measured: `  FAIL  agent_alive — …` then `RESULT: FAIL`, exit 1 |
++| The seed WARN repeats its own sentence | `… the seed could not be measured; pass --strict-seed to refuse it — the seed could not be measured; pass --strict-seed to refuse it` [scripts/verify-node.sh:189] [scripts/verify-node.sh:194] | cosmetic, verdict unaffected | measured in five fixture arms |
++| Under `--strict-seed` the FAIL still advises the flag that was just used | `… pass --strict-seed to refuse it (--strict-seed: unknown is not a pass)` [scripts/verify-node.sh:192] | cosmetic | measured (§3, the `--strict-seed` row) |
++| A WARN row can begin its detail with the word `FAIL` | `WARN checkout_freshness — FAIL (bunker exec failed: …)` because the parent lifts the child's `RESULT:` line verbatim [scripts/verify-node.sh:146] [scripts/verify-node.sh:150] | cosmetic, but a `grep FAIL` census miscounts it | measured in the gap arm |
++| A checkout leg that exits 2 because *the parent's own argv* is wrong reads as "could not be measured" | `WARN … could not be measured` instead of a usage error [scripts/verify-node.sh:145] [scripts/node_freshness.py:238] | hides a caller bug behind a WARN | read-from-code; the child returns `2` for a usage error and for unreachability alike [scripts/node_freshness.py:238] [scripts/node_freshness.py:699] |
++| `lib.sh` absent removes every row | six `command not found` lines and `FAILED: unbound variable`, exit 1 [scripts/verify-node.sh:18] [scripts/verify-node.sh:206] | no-row (with a non-zero exit by accident) | measured (§3) |
++| A missing `curl` silently becomes a transport gap | the probe yields `000`, so an absent client reads exactly like an unreachable node [scripts/verify-node.sh:62] [scripts/verify-node.sh:75] | **unverified** in the wrong direction — the control host's own defect is reported as the node's transport | read-from-code; nothing checks that `curl` exists |
+ 
+ ## 7. Environment and settings it reads
+ 
+ | Variable | Default | Read at | Effect if unset |
+ |---|---|---|---|
+ | `BUNKER_SERVER` | empty — `${BUNKER_SERVER:-}` [scripts/verify-node.sh:20] | before the argument loop, as the default for `--server` [scripts/verify-node.sh:20] | with no `--server` either, the run refuses with `set BUNKER_SERVER or pass --server <name>` and exit 2 [scripts/verify-node.sh:35]. Measured: `--server` alone is sufficient |
+-| `--server` (argv) | inherited default above | overrides the variable in the loop [scripts/verify-node.sh:24] | a name the CLI does not know fails step 1 [scripts/verify-node.sh:44] |
+-| `--port` (argv) | `10800` [scripts/verify-node.sh:20] | spliced into both URLs and into the remote command text [scripts/verify-node.sh:50] [scripts/verify-node.sh:59] [scripts/verify-node.sh:81] | the default port is used; **no validation**, see §6c |
+-| `--artifact` (argv) | empty — leg skipped [scripts/verify-node.sh:20] | the artifact leg, quoted for the remote side with `shq` [scripts/verify-node.sh:97] [scripts/verify-node.sh:98] | the whole leg prints nothing |
+-| `--strict-freshness` | `0` [scripts/verify-node.sh:20] | the unmeasurable-checkout branch [scripts/verify-node.sh:138] | an unmeasurable checkout is a WARN, never a FAIL [scripts/verify-node.sh:141] |
+-| `--strict-seed` | `0` [scripts/verify-node.sh:20] | forwarded to the child as its own flag [scripts/verify-node.sh:166] [scripts/verify-node.sh:167] | an unmeasurable seed is a WARN [scripts/verify-node.sh:183] |
+-| `PATH` | inherited | `bunker`, `curl`, `python3`, `mktemp`, `sha256sum`, and every text helper [scripts/verify-node.sh:41] [scripts/verify-node.sh:53] [scripts/verify-node.sh:98] [scripts/verify-node.sh:127] | a missing `bunker` fails step 1; a missing `curl` becomes a fake transport gap; a missing `python3` warns on both Python legs (§6c) |
+-| `TMPDIR` | inherited | the five `mktemp` scratch files [scripts/verify-node.sh:99] [scripts/verify-node.sh:126] [scripts/verify-node.sh:165] | scratch lands in the system temp dir; **`/tmp` is hard-coded regardless** for the status body [scripts/verify-node.sh:53] |
+-| `HOME` | inherited | not read here, but both Python children resolve the node's home **from the agent** rather than templating it [scripts/node_freshness.py:28] | the children measure `repo` under the node's own `$HOME` [scripts/verify-node.sh:127] [scripts/verify-node.sh:168] |
++| `--server` (argv) | inherited default above | overrides the variable in the loop [scripts/verify-node.sh:24] | a name the CLI does not know fails step 1 [scripts/verify-node.sh:53] |
++| `--port` (argv) | `10800` [scripts/verify-node.sh:20] | spliced into both URLs and into the remote command text [scripts/verify-node.sh:59] [scripts/verify-node.sh:68] [scripts/verify-node.sh:90] | the default port is used; **no validation**, see §6c |
++| `--artifact` (argv) | empty — leg skipped [scripts/verify-node.sh:20] | the artifact leg, quoted for the remote side with `shq` [scripts/verify-node.sh:106] [scripts/verify-node.sh:107] | the whole leg prints nothing |
++| `--strict-freshness` | `0` [scripts/verify-node.sh:20] | the unmeasurable-checkout branch [scripts/verify-node.sh:147] | an unmeasurable checkout is a WARN, never a FAIL [scripts/verify-node.sh:150] |
++| `--strict-seed` | `0` [scripts/verify-node.sh:20] | forwarded to the child as its own flag [scripts/verify-node.sh:177] [scripts/verify-node.sh:178] | an unmeasurable seed is a WARN row that ends the run `VERIFY: UNVERIFIED`, exit 3 (CF-291); with the flag it is a FAIL [scripts/verify-node.sh:192] |
++| `PATH` | inherited | `bunker`, `curl`, `python3`, `mktemp`, `sha256sum`, and every text helper [scripts/verify-node.sh:50] [scripts/verify-node.sh:62] [scripts/verify-node.sh:107] [scripts/verify-node.sh:136] | a missing `bunker` fails step 1; a missing `curl` becomes a fake transport gap; a missing `python3` warns on both Python legs (§6c) |
++| `TMPDIR` | inherited | the five `mktemp` scratch files [scripts/verify-node.sh:108] [scripts/verify-node.sh:135] [scripts/verify-node.sh:176] | scratch lands in the system temp dir; **`/tmp` is hard-coded regardless** for the status body [scripts/verify-node.sh:62] |
++| `HOME` | inherited | not read here, but both Python children resolve the node's home **from the agent** rather than templating it [scripts/node_freshness.py:28] | the children measure `repo` under the node's own `$HOME` [scripts/verify-node.sh:136] [scripts/verify-node.sh:179] |
+ | credentials | **none read** | the file passes no token, key or bearer anywhere; the bunker CLI carries its own agent trust from its config | nothing to leak in argv or in a log line — consistent with the repo rule that credentials travel as 600-mode files, never argv values [fact: FACT-05] |
+ 
+ Settings that live outside this file but decide its verdict: the node's `dashboard.basic_auth` block in `$HOME/.hermes/config.yaml`, which is what the gateway's `auth_required` reflects [scripts/harness/install-hermes.sh:202], and the gateway bind, which the adapter starts on `0.0.0.0` at the chosen port [scripts/harness/install-hermes.sh:284]. One bunker serves one project and every lane of it enters the same one [fact: FACT-02], so the single `--agent` id is the whole scope of this check.
+@@ -264,7 +264,7 @@ Settings that live outside this file but decide its verdict: the node's `dashboa
+ - The stub trace that proves the `--port` interpolation is on record: the node-side command text was captured verbatim as `curl -s -o /dev/null -w '%{http_code}' --max-time 5 'http://127.0.0.1:10800';echo FX36_INJECTED;'/api/status'` — the quote closes the URL literal. Remote execution of that text was deliberately **not** run: the harness refused the local demonstration, so the record covers the interpolation and stops there.
+ - `lib.sh` absence was measured by copying the script into a directory without it: `./verify-node.sh: line 18: …/lib.sh: No such file or directory`, six `command not found` lines, then `line 191: FAILED: unbound variable`, exit 1.
+ - Checkout leg proved green independently of the node: `python3 scripts/node_freshness.py --workdir .` in this worktree → `PASS freshness — branch=wt/md-36b head=e7cf075ffff4 origin_main=e7cf075ffff4 ancestor=true behind=0`, `RESULT: PASS`, exit 0 [scripts/node_freshness.py:366].
+-- The 401 rule is grounded in the bus contract as well as this file: an unsigned read is a 401 by design, so a 401 is evidence the gate exists [fact: FACT-03]; nothing in this file treats 401 as a failure [scripts/verify-node.sh:83] [scripts/verify-node.sh:88].
++- The 401 rule is grounded in the bus contract as well as this file: an unsigned read is a 401 by design, so a 401 is evidence the gate exists [fact: FACT-03]; nothing in this file treats 401 as a failure [scripts/verify-node.sh:92] [scripts/verify-node.sh:97].
+ - One bunker, one project, one agent id — the reason a single `--agent` is the whole scope [fact: FACT-02]; and no credential is ever passed as a value by this file [fact: FACT-05].
+ - Evidence here is re-runnable by construction, not narrative: every §3 row is a command whose exit code is part of the record, which is the repo's standing rule for closing work [fact: FACT-10].
+-- Self-test surfaces that can go red on this module: the freshness section of `tests/selftest.sh` drives the checkout leg and the seed section drives the seed leg offline in three directions [tests/selftest.sh:2829] [tests/selftest.sh:3150]. This document's own gate: `python3 scripts/master_doc_check.py docs/master --only 36- --strict` → `MASTER-DOC: PASS`.
++- Self-test surfaces that can go red on this module: the freshness section of `tests/selftest.sh` drives the checkout leg and the seed section drives the seed leg offline in three directions [tests/selftest.sh:2829] [tests/selftest.sh:3150]; since CF-291 the same section also drives THIS verifier end to end over a fixture node (stub `bunker` + stub `curl`), where a 0-byte, an unparseable and an absent record each end `VERIFY: UNVERIFIED` exit 3 naming `seed_drift`, a missing seeder and the absent-record-under-`--strict-seed` case end `VERIFY: FAIL` exit 1, the same empty-record fixture prints `VERIFY: PASS` exit 0 under the pre-fix `436def5` verifier, and the green control returns to `VERIFY: PASS` exit 0. This document's own gate: `python3 scripts/master_doc_check.py docs/master --only 36- --strict` → `MASTER-DOC: PASS`.
+diff --git a/scripts/node-create.sh b/scripts/node-create.sh
+index 57c0069..e2731f3 100755
+--- a/scripts/node-create.sh
++++ b/scripts/node-create.sh
+@@ -131,7 +131,7 @@ verify_rc=0
+ "$HERE/verify-node.sh" --agent "$AGENT" --server "$SERVER" --port "$PORT" || verify_rc=$?
+ case "$verify_rc" in
+   0) ok "verify" "round trip proven from the control host" ;;
+-  3) warn "verify" "UNVERIFIED — the node answers inside itself but this host has no transport to it (CF-224); the node is not marked failed" ;;
++  3) warn "verify" "UNVERIFIED — a leg could not be measured from this host (no transport, or an unreadable seed; see the VERIFY line for which) — the node is not marked failed (CF-224/CF-291)" ;;
+   *) bad "verify" "round trip failed — node remains unverified"; incomplete ;;
+ esac
+ 
+diff --git a/scripts/node_seed_drift.py b/scripts/node_seed_drift.py
+index 53f99c1..abb1e13 100644
+--- a/scripts/node_seed_drift.py
++++ b/scripts/node_seed_drift.py
+@@ -106,7 +106,11 @@ set -u
+ echo "HOME=$HOME"
+ REC="$HOME/__RECORD_REL__"
+ if [ ! -f "$REC" ]; then echo "RECORD=0"; exit 0; fi
+-if ! python3 - "$REC" -c 'import json,sys; json.load(open(sys.argv[1]))' >/dev/null 2>&1; then
++# CF-291: the program must be passed BEFORE the record. `python3 - "$REC" -c '<code>'` reads the
++# PROGRAM from stdin ('-') and leaves '<code>' in argv, so an empty stdin was a valid empty program
++# and every record — a 0-byte one included — was called parseable. The record was then handed to
++# node_seed.py check, which died on it and cost the operator the real cause.
++if ! python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$REC" >/dev/null 2>&1; then
+   echo "RECORD=2"
+   exit 0
+ fi
+diff --git a/scripts/verify-node.sh b/scripts/verify-node.sh
+index 2d4a86a..dd8799c 100755
+--- a/scripts/verify-node.sh
++++ b/scripts/verify-node.sh
+@@ -34,7 +34,16 @@ done
+ # environment variable being set first: the documented flag was dead.
+ [ -z "$SERVER" ] && { echo "set BUNKER_SERVER or pass --server <name>" >&2; exit 2; }
+ 
++# UNVERIFIED is not one story: a leg can be unmeasurable because this host has no transport to
++# the node (CF-224) or because the thing it measures cannot be read at all (CF-291, the seed).
++# Each unmeasurable leg therefore NAMES itself here, and the final line repeats the reasons, so
++# the operator is not told "transport" for a cause that has nothing to do with transport.
+ UNVERIFIED=0
++UNVERIFIED_WHY=""
++unverified() {  # unverified <why this leg could not be measured>
++  UNVERIFIED=$((UNVERIFIED+1))
++  UNVERIFIED_WHY="${UNVERIFIED_WHY:+$UNVERIFIED_WHY; }$1"
++}
+ say "verify node $AGENT"
+ 
+ # 1. alive
+@@ -68,10 +77,10 @@ elif [ "$code" = 000 ]; then
+   case "$in_code" in
+     200)
+       warn "gateway_reachable" "no transport from this host to $ip:$PORT — the gateway answers 200 INSIDE the node, so this is unverified, not failed (CF-224: publish a port or define the transport)"
+-      UNVERIFIED=1 ;;
++      unverified "the node answered inside itself, but this host has no transport to it" ;;
+     *)
+       warn "gateway_reachable" "no transport to $ip:$PORT, and the gateway does not answer inside the node either ($in_code) — the harness is not up"
+-      UNVERIFIED=1 ;;
++      unverified "this host has no transport to $ip:$PORT, and the gateway does not answer inside the node either ($in_code)" ;;
+   esac
+ else
+   bad "gateway_reachable" "$url -> $code (is the harness running on 0.0.0.0:$PORT?)"
+@@ -89,7 +98,7 @@ case "$code" in
+       200)         bad "unauth_refused" "/api/system/stats -> 200 INSIDE the node — the gateway is open" ;;
+       *)           warn "unauth_refused" "unverified: no transport from here, and $in_code inside the node" ;;
+     esac
+-    UNVERIFIED=1 ;;
++    unverified "the auth gate could not be measured from this host: no transport to http://$ip:$PORT/api/system/stats" ;;
+   *) bad "unauth_refused" "/api/system/stats -> $code — auth refusal not verified" ;;
+ esac
+ 
+@@ -154,10 +163,12 @@ fi
+ # removed in the same one — and its verdict is folded in here, so a drifted
+ # seed drives VERIFY: FAIL on its own.
+ #
+-# Default mapping: PASS -> PASS, drift -> FAIL, unmeasurable (or a node with no
+-# seed record yet) -> WARN — "cannot measure" is not proof of a broken copy,
+-# the same doctrine as the freshness leg above. With --strict-seed an
+-# unmeasurable seed is a FAIL too, so a gate can refuse on "unknown".
++# Default mapping: PASS -> PASS, drift -> FAIL. An unmeasurable seed (or a node with no seed
++# record yet) is a WARN row, because "cannot measure" is not proof of a broken copy, the same
++# doctrine as the freshness leg above — but a WARN is NOT a pass: it sets UNVERIFIED, so the gate
++# answers VERIFY: UNVERIFIED and exits 3 rather than printing PASS for a seed nobody read
++# (CF-291: an empty or unparseable record used to end in `VERIFY: PASS`, exit 0). With
++# --strict-seed the same case is a FAIL instead, so a gate can refuse on "unknown" outright.
+ SEEDCHK="$HERE/node_seed_drift.py"
+ if [ ! -r "$SEEDCHK" ]; then
+   bad "seed_drift" "$SEEDCHK missing — the node's seed is unmeasured"
+@@ -181,6 +192,10 @@ else
+         bad "seed_drift" "${detail:-unmeasurable} (--strict-seed: unknown is not a pass)"
+       else
+         warn "seed_drift" "${detail:-unmeasurable} — the seed could not be measured; pass --strict-seed to refuse it"
++        # A WARN row is not a pass and not a FAIL: the seed was never read, so VERIFY: PASS here
++        # would certify a copy nobody looked at (CF-291). Refuse to call it verified instead, and
++        # name it, so the final line does not blame the transport for a seed problem.
++        unverified "seed_drift: ${detail:-unmeasurable}"
+       fi
+       ;;
+   esac
+@@ -190,7 +205,9 @@ fi
+ say ""
+ if [ "$FAILED" -gt 0 ]; then say "VERIFY: FAIL ($FAILED)"; exit 1; fi
+ if [ "${UNVERIFIED:-0}" -gt 0 ]; then
+-  say "VERIFY: UNVERIFIED — the node answered inside itself, but this host has no transport to it"
++  # Name the legs that produced it: the transport sentence alone was a lie once the seed leg could
++  # also be the cause (CF-291). A seed WARN now reads `... seed_drift: <what could not be read>`.
++  say "VERIFY: UNVERIFIED — ${UNVERIFIED_WHY:-some legs could not be measured}"
+   say "        (distinct from FAIL on purpose: nothing is broken and nothing is proven — CF-224)"
+   exit 3
+ fi
+diff --git a/tests/selftest.sh b/tests/selftest.sh
+index eab4b34..dd3bcf7 100755
+--- a/tests/selftest.sh
++++ b/tests/selftest.sh
+@@ -940,9 +940,21 @@ say "17. auth verification fails closed, with a pre-fix detector control"
+ tmpd=$(mktemp -d)
+ mkdir -p "$tmpd/bin" "$tmpd/before"
+ cp "$HERE/scripts/lib.sh" "$tmpd/before/"
++# CF-291: step 6 folds the node's seed record into the verdict, so this fixture carries a
++# measurable seed — a node home with a real record and its files. Without it the seed leg is a
++# WARN, which now means UNVERIFIED, and these arms would measure the fixture instead of the auth
++# legs they name. The seed probe is the ONE bunker exec below whose command runs for real.
++mkdir -p "$tmpd/home/.hermes" "$tmpd/seed-src/prompts"
++printf 'prompts/foreman.md\n' > "$tmpd/seed.manifest"
++printf 'the foreman procedure\n' > "$tmpd/seed-src/prompts/foreman.md"
++python3 -B "$HERE/scripts/node_seed.py" build --manifest "$tmpd/seed.manifest" \
++  --repo-root "$tmpd/seed-src" --out "$tmpd/seed.tar" >/dev/null 2>&1
++python3 -B "$HERE/scripts/node_seed.py" apply --tar "$tmpd/seed.tar" \
++  --record "$tmpd/seed.tar.json" --home "$tmpd/home" >/dev/null 2>&1
+ cat > "$tmpd/bin/bunker" <<'EOF'
+ #!/usr/bin/env bash
+ for a in "$@"; do
++  case "$a" in *seed-applied.json*) exec bash -c "${!#}" ;; esac
+   case "$a" in *hostname\ -I*) echo 127.0.0.1; exit 0 ;; esac
+ done
+ echo ALIVE fixture
+@@ -966,7 +978,7 @@ EOF
+ chmod +x "$tmpd/bin/bunker" "$tmpd/bin/curl"
+ cf077_run() {
+   env PATH="$tmpd/bin:$PATH" BUNKER_SERVER=fixture CRIER_URL=http://fixture.invalid:8767 \
+-    STATS_CODE="$1" STATUS_BODY="$2" \
++    HOME="$tmpd/home" STATS_CODE="$1" STATUS_BODY="$2" \
+     /bin/bash "$3" "${@:4}" 2>&1
+ }
+ body='{"status":"ok","auth_required":true}'
+@@ -3722,6 +3734,169 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" \
+ else
+   say "  FAIL  bunker mode --json did not carry the measurement (exit $rc)"; fails=$((fails+1))
+ fi
++
++# CF-291: step 6 could not move the verdict. A seed the leg could not measure printed a WARN row
++# and then fell through to `VERIFY: PASS` (exit 0) at the bottom of scripts/verify-node.sh, so a
++# node carrying a 0-byte seed-applied.json — or no record at all — was certified by the gate, and
++# the same fixture passed under --strict-seed only because that flag takes a different branch.
++# These arms drive the REAL verifier over a fixture node: stub bunker runs the "remote" command
++# locally, stub curl answers the two gateway reads, and the fixture home carries the applied
++# record AND a real checkout level with its origin — so steps 1-5 are green and the seed leg is
++# the only thing any arm below can move.
++vn=$(mktemp -d)
++mkdir -p "$vn/bin" "$vn/tree" "$vn/before" "$vn/home/.hermes"
++cp -r "$HERE/scripts" "$vn/tree/scripts"
++rm -rf "$vn/tree/scripts/__pycache__"
++cp -r "$vn/tree/scripts" "$vn/before/scripts"
++# The control is the immutable source at 436def5 — the verifier as it stood before this row — not a
++# stub of the defect: its siblings are byte-identical to the tree under test, so the ONLY difference
++# between the two runs is the verdict the gate reaches on the same unmeasurable seed.
++git -C "$HERE" show 436def5:scripts/verify-node.sh > "$vn/before/scripts/verify-node.sh"
++prefix_rc=$?
++cat > "$vn/bin/bunker" <<'EOF'
++#!/usr/bin/env bash
++printf 'exec\n' >> "${FIXTURE_LOG:?}"
++exec bash -c "${!#}"
++EOF
++cat > "$vn/bin/curl" <<'EOF'
++#!/usr/bin/env bash
++o="" u=""
++while [ $# -gt 0 ]; do
++  case "$1" in
++    -o) o="$2"; shift 2 ;;
++    -*) shift ;;
++    *) u="$1"; shift ;;
++  esac
++done
++case "$u" in */api/system/stats) c=401 ;; *) c=200 ;; esac
++if [ -n "$o" ] && [ "$o" != /dev/null ]; then
++  printf '%s' '{"status":"ok","auth_required":true}' > "$o"
++fi
++printf '%s' "$c"
++EOF
++chmod +x "$vn/bin/bunker" "$vn/bin/curl"
++# The node home: the fixture seed applied by the REAL seeder (same tar the arms above built), and a
++# clean checkout level with origin so step 5 PASSes instead of warning.
++python3 -B "$SEED" apply --tar "$tmpd/seed.tar" --record "$tmpd/seed.tar.json" --home "$vn/home" >/dev/null 2>&1
++git init -q -b main --bare "$vn/origin.git"
++git clone -q "$vn/origin.git" "$vn/home/repo" 2>/dev/null
++git -C "$vn/home/repo" -c user.email=fixture@example.invalid -c user.name=fixture \
++  commit -qm fixture --allow-empty
++git -C "$vn/home/repo" push -q -u origin main
++git -C "$vn/home/repo" fetch -q origin
++vn_run() {  # vn_run <tree-with-scripts> [verify-node args...]: the fixture home is the "node"
++  local tree="$1"; shift
++  env PATH="$vn/bin:$PATH" FIXTURE_LOG="$vn/bunker.log" HOME="$vn/home" \
++    /bin/bash "$tree/scripts/verify-node.sh" --agent cf-fixture --server fixture "$@" 2>&1
++}
++vn_rec="$vn/home/.hermes/seed-applied.json"
++# A pristine copy of the record: the corrupt arm overwrites the live one, so the absent arm's
++# `mv` backup would restore a corrupt record and the green control could never go green.
++cp "$vn_rec" "$vn/good-record.json"
++
++# green: the fixture node is verifiable, so every arm below has something to move.
++out=$(vn_run "$vn/tree"); rc=$?
++if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
++  && printf '%s\n' "$out" | grep -Fq '  PASS  seed_drift — ' \
++  && printf '%s\n' "$out" | grep -Fq '2 seeded files present and matching' \
++  && printf '%s\n' "$out" | grep -Eq '^  PASS  checkout_freshness'; then
++  say "  PASS  a node whose seed matches its record -> VERIFY: PASS, exit $rc (the fixture can go green)"
++else
++  say "  FAIL  the fixture node did not verify (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++
++# empty record (AC 2): 0 bytes is not a passed seed, it is an unmeasured one.
++: > "$vn_rec"
++out=$(vn_run "$vn/tree"); rc=$?
++if [ "$rc" -eq 3 ] \
++  && printf '%s\n' "$out" | grep -Fq '  WARN  seed_drift — the seed record at ' \
++  && printf '%s\n' "$out" | grep -Eq '^VERIFY: UNVERIFIED — seed_drift: the seed record at ' \
++  && printf '%s\n' "$out" | grep -Fq "$vn_rec" \
++  && printf '%s\n' "$out" | grep -Fq 'does not parse' \
++  && ! printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS'; then
++  say "  PASS  a 0-byte seed record -> exit $rc, VERIFY: UNVERIFIED naming seed_drift (not a PASS)"
++else
++  say "  FAIL  an empty seed record did not end UNVERIFIED (exit $rc): $(printf '%s\n' "$out" | grep -E '^VERIFY|seed_drift' | head -3 | tr '\n' ' ')"
++  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++
++# pre-fix control: the SAME fixture through 436def5 must pass, or these arms prove nothing.
++if [ "$prefix_rc" -eq 0 ]; then
++  out=$(vn_run "$vn/before"); rc=$?
++  if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
++    && printf '%s\n' "$out" | grep -Fq '  WARN  seed_drift — '; then
++    say "  PASS  pre-fix 436def5 certifies the same unmeasured seed: VERIFY: PASS, exit $rc (the fixture detects CF-291)"
++  else
++    say "  FAIL  pre-fix 436def5 control did not pass the unmeasured seed (exit $rc)"; fails=$((fails+1))
++    printf '%s\n' "$out" | sed 's/^/    | /'
++  fi
++else
++  say "  FAIL  pre-fix source 436def5:scripts/verify-node.sh unavailable"; fails=$((fails+1))
++fi
++
++# corrupt record: not JSON at all — same verdict, and the reason names the record.
++printf 'this is not a seed record\n' > "$vn_rec"
++out=$(vn_run "$vn/tree"); rc=$?
++if [ "$rc" -eq 3 ] \
++  && printf '%s\n' "$out" | grep -Eq '^VERIFY: UNVERIFIED — seed_drift: the seed record at ' \
++  && printf '%s\n' "$out" | grep -Fq "$vn_rec" \
++  && printf '%s\n' "$out" | grep -Fq 'does not parse' \
++  && ! printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS'; then
++  say "  PASS  an unparseable seed record -> exit $rc, VERIFY: UNVERIFIED naming seed_drift and the path"
++else
++  say "  FAIL  a corrupt seed record did not end UNVERIFIED (exit $rc): $(printf '%s\n' "$out" | grep -E '^VERIFY|seed_drift' | head -3 | tr '\n' ' ')"
++  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++
++# absent record: no seed was ever applied — unmeasured, so the gate refuses to call it verified.
++mv "$vn_rec" "$vn/record.bak"
++out=$(vn_run "$vn/tree"); rc=$?
++if [ "$rc" -eq 3 ] \
++  && printf '%s\n' "$out" | grep -Eq '^VERIFY: UNVERIFIED — seed_drift: no seed record at ' \
++  && printf '%s\n' "$out" | grep -Fq "$vn_rec" \
++  && ! printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS'; then
++  say "  PASS  an absent seed record -> exit $rc, VERIFY: UNVERIFIED naming seed_drift and the path"
++else
++  say "  FAIL  an absent seed record did not end UNVERIFIED (exit $rc): $(printf '%s\n' "$out" | grep -E '^VERIFY|seed_drift' | head -3 | tr '\n' ' ')"
++  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++
++# the strict path keeps its wording: an unknown seed is a FAIL, never an UNVERIFIED.
++out=$(vn_run "$vn/tree" --strict-seed); rc=$?
++if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: FAIL (1)' \
++  && printf '%s\n' "$out" | grep -Fq '  FAIL  seed_drift — no seed record at ' \
++  && printf '%s\n' "$out" | grep -Fq 'an unknown seed is not a pass'; then
++  say "  PASS  an absent record under --strict-seed is still a FAIL, exit $rc (wording preserved)"
++else
++  say "  FAIL  --strict-seed no longer refuses the absent record as a FAIL (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++
++# the seeder itself gone: nothing could stage a check, and that is a named FAIL, not a warning.
++mv "$vn/tree/scripts/node_seed_drift.py" "$vn/node_seed_drift.py.bak"
++out=$(vn_run "$vn/tree"); rc=$?
++if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: FAIL (1)' \
++  && printf '%s\n' "$out" | grep -Fq '  FAIL  seed_drift — ' \
++  && printf '%s\n' "$out" | grep -Fq 'node_seed_drift.py missing'; then
++  say "  PASS  a missing seeder -> exit $rc, VERIFY: FAIL naming the unmeasured seed"
++else
++  say "  FAIL  a missing seeder did not fail the gate (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++
++# green again: restore the seeder and the record — the arms can go green, not only red.
++mv "$vn/node_seed_drift.py.bak" "$vn/tree/scripts/node_seed_drift.py"
++cp "$vn/good-record.json" "$vn_rec"
++out=$(vn_run "$vn/tree"); rc=$?
++if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
++  && printf '%s\n' "$out" | grep -Fq '2 seeded files present and matching'; then
++  say "  PASS  seeder and record restored -> VERIFY: PASS, exit $rc again (the arms can go green)"
++else
++  say "  FAIL  the restored fixture did not verify (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++rm -rf "$vn"
+ rm -rf "$tmpd"
+ # END cf250-seed-drift
+ 
