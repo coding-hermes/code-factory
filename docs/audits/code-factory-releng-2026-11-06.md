@@ -274,3 +274,98 @@ still `pending`) plus Decision 1b (0 published tags, 0 Release objects, no `VERS
 release surface owned by `CF-161`). Hosted CI re-probed and still absent by design — `gh run list` =
 `[]`, `gh api …/contents/.github/workflows` = 404 — so there is no run to file against and nothing to
 report as a failure.
+
+## Pass 4 — the served tip is gate-green, and CF-378 was fixed rather than re-audited
+
+Fourth delivery of the same tick id. Opened 2026-11-06T12:09Z at the served tip `b2d187f`
+(`git rev-list --left-right --count origin/main...HEAD` = `0 0`), closed at `84ae65f`. Pass 4 did not
+re-run the release sweep, did not re-derive the decision, and did not append a fifth census
+correction: it closed the one leg pass 3 left open and then spent the tick landing the fix that
+`CF-378` had been describing for three passes.
+
+### 1. Pass 3's open leg: the repository's own gate, at the served tip
+
+Pass 3 proved `e8d1248` was gate-RED, recorded that it did not land the repair (a sibling foreman did,
+at `c3f7932`), and gated its own carrier only through the commit-time guard — never through the suite.
+This pass ran the gate itself at the tip it was served:
+
+    bash tests/selftest.sh   # at b2d187f
+    SELFTEST: PASS           # rc=0, 492-line log
+
+The tree a reader is served is therefore the tree the gate measured. Tree identity could not have
+carried pass 1's green forward: `c3f7932..b2d187f` is not bookkeeping-only, because `417449d` adds a
+harness test.
+
+### 2. The lane's published census recipe was under-measuring by 73%
+
+The posture table this lane works from grades the tailnet class with `100\.6[4-9]\.[0-9]+\.[0-9]+`,
+which covers only `100.64–100.69` — one tenth of the CGNAT /10, which runs `100.64–100.127`. At
+`b2d187f` the narrow pattern reads **12 occurrences / 6 files**; the corrected range reads
+**45 / 15**. Pass 3's published 42/13 used the corrected range (`CF-378`'s AC1 already carried it), so
+pass 3's census stands and the defect is in the recipe, not in the figure. Corrected pattern:
+
+    100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.[0-9]+\.[0-9]+
+
+### 3. `CF-378` landed: docs scrubbed, and the class now has a gate
+
+One worker was dispatched against `CF-378` (agent `coding-hermes-worker`), which committed `5dc48b8`;
+the fleet harvester then rebased it onto two sibling commits as `84ae65f`. `git diff --name-only
+5dc48b8 84ae65f` lists 8 paths, all under `.coding-hermes/` or `.gitreins/` — **zero build inputs**,
+so the gate measured at `5dc48b8` stands at the rebased tip by tree identity.
+
+| Path | Change |
+|---|---|
+| `docs/handbook/appendices/units/05-scripts-bunker-provision-sh.md` | 5 literals → placeholders |
+| `docs/handbook/appendices/units/06-scripts-bunker-server-install-sh.md` | 1 literal → placeholder |
+| `docs/MASTER-DOC-SCHEMA.md` | 1 literal → placeholder |
+| `tests/selftest.sh` | +68 lines: arm at L159–225, inside section 6 |
+
+The three doc files now use `<crier-host>` / `<ci-box>` forms that keep the surrounding commands
+runnable, each with one sentence pointing at the operator's own config. The arm grades every tracked
+file except `.coding-hermes/board` and `.gitreins`, prints exactly one PASS row, and on violation one
+FAIL row naming `path:line` and never the address — a gate that prints what it forbids republishes the
+class in every log it reds. A run that grades 0 files is a FAIL, not a green. Its red proof is a
+seeded git repo whose literal is assembled from octet variables at run time (writing the address into
+the suite would put the class straight back, since `selftest.sh` is itself tracked and graded), plus
+an out-of-range subnet that must stay green, so the arm proves its boundary and not merely a hit.
+
+Measured at `84ae65f`:
+
+| Scope | Occurrences | Files |
+|---|---|---|
+| outside `.coding-hermes/` and `.gitreins` — the fix's scope | **0** | **0** |
+| AC1's original exclusion list (board only) | 17 | 8 bundles |
+| whole tracked tree | 38 | 12 |
+
+Split of the 38: board **19**, `.gitreins` **19**, docs **0**. Both remaining shares belong to other
+rows — `.gitreins/history/*/commit.patch` republishes whole patches, so it re-carries every literal
+any commit ever held (`CF-050`).
+
+**AC1 was defective as written, and this pass amends it instead of faking a close.** Its probe
+excluded only `.coding-hermes/board`, so it could never reach 0 while `.gitreins` is another row's
+surface. `CF-378`'s criterion 1 now also excludes `.gitreins`, with the amendment recorded in the
+criterion text and the row note; as amended it reads 0. The row stays `pending` rather than being
+closed by this lane: its remaining exposure lives on `CF-050`'s surface and pass 4 does not speak for
+that row.
+
+### 4. Posture re-measured at `84ae65f`
+
+| Item | Reading |
+|---|---|
+| visibility / license | public / MIT |
+| secret scanning, push protection | enabled / enabled |
+| Dependabot security updates | disabled (owner-scoped) |
+| branch protection | ABSENT — HTTP 404, an owner decision, not foreman work |
+| workflows dir / workflow runs | absent / `[]` — healthy, not absent CI |
+| published heads | 72; unrelated `master` lineage of 772 commits (`CF-163`) |
+| release tags / Release objects | 0 / 0 |
+| absolute host paths | 2555 occurrences / 550 files (`CF-050`) |
+| credential shapes | 21 |
+
+### 5. Release decision — unchanged
+
+**NO TAG.** Rule **R2** — P0 rows `CF-001`, `CF-002`, `CF-004`, `CF-005`, `CF-139` still
+`in_progress`; `CF-227`, `CF-252` still `pending` (`CF-229` was closed by a sibling lane during this
+pass) — plus Decision 1b: 0 published tags, 0 Release objects, no `VERSION`, no `CHANGELOG`, release
+surface owned by `CF-161`. Hosted CI remains absent by design: no `.github/workflows`, `gh run list` =
+`[]`, so there is no run to file against.
