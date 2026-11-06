@@ -1,0 +1,664 @@
+diff --git a/patches/README.md b/patches/README.md
+new file mode 100644
+index 0000000..f4afa21
+--- /dev/null
++++ b/patches/README.md
+@@ -0,0 +1,88 @@
++# patches/ — the versioned home of the fleet ops census script
++
++The fleet operations census (`fleet_ops_check.py`) runs from
++`~/.hermes/scripts/fleet_ops_check.py`. That directory is not a git repository, so the script
++itself is tracked in no commit anywhere. This directory is therefore its **only** version
++history, and it is the only thing that makes a change to it auditable:
++
++```
++patches/base/fleet_ops_check.py.orig   the PRISTINE module every patch applies to
++patches/fleet-ops-<name>.patch         one patch per landed change, in chain order
++patches/fleet-ops-<name>.test.py       the regression arms for that change
++patches/fleet-ops-chain.sha256         the digest of the module after every stage
++scripts/verify-patch.sh                the drift gate: rebuild the chain, compare with live
++```
++
++## Base
++
++`patches/base/fleet_ops_check.py.orig` — sha256
++`b0054326771850a85e2240a00f89935a3817ab864d445779740a92c2de3f2e9d`, 347 lines. Its suffix is
++`.orig`, not `.py`, on purpose: the module is a pristine input, not tree source, and a `.py`
++suffix would put it in the path of the Python lint lane for no benefit.
++
++## Applying a patch
++
++Each patch's own header names its target. The target path **exists at `HEAD`**, so the check
++runs from the repository root against the shipped base:
++
++```bash
++git apply --check patches/fleet-ops-shell-toolkit.patch     # rc 0 against the tracked base
++```
++
++To materialise the patched module, apply into a scratch tree — never in place, because the
++shipped base must stay pristine:
++
++```bash
++work=$(mktemp -d); mkdir -p "$work/patches/base"
++cp patches/base/fleet_ops_check.py.orig "$work/patches/base/"
++( cd "$work" && git apply "$OLDPWD/patches/fleet-ops-shell-toolkit.patch" )
++# the result is "$work/patches/base/fleet_ops_check.py.orig"
++```
++
++The patches apply in chain order. `fleet-ops-backup-heuristic.patch` and
++`fleet-ops-ci-markers.patch` name a bare `fleet_ops_check.py` (the filename the live script has),
++so carry the previous stage's output into that name before applying them:
++
++```bash
++cp "$work/patches/base/fleet_ops_check.py.orig" "$work/fleet_ops_check.py"
++( cd "$work" && git apply "$OLDPWD/patches/fleet-ops-backup-heuristic.patch" \
++                        && git apply "$OLDPWD/patches/fleet-ops-ci-markers.patch" )
++```
++
++## Chain digests
++
++Reproduce the chain stage by stage and compare each result with
++`patches/fleet-ops-chain.sha256`:
++
++| stage | patch | sha256 after the stage |
++|---|---|---|
++| base | — | `b0054326771850a85e2240a00f89935a3817ab864d445779740a92c2de3f2e9d` |
++| shell-toolkit | `fleet-ops-shell-toolkit.patch` | `82a3bf3418f1f521e3941334d796e09e1088512eb0f75ddd89d468d36f81d976` |
++| backup-heuristic | `fleet-ops-backup-heuristic.patch` | `77d1deb2bd97e61f88b90497590f9d6601003584e380ac9fbc97ccc8d6cd7829` |
++| ci-markers | `fleet-ops-ci-markers.patch` | `f393a681a59ef80d8386d00dd15074e78701d8244f5cd447544322785b2ef6e6` |
++
++The last digest is the module that was live on 2026-11-05.
++
++## The drift gate
++
++```bash
++bash scripts/verify-patch.sh                          # compares with the live script
++bash scripts/verify-patch.sh /path/to/a/copy          # compares with that copy
++FLEET_OPS_SCRIPT=/path/to/script bash scripts/verify-patch.sh
++```
++
++It rebuilds the module from the shipped base through every patch, checks each stage against the
++recorded digest, and then compares the final stage with the live file. It prints a named
++`PASS` / `FAIL` / `SKIP` row per arm and exits 1 if any arm fails. It never writes to the live
++script; a checkout without the fleet prints `SKIP` for the live arm and still verifies the chain
++against the recorded digests.
++
++When the gate reports live drift, the live script has been edited without a patch here. Do not
++"fix" the gate: capture the edit as a new patch (pristine = the previous stage, patched = the new
++live content), append its stage digest to `fleet-ops-chain.sha256`, and add its regression arms.
++
++## Regression arms
++
++`patches/fleet-ops-*.test.py` take the script path as `argv[1]` (default: the live path) and
++print `PASS`/`FAIL` per arm, exiting 1 on any failure. They are the only executable proof for a
++change, because the module is not in the tree and `tests/selftest.sh` cannot import it.
+diff --git a/patches/base/fleet_ops_check.py.orig b/patches/base/fleet_ops_check.py.orig
+new file mode 100755
+index 0000000..254a41b
+--- /dev/null
++++ b/patches/base/fleet_ops_check.py.orig
+@@ -0,0 +1,347 @@
++#!/usr/bin/env python3
++"""fleet_ops_check.py — the operations census for the coding-hermes fleet.
++
++Why this exists
++---------------
++QA caught defects in what a project *does*. Nothing caught the operations around it: a service
++could ship with no health endpoint, no metrics, no restart policy and no deploy path and no lane
++would ever say so — it just quietly became the thing that pages nobody. This is the ops analogue
++of the QA sweep: derive what a project IS from evidence in its tree, then judge only the ops
++surfaces that kind of project needs.
++
++Design rules
++------------
++* **Derive the kind, never assume it.** A docs-only repo needs no k8s. A service needs health,
++  metrics, supervision and a deploy path. Getting this wrong is how an ops check becomes noise
++  nobody reads.
++* **Evidence or silence.** Every finding carries the file (or absence) it was derived from.
++* **Exit 0 when clean, 1 when a RUNNABLE project has a gap.** Lanes are silent when clean.
++
++Usage
++-----
++  fleet_ops_check.py                     # text report for the whole fleet
++  fleet_ops_check.py --json              # machine report
++  fleet_ops_check.py --project code-factory
++  fleet_ops_check.py --only-gaps         # suppress compliant projects
++"""
++from __future__ import annotations
++
++import argparse
++import json
++import os
++import re
++import sqlite3
++import sys
++
++DB = os.path.expanduser('~/.hermes/coding-hermes/scheduler.db')
++ROLE_SUFFIXES = ('-foreman', '-qa', '-ops', '-pm', '-relsync', '-sync', '-releng',
++                 '-dogfood', '-docs', '-readme', '-review', '-perf')
++
++# Files whose presence proves a capability, and the capability they prove.
++CONTAINER = ('Dockerfile', 'docker-compose.yml', 'docker-compose.yaml', 'compose.yml',
++             'compose.yaml', 'Containerfile')
++ORCHESTRATION = ('k8s', 'kubernetes', 'deploy/k8s', 'helm', 'chart', 'Chart.yaml',
++                 'kustomization.yaml', 'manifests')
++SUPERVISION = ('deploy', 'deployment', 'systemd', 'contrib/systemd', 'ops', 'packaging')
++DEPLOY_DOC = ('DEPLOY.md', 'docs/deploy.md', 'docs/deployment.md', 'RUNBOOK.md',
++              'docs/runbook.md', 'OPERATIONS.md', 'docs/operations.md')
++BACKUP = ('backup', 'restore', 'snapshot')
++
++SERVER_PAT = re.compile(
++    r'(ListenAndServe|http\.Server\{|net/http.*Handler|FastAPI\(|Flask\(|'
++    r'app\.listen\(|createServer\(|express\(\)|uvicorn\.run|serve\(\))')
++STATEFUL_PAT = re.compile(r'(sqlite3|duckdb|postgres|psycopg|pgx|mysql|redis|bbolt|leveldb)')
++
++
++def project_family(name: str) -> str:
++    """Strip ROLE suffixes REPEATEDLY: `x-foreman-qa` -> `x`, not `x-foreman`.
++
++    A single strip left `wojons-mythos-foreman` standing as its own "project family", so the
++    census reported a docs project called `wojons-mythos-foreman` alongside the real one and
++    doubled every finding.
++    """
++    changed = True
++    while changed:
++        changed = False
++        for suf in sorted(ROLE_SUFFIXES, key=len, reverse=True):
++            if name.endswith(suf) and len(name) > len(suf):
++                name = name[: -len(suf)]
++                changed = True
++                break
++    return name
++
++
++def load_projects():
++    con = sqlite3.connect(f'file:{DB}?mode=ro', uri=True)
++    rows = con.execute(
++        'SELECT name, workdir, repo_url, enabled, namespace_id FROM projects'
++    ).fetchall()
++    con.close()
++    out = {}
++    for name, workdir, repo_url, enabled, ns in rows:
++        fam = project_family(name)
++        cur = out.get(fam)
++        # prefer an enabled row, then the one with a real workdir
++        score = (1 if enabled else 0, 1 if workdir else 0, len(name))
++        if cur is None or score > cur['_score']:
++            out[fam] = {'family': fam, 'workdir': workdir, 'repo_url': repo_url,
++                        'enabled': bool(enabled), 'namespace': ns, 'lanes': [],
++                        '_score': score}
++        out[fam]['lanes'].append(name)
++    con.close() if False else None
++    for v in out.values():
++        v.pop('_score', None)
++    return out
++
++
++def exists_any(root: str, names) -> str | None:
++    for n in names:
++        p = os.path.join(root, n)
++        if os.path.exists(p):
++            return n
++    return None
++
++
++def rel_hits(root: str, names, limit: int = 12) -> list[str]:
++    """Shallow, bounded search: `names` matched as path components anywhere under root."""
++    hits, root = [], os.path.realpath(root)
++    if not os.path.isdir(root):
++        return hits
++    for dirpath, dirnames, filenames in os.walk(root):
++        depth = dirpath[len(root):].count(os.sep)
++        if depth >= 3:
++            dirnames[:] = []
++        dirnames[:] = [d for d in dirnames
++                       if d not in ('.git', 'node_modules', 'venv', '.venv', 'dist',
++                                    'build', '__pycache__', 'target', '.next')]
++        for n in names:
++            if n in filenames or n in dirnames:
++                p = os.path.relpath(os.path.join(dirpath, n), root)
++                if p not in hits:
++                    hits.append(p)
++                if len(hits) >= limit:
++                    return sorted(hits)
++    return sorted(hits)
++
++
++def grep_files(root: str, pattern, exts=('.go', '.py', '.ts', '.js', '.rs'),
++               limit=2000, max_bytes=400_000) -> bool:
++    """Bounded content scan: True on first match. Never reads a huge file whole."""
++    seen = 0
++    for dirpath, dirnames, filenames in os.walk(root):
++        depth = dirpath[len(root):].count(os.sep)
++        if depth >= 4:
++            dirnames[:] = []
++        dirnames[:] = [d for d in dirnames
++                       if d not in ('.git', 'node_modules', 'venv', '.venv', 'dist',
++                                    'build', '__pycache__', 'target')]
++        for f in filenames:
++            if not f.endswith(exts):
++                continue
++            seen += 1
++            if seen > limit:
++                return False
++            p = os.path.join(dirpath, f)
++            try:
++                if os.path.getsize(p) > max_bytes:
++                    continue
++                with open(p, errors='replace') as fh:
++                    if pattern.search(fh.read()):
++                        return True
++            except OSError:
++                continue
++    return False
++
++
++def classify(root: str, docs_only: bool) -> tuple[str, dict]:
++    """(kind, evidence). kind in service | cli | library | docs | unknown."""
++    ev = {}
++    container = exists_any(root, CONTAINER) or (rel_hits(root, CONTAINER, 1) or [None])[0]
++    orch = rel_hits(root, ORCHESTRATION, 3)
++    sup = rel_hits(root, SUPERVISION, 3)
++    serv = grep_files(root, SERVER_PAT)
++    ev.update(container=container, orchestration=orch[:3], supervision=sup[:3],
++              server_entrypoint=serv)
++
++    has_go = os.path.exists(os.path.join(root, 'go.mod'))
++    has_py = any(os.path.exists(os.path.join(root, f))
++                 for f in ('pyproject.toml', 'setup.py', 'requirements.txt'))
++    has_js = os.path.exists(os.path.join(root, 'package.json'))
++    has_manifest = has_go or has_py or has_js
++
++    if docs_only or not has_manifest:
++        return ('docs' if docs_only else 'unknown'), ev
++    if container or orch or serv:
++        return 'service', ev
++    if has_go and os.path.isdir(os.path.join(root, 'cmd')):
++        return 'cli', ev
++    return 'library', ev
++
++
++def ops_gaps(kind: str, root: str, ev: dict) -> list[dict]:
++    """Findings for a project, restricted to what its KIND actually needs."""
++    gaps = []
++
++    def add(key, detail, severity='P2'):
++        gaps.append({'check': key, 'detail': detail, 'severity': severity})
++
++    if kind in ('service', 'cli', 'library'):
++        if not exists_any(root, DEPLOY_DOC):
++            add('deploy-doc', 'no DEPLOY/RUNBOOK/OPERATIONS doc — the deploy path is tribal',
++                'P2' if kind == 'service' else 'P3')
++
++    if kind == 'service':
++        if not ev.get('server_entrypoint'):
++            add('health', 'no health/readiness endpoint found in the entrypoint', 'P1')
++        if not grep_files(root, re.compile(r'(prometheus|/metrics|otel|opentelemetry|statsd)',
++                                           re.I)):
++            add('metrics', 'no metrics instrumentation (prometheus/otel/statsd)', 'P1')
++        if not ev.get('container'):
++            add('container', 'service with no Dockerfile/compose', 'P2')
++        if not ev.get('supervision'):
++            add('supervision', 'no systemd unit / deploy dir — restart policy undefined', 'P2')
++        if not ev.get('orchestration') and not ev.get('supervision'):
++            add('scheduling', 'no orchestrator and no supervisor: nothing restarts it', 'P2')
++        # Stateful means the project OWNS a store, not that it imports a db client — a service
++        # that talks to someone else's postgres has nothing of its own to back up. Evidence:
++        # a db/data file in the tree, or migrations/schema, or a compose service for a datastore.
++        owns_store = bool(rel_hits(root, ('migrations', 'schema.sql', 'init.sql'), 2)) or \
++            any(f.endswith(('.db', '.duckdb', '.sqlite', '.sqlite3'))
++                for f in rel_hits(root, ('data.db', 'app.db', 'store.db', 'state.db'), 3))
++        if owns_store and not rel_hits(root, BACKUP, 2):
++            add('backup', 'owns a datastore with no backup/restore path', 'P1')
++
++    if kind in ('service', 'library') and not rel_hits(root, ('.github',), 1):
++        add('ci', 'no CI pipeline in the repo — nothing gates a merge', 'P3')
++    return gaps
++
++
++def annotate_alignment(info: dict) -> list[dict]:
++    """Lane-family alignment: an active project should own an -ops lane.
++
++    Reported as ONE fleet-level rollup (see `--alignment`), never as a per-project P2 — 72
++    "no -ops lane" rows would bury the actual ops-surface findings the day this lane family is
++    first introduced, which is exactly when the signal matters most.
++    """
++    if not info['enabled']:
++        return []
++    if any(l.endswith('-ops') for l in info['lanes']):
++        return []
++    return [{'check': 'lane-ops', 'detail': 'no -ops lane — operations run unwatched',
++             'severity': 'P3'}]
++
++
++def resolve_workdir(info: dict) -> str:
++    """The directory an ops census should actually read.
++
++    A lane row's `workdir` is often a stand-in directory (a board holder), while the real repo is
++    named by `repo_url` as `local:/path`. Standing in a docs-only directory made ten running
++    services classify as `docs` and would have hidden every container/metrics gap they have.
++    """
++    wd = info.get('workdir') or ''
++    repo = info.get('repo_url') or ''
++    if repo.startswith('local:'):
++        cand = repo[len('local:'):]
++        if os.path.isdir(cand) and os.path.exists(os.path.join(cand, '.git')):
++            return cand
++    if wd and os.path.isdir(wd) and wd.rstrip('/') != '/tmp':
++        return wd
++    if repo.startswith('local:') and os.path.isdir(repo[len('local:'):]):
++        return repo[len('local:'):]
++    return wd
++
++
++def main() -> int:
++    ap = argparse.ArgumentParser()
++    ap.add_argument('--json', action='store_true')
++    ap.add_argument('--project')
++    ap.add_argument('--only-gaps', action='store_true')
++    ap.add_argument('--alignment', action='store_true',
++                    help='also list the families with no -ops lane (rollup only by default)')
++    ap.add_argument('--limit', type=int, default=0)
++    a = ap.parse_args()
++
++    fams = load_projects()
++    # Probe/scratch projects are not projects: they are fixtures a test left behind and they
++    # would otherwise carry a permanent "workdir does not exist" finding.
++    fams = {k: v for k, v in fams.items()
++            if not k.startswith('zz-') and (v.get('workdir') or '').rstrip('/') != '/tmp'
++            and not (v.get('workdir') or '').startswith('/tmp/')}
++    for v in fams.values():
++        v['workdir'] = resolve_workdir(v)
++    if a.project:
++        fams = {k: v for k, v in fams.items() if k == a.project}
++
++    report, flagged = [], 0
++    for fam, info in sorted(fams.items()):
++        wd = info.get('workdir') or ''
++        if not wd or not os.path.isdir(wd):
++            report.append({'family': fam, 'kind': 'unresolved', 'workdir': wd,
++                           'gaps': [{'check': 'workdir', 'severity': 'P2',
++                                     'detail': f'workdir does not exist: {wd}'}],
++                           'lanes': info['lanes'], 'evidence': {}})
++            flagged += 1
++            continue
++        docs_only = (not any(os.path.exists(os.path.join(wd, f))
++                             for f in ('go.mod', 'package.json', 'pyproject.toml',
++                                       'setup.py', 'Cargo.toml', 'requirements.txt')))
++        kind, ev = classify(wd, docs_only)
++        gaps = ops_gaps(kind, wd, ev)
++        if info['enabled']:
++            gaps += annotate_alignment(info)
++        entry = {'family': fam, 'kind': kind, 'workdir': wd, 'gaps': gaps,
++                 'lanes': info['lanes'], 'evidence': ev}
++        report.append(entry)
++        if gaps:
++            flagged += 1
++
++    if a.json:
++        print(json.dumps(report, indent=1, default=str))
++    else:
++        kinds, by_check = {}, {}
++        for r in report:
++            kinds[r['kind']] = kinds.get(r['kind'], 0) + 1
++            for g in r['gaps']:
++                by_check[g['check']] = by_check.get(g['check'], 0) + 1
++        print('OPS CENSUS  %d project families  %s' % (
++            len(report), '  '.join(f'{k}={v}' for k, v in sorted(kinds.items()))))
++        print('\nfindings by check:')
++        for k, v in sorted(by_check.items(), key=lambda kv: -kv[1]):
++            print('   %-13s %d' % (k, v))
++
++        no_ops = [r['family'] for r in report
++                  if any(g['check'] == 'lane-ops' for g in r['gaps'])]
++        if no_ops:
++            print('\nlanes: %d famil%s have no -ops lane%s' % (
++                len(no_ops), 'y' if len(no_ops) == 1 else 'ies',
++                ':' if a.alignment else ' (pass --alignment to list them)'))
++            if a.alignment:
++                for f in no_ops:
++                    print('   ' + f)
++
++        # The per-project list is the actionable half: everything above P3, workdirs that do not
++        # resolve, and runnable projects with an ops surface gap. A clean project stays silent.
++        print('\nprojects needing work (P1/P2):')
++        shown = 0
++        for r in sorted(report, key=lambda r: (-sum(1 for g in r['gaps']
++                                                    if g['severity'] in ('P1', 'P2')),
++                                               r['family'])):
++            hard = [g for g in r['gaps'] if g['severity'] in ('P1', 'P2')]
++            if not hard:
++                continue
++            if a.only_gaps and not hard:
++                continue
++            print('\n%-26s %-9s %s' % (r['family'][:26], r['kind'],
++                                       ', '.join(r['lanes'])[:58]))
++            for g in hard:
++                print('   %-3s [%-11s] %s' % (g['severity'], g['check'], g['detail']))
++            shown += 1
++            if a.limit and shown >= a.limit:
++                print('\n... stopped at --limit %d' % a.limit)
++                break
++        print('\nflagged %d of %d families (P1/P2 shown above)' % (flagged, len(report)))
++    return 1 if flagged else 0
++
++
++if __name__ == '__main__':
++    sys.exit(main())
+diff --git a/patches/fleet-ops-chain.sha256 b/patches/fleet-ops-chain.sha256
+new file mode 100644
+index 0000000..743633a
+--- /dev/null
++++ b/patches/fleet-ops-chain.sha256
+@@ -0,0 +1,12 @@
++# fleet ops census — patch chain
++#
++# The census script runs live from ~/.hermes/scripts/fleet_ops_check.py and is tracked in no
++# commit anywhere (CF-241), so this directory IS its version history: a pristine base plus one
++# patch per landed change. Each line records the sha256 of the module AFTER that stage, so the
++# chain can be reproduced and drift detected without the live file.
++#
++# stage		patch						sha256 after stage
++base		-						b0054326771850a85e2240a00f89935a3817ab864d445779740a92c2de3f2e9d
++shell-toolkit	patches/fleet-ops-shell-toolkit.patch		82a3bf3418f1f521e3941334d796e09e1088512eb0f75ddd89d468d36f81d976
++backup-heuristic	patches/fleet-ops-backup-heuristic.patch	77d1deb2bd97e61f88b90497590f9d6601003584e380ac9fbc97ccc8d6cd7829
++ci-markers	patches/fleet-ops-ci-markers.patch		f393a681a59ef80d8386d00dd15074e78701d8244f5cd447544322785b2ef6e6
+diff --git a/patches/fleet-ops-shell-toolkit.patch b/patches/fleet-ops-shell-toolkit.patch
+index bc7377b..f408a22 100644
+--- a/patches/fleet-ops-shell-toolkit.patch
++++ b/patches/fleet-ops-shell-toolkit.patch
+@@ -1,5 +1,25 @@
+---- a/fleet_ops_check.py
+-+++ b/fleet_ops_check.py
++# CF-206 / CF-241 — classify a manifest-less shell toolkit as `cli` in the fleet ops census
++#
++# Target:   patches/base/fleet_ops_check.py.orig — the PRISTINE census module, shipped here
++#           because the live script (~/.hermes/scripts/fleet_ops_check.py) is tracked in no commit.
++# Base:     sha256 b0054326771850a85e2240a00f89935a3817ab864d445779740a92c2de3f2e9d
++# Patched:  sha256 82a3bf3418f1f521e3941334d796e09e1088512eb0f75ddd89d468d36f81d976
++# Apply:    from the repository root,
++#             git apply --check patches/fleet-ops-shell-toolkit.patch
++#           (the target path above exists at HEAD, so the check runs against the shipped base).
++#           To materialise the module, apply into a scratch tree — never in place — as documented
++#           in patches/README.md; the later patches in the chain apply on this result.
++# Test:     python3 patches/fleet-ops-shell-toolkit.test.py [path-to-fleet_ops_check.py]
++# Chain:    patches/fleet-ops-chain.sha256, checked by `bash scripts/verify-patch.sh`
++#
++# The census derived "is this a spec corpus?" from the absence of a language manifest, so a repo
++# that ships only shell scripts (an installer, a node provisioner, an operator CLI) classified as
++# `docs` and was judged on NOTHING — no health, metrics, supervision, backup or deploy checks.
++# `classify()` now derives `cli` from two or more tracked scripts under scripts/ or bin/, or a
++# tests/selftest.sh gate, and records the basis as `shell-toolkit:<n>`.
++#
++--- a/patches/base/fleet_ops_check.py.orig
+++++ b/patches/base/fleet_ops_check.py.orig
+ @@ -31,6 +31,7 @@
+  import os
+  import re
+diff --git a/scripts/verify-patch.sh b/scripts/verify-patch.sh
+new file mode 100644
+index 0000000..a825b21
+--- /dev/null
++++ b/scripts/verify-patch.sh
+@@ -0,0 +1,161 @@
++#!/usr/bin/env bash
++# verify-patch.sh — drift gate for the fleet ops census patch chain (CF-241)
++#
++# The census script runs live from ~/.hermes/scripts/fleet_ops_check.py and is tracked in no
++# commit anywhere, so patches/ is its only version history: a pristine base
++# (patches/base/fleet_ops_check.py.orig) plus one patch per landed change, with the digest of
++# the module after every stage recorded in patches/fleet-ops-chain.sha256.
++#
++# This gate rebuilds that chain in a scratch tree and then compares the final stage with the
++# live file. It is the only thing that turns those patches from prose into a checkable claim:
++# if the live script is edited without a patch here, the last arm fails and names both digests.
++# It never writes to the live script — that file is only ever read through sha256.
++#
++#   bash scripts/verify-patch.sh [path-to-live-script]
++#   FLEET_OPS_SCRIPT=/path/to/script bash scripts/verify-patch.sh
++#
++# Exit 0 when every arm passes, 1 when any arm fails. A checkout without the fleet (no live
++# script) prints SKIP for the live arm and still verifies the chain against the recorded
++# digests.
++set -u
++
++HERE=${0%/*}
++case "$HERE" in "$0") HERE=. ;; esac
++HERE="$(cd "$HERE/.." && pwd)"
++
++LIVE=${1:-${FLEET_OPS_SCRIPT:-$HOME/.hermes/scripts/fleet_ops_check.py}}
++BASE="$HERE/patches/base/fleet_ops_check.py.orig"
++CHAIN="$HERE/patches/fleet-ops-chain.sha256"
++
++fails=0
++say() { printf '%s\n' "$*"; }
++
++sha() {
++  if command -v sha256sum >/dev/null 2>&1; then
++    sha256sum "$1" | cut -d' ' -f1
++  else
++    shasum -a 256 "$1" | cut -d' ' -f1
++  fi
++}
++
++if [ ! -f "$BASE" ]; then
++  say "FAIL  base: patches/base/fleet_ops_check.py.orig is missing"
++  exit 1
++fi
++if [ ! -f "$CHAIN" ]; then
++  say "FAIL  chain: patches/fleet-ops-chain.sha256 is missing"
++  exit 1
++fi
++
++work=$(mktemp -d "${TMPDIR:-/tmp}/verify-patch.XXXXXX") || {
++  say "FAIL  chain: could not create a scratch directory"
++  exit 1
++}
++trap 'rm -rf "$work"' EXIT
++
++stages=0
++patches=0
++prev=""
++final_digest=""
++
++while read -r stage patch want; do
++  case "$stage" in
++    ''|'#'*) continue ;;
++  esac
++  if [ -z "${want:-}" ]; then
++    say "FAIL  chain: malformed line for stage '$stage' in patches/fleet-ops-chain.sha256"
++    fails=$((fails + 1))
++    continue
++  fi
++
++  if [ -z "$prev" ]; then
++    # base stage: seed the scratch tree with the shipped pristine module
++    mkdir -p "$work/patches/base"
++    cp "$BASE" "$work/patches/base/fleet_ops_check.py.orig" || {
++      say "FAIL  base: could not stage the shipped pristine module"
++      fails=$((fails + 1))
++      break
++    }
++    prev="patches/base/fleet_ops_check.py.orig"
++    got=$(sha "$work/$prev")
++    stages=$((stages + 1))
++    if [ "$got" = "$want" ]; then
++      say "PASS  base: patches/base/fleet_ops_check.py.orig is $got"
++    else
++      say "FAIL  base: shipped base is $got, recorded $want"
++      fails=$((fails + 1))
++      break
++    fi
++    continue
++  fi
++
++  pf="$HERE/$patch"
++  if [ ! -f "$pf" ]; then
++    say "FAIL  stage $stage: patch $patch is missing"
++    fails=$((fails + 1))
++    break
++  fi
++
++  target=$(grep -m1 '^+++ b/' "$pf" | sed 's|^+++ b/||')
++  if [ -z "$target" ]; then
++    say "FAIL  stage $stage: $patch names no target path"
++    fails=$((fails + 1))
++    break
++  fi
++
++  # carry the previous stage's output into this patch's own target path
++  if [ "$target" != "$prev" ]; then
++    mkdir -p "$(dirname "$work/$target")" 2>/dev/null || true
++    cp "$work/$prev" "$work/$target" || {
++      say "FAIL  stage $stage: could not carry the previous stage into $target"
++      fails=$((fails + 1))
++      break
++    }
++  fi
++
++  if ! ( cd "$work" && git apply "$pf" ) 2>"$work/.apply.err"; then
++    reason=$(tr '\n' ' ' < "$work/.apply.err")
++    say "FAIL  stage $stage: $patch did not apply (${reason:-no reason reported})"
++    fails=$((fails + 1))
++    break
++  fi
++
++  got=$(sha "$work/$target")
++  stages=$((stages + 1))
++  patches=$((patches + 1))
++  if [ "$got" = "$want" ]; then
++    say "PASS  stage $stage: $patch -> $got"
++  else
++    say "FAIL  stage $stage: $patch produced $got, recorded $want"
++    fails=$((fails + 1))
++    break
++  fi
++  prev="$target"
++  final_digest="$got"
++done < "$CHAIN"
++
++if [ "$stages" -eq 0 ]; then
++  say "FAIL  chain: no stages were read from patches/fleet-ops-chain.sha256"
++  fails=$((fails + 1))
++fi
++
++if [ "$fails" -eq 0 ] && [ -n "$final_digest" ]; then
++  if [ -f "$LIVE" ]; then
++    live_digest=$(sha "$LIVE")
++    if [ "$live_digest" = "$final_digest" ]; then
++      say "PASS  live: $LIVE matches the shipped chain ($stages stages, $patches patches, $live_digest)"
++    else
++      say "FAIL  live: $LIVE drifted — live $live_digest, shipped chain $final_digest; capture the edit as a patch (see patches/README.md)"
++      fails=$((fails + 1))
++    fi
++  else
++    say "SKIP  live: no script at $LIVE — chain verified against the recorded digests only"
++  fi
++fi
++
++if [ "$fails" -gt 0 ]; then
++  say "VERIFY-PATCH: FAIL ($fails failing arm(s))"
++  exit 1
++fi
++say "VERIFY-PATCH: PASS"
++exit 0
