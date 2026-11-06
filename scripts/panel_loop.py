@@ -275,15 +275,21 @@ def main() -> int:
 
     chapters = [c.strip() for c in args.chapters.split(",") if c.strip()] or None
     st = load_state()
+    # rounds=0 and max-seconds=0 mean NO CAP: the loop runs until a real stop
+    # condition fires (unanimous PASS, or two consecutive rounds with no new
+    # defect class). A cap is a budget for a session, not a definition of done.
+    rounds = args.rounds if args.rounds > 0 else 10**9
+    budget = args.max_seconds if args.max_seconds > 0 else 10**9
     rnd = args.start_round or (st["round"] + 1)
     t0 = time.time()
     PANEL.mkdir(parents=True, exist_ok=True)
 
-    print(f"panel loop: start round {rnd}, cap {args.rounds} rounds / {args.max_seconds}s")
+    print(f"panel loop: start round {rnd}, cap {rounds if rounds < 10**8 else 'none'} rounds / "
+          f"{budget if budget < 10**8 else 'none'}s")
     print(f"writer: {WRITER_MODEL} @ {WRITER_PROVIDER}")
     st["status"] = "running"
 
-    while st["round"] < args.rounds and (time.time() - t0) < args.max_seconds:
+    while st["round"] < rounds and (time.time() - t0) < budget:
         rnd = st["round"] + 1
         st["round"] = rnd
         save_state(st)
