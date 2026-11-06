@@ -120,7 +120,39 @@ scripts/boardctl validate
 bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 ```
 
-- **Re-measured 2026-11-06T00:06Z at tip `4d84d5a`:** 344 task rows, 462 events (max event id 461;
+- **Re-measured 2026-11-06T10:14Z at tip `2f07051`:** 350 task rows, 489 events (max event id 489;
+  one benign duplicate id 336, owned by **CF-196**) — 80 `complete`, 13 `in_progress`, 1 `blocked`,
+  256 `pending`, no duplicate task ids. Both board files are byte-identical to their `origin/main`
+  copies (`python3 scripts/board_drift.py check --workdir . --ref origin/main` prints `RESULT: OK`,
+  350 vs 350 rows, 0 divergent ids). `scripts/boardctl validate` prints `RESULT: OK (7 warning(s))` —
+  the six this block listed before plus **CF-371**'s title/priority drift (title says `P1`, the field
+  says `P3`) — and `key uniformity: 350/350 rows carry only canon keys (0 drift)`. 79 of the 80
+  `complete` rows bind a commit that exists and is an ancestor of `origin/main`; the exception is
+  **CF-245**, a verification closeout whose fix landed in the scheduler repo (`572b111f`) and whose
+  `commit_hash` is therefore `null` — the board has no field that expresses a close with no commit
+  in this repository, only free prose in `worker_summary`, and **CF-377** (filed in this commit) owns
+  giving it one. 88 evidence artifact pointers (79 unique paths) resolve at this tip: 86 as bare
+  paths, plus CF-034's anchored pointer `tests/selftest.sh::clone-error-classification`, whose file
+  part exists and whose anchor occurs once in that file; the 88th was **CF-372**'s bare
+  `verdict.json`, which named no path at all — this commit rebinds it to
+  `.gitreins/history/2026-11-06/df7b7412/verdict.json` (tracked, `task_id` CF-372, `passed` true),
+  so 88/88 resolve at this commit. `tests/selftest.sh` prints `SELFTEST: PASS` (rc 0) on a CLEAN
+  WORKTREE of this tip — `PASS 350/350 rows parse`, 358 `PASS` rows and 58 `FAIL` rows that all sit
+  inside negative fixtures — at loadavg 7.22 (1 min). The verdict-binding instrument this block
+  cites is committed, so it was re-run rather than re-implemented:
+  `python3 docs/audits/cf181-verdict-binding-sweep.py` prints
+  `ref=origin/main complete_rows=80 verdict_artifacts_checked=51 orphan_count=1`, and the single
+  orphan is **CF-077** (run `410022a2`, binding the pre-rewrite copy `1dfb58b8`), owned by pending
+  **CF-181** — so CF-181's AC0 reproduces as written (the same instrument measured 42 artifacts
+  across 70 complete rows in the snapshot below, 51 across 80 here; the delta is row growth, not a
+  changed rule). This commit also files CF-377 and
+  repairs CF-372's pointer, which takes the board to 351 rows / 490 events (80 `complete`, 13
+  `in_progress`, 1 `blocked`, 257 `pending`, max event id 490): a reader at this commit sees those
+  numbers, while the paragraph above is the published tip they were measured at. Three sibling rows
+  still own the structural fixes for this block: **CF-081** (the hand-typed counts and the hand-typed
+  tip label), **CF-154** (the warning count does not follow from the board) and **CF-196** (duplicate
+  event ids).
+- **Earlier snapshot, 2026-11-06T00:06Z at tip `4d84d5a` (historical, not current):** 344 task rows, 462 events (max event id 461;
   one benign duplicate id 336, owned by **CF-196**) — 70 `complete`, 14 `in_progress`, 260 `pending`,
   no duplicate task ids. Both board files are byte-identical to their `origin/main` copies
   (`python3 scripts/board_drift.py check --workdir . --ref origin/main` prints `RESULT: OK`,
