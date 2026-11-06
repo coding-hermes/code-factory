@@ -1,0 +1,163 @@
+│ cache/scratch/ffc_probe.sh
+│ @@ -0,0 +1,7 @@
+│ +#!/usr/bin/env bash
+│ +set -u
+│ +HERE=/home/kara/code-factory/scripts
+│ +. "$HERE/lib.sh"
+│ +fetch_verified "http://127.0.0.1:1/nothing" "/home/kara/.hermes/cache/scratch/ffc_artifact.bin" "deadbeef"
+│ +echo "rc=$?"
+│ +[ -e "/home/kara/.hermes/cache/scratch/ffc_artifact.bin" ] && echo "ARTIFACT LEFT" || echo "no artifact left"
+All checks complete. ~130 line-level citations re-verified against the five codebases, every chapter's test battery re-run, both Go repos built and tested, one probe script executed. Verdict follows.
+
+```
+VERDICT: FAIL
+
+BLOCKING: 4 — findings that must be fixed before the named chapter can be called written
+
+NON-BLOCKING: 8
+
+FINDINGS:
+
+BLOCKING
+
+1. kind UNVERIFIED — chapter M12 (§12 cross-reference; §6 contract M12-C1)
+   Claim quoted: "M2 DISPATCH (node) is the client that reaches the proxy over the tailnet";
+   M12-C1 producer cell: "node `POST /v1/chat/completions` with `Authorization: Bearer ***"
+   with state "works".
+   Evidence: `grep -rn '8775|proxy|PROXY|CF_PROXY'` over code-factory scripts/, config/,
+   specs/ returns nothing (run this round) — no node file references the proxy at all; the
+   producer side names no file:function; the row is also malformed (a pipe inside backticks
+   splits the cell; `***` is an unexplained redaction). The proxy-side half (401 at :128-130,
+   allowlist 403 at :155-160) is verified; the client half is asserted, not shown.
+   Fix: name the node-side producer file:function (or restate the producer as the
+   operator-configured CF_BASE_URL boundary and quote the empty grep as proof), and repair
+   the table row. "Works" may not stand on one measured side.
+
+2. kind UNVERIFIED (one-sided internal contract) — chapter M3 (§6, M3-C2)
+   Claim quoted: producer = "rumour — one side only (the node's result envelope
+   `branch`/`commit`; no producer file:function named)".
+   Evidence: the producer exists and is already cited by M2 §6 — node-bus-worker.py:1128-1144
+   builds the result envelope; `branch`/`commit` are its `git_field(...rev-parse...)` entries
+   (re-read this round). Both sides of this contract live inside the five systems; leaving
+   one unnamed is a rumour by the panel's own rule.
+   Fix: one cell — cite node-bus-worker.py:1141-1142 as the producer.
+
+3. kind UNVERIFIED (classification evidence is not an invoking line) — chapter M1 (§3)
+   Claim quoted: S1 "disk_floor.py:144 `main()` is the CLI entrypoint; invoked by
+   bunker-provision.sh"; S4 "node_seed.py runs inside bunker-provision --apply
+   (docs/UNIT-MAP.yaml:64)".
+   Evidence: OUTLINE §III.3 requires the invoking `file:line` or an absence proof by quoted
+   grep. `main()` at disk_floor.py:144 is a definition, not an invocation; UNIT-MAP.yaml:64
+   is a document, not code. No line of bunker-provision.sh calling disk_floor.py or
+   node_seed.py is cited anywhere in the chapter.
+   Fix: cite the actual call lines inside bunker-provision.sh, or quote the grep proving
+   absence. The chapter's own note ("S1–S4 unit bodies are UNVERIFIED this round") confirms.
+
+4. kind CONTRADICTION (field-contract violation) — chapters M5, M9, M10 (§1 Status)
+   Claim quoted: M5 "Status: VERIFIED — … the remaining installer bodies not read
+   line-by-line"; M9 and M10 "Status: PARTIAL".
+   Evidence: MASTER-DOC-SCHEMA §1 enumerates Status as `VERIFIED` / `UNVERIFIED` / `FAILING`
+   — never blank, never anything else. "PARTIAL" is not in the vocabulary, and M5's VERIFIED
+   covers the same epistemic state (units admitted unread) that M1 stamps UNVERIFIED. Three
+   chapters, one situation, three different words.
+   Fix: one convention — unread bodies ⇒ UNVERIFIED for the module, with a scoped note
+   naming what IS verified; reserve FAILING for measured breaks.
+
+NON-BLOCKING
+
+5. kind OMISSION — chapter M2 (§9): two log rows for a 1498-line active worker. No
+   grep-derived inventory offered. Fix: derive §9 from a quoted grep of the logging calls.
+
+6. kind OMISSION — chapter M6 (§6, M6-C2): producer "the render pipeline, no function" —
+   gen_nasa_handbook.py is in M6's own unit list and can fill the producer side; only the
+   consumer (owner approval) is genuinely external. Fix: name the render entry function.
+
+7. kind UNVERIFIED (rule 4 — I could not repeat these either; each is honestly marked):
+   M1 §7 certification ladder and M2 §7 / M10 §7 cf-node bus ladder (verified: no
+   ~/node-bus-worker.py on this host), M5 §7 conformance legs, M7 §7 token mint (no App
+   credentials on this host), M12 §7 live admission (proxy not started). These must run
+   before their modules may carry VERIFIED.
+
+8. kind OMISSION-adjacent, chapter correct — M11 §7/F11-2: confirmed by grep —
+   tests/test_durable_job.py contains no assert/raise/exit, so the "live job tests" cannot
+   fail; the chapter's UNVERIFIED row is right and the tests themselves are decoration until
+   they assert (board-row material, not a chapter defect).
+
+9. Documented system defects, reproduced this round (chapters already carry them with
+   evidence — board rows, not doc gaps): CF-354 (node reads `text` at node-bus-worker.py:986
+   vs scheduler emits `text_b64` at bus/dispatch.go:202 — both read verbatim); CF-355
+   (dispatchReplyVerdict :713-726 returns success when `ok` is absent — read verbatim);
+   SCHED-GAP-1726 (go test ./internal/scheduler reproduced: rc 1, goroutine parked in
+   evalDrain, 157.6s); lint-gate pass-through (ruff confirms F841 at panel_loop.py:114);
+   gitleaks hook exit-0 hole (install-gitreins.sh:130-132); landing gate empty by default
+   (land-node-branch.sh:36, :171-193).
+
+10. kind UNBUILDABLE-adjacent, systemic — M6 (§7/F6-1): the doc gate's `[0-9][0-9]-*.md`
+    glob (master_doc_check.py:188) cannot select these `M*.md` chapters, so the handbook's
+    own gate cannot certify the part of the handbook this loop is writing. Already filed;
+    the fix is a gate change, not a chapter change — but WRITTEN status for chapters/ is
+    currently un-gateable by machine.
+
+11. PADDING hunt: none found. Every §5 settings row tested carries default + range +
+    consequence; NAME ONLY count: 0. Log lines are classified descriptive/evidentiary with
+    the distinction load-bearing (F0-4).
+
+12. Rumour states that are honest boundaries (verified, not defects): M4-C1 — grep shows no
+    in-repo producer invoking `boardctl create` (only board_lock.py:100 and
+    gen_unit_map.py:45 reference the name), so the foreman→board producer genuinely lives
+    outside this repo; M0-C1/M1-C2 (bunker CLI), M7-C1 (GitHub), M12-C2 (upstream gateway)
+    are external peers with no file:function to name. Correctly measured.
+
+DEFECT CLASSES:
+- one-sided-internal-contract (nameable side left as rumour)
+- unproven-cross-reference (client asserted without a cite)
+- classification-evidence-not-invoking-line (definitions/docs standing in for call sites)
+- status-vocabulary-drift (field contract violated: PARTIAL, scoped-VERIFIED)
+- credential/live-node-gated-unrepeatable checks
+- admitted-incomplete-inventory (grep-level reads of large bodies)
+- gate-cannot-select-its-own-chapters
+- decorative-tests (print without assert)
+
+CHAPTER SCORECARD:
+- M0  WRITTEN — 13/13 headings; every predicate and grep re-verified true ([0-7]00 vs
+  "must be 600", non-emptiness vs set-ness, 11/17 sourcers, codex divergence); fail-closed
+  fetch repeated (rc 1, no artifact).
+- M1  PARTIAL — S1–S4 bodies unread (own admission); classification evidence not invoking
+  lines (finding 3); cert ladder unrepeatable here.
+- M2  WRITTEN — contract spine verified exactly (constants :80-84/:111-114, text refusal
+  :986-991, reply fields :1128-1144 verbatim, dispatch_wall no-clamp, PID 1755676 hardcode);
+  §9 thin (finding 5).
+- M3  PARTIAL — every claim verified (GATE="" default, gate-only-when-set, explicit-object
+  push + ancestry proof, lane-ROW clone with enabled=0/local repo_url, arm-51 F841
+  reproduced); blocked only by the M3-C2 producer cell (finding 2).
+- M4  WRITTEN — 357 rows / 515 events re-counted, drift RESULT: OK, duplicate-id refusal
+  reproduced verbatim, evidence-run-id rule confirmed at --help:25.
+- M5  PARTIAL — resolver-not-wired and opencode check-only verified true; three installer
+  bodies unread; status word over-claims (finding 4).
+- M6  PARTIAL — gate FAIL reproduced (44 modules, 37 VERIFIED, 50 errors, exit 1); panel
+  path staleness verified; its own gate cannot grade chapters/ (finding 10).
+- M7  PARTIAL — settings register fully verified (60/540/20, min-age 2400, if-older 0,
+  exit-2 bare invoke); mint unrepeatable without App credentials.
+- M8  WRITTEN — both files read in full, all cites exact; .cf-jobs reaper gap real
+  (AGED_PARENTS = .node/{jobs,clones} only).
+- M9  PARTIAL — settlement/envelope/config/metrics cites all verified (30 tables, board not
+  board_row, absence-is-success premise verbatim); S1/S5 grep-level; go-test FAIL
+  reproduced, not a doc defect.
+- M10 PARTIAL — config defaults block verified (metrics default-ON, sig conditional,
+  8767/8770); 1895-line handler §6 admitted non-exhaustive; status word off-vocabulary.
+- M11 WRITTEN — read in full; every spot-check exact (task_seconds floor, serial loop,
+  ledger-after-run ordering, reply body with error_b64, all 16 log lines).
+- M12 PARTIAL — proxy side fully verified against the sha256-stamped file (admission,
+  rewrite, mid-stream no-502, lying FATAL message); node-client side unproven (finding 1).
+
+Score: 5 WRITTEN, 8 PARTIAL, 0 SKELETON. Zero FALSE CLAIMs in ~130 re-verified citations —
+the round-3 chapters describe the code as it is. The FAIL is narrow: four fixable defects
+(one contract cell, one cross-reference, one set of call-site cites, one status
+convention), not a rewrite.
+```
+
+PANEL REVIEW COMPLETE
+
+session_id: local-f2b05d177ed315d3a12eb87e79a7bd603cdf926a017f2503c07254b5503f1546
+
+EXIT=0

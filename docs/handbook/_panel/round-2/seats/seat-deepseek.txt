@@ -1,0 +1,78 @@
+All verification complete. I read all 13 chapters, the outline, the schema, and re-verified the load-bearing claims against the five codebases with my own commands. Here is the verdict.
+
+---
+
+VERDICT: FAIL
+
+BLOCKING: 6 — findings that must be fixed before these chapters can be called written
+
+NON-BLOCKING: 2
+
+FINDINGS:
+
+BLOCKING
+
+1. FALSE CLAIM — M0–M12 (writer manifest) — "every §6 contract now names producer file:function AND consumer file:function."
+   Evidence: the both-sides rule (brief rule 2; schema §3c line 56 "a contract with one side named is a rumour") is still violated by the residual one-sided rows I measured. M9-C1 names NEITHER side — producer "operator config", consumer "scheduler config load" (M9-scheduler.md §6). M3-C2 producer "the node's result envelope (branch, commit)" is not a file:function. M5-C1 consumer "per-leg verdict" is not a file:function. M7-C1 consumer "github.com App installation". M8-C1 consumer "the target roots it enumerates". M0-C1 consumer "the bunker binary the CLI invokes". M12-C1/M12-C2 consumer is a protocol description, not a function. The fix was claimed complete in the manifest ("every §6 contract now names both") when ~8 rows still have a name-only side.
+   Fix: either put the real producer/consumer file:function on every remaining row (the producer side of M9-C1 is findable — the config-load path in the scheduler; the consumer side of M12-C2 is the upstream handler), or mark each remaining row honestly as one-sided instead of claiming the rule is satisfied.
+
+2. OMISSION — M9 — Settings register is empty. M9 §5 reads "config.example.toml is the register … its individual keys were not read line-by-line this round."
+   Evidence: zero default/range/consequence rows for the scheduler, whose intervals, weight budget, max_concurrent and tick timeout are the outline's Part V.6. Under the outline's decision rule ("a name with no consequence is NAME ONLY and counts as unwritten"), every scheduler setting is still unwritten. This is the round-1 "missing settings register" finding, fixed for the node-side chapters (M0/M2/M5/M8/M11/M12 now carry real registers) but deferred for the one module that most needs it.
+   Fix: read config.example.toml and emit the register, or mark the whole M9 settings surface RED rather than deferring it.
+
+3. OMISSION — M9, M10 — the scheduler/crier core authorities are still contract-table entries, not systems. M9 S1 (admission_mode, tick_process, packer_select, namespace_alloc, usage_pool_policy) and S5 (doctrine) are "named by OUTLINE M9.S1" with no source read; M10 S1 (handler.go, 1895 lines) and S2 (the guard) are "not read this round". I confirmed: `grep -c admission_mode M9-scheduler.md` = 1 (the outline-derived name only).
+   Evidence: the v1→v2 correction's whole point (OUTLINE.md lines 6-9) was to stop documenting the scheduler/bus/dispatcher/proxy "as entries in a contract table rather than as systems." M9 now reads only settlement (dispatch_leg.go:260-336, :713-726) and dispatch.go; the admission authority — the scheduler's reason to exist — is unread. The crier guard, the security-critical path, is unread. Round 1's largest single finding is half-addressed.
+   Fix: read admission_mode/tick_process and the guard; classify them with invoking file:line, or drop M9/M10 to honest SKELETON instead of PARTIAL.
+
+4. UNVERIFIED — M9 — revision stamp stale. M9 §1 stamps `dfa9c84f`; the scheduler HEAD is now `1771d3aa` (measured). I confirmed dfa9c84f is an ancestor but 2 commits behind, and that no commit since touched dispatch_leg.go (so the cited lines still hold), but the stamp violates schema §1 ("one revision per document issue") and sol's rule that "any locator written into an external repo must carry the external repo's own HEAD."
+   Fix: re-stamp at the current scheduler HEAD and re-verify the two cited ranges.
+
+5. OMISSION — the document as a whole — Parts I, II (16 flows), IV (18 contracts), V (~83 env vars, ~215 CLI switches), VI (risk), VII (work derivation), VIII (delivery mechanisms) have no chapters. Only Part III (13 module chapters) exists.
+   Evidence: OUTLINE.md commits to 8 parts; 7 are unwritten. The flows (F1–F16) named as the panel's largest finding, the 18-contract register (OUTLINE §IV still says "0 of 18 name both implementations"), and the settings register at scale have no home. This was grok #9 in round 1 and was neither fixed nor rejected.
+   Fix: either write those parts or get an explicit quorum ruling that this round's deliverable is Part III only; as written the handbook is 1/8 of its own structure.
+
+6. OMISSION — M1/M6/orphan — `scripts/ownership.py` (5606 bytes, added at HEAD 943ef98, the "ops: ownership tooling" commit) is in no chapter and no UNIT-MAP entry.
+   Evidence: `grep -rl ownership.py docs/handbook/chapters/` → no match; `grep -c ownership docs/UNIT-MAP.yaml` → 0. Per the outline's scope rule ("anything a run does reach that this outline has no home for is a defect and gets a chapter"), the unit is orphaned. This is round-1 deepseek #14, unfixed.
+   Fix: classify ownership.py into a submodule inventory (or explicitly rule it out of scope with a reason).
+
+NON-BLOCKING
+
+7. Metrics RED in 11 of 13 chapters (M0–M8, M11, M12). This is the honest, schema-mandated answer ("none" is RED), and I confirmed the honesty is real (only M9 server_metrics.go and M10 metrics.go were actually measured). But the observability gap stands: dispatch/settlement/landing rate, refusal count and latency are all answered by grepping logs. Not a defect in the writing; a defect in the systems it describes, which the chapters correctly report.
+
+8. CONTRADICTION (spec-vs-spec, unresolved) — M5 §3 files the UNIT-MAP(3) vs OUTLINE(5) submodule split as a parenthetical. Round-1 grok #17 asked it be a board row; it was not. The two structure maps still disagree with no reconciliation, so a reader cannot tell which submodule inventory is authoritative.
+
+DEFECT CLASSES:
+
+one-sided-contract-residual · overclaimed-fix · empty-settings-register · unread-core-authority · stale-external-stamp · missing-parts · orphaned-unit · red-observability · spec-vs-spec-unreconciled
+
+WHAT I VERIFIED AS TRUE (so the next round keeps it):
+
+- All 22 new findings F0-1..F12-2 are accurate. I independently confirmed each: F0-1 bunker_exec is a bunker CLI call (lib.sh:75-78), not crier; F0-4 lib.sh:6-7 print unconditionally (descriptive, not evidentiary); F1-1 provisioner resolves bunker via `have` (PATH) while :233 prints "mode 600" over a `[ -s ]` probe; F2-1 node imports urllib not crier_client; F3-1 clone_lane refuses same-lane before sqlite3.connect; F8-1 reclaim_disk HAS the age gate (--job-ttl-hours 24); F9-2 scheduler.db is 30 tables / 0 verdicts; F10-1 crier auth order is headers→lookup→caller→timestamp→key→sig, not sig-first; F11-2 the dispatcher test scripts print without asserting; F12-2 the proxy carries a CONTRACT section at :9-19.
+- CF-354 both sides: `dispatch.go:202` emits `text_b64`; `node-bus-worker.py:986` reads `dispatch.get("text")`; `grep -c text_b64 node-bus-worker.py` = 0.
+- CF-355 both sides: node sends `status` at :1132; `dispatchReplyVerdict` (dispatch_leg.go:713-726) reads only `payload["ok"]`, absence = SUCCESS.
+- Line cites exact for lib.sh (:5-9, :13, :19-42, :48-57, :60-64, :67-70, :75-78), harness-vars.sh (:34, :66, :176-192, :218-220, :276-292), land-node-branch.sh, install-gitreins.sh, clone_lane.py (:38-45/:65-68), reclaim_disk.py (:42/:46-47/:90-92/:104-111), master_doc_check.py (:52/:188/:191-209), dispatcher.py (:43/:46/:48/:52-53/:60/:142-150/:365-374/:470-475/:500-519), cf-inference-proxy.py (:9-19/:43/:45/:48/:53-54/:58-62/:115-123/:154-160/:164-180/:204/:237/:265-270).
+- Measured values all reproduce: bash 5.3.9, python 3.14.9, go 1.26.5; lib.sh 78 / harness-vars.sh 318 / land-node-branch.sh 295 / install-gitreins.sh 180 / clone_lane.py 130 / node-bus-worker.py 1498 / reclaim_disk.py 169 / master_doc_check.py 268 / harness_resolve.py 400 / install-hermes.sh 375 / cf-inference-proxy.py 273 / dispatcher.py 538; board 357 rows / 515 events; boardctl exactly 20 subcommands; crier config.go:622 = 8767, crier-front:39 = 127.0.0.1:8770, crier go.mod = 1.26.10, crier_client deliver:975/retrieve:1009/ack:1038.
+
+CHAPTER SCORECARD:
+
+- M0 shared-contract — PARTIAL. Line-accurate and the four findings F0-1..F0-4 are all true, but M0-C1 is one-sided and metrics RED.
+- M1 provisioning — PARTIAL. Honest UNVERIFIED status; F1-1 true; M1-C1 one-sided; metrics RED.
+- M2 dispatch — PARTIAL. CF-354/355 verified on both sides; contracts now name both producer and consumer file:function (the best contract rows in the set); RED metrics only.
+- M3 repository — PARTIAL. Strongest chapter: every cited line exact, CF-357 fix reproduced, dry-run fixture reproduced; held back by the one-sided M3-C2 and RED metrics.
+- M4 board — PARTIAL. Store counts and drift reproduced; verb count now correct at 20; RED metrics.
+- M5 harness — PARTIAL. F5-1 true; the UNIT-MAP/OUTLINE split unresolved; M5-C1 one-sided; RED metrics.
+- M6 documentation — PARTIAL. Gate state re-run and correct (44/37/50, FAIL, exit 1); F6-1 true; RED metrics.
+- M7 github — PARTIAL (thin). CLI surface measured (exit 2, no mint) and correct; but all three script bodies unread; M7-C1 one-sided; RED metrics.
+- M8 safety — PARTIAL. reclaim_disk read in full, F8-1/F8-2 true; M8-C1 one-sided; RED metrics.
+- M9 scheduler — PARTIAL. Settlement/verdict read and CF-355 correctly located; but S1/S5 unread, settings register empty, stamp 2 commits stale.
+- M10 crier — PARTIAL. Auth order and client surface read and correct; but handler.go (1895 lines) and the guard unread.
+- M11 dispatcher — PARTIAL. Read in full, every cite exact, F11-1/F11-2 true; M11-C2 one-sided; RED metrics.
+- M12 inference-proxy — PARTIAL. Read in full, F12-1/F12-2 true, CONTRACT section correctly identified; M12-C1/C2 one-sided; RED metrics.
+
+Bottom line: the round-2 rewrite is a genuine, measurable improvement — the line cites are precise, all 22 filed findings are true, the four missing headings were added, and M9/M10 were promoted from SKELETON with real source reads. But the document is not written. The both-sides contract fix was overclaimed, the scheduler's admission authority and crier's guard remain unread, the scheduler's settings register is deferred, seven of the outline's eight parts have no chapter, and a unit added at HEAD is orphaned. None of the 13 chapters is WRITTEN.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-c29e07941c9b53e85f353b3f9f1b6e51a542923ddb6d0c77f7351f19aee4ff0a
+
+EXIT=0

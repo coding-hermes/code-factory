@@ -1,0 +1,638 @@
+│ cache/scratch/round5_independent_probes.py
+│ @@ -0,0 +1,124 @@
+│ +import ast
+│ +import contextlib
+│ +import http.client
+│ +import importlib.util
+│ +import io
+│ +import json
+│ +import os
+│ +from pathlib import Path
+│ +import signal
+│ +import subprocess
+│ +import tempfile
+│ +import threading
+│ +import time
+│ +from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+│ +
+│ +ROOT = Path('/home/kara/code-factory')
+│ +BASE = Path(tempfile.mkdtemp(prefix='quorum-r5-', dir='/home/kara/.hermes/cache/scratch'))
+│ +print('probe_root=' + str(BASE), flush=True)
+│ +
+│ +# Static inventories, independently derived, never read earlier seat verdicts.
+│ +chapters = sorted((ROOT / 'docs/handbook/chapters').glob('M*.md'))
+│ +print('chapter_count=' + str(len(chapters)))
+│ +for expr in [r'\. "\$HERE/lib\.sh"', r'\. "\$HERE/(\.\./)?lib\.sh"']:
+│ +    import re
+│ +    found = [str(p.relative_to(ROOT)) for p in (ROOT/'scripts').rglob('*') if p.is_file() and re.search(expr, p.read_text(errors='replace'))]
+│ +    print('source_count ' + expr + ' = ' + str(len(found)))
+│ +main = Path('/home/kara/coding-hermes-scheduler/coding-herms-scheduler/cmd/schedulerd/main.go').read_text()
+│ +flags = re.findall(r'flag\.(?:String|Int|Int64|Bool|Duration|Float64)\("([^\"]+)"', main)
+│ +print('schedulerd_declared_flags=' + str(len(flags)))
+│ +print('proxy_sink_constants=' + repr([line for line in Path('/home/kara/.hermes/scripts/cf-inference-proxy.py').read_text().splitlines() if line.startswith(('USAGE_LOG =','CAPTURE_LOG ='))]))
+│ +
+│ +# Repeat the cheap documented unit checks; isolate all generated caches/temp files.
+│ +env = dict(os.environ, TMPDIR=str(BASE), PYTHONPYCACHEPREFIX=str(BASE/'pycache'))
+│ +for name in ['disk_floor', 'lane_target', 'harness_resolve', 'reclaim']:
+│ +    result = subprocess.run(['python3', '-B', 'tests/test_' + name + '.py'], cwd=ROOT, env=env, capture_output=True, text=True, timeout=60)
+│ +    print('REPEAT test_' + name + ' rc=' + str(result.returncode))
+│ +    print((result.stdout + result.stderr).strip())
+│ +
+│ +# Isolate the actual proxy implementation on ephemeral loopback ports with fake credentials.
+│ +spec = importlib.util.spec_from_file_location('r5_proxy', '/home/kara/.hermes/scripts/cf-inference-proxy.py')
+│ +proxy = importlib.util.module_from_spec(spec)
+│ +spec.loader.exec_module(proxy)
+│ +payload = b'data: {"ok":true}\n\ndata: [DONE]\n\n'
+│ +class Upstream(BaseHTTPRequestHandler):
+│ +    def do_POST(self):
+│ +        self.rfile.read(int(self.headers['Content-Length']))
+│ +        self.send_response(200)
+│ +        self.send_header('Content-Type', 'text/event-stream')
+│ +        self.send_header('Content-Length', str(len(payload)))
+│ +        self.end_headers()
+│ +        self.wfile.write(payload)
+│ +    def log_message(self, *args):
+│ +        pass
+│ +up = ThreadingHTTPServer(('127.0.0.1', 0), Upstream)
+│ +relay = ThreadingHTTPServer(('127.0.0.1', 0), proxy.Handler)
+│ +proxy.UPSTREAM = 'http://127.0.0.1:' + str(up.server_port)
+│ +proxy.UPSTREAM_MODEL = ''
+│ +proxy.upstream_key = lambda: 'fixture-only-not-a-real-key'
+│ +proxy.load_tokens = lambda: {'fixture-node': 'fixture-token'}
+│ +proxy.USAGE_LOG = BASE/'usage.jsonl'
+│ +proxy.CAPTURE_LOG = BASE/'capture.jsonl'
+│ +for server in (up, relay):
+│ +    threading.Thread(target=server.serve_forever, daemon=True).start()
+│ +conn = http.client.HTTPConnection('127.0.0.1', relay.server_port, timeout=0.5)
+│ +try:
+│ +    conn.request('POST', '/v1/chat/completions', body=json.dumps({'model':'hermes','stream':True,'messages':[]}), headers={'Authorization':'Bearer fixture-token','Content-Type':'application/json'})
+│ +    response = conn.getresponse()
+│ +    received = response.read(len(payload))
+│ +    print('PROXY healthy_stream status=' + str(response.status) + ' bytes_match=' + str(received == payload) + ' headers=' + repr(response.getheaders()))
+│ +    try:
+│ +        extra = response.read(1)
+│ +        print('PROXY healthy_stream eof=' + repr(extra))
+│ +    except TimeoutError:
+│ +        print('PROXY healthy_stream EOF_TIMEOUT (upstream already completed)')
+│ +finally:
+│ +    conn.close()
+│ +    relay.shutdown()
+│ +    up.shutdown()
+│ … omitted 46 diff line(s) across 1 additional file(s)/section(s)
+│ cache/scratch/round5_verifier_probe.py
+│ @@ -0,0 +1,63 @@
+│ +from pathlib import Path
+│ +import os
+│ +import subprocess
+│ +import tempfile
+│ +
+│ +root = Path('/home/kara/code-factory')
+│ +base = Path(tempfile.mkdtemp(prefix='quorum-r5-verify-',dir='/home/kara/.hermes/cache/scratch'))
+│ +bin_dir = base/'bin'
+│ +bin_dir.mkdir()
+│ +def executable(name, text):
+│ +    p = bin_dir/name
+│ +    p.write_text(text)
+│ +    p.chmod(0o700)
+│ +executable('bunker', '''#!/bin/sh
+│ +case "$*" in
+│ + *'echo ALIVE'*) printf 'ALIVE fixture\n' ;;
+│ + *'hostname -I'*) printf '127.0.0.1\n' ;;
+│ + *) exit 1 ;;
+│ +esac
+│ +''')
+│ +executable('curl', '''#!/bin/sh
+│ +case "$*" in
+│ + *'/api/status'*)
+│ +  dest=""
+│ +  while [ "$#" -gt 0 ]; do
+│ +   if [ "$1" = -o ]; then dest="$2"; break; fi
+│ +   shift
+│ +  done
+│ +  printf '{"auth_required":true}\n' > "$dest"
+│ +  printf 200 ;;
+│ + *'/api/system/stats'*) printf 401 ;;
+│ + *) exit 1 ;;
+│ +esac
+│ +''')
+│ +executable('python3', '''#!/bin/sh
+│ +case "$*" in
+│ + *node_freshness.py*) printf 'RESULT: UNVERIFIED fixture checkout unavailable\n' >&2; exit 3 ;;
+│ + *node_seed_drift.py*) printf '  PASS  seed_drift — fixture seed matches\n' >&2; exit 0 ;;
+│ + *) exit 99 ;;
+│ +esac
+│ +''')
+│ +# Keep the tested shell intact except relocating its fixed /tmp status sink into scratch.
+│ +# No production files or live node are touched.
+│ +source = (root/'scripts/verify-node.sh').read_text().replace('HERE="$(cd "$(dirname "$0")" && pwd)"', 'HERE="/home/kara/code-factory/scripts"').replace('/tmp/node-status.json', str(base/'node-status.json'))
+│ +probe = base/'verify-node.sh'
+│ +probe.write_text(source)
+│ +env = dict(os.environ, PATH=str(bin_dir)+':'+os.environ['PATH'], TMPDIR=str(base))
+│ +for extra in ([],['--strict-freshness']):
+│ +    result = subprocess.run(['bash',str(probe),'--agent','fixture','--server','fixture',*extra],env=env,capture_output=True,text=True,timeout=10)
+│ +    print('VERIFIER FIXTURE ' + repr(extra) + ' rc=' + str(result.returncode))
+│ +    print(result.stdout + result.stderr)
+│ +# Exercise the actual lib.sh helper on a loopback-refused URL.
+│ +helper = base/'fetch-refusal.sh'
+│ +helper.write_text('''#!/bin/bash
+│ +. /home/kara/code-factory/scripts/lib.sh
+│ +fetch_verified http://127.0.0.1:1/nothing "$1" deliberately-wrong-digest
+│ +rc=$?
+│ +printf 'fetch_rc=%s artifact_present=' "$rc"
+│ +if [ -e "$1" ]; then printf 'yes\n'; else printf 'no\n'; fi
+│ +''')
+│ +result = subprocess.run(['bash',str(helper),str(base/'artifact')],env=dict(os.environ,TMPDIR=str(base)),capture_output=True,text=True,timeout=10)
+│ +print(result.stdout+result.stderr)
+│ +print('FIXTURE_ROOT=' + str(base))
+VERDICT: FAIL
+BLOCKING: 25 — findings that prevent the affected chapters from being called WRITTEN
+NON-BLOCKING: 1
+
+FINDINGS:
+
+Review basis:
+  Read all 13 chapters, OUTLINE.md and MASTER-DOC-SCHEMA.md. Checked claims against the implementations, not previous seat verdicts.
+
+  Source revisions verified:
+    code-factory: 943ef984dc093e5780605ac6e54cd043122126ef
+    scheduler: 1771d3aad61e6c1ce2845e3f1450f88aa73340b3
+    crier: 691f0c78fc75717295abf3bd85aaa9192616aac0
+    crier-fleet: 283bca91091933177ec521e52f37f1bc987cf7da
+    inference proxy SHA-256: b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5
+
+  Path abbreviations below:
+    CF = /home/kara/code-factory
+    SCH = /home/kara/coding-hermes-scheduler/coding-herms-scheduler
+    CR = /home/kara/crier
+    DISP = /home/kara/crier-fleet
+    PX = /home/kara/.hermes/scripts/cf-inference-proxy.py
+    Chapter references are files under CF/docs/handbook/chapters/.
+
+  Independently repeated:
+    disk_floor: 12 tests, PASS.
+    lane_target: 40 tests, PASS.
+    harness_resolve: 28 tests, PASS.
+    reclaim: 9 tests, PASS.
+    boardctl validate: 357 tasks, 515 events, RESULT: OK with 7 warnings.
+    board_drift: RESULT: OK, board bytes match origin/main.
+    verify-patch: PASS, four stages and three patches.
+    default documentation gate: 44 modules, 37 declared VERIFIED, 50 errors, exit 1.
+    gate explicitly targeting chapters/: zero selected modules, exit 1.
+    handbook renderer: “no modules found”, exit 1.
+    live proxy without a token: HTTP 401.
+    GitHub minter without a subcommand: usage, exit 2.
+
+  Additional offline probes exercised the actual proxy handler, the dispatcher's generated runner template, and the verifier's decision branches with disposable stand-ins. They used no production credentials and dispatched no real work.
+
+  I did not repeat the full Go suites, live node certification, live conformance battery or GitHub token mint. Their historical PASS claims are not new execution evidence from this review.
+
+B01 — FALSE CLAIM
+  Chapter: M11-dispatcher.md, §2/§3/§11.
+  Claim: “kill the process group on deadline”; the durable job model is presented as ensuring descendants stop with the job.
+
+  Evidence:
+    DISP/dispatcher.py:246-260 explicitly starts GNU timeout in its own process group.
+    DISP/dispatcher.py:328-330 kills the group identified by run.sh's pid, not the separate timeout group recorded in hpid.
+    My disposable execution of the actual runner template produced distinct runner and timeout process groups. After terminating the runner group, the timeout process was still live:
+      distinct=True
+      timeout_still_live=True
+
+  Fix:
+    Document the two process groups and the surviving-harness failure mode. Withdraw the descendant-termination guarantee until a test proves that the deadline path kills the harness group and its children. The corresponding implementation repair must target the supervised execution boundary, not merely run.sh's group.
+
+B02 — FALSE CLAIM
+  Chapter: M5-harness.md:40-42.
+  Claim: The installers are operator-invoked; the source search finds no production invocation, and “all five run by an operator, not a unit.”
+
+  Evidence:
+    CF/scripts/project-node.sh:440 constructs:
+      inst="$HERE/harness/install-$HARNESS.sh"
+    CF/scripts/project-node.sh:449-452 invokes that installer with --apply or --check.
+    CF/scripts/node-create.sh:24,31 also constructs the selected installer path for staging.
+    A literal search for “install-hermes” misses these computed call sites.
+
+  Fix:
+    Correct the invocation graph and classifications. Name project-node.sh's layer-20 dispatch as the caller and distinguish installation orchestration from the operator who initially starts provisioning. Search computed paths before asserting that no caller exists.
+
+B03 — FALSE CLAIM
+  Chapter: M12-inference-proxy.md:65-66.
+  Claim:
+    USAGE_LOG = ~/.hermes/logs/cf-usage.jsonl
+    CAPTURE_LOG = ~/.hermes/logs/cf-capture.jsonl
+
+  Evidence:
+    PX:50:
+      /home/kara/.hermes/logs/cf-inference-usage.jsonl
+    PX:52:
+      /home/kara/.hermes/logs/cf-inference-requests.jsonl
+    These are the constants in the exact file whose hash the chapter correctly records.
+
+  Fix:
+    Replace both paths in the settings register. Identify them as hardcoded paths, not configurable environment settings. An operator following the current register looks in the wrong files for attribution and request capture.
+
+B04 — FALSE CLAIM
+  Chapter: M4-board.md:130.
+  Claim: “M9 SCHEDULER and M10 CRIER read board rows as admission gates.”
+
+  Evidence:
+    SCH/internal/scheduler/admission_mode.go:230-242 performs the board-ownership/workability admission decision.
+    CR/internal/registry/handler.go:1690 and its retrieval implementation operate on inbox messages and leases.
+    A source search across Crier's Go files found no matches for tasks.jsonl, board_ownership, boardWorkable or board/admission terminology.
+
+  Fix:
+    Assign board-driven scheduling admission to M9. Describe M10's actual transport, authentication and guard admission separately. Do not give the bus responsibility for the scheduler's board gate.
+
+B05 — OMISSION
+  Chapter: M1-provisioning.md, §10/§11.
+  Claim: The certification ladder describes checkout unmeasurability as WARN and the final FAIL/UNVERIFIED precedence, but omits that checkout unmeasurability can still finish as VERIFY: PASS.
+
+  Evidence:
+    CF/scripts/verify-node.sh:145-151 prints a checkout WARN without calling unverified().
+    The seed equivalent does call unverified() at :194-198.
+    Final selection is at :206-214.
+    My controlled fixture, with reachable/authenticated gateway checks and a passing seed check, returned:
+      WARN checkout_freshness — UNVERIFIED fixture checkout unavailable
+      VERIFY: PASS
+      rc=0
+    The same fixture with --strict-freshness returned VERIFY: FAIL, rc=1.
+
+  Fix:
+    Explicitly document this asymmetric false-green path and its operational consequence. State that default certification does not prove checkout freshness when that measurement is unavailable. Provide a regression test and require strict freshness wherever freshness is an acceptance condition.
+
+B06 — OMISSION
+  Chapter: M1-provisioning.md, S4.
+  Claim: “seed prompts/skills/env”; the inventory names the seeder but does not explain its update contract.
+
+  Evidence:
+    CF/scripts/node_seed.py:205-247 stages extraction and verifies recorded digests.
+    :249-312 distinguishes new, changed, removed and local-only files.
+    Without --force, changed, removed and local-only files are preserved.
+    With --force, :280-291 removes and replaces destination trees.
+    :320-324 writes the applied seed record.
+    These behaviors determine whether a provisioned node actually carries the intended procedure.
+
+  Fix:
+    Write the seed state machine: build → transfer → digest verification → preservation/replacement → applied record → drift check. Include the consequences of preserved local edits and --force. Naming the seeder and its invocation is not sufficient documentation of S4.
+
+B07 — OMISSION
+  Chapter: M1-provisioning.md, §5.
+  Claim: The settings register covers provisioning inputs through a single “config keys” row and a mode row.
+
+  Evidence:
+    CF/scripts/bunker-provision.sh:38-46 declares the provisioning defaults.
+    :356 uses a 6h spawn TTL fallback.
+    :562-609 implements the CLI/config precedence surface.
+    CF/scripts/node_seed.py:43-44 defines the default manifest and 16 MiB seed budget; :373-387 exposes manifest, budget, destination and destructive force controls.
+    These controls have no individual default/range/consequence entries in M1.
+
+  Fix:
+    Replace the aggregated KEY=VALUE row with the actual provisioning and seeding controls. Give each control its default, accepted values, reader and consequence. Include TTL, credential/profile paths, namespaces, config-set inputs and seed limits. The present aggregate is NAME ONLY.
+
+B08 — FALSE CLAIM
+  Chapter: M2-dispatch.md:71,77.
+  Claim:
+    DEFAULT_INBOX_LIMIT range: “positive int”.
+    --harness-wall / --timeout defaults: symbolic constant names rather than values.
+
+  Evidence:
+    CR/internal/registry/handler.go:1718-1731 rejects an inbox batch above 100.
+    CF/scripts/node-bus-worker.py:80-83 defines concrete defaults:
+      inbox limit 10
+      lease 30 seconds
+      request timeout 10 seconds
+      harness wall 1800 seconds
+    The worker's CLI does not uniformly validate all these arguments as positive integers; :1463-1478 validates specific other inputs.
+
+  Fix:
+    Document the effective producer-and-consumer bounds, including the bus's 100-message ceiling. Expand symbolic defaults into values. Distinguish accepted argparse types, local validation, downstream refusal and runtime exceptions.
+
+B09 — OMISSION
+  Chapter: M0-shared-contract.md, S1.
+  Claim: The shell contract is described through printing, verified fetch, disk admission and quoting.
+
+  Evidence:
+    CF/scripts/lib.sh:59-64 implements once(): sentinel existence suppresses execution; successful execution is followed by directory creation and sentinel writing.
+    :13 implements have() with an intentionally successful empty result on absence.
+    :45 implements the rounded free-space measurement.
+    The chapter does not explain once() at all, or the caller obligations arising from these helper return/value contracts.
+
+  Fix:
+    Inventory every exported helper with inputs, output, exit behavior and caller obligations. Explain sentinel semantics, lack of a concurrency lock around once(), and how callers must detect an empty have() result. M0 is the shared behavioral contract, not a selection of its most visible helpers.
+
+B10 — UNVERIFIED
+  Chapter: M3-repository.md, §7.
+  Claim: The module is VERIFIED, while the landing dry-run was refused and the named freshness arm was not rerun.
+
+  Evidence:
+    M3:106 records refusal rather than execution of a valid landing plan.
+    M3:107 records only that the freshness test arm exists.
+    CF/scripts/land-node-branch.sh:145-214 implements ancestry, idempotency, gate and local-main refusal branches.
+    :265-287 implements push, post-push fetch, ancestry verification and remote disagreement handling.
+    Syntax checking does not exercise these behaviors.
+
+  Fix:
+    Supply a disposable local bare remote and clean worktree fixture. Exercise successful dry-run, gate rejection, successful landing, repeated landing, rejected ancestry and failed remote-proof cases with asserted exits and ref readback. Keep the behavioral verification field UNVERIFIED until those results exist.
+
+B11 — OMISSION
+  Chapter: M4-board.md, S1/§7/§10.
+  Claim: “board_lock.py adjudicates the lock”; verification expects “RESIDUE / HELD”.
+
+  Evidence:
+    CF/scripts/board_lock.py:149-158 has three outcomes, including ABSENT.
+    It first checks open file descriptors and returns HELD for a discovered descriptor holder; otherwise it tries the flock probe.
+    :49-65 begins the /proc descriptor inspection.
+    The chapter does not explain these distinct kinds of evidence, the absent-path case, or the operator decision following each outcome.
+
+  Fix:
+    Document the classifier algorithm and its limits. Distinguish an open descriptor from proof of an advisory flock, explain permission/race limitations, and give safe next actions for ABSENT, HELD and RESIDUE. Supply held/unheld fixtures rather than a command without a concrete lock setup.
+
+B12 — OMISSION
+  Chapter: M5-harness.md, §5.
+  Claim: “harness-vars.sh … is the register for the CF_* set it enforces,” used as the module's settings register.
+
+  Evidence:
+    CF/scripts/harness/install-hermes.sh:23-30 reads NODE_GATEWAY_PORT, HERMES_PIN and HERMES_PYTHON_BIN and defines interpreter bounds.
+    CF/scripts/harness/install-codex.sh:49-60 defines pin, installation paths, digest, disk floor, sandbox and turn controls.
+    :428 reads CF_CODEX_SHA256.
+    The chapter's CF_* table does not register these installer/toolchain controls with their defaults, ranges and consequences.
+
+  Fix:
+    Retain the shared variable contract and add per-adapter installation, interpreter, artifact-integrity, sandbox and gateway registers. Explain coordinated pin/digest changes. The shared run-variable table is not the entire harness settings surface.
+
+B13 — UNBUILDABLE
+  Chapter: M6-documentation.md, S1–S8.
+  Claim: The chapter describes a documentation pipeline but acknowledges that its gate, fill and render paths do not operate on this chapter set.
+
+  Evidence:
+    CF/scripts/master_doc_check.py:188 selects NN-*.md.
+    CF/scripts/gen_nasa_handbook.py:253-260 uses the same filename convention.
+    CF/scripts/panel_loop.py:33-34 depends on dated scratch paths; :62-70 searches III.* identifiers.
+    Independent execution:
+      master_doc_check.py docs/handbook/chapters
+        zero modules selected, exit 1
+      gen_nasa_handbook.py
+        “no modules found”, exit 1
+
+  Fix:
+    Provide one executable, chapter-aware entry path from source selection through verification to the delivered artifact. Document its actual inputs, outputs, failure behavior and acceptance command. The current chapter correctly admits the disconnection, but that admission does not make the pipeline buildable or the chapter WRITTEN.
+
+B14 — OMISSION
+  Chapter: M7-github.md, §5.
+  Claim: “refresh controls … | per-flag” constitutes the lifecycle settings register.
+
+  Evidence:
+    CF/scripts/github-app-refresh.sh:24-33 defines actual refresh defaults, including MIN_AGE=2400, credential-store destination and local/node mode flags.
+    :53 validates the min-age spelling.
+    :104-142 is the local refresh path; :145-174 is a different node installation path.
+    CF/scripts/github-app-token.py:582-590 skips minting based on destination age.
+    The aggregate row does not give individual defaults, ranges and consequences for these controls.
+
+  Fix:
+    Split the lifecycle controls into individual rows. Explain min-age versus token lifetime, local/node behavior, destination precedence, credential-store rewriting and failure before/after installation. “Per-flag” is NAME ONLY, not a range.
+
+B15 — OMISSION
+  Chapter: M8-safety.md, §5/§11.
+  Claim: The reaper is governed by --job-ttl-hours, --root and --dry-run.
+
+  Evidence:
+    CF/scripts/reclaim_disk.py:14-22 fixes the actual target and protection lists.
+    :102-103 processes build caches without an age condition.
+    :104-111 applies age handling only to job/clone children.
+    :90 keeps a directory when its age is less than or equal to the TTL.
+    :119-123 reports byte totals even in dry-run mode.
+    The chapter does not enumerate the cache targets or explicitly warn that the TTL does not protect those caches and dry-run byte totals are projected, not actually reclaimed.
+
+  Fix:
+    List the exact cache, aged-parent and protected paths. State the TTL's scope and boundary behavior and distinguish planned from actual deletion totals. This is necessary for an operator to predict what a maintenance run will remove.
+
+B16 — UNBUILDABLE
+  Chapter: M9-scheduler.md, S1.
+  Claim: “eligibility, tasks-vs-cooldown, board gates, fairness, budget reservation” describes admission and allocation.
+
+  Evidence:
+    SCH/internal/scheduler/admission_mode.go:98-129 implements mode precedence.
+    :177-184 implements ownership overrides.
+    :230-242 requires owned, readable, workable board work for the waiver.
+    :266-267 identifies the last-failed-tick condition.
+    SCH/internal/scheduler/usage_pool_policy.go:26-63 distinguishes disabled policy, missing authority, local/remote pools, observe-only checks, lease recovery and reservation.
+    M9 names these responsibilities but does not describe their composed decision sequence or refusal outcomes.
+
+  Fix:
+    Write an ordered admission procedure with input authority, gate order, waiver rules, observe-only versus enforcing behavior, reservation/release ownership and named deferrals. Provide worked positive, refused, empty-board and unavailable-authority cases. A list of Go filenames and policy nouns cannot be turned into a reliable implementation task.
+
+B17 — OMISSION
+  Chapter: M9-scheduler.md, S3.
+  Claim: “live store has 30 tables” plus selected migration locators documents durable state.
+
+  Evidence:
+    SCH/internal/database/migrations.go:1217-1232 defines the tick dispatch receipt and indexes.
+    :1391-1408 defines run states, verification states and submission idempotency.
+    :1412-1425 defines workspace lease ownership and the single-active-writer index.
+    :1427-1447 defines attempt generation and process/session attribution.
+    :1449-1489 defines event sequence uniqueness, verification receipts, projections and outbox state.
+    These are run-correctness and recovery contracts, not incidental package internals.
+
+  Fix:
+    Add the store's keys, relationships, state vocabularies, uniqueness guarantees, write authorities and recovery queries. Explain how tick receipts, execution runs, attempts, workspace leases and projections relate. A table count is a census, not a durable-state chapter.
+
+B18 — OMISSION
+  Chapter: M9-scheduler.md, S4.
+  Claim: “ls cmd/ → 7 command dirs” documents operator surfaces.
+
+  Evidence:
+    SCH/cmd/schedulerd/main.go:95-107 defines database, listener, TLS and public-origin controls.
+    SCH/internal/api/server.go:289-346 mounts health, configuration, projects, hooks, lanes, namespaces, groups, templates, ticks, evaluation, pause/resume, events, queue and metrics routes.
+    S4 supplies neither an operator surface inventory nor request/response examples and operational failure semantics.
+
+  Fix:
+    Document the surfaces at submodule granularity: daemon/service entry, read operations, authenticated mutations, dashboard, MCP and recovery commands. Include who may invoke each operation, its durable effect and the readback proving success. Command-directory presence is not an invocation or an operating procedure.
+
+B19 — OMISSION
+  Chapter: M9-scheduler.md, §5.
+  Claim: The selected binary defaults form the settings register.
+
+  Evidence:
+    An independent extraction from SCH/cmd/schedulerd/main.go found 57 flag declarations.
+    Important omitted examples:
+      :149 spawn-mem-limit-mb
+      :150 board-stasis-gate
+      :151 hooks-file
+      :159 session-silence-grace
+      :170 session-poll-loop-min-ticks
+      :172 disable-tick-push
+      :190 no-exec-fallback
+    These change admission, execution termination, hooks or publication behavior.
+
+  Fix:
+    Derive the complete register from flag, TOML and environment readers, reconcile precedence, and attach each reader and consequence. Keep the chapter PARTIAL until the omitted controls are registered; acknowledging an incomplete register does not satisfy the field contract.
+
+B20 — OMISSION
+  Chapter: M10-crier.md, S1.
+  Claim: “registration, routing, acceptance, leases, retrieval, ack, TTL, transfer and dead letters” describes custody.
+
+  Evidence:
+    CR/internal/registry/handler.go:1711-1743 implements parameter aliases and precedence, default batch 10, maximum batch 100 and default lease 30 seconds.
+    :1770-1775 explains that messages removed by a post-retrieval tag filter remain leased.
+    CR/clients/python/crier_client.py:975-1006 defines signed delivery behavior and absent TTL versus ttl_seconds=0.
+    :1009-1036 returns decoded messages carrying the batch lease.
+    These operational distinctions are missing from the chapter's custody description.
+
+  Fix:
+    Write the custody lifecycle and wire contract, including defaults, aliases, lease ownership, ack requirements, empty responses, expiry behavior, idempotent replay/busy cases and filtering consequences. This is required to distinguish an empty queue, a held queue and failed delivery.
+
+B21 — OMISSION
+  Chapter: M10-crier.md, §5/§8.
+  Claim: Grouped Webhook.* and Guard.* rows, with range “—”, are documented settings; the metric-name list is a completed inventory.
+
+  Evidence:
+    CR/config/config.go:635-655 supplies individual defaults.
+    :1131-1136 and :1147-1187 reject invalid/non-positive values for individual controls.
+    CR/internal/guard/metrics.go:22-29 defines counters; :46-49 defines a histogram and its labels; :38-45 fixes label domains and seeded children.
+    M10 uses grouped consequences, dash ranges and wildcard metric names rather than the required per-setting and per-metric contracts.
+
+  Fix:
+    Expand the settings into individually admissible rows. Expand metrics into exact names, types, labels, label domains, questions answered and scrape location/authentication. A broad list is useful orientation, but is not the schema's completed register.
+
+B22 — UNVERIFIED
+  Chapters: M0, M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11 and M12, §6.
+  Claim: The contract tables satisfy the two-sided contract rule.
+
+  Evidence:
+    Examples that still lack the required producer AND consumer file:function:
+      M0-C1: external bunker handler unnamed, state “works”.
+      M5-C2: gateway is a port/service, state “works”.
+      M6-C1: consumer is “the handbook's status word”, state “works”.
+      M8-C1: “filesystem” and target roots stand in for a consumer, state “works”.
+      M9-C2: consumer is “node/dispatcher decode”, not named functions.
+      M12-C2: upstream is explicitly “rumour — one side only”, yet state “works”.
+    Other tables honestly retain UNVERIFIED sides. That is admissible uncertainty, but remains a closure blocker.
+    Concrete nameable implementations include SCH/internal/bus/dispatch.go:175 payload(), CF/scripts/node-bus-worker.py:972 process(), and DISP/dispatcher.py:135 payload_task().
+
+  Fix:
+    Name both implementation functions and payload/timing/error semantics for each in-scope software contract. Where a peer is outside the reviewable boundary, state that limitation and retain UNVERIFIED rather than inventing an exception that promotes “rumour” to “works”. Remove filesystem/status-word pseudo-contracts or replace them with the actual producing and consuming units.
+
+B23 — UNVERIFIED
+  Chapters: M0–M8, M11 and M12, §8.
+  Claim: Each reports “RED — none” for emitted metrics, while several identities remain VERIFIED.
+
+  Evidence:
+    These RED fields are explicitly present in the chapters.
+    MASTER-DOC-SCHEMA.md:72-79 makes missing metrics a required RED field.
+    The handbook README:61-65 likewise states that such chapters stay PARTIAL until instrumentation exists or an explicit exception is approved.
+    Structured logs and a replay ledger do not themselves satisfy the requested emitted metric contract.
+
+  Fix:
+    Keep these chapters PARTIAL. Close the observability gap with defined metrics and measured scrape evidence, or obtain a recorded schema exception. Honest reporting of “none” is correct writing; it is not authorization to call the required field complete.
+
+B24 — OMISSION
+  Chapters: M0, M1, M2, M5, M6, M7, M8, M9 and M10, §9.
+  Claim: The log-line sections satisfy the required verbatim operator-visible inventory.
+
+  Evidence:
+    CF/scripts/lib.sh:32 and :37 emit destination-directory and move failures omitted from M0.
+    M2:118 contains explanatory prose about a digest mismatch, not a verbatim emitted line.
+    M9:136-138 explicitly admits that its two entries are only a sample.
+    M10:138-140 explicitly admits a non-exhaustive inventory.
+    CF/scripts/verify-node.sh:53 emits RESULT: FAIL on an early branch, in addition to the terminal VERIFY forms.
+    Required log condition/action detail is therefore incomplete even where the selected entries are accurate.
+
+  Fix:
+    Derive operator-visible emission sites, group repetitive helpers without losing their call-specific conditions, and quote actual format strings. For each entry give level, trigger, descriptive/evidentiary status and operator action. Do not substitute a prose summary for a log string.
+
+B25 — UNVERIFIED
+  Chapters: M0, M1, M2, M3, M5, M7 and M10, §7.
+  Claim: The verification tables provide checks a stranger can repeat.
+
+  Evidence:
+    M0 names a staged ffc_probe.sh without its location or complete invocation.
+    M1 uses live-node placeholders without an established node/transport fixture.
+    M2 and M10 cite ~/node-bus-worker.py on cf-node and explicitly say the check is not repeatable from this host.
+    M3 records a refused dry-run instead of a successful clean-fixture check.
+    M5's real-node conformance command is not accompanied by a complete setup and target contract.
+    M7's mint row is “token …”, not an executable command with declared inputs.
+    My independently staged helper probe did confirm fetch_rc=1 and artifact_present=no, but that does not make the chapter's missing probe artifact reproducible.
+
+  Fix:
+    Provide complete offline fixtures where possible and complete live prerequisites where not. State execution host, working directory, target selection, credential-file roles without values, command, asserted exit, expected output, revision and retained result artifact. Keep unavailable live checks UNVERIFIED; do not replace them with syntax compilation or inherited seat results.
+
+N01 — PADDING — non-blocking
+  Chapters: M0, M2, M3, M5, M6, M7, M9, M10, M11 and M12.
+  Claim: Repeated “round-3 said”, “round-4 was false” and named-seat correction narratives remain embedded in operating sections.
+
+  Evidence:
+    Examples include M0:89-90, M3:109-112, M5:46-47 and M12:82-85.
+    These describe the review's history rather than the operator's next decision.
+
+  Fix:
+    Move superseded wording and seat attribution into the change/supersession appendix. Keep the corrected behavior, its source and any unresolved limitation in the operational chapter. Preserve provenance without making the operator reconstruct previous rounds.
+
+DEFECT CLASSES:
+  Unproven descendant termination
+  Computed-call-site blindness
+  Incorrect operational paths
+  Misassigned system authority
+  Unmeasurable-to-PASS certification
+  Undocumented seed replacement semantics
+  NAME ONLY settings
+  Producer/consumer range mismatch
+  Incomplete shared helper contract
+  Census substituted for specification
+  Disconnected documentation pipeline
+  One-sided contracts promoted to works
+  Missing metric contracts
+  Sample logs presented as inventory
+  Non-repeatable verification
+  Review-history padding
+
+CHAPTER SCORECARD:
+
+  M0 — PARTIAL
+    Shared helper coverage is incomplete; the fetch probe is not fully reproducible from the chapter; contract and metrics fields remain unresolved.
+
+  M1 — PARTIAL
+    Omits the checkout-unmeasurable-to-PASS path and consequential seed/update behavior. Provisioning settings and live verification remain incomplete.
+
+  M2 — PARTIAL
+    Useful source-backed dialect and settlement analysis, but effective input bounds, two-sided contracts, log inventory and repeatable live verification are incomplete.
+
+  M3 — PARTIAL
+    Important landing constraints are accurately described, but behavioral verification has not exercised a valid fixture. Metrics and full contract closure remain absent. Operator invocation alone is not a defect.
+
+  M4 — PARTIAL
+    Store census and validation reproduce. The Crier board-admission claim is false; lock adjudication and write-boundary contracts are not fully specified.
+
+  M5 — PARTIAL
+    The no-production-installer-caller claim is false because project-node.sh computes and invokes the selected installer. Per-adapter settings and conformance evidence remain incomplete.
+
+  M6 — PARTIAL
+    Correctly admits structural rather than semantic verification, but there is no demonstrated end-to-end pipeline for these M-numbered chapters.
+
+  M7 — PARTIAL
+    Credential-domain separation and bare-CLI behavior are supported. Lifecycle controls remain aggregated, and mint/installation verification is unexecuted and incompletely specified.
+
+  M8 — PARTIAL
+    Unit tests and scan-scope behavior reproduce. Exact deletion targets, unconditional-cache behavior, dry-run accounting, metrics and contract closure remain incomplete.
+
+  M9 — PARTIAL
+    The settlement mismatch and selected defaults are source-backed. Admission composition, durable execution state, operator surfaces, settings and log inventory are not yet a buildable subsystem specification.
+
+  M10 — PARTIAL
+    Guard degradation and default-on metrics are supported by code. Custody semantics, individual settings, metric contracts, client coverage and repeatable signed-read verification remain incomplete.
+
+  M11 — PARTIAL
+    Ledger ordering and serial execution are substantially documented, but the deadline descendant-termination assurance is contradicted by both the generated runner and an independent disposable execution.
+
+  M12 — PARTIAL
+    Hash and live no-token refusal reproduce. The recorded sink paths are wrong; the node-client contract is unproven. An independent healthy-stream fixture confirms forwarded bytes followed by an EOF timeout, so streaming completion remains defective.
+
+  No chapter qualifies as WRITTEN. All 13 are PARTIAL, not SKELETON: each contains substantive source-backed work, but each retains required unresolved fields or the findings above.
+
+  Reproducible review probes:
+    /home/kara/.hermes/cache/scratch/round5_independent_probes.py
+    /home/kara/.hermes/cache/scratch/round5_verifier_probe.py
+
+PANEL REVIEW COMPLETE
+
+session_id: local-4a8989dd28595c194bf17d87081ccbd4553853a009e3a37f1d3b0918c501a198
+
+EXIT=0

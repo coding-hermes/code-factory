@@ -1,0 +1,277 @@
+│ cache/scratch/round4-judge/check_claims.py
+│ @@ -0,0 +1,444 @@
+│ +#!/usr/bin/env python3
+│ +"""Round-4 quorum judge: mechanical verification of chapter file:line citations."""
+│ +import sys, os
+│ +
+│ +CF = "/home/kara/code-factory"
+│ +SCHED = "/home/kara/coding-hermes-scheduler/coding-herms-scheduler"
+│ +CRIER = "/home/kara/crier"
+│ +FLEET = "/home/kara/crier-fleet"
+│ +PROXY = "/home/kara/.hermes/scripts/cf-inference-proxy.py"
+│ +
+│ +CHECKS = []
+│ +def at(label, path, lo, hi, *subs):
+│ +    CHECKS.append(("at", label, path, lo, hi, subs))
+│ +def cnt(label, path, n):
+│ +    CHECKS.append(("cnt", label, path, n))
+│ +def absent(label, path, sub):
+│ +    CHECKS.append(("abs", label, path, sub))
+│ +
+│ +# ---------------- M0 ----------------
+│ +cnt("M0 lib.sh line count 78", f"{CF}/scripts/lib.sh", 78)
+│ +at("M0 ok/bad/warn/note rows :5-9", f"{CF}/scripts/lib.sh", 5, 9, "PASS", "FAIL", "WARN")
+│ +at("M0 FAILED counter :11", f"{CF}/scripts/lib.sh", 11, 11, "FAILED")
+│ +at("M0 have() :13", f"{CF}/scripts/lib.sh", 13, 13, "have")
+│ +at("M0 fetch_verified :19-42", f"{CF}/scripts/lib.sh", 19, 42, "fetch_verified")
+│ +at("M0 --max-time 120 :22", f"{CF}/scripts/lib.sh", 22, 22, "max-time", "120")
+│ +at("M0 sha compare :24-27", f"{CF}/scripts/lib.sh", 24, 27, "sha256")
+│ +at("M0 digest mismatch :26", f"{CF}/scripts/lib.sh", 26, 26, "digest mismatch")
+│ +at("M0 require_disk :48-57", f"{CF}/scripts/lib.sh", 48, 57, "require_disk")
+│ +at("M0 disk FAIL row :54", f"{CF}/scripts/lib.sh", 54, 54, "disk")
+│ +at("M0 shq :67-70", f"{CF}/scripts/lib.sh", 67, 70, "shq")
+│ +at("M0 bunker_exec :75-78", f"{CF}/scripts/lib.sh", 75, 78, "bunker_exec", "bash -lc")
+│ +
+│ +# ---------------- M1 ----------------
+│ +at("M1 load_config :95-123", f"{CF}/scripts/bunker-provision.sh", 95, 123, "load_config")
+│ +at("M1 KEY=VALUE refusal :103", f"{CF}/scripts/bunker-provision.sh", 103, 103, "=")
+│ +at("M1 unknown key :118", f"{CF}/scripts/bunker-provision.sh", 118, 118, "unknown")
+│ +at("M1 node_env --check :147", f"{CF}/scripts/bunker-provision.sh", 147, 147, "node_env", "--check")
+│ +at("M1 have bunker :181", f"{CF}/scripts/bunker-provision.sh", 181, 181, "bunker")
+│ +at("M1 no bunker on PATH :182", f"{CF}/scripts/bunker-provision.sh", 182, 182, "no bunker client on PATH")
+│ +at("M1 timeout :187", f"{CF}/scripts/bunker-provision.sh", 187, 187, "timeout")
+│ +at("M1 bunker cp/exec probe :225-226", f"{CF}/scripts/bunker-provision.sh", 225, 226, "bunker")
+│ +at("M1 -s token probe :214", f"{CF}/scripts/bunker-provision.sh", 214, 214, "-s", "github.token")
+│ +at("M1 mode-600 claim :233", f"{CF}/scripts/bunker-provision.sh", 233, 233, "mode 600")
+│ +at("M1 node_env --apply :426", f"{CF}/scripts/bunker-provision.sh", 426, 426, "node_env")
+│ +at("M1 node_seed build :454", f"{CF}/scripts/bunker-provision.sh", 454, 454, "node_seed")
+│ +at("M1 node_gateway_auth :483-495", f"{CF}/scripts/bunker-provision.sh", 483, 495, "node_gateway_auth")
+│ +at("M1 node_identity :518-533", f"{CF}/scripts/bunker-provision.sh", 518, 533, "node_identity")
+│ +at("M1 destroy --yes :550", f"{CF}/scripts/bunker-provision.sh", 550, 550, "--yes")
+│ +at("M1 modes :561-609", f"{CF}/scripts/bunker-provision.sh", 561, 609, "destroy", "apply")
+│ +at("M1 CLI wins :598", f"{CF}/scripts/bunker-provision.sh", 598, 598, "command line always wins")
+│ +at("M1 ROLE_DEFAULTS :34-42", f"{CF}/scripts/disk_floor.py", 34, 42, "worker", "builder", "full", "5", "10", "20")
+│ +at("M1 DEFAULT_ROLE :37", f"{CF}/scripts/disk_floor.py", 37, 37, "worker")
+│ +at("M1 MIN/MAX_GIB :60-75", f"{CF}/scripts/disk_floor.py", 60, 75, "MIN_GIB", "MAX_GIB")
+│ +at("M1 resolve() :115-141", f"{CF}/scripts/disk_floor.py", 115, 141, "def resolve")
+│ +at("M1 cli floor :127", f"{CF}/scripts/disk_floor.py", 127, 127, "disk")
+│ +at("M1 env floor :129", f"{CF}/scripts/disk_floor.py", 129, 129, "NODE_DISK_FLOOR")
+│ +at("M1 role default :141", f"{CF}/scripts/disk_floor.py", 141, 141, "ROLE_DEFAULTS")
+│ +at("M1 FloorError unknown role :122-125", f"{CF}/scripts/disk_floor.py", 122, 125, "FloorError", "unknown role")
+│ +at("M1 exit 2 :169-171", f"{CF}/scripts/disk_floor.py", 169, 171, "2")
+│ +at("M1 agent_alive :50-54", f"{CF}/scripts/verify-node.sh", 50, 54, "ALIVE")
+│ +at("M1 gateway_reachable :57-87", f"{CF}/scripts/verify-node.sh", 57, 87, "api/status")
+│ +at("M1 auth_required :70-74", f"{CF}/scripts/verify-node.sh", 70, 74, "auth_required")
+│ +at("M1 000=UNVERIFIED :75-84", f"{CF}/scripts/verify-node.sh", 75, 84, "000")
+│ +at("M1 unauth_refused :90-103", f"{CF}/scripts/verify-node.sh", 90, 103, "system/stats")
+│ +at("M1 artifact_digest :104-115", f"{CF}/scripts/verify-node.sh", 104, 115, "artifact")
+│ +at("M1 checkout_freshness :118-155", f"{CF}/scripts/verify-node.sh", 118, 155, "node_freshness")
+│ +at("M1 seed_drift :157-202", f"{CF}/scripts/verify-node.sh", 157, 202, "node_seed_drift")
+│ +at("M1 ladder exit :205-214", f"{CF}/scripts/verify-node.sh", 205, 214, "VERIFY: FAIL", "UNVERIFIED")
+│ +at("M1 disk_floor caller :173", f"{CF}/scripts/project-node.sh", 173, 173, "disk_floor.py")
+│ +at("M1 reclaim caller :212", f"{CF}/scripts/project-node.sh", 212, 212, "reclaim_disk.py")
+│ +
+│ +# ---------------- M2 ----------------
+│ +at("M2 urllib import :66-78", f"{CF}/scripts/node-bus-worker.py", 66, 78, "urllib")
+│ +absent("M2 no crier_client import", f"{CF}/scripts/node-bus-worker.py", "crier_client")
+│ +at("M2 DEFAULT_INBOX_LIMIT 10 :80", f"{CF}/scripts/node-bus-worker.py", 80, 80, "DEFAULT_INBOX_LIMIT")
+│ +at("M2 DEFAULT_LEASE_SECONDS 30 :81", f"{CF}/scripts/node-bus-worker.py", 81, 81, "DEFAULT_LEASE_SECONDS")
+│ +at("M2 SEEN_LIMIT 200 :84", f"{CF}/scripts/node-bus-worker.py", 84, 84, "SEEN_LIMIT")
+│ +at("M2 turns range :111", f"{CF}/scripts/node-bus-worker.py", 111, 111, "1000")
+│ … omitted 366 diff line(s) across 1 additional file(s)/section(s)
+│ .hermes/cache/scratch/round4-judge/check_claims.py
+│ @@ -404,9 +404,14 @@
+│  sel = sys.argv[1] if len(sys.argv) > 1 else ""
+│  fails = 0
+│  total = 0
+│ -for kind, label, path, lo, hi, subs in CHECKS:
+│ -    if sel and not sel.lower() in label.lower():
+│ -        continue
+│ +for c in CHECKS:
+│ +    kind, label, path = c[0], c[1], c[2]
+│ +    if kind == "cnt":
+│ +        lo, hi, subs = c[3], c[3], ()
+│ +    elif kind == "abs":
+│ +        lo, hi, subs = 1, 1, (c[3],)
+│ +    else:
+│ +        lo, hi, subs = c[3], c[4], c[5]
+│      total += 1
+│      try:
+│          with open(path, errors="replace") as f:
+All verification is complete: ~380 claim checks against the code, every repeatable command re-run (both Go suites, all unit tests, board census/validate/drift, doc gate, patch chain, scan-scope, proxy hash + live 401, fail-closed probe), and the two ambiguous claims (crier idempotency branches, scheduler `board` field) resolved by reading the code. Verdict:
+
+```
+VERDICT: FAIL
+
+BLOCKING: 4 — findings that must be fixed before this chapter set can be called written
+NON-BLOCKING: 5
+
+FINDINGS:
+
+BLOCKING
+
+1. FALSE CLAIM — M9 (§7 Verification, §1 Status, §13 Evidence)
+   Claim: "go test ./... → FAIL (rc 1) — SCHED-GAP-1726 goroutine census: 1
+   goroutine(s) still parked in evalDrain at suite exit (169.8s)" and "It is a
+   liveness leak, not a build break … real and reproduced this round (not a
+   one-off)."
+   Evidence: at the SAME revision `1771d3aad61e6c1ce2845e3f1450f88aa73340b3`,
+   `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./...` → rc=0, 25/25
+   packages ok, internal/scheduler ran 169.265s NOT cached and passed. The
+   writer's shell carried the ambient var (my shell reports it =1; it is
+   documented in the repo's own docs/reference/env-vars.md and load-bearing in
+   schedgap1608_operator_restart_test.go / restart_approval.go). With the var
+   set I reproduce three FAILs (TestSCHEDGAP091_DrainTimeoutStampsOrphan,
+   TestOperatorRestartApprovalEnv, TestAbortInFlightTicks_OperatorApprovedStamp)
+   plus the census line; with `env -u` those three tests pass in 0.268s. The
+   "reproduced twice" runs inherited the same artifact. Rule 4 violated in the
+   strongest form: I repeated the command and got the opposite result.
+   Fix: re-stamp §7 with the clean-env command and its PASS (or record the env
+   precondition in the row), and correct §1 Status and §13's command log. Do
+   not carry "SCHED-GAP-1726 liveness leak" as a finding of the code without a
+   clean-env reproduction.
+
+2. UNVERIFIED (classification rule not applied) — M1 §3, M3 §3, M5 §3, M9 §3
+   Claim: submodules classified **active** whose evidence is not an invoking
+   line: M3 S2 land-node-branch.sh ("invoked by the node's result envelope"),
+   M1 S2 bunker-provision.sh ("is the orchestrator"), M5 S1 install-hermes.sh
+   ("measured adapter; certified by the conformance battery"), M9 S4/S5
+   (`ls cmd/` → 7 commands; "six doctrine docs present").
+   Evidence: repo-wide greps run this round — `land-node-branch` is referenced
+   only by tests/selftest.sh; `bunker-provision` only in bunker_config_gen.py
+   docstrings; `install-hermes` only by tests/ (install-claude-code.sh:649 is a
+   comment); `ls cmd/` and "docs present" are existence, not invocation. The
+   document's own rule (OUTLINE §III.3, quoted by the chapters) requires the
+   invoking `file:line` or a quoted absence-proof — M2 (F2-4), M6 (F6-4) and
+   M8 (F8-4) apply exactly that and demote to operator-invoked. Counter-proof
+   the chapters missed: verify-node.sh IS invoked (node-create.sh:131) and
+   node-bus-worker.py --check IS invoked (bunker-crier-connect.sh:53) — those
+   two "active" rows are right but still cite no invoking line.
+   Fix: one standard everywhere — either grep-proof each classification (and
+   re-classify land-node-branch / bunker-provision / install-hermes as
+   operator-invoked) or cite the invoking lines that justify "active".
+
+3. UNVERIFIED (citations that land on the wrong code) — M7 §5, M9 §11
+   Claim: M7 "`--env-file` … (`:300-304`)" and "`--api-base` … (`:305-309`)";
+   M9 "`:208+` boardOwnedByLane".
+   Evidence: github-app-token.py:300-309 is GITHUB_APP_ID/INSTALLATION_ID
+   validation prose — the actual defaults are DEFAULT_ENV_FILE at :45,
+   DEFAULT_API at :47, argparse at :110/:115. admission_mode.go's
+   boardOwnedByLane is at :173-177 (comment :173, func :177); ":208+" lands on
+   tasksAdmissionDue. A reader following the pin reads the wrong code.
+   Fix: re-pin those three rows (M7 §5 → :45/:110, :47/:115; M9 §11 → :173-177;
+   also M7 APP_ID/INSTALLATION_ID rows shift ~5-10 lines, access_tokens POST is
+   :371 not :367-369).
+
+4. UNVERIFIED (verification command not repeatable as printed) — M12 §13
+   Claim: "grep -rn '8775|CF_PROXY|cf-inference-proxy' scripts/ config/
+   specs/" with the three matches listed (panel_loop.py:136,
+   master_doc_skeleton.py:25/:211, node.env.example:22).
+   Evidence: the command AS QUOTED (BRE, no -E) returns nothing — measured
+   rc=1, 0 matches; with -E the three matches reproduce exactly (this round).
+   A stranger running the documented command concludes the opposite of the
+   row. This is the same defect class the panel already burned a round on
+   (round-3's over-escaped greps, M0 §7).
+   Fix: print the command with -E (or three -e branches).
+
+NON-BLOCKING
+
+5. Citation drift, adjacent lines, claims all TRUE — M1, M2, M6, M10, M11
+   M1 :118→:119 (unknown-key refusal), :598→:589 (the quoted comment), five
+   re-applied flags :605-611→:604-608; M2 branch/commit :1141-1142→:1139-1140,
+   seen-cache warn :1355→:1352-1353, --interval :1442→:1441, range :111→:112;
+   M6 MODULES :17→:18; M10 metrics.go:5→:2; M11 int(TASK_S) :193→:196.
+   Verified TRUE in every case within the cited function. Fix: one re-pin pass.
+
+6. OMISSION (disclosed) — M9 §9, M10 §9
+   M9's log-line inventory is 2 of 379 `log.Printf` sites (count re-measured:
+   379); M10's §9 is explicitly non-exhaustive over the 1895-line handler.
+   Both self-flagged RED. Sections exist but are not inventories; they gate
+   the WRITTEN score for those two chapters, not the document's honesty.
+
+7. UNVERIFIED-by-conditions (honestly disclosed) — M1 §7 certification ladder,
+   M2 §7 bus-worker ladder, M5 §7 conformance legs, M7 §7 token mint, M10 §7
+   signed-read ladder, M12 §7 disallowed-model leg
+   Each needs a live node or App credentials this host does not have; every
+   row is already marked UNVERIFIED with the precondition named. I could not
+   repeat them either. No action beyond keeping the markings.
+
+8. OMISSION (system-level, disclosed as F6-1/CF-360) — M6
+   The module's own gate cannot select this chapter set: master_doc_check.py
+   glob `[0-9][0-9]-*.md` at :188 (re-run: 44 modules, 37 VERIFIED, 50 errors,
+   MASTER-DOC: FAIL, exit 1 — exact) and gen_nasa_handbook.py:18 hardcodes
+   docs/master. Consequence: this document has no automated gate; the only
+   gate that runs on it is this panel. Keep the finding; it needs a board row
+   with the chapter-aware gate as acceptance, which CF-360 appears to be.
+
+9. Metrics RED (inherent, code not doc) — M0, M1, M2, M3, M4, M5, M6, M7, M8,
+   M11, M12
+   Eleven chapters correctly report "none" with the schema's RED marking; M9
+   and M10 have real metric surfaces, verified (server_metrics.go blocks;
+   crier_guard_* counters/histogram at metrics.go:19-49, default-ON at
+   config.go:667-673, mount at observability.go:101-109). The RED fields are
+   findings against the code, not the document; fixing them is code work.
+
+DEFECT CLASSES:
+env-contaminated-verification · classification-without-invoking-line ·
+citation-mispin-wrong-construct · unrepeatable-quoted-command ·
+adjacent-line-drift · disclosed-unread-bodies · external-boundary-contracts ·
+metrics-absent-in-code · self-gating-impossible
+
+CHAPTER SCORECARD:
+- M0  WRITTEN — 78-line file read; 11/17 source counts exact; fail-closed
+  probe re-run (curl(7), rc=1, no artifact); only RED is inherent metrics.
+- M1  PARTIAL — orchestrator paths and the ladder verified leg-by-leg
+  (precedence exit 0/1/3 confirmed at verify-node.sh:205-214), but S1-S4 unit
+  bodies unread (self-declared) and S2 classification lacks an invoking line.
+- M2  PARTIAL — node-bus-worker.py contracts and settlement ordering verified
+  exactly (deliver → seen-after-delivery :1347-1349 → ack-last :1359-1367);
+  PID 1755676 hardcode confirmed; but the S1 trio is structure-mapped only and
+  the live ladder is not repeatable from this host.
+- M3  WRITTEN — all three units read in full; gate-empty-by-default (:36,
+  :171-193) and the clone_lane-is-a-lane-row correction (:74-118) verified;
+  dry-run honestly re-refused on a dirty workdir; numbered-arm hoax confirmed
+  (0 matches). Classification of S2 is the one open row (finding 2).
+- M4  PARTIAL — 357/515 census, drift OK, validate OK(7 warnings) all
+  reproduced exactly; both contract rows are UNVERIFIABLE in-repo by nature
+  (all sides external) and the chapter says so.
+- M5  PARTIAL — harness-vars.sh predicate `[0-7]00` vs "must be 600" message,
+  resolver-with-no-caller, and the non-uniform adapter matrix all verified
+  exactly; four installer bodies unread and conformance not run.
+- M6  PARTIAL — the gate's behavior (structural, reports supplied status;
+  44/37/50 FAIL) reproduced exactly and F6-2's correction is right; but most
+  of the pipeline is unread and the module cannot gate this document set.
+- M7  PARTIAL — CLI surface, 0600 enforcement, JWT constants, credential
+  separation from fleet-gh-scope.py:52/:81-94 all verified; mint never run
+  (no creds) and §5 carries the wrong-construct pins (finding 3).
+- M8  WRITTEN — both files read in full; 9 reclaim tests and the 15-claim
+  scan-scope run repeated exactly; PROTECTED list and the .cf-jobs gap
+  verified in code.
+- M9  PARTIAL — settlement, dispatchReplyVerdict's ok-only read (:712-726),
+  text_b64/board envelope (:184, :202), binary defaults (main.go:108-144), 30
+  tables, 379 sites: all verified — but the chapter's one FAIL row is false
+  (finding 1), admission internals are grep-level, and §9 is 2/379.
+- M10 PARTIAL — handler function map, guard oversize/fail-open branches
+  (errorResult :318-361 verified verbatim), policy precedence, default-ON
+  metrics, 91 test files and a green 40-package suite all confirmed; the
+  1895-line body is not read line-by-line and §9 admits it.
+- M11 WRITTEN — read in full; all 23 log() sites confirmed with exact line
+  numbers (25 grep hits minus comment :81 and def :112); reply shape and the
+  always-`ok` field verified at :500-508; decoration tests confirmed (0
+  asserts); task_seconds(10)=30 confirmed in code.
+- M12 WRITTEN — read in full; sha256 exact; live 401 reproduced; the
+  [200,502] double-status analysis confirmed against :232-238; the only defect
+  is the -E missing from one quoted grep (finding 4).
+
+The set is close: 5 of 13 chapters are genuinely written, every headline
+contract defect (CF-354/355/356, F2-2, F3-2/3/3, F5-2/3, F10-4, F11-3/4/5/6,
+F12-4/5/6) verified true against the code, and I found no invented claim other
+than M9's test verdict. The four blocking findings are all cheap to fix and
+all sit in evidence rows, not prose.
+
+PANEL REVIEW COMPLETE
+```
+
+session_id: local-dfd1db9c6d31b7aec935dba6ac091292f53f80d39957d277657e0c6f5a97166d
+
+EXIT=0

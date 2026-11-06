@@ -1,0 +1,1112 @@
+│ cache/scratch/ffc_probe.sh
+│ @@ -0,0 +1,7 @@
+│ +#!/usr/bin/env bash
+│ +set -u
+│ +HERE=/home/kara/code-factory/scripts
+│ +. "$HERE/lib.sh"
+│ +fetch_verified "http://127.0.0.1:1/nothing" "/tmp/ffc_artifact.bin" "deadbeef"
+│ +echo "rc=$?"
+│ +[ -e "/tmp/ffc_artifact.bin" ] && echo "ARTIFACT LEFT" || echo "no artifact left"
+│ docs/handbook/chapters/M0-shared-contract.md
+│ @@ -4,26 +4,30 @@
+│
+│  | Field | Value |
+│  |---|---|
+│ -| Module name | SHARED CONTRACT (`scripts/lib.sh` + `scripts/harness/harness-vars.sh`) |
+│ -| Path | `/home/kara/code-factory/scripts/lib.sh`, `/home/kara/code-factory/scripts/harness/harness-vars.sh` |
+│ +| Module name | SHARED CONTRACT (`scripts/lib.sh`) |
+│ +| Path | `/home/kara/code-factory/scripts/lib.sh` |
+│  | Revision | `943ef984dc093e5780605ac6e54cd043122126ef` (code-factory HEAD, 2026-11-06) |
+│ -| Language / runtime | bash 5.3.9 (measured: `bash --version`); both files sourced, never executed |
+│ +| Language / runtime | bash 5.3.9 (measured: `bash --version`); sourced, never executed |
+│  | Owner lane | code-factory (node-side + control-host shell) |
+│ -| Status | **VERIFIED** — `lib.sh` (78 lines) and `harness-vars.sh` (318 lines) read in full; every cited line re-verified this round |
+│ +| Status | **VERIFIED** — `lib.sh` (78 lines) read in full; every cited line re-verified this round |
+│ +
+│ +The variable contract (`scripts/harness/harness-vars.sh`, 318 lines) is **not** part of M0.
+│ +OUTLINE M0.S1 is the *shell* contract only; `harness-vars.sh` is M5.S5 (see §12). Round-2/round-3
+│ +labelled both "S1" here; that double-ownership is corrected this round.
+│
+│  ## 2. Purpose, authority and position
+│
+│ -The shared shell substrate every node-side module sources, and the *reference* implementation of the
+│ -CF_* variable contract (`specs/HARNESS-MATRIX.md` §5). It decides what a shell script may print
+│ -(`ok`/`bad`/`warn`/`note`), what a pinned download may accept (`fetch_verified`), what a disk
+│ -floor may admit (`require_disk`), and what a credential may look like (`cfv_validate`). It may
+│ -not decide anything about a run itself: it never reads the directive, never spawns a harness,
+│ -never touches the bus.
+│ +The shared shell substrate every node-side module sources. It decides what a shell script may
+│ +print (`ok`/`bad`/`warn`/`note`, `lib.sh:5-9`), what a pinned download may accept
+│ +(`fetch_verified`), what a disk floor may admit (`require_disk`), and what a credential *mode*
+│ +may look like (via M5.S5, not here). It may not decide anything about a run itself: it never
+│ +reads the directive, never spawns a harness, never touches the bus.
+│
+│  **What breaks if this module is absent.** Every installer and checker fails on undefined
+│  `ok`/`bad`/`FAILED` before doing anything. Seventeen shell scripts source `lib.sh` — 11 direct
+│ -(`grep -rl '\\. \"$HERE/lib.sh\"' scripts/` → 11) plus 6 in `scripts/harness/` that source
+│ -`$HERE/../lib.sh` (`grep -rlE '\\. \"\\$HERE/(\\.\\./)?lib\\.sh\"' scripts/` → 17).
+│ +(`grep -rl '\. "$HERE/lib.sh"' scripts/` → 11) plus 6 in `scripts/harness/` that source
+│ +`$HERE/../lib.sh` (`grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` → 17). Both commands were
+│ +run this round and their counts verified.
+│
+│  **What breaks if it lies.** `fetch_verified` (`lib.sh:19-42`) is the pinned-download primitive
+│  every installer relies on; a false digest match installs a wrong or tampered binary and reports
+│ @@ -34,18 +38,10 @@
+│
+│  | Submodule | File | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│ -| S1 shell contract | `lib.sh` | **active** | sourced by 17 scripts — `grep -rlE '\\. \"\\$HERE/(\\.\\./)?lib\\.sh\"' scripts/` → 17 |
+│ -| S1 variable contract | `harness-vars.sh` | **active** | sourced by every harness installer, e.g. `install-hermes.sh:21` (`. "$HERE/harness-vars.sh"`); `install-opencode.sh` names it "one implementation" |
+│ +| S1 shell contract | `lib.sh` | **active** | sourced by 17 scripts — `grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` → 17 (run this round) |
+│
+│ -**Finding F0-5 (this round).** The variable contract is **not** a single implementation. The
+│ -round-2 chapter called `harness-vars.sh` "the single implementation of the CF_* variable
+│ -contract". `install-codex.sh` sources it conditionally (`:47`) but then re-implements its own
+│ -copy: its own `VAR` associative array (`:67-72`), its own `validate_vars()` (`:190`), its own
+│ -credential predicate (`:276-280`, accepts `600|400` only), and its own `TIMEOUT_S` default of
+│ -300 (`:60`) rather than the register's 1800. `install-opencode.sh` uses the shared contract;
+│ -`install-codex.sh` does not. Two credential predicates disagree (`harness-vars.sh:203` accepts
+│ -`[0-7]00`, so mode 700 passes; `install-codex.sh:278` accepts only `600|400`). This is a defect
+│ -class, filed as a board row this round (see §13).
+│ +`harness-vars.sh` is **not** an M0 submodule (M5.S5, OUTLINE M5). Round-3 listed a second "S1"
+│ +here; removed.
+│
+│  ## 4. Dependencies
+│
+│ @@ -53,62 +49,51 @@
+│
+│  | Dependency | Version constraint | Where | How absence is detected |
+│  |---|---|---|---|
+│ -| bash | >= 4 (associative arrays at `harness-vars.sh:34`) | node + control host | `set -u` + undefined helper aborts the caller |
+│ +| bash | >= 4 | node + control host | `set -u` + undefined helper aborts the caller |
+│  | curl | any | node + control host | `curl -fsSL` nonzero → `fetch_verified` returns 1 (`lib.sh:22`) |
+│  | sha256sum | any | with curl | digest mismatch → return 1 (`lib.sh:24-27`) |
+│
+│ -**4b. Library contracts**
+│ +**4b. Library contracts** — `lib.sh` imports nothing; it is the bottom of the shell stack.
+│
+│ -| Import | Provider | Contract relied on | If it changes |
+│ -|---|---|---|---|
+│ … omitted 135 diff line(s) across 1 additional file(s)/section(s)
+│ docs/handbook/chapters/M1-provisioning.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | `943ef984dc093e5780605ac6e54cd043122126ef` (code-factory HEAD, 2026-11-06) |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side) |
+│ -| Status | **UNVERIFIED** — `bunker-provision.sh` `--check` probe (`:175-249`), `disk_floor.py` `resolve()` (`:115-141`) and `verify-node.sh` (`:20-198`) read this round; the remaining unit bodies not read line-by-line |
+│ +| Status | **UNVERIFIED** — `bunker-provision.sh` `--check` probe, config loader (`:95-123`), CLI (`:561-609`), `destroy` (`:550-558`), `disk_floor.py` `resolve()` (`:115-141`) and `verify-node.sh` (`:20-214`) read this round; the remaining unit bodies (`node_identity.py`, `node_seed.py`, `node_seed_drift.py`, `node_env.py`, `node_freshness.py`, `bunker_config_gen.py`) not read line-by-line |
+│
+│  ## 2. Purpose, authority and position
+│
+│ @@ -32,14 +32,15 @@
+│
+│  | Submodule | Unit | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│ -| S1 qualify the host | `bunker-server-install.sh`, `disk_floor.py` | **active** | `disk_floor.py:144` `main()` is the CLI entrypoint; invoked by `bunker-provision.sh` before admission |
+│ +| S1 qualify the host | `bunker-server-install.sh`, `disk_floor.py` | **active** | `disk_floor.py` is invoked by `project-node.sh:173` (`python3 "$HERE/disk_floor.py" … resolve …`), not by `bunker-provision.sh` (F1-4) |
+│  | S2 create the container + config | `bunker-provision.sh`, `bunker_config_gen.py`, `node-create.sh`, `bunker-crier-connect.sh` | **active** | `bunker-provision.sh` is the orchestrator (probe `:175-249`) |
+│ -| S3 identity and bus membership | `node_identity.py`, `node_gateway_auth.py` | **active** | `node_gateway_auth.py` wired into `bunker-provision` only; the standalone `node-create.sh` never calls it (CF-192) |
+│ -| S4 seed prompts/skills/env | `node_seed.py`, `node_seed_drift.py`, `node_env.py` | **active** | `node_seed.py` runs inside `bunker-provision --apply` after the container is reachable (`docs/UNIT-MAP.yaml:64`) |
+│ -| S5 prove the node works | `verify-node.sh`, `node_freshness.py` | **active** | `verify-node.sh` is the certification ladder (`:50-198`) |
+│ +| S3 identity and bus membership | `node_identity.py`, `node_gateway_auth.py` | **active** | `node_gateway_auth.py` staged and run inside `bunker-provision.sh:483-495`; `node_identity.py` at `:518-533`; the standalone `node-create.sh` never calls it (CF-192) |
+│ +| S4 seed prompts/skills/env | `node_seed.py`, `node_seed_drift.py`, `node_env.py` | **active** | `node_seed.py build` at `bunker-provision.sh:454`; `node_env.py --check` at `:147` / `--apply` at `:426` |
+│ +| S5 prove the node works | `verify-node.sh`, `node_freshness.py` | **active** | `verify-node.sh` is the certification ladder (`:20-214`); `node_freshness.py` folded in at `:118-155` |
+│
+│ -Classification note: S1–S4 unit bodies are UNVERIFIED this round (not read line-by-line); the
+│ -invoking lines above are the orchestrator entrypoints, not a full read of each unit.
+│ +Classification note: S1–S4 unit *bodies* are UNVERIFIED this round (not read line-by-line); the
+│ +invoking lines above are the orchestrator call sites, which round-3 got wrong in two places
+│ +(see F1-4).
+│
+│  ## 4. Dependencies
+│
+│ @@ -63,25 +64,31 @@
+│
+│  ## 5. Settings register
+│
+│ -`disk_floor.py` fixes the floor bounds and role defaults:
+│ +`disk_floor.py` fixes the floor bounds and role defaults; `bunker-provision.sh` fixes the config
+│ +surface.
+│
+│  | Setting | Default | Range | Governs | What breaks if changed |
+│  |---|---|---|---|---|
+│ -| `ROLE_DEFAULTS` | `{"worker": 5, "builder": 10, "full": 20}` GiB (`:36`) | 1..4096 GiB (`MIN_GIB`/`MAX_GIB`) | admission floor per role | a value outside the range is refused (`:68-71`) |
+│ -| `DEFAULT_ROLE` | `"worker"` (`:37`) | one of the role keys | which floor applies when no role is named | an **unknown explicit role is refused**, not defaulted (see F1-2) |
+│ +| `ROLE_DEFAULTS` | `{"worker": 5, "builder": 10, "full": 20}` GiB (`disk_floor.py:36`) | 1..4096 GiB (`MIN_GIB`/`MAX_GIB`) | admission floor per role | a value outside the range is refused (`:68-71`) |
+│ +| `DEFAULT_ROLE` | `"worker"` (`:37`) | one of the role keys | which floor applies when no role is named | an **unknown explicit role is refused**, not defaulted (F1-2) |
+│ +| config keys | `PROJECT AGENT SERVER REPO REF HARNESS NAMESPACE NAMESPACES TTL CRIER_URL DUCKBRAIN_URL GIT_AUTHOR_* CONFIG_SET_* *_TOKEN_FILE …` (`bunker-provision.sh:108-123`) | KEY=VALUE lines only | provisioning inputs | an unknown key is refused (`:118`); a non-`KEY=VALUE` line is refused (`:103`) |
+│ +| mode | `check`/`apply`/`destroy` (`:561-609`) | one of three | what the run does | `--destroy` requires `--yes` and a non-empty `--agent`, else exit 2 (`:550-558`) |
+│ +
+│ +**Config-vs-CLI precedence (read this round).** `load_config` (`:95-123`) parses the file as data
+│ +(never sources it), then the CLI flags are re-applied on top — "the command line always wins"
+│ +(`:598`). Five flags were assigned during parsing and then overwritten by `load_config`, so they
+│ +are applied again after the config (`:605-611`) — a documented precedence bug fixed by re-ordering.
+│
+│  **Floor precedence (verified, F1-3).** `disk_floor.py:115-141` `resolve()` applies, in order:
+│  `--disk-floor` (cli, `:127`) → `NODE_DISK_FLOOR` (env, `:129`) → `[disk]` config key
+│ -(`{role}_gib`, then `default`, `:130-140`) → `ROLE_DEFAULTS[role]` (`:141`). This round-2
+│ -chapter flagged the precedence UNVERIFIED; it is now read and confirmed, so the UNVERIFIED flag
+│ -is removed.
+│ +(`{role}_gib`, then `default`, `:130-140`) → `ROLE_DEFAULTS[role]` (`:141`).
+│
+│  ## 6. Contracts in and out
+│
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│ -| M1-C1 | crier | out | `bunker-crier-connect.sh` (writes `auth/crier.token`) | crier `POST /agents/{id}` handler | **UNVERIFIED** — token exchange not re-run this round; both sides unread |
+│ -| M1-C2 | bunker daemon | out | `lib.sh:75` `bunker_exec` | **rumour — one side only** (the `bunker` binary) | works (short create/exec/cp calls) |
+│ +| M1-C1 | crier | out | `bunker-crier-connect.sh` (writes `auth/crier.token`) | crier `internal/registry/handler.go:598` `HandleRegister` (POST `/agents/{id}`) | **UNVERIFIED** — token exchange not re-run this round |
+│ +| M1-C2 | bunker daemon | out | `lib.sh:75` `bunker_exec` | **rumour — one side only** (the external `bunker` binary) | works (short create/exec/cp calls) |
+│
+│  ## 7. Verification
+│
+│ @@ -89,7 +96,7 @@
+│  |---|---|---|---|---|
+│  | shell parse | `for f in scripts/bunker-*.sh scripts/node-create.sh scripts/verify-node.sh scripts/bunker-crier-connect.sh; do bash -n "$f"; done` | exit 0 | 2026-11-06 | PASS (in 20/20 sweep) |
+│  | python compile | `python3 -m py_compile scripts/disk_floor.py scripts/node_identity.py scripts/node_gateway_auth.py scripts/node_seed.py scripts/node_seed_drift.py scripts/node_env.py scripts/node_freshness.py` | exit 0 | 2026-11-06 | PASS |
+│ -| disk floor unit | `python3 tests/test_disk_floor.py` | 12 tests pass | 2026-11-06 | **PASS** (12 tests, rc 0) |
+│ +| disk floor unit | `python3 tests/test_disk_floor.py` | 12 tests pass | 2026-11-06 | **PASS** (rc 0) |
+│  | certification ladder | `scripts/verify-node.sh --agent <id> --server <host>` on a live node | per-leg observation | not run this round | **UNVERIFIED** (needs a live node; legs documented in §11) |
+│
+│ … omitted 72 diff line(s) across 1 additional file(s)/section(s)
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | `943ef984dc093e5780605ac6e54cd043122126ef` (code-factory HEAD, 2026-11-06) |
+│  | Language / runtime | Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side); consumes scheduler + crier |
+│ -| Status | **VERIFIED** for `node-bus-worker.py` contracts (imports `:66-78`, `text` read `:986`, reply shape `:1128-1144`, `deliver`/`ack` `:1160-1201`, `dispatch_wall` `:1152-1157`); other units structure-mapped only |
+│ +| Status | **VERIFIED** for `node-bus-worker.py` contracts (imports `:66-78`, `text` read `:986`, reply shape `:1128-1144`, settlement `:1300-1367`, CLI `:1430-1478`, `dispatch_wall` `:1152-1157`); `add_family_lanes.py`/`configure_family.py`/`load_lane_config.py` structure-mapped only |
+│
+│  ## 2. Purpose, authority and position
+│
+│ @@ -30,15 +30,15 @@
+│
+│  | Submodule | Unit | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│ -| S1 declare and configure lanes | `add_family_lanes.py`, `configure_family.py`, `load_lane_config.py` | **active** | `add_family_lanes.py` has a `main()` entrypoint; `configure_family.py:24-28` reads the scheduler operator token at module import |
+│ -| S2 resolve a target | `lane_target.py` | **active** | `tests/test_lane_target.py` exercises it (40 tests PASS this round) |
+│ -| S3 consume the inbox, sign, reply | `node-bus-worker.py` | **active** | reads the inbox (`:986`), replies (`:1160`), acks (`:1185`) |
+│ +| S1 declare and configure lanes | `add_family_lanes.py`, `configure_family.py`, `load_lane_config.py` | **operator-invoked** | no in-repo caller — `grep -rn 'add_family_lanes\|configure_family\|load_lane_config' scripts/` matches only the files themselves (run this round). `configure_family.py:24-28` reads the scheduler operator token at module import |
+│ +| S2 resolve a target | `lane_target.py` | **active** | `tests/test_lane_target.py` exercises it (40 tests PASS this round); no production caller in-repo |
+│ +| S3 consume the inbox, sign, reply | `node-bus-worker.py` | **active** | reads the inbox (`:986`), replies (`:1160`), acks (`:1185`), settles (`:1300-1367`) |
+│
+│ -**Finding F2-2 (this round).** `configure_family.py:24-28` hardcodes `PID = "1755676"` and
+│ -reads `/proc/<PID>/environ` at module import to extract `SCHEDULER_OPERATOR_TOKEN`, with no
+│ -fallback. Configuration fails (or mis-targets) before the chapter's "partial write" failure mode
+│ -unless that exact process is alive. The config path is non-portable until its credential
+│ -acquisition contract is established.
+│ +**Finding F2-2.** `configure_family.py:24-28` hardcodes `PID = "1755676"` and reads
+│ +`/proc/<PID>/environ` at module import to extract `SCHEDULER_OPERATOR_TOKEN`, with no fallback.
+│ +Configuration fails (or mis-targets) before the chapter's "partial write" failure mode unless that
+│ +exact process is alive. The config path is non-portable until its credential acquisition contract
+│ +is established.
+│
+│  ## 4. Dependencies
+│
+│ @@ -55,13 +55,14 @@
+│  | Import | Provider | Contract relied on | If it changes |
+│  |---|---|---|---|
+│  | `urllib.request` | stdlib | `node-bus-worker.py:66-78` imports urllib, **not** `crier_client`; the node speaks HTTP + ed25519 signing itself | n/a (stdlib) |
+│ -| `lib.sh` / `harness-vars.sh` | this repo | shell helpers + CF_* validation on the run path | see M0 |
+│ +| `lib.sh` / `harness-vars.sh` | this repo | shell helpers + CF_* validation on the run path | see M0 / M5 |
+│
+│  **4c. Service contracts** — see §6.
+│
+│  ## 5. Settings register
+│
+│ -`node-bus-worker.py` fixes the run-budget and inbox constants (`:80-114`):
+│ +`node-bus-worker.py` fixes the run-budget and inbox constants (`:80-114`) and the CLI
+│ +(`:1430-1478`):
+│
+│  | Setting | Default | Range | Governs | What breaks if changed |
+│  |---|---|---|---|---|
+│ @@ -70,6 +71,10 @@
+│  | `DEFAULT_INBOX_LIMIT` | 10 (`:80`) | positive int | inbox batch size | larger batches raise per-poll latency |
+│  | `DEFAULT_LEASE_SECONDS` | 30 (`:81`) | positive int | lease on each retrieve | too long holds messages during a crash |
+│  | `SEEN_LIMIT` | 200 (`:84`) | positive int | idempotency window | smaller window re-runs a redelivered dispatch |
+│ +| `--reply-to` | `"scheduler"` (`:1431`) | an agent id | result recipient when the dispatch names none | a wrong default drops replies |
+│ +| `--wait-seconds` | 0 (`:1438`) | 0..120 (`:1464`) | inbox long-poll budget | outside 0..120 → exit 2 ("the bus answers 400 outside it") |
+│ +| `--interval` | 15 (`:1442`) | positive int | seconds between `--loop` polls | 0 starves the loop |
+│ +| `--harness-wall` / `--timeout` | `DEFAULT_HARNESS_WALL` / `DEFAULT_TIMEOUT` (`:1446-1449`) | positive int | per-run wall / per-request timeout | see F2-3 for the wall fallback |
+│
+│  ## 6. Contracts in and out
+│
+│ @@ -98,10 +103,16 @@
+│
+│  ## 9. Log lines (verbatim)
+│
+│ +The worker prints via `lib.sh` helpers plus three local aliases (`node-bus-worker.py:124-137`:
+│ +`PASS`/`FAIL`/`WARN`/`..`). The observable surface is therefore per-measurement helper rows, not a
+│ +fixed set of distinct strings; the evidentiary rows are the refusals, which name the rule:
+│ +
+│  | Level | Line | Emitted when | Kind |
+│  |---|---|---|---|
+│ -| — | `  PASS  %s — %s` / `  FAIL  %s — %s` (`node-bus-worker.py:124-129`) | every measurement row | descriptive (same rule as M0 F0-4) |
+│ +| — | `  PASS  %s — %s` / `  FAIL  %s — %s` (`node-bus-worker.py:125,129`) | every measurement row | descriptive (same rule as M0 F0-4) |
+│ +| — | `  FAIL  identity — …; refusing` (`:603`) | unparseable/absent identity | evidentiary |
+│  | — | `inbox — GET /agents/cf-node/inbox/stats -> 200` | a valid signed inbox read (FACT-04) | evidentiary |
+│ +| — | a `brief.digest` mismatch is refused, not warned (`:37`) | dispatch digest != sha256(text) | evidentiary |
+│
+│  ## 10. Failure modes, indications and recovery
+│
+│ … omitted 52 diff line(s) across 1 additional file(s)/section(s)
+│ docs/handbook/chapters/M3-repository.md
+│ @@ -13,15 +13,17 @@
+│
+│  ## 2. Purpose, authority and position
+│
+│ -Gives the node the right tree and gives finished work its only path into `origin/main`
+│ +Gives the node the right tree and gives finished work its path into `origin/main`
+│  (`land-node-branch.sh`). It decides what a landing may publish (an explicit
+│  `<merge_sha>:refs/heads/<main>`, never `HEAD`), what the gate may allow, and when a clone is too
+│  stale. It may not decide what work is *worth* landing — that is the foreman/board (M4).
+│
+│  **What breaks if this module is absent.** The node has no right tree and work cannot leave it.
+│ -`land-node-branch.sh` is the only path a finished node task has into `origin/main` — the result
+│ -envelope names `branch` and `commit` and "no step in this repo merges them" (`:8-9`). M3 owns
+│ -F5 LANDING, a primary flow.
+│ +`land-node-branch.sh` is the landing path for a finished node task — the result envelope names
+│ +`branch` and `commit` (`node-bus-worker.py:1141-1142`) and this script is what merges them. M3
+│ +owns F5 LANDING, a primary flow. (Round-3's "the only path into origin/main" rested on a code
+│ +comment; the claim is softened here to what the code shows: this is the script that performs the
+│ +landing.)
+│
+│  **What breaks if it lies.** A landing that reports success without the commit actually in
+│  `origin/main` is the exact defect the script is built to refuse: it pushes an explicit object,
+│ @@ -32,18 +34,15 @@
+│
+│  | Submodule | Unit | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│ -| S1 clone and track freshness | `clone_lane.py`, `repo_freshness.py` | **active** | `clone_lane.py:129` `main()` is the entrypoint |
+│ -| S2 land a branch | `land-node-branch.sh` | **active** | owns F5 LANDING |
+│ -| S3 commit hooks and gates | `install-gitreins.sh`, `.gitleaks.toml`, `core.hooksPath` | **active** | hook generated by `install-gitreins.sh:124-136` into the *target* repo's `.git/hooks/pre-commit` |
+│ +| S1 clone and track freshness | `clone_lane.py`, `repo_freshness.py` | **active** | `clone_lane.py:129` `main()` is the entrypoint (operator-invoked; no in-repo caller). `repo_freshness.py` body unread this round |
+│ +| S2 land a branch | `land-node-branch.sh` | **active** | owns F5 LANDING; invoked by the node's result envelope (M3-C2) |
+│ +| S3 commit hooks and gates | `install-gitreins.sh`, `.gitleaks.toml`, `core.hooksPath` | **active** | hook generated by `install-gitreins.sh:120-138` into the target repo's `.git/hooks/pre-commit` |
+│
+│ -**Finding F3-2 (this round).** `clone_lane.py` does **not** clone a git repository. It clones a
+│ -**lane row** in the scheduler DB: it reads the source `projects` row (`:74`), copies its fields
+│ -(`:82-97`), and INSERTs/UPDATEs the destination (`:107-118`) with `enabled=0` (`:88`) and
+│ -`repo_url` `local:~/code-factory` (`:89`). Its docstring (`:2`) says "create a lane row by cloning
+│ -a canonical sibling". The node's actual git checkout is produced by the provisioner (M1), not by
+│ -`clone_lane.py`. The S1 name "clone and track freshness" is therefore two distinct operations:
+│ -lane-row cloning (a scheduler-config action, conceptually M2) and repository freshness
+│ -(`repo_freshness.py`). This is a structural finding, not a mis-statement of what the script does.
+│ +**Finding F3-2.** `clone_lane.py` does **not** clone a git repository. It clones a **lane row** in
+│ +the scheduler DB: it reads the source `projects` row (`:74`), copies its fields (`:82-97`), and
+│ +INSERTs/UPDATEs the destination (`:107-118`) with `enabled=0` (`:88`) and `repo_url`
+│ +`local:~/code-factory` (`:89`). The node's actual git checkout is produced by the provisioner (M1),
+│ +not by `clone_lane.py`.
+│
+│  ## 4. Dependencies
+│
+│ @@ -70,22 +69,24 @@
+│  | Setting | Default | Range | Governs | What breaks if changed |
+│  |---|---|---|---|---|
+│  | `GITREINS_PIN` | `0.17.1` (`install-gitreins.sh:19`) | exact version | gate binary pin | a non-matching installed version → `bad "gitreins" "version … != pin"` (`:53`) |
+│ -| `GITREINS_VENV` | `$HOME/gitreins-venv` (`:23`) | a `$HOME` path | where the pinned binary lives | the hook hardcodes this venv path (`:134`); moving it breaks the hook |
+│ +| `GITREINS_VENV` | `$HOME/gitreins-venv` (`:23`) | a `$HOME` path | where the pinned binary lives | the hook hardcodes this venv path (`:120-138`); moving it breaks the hook |
+│  | `REMOTE` / `MAIN` | `origin` / `main` (`land-node-branch.sh:36`) | git ref names | push/fetch targets | a different remote is an explicit operator choice |
+│  | `GATE` (`--gate-cmd`) | **empty** (`:36`), set only by `--gate-cmd` (`:76`) | a shell command | the optional pre-merge gate | **when empty, no gate runs** (`:171-193`): `land-node-branch.sh` publishes with no project gate by default |
+│
+│ -**Gate-by-default correction (F3-3).** The round-2 chapter described the gate as part of landing.
+│ -Measured: `land-node-branch.sh:36` initialises `GATE=""`; `:76` sets it only from `--gate-cmd`;
+│ -`:171-193` runs a gate only when `GATE` is non-empty. A landing with no `--gate-cmd` runs **no**
+│ -project gate. `install-gitreins.sh:120-136` writes a target hook, but that does not make the
+│ -landing command's gate mandatory, nor does a generated hook file prove git invokes it.
+│ +**Gate-by-default correction (F3-3).** `land-node-branch.sh:36` initialises `GATE=""`; `:76` sets it
+│ +only from `--gate-cmd`; `:171-193` runs a gate only when `GATE` is non-empty. A landing with no
+│ +`--gate-cmd` runs **no** project gate.
+│
+│  ## 6. Contracts in and out
+│
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│ -| M3-C1 | git remote (origin) | out | `land-node-branch.sh:265` `git push $REMOTE $merge_sha:refs/heads/$MAIN` | the remote's `refs/heads/<main>` | works (explicit object, never `HEAD`) |
+│ -| M3-C2 | node | in | **rumour — one side only** (the node's result envelope `branch`/`commit`; no producer file:function named) | `land-node-branch.sh:127-149` resolves `MAIN_REF` and `branch_ref` | works (both must be fetchable) — consumer side named, producer side is the node's envelope, not a function |
+│ +| M3-C1 | git remote (origin) | out | `land-node-branch.sh:265` `git push $REMOTE $merge_sha:refs/heads/$MAIN` | the remote's `refs/heads/<main>` (external) | works (explicit object, never `HEAD`) |
+│ +| M3-C2 | node | in | `scripts/node-bus-worker.py:1141-1142` builds `branch`/`commit` (the reply envelope's `git_field(…rev-parse…)` entries) | `land-node-branch.sh:127-149` resolves `MAIN_REF` and `branch_ref` | works (both must be fetchable) |
+│ +
+│ +The round-3 M3-C2 producer was "rumour — one side only". The producer is nameable: it is
+│ +`node-bus-worker.py`'s reply envelope (`:1128-1144`), specifically the `branch`/`commit` fields at
+│ +`:1141-1142`. Both sides are now named.
+│ … omitted 68 diff line(s) across 1 additional file(s)/section(s)
+│ docs/handbook/chapters/M4-board.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | `943ef984dc093e5780605ac6e54cd043122126ef` (code-factory HEAD, 2026-11-06) |
+│  | Language / runtime | bash (boardctl wrapper) + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│ -| Status | **VERIFIED** at store level (357 rows / 515 events, `board_drift` RESULT OK, both measured this round); boardctl verb surface is the external executable's, not this repo's |
+│ +| Status | **VERIFIED** at store level (357 rows / 515 events / 0 fixtures, `board_drift` RESULT OK, `boardctl validate` RESULT OK with 7 warnings — all measured this round); the `boardctl` verb surface is the external executable's, not this repo's |
+│
+│  ## 2. Purpose, authority and position
+│
+│ @@ -30,7 +30,7 @@
+│
+│  | Submodule | Unit | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│ -| S1 write and validate rows | `boardctl` (wrapper), `board_lock.py` | **active** | `scripts/boardctl` is the stable entrypoint (`exec boardctl -C "$ROOT"`); `board_lock.py` adjudicates the lock |
+│ +| S1 write and validate rows | `boardctl` (wrapper), `board_lock.py` | **active** | `scripts/boardctl` is the stable entrypoint (`exec boardctl -C "$ROOT"`); `board_lock.py` adjudicates the lock (`adjudicate`, `:149`) |
+│  | S2 compare board copies | `board_drift.py` | **active** | `python3 scripts/board_drift.py check …` → RESULT OK this round |
+│
+│  ## 4. Dependencies
+│ @@ -57,14 +57,20 @@
+│  |---|---|---|---|---|
+│  | `-C <repo-or-board-dir>` | none (wrapper forces `-C "$ROOT"`) | a board dir | which board the verb targets | the wrapper pins it to the repo root so a bare `boardctl` cannot hit the wrong board |
+│  | `update --status complete` | — | requires `--evidence-run-id` | row closeout | a completion without a bound run id is **refused** (`boardctl --help:25`; TR-251) |
+│ -| `create` / `update` (id, fingerprint) | — | unique id; unique finding fingerprint | row identity | a duplicate id is refused (`boardctl: task id "…" already exists — create aborted`); a duplicate finding fingerprint is refused |
+│ +| `create` / `update` (id, fingerprint) | — | unique id; unique finding fingerprint | row identity | a duplicate id is refused (`task id "…" already exists — create aborted`); a duplicate finding fingerprint is refused |
+│ +| `validate [--strict-keys] [--fail-on dangling-dep]` | — | flags | semantic validation strictness | `--strict-keys` tightens key uniformity; `--fail-on dangling-dep` promotes a dangling dependency from warning to failure (`boardctl validate --help`) |
+│
+│  ## 6. Contracts in and out
+│
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│ -| M4-C1 | foreman | in | **rumour — one side only** (`boardctl create/update`, an invocation, not a function) | **rumour — one side only** (the JSONL store `tasks.jsonl`/`events.jsonl`, a file, not a function) | works (row `{id, status, title, …}`) |
+│ -| M4-C2 | gitreins | in | **rumour — one side only** ("the judge's verdict", no file:function) | `boardctl update --status complete` (an invocation) | **UNMEASURED** — round-2 carried "broken (OUTLINE §IV)"; the state was inherited, not measured this round |
+│ +| M4-C1 | foreman | in | **external** — the foreman lives outside this repo; `grep -rn boardctl scripts/` matches only `board_lock.py:98/:100` (a grep over the wrapper) and `gen_unit_map.py:45` (a name list). No in-repo producer invokes `boardctl create` | the JSONL store `.coding-hermes/board/{tasks,events}.jsonl`, appended via the external `boardctl` binary (a file, not a function) | **UNVERIFIED** — the store is measured (357/515) but the foreman→board write wire is not exercised in this repo |
+│ +| M4-C2 | gitreins | in | **external** — the judge's verdict file (written by the gitreins binary, not in this repo) | `boardctl update --status complete` (the external binary; completion REQUIRES `--evidence-run-id`) | **UNVERIFIED** — round-3 carried "broken (OUTLINE §IV)" as an inherited state; the gitreins-verdict→board-close path was not re-run this round |
+│ +
+│ +Both rows carry no in-repo function on either side because every side is an external peer (the
+│ +foreman, the gitreins binary, the `boardctl` binary, and the JSONL store). The honest state is
+│ +therefore **UNVERIFIED**, not "works" — a "works" verdict attached to an unnamed side is a rumour
+│ +with a verdict (grok 11 / deepseek 1).
+│
+│  ## 7. Verification
+│
+│ @@ -72,16 +78,17 @@
+│  |---|---|---|---|---|
+│  | store census | `jq -r '.id' .coding-hermes/board/tasks.jsonl | wc -l` | 357 rows | 2026-11-06 | PASS (357) |
+│  | events count | `wc -l .coding-hermes/board/events.jsonl` | 515 lines | 2026-11-06 | PASS (515) |
+│ -| drift | `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-06 | **PASS** (RESULT: OK, 357 vs 357) |
+│ -| lock adjudication | `scripts/board_lock.py` on held/unheld lock | RESIDUE / HELD named | 2026-11-06 | PASS (selftest arm 33) |
+│ +| drift | `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-06 | **PASS** (RESULT: OK; HEAD==origin/main `943ef98`) |
+│ +| semantic validate | `scripts/boardctl validate` | RESULT OK with named warnings | 2026-11-06 | **PASS** — `357 tasks, 515 events, 0 fixtures`, `key uniformity 357/357 (0 drift)`, `RESULT: OK (7 warning(s))` |
+│ +| lock adjudication | `scripts/board_lock.py` on a held/unheld lock | RESIDUE / HELD named (`board_lock.py:149`) | 2026-11-06 | UNVERIFIED — not re-run this round (round-3 cited "arm 33", which does not exist) |
+│  | duplicate id refusal | `boardctl create --id CF-357 --title x` | refused | 2026-11-06 | **PASS** — `task id "CF-357" already exists … create aborted` |
+│
+│ -**Census-vs-validation correction (F4-2).** The round-2 §7 "store integrity" check is a
+│ -**census**, not an integrity validation: `jq -r '.id' … | wc -l` counts extracted ids and does
+│ -not check uniqueness, status vocabulary, dependency relationships or evidence binding. Byte
+│ -parity (`board_drift`) proves equality with a reference, not semantic correctness. The real
+│ -validation is boardctl's `validate` verb and its refusal fixtures (duplicate id above; the
+│ -`--status complete REQUIRES --evidence-run-id` refusal).
+│ +**Census-vs-validation correction (F4-2).** The `jq -r '.id' … | wc -l` check is a **census**,
+│ +not integrity validation. The real validation is `boardctl validate`, which this round returned
+│ +`RESULT: OK (7 warning(s))` — the warnings are free-form `guard_result`/`ci_result` values
+│ +(outside the `{PASS,FAIL,SKIP}` vocabulary), a priority/title disagreement (CF-150, CF-192,
+│ +CF-371), a duplicate event id (line 337), and a headerless board (header checks skipped). Warnings
+│ +are distinct from failures; `--strict-keys` and `--fail-on dangling-dep` tighten the gate.
+│
+│  ## 8. Metrics
+│
+│ @@ -90,11 +97,14 @@
+│
+│  ## 9. Log lines (verbatim)
+│
+│ +`boardctl` is an external binary, so these strings carry no file:line in this repo; they are
+│ +quoted from the captured run output this round:
+│ +
+│  | Level | Line | Emitted when | Kind |
+│  |---|---|---|---|
+│  | — | `boardctl: task id "%s" already exists in tasks.jsonl — create aborted` | duplicate id | evidentiary |
+│ -| — | `boardctl: task "%s" not found in tasks.jsonl` | update/create against a missing id | evidentiary |
+│ … omitted 32 diff line(s) across 1 additional file(s)/section(s)
+│ docs/handbook/chapters/M5-harness.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | `943ef984dc093e5780605ac6e54cd043122126ef` (code-factory HEAD, 2026-11-06) |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side) |
+│ -| Status | **VERIFIED** — `harness-vars.sh` (318 lines), `harness_resolve.py` (400 lines), `install-hermes.sh` (375 lines) read in full; the remaining installer bodies not read line-by-line |
+│ +| Status | **UNVERIFIED** — `harness-vars.sh` (318 lines), `harness_resolve.py` (400 lines), `install-hermes.sh` (375 lines), `install-gitreins.sh` (180 lines) read in full; `install-codex.sh` partial; `install-claude-code.sh`/`install-deepseek.sh`/`install-pi-agent.sh`/`install-opencode.sh` bodies not read line-by-line; the conformance battery not run this round |
+│
+│  ## 2. Purpose, authority and position
+│
+│ @@ -26,27 +26,25 @@
+│  `install-gitreins.sh:12-13`). A silent acceptance of a credential value lets two lanes on one node
+│  contaminate each other (matrix §5).
+│
+│ -**Finding F5-2 (this round).** `harness_resolve.py` is **not** the runtime resolver. A repo-wide
+│ -search finds it referenced only by itself, `tests/selftest.sh` and `tests/test_harness_resolve.py`
+│ -— no production caller. The node's actual selection reads `node.json`'s `harness.cmd`/`harness.name`
+│ +**Finding F5-2.** `harness_resolve.py` is **not** the runtime resolver. A repo-wide search finds it
+│ +referenced only by itself, `tests/selftest.sh` and `tests/test_harness_resolve.py` — no production
+│ +caller. The node's actual selection reads `node.json`'s `harness.cmd`/`harness.name`
+│  (`node-bus-worker.py:407-409`, default `hermes`) and builds the harness argv directly
+│  (`node-bus-worker.py:459-469`); the dispatcher invokes Hermes directly (`dispatcher.py:260`). The
+│ -resolver is a standalone selection facility, not the wired runtime authority the round-2 §2
+│ -claimed ("the single resolver").
+│ +resolver is a standalone selection facility, not the wired runtime authority round-2 claimed.
+│
+│  ## 3. Submodule inventory
+│
+│  | Submodule | Unit | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│ -| S1 hermes | `install-hermes.sh` | **active** | measured adapter, `install-hermes.sh:2-6`; certified by the conformance battery |
+│ -| S2 foreign harnesses | `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh` | **active** (installed/checked by operator; capability varies — see F5-3) | sourced by `scripts/harness/`; `install-codex.sh:47` sources `harness-vars.sh`; `install-opencode.sh:4-6` is UNVERIFIED/`--apply`-refusing |
+│ -| S3 toolchain/gate/node | `install-go.sh`, `install-gitreins.sh`, `project-node.sh` | **active** | gate pin at `install-gitreins.sh:19` |
+│ +| S1 hermes | `install-hermes.sh` | **active** | measured adapter; certified by the conformance battery |
+│ +| S2 foreign harnesses | `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh` | **active** (installed/checked by operator; capability varies — see §11) | `install-opencode.sh:15`, `install-deepseek.sh`, `install-pi-agent.sh` source `harness-vars.sh`; `install-claude-code.sh:36` sources `lib.sh` |
+│ +| S3 toolchain/gate/node | `install-go.sh`, `install-gitreins.sh`, `project-node.sh` | **active** | gate pin at `install-gitreins.sh:19`; `install-gitreins.sh` is the **installer** (M3.S3 owns the hook behaviour) |
+│  | S4 harness resolution | `harness_resolve.py` | **optional** | no production caller (`grep -rln harness_resolve scripts/` → self + tests only); F5-2 |
+│ -| S5 variable contract | `harness/harness-vars.sh` | **active** | sourced by `install-hermes.sh:21` |
+│ +| S5 variable contract | `harness/harness-vars.sh` | **active** | sourced by `install-hermes.sh`, `install-opencode.sh:15`, `install-deepseek.sh`, `install-pi-agent.sh`, `install-codex.sh:47` (conditional) |
+│
+│  **Finding F5-4.** OUTLINE v2 lists M5 as 5 submodules (S1–S5); `docs/UNIT-MAP.yaml` lists 3
+│ -(S1–S3). The two structure maps still disagree with no reconciliation; the 5-submodule reading is
+│ -authoritative here (the code carries S4 and S5).
+│ +(S1–S3). The two structure maps still disagree; the 5-submodule reading is authoritative here.
+│
+│  ## 4. Dependencies
+│
+│ @@ -63,27 +61,41 @@
+│  | Import | Provider | Contract relied on | If it changes |
+│  |---|---|---|---|
+│  | `lib.sh` `fetch_verified` | this repo | pinned, digest-checked download, never `curl \| sh` | see M0 |
+│ -| `harness-vars.sh` | this repo | CF_* validation: path-only credential, no ambient key, `$HOME`-scoped workdir | a contract loosening re-opens lane contamination |
+│ +| `harness-vars.sh` | this repo (S5) | CF_* validation: path-only credential, no ambient key, `$HOME`-scoped workdir | a contract loosening re-opens lane contamination |
+│  | `harness-matrix.json` | this repo (`config/`) | `by_family`, `hosts`, `shims`, `default` (`load_matrix`, `:188-216`) | a malformed table → `harness_matrix_invalid` refusal |
+│
+│  **4c. Service contracts** — see §6.
+│
+│  ## 5. Settings register
+│
+│ +`harness-vars.sh` (S5) is the register for the CF_* set it enforces. `CFV_DECLARED`
+│ +(`:28-29`, 12 vars) and `CFV_REQUIRED` (`:31`, 6 vars) define the surface.
+│ +
+│  | Setting | Default | Range | Governs | What breaks if changed |
+│  |---|---|---|---|---|
+│ -| `HERMES_PYTHON_BIN` | `python3` (`install-hermes.sh:26`) | interpreter satisfying >=3.11,<3.14 | which python builds the venv | 3.14.x is refused (`:108-115`) |
+│ -| `HERMES_PIN` | `0.19.0` (`:24`) | exact | installed hermes version | mismatch → `bad "version"` (`:296`) |
+│ -| `GITREINS_PIN` | `0.17.1` | exact | gate binary | mismatch → `bad "gitreins"` (`install-gitreins.sh:53`) |
+│ -| `CF_CODEX_PIN` | `0.166.0` (`install-codex.sh:49`) | exact | codex version | mismatch → refuse |
+│ -| `CF_MAX_TURNS` / `CF_TIMEOUT_S` | 40 / 1800 (`harness-vars.sh:276-277`) | 1..1000 / 1..86400 | run budget | refusal outside range |
+│ -| matrix `default` | `"hermes"` (`harness_resolve.py:211`) | a harness name | fallback selection | a non-string/empty default → `harness_matrix_invalid` |
+│ +| `CF_MAX_TURNS` | 40 (`:276`) | integer 1..1000 (`:281`) | turn budget | 0 or >1000 refused; loosening lets a run spin unbounded |
+│ +| `CF_TIMEOUT_S` | 1800 (`:277`) | integer 1..86400 (`:287`) | wall-clock per turn | refusal outside range; `install-codex.sh` re-defaults to 300 (see §11) |
+│ +| `CF_MODEL` | unset (required in `--contract`) | no spaces (`:225`) | model id | a model id with spaces refused |
+│ +| `CF_PROVIDER` / `CF_NAMESPACE` / `CF_LANE` | unset | lowercase `[a-z0-9._-]` (`:226-231`) | lane/namespace naming | an uppercase or symbol name refused |
+│ +| `CF_RUN_ID` | unset | `[A-Za-z0-9._:-]` (`:236`) | correlation id | a non-id value refused |
+│ +| `CF_BASE_URL` | unset | http(s), **no userinfo** (`:216`, `:219`) | harness endpoint | a URL carrying `user:pass@` is refused (credential-in-URL) |
+│ +| `CF_API_KEY_FILE` | unset | a path, mode `[0-7]00` (`:203`) | credential delivery | a VALUE refused; missing/empty file refused; mode 644 refused (`:204`) |
+│ +| `CF_API_KEY` + `CFV_AMBIENT_KEYS` (`:33`) | unset | must be **empty** (`:176-185`) | ambient credential ban | a non-empty value refused |
+│ +| `CF_WORKDIR` | unset | exists, resolves inside `$HOME` (`:244-249`) | harness write boundary | outside `$HOME` refused |
+│ +| `CF_SKILLS_DIR` | unset | a path (`:258`) | skills root | warns (not fails) if the dir does not exist yet (`:260`) |
+│ … omitted 86 diff line(s) across 1 additional file(s)/section(s)
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -9,48 +9,50 @@
+│  | Revision | `943ef984dc093e5780605ac6e54cd043122126ef` (code-factory HEAD, 2026-11-06) |
+│  | Language / runtime | Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│ -| Status | **VERIFIED** for `master_doc_check.py` (268 lines) read in full; the rest of the pipeline not read line-by-line |
+│ +| Status | **UNVERIFIED** — `master_doc_check.py` (268 lines) read in full and its FAIL reproduced; the rest of the pipeline (`master_doc_fill.py`, `gen_nasa_handbook.py`, `master_doc_panel.py`, `gen_unit_map.py`, …) not read line-by-line; the gate reads `MASTER-DOC: FAIL` |
+│
+│  ## 2. Purpose, authority and position
+│
+│  The system's description of itself, and the gate that checks the *structure* of that description.
+│ -`master_doc_check.py` recomputes VERIFIED from headings, locators and facts; without it a VERIFIED
+│ -stamp is prose. `panel_loop.py` is the loop this handbook chapter is a product of.
+│ +`master_doc_check.py` validates headings, locator existence/bounds and citation requirements, then
+│ +**reports the document's declared status — it does not recompute it** (F6-2, corrected this round).
+│ +`panel_loop.py` is the loop this handbook chapter is a product of.
+│
+│  **What breaks if this module is absent.** The system cannot describe itself, and no one can check
+│  the description.
+│
+│ -**What breaks if it lies.** Two distinct failure modes, which round-2 conflated:
+│ +**What breaks if it lies.** Two distinct failure modes:
+│  - The PASS-over-zero failure (fixed): `DEFAULT_ROOTS` (`master_doc_check.py:52`) falls back to
+│    `docs/handbook/appendices/units`, and an empty selection is a named failure (`:191-209`).
+│  - **The gate is a structural/citation gate, not a semantic truth verifier (F6-2).**
+│ -  `master_doc_check.py:94-125` checks headings and locator existence/bounds; `:128-138` reads the
+│ -  document's *supplied* status and imposes citation requirements; `:215-216` retains and counts
+│ -  that supplied status even when errors exist. It does **not** verify that cited code supports the
+│ -  prose. The live result — `44 module(s): 37 VERIFIED, 50 error(s)` with `MASTER-DOC: FAIL` —
+│ -  shows 37 modules stamped VERIFIED alongside 50 errors: the stamp is the document's own claim,
+│ -  re-emitted, not a re-derivation of truth.
+│ +  `master_doc_check.py:128-138` reads the document's *supplied* status and imposes citation
+│ +  requirements (`VERIFIED` needs >=3 locators and at least one cited FACT-nn); `:214-216` retains
+│ +  and counts that supplied status. It does **not** verify that cited code supports the prose. The
+│ +  live result — `44 module(s): 37 VERIFIED, 50 error(s)`, `MASTER-DOC: FAIL` — shows 37 modules
+│ +  stamped VERIFIED alongside 50 errors: the stamp is the document's own claim, re-emitted, not a
+│ +  re-derivation of truth.
+│
+│  ## 3. Submodule inventory
+│
+│  | Submodule | Unit | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│ -| S1 skeleton + census | `master_doc_skeleton.py` | **active** | `main()` entrypoint (structure-mapped) |
+│ -| S2 fill | `master_doc_fill.py` | **active** | `--engine hermes` runs a seat (UNIT-MAP:183-184) |
+│ +| S1 skeleton + census | `master_doc_skeleton.py` | **active** | `main()` entrypoint; structure-mapped |
+│ +| S2 fill | `master_doc_fill.py` | **operator-invoked** | `main()` (`:393`); `--engine api\|hermes`, `--workers 2`, `--provider deepseek` (`:394-411`); no in-repo production caller |
+│  | S3 gate | `master_doc_check.py` | **active** | `main()` at `:160`; selects `[0-9][0-9]-*.md` at `:188` |
+│  | S4 panel | `master_doc_panel.py`, `panel_loop.py`, `ownership.py` | **active** (panel), **optional** (ownership) | `panel_loop.py` runs this loop; `ownership.py` has no code caller (`grep -rn ownership.py scripts/` → self only) |
+│ -| S5 render | `gen_nasa_handbook.py`, `gen_system_views.py`, `sheet_style.py` | **active** | render the handbook |
+│ -| S6 corpus | `extract_owner_decisions.py` | **active** | extracts owner decisions |
+│ -| S7 unit-map | `gen_unit_map.py` | **active** | measures who references a unit |
+│ -| S8 patch-chain drift | `verify-patch.sh` | **active** | chain-break detection |
+│ +| S5 render | `gen_nasa_handbook.py`, `gen_system_views.py`, `sheet_style.py` | **operator-invoked** | `gen_nasa_handbook.py:247` `main()`; no in-repo caller (`grep -rn gen_nasa_handbook scripts/` → only `gen_unit_map.py:31` NOT_CALLERS) |
+│ +| S6 corpus | `extract_owner_decisions.py` | **operator-invoked** | no in-repo caller (grep empty) |
+│ +| S7 unit-map | `gen_unit_map.py` | **operator-invoked** | `main()`; no in-repo caller |
+│ +| S8 patch-chain drift | `verify-patch.sh` | **operator-invoked** | no in-repo caller, no cron/timer; run manually this round (VERIFY-PATCH: PASS) |
+│
+│ -**Finding F6-3 (this round).** `scripts/ownership.py` (170 lines, added at HEAD `943ef98`, "ops:
+│ -ownership tooling") is classified here for the first time. It decides who owns the canonical
+│ -checkout before a lane blocks on it (`status`/`claim`/`release` over `.coding-hermes/panel.lock`).
+│ -No script invokes it (`grep -rn ownership.py scripts/` matches only its own docstring); the
+│ -writer/judge session runs it manually. Classification: **optional** — operator-invoked, the system
+│ -is correct without it. Measured this round: `python3 scripts/ownership.py status` → state
+│ -`held-by-live-worker`, owner `panel_loop`.
+│ +Round-3 classified S5–S8 "active" on prose ("render the handbook", "extracts owner decisions",
+│ +"measures who references a unit", "chain-break detection"). The classification rule requires the
+│ +invoking line; a repo-wide grep finds no invoker for any of S5–S8 (only self-references and
+│ +`gen_unit_map.py`'s own `NOT_CALLERS` set at `:31`). They are **operator-invoked (optional)**.
+│ +
+│ +**Finding F6-3.** `scripts/ownership.py` (170 lines) decides who owns the canonical checkout before
+│ +a lane blocks on it (`status`/`claim`/`release` over `.coding-hermes/panel.lock`). No script
+│ +invokes it; the writer/judge session runs it manually. Classification: **optional**.
+│
+│  ## 4. Dependencies
+│
+│ @@ -74,15 +76,18 @@
+│
+│  | Setting | Default | Range | Governs | What breaks if changed |
+│  |---|---|---|---|---|
+│ -| `CF_MASTER_DIR` | unset | a directory | overrides root resolution (`:67`) | pointing it at a nonexistent dir yields a named failure |
+│ … omitted 76 diff line(s) across 1 additional file(s)/section(s)
+│ docs/handbook/chapters/M7-github.md
+│ @@ -9,13 +9,14 @@
+│  | Revision | `943ef984dc093e5780605ac6e54cd043122126ef` (code-factory HEAD, 2026-11-06) |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│ -| Status | **UNVERIFIED** — CLI surface measured (`github-app-token.py` exits 2 with no command); the settings/control regions read (`:45-52`, `:108-117`, `:719-723`; `github-app-refresh.sh:24-53,104-174`); mint not run (no App creds on this host) |
+│ +| Status | **UNVERIFIED** — CLI surface measured (`github-app-token.py` exits 2 with no command); the settings/control regions read (`:107-117`, `:300-372`, `:579`; `github-app-refresh.sh:37-53,104-174`); mint not run (no App creds on this host) |
+│
+│  ## 2. Purpose, authority and position
+│
+│ -Authenticates the fleet to the forge without a long-lived token in argv. It decides how an App
+│ -credential is minted, cached and refreshed. It may not decide which repos the fleet may touch —
+│ -that is the App installation scope.
+│ +Authenticates the fleet to the forge without a long-lived token in argv. It decides how a GitHub
+│ +**App installation token** is minted, cached and refreshed. It may not decide which repos the fleet
+│ +may touch — that is the App installation scope. (It does **not** mint the per-dispatch scoped token
+│ +M11 consumes, nor the node tokens M12 admits — see §12.)
+│
+│  **What breaks if this module is absent.** The fleet cannot authenticate without a human PAT — or
+│  a token leaks into `ps` output (FACT-05: credentials travel as file paths, never argv values).
+│ @@ -27,7 +28,7 @@
+│
+│  | Submodule | Unit | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│ -| S1 app credentials | `github-app-setup.sh`, `github-app-token.py`, `github-app-refresh.sh` | **active** | `github-app-refresh.sh` mints/installs on the node path (`:145-174`); token mint on the dispatch path (M11 consumes it) |
+│ +| S1 app credentials | `github-app-setup.sh`, `github-app-token.py`, `github-app-refresh.sh` | **active** | `github-app-refresh.sh` mints/installs on the node path (`:145-174`); token mint on the refresh path |
+│
+│  ## 4. Dependencies
+│
+│ @@ -36,13 +37,13 @@
+│  | Dependency | Version constraint | Where | How absence is detected |
+│  |---|---|---|---|
+│  | python3 | 3.x | control host | `command -v python3` empty → `bad "python3"` (`github-app-refresh.sh:60`) |
+│ -| GitHub App private key | an App key file (env file) | control host | `[ -f "$ENV_FILE" ]` absent → `bad "env_file" … exit 1` (`:57`) |
+│ +| GitHub App private key | an RSA `.pem`, mode **exactly 0600** (`github-app-token.py:344-352`) | control host | `GITHUB_APP_PRIVATE_KEY_FILE` unset → named problem (`:330-333`); mode != 0600 → refused (`:344-348`) |
+│
+│  **4b. Library contracts**
+│
+│  | Import | Provider | Contract relied on | If it changes |
+│  |---|---|---|---|
+│ -| GitHub App API (JWT mint + installation token) | github.com | installation-token endpoint | an API change breaks the mint |
+│ +| GitHub App API (JWT mint + installation token) | github.com | `POST /app/installations/{id}/access_tokens` (`:367-369`) | an API change breaks the mint |
+│
+│  **4c. Service contracts** — see §6.
+│
+│ @@ -51,19 +52,22 @@
+│  | Setting | Default | Range | Governs | What breaks if changed |
+│  |---|---|---|---|---|
+│  | subcommand | none | `check` / `token` / `jwt` / `manifest` | which credential operation runs | a bare invocation performs **no** mint — prints usage, exits 2 |
+│ -| `--env-file` | `~/.config/code-factory/github-app.env` (`github-app-token.py:45`, `:110`) | a path | the App's identity | absent env file → mint fails |
+│ -| `--api-base` | `https://api.github.com` (`:47`, `:115`) | a URL | API endpoint (tests point it local) | a wrong base breaks the mint |
+│ +| `GITHUB_APP_ID` | unset | numeric (`:310-315`) | the App identity | unset or non-numeric → named problem; no mint |
+│ +| `GITHUB_APP_INSTALLATION_ID` | unset | numeric (`:317-322`) | the installation scope | unset or non-numeric → named problem |
+│ +| `GITHUB_APP_PRIVATE_KEY_FILE` | unset | a path, mode **exactly 0600** (`:326-358`) | the RSA signing key | absent/0600-only/parse-failure all refused by name |
+│ +| `--env-file` | `GITHUB_APP_ENV_FILE` or `~/.config/code-factory/github-app.env` (`:300-304`) | a path | the App's identity source | absent env file → mint fails |
+│ +| `--api-base` | `GITHUB_API_BASE` or `https://api.github.com` (`:305-309`) | a URL | API endpoint (tests point it local) | a wrong base breaks the mint |
+│ +| token destination | `args.out` or `GITHUB_APP_TOKEN_FILE` or `DEFAULT_TOKEN_FILE` (`:579`) | a path | where the token is written | a wrong path writes the credential to the wrong place |
+│ +| `--if-older` | 0 (`:719-723`) | seconds | no-op while destination younger than N | 0 = always re-mint |
+│ +| refresh controls | `--env-file --token-file --node --server --min-age --git-credentials --api-base --local --dry-run --quiet` (`github-app-refresh.sh:37-53`) | per-flag | local vs node install, write/no-write | `--dry-run`/`--quiet` change write/no-write; `--node` installs into `$NODE:$HOME/.node/auth/github.token` (`:145-174`) |
+│  | `JWT_BACKDATE` / `JWT_LIFETIME` | 60 s / 540 s (`:50-51`) | seconds | JWT exp/iat window | GitHub rejects exp >10 min out |
+│  | `TIMEOUT` | 20 s (`:52`) | seconds | HTTP timeout | too short fails the mint |
+│ -| `--if-older` | 0 (`:719-723`) | seconds | no-op while destination younger than N | 0 = always re-mint |
+│ -| `--min-age` | 2400 s (`github-app-refresh.sh:28`) | seconds | refresh reuse floor | below it the existing token is kept |
+│ -| `--node` / `--server` / `--local` | unset / unset / 0 (`:26-31`) | a node + server, or local | local vs node install branch | node mode installs into `$NODE:$HOME/.node/auth/github.token` (`:145-174`) |
+│
+│  ## 6. Contracts in and out
+│
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│ -| M7-C1 | GitHub | out | `github-app-token.py` (JWT → installation token) | **rumour — one side only** ("github.com App installation", an external service, not a function) | works (read-only `check` mints in memory; `token` writes a private credential file) |
+│ +| M7-C1 | GitHub | out | `github-app-token.py:362` `mint()` (JWT → installation token) | **rumour — one side only** ("github.com App installation", an external service, not a function) | works (read-only `check` mints in memory; `token` writes a private credential file) — external boundary, rumour correct |
+│
+│  ## 7. Verification
+│
+│ @@ -93,6 +97,7 @@
+│  | Token in argv | `ps` shows the value | a file-path credential | by design prevented — token never printed; refresh uses the cached file |
+│  | No command selected | usage, exit 2 | a real mint | pass `check`/`token` with the required file-path args |
+│  | Mode not 600 after mint | `bad "mode" … expected 600` (`:127-128`), exit 1 before rewriting the store | a secure token file | `chmod 600` the token file, re-run |
+│ +| Key file not 0600 | `… is mode %04o; a private key must be 0600` (`github-app-token.py:344-348`) | a valid key | `chmod 600` the `.pem` |
+│  | Node credential law incomplete | rotation-on-compromise, owner-only minting, per-project scoping unstated | a written law | **OPEN** — CF-347 |
+│ … omitted 37 diff line(s) across 1 additional file(s)/section(s)
+│ docs/handbook/chapters/M8-safety.md
+│ @@ -30,8 +30,8 @@
+│
+│  | Submodule | Unit | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│ -| S1 disk | `reclaim_disk.py` | **active** | `main()` at `:129`; `run` subcommand |
+│ -| S2 scan scope | `check_scan_scope.py` | **active** | `main()` at `:73`; `__main__` guard at `:117` |
+│ +| S1 disk | `reclaim_disk.py` | **active** | invoked by `project-node.sh:212` (`python3 "$HERE/reclaim_disk.py" run --root "$HOME" --json`) during provisioning |
+│ +| S2 scan scope | `check_scan_scope.py` | **operator-invoked (optional)** | no production caller (`grep -rn check_scan_scope scripts/` → no caller; run manually this round) |
+│
+│  **Finding (carried):** `verify-patch.sh` is **not** an M8 unit — OUTLINE assigns it to M6.S8
+│  (`OUTLINE.md:170`). M8 has two submodules (S1, S2).
+│ @@ -64,7 +64,7 @@
+│
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│ -| M8-C1 | filesystem | in | `reclaim_disk.py:42` `reclaim()` | **rumour — one side only** ("the target roots it enumerates", no function) | works (containment + symlink + protected checks at `:25-39`) |
+│ +| M8-C1 | filesystem | in | `reclaim_disk.py:42` `reclaim()` | **rumour — one side only** ("the target roots it enumerates", no function) | works (containment + symlink + protected checks at `:25-39`) — filesystem is an external peer, rumour correct |
+│
+│  ## 7. Verification
+│
+│ @@ -111,18 +111,22 @@
+│  - M6 DOCUMENTATION owns `verify-patch.sh` (M6.S8), not M8.
+│  - M3 REPOSITORY cites job/clone dirs as landing evidence, which M8's reaper must not delete.
+│  - M11 DISPATCHER's `.cf-jobs` dirs are outside this reaper's targets (F8-3).
+│ +- M1 PROVISIONING invokes `reclaim_disk.py run` via `project-node.sh:212`.
+│
+│  ## 13. Evidence of record
+│
+│  - Code read: `reclaim_disk.py` (169 lines) and `check_scan_scope.py` (118 lines), both in full.
+│ +- Commands run: `python3 tests/test_reclaim.py` (9 pass); `python3 scripts/check_scan_scope.py`
+│ +  (RESULT OK, 15 claims); `grep -rn check_scan_scope scripts/` (no caller).
+│  - `docs/UNIT-MAP.yaml:222-236` (M8 S1–S2).
+│  - Board rows: CF-290, CF-341, CF-368.
+│ -- **Findings filed this round:**
+│ +- **Findings:**
+│    - **F8-1** (carried) — the TTL exists (`--job-ttl-hours` 24, `:42`); the open question is
+│      evidence retention, not the absence of a TTL.
+│    - **F8-2** (carried) — `verify-patch.sh` is M6.S8, not M8.
+│ -  - **F8-3** — `check_scan_scope.py`'s exact surface (two path patterns, case-sensitive
+│ -    same-line rule, empty-selection = OK) is now documented; and dispatcher `.cf-jobs` dirs are
+│ -    not a reap target (`AGED_PARENTS` = `.node/jobs`, `.node/clones` only).
+│ +  - **F8-3** — `check_scan_scope.py`'s exact surface (two path patterns, case-sensitive same-line
+│ +    rule, empty-selection = OK) documented; dispatcher `.cf-jobs` dirs are not a reap target.
+│ +  - **F8-4** (new) — `reclaim_disk.py` is invoked by `project-node.sh:212` (active);
+│ +    `check_scan_scope.py` has no production caller (operator-invoked, optional).
+│
+│  ## RED field count: 1 (Metrics §8)
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -6,10 +6,10 @@
+│  |---|---|
+│  | Module name | SCHEDULER |
+│  | Path | `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/` (Go) |
+│ -| Revision | `1771d3aad61e6c1ce2845e3f1450f88aa73340b3` (scheduler repo HEAD, re-stamped this round — the round-2 stamp `dfa9c84f` was 2 commits stale) |
+│ +| Revision | `1771d3aad61e6c1ce2845e3f1450f88aa73340b3` (scheduler repo HEAD, re-stamped this round) |
+│  | Language / runtime | Go — `go.mod` declares `go 1.26.0` + `toolchain go1.26.6`; `go env GOVERSION` resolves **go1.26.6** (`GOTOOLCHAIN=auto`). Host `go version` = **go1.26.5** (default PATH `/home/kara/.local/bin/go` → `go1.26.5` sdk); `/usr/bin/go` = go1.26.8, `/snap/bin/go` = go1.27.1 |
+│  | Owner lane | coding-hermes-scheduler (control plane) |
+│ -| Status | **PARTIAL** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go`), and the settings register (`config.example.toml`) read this round; `tick_process.go`/`packer_select.go`/`namespace_alloc.go`/`usage_pool_policy.go` grep-level, not line-by-line |
+│ +| Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:143-208`), the binary defaults (`cmd/schedulerd/main.go:108-144`), the auth path (`internal/api/auth.go:187-197`) and `config.example.toml` read this round; `tick_process.go`/`packer_select.go`/`namespace_alloc.go`/`usage_pool_policy.go` grep-level, not line-by-line; `go test ./...` FAILS (SCHED-GAP-1726) |
+│
+│  ## 2. Purpose, authority and position
+│
+│ @@ -30,7 +30,7 @@
+│
+│  | Submodule | Unit | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│ -| S1 admission and allocation | `admission_mode.go`, `tick_process.go`, `packer_select.go`, `namespace_alloc.go`, `usage_pool_policy.go` | **active** | `admission_mode.go:98` `admissionModeFor` (project override → namespace default → cooldown); `admission_mode.go:112` `admissionModeForProject` (DB read); `tick_process.go:40` `evaluate()`; `packer_select.go:19` `Pack`; `namespace_alloc.go:131` `Allocate`; `usage_pool_policy.go:21` `reserveUsagePools` |
+│ +| S1 admission and allocation | `admission_mode.go`, `tick_process.go`, `packer_select.go`, `namespace_alloc.go`, `usage_pool_policy.go` | **active** | `admission_mode.go:98` `admissionModeFor` (project override → namespace default → cooldown); `:112` `admissionModeForProject` (DB read); `tick_process.go:40` `evaluate()`; `packer_select.go:19` `Pack`; `namespace_alloc.go:131` `Allocate`; `usage_pool_policy.go:21` `reserveUsagePools` |
+│  | S2 execution and settlement | `spawn`, `slot_pool`, `lifecycle`, `dispatch_leg` | **active** | `dispatch_leg.go:260` `awaitDispatchReply`; `:262-336` constructs completed/failed/timeout outcomes |
+│  | S3 durable state | `scheduler.db` + migration stores | **active** | live store has **30** tables; `migrations.go:1217` `tick_dispatch`, `:1391` `execution_runs`, `:1427` `execution_attempts`, `:1449` `execution_events`, `:1470` `execution_projections`, `:1479` `execution_outbox`, entrypoint `:2036` |
+│  | S4 operator surfaces | `cmd/schedulerd`, `scheduler-dispatch`, `scheduler-query`, `queueprobe`, `migrate`, `backfill-commit-signals`, `cooldown-residue` | **active** | `ls cmd/` → 7 commands |
+│ @@ -56,35 +56,38 @@
+│
+│  ## 5. Settings register
+│
+│ -`config.example.toml` (read in full this round). Defaults are the file's commented values;
+│ -the resolution order is hardcoded defaults → TOML → `SCHEDULER_*` env → CLI.
+│ +**Binary defaults (read this round, B18/F9-3).** The daemon's actual flag defaults are in
+│ +`cmd/schedulerd/main.go:108-144`; `config.example.toml` is the *example* register, and its
+│ +commented values are **not** the runtime defaults.
+│
+│ -| Setting | Default | Range | Governs | What breaks if changed |
+│ +| Setting | Binary default | Range | Governs | What breaks if changed |
+│  |---|---|---|---|---|
+│ -| `scheduler.min_interval` | `20m` | Go duration | fastest tick interval | below it ticks are refused/never fire |
+│ -| `scheduler.max_interval` | `24h` | Go duration | slowest tick interval | above it lanes starve |
+│ -| `scheduler.num_levels` | 10 | >= 1 | priority levels | 0 breaks the priority sort |
+│ -| `scheduler.weight_budget` | 100 | >= 1 | weight budget per evaluation | 0 admits nothing |
+│ -| `scheduler.max_concurrent` | 12 | >= 1 | concurrent foreman ticks | a load gate (12) is the ceiling, not the floor |
+│ -| `scheduler.tick_timeout` | `2h` | Go duration | wall-clock before a tick is killed | too short kills legitimate ticks |
+│ -| `scheduler.gateway_response_timeout` | `30m0s` | Go duration | per-turn POST deadline (min of this and tick_timeout) | `0s` disables |
+│ -| `scheduler.gateway_transient_retries` | 3 | int | 5xx/refused retry count | 0 = single attempt |
+│ -| `scheduler.namespace_mode` | true | bool | multi-namespace scheduling | off disables reserved/hard_cap |
+│ -| `daemon.db_path` | `~/.hermes/coding-hermes/scheduler.db` | a path | SQLite location | moving it orphans the store |
+│ -| `daemon.listen` | `127.0.0.1:9090` | an address | dashboard/API/MCP surface | off-loopback exposes the surface |
+│ -| `gateway.url` | `http://127.0.0.1:8642` | a URL (`${VAR}` interpolation) | Hermes gateway endpoint | empty falls back to `exec.Command` spawn |
+│ +| `min-interval` | **30 s** (`main.go:108`) | Go duration | fastest tick interval | below it ticks are refused/never fire |
+│ +| `max-interval` | 24 h (`:109`) | Go duration | slowest tick interval | above it lanes starve |
+│ +| `num-levels` | 10 (`:110`) | >= 1 | priority levels | 0 breaks the priority sort |
+│ +| `budget` (weight budget) | 100 (`:111`) | >= 1 | weight budget per evaluation | 0 admits nothing |
+│ +| `max-concurrent` | **10** (`:112`) | >= 1 | concurrent foreman ticks | a load gate is a separate knob (see below) |
+│ +| `namespace-mode` | **false** (`:113`) | bool | multi-namespace scheduling | off disables reserved/hard_cap |
+│ +| `tick-timeout` | 7200 s / 2 h (`:114`) | Go duration | wall-clock before a tick is killed | too short kills legitimate ticks |
+│ +| `api-read-timeout` | 5 s | Go duration | per-request deadline for heavy read surfaces | a stalled DB helper returns 504 naming it (SCHED-GAP-1575-B) |
+│ +| `gateway-response-timeout` | 30 m | Go duration | per-turn POST deadline (min of this and tick-timeout) | `0` disables |
+│ +| `gateway-transient-retries` | 3 | int | 5xx/refused retry count | 0 = single attempt |
+│ +| `slot-patience` | 5 m | Go duration | how long a spawn waits for a free slot | the drop emits a `slot_pool` event (ADV-R08/G3) |
+│ +| `tasks-pacing` | 60 s | Go duration | min post-tick spacing for tasks-mode projects | 0 = disabled |
+│ +| `load-gate-threshold` | **0 (disabled)** (`:144`) | float (1-min load avg) | defer new spawns while load >= threshold | 0 disables; namespaces opt out via `load_gate='off'` |
+│ +| `feature-prune-weeks` | 8 | int | dead-feature reaper prune window | flag only — nothing is auto-deleted |
+│
+│ -**Load caveat (F9-3).** The file's own header (`DOGFOOD-012`) states the resolution order is the
+│ -FEAT-005 target, not today's reality: the daemon currently reads only the `[[projects]]` /
+│ -`[[namespaces]]` sections and a few `[scheduler]` fields from `--config`; the `[daemon]` /
+│ -`[gateway]` / `[duckbrain]` root sections are **not loaded** until FEAT-005 wires `LoadConfig` into
+│ -daemon boot. A setting's presence in the example file is not proof the daemon reads it.
+│ +**Load caveat (F9-3).** The example file's own header (`DOGFOOD-012`) states the full resolution
+│ +order is the FEAT-005 target, not today's reality: the daemon currently reads only the
+│ +`[[projects]]` / `[[namespaces]]` sections and a few `[scheduler]` fields from `--config`; the
+│ +`[daemon]` / `[gateway]` / `[duckbrain]` root sections are **not loaded** until FEAT-005 wires
+│ +`LoadConfig`. A setting's presence in the example file is not proof the daemon reads it.
+│
+│  ## 6. Contracts in and out
+│
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│ -| M9-C1 | owner | in | **rumour — neither side named** (operator config, not a function) | **rumour** (config load path, not a function) | UNMEASURED — the config-load consumer exists (`admission_mode.go:112` reads from the DB, not the file) but the producer/consumer file:function pair is not named |
+│ +| M9-C1 | owner | in | **operator config** — `fleet.toml` + `scheduler.db` project rows (lane enabled/cadence/weight/pin); the load path is the `config` package (FEAT-005 `LoadConfig`, partially wired) — no single in-repo function is the producer | `internal/scheduler/admission_mode.go:112` `admissionModeForProject` (reads the lane's admission mode from the DB) | **UNVERIFIED** — the consumer is nameable; the producer is operator config, not a function |
+│ … omitted 89 diff line(s) across 1 additional file(s)/section(s)
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | `691f0c78fc75717295abf3bd85aaa9192616aac0` (crier repo HEAD, stamped this round) |
+│  | Language / runtime | Go — `go.mod` declares `go 1.26.10` (a build/toolchain requirement, not a runtime one); host `go version` = **go1.26.5** (default PATH), `/usr/bin/go` = 1.26.8, `/snap/bin/go` = 1.27.1; `GOTOOLCHAIN=auto` auto-fetches 1.26.10 for this repo |
+│  | Owner lane | crier (control plane) |
+│ -| Status | **PARTIAL** — `internal/registry/handler.go` (deliver/retrieve/ack surfaces + log lines), `internal/guard/guard.go` (pipeline + `Check`), `config/config.go` (controls + metrics default), `clients/python/crier_client.py`, `cmd/crier-front/main.go` read this round; the full 1895-line handler body not read line-by-line |
+│ +| Status | **UNVERIFIED** — `internal/registry/handler.go` (deliver/retrieve/ack surfaces + slog lines), `internal/guard/guard.go` (pipeline, oversize branch, `errorResult`), `internal/guard/policy.go` (`ResolvePolicy`), `internal/guard/metrics.go`, `config/config.go` (controls + guard bounds + metrics default), `clients/python/crier_client.py`, `cmd/crier-front/main.go` read this round; the full 1895-line handler body not read line-by-line |
+│
+│  ## 2. Purpose, authority and position
+│
+│ @@ -30,7 +30,7 @@
+│  | Submodule | Unit | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│  | S1 custody and transport | `internal/registry/handler.go` (1895 lines) | **active** | `HandleRegister` (`:598`), `HandleDeliver` (`:990`), `HandleRetrieve` (`:1690`), `HandleAck` (`:1812`) |
+│ -| S2 the guard | `internal/guard/guard.go` | **active** | `Guard.Check` (`:167`) is the choke point; pipeline documented at `:25-28`; `New` (`:69`) |
+│ +| S2 the guard | `internal/guard/guard.go` | **active** | `Guard.Check` (`:167`) is the choke point; pipeline documented at `:25-28`; oversize branch `:198-234`; `errorResult` `:318-361` |
+│  | S3 binaries, ports, services | `config.go:622` port 8767; `crier-front/main.go:39` listen `127.0.0.1:8770` | **active** | read |
+│  | S4 client libraries | `clients/python/crier_client.py`, `clients/typescript` | **active** | Python client read (`deliver` `:975`, `retrieve` `:1009`, `ack` `:1038`) |
+│
+│ @@ -54,7 +54,8 @@
+│
+│  ## 5. Settings register
+│
+│ -`config/config.go:621-674` fixes these defaults:
+│ +`config/config.go:621-674` fixes the defaults; `config/config.go:1139-1187` fixes the guard's env
+│ +bounds:
+│
+│  | Setting | Default | Range | Governs | What breaks if changed |
+│  |---|---|---|---|---|
+│ @@ -66,19 +67,20 @@
+│  | `Guard.*` | Enabled true, Timeout 10s, MaxConcurrent 8, CircuitThreshold 10, CircuitCooldown 300s, MaxPayloadBytes 65536, RenderMaxBytes 32768 (`:644-655`) | — | guard behaviour | a raised MaxPayload lets a bigger untrusted payload reach the router |
+│  | `Observability.EnableMetrics` | **true** (`:673`) | bool | `/metrics` mount | `CR_ENABLE_METRICS=false` disables it |
+│  | front `defaultListen` | `127.0.0.1:8770` (`crier-front/main.go:39`) | a loopback listen | the front's surface | binding off-loopback exposes the front |
+│ +| `CR_GUARD_TIMEOUT_MS` / `CR_GUARD_MAX_CONCURRENT` / `CR_GUARD_CIRCUIT_THRESHOLD` / `CR_GUARD_CIRCUIT_COOLDOWN_S` / `CR_GUARD_MAX_PAYLOAD_BYTES` / `CR_GUARD_RENDER_MAX_BYTES` | env, positive only (`config.go:1139-1187`) | int > 0 | guard tuning | a non-numeric or `<= 0` value → named error (`invalid CR_GUARD_…`), not a silent default |
+│
+│ -**Metrics-default correction (F10-3).** Round-2 §8 said metrics sit behind an "opt-in GET /metrics
+│ -surface". Measured: `config.go:667-673` sets `EnableMetrics: true` by default (MON-CRIER-001 —
+│ -an opt-in surface answered 404 everywhere, indistinguishable from a broken endpoint);
+│ +**Metrics-default correction (F10-3).** `config.go:667-673` sets `EnableMetrics: true` by default;
+│  `CR_ENABLE_METRICS` is the disabling override; `cmd/server/observability.go:101-109` mounts
+│ -`/metrics` and logs its auth posture. Metrics are default-ON, not opt-in.
+│ +`/metrics`. Metrics are default-ON, not opt-in. **Contradicting artifact (grok 19):**
+│ +`internal/metrics/metrics.go:5` still calls the surface "the opt-in GET /metrics surface" — the
+│ +comment disagrees with the default-ON config.
+│
+│  ## 6. Contracts in and out
+│
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│  | M10-C1 | scheduler | in | `internal/bus/dispatch.go:202` `payload()` (envelope with `text_b64`, `board`) | `handler.go:990` `HandleDeliver` | **broken** — CF-354 (node reads `text`) |
+│ -| M10-C2 | node | out | `handler.go:1690` `HandleRetrieve` (lease); client side `crier_client.py:1009` `retrieve` | `node-bus-worker.py` inbox read | works |
+│ +| M10-C2 | node | out | `handler.go:1690` `HandleRetrieve` (lease); client side `crier_client.py:1009` `retrieve` | `scripts/node-bus-worker.py` (inbox GET via urllib, reads `text` at `:986`) | works |
+│  | M10-C3 | node | in | **node's own HTTP deliver** — `node-bus-worker.py:1160` `deliver` (urllib, **not** `crier_client.py`) | scheduler `dispatchReplyVerdict` | **broken** — CF-355 (scheduler reads `ok`) |
+│
+│  ## 7. Verification
+│ @@ -86,17 +88,26 @@
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│  | build | `go build ./...` (crier repo) | exit 0 | 2026-11-06, rev `691f0c78` | **PASS** (rc 0) |
+│ -| go test | `go test ./...` | green | 2026-11-06, rev `691f0c78` | **PASS** (rc 0, all packages ok) |
+│ +| go test | `go test ./...` | green | 2026-11-06, rev `691f0c78` | **PASS** (rc 0); `internal/registry` ran 6.962 s over **91 test files** |
+│  | port fact | `grep -n 'Port' config/config.go` | 8767 | 2026-11-06 | PASS (`:622`) |
+│  | signed-read ladder | `python3 ~/node-bus-worker.py --check` on cf-node | inbox 200 with key+bearer | 2026-11-05, cf-node only | PASS (FACT-04) — not repeatable from this control host |
+│ +
+│ +**Assurance-gap note (kimi 6, re-measured).** Round-3 reported `internal/registry` as "no tests to
+│ +run". At the same revision the package has **91 test files** (measured: `ls internal/registry/*_test.go`),
+│ +and `go test` ran them in 6.962 s. A green run over 91 test files is real, but it still does not
+│ +prove line-by-line coverage of the 1895-line handler.
+│
+│  ## 8. Metrics
+│
+│  **Measured — real, not RED (default-ON).** Crier implements a Prometheus text-exposition registry
+│  (`internal/metrics/metrics.go`) mounted at `/metrics` by default (`config.go:673`;
+│ -`observability.go:101-109`), with at least one counter `crier_detect_alerts_total`
+│ -(`internal/detect/detect.go:94`). It deliberately avoids `prometheus/client_golang`
+│ -(`metrics.go:5`). Auth posture: not exempt — requires Bearer when `CR_AUTH_TOKEN` is set.
+│ +`observability.go:101-109`). **Inventory (B22, read this round):**
+│ +`internal/guard/metrics.go:19-49` registers `crier_guard_saturated_total` (checks failed open on a
+│ +saturated concurrency semaphore), `crier_guard_all_providers_failed_total` (whole fallback chain
+│ +failed), and `crier_guard_check_duration_seconds{decision,errored}` (a histogram with closed-enum
+│ … omitted 53 diff line(s) across 1 additional file(s)/section(s)
+│ docs/handbook/chapters/M11-dispatcher.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | `283bca91091933177ec521e52f37f1bc987cf7da` (crier-fleet HEAD, stamped this round) |
+│  | Language / runtime | Python — `#!/usr/bin/env python3`, no pinned version; host `python3` = 3.14.9 |
+│  | Owner lane | crier-fleet (control plane) |
+│ -| Status | **VERIFIED** — `dispatcher.py` read in full this round (job model, ledger, completion bridge, settings, loop) |
+│ +| Status | **VERIFIED** — `dispatcher.py` read in full this round (job model, ledger, completion bridge, settings, loop, all 23 log lines); the live-job tests are decoration (no assert) and the synchronous `CF_DURABLE_JOB=0` path is unmeasured (§7) |
+│
+│  ## 2. Purpose, authority and position
+│
+│ @@ -23,13 +23,13 @@
+│
+│  **What breaks if it lies.** A task recorded as done that never ran. The ledger replays a recorded
+│  result instead of re-running a redelivery (`dispatcher.py:470-475`) — **but only for a task whose
+│ -result reached the ledger before the crash** (see F11-3).
+│ +result reached the ledger before the crash** (F11-3).
+│
+│  ## 3. Submodule inventory
+│
+│  | Submodule | Unit | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│ -| S1 job model and durable execution | `dispatch_durable` (`:215-331`) | **active** | start, poll, kill process group |
+│ +| S1 job model and durable execution | `dispatch_durable` (`:215-331`); `dispatch` switch (`:334-358`) | **active** | start, poll, kill process group; `CF_DURABLE_JOB=0` selects the synchronous path |
+│  | S2 ledger and idempotency | `ledger_load`/`ledger_put` (`:365-397`), replay (`:470-475`) | **active** | redelivery replays recorded result |
+│  | S3 completion bridge | `deliver`-before-`ack` (`:500-519`), reply encoding | **active** | `reply_b64` never echoes the task body |
+│  | S4 agent registry and scope | `AGENTS` (`:104-109`), per-dispatch scoped GitHub token (`:62-98`) | **active** | `fleet_agents.json` |
+│ @@ -48,6 +48,7 @@
+│  | Import | Provider | Contract relied on | If it changes |
+│  |---|---|---|---|
+│  | `crier_client.Crier` | crier | `retrieve` (`:435`), `deliver` (`:508`), `ack` (`:519`, `:448`, `:465`) — **not** `send`/`retrieve`/`complete` | a `retrieve` rename stops polling silently |
+│ +| `fleet-gh-scope.py` | external tool (`SCOPE_TOOL`, `:68`) | `dispatch_env` / `env_prefix` (`:91-98`) | an unavailable scoper is non-fatal: dispatches carry no `GH_TOKEN` |
+│
+│  **4c. Service contracts** — see §6.
+│
+│ @@ -56,17 +57,22 @@
+│  | Setting | Default | Range | Governs | What breaks if changed |
+│  |---|---|---|---|---|
+│  | `DISPATCH_POLL_S` | 5 (`:43`) | positive float | poll interval | shorter polls raise bus load |
+│ +| `DISPATCH_PROGRESS_S` | 20 (`:45`) | positive int | how often the node writes a progress line (CF-249) | 0 or negative suppresses progress |
+│  | `DISPATCH_LEASE_S` | 1800 (`:46`) | positive int | inbox lease | too long holds messages during a crash |
+│ -| `DISPATCH_TASK_S` | 240 (`:48`) | positive int | fallback task duration | — |
+│ +| `DISPATCH_TASK_S` | `"240"` (`:48`, a **string**) | positive int at use (`task_seconds`, `:193`) | fallback task duration | a non-numeric env value raises `ValueError` **at use** (`int(TASK_S)` in `task_seconds`), not at admission (kimi 8) |
+│  | `DISPATCH_MARGIN_S` | 60 (`:52`) | positive int | reserve before the caller's deadline | see F11-4 |
+│  | `DISPATCH_TASK_CAP_S` | 7200 (`:53`) | positive int | ceiling on the envelope wall | a larger envelope wall is clamped |
+│  | `BUNKER_BIN` | `/home/kara/.local/bin/bunker` (`:60`) | absolute path | which bunker binary runs | PATH order would otherwise pick a wrong binary |
+│ +| `CF_DURABLE_JOB` | `"1"` (`:336`) | `"0"` or non-`"0"` | execution mode switch | **`"0"` selects the synchronous `hermes chat -q` path (`:334-358`)**, bypassing the detached start/poll job model (B23) |
+│ +| `DISPATCH_LOG` / `DISPATCH_PIDFILE` | `$FLEET/logs/dispatcher.log` / `$FLEET/dispatcher.pid` (`:41-42`) | a path | log/PID location | a wrong path loses the journal/lock |
+│ +| `FLEET_GH_SCOPE` | `/home/kara/.hermes/scripts/fleet-gh-scope.py` (`:68`) | a path | scoped-token minter | a wrong path disables scoped tokens (non-fatal) |
+│ +| `FLEET_AGENTS` / `FLEET_AGENTS_FILE` | `fleet_agents.json` (`:104-109`) | a dict / path | agent registry | empty → "no FLEET_AGENTS configured" |
+│
+│  ## 6. Contracts in and out
+│
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│ -| M11-C1 | crier | in | crier `GET /agents/{id}/inbox` — `crier_client.py:1009` `retrieve` | `dispatcher.py:435` `crier.retrieve` | works |
+│ +| M11-C1 | crier | in | crier server `internal/registry/handler.go:1690` `HandleRetrieve` (the lease-granting side) | `dispatcher.py:435` `crier.retrieve` (the client side) | works |
+│  | M11-C2 | scheduler | out | `dispatcher.py:500-508` builds `{in_reply_to, agent, ok, seconds, task_len, reply_b64, reply_len}` and `crier.deliver` | scheduler `dispatchReplyVerdict` (`dispatch_leg.go:713`) | **works** — the dispatcher always sends `ok` (`:501`), which is exactly the field `dispatchReplyVerdict` reads. CF-355 (status-vs-ok) belongs to the **node worker** (M2-C2 / M9-C3), not this producer |
+│
+│  ## 7. Verification
+│ @@ -74,42 +80,53 @@
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│  | python compile | `python3 -m py_compile dispatcher.py` | exit 0 | 2026-11-06, rev `283bca9` | PASS |
+│ -| source read | `read_file dispatcher.py` (538 lines) | full body read | 2026-11-06 | PASS |
+│ -| live job tests | `tests/test_durable_job.py` / `test_job_kill.py` | failure oracle | not run this round | **UNVERIFIED** — these scripts print results but do not assert (F11-2) |
+│ +| live job tests | `tests/test_durable_job.py` / `test_job_kill.py` | failure oracle | not run this round | **UNVERIFIED** — these scripts print results but do not assert (`tests/test_durable_job.py` contains no `assert`/`raise`/`exit`), so they cannot fail (F11-2, glm 8) |
+│ +
+│ +The round-3 "source read (538 lines) PASS" row was decoration — reading the file cannot fail. It
+│ +is removed; the body read is recorded in §1/§13 instead.
+│
+│  ## 8. Metrics
+│
+│  **RED — none.** The dispatcher emits no counters, gauges or histograms. Dispatch rate, job
+│ -duration, kill count and redelivery count are answerable only by grepping the log. (It does append
+│ -a `dispatch-ledger.jsonl`, but that is a replay ledger, not an emitted metric.)
+│ +duration, kill count and redelivery count are answerable only by grepping the log. (It appends a
+│ +`dispatch-ledger.jsonl`, but that is a replay ledger, not an emitted metric.)
+│
+│  ## 9. Log lines (verbatim)
+│
+│ … omitted 92 diff line(s) across 1 additional file(s)/section(s)
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -0,0 +1,174 @@
+│ +# M12 — INFERENCE PROXY
+│ +
+│ +## 1. Identity
+│ +
+│ +| Field | Value |
+│ +|---|---|
+│ +| Module name | INFERENCE PROXY (`cf-inference-proxy.py`) |
+│ +| Path | `/home/kara/.hermes/scripts/cf-inference-proxy.py` (273 lines) |
+│ +| Revision | content sha256 `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (lives outside any git repo; no revision to stamp) |
+│ +| Language / runtime | Python — `#!/usr/bin/env python3`, no pinned version; **requires >= 3.10** (F12-5: `_forward` at `:164` declares `body: bytes | None`, an evaluated union annotation) |
+│ +| Owner lane | code-factory (control-host service, consumed by nodes) |
+│ +| Status | **VERIFIED** — read in full this round (273 lines: admission, routing, streaming, capture); content sha256 reproduced; live 401 admission reproduced this round |
+│ +
+│ +## 2. Purpose, authority and position
+│ +
+│ +The only thing holding the real provider credential (CF-002: no provider key leaves the control
+│ +host). A node gets a NODE TOKEN, never a provider key, and this proxy forwards on the node's
+│ +behalf. It decides which node may call (token), which model may run (allowlist), and whether the
+│ +call is streamed through or buffered. It is a **control-host** service, not a node-local one
+│ +(F12-1).
+│ +
+│ +**What breaks if this module is absent.** The node has no inference path ("the node's only
+│ +inference path", CF-351).
+│ +
+│ +**What breaks if it lies.** A fail-closed admission that fails open routes an untrusted or
+│ +off-contract model to the upstream and spends the fleet's credit on a dearer model.
+│ +
+│ +## 3. Submodule inventory
+│ +
+│ +| Submodule | Unit | Classification | Evidence (invoking line) |
+│ +|---|---|---|---|
+│ +| S1 admission | token resolution `_node` (`:115-123`), model allowlist (`:155-160`), fail-closed startup (`:265-270`) | **active** (control-host service; operator/systemd-invoked, no in-repo caller) | read this round |
+│ +| S2 upstream routing | `_forward` (`:164-180`), model rewrite via `UPSTREAM_MODEL` | **active** | read |
+│ +| S3 stream pass-through | `:200-238` (streamed), `:240-258` (buffered) | **active** | read |
+│ +| S4 usage and request capture | `capture_request` (`:83-95`), `log_usage` (`:98-101`) | **active** | read |
+│ +
+│ +## 4. Dependencies
+│ +
+│ +**4a. Runtime dependencies**
+│ +
+│ +| Dependency | Version constraint | Where | How absence is detected |
+│ +|---|---|---|---|
+│ +| python3 (stdlib only) | **>= 3.10** (`:164` union annotation) | control host | import/syntax failure on < 3.10 |
+│ +| node token file | `TOKENS_PATH` `/home/kara/.hermes/secrets/cf-node-tokens.json` (`:48`) | control host | `FATAL: no token file … refusing to start open`, exit 2 (`:265-267`) |
+│ +| upstream key | selected by `CF_PROXY_UPSTREAM_KEY_ENV` (default `API_SERVER_KEY`, `:47`) in `~/.hermes/.env` | control host | `FATAL: API_SERVER_KEY missing`, exit 2 (`:268-270`) |
+│ +
+│ +**4b. Library contracts**
+│ +
+│ +| Import | Provider | Contract relied on | If it changes |
+│ +|---|---|---|---|
+│ +| `urllib.request` | stdlib | `urlopen` with `timeout=300` (`:204`, `:241`) | the 300s timeout is load-bearing for stream pass-through |
+│ +
+│ +**4c. Service contracts** — see §6.
+│ +
+│ +## 5. Settings register
+│ +
+│ +| Setting | Default | Range | Governs | What breaks if changed |
+│ +|---|---|---|---|---|
+│ +| `CF_PROXY_UPSTREAM` | `http://127.0.0.1:8642` (`:43`) | an http(s) endpoint | where node inference is served | pointing at a provider gives nodes their own lane; the key still never leaves the host |
+│ +| `CF_PROXY_UPSTREAM_MODEL` | `""` (`:45`) | a model name or empty | model rewrite | non-empty rewrites the requested model before forwarding (`:166-170`) |
+│ +| `CF_PROXY_UPSTREAM_KEY_ENV` | `API_SERVER_KEY` (`:47`) | an env var name | which credential the proxy reads | a renamed credential must be coordinated with the endpoint |
+│ +| `CF_PROXY_ALLOWED_MODELS` | `hermes` (`:60-62`) | comma list | which models a node may ask for | empty env = deny all, never "allow everything" (`:58-59`) |
+│ +| `MAX_BODY` | 4 MiB (`:54`) | positive int | request body ceiling | a body `> MAX_BODY` → 400 (`:142-143`) |
+│ +| `LISTEN` | `("0.0.0.0", 8775)` (`:53`) | **a hardcoded constant, not a setting** | proxy listener | no env/flag override; binds 0.0.0.0 so the tailnet can reach it (grok 13) |
+│ +
+│ +**F12-3 (credential selector).** The upstream credential name is configurable
+│ +(`CF_PROXY_UPSTREAM_KEY_ENV`, `:47`), read by `upstream_key()` (`:75-80`) which scans `ENV_PATH`
+│ +for `NAME=value`. But the startup error at `:269` hardcodes `API_SERVER_KEY` in its message even
+│ +when a different name is configured — the diagnostic lies about which variable it checked.
+│ +
+│ +## 6. Contracts in and out
+│ +
+│ +| ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│ +|---|---|---|---|---|---|
+│ +| M12-C1 | node | in | **unproven** — no node file references the proxy: `grep -rn '8775|CF_PROXY|cf-inference-proxy' scripts/ config/ specs/` matches only `panel_loop.py:136`, `master_doc_skeleton.py:25/:211` (self-references listing the path) and `config/node.env.example:22` (a comment). The producer is the node over the tailnet via operator-configured `CF_BASE_URL` | `cf-inference-proxy.py:135` `do_POST` → `_node` (`:115`) | **UNVERIFIED** — proxy side verified (401 on missing/unknown token, `:128-130`); the node-client half has no file:function to name |
+│ +
+│ +The round-3 M12-C1 producer cell ("node POST /v1/chat/completions with Authorization: Bearer ***")
+│ +was a broken table row (an unclosed code span, a `***` redaction artifact, a pipe inside the cell)
+│ … omitted 96 diff line(s) across 1 additional file(s)/section(s)
+All 13 chapters rewritten. Here is the round-4 manifest.
+
+═══════════════════════════════════════════════════
+WRITER ROUND 4 — MANIFEST
+═══════════════════════════════════════════════════
+
+Chapters written (13 of 13):
+  M0-shared-contract.md · M1-provisioning.md · M2-dispatch.md · M3-repository.md ·
+  M4-board.md · M5-harness.md · M6-documentation.md · M7-github.md · M8-safety.md ·
+  M9-scheduler.md · M10-crier.md · M11-dispatcher.md · M12-inference-proxy.md
+
+Chapters still skeleton: 0
+
+RED field count per chapter:
+  M0-shared-contract  1  (Metrics §8 — none)
+  M1-provisioning     2  (Status §1 unread bodies, Metrics §8)
+  M2-dispatch         2  (Metrics §8, §7 bus-worker ladder not repeatable from this host)
+  M3-repository       1  (Metrics §8)
+  M4-board            2  (Metrics §8, M4-C1/M4-C2 contract states UNVERIFIED)
+  M5-harness          2  (Status §1 foreign installer bodies unread, Metrics §8)
+  M6-documentation    2  (Status §1 own gate reads FAIL, Metrics §8)
+  M7-github           2  (Status §1 mint UNVERIFIED, Metrics §8)
+  M8-safety           1  (Metrics §8)
+  M9-scheduler        2  (§7 go-test FAIL, §9 log inventory 2-of-379)
+  M10-crier           1  (S1 handler 1895-line body not line-by-line)
+  M11-dispatcher      2  (Metrics §8, §7 live-job tests are decoration)
+  M12-inference-proxy 2  (Metrics §8, M12-C1 client half UNVERIFIED)
+  Total: 22 RED fields.
+
+Every blocking finding in round-3 CORRECTIONS.md was applied. The main fixes, by class:
+  - Status vocabulary: M9/M10 "PARTIAL" → UNVERIFIED; M5/M6 "VERIFIED" over unread bodies → UNVERIFIED (schema §1 closed set restored).
+  - One-sided contracts: named the nameable in-repo side — M1-C1→HandleRegister (handler.go:598), M3-C2→node-bus-worker.py:1141-1142, M9-C1→admission_mode.go:112, M6-C2→gen_nasa_handbook.py:247, M11-C1→HandleRetrieve (handler.go:1690), M10-C2→node-bus-worker.py. Reserved "rumour" for genuinely external peers (bunker, GitHub, filesystem, upstream gateway).
+  - Classification evidence: disk_floor.py caller = project-node.sh:173 (not bunker-provision.sh); node_seed.py = bunker-provision.sh:454 (not UNIT-MAP.yaml); M6 S5–S8 reclassified operator-invoked (grep empty); M8 reclaim_disk active (project-node.sh:212), check_scan_scope optional.
+  - M9 defaults: binary defaults are 30s/10/false/load-gate-0 (main.go:108/112/113/144), not the example file's 20m/12/true.
+  - M6 "recomputes VERIFIED" removed (the gate reports supplied status, :128-138/:214-216).
+  - M12 502 corrected (headers sent at :206-210 before first read → [200,502] for mid-headers failure; clean 502 only when urlopen fails); Python >= 3.10 (:164).
+  - Credential domains separated (M7 installation tokens ≠ fleet-gh-scope.py→gh-app-token.py scoped tokens ≠ M12 node tokens, producer unknown).
+  - M11 CF_DURABLE_JOB=0 synchronous path documented (:334-358); §9 completed to 23 rows; DISPATCH_TASK_S string-until-use noted.
+  - M0/M3/M4 "arm N" pointers replaced with named selftest arms (cf244-node-freshness, cf213-land-node-branch) and captured `boardctl validate` output.
+  - M10 guard degradation policy written (oversize :198-234, fail-open/fail-closed :318-361, precedence policy.go:172-202).
+
+Scope finding (not silently dropped — deepseek #3 / sol B03): the OUTLINE commits to 8 parts; this round's deliverable is Part III only (13 module chapters). Parts I, II, IV–VIII remain unwritten. That correction needs an explicit quorum scope ruling recorded in the outline; the writer cannot convene quorum.
+
+Commands run with exit status (rc):
+  git status / git rev-parse (5 repos) ............ rc 0
+  grep -rl '\. "$HERE/lib.sh"' scripts/ → 11 ..... rc 0
+  grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' → 17 .... rc 0
+  grep -rln harness-vars.sh scripts/ (7 files) .... rc 0
+  grep -rn disk_floor scripts/*.sh ................ rc 0
+  grep -rn node_seed|node_gateway_auth bunker-provision.sh  rc 0
+  bash -n (lib.sh, harness-vars.sh, land, verify-node, github-app-*, harness/*)  rc 0
+  python3 -m py_compile (all node-side .py) ....... rc 0
+  python3 tests/test_disk_floor.py ................ rc 0 (12 tests)
+  python3 tests/test_lane_target.py ............... rc 0 (40 tests)
+  python3 tests/test_harness_resolve.py ........... rc 0 (28 tests)
+  python3 tests/test_reclaim.py ................... rc 0 (9 tests)
+  python3 scripts/master_doc_check.py ............. rc 1 (MASTER-DOC: FAIL, 44/37/50)
+  bash scripts/verify-patch.sh .................... rc 0 (VERIFY-PATCH: PASS)
+  python3 scripts/board_drift.py check ............ rc 0 (RESULT: OK)
+  scripts/boardctl validate ....................... rc 0 (RESULT: OK, 7 warnings)
+  scripts/boardctl validate --help ................ rc 0 (--strict-keys/--fail-on)
+  go build ./... (scheduler) ...................... rc 0
+  go test ./... (scheduler) ....................... rc 1 (SCHED-GAP-1726, 169.8s)
+  go build ./... (crier) .......................... rc 0
+  go test ./... (crier) ........................... rc 0 (registry 91 test files, 6.9s)
+  sha256sum cf-inference-proxy.py ................. rc 0 (b12a0ac5…)
+  python3 -m py_compile cf-inference-proxy.py ..... rc 0
+  curl POST :8775 no-token ........................ rc 0 (HTTP 401)
+  curl POST :8775 disallowed, no-token ............ rc 0 (HTTP 401 "missing or unknown node token")
+  grep -rn '8775|CF_PROXY|cf-inference-proxy' scripts/ config/ specs/  rc 1 (no node producer)
+  grep -rn 'add_family_lanes|configure_family|load_lane_config' scripts/  rc 1 (no caller)
+  grep -rn gen_nasa_handbook scripts/ ............. rc 0 (only NOT_CALLERS)
+  grep -rn verify-patch scripts/ .................. rc 1 (no caller)
+  grep -n 'log(' dispatcher.py .................... rc 0 (23 sites)
+  grep -n 'log.Printf' internal/scheduler/*.go | wc -l  rc 0 (379)
+  grep -nE '\barm (33|41|51)\b' tests/selftest.sh .. rc 1 (0 matches — arms are named)
+  ls internal/registry/*_test.go .................. rc 0 (91)
+  ./scripts/land-node-branch.sh --dry-run (dirty workdir)  rc 0 (refused: workdir_clean)
+  bash /tmp/ffc_probe.sh (fetch_verified fails closed)  rc 1 (no artifact left — expected)
+
+WRITER ROUND COMPLETE
+
+session_id: local-43ce24e7795d0499ddae0730f19a4284dbc8a0fa95507248afd52008c56c2c52

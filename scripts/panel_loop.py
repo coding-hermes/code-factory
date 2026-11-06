@@ -180,6 +180,32 @@ def run_panel(rnd: int, brief: Path, timeout_s: int) -> dict[str, Path]:
     return {p.stem.replace("seat-", ""): p for p in sorted(outdir.glob("seat-*.txt"))}
 
 
+def rerun_missing(rnd: int, brief: Path, timeout_s: int, missing: list[str]) -> None:
+    """Re-run only the families that failed to return.
+
+    PANEL-LOOP.md says a round where a seat did not return does not count. Honouring
+    that means re-running that family alone rather than letting a missing seat pass
+    silently into the tally — round 6 lost kimi and the round still "completed".
+    """
+    if not missing:
+        return
+    lines = [
+        ln for ln in MANIFEST.read_text().splitlines()
+        if ln.strip() and not ln.strip().startswith("#") and ln.split("|")[0].strip() in missing
+    ]
+    if not lines:
+        return
+    sub = PANEL / f"round-{rnd}" / "seats" / "_rerun.manifest"
+    sub.parent.mkdir(parents=True, exist_ok=True)
+    sub.write_text("\n".join(lines) + "\n")
+    print(f"  re-running missing seats: {', '.join(missing)}", flush=True)
+    subprocess.call(
+        ["bash", str(FANOUT), str(brief), str(PANEL / f"round-{rnd}" / "seats"), str(sub),
+         str(timeout_s), "90"],
+        cwd="/home/kara",
+    )
+
+
 def parse_seat(p: Path) -> dict:
     text = p.read_text(errors="replace")
     verdict = "MISSING"
@@ -275,6 +301,10 @@ def main() -> int:
         brief = judge_brief(rnd, chapters)
         paths = run_panel(rnd, brief, args.judge_timeout)
         seats = {tag: parse_seat(p) for tag, p in paths.items()}
+        broken = [t for t, s in seats.items() if not s["complete"] or s["verdict"] == "MISSING"]
+        if broken:
+            rerun_missing(rnd, brief, args.judge_timeout, broken)
+            seats = {tag: parse_seat(p) for tag, p in paths.items()}
         for tag, s in seats.items():
             print(f"  {tag}: {s['verdict']} blocking={s['blocking']} complete={s['complete']}", flush=True)
 

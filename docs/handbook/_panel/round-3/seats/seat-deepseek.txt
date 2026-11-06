@@ -1,0 +1,67 @@
+VERDICT: FAIL
+
+BLOCKING: 3 — findings that must be fixed before the chapter set can be called written
+
+NON-BLOCKING: 3
+
+FINDINGS:
+
+BLOCKING
+
+1. kind: UNVERIFIED — rule 2 (both sides) — M1, M3, M4, M5, M6, M9 — within-repo contracts still one-sided where the other side is nameable in code this round actually read.
+   Claim (pattern): producer/consumer cells written as "rumour — one side only" or prose instead of file:function, on contracts whose both sides live inside these five repos.
+   Evidence (each side IS findable and is named elsewhere in this very document):
+   - M1-C1 consumer is "crier POST /agents/{id} handler" — but M10 §3 names the real function: `internal/registry/handler.go:598` `HandleRegister`.
+   - M3-C2 producer is "the node's result envelope (branch, commit)" — but M2 §6 names the real builder: `node-bus-worker.py:1128` (the reply envelope).
+   - M9-C1 (owner→scheduler) — "rumour — neither side named" (operator config / config load path); the config-load consumer is nameable (the chapter itself notes `admission_mode.go:112` reads it from the DB).
+   - M4-C1 both sides "rumour"; M4-C2 producer "rumour" + consumer "an invocation"; M5-C1 consumer "per-leg verdict" (the producer `tests/harness-conformance.sh` IS named, the consumer side is not); M6-C2 both sides "rumour".
+   The honest "rumour" flagging is a real improvement over round-2's overclaim (it stops lying), but flagging a rumour does not satisfy rule 2. For external boundaries (bunker binary M0-C1/M1-C2, GitHub M7-C1, filesystem M8-C1, upstream gateway M12-C2) "rumour — one side only, external system" is the correct completion; for these six within-repo rows it is not.
+   Fix: name the producer/consumer file:function where it exists in the already-read code (cross-reference M10's HandleRegister into M1-C1, M2's reply builder into M3-C2, etc.); reserve "rumour" for the genuinely external boundaries only.
+
+2. kind: UNVERIFIED — M9 — the owner→scheduler contract (M9-C1) is the clearest instance and the scheduler's reason to exist, and it has "neither side named" with state UNMEASURED.
+   Claim: "M9-C1 | owner | in | rumour — neither side named (operator config, not a function) | rumour (config load path, not a function) | UNMEASURED".
+   Evidence: the consumer is nameable — `admission_mode.go:112` `admissionModeForProject` reads from the DB; the config-load path and the lane enabled/cadence/weight/pin fields the OUTLINE §IV lists for this contract all live in this repo. A contract with one in-repo side unread is a rumour under rule 2; one with neither side named is an unwritten row.
+   Fix: read the config-load path (and the DB read it lands in) and name producer + consumer file:function, or explicitly downgrade the row to "no owning module — see Part I.9" and stop listing it in §6.
+
+3. kind: OMISSION — document as a whole — Parts I, II, IV–VIII have no chapters.
+   Claim: OUTLINE.md commits to 8 parts; only Part III (13 module chapters) exists.
+   Evidence: F1–F16 flows (the panel's largest standing finding), the 18-contract register (OUTLINE §IV still says "0 of 18 name both implementations"), the full settings register (~83 env / ~215 CLI, OUTLINE V), risk (VI), work derivation (VII), and delivery mechanisms (VIII) have no home. The outline itself marks F6–F16 "(MISSING)" and Parts IV–VIII as unwritten, so this is an acknowledged gap, not a hidden one — but a handbook that is 1/8 of its own structure cannot be called written.
+   Fix: either write those parts or obtain an explicit quorum ruling that this round's deliverable is Part III only and record that ruling in the outline; as it stands the structure map promises 8 parts and delivers 1.
+
+NON-BLOCKING
+
+4. kind: OMISSION (system defect, correctly reported) — M0–M8, M11, M12 — Metrics "RED — none".
+   Evidence: I confirmed the honesty is real — only M9 (server_metrics.go) and M10 (metrics.go) actually emit. The observability gap (dispatch/settlement/landing rate, refusal count, latency all answered by grep) is a defect in the systems, which the chapters correctly report. Not a writing defect.
+
+5. kind: UNVERIFIED (aspirational settings) — M9 §5 — config resolution order is FEAT-005 target, not today's reality.
+   Claim (F9-3): the daemon loads only the fleet sections + a few [scheduler] fields; [daemon]/[gateway]/[duckbrain] are not loaded until FEAT-005 wires LoadConfig.
+   Evidence: `config.example.toml:12-16` (DOGFOOD-012) states exactly this. The 12 settings rows I verified against the file are therefore a register of intent, not of loaded behaviour. Correctly disclosed; worth a board row so the register and the loader cannot keep drifting apart.
+
+6. kind: OMISSION (coverage) — M1, M5, M6, M10 — core submodule bodies still structure-mapped, not read line-by-line.
+   Evidence: M1 (9 of 13 unit bodies unread, self-stamped UNVERIFIED), M5 (5 foreign installer bodies unread), M6 (pipeline beyond master_doc_check.py unread), M10 (handler.go's 1895-line body read at function/slog-surface level only). Each chapter discloses this honestly, and the cite-accuracy on what WAS read is excellent, but the outline's S-level submodule inventory is not yet fully evidence-backed.
+
+DEFECT CLASSES:
+
+one-sided-contract-residual (within-repo, nameable) · missing-parts (7 of 8 outline parts unwritten) · unread-submodule-body · honest-red-metrics (system gap, correctly reported) · aspirational-settings-register (config-not-loaded) · external-boundary-rumour (correct, not a defect)
+
+CHAPTER SCORECARD:
+
+- M0 shared-contract — WRITTEN. Both files read in full; F0-5/F0-6 verified true this round (credential predicate `[0-7]00` at harness-vars.sh:201-204, non-emptiness not set-ness at :176/:181 — both re-read and confirmed); source census 11/17 correct; M0-C1 is an external bunker boundary, so the one-sided flag is the correct completion. Metrics RED honest.
+- M1 provisioning — PARTIAL. Floor precedence (:115-141) and F1-2 (unknown role raises FloorError, exit 2) verified; Status self-stamped UNVERIFIED (9 unit bodies unread); M1-C1 consumer nameable (HandleRegister) but left as prose.
+- M2 dispatch — WRITTEN. The two best contract rows in the set — M2-C1 (`dispatch.go:202` text_b64 vs `node-bus-worker.py:986` text) and M2-C2 (`node-bus-worker.py:1132` status vs `dispatch_leg.go:713-726` ok) both name producer AND consumer file:function, and both CF-354/CF-355 re-verified; F2-3 (dispatch_wall does not clamp — `:1152-1157` int-converts then falls back) re-read and confirmed.
+- M3 repository — PARTIAL. Land/freshness/gate cites verified; F3-2 (clone_lane clones a lane row, not a repo) and F3-3 (--gate-cmd empty default, no gate runs) both true; held back by the nameable M3-C2 producer and repo_freshness.py unread.
+- M4 board — PARTIAL. Store re-measured (357 rows / 515 events, drift OK, 20 verbs, duplicate-id and evidence-run-id refusals reproduced); F4-2 (census vs validation) is a correct correction; but M4-C1/M4-C2 both remain one-sided within-repo.
+- M5 harness — PARTIAL. Resolver + hermes installer verified (python >=3.11,<3.14 refusal, 28 tests); F5-2 (resolver has no production caller) correctly re-classifies S4 as optional; 5 foreign installer bodies unread, M5-C1 consumer vague.
+- M6 documentation — PARTIAL. Gate result reproduced (44 modules / 37 VERIFIED / 50 errors, exit 1); F6-2 (structural/citation gate, not truth verifier) and F6-3 (ownership.py classified optional) both real; most of the pipeline unread, M6-C2 both sides vague.
+- M7 github — PARTIAL. CLI surface verified (bare invocation → usage, exit 2); settings register now filled (F7-2 fixes the round-2 one-row register); mint UNVERIFIED (no App creds, honest); three script bodies largely unread.
+- M8 safety — WRITTEN. Both files read in full; AGED_PARENTS = (.node/jobs, .node/clones) confirmed at :21, check_scan_scope surface (two path patterns, case-sensitive same-line rule, empty-selection OK) confirmed at :31-32/:64-68; F8-3 (dispatcher .cf-jobs not a reap target) real; M8-C1 external filesystem boundary.
+- M9 scheduler — PARTIAL. The round-2 empties are now filled and correct: settings register (12 rows, all match config.example.toml exactly), admission authority read (admission_mode.go:98/:112, tick_process.go:40, packer_select.go:19, namespace_alloc.go:131, usage_pool_policy.go:21 — all line-exact), revision re-stamped 1771d3aa, Go version corrected to 1.26.5 (default PATH, verified). go test ./... re-run by this judge and the SCHED-GAP-1726 goroutine-census FAIL reproduced exactly (rc 1, 159.7s, "1 goroutine(s) still parked in evalDrain"). Held back by M9-C1 (both sides unnamed) and S1 grep-level coverage of four packages.
+- M10 crier — PARTIAL. Ports (8767 config.go:622, 8770 main.go:39), client methods (deliver:975/retrieve:1009/ack:1038), metrics default (EnableMetrics:true, config.go:673 + CR_ENABLE_METRICS override) all verified; F10-2 corrected (host go 1.26.5, GOTOOLCHAIN=auto fetches 1.26.10, build/test PASS) and F10-3 (metrics default-ON) both real; contracts correctly re-attributed (M10 §4b now says the node worker does NOT import crier_client — the round-2 contradiction is fixed); 1895-line handler body read at function/slog level, not line-by-line.
+- M11 dispatcher — WRITTEN. Read in full; M11-C2 corrected to "works" (dispatcher.py:500-508 always sends ok, which is exactly what dispatchReplyVerdict reads — CF-355 belongs to the node worker, not this producer); F11-3 (replay not crash-safe), F11-4 (margin is intended, not guaranteed), F11-5 (serial head-of-line blocking) all real and verified; M11-C1 both-sided.
+- M12 inference-proxy — WRITTEN. Read in full; full sha256 `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` reproduced (273 lines); F12-3 (credential selector + hardcoded API_SERVER_KEY diagnostic at :269) and F12-4 (mid-stream failure terminates with no 502 — headers already sent at :206-210, flush at :217-218, bare return at :238) both verified; M12-C2 external upstream boundary.
+
+Bottom line: the round-3 rewrite is a step-change in accuracy — I independently reproduced ~40 claims (the full scheduler go test, go version across three toolchains, every contested line citation, the config.example.toml register, both cross-system contract defects CF-354/CF-355) and found not one FALSE CLAIM remaining. The document no longer fabricates or overclaims; what remains is coverage, not truth: seven of the eight outline parts still have no chapter, six within-repo contracts are still one-sided when the other side is nameable in code this round actually read, and several submodule bodies are still structure-mapped rather than read. Fix those and this is a PASS set.
+
+PANEL REVIEW COMPLETE
+
+EXIT=0

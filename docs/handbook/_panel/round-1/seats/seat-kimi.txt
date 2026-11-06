@@ -1,0 +1,148 @@
+VERDICT: FAIL
+
+BLOCKING: 7 — findings that must be fixed before this chapter set can be called written
+NON-BLOCKING: 7
+
+FINDINGS
+
+B1. FALSE CLAIM + CONTRADICTION — M6 (chapters/M6-documentation.md §4, §7, §8)
+  Claim: verification row dated 2026-11-06 reads "FAILING — CF-374: prints PASS over 0 modules";
+  §7 lists "OPEN — CF-374: point the check at the real root"; §8 lists "CF-374 (complete)".
+  Evidence: I re-ran the exact command (`python3 scripts/master_doc_check.py`, repo root, tree at
+  HEAD 943ef98, one commit past the stamped f0ca317, touching only scripts/ownership.py): output is
+  "44 module(s): 37 VERIFIED, 50 error(s), 0 warning(s), 10 fact(s) in the ledger / MASTER-DOC: FAIL".
+  The board row itself: `"id":"CF-374",...,"status":"complete"` (.coding-hermes/board/tasks.jsonl).
+  The gate does not print PASS over 0 modules; it FAILs over 44 modules. The chapter's measured
+  result does not reproduce, and §7 contradicts §8 and the board.
+  Fix: re-run the gate, record the real output, delete the stale CF-374 narrative, reconcile §4/§7/§8.
+
+B2. FALSE CLAIM (evidence command does not reproduce) — M0 (§2, §4)
+  Claim: "seventeen measured directly by `grep -rl '\. \"$HERE/lib.sh\"\|source.*lib.sh' scripts/`
+  (17 matches)" and §4 row "who sources it ... >= 17 files ... PASS (17)".
+  Evidence: I ran the quoted command verbatim twice: 11 matches both times. The true count of shell
+  files that source lib.sh is 17 (measured via `grep -rn '^\s*\.\s\|^\s*source\s' scripts/
+  --include='*.sh' | grep lib.sh | sort -u | wc -l` = 17), so the conclusion is accidentally right,
+  but the §4 check as written FAILS when a stranger repeats it — 11 < 17 against a ">= 17" expectation.
+  Fix: quote the command that actually yields 17, or state 11 for that command.
+
+B3. UNVERIFIED contracts (rule 2, both-sides) — ALL 13 chapters, §3c
+  Claim: ~20 service-contract rows across the document; not one names producer AND consumer as
+  file:function. Most name neither side (M9/M12 name only a direction and an OUTLINE section).
+  Evidence: brief rule 2 ("One side is a rumour"); MASTER-DOC-SCHEMA.md §3c line 56 ("Every wire
+  contract names both sides' file and function"). Root cause: the schema's own worked example
+  (MASTER-DOC-SCHEMA.md lines 136-142) violates the same rule — the chapters copied the example.
+  Verified counterexample exists in-repo: scheduler emits text_b64 at
+  coding-herms-scheduler/internal/bus/dispatch.go:202; node reads `dispatch.get("text")` at
+  code-factory/scripts/node-bus-worker.py:986 — both sides were findable; nobody wrote them down.
+  Fix: fix the schema worked example first, then add file:function on both sides of every §3c row.
+
+B4. OMISSION (mandated structure) — ALL 13 chapters
+  Claim: OUTLINE.md PART III mandates 13 headings per chapter. Every chapter implements only the
+  8-section MASTER-DOC-SCHEMA shape. Missing everywhere: #3 submodule inventory with
+  active/optional/legacy/designed-not-built classification proven by invoking file:line; #5 settings
+  register (default, range, consequence — under the outline's own decision rule every setting in the
+  document is therefore NAME ONLY and counts as unwritten); #11 limits and margins; #12 cross-references.
+  Evidence: OUTLINE.md lines 97-131 vs. any chapter's section list. Zero settings registers exist
+  in docs/handbook/chapters/.
+  Fix: either write the four missing headings per chapter, or amend the outline — the document may
+  not silently satisfy the weaker of its two governing specs.
+
+B5. CONTRADICTION + FALSE CLAIM — M6 vs M8 over verify-patch.sh
+  Claim: M6 §8 and OUTLINE assign verify-patch.sh to M6.S8; M8 §1 lists it in M8's path and M8 §8
+  asserts "OUTLINE.md v2 adds M8.S3 patch-chain drift (verify-patch.sh)".
+  Evidence: OUTLINE.md line 170 assigns verify-patch.sh to M6.S8; the M8 entry (line 173) has only
+  S1/S2 — no M8.S3 exists. One unit claimed by two chapters, and M8's outline citation is fabricated.
+  Fix: single ownership (the outline says M6.S8); M8 drops the file and the invented citation.
+
+B6. UNVERIFIED skeletons — M9, M10, M11, M12
+  Claim: four control-plane chapters whose own status fields read "RED — UNVERIFIED", with §3b
+  explicitly empty ("not read this round"), no revision stamp (schema §1 requires one; "external
+  repo — not stamped" is a RED identity field), zero captured log lines, metrics unverified, and
+  verification limited to `ls` / `wc -l`. Self-declared RED counts: 6, 6, 4, 5.
+  Evidence: chapters/M9-scheduler.md §1/§3b/§5/§6; M10-crier.md same; M11-dispatcher.md §1/§5;
+  M12-inference-proxy.md §1/§3b/§6. Their repo-path rows do reproduce (cmd/, internal/,
+  config.example.toml, scheduler.db all exist at the stated paths; crier clients/ holds python +
+  typescript; cf-inference-proxy.py is exactly 273 lines) — but reachability is not a chapter.
+  Fix: read the source, stamp each repo's revision, fill 3b/5/6, or declare these chapters unwritten.
+
+B7. UNVERIFIED verification rows shipped open — M0, M1, M2, M3, M4, M5, M7, M8
+  Claim (rule 1: a claim without evidence is UNVERIFIED and blocks): M0 fetch_verified fail-closed
+  "not run this round"; M1 disk-floor unit unrun and selftest row left at "running this round — see
+  manifest" (manifest not path-named; I ran it to completion: SELFTEST FAIL (1)); M2 test_lane_target
+  unrun; M3 land dry-run unrun; M4 board_drift unrun; M5 conformance battery + test_harness_resolve
+  unrun; M7 token mint unrun; M8 test_reclaim unrun.
+  Fix: run them or strike the rows; a finished chapter cannot carry "running" as a result.
+
+NON-BLOCKING
+N1. Citation slip — M5 §6: "installed %s but the pin is %s (`install-gitreins.sh:105`)" — actual
+  line 106, and the verbatim drops "(log $log)".
+N2. Count drift — M4 §3b: "21 verbs" — `boardctl --help` lists 20 subcommands (doctor does exist;
+  boardctl reports version "dev", so drift is plausible; re-measure and stamp a version).
+N3. Repeatability disclosure — M2 §4: `python3 ~/node-bus-worker.py --check` is a cf-node command;
+  ~/node-bus-worker.py does not exist on this host (verified). Dated FACT-04 stands, but say where
+  it must be run.
+N4. Stale stamp — all chapters stamp f0ca317; HEAD moved to 943ef98 at 15:48 mid-round
+  (scripts/ownership.py added). The "31/31" py_compile sweep is now 32/32. Re-stamp at publication.
+N5. Stale carried evidence — M11 §4 PASSes are stamped rev 98eb5ce (2026-11-04); crier-fleet HEAD
+  is 283bca9. Per the schema's own rule, a check from a prior revision is UNVERIFIED.
+N6. Count slip (outline-side) — OUTLINE appendix A claims 47 unit files; 46 .md measured in
+  docs/handbook/appendices/units/ (including 00-INDEX and _facts).
+N7. Overstatement — M0 §2 "Twenty scripts source lib.sh": 17 shell sourcers measured; 20 is the
+  count of all .sh files in scripts/.
+
+WHAT I RE-VERIFIED AS TRUE (so the next round keeps it)
+- M3's round-measured claims reproduce exactly. My own run of tests/selftest.sh: SELFTEST FAIL (1);
+  the single failing case is "FAIL tracked python surface is red: a python-staging commit is refused"
+  (arm 51); the arm-41 section passes 12/12. QA-CODE-FACTORY-2's repo-freshness diagnosis is stale,
+  as M3 §8 says.
+- M4 store counts reproduce two ways: jq/wc give 357 rows / 515 events; `boardctl doctor`
+  independently reports "rows: 357 tasks, 515 events".
+- CF-354/CF-355 are real, open, and code-accurate: text_b64 emitted at internal/bus/dispatch.go:202,
+  `text` read at node-bus-worker.py:986, and dispatchReplyVerdict (dispatch_leg.go:713-726) checks
+  only ok:false.
+- Every line citation I spot-checked is exact: lib.sh:6-8, 19-42, 26, 48-57, 75-78;
+  land-node-branch.sh:8-9, 22-24, 53-58, 91-93, 167, 214, 231, 265-283, 291, 294;
+  install-gitreins.sh:12-14, 53, 120-139; .gitleaks.toml:11-33; harness-vars.sh:34, 66, 157-159.
+- Measured values reproduce: bash 5.3.9, python 3.14.9, go 1.26.5; lib.sh 78 / harness-vars.sh 318 /
+  land-node-branch.sh 295 / install-gitreins.sh 180 / .gitleaks.toml 48 / proxy 273 / bus worker 1498 /
+  gen_unit_map.py 359 / panel_loop.py 305 lines; bash -n 20/20 PASS; no scripts/hooks/ directory
+  (M3's outline correction is correct).
+
+DEFECT CLASSES
+stale-diagnosis-carried-forward (B1, and QA-CODE-FACTORY-2 caught by M3); evidence-command-does-not-
+reproduce (B2); one-sided-contract (B3); missing-mandated-heading (B4); spec-vs-spec-contradiction
+(B3 root cause, B4); double-claimed-unit (B5); fabricated-citation (B5); unread-body-skeleton (B6);
+unstamped-external-revision (B6, N4, N5); open-UNVERIFIED-row (B7); count-drift (N2, N6, N7);
+off-by-one-citation (N1).
+
+CHAPTER SCORECARD
+M0  PARTIAL — exact citations and honest RED metrics, but its own §4 source-count check fails when
+    repeated (B2); one UNVERIFIED row open.
+M1  PARTIAL — structure verified against UNIT-MAP, bodies unread, §4 selftest row left "running"
+    with no manifest path; disk-floor row open.
+M2  PARTIAL — strongest node-side chapter; honest about the unread 1498-line worker; failure modes
+    are code-accurate (verified CF-354/355); contracts one-sided; lane_target row open.
+M3  PARTIAL — closest to written: three files read in full with every citation exact, round-measured
+    selftest claim independently reproduced by this judge, two correct findings filed against the
+    outline and a stale board row. Held back by B3/B4, an open dry-run row, and UNVERIFIED
+    clone_lane/repo_freshness.
+M4  PARTIAL — store-level claims reproduced two independent ways; verb surface taken from a doc,
+    not the tool, and the count is off (N2); drift row open.
+M5  PARTIAL — harness-vars.sh read in full; installer bodies and resolver unread; two open
+    verification rows; citation slip N1.
+M6  PARTIAL (blocking) — its central gate claim is inverted against reality and disagrees with
+    itself and the board (B1); double-claims verify-patch.sh (B5).
+M7  SKELETON — bodies unread, one thin contract row, token-mint check never run.
+M8  SKELETON — bodies unread, and it carries a fabricated outline citation plus a unit the outline
+    assigns to M6 (B5).
+M9  SKELETON — self-declared 6 RED fields; no source read, no revision stamp, no logs, no metrics.
+M10 SKELETON — self-declared 6 RED fields; same shape as M9.
+M11 SKELETON — leans on the schema's worked example stamped at a superseded revision; 4 RED fields.
+M12 SKELETON — a 273-line file measured by wc -l and nothing else; 5 RED fields; every contract
+    row names no function on either side.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-7ad5f8a252cc7fe33d3630cab9cf0125a64c92c13e8bd6d5bf4229033167b7a1
+
+EXIT=0

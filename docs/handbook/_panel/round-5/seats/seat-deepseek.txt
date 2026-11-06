@@ -1,0 +1,77 @@
+All load-bearing claims verified against the code. Here is my full verdict.
+
+VERDICT: FAIL
+
+BLOCKING: 5 — findings that must be fixed before the affected chapters can be called written
+
+NON-BLOCKING: 7
+
+FINDINGS:
+
+BLOCKING
+
+1. [OMISSION] M9 §9 (Log lines). The chapter documents 2 of 379 operator-visible log sites and self-declares "This is a sample, not an inventory." Evidence: `grep -rn "log.Printf" internal/scheduler/*.go | wc -l` = 379 (reproduced). The schema requires "every operator-visible line, verbatim." Fix: complete the verbatim inventory, or explicitly narrow M9 §9 to the settlement/batch-dispatch surface and record the uncovered count as a named RED, not a sample.
+
+2. [OMISSION] M9 §5 (Settings register). The register lists ~14 settings; `cmd/schedulerd/main.go` carries 57 flag definitions (reproduced via `grep -c 'flag\.(...' main.go` = 57). Unregistered live flags: `tls-cert`, `tls-key`, `public-url`, `peer-freshness-window`, `spawn-mem-limit-mb`, `board-stasis-gate` (all present at main.go:100-150). Fix: register every flag with default/range/consequence, or declare the unregistered surface explicitly out of scope with a quoted grep proving the boundary.
+
+3. [UNVERIFIED] M10 §1/§9. The 1895-line handler.go body was not read line-by-line and the §9 log inventory is self-declared non-exhaustive. Evidence: `wc -l internal/registry/handler.go` = 1895 (reproduced). Fix: read the handler body and complete the slog inventory, or downgrade the §9 claim to an explicit sample with a measured uncovered-count.
+
+4. [UNVERIFIED/OMISSION] M1 §3/§5. Six S1-S4 unit bodies are unread — node_identity.py, node_seed.py, node_seed_drift.py, node_env.py, node_freshness.py, bunker_config_gen.py — so their settings and behaviour are undocumented; only the orchestrator invoking lines are cited. Fix: read the six bodies and register their settings/consequences.
+
+5. [UNVERIFIED/OMISSION] M5 §3/§5. Four foreign-installer bodies are unread (install-claude-code.sh, install-deepseek.sh, install-pi-agent.sh, install-opencode.sh; install-codex.sh partial). Fix: read the bodies and register their settings and capability uniformly (the §11 matrix currently rests on line-range reads).
+
+NON-BLOCKING
+
+- [class] Metrics "none" on 11 chapters (M0, M1, M2, M3, M4, M5, M6, M7, M8, M11, M12) — each absence-proved by a quoted repo grep. Correctly documented; this is a system observability defect, not a document defect. It blocks the system, not the document.
+- M6 §7 — the documentation module's own gate reads MASTER-DOC: FAIL (44 modules, 37 VERIFIED, 50 errors). Correctly documented live state; the FAIL is a stale-locator condition, reported not hidden.
+- M12-C1 — node-client half UNVERIFIED; no in-repo file:function exists (config-wired via node.env.example:22,26). Genuinely unnameable, correctly marked.
+- M12 F12-7 — healthy SSE stream unframed to completion; UNVERIFIED until an HTTP-completion test passes. System defect, correctly documented.
+- M4-C1/M4-C2 — UNVERIFIED; every side is an external peer (foreman, gitreins binary, boardctl binary, JSONL store). Correctly re-derived from round-3's "works"/"broken".
+- M7-C1 — UNVERIFIED; consumer is the external github.com API. Correctly marked.
+- M2 §7 / M11 §7 — live-node ladders not repeatable from this control host; M11's live-job test scripts print without asserting (decoration, correctly flagged).
+
+DEFECT CLASSES
+
+incomplete-log-inventory · incomplete-settings-register · unread-unit-body · metrics-absent (system) · one-sided-or-external-contract (UNVERIFIED) · decoration-test (no failing oracle) · live-state-gated-verification (unrepeatable)
+
+CHAPTER SCORECARD
+
+- M0 shared-contract — PARTIAL — Metrics RED only; all cited lines re-verified; nearest to written.
+- M1 provisioning — PARTIAL — S1-S4 bodies unread (UNVERIFIED); Metrics RED.
+- M2 dispatch — PARTIAL — Metrics RED; live ladder unrepeatable; contract states both-sided and correct.
+- M3 repository — PARTIAL — Metrics RED; S2 correctly reclassified operator-invoked (F3-5).
+- M4 board — PARTIAL — Metrics RED; M4-C1/C2 UNVERIFIED (external peers).
+- M5 harness — PARTIAL — foreign installer bodies unread; Metrics RED.
+- M6 documentation — PARTIAL — own gate reads FAIL; Metrics RED.
+- M7 github — PARTIAL — mint UNVERIFIED; M7-C1 UNVERIFIED; Metrics RED.
+- M8 safety — PARTIAL — Metrics RED only; nearest to written.
+- M9 scheduler — PARTIAL — §9 log inventory 2/379; §5 settings incomplete; S1 grep-level.
+- M10 crier — PARTIAL — handler body unread; §9 non-exhaustive.
+- M11 dispatcher — PARTIAL — Metrics RED; live-job tests decoration.
+- M12 inference-proxy — PARTIAL — node-client half UNVERIFIED; stream completion UNVERIFIED; Metrics RED.
+
+0 WRITTEN, 13 PARTIAL, 0 SKELETON.
+
+WHAT I VERIFIED AS TRUE (so the next round keeps it)
+
+- F9-3 correction is TRUE: `LoadRootConfig` is called at exactly main.go:640, 673, 762, 854, 870, 968, 995, 1023, 1054, 1309; loader.go implements the three-layer merge (LoadConfig:110, applyEnvOverrides:206, LoadRootConfig:630). Round-4's "root sections not loaded" was FALSE.
+- F9-6 correction is TRUE: the ambient `SCHEDULER_OPERATOR_RESTART_APPROVED=1` is present in this shell; `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -run '...OperatorRestart...|...SCHEDGAP091...|...AbortInFlightTicks...' -count=1` = ok (0.288s). The var is load-bearing (restart_approval.go:57 EnvOperatorRestartApproved).
+- F9-4 locator re-pin TRUE: metricsSpawns func at server_metrics.go:195 (doc comment :192).
+- F9-2 TRUE: scheduler.db = 30 tables, no verdicts table.
+- F9-5 TRUE: binary defaults 30s/24h/10/100/10/false/7200s at main.go:108-114; load-gate-threshold 0 at :144.
+- boardOwnedByLane def :177, called :234 (admission_mode.go) — round-4's ":208+" was tasksAdmissionDue, not the function.
+- S1 locators exact: tick_process.go:40 evaluate, packer_select.go:19 Pack, namespace_alloc.go:131 Allocate, usage_pool_policy.go:21 reserveUsagePools (all receiver methods).
+- CF-354 both sides TRUE: dispatch.go emits text_b64; node-bus-worker.py:986 reads dispatch.get("text"); no text_b64 in the worker.
+- CF-355 both sides TRUE: node sends "status" (:1132); scheduler reads payload["ok"] (:714).
+- F2-4 correction TRUE: configure_family.py:17 imports, :149 calls lane_target.parse.
+- F3-5 TRUE: land-node-branch matched only by selftest.sh arms (syntax+usage), no in-repo invoker.
+- M12 ERE grep TRUE: 4 text sites (panel_loop.py:136, master_doc_skeleton.py:25/:211, node.env.example:22 — a live assignment, not a comment).
+- M4 census TRUE: 357 tasks / 515 events. M11 log sites TRUE: 23 calls (25 grep lines incl. def+comment). M10 metrics grep TRUE: crier_[a-z_]+ = 67 unique; registry = 91 test files.
+
+The document is honest and the two operator-facing FALSE CLAIMs are genuinely fixed. It is not yet WRITTEN: the closable completeness gaps (two control-plane modules with incomplete log/settings registers, two node-side modules with unread unit bodies) are what hold it at 0/13.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-47ea127066ff9bbe19c9973da79b654c1cc5b7ba5967aec81739fc0351eb9b4a
+
+EXIT=0

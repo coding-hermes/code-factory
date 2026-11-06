@@ -1,0 +1,72 @@
+VERDICT: FAIL
+
+BLOCKING: 5 — findings that must be fixed before this chapter can be called written
+NON-BLOCKING: 3
+
+Judged document-against-code at the stamped revisions (code-factory 943ef98, scheduler 1771d3aa, crier 691f0c78, crier-fleet 283bca9; proxy sha256 b12a0ac5… reproduced). Every round-5 correction I tested re-derives true from the code — F9-3 (LoadRootConfig called at exactly main.go:640,673,762,854,870,968,995,1023,1054,1309; the stale NOTE is in config.example.toml:12-16, not the daemon), F9-6 (clean-env `go test ./...` rc 0, 25/25 packages — reproduced; my own shell carries SCHEDULER_OPERATOR_RESTART_APPROVED=1, confirming the contamination mechanism), F2-4 (lane_target called at configure_family.py:17,149), F3-5 (land-node-branch has no in-repo invoker; selftest.sh:2465/2473/2502 exact), F11-6 (ledger check :470-475, put :481-483 covers both modes), F10-3 (metrics.go:2), F12-7 (protocol_version="HTTP/1.1" at :105 with no Content-Length/Transfer-Encoding/Connection on the stream path — the unframed-SSE defect is real), F0-6 (`[0-7]00` predicate at :203 vs "must be 600" message at :204), M6 B14 (ThreadPoolExecutor at :450), M12-C1 (node.env.example:22 is the live assignment). The failures below are what remains.
+
+FINDINGS:
+
+1. FALSE CLAIM — M12 (§5 settings register)
+   Claim quoted: "`USAGE_LOG` | `~/.hermes/logs/cf-usage.jsonl` (`:49`)" and "`CAPTURE_LOG` | `~/.hermes/logs/cf-capture.jsonl` (`:50`)"
+   Evidence: `sed -n '50p;52p' /home/kara/.hermes/scripts/cf-inference-proxy.py` → :50 `USAGE_LOG = …"cf-inference-usage.jsonl"`, :52 `CAPTURE_LOG = …"cf-inference-requests.jsonl"`. Both filenames in the chapter are invented; both line cites land on the wrong statements (:49 is ENV_PATH).
+   Fix: replace with the measured names and lines; an operator hunting the capture log at the documented path finds nothing — in a chapter whose §2 stakes is "what breaks if it lies".
+
+2. CONTRADICTION — M10 (§6 M10-C1) vs OUTLINE Part IV and README I.3/I.5
+   Claim quoted: M10-C1 "**works (transport)** — … the mismatch is a node-consumption defect … Round-4's 'broken (CF-354)' mis-scoped the break"; OUTLINE Part IV still reads "scheduler → crier — envelope … **broken**" and "crier → node — … **works**"; README still carries "10 works / 6 broken / 2 missing".
+   Evidence: OUTLINE.md lines 207-209 vs chapters/M10-crier.md:82; the measured break (node reads `text` at node-bus-worker.py:986) sits on the crier→node leg, the inverse of the register.
+   Fix: write the re-scope back into the Part IV register rows (and README I.3/I.5 counts) or footnote each row with the chapter that supersedes it. A register of record that contradicts the chapters it registers is worse than a rumour — it is a measured fact undone by a stale table.
+
+3. UNVERIFIED — M4 (§7 verification table)
+   Claim quoted: "drift … **PASS** (RESULT: OK; HEAD==origin/main `943ef98`), 2026-11-06"
+   Evidence: re-run this round: `RESULT: DRIFT (4 failed)` — tasks/events byte parity FAIL, CF-051 pending(local) vs complete(published); origin/main has advanced 3 commits past the stamped HEAD (b82a5df…). MASTER-DOC-SCHEMA §4: "A check that passed three revisions ago is UNVERIFIED" — here, literally three.
+   Fix: re-run board_drift after resync, re-stamp; or record the drift as the current honest row. Not the writer's fabrication — the repo moved mid-panel — but the printed PASS no longer repeats.
+
+4. UNVERIFIED — M9 (§5 settings register, six rows)
+   Claim quoted: rows `api-read-timeout` 5 s, `gateway-response-timeout` 30 m, `gateway-transient-retries` 3, `slot-patience` 5 m, `tasks-pacing` 60 s, `feature-prune-weeks` 8 — all carry default/governs/consequence but no `file:line`.
+   Evidence: rule 1 — a claim without a locator blocks. I measured them true (main.go:122, :128, :138, :142, :143, :145), so the fix is mechanical, but the chapter as written asks the reader to trust unlocated numbers — the exact defect F9-5 was filed against round-3 for.
+   Fix: add the six locators (now measured) or drop the rows to the RED note.
+
+5. OMISSION — README Part II flow ledger (document-level)
+   Claim quoted: the flow table tracks II.1–II.10 only; `grep -n 'F1[1-6]\|SCHEDULING ADMISSION\|CREDENTIAL LIFECYCLE\|MULTI-NODE' docs/handbook/README.md` → 0 rows.
+   Evidence: OUTLINE Part II commits to 16 flows; the six quorum-added flows (F11 admission, F12 credentials, F13 upgrade, F14 observability ingestion, F15 backup/restore, F16 fan-out) — the panel's largest structural addition — have no status row at all, not even MISSING. A ledger that silently drops a third of the committed scope repeats the v1 sin (coverage claimed but not tracked).
+   Fix: add II.11–II.16 rows marked MISSING with an owner module pointer (M9, M1/M7/M12, M9/M6, M14-none, ops, M11).
+
+6. CONTRADICTION (non-blocking) — M11 (§5 vs §13 F11-7)
+   Claim quoted: §5 "`int(TASK_S)` at `:196`"; F11-7 "(`task_seconds` `:193`)".
+   Evidence: actual `return int(TASK_S)` at dispatcher.py:195 (def :185, guard :194). The claim (string until int() at use, ValueError at use) is true; the chapter cites two different wrong lines for it.
+   Fix: pin :195 in both places.
+
+7. OMISSION (non-blocking) — M10 (§8 metrics inventory)
+   Claim quoted: "Inventory (B56, completed this round — `grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u`)"
+   Evidence: the same command returns 67 unique strings this round; the chapter enumerates ~40 base series and neither distinguishes histogram `_bucket/_sum/_count` components nor excludes the test-only `crier_test_*` family (the writer's own manifest said 60). "Completed" overstates a partial enumeration.
+   Fix: state the count the command returns and the scope (runtime series vs test helpers vs exposition components).
+
+8. UNVERIFIED — declared, confirmed (non-blocking) — M2/M10 §7 and M1 §7
+   Claim quoted: signed-read ladder / certification ladder / bus-worker ladder "not repeatable from this control host".
+   Evidence: I cannot repeat them either (no `~/node-bus-worker.py`, no live node from this host); correctly carried as RED/UNVERIFIED rather than asserted. No fix demanded beyond keeping them RED until a node-side run re-dates them.
+
+DEFECT CLASSES: register-not-reconciled (measured state not written back to the register of record) · settings-drift (defaults/names not re-derived from code) · verification-currency (PASS rows gone stale after origin advanced) · locator-drift (±1 line, self-inconsistent within a chapter) · true-claim-no-evidence · honest-RED accounting (working as intended).
+
+CHAPTER SCORECARD:
+- M0 — PARTIAL. Every locator verified (11/17 source counts reproduce; lib.sh :5-11,22,26,54,67-78 exact); metrics RED is a system defect, not a writing defect.
+- M1 — PARTIAL. F1-1 verified in both directions (:214 probes `-s`, :233 claims mode 600); five re-applied CLI flags at :604-608 exact; S1–S4 bodies honestly declared unread.
+- M2 — PARTIAL. All cited lines verified including the same-batch duplicate structure (:1304-1331 vs :1341-1347); ladder correctly RED as unrepeatable.
+- M3 — PARTIAL. F3-3/F3-5 verified (GATE="" :36, gate :171-193, no in-repo invoker); repo_freshness rows cite the add_argument statement line — acceptable, flag literals sit at :559+.
+- M4 — PARTIAL. Census 357/515 and `validate` OK(7 warnings) reproduce; the drift row itself is now stale (finding 3).
+- M5 — PARTIAL. Mode predicate and per-installer sourcing/refusals all verified; foreign bodies declared unread.
+- M6 — PARTIAL. Gate FAIL reproduced exactly (44 modules / 37 VERIFIED / 50 errors); fill/render locators verified; own-gate-FAIL honestly RED.
+- M7 — PARTIAL. Every locator verified (mint :362/:371, --dry-run exits at :106/:154, say_q :55); mint correctly UNVERIFIED without creds.
+- M8 — PARTIAL. Scan-scope 15-claim PASS reproduced; reclaim locators verified; both files read in full.
+- M9 — PARTIAL. The two inverted operator-facing facts (F9-3, F9-6) now verified true against code and reproduced by me; blocked on finding 4 plus its own declared REDs (§9 2/379, S1 grep-level).
+- M10 — PARTIAL. Locators and test/build reproduction solid; blocked on finding 2 (register) and finding 7 (inventory overstatement).
+- M11 — PARTIAL. Near-complete: 23 log sites, ledger semantics, always-`ok` reply all verified; blocked on decoration tests (cannot fail) and finding 6.
+- M12 — PARTIAL. F12-7 proven real (HTTP/1.1 at :105 + unframed stream); blocked on finding 1 — the one outright false claim that survived this round.
+
+No chapter reaches WRITTEN: each carries at least one RED field, and the four with new blocking findings (M4, M9, M10, M12) cannot be called written even under the round's own lenient standard. The corrections themselves are sound — every one I re-derived from code came back true — which is why the verdict is FAIL on completeness and currency, not on honesty.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-a2621b0defbd77e4cbb2261da5b7d341dedc93bafbf1b8e4c37ab338e3279d70
+
+EXIT=0

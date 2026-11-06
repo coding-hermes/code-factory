@@ -1,0 +1,11 @@
+│ /tmp/ffc_direct.sh
+│ @@ -0,0 +1,5 @@
+│ +#!/bin/bash
+│ +. /home/kara/code-factory/scripts/lib.sh
+│ +fetch_verified http://127.0.0.1:1/nothing /tmp/ffc-art2 wrong-digest 2>/dev/null
+│ +echo "rc=$?"
+│ +[ -e /tmp/ffc-art2 ] && echo artifact=yes || echo artifact=no
+
+session_id: local-e714272c13d23957b85396c7e8d7ae16fbb78c0dcf3f6f2cbc02e97ac43c0974
+
+EXIT=0

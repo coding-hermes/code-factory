@@ -92,7 +92,7 @@ day-one/empty case · degradation path · diagram.
 - **F16 MULTI-NODE FAN-OUT** — trigger: a lane or row targeting more than one node; exit:
   every target acknowledged, each with its own receipt. *(MISSING)*
 
-## PART III — MODULES (13 modules, 34 submodules)
+## PART III — MODULES (13 modules, 47 submodules)
 
 ### Chapter headings — corrected
 
@@ -204,8 +204,8 @@ payload, timing, failure semantics, measured state, breaking-change policy. Curr
 **0 of 18** name both implementations.
 
 - **owner → scheduler** — lane enabled, cadence, weight, pin · **works**
-- **scheduler → crier** — envelope: run_id, corr_id, lane, board_row, text_b64 · **broken**
-- **crier → node** — inbox message + lease · **works**
+- **scheduler → crier** — envelope: run_id, corr_id, lane, board_row, text_b64 · **broken** *(superseded — see M10-C1: works (transport); the text_b64/text break is node-side, glm #2)*
+- **crier → node** — inbox message + lease · **works** *(superseded — see M10-C2: works; the CF-354 field-mismatch is the node's consumption, M2-C1)*
 - **node → crier** — reply: in_reply_to, corr_id, run_id, outcome · **broken**
 - **foreman → scheduler** — the lane's prompt text and skills it may load · **broken**
 - **crier → scheduler** — completion event for a finished run · **missing**
@@ -269,7 +269,7 @@ and supersession record
 | Parts | 7 | 8 |
 | Flows | 10 | 16 |
 | Modules | 9 | 13 |
-| Submodule chapters | 25 | 34 |
+| Submodule chapters | 25 | 47 |
 | Headings per chapter | 11 | 13 |
 | Coverage gaps folded in | — | 22–28 per seat |
 

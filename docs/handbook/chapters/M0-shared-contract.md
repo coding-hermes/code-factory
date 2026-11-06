@@ -1,0 +1,178 @@
+# M0 — SHARED CONTRACT
+
+## 1. Identity
+
+| Field | Value |
+|---|---|
+| Module name | SHARED CONTRACT (`scripts/lib.sh`) |
+| Path | `/home/kara/code-factory/scripts/lib.sh` |
+| Revision | `943ef984dc093e5780605ac6e54cd043122126ef` (code-factory HEAD, 2026-11-06) |
+| Language / runtime | bash 5.3.9 (measured: `bash --version`); sourced, never executed |
+| Owner lane | code-factory (node-side + control-host shell) |
+| Status | **VERIFIED** — `lib.sh` (78 lines) read in full; every cited line re-verified this round |
+
+The variable contract (`scripts/harness/harness-vars.sh`, 318 lines) is **not** part of M0.
+OUTLINE M0.S1 is the *shell* contract only; `harness-vars.sh` is M5.S5 (see §12). Round-2/round-3
+labelled both "S1" here; that double-ownership is corrected this round.
+
+## 2. Purpose, authority and position
+
+The shared shell substrate every node-side module sources. It decides what a shell script may
+print (`ok`/`bad`/`warn`/`note`, `lib.sh:6-9`; `say()` is `:5` and is not one of the four
+verdict helpers), what a pinned download may accept
+(`fetch_verified`), what a disk floor may admit (`require_disk`), and what a credential *mode*
+may look like (via M5.S5, not here). It may not decide anything about a run itself: it never
+reads the directive, never spawns a harness, never touches the bus.
+
+**What breaks if this module is absent.** Every installer and checker fails on undefined
+`ok`/`bad`/`FAILED` before doing anything. Seventeen shell scripts source `lib.sh` — 11 direct
+(`grep -rl '\. "$HERE/lib.sh"' scripts/` → 11) plus 6 in `scripts/harness/` that source
+`$HERE/../lib.sh` (`grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` → 17). Both commands were
+run this round and their counts verified.
+
+**What breaks if it lies.** `fetch_verified` (`lib.sh:19-42`) is the pinned-download primitive
+every installer relies on; a false digest match installs a wrong or tampered binary and reports
+PASS. `require_disk` (`lib.sh:48-57`) is the disk floor; a false "enough space" lets the
+provisioner proceed onto a host it must refuse.
+
+## 3. Submodule inventory
+
+| Submodule | File | Classification | Evidence (invoking line) |
+|---|---|---|---|
+| S1 shell contract | `lib.sh` | **active** | sourced by 17 scripts — `grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` → 17 (run this round) |
+
+`harness-vars.sh` is **not** an M0 submodule (M5.S5, OUTLINE M5). Round-3 listed a second "S1"
+here; removed.
+
+**Exported helper inventory (B09, completed this round — every helper in `lib.sh`):**
+
+| Helper | `lib.sh` | Inputs → output / exit | Caller obligations |
+|---|---|---|---|
+| `say()` | `:5` | args → prints verbatim | none |
+| `ok()` / `bad()` / `warn()` / `note()` | `:6-9` | `bad` increments the per-script `FAILED` counter (`:7`) | treat PASS/FAIL rows as descriptive, not proof (F0-4) |
+| `have()` | `:13` | `command -v` **or `true`** — an absent binary yields an **empty, success** result | caller must test the *empty* result, not the exit code; empty `have` output = "not found" |
+| `fetch_verified()` | `:19-42` | url/dest/digest → 0 on digest-verified install, 1 on any failure | the pinned-download primitive (F0-2) |
+| `free_gb()` | `:45` | path → `%.1f` GB free | used by `require_disk` only |
+| `require_disk()` | `:48-57` | path/floor → `ok` or `bad` + return 1 | the disk-floor admission |
+| `once()` | `:60-64` | sentinel + command → runs command only if sentinel absent, then writes a timestamped sentinel | **no concurrency lock**: `:62` checks then `:63` runs with no `flock` — two racers both run; the sentinel is `date -u` text, not a digest |
+| `shq()` | `:67-70` | value → single-quoted shell token | quotes empties and apostrophes for remote-shell composition |
+| `bunker_exec()` | `:75-78` | server/agent/cmd… → `bunker exec … -- bash -lc "<joined>"` | joins remaining args as trusted shell text; interpolated data must pass `shq` first (`:72-74`) |
+
+## 4. Dependencies
+
+**4a. Runtime dependencies**
+
+| Dependency | Version constraint | Where | How absence is detected |
+|---|---|---|---|
+| bash | >= 4 | node + control host | `set -u` + undefined helper aborts the caller |
+| curl | any | node + control host | `curl -fsSL` nonzero → `fetch_verified` returns 1 (`lib.sh:22`) |
+| sha256sum | any | with curl | digest mismatch → return 1 (`lib.sh:24-27`) |
+
+**4b. Library contracts** — `lib.sh` imports nothing; it is the bottom of the shell stack.
+
+**4c. Service contracts** — see §6.
+
+## 5. Settings register
+
+`lib.sh` carries one tunable constant and no env-var surface:
+
+| Setting | Default | Range | Governs | What breaks if changed |
+|---|---|---|---|---|
+| `fetch_verified` `--max-time` | 120 s (`lib.sh:22`, hardcoded) | fixed | download stall ceiling | a download stalling past 120 s fails with rc 1; lowering it rejects slow-but-valid mirrors |
+
+`FAILED` (`lib.sh:11`) is a per-script failure counter, not a setting. The CF_* variable
+contract settings (`CF_MAX_TURNS`, `CF_TIMEOUT_S`, `CF_API_KEY_FILE`, …) live in M5.S5, not here.
+
+## 6. Contracts in and out
+
+| ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+|---|---|---|---|---|---|
+| M0-C1 | bunker CLI | out | `lib.sh:75` `bunker_exec` (composes `bunker exec … -- bash -lc`) | **rumour — one side only** (the external `bunker` binary's exec handler, not in this repo) | works as a **bunker** contract, not a crier contract (F0-1) |
+
+The one-sided flag here is the correct completion: `bunker` is an external peer with no in-repo
+function to name.
+
+## 7. Verification
+
+| Check | Command | Expected | Last run | Result |
+|---|---|---|---|---|
+| syntax | `bash -n scripts/lib.sh` | exit 0 | 2026-11-06, rev `943ef98` | PASS |
+| who sources it (direct) | `grep -rl '\. "$HERE/lib.sh"' scripts/` | 11 files | 2026-11-06 | PASS (11) |
+| who sources it (total) | `grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` | 17 files | 2026-11-06 | PASS (17) |
+| fetch_verified fails closed | staged probe `ffc_probe.sh` — source lib.sh, fetch `http://127.0.0.1:1/nothing` with a wrong digest | rc 1, no artifact left | 2026-11-06 | **PASS** — `curl: (7) … Could not connect`, `rc=1`, `no artifact left` |
+
+The probe is not shipped as a file in this repo; the complete invocation (B25) is the two lines
+that reproduce it against a refused loopback URL:
+
+```
+$ printf '#!/bin/bash\n. /home/kara/code-factory/scripts/lib.sh\nfetch_verified http://127.0.0.1:1/nothing "$1" deliberately-wrong-digest\nprintf "rc=%s artifact=" "$?"; [ -e "$1" ] && echo yes || echo no\n' > /tmp/ffc_probe.sh && chmod +x /tmp/ffc_probe.sh
+$ bash /tmp/ffc_probe.sh /tmp/ffc-artifact   # → curl: (7) … ; rc=1 artifact=no
+```
+
+An independent verifier reproduced `fetch_rc=1 artifact_present=no` from this same helper
+(`round5_verifier_probe.py`); the probe artifact itself is not a repo file.
+
+The round-3 chapter's literal source-count commands were over-escaped and returned rc 1 / 0
+matches (sol B05). The commands above are the corrected expressions, re-run this round.
+
+## 8. Metrics
+
+**RED — none (absence-proved this round).** `lib.sh` emits no counters, gauges or histograms —
+`grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' scripts/lib.sh` → 0 matches (the only
+writes are `printf` rows and the `FAILED` integer at `lib.sh:11`). Sourcing frequency and refusal
+rate are answerable only by the static greps above.
+
+## 9. Log lines (verbatim)
+
+| Level | Line | Emitted when | Kind |
+|---|---|---|---|
+| — | `  PASS  %s — %s` (`lib.sh:6`) | `ok` called | **descriptive** — printed unconditionally from two args; proves nothing alone |
+| — | `  FAIL  %s — %s` (`lib.sh:7`) | `bad` called, `FAILED` incremented | **descriptive** (same reason) |
+| — | `  WARN  %s — %s` (`lib.sh:8`) | `warn` called | descriptive |
+| — | `  ..    %s` (`lib.sh:9`) | `note` called | descriptive |
+| — | `digest mismatch for %s: want %s got %s` (`lib.sh:26`, stderr) | `fetch_verified` digest mismatch | **evidentiary** — only after the sha256 comparison failed |
+| — | `cannot create destination directory %s for %s` (`lib.sh:32`, stderr) | `mkdir -p` of the artifact dir fails | **evidentiary** (B24, added this round) |
+| — | `cannot move verified download into place at %s for %s` (`lib.sh:37`, stderr) | `mv` of the verified artifact fails | **evidentiary** (B24, added this round) |
+
+## 10. Failure modes, indications and recovery
+
+| Failure | Presents as | Distinguished from | Recovery |
+|---|---|---|---|
+| Digest mismatch | `digest mismatch for %s` on stderr, return 1 | a download/network failure (`curl` exit, no message) | inspect URL and expected hash; the artifact was never moved into place (`:24-38`) |
+| Disk floor trip | `  FAIL  disk — <free> GB free < floor` (`:54`) | a `free_gb` failure | free space or lower the floor deliberately |
+| Shell injection via `bunker_exec` | a composed `bash -lc` string runs interpolated data | a quoted `shq` call | every interpolated value must pass `shq` before composition (`:72-74`) |
+
+## 11. Limits and margins
+
+- `fetch_verified` `--max-time 120` (`:22`): a download stalling past 120 s fails.
+- `shq` (`:67-70`) quotes empty strings and apostrophes for remote-shell composition; it is not a
+  sandbox — `bunker_exec` (`:75-78`) joins remaining args into `bash -lc` text, so a caller that
+  skips `shq` on interpolated data can inject shell.
+- No measured concurrency/throughput limits exist; the helpers are synchronous and single-threaded.
+
+## 12. Cross-references
+
+- F2 PROVISIONING uses `require_disk` (M1) and `fetch_verified` (M5).
+- M1 PROVISIONING sources `lib.sh`, resolves `bunker` via `have` (`:13`).
+- **M5 HARNESS owns `harness-vars.sh` (M5.S5).** The variable contract is **not** sourced by every
+  installer: `install-hermes.sh`, `install-opencode.sh`, `install-deepseek.sh`,
+  `install-pi-agent.sh` source it; `install-codex.sh` sources it conditionally (`:47`) then
+  re-implements a divergent copy; `install-claude-code.sh` sources `../lib.sh` (`:36`), not
+  `harness-vars.sh`, and documents its own CF_* handling inline. See M5 §11.
+- The CF_* contract is specified at `specs/HARNESS-MATRIX.md` §5 and enforced at
+  `scripts/harness/harness-vars.sh` (M5.S5).
+
+## 13. Evidence of record
+
+- Code: `scripts/lib.sh` (78 lines) — read in full.
+- Commands run this round: `bash -n scripts/lib.sh`; `grep -rl '\. "$HERE/lib.sh"' scripts/` (11);
+  `grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` (17); `ffc_probe.sh` (fetch_verified fails
+  closed, rc 1, no artifact).
+- **Findings:**
+  - **F0-1** (carried) — `bunker_exec` (`lib.sh:75-78`) invokes the **bunker CLI**, not crier.
+  - **F0-4** (carried) — `ok`/`bad` PASS/FAIL rows are descriptive, not evidentiary.
+  - **F0-5** (now owned by M5 §11) — the CF_* variable contract is not a single implementation:
+    `install-codex.sh` duplicates the validator; `install-claude-code.sh` sources `lib.sh` not
+    `harness-vars.sh`.
+
+## RED field count: 1 (Metrics §8)

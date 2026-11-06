@@ -1,0 +1,314 @@
+⚠️  Primary auth failed — switching to fallback: fireworks / accounts/fireworks/models/deepseek-v4p1-flash-1017
+│ cache/scratch/locator_check.py
+│ @@ -0,0 +1,58 @@
+│ +#!/usr/bin/env python3
+│ +"""Check every file:line citation in the round-6 handbook chapters against the code."""
+│ +import os, re, sys, collections
+│ +
+│ +ROOTS = [
+│ +    "/home/kara/code-factory",
+│ +    "/home/kara/coding-hermes-scheduler/coding-herms-scheduler",
+│ +    "/home/kara/crier",
+│ +    "/home/kara/crier-fleet",
+│ +    "/home/kara/.hermes/scripts",
+│ +]
+│ +CH = "/home/kara/code-factory/docs/handbook/chapters"
+│ +
+│ +# index: basename -> [paths]
+│ +index = collections.defaultdict(list)
+│ +for root in ROOTS:
+│ +    for dirpath, dirnames, filenames in os.walk(root):
+│ +        dirnames[:] = [d for d in dirnames if d not in (".git", "node_modules", "__pycache__", ".venv", "venv", "dist")]
+│ +        for f in filenames:
+│ +            index[f].append(os.path.join(dirpath, f))
+│ +
+│ +CIT = re.compile(r"([A-Za-z0-9_][A-Za-z0-9_./\-]*\.(?:py|sh|go|md|toml|json|ya?ml|txt|jsonl|ts|db)):(\d+)(?:-(\d+))?")
+│ +
+│ +bad = []
+│ +stats = collections.Counter()
+│ +for name in sorted(os.listdir(CH)):
+│ +    if not name.endswith(".md"):
+│ +        continue
+│ +    path = os.path.join(CH, name)
+│ +    for lineno, line in enumerate(open(path, encoding="utf-8", errors="replace"), 1):
+│ +        for m in CIT.finditer(line):
+│ +            ref, a, b = m.group(1), int(m.group(2)), m.group(3)
+│ +            base = os.path.basename(ref)
+│ +            cands = index.get(base) or []
+│ +            if not cands:
+│ +                bad.append((name, lineno, ref, a, "NO SUCH FILE ON DISK"))
+│ +                continue
+│ +            # pick the candidate that has enough lines
+│ +            ok = False
+│ +            maxtot = 0
+│ +            for c in cands:
+│ +                try:
+│ +                    tot = sum(1 for _ in open(c, "rb"))
+│ +                except OSError:
+│ +                    continue
+│ +                maxtot = max(maxtot, tot)
+│ +                hi = int(b) if b else a
+│ +                if a >= 1 and hi <= tot:
+│ +                    ok = True
+│ +                    break
+│ +            if not ok:
+│ +                bad.append((name, lineno, ref, a, "OUT OF RANGE (candidates=%d max_lines=%d)" % (len(cands), maxtot)))
+│ +            stats["refs"] += 1
+│ +
+│ +print("citations checked:", stats["refs"])
+│ +print("suspect:", len(bad))
+│ +for row in bad:
+│ +    print("%s:%d  %s:%d  -> %s" % (row[0], row[1], row[2], row[3], row[4]))
+│ cache/scratch/route_census.py
+│ @@ -0,0 +1,17 @@
+│ +#!/usr/bin/env python3
+│ +import re, sys
+│ +src = open("/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server.go").read().splitlines()
+│ +start = next(i for i, l in enumerate(src) if "func (s *Server) Handler()" in l)
+│ +routes = []
+│ +for l in src[start:]:
+│ +    for m in re.finditer(r'mux\.HandleFunc\("([^"]+)"', l):
+│ +        routes.append(m.group(1))
+│ +    if "return " in l and routes and "Handler" not in l and l.strip().startswith("return"):
+│ +        break
+│ +uniq = sorted(set(routes))
+│ +print("registered routes in Handler():", len(uniq))
+│ +chap = open("/home/kara/code-factory/docs/handbook/chapters/M9-scheduler.md").read()
+│ +missing = [r for r in uniq if r.replace("/api/v1", "") not in chap and r not in chap]
+│ +print("routes NOT named in the chapter:", len(missing))
+│ +for r in missing:
+│ +    print("   ", r)
+VERDICT: FAIL
+BLOCKING: 10 — findings that must be fixed before these chapters can be called written
+NON-BLOCKING: 6
+
+SCOPE OF THIS SEAT
+  All 13 chapters in docs/handbook/chapters/ (2,816 lines) read in full against
+  code-factory, the scheduler repo (rev 1771d3aa), crier (691f0c78), crier-fleet
+  (283bca9) and cf-inference-proxy.py. 274 file:line citations machine-checked
+  (script: /home/kara/.hermes/cache/scratch/locator_check.py — 272 resolve, 2 do
+  not); ~70 claims then opened at the cited line and read. Commands I re-ran
+  myself and whose output I quote below: git log/diff, go build/test, go version,
+  sqlite3 .tables, boardctl validate/create, board_drift, jq/wc censuses, the
+  M0 ffc_probe, the 401 admission probe, unittest batteries. Not repeatable from
+  this seat: the cf-node bus-worker ladder (M2 §7, M10 §7) and the certification
+  ladder (M1 §7) need a live node; the M9 full `go test ./...` (~500-1100 s) I
+  ran only the three named env-sensitive tests for; the GitHub mint (M7) has no
+  App credentials on this host. Those are marked below, not silently passed.
+
+FINDINGS
+
+1. FALSE CLAIM — M4 BOARD (§1 Status, §7 row 3, §13 F4-4)
+   Claim: "board_drift returns RESULT: DRIFT (4 failed) because origin/main
+   advanced 3 commits past HEAD … 357 vs 357 rows with 1 divergent id (CF-051);
+   HEAD=943ef98 is an ancestor of origin/main=6bb3ac8".
+   Evidence: I ran the chapter's own command —
+     python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main
+     → FAIL byte parity tasks.jsonl; FAIL byte parity events.jsonl;
+       FAIL board status — CF-051 workdir=pending published=complete;
+       FAIL board status — CF-303 workdir=pending published=complete;
+       "FAIL board rows — 357 vs 357 rows; 2 divergent ids: CF-051,CF-303";
+       "FAIL HEAD ancestry — HEAD=48ae2c9 origin/main=5b11bdc; not an ancestor";
+       RESULT: DRIFT (6 failed)
+   The status word is right; every number under it is wrong (4→6 failures,
+   1→2 divergent ids) and the ancestry direction is inverted (ancestor → not an
+   ancestor). Fix: paste this run verbatim with its date, drop the "is an
+   ancestor" inference, and re-run at merge time as §7 already instructs.
+   (The chapter's own "drift is a moving target" caveat is correct but does not
+   license a stale row: this is the module's headline status evidence.)
+
+2. FALSE CLAIM — M9 §1 and M10 §1/F10-2 (shared environment fact), with a
+   derived buildability claim in M9 §4a
+   Claim: "host `go version` = go1.26.5 (default PATH /home/kara/.local/bin/go)";
+   M9 §4a: "with GOTOOLCHAIN=local the 1.26.5 host would be below the toolchain
+   directive".
+   Evidence: `/home/kara/.local/bin/go -> go version go1.26.6 linux/amd64`;
+   `go env GOVERSION` → go1.26.6; `/usr/bin/go` 1.26.8 and `/snap/bin/go` 1.27.1
+   are as stated. `GOTOOLCHAIN=local go build ./...` in
+   coding-hermes-scheduler → rc 0 (not a refusal). Fix: re-measure the host
+   toolchain and state the local-build result as measured; the crier half of the
+   same sentence (go.mod go 1.26.10, auto-fetch required) does hold.
+
+3. OMISSION — M9 §3 "Operator surfaces (B18)"
+   Claim: "the route inventory is [written]" and "The daemon mounts its HTTP
+   routes in internal/api/server.go:289-346", followed by an enumeration.
+   Evidence: `internal/api/server.go` registers 43 routes in Handler(); the
+   chapter names 33. Missing: /api/v1/hooks/reload (server.go:300 — inside the
+   cited range), /features, /features/prune-candidates, /peers, /peers/,
+   /agents, /agents/, /federation/query, /federation/catalogue,
+   /cooldown/residue. Fix: enumerate all 43, or rescope the sentence to "read
+   surfaces, 25 of 43" and name the remainder as RED like §9 does for logs.
+
+4. OMISSION — settings registers, 13 of 13 chapters
+   Claim (representative, M9 §5): the register gives "Default | Range | Governs |
+   What breaks if changed".
+   Evidence: OUTLINE §5 requires "default, valid range, what it governs, what
+   breaks if changed, who reads it". No settings table in any chapter carries a
+   reader. `grep -l 'who reads|Read by' chapters/*.md` → 0 files. The gap is
+   document-wide and mechanical to close (argparse/flag/getenv read site gives
+   the file:line). Fix: add a "read by (file:function)" column per row.
+
+5. OMISSION — submodule inventory, 13 of 13 chapters
+   Claim (representative, M2 §3): table columns "Submodule | Unit |
+   Classification | Evidence (invoking line)".
+   Evidence: OUTLINE §3 requires per submodule "responsibility, owner,
+   invocation, execution location, producer/consumer links, and classification".
+   Four of the six required fields are absent in every chapter. Fix: add the
+   columns, or mark each absent field RED per row (the schema's §1 rule for an
+   empty field: the empty field is the finding).
+
+6. CONTRADICTION — structure maps (M1, M2, M3, M4, M6, M7, M8, M9–M12)
+   Claim: OUTLINE "13 modules, 47 submodules"; the chapters enumerate 47; M1
+   cites "docs/UNIT-MAP.yaml:26-77 (M1 S1–S5)", M2 ":78-102", M4 ":122-138",
+   M7 ":208-220", M8 ":222-236".
+   Evidence: docs/UNIT-MAP.yaml records 9 modules and 25 submodules — M3 has
+   S1–S2 only (no S3), M6 has S1–S6 (no S7/S8), and M9/M10/M11/M12 are absent
+   entirely (`grep -n 'id: M' docs/UNIT-MAP.yaml` ends at M8.S2). Only M5
+   discloses its own disagreement (F5-4). Chapters M3/M6/M9–M12 cite no map at
+   all, so the drift is invisible where it is largest. Fix: extend UNIT-MAP or
+   state the disagreement once for the document and repeat M5's disclosure
+   pattern in M3/M6/M9–M12.
+
+7. CONTRADICTION — M10-C2 vs M2-C1/M9-C2 (same contract, opposite state words)
+   Claim, M10-C2: "HandleRetrieve (lease); client side crier_client.py:1009
+   retrieve → scripts/node-bus-worker.py:972 process (the node's inbox consumer;
+   reads text at :986) | works".
+   Counter-claim, M2-C1: same consumer "node-bus-worker.py:986 reads
+   dispatch.get("text")" → "broken — CF-354: the node reads text, the scheduler
+   sends text_b64".
+   Evidence: both citations are correct (node-bus-worker.py:986, bus/dispatch.go:202);
+   therefore the pair cannot be both "works" and "broken" as printed. The
+   README's re-scope note reconciles the OUTLINE, not these two rows. Fix:
+   M10-C2 = "works (lease/transport); consumption broken — see M2-C1/CF-354".
+
+8. OMISSION (NAME ONLY) — M9 §5
+   Claim: "Remaining 32 of the 57 … name = default; consequence is scoped, not
+   expanded per row … which is a named RED on the register".
+   Evidence: OUTLINE §5 decision rule — "a name has no consequence is NAME ONLY
+   and counts as unwritten". The 57-flag count is right
+   (`grep -cE 'flag\.(String|Int|Int64|Bool|Duration|Float64)' cmd/schedulerd/main.go`
+   = 57), so 32 rows are unwritten by the outline's own rule. Disclosing a RED
+   field is honest but does not fill it. Fix: expand consequence per row, or
+   move the 32 into an explicitly-out-of-scope list with the reason.
+
+9. OMISSION — M9 §9
+   Claim: "The control plane has 379 log.Printf call sites … the remaining 377
+   sites are uncovered and are the named RED on this field".
+   Evidence: 379 confirmed (`grep -rn "log.Printf" internal/scheduler/*.go | wc -l`).
+   OUTLINE §9 requires every operator-visible line, verbatim, classified. 2 of
+   379 is 0.5% coverage of a field the outline treats as mandatory. Fix: either
+   generate the inventory mechanically (`grep -n` + level + trigger) or split the
+   field: the settlement surface (written) + a mechanical appendix (to write).
+
+10. OMISSION — M10 §8
+   Claim: "the series names are inventoried, but the full per-metric
+   type/labels/question/scrape table is a named RED on this field".
+   Evidence: 67-string census confirmed; OUTLINE §8 requires type, labels, the
+   question answered, where scraped, per metric. The inventory is a name list.
+   Fix: fill the table for the runtime series (the emitters are already located:
+   guard/metrics.go:22-49, handler.go:38-45, capability.go:99-105).
+
+NON-BLOCKING FINDINGS
+
+A. LOCATOR OFF-BY-ONE — M5 §9: "surfaced by print(f"FAIL {exc}") at :389".
+   Evidence: harness_resolve.py:388 is the print; :389 is `return 2`.
+   Fix: cite :388.
+B. MIS-ATTRIBUTED LOCATOR — M5 §3: "the harness adapter :440/:449-452; other
+   units (`disk_floor.py:173`, `reclaim_disk.py:212`)". reclaim_disk.py is 169
+   lines; 212 is project-node.sh:212. Fix: "project-node.sh:173, :212".
+C. ONE-SIDED CONTRACT WITH A VERDICT — M9-C3 producer cell reads only
+   "completion reply" (no file:function) yet the state is "broken". M10-C3 names
+   both sides (node-bus-worker.py:1160 deliver → dispatch_leg.go:713). Rule 2
+   makes that row a rumour. Fix: point M9-C3 at M10-C3's producer or demote the
+   state to "rumour (producer named in M10-C3)".
+D. PADDING (mild) — M6 §2: "What breaks if this module is absent. The system
+   cannot describe itself, and no one can check the description." Names nothing
+   observable; the schema asks what fails, not a restatement. Fix: name the
+   concrete failure (the gate's empty-selection PASS, which the same chapter
+   documents at :191-209).
+E. STALE "HEAD" LABEL — all 11 code-factory chapters: "Revision
+   943ef984dc093e5780605ac6e54cd043122126ef (code-factory HEAD, 2026-11-06)".
+   Evidence: HEAD is now 48ae2c9 (one commit later, panel_loop fix). The stamp
+   is still the correct derivation revision; only the words "code-factory HEAD"
+   are false. Fix: "at derivation" instead of "HEAD".
+F. COMPOUND STATUS FIELD — M4 §1: "Status | VERIFIED at store level … board
+   parity is now DRIFT". MASTER-DOC-SCHEMA §1 allows VERIFIED / UNVERIFIED /
+   FAILING only. Fix: one word (VERIFIED for the store, FAILING for parity) with
+   the detail in prose.
+
+DEFECT CLASSES
+  stale-measurement · environment-fact-drift · inventory-claimed-complete ·
+  missing-required-field (document-wide) · structure-map-drift ·
+  cross-chapter-state-disagreement · self-declared-RED-left-unfilled ·
+  locator-off-by-one · external-peer-rumour · stale-status-label
+
+CHAPTER SCORECARD
+  M0  SHARED CONTRACT      PARTIAL — lib.sh read end-to-end, all 9 helpers, 11/17
+                           source counts and the ffc probe reproduce (rc=1,
+                           artifact=no); only the Metrics RED and a one-sided
+                           bunker contract remain.
+  M1  PROVISIONING         PARTIAL — strongest chapter of the set; F1-1, F1-2,
+                           F1-4 and the B05 false-green asymmetry (verify-node.sh
+                           :150 warn vs :198 unverified) all reproduce. Held back
+                           by five unread bodies (node_env, node_seed_drift,
+                           node_freshness, bunker_config_gen, node_gateway_auth)
+                           and an unrun live ladder.
+  M2  DISPATCH (NODE)      PARTIAL — every claim I opened reproduced (:80-114
+                           constants, :986 text read, :1128-1144 reply fields,
+                           :1152-1157 dispatch_wall, same-batch idempotency at
+                           :1304-1347). S1 trio structure-mapped only; metrics RED.
+  M3  REPOSITORY           PARTIAL — source read and citations right (295/180/130
+                           lines, GATE="" at :36, gate at :171-193, proof at
+                           :265-287); behavioural status honestly UNVERIFIED with
+                           no clean fixture; UNIT-MAP S3 gap undisclosed.
+  M4  BOARD                PARTIAL — counts (357/515), validate (7 warnings,
+                           named exactly) and lock classifier reproduce; the
+                           drift row is the round's clearest false claim (finding 1).
+  M5  HARNESS              PARTIAL — pins, python gate, CF_* bounds and the
+                           F0-6 predicate (mode [0-7]00 vs "must be 600") all
+                           verified; two locator slips (A, B); conformance unrun.
+  M6  DOCUMENTATION        PARTIAL — gate output reproduces exactly (44 modules,
+                           37 VERIFIED, 50 errors, MASTER-DOC: FAIL), and the
+                           chapter correctly refuses to call its own gate a truth
+                           verifier. Its B13/B15 finding is load-bearing for the
+                           whole document: no renderer or gate selects M*.md, so
+                           nothing in this set can be built or gated by the
+                           project's own pipeline. PADDING in §2.
+  M7  GITHUB               PARTIAL — CLI exit 2, refresh controls (MIN_AGE 2400,
+                           dry-run at :106, mode gate at :127-130) verified; the
+                           mint itself is unrun and says so.
+  M8  SAFETY               PARTIAL — both units read in full, 9 reclaim tests
+                           pass, scan-scope returns 15 claims/OK; only Metrics
+                           RED stands between it and WRITTEN.
+  M9  SCHEDULER            PARTIAL — defaults (30s/10/false), 57 flags, 379 log
+                           sites, 30 tables, LoadRootConfig ×10 and the CF-355
+                           silent-success reading all verified; failed by the
+                           route inventory (finding 3), name-only flags (8) and
+                           2/379 log coverage (9).
+  M10 CRIER                PARTIAL — 91 test files, 1895 lines, 3/3 slog sites,
+                           67 metric strings, retrieve aliases/caps and the
+                           default-ON metrics contradiction all verified; one
+                           contradictory state word (finding 7) and an unfilled
+                           metric contract (10).
+  M11 DISPATCHER           PARTIAL — 538 lines, 23 call sites, the B01 kill-group
+                           analysis and the CF_DURABLE_JOB=0 correction are
+                           accurate, and the "tests are decoration" claim is
+                           true (test_durable_job.py, 11 lines, no assert).
+  M12 INFERENCE PROXY      PARTIAL — sha256, 273 lines, sink paths, 401 live
+                           admission and the [200,502] framing defect verified;
+                           node-client half and stream completion honestly
+                           UNVERIFIED.
+
+  No chapter reaches WRITTEN. Under the outline's own gate (VII.3) and the
+  schema's "an empty required field is the finding", the four document-wide
+  field gaps (findings 4, 5) plus three unfilled RED fields (8, 9, 10) are what
+  hold all 13 at PARTIAL — not prose quality. Where these chapters make a
+  locatable claim, the claim is overwhelmingly true; where they enumerate, the
+  enumerations are short and presented as complete; and where the environment
+  moved under them, the measurement was not re-taken.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-18dfac354252ac87f3b7bb76bcc26c9849b71af594f1b8ff8346aa20793b828c
+
+EXIT=0

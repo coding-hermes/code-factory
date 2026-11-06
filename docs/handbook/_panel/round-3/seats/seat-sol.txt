@@ -1,0 +1,599 @@
+│ cache/scratch/handbook-r3-sol-probes.py
+│ @@ -0,0 +1,76 @@
+│ +import ast
+│ +import importlib.util
+│ +import io
+│ +import json
+│ +import pathlib
+│ +import re
+│ +import subprocess
+│ +import types
+│ +
+│ +root = pathlib.Path('/home/kara/code-factory')
+│ +chapter = (root / 'docs/handbook/chapters/M0-shared-contract.md').read_text()
+│ +for line in chapter.splitlines():
+│ +    if line.startswith('| who sources it'):
+│ +        command = re.search(r'`([^`]+)`', line).group(1)
+│ +        r = subprocess.run(command, shell=True, cwd=root, capture_output=True, text=True)
+│ +        print('M0 literal command:', command)
+│ +        print('result:', json.dumps({'rc': r.returncode, 'file_count': len(r.stdout.splitlines()), 'stderr': r.stderr.strip()}))
+│ +
+│ +path = '/home/kara/.hermes/scripts/cf-inference-proxy.py'
+│ +spec = importlib.util.spec_from_file_location('proxy_audit', path)
+│ +m = importlib.util.module_from_spec(spec)
+│ +spec.loader.exec_module(m)
+│ +m.upstream_key = lambda: 'fixture-only-not-a-credential'
+│ +usage = []
+│ +m.log_usage = usage.append
+│ +
+│ +class Response:
+│ +    status = 200
+│ +    headers = {'Content-Type': 'text/event-stream'}
+│ +    def __init__(self, fail_after_chunk):
+│ +        self.fail_after_chunk = fail_after_chunk
+│ +        self.calls = 0
+│ +    def read1(self, n):
+│ +        self.calls += 1
+│ +        if self.fail_after_chunk and self.calls == 1:
+│ +            return b'data: fixture\n\n'
+│ +        raise OSError('fixture upstream read failure')
+│ +
+│ +class Harness:
+│ +    path = '/v1/chat/completions'
+│ +    def __init__(self):
+│ +        self.statuses = []
+│ +        self.headers_out = []
+│ +        self.wfile = io.BytesIO()
+│ +    def send_response(self, code): self.statuses.append(code)
+│ +    def send_header(self, *header): self.headers_out.append(header)
+│ +    def end_headers(self): pass
+│ +    _json = m.Handler._json
+│ +
+│ +for fail_after_chunk in (False, True):
+│ +    m.urllib.request.urlopen = lambda *a, **kw: Response(fail_after_chunk)
+│ +    h = Harness()
+│ +    m.Handler._forward(h, 'POST', 'fixture-node', b'{"model":"hermes","stream":true}')
+│ +    print('M12 streaming fault:', json.dumps({'after_chunk': fail_after_chunk, 'response_status_sequence': h.statuses, 'output': h.wfile.getvalue().decode()}))
+│ +
+│ +class Admission(Harness):
+│ +    def _node(self): return 'fixture-node'
+│ +    def _forward(self, *args): raise AssertionError('disallowed request forwarded')
+│ +h = Admission()
+│ +body = b'{"model":"definitely-not-allowed"}'
+│ +h.headers = {'Content-Length': str(len(body))}
+│ +h.rfile = io.BytesIO(body)
+│ +m.Handler.do_POST(h)
+│ +print('M12 isolated admission:', json.dumps({'statuses': h.statuses, 'body': h.wfile.getvalue().decode()}))
+│ +
+│ +source = pathlib.Path('/home/kara/crier-fleet/dispatcher.py').read_text()
+│ +tree = ast.parse(source)
+│ +fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'task_seconds')
+│ +ns = {'TASK_S': '240', 'CAP_S': 7200, 'MARGIN_S': 60}
+│ +exec(compile(ast.Module(body=[fn], type_ignores=[]), '<dispatcher task_seconds>', 'exec'), ns)
+│ +print('M11 actual task_seconds:', json.dumps({str(w): ns['task_seconds'](w) for w in (0, 10, 60, 90, 10000)}))
+│ +
+│ +for name in ('M0-shared-contract.md', 'M5-harness.md', 'M12-inference-proxy.md'):
+│ +    text = (root / 'docs/handbook/chapters' / name).read_text()
+│ +    print('chapter:', name, 'lines:', len(text.splitlines()))
+│ +print('PROBES COMPLETE: no upstream network or real credentials used')
+VERDICT: FAIL
+BLOCKING: 26 — grouped findings that prevent the affected chapters from being called WRITTEN
+NON-BLOCKING: 0
+
+FINDINGS:
+
+Review basis:
+  All thirteen M0–M12 chapters were read against the outline, field schema and actual implementation sources. Previous seats’ verdict files were not used as evidence.
+
+  Source revisions matched the chapter stamps:
+    code-factory: 943ef984dc093e5780605ac6e54cd043122126ef
+    scheduler: 1771d3aad61e6c1ce2845e3f1450f88aa73340b3
+    crier: 691f0c78fc75717295abf3bd85aaa9192616aac0
+    crier-fleet: 283bca91091933177ec521e52f37f1bc987cf7da
+
+  The proxy’s measured SHA-256 matched its chapter:
+    b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5
+
+Evidence path prefixes:
+  CF = /home/kara/code-factory
+  SC = /home/kara/coding-hermes-scheduler/coding-herms-scheduler
+  CR = /home/kara/crier
+  DF = /home/kara/crier-fleet
+  PROXY = /home/kara/.hermes/scripts/cf-inference-proxy.py
+
+Accurately documented implementation defects, including the text_b64/text mismatch and status/ok mismatch, are not counted below as new false documentation claims. Explicit RED fields nevertheless remain blockers under the supplied schema.
+
+B01 — UNVERIFIED — M0–M12 — Both-sided implementation contracts remain incomplete.
+
+  Claim quoted:
+    M0:94: “rumour — one side only”
+    M4:66: producer is “boardctl create/update”; consumer is the JSONL store.
+    M9:88: consumer is “node/dispatcher decode”.
+    M12:77: upstream consumer is not a function.
+
+  Evidence:
+    These are admissions of missing contract fields, not completed contracts. Even apparently concrete rows sometimes name an expression rather than its implementing function: M2:78 names a read at node-bus-worker.py:986, whose enclosing consumer is process() at CF/scripts/node-bus-worker.py:972. M11:69 presents the client’s retrieve() as the producer instead of identifying the server’s HandleRetrieve at CR/internal/registry/handler.go:1690.
+
+    CF/docs/MASTER-DOC-SCHEMA.md:51–57 requires both implementing files and functions.
+
+  Fix:
+    Complete each contract at its actual boundary. Name producer and consumer functions, payload, timing, failure semantics and compatibility rule. External implementation unavailable must remain explicitly UNVERIFIED; “works” does not waive the missing side.
+
+B02 — UNVERIFIED — M1, M2, M3, M5, M6, M8, M9, M10, M11, M12 — “Active” is repeatedly supported by existence, not invocation.
+
+  Claim quoted:
+    M1:35: “main() is the CLI entrypoint”
+    M2:34: “tests/test_lane_target.py exercises it”
+    M8:33–34: main() and __main__ guards
+    M12:32–35: “read”
+
+  Evidence:
+    CF/scripts/disk_floor.py:144 defines an entry point. CF/scripts/check_scan_scope.py:117 invokes its own main only when executed. Neither establishes that a scheduler lane, timer, cron or another production unit invokes it.
+
+    The classification rule at CF/docs/handbook/OUTLINE.md:107–113 specifically requires the invoking line. An operator-invoked facility can be optional, not automatically active.
+
+  Fix:
+    Replace entry-point and “read” evidence with the actual caller or installed service/timer invocation. Where that cannot be established, mark activation UNVERIFIED. Apply the rule consistently rather than only to harness_resolve.py and ownership.py.
+
+B03 — OMISSION — M0–M8, M11, M12 — Required metrics fields remain RED.
+
+  Claim quoted:
+    These eleven chapters explicitly report “RED — none.”
+
+  Evidence:
+    CF/docs/MASTER-DOC-SCHEMA.md:72–79 makes an absent metrics surface a RED field. Examples inspected directly include CF/scripts/lib.sh:5–11, DF/dispatcher.py:112–120 and PROXY:83–101: their output is reporting or capture, not the required counter/gauge/histogram inventory.
+
+  Fix:
+    Do not call these chapters WRITTEN while this requirement remains unsatisfied. Either supply an evidenced metrics surface or obtain an explicit schema exception defining an acceptable alternative. Accurately describing “none” is honest, but it does not turn the required field green.
+
+B04 — UNBUILDABLE — M0, M1, M2, M3, M5, M7, M10, M11, M12 — Several verification rows are descriptions of tests, not executable procedures.
+
+  Claim quoted:
+    M0:105: “source both contracts, probe modes 400/600/700/644”
+    M3:96: “--workdir <scratch> … --commit <sha>”
+    M7:75: “token …”
+    M11:77: “read_file dispatcher.py”
+    M12:90: “run the proxy, POST with a disallowed model”
+
+  Evidence:
+    These omit fixture creation, complete arguments, execution location or a concrete oracle. M2:92 and M10:91 explicitly acknowledge that their node command is not repeatable from this control host. Several dated verification rows also lack their own revision or artifact binding.
+
+    I did not repeat live provisioning, credential minting, remote harness execution or the full Go suites. Those results are not independently confirmed by this review.
+
+  Fix:
+    Supply complete fixture/setup/run/assert/cleanup procedures, execution locations and credential prerequisites. Bind historical results to revisions and artifacts. Keep unavailable live checks UNVERIFIED rather than treating syntax checks or source reads as substitutes.
+
+B05 — FALSE CLAIM — M0 — Both published source-count commands fail literally.
+
+  Claim quoted:
+    M0:102–103 reports PASS with 11 direct sourcers and 17 total sourcers.
+
+  Evidence:
+    I extracted each command verbatim from the chapter and executed it in CF. Both returned:
+      rc=1
+      file_count=0
+      stderr=""
+
+    The displayed grep expressions are over-escaped. This is a reproducibility failure even if a corrected expression would recover the intended counts.
+
+  Fix:
+    Replace the commands with expressions that actually match the source. Re-run them and publish the command, matching file list and count together.
+
+B06 — FALSE CLAIM — M0, M5 — The shared variable contract is not sourced by every installer.
+
+  Claim quoted:
+    M0:38: “sourced by every harness installer”
+    M0:46: “install-opencode.sh uses the shared contract; install-codex.sh does not.”
+
+  Evidence:
+    The account of divergent implementations is incomplete. CF/scripts/harness/install-claude-code.sh:34–36 sources lib.sh, not harness-vars.sh. It implements its own CLI and variable behavior, including --turn, at :60–115 and :127 onward.
+
+    This is another independent adapter contract, not merely the codex divergence already described.
+
+  Fix:
+    Replace the universal sourcing claim with a per-adapter implementation map. Document which adapters share the validator, which duplicate it and where their accepted inputs and enforcement differ.
+
+B07 — OMISSION — M0, M5 — The CF_* settings register omits substantial enforced behavior.
+
+  Claim quoted:
+    M0:69: “harness-vars.sh is the register for the CF_* set it enforces”
+    M5:66 describes CF_* validation as a library contract.
+
+  Evidence:
+    CF/scripts/harness/harness-vars.sh:28–31 declares the input and required sets. Its enforced rules include:
+      CF_BASE_URL scheme and userinfo refusal: :211–220
+      CF_MODEL shape: :223–225
+      provider/namespace/lane shape: :226–231
+      CF_RUN_ID shape: :233–236
+      CF_WORKDIR realpath containment: :239–250
+      CF_SKILLS_DIR warning behavior: :254–261
+      CF_HARNESS_OPTS syntax and secret detection: :264–272
+      required fields specifically in contract mode: :307–316
+
+    The chapter registers do not give these settings their complete defaults, valid shapes, mode-dependent requirements and consequences.
+
+  Fix:
+    Register every declared input and validation mode. Distinguish unset, required, recorded-only, warning-only and enforced behavior. A reference to “the CF_* contract” is not a replacement for its operational specification.
+
+B08 — OMISSION — M1 — The provisioning control surface and destructive branch are unwritten.
+
+  Claim quoted:
+    M1:16: “Turns a bare host into a node”
+    M1 §5 registers only ROLE_DEFAULTS and DEFAULT_ROLE.
+
+  Evidence:
+    CF/scripts/bunker-provision.sh:95–123 parses configuration as data and rejects unknown keys. Its CLI at :561–609 controls credentials, profile application, namespaces, repository/ref, harness selection and overrides.
+
+    It also implements --destroy with a mandatory --yes and a bunker destroy call at :550–558. These controls are absent from the settings register and recovery procedure.
+
+  Fix:
+    Document the actual configuration keys, precedence, defaults, valid values and consequences. Include teardown authorization, exact target selection and what the destroy operation does and does not remove. Mark unread provisioning units as separate unresolved coverage, not one generic status sentence.
+
+B09 — OMISSION — M1 — The “certification ladder” covers only part of the implemented ladder.
+
+  Claim quoted:
+    M1:124–129 lists agent_alive, gateway_reachable, unauth_refused and the two strictness switches.
+
+  Evidence:
+    CF/scripts/verify-node.sh also implements:
+      artifact digest comparison: :105–115
+      checkout freshness and its exit mapping: :118–155
+      seed drift and its exit mapping: :157–202
+      final FAIL/UNVERIFIED/PASS precedence: :205–214
+
+    In particular, the default freshness-unmeasurable branch at :145–151 and seed-unmeasurable branch at :188–198 do not have identical effects.
+
+  Fix:
+    Give every leg its trigger, measurement, exit mapping, strict-mode behavior and expected indication. An operator must be able to distinguish a usable gateway, a fresh checkout and an intact seed instead of treating them as one certification claim.
+
+B10 — OMISSION — M2 — Inbox settlement, durable replay limits and operator controls are insufficiently specified.
+
+  Claim quoted:
+    M2:72 describes SEEN_LIMIT as the “idempotency window”.
+    M2 §10 names protocol mismatches but not the full execute/deliver/cache/ack failure sequence.
+
+  Evidence:
+    CF/scripts/node-bus-worker.py:1304–1367 executes messages, delivers results, updates and saves the seen cache, then acknowledges. Results enter the cache after delivery succeeds; save failure only warns. A crash before persistence is therefore not covered by durable replay.
+
+    The CLI also exposes reply target, long-poll budget, interval, harness wall and HTTP timeout at :1430–1450, with validation at :1454–1478. These are missing from the settings register.
+
+  Fix:
+    Write the settlement state machine, persistence boundary, crash windows and per-branch retry consequences. Register the actual worker controls, including --reply-to’s default and the 0..120 long-poll bound.
+
+B11 — OMISSION — M3 — Hook installation is described, but hook effectiveness is not operationally specified.
+
+  Claim quoted:
+    M3:37 identifies generated hooks, .gitleaks.toml and core.hooksPath as S3.
+    M3:81 acknowledges that a generated hook does not prove Git invokes it.
+
+  Evidence:
+    CF/scripts/install-gitreins.sh:59–63 checks only an executable .git/hooks/pre-commit containing “gitreins”. At :120–138 it preserves an existing such hook or writes one. It does not establish the effective core.hooksPath or exercise a rejecting commit.
+
+    The inspected boardctl help separately exposes boardctl install and enforce/warn lint modes. The chapter supplies no complete board-lint installation or effective-hook verification procedure.
+
+  Fix:
+    Document effective hook-path resolution, coexistence of board-lint and GitReins, enforcement versus warning mode and a disposable rejecting-commit fixture. Give the bypass disclosure procedure concrete fields and evidence rather than merely saying it must be disclosed.
+
+B12 — OMISSION — M4 — The chapter names semantic validation but does not record or operationalize it.
+
+  Claim quoted:
+    M4:83: “The real validation is boardctl’s validate verb”
+    M4 §7 records census, parity, lock behavior and duplicate-id refusal, but no validate result.
+
+  Evidence:
+    I ran scripts/boardctl validate in CF. It reported:
+      rows: 357 tasks, 515 events, 0 fixtures
+      key uniformity: 357/357 rows carry only canon keys (0 drift)
+      RESULT: OK (7 warning(s))
+
+    The warnings included free-form guard/CI values, priority/title disagreements, a duplicate event id and skipped header checks on a headerless board.
+
+    The measured CLI also distinguishes ordinary validate from --strict-keys and --fail-on dangling-dep. Those acceptance differences are absent from the chapter.
+
+  Fix:
+    Add the real semantic-validation command and result, distinguish warnings from failures and specify the stricter gate policy. Document row/event vocabulary and evidence-binding semantics sufficiently for a writer to construct valid updates, not merely discover twenty verb names.
+
+B13 — OMISSION — M5 — The adapter capability matrix still leaves immediately discoverable behavior unread.
+
+  Claim quoted:
+    M5:131: Claude Code “body unread this round”
+    M5:133: DeepSeek and pi-agent “bodies unread this round”
+
+  Evidence:
+    CF/scripts/harness/install-deepseek.sh:95–97 refuses --apply.
+    CF/scripts/harness/install-pi-agent.sh:107–109 refuses --apply.
+    CF/scripts/harness/install-claude-code.sh:60–115 exposes --turn, a pinned package, Node >=22, isolated settings, credential requirements and a turn limit that is not always enforced.
+
+    These are substantive support and operation differences, not obscure internals.
+
+  Fix:
+    Complete the per-adapter matrix: install/check/contract/turn support, pins, prerequisites, credential path, invocation, actual budget enforcement and refusal behavior. Do not leave installed/check-only/unsupported distinctions implicit.
+
+B14 — CONTRADICTION — M6 — The chapter both claims and disproves VERIFIED recomputation.
+
+  Claim quoted:
+    M6:17–18: “master_doc_check.py recomputes VERIFIED from headings, locators and facts; without it a VERIFIED stamp is prose.”
+
+  Evidence:
+    CF/scripts/master_doc_check.py:128–138 reads the supplied status and applies additional checks. At :214–216 it retains and counts that supplied status.
+
+    M6:26–32 correctly explains this later in the same chapter. I repeated the checker and obtained:
+      44 module(s): 37 VERIFIED, 50 error(s), 0 warning(s), 10 fact(s) in the ledger
+      MASTER-DOC: FAIL
+
+  Fix:
+    Remove the recomputation claim. State consistently that the checker validates structure/citations and reports the document’s declared status; it does not derive semantic truth.
+
+B15 — UNBUILDABLE — M6 — The fill/render pipeline does not operate on the delivered chapter set, and this is incompletely documented.
+
+  Claim quoted:
+    M6:42: S5 is active and will “render the handbook”.
+    M6 §10 describes stale checker and panel selection, but not the renderer’s equivalent failure.
+
+  Evidence:
+    CF/scripts/gen_nasa_handbook.py:17–18 hardcodes docs/master. At :253–260 it selects NN-*.md and refuses an empty selection.
+
+    I executed it with output paths under the scratch directory. Its output was:
+      no modules found
+
+    CF/scripts/master_doc_fill.py:26 also defaults to docs/master and selects NN-*.md at :422. Its engine, worker count and write controls are implemented at :393–418 but absent from the chapter settings.
+
+  Fix:
+    Document each stage’s actual input selection and output artifact. Mark the delivered M-chapter pipeline unsupported where appropriate. Provide a concrete route from these chapter files to the approval artifact and register the stage-specific settings. Do not describe a legacy renderer as the working delivery path.
+
+B16 — FALSE CLAIM — M7, M11, M12 — Credential producer ownership is conflated across unrelated token systems.
+
+  Claim quoted:
+    M7:107: M11 consumes the scoped per-dispatch credential “minted on this box”.
+    M11:135: “M7 GITHUB mints the per-dispatch scoped token”.
+    M12:137: “M7 GITHUB and M1 PROVISIONING produce the node tokens this proxy admits.”
+
+  Evidence:
+    DF/dispatcher.py:68–95 loads /home/kara/.hermes/scripts/fleet-gh-scope.py and calls its dispatch_env/env_prefix interface.
+
+    That tool’s mint_scoped at /home/kara/.hermes/scripts/fleet-gh-scope.py:81–94 invokes a different minter, ~/.hermes/scripts/gh-app-token.py, configured at :52.
+
+    CF/scripts/github-app-token.py:362–372 implements the chapter’s installation-token mint. PROXY:48 and :65–72 instead load a node-token JSON mapping; :115–123 compare incoming bearer tokens against it. The chapters do not identify the actual producer of that mapping.
+
+  Fix:
+    Separate GitHub installation tokens, per-repository dispatch credentials, crier credentials and inference node tokens. Name their actual producers, consumers, stores, scopes and rotation paths. Mark the proxy-token producer unknown until established.
+
+B17 — OMISSION — M7 — Essential mint inputs and lifecycle controls are absent or NAME ONLY.
+
+  Claim quoted:
+    M7 §4 lists the App private key as “an App key file (env file)”.
+    M7 §5 gives several ranges only as “seconds” or “a path”.
+
+  Evidence:
+    CF/scripts/github-app-token.py requires distinct numeric App and installation identifiers at :300–322 and a separate RSA key file with exactly mode 0600 at :326–358.
+
+    Output destination resolution is at :579. Environment overrides for input/API defaults are at :107–117. Refresh controls include --token-file, --git-credentials, --dry-run and --quiet at CF/scripts/github-app-refresh.sh:37–53. The empty-node default selects local behavior at :104.
+
+  Fix:
+    Document the credential input schema separately from the key file, required identifiers, mode requirements, destination precedence, refresh scheduling and all write/no-write controls. Replace unit names masquerading as ranges with actual accepted and enforced bounds.
+
+B18 — FALSE CLAIM — M9 — Example configuration values are presented as defaults instead of actual daemon defaults.
+
+  Claim quoted:
+    M9:64: min_interval default 20m
+    M9:68: max_concurrent default 12
+    M9:72: namespace_mode default true
+
+  Evidence:
+    Actual daemon flag defaults in SC/cmd/schedulerd/main.go are:
+      :108 — min-interval = 30 seconds
+      :112 — max-concurrent = 10
+      :113 — namespace-mode = false
+
+    The later chapter caveat that only selected TOML fields are loaded makes it especially unsafe to use the example file as the runtime default register. The max_concurrent consequence also incorrectly discusses an independent load gate.
+
+  Fix:
+    Separate binary defaults, example values, accepted TOML fields and deployed overrides. Cite each setting’s actual reader. Register load-gate-threshold independently; its binary default is 0, disabled, at main.go:144.
+
+B19 — OMISSION — M9 — Admission and operator authority are inventoried, not explained.
+
+  Claim quoted:
+    M9:33 names admissionModeFor, evaluate, Pack, Allocate and reserveUsagePools.
+    M9:36 describes operator surfaces as seven command names.
+
+  Evidence:
+    SC/internal/scheduler/admission_mode.go implements board ownership at :143–184 and tasks admission at :208 onward. It distinguishes workable rows, unreadable boards, owned/shared boards and cooldown fallback.
+
+    SC/cmd/schedulerd/main.go:142–170 exposes pacing, load admission, board-stasis, memory and liveness controls. Operator authentication is implemented in SC/internal/api/auth.go, including credential extraction at :187–197. These affect a run but are not operationally specified in M9.
+
+  Fix:
+    Write the actual admission decision sequence, including ownership, workability, pacing and refusal reasons. Document mutation authentication, command/API entry points, durable transitions and recovery. Package/function lists do not satisfy the S1–S5 chapter obligations.
+
+B20 — CONTRADICTION — M9, M10 — Identity status violates the supplied field vocabulary.
+
+  Claim quoted:
+    M9:12: Status “PARTIAL”
+    M10:12: Status “PARTIAL”
+
+  Evidence:
+    CF/docs/MASTER-DOC-SCHEMA.md:21 permits VERIFIED, UNVERIFIED or FAILING. The handbook README itself separates identity status from chapter completeness at :54–60.
+
+  Fix:
+    Keep PARTIAL in the chapter-completeness scorecard. Use the schema’s identity vocabulary and specify which claims are verified, unverified or failing.
+
+B21 — OMISSION — M10 — Guard failure policy and oversized-payload behavior are missing from the safety account.
+
+  Claim quoted:
+    M10:23–25 describes the guard’s normal pipeline and a false pass.
+    M10:66 compresses Guard.* controls into one row with range “—”.
+
+  Evidence:
+    CR/internal/guard/guard.go:198–234 skips the LLM for oversized payloads and branches on deterministic evidence.
+    Its errorResult at :318–361 defaults to fail-open, preserves high-confidence deterministic blocks and applies fail-closed policy when configured.
+    Policy precedence is implemented at CR/internal/guard/policy.go:172–202.
+
+    Actual setting validation is at CR/config/config.go:1139–1187, including positive bounds for timeout, concurrency and payload caps.
+
+  Fix:
+    Document disabled, oversized, saturated, provider-outage, malformed-verdict, fail-open and fail-closed paths. Register each control with its environment name, units, bound and consequence. The security boundary cannot be conveyed by the happy-path pipeline alone.
+
+B22 — OMISSION — M9, M10 — “Real metrics” is not the required metrics inventory.
+
+  Claim quoted:
+    M9:106–113 lists JSON blocks.
+    M10:97 says there is “at least one counter crier_detect_alerts_total”.
+
+  Evidence:
+    SC/internal/api/server_metrics.go:125 onward distinguishes sources and reset/window behavior; for example, deferrals are per-process counters reset on restart at :132–136.
+
+    CR/internal/guard/metrics.go:19–49 exposes saturation/provider-failure counters and a duration histogram with decision/errored labels. CR/cmd/server/observability.go:168 onward registers gauges. These are operationally important surfaces absent from the inventory.
+
+    The schema requires metric, type, labels, question answered and scrape location—not merely existence of an endpoint.
+
+  Fix:
+    Derive the full inventory from registrations and increments. Include units, bounded labels, reset semantics, windows, availability reasons, scrape authentication and the scraper or explicitly unknown scrape deployment.
+
+B23 — OMISSION — M11 — The dispatcher can disable its durable job model, but the chapter never names the switch.
+
+  Claim quoted:
+    M11:17: “start detached, poll with short calls, kill the process group on deadline”
+    M11 §5 omits CF_DURABLE_JOB.
+    M11:60 leaves DISPATCH_TASK_S’s consequence as “—”.
+
+  Evidence:
+    DF/dispatcher.py:334–358 selects a separate synchronous path when CF_DURABLE_JOB=0. This bypasses the detached start/poll job model that the chapter presents as the dispatcher’s behavior.
+
+    Additional operational controls include progress cadence at :45, agent selection at :104–109, log/PID paths at :41–42 and the scope tool at :68.
+
+  Fix:
+    Register the execution-mode switch and explain both paths, their deadline/failure differences and the legacy stream-boundary risk. Complete fallback-duration consequences and the remaining service configuration.
+
+B24 — FALSE CLAIM — M12 — Failure before the first body chunk does not guarantee a clean 502 response.
+
+  Claim quoted:
+    M12:117: “Upstream unreachable before first byte | 502”
+    M12:129–130: “A 502 is returned only when the failure happens before the first byte.”
+
+  Evidence:
+    PROXY:206–210 sends the upstream status and ends headers before reading the first chunk at :212. The exception branch tests first is None at :236, which means no body chunk was received—not that headers remain unsent.
+
+    An isolated execution of the actual _forward method with a failing first upstream read produced:
+      response_status_sequence: [200, 502]
+
+    With one chunk followed by failure it produced:
+      response_status_sequence: [200]
+
+    No upstream network or real credentials were used.
+
+  Fix:
+    Distinguish connection failure before upstream acceptance, read failure after downstream headers but before the first chunk, and failure after a chunk. Document the attempted second response in the middle case; do not promise a valid standalone 502.
+
+B25 — FALSE CLAIM — M12 — “Python 3.x” is not a sufficient interpreter constraint.
+
+  Claim quoted:
+    M12:43: python3, “stdlib only”, constraint “3.x”
+
+  Evidence:
+    PROXY:164 defines _forward with bytes | None and has no postponed-annotation import. That evaluated union annotation requires Python 3.10 or later; older Python 3 interpreters do not satisfy the source as written.
+
+  Fix:
+    State and test the minimum interpreter version. Separate “no third-party packages” from “compatible with every Python 3 release”.
+
+B26 — OMISSION — M12 — Capture content and capture/usage failure semantics are not specified.
+
+  Claim quoted:
+    M12:94–97 describes “structured capture/usage JSONL” and lists attribution fields.
+    M12 §10 contains no capture-write or usage-write failure mode.
+
+  Evidence:
+    PROXY:83–95 records the raw request body, truncated to 120000 characters, plus message/tool counts and request keys. Capture exceptions are silently swallowed.
+
+    PROXY:98–101 writes usage without equivalent exception suppression. These writes occur on admission-refusal and forwarding paths, including :152–157, :220–238 and :252–253. Failure of the usage sink can therefore affect request handling rather than merely omit telemetry.
+
+    The capture function also appends without implementing the “last 200 requests” retention claimed by the source comment at :51.
+
+  Fix:
+    Document exact paths, content sensitivity, truncation, permissions, retention and rotation ownership. Distinguish capture loss from usage-write failure and state how either is detected. Do not infer implemented retention from a comment.
+
+Verification repeated by this judge:
+  python3 tests/test_disk_floor.py — 12 tests, OK
+  python3 tests/test_lane_target.py — 40 tests, OK
+  python3 tests/test_harness_resolve.py — 28 tests, OK
+  python3 tests/test_reclaim.py — 9 tests, OK
+  python3 scripts/master_doc_check.py — MASTER-DOC: FAIL; 50 errors
+  python3 scripts/check_scan_scope.py — 15 claims; RESULT: OK
+  python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main — RESULT: OK
+  scripts/boardctl validate — RESULT: OK (7 warning(s))
+  bash scripts/verify-patch.sh — VERIFY-PATCH: PASS
+  M0 literal grep procedures — both failed, zero matches
+  Isolated proxy admission — 403 “model not permitted”; forwarding was not reached
+  Isolated proxy streaming failures — reproduced the header/first-chunk distinction above
+  Dispatcher task_seconds — confirmed 10s and 60s caller budgets both produce a 30s task budget
+
+  The full scheduler/crier Go suites and live node, mint and remote-job checks were not repeated. This verdict does not claim otherwise.
+
+DEFECT CLASSES:
+  One-sided contracts
+  Activation inferred from existence
+  Unresolved mandatory RED fields
+  Non-executable verification procedures
+  Broken literal commands
+  Divergent validator implementations
+  NAME ONLY and omitted settings
+  Missing lifecycle and recovery branches
+  Hook presence mistaken for enforcement evidence
+  Self-reported status mistaken for recomputation
+  Legacy pipeline selection
+  Credential-domain conflation
+  Example values mistaken for runtime defaults
+  Invalid identity-status vocabulary
+  Incomplete guard policy
+  Incomplete metrics inventory
+  Undocumented execution-mode switch
+  Headers/body failure-boundary confusion
+  Incorrect interpreter constraint
+  Unspecified capture and telemetry failure semantics
+
+CHAPTER SCORECARD:
+
+  M0 — PARTIAL
+    Concrete helper and predicate evidence exists. Literal verification commands fail; universal adapter sourcing is false; variable settings, contracts and metrics remain incomplete.
+
+  M1 — PARTIAL
+    Disk-floor behavior is substantiated, including passing unit tests. Provisioning controls, teardown and the complete certification state mapping are not written.
+
+  M2 — PARTIAL
+    The two principal dialect mismatches are accurately described. Settlement durability, replay boundaries, activation evidence and worker controls remain incomplete.
+
+  M3 — PARTIAL
+    Landing and optional-gate behavior are substantially grounded. Effective hook enforcement, board-lint operation and a complete reproducible verification procedure are missing.
+
+  M4 — PARTIAL
+    Census and published-reference parity were reproduced. Semantic validation has unresolved warnings, while row/event policy and contract implementations remain insufficiently specified.
+
+  M5 — PARTIAL
+    Resolver tests pass and its unwired status is acknowledged. The adapter matrix still omits available operational behavior, and the shared-variable account is incomplete.
+
+  M6 — PARTIAL
+    The checker’s real failure is reproducible. The chapter contradicts itself about status recomputation and does not provide a working fill/render path for these chapters.
+
+  M7 — PARTIAL
+    CLI behavior and portions of the refresh path are grounded. Mint inputs and lifecycle settings are incomplete; credential production is incorrectly mapped to other systems; live mint remains unverified.
+
+  M8 — PARTIAL
+    Reclaim tests and scan-scope behavior were reproduced. The active classification lacks invoking evidence, the service contract is incomplete and the mandatory metrics field remains RED.
+
+  M9 — PARTIAL
+    Settlement defect descriptions are grounded in source. Runtime defaults are wrong, admission/operator behavior is mostly inventoried rather than specified, metrics are incomplete and identity status violates the schema.
+
+  M10 — PARTIAL
+    Default-on metrics and signed-read ordering are grounded. Guard degradation policy, settings bounds, complete metrics and client/transport contracts remain unwritten.
+
+  M11 — PARTIAL
+    Ledger ordering, serial execution and budget-floor behavior are accurately described. The nondurable execution switch is omitted, credential ownership is wrong and live verification lacks a reliable executable oracle.
+
+  M12 — PARTIAL
+    Hash, admission logic and mid-stream truncation behavior are grounded. The pre-first-chunk guarantee is false, Python requirements are wrong and token provenance/capture failure contracts are incomplete.
+
+No chapter qualifies as WRITTEN. None is merely a SKELETON: all contain substantive source-backed material, but every chapter still has blocking field or behavioral gaps.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-70787b3b8fdee698b884a209105a2e0c8ceffd95c85d231fd2801f6c7b83c802
+
+EXIT=0

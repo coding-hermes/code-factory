@@ -102,13 +102,13 @@ directories, log excerpts with timestamps.
 
 ---
 
-## Worked example — `crier-fleet/dispatcher.py`, revision `98eb5ce`
+## Worked example — `crier-fleet/dispatcher.py`, revision `283bca91`
 
 This section exists to demonstrate the shape with real values, including the
 places where the honest answer is "none".
 
 **1. Identity.** `dispatcher.py` · `/home/kara/crier-fleet/dispatcher.py` ·
-rev `98eb5ce` · Python 3.11 · owner: the fleet dispatcher service
+rev `283bca9` · Python 3.14.9 (host interpreter; the file pins no version — `#!/usr/bin/env python3`) · owner: the fleet dispatcher service
 (`fleet-dispatcher.service`) · status **VERIFIED** for the job model,
 **FAILING** for metrics and for the completion dialect (see 7).
 
@@ -175,7 +175,7 @@ all currently answered by grepping the log.
 | Harness overruns deadline | `DONE:124`, job killed | a crash (`DONE:1` + traceback) | automatic; check the `rc=` log |
 | Node unreachable | `client for … failed`, no job dir | a killed job | check bunker, not the harness |
 | Reply refused by guard | task runs, answer lost | a timeout | base64 on both legs; see CF-133 |
-| **Silent success** | scheduler records a pass for a `status:"failed"` reply | a real pass | **OPEN**: `dispatch_leg.go:438–454` checks only `ok:false` |
+| **Silent success** | scheduler records a pass for a `status:"failed"` reply | a real pass | **OPEN** (CF-355): `dispatchReplyVerdict` at `internal/scheduler/dispatch_leg.go:713–726` reads only `payload["ok"]`; a node reply carrying `status:"failed"` and no `ok` field is scored a success |
 
 **8. Evidence of record.** Board rows CF-138, CF-204; job dirs
 `~/.cf-jobs/job-1793880806-316410e1` (boundary), `…-dde03817` (kill);

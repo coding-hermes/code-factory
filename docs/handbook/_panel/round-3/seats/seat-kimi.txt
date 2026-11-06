@@ -1,0 +1,81 @@
+Both batteries done. Composing the verdict from ~60 spot-checked locator claims and 17 repeated verification commands.
+
+VERDICT: FAIL — narrowly. No factual claim tested against the code failed; the round fails on one field-contract breach and carries seven non-blocking findings.
+
+BLOCKING: 1
+NON-BLOCKING: 7
+
+FINDINGS:
+
+1. kind: BLOCKING / field-contract breach (off-vocabulary status stamp)
+   chapter: M9-scheduler, M10-crier
+   claim quoted: "Status | **PARTIAL** — settlement … read this round" (M9 §1); "Status | **PARTIAL** — `internal/registry/handler.go` … read this round" (M10 §1)
+   evidence: docs/MASTER-DOC-SCHEMA.md:21 — "Status | `VERIFIED` / `UNVERIFIED` / `FAILING` — never blank, never 'done'". PARTIAL is outside the closed set. The chapters' own scope detail is honest and thorough, but the identity field is malformed against the contract this document is judged by.
+   fix: either restamp both chapters UNVERIFIED-with-scope (the scope prose already exists), or amend MASTER-DOC-SCHEMA.md §1 to admit PARTIAL and define it. Mechanical; minutes.
+
+2. kind: UNVERIFIED (inherited, unmeasured state)
+   chapter: M4-board
+   claim quoted: "M4-C2 … **UNMEASURED** — round-2 carried 'broken (OUTLINE §IV)'; the state was inherited, not measured this round"
+   evidence: chapter §6; no fixture run. Rule 1: a carried verdict with no fresh evidence stays UNVERIFIED.
+   fix: run a gitreins verdict → board close fixture (or prove no such path exists) and stamp the measured state.
+
+3. kind: CONTRADICTION (document-internal staleness)
+   chapter: OUTLINE.md vs chapters M2/M9/M10/M11/M12
+   claim quoted: OUTLINE PART IV — "Current: **0 of 18** name both implementations."
+   evidence: chapters now name producer AND consumer file:function for at least 8 contracts: M2-C1 (`dispatch.go:202` → `node-bus-worker.py:986`), M2-C2 (`node-bus-worker.py:1128` → `dispatch_leg.go:713`), M9-C2/C3, M10-C1, M11-C1 (`crier_client.py:1009` → `dispatcher.py:435`), M11-C2, M12-C1. Verified this round against the code.
+   fix: recount and rewrite the OUTLINE PART IV preamble.
+
+4. kind: FALSE CLAIM (locator drift, minor)
+   chapter: M9-scheduler
+   claim quoted: F9-4 — "implemented in `metricsSpawns` (`:192`)"
+   evidence: internal/api/server_metrics.go:195 is the `func` keyword; :192 is the doc comment. The sibling cite "described at server_metrics.go:20" is exact (verified).
+   fix: cite :195 (or ":192-195").
+
+5. kind: UNVERIFIED (verification debt — the check was repeatable and was not run)
+   chapter: M12-inference-proxy
+   claim quoted: "admission (live) … not run this round | **UNVERIFIED** — admission is a curl away … but the proxy was not started this round"
+   evidence: the proxy is LIVE — `ss -tlnp` shows 0.0.0.0:8775 (pid 2603939). Repeated by this judge: POST with no token → 401; POST with a valid node token and model "definitely-not-allowed-model" → 403 {"error": "model not permitted", "allowed": ["hermes"]}. Both match cf-inference-proxy.py:128-130 and :155-160.
+   fix: stamp the row PASS with today's output; the chapter's claim is true but its evidence cell is empty where it need not be.
+
+6. kind: OMISSION (assurance gap behind a true claim)
+   chapter: M10-crier
+   claim quoted: "go test | `go test ./...` | green | 2026-11-06, rev `691f0c78` | **PASS** (rc 0, all packages ok)"
+   evidence: reproduced — rc 0, but the run reports "ok crier/internal/registry 0.063s [no tests to run]". The 1895-line handler (S1, the module's core) is covered by zero executable tests; the green cannot fail for that package.
+   fix: the chapter should state the shallowness, as M6 §7 does for its own FAIL; a PASS over a package with no tests is a weaker fact than the row implies.
+
+7. kind: UNVERIFIED (one-sided internal contracts — rumour class)
+   chapter: M4-board, M6-documentation, M9-scheduler
+   claim quoted: M4-C1 "rumour — one side only" (both sides); M6-C2 "rumour — one side only" (both sides, UNMEASURED); M9-C1 "rumour — neither side named"
+   evidence: chapter §6 rows. Honestly flagged per rule 2 (external peers like github.com, the upstream gateway, the bunker binary, a git remote and the filesystem legitimately have no in-repo function to name); but these three are internal wires with no file:function on either side.
+   fix: name both implementations or file the board rows and cite them.
+
+8. kind: FALSE CLAIM (settings-register imprecision, minor)
+   chapter: M11-dispatcher
+   claim quoted: "`DISPATCH_TASK_S` | 240 (`:48`) | positive int | … | —"
+   evidence: dispatcher.py:48 — `TASK_S = os.environ.get("DISPATCH_TASK_S", "240")` keeps the value a string; `int(TASK_S)` happens only inside task_seconds (:193). A non-numeric env value raises ValueError at use, not at admission; the "what breaks" cell is "—".
+   fix: note string-until-use and the ValueError-at-use failure mode; fill the consequence cell.
+
+DEFECT CLASSES: off-vocabulary status stamp · inherited-unmeasured state · stale superseded count (OUTLINE vs chapters) · locator drift · verification debt (repeatable check left unrun) · green-over-no-tests assurance gap · one-sided internal contract (rumour) · consequence-cell imprecision
+
+CHAPTER SCORECARD:
+- M0-shared-contract: WRITTEN — 13/13 headings; every locator re-verified by this judge (grep counts 11/17, predicates [0-7]00 vs 600|400, defaults 40/1800, fetch_verified --max-time 120). Metrics RED declared, as the schema mandates.
+- M1-provisioning: PARTIAL — S1–S4 unit bodies self-declared not read line-by-line; M1-C1 both sides unread. What was read (resolve(), probe, verify-node ladder) verified exact.
+- M2-dispatch: WRITTEN — node worker contracts verified line-level (:986 text read, :1128-1144 reply shape, :1152-1157 dispatch_wall, configure_family.py:24-28 PID hardcode). Non-repeatable check honestly flagged.
+- M3-repository: WRITTEN — gate-by-default correction verified (GATE="" at :36, set only at :76); clone_lane.py lane-row finding verified; dry-run row reproducible.
+- M4-board: PARTIAL — store census and drift reproduced (357/515, RESULT OK), but both contracts are rumours and M4-C2 is inherited-not-measured (finding 2).
+- M5-harness: WRITTEN — F5-2 (resolver has no production caller) verified against node-bus-worker.py:407-409/459-469 and dispatcher.py:260; adapter capability matrix verified (pins 0.19.0/0.17.1/0.166.0, python >=3.11,<3.14, opencode --apply refusal).
+- M6-documentation: WRITTEN — gate FAIL reproduced byte-for-byte (44 modules, 37 VERIFIED, 50 errors, MASTER-DOC: FAIL, rc 1); F6-2 (structural, not semantic, gate) is the harsh call this panel exists to make; ownership.py status reproduced (held-by-live-worker, panel_loop).
+- M7-github: PARTIAL — mint UNVERIFIED (no App creds on host, declared); settings/control regions verified exact (:45-52, JWT 60/540, TIMEOUT 20, --min-age 2400).
+- M8-safety: WRITTEN — both units read in full; settings and scan-scope surface verified (:42/:46-47/:135, AGED_PARENTS .node/jobs+.node/clones, two path patterns, same-line rule, empty-selection OK).
+- M9-scheduler: PARTIAL — settlement, admission, settings and metrics verified exact (dispatchReplyVerdict :713-726 reads only payload["ok"], absence=success; 30 tables, no verdicts; config.example.toml defaults all match; DOGFOOD-012 caveat true). go build PASS and go test FAIL (SCHED-GAP-1726 goroutine census, rc 1) both reproduced this round. Blocking stamp defect (finding 1); locator drift (finding 4).
+- M10-crier: PARTIAL — handler entry points, guard pipeline, config defaults and agentsig conditional all verified (:598/:990/:1690/:1812, port 8767, EnableMetrics true :673, go build + go test PASS reproduced). 1895-line body not read line-by-line (declared); test green is shallow for registry (finding 6). Blocking stamp defect (finding 1).
+- M11-dispatcher: WRITTEN — full-body read; F11-3 (dispatch :479 before ledger_put :481), F11-4 (task_seconds :185-197 floor 30), F11-5 (serial loop :428-442), reply always carries ok (:500-508) all verified. Settings imprecision is finding 8.
+- M12-inference-proxy: WRITTEN — full-body read + content sha256 verified; fail-closed startup (:265-270), mid-stream no-502 (:236-238), hardcoded credential name (:269) all verified; live admission independently reproduced by this judge (401/403 PASS), upgrading the chapter's UNVERIFIED row (finding 5).
+
+Basis for the verdict: I re-verified over 60 file:line claims across all 13 chapters and repeated 17 of the chapters' verification commands; every substantive claim held. The document's remaining REDs are self-declared, which the schema makes admissible. The single blocking finding is the out-of-vocabulary Status stamp in M9 and M10 against MASTER-DOC-SCHEMA.md:21 — cheap to fix, but the field contract is explicit, and a lenient round costs a loop iteration.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-f6007e764b96e0c5e4f3efae4eb2a2d5b73d6f8dda42ac47b2d157c7ff46241c
+
+EXIT=0
