@@ -1,0 +1,264 @@
+I have walked all five trees and the supporting model files. Here is the full verdict.
+
+---
+
+VERDICT: REJECT
+
+The corrective skeleton (Parts I–VII, responsibility-shaped modules, the 11-heading field set, the contracts/settings/risk/derivation register) is the right shape and must be kept. But the outline describes only 1 of the 5 trees the brief itself names as "the system it must describe." The scheduler, the crier bus, the crier-fleet dispatcher, and the inference proxy appear only as component-register rows and contract edges — they have no subsystem chapter. A stranger cannot rebuild the system from this outline; they can rebuild the node. That is the same class of defect the owner rejected once before, and 7 node scripts are additionally unmapped. The corrective is additive and concrete, but it is large enough that "accept with corrections" would undersell it.
+
+---
+
+COVERAGE GAPS: 28
+
+Node-side (in code-factory but absent from UNIT-MAP, hence no submodule — 7 scripts):
+
+1. scripts/harness_resolve.py — the single authority deciding which harness runs a model (design authority specs/HARNESS-MATRIX.md §4); has its own test test_harness_resolve.py. Serves both DISPATCH and HARNESS. No chapter.
+2. scripts/harness/harness-vars.sh — the one implementation of the variable contract (specs/HARNESS-MATRIX.md §5); sourced by every installer. No chapter.
+3. scripts/harness/install-deepseek.sh — foreign-harness installer; M5.S2 lists codex/claude-code/opencode but omits deepseek.
+4. scripts/harness/install-pi-agent.sh — foreign-harness installer; SYSTEM-MODEL harness impl explicitly names "pi". Omitted.
+5. scripts/gen_unit_map.py — measures unit triggers and generates UNIT-MAP.yaml; a documentation/census tool with no M6 chapter.
+6. scripts/sheet_style.py — the single visual language for every generated sheet; no M6 render chapter.
+7. scripts/verify-patch.sh — the drift gate for the fleet-ops census patch chain (CF-241); no chapter.
+
+Node-side surfaces absent (config/spec/prompt/test):
+
+8. config/harness-matrix.json — the resolution matrix harness_resolve.py consumes; no settings surface.
+9. specs/ (ENVELOPE.md, FLEET-MEMORY.md, HARNESS-MATRIX.md, HARNESS-MEMORY.md, HARNESS.md, NODE.md, TRACE.md) — seven authoritative structural specs; the outline cites only SYSTEM-MODEL.yaml, UNIT-MAP.yaml, README.md, MASTER-DOC-SCHEMA.md.
+10. prompts/ (foreman.md + docs/dogfood/duckbrain/perf/pm/qa/readme/releng/review/sync) — the foreman prompt IS a contract (foreman→scheduler "the lane's prompt text"); absent as a surface.
+11. skills/ (code-factory-bunker, code-factory-foreman) — the foreman skill is a named component impl.
+12. tests/harness-conformance.sh — the CONFORMANCE BATTERY, a first-class SYSTEM-MODEL component (conformance→harness, state broken); no chapter.
+13. tests/selftest.sh (239 KB) — the node-side gate; not named anywhere.
+14. config/bunker.example.conf, config/github-app.example.env, config/node.env.example — config surfaces (only node-seed.txt is referenced, indirectly).
+15. examples/floor.toml.example — the disk-floor config example.
+16. .gitleaks.toml — the scan-scope config M8.S2's gitleaks claim depends on.
+
+Scheduler tree (whole subsystem, no chapter):
+
+17. coding-hermes-scheduler — cmd/schedulerd (+ scheduler-query, scheduler-dispatch, backfill-commit-signals, cooldown-residue, migrate, queueprobe); internal/scheduler (admission, budget, cost, fairness, waves, load_gate, lane_hooks, foreman_routing, adaptive_cooldown, board_guard/closure/freshness, namespace_alloc, spawn, telemetry); internal/api, internal/dashboard, internal/mcp, internal/database (migrations.go, models.go); schemas/execution/v1/*.json; ops/* and scripts/* hooks.
+18. Scheduler config surfaces: fleet.example.toml, config.example.toml — the admission/cadence/weight/pin source of truth.
+
+Crier tree (whole subsystem, no chapter):
+
+19. crier — cmd/server (the bus), cmd/crier-front, cmd/crier-mcp; internal/registry, session, mesh, federation, trust, webhook, ingress, a2a, chat, relay, namespace, permissions, reads, ratelimit; clients/python + typescript; specs/ (25 spec files).
+20. The crier GUARD — internal/guard/* and specs/LLM-MESSAGE-GUARD.md; the brief names "the message bus and its guard" as one system, and the guard has no chapter.
+
+Crier-fleet tree (whole subsystem, no chapter):
+
+21. dispatcher.py — the fleet dispatcher and its job model (lease, ack=done-never-picked-up, progress lines, EXEC_TIMEOUT).
+22. courier.py — orchestrator-side bus client.
+23. fleet-gateway-facade.py — the door the scheduler speaks for REMOTE work (SSE translation, key→agent+box mapping).
+24. register_fleet.py, renew-fleet.sh, fleet-ttl-census.py, verify-repo-coverage.py, test_all_agents.py, staged-remote-wiring.sh, bridge/bridge_ctl.py, bridge/courier_bridge.py, keys/.
+25. ENDPOINT-CONTRACT.md — the closed-set endpoint declaration (hermes-gateway / openai-compatible / anthropic-messages / webhook / bus-native).
+
+Inference relay (explicitly named in brief, no chapter):
+
+26. ~/.hermes/scripts/cf-inference-proxy.py — node inference relay (CF-002); surfaces /v1/chat/completions, /v1/models, /health; node-token boundary; usage + capture logs.
+
+System components named in SYSTEM-MODEL with no subsystem chapter:
+
+27. task-router ("router") — component + contract router→gateway; no chapter.
+28. duckbrain, sessionstore (state.db), gitreins (the gate's verdict model), the hermes gateway, and the bunker daemon — each a component with contracts (node→duckbrain, foreman→duckbrain, node→sessionstore, node→gitreins, gitreins→board, crier→gateway) and no chapter beyond their installer script.
+
+Also: the outline's own counts are internally inconsistent — Appendix A and the counts table say "47 files / 47 unit evidence sections" while the brief and README say 44 units. Reality: 51 scripts (44 mapped + 7 unmapped above). Fix 47 → 51, and note the 7 unmapped.
+
+---
+
+REGROUPING: 9
+
+1. bunker-crier-connect.sh — from M1.S2 (create the container) → M1.S3 (identity and bus membership). Its effect is "exchanges an agent token with crier, writes auth/crier.token at 0600" — that is membership, not container creation.
+2. node_gateway_auth.py — from M1.S3 (identity/bus membership) → new M1.S6 "gateway and dashboard auth". Its effect is dashboard basic_auth on the node gateway; it is neither identity nor bus membership.
+3. harness_resolve.py — unmapped; it is a shared contract, not a member: it decides which harness a RUN uses, bridging DISPATCH (M2) and HARNESS (M5). Give it its own submodule under HARNESS ("resolve the harness for a run") and declare it shared.
+4. harness-vars.sh — unmapped; move to M0 SHARED CONTRACT. The CF_* variable contract is cross-harness (every installer sources it); it is the second shared contract beside lib.sh.
+5. install-deepseek.sh + install-pi-agent.sh — unmapped; add to M5.S2 (foreign harnesses) alongside codex/claude-code/opencode. SYSTEM-MODEL's harness impl list is the authority and it names pi and deepseek.
+6. gen_unit_map.py — unmapped; add to M6.S1 (skeleton and census) — it is the census instrument.
+7. sheet_style.py — unmapped; add to M6.S5 (render) — it is the render language.
+8. verify-patch.sh — unmapped; add as new M8.S3 "patch-chain drift" — it is a gate, not a disk/scan concern, but SAFETY is the closest module.
+9. project-node.sh — M5.S3 ("toolchain, gate and node entry") is a grab-bag that lumps three unrelated concerns. project-node.sh is the composition root (layers base+harness+bus+repo), not a toolchain unit. Move it to its own M1 submodule "composition root" (it is the apply-path top).
+
+---
+
+FLOW CHANGES: 6 added (F1–F10 are the right primary/secondary spine; six classes are missing)
+
+1. F11 SCHEDULING ADMISSION — trigger: a lane's cadence tick fires; exit: a run is admitted to the crier envelope OR refused (budget hold / cooldown / load gate / fairness) with a recorded reason. F1 begins after admission; admission itself is the scheduler's decision and has no flow.
+2. F12 CREDENTIAL LIFECYCLE — trigger: token near expiry, or a new agent/box; exit: fresh credential on disk at 0600, old one rotated, no long-lived token in argv (github-app-token.py, bunker-crier-connect.sh, cf node tokens, fleet keys).
+3. F13 UPGRADE & MIGRATION — trigger: a pinned version bump or a schema change; exit: new harness/toolchain live, DB migrated (scheduler cmd/migrate + migrations.go), seed drift reported clean (node_seed_drift.py).
+4. F14 OBSERVABILITY INGESTION — trigger: a run emits a metric/log; exit: the metric is visible and attributed in the dashboard/observatory/duckbrain. Distinct from F7 (the alert response): this is the pipeline, F7 is the reaction.
+5. F15 BACKUP & RESTORE — trigger: schedule or detected corruption; exit: a restorable artifact verified, or a restored DB passes checks (crier scripts/backup-db.sh + restore-db.sh, scheduler DB, board tasks.jsonl, duckbrain git store).
+6. F16 MULTI-NODE FAN-OUT — trigger: a wave/lane targets more than one node; exit: every target acked (ack=done) with a per-node receipt (dispatcher loop, fleet-gateway-facade key map, register_fleet).
+
+---
+
+HEADING CHANGES: 6
+
+Add:
+1. Add "III.x.12 Limits and margins (operational envelope)" — the values at which the thing stops being safe: disk floor (disk_floor.py), lease window, load ceiling, concurrency caps, rate limits, PAYG ordering. The settings register lists values; it does not state the operating edge. This is the Apollo "limitations" section.
+2. Add "III.x.13 Severity classification" — every failure mode carries WARNING / CAUTION / EMERGENCY and its escalation path. Heading 10 currently flattens all failures to equal weight.
+
+Refine:
+3. Refine III.x.1 — add the sub-item "where to turn next" (upstream/downstream chapter + the flow that exercises this module). This is the Apollo cross-reference "next page" and it is absent everywhere.
+4. Refine III.x.7 (Verification) — require "each procedure step names its expected indication," not just command + expected output. A command whose output is only "exit 0" is not an indication.
+5. Refine III.x.11 — rename to "Evidence of record — the citable pointer (file:line, digest, date)". As written it will duplicate III.x.7; tying it to the R-nnn trace (Part VII.1) is what earns it a place.
+
+Padding:
+6. III.x.2 ("Why it matters — what breaks if absent, what breaks if it lies") overlaps III.x.10 ("Failure modes and recovery"). Keep 2 (the consequence story) but tighten 10 to the operational failure ladder so the two do not restate each other. No heading is dropped outright; this is the only one at risk of producing padding.
+
+---
+
+MERGE PROPOSAL: FAIL
+
+Criterion: a module earns its own chapter when it is the source of a contract or a primary flow, or when a stranger must diagnose it in isolation. M0 fails the fold immediately: lib.sh is the contract twenty scripts source and the one thing that must "change alone at your peril" — burying it in a "Supporting subsystems" grab-bag reproduces the path-shaped grouping the owner already rejected, in size-shaped form. M3 fails it too: LANDING (F5) is a primary flow and land-node-branch.sh carries the ancestor-assertion safety rule. M8 fails it: "the checks that must be able to fail" is a category that disappears when folded. M7 is small but a complete credential subsystem; folding GitHub auth into a shared chapter with SAFETY is incoherent. Fold by responsibility only — M0, M3, M7, M8 each stay their own chapter, however small.
+
+---
+
+BUILDABLE: YES (for III.2, with 3 named coarse headings)
+
+An agent can write III.2 PROVISIONING from the outline + UNIT-MAP effects without inventing anything, except three headings are too coarse to constrain the writing:
+
+1. III.2.2 — needs the sub-item: "the provisioner's apply order (create → config → connect bus → seed → verify) and where --check vs --apply diverge."
+2. III.2.3 — needs the sub-item: "the two provisioning paths (bunker-provision vs node-create.sh) and the auth-gate divergence between them (CF-192)."
+3. III.2.5 — needs the sub-item: "the acceptance ladder (agent, gateway, auth, artifact, tree, seed) and the UNVERIFIED (exit 3) vs FAIL (exit 1) distinction (CF-224)."
+
+---
+
+CORRECTED OUTLINE (replaces the reviewed file verbatim)
+
+PART I — SYSTEM ARRANGEMENT
+- I.1 Purpose and the one idea
+- I.2 Actors and trust boundary
+- I.3 Layer arrangement and component boxes (six layers, from SYSTEM-MODEL.yaml)
+- I.4 Component register — 16 components, owns / does-not-own / where it lives
+- I.5 Contract register (18 interfaces, measured state)
+- I.6 Invariants
+- I.7 Non-goals and why
+- I.8 Surface inventory (entry points derived, not imagined)
+- I.9 What this census does NOT cover
+
+PART II — OPERATIONAL FLOWS (16)
+Every flow: trigger · exit · actors · preconditions · numbered steps (each naming its module) · branches and error paths · state transitions · data read/written by contract id · timing, limits, retries, idempotency · duplicate/concurrent case · day-one case · diagram.
+- F1 DISPATCH (primary) — how a board row becomes work
+- F2 PROVISIONING (primary) — how a bare host becomes a node
+- F3 MEMORY (primary) — how a run becomes searchable
+- F4 DOCUMENTATION (primary) — how a component becomes an approved document
+- F5 LANDING (primary) — how work reaches main
+- F6 MAINTENANCE (secondary) — disks, branches, caches from decaying
+- F7 MONITORING (secondary) — how anyone learns the machine is unwell
+- F8 RECOVERY (secondary) — after crash, restart, orphaned run
+- F9 DEGRADATION (secondary) — when a dependency is gone
+- F10 TEARDOWN / REBUILD (secondary) — removing a node/lane without residue
+- F11 SCHEDULING ADMISSION (primary) — trigger: cadence tick fires; exit: run admitted to crier envelope or refused with recorded reason
+- F12 CREDENTIAL LIFECYCLE (secondary) — trigger: token near expiry / new agent; exit: fresh credential 0600, old rotated, nothing long-lived in argv
+- F13 UPGRADE & MIGRATION (secondary) — trigger: pinned version bump / schema change; exit: harness live, DB migrated, seed drift clean
+- F14 OBSERVABILITY INGESTION (secondary) — trigger: run emits metric; exit: metric visible and attributed
+- F15 BACKUP & RESTORE (secondary) — trigger: schedule or corruption; exit: restorable artifact verified / restored DB passes checks
+- F16 MULTI-NODE FAN-OUT (secondary) — trigger: wave targets >1 node; exit: every target acked (ack=done) with per-node receipt
+
+PART III — NODE SUBSYSTEMS (9 modules)
+Every chapter carries the 13 headings: III.x.1 Identity and position in the pipeline (with "where to turn next") · III.x.2 Why it matters (consequence story) · III.x.3 Submodule inventory and the units that serve it · III.x.4 Dependencies (runtime · library · service, both sides) · III.x.5 Settings register (env, flag, timeout, cap, default, range, effect) · III.x.6 Contracts in and out · III.x.7 Verification (commands, expected indication per step, date, revision) · III.x.8 Metrics emitted · III.x.9 Log lines (verbatim; descriptive vs evidentiary) · III.x.10 Failure modes and recovery (operational ladder) · III.x.11 Evidence of record (citable pointer: file:line, digest, date) · III.x.12 Limits and margins (operational envelope) · III.x.13 Severity classification (WARNING / CAUTION / EMERGENCY).
+
+- III.1 M0 SHARED CONTRACT — changes alone at your peril
+  - III.1.1 shell contract: lib.sh
+  - III.1.2 variable contract: harness-vars.sh
+- III.2 M1 PROVISIONING — a bare host becomes a node
+  - III.2.1 qualify the host: bunker-server-install.sh, disk_floor.py
+  - III.2.2 create the container and its config: bunker-provision.sh, bunker_config_gen.py, node-create.sh (sub-item: apply order create→config→bus→seed→verify; --check vs --apply)
+  - III.2.3 identity and bus membership: node_identity.py, bunker-crier-connect.sh (sub-item: dual path + auth-gate divergence, CF-192)
+  - III.2.4 seed prompts, skills and env: node_seed.py, node_seed_drift.py, node_env.py
+  - III.2.5 prove the node works: verify-node.sh, node_freshness.py (sub-item: acceptance ladder; UNVERIFIED exit 3 vs FAIL exit 1, CF-224)
+  - III.2.6 gateway and dashboard auth: node_gateway_auth.py
+  - III.2.7 composition root: project-node.sh
+- III.3 M2 DISPATCH — whose turn it is becomes a brief, a run and a reply
+  - III.3.1 declare and configure lanes: add_family_lanes.py, configure_family.py, load_lane_config.py
+  - III.3.2 resolve a target: lane_target.py
+  - III.3.3 consume the inbox, sign, reply: node-bus-worker.py
+- III.4 M3 REPOSITORY — the node has the right tree, work can leave it
+  - III.4.1 clone and track freshness: clone_lane.py, repo_freshness.py
+  - III.4.2 land a branch: land-node-branch.sh
+- III.5 M4 BOARD — the fleet remembers what it decided and what it proved
+  - III.5.1 write and validate rows: boardctl, board_lock.py
+  - III.5.2 compare board copies: board_drift.py
+- III.6 M5 HARNESS — the agent can code, its commits are graded
+  - III.6.1 hermes: install-hermes.sh
+  - III.6.2 foreign harnesses: install-codex.sh, install-claude-code.sh, install-opencode.sh, install-deepseek.sh, install-pi-agent.sh
+  - III.6.3 toolchain and gate: install-go.sh, install-gitreins.sh
+  - III.6.4 resolve the harness for a run: harness_resolve.py (shared contract with M2)
+- III.7 M6 DOCUMENTATION — the system describes itself, and someone can check it
+  - III.7.1 skeleton and census: master_doc_skeleton.py, gen_unit_map.py
+  - III.7.2 fill: master_doc_fill.py
+  - III.7.3 gate: master_doc_check.py
+  - III.7.4 panel: master_doc_panel.py
+  - III.7.5 render: gen_nasa_handbook.py, gen_system_views.py, sheet_style.py
+  - III.7.6 corpus: extract_owner_decisions.py
+- III.8 M7 GITHUB — authenticate to the forge without a long-lived token in argv
+  - III.8.1 app credentials: github-app-setup.sh, github-app-token.py, github-app-refresh.sh
+- III.9 M8 SAFETY — the checks that must be able to fail, the disk they must not fill
+  - III.9.1 disk: reclaim_disk.py
+  - III.9.2 scan scope: check_scan_scope.py
+  - III.9.3 patch-chain drift: verify-patch.sh
+
+PART IV — FLEET SUBSYSTEMS (10 modules — the four missing trees + the six components with no chapter)
+Same 13-heading field set.
+- IV.1 SCHEDULER — coding-hermes-scheduler: schedulerd + scheduler-query/dispatch; internal/scheduler (admission, budget, cost, fairness, waves, load_gate, lane_hooks, foreman_routing, adaptive_cooldown, board_guard/closure/freshness, namespace_alloc, spawn, telemetry); database (migrations, models); api / dashboard / mcp; schemas/execution/v1.
+- IV.2 CRIER (BUS) — cmd/server, cmd/crier-front, cmd/crier-mcp; internal/registry, session, mesh, federation, trust, webhook, ingress, a2a, chat, relay, namespace, permissions, reads, ratelimit; clients/python + typescript; specs/.
+- IV.3 CRIER GUARD — internal/guard/*; specs/LLM-MESSAGE-GUARD.md (the message bus's guard, named in the brief).
+- IV.4 DISPATCHER — crier-fleet: dispatcher.py (job model: lease, ack=done, progress), courier.py, fleet-gateway-facade.py, register_fleet.py, renew-fleet.sh, fleet-ttl-census.py, verify-repo-coverage.py, test_all_agents.py, staged-remote-wiring.sh, bridge/, keys/, ENDPOINT-CONTRACT.md.
+- IV.5 TASK-ROUTER — model choice, lane chains, caps, PAYG ordering (contract router→gateway).
+- IV.6 INFERENCE PROXY — ~/.hermes/scripts/cf-inference-proxy.py (CF-002 node-token boundary; /v1/chat/completions, /v1/models, /health; usage + capture logs).
+- IV.7 BUNKER DAEMON — hosts the agent containers (create/exec/cp, per-agent home).
+- IV.8 DUCKBRAIN — namespaced durable memory (R1/R2/R3 records, recall).
+- IV.9 SESSION STORE — ~/.hermes/state.db (every turn, model, tokens, cost).
+- IV.10 COMMIT GATE (gitreins) — the verdict model, not just install-gitreins.sh.
+
+PART V — CONTRACTS (18)
+Each names both sides: producer file:function, consumer file:function, payload, timing, failure semantics, measured state, breaking-change policy.
+(Keep the 18 edges exactly as listed in the reviewed Part IV; each gets its both-sides producer/consumer function names, which today are 0 of 18.)
+
+PART VI — SETTINGS REGISTER
+- VI.1 Environment variables (name · default · range · effect · who reads it)
+- VI.2 CLI switches (verb · flag · effect · misuse)
+- VI.3 Timeouts, caps, floors and rates (value · where enforced · what it governs)
+- VI.4 Provider and model routing settings (incl. harness-matrix.json)
+- VI.5 Paths and filesystem contracts
+- VI.6 Scheduler + crier + dispatcher + proxy settings (fleet.example.toml, config.example.toml, CRIER_URL, DISPATCH_*, CF_PROXY_*)
+
+PART VII — RISK AND UNKNOWNS
+- VII.1 Known knowns (measured facts, with how measured)
+- VII.2 Known unknowns (probe · falsifier · who can answer · blocking?)
+- VII.3 Unknown unknowns (found by comparison · converted to measurement or decision)
+- VII.4 Unknown knowns (operator constraints, with source)
+- VII.5 Promotion log
+- VII.6 Rejected findings and why
+
+PART VIII — WORK DERIVATION
+- VIII.1 Requirement table (R-nnn · statement · module · assertion · evidence)
+- VIII.2 Task list derived from chapters, each citing the section it closes
+- VIII.3 Acceptance gate per chapter (what makes it WRITTEN)
+
+APPENDICES
+- A — Per-unit evidence sections (51 scripts, appendices/units/)
+- B — Quorum verdicts by round (_quorum-*/)
+- C — Field contract each chapter must satisfy (docs/MASTER-DOC-SCHEMA.md)
+- D — Change log and supersession record
+- E — The seven structural specs (specs/ENVELOPE.md, FLEET-MEMORY.md, HARNESS-MATRIX.md, HARNESS-MEMORY.md, HARNESS.md, NODE.md, TRACE.md) as design authority
+
+Counts to build to: 8 parts + appendices · 16 flows · 9 node modules (27 submodules) · 10 fleet modules · 18 contracts · 51 scripts (44 mapped + 7 now mapped) · settings across all five trees · 13 headings per chapter.
+
+---
+
+CORRECTIONS RANKED (top 10 by damage if ignored)
+
+1. Add PART IV FLEET SUBSYSTEMS (scheduler, crier, dispatcher, proxy, router, bunker, duckbrain, sessionstore, gitreins, gateway). Ignoring this produces a handbook that cannot rebuild the system — the exact rejection that produced this corrective.
+2. Map the 7 unmapped scripts (harness_resolve.py, harness-vars.sh, install-deepseek.sh, install-pi-agent.sh, gen_unit_map.py, sheet_style.py, verify-patch.sh). They are real running code with no home.
+3. Add F11 SCHEDULING ADMISSION. Admission is the scheduler's core decision; without it the "whose turn" logic is undocumented.
+4. Add the limits-and-margins heading (III.x.12). The settings register without operating edges is a dial list, not an Apollo envelope.
+5. Fix the two M1 grouping errors (bunker-crier-connect.sh → M1.S3; node_gateway_auth.py → its own submodule). Wrong grouping misroutes a reader to the wrong diagnosis path.
+6. Add the severity-classification heading (III.x.13). A flat failure list cannot tell a stranger what is an emergency.
+7. Add F12 CREDENTIAL LIFECYCLE. The entire security model is "no long-lived token in argv" and no flow documents it.
+8. Add F15 BACKUP & RESTORE. crier ships backup-db.sh/restore-db.sh; the handbook must say when and how to use them.
+9. Split project-node.sh out of M5.S3. It is the composition root; leaving it in "toolchain, gate and node entry" hides the apply path.
+10. Fix the internal count contradictions (47 vs 44 vs 51) and promote the specs/ directory to Appendix E. Stale counts and a missing design-authority appendix invite a writer to invent.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-b9d0166decda0a629df219032990ec5810a7073ba7049832af4bf1d8408dee78
+
+EXIT=0

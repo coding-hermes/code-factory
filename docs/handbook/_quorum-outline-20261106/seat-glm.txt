@@ -1,0 +1,273 @@
+VERDICT: ACCEPT WITH CORRECTIONS
+
+The outline's discipline is right (fixed heading contract, flows with trigger/exit, both-sided contracts, evidence appendices) and it correctly replaced the rejected 40-file census. But it covers ONE of the five trees. Part III is entirely node-side: the scheduler, the bus and its guard, the crier-fleet dispatcher and gateway facade, and the inference proxy — four of the five trees the brief names — have zero chapters, zero units, and (except four contract stubs) zero presence. A stranger could rebuild the node from this outline and would not know what decides work, what carries it, or how a node is allowed to spend money.
+
+COVERAGE GAPS: 14
+
+1. SCHEDULER daemon and admission — /home/kara/coding-hermes-scheduler/coding-herms-scheduler (cmd/schedulerd, internal/scheduler, internal/api, internal/cooldownaudit, internal/execution, internal/dashboard, fleet.example.toml). Decides whose turn it is: admission modes (tasks vs cooldown), weights, cadence, priorities, cooldown tiers (900/7200/43200), daily/weekly/final USD budgets, adaptive cooldown escalator, per-lane gateway_url/prompt_mode. The handbook's first operator question ("why did/didn't this run?") is unanswerable without it. Needs module chapter M10.
+2. Lane onboarding and family allowlist — scheduler internal/api/lane_onboarding.go, documented in-repo at code-factory docs/SCHEDULER-ADMISSION.md (satellite suffixes, canonical workdir roots, family cooldown floors). A code-factory-facing gate implemented in another tree; the outline never mentions it. M10.S2.
+3. TASK-ROUTER — component in SYSTEM-MODEL (impl: task-router), contract router→gateway state "works", zero chapters. Owns model chains, caps, PAYG ordering. M10.S4.
+4. CRIER bus primitives and guard — /home/kara/crier (internal/: relay, mesh, registry, session, inbox leases, webhook, federation, permissions, ratelimit, strictjson, hermesession, guard). Guard = circuit breaker (CR_GUARD_CIRCUIT_THRESHOLD/COOLDOWN_S) + scoring gate (jev, kanban). The outline names crier in six contracts but never defines lease semantics, ack=done, signature/audience rules, or the circuit. M11.
+5. CRIER-FLEET dispatcher and courier — /home/kara/crier-fleet (dispatcher.py, courier.py, bridge/, register_fleet.py, keys/, fleet_agents.json). The dispatcher is why the loop survives: it runs on the control box because in-container processes die with their exec session; retrieve() leases, failures are deliberately unacked so the lease expires and the bus redelivers. F1 depends on semantics that appear nowhere. M11.S3.
+6. FLEET-GATEWAY-FACADE and endpoint shapes — crier-fleet/fleet-gateway-facade.py + ENDPOINT-CONTRACT.md. A SECOND dispatch transport: scheduler POSTs /v1/responses (SSE) with X-Hermes-Session-Key = tick id; the facade maps the key to a remote agent+box, drives it via bunker exec, answers in the scheduler's SSE shape; unmapped keys proxy to the local gateway. Five endpoint shapes (hermes-gateway, openai-compatible, anthropic-messages, webhook, bus-native) with a named-refusal rule. F1 as drawn is bus-only — half the dispatch story. M11.S4.
+7. CF-INFERENCE-PROXY — /home/kara/.hermes/scripts/cf-inference-proxy.py. Enforces CF-002 (no provider key leaves the control host): node tokens in cf-node-tokens.json, /v1/chat/completions + /v1/models + /health, upstream rewrite (CF_PROXY_UPSTREAM/_MODEL/_KEY_ENV), per-call usage log for attribution. A named tree of the brief with literally zero occurrences of "inference" or "proxy" in the outline. M12.
+8. FOREMAN component — prompts/foreman.md + skills/code-factory-foreman. Owns three contracts (foreman→scheduler broken: 3 of 14 lanes match the shipped prompt; foreman→board works; foreman→duckbrain works) and steps of F1/F4/F5, but has no module, no unit, no chapter. The actor that turns rows into briefs is undocumented. M9.
+9. Lane prompt corpus — prompts/{foreman,qa,pm,sync,docs,dogfood,readme,releng,review,perf,duckbrain}.md. The seeded prompts are the foreman contract's payload and the seed tar's content (node_seed.py). No chapter lists or grades them. M9.S1.
+10. CONFORMANCE BATTERY — tests/harness-conformance.sh + tests/harness/{claude-code,codex,vars}-install-test.sh + docs/HARNESS-CONFORMANCE.md. A SYSTEM-MODEL component (governance layer) with contract 17 (conformance→harness, broken: vars/memory legs have no executor, CF-328) — but no unit in UNIT-MAP and no submodule. M5.S4.
+11. HARNESS MATRIX and resolver — scripts/harness_resolve.py, config/harness-matrix.json, specs/HARNESS-MATRIX.md §4/§5. One place decides which harness runs a model (--explain answers "why did this run in Codex?"). Plus three unlisted installers/contracts: harness/harness-vars.sh (the 12-name CF_* variable contract, refusal exit 2), install-deepseek.sh, install-pi-agent.sh (check-only adapters, honestly UNVERIFIED). None are units today. M2.S2 + M5.S2 + M0.S2.
+12. PATCH CHAIN / fleet-ops census — patches/ (base/fleet_ops_check.py.orig, fleet-ops-*.patch + .test.py, fleet-ops-chain.sha256) + scripts/verify-patch.sh (CF-241). The only version history for a script tracked in no commit; the drift gate rebuilds the chain and compares with the live file. Zero outline presence. M13.S2.
+13. TTL lifecycle — crier-fleet/fleet-ttl-census.py (exit 1 below WARN_H=72h so a cron can alert on exit) + renew-fleet.sh (census/archive/renew; bunker renew is DESTRUCTIVE — userdel -rf, empty home — and bunker heartbeat CANNOT extend a 7d agent). Node death is on a timer the outline never mentions. M13.S1.
+14. Repo self-gate and doc-census stragglers — tests/selftest.sh ("a green that cannot go red is decoration") + tests/test_*.py; scripts/gen_unit_map.py (measures the UNIT-MAP triggers — the evidence layer the outline's own appendix depends on) and scripts/sheet_style.py (house style for every sheet). Also: the "47 unit evidence sections" count is the directory file count — it includes 00-INDEX/_facts/_panel and 7 spec sections, while install-go.sh and six doc-pipeline units have NO per-unit section. M8.S2 + M6.
+
+REGROUPING: 10
+
+1. project-node.sh — from M5.S3 (toolchain/gate/node entry) — to new M1.S6 "node assembly". Reason: UNIT-MAP itself says it "layers base, harness, bus, repo" — it composes every layer of the node, it is not a harness member; a reader asking "how is a node built" will not look under HARNESS. F2's layering step owns it.
+2. check_scan_scope.py — from M8.S2 (scan scope) — to M6.S3 (gate). Reason: its effect is "fails any repo line that states a gitleaks claim without --log-opts" — it grades documentation truthfulness, identical in kind to master_doc_check; filing it under SAFETY hides that the doc gate family has two members.
+3. harness-vars.sh — new unit — to M0.S2 "harness variable contract". Reason: it is a sourced, side-effect-free contract implementation shared by every installer (12 CF_* names, credential-is-a-PATH refusal, CF_MAX_TURNS 1..1000, CF_TIMEOUT_S 1..86400). It is the definition of a shared contract, i.e. M0 material, not an installer.
+4. harness_resolve.py — new unit — to M2.S2 (resolve a target). Reason: its own header — provisioning decides which harness a node happens to have; this decides which harness a RUN should use. Run-level decision = dispatch.
+5. install-deepseek.sh, install-pi-agent.sh — new units — to M5.S2 (foreign harnesses). Reason: same adapter shape as codex/claude-code/opencode; both honestly refuse --apply by name (no measured ladder), which is exactly the evidence the conformance table needs.
+6. tests/harness-conformance.sh — new unit — to new M5.S4 "conformance battery". Reason: it is a governance component in SYSTEM-MODEL with its own contract; nesting it under installers would repeat the file-path mistake.
+7. tests/selftest.sh — new unit — to new M8.S2 "repo self-gate". Reason: M8's blurb is "the checks that must be able to fail"; selftest is the canonical instance.
+8. gen_unit_map.py — new unit — to M6.S1 (skeleton and census). Reason: it produces the measured trigger evidence UNIT-MAP and appendix A rest on.
+9. sheet_style.py — new unit — to M6.S5 (render). Reason: single source of the visual language for gen_nasa_handbook and gen_system_views output.
+10. verify-patch.sh — new unit — to new M13.S2 (patch chain). Reason: it gates an out-of-repo live script; it is fleet-ops maintenance, not repo safety.
+Shared-contract callouts (serve two modules — document as cross-referenced contracts, not members): node_freshness.py (M1.S5 proof AND M3.S1 freshness — declared-vs-actual spans harness and repo); node_seed_drift.py (M1 provisioning AND F13 upgrade); board_drift.py (M4 board AND M9 foreman landing checks); github-app-token.py (M7 mint AND M9/M5 consumers); lib.sh and harness-vars.sh are M0 by definition — M0 IS the shared-contract module.
+
+FLOW CHANGES: 7
+
+1. F1 DISPATCH — refine — trigger: unchanged (board row pending) — exit: unchanged (reply + row attempt) — add the named transport-selection branch: bus leg (scheduler→crier envelope→inbox lease) AND gateway-direct leg (scheduler POST /v1/responses SSE, X-Hermes-Session-Key=tick id → facade → bunker exec; unmapped key → local gateway). Why: ENDPOINT-CONTRACT.md exists because "forward it to the Hermes gateway" is only one wire shape; the outline draws only that one, so a rebuild would omit the working half.
+2. F7 MONITORING — refine — trigger: cron / poll — exit: a human or cron is woken — must name the ingestion path per source: scheduler dashboard+API, crier metrics, fleet-ttl-census exit 1, cf-inference-usage.jsonl, agent logs. Why: "how does anyone learn the machine is unwell" currently has no data path, so the chapter cannot be written from it.
+3. F11 SCHEDULING ADMISSION — add — trigger: lane cadence fires or a board row is pending — exit: spawn accepted (session or envelope) OR a named refusal (cooldown, weight budget, namespace hard_cap, daily/weekly/final budget, admission mode, spawn-overlap enqueue). Why missing: F1 begins after the decision; admission modes, family allowlists, budgets and adaptive cooldown (fleet.example.toml, SCHEDULER-ADMISSION.md) are the scheduler's core job.
+4. F12 CREDENTIAL LIFECYCLE — add — trigger: installation token nearing expiry (1h TTL), TTL census below 72h, new node mint — exit: refreshed token cached at 0600 (github-app-refresh), or agent renewed-and-verified AFTER archive (renew-fleet), or a named refusal. Why missing: rotation, expiry and destructive renewal are neither creation (F2) nor decay (F6); renew without archive destroys the home.
+5. F13 UPGRADE / MIGRATION — add — trigger: pin bump in harness-matrix/install-*, seed drift detected (node_seed_drift), scheduler migrate cmd — exit: node_freshness + verify-node green at the new pin, board_drift clean. Why missing: upgrade is a distinct class from build (F2) and prune (F6).
+6. F14 BACKUP / RESTORE — add — trigger: weekly cron or pre-renewal archive step — exit: restorable artifact verified (renew-fleet archive; patch-chain digests). Why missing: F8 covers crash recovery, not restoration; the destructive renew path REQUIRES a backup-first step that no flow names.
+7. F15 MULTI-NODE FAN-OUT — add — trigger: owner declares a project family (add_family_lanes) or a second box is registered (register_fleet) or peer control (REMOTE-005) — exit: N lanes admitted under family rules, N agents keyed and registered, facade keys minted (--mint). Why missing: F2 provisions exactly one node; the fleet shape (satellite families, peer schedulers, multi-box) is the actual system.
+
+HEADING CHANGES: 7
+
+1. ADD — III.x.7 "Limits and margins (rated capacity)": lease 30 s, agent TTL 7 d, rate 100 events/min, disk-floor defaults by role, budget caps, CF_MAX_TURNS 1..1000, CF_TIMEOUT_S 1..86400, token TTLs. Prevents: "it worked at five nodes" with no stated rated count.
+2. ADD — III.x.12 "Operating procedures with expected indications": numbered operator steps (install, verify, renew, tear down), each with its expected indication and exit code, labelled MEASURED/CHECK LOCALLY/BLOCKED/NOT YET as OPERATIONS.md already models. Prevents: an unexecutable runbook.
+3. REFINE — III.x.10 "Failure modes and recovery" must classify each mode CAUTION / WARNING / EMERGENCY (Apollo practice). Prevents: destructive-but-rare modes (bunker renew) filed beside cosmetic ones.
+4. REFINE — III.x.1 must end with cross-references ("where to turn next"): upstream and downstream chapter numbers. Prevents: orphan chapters the rejected file-path version was killed for.
+5. REFINE — III.x.3 must POINT at appendix unit sections, never restate unit facts. Prevents: chapter/appendix drift (two copies of every fact).
+6. REFINE — III.x.8 metrics: a module emitting none must say "none emitted" plus the blind spot that creates. Prevents: "N/A" — an unexplained null on a live module.
+7. REFINE — III.x.7 verification must carry per-leg expected indication and exit code (verify-node exit 3 = UNVERIFIED not FAIL, CF-224; harness contract refusal exit 2; verify-patch SKIP arm). Prevents: a green that cannot go red.
+No heading is pure padding; III.x.9 (log lines) gets the same none-plus-why rule as metrics rather than removal.
+
+MERGE PROPOSAL: FAIL — criterion: a module may be folded into "supporting" only if no flow step and no contract names it as owner. M3 owns F5 LANDING (land-node-branch.sh is the flow's instrument — a PRIMARY flow with no owning chapter if folded). M8 owns F6 MAINTENANCE's disk leg and the self-gate. M7 owns the only forge-facing credential surface (3 units with refusal semantics; F12 lives here). M0 is the dependency root of every shell unit — a grab-bag chapter inverts its position; if page budget demands folding, M0's home is Part I as the contract layer, not "supporting subsystems". All four proposed folds fail the criterion.
+
+BUILDABLE: NO — for chapter III.2 specifically:
+- III.x.4 Dependencies: no sub-item demanding a service-table row per external service (bunker daemon, crier URL, gateway :10800/:8642, proxy) with endpoint, auth and the named refusal on absence — the writer must invent the bunker CLI surface (exec session death, cp path rules, destructive renew) because Part IV contains no bunker contract at all.
+- III.x.5 Settings: buildable for censused M1 units (appendix sections 04–36 exist) but the CF_* 12-name contract and CF_PROXY_* have no census home — add sub-item "settings source = appendix A section per unit; RED if the section is absent".
+- III.x.6 Contracts in and out: Part IV lists names + states only (README measures 0 of 18 both-sided) — add sub-item "quote payload fields, timing, failure semantics; RED if the contract is absent from Part IV" (the crier token exchange and bunker create/exec/cp are absent today).
+- III.x.7 Verification: needs the per-leg exit-code rule (above) or the CF-224 exit-3 nuance will be invented wrongly.
+- III.x.10 Failure modes: needs the severity class + recovery procedure per mode.
+
+CORRECTED OUTLINE:
+
+# HANDBOOK OUTLINE — every part, chapter and heading (corrected)
+
+## PART I — SYSTEM ARRANGEMENT
+
+- [ ] I.1 Purpose and the one idea
+- [ ] I.2 Actors and trust boundary
+- [ ] I.3 Layer arrangement and component boxes (control · transport · execution · memory · governance · evidence)
+- [ ] I.4 Component register (20 top-level: owner, scheduler, foreman, task-router, crier (+guard, +hermesession), dispatcher, gateway-facade, gateway, bunker, node, inference-proxy, harness, board, duckbrain, sessionstore, gitreins, docsgate, conformance, handbook, fleet-ops) — owns / does-not-own / where it lives
+- [ ] I.5 Contract register (26 interfaces, measured state)
+- [ ] I.6 Invariants (what must always hold — incl. CF-002: no provider key leaves the control host; ack=done; a green that cannot go red)
+- [ ] I.7 Non-goals and why
+- [ ] I.8 Surface inventory (entry points derived, not imagined)
+- [ ] I.9 What this census does NOT cover
+- [ ] I.10 Document map — which existing doc is authoritative for what (DESIGN, OPERATIONS, SCHEDULER-ADMISSION, THREAT-MODEL, SECURITY-TRIAGE, REPOSITORIES, BOARD, HARNESS-CONFORMANCE, RUMSFELD, traceability-doctrine, specs/*)
+
+## PART II — OPERATIONAL FLOWS (15)
+
+Every flow carries: trigger · exit · actors · preconditions · numbered steps (each naming its module) · branches and error paths · state transitions · data read/written by contract id · timing, limits, retries, idempotency · duplicate/concurrent case · day-one case · diagram.
+
+- [ ] F1 — DISPATCH (primary, two transport legs: bus envelope; gateway-direct SSE via facade) · RENDERED, amend
+- [ ] F2 — PROVISIONING (primary) · RENDERED
+- [ ] F3 — MEMORY (primary) · RENDERED
+- [ ] F4 — DOCUMENTATION (primary) · RENDERED
+- [ ] F5 — LANDING (primary) · RENDERED
+- [ ] F6 — MAINTENANCE (secondary) · MISSING
+- [ ] F7 — MONITORING (secondary; ingestion path named per source) · MISSING
+- [ ] F8 — RECOVERY (secondary) · MISSING
+- [ ] F9 — DEGRADATION (secondary) · MISSING
+- [ ] F10 — TEARDOWN / REBUILD (secondary) · MISSING
+- [ ] F11 — SCHEDULING ADMISSION (primary) · MISSING
+- [ ] F12 — CREDENTIAL LIFECYCLE (secondary) · MISSING
+- [ ] F13 — UPGRADE / MIGRATION (secondary) · MISSING
+- [ ] F14 — BACKUP / RESTORE (secondary) · MISSING
+- [ ] F15 — MULTI-NODE FAN-OUT (secondary) · MISSING
+
+## PART III — SUBSYSTEMS (14 modules, 44 submodules)
+
+Every chapter carries the same headings, in this order:
+
+- III.x.1 Identity and position in the pipeline (ends with cross-references: where to turn next)
+- III.x.2 Why it matters — what breaks if absent, what breaks if it lies
+- III.x.3 Submodule inventory (points to appendix unit sections; never restates them)
+- III.x.4 Dependencies: runtime · library · service (both sides named; one table row per external service with endpoint, auth, refusal-on-absence)
+- III.x.5 Settings register — every env var, flag, timeout, cap, default, range, with what changes if it changes
+- III.x.6 Contracts in and out (quote payload, timing, failure semantics; RED if absent from Part IV)
+- III.x.7 Limits and margins — rated capacity and how far it may be pushed
+- III.x.8 Verification — commands, per-leg expected indication and exit code, date, revision
+- III.x.9 Metrics emitted — or "none emitted" plus the blind spot that creates
+- III.x.10 Log lines — verbatim, descriptive vs evidentiary
+- III.x.11 Failure modes and recovery — each classed CAUTION / WARNING / EMERGENCY
+- III.x.12 Operating procedures with expected indications (MEASURED / CHECK LOCALLY / BLOCKED / NOT YET)
+- III.x.13 Evidence of record
+
+### Module chapters
+
+- [ ] III.1 — M0 SHARED CONTRACT
+  - [ ] III.1.1 shell contract · lib.sh
+  - [ ] III.1.2 harness variable contract · harness-vars.sh (12 CF_* names, refusal exit 2)
+- [ ] III.2 — M1 PROVISIONING
+  - [ ] III.2.1 qualify the host · bunker-server-install.sh, disk_floor.py
+  - [ ] III.2.2 create the container and its config · bunker-provision.sh, bunker_config_gen.py, node-create.sh, bunker-crier-connect.sh
+  - [ ] III.2.3 identity and bus membership · node_identity.py, node_gateway_auth.py
+  - [ ] III.2.4 seed prompts, skills and env · node_seed.py, node_seed_drift.py, node_env.py
+  - [ ] III.2.5 prove the node works · verify-node.sh, node_freshness.py (shared with M3)
+  - [ ] III.2.6 node assembly · project-node.sh (layers base, harness, bus, repo)
+- [ ] III.3 — M2 DISPATCH (node side)
+  - [ ] III.3.1 declare and configure lanes · add_family_lanes.py, configure_family.py, load_lane_config.py
+  - [ ] III.3.2 resolve a target and its harness · lane_target.py, harness_resolve.py, config/harness-matrix.json
+  - [ ] III.3.3 consume the inbox, sign, reply · node-bus-worker.py
+- [ ] III.4 — M3 REPOSITORY
+  - [ ] III.4.1 clone and track freshness · clone_lane.py, repo_freshness.py
+  - [ ] III.4.2 land a branch · land-node-branch.sh
+- [ ] III.5 — M4 BOARD
+  - [ ] III.5.1 write and validate rows · boardctl, board_lock.py
+  - [ ] III.5.2 compare board copies · board_drift.py (shared with M9)
+- [ ] III.6 — M5 HARNESS
+  - [ ] III.6.1 hermes · install-hermes.sh
+  - [ ] III.6.2 foreign harnesses · install-codex.sh, install-claude-code.sh, install-opencode.sh, install-deepseek.sh, install-pi-agent.sh
+  - [ ] III.6.3 toolchain and commit gate · install-go.sh, install-gitreins.sh
+  - [ ] III.6.4 conformance battery · tests/harness-conformance.sh, tests/harness/*-test.sh (contract: check, apply, smoke, vars, memory)
+- [ ] III.7 — M6 DOCUMENTATION
+  - [ ] III.7.1 skeleton and census · master_doc_skeleton.py, gen_unit_map.py
+  - [ ] III.7.2 fill · master_doc_fill.py
+  - [ ] III.7.3 gate · master_doc_check.py, check_scan_scope.py
+  - [ ] III.7.4 panel · master_doc_panel.py
+  - [ ] III.7.5 render · gen_nasa_handbook.py, gen_system_views.py, sheet_style.py
+  - [ ] III.7.6 corpus · extract_owner_decisions.py
+- [ ] III.8 — M7 CREDENTIALS AND FORGE
+  - [ ] III.8.1 app credentials · github-app-setup.sh, github-app-token.py, github-app-refresh.sh
+  - [ ] III.8.2 node and bus credentials · node identity keys, crier token exchange, cf-node-tokens.json, refusal rules
+- [ ] III.9 — M8 SAFETY
+  - [ ] III.9.1 disk · reclaim_disk.py
+  - [ ] III.9.2 repo self-gate · tests/selftest.sh, tests/test_*.py
+- [ ] III.10 — M9 FOREMAN
+  - [ ] III.10.1 lane prompt corpus · prompts/{foreman,qa,pm,sync,docs,dogfood,readme,releng,review,perf,duckbrain}.md, prompt_mode append/replace
+  - [ ] III.10.2 row lifecycle and evidence · skills/code-factory-foreman — brief, verify, close; foreman→board, foreman→duckbrain
+- [ ] III.11 — M10 CONTROL PLANE
+  - [ ] III.11.1 scheduler daemon and admission · cmd/schedulerd, internal/scheduler (tasks vs cooldown, weight, cadence, priority)
+  - [ ] III.11.2 lane onboarding and family allowlist · internal/api/lane_onboarding.go, docs/SCHEDULER-ADMISSION.md
+  - [ ] III.11.3 budgets, cooldowns and adaptive escalation · fleet.example.toml (daily/weekly/final USD, cooldown tiers, adaptive_cooldown), internal/cooldownaudit
+  - [ ] III.11.4 model routing · task-router (chains, caps, PAYG ordering), contract router→gateway
+  - [ ] III.11.5 peer control and maintenance cmds · internal/remote (REMOTE-005), cmd/{migrate, backfill-commit-signals, cooldown-residue, queueprobe, scheduler-dispatch, scheduler-query}
+- [ ] III.12 — M11 TRANSPORT (CRIER AND DISPATCHER)
+  - [ ] III.12.1 bus primitives and guard · crier internal/{relay,mesh,registry,session,ingress,permissions,ratelimit,strictjson,guard} — leases, ack=done, signature/audience, circuit breaker CR_GUARD_*
+  - [ ] III.12.2 hermesession gateway delivery · crier internal/hermesession (message becomes a session turn)
+  - [ ] III.12.3 fleet dispatcher and courier · dispatcher.py, courier.py, bridge/, register_fleet.py, keys/, fleet_agents.json (lease/redelivery; runs on control box because exec-spawned processes die with the session)
+  - [ ] III.12.4 gateway facade and endpoint shapes · fleet-gateway-facade.py, ENDPOINT-CONTRACT.md (5 shapes, refusal rule, X-Hermes-Session-Key mapping, unmapped→local)
+- [ ] III.13 — M12 INFERENCE RELAY
+  - [ ] III.13.1 the proxy · cf-inference-proxy.py (/v1/chat/completions, /v1/models, /health; node tokens; upstream rewrite; usage log; CF-002)
+- [ ] III.14 — M13 FLEET OPS LIFECYCLE
+  - [ ] III.14.1 TTL census and renewal · fleet-ttl-census.py, renew-fleet.sh (heartbeat cannot renew; bunker renew is destructive)
+  - [ ] III.14.2 patch chain · patches/, verify-patch.sh, fleet_ops_check.py lineage
+  - [ ] III.14.3 backup and restore · renew-fleet archive step, restorable-artifact verification
+
+## PART IV — CONTRACTS (26)
+
+Each contract names both sides: producer file:function, consumer file:function, payload, timing, failure semantics, measured state, breaking-change policy.
+
+- [ ] owner → scheduler — lane enabled, cadence, weight, pin · works
+- [ ] scheduler → crier — envelope: run_id, corr_id, lane, board_row, text_b64 · broken
+- [ ] crier → node — inbox message + lease (30 s) · works
+- [ ] node → crier — reply: in_reply_to, corr_id, run_id, outcome · broken
+- [ ] foreman → scheduler — the lane's prompt text and skills it may load · broken
+- [ ] crier → scheduler — completion event for a finished run · missing (CF-337)
+- [ ] router → gateway — model choice for a prompt · works
+- [ ] crier → gateway — hermes-session delivery · works
+- [ ] node → duckbrain — R1 run record, R2 fleet index · missing (CF-329)
+- [ ] node → board — row event with run_id and outcome · broken
+- [ ] node → sessionstore — every turn, model, tokens · works
+- [ ] node → gitreins — staged diff · works
+- [ ] gitreins → board — verdict that closes a row · broken
+- [ ] foreman → board — row created, row closed, evidence · works
+- [ ] foreman → duckbrain — decisions, findings, goal · works
+- [ ] docsgate → handbook — module status word · works
+- [ ] conformance → harness — per-leg verdict (check, apply, smoke, vars, memory) · broken (CF-328)
+- [ ] handbook → owner — the approval artifact · works
+- [ ] scheduler → facade — POST /v1/responses SSE, X-Hermes-Session-Key = tick id · works
+- [ ] facade → agent — bunker exec drive (no container listener; translator not tunnel) · works
+- [ ] dispatcher → agent — retrieve lease · bunker exec · ack only on completion; failure redelivers · works
+- [ ] node → inference-proxy — Bearer node token, OpenAI-compatible relay · broken (create path stages no node token — OPERATIONS.md)
+- [ ] inference-proxy → upstream — key read from control-host .env only, never logged · works (CF-002)
+- [ ] github-app-token → forge — installation token mint, cached, 1 h TTL, never printed · works
+- [ ] scheduler peer → peer — REMOTE-005 lane control over the peer HTTP API, operator token · works
+- [ ] guard → ingress — circuit breaker (CR_GUARD_CIRCUIT_THRESHOLD/COOLDOWN_S) and scoring gate · works
+
+## PART V — SETTINGS REGISTER
+
+- [ ] V.1 Environment variables (name · default · range · effect · who reads it) — incl. the 12 CF_* contract names and CF_PROXY_UPSTREAM/_MODEL/_KEY_ENV
+- [ ] V.2 CLI switches (verb · flag · effect · misuse)
+- [ ] V.3 Timeouts, caps, floors and rates (value · where enforced · what it governs)
+- [ ] V.4 Provider and model routing settings
+- [ ] V.5 Paths and filesystem contracts
+- [ ] V.6 Fleet configuration register — fleet.toml (projects, namespaces, budgets, adaptive cooldown), fleet_agents.json, harness-matrix.json, endpoint declarations, cf-node-tokens.json, fleet-gateway-keys.json
+
+## PART VI — RISK AND UNKNOWNS
+
+- [ ] VI.1 Known knowns (measured facts, with how measured) — source: docs/RUMSFELD.md
+- [ ] VI.2 Known unknowns (probe · falsifier · who can answer · blocking?)
+- [ ] VI.3 Unknown unknowns (found by comparison · converted to a measurement or a decision)
+- [ ] VI.4 Unknown knowns (operator constraints, with source)
+- [ ] VI.5 Promotion log — what moved quadrant, when, why (maintained, not archived)
+- [ ] VI.6 Rejected findings and why they were rejected
+
+## PART VII — WORK DERIVATION
+
+- [ ] VII.1 Requirement table (R-nnn · statement · module · assertion · evidence)
+- [ ] VII.2 Task list derived from chapters, each citing the section it closes
+- [ ] VII.3 Acceptance gate per chapter (what makes it WRITTEN, not merely present)
+
+## APPENDICES
+
+- [ ] A — Per-unit evidence sections (53 in-repo units + 15 cross-tree surfaces, appendices/units/ — one section per unit, no exceptions; the current 47-file count conflates index/panel/spec files and leaves install-go.sh and six doc-pipeline units without sections)
+- [ ] B — Quorum verdicts by round (_quorum-*/)
+- [ ] C — Field contract each chapter must satisfy (docs/MASTER-DOC-SCHEMA.md)
+- [ ] D — Change log and supersession record
+
+## Counts to build to
+
+| Item | Count |
+|---|---|
+| Parts | 7 + appendices |
+| Flows | 15 (5 rendered, 10 missing) |
+| Modules | 14 |
+| Submodule chapters | 44 |
+| Contracts | 26 (17 works · 7 broken · 2 missing) |
+| Settings to register | ~95 env + ~215 flags + fleet.toml fields (measured range across seats) |
+| Unit evidence sections | 53 in-repo + 15 cross-tree |
+
+CORRECTIONS RANKED:
+
+1. Add the CONTROL PLANE module (scheduler, admission, onboarding, budgets, routing) — without it the handbook cannot answer "why did this run / not run", the single most common operator question; every flow currently starts downstream of the decision.
+2. Add the TRANSPORT module (crier primitives + guard, dispatcher, facade, endpoint shapes) — F1 and F5 lean on lease/ack/redelivery/circuit semantics that appear nowhere; a rebuild from this outline would lose work on dispatcher crash.
+3. Add the INFERENCE RELAY module — it is the entire enforcement of CF-002 (nodes hold tokens, never provider keys); zero presence today, and its settings would be unwritable.
+4. Amend F1 to carry the gateway-direct SSE/facade leg — the outline documents only the bus transport, so a stranger rebuilding dispatch rebuilds half of it.
+5. Add the FOREMAN module and the lane prompt corpus — three contracts and two flow steps have an owner with no chapter; the prompt drift finding (3 of 14 lanes) lives here.
+6. Add F11 SCHEDULING ADMISSION — admission modes, weights, budgets, family allowlists; currently invisible.
+7. Add F12 CREDENTIAL LIFECYCLE — bunker renew is destructive and heartbeat cannot extend TTL; undocumented, this is a data-loss trap.
+8. FAIL the merge proposal — M3 owns primary flow F5 and M8 owns F6; folding either orphans a flow from its owning chapter.
+9. Add the "Limits and margins" heading — rated capacities (lease 30 s, TTL 7 d, budgets, 1..1000 turns) are Apollo-required and absent from all 11 headings.
+10. Fix appendix A's unit census — the "47" count hides seven units with no evidence section and three unlisted harness adapters; per the schema, an empty field is a RED finding, not a rounding error.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-e4a27c4bf87912aa8b9c56dcc1559a95ebe2e2dbfba16dba4b7bf0cda76c847c
+
+EXIT=0
