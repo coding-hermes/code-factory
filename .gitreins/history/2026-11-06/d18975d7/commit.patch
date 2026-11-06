@@ -1,0 +1,628 @@
+commit 1f1c0fe8ae2b52406f0e8a3e2eb7dc1906c519d0
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Fri Nov 6 18:31:18 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Fri Nov 6 18:31:18 2026 -0500
+
+    fix(node-bus-worker): decode the wire directive member text_b64 (CF-354)
+    
+    The scheduler sends the dispatch directive as `text_b64` (base64 of the UTF-8 text) because
+    crier's control-key guard refuses prose that quotes JSON key names. `scripts/node-bus-worker.py`
+    read only `dispatch.get("text")`, so every dispatch the scheduler actually sends was refused by
+    this repository's own node with the named `brief` row, and the live fleet only worked because a
+    dispatcher outside this repository decodes the member. `specs/ENVELOPE.md` called `text` mandatory
+    and never described the encoding.
+    
+    Worker: new `directive_text(dispatch) -> (text, reason)` used by `process()` in place of the bare
+    `dispatch.get("text")`. `text_b64` wins when present and is decoded as UTF-8; a `text_b64` that
+    does not decode (bad base64, non-UTF-8, or empty/whitespace after decode) is the named `text_b64`
+    refusal and NEVER falls back to another member, because a corrupted dispatch must not run a
+    different instruction than the one that was sent. Only when `text_b64` is absent does the worker
+    fall back to `task`, `text`, `prompt`, `message`, `body` (first non-empty string wins), matching
+    the sender-side fallback list in docs/MASTER-DOC-SCHEMA.md §3c. `brief.digest` is still sha256 over
+    the directive text, which is now the DECODED text, so a digest taken over the base64 is refused.
+    The absent-instruction refusal keeps its wording (`carries no `text`` / reason `brief`), and
+    nothing prints the directive.
+    
+    Spec: `specs/ENVELOPE.md` now states the rule instead of leaving `text` undefined — decode
+    `text_b64` first and never consult another member while it is present, a decode failure is a named
+    refusal and not a silent fallback, the fallback order for older senders, and that `brief.digest` is
+    sha256 over the decoded directive text; the example dispatch carries `text_b64`.
+    
+    Tests: new `tests/test_bus_dispatch_encoding.py` (unittest, hermetic — one `mktemp -d`, no network,
+    no credential) asserts what the harness RECEIVED, not what the worker said it would do. Measured,
+    `python3 tests/test_bus_dispatch_encoding.py` rc=0:
+    
+      PASS  A1  text_b64-only dispatch runs; the harness receives exactly the decoded bytes
+      PASS  A2  a dispatch carrying only the legacy `text` still runs (no regression)
+      PASS  A3  corrupt text_b64 -> named `text_b64` refusal, no fallback, harness never started
+      PASS  A4  no instruction member -> the existing named `brief` refusal, unchanged
+      PASS  A5  brief.digest over the base64 (not the decoded text) is refused by `brief_digest`
+    
+    The same fixture pointed at the pre-fix source (CF_BUS_WORKER_SOURCE=<5b11bdc worker>
+    CF_BUS_DISPATCH_PREFIX_CONTROL=1) prints
+    
+      PASS  P0  the PRE-FIX source refuses a text_b64 dispatch with the `brief` row (the red)
+    
+    and the control prints FAIL against the fixed worker, so it discriminates rather than merely
+    passing.
+    
+    selftest: section 54 runs the fixture (one PASS row) and the red control against
+    `git show 5b11bdc:scripts/node-bus-worker.py` (one PASS row); an unavailable pre-fix source is a
+    named FAIL row, not a pass. `bash tests/selftest.sh` ends `SELFTEST: PASS` (exit 0) with 384 PASS
+    rows and 59 FAIL rows, every FAIL a negative fixture — gateway_start refusals, board-lint and
+    landing refusals — and section 54 contributes none. docs/ACCEPTANCE-PLAN.md gains the §54 mapping
+    row and its current-state census moves to 54 numbered sections + 3 lettered = 57 arms
+    (`bash docs/audits/cf198-section-mapping.sh` prints arms_plan=57 arms_tree=57, RESULT: OK), which
+    §39 grades.
+    
+    Not pushed: the foreman pushes and verifies remote parity.
+---
+ docs/ACCEPTANCE-PLAN.md             |   5 +-
+ scripts/node-bus-worker.py          |  52 +++++-
+ specs/ENVELOPE.md                   |  28 ++-
+ tests/selftest.sh                   |  34 ++++
+ tests/test_bus_dispatch_encoding.py | 351 ++++++++++++++++++++++++++++++++++++
+ 5 files changed, 461 insertions(+), 9 deletions(-)
+
+diff --git a/docs/ACCEPTANCE-PLAN.md b/docs/ACCEPTANCE-PLAN.md
+index 1893ea2..d5c7596 100644
+--- a/docs/ACCEPTANCE-PLAN.md
++++ b/docs/ACCEPTANCE-PLAN.md
+@@ -10,7 +10,7 @@ and `ruff` is not found) was not re-measured on 2026-11-06 and stands as that da
+ Both legs are host-environment, not suite regressions, and they are the reason some commits needed
+ `core.hooksPath=/dev/null` (CF-285). Read the `PASS` figures below as measured on a configured host.
+ 
+-**Current state (board figures re-measured 2026-11-06T10:05Z at tip `2f07051`; the section and arm census re-measured on the CF-051 tree, §53):** `tests/selftest.sh` carries 53 numbered sections — numbered 1 through 53 — plus three lettered sub-arms, §4b, §7b and §31b, which the section regex `^say "[0-9]+\.` does not count, so the tree carries 56 arms; both counts are DERIVED by `bash docs/audits/cf198-section-mapping.sh` (it must print `RESULT: OK` with `arms_plan=56 arms_tree=56`), and `tests/selftest.sh` §39 fails with a named plan-side row when a mapping row is missing. The board figures on this line are pinned to `2f07051` and were measured there: 350 task rows and 489 events (80 complete, 13 in_progress, 256 pending, 1 blocked), and `bash scripts/boardctl validate` printed `RESULT: OK (7 warning(s))` at that tip. This PM tick's own landing adds its row edit and its event on top of those figures, so any later tip reads higher — re-measure rather than quoting them. Every number on this line was measured on a named tree; the earlier snapshots kept in the paragraphs below still reproduce at the tips they name.
++**Current state (board figures re-measured 2026-11-06T10:05Z at tip `2f07051`; the section and arm census re-measured on the CF-354 tree, §54):** `tests/selftest.sh` carries 54 numbered sections — numbered 1 through 54 — plus three lettered sub-arms, §4b, §7b and §31b, which the section regex `^say "[0-9]+\.` does not count, so the tree carries 57 arms; both counts are DERIVED by `bash docs/audits/cf198-section-mapping.sh` (it must print `RESULT: OK` with `arms_plan=57 arms_tree=57`), and `tests/selftest.sh` §39 fails with a named plan-side row when a mapping row is missing. The board figures on this line are pinned to `2f07051` and were measured there: 350 task rows and 489 events (80 complete, 13 in_progress, 256 pending, 1 blocked), and `bash scripts/boardctl validate` printed `RESULT: OK (7 warning(s))` at that tip. This PM tick's own landing adds its row edit and its event on top of those figures, so any later tip reads higher — re-measure rather than quoting them. Every number on this line was measured on a named tree; the earlier snapshots kept in the paragraphs below still reproduce at the tips they name.
+ 
+ **Evidence snapshot (re-measured 2026-11-04T02:35Z at tip `d02916e`; the stamp read as a bare
+ `2026-11-04 02:35` until this correction, and the tip, not the clock, is what reproduces these
+@@ -111,7 +111,7 @@ A green suite is not PRD coverage, and the reverse gap matters as much as the fo
+ 31 arms, 88 `PASS` rows — and only three requirements have an arm that can fail on them (`CF-102` ←
+ §2 and §14, `CF-105` ← §5, `CF-109` ← §12 and §13 partially, plus `CF-127` ← §31 as of the CF-127
+ landing). Every other arm is governed by a spec, a
+-rule or a board row, and the mapping below names every numbered section in the current tree. The current tree carries 56 arms: 53 numbered sections and three lettered arms (§4b, §7b, §31b). These counts are derived by `bash docs/audits/cf198-section-mapping.sh`, which also enforces the table's numbered-section coverage both ways — a section the tree carries and the table omits is a named plan-side failure, and a row the table names with no such section is a named tree-side one — so the next section that lands cannot leave the table or the count behind. The older
++rule or a board row, and the mapping below names every numbered section in the current tree. The current tree carries 57 arms: 54 numbered sections and three lettered arms (§4b, §7b, §31b). These counts are derived by `bash docs/audits/cf198-section-mapping.sh`, which also enforces the table's numbered-section coverage both ways — a section the tree carries and the table omits is a named plan-side failure, and a row the table names with no such section is a named tree-side one — so the next section that lands cannot leave the table or the count behind. The older
+ section census in `docs/audits/cf099-prd-drift-probe.sh` still counts only numbered lines, so a lettered arm
+ lands uncounted (`CF-113`, pending, owns that separate fix).
+ 
+@@ -166,6 +166,7 @@ lands uncounted (`CF-113`, pending, owns that separate fix).
+ | §51 the python lint gate can go red on one unused import, and the tracked surface it grades is clean | board `CF-254` (the Tier-1 lint lane takes its scope from staged file EXTENSIONS and grades only `*.py` — `.gitreins/config.yaml:9-16`, naming `engine/guard_manager.py:2823` — so a red on a tracked python file refuses every python-staging commit in this family while board-only commits still pass, and the red reached `origin/main` at `52e1c4d` as verdict `.gitreins/history/2026-11-05/0e9f844d`. The arm pins both states of the checker that lane runs: one unused import in a fixture exits nonzero naming `F401`, the same file after that import is removed exits 0, and the tracked python surface (`git ls-files '*.py'`, 29 files) grades clean, so a reintroduced F401 reds the very suite that grades it) |
+ | §52 master-doc fills converge on a runner-owned status | board `CF-257` (offline local replies exercise both fill writers, measured section/locator counts, provider and UTC stamping, and missing-status rejection; `CF_MASTER_DIR` fixtures drive the real selector with `--dry-run`, select one RED module, skip the index and missing-Path file, preserve every module's SHA-256 over two FILLED runs, and prove `--force` selects only modules. Two fixtures carry the completions a fill actually writes — `**VERIFIED — …**` from the earlier accepted-output writer and the bare `**VERIFIED**` — with the template's RED string still in their bodies, and neither may be a candidate; those two arms red on the pre-fix selector, which tested that body string and so re-filled all 37 verified modules on every run. No provider call or real-document refill is part of this evidence) |
+ | §53 `node-create.sh` refuses a `--agent` that does not exist, before any staging | board `CF-051` (`--agent` is a REUSE, not a claim: `scripts/node-create.sh` proves the supplied id with `bunker info … --server`, prints `  FAIL  agent — <id> not found on <server> — spawn it (drop --agent) or pass an existing agent id` and exits 1 before any `cp`/`exec`, and only prints `  PASS  spawn — reusing …` once the check passed; the no-flag path still spawns, and cleanup never suggests destroying an agent the operator supplied. Three arms share one PATH stub with no network: the missing id gives the named FAIL plus zero staging invocations in the stub's log, the existing id still reaches staging and creates the node (so the check is not a blanket refusal), and the pre-fix revision `943ef98` re-run against the same fixture still prints the false `PASS  spawn — reusing ghost-agent` and stages into the absent agent — the red this row was raised on) |
++| §54 the bus worker decodes the wire directive member, and the pre-fix revision cannot | board `CF-354` (`specs/ENVELOPE.md` now states the encoding rule the scheduler always used: the directive travels as `text_b64`, base64 of the UTF-8 text, because the reply relay's control-key guard refuses the prose a foreman prompt carries. A receiver decodes it FIRST, falls back to `task`/`text`/`prompt`/`message`/`body` only when it is absent, treats a `text_b64` that does not decode as a NAMED refusal rather than a silent fallback, and binds `brief.digest` to sha256 of the DECODED text. `scripts/node-bus-worker.py` read only `text`, so every dispatch the scheduler actually sent was refused here with the `brief` row and the fleet only worked because a dispatcher outside this repository decodes the member. Five arms in `tests/test_bus_dispatch_encoding.py` — no network, no credential, one `mktemp -d` — assert what the harness RECEIVED: `text_b64` decodes to the exact bytes, the legacy `text` still runs, a corrupt `text_b64` is the named `text_b64` refusal with no fallback and the harness never started, an absent instruction keeps the unchanged `brief` wording, and a digest taken over the base64 is refused by `brief_digest`. The section's red control runs the SAME fixture against `5b11bdc:scripts/node-bus-worker.py` and requires the `brief` refusal there — the defect this row was raised on — and the control fails against the fixed worker, so it discriminates) |
+ 
+ These sections are legitimate and must not be deleted to "clean up" the mapping: they serve
+ `AGENTS.md` rules, the specs and this board. They must not be counted as acceptance of
+diff --git a/scripts/node-bus-worker.py b/scripts/node-bus-worker.py
+index b5c067a..90f7fa3 100644
+--- a/scripts/node-bus-worker.py
++++ b/scripts/node-bus-worker.py
+@@ -35,6 +35,7 @@ Refusals (named, non-zero exit, no side effects when possible):
+   bus_bearer   no bearer token (file or CRIER_AUTH_TOKEN) to send with the signature
+   bus_health   the bus does not answer /health (000) from this node
+   brief_digest a dispatch's brief.digest does not match sha256(text) — refused, not warned
++  text_b64     a dispatch's `text_b64` does not decode to UTF-8 text — refused, no fallback
+   brief_project a dispatch names a project other than this node's
+   brief_workdir a dispatch names a workdir that is not inside this node's clone
+ 
+@@ -115,6 +116,10 @@ SECTION5_INTS = {
+ 
+ EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
+ 
++# The plain members a dispatch may carry instead of `text_b64`, in the order older senders use
++# (docs/MASTER-DOC-SCHEMA.md §3c). Read by directive_text().
++DIRECTIVE_MEMBERS = ("task", "text", "prompt", "message", "body")
++
+ 
+ # --------------------------------------------------------------------------------------------
+ # rows — one line per measurement, house style: "  PASS  <name> — <value>"
+@@ -969,6 +974,36 @@ def refusal(ident, dispatch, reason, detail):
+     }
+ 
+ 
++def directive_text(dispatch):
++    """(text, reason) — the directive a dispatch carries, and the refusal reason if it has none.
++
++    The scheduler sends the directive as `text_b64` (base64 of the UTF-8 text) because the reply
++    relay's control-key guard refuses prose that quotes JSON key names (`specs/ENVELOPE.md`
++    §Reserved field names). Decode it FIRST: a `text_b64` that does not decode is a named refusal,
++    never a silent fallback to another member — a corrupted dispatch must not run a different
++    instruction than the one that was sent.
++
++    The legacy plain members stay supported for older senders, in the order
++    `docs/MASTER-DOC-SCHEMA.md` §3c lists: `task`, `text`, `prompt`, `message`, `body`.
++    """
++    if "text_b64" in dispatch:
++        encoded = dispatch["text_b64"]
++        if not isinstance(encoded, str):
++            return "", "text_b64"
++        try:
++            decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
++        except (ValueError, UnicodeDecodeError):
++            return "", "text_b64"
++        if not decoded.strip():
++            return "", "text_b64"
++        return decoded, ""
++    for name in DIRECTIVE_MEMBERS:
++        candidate = dispatch.get(name)
++        if isinstance(candidate, str) and candidate.strip():
++            return candidate, ""
++    return "", "brief"
++
++
+ def process(dispatch, ident, signer, args, seen):
+     """Handle ONE dispatch. Returns (rows_ok, result_dict or None, message_ids_to_ack)."""
+     dispatch_id = str(dispatch.get("dispatch_id") or "")
+@@ -983,8 +1018,21 @@ def process(dispatch, ident, signer, args, seen):
+         )
+         return True, seen[key], True
+ 
+-    text = dispatch.get("text")
+-    if not isinstance(text, str) or not text.strip():
++    text, reason = directive_text(dispatch)
++    if reason == "text_b64":
++        bad(
++            "text_b64",
++            f"{label} `text_b64` does not decode to UTF-8 text — a corrupted dispatch is "
++            f"refused, not run against another member",
++        )
++        result = refusal(
++            ident,
++            dispatch,
++            "text_b64",
++            "dispatch carries a `text_b64` that does not decode to UTF-8 text",
++        )
++        return False, result, True
++    if not text:
+         bad(
+             "brief",
+             f"{label} carries no `text` — a dispatch without an instruction is a bug, "
+diff --git a/specs/ENVELOPE.md b/specs/ENVELOPE.md
+index 74ce99f..7deee0b 100644
+--- a/specs/ENVELOPE.md
++++ b/specs/ENVELOPE.md
+@@ -13,8 +13,8 @@ ambiguity.
+   "issued_at": "2026-10-29T18:40:00Z",
+   "reply_to": "mdp-collector",
+   "lane": "crier",
+-  "text": "You are the foreman for lane crier. Work the board at <ref>. Report a verdict.",
+-  "brief": {"digest": "<sha256 of the task text>", "bytes": 4211},
++  "text_b64": "<base64 of the UTF-8 directive — e.g. You are the foreman for lane crier. …>",
++  "brief": {"digest": "<sha256 of the directive TEXT, not of the base64>", "bytes": 4211},
+   "route": {"provider": "xkiro", "model": "openai/gpt-6.1-sol", "harness": "hermes"},
+   "vars": {"CF_MODEL": "openai/gpt-6.1-sol", "CF_PROVIDER": "xkiro",
+            "CF_API_KEY_FILE": "/home/node/.node/keys/xkiro.key",
+@@ -25,9 +25,27 @@ ambiguity.
+ }
+ ```
+ 
+-**`text` is mandatory.** A dispatch without `text` is a bug: the receiving side has no
+-instruction and will either invent one or run the JSON as a prompt. `brief.digest` proves the
+-node got the task it was given; a mismatch is a refusal, not a warning.
++**The instruction is mandatory, and `text_b64` is how it travels.** A dispatch must carry an
++instruction — `text_b64` (base64 of the UTF-8 directive) or, for older senders, one of the plain
++members below. A dispatch with neither is a bug: the receiving side has no instruction and will
++either invent one or run the JSON as a prompt.
++
++The encoding exists because the reply relay's control-key guard (see *Reserved field names*)
++refuses prose that would otherwise be re-injected, and a real directive routinely quotes JSON
++bodies and board rows. So the directive goes on the wire base64-encoded, and the guard sees opaque
++text. The decoding rule is therefore part of the contract, not an implementation detail:
++
++- A receiver **MUST** decode `text_b64` first, to UTF-8, and **MUST NOT** consult another member
++  while `text_b64` is present.
++- A `text_b64` that does not decode — bad base64, bytes that are not UTF-8, or a decoded body that
++  is empty or whitespace — is a **named refusal** (`text_b64`), never a silent fallback. Falling
++  back would run a different instruction than the one that was sent, and hide a corrupted dispatch.
++- Only when `text_b64` is **absent** does the receiver fall back to the plain members, in this
++  order: `task`, `text`, `prompt`, `message`, `body` (first non-empty string wins). Plain `text` is
++  the historical member; the others are tolerated for older senders.
++- `brief.digest` proves the node got the task it was given: it is **sha256 over the decoded
++  directive text** — the UTF-8 bytes the sender hashed, not the base64 that carried them. A
++  mismatch is a refusal, not a warning.
+ 
+ **`vars` carries the harness variable contract** (`specs/HARNESS-MATRIX.md` §5). It is optional:
+ a dispatch without it runs with no `CF_*` in the harness child's environment. When it is present,
+diff --git a/tests/selftest.sh b/tests/selftest.sh
+index 622b73e..28367b9 100755
+--- a/tests/selftest.sh
++++ b/tests/selftest.sh
+@@ -4699,5 +4699,39 @@ fi
+ rm -rf "$tmpd"
+ # END cf051-agent-reuse
+ 
++say "54. the bus worker decodes the wire directive member, and the pre-fix revision cannot (CF-354)"
++# specs/ENVELOPE.md sends the directive as `text_b64`; this repo's node read only `text`, so every
++# dispatch the scheduler actually sent was refused HERE with the `brief` row, and the fleet only
++# worked because a dispatcher outside this repository decodes the member. The fixture asserts what
++# the HARNESS RECEIVED, not what the worker said it would do: five arms, three of them the failure
++# path, so a green here can go red. No network, no credential, everything under one mktemp -d.
++cf354=$(mktemp -d)
++if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_bus_dispatch_encoding.py" \
++     >"$cf354/out" 2>&1; then
++  say "  PASS  text_b64 decoded to the harness bytes, legacy text still runs, corrupt text_b64 / absent instruction / base64 digest each refused"
++else
++  say "  FAIL  the dispatch encoding on the receiving side (tests/test_bus_dispatch_encoding.py)"
++  fails=$((fails+1))
++  sed 's/^/    | /' "$cf354/out"
++fi
++# ARM (red control): the SAME fixture against the revision this row was raised on. It must refuse
++# the text_b64 dispatch with the named `brief` row — pointed at the fixed worker the control fails,
++# so it discriminates rather than merely passing.
++if git -C "$HERE" show 5b11bdc:scripts/node-bus-worker.py > "$cf354/node-bus-worker.py" 2>/dev/null; then
++  if CF_BUS_WORKER_SOURCE="$cf354/node-bus-worker.py" CF_BUS_DISPATCH_PREFIX_CONTROL=1 \
++       PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_bus_dispatch_encoding.py" \
++       >"$cf354/prefix" 2>&1; then
++    say "  PASS  pre-fix 5b11bdc refuses the text_b64 dispatch with the brief row (fixture detects CF-354)"
++  else
++    say "  FAIL  pre-fix control did not reproduce the brief refusal on a text_b64 dispatch"
++    fails=$((fails+1))
++    sed 's/^/    | /' "$cf354/prefix"
++  fi
++else
++  say "  FAIL  pre-fix source unavailable (git show 5b11bdc:scripts/node-bus-worker.py)"
++  fails=$((fails+1))
++fi
++rm -rf "$cf354"
++
+ say ""
+ [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
+diff --git a/tests/test_bus_dispatch_encoding.py b/tests/test_bus_dispatch_encoding.py
+new file mode 100644
+index 0000000..34de4eb
+--- /dev/null
++++ b/tests/test_bus_dispatch_encoding.py
+@@ -0,0 +1,351 @@
++#!/usr/bin/env python3
++"""Hermetic tests for the dispatch's wire encoding on the receiving side (CF-354).
++
++`specs/ENVELOPE.md` fixes the instruction member: the scheduler sends the directive as `text_b64`
++(base64 of the UTF-8 text), because the reply relay's control-key guard refuses the prose a real
++foreman prompt carries. `scripts/node-bus-worker.py` read only `text`, so every dispatch the
++scheduler actually sent was refused by this repo's own node with the `brief` row. The live fleet
++only worked because a dispatcher outside this repository decodes the member.
++
++These arms hold the worker to the contract, and each one is an assertion about what the harness
++RECEIVED, not about what the worker said it would do:
++
++  A1 green  a dispatch carrying only `text_b64` runs; the harness gets exactly the decoded bytes
++  A2 green  a dispatch carrying only the legacy `text` still runs (no regression)
++  A3 red    a corrupt `text_b64` is refused by the named `text_b64` row; the harness never starts
++            and the legacy `text` sitting beside it is never used
++  A4 red    a dispatch with no instruction member keeps the existing named `brief` refusal
++  A5 red    a `brief.digest` taken over the base64 (not the decoded text) is refused
++
++Run directly: `python3 tests/test_bus_dispatch_encoding.py` — exit 0 on success, 1 on failure.
++No network, no credential, no install; every fixture lives under `mktemp -d`.
++
++The pre-fix control points the SAME fixture at another worker source, so the red needs no second
++copy of the arms:
++
++  CF_BUS_WORKER_SOURCE=/tmp/.../node-bus-worker.py CF_BUS_DISPATCH_PREFIX_CONTROL=1 \
++      python3 tests/test_bus_dispatch_encoding.py
++
++which asserts that revision refuses a `text_b64` dispatch with the named `brief` row. A fixture
++that cannot reproduce the defect it was written for is decoration.
++"""
++
++from __future__ import annotations
++
++import base64
++import contextlib
++import hashlib
++import importlib.util
++import io
++import os
++import shutil
++import sys
++import tempfile
++import types
++import unittest
++
++HERE = os.path.dirname(os.path.abspath(__file__))
++DEFAULT_WORKER = os.path.join(HERE, os.pardir, "scripts", "node-bus-worker.py")
++WORKER = os.environ.get("CF_BUS_WORKER_SOURCE") or DEFAULT_WORKER
++PREFIX_CONTROL = os.environ.get("CF_BUS_DISPATCH_PREFIX_CONTROL") == "1"
++
++
++def load_worker():
++    """Import the worker source, whose filename is not a valid module name."""
++    spec = importlib.util.spec_from_file_location("cf_bus_worker_cf354", WORKER)
++    module = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(module)
++    return module
++
++
++WORKER_MOD = load_worker()
++
++# A directive with the shapes that made the encoding necessary: newlines, quotes, `$`-signs and
++# a JSON body the relay's control-key guard would otherwise refuse.
++DIRECTIVE = (
++    'You are the foreman for lane "code-factory".\n'
++    "\n"
++    "Costs $5 per row and $HOME stays a literal dollar-sign word.\n"
++    '  - a quoted body: {"status": "pending"}\n'
++    "  - an apostrophe: it's fine\n"
++    "\n"
++    "Report a verdict.\n"
++)
++
++# Stands in for the harness: it records the prompt it was given and the fact that it started.
++STUB = """\
++import sys
++from pathlib import Path
++text, got, marker = sys.argv[1], sys.argv[2], sys.argv[3]
++Path(marker).write_text("harness started\\n", encoding="utf-8")
++Path(got).write_text(text, encoding="utf-8")
++"""
++
++
++def b64(text):
++    return base64.b64encode(text.encode("utf-8")).decode("ascii")
++
++
++class RecordingIdentity:
++    """The slice of the node identity `process()` reads, with a harness that records its prompt."""
++
++    def __init__(self, home, repo, stub, got, marker):
++        self.home = home
++        self.repo_path = repo
++        self.project = "code-factory"
++        self.harness_name = "fixture-recorder"
++        self.stub = stub
++        self.got = got
++        self.marker = marker
++        self.received = []
++
++    def harness_argv(self, prompt):
++        self.received.append(prompt)
++        return [sys.executable, "-B", self.stub, prompt, self.got, self.marker]
++
++
++class BusDispatchEncodingTest(unittest.TestCase):
++    def setUp(self):
++        self.home = tempfile.mkdtemp(prefix="cf354-dispatch-")
++        self.addCleanup(shutil.rmtree, self.home, ignore_errors=True)
++        self.repo = os.path.join(self.home, "repo")
++        os.makedirs(self.repo)
++        self.got = os.path.join(self.home, "harness-prompt.txt")
++        self.marker = os.path.join(self.home, "harness-started.txt")
++        self.stub = os.path.join(self.home, "record_harness.py")
++        with open(self.stub, "w", encoding="utf-8") as handle:
++            handle.write(STUB)
++        self.ident = RecordingIdentity(
++            self.home, self.repo, self.stub, self.got, self.marker
++        )
++        # process() reads exactly these two flags off args for the non-dry-run path.
++        self.args = types.SimpleNamespace(dry_run=False, harness_wall=30)
++        self.output = ""
++
++    def run_dispatch(self, dispatch):
++        """Run one dispatch through process(), capturing the worker's rows as text."""
++        buffer = io.StringIO()
++        with contextlib.redirect_stdout(buffer):
++            outcome = WORKER_MOD.process(dispatch, self.ident, None, self.args, {})
++        self.output = buffer.getvalue()
++        return outcome
++
++    def harness_bytes(self):
++        with open(self.got, "rb") as handle:
++            return handle.read()
++
++    def harness_started(self):
++        return os.path.exists(self.marker)
++
++    def test_a1_text_b64_only_dispatch_runs(self):
++        """A1  text_b64-only dispatch runs; the harness receives exactly the decoded bytes"""
++        dispatch = {
++            "dispatch_id": "cf354-a1",
++            "corr_id": "lane-cf354-a1",
++            "lane": "code-factory",
++            "text_b64": b64(DIRECTIVE),
++            "brief": {
++                "digest": hashlib.sha256(DIRECTIVE.encode("utf-8")).hexdigest(),
++                "bytes": len(DIRECTIVE.encode("utf-8")),
++            },
++        }
++        rows_ok, result, ack = self.run_dispatch(dispatch)
++        self.assertIsNotNone(
++            result, f"a text_b64 dispatch produced no result: {self.output}"
++        )
++        self.assertTrue(rows_ok, f"the dispatch did not succeed: {self.output}")
++        self.assertEqual(
++            "completed",
++            result.get("status"),
++            f"status was not a success status: {result.get('status')!r} {self.output}",
++        )
++        self.assertNotIn("refused_by", result, "a decoded dispatch was refused")
++        self.assertTrue(self.ident.received, "the harness command was never built")
++        self.assertEqual(
++            {DIRECTIVE},
++            set(self.ident.received),
++            "the harness was not handed the decoded directive",
++        )
++        self.assertEqual(
++            DIRECTIVE.encode("utf-8"),
++            self.harness_bytes(),
++            "the harness received different bytes than the sender encoded",
++        )
++
++    def test_a2_legacy_text_still_runs(self):
++        """A2  a dispatch carrying only the legacy `text` still runs (no regression)"""
++        dispatch = {
++            "dispatch_id": "cf354-a2",
++            "corr_id": "lane-cf354-a2",
++            "text": DIRECTIVE,
++        }
++        rows_ok, result, ack = self.run_dispatch(dispatch)
++        self.assertTrue(rows_ok, f"the legacy member no longer runs: {self.output}")
++        self.assertEqual("completed", result.get("status"), f"status: {self.output}")
++        self.assertEqual(
++            DIRECTIVE.encode("utf-8"),
++            self.harness_bytes(),
++            "the harness received different bytes than the sender sent",
++        )
++
++    def test_a3_corrupt_text_b64_is_refused_without_fallback(self):
++        """A3  corrupt text_b64 -> named `text_b64` refusal, no fallback, harness never started"""
++        dispatch = {
++            "dispatch_id": "cf354-a3",
++            "corr_id": "lane-cf354-a3",
++            # `*` and `!` are outside the base64 alphabet, and a valid `text` sits beside it.
++            "text_b64": "not*base64!!",
++            "text": DIRECTIVE,
++        }
++        rows_ok, result, ack = self.run_dispatch(dispatch)
++        self.assertFalse(rows_ok, "a corrupt text_b64 was reported as a success")
++        self.assertEqual(
++            "refused", result.get("status"), f"status: {result.get('status')!r}"
++        )
++        self.assertEqual(
++            "text_b64",
++            result.get("refused_by"),
++            f"the refusal is not the named text_b64 one: {result.get('refused_by')!r}",
++        )
++        self.assertFalse(
++            self.harness_started(), "the harness ran on a corrupt dispatch"
++        )
++        self.assertEqual(
++            [],
++            self.ident.received,
++            "the legacy `text` was used as a fallback for a corrupt `text_b64`",
++        )
++        self.assertIn(
++            "  FAIL  text_b64 — ",
++            self.output,
++            f"the refusal was not printed as a named text_b64 row: {self.output}",
++        )
++        # The other two ways a present text_b64 does not decode are the same named refusal.
++        for label, encoded in (
++            ("non-UTF-8 bytes", base64.b64encode(b"\xff\xfe\xfa").decode("ascii")),
++            ("empty after decode", base64.b64encode(b"  \n\t").decode("ascii")),
++            ("not a string", None),
++        ):
++            with self.subTest(case=label):
++                self.assertEqual(
++                    ("", "text_b64"),
++                    WORKER_MOD.directive_text({"text_b64": encoded}),
++                    f"{label} was not refused as text_b64",
++                )
++
++    def test_a4_no_instruction_is_the_named_brief_refusal(self):
++        """A4  no instruction member -> the existing named `brief` refusal, unchanged"""
++        dispatch = {
++            "dispatch_id": "cf354-a4",
++            "corr_id": "lane-cf354-a4",
++            "lane": "code-factory",
++        }
++        rows_ok, result, ack = self.run_dispatch(dispatch)
++        self.assertFalse(
++            rows_ok, "a dispatch without an instruction was reported as a success"
++        )
++        self.assertEqual(
++            "refused", result.get("status"), f"status: {result.get('status')!r}"
++        )
++        self.assertEqual(
++            "brief",
++            result.get("refused_by"),
++            f"the refusal is not the named brief one: {result.get('refused_by')!r}",
++        )
++        self.assertIn(
++            "carries no `text`",
++            result.get("refusal", ""),
++            f"the absent-instruction wording changed: {result.get('refusal')!r}",
++        )
++        self.assertFalse(
++            self.harness_started(), "the harness ran without an instruction"
++        )
++
++    def test_a5_digest_over_the_raw_base64_is_refused(self):
++        """A5  brief.digest over the base64 (not the decoded text) is refused by `brief_digest`"""
++        encoded = b64(DIRECTIVE)
++        dispatch = {
++            "dispatch_id": "cf354-a5",
++            "corr_id": "lane-cf354-a5",
++            "text_b64": encoded,
++            "brief": {
++                "digest": hashlib.sha256(encoded.encode("utf-8")).hexdigest(),
++                "bytes": len(encoded),
++            },
++        }
++        rows_ok, result, ack = self.run_dispatch(dispatch)
++        self.assertFalse(rows_ok, "a digest taken over the base64 was accepted")
++        self.assertEqual(
++            "brief_digest",
++            result.get("refused_by"),
++            f"the refusal is not brief_digest: {result.get('refused_by')!r}",
++        )
++        self.assertFalse(
++            self.harness_started(), "the harness ran on a mismatched brief"
++        )
++        self.assertIn(
++            "  FAIL  brief_digest — ",
++            self.output,
++            f"the refusal was not printed as a named brief_digest row: {self.output}",
++        )
++
++    def test_p0_prefix_control_refuses_text_b64_with_the_brief_row(self):
++        """P0  the PRE-FIX source refuses a text_b64 dispatch with the `brief` row (the red)"""
++        dispatch = {
++            "dispatch_id": "cf354-p0",
++            "corr_id": "lane-cf354-p0",
++            "text_b64": b64(DIRECTIVE),
++            "brief": {
++                "digest": hashlib.sha256(DIRECTIVE.encode("utf-8")).hexdigest(),
++                "bytes": len(DIRECTIVE.encode("utf-8")),
++            },
++        }
++        rows_ok, result, ack = self.run_dispatch(dispatch)
++        self.assertFalse(rows_ok, "the pre-fix source executed a text_b64 dispatch")
++        self.assertEqual(
++            "brief",
++            result.get("refused_by"),
++            f"the pre-fix refusal is not the named brief one: "
++            f"{result.get('refused_by')!r}",
++        )
++        self.assertIn(
++            "carries no `text`",
++            result.get("refusal", ""),
++            f"the pre-fix refusal wording changed: {result.get('refusal')!r}",
++        )
++        self.assertFalse(self.harness_started(), "the pre-fix source ran the harness")
++
++
++ARMS = (
++    "test_a1_text_b64_only_dispatch_runs",
++    "test_a2_legacy_text_still_runs",
++    "test_a3_corrupt_text_b64_is_refused_without_fallback",
++    "test_a4_no_instruction_is_the_named_brief_refusal",
++    "test_a5_digest_over_the_raw_base64_is_refused",
++)
++PREFIX_ARM = "test_p0_prefix_control_refuses_text_b64_with_the_brief_row"
++
++
++def run_arms(names):
++    """Run each arm as its own unittest case and print one PASS/FAIL row per arm."""
++    failures = 0
++    for name in names:
++        case = BusDispatchEncodingTest(name)
++        outcome = unittest.TestResult()
++        case.run(outcome)
++        row = (getattr(BusDispatchEncodingTest, name).__doc__ or name).strip()
++        if outcome.wasSuccessful():
++            print(f"  PASS  {row}")
++            continue
++        failures += 1
++        print(f"  FAIL  {row}")
++        for failed, trace in outcome.failures + outcome.errors:
++            for line in trace.strip().splitlines():
++                print(f"    | {line}")
++    return failures
++
++
++if __name__ == "__main__":
++    chosen = (PREFIX_ARM,) if PREFIX_CONTROL else ARMS
++    print(f"bus dispatch encoding (worker: {os.path.normpath(WORKER)})")
++    sys.exit(1 if run_arms(chosen) else 0)
