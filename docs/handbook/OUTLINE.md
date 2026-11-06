@@ -8,6 +8,33 @@ code-factory and left the scheduler, the bus, the dispatcher and the inference p
 entries in a contract table rather than as systems.** A reader cannot operate a fleet
 from the node's side of it. They are now modules M9–M12.
 
+## Scope boundary — stated, because two rounds disagreed about it
+
+Round two still returned 14–26 "coverage gaps" per seat. Reading them, the gaps are not
+omissions in the same dimension: they are **scope disagreements**. One seat counts every
+internal Go package in the scheduler and every one of crier's thirty-one packages as a
+missing chapter; another counts only what a run touches end to end.
+
+The boundary this document commits to, and which a reviewer should grade against:
+
+- **In scope:** every component that can change the behaviour or the correctness of a
+  run — the five systems (code-factory, scheduler, crier, dispatcher, inference proxy),
+  their operator surfaces, their durable stores, their delivery mechanisms (prompts,
+  skills, config, patches), and every contract between them.
+- **In scope at submodule granularity, not package granularity:** a Go package that
+  implements part of a documented submodule is *evidence* for that submodule, not a
+  chapter of its own. `internal/scheduler/admission_mode.go` belongs inside M9.S1; it
+  does not get a chapter called "admission_mode".
+- **Out of scope, explicitly:** third-party internals (Go stdlib, Docker, SQLite, crier's
+  vendored transport libraries), the fleet's other forty projects, and anything a run
+  cannot reach.
+- **In scope and currently missing:** anything in the gap lists that a run *does* reach
+  and this outline has no home for. Those are defects, and they get chapters.
+
+A reviewer who wants package-level chapters is asking for a different document; say so
+plainly rather than counting it as a gap.
+
+
 ---
 
 ## PART I — SYSTEM ARRANGEMENT
@@ -78,12 +105,19 @@ each with what it prevents:
 2. **Consequences of absence, and of false report** — merged from v1's "why it matters";
    prevents "without this the system would not work correctly."
 3. **Submodule inventory** — per submodule: responsibility, owner, invocation, execution
-   location, producer/consumer links, and classification (active / optional / legacy /
-   designed-not-built).
+   location, producer/consumer links, and classification. **Classification rule:** a unit
+   is *active* if a scheduler lane, cron, timer or another unit invokes it; *optional* if
+   only an operator invokes it and the system is correct without it; *legacy* if nothing
+   invokes it and the code still references it; *designed-not-built* if a spec names it
+   and no unit exists. Evidence must be the invoking line (`file:line`) or the absence
+   proven by a repo-wide grep quoted with its command.
 4. **Dependencies** — runtime (version, required location, **how absence is detected**) ·
    library (the call or field relied on) · service (**both sides' file and function**).
 5. **Settings register** — every env var, flag, timeout, cap, floor and rate: default,
-   valid range, what it governs, what breaks if changed, who reads it.
+   valid range, what it governs, what breaks if changed, who reads it. **Decision rule:**
+   a setting is *documented* only when its default, its range and one consequence of
+   changing it are all stated; a name with no consequence is `NAME ONLY` and counts as
+   unwritten.
 6. **Contracts in and out** — by contract id, with measured state.
 7. **Verification** — commands a stranger can run, expected output, date, revision.
 8. **Metrics** — type, labels, the question answered, where scraped. **"None" is RED.**
