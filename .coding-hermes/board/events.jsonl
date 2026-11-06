@@ -501,3 +501,4 @@
 {"id":501,"timestamp":"2026-11-06T12:08:41+00:00","event_type":"task_created","task_id":"QA-CODE-FACTORY-1","actor":"foreman","detail":"{\"id\":\"QA-CODE-FACTORY-1\",\"status\":\"pending\"}"}
 {"id":502,"timestamp":"2026-11-06T12:17:08+00:00","event_type":"task_created","task_id":"QA-CODE-FACTORY-2","actor":"foreman","detail":"{\"id\":\"QA-CODE-FACTORY-2\",\"status\":\"pending\"}"}
 {"id":503,"timestamp":"2026-11-06T12:34:27+00:00","event_type":"task_completed","task_id":"CF-378","actor":"foreman","detail":"{\"status\":\"complete\"}"}
+{"id":504,"timestamp":"2026-11-06T12:44:23+00:00","event_type":"task_updated","task_id":"CF-280","actor":"foreman","detail":"{\"status\":\"in_progress\"}"}
