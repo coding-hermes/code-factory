@@ -255,6 +255,96 @@ fi
 rm -rf "$tmpd"
 # END tailnet-address-gate
 
+# BEGIN github-app-refresh-gate
+# CF-320: this script used to print a FAIL mode row and then rewrite the git credential store
+# with that insecure token anyway, exit 0, and call the run "refreshed" on the strength of a
+# substring in the minter's stdout. The arms below run the REAL script against a stub minter,
+# each in its own mktemp -d: the script sources lib.sh from its own directory and execs
+# $HERE/github-app-token.py, so the stub replaces the copied minter beside it. No network, no
+# bunker, no real credential. Every arm asserts NAMED rows — a bootstrap crash that prints
+# "unbound variable", or a bare FAIL, satisfies none of them.
+gar_fixture() {  # gar_fixture <dir> — repo scripts tree plus a stub minter at <dir>/scripts
+  mkdir -p "$1/scripts"
+  cp -R "$HERE/scripts/." "$1/scripts/"
+  cat > "$1/scripts/github-app-token.py" <<'PY'
+import os, sys
+mode = os.environ.get("CF_STUB_MODE", "mint")
+if mode == "skip":
+    print("  SKIP  token — fixture token is young, still valid")
+    print("GITHUB APP TOKEN: SKIP — nothing to do")
+    sys.exit(0)
+dest = sys.argv[sys.argv.index("--out") + 1]
+with open(dest, "w", encoding="utf-8") as fh:
+    fh.write(os.environ.get("CF_STUB_TOKEN", "fixture-token") + "\n")
+os.chmod(dest, 0o644 if mode == "bad-mode" else 0o600)
+print("  PASS  token — written at mode %s (fixture minter)" % oct(os.stat(dest).st_mode & 0o777)[2:])
+print("GITHUB APP TOKEN: PASS — minted a 3600s fixture token")
+PY
+  printf 'GITHUB_APP_ID=1\nGITHUB_APP_INSTALLATION_ID=1\n' > "$1/github-app.env"
+  printf 'https://x-access-token:fixture-old\n' > "$1/git-credentials"
+  chmod 600 "$1/git-credentials"
+}
+# (a) An insecure mint must be a verdict, not a remark: non-zero exit, one named `FAIL mode` row,
+# no `PASS refresh` row, and the credential store left byte-identical.
+gar=$(mktemp -d)
+gar_fixture "$gar"
+cp -p "$gar/git-credentials" "$gar/git-credentials.pre"
+gar_out=$(env HOME="$gar" CF_STUB_MODE=bad-mode CF_STUB_TOKEN=insecure-fixture-token \
+  bash "$gar/scripts/github-app-refresh.sh" --env-file "$gar/github-app.env" \
+  --token-file "$gar/github.token" --git-credentials "$gar/git-credentials" 2>&1); gar_rc=$?
+gar_mode_rows=$(printf '%s\n' "$gar_out" | grep -Ec '^  FAIL  mode' || true)
+gar_refresh_rows=$(printf '%s\n' "$gar_out" | grep -Ec '^  PASS  refresh' || true)
+if [ "$gar_rc" -ne 0 ] && [ "$gar_mode_rows" = 1 ] && [ "$gar_refresh_rows" = 0 ] \
+  && cmp -s "$gar/git-credentials.pre" "$gar/git-credentials"; then
+  say "  PASS  insecure mint (mode 644) -> exit $gar_rc, one '^  FAIL  mode' row, no '^  PASS  refresh' row, credential store byte-identical"
+else
+  say "  FAIL  insecure mint still rewrote the credential store (exit $gar_rc, $gar_mode_rows mode row(s), $gar_refresh_rows refresh row(s))"; fails=$((fails+1))
+fi
+rm -rf "$gar"
+# (b) The clock-behind case: a token two hours old must be re-minted, and the re-mint must be
+# read off the FILE — mtime advanced and content digest changed — not off the minter's sentence.
+gar=$(mktemp -d)
+gar_fixture "$gar"
+printf 'stale-fixture-token\n' > "$gar/github.token"
+chmod 600 "$gar/github.token"
+touch -d '2 hours ago' "$gar/github.token"
+gar_pre_mtime=$(stat -c %Y "$gar/github.token")
+gar_pre_digest=$(sha256sum "$gar/github.token" | cut -d' ' -f1)
+gar_out=$(env HOME="$gar" CF_STUB_MODE=mint CF_STUB_TOKEN=fresh-fixture-token \
+  bash "$gar/scripts/github-app-refresh.sh" --env-file "$gar/github-app.env" \
+  --token-file "$gar/github.token" --git-credentials "$gar/git-credentials" 2>&1); gar_rc=$?
+gar_post_mtime=$(stat -c %Y "$gar/github.token")
+gar_post_digest=$(sha256sum "$gar/github.token" | cut -d' ' -f1)
+gar_refresh_rows=$(printf '%s\n' "$gar_out" | grep -Ec '^  PASS  refresh' || true)
+if [ "$gar_rc" -eq 0 ] && [ "$gar_post_mtime" -gt "$gar_pre_mtime" ] \
+  && [ "$gar_post_digest" != "$gar_pre_digest" ] && [ "$gar_refresh_rows" = 1 ]; then
+  say "  PASS  token mtime 2h old -> re-minted: mtime $gar_pre_mtime -> $gar_post_mtime, digest changed, one '^  PASS  refresh' row"
+else
+  say "  FAIL  a 2h-old token was not re-minted from a re-read (exit $gar_rc, mtime $gar_pre_mtime -> $gar_post_mtime, digest changed: $([ "$gar_post_digest" != "$gar_pre_digest" ] && echo yes || echo no))"; fails=$((fails+1))
+fi
+rm -rf "$gar"
+# (c) A fresh token whose minter reports a skip is a no-op: exit 0, neither file rewritten, and
+# the row says so. The file is re-read here too, so "no-op" is a measurement, not a quote.
+gar=$(mktemp -d)
+gar_fixture "$gar"
+printf 'still-valid-fixture-token\n' > "$gar/github.token"
+chmod 600 "$gar/github.token"
+cp -p "$gar/github.token" "$gar/github.token.pre"
+cp -p "$gar/git-credentials" "$gar/git-credentials.pre"
+gar_out=$(env HOME="$gar" CF_STUB_MODE=skip \
+  bash "$gar/scripts/github-app-refresh.sh" --env-file "$gar/github-app.env" \
+  --token-file "$gar/github.token" --git-credentials "$gar/git-credentials" 2>&1); gar_rc=$?
+gar_says_noop=no
+printf '%s\n' "$gar_out" | grep -Fq 'no-op' && gar_says_noop=yes
+if [ "$gar_rc" -eq 0 ] && cmp -s "$gar/github.token.pre" "$gar/github.token" \
+  && cmp -s "$gar/git-credentials.pre" "$gar/git-credentials" && [ "$gar_says_noop" = yes ]; then
+  say "  PASS  fresh token + minter skip -> exit 0, token and credential store byte-identical, the row says 'no-op'"
+else
+  say "  FAIL  a fresh token was not reported as a no-op (exit $gar_rc, no-op row: $gar_says_noop)"; fails=$((fails+1))
+fi
+rm -rf "$gar"
+# END github-app-refresh-gate
+
 # BEGIN board-arm
 # CF-088: share the actual gate with fixtures, without requiring boardctl.
 board_arm() {

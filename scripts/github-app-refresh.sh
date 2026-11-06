@@ -76,8 +76,8 @@ life_left() {
 }
 
 # mint_local <dest> — fills MINT_ROWS (the minter's own named rows, which carry no secret) and
-# MINT_SKIPPED, so the caller can tell "a fresh token was written" from "the token was still
-# valid": a refresh that reports work it did not do is the same lie as a vacuous PASS.
+# MINT_SKIPPED, the minter's own claim. That claim is informational only: the caller decides
+# "refreshed" from a re-read of the file (file_state below), never from a stdout substring.
 MINT_ROWS=""
 MINT_SKIPPED=0
 mint_local() {
@@ -89,17 +89,46 @@ mint_local() {
   return "$rc"
 }
 
+# file_state <path> -> "<mtime-epoch> <sha256|->", read from the filesystem.
+# "Refreshed" is a fact about the file, never a sentence the minter printed: a stdout substring
+# is an assertion, and a PASS row paid for an assertion is the same lie as a vacuous green.
+file_state() {
+  local f="$1" m d
+  m=$(stat -c %Y "$f" 2>/dev/null || echo '-')
+  if [ -f "$f" ]; then
+    d=$(sha256sum "$f" 2>/dev/null | cut -d' ' -f1)
+  fi
+  printf '%s %s' "$m" "${d:--}"
+}
+
 if [ "$LOCAL" -eq 1 ] || [ "$NODE" = "" ]; then
   say_q "github-app-refresh — local: $TOKEN_FILE (min-age ${MIN_AGE}s)"
   if [ "$DRY" -eq 1 ]; then note "dry run: no mint, no write"; exit 0; fi
+  before=$(file_state "$TOKEN_FILE")
   mint_local "$TOKEN_FILE" || { bad "refresh" "could not mint into $TOKEN_FILE — the existing token keeps its remaining life"; exit 1; }
-  if [ "$MINT_SKIPPED" -eq 1 ]; then
+  after=$(file_state "$TOKEN_FILE")
+  # The minter's own PASS/SKIP line is informational; the two reads above are the authority, and
+  # a disagreement between them is named rather than hidden behind either side's sentence.
+  if [ "$after" = "$before" ] && [ "$MINT_SKIPPED" -eq 0 ]; then
+    note "minter reported a mint, but $TOKEN_FILE was not rewritten"
+  elif [ "$after" != "$before" ] && [ "$MINT_SKIPPED" -eq 1 ]; then
+    note "minter reported a skip, but $TOKEN_FILE was rewritten"
+  fi
+  if [ "$after" = "$before" ]; then
+    [ -f "$TOKEN_FILE" ] || { bad "token_file" "$TOKEN_FILE is still absent after a mint that reported success"; exit 1; }
     left=$(life_left "$TOKEN_FILE")
-    ok "refresh" "(no-op) $TOKEN_FILE is still valid, ~${left}s left; nothing rewritten"
+    ok "refresh" "(no-op) $TOKEN_FILE was not rewritten (mtime and content unchanged), ~${left}s left; nothing rewritten"
     exit 0
   fi
+  # CF-320: a FAIL row is a verdict, not a remark. An insecure token file must stop the run
+  # BEFORE the credential store is rewritten — printing FAIL and then writing anyway leaves the
+  # store holding the very token the row just rejected.
   mode=$(stat -c %a "$TOKEN_FILE" 2>/dev/null || echo '?')
-  [ "$mode" = "600" ] || bad "mode" "$TOKEN_FILE is mode $mode, expected 600"
+  if [ "$mode" != "600" ]; then
+    bad "mode" "$TOKEN_FILE is mode $mode, expected 600"
+    note "refusing to rewrite $GIT_CREDENTIALS with a token whose file is not private"
+    exit 1
+  fi
   # A store-based credential helper reads ~/.git-credentials: rewrite it only when it exists,
   # so this script never creates a second credential store on a host that does not use one.
   if [ -f "$GIT_CREDENTIALS" ] && [ -s "$TOKEN_FILE" ]; then
