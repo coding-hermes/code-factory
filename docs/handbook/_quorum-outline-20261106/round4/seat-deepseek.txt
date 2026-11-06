@@ -1,0 +1,160 @@
+I have walked all five trees and read the supporting model files. Two facts frame this verdict, stated up front so the review is honest about what it graded:
+
+1. The brief describes the artifact as "7 parts, 10 flows, 9 modules, 25 submodules, 11 headings" — that is the v1 outline. The file on disk, `/home/kara/code-factory/docs/handbook/OUTLINE.md`, is already v2 ("corrected by quorum", 8 parts, 16 flows, 13 modules, 13 headings). I graded the artifact as it actually is.
+2. v2 fixed the single largest v1 defect — the scheduler, crier, dispatcher and inference proxy now have modules (M9–M12). The prior round's `_quorum-outline-20261106/seat-*.txt` verdicts are folded in correctly. What remains below is what v2 still gets wrong.
+
+VERDICT: ACCEPT WITH CORRECTIONS
+
+The architecture (arrangement → flows → subsystems → contracts → settings → risk → derivation) is correct and is a genuine corrective to the rejected 40-file census. v2 closed the worst defect by giving the control plane chapters. What remains is not a re-architecture; it is a set of mandatory, additive corrections: the control-plane chapters are still too coarse to constrain writing, two real actors (foreman, conformance battery) have no chapter, the authoritative structure file contradicts the outline, and the flow model omits the second dispatch transport.
+
+COVERAGE GAPS: 24 — each a component a run reaches that has no home in the outline.
+
+Control-plane — crier-fleet (M11 is 4 submodules; these are unlisted):
+1. fleet-gateway-facade.py — /home/kara/crier-fleet/fleet-gateway-facade.py. A SECOND dispatch transport: scheduler POSTs /v1/responses (stream) with X-Hermes-Session-Key = tick id; the adapter maps key→agent and drives it via `bunker exec` ("a TRANSLATOR, not a tunnel"). F1 as drawn is bus-only; this path is the other half of dispatch and appears nowhere. Needs its own submodule.
+2. courier.py — /home/kara/crier-fleet/courier.py. Orchestrator-side bus client (`send <agent> <task>`), imports crier_client.py. Unlisted.
+3. fleet-ttl-census.py — /home/kara/crier-fleet/fleet-ttl-census.py. TTL census (exit 1 below WARN_H). Unlisted.
+4. renew-fleet.sh — /home/kara/crier-fleet/renew-fleet.sh. F12's implementation: census/archive/renew; `bunker renew` is DESTRUCTIVE and refused without a verified archive; `bunker heartbeat` cannot extend a 7d agent. A credential/agent-lifecycle boundary with no owning chapter.
+5. bridge/ (courier_bridge.py, bridge_ctl.py) — /home/kara/crier-fleet/bridge/. Unlisted.
+6. sender-stamp-check/ — /home/kara/crier-fleet/sender-stamp-check/. A whole rollout/verification surface (probe, verify-live-sender, drain-orchestrator). Unlisted.
+7. verify-repo-coverage.py, test_all_agents.py, staged-remote-wiring.sh — /home/kara/crier-fleet/. Unlisted.
+8. ENDPOINT-CONTRACT.md — /home/kara/crier-fleet/ENDPOINT-CONTRACT.md. The endpoint-shape contract the facade implements. Unlisted.
+
+Control-plane — crier (M10 is 4 submodules; these surfaces are unnamed):
+9. A2A protocol — /home/kara/crier/internal/a2a/ (a2a.go 55KB, a2aclient.go, a2apush.go, a2acard.go) + specs/A2A-OPTION.md. SHIPPED (INT-A2A-002..007): Agent Card, JSON-RPC SendMessage/Streaming, task lifecycle, outbound client. A shipped interop protocol with zero outline presence.
+10. Federation / mesh — /home/kara/crier/internal/federation/ + specs/CHAT-FEDERATION.md + FEDERATION-AUTH.md. Peer instances and per-peer policy. Unlisted.
+11. Webhook delivery — /home/kara/crier/internal/webhook/ + specs/WEBHOOK-DELIVERY.md. Push-based HTTP delivery. Unlisted.
+12. Chat surface — /home/kara/crier/internal/chat/ + 12 specs/CHAT-*.md + cmd/server/chat.html. Unlisted as a delivery surface.
+13. Ingress — /home/kara/crier/internal/ingress/ + specs/CRIER-INGRESS.md. Unlisted.
+14. Reads — /home/kara/crier/internal/reads/ + specs/CRIER-READS.md. Unlisted.
+
+Control-plane — scheduler (M9.S4 lists 5 binaries; the tree has 7):
+15. cmd/cooldown-residue — /home/kara/coding-hermes-scheduler/coding-herms-scheduler/cmd/cooldown-residue/. Unlisted.
+16. cmd/backfill-commit-signals — .../cmd/backfill-commit-signals/. Unlisted.
+17. ops/ monitoring surface — .../ops/ (fleet-infra-findings.py, fleet-infra-sweep.sh, cluster-chain-probe.sh, load-attribution.sh, check-daemon-freshness.sh, check-fleet-invariants.py, dagger-role-tick.sh, status-lock-ab.sh). These are F7 MONITORING and F14 observability implementers; M9.S5 names only hop-liveness-watchdog.
+
+Inference proxy:
+18. unstick-inference.sh — /home/kara/.hermes/scripts/unstick-inference.sh. Inference recovery. Unlisted.
+19. code-factory-foreman-watch.py — /home/kara/.hermes/scripts/code-factory-foreman-watch.py. Foreman liveness watcher. Unlisted.
+
+Node-side actors with no chapter:
+20. FOREMAN actor — prompts/foreman.md + skills/code-factory-foreman/SKILL.md. Owns three contracts (foreman→scheduler broken, foreman→board works, foreman→duckbrain works) and steps of F1/F4/F5. Folded into VIII.1/VIII.2 as "delivery mechanisms" — no operating chapter.
+21. CONFORMANCE battery — tests/harness-conformance.sh + tests/harness/{claude-code,codex,vars}-install-test.sh + docs/HARNESS-CONFORMANCE.md. A SYSTEM-MODEL governance component with a broken contract (CF-328); only VIII.5 "tests/" generically names it.
+22. Stale UNIT-MAP (7 units) — the outline's own authoritative structure file omits harness_resolve.py, harness-vars.sh, install-deepseek.sh, install-pi-agent.sh, gen_unit_map.py, sheet_style.py, verify-patch.sh (all present under scripts/, all now listed in the outline's modules but absent from UNIT-MAP.yaml). The outline and its source-of-structure disagree.
+23. Contract-register undercount — SYSTEM-MODEL has 18 edges, but scheduler→board (F1 step 7 rides it), node→inference-proxy, inference-proxy→upstream, dispatcher→node, courier→crier, scheduler→gateway/facade, and node→github have no contract row. "18 contracts" is false; the true set is ~25.
+24. docs/MASTER-DOC-SCHEMA.md drift — appendix C is "the field contract a chapter must satisfy" but it defines 8 sections, not the outline's 13 headings. A writer cannot know which contract governs.
+
+REG ROUPING: 8
+
+1. project-node.sh — from M5.S3 (toolchain/gate/node entry) → M1.S6 "assemble the node". UNIT-MAP's own effect says it "layers base, harness, bus, repo"; it is the node's composition root, not a harness installer. F2's layering step owns it.
+2. verify-patch.sh — from M6.S8 (documentation) → M8.S3 (safety). It gates the patches/ sha256 chain; it is a release-integrity gate, not documentation.
+3. harness_resolve.py + harness-vars.sh — both currently unmapped; both serve M5 (harness resolution / variable contract). Confirm them as M5.S4/M5.S5 units in UNIT-MAP (outline already implies this; the map must say it).
+4. install-deepseek.sh, install-pi-agent.sh — unmapped; belong in M5.S2 (foreign harnesses) alongside codex/claude/opencode.
+5. gen_unit_map.py, sheet_style.py — unmapped; belong in M6 (S7 unit-map generation, S5 render). gen_unit_map is only mentioned in a UNIT-MAP comment, not as a unit.
+6. add_family_lanes.py / configure_family.py / load_lane_config.py (M2.S1) — shared contract: node-side scripts writing scheduler state, i.e. the owner→scheduler contract implementation. Keep in M2.S1 but mark M2.S1 as the node-side of a cross-tree contract with M9.S1; each entry must name the scheduler table it writes.
+7. check_scan_scope.py — M8.S2 serves two modules: its effect ("fails any line stating a gitleaks claim without --log-opts") grades documentation truthfulness (M6 gate family), not just safety. Keep in M8 but add an M6.S3 cross-reference; it is a two-module unit, not a clean member.
+8. M9.S5 "doctrine" — the ops/ scripts (gap 17) are mis-homed: they are executable monitoring, not doctrine. Split into M9.S5 (specs: scheduler-rules, dispatch-spec, execution-contracts, execution-store, drain-restart) and a new M9.S6 (operations and monitoring: the ops/ scripts + the two missing binaries).
+
+FLOW CHANGES: 3 — all six classes the brief names (scheduling admission, credential lifecycle, upgrade/migration, observability ingestion, backup/restore, multi-node fan-out) are already F11–F16. The remaining holes are these:
+
+1. F17 GATEWAY-FACADE DISPATCH — trigger: a lane's cadence tick whose dispatch rides the gateway URL rather than the bus (scheduler POST /v1/responses, stream:true, X-Hermes-Session-Key = tick id); exit: the session turn delivered inside the agent container via bunker exec and the reply returned in the scheduler's SSE shape, or a named refusal. Missing today because F1 is drawn bus-only ("begins at the node's inbox"), so half the dispatch story is untold.
+2. F18 MESSAGE GUARD — trigger: every message entering the bus; exit: a guard verdict (pass / rewrite / quarantine / escalate) with the delivered or blocked message. Missing today because the guard is a submodule (M10.S2) but its observable process — the answer to "how does a message get quarantined" — has no flow.
+3. F19 PEER AND FEDERATION DELIVERY — trigger: a message addressed to an A2A Agent Card or a federated peer namespace; exit: delivery to the foreign endpoint with idempotency, or a named refusal. Missing today because A2A and federation have no chapter and therefore no flow.
+
+Note, not an addition: F12 (credential lifecycle) and F16 (multi-node fan-out) currently have no owning module — F12's implementers are scattered (renew-fleet.sh in crier-fleet, github-app-*.sh in M7, node_gateway_auth in M1.S3), and F16's implementers (internal/remote, internal/target, internal/federation) are unassigned. Each flow section must name its owning module; these two cannot.
+
+HEADING CHANGES: 3
+
+1. ADD "Severity classification (EMERGENCY / WARNING / CAUTION / NOTE)" as an axis inside heading 10 (Failure modes) — or a 14th heading. Prevents the sentence "operator should check the logs" appearing where Apollo would say "WARNING — do not renew without a verified archive; the operation is destructive."
+2. REFINE heading 9 "Log lines" — add the same "None is RED" discipline heading 8 (Metrics) already has. Prevents a writer inventing log lines for a module (M0 lib.sh, M7 github) that emits none.
+3. REFINE heading 13 "Evidence of record" — add "None is a named state, not an omission." Prevents padding for M0, which will have no board rows or verdicts.
+
+Also, on counts, not a heading change but a hard defect: the outline claims "13 headings" while appendix C (MASTER-DOC-SCHEMA.md) defines 8 sections. Reconcile the two before any chapter is written.
+
+MERGE PROPOSAL: FAIL — criterion (endorsing the author's own rejection): an independently operated responsibility with its own authority, state, controls, failure consequences or recovery procedure remains independently addressable. M3 owns F5 LANDING — a primary flow — so folding it into "Supporting subsystems" leaves a primary flow with no owning chapter. M0 is the shell contract sourced by twenty scripts; folding it away hides the one thing every script depends on. All 13 modules keep their own chapter.
+
+BUILDABLE: NO — not as a whole. III.2 (M1 PROVISIONING) is buildable: its five submodules name units whose effects are in UNIT-MAP. The coarse headings that break the rest are:
+
+1. M10.S1 "custody and transport" — one submodule holding registration/routing/acceptance/idempotency/retrieval/leases/ack/TTL/transfer/dead-lines/backend-selection. It cannot constrain a writer; it must be split to enumerate the delivery surfaces (bus inbox, chat, A2A, webhook, hermes-session, federation, ingress, reads).
+2. M11.S1 "job model" — names only dispatch_durable; the facade, courier, TTL and renewal are absent, so a writer of M11 cannot produce the dispatcher chapter the system needs.
+3. M9.S1 "admission and allocation" — names five packages but omits cooldownaudit, blocks and clock; the cooldown-tier/budget/load-gate decision is not enumerated.
+4. M9.S4 "operator surfaces" — lists five of seven binaries; cooldown-residue and backfill-commit-signals are missing.
+5. M12.S4 "usage and request capture" — needs the capture-file/log contract named (what is written, where, for attribution) or a writer will invent one.
+6. Every module chapter — because UNIT-MAP.yaml is stale (7 units missing) and the submodule count (34) is false (the listing has 47), a writer cannot trust the structure files the outline says are authoritative.
+
+CORRECTED OUTLINE (ready to use verbatim):
+
+PART I — SYSTEM ARRANGEMENT
+I.1 Purpose and the one idea
+I.2 Actors and trust boundary
+I.3 Layer arrangement and component boxes
+I.4 Component register — owns / does-not-own / where it lives today
+I.5 Contract register — 25 interfaces with measured state (18 in SYSTEM-MODEL + the 7 missing edges named in Part IV)
+I.6 Invariants — what must always hold
+I.7 Non-goals and why
+I.8 Surface inventory — every entry point derived, not imagined
+I.9 What this census does NOT cover — named areas; external contract-only systems (task-router, hermes gateway, bunker daemon, duckbrain, sessionstore, gitreins, GitHub App auth, the tailnet) listed explicitly as "described from the client side only"
+
+PART II — FLOWS (19)
+Primary (6, rendered): F1 DISPATCH AND SETTLEMENT (bus path, rescoped); F2 PROVISIONING AND CERTIFICATION; F3 RUN CAPTURE AND SEARCH; F4 DOCUMENTATION; F5 LANDING; F17 GATEWAY-FACADE DISPATCH (added — second dispatch transport).
+Secondary (5, missing): F6 MAINTENANCE; F7 MONITORING; F8 RECOVERY; F9 DEGRADATION; F10 TEARDOWN/REBUILD.
+Added by quorum (8): F11 SCHEDULING ADMISSION; F12 CREDENTIAL LIFECYCLE; F13 UPGRADE AND MIGRATION; F14 OBSERVABILITY INGESTION; F15 BACKUP AND RESTORE; F16 MULTI-NODE FAN-OUT; F18 MESSAGE GUARD (added); F19 PEER AND FEDERATION DELIVERY (added).
+Every flow names its owning module; F12 and F16 gain owners via M11.S7 and M9.S6 below.
+
+PART III — MODULES (14 modules, 62 submodules; one chapter each; the 13-heading field set reconciled against MASTER-DOC-SCHEMA.md)
+
+Node-side:
+M0 SHARED CONTRACT — S1 shell contract (lib.sh).
+M1 PROVISIONING — S1 qualify the host (bunker-server-install.sh, disk_floor.py); S2 create the container and config (bunker-provision.sh, bunker_config_gen.py, node-create.sh, bunker-crier-connect.sh); S3 identity and bus membership (node_identity.py, node_gateway_auth.py); S4 seed prompts, skills and env (node_seed.py, node_seed_drift.py, node_env.py); S5 prove the node works (verify-node.sh, node_freshness.py); S6 assemble the node (project-node.sh — moved from M5.S3).
+M2 DISPATCH (NODE SIDE) — S1 declare and configure lanes (add_family_lanes.py, configure_family.py, load_lane_config.py — each entry names the scheduler table it writes); S2 resolve a target (lane_target.py); S3 consume the inbox, sign, reply (node-bus-worker.py).
+M3 REPOSITORY — S1 clone and track freshness (clone_lane.py, repo_freshness.py); S2 land a branch (land-node-branch.sh); S3 commit hooks and gates (hooks/, commit_hook, core.hooksPath, gitleaks and board-lint pre-commit, the disclosed bypass).
+M4 BOARD — S1 write and validate rows (boardctl, board_lock.py); S2 compare board copies (board_drift.py).
+M5 HARNESS — S1 hermes (install-hermes.sh); S2 foreign harnesses (install-codex.sh, install-claude-code.sh, install-opencode.sh, install-deepseek.sh, install-pi-agent.sh); S3 toolchain, gate and node entry (install-go.sh, install-gitreins.sh); S4 harness resolution (harness_resolve.py, specs/HARNESS-MATRIX.md §4); S5 variable contract (harness/harness-vars.sh, matrix §5); S6 conformance battery (tests/harness-conformance.sh, tests/harness/*, docs/HARNESS-CONFORMANCE.md — the broken conformance→harness contract lives here).
+M6 DOCUMENTATION — S1 skeleton and census (master_doc_skeleton.py); S2 fill (master_doc_fill.py); S3 gate (master_doc_check.py, check_scan_scope.py cross-referenced); S4 panel (master_doc_panel.py); S5 render (gen_nasa_handbook.py, gen_system_views.py, sheet_style.py); S6 corpus (extract_owner_decisions.py); S7 unit-map generation (gen_unit_map.py — regeneration of UNIT-MAP.yaml is a mandatory first task); S8 patch-chain drift gate (verify-patch.sh — moved to M8.S3; see below).
+M7 GITHUB — S1 app credentials (github-app-setup.sh, github-app-token.py, github-app-refresh.sh).
+M8 SAFETY — S1 disk (reclaim_disk.py); S2 scan scope (check_scan_scope.py); S3 patch-chain drift gate (verify-patch.sh — moved from M6.S8).
+
+Control-plane:
+M9 SCHEDULER — S1 admission and allocation (admission_mode, tick_process, packer_select, namespace_alloc, usage_pool_policy, cooldownaudit, blocks, clock: eligibility, tasks-vs-cooldown, board gates, fairness, budget reservation, cooldown tiers 900/7200/43200, daily/weekly/final USD budgets); S2 execution and settlement (spawn, slot_pool, lifecycle, dispatch_leg: local vs remote, queue→running→terminal, deadlines, circuit, accounting, recovery); S3 durable state (internal/database, scheduler.db 26 tables); S4 operator surfaces (cmd/schedulerd, scheduler-dispatch, scheduler-query, queueprobe, migrate, cooldown-residue, backfill-commit-signals; HTTP API, dashboard, MCP, lanehook, remote, bus); S5 doctrine (scheduler-rules, dispatch-spec, execution-contracts, execution-store, drain-restart, hop-liveness-watchdog); S6 operations and monitoring (ops/ check-daemon-freshness.sh, check-fleet-invariants.py, fleet-infra-findings.py, fleet-infra-sweep.sh, cluster-chain-probe.sh, load-attribution.sh, dagger-role-tick.sh, status-lock-ab.sh — owns F7 and F14).
+M10 CRIER — S1 custody and transport (registration, routing, acceptance, idempotency, retrieval, leases, ack, TTL, transfer, dead letters, backend selection); S2 the guard (pattern pre-scan → render → router verdict → escalation → quarantine; circuit breaker, jev/kanban scoring — internal/guard/); S3 delivery surfaces (inbox/bus; chat — internal/chat + specs/CHAT-*.md; A2A — internal/a2a + specs/A2A-OPTION.md, SHIPPED; webhook — internal/webhook + specs/WEBHOOK-DELIVERY.md; hermes-session; federation/mesh — internal/federation + specs/CHAT-FEDERATION.md + FEDERATION-AUTH.md; ingress — specs/CRIER-INGRESS.md; reads — specs/CRIER-READS.md); S4 binaries, ports and services (server :8767/:18767, crier-front :8770, crier-mcp, dagger/daggerctl, deploy units, dist/install.sh); S5 client libraries (clients/python/crier_client.py + clients/typescript/crier.ts — the versioned contract consumed by the node worker, the dispatcher and courier); S6 observability and metrics (internal/metrics, observability.go, prometheus scrape — owns F14's crier leg).
+M11 DISPATCHER (crier-fleet) — S1 job model and durable execution (dispatcher.py: start/poll/kill process group, dispatch_durable, retrieve() leases, failure deliberately unacked); S2 ledger and idempotency (redeliveries replay, never re-run); S3 completion bridge (reply encoding, guard interaction); S4 gateway facade (fleet-gateway-facade.py: /v1/responses SSE, X-Hermes-Session-Key → agent, bunker-exec translator — owns F17); S5 courier and bus client (courier.py, bridge/); S6 agent registry and scope (register_fleet.py, fleet_agents.json, keys/); S7 TTL and credential lifecycle (fleet-ttl-census.py, renew-fleet.sh census/archive/renew — owns F12's fleet leg; destructive renew refused without verified archive); S8 delivery tooling (sender-stamp-check/, verify-repo-coverage.py, test_all_agents.py, staged-remote-wiring.sh, ENDPOINT-CONTRACT.md).
+M12 INFERENCE PROXY — S1 admission (token → node, model allowlist, fail-closed); S2 upstream routing (gateway vs direct provider, model rewrite); S3 stream pass-through; S4 usage and request capture (the capture-file/log contract named); S5 recovery and operators (unstick-inference.sh).
+M13 FOREMAN — S1 the foreman prompt (prompts/foreman.md; drift vs the 14 shipped lanes, 3-of-14 match); S2 the foreman skill (skills/code-factory-foreman); S3 the lane prompt corpus (prompts/{qa,pm,sync,docs,dogfood,readme,releng,review,perf,duckbrain}.md — the foreman→scheduler contract payload); S4 foreman watchers (code-factory-foreman-watch.py).
+
+PART IV — CONTRACTS (25)
+The 18 existing edges, plus: scheduler→board (row state change on attempt recorded); node→inference-proxy (model request); inference-proxy→upstream (provider call); dispatcher→node (bunker exec); courier→crier (send); scheduler→gateway/facade (F17); node→github (App token). Each names both implementations; 0 of 25 do today.
+
+PART V — SETTINGS REGISTER
+V.1 Environment variables (~83); V.2 CLI switches (~215 + the 7 scheduler binaries' flags); V.3 Timeouts, caps, floors and rates (incl. the dispatcher's 240s/400s/300s stream ceiling, the guard's circuit threshold/cooldown); V.4 Provider and model routing; V.5 Paths and filesystem contracts; V.6 Scheduler configuration (config.example.toml + fleet.example.toml).
+
+PART VI — RISK AND UNKNOWNS
+VI.1–VI.6 as v2 (Rumsfeld quadrants, promotion log, rejected findings).
+
+PART VII — WORK DERIVATION
+VII.1 Requirement table; VII.2 Task list; VII.3 Acceptance gate per chapter — with a first task: regenerate UNIT-MAP.yaml (M6.S7) so the 7 missing units are mapped before any chapter cites the map.
+
+PART VIII — DELIVERY MECHANISMS
+VIII.1 prompts/ (11); VIII.2 skills/; VIII.3 config/; VIII.4 patches/; VIII.5 tests/. Note: VIII.1/VIII.2 are the foreman contract's payload, now owned by M13; VIII.5 is owned by M5.S6.
+
+APPENDICES
+A per-unit evidence (regenerated to include the 7 missing units); B quorum verdicts by round; C field contract (MASTER-DOC-SCHEMA.md — reconciled to 13 headings); D change log and supersession.
+
+Counts (corrected): Parts 8; Flows 19; Modules 14; Submodules 62; Headings 13 (reconciled with the schema); Contracts 25.
+
+CORRECTIONS RANKED: (top 10 by damage if ignored)
+
+1. M10/M11 under-specification — the gateway facade (a dispatch transport) and A2A (a shipped protocol) have no chapter; F1 as drawn is bus-only and materially wrong about how dispatch works.
+2. UNIT-MAP.yaml is stale (7 units unmapped) — the outline's own authoritative structure file contradicts the outline; every writer cross-referencing it misses 7 units.
+3. Submodule count is false (34 claimed, 47 listed) — the TOC and counts table lie; README and appendix counts inherit the error downstream.
+4. F12 credential lifecycle has no owner — renew-fleet.sh is destructive and undocumented; an operator can destroy an agent home unguided.
+5. Contract register undercounts (18 vs ~25) — scheduler→board, node→inference-proxy, dispatcher→node and facade→scheduler have no edge at all, in a document whose own rule is "a contract with one side named is a rumour."
+6. Heading drift vs MASTER-DOC-SCHEMA.md (13 vs 8) — appendix C contradicts the chapter contract; writers cannot know which field set to satisfy.
+7. FOREMAN actor has no chapter — the actor that turns rows into briefs, owning three contracts and steps of F1/F4/F5, is folded into "delivery mechanisms" without an operating chapter.
+8. CONFORMANCE battery unowned — a SYSTEM-MODEL governance component with a broken contract (CF-328) has no module, so its RED state can never be filed against anything.
+9. F1 omits the facade path — the gateway-routed dispatch transport is absent from the flow model; half the dispatch story is untold.
+10. Scheduler ops/monitoring unowned — fleet-infra sweep, cluster-chain-probe, load-attribution, cooldown-residue and backfill-commit-signals have no home, so F7 ("how anyone learns the machine is unwell") has no named implementer.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-6fd9a8fd2f5fc5340d21e24ae4f0ce24b3a2faa99064819268fd960073fda00a
+
+EXIT=0

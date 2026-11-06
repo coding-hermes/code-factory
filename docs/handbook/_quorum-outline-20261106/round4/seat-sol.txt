@@ -1,0 +1,1472 @@
+VERDICT: ACCEPT WITH CORRECTIONS
+
+This verdict applies to the file actually present, not the older outline described in the brief.
+
+Reviewed baseline:
+  CF = /home/kara/code-factory, revision bcde98901f9b98df3e05eb731db623b4089e45bf
+  SCH = /home/kara/coding-hermes-scheduler/coding-herms-scheduler, revision dfa9c84fbf0c0de0be5de6259609a13fc6ca8b1b
+  BUS = /home/kara/crier, revision 691f0c78fc75717295abf3bd85aaa9192616aac0
+  FLEET = /home/kara/crier-fleet, revision 283bca91091933177ec521e52f37f1bc987cf7da
+  PROXY = /home/kara/.hermes/scripts/cf-inference-proxy.py
+  PROXY SHA-256 = b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5
+
+The current outline already adds the scheduler, Crier, dispatcher, inference proxy and six additional flows. Those are not new findings from this review. Its banner still says v2; its latest commit describes v4.
+
+The remaining defects are substantive: incorrect unit responsibilities, incomplete operational ownership, incompatible execution dialects treated as one contract, and a documentation pipeline that still selects the old per-file document shape.
+
+Measured structural corrections:
+  Current outline: 8 parts, 16 flows, 13 modules and 47 enumerated submodules—not 34.
+  UNIT-MAP.yaml: 9 modules, 25 submodules and 44 units.
+  CF/scripts: 51 tracked files. Every one has exactly one primary ownership assignment in the corrected outline below.
+  SYSTEM-MODEL.yaml: 16 components—not the 27 stated in the handbook README.
+
+Review was read-only. No provisioning, dispatch, credential minting, restore, test battery or service mutation was performed. Source-supported behavior is distinguished below from deployed observations and requirements that remain unverified.
+
+
+COVERAGE GAPS: 17
+
+These are responsibility-level coverage gaps, not a demand for one chapter per Go package. Each requires an independently addressable chapter or submodule.
+
+1. Foreman decision and verification responsibility.
+   Location: CF/prompts/foreman.md, CF/skills/code-factory-foreman/SKILL.md, SCH/internal/foreman/, SCH/internal/execution/.
+   Missing home: Part VIII describes prompt delivery, but no module owns task selection, brief construction, worker supervision, evidence adjudication and closeout authority.
+   Correction: M16. Packaging a prompt is not an explanation of the agent’s operational responsibility.
+
+2. Gateway and model-routing runtime integration.
+   Location: SCH/internal/scheduler/gateway_client.go, gateway_stream.go, gateway_endpoint.go and router_client.go; BUS/internal/hermesession/; CF/scripts/harness/install-hermes.sh; PROXY.
+   Missing home: installation and an arrow labelled router → gateway do not explain Responses/SSE handling, session identity, endpoint precedence or the difference between model inference and an agent session.
+   Correction: M13, explicitly limited to the external systems’ integration contracts.
+
+3. Bunker hosting and container lifecycle.
+   Location: CF/scripts/bunker-server-install.sh:27–64; CF/scripts/node-create.sh:92–125; FLEET/dispatcher.py:200–291; FLEET/renew-fleet.sh.
+   Missing home: M1 describes a provisioner, not the server, client, aliases, certificate pins, container home, exec lifetime, mounts or destructive renewal on which it depends.
+   Correction: M15, with renewal procedures owned by M8.S5.
+
+4. Durable memory, session accounting and evidence stores.
+   Location: CF/specs/FLEET-MEMORY.md, specs/HARNESS-MEMORY.md; SCH/internal/database/hermesstate.go; SCH/internal/agentlog/; PROXY:48–52; node-bus-worker.py:386 and 1304–1355.
+   Missing home: flows and contract arrows name these stores, but no chapter gives their authority, keys, schema, retention, access or recovery.
+   Correction: M14. Keep board state, execution state, searchable memory, session accounting and filesystem evidence distinct.
+
+5. Group/template deployment.
+   Location: SCH/internal/blocks/, particularly deploy.go:19–88 and 115–159; cmd/schedulerd/main.go:1347.
+   Missing home: an operator can deploy task templates to multiple project boards. This is neither a normal tick nor merely an HTTP endpoint.
+   Correction: M9.S8 and F18.
+
+6. Scheduler-to-DuckBrain replication and failure spool.
+   Location: SCH/internal/sync/duckbrain.go:24–80, 98–125 and 160 onward; SCH/internal/database/spool.go; cmd/schedulerd/main.go:1275.
+   Missing home: the 18-contract register omits this implemented producer and its retry, rejection, deduplication and spool semantics.
+   Correction: M9.S9 and C26. Do not conflate this with a node’s proposed R1/R2 run capture.
+
+7. Typed execution and wave coordination.
+   Location: SCH/internal/execution/; schemas/execution/v1/; internal/scheduler/wave_manifest.go, wave_budget.go, wave_recovery.go, wave_stale_base.go and wave_timeout.go.
+   Missing home: “execution and settlement” is too broad to constrain workspace leases, brief digests, route receipts, artifact manifests, verification receipts or parent/worker recovery.
+   Correction: M9.S4. These are operational contracts, not separate package-shaped chapters.
+
+8. Clock and simulation operating mode.
+   Location: SCH/internal/clock/; internal/scheduler/sim_fixture.go, sim_spawn.go and clocks.go; cmd/schedulerd/main.go:480–486.
+   Missing home: simulated time can change admission and deadlines. The daemon contains a refusal intended to prevent simulated-clock operation on a real fleet.
+   Correction: M9.S10, including the mode boundary and its verification.
+
+9. Scheduler operational automation and diagnostic utilities.
+   Location: SCH/ops/, scripts/ and deploy/.
+   Missing implementations include check-daemon-freshness.sh, check-fleet-invariants.py, cluster-chain-probe.sh, fleet-infra-findings.py, collapse-fleet-infra-findings.py, fleet-infra-sweep.sh, load-attribution.sh, enable-https-origin.sh, the pm-standin tools, cooldown-residue tooling, destination-coverage-check.py, policy deployment/hash checks and lifecycle hook scripts.
+   Missing binaries include cmd/backfill-commit-signals and cmd/cooldown-residue.
+   Correction: M9.S11, with diagnostic and migration utilities classified separately from continuously armed automation.
+
+10. Crier authorization and identity authority.
+    Location: BUS/internal/permissions/, internal/trust/, internal/namespace/, internal/registry/service_auth.go and agentsig.go; cmd/server/main.go:850–870; config/config.go:269–279.
+    Missing home: registration and the content guard do not cover principal bindings, grants, namespace policy, delegation, service audience or agent signatures.
+    Correction: M10.S2. Authorization must not be buried inside “custody and transport.”
+
+11. Crier execution-delivery alternatives.
+    Location: BUS/internal/hermesession/, internal/webhook/, internal/harness/, internal/a2a/, internal/daggerctl/; cmd/server/main.go:788–823.
+    Missing home: an inbox consumer is only one delivery mode. Webhook delivery, Hermes session delivery and harness execution have different completion, retry and cancellation meanings.
+    Correction: M10.S4 and M10.S7, with feature-gated and unused modes identified explicitly.
+
+12. Crier session, ingress and operator conversation surfaces.
+    Location: BUS/internal/session/, internal/ingress/, internal/reads/, internal/chat/ and internal/tags/; cmd/server/main.go:923–998.
+    Missing home: sessions, tasks, groups, participants, compilation, threading, read state, search and ingress routing have state and authority beyond the agent inbox.
+    Correction: M10.S5. Document the operational surface and feature conditions without giving each internal package a chapter.
+
+13. Crier topology and federation.
+    Location: BUS/internal/relay/, internal/mesh/ and internal/federation/; cmd/server/main.go:408–424 and 707–775.
+    Missing home: topic publication, subscriptions, authenticated mesh connections, federation holds and peer delivery are not explained by a per-agent lease description.
+    Correction: M10.S6.
+
+14. Crier persistence, migration and recovery.
+    Location: BUS/config/config.go:27–154; internal/registry/*store*; internal/session/*store*; registry/migrations/; scripts/backup-db.sh; scripts/restore-db.sh; deploy/crier-backup.*.
+    Missing home: “backend selection” does not explain the independent registry and session backend choices, volatile memory mode, migrations, backup coverage or restore interlocks.
+    Correction: M10.S8. The backup script’s PostgreSQL drill can report SKIP when it cannot create a scratch database; that must not become a successful restore-drill claim.
+
+15. Fleet operator tools and alternate execution adapters.
+    Location: FLEET/courier.py, fleet-gateway-facade.py, bridge/courier_bridge.py, bridge/bridge_ctl.py, staged-remote-wiring.sh, verify-repo-coverage.py and test_all_agents.py.
+    Missing home: the dispatcher chapter omits these separate operator and compatibility surfaces.
+    Correction: M11.S6–S7.
+    Evidence of differing behavior: courier.py:95–106 leases and acknowledges messages; fleet-gateway-facade.py:154–177 forwards unmapped requests to a local gateway; staged-remote-wiring.sh:2 explicitly identifies itself as staged, not applied.
+    The inspected user service for the facade was absent. That is not proof that the adapter cannot be started manually or elsewhere.
+
+16. Fleet operations census behavior.
+    Location: CF/patches/base/fleet_ops_check.py.orig, patches/fleet-ops-*.patch, patches/fleet-ops-chain.sha256 and scripts/verify-patch.sh:4–19.
+    Missing home: the outline places its drift verifier in DOCUMENTATION and describes patch delivery, but never assigns the operational census itself.
+    Correction: M8.S4. Explain what the reconstructed script checks, its target selection and what each verdict proves.
+
+17. Installed service activation and deployment provenance.
+    Location: /home/kara/.config/systemd/user/fleet-dispatcher.service, cf-inference-proxy.service, crier-fleet.service and coding-hermes-scheduler.service; repository deploy directories and external environment-file references.
+    Missing home: repository source, installed unit, environment file, process command and running artifact are different configuration layers.
+    Correction: Part VIII plus M9.S11, M11.S5 and M12.S5.
+    Read-only systemd inspection showed the dispatcher, inference proxy, fleet Crier and scheduler units active. The dispatcher’s installed unit uses Restart=on-failure; the proxy uses Restart=always. A handbook must explain these actual activation paths rather than infer deployment from a source file.
+
+
+REG ROUPING: 12
+
+Eleven changes concern the original 44-unit map. The twelfth corrects an additional unit assigned in the current outline. The remaining 33 original units retain their responsibility-level ownership; section-number changes alone are not counted as regrouping.
+
+1. clone_lane.py
+   From: M3.S1, clone and track repository freshness.
+   To: M2.S1, lane declaration and configuration.
+   Reason: it clones a scheduler projects-table row, not a repository. Its main operation reads a source lane and inserts or updates the destination lane.
+   Evidence: CF/scripts/clone_lane.py:2–21 and 74–125.
+
+2. disk_floor.py
+   From: M1.S1, qualify the host.
+   To: M8.S1, resource admission policy.
+   Reason: the policy is shared by provisioning and node preflight. Its owner should be the resource-safety responsibility; M1 consumes it.
+   Evidence: CF/scripts/project-node.sh:145–185 and disk_floor.py’s resolver.
+
+3. bunker-crier-connect.sh
+   From: M1.S2, create container and config.
+   To: M1.S3, identity and bus membership.
+   Reason: it stages bus identity and proves a signed read independently of cloning or harness installation.
+   Evidence: CF/scripts/bunker-crier-connect.sh:9–18, 46–104 and 107–139.
+
+4. node_gateway_auth.py
+   From: M1.S3, identity and bus membership.
+   To: M13.S2, gateway authentication and exposure.
+   Reason: it manages dashboard basic authentication and a generated password, not bus identity.
+   Evidence: CF/scripts/node_gateway_auth.py:2–14 and 63–83.
+
+5. node_seed_drift.py
+   From: M1.S4, seed prompts, skills and environment.
+   To: M8.S3, configuration and seed drift surveillance.
+   Reason: it measures the continued validity of an applied seed. Provisioning consumes its result but does not own recurring surveillance.
+   Evidence: CF/scripts/node_seed_drift.py:2–34.
+
+6. node_freshness.py
+   From: M1.S5, prove the node works.
+   To: M3.S2, checkout freshness and provenance.
+   Reason: its four arms are branch, worktree, ancestry and synchronization—not harness certification.
+   Evidence: CF/scripts/node_freshness.py:2–40.
+
+7. repo_freshness.py
+   From: M3.S1, clone and track freshness.
+   To: M3.S2, checkout freshness and provenance.
+   Reason: separate materializing a repository from measuring its continuing relation to a remote.
+   Evidence: CF/scripts/repo_freshness.py:11–35.
+
+8. lane_target.py
+   From: M2.S2, resolve a target.
+   To: M0.S2, shared target-reference contract.
+   Reason: local paths, remote references and structural verification are interface vocabulary, not dispatch policy. Preserve one parser and make each consumer’s actual wiring explicit.
+   Evidence: CF/scripts/lane_target.py:2–31, 46–72 and 138 onward; configure_family.py:149.
+
+9. install-gitreins.sh
+   From: M5.S3, toolchain, gate and node entry.
+   To: M3.S3, commit identity, hooks and integration gates.
+   Reason: it installs a commit gate, writes its hook and configures Git identity. Those consequences belong to repository governance, not harness selection.
+   Evidence: CF/scripts/install-gitreins.sh:82–158.
+
+10. project-node.sh
+    From: M5.S3, toolchain, gate and node entry.
+    To: M1.S2, container and layered-node orchestration.
+    Reason: it orchestrates preflight, base tools, harness, bus and repository layers. The harness is one child layer.
+    Evidence: CF/scripts/project-node.sh:2–28.
+
+11. check_scan_scope.py
+    From: M8.S2, scan scope.
+    To: M6.S3, document assertion and scope gates.
+    Reason: it checks statements in posture documents. It does not scan a repository for secrets or enforce a commit’s safety.
+    Evidence: CF/scripts/check_scan_scope.py:2–22 and 41–70.
+
+12. verify-patch.sh
+    From: current-outline M6.S8, documentation.
+    To: M8.S4, fleet operations census and deployment drift.
+    Reason: it reconstructs an operational script and compares its digest with the deployed copy. Rendering documentation is not its responsibility.
+    Evidence: CF/scripts/verify-patch.sh:4–19 and 142–153.
+
+Shared-contract treatment:
+  lib.sh is a shared shell ABI, not a provisioning helper. Its FAILED accumulator, quoting, download verification and shell-command joining must have one owner.
+  lane_target.py has one implementation owner in M0; consumers reference C22 rather than copying the parser into their module membership.
+  harness-vars.sh has one owner in M5.S5; dispatcher/node-worker producers and adapters share C35.
+  node.json is a shared data contract: project-node.sh creates its base structure, node_identity.py merges fields, and other units consume it.
+  board_drift.py remains owned by M4, but its Git-reference and ancestry assumptions are shared with M3 through an explicit contract.
+
+
+FLOW CHANGES: 10
+
+The six classes suggested in the brief—admission, credentials, upgrade, observability, backup and fan-out—already appear as F11–F16 in the current file. They need correction, not rediscovery.
+
+1. F1 — Dispatch, execution and settlement.
+   Trigger: an admitted lane is handed to a selected execution path.
+   Exit: task outcome, reply-delivery state, scheduler-record state and acknowledgement state are recorded separately; unresolved phases remain named.
+   Change: distinguish the control-host dispatcher from the node-side worker and their incompatible payload/result dialects.
+   Evidence: SCH/internal/bus/dispatch.go:175–206 emits text_b64; FLEET/dispatcher.py:135–163 decodes it; CF/node-bus-worker.py:986–994 requires text. The scheduler verdict reader at dispatch_leg.go:709–725 treats absence of ok:false as success, whereas the node worker emits status.
+
+2. F3 — Run capture, attribution and retrieval.
+   Trigger: an execution phase or terminal result produces evidence.
+   Exit: the expected record can be retrieved by its stable identity, or the missing producer/store/join is named.
+   Change: separate proposed R1/R2 capture, implemented scheduler replication, local seen caches, dispatcher ledgers and session accounting.
+   Evidence: SCH/internal/sync/duckbrain.go:35–80 and CF/node-bus-worker.py:1304–1355 describe different mechanisms.
+
+3. F4 — Documentation production and qualification.
+   Trigger: a source, configuration, requirement or handbook schema changes.
+   Exit: the delivered handbook uses the intended chapter set, resolves its references and carries earned, issue-specific status.
+   Change: include migration of the skeleton, filler, checker, panel and renderer to the subsystem schema.
+   Evidence: master_doc_check.py:25–34 still requires eight old headings; master_doc_panel.py:42–45 grades that shape and :67–71 selects docs/master; gen_nasa_handbook.py:17–18 also selects docs/master.
+
+4. F11 — Scheduling admission.
+   Trigger: periodic evaluation, board change, explicit operator evaluation or another supported wake mechanism.
+   Exit: a lane has an admission/reservation decision and named execution handoff, or a precise deferral/refusal.
+   Change: do not require admission to exit “in a Crier envelope.” Local and gateway paths exist; the scheduler chooses a lane, not its task.
+   Evidence: SCH/dispatch_leg.go:13–35 and cmd/schedulerd/main.go’s admission and execution configuration.
+
+5. F12 — Credential issue, refresh, revocation and expiry.
+   Trigger: onboarding, dispatch, approaching expiry, permission change or suspected compromise.
+   Exit: the intended consumer can authenticate with the intended scope; obsolete credentials are revoked or their remaining validity is explicitly recorded.
+   Change: not every credential is a file, and obtaining a replacement does not prove the old credential was revoked.
+   Evidence: CF/github-app-refresh.sh:5–17; FLEET/dispatcher.py:62–98; fleet-gh-scope.py:21–39.
+
+6. F13 — Upgrade, migration and rollback.
+   Trigger: a code, artifact, policy, configuration or schema revision.
+   Exit: the activated artifact and compatible state are read back, or rollback/blocked migration is recorded.
+   Change: distinguish source update, installation, service activation and migration; include rollback eligibility and downgrade constraints.
+   Evidence: SCH/internal/database/migrations.go; BUS/registry/migrations/; installed unit paths; CF/verify-patch.sh.
+
+7. F15 — Backup and restoration.
+   Trigger: backup schedule, planned destructive operation, corruption or recovery drill.
+   Exit: each required store is restored and checked in isolation, or the uncovered/failed/skipped leg is explicit.
+   Change: one known row is insufficient to certify all independent stores; a parsed archive is not a restore.
+   Evidence: BUS/scripts/backup-db.sh:6–18 and 45–65; restore-db.sh:7–20; FLEET/renew-fleet.sh:55–68.
+
+8. F16 — Multi-target execution and reconciliation.
+   Trigger: an operation declares multiple execution recipients.
+   Exit: every intended recipient has a correlated terminal result or named unresolved outcome.
+   Change: separate Crier session fan-out, a serial dispatcher traversing multiple agents, and a scheduler’s single-target work dispatch. Do not imply an implemented general multi-node job coordinator.
+   Evidence: SCH/internal/bus/dispatch.go:11 and 40–45; FLEET/dispatcher.py:428–479; BUS/internal/session/fanout.go.
+
+9. F17 — TTL renewal with state continuity. ADD.
+   Trigger: an agent approaches its expiry threshold or an operator requests renewal.
+   Exit: the replacement agent’s identity, restored state, repository, credentials and operation are verified, or renewal stops at an explicit failed safeguard.
+   Why missing: teardown/rebuild does not describe preservation across a destructive renew operation.
+   Evidence: FLEET/renew-fleet.sh:9–20 and 55–68. Its present “verification” only prints status/expiry; deeper restored-state qualification remains a requirement, not an implemented guarantee.
+
+10. F18 — Group/template task deployment. ADD.
+    Trigger: an operator deploys a named template to a resolved project group.
+    Exit: a per-project appended, skipped, would_append, would_skip or error result, with intended task identities and an audit record.
+    Why missing: creating tasks across boards is distinct from executing tasks across nodes.
+    Evidence: SCH/internal/blocks/deploy.go:19–88 and 115–159.
+
+
+HEADING CHANGES: 15
+
+The original eleven headings were recovered from revision 4b37671. The current file’s thirteen-heading revision is also considered here.
+
+1. Refine “Identity and position in the pipeline.”
+   Earns its place. Require source revision, deployment location, invocation, runtime, authority and supported operating modes.
+   Prevents: “This module runs on the node”—when its controller actually runs on the control host.
+
+2. Merge “Why it matters” into authority and hazard analysis.
+   Consequences earn space; a compulsory introductory essay does not.
+   Prevents: “Without this important subsystem, the pipeline would not work correctly.”
+
+3. Refine “Submodule inventory.”
+   Require implementation ownership, actual invoker, inputs, outputs and classification evidence. Separate production invocation from tests, documentation references and manual use.
+   Prevents: “The unit is active because its filename appears in another Python file.”
+   Evidence: gen_unit_map.py:27–31 and 38–75 scan textual references, not a deployment graph.
+
+4. Refine “Dependencies.”
+   Require version/source, location, exact relied-on behavior, credentials, absence detection and degradation policy. External integrations state the boundary of knowledge.
+   Prevents: “Bunker is required”—without identifying which client, server, certificate policy or capability is required.
+
+5. Refine “Settings register.”
+   Add source precedence per setting, unset-versus-empty behavior, validation, units, application/reload moment, persistence and effective-value readback. Record absent validation as absent.
+   Prevents: “CLI always wins”—copied from a target configuration design rather than the boot path.
+   Evidence: SCH/config.example.toml:6–16 expressly distinguishes intended precedence from current loading.
+
+6. Refine “Contracts in and out.”
+   Require versioned dialects, state transitions, identity fields, authority, idempotency, time budgets and both implementations.
+   Prevents: “A result has outcome and run_id”—when the current consumer reads ok and in_reply_to.
+
+7. Refine “Verification.”
+   Separate static inspection, isolated functional checks, deployment checks and end-to-end proof. Require negative controls, exact target/revision, expected indication and safety classification.
+   Prevents: “Verified”—because a filename exists or a command exited zero.
+
+8. Merge “Metrics emitted” into “Observability and indications.”
+   Metrics remain mandatory inventory where applicable, but one-shot units may be observable through structured output and exit status. N/A needs a reason.
+   Prevents: “Metrics: none, RED”—repeated mechanically for a deterministic one-shot formatter.
+
+9. Merge “Log lines” into the same observability register.
+   Keep verbatim operator-relevant messages, correlation fields, trigger and action. A message’s wording alone does not make it proof.
+   Prevents: “The job-start log proves the job started.”
+
+10. Refine “Failure modes and recovery.”
+    Add WARNING, CAUTION and EMERGENCY classification, diagnostic discriminators, stop conditions, authority, numbered actions, expected indications and rollback.
+    Prevents: “Restart the service”—without checking whether a job still runs or whether restarting can duplicate work.
+
+11. Merge “Evidence of record” into verification and an issue-specific evidence manifest.
+    Preserve provenance, not duplicate the same log links in multiple required paragraphs.
+    Prevents: “See the board for evidence”—without a particular row, revision, attempt and retained artifact.
+
+12. Retain and refine the current “Limits and margins” addition.
+    Require enforced versus assumed limits, timer relationships, tested load, retention bounds and unmeasured margins.
+    Prevents: “Requests are bounded to 200 records”—when capture_request merely appends.
+    Evidence: PROXY:51–52 versus :83–95.
+
+13. Add “Normal operating procedures.”
+    Require start, inspect, execute, stop, drain and reconfigure procedures, with numbered actions and expected indications.
+    Prevents: a handbook that describes failures but never explains normal operation.
+
+14. Add “Persistent state, concurrency and retention.”
+    Require authoritative stores, writers, locks, atomicity, crash windows, deduplication lifetime, cleanup policy and recovery dependencies.
+    Prevents: “Exactly once”—because a completed-result ledger exists.
+    Evidence: FLEET/dispatcher.py:479–483 records only after dispatch returns; node-bus-worker.py:1341–1355 persists its seen cache after delivery.
+
+15. Retain and refine the current “Cross-references” addition.
+    Generate stable references to normal procedures, fault isolation, contracts, settings and adjacent responsibilities. Avoid a generic “see monitoring.”
+    Prevents: “Consult the relevant subsystem”—without a usable destination.
+
+The corrected chapter field set therefore has twelve fields, defined verbatim in the corrected outline below. Separate importance essays, exhaustive irrelevant log dumps and duplicated evidence paragraphs are removed.
+
+
+MERGE PROPOSAL: FAIL
+
+Criterion: an independently operated responsibility with its own authority, persistent state, controls, hazard, failure consequence or recovery procedure must remain independently addressable.
+
+M0 defines a shared execution ABI. M3 owns repository integration and F5. M7 controls credential scope and expiry. M8 can delete state and evidence. None is merely supporting prose.
+
+The current outline already rejects the proposed merge. Retain that rejection. The same criterion applies to the additional integration and governance chapters below.
+
+
+BUILDABLE: NO
+
+An agent could produce prose, but not a sufficiently constrained operational chapter III.2.
+
+The required corrections are to “Submodule inventory,” “Dependencies,” “Settings register,” “Contracts in and out,” “Normal operating procedures,” “Persistent state,” “Failure modes” and “Verification.”
+
+Specific source contradictions that the chapter must not inherit:
+  node_identity.py merges JSON; it does not mint an Ed25519 keypair.
+  bunker_config_gen.py derives configurations from scheduler rows; it is not simply an operator questionnaire.
+  clone_lane.py clones a scheduler lane, not a repository.
+  reclaim_disk.py currently has an age gate; UNIT-MAP.yaml’s “no age gate” statement is stale.
+  harness-conformance.sh currently implements a vars leg; a historical “no executor” label is not a present-state measurement.
+  bunker-provision.sh --check stages a probe onto the node, despite its broad read-only description.
+
+Evidence:
+  CF/node_identity.py:2–17 and 77–95.
+  CF/bunker_config_gen.py:2–64.
+  CF/clone_lane.py:74–125.
+  CF/reclaim_disk.py:42–47 and 82–99.
+  CF/tests/harness-conformance.sh:4–25.
+  CF/bunker-provision.sh:201–227.
+
+The III.2 writing requirements are specified explicitly below.
+
+
+CORRECTED OUTLINE:
+
+CODE-FACTORY SYSTEM OPERATIONS AND RECONSTRUCTION HANDBOOK
+
+Document rules
+
+  The handbook describes responsibilities, operating procedures and contracts. File paths are evidence locators, not chapter titles.
+
+  Distinguish:
+    DESIGNED — required behavior or a specified interface.
+    IMPLEMENTED — source-supported behavior at a named revision.
+    DEPLOYED — an installed and activated artifact observed at a named time.
+    VERIFIED — the particular claim was exercised against its exact target.
+    FAILING — an exercised claim failed.
+    UNVERIFIED — evidence is absent, stale, incomplete or inaccessible.
+    NOT APPLICABLE — the field does not apply, with a reason.
+
+  Document completeness and system health are independent. A complete chapter may accurately describe a failing subsystem.
+
+  Classify implementations as:
+    ACTIVE — production invocation and deployment evidence are named.
+    MANUAL — an operator entry point exists; automatic invocation is not established.
+    OPTIONAL — a declared feature or alternate operating mode, with its enabling condition.
+    LEGACY — a superseded implementation with evidence of the supersession.
+    DESIGNED-NOT-BUILT — a requirement exists without an implementation.
+    INVOCATION-UNVERIFIED — source exists but its production activation is not established.
+
+  A test reference is not production invocation. Absence from one repository is not proof of absence from installed services or external automation.
+
+  One implementation has one primary ownership assignment. Shared behavior is referenced through a contract rather than duplicated as module membership.
+
+  Every measurable statement carries its revision or observation time. Historical contract states and census totals are not carried forward as current facts.
+
+PART I — DOCUMENT CONTROL AND SYSTEM ARRANGEMENT
+
+  I.1 Document identity and applicability
+    Issue, revision, date, approval state and applicable deployment.
+    Revisions of all four repositories.
+    Digests and deployment provenance of unversioned external scripts.
+    Source-tree differences relevant to the issue.
+    Superseded issues and unresolved applicability limitations.
+
+  I.2 Purpose, operating mission and boundaries
+    What the factory produces.
+    Meaning of project, lane, node, agent, task, tick, dispatch, attempt, job and session.
+    Ownership and authorization boundaries.
+    Non-goals and explicitly excluded internals.
+
+  I.3 Actors and authority
+    Operator, scheduler, foreman, worker, verifier, commit gate and document reviewer.
+    Who selects lanes, tasks, models and execution targets.
+    Who may mutate configuration, credentials, boards and published branches.
+    Approval and escalation boundaries.
+
+  I.4 Physical arrangement
+    Control host, Bunker servers, container nodes and external services.
+    Process and filesystem locations.
+    Network reachability, bind addresses, endpoints and certificate boundaries.
+    Installed units, timers, cron entry points and manually started services.
+
+  I.5 Logical arrangement
+    Control, transport, execution, memory, governance and evidence layers.
+    Local command, gateway session, Crier-dispatcher and node-worker execution paths.
+    Optional adapter and protocol paths.
+    Shared versus per-node services.
+
+  I.6 Component and implementation register
+    Module, responsibility, owner, implementation and operating location.
+    Source artifact, installed artifact and active invocation.
+    Settings, state, procedures and contracts owned by each component.
+    Classification and evidence for that classification.
+
+  I.7 Contract and identity register
+    C01–C36.
+    Identity translation between task, tick, correlation, message, job, session, brief and commit.
+    Required joins and presently missing joins.
+    Version and dialect compatibility matrix.
+
+  I.8 System invariants
+    Scheduler lane selection versus foreman task selection.
+    Explicit target selection and prohibited fallback.
+    Provider credential boundary.
+    Workspace and project isolation.
+    Transport acceptance versus execution completion.
+    Verification versus self-report.
+    Published-tree proof versus local success.
+    Safe handling of unknown and skipped measurements.
+
+  I.9 State authority and configuration authority
+    Board JSONL, scheduler database, execution records, Crier stores, session records, searchable memory and filesystem artifacts.
+    Source configuration, generated configuration, database state, installed service configuration and effective process state.
+    Conflict resolution and permitted reconciliation directions.
+
+  I.10 Scope, census method and exclusions
+    Inventory source for scripts, binaries, routes, tools, configuration, stores, services and dependencies.
+    Package-to-responsibility mapping.
+    External systems documented through integration, installation and verification contracts.
+    Named uninspected or inaccessible surfaces.
+    Exclusion of third-party implementation internals and unrelated fleet products.
+
+  I.11 Reading and fault-isolation map
+    Symptom-to-procedure index.
+    First commissioning, routine operation, failed dispatch, lost completion, stale code, expired credential and damaged state.
+    Stable section identifiers and rendered page references.
+
+PART II — OPERATIONAL FLOWS
+
+  Every flow contains:
+    Trigger and initiating authority.
+    Preconditions and required configuration.
+    Actors, execution locations and contracts.
+    Numbered steps with expected indications.
+    Read/write sets and state transitions.
+    Branches, refusals, degraded operation and emergency stops.
+    Time budgets, retries, idempotency and concurrency.
+    Empty-system and first-run behavior.
+    Observable exit, retained evidence and next procedure.
+    An as-implemented diagram, with designed-but-missing edges visibly distinct.
+
+  II.1 F1 — Dispatch, execution and settlement
+    Trigger: admission hands a lane to a selected execution path.
+    Exit: correlated task outcome, delivery state, persistence state and acknowledgement state, or named uncertainty.
+    Branches: local command, gateway session, fleet dispatcher and node worker.
+    Explicitly document incompatible directive and result dialects, late replies, duplicates, crash windows and cancellation.
+
+  II.2 F2 — Provisioning and certification
+    Trigger: an authorized project/node declaration.
+    Exit: all required qualification legs verified, or exact failed, skipped and unmeasurable legs.
+    Sequence: derive declaration; qualify host; create/reuse agent; stage credentials and identity; apply environment and seed; establish gateway authentication; install node layers; verify.
+    CREATED is not CERTIFIED.
+
+  II.3 F3 — Run capture, attribution and retrieval
+    Trigger: execution produces progress, result or evidence.
+    Exit: expected records can be retrieved through stable identities, or missing capture/join/retention is named.
+    Separate node run memory, scheduler replication, dispatcher ledger, node seen cache and session accounting.
+
+  II.4 F4 — Documentation production and qualification
+    Trigger: source, configuration, requirements or document schema changes.
+    Exit: the intended subsystem handbook is rendered with resolvable references and earned issue-specific status.
+    Include census, source extraction, authoring, semantic review, structural checks, rendering and delivered-artifact inspection.
+
+  II.5 F5 — Repository integration and publication
+    Trigger: a worker submits a branch, commit and evidence.
+    Exit: the exact approved change is verified in the intended published branch, or a refusal is recorded.
+    Include clean-tree checks, base compatibility, gate execution, hooks, integration, push, remote readback and evidence-bound board transition.
+    A worker commit or merge message is not publication proof.
+
+  II.6 F6 — Preventive maintenance
+    Trigger: maintenance schedule, resource threshold or detected drift.
+    Exit: resource/freshness state remeasured with retained evidence and named omissions.
+    Include caches, aged jobs, checkouts, seed drift, policy drift and artifact retention.
+
+  II.7 F7 — Monitoring and alert delivery
+    Trigger: sample, state transition, missing progress or threshold breach.
+    Exit: the correct observer receives an attributable signal, or the ingestion/alerting gap is named.
+    Include process health versus dependency health, missing samples and alert suppression.
+
+  II.8 F8 — Crash, orphan and restart recovery
+    Trigger: interrupted controller, service restart, orphaned process or ambiguous dispatch.
+    Exit: work and custody reconciled, with no unidentified surviving execution.
+    Include ledger gaps, lease expiry, outstanding jobs, late results, retained process identities and safe redispatch rules.
+
+  II.9 F9 — Dependency degradation
+    Trigger: an unavailable, refusing or incompatible dependency.
+    Exit: explicitly bounded degraded behavior or named fail-closed refusal.
+    Distinguish best-effort visibility publication from required work delivery.
+    State which failures can retry and which require configuration or authorization changes.
+
+  II.10 F10 — Retirement and reconstruction
+    Trigger: authorized removal or rebuild.
+    Exit: execution stopped, custody settled, credentials handled, required state preserved and residue checked; reconstruction returns to F2.
+    Do not equate destroying a container with retiring a lane, bus identity or credential.
+
+  II.11 F11 — Scheduling admission and allocation
+    Trigger: evaluation, supported wake event or operator action.
+    Exit: admitted/reserved execution handoff, or reasoned deferral/refusal.
+    Include tasks/cooldown behavior, board eligibility, fairness, resource and budget gates, namespace allocation and operator overrides.
+
+  II.12 F12 — Credential lifecycle
+    Trigger: issue, dispatch, refresh, expiry, scope change or compromise.
+    Exit: intended authentication and scope verified; obsolete validity explicitly handled.
+    Separate GitHub App credentials, installation tokens, Crier bearer/signing identity, gateway credentials, proxy node tokens and memory credentials.
+
+  II.13 F13 — Upgrade, migration and rollback
+    Trigger: artifact, configuration, policy or schema change.
+    Exit: compatible activated revision verified, or rollback/blocked state recorded.
+    Include drain, snapshots, installation, migration, reload/restart, effective-value readback and downgrade constraints.
+
+  II.14 F14 — Observability ingestion
+    Trigger: a tick, message, execution phase, model turn or sample.
+    Exit: the expected record appears at the destination with correct identity, units and timestamp, or an explicit missing-record outcome.
+    Include logs, metrics, scheduler events, session accounting and external replication.
+
+  II.15 F15 — Backup and restoration
+    Trigger: schedule, destructive-operation precondition, corruption or drill.
+    Exit: required stores restored and checked independently, with unsupported/skipped legs identified.
+    Include snapshot consistency, encryption/access, retention, restore order and post-restore operation.
+
+  II.16 F16 — Multi-target execution
+    Trigger: an operation names multiple recipients.
+    Exit: every intended recipient has a correlated terminal or unresolved outcome.
+    Distinguish session fan-out, serial dispatch and any designed-but-unimplemented coordinator.
+    Include partial failure, per-target deadlines, cancellation and result aggregation.
+
+  II.17 F17 — TTL renewal and state continuity
+    Trigger: expiry threshold or authorized renewal.
+    Exit: restored replacement node passes state-continuity and operational checks, or renewal stops safely.
+    Include archive verification, destructive renewal, restoration, identity reconciliation and recertification.
+
+  II.18 F18 — Group/template task deployment
+    Trigger: deploy a named template to a resolved project group.
+    Exit: audited per-project append/skip/error results or the equivalent dry-run plan.
+    Include target resolution, idempotency, task identities and partial failure.
+    Task deployment does not assert execution completion.
+
+PART III — SUBSYSTEMS
+
+  Chapter field contract
+
+    H1 Identity, authority and rationale
+      Responsibility, owner, source/deployment revision, execution location, permitted decisions, non-authority, design rationale and consequences of absence or false reporting.
+
+    H2 Arrangement and implementation inventory
+      Submodules, implementation units, actual invokers, operating modes, classification, ownership and producer/consumer links.
+
+    H3 Interfaces and state transitions
+      Referenced contract IDs, dialect/version, inputs, outputs, identities, transitions, refusal and compatibility semantics.
+
+    H4 Dependencies and support matrix
+      Runtime, library, artifact, service, network, credential and filesystem dependencies; versions, locations, relied-on behavior and absence detection.
+
+    H5 Controls and settings
+      Names, types, units, defaults, validation, valid/unenforced ranges, precedence, unset/empty behavior, consequences, application moment, persistence and effective-value readback.
+
+    H6 Normal operating procedures
+      Preconditions, authority, numbered actions, expected indications, side effects, stop conditions and observable exit for each supported mode.
+
+    H7 Persistent state, concurrency and retention
+      Authoritative stores, schemas, writers, locks, atomicity, crash windows, deduplication, cleanup, backup and restoration dependencies.
+
+    H8 Observability and indications
+      Metrics, logs, structured outputs, exit codes, labels, correlation, destinations, missing-data behavior and the operator action each indication supports.
+
+    H9 Hazards, fault isolation and contingency procedures
+      WARNING, CAUTION and EMERGENCY classification; discriminating symptoms; safe stop, recovery, rollback and escalation with expected indications.
+
+    H10 Limits, budgets and margins
+      Enforced and assumed limits, timer relationships, capacities, measured performance, unmeasured conditions and qualification margins.
+
+    H11 Verification and evidence
+      Static, isolated, deployed and end-to-end checks; negative controls; exact targets and revisions; expected results; evidence manifest and retention.
+
+    H12 Navigation
+      Related flows, contracts, settings, normal procedures, fault-isolation entries, adjacent modules and rendered page references.
+
+  Use III.<chapter>.H<field> and III.<chapter>.S<submodule> identifiers. Do not reuse III.2.1 for both a field and a submodule.
+
+  III.1 M0 — SHARED EXECUTION AND TARGET CONTRACTS
+
+    M0.S1 Shell execution ABI
+      Primary unit: scripts/lib.sh.
+      FAILED accumulation, output rows, quoting, command-text versus argv semantics, idempotent sentinels and verified downloads.
+      Consumers and version compatibility through C34.
+
+    M0.S2 Target-reference vocabulary
+      Primary unit: scripts/lane_target.py.
+      Local paths, remote schemes, structural validation, repository-root checks, remote verification limits and explicit execution options.
+      Consumers reference C22 rather than owning duplicate parsers.
+
+  III.2 M1 — PROVISIONING AND CERTIFICATION
+
+    M1.S1 Host qualification
+      Primary unit: scripts/bunker-server-install.sh.
+      Control-host tools, Bunker server reachability/capacity and consumption of resource policy from M8.S1.
+      Document the advertised-versus-implemented --apply distinction.
+
+    M1.S2 Declaration, creation and layered-node orchestration
+      Primary units: scripts/bunker_config_gen.py, bunker-provision.sh, node-create.sh and project-node.sh.
+      Registry-derived configuration, ambiguous-project refusal, create/reuse behavior, staging manifest and layers 00/10/20/30/40.
+      Separate the provisioner path from standalone creation and scoped fixture runs.
+
+    M1.S3 Node identity and bus membership
+      Primary units: scripts/node_identity.py and bunker-crier-connect.sh.
+      node.json ownership and merging, crier.json, signing-key provenance, bearer references, registration prerequisites and signed-read certification.
+      State explicitly that node_identity.py does not generate the signing key.
+
+    M1.S4 Environment and seed application
+      Primary units: scripts/node_env.py and node_seed.py.
+      Config parsing as data, secret-file references, environment application before gateway startup, archive/digest verification and seed-applied.json.
+      Continuous drift surveillance is M8.S3.
+
+    M1.S5 Certification and refusal ladder
+      Primary unit: scripts/verify-node.sh.
+      Control-host versus node-side measurements, artifact and auth checks, repository freshness and seed checks consumed from their owners.
+      Distinguish PASS, FAIL, WARN, SKIP, UNVERIFIED and scoped checks.
+
+    Mandatory III.2 writing constraints:
+      H1: distinguish control host, Bunker server and container execution.
+      H2: show both create entry paths and every staged runtime file.
+      H3: specify the node.json merge contract, bus identity and credential bundle.
+      H4: list tools and credentials required before each phase—not only before the entire operation.
+      H5: record configuration-file parsing, CLI overrides, defaults, role/kind selection, layer scope, ports, TTL and secret references.
+      H6: write the actual phase order, with preconditions and expected indication after each phase.
+      H6: identify --check operations that stage files or otherwise have side effects.
+      H7: distinguish reuse, partial provisioning, cleanup, rollback and destructive destroy.
+      H9: include missing auth, missing seed, unavailable node, stale checkout, conflicting configuration and partially installed harness.
+      H10: identify the transport deadline and per-phase budgets.
+      H11: verify generated configuration, idempotent reapply, required negative cases and certification from the control host.
+      H12: point gateway failures to M13, bus failures to M10, checkout failures to M3 and resource failures to M8.
+      Unsupported guarantees remain UNVERIFIED or DESIGNED, not inferred.
+
+  III.3 M2 — LANE CONFIGURATION AND NODE-SIDE EXECUTION
+
+    M2.S1 Lane declaration and configuration
+      Primary units: scripts/add_family_lanes.py, configure_family.py, load_lane_config.py and clone_lane.py.
+      API versus direct-database mutation, prompt assignment, parent/namespace/admission settings, transaction boundaries and readback.
+      Identify one-off migration utilities and hard-coded deployment assumptions.
+
+    M2.S2 Target and execution-profile selection
+      Consume M0.S2 and C22.
+      Lane/project/node references, real checkout versus stand-in locator and selected execution path.
+      Document actual resolver wiring separately from available resolver code.
+
+    M2.S3 Node inbox execution
+      Primary unit: scripts/node-bus-worker.py.
+      Identity, signature/body binding, directive validation, variable sanitization, harness and gate invocation, result construction, seen cache, reply and acknowledgement.
+      Preserve its actual text/status dialect and identify compatibility gaps with the scheduler/dispatcher dialect.
+
+  III.4 M3 — REPOSITORY MATERIALIZATION, GOVERNANCE AND PUBLICATION
+
+    M3.S1 Repository materialization
+      Implemented through the repository layer of M1.S2 and its Git operations.
+      Origin/ref selection, authenticated clone/update, workdir ownership and conflict behavior.
+      Explicitly exclude clone_lane.py from repository cloning.
+
+    M3.S2 Checkout freshness and provenance
+      Primary units: scripts/repo_freshness.py and node_freshness.py.
+      Comparison-ref selection, fetch versus offline inspection, dirty/detached/unborn/divergent states and strictness.
+      Separate local lane census from remote node measurement.
+
+    M3.S3 Commit identity, hooks and integration gates
+      Primary unit: scripts/install-gitreins.sh.
+      External GitReins implementation and repository policy.
+      Hook installation location, effective core.hooksPath, absolute executable selection, staged-tree scope, asynchronous guards, bypass disclosure and commit creation proof.
+      Do not imply CF contains a hooks/ directory merely because a hook is generated.
+
+    M3.S4 Integration and publication
+      Primary unit: scripts/land-node-branch.sh.
+      Source commit and branch checks, base constraints, isolated gate worktree, fast-forward/non-fast-forward behavior, explicit-object push and published-ref proof.
+      Distinguish publication from board closeout.
+
+  III.5 M4 — BOARD AND EVIDENCE-BOUND WORK STATE
+
+    M4.S1 Canonical board interface
+      Primary unit: scripts/boardctl.
+      The script is a wrapper around the external boardctl executable, not the board engine.
+      Installation/support contract, tasks.jsonl, events.jsonl, schema, vocabulary, validation, evidence requirements and write authority.
+
+    M4.S2 Ownership and lock adjudication
+      Primary unit: scripts/board_lock.py.
+      Held lock, open descriptor, free lock and residue distinctions.
+      Exact lock scope, limitations and permitted operator response.
+
+    M4.S3 Published-board drift
+      Primary unit: scripts/board_drift.py.
+      Published bytes, working-tree bytes, reference repository, ancestry repository, malformed rows and offline limitations.
+      Coordinate with M3 through explicit Git-reference contracts.
+
+  III.6 M5 — HARNESS AND TOOLCHAIN COMPATIBILITY
+
+    M5.S1 Hermes installation
+      Primary unit: scripts/harness/install-hermes.sh.
+      Installation pin, environment, gateway startup and installation versus runtime qualification.
+
+    M5.S2 Alternate harness adapters
+      Primary units: install-codex.sh, install-claude-code.sh, install-opencode.sh, install-deepseek.sh and install-pi-agent.sh under scripts/harness/.
+      Separate generation-specific declarations, install capability, check capability and measured non-interactive execution.
+      An adapter file does not establish support.
+
+    M5.S3 Project toolchains
+      Primary unit: scripts/install-go.sh.
+      Go pin, platform/digest selection, installation root, activation and version readback.
+      Node, Rust and Python requirements consumed by node-kind checks.
+      Distinguish installed tools from tools merely checked.
+
+    M5.S4 Harness resolution
+      Primary unit: scripts/harness_resolve.py.
+      config/harness-matrix.json and specs/HARNESS-MATRIX.md.
+      Model family, lane class, declared hosts/shims, selection and refusal.
+      Name actual consumers; do not imply automatic use from existence alone.
+
+    M5.S5 Harness variable contract and conformance
+      Primary unit: scripts/harness/harness-vars.sh.
+      C35 producer/consumer obligations, required names, validation, credential-path handling and ambient-variable isolation.
+      Qualification consumers: tests/harness-conformance.sh and adapter/variable-contract tests.
+      Check, apply, vars, smoke and any specified-but-unimplemented memory leg remain separately reported.
+
+  III.7 M6 — DOCUMENTATION ENGINEERING AND QUALIFICATION
+
+    M6.S1 Source census and skeleton
+      Primary unit: scripts/master_doc_skeleton.py.
+      Inventory scope, excluded paths, truncation limits, module mapping and output-root selection.
+
+    M6.S2 Evidence-constrained authoring
+      Primary unit: scripts/master_doc_fill.py.
+      Source input, provider/model binding, output selection, deletion protection, status computation and failure artifacts.
+
+    M6.S3 Structural and assertion gates
+      Primary units: scripts/master_doc_check.py and check_scan_scope.py.
+      Chapter-schema compatibility, locator/fact checks, empty-selection refusal and secret-scan claim scope.
+      Structural correctness is not semantic truth.
+
+    M6.S4 Independent semantic review
+      Primary unit: scripts/master_doc_panel.py.
+      Module selection, brief/schema consistency, seat identity, completion, disagreement and evidence adjudication.
+
+    M6.S5 Rendering and delivered-artifact inspection
+      Primary units: scripts/gen_nasa_handbook.py, gen_system_views.py and sheet_style.py.
+      Selected chapter set, diagrams, deficiency register, typography, pagination and links.
+      Graphviz, Chrome, PyMuPDF and other direct rendering dependencies, with their actual invocation contracts.
+
+    M6.S6 Requirement corpus
+      Primary unit: scripts/extract_owner_decisions.py.
+      Candidate denominator, time window, title/content filters, truncation, provenance and distinction between owner text and an approved requirement.
+
+    M6.S7 Unit-map and cross-reference generation
+      Primary unit: scripts/gen_unit_map.py.
+      Assignment map, textual references, production invocation evidence and calculated counts.
+      Reconcile OUTLINE.md, UNIT-MAP.yaml, SYSTEM-MODEL.yaml, handbook README, schema, checker, panel and renderer.
+
+  III.8 M7 — CREDENTIAL AUTHORITY AND FORGE ACCESS
+
+    M7.S1 GitHub App bootstrap
+      Primary unit: scripts/github-app-setup.sh.
+      Human authorization/download steps, App permissions, installation coverage and verified configuration output.
+
+    M7.S2 Installation-token minting and refresh
+      Primary units: scripts/github-app-token.py and github-app-refresh.sh.
+      App JWT versus installation token, expiry, cache, refresh, local/node destination and safe handling.
+
+    M7.S3 Per-dispatch repository scoping
+      Integration implementation: ~/.hermes/scripts/fleet-gh-scope.py and its gh-app-token.py dependency.
+      Scope manifest, intended repository, actual granted reach and dispatcher/facade injection.
+      Contrast transient injection with provisioned credential files; document actual persistence and exposure risks.
+
+    M7.S4 Non-forge credential lifecycle
+      Crier bearer and signing identity, gateway authentication, inference node tokens, memory credentials and artifact-store credentials.
+      Issuer, consumer, scope, storage, permissions, refresh/revocation and recovery owner for each.
+      Implementations remain owned by their runtime modules; this is the lifecycle coordination register.
+
+  III.9 M8 — RESOURCE SAFETY, DRIFT AND NODE LONGEVITY
+
+    M8.S1 Resource admission policy
+      Primary unit: scripts/disk_floor.py.
+      Role defaults, override precedence, parser/range validation, units and consumers.
+
+    M8.S2 Bounded reclamation
+      Primary unit: scripts/reclaim_disk.py.
+      Fixed caches, aged paths, TTL, protected paths, symlink/containment checks, dry run and evidence retention.
+      Distinguish this script’s paths from dispatcher .cf-jobs directories.
+
+    M8.S3 Seed and configuration drift surveillance
+      Primary unit: scripts/node_seed_drift.py.
+      Applied digest record, source comparison, remote staging side effects, strictness and unmeasurable states.
+
+    M8.S4 Fleet operations census and deployment drift
+      Primary unit: scripts/verify-patch.sh.
+      Operational implementation: patches/base/fleet_ops_check.py.orig plus the ordered patch chain.
+      Census behavior, project-kind selection, operational checks, patch application, stage digests and deployed-copy comparison.
+      Separate chain verification from verification of a present live script.
+
+    M8.S5 TTL surveillance, archive and renewal
+      Implementations: FLEET/fleet-ttl-census.py and renew-fleet.sh.
+      Expiry interpretation, unreadable agents, warning threshold, archive consistency, destructive renewal, restore and recertification.
+      Identify the present verification limits and required safeguards not yet implemented.
+
+  III.10 M9 — SCHEDULER
+
+    M9.S1 Lane catalog and effective configuration
+      internal/config/, project/namespace records, loader and pin registry.
+      Fleet seeding versus existing database values, endpoint/model/prompt resolution and effective configuration.
+      Configuration source and mutation authority.
+
+    M9.S2 Admission and allocation
+      Admission mode, board eligibility/freshness, cadence, cooldown, tasks pacing, fairness, urgency, namespace allocation, usage pools, budgets and load/resource gates.
+      Reservation, deferral and explicit operator intervention.
+
+    M9.S3 Execution lifecycle and settlement
+      Local command, gateway and Crier dispatch paths.
+      Slot ownership, session identity, timeout/cancellation, progress, circuit behavior, restart/drain, orphan handling, delivery and accounting.
+      Actual task outcome versus telemetry completeness.
+
+    M9.S4 Typed execution and worker waves
+      internal/execution/, internal/foreman/, schemas/execution/v1/ and wave coordination.
+      Brief canonicalization/digests, workspace leases, capability/permission/resource policy, route/artifact/verification receipts and parent/worker state.
+      Separate outer lane dispatch from a foreman-created task-specific execution brief.
+
+    M9.S5 Durable state and migration
+      scheduler.db schema, migrations, transactions, connection/lock policy, read pools, tick/dispatch/worker/execution records and recovery.
+      Derive table inventory from source; do not freeze an unexplained table count.
+
+    M9.S6 Operator and integration surfaces
+      schedulerd, scheduler-dispatch, scheduler-query, queueprobe and migrate.
+      HTTP API, dashboard, event stream, MCP and authentication.
+      Diagnostic utilities and compatibility with remote consumers.
+
+    M9.S7 Federation, remote control and bus integration
+      internal/bus/, internal/remote/, peer records and federation API/MCP/CLI.
+      Publish/query/dispatch distinctions, identity, permissions, replay and failure policy.
+
+    M9.S8 Groups, templates and board deployment
+      internal/blocks/, groups.jsonl and templates.jsonl.
+      Target resolution, dry run, idempotency, per-project outcomes and audit.
+
+    M9.S9 External state replication
+      internal/sync/ and sync spool.
+      DuckBrain authentication, batching, change detection, retry, rejection/rate-limit behavior and destination verification.
+
+    M9.S10 Time and simulation
+      internal/clock/, simulated fixtures/spawn and daemon mode guard.
+      Real versus simulated time, timing seams, timestamps and prevention of accidental live simulation.
+
+    M9.S11 Deployment and operational stewardship
+      Service units, gateway profile, timers, watchdogs, hop-liveness checks, cooldown-residue checks and fleet-sync.
+      Invariant, destination-coverage, freshness, load and cluster-chain probes.
+      Infrastructure finding creation/collapse and pm-standin operational tools.
+      Lifecycle hooks: configuration, placeholders, worktree setup, merge, quiescence and prune.
+      Backfills, policy deployment/hash checks and HTTPS-origin setup.
+      Classify each script as armed automation, manual diagnostic, migration or test support.
+
+  III.11 M10 — CRIER
+
+    M10.S1 Registry and inbox custody
+      Registration, addressing, routing, capability delivery, acceptance, idempotency, retrieval, leases, acknowledgement, TTL, transfer and dead letters.
+      Presence and backpressure.
+      Transport acceptance is not completed work.
+
+    M10.S2 Identity, namespace and delivery authority
+      Bearer authentication, agent signatures and body binding.
+      Principals, bindings, grants, agent class, namespace policy, trust anchors and delegation.
+      Service-delivery audience and receipt authority.
+      Authorization versus content inspection.
+
+    M10.S3 Guard, detection and escalation
+      Pattern scan, rendering, router/JEV decisions, circuit behavior, rewriting, quarantine, containment and escalation.
+      Failure policy and operator review.
+      Encoding transformations are not a substitute for an explicit trust policy.
+
+    M10.S4 Execution-delivery transports
+      Inbox pull, Hermes session delivery, webhook driver and harness adapters.
+      Blocking versus asynchronous acceptance, output extraction, retry, cancellation and durable versus in-memory queues.
+
+    M10.S5 Session and operator conversation state
+      Sessions, tasks, participants, groups, fan-out, context, compilation, threads, tags, ingress routing, reads/search and audit.
+      CLI/MCP/browser entry points and authority.
+      Link conversation/task state to execution receipts without treating them as identical.
+
+    M10.S6 Relay, mesh and federation
+      Topic publication/subscription, mesh connection authentication, peer liveness, federation policy, holds, forwarding and delivery receipts.
+      Local and remote failure boundaries.
+
+    M10.S7 Optional execution protocols and bridges
+      A2A discovery/task/replay/push/cancellation/output.
+      DAGger control, targets, task triggers, evidence and wait behavior.
+      Feature gates, required services and explicit applicability.
+
+    M10.S8 Persistent stores, migration and recovery
+      Registry/inbox versus session/group/permission stores.
+      Memory, JSONL, SQLite and PostgreSQL choices and resolved configuration.
+      Schema migration, locking, backups, restoration and restart reconciliation.
+      Primary scripts: backup-db.sh and restore-db.sh; backup service/timer.
+
+    M10.S9 Binaries, configuration and operator interfaces
+      Server, front and MCP binaries.
+      Configuration file/environment precedence, ports, health/status/version, OpenAPI, browser surface and authentication.
+      Install, deploy and service activation paths.
+
+    M10.S10 Client-library contracts
+      clients/python/crier_client.py and clients/typescript/crier.ts.
+      Signing, audience, serialization, payload decoding, retrieve/ack behavior, errors and version compatibility.
+      Consumers in scheduler, node worker, dispatcher and operator tools.
+
+  III.12 M11 — FLEET DISPATCHER AND ADAPTERS
+
+    M11.S1 Supervised remote jobs
+      FLEET/dispatcher.py: dispatch_durable, _bunker and task_seconds.
+      Job identity, staging, detached start, polling, progress, deadlines, process groups and kill verification.
+      Actual harness/workdir selection.
+
+    M11.S2 Ledger and restart semantics
+      dispatch-ledger.jsonl, loading, recording and replay.
+      Persistence failures, crash-before-record windows, duplicate consumers and retention.
+      Do not promise exactly-once execution.
+
+    M11.S3 Completion and acknowledgement bridge
+      Directive decoding, reply target, reply_b64/error_b64, sender, correlation and acknowledgement.
+      Separate work failure from reply-delivery failure and acknowledgement failure.
+      Scheduler compatibility through C04/C06.
+
+    M11.S4 Agent registry and credential scope
+      fleet_agents.json, register_fleet.py, key files and Crier registration.
+      Registry-source drift, server resolution and per-agent repository scope.
+
+    M11.S5 Service lifecycle and queue stewardship
+      Installed fleet-dispatcher.service, environment references, PID-file singleton check, restart policy and polling loop.
+      Serial queue behavior, lease duration, head-of-line blocking, shutdown and liveness supervision.
+
+    M11.S6 Operator courier and qualification tools
+      courier.py, verify-repo-coverage.py, test_all_agents.py and job qualification tests.
+      Classify commands that lease, acknowledge, mint credentials or execute remote work.
+      Identify reply-dialect drift rather than treating a stale probe as a valid oracle.
+
+    M11.S7 Alternate and transitional adapters
+      fleet-gateway-facade.py, bridge/courier_bridge.py, bridge/bridge_ctl.py and staged-remote-wiring.sh.
+      Mapping, local fallback, SSE translation, timeout and startup semantics.
+      Deployment applicability, coexistence hazards, legacy status and migration/rollback authority.
+
+  III.13 M12 — RESTRICTED INFERENCE PROXY
+
+    M12.S1 Node authentication and model admission
+      Bearer-to-node mapping, missing/unreadable token file, model allowlist and request-size checks.
+      Distinguish model authorization from quotas and spend limits not implemented here.
+
+    M12.S2 Upstream resolution and credentials
+      CF_PROXY_UPSTREAM, CF_PROXY_UPSTREAM_MODEL and CF_PROXY_UPSTREAM_KEY_ENV.
+      Gateway versus direct-provider behavior, model rewrite and request-time credential lookup.
+
+    M12.S3 HTTP and stream relay
+      /health, /v1/models and /v1/chat/completions.
+      Stream versus non-stream behavior, idle/request timeout, first byte, disconnect, partial response and upstream errors.
+      Headers and connection/framing behavior.
+
+    M12.S4 Request capture, usage attribution and retention
+      Capture and usage JSONL paths, recorded fields, body truncation, permissions, privacy and concurrent writes.
+      Distinguish documented retention from implemented retention.
+      Log failures and missing observations.
+
+    M12.S5 Deployment and operation
+      Installed cf-inference-proxy.service, bind address, port, dependency ordering and restart policy.
+      Source digest, effective configuration, startup checks, health limits and end-to-end qualification.
+
+  III.14 M13 — GATEWAY, ROUTER AND MODEL-RUNTIME INTEGRATION
+
+    M13.S1 Gateway session interface
+      Scheduler Responses API, session keys, progress/SSE terminal events, deadlines and cancellation.
+      Node gateway versus control-host gateway.
+      Required external installation/version and diagnostic contracts.
+
+    M13.S2 Gateway authentication and exposure
+      Primary CF unit: scripts/node_gateway_auth.py.
+      Dashboard basic authentication, API authentication, bind policy, generated credential storage and reconfiguration/startup order.
+
+    M13.S3 Model routing and provider integration
+      Router, gateway, inference proxy and harness binding responsibilities.
+      Requested versus served model/provider, fallback policy, protocol compatibility and credential boundary.
+      External internals remain outside this handbook’s claimed implementation coverage.
+
+    M13.S4 Network and endpoint support contract
+      Required hostnames/addresses, ports, loopback versus remote access, TLS/certificate policy and reachability checks.
+      Endpoint precedence and failure discrimination.
+      Publish deployment-specific values only in the appropriate controlled edition.
+
+  III.15 M14 — MEMORY, ACCOUNTING AND OBSERVABILITY INTEGRATION
+
+    M14.S1 Searchable memory
+      DuckBrain namespace/key/domain contracts, credentials, run records, fleet index and rollups.
+      Producer coverage, retrieval checks and designed-but-missing capture.
+
+    M14.S2 Session and model accounting
+      Hermes session records and scheduler readers.
+      Session/tick joins, actual model/provider identity, usage, cost sources, partial telemetry and window boundaries.
+
+    M14.S3 Evidence catalog and retention
+      Board evidence, execution receipts, job directories, ledgers, seen caches, raw captures and documentation evidence.
+      Stable pointers, content/revision binding, privacy, cleanup and restoration.
+
+    M14.S4 Monitoring destinations
+      Logs/journal, metrics endpoints/scrapers, scheduler dashboard/events, liveness watchdogs and operator alerts.
+      Destination coverage and missing-data semantics.
+      A healthy exporter does not prove successful ingestion.
+
+  III.16 M15 — BUNKER AND HOSTING INTEGRATION
+
+    M15.S1 Server capability and configuration
+      Required daemon/client compatibility, server aliases, certificate pins, capacity and lifecycle policy.
+      External installation and verification references.
+
+    M15.S2 Client operations and transport
+      spawn/info/list/status/exec/cp/mount/unmount/destroy/renew as consumed by the factory.
+      Paths, homes, staging, timeouts, process/session lifetime and error meanings.
+
+    M15.S3 Container and home lifecycle
+      Node identity, filesystem ownership, runtime isolation, TTL, process ownership and destruction safeguards.
+      Persistent versus disposable state and renewal implications.
+
+    M15.S4 Host and supply prerequisites
+      Required OS/kernel/container capabilities, network, storage, runtimes and artifact sources.
+      Pinned installation/reconstruction procedure and explicit external authority.
+      Do not claim to document Bunker or container-engine internals absent their sources.
+
+  III.17 M16 — FOREMAN GOVERNANCE AND WORK COORDINATION
+
+    M16.S1 Role and instruction authority
+      Foreman and satellite responsibilities.
+      Delivered prompt/skill versus effective runtime instructions.
+      Owner constraints, approval boundaries and role-specific authority.
+
+    M16.S2 Task selection and brief construction
+      Board eligibility, premise checks, task selection, scope, workspace, source revision and acceptance criteria.
+      Outer lane dispatch versus task-specific execution brief.
+      Goal/subgoal and attempt identity where supported.
+
+    M16.S3 Worker supervision and evidence adjudication
+      Dispatch, progress, completion, verification, discrepancy handling and failure recovery.
+      Independent proof versus worker self-report.
+      Publication and board transitions through M3/M4.
+
+    M16.S4 Closeout, escalation and operator delivery
+      Evidence-bound completion, rejected results, blocked work, approvals and operator reports.
+      Distinguish runtime behavior implemented in code from procedural requirements carried by prompts and skills.
+
+PART IV — INTERFACE AND DATA CONTRACTS
+
+  Every contract entry contains:
+    Stable identifier and version/dialect.
+    Producer and consumer implementations, including file and function.
+    Authority and authentication.
+    Field/schema definitions, encoding and identity.
+    State transitions and delivery/completion meanings.
+    Deadline, retry, idempotency, replay and concurrency.
+    Durable records and acknowledgement.
+    Compatibility, upgrade and refusal behavior.
+    Designed, implemented, deployed and tested state separately.
+    Reproducible evidence and unresolved gaps.
+
+  C01 Operator/configuration publisher → scheduler
+    Lane, namespace, cadence, admission, weight, prompt, endpoint and routing configuration; effective-value readback.
+
+  C02 Scheduler → Crier work delivery
+    Current WorkItem payload and HTTP body: lane, board/workdir references, corr_id, scheduler_id, reply_to, text_b64 and limits.
+    Do not insert a task identifier into this outer lane-selection contract.
+
+  C03 Crier → execution consumer
+    Inbox envelope, payload decoding, message identity, lease and custody.
+    Fleet dispatcher and node-worker profiles are distinct.
+
+  C04 Execution consumer → Crier result delivery
+    Dispatcher ok/reply_b64 dialect versus node-worker env_version/status/exit_codes dialect.
+    Correlation, sender, audience, authentication and delivery acknowledgement.
+
+  C05 Instruction publisher → scheduler/runtime instructions
+    Prompt and skill sources, stored prompt, composition mode and effective instruction verification.
+
+  C06 Crier result inbox → scheduler settlement
+    in_reply_to/corr_id matching, actual verdict parsing, unknown/late/duplicate messages, acknowledgement and persistence.
+    Existence of this code does not prove end-to-end compatibility.
+
+  C07 Router → gateway/model selection
+    Requested and selected binding, endpoint, protocol, fallback and served-identity evidence.
+
+  C08 Crier → Hermes session delivery
+    Session invocation, authentication, timeout, output and terminal outcome.
+
+  C09 Run producers → searchable run memory
+    R1 detail, R2 fleet index and rollup references.
+    Missing producers remain explicitly designed-not-built.
+
+  C10 Execution evidence → board attempt/event
+    Task and attempt identity, outcome, evidence and state transition.
+    Document missing joins without manufacturing run IDs.
+
+  C11 Harness/gateway → session accounting
+    Session, model/provider, usage, timing and partial-record semantics.
+
+  C12 Git staged change → GitReins
+    Effective hook, protected object/tree, guard invocation and verdict.
+
+  C13 GitReins verdict → foreman → board
+    Evidence binding and authorized transition.
+    State explicitly whether any automatic closer exists.
+
+  C14 Foreman → board
+    Creation, selection, state updates, events and completion evidence.
+
+  C15 Foreman → durable decision memory
+    Namespaced decisions, findings, goals, provenance and retrieval.
+
+  C16 Document checker → renderer
+    Chapter manifest, computed status, supported schema and failure handling.
+
+  C17 Conformance battery → harness
+    Per-leg inputs, actual selected binary, artifacts, verdicts and skip reasons.
+
+  C18 Delivered handbook → operator
+    Applicable issue, approval scope, limitations and delivered-artifact identity.
+
+  C19 Provisioner → Bunker
+    Create/reuse, staging, exec, identity, home and destruction semantics.
+
+  C20 Provisioner/node configuration → runtime identity and gateway
+    node.json merge, environment/configuration ownership and startup order.
+
+  C21 Seed producer → node seed consumer
+    Manifest, archive, digest, budget, applied record and drift semantics.
+
+  C22 Shared target references → consumers
+    Parsed local/remote references, verification scope and actual execution target.
+
+  C23 Dispatcher → remote supervised job
+    Message/job identities, staged files, process groups, progress, terminal status and cleanup.
+
+  C24 Node → inference proxy → upstream
+    Node authentication, allowed requested model, rewritten upstream model, stream and error semantics.
+
+  C25 Credential scoper → execution/forge access
+    Agent-to-repository mapping, token scope, expiry, injection/storage and actual reach.
+
+  C26 Scheduler replica producer → DuckBrain
+    Snapshot/change detection, spool, rejection, retry and destination readback.
+
+  C27 Scheduler ↔ scheduler federation
+    Publish/query/control operations, peer identities, authorization, replay and remote state.
+
+  C28 Group/template deployer → project boards
+    Target set, task identity, idempotency, dry run, partial failure and audit.
+
+  C29 Crier identity/authorization → delivery
+    Principal, binding, grant, namespace, delegation, agent signature and service audience.
+
+  C30 Crier → alternate execution protocols
+    Webhook, harness, A2A and DAGger profiles, acceptance, output and completion.
+
+  C31 Durable store → backup/migration/restore
+    Consistency, schema compatibility, retained artifacts, restore order and post-restore proof.
+
+  C32 Telemetry producer → observer
+    Record identity, units, timestamp, labels, transport, ingestion and missing-data behavior.
+
+  C33 Release/configuration artifact → activated process
+    Source revision, build/digest, installation, service configuration, activation and rollback.
+
+  C34 Shared shell ABI → scripts
+    Output rows, FAILED state, quoting, command construction and verified downloads.
+
+  C35 Harness variable producers → adapters/worker
+    Declared CF_* names, required set, validation, defaults, credential references and receipt.
+
+  C36 Crier client library → server
+    Serialization, signing transcript/body binding, audience, lease/ack API and compatibility.
+
+PART V — CONTROLS, SETTINGS AND RESOURCE REGISTERS
+
+  V.1 Register schema and measurement method
+    Setting identity, owner, consumer locator, type, units, default, validation, precedence, consequences, application moment and verification.
+    Enumerate flags, environment, config keys, database fields, manifests and installed-unit settings.
+    Record unenforced ranges and ignored declarations honestly.
+
+  V.2 Node provisioning and resource settings
+    Project/agent/server/repository/ref/harness.
+    Role, kind, layers, disk floor, ports, TTL and staging.
+    Environment/profile and seed controls.
+
+  V.3 Scheduler settings
+    Admission, cadence, cooldown, fairness, namespace and pool allocation.
+    Load, concurrency, budgets, execution deadlines, watchdogs, drain/restart and overrides.
+    Configuration seeding, database state and effective process values.
+
+  V.4 Crier settings
+    Configuration source and environment.
+    Registry/session backend, paths, authentication, namespace/permission/trust policy.
+    Guard/detection, transport, body/rate/lease/TTL limits and optional protocols.
+
+  V.5 Dispatcher and adapter settings
+    Agent registry, Bunker binary, poll/lease/task/progress budgets, ledger/log/PID paths, scope helper and alternate adapter configuration.
+    Relationships among caller deadline, node deadline, lease and reply margin.
+
+  V.6 Inference, gateway, router and provider settings
+    Upstream, model rewrite, allowlist, credential references, endpoint precedence and stream limits.
+    Requested versus served binding and fallback policy.
+
+  V.7 Harness and toolchain settings
+    Installer pins, hashes, paths, model/harness matrix, CF_* variables, budgets and conformance controls.
+
+  V.8 Identity and credential settings
+    Issuers, scope, references, permissions, expiry, refresh/revocation and reload semantics.
+    No credential values in the handbook.
+
+  V.9 Filesystem, state and retention settings
+    Home/checkout/reference paths, stores, caches, artifacts, ledgers, spool, log/capture retention and backup destinations.
+
+  V.10 Documentation and qualification settings
+    Input/output roots, chapter/schema selection, providers, seat selection, evidence filters, renderer dependencies and safety controls.
+
+  V.11 Effective-configuration and interaction tables
+    Per-key authority and persistence.
+    Timer/cap/floor interactions.
+    Restart-required versus dynamically applied changes.
+    Desired versus effective versus measured values.
+
+PART VI — HAZARDS, LIMITATIONS AND UNKNOWNS
+
+  VI.1 Hazard register
+    Safety/security/data-loss/spend/correctness consequences.
+    WARNING, CAUTION and EMERGENCY applicability.
+    Prevention, indication, containment, recovery and owner.
+
+  VI.2 Measured facts
+    Issue-specific evidence pointers rather than duplicated narrative.
+    Source-supported versus exercised versus deployed facts.
+
+  VI.3 Known unknowns and open defects
+    Claim, missing evidence, probe, falsifier, responsible owner and operational consequence.
+    Explicit missing implementation and compatibility gaps.
+
+  VI.4 Discovery and untested conditions
+    Coverage boundaries, comparison methods, negative tests and unqualified loads.
+    Do not pretend unknown unknowns are an enumerated fact set.
+
+  VI.5 Operator constraints and design decisions
+    Source of authority, applicability, rationale and rejected alternatives.
+    Requirements are not inferred from incidental implementation.
+
+  VI.6 Promotion, rejection and supersession log
+    Movement from unknown to measured.
+    Corrected historical claims.
+    Rejected findings with evidence and retained limitations.
+
+PART VII — REQUIREMENTS, QUALIFICATION AND WORK DERIVATION
+
+  VII.1 Requirement register
+    Stable ID, source, authority, statement, owning section and acceptance assertion.
+
+  VII.2 Traceability matrix
+    Requirement → module/procedure → contract → setting → verification → evidence → deficiency.
+
+  VII.3 Chapter acceptance
+    Complete implementation assignment.
+    Applicable field coverage.
+    Correct source and deployment provenance.
+    Both-sided contracts and explicit missing implementations.
+    Operational procedures with expected indications.
+    Reconciled cross-references and counts.
+
+  VII.4 Qualification matrix
+    Static, unit, integration, deployed and end-to-end evidence.
+    Positive and negative controls.
+    Scope, fixture/live distinction and skipped/unmeasurable legs.
+
+  VII.5 Derived implementation and documentation work
+    Each task cites the exact section, defect and acceptance command it closes.
+    Separate documentation corrections, system implementation gaps and owner decisions.
+
+  VII.6 Delivery acceptance
+    Rendered issue contains the intended chapters.
+    Navigation, diagrams, settings, contracts and deficiency state match the issue manifest.
+    WRITTEN does not mean the described system is healthy.
+
+PART VIII — BUILD, DELIVERY, ACTIVATION AND RECONSTRUCTION
+
+  VIII.1 Artifact and dependency manifest
+    Repository revisions, executable/script provenance, external artifacts, pins, hashes and support constraints.
+    Build-time versus runtime versus qualification dependencies.
+
+  VIII.2 Configuration packaging and reconciliation
+    CF/config/ declarations and manifests.
+    Scheduler TOML/database/service inputs.
+    Crier configuration and installed environment references.
+    Dispatcher maps, proxy policy and external scope manifests.
+    Generation, installation, application and readback.
+
+  VIII.3 Prompt and skill delivery
+    All shipped prompts and skills.
+    Source → seed/stored prompt → effective runtime instructions.
+    Digests, composition, drift and activation.
+
+  VIII.4 Operational patch delivery
+    Base, ordered patches, stage digests and live target.
+    Reconstruction, drift detection and rollback provenance.
+
+  VIII.5 Service and timer installation
+    Repository service definitions versus installed definitions.
+    Scheduler/gateway/watchdogs/fleet-sync/cooldown-residue.
+    Crier/server/front/MCP/backup.
+    Dispatcher and inference proxy.
+    Environment-file references, dependency order, restart policy and activation verification.
+
+  VIII.6 Build, release and upgrade procedures
+    Relevant Makefiles, Go/Python/Node dependencies, container definitions and release tooling.
+    Crier install, bunker-deploy, release-artifacts and release-upload scripts.
+    Scheduler release preparation and version-authority checks.
+    Source update versus built artifact versus activated version.
+    Rollback and migration constraints.
+
+  VIII.7 Qualification tooling and safe execution
+    CF selftest, harness conformance, adapter tests and patch tests.
+    Scheduler invariant, integration, simulation, API/MCP/dashboard and operational fixture batteries.
+    Crier API/client, persistence, transport, browser, federation, load/soak and clean-install batteries.
+    Fleet durable-job, timeout/kill, boundary and all-agent probes.
+    Classify every tool by mutations, network access, credential use, resource cost and target isolation.
+    Test helpers and examples map here unless they are actual production invokers.
+
+  VIII.8 Clean reconstruction
+    Required inputs and external authorities.
+    Rebuild control services, restore durable state, establish credentials, provision nodes, register execution targets and qualify the full path.
+    Name every missing artifact or manual authorization.
+    Do not claim reproducibility until the isolated reconstruction has been exercised.
+
+  VIII.9 Delivery and configuration change record
+    Intended scope, dry-run result, authorization, applied artifact, effective readback, rollback handle and verification.
+    Include unversioned installed scripts and service drop-ins.
+
+APPENDICES
+
+  A — Implementation-to-responsibility census
+    All CF/scripts files with one primary assignment.
+    Scheduler and Crier package/file membership under the responsibility submodules.
+    Fleet tracked and operational untracked scripts.
+    Proxy, installed units and reachable external helper dependencies.
+    Classified exclusions and invocation evidence.
+
+  B — Surface register
+    Every CLI binary/verb, HTTP route, MCP tool, browser entry point, timer, cron and service.
+    Authentication, mutation class, owner, contract and procedure destination.
+
+  C — Per-unit source and evidence records
+    Existing per-file sections retained as subordinate evidence.
+    Provenance, settings, indications, failure observations and supersession status.
+    No implication that a per-file record is a subsystem chapter.
+
+  D — State, identity and schema dictionary
+    Board/task/event, tick/dispatch/worker, execution brief/receipt, message/lease, job/ledger, session/model usage and memory keys.
+    Identity translation and absent joins.
+
+  E — Qualification records and retained artifacts
+    Commands, target revisions, test scope, expected/actual results, timestamps, verdicts and retention.
+
+  F — Quorum records and adjudication
+    Brief baseline, seat output, accepted/refuted findings and evidence supporting each disposition.
+
+  G — Glossary, symbols, units and status vocabulary
+    Definitions shared by procedures, settings, contracts and diagrams.
+
+  H — Symptom and warning/caution/emergency index
+    Indication → first discriminator → safe action → procedure → adjacent subsystem.
+
+  I — Requirements, decisions and historical claims
+    Original authority, applicability, superseded measurements and unresolved decisions.
+
+  J — Issue manifest and generated indexes
+    Source revisions/digests, chapter list, implementation census, contract list, flow list, settings totals, cross-reference validation and change record.
+
+Replacement-outline census:
+  8 parts.
+  18 flows.
+  17 independently addressable module chapters.
+  87 submodules.
+  12 chapter fields.
+  36 named contract entries, subject to versioned expansion when new interfaces are discovered.
+  All 51 currently tracked CF/scripts files assigned once.
+  No fixed claim that a given number of contracts currently works.
+
+
+CORRECTIONS RANKED: top 10 by damage if ignored
+
+1. Separate execution paths and result dialects.
+   Otherwise the handbook teaches a path that cannot consume its directive or can interpret a failed node result as success. Start with C02–C06 and M2/M9/M11.
+
+2. Correct clone_lane.py’s responsibility.
+   It mutates scheduler lane rows. Calling it a repository cloner can lead an operator to alter or disable scheduling while attempting to repair a checkout.
+
+3. Replace inherited contract-health labels with issue-specific evidence.
+   Completion-consumer code exists; that does not establish interoperability. Historical “missing,” “works” and “broken” labels must not override current source or substitute for an exercised path.
+
+4. Make credential and identity boundaries operationally explicit.
+   node_identity.py does not mint signing keys. Dashboard authentication is not bus membership. Scoped dispatch credentials are not the same mechanism as provisioned token files.
+
+5. Add destructive renewal and multi-store restoration procedures.
+   A nonempty archive and an expiry line do not prove restored state. Errors here can destroy the only usable node home or restore only part of the system.
+
+6. Constrain effective configuration and activation.
+   The example precedence is partly a target design; installed units and database values can differ from source declarations. Every setting needs its actual reader and readback.
+
+7. Qualify idempotency and crash recovery honestly.
+   Completed-result ledgers and seen caches leave execution-before-persistence windows. Do not describe them as exactly-once execution or infer that redispatch is safe.
+
+8. Align the documentation producer, gate, panel and renderer with the new handbook.
+   They still select old roots and an eight-heading shape. Without this correction, a valid subsystem outline can still produce or certify the rejected per-file artifact.
+
+9. Give independently operated responsibilities their own addresses.
+   Preserve M0/M3/M7/M8 and add the missing foreman, runtime integration, hosting, state/observability and control-plane submodules. Do not hide their recovery authority in “supporting systems.”
+
+10. Reconcile the census and build usable navigation.
+    The present outline says 34 submodules while listing 47; the README’s component total also disagrees with the model. Generated, issue-bound registers and procedure cross-references prevent a complete-looking handbook from concealing omitted or stale material.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-e9299dab436b6acab368886fb395fe76164d50288010cf15a1c807c8b27ae295
+
+EXIT=0

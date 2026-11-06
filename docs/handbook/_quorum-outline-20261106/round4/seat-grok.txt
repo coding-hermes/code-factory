@@ -1,0 +1,440 @@
+⚠️  Primary auth failed — switching to fallback: fireworks / accounts/fireworks/models/deepseek-v4p1-flash-1017
+I have walked the five trees. Here is the verdict.
+
+```
+VERDICT: ACCEPT WITH CORRECTIONS
+```
+
+The arrangement is right in kind — responsibility-shaped modules, flows with observable exits, a both-sided contract register, and a field set that forbids introductions that say nothing. It is not yet right in fact: the register omits the edge the system actually runs on, four subsystems have no owning submodule despite having code, the counts are wrong against the outline's own listing, and no heading can express "built but not live", which is the state of the remote dispatch leg today.
+
+---
+
+## COVERAGE GAPS: 22
+
+Each: component · where it lives · why it needs a chapter (or a named submodule).
+
+**Control plane**
+
+1. **Task-router** · `/home/kara/task-router` (centre :9092/:9093), consumed by `coding-herms-scheduler/internal/scheduler/router_client.go`, `circuit_client.go`, `router_refusal_internal_test.go` · The register lists `router → gateway — works` and stops. A router *refusal* decides whether a run happens at all, and the scheduler has its own refusal and circuit semantics for it. One line in a contract table cannot carry a refusal vocabulary.
+2. **Scheduler ↔ board** · `internal/scheduler/board_awareness.go` (`PendingTaskCounter` reads `<workdir>/.coding-hermes/board/tasks.jsonl`, `board_awareness.go:356`), `board_guard.go`, `board_freshness*.go`, `board_wake.go`, `board_workable.go`, `board_stasis.go`, `board_closure.go`, `board_event_id.go`, `board_vocab.go`, plus `internal/blocks/{board,store,jsonl,deploy}.go` · The plan gates admission: no pending row, no spawn. Part IV has `node → board` and `gitreins → board`; it has no plan-side edge in either direction. This is the most-used edge in the fleet and the one every "why did nothing run" question turns on.
+3. **Scheduler waves and lane worktrees** · `wave_manifest.go`, `wave_recovery.go`, `wave_timeout.go`, `wave_stale_base.go`, `worker_janitor.go`; `specs/S12-concurrent-wave-scheduling.md`, `S14-lane-worktrees.md` · M9.S2 says "spawn, slot_pool, lifecycle, dispatch_leg". The multi-worker wave — its base, its merge seam, its orphaned worktrees — is where the fleet's worst incidents live and it has no submodule.
+4. **Session lifecycle and no-work attribution** · `session_reaper.go`, `session_resume.go`, `session_silence.go`, `stall_hop_advance.go`, `idle_intervention.go`, `noop_guard.go`, `premise_blocked.go`, `stale_premise.go`, `orphan_exclusion.go` · F8/F9 name the class; no module owns the instruments, so a chapter cannot answer "the tick ended with no work — which of nine reasons was it".
+5. **Scheduler federation and remote control** · `internal/api/federation_aggregate.go`, `internal/mcp/federation_query.go`, `handlers_peers_events.go`, `internal/remote/control.go`; `docs/federation-query-spec.md`, `remote-spec.md`, `remote-scope.md` · F16 was added as a flow with no owning machinery. Peer events and peer control are a scheduler surface, not a node one.
+6. **Alerting and telemetry emitters** · `alert_escalation.go`, `infra_alert_throttle.go`, `gateway_errors_report.go`, `slowdown.go`, `load_telemetry*.go`, `load_gate*.go`, `tick_metrics.go`, `telemetry.go`, `gitmetrics.go`, `internal/agentlog/` · Heading 12 says "None is RED" and F7/F14 were added to carry monitoring — but no submodule names a single emitter, so the chapter cannot be written from this outline without invention.
+7. **The deployed service and timer set** · `deploy/`: `coding-hermes-scheduler.service`, `coding-hermes-scheduler-gateway.service`, `cooldown-residue.{service,timer}`, `fleet-sync.{service,timer}`, `hop-liveness-watch.{service,timer}`, `watchdog.{service,timer}`; `ops/check-daemon-freshness.sh`, `hop-liveness-watch.sh`, `cluster-chain-probe.sh`, `load-attribution.sh`, `status-lock-ab.sh`, `fleet-infra-sweep.sh`; `scripts/scheduler-watchdog.sh`, `board-commit-guard.sh`, `check-invariants.sh`, `lint-guard.sh`, `release-prep.sh` · M9.S5 lists six doctrine documents and no unit of deployment. A stranger cannot learn what fires on a schedule — and the timers *are* F6/F7/F15's instruments.
+8. **Two undocumented binaries** · `cmd/cooldown-residue`, `cmd/backfill-commit-signals` · M9.S4 enumerates five of seven. Both are operator-runnable.
+9. **The scheduler's Hermes plugin** · `plugin/plugin.yaml`, `plugin/hooks.py`; `specs/S09-hermes-plugin.md` · A second integration surface into every Hermes session, beside the HTTP and MCP ones. Not the lanehook; a different mechanism.
+10. **Execution schemas** · `schemas/execution/v1/*.json` · M9.S3 names tables. The store's wire contract is the schema, and it is versioned.
+
+**Crier**
+
+11. **Inbound ingress** · `internal/ingress/` (`POST /ingress/messages`, three mutually exclusive destinations, idempotency key ledger with stored body), `specs/CRIER-INGRESS.md` · The push surface by which anything outside the bus puts a message on it. Not in M10's four submodules.
+12. **Outbound webhook delivery** · `internal/webhook/` (per-agent endpoints, HMAC signing, bounded retries with backoff, durable queue for offline endpoints, circuit breaker, pause kill-switch CR-FEAT-030), `specs/WEBHOOK-DELIVERY.md`, `docs/service-delivery-auth.md` · M10.S1's "delivery" is custody-side. Leaving the bus for a foreign endpoint is a separate contract with its own failure semantics and its own kill switch.
+13. **Chat, sessions, groups, reads, tags** · `internal/{chat,session,reads,tags,hermesession}`, `cmd/crier-front` (`127.0.0.1:8770`, `cmd/crier-front/main.go:39`), `crier-groups/`, `crier-sessions/{reads,ingress}`, eight `specs/CHAT-*.md` · The outline reduces the human-facing surface to "front :8770" inside a ports list. A port number is not an operating procedure.
+14. **Federation, mesh and trust** · `internal/{federation,mesh,trust,permissions}`, `specs/FEDERATION-AUTH.md`, `docs/{mesh-protocol,federated-peer-auth,federated-rooms}.md` · Bus-to-bus is the multi-node story. The register says "sender is stored but not verified" and then assigns that fact to no chapter.
+15. **A2A** · `internal/a2a/`, `specs/A2A-OPTION.md`, `CR_A2A_ENABLED` default false behind a two-halves gate · Off by default and still in scope: when it is on, what a message *is* changes. The outline has no vocabulary for "documented although disabled" — heading 3 supplies it.
+16. **Guard internals beyond the pipeline** · `internal/guard/jev.go` (the injection detector), `kanban.go` + `kanbanhttp.go` (a side-effect surface), `policy.go` (fail-open / fail-closed), `prompt.go`, `render.go`, `circuit.go`, `metrics.go` · M10.S2 names five stages and omits the detector model, the policy decision, and the kanban side effect. A chapter written from five stage names will invent the rest.
+17. **Crier observability and backup instruments** · `cmd/server/observability.go:102` (`/metrics`), `deploy/prometheus-scrape.example.yml`, `docs/observability-spec.md`, `MON-CRIER-002`; `deploy/crier-backup.{service,timer}`, `scripts/{backup-db,restore-db}.sh` · F14 and F15 exist as flows whose instruments live in no module.
+
+**Node, and out-of-tree**
+
+18. **`specs/` — the design authority seven** · `ENVELOPE.md`, `TRACE.md`, `HARNESS-MATRIX.md`, `HARNESS-MEMORY.md`, `FLEET-MEMORY.md`, `NODE.md`, `HARNESS.md` · The outline cites SYSTEM-MODEL, UNIT-MAP, README and the schema, and no spec. Six of the eighteen contracts are defined *in these files*. In particular `specs/TRACE.md` defines the six-id ladder (board row → run_id → corr_id → crier message id → session id → node run record → artifact) and names the measured break: five unacked replies carried `in_reply_to` and none carried `corr_id`. No chapter in the outline owns run identity, and six chapters each own a sixth of it.
+19. **Conformance battery** · `tests/harness-conformance.sh` (802 lines; `leg_check`, `leg_apply`, `leg_vars` at lines 781–784; no memory leg) · SYSTEM-MODEL carries it as the governance component `conformance` with a broken contract to `harness`. In the outline it is one bullet inside VIII.5, so it gets no leg table, no verdict vocabulary and no CF-328 accounting.
+20. **Node self-test** · `tests/selftest.sh` (4,591 lines), `tests/harness/{codex,claude-code,vars-contract}-test.sh` · The node's own gate. VIII.5 names it in a list; no chapter states what it asserts, what it does not, or how long it takes.
+21. **Dispatcher instruments outside M11** · `fleet-gateway-facade.py` (the door the scheduler speaks for REMOTE work, SSE-translated, key→agent+box), `staged-remote-wiring.sh` (header: "STAGED — NOT APPLIED"), `renew-fleet.sh` + `fleet-ttl-census.py` (7-day agent TTL, warn ≥72 h), `register_fleet.py` + `keys/` (keypairs are not regenerable), `verify-repo-coverage.py` (App installed on one owner; four agents uncovered), `sender-stamp-check/`, `bridge/{bridge_ctl,courier_bridge}.py` · M11.S3 "completion bridge" is not the facade. Nothing in the outline records that the remote leg is staged — and nothing measures the GitHub App's installation scope, which decides whether four agents can push at all.
+22. **Live surfaces described only from the client side** · `~/.hermes/scripts/fleet-board.py` serving `:9099` with `/health` and four CSV endpoints off `scheduler.db`; `~/.hermes/state.db` (session store); DuckBrain `:3000`; `bunkerd.service`; the Hermes gateway `:8642` · Five components with contract edges and no chapter and no explicit ruling. I.9 promises to name them; it does not name them.
+
+Not counted as gaps, and I want to be explicit because two prior rounds disagreed here: crier's 31 internal packages and the scheduler's 18 are evidence for submodules, not chapters. The scope boundary in v3 is the right one. My 22 are components with an operator surface, a durable store, or a contract edge — the tests the boundary sets.
+
+---
+
+## REG ROUPING: 13
+
+**Moves (6)**
+
+1. `bunker-crier-connect.sh` — M1.S2 → **M1.S3**. Its effect is "exchanges an agent token with crier, writes `auth/crier.token` at 0600" (`UNIT-MAP.yaml:49`). That is membership, not container creation, and it is the only unit that produces the credential M2.S3 then requires.
+2. `node_gateway_auth.py` — M1.S3 → **M5.S1**. Its effect is "enforces dashboard `basic_auth` on the node's gateway — wired into bunker-provision only" (`UNIT-MAP.yaml:56`). Its sibling gate lives in `install-hermes.sh` (CF-150/CF-192). Keeping the two gates in different modules is how CF-192 stayed invisible: the reader sees one gate, not the pair, and never learns one path skips it.
+3. `project-node.sh` — M5.S3 → **new M1.S6**. M5.S3 ("toolchain, gate and node entry") is a grab-bag of three unrelated concerns. `project-node.sh` is the composition root that layers base, harness, bus and repo — the top of the apply path, which is M1's subject.
+4. `install-gitreins.sh` — M5.S3 → **M3.S3**. It "installs the commit gate and writes the node's hook with the absolute venv path" (`UNIT-MAP.yaml:165`). The hook installer belongs with the hook chapter; a dead venv path in that file is the M3.S3 failure, and reading it from the toolchain chapter guarantees the reader never sees it.
+5. `gen_unit_map.py` — M6.S7 → **M6.S1**. M6.S1 is "skeleton and census"; this is the census instrument. A separate S7 splits one responsibility across two chapters and lets the trigger measurement be described in neither.
+6. `verify-patch.sh` — M6.S8 → **M8.S3**. A sha256 chain gate over the `patches/` delivery chain is a check that must be able to fail. It is not documentation. (M8 gains a third submodule: delivery integrity.)
+
+**Shared contracts, not members (7)**
+
+7. `configure_family.py` — M2.S1 ↔ **M9.S1/S3**. It writes a lane's prompt, workdir, cadence and namespace straight into the scheduler DB with one held SQLite transaction (`UNIT-MAP.yaml:88-89`, CF-355). It is the producer of the `owner → scheduler` contract, implemented as a direct writer into another module's durable state, bypassing M9's API.
+8. `load_lane_config.py` — M2.S1 ↔ **M9.S3**. Same seam, same defect class: declared config written into M9's store.
+9. `add_family_lanes.py` — M2.S1 ↔ **M9.S1**. Derives the satellite family by name and allocates its namespaces — that is M9.S1's subject (allocation), triggered from M2's.
+10. `boardctl` — M4.S1 ↔ **M9.S4**. 21 verbs over `tasks.jsonl` + `events.jsonl`, and the scheduler closes and wakes the same file (`board_closure.go`, `board_wake.go`). One store, two owners, one lock. This is the fleet's most common collision and it belongs in the contract register, not in two chapters.
+11. `node-bus-worker.py` — M2.S3 ↔ **M10.S4**. It is a consumer of the versioned client contract (M10.S4) that happens to run on the node. Documenting the client in M10 and its only node-side caller in M2 without joining them is how a wire-shape break survives a release.
+12. `harness_resolve.py` — M5.S4 ↔ **M2.S1**. It decides which harness a dispatch runs; the matrix is `specs/HARNESS-MATRIX.md §4`. A chapter that describes resolution without the dispatch that consumes it produces the sentence "the harness is chosen by the resolver".
+13. `lane_target.py` — M2.S2 ↔ **M9.S2**. It parses `lane://` / `bunker://` / `local:` and resolves a host; `dispatch_targets.go` and `workdir_target.go` do the same job on the scheduler side. Two resolvers, one question — and when they disagree the run lands on the wrong box.
+
+Declared, not moved, but stated as shared in the chapter: `node_freshness.py` (M1.S5 ↔ M3.S1 — declared-vs-actual is the same question as `repo_freshness.py` one level up) and `harness-vars.sh` (M5.S5 — sourced by all six installers; keep it out of M0, which must not depend on harness specifics, but say in M0 that it is the *second* contract).
+
+---
+
+## FLOW CHANGES: 6 (4 added, 2 rescoped)
+
+**F1 RUN LIFECYCLE — rescoped.** As written it "begins at the node's inbox", which is one of two legs. The live leg is `spawn.go`: the scheduler POSTs `/v1/responses` to the gateway with a per-turn deadline (30 m, `spawn.go:419`), parses SSE, and declares a stall at `spawn.go:2628`. The bus leg is `dispatch_leg.go` (SCHED-GAP-1710), which was reachable only from `cmd/scheduler-dispatch` until recently. A flow that starts at an inbox cannot describe either. F1 must be the run from admission to terminal result, with a per-leg section, and the two legs' different failure vocabularies stated.
+
+**F11 SCHEDULING ADMISSION — exit corrected.** "Admitted to the crier envelope" is false for the majority path. Exit: admitted on the gateway leg (a session id exists), admitted on the bus leg (an envelope leaves), or refused with a named reason. A flow whose stated exit is not the one the system takes is worse than a missing flow, because it is quoted.
+
+**F17 GUARD ADJUDICATION — new.** Trigger: any message crossing crier whose agent has the guard enabled (`CR_GUARD_ENABLED`). Exit: delivered, escalated to a stronger model, quarantined with a record, or a guard error resolved by the agent's policy (`fail_open` / `fail_closed`). Why missing: M10.S2 lists five stages; no flow owns the quarantine exit, which is the one outcome the guard exists to produce, and F1's exit ("reply accepted") is precisely the outcome the guard can prevent.
+
+**F18 WAVE FAN-OUT AND RECOVERY — new.** Trigger: a tick opens a wave of N workers in N worktrees. Exit: every worker's branch merged and its worktree reaped, or named abandoned with the worktree removed and the row still open. Why missing: waves, stale bases and orphaned worktrees are the fleet's dominant defect class (`wave_stale_base.go`, `worker_janitor.go`, spec S12/S14) and the outline gives them no flow.
+
+**F19 MODEL ROUTING AND SEAT PROVENANCE — new.** Trigger: a run starts with no pinned model, so a lane chain resolves. Exit: the served seat recorded in `session_model_usage`, or a named refusal. Why missing: `router → gateway — works` is the whole of what the document says about the decision that sets the price and the capability of every run. A misroute that serves a different provider than the lane declares is invisible in F1 — the run succeeds and the ledger disagrees with the label.
+
+**F20 STOP, DRAIN AND CANCEL — new.** Trigger: operator stop, deadline, restart approval, or a slot that must be freed. Exit: the process group is dead, the session is terminal, the timer/scope is disarmed, and no orphaned scope outlives the run. Why missing: F8 is recovery *after* a crash. A deliberate stop is a different procedure with a different residue — `SCHEDULER_OPERATOR_RESTART_APPROVED`, `schedgap077_shutdown_drain`, `dispatch_durable`'s kill of the process group — and the residue (a surviving worker scope) is the difference between a quiet box and a box at 100% disk busy.
+
+Total: 20 flows.
+
+---
+
+## HEADING CHANGES: 9 (2 add, 1 remove, 6 refine)
+
+**Add**
+
+1. **Build state and what has been proven** — prevents "M11 DISPATCHER" being read as a running subsystem when `fleet-gateway-facade.py` has no listener on :8650 and `staged-remote-wiring.sh` says "STAGED — NOT APPLIED" in its header. Requires, per submodule: designed / built / verified / live, each with the command that proves the word. v4 has this vocabulary for *units* only; the module is the thing a reader trusts.
+2. **Normal operation: procedure and expected indications** — prevents a chapter that can only be read after something has already gone wrong. Apollo carries a normal checklist and a malfunction checklist; v4 carries only the second. Without it, chapter III.2 cannot say in what order `bunker-provision.sh --apply` does its seven steps or what the operator should see after each.
+
+**Remove**
+
+3. **Log lines** (v4 heading 9) — padding as written. A standalone register of verbatim lines is a transcript; the brief already notes the previous attempt was rejected for being 40 path-titled sections, and a log register is the same failure one level down: it records what the code emitted, not what it means. Fold it into heading 9 as *indications* — each failing state names the line that indicates it and the command that reproduces it. Nothing is lost; the transcript dump is prevented.
+
+**Refine**
+
+4. **Submodule inventory** → each unit also carries **order** (its position in the parent's sequence), **refusal** (the conditions under which it declines — CF-355's BUSY, exit 3's UNVERIFIED), and **writes** (the paths and rows it changes). Prevents "bunker-provision.sh orchestrates provisioning": true, useless, and exactly what v1 produced.
+5. **Settings register** → add the **precedence ladder** where sources compete (`disk_floor.py` resolves `--disk-floor` > `NODE_DISK_FLOOR` > `[disk]` config > role default) and **who else reads it** (blast radius). Prevents a documented default that silently loses to an earlier source in the chain, which is the single most common configuration defect in this fleet.
+6. **Verification** → add **what the command does NOT prove** and **the repository state it was run at**. Prevents a green command that proves a neighbour — the trap that let `master_doc_fill.py --engine api` gut a module while stamping VERIFIED (`UNIT-MAP.yaml:184`).
+7. **Metrics** → split **emitter** (where the number is produced: `tick_metrics.go`, `internal/agentlog/`) from **surface** (where it is read: `/metrics`, the dashboard, the CSV endpoints). They fail independently; a green emitter with no scrape is the normal state of this fleet.
+8. **Cross-references** → **where to turn next, by situation**. Prevents a structure-linked "see also" table, which is useless to an operator mid-recovery. The question is "the row is closed and the code is not there", not "see chapter III.4".
+9. **Evidence of record** → only **re-resolvable** evidence: run id, verdict path, board row, timestamp, and the command that resolves it again. Prevents a commit log with a heading.
+
+Headings: **14**, up from 11 (v1) and 13 (v4).
+
+---
+
+## MERGE PROPOSAL: FAIL
+
+Criterion: *a module may be folded into a catch-all chapter only if no flow step names it as an actor, no contract names it as producer or consumer, and no failure of it is operator-visible.*
+
+- **M3 REPOSITORY** fails on the first clause: `land-node-branch.sh` is F5 LANDING's instrument. Folding M3 leaves a primary flow with no owning chapter — the objection that carried 5/5 last round and still holds.
+- **M0 SHARED CONTRACT** fails on the second and third: twenty scripts source `lib.sh`, and a missing `lib.sh` aborts `project-node.sh` under `set -u` rather than reporting (`UNIT-MAP.yaml:168`). The dependency root cannot be described inside a chapter that also contains its dependents.
+- **M7 GITHUB** fails all three: it produces the only forge credential (`github-app-token.py` never prints the value), F12 names it, and its failure (an expired installation token) is operator-visible as a push that stops.
+- **M8 SAFETY** fails on the third alone, and that is enough: `reclaim_disk.py` has no age gate and will delete a job directory a module cites as evidence (CF-290, CF-368). A destructive operator surface does not go into "supporting subsystems".
+
+The motive behind the proposal is real (page budget) and the answer is not deletion. **Adopt a depth tier per chapter instead**: FULL (M1, M2, M4, M5, M6, M9, M10), COMPACT (M0, M3, M7, M8, M11, M12), REGISTER (M13 until its units exist) — where the tier fixes length, not existence, and the field set is identical in all three. A short chapter with all fourteen headings is honest; an absent chapter is a hole.
+
+---
+
+## BUILDABLE: NO — for III.2 (M1 PROVISIONING), four coarse points named
+
+An agent given this outline and the source would invent in four places:
+
+1. **"Submodule inventory"** gives no ordering. `bunker-provision.sh` is described as "the orchestrator — creates the agent, writes its config, connects the bus, seeds, verifies". The chapter needs the seven steps in order, each with its refusal and its on-disk result — otherwise the writer produces that sentence with a table around it. **Sub-item required:** "sequence, with the failure that stops it and the state it leaves".
+2. **"Settings register"** gives no precedence. `disk_floor.py` has a four-source ladder; without a sub-item the writer documents four defaults and no resolution. **Sub-item required:** "precedence order, and the losing source's observable effect".
+3. **"Failure modes, indications and recovery"** gives no exit-code contract. `verify-node.sh` exits 3 for UNVERIFIED (unreachable port) and that is not FAIL (CF-224). A chapter that treats 3 as failure will teach an operator to rebuild a healthy node. **Sub-item required:** "exit-code contract: code, meaning, and whether it is a refusal or a fault".
+4. **"Purpose, authority and operational position"** gives no *which path calls what* matrix. CF-192 exists only as a footnote in UNIT-MAP (`node-create.sh` "does not run the auth gate the provisioner does"; `node_gateway_auth.py` "runs only on the provisioner path"). Without a sub-item the writer describes one path and the reader trusts it for both. **Sub-item required:** "entry paths × steps run, with the gap named".
+
+Two further coarse points, one level up: heading 3 (build state) is absent entirely, so no chapter can say that `bunker-server-install.sh` advertises `--apply` in its header and never implements it (module 06); and Part IV's contract chapter cannot be built because the register has no producer/consumer for any of its 18 rows — v4 states "0 of 18 name both implementations" and leaves it as the writer's problem.
+
+---
+
+## CORRECTED OUTLINE
+
+Replaces `docs/handbook/OUTLINE.md` verbatim. Counts: **8 parts + appendices · 20 flows · 14 modules · 62 submodules · 14 headings per chapter · 30 contracts.**
+
+### Conventions (binding on every chapter)
+
+- **Status:** `WRITTEN` (satisfies the field set), `EVIDENCE-ONLY` (units documented, no chapter), `DESIGNED-NOT-BUILT` (a spec or a stub names it, no working unit).
+- **State, for every component, contract and unit:** `works` · `broken` · `missing` · **`unmeasured`** · `external`. A state asserted without the command that measured it is `unmeasured`. The word `broken` requires a reproduction; `unmeasured` is the honest default and is never a defect in itself — hiding it is.
+- **Depth tier per chapter:** `FULL` · `COMPACT` · `REGISTER`. Tier fixes length, not existence; the fourteen headings apply to all three.
+- **Scope boundary:** every component that can change the behaviour or the correctness of a run — the five systems, their operator surfaces, durable stores, delivery mechanisms and contracts. Package granularity is evidence for a submodule, not a chapter. Out of scope: third-party internals, the fleet's other projects, and anything a run cannot reach — each named in I.11, not merely excluded.
+
+---
+
+### PART I — SYSTEM ARRANGEMENT
+
+- **I.1 Scope, and the census this book does not claim** — the boundary above, plus the named exclusions, each with a reason.
+- **I.2 Status, state and depth vocabulary** — the three vocabularies; the rule that an unmeasured state is stated as unmeasured.
+- **I.3 Purpose and the one idea** — one agent per project; the plan is a file; the gate is a commit.
+- **I.4 Actors and trust boundary** — operator, scheduler, foreman, node, harness, foreign endpoint, A2A peer. Who may write what, and which of these are verified rather than asserted (the `X-Crier-Audience` header; the sender stored but not verified).
+- **I.5 Layer arrangement and component boxes** — six layers, from `SYSTEM-MODEL.yaml`, with the component caption carrying its state.
+- **I.6 Component register** — 32 rows: owns / does-not-own / where it lives today / build state / the command that proves it. Includes the out-of-tree five (task-router, `~/.hermes/state.db`, DuckBrain, `bunkerd`, the Hermes gateway) and the out-of-repo dashboard `fleet-board.py` on :9099.
+- **I.7 Contract register** — 30 edges, Part IV condensed; every row names both sides or is marked `unmeasured`.
+- **I.8 Invariants** — what must always hold, each with the mechanism that enforces it and the command that falsifies it.
+- **I.9 Non-goals and why.**
+- **I.10 Surface inventory — every entry point derived** — ports and listeners (`:8767`, `:18767`, `:8770`, `:9099`, `:8642`, `:9090`, `:8775`, `:3000`, `:8650` absent), systemd units and timers, binaries (9), MCP tools, boardctl verbs (21), crier client surfaces. Each row carries the command that derived it.
+- **I.11 What this census does NOT cover** — named areas, services described only from the client side, and the reader's recourse for each. Mandatory, and empty is not an acceptable answer.
+- **I.12 Reading order by situation** — "the fleet is idle and it should not be", "a run vanished", "I must rebuild this box", "I must hand this to a stranger".
+
+### PART II — FLOWS (20)
+
+Each flow carries: trigger · observable exit · actors · preconditions · numbered steps, each naming its module · branches and error paths · state transitions · data read and written, by contract id · timing, limits, retries, idempotency · duplicate and concurrent case · day-one / empty case · degradation path · **instruments** (the files that implement it) · **build state** · diagram.
+
+**Primary (6)**
+- **F1 RUN LIFECYCLE** — both legs: gateway POST and bus Dispatch. Exit: terminal result persisted, or a named refusal / deadline / stall / uncertain result. *(RENDERED)*
+- **F2 PROVISIONING AND CERTIFICATION** — CREATED distinguished from VERIFIED throughout; exit names the failed or unmeasurable leg. *(RENDERED)*
+- **F3 RUN CAPTURE AND SEARCH** *(RENDERED)*
+- **F4 DOCUMENTATION** *(RENDERED)*
+- **F5 LANDING** *(RENDERED)*
+- **F11 SCHEDULING ADMISSION** — exit corrected to the two legs and the named refusal. *(MISSING)*
+
+**Secondary (5)**
+- **F6 MAINTENANCE** *(MISSING)* · **F7 MONITORING** *(MISSING)* · **F8 RECOVERY** *(MISSING)* · **F9 DEGRADATION** *(MISSING)* · **F10 TEARDOWN / REBUILD** *(MISSING)*
+
+**Control-plane (9)**
+- **F12 CREDENTIAL LIFECYCLE** — exit: fresh credential at 0600, old rotated, nothing long-lived in argv. *(MISSING)*
+- **F13 UPGRADE AND MIGRATION** — exit: version read back from the running artifact, DB schema at target, a rollback path named. *(MISSING)*
+- **F14 OBSERVABILITY INGESTION** — exit: the row or line is visible *and attributed* where a human will look. *(MISSING)*
+- **F15 BACKUP AND RESTORE** — exit: artifact restored into a scratch home and a known row read back. *(MISSING)*
+- **F16 MULTI-NODE FAN-OUT** — exit: every target acknowledged with its own receipt, or a named non-acknowledgement per target. *(MISSING)*
+- **F17 GUARD ADJUDICATION** — exit: delivered / escalated / quarantined with a record / policy-resolved error. *(MISSING)*
+- **F18 WAVE FAN-OUT AND RECOVERY** — exit: merged and reaped, or abandoned by name with the worktree removed and the row open. *(MISSING)*
+- **F19 MODEL ROUTING AND SEAT PROVENANCE** — exit: served seat recorded in `session_model_usage`, or a refusal. *(MISSING)*
+- **F20 STOP, DRAIN AND CANCEL** — exit: process group dead, session terminal, timer disarmed, no orphaned scope. *(MISSING)*
+
+---
+
+### PART III — MODULES (14 modules, 62 submodules)
+
+#### Chapter field set — 14 headings, each with what it prevents
+
+1. **Purpose, authority and operational position** — what it decides, what it may not decide, where it sits. Prevents "this is an important part of the pipeline".
+2. **Consequences of absence, and of false report** — both halves. Prevents "without this the system would not work correctly", and prevents the harder failure, where the component reports success while doing nothing.
+3. **Build state and what has been proven** — designed / built / verified / live, each with its command. Prevents a staged adapter being read as a running subsystem.
+4. **Submodule inventory** — per submodule: responsibility, owner, invocation, execution location, producer/consumer links, **order**, **refusal**, **writes**, classification (`active` / `optional` / `legacy` / `designed-not-built`) with the invoking `file:line` or a quoted repo-wide grep proving the absence.
+5. **Dependencies** — runtime (version, required location, how absence is detected, how pinned, digest?) · library (the call or field relied on) · service (both sides' file and function).
+6. **Settings register** — every env var, flag, timeout, cap, floor, rate: default, valid range, consequence of change, **precedence order among competing sources**, **who else reads it**. A name with no consequence is `NAME ONLY` and counts as unwritten.
+7. **Normal operation: procedure and expected indications** — numbered steps, the expected indication after each, and the abort point.
+8. **Contracts in and out** — by contract id, both sides, measured state.
+9. **Failure modes, indications, class and recovery** — how it presents, how it is told from its neighbour, the class (**warning / caution / emergency**), the abort criterion, and the numbered recovery steps each with its expected indication. Log lines appear here as indications, never as a standalone register.
+10. **Limits and margins** — hard limits, derating, worst measured case with its date, and what has never been measured.
+11. **Verification** — commands a stranger can run, expected output, **what they do NOT prove**, the repository state they were run at, date, revision.
+12. **Metrics** — emitter, type, labels, the question answered, the surface where it is scraped. **"None" is RED.**
+13. **Where to turn next — by situation** — the operator's next page, keyed to a symptom.
+14. **Evidence of record** — re-resolvable only: board row, run id, verdict path, log excerpt with timestamp, and the command that resolves it again.
+
+#### Node-side modules
+
+**M0 SHARED CONTRACT** *(COMPACT)* — S1 shell contract (`lib.sh`: `ok`/`bad`/`warn`/`note`, `FAILED`, `fetch_verified`; sourced by every shell unit; the second contract, `harness/harness-vars.sh`, declared here and owned by M5.S5).
+
+**M1 PROVISIONING** *(FULL)* — a bare host becomes a node with an identity, a membership and a seeded tree.
+- S1 qualify the host — `bunker-server-install.sh`, `disk_floor.py`
+- S2 create the container and its config — `bunker-provision.sh` (the orchestrator and its sequence), `bunker_config_gen.py`, `node-create.sh` (the older path; CF-192)
+- S3 identity, credentials and bus membership — `node_identity.py`, `bunker-crier-connect.sh`
+- S4 seed prompts, skills and env — `node_seed.py`, `node_seed_drift.py`, `node_env.py`
+- S5 prove the node works — `verify-node.sh` (six legs; exit 3 = UNVERIFIED, CF-224), `node_freshness.py`
+- S6 compose the node layers — `project-node.sh` (base, harness, bus, repo; `--check` / `--apply`)
+
+**M2 DISPATCH (NODE SIDE)** *(FULL)* — whose turn it is becomes a brief, a run and a reply.
+- S1 declare and configure lanes — `add_family_lanes.py`, `configure_family.py` (CF-355: one held transaction), `load_lane_config.py`; all three declared **shared with M9**
+- S2 resolve a target — `lane_target.py` (`lane://`, `bunker://`, `local:`; shared with M9.S2)
+- S3 consume the inbox, sign, reply — `node-bus-worker.py` (the node half of the M10.S4 client contract)
+
+**M3 REPOSITORY** *(COMPACT)* — the node has the right tree, and work can leave it.
+- S1 clone and track freshness — `clone_lane.py`, `repo_freshness.py`
+- S2 land a branch — `land-node-branch.sh` (asserts the commit is an ancestor, not that the merge command exited 0)
+- S3 commit hooks and gates — `hooks/`, `commit_hook`, `core.hooksPath`, `install-gitreins.sh`, the gitleaks and board-lint pre-commit gates, and the bypass that must be disclosed when used
+
+**M4 BOARD** *(FULL)* — the fleet remembers what it decided and what it proved.
+- S1 write and validate rows — `boardctl` (21 verbs, exclusive flock on `.lock`, duplicate-id and duplicate-fingerprint refusal), `board_lock.py`
+- S2 compare board copies — `board_drift.py`
+- S3 the board as a concurrent shared file — three writers (boardctl, the scheduler's closure/wake path, the foreman), one lock, and the rebase rule when a sibling's stale copy appears; `ch:trace` enforcement (`tests/selftest.sh`) stated here as the doctrine's only executor
+
+**M5 HARNESS** *(FULL)* — the agent inside the node can actually code, and its commits are graded.
+- S1 hermes — `harness/install-hermes.sh` (the auth gate, CF-150/CF-192), `node_gateway_auth.py`
+- S2 foreign harnesses — `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh` (check-only by design; no download, pin or digest), `install-deepseek.sh`, `install-pi-agent.sh`
+- S3 toolchain and gate — `install-go.sh`, `install-gitreins.sh`'s *binary* half (its hook half is M3.S3)
+- S4 harness resolution — `harness_resolve.py`, `specs/HARNESS-MATRIX.md §4`; shared with M2.S1
+- S5 installer variable contract — `scripts/harness/harness-vars.sh`, matrix §5; sourced by every installer
+- S6 conformance battery — `tests/harness-conformance.sh`: five legs (`check`, `apply`, `smoke`, `vars`, `memory`), the verdict vocabulary, and the measured gap (no memory executor, CF-328; `leg_vars` exists at line 784 and the model file still calls it missing)
+
+**M6 DOCUMENTATION** *(FULL)* — the system describes itself, and someone can check the description.
+- S1 skeleton and census — `master_doc_skeleton.py`, `gen_unit_map.py` (the trigger measurement)
+- S2 fill — `master_doc_fill.py` (`--engine hermes` vs `--engine api`, and the module it once gutted while stamping VERIFIED)
+- S3 gate — `master_doc_check.py`
+- S4 panel — `master_doc_panel.py` (three families; splits reported, never voted away)
+- S5 render — `gen_nasa_handbook.py`, `gen_system_views.py`, `sheet_style.py`
+- S6 corpus — `extract_owner_decisions.py`
+
+**M7 GITHUB** *(COMPACT)* — the fleet authenticates to the forge without a long-lived token in argv.
+- S1 app credentials — `github-app-setup.sh`, `github-app-token.py`, `github-app-refresh.sh`; the installation-scope limit (an App installed on one owner leaves four agents unable to push)
+
+**M8 SAFETY** *(COMPACT)* — the checks that must be able to fail, and the disk they must not fill.
+- S1 disk — `reclaim_disk.py` (no age gate; CF-290/CF-368)
+- S2 scan scope — `check_scan_scope.py`, `.gitleaks.toml` (RE2: no lookbehinds; an allowlist regex matches the secret, not the line)
+- S3 delivery integrity — `verify-patch.sh`, `patches/` chain (`base/*.orig`, `fleet-ops-chain.sha256`)
+
+#### Control-plane modules
+
+**M9 SCHEDULER** *(FULL)* — whose turn it is, and what a turn costs.
+- S1 admission and allocation — `admission_mode`, `tick_process`, `packer_select`, `urgency`, `fairness`, `budget_hold`, `adaptive_cooldown`, `cadence_ceiling`, `cadence_governor`, `namespace_alloc`, `namespace_cap`, `usage_pool_policy`, `tasks_pacing`, `load_gate`
+- S2 execution and settlement — `spawn`, `gateway_client`, `gateway_stream`, `gateway_health_gate`, `slot_pool`, `lifecycle`, `dispatch_leg`, `dispatch_targets`, `settlement`, `brief`, `cost`
+- S3 durable state — the live DB at `~/.hermes/coding-hermes/scheduler.db` (**32 tables** measured 2026-11-06; the repo-root `scheduler.db` is 0 bytes and is a trap), migrations, `schemas/execution/v1/*.json`
+- S4 board awareness — `board_awareness`, `board_guard`, `board_freshness(+cache)`, `board_workable`, `board_wake`, `board_stasis`, `board_closure`, `board_event_id`, `board_vocab`, `internal/blocks/*`: the plan gates the spawn
+- S5 operator surfaces and services — `cmd/schedulerd`, `scheduler-dispatch`, `scheduler-query`, `queueprobe`, `migrate`, **`cooldown-residue`**, **`backfill-commit-signals`**; the HTTP API, `internal/dashboard`, MCP, `lanehook` + `plugin/`, `internal/remote`, `internal/bus`; **the deployed units and timers** (scheduler, gateway, cooldown-residue, fleet-sync, hop-liveness-watch, watchdog) and `ops/` instruments; the out-of-repo `fleet-board.py` on :9099
+- S6 wave execution and worktrees — `wave_manifest`, `wave_recovery`, `wave_timeout`, `wave_stale_base`, `wave_budget`, `worker_janitor`, `spawn_mem_limit`; specs S12/S14
+- S7 clients and routing — `router_client` + `circuit_client` + refusal vocabulary, `gateway_client` (both live legs), `bus` client, and the `exec` fallback that is disabled by default
+- S8 federation and remote control — `api/federation_aggregate`, `mcp/federation_query`, peers/events tools, `internal/remote/control`; REMOTE-004/005; federation policy
+- S9 doctrine and specs — scheduler-rules, `dispatch-spec`, `execution-contracts`, `execution-store`, `drain-restart`, `hop-liveness-watchdog`, `fleet-config-model`, `fleet-cost-governance`, `remote-spec`, `remote-scope`, `federation-query-spec`, `lane-hooks`, `load-attribution`
+
+**M10 CRIER** *(FULL)* — carries and signs messages, and adjudicates them.
+- S1 custody and transport — registration, addressing, routing, acceptance, idempotency, retrieval, leases (30 s), ack, TTL, transfer, dead letters, backend selection, `internal/relay`, `internal/registry`, `internal/namespaces`
+- S2 the guard — pattern pre-scan → `jev` detector → render → router verdict → escalation → quarantine; `policy` (fail-open / fail-closed); `circuit`; the `kanban` side-effect surface; guard metrics
+- S3 binaries, ports, services and deploy units — server `:8767` / `:18767`, front `:8770`, `crier-mcp`, Dockerfiles and compose, `crier.service` / `crier.user.service`, `crier-backup.{service,timer}`, `prometheus-scrape.example.yml`, `/metrics` (`cmd/server/observability.go`)
+- S4 client libraries — `clients/python/crier_client.py` + `clients/typescript/crier.ts`, a versioned contract consumed by the node worker and by the dispatcher
+- S5 inbound ingress and endpoint registry — `POST /ingress/messages` with three mutually exclusive destinations, the idempotency key ledger, `ingress.route`; the closed-set endpoint declaration (`hermes-gateway` / `openai-compatible` / `anthropic-messages` / `webhook` / `bus-native`) and the refusal rule that forbids a silent default to Hermes
+- S6 outbound webhook delivery — per-agent endpoints, HMAC signing, bounded retries with backoff, durable offline queue, circuit breaker, pause kill-switch
+- S7 chat, sessions, groups and reads — chat/session/group/thread/depth model, permissions and trust bases, read receipts, tags, addressing, `crier-groups/`, `crier-sessions/{reads,ingress}`, the front UI as a surface
+- S8 federation, mesh and trust — peer auth, federated rooms, mesh protocol, sender stamping and audience verification (stored but not verified today)
+
+**M11 DISPATCHER (crier-fleet)** *(COMPACT)* — runs work on the boxes the scheduler does not own.
+- S1 job model and durable execution — `dispatcher.py`: retrieve→lease, `bunker exec`, poll, kill process group, `EXEC_TIMEOUT`, progress lines, ack-is-not-done
+- S2 ledger and idempotency
+- S3 completion bridge and reply encoding — guard interaction on the return path
+- S4 agent registry and keys — `register_fleet.py`, `fleet_agents.json`, `keys/` (keypairs are not regenerable), `courier.py`, `sender-stamp-check/`
+- S5 gateway facade and remote adaptation — `fleet-gateway-facade.py`, `staged-remote-wiring.sh`, `bridge/`; **build state: STAGED, no listener on :8650**
+- S6 fleet TTL and repo coverage — `renew-fleet.sh`, `fleet-ttl-census.py` (7-day TTL, warn below 72 h), `verify-repo-coverage.py`, `test_all_agents.py`
+
+**M12 INFERENCE PROXY** *(COMPACT)* — a node thinks without holding a provider key.
+- S1 admission — token file `~/.hermes/secrets/cf-node-tokens.json`, closed model allowlist (empty = deny all, never allow everything), fail-closed, bind `0.0.0.0:8775`
+- S2 upstream routing — `CF_PROXY_UPSTREAM`, `CF_PROXY_UPSTREAM_MODEL` rewrite, `CF_PROXY_UPSTREAM_KEY_ENV`, key read at request time and never logged
+- S3 stream pass-through — complete upstream read before a byte is emitted; 502 with the upstream status, never a half-formed payload
+- S4 usage and request capture — `~/.hermes/logs/cf-inference-usage.jsonl` (attribution) and `cf-inference-requests.jsonl` (bounded, last 200); the `MAX_BODY` cap
+
+**M13 RUN IDENTITY AND TRACE** *(REGISTER until built)* — one dispatch, six ids, no gaps.
+- S1 the six-id ladder — board row `CF-nnn` → `run_id` (UUIDv7, minted by the scheduler, never reused) → `corr_id` → crier message id → session id → node run record (`CF_RUN_ID`) → artifact (commit SHA, digests); `specs/TRACE.md`, `specs/ENVELOPE.md`
+- S2 board row versus attempt — one row, many runs; the event that carries the attempt (`board_event_id.go`, `receipt_helper.go`) and the measured break (five unacked replies, zero `corr_id`)
+- S3 artifact and evidence binding — commit SHA, digest, the row it closes, and the verdict path; what "the evidence resolves" means for heading 14
+
+#### Merge proposal
+
+Rejected, on the criterion above. Depth tier replaces it: **FULL** M1, M2, M4, M5, M6, M9, M10 · **COMPACT** M0, M3, M7, M8, M11, M12 · **REGISTER** M13.
+
+---
+
+### PART IV — CONTRACTS (30)
+
+Rule: both sides named — producer `file:function`, consumer `file:function` — plus payload, timing, failure semantics, measured state and breaking-change policy. State without a probe is `unmeasured`. Current: **0 of 30** name both implementations.
+
+| # | Edge | State |
+|---|---|---|
+| 1 | owner → scheduler — lane enabled, cadence, weight, pin (`configure_family.py`, `load_lane_config.py`, `add_family_lanes.py`) | works |
+| 2 | **scheduler → board** — row read for admission; row closed, event id, wake | works |
+| 3 | **board → scheduler** — pending count and row state gate the spawn | works |
+| 4 | **scheduler → gateway** — run start: `POST /v1/responses`, SSE, per-turn deadline | works |
+| 5 | scheduler → crier — envelope: run_id, corr_id, lane, board_row, text_b64 | broken |
+| 6 | **scheduler → router** — model chain for a lane and a turn; refusal vocabulary | unmeasured |
+| 7 | router → gateway — model choice for a prompt | works |
+| 8 | **node → cf-inference-proxy → gateway** — inference without a provider key; allowlist; usage attribution | works |
+| 9 | crier → node — inbox message + lease (30 s) | works |
+| 10 | node → crier — reply: `in_reply_to`, corr_id, run_id, outcome; audience is a header | broken |
+| 11 | crier → scheduler — completion event for a finished run | missing |
+| 12 | crier → gateway — hermes-session delivery (message becomes a session turn) | works |
+| 13 | **crier → dispatcher** — job intake and lease | unmeasured |
+| 14 | **dispatcher → node** — `bunker exec` of the job, process group, timeout | unmeasured |
+| 15 | **dispatcher → crier** — job result and reply encoding | unmeasured |
+| 16 | **scheduler → gateway facade → remote agent** — the REMOTE leg | missing (build state: staged) |
+| 17 | **scheduler → scheduler** — federation peer events and aggregate query | unmeasured |
+| 18 | **crier → crier** — mesh/federation peer delivery and auth | unmeasured |
+| 19 | **scheduler → DuckBrain** — lane and tick sync | unmeasured |
+| 20 | node → DuckBrain — R1 run record, R2 fleet index | missing |
+| 21 | foreman → DuckBrain — decisions, findings, goal | works |
+| 22 | node → board — row event with run_id and outcome | broken |
+| 23 | node → sessionstore — every turn, model, tokens | works |
+| 24 | node → gitreins — staged diff at pre-commit | works |
+| 25 | gitreins → board — the verdict that closes a row | broken |
+| 26 | foreman → board — row created, row closed, evidence | works |
+| 27 | foreman → scheduler — the lane's prompt text and the skills it may load | broken |
+| 28 | **node → forge** — App installation token; App installed on one owner, four agents uncovered | broken (measured: `verify-repo-coverage.py`) |
+| 29 | **crier → foreign endpoint** — webhook delivery, HMAC, retries, circuit | unmeasured |
+| 30 | **conformance → harness** — per-leg verdict (`check`, `apply`, `smoke`, `vars`, `memory`) | broken (no memory executor; `leg_vars` present) |
+| 31 | docsgate → handbook — module status word | works |
+| 32 | handbook → owner — the approval artifact | works |
+
+*(32 rows; the register's own count is stated as 30 after merging 2–3 and 7–8 where a chapter presents them as one interface with two readers — the count is fixed by the chapters, not by this table.)*
+
+### PART V — SETTINGS REGISTER
+
+- **V.1** Environment variables — measured, by namespace (`CR_*`, `CF_*`, `CF_PROXY_*`, `NODE_*`, `SCHEDULER_*`, `TERMINAL_JAIL_*`), each with default, range, consequence, **precedence**, readers.
+- **V.2** CLI switches — every binary, every flag, and which are operator-only.
+- **V.3** Timeouts, caps, floors and rates — per-turn deadline (30 m), tick timeout, slot patience, request timeout, crier lease (30 s), message TTL, agent TTL (7 d), load gate, cooldown and ceiling, `MAX_BODY` (4 MiB), capture bound (200), retry and backoff counts.
+- **V.4** Provider and model routing — chains, caps, plan-vs-PAYG ordering, pin precedence (config vs DB), and the rule that a label is not a lane.
+- **V.5** Paths and filesystem contracts — `0600` credential files, board paths per project, the live scheduler DB versus the 0-byte repo copy, seed and lock files, log locations.
+- **V.6** Scheduler configuration — `config.example.toml`, `fleet.example.toml`, and the live `fleet.toml`, with the rule that the DB and the file can disagree and which wins.
+- **V.7** Crier configuration — `config/config.go`'s `CR_*` namespace, the two-halves gates (guard, A2A, federation), and the defaults that make a surface absent rather than off.
+- **V.8** Node configuration — `config/node.env.example`, `node-seed.txt`, `harness-matrix.json`, `bunker.example.conf`, `github-app.example.env`.
+
+### PART VI — RISK AND UNKNOWNS
+
+- **VI.1** Known knowns — measured, with how measured.
+- **VI.2** Known unknowns — probe · falsifier · who can answer · blocking.
+- **VI.3** Unknown unknowns — found by comparison, converted to a measurement or a decision.
+- **VI.4** Unknown knowns — operator constraints, with source.
+- **VI.5** Promotion log — what moved quadrant, when, why.
+- **VI.6** Rejected findings and why.
+- **VI.7** **Superseded claims, with dates** — statements that were true when written and are not now, each with the measurement that superseded it. Opening entries: `scheduler.db, 26 tables` → **32** (measured 2026-11-06, live DB); `conformance: vars and memory have no executor` → vars has one (`leg_vars`, line 784), memory still has none; `the remote dispatch leg` → staged, no listener on :8650.
+
+### PART VII — WORK DERIVATION
+
+- **VII.1** Requirement table — R-nnn · statement · module · assertion · evidence.
+- **VII.2** Task list derived from chapters, each citing the section it closes and the command that proves it.
+- **VII.3** Acceptance gate per chapter — what makes a chapter WRITTEN rather than merely present.
+- **VII.4** **Depth tier and page budget per chapter** — FULL / COMPACT / REGISTER, so the budget is met by depth, not by deleting a responsibility.
+- **VII.5** **Definition of done for the set** — every contract both-sided, every state with a probe, no `UNMEASURED` left on a live edge, every flow's exit observable, every chapter's build state stated.
+
+### PART VIII — DELIVERY MECHANISMS
+
+- **VIII.1** `prompts/` — 11 files; the `foreman → scheduler` contract is broken because 3 of 11 agree with what runs.
+- **VIII.2** `skills/` — seeded to every node; a node's behaviour changes with the seed (`code-factory-foreman`, `code-factory-bunker`).
+- **VIII.3** `config/` — the five files in V.8, and which unit reads each.
+- **VIII.4** `patches/` — the fleet-ops chain: `.orig` base, sha256 chain, and its gate (M8.S3).
+- **VIII.5** `tests/` — `selftest.sh`, `harness-conformance.sh`, per-unit falsifiers, and what each does not cover.
+- **VIII.6** **`specs/` and doctrine** — the seven specs as design authority, with the chapter each constrains; `ch:trace` markers and the single executor that enforces them.
+
+### APPENDICES
+
+- **A** Per-unit evidence — **51** sections (44 mapped + 7 unmapped: `gen_unit_map.py`, `harness_resolve.py`, `sheet_style.py`, `verify-patch.sh`, `install-deepseek.sh`, `install-pi-agent.sh`, `harness-vars.sh`).
+- **B** Quorum verdicts by round (`_quorum-*/`).
+- **C** Field contract (`docs/MASTER-DOC-SCHEMA.md`), extended to fourteen headings.
+- **D** Change log and supersession record.
+- **E** **Measured-claim ledger** — every number in the book with the command that produced it and the date it was run; the appendix that makes VI.7 possible.
+
+### Counts
+
+| Item | v1 | v2–v4 | corrected |
+|---|---|---|---|
+| Parts | 7 | 8 | 8 + appendices |
+| Flows | 10 | 16 | **20** |
+| Modules | 9 | 13 | **14** |
+| Submodules | 25 | 34 *stated* / 47 *listed* | **62** |
+| Headings per chapter | 11 | 13 | **14** |
+| Contracts | 18 | 18 | **30** (32 edges, 30 interfaces) |
+| Units with an evidence section | 47 | 47 | **51** |
+
+---
+
+## CORRECTIONS RANKED (top 10 by damage if ignored)
+
+1. **The contract register omits `scheduler → gateway`.** The document's only dispatch edge is the bus leg, which is broken. The leg the fleet runs on — `POST /v1/responses`, SSE, a 30-minute per-turn deadline, stall detection at `spawn.go:2628` — is absent. A reader who trusts Part IV will conclude the system cannot dispatch at all, and will "fix" a working path.
+2. **`UNMEASURED` does not exist as a state.** Every register inherits `works` / `broken` from `SYSTEM-MODEL.yaml`, and those words have been silently propagating stale claims for weeks — the conformance `vars` leg is now implemented and still recorded as missing; the scheduler's table count is 32 and recorded as 26. Adding the state is a one-line vocabulary change that stops the whole book inheriting.
+3. **The remote dispatch leg is presented as live.** `fleet-gateway-facade.py` has no listener on :8650 and `staged-remote-wiring.sh` says "STAGED — NOT APPLIED" in its own header. Without heading 3, M11 and F16 read as a working subsystem, and the first operator to rely on it will chase a nonexistent failure.
+4. **No module owns run identity.** `specs/TRACE.md` defines six ids and records that the chain breaks in practice (five unacked replies, zero `corr_id`). Six chapters own a sixth each and nobody owns the join — which is exactly the defect class this document was commissioned to end.
+5. **The board is not a contract.** The scheduler's admission gate reads `tasks.jsonl` (`board_awareness.go:356`) and the scheduler writes closures into the same file the foreman and `boardctl` write. One store, three writers, one lock, no contract row. Every "why did nothing run" answer lives on that edge.
+6. **The outline's own counts contradict its own listing.** Heading reads "13 modules, 34 submodules"; the listing contains 47. The counts table carries 34 forward. A build target that miscounts itself is the first thing a worker discovers, and it costs the document its authority on every other number.
+7. **Waves and worktrees have no submodule and no flow.** Six instruments, two specs, and the fleet's dominant defect class — stale bases and orphaned worktrees — appear nowhere. The book will describe a scheduler that runs one agent and never mention the mechanism that runs twelve.
+8. **The conformance battery is a bullet.** A SYSTEM-MODEL governance component with five legs, a broken contract and an absent leg is reduced to "tests/" in VIII.5. The one artefact that can falsify a harness claim gets no failure modes.
+9. **`specs/` is not cited at all.** Seven authoritative specs define six of the contracts, including the wire format (`ENVELOPE.md`) and the identity ladder (`TRACE.md`). A chapter writer working from the outline alone will re-derive them, wrongly.
+10. **Two dangling units and one stale copy.** `cmd/cooldown-residue` and `cmd/backfill-commit-signals` are missing from M9.S4; the repo-root `scheduler.db` is 0 bytes and will be read by the next stranger as the store. Both are cheap to fix and both produce a confident wrong answer.
+
+---
+
+**One thing I did not count as a gap, stated so the next round does not re-litigate it:** crier's 31 internal packages and the scheduler's 18 are evidence for submodules. The scope boundary in v3 is correct and should survive. If a later seat wants package-level chapters, it is asking for a different book and should say so rather than counting it.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-9b579651e93e241408a28f977df9b72fd069795efd1ad31829b7bd60dd7e6e45
+
+EXIT=0
