@@ -3855,6 +3855,106 @@ else
   printf '%s\n' "$out"
 fi
 rm -rf "$tmpd"
+# CF-374: the checker's default root was the literal "docs/master", which the Apollo re-arrange
+# removed from the tree, so its glob matched nothing and one run printed "0 module(s): 0 VERIFIED,
+# 0 error(s)" together with "MASTER-DOC: PASS". A gate whose empty case is green cannot catch the
+# locator/FACT drift it exists for. The three arms below pin the fixed behaviour, each of them a
+# that-command-succeeds assertion so this block can go red rather than print a shape.
+# Part of section 52: no new numbered section and no census change (arms_tree stays 55), like the
+# CF-230 block in section 12. A numbered section would force a docs/ACCEPTANCE-PLAN.md mapping row
+# and the prose arm count with it (docs/audits/cf198-section-mapping.sh), and this row may not
+# touch docs/.
+# BEGIN master-doc-reachability
+say "  section 52 reachability (CF-374): the checker resolves its root and refuses a zero-module pass"
+tmpd=$(mktemp -d)
+# arm 1: no candidate root exists -> one named FAIL per candidate tried, non-zero, never PASS.
+mkdir -p "$tmpd/bare"
+out=$(env -u CF_MASTER_DIR python3 "$HERE/scripts/master_doc_check.py" --repo "$tmpd/bare" 2>&1); rc=$?
+if [ "$rc" -ne 0 ] \
+  && printf '%s\n' "$out" | grep -q '^   FAIL  no master doc root at .*docs/master$' \
+  && printf '%s\n' "$out" | grep -q '^   FAIL  no master doc root at .*docs/handbook/appendices/units$' \
+  && ! printf '%s\n' "$out" | grep -q 'MASTER-DOC: PASS'; then
+  say "  PASS  absent root -> exit $rc, both candidate roots named, no PASS"
+else
+  say "  FAIL  absent root was not a named refusal (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+# arm 2: a root that really holds one module still counts it, and can still pass. The module is
+# built from the shipped shape: the eight required headings, the `| Status | **VERIFIED ...**` row,
+# three locators that resolve inside the fixture repository, and one ledger fact it may cite.
+fixture="$tmpd/one/docs/handbook/appendices/units"
+mkdir -p "$fixture"
+printf '# fixture source line one\n# fixture source line two\n# fixture source line three\n' \
+  > "$tmpd/one/fixture_source.py"
+cat > "$fixture/01-fixture.md" <<'MD'
+# 01. fixture_source.py
+
+| Field | Value |
+|---|---|
+| Path | `fixture_source.py` |
+| Status | **VERIFIED - three locators and one ledger fact, measured on the fixture repo** |
+
+## 1. Purpose and why it matters
+
+The fixture module exists so the gate can be shown counting one real module rather than none.
+It cites `fixture_source.py:1`, `fixture_source.py:2` and `fixture_source.py:3`.
+
+## 2. Dependencies and library contracts
+
+Standard library only; the fixture source is a three-line file the checker reads back.
+
+## 3. Verification
+
+The fixture was checked with the gate under test and cites `fact: FACT-01` from its ledger.
+
+## 4. Metrics emitted
+
+No metric is emitted; the only output is the gate summary line and its verdict.
+
+## 5. Log lines it can generate
+
+No levelled log line is generated; the module surface is the checker summary itself.
+
+## 6. Failure modes
+
+A missing section, a locator past the end of the fixture source, or an absent ledger fact reds.
+
+## 7. Environment and settings it reads
+
+No environment variable is read; the root is resolved from the repository argument.
+
+## 8. Evidence of record
+
+Every claim above comes from re-running the gate on this fixture directory, not a commit message.
+MD
+printf '| id | claim | how measured | measured at | confidence |\n|---|---|---|---|---|\n| FACT-01 | The fixture ledger carries exactly one fact | this file | 2026-11-06 | measured |\n' \
+  > "$fixture/_facts.md"
+out=$(env -u CF_MASTER_DIR python3 "$HERE/scripts/master_doc_check.py" --repo "$tmpd/one" 2>&1); rc=$?
+if [ "$rc" -eq 0 ] \
+  && printf '%s\n' "$out" | grep -q '^1 module(s): 1 VERIFIED' \
+  && ! printf '%s\n' "$out" | grep -q '0 module(s)' \
+  && printf '%s\n' "$out" | grep -q 'MASTER-DOC: PASS'; then
+  say "  PASS  one-module root -> exit 0, summary reads 1 module(s)"
+else
+  say "  FAIL  one-module root did not count one module (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+# arm 3: the red-proof for the vacuous case. The root exists, so resolution succeeds, but it holds
+# no NN-*.md module: that must be a named FAIL against the resolved root, not a clean PASS.
+mkdir -p "$tmpd/empty"
+out=$(python3 "$HERE/scripts/master_doc_check.py" "$tmpd/empty" 2>&1); rc=$?
+if [ "$rc" -ne 0 ] \
+  && printf '%s\n' "$out" | grep -q '^   FAIL  no module files (NN-\*.md) in the resolved root:' \
+  && printf '%s\n' "$out" | grep -Fq "$tmpd/empty" \
+  && printf '%s\n' "$out" | grep -q '^0 module(s):' \
+  && ! printf '%s\n' "$out" | grep -q 'MASTER-DOC: PASS'; then
+  say "  PASS  zero-module root -> exit $rc, FAIL names the root, 0 module(s), no PASS"
+else
+  say "  FAIL  zero-module root still reported itself healthy (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+rm -rf "$tmpd"
+# END master-doc-reachability
 # END master-doc-selection
 
 say ""
