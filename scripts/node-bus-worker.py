@@ -35,6 +35,7 @@ Refusals (named, non-zero exit, no side effects when possible):
   bus_bearer   no bearer token (file or CRIER_AUTH_TOKEN) to send with the signature
   bus_health   the bus does not answer /health (000) from this node
   brief_digest a dispatch's brief.digest does not match sha256(text) — refused, not warned
+  text_b64     a dispatch's `text_b64` does not decode to UTF-8 text — refused, no fallback
   brief_project a dispatch names a project other than this node's
   brief_workdir a dispatch names a workdir that is not inside this node's clone
 
@@ -114,6 +115,10 @@ SECTION5_INTS = {
 }
 
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
+
+# The plain members a dispatch may carry instead of `text_b64`, in the order older senders use
+# (docs/MASTER-DOC-SCHEMA.md §3c). Read by directive_text().
+DIRECTIVE_MEMBERS = ("task", "text", "prompt", "message", "body")
 
 
 # --------------------------------------------------------------------------------------------
@@ -969,6 +974,36 @@ def refusal(ident, dispatch, reason, detail):
     }
 
 
+def directive_text(dispatch):
+    """(text, reason) — the directive a dispatch carries, and the refusal reason if it has none.
+
+    The scheduler sends the directive as `text_b64` (base64 of the UTF-8 text) because the reply
+    relay's control-key guard refuses prose that quotes JSON key names (`specs/ENVELOPE.md`
+    §Reserved field names). Decode it FIRST: a `text_b64` that does not decode is a named refusal,
+    never a silent fallback to another member — a corrupted dispatch must not run a different
+    instruction than the one that was sent.
+
+    The legacy plain members stay supported for older senders, in the order
+    `docs/MASTER-DOC-SCHEMA.md` §3c lists: `task`, `text`, `prompt`, `message`, `body`.
+    """
+    if "text_b64" in dispatch:
+        encoded = dispatch["text_b64"]
+        if not isinstance(encoded, str):
+            return "", "text_b64"
+        try:
+            decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
+            return "", "text_b64"
+        if not decoded.strip():
+            return "", "text_b64"
+        return decoded, ""
+    for name in DIRECTIVE_MEMBERS:
+        candidate = dispatch.get(name)
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate, ""
+    return "", "brief"
+
+
 def process(dispatch, ident, signer, args, seen):
     """Handle ONE dispatch. Returns (rows_ok, result_dict or None, message_ids_to_ack)."""
     dispatch_id = str(dispatch.get("dispatch_id") or "")
@@ -983,8 +1018,21 @@ def process(dispatch, ident, signer, args, seen):
         )
         return True, seen[key], True
 
-    text = dispatch.get("text")
-    if not isinstance(text, str) or not text.strip():
+    text, reason = directive_text(dispatch)
+    if reason == "text_b64":
+        bad(
+            "text_b64",
+            f"{label} `text_b64` does not decode to UTF-8 text — a corrupted dispatch is "
+            f"refused, not run against another member",
+        )
+        result = refusal(
+            ident,
+            dispatch,
+            "text_b64",
+            "dispatch carries a `text_b64` that does not decode to UTF-8 text",
+        )
+        return False, result, True
+    if not text:
         bad(
             "brief",
             f"{label} carries no `text` — a dispatch without an instruction is a bug, "

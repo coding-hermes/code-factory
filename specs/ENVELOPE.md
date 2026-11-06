@@ -13,8 +13,8 @@ ambiguity.
   "issued_at": "2026-10-29T18:40:00Z",
   "reply_to": "mdp-collector",
   "lane": "crier",
-  "text": "You are the foreman for lane crier. Work the board at <ref>. Report a verdict.",
-  "brief": {"digest": "<sha256 of the task text>", "bytes": 4211},
+  "text_b64": "<base64 of the UTF-8 directive — e.g. You are the foreman for lane crier. …>",
+  "brief": {"digest": "<sha256 of the directive TEXT, not of the base64>", "bytes": 4211},
   "route": {"provider": "xkiro", "model": "openai/gpt-6.1-sol", "harness": "hermes"},
   "vars": {"CF_MODEL": "openai/gpt-6.1-sol", "CF_PROVIDER": "xkiro",
            "CF_API_KEY_FILE": "/home/node/.node/keys/xkiro.key",
@@ -25,9 +25,27 @@ ambiguity.
 }
 ```
 
-**`text` is mandatory.** A dispatch without `text` is a bug: the receiving side has no
-instruction and will either invent one or run the JSON as a prompt. `brief.digest` proves the
-node got the task it was given; a mismatch is a refusal, not a warning.
+**The instruction is mandatory, and `text_b64` is how it travels.** A dispatch must carry an
+instruction — `text_b64` (base64 of the UTF-8 directive) or, for older senders, one of the plain
+members below. A dispatch with neither is a bug: the receiving side has no instruction and will
+either invent one or run the JSON as a prompt.
+
+The encoding exists because the reply relay's control-key guard (see *Reserved field names*)
+refuses prose that would otherwise be re-injected, and a real directive routinely quotes JSON
+bodies and board rows. So the directive goes on the wire base64-encoded, and the guard sees opaque
+text. The decoding rule is therefore part of the contract, not an implementation detail:
+
+- A receiver **MUST** decode `text_b64` first, to UTF-8, and **MUST NOT** consult another member
+  while `text_b64` is present.
+- A `text_b64` that does not decode — bad base64, bytes that are not UTF-8, or a decoded body that
+  is empty or whitespace — is a **named refusal** (`text_b64`), never a silent fallback. Falling
+  back would run a different instruction than the one that was sent, and hide a corrupted dispatch.
+- Only when `text_b64` is **absent** does the receiver fall back to the plain members, in this
+  order: `task`, `text`, `prompt`, `message`, `body` (first non-empty string wins). Plain `text` is
+  the historical member; the others are tolerated for older senders.
+- `brief.digest` proves the node got the task it was given: it is **sha256 over the decoded
+  directive text** — the UTF-8 bytes the sender hashed, not the base64 that carried them. A
+  mismatch is a refusal, not a warning.
 
 **`vars` carries the harness variable contract** (`specs/HARNESS-MATRIX.md` §5). It is optional:
 a dispatch without it runs with no `CF_*` in the harness child's environment. When it is present,

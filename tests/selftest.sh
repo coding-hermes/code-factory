@@ -4699,5 +4699,39 @@ fi
 rm -rf "$tmpd"
 # END cf051-agent-reuse
 
+say "54. the bus worker decodes the wire directive member, and the pre-fix revision cannot (CF-354)"
+# specs/ENVELOPE.md sends the directive as `text_b64`; this repo's node read only `text`, so every
+# dispatch the scheduler actually sent was refused HERE with the `brief` row, and the fleet only
+# worked because a dispatcher outside this repository decodes the member. The fixture asserts what
+# the HARNESS RECEIVED, not what the worker said it would do: five arms, three of them the failure
+# path, so a green here can go red. No network, no credential, everything under one mktemp -d.
+cf354=$(mktemp -d)
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_bus_dispatch_encoding.py" \
+     >"$cf354/out" 2>&1; then
+  say "  PASS  text_b64 decoded to the harness bytes, legacy text still runs, corrupt text_b64 / absent instruction / base64 digest each refused"
+else
+  say "  FAIL  the dispatch encoding on the receiving side (tests/test_bus_dispatch_encoding.py)"
+  fails=$((fails+1))
+  sed 's/^/    | /' "$cf354/out"
+fi
+# ARM (red control): the SAME fixture against the revision this row was raised on. It must refuse
+# the text_b64 dispatch with the named `brief` row — pointed at the fixed worker the control fails,
+# so it discriminates rather than merely passing.
+if git -C "$HERE" show 5b11bdc:scripts/node-bus-worker.py > "$cf354/node-bus-worker.py" 2>/dev/null; then
+  if CF_BUS_WORKER_SOURCE="$cf354/node-bus-worker.py" CF_BUS_DISPATCH_PREFIX_CONTROL=1 \
+       PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_bus_dispatch_encoding.py" \
+       >"$cf354/prefix" 2>&1; then
+    say "  PASS  pre-fix 5b11bdc refuses the text_b64 dispatch with the brief row (fixture detects CF-354)"
+  else
+    say "  FAIL  pre-fix control did not reproduce the brief refusal on a text_b64 dispatch"
+    fails=$((fails+1))
+    sed 's/^/    | /' "$cf354/prefix"
+  fi
+else
+  say "  FAIL  pre-fix source unavailable (git show 5b11bdc:scripts/node-bus-worker.py)"
+  fails=$((fails+1))
+fi
+rm -rf "$cf354"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
