@@ -4096,6 +4096,121 @@ else
   say "  FAIL  the restored fixture did not verify (exit $rc)"; fails=$((fails+1))
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
+# CF-270 — the port reached the remote shell. `--port` was taken verbatim into PORT and then
+# expanded LOCALLY inside a double-quoted string that was handed to a REMOTE `bash -lc`, so
+#   --port "10800'; touch <path>; echo '"
+# ran code on the node (measured: the remote command became
+#   ... 'http://127.0.0.1:10800'; touch /tmp/cf270-canary; echo '/api/status').
+# The stub below RECORDS the argv it is handed and never executes it: what matters is the command
+# the remote shell would have received, not what it would have done. Three arms plus the pre-fix
+# red control, so a green here can go red. Part of section 48, where the verifier fixture lives:
+# no new numbered section and no census change (arms_tree stays 57), the CF-230 precedent.
+say "  ..  CF-270: --port is a port or a usage error, and it reaches the node as an argument"
+cf270=$(mktemp -d)
+mkdir -p "$cf270/bin" "$cf270/tree" "$cf270/home"
+cp -r "$HERE/scripts" "$cf270/tree/scripts"
+rm -rf "$cf270/tree/scripts/__pycache__"
+canary="$cf270/cf270-canary"
+cat > "$cf270/bin/bunker" <<'EOF'
+#!/usr/bin/env bash
+# CF-270: record the argv, never run it.
+printf '%s\n' "$*" >> "${FIXTURE_LOG:?}"
+printf 'ALIVE fixture-node\n'
+EOF
+cat > "$cf270/bin/curl" <<'EOF'
+#!/usr/bin/env bash
+printf '000'
+EOF
+chmod +x "$cf270/bin/bunker" "$cf270/bin/curl"
+cf270_run() {  # cf270_run <port>: a fresh record per run, the REAL verifier, stub transport
+  : > "$cf270/remote.log"
+  env PATH="$cf270/bin:$PATH" FIXTURE_LOG="$cf270/remote.log" HOME="$cf270/home" \
+    /bin/bash "$cf270/tree/scripts/verify-node.sh" --agent cf-fixture --server fixture \
+    --port "$1" 2>&1
+}
+
+# AC2 (a): a non-numeric port is a usage error, refused before the first remote invocation.
+out=$(cf270_run not-a-port); rc=$?
+if [ "$rc" -eq 2 ] && [ ! -s "$cf270/remote.log" ] && [ ! -e "$canary" ] \
+  && [ "$(printf '%s\n' "$out" | grep -cF -- 'verify-node: --port must be digits 1-65535 (got: not-a-port)')" = 1 ] \
+  && ! printf '%s\n' "$out" | grep -q 'VERIFY:'; then
+  say "  PASS  CF-270 --port not-a-port -> exit $rc, stderr names --port, 0 recorded remote invocations"
+else
+  say "  FAIL  CF-270 a non-numeric --port was not refused before the first remote call (exit $rc, $(grep -ac . "$cf270/remote.log") recorded)"
+  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# AC2 (b): the boundary. 1..65535 is the whole legal range, so 0, 65536, an empty value and a
+# padded value are refused by the same rule, and none of them reaches the transport.
+cf270_bad=""
+for cf270_port in 0 65536 "" " 10800"; do
+  out=$(cf270_run "$cf270_port"); rc=$?
+  if [ "$rc" -eq 2 ] && [ ! -s "$cf270/remote.log" ] \
+    && printf '%s\n' "$out" | grep -qF -- 'verify-node: --port must be digits 1-65535 (got: '; then :; else
+    cf270_bad="${cf270_bad:+$cf270_bad, }'$cf270_port' (exit $rc, $(grep -ac . "$cf270/remote.log") recorded)"
+  fi
+done
+if [ -z "$cf270_bad" ]; then
+  say "  PASS  CF-270 --port 0 / 65536 / empty / ' 10800' -> exit 2 each, 0 recorded remote invocations"
+else
+  say "  FAIL  CF-270 out-of-range --port accepted: $cf270_bad"
+  fails=$((fails+1))
+fi
+
+# AC2 (c): the measured exploit. Pre-fix this value closed the single quotes of the remote curl
+# URL and `touch` ran on the node; now it never leaves this host.
+inject="10800'; touch $canary; echo '"
+out=$(cf270_run "$inject"); rc=$?
+if [ "$rc" -eq 2 ] && [ ! -s "$cf270/remote.log" ] && [ ! -e "$canary" ] \
+  && printf '%s\n' "$out" | grep -qF -- 'verify-node: --port must be digits 1-65535 (got: ' \
+  && ! printf '%s\n' "$out" | grep -q 'VERIFY:'; then
+  say "  PASS  CF-270 injection --port -> exit $rc, refused before the first remote call, canary never created"
+else
+  say "  FAIL  CF-270 the injection --port was not refused (exit $rc, $(grep -ac . "$cf270/remote.log") recorded, canary $([ -e "$canary" ] && echo CREATED || echo absent))"
+  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# Control: a real port still runs the legs, and it reaches the remote shell as POSITIONAL DATA —
+# the recorded body is the FIXED single-quoted script plus `_ 10800 <path>`, never a locally
+# expanded URL — so this is a hardening, not a blanket refusal.
+out=$(cf270_run 10800); rc=$?
+inside_recs=$(grep -acF -- '"http://127.0.0.1:$1$2" _ 10800 /' "$cf270/remote.log")
+if [ "$rc" -eq 3 ] && [ "$inside_recs" -eq 2 ] \
+  && grep -aFq -- '_ 10800 /api/status' "$cf270/remote.log" \
+  && grep -aFq -- '_ 10800 /api/system/stats' "$cf270/remote.log" \
+  && ! grep -aFq 'cf270-canary' "$cf270/remote.log" \
+  && ! grep -aFq "127.0.0.1:10800'" "$cf270/remote.log" \
+  && printf '%s\n' "$out" | grep -Eq '^  PASS  agent_alive' \
+  && printf '%s\n' "$out" | grep -Eq '^VERIFY: UNVERIFIED — '; then
+  say "  PASS  CF-270 --port 10800 -> both inside legs run, port and path travel as arguments, no canary in any command"
+else
+  say "  FAIL  CF-270 a valid --port no longer runs the legs as positional data (exit $rc, $inside_recs inside call(s))"
+  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+  sed 's/^/    rec| /' "$cf270/remote.log"
+fi
+
+# Pre-fix red control: the same value through the pre-fix body must put the canary INSIDE the
+# recorded remote command, or the arms above prove nothing. The body is a copy of the `inside()`
+# the verifier carried at 2f070b0 — unchanged except that PORT and the path are its arguments.
+cat > "$cf270/prefix-inside.sh" <<'EOF'
+#!/usr/bin/env bash
+inside() { bunker exec --server "${SERVER:-fixture}" "${AGENT:-cf-fixture}" -- bash -lc "curl -s -o /dev/null -w '%{http_code}' --max-time 5 'http://127.0.0.1:$PORT$1'" 2>/dev/null; }
+PORT="$1"
+inside "$2"
+EOF
+: > "$cf270/remote.log"
+env PATH="$cf270/bin:$PATH" FIXTURE_LOG="$cf270/remote.log" \
+  bash "$cf270/prefix-inside.sh" "$inject" /api/status >/dev/null 2>&1
+if [ -s "$cf270/remote.log" ] && [ ! -e "$canary" ] \
+  && grep -aFq -- "; touch $canary; echo '/api/status'" "$cf270/remote.log" \
+  && ! grep -aFq -- ' _ 10800' "$cf270/remote.log"; then
+  say "  PASS  CF-270 pre-fix inside() interpolates the port: the canary IS in the recorded remote command (the fixture detects the defect)"
+else
+  say "  FAIL  CF-270 the pre-fix body did not reproduce the interpolation — these arms would pass vacuously"
+  fails=$((fails+1)); sed 's/^/    | /' "$cf270/remote.log"
+fi
+rm -rf "$cf270"
+
 rm -rf "$vn"
 rm -rf "$tmpd"
 # END cf250-seed-drift

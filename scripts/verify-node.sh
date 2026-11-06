@@ -30,6 +30,29 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -z "$AGENT" ] && { echo "usage: $0 --agent ID [--server NAME] [--port P] [--artifact PATH] [--strict-freshness] [--strict-seed]"; exit 2; }
+# CF-270: --port was taken verbatim into PORT and then expanded LOCALLY inside a double-quoted
+# string that was handed to a REMOTE `bash -lc`, so
+#     --port "10800'; touch /tmp/cf270-canary; echo '"
+# broke out of the single quotes and executed on the node (measured: the remote command became
+# `... 'http://127.0.0.1:10800'; touch /tmp/cf270-canary; echo '/api/status'`). A port is an
+# integer in 1..65535 or it is a usage error, and 2 is the code `unknown arg` and a missing
+# --agent already use. Validate it HERE, before ANY use of it.
+case "$PORT" in
+  ''|*[!0-9]*) PORT_VALID=0 ;;
+  *) PORT_VALID=1 ;;
+esac
+# Five digits is the widest possible port; refusing a longer string keeps the base-10 expansion
+# below inside the shell's integer range instead of making it print its own overflow error.
+[ "${#PORT}" -le 5 ] || PORT_VALID=0
+if [ "$PORT_VALID" -ne 1 ]; then
+  printf 'verify-node: --port must be digits 1-65535 (got: %s)\n' "$PORT" >&2
+  exit 2
+fi
+PORT=$((10#$PORT))
+if [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
+  printf 'verify-node: --port must be digits 1-65535 (got: %s)\n' "$PORT" >&2
+  exit 2
+fi
 # The old guard used ${VAR:?} at assignment time, so --server could never be used without the
 # environment variable being set first: the documented flag was dead.
 [ -z "$SERVER" ] && { echo "set BUNKER_SERVER or pass --server <name>" >&2; exit 2; }
@@ -65,7 +88,11 @@ code=$(curl -s -o /tmp/node-status.json -w '%{http_code}' --max-time 8 "$url" 2>
 # "000" here means UNVERIFIED, not broken. The distinction matters: FAIL sends an operator to fix a
 # node that works, PASS would be a lie, so UNVERIFIED is its own verdict (CF-224) — and it must name
 # the transport it could not use.
-inside() { bunker exec --server "$SERVER" "$AGENT" -- bash -lc "curl -s -o /dev/null -w '%{http_code}' --max-time 5 'http://127.0.0.1:$PORT$1'" 2>/dev/null; }
+# CF-270: the port and the path travel as POSITIONAL ARGUMENTS to the remote shell, so neither
+# value can be re-parsed as shell syntax: the remote body is a FIXED single-quoted string that
+# only reads its own "$1"/"$2". The old form expanded $PORT locally inside a double-quoted
+# string, and a value carrying a quote closed the single quotes and ran on the node.
+inside() { bunker exec --server "$SERVER" "$AGENT" -- bash -lc 'curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://127.0.0.1:$1$2"' _ "$PORT" "$1" 2>/dev/null; }
 
 if [ "$code" = 200 ]; then
   ok "gateway_reachable" "$url -> 200"
