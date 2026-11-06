@@ -1,0 +1,80 @@
+{
+  "task_id": "CF-225",
+  "task_title": "claude-code conformance legs: resolve the harness binary where the adapter installed it, not only on PATH",
+  "task_criteria": [
+    "bash tests/harness-conformance.sh --only claude-code prints a claude-code:smoke row whose reason is NOT 'binary claude absent from PATH' (with no credential it SKIPs naming the missing credential), bash tests/selftest.sh prints SELFTEST: PASS, and a new selftest arm fails when the battery ignores the adapter's measured binary path"
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "7686bc81523e1da8c2d0bb951d2f64eef59d65c2",
+  "working_tree_content_fingerprint": "f5219b208a475ef8dd6183e6aef6689a0e4730d770c7a41b5bb8cb03f2b43c87",
+  "working_tree_dirty_path_count": 2355,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261106T102524.982212Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n5:32AM INF scanned ~2831990 bytes (2.83 MB) in 1.26s\n5:32AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 278 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261106T102524.982212Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n install-go.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n verify-patch.sh\n  PASS  bash -n harness-vars.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-deepseek.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n install-pi-agent.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.gJxSlSqc56/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  351/351 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n\n\u2026 [31173 chars omitted \u2014 410 line(s)] \u2026\n  PASS  install-go positive: applied host pin read back (  PASS  go \u2014 go version go1.26.5 linux/amd64)\n\n51. the python lint lane can go red on one unused import, and green once it is removed (CF-254)\n  PASS  one unused import -> exit 1 naming F401\n  PASS  same file once the import is removed -> exit 0\n  PASS  tracked python surface clean: 41 files graded\n52. master-doc fills converge on runner-owned status without network (CF-257)\n  PASS  both fill writers stamp census/provider/UTC; missing status is rejected\n  PASS  local writer fixtures completed without provider calls\n  PASS  RED module selected, index and missing-Path document skipped\nskip 00-INDEX.md index\nskip 03-not-a-module.md no path field\ntodo=1 provider=deepseek workers=2\ncandidate 01-first.md\n  PASS  VERIFIED and bare VERIFIED Status rows are complete, never candidates\n  PASS  old selector would wrongly refill both completed modules\n  PASS  filled run 1: todo=0 exit=0 sha256sum unchanged\ntodo=0 provider=deepseek workers=2\n  PASS  filled run 2: todo=0 exit=0 sha256sum unchanged\ntodo=0 provider=deepseek workers=2\n  PASS  --force selects all four modules, VERIFIED ones included, never the non-modules\n  section 52 reachability (CF-374): the checker resolves its root and refuses a zero-module pass\n  PASS  absent root -> exit 2, both candidate roots named, no PASS\n  PASS  one-module root -> exit 0, summary reads 1 module(s)\n  PASS  zero-module root -> exit 1, FAIL names the root, 0 module(s), no PASS\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261106T102524.982212Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    }
+  },
+  "summary": "Judge Result: CF-225\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-06T10:33:20.011476",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-06T10:33:20.028169+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 10840,
+        "truncated": false,
+        "source": "git show 7686bc81523e"
+      }
+    ],
+    "task_id": "CF-225"
+  }
+}
