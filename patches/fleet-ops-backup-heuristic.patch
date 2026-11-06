@@ -1,0 +1,106 @@
+# CF-370 — the fleet ops census backup check is a phantom P1 generator
+#
+# Target:   the fleet ops census script, live at ~/.hermes/scripts/fleet_ops_check.py
+#           (tracked in no commit anywhere — CF-241 — so this patch IS its versioned home).
+# Pristine: sha256 82a3bf3418f1f521e3941334d796e09e1088512eb0f75ddd89d468d36f81d976
+# Patched:  apply with `git apply` (or `patch -p1`) in the directory holding fleet_ops_check.py.
+# Test:     patches/fleet-ops-backup-heuristic.test.py  (argv[1] = target script, default live path)
+#
+# Two defects in `ops_gaps()`, one phantom P1 class each:
+#   1. `owns_store` matched `schema.sql` as a path component ANYWHERE under the root, so the
+#      foreman board's own DDL (`.coding-hermes/board/schema.sql`) and the GitReins ledger
+#      (`.gitreins/state.db`) counted as project datastores. 15 of 26 flagged families fired
+#      only on that file; the canonical board is git-tracked JSONL, so there is nothing to back up.
+#   2. The backup arm matched whole path COMPONENTS only (`backup`, `restore`, `snapshot`), so a
+#      real backup path recorded as `docs/backup-set.md`, `docs/runbooks/backup-restore.md` or
+#      `scripts/backup-db.sh` was invisible and 10 more families were told their backup path did
+#      not exist.
+#
+# Two negative controls keep the check alive: a genuine store (migrations/001.sql) with no
+# backup-named artifact still reports P1, and a real store beside `.coding-hermes/board/schema.sql`
+# still reports P1 (the harness exclusion cannot swallow it).
+#
+# Proven before shipping: the regression test fails 24 arms on the pristine build and passes all
+# 32 on the patched build; `git apply --check` forward on the pristine copy and `--reverse` on the
+# patched live file; the live census then reports no check=backup gap for the 15 harness-triggered
+# families while keeping the 10 genuine-store families that still lack any backup artifact.
+
+--- a/fleet_ops_check.py
++++ b/fleet_ops_check.py
+@@ -47,6 +47,17 @@
+ DEPLOY_DOC = ('DEPLOY.md', 'docs/deploy.md', 'docs/deployment.md', 'RUNBOOK.md',
+               'docs/runbook.md', 'OPERATIONS.md', 'docs/operations.md')
+ BACKUP = ('backup', 'restore', 'snapshot')
++# Artifact name substrings the backup arm accepts by BASENAME for doc/script extensions. `rel_hits`
++# matches whole path COMPONENTS, so a real backup path recorded as `docs/backup-set.md` or
++# `scripts/backup-db.sh` never equals `backup` and the project was reported as having no backup
++# path at all (CF-370).
++BACKUP_NAME_HINTS = ('backup', 'restore', 'snapshot')
++BACKUP_EXTS = ('.md', '.sh', '.py', '.yaml', '.yml')
++BACKUP_DEPTH = 3
++# Harness bookkeeping, not project data: the foreman board's own DDL (`.coding-hermes/board/
++# schema.sql`) and the GitReins ledger (`.gitreins/state.db`) are re-created by the harness and are
++# not datastores the project owns (CF-370). A real store beside them must still report.
++HARNESS_DIRS = ('.coding-hermes', '.gitreins')
+ 
+ # A shell toolkit is a project whose operational surface IS its own scripts — an installer, a node
+ # provisioner, an operator CLI — and which ships no language manifest for `classify()` to derive a
+@@ -153,6 +164,45 @@
+     return sorted(hits)
+ 
+ 
++def is_harness_path(rel: str) -> bool:
++    """True for a path inside harness bookkeeping (the foreman board, the GitReins ledger)."""
++    return any(part in HARNESS_DIRS for part in rel.replace(os.sep, '/').split('/'))
++
++
++def store_hits(root: str) -> list[str]:
++    """Datastore evidence for a project, ignoring the harness's own bookkeeping files."""
++    hits = [p for p in rel_hits(root, ('migrations', 'schema.sql', 'init.sql'), 2)
++            if not is_harness_path(p)]
++    hits += [p for p in rel_hits(root, ('data.db', 'app.db', 'store.db', 'state.db'), 3)
++             if not is_harness_path(p) and p.endswith(('.db', '.duckdb', '.sqlite', '.sqlite3'))]
++    return hits
++
++
++def backup_hits(root: str) -> list[str]:
++    """Backup/restore evidence: a whole component named backup|restore|snapshot, or an artifact
++    whose BASENAME carries one of those words with a doc/script extension."""
++    hits = list(rel_hits(root, BACKUP, 2))
++    root = os.path.realpath(root)
++    if not os.path.isdir(root):
++        return hits
++    for dirpath, dirnames, filenames in os.walk(root):
++        depth = dirpath[len(root):].count(os.sep)
++        if depth >= BACKUP_DEPTH:
++            dirnames[:] = []
++        dirnames[:] = [d for d in dirnames
++                       if d not in ('.git', 'node_modules', 'venv', '.venv', 'dist',
++                                    'build', '__pycache__', 'target', '.next')]
++        for f in filenames:
++            low = f.lower()
++            if not low.endswith(BACKUP_EXTS):
++                continue
++            if any(h in low for h in BACKUP_NAME_HINTS):
++                p = os.path.relpath(os.path.join(dirpath, f), root)
++                if p not in hits:
++                    hits.append(p)
++    return hits
++
++
+ def grep_files(root: str, pattern, exts=('.go', '.py', '.ts', '.js', '.rs'),
+                limit=2000, max_bytes=400_000) -> bool:
+     """Bounded content scan: True on first match. Never reads a huge file whole."""
+@@ -282,10 +332,8 @@
+         # Stateful means the project OWNS a store, not that it imports a db client — a service
+         # that talks to someone else's postgres has nothing of its own to back up. Evidence:
+         # a db/data file in the tree, or migrations/schema, or a compose service for a datastore.
+-        owns_store = bool(rel_hits(root, ('migrations', 'schema.sql', 'init.sql'), 2)) or \
+-            any(f.endswith(('.db', '.duckdb', '.sqlite', '.sqlite3'))
+-                for f in rel_hits(root, ('data.db', 'app.db', 'store.db', 'state.db'), 3))
+-        if owns_store and not rel_hits(root, BACKUP, 2):
++        owns_store = bool(store_hits(root))
++        if owns_store and not backup_hits(root):
+             add('backup', 'owns a datastore with no backup/restore path', 'P1')
+ 
+     if kind in ('service', 'library') and not rel_hits(root, ('.github',), 1):
