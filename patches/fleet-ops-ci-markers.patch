@@ -1,0 +1,45 @@
+--- a/fleet_ops_check.py
++++ b/fleet_ops_check.py
+@@ -142,6 +142,33 @@
+     return None
+ 
+ 
++# CI providers do not all live under `.github`. The census used to test only for a `.github`
++# directory, so a repo with a real, running pipeline configured in `.gitlab-ci.yml` (or CircleCI,
++# Jenkins, Azure, Bitbucket, Drone, Travis, Cloud Build) was reported as "no CI pipeline — nothing
++# gates a merge". That is a phantom P3: it cannot be closed by adding a pipeline, because the
++# pipeline already exists.
++CI_ROOT_MARKERS = (
++    '.gitlab-ci.yml',
++    'Jenkinsfile',
++    'azure-pipelines.yml',
++    'bitbucket-pipelines.yml',
++    '.travis.yml',
++    '.drone.yml',
++    'cloudbuild.yaml',
++)
++CI_ROOT_DIRS = ('.github', '.circleci')
++
++
++def has_ci(root: str) -> bool:
++    """True when the tree carries a CI pipeline definition from ANY supported provider."""
++    if rel_hits(root, ('.github',), 1):
++        return True
++    for d in CI_ROOT_DIRS:
++        if os.path.isdir(os.path.join(root, d)):
++            return True
++    return exists_ci(root, CI_ROOT_MARKERS) is not None
++
++
+ def rel_hits(root: str, names, limit: int = 12) -> list[str]:
+     """Shallow, bounded search: `names` matched as path components anywhere under root."""
+     hits, root = [], os.path.realpath(root)
+@@ -336,7 +363,7 @@
+         if owns_store and not backup_hits(root):
+             add('backup', 'owns a datastore with no backup/restore path', 'P1')
+ 
+-    if kind in ('service', 'library') and not rel_hits(root, ('.github',), 1):
++    if kind in ('service', 'library') and not has_ci(root):
+         add('ci', 'no CI pipeline in the repo — nothing gates a merge', 'P3')
+     return gaps
+ 
