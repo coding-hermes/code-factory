@@ -9,7 +9,10 @@
 #          a credential VALUE and an ambient provider key are each refused by name, and no
 #          declared variable is accepted and then silently dropped (row CF-229)
 #   smoke  a REAL turn in a scratch directory that must leave a file containing a
-#          token this script chose, verified by bytes on the control host
+#          token this script chose, verified by bytes on the control host. The binary
+#          is the one the adapter's own --check measured (its "PASS binary" row),
+#          so an installer that puts the binary under a $HOME prefix that is not
+#          on PATH is still smokeable; PATH is the fallback, not the oracle.
 #
 # A leg prints `  PASS  <harness>:<leg> — <measured value>`, `  FAIL  … — <measured
 # value>` or `  SKIP  <harness>:<leg> — <the exact credential or binary that is
@@ -50,7 +53,7 @@ while [ "$#" -gt 0 ]; do
     --adapter-dir) ADAPTER_DIR="${2:-}"; [ -n "$ADAPTER_DIR" ] || { printf 'FAIL battery: --adapter-dir needs a path\n'; exit 2; }; shift 2 ;;
     --doc) DOC="${2:-}"; [ -n "$DOC" ] || { printf 'FAIL battery: --doc needs a path\n'; exit 2; }; shift 2 ;;
     --timeout) TIMEOUT="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) printf 'FAIL battery: unknown argument %s\n' "$1"; exit 2 ;;
   esac
 done
@@ -429,22 +432,46 @@ leg_check() {  # <id> <adapter file> <binary> <generation>
 
 leg_smoke() {  # <id> <binary> <generation> <measured>
   local id="$1" bin="$2" gen="$3" measured="$4" dir cred rc token out sum want prompt attempt
-  local path
-  path="$(command -v "$bin" 2>/dev/null || true)"
+  local path="" stated="" source="" rundir=""
+  # Resolve the binary from the adapter's own measurement first (CF-225). leg_check already ran
+  # --check and stored its "PASS binary" row in $WORK/$id.check.txt; an adapter whose installer
+  # writes under a $HOME prefix (claude-code: ~/.local/harness/npm/bin) has measured a real,
+  # owned binary that PATH knows nothing about, and a smoke leg that re-resolves with
+  # `command -v` alone refuses to test the harness our own installer installed. PATH is read
+  # only when the adapter names no path, or names one that is not executable -- and the row
+  # always quotes the path it used, so a resolution that is never invoked cannot look green.
+  if [ -f "$WORK/$id.check.txt" ]; then
+    stated="$(adapter_row "$(cat "$WORK/$id.check.txt")" PASS binary \
+      | tr ' \t' '\n\n' | grep -m1 '^/' || true)"
+  fi
+  if [ -n "$stated" ] && [ -x "$stated" ]; then
+    path="$stated"; source="the path its --check measured"
+  else
+    path="$(command -v "$bin" 2>/dev/null || true)"
+    if [ -n "$path" ] && [ -n "$stated" ]; then
+      source="PATH fallback: the adapter named $stated, which is not executable"
+    elif [ -n "$path" ]; then
+      source="PATH fallback: the adapter named no binary path"
+    fi
+  fi
   if [ -z "$path" ]; then
-    emit "$id" smoke SKIP "binary \`$bin\` absent from PATH"
+    if [ -n "$stated" ]; then
+      emit "$id" smoke SKIP "binary \`$bin\` absent: the adapter's --check named $stated, which is not executable, and no \`$bin\` is on PATH"
+    else
+      emit "$id" smoke SKIP "binary \`$bin\` absent: the adapter's --check names no binary path and no \`$bin\` is on PATH"
+    fi
     return 0
   fi
   if [ "$gen" != "0" ]; then
     local ver major
-    ver="$(ver_of "$bin")"; major="${ver%%.*}"
+    ver="$(ver_of "$path")"; major="${ver%%.*}"
     if [ "${major:-}" != "$gen" ]; then
-      emit "$id" smoke SKIP "no $bin $gen.x binary on PATH (measured $ver is v${major:-unknown}); a v1 binary cannot smoke a v2 harness"
+      emit "$id" smoke SKIP "no $bin $gen.x binary at $path (measured $ver is v${major:-unknown}); a v1 binary cannot smoke a v2 harness"
       return 0
     fi
   fi
   if [ "$measured" != "1" ]; then
-    emit "$id" smoke SKIP "$bin is present but this repo has measured no non-interactive surface for it (specs/HARNESS.md) — refusing to invent a turn"
+    emit "$id" smoke SKIP "$bin is present at $path but this repo has measured no non-interactive surface for it (specs/HARNESS.md): refusing to invent a turn"
     return 0
   fi
   cred=""; cred_rc=0
@@ -465,9 +492,17 @@ leg_smoke() {  # <id> <binary> <generation> <measured>
   rm -rf "$dir"; mkdir -p "$dir"
   token="CF-CONF-${id//[^a-zA-Z0-9]/}-$(od -An -N3 -tx1 /dev/urandom | tr -d ' \n')"
   prompt="Create a file named smoke.txt in the current working directory whose entire contents are exactly: $token. Do not do anything else."
+  # smoke_turn invokes a bare name (`claude -p ...`), so the resolved path is put in front of
+  # PATH for that subshell -- and the identity of the bare name is asserted first, because a
+  # path that is resolved and printed but never invoked is decoration.
+  rundir="$(dirname "$path")"
+  if [ "$(PATH="$rundir:$PATH" command -v "$bin" 2>/dev/null || true)" != "$path" ]; then
+    emit "$id" smoke FAIL "resolved $path but a bare \`$bin\` with $rundir first on PATH answers '$(PATH="$rundir:$PATH" command -v "$bin" 2>/dev/null || printf 'nothing')' -- the turn would run a different binary"
+    return 0
+  fi
   attempt=1
   while : ; do
-    out="$(smoke_turn "$id" "$dir" "$prompt" 2>&1)"; rc=$?
+    out="$( export PATH="$rundir:$PATH"; smoke_turn "$id" "$dir" "$prompt" 2>&1 )"; rc=$?
     printf '%s\n' "$out" > "$WORK/$id.smoke-$attempt.log"
     [ -f "$dir/smoke.txt" ] && break
     [ "$rc" -eq 0 ] && break
@@ -490,7 +525,7 @@ leg_smoke() {  # <id> <binary> <generation> <measured>
   fi
   sum="$(sha256sum "$dir/smoke.txt" | cut -c1-12)"
   want="$(printf '%s' "$token" | sha256sum | cut -c1-12)"
-  emit "$id" smoke PASS "smoke.txt contains $token ($(wc -c < "$dir/smoke.txt") B, sha256 $sum…, exit $rc; token sha256 $want…)"
+  emit "$id" smoke PASS "smoke.txt contains $token ($(wc -c < "$dir/smoke.txt") B, sha256 $sum..., exit $rc; token sha256 $want...; binary $path ($source))"
   return 0
 }
 

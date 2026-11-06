@@ -2774,6 +2774,171 @@ else
   say "  FAIL  a PASS with an empty value survived (exit $rc): $(printf '%s\n' "$out" | grep 'hermes:' | tr '\n' ' ')"; fails=$((fails+1))
 fi
 
+# (d) CF-225: a binary the adapter measured OUTSIDE PATH is still smokeable. The claude-code
+# adapter installs under $HOME/.local/harness/npm/bin, which is not on PATH, so a smoke leg that
+# re-resolves with `command -v` alone refused to test a harness our own installer installed and
+# blamed PATH instead. The stub below sits off PATH and records its own argv[0], and a synthetic
+# credential (never a real one) lets the turn run, so the row proves the resolved path was the
+# binary that EXECUTED -- not merely a string that was printed.
+mkdir -p "$tmpd/offpath-bin" "$tmpd/offpath" "$tmpd/nobin" "$tmpd/prefix/tests"
+cat > "$tmpd/offpath-bin/claude" <<'STUB'
+#!/usr/bin/env bash
+printf 'stub-binary: %s\n' "$0"
+printf '%s\n' "$*" > smoke.txt
+STUB
+chmod +x "$tmpd/offpath-bin/claude"
+cat > "$tmpd/offpath/install-claude-code.sh" <<'FIX'
+#!/usr/bin/env bash
+. "${FIXTURE_LIB:?}"
+case "${1:---check}" in
+  --check)
+    say "harness: claude-code (fixture, binary off PATH)"
+    ok binary "$FIXTURE_BIN/offpath-bin/claude (installed by this adapter)"
+    ok version "9.9.9-fixture"
+    say ""
+    say "CLAUDE-CODE: PASS" ;;
+  *) bad apply "fixture adapter has no ladder"; exit 1 ;;
+esac
+FIX
+# (e) an adapter that names no binary, with the binary genuinely absent: still a SKIP naming the
+# absence -- the resolution above must not turn "nothing to measure" into a green row.
+cat > "$tmpd/nobin/install-codex.sh" <<'FIX'
+#!/usr/bin/env bash
+. "${FIXTURE_LIB:?}"
+case "${1:---check}" in
+  --check)
+    say "harness: codex (fixture, names no binary)"
+    ok version "9.9.9-fixture"
+    say ""
+    say "CODEX: PASS" ;;
+  *) bad apply "fixture adapter has no ladder"; exit 1 ;;
+esac
+FIX
+synthetic_key="synthetic-$(printf '%s' fixture-key)"
+runb_nopath() {  # runb_nopath <adapter-dir> <only> [script] -- PATH holds no harness binary
+  local dir="$1" only="$2" script="${3:-$HERE/tests/harness-conformance.sh}"
+  env -i PATH="/usr/bin:/bin" HOME="$tmpd/home" FIXTURE_BIN="$tmpd" FIXTURE_LIB="$HERE/scripts/lib.sh" \
+    ANTHROPIC_API_KEY="$synthetic_key" \
+    /bin/bash "$script" --only "$only" --adapter-dir "$dir" 2>&1
+}
+out=$(runb_nopath "$tmpd/offpath" claude-code)
+smoke_row=$(printf '%s\n' "$out" | grep '^  PASS  claude-code:smoke' | head -1)
+if [ -n "$smoke_row" ] \
+  && printf '%s' "$smoke_row" | grep -qF "binary $tmpd/offpath-bin/claude" \
+  && grep -rqF 'stub-binary: ' "$tmpd/home/.harness-conformance" 2>/dev/null \
+  && ! printf '%s\n' "$out" | grep -q 'claude-code:smoke .*absent'; then
+  say "  PASS  a binary measured off PATH is resolved from the adapter's own row and that path runs the turn"
+else
+  say "  FAIL  an off-PATH measured binary did not smoke (or the row does not quote the path): $(printf '%s\n' "$out" | grep 'claude-code:smoke' | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+out=$(runb_nopath "$tmpd/nobin" codex)
+if printf '%s\n' "$out" | grep -qF '  SKIP  codex:smoke' \
+  && printf '%s\n' "$out" | grep -qF 'binary `codex` absent' \
+  && printf '%s\n' "$out" | grep -qF 'no `codex` is on PATH' \
+  && ! printf '%s\n' "$out" | grep -q '^  PASS  codex:smoke'; then
+  say "  PASS  no binary row and no binary anywhere -> SKIP naming the absence"
+else
+  say "  FAIL  an absent binary was not a named SKIP: $(printf '%s\n' "$out" | grep 'codex:smoke' | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+# (f) the arm above can fail. The frozen body below is the leg_smoke that shipped before CF-225
+# (git show 2f4df2f:tests/harness-conformance.sh): it resolves the smoke binary with `command -v`
+# alone. Its em dashes and ellipses are rendered as -- and ... so this diff stays ASCII; nothing
+# else differs. The shipped script is copied with only that one function replaced, so the
+# comparison isolates the resolution rule -- and on the same fixture it prints the wrong verdict,
+# which is what makes the green above evidence.
+ln -sfn "$HERE/scripts" "$tmpd/prefix/scripts"
+ln -sfn "$HERE/specs" "$tmpd/prefix/specs"
+cat > "$tmpd/prefix-leg-smoke.sh" <<'PREFIX'
+leg_smoke() {  # <id> <binary> <generation> <measured>
+  local id="$1" bin="$2" gen="$3" measured="$4" dir cred rc token out sum want prompt attempt
+  local path
+  path="$(command -v "$bin" 2>/dev/null || true)"
+  if [ -z "$path" ]; then
+    emit "$id" smoke SKIP "binary \`$bin\` absent from PATH"
+    return 0
+  fi
+  if [ "$gen" != "0" ]; then
+    local ver major
+    ver="$(ver_of "$bin")"; major="${ver%%.*}"
+    if [ "${major:-}" != "$gen" ]; then
+      emit "$id" smoke SKIP "no $bin $gen.x binary on PATH (measured $ver is v${major:-unknown}); a v1 binary cannot smoke a v2 harness"
+      return 0
+    fi
+  fi
+  if [ "$measured" != "1" ]; then
+    emit "$id" smoke SKIP "$bin is present but this repo has measured no non-interactive surface for it (specs/HARNESS.md): refusing to invent a turn"
+    return 0
+  fi
+  cred=""; cred_rc=0
+  case "$id" in
+    hermes) cred="$(cred_hermes)" || cred_rc=$? ;;
+    claude-code) cred="$(cred_claude)" || cred_rc=$? ;;
+    codex) cred="$(cred_codex)" || cred_rc=$? ;;
+    opencode|opencode-v2) cred="$(cred_opencode)" || cred_rc=$? ;;
+    deepseek) cred="$(cred_deepseek)" || cred_rc=$? ;;
+    pi-agent) cred="$(cred_pi)" || cred_rc=$? ;;
+  esac
+  if [ "$cred_rc" -ne 0 ]; then
+    emit "$id" smoke SKIP "$cred"
+    return 0
+  fi
+
+  dir="$WORK/smoke/$id"
+  rm -rf "$dir"; mkdir -p "$dir"
+  token="CF-CONF-${id//[^a-zA-Z0-9]/}-$(od -An -N3 -tx1 /dev/urandom | tr -d ' \n')"
+  prompt="Create a file named smoke.txt in the current working directory whose entire contents are exactly: $token. Do not do anything else."
+  attempt=1
+  while : ; do
+    out="$(smoke_turn "$id" "$dir" "$prompt" 2>&1)"; rc=$?
+    printf '%s\n' "$out" > "$WORK/$id.smoke-$attempt.log"
+    [ -f "$dir/smoke.txt" ] && break
+    [ "$rc" -eq 0 ] && break
+    [ "$attempt" -ge 2 ] && break
+    [ "$rc" -eq 124 ] && break   # a hang is not transient; a second window proves nothing
+    note_row "$id: smoke attempt $attempt exited $rc with no artifact -- retried once"
+    attempt=$((attempt+1)); sleep 2
+  done
+  if [ "$rc" -ne 0 ] && [ ! -f "$dir/smoke.txt" ]; then
+    emit "$id" smoke FAIL "turn exited $rc and wrote no smoke.txt after $attempt attempt(s) -- $(printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -1)"
+    return 0
+  fi
+  if [ ! -f "$dir/smoke.txt" ]; then
+    emit "$id" smoke FAIL "turn exited $rc but left no smoke.txt in $dir"
+    return 0
+  fi
+  if ! grep -qF -- "$token" "$dir/smoke.txt"; then
+    emit "$id" smoke FAIL "smoke.txt does not contain the token it was asked for ($(wc -c < "$dir/smoke.txt") B, sha256 $(sha256sum "$dir/smoke.txt" | cut -c1-12)..., exit $rc)"
+    return 0
+  fi
+  sum="$(sha256sum "$dir/smoke.txt" | cut -c1-12)"
+  want="$(printf '%s' "$token" | sha256sum | cut -c1-12)"
+  emit "$id" smoke PASS "smoke.txt contains $token ($(wc -c < "$dir/smoke.txt") B, sha256 $sum..., exit $rc; token sha256 $want...)"
+  return 0
+}
+PREFIX
+awk -v body="$tmpd/prefix-leg-smoke.sh" '
+  /^leg_smoke\(\) \{/ { while ((getline line < body) > 0) print line; close(body); skip=1; next }
+  skip && /^\}$/ { skip=0; next }
+  !skip { print }
+' "$HERE/tests/harness-conformance.sh" > "$tmpd/prefix/tests/harness-conformance.sh"
+prefix_defs=$(grep -c '^leg_smoke() {' "$tmpd/prefix/tests/harness-conformance.sh" 2>/dev/null || true)
+if bash -n "$tmpd/prefix/tests/harness-conformance.sh" 2>/dev/null && [ "$prefix_defs" = 1 ] \
+  && ! grep -qF "the path its --check measured" "$tmpd/prefix/tests/harness-conformance.sh"; then
+  out=$(runb_nopath "$tmpd/offpath" claude-code "$tmpd/prefix/tests/harness-conformance.sh")
+  if printf '%s\n' "$out" | grep -qF '  SKIP  claude-code:smoke' \
+    && printf '%s\n' "$out" | grep -qF 'binary `claude` absent from PATH' \
+    && ! printf '%s\n' "$out" | grep -q '^  PASS  claude-code:smoke'; then
+    say "  PASS  the pre-CF-225 PATH-only leg prints SKIP 'absent from PATH' on the same fixture -> the new arm can fail"
+  else
+    say "  FAIL  the pre-CF-225 leg did not print the wrong verdict: $(printf '%s\n' "$out" | grep 'claude-code:smoke' | tr '\n' ' ')"
+    fails=$((fails+1))
+  fi
+else
+  say "  FAIL  could not splice the pre-CF-225 leg_smoke into a scratch copy (defs=$prefix_defs)"; fails=$((fails+1))
+fi
+
 # One provisioning config per project, derived from the registry. Hand-written
 # configs drift (a typo in a repo URL, one agent name on two projects, a
 # namespace the registry no longer agrees with), so the configs are generated

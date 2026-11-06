@@ -52,6 +52,16 @@ control host), and, only with `--install`, the adapter's `--apply` in a throwawa
 by a post-apply `--check`. It prints `PASS`/`FAIL`/`SKIP` with the measured value and regenerates
 `docs/HARNESS-CONFORMANCE.md` with `--write-doc`.
 
+The smoke leg resolves the binary from the adapter's own measurement (the `PASS binary` row that
+`--check` printed), and falls back to `PATH` only when the adapter names no path, or names one that
+is not executable. A harness binary is not required to be on `PATH`: an installer is free to put it
+under a `$HOME` prefix (claude-code: `~/.local/harness/npm/bin`), and such a binary is owned and
+measured even though `command -v` cannot see it. A battery that re-resolved it with `command -v`
+alone reported `SKIP ... absent from PATH` for a harness this repo had just installed, which is a
+false negative, not a measurement. The row quotes the path it resolved and the rule it used, and the
+turn is launched with that path's directory first on `PATH`, so a binary that is resolved but never
+invoked cannot look green; a genuinely absent binary is still a `SKIP` that names the absence.
+
 A `SKIP` names the exact credential or binary that is missing, and it is not evidence of support:
 this spec's table is a claim about a method, the matrix is a measurement of a host, and only the
 matrix may be quoted as "works here". A harness named in the tables above with no adapter file is
