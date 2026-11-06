@@ -151,9 +151,9 @@ in a second clean clone of the published remote at `2787611`:
 (`docs/handbook/appendices/units/05-scripts-bunker-provision-sh.md` ×3,
 `06-scripts-bunker-server-install-sh.md` ×1, `docs/MASTER-DOC-SCHEMA.md` ×1); the other **12 of 17
 ride `.gitreins/history/*/commit.patch|worktree.patch`**. Those bundles re-publish the same literals
-(`100.69.3.13`, `100.78.165.52`, `100.97.236.14`), so they are drained by the CF-050 fix (stop
-publishing `.gitreins`) rather than by a separate edit, and CF-378's scope is extended by note to say
-so instead of opening a duplicate row.
+(the three addresses pass 2 printed here were removed by pass 3 — see the correction section), so they
+are drained by the CF-050 fix (stop publishing `.gitreins`) rather than by a separate edit, and
+CF-378's scope is extended by note to say so instead of opening a duplicate row.
 
 ### Legs this pass closed
 
@@ -222,6 +222,11 @@ Two findings follow, and the second is the one that matters:
    an address to prove an address is exposed makes the exposure worse. CF-378's remedy scope is
    therefore widened: scrubbing `docs/audits/*.md` and board event detail text is part of the fix, not
    an afterthought, and later censuses publish counts and paths only.
+
+Measured after this commit's own scrub the class re-reads **42 occurrences / 13 files**: this document
+no longer contributes any, because the three literals pass 2 printed were replaced by a count reference
+above. The board copies (18) and the judge bundles (17) are the remedy rows' work; the share this lane
+could remove without editing another lane's artifact, it has now removed.
 
 Host paths re-measured at the served tip for the same reason: **2555 occurrences / 550 files**
 (pass 2: 2554 / 550 at `2787611`). The one-occurrence delta is the scratch path inside board event
