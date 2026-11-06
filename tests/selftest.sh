@@ -2587,15 +2587,31 @@ else
   say "  FAIL  the remote does not contain the landed commit"; fails=$((fails+1))
 fi
 
-# i. the same command twice changes nothing (the second run does not even run the gate)
+# i. the same command twice changes nothing — and the gate still runs on the already-landed
+# path, because ancestry is not evidence that the node's own tree is green. i1 asserts a red
+# gate is a refusal there (the pre-fix script printed LANDED (already) and exited 0 without ever
+# running --gate-cmd); i2 asserts idempotence survives: exit 0, the gate row printed, no ref moved.
 head_before=$(git -C "$tmpd/wd" rev-parse HEAD)
-cf213 "idempotent re-run" 0 "  PASS  landed — $node2 is an ancestor of origin/main" \
-  --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$node2" --gate-cmd 'exit 99'
-if printf '%s\n' "$out" | grep -Fq "LANDED (already)" \
+origin_before=$(git -C "$tmpd/origin.git" rev-parse refs/heads/main)
+cf213 "already-landed red gate" 1 "  FAIL  gate — 'echo fixture gate refused; exit 99' exited 99 at ${node2:0:12}" \
+  --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$node2" --gate-cmd 'echo fixture gate refused; exit 99'
+if ! printf '%s\n' "$out" | grep -Fq "LANDED (already)" \
   && [ "$(git -C "$tmpd/wd" rev-parse HEAD)" = "$head_before" ]; then
-  say "  PASS  second run exited $rc with no merge and no push"
+  say "  PASS  a red gate on an already-landed commit refused and moved no ref (main ${head_before:0:12})"
 else
-  say "  FAIL  second run changed the tree"; fails=$((fails+1))
+  say "  FAIL  a red gate on an already-landed commit printed LANDED or moved a ref"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+cf213 "idempotent re-run" 0 "  PASS  gate — 'test -f node.txt' exited 0 at ${node2:0:12} (detached worktree)" \
+  --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$node2" --gate-cmd 'test -f node.txt'
+if printf '%s\n' "$out" | grep -Fq "LANDED (already)" \
+  && printf '%s\n' "$out" | grep -Fq "  PASS  gate —" \
+  && [ "$(git -C "$tmpd/wd" rev-parse HEAD)" = "$head_before" ] \
+  && [ "$(git -C "$tmpd/origin.git" rev-parse refs/heads/main)" = "$origin_before" ]; then
+  say "  PASS  second run exited $rc, ran the gate, and moved no ref — main ${head_before:0:12}, origin/main ${origin_before:0:12}"
+else
+  say "  FAIL  second run changed the tree or did not run the gate"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
 # j. a push the remote refuses must not print a success row: the merge is local, the landing not

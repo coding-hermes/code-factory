@@ -26,9 +26,11 @@
 # object cannot drift apart.
 #
 # Idempotent: a commit already contained in <remote>/<main> is reported as landed, with no
-# merge and no push. --dry-run runs every read-only check, prints the exact commands it
-# would run — including the explicit-sha push, which on --no-ff can only be named after the
-# merge creates it — and changes nothing (no fetch, no gate worktree, no merge, no push).
+# merge and no push — the gate still runs on that path, so "already landed" is reported only
+# after the node's own tree has been measured. --dry-run runs every read-only check, prints the
+# exact commands it would run — including the explicit-sha push, which on --no-ff can only be
+# named after the merge creates it — and changes nothing (no fetch, no gate worktree, no merge,
+# no push).
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
@@ -65,6 +67,36 @@ cleanup() {
   GATE_WT=""
 }
 trap cleanup EXIT
+
+# --- gate: measure the node's tree, not main's --------------------------------------------
+# Every path that reports success runs this, including the already-landed path: being an
+# ancestor of <remote>/<main> proves ancestry, not that the node's own tree is green.
+run_gate() {
+  [ -n "$GATE" ] || return 0
+  if [ "$DRY" -eq 1 ]; then
+    note "dry-run: would run gate '$GATE' in a detached worktree at ${commit_sha:0:12}"
+    return 0
+  fi
+  local wtbase gate_wt gate_rc gate_last
+  wtbase=$(mktemp -d)
+  gate_wt="$wtbase/gate"
+  if ! git -C "$TOP" worktree add --quiet --detach "$gate_wt" "$commit_sha" >/dev/null 2>&1; then
+    rm -rf "$wtbase"
+    refuse gate "cannot create a detached worktree at $commit_sha in $TOP to run '$GATE'"
+  fi
+  GATE_WT="$gate_wt"
+  ( cd "$gate_wt" && bash -c "$GATE" ) >"$wtbase/gate.log" 2>&1
+  gate_rc=$?
+  if [ "$gate_rc" -eq 0 ]; then
+    ok gate "'$GATE' exited 0 at ${commit_sha:0:12} (detached worktree)"
+    cleanup
+  else
+    gate_last=$(last_reason "$wtbase/gate.log")
+    tail -5 "$wtbase/gate.log" 2>/dev/null | sed 's/^/  ..    /'
+    refuse gate "'$GATE' exited $gate_rc at ${commit_sha:0:12} — ${gate_last:-no output}"
+  fi
+  return 0
+}
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -148,13 +180,16 @@ else
   refuse commit_on_branch "$commit_sha is not reachable from $branch_ref (tip ${branch_sha:0:12})"
 fi
 
-# Idempotence: the same command twice must change nothing and exit 0.
+# Idempotence: the same command twice must change nothing and exit 0 — and the gate still runs,
+# because "already in <remote>/<main>" is a claim about ancestry, not about the node's tree.
 if git -C "$TOP" merge-base --is-ancestor "$commit_sha" "$MAIN_REF"; then
   ok landed "$commit_sha is an ancestor of $REMOTE/$MAIN (${main_sha:0:12}) — already landed"
   say ""
   if [ "$DRY" -eq 1 ]; then
+    [ -n "$GATE" ] && note gate "dry-run: not run — a gate worktree would be created at ${commit_sha:0:12}"
     say "LAND: DRY-RUN — nothing to do, $commit_sha is already in $REMOTE/$MAIN"
   else
+    run_gate
     say "LANDED (already): $BRANCH @ $commit_sha in $REMOTE/$MAIN"
   fi
   exit 0
@@ -168,29 +203,7 @@ else
 fi
 
 # --- gate: measure the node's tree, not main's --------------------------------------------
-if [ -n "$GATE" ]; then
-  if [ "$DRY" -eq 1 ]; then
-    note "dry-run: would run gate '$GATE' in a detached worktree at ${commit_sha:0:12}"
-  else
-    wtbase=$(mktemp -d)
-    gate_wt="$wtbase/gate"
-    if ! git -C "$TOP" worktree add --quiet --detach "$gate_wt" "$commit_sha" >/dev/null 2>&1; then
-      rm -rf "$wtbase"
-      refuse gate "cannot create a detached worktree at $commit_sha in $TOP to run '$GATE'"
-    fi
-    GATE_WT="$gate_wt"
-    ( cd "$gate_wt" && bash -c "$GATE" ) >"$wtbase/gate.log" 2>&1
-    gate_rc=$?
-    if [ "$gate_rc" -eq 0 ]; then
-      ok gate "'$GATE' exited 0 at ${commit_sha:0:12} (detached worktree)"
-      cleanup
-    else
-      gate_last=$(last_reason "$wtbase/gate.log")
-      tail -5 "$wtbase/gate.log" 2>/dev/null | sed 's/^/  ..    /'
-      refuse gate "'$GATE' exited $gate_rc at ${commit_sha:0:12} — ${gate_last:-no output}"
-    fi
-  fi
-fi
+run_gate
 
 head_sha=$(git -C "$TOP" rev-parse --verify HEAD)
 if [ "$FF_ONLY" -eq 1 ] && ! git -C "$TOP" merge-base --is-ancestor "$head_sha" "$commit_sha"; then
