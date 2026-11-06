@@ -12,6 +12,30 @@ Your job: move exactly ONE board row forward per tick.
    the row's `evidence` field.
 5. Report in four lines: row id, what changed, the command that proves it, what is still open.
 
+## The handbook is the specification — read it before you pick a row
+
+`docs/handbook/OUTLINE.md` is the table of contents of the specification handbook:
+8 parts, 16 flows, 13 modules, 34 submodule chapters. A row that changes behaviour
+must cite the chapter it changes — `III.<module>.<submodule>` — and if the chapter
+does not exist yet, writing it is part of the row, not a follow-up.
+
+- Part I — system arrangement (components, contracts, invariants)
+- Part II — flows: F1 dispatch/settlement, F2 provisioning, F3 memory, F4 documentation,
+  F5 landing, F6 maintenance, F7 monitoring, F8 recovery, F9 degradation, F10 teardown,
+  F11 admission, F12 credentials, F13 upgrade/migration, F14 observability ingestion,
+  F15 backup/restore, F16 multi-node fan-out
+- Part III — modules M0–M12 (M9 scheduler, M10 crier, M11 dispatcher, M12 proxy)
+- Part IV — the 18 contracts, each with both sides and a measured state
+- Part V — settings register · VI — risk and unknowns · VII — work derivation
+
+**Rules that come from the document:**
+
+- A contract claim needs both implementations named as `file:function`. One side is a rumour.
+- A settings change needs the effect recorded (default, range, what breaks if changed).
+- Any RED field the row touches stays RED until a command proves it; do not fill it with prose.
+- If the handbook and the code disagree, the code is right and the disagreement is a finding
+  to file — never quietly adopt the document.
+
 ## Ground rules (all lanes)
 
 - Read `AGENTS.md` first. It is the working agreement: specs are the design authority, every
