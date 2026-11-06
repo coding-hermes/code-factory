@@ -150,7 +150,11 @@ modules get their own chapter.
   `configure_family.py`, `load_lane_config.py`) · S2 resolve a target (`lane_target.py`) ·
   S3 consume the inbox, sign, reply (`node-bus-worker.py`)
 - **M3 REPOSITORY** — S1 clone and track freshness (`clone_lane.py`,
-  `repo_freshness.py`) · S2 land a branch (`land-node-branch.sh`)
+  `repo_freshness.py`) · S2 land a branch (`land-node-branch.sh`) · **S3 commit hooks and
+  gates** (`hooks/`, `commit_hook`, `core.hooksPath`, the gitleaks and board-lint
+  pre-commit gates, and the bypass that must be disclosed when used) — *added on 5-seat
+  consensus; every seat named hooks as a gap, and a hook that silently does not run is
+  indistinguishable from a clean tree*
 - **M4 BOARD** — S1 write and validate rows (`boardctl`, `board_lock.py`) · S2 compare
   board copies (`board_drift.py`)
 - **M5 HARNESS** — S1 hermes (`install-hermes.sh`) · S2 foreign harnesses (**hermes,
