@@ -1,0 +1,47 @@
+I have read the brief and the document set thoroughly. Here is the verdict.
+
+VERDICT: FAIL
+
+STRUCTURE: FAIL — the set opens with 00-INDEX.md, a per-file census (one row per script/spec path, lines 8-51); the system-level arrangement exists as docs/SYSTEM-MODEL.yaml but nothing links to it — 00-INDEX references SYSTEM-MODEL.yaml, UNIT-MAP.yaml and RUMSFELD.md zero times, so a stranger enters through a list of files, not a general arrangement.
+
+SECTIONS STILL FILE-SHAPED: 44 of 44 — every one of 01-44 is titled by a file path (`scripts/add_family_lanes.py`, `scripts/bunker-provision.sh`, `specs/NODE.md`); the subsystem regrouping (9 modules M0-M8, 25 submodules) lives in UNIT-MAP.yaml and is not linked from the index or any module.
+
+FLOWS MISSING (by class): maintenance, monitoring, recovery, degradation — all absent. SYSTEM-MODEL.yaml has 5 flows (DISPATCH, PROVISIONING, MEMORY, DOCUMENTATION, LANDING), all happy-path, and each step names a COMPONENT (scheduler/crier/node/harness), never the module/script that executes it. 00-INDEX.md:84-85 admits five flows (incl. disaster recovery) have no end-to-end description.
+
+CONTRACT GAPS: 0 one-sided-by-name, but 18 of 18 one-sided-at-file-level — every contract names both sides as components (from/to) yet none names both sides' file:function, contradicting MASTER-DOC-SCHEMA.md §3c ("Every wire contract names both sides' file and function"). Timing is present (`mode`); failure semantics is ad-hoc in `note`; there is no version/compatibility field anywhere.
+
+SETTINGS DOCUMENTED vs EXISTING: ~25 of ~83 (sample, module 05) — method: distinct `$VAR`/`--flag`/config-key tokens in scripts/bunker-provision.sh (83) vs tokens in module 05 §7 (25). No module reconciles its settings section against source; the gate requires only 3 locators, never a settings census. Worse: MASTER-DOC-SCHEMA.md has no settings section at all, while master_doc_check.py:29 requires one — the field contract and the gate disagree on the required section set.
+
+CONTRADICTIONS: 4 —
+1. master_doc_check.py:22-31 REQUIRED_SECTIONS demands "Environment and settings it reads" (a section MASTER-DOC-SCHEMA.md never defines) and omits "Identity" (MASTER-DOC-SCHEMA.md §1), plus "Metrics emitted" vs the schema's §5 "Metrics it emits". The document set's own rules for what a section must contain are self-contradictory.
+2. UNIT-MAP.yaml M6 assigns master_doc_fill.py / master_doc_panel.py / extract_owner_decisions.py / install-go.sh as units, while 00-INDEX.md:71 states those same five scripts "have none" (no module). The subsystem map and the census cannot both be right.
+3. 00-INDEX.md:4 says "A section turns green" but no GREEN status exists — the status vocabulary is VERIFIED/UNVERIFIED/FAILING/RED. The index's own header references a state the checker cannot emit.
+4. SYSTEM-MODEL.yaml contains 16 components (verified by parse), but the surrounding reporting describes "27 components" — 16 components + 6 layers + 5 flows = 27, so the owner-facing description has drifted into counting layers and flows as components.
+
+TRACEABILITY: partially derivable — the status word IS computed (master_doc_check.py recomputes VERIFIED from locators + facts and cross-checks the index, lines 168-193), which is genuine. But a task list cannot be derived cleanly because: (a) VERIFIED is a weak certificate (3 locators + 1 FACT citation, master_doc_check.py:98-106) with no check that settings, contracts or flows are complete, so it does not mean "a stranger can rebuild"; (b) 6 RED + 1 FAILING modules carry "unknown" defaults (module 40 §7) with no acceptance command; (c) verification commands are scratch-probe-bound (module 01 §8 builds copy.db/schema.sql), not re-runnable against the live system.
+
+RUMSFELD: present-but-broken — docs/RUMSFELD.md is real and strong on Q1 (40 known-knowns), Q2 (18 known-unknowns each with probe + falsifier + answer-bucket, lines 98-130) and Q3 (24 unknown-knowns), but Q4's 50 unknown-unknowns (lines 186-259) name a standard and a state (ABSENT/PARTIAL) with NO per-item probe or falsifier and no path-to-known; and the whole register is self-labeled "WORKING DOCUMENT — not VERIFIED" (line 3) and is not linked from the index or any module.
+
+TOP 10 DEFECTS:
+1. No system-arrangement entry point — 00-INDEX.md:8-51 is a file census that links to SYSTEM-MODEL.yaml / UNIT-MAP.yaml / RUMSFELD.md zero times; a stranger opens the book and sees scripts, not a machine.
+2. SYSTEM-MODEL.yaml is orphaned — 16 components, 6 layers, 18 contracts, 5 flows, and not one of 44 module sections references it; the single artifact that answers "what are the boxes" is invisible.
+3. All 18 contracts are one-sided at file:function level (MASTER-DOC-SCHEMA.md §3c), so cross-boundary interfaces are rumors at system level even though module 01 §2c does it correctly.
+4. No maintenance/monitoring/recovery/degradation flows — 5 happy paths only, and 00-INDEX.md:84-85 admits disaster recovery is undescribed end to end.
+5. Gate vs field contract disagreement (master_doc_check.py:22-31 vs MASTER-DOC-SCHEMA.md §1/§5) — the set's rules for its own sections are self-contradictory.
+6. Settings documented without a census — no module reconciles "reads" against source; the Apollo "every dial" requirement is asserted, never measured.
+7. VERIFIED is a weak certificate (master_doc_check.py:98-106) — 37 modules pass a shape check that never verifies settings completeness, two-sided contracts, or flow-module binding.
+8. UNIT-MAP vs 00-INDEX coverage disagreement (UNIT-MAP M6 vs 00-INDEX.md:71) — subsystem map and census contradict on five scripts.
+9. Q4 unknown-unknowns carry no probe/falsifier/path (RUMSFELD.md:186-259) and the register is "not VERIFIED" and unlinked.
+10. Deficiency register generated from a 219-open-row board (gen_nasa_handbook.py:171-244) with unbounded P1-P5 sprawl — a builder cannot see which deficiencies actually block operation.
+
+WHAT ONE PAGE SHOULD BE ADDED THAT ISN'T THERE: a single opening "SYSTEM ARRANGEMENT" page — the 16 components drawn and described in one page (rendered from SYSTEM-MODEL.yaml), with each of the 44 module sections re-keyed to the component it serves (from UNIT-MAP.yaml), so the book opens the way an Apollo volume opens with the vehicle general arrangement before any per-file detail. That page already exists as data; it does not exist as the front of the document.
+
+Per-question grades: 1 FAIL, 2 FAIL, 3 FAIL, 4 FAIL, 5 FAIL, 6 FAIL (4 contradictions), 7 FAIL (status computed, but too weak and RED modules untraceable), 8 PARTIAL-FAIL (Q2 register is good; Q4 has no falsifiers; overall FAIL).
+
+Reference class: Apollo Operations Handbook / Spacecraft Familiarization volumes (CSM/LM), whose general-arrangement opening, two-sided interface control documents, and "every dial" discipline are the standard this set was asked to meet.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-7a04e5c13583e947cc13f3710ffd927dc998cb5deddd6815cd20e953a7d492b5
+
+EXIT=0

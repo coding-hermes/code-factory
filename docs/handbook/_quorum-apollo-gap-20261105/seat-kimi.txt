@@ -1,0 +1,169 @@
+│ cache/scratch/cf-apollo-gap-20261105/settings_census.py
+│ @@ -0,0 +1,48 @@
+│ +import re, glob
+│ +
+│ +base = '/home/kara/code-factory'
+│ +
+│ +doc = {}
+│ +for f in sorted(glob.glob(base + '/docs/master/*.md')):
+│ +    t = open(f).read()
+│ +    m = re.search(r'## 7\.(.*?)(\n## |\Z)', t, re.S)
+│ +    if m:
+│ +        for tok in re.findall(r'([A-Z_][A-Z0-9_]{2,})', m.group(1)):
+│ +            doc.setdefault(tok, f)
+│ +
+│ +sh_vars = {}
+│ +for f in glob.glob(base + '/scripts/**/*.sh', recursive=True) + [base + '/scripts/lib.sh']:
+│ +    t = open(f).read()
+│ +    for tok in re.findall(r'\$\{?([A-Z_][A-Z0-9_]{2,})', t):
+│ +        sh_vars.setdefault(tok, f)
+│ +
+│ +builtins = set('''BASH BASH_SOURCE BASH_VERSION EUID UID GID PID PPID PWD OLDPWD SHELL SHLVL IFS TERM USER LOGNAME HOSTNAME RANDOM SECONDS LINENO FUNCNAME GROUPS DIRSTACK PIPESTATUS OPTIND OPTARG REPLY CDPATH ENV SHELLOPTS BASHOPTS MACHTYPE OSTYPE COLUMNS LINES LANG LC_ALL TMPDIR EDITOR DISPLAY HISTFILE PROMPT_COMMAND PS1 PS2 EPOCHSECONDS SRANDOM BASHPID GLOBIGNORE HOSTTYPE IGNOREEOF LC_COLLATE LC_CTYPE LC_MESSAGES LC_NUMERIC MAIL MAILCHECK MAILPATH NULLCMD TMOUT FIGNORE INPUTRC HISTCONTROL HISTSIZE HISTFILESIZE HISTIGNORE FCEDIT HOSTFILE TIMEFORMAT POSIXLY_CORRECT COPROC HOME PATH'''.split())
+│ +
+│ +cand = sorted(set(sh_vars) - builtins)
+│ +
+│ +# config-file keys accepted by bunker-provision.sh load_config
+│ +prov = open(base + '/scripts/bunker-provision.sh').read()
+│ +cfg_keys = sorted(set(re.findall(r'^\s*([A-Z_][A-Z0-9_]{2,})\s*\)', prov, re.M)))
+│ +
+│ +py_vars = set()
+│ +for f in glob.glob(base + '/scripts/*.py'):
+│ +    t = open(f).read()
+│ +    for tok in re.findall(r"os\.(?:environ(?:\.get)?|getenv)\(?\[?['\"]([A-Z_][A-Z0-9_]+)", t):
+│ +        py_vars.add(tok)
+│ +
+│ +print("=== DOCUMENTED in §7 (n=%d) ===" % len(doc))
+│ +for k in sorted(doc): print("DOC ", k, "<-", doc[k])
+│ +print("=== SHELL CANDIDATES (n=%d) ===" % len(cand))
+│ +for k in cand: print("SH  ", k, "<-", sh_vars[k])
+│ +print("=== PY ENV (n=%d) ===" % len(py_vars))
+│ +for k in sorted(py_vars): print("PY  ", k)
+│ +print("=== PROVISION CONFIG KEYS (n=%d) ===" % len(cfg_keys))
+│ +for k in cfg_keys: print("CFG ", k)
+│ +
+│ +union = set(cand) | py_vars | set(cfg_keys)
+│ +documented = union & set(doc)
+│ +print("=== SUMMARY ===")
+│ +print("union knobs:", len(union))
+│ +print("documented anywhere in §7:", len(documented))
+│ +print("UNDOCUMENTED:")
+│ +for k in sorted(union - set(doc)): print("  UNDOC", k)
+│ cache/scratch/cf-apollo-gap-20261105/settings_census2.py
+│ @@ -0,0 +1,57 @@
+│ +import re, glob
+│ +
+│ +base = '/home/kara/code-factory'
+│ +
+│ +doc = {}
+│ +for f in sorted(glob.glob(base + '/docs/master/*.md')):
+│ +    t = open(f).read()
+│ +    m = re.search(r'## 7\.(.*?)(\n## |\Z)', t, re.S)
+│ +    if m:
+│ +        for tok in re.findall(r'([A-Z_][A-Z0-9_]{2,})', m.group(1)):
+│ +            doc.setdefault(tok, f.split('/')[-1])
+│ +
+│ +builtins = set('''BASH BASH_SOURCE BASH_VERSION EUID UID GID PID PPID PWD OLDPWD SHELL SHLVL IFS TERM USER LOGNAME HOSTNAME RANDOM SECONDS LINENO FUNCNAME GROUPS DIRSTACK PIPESTATUS OPTIND OPTARG REPLY CDPATH ENV SHELLOPTS BASHOPTS MACHTYPE OSTYPE COLUMNS LINES LANG LC_ALL TMPDIR EDITOR DISPLAY HISTFILE PROMPT_COMMAND PS1 PS2 EPOCHSECONDS SRANDOM BASHPID GLOBIGNORE HOSTTYPE IGNOREEOF LC_COLLATE LC_CTYPE LC_MESSAGES LC_NUMERIC MAIL MAILCHECK MAILPATH NULLCMD TMOUT FIGNORE INPUTRC HISTCONTROL HISTSIZE HISTFILESIZE HISTIGNORE FCEDIT HOSTFILE TIMEFORMAT POSIXLY_CORRECT COPROC HOME PATH FAILED'''.split())
+│ +
+│ +# env-only vars: referenced with $ but NEVER assigned in that script
+│ +env_only = {}
+│ +for f in glob.glob(base + '/scripts/**/*.sh', recursive=True) + [base + '/scripts/lib.sh']:
+│ +    t = open(f).read()
+│ +    assigned = set(re.findall(r'(?:^|\s|;|local\s+|declare\s+\w*\s*|readonly\s+|export\s+|for\s+)([A-Z_][A-Z0-9_]{2,})(?:=|\s*=)', t))
+│ +    referenced = set(re.findall(r'\$\{?([A-Z_][A-Z0-9_]{2,})', t))
+│ +    for v in referenced - assigned - builtins:
+│ +        env_only.setdefault(v, f.split('scripts/')[-1])
+│ +
+│ +py_env = {}
+│ +for f in glob.glob(base + '/scripts/*.py'):
+│ +    t = open(f).read()
+│ +    for tok in re.findall(r"os\.(?:environ(?:\.get)?|getenv)\(?\[?['\"]([A-Z_][A-Z0-9_]+)", t):
+│ +        py_env.setdefault(tok, f.split('scripts/')[-1])
+│ +
+│ +# CLI flags across scripts
+│ +flags = {}
+│ +for f in glob.glob(base + '/scripts/**/*.sh', recursive=True) + glob.glob(base + '/scripts/*.py'):
+│ +    t = open(f).read()
+│ +    for fl in set(re.findall(r'(--[a-z][a-z0-9-]{2,})', t)):
+│ +        flags.setdefault(fl, f.split('scripts/')[-1])
+│ +
+│ +# timeouts / caps / numeric constants
+│ +knobs = []
+│ +for f in glob.glob(base + '/scripts/**/*.sh', recursive=True) + glob.glob(base + '/scripts/*.py') + [base + '/scripts/lib.sh']:
+│ +    for i, line in enumerate(open(f), 1):
+│ +        for m in re.finditer(r'(?i)(timeout|_budget|_floor|_cap|max_|_limit|deadline|ttl|_secs|_seconds|_gib|_mb|lease)[^#\n]{0,60}', line):
+│ +            knobs.append((f.split('scripts/')[-1], i, line.strip()[:110]))
+│ +
+│ +all_env = set(env_only) | set(py_env)
+│ +print("ENV-ONLY SHELL VARS (read, never assigned in-script):", len(env_only))
+│ +for k in sorted(env_only): print("  SHENV", k, "<-", env_only[k])
+│ +print()
+│ +print("PY ENV:", len(py_env))
+│ +for k in sorted(py_env): print("  PYENV", k, "<-", py_env[k])
+│ +print()
+│ +print("DISTINCT CLI FLAGS:", len(flags))
+│ +print()
+│ +print("TIMEOUT/CAP-LIKE LINES:", len(knobs))
+│ +print()
+│ +undoc = sorted(all_env - set(doc))
+│ +print("=== OPERATOR-FACING ENV VARS:", len(all_env), " DOCUMENTED in §7:", len(all_env & set(doc)), " UNDOCUMENTED:", len(undoc))
+│ +for k in undoc: print("  UNDOC", k, "<-", env_only.get(k) or py_env.get(k))
+All evidence gathered. Composing the verdict.
+
+VERDICT: FAIL
+
+Graded against: the Apollo Operations Handbook class (CSM/LM AOH volumes), Apollo Spacecraft Familiarization manuals, the Flight Data File checklist cards, and the mission-rules tradition — documents whose defining property is that the vehicle's arrangement, every dial, and every failure response is bound into one citable set. Grading is of the gap between that standard and the document set as it exists on this host at 2026-11-05 ~23:45 (tree 12d6f9a). The set is enormously better than the r2 handbook the first panel failed — modules 01, 18 and 25 are individually close to the AOH standard — but the set fails as a handbook: the parts do not reference each other, the primary flow does not close, the secondary flows do not exist, and the newest rendered artifact still teaches numbers the first quorum proved false.
+
+Per-question grades:
+1. STRUCTURE: FAIL
+2. MODULE/SUBSYSTEM FRAMING: FAIL
+3. FLOWS: FAIL
+4. CONTRACTS: FAIL
+5. SETTINGS/LIMITS/SWITCHES: FAIL
+6. CONTRADICTIONS: FAIL
+7. TRACEABILITY TO WORK: FAIL
+8. RUMSFELD DISCIPLINE: FAIL (narrowly — the strongest area of the set)
+
+STRUCTURE: The module set opens with a per-file census table (docs/master/00-INDEX.md:6-51), not a general arrangement; the system-level arrangement exists (docs/SYSTEM-MODEL.yaml + rendered 9-sheet /tmp/cf-system-views.pdf) but is bound into nothing — grep for SYSTEM-MODEL|UNIT-MAP|RUMSFELD across all of docs/master/ returns zero references.
+
+SECTIONS STILL FILE-SHAPED: 44 of 44 — every section is one file (`01-scripts-add-family-lanes-py.md` … `36-scripts-verify-node-sh.md`, `37-43` per specs/*.md, 44 a pipeline rollup). Zero sections are subsystem-shaped. The subsystem framing exists only in two orphan artifacts nothing links to: docs/UNIT-MAP.yaml (9 modules M0-M8, 25 submodules, 44 units) and docs/SYSTEM-MODEL.yaml (6 layers, 16 components). (The brief's "~18 skeleton" is stale: only 40-43 are skeletons today; modules 01-39 are substantive even when RED.)
+
+FLOWS MISSING (by class): maintenance (reclaim_disk lifecycle — no age gate, RUMSFELD.md:231); monitoring/liveness (a dead node and a busy node look identical to the board, RUMSFELD.md:246); recovery/disaster (node loss, key rotation, board/git corruption — admitted missing at 00-INDEX.md:84-85); degradation (no cordon/drain path, RUMSFELD.md:230-232); onboarding a new project (00-INDEX.md:85). The five flows SYSTEM-MODEL.yaml does define are not traceable: 10 of 24 steps traverse edges absent from the contract register (F1: node→harness, harness→node, scheduler→board; F2: node→bunker, node→node, owner→node; F3: owner→duckbrain; F4: foreman→docsgate ×2, docsgate→foreman, foreman→foreman; F5: gitreins→foreman, foreman→crier), and F1 DISPATCH — the primary flow — ends on `scheduler→board "row state changes, attempt recorded"` (SYSTEM-MODEL.yaml:259-260), an edge the register does not contain, immediately after a hop registered as `missing` (crier→scheduler, :182-183) and a hop registered `broken — no run_id exists; events do not name an attempt` (node→board, :204-205). Steps name components, not executing modules; six components (scheduler, crier, duckbrain, 9router, gateway, bunker daemon) have no page at all (00-INDEX.md:79-82).
+
+CONTRACT GAPS: 18 registered; 0 of 18 satisfy the set's own rule that "every wire contract names both sides' file and function… a contract with one side named is a rumour" (docs/MASTER-DOC-SCHEMA.md:56-57) — SYSTEM-MODEL.yaml contracts name neither side's file:function. One-sided: 4 (router→gateway :184-188 "in-band", no payload; node→sessionstore :206-210 "writes via gateway", gateway side unstated; conformance→harness :237-242 specifies a five-leg verdict against a battery that has exactly three legs, RUMSFELD.md:45; docsgate→handbook :232-236 "read at build" with no build that exists). Unstated: ≥11 edges the model's own flows traverse (listed above) plus scheduler→gateway spawn and every 9router edge. Measured state IS present and honest: 10 works / 6 broken / 2 missing — the register's best feature.
+
+SETTINGS DOCUMENTED vs EXISTING: env vars 51 of 60 (85%) — method: extracted `os.environ`/`os.getenv` reads plus env-only shell `$VARS` (referenced, never assigned in-script) across scripts/, intersected with §7 tokens of docs/master; gaps: CFV_MODE/CFV_HELP/CFV_FAILED and CF_AS/CF_AS_PID (harness-vars/install-codex contract), CF_MASTER_DIR (module 44's own §7 omits it), GOPATH (module 33 gap), GO_DL_BASE (install-go.sh — no module). CLI flags: ≥25 of 207 distinct flags appear nowhere in docs/master, concentrated in the 10 unmoduled scripts and the CF_* contract that landed 19:20 (--contract, --api-key, --openai-api-key, --anthropic-api-key, --harness-opts). Numeric dials: ~20 of ~382 timeout/cap/budget/floor-bearing source lines enumerated with effect (the good ones: 30 s urlopen + 60 s/60000 ms SQLite at 01-…:253-254; 16 MiB seed budget; 5/10/20 GiB floors; 300 s bunker-exec wall; 10 s crier probe). Validation ranges: essentially absent from the docs even where the source now states them (install-opencode.sh:46-47: 1..1000 / 1..86400). Six external systems: 0 of N — scheduler cadence/weight/pin/admission knobs, crier guard config, DuckBrain scoping, gateway auth, bunker daemon flags have no page (00-INDEX.md:79-82). Apollo documents every dial; this set documents roughly a third of the dials in a third of the system.
+
+CONTRADICTIONS: 8 (each with both locators)
+1. docs/master/00-INDEX.md:51 lists module 44 as `scripts/master_doc_*.py` VERIFIED vs the same file at :71 naming master_doc_fill.py, master_doc_panel.py and master_doc_check.py among "five scripts still have none".
+2. docs/master/00-INDEX.md:71 ("scripts/ | 43 files | 13,965 lines") vs docs/RUMSFELD.md:62 ("scripts/ 42 files / 13,944 lines") vs the tree (51 files / 16,579 lines) — two censuses both claiming 2026-11-05 measurement disagree with each other and with reality.
+3. docs/RUMSFELD.md:62 ("docs/ 165 / 27,835") vs docs/master/00-INDEX.md:73 ("docs/ | 165 | 27,807") — same directory, same day, two line counts.
+4. docs/RUMSFELD.md:78 ("scripts/harness_resolve.py does not exist; matrix invariant I2 has no implementation — measured (`ls` fails)") vs scripts/harness_resolve.py, committed 74d36cf 2026-11-05 17:23 and on disk; the register was never corrected, so K8 (:114) plans a build whose premise is already false.
+5. docs/master/18-scripts-harness-install-opencode-sh.md:177 ("This file reads no CF_* variable — measured: zero occurrences… only on the unmerged wt/cf-vars branch") and §3 row 5 (:65, "--help falls through to the check and exits 0") vs scripts/harness/install-opencode.sh:24,41-47,58 (CF_* contract with validated ranges and a real help path, landed 45bd4bd 2026-11-05 19:20) — the module's measured basis was falsified eight hours after its stamped revision b31c232 and still stands as RED-for-the-wrong-reason.
+6. docs/OPERATIONS.md:209 (node-bus-worker.py "is staged by provisioning") vs scripts/node-create.sh:21-24 (staged set: project-node.sh, install-go.sh, lib.sh, disk_floor.py, reclaim_disk.py, harness-vars.sh, install-$HARNESS.sh — no node-bus-worker.py); module 25 documents the contradiction but the runbook still teaches the false path.
+7. docs/SYSTEM-MODEL.yaml:237-242 (conformance contract: "per-leg verdict (check, apply, smoke, vars, memory)") vs docs/RUMSFELD.md:45 ("the conformance battery has exactly three legs… against a spec demanding five") and module 38's FAILING status — the contract register describes as its interface a five-leg wire that does not exist.
+8. code-factory-handbook.pdf (newest render, 23:43, 17 pp): CONTENTS still reads "Eight sheets make up the set" (extracted text line ~140), still prints "603 TICKS RECORDED" (line 1396 — irreproducible from scheduler.db: 101,474 / 1,942 / 324 ticks by any slice), still prints "harness-conformance.sh prints five legs per harness" (line 1341 — the battery has three, tests/harness-conformance.sh:4), still stamps REV 3b1e826 — every one of these was a named FAIL finding of all five seats in code-factory-reports/handbook/QUORUM-REVIEW-20261105.md, and the newest readable artifact re-ships them.
+(Also logged: code-factory-handbook-v2.pdf cover "MODULES 43" vs 00-INDEX.md:57 "Modules: 44"; RUMSFELD.md:273-274 "8 of 18 contracts broken" vs the register's own 6 broken + 2 missing; module 25's quoted staged set already one item stale vs node-create.sh:21-24.)
+
+TRACEABILITY: A module-level task list CAN be derived — every §3 carries re-runnable commands with expected results (exemplary at 01-…:125-134), and the board's rows cite CF ids with 188 measurement-verbed acceptance criteria (RUMSFELD.md:73). What breaks it: (a) the status vocabulary is computed but unarmed — master_doc_check.py is invoked by nothing outside itself (grep over tests/, scripts/, AGENTS.md, .coding-hermes/ finds only board row CF-311; RUMSFELD K7 :108 is still open), so VERIFIED is a hand-run snapshot that decays in silence, proven by module 18 vs 45bd4bd the same day; (b) flow-level tasks are underivable — the five missing flows (00-INDEX.md:84-85) have no steps to cite; (c) work on the six uncovered systems has no section id to reference; (d) skeleton modules 40-43 verify nothing ("Last run: UNKNOWN" ×8, docs/master/40:54-62, §8 "none yet" :110).
+
+RUMSFELD: present — and perishable. The four-quadrant register exists with per-quadrant destinations (docs/RUMSFELD.md:298-307); all 18 Q2 known-unknowns carry a probe AND a falsifier bucketed by when they can be answered (:100-129); Q3's 24 unknown-knowns each name the document that should hold them and 20 carry a measured cost; Q4 is a genuine 50-item sweep against 17 standards and 16 comparable systems. What is missing: Q4's 50 items carry state (ABSENT/PARTIAL) but no probe and no falsifier per item — half the register's unknowns fail the brief's bar; the seven "run now" probes K1-K7 are recorded as unrun with no results (:265-267); and the "path by which an unknown moves to known" failed in practice within hours — harness_resolve.py landed at 17:23 falsifying RUMSFELD.md:78's "measured (ls fails)" and the register still asserts it.
+
+TOP 10 DEFECTS:
+1. No bound document — the set is ≥6 artifacts (44 module pages, SYSTEM-MODEL.yaml, UNIT-MAP.yaml, RUMSFELD.md, plus two competing handbook PDFs) with zero cross-references from the module set (grep NONE). A builder cannot get from docs/master/00-INDEX.md to the system view in any number of steps. Breaks: orientation — the Apollo general-arrangement function.
+2. The newest rendered handbook (code-factory-reports/handbook/code-factory-handbook.pdf, 23:43) re-ships verbatim content the same-day quorum FAILED — "eight sheets", 603 ticks, five legs, REV 3b1e826 (extracted lines 140/1396/1341/1365; QUORUM-REVIEW-20261105.md seats SOL/GLM/KIMI/GROK/DEEPSEEK). Breaks: trust — the flagship artifact teaches measured-false numbers.
+3. Primary flow does not close in the model: F1's terminal edge scheduler→board is unregistered and its last two registered hops are missing/broken (SYSTEM-MODEL.yaml:182-183, 204-205, 259-260). Breaks: diagnosis of "a row became work" — the system's reason to exist.
+4. No secondary flows: maintenance, monitoring/liveness, recovery/disaster, degradation, project onboarding all absent (00-INDEX.md:84-85; RUMSFELD.md:230-232,246). Breaks: operations — a stranger cannot keep the vehicle alive, only read its steady state.
+5. Contracts fail the set's own schema: 0 of 18 name both sides' file:function (MASTER-DOC-SCHEMA.md:56-57 vs SYSTEM-MODEL.yaml:149-247); 4 one-sided; ≥11 unstated including the edge the primary flow ends on. Breaks: interface work — the schema's own word is "rumour".
+6. Coverage is ~30% of the system by the set's own admission (00-INDEX.md:67-88): docs/ 165 files, tests/ (55-arm gate), prompts/, skills/, config/ all zero modules; six whole systems documented client-side only (:79-82); 10 scripts on disk have no module while :71 claims five. Breaks: rebuild — the brief's core requirement.
+7. The VERIFIED gate is unarmed: nothing invokes master_doc_check.py (only board row CF-311 references it outside itself), so the honest status vocabulary decays silently — module 18's measurements were falsified by 45bd4bd eight hours after stamping and the module still stands. Breaks: the "computed, never asserted" promise (00-INDEX.md:4).
+8. The node's own contract is a skeleton: module 40 (specs/NODE.md) is RED with UNKNOWN purpose (:12-13), eight verification rows never run (:54-62), empty evidence (:110). Breaks: the central unit of the system has no verified page.
+9. The Rumsfeld register does not shrink: K1-K7 recorded unrun; K8's premise falsified same-day by 74d36cf without register update; Q4's 50 items have no probes. Breaks: the mechanism whose stated purpose (:9) is "to shrink the list".
+10. Two censuses of the same tree disagree with each other and with the tree (00-INDEX.md:71 vs RUMSFELD.md:62 vs 51 files/16,579 lines) and the latest module-generated artifact counts 43 modules where the index counts 44 (code-factory-handbook-v2.pdf cover vs 00-INDEX.md:57). Breaks: every downstream count — a builder cannot tell which census to stand on, and the set's own rule is that a wrong count is a finding.
+
+WHAT ONE PAGE SHOULD BE ADDED THAT ISN'T THERE: a SECTION 0 "GENERAL ARRANGEMENT AND READING MAP" bound into docs/master as 00.5 (and into every render): the six-layer/16-component arrangement drawn from SYSTEM-MODEL.yaml, with every F1-F5 flow step annotated with the module section or named-external-system that executes it and the measured state of the contract it rides (works/broken/missing/no-edge), closing with the explicit uncovered-territory list (six systems, 10 unmoduled scripts, docs/tests/prompts/config) so a stranger knows the boundary of the map before trusting it. The artifacts it binds already exist (SYSTEM-MODEL.yaml, UNIT-MAP.yaml, 00-INDEX.md's own coverage table) — what does not exist is the page that welds them to the 44 module sheets, which is precisely the page that turns a file census into a vehicle manual and makes "which page to turn to next" answerable.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-e1c7a6a5b04c96075575110cf73b02ecee77d0a32ebd4fb5af27941d0d088cac
+
+EXIT=0

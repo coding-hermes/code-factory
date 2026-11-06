@@ -1,0 +1,466 @@
+⚠️  Primary auth failed — switching to fallback: fireworks / accounts/fireworks/models/deepseek-v4p1-flash-1017
+│ cache/scratch/cf-apollo-gap-20261105/envscan.py
+│ @@ -0,0 +1,29 @@
+│ +import re, pathlib, json, collections
+│ +
+│ +root = pathlib.Path('/home/kara/code-factory')
+│ +files = []
+│ +for p in sorted(root.glob('scripts/**/*')):
+│ +    if p.is_file() and p.suffix in ('.py', '.sh') and '__pycache__' not in str(p):
+│ +        files.append(p)
+│ +
+│ +py_env = re.compile(r'(?:os\.environ(?:\.get)?\s*[\(\[]\s*|getenv\(\s*)["\']([A-Za-z_][A-Za-z0-9_]*)["\']')
+│ +py_environ_sub = re.compile(r'os\.environ\[\s*["\']([A-Za-z_][A-Za-z0-9_]*)["\']')
+│ +sh_var = re.compile(r'\$\{([A-Za-z_][A-Za-z0-9_]*)(?::?-[^}]*)?\}')
+│ +
+│ +found = collections.defaultdict(list)   # name -> [(file, line, kind)]
+│ +for p in files:
+│ +    for i, line in enumerate(p.read_text(errors='replace').splitlines(), 1):
+│ +        if p.suffix == '.py':
+│ +            for m in py_env.finditer(line):
+│ +                found[m.group(1)].append((str(p.relative_to(root)), i, 'py-read'))
+│ +            for m in py_environ_sub.finditer(line):
+│ +                found[m.group(1)].append((str(p.relative_to(root)), i, 'py-read'))
+│ +        else:
+│ +            for m in sh_var.finditer(line):
+│ +                found[m.group(1)].append((str(p.relative_to(root)), i, 'sh-use'))
+│ +
+│ +# also python: argparse add_argument defaults count separately
+│ +print("=== distinct env-ish names:", len(found))
+│ +for name in sorted(found):
+│ +    locs = found[name]
+│ +    print(f"{name}\t{len(locs)}\t{locs[0][0]}:{locs[0][1]}")
+│ cache/scratch/cf-apollo-gap-20261105/knobscan.py
+│ @@ -0,0 +1,36 @@
+│ +import re, pathlib, collections
+│ +
+│ +root = pathlib.Path('/home/kara/code-factory')
+│ +docs = {p.name: p.read_text(errors='replace') for p in sorted((root/'docs/master').glob('*.md'))}
+│ +all_docs = "\n".join(docs.values())
+│ +
+│ +py_env = re.compile(r'(?:os\.environ(?:\.get)?\s*[\(\[]\s*|getenv\(\s*)["\']([A-Za-z_][A-Za-z0-9_]*)["\']')
+│ +sh_default = re.compile(r'\$\{([A-Z][A-Z0-9_]{2,})(?::-|:-|:)')
+│ +sh_plain = re.compile(r'\$\{([A-Z][A-Z0-9_]{2,})\}')
+│ +sh_assign_env = re.compile(r'^\s*(?:export\s+)?([A-Z][A-Z0-9_]{2,})=["\']?\$\{')
+│ +
+│ +knobs = collections.defaultdict(lambda: {'files': set(), 'lines': [], 'kinds': set()})
+│ +
+│ +for p in sorted(root.glob('scripts/**/*')):
+│ +    if not p.is_file() or '__pycache__' in str(p) or p.suffix not in ('.py', '.sh'):
+│ +        continue
+│ +    rel = str(p.relative_to(root))
+│ +    for i, line in enumerate(p.read_text(errors='replace').splitlines(), 1):
+│ +        if p.suffix == '.py':
+│ +            for m in py_env.finditer(line):
+│ +                k = knobs[m.group(1)]; k['files'].add(rel); k['lines'].append((rel,i)); k['kinds'].add('env-read')
+│ +        else:
+│ +            for m in sh_default.finditer(line):
+│ +                k = knobs[m.group(1)]; k['files'].add(rel); k['lines'].append((rel,i)); k['kinds'].add('env-default')
+│ +
+│ +names = sorted(n for n in knobs if not n.startswith('CFV_'))
+│ +print(f"=== {len(names)} env knobs (os.environ reads + shell ${{VAR:-default}}) across scripts/")
+│ +docd, undoc = [], []
+│ +for n in names:
+│ +    present = n in all_docs
+│ +    where = [f for f,t in docs.items() if n in t]
+│ +    (docd if present else undoc).append(n)
+│ +    loc = f"{knobs[n]['lines'][0][0]}:{knobs[n]['lines'][0][1]}"
+│ +    print(f"{'DOC' if present else '===UNDOC==='}\t{n}\t{loc}\t{len(knobs[n]['files'])}files\t{','.join(sorted(where))[:120]}")
+│ +print(f"\n=== documented={len(docd)} undocumented={len(undoc)}")
+│ +print("UNDOC:", ", ".join(undoc))
+│ cache/scratch/cf-apollo-gap-20261105/loccheck.py
+│ @@ -0,0 +1,32 @@
+│ +import re, pathlib, collections, subprocess
+│ +
+│ +root = pathlib.Path('/home/kara/code-factory')
+│ +docs = sorted((root/'docs/master').glob('[0-9]*.md'))
+│ +loc = re.compile(r'\[([A-Za-z0-9_./\-]+\.(?:py|sh|md|jsonl|json|yaml|toml|go|txt)):(\d+)(?:-(\d+))?\]')
+│ +
+│ +tot = 0
+│ +bad = []
+│ +by_file = collections.Counter()
+│ +for d in docs:
+│ +    text = d.read_text(errors='replace')
+│ +    for m in loc.finditer(text):
+│ +        p, a, b = m.group(1), int(m.group(2)), m.group(3)
+│ +        target = root/p
+│ +        tot += 1
+│ +        by_file[p] += 1
+│ +        if not target.exists():
+│ +            bad.append((d.name, p, a, 'MISSING FILE'))
+│ +            continue
+│ +        try:
+│ +            n = len(target.read_text(errors='replace').splitlines())
+│ +        except Exception as e:
+│ +            bad.append((d.name, p, a, f'READ ERR {e}')); continue
+│ +        hi = int(b) if b else a
+│ +        if a < 1 or hi > n:
+│ +            bad.append((d.name, p, f'{a}-{b}' if b else a, f'OUT OF RANGE (file has {n} lines)'))
+│ +print(f"total locator refs: {tot}  distinct files: {len(by_file)}  unresolvable: {len(bad)}")
+│ +for r in bad[:40]:
+│ +    print("BAD", r)
+│ +print("\ntop referenced files:")
+│ +for f, c in by_file.most_common(12):
+│ +    print(f"  {c:4d}  {f}")
+│ cache/scratch/cf-apollo-gap-20261105/flagscan.py
+│ @@ -0,0 +1,43 @@
+│ +import re, pathlib, collections
+│ +
+│ +root = pathlib.Path('/home/kara/code-factory')
+│ +docs = {p.name: p.read_text(errors='replace') for p in sorted((root/'docs/master').glob('*.md'))}
+│ +all_docs = "\n".join(docs.values())
+│ +
+│ +# map module -> doc, from the index table
+│ +idx = (root/'docs/master/00-INDEX.md').read_text()
+│ +entries = re.findall(r'\| (\d+) \| \[`([^`]+)`\]\(([\w.\-]+\.md)\)', idx)
+│ +
+│ +arg_re = re.compile(r'add_argument\(\s*["\'](-{1,2}[A-Za-z0-9_\-]+)')
+│ +sh_flag = re.compile(r'(?<![\w-])(--[a-z][a-z0-9\-]{1,30})')
+│ +
+│ +rows = []
+│ +for num, path, docfile in entries:
+│ +    src = root/path
+│ +    if not src.exists():
+│ +        rows.append((num, path, docfile, 'SOURCE MISSING', 0, 0, []))
+│ +        continue
+│ +    text = src.read_text(errors='replace')
+│ +    if path.endswith('.py'):
+│ +        flags = sorted(set(arg_re.findall(text)))
+│ +    elif path.endswith('.sh'):
+│ +        flags = sorted({m for m in sh_flag.findall(text)})
+│ +    else:
+│ +        rows.append((num, path, docfile, 'spec/other', 0, 0, []))
+│ +        continue
+│ +    doc = docs.get(docfile, '')
+│ +    missing = [f for f in flags if f not in doc]
+│ +    rows.append((num, path, docfile, 'ok', len(flags), len(missing), missing))
+│ +
+│ +print(f"{'#':>3} {'flags':>6} {'undoc':>6}  doc")
+│ +tot = tot_missing = 0
+│ +for num, path, docfile, st, n, nm, missing in rows:
+│ +    if st != 'ok':
+│ +        print(f"{num:>3} {'-':>6} {'-':>6}  {path}  [{st}]")
+│ +        continue
+│ +    tot += n; tot_missing += nm
+│ +    flag = '  <-- ALL UNDOC' if nm == n and n else ''
+│ +    print(f"{num:>3} {n:>6} {nm:>6}  {path}{flag}")
+│ +    if missing and nm:
+│ +        print(f"        missing: {' '.join(missing[:14])}{' …' if len(missing)>14 else ''}")
+│ +print(f"\nTOTAL flags parsed: {tot}  absent from their own module section: {tot_missing}")
+│ cache/scratch/cf-apollo-gap-20261105/flagscan2.py
+│ @@ -0,0 +1,31 @@
+│ +import re, pathlib
+│ +
+│ +root = pathlib.Path('/home/kara/code-factory')
+│ +docs = {p.name: p.read_text(errors='replace') for p in sorted((root/'docs/master').glob('*.md'))}
+│ +idx = (root/'docs/master/00-INDEX.md').read_text()
+│ +entries = re.findall(r'\| (\d+) \| \[`([^`]+)`\]\(([\w.\-]+\.md)\)', idx)
+│ +
+│ +arg_re = re.compile(r'add_argument\(\s*["\'](-{1,2}[A-Za-z0-9_\-]+)')
+│ +# shell: a case-branch flag or an explicit comparison
+│ +sh_case = re.compile(r'^\s*(--[a-z][a-z0-9\-]+)\)', re.M)
+│ +sh_test = re.compile(r'\[\s*"?\$1"?\s*=\s*(--?[a-z][a-z0-9\-]+)')
+│ +sh_any = re.compile(r'(?<![\w-])(--[a-z][a-z0-9\-]{2,})(?=[\s"\']|$)')
+│ +
+│ +tot = miss_tot = 0
+│ +print(f"{'#':>3} {'own':>4} {'undoc':>5}  module")
+│ +for num, path, docfile in entries:
+│ +    src = root/path
+│ +    if not src.exists() or path.endswith('.md'):
+│ +        continue
+│ +    text = src.read_text(errors='replace')
+│ +    if path.endswith('.py'):
+│ +        flags = sorted(set(arg_re.findall(text)))
+│ +    else:
+│ +        flags = sorted(set(sh_case.findall(text)) | set(sh_test.findall(text)) | set(sh_any.findall(text)))
+│ +    doc = docs.get(docfile, '')
+│ +    missing = [f for f in flags if f not in doc]
+│ +    tot += len(flags); miss_tot += len(missing)
+│ +    print(f"{num:>3} {len(flags):>4} {len(missing):>5}  {path}")
+│ +    if missing:
+│ +        print(f"      not named in {docfile}: {' '.join(missing)}")
+│ +print(f"\nTOTAL own switches: {tot}; not named in their own module section: {miss_tot}")
+│ cache/scratch/cf-apollo-gap-20261105/pdfdump.py
+│ @@ -0,0 +1,13 @@
+│ +import sys
+│ +try:
+│ +    import pypdf
+│ +except ImportError:
+│ +    print("no pypdf")
+│ +    sys.exit(0)
+│ +p = '/home/kara/code-factory-reports/handbook/code-factory-handbook-2026-11-05-r2.pdf'
+│ +r = pypdf.PdfReader(p)
+│ +print('pages', len(r.pages))
+│ +for i, pg in enumerate(r.pages, 1):
+│ +    t = pg.extract_text() or ''
+│ +    print('--- PAGE', i, 'chars', len(t))
+│ +    print(t[:800].replace('\n', ' | '))
+│ cache/scratch/cf-apollo-gap-20261105/revdrift.py
+│ @@ -0,0 +1,34 @@
+│ +import re, pathlib, subprocess
+│ +
+│ +root = pathlib.Path('/home/kara/code-factory')
+│ +idx = (root/'docs/master/00-INDEX.md').read_text()
+│ +entries = re.findall(r'\| (\d+) \| \[`([^`]+)`\]\(([\w.\-]+\.md)\)', idx)
+│ +head = subprocess.run(['git','-C',str(root),'rev-parse','HEAD'],capture_output=True,text=True).stdout.strip()
+│ +
+│ +def git(*a):
+│ +    return subprocess.run(['git','-C',str(root)]+list(a),capture_output=True,text=True)
+│ +
+│ +sha = re.compile(r'`([0-9a-f]{7,40})`')
+│ +rows=[]
+│ +for num, path, docfile in entries:
+│ +    if '*' in path: continue
+│ +    doc = (root/'docs/master'/docfile).read_text(errors='replace')
+│ +    m = re.search(r'^\| Revision \|(.+)$', doc, re.M)
+│ +    line = m.group(1) if m else ''
+│ +    shas = sha.findall(line)
+│ +    rev = shas[0] if shas else ''
+│ +    ok = git('cat-file','-e',rev+'^{commit}').returncode == 0 if rev else False
+│ +    changed = ''
+│ +    if ok:
+│ +        d = git('diff','--numstat',rev,head,'--',path)
+│ +        changed = 'CHANGED' if d.stdout.strip() else 'identical'
+│ +    rows.append((num,path,rev,ok,changed))
+│ +
+│ +n_changed = sum(1 for r in rows if r[4]=='CHANGED')
+│ +n_ident = sum(1 for r in rows if r[4]=='identical')
+│ +n_bad = sum(1 for r in rows if not r[3])
+│ +print(f"modules={len(rows)}  stamped-rev resolvable={len(rows)-n_bad}  file unchanged since stamp={n_ident}  file CHANGED since stamp={n_changed}")
+│ +print(f"HEAD={head[:8]}")
+│ +for r in rows:
+│ +    if r[4]=='CHANGED' or not r[3]:
+│ +        print(f"  #{r[0]:>2} {r[1]:<46} stamp={r[2] or '??':<8} {'UNRESOLVABLE' if not r[3] else r[4]}")
+│ cache/scratch/cf-apollo-gap-20261105/section23scan.py
+│ @@ -0,0 +1,35 @@
+│ +import re, pathlib
+│ +
+│ +root = pathlib.Path('/home/kara/code-factory')
+│ +docs = sorted((root/'docs/master').glob('[0-9][0-9]-*.md'))
+│ +docs = [d for d in docs if not d.name.startswith('00-')]
+│ +
+│ +def block(text, pat):
+│ +    m = re.search(pat, text, re.M)
+│ +    if not m: return ''
+│ +    rest = text[m.start():]
+│ +    nxt = re.search(r'^## ', rest, re.M)
+│ +    return rest[:nxt.start()] if nxt else rest
+│ +
+│ +print(f"{'mod':<6}{'2c rows':>8}{'both-sides kw':>14}{'7 rows':>7}{'default kw':>11}{'flags/knobs listed':>19}")
+│ +tot = dict(c2=0, both=0, s7=0, dflt=0)
+│ +rowsout=[]
+│ +for d in docs:
+│ +    t = d.read_text(errors='replace')
+│ +    c2 = block(t, r'^### 2c\.|^### 2c |^## 2c\.')
+│ +    s7 = block(t, r'^## 7\.|^### 7\.')
+│ +    c2rows = len([l for l in c2.splitlines() if l.strip().startswith('|') and '---' not in l and not re.match(r'^\|\s*(Peer|Import|Dependency)', l)])
+│ +    both = len(re.findall(r'other side|written by|implemented by|file:function|\(.*?\.(?:py|sh|go):', c2, re.I))
+│ +    s7rows = len([l for l in s7.splitlines() if l.strip().startswith('|') and '---' not in l])
+│ +    dflt = len(re.findall(r'default', s7, re.I))
+│ +    knobs = len(re.findall(r'`[A-Z_]{3,}`|--[a-z][a-z0-9\-]+', s7))
+│ +    tot['c2']+=c2rows; tot['both']+=both; tot['s7']+=s7rows; tot['dflt']+=dflt
+│ +    rowsout.append((d.name[:5], c2rows, both, s7rows, dflt, knobs))
+│ +for r in rowsout:
+│ +    print(f"{r[0]:<6}{r[1]:>8}{r[2]:>14}{r[3]:>7}{r[4]:>11}{r[5]:>19}")
+│ +print("\nTOTALS 2c rows:", tot['c2'], " both-side markers:", tot['both'], " §7 rows:", tot['s7'], " 'default' mentions:", tot['dflt'])
+│ +# modules with no 2c at all
+│ +none = [r[0] for r in rowsout if r[1]==0]
+│ +print("modules with ZERO §2c contract rows:", len(none), none)
+│ +zero7 = [r[0] for r in rowsout if r[3]==0]
+│ +print("modules with ZERO §7 rows:", len(zero7), zero7)
+│ cache/scratch/cf-apollo-gap-20261105/section7scan.py
+│ @@ -0,0 +1,27 @@
+│ +import re, pathlib
+│ +
+│ +root = pathlib.Path('/home/kara/code-factory')
+│ +docs = [d for d in sorted((root/'docs/master').glob('[0-9][0-9]-*.md')) if not d.name.startswith('00-')]
+│ +
+│ +def body_after(text, pat):
+│ +    m = re.search(pat, text, re.M)
+│ +    if not m: return ''
+│ +    start = m.end()
+│ +    nxt = re.search(r'^## ', text[start:], re.M)
+│ +    return text[start:start+nxt.start()] if nxt else text[start:]
+│ +
+│ +tot_rows = tot_default = tot_knob = 0
+│ +zero = []
+│ +print(f"{'mod':<7}{'§7 rows':>8}{'defaults':>9}{'knobs':>7}")
+│ +for d in docs:
+│ +    t = d.read_text(errors='replace')
+│ +    s7 = body_after(t, r'^## 7\.')
+│ +    rows = [l for l in s7.splitlines() if l.strip().startswith('|') and not re.match(r'^\|\s*-+', l.strip())]
+│ +    rows = [l for l in rows if not re.match(r'^\|\s*(setting|Flag|Variable|Name|Key|Env|Dependency|Field|Scope)', l.strip(), re.I)]
+│ +    dflt = len(re.findall(r'default', s7, re.I))
+│ +    knobs = len(set(re.findall(r'`[A-Z][A-Z_0-9]{2,}`|--[a-z][a-z0-9\-]+', s7)))
+│ +    tot_rows += len(rows); tot_default += dflt; tot_knob += knobs
+│ +    if not rows: zero.append(d.name[:5])
+│ +    print(f"{d.name[:5]:<7}{len(rows):>8}{dflt:>9}{knobs:>7}")
+│ +print(f"\nTOTAL §7 rows across 44 modules: {tot_rows}; 'default' mentions: {tot_default}; distinct knobs named: {tot_knob}")
+│ +print("modules with empty §7:", len(zero), zero)
+│ cache/scratch/cf-apollo-gap-20261105/final_settings.py
+│ @@ -0,0 +1,64 @@
+│ +import re, pathlib, collections
+│ +
+│ +root = pathlib.Path('/home/kara/code-factory')
+│ +idx = (root/'docs/master/00-INDEX.md').read_text()
+│ +entries = re.findall(r'\| (\d+) \| \[`([^`]+)`\]\(([\w.\-]+\.md)\)', idx)
+│ +owner = {p: d for _, p, d in entries}
+│ +docs = {p.name: p.read_text(errors='replace') for p in sorted((root/'docs/master').glob('*.md'))}
+│ +
+│ +py_env = re.compile(r'(?:os\.environ(?:\.get)?\s*[\(\[]\s*|getenv\(\s*)["\']([A-Za-z_][A-Za-z0-9_]*)["\']')
+│ +sh_def = re.compile(r'\$\{([A-Z][A-Z0-9_]{2,})(?::-|:-|:)')
+│ +
+│ +knobs = collections.defaultdict(set)   # name -> {files}
+│ +for p in sorted(root.glob('scripts/**/*')):
+│ +    if not p.is_file() or '__pycache__' in str(p) or p.suffix not in ('.py', '.sh'):
+│ +        continue
+│ +    rel = str(p.relative_to(root))
+│ +    txt = p.read_text(errors='replace')
+│ +    names = set(py_env.findall(txt)) | set(sh_def.findall(txt)) if p.suffix == '.py' else set(sh_def.findall(txt))
+│ +    for n in names:
+│ +        if n.startswith('CFV_'):
+│ +            continue
+│ +        knobs[n].add(rel)
+│ +
+│ +own_ok, own_missing, orphan = 0, [], []
+│ +for n, files in sorted(knobs.items()):
+│ +    where = [f for f in files if f in owner]
+│ +    if not where:
+│ +        orphan.append((n, sorted(files)))
+│ +        continue
+│ +    doc = docs.get(owner[where[0]], '')
+│ +    if n in doc:
+│ +        own_ok += 1
+│ +    else:
+│ +        own_missing.append((n, where[0], owner[where[0]]))
+│ +
+│ +print(f"ENV KNOBS: {len(knobs)} distinct read in scripts/")
+│ +print(f"  named in the module page of the file that reads them : {own_ok}")
+│ +print(f"  read by a file that has NO module page at all        : {len(orphan)}")
+│ +print(f"  read in a documented file but absent from its §7/doc : {len(own_missing)}")
+│ +for n, f, d in own_missing:
+│ +    print(f"    - {n:<26} read at {f:<38} page {d}")
+│ +print("  orphaned:")
+│ +for n, f in orphan:
+│ +    print(f"    - {n:<26} {f}")
+│ +
+│ +# own CLI switches, restricted to argparse + shell case branches
+│ +arg = re.compile(r'add_argument\(\s*["\'](-{1,2}[A-Za-z0-9_\-]+)')
+│ +case = re.compile(r'^\s*(--[a-z][a-z0-9\-]+)\)', re.M)
+│ +tot = bad = 0
+│ +badlist = []
+│ +for p, d in owner.items():
+│ +    src = root/p
+│ +    if not src.exists() or src.suffix not in ('.py', '.sh'):
+│ +        continue
+│ +    t = src.read_text(errors='replace')
+│ +    flags = sorted(set(arg.findall(t))) if src.suffix == '.py' else sorted(set(case.findall(t)))
+│ +    doc = docs.get(d, '')
+│ +    for f in flags:
+│ +        tot += 1
+│ +        if f not in doc:
+│ +            bad += 1; badlist.append((f, p, d))
+│ +print(f"\nOWN CLI SWITCHES (argparse + shell case branches): {tot}; not named on their own module page: {bad}")
+│ +for f, p, d in badlist:
+│ +    print(f"    - {f:<18} {p:<34} page {d}")
+│ cache/scratch/cf-apollo-gap-20261105/contractscan.py
+│ @@ -0,0 +1,34 @@
+│ +import re, pathlib
+│ +
+│ +root = pathlib.Path('/home/kara/code-factory')
+│ +docs = [d for d in sorted((root/'docs/master').glob('[0-9][0-9]-*.md')) if not d.name.startswith('00-')]
+│ +LOC = re.compile(r'([\w./-]*\.(?:py|sh|md|go|jsonl)):(\d+)')
+│ +
+│ +def block(text):
+│ +    m = re.search(r'^### 2c\.', text, re.M)
+│ +    if not m: return ''
+│ +    s = m.end()
+│ +    n = re.search(r'^## ', text[s:], re.M)
+│ +    return text[s:s+n.start()] if n else text[s:]
+│ +
+│ +rows_total = both = one = zero = 0
+│ +detail = []
+│ +for d in docs:
+│ +    b = block(d.read_text(errors='replace'))
+│ +    if not b: continue
+│ +    for line in b.splitlines():
+│ +        s = line.strip()
+│ +        if not s.startswith('|') or re.match(r'^\|[\s\-:|]+\|$', s): continue
+│ +        if re.match(r'^\|\s*(Peer|Import|Dependency|Direction)', s): continue
+│ +        refs = {f for f, _ in LOC.findall(s)}
+│ +        rows_total += 1
+│ +        if len(refs) >= 2: both += 1
+│ +        elif len(refs) == 1: one += 1
+│ +        else:
+│ +            zero += 1; detail.append((d.name[:5], s[:110]))
+│ +print(f"§2c contract rows: {rows_total}")
+│ +print(f"  name BOTH implementing sides (>=2 distinct file refs): {both}")
+│ +print(f"  name ONE side                                          : {one}")
+│ +print(f"  name NO file at all (component prose only)              : {zero}")
+│ +for x in detail[:12]:
+│ +    print("   zero-side example:", x)
+VERDICT: FAIL
+
+STRUCTURE: There is a system-level arrangement in this *set* but not in this *document*: `docs/SYSTEM-MODEL.yaml:13-145` (6 layers, 16 components, 18 contracts) and its 9-page render (`/home/kara/code-factory-reports/handbook/cf-system-views.pdf`, 2026-11-05 22:29) are exactly the Apollo "general arrangement" move — but the artifact the owner asked for, `code-factory-operations-handbook.pdf` (277 pages, 22:32 the same night), opens cover → contents → a board-derived deficiency register → page 8 = `01. SCRIPTS/ADD_FAMILY_LANES.PY`. First operational page in a 277-page handbook is one Python script. The 277-page PDF contains zero occurrences of "SYSTEM-MODEL", "UNIT-MAP" or "system view" (measured: `grep -ci` → 0), so the arrangement chapter and the detail chapters do not know about each other; the reader is handed two disconnected documents and no page that says "start here, then turn to 2.1-1". Apollo volumes bound the general arrangement, the subsystem chapters and the checklist cards under one numbering scheme with cross-references; this set has three numbering schemes (CF2A-00, CF2A-03-BLOCK I-(1) in the rejected r2 PDF, and CF2A-01…44 in the 277-page build) and no cross-reference between any of them.
+
+SECTIONS STILL FILE-SHAPED: 43 of 44 — every chapter title but one is a path (`docs/master/00-INDEX.md:8-51`: `scripts/add_family_lanes.py`, `specs/ENVELOPE.md`, …). `docs/master/44-doc-pipeline.md` is the only subsystem-shaped chapter (it covers four scripts as one responsibility). Roughly five bodies generalize past their file — 01 (the lane-family writer), 25 (the node half of the bus), 31+32 (seed and seed-drift as one mechanism), 05 (the provisioner orchestrator), 02 (the drift instrument) — but the *unit of the document* is still the file: 39 pages describe one script's lines and cannot be read as "the subsystem that does X". The honest subsystem framing exists, is good, and is stranded: `docs/UNIT-MAP.yaml:15-236` gives 9 modules / 25 submodules / 44 units with a measured `trigger` and an authored `effect` — and no module page, no index line and no page of the 277-page PDF refers to it (`docs/master/00-INDEX.md` links only `01-…43-*.md`; measured: zero references).
+
+FLOWS MISSING (by class): all four secondary classes. `docs/SYSTEM-MODEL.yaml:249-294` declares five flows: F1 DISPATCH, F2 PROVISIONING, F3 MEMORY, F4 DOCUMENTATION, F5 LANDING. Missing end-to-end, by class: (a) **monitoring** — no flow from a running tick to the board/ledger/eye of an operator, no SLI path (RUMSFELD Q4(a) #15 admits "the 174-tick outage was found by a human reading a log"); (b) **recovery** — node loss, key rotation, board corruption, git corruption, half-provisioned node; `docs/RUMSFELD.md:224-225` states the pattern outright ("we document steady state well and transitions almost not at all") and lists cordon/drain/rollback as NONE; (c) **degradation** — model-lane fallback, 429/402 handling, PAYG ordering, crier signature refusal during an incident; (d) **maintenance** — disk floor reclamation, seed drift, repo freshness, token refresh; each exists only as a single script's purpose, never as a sequence. Worse, the five that *do* exist do not satisfy the second half of the question: not one step names the module that executes it. F1's seven steps are `[scheduler, crier, "envelope with run_id"]` … `[scheduler, board, "row state changes, attempt recorded"]` (`docs/SYSTEM-MODEL.yaml:254-260`) — components, not files, not functions, no timing, no failure branch, no "if this step returns X, go to Y". An operator cannot execute F1 from the document; the r2 PDF's own flow chapter (`code-factory-handbook-2026-11-05-r2.pdf`, sheet 2.2, "FIVE FLOWS") has the same property.
+
+CONTRACT GAPS: 18 declared, 8 not in `works`, of which **2 are one-sided (no second implementation exists at all)** and **6 are stated-but-broken**; at the module level **127 of 256 §2c rows name one side only and 14 name none**. `docs/SYSTEM-MODEL.yaml:147-247`: crier→scheduler "completion event" is `state: missing` ("CF-337 — nothing writes completions back", :183) and node→duckbrain R1/R2 is `state: missing` ("zero DuckBrain calls (CF-329)", :199). Both are one-sided by construction: `specs/FLEET-MEMORY.md:43-66` specifies R1 and R2 records in full, `docs/master/25-scripts-node-bus-worker-py.md` — the page that owns the node's run path — contains **zero occurrences of "DuckBrain", "R1" or "CF-329"** (measured `grep -n` → no match), so the module that would have to fail this contract does not carry it, and the contract's absence is invisible to anyone reading the module set rather than the YAML. The six broken ones (:158, :166, :172, :200, :216, :237) carry a one-line `note` and no payload/timing table. Per-module: 256 rows under `### 2c`, 115 with two distinct implementing files named (e.g. `docs/master/02-scripts-board-drift-py.md:112-120`, which is exemplary — it names `boardctl`, `AGENTS.md:54-62`, git, and the selftest arm), 127 with one (typical shape: `| git | outbound | argv | git show … || the local repository` — a peer that is a binary, not a second implementation), 14 with none. Four pages have no §2c at all: `41-sp`, `42-sp`, `43-sp` (their §2 is prose prose naming components — `docs/master/42-specs-trace-md.md:25-43` — no payload, no timing, no failure semantics) and `44`.
+
+SETTINGS DOCUMENTED vs EXISTING: 76 of 82 environment knobs on the page that reads them (79 of 82 named somewhere in the set), and 211 of 215 own CLI switches — but **0 of 82 knobs and 0 of 215 switches appear in any system-level register**, and the one file that defines the contract surface for four harnesses has no page at all. Method: parsed every `os.environ[...]`/`getenv(...)` read and every `${VAR:-default}` in `scripts/**/*.{py,sh}` (82 distinct names, excluding the `CFV_*` internals), mapped each to its owning module via `docs/master/00-INDEX.md:8-51`, then tested name presence on that page; separate pass over `add_argument("--x")` and shell `--x)` case branches (215), plus a row/keyword census of every §7 table (473 rows, 143 "default" mentions, 612 distinct knob tokens). Gaps that matter: `scripts/harness/harness-vars.sh` — 318 lines, `CFV_DECLARED` = 12 vars plus 2 ambient keys at `:28-33`, sourced by all four installers and named by only two module pages in passing — **has no module page**; `STRICT_FRESHNESS` and `STRICT_SEED` are read at `scripts/verify-node.sh:138` and `:167` and are absent from their own page (`36-scripts-verify-node-sh.md`; `STRICT_SEED` is documented on the wrong page, `32-scripts-node-seed-drift-py.md`); `CF_MASTER_DIR` (`scripts/master_doc_fill.py:26`), `FLEET_OPS_SCRIPT` (`scripts/verify-patch.sh:26`) and `GO_DL_BASE` (`scripts/install-go.sh:138`) are read by files with no page; four switches are missing from their own page — `--db` (`scripts/clone_lane.py:58`), `--harness-opts` (`scripts/harness/install-codex.sh`), `--force` (`scripts/node_seed.py`, documented at `:16-19` in the script's own header and nowhere on page 31), `--port` (`scripts/project-node.sh`). Seven pages carry prose instead of a §7 table (`01, 10, 20, 21, 22, 29, 30`). The per-page work is real and in places superb — `docs/master/02-scripts-board-drift-py.md:352-372` enumerates every flag with its default, every inherited variable, the 30 s git bound and the consequence of unsetting each — but there is no page an operator can consult to answer "what is the default and what breaks if I change it" for the system as a whole, which is precisely the Apollo controls-and-indicators index.
+
+CONTRADICTIONS: 8.
+
+1. **Status is asserted, not measured — the set's own founding rule.** `docs/master/00-INDEX.md:4`: "A section turns green by running a command, never by editing prose." Against `scripts/master_doc_check.py:95-106`: `VERIFIED` is granted on `len(locs) >= 3` plus one `fact: FACT-nn` citation and the absence of the tokens `UNKNOWN`/`TODO`/`TBD` (`:120-123`). The gate never executes anything, never reads §3's result column, and cannot tell a re-run from a sentence. 37 pages therefore wear a word that the gate did not measure.
+
+2. **One revision per issue, or eighteen.** `docs/MASTER-DOC-SCHEMA.md:18`: "The commit the section was derived from. **One revision per document issue**." Against the actual stamps: `02`→`dad2749`, `05`→`b3ed55c`, `09`→`83b2194`, `10`→`ffecec4` (a *tree* object, not a commit — `git cat-file -t ffecec4` → `tree`), `20`→`d6ddb45`, `29`/`34`→`d8c7796`, `37`→`3c4c639`, `43`→`3d54355`, `42`→`6eea792` — 18 distinct bases across 43 pages, and `HEAD` is `12d6f9a`, which is none of them.
+
+3. **How many VERIFIED.** `docs/master/44-doc-pipeline.md:3` §3: "**44 modules, 34 VERIFIED, 0 errors, `MASTER-DOC: PASS`**." Against the gate itself, run today: `44 module(s): 37 VERIFIED, 0 error(s)` — and against `docs/master/00-INDEX.md:57`: "Modules: **44** (37 VERIFIED, 7 not)". One of the three is a page in the set that misreports the set.
+
+4. **How big the tree is.** `docs/master/00-INDEX.md:71`: "`scripts/` | 43 | 13,965". `docs/RUMSFELD.md:62`: "`scripts/` 42 files / 13,944 lines". Both stamped "measured" on 2026-11-05 against the same repository; measured now: **51 files / 16,579 lines**, and 45 files in `docs/master` against the 44 the index claims.
+
+5. **How many verification sections.** `docs/master/00-INDEX.md:58`: "Modules with a verification section: **33**". Measured `grep -l '^## 3\.' docs/master/[0-9]*.md` → **44**. Every module has one; the census line is stale and the index presents it as generated.
+
+6. **The status vocabulary.** `docs/MASTER-DOC-SCHEMA.md:21`: "Status | `VERIFIED` / `UNVERIFIED` / `FAILING` — never blank, never 'done'". Six pages use `RED` as their status word (`09, 25, 40, 41, 42, 43`), a value the schema does not define and no page defines either; `UNVERIFIED` is never used once. The gate accepts `RED` (`scripts/master_doc_check.py:41`) and flags nothing.
+
+7. **RUMSFELD counts its own quadrant three ways.** `docs/RUMSFELD.md:133` heading: "Q3 — UNKNOWN KNOWNS (**24**)". Body: **26** numbered rows (`:142-177`, measured). Prose: "**20 of the 24**" (`:136`). Three numbers for one table in the one document whose subject is epistemic discipline.
+
+8. **The rejected handbook still contradicts itself inside the set, and the new build does not supersede it.** r2, page 1-1 and page 1-2 each carry a `1.3` and a `1.4` (`ROW GRAMMAR`, `THE FALSIFIER RULE` / `DEPENDENCIES`, `MODULE INDEX` — verbatim, seat SOL found this and it is still there). Table 1-1 (p. 1-1) and Table 1-4 (p. 1-2) index "2.1 Verification / 2.2 Topology / 2.3 Provisioning"; the sheets are headed "SUBSECTION 2.1 — MASTER PLAN AND STAGE LADDER" and "SUBSECTION 2.2 — DATA FLOWS AND THEIR CONTRACTS", and the indexed "2.3-2" does not exist. p. 3 prints `TABLE 2.4-1 … MEASURED STATE AT REVISION 3b1e826` under a footer reading `REV bc02e2c`. And p. 3 closes S0 "PASS" on "DuckBrain 404-with-token" against its own exit test, which requires "a DuckBrain POST of a key then GET of the same key returns the bytes" — a 404 is a failed round trip. The 277-page build is titled `CF2A-00` and silently drops the block/section/sheet apparatus, so the numbering defects are neither fixed nor retired: the set now ships both the broken numbering and its replacement, with nothing saying which governs.
+
+TRACEABILITY: **A task list can be derived for about a third of the set, and the status vocabulary that would make it trustworthy is not computed.** What works: §3 tables are re-runnable commands with expected values (`docs/master/02-scripts-board-drift-py.md:138-168` — 29 arms, transcripts at `:170-248`), §6 has a Recovery column, and the board row ↔ page link exists in §8 (`:177-178` cites CF-138/CF-204). What breaks it, in order of severity: (a) status is a text-pattern match, not a measurement (contradiction 1), so a task list derived from "RED" would miss the 37 pages whose §3 tables contain untested rows and stale dates — the vocabulary has no word for "structurally complete, unmeasured"; (b) staleness is systemic — **14 of 43 pages describe a file that has changed since that page's own stamp** (`16, 17, 18, 20, 25, 26, 31` and all seven specs `37-43`; measured `git diff --numstat <stamp> HEAD -- <file>`), so any task "verify module N" must first re-stamp it; (c) the §7/§2c empty fields the schema calls findings are not enumerated anywhere as tasks — `docs/MASTER-DOC-SCHEMA.md:7-8` says "the empty field is the finding", but there is no generated list of empty fields, and the deficiency register is board-derived (`code-factory-operations-handbook.pdf` p. 2, 271 open rows) so it contains board debt, not document debt; (d) coverage holes make the derivation unsound: eight files have no page (`gen_system_views.py`, `gen_unit_map.py`, `harness/harness-vars.sh`, `harness/install-deepseek.sh`, `harness/install-pi-agent.sh`, `harness_resolve.py`, `sheet_style.py`, `verify-patch.sh`) and `scripts/boardctl` — 21 verbs over the fleet's memory — has no page at all, though `docs/UNIT-MAP.yaml:130` describes it and four pages cite it in passing. `docs/master/00-INDEX.md:71` admits five missing pages; the measured count is eight plus boardctl.
+
+RUMSFELD: **present and better than most of the document — but broken at the seam that matters and outside the delivery.** Present: `docs/RUMSFELD.md` (307 lines) has all four quadrants — Q1 40 known-knowns with a weight column, Q2 18 known-unknowns bucketed by *when* they can be answered, Q3 26 unknown-knowns with "should live in" and a measured cost, Q4 50 unknown-unknowns split standards/comparables, plus a shrink plan and a "rejected findings" section. Q2 is the only quadrant that fully meets the Apollo test: every entry has a probe **and** a falsifier and a named bucket (`:98-129`). What is missing: (a) **Q4 has no probe and no falsifier per item** — `:194-220` and `:227-253` give "State: ABSENT/PARTIAL" and a nearest-thing column, and the file's own rule at `:9-10` ("A quadrant that does not say what would settle this is a note, not a register entry") is violated 50 times; (b) the promotion path exists only as prose headings (`:263-282`) — no item carries the row id or fact id it became, so "moves to known" is a promise, not a mechanism, despite `:300-307` claiming a destination per quadrant; (c) Q3's counts disagree with its own rows (contradiction 7); (d) **it is not in the set**: zero references from `docs/master/*`, not linked from `docs/master/00-INDEX.md`, and zero occurrences of "RUMSFELD" in the 277-page handbook (`grep -ci` → 0). The one page that answers question 8 is the one page an operator reading the handbook never sees. The unknown-unknown list also contains its own indictment: RUMSFELD Q4(b) §13 and Q4(a) §13 both flag that `reclaim_disk.py` deletes the job directories the modules cite as evidence.
+
+TOP 10 DEFECTS:
+
+1. **The gate cannot tell a measurement from a sentence, and 37 pages are certified by it.** `scripts/master_doc_check.py:95-106` vs `docs/master/00-INDEX.md:4`. Why it breaks a builder: they will treat 37 green pages as 37 verified subsystems, file no work against them, and discover on the first rebuild that §3's "PASS 2026-11-05" rows were never re-run — there is no field anywhere recording that a command executed.
+
+2. **No general arrangement inside the deliverable, and no cross-reference to the one that exists.** `code-factory-operations-handbook.pdf` p. 3→8 (contents → module 01) and 0 mentions of `SYSTEM-MODEL.yaml`/`UNIT-MAP.yaml`/the 9-page system view. Why it breaks a builder: they cannot tell which of six scripts owns "the drawer nobody can find" without reading all 44 chapters; the layer/contract map that would answer it is a different PDF they were never told about.
+
+3. **Eight files and one 21-verb CLI have no page; the index under-reports it as five.** Missing: `scripts/harness/harness-vars.sh` (the declared-input contract for four installers), `gen_system_views.py`, `gen_unit_map.py`, `harness_resolve.py`, `sheet_style.py`, `verify-patch.sh`, `harness/install-deepseek.sh`, `harness/install-pi-agent.sh`, plus `scripts/boardctl` (`docs/master/00-INDEX.md:71` vs measured). Why it breaks a builder: `harness-vars.sh` is where `CF_TIMEOUT_S`/`CF_MAX_TURNS`/`CF_RUN_ID` defaults and the `--contract` refusal live; a reader rebuilding a harness has no page for the file that defines whether the harness may run at all.
+
+4. **Contract rows are half-rumours by construction: 127 of 256 name one side.** Schema demands both (`docs/MASTER-DOC-SCHEMA.md:56-57`: "A contract with one side named is a rumour"); the gate does not check it. Why it breaks a builder: they can implement the caller and never learn the callee's payload rule — e.g. `docs/master/42-specs-trace-md.md:25-43` names six components for the trace contract with no payload shape, no timing, no failure semantics, and the contract's own state is "4 of 7 hops broken" (`docs/RUMSFELD.md:47`).
+
+5. **Flows name components, not executors, and four flow classes are absent.** `docs/SYSTEM-MODEL.yaml:249-294`; missing monitoring/recovery/degradation/maintenance (see FLOWS). Why it breaks a builder at 03:00: there is no sequence to follow for a node that dies mid-dispatch — the answer is scattered across `docs/master/20`, `25`, `34`, `36` and the r2 sheet 2.4 "operating loop".
+
+6. **Revision stamps are per-page, some are not commits, and 14 pages are already stale against their own source.** `docs/MASTER-DOC-SCHEMA.md:18` vs the 18 stamps and `HEAD=12d6f9a`; `docs/master/10-scripts-configure-family-py.md` stamps a tree (`ffecec4`); pages `16,17,18,20,25,26,31,37-43` describe files that have since changed. Why it breaks a builder: they cannot tell whether a cited line is the line that exists — 7,017 locators all resolve to *some* line ≤ EOF (measured), and `master_doc_check.py:70-93` validates only existence and range, never content.
+
+7. **The status vocabulary has four words for a five-state world and no definition of the fourth.** `docs/MASTER-DOC-SCHEMA.md:21` (three words) vs six pages using `RED`; `docs/master/00-INDEX.md:62-89` then admits the count is ~30% of the tracked lines. Why it breaks a builder: "RED" means three different things across the set — file-shape incomplete (`18`), spec not implemented (`42`), and "measured, and it is broken" (`38` FAILING) — so triage by status word sorts nothing.
+
+8. **The rejected 14-page handbook is still in the set, unreconciled, with its numbering collision intact and its successor silent about it.** `code-factory-handbook-2026-11-05-r2.pdf` p1-1/p1-2 (duplicate 1.3/1.4), Table 1-1 vs sheets 2.1/2.2, `3b1e826` vs `bc02e2c`, S0 closed on a 404; superseded by `code-factory-operations-handbook.pdf` with no supersession note anywhere. Why it breaks a builder: two documents disagree about which sections exist, and one of them is the one the prior panel failed 107 times.
+
+9. **The one page that carries the system's switches is missing, and the per-page tables do not compose into a register.** 473 §7 rows across 44 pages, 0 system-level rows; `scripts/harness/harness-vars.sh` unowned; `--port`/`--db`/`--force`/`--harness-opts` absent from their own pages. Why it breaks a builder: they cannot answer "if I raise `CF_TIMEOUT_S`, what stops working" without reading 44 pages, and the two knobs that decide whether a node passes verification at all (`STRICT_FRESHNESS`, `STRICT_SEED`, `scripts/verify-node.sh:138,167`) are not on the page that reads them.
+
+10. **The papered-over failure direction is named but never escalated.** `docs/master/25-scripts-node-bus-worker-py.md` contains no mention of the DuckBrain R1/R2 contract that `specs/FLEET-MEMORY.md:43-66` requires and `docs/SYSTEM-MODEL.yaml:199` marks missing; `docs/SYSTEM-MODEL.yaml:175` records the scheduler's silent-success defect ("checks only `ok:false`") and it appears in the schema's own worked example (`docs/MASTER-DOC-SCHEMA.md:175`) as OPEN. Why it breaks a builder: the three highest-cost defects in the set (no memory record, phantom success, no completion producer) are documented *outside* the pages that implement them, so a reader of the module set concludes the run path is closed.
+
+WHAT ONE PAGE SHOULD BE ADDED THAT ISN'T THERE: **A system controls-and-indicators index — one table, generated, that lists every switch, environment variable, timeout, cap and default in the machine with its owner file:line, its default, its valid range, what it changes downstream, and the page that owns it — one row per knob, alphabetical, with the reverse index (per page → its knobs) beside it.** It is the Apollo Flight Data File's controls index, it is the single page that turns 44 correct-but-separate §7 tables into an operable machine, and its absence is measurable today: 82 environment knobs and 215 CLI switches exist; 0 appear in any system-level register; 3 knobs are read by files with no page; 2 knobs that gate node verification are missing from the page that reads them. Build it from `scripts/` (the parse is one pass — `os.environ`/`getenv`/`${VAR:-}`/`add_argument`/case-branches), stamp it with the revision it was measured at, and put it as sheet 1-3 so the reader meets it before module 01. Second priority, if a second page is allowed: a symptom→page troubleshooting index, of which the set has none — two pages in 44 mention "troubleshoot" at all.
+
+Note on the brief's premise: the set has moved since "~22 substantive, ~18 skeleton". It is now 44 pages × 8 sections, 7,017 locators, 37 pages asserting VERIFIED. The defect has changed class — from *skeleton* to *over-certification plus fragmentation* — and the grade above is against the newer artifact (`code-factory-operations-handbook.pdf`, 277 pages) as well as the older one it does not retire.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-dd9ac4d1be639e16b1f964cf3e8c798b8e6e3ed52f4cc9e64ec3b7adcf46d1c2
+
+EXIT=0

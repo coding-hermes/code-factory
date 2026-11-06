@@ -1,0 +1,270 @@
+VERDICT: FAIL
+
+Comparison standard: Apollo Operations Handbook systems-description volumes and Spacecraft Familiarization manuals for subsystem arrangement and interactions; Flight Data File checklists for executable procedures; mission rules for limits, degraded modes and go/no-go decisions. Typography and source-file coverage do not satisfy those standards.
+
+Review baseline: code-factory commit 12d6f9accd9fe6c9be42d513a66197b928fdb8c9. The supplied inventory is stale: there are 44 numbered master sections, not 40, and 16 components in SYSTEM-MODEL.yaml, not 27. The strict document checker actually returned “44 module(s): 37 VERIFIED, 0 error(s), 0 warning(s)” and “MASTER-DOC: PASS.” That result does not establish operational correctness.
+
+Paths below are relative to /home/kara/code-factory unless absolute. The earlier PDF was found at /home/kara/code-factory-reports/handbook/code-factory-handbook-2026-11-05-r2.pdf. No reviewed files or services were changed. Another writer modified scripts/clone_lane.py during the review; the final CLI census was therefore recomputed from the committed baseline rather than that moving working tree.
+
+STRUCTURE: PASS — the standalone system-view volume opens with a general arrangement and responsibility register (/tmp/cf-system-views.pdf, sheets 2–3; docs/SYSTEM-MODEL.yaml:13–145), but this is not an integrated operating-document hierarchy.
+
+SECTIONS STILL FILE-SHAPED: 43 — FAIL.
+
+The classification is based on the actual section titles and identity fields, not the brief’s inventory:
+
+  • Sections 01–36 describe individual scripts.
+  • Sections 37–43 describe individual specification files.
+  • Section 44 is the only numbered master section organized around a multi-file responsibility: the documentation pipeline.
+
+Examples: docs/master/01-scripts-add-family-lanes-py.md:1–8; 11-scripts-disk-floor-py.md:1–8; 25-scripts-node-bus-worker-py.md:1–8; 37-specs-envelope-md.md:1–8; 44-doc-pipeline.md:1–14.
+
+The separate UNIT-MAP supplies nine responsibility-shaped modules, M0–M8, containing 25 submodules and 44 units. Those are subsystem groupings, but they have not become the handbook’s chapter structure. A reader still moves from “scripts/node_seed.py” to another script page rather than through a provisioning subsystem’s operating states, controls and interfaces. The index explicitly admits that the module set is “file-shaped, not system-shaped” (docs/master/00-INDEX.md:64–82).
+
+Section 37 contains cross-boundary analysis, but its deliverable remains a comparison of one specification file, not the authoritative interface chapter that a builder can implement without choosing among dialects (docs/master/37-specs-envelope-md.md:18–26).
+
+FLOWS MISSING (by class): FAIL — maintenance, monitoring, recovery, degradation, teardown/rebuild, and operational onboarding are not traceable end to end.
+
+The five registered flows are DISPATCH, PROVISIONING, MEMORY, DOCUMENTATION and LANDING (docs/SYSTEM-MODEL.yaml:249–294). Naming actors in these sequences does not establish executable operation.
+
+  1. Primary dispatch: F1 names seven exchanges, but supplies no implementation entry point, acceptance observation or failure branch per step. It draws a completion event and board transition even though the register marks completion write-back missing (docs/SYSTEM-MODEL.yaml:178–183, 250–260).
+
+  2. Provisioning: F2 has the node request its own container creation before explaining what bootstrap component executes that request. There is no complete operator-to-provisioner-to-daemon sequence with partial-failure backout (docs/SYSTEM-MODEL.yaml:261–269; docs/OPERATIONS.md:55–65).
+
+  3. Landing: F5 asks “How does work reach main?” but contains no fetch, merge, project gate, push or remote read-back step. It goes from committing on a node branch to a verdict, closing a row and announcing completion (docs/SYSTEM-MODEL.yaml:287–294).
+
+  4. Maintenance: no sequence covers coordinated harness/toolchain upgrade, prompt/config rollout, compatibility checks and rollback. UNIT-MAP provides effects, not those transitions (docs/UNIT-MAP.yaml:140–206).
+
+  5. Monitoring: no sequence connects a measurement to an alert threshold, responsible operator, diagnosis and disposition. The register itself acknowledges missing SLO and alert-to-runbook arrangements (docs/RUMSFELD.md:209–213).
+
+  6. Recovery/degradation: node loss, bus outage, provider failure and duplicate delivery lack a complete stop–preserve–diagnose–repair–re-admit procedure. The runbook explicitly omits the scheduler-disable command and automated retry recovery (docs/OPERATIONS.md:154–173).
+
+  7. Teardown/rebuild: destruction is documented as one operation; credential revocation, draining, restoration and requalification remain BLOCKED / NOT YET (docs/OPERATIONS.md:169–177).
+
+CONTRACT GAPS: FAIL — 0 one-sided endpoint pairs at component-name level; 18 implementation-unbound central entries; 10 additional cross-boundary flow pairs unstated in the central contract register.
+
+The counts have distinct meanings:
+
+  • All 18 registered contracts name “from” and “to.” Calling those logically one-sided would be false.
+  • None of those 18 central entries supplies a complete bilateral file:function binding, payload schema, timing rules, failure semantics and dated measurement reference. “state: works” is an authored field, not an attached measurement (docs/SYSTEM-MODEL.yaml:149–247).
+  • Comparing the five flows’ distinct cross-component exchanges against the registered pairs produces these ten omissions:
+
+      docsgate → foreman
+      foreman → crier
+      foreman → docsgate
+      gitreins → foreman
+      harness → node
+      node → bunker
+      node → harness
+      owner → duckbrain
+      owner → node
+      scheduler → board
+
+    Locators: docs/SYSTEM-MODEL.yaml:254–294.
+
+Thus the model’s own register-plus-flow union contains at least 28 distinct directed boundary pairs, not an exhaustive 18-interface inventory.
+
+Some individual module tables do name both implementations: module 01’s scheduler writes, module 25’s bus routes and module 37’s envelope comparison. Those do not repair the central register’s missing coverage and binding (docs/master/01-scripts-add-family-lanes-py.md:98–114; 25-scripts-node-bus-worker-py.md:55–63; 37-specs-envelope-md.md:50–63).
+
+The 10 works / 6 broken / 2 missing state census reproduces the YAML labels. The renderer simply reads and prints those labels; it does not measure the contracts (scripts/gen_system_views.py:190–210, 222–242).
+
+SETTINGS DOCUMENTED vs EXISTING: FAIL — 1 of 15 dispatcher environment-control names appears in the reviewed text; 257 of 294 source-declared CLI spellings are mentioned in source-associated master pages. Neither figure is complete operational documentation.
+
+Method:
+
+  • Dispatcher census: collect and deduplicate literal os.environ.get names in /home/kara/crier-fleet/dispatcher.py; search the master pages, system model, unit map, schema, Rumsfeld register and operations runbook. The earlier PDF supplies none of the fourteen missing names.
+  • CLI census: read committed scripts/*.py, scripts/*.sh and scripts/harness/*.sh; extract literal long options from Python add_argument declarations and shell case labels, including aliases, help and explicit refusal spellings; deduplicate by implementation file and option. Count textual occurrence in master pages that reference that implementation.
+  • These are name-coverage measurements. They do not establish correct defaults, units, ranges, precedence, reload behavior or downstream effects. They also exclude a complete census of the external scheduler, Crier, gateway and bunker settings. A defensible all-system n-of-m count is absent.
+
+Concrete missing operating controls:
+
+  • DISPATCH_POLL_S=5
+  • DISPATCH_PROGRESS_S=20
+  • DISPATCH_LEASE_S=1800
+  • DISPATCH_TASK_S=240
+  • DISPATCH_MARGIN_S=60
+  • DISPATCH_TASK_CAP_S=7200
+  • CF_DURABLE_JOB, defaulting to the durable-job path
+
+Sources: /home/kara/crier-fleet/dispatcher.py:38–68, 104–106, 334–337.
+
+Their interaction is the important missing specification: task_seconds uses the fallback task budget when no positive wall limit arrives, otherwise max(30, min(CAP_S, wall_s − MARGIN_S)); the worker leases messages using LEASE_S (/home/kara/crier-fleet/dispatcher.py:185–197, 435). The handbook does not tell an operator what changing these controls does to deadline reporting, lease expiry or duplicate execution.
+
+Other omissions include eight of the resolver’s nine explicit options, five filler options and three panel options. The actual declarations are at scripts/harness_resolve.py:327–371, scripts/master_doc_fill.py:393–419 and scripts/master_doc_panel.py:106–111. Section 44’s settings table does not enumerate them (docs/master/44-doc-pipeline.md:91–99).
+
+The field contract itself has no mandatory settings/limits section or required range, units, precedence and interaction fields (docs/MASTER-DOC-SCHEMA.md:12–101). The checker requires an “Environment and settings” heading but does not check its completeness (scripts/master_doc_check.py:22–31, 108–123).
+
+CONTRADICTIONS: 12 — FAIL.
+
+  1. Computed status versus read-back author status.
+
+     Claim: “the status is now computed from locators; the author’s word is ignored” (docs/master/44-doc-pipeline.md:84).
+
+     Implementation: the checker reads VERIFIED from the document’s Status row, conditionally validates that claim, returns it and counts it. It does not run the module’s acceptance commands or establish their freshness (scripts/master_doc_check.py:95–125, 150–154).
+
+  2. The PDF cannot overclaim versus an ungated renderer.
+
+     Claim: a module refused by the checker prints RED, “so the PDF cannot claim more than the gate allows” (docs/master/44-doc-pipeline.md:31–33).
+
+     Implementation: status_of extracts the written status; the renderer puts it in the contents and chapter header without invoking the checker (scripts/gen_nasa_handbook.py:166–168, 272–295).
+
+  3. Closed stage versus failed printed exit criterion.
+
+     The earlier PDF’s page 3, §2.1.2, Table 2.4-1, requires S0 to perform a DuckBrain POST followed by GET returning the bytes. Its measured result instead says “PASS — crier 200, DuckBrain 404-with-token, board appends,” while the stage ladder labels S0 CLOSED.
+
+     A 404 does not satisfy that page’s write/read-back criterion.
+
+  4. No bus worker versus a shipped bus worker.
+
+     Claim: “No bus worker exists”; nothing produces or acknowledges a result envelope (docs/DESIGN.md:52–55).
+
+     Opposite: module 25 describes the worker and measured execute–reply–ack cycle; the current implementation contains process and refusal handling (docs/master/25-scripts-node-bus-worker-py.md:12–18, 86–87; scripts/node-bus-worker.py:934–976).
+
+  5. Mandatory environment variable versus sufficient flag.
+
+     Claim: BUNKER_SERVER must be set even when --server is supplied (docs/OPERATIONS.md:129, 201).
+
+     Implementation: SERVER defaults from an optional environment value, --server overrides it, and validation occurs afterward. The module page explicitly records that “--server alone is sufficient” (scripts/verify-node.sh:20–35; docs/master/36-scripts-verify-node-sh.md:246).
+
+  6. Ignored TTL versus forwarded TTL.
+
+     Claim: TTL is parsed but not forwarded, so spawning retains node-create’s default (docs/OPERATIONS.md:47, 196).
+
+     Implementation: a nonempty TTL is appended as --ttl to create_args before invoking node-create.sh (scripts/bunker-provision.sh:501–504).
+
+  7. Refusing/missing installers versus implemented installers.
+
+     Claim: Claude Code’s --apply refuses, and Codex has no tracked installer (docs/OPERATIONS.md:105, 204).
+
+     Opposite: the Claude installer documents and implements its pinned --apply path, and install-codex.sh explicitly exposes --apply (scripts/harness/install-claude-code.sh:68–71; scripts/harness/install-codex.sh:8–10; docs/master/39-specs-harness-md.md:77–84).
+
+  8. Absent harness resolver versus executable resolver.
+
+     Claim: harness_resolve.py is absent and cannot run (docs/master/38-specs-harness-matrix-md.md:55, 69, 93; docs/RUMSFELD.md:78).
+
+     Opposite: the resolver exists with its declared interface (scripts/harness_resolve.py:319–396). A read-only execution during this review selected codex with harness_reason=matrix for gpt-6.1-sol on code-factory-qa.
+
+  9. Three conformance legs versus four.
+
+     Claim: vars has no executor and only check/apply/smoke exist (docs/master/38-specs-harness-matrix-md.md:71, 91; docs/SYSTEM-MODEL.yaml:237–242).
+
+     Implementation: leg_vars exists and is called in the main loop (tests/harness-conformance.sh:280–370, 677–683). The memory leg remains missing; that does not make vars missing.
+
+  10. No job age gate versus a job TTL.
+
+      Claim: reclaim_disk has “no age gate” and will delete a cited job directory (docs/UNIT-MAP.yaml:229–231).
+
+      Implementation: build caches have no age gate, but immediate job/clone children are passed with aged=True and retained while age ≤ job_ttl_hours, default 24 (scripts/reclaim_disk.py:42, 90–111). Module 34 documents that distinction (docs/master/34-scripts-reclaim-disk-py.md:486–498).
+
+  11. No project-table writer versus documented project-table writers.
+
+      Claim: “Nothing in code-factory writes this table; verified by grep” (docs/master/35-scripts-repo-freshness-py.md, §2c, scheduler projects-table row).
+
+      Opposite: module 23 identifies three overlapping writers and their columns; module 01 describes its direct SQL update phase (docs/master/23-scripts-load-lane-config-py.md:50–55; docs/master/01-scripts-add-family-lanes-py.md:23–27).
+
+  12. The cited work item does not own the stated missing interface.
+
+      Claim: the missing node-to-DuckBrain write is tracked as CF-329 (docs/SYSTEM-MODEL.yaml:194–199).
+
+      Actual row: CF-329 concerns Codex cleanup deleting rollout evidence, not implementing the node’s R1/R2 writer (.coding-hermes/board/tasks.jsonl:303).
+
+TRACEABILITY: FAIL — a provisional defect list can be extracted; a complete, executable and correctly bound task list cannot be derived directly.
+
+The breaks are specific:
+
+  • Requirement-level acceptance is not consistently an executable command. Module 41 says “run a lane on a node, then GET both keys”; module 42 says “dispatch twice, compare” and “kill mid-flight.” These lack fixture construction, exact invocation, expected fields, negative control and evidence destination (docs/master/41-specs-fleet-memory-md.md:48–60; 42-specs-trace-md.md:45–57).
+
+  • Work references are misbound. CF-329 is wrong above. CF-328 is repeatedly assigned to the missing five-leg executor, but its actual acceptance criteria concern named harness inventory, a section citation and README/conformance agreement (docs/master/43-specs-harness-memory-md.md:56, 116; .coding-hermes/board/tasks.jsonl:302).
+
+  • The generated deficiency chapter copies only id, title and status, omits acceptance commands and section bindings, and truncates presentation beyond forty rows per priority (scripts/gen_nasa_handbook.py:214–242).
+
+  • Document accuracy and component readiness share one status field. Module 18 explicitly says RED is the component’s status, not the document’s; module 37 says VERIFIED means the comparison is complete despite interface disagreement (docs/master/18-scripts-harness-install-opencode-sh.md:8; 37-specs-envelope-md.md:8–14). The index counts those words as if they formed a common readiness scale.
+
+  • READY remains a local check outcome, not a factory operating clearance. The worker returns BUS WORKER: READY after its own check tally; module 25 separately records the deployed dispatch cycle as unrun (scripts/node-bus-worker.py:821–826; docs/master/25-scripts-node-bus-worker-py.md:8, 95).
+
+  • The checker also accepts an empty selection. This review executed the strict checker with --only nonexistent- and received “0 module(s)” followed by “MASTER-DOC: PASS.” The implementation permits that result (scripts/master_doc_check.py:140–147, 195–201).
+
+The required replacement is a requirement/defect matrix binding stable subsystem requirement → affected interface/control → task ID → exact acceptance command → expected positive and negative outcomes → retained evidence → applicable revision. The present status census is not that matrix.
+
+RUMSFELD: PRESENT BUT BROKEN — FAIL against the requirement that every unknown carry a probe, falsifier and promotion path.
+
+docs/RUMSFELD.md explicitly supplies all four quadrants and a destination/promotion scheme (lines 29, 93, 133, 186, 298–307). Calling it absent would be incorrect.
+
+What is missing:
+
+  • Q2 bucket 1 has Probe/Falsifier columns, but buckets 2 and 3 substitute “Needs” or “Blocked on” for an executable probe (docs/RUMSFELD.md:100–129).
+
+  • Q3 records practices, proposed homes and costs, not a probe/falsifier/closure result for each entry. Its heading says 24 entries, while the numbered table actually contains 26 (docs/RUMSFELD.md:133–177).
+
+  • Q4’s fifty standards/comparable-system entries have state or nearest-equivalent columns, not individual falsifiers, probe commands, owners and closure evidence (docs/RUMSFELD.md:192–253).
+
+  • Known-known entries are not systematically invalidated when source changes. The register still calls the resolver nonexistent and the battery exactly three-legged, contrary to the reviewed source (docs/RUMSFELD.md:45, 78; scripts/harness_resolve.py:319–396; tests/harness-conformance.sh:677–683).
+
+  • The generic promotion rule does not provide per-item transition history identifying the probe result, revision, resulting fact and destination section (docs/RUMSFELD.md:3–7, 298–307).
+
+TOP 10 DEFECTS:
+
+  1. No authoritative, implementable dispatch-and-result interface.
+     The set documents incompatible dialects without resolving which one a new builder must implement. The scheduler emits text_b64; the repository worker requires text. The worker’s refusal has status but no ok boolean, while the scheduler accepts absent ok as success.
+     Locators: docs/master/37-specs-envelope-md.md:18–26, 78–86; scheduler internal/bus/dispatch.go:202; scripts/node-bus-worker.py:934–975; scheduler internal/scheduler/dispatch_leg.go:704–720.
+     Builder failure: connecting the pictured components can turn a refused task into apparent success.
+
+  2. VERIFIED and READY are not controlled operating clearances.
+     Locators: docs/master/18-scripts-harness-install-opencode-sh.md:8; 37-specs-envelope-md.md:8–14; scripts/master_doc_check.py:95–125; scripts/node-bus-worker.py:821–826.
+     Builder failure: a status can mean document accuracy, unresolved component failure or local probe success. There is no common admission decision.
+
+  3. The critical operating dispatcher is not a subsystem in the system model.
+     The model’s component register omits the control-host dispatcher described by /home/kara/crier-fleet/dispatcher.py.
+     Locators: docs/SYSTEM-MODEL.yaml:33–145; /home/kara/crier-fleet/dispatcher.py:2–16, 215–225.
+     Builder failure: the reader cannot tell whether to deploy the node worker, the control-host dispatcher or both, or which path owns leases, deadlines and recovery.
+
+  4. No executable off-nominal mode-transition procedure.
+     Locators: docs/SYSTEM-MODEL.yaml:249–294; docs/OPERATIONS.md:158–177.
+     Builder failure: an operator cannot reliably stop admission, preserve a live job, prevent duplicate execution, repair the fault and prove re-admission is safe.
+
+  5. No complete controls-and-limits register.
+     Locators: /home/kara/crier-fleet/dispatcher.py:38–68, 185–197, 334–337; docs/MASTER-DOC-SCHEMA.md:12–101.
+     Builder failure: changing a timeout, lease or execution-mode switch has undocumented cross-system consequences.
+
+  6. No single controlled as-built configuration baseline.
+     The schema requires one revision per document issue, but sections cite different trees and external readings; rebuilding the skeleton also truncates discovery to forty entries.
+     Locators: docs/MASTER-DOC-SCHEMA.md:18; docs/master/01-scripts-add-family-lanes-py.md:7; 37-specs-envelope-md.md:57–63; 44-doc-pipeline.md:7; scripts/master_doc_skeleton.py:208–220.
+     Builder failure: “rebuild this machine” has no unique set of source, configuration and document revisions.
+
+  7. The document architecture preserves file boundaries instead of operational responsibilities.
+     Locators: docs/master/00-INDEX.md:8–51, 64–82; docs/UNIT-MAP.yaml:15–236.
+     Builder failure: understanding provisioning or admission requires reconstructing scattered script contracts rather than reading one subsystem chapter.
+
+  8. Cross-reference integrity is not controlled.
+     The earlier PDF duplicates paragraph identifiers 1.3 and 1.4 across physical pages 1–2; its §1.2 and Table 1-4 index system sheets whose actual titles/content differ.
+     Locators: earlier PDF, page 1 §§1.2–1.4; page 2 §§1.3–1.4; pages 3–5 §2.1/§2.2/§2.3.
+     Builder failure: the instruction to turn to a specific paragraph or sheet is ambiguous or wrong.
+
+  9. Findings do not form an acceptance-bound work specification.
+     Locators: docs/master/41-specs-fleet-memory-md.md:53–60; 42-specs-trace-md.md:50–57; scripts/gen_nasa_handbook.py:214–242; .coding-hermes/board/tasks.jsonl:302–303.
+     Builder failure: task implementers must invent the executable proof and may be sent to an unrelated row.
+
+  10. The uncertainty register does not enforce discovery-to-closure.
+      Locators: docs/RUMSFELD.md:100–129, 133–177, 192–253, 298–307.
+      Builder failure: acknowledged uncertainty can remain indefinitely classified as a question, or remain “known” after its supporting source has changed.
+
+WHAT ONE PAGE SHOULD BE ADDED THAT ISN'T THERE:
+
+“AS-BUILT OPERATING PATH AND MODE-TRANSITION CARD.”
+
+One controlled page should identify the actual deployed execution path—not interchangeable target architectures—and show:
+
+  • The selected receiver and its implementation/revision.
+  • DISARMED → QUALIFIED → ARMED → RUNNING → RESULT VERIFIED → LANDED.
+  • Separate transitions for REFUSED, TIMED OUT, RESULT LOST, NODE LOST and RECOVERY HOLD.
+  • For every transition: executing module/function, exact command or endpoint, required inputs, applicable limits, expected observation, stop condition and next section/page.
+  • A conspicuous distinction between transport acceptance, task execution, artifact verification and board closure.
+  • A completion rule requiring independently read-back artifacts and published commit evidence.
+  • An explicit BLOCKED endpoint wherever no implemented transition exists.
+
+F1 and F5 do not provide that card: they omit the operational gates and, in F5, the operation that actually lands work (docs/SYSTEM-MODEL.yaml:250–260, 287–294). The recovery prose explicitly leaves essential commands unspecified (docs/OPERATIONS.md:158–173). Until this page can be filled without inventing a transition, the set cannot serve as a handbook from which a stranger can safely operate, diagnose and rebuild the machine.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-7ba4710b30562d1c858ebd4a42238fd89414853e02b3c25e0877ea76d273f147
+
+EXIT=0
