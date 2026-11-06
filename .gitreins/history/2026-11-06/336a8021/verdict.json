@@ -1,0 +1,114 @@
+{
+  "task_id": "CF-288-OPS1",
+  "task_title": "node_seed apply reports every file it replaces and preserves locally edited files unless --force",
+  "task_criteria": [
+    "scripts/node_seed.py apply prints one named line per installed tree and per replaced, removed or preserved file path; without --force a locally modified target file survives the re-apply byte-identical; with --force it is replaced and the replacement is named; a selftest arm proves the edit survives a re-apply and that rmtree-without-report is gone"
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "041608fb08ba94bd9ee285404f3f4ce199cb261a",
+  "working_tree_content_fingerprint": "d5d11b7ee326bb200b88862b295a9836c6e10e0cef820c21a8f7627ccbded9eb",
+  "working_tree_dirty_path_count": 2365,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261106T014344.076142Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n8:46PM INF scanned ~2651288 bytes (2.65 MB) in 1.72s\n8:46PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 270 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261106T014344.076142Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n install-go.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n verify-patch.sh\n  PASS  bash -n harness-vars.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-deepseek.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n install-pi-agent.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.JpJCBFnNUM/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  346/346 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n\n\u2026 [30437 chars omitted \u2014 401 line(s)] \u2026\n  PASS  an unknown kind is a named FAIL before any layer runs (never a silent pass)\n50. install-go.sh can go red, and its pin is a digest (CF-219)\n  PASS  install-go negative: no Go -> named FAIL, exit 1\n  PASS  install-go digest: wrong sha256 refused and destination absent\n  PASS  install-go digest control: measured sha256 accepted\n  PASS  install-go positive: applied host pin read back (  PASS  go \u2014 go version go1.26.5 linux/amd64)\n\n51. the python lint lane can go red on one unused import, and green once it is removed (CF-254)\n  PASS  one unused import -> exit 1 naming F401\n  PASS  same file once the import is removed -> exit 0\n  PASS  tracked python surface clean: 39 files graded\n52. master-doc fills converge on runner-owned status without network (CF-257)\n  PASS  both fill writers stamp census/provider/UTC; missing status is rejected\n  PASS  local writer fixtures completed without provider calls\n  PASS  RED module selected, index and missing-Path document skipped\nskip 00-INDEX.md index\nskip 03-not-a-module.md no path field\ntodo=1 provider=deepseek workers=2\ncandidate 01-first.md\n  PASS  VERIFIED and bare VERIFIED Status rows are complete, never candidates\n  PASS  old selector would wrongly refill both completed modules\n  PASS  filled run 1: todo=0 exit=0 sha256sum unchanged\ntodo=0 provider=deepseek workers=2\n  PASS  filled run 2: todo=0 exit=0 sha256sum unchanged\ntodo=0 provider=deepseek workers=2\n  PASS  --force selects all four modules, VERIFIED ones included, never the non-modules\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261106T014344.076142Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 scripts/node_seed.py apply prints one named line per installed tree and per replaced, removed or preserved file path; without --force a locally modified target file survives the re-apply byte-identical; with --force it is replaced and the replacement is named; a selftest arm proves the edit survives a re-apply and that rmtree-without-report is gone: scripts/node_seed.py:254-318 classifies each path (new/changed/removed/local_only) and prints one named line per path plus a 'PASS seed_install \u2014 <tree>/ installed (N files)' line per tree; shutil.rmtree on the destination now exists only inside `if args.force:` (line 290), the non-force branch copies only new files (lines 296-298). Manual run in /tmp/cf288: fresh apply printed '.. new prompts/foreman.md' / '.. new skills/fake-skill.md' with per-tree seed_install lines; re-apply without --force printed '.. preserved prompts/foreman.md (changed locally; --force to replace)' and '.. preserved prompts/local-notes.md (locally modified; --force to replace)' with foreman.md sha256 unchanged (0aff79b5\u2026 before and after) and local-notes.md intact; --force printed '.. changed prompts/foreman.md' and '.. local-only prompts/local-notes.md (removed by --force)' and restored foreman.md to the seed digest 5d1aa573\u2026. Selftest arms at tests/selftest.sh:3257-3318; full suite run `bash tests/selftest.sh` output: 'PASS  re-apply without --force preserves a changed prompt and a local note, naming both (exit 0)', 'PASS  re-apply with --force overwrites the changed prompt and names it (exit 0)', final line 'SELFTEST: PASS' with zero FAIL lines (exit 0).\nnode_seed.py apply now reports every installed tree and every new/changed/removed/preserved path, preserves local edits byte-identically without --force and replaces+naming them with --force, proven by passing selftest arms and a full green suite run.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 scripts/node_seed.py apply prints one named line per installed tree and per replaced, removed or preserved file path; without --force a locally modified target file survives the re-apply byte-identical; with --force it is replaced and the replacement is named; a selftest arm proves the edit survives a re-apply and that rmtree-without-report is gone: scripts/node_seed.py:254-318 classifies each path (new/changed/removed/local_only) and prints one named line per path plus a 'PASS seed_install \u2014 <tree>/ installed (N files)' line per tree; shutil.rmtree on the destination now exists only inside `if args.force:` (line 290), the non-force branch copies only new files (lines 296-298). Manual run in /tmp/cf288: fresh apply printed '.. new prompts/foreman.md' / '.. new skills/fake-skill.md' with per-tree seed_install lines; re-apply without --force printed '.. preserved prompts/foreman.md (changed locally; --force to replace)' and '.. preserved prompts/local-notes.md (locally modified; --force to replace)' with foreman.md sha256 unchanged (0aff79b5\u2026 before and after) and local-notes.md intact; --force printed '.. changed prompts/foreman.md' and '.. local-only prompts/local-notes.md (removed by --force)' and restored foreman.md to the seed digest 5d1aa573\u2026. Selftest arms at tests/selftest.sh:3257-3318; full suite run `bash tests/selftest.sh` output: 'PASS  re-apply without --force preserves a changed prompt and a local note, naming both (exit 0)', 'PASS  re-apply with --force overwrites the changed prompt and names it (exit 0)', final line 'SELFTEST: PASS' with zero FAIL lines (exit 0).\nnode_seed.py apply now reports every installed tree and every new/changed/removed/preserved path, preserves local edits byte-identically without --force and replaces+naming them with --force, proven by passing selftest arms and a full green suite run.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "scripts/node_seed.py apply prints one named line per installed tree and per replaced, removed or preserved file path; without --force a locally modified target file survives the re-apply byte-identical; with --force it is replaced and the replacement is named; a selftest arm proves the edit survives a re-apply and that rmtree-without-report is gone",
+                "status": "PASS",
+                "detail": "scripts/node_seed.py:254-318 classifies each path (new/changed/removed/local_only) and prints one named line per path plus a 'PASS seed_install \u2014 <tree>/ installed (N files)' line per tree; shutil.rmtree on the destination now exists only inside `if args.force:` (line 290), the non-force branch copies only new files (lines 296-298). Manual run in /tmp/cf288: fresh apply printed '.. new prompts/foreman.md' / '.. new skills/fake-skill.md' with per-tree seed_install lines; re-apply without --force printed '.. preserved prompts/foreman.md (changed locally; --force to replace)' and '.. preserved prompts/local-notes.md (locally modified; --force to replace)' with foreman.md sha256 unchanged (0aff79b5\u2026 before and after) and local-notes.md intact; --force printed '.. changed prompts/foreman.md' and '.. local-only prompts/local-notes.md (removed by --force)' and restored foreman.md to the seed digest 5d1aa573\u2026. Selftest arms at tests/selftest.sh:3257-3318; full suite run `bash tests/selftest.sh` output: 'PASS  re-apply without --force preserves a changed prompt and a local note, naming both (exit 0)', 'PASS  re-apply with --force overwrites the changed prompt and names it (exit 0)', final line 'SELFTEST: PASS' with zero FAIL lines (exit 0)."
+              }
+            ],
+            "summary": "node_seed.py apply now reports every installed tree and every new/changed/removed/preserved path, preserves local edits byte-identically without --force and replaces+naming them with --force, proven by passing selftest arms and a full green suite run.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-288-OPS1\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 scripts/node_seed.py apply prints one named line per installed tree and per replaced, removed or preserved file path; without --force a locally modified target file survives the re-apply byte-identical; with --force it is replaced and the replacement is named; a selftest arm proves the edit survives a re-apply and that rmtree-without-report is gone: scripts/node_seed.py:254-318 classifies each path (new/changed/removed/local_only) and prints one named line per path plus a 'PASS seed_install \u2014 <tree>/ installed (N files)' line per tree; shutil.rmtree on the destination now exists only inside `if args.force:` (line 290), the non-force branch copies only new files (lines 296-298). Manual run in /tmp/cf288: fresh apply printed '.. new prompts/foreman.md' / '.. new skills/fake-skill.md' with per-tree seed_install lines; re-apply without --force printed '.. preserved prompts/foreman.md (changed locally; --force to replace)' and '.. preserved prompts/local-notes.md (locally modified; --force to replace)' with foreman.md sha256 unchanged (0aff79b5\u2026 before and after) and local-notes.md intact; --force printed '.. changed prompts/foreman.md' and '.. local-only prompts/local-notes.md (removed by --force)' and restored foreman.md to the seed digest 5d1aa573\u2026. Selftest arms at tests/selftest.sh:3257-3318; full suite run `bash tests/selftest.sh` output: 'PASS  re-apply without --force preserves a changed prompt and a local note, naming both (exit 0)', 'PASS  re-apply with --force overwrites the changed prompt and names it (exit 0)', final line 'SELFTEST: PASS' with zero FAIL lines (exit 0).\nnode_seed.py apply now reports every installed tree and every new/changed/removed/preserved path, preserves local edits byte-identically without --force and replaces+naming them with --force, proven by passing selftest arms and a full green suite run.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-06T01:50:25.618472",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-06T01:50:25.634267+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 46707,
+        "truncated": false,
+        "source": "git show 041608fb08ba"
+      }
+    ],
+    "task_id": "CF-288-OPS1"
+  }
+}
