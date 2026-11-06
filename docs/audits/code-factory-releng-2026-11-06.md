@@ -369,3 +369,31 @@ that row.
 pass) — plus Decision 1b: 0 published tags, 0 Release objects, no `VERSION`, no `CHANGELOG`, release
 surface owned by `CF-161`. Hosted CI remains absent by design: no `.github/workflows`, `gh run list` =
 `[]`, so there is no run to file against.
+
+### 6. The gate's one red arm is not the case `QA-CODE-FACTORY-2` names
+
+Landing this carrier put the commit-time guard through four runs in the same hour, on the same
+scripts, with the same staged diff:
+
+| Time | Tree | Result |
+|---|---|---|
+| 12:02Z | main checkout @ `5dc48b8` | `SELFTEST: PASS` |
+| 12:15Z | `proj-wt-cf-releng-p4` @ `84ae65f` | `SELFTEST: PASS` |
+| 12:25Z | `proj-wt-cf-releng-p4b` @ `c42692c` | `SELFTEST: FAIL (1)` |
+| 12:31Z | same worktree, same staged diff, retried | `SELFTEST: PASS` |
+
+Two conclusions. First, the tip is not uniformly red and the red is not a regression introduced by
+the diff being staged: identical trees produced both outcomes six minutes apart. Second, and the
+reason this belongs in the audit, **the arm that reds is not the one the QA row names.** That row
+says `repo_freshness.py --gate --bound 5` stopped emitting `PASS cf-stale — lag 2, ahead 0`; in the
+failing run that case PASSED (guard log `guard-20261106T122544.568507Z` line 347: "PASS the same
+workdir clears --bound 5 (bound is policy, not a constant), exit 0"). Diffing the passing and failing
+logs row-for-row isolates exactly one arm — `node-seed-drift --strict-seed`, whose emitted row reads
+`(--strict-seed: an unknown is not a pass)` where the suite greps for `an unknown seed is not a pass`.
+The only source of that string under `scripts/` (`node_seed_drift.py:236`) prints the expected
+wording, so the truncated form arrives from the nested/remote rendering path rather than a changed
+message — which is exactly why the next run passes.
+
+Filed as a correction on `QA-CODE-FACTORY-2` rather than as a new row: the row's remedy ladder (grade
+the checker's emitted row against the fixture's expectation, and make the wording one constant) still
+applies, but the case name and the "fails EVERY commit" scope do not.
