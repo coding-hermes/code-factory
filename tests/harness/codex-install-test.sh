@@ -299,5 +299,126 @@ fi
 
 # ---------------------------------------------------------------------------------------------
 say ""
+say "D. CF_RUN_ID admission and turn-home containment (CF-277)"
+# ---------------------------------------------------------------------------------------------
+# A run id is refused at admission or not at all, and the only directory a turn removes is the
+# fresh mktemp one it made. Two sentinels stand in for the victim: one where the brief names it
+# ($SB/victim), and one at the path a `../../victim` id would actually resolve to under a turn
+# home ($RUNID_HOME/victim) — so a traversal shows up as a missing file, not as a passing grep.
+RUNID_HOME="$SB/home-runid"
+mkdir -p "$RUNID_HOME/work" "$RUNID_HOME/keys" "$RUNID_HOME/victim" "$SB/victim"
+git -C "$RUNID_HOME/work" init -q >/dev/null 2>&1
+git -C "$RUNID_HOME/work" -c user.email=cf277@local -c user.name=cf277 commit -q --allow-empty -m init >/dev/null 2>&1
+printf '%s\n' "$SYNTH_KEY" >"$RUNID_HOME/keys/provider.key"; chmod 600 "$RUNID_HOME/keys/provider.key"
+printf 'sentinel\n' >"$SB/victim/keep.txt"
+printf 'sentinel\n' >"$RUNID_HOME/victim/keep.txt"
+
+# Everything a --turn needs except the run id itself: so the only thing standing between the
+# value and the delete is the admission check.
+D1_SET=(--model gpt-5.6-luna --provider openai-codex --namespace code-factory --lane cf-qa
+        --workdir "$RUNID_HOME/work" --api-key-file "$RUNID_HOME/keys/provider.key")
+
+# D1a — a traversal id is refused by --check, and nothing outside the cache root is removed.
+O="$SB/d1a.out"
+rc=$(run_home "$RUNID_HOME" "$O" "$INSTALLER" --check "${D1_SET[@]}" --run-id '../../victim')
+expect_refused "D1a --check refuses CF_RUN_ID='../../victim'" "$O" "$rc" "run_id"
+grep -qF -- "got '../../victim'" "$O" && ok "D1a the refusal quotes the value it refused" \
+  || no "D1a the refusal does not quote the refused value"
+if [ -d "$SB/victim" ] && [ -f "$SB/victim/keep.txt" ]; then
+  ok "D1a \$SB/victim and its file survive the refusal"
+else
+  no "D1a \$SB/victim or its file was removed by a refused run"
+fi
+if [ -d "$RUNID_HOME/victim" ] && [ -f "$RUNID_HOME/victim/keep.txt" ]; then
+  ok "D1a the traversal target under \$HOME also survives the refusal"
+else
+  no "D1a a refusal still removed \$HOME/victim"
+fi
+
+# D1b — the same value is refused in --turn, the mode that would have reached the delete.
+O="$SB/d1b.out"
+rc=$(run_home "$RUNID_HOME" "$O" "$INSTALLER" --turn "${D1_SET[@]}" --run-id '../../victim')
+expect_refused "D1b --turn refuses the same id (the mode that reaches the delete)" "$O" "$rc" "run_id"
+if [ -f "$SB/victim/keep.txt" ] && [ -f "$RUNID_HOME/victim/keep.txt" ]; then
+  ok "D1b neither sentinel was removed in --turn"
+else
+  no "D1b a refused --turn removed a sentinel"
+fi
+[ -e "$RUNID_HOME/.cache/cf-codex" ] && no "D1b a refused run created the turn cache root anyway" \
+  || ok "D1b a refused run created nothing under \$HOME/.cache"
+
+# D1c — every shape the contract forbids is refused by name: separators, dot-dot, a leading dot,
+# whitespace, a shell metacharacter, and an over-long id.
+for bad in '../victim' '.hidden' 'a/b' 'a;b' 'a b' '$x' "$(printf 'a%.0s' $(seq 1 129))"; do
+  O="$SB/d1c.out"
+  rc=$(run_home "$RUNID_HOME" "$O" "$INSTALLER" --check "${D1_SET[@]}" --run-id "$bad")
+  if [ "$rc" = "2" ] && grep -q 'CODEX: REFUSED' "$O" && grep -q 'run_id' "$O"; then
+    ok "D1c refused run_id=$(printf '%.16s' "$bad") (${#bad} chars)"
+  else
+    no "D1c run_id='$(printf '%.16s' "$bad")' (${#bad} chars) was not refused by name (rc=$rc)"
+  fi
+done
+
+# D2 — the id the suite already uses is not refused for that reason. A refusal for a different,
+# named reason would be acceptable; the pass row names whichever verdict the run produced.
+O="$SB/d2.out"
+rc=$(run_home "$FAKEHOME" "$O" "$INSTALLER" --check "${FULL_SET[@]}" --workdir "$FAKEHOME/work")
+if grep -q 'run_id' "$O"; then
+  no "D2 --run-id r-lane must not be refused for the run id (rc=$rc)"; sed 's/^/        /' "$O"
+else
+  D2_VERDICT="$(grep -m1 -E '^CODEX: ' "$O" || echo 'CODEX: no-verdict')"
+  ok "D2 --run-id r-lane is admitted (rc=$rc; verdict: $D2_VERDICT)"
+fi
+grep -qF -- 'contract:CF_RUN_ID = r-lane' "$O" \
+  && ok "D2 the CF_RUN_ID contract record line is still emitted" \
+  || no "D2 the CF_RUN_ID contract record line is missing from the report"
+
+# D3 — the delete is confined, measured behaviourally: a stub codex that fails every invocation
+# lets the turn home exist and the EXIT trap run, so the removal path is really exercised.
+TURN_HOME_BASE="$SB/home-turn"
+mkdir -p "$TURN_HOME_BASE/work" "$TURN_HOME_BASE/keys" "$TURN_HOME_BASE/.cache/cf-codex" "$SB/stub-turn"
+git -C "$TURN_HOME_BASE/work" init -q >/dev/null 2>&1
+git -C "$TURN_HOME_BASE/work" -c user.email=cf277@local -c user.name=cf277 commit -q --allow-empty -m init >/dev/null 2>&1
+printf '%s\n' "$SYNTH_KEY" >"$TURN_HOME_BASE/keys/provider.key"; chmod 600 "$TURN_HOME_BASE/keys/provider.key"
+printf 'sentinel\n' >"$TURN_HOME_BASE/.cache/cf-codex/sentinel.keep"
+cat >"$SB/stub-turn/codex" <<'STUBEOF'
+#!/usr/bin/env bash
+# CF-277 D3: fails every invocation immediately — the turn runs, the trap fires, nothing is served.
+printf 'stub codex: fails on purpose\n' >&2
+exit 1
+STUBEOF
+chmod +x "$SB/stub-turn/codex"
+
+O="$SB/d3.out"
+rc=$(clean_env -u XDG_CACHE_HOME HOME="$TURN_HOME_BASE" PATH="$SB/stub-turn:/usr/local/bin:/usr/bin:/bin" \
+     "$INSTALLER" --turn --model gpt-5.6-luna --provider openai-codex --namespace code-factory \
+     --run-id r-lane --lane cf-qa --workdir "$TURN_HOME_BASE/work" \
+     --api-key-file "$TURN_HOME_BASE/keys/provider.key" >"$O" 2>&1; echo $?)
+grep -q 'FAIL  turn_exit' "$O" \
+  && ok "D3 the stub codex was really invoked (FAIL turn_exit row present)" \
+  || { no "D3 the turn never reached the stub, so the trap was not exercised (rc=$rc)"; sed 's/^/        /' "$O"; }
+turn_dir=$(sed -n 's/^  PASS  turn_home — \([^ ]*\) (isolated.*/\1/p' "$O" | head -1)
+case "$turn_dir" in
+  "$TURN_HOME_BASE/.cache/cf-codex/run."*)
+    ok "D3a the reported turn_home is a mktemp directory under the cache root: $turn_dir" ;;
+  *) no "D3a the turn_home row names no mktemp directory under \$HOME/.cache/cf-codex (got '${turn_dir:-none}')" ;;
+esac
+case "$turn_dir" in
+  *r-lane*) no "D3a the turn home is still derived from CF_RUN_ID: $turn_dir" ;;
+  *) ok "D3a the turn home carries no part of the run id" ;;
+esac
+if [ -n "$turn_dir" ] && [ ! -e "$turn_dir" ]; then
+  ok "D3b that exact directory is gone after the run"
+elif [ -n "$turn_dir" ]; then
+  no "D3b the turn home survived the EXIT trap: $turn_dir"
+else
+  no "D3b no turn home was reported, so the removal could not be measured"
+fi
+[ -f "$TURN_HOME_BASE/.cache/cf-codex/sentinel.keep" ] \
+  && ok "D3c the sentinel beside the turn home still exists (the trap removed only its own leaf)" \
+  || no "D3c the trap removed a file it did not create"
+
+# ---------------------------------------------------------------------------------------------
+say ""
 say "codex installer test: $PASS passed, $FAIL failed, $SKIP skipped"
 [ "$FAIL" -eq 0 ] && { say "RESULT: PASS"; exit 0; } || { say "RESULT: FAIL"; exit 1; }

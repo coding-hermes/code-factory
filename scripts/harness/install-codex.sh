@@ -188,7 +188,7 @@ target_triple() {  # prints the release triple this pin has a MEASURED digest fo
 
 # The required set is validated whenever any of it is supplied; --turn always needs all of it.
 validate_vars() {
-  local supplied=0 missing=() v
+  local supplied=0 missing=() v rid
   for v in "${REQUIRED[@]}" CF_SKILLS_DIR CF_BASE_URL CF_HARNESS_OPTS CF_MAX_TURNS; do
     [ -n "${VAR[$v]:-}" ] && supplied=1
   done
@@ -198,6 +198,16 @@ validate_vars() {
   done
   if [ "${#missing[@]}" -gt 0 ]; then
     refuse "vars" "the CF_* set from specs/HARNESS-MATRIX.md §5 is incomplete; missing: ${missing[*]} (a value in argv for a credential is always a FAIL)"
+  fi
+  # CF-277: CF_RUN_ID is a correlation id, not a path. It is admitted only as a bare identifier —
+  # a value carrying a separator or a dot-dot segment can escape any directory it is joined to,
+  # and admission is the one place that can fail closed before anything is created or removed.
+  # The value is echoed back truncated: a refusal still has to name what it refused.
+  rid="${VAR[CF_RUN_ID]:-}"
+  if [ -n "$rid" ]; then
+    if [ "${#rid}" -gt 128 ] || [[ ! "$rid" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+      refuse "run_id" "CF_RUN_ID must be a bare identifier (^[A-Za-z0-9][A-Za-z0-9._-]*\$, max 128 chars); got '$(printf '%.64s' "$rid")' (${#rid} chars)"
+    fi
   fi
   if [ "$MODE" = "--turn" ] && [ -z "${VAR[CF_API_KEY_FILE]:-}" ]; then
     note "CF_API_KEY_FILE unset — the turn will use the host login at \$HOME/.codex/auth.json (ambient, named as such)"
@@ -230,6 +240,21 @@ validate_vars() {
 
 inside_home() {  # inside_home <abs path>
   case "$1" in "$HOME"/*) return 0 ;; *) return 1 ;; esac
+}
+
+# The turn cache root (CF-277), and the only tree a turn may create or remove under.
+turn_cache_root() { printf '%s' "${XDG_CACHE_HOME:-$HOME/.cache}/cf-codex"; }
+
+# inside_turn_cache <abs path> — true only for one mktemp leaf directly under the cache root.
+# Both the EXIT trap and any delete ask this before touching a directory, so a path is removable
+# only when it is provably inside the cache root.
+inside_turn_cache() {
+  local root leaf
+  root="$(turn_cache_root)"
+  case "${1:-}" in "$root"/run.?*) ;; *) return 1 ;; esac
+  leaf="${1#"$root"/}"
+  case "$leaf" in */*) return 1 ;; esac
+  return 0
 }
 
 check_api_key_file() {
@@ -485,13 +510,23 @@ case "$MODE" in
     # CODEX_HOME: an isolated one per run when a key file is supplied, so neither the model nor
     # the key can come from the host's ~/.codex. With no key file the host login is the only
     # credential that exists, and it is used — named, not assumed.
+    #
+    # CF-277: the turn home is a fresh mktemp directory under the turn cache root — never a path
+    # built from CF_RUN_ID — and the EXIT trap removes it only when inside_turn_cache agrees the
+    # path is one leaf under that root. There is no delete before the directory is created.
     turn_home=""
-    cleanup() { [ -n "$turn_home" ] && rm -rf "$turn_home"; }
+    cache_root="$(turn_cache_root)"
+    cleanup() {
+      [ -n "$turn_home" ] || return 0
+      inside_turn_cache "$turn_home" || return 0    # outside the cache root: never removed
+      rm -rf -- "$turn_home"
+    }
     trap cleanup EXIT INT TERM
     if [ -n "${VAR[CF_API_KEY_FILE]:-}" ]; then
-      turn_home="$HOME/.cache/cf-codex/$VAR[CF_RUN_ID]"
-      rm -rf "$turn_home"
-      mkdir -p "$turn_home" && chmod 700 "$turn_home" || { bad "turn_home" "cannot create $turn_home"; exit 1; }
+      mkdir -p "$cache_root" && chmod 700 "$cache_root" \
+        || { bad "turn_home" "cannot create the turn cache root $cache_root"; exit 1; }
+      turn_home=$(umask 077; mktemp -d "$cache_root/run.XXXXXXXX") \
+        || { turn_home=""; bad "turn_home" "cannot create a turn directory under $cache_root"; exit 1; }
       {
         printf 'model = "%s"\n' "$model"
         printf 'model_provider = "%s"\n' "$provider"
