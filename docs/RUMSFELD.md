@@ -60,7 +60,7 @@ own measurement. The distinction matters: a carried fact is only as fresh as its
 | control host Python **3.14.9**; cf-node **3.13.5** — and the hermes adapter FAILs here on `>=3.11,<3.14` | measured; constraint violated on the control host, satisfied on the node |
 | listening: `schedulerd` 127.0.0.1:9090, `crier` *:8767, `hermes` :8642/:8643, `chimera` :8765, `off-by-one` :8766 | measured |
 | `scripts/` 42 files / 13,944 lines; `docs/` 165 / 27,835; `specs/` 7 / 949; `tests/` 7 / 5,507; `docs/master` 44 modules | measured |
-| `tests/selftest.sh` 3,657 lines, **52 numbered sections + 3 lettered (§4b §7b §31b) = 55 arms**, 291 PASS assertions | measured; see "Rejected findings" |
+| `tests/selftest.sh` 4,687 lines, **53 numbered sections + 3 lettered (§4b §7b §31b) = 56 arms**, 380 `PASS` rows (`grep -c '^  PASS'` over a clean-worktree run at `388c7cb`) | measured 2026-11-06; see "Rejected findings" |
 | cf-node running, 835 MB used, no public URL; the network boundary is explicitly **not verified** | measured |
 | GitReins armed: `config.yaml`, `tasks.yaml`, `worktrees.json`, `usage.jsonl`, `logs` all present | measured |
 
@@ -199,7 +199,7 @@ Each item was checked against the repo by grep before being called absent.
 | 4 | MIL-STD-498 SVD | Version description per release | ABSENT: no VERSION/CHANGELOG/tags (CF-161), so "rebuild exactly" is unfalsifiable |
 | 5 | MIL-STD-498 SIP | Installation plan **incl. backout** | PARTIAL: prerequisites exist, no backout of a half-provisioned node |
 | 6 | MIL-STD-498 SPS | As-built inventory | ABSENT |
-| 7 | MIL-STD-498 STD/STR | Case→expected-result catalogue + per-run report bound to a commit | PARTIAL: 55 arms, no expected-result catalogue |
+| 7 | MIL-STD-498 STD/STR | Case→expected-result catalogue + per-run report bound to a commit | PARTIAL: 56 arms, no expected-result catalogue |
 | 8 | IEEE 1012 | **Integrity levels** setting minimum V&V per item | ABSENT: a docs typo and the digest gate get identical scrutiny |
 | 9 | IEEE 1012 | IV&V independence statement | PARTIAL: three models is technical diversity — same host, corpus, operator, incentive |
 | 10 | IEEE 730 | Software quality assurance plan with nonconformance authority | ABSENT: a `-qa` lane with a cooldown floor and no charter |
@@ -284,10 +284,11 @@ commit gate cluster) explain CF-031, CF-217 and one lost commit.
 
 ## Rejected findings (recorded so they are not re-filed)
 
-- **"`selftest.sh` has 52 arms, so the docs' 55 is wrong."** Rejected: 52 numbered sections **plus §4b, §7b,
-  §31b** = 55, and `docs/ACCEPTANCE-PLAN.md:108` says exactly that, derived by
-  `docs/audits/cf198-section-mapping.sh`. The count regex `^say "[0-9]+\.` cannot see lettered arms. The
-  docs are right; the audit's grep was not.
+- **"`selftest.sh` has 52 arms, so the docs' 55 is wrong."** Rejected: the numbered sections **plus §4b, §7b,
+  §31b** are counted separately, and the count regex `^say "[0-9]+\.` cannot see lettered arms. The numbers
+  move as sections land — at `388c7cb` the tree carries 53 numbered sections + 3 lettered = **56 arms**,
+  derived by `docs/audits/cf198-section-mapping.sh` (`RESULT: OK`, `arms_plan=56 arms_tree=56`), and
+  `docs/ACCEPTANCE-PLAN.md` states the same count. The docs are right; the audit's grep was not.
 - **"The conformance battery must run in a worktree or it dirties the checkout."** Rejected: it writes to
   `$HOME/.harness-conformance/run-*/`, and `--install` uses a throwaway HOME; tested at `selftest §45`.
 - **"A `.lock` file must be adjudicated with `board_lock.py`."** Rejected as already documented in
