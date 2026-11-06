@@ -156,6 +156,74 @@ else
   say "  PASS  none found"
 fi
 
+# BEGIN tailnet-address-gate
+# CF-378: this repository is PUBLIC, so a CGNAT/tailnet literal in a tracked file hands anyone who
+# clones it a map of the fleet's control-plane topology. The gate grades every tracked file except
+# two surfaces that are not this row's to rewrite:
+#   .coding-hermes/board — append-only, foreman-owned;
+#   .gitreins           — CF-050 owns stopping the publication of .gitreins/history/*/commit.patch
+#                         and worktree.patch; those bundles republish whole patches, so they
+#                         re-carry every literal any commit ever held (17 at HEAD b2d187f).
+# It sits inside section 6 (the repo-wide literal scan, above) instead of a new numbered section,
+# so arms_tree stays 55 and docs/ACCEPTANCE-PLAN.md needs no mapping row — the CF-374 precedent.
+tailnet_re='100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.[0-9]+\.[0-9]+'
+# $1 = repository root -> one <path>:<line>:<content> line per hit, board and .gitreins excluded.
+tailnet_scan() {
+  local root="$1" f
+  while IFS= read -r -d '' f; do
+    # -H is load-bearing: the loop grades one file per grep, and grep drops the filename prefix
+    # when a single file is named — the FAIL row would then name a line number, not the file.
+    grep -nHIE -e "$tailnet_re" -- "$root/$f" 2>/dev/null | sed -e "s|^$root/||"
+  done < <(git -C "$root" ls-files -z -- . ':(exclude).coding-hermes/board' ':(exclude).gitreins')
+  return 0
+}
+# $1 = root, $2 = label. One PASS row, or one FAIL row naming path:line. It never quotes the
+# address itself: a gate that prints what it forbids republishes the class in every log it reds.
+# A run that graded nothing is a FAIL, not a green (a gate whose empty case passes is decoration).
+tailnet_verdict() {
+  local root="$1" label="$2" hits files graded n
+  graded=$(git -C "$root" ls-files -- . ':(exclude).coding-hermes/board' ':(exclude).gitreins' 2>/dev/null | grep -c . || true)
+  hits=$(tailnet_scan "$root")
+  if [ -z "$hits" ] && [ "${graded:-0}" -gt 0 ]; then
+    say "  PASS  $label — 0 tailnet-address hits in $graded tracked file(s) outside .coding-hermes/board and .gitreins"
+    return 0
+  fi
+  if [ -z "$hits" ]; then
+    say "  FAIL  $label — 0 tracked file(s) graded at $root; the gate proved nothing"
+    return 1
+  fi
+  n=$(printf '%s\n' "$hits" | cut -d: -f1 | sort -u | grep -c . || true)
+  files=$(printf '%s\n' "$hits" | cut -d: -f1,2 | sort -u | tr '\n' ' ')
+  say "  FAIL  $label — $n tracked file(s) publish a tailnet address at ${files% }; replace the literal with a <host> placeholder whose real value lives in the operator's own config"
+  return 1
+}
+say "  section 6 tailnet-address (CF-378): no tracked file outside the board publishes a tailnet address"
+tailnet_verdict "$HERE" 'tailnet-address' && : || fails=$((fails+1))
+# Red proof: a seeded repository, so the gate grades the fixture the way it grades the tree (a
+# fixture directory that is not a git index would grade 0 files and prove nothing). The literal is
+# assembled from octet variables because this file is itself graded — writing the address here would
+# put the class straight back. The second line is a subnet OUTSIDE the CGNAT range, so the arm shows
+# the boundary and not just a hit.
+tmpd=$(mktemp -d)
+git init -q -b trunk "$tmpd/seed"
+mkdir -p "$tmpd/seed/docs"
+o1=100 o2=97 o3=236 o4=14 o5=63
+printf '%s\n' '# seeded fixture — not part of the tree' '' \
+  "crier bus: http://$o1.$o2.$o3.$o4:8767/inbox" \
+  "near miss: http://$o1.$o5.7.7:8767 — outside the CGNAT range, must stay green" \
+  > "$tmpd/seed/docs/seeded.md"
+git -C "$tmpd/seed" add docs/seeded.md
+out=$(tailnet_verdict "$tmpd/seed" 'tailnet-address' 2>&1); rc=$?
+expected="  FAIL  tailnet-address — 1 tracked file(s) publish a tailnet address at docs/seeded.md:3; replace the literal with a <host> placeholder whose real value lives in the operator's own config"
+if [ "$rc" -ne 0 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ]; then
+  say "  PASS  seeded fixture -> FAIL names docs/seeded.md:3; the out-of-range subnet stays green"
+else
+  say "  FAIL  seeded tailnet literal escaped the gate (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+rm -rf "$tmpd"
+# END tailnet-address-gate
+
 # BEGIN board-arm
 # CF-088: share the actual gate with fixtures, without requiring boardctl.
 board_arm() {

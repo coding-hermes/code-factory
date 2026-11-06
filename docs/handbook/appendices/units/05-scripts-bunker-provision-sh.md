@@ -59,7 +59,7 @@ All commands below are read-only. The first measures a live node; the rest are t
 
 | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|
-| Live preflight against a provisioned node | `bash scripts/bunker-provision.sh --config ~/.config/code-factory/code-factory.conf --check --agent cf-node --crier-url http://100.97.236.14:8767 --duckbrain-url http://100.97.236.14:3000` [scripts/bunker-provision.sh:178-304] | one row per measured surface (repo, `node.json`, four credentials, git store, gateway auth, gitreins, commit hook, harness), the bus row quoting `PASS  inbox`, then `BUNKER: FAIL (1)` because the three control-host token files named by the config are no longer on this host [scripts/bunker-provision.sh:163-174] | 2026-11-05T16:10Z | 16 `PASS` rows, 2 `WARN`, exit 1 — exactly the named `inputs` FAIL; verbatim output in §8 |
+| Live preflight against a provisioned node | `bash scripts/bunker-provision.sh --config ~/.config/code-factory/code-factory.conf --check --agent cf-node --crier-url http://<crier-host>:8767 --duckbrain-url http://<duckbrain-host>:3000` [scripts/bunker-provision.sh:178-304] | one row per measured surface (repo, `node.json`, four credentials, git store, gateway auth, gitreins, commit hook, harness), the bus row quoting `PASS  inbox`, then `BUNKER: FAIL (1)` because the three control-host token files named by the config are no longer on this host [scripts/bunker-provision.sh:163-174] | 2026-11-05T16:10Z | 16 `PASS` rows, 2 `WARN`, exit 1 — exactly the named `inputs` FAIL; verbatim output in §8 |
 | Absent config is refused | `bash scripts/bunker-provision.sh --config /nonexistent.conf --check` [scripts/bunker-provision.sh:98] | `  FAIL  config — cannot read /nonexistent.conf`, exit 1 | 2026-11-05T16:12Z | PASS (as expected) |
 | A shell line in the config is refused, never executed | `printf 'PROJECT=demo\nrm -rf /tmp/should-never-run\n' > /tmp/shell.conf; bash scripts/bunker-provision.sh --config /tmp/shell.conf --check` [scripts/bunker-provision.sh:103-106] | `  FAIL  config — /tmp/shell.conf:2 is not KEY=VALUE — refusing to run it`, exit 1, and the file is not created | 2026-11-05T16:12Z | PASS (as expected) |
 | No bunker client on `PATH` | `env -i PATH=/usr/bin:/bin HOME="$HOME" bash scripts/bunker-provision.sh --check --project demo` [scripts/bunker-provision.sh:181-184] | `  FAIL  bunker_cli — no bunker client on PATH`, exit 1 | 2026-11-05T16:12Z | PASS (as expected) |
@@ -171,11 +171,15 @@ The preflight validates the files it will read, before any host is touched: all 
 ## 8. Evidence of record
 
 - What a reviewer re-runs, and what it printed on 2026-11-05.
+- Two endpoints below appear as `<crier-host>:8767` and `<duckbrain-host>:3000`: the real addresses
+  live in the operator's own config (`CRIER_URL`/`DUCKBRAIN_URL` in the provisioner's `KEY=VALUE`
+  config, or the `--crier-url`/`--duckbrain-url` flags), and are not published here because this
+  repository is public (CF-378).
 
 ```
 $ cd ~/proj-wt-md-05   # main @ 55ddb92, scripts/bunker-provision.sh blob b3ed55c, sha256 981f9972ce7c2c47
 $ bash scripts/bunker-provision.sh --config ~/.config/code-factory/code-factory.conf --check \
-    --agent cf-node --crier-url http://100.97.236.14:8767 --duckbrain-url http://100.97.236.14:3000
+    --agent cf-node --crier-url http://<crier-host>:8767 --duckbrain-url http://<duckbrain-host>:3000
   PASS  config — code-factory.conf — 13 lines, KEY=VALUE only
   FAIL  inputs — not readable: GITHUB_TOKEN_FILE(/home/kara/.config/code-factory/code-factory/github.token) DUCKBRAIN_TOKEN_FILE(/home/kara/.config/code-factory/code-factory/duckbrain.token) S3_ENV_FILE(/home/kara/.config/code-factory/code-factory/s3.env)
 bunker-provision --check — project=code-factory agent=cf-node server=bunker-las-03
@@ -210,7 +214,7 @@ BUNKER: FAIL (1)
 ```
 $ code=$(printf 'header = "x-api-key: %s"\nurl = "%s"\n' \
     "$(head -c 4096 ~/.duckbrain/9router-foreman.token | tr -d '\r\n')" \
-    "http://100.97.236.14:3000/api/memories/key/x?namespace=code-factory" \
+    "http://<duckbrain-host>:3000/api/memories/key/x?namespace=code-factory" \
   | curl -s -K - -o /dev/null -m 8 -w '%{http_code}'); echo "${code:-000}"
 404
 ```

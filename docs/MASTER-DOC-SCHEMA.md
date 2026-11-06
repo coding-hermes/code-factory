@@ -122,7 +122,10 @@ is exactly what happened for 86 consecutive dispatches.
 |---|---|---|---|
 | `bunker` CLI | 0.1.4+ (cert pinning) | `/home/kara/.local/bin/bunker` — **absolute path in code**, because two binaries exist on this host and PATH order silently picks the wrong one | exit 127 from `subprocess`, logged |
 | `hermes` CLI | on the node | `$HOME/.local/bin/hermes` inside the container | `DONE:127` in the job status file |
-| crier bus | reachable | `http://100.97.236.14:8767` | `client for <agent> failed` log line |
+| crier bus | reachable | `http://<crier-host>:8767` | `client for <agent> failed` log line |
+
+The crier bus endpoint in this worked example is a placeholder: the real value lives in the
+operator's own config on the control host, never in a published document.
 
 **3b. Library contracts.** `crier_client.Crier` — path-injected from
 `/home/kara/crier/clients/python`; the module relies on

@@ -205,6 +205,10 @@ directly with `${VAR:-}` and `${VAR:-default}` [scripts/bunker-server-install.sh
   `env -i` because the ambient `PATH` on this box contains a stub `bunker` fixture left by another
   lane; every run below resolves `/home/kara/.local/bin/bunker` instead.
 
+  The `URL:` row inside the `bunker-las-03` block below reads `http://<ci-box>:10001`: the real
+  address is the one the operator's own `~/.config/bunker/config.yaml` names for that server, and it
+  is redacted to a placeholder here because this repository is public (CF-378).
+
 ```
 $ env -i PATH=/home/kara/.local/bin:/usr/local/bin:/usr/bin:/bin HOME=/home/kara \
     bash scripts/bunker-server-install.sh --check
@@ -225,7 +229,7 @@ bunker server: bunker-las-03
   PASS  agents_running — 1 running
   ..    ── bunker-las-03 ──
   ..      Hostname: bunker-las-03
-  ..      URL:      http://100.69.3.13:10001
+  ..      URL:      http://<ci-box>:10001
   ..      Version:  0.1.4
   ..      Status:   ONLINE
   ..      Uptime:   8d 22h 40m
