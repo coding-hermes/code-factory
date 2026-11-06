@@ -22,3 +22,4 @@ key*
 # Python bytecode, kept out of every checkout including nodes
 __pycache__/
 *.pyc
+.gitreins/rescued-*/

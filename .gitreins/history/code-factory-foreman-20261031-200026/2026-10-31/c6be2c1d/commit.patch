@@ -1,0 +1,13 @@
+commit 24208bde7b8f82dc0ad218afb73e5ced6b2e7d54
+Merge: 792e687 573488f
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Sat Oct 31 15:17:17 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Sat Oct 31 15:17:17 2026 -0500
+
+    merge: integrate CF-034 clone error classification
+
+ README.md               |  7 +++----
+ scripts/project-node.sh | 16 +++++++++++++--
+ tests/selftest.sh       | 52 ++++++++++++++++++++++++++++++++++++++++++++-----
+ 3 files changed, 64 insertions(+), 11 deletions(-)

@@ -1,0 +1,112 @@
+{
+  "task_id": "CF-012",
+  "task_title": "Add repository traceability doctrine",
+  "task_criteria": [
+    "Add docs/traceability-doctrine.md defining the marker fields and closure rules; run bash tests/selftest.sh; preserve the original board acceptance contract; include a fresh ch:trace row=CF-012 marker in a committed evidence artifact."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/worktrees/code-factory-CF-012-20261031-1007",
+  "branch": "wt/CF-012-20261031-1007",
+  "commit": "dd25fb19731696f8a71eda5de808ccb40c8f7895",
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/worktrees/code-factory-CF-012-20261031-1007/.gitreins/logs/guard-20261031T103548.492932Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: harness state excluded from gitleaks scope (.gitreins/**)\nsecrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n5:41AM INF scanned ~130978 bytes (130.98 KB) in 137ms\n5:41AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 58 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/worktrees/code-factory-CF-012-20261031-1007/.gitreins/logs/guard-20261031T103548.492932Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains FAIL rows\n3. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///home/kara/.hermes/cache/scratch/tmp.YCMlVgQKz8/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n4. no literal credential assignments\n  PASS  none found\n5. the board is valid JSONL\n  PASS  24/24 rows parse\n6. project board entrypoint is real and fails closed without dependency\n  PASS  bash -n scripts/boardctl\n  PASS  local help\n  PASS  missing boardctl -> explicit FAIL, exit 127\n7. every prompt file the README relies on exists\n  PASS  every prompts/*.md named by README.md exists\n  PASS  absent prompt refused (absent: prompts/ghost-lane.md)\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/worktrees/code-factory-CF-012-20261031-1007/.gitreins/logs/guard-20261031T103548.492932Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 Add docs/traceability-doctrine.md defining the marker fields and closure rules; run bash tests/selftest.sh; preserve the original board acceptance contract; include a fresh ch:trace row=CF-012 marker in a committed evidence artifact.: All four sub-requirements verified. (1) DOCTRINE FILE: `git ls-tree -r --name-only HEAD docs | grep -i trace` -> `docs/traceability-doctrine.md`; it defines all 11 marker fields in a table (row, spec, wave, test, doc, prompt, evidence, witness, verdict, commit, memory) at lines 9-40, and a `## Closure rules` section at line 41 with 7 numbered rules (nothing-closes-by-reference, evidence-is-a-produced-artifact, open-finding uses verdict=none:open-finding/commit=none:open, closure must bind a published commit, witness absence must be explicit, resolvability, docs-only limits). (2) SELFTEST: `bash tests/selftest.sh` -> REAL_EXIT=0, tail output `SELFTEST: PASS` with all 7 sections PASS (script parsing, empty-PATH fail, digest refusal, no literal credentials, 24/24 board rows parse, boardctl fail-closed, prompt existence). (3) BOARD CONTRACT PRESERVED: original CF-012 acceptance contract in .coding-hermes/board/events.jsonl is '1. test -e docs/traceability-doctrine.md succeeds on a fresh clone of the published tip. 2. That file defines the ch:trace marker fields used in README.md and states the closure rules. 3. tests/selftest.sh still prints SELFTEST: PASS.' All three hold: file exists at HEAD, field set defined in the doctrine is byte-identical to the field set used in README.md markers (diff of sorted field lists -> IDENTICAL FIELD SETS), and selftest prints PASS. The commit touched only 2 docs files (`git show --name-only HEAD` -> docs/audits/code-factory-CF-012-20261031-1007.md, docs/traceability-doctrine.md; events.jsonl count = 0), so the board row was not altered. (4) FRESH MARKER IN COMMITTED ARTIFACT: `git show HEAD:docs/audits/code-factory-CF-012-20261031-1007.md | grep -c 'ch:trace row=CF-012'` -> 1, with all 11 fields present (verified field-by-field: 11/11 OK, field count 11). It is fresh, not copied: the pre-existing CF-012 row marker had spec=none:no-doctrine-exists, witness=none:no-doctrine-file-exists, commit=396f133..., whereas the new marker has spec=docs/traceability-doctrine.md#marker-fields, evidence=docs/audits/code-factory-CF-012-20261031-1007.md, witness=none:docs-only, verdict=none:open-finding, commit=none:open \u2014 consistent with the doctrine's own rule 3 for an open finding. The artifact is committed in dd25fb1.\ndocs/traceability-doctrine.md defines all 11 marker fields and 7 closure rules, selftest exits 0 with SELFTEST: PASS, the original board acceptance contract is fully satisfied and unmodified, and a fresh 11-field ch:trace row=CF-012 marker is committed in docs/audits/code-factory-CF-012-20261031-1007.md.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 Add docs/traceability-doctrine.md defining the marker fields and closure rules; run bash tests/selftest.sh; preserve the original board acceptance contract; include a fresh ch:trace row=CF-012 marker in a committed evidence artifact.: All four sub-requirements verified. (1) DOCTRINE FILE: `git ls-tree -r --name-only HEAD docs | grep -i trace` -> `docs/traceability-doctrine.md`; it defines all 11 marker fields in a table (row, spec, wave, test, doc, prompt, evidence, witness, verdict, commit, memory) at lines 9-40, and a `## Closure rules` section at line 41 with 7 numbered rules (nothing-closes-by-reference, evidence-is-a-produced-artifact, open-finding uses verdict=none:open-finding/commit=none:open, closure must bind a published commit, witness absence must be explicit, resolvability, docs-only limits). (2) SELFTEST: `bash tests/selftest.sh` -> REAL_EXIT=0, tail output `SELFTEST: PASS` with all 7 sections PASS (script parsing, empty-PATH fail, digest refusal, no literal credentials, 24/24 board rows parse, boardctl fail-closed, prompt existence). (3) BOARD CONTRACT PRESERVED: original CF-012 acceptance contract in .coding-hermes/board/events.jsonl is '1. test -e docs/traceability-doctrine.md succeeds on a fresh clone of the published tip. 2. That file defines the ch:trace marker fields used in README.md and states the closure rules. 3. tests/selftest.sh still prints SELFTEST: PASS.' All three hold: file exists at HEAD, field set defined in the doctrine is byte-identical to the field set used in README.md markers (diff of sorted field lists -> IDENTICAL FIELD SETS), and selftest prints PASS. The commit touched only 2 docs files (`git show --name-only HEAD` -> docs/audits/code-factory-CF-012-20261031-1007.md, docs/traceability-doctrine.md; events.jsonl count = 0), so the board row was not altered. (4) FRESH MARKER IN COMMITTED ARTIFACT: `git show HEAD:docs/audits/code-factory-CF-012-20261031-1007.md | grep -c 'ch:trace row=CF-012'` -> 1, with all 11 fields present (verified field-by-field: 11/11 OK, field count 11). It is fresh, not copied: the pre-existing CF-012 row marker had spec=none:no-doctrine-exists, witness=none:no-doctrine-file-exists, commit=396f133..., whereas the new marker has spec=docs/traceability-doctrine.md#marker-fields, evidence=docs/audits/code-factory-CF-012-20261031-1007.md, witness=none:docs-only, verdict=none:open-finding, commit=none:open \u2014 consistent with the doctrine's own rule 3 for an open finding. The artifact is committed in dd25fb1.\ndocs/traceability-doctrine.md defines all 11 marker fields and 7 closure rules, selftest exits 0 with SELFTEST: PASS, the original board acceptance contract is fully satisfied and unmodified, and a fresh 11-field ch:trace row=CF-012 marker is committed in docs/audits/code-factory-CF-012-20261031-1007.md.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "Add docs/traceability-doctrine.md defining the marker fields and closure rules; run bash tests/selftest.sh; preserve the original board acceptance contract; include a fresh ch:trace row=CF-012 marker in a committed evidence artifact.",
+                "status": "PASS",
+                "detail": "All four sub-requirements verified. (1) DOCTRINE FILE: `git ls-tree -r --name-only HEAD docs | grep -i trace` -> `docs/traceability-doctrine.md`; it defines all 11 marker fields in a table (row, spec, wave, test, doc, prompt, evidence, witness, verdict, commit, memory) at lines 9-40, and a `## Closure rules` section at line 41 with 7 numbered rules (nothing-closes-by-reference, evidence-is-a-produced-artifact, open-finding uses verdict=none:open-finding/commit=none:open, closure must bind a published commit, witness absence must be explicit, resolvability, docs-only limits). (2) SELFTEST: `bash tests/selftest.sh` -> REAL_EXIT=0, tail output `SELFTEST: PASS` with all 7 sections PASS (script parsing, empty-PATH fail, digest refusal, no literal credentials, 24/24 board rows parse, boardctl fail-closed, prompt existence). (3) BOARD CONTRACT PRESERVED: original CF-012 acceptance contract in .coding-hermes/board/events.jsonl is '1. test -e docs/traceability-doctrine.md succeeds on a fresh clone of the published tip. 2. That file defines the ch:trace marker fields used in README.md and states the closure rules. 3. tests/selftest.sh still prints SELFTEST: PASS.' All three hold: file exists at HEAD, field set defined in the doctrine is byte-identical to the field set used in README.md markers (diff of sorted field lists -> IDENTICAL FIELD SETS), and selftest prints PASS. The commit touched only 2 docs files (`git show --name-only HEAD` -> docs/audits/code-factory-CF-012-20261031-1007.md, docs/traceability-doctrine.md; events.jsonl count = 0), so the board row was not altered. (4) FRESH MARKER IN COMMITTED ARTIFACT: `git show HEAD:docs/audits/code-factory-CF-012-20261031-1007.md | grep -c 'ch:trace row=CF-012'` -> 1, with all 11 fields present (verified field-by-field: 11/11 OK, field count 11). It is fresh, not copied: the pre-existing CF-012 row marker had spec=none:no-doctrine-exists, witness=none:no-doctrine-file-exists, commit=396f133..., whereas the new marker has spec=docs/traceability-doctrine.md#marker-fields, evidence=docs/audits/code-factory-CF-012-20261031-1007.md, witness=none:docs-only, verdict=none:open-finding, commit=none:open \u2014 consistent with the doctrine's own rule 3 for an open finding. The artifact is committed in dd25fb1."
+              }
+            ],
+            "summary": "docs/traceability-doctrine.md defines all 11 marker fields and 7 closure rules, selftest exits 0 with SELFTEST: PASS, the original board acceptance contract is fully satisfied and unmodified, and a fresh 11-field ch:trace row=CF-012 marker is committed in docs/audits/code-factory-CF-012-20261031-1007.md.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-012\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: harness state excluded from gitleaks scope (.gitreins/**)\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 Add docs/traceability-doctrine.md defining the marker fields and closure rules; run bash tests/selftest.sh; preserve the original board acceptance contract; include a fresh ch:trace row=CF-012 marker in a committed evidence artifact.: All four sub-requirements verified. (1) DOCTRINE FILE: `git ls-tree -r --name-only HEAD docs | grep -i trace` -> `docs/traceability-doctrine.md`; it defines all 11 marker fields in a table (row, spec, wave, test, doc, prompt, evidence, witness, verdict, commit, memory) at lines 9-40, and a `## Closure rules` section at line 41 with 7 numbered rules (nothing-closes-by-reference, evidence-is-a-produced-artifact, open-finding uses verdict=none:open-finding/commit=none:open, closure must bind a published commit, witness absence must be explicit, resolvability, docs-only limits). (2) SELFTEST: `bash tests/selftest.sh` -> REAL_EXIT=0, tail output `SELFTEST: PASS` with all 7 sections PASS (script parsing, empty-PATH fail, digest refusal, no literal credentials, 24/24 board rows parse, boardctl fail-closed, prompt existence). (3) BOARD CONTRACT PRESERVED: original CF-012 acceptance contract in .coding-hermes/board/events.jsonl is '1. test -e docs/traceability-doctrine.md succeeds on a fresh clone of the published tip. 2. That file defines the ch:trace marker fields used in README.md and states the closure rules. 3. tests/selftest.sh still prints SELFTEST: PASS.' All three hold: file exists at HEAD, field set defined in the doctrine is byte-identical to the field set used in README.md markers (diff of sorted field lists -> IDENTICAL FIELD SETS), and selftest prints PASS. The commit touched only 2 docs files (`git show --name-only HEAD` -> docs/audits/code-factory-CF-012-20261031-1007.md, docs/traceability-doctrine.md; events.jsonl count = 0), so the board row was not altered. (4) FRESH MARKER IN COMMITTED ARTIFACT: `git show HEAD:docs/audits/code-factory-CF-012-20261031-1007.md | grep -c 'ch:trace row=CF-012'` -> 1, with all 11 fields present (verified field-by-field: 11/11 OK, field count 11). It is fresh, not copied: the pre-existing CF-012 row marker had spec=none:no-doctrine-exists, witness=none:no-doctrine-file-exists, commit=396f133..., whereas the new marker has spec=docs/traceability-doctrine.md#marker-fields, evidence=docs/audits/code-factory-CF-012-20261031-1007.md, witness=none:docs-only, verdict=none:open-finding, commit=none:open \u2014 consistent with the doctrine's own rule 3 for an open finding. The artifact is committed in dd25fb1.\ndocs/traceability-doctrine.md defines all 11 marker fields and 7 closure rules, selftest exits 0 with SELFTEST: PASS, the original board acceptance contract is fully satisfied and unmodified, and a fresh 11-field ch:trace row=CF-012 marker is committed in docs/audits/code-factory-CF-012-20261031-1007.md.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-10-31T10:41:55.498154",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-10-31T10:41:55.513357+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 9088,
+        "truncated": false,
+        "source": "git show dd25fb197316"
+      }
+    ],
+    "task_id": "CF-012"
+  }
+}
