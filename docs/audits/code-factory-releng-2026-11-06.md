@@ -102,3 +102,72 @@ Board and audit writes were made in the clone and pushed to the published remote
 `HEAD:main`; parity was re-proved after the push. A clone carries no commit-time hooks, so the
 configured checks were run manually at the carrier tree (`bash tests/selftest.sh`) and the result is
 quoted above — the CF-031 precedent for board-and-docs-only commits.
+
+## Pass 2 addendum — same tick id, re-delivered after the carrier landed
+
+This is the **second pass of tick `code-factory-releng-2026-11-06-11-09-45`**, not a new tick. The
+scheduler delivered the same id again after the first pass had already pushed its carrier
+`2787611` (11:29:48Z, board event `496` = audit/CF-050, board event `495` = task_created/CF-378).
+Per the re-delivery rule this pass did **not** re-run the sweep and did **not** re-cut: it verified
+the earlier pass's durable claims at the served tip and closed the two legs the cutting pass could
+not close. Measured 2026-11-06T11:34:37–11:39Z.
+
+### Gate at the SERVED tip (not only at the graded sha)
+
+The earlier pass graded `130e235`. The served tip is `2787611`. The delta between them is
+`.coding-hermes/board/tasks.jsonl`, `.coding-hermes/board/events.jsonl` and this document — **zero
+BUILD-INPUT files**, so the suite result stands by tree identity. This pass re-proved it empirically
+in a second clean clone of the published remote at `2787611`:
+
+| Check | Command | Result |
+|---|---|---|
+| Graded tree | `git rev-parse HEAD` in a fresh clone | `2787611` = `origin/main` |
+| Clean tree | `git status --porcelain \| wc -l` | `0` |
+| Selftest | `bash tests/selftest.sh` | **`SELFTEST: PASS`, rc=0**, 40 s (11:34:37Z → 11:35:29Z), 359 `PASS`-bearing lines; the 105 `FAIL`-token lines are the battery's own negative fixtures/expectations (loose grep — the earlier pass's stricter `^FAIL` count was 58) |
+| Delta classification | `git diff --name-only 130e235..2787611` | board ×2 + this doc — all non-build |
+
+### Posture re-measured at `2787611` (every row of the table above reproduces)
+
+| Leg | Result at `2787611` | vs `130e235` |
+|---|---|---|
+| Visibility / license / default branch | public, MIT, `main` | unchanged |
+| Secret scanning / push protection | `enabled` / `enabled` | unchanged |
+| Non-provider patterns / validity checks / Dependabot security updates | `disabled` / `disabled` / `disabled` | unchanged (owner-only settings, no row can execute them) |
+| Open secret-scanning alerts (`?state=open`) | **0** | unchanged |
+| Branch protection `main` | **404 Branch not protected** | unchanged (CF-120) |
+| Remote tags / Release objects | **0** / **0** | unchanged (CF-161) |
+| Hosting CI | `gh run list` = `[]`; `.github/workflows` 404 | unchanged — no CI configured, not a failure |
+| Absolute host paths — all | **550 files / 2554 occurrences** | identical to the earlier pass |
+| … excluding `.gitreins` + board | **108 files / 703 occurrences** | identical |
+| Tracked judge bundles | `.gitreins` = 808 files | unchanged |
+| Working-tree secrets | `gitleaks detect --no-git --redact` → **0 findings** (2.53 MB) | unchanged |
+| Unrelated `master` lineage | `4ead64f`, `772 754` vs `main`, 441 files / 327 internal | unchanged (CF-163) |
+| **Anonymous reachability** | `raw.githubusercontent.com/.../master/.hermes/fleet.toml` → **200**; `.../master/monitoring/.coding-hermes/board/tasks.jsonl` → **200** (unauthenticated) | the board path is newly probed this pass, and it is live: a stranger can fetch the fleet's own operational board |
+| Published heads | **72** | unchanged |
+
+**One new measurement.** The tailnet-address class (CF-378) is larger than the earlier pass's
+`5 occurrences / 3 files` when the judge bundles are included: `17 occurrences / 11 files`. Outside
+`.gitreins` the count is exactly the earlier `5 / 3`
+(`docs/handbook/appendices/units/05-scripts-bunker-provision-sh.md` ×3,
+`06-scripts-bunker-server-install-sh.md` ×1, `docs/MASTER-DOC-SCHEMA.md` ×1); the other **12 of 17
+ride `.gitreins/history/*/commit.patch|worktree.patch`**. Those bundles re-publish the same literals
+(`100.69.3.13`, `100.78.165.52`, `100.97.236.14`), so they are drained by the CF-050 fix (stop
+publishing `.gitreins`) rather than by a separate edit, and CF-378's scope is extended by note to say
+so instead of opening a duplicate row.
+
+### Legs this pass closed
+
+| Leg | State before | Now |
+|---|---|---|
+| Gate on the SERVED tip | only the graded parent `130e235` was measured | `2787611` cloned clean, `SELFTEST: PASS` rc=0 |
+| Delivery to the owner thread | the first pass left no send receipt anywhere (no `message_id` in the doc, the board event, or DuckBrain) | sent via `hermes send` to the scheduler-resolved thread; `message_id` recorded in the board audit event for this pass |
+| Durable memory | no `code-factory` DuckBrain key existed for any 2026-11-06 releng tick (newest releng key was 2026-11-04) | record written under `/project/code-factory/foreman/ticks/code-factory-releng-2026-11-06-11-09-45` and read back |
+| Carrier CI | n/a — the repository ships no workflows (`gh api .../contents/.github/workflows` = 404, `gh run list` = `[]`) | re-proved absent, not assumed |
+
+### Release decision: unchanged — NO TAG
+
+Re-checked at `2787611`: five P0 rows are still `in_progress` (`CF-001`, `CF-002`, `CF-004`,
+`CF-005`, `CF-139`) and three more P0 rows are open `pending` (`CF-227`, `CF-229`, `CF-252`); the
+release surface is still absent (`git ls-remote --tags` = 0, `gh api .../releases` = 0, no `VERSION`,
+no `CHANGELOG`, version scheme still owned by `CF-161`). Decision 1 rule **R2** fires and Decision 1b
+independently forbids an invented first tag. No tag, no Release object, no artifact.
