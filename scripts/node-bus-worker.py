@@ -53,6 +53,14 @@ Identity precedence, so one node can be declared in pieces:
   url      crier.json.url     -> node.json.bus.base -> --crier
   repo     node.json.repo.path -> --workdir
   harness  node.json.harness.cmd -> $HOME/hermes-venv/bin/hermes -z {prompt}
+
+The §5 variable contract (specs/HARNESS-MATRIX.md §5):
+  A dispatch may carry `vars` — an object of CF_* names. This worker exports exactly that set into the
+  harness child's environment, and NOTHING about it is read from the worker's own environment: every
+  CF_* variable present here is scrubbed before the harness starts, so two lanes on one node cannot
+  contaminate each other. A name outside §5, or a credential VALUE where a path belongs, is a named
+  refusal — never a guess, and never an echo of the value. Every run's result envelope records which
+  names were set and their lengths (never a credential value), so two runs are comparable.
 """
 
 import argparse
@@ -75,6 +83,36 @@ DEFAULT_TIMEOUT = 10
 DEFAULT_HARNESS_WALL = 1800
 SEEN_LIMIT = 200
 
+# specs/HARNESS-MATRIX.md §5 — the one set a node passes to a harness. Names are stable; the
+# directive is the only source, and nothing here is ever read from the worker's own environment.
+SECTION5_VARS = (
+    "CF_MODEL",
+    "CF_PROVIDER",
+    "CF_BASE_URL",
+    "CF_API_KEY_FILE",
+    "CF_WORKDIR",
+    "CF_NAMESPACE",
+    "CF_RUN_ID",
+    "CF_LANE",
+    "CF_SKILLS_DIR",
+    "CF_HARNESS_OPTS",
+    "CF_MAX_TURNS",
+    "CF_TIMEOUT_S",
+)
+SECTION5_REQUIRED = (
+    "CF_MODEL",
+    "CF_PROVIDER",
+    "CF_WORKDIR",
+    "CF_NAMESPACE",
+    "CF_RUN_ID",
+    "CF_LANE",
+)
+# name -> (low, high, default): the budget bounds the matrix fixes.
+SECTION5_INTS = {
+    "CF_MAX_TURNS": (1, 1000, 40),
+    "CF_TIMEOUT_S": (1, 86400, 1800),
+}
+
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 
 
@@ -93,6 +131,10 @@ def bad(name, reason):
 
 def warn(name, reason):
     print(f"  WARN  {name} — {reason}")
+
+
+def note(line):
+    print(f"  ..    {line}")
 
 
 def say(line=""):
@@ -427,6 +469,95 @@ class Identity:
         return [str(part).replace("{prompt}", prompt) for part in parts]
 
 
+# --------------------------------------------------------------------------------------------
+# the §5 variable contract — read from the directive, exported to the harness child, recorded
+# --------------------------------------------------------------------------------------------
+
+
+def secret_shaped(value):
+    """True for a credential VALUE (a known key prefix, or a bare opaque token). Never echoed."""
+    text = str(value)
+    if text.startswith(("sk-", "sk_", "ghp_", "gho_", "AIza", "xoxa-", "xoxb-", "xoxp-")):
+        return True
+    if "/" in text or " " in text:
+        return False
+    return len(text) >= 20 and re.fullmatch(r"[A-Za-z0-9_+=.-]+", text) is not None
+
+
+def directive_vars(dispatch, home):
+    """The §5 set a dispatch carries, validated. Returns (values, problems).
+
+    The directive is the ONLY source: this reads `dispatch["vars"]`, or the same object inside
+    `dispatch["payload"]`, and nothing else. A problem becomes a named refusal, and no value is
+    ever copied into a message — only its name and its length.
+    """
+    raw = dispatch.get("vars")
+    if raw is None and isinstance(dispatch.get("payload"), dict):
+        raw = dispatch["payload"].get("vars")
+    if raw is None:
+        return {}, []
+    if not isinstance(raw, dict):
+        return {}, ["`vars` is not an object"]
+
+    values, problems = {}, []
+    for name, value in raw.items():
+        key = str(name)
+        if key not in SECTION5_VARS:
+            problems.append(f"{key} is not a §5 variable (specs/HARNESS-MATRIX.md §5)")
+            continue
+        if isinstance(value, bool) or not isinstance(value, (str, int)):
+            problems.append(f"{key} is not a string or an integer")
+            continue
+        values[key] = str(value)
+
+    for key, text in list(values.items()):
+        if key in SECTION5_INTS:
+            low, high, _default = SECTION5_INTS[key]
+            if not text.isdigit() or not low <= int(text) <= high:
+                problems.append(f"{key} is not an integer in {low}..{high}: {text!r}")
+        elif key == "CF_API_KEY_FILE":
+            if secret_shaped(text):
+                problems.append(
+                    "CF_API_KEY_FILE carries a credential VALUE, not a path "
+                    f"({len(text)} chars; the value is not printed)"
+                )
+            elif "/" not in text:
+                problems.append("CF_API_KEY_FILE is not a path (expected /abs/path or ~/path)")
+        elif key == "CF_WORKDIR":
+            real = os.path.realpath(os.path.expanduser(text))
+            if not os.path.isdir(real):
+                problems.append(f"CF_WORKDIR is not an existing directory: {text}")
+            elif not inside_clone(real, home):
+                problems.append(f"CF_WORKDIR {real} is outside this node's $HOME ({home})")
+        elif key == "CF_HARNESS_OPTS":
+            if re.search(r"sk-|api[_-]?key=|token=|secret=|password=", text, re.IGNORECASE):
+                problems.append("CF_HARNESS_OPTS looks like it carries a credential; it is recorded, so it is public")
+            elif not re.fullmatch(r"[A-Za-z0-9_.-]+=[^,]+(,[A-Za-z0-9_.-]+=[^,]+)*", text):
+                problems.append("CF_HARNESS_OPTS is not a key=value[,key=value] bag")
+        elif key == "CF_BASE_URL":
+            if not re.match(r"^https?://", text):
+                problems.append(f"CF_BASE_URL is not an http(s) URL: {text}")
+            elif "@" in text.split("://", 1)[1]:
+                problems.append("CF_BASE_URL carries userinfo; a credential in a URL is a credential as a value")
+    return values, problems
+
+
+def section5_receipt(values):
+    """name -> {set, len} for every declared variable: comparable across runs, never a value."""
+    return {
+        name: ({"set": True, "len": len(values[name])} if name in values else {"set": False, "len": 0})
+        for name in SECTION5_VARS
+    }
+
+
+def harness_env(ident, values):
+    """The harness child's environment: the directive's set, with every ambient CF_* scrubbed."""
+    env = {key: value for key, value in os.environ.items() if not key.startswith("CF_")}
+    env["HOME"] = ident.home
+    env.update(values)
+    return env
+
+
 def inside_clone(path, clone):
     """True only when `path` resolves to the clone or something below it."""
     if not clone:
@@ -652,6 +783,29 @@ def check(ident, args):
             version = f"--version failed: {one_line(str(exc), 80)}"
         ok("harness", f"{binary} — {version or 'no version output'}")
 
+    # the §5 set this worker would pass: resolved from the directive, never from this environment
+    for name in SECTION5_VARS:
+        required = " (required)" if name in SECTION5_REQUIRED else " (optional)"
+        note(f"contract:{name} — from the directive's `vars`{required}")
+    ambient = sorted(name for name in SECTION5_VARS if os.environ.get(name))
+    if ambient:
+        bad(
+            "vars_ambient",
+            f"{', '.join(ambient)} set in this worker's environment — every CF_* is scrubbed "
+            f"before the harness runs; the directive is the only source",
+        )
+        failed()
+    else:
+        ok(
+            "vars_ambient",
+            "no CF_* variable is set in this worker's environment, so no lane can inherit another's",
+        )
+    ok(
+        "vars",
+        f"{len(SECTION5_VARS)} declared ({len(SECTION5_REQUIRED)} required) and {len(SECTION5_VARS) - len(SECTION5_REQUIRED)} optional "
+        f"(specs/HARNESS-MATRIX.md §5); the harness child env is the directive's `vars` and nothing else",
+    )
+
     # gateway
     gateway = f"http://127.0.0.1:{ident.port}/api/status"
     status, _ = request("GET", gateway, timeout=args.timeout)
@@ -702,13 +856,17 @@ def dispatch_key(doc):
     )
 
 
-def run_harness(ident, prompt, timeout_s):
-    """Run the harness once. Returns (exit_code, seconds, stdout, stderr, note)."""
+def run_harness(ident, prompt, timeout_s, values=None):
+    """Run the harness once. Returns (exit_code, seconds, stdout, stderr, note).
+
+    `values` is the §5 set from the directive. It is the only source: harness_env() strips every
+    CF_* variable this worker's own environment carries, so a lane cannot inherit another lane's
+    model, key or endpoint.
+    """
     argv = ident.harness_argv(prompt)
     workdir = ident.repo_path or ident.home
     started = time.time()
-    env = dict(os.environ)
-    env["HOME"] = ident.home
+    env = harness_env(ident, values or {})
     try:
         completed = subprocess.run(
             argv,
@@ -876,11 +1034,38 @@ def process(dispatch, ident, signer, args, seen):
             return False, result, True
         ok("brief_workdir", f"{workdir} is inside the clone")
 
+    # The §5 set comes from the directive and from nowhere else. A problem is a refusal, because a
+    # variable that is dropped silently makes two runs incomparable and a lane unreproducible.
+    values, var_problems = directive_vars(dispatch, ident.home)
+    if var_problems:
+        for problem in var_problems:
+            bad("vars", f"{label} {problem}")
+        result = refusal(ident, dispatch, "vars", "; ".join(var_problems)[:500])
+        result["vars"] = section5_receipt(values)
+        return False, result, True
+    if values:
+        ok(
+            "vars",
+            f"{label} {len(values)} §5 variable(s) from the directive: "
+            f"{', '.join(sorted(values))} (nothing read from this worker's environment)",
+        )
+    else:
+        ok(
+            "vars",
+            f"{label} carries no `vars` object — nothing is exported, and nothing is taken from "
+            f"this worker's environment",
+        )
+
     argv = ident.harness_argv(text)
     if args.dry_run:
         say(
             f"  WOULD  harness — {' '.join(argv[:2])} <{len(text)} chars of prompt> in {ident.repo_path or ident.home} "
             f"(wall limit {dispatch_wall(dispatch, args)}s)"
+        )
+        say(
+            "  WOULD  vars — the harness child env carries: "
+            + (", ".join(f"{k}({len(v)})" for k, v in sorted(values.items())) or "(none)")
+            + "; every CF_* in this worker's environment is scrubbed first"
         )
         if isinstance(dispatch.get("gate"), dict):
             say(
@@ -892,12 +1077,13 @@ def process(dispatch, ident, signer, args, seen):
         return True, None, False
 
     wall = dispatch_wall(dispatch, args)
-    code, seconds, stdout, stderr, note = run_harness(ident, text, wall)
+    code, seconds, stdout, stderr, note = run_harness(ident, text, wall, values)
     if note:
         bad("harness", f"{label} {note}")
         result = refusal(ident, dispatch, "harness", note)
         result["status"] = "failed"
         result["wall_s"] = round(seconds, 1)
+        result["vars"] = section5_receipt(values)
         return False, result, True
     ok("harness", f"{label} exit {code} in {seconds:.1f}s (wall limit {wall}s)")
 
@@ -925,6 +1111,8 @@ def process(dispatch, ident, signer, args, seen):
         "status": "failed" if failed_status else "completed",
         "host_identity": socket.gethostname(),
         "harness": {"name": ident.harness_name},
+        # The §5 run receipt: name + set/unset + length, never a value, so two runs compare.
+        "vars": section5_receipt(values),
         "exit_codes": [code],
         "gate_exit": gate_exit,
         "branch": git_field(ident.repo_path, "rev-parse", "--abbrev-ref", "HEAD"),

@@ -255,7 +255,7 @@ Transcript 5 (row 13), the repository suite's own legs for this module, extracte
   PASS  crier_url handoff preserves exported URL and shell metacharacters
   PASS  crier_url refusal rejects unset and empty bus before bunker invocation
 35. node-create accepts and forwards --ref (CF-153)
-  PASS  --staged-files --ref master -> exit 0, same six-file staged set
+  PASS  --staged-files --ref master -> exit 0, same seven-file staged set
   PASS  ref 'master' crosses the transport as --ref 'master'
   PASS  ref 're'lease' crosses the transport as --ref 're'\''lease'
 
@@ -370,11 +370,13 @@ unless `--staged-files`), `--repo` (empty; an empty repo is legal and means "no 
   real `bunker` client present (0.2.0) but never invoked against a host. Every create transcript in
   §3 comes from a fixture: a copy of `scripts/`, a stub `bunker` that only records argv, and a stub
   `verify-node.sh`. **No node was created**, per this task's constraint.
-- **The staged set, as measured**: six items, exactly
-  `project-node.sh install-go.sh lib.sh disk_floor.py reclaim_disk.py harness/install-hermes.sh`, in
-  that order, from `bash scripts/node-create.sh --staged-files` (exit 0). The repository suite pins
-  the same count as a literal — "same six-file staged set" [tests/selftest.sh:1651] — so changing
-  the set is a suite change too, which is part of why the gap below has survived.
+- **The staged set, as measured**: seven items, exactly
+  `project-node.sh install-go.sh lib.sh disk_floor.py reclaim_disk.py harness/harness-vars.sh
+  harness/install-hermes.sh`, in that order, from `bash scripts/node-create.sh --staged-files`
+  (exit 0). `harness/harness-vars.sh` joined the set with CF-229, when the adapters began sourcing
+  the shared §5 contract. The repository suite pins the same count as a literal — "same seven-file
+  staged set" [tests/selftest.sh:1667] — so changing the set is a suite change too, which is part of
+  why the gap below has survived.
 - **CF-276 is CONFIRMED on its three legs.** (a) `docs/OPERATIONS.md:209` says of
   `scripts/node-bus-worker.py` that "it is staged by provisioning" [docs/OPERATIONS.md:209].
   (b) The staged set at [scripts/node-create.sh:23] does not contain it, the `cp` loop copies only

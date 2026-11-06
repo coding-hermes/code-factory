@@ -6,12 +6,19 @@
 #
 #   install-hermes.sh --check
 #   install-hermes.sh --apply
+#   install-hermes.sh --contract
+#   install-hermes.sh --help
+#
+# The §5 input contract is one implementation, scripts/harness/harness-vars.sh: every declared
+# variable is accepted as a flag and as a CF_* environment variable, a credential is a PATH (never
+# a value, never ambient), and every accepted name is recorded (CF-229).
 #
 # A public bind ALWAYS requires auth (since the June 2026 hardening; --insecure is a no-op),
 # so --apply refuses to start a gateway without dashboard.basic_auth configured.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/../lib.sh"
+. "$HERE/harness-vars.sh"
 
 PORT="${NODE_GATEWAY_PORT:-10800}"
 PIN="${HERMES_PIN:-0.19.0}"
@@ -21,7 +28,53 @@ PYTHON_MIN_MAJOR=3
 PYTHON_MIN_MINOR=11
 PYTHON_MAX_MAJOR=3
 PYTHON_MAX_MINOR=14
-MODE="${1:---check}"
+MODE="--check"
+
+usage() {
+  cat <<'HERMES_USAGE'
+install-hermes.sh — the MEASURED Hermes adapter (pin, venv, gateway probe).
+
+USAGE
+  install-hermes.sh [--check | --apply | --contract] [CF_* options]
+
+MODES
+  --check      (default) Read-only. python compatibility, the venv binary and its measured
+               version against the pin, the gateway port and /api/status, and whether a provider
+               key exists (existence only — the value is never read). Exit 0 only when every row
+               PASSes.
+  --apply      Install hermes-agent at the pin into $HOME/hermes-venv and start the gateway with
+               --skip-build, which refuses without dashboard.basic_auth. Re-running it changes
+               nothing: an installed pin is a no-op and a listening port is left alone.
+  --contract   Validate the §5 set below and exit 0, or exit 2 with a named refusal. Installs
+               nothing, starts nothing, needs no credential: this is the acceptance check the
+               conformance battery calls.
+
+  --help, -h   This text.
+
+HERMES_USAGE
+  cfv_help_block
+  cat <<'HERMES_TAIL'
+REFUSALS (each one names the rule, not just "invalid")
+  * a credential value in CF_API_KEY_FILE or as --api-key, and CF_API_KEY set at all (not in the
+    contract) — a key travels as a mode-600 PATH, never as a value (AGENTS.md r8);
+  * OPENAI_API_KEY / ANTHROPIC_API_KEY exported into the ambient environment — the directive is
+    the only source, so two lanes on one node cannot contaminate each other (matrix §5);
+  * CF_WORKDIR that does not exist, or that resolves outside $HOME;
+  * CF_MAX_TURNS / CF_TIMEOUT_S that are not integers, or outside 1..1000 / 1..86400;
+  * CF_BASE_URL that is not http(s), or that carries userinfo (a credential in a URL).
+
+WHAT THIS ADAPTER DOES WITH THE SET
+  --check/--apply record every accepted name and act on the ones the install ladder needs
+  (CF_WORKDIR, CF_BASE_URL, CF_API_KEY_FILE, the budget). Model, provider, namespace, run id,
+  lane, skills root and the options bag belong to the RUN, which this installer does not perform:
+  they are recorded here and passed to the harness by the node at invocation time (§5).
+HERMES_TAIL
+}
+
+cfv_load_env
+cfv_parse_args "$@"
+[ "$CFV_HELP" -eq 0 ] || { usage; exit 0; }
+MODE="--$CFV_MODE"
 
 hb() { [ -x "$VENV/bin/hermes" ] && echo "$VENV/bin/hermes" || have hermes; }
 hv() {
@@ -213,6 +266,21 @@ PY
 }
 
 say "harness: hermes (pin $PIN, port $PORT)"
+
+# The §5 contract is checked before anything else touches this host: a refusal here means nothing
+# was installed, started or read.
+cfv_validate "$CFV_MODE"
+if cfv_refused; then
+  say ""
+  say "HERMES: FAIL ($CFV_FAILED) — contract refused; nothing was installed or started"
+  exit 2
+fi
+if [ "$CFV_MODE" = "contract" ]; then
+  say ""
+  say "HERMES: CONTRACT PASS — the §5 set is accepted (specs/HARNESS-MATRIX.md §5); nothing installed"
+  exit 0
+fi
+
 check_python_compatibility || exit 1
 
 h=$(hb)

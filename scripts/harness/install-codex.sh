@@ -35,7 +35,7 @@
 # by name on any other arch rather than installing something that cannot run.
 #
 # CREDENTIALS: never a value in argv, never read from the ambient environment (AGENTS.md r8,
-# specs/HARNESS-MATRIX.md §4). A key arrives as CF_API_KEY_FILE — a path, mode 600 — or as the
+# specs/HARNESS-MATRIX.md §5). A key arrives as CF_API_KEY_FILE — a path, mode 600 — or as the
 # host's own `$HOME/.codex/auth.json` login, which is reported as ambient because it is.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -61,13 +61,15 @@ TIMEOUT_S="${CF_TIMEOUT_S:-300}"
 MODE="--check"
 DEEP=0
 
-# The required set from specs/HARNESS-MATRIX.md §4. CF_API_KEY_FILE is required for a paid
-# provider; CF_SKILLS_DIR is accepted and unused (codex has its own AGENTS.md convention).
+# The required set from specs/HARNESS-MATRIX.md §5. CF_API_KEY_FILE is required for a paid
+# provider; CF_SKILLS_DIR and CF_HARNESS_OPTS are accepted and recorded (codex has its own
+# AGENTS.md convention for skills, and the options bag is recorded so two runs are comparable).
 declare -A VAR=( [CF_MODEL]="${CF_MODEL:-}" [CF_PROVIDER]="${CF_PROVIDER:-}"
                  [CF_BASE_URL]="${CF_BASE_URL:-}" [CF_API_KEY_FILE]="${CF_API_KEY_FILE:-}"
                  [CF_WORKDIR]="${CF_WORKDIR:-}" [CF_NAMESPACE]="${CF_NAMESPACE:-}"
                  [CF_RUN_ID]="${CF_RUN_ID:-}" [CF_LANE]="${CF_LANE:-}"
-                 [CF_SKILLS_DIR]="${CF_SKILLS_DIR:-}" [CF_MAX_TURNS]="${CF_MAX_TURNS:-}" )
+                 [CF_SKILLS_DIR]="${CF_SKILLS_DIR:-}" [CF_HARNESS_OPTS]="${CF_HARNESS_OPTS:-}"
+                 [CF_MAX_TURNS]="${CF_MAX_TURNS:-}" )
 REQUIRED=(CF_MODEL CF_PROVIDER CF_WORKDIR CF_NAMESPACE CF_RUN_ID CF_LANE)
 
 refuse() {  # refuse <leg> <reason> — a named refusal; nothing is installed or run
@@ -78,6 +80,22 @@ refuse() {  # refuse <leg> <reason> — a named refusal; nothing is installed or
 
 usage() {
   sed -n '3,20p' "$0" | sed 's/^# \{0,1\}//'
+  cat <<'CODEX_VARS'
+THE VARIABLE CONTRACT (specs/HARNESS-MATRIX.md §5). Each name is accepted as the flag AND as the
+CF_* environment variable; the directive is the only source, so nothing is inferred or inherited.
+  CF_MODEL          --model          model id requested by task-router                    (required)
+  CF_PROVIDER       --provider       provider lane (anthropic, openai-codex, deepseek, …) (required)
+  CF_BASE_URL       --base-url       endpoint the harness must talk to                    (optional)
+  CF_API_KEY_FILE   --api-key-file   PATH to a mode-600 key file — never a value          (paid lanes)
+  CF_WORKDIR        --workdir        the clone the harness may write in; must be in $HOME (required)
+  CF_NAMESPACE      --namespace      DuckBrain namespace for the run's writes             (required)
+  CF_RUN_ID         --run-id         correlation id from the bus envelope                 (required)
+  CF_LANE           --lane           lane name (e.g. code-factory-qa)                     (required)
+  CF_SKILLS_DIR     --skills-dir     seeded skills root on the node                       (optional)
+  CF_HARNESS_OPTS   --harness-opts   key=value,key=value — recorded verbatim              (optional)
+  CF_MAX_TURNS      --max-turns      turn budget, default 40                              (optional)
+  CF_TIMEOUT_S      --timeout-s      wall-clock budget for one turn, default 1800         (optional)
+CODEX_VARS
 }
 
 # --- the CF_* argument surface ---------------------------------------------------------------
@@ -97,7 +115,7 @@ while [ "$#" -gt 0 ]; do
     # A credential as a VALUE is a FAIL, and the value is never echoed.
     --api-key|--key|--token|--openai-api-key)
       refuse "credential_argv" "a credential may never travel as an argument (AGENTS.md r8) — pass --api-key-file <path> instead" ;;
-    --model|--provider|--base-url|--api-key-file|--workdir|--namespace|--run-id|--lane|--skills-dir|--max-turns|--timeout-s)
+    --model|--provider|--base-url|--api-key-file|--workdir|--namespace|--run-id|--lane|--skills-dir|--harness-opts|--max-turns|--timeout-s)
       _flag="$1"
       if [ "$#" -lt 2 ] || [ "${2#--}" != "$2" ]; then refuse "args" "$_flag needs a value"; fi
       _v="$2"
@@ -111,6 +129,7 @@ while [ "$#" -gt 0 ]; do
         --run-id) VAR[CF_RUN_ID]="$_v" ;;
         --lane) VAR[CF_LANE]="$_v" ;;
         --skills-dir) VAR[CF_SKILLS_DIR]="$_v" ;;
+        --harness-opts) VAR[CF_HARNESS_OPTS]="$_v" ;;
         --max-turns) VAR[CF_MAX_TURNS]="$_v" ;;
         --timeout-s) TIMEOUT_S="$_v" ;;
       esac
@@ -170,7 +189,7 @@ target_triple() {  # prints the release triple this pin has a MEASURED digest fo
 # The required set is validated whenever any of it is supplied; --turn always needs all of it.
 validate_vars() {
   local supplied=0 missing=() v
-  for v in "${REQUIRED[@]}" CF_SKILLS_DIR CF_BASE_URL CF_MAX_TURNS; do
+  for v in "${REQUIRED[@]}" CF_SKILLS_DIR CF_BASE_URL CF_HARNESS_OPTS CF_MAX_TURNS; do
     [ -n "${VAR[$v]:-}" ] && supplied=1
   done
   if [ "$MODE" != "--turn" ] && [ "$supplied" -eq 0 ]; then return 0; fi
@@ -178,13 +197,35 @@ validate_vars() {
     if [ -z "${VAR[$v]:-}" ]; then missing+=("$v"); fi
   done
   if [ "${#missing[@]}" -gt 0 ]; then
-    refuse "vars" "the CF_* set from specs/HARNESS-MATRIX.md §4 is incomplete; missing: ${missing[*]} (a value in argv for a credential is always a FAIL)"
+    refuse "vars" "the CF_* set from specs/HARNESS-MATRIX.md §5 is incomplete; missing: ${missing[*]} (a value in argv for a credential is always a FAIL)"
   fi
   if [ "$MODE" = "--turn" ] && [ -z "${VAR[CF_API_KEY_FILE]:-}" ]; then
     note "CF_API_KEY_FILE unset — the turn will use the host login at \$HOME/.codex/auth.json (ambient, named as such)"
   fi
   [ -n "${VAR[CF_MAX_TURNS]:-}" ] && [[ ! "${VAR[CF_MAX_TURNS]}" =~ ^[0-9]+$ ]] &&
     refuse "vars" "CF_MAX_TURNS must be an integer, got '${VAR[CF_MAX_TURNS]}'"
+  # The options bag is recorded verbatim, so it is public: it may never carry a credential.
+  if [ -n "${VAR[CF_HARNESS_OPTS]:-}" ]; then
+    if printf '%s' "${VAR[CF_HARNESS_OPTS]}" | grep -Eqi 'sk-|api[_-]?key=|token=|secret=|password='; then
+      refuse "vars" "CF_HARNESS_OPTS looks like it carries a credential; options are recorded, so they are public"
+    fi
+    if ! printf '%s' "${VAR[CF_HARNESS_OPTS]}" | grep -Eq '^[A-Za-z0-9_.-]+=[^,]+(,[A-Za-z0-9_.-]+=[^,]+)*$'; then
+      refuse "vars" "CF_HARNESS_OPTS must be key=value[,key=value]"
+    fi
+  fi
+  # Record the accepted set by name: a variable this adapter cannot act on is still named, so it is
+  # never accepted and silently ignored (matrix §5, row CF-229). CF_API_KEY_FILE is recorded as a
+  # boolean, never as its content: it may arrive as a value by mistake, and a refusal must not
+  # become the leak it exists to prevent.
+  for v in "${REQUIRED[@]}" CF_BASE_URL CF_SKILLS_DIR CF_HARNESS_OPTS; do
+    note "contract:$v = ${VAR[$v]:-unset}"
+  done
+  if [ -n "${VAR[CF_API_KEY_FILE]:-}" ]; then
+    note "contract:CF_API_KEY_FILE = <set: ${#VAR[CF_API_KEY_FILE]} chars; content never recorded>"
+  else
+    note "contract:CF_API_KEY_FILE = unset"
+  fi
+  note "contract:CF_MAX_TURNS = ${VAR[CF_MAX_TURNS]:-40}   CF_TIMEOUT_S = ${TIMEOUT_S:-300}"
 }
 
 inside_home() {  # inside_home <abs path>
@@ -194,6 +235,15 @@ inside_home() {  # inside_home <abs path>
 check_api_key_file() {
   local path="${VAR[CF_API_KEY_FILE]:-}" mode
   [ -n "$path" ] || return 0
+  # A VALUE is refused before anything looks it up, and the value is never echoed (matrix §5,
+  # AGENTS.md r8): a key-shaped string, or a bare opaque token with no path separator.
+  case "$path" in
+    sk-*|sk_*|ghp_*|gho_*|xox[abp]-*|AIza*|*' '*)
+      refuse "credential" "CF_API_KEY_FILE carries a credential VALUE, not a path (length ${#path}; the value is not printed) — pass a mode-600 file path" ;;
+    */*) : ;;
+    *) [ "${#path}" -ge 20 ] &&
+         refuse "credential" "CF_API_KEY_FILE carries a credential VALUE, not a path (length ${#path}; the value is not printed) — pass a mode-600 file path" ;;
+  esac
   [ -e "$path" ] || refuse "credential" "CF_API_KEY_FILE does not exist: $path"
   [ -f "$path" ] || refuse "credential" "CF_API_KEY_FILE is not a regular file: $path"
   [ -r "$path" ] || refuse "credential" "CF_API_KEY_FILE is not readable by this user: $path"

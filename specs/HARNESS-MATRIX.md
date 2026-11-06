@@ -132,6 +132,16 @@ Two rules that are cheap now and expensive later: **no credential is ever passed
 **no harness may read a model or a key from the node's ambient environment** — the directive is the
 only source, so two lanes on one node cannot contaminate each other.
 
+**Implemented once.** `scripts/harness/harness-vars.sh` is the single implementation of this
+section: each installer accepts every name below as a flag *and* as a CF_ environment variable,
+refuses a credential value (exit 2, the value never echoed) and an ambient provider key, requires
+the workdir to exist inside `$HOME`, bounds the budget, and records every name it accepted — so no
+declared variable can be accepted and then silently ignored. `scripts/node-bus-worker.py` carries
+the same set from the dispatch's `vars` object into the harness child's environment (scrubbing every
+ambient CF_ variable first) and writes name + set/unset + length into the result envelope, which is
+what lets two runs be compared. `tests/harness-conformance.sh`'s `vars` leg and
+`tests/harness/vars-contract-test.sh` are the proofs, per installer.
+
 ---
 
 ## 6. Switching and management — how it is operated

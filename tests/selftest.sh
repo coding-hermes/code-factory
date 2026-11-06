@@ -419,6 +419,10 @@ for name, body in {
     (scripts / "harness").mkdir(parents=True)
     (scripts / "harness/install-hermes.sh").write_text(source[:start] + body + source[end:])
     (scripts / "lib.sh").write_text((repo / "scripts/lib.sh").read_text())
+    # The §5 contract library (CF-229): without it the mutated copy dies on its own include and
+    # every "rejected mutation" arm below would pass for the wrong reason.
+    (scripts / "harness/harness-vars.sh").write_text(
+        (repo / "scripts/harness/harness-vars.sh").read_text())
 PY
 then
   auth_fixture_run() {
@@ -1295,6 +1299,9 @@ root, fixture = map(Path, sys.argv[1:])
 (fixture / "home").mkdir()
 (fixture / "scripts" / "harness").mkdir(parents=True)
 shutil.copyfile(root / "scripts/lib.sh", fixture / "scripts/lib.sh")
+# harness-vars.sh is the §5 contract every adapter sources (CF-229): a spliced copy of an adapter
+# is only meaningful with the library beside it.
+shutil.copyfile(root / "scripts/harness/harness-vars.sh", fixture / "scripts/harness/harness-vars.sh")
 source = (root / "scripts/harness/install-hermes.sh").read_text()
 start = source.index('    "$PYTHON_BIN" -m venv')
 end = source.index('\n  else\n    note "already installed:', start)
@@ -1657,9 +1664,9 @@ mkdir -p "$tmpd/scripts/harness" "$tmpd/bin"
 no_ref=$(bash "$HERE/scripts/node-create.sh" --staged-files 2>&1); no_rc=$?
 with_ref=$(bash "$HERE/scripts/node-create.sh" --staged-files --ref master 2>&1); ref_rc=$?
 if [ "$no_rc" -eq 0 ] && [ "$ref_rc" -eq 0 ] && [ "$with_ref" = "$no_ref" ] \
-  && [ "$(printf '%s\n' "$with_ref" | grep -c .)" -eq 6 ] \
+  && [ "$(printf '%s\n' "$with_ref" | grep -c .)" -eq 7 ] \
   && ! printf '%s\n' "$with_ref" | grep -Fq 'unknown arg:'; then
-  say "  PASS  --staged-files --ref master -> exit 0, same six-file staged set"
+  say "  PASS  --staged-files --ref master -> exit 0, same seven-file staged set"
 else
   say "  FAIL  --ref rejected or changed the staged set (exit $no_rc/$ref_rc)"; fails=$((fails+1))
 fi
@@ -1743,6 +1750,8 @@ with tempfile.TemporaryDirectory(prefix="cf159-") as directory:
     for name in ("node-create.sh", "lib.sh", "project-node.sh", "install-go.sh", "disk_floor.py", "reclaim_disk.py"):
         shutil.copyfile(root / "scripts" / name, scripts / name)
     shutil.copyfile(root / "scripts/harness/install-hermes.sh", scripts / "harness/install-hermes.sh")
+    # The adapter sources this (CF-229); the fixture's staging tree must be a complete node.
+    shutil.copyfile(root / "scripts/harness/harness-vars.sh", scripts / "harness/harness-vars.sh")
     executable(scripts / "verify-node.sh", "#!/bin/bash\nexit 0\n")
     executable(binary / "bunker", '''#!/bin/bash
 case "$1" in

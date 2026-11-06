@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # harness-conformance.sh — one battery, one matrix.
 #
-# For every harness the factory names, prove or refute three legs:
+# For every harness the factory names, prove or refute four legs:
 #
 #   check  the adapter's own --check, quoted with the value it measured
 #   apply  the adapter's --apply in a throwaway HOME (only with --install)
+#   vars   the §5 variable contract: --help documents the declared set, the full set is accepted,
+#          a credential VALUE and an ambient provider key are each refused by name, and no
+#          declared variable is accepted and then silently dropped (row CF-229)
 #   smoke  a REAL turn in a scratch directory that must leave a file containing a
 #          token this script chose, verified by bytes on the control host
 #
@@ -13,11 +16,12 @@
 # missing>`. Nothing here can pass on an empty value: every row goes through
 # emit(), which rewrites an empty PASS into a FAIL and an empty SKIP into a FAIL.
 #
-#   tests/harness-conformance.sh                     # check + smoke, no installs
+#   tests/harness-conformance.sh                     # check + vars + smoke, no installs
 #   tests/harness-conformance.sh --install           # also run each --apply in a scratch HOME
+#   tests/harness-conformance.sh --vars-only         # only the §5 variable-contract leg
 #   tests/harness-conformance.sh --write-doc         # regenerate docs/HARNESS-CONFORMANCE.md
 #   tests/harness-conformance.sh --only hermes,codex # subset by id
-#   tests/harness-conformance.sh --adapter-dir DIR   # fixture hook (tests/selftest.sh §44)
+#   tests/harness-conformance.sh --adapter-dir DIR   # fixture hook (tests/selftest.sh §45)
 #
 # The battery never installs anything without --install, never writes outside $HOME,
 # never reads a credential value (existence and validity only), and never invents a
@@ -28,6 +32,7 @@ HERE="$(cd "$(dirname "$0")/.." && pwd)"
 
 MODE_INSTALL=0
 WRITE_DOC=0
+VARS_ONLY=0
 ONLY=""
 ADAPTER_DIR="$HERE/scripts/harness"
 DOC="$HERE/docs/HARNESS-CONFORMANCE.md"
@@ -40,11 +45,12 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --install) MODE_INSTALL=1; shift ;;
     --write-doc) WRITE_DOC=1; shift ;;
+    --vars-only) VARS_ONLY=1; shift ;;
     --only) ONLY="${2:-}"; [ -n "$ONLY" ] || { printf 'FAIL battery: --only needs an id\n'; exit 2; }; shift 2 ;;
     --adapter-dir) ADAPTER_DIR="${2:-}"; [ -n "$ADAPTER_DIR" ] || { printf 'FAIL battery: --adapter-dir needs a path\n'; exit 2; }; shift 2 ;;
     --doc) DOC="${2:-}"; [ -n "$DOC" ] || { printf 'FAIL battery: --doc needs a path\n'; exit 2; }; shift 2 ;;
     --timeout) TIMEOUT="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) printf 'FAIL battery: unknown argument %s\n' "$1"; exit 2 ;;
   esac
 done
@@ -196,6 +202,172 @@ kill_gateways() {
     [ "$pid" = "$$" ] && continue
     kill "$pid" 2>/dev/null || true
   done
+}
+
+# ------------------------------------------------------- the §5 variable contract (vars, CF-229)
+# The declared set is the spec's: it is parsed out of specs/HARNESS-MATRIX.md §5 rather than copied
+# here, so a spec edit reaches the leg without an edit to this file. CONTRACT_VARS is the set this
+# battery actually SENDS; when the two disagree the leg goes red and names the variable — which is
+# what makes "drop one declared variable and the leg must fail" a provable claim.
+CONTRACT_VARS=(CF_MODEL CF_PROVIDER CF_BASE_URL CF_API_KEY_FILE CF_WORKDIR CF_NAMESPACE
+               CF_RUN_ID CF_LANE CF_SKILLS_DIR CF_HARNESS_OPTS CF_MAX_TURNS CF_TIMEOUT_S)
+SPEC="$HERE/specs/HARNESS-MATRIX.md"
+VARS_DIR="$WORK/vars"
+VARS_KEY="$VARS_DIR/api.key"
+VARS_WORKDIR="$VARS_DIR/workdir"
+VARS_SKILLS="$VARS_DIR/skills"
+# A synthetic credential and synthetic ambient keys, built from parts so no line in this file looks
+# like a literal key to the tree-hygiene grep (AGENTS.md r8). Neither value is ever a real secret.
+SYNTH_SECRET="sk-$(printf 'cf229-%s' 'not-a-real-credential')"
+HC_ENV=()      # extra environment for one hc_run (never the directive's set)
+RUN_ENV=()     # the §5 set under test, as NAME=value assignments
+
+spec_declared() {  # the §5 table's variable names, in the spec's own order
+  [ -f "$SPEC" ] || return 1
+  awk '/^## 5\./{f=1;next} /^## 6\./{f=0} f' "$SPEC" | grep -oE '`CF_[A-Z_]+`' | tr -d '`' \
+    | awk '!seen[$0]++'
+}
+
+declared_drift() {  # every disagreement between the spec's set and the set this battery sends
+  local v
+  for v in "${CONTRACT_VARS[@]}"; do
+    spec_declared | grep -qx -- "$v" \
+      || printf 'this battery checks %s, which §5 does not declare; ' "$v"
+  done
+  while read -r v; do
+    printf '%s\n' "${CONTRACT_VARS[@]}" | grep -qx -- "$v" \
+      || printf '§5 declares %s and this battery drops it; ' "$v"
+  done < <(spec_declared)
+}
+
+vars_value() {  # the synthetic value this battery sends for one declared variable
+  case "$1" in
+    CF_MODEL) printf 'fixture-model-1' ;;
+    CF_PROVIDER) printf 'fixture' ;;
+    CF_BASE_URL) printf 'http://127.0.0.1:9/v1' ;;
+    CF_API_KEY_FILE) printf '%s' "$VARS_KEY" ;;
+    CF_WORKDIR) printf '%s' "$VARS_WORKDIR" ;;
+    CF_NAMESPACE) printf 'code-factory-qa' ;;
+    CF_RUN_ID) printf 'cf229-vars-run' ;;
+    CF_LANE) printf 'code-factory-qa' ;;
+    CF_SKILLS_DIR) printf '%s' "$VARS_SKILLS" ;;
+    CF_HARNESS_OPTS) printf 'sandbox=workspace-write,approval=never' ;;
+    CF_MAX_TURNS) printf '40' ;;
+    CF_TIMEOUT_S) printf '1800' ;;
+    *) printf 'unset' ;;
+  esac
+}
+
+vars_args() {  # the full declared set, as NAME=value assignments, in CONTRACT_VARS order
+  local v
+  for v in "${CONTRACT_VARS[@]}"; do printf '%s=%s\n' "$v" "$(vars_value "$v")"; done
+}
+
+vars_fixture() {  # the workdir + key file the acceptance run needs, both inside $HOME
+  [ -d "$VARS_WORKDIR" ] && [ -s "$VARS_KEY" ] && return 0
+  mkdir -p "$VARS_WORKDIR" "$VARS_SKILLS" || return 1
+  git -C "$VARS_WORKDIR" init -q -b main >/dev/null 2>&1 || return 1
+  (umask 077; printf '%s\n' "$(printf 'synthetic-%s' 'not-a-credential')" > "$VARS_KEY") || return 1
+  chmod 600 "$VARS_KEY" || return 1
+}
+
+hc_run() {  # hc_run <adapter> [args...] — a scrubbed env: this battery's set is the only source
+  local adapter="$1"; shift
+  env -i PATH="$PATH" HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" LANG=C \
+    "${RUN_ENV[@]}" "${HC_ENV[@]}" bash "$adapter" "$@"
+}
+
+leg_vars() {  # <id> <adapter file>
+  local id="$1" file="$2" path help out rc mode problems="" missing="" silent="" v
+  local base_env=() swap=()
+  path="$ADAPTER_DIR/$file"
+  if [ ! -f "$path" ]; then
+    emit "$id" vars FAIL "no adapter at scripts/harness/$file — no installer to hold to the §5 contract"
+    return 0
+  fi
+  if ! bash -n "$path" 2>/dev/null; then
+    emit "$id" vars FAIL "scripts/harness/$file is not valid bash"
+    return 0
+  fi
+  if ! vars_fixture; then
+    emit "$id" vars FAIL "cannot stage the fixture workdir/key under $VARS_DIR (both must be inside \$HOME)"
+    return 0
+  fi
+  mapfile -t base_env < <(vars_args)
+  RUN_ENV=()
+
+  # (a) --help documents every variable the SPEC declares.
+  help="$(hc_run "$path" --help 2>&1)"; rc=$?
+  printf '%s\n' "$help" > "$WORK/$id.vars-help.txt"
+  if [ "$rc" -ne 0 ]; then
+    emit "$id" vars FAIL "--help exited $rc — the installer cannot document its own contract"
+    return 0
+  fi
+  while read -r v; do
+    case "$help" in *"$v"*) ;; *) missing="$missing $v" ;; esac
+  done < <(spec_declared)
+  [ -z "$missing" ] || problems="$problems --help does not document:$missing;"
+
+  # (b) the full declared set is accepted. --contract is the acceptance mode where an installer
+  # offers one; otherwise the leg requires that --check does not refuse the contract, because a
+  # harness that is simply not installed on this host must still accept the inputs it was given.
+  case "$help" in *--contract*) mode="--contract" ;; *) mode="--check" ;; esac
+  RUN_ENV=("${base_env[@]}")
+  out="$(hc_run "$path" "$mode" 2>&1)"; rc=$?
+  printf '%s\n' "$out" > "$WORK/$id.vars.txt"
+  if [ "$mode" = "--contract" ]; then
+    [ "$rc" -eq 0 ] || problems="$problems $mode exited $rc on the full set (want 0);"
+  else
+    [ "$rc" -ne 2 ] || problems="$problems $mode refused the full set (exit $rc);"
+    if printf '%s\n' "$out" | grep -q '^  FAIL  contract:'; then
+      problems="$problems $mode refused a contract row: $(printf '%s\n' "$out" | awk 'index($0,"  FAIL  contract:")==1' | head -1 | sed 's/^  FAIL  //;s/ — .*//');"
+    fi
+  fi
+
+  # (c) nothing is accepted and then silently dropped: every declared name is recorded by the run.
+  while read -r v; do
+    printf '%s\n' "$out" | grep -q -- "$v" || silent="$silent $v"
+  done < <(spec_declared)
+  [ -z "$silent" ] || problems="$problems accepted but never recorded:$silent;"
+
+  # (d) the two negative cases the spec's `vars` leg names: a credential VALUE, and an ambient key.
+  for v in "${base_env[@]}"; do
+    case "$v" in CF_API_KEY_FILE=*) swap+=("CF_API_KEY_FILE=$SYNTH_SECRET") ;; *) swap+=("$v") ;; esac
+  done
+  printf '%s\n' "${swap[@]}" | grep -q '^CF_API_KEY_FILE=' || swap+=("CF_API_KEY_FILE=$SYNTH_SECRET")
+  RUN_ENV=("${swap[@]}")
+  out="$(hc_run "$path" "$mode" 2>&1)"; rc=$?
+  printf '%s\n' "$out" > "$WORK/$id.vars-value.txt"
+  if [ "$rc" -eq 0 ]; then
+    problems="$problems a credential VALUE was accepted (exit 0);"
+  elif ! printf '%s\n' "$out" | grep -qE 'CF_API_KEY_FILE|credential'; then
+    problems="$problems a credential VALUE was refused without naming it;"
+  fi
+  if printf '%s\n' "$out" | grep -qF -- "$SYNTH_SECRET"; then
+    problems="$problems the refused credential value was echoed into the log;"
+  fi
+
+  RUN_ENV=("${base_env[@]}")
+  HC_ENV=("OPENAI_API_KEY=$SYNTH_SECRET" "ANTHROPIC_API_KEY=$SYNTH_SECRET")
+  out="$(hc_run "$path" "$mode" 2>&1)"; rc=$?
+  HC_ENV=()
+  RUN_ENV=()
+  printf '%s\n' "$out" > "$WORK/$id.vars-ambient.txt"
+  if [ "$rc" -eq 0 ]; then
+    problems="$problems an ambient provider key was accepted (exit 0);"
+  elif ! printf '%s\n' "$out" | grep -qE 'OPENAI_API_KEY|ANTHROPIC_API_KEY|contract:ambient'; then
+    problems="$problems an ambient provider key was refused without naming it;"
+  fi
+  if printf '%s\n' "$out" | grep -qF -- "$SYNTH_SECRET"; then
+    problems="$problems the ambient key value was echoed into the log;"
+  fi
+
+  if [ -n "$problems" ]; then
+    emit "$id" vars FAIL "$(printf '%s' "$problems" | sed 's/^ //;s/;$//')"
+  else
+    emit "$id" vars PASS "§5 set accepted in $mode (${#CONTRACT_VARS[@]} declared); a credential VALUE and an ambient key are both refused by name; every name is recorded"
+  fi
+  return 0
 }
 
 # ----------------------------------------------------------------------- legs
@@ -415,6 +587,19 @@ write_doc() {
       done
       printf '\n'
     done 3< <(printf "%s\n" "$HARNESSES")
+    printf '\n## The vars leg (specs/HARNESS-MATRIX.md §5)\n\n'
+    printf 'The declared set is parsed out of the spec above, so this leg cannot drift from it. A row is\n'
+    printf '`PASS` only when the installer documents every declared variable in `--help`, accepts the full\n'
+    printf 'set, refuses a credential VALUE and an ambient provider key by name, and records every name it\n'
+    printf 'accepted — a declared variable that is accepted and then silently dropped fails the row.\n\n'
+    printf '| harness | vars |\n|---|---|\n'
+    while IFS='|' read -r id _rest <&3; do
+      [ -n "$id" ] || continue
+      row="$(awk -F'\t' -v i="$id" -v l="vars" '$1==i && $2==l {print $3 "|" $4; exit}' "$RESULTS")"
+      verdict="${row%%|*}"; value="${row#*|}"
+      value="${value//|/\\|}"
+      printf '| `%s` | `%s` — %s |\n' "$id" "${verdict:-NOT RUN}" "${value:-no row recorded}"
+    done 3< <(printf "%s\n" "$HARNESSES")
     printf '\n## The rows as printed\n\n```\n'
     awk -F'\t' '$1!="note" {printf "  %-4s  %s:%s — %s\n", $3, $1, $2, $4}' "$RESULTS"
     printf '```\n\n'
@@ -474,14 +659,28 @@ say "harness conformance — $(date -u +%Y-%m-%dT%H:%M:%SZ), adapters from ${ADA
 say "  work: $WORK"
 say "  installs: $([ "$MODE_INSTALL" -eq 1 ] && echo 'enabled (scratch HOME)' || echo 'disabled (--install to enable)')"
 say ""
+say "the §5 variable contract (specs/HARNESS-MATRIX.md §5)"
+declared_count="$(spec_declared 2>/dev/null | grep -c . || true)"
+drift="$(declared_drift)"
+if [ "${declared_count:-0}" -lt 1 ]; then
+  emit "battery" "vars-declared" FAIL "specs/HARNESS-MATRIX.md §5 declares no CF_* variables (the §5 table was not found) — the vars leg has no authority to check against"
+elif [ -n "$drift" ]; then
+  emit "battery" "vars-declared" FAIL "$(printf '%s' "$drift" | sed 's/; $//') — the set this battery checks is not the set §5 declares"
+else
+  emit "battery" "vars-declared" PASS "all $declared_count variables §5 declares are checked, and only those"
+fi
+say ""
 
 while IFS='|' read -r id adapter bin gen smoke measured <&3; do
   [ -n "$id" ] || continue
   selected "$id" || continue
   say "$id"
-  leg_check "$id" "$adapter" "$bin" "$gen"
-  leg_apply "$id" "$adapter"
-  leg_smoke "$id" "$bin" "$gen" "$measured"
+  if [ "$VARS_ONLY" -eq 0 ]; then
+    leg_check "$id" "$adapter" "$bin" "$gen"
+    leg_apply "$id" "$adapter"
+  fi
+  leg_vars "$id" "$adapter"
+  [ "$VARS_ONLY" -eq 0 ] && leg_smoke "$id" "$bin" "$gen" "$measured"
   say ""
 done 3< <(printf '%s\n' "$HARNESSES")
 

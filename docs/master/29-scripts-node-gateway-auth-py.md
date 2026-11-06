@@ -35,7 +35,7 @@ not mean the module is correct: §6 records three measured defects in it.
   `node-create.sh` (`scripts/bunker-provision.sh:499-504`).
 - **Who does not call it.** `scripts/node-create.sh` and `scripts/project-node.sh` contain zero
   occurrences of either `auth` or `config.yaml` (measured: `grep -n 'auth\|config.yaml'` exits 1 for
-  both files). `node-create.sh` stages six files, none of them this script and none a config
+  both files). `node-create.sh` stages seven files, none of them this script and none a config
   (`scripts/node-create.sh:23`). This is precisely CF-150: the standalone create path
   (`node-create.sh` → `project-node.sh --apply` at `scripts/node-create.sh:121`) never reaches the only
   writer of the block.
