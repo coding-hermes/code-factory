@@ -1,0 +1,111 @@
+{
+  "task_id": "CF-320",
+  "task_title": "github-app-refresh.sh: a FAIL row after minting an insecure token must abort the credential write, and 'refreshed' must come from a re-read",
+  "task_criteria": [
+    "scripts/github-app-refresh.sh aborts a credential write when the minted token file is not mode 600, and reports 'refreshed' from a re-read of the file rather than from the minter's stdout. Proven by: bash tests/selftest.sh exits 0 at the judged commit and its github-app-refresh section asserts (a) a minter that writes mode 644 yields a FAIL row, no rewrite of the git-credential store, and a non-zero exit; (b) a token file whose mtime is 2 hours old is re-minted, proven by a changed mtime and content re-read; (c) a fresh token file (mtime now) reports a no-op without rewriting either file."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/.hermes/cache/scratch/cf-tick-20261106-174007.PbJGD9/clone",
+  "branch": "main",
+  "commit": "83cf8ccb680d91fef02186535f4dc267a5251fe9",
+  "working_tree_content_fingerprint": "aa2f76eb6305d3f2ea61b02d39ddc188e03104acfbb4422e59f1f708132bb6a6",
+  "working_tree_dirty_path_count": 0,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n12:55PM INF scanned ~2616627 bytes (2.62 MB) in 981ms\n12:55PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 279 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n install-go.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n verify-patch.sh\n  PASS  bash -n harness-vars.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-deepseek.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n install-pi-agent.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.tQKH1T1QiM/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n  PASS  uncreatable destination -> fetch_verified exit 1, no artifact installed\n  PASS  caller surfaced the failed install: 1 '^  FAIL  go:download' row, fixture exit 1\n6. no literal credential assignments\n  PASS  none found\n  section 6 tailnet-address (CF-378): no tracked file outside the board publishes a tailnet address\n  PASS  tailnet-address \u2014 0 tailnet-address hits in 278 tracked file(s) outside .coding-hermes/board and .gitreins\n  PASS  seeded fixture -> FAIL names docs/seeded.md:3; the out-of-range subnet stays green\n\n\u2026 [33316 chars omitted \u2014 439 line(s)] \u2026\n  PASS  install-go positive: applied host pin read back (  PASS  go \u2014 go version go1.26.5 linux/amd64)\n\n51. the python lint lane can go red on one unused import, and green once it is removed (CF-254)\n  PASS  one unused import -> exit 1 naming F401\n  PASS  same file once the import is removed -> exit 0\n  PASS  tracked python surface clean: 42 files graded\n52. master-doc fills converge on runner-owned status without network (CF-257)\n  PASS  both fill writers stamp census/provider/UTC; missing status is rejected\n  PASS  local writer fixtures completed without provider calls\n  PASS  RED module selected, index and missing-Path document skipped\nskip 00-INDEX.md index\nskip 03-not-a-module.md no path field\ntodo=1 provider=deepseek workers=2\ncandidate 01-first.md\n  PASS  VERIFIED and bare VERIFIED Status rows are complete, never candidates\n  PASS  old selector would wrongly refill both completed modules\n  PASS  filled run 1: todo=0 exit=0 sha256sum unchanged\ntodo=0 provider=deepseek workers=2\n  PASS  filled run 2: todo=0 exit=0 sha256sum unchanged\ntodo=0 provider=deepseek workers=2\n  PASS  --force selects all four modules, VERIFIED ones included, never the non-modules\n  section 52 reachability (CF-374): the checker resolves its root and refuses a zero-module pass\n  PASS  absent root -> exit 2, both candidate roots named, no PASS\n  PASS  one-module root -> exit 0, summary reads 1 module(s)\n  PASS  zero-module root -> exit 1, FAIL names the root, 0 module(s), no PASS\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 scripts/github-app-refresh.sh aborts a credential write when the minted token file is not mode 600, and reports 'refreshed' from a re-read of the file rather than from the minter's stdout. Proven by: bash tests/selftest.sh exits 0 at the judged commit and its github-app-refresh section asserts (a) a minter that writes mode 644 yields a FAIL row, no rewrite of the git-credential store, and a non-zero exit; (b) a token file whose mtime is 2 hours old is re-minted, proven by a changed mtime and content re-read; (c) a fresh token file (mtime now) reports a no-op without rewriting either file.: scripts/github-app-refresh.sh:127-133 \u2014 `if [ \"$mode\" != \"600\" ]; then bad \"mode\" ...; note \"refusing to rewrite $GIT_CREDENTIALS ...\"; exit 1; fi` runs BEFORE the credential-store rewrite block at :135, so a FAIL row aborts the write. 'refreshed' comes from file_state() (:88-96, stat -c %Y + sha256) read as `before`/`after` around the mint (:109-124); MINT_SKIPPED is documented as informational only (:78-86) and a stdout/re-read disagreement is named via note(). tests/selftest.sh:258-346 block 'github-app-refresh-gate': (a) :287-303 asserts rc!=0, exactly one '^  FAIL  mode' row, zero '^  PASS  refresh' rows, and `cmp -s git-credentials.pre git-credentials`; (b) :304-322 touches the token '2 hours ago' and asserts post_mtime>pre_mtime, post_digest!=pre_digest, one '^  PASS  refresh' row; (c) :323-345 asserts exit 0, token AND credential store byte-identical, and a 'no-op' row. TEST RUN: `bash tests/selftest.sh` -> exit 0, final line 'SELFTEST: PASS' (/tmp/st3.out:510, 'EXIT=0'); arms at /tmp/st3.out:45-47 all PASS ('insecure mint (mode 644) -> exit 1, one ^  FAIL  mode row, no ^  PASS  refresh row, credential store byte-identical'; 'token mtime 2h old -> re-minted: mtime 1793980869 -> 1793988069, digest changed'; 'fresh token + minter skip -> exit 0, token and credential store byte-identical, the row says no-op'). RED PROOF: the same block run against the pre-fix script (git show HEAD~1:scripts/github-app-refresh.sh) turns arm (a) FAIL ('insecure mint still rewrote the credential store (exit 0, 1 mode row(s), 1 refresh row(s))'), FAILS=1 \u2014 the arm genuinely detects the bug.\nThe mode gate now exits non-zero before the credential store is touched, 'refreshed' is decided by a before/after mtime+digest re-read, and bash tests/selftest.sh exits 0 with all three github-app-refresh arms passing (and arm (a) provably red against the pre-fix script).",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 scripts/github-app-refresh.sh aborts a credential write when the minted token file is not mode 600, and reports 'refreshed' from a re-read of the file rather than from the minter's stdout. Proven by: bash tests/selftest.sh exits 0 at the judged commit and its github-app-refresh section asserts (a) a minter that writes mode 644 yields a FAIL row, no rewrite of the git-credential store, and a non-zero exit; (b) a token file whose mtime is 2 hours old is re-minted, proven by a changed mtime and content re-read; (c) a fresh token file (mtime now) reports a no-op without rewriting either file.: scripts/github-app-refresh.sh:127-133 \u2014 `if [ \"$mode\" != \"600\" ]; then bad \"mode\" ...; note \"refusing to rewrite $GIT_CREDENTIALS ...\"; exit 1; fi` runs BEFORE the credential-store rewrite block at :135, so a FAIL row aborts the write. 'refreshed' comes from file_state() (:88-96, stat -c %Y + sha256) read as `before`/`after` around the mint (:109-124); MINT_SKIPPED is documented as informational only (:78-86) and a stdout/re-read disagreement is named via note(). tests/selftest.sh:258-346 block 'github-app-refresh-gate': (a) :287-303 asserts rc!=0, exactly one '^  FAIL  mode' row, zero '^  PASS  refresh' rows, and `cmp -s git-credentials.pre git-credentials`; (b) :304-322 touches the token '2 hours ago' and asserts post_mtime>pre_mtime, post_digest!=pre_digest, one '^  PASS  refresh' row; (c) :323-345 asserts exit 0, token AND credential store byte-identical, and a 'no-op' row. TEST RUN: `bash tests/selftest.sh` -> exit 0, final line 'SELFTEST: PASS' (/tmp/st3.out:510, 'EXIT=0'); arms at /tmp/st3.out:45-47 all PASS ('insecure mint (mode 644) -> exit 1, one ^  FAIL  mode row, no ^  PASS  refresh row, credential store byte-identical'; 'token mtime 2h old -> re-minted: mtime 1793980869 -> 1793988069, digest changed'; 'fresh token + minter skip -> exit 0, token and credential store byte-identical, the row says no-op'). RED PROOF: the same block run against the pre-fix script (git show HEAD~1:scripts/github-app-refresh.sh) turns arm (a) FAIL ('insecure mint still rewrote the credential store (exit 0, 1 mode row(s), 1 refresh row(s))'), FAILS=1 \u2014 the arm genuinely detects the bug.\nThe mode gate now exits non-zero before the credential store is touched, 'refreshed' is decided by a before/after mtime+digest re-read, and bash tests/selftest.sh exits 0 with all three github-app-refresh arms passing (and arm (a) provably red against the pre-fix script).",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "scripts/github-app-refresh.sh aborts a credential write when the minted token file is not mode 600, and reports 'refreshed' from a re-read of the file rather than from the minter's stdout. Proven by: bash tests/selftest.sh exits 0 at the judged commit and its github-app-refresh section asserts (a) a minter that writes mode 644 yields a FAIL row, no rewrite of the git-credential store, and a non-zero exit; (b) a token file whose mtime is 2 hours old is re-minted, proven by a changed mtime and content re-read; (c) a fresh token file (mtime now) reports a no-op without rewriting either file.",
+                "status": "PASS",
+                "detail": "scripts/github-app-refresh.sh:127-133 \u2014 `if [ \"$mode\" != \"600\" ]; then bad \"mode\" ...; note \"refusing to rewrite $GIT_CREDENTIALS ...\"; exit 1; fi` runs BEFORE the credential-store rewrite block at :135, so a FAIL row aborts the write. 'refreshed' comes from file_state() (:88-96, stat -c %Y + sha256) read as `before`/`after` around the mint (:109-124); MINT_SKIPPED is documented as informational only (:78-86) and a stdout/re-read disagreement is named via note(). tests/selftest.sh:258-346 block 'github-app-refresh-gate': (a) :287-303 asserts rc!=0, exactly one '^  FAIL  mode' row, zero '^  PASS  refresh' rows, and `cmp -s git-credentials.pre git-credentials`; (b) :304-322 touches the token '2 hours ago' and asserts post_mtime>pre_mtime, post_digest!=pre_digest, one '^  PASS  refresh' row; (c) :323-345 asserts exit 0, token AND credential store byte-identical, and a 'no-op' row. TEST RUN: `bash tests/selftest.sh` -> exit 0, final line 'SELFTEST: PASS' (/tmp/st3.out:510, 'EXIT=0'); arms at /tmp/st3.out:45-47 all PASS ('insecure mint (mode 644) -> exit 1, one ^  FAIL  mode row, no ^  PASS  refresh row, credential store byte-identical'; 'token mtime 2h old -> re-minted: mtime 1793980869 -> 1793988069, digest changed'; 'fresh token + minter skip -> exit 0, token and credential store byte-identical, the row says no-op'). RED PROOF: the same block run against the pre-fix script (git show HEAD~1:scripts/github-app-refresh.sh) turns arm (a) FAIL ('insecure mint still rewrote the credential store (exit 0, 1 mode row(s), 1 refresh row(s))'), FAILS=1 \u2014 the arm genuinely detects the bug."
+              }
+            ],
+            "summary": "The mode gate now exits non-zero before the credential store is touched, 'refreshed' is decided by a before/after mtime+digest re-read, and bash tests/selftest.sh exits 0 with all three github-app-refresh arms passing (and arm (a) provably red against the pre-fix script).",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-320\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 scripts/github-app-refresh.sh aborts a credential write when the minted token file is not mode 600, and reports 'refreshed' from a re-read of the file rather than from the minter's stdout. Proven by: bash tests/selftest.sh exits 0 at the judged commit and its github-app-refresh section asserts (a) a minter that writes mode 644 yields a FAIL row, no rewrite of the git-credential store, and a non-zero exit; (b) a token file whose mtime is 2 hours old is re-minted, proven by a changed mtime and content re-read; (c) a fresh token file (mtime now) reports a no-op without rewriting either file.: scripts/github-app-refresh.sh:127-133 \u2014 `if [ \"$mode\" != \"600\" ]; then bad \"mode\" ...; note \"refusing to rewrite $GIT_CREDENTIALS ...\"; exit 1; fi` runs BEFORE the credential-store rewrite block at :135, so a FAIL row aborts the write. 'refreshed' comes from file_state() (:88-96, stat -c %Y + sha256) read as `before`/`after` around the mint (:109-124); MINT_SKIPPED is documented as informational only (:78-86) and a stdout/re-read disagreement is named via note(). tests/selftest.sh:258-346 block 'github-app-refresh-gate': (a) :287-303 asserts rc!=0, exactly one '^  FAIL  mode' row, zero '^  PASS  refresh' rows, and `cmp -s git-credentials.pre git-credentials`; (b) :304-322 touches the token '2 hours ago' and asserts post_mtime>pre_mtime, post_digest!=pre_digest, one '^  PASS  refresh' row; (c) :323-345 asserts exit 0, token AND credential store byte-identical, and a 'no-op' row. TEST RUN: `bash tests/selftest.sh` -> exit 0, final line 'SELFTEST: PASS' (/tmp/st3.out:510, 'EXIT=0'); arms at /tmp/st3.out:45-47 all PASS ('insecure mint (mode 644) -> exit 1, one ^  FAIL  mode row, no ^  PASS  refresh row, credential store byte-identical'; 'token mtime 2h old -> re-minted: mtime 1793980869 -> 1793988069, digest changed'; 'fresh token + minter skip -> exit 0, token and credential store byte-identical, the row says no-op'). RED PROOF: the same block run against the pre-fix script (git show HEAD~1:scripts/github-app-refresh.sh) turns arm (a) FAIL ('insecure mint still rewrote the credential store (exit 0, 1 mode row(s), 1 refresh row(s))'), FAILS=1 \u2014 the arm genuinely detects the bug.\nThe mode gate now exits non-zero before the credential store is touched, 'refreshed' is decided by a before/after mtime+digest re-read, and bash tests/selftest.sh exits 0 with all three github-app-refresh arms passing (and arm (a) provably red against the pre-fix script).\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-06T18:02:24.631051",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-06T18:02:24.649670+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 11053,
+        "truncated": false,
+        "source": "git show 83cf8ccb680d"
+      }
+    ],
+    "task_id": "CF-320"
+  }
+}
