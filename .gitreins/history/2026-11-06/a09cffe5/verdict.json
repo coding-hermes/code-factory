@@ -1,0 +1,111 @@
+{
+  "task_id": "CF-229-V2",
+  "task_title": "Gate the receiving side of the \u00a75 variable contract: the bus worker must record which values it passed, and that arm must be able to fail",
+  "task_criteria": [
+    "CF-229: gate the RECEIVING side of the specs/HARNESS-MATRIX.md \u00a75 variable contract. This task grades the test change and the gate at this commit. The board row's own closure lands in a SEPARATE later commit that cites this verdict \u2014 do NOT grade the row's status here, and do not require the row to read `complete` in this tree.\n\n1. `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/test_section5_receipt.py` exits 0 and prints `Ran 6 tests` then `OK`. The six tests prove, against scripts/node-bus-worker.py: all twelve \u00a75 names are accepted from a dispatch's `vars` object with no problem reported; `section5_receipt` covers every declared name with exactly {set, len} and never records a value (the credential path must not appear in it); a name the directive did not carry reads as `set: false` rather than vanishing; `harness_env` carries exactly the directive's values and drops an ambient `CF_*` the directive never named; and the two refusal arms go red by name (an undeclared name, and a credential sent as a value, whose refusal must not echo the secret).\n\n2. `bash tests/selftest.sh` prints `SELFTEST: PASS` with `> 350` `  PASS` rows, and one of those rows reads `PASS  \u00a75 set accepted from the directive, receipt records name/set/len only, ambient CF_* scrubbed`.\n\n3. The new arm is INSIDE the existing section 44, so the section count the drift probe reads must not move: `grep -c '^say \"[0-9]*\\.' tests/selftest.sh` prints `52`, and `bash docs/audits/cf099-prd-drift-probe.sh` prints `OK:` at this tip.\n\n4. The arm can fail: move `tests/test_section5_receipt.py` aside in a scratch copy (or break one assertion) and the same `bash tests/selftest.sh` section must print `FAIL  the \u00a75 contract on the receiving side (tests/test_section5_receipt.py)`; a check that cannot print FAIL is decoration (AGENTS.md rule 2).\n\n5. `bash scripts/boardctl validate` prints `RESULT: OK` and `git log -1 --format=%s` names the test change under commit style `<type>: <what> \u2014 <why>. Addresses CF-229.`"
+  ],
+  "passed": true,
+  "worktree": "/home/kara/.hermes/cache/scratch/cf-20261106-112733/audit",
+  "branch": "main",
+  "commit": "417449ddfff8f5b8145dcf175f10c280d822c7e2",
+  "working_tree_content_fingerprint": "7915274b81c4c161ae7e8e5200c83675a5423a65e82f0d24f0f26b452f1e43af",
+  "working_tree_dirty_path_count": 0,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n6:43AM INF scanned ~2620973 bytes (2.62 MB) in 1.13s\n6:43AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 280 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n install-go.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n verify-patch.sh\n  PASS  bash -n harness-vars.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-deepseek.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n install-pi-agent.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.m1s2ymP2ok/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  352/352 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n\n\u2026 [31308 chars omitted \u2014 411 line(s)] \u2026\n  PASS  install-go positive: applied host pin read back (  PASS  go \u2014 go version go1.26.5 linux/amd64)\n\n51. the python lint lane can go red on one unused import, and green once it is removed (CF-254)\n  PASS  one unused import -> exit 1 naming F401\n  PASS  same file once the import is removed -> exit 0\n  PASS  tracked python surface clean: 42 files graded\n52. master-doc fills converge on runner-owned status without network (CF-257)\n  PASS  both fill writers stamp census/provider/UTC; missing status is rejected\n  PASS  local writer fixtures completed without provider calls\n  PASS  RED module selected, index and missing-Path document skipped\nskip 00-INDEX.md index\nskip 03-not-a-module.md no path field\ntodo=1 provider=deepseek workers=2\ncandidate 01-first.md\n  PASS  VERIFIED and bare VERIFIED Status rows are complete, never candidates\n  PASS  old selector would wrongly refill both completed modules\n  PASS  filled run 1: todo=0 exit=0 sha256sum unchanged\ntodo=0 provider=deepseek workers=2\n  PASS  filled run 2: todo=0 exit=0 sha256sum unchanged\ntodo=0 provider=deepseek workers=2\n  PASS  --force selects all four modules, VERIFIED ones included, never the non-modules\n  section 52 reachability (CF-374): the checker resolves its root and refuses a zero-module pass\n  PASS  absent root -> exit 2, both candidate roots named, no PASS\n  PASS  one-module root -> exit 0, summary reads 1 module(s)\n  PASS  zero-module root -> exit 1, FAIL names the root, 0 module(s), no PASS\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 CF-229: gate the RECEIVING side of the specs/HARNESS-MATRIX.md \u00a75 variable contract. This task grades the test change and the gate at this commit. The board row's own closure lands in a SEPARATE later commit that cites this verdict \u2014 do NOT grade the row's status here, and do not require the row to read `complete` in this tree.\n\n1. `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/test_section5_receipt.py` exits 0 and prints `Ran 6 tests` then `OK`. The six tests prove, against scripts/node-bus-worker.py: all twelve \u00a75 names are accepted from a dispatch's `vars` object with no problem reported; `section5_receipt` covers every declared name with exactly {set, len} and never records a value (the credential path must not appear in it); a name the directive did not carry reads as `set: false` rather than vanishing; `harness_env` carries exactly the directive's values and drops an ambient `CF_*` the directive never named; and the two refusal arms go red by name (an undeclared name, and a credential sent as a value, whose refusal must not echo the secret).\n\n2. `bash tests/selftest.sh` prints `SELFTEST: PASS` with `> 350` `  PASS` rows, and one of those rows reads `PASS  \u00a75 set accepted from the directive, receipt records name/set/len only, ambient CF_* scrubbed`.\n\n3. The new arm is INSIDE the existing section 44, so the section count the drift probe reads must not move: `grep -c '^say \"[0-9]*\\.' tests/selftest.sh` prints `52`, and `bash docs/audits/cf099-prd-drift-probe.sh` prints `OK:` at this tip.\n\n4. The arm can fail: move `tests/test_section5_receipt.py` aside in a scratch copy (or break one assertion) and the same `bash tests/selftest.sh` section must print `FAIL  the \u00a75 contract on the receiving side (tests/test_section5_receipt.py)`; a check that cannot print FAIL is decoration (AGENTS.md rule 2).\n\n5. `bash scripts/boardctl validate` prints `RESULT: OK` and `git log -1 --format=%s` names the test change under commit style `<type>: <what> \u2014 <why>. Addresses CF-229.`: PASS: `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/test_section5_receipt.py` exit 0, \"Ran 6 tests\" + \"OK\". Six tests: all 12 SECTION5_VARS accepted (test_every_declared_name_is_accepted_from_the_directive), receipt covers declared set with exactly {set,len} and no credential path (test_receipt_records_which_values_were_passed_without_recording_them), partial set reads set:false (test_partial_set_is_still_reported_name_by_name), harness_env carries directive values + drops ambient CF_SMUGGLED (test_harness_env_carries_the_directive_set_and_scrubs_ambient_cf), two refusal arms by name (CF_NOT_DECLARED, CF_API_KEY_FILE secret not echoed). Worker impl at scripts/node-bus-worker.py:489 directive_vars, :559 section5_receipt, :571 harness_env.\nPartial verdict \u2014 all verified criteria passed",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 CF-229: gate the RECEIVING side of the specs/HARNESS-MATRIX.md \u00a75 variable contract. This task grades the test change and the gate at this commit. The board row's own closure lands in a SEPARATE later commit that cites this verdict \u2014 do NOT grade the row's status here, and do not require the row to read `complete` in this tree.\n\n1. `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/test_section5_receipt.py` exits 0 and prints `Ran 6 tests` then `OK`. The six tests prove, against scripts/node-bus-worker.py: all twelve \u00a75 names are accepted from a dispatch's `vars` object with no problem reported; `section5_receipt` covers every declared name with exactly {set, len} and never records a value (the credential path must not appear in it); a name the directive did not carry reads as `set: false` rather than vanishing; `harness_env` carries exactly the directive's values and drops an ambient `CF_*` the directive never named; and the two refusal arms go red by name (an undeclared name, and a credential sent as a value, whose refusal must not echo the secret).\n\n2. `bash tests/selftest.sh` prints `SELFTEST: PASS` with `> 350` `  PASS` rows, and one of those rows reads `PASS  \u00a75 set accepted from the directive, receipt records name/set/len only, ambient CF_* scrubbed`.\n\n3. The new arm is INSIDE the existing section 44, so the section count the drift probe reads must not move: `grep -c '^say \"[0-9]*\\.' tests/selftest.sh` prints `52`, and `bash docs/audits/cf099-prd-drift-probe.sh` prints `OK:` at this tip.\n\n4. The arm can fail: move `tests/test_section5_receipt.py` aside in a scratch copy (or break one assertion) and the same `bash tests/selftest.sh` section must print `FAIL  the \u00a75 contract on the receiving side (tests/test_section5_receipt.py)`; a check that cannot print FAIL is decoration (AGENTS.md rule 2).\n\n5. `bash scripts/boardctl validate` prints `RESULT: OK` and `git log -1 --format=%s` names the test change under commit style `<type>: <what> \u2014 <why>. Addresses CF-229.`: PASS: `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/test_section5_receipt.py` exit 0, \"Ran 6 tests\" + \"OK\". Six tests: all 12 SECTION5_VARS accepted (test_every_declared_name_is_accepted_from_the_directive), receipt covers declared set with exactly {set,len} and no credential path (test_receipt_records_which_values_were_passed_without_recording_them), partial set reads set:false (test_partial_set_is_still_reported_name_by_name), harness_env carries directive values + drops ambient CF_SMUGGLED (test_harness_env_carries_the_directive_set_and_scrubs_ambient_cf), two refusal arms by name (CF_NOT_DECLARED, CF_API_KEY_FILE secret not echoed). Worker impl at scripts/node-bus-worker.py:489 directive_vars, :559 section5_receipt, :571 harness_env.\nPartial verdict \u2014 all verified criteria passed",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "CF-229: gate the RECEIVING side of the specs/HARNESS-MATRIX.md \u00a75 variable contract. This task grades the test change and the gate at this commit. The board row's own closure lands in a SEPARATE later commit that cites this verdict \u2014 do NOT grade the row's status here, and do not require the row to read `complete` in this tree.\n\n1. `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/test_section5_receipt.py` exits 0 and prints `Ran 6 tests` then `OK`. The six tests prove, against scripts/node-bus-worker.py: all twelve \u00a75 names are accepted from a dispatch's `vars` object with no problem reported; `section5_receipt` covers every declared name with exactly {set, len} and never records a value (the credential path must not appear in it); a name the directive did not carry reads as `set: false` rather than vanishing; `harness_env` carries exactly the directive's values and drops an ambient `CF_*` the directive never named; and the two refusal arms go red by name (an undeclared name, and a credential sent as a value, whose refusal must not echo the secret).\n\n2. `bash tests/selftest.sh` prints `SELFTEST: PASS` with `> 350` `  PASS` rows, and one of those rows reads `PASS  \u00a75 set accepted from the directive, receipt records name/set/len only, ambient CF_* scrubbed`.\n\n3. The new arm is INSIDE the existing section 44, so the section count the drift probe reads must not move: `grep -c '^say \"[0-9]*\\.' tests/selftest.sh` prints `52`, and `bash docs/audits/cf099-prd-drift-probe.sh` prints `OK:` at this tip.\n\n4. The arm can fail: move `tests/test_section5_receipt.py` aside in a scratch copy (or break one assertion) and the same `bash tests/selftest.sh` section must print `FAIL  the \u00a75 contract on the receiving side (tests/test_section5_receipt.py)`; a check that cannot print FAIL is decoration (AGENTS.md rule 2).\n\n5. `bash scripts/boardctl validate` prints `RESULT: OK` and `git log -1 --format=%s` names the test change under commit style `<type>: <what> \u2014 <why>. Addresses CF-229.`",
+                "status": "PASS",
+                "detail": "PASS: `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/test_section5_receipt.py` exit 0, \"Ran 6 tests\" + \"OK\". Six tests: all 12 SECTION5_VARS accepted (test_every_declared_name_is_accepted_from_the_directive), receipt covers declared set with exactly {set,len} and no credential path (test_receipt_records_which_values_were_passed_without_recording_them), partial set reads set:false (test_partial_set_is_still_reported_name_by_name), harness_env carries directive values + drops ambient CF_SMUGGLED (test_harness_env_carries_the_directive_set_and_scrubs_ambient_cf), two refusal arms by name (CF_NOT_DECLARED, CF_API_KEY_FILE secret not echoed). Worker impl at scripts/node-bus-worker.py:489 directive_vars, :559 section5_receipt, :571 harness_env."
+              }
+            ],
+            "summary": "Partial verdict \u2014 all verified criteria passed",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-229-V2\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 CF-229: gate the RECEIVING side of the specs/HARNESS-MATRIX.md \u00a75 variable contract. This task grades the test change and the gate at this commit. The board row's own closure lands in a SEPARATE later commit that cites this verdict \u2014 do NOT grade the row's status here, and do not require the row to read `complete` in this tree.\n\n1. `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/test_section5_receipt.py` exits 0 and prints `Ran 6 tests` then `OK`. The six tests prove, against scripts/node-bus-worker.py: all twelve \u00a75 names are accepted from a dispatch's `vars` object with no problem reported; `section5_receipt` covers every declared name with exactly {set, len} and never records a value (the credential path must not appear in it); a name the directive did not carry reads as `set: false` rather than vanishing; `harness_env` carries exactly the directive's values and drops an ambient `CF_*` the directive never named; and the two refusal arms go red by name (an undeclared name, and a credential sent as a value, whose refusal must not echo the secret).\n\n2. `bash tests/selftest.sh` prints `SELFTEST: PASS` with `> 350` `  PASS` rows, and one of those rows reads `PASS  \u00a75 set accepted from the directive, receipt records name/set/len only, ambient CF_* scrubbed`.\n\n3. The new arm is INSIDE the existing section 44, so the section count the drift probe reads must not move: `grep -c '^say \"[0-9]*\\.' tests/selftest.sh` prints `52`, and `bash docs/audits/cf099-prd-drift-probe.sh` prints `OK:` at this tip.\n\n4. The arm can fail: move `tests/test_section5_receipt.py` aside in a scratch copy (or break one assertion) and the same `bash tests/selftest.sh` section must print `FAIL  the \u00a75 contract on the receiving side (tests/test_section5_receipt.py)`; a check that cannot print FAIL is decoration (AGENTS.md rule 2).\n\n5. `bash scripts/boardctl validate` prints `RESULT: OK` and `git log -1 --format=%s` names the test change under commit style `<type>: <what> \u2014 <why>. Addresses CF-229.`: PASS: `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/test_section5_receipt.py` exit 0, \"Ran 6 tests\" + \"OK\". Six tests: all 12 SECTION5_VARS accepted (test_every_declared_name_is_accepted_from_the_directive), receipt covers declared set with exactly {set,len} and no credential path (test_receipt_records_which_values_were_passed_without_recording_them), partial set reads set:false (test_partial_set_is_still_reported_name_by_name), harness_env carries directive values + drops ambient CF_SMUGGLED (test_harness_env_carries_the_directive_set_and_scrubs_ambient_cf), two refusal arms by name (CF_NOT_DECLARED, CF_API_KEY_FILE secret not echoed). Worker impl at scripts/node-bus-worker.py:489 directive_vars, :559 section5_receipt, :571 harness_env.\nPartial verdict \u2014 all verified criteria passed\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-06T11:52:35.401444",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-06T11:52:35.421768+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 10058,
+        "truncated": false,
+        "source": "git show 417449ddfff8"
+      }
+    ],
+    "task_id": "CF-229-V2"
+  }
+}
