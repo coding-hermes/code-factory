@@ -1,0 +1,195 @@
+commit 43d8def526868965b7d59f1ceda8919e10113b10
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Fri Nov 6 17:46:13 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Fri Nov 6 17:46:13 2026 -0500
+
+    fix(land-node-branch): run the gate on the already-landed path too (CF-303)
+    
+    The already-landed (idempotence) path reported success without running --gate-cmd.
+    `scripts/land-node-branch.sh` measured the node's tree only on the merge path; when the
+    envelope's commit was already an ancestor of <remote>/<main> it printed
+    `LANDED (already): <branch> @ <commit> in <remote>/<main>` and exited 0 without ever
+    creating the detached worktree the gate is supposed to measure. A commit that landed by
+    another route, or landed and was broken afterwards, was therefore reported as landed-clean
+    by the one check that would have caught it.
+    
+    Measured pre-fix on a scratch bare origin: landing the node branch once with a green gate,
+    then running
+    
+      scripts/land-node-branch.sh --workdir <wd> --branch node/crier/fixture \
+          --commit <sha already in origin/main> --gate-cmd 'exit 99'
+    
+    printed `LANDED (already): ...` and exited 0 — the gate never ran.
+    
+    Fix: the gate block is hoisted verbatim into `run_gate()` (detached worktree at $commit_sha,
+    `bash -c "$GATE"` there, `PASS gate` on 0, last 5 log lines + `refuse gate` on nonzero,
+    `cleanup` on both paths) and is called from BOTH success paths — the already-landed path
+    before the LANDED line, and the existing place in the merge path. Refusal precedence is
+    unchanged: the gate call stays below the `descendant` check, so a branch that needs a rebase
+    is still refused as `descendant` first (probed: stale branch + `--gate-cmd 'exit 99'` refuses
+    `descendant`, no gate row). --dry-run still runs no gate and creates no worktree; the
+    already-landed dry-run path now prints one named row,
+    `note gate "dry-run: not run — a gate worktree would be created at <sha12>"`. Argument
+    parser, refusal vocabulary, push refspec, the no_ff_local guard and the post-push `landed`
+    proof are untouched, and no worktree leaks on either path.
+    
+    Verification: tests/selftest.sh section 42, arm i rewritten into two arms — i1
+    (`already-landed red gate`) asserts exit 1 with the named row
+    `FAIL gate — 'echo fixture gate refused; exit 99' exited 99 at <node2>`, no `LANDED (already)`
+    line and an unmoved HEAD (the pre-fix script exits 0 here, so the arm is red before the fix);
+    i2 (`idempotent re-run`) asserts exit 0, `PASS gate —`, `LANDED (already)`, and both local
+    HEAD and the bare origin's refs/heads/main unchanged. `bash -n scripts/land-node-branch.sh &&
+    bash tests/selftest.sh` ends `SELFTEST: PASS` (exit 0, fails=0).
+---
+ scripts/land-node-branch.sh | 67 +++++++++++++++++++++++++++------------------
+ tests/selftest.sh           | 28 +++++++++++++++----
+ 2 files changed, 62 insertions(+), 33 deletions(-)
+
+diff --git a/scripts/land-node-branch.sh b/scripts/land-node-branch.sh
+index c900ff2..9390db1 100755
+--- a/scripts/land-node-branch.sh
++++ b/scripts/land-node-branch.sh
+@@ -26,9 +26,11 @@
+ # object cannot drift apart.
+ #
+ # Idempotent: a commit already contained in <remote>/<main> is reported as landed, with no
+-# merge and no push. --dry-run runs every read-only check, prints the exact commands it
+-# would run — including the explicit-sha push, which on --no-ff can only be named after the
+-# merge creates it — and changes nothing (no fetch, no gate worktree, no merge, no push).
++# merge and no push — the gate still runs on that path, so "already landed" is reported only
++# after the node's own tree has been measured. --dry-run runs every read-only check, prints the
++# exact commands it would run — including the explicit-sha push, which on --no-ff can only be
++# named after the merge creates it — and changes nothing (no fetch, no gate worktree, no merge,
++# no push).
+ set -uo pipefail
+ HERE="$(cd "$(dirname "$0")" && pwd)"
+ . "$HERE/lib.sh"
+@@ -66,6 +68,36 @@ cleanup() {
+ }
+ trap cleanup EXIT
+ 
++# --- gate: measure the node's tree, not main's --------------------------------------------
++# Every path that reports success runs this, including the already-landed path: being an
++# ancestor of <remote>/<main> proves ancestry, not that the node's own tree is green.
++run_gate() {
++  [ -n "$GATE" ] || return 0
++  if [ "$DRY" -eq 1 ]; then
++    note "dry-run: would run gate '$GATE' in a detached worktree at ${commit_sha:0:12}"
++    return 0
++  fi
++  local wtbase gate_wt gate_rc gate_last
++  wtbase=$(mktemp -d)
++  gate_wt="$wtbase/gate"
++  if ! git -C "$TOP" worktree add --quiet --detach "$gate_wt" "$commit_sha" >/dev/null 2>&1; then
++    rm -rf "$wtbase"
++    refuse gate "cannot create a detached worktree at $commit_sha in $TOP to run '$GATE'"
++  fi
++  GATE_WT="$gate_wt"
++  ( cd "$gate_wt" && bash -c "$GATE" ) >"$wtbase/gate.log" 2>&1
++  gate_rc=$?
++  if [ "$gate_rc" -eq 0 ]; then
++    ok gate "'$GATE' exited 0 at ${commit_sha:0:12} (detached worktree)"
++    cleanup
++  else
++    gate_last=$(last_reason "$wtbase/gate.log")
++    tail -5 "$wtbase/gate.log" 2>/dev/null | sed 's/^/  ..    /'
++    refuse gate "'$GATE' exited $gate_rc at ${commit_sha:0:12} — ${gate_last:-no output}"
++  fi
++  return 0
++}
++
+ while [ $# -gt 0 ]; do
+   case "$1" in
+     --workdir) [ $# -ge 2 ] || { say "refusing: --workdir needs a value"; exit 2; }; WORKDIR="$2"; shift 2 ;;
+@@ -148,13 +180,16 @@ else
+   refuse commit_on_branch "$commit_sha is not reachable from $branch_ref (tip ${branch_sha:0:12})"
+ fi
+ 
+-# Idempotence: the same command twice must change nothing and exit 0.
++# Idempotence: the same command twice must change nothing and exit 0 — and the gate still runs,
++# because "already in <remote>/<main>" is a claim about ancestry, not about the node's tree.
+ if git -C "$TOP" merge-base --is-ancestor "$commit_sha" "$MAIN_REF"; then
+   ok landed "$commit_sha is an ancestor of $REMOTE/$MAIN (${main_sha:0:12}) — already landed"
+   say ""
+   if [ "$DRY" -eq 1 ]; then
++    [ -n "$GATE" ] && note gate "dry-run: not run — a gate worktree would be created at ${commit_sha:0:12}"
+     say "LAND: DRY-RUN — nothing to do, $commit_sha is already in $REMOTE/$MAIN"
+   else
++    run_gate
+     say "LANDED (already): $BRANCH @ $commit_sha in $REMOTE/$MAIN"
+   fi
+   exit 0
+@@ -168,29 +203,7 @@ else
+ fi
+ 
+ # --- gate: measure the node's tree, not main's --------------------------------------------
+-if [ -n "$GATE" ]; then
+-  if [ "$DRY" -eq 1 ]; then
+-    note "dry-run: would run gate '$GATE' in a detached worktree at ${commit_sha:0:12}"
+-  else
+-    wtbase=$(mktemp -d)
+-    gate_wt="$wtbase/gate"
+-    if ! git -C "$TOP" worktree add --quiet --detach "$gate_wt" "$commit_sha" >/dev/null 2>&1; then
+-      rm -rf "$wtbase"
+-      refuse gate "cannot create a detached worktree at $commit_sha in $TOP to run '$GATE'"
+-    fi
+-    GATE_WT="$gate_wt"
+-    ( cd "$gate_wt" && bash -c "$GATE" ) >"$wtbase/gate.log" 2>&1
+-    gate_rc=$?
+-    if [ "$gate_rc" -eq 0 ]; then
+-      ok gate "'$GATE' exited 0 at ${commit_sha:0:12} (detached worktree)"
+-      cleanup
+-    else
+-      gate_last=$(last_reason "$wtbase/gate.log")
+-      tail -5 "$wtbase/gate.log" 2>/dev/null | sed 's/^/  ..    /'
+-      refuse gate "'$GATE' exited $gate_rc at ${commit_sha:0:12} — ${gate_last:-no output}"
+-    fi
+-  fi
+-fi
++run_gate
+ 
+ head_sha=$(git -C "$TOP" rev-parse --verify HEAD)
+ if [ "$FF_ONLY" -eq 1 ] && ! git -C "$TOP" merge-base --is-ancestor "$head_sha" "$commit_sha"; then
+diff --git a/tests/selftest.sh b/tests/selftest.sh
+index 0a60584..622b73e 100755
+--- a/tests/selftest.sh
++++ b/tests/selftest.sh
+@@ -2587,15 +2587,31 @@ else
+   say "  FAIL  the remote does not contain the landed commit"; fails=$((fails+1))
+ fi
+ 
+-# i. the same command twice changes nothing (the second run does not even run the gate)
++# i. the same command twice changes nothing — and the gate still runs on the already-landed
++# path, because ancestry is not evidence that the node's own tree is green. i1 asserts a red
++# gate is a refusal there (the pre-fix script printed LANDED (already) and exited 0 without ever
++# running --gate-cmd); i2 asserts idempotence survives: exit 0, the gate row printed, no ref moved.
+ head_before=$(git -C "$tmpd/wd" rev-parse HEAD)
+-cf213 "idempotent re-run" 0 "  PASS  landed — $node2 is an ancestor of origin/main" \
+-  --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$node2" --gate-cmd 'exit 99'
+-if printf '%s\n' "$out" | grep -Fq "LANDED (already)" \
++origin_before=$(git -C "$tmpd/origin.git" rev-parse refs/heads/main)
++cf213 "already-landed red gate" 1 "  FAIL  gate — 'echo fixture gate refused; exit 99' exited 99 at ${node2:0:12}" \
++  --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$node2" --gate-cmd 'echo fixture gate refused; exit 99'
++if ! printf '%s\n' "$out" | grep -Fq "LANDED (already)" \
+   && [ "$(git -C "$tmpd/wd" rev-parse HEAD)" = "$head_before" ]; then
+-  say "  PASS  second run exited $rc with no merge and no push"
++  say "  PASS  a red gate on an already-landed commit refused and moved no ref (main ${head_before:0:12})"
++else
++  say "  FAIL  a red gate on an already-landed commit printed LANDED or moved a ref"; fails=$((fails+1))
++  printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++cf213 "idempotent re-run" 0 "  PASS  gate — 'test -f node.txt' exited 0 at ${node2:0:12} (detached worktree)" \
++  --workdir "$tmpd/wd" --branch node/crier/fixture --commit "$node2" --gate-cmd 'test -f node.txt'
++if printf '%s\n' "$out" | grep -Fq "LANDED (already)" \
++  && printf '%s\n' "$out" | grep -Fq "  PASS  gate —" \
++  && [ "$(git -C "$tmpd/wd" rev-parse HEAD)" = "$head_before" ] \
++  && [ "$(git -C "$tmpd/origin.git" rev-parse refs/heads/main)" = "$origin_before" ]; then
++  say "  PASS  second run exited $rc, ran the gate, and moved no ref — main ${head_before:0:12}, origin/main ${origin_before:0:12}"
+ else
+-  say "  FAIL  second run changed the tree"; fails=$((fails+1))
++  say "  FAIL  second run changed the tree or did not run the gate"; fails=$((fails+1))
++  printf '%s\n' "$out" | sed 's/^/    | /'
+ fi
+ 
+ # j. a push the remote refuses must not print a success row: the merge is local, the landing not
