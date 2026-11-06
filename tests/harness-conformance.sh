@@ -685,7 +685,15 @@ and removes that HOME afterwards unless `HC_KEEP_APPLY=1`.
 - **Not a gate on its own.** `tests/selftest.sh` §44 proves this battery can go red. A battery that
   cannot report FAIL is decoration, and the fixture arms are what keep it honest.
 TEXT
-  } > "$DOC"
+  } | sed "s|$HOME|~|g" > "$DOC"
+  # A measured value may quote an absolute binary path (leg_smoke now does). This repo is
+  # public, so the generated artifact renders the operator's home as ~ and this check makes
+  # that property falsifiable: remove the sed above and this row turns FAIL.
+  if grep -qF -- "$HOME" "$DOC"; then
+    emit "battery" "doc-home-path" FAIL "the generated matrix still names $HOME — a public repo publishes ~, not a host layout"
+  else
+    emit "battery" "doc-home-path" PASS "no absolute home path in ${DOC#"$HERE"/} ($(wc -l < "$DOC") lines; \$HOME rendered as ~)"
+  fi
   note_row "doc written: ${DOC#"$HERE"/}"
 }
 
