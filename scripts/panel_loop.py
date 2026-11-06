@@ -111,7 +111,9 @@ def run_writer(rnd: int, chapters: list[str] | None, timeout_s: int) -> tuple[bo
         "-Q", "--ignore-rules", "--max-turns", "200",
     ]
     with log.open("w") as fh:
-        rc = subprocess.call(cmd, stdout=fh, stderr=subprocess.STDOUT, cwd=str(ROOT))
+        # The call's status is never read — completion is judged from the log text below — so it is
+        # dropped rather than left to red the tracked python surface that selftest.sh §51 grades.
+        subprocess.call(cmd, stdout=fh, stderr=subprocess.STDOUT, cwd=str(ROOT))
     ok = "WRITER ROUND COMPLETE" in log.read_text(errors="replace")
     return ok, log
 

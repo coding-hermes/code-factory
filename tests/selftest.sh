@@ -926,6 +926,9 @@ if [ -n "${FIXTURE_LOG:-}" ]; then
   printf '\n' >> "$FIXTURE_LOG"
 fi
 case "$1" in
+  # CF-051: a supplied --agent is proved to exist before any success row; this fixture's
+  # agent exists, so the reuse path still runs as it did.
+  info) exit 0 ;;
   spawn) printf '%s\n' "$2" > "$FIXTURE_AGENT" ;;
   cp) [ "${FIXTURE_CP_FAIL:-0}" = 0 ] || { echo 'fixture copy refused' >&2; exit 1; } ;;
   exec) case "$*" in *NODE_PROJECT=*)
@@ -1966,6 +1969,7 @@ with tempfile.TemporaryDirectory(prefix="cf159-") as directory:
     executable(scripts / "verify-node.sh", "#!/bin/bash\nexit 0\n")
     executable(binary / "bunker", '''#!/bin/bash
 case "$1" in
+  info) exit 0 ;;   # CF-051: the reused agent exists, so the payload arms still reach staging
   cp) exit 0 ;;
   exec)
     case "${!#}" in
@@ -4586,6 +4590,98 @@ fi
 rm -rf "$tmpd"
 # END master-doc-reachability
 # END master-doc-selection
+
+# CF-051: `--agent` is a REUSE, not a claim. Pre-fix, a supplied id was reported as reused without
+# any check, so a nonexistent agent produced
+#   PASS  spawn — reusing ghost-agent
+# and work proceeded into staging; the operator only learned the truth from an unrelated
+# downstream failure. Three arms share one PATH stub (no network, no real bunker): INFO_FAIL=1
+# for the red arm, 0 for the green control, and the pre-fix revision re-run against the same
+# fixture so the check keeps a demonstrable red. Every assertion names its row.
+say "53. node-create refuses a --agent that does not exist, before any staging (CF-051)"
+tmpd=$(mktemp -d)
+mkdir -p "$tmpd/scripts/harness" "$tmpd/bin"
+staged=$(bash "$HERE/scripts/node-create.sh" --staged-files); staged_rc=$?
+if [ "$staged_rc" -eq 0 ]; then
+  while IFS= read -r file; do
+    cp "$HERE/scripts/$file" "$tmpd/scripts/$file" || fails=$((fails+1))
+  done <<< "$staged"
+else
+  say "  FAIL  CF-051 fixture cannot stage the tree (manifest exit $staged_rc)"; fails=$((fails+1))
+fi
+cp "$HERE/scripts/node-create.sh" "$tmpd/scripts/" || fails=$((fails+1))
+printf '#!/usr/bin/env bash\nexit 0\n' > "$tmpd/scripts/verify-node.sh"
+chmod +x "$tmpd/scripts/verify-node.sh"
+cat > "$tmpd/bin/bunker" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  info)
+    printf 'info %s\n' "${2:-}" >> "${FIXTURE_LOG:?}"
+    [ "${FIXTURE_INFO_FAIL:-0}" = 0 ] || { echo "agent ${2:-}: no such agent" >&2; exit 1; }
+    ;;
+  spawn|cp|exec) printf '%s\n' "$*" >> "${FIXTURE_LOG:?}" ;;
+  *) echo 'unexpected bunker command' >&2; exit 99 ;;
+esac
+EOF
+chmod +x "$tmpd/bin/bunker"
+# The stub records every invocation to FIXTURE_LOG, so a staging call is countable, not inferred.
+cf051_run() {  # cf051_run <node-create path> <info-fails 0|1> <log>
+  : > "$3"
+  env -i HOME="$tmpd/control-home" PATH="$tmpd/bin:/usr/bin:/bin" BUNKER_SERVER=fixture-server \
+    CRIER_URL=http://fixture.invalid:8767 NODE_DISK_FLOOR=1 \
+    FIXTURE_INFO_FAIL="$2" FIXTURE_LOG="$3" \
+    /bin/bash "$1" --project fixture --agent ghost-agent 2>&1
+}
+missing_row='  FAIL  agent — ghost-agent not found on fixture-server — spawn it (drop --agent) or pass an existing agent id'
+reuse_row='  PASS  spawn — reusing ghost-agent'
+# ARM 1 (red): the id does not exist -> one named FAIL naming id and remedy, exit 1, no staging.
+out=$(cf051_run "$tmpd/scripts/node-create.sh" 1 "$tmpd/red.log"); rc=$?
+if [ "$rc" -eq 1 ] \
+  && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$missing_row")" = 1 ] \
+  && ! printf '%s\n' "$out" | grep -Fq -- "$reuse_row" \
+  && grep -aFq 'info ghost-agent' "$tmpd/red.log" \
+  && ! grep -aEq '^(spawn|cp|exec)( |$)' "$tmpd/red.log" \
+  && ! printf '%s\n' "$out" | grep -Eq 'unbound variable|^unexpected bunker command|line [0-9]+:'; then
+  say "  PASS  missing --agent -> named FAIL agent, exit $rc, info probed, zero staging calls"
+else
+  say "  FAIL  missing --agent was not refused before staging (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+  sed 's/^/    log| /' "$tmpd/red.log"
+fi
+# ARM 2 (green control): the id exists -> the reuse row prints and staging is reached, so the new
+# check is a real test, not a blanket refusal of --agent.
+out=$(cf051_run "$tmpd/scripts/node-create.sh" 0 "$tmpd/green.log"); rc=$?
+if [ "$rc" -eq 0 ] \
+  && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$reuse_row")" = 1 ] \
+  && ! printf '%s\n' "$out" | grep -Eq '^  FAIL  ' \
+  && [ "$(grep -acE '^(spawn|cp|exec)( |$)' "$tmpd/green.log")" -gt 0 ] \
+  && printf '%s\n' "$out" | grep -Fq 'NODE CREATED: ghost-agent'; then
+  say "  PASS  existing --agent -> reuse row printed, staging reached, node created (exit $rc)"
+else
+  say "  FAIL  existing --agent was refused or never reached staging (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+# ARM 3 (pre-fix control): the same fixture against the revision the row was raised on must still
+# print the false PASS and stage into the absent agent, or this section proves nothing.
+mkdir -p "$tmpd/before"
+cp -a "$tmpd/scripts/." "$tmpd/before/" 2>/dev/null
+if git -C "$HERE" show 943ef98:scripts/node-create.sh > "$tmpd/before/node-create.sh" 2>/dev/null; then
+  out=$(cf051_run "$tmpd/before/node-create.sh" 1 "$tmpd/before.log"); rc=$?
+  if [ "$rc" -eq 0 ] \
+    && printf '%s\n' "$out" | grep -Fxq -- "$reuse_row" \
+    && [ "$(grep -acE '^(spawn|cp|exec)( |$)' "$tmpd/before.log")" -gt 0 ] \
+    && ! printf '%s\n' "$out" | grep -Fq -- "$missing_row"; then
+    say "  PASS  pre-fix revision reports the false reuse row and stages anyway (fixture detects CF-051)"
+  else
+    say "  FAIL  pre-fix control did not reproduce the false reuse (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+else
+  say "  FAIL  pre-fix source unavailable (git show 943ef98:scripts/node-create.sh)"
+  fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+# END cf051-agent-reuse
 
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

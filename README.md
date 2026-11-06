@@ -151,7 +151,9 @@ instead of implying it works.
 `--ref <branch>` on the step 3 create command; `scripts/node-create.sh` forwards it and the node
 clones that branch or tag (`scripts/project-node.sh` accepts the same flag directly). A missing ref
 reports that ref and the `--ref` flag; a repository-access failure retains the deploy-key hint for
-private repositories (CF-034).
+private repositories (CF-034). `--agent ID` reuses an agent that must **already exist** on the
+server: the create path proves it with `bunker info` before any success row or staging, prints a
+named `FAIL agent` naming the id and the remedy otherwise, and never spawns an agent you named.
 
 See `.coding-hermes/board/tasks.jsonl` for the work items and their acceptance criteria. The
 ordered path from this table to one landed result — P0 through P3, each with a command as its exit

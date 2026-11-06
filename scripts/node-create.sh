@@ -6,6 +6,9 @@
 #
 # Spawns the agent if needed, stages the scripts into it, runs project-node.sh --apply inside,
 # then runs verify-node.sh. Idempotent: an existing agent is reused, not respawned.
+# --agent reuses an agent that must ALREADY exist on the server: it is proved with `bunker info`
+# before any success row and before staging, never spawned, and a missing id is a named
+# `FAIL agent` that names the remedy and exits 1 without touching the agent (CF-051).
 # --ref is the branch or tag the node clones; it defaults to main (or $NODE_REF) and is the
 # remedy project-node.sh names when a repo's default branch is not main.
 # On failure, retain a newly spawned agent for diagnosis and print its exact, explicit-server
@@ -87,13 +90,13 @@ if [ -z "$SERVER" ]; then
   bad "server_declared" "BUNKER_SERVER unset — no agent host to create the node on"
   incomplete
 fi
-[ -z "$PROJECT" ] && { echo "usage: $0 --project P --repo URL [--ref R] [--harness H] [--agent ID]"; exit 2; }
+[ -z "$PROJECT" ] && { echo "usage: $0 --project P --repo URL [--ref R] [--harness H] [--agent ID]"; echo "       --agent ID reuses an agent that must already exist on the server; it is never spawned"; exit 2; }
 
 b=$(have bunker) || { echo "bunker client missing" >&2; exit 1; }
 
 say "node-create — project=$PROJECT harness=$HARNESS server=$SERVER"
 
-# 1. an agent to live in
+# 1. an agent to live in — spawned when unnamed, reused (and proved to exist) when --agent is given
 if [ -z "$AGENT" ]; then
   AGENT="node-$PROJECT-$(date +%H%M%S)"
   say "  ..    spawning $AGENT (ttl $TTL)"
@@ -101,6 +104,14 @@ if [ -z "$AGENT" ]; then
   SPAWNED=1
   ok "spawn" "$AGENT"
 else
+  # A supplied agent is reused and never spawned, so it has to exist. Prove that before the
+  # success row and before any staging call: otherwise a typo is reported as a reuse, work
+  # proceeds into a nonexistent agent, and the operator learns the truth from an unrelated
+  # downstream failure (CF-051).
+  if ! "$b" info "$AGENT" --server "$SERVER" >/dev/null 2>&1; then
+    bad "agent" "$AGENT not found on $SERVER — spawn it (drop --agent) or pass an existing agent id"
+    exit 1
+  fi
   ok "spawn" "reusing $AGENT"
 fi
 
