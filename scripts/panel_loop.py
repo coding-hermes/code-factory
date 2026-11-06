@@ -94,6 +94,13 @@ def writer_prompt(rnd: int, chapters: list[str] | None) -> str:
         "green chapter without evidence; never adopt the document over the code — if they "
         "disagree the code wins and the disagreement is a finding you file in this round. "
         "Write to docs/handbook/chapters/<chapter-id>-<slug>.md. "
+        "ALIGNMENT IS CHECKED, NOT REMEMBERED: section 6 of every chapter must cite the "
+        "CANONICAL contract ids CT-01..CT-18 from OUTLINE Part IV, not local ids like "
+        "M2-C1 — two chapters describing the same interface from opposite ends must carry "
+        "the same CT id or nothing can verify they agree. "
+        "Before you finish, run `python3 scripts/handbook_spine.py` and drive its finding "
+        "count to zero; paste the summary line into your manifest. "
+
         "End by printing a manifest: chapters written, chapters still skeleton, RED field "
         "count per chapter, and every command you ran with its exit status. "
         "Print WRITER ROUND COMPLETE when done. Round %d." % rnd
@@ -146,6 +153,11 @@ Check every chapter against the four rules that make a claim admissible:
 3. **Consequence** — does each setting carry default, range and what breaks if changed?
    A name with no consequence is `NAME ONLY` and counts as unwritten.
 4. **Repeatable** — if you cannot repeat the verification command yourself, say so.
+
+Also run `python3 scripts/handbook_spine.py` and treat every finding it reports as a
+blocking finding of kind CONTRADICTION: an unregistered canonical contract id, a setting
+documented twice with different defaults, a dangling reference, or a count claim that
+disagrees with what the chapters actually contain.
 
 Also hunt: a claim contradicted by the code (`FALSE CLAIM`), a chapter that omits what the
 code plainly does (`OMISSION`), two chapters that disagree (`CONTRADICTION`), a chapter no
