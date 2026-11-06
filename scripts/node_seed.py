@@ -13,6 +13,11 @@ This script is a three-part contract:
   --apply   on the node: extract the tarball into $HOME/.hermes, verify each
             file against the record BEFORE installing it, and write what was
             applied and when. A digest mismatch refuses the whole seed.
+            Without --force, apply is non-destructive: a file the node
+            modified, or wrote itself, is left in place and reported as
+            `preserved` (still exit 0), and only new or byte-identical files
+            land. With --force, prompts/ and skills/ are replaced wholesale
+            and every changed, removed or local-only file is named first.
   --check   on either side: compare what is on disk with what was recorded and
             exit 1 on any drift, naming the path.
 
@@ -159,6 +164,36 @@ def load_record(path: str) -> dict:
         return json.load(fh)
 
 
+def _walk_files(root: str) -> set[str]:
+    """Relative paths of every regular file under root (empty if absent)."""
+    if not os.path.isdir(root):
+        return set()
+    found: set[str] = set()
+    for dirpath, _dirnames, filenames in os.walk(root):
+        for name in filenames:
+            found.add(os.path.relpath(os.path.join(dirpath, name), root))
+    return found
+
+
+def _previous_seeded(hermes: str) -> set[str]:
+    """Relative paths recorded by the last apply into this home, or empty.
+
+    Separates a node-only file that a previous seed shipped (a source file
+    since removed) from one the operator wrote by hand. An absent or unreadable
+    record degrades to the empty set, which errs toward calling a node-only
+    file local-only rather than mis-labelling it removed.
+    """
+    record_path = os.path.join(hermes, "seed-applied.json")
+    if not os.path.isfile(record_path):
+        return set()
+    try:
+        with open(record_path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        return {f["path"] for f in data.get("files", [])}
+    except (OSError, ValueError, TypeError, AttributeError, KeyError):
+        return set()
+
+
 def apply_seed(args: argparse.Namespace) -> int:
     record = load_record(args.record)
     home = os.path.expanduser(args.home)
@@ -193,16 +228,60 @@ def apply_seed(args: argparse.Namespace) -> int:
             return 1
         ok("seed_digest", "all %d files match the record" % len(record["files"]))
 
-        # prompts/ and skills/ are replaced as directories so a deleted source
-        # file does not survive on the node as a ghost.
+        # prompts/ and skills/ are compared path-by-path BEFORE anything is
+        # replaced, so a node-local edit is never deleted or overwritten
+        # without --force. Without --force the destination is never rmtree'd:
+        # a changed, removed or local-only file is left exactly as the node has
+        # it and reported as preserved; only new and byte-identical files land.
+        previous = _previous_seeded(hermes)
         for top in ("prompts", "skills"):
             dst = os.path.join(hermes, top)
             src = os.path.join(staging, top)
             if not os.path.isdir(src):
                 continue
-            if os.path.isdir(dst):
-                shutil.rmtree(dst)
-            shutil.copytree(src, dst)
+
+            src_files = _walk_files(src)
+            dst_files = _walk_files(dst)
+            new: list[str] = []
+            changed: list[str] = []
+            removed: list[str] = []
+            local_only: list[str] = []
+            for rel in sorted(src_files):
+                if rel not in dst_files:
+                    new.append(rel)
+                elif sha256_file(os.path.join(src, rel)) != sha256_file(os.path.join(dst, rel)):
+                    changed.append(rel)
+            for rel in sorted(dst_files - src_files):
+                if (top + "/" + rel) in previous:
+                    removed.append(rel)
+                else:
+                    local_only.append(rel)
+
+            if args.force:
+                for rel in new:
+                    note("new %s" % (top + "/" + rel))
+                for rel in changed:
+                    note("changed %s" % (top + "/" + rel))
+                for rel in removed:
+                    note("removed %s" % (top + "/" + rel))
+                for rel in local_only:
+                    note("local-only %s (removed by --force)" % (top + "/" + rel))
+                if os.path.isdir(dst):
+                    shutil.rmtree(dst)
+                shutil.copytree(src, dst)
+            else:
+                for rel in new:
+                    note("new %s" % (top + "/" + rel))
+                    target = os.path.join(dst, rel)
+                    os.makedirs(os.path.dirname(target), exist_ok=True)
+                    shutil.copy2(os.path.join(src, rel), target)
+                for rel in changed:
+                    note("preserved %s (changed locally; --force to replace)" % (top + "/" + rel))
+                for rel in removed:
+                    note("preserved %s (removed from seed; --force to remove)" % (top + "/" + rel))
+                for rel in local_only:
+                    note("preserved %s (locally modified; --force to replace)" % (top + "/" + rel))
+
             ok("seed_install", "%s/ installed (%d files)" % (top, sum(len(f) for _, _, f in os.walk(dst))))
 
         applied = dict(record)
@@ -257,6 +336,8 @@ def main(argv: list[str]) -> int:
     a.add_argument("--tar", required=True)
     a.add_argument("--record", required=True)
     a.add_argument("--home", default="~")
+    a.add_argument("--force", action="store_true", default=False,
+                   help="replace prompts/ and skills/ wholesale, overwriting node-local edits")
 
     c = sub.add_parser("check", help="compare the node against the record")
     c.add_argument("--record", required=True)

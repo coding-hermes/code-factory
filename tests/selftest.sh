@@ -3254,6 +3254,64 @@ fi
 
 rm -rf "$seed_tmp" "$seed_home" "$seed_home2"
 
+# --- node_seed.py: apply preserves local edits unless --force (CF-288) -------------------------
+# The failure this closes: apply_seed() used to rmtree prompts/ and skills/
+# before copying, so a hand-written or hand-edited file on the node was
+# deleted or overwritten with no per-path report. Without --force the node
+# must keep every file it would lose or mutate, and name each one, by path.
+
+say ""
+say "node_seed - apply is non-destructive unless --force (CF-288)"
+
+seed_nt=$(mktemp -d); seed_home288=$(mktemp -d)
+SEED_REPO="$(cd "$(dirname "$0")/.." && pwd)"
+out=$(python3 -B "$SEED" build --manifest "$SEED_MANIFEST" --repo-root "$SEED_REPO" --out "$seed_nt/seed.tar" 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && [ -f "$seed_nt/seed.tar.json" ]; then
+  say "  PASS  CF-288 fixture seed built (exit $rc)"
+else
+  say "  FAIL  CF-288 fixture seed did not build (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# (a): a fresh apply into an empty home lands the seed.
+out=$(python3 -B "$SEED" apply --tar "$seed_nt/seed.tar" --record "$seed_nt/seed.tar.json" --home "$seed_home288" 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && [ -f "$seed_home288/.hermes/prompts/foreman.md" ]; then
+  say "  PASS  CF-288 fixture fresh apply landed a seed (exit $rc)"
+else
+  say "  FAIL  CF-288 fixture fresh apply did not land a seed (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# (b): a local edit to a seeded prompt, plus a note the seed never shipped.
+printf '\n# local edit CF-288\n' >> "$seed_home288/.hermes/prompts/foreman.md"
+printf '# a note nobody seeded\n' > "$seed_home288/.hermes/prompts/local-notes.md"
+
+# (c): re-apply WITHOUT --force keeps both local files and names each one.
+out=$(python3 -B "$SEED" apply --tar "$seed_nt/seed.tar" --record "$seed_nt/seed.tar.json" --home "$seed_home288" 2>&1); rc=$?
+if [ "$rc" -eq 0 ] \
+  && grep -q 'local edit CF-288' "$seed_home288/.hermes/prompts/foreman.md" \
+  && [ -f "$seed_home288/.hermes/prompts/local-notes.md" ] \
+  && printf '%s\n' "$out" | grep -Fq 'preserved prompts/foreman.md' \
+  && printf '%s\n' "$out" | grep -Fq 'preserved prompts/local-notes.md'; then
+  say "  PASS  re-apply without --force preserves a changed prompt and a local note, naming both (exit $rc)"
+else
+  say "  FAIL  re-apply without --force did not preserve local edits or name them (exit $rc)"
+  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# (d): re-apply WITH --force replaces the prompt wholesale and names it.
+out=$(python3 -B "$SEED" apply --tar "$seed_nt/seed.tar" --record "$seed_nt/seed.tar.json" --home "$seed_home288" --force 2>&1); rc=$?
+if [ "$rc" -eq 0 ] \
+  && ! grep -q 'local edit CF-288' "$seed_home288/.hermes/prompts/foreman.md" \
+  && printf '%s\n' "$out" | grep -Fq 'changed prompts/foreman.md'; then
+  say "  PASS  re-apply with --force overwrites the changed prompt and names it (exit $rc)"
+else
+  say "  FAIL  re-apply with --force did not overwrite the local edit or name it (exit $rc)"
+  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+rm -rf "$seed_nt" "$seed_home288"
+
 # BEGIN cf250-seed-drift
 say "48. verify-node.sh folds the seed record: a node's seeded prompts and skills are the digests the seed named (CF-250)"
 # The failure this closes: node_seed.py check can refuse a drifted seed (CF-220) but nothing on
