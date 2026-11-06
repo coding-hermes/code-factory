@@ -9,14 +9,41 @@ way to give a new project the same shape is to clone a live row.
 Usage:
   clone_lane.py --from crier-docs --to code-factory-docs --workdir <path> \
                 --namespace docs --parent code-factory --prompt prompts/docs.md
+
+`--to` must differ from `--from`. This script REFUSES a `--to` equal to its `--from`, before it
+opens the database at all: a lane cannot be its own clone, and treating the source as the
+destination rewrites — and disables — a LIVE lane instead of failing. The refusal exits 2 and
+names both arguments:
+
+  REFUSED: --to and --from are the same lane (code-factory-docs); refusing to rewrite the source row
+
+`--db` names the scheduler database; it defaults to $SCHEDULER_DB when that is set, else
+~/.hermes/coding-hermes/scheduler.db.
 """
 
 import argparse
 import os
 import sqlite3
+import sys
 import time
 
-DB = os.path.expanduser("~/.hermes/coding-hermes/scheduler.db")
+
+def default_db():
+    """The scheduler DB: $SCHEDULER_DB when set, else the host default."""
+    return os.environ.get("SCHEDULER_DB") or os.path.expanduser(
+        "~/.hermes/coding-hermes/scheduler.db"
+    )
+
+
+def refuse_same_lane(lane):
+    """Stop before any DB work: the source row is not a clone destination."""
+    print(
+        f"REFUSED: --to and --from are the same lane ({lane}); "
+        "refusing to rewrite the source row",
+        file=sys.stderr,
+    )
+    print(f"  --from={lane} --to={lane}", file=sys.stderr)
+    raise SystemExit(2)
 
 
 def main():
@@ -27,9 +54,20 @@ def main():
     ap.add_argument("--namespace", required=True)
     ap.add_argument("--parent", required=True)
     ap.add_argument("--prompt")
+    ap.add_argument(
+        "--db",
+        default=default_db(),
+        help="scheduler database (default: $SCHEDULER_DB, else "
+        "~/.hermes/coding-hermes/scheduler.db)",
+    )
     a = ap.parse_args()
 
-    con = sqlite3.connect(DB, timeout=60)
+    # CF-357: refuse BEFORE sqlite3.connect. Same name would fetch the source row, rewrite it
+    # as the destination, then UPDATE ... WHERE name=<same name> — disabling a live lane.
+    if a.src == a.dst:
+        refuse_same_lane(a.dst)
+
+    con = sqlite3.connect(a.db, timeout=60)
     con.execute("PRAGMA busy_timeout=60000")
     con.row_factory = sqlite3.Row
 

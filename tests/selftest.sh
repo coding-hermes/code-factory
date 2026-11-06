@@ -519,6 +519,16 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_disk_floor.py" >/dev/n
 else
   say "  FAIL  disk floor contract"; fails=$((fails+1))
 fi
+# CF-357: a lane may not be cloned onto itself. `--from X --to X` used to rewrite the source
+# row as the destination and disable a LIVE lane. The arm proves the refusal lands before any
+# database is opened: exit 2, stderr naming --to/--from and the lane, the source row unchanged,
+# and a genuine clone still succeeding so the guard is not a blanket break. Part of section 12:
+# no new numbered section and no census change (arms_tree stays 55), like the CF-230 block below.
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_clone_lane.py" >/dev/null 2>&1; then
+  say "  PASS  CF-357 clone_lane same-lane clone refused before the DB open, source row intact, genuine clone still lands"
+else
+  say "  FAIL  CF-357 clone_lane same-lane refusal contract"; fails=$((fails+1))
+fi
 # CF-230: harness selection resolves in one place (specs/HARNESS-MATRIX.md §4). Part of
 # section 12: no new numbered section and no census change (arms_tree stays 55). The test
 # drives the real CLI and reads the shipped matrix, so a hardcoded table or a silent
