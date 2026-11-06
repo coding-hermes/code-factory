@@ -171,3 +171,101 @@ Re-checked at `2787611`: five P0 rows are still `in_progress` (`CF-001`, `CF-002
 release surface is still absent (`git ls-remote --tags` = 0, `gh api .../releases` = 0, no `VERSION`,
 no `CHANGELOG`, version scheme still owned by `CF-161`). Decision 1 rule **R2** fires and Decision 1b
 independently forbids an invented first tag. No tag, no Release object, no artifact.
+
+## Pass 3 correction — the tailnet census published in pass 2 was an undercount
+
+Third delivery of the same tick id, measured 2026-11-06T11:38–11:52Z at the served tip `e8d1248`
+(= `origin/main`). Pass 3 did **not** re-run the sweep, did **not** re-cut, and did **not** replay the
+suite: `git diff --name-only 130e235..e8d1248` and `git diff --name-only 2787611..e8d1248` both list
+only `.coding-hermes/board/{tasks,events}.jsonl` plus this document — zero BUILD-INPUT files, so pass
+1's `SELFTEST: PASS` and pass 2's re-proof stand by tree identity. The gate itself did **not** stand,
+which is the first finding below.
+
+Re-anchored after the fact: two sibling commits landed between that measurement and this carrier —
+`c3f7932` (the doc scope repair) and `417449d` (a CF-229 harness test). Neither touches a quantified
+surface: the census re-reads 45 occurrences / 14 files and 2555 / 550 at the rebased tip, identical to
+the figures in this section, and the carrier is gated there rather than at the sha that was measured.
+
+What it did do is re-measure the figure a later audit would have to trust, and both quantity and
+scope in pass 2's published census are wrong.
+
+| Scope | pass 2 published | measured at pass 2's OWN tip `2787611` | measured at served tip `e8d1248` |
+|---|---|---|---|
+| all tracked files | 17 occurrences / 11 files | **36 / 13** | **45 / 14** |
+| under `.gitreins/` | 12 (implied by the split) | 17 / 8 bundles | 17 / 8 bundles |
+| under `.coding-hermes/board/` | not counted | 12 / 2 | **18 / 2** |
+| neither | "exactly 5 / 3" | 7 / 4 | **10 / 4** |
+
+Per-file at `e8d1248`. This section deliberately does **not** reprint an address, because reprinting
+is what has been driving the growth:
+
+| Path | Occurrences |
+|---|---|
+| `.coding-hermes/board/tasks.jsonl` | 13 |
+| `docs/handbook/appendices/units/05-scripts-bunker-provision-sh.md` | 5 |
+| `.coding-hermes/board/events.jsonl` | 5 |
+| `docs/audits/code-factory-releng-2026-11-06.md` (this file) | 3 |
+| `.gitreins/history/…` (8 verdict bundles) | 17 |
+| `docs/handbook/appendices/units/06-scripts-bunker-server-install-sh.md` | 1 |
+| `docs/MASTER-DOC-SCHEMA.md` | 1 |
+
+Two findings follow, and the second is the one that matters:
+
+1. **The published total was the judge-bundle subtotal.** `17 / 11` is exactly the `.gitreins` count at
+   both tips, so pass 2 appears to have published a scoped count as the total — an inference from the
+   numbers only, because the command that produced it was not recorded. A reader of that figure would
+   have concluded the class was half its real size and would have looked in the wrong place.
+2. **The audit chain is now the fastest-growing contributor, and this lane authors it.** Between
+   `2787611` and `e8d1248` the class grew by nine occurrences — this document +3, board
+   `tasks.jsonl` +3 (the CF-378 note), board `events.jsonl` +3 (pass 2's own audit event) — every one
+   of them written by pass 2 of this tick, to prove that addresses were exposed. A sweep that prints
+   an address to prove an address is exposed makes the exposure worse. CF-378's remedy scope is
+   therefore widened: scrubbing `docs/audits/*.md` and board event detail text is part of the fix, not
+   an afterthought, and later censuses publish counts and paths only.
+
+Host paths re-measured at the served tip for the same reason: **2555 occurrences / 550 files**
+(pass 2: 2554 / 550 at `2787611`). The one-occurrence delta is the scratch path inside board event
+`497` — same mechanism.
+
+**Evidence-boundary correction.** Pass 2's addendum states "Measured 2026-11-06T11:34:37–11:39Z", but
+its commit landed at `11:37:46Z` and the selftest leg it quotes ran `11:34:37→11:35:29Z`. A
+measurement window cannot end after the artifact that reports it was frozen; the corrected window is
+`11:34:37–11:37:27Z`, the instant board event `497` closed.
+
+### The served tip was gate-RED, and pass 2 published it as green
+
+The most material finding of this pass is not in the census: it is that `e8d1248` — the tip a reader
+is served — **fails the repository's own gate**. `bash tests/selftest.sh` there ends
+`SELFTEST: FAIL (1)`, the failing arm being
+`FAIL  audit-scope: docs/audits/code-factory-releng-2026-11-06.md:143 gitleaks claim names no --log-opts`
+— pass 2's own "Working-tree secrets" row, which named a scan result without naming the scan scope.
+
+The regression is isolated to pass 2's carrier by grading each ref's document with the repository's own
+checker (`scripts/check_scan_scope.py`, which requires any line naming `gitleaks` to name `--log-opts`
+on the same line):
+
+| Ref | Carrier | `check_scan_scope.py` |
+|---|---|---|
+| `2787611` | pass 1 | `OK  audit-scope: 2 gitleaks claim(s) name their --log-opts` → `RESULT: OK` |
+| `e8d1248` | pass 2 | `FAIL  audit-scope: …:143 gitleaks claim names no --log-opts` → `RESULT: FAIL (1 violation(s))` |
+
+Pass 2's "SELFTEST: PASS" was true of `2787611`, the tree it measured, and it was published as the state
+of the tip it was writing to. It never gated its own carrier: it measured before writing the addendum,
+committed through a clone (which carries no commit-time hooks), and pushed. A green measured at the
+parent is not a green at the carrier — this is the posture-doc trap in its ordinary form, a bookkeeping
+commit that adds a scanner line without the scope flag and reds a tip whose code commit was green.
+
+Repair: the row now names its scope — but this pass did not land that repair. A **sibling foreman**
+committed it at `c3f7932` ("name the scan scope on the releng pass-2 working-tree secrets row") while
+this pass was preparing its own edit of the same line; this pass dropped its duplicate text and kept
+the sibling's. Two lanes reaching the same defect from opposite directions, minutes apart, is the
+strongest form of the finding: `e8d1248` was red on the published default branch and no lane had gated
+it. What this pass contributes is the per-ref isolation above, the corrected census, the corrected
+measurement window, and a re-gate of the rebased carrier through the repository's own pre-commit guard.
+
+Release decision unchanged and re-checked at `e8d1248`: **NO TAG** — rule **R2** (P0 rows
+`CF-001`, `CF-002`, `CF-004`, `CF-005`, `CF-139` still `in_progress`; `CF-227`, `CF-229`, `CF-252`
+still `pending`) plus Decision 1b (0 published tags, 0 Release objects, no `VERSION`, no `CHANGELOG`,
+release surface owned by `CF-161`). Hosted CI re-probed and still absent by design — `gh run list` =
+`[]`, `gh api …/contents/.github/workflows` = 404 — so there is no run to file against and nothing to
+report as a failure.
