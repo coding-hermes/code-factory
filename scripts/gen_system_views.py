@@ -10,12 +10,16 @@ can never be ambiguous about which line it belongs to.
 """
 
 import argparse
+import datetime
 import html
 import pathlib
 import subprocess
 import sys
 
 import yaml
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from sheet_style import CSS_LANDSCAPE as CSS, cover, dochead, stamp  # noqa: E402
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 MODEL = REPO / "docs/SYSTEM-MODEL.yaml"
@@ -27,24 +31,9 @@ STATE = {
     "external": ("#555555", "solid"),
 }
 
-CSS = """
-@page { size: A4 landscape; margin: 8mm; }
-body { font-family: "Helvetica Neue", Arial, sans-serif; margin: 0; color: #111; background: #fff; }
-h1 { font-size: 15pt; letter-spacing: 0.14em; margin: 0 0 1.5mm; }
-h2 { font-size: 9.5pt; letter-spacing: 0.08em; margin: 0 0 2mm; color: #444; font-weight: 400; }
-p.lede { font-size: 8.5pt; max-width: 262mm; margin: 0 0 2mm; }
-.page { page-break-after: always; break-inside: avoid; }
-.legend { font-size: 8pt; margin-top: 1mm; }
-.legend span { margin-right: 7mm; }
-table { border-collapse: collapse; width: 100%; font-size: 7.6pt; }
-th { text-align: left; border-bottom: 1pt solid #111; padding: 1.1mm; background: #efeee8; }
-td { border-bottom: 0.4pt solid #ccc; padding: 1.1mm; vertical-align: top; }
-.st-works { color: #14532d; font-weight: 700; }
-.st-broken { color: #a11d1d; font-weight: 700; }
-.st-missing { color: #8a5200; font-weight: 700; }
-.st-external { color: #555; font-weight: 700; }
-img { display: block; }
-"""
+
+def head_short():
+    return datetime.date.today().isoformat()
 
 
 def esc(s):
@@ -238,54 +227,78 @@ def main():
     render_dot(dot_src, wd / "master.svg")
 
     broken = [k for k in model["contracts"] if k["state"] != "works"]
+
+    def P(section, body):
+        return "<div class='page'>" + dochead(doc["id"], section) + body + "</div>"
+
     pages = [
-        "<div class='page'><h1>%s — %s</h1><h2>%s  ·  a box is a responsibility, not a file; every "
-        "arrow is a numbered contract, and <b>%d of %d do not hold as specified</b></h2>"
-        "<img src='master.svg' style='height:168mm'/>"
-        "<div class='legend'>"
-        "<span style='color:#14532d'><b>— solid</b> works</span>"
-        "<span style='color:#a11d1d'><b>-- dashed</b> broken</span>"
-        "<span style='color:#8a5200'><b>·· dotted</b> missing</span>"
-        "<span style='color:#555'><b>— grey</b> external</span></div></div>"
-        % (
-            esc(doc["id"]),
-            esc(doc["title"]),
-            esc(doc["subtitle"]),
-            len(broken),
-            len(model["contracts"]),
-        )
+        cover(
+            doc["id"],
+            doc["title"],
+            doc["subtitle"],
+            (
+                "Systems view &middot; components, contracts, flows",
+                "%d components &middot; %d contracts &middot; <b>%d do not hold</b>"
+                % (len(model["components"]), len(model["contracts"]), len(broken)),
+                "Generated from docs/SYSTEM-MODEL.yaml",
+            ),
+        ),
+        P(
+            "MASTER SYSTEM VIEW",
+            "<h1>%s — %s</h1><h2>%s &middot; a box is a responsibility, not a file; every arrow is a numbered "
+            "contract, and <b>%d of %d do not hold as specified</b></h2>"
+            "<img src='master.svg' style='height:168mm'/>"
+            "<div class='legend'>"
+            "<span style='color:#14532d'><b>— solid</b> works</span>"
+            "<span style='color:#a11d1d'><b>-- dashed</b> broken</span>"
+            "<span style='color:#8a5200'><b>·· dotted</b> missing</span>"
+            "<span style='color:#555'><b>— grey</b> external</span></div>"
+            % (
+                esc(doc["id"]),
+                esc(doc["title"]),
+                esc(doc["subtitle"]),
+                len(broken),
+                len(model["contracts"]),
+            ),
+        ),
     ]
 
     pages.append(
-        "<div class='page'><h1>COMPONENT REGISTER</h1>"
-        "<h2>what each box owns, what it explicitly does not do, and where it lives today</h2>"
-        "<p class='lede'>The <b>impl</b> column is the only volatile thing on these pages: it names "
-        "where the responsibility is implemented now. Move a script, rename a repo, and the model "
-        "does not change — only this column does.</p>"
-        + component_table(model)
-        + "</div>"
+        P(
+            "COMPONENT REGISTER",
+            "<h1>COMPONENT REGISTER</h1>"
+            "<h2>what each box owns, what it explicitly does not do, and where it lives today</h2>"
+            "<p class='lede'>The <b>impl</b> column is the only volatile thing on these pages: it names "
+            "where the responsibility is implemented now. Move a script, rename a repo, and the model "
+            "does not change — only this column does.</p>" + component_table(model),
+        )
     )
 
     pages.append(
-        "<div class='page'><h1>CONTRACT REGISTER</h1>"
-        "<h2>every arrow in the master view, what it carries, how, and its measured state</h2>"
-        + contract_table(model)
-        + "</div>"
+        P(
+            "CONTRACT REGISTER",
+            "<h1>CONTRACT REGISTER</h1>"
+            "<h2>every arrow in the master view, what it carries, how, and its measured state</h2>"
+            + contract_table(model),
+        )
     )
 
     for fl in model["flows"]:
         svg = seq_svg(model, fl)
         (wd / (fl["id"] + ".svg")).write_text(svg, encoding="utf-8")
         pages.append(
-            "<div class='page'><h1>%s — %s</h1><h2>%s</h2>"
-            "<img src='%s.svg' style='height:150mm'/>"
-            "<div class='legend'>%s</div></div>"
-            % (
-                esc(fl["id"]),
-                esc(fl["name"]),
-                esc(fl["question"]),
-                esc(fl["id"]),
-                esc(fl.get("note", "")),
+            P(
+                fl["name"],
+                "<h1>%s — %s</h1><h2>%s</h2>"
+                "<img src='%s.svg' style='height:150mm'/>"
+                "<div class='legend'>%s</div>"
+                % (
+                    esc(fl["id"]),
+                    esc(fl["name"]),
+                    esc(fl["question"]),
+                    esc(fl["id"]),
+                    esc(fl.get("note", "")),
+                ),
             )
         )
 
@@ -312,6 +325,9 @@ def main():
         text=True,
         timeout=600,
     )
+    # The running foot and sheet number go on AFTER print: Chrome has no reliable margin-box folio,
+    # and an unnumbered sheet cannot be cited.
+    stamp(a.out, doc["id"], footer=datetime.date.today().isoformat())
     print(
         "pdf: %s (%.1f KB) — %d components, %d contracts (%d not working), %d flows"
         % (

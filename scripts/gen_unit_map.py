@@ -9,6 +9,7 @@ does the referencing. A condition the call site shows is therefore always eviden
 """
 
 import argparse
+import datetime
 import html
 import json
 import pathlib
@@ -18,6 +19,9 @@ import sys
 
 import yaml
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from sheet_style import CSS_LANDSCAPE as CSS, cover, dochead, stamp  # noqa: E402
+
 REPO = pathlib.Path(__file__).resolve().parent.parent
 MAP = REPO / "docs/UNIT-MAP.yaml"
 # A trigger is CODE. Config, records and docs mention units constantly and prove nothing about who
@@ -25,22 +29,6 @@ MAP = REPO / "docs/UNIT-MAP.yaml"
 SCAN_SUFFIX = {".sh", ".py"}
 # generators embed unit names in their own prose; they never call them
 NOT_CALLERS = {"gen_unit_map.py", "gen_system_views.py", "gen_nasa_handbook.py"}
-
-CSS = """
-@page { size: A4 landscape; margin: 8mm; }
-body { font-family: "Helvetica Neue", Arial, sans-serif; margin: 0; color: #111; background: #fff; }
-h1 { font-size: 14pt; letter-spacing: 0.12em; margin: 0 0 1.5mm; }
-h2 { font-size: 9pt; letter-spacing: 0.06em; margin: 0 0 2mm; color: #444; font-weight: 400; }
-p.lede { font-size: 8.4pt; max-width: 262mm; margin: 0 0 2mm; }
-.page { page-break-after: always; break-inside: avoid; }
-table { border-collapse: collapse; width: 100%; font-size: 7.4pt; }
-th { text-align: left; border-bottom: 1pt solid #111; padding: 1.1mm; background: #efeee8; }
-td { border-bottom: 0.4pt solid #ccc; padding: 1.1mm; vertical-align: top; }
-code { font-family: "SF Mono", Menlo, monospace; font-size: 7pt; }
-.trig { color: #14532d; }
-.none { color: #a11d1d; }
-img { display: block; }
-"""
 
 
 def esc(s):
@@ -280,7 +268,55 @@ def main():
                     % (esc(m["id"]), esc(m["name"]), i + 1, i + len(chunk), len(rows))
                 )
             )
-            pages.append(head + table_of(chunk) + "</div>")
+            cont = (
+                ""
+                if i + len(chunk) >= len(rows)
+                else "<p class='lede'><i>Table continues on the next sheet.</i></p>"
+            )
+            legend = (
+                (
+                    "<div class='legend'>Red <b>no code caller</b> means nothing in the repo invokes this unit: "
+                    "an operator types it, or a lane prompt does. That is a fact about the system, not a gap in "
+                    "the scan.</div>"
+                )
+                if first
+                else ""
+            )
+            pages.append(head + table_of(chunk) + cont + legend + "</div>")
+
+    # one house style for every sheet: cover, document head, running foot
+    pages.insert(
+        0,
+        cover(
+            "CF2A-11",
+            "UNIT MAP",
+            "Modules, submodules, units and their triggers",
+            (
+                "%d modules &middot; %d submodules &middot; %d units"
+                % (
+                    len(model["modules"]),
+                    sum(len(m["submodules"]) for m in model["modules"]),
+                    total_units,
+                ),
+                "%d units have no code caller" % len(orphan),
+                "Generated from docs/UNIT-MAP.yaml",
+            ),
+        ),
+    )
+    withhead = []
+    for page in pages:
+        m = re.search(r"<h1>([^<]*)</h1>", page)
+        section = m.group(1) if m else "UNIT MAP"
+        withhead.append(
+            page.replace(
+                "<div class='page'>",
+                "<div class='page'>" + dochead("CF2A-11", section),
+                1,
+            )
+            if page.startswith("<div class='page'>")
+            else page
+        )
+    pages = withhead
 
     (wd / "index.html").write_text(
         "<!doctype html><html><head><meta charset='utf-8'><style>"
@@ -304,6 +340,7 @@ def main():
         text=True,
         timeout=600,
     )
+    stamp(a.out, "CF2A-11", footer=datetime.date.today().isoformat())
     json.dump(refs, open(wd / "refs.json", "w"), indent=1)
     print(
         "pdf: %s (%.1f KB) — %d modules, %d units, %d with no code caller"
