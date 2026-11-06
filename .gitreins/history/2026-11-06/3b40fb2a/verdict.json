@@ -1,0 +1,114 @@
+{
+  "task_id": "CF-277",
+  "task_title": "install-codex.sh: validate CF_RUN_ID and confine the isolated turn-home delete to a mktemp dir",
+  "task_criteria": [
+    "install-codex.sh refuses any CF_RUN_ID that is not a bare identifier, exiting 2 and naming run_id, so a crafted value such as dot-dot-slash cannot reach any delete path; the isolated CODEX_HOME turn dir is a fresh mktemp directory under the cache root and every removal is proven to stay inside that root; and the hermetic installer battery executes a crafted-run-id fixture that shows the refusal and shows a sentinel file outside the temp tree surviving the run."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "11215b3eace854344c7f9b6e31c4ad6fd34670b8",
+  "working_tree_content_fingerprint": "f4189e972e3c40730193f6e9bc68c9f5e78cefa073433a0057713f6ad803c3d6",
+  "working_tree_dirty_path_count": 2365,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261106T014344.076142Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n8:46PM INF scanned ~2651288 bytes (2.65 MB) in 1.36s\n8:46PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 270 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261106T014344.076142Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n install-go.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n verify-patch.sh\n  PASS  bash -n harness-vars.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-deepseek.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n install-pi-agent.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.7Um4SnizDO/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n6. no literal credential assignments\n  PASS  none found\n7. the board is valid JSONL\n  PASS  346/346 rows parse\n7b. board gate rejects invalid records with line-numbered FAIL rows (CF-088)\n  PASS  null fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got null\n  FAIL  2 of 3 rows parse\n  PASS  array fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got []\n  FAIL  2 of 3 rows parse\n  PASS  string fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got \"fixture\"\n  FAIL  2 of 3 rows parse\n  PASS  number fixture rejected, exit 1\n  FAIL  board line 2: expected JSON object, got 42\n\n\u2026 [30437 chars omitted \u2014 401 line(s)] \u2026\n  PASS  an unknown kind is a named FAIL before any layer runs (never a silent pass)\n50. install-go.sh can go red, and its pin is a digest (CF-219)\n  PASS  install-go negative: no Go -> named FAIL, exit 1\n  PASS  install-go digest: wrong sha256 refused and destination absent\n  PASS  install-go digest control: measured sha256 accepted\n  PASS  install-go positive: applied host pin read back (  PASS  go \u2014 go version go1.26.5 linux/amd64)\n\n51. the python lint lane can go red on one unused import, and green once it is removed (CF-254)\n  PASS  one unused import -> exit 1 naming F401\n  PASS  same file once the import is removed -> exit 0\n  PASS  tracked python surface clean: 39 files graded\n52. master-doc fills converge on runner-owned status without network (CF-257)\n  PASS  both fill writers stamp census/provider/UTC; missing status is rejected\n  PASS  local writer fixtures completed without provider calls\n  PASS  RED module selected, index and missing-Path document skipped\nskip 00-INDEX.md index\nskip 03-not-a-module.md no path field\ntodo=1 provider=deepseek workers=2\ncandidate 01-first.md\n  PASS  VERIFIED and bare VERIFIED Status rows are complete, never candidates\n  PASS  old selector would wrongly refill both completed modules\n  PASS  filled run 1: todo=0 exit=0 sha256sum unchanged\ntodo=0 provider=deepseek workers=2\n  PASS  filled run 2: todo=0 exit=0 sha256sum unchanged\ntodo=0 provider=deepseek workers=2\n  PASS  --force selects all four modules, VERIFIED ones included, never the non-modules\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261106T014344.076142Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 install-codex.sh refuses any CF_RUN_ID that is not a bare identifier, exiting 2 and naming run_id, so a crafted value such as dot-dot-slash cannot reach any delete path; the isolated CODEX_HOME turn dir is a fresh mktemp directory under the cache root and every removal is proven to stay inside that root; and the hermetic installer battery executes a crafted-run-id fixture that shows the refusal and shows a sentinel file outside the temp tree surviving the run.: Admission: scripts/harness/install-codex.sh:205-211 \u2014 validate_vars() rejects CF_RUN_ID unless it matches ^[A-Za-z0-9][A-Za-z0-9._-]*$ and is <=128 chars, calling `refuse run_id` with the value echoed truncated to 64 chars; refuse() at :75-79 prints 'FAIL run_id \u2014 refused: ...' plus 'CODEX: REFUSED (run_id)' and `exit 2`. Containment: :518-527 \u2014 cache_root=$(turn_cache_root) (${XDG_CACHE_HOME:-$HOME/.cache}/cf-codex), turn_home=$(umask 077; mktemp -d \"$cache_root/run.XXXXXXXX\"), never derived from CF_RUN_ID; the old pre-create `rm -rf` is gone. cleanup() trap at :519-523 calls inside_turn_cache before `rm -rf --`; inside_turn_cache at :251-259 requires the \"$root\"/run.?* prefix and a leaf containing no '/'. Independent repro: HOME=$T/home, --turn --run-id '../../victim' -> RC=2, output 'FAIL run_id \u2014 refused: CF_RUN_ID must be a bare identifier (^[A-Za-z0-9][A-Za-z0-9._-]*$, max 128 chars); got '../../victim' (12 chars)' + 'CODEX: REFUSED (run_id)'; $T/home/victim/keep.txt SENTINEL_SURVIVED; NO_CACHE_ROOT created. Battery: `bash tests/harness/codex-install-test.sh` EXIT=0, 'codex installer test: 51 passed, 0 failed, 0 skipped' / 'RESULT: PASS'. Section D (tests/harness/codex-install-test.sh:300-419) is hermetic (fresh $FAKEHOME, stub codex, no network): D1a --check refuses '../../victim' with exit 2 naming run_id and quoting the value, and both $SB/victim and $RUNID_HOME/victim sentinels survive; D1b --turn refuses the same id, neither sentinel removed, nothing created under $HOME/.cache; D1c refuses ../victim, .hidden, a/b, a;b, 'a b', $x and a 129-char id; D2 admits r-lane and keeps the contract:CF_RUN_ID line; D3a the reported turn_home is $HOME/.cache/cf-codex/run.F6il9m7Y with no run-id part, D3b that exact dir is gone after the run, D3c the sentinel.keep beside the turn home still exists.\nCF_RUN_ID is validated fail-closed with exit 2 naming run_id, the turn home is a fresh mktemp leaf under the cache root guarded by inside_turn_cache before any rm -rf, and the hermetic section-D fixture passes (51/0/0, RESULT: PASS) showing the refusal plus surviving sentinels outside the temp tree.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 install-codex.sh refuses any CF_RUN_ID that is not a bare identifier, exiting 2 and naming run_id, so a crafted value such as dot-dot-slash cannot reach any delete path; the isolated CODEX_HOME turn dir is a fresh mktemp directory under the cache root and every removal is proven to stay inside that root; and the hermetic installer battery executes a crafted-run-id fixture that shows the refusal and shows a sentinel file outside the temp tree surviving the run.: Admission: scripts/harness/install-codex.sh:205-211 \u2014 validate_vars() rejects CF_RUN_ID unless it matches ^[A-Za-z0-9][A-Za-z0-9._-]*$ and is <=128 chars, calling `refuse run_id` with the value echoed truncated to 64 chars; refuse() at :75-79 prints 'FAIL run_id \u2014 refused: ...' plus 'CODEX: REFUSED (run_id)' and `exit 2`. Containment: :518-527 \u2014 cache_root=$(turn_cache_root) (${XDG_CACHE_HOME:-$HOME/.cache}/cf-codex), turn_home=$(umask 077; mktemp -d \"$cache_root/run.XXXXXXXX\"), never derived from CF_RUN_ID; the old pre-create `rm -rf` is gone. cleanup() trap at :519-523 calls inside_turn_cache before `rm -rf --`; inside_turn_cache at :251-259 requires the \"$root\"/run.?* prefix and a leaf containing no '/'. Independent repro: HOME=$T/home, --turn --run-id '../../victim' -> RC=2, output 'FAIL run_id \u2014 refused: CF_RUN_ID must be a bare identifier (^[A-Za-z0-9][A-Za-z0-9._-]*$, max 128 chars); got '../../victim' (12 chars)' + 'CODEX: REFUSED (run_id)'; $T/home/victim/keep.txt SENTINEL_SURVIVED; NO_CACHE_ROOT created. Battery: `bash tests/harness/codex-install-test.sh` EXIT=0, 'codex installer test: 51 passed, 0 failed, 0 skipped' / 'RESULT: PASS'. Section D (tests/harness/codex-install-test.sh:300-419) is hermetic (fresh $FAKEHOME, stub codex, no network): D1a --check refuses '../../victim' with exit 2 naming run_id and quoting the value, and both $SB/victim and $RUNID_HOME/victim sentinels survive; D1b --turn refuses the same id, neither sentinel removed, nothing created under $HOME/.cache; D1c refuses ../victim, .hidden, a/b, a;b, 'a b', $x and a 129-char id; D2 admits r-lane and keeps the contract:CF_RUN_ID line; D3a the reported turn_home is $HOME/.cache/cf-codex/run.F6il9m7Y with no run-id part, D3b that exact dir is gone after the run, D3c the sentinel.keep beside the turn home still exists.\nCF_RUN_ID is validated fail-closed with exit 2 naming run_id, the turn home is a fresh mktemp leaf under the cache root guarded by inside_turn_cache before any rm -rf, and the hermetic section-D fixture passes (51/0/0, RESULT: PASS) showing the refusal plus surviving sentinels outside the temp tree.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "install-codex.sh refuses any CF_RUN_ID that is not a bare identifier, exiting 2 and naming run_id, so a crafted value such as dot-dot-slash cannot reach any delete path; the isolated CODEX_HOME turn dir is a fresh mktemp directory under the cache root and every removal is proven to stay inside that root; and the hermetic installer battery executes a crafted-run-id fixture that shows the refusal and shows a sentinel file outside the temp tree surviving the run.",
+                "status": "PASS",
+                "detail": "Admission: scripts/harness/install-codex.sh:205-211 \u2014 validate_vars() rejects CF_RUN_ID unless it matches ^[A-Za-z0-9][A-Za-z0-9._-]*$ and is <=128 chars, calling `refuse run_id` with the value echoed truncated to 64 chars; refuse() at :75-79 prints 'FAIL run_id \u2014 refused: ...' plus 'CODEX: REFUSED (run_id)' and `exit 2`. Containment: :518-527 \u2014 cache_root=$(turn_cache_root) (${XDG_CACHE_HOME:-$HOME/.cache}/cf-codex), turn_home=$(umask 077; mktemp -d \"$cache_root/run.XXXXXXXX\"), never derived from CF_RUN_ID; the old pre-create `rm -rf` is gone. cleanup() trap at :519-523 calls inside_turn_cache before `rm -rf --`; inside_turn_cache at :251-259 requires the \"$root\"/run.?* prefix and a leaf containing no '/'. Independent repro: HOME=$T/home, --turn --run-id '../../victim' -> RC=2, output 'FAIL run_id \u2014 refused: CF_RUN_ID must be a bare identifier (^[A-Za-z0-9][A-Za-z0-9._-]*$, max 128 chars); got '../../victim' (12 chars)' + 'CODEX: REFUSED (run_id)'; $T/home/victim/keep.txt SENTINEL_SURVIVED; NO_CACHE_ROOT created. Battery: `bash tests/harness/codex-install-test.sh` EXIT=0, 'codex installer test: 51 passed, 0 failed, 0 skipped' / 'RESULT: PASS'. Section D (tests/harness/codex-install-test.sh:300-419) is hermetic (fresh $FAKEHOME, stub codex, no network): D1a --check refuses '../../victim' with exit 2 naming run_id and quoting the value, and both $SB/victim and $RUNID_HOME/victim sentinels survive; D1b --turn refuses the same id, neither sentinel removed, nothing created under $HOME/.cache; D1c refuses ../victim, .hidden, a/b, a;b, 'a b', $x and a 129-char id; D2 admits r-lane and keeps the contract:CF_RUN_ID line; D3a the reported turn_home is $HOME/.cache/cf-codex/run.F6il9m7Y with no run-id part, D3b that exact dir is gone after the run, D3c the sentinel.keep beside the turn home still exists."
+              }
+            ],
+            "summary": "CF_RUN_ID is validated fail-closed with exit 2 naming run_id, the turn home is a fresh mktemp leaf under the cache root guarded by inside_turn_cache before any rm -rf, and the hermetic section-D fixture passes (51/0/0, RESULT: PASS) showing the refusal plus surviving sentinels outside the temp tree.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-277\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 install-codex.sh refuses any CF_RUN_ID that is not a bare identifier, exiting 2 and naming run_id, so a crafted value such as dot-dot-slash cannot reach any delete path; the isolated CODEX_HOME turn dir is a fresh mktemp directory under the cache root and every removal is proven to stay inside that root; and the hermetic installer battery executes a crafted-run-id fixture that shows the refusal and shows a sentinel file outside the temp tree surviving the run.: Admission: scripts/harness/install-codex.sh:205-211 \u2014 validate_vars() rejects CF_RUN_ID unless it matches ^[A-Za-z0-9][A-Za-z0-9._-]*$ and is <=128 chars, calling `refuse run_id` with the value echoed truncated to 64 chars; refuse() at :75-79 prints 'FAIL run_id \u2014 refused: ...' plus 'CODEX: REFUSED (run_id)' and `exit 2`. Containment: :518-527 \u2014 cache_root=$(turn_cache_root) (${XDG_CACHE_HOME:-$HOME/.cache}/cf-codex), turn_home=$(umask 077; mktemp -d \"$cache_root/run.XXXXXXXX\"), never derived from CF_RUN_ID; the old pre-create `rm -rf` is gone. cleanup() trap at :519-523 calls inside_turn_cache before `rm -rf --`; inside_turn_cache at :251-259 requires the \"$root\"/run.?* prefix and a leaf containing no '/'. Independent repro: HOME=$T/home, --turn --run-id '../../victim' -> RC=2, output 'FAIL run_id \u2014 refused: CF_RUN_ID must be a bare identifier (^[A-Za-z0-9][A-Za-z0-9._-]*$, max 128 chars); got '../../victim' (12 chars)' + 'CODEX: REFUSED (run_id)'; $T/home/victim/keep.txt SENTINEL_SURVIVED; NO_CACHE_ROOT created. Battery: `bash tests/harness/codex-install-test.sh` EXIT=0, 'codex installer test: 51 passed, 0 failed, 0 skipped' / 'RESULT: PASS'. Section D (tests/harness/codex-install-test.sh:300-419) is hermetic (fresh $FAKEHOME, stub codex, no network): D1a --check refuses '../../victim' with exit 2 naming run_id and quoting the value, and both $SB/victim and $RUNID_HOME/victim sentinels survive; D1b --turn refuses the same id, neither sentinel removed, nothing created under $HOME/.cache; D1c refuses ../victim, .hidden, a/b, a;b, 'a b', $x and a 129-char id; D2 admits r-lane and keeps the contract:CF_RUN_ID line; D3a the reported turn_home is $HOME/.cache/cf-codex/run.F6il9m7Y with no run-id part, D3b that exact dir is gone after the run, D3c the sentinel.keep beside the turn home still exists.\nCF_RUN_ID is validated fail-closed with exit 2 naming run_id, the turn home is a fresh mktemp leaf under the cache root guarded by inside_turn_cache before any rm -rf, and the hermetic section-D fixture passes (51/0/0, RESULT: PASS) showing the refusal plus surviving sentinels outside the temp tree.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-06T01:49:25.262310",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-06T01:49:25.286380+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 19685,
+        "truncated": false,
+        "source": "git show 11215b3eace8"
+      }
+    ],
+    "task_id": "CF-277"
+  }
+}
