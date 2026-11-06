@@ -3061,6 +3061,96 @@ else
   say "  FAIL  could not splice the pre-CF-225 leg_smoke into a scratch copy (defs=$prefix_defs)"; fails=$((fails+1))
 fi
 
+# (g) CF-227: the codex smoke turn must pin its provider AND its model on argv. `codex exec`
+# with neither inherits `model_provider`/`model` from the ambient ~/.codex/config.toml, and this
+# host's file pins claude-code-router at a port nothing listens on -- so the `codex:smoke` cell
+# measured that router, not codex. The stub below records its own argv and never writes the
+# artifact: no network, no credential value and no model token is involved (the auth.json is
+# synthetic and only satisfies cred_codex's shape probe). The control case is the same battery
+# with the pre-CF-227 codex arm spliced back in, which must record an argv WITHOUT the pin --
+# that is what keeps the arm above falsifiable.
+mkdir -p "$tmpd/codexpin/bin" "$tmpd/codexpin/adapters" "$tmpd/codexpin/home/.codex" "$tmpd/nopin/tests"
+printf '{"auth_mode":"fixture","tokens":{"synthetic":true}}\n' > "$tmpd/codexpin/home/.codex/auth.json"
+cat > "$tmpd/codexpin/bin/codex" <<'STUB'
+#!/usr/bin/env bash
+# A codex that records the argv it was handed and exits as told. It never writes an artifact,
+# because the point of the arm is that the artifact -- not the exit code -- is the evidence.
+case "${1:-}" in
+  --version) printf 'codex-cli 9.9.9-fixture\n'; exit 0 ;;
+esac
+printf '%s\n' "$*" >> "${FAKE_CODEX_ARGV:?}"
+[ "${FAKE_CODEX_EXIT:-1}" = 0 ] && exit 0
+exit "${FAKE_CODEX_EXIT:-1}"
+STUB
+chmod +x "$tmpd/codexpin/bin/codex"
+cat > "$tmpd/codexpin/adapters/install-codex.sh" <<'FIX'
+#!/usr/bin/env bash
+. "${FIXTURE_LIB:?}"
+case "${1:---check}" in
+  --check)
+    say "harness: codex (fixture, names no binary)"
+    ok version "9.9.9-fixture"
+    say ""
+    say "CODEX: PASS" ;;
+  *) bad apply "fixture adapter has no ladder"; exit 1 ;;
+esac
+FIX
+runb_codex() {  # runb_codex <script> <argv-file> <stub exit code>
+  env -i PATH="$tmpd/codexpin/bin:/usr/bin:/bin" HOME="$tmpd/codexpin/home" \
+    FIXTURE_LIB="$HERE/scripts/lib.sh" HC_CODEX_MODEL=fixture-codex-model \
+    FAKE_CODEX_ARGV="$2" FAKE_CODEX_EXIT="$3" \
+    /bin/bash "$1" --only codex --adapter-dir "$tmpd/codexpin/adapters" 2>&1
+}
+out=$(runb_codex "$HERE/tests/harness-conformance.sh" "$tmpd/codexpin/pinned.argv" 1)
+smoke_row=$(printf '%s\n' "$out" | grep '^  FAIL  codex:smoke' | head -1)
+if grep -qF -- '-c model_provider="openai"' "$tmpd/codexpin/pinned.argv" 2>/dev/null \
+  && grep -qF -- '-m fixture-codex-model' "$tmpd/codexpin/pinned.argv" \
+  && grep -qE 'Create a file named smoke.txt .*CF-CONF-codex-' "$tmpd/codexpin/pinned.argv" \
+  && [ -n "$smoke_row" ] \
+  && printf '%s' "$smoke_row" | grep -qF 'provider openai' \
+  && printf '%s' "$smoke_row" | grep -qF 'base_url codex built-in OpenAI endpoint' \
+  && ! printf '%s\n' "$out" | grep -q '^  PASS  codex:smoke'; then
+  say "  PASS  codex smoke argv carries -c model_provider=\"openai\" -m fixture-codex-model and the needle; the FAIL names the provider and its base_url"
+else
+  say "  FAIL  the codex smoke turn did not pin its binding: $(printf '%s\n' "$out" | grep 'codex:smoke' | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+# exit 0 is not evidence: the same stub exiting 0 must still FAIL, by that exact name.
+out=$(runb_codex "$HERE/tests/harness-conformance.sh" "$tmpd/codexpin/zero.argv" 0)
+if printf '%s\n' "$out" | grep -qxF '  FAIL  codex:smoke — exited 0 without writing smoke.txt' \
+  && ! printf '%s\n' "$out" | grep -q '^  PASS  codex:smoke'; then
+  say "  PASS  codex exiting 0 with no artifact -> FAIL 'exited 0 without writing smoke.txt'"
+else
+  say "  FAIL  exit 0 without an artifact was not refused by that name: $(printf '%s\n' "$out" | grep 'codex:smoke' | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+# the control: the same battery with the pre-CF-227 codex arm (git show 2f4df2f:tests/harness-conformance.sh)
+ln -sfn "$HERE/scripts" "$tmpd/nopin/scripts"
+ln -sfn "$HERE/specs" "$tmpd/nopin/specs"
+printf '%s\n' '    codex)      ( cd "$dir" && timeout "$TIMEOUT" codex exec --skip-git-repo-check -s workspace-write "$prompt" </dev/null ) ;;' > "$tmpd/nopin-arm.txt"
+# Replace the whole codex smoke arm -- both of its lines -- and leave the `codex) cred_...`
+# arm of the credential probe alone: the anchor is `codex)      ( cd`, which only smoke_turn has.
+awk -v arm="$tmpd/nopin-arm.txt" '
+  skip { if ($0 ~ /;;[[:space:]]*$/) skip=0; next }
+  /^    codex\)      \( cd / { while ((getline l < arm) > 0) print l; close(arm); skip=1; next }
+  { print }
+' "$HERE/tests/harness-conformance.sh" > "$tmpd/nopin/tests/harness-conformance.sh"
+if bash -n "$tmpd/nopin/tests/harness-conformance.sh" 2>/dev/null \
+  && grep -qF 'codex exec --skip-git-repo-check -s workspace-write "$prompt"' "$tmpd/nopin/tests/harness-conformance.sh" \
+  && ! grep -qF 'model_provider=\"$CODEX_PROVIDER\"' "$tmpd/nopin/tests/harness-conformance.sh"; then
+  out=$(runb_codex "$tmpd/nopin/tests/harness-conformance.sh" "$tmpd/codexpin/nopin.argv" 1)
+  if [ -s "$tmpd/codexpin/nopin.argv" ] \
+    && ! grep -qF 'model_provider' "$tmpd/codexpin/nopin.argv" \
+    && ! grep -qF -- '-m fixture-codex-model' "$tmpd/codexpin/nopin.argv"; then
+    say "  PASS  the pin-removed control records an argv with no model_provider -> the arm above can fail"
+  else
+    say "  FAIL  the pin-removed control still recorded a pinned argv: $(tr '\n' ' ' < "$tmpd/codexpin/nopin.argv" 2>/dev/null)"
+    fails=$((fails+1))
+  fi
+else
+  say "  FAIL  could not splice the pre-CF-227 codex arm into a scratch copy"; fails=$((fails+1))
+fi
+
 # One provisioning config per project, derived from the registry. Hand-written
 # configs drift (a typo in a repo URL, one agent name on two projects, a
 # namespace the registry no longer agrees with), so the configs are generated

@@ -26,6 +26,16 @@
 #   tests/harness-conformance.sh --only hermes,codex # subset by id
 #   tests/harness-conformance.sh --adapter-dir DIR   # fixture hook (tests/selftest.sh §45)
 #
+# Knobs (environment):
+#   HC_TIMEOUT        seconds one smoke turn may take (default 300)
+#   HC_APPLY_TIMEOUT  seconds one adapter --apply may take (default 600)
+#   HC_CODEX_MODEL    model id the codex smoke turn pins on argv together with
+#                     `-c model_provider="openai"` (default gpt-6-luna). Both halves of the
+#                     binding are pinned on argv because `codex exec` with neither inherits
+#                     `model_provider`/`model` from the ambient ~/.codex/config.toml: a host
+#                     profile that names a router this repo never installed turns every smoke
+#                     turn into a measurement of that router (CF-227).
+#
 # The battery never installs anything without --install, never writes outside $HOME,
 # never reads a credential value (existence and validity only), and never invents a
 # turn for a harness whose non-interactive surface this repo has not measured.
@@ -41,6 +51,11 @@ ADAPTER_DIR="$HERE/scripts/harness"
 DOC="$HERE/docs/HARNESS-CONFORMANCE.md"
 TIMEOUT="${HC_TIMEOUT:-300}"
 APPLY_TIMEOUT="${HC_APPLY_TIMEOUT:-600}"
+# CF-227: the codex smoke turn pins both halves of its provider binding on argv. §3 of
+# specs/HARNESS-MATRIX.md says codex hosts OpenAI natively, so `openai` is the spec-correct
+# provider; the model is a knob so the pin can be re-measured without editing the battery.
+CODEX_PROVIDER="openai"
+CODEX_MODEL="${HC_CODEX_MODEL:-gpt-6-luna}"
 SKIPPED=0
 ARGS="$*"
 
@@ -53,7 +68,7 @@ while [ "$#" -gt 0 ]; do
     --adapter-dir) ADAPTER_DIR="${2:-}"; [ -n "$ADAPTER_DIR" ] || { printf 'FAIL battery: --adapter-dir needs a path\n'; exit 2; }; shift 2 ;;
     --doc) DOC="${2:-}"; [ -n "$DOC" ] || { printf 'FAIL battery: --doc needs a path\n'; exit 2; }; shift 2 ;;
     --timeout) TIMEOUT="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,41p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) printf 'FAIL battery: unknown argument %s\n' "$1"; exit 2 ;;
   esac
 done
@@ -97,7 +112,7 @@ note_row() { printf '  ..    %s\n' "$*"; printf 'note\t-\tNOTE\t%s\n' "$(clean "
 # id | adapter file | binary | generation | non-interactive smoke | smoke measured here
 HARNESSES="hermes|install-hermes.sh|hermes|0|hermes -z \"<prompt>\"|1
 claude-code|install-claude-code.sh|claude|0|claude -p \"<prompt>\"|1
-codex|install-codex.sh|codex|0|codex exec --skip-git-repo-check -s workspace-write \"<prompt>\"|1
+codex|install-codex.sh|codex|0|codex exec --skip-git-repo-check -s workspace-write -c model_provider=\"openai\" -m <model> -- \"<prompt>\"|1
 opencode|install-opencode.sh|opencode|1|opencode run \"<prompt>\"|1
 opencode-v2|install-opencode.sh|opencode|2|opencode run \"<prompt>\"|0
 deepseek|install-deepseek.sh|deepseek|0|(none documented)|0
@@ -182,6 +197,32 @@ cred_pi() {
 }
 
 # ------------------------------------------------------------------- smoke turns
+
+# The endpoint a pinned codex provider resolves to, so a failing turn names the binding that was
+# attempted instead of only the transport symptom. `openai` is codex's built-in provider and has
+# no base_url of its own: codex talks to its default OpenAI endpoint, and OPENAI_BASE_URL would
+# override that (this battery never sets it). A named provider carries its base_url in
+# ~/.codex/config.toml, so it is read from there — never invented. A URL the turn itself reported
+# on stdout/stderr wins over both, because that is the endpoint that was really tried.
+codex_base_url() {  # codex_base_url <provider> [turn output]
+  local provider="$1" out="${2:-}" reported=""
+  if [ -n "$out" ]; then
+    reported="$(printf '%s\n' "$out" | grep -oE 'https?://[A-Za-z0-9._:/~%+?=&-]+' | head -1 || true)"
+  fi
+  if [ -n "$reported" ]; then printf '%s (reported by codex)' "$reported"; return 0; fi
+  case "$provider" in
+    openai) printf 'codex built-in OpenAI endpoint (provider openai declares no base_url)' ;;
+    *)
+      if [ -f "$HOME/.codex/config.toml" ]; then
+        reported="$(awk -v s="[model_providers.$provider]" '
+          $0==s {f=1; next} /^\[/ {f=0} f && $1=="base_url" {gsub(/"/,"",$3); print $3; exit}' \
+          "$HOME/.codex/config.toml" 2>/dev/null || true)"
+      fi
+      printf '%s' "${reported:-no base_url for provider $provider in ~/.codex/config.toml}"
+      ;;
+  esac
+}
+
 smoke_turn() {  # smoke_turn <id> <dir> <prompt>
   local id="$1" dir="$2" prompt="$3"
   case "$id" in
@@ -189,7 +230,14 @@ smoke_turn() {  # smoke_turn <id> <dir> <prompt>
     # the message, and this script's own stdin carries the harness table.
     hermes)     ( cd "$dir" && timeout "$TIMEOUT" hermes -z "$prompt" </dev/null ) ;;
     claude-code)( cd "$dir" && timeout "$TIMEOUT" claude -p "$prompt" </dev/null ) ;;
-    codex)      ( cd "$dir" && timeout "$TIMEOUT" codex exec --skip-git-repo-check -s workspace-write "$prompt" </dev/null ) ;;
+    # CF-227: the provider AND the model are pinned on argv. `codex exec` with neither inherits
+    # `model_provider`/`model` from the ambient ~/.codex/config.toml, and a host file that pins a
+    # router this repo never installed turns every smoke turn into five "Reconnecting... waiting
+    # for network" retries, exit 124 and no artifact — a measurement of that router, not of codex.
+    # The credential stays the host's own ~/.codex/auth.json (named by cred_codex); only the
+    # binding is pinned, and nothing here reads, copies or rewrites that file.
+    codex)      ( cd "$dir" && timeout "$TIMEOUT" codex exec --skip-git-repo-check -s workspace-write \
+                  -c "model_provider=\"$CODEX_PROVIDER\"" -m "$CODEX_MODEL" -- "$prompt" </dev/null ) ;;
     opencode|opencode-v2) ( cd "$dir" && timeout "$TIMEOUT" opencode run "$prompt" </dev/null ) ;;
     pi-agent)   ( cd "$dir" && timeout "$TIMEOUT" pi -p --no-session "$prompt" </dev/null ) ;;
     *)          return 127 ;;
@@ -432,7 +480,7 @@ leg_check() {  # <id> <adapter file> <binary> <generation>
 
 leg_smoke() {  # <id> <binary> <generation> <measured>
   local id="$1" bin="$2" gen="$3" measured="$4" dir cred rc token out sum want prompt attempt
-  local path="" stated="" source="" rundir=""
+  local path="" stated="" source="" rundir="" pinned="" detail=""
   # Resolve the binary from the adapter's own measurement first (CF-225). leg_check already ran
   # --check and stored its "PASS binary" row in $WORK/$id.check.txt; an adapter whose installer
   # writes under a $HOME prefix (claude-code: ~/.local/harness/npm/bin) has measured a real,
@@ -512,20 +560,31 @@ leg_smoke() {  # <id> <binary> <generation> <measured>
     attempt=$((attempt+1)); sleep 2
   done
   if [ "$rc" -ne 0 ] && [ ! -f "$dir/smoke.txt" ]; then
-    emit "$id" smoke FAIL "turn exited $rc and wrote no smoke.txt after $attempt attempt(s) — $(printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -1)"
+    detail="$(printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -1)"
+    # CF-227: a failing codex turn names the binding it attempted, not only the transport
+    # symptom — "waiting for network" says nothing about which provider or endpoint was tried.
+    [ "$id" = codex ] && detail="provider $CODEX_PROVIDER, model $CODEX_MODEL, base_url $(codex_base_url "$CODEX_PROVIDER" "$out") — $detail"
+    emit "$id" smoke FAIL "turn exited $rc and wrote no smoke.txt after $attempt attempt(s) — $detail"
     return 0
   fi
   if [ ! -f "$dir/smoke.txt" ]; then
-    emit "$id" smoke FAIL "turn exited $rc but left no smoke.txt in $dir"
+    # CF-227: exit 0 is not evidence. A codex turn that logs
+    # `failed to spawn code-mode host …: No such file or directory` still exits 0 and writes
+    # nothing, so the artifact — never the exit code — is what this leg verifies.
+    emit "$id" smoke FAIL "exited 0 without writing smoke.txt"
     return 0
   fi
   if ! grep -qF -- "$token" "$dir/smoke.txt"; then
-    emit "$id" smoke FAIL "smoke.txt does not contain the token it was asked for ($(wc -c < "$dir/smoke.txt") B, sha256 $(sha256sum "$dir/smoke.txt" | cut -c1-12)…, exit $rc)"
+    emit "$id" smoke FAIL "wrote smoke.txt without the token (asked for $token; got $(wc -c < "$dir/smoke.txt") B, sha256 $(sha256sum "$dir/smoke.txt" | cut -c1-12)…, exit $rc)"
     return 0
   fi
   sum="$(sha256sum "$dir/smoke.txt" | cut -c1-12)"
   want="$(printf '%s' "$token" | sha256sum | cut -c1-12)"
-  emit "$id" smoke PASS "smoke.txt contains $token ($(wc -c < "$dir/smoke.txt") B, sha256 $sum..., exit $rc; token sha256 $want...; binary $path ($source))"
+  # CF-227: the codex row names the binding it pinned, so the cell cannot be read as a
+  # measurement of whatever provider the host's ambient config happened to name.
+  pinned=""
+  [ "$id" = codex ] && pinned="provider $CODEX_PROVIDER, model $CODEX_MODEL; "
+  emit "$id" smoke PASS "smoke.txt contains $token ($(wc -c < "$dir/smoke.txt") B, sha256 $sum..., exit $rc; token sha256 $want...; ${pinned}binary $path ($source))"
   return 0
 }
 
@@ -603,8 +662,8 @@ write_doc() {
     printf '# Harness conformance matrix\n\n'
     printf '**Generated by `tests/harness-conformance.sh --write-doc` at %s on `%s` (%s, commit `%s`).\n' "$stamp" "$(uname -n)" "$host" "$sha"
     printf 'Do not hand-edit this file: the next run overwrites it. Change the battery, or the adapter, instead.**\n\n'
-    printf 'Command: `tests/harness-conformance.sh %s` with `HERMES_PYTHON_BIN=%s`, `HC_TIMEOUT=%s`, `HC_APPLY_TIMEOUT=%s`.\n\n' \
-      "${ARGS:-}" "${HERMES_PYTHON_BIN:-unset}" "$TIMEOUT" "$APPLY_TIMEOUT"
+    printf 'Command: `tests/harness-conformance.sh %s` with `HERMES_PYTHON_BIN=%s`, `HC_TIMEOUT=%s`, `HC_APPLY_TIMEOUT=%s`, `HC_CODEX_MODEL=%s`.\n\n' \
+      "${ARGS:-}" "${HERMES_PYTHON_BIN:-unset}" "$TIMEOUT" "$APPLY_TIMEOUT" "$CODEX_MODEL"
     printf 'Every cell is one leg for one harness. `PASS` quotes the value that was measured, `FAIL`\n'
     printf 'quotes the value that contradicted it, and `SKIP` names the exact credential, binary or\n'
     printf 'capability that is missing here. A SKIP is **not** evidence of support: it says this host\n'
