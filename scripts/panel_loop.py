@@ -195,12 +195,21 @@ def parse_seat(p: Path) -> dict:
         # fall back to counting findings lines with a claimed kind
         blocking = sum(1 for line in text.splitlines() if any(k in line.upper() for k in KINDS))
     classes = []
-    m = re.search(r"^DEFECT CLASSES:(.*?)(?=^\w[\w ]*:|\Z)", text, re.S | re.M)
+    m = re.search(r"^DEFECT CLASSES:(.*?)(?=^[A-Z][A-Z ]+:|\Z)", text, re.S | re.M)
     if m:
         for chunk in re.split(r"[,;\n]", m.group(1)):
-            c = chunk.strip(" -*•\t").lower()
-            if 3 < len(c) < 60:
-                classes.append(c)
+            c = chunk.strip(" -*•\t")
+            # A defect class is prose: at least two words, no digits, parens or
+            # file references. The earlier filter admitted fragments like ":19-42"
+            # and "78 lines)", which made every round look like it produced new
+            # classes and disabled the second stop condition entirely.
+            if not (3 < len(c) < 60):
+                continue
+            if any(ch.isdigit() for ch in c) or any(ch in c for ch in "():/"):
+                continue
+            if len(c.split()) < 2:
+                continue
+            classes.append(c.lower())
     return {
         "seat": p.stem.replace("seat-", ""),
         "verdict": verdict,
