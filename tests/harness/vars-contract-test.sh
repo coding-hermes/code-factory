@@ -23,7 +23,8 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")/../.." && pwd)"
 SPEC="$HERE/specs/HARNESS-MATRIX.md"
 CONF="$HERE/tests/harness-conformance.sh"
-INSTALLERS=(install-hermes.sh install-opencode.sh install-claude-code.sh install-codex.sh)
+INSTALLERS=(install-hermes.sh install-opencode.sh install-claude-code.sh install-codex.sh
+            install-deepseek.sh install-pi-agent.sh)
 
 PASSED=0
 FAILED=0

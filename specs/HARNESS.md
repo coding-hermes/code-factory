@@ -29,7 +29,8 @@ A **harness** is whatever runs the work inside a node. The factory must not care
 | **codex** | release tarball `codex-x86_64-unknown-linux-musl.tar.gz` from `rust-v0.166.0`, sha256-pinned, installed under `$HOME/.local/codex/<pin>`; **exec** mode (`codex exec --json -s <mode> -m <model> -- <text>`, `exec resume <id>`) | **MEASURED** (CF-227, 2026-11-04, `scripts/harness/install-codex.sh`): 7 s install, version read back `codex-cli 0.166.0`, idempotent second `--apply`, and one real turn wrote a fixed token with `model_served` read from codex's own rollout record. The **app-server** sidecar is `[experimental]` and **nothing in crier uses it** — `codex.go` names "two verified surfaces: exec create / exec resume", and `grep -rn app-server` over crier is empty; `--app-server` probes it anyway (an `initialize` over stdio answers with a `userAgent`). |
 | **aider** | `pip install aider-chat` (venv) | not measured |
 | **goose** | binary | not measured |
-| **pi-agent** | binary | not measured |
+| **pi-agent** | `scripts/harness/install-pi-agent.sh`; binary `pi`, non-interactive surface `pi -p --no-session "<prompt>"` | not measured as an install (no pin, no artefact digest); the adapter ships a documented `--check`/`--contract` and refuses `--apply` by name |
+| **deepseek** | `scripts/harness/install-deepseek.sh`; the conformance row probes the binary `deepseek` (the matrix names DeepSeek's own harness at npm `@deepseek-ai/dsh`, CLI `dsh`, absent from both trees) | not measured (no binary, no ladder); the adapter ships a documented `--check`/`--contract` and refuses `--apply` by name |
 
 Hermes certifies only `$HOME/hermes-venv/bin/hermes` at `HERMES_PIN` (default `0.19.0`).
 A PATH-provided binary is labelled host-provided and FAILs the binary row, even if its
@@ -38,9 +39,10 @@ when the venv binary is absent, regardless of PATH. A venv version mismatch is n
 and reinstalls the pin; only a matching venv binary earns "already installed".
 
 **hermes** and **codex** have measured install ladders in this repo (`install-hermes.sh`,
-`install-codex.sh`, both proved by a script that can go red). The others ship a documented
-`--check` and a method, and are marked `UNVERIFIED` until someone runs them — an unverified
-installer is not a supported installer, and the script says so out loud.
+`install-codex.sh`, both proved by a script that can go red). `opencode`, `claude-code`,
+`deepseek` and `pi-agent` ship a documented `--check`/`--contract` and a method, and are marked
+`UNVERIFIED` until someone runs them; `aider` and `goose` ship no adapter file at all. An
+unverified installer is not a supported installer, and the script says so out loud.
 
 ## Conformance is measured, not claimed
 
