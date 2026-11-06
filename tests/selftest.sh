@@ -940,9 +940,21 @@ say "17. auth verification fails closed, with a pre-fix detector control"
 tmpd=$(mktemp -d)
 mkdir -p "$tmpd/bin" "$tmpd/before"
 cp "$HERE/scripts/lib.sh" "$tmpd/before/"
+# CF-291: step 6 folds the node's seed record into the verdict, so this fixture carries a
+# measurable seed — a node home with a real record and its files. Without it the seed leg is a
+# WARN, which now means UNVERIFIED, and these arms would measure the fixture instead of the auth
+# legs they name. The seed probe is the ONE bunker exec below whose command runs for real.
+mkdir -p "$tmpd/home/.hermes" "$tmpd/seed-src/prompts"
+printf 'prompts/foreman.md\n' > "$tmpd/seed.manifest"
+printf 'the foreman procedure\n' > "$tmpd/seed-src/prompts/foreman.md"
+python3 -B "$HERE/scripts/node_seed.py" build --manifest "$tmpd/seed.manifest" \
+  --repo-root "$tmpd/seed-src" --out "$tmpd/seed.tar" >/dev/null 2>&1
+python3 -B "$HERE/scripts/node_seed.py" apply --tar "$tmpd/seed.tar" \
+  --record "$tmpd/seed.tar.json" --home "$tmpd/home" >/dev/null 2>&1
 cat > "$tmpd/bin/bunker" <<'EOF'
 #!/usr/bin/env bash
 for a in "$@"; do
+  case "$a" in *seed-applied.json*) exec bash -c "${!#}" ;; esac
   case "$a" in *hostname\ -I*) echo 127.0.0.1; exit 0 ;; esac
 done
 echo ALIVE fixture
@@ -966,7 +978,7 @@ EOF
 chmod +x "$tmpd/bin/bunker" "$tmpd/bin/curl"
 cf077_run() {
   env PATH="$tmpd/bin:$PATH" BUNKER_SERVER=fixture CRIER_URL=http://fixture.invalid:8767 \
-    STATS_CODE="$1" STATUS_BODY="$2" \
+    HOME="$tmpd/home" STATS_CODE="$1" STATUS_BODY="$2" \
     /bin/bash "$3" "${@:4}" 2>&1
 }
 body='{"status":"ok","auth_required":true}'
@@ -3722,6 +3734,169 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$out" \
 else
   say "  FAIL  bunker mode --json did not carry the measurement (exit $rc)"; fails=$((fails+1))
 fi
+
+# CF-291: step 6 could not move the verdict. A seed the leg could not measure printed a WARN row
+# and then fell through to `VERIFY: PASS` (exit 0) at the bottom of scripts/verify-node.sh, so a
+# node carrying a 0-byte seed-applied.json — or no record at all — was certified by the gate, and
+# the same fixture passed under --strict-seed only because that flag takes a different branch.
+# These arms drive the REAL verifier over a fixture node: stub bunker runs the "remote" command
+# locally, stub curl answers the two gateway reads, and the fixture home carries the applied
+# record AND a real checkout level with its origin — so steps 1-5 are green and the seed leg is
+# the only thing any arm below can move.
+vn=$(mktemp -d)
+mkdir -p "$vn/bin" "$vn/tree" "$vn/before" "$vn/home/.hermes"
+cp -r "$HERE/scripts" "$vn/tree/scripts"
+rm -rf "$vn/tree/scripts/__pycache__"
+cp -r "$vn/tree/scripts" "$vn/before/scripts"
+# The control is the immutable source at 436def5 — the verifier as it stood before this row — not a
+# stub of the defect: its siblings are byte-identical to the tree under test, so the ONLY difference
+# between the two runs is the verdict the gate reaches on the same unmeasurable seed.
+git -C "$HERE" show 436def5:scripts/verify-node.sh > "$vn/before/scripts/verify-node.sh"
+prefix_rc=$?
+cat > "$vn/bin/bunker" <<'EOF'
+#!/usr/bin/env bash
+printf 'exec\n' >> "${FIXTURE_LOG:?}"
+exec bash -c "${!#}"
+EOF
+cat > "$vn/bin/curl" <<'EOF'
+#!/usr/bin/env bash
+o="" u=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o) o="$2"; shift 2 ;;
+    -*) shift ;;
+    *) u="$1"; shift ;;
+  esac
+done
+case "$u" in */api/system/stats) c=401 ;; *) c=200 ;; esac
+if [ -n "$o" ] && [ "$o" != /dev/null ]; then
+  printf '%s' '{"status":"ok","auth_required":true}' > "$o"
+fi
+printf '%s' "$c"
+EOF
+chmod +x "$vn/bin/bunker" "$vn/bin/curl"
+# The node home: the fixture seed applied by the REAL seeder (same tar the arms above built), and a
+# clean checkout level with origin so step 5 PASSes instead of warning.
+python3 -B "$SEED" apply --tar "$tmpd/seed.tar" --record "$tmpd/seed.tar.json" --home "$vn/home" >/dev/null 2>&1
+git init -q -b main --bare "$vn/origin.git"
+git clone -q "$vn/origin.git" "$vn/home/repo" 2>/dev/null
+git -C "$vn/home/repo" -c user.email=fixture@example.invalid -c user.name=fixture \
+  commit -qm fixture --allow-empty
+git -C "$vn/home/repo" push -q -u origin main
+git -C "$vn/home/repo" fetch -q origin
+vn_run() {  # vn_run <tree-with-scripts> [verify-node args...]: the fixture home is the "node"
+  local tree="$1"; shift
+  env PATH="$vn/bin:$PATH" FIXTURE_LOG="$vn/bunker.log" HOME="$vn/home" \
+    /bin/bash "$tree/scripts/verify-node.sh" --agent cf-fixture --server fixture "$@" 2>&1
+}
+vn_rec="$vn/home/.hermes/seed-applied.json"
+# A pristine copy of the record: the corrupt arm overwrites the live one, so the absent arm's
+# `mv` backup would restore a corrupt record and the green control could never go green.
+cp "$vn_rec" "$vn/good-record.json"
+
+# green: the fixture node is verifiable, so every arm below has something to move.
+out=$(vn_run "$vn/tree"); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
+  && printf '%s\n' "$out" | grep -Fq '  PASS  seed_drift — ' \
+  && printf '%s\n' "$out" | grep -Fq '2 seeded files present and matching' \
+  && printf '%s\n' "$out" | grep -Eq '^  PASS  checkout_freshness'; then
+  say "  PASS  a node whose seed matches its record -> VERIFY: PASS, exit $rc (the fixture can go green)"
+else
+  say "  FAIL  the fixture node did not verify (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# empty record (AC 2): 0 bytes is not a passed seed, it is an unmeasured one.
+: > "$vn_rec"
+out=$(vn_run "$vn/tree"); rc=$?
+if [ "$rc" -eq 3 ] \
+  && printf '%s\n' "$out" | grep -Fq '  WARN  seed_drift — the seed record at ' \
+  && printf '%s\n' "$out" | grep -Eq '^VERIFY: UNVERIFIED — seed_drift: the seed record at ' \
+  && printf '%s\n' "$out" | grep -Fq "$vn_rec" \
+  && printf '%s\n' "$out" | grep -Fq 'does not parse' \
+  && ! printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS'; then
+  say "  PASS  a 0-byte seed record -> exit $rc, VERIFY: UNVERIFIED naming seed_drift (not a PASS)"
+else
+  say "  FAIL  an empty seed record did not end UNVERIFIED (exit $rc): $(printf '%s\n' "$out" | grep -E '^VERIFY|seed_drift' | head -3 | tr '\n' ' ')"
+  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# pre-fix control: the SAME fixture through 436def5 must pass, or these arms prove nothing.
+if [ "$prefix_rc" -eq 0 ]; then
+  out=$(vn_run "$vn/before"); rc=$?
+  if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
+    && printf '%s\n' "$out" | grep -Fq '  WARN  seed_drift — '; then
+    say "  PASS  pre-fix 436def5 certifies the same unmeasured seed: VERIFY: PASS, exit $rc (the fixture detects CF-291)"
+  else
+    say "  FAIL  pre-fix 436def5 control did not pass the unmeasured seed (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+else
+  say "  FAIL  pre-fix source 436def5:scripts/verify-node.sh unavailable"; fails=$((fails+1))
+fi
+
+# corrupt record: not JSON at all — same verdict, and the reason names the record.
+printf 'this is not a seed record\n' > "$vn_rec"
+out=$(vn_run "$vn/tree"); rc=$?
+if [ "$rc" -eq 3 ] \
+  && printf '%s\n' "$out" | grep -Eq '^VERIFY: UNVERIFIED — seed_drift: the seed record at ' \
+  && printf '%s\n' "$out" | grep -Fq "$vn_rec" \
+  && printf '%s\n' "$out" | grep -Fq 'does not parse' \
+  && ! printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS'; then
+  say "  PASS  an unparseable seed record -> exit $rc, VERIFY: UNVERIFIED naming seed_drift and the path"
+else
+  say "  FAIL  a corrupt seed record did not end UNVERIFIED (exit $rc): $(printf '%s\n' "$out" | grep -E '^VERIFY|seed_drift' | head -3 | tr '\n' ' ')"
+  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# absent record: no seed was ever applied — unmeasured, so the gate refuses to call it verified.
+mv "$vn_rec" "$vn/record.bak"
+out=$(vn_run "$vn/tree"); rc=$?
+if [ "$rc" -eq 3 ] \
+  && printf '%s\n' "$out" | grep -Eq '^VERIFY: UNVERIFIED — seed_drift: no seed record at ' \
+  && printf '%s\n' "$out" | grep -Fq "$vn_rec" \
+  && ! printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS'; then
+  say "  PASS  an absent seed record -> exit $rc, VERIFY: UNVERIFIED naming seed_drift and the path"
+else
+  say "  FAIL  an absent seed record did not end UNVERIFIED (exit $rc): $(printf '%s\n' "$out" | grep -E '^VERIFY|seed_drift' | head -3 | tr '\n' ' ')"
+  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# the strict path keeps its wording: an unknown seed is a FAIL, never an UNVERIFIED.
+out=$(vn_run "$vn/tree" --strict-seed); rc=$?
+if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: FAIL (1)' \
+  && printf '%s\n' "$out" | grep -Fq '  FAIL  seed_drift — no seed record at ' \
+  && printf '%s\n' "$out" | grep -Fq 'an unknown seed is not a pass'; then
+  say "  PASS  an absent record under --strict-seed is still a FAIL, exit $rc (wording preserved)"
+else
+  say "  FAIL  --strict-seed no longer refuses the absent record as a FAIL (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# the seeder itself gone: nothing could stage a check, and that is a named FAIL, not a warning.
+mv "$vn/tree/scripts/node_seed_drift.py" "$vn/node_seed_drift.py.bak"
+out=$(vn_run "$vn/tree"); rc=$?
+if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: FAIL (1)' \
+  && printf '%s\n' "$out" | grep -Fq '  FAIL  seed_drift — ' \
+  && printf '%s\n' "$out" | grep -Fq 'node_seed_drift.py missing'; then
+  say "  PASS  a missing seeder -> exit $rc, VERIFY: FAIL naming the unmeasured seed"
+else
+  say "  FAIL  a missing seeder did not fail the gate (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# green again: restore the seeder and the record — the arms can go green, not only red.
+mv "$vn/node_seed_drift.py.bak" "$vn/tree/scripts/node_seed_drift.py"
+cp "$vn/good-record.json" "$vn_rec"
+out=$(vn_run "$vn/tree"); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
+  && printf '%s\n' "$out" | grep -Fq '2 seeded files present and matching'; then
+  say "  PASS  seeder and record restored -> VERIFY: PASS, exit $rc again (the arms can go green)"
+else
+  say "  FAIL  the restored fixture did not verify (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+rm -rf "$vn"
 rm -rf "$tmpd"
 # END cf250-seed-drift
 

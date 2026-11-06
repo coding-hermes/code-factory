@@ -131,7 +131,7 @@ verify_rc=0
 "$HERE/verify-node.sh" --agent "$AGENT" --server "$SERVER" --port "$PORT" || verify_rc=$?
 case "$verify_rc" in
   0) ok "verify" "round trip proven from the control host" ;;
-  3) warn "verify" "UNVERIFIED — the node answers inside itself but this host has no transport to it (CF-224); the node is not marked failed" ;;
+  3) warn "verify" "UNVERIFIED — a leg could not be measured from this host (no transport, or an unreadable seed; see the VERIFY line for which) — the node is not marked failed (CF-224/CF-291)" ;;
   *) bad "verify" "round trip failed — node remains unverified"; incomplete ;;
 esac
 

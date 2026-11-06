@@ -34,7 +34,16 @@ done
 # environment variable being set first: the documented flag was dead.
 [ -z "$SERVER" ] && { echo "set BUNKER_SERVER or pass --server <name>" >&2; exit 2; }
 
+# UNVERIFIED is not one story: a leg can be unmeasurable because this host has no transport to
+# the node (CF-224) or because the thing it measures cannot be read at all (CF-291, the seed).
+# Each unmeasurable leg therefore NAMES itself here, and the final line repeats the reasons, so
+# the operator is not told "transport" for a cause that has nothing to do with transport.
 UNVERIFIED=0
+UNVERIFIED_WHY=""
+unverified() {  # unverified <why this leg could not be measured>
+  UNVERIFIED=$((UNVERIFIED+1))
+  UNVERIFIED_WHY="${UNVERIFIED_WHY:+$UNVERIFIED_WHY; }$1"
+}
 say "verify node $AGENT"
 
 # 1. alive
@@ -68,10 +77,10 @@ elif [ "$code" = 000 ]; then
   case "$in_code" in
     200)
       warn "gateway_reachable" "no transport from this host to $ip:$PORT — the gateway answers 200 INSIDE the node, so this is unverified, not failed (CF-224: publish a port or define the transport)"
-      UNVERIFIED=1 ;;
+      unverified "the node answered inside itself, but this host has no transport to it" ;;
     *)
       warn "gateway_reachable" "no transport to $ip:$PORT, and the gateway does not answer inside the node either ($in_code) — the harness is not up"
-      UNVERIFIED=1 ;;
+      unverified "this host has no transport to $ip:$PORT, and the gateway does not answer inside the node either ($in_code)" ;;
   esac
 else
   bad "gateway_reachable" "$url -> $code (is the harness running on 0.0.0.0:$PORT?)"
@@ -89,7 +98,7 @@ case "$code" in
       200)         bad "unauth_refused" "/api/system/stats -> 200 INSIDE the node — the gateway is open" ;;
       *)           warn "unauth_refused" "unverified: no transport from here, and $in_code inside the node" ;;
     esac
-    UNVERIFIED=1 ;;
+    unverified "the auth gate could not be measured from this host: no transport to http://$ip:$PORT/api/system/stats" ;;
   *) bad "unauth_refused" "/api/system/stats -> $code — auth refusal not verified" ;;
 esac
 
@@ -154,10 +163,12 @@ fi
 # removed in the same one — and its verdict is folded in here, so a drifted
 # seed drives VERIFY: FAIL on its own.
 #
-# Default mapping: PASS -> PASS, drift -> FAIL, unmeasurable (or a node with no
-# seed record yet) -> WARN — "cannot measure" is not proof of a broken copy,
-# the same doctrine as the freshness leg above. With --strict-seed an
-# unmeasurable seed is a FAIL too, so a gate can refuse on "unknown".
+# Default mapping: PASS -> PASS, drift -> FAIL. An unmeasurable seed (or a node with no seed
+# record yet) is a WARN row, because "cannot measure" is not proof of a broken copy, the same
+# doctrine as the freshness leg above — but a WARN is NOT a pass: it sets UNVERIFIED, so the gate
+# answers VERIFY: UNVERIFIED and exits 3 rather than printing PASS for a seed nobody read
+# (CF-291: an empty or unparseable record used to end in `VERIFY: PASS`, exit 0). With
+# --strict-seed the same case is a FAIL instead, so a gate can refuse on "unknown" outright.
 SEEDCHK="$HERE/node_seed_drift.py"
 if [ ! -r "$SEEDCHK" ]; then
   bad "seed_drift" "$SEEDCHK missing — the node's seed is unmeasured"
@@ -181,6 +192,10 @@ else
         bad "seed_drift" "${detail:-unmeasurable} (--strict-seed: unknown is not a pass)"
       else
         warn "seed_drift" "${detail:-unmeasurable} — the seed could not be measured; pass --strict-seed to refuse it"
+        # A WARN row is not a pass and not a FAIL: the seed was never read, so VERIFY: PASS here
+        # would certify a copy nobody looked at (CF-291). Refuse to call it verified instead, and
+        # name it, so the final line does not blame the transport for a seed problem.
+        unverified "seed_drift: ${detail:-unmeasurable}"
       fi
       ;;
   esac
@@ -190,7 +205,9 @@ fi
 say ""
 if [ "$FAILED" -gt 0 ]; then say "VERIFY: FAIL ($FAILED)"; exit 1; fi
 if [ "${UNVERIFIED:-0}" -gt 0 ]; then
-  say "VERIFY: UNVERIFIED — the node answered inside itself, but this host has no transport to it"
+  # Name the legs that produced it: the transport sentence alone was a lie once the seed leg could
+  # also be the cause (CF-291). A seed WARN now reads `... seed_drift: <what could not be read>`.
+  say "VERIFY: UNVERIFIED — ${UNVERIFIED_WHY:-some legs could not be measured}"
   say "        (distinct from FAIL on purpose: nothing is broken and nothing is proven — CF-224)"
   exit 3
 fi

@@ -106,7 +106,11 @@ set -u
 echo "HOME=$HOME"
 REC="$HOME/__RECORD_REL__"
 if [ ! -f "$REC" ]; then echo "RECORD=0"; exit 0; fi
-if ! python3 - "$REC" -c 'import json,sys; json.load(open(sys.argv[1]))' >/dev/null 2>&1; then
+# CF-291: the program must be passed BEFORE the record. `python3 - "$REC" -c '<code>'` reads the
+# PROGRAM from stdin ('-') and leaves '<code>' in argv, so an empty stdin was a valid empty program
+# and every record — a 0-byte one included — was called parseable. The record was then handed to
+# node_seed.py check, which died on it and cost the operator the real cause.
+if ! python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$REC" >/dev/null 2>&1; then
   echo "RECORD=2"
   exit 0
 fi
