@@ -120,7 +120,7 @@ scripts/boardctl validate
 bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 ```
 
-- **Re-measured 2026-11-06T10:14Z at tip `2f07051`:** 350 task rows, 489 events (max event id 489;
+- **Re-measured 2026-11-06T10:05Z at tip `2f07051`:** 350 task rows, 489 events (max event id 489;
   one benign duplicate id 336, owned by **CF-196**) — 80 `complete`, 13 `in_progress`, 1 `blocked`,
   256 `pending`, no duplicate task ids. Both board files are byte-identical to their `origin/main`
   copies (`python3 scripts/board_drift.py check --workdir . --ref origin/main` prints `RESULT: OK`,
