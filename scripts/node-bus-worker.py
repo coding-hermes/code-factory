@@ -477,7 +477,9 @@ class Identity:
 def secret_shaped(value):
     """True for a credential VALUE (a known key prefix, or a bare opaque token). Never echoed."""
     text = str(value)
-    if text.startswith(("sk-", "sk_", "ghp_", "gho_", "AIza", "xoxa-", "xoxb-", "xoxp-")):
+    if text.startswith(
+        ("sk-", "sk_", "ghp_", "gho_", "AIza", "xoxa-", "xoxb-", "xoxp-")
+    ):
         return True
     if "/" in text or " " in text:
         return False
@@ -522,30 +524,46 @@ def directive_vars(dispatch, home):
                     f"({len(text)} chars; the value is not printed)"
                 )
             elif "/" not in text:
-                problems.append("CF_API_KEY_FILE is not a path (expected /abs/path or ~/path)")
+                problems.append(
+                    "CF_API_KEY_FILE is not a path (expected /abs/path or ~/path)"
+                )
         elif key == "CF_WORKDIR":
             real = os.path.realpath(os.path.expanduser(text))
             if not os.path.isdir(real):
                 problems.append(f"CF_WORKDIR is not an existing directory: {text}")
             elif not inside_clone(real, home):
-                problems.append(f"CF_WORKDIR {real} is outside this node's $HOME ({home})")
+                problems.append(
+                    f"CF_WORKDIR {real} is outside this node's $HOME ({home})"
+                )
         elif key == "CF_HARNESS_OPTS":
-            if re.search(r"sk-|api[_-]?key=|token=|secret=|password=", text, re.IGNORECASE):
-                problems.append("CF_HARNESS_OPTS looks like it carries a credential; it is recorded, so it is public")
-            elif not re.fullmatch(r"[A-Za-z0-9_.-]+=[^,]+(,[A-Za-z0-9_.-]+=[^,]+)*", text):
+            if re.search(
+                r"sk-|api[_-]?key=|token=|secret=|password=", text, re.IGNORECASE
+            ):
+                problems.append(
+                    "CF_HARNESS_OPTS looks like it carries a credential; it is recorded, so it is public"
+                )
+            elif not re.fullmatch(
+                r"[A-Za-z0-9_.-]+=[^,]+(,[A-Za-z0-9_.-]+=[^,]+)*", text
+            ):
                 problems.append("CF_HARNESS_OPTS is not a key=value[,key=value] bag")
         elif key == "CF_BASE_URL":
             if not re.match(r"^https?://", text):
                 problems.append(f"CF_BASE_URL is not an http(s) URL: {text}")
             elif "@" in text.split("://", 1)[1]:
-                problems.append("CF_BASE_URL carries userinfo; a credential in a URL is a credential as a value")
+                problems.append(
+                    "CF_BASE_URL carries userinfo; a credential in a URL is a credential as a value"
+                )
     return values, problems
 
 
 def section5_receipt(values):
     """name -> {set, len} for every declared variable: comparable across runs, never a value."""
     return {
-        name: ({"set": True, "len": len(values[name])} if name in values else {"set": False, "len": 0})
+        name: (
+            {"set": True, "len": len(values[name])}
+            if name in values
+            else {"set": False, "len": 0}
+        )
         for name in SECTION5_VARS
     }
 
@@ -1064,7 +1082,10 @@ def process(dispatch, ident, signer, args, seen):
         )
         say(
             "  WOULD  vars — the harness child env carries: "
-            + (", ".join(f"{k}({len(v)})" for k, v in sorted(values.items())) or "(none)")
+            + (
+                ", ".join(f"{k}({len(v)})" for k, v in sorted(values.items()))
+                or "(none)"
+            )
             + "; every CF_* in this worker's environment is scrubbed first"
         )
         if isinstance(dispatch.get("gate"), dict):

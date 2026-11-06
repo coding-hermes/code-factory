@@ -15,6 +15,7 @@ needs a human or a measurement, not a vote.
 Seats default to three different families, all inside this project's lane policy (xkiro + DeepSeek
 PAYG): gpt-6.1-sol, kimi-k3-agent, deepseek-v4-flash.
 """
+
 import argparse
 import json
 import pathlib
@@ -79,9 +80,23 @@ def run_seat(seat, modules, timeout):
         path = fh.name
     try:
         r = subprocess.run(
-            ["hermes", "chat", "-q", brief, "-m", model, "--provider", provider,
-             "-Q", "--max-turns", "40"],
-            capture_output=True, text=True, timeout=timeout, cwd=str(REPO),
+            [
+                "hermes",
+                "chat",
+                "-q",
+                brief,
+                "-m",
+                model,
+                "--provider",
+                provider,
+                "-Q",
+                "--max-turns",
+                "40",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=str(REPO),
         )
     except subprocess.TimeoutExpired:
         return seat, None, "timed out after %ds" % timeout
@@ -105,7 +120,11 @@ def run_seat(seat, modules, timeout):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--modules", required=True, help="comma-separated module prefixes, e.g. 03,04,05")
+    ap.add_argument(
+        "--modules",
+        required=True,
+        help="comma-separated module prefixes, e.g. 03,04,05",
+    )
     ap.add_argument("--seats", default="sol,k3,flash")
     ap.add_argument("--timeout", type=int, default=1200)
     ap.add_argument("--out", default="docs/master/_panel")
@@ -116,7 +135,10 @@ def main():
         print("no modules matched %s" % a.modules)
         return 2
     seats = [s.strip() for s in a.seats.split(",") if s.strip()]
-    print("panel: %d module(s), %d seat(s): %s" % (len(modules), len(seats), ", ".join(seats)))
+    print(
+        "panel: %d module(s), %d seat(s): %s"
+        % (len(modules), len(seats), ", ".join(seats))
+    )
 
     results = {}
     with ThreadPoolExecutor(max_workers=len(seats)) as ex:
@@ -135,22 +157,36 @@ def main():
             tally[key]["module_verdicts"][seat] = mod.get("verdict", "?")
             for s in mod.get("sections", []):
                 tally[key]["sections"].setdefault(str(s.get("n")), {})[seat] = (
-                    s.get("verdict", "?"), s.get("why", ""), s.get("evidence", ""))
+                    s.get("verdict", "?"),
+                    s.get("why", ""),
+                    s.get("evidence", ""),
+                )
 
     outdir = REPO / a.out
     outdir.mkdir(parents=True, exist_ok=True)
     stamp = "_".join(m.stem.split("-")[0] for m in modules)
     jpath = outdir / ("%s.json" % stamp)
-    jpath.write_text(json.dumps({"modules": [str(m) for m in modules], "seats": results,
-                                 "tally": tally}, indent=2), encoding="utf-8")
+    jpath.write_text(
+        json.dumps(
+            {"modules": [str(m) for m in modules], "seats": results, "tally": tally},
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
     print("\n%-46s %s" % ("module", "seat verdicts"))
     disputed = 0
     for key, t in sorted(tally.items()):
         vs = t["module_verdicts"]
         vals = sorted(set(vs.values()))
-        print("%-46s %s%s" % (key, ", ".join("%s=%s" % kv for kv in sorted(vs.items())),
-                              "   <-- SPLIT" if len(vals) > 1 else ""))
+        print(
+            "%-46s %s%s"
+            % (
+                key,
+                ", ".join("%s=%s" % kv for kv in sorted(vs.items())),
+                "   <-- SPLIT" if len(vals) > 1 else "",
+            )
+        )
         for n, per_seat in sorted(t["sections"].items()):
             bad = [s for s, (v, _, _) in per_seat.items() if v not in ("OK",)]
             if bad:
@@ -160,11 +196,16 @@ def main():
                     print("    §%-2s %-6s %-10s %s  [%s]" % (n, s, v, why[:70], ev))
 
     seat_fail = [s for s, r in results.items() if not r["verdict"]]
-    print("\n%d section finding(s); %d seat(s) answered; json: %s"
-          % (disputed, len(results) - len(seat_fail), jpath))
+    print(
+        "\n%d section finding(s); %d seat(s) answered; json: %s"
+        % (disputed, len(results) - len(seat_fail), jpath)
+    )
     if seat_fail:
         print("SEATS WITH NO VERDICT: %s" % ", ".join(seat_fail))
-    print("PANEL: %s" % ("INCOMPLETE" if seat_fail else ("FINDINGS" if disputed else "CLEAN")))
+    print(
+        "PANEL: %s"
+        % ("INCOMPLETE" if seat_fail else ("FINDINGS" if disputed else "CLEAN"))
+    )
     return 1 if (seat_fail or disputed) else 0
 
 
