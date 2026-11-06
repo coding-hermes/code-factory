@@ -13,6 +13,9 @@ FAILED=${FAILED:-0}
 have() { command -v "$1" >/dev/null 2>&1 && command -v "$1" || true; }
 
 # A pinned download that refuses a digest mismatch (CF-105). Never pipes to a shell.
+# CF-280: fails closed. Every step that can fail while putting the artifact in place is checked
+# explicitly — no `set -e` (this file is sourced by many scripts) and no trailing `|| true` deciding
+# the status. The function's exit code now describes the INSTALL, not the best-effort chmod.
 fetch_verified() {
   local url="$1" dest="$2" want="$3"
   local tmp; tmp="$(mktemp)"
@@ -23,9 +26,19 @@ fetch_verified() {
     printf 'digest mismatch for %s: want %s got %s\n' "$url" "$want" "$got" >&2
     return 1
   fi
-  mkdir -p "$(dirname "$dest")"
-  mv "$tmp" "$dest"
+  local dir; dir="$(dirname "$dest")"
+  if ! mkdir -p "$dir"; then
+    rm -f "$tmp"
+    printf 'cannot create destination directory %s for %s\n' "$dir" "$url" >&2
+    return 1
+  fi
+  if ! mv "$tmp" "$dest"; then
+    rm -f "$tmp"
+    printf 'cannot move verified download into place at %s for %s\n' "$dest" "$url" >&2
+    return 1
+  fi
   chmod +x "$dest" 2>/dev/null || true
+  return 0
 }
 
 # Free space in GB at a path.

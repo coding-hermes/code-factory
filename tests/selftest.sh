@@ -147,6 +147,37 @@ want=$(sha256sum "$tmpd/src" | cut -d' ' -f1)
 fetch_verified "file://$tmpd/src" "$tmpd/out" "$want" && say "  PASS  correct digest accepted" || { say "  FAIL  correct digest refused"; fails=$((fails+1)); }
 fetch_verified "file://$tmpd/src" "$tmpd/out2" "0000000000000000000000000000000000000000000000000000000000000000" \
   && { say "  FAIL  wrong digest accepted"; fails=$((fails+1)); } || say "  PASS  wrong digest refused"
+# CF-280 red-proof: revert fetch_verified to the pre-fix body (an unchecked `mkdir -p`/`mv` followed
+# by `chmod ... || true`) and BOTH arms below go RED — the positive arm sees exit 0 (the chmod's
+# status) and the caller arm prints no `go:download` FAIL row. They are regression arms, not
+# decoration. The destination's parent is a regular FILE, so `mkdir -p` fails with ENOTDIR for root
+# and non-root alike (0555 permissions are not used here: root ignores them).
+: > "$tmpd/blocker"
+fetch_rc=0
+fetch_verified "file://$tmpd/src" "$tmpd/blocker/bin" "$want" >/dev/null 2>&1 || fetch_rc=$?
+if [ "$fetch_rc" -ne 0 ] && [ ! -e "$tmpd/blocker/bin" ]; then
+  say "  PASS  uncreatable destination -> fetch_verified exit $fetch_rc, no artifact installed"
+else
+  say "  FAIL  uncreatable destination was reported as a verified install (exit $fetch_rc)"; fails=$((fails+1))
+fi
+# The caller arm proves the failure is SURFACED, not silent: it mirrors the install-go.sh branch
+# (`fetch_verified ... || bad "go:download" ...`) and asserts the ROW, not the substring FAIL — a
+# shell death also prints FAIL and would fake a pass. `bad` returns the status of its own printf, so
+# the fixture states `exit 1` rather than inheriting that 0.
+cat > "$tmpd/caller.sh" <<'EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+. "$1"
+fetch_verified "$2" "$3" "$4" || { bad "go:download" "verified download did not install to $3"; exit 1; }
+EOF
+caller_out=$(bash "$tmpd/caller.sh" "$HERE/scripts/lib.sh" "file://$tmpd/src" "$tmpd/blocker/bin" "$want" 2>&1)
+caller_rc=$?
+caller_rows=$(printf '%s\n' "$caller_out" | grep -Ec '^  FAIL  go:download' || true)
+if [ "$caller_rc" -ne 0 ] && [ "$caller_rows" = 1 ]; then
+  say "  PASS  caller surfaced the failed install: 1 '^  FAIL  go:download' row, fixture exit $caller_rc"
+else
+  say "  FAIL  caller did not surface the failed install (exit $caller_rc, $caller_rows go:download row(s))"; fails=$((fails+1))
+fi
 rm -rf "$tmpd"
 
 say "6. no literal credential assignments"
