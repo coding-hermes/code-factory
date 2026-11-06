@@ -8,7 +8,7 @@ section that is green without evidence is a lie the next reviewer will find.
 
 Usage:
   ./master_doc_fill.py --limit 3            # prove the loop on three modules
-  ./master_doc_fill.py                     # fill modules without a FILLED status
+  ./master_doc_fill.py                     # fill modules without a FILLED/VERIFIED status
   ./master_doc_fill.py --workers 4         # parallel
 """
 
@@ -26,6 +26,11 @@ from pathlib import Path
 MASTER = Path(os.environ.get("CF_MASTER_DIR") or "/home/kara/code-factory/docs/master")
 FILLED_MARKER = "FILLED — "
 STATUS_ROW = re.compile(r"^\| Status \| (.*?) \|[ \t]*$", re.MULTILINE)
+# The completions a fill has ever written. `mark_filled()` stamps FILLED; the earlier
+# accepted-output writer stamped VERIFIED, and every module filled before 2026-11-05 carries
+# that one. A bare `**VERIFIED**` row is the same claim with no measurements attached. All
+# three mean "already filled": selecting them again is the loop that never converged.
+COMPLETE_STATUS = re.compile(r"^\*\*(?:FILLED|VERIFIED)(?: — |\*\*)")
 STATE = Path("/home/kara/.hermes/logs/master-doc-fill.jsonl")
 ENV = Path("/home/kara/.hermes/.env")
 
@@ -147,6 +152,17 @@ def mark_filled(text, provider):
         f"{datetime.now(timezone.utc).date().isoformat()} UTC** |"
     )
     return STATUS_ROW.sub(lambda _: status, text)
+
+
+def is_complete(text):
+    """True when the module's single Status row already records a completed fill.
+
+    The selector must read the markers the writers actually emit (`mark_filled`, and the older
+    accepted-output path that stamped VERIFIED). Testing for the template's RED string instead
+    re-selected every filled module on every run, so the program could never converge.
+    """
+    statuses = STATUS_ROW.findall(text)
+    return len(statuses) == 1 and bool(COMPLETE_STATUS.match(statuses[0]))
 
 
 def locators_resolve(text, repo_root):
@@ -380,7 +396,9 @@ def main():
     ap.add_argument("--workers", type=int, default=2)
     ap.add_argument("--provider", default="deepseek", choices=sorted(PROVIDERS))
     ap.add_argument(
-        "--force", action="store_true", help="refill modules already marked FILLED"
+        "--force",
+        action="store_true",
+        help="refill modules already marked FILLED or VERIFIED",
     )
     ap.add_argument(
         "--only",
@@ -414,10 +432,7 @@ def main():
         if not re.search(r"\| Path \| `([^`]+)` \|", t):
             print("skip %s no path field" % f.name, flush=True)
             continue
-        statuses = STATUS_ROW.findall(t)
-        filled = len(statuses) == 1 and statuses[0].removeprefix("**").startswith(
-            FILLED_MARKER
-        )
+        filled = is_complete(t)
         if a.force or not filled:
             todo.append(f)
     if a.limit:

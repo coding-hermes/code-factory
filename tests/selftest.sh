@@ -3677,6 +3677,17 @@ second.write_text(text)
 # Give the index a Path row too: its name must still exclude it, even with --force.
 (master / "00-INDEX.md").write_text(text)
 (master / "03-not-a-module.md").write_text("# Notes\n| Status | **RED** |\n")
+# CF-257: every module filled before 2026-11-05 carries a `VERIFIED — ` Status row from the
+# earlier accepted-output writer (37 of them on the real tree), and one module carries the bare
+# `**VERIFIED**` form. The template's RED string stays in their bodies, exactly as a real fill
+# leaves it — so a selector that tests the body re-fills documents it already completed.
+for name, row in (
+    ("04-verified.md", "**VERIFIED — 2 sections, 1 locator, fixture-api, 2026-11-05 UTC**"),
+    ("05-bare-verified.md", "**VERIFIED**"),
+):
+    (master / name).write_text(
+        text.replace("| Status | **RED — no verification recorded** |", f"| Status | {row} |")
+    )
 
 # Exercise BOTH accepted-output writers using only local stubs, never provider calls.
 with patch.object(runner, "call", return_value=(text, 0.0)):
@@ -3729,6 +3740,18 @@ else
   say "  FAIL  RED/index/Path selection (exit $rc)"; fails=$((fails+1))
   printf '%s\n' "$out"
 fi
+# CF-257 regression: a module whose single Status row starts with `**VERIFIED — ` — or with the
+# bare `**VERIFIED**` — is complete. On the pre-fix selector both were candidates, so every run
+# re-filled the 37 modules the older writer had already verified and the program never converged.
+marker_leaks=
+for name in 04-verified.md 05-bare-verified.md; do
+  printf '%s\n' "$out" | grep -Fxq "candidate $name" && marker_leaks="$marker_leaks $name"
+done
+if [ -z "$marker_leaks" ]; then
+  say "  PASS  VERIFIED and bare VERIFIED Status rows are complete, never candidates"
+else
+  say "  FAIL  a completed module is still selected:$marker_leaks"; fails=$((fails+1))
+fi
 cp "$tmpd/filled-first.md" "$tmpd/master/01-first.md"
 # Negative control: the old body-string selector would select BOTH filled modules.
 if [ "$(grep -l 'RED — no verification recorded' "$tmpd/master"/0[12]-*.md | wc -l)" -eq 2 ]; then
@@ -3750,13 +3773,18 @@ for pass in 1 2; do
   fi
 done
 out=$(CF_MASTER_DIR="$tmpd/master" python3 "$HERE/scripts/master_doc_fill.py" --dry-run --force 2>&1); rc=$?
-if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^todo=2 ' \
-  && [ "$(printf '%s\n' "$out" | grep -c '^candidate ')" = 2 ] \
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^todo=4 ' \
+  && [ "$(printf '%s\n' "$out" | grep -c '^candidate ')" = 4 ] \
   && printf '%s\n' "$out" | grep -Fxq 'candidate 01-first.md' \
-  && printf '%s\n' "$out" | grep -Fxq 'candidate 02-second.md'; then
-  say "  PASS  --force selects both filled modules, never the non-modules"
+  && printf '%s\n' "$out" | grep -Fxq 'candidate 02-second.md' \
+  && printf '%s\n' "$out" | grep -Fxq 'candidate 04-verified.md' \
+  && printf '%s\n' "$out" | grep -Fxq 'candidate 05-bare-verified.md' \
+  && ! printf '%s\n' "$out" | grep -Fxq 'candidate 00-INDEX.md' \
+  && ! printf '%s\n' "$out" | grep -Fxq 'candidate 03-not-a-module.md'; then
+  say "  PASS  --force selects all four modules, VERIFIED ones included, never the non-modules"
 else
   say "  FAIL  --force selection (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out"
 fi
 rm -rf "$tmpd"
 # END master-doc-selection
