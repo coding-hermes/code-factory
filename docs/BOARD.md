@@ -120,7 +120,30 @@ scripts/boardctl validate
 bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 ```
 
-- **Re-measured 2026-11-05T10:07Z at tip `bc02e2c`:** 214 task rows, 403 events (max event id 402;
+- **Re-measured 2026-11-06T00:06Z at tip `4d84d5a`:** 344 task rows, 462 events (max event id 461;
+  one benign duplicate id 336, owned by **CF-196**) — 70 `complete`, 14 `in_progress`, 260 `pending`,
+  no duplicate task ids. Both board files are byte-identical to their `origin/main` copies
+  (`python3 scripts/board_drift.py check --workdir . --ref origin/main` prints `RESULT: OK`,
+  344 vs 344 rows, 0 divergent ids). `scripts/boardctl validate` prints `RESULT: OK (6 warning(s))`
+  (CF-034's free-form `guard_result`/`ci_result`, CF-150's and CF-192's title/priority drift, the
+  duplicate event id 336 and the headerless board) and
+  `key uniformity: 344/344 rows carry only canon keys (0 drift)`. 70/70 `complete` rows bind a commit
+  that exists and is an ancestor of `origin/main`, and 79 evidence artifact pointers (71 unique
+  paths) resolve: 78 as bare paths, plus CF-034's single anchored pointer
+  `tests/selftest.sh::clone-error-classification`, whose file part exists and whose anchor occurs
+  once in that file — a `test -e` on the whole string reports it as missing and is wrong.
+  `tests/selftest.sh` printed `SELFTEST: PASS` (rc 0) on a CLEAN WORKTREE of this tip,
+  `PASS 344/344 rows parse`, 342 `PASS` rows and 58 `FAIL` rows that all sit inside negative
+  fixtures, at loadavg 25.25 (1 min) — the same suite run against the shared checkout's dirty tree
+  printed `SELFTEST: FAIL (18)` because a sibling lane had `scripts/harness/harness-vars.sh`
+  untracked while `install-hermes.sh` referenced it (`staged_set` arms); the tip is green, the
+  dirty tree was not the tip. The verdict-binding sweep prints
+  `complete_rows=70 verdict_artifacts_checked=42 orphan_count=1`: only **CF-077** (owned by pending
+  **CF-181**), down from the 2 this block recorded at `bc02e2c`, so CF-181's AC0 — which asserts
+  `orphan_count=1` — reproduces again as written. Three sibling rows still own the structural fixes
+  for this block: **CF-081** (the hand-typed counts and the hand-typed tip label), **CF-154** (the
+  warning count does not follow from the board) and **CF-196** (duplicate event ids).
+- **Earlier snapshot, 2026-11-05T10:07Z at tip `bc02e2c` (historical, not current):** 214 task rows, 403 events (max event id 402;
   one benign duplicate id 336, owned by **CF-196**) — 63 `complete`, 11 `in_progress`, 140 `pending`,
   no duplicate task ids. Both board files are byte-identical to their `origin/main` copies
   (`python3 scripts/board_drift.py check --workdir . --ref origin/main` prints `RESULT: OK`,
