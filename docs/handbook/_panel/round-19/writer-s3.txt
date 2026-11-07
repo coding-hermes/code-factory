@@ -1,0 +1,520 @@
+│ cache/scratch/m9_log_enum_r19.py
+│ @@ -0,0 +1,21 @@
+│ +import re
+│ +from pathlib import Path
+│ +ROOT = Path('/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/scheduler')
+│ +pat = re.compile(r'log\.Printf\("([^"]*)"')
+│ +first = {}
+│ +for p in sorted(ROOT.glob('*.go')):
+│ +    if p.name.endswith('_test.go'):
+│ +        continue
+│ +    for i, line in enumerate(p.read_text(errors='replace').splitlines(), 1):
+│ +        m = pat.search(line)
+│ +        if m:
+│ +            s = m.group(1)
+│ +            if s not in first:
+│ +                first[s] = (p.name, i)
+│ +print("distinct:", len(first))
+│ +out = []
+│ +for s in sorted(first):
+│ +    fn, ln = first[s]
+│ +    out.append(f"{fn}:{ln}\t{s}")
+│ +Path('/tmp/m9_log_enum_r19.txt').write_text('\n'.join(out))
+│ +print("wrote", len(out), "entries")
+│ cache/scratch/m9_log_diff_r19.py
+│ @@ -0,0 +1,43 @@
+│ +import re
+│ +from pathlib import Path
+│ +
+│ +ch = Path('/home/kara/code-factory/docs/handbook/chapters/M9-scheduler.md').read_text()
+│ +# extract the code block between the §9 inventory intro and the next '## 10.'
+│ +start = ch.index('```text\nspawn.go:2072')
+│ +end = ch.index('## 10. Failure modes', start)
+│ +block = ch[start:end]
+│ +# parse lines like "file.go:NNN\tstring"
+│ +old = {}
+│ +for line in block.splitlines():
+│ +    line = line.strip()
+│ +    if not line or line.startswith('```') or line.startswith('spawn'):
+│ +        pass
+│ +    m = re.match(r'^([\w./-]+\.go):(\d+)\t(.*)$', line)
+│ +    if m:
+│ +        old[m.group(3)] = (m.group(1), int(m.group(2)))
+│ +
+│ +new = {}
+│ +for line in Path('/tmp/m9_log_enum_r19.txt').read_text().splitlines():
+│ +    m = re.match(r'^([\w./-]+\.go):(\d+)\t(.*)$', line)
+│ +    if m:
+│ +        new[m.group(3)] = (m.group(1), int(m.group(2)))
+│ +
+│ +print("old entries parsed:", len(old), " new entries:", len(new))
+│ +changed_files = {'adaptive_cooldown.go','loop.go','multipool_packer.go','noop_pacing.go','packer.go','packer_select.go','spawn.go'}
+│ +diff_lines = []
+│ +for s in sorted(old):
+│ +    ofn, oln = old[s]
+│ +    if ofn in changed_files:
+│ +        nfn, nln = new.get(s, ('MISSING', -1))
+│ +        if (nfn, nln) != (ofn, oln):
+│ +            diff_lines.append((ofn, oln, nfn, nln, s))
+│ +print("entries in changed files whose file:line moved:", len(diff_lines))
+│ +for ofn, oln, nfn, nln, s in diff_lines:
+│ +    print(f"  {ofn}:{oln} -> {nfn}:{nln}  {s[:70]}")
+│ +# also check: any string missing entirely
+│ +missing = [s for s in old if s not in new]
+│ +extra = [s for s in new if s not in old]
+│ +print("strings missing in new:", len(missing))
+│ +print("strings extra in new:", len(extra))
+│ +for s in extra[:20]:
+│ +    print("  EXTRA:", new[s], s[:70])
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | SCHEDULER |
+│  | Path | `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/` (Go) |
+│ -| Revision | `251d11db` (scheduler repo HEAD at this round's stamp). The round-15 stamp `7a7afc0f` is superseded; HEAD advanced through `81ce9fcb` (board JSONL), `b0da3761` + `bbefa36c` (QA-CHS-188 test-only), `384e5df7` ("scheduler: unblock before you block" — a `spawn.go` prompt-text change), to `251d11db`. `git diff --name-only 34e44897..HEAD` returns **five** paths: `.coding-hermes/board/events.jsonl`, `.coding-hermes/board/tasks.jsonl`, `.qa/chaos-probes/errorpath.sh`, `internal/scheduler/spawn.go`, `internal/scheduler/usage_pool_policy_test.go`. The only cited-file change is `spawn.go`: `384e5df7` appended an "UNBLOCK BEFORE YOU BLOCK" block to the `builtinForemanPrompt` string constant (+5 lines), which shifted `buildForemanPrompt` from `:1244` to `:1249` — a prompt-text-only change, no control-flow change. Every other cited Go file (`admission_mode.go`, `packer_select.go`, `slot_pool.go`, `tick_process.go`, `usage_pool_policy.go`, `dispatch_leg.go`, `bus/dispatch.go`, `main.go`, `server.go`, `server_metrics.go`, `loader.go`, `urgency.go`, `migrations.go`) is byte-identical to `34e44897` |
+│ +| Revision | `d0dad6d9` (scheduler repo HEAD, this round's stamp). Re-stamped from `251d11db`: HEAD advanced through four commits — `0b357bb9` (read your own board, always), `79510add` + `d0dad6d9` (pace tasks-admitted lanes on their no-op streak; the latter is the spin fix), `ea7810db` (board: file SCHED-GAP-16999, board JSONL only). `git diff --name-only 251d11db..HEAD` = **twelve** paths: the two board JSONL, seven `internal/scheduler/*.go` (`adaptive_cooldown.go`, `loop.go`, `multipool_packer.go`, `noop_pacing.go`, `packer.go`, `packer_select.go`, `spawn.go`), three `noop_pacing_*_test.go`, and (already present at `251d11db`) no new file — `noop_pacing.go` is new in this range (added `79510add`). Load-bearing effect: `spawn.go` gained one line in `builtinForemanPrompt` (`:1213`, the READ-YOUR-OWN-BOARD line), shifting `buildForemanPrompt` `:1249`→`:1250` (§6 CT-05); `packer_select.go`'s namespace-mode gate order shifted +12 lines and the no-work gates' **definitions** live in `nowork.go` (not `packer_select.go`) — §3 re-derived; `loop.go` gained a +10 net change moving two §9 log sites +10. Unchanged this drift (`git diff --name-only 251d11db..HEAD` does **not** list them): `admission_mode.go`, `slot_pool.go`, `tick_process.go`, `usage_pool_policy.go`, `dispatch_leg.go`, `bus/dispatch.go`, `main.go`, `server.go`, `server_metrics.go`, `loader.go`, `urgency.go`, `migrations.go` — so §2 settlement, §5 flag defaults, §6 CT-01/CT-02/CT-06 and §8 metrics all hold at their cited lines |
+│  | Language / runtime | Go — `go.mod` declares `go 1.26.0` + `toolchain go1.26.10`; inside the module `go env GOVERSION` resolves **go1.26.10** via `GOTOOLCHAIN=auto` from the module cache (`golang.org/toolchain@v0.0.1-go1.26.10.linux-amd64`). The host **bootstrap** binaries are older and were NOT upgraded: `/usr/bin/go` = **go1.26.8** (`cat /usr/lib/go-1.26/VERSION` → `go1.26.8`), `/home/kara/.local/bin/go` = **go1.26.5** (`readlink -f` → `/home/kara/sdk/go1.26.5/bin/go`). The round-16 judges' 1.26.8/1.26.5 measurement was correct; round-17's "the host was upgraded to 1.26.10" was FALSE (kimi #3) — 1.26.10 is selected at build time by the module's `toolchain` directive, not installed as any host default |
+│  | Owner lane | coding-hermes-scheduler (control plane) |
+│  | Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:98-129, 143-208, 230-267`), the pack gate order (`packer_select.go:437-521`), the binary defaults (`cmd/schedulerd/main.go:95-200`), the auth path (`internal/api/auth.go:187-197`), the API route table (`internal/api/server.go:289-370`) and `config.example.toml` read this round; `tick_process.go`/`slot_pool.go`/`usage_pool_policy.go`/`migrations.go` re-read this round. The admission procedure (§3) is re-derived from the calling sequence (sol B17); the full 30-table census is named (grok #3) |
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | `d0dad6d9` (scheduler repo HEAD, this round's stamp). Re-stamped from `251d11db`: HEAD advanced through four commits — `0b357bb9` (read your own board, always), `79510add` + `d0dad6d9` (pace tasks-admitted lanes on their no-op streak; the latter is the spin fix), `ea7810db` (board: file SCHED-GAP-16999, board JSONL only). `git diff --name-only 251d11db..HEAD` = **twelve** paths: the two board JSONL, seven `internal/scheduler/*.go` (`adaptive_cooldown.go`, `loop.go`, `multipool_packer.go`, `noop_pacing.go`, `packer.go`, `packer_select.go`, `spawn.go`), three `noop_pacing_*_test.go`, and (already present at `251d11db`) no new file — `noop_pacing.go` is new in this range (added `79510add`). Load-bearing effect: `spawn.go` gained one line in `builtinForemanPrompt` (`:1213`, the READ-YOUR-OWN-BOARD line), shifting `buildForemanPrompt` `:1249`→`:1250` (§6 CT-05); `packer_select.go`'s namespace-mode gate order shifted +12 lines and the no-work gates' **definitions** live in `nowork.go` (not `packer_select.go`) — §3 re-derived; `loop.go` gained a +10 net change moving two §9 log sites +10. Unchanged this drift (`git diff --name-only 251d11db..HEAD` does **not** list them): `admission_mode.go`, `slot_pool.go`, `tick_process.go`, `usage_pool_policy.go`, `dispatch_leg.go`, `bus/dispatch.go`, `main.go`, `server.go`, `server_metrics.go`, `loader.go`, `urgency.go`, `migrations.go` — so §2 settlement, §5 flag defaults, §6 CT-01/CT-02/CT-06 and §8 metrics all hold at their cited lines |
+│  | Language / runtime | Go — `go.mod` declares `go 1.26.0` + `toolchain go1.26.10`; inside the module `go env GOVERSION` resolves **go1.26.10** via `GOTOOLCHAIN=auto` from the module cache (`golang.org/toolchain@v0.0.1-go1.26.10.linux-amd64`). The host **bootstrap** binaries are older and were NOT upgraded: `/usr/bin/go` = **go1.26.8** (`cat /usr/lib/go-1.26/VERSION` → `go1.26.8`), `/home/kara/.local/bin/go` = **go1.26.5** (`readlink -f` → `/home/kara/sdk/go1.26.5/bin/go`). The round-16 judges' 1.26.8/1.26.5 measurement was correct; round-17's "the host was upgraded to 1.26.10" was FALSE (kimi #3) — 1.26.10 is selected at build time by the module's `toolchain` directive, not installed as any host default |
+│  | Owner lane | coding-hermes-scheduler (control plane) |
+│ -| Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:98-129, 143-208, 230-267`), the pack gate order (`packer_select.go:437-521`), the binary defaults (`cmd/schedulerd/main.go:95-200`), the auth path (`internal/api/auth.go:187-197`), the API route table (`internal/api/server.go:289-370`) and `config.example.toml` read this round; `tick_process.go`/`slot_pool.go`/`usage_pool_policy.go`/`migrations.go` re-read this round. The admission procedure (§3) is re-derived from the calling sequence (sol B17); the full 30-table census is named (grok #3) |
+│ +| Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:98-129, 143-208, 230-267`), the pack gate order (`packer_select.go:376-531`; no-work gate **definitions** in `nowork.go:182/:245`, `board_stasis.go:320`, `stale_premise.go:208`, `premise_blocked.go:299`, `cadence_ceiling.go:71`), the binary defaults (`cmd/schedulerd/main.go:95-200`), the auth path (`internal/api/auth.go:187-197`), the API route table (`internal/api/server.go:289-370`) and `config.example.toml` read this round; `tick_process.go`/`slot_pool.go`/`usage_pool_policy.go`/`migrations.go` re-read this round. The admission procedure (§3) is re-derived from the calling sequence at HEAD `d0dad6d9` (sol B17, re-verified this round); the full 30-table census is named (grok #3) |
+│
+│  ## 2. Purpose, authority and position
+│
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -39,50 +39,60 @@
+│  **Operator surfaces.** The daemon mounts its HTTP routes in `internal/api/server.go` (the
+│  `Handler()` tree spans `:289-370`): `grep -oE 'mux\.HandleFunc\("[^"]+"' internal/api/server.go | sort -u | wc -l` = **43** (measured). The full set, all under `/api/v1/`, in mount order: `health`, `live`, `status`, `config`, `projects`, `projects/`, `hooks`, `hooks/plan`, `hooks/{id}`, `hooks/reload`, `lanes/tree`, `lanes`, `links`, `links/`, `cadence`, `namespaces`, `namespaces/`, `groups`, `groups/`, `templates`, `templates/`, `ticks`, `ticks/`, `queue`, `openapi.json`, `metrics`, `evaluate`, `pause`, `resume`, `events`, `events/stream`, `observatory`, `observatory/stream`, `gateway-errors`, `features`, `features/prune-candidates`, `peers`, `peers/`, `agents`, `agents/`, `federation/query`, `federation/catalogue`, `cooldown/residue`. Auth on mutations via `extractBearerOrHeaderToken` (`internal/api/auth.go:187-197`). The recovery commands (`reap-sessions`, `verify-board`, `migrate`) are CLI-only flags/subcommands, not HTTP routes. Per-route request/response shapes and write-authority readbacks are **not** written this round — the route inventory is complete (43), the per-route contract is not (a named RED on S4).
+│
+│ -**Admission procedure (B17, re-derived this round from the calling sequence).** The order is the
+│ -packer's own execution order, not an alphabetized list of helpers. Packing is invoked at
+│ -`tick_process.go:285` (`multiPoolPacker.Pack`), and the per-project gate sequence inside `Pack`
+│ -(`packer_select.go`, namespace-mode path) is:
+│ -
+│ -1. **Mode precedence** (`admission_mode.go:98-107` `admissionModeFor`): a project-level
+│ -   `cooldown`/`tasks` mode wins; otherwise the namespace's mode wins; otherwise **cooldown**.
+│ -   `admissionModeForProject` (`:112-129`) re-reads the same precedence from the DB for post-tick
+│ -   paths. This decides *which* branch of the gates below applies.
+│ -2. **Builder no-work gates** (`packer_select.go:437-455`): a cooldown-mode builder whose board
+│ -   holds no dispatchable row (`builderAdmissionBlocked` `:438`) is deferred; a tasks-mode builder
+│ -   in the same state (`tasksBuilderAdmissionBlocked` `:452`) is deferred *before its pin is
+│ -   consulted*. These gates call the board-ownership predicate (`boardOwnedByLane`,
+│ -   `admission_mode.go:177-184`) and the workability predicate (`tasksAdmissionDue`, `:230-243`),
+│ -   which are predicates, not ordering steps.
+│ -3. **Board-stasis gate** (`packer_select.go:462` `boardStasisBlocks`): a cooldown-mode BUILDER
+│ -   whose board fingerprint (mtime+size+content-digest) is unchanged since its previous completed
+│ -   tick is excluded — no cooldown consumed. Flag `board-stasis-gate` default **true**
+│ -   (`main.go:150`, SCHED-GAP-1678).
+│ -4. **Stale-premise gate** (`packer_select.go:471` `stalePremiseBlocks`): a board whose open rows
+│ -   are stale. One board read, no git ops.
+│ -5. **Blocked-head gate** (`packer_select.go:480` `premiseBlocks`): every pending row
+│ -   dependency-blocked or sibling-held.
+│ -6. **Shared gate defer** (`packer_select.go:486` `gate.Defer`): the shared gate's wall-clock
+│ -   verdict.
+│ -7. **Concurrency caps** (`packer_select.go:493` global `maxConcurrent`; per-namespace cap
+│ -   `:495-498`): 0 = unlimited per-namespace.
+│ -8. **Cadence ceiling** (`packer_select.go:512` `cadenceCeilingDefers`): a per-namespace rolling-
+│ -   window cap that defers (never consumes cooldown) a lane that would otherwise pack.
+│ -9. **Weight budget** (`packer_select.go:519` `pu.EffectiveWeight > budgetRemaining`): the budget
+│ -   hold queues the lane.
+│ -10. **Usage-pool reservation — later, at spawn, not at pack** (`slot_pool.go:539-585`): after a
+│ -    lane is packed and a slot opens, `reserveUsagePools` (`slot_pool.go:569`, defined at
+│ -    `usage_pool_policy.go:21`) makes tick ownership durable (`Enqueue`, `:545`) and then reserves
+│ -    the usage pool. Its distinct outcomes: a disabled policy returns `(false, nil)` (enforcement
+│ -    off, `:26-28`); a nil DB authority returns a named **authority-unavailable** error (`:29-31`),
+│ -    not `(false, nil)`; a missing/invalid `host_id` or empty pool set returns `ErrUsagePoolMissing`
+│ -    (`:37-44`); `ObserveOnly` checks without reserving (`:45-53`); otherwise lease recovery runs
+│ -    and `ReserveAll` enforces the reservation (`:54-64`), and a capacity denial emits an event
+│ -    (`:65-70`). Remote lanes append `host:<id>`, local lanes append `LocalPoolID`.
+│ -
+│ -The round-8 "ordered procedure" placed usage-pool reservation *before* board-stasis and omitted
+│ -the stale-premise/blocked-head/cadence/budget gates — that list was an ordering of related
+│ -helpers, not the composed call order (sol B17). This list is the call order.
+│ +**Admission procedure (B17, re-derived this round at HEAD `d0dad6d9` from the calling sequence).**
+│ +The order is the packer's own execution order, not an alphabetized list of helpers. Packing is
+│ +invoked at `tick_process.go:285` (`multiPoolPacker.Pack`), and the per-project gate sequence inside
+│ +`Pack` (`packer_select.go`, namespace-mode path, `:369-531`) is:
+│ +
+│ +1. **Shared gate + mode** (`packer_select.go:369-377`): the shared gate is computed (`cooldownDur :=
+│ +   gate.Cooldown`), `gate.SkipMode` skips (`:371-373`), then `admissionModeFor`
+│ +   (`admission_mode.go:98`, unchanged) resolves project-override → namespace → **cooldown**. This
+│ +   decides which of the two branches below applies.
+│ +2. **Tasks-mode waiver branch** (`packer_select.go:376`, `mode == Tasks && tasksAdmissionDue(...)`):
+│ +   - **post-failure stand-down** (`:386-390`, SCHED-GAP-214): after a FAILED tick the waiver stands
+│ +     down and the lane paces on its full cooldown.
+│ +   - **NOOP-PACING** (`:395` `tasksNoopStreakDeferred`, defined `noop_pacing.go` — new this drift):
+│ +     a lane that keeps completing with no artifact of its own work is spaced by a doubling
+│ +     `cooldown_floor_s` no-op cooldown (8× cap), so dry churn (measured 76 spawns/day, 63 dry_run on
+│ +     task-router-foreman) cannot continue; any artifact resets the streak.
+│ +   - **FailureBackoff** (`:402-407`, SCHED-GAP-133): only when `ConsecutiveFailures > 1`.
+│ +   - **tasks-pacing** (`:411` `tasksPacingDeferredJittered`, SCHED-GAP-136): post-tick spacing+jitter.
+│ +   - **stale-premise** (`:419` `stalePremiseBlocks`, def `stale_premise.go:208`) then **blocked-head**
+│ +     (`:428` `premiseBlocks`, def `premise_blocked.go:299`): the waiver fired (open rows exist) but
+│ +     they are stale or all dependency-blocked/sibling-held.
+│ +3. **Cooldown-mode branch** (`else`, `:433`) — the builder no-work gates, deferred *before the pin
+│ +   is consulted*:
+│ +   - `builderAdmissionBlocked` (`:450`, def `nowork.go:182`, SCHED-GAP-1655): a cooldown BUILDER whose
+│ +     board holds no dispatchable row.
+│ +   - `tasksBuilderAdmissionBlocked` (`:464`, def `nowork.go:245`, SCHED-GAP-1656).
+│ +   - `boardStasisBlocks` (`:474`, def `board_stasis.go:320`, SCHED-GAP-1678): board fingerprint
+│ +     (mtime+size+content-digest) unchanged since the previous completed tick → excluded, no cooldown
+│ +     consumed. Flag `board-stasis-gate` default **true** (`main.go:150`).
+│ +   - `stalePremiseBlocks` (`:483`, def `stale_premise.go:208`) then `premiseBlocks` (`:492`, def
+│ +     `premise_blocked.go:299`).
+│ … omitted 26 diff line(s) across 1 additional file(s)/section(s)
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -256,7 +256,7 @@
+│  | CT-01 | owner | in | **operator config (boundary)** — a human writes `fleet.toml` + `scheduler.db` project rows (lane enabled/cadence/weight/pin); there is no producer function (the load path `config.LoadRootConfig`, called at `main.go:640,673,762,854,870,968,995,1023,1054,1309`, is the consumer's loader, not a producer) | `internal/scheduler/admission_mode.go:112` `admissionModeForProject` (reads the lane's admission mode from the DB) | **UNVERIFIED (boundary)** — the consumer is nameable; the producer is a human writing config, not a function |
+│  | CT-02 | crier | out | `internal/bus/dispatch.go:175` `payload()` (the function is declared at `:175`; `:202` is the `p["text_b64"] = …` assignment inside it — emits `text_b64` (base64), field **`board`** (not `board_row`)) | crier `internal/registry/handler.go:990` `HandleDeliver` | **works** — CF-354 fixed and closed (commit `1f1c0fe`); crier delivers the envelope verbatim; the former `text`/`text_b64` mismatch was node-side consumption |
+│  | CT-06 | crier | in | `dispatcher.py:400` `main` (reply build `:500-508`; `crier.deliver` `:508`); transported by crier `internal/registry/handler.go:990` `HandleDeliver` into the scheduler's inbox | `internal/scheduler/dispatch_leg.go:713` `dispatchReplyVerdict` (reads only `payload["ok"]`) | **works (dispatcher leg)** — the dispatcher always sends `ok` (`dispatcher.py:501`), the exact field `dispatchReplyVerdict` reads. CF-355 (the node's `status` reply scoring success-on-failure) is the **node-reply** leg, carried at CT-04, not this producer |
+│ -| CT-05 | foreman | in | `scripts/load_lane_config.py:31-37` (module scope — top-level code, no function; `UPDATE projects SET prompt=?, prompt_mode='append'`) | `internal/scheduler/spawn.go:1249` `buildForemanPrompt` (namespace default → project replace/append → dynamic footer) | **UNVERIFIED** — both ends are in-repo (internal); the OUTLINE VIII.1 "3 of 11 prompt files disagree" breakage is **unmeasured** (no command establishes which three files disagree or on what) |
+│ +| CT-05 | foreman | in | `scripts/load_lane_config.py:31-37` (module scope — top-level code, no function; `UPDATE projects SET prompt=?, prompt_mode='append'`) | `internal/scheduler/spawn.go:1250` `buildForemanPrompt` (namespace default → project replace/append → dynamic footer) | **UNVERIFIED** — both ends are in-repo (internal); the OUTLINE VIII.1 "3 of 11 prompt files disagree" breakage is **unmeasured** (no command establishes which three files disagree or on what) |
+│  | CT-15 | foreman | out | **external** — the foreman lane's decision/finding/goal writes (out of scope) | **external** — the duckbrain service (out of scope) | **UNVERIFIED (boundary)** — neither side has an in-repo `file:function`, and the wire was not measured this round |
+│
+│  CT-01 and CT-15 are boundary contracts: the owner is a human and duckbrain is a service outside
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -383,7 +383,7 @@
+│  adaptive_cooldown.go:177	ADMISSION: %s board drained (tasks mode) → cooldown %ds → %ds (floor pin)
+│  slot_pool.go:709	ADMIT: %s tick=%s reason=%s nudge=%s
+│  slot_pool.go:706	ADMIT: %s tick=%s reason=%s nudge=%s cooldown_remaining=%.0fs (EARLY)
+│ -loop.go:2613	ADMIT: candidate query failed: %v — no admission lines this pass
+│ +loop.go:2623	ADMIT: candidate query failed: %v — no admission lines this pass
+│  schedgap157.go:125	ADMIT: record admission stamp tick %s: %v
+│  schedgap157.go:110	ADMIT: record deferral %s (%s): %v
+│  loop.go:2334	ADMIT: scan candidate row: %v
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -386,7 +386,7 @@
+│  loop.go:2623	ADMIT: candidate query failed: %v — no admission lines this pass
+│  schedgap157.go:125	ADMIT: record admission stamp tick %s: %v
+│  schedgap157.go:110	ADMIT: record deferral %s (%s): %v
+│ -loop.go:2334	ADMIT: scan candidate row: %v
+│ +loop.go:2344	ADMIT: scan candidate row: %v
+│  deliver.go:497	ALERT: %s tick=%s — %s (no delivery target configured)
+│  deliver.go:520	ALERT: %s tick=%s → %s
+│  deliver.go:509	ALERT: temp file: %v
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | CRIER |
+│  | Path | `/home/kara/crier/` (Go) |
+│ -| Revision | `e50e55ee` (crier repo stamp this round). HEAD has since advanced **one test-only commit** to `1587a03f` (`test(crier): keep the dead-endpoint control honest…`, INT-CI-027 — changes `cmd/server/session_dispatch_live_test.go` only; `git diff --name-only e50e55ee..HEAD` = that one path). Every cited **non-test** Go file is byte-identical to `33c1f388` (`git diff --name-only 33c1f388..HEAD -- internal/registry/handler.go internal/guard config/config.go internal/registry/agentsig.go internal/registry/service_auth.go clients/python/crier_client.py` → empty). The round-15 stamp `0a372209` is superseded; the `git diff --name-only 0a372209..HEAD` six-path list (`.coding-hermes/board/events.jsonl`, `.coding-hermes/board/tasks.jsonl`, `.gitreins/tasks.yaml`, `README.md`, `cmd/server/session_budget_cut_test.go`, `cmd/server/session_dispatch_live_test.go`) is quoted with its real content and dated |
+│ +| Revision | `a9044518` (crier repo HEAD, this round's stamp — re-stamped from `e50e55ee`). HEAD advanced through three test/qa-only commits: `1587a03f` (INT-CI-027, `cmd/server/session_dispatch_live_test.go`), `a4efefbb` (CRIER-HARNESS-7, `internal/harness/opencode/live_delivery_test.go`), `a9044518` (qa: record crier battery transport failure). `git diff --name-only e50e55ee..HEAD` = those two test files plus the two board JSONL (`.coding-hermes/board/{events,tasks}.jsonl`). Every cited **non-test** file is byte-identical to `33c1f388` (`git diff --name-only 33c1f388..HEAD -- internal/registry/handler.go internal/guard config/config.go internal/registry/agentsig.go internal/registry/service_auth.go clients/python/crier_client.py clients/typescript/crier.ts cmd/crier-front/main.go cmd/crier-mcp/main.go cmd/server/observability.go internal/metrics/metrics.go deploy/` → **empty**, re-verified this round). The round-15 stamp `0a372209` is superseded. A live crier foreman is active on this repo and may land further test-only/board commits; the load-bearing fact is the cited non-test files' byte-identity to `33c1f388`, not the exact HEAD tip |
+│  | Language / runtime | Go — `go.mod` declares `go 1.26.10`; inside the module `go env GOVERSION` resolves **go1.26.10** via `GOTOOLCHAIN=auto` from the module cache. The host **bootstrap** binaries were NOT upgraded: `/usr/bin/go` = **go1.26.8** (`cat /usr/lib/go-1.26/VERSION`), `/home/kara/.local/bin/go` = **go1.26.5** (`readlink -f` → `/home/kara/sdk/go1.26.5/bin/go`). The round-16 judges' 1.26.8/1.26.5 was correct; round-17's "the host was upgraded to 1.26.10" was FALSE (kimi #3) |
+│  | Owner lane | crier (control plane) |
+│  | Status | **UNVERIFIED** — `internal/registry/handler.go` (deliver/retrieve/ack surfaces + the full 3-site slog surface), `internal/guard/guard.go` (pipeline, oversize branch, `errorResult`, `audit`), `internal/guard/router.go` (saturation counter), `internal/guard/policy.go` (`ResolvePolicy`), `internal/guard/metrics.go`, `config/config.go` (controls + guard bounds + metrics default + service-delivery), `internal/registry/service_auth.go`, `clients/python/crier_client.py`, `clients/typescript/crier.ts`, `cmd/crier-front/main.go`, `cmd/crier-mcp/main.go`, `deploy/*` read this round; the full 1895-line handler body read line-by-line this round (register, deliver, retrieve, ack, stats, idempotency, realms, per-peer policy, service-delivery auth, federation fallback — see §3) |
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -184,8 +184,8 @@
+│
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│ -| build | `go build ./...` (crier repo) | exit 0 | 2026-11-07, rev `e50e55ee` (re-run this round) | **PASS** (rc 0) |
+│ -| go test | `go test -count=1 ./...` | green | 2026-11-07, rev `e50e55ee` (re-run this round) | **PASS** (rc 0) — 44 packages: 41 `ok`, 3 `[no test files]`, 0 FAIL |
+│ +| build | `go build ./...` (crier repo) | exit 0 | 2026-11-07, rev `a9044518` (re-run this round) | **PASS** (rc 0) |
+│ +| go test | `go test -count=1 ./...` | green | 2026-11-07, rev `a9044518` (re-run this round) | **PASS** (rc 0) — clean run: all packages `ok` except the `[no test files]` set (41 ok / 3 no-test-files per the round-18 census, re-confirmed clean at this HEAD) |
+│  | port fact | `grep -n 'Port' config/config.go` | 8767 | 2026-11-07 | PASS (`:622`) |
+│  | slog surface | `grep -cE 'slog\.(Info\|Error\|Warn\|Debug)' internal/registry/handler.go` | 3 | 2026-11-07 | **PASS** — exactly 3 sites (all in §9); no `log.Printf`/`fmt.Printf` in the handler. The round-16 row quoted a BRE (`grep -c 'slog.(Info\|Error\|Warn\|Debug)'`) which returns **0** (rc 1) because `(`/`|` are literal in BRE — the `-E` form above is the reproducing command (grok #1) |
+│  | signed-read ladder | `python3 ~/node-bus-worker.py --check` on cf-node | inbox 200 with key+bearer | 2026-11-05, cf-node only | PASS (FACT-04) — **not repeatable from this control host** (a named RED on §7) |
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -195,7 +195,7 @@
+│  Commit `eb21ca03` (idle-boot detect-alert assertion made order-insensitive) landed after that stamp
+│  and removes the order-sensitive assertion (QA-CRIER-56: `CR_DETECT_QUIET_HOURS` 01:00–05:00 UTC
+│  window contamination). The FLAKY row is **superseded**; this round's single `go test -count=1 ./...`
+│ -at `e50e55ee` is a clean PASS (41 ok, 3 no test files, rc 0).
+│ +at `a9044518` is a clean PASS (all `ok` except the no-test-files set, rc 0).
+│
+│  ## 8. Metrics
+│
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -327,7 +327,7 @@
+│    `clients/python/crier_client.py:840-855, 960-1036`; `clients/typescript/crier.ts:560-625`;
+│    `cmd/crier-front/main.go:39`; `cmd/crier-mcp/main.go` (bridge mode, `:120, :173-219`);
+│    `cmd/server/observability.go:95-115`; `internal/metrics/metrics.go:1-8`; `deploy/crier.service`, `deploy/crier.user.service`, `deploy/crier-backup.service`, `deploy/crier-backup.timer`.
+│ -- Commands run: `go build ./...` (PASS, re-run this round); `go test -count=1 ./...` (PASS at `e50e55ee`, rc 0 — 41 ok, 3 no test files);
+│ +- Commands run: `go build ./...` (PASS, re-run this round); `go test -count=1 ./...` (PASS at `a9044518`, rc 0 — clean run, all `ok` except the no-test-files set);
+│    `ls cmd/` (crier-front, crier-mcp, server); `ls deploy/` (4 units + 1 scrape example);
+│    `grep -cE 'slog\.(Info|Error|Warn|Debug)' internal/registry/handler.go` (3);
+│    `grep -nE 'slog\.(Info|Error|Warn|Debug)' internal/guard/guard.go` (wrappers at `:100/:103`);
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -333,9 +333,9 @@
+│    `grep -nE 'slog\.(Info|Error|Warn|Debug)' internal/guard/guard.go` (wrappers at `:100/:103`);
+│    `grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u | wc -l` (67);
+│    `git diff --name-only 0a372209..HEAD` (6 paths, two `cmd/server` test files).
+│ -- Rev re-stamped: `e50e55ee` (this round); crier HEAD is now `1587a03f` (one test-only commit past,
+│ -  INT-CI-027); cited non-test files byte-identical to `33c1f388` (verified by a `git diff --name-only
+│ -  33c1f388..HEAD -- <cited paths>` returning empty).
+│ +- Rev re-stamped: `a9044518` (this round); crier HEAD advanced three test/qa-only commits past `e50e55ee`
+│ +  (`1587a03f`, `a4efefbb`, `a9044518`); cited non-test files byte-identical to `33c1f388` (verified by a `git diff --name-only
+│ +  33c1f388..HEAD -- <cited paths>` returning empty this round).
+│  - Board rows: CF-337, CF-361, CF-369.
+│  - **Findings:**
+│    - **F10-1** (carried) — auth order is headers → target → caller → timestamp → key → signature.
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -362,9 +362,13 @@
+│    - **F10-11** (new, kimi B6/grok #8) — the closed-world `git diff` claim is withdrawn: HEAD
+│      advanced and two `cmd/server` test files changed after the round-16 stamps; the diff is quoted
+│      with the real six paths and dated.
+│ -  - **F10-12** (new, kimi #9/deepseek N1) — crier HEAD advanced one test-only commit to `1587a03f`
+│ -    (INT-CI-027); every cited non-test file is byte-identical to `33c1f388` (verified `git diff
+│ -    --name-only 33c1f388..HEAD -- <cited paths>` → empty). §1 re-stamped.
+│ +  - **F10-12** (updated this round, was kimi #9/deepseek N1) — crier HEAD advanced three test/qa-only
+│ +    commits to `a9044518` (`1587a03f` INT-CI-027, `a4efefbb` CRIER-HARNESS-7, `a9044518` qa battery
+│ +    record); every cited non-test file is byte-identical to `33c1f388` (verified `git diff --name-only
+│ +    33c1f388..HEAD -- <cited paths>` → empty this round). §1/§7/§13 re-stamped.
+│ +  - **F10-16** (new, this round) — a live crier foreman is active on the repo, so HEAD moves during
+│ +    the round; the re-stamp at `a9044518` is the tip as measured this round, and the load-bearing
+│ +    claim is the cited non-test files' byte-identity to `33c1f388` (re-verified empty), not the tip.
+│    - **F10-13** (new, grok #5) — the capability delivery route (`HandleDeliverByCapability`,
+│      `handler.go:1014`, `POST /capabilities/{capability}/inbox` at `cmd/server/main.go:112`) and its
+│      protected-recipient refusal (`service_auth.go:117-126`) are now documented in §3 S1 and §10;
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -270,10 +270,10 @@
+│
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│ -| build | `go build ./...` (scheduler repo) | exit 0 | 2026-11-07, rev `251d11db` (re-run this round) | **PASS** (rc 0) |
+│ +| build | `go build ./...` (scheduler repo) | exit 0 | 2026-11-07, rev `d0dad6d9` (re-run this round) | **PASS** (rc 0) |
+│  | durable state | `sqlite3 ~/.hermes/coding-hermes/scheduler.db '.tables'` | tables listed | 2026-11-07 | **PASS** — 30 tables; no `verdicts` table |
+│ -| go test — internal/scheduler package (adequate timeout) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -count=1 -timeout 1800s` | green | 2026-11-07, rev `251d11db` | **PASS (rc 0)** — 376.454s |
+│ -| go test — full suite (default 600s timeout) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./...` | green | 2026-11-07, rev `251d11db` | **FAIL (rc 1) under parallel load** — `internal/scheduler` hit the 600s per-package timeout and `TestCTL002_EventsStream_SlowClientDoesNotBlockWritersOrLoseEvents` failed; both pass solo (see the note) |
+│ +| go test — internal/scheduler package (adequate timeout) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -count=1 -timeout 1800s` | green | 2026-11-07, rev `d0dad6d9` | **PASS (rc 0)** — (timing below) |
+│ +| go test — full suite (default 600s timeout) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./...` | green | not re-run this round (see note) | **FAIL (rc 1) under parallel load** at `251d11db` (F9-13) — not re-run at `d0dad6d9`; the isolated `internal/scheduler` package run is the green evidence this round |
+│  | go test (three env-sensitive tests) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -run 'TestSCHEDGAP091_DrainTimeoutStampsOrphan|TestOperatorRestartApprovalEnv|TestAbortInFlightTicks_OperatorApprovedStamp' -count=1` | green | 2026-11-07, rev `251d11db` | **PASS (rc 0)** — 0.259s |
+│
+│  **Env-contamination correction.** Round-4 reported `go test ./...` FAIL with a parked-goroutine
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -274,7 +274,7 @@
+│  | durable state | `sqlite3 ~/.hermes/coding-hermes/scheduler.db '.tables'` | tables listed | 2026-11-07 | **PASS** — 30 tables; no `verdicts` table |
+│  | go test — internal/scheduler package (adequate timeout) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -count=1 -timeout 1800s` | green | 2026-11-07, rev `d0dad6d9` | **PASS (rc 0)** — (timing below) |
+│  | go test — full suite (default 600s timeout) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./...` | green | not re-run this round (see note) | **FAIL (rc 1) under parallel load** at `251d11db` (F9-13) — not re-run at `d0dad6d9`; the isolated `internal/scheduler` package run is the green evidence this round |
+│ -| go test (three env-sensitive tests) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -run 'TestSCHEDGAP091_DrainTimeoutStampsOrphan|TestOperatorRestartApprovalEnv|TestAbortInFlightTicks_OperatorApprovedStamp' -count=1` | green | 2026-11-07, rev `251d11db` | **PASS (rc 0)** — 0.259s |
+│ +| go test (three env-sensitive tests) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -run 'TestSCHEDGAP091_DrainTimeoutStampsOrphan|TestOperatorRestartApprovalEnv|TestAbortInFlightTicks_OperatorApprovedStamp' -count=1` | green | 2026-11-07, rev `d0dad6d9` | **PASS (rc 0)** — 4.353s |
+│
+│  **Env-contamination correction.** Round-4 reported `go test ./...` FAIL with a parked-goroutine
+│  census at suite exit. That FAIL is an artifact of the writer's shell carrying the ambient
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -771,14 +771,17 @@
+│
+│  - Code read: `internal/scheduler/dispatch_leg.go` (`:245-364`, `:700-759`), `internal/bus/dispatch.go`
+│    (`:170-214`), `internal/scheduler/admission_mode.go` (`:98-129, 143-208, 230-267`),
+│ -  `internal/scheduler/usage_pool_policy.go:21-70`, `internal/scheduler/packer_select.go:437-521`,
+│ +  `internal/scheduler/usage_pool_policy.go:21-70`, `internal/scheduler/packer_select.go:369-531`,
+│ +  `internal/scheduler/nowork.go:82-265`, `internal/scheduler/board_stasis.go:320`,
+│ +  `internal/scheduler/stale_premise.go:208`, `internal/scheduler/premise_blocked.go:299`,
+│ +  `internal/scheduler/cadence_ceiling.go:71`, `internal/scheduler/noop_pacing.go` (log sites),
+│    `internal/scheduler/slot_pool.go:539-585`, `internal/scheduler/tick_process.go:285`,
+│    `cmd/schedulerd/main.go:95-200`, `internal/api/auth.go:187-197`, `internal/api/server.go:289-370`,
+│    `internal/api/server_metrics.go:60-81, :87-119, :125-136, :195`, `config.example.toml` (full),
+│    `internal/database/migrations.go` (full 30-table census), `internal/config/loader.go:421-422`,
+│    `internal/scheduler/urgency.go:18-22`.
+│ -- Commands run: `go build ./...` (PASS); `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -count=1 -timeout 1800s` (PASS, 376.454s); the three env-sensitive tests (PASS, 0.259s); `TestCTL002_EventsStream_SlowClient…` solo (PASS, 4.656s); the full `go test ./...` (rc 1 under parallel load — F9-13);
+│ -  `git diff --name-only 34e44897..HEAD` (5 paths, one cited `.go` file changed);
+│ +- Commands run: `go build ./...` (PASS, re-run this round at `d0dad6d9`); `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -count=1 -timeout 1800s` (PASS, timing below); the three env-sensitive tests (PASS, 4.353s this round); the full `go test ./...` at `251d11db` (rc 1 under parallel load — F9-13);
+│ +  `git diff --name-only 251d11db..HEAD` (12 paths — two board JSONL, seven `.go`, three `_test.go`);
+│    `grep -n 'LoadRootConfig' cmd/schedulerd/main.go` (10 sites);
+│    `grep -rn "log.Printf" internal/scheduler/*.go | grep -v _test.go | wc -l` (381 excluding test; 382 including);
+│    `grep -rhoE 'log\.Printf\("[^"]*"' internal/scheduler/*.go | grep -v _test.go | sed 's/^log\.Printf("//; s/"$//' | sort -u | wc -l` (370 distinct format strings — the §9 enumeration);
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -788,9 +788,10 @@
+│    `cat /usr/lib/go-1.26/VERSION` (go1.26.8); `readlink -f /home/kara/.local/bin/go` (`/home/kara/sdk/go1.26.5/bin/go`); `go env GOVERSION` in-module (go1.26.10 via GOTOOLCHAIN=auto);
+│    `grep -cE 'flag\.(String|Int|Int64|Bool|Duration|Float64)' cmd/schedulerd/main.go` (57);
+│    `sqlite3 … '.tables'` (30 tables); `grep -oE 'mux\.HandleFunc\("[^"]+"' internal/api/server.go | sort -u | wc -l` (43).
+│ -- Rev re-stamped: `251d11db` (this round). The one cited-file change since `34e44897` is
+│ -  `spawn.go` (`384e5df7` prompt-text append, `buildForemanPrompt` `:1244`→`:1249`); all other cited
+│ -  Go files are byte-identical to `34e44897`.
+│ +- Rev re-stamped: `d0dad6d9` (this round). HEAD advanced four commits past `251d11db`
+│ +  (`0b357bb9`, `79510add`, `ea7810db`, `d0dad6d9`); the namespace-mode gate order shifted +12 lines
+│ +  and `buildForemanPrompt` moved `:1249`→`:1250`; the no-work gate definitions were already in
+│ +  `nowork.go` at `251d11db` (unchanged) — only the `packer_select.go` call sites moved.
+│  - Board rows: CF-334, CF-335, CF-337, CF-343, CF-346, CF-353, CF-354, CF-355.
+│  - **Findings:**
+│    - **F9-1** (carried) — settlement exists (`dispatch_leg.go:260-336`); the real defect is CF-355.
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -799,7 +799,15 @@
+│    - **F9-3** (corrected) — `LoadRootConfig` IS loaded at boot (`main.go:640,673,762,854,870,968,995,1023,1054,1309`), three-layer merge in `loader.go`. The only residue: `config.example.toml`'s header NOTE is stale.
+│    - **F9-4** — `metricsSpawns` is at `:195`, not `:192`.
+│    - **F9-6** (carried) — round-4's `go test ./...` FAIL was env contamination, not a code break; clean-env PASSES.
+│ -  - **F9-7** (corrected, sol B17) — the ordered admission procedure is now the packer's call order (`packer_select.go:437-521`), with usage-pool reservation at spawn (`slot_pool.go:539-585`), not an alphabetized helper list.
+│ +  - **F9-7** (re-derived this round at `d0dad6d9`, sol B17) — the ordered admission procedure is the
+│ +    packer's call order (`packer_select.go:369-531`), with usage-pool reservation at spawn
+│ +    (`slot_pool.go:539-585`), not an alphabetized helper list. The round-18 `251d11db` derivation
+│ +    cited the cooldown-branch call sites 12 lines earlier; the new tasks-mode branch (NOOP-PACING,
+│ +    post-failure stand-down, FailureBackoff, tasks-pacing) is now named.
+│ +  - **F9-16** (new, this round) — scheduler HEAD advanced `251d11db`→`d0dad6d9` (four commits, 12
+│ +    paths); §1/§3/§6/§7/§9/§13 re-stamped and re-verified. Only two §9 log locators moved
+│ +    (`loop.go:2613→2623`, `:2334→2344`); `buildForemanPrompt` moved `:1249→:1250`; the 381-site /
+│ +    370-distinct log census and the 57-flag / 43-route counts are unchanged at the new HEAD.
+│    - **F9-8** (carried) — `num-levels` "0 breaks the priority sort" was false: `loader.go:421-422` rejects `< 1` and `urgency.go:18-22` clamps `< 2` to 2.
+│    - **F9-9** (carried) — `tick_duration_ms`'s success shape has **no `available` field**; the `:30` intro comment is wrong for that block.
+│    - **F9-10** (carried) — the run-correctness write authorities and the recovery selector are named (`execution_store.go`); per-failure-mode post-recovery indications remain unwritten.
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -272,7 +272,7 @@
+│  |---|---|---|---|---|
+│  | build | `go build ./...` (scheduler repo) | exit 0 | 2026-11-07, rev `d0dad6d9` (re-run this round) | **PASS** (rc 0) |
+│  | durable state | `sqlite3 ~/.hermes/coding-hermes/scheduler.db '.tables'` | tables listed | 2026-11-07 | **PASS** — 30 tables; no `verdicts` table |
+│ -| go test — internal/scheduler package (adequate timeout) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -count=1 -timeout 1800s` | green | 2026-11-07, rev `d0dad6d9` | **PASS (rc 0)** — (timing below) |
+│ +| go test — internal/scheduler package (adequate timeout) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -count=1 -timeout 1800s` | green | 2026-11-07, rev `d0dad6d9` | **PASS (rc 0)** — 547.133s |
+│  | go test — full suite (default 600s timeout) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./...` | green | not re-run this round (see note) | **FAIL (rc 1) under parallel load** at `251d11db` (F9-13) — not re-run at `d0dad6d9`; the isolated `internal/scheduler` package run is the green evidence this round |
+│  | go test (three env-sensitive tests) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -run 'TestSCHEDGAP091_DrainTimeoutStampsOrphan|TestOperatorRestartApprovalEnv|TestAbortInFlightTicks_OperatorApprovedStamp' -count=1` | green | 2026-11-07, rev `d0dad6d9` | **PASS (rc 0)** — 4.353s |
+│
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -780,7 +780,7 @@
+│    `internal/api/server_metrics.go:60-81, :87-119, :125-136, :195`, `config.example.toml` (full),
+│    `internal/database/migrations.go` (full 30-table census), `internal/config/loader.go:421-422`,
+│    `internal/scheduler/urgency.go:18-22`.
+│ -- Commands run: `go build ./...` (PASS, re-run this round at `d0dad6d9`); `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -count=1 -timeout 1800s` (PASS, timing below); the three env-sensitive tests (PASS, 4.353s this round); the full `go test ./...` at `251d11db` (rc 1 under parallel load — F9-13);
+│ +- Commands run: `go build ./...` (PASS, re-run this round at `d0dad6d9`); `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -count=1 -timeout 1800s` (PASS, 547.133s this round); the three env-sensitive tests (PASS, 4.353s this round); the full `go test ./...` at `251d11db` (rc 1 under parallel load — F9-13);
+│    `git diff --name-only 251d11db..HEAD` (12 paths — two board JSONL, seven `.go`, three `_test.go`);
+│    `grep -n 'LoadRootConfig' cmd/schedulerd/main.go` (10 sites);
+│    `grep -rn "log.Printf" internal/scheduler/*.go | grep -v _test.go | wc -l` (381 excluding test; 382 including);
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -817,7 +817,11 @@
+│      600s per-package timeout in `internal/scheduler` plus the CTL002 load-window flake; the flake set
+│      also includes `TestSCHEDGAP1666_SevenDaySimulation` (glm #3). Both pass solo (`internal/scheduler`
+│      376.454s, CTL002 4.656s). A load artifact, not a test regression — but **only the isolated runs
+│ -    are green this round**; no clean full-suite pass is captured (sol B22).
+│ +    are green this round**; no clean full-suite pass is captured (sol B22). **Re-verified this round at
+│ +    `d0dad6d9`:** the isolated `internal/scheduler` package PASSes in 547.133s (rc 0; slower than
+│ +    round-18's 376.454s under the concurrent crier-test + live-fleet load), and the full `go test
+│ +    ./...` was not re-run — the full-suite green state remains last captured at `34e44897` on a quiet
+│ +    host (round-16).
+│    - **F9-14** (new, kimi #3) — the round-17 claim "the host was upgraded to 1.26.10" was FALSE. The
+│      host bootstrap binaries are 1.26.8 (`/usr/bin/go`) and 1.26.5 (`~/.local/bin/go`); go1.26.10 is
+│      selected at build time by `go.mod`'s `toolchain go1.26.10` directive via `GOTOOLCHAIN=auto` from
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -114,10 +114,10 @@
+│
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│ -| content hash | `sha256sum /home/kara/.hermes/scripts/cf-inference-proxy.py` | full digest | 2026-11-06 | **PASS** — `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` |
+│ -| python compile | `python3 -m py_compile /home/kara/.hermes/scripts/cf-inference-proxy.py` | exit 0 | 2026-11-06 | PASS |
+│ -| admission (no token) | `curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8775/v1/chat/completions -d '{"model":"hermes"}'` | 401 | 2026-11-06 | **PASS** — 401 (proxy live on `:8775`) |
+│ -| systemd unit active | `systemctl --user status cf-inference-proxy.service` | loaded, enabled, `active (running)` | 2026-11-06 | **PASS** — active since 2026-11-05 09:21, Main PID 2603939, drop-in `10-upstream.conf` |
+│ +| content hash | `sha256sum /home/kara/.hermes/scripts/cf-inference-proxy.py` | full digest | 2026-11-07 (re-run this round) | **PASS** — `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` |
+│ +| python compile | `python3 -m py_compile /home/kara/.hermes/scripts/cf-inference-proxy.py` | exit 0 | 2026-11-07 (re-run this round) | PASS |
+│ +| admission (no token) | `curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8775/v1/chat/completions -d '{"model":"hermes"}'` | 401 | 2026-11-07 (re-run this round) | **PASS** — 401 (proxy live on `:8775`) |
+│ +| systemd unit active | `systemctl --user status cf-inference-proxy.service` | loaded, enabled, `active (running)` | 2026-11-07 (re-run this round) | **PASS** — active since 2026-11-05 09:21, Main PID 2603939, drop-in `10-upstream.conf` |
+│  | admission (disallowed model, valid token) | POST `{"model":"definitely-not-allowed-model"}` with a valid node token | 403 `model not permitted` | 2026-11-06 | **UNVERIFIED** — not re-run this round (the node token file was not read); a round-3 judge reproduced the 403 at `:155-160` (provenance, not this round's measured evidence) |
+│  | admission (malformed model type) | POST `{"model":["hermes"]}` with a valid node token | a clean 400/403 refusal | not re-run this round | **UNVERIFIED — and FAILING on the branch:** `asked not in ALLOWED_MODELS` (`:155`) on a non-string `asked` raises `TypeError`, so the refusal is a connection drop, not an HTTP error. Reproduced by a judge's patched-token fixture (sol B26: `PROXY_HANDLER_EXCEPTION=TypeError`, `PROXY_NONSTRING_MODEL_HTTP=RemoteDisconnected`), not a live curl this round |
+│
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | SCHEDULER |
+│  | Path | `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/` (Go) |
+│ -| Revision | `d0dad6d9` (scheduler repo HEAD, this round's stamp). Re-stamped from `251d11db`: HEAD advanced through four commits — `0b357bb9` (read your own board, always), `79510add` + `d0dad6d9` (pace tasks-admitted lanes on their no-op streak; the latter is the spin fix), `ea7810db` (board: file SCHED-GAP-16999, board JSONL only). `git diff --name-only 251d11db..HEAD` = **twelve** paths: the two board JSONL, seven `internal/scheduler/*.go` (`adaptive_cooldown.go`, `loop.go`, `multipool_packer.go`, `noop_pacing.go`, `packer.go`, `packer_select.go`, `spawn.go`), three `noop_pacing_*_test.go`, and (already present at `251d11db`) no new file — `noop_pacing.go` is new in this range (added `79510add`). Load-bearing effect: `spawn.go` gained one line in `builtinForemanPrompt` (`:1213`, the READ-YOUR-OWN-BOARD line), shifting `buildForemanPrompt` `:1249`→`:1250` (§6 CT-05); `packer_select.go`'s namespace-mode gate order shifted +12 lines and the no-work gates' **definitions** live in `nowork.go` (not `packer_select.go`) — §3 re-derived; `loop.go` gained a +10 net change moving two §9 log sites +10. Unchanged this drift (`git diff --name-only 251d11db..HEAD` does **not** list them): `admission_mode.go`, `slot_pool.go`, `tick_process.go`, `usage_pool_policy.go`, `dispatch_leg.go`, `bus/dispatch.go`, `main.go`, `server.go`, `server_metrics.go`, `loader.go`, `urgency.go`, `migrations.go` — so §2 settlement, §5 flag defaults, §6 CT-01/CT-02/CT-06 and §8 metrics all hold at their cited lines |
+│ +| Revision | `d0dad6d9` (scheduler repo HEAD, this round's stamp). Re-stamped from `251d11db`: HEAD advanced through four commits — `0b357bb9` (read your own board, always), `79510add` + `d0dad6d9` (pace tasks-admitted lanes on their no-op streak; the latter is the spin fix), `ea7810db` (board: file SCHED-GAP-16999, board JSONL only). `git diff --name-only 251d11db..HEAD` = **twelve** paths: the two board JSONL, seven `internal/scheduler/*.go` (`adaptive_cooldown.go`, `loop.go`, `multipool_packer.go`, `noop_pacing.go`, `packer.go`, `packer_select.go`, `spawn.go`), and three `noop_pacing_*_test.go`. `noop_pacing.go` is **new** in this range (added `79510add`); `nowork.go` (the no-work gate definitions) was already present at `251d11db` and is unchanged. Load-bearing effect: `spawn.go` gained one line in `builtinForemanPrompt` (`:1213`, the READ-YOUR-OWN-BOARD line), shifting `buildForemanPrompt` `:1249`→`:1250` (§6 CT-05); `packer_select.go`'s namespace-mode gate order shifted +12 lines and the no-work gates' **definitions** live in `nowork.go` (not `packer_select.go`) — §3 re-derived; `loop.go` gained a +10 net change moving two §9 log sites +10. Unchanged this drift (`git diff --name-only 251d11db..HEAD` does **not** list them): `admission_mode.go`, `slot_pool.go`, `tick_process.go`, `usage_pool_policy.go`, `dispatch_leg.go`, `bus/dispatch.go`, `main.go`, `server.go`, `server_metrics.go`, `loader.go`, `urgency.go`, `migrations.go` — so §2 settlement, §5 flag defaults, §6 CT-01/CT-02/CT-06 and §8 metrics all hold at their cited lines |
+│  | Language / runtime | Go — `go.mod` declares `go 1.26.0` + `toolchain go1.26.10`; inside the module `go env GOVERSION` resolves **go1.26.10** via `GOTOOLCHAIN=auto` from the module cache (`golang.org/toolchain@v0.0.1-go1.26.10.linux-amd64`). The host **bootstrap** binaries are older and were NOT upgraded: `/usr/bin/go` = **go1.26.8** (`cat /usr/lib/go-1.26/VERSION` → `go1.26.8`), `/home/kara/.local/bin/go` = **go1.26.5** (`readlink -f` → `/home/kara/sdk/go1.26.5/bin/go`). The round-16 judges' 1.26.8/1.26.5 measurement was correct; round-17's "the host was upgraded to 1.26.10" was FALSE (kimi #3) — 1.26.10 is selected at build time by the module's `toolchain` directive, not installed as any host default |
+│  | Owner lane | coding-hermes-scheduler (control plane) |
+│  | Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:98-129, 143-208, 230-267`), the pack gate order (`packer_select.go:376-531`; no-work gate **definitions** in `nowork.go:182/:245`, `board_stasis.go:320`, `stale_premise.go:208`, `premise_blocked.go:299`, `cadence_ceiling.go:71`), the binary defaults (`cmd/schedulerd/main.go:95-200`), the auth path (`internal/api/auth.go:187-197`), the API route table (`internal/api/server.go:289-370`) and `config.example.toml` read this round; `tick_process.go`/`slot_pool.go`/`usage_pool_policy.go`/`migrations.go` re-read this round. The admission procedure (§3) is re-derived from the calling sequence at HEAD `d0dad6d9` (sol B17, re-verified this round); the full 30-table census is named (grok #3) |
+│ cache/scratch/m9_manifest_s3.txt
+│ @@ -0,0 +1,52 @@
+│ +
+│ +
+│ +================================================================================
+│ +WRITER MANIFEST — ROUND 19, group s3 (M9 scheduler, M10 crier, M11 dispatcher, M12 inference-proxy)
+│ +================================================================================
+│ +
+│ +SPINE: python3 scripts/handbook_spine.py -> "chapters=13  canonical contracts=18  findings=0", exit 0.
+│ +
+│ +CHAPTERS WRITTEN: M9-scheduler, M10-crier, M11-dispatcher, M12-inference-proxy (all four; none skeleton; all carry §1–§13).
+│ +
+│ +CHAPTERS STILL SKELETON: none.
+│ +
+│ +RED FIELD COUNT PER CHAPTER (unchanged this round — drift is a re-stamp, not a new RED):
+│ +  M9 = 5  (§9 per-line classification of 368 strings; S4 per-route operator contract; S3 post-recovery readbacks; §5 aux-flag range/precedence; CT-05 internal UNVERIFIED). Boundary CT-01/CT-15 = terminal, not RED.
+│ +  M10 = 4 (§9 module-wide log inventory; §5 storage-selection custody-proof; §7 signed-read ladder; §3 S4 TS client + S3 front/MCP activation).
+│ +  M11 = 2 (§8 metrics absence-proved; §7 live-job test decoration cannot fail).
+│ +  M12 = 3 (§8 metrics absence-proved; stream completion FAILING F12-7; malformed model-type FAILING F12-10). Boundary/local contracts = terminal, not RED.
+│ +
+│ +WHAT CHANGED:
+│ +  M9: scheduler HEAD advanced 251d11db -> d0dad6d9 (4 commits, 12 paths). Re-stamped §1; re-derived §3 admission procedure (+12 shift, new tasks-mode gates NOOP-PACING/post-failure-stand-down/FailureBackoff/tasks-pacing; gate defs nowork.go:182/:245, board_stasis.go:320, stale_premise.go:208, premise_blocked.go:299, cadence_ceiling.go:71); fixed §6 CT-05 buildForemanPrompt :1249->:1250; fixed 2 §9 log locators (loop.go:2613->2623, :2334->2344); re-verified 381/370 log census + 57-flag/43-route counts unchanged; re-ran build + isolated package test + env tests.
+│ +  M10: crier HEAD advanced e50e55ee -> a9044518 (3 test/qa-only commits). Re-stamped §1/§7/§13; cited non-test files verified byte-identical to 33c1f388.
+│ +  M11: no drift (HEAD 283bca9). Re-verified py_compile, 25 log sites, 0 metrics, 538 lines.
+│ +  M12: no drift (sha256 b12a0ac5…, 273 lines, 401, systemd active). Re-stamped §7 last-run dates to 2026-11-07.
+│ +
+│ +CROSS-SECTION DEPENDENCY: none new. M9 §6 cites CT-02/CT-06 (internal) whose peer chapters M10 (CT-02 consumer) and M11 (CT-06 producer) I do not own; verified the file:function pairs still agree (bus/dispatch.go:175 payload(); dispatch_leg.go:713 dispatchReplyVerdict; handler.go:990 HandleDeliver; dispatcher.py:501 ok unchanged), spine reports zero pair/state disagreement. Requirement for peers: M10 keep CT-02 consumer handler.go:990 HandleDeliver; M11 keep CT-06 producer dispatcher.py:501 ok.
+│ +
+│ +COMMANDS RUN (all exit 0 unless noted):
+│ +  git log -1 --oneline (scheduler/crier/crier-fleet/code-factory) = 0 -> d0dad6d9 / a9044518 / 283bca9 / dbf810b
+│ +  git diff --name-only 251d11db..HEAD (scheduler) = 0 -> 12 paths
+│ +  git diff --name-only e50e55ee..HEAD (crier) = 0 -> 2 test files + 2 board JSONL
+│ +  git diff --name-only 33c1f388..HEAD -- <cited crier paths> = 0 -> empty
+│ +  go build ./... (scheduler @ d0dad6d9) = 0
+│ +  env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -count=1 -timeout 1800s = 0 (547.133s)
+│ +  env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -run 'TestSCHEDGAP091_...|TestOperatorRestartApprovalEnv|TestAbortInFlightTicks_...' -count=1 = 0 (4.353s)
+│ +  go build ./... (crier @ a9044518) = 0
+│ +  go test -count=1 ./... (crier @ a9044518) = 0 (clean)
+│ +  python3 -m py_compile dispatcher.py = 0
+│ +  python3 -m py_compile cf-inference-proxy.py = 0
+│ +  sha256sum cf-inference-proxy.py = 0 -> b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5
+│ +  curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8775/v1/chat/completions -d '{"model":"hermes"}' = 0 -> 401
+│ +  systemctl --user is-active cf-inference-proxy.service = 0 -> active
+│ +  grep -rn "log.Printf" internal/scheduler/*.go | grep -v _test.go | wc -l = 0 -> 381
+│ +  grep -rhoE 'log\.Printf\("[^"]*"' ... | sort -u | wc -l = 0 -> 370
+│ +  grep -cE 'flag\.(String|Int|Int64|Bool|Duration|Float64)' cmd/schedulerd/main.go = 0 -> 57
+│ +  grep -oE 'mux\.HandleFunc\("[^"]+"' internal/api/server.go | sort -u | wc -l = 0 -> 43
+│ +  grep -cE 'prometheus|Counter|Gauge|Histogram|/metrics' dispatcher.py = 0 -> 0
+│ +  grep -c 'log(' dispatcher.py = 0 -> 25
+│ +  python3 scratch/m9_log_enum_r19.py = 0 -> 370 distinct
+│ +  python3 scratch/m9_log_diff_r19.py = 0 -> 2 loop.go locators moved
+│ +  python3 scripts/handbook_spine.py = 0 -> findings=0
+│ +
+│ +WRITER ROUND COMPLETE
+Round 19 complete. Here is my manifest.
+
+WRITER ROUND 19 — group s3 (M9 scheduler, M10 crier, M11 dispatcher, M12 inference-proxy)
+
+SPINE SUMMARY
+`python3 scripts/handbook_spine.py` → `chapters=13  canonical contracts=18  findings=0`, exit 0.
+
+CHAPTERS WRITTEN: M9, M10, M11, M12 (all four; none skeleton; each carries §1–§13).
+CHAPTERS STILL SKELETON: none.
+
+RED FIELD COUNT PER CHAPTER (unchanged — this round's work is a re-stamp of drifted code, not a new RED):
+- M9 = 5 — §9 per-line classification of 368 strings; S4 per-route operator contract; S3 post-recovery readbacks; §5 aux-flag range/precedence; CT-05 internal UNVERIFIED. (Boundary CT-01/CT-15 are terminal, not REDs.)
+- M10 = 4 — §9 module-wide log inventory; §5 storage-selection custody-proof; §7 signed-read ladder; §3 S4 TS client + S3 front/MCP activation.
+- M11 = 2 — §8 metrics absence-proved; §7 live-job test is decoration (cannot fail).
+- M12 = 3 — §8 metrics absence-proved; stream completion FAILING (F12-7); malformed model-type FAILING (F12-10). (Boundary/local contracts terminal, not REDs.)
+
+WHAT CHANGED THIS ROUND
+- M9: scheduler HEAD advanced 251d11db → d0dad6d9 (4 commits, 12 paths). Re-stamped §1; re-derived §3 admission procedure at the new line numbers (+12 shift, new tasks-mode gates NOOP-PACING / post-failure-stand-down / FailureBackoff / tasks-pacing; gate defs now named in nowork.go:182/:245, board_stasis.go:320, stale_premise.go:208, premise_blocked.go:299, cadence_ceiling.go:71). Fixed §6 CT-05 buildForemanPrompt :1249→:1250 and two §9 log locators (loop.go:2613→2623, :2334→2344). Re-verified 381-site/370-distinct log census and 57-flag/43-route counts unchanged. Re-ran build, isolated package test, and env tests.
+- M10: crier HEAD advanced e50e55ee → a9044518 (3 test/qa-only commits). Re-stamped §1/§7/§13; verified every cited non-test file byte-identical to 33c1f388.
+- M11: no drift (HEAD 283bca9). Re-verified py_compile, 25 log sites, 0 metrics, 538 lines.
+- M12: no drift (sha256 b12a0ac5…, 273 lines, live 401, systemd active). Re-stamped §7 last-run dates to 2026-11-07.
+
+CROSS-SECTION DEPENDENCY: none new. M9 §6 cites CT-02/CT-06 (internal), whose peer chapters M10 (CT-02 consumer) and M11 (CT-06 producer) I do not own. I verified the file:function pairs still agree at the new HEADs (bus/dispatch.go:175 payload(); dispatch_leg.go:713 dispatchReplyVerdict; handler.go:990 HandleDeliver; dispatcher.py:501 ok all unchanged) and the spine reports zero pair/state disagreement. Requirement the peers must keep: M10 keeps CT-02 consumer `handler.go:990 HandleDeliver`; M11 keeps CT-06 producer `dispatcher.py:501` (`ok`).
+
+COMMANDS RUN (all exit 0 unless noted)
+- git log -1 --oneline (scheduler/crier/crier-fleet/code-factory) → d0dad6d9 / a9044518 / 283bca9 / dbf810b
+- git diff --name-only 251d11db..HEAD (scheduler) → 12 paths
+- git diff --name-only e50e55ee..HEAD (crier) → 2 test files + 2 board JSONL
+- git diff --name-only 33c1f388..HEAD -- <cited crier paths> → empty (byte-identical)
+- go build ./... (scheduler @ d0dad6d9) → exit 0
+- env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -count=1 -timeout 1800s → exit 0, 547.133s
+- env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -run 'TestSCHEDGAP091_...|TestOperatorRestartApprovalEnv|TestAbortInFlightTicks_...' -count=1 → exit 0, 4.353s
+- go build ./... (crier @ a9044518) → exit 0
+- go test -count=1 ./... (crier @ a9044518) → exit 0 (clean)
+- python3 -m py_compile dispatcher.py → exit 0
+- python3 -m py_compile cf-inference-proxy.py → exit 0
+- sha256sum cf-inference-proxy.py → b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5
+- curl no-token POST → 401
+- systemctl --user is-active cf-inference-proxy.service → active
+- grep "log.Printf" (scheduler) → 381 sites; distinct → 370; flags → 57; routes → 43; dispatcher log() → 25; dispatcher metrics grep → 0
+- python3 scripts/handbook_spine.py → findings=0
+
+WRITER ROUND COMPLETE
+
+session_id: local-d32f53887ef55c5087cedc53ea4f7373776ab8ca3fbd7877eb26cfc07d40158d
+andleFunc\("[^"]+"' internal/api/server.go | sort -u | wc -l = 0 -> 43
+  grep -cE 'prometheus|Counter|Gauge|Histogram|/metrics' dispatcher.py = 0 -> 0
+  grep -c 'log(' dispatcher.py = 0 -> 25
+  python3 scratch/m9_log_enum_r19.py = 0 -> 370 distinct
+  python3 scratch/m9_log_diff_r19.py = 0 -> 2 loop.go locators moved
+  python3 scripts/handbook_spine.py = 0 -> findings=0
+
+WRITER ROUND COMPLETE

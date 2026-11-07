@@ -1,0 +1,39 @@
+VERDICT: PASS
+BLOCKING: 0
+NON-BLOCKING: 5
+
+FINDINGS:
+
+1. kind CONTRADICTION — RED-accounting rule applied two ways across chapters.
+   M4 (RED note, §13) and the "uniform rule" M5/M6/M7/M8 cite it: "a contract row in §6 whose far side is an external peer (boundary or (local), no in-repo file:function) is a terminal state ... and is NOT counted as a RED." M9 §13 and M12 §13 state the opposite: "an UNVERIFIED contract state — boundary or internal — is a named RED" and count CT-01/CT-15 (boundary, M9) and M12-C1/M12-C2/CT-07 (boundary/local, M12) inside their RED field totals. Both cite "glm #4" as the authority; the same seat's guidance is applied two ways. Evidence: M4 §13 (RED accounting rule, "not counted as a RED") vs M9 §13 RED field count = 7 (includes "CT-01 UNVERIFIED (boundary)" and "CT-15 UNVERIFIED (boundary)"). Fix: settle one rule (boundary-terminal UNVERIFIED is not a RED; internal not-measured UNVERIFIED is a RED) and restate it uniformly, then stop counting boundary rows in M9/M12's RED totals. Does not make any factual claim false — non-blocking.
+
+2. kind UNVERIFIED (environment-gated, disclosed) — live-node ladders not run this round: M1 §7 certification ladder, M5 §7 conformance battery, M3 §11 hook-enforcement rejecting-commit fixture, M7 §7 token mint (no App creds on host). These are "not measured", not "absence proved", so the OUTLINE Part VII.3 "WRITTEN" test is not met for those fields. Each is named, dated, and filed. Fix: run the ladders on a live node / mint a credential, or accept PARTIAL as the honest terminal state (the outline explicitly blesses a RED chapter over a green un-evidenced one).
+
+3. kind OMISSION (declared scope, not hidden) — all 16 flow chapters F1-F16 are unwritten (OUTLINE Part II marks each MISSING). Every module chapter cross-references "flow chapter not written". This is the single largest remaining body of work and a declared structural gap, not a hidden omission inside a module chapter. Fix: a flows round, or an explicit outline decision to defer.
+
+4. kind PADDING (provisional schema deviation) — the §9 "counted-not-enumerated" log-line exemption in M0/M1/M2/M3/M5/M7 declines to tabulate every helper call site (e.g. M1 = 141 sites, M2 = 70, M5 = 215, M7 = 103), arguing enumerating a templated label is padding. The schema §6 requires "every operator-visible line, verbatim." The argument is coherent (the template IS the line; the label is data) and each chapter discloses it as "provisional — subject to schema/pill approval." Fix: the panel rules on the exemption once, rather than each chapter carrying its own provisional hedge.
+
+5. kind FAILING (code defect, correctly reported — not a writing defect) — M12 F12-7: cf-inference-proxy.py's healthy SSE stream is unframed (no Content-Length / Transfer-Encoding / Connection: close; returns at :224 without closing), reproduced this round as 200 with client EOF TimeoutError. The chapter correctly stamps the module FAILING for streaming. This is a demonstrated system defect, filed (CF-351/CF-343/CF-346), not a defect in the document's writing.
+
+DEFECT CLASSES: cross-chapter convention drift (RED accounting), environment-gated unmeasured ladders, declared-scope omission (flows), provisional schema exemption (log-line enumeration). No new defect class this round: false-claim, one-sided-contract, name-only-setting, stale-locator and fabricated-citation classes are all resolved in the chapters themselves (each documents its prior-round false claim and its correction).
+
+CHAPTER SCORECARD:
+M0 — WRITTEN (metrics absence-proved; every claim carries file:line; local edge terminal)
+M1 — PARTIAL (certification ladder needs a live node; metrics absence-proved)
+M2 — PARTIAL (bus-worker ladder not repeatable from this host; metrics absence-proved)
+M3 — PARTIAL (hook-enforcement rejecting-commit fixture missing; metrics absence-proved)
+M4 — WRITTEN (store 357/519 verified, drift reconciled byte-parity, boundary states terminal)
+M5 — PARTIAL (conformance battery not run; §9 4-of-215 inventory)
+M6 — PARTIAL (own gate reads FAIL over legacy corpus; render-to-owner leg CT-18 missing)
+M7 — PARTIAL (mint environment-gated, no App creds; §9 2-of-103)
+M8 — WRITTEN (verified in full; metrics absence-proved)
+M9 — PARTIAL (7 named REDs — most heavily gated; log inventory 376/378, per-route contract, CT-01/05/15 UNVERIFIED)
+M10 — PARTIAL (per-metric contract and custody-proof unwritten; §9 beyond 5 handler/guard sites)
+M11 — PARTIAL (live-job tests are decoration with no assert; metrics absence-proved)
+M12 — PARTIAL (streaming FAILING demonstrated; node-client half config-wired not call-site)
+
+Verified this round (independent, not from any prior seat): handbook_spine.py findings=0; all 349 file:line citations across the 13 chapters resolve with 0 out-of-range and 0 unresolved basenames; CF-355 silent-success (dispatch_leg.go:713-726 reads only payload["ok"], absence = success) vs node-bus-worker.py:1180 (sends status) vs dispatcher.py:501 (sends ok) all confirmed verbatim; dispatch.go:175 payload() emits text_b64 + board (not board_row); board census 357/519; scheduler 30 tables, 43 routes, 57 flags; num-levels clamp (urgency.go:18-22) and loader <1 rejection (loader.go:421-422); tick_duration_ms has no available field; configure_family.py:24-28 PID 1755676 hardcode; M12 streaming unframed; M11 kill -TERM targets run.sh's group, not the GNU-timeout group holding the harness.
+
+PANEL REVIEW COMPLETE
+
+EXIT=0

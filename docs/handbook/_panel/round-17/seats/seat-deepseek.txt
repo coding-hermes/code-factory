@@ -1,0 +1,136 @@
+I have read all 13 chapters, the outline, the schema, run the spine, and spot-checked ~18 load-bearing claims directly against the code. Here is the verdict.
+
+```
+VERDICT: FAIL
+
+BLOCKING: 3
+
+NON-BLOCKING: 4
+
+FINDINGS
+========
+
+B1 — UNBUILDABLE — M6-documentation
+  Claim: "the legacy fill/render/panel pipeline is UNBUILDABLE against these
+  M-numbered chapters" and CT-18 state UNVERIFIED.
+  Evidence: verified in code. scripts/gen_nasa_handbook.py:18 hardcodes
+  `MODULES = REPO / "docs/master"`; :255 selects `[0-9][0-9]-*.md`; :259 prints
+  "no modules found". master_doc_check.py:52 DEFAULT_ROOTS=("docs/master",
+  "docs/handbook/appendices/units") and :188 globs the same `[0-9][0-9]-*.md`.
+  Neither selects `M0-...-*.md`, so the only renderer that produces the owner's
+  approval artifact cannot render these chapters. The document has no working
+  path to the owner's desk. Documenting the breakage (F6-1) does not fix it.
+  Fix: add a chapter-aware render leg (or make gen_nasa_handbook select M*.md)
+  so CT-18 is satisfiable.
+
+B2 — OMISSION (coverage) — document-wide / OUTLINE Part II
+  Claim: OUTLINE Part II lists 16 flows (F1-F16), all marked MISSING.
+  Evidence: `ls docs/handbook/chapters/` yields only M0-M12; no F*.md or flow
+  file exists. Verified. This is the panel's historically largest single
+  finding (OUTLINE header names "Secondary (5, missing — the panel's largest
+  single finding)") and it is still open: every chapter §12 reads "flow
+  chapter not written." In-scope per the outline's own scope boundary.
+  Fix: write the 16 flow chapters, or record an explicit quorum scope ruling
+  that defers them with a dated owner decision.
+
+B3 — INCOMPLETE-RED — M9-scheduler, M10-crier
+  Claim: M9 §8 per-metric contract, M9 §9 log inventory (372 distinct
+  log.Printf strings), M10 §8 per-metric contract are named REDs as
+  "not measured."
+  Evidence: verified. `grep -rn "log.Printf" internal/scheduler/*.go |
+  grep -v _test.go | wc -l` = 381 sites (370 distinct) — only 2 tabulated in
+  M9 §9. These are distinct operator-visible strings, not the four house-style
+  templates that justify M0/M1/M2/M3's "counted-not-enumerated" exemption.
+  Under OUTLINE Part VII.3 a "not measured" field is UNVERIFIED and blocks
+  WRITTEN. These are enumerable with a grep and within the loop's power to
+  complete.
+  Fix: tabulate M9 §8/M10 §8 per-metric (type/labels/question/scrape) and M9
+  §9's remaining distinct log strings, or obtain an explicit schema exception.
+
+NON-BLOCKING FINDINGS
+=====================
+
+N1 — REVISION-DRIFT — M10-crier
+  Claim: "Revision: e50e55ee (crier repo HEAD at this round's stamp)."
+  Evidence: git rev-parse HEAD = 1587a03f (one commit past e50e55ee).
+  e50e55ee IS an ancestor; the new commit is test-only ("test(crier): keep the
+  dead-endpoint control honest ... INT-CI-027"), so no cited non-test claim is
+  affected. The chapter's own closed-world "git diff" discipline (F10-11)
+  already acknowledges HEAD advances.
+  Fix: re-stamp to 1587a03f next round.
+
+N2 — COUNT-DRIFT — M9-scheduler
+  Claim: "378 call sites ... producing 372 distinct format strings."
+  Evidence: measured 381 sites / 370 distinct at the same stamped rev 251d11db.
+  Immaterial — the field is RED either way — but the census numbers are off by
+  ~3. The spine's COUNT CLAIM check does not cover prose log-site counts
+  (M6 §3 S9: submodule is None).
+  Fix: re-run the grep and re-quote the exact number.
+
+N3 — CONFLICTED-EXEMPTION — M0/M1/M2/M3/M5/M7
+  Claim: the "counted not enumerated" §9 schema exemption (house templates
+  with data-interpolated labels) is a writer argument, self-flagged "if the
+  panel rejects it, the field is RED."
+  Evidence: M5 §9 (274 sites, 4 tabulated) and M7 §9 (103 sites, 2 tabulated)
+  already declare the uncovered count a named RED; M1/M2/M3 assert the
+  exemption. No uniform panel ruling exists across the group.
+  Fix: settle the exemption once (one ruling, applied M0-M8) so RED counts are
+  comparable.
+
+N4 — TERMINAL-RED (resource-gated) — M1/M2/M5/M7/M10/M12
+  Claim: not-measured REDs that require a live node or a credential absent on
+  this host.
+  Evidence: M1 §7 certification ladder, M2 §7 bus-worker ladder, M5 §7
+  conformance battery, M10 §7 signed-read ladder (all need a live cf-node);
+  M7 §1 token mint (no GitHub App creds on host); M12 §7 disallowed-model 403
+  (needs the node token file). These are valid terminal UNVERIFIED states per
+  OUTLINE Part IV, not writing defects.
+  Fix: none in-loop; a live-node certification pass would close them.
+
+DEFECT CLASSES
+==============
+UNBUILDABLE-DELIVERY, OMISSION-FLOWS, INCOMPLETE-RED, REVISION-DRIFT,
+CONFLICTED-EXEMPTION, TERMINAL-RED.
+(None observed this round: FALSE CLAIM, CONTRADICTION, PADDING, SKELETON.)
+
+CHAPTER SCORECARD
+=================
+M0  shared-contract    WRITTEN  — 1 RED (metrics, absence-proved); all claims file:line-verified
+M1  provisioning       PARTIAL  — §7 certification ladder not-measured (needs live node)
+M2  dispatch           PARTIAL  — §7 bus-worker ladder not-measured (needs cf-node)
+M3  repository         PARTIAL  — S3 hook enforcement + freshness arm not-measured
+M4  board              WRITTEN  — 1 RED (metrics, absence-proved); store census 357/519 re-verified
+M5  harness            PARTIAL  — §7 conformance battery + §9 inventory incomplete
+M6  documentation      PARTIAL  — Status UNVERIFIED (own gate reads FAIL: 44/37/50), CT-18 leg unbuildable
+M7  github             PARTIAL  — §1 mint not-measured (no App creds) + §9 inventory incomplete
+M8  safety             WRITTEN  — 1 RED (metrics, absence-proved)
+M9  scheduler          PARTIAL  — 6 REDs (per-metric, log inventory, per-route, post-recovery, aux-flag range, CT-05 internal unmeasured)
+M10 crier              PARTIAL  — 5 REDs (per-metric, module log inventory, custody-proof, signed-read ladder, TS/front/MCP activation)
+M11 dispatcher         PARTIAL  — §7 live-job tests are decoration (cannot fail)
+M12 inference-proxy    PARTIAL  — streaming completion FAILING (F12-7 reproduced: 200 with no Content-Length/Transfer-Encoding/Connection, client EOF timeout)
+
+VERIFICATION NOTES
+==================
+Spine gate: `python3 scripts/handbook_spine.py` -> "chapters=13 canonical
+contracts=18 findings=0", exit 0. No unregistered contract id, no setting
+default conflict, no dangling reference, no count-claim mismatch.
+
+Spot-checks that held against live code (no FALSE CLAIM found):
+- dispatchReplyVerdict reads only payload["ok"]; absence = success
+  (dispatch_leg.go:709-726) -> CF-355 real, carried at CT-04.
+- node-bus-worker.py:1176-1192 reply carries `status`, no `ok`/`run_id`/`outcome`.
+- handbook_spine.py is dirty: 443 lines vs HEAD 340, sha256 afbc65fc (M6 F6-8 exact).
+- board census 357 rows / 519 events (M4 exact).
+- crier: handler slog=3, Port 8767, metrics default-ON with metrics.go:2 "opt-in" contradiction (M10 F10-3 exact).
+- scheduler: 30 tables, no-exec-fallback=true, board-stasis-gate=true, load-gate=0, buildForemanPrompt:1249 (M9 exact).
+- cf-inference-proxy sha256 b12a0ac5; streaming framing defect reproduced (M12 exact).
+- master_doc_check.py -> "44 module(s): 37 VERIFIED, 50 error(s)", MASTER-DOC: FAIL, exit 1 (M6 exact).
+```
+
+The document is the most evidence-dense and self-correcting round this loop has produced: the spine is clean, there are zero false claims and zero cross-chapter contradictions in my verification, and the delicate self-corrections (CF-354/CF-355, the F12-7 streaming defect, the dirty `handbook_spine.py`, the `metrics.go` "opt-in" comment) all check out against the code. It fails on delivery, not on honesty: the render leg (CT-18) cannot produce the owner's artifact, the 16 flow chapters remain unwritten, and M9/M10 carry enumerable "not measured" REDs that are within the loop's power to close.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-c7e92acb721229ca61eb14a3bfb538b93d1d330d98378eaa4c491dbdd6b6f1c7
+
+EXIT=0

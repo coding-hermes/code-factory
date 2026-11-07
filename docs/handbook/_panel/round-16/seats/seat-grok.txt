@@ -1,0 +1,294 @@
+⚠️  Primary auth failed — switching to fallback: fireworks / accounts/fireworks/models/deepseek-v4p1-flash-1017
+│ cache/scratch/cite_check.py
+│ @@ -0,0 +1,64 @@
+│ +#!/usr/bin/env python3
+│ +"""Verify every file:line citation in the handbook chapters resolves."""
+│ +import os, re, sys
+│ +from pathlib import Path
+│ +from collections import defaultdict
+│ +
+│ +CH = Path("/home/kara/code-factory/docs/handbook/chapters")
+│ +ROOTS = {
+│ +    "code-factory": Path("/home/kara/code-factory"),
+│ +    "scheduler": Path("/home/kara/coding-hermes-scheduler/coding-herms-scheduler"),
+│ +    "crier": Path("/home/kara/crier"),
+│ +    "crier-fleet": Path("/home/kara/crier-fleet"),
+│ +    "hermes-scripts": Path("/home/kara/.hermes/scripts"),
+│ +}
+│ +
+│ +# index by basename -> list of (root, path)
+│ +index = defaultdict(list)
+│ +for name, root in ROOTS.items():
+│ +    if not root.exists():
+│ +        print(f"MISSING ROOT {name} {root}", file=sys.stderr)
+│ +        continue
+│ +    for dirpath, dirnames, filenames in os.walk(root):
+│ +        # skip heavy dirs
+│ +        dirnames[:] = [d for d in dirnames if d not in {".git", "node_modules", "vendor", ".venv", "__pycache__", "target", "dist"}]
+│ +        for fn in filenames:
+│ +            index[fn].append(Path(dirpath) / fn)
+│ +
+│ +LINE = re.compile(r"`?([\w./-]+\.(?:py|go|sh|ts|js|json|toml|yaml|md|jsonl|conf)):(\d{1,5})(?:-(\d{1,5}))?`?")
+│ +
+│ +bad, okc, unresolved = [], 0, []
+│ +for p in sorted(CH.glob("M*.md")):
+│ +    text = p.read_text(errors="replace")
+│ +    for m in LINE.finditer(text):
+│ +        fname, l1, l2 = m.group(1), int(m.group(2)), m.group(3)
+│ +        base = os.path.basename(fname)
+│ +        cands = index.get(base, [])
+│ +        # prefer candidate whose path ends with the cited relative path
+│ +        rel = fname.lstrip("./")
+│ +        pref = [c for c in cands if str(c).endswith("/" + rel)] or cands
+│ +        if not pref:
+│ +            unresolved.append((p.stem, fname, l1))
+│ +            continue
+│ +        c = pref[0]
+│ +        try:
+│ +            n = sum(1 for _ in open(c, "rb"))
+│ +        except OSError:
+│ +            unresolved.append((p.stem, fname, l1)); continue
+│ +        hi = int(l2) if l2 else l1
+│ +        if l1 > n or hi > n:
+│ +            bad.append((p.stem, fname, l1, hi, n, str(c)))
+│ +        else:
+│ +            okc += 1
+│ +
+│ +print(f"citations in-range: {okc}")
+│ +print(f"OUT-OF-RANGE: {len(bad)}")
+│ +for b in bad:
+│ +    print("  OOR", b)
+│ +print(f"UNRESOLVED FILE: {len(unresolved)}")
+│ +seen=set()
+│ +for u in unresolved:
+│ +    k=(u[1],)
+│ +    if k in seen: continue
+│ +    seen.add(k)
+│ +    print("  UNRESOLVED", u)
+│ cache/scratch/cite_check2.py
+│ @@ -0,0 +1,63 @@
+│ +#!/usr/bin/env python3
+│ +"""Verify every file:line citation in the handbook chapters resolves (suffix-scored)."""
+│ +import os, re, sys
+│ +from pathlib import Path
+│ +from collections import defaultdict
+│ +
+│ +CH = Path("/home/kara/code-factory/docs/handbook/chapters")
+│ +ROOTS = [
+│ +    Path("/home/kara/code-factory"),
+│ +    Path("/home/kara/coding-hermes-scheduler/coding-herms-scheduler"),
+│ +    Path("/home/kara/crier"),
+│ +    Path("/home/kara/crier-fleet"),
+│ +    Path("/home/kara/.hermes/scripts"),
+│ +]
+│ +
+│ +index = defaultdict(list)
+│ +for root in ROOTS:
+│ +    if not root.exists():
+│ +        print(f"MISSING ROOT {root}", file=sys.stderr); continue
+│ +    for dirpath, dirnames, filenames in os.walk(root):
+│ +        dirnames[:] = [d for d in dirnames if d not in {".git","node_modules","vendor",".venv","__pycache__","target","dist"}]
+│ +        for fn in filenames:
+│ +            index[fn].append(Path(dirpath) / fn)
+│ +
+│ +LINE = re.compile(r"`?([\w./-]+\.(?:py|go|sh|ts|js|json|toml|yaml|md|jsonl|conf)):(\d{1,5})(?:-(\d{1,5}))?`?")
+│ +
+│ +def suffix_score(c, rel):
+│ +    a = Path(str(c)).parts[::-1]
+│ +    b = Path(rel).parts[::-1]
+│ +    n = 0
+│ +    for x, y in zip(a, b):
+│ +        if x == y: n += 1
+│ +        else: break
+│ +    return n
+│ +
+│ +bad, okc, unresolved = [], 0, []
+│ +for p in sorted(CH.glob("M*.md")):
+│ +    text = p.read_text(errors="replace")
+│ +    for m in LINE.finditer(text):
+│ +        fname, l1, l2 = m.group(1), int(m.group(2)), m.group(3)
+│ +        base = os.path.basename(fname)
+│ +        cands = index.get(base, [])
+│ +        if not cands:
+│ +            unresolved.append((p.stem, fname, l1)); continue
+│ +        rel = fname.lstrip("./")
+│ +        best = max(suffix_score(c, rel) for c in cands)
+│ +        pref = [c for c in cands if suffix_score(c, rel) == best]
+│ +        # prefer code-factory then scheduler then crier order as listed
+│ +        pref.sort(key=lambda c: next((i for i, r in enumerate(ROOTS) if str(c).startswith(str(r))), 99))
+│ +        c = pref[0]
+│ +        n = sum(1 for _ in open(c, "rb"))
+│ +        hi = int(l2) if l2 else l1
+│ +        if l1 > n or hi > n:
+│ +            bad.append((p.stem, fname, l1, hi, n, str(c)))
+│ +        else:
+│ +            okc += 1
+│ +
+│ +print(f"citations in-range: {okc}")
+│ +print(f"OUT-OF-RANGE: {len(bad)}")
+│ +for b in bad:
+│ +    print("  OOR", b)
+│ +print(f"UNRESOLVED BASENAME: {len(unresolved)}")
+│ +for u in unresolved: print("  UNRESOLVED", u)
+│ cache/scratch/cite_check3.py
+│ @@ -0,0 +1,58 @@
+│ +#!/usr/bin/env python3
+│ +"""Verify citations; tie-break by line count (suffix score first)."""
+│ +import os, re
+│ +from pathlib import Path
+│ +from collections import defaultdict
+│ +
+│ +CH = Path("/home/kara/code-factory/docs/handbook/chapters")
+│ +ROOTS = [
+│ +    Path("/home/kara/code-factory"),
+│ +    Path("/home/kara/coding-hermes-scheduler/coding-herms-scheduler"),
+│ +    Path("/home/kara/crier"),
+│ +    Path("/home/kara/crier-fleet"),
+│ +    Path("/home/kara/.hermes/scripts"),
+│ +]
+│ +
+│ +index = defaultdict(list)
+│ +for root in ROOTS:
+│ +    for dirpath, dirnames, filenames in os.walk(root):
+│ +        dirnames[:] = [d for d in dirnames if d not in {".git","node_modules","vendor",".venv","__pycache__","target","dist"}]
+│ +        for fn in filenames:
+│ +            index[fn].append(Path(dirpath) / fn)
+│ +
+│ +LINE = re.compile(r"`?([\w./-]+\.(?:py|go|sh|ts|js|json|toml|yaml|md|jsonl|conf)):(\d{1,5})(?:-(\d{1,5}))?`?")
+│ +
+│ +def suffix_score(c, rel):
+│ +    a = Path(str(c)).parts[::-1]; b = Path(rel).parts[::-1]
+│ +    n = 0
+│ +    for x, y in zip(a, b):
+│ +        if x == y: n += 1
+│ +        else: break
+│ +    return n
+│ +
+│ +bad, okc, unresolved = [], 0, []
+│ +for p in sorted(CH.glob("M*.md")):
+│ +    text = p.read_text(errors="replace")
+│ +    for m in LINE.finditer(text):
+│ +        fname, l1, l2 = m.group(1), int(m.group(2)), m.group(3)
+│ +        base = os.path.basename(fname)
+│ +        cands = index.get(base, [])
+│ +        if not cands:
+│ +            unresolved.append((p.stem, fname, l1)); continue
+│ +        rel = fname.lstrip("./")
+│ +        best = max(suffix_score(c, rel) for c in cands)
+│ +        pref = [c for c in cands if suffix_score(c, rel) == best]
+│ +        pref.sort(key=lambda c: -sum(1 for _ in open(c, "rb")))
+│ +        c = pref[0]
+│ +        n = sum(1 for _ in open(c, "rb"))
+│ +        hi = int(l2) if l2 else l1
+│ +        if l1 > n or hi > n:
+│ +            bad.append((p.stem, fname, l1, hi, n, str(c)))
+│ +        else:
+│ +            okc += 1
+│ +
+│ +print(f"citations in-range: {okc}")
+│ +print(f"OUT-OF-RANGE: {len(bad)}")
+│ +for b in bad: print("  OOR", b)
+│ +print(f"UNRESOLVED BASENAME: {len(unresolved)}")
+│ +for u in unresolved: print("  UNRESOLVED", u)
+│ cache/scratch/subcount.py
+│ @@ -0,0 +1,26 @@
+│ +#!/usr/bin/env python3
+│ +"""Count submodule inventory rows per chapter and compare with OUTLINE."""
+│ +import re
+│ +from pathlib import Path
+│ +CH = Path("/home/kara/code-factory/docs/handbook/chapters")
+│ +total = 0
+│ +for p in sorted(CH.glob("M*.md"), key=lambda x: int(re.match(r"M(\d+)", x.stem).group(1))):
+│ +    t = p.read_text(errors="replace")
+│ +    m = re.search(r"^## 3\. Submodule inventory$(.*?)(?=^## )", t, re.S | re.M)
+│ +    if not m:
+│ +        print(f"{p.stem}: NO SECTION 3"); continue
+│ +    body = m.group(1)
+│ +    rows = [l for l in body.splitlines() if l.startswith("|") and not set(l) <= set("|-: ")]
+│ +    rows = [r for r in rows if not r.lstrip("|").strip().lower().startswith("submodule")]
+│ +    ids = []
+│ +    for r in rows:
+│ +        cells = [c.strip() for c in r.strip("|").split("|")]
+│ +        ids.append(cells[0])
+│ +    total += len(rows)
+│ +    print(f"{p.stem}: {len(rows)} rows  {ids}")
+│ +print("TOTAL submodule rows:", total)
+│ +# OUTLINE claims
+│ +out = Path("/home/kara/code-factory/docs/handbook/OUTLINE.md").read_text()
+│ +for pat in [r"(\d+)\s+modules?,?\s+(\d+)\s+submodules", r"Submodule chapters \| 25 \| (\d+)"]:
+│ +    for mm in re.finditer(pat, out):
+│ +        print("OUTLINE count claim:", mm.group(0))
+│ cache/scratch/ffc_probe2.sh
+│ @@ -0,0 +1,4 @@
+│ +#!/bin/bash
+│ +. /home/kara/code-factory/scripts/lib.sh
+│ +fetch_verified http://127.0.0.1:1/nothing "$1" deliberately-wrong-digest
+│ +printf "rc=%s artifact=" "$?"; [ -e "$1" ] && echo yes || echo no
+VERDICT: FAIL
+BLOCKING: 4 — findings that must be fixed before these chapters can be called written
+NON-BLOCKING: 6
+
+I am the round-16 seat. I judged the document against the code, and I reproduced the commands rather than reading the chapters' own assurances. What follows is what I measured on this host at code-factory `3fba8a7` (== origin/main), scheduler HEAD `bbefa36c`, crier HEAD `7220a22b`, crier-fleet `283bca9`, proxy `b12a0ac5…`.
+
+WHAT REPRODUCED (so the record is fair before the findings):
+
+- `python3 scripts/handbook_spine.py` → `chapters=13 canonical contracts=18 findings=0`, rc 0.
+- All 349 `file:line` citations in the 13 chapters resolve to an existing file, in range. Zero out-of-range, zero unresolved. No fabricated locator found.
+- M0: `bash -n` PASS; 11 direct / 17 total sourcers; metrics grep 0; the `fetch_verified` probe reproduced `rc=1 artifact=no` with `curl: (7)`.
+- M1/M2/M3/M5/M6/M8 unit suites: 12 / 40 / 4 / 28 / 9 tests all OK; `bash -n` and `py_compile` clean across every cited script.
+- M4: 357 rows, 519 events, `boardctl validate` → `RESULT: OK (7 warning(s))` with exactly the warnings described (CF-150/CF-192/CF-371, duplicate event line 337, headerless board); `board_drift` → byte-parity identical, 0 divergent ids, HEAD == origin/main; duplicate-id refusal and the TR-251 `--evidence-run-id` completion refusal both reproduced by me on a scratch board copy.
+- M6: `master_doc_check.py` → `44 module(s): 37 VERIFIED, 50 error(s)`, `MASTER-DOC: FAIL`, rc 1 — as stated. `verify-patch.sh` → `VERIFY-PATCH: PASS` (5 stages, 4 patches, `57432007…`).
+- M8: `check_scan_scope.py` → 15 claims, RESULT OK; reclaim targets (`BUILD_CACHES`/`AGED_PARENTS`/`PROTECTED`) match the code exactly.
+- M9: 30 tables / 0 `verdicts`; 57 flag definitions; 43 `mux.HandleFunc` routes and the enumerated list really is 43 items; 378 `log.Printf` / 372 distinct strings; 7 `cmd/` dirs; `go build ./...` rc 0. `dispatchReplyVerdict` does read only `payload["ok"]` and treats absence as success; `payload()` is at `internal/bus/dispatch.go:175` and emits `board` with no `run_id`; `buildForemanPrompt` is at `spawn.go:1244`; `load_lane_config.py:31-37` does `UPDATE projects SET prompt=?, prompt_mode='append'`.
+- M10: handler is 1895 lines, 91 test files, 67 `crier_*` strings, `go build` rc 0; the three slog lines are really at `:1332/:1795/:1885`; config defaults at `:622-673` match row-for-row; `AGENTS.md:173` does carry the `:18767`/`:18877` demo.
+- M11: `dispatcher.py` 538 lines, 25 `log(` hits, 23 sites enumerated and correct; `:501` sends `ok`; the GNU-timeout/process-group analysis at `:246-262, :329` is accurate and the defect is real.
+- M12: sha256 `b12a0ac5…` reproduced, 273 lines, `py_compile` PASS, unit `active`, MainPID 2603939, no-token POST → 401; `LISTEN`/`MAX_BODY`/`ALLOWED_MODELS` at `:53-62` as documented.
+- Negative claims that hold: `node-bus-worker.py` has 0 `duckbrain` and 0 `boardctl|tasks.jsonl|events.jsonl` hits; crier has 0 Go files referencing `tasks.jsonl|board_ownership|boardWorkable`; `gen_nasa_handbook` has no production invoker; `check_scan_scope` has no production invoker.
+
+FINDINGS:
+
+1. FALSE CLAIM — M10, §7 row "slog surface". Claim: `grep -c 'slog.(Info|Error|Warn|Debug)' internal/registry/handler.go` → "PASS — exactly 3 sites". Evidence: I ran it at crier HEAD; it returns **0**, rc 1, because that is a BRE where `(` and `|` are literal. The ERE form (`grep -cE 'slog\.(Info|Error|Warn|Debug)'`) returns 3. The underlying fact (3 sites, at `handler.go:1332`, `:1795`, `:1885`) is true and the lines are correct; the quoted command does not produce the quoted result. This is precisely the defect M12 §6 flags in round 4 ("quoted command omitted `-E`, so its BRE returned 0 — the opposite of the row's claim"), repeated in this chapter. Fix: replace the row's command with the `-E` form and re-stamp; or mark the row UNVERIFIED and count it. Verifiability of a §7 table is the whole point of the table.
+
+2. OMISSION — M10, §3 S3 "binaries, ports and services". OUTLINE M10.S3 is defined as "server :8767 / :18767, front :8770, mcp, deploy units". The chapter's S3 row covers only `config/config.go:622` (8767) and `crier-front/main.go:39` (8770). Measured: `ls cmd/` → `crier-front`, `crier-mcp`, `server`; `crier-mcp` occurs **0 times** in the chapter; `deploy/` contains `crier.service`, `crier.user.service`, `crier.backup.service/.timer`, `prometheus-scrape.example.yml` — none is named, no unit path, no args, no port for the MCP binary, no deploy/restart surface. `:18767` appears once, only as "unmeasured". The chapter does not count this in its RED list. A reader cannot start, stop or verify the crier MCP or the deployed units from this chapter, and those are in-scope operator surfaces by the outline's own wording. Fix: write S3's mcp + deploy-unit rows (unit names, paths, ports/envs, how absence is detected), or declare S3 partial and add it to the RED count.
+
+3. OMISSION — M9, §3 durable-state keys. Claim: "The 30-table store's run-correctness keys and their relationships". Measured: 14 of the 30 tables are named nowhere in M9 — `tick_workers`, `usage_pools`, `usage_pool_leases`, `usage_pool_lease_members`, `usage_pool_memberships`, `usage_pool_deferrals`, `usage_pool_deferrals`, `feature_usage`, `hook_runs`, `host_samples`, `lane_links`, `namespace_ticks`, `remote_events`, `remote_events_stats`, `sync_spool`. Two of those are load-bearing for things the chapter itself asserts elsewhere: admission step 5 is `reserveUsagePools` (`usage_pool_policy.go:26-63`) and the reservation's durable record is the `usage_pool*` family — so the chapter documents the decision and omits the store it writes; and OUTLINE M9.S3 names `tick_workers` explicitly. None of this is in the §RED list (which names only per-failure-mode recovery indications), so the field is understated. Fix: add the `usage_pool*` and `tick_workers` keys (at minimum), or scope the S3 claim to what it actually covers and count the rest RED.
+
+4. CONTRADICTION — the §9 log-inventory exemption is accounted two different ways across chapters, and no authority authorizes it. `MASTER-DOC-SCHEMA.md` §6 requires "every operator-visible line, verbatim"; OUTLINE §9 says "verbatim, classified descriptive or evidentiary". M1, M2 and M3 declare a "schema exemption (deepseek B4) / provisional" and then **exclude** it from their RED counts (M1 = 2, M2 = 2, M3 = 2), while M5 (4 of 215), M7 (2 of 103), M9 (376 of 378) and M10 (webhook/store/detect/federation emitters untabulated) **count** the same uncovered inventory as a named RED. Same field, same exemption, two accounting rules. Under OUTLINE Part VII.3 a "not measured" field is a named RED, so M1/M2/M3 understate their own RED counts by one. Fix: pick one rule — either the schema grants the exemption (amend the schema, then M5/M7/M9/M10 over-count) or it does not (then M1/M2/M3 add §9 to their RED counts). It cannot be both.
+
+5. CONTRADICTION — M4's RED count contradicts M4's own accounting rule. §1/§11 declare the rule ("RED counts only fields where the writer's own evidence is incomplete (an unread body, an unrun ladder, an untabulated log inventory)"), then §7 row "lock adjudication" says "UNVERIFIED — the classifier was read in full but not exercised against a held/unheld fixture this round", and the RED count is printed as **1** (metrics only). An unrun fixture is an unrun ladder by that rule. Count is 2. Fix: either run the ABSENT/HELD/RESIDUE fixture (it is cheap — `board_lock.py` against a scratch lock) or count it.
+
+6. CONTRADICTION — the schema's section numbering is not the chapters'. OUTLINE Part III states the authority rule ("`docs/MASTER-DOC-SCHEMA.md` §1 puts Identity first… where this list and the schema disagree, the schema wins") then lists 13 headings, and every chapter implements 1–13: §3 = Submodule inventory, §5 = Settings register, §8 = Metrics, §9 = Log lines. The schema says §3 = Dependencies (3a/3b/3c), §4 = Verification, §5 = Metrics, §6 = Log lines, §7 = Failure modes, §8 = Evidence. So a worker told to fill "schema §5 Metrics" opens §5 and finds a settings table; a reader told "§3c names both sides of every wire" finds the store census. The content exists (it is all present, relocated), so this is an authority/numbering defect rather than missing fields — but it is the exact seam a work-derivation pass (Part VII.2 "each citing the section it closes") will miscite 13 times. Fix: either renumber the chapters to the schema, or amend the schema/OUTLINE so one document is authoritative for section numbers.
+
+7. CONTRADICTION (count) — "13 modules, 48 submodules" vs 50 inventory rows. Distinct submodule IDs still total 48, but the chapters carry 50 §3 rows: M1 splits S1 into two rows ("disk floor", "bunker server") and M3 relabels S1 as S1a/S1b. `handbook_spine.py:401` sets `"submodule": None`, so no submodule count is ever compared — the gate is structurally blind here, which is why this survived. Non-blocking because the ID count is defensible; fix by stating "48 submodule ids, 50 rows (M1.S1 and M3.S1 each carry two units with different classifications)".
+
+8. CONTRADICTION (stale exhaustiveness) — M9 §1 and M10 §1 quote closed-world `git diff` results that no longer hold. M9: "`git diff --name-only 34e44897..HEAD` returns only board JSONL and `.qa/chaos-probes/errorpath.sh`" — measured now: a **fourth** path, `internal/scheduler/usage_pool_policy_test.go`, and HEAD is `bbefa36c`, not the stated `81ce9fcb`. M10: "`git diff --name-only 0a372209..HEAD` = `README.md` only" — measured now: board JSONL, `.gitreins/tasks.yaml`, `README.md`, and HEAD is `7220a22b`, not `fa619c22`. In both cases the *conclusion* (cited Go files unchanged) survives — no `.go` file is in either diff — but the quoted output is not repeatable, which is rule 4. This is drift after the stamp, not fabrication; keep the claims, date them, and stop asserting the diff is exhaustive.
+
+9. CONTRADICTION (minor, ownership) — M0 §12 says "F2 PROVISIONING uses `require_disk` (M1) and `fetch_verified` (M5)". `fetch_verified` is defined in `lib.sh:19-42` — M0's own unit, as M0 §3/§4 and M5 §12 both state. Fix the parenthetical to M0.
+
+10. OMISSION (document-level) — Part II is empty. All 16 flows are `(MISSING)`; every chapter's §12 says so honestly, and the spine's count check hardcodes `"flow": 16` so a chapter repeating "16 flows" passes. Also absent: Part V settings register as a document (the material is only per-chapter), Part VI quadrants, Part VII requirement/task tables, Part VIII. The chapters are gradeable; the handbook is not deliverable. This is a non-blocking finding for the chapter round and a blocking one for the document round that follows.
+
+DEFECT CLASSES: unevidenceable command (BRE vs ERE, repeated from a prior round's own finding); submodule-under-scope (a declared submodule half-written; the omission not counted in RED); store-inventory gap where the decision is documented and the durable record is not; internally inconsistent RED accounting for one declared exemption; schema/outline numbering split with a stated precedence rule that is then not followed; stale closed-world git facts presented as current; count claims the spine is structurally blind to; document-level parts unwritten while chapters are complete.
+
+CHAPTER SCORECARD:
+
+- M0 — WRITTEN. Every schema field filled, every claim carries `file:line`, both §7 probes reproduced by me, 1 RED (metrics, absence-proved with a 0-match grep). One cosmetic cross-reference error (§12 "fetch_verified (M5)").
+- M1 — PARTIAL. Source-complete and the settings surface is exhaustive (I re-derived the ROLE_DEFAULTS, TTL, budget, verify-node port validation, and the six-flag precedence). Cannot be WRITTEN: certification ladder unrun (needs a live node), §9 counted-not-enumerated and excluded from the RED count.
+- M2 — PARTIAL. Reply shape, `SECTION5_INTS`, inbox/lease/seen defaults and the dry-run lease all verified exactly. §7 live ladder not repeatable from this host; §9 excluded from RED count.
+- M3 — PARTIAL. Landing arm boundaries (`:2463-2729`, `:3433-3670`) resolve, `GATE=""`/`run_gate` guard verified, F3-2/F3-5 true. Hook *enforcement* unproven (declared), §9 excluded from RED count.
+- M4 — PARTIAL. Store, drift, validate, duplicate-id and TR-251 refusal all reproduced by me. Not WRITTEN because the lock classifier was never exercised and the RED count says 1 where its own rule says 2.
+- M5 — PARTIAL. Adapter matrix, pins, python gate `>=3.11,<3.14` and `[0-7]00` predicate all verified; resolver CLI surface verified. Conformance battery unrun; §9 4 of 215 uncovered (correctly counted).
+- M6 — PARTIAL. The gate's real behaviour is documented honestly (structural, not semantic; FAIL over 44/37/50 reproduced), the spine's five checks and its two blind spots are named. Not WRITTEN: own gate reads FAIL, and the render-to-owner leg does not select `M*.md` at all (CT-18).
+- M7 — PARTIAL. CLI rc 2, mode-0600 key rule, `MIN_AGE` 2400 s and the `--dry-run`/`--quiet` correction verified; mint unrun (no App creds on this host, environment-gated), §9 2 of 103 (counted).
+- M8 — WRITTEN. Both units read in full, all three §7 checks reproduced, targets and TTL semantics match the code exactly, 1 RED (metrics, absence-proved).
+- M9 — PARTIAL. The strongest chapter on measurement (57/43/30/378/372 all exact; admission procedure and settlement defect both verified against source) but 7 declared REDs plus the unnamed `usage_pool*`/`tick_workers` store keys and a stale closed-world diff.
+- M10 — PARTIAL. 1895-line body genuinely read; guard/metrics/custody/service-auth all check out against source; three REDs declared. Not WRITTEN: S3 omits `crier-mcp` and every deploy unit, and the §7 slog row's command does not reproduce.
+- M11 — PARTIAL. 538 lines read, all 23 log sites correct, the deadline-kill descendant defect is real and correctly reasoned. The live-job tests are decoration (no assert) — honestly declared — and metrics are absent.
+- M12 — PARTIAL. Hash, admission 401, unit state, sink paths and the `[200, 502]` framing analysis all verified. Streaming is FAILING (F12-7), and four of its fields are UNVERIFIED — the chapter says so plainly, which is the correct behaviour and still not WRITTEN.
+
+The document is far better than a rejected draft: the locators are real, the counts are real, the defects it names are real, and it repeatedly corrects its own prior rounds with measurements. It still fails this round because four fields are demonstrably not as claimed — one evidence row that cannot be replayed, two declared submodules/stores that are half-written without being counted, and one RED-accounting rule applied two ways in the same document while the schema that owns the field says neither is allowed.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-b68e1a04158329723d0bd139e3a7705a9cf9f5ec7095953229dd7c627c6d0dfb
+
+EXIT=0

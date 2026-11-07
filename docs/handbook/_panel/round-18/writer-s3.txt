@@ -1,0 +1,591 @@
+│ cache/scratch/m9_log_enum.py
+│ @@ -0,0 +1,19 @@
+│ +import re
+│ +from pathlib import Path
+│ +
+│ +ROOT = Path('/home/kara/coding-hermes-scheduler/coding-herms-scheduler')
+│ +pat = re.compile(r'log\.Printf\("([^"]*)"')
+│ +first = {}
+│ +for p in sorted((ROOT / 'internal/scheduler').glob('*.go')):
+│ +    if p.name.endswith('_test.go'):
+│ +        continue
+│ +    for i, line in enumerate(p.read_text(errors='replace').splitlines(), 1):
+│ +        m = pat.search(line)
+│ +        if m:
+│ +            s = m.group(1)
+│ +            if s not in first:
+│ +                first[s] = (p.name, i)
+│ +print("distinct:", len(first))
+│ +for s in sorted(first):
+│ +    fn, ln = first[s]
+│ +    print(f"{fn}:{ln}\t{s}")
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -7,7 +7,7 @@
+│  | Module name | SCHEDULER |
+│  | Path | `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/` (Go) |
+│  | Revision | `251d11db` (scheduler repo HEAD at this round's stamp). The round-15 stamp `7a7afc0f` is superseded; HEAD advanced through `81ce9fcb` (board JSONL), `b0da3761` + `bbefa36c` (QA-CHS-188 test-only), `384e5df7` ("scheduler: unblock before you block" — a `spawn.go` prompt-text change), to `251d11db`. `git diff --name-only 34e44897..HEAD` returns **five** paths: `.coding-hermes/board/events.jsonl`, `.coding-hermes/board/tasks.jsonl`, `.qa/chaos-probes/errorpath.sh`, `internal/scheduler/spawn.go`, `internal/scheduler/usage_pool_policy_test.go`. The only cited-file change is `spawn.go`: `384e5df7` appended an "UNBLOCK BEFORE YOU BLOCK" block to the `builtinForemanPrompt` string constant (+5 lines), which shifted `buildForemanPrompt` from `:1244` to `:1249` — a prompt-text-only change, no control-flow change. Every other cited Go file (`admission_mode.go`, `packer_select.go`, `slot_pool.go`, `tick_process.go`, `usage_pool_policy.go`, `dispatch_leg.go`, `bus/dispatch.go`, `main.go`, `server.go`, `server_metrics.go`, `loader.go`, `urgency.go`, `migrations.go`) is byte-identical to `34e44897` |
+│ -| Language / runtime | Go — `go.mod` declares `go 1.26.0` + `toolchain go1.26.10`; `go env GOVERSION` resolves **go1.26.10**. Host bootstrap `go` = **go1.26.10** both at `/usr/bin/go` (`/usr/lib/go-1.26/bin/go`, `readlink -f` + `/usr/bin/go version`) and `/home/kara/.local/bin/go` (this round; the round-16 judges measured 1.26.8/1.26.5 — the host was upgraded to 1.26.10 since, so no `GOTOOLCHAIN` fetch is needed) |
+│ +| Language / runtime | Go — `go.mod` declares `go 1.26.0` + `toolchain go1.26.10`; inside the module `go env GOVERSION` resolves **go1.26.10** via `GOTOOLCHAIN=auto` from the module cache (`golang.org/toolchain@v0.0.1-go1.26.10.linux-amd64`). The host **bootstrap** binaries are older and were NOT upgraded: `/usr/bin/go` = **go1.26.8** (`cat /usr/lib/go-1.26/VERSION` → `go1.26.8`), `/home/kara/.local/bin/go` = **go1.26.5** (`readlink -f` → `/home/kara/sdk/go1.26.5/bin/go`). The round-16 judges' 1.26.8/1.26.5 measurement was correct; round-17's "the host was upgraded to 1.26.10" was FALSE (kimi #3) — 1.26.10 is selected at build time by the module's `toolchain` directive, not installed as any host default |
+│  | Owner lane | coding-hermes-scheduler (control plane) |
+│  | Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:98-129, 143-208, 230-267`), the pack gate order (`packer_select.go:437-521`), the binary defaults (`cmd/schedulerd/main.go:95-200`), the auth path (`internal/api/auth.go:187-197`), the API route table (`internal/api/server.go:289-370`) and `config.example.toml` read this round; `tick_process.go`/`slot_pool.go`/`usage_pool_policy.go`/`migrations.go` re-read this round. The admission procedure (§3) is re-derived from the calling sequence (sol B17); the full 30-table census is named (grok #3) |
+│
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -146,7 +146,7 @@
+│
+│  | Dependency | Version constraint | Where | How absence is detected |
+│  |---|---|---|---|
+│ -| Go toolchain | `go 1.26.0` + `toolchain go1.26.10` (`go.mod`) | build host | host go is already go1.26.10 (`go env GOVERSION`); `go build ./...` PASS |
+│ +| Go toolchain | `go 1.26.0` + `toolchain go1.26.10` (`go.mod`) | build host | the host bootstrap binaries are 1.26.8 (`/usr/bin/go`) / 1.26.5 (`~/.local/bin/go`); `go.mod`'s `toolchain go1.26.10` directive makes `go build` select go1.26.10 via `GOTOOLCHAIN=auto` from the module cache (already fetched: `golang.org/toolchain@v0.0.1-go1.26.10.linux-amd64` present), so `go build ./...` PASSes without a fresh download on this host |
+│  | SQLite (scheduler.db) | via `modernc.org/sqlite v1.60.1` | control host | DB open failure |
+│
+│  **4b. Library contracts**
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -283,7 +283,7 @@
+│
+│  ## 8. Metrics
+│
+│ -**Measured — real, not RED.** The scheduler serves `GET /api/v1/metrics` (`internal/api/server_metrics.go:87` `metrics`) with a top-level body of `generated_at`, `uptime_s`, `sources` and the eleven blocks `spawns`, `deferrals`, `nudges`, `ticks`, `tick_duration_ms`, `gateway`, `outcomes`, `stalls`, `escalations`, `lane_churn`, `dispatch_inbox` (`:101-119`); each block's source string is in `metricsSources()` (`:125`). `metricsWindow` is 24h (`:42`).
+│ +**Measured — real, not RED.** The scheduler serves `GET /api/v1/metrics` (`internal/api/server_metrics.go:87` `metrics`) with a top-level body of `generated_at`, `uptime_s`, `sources` and the eleven blocks `spawns`, `deferrals`, `nudges`, `ticks`, `tick_duration_ms`, `gateway`, `outcomes`, `stalls`, `escalations`, `lane_churn`, `dispatch_inbox` (`:101-119`). Ten blocks' source strings live in `metricsSources()` (`:125-189`); **`dispatch_inbox`'s source string is NOT there** — it sits at `:713-724` inside `metricsLaneChurn`'s return map (a misplacement: the entry documents `dispatch_inbox` but is a key in the `lane_churn` result). `metricsWindow` is 24h (`:42`).
+│
+│  **Wire shapes.** Two distinct success shapes: the ten map-based blocks (`spawns`, `deferrals`,
+│  `nudges`, `ticks`, `gateway`, `outcomes`, `stalls`, `escalations`, `lane_churn`, `dispatch_inbox`)
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -300,11 +300,26 @@
+│  from the `ticks` table joined to `projects` (`:127-130`). `metricsSpawns` is the `func` keyword at
+│  `:195`, not `:192` (which is the doc comment).
+│
+│ -**Per-metric contract (RED, sol B04).** The block *names* and *wire shapes* above are measured,
+│ -but the schema's per-metric contract — `type`, `labels` (here: the per-block field set), `question
+│ -answered`, `where scraped` — is not filled for each of the eleven blocks. The scheduler emits JSON
+│ -over an HTTP route, not Prometheus text exposition, so "type" is a map/struct shape rather than a
+│ -Counter/Gauge/Histogram. That per-metric register is a named RED on this field, not a completed one.
+│ +**Per-metric contract (filled this round, closing sol B04/B21).** The scheduler emits JSON over
+│ +`GET /api/v1/metrics` (not Prometheus text exposition), so "type" is a JSON shape rather than a
+│ +Counter/Gauge/Histogram; every block is scraped from the same route (`internal/api/server_metrics.go:87`),
+│ +behind the same `extractBearerOrHeaderToken` auth as `/api/v1/status` (`internal/api/auth.go:187-197`).
+│ +`metricsSources()` (`:125-189`, plus the misplaced `dispatch_inbox` entry at `:713-724`) is the
+│ +per-block provenance register. Per block:
+│ +
+│ +| Block | Type (shape) | Labels / fields | Question answered | Scrape / window |
+│ +|---|---|---|---|---|
+│ +| `spawns` | JSON map | `total`, `by_namespace`, `by_outcome{committed,dry_run,failed,timeout,aborted:no_artifact,no_work}` | spawn volume per namespace and per terminal outcome | `/api/v1/metrics`, 24h window (`:195`) |
+│ +| `deferrals` | JSON map | `by_reason`, `admitted_by_namespace`, `passes` | why ticks were deferred (SCHED-GAP-155 admission counters) | per-process, monotonic, reset by restart (`:274`) |
+│ +| `nudges` | JSON map | grouped by `orphan_reason` (drain_timeout \| startup_reap \| zombie_reap) | orphan re-nudges | all-time, persisted (`:305`) |
+│ +| `ticks` | JSON map | `active`, `queued`, `by_namespace`, `global_cap`, `cooldown_expired_unscheduled` | current tick occupancy and capacity | live snapshot (`:336`) |
+│ +| `tick_duration_ms` | JSON struct | `count`, `window`, `p50`, `p90`, `p99` | tick spawn→complete latency percentiles | 24h window, nearest-rank (`:426`) |
+│ +| `gateway` | JSON map | drain-class error rows | harness gateway drain incidence | 24h window (`:485`) |
+│ +| `outcomes` | JSON map | committed-with-zero-commits | "committed" ticks that landed no commit | 24h window (`:504`) |
+│ +| `stalls` | JSON map | `by_minutes` buckets 30-60 / 60-120 / 120+ | ticks exceeding the 30 min stall floor | 24h window (`:530`) |
+│ +| `escalations` | JSON map | `by_day`, `by_severity`, `by_class` | CRITICAL/HIGH event rows | 24h window (`:582`) |
+│ +| `lane_churn` | JSON map | `disabled_by_day`, `by_provenance`, `disabled_total`, `enabled_per_day`, `enabled_current` | lane disable/enable provenance | 24h window (`:632`) |
+│ +| `dispatch_inbox` | JSON map | `seen_total`, `correlated_total`, `uncorrelated_total`, `acked_total`, `deferred_total`, `unacked_current`, `unacked_overflow` | dispatch reply-inbox correlation accounting (SCHED-GAP-16984) | all-time, per-process (`:734`) |
+│
+│  ## 9. Log lines (verbatim)
+│
+│ cache/scratch/m9_rewrite_s9.py
+│ @@ -0,0 +1,56 @@
+│ +import re
+│ +from pathlib import Path
+│ +
+│ +CH = Path('/home/kara/code-factory/docs/handbook/chapters/M9-scheduler.md')
+│ +text = CH.read_text()
+│ +
+│ +# Locate the §9 section: from "## 9. Log lines" to the next "## ".
+│ +start = text.index('## 9. Log lines (verbatim)')
+│ +end = text.index('## 10. Failure modes', start)
+│ +
+│ +# Build the enumeration block from the enum file (skip the "distinct: 370" header).
+│ +enum_lines = []
+│ +for ln in Path('/tmp/m9_log_enum.txt').read_text().splitlines():
+│ +    if ln.startswith('distinct:'):
+│ +        continue
+│ +    if '\t' in ln:
+│ +        enum_lines.append(ln)
+│ +
+│ +enum_block = '\n'.join(enum_lines)
+│ +
+│ +new_sec = '''## 9. Log lines (verbatim)
+│ +
+│ +**Scope and count (re-measured this round, kimi #5 / deepseek N2).** The scheduler's
+│ +operator-visible logging is `log.Printf` — unstructured and level-less — in
+│ +`internal/scheduler/*.go` (65 files). Measured:
+│ +
+│ +- **381 call sites** excluding the one `_test.go` line (`grep -rn "log.Printf" internal/scheduler/*.go | grep -v _test.go | wc -l` = 381; 382 including the test file). Round-17's "378 sites" was low by 3.
+│ +- **370 distinct format strings** — every site passes a literal string as its first argument, so the distinct count is exact: `grep -rhoE 'log\\\\.Printf\\\\(\\"[^\\"]*\\"' internal/scheduler/*.go | grep -v _test.go | sed 's/^log\\\\.Printf(\\"//; s/\\"$//' | sort -u | wc -l` = 370. Round-17's "372 distinct" was wrong and had no published command; this is the command and its output.
+│ +
+│ +The complete 370-string inventory is enumerated verbatim below (one `file:line` per distinct
+│ +string, the first occurrence). This converts the §9 RED from **not measured** (a writing defect)
+│ +to **measured + enumerated, but per-line trigger/kind not classified**: the enumeration is
+│ +complete, and only the `Emitted when` / `Kind` annotation of the 368 strings beyond the two
+│ +settlement rows is unwritten (the residual RED). The 370 level-less `log.Printf` strings are
+│ +themselves a system observability finding (no levels, no structured fields — every severity is
+│ +greppable only by prefix), filed as a board row, not a writer's-diligence gap.
+│ +
+│ +**Settlement surface (classified).**
+│ +
+│ +| Level | Line | Emitted when | Kind |
+│ +|---|---|---|---|
+│ +| — | `DISPATCH: %s tick=%s agent=%s corr=%s message=%s transport=%s wall=%s lane_ref=%s board_ref=%s` (`dispatch_leg.go:252`) | a dispatch is issued | evidentiary |
+│ +| — | `DISPATCH: %s tick=%s inbox seen=%d correlated=%d uncorrelated=%d keys=%s acked=%d deferred=%d` (built by `fmt.Sprintf` at `dispatch_leg.go:456`, emitted via `log.Printf("%s", line)`) | one per retrieve batch that carried messages | evidentiary |
+│ +
+│ +**Complete verbatim inventory (370 distinct `log.Printf` format strings, first-occurrence `file:line`).**
+│ +Level is `—` for all (unstructured, no level field); per-line `Emitted when`/`Kind` is not yet
+│ +classified (the residual RED). Reproduce with the command above.
+│ +
+│ +```text
+│ +''' + enum_block + '''
+│ +```
+│ +'''
+│ +
+│ +new_text = text[:start] + new_sec + text[end:]
+│ +CH.write_text(new_text)
+│ +print("wrote", CH, "new length", len(new_text))
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -275,11 +275,17 @@
+│  **Load-window correction (F9-13, measured this round).** The full `go test ./...` at `251d11db`
+│  did **not** pass this round: run in the default package-parallel mode under load it returned rc 1
+│  with `internal/scheduler` hitting the 600s per-package timeout (panic: test timed out, hundreds of
+│ -parked `SimClock.run` goroutines) and `TestCTL002_EventsStream_SlowClient…` failing. Both are
+│ -load/parallelism artifacts, not code breaks: `internal/scheduler` alone finishes in 376.454s
+│ -(`-timeout 1800s`, rc 0) and `TestCTL002` alone passes in 4.656s (rc 0). The round-16 "25/25 PASS"
+│ -was at `34e44897` under a quiet host. The suite is green when packages get an adequate timeout or
+│ -run quiet; the 600s default under parallel load is the failure mode, not a test regression.
+│ +parked `SimClock.run` goroutines) and `TestCTL002_EventsStream_SlowClient…` failing. The flake set
+│ +is **wider** than CTL002 alone: a judge's clean-environment repeat under host load 12–20 also hit
+│ +`TestSCHEDGAP1666_SevenDaySimulation` (`board_empty` assertion) and the SCHED-GAP-1726 goroutine
+│ +census; `SCHEDGAP1666` passes solo at load 15 (glm #3). All are load/parallelism artifacts, not
+│ +code breaks: `internal/scheduler` alone finishes in 376.454s (`-timeout 1800s`, rc 0) and
+│ +`TestCTL002` alone passes in 4.656s (rc 0). **The proven result is narrower than "the suite is
+│ +green":** the only green executions this round are the isolated `internal/scheduler` package run
+│ +(376.454s) and the isolated CTL002 run (4.656s); the full-suite run at `251d11db` is FAIL (rc 1).
+│ +No clean-environment full-suite pass has been captured this round, so the round-16 "25/25 PASS"
+│ +(measured at `34e44897` on a quiet host) is the last full-suite green, and the current full-suite
+│ +state under load is FAIL until a quiet/adequate-timeout full run is captured (sol B22).
+│
+│  ## 8. Metrics
+│
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -770,7 +770,9 @@
+│  - Commands run: `go build ./...` (PASS); `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -count=1 -timeout 1800s` (PASS, 376.454s); the three env-sensitive tests (PASS, 0.259s); `TestCTL002_EventsStream_SlowClient…` solo (PASS, 4.656s); the full `go test ./...` (rc 1 under parallel load — F9-13);
+│    `git diff --name-only 34e44897..HEAD` (5 paths, one cited `.go` file changed);
+│    `grep -n 'LoadRootConfig' cmd/schedulerd/main.go` (10 sites);
+│ -  `grep -rn "log.Printf" internal/scheduler/*.go | wc -l` (379 incl. one test line; 378 excluding);
+│ +  `grep -rn "log.Printf" internal/scheduler/*.go | grep -v _test.go | wc -l` (381 excluding test; 382 including);
+│ +  `grep -rhoE 'log\.Printf\("[^"]*"' internal/scheduler/*.go | grep -v _test.go | sed 's/^log\.Printf("//; s/"$//' | sort -u | wc -l` (370 distinct format strings — the §9 enumeration);
+│ +  `cat /usr/lib/go-1.26/VERSION` (go1.26.8); `readlink -f /home/kara/.local/bin/go` (`/home/kara/sdk/go1.26.5/bin/go`); `go env GOVERSION` in-module (go1.26.10 via GOTOOLCHAIN=auto);
+│    `grep -cE 'flag\.(String|Int|Int64|Bool|Duration|Float64)' cmd/schedulerd/main.go` (57);
+│    `sqlite3 … '.tables'` (30 tables); `grep -oE 'mux\.HandleFunc\("[^"]+"' internal/api/server.go | sort -u | wc -l` (43).
+│  - Rev re-stamped: `251d11db` (this round). The one cited-file change since `34e44897` is
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -791,10 +791,19 @@
+│    - **F9-10** (carried) — the run-correctness write authorities and the recovery selector are named (`execution_store.go`); per-failure-mode post-recovery indications remain unwritten.
+│    - **F9-11** (new, grok #3) — the `usage_pool*` family and `tick_workers` store keys are now named (the reservation's durable record), closing the "14 tables unnamed" omission.
+│    - **F9-12** (new, kimi B5/grok #8) — the closed-world `git diff` claim is withdrawn: HEAD advanced and `spawn.go` changed after the round-16 stamps; the diff is quoted with the real five paths and dated.
+│ -  - **F9-13** (new, this round) — the full `go test ./...` at `251d11db` under parallel load hit the
+│ -    600s per-package timeout in `internal/scheduler` plus the CTL002 load-window flake; both pass
+│ -    solo (`internal/scheduler` 376.454s, CTL002 4.656s). A load artifact, not a test regression — the
+│ -    round-16 "25/25 PASS" was at `34e44897` on a quiet host.
+│ +  - **F9-13** (updated, this round) — the full `go test ./...` at `251d11db` under parallel load hit the
+│ +    600s per-package timeout in `internal/scheduler` plus the CTL002 load-window flake; the flake set
+│ +    also includes `TestSCHEDGAP1666_SevenDaySimulation` (glm #3). Both pass solo (`internal/scheduler`
+│ +    376.454s, CTL002 4.656s). A load artifact, not a test regression — but **only the isolated runs
+│ +    are green this round**; no clean full-suite pass is captured (sol B22).
+│ +  - **F9-14** (new, kimi #3) — the round-17 claim "the host was upgraded to 1.26.10" was FALSE. The
+│ +    host bootstrap binaries are 1.26.8 (`/usr/bin/go`) and 1.26.5 (`~/.local/bin/go`); go1.26.10 is
+│ +    selected at build time by `go.mod`'s `toolchain go1.26.10` directive via `GOTOOLCHAIN=auto` from
+│ +    the module cache. §1/§4a corrected.
+│ +  - **F9-15** (new, this round) — §8 per-metric contract filled (11 blocks, type/labels/question/scrape).
+│ +    While filling it: `metricsSources()` (`:125-189`) documents 10 blocks; `dispatch_inbox`'s source
+│ +    string is misplaced inside `metricsLaneChurn`'s return map (`:713-724`), not in `metricsSources()` —
+│ +    a code placement defect, filed as a board row, corrected in §8.
+│
+│  ## RED field count: 6 — §9 log inventory (376 of 378 operator-visible sites / 370 of 372 distinct
+│  strings uncovered, not-measured); §8 per-metric contract (blocks inventoried, per-metric
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -805,13 +805,15 @@
+│      string is misplaced inside `metricsLaneChurn`'s return map (`:713-724`), not in `metricsSources()` —
+│      a code placement defect, filed as a board row, corrected in §8.
+│
+│ -## RED field count: 6 — §9 log inventory (376 of 378 operator-visible sites / 370 of 372 distinct
+│ -strings uncovered, not-measured); §8 per-metric contract (blocks inventoried, per-metric
+│ -type/labels/question/scrape not filled — sol B04); S4 per-route operator contract (43 routes
+│ -inventoried, per-route request/response shapes + write readbacks not written); S3 per-failure-mode
+│ -post-recovery indications (write authorities + recovery selector named, the readback ladder not
+│ -written); §5 auxiliary-flag range + reader/precedence not re-verified per flag (sol B18); CT-05
+│ -internal UNVERIFIED ("3 of 11 prompt files disagree" unmeasured). **Boundary contracts CT-01 and
+│ -CT-15 are terminal states, not REDs** (uniform rule: a contract row whose far side is an external
+│ -peer — no in-repo `file:function` — is a terminal state and is not counted as a RED; an internal
+│ -contract that is UNVERIFIED because it was never measured **is** a RED).
+│ +## RED field count: 5 — §9 log inventory (enumeration complete: 381 sites / 370 distinct strings
+│ +measured and listed verbatim; per-line `Emitted when`/`Kind` classification of the 368 strings
+│ +beyond the two settlement rows is unwritten — the narrowed residual, was "not measured"); S4
+│ +per-route operator contract (43 routes inventoried, per-route request/response shapes + write
+│ +readbacks not written); S3 per-failure-mode post-recovery indications (write authorities + recovery
+│ +selector named, the readback ladder not written); §5 auxiliary-flag range + reader/precedence not
+│ +re-verified per flag (sol B18); CT-05 internal UNVERIFIED ("3 of 11 prompt files disagree"
+│ +unmeasured). **Closed this round: §8 per-metric contract** (11 blocks filled, sol B04/B21).
+│ +**Boundary contracts CT-01 and CT-15 are terminal states, not REDs** (uniform rule: a contract row
+│ +whose far side is an external peer — no in-repo `file:function` — is a terminal state and is not
+│ +counted as a RED; an internal contract that is UNVERIFIED because it was never measured **is** a
+│ +RED).
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | CRIER |
+│  | Path | `/home/kara/crier/` (Go) |
+│ -| Revision | `e50e55ee` (crier repo HEAD at this round's stamp). The round-15 stamp `0a372209` is superseded; HEAD advanced through `fa619c22` → `7220a22b` → `e50e55ee` (`c4d3c240` "load-insensitive session assertions + deterministic delivery_ms"). `git diff --name-only 0a372209..HEAD` returns **six** paths: `.coding-hermes/board/events.jsonl`, `.coding-hermes/board/tasks.jsonl`, `.gitreins/tasks.yaml`, `README.md`, `cmd/server/session_budget_cut_test.go`, `cmd/server/session_dispatch_live_test.go`. `git diff --name-only 33c1f388..HEAD` adds `.github/workflows/release.yml`, `Makefile`, `docs/releases.md`, `releng/*`, `scripts/release-upload*.sh`. Every cited **non-test** Go file (`internal/registry/handler.go`, `internal/guard/*.go`, `config/config.go`, `internal/registry/agentsig.go`, `internal/registry/service_auth.go`, `clients/python/crier_client.py`) is byte-identical to the round-12 stamp `33c1f388` — the only Go changes since then are two `cmd/server` test files |
+│ +| Revision | `e50e55ee` (crier repo stamp this round). HEAD has since advanced **one test-only commit** to `1587a03f` (`test(crier): keep the dead-endpoint control honest…`, INT-CI-027 — changes `cmd/server/session_dispatch_live_test.go` only; `git diff --name-only e50e55ee..HEAD` = that one path). Every cited **non-test** Go file is byte-identical to `33c1f388` (`git diff --name-only 33c1f388..HEAD -- internal/registry/handler.go internal/guard config/config.go internal/registry/agentsig.go internal/registry/service_auth.go clients/python/crier_client.py` → empty). The round-15 stamp `0a372209` is superseded; the `git diff --name-only 0a372209..HEAD` six-path list (`.coding-hermes/board/events.jsonl`, `.coding-hermes/board/tasks.jsonl`, `.gitreins/tasks.yaml`, `README.md`, `cmd/server/session_budget_cut_test.go`, `cmd/server/session_dispatch_live_test.go`) is quoted with its real content and dated |
+│  | Language / runtime | Go — `go.mod` declares `go 1.26.10`; `go env GOVERSION` resolves **go1.26.10**. Host bootstrap `go` = **go1.26.10** both at `/usr/bin/go` (`/usr/lib/go-1.26/bin/go`) and `/home/kara/.local/bin/go` (this round; the round-16 judges measured 1.26.8/1.26.5 — the host was upgraded to 1.26.10 since) |
+│  | Owner lane | crier (control plane) |
+│  | Status | **UNVERIFIED** — `internal/registry/handler.go` (deliver/retrieve/ack surfaces + the full 3-site slog surface), `internal/guard/guard.go` (pipeline, oversize branch, `errorResult`, `audit`), `internal/guard/router.go` (saturation counter), `internal/guard/policy.go` (`ResolvePolicy`), `internal/guard/metrics.go`, `config/config.go` (controls + guard bounds + metrics default + service-delivery), `internal/registry/service_auth.go`, `clients/python/crier_client.py`, `clients/typescript/crier.ts`, `cmd/crier-front/main.go`, `cmd/crier-mcp/main.go`, `deploy/*` read this round; the full 1895-line handler body read line-by-line this round (register, deliver, retrieve, ack, stats, idempotency, realms, per-peer policy, service-delivery auth, federation fallback — see §3) |
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -7,7 +7,7 @@
+│  | Module name | CRIER |
+│  | Path | `/home/kara/crier/` (Go) |
+│  | Revision | `e50e55ee` (crier repo stamp this round). HEAD has since advanced **one test-only commit** to `1587a03f` (`test(crier): keep the dead-endpoint control honest…`, INT-CI-027 — changes `cmd/server/session_dispatch_live_test.go` only; `git diff --name-only e50e55ee..HEAD` = that one path). Every cited **non-test** Go file is byte-identical to `33c1f388` (`git diff --name-only 33c1f388..HEAD -- internal/registry/handler.go internal/guard config/config.go internal/registry/agentsig.go internal/registry/service_auth.go clients/python/crier_client.py` → empty). The round-15 stamp `0a372209` is superseded; the `git diff --name-only 0a372209..HEAD` six-path list (`.coding-hermes/board/events.jsonl`, `.coding-hermes/board/tasks.jsonl`, `.gitreins/tasks.yaml`, `README.md`, `cmd/server/session_budget_cut_test.go`, `cmd/server/session_dispatch_live_test.go`) is quoted with its real content and dated |
+│ -| Language / runtime | Go — `go.mod` declares `go 1.26.10`; `go env GOVERSION` resolves **go1.26.10**. Host bootstrap `go` = **go1.26.10** both at `/usr/bin/go` (`/usr/lib/go-1.26/bin/go`) and `/home/kara/.local/bin/go` (this round; the round-16 judges measured 1.26.8/1.26.5 — the host was upgraded to 1.26.10 since) |
+│ +| Language / runtime | Go — `go.mod` declares `go 1.26.10`; inside the module `go env GOVERSION` resolves **go1.26.10** via `GOTOOLCHAIN=auto` from the module cache. The host **bootstrap** binaries were NOT upgraded: `/usr/bin/go` = **go1.26.8** (`cat /usr/lib/go-1.26/VERSION`), `/home/kara/.local/bin/go` = **go1.26.5** (`readlink -f` → `/home/kara/sdk/go1.26.5/bin/go`). The round-16 judges' 1.26.8/1.26.5 was correct; round-17's "the host was upgraded to 1.26.10" was FALSE (kimi #3) |
+│  | Owner lane | crier (control plane) |
+│  | Status | **UNVERIFIED** — `internal/registry/handler.go` (deliver/retrieve/ack surfaces + the full 3-site slog surface), `internal/guard/guard.go` (pipeline, oversize branch, `errorResult`, `audit`), `internal/guard/router.go` (saturation counter), `internal/guard/policy.go` (`ResolvePolicy`), `internal/guard/metrics.go`, `config/config.go` (controls + guard bounds + metrics default + service-delivery), `internal/registry/service_auth.go`, `clients/python/crier_client.py`, `clients/typescript/crier.ts`, `cmd/crier-front/main.go`, `cmd/crier-mcp/main.go`, `deploy/*` read this round; the full 1895-line handler body read line-by-line this round (register, deliver, retrieve, ack, stats, idempotency, realms, per-peer policy, service-delivery auth, federation fallback — see §3) |
+│
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -90,7 +90,7 @@
+│
+│  | Dependency | Version constraint | Where | How absence is detected |
+│  |---|---|---|---|
+│ -| Go toolchain (build) | `go 1.26.10` (`go.mod`) | build host | host go is already go1.26.10 — `go build ./...` **PASS** |
+│ +| Go toolchain (build) | `go 1.26.10` (`go.mod`) | build host | the host bootstrap binaries are 1.26.8 (`/usr/bin/go`) / 1.26.5 (`~/.local/bin/go`); `go.mod`'s `go 1.26.10` directive makes `go build` select go1.26.10 via `GOTOOLCHAIN=auto` from the module cache — `go build ./...` **PASS** |
+│  | PostgreSQL (via `pgx/v5`) / SQLite (via `modernc.org/sqlite`) | driver-pinned | control host | DB open failure |
+│
+│  **4b. Library contracts**
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -29,7 +29,7 @@
+│
+│  | Submodule | Unit | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│ -| S1 custody and transport | `internal/registry/handler.go` (1895 lines) | **active** | HTTP handlers mounted by `cmd/server` and run under `deploy/crier.service` (`ExecStart=/usr/local/bin/crier -pidfile /run/crier/crier.pid`): `HandleRegister` (`:598`), `HandleDeliver` (`:990`), `HandleRetrieve` (`:1690`), `HandleAck` (`:1812`) |
+│ +| S1 custody and transport | `internal/registry/handler.go` (1895 lines) | **active** | HTTP handlers mounted by `cmd/server` and run under `deploy/crier.service` (`ExecStart=/usr/local/bin/crier -pidfile /run/crier/crier.pid`): `HandleRegister` (`:598`), `HandleDeliver` (`:990`), `HandleDeliverByCapability` (`:1014`, registered at `cmd/server/main.go:112` as `POST /capabilities/{capability}/inbox`), `HandleRetrieve` (`:1690`), `HandleAck` (`:1812`) |
+│  | S2 the guard | `internal/guard/guard.go` | **active** | `Guard.Check` (`:167`) is the choke point, invoked from the deliver path; pipeline documented at `:25-28`; oversize branch `:198-234`; `errorResult` `:318-361`; `audit` `:430` |
+│  | S3 binaries, ports, services | server `:8767`; front `127.0.0.1:8770`; MCP stdio bridge; deploy units | **active (server)** / **operator-invoked (front, mcp)** | `deploy/crier.service` `ExecStart` invokes the server; front listens via `cmd/crier-front/main.go:39` (`defaultListen = "127.0.0.1:8770"`); MCP is `cmd/crier-mcp/main.go` `server.Serve()` (`:219`) — an MCP stdio bridge (JSON-RPC over stdin/stdout), no port; the front's and MCP's production invokers are not in `deploy/` (no unit file names them) — activation UNVERIFIED for those two |
+│  | S4 client libraries | `clients/python/crier_client.py`, `clients/typescript/crier.ts` | **active (python)** / **UNVERIFIED activation (typescript)** | Python client consumed by `crier-fleet/dispatcher.py` (M11 imports `crier_client`); the TypeScript client has no in-repo consumer found (`grep -rn 'crier.ts\|@/clients/typescript' cmd/ internal/` → 0) — its production invoker is out of scope |
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -56,6 +56,14 @@
+│    or empty body returns `[]`; messages carry their batch `lease_id`. A held (leased) message is
+│    not returned again until its lease expires — an empty list after a failed ack is expected, not a
+│    lost message; `stats()` distinguishes "nothing queued" from "everything leased".
+│ +- **Capability routing** (`HandleDeliverByCapability`, `handler.go:1014`; route `POST
+│ +  /capabilities/{capability}/inbox` at `cmd/server/main.go:112`): an alternative deliver surface
+│ +  that resolves the capability to a holder agent instead of a named recipient. Its authorization
+│ +  rule (`internal/registry/service_auth.go:117-126`) **refuses** a capability address whose resolved
+│ +  holder is a protected service recipient — `403` `"service delivery requires an explicit recipient
+│ +  URL; capability routing cannot authorize a service recipient"`. Outcome counters
+│ +  `crier_capability_routed_total` (`capability.go:99`) and `crier_capability_unheld_total`
+│ +  (`:105`) back this surface.
+│
+│  **Protected service-delivery authorization (sol B01, corrected this round — the header is
+│  `X-Crier-Audience`, not `X-Crier-Service-Audience`).** `deliverAuthenticated` calls
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -112,8 +112,10 @@
+│
+│  ## 5. Settings register
+│
+│ -`config/config.go:621-674` fixes the defaults; `config/config.go:1139-1187` fixes the guard's env
+│ -bounds. Individual rows:
+│ +`config/config.go:621-674` fixes the defaults; the guard's env-bounds **field definitions** (the
+│ +`CR_GUARD_*` names and their struct defaults) live in `internal/guard/guard.go:49-55`, and
+│ +`config/config.go:1139-1187` is the *reader/validator* that applies them (kimi #8 — the round-17
+│ +citation named only the reader, not the file that defines the bounds). Individual rows:
+│
+│  | Setting | Default | Range | Governs | What breaks if changed |
+│  |---|---|---|---|---|
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -141,7 +141,7 @@
+│  | `Guard.KanbanQueueSize` | 100 (`:654`) | int | guard queue depth | smaller drops queued checks |
+│  | `Observability.EnableMetrics` | **true** (`:673`) | bool | `/metrics` mount | `CR_ENABLE_METRICS=false` disables it |
+│  | front `defaultListen` | `127.0.0.1:8770` (`crier-front/main.go:39`) | a loopback listen | the front's surface | binding off-loopback exposes the front |
+│ -| `CR_GUARD_TIMEOUT_MS` / `CR_GUARD_MAX_CONCURRENT` / `CR_GUARD_CIRCUIT_THRESHOLD` / `CR_GUARD_CIRCUIT_COOLDOWN_S` / `CR_GUARD_MAX_PAYLOAD_BYTES` / `CR_GUARD_RENDER_MAX_BYTES` | env, positive only (`config/config.go:1139-1187`) | int > 0 | guard tuning | a non-numeric or `<= 0` value → named error (`invalid CR_GUARD_…`), not a silent default |
+│ +| `CR_GUARD_TIMEOUT_MS` / `CR_GUARD_MAX_CONCURRENT` / `CR_GUARD_CIRCUIT_THRESHOLD` / `CR_GUARD_CIRCUIT_COOLDOWN_S` / `CR_GUARD_MAX_PAYLOAD_BYTES` / `CR_GUARD_RENDER_MAX_BYTES` | env, positive only — field defaults at `internal/guard/guard.go:49-55`, reader/validator `config/config.go:1139-1187` | int > 0 | guard tuning | a non-numeric or `<= 0` value → named error (`invalid CR_GUARD_…`), not a silent default |
+│  | `CR_AUTH_TOKEN` | `""` (`:624`) | a bearer token | the message-surface auth token (distinct from the permissions admin token and the federation token) | set → `/metrics` and message routes require Bearer |
+│  | `CR_SERVICE_DELIVERY_ALLOWLIST` | `""` (`:1010`) | exact `sender>recipient` comma list (no wildcards) | the protected-recipient set for service delivery | nonempty arms `authorizeServiceDelivery` (`handler.go:1147` → `service_auth.go:128-168`); a malformed entry → startup refusal (`service_auth.go:44-66` `ParseServiceDeliveryAllowlist`) |
+│  | `CR_SERVICE_DELIVERY_AUDIENCE` | `""` (`:1014`) | a string | this relay's identity in protected signatures | **required when the allowlist is nonempty** (`service_auth.go:82-99` `SetServiceDelivery`) |
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -145,6 +145,9 @@
+│  | `CR_AUTH_TOKEN` | `""` (`:624`) | a bearer token | the message-surface auth token (distinct from the permissions admin token and the federation token) | set → `/metrics` and message routes require Bearer |
+│  | `CR_SERVICE_DELIVERY_ALLOWLIST` | `""` (`:1010`) | exact `sender>recipient` comma list (no wildcards) | the protected-recipient set for service delivery | nonempty arms `authorizeServiceDelivery` (`handler.go:1147` → `service_auth.go:128-168`); a malformed entry → startup refusal (`service_auth.go:44-66` `ParseServiceDeliveryAllowlist`) |
+│  | `CR_SERVICE_DELIVERY_AUDIENCE` | `""` (`:1014`) | a string | this relay's identity in protected signatures | **required when the allowlist is nonempty** (`service_auth.go:82-99` `SetServiceDelivery`) |
+│ +| `CR_MCP_NUDGE_ENABLED` / `CR_MCP_NUDGE_MAX_COUNT` / `CR_MCP_NUDGE_SESSION_START` | true / 999 / **false** (`config.go:634`; reader+validation `:697-709`) | bool / positive int / bool | the MCP nudge surface (read-only counts) + the session-start prefix | nudge is **ON by default** (read-only counts); the session-start prefix is **OFF** (it changes an agent's prompt — arming it is a deployment decision); a non-boolean or `<= 0` count → named error |
+│ +| `CR_FED_MAX_HOLD_S` | 300 s (`Federation.MaxHold`, `config.go:657`; reader `:971-974`) | positive seconds | how long a federated delivery is held before `FEDERATION_FAILED` (DF-CRIER-7) | a non-numeric value → named error `invalid CR_FED_MAX_HOLD_S` |
+│ +| `CR_DATABASE_MAX_CONNS` / `CR_DATABASE_MIN_CONNS` | 4 / 0 (`config.go:660-665`; validation `:771-786`) | positive / non-negative int | the DB pool size | `MinConns > MaxConns` → named error at startup (`:783-786`); a non-numeric or `<= 0` `MAX` → named error |
+│
+│  **Metrics-default correction.** `config.go:667-673` sets `EnableMetrics: true` by default;
+│  `CR_ENABLE_METRICS` is the disabling override; `cmd/server/observability.go:101-109` mounts
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -230,10 +230,30 @@
+│  counter and the final admission outcome are therefore two different facts: the counter says the
+│  guard was saturated; the decision/error observations say what happened to the message.
+│
+│ -**Per-metric contract (RED, sol B04).** The per-metric `question answered` and exact `label
+│ -domains` for every runtime series are not yet filled to the schema's per-metric contract — the
+│ -series names are inventoried, but the full per-metric `type/labels/question/scrape` table is a
+│ -named RED on this field, not a completed register.
+│ +**Per-metric contract (filled this round, closing sol B04/B21/B23).** The series above are emitted
+│ +as Prometheus text exposition over `GET /metrics` (default-ON, `config.go:673`; mounted
+│ +`observability.go:101-109`; Bearer-gated when `CR_AUTH_TOKEN` is set). The 34-string
+│ +`grep -rhoE 'New(Counter|Gauge|Histogram…)…'` census mixes runtime series with `_bucket/_sum/_count`
+│ +exposition components, `crier_test_*` test-only series, and `example_*`/`dup_*`/`busy_*` fixtures
+│ +(the latter are not runtime). The runtime series, with type/labels/question/scrape:
+│ +
+│ +| Metric | Type | Labels | Question answered | Scrape |
+│ +|---|---|---|---|---|
+│ +| `crier_guard_saturated_total` | Counter | — | guard checks rejected by concurrency saturation (MON-CRIER-003) | `/metrics` (`guard/metrics.go:22`) |
+│ +| `crier_guard_all_providers_failed_total` | Counter | — | checks whose whole provider fallback chain failed | `/metrics` (`guard/metrics.go:28`) |
+│ +| `crier_guard_check_duration_seconds` | HistogramVec | `decision{allow,block,sanitize}`, `errored{true,false}` (closed enums, seeded 0) | guard check latency, by verdict and fail-open | `/metrics` (`guard/metrics.go:44-49`) |
+│ +| `crier_delivery_accepted_total` | Counter | — | inbox deliveries accepted (stored or webhook-pushed) | `/metrics` (`handler.go:38`) |
+│ +| `crier_guard_decisions_total` | CounterVec | `decision{allow,block,sanitize}` | guard verdicts at the choke point (DF-CRIER-142) | `/metrics` (`handler.go:42`) |
+│ +| `crier_inbox_*` (queue_depth, queue_leased, queue_oldest_age_seconds, deliver_duration, expired_total, shed_total, transfers_total, deadlettered_total, expiry_receipts_total) | Counter / Gauge / Histogram | `shed_total` by reason | inbox occupancy, aging, expiry, shedding, dead-letters | `/metrics` (`handler.go:38-45`) |
+│ +| `crier_delivery_idempotent_replay_total` | Counter | — | redeliveries replayed from the idempotency record | `/metrics` (`handler.go:38-45`) |
+│ +| `crier_capability_routed_total` / `crier_capability_unheld_total` | Counter | — | `POST /capabilities/{capability}/inbox` resolved to a holder vs refused NO_CAPABLE_AGENT (§3 S1) | `/metrics` (`capability.go:99, :105`) |
+│ +| `crier_http_requests_total` / `crier_http_request_duration_seconds` | CounterVec / Histogram | `code`, `route` | HTTP surface request volume and latency by route | `/metrics` |
+│ +| `crier_webhook_attempts_total` / `crier_webhook_deliveries_total` | CounterVec | — | webhook push attempts and deliveries | `/metrics` |
+│ +| `crier_detect_alerts_total` | CounterVec | — | quiet-hour/volume detection alerts | `/metrics` |
+│ +| `crier_store_queue_depth_read_errors_total` | CounterVec | — | store queue-depth read failures | `/metrics` |
+│ +| `crier_federation_*` / `crier_relay_events_total` | Counter | — | federated relay and event volume | `/metrics` |
+│ +| `crier_ws_subscribers` | Gauge | — | live websocket subscriber count | `/metrics` |
+│ +| `crier_up` / `crier_build_info` / `crier_start_time_seconds` | Gauge | — | liveness, build identity, process start | `/metrics` |
+│
+│  Auth posture: `/metrics` is not exempt — it requires Bearer when `CR_AUTH_TOKEN` is set.
+│
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -298,6 +298,7 @@
+│  | **Guard error (provider outage)** | `errorResult` (`guard.go:318-361`) defaults to **fail-open** (Allow, errored) unless `policy.FailClosed`, which applies `errorAction(policy.Action)` (default block); a high-confidence prematch escalates even a fail-open to block/high | a clean verdict | set `FailClosed` on the policy to fail closed |
+│  | **Guard concurrency saturation** | `ErrConcurrencySaturated` after the 2s semaphore acquire (`router.go:230-234`); counted by `crier_guard_saturated_total` | a provider outage | the disposition follows `errorResult` per policy — check the decision/error observations, not just the saturation counter |
+│  | Empty retrieve ≠ lost message | `[]` after a failed ack while a message is leased | a lost message | use `stats()` to tell "nothing queued" from "everything leased" (`crier_client.py:1018-1021`) |
+│ +| Capability addressed to a protected recipient | 403 `service delivery requires an explicit recipient URL; capability routing cannot authorize a service recipient` (`service_auth.go:117-126`) | a `NO_CAPABLE_AGENT` refusal (counted `crier_capability_unheld_total`, no holder advertises the capability) | deliver to an explicit recipient URL instead — capability routing cannot resolve a protected service recipient |
+│
+│  ## 11. Limits and margins
+│
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -337,7 +337,9 @@
+│  - Board rows: CF-337, CF-361, CF-369.
+│  - **Findings:**
+│    - **F10-1** (carried) — auth order is headers → target → caller → timestamp → key → signature.
+│ -  - **F10-2** (corrected) — host go is 1.26.10 (was 1.26.5 at round-15, 1.26.8/1.26.9 at the round-16 judges); `go build`/`go test` PASS.
+│ +  - **F10-2** (corrected again, kimi #3) — round-17 claimed "host go is 1.26.10"; the host bootstrap
+│ +    binaries are actually 1.26.8 (`/usr/bin/go`) and 1.26.5 (`~/.local/bin/go`), and go1.26.10 is
+│ +    selected at build time by `go.mod`'s `go 1.26.10` directive via `GOTOOLCHAIN=auto`; `go build`/`go test` PASS.
+│    - **F10-3** — metrics are default-ON (`EnableMetrics: true`), not opt-in; `metrics.go:2` still
+│      says "opt-in" (contradicting artifact, locator `:2`).
+│    - **F10-4** (carried) — guard degradation policy written: oversize branch (`:198-234`) and
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -344,8 +344,8 @@
+│      says "opt-in" (contradicting artifact, locator `:2`).
+│    - **F10-4** (carried) — guard degradation policy written: oversize branch (`:198-234`) and
+│      fail-open/fail-closed `errorResult` (`:318-361`) with policy precedence (`policy.go:172-202`).
+│ -  - **F10-5** (carried) — the handler's slog surface is complete (3/3); the 67-string metric census
+│ -    is scoped, not a completed per-metric register.
+│ +  - **F10-5** (closed this round) — the 67-string metric census is scoped; the **per-metric contract
+│ +    is now filled** (§8 table: type/labels/question/scrape for every runtime series).
+│    - **F10-6** (corrected, sol B01) — the protected-delivery header is `X-Crier-Audience`
+│      (`agentsig.go:35`), not `X-Crier-Service-Audience`; the node/dispatcher construct requests
+│      without the full protected-delivery control set, so "works" is scoped to un-protected recipients.
+│ @@ -360,6 +360,21 @@
+│    - **F10-11** (new, kimi B6/grok #8) — the closed-world `git diff` claim is withdrawn: HEAD
+│      advanced and two `cmd/server` test files changed after the round-16 stamps; the diff is quoted
+│      with the real six paths and dated.
+│ +  - **F10-12** (new, kimi #9/deepseek N1) — crier HEAD advanced one test-only commit to `1587a03f`
+│ +    (INT-CI-027); every cited non-test file is byte-identical to `33c1f388` (verified `git diff
+│ +    --name-only 33c1f388..HEAD -- <cited paths>` → empty). §1 re-stamped.
+│ +  - **F10-13** (new, grok #5) — the capability delivery route (`HandleDeliverByCapability`,
+│ +    `handler.go:1014`, `POST /capabilities/{capability}/inbox` at `cmd/server/main.go:112`) and its
+│ +    protected-recipient refusal (`service_auth.go:117-126`) are now documented in §3 S1 and §10;
+│ +    the §8 `crier_capability_*` counters are cross-referenced to the route that emits them.
+│ +  - **F10-14** (new, kimi #8) — the guard env-bounds citation now names the field definitions
+│ +    (`internal/guard/guard.go:49-55`) alongside the reader/validator (`config/config.go:1139-1187`);
+│ +    round-17 cited only the reader.
+│ +  - **F10-15** (new, sol B23) — the run-affecting controls missing from §5 are now registered: MCP
+│ +    nudge (`CR_MCP_NUDGE_*`, default nudge ON / session-start OFF, `config.go:634, :697-709`),
+│ +    federation hold (`CR_FED_MAX_HOLD_S` = 300s, `:657, :971-974`), and DB pool
+│ +    (`CR_DATABASE_MAX_CONNS`/`MIN_CONNS` = 4/0 with the `MinConns > MaxConns` startup refusal,
+│ +    `:660-665, :771-786`).
+│
+│  ## RED field count: 5 — §8 per-metric contract (series names inventoried, type/labels/question/scrape
+│  not filled per metric — sol B04); §9 log inventory incomplete beyond the six tabulated handler/guard
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -333,7 +333,9 @@
+│    `grep -nE 'slog\.(Info|Error|Warn|Debug)' internal/guard/guard.go` (wrappers at `:100/:103`);
+│    `grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u | wc -l` (67);
+│    `git diff --name-only 0a372209..HEAD` (6 paths, two `cmd/server` test files).
+│ -- Rev re-stamped: `e50e55ee` (this round); cited non-test files byte-identical to `33c1f388`.
+│ +- Rev re-stamped: `e50e55ee` (this round); crier HEAD is now `1587a03f` (one test-only commit past,
+│ +  INT-CI-027); cited non-test files byte-identical to `33c1f388` (verified by a `git diff --name-only
+│ +  33c1f388..HEAD -- <cited paths>` returning empty).
+│  - Board rows: CF-337, CF-361, CF-369.
+│  - **Findings:**
+│    - **F10-1** (carried) — auth order is headers → target → caller → timestamp → key → signature.
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -378,11 +378,12 @@
+│      (`CR_DATABASE_MAX_CONNS`/`MIN_CONNS` = 4/0 with the `MinConns > MaxConns` startup refusal,
+│      `:660-665, :771-786`).
+│
+│ -## RED field count: 5 — §8 per-metric contract (series names inventoried, type/labels/question/scrape
+│ -not filled per metric — sol B04); §9 log inventory incomplete beyond the six tabulated handler/guard
+│ +## RED field count: 4 — §9 log inventory incomplete beyond the six tabulated handler/guard
+│  sites (the webhook/store/detect/federation emitters are not tabulated one-per-site); §5
+│  storage-selection custody-proof not written (how an operator proves *which* backend is serving
+│  custody at boot is unmeasured); §7 signed-read ladder not repeatable from this control host
+│  (UNVERIFIED); §3 S4 TypeScript client + S3 front/MCP production activation not evidenced (no
+│ -in-repo/systemd invoker named — sol B27). The former "go test FLAKY" and "handler body not read"
+│ -REDs are **closed this round** (clean PASS at `e50e55ee`; body read line-by-line).
+│ +in-repo/systemd invoker named — sol B27). **Closed this round: §8 per-metric contract** (filled,
+│ +sol B04/B21/B23) and the §5 run-affecting-controls gap (MCP nudge, federation hold, DB pool now
+│ +registered, sol B23). The former "go test FLAKY" and "handler body not read" REDs were already
+│ +closed at round 17 (clean PASS at `e50e55ee`; body read line-by-line).
+│ docs/handbook/chapters/M11-dispatcher.md
+│ @@ -144,9 +144,14 @@
+│
+│  Complete inventory (all 23 `log()` **call sites**; `grep -n 'log(' dispatcher.py` returns **25**
+│  lines — `:81` a comment mentioning `log()` and `:112` the `def log(` definition, plus the 23 calls;
+│ -`dispatcher.py:112` `log()` writes to `DISPATCH_LOG`):
+│ -
+│ -| Level | Line | Emitted when | Kind |
+│ +`dispatcher.py:112` `log()` writes to `DISPATCH_LOG`). **Emitted-severity correction (sol B24):**
+│ +`log(msg)` (`:112-120`) takes one message string and emits only `"<timestamp> <msg>\n"` — there is
+│ +**no severity field**, no level parameter, and no structured level anywhere on the write path. The
+│ +`Level` column below is therefore **operator-inferred** from the message text, not an emitted
+│ +attribute, and there is no level-based filtering of the journal. (The round-17 table presented
+│ +`warn`/`error`/`info` as emitted levels — that was a misrepresentation.)
+│ +
+│ +| Level (inferred — none emitted) | Line | Emitted when | Kind |
+│  |---|---|---|---|
+│  | warn | `scoped token mint failed for %s (%s) — dispatching without GH_TOKEN` (`:97`) | scoper unreachable | descriptive |
+│  | warn | `text_b64 did not decode: %s` (`:147`) | malformed dispatch | descriptive |
+│ docs/handbook/chapters/M11-dispatcher.md
+│ @@ -245,5 +245,8 @@
+│      service-delivery `idempotency_key`/`X-Crier-Audience`, so "works" is scoped to un-protected recipients.
+│    - **F11-11** (new, sol B24) — output retention (last 4000 bytes → last six lines) and the
+│      `"orchestrator"` fallback recipient are documented; `reply_len` measures the excerpt.
+│ +  - **F11-12** (new, sol B24) — the §9 table presented `warn`/`error`/`info` as emitted log levels;
+│ +    `log()` (`:112-120`) emits no severity — only `"<timestamp> <msg>\n"`. The `Level` column is now
+│ +    labelled **operator-inferred**, not emitted.
+│
+│  ## RED field count: 2 (Metrics §8 — absence-proved; live-job test row §7 — decoration, cannot fail)
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | content sha256 `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (lives outside any git repo; no git revision to stamp). Locators re-verified at code-factory HEAD `e07d031` (this round) |
+│  | Language / runtime | Python — `#!/usr/bin/env python3`, no pinned version; **requires >= 3.10** (F12-5: `_forward` at `:164` declares `body: bytes \| None`, an evaluated union annotation) |
+│  | Owner lane | code-factory (control-host service, consumed by nodes) |
+│ -| Status | **VERIFIED (admission/routing/capture), FAILING (streaming)** — read in full this round (273 lines); content sha256 reproduced; live 401 admission reproduced this round; the two sink paths corrected this round (F12-8). **Streaming completion is FAILING (sol B22):** the healthy SSE stream is unframed to completion (`:206-224`), reproduced as a `200` with no `Content-Length`/`Transfer-Encoding`/`Connection` and a client EOF timeout (§11 F12-7). A blanket VERIFIED would contradict that demonstrated defect — admission, routing and capture are verified, streaming is not |
+│ +| Status | **FAILING** — read in full this round (273 lines); content sha256 reproduced; live 401 admission reproduced this round; the two sink paths corrected this round (F12-8). Admission, routing and capture are VERIFIED; **streaming is FAILING (sol B22):** the healthy SSE stream is unframed to completion (`:206-224`), reproduced as a `200` with no `Content-Length`/`Transfer-Encoding`/`Connection` and a client EOF timeout (§11 F12-7). The single status word is the weaker one (FAILING, grok #10); a blanket VERIFIED would contradict the demonstrated streaming defect |
+│
+│  ## 2. Purpose, authority and position
+│
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | INFERENCE PROXY (`cf-inference-proxy.py`) |
+│  | Path | `/home/kara/.hermes/scripts/cf-inference-proxy.py` (273 lines) |
+│ -| Revision | content sha256 `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (lives outside any git repo; no git revision to stamp). Locators re-verified at code-factory HEAD `e07d031` (this round) |
+│ +| Revision | content sha256 `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (lives outside any git repo; no git revision to stamp). Locators re-verified at code-factory HEAD `dbf810b` (this round's code-factory HEAD — the M12-C1 node-client grep evidence; the proxy file itself is outside git) |
+│  | Language / runtime | Python — `#!/usr/bin/env python3`, no pinned version; **requires >= 3.10** (F12-5: `_forward` at `:164` declares `body: bytes \| None`, an evaluated union annotation) |
+│  | Owner lane | code-factory (control-host service, consumed by nodes) |
+│  | Status | **FAILING** — read in full this round (273 lines); content sha256 reproduced; live 401 admission reproduced this round; the two sink paths corrected this round (F12-8). Admission, routing and capture are VERIFIED; **streaming is FAILING (sol B22):** the healthy SSE stream is unframed to completion (`:206-224`), reproduced as a `200` with no `Content-Length`/`Transfer-Encoding`/`Connection` and a client EOF timeout (§11 F12-7). The single status word is the weaker one (FAILING, grok #10); a blanket VERIFIED would contradict the demonstrated streaming defect |
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -93,7 +93,7 @@
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│  | CT-07 | gateway | in (model choice) | **external** — the task-router's model choice (out of scope) | **external** — the Hermes gateway (out of scope) | **UNVERIFIED (boundary)** — neither side has an in-repo `file:function`, and the wire was not measured this round; an outline "works" annotation is not implementation evidence (sol B03) |
+│ -| M12-C1 | node | in | **unproven client half** — the proxy side is verified (401 on missing/unknown token, `:128-130`); the node side has no in-repo file that *calls* the proxy. `grep -rnE '8775\|CF_PROXY\|cf-inference-proxy' scripts/ config/ specs/` (ERE, re-run this round at CF HEAD `3fba8a7`; the `\|` in this table cell is markdown escaping for the bare-`|` alternation actually run — the exact command is in §13) matches **four** text sites: `scripts/panel_loop.py:188` (locator re-pinned this round — round-15 cited `:145`, which is a `log = outdir / …` line), `scripts/master_doc_skeleton.py:25` and `:211` (self-references listing the path), and `config/node.env.example:22` — which is the **live assignment** `ENV_CF_PROXY_API_KEY=@~/.node/auth/provider.key`, not a comment. `config/node.env.example:26` comments `CONFIG_SET_MODEL_PROVIDER=cf-proxy -> model.provider`, so the producer half is config-driven: `node.env.example:22,26` → `node_env.py`/provisioner config generation → `~/.hermes/config.yaml` `model.provider=cf-proxy`. Round-4's quoted command omitted `-E`, so its bare-`\|` BRE returned **0** matches (measured rc 1) — the opposite of the row's claim (grok 2 / glm 4). | `cf-inference-proxy.py:135` `do_POST` → `_node` (`:136`) | **UNVERIFIED** — proxy side verified; the node-client call site is config-wired, not a `file:function` in this repo |
+│ +| M12-C1 | node | in | **unproven client half** — the proxy side is verified (401 on missing/unknown token, `:128-130`); the node side has no in-repo file that *calls* the proxy. `grep -rnE '8775\|CF_PROXY\|cf-inference-proxy' scripts/ config/ specs/` (ERE, re-run this round at CF HEAD `dbf810b`; the `\|` in this table cell is markdown escaping for the bare-`|` alternation actually run — the exact command is in §13) matches **four** text sites: `scripts/panel_loop.py:188` (locator re-pinned this round — round-15 cited `:145`, which is a `log = outdir / …` line), `scripts/master_doc_skeleton.py:25` and `:211` (self-references listing the path), and `config/node.env.example:22` — which is the **live assignment** `ENV_CF_PROXY_API_KEY=@~/.node/auth/provider.key`, not a comment. `config/node.env.example:26` comments `CONFIG_SET_MODEL_PROVIDER=cf-proxy -> model.provider`, so the producer half is config-driven: `node.env.example:22,26` → `node_env.py`/provisioner config generation → `~/.hermes/config.yaml` `model.provider=cf-proxy`. Round-4's quoted command omitted `-E`, so its bare-`\|` BRE returned **0** matches (measured rc 1) — the opposite of the row's claim (grok 2 / glm 4). | `cf-inference-proxy.py:135` `do_POST` → `_node` (`:136`) | **UNVERIFIED** — proxy side verified; the node-client call site is config-wired, not a `file:function` in this repo |
+│  | M12-C2 | upstream | out | `_forward` (`:164`) builds the upstream request with the control-host key | **rumour — one side only** (the upstream gateway/provider, not a function) | **UNVERIFIED** — external boundary with one side named; a "works" verdict on a rumour is not permitted (B06) |
+│
+│  The round-3 M12-C1 producer cell (\"node POST /v1/chat/completions with Authorization: Bearer ***\")
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -147,6 +147,7 @@
+│  | Missing/unknown token | 401 `missing or unknown node token` (`:130`) | a wrong bearer | provision the node's token file |
+│  | Disallowed model | 403 `model not permitted` + `allowed` list (`:158-160`) | a malformed body (400) | add the model to the allowlist deliberately |
+│  | No model named | 400 `a model is required` (`:154`) | a disallowed model | send a model field |
+│ +| **Malformed model type (list/dict, not a string)** | the handler raises `TypeError` at `:155` — `asked = json.loads(body).get("model","")` (`:148`) accepts any JSON value and `asked not in ALLOWED_MODELS` (`:155`, a set membership) requires a hashable string, so `{"model":["hermes"]}` crashes the handler. The client sees a **connection drop** (RemoteDisconnected), no HTTP error response | a disallowed model (403) or a malformed JSON body (400) | send a string `model`; the proxy does **not** validate `asked` is a string before the membership test (sol B26) |
+│  | Connection failure (urlopen raises before headers) | a clean 502 `upstream unreachable` (`:236-237`) | an upstream rejection | check the upstream gateway |
+│  | Read failure after headers, before first chunk | the upstream status + headers are already sent (`:206-210`), then the proxy attempts a second 502 — the client sees `[200, 502]`, a corrupt response (F12-4) | a clean 502 | client must detect the truncated stream |
+│  | Upstream dies mid-stream | `first` is set, the stream just ends (`:238`), **no 502** | a buffered failure | client must detect a truncated stream |
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -119,6 +119,7 @@
+│  | admission (no token) | `curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8775/v1/chat/completions -d '{"model":"hermes"}'` | 401 | 2026-11-06 | **PASS** — 401 (proxy live on `:8775`) |
+│  | systemd unit active | `systemctl --user status cf-inference-proxy.service` | loaded, enabled, `active (running)` | 2026-11-06 | **PASS** — active since 2026-11-05 09:21, Main PID 2603939, drop-in `10-upstream.conf` |
+│  | admission (disallowed model, valid token) | POST `{"model":"definitely-not-allowed-model"}` with a valid node token | 403 `model not permitted` | 2026-11-06 | **UNVERIFIED** — not re-run this round (the node token file was not read); a round-3 judge reproduced the 403 at `:155-160` (provenance, not this round's measured evidence) |
+│ +| admission (malformed model type) | POST `{"model":["hermes"]}` with a valid node token | a clean 400/403 refusal | not re-run this round | **UNVERIFIED — and FAILING on the branch:** `asked not in ALLOWED_MODELS` (`:155`) on a non-string `asked` raises `TypeError`, so the refusal is a connection drop, not an HTTP error. Reproduced by a judge's patched-token fixture (sol B26: `PROXY_HANDLER_EXCEPTION=TypeError`, `PROXY_NONSTRING_MODEL_HTTP=RemoteDisconnected`), not a live curl this round |
+│
+│  ## 8. Metrics
+│
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -225,11 +225,18 @@
+│      (`:52`).
+│    - **F12-9** (new, glm #1) — `panel_loop.py` locator re-pinned from `:145` to `:188` (round-15's
+│      `:145` is a `log = outdir / …` line; the `cf-inference-proxy` reference is `:188`).
+│ -
+│ -## RED field count: 2 — Metrics §8 (absence-proved); stream completion **FAILING** (F12-7
+│ -reproduced). **The boundary/local contracts are not REDs.** Uniform rule (settled this round): a
+│ -contract row whose far side is an external peer — boundary (CT-07) or a local edge with no in-repo
+│ -`file:function` on the node/upstream side (M12-C1, M12-C2) — is a **terminal** UNVERIFIED state and
+│ -is not counted as a RED; only an internal contract that was never measured, or a FAILING submodule,
+│ -is a RED. The streaming defect is a FAILING submodule (a demonstrated code defect), so it is RED;
+│ -the three UNVERIFIED contracts are terminal.
+│ +  - **F12-10** (new, sol B26) — a non-string `model` (e.g. `{"model":["hermes"]}`) escapes the
+│ +    documented 400/403 refusal: `asked not in ALLOWED_MODELS` (`:155`) raises `TypeError` on a
+│ +    list/dict, so the handler crashes and the client sees a connection drop (RemoteDisconnected),
+│ +    no HTTP error. Documented in §10 and §7; the fix (validate `asked` is a string at `:148-149`
+│ +    before the membership test) is a board row, not yet landed.
+│ +
+│ +## RED field count: 3 — Metrics §8 (absence-proved); stream completion **FAILING** (F12-7
+│ +reproduced); admission malformed-model-type **FAILING** (F12-10/sol B26 — a demonstrated
+│ +`TypeError`/disconnect instead of a clean refusal). **The boundary/local contracts are not REDs.**
+│ +Uniform rule (settled this round): a contract row whose far side is an external peer — boundary
+│ +(CT-07) or a local edge with no in-repo `file:function` on the node/upstream side (M12-C1, M12-C2)
+│ +— is a **terminal** UNVERIFIED state and is not counted as a RED; only an internal contract that was
+│ +never measured, or a FAILING submodule, is a RED. The streaming defect and the malformed-model-type
+│ +crash are FAILING submodule behaviours (demonstrated code defects), so they are RED; the three
+│ +UNVERIFIED contracts are terminal.
+│ cache/scratch/check_bs.py
+│ @@ -0,0 +1,3 @@
+│ +line = open('/home/kara/code-factory/docs/handbook/chapters/M9-scheduler.md').read().splitlines()[336]
+│ +i = line.find('grep -rhoE')
+│ +print(repr(line[i:i+70]))
+│ cache/scratch/fix_m9_bs.py
+│ @@ -0,0 +1,23 @@
+│ +from pathlib import Path
+│ +
+│ +CH = Path('/home/kara/code-factory/docs/handbook/chapters/M9-scheduler.md')
+│ +lines = CH.read_text().splitlines()
+│ +
+│ +# Line index 336 (0-based) = file line 337.
+│ +idx = None
+│ +for i, l in enumerate(lines):
+│ +    if l.startswith('- **370 distinct format strings**'):
+│ +        idx = i
+│ +        break
+│ +assert idx is not None, 'anchor not found'
+│ +
+│ +correct = ('- **370 distinct format strings** \u2014 every site passes a literal string as its first '
+│ +           'argument, so the distinct count is exact: `grep -rhoE \'log\\.Printf\\("[^"]*"\' '
+│ +           'internal/scheduler/*.go | grep -v _test.go | sed \'s/^log\\.Printf("//; s/"$//\' | '
+│ +           'sort -u | wc -l` = 370. Round-17\'s "372 distinct" was wrong and had no published '
+│ +           'command; this is the command and its output.')
+│ +
+│ +lines[idx] = correct
+│ +CH.write_text('\n'.join(lines) + '\n')
+│ +print('fixed line', idx + 1)
+│ +print(lines[idx][:120])
+│ cache/scratch/run_extracted_cmd.py
+│ @@ -0,0 +1,9 @@
+│ +import subprocess, re
+│ +line = open('/home/kara/code-factory/docs/handbook/chapters/M9-scheduler.md').read().splitlines()[336]
+│ +m = re.search(r'`(grep[^`]*)`', line)
+│ +cmd = m.group(1)
+│ +print('EXTRACTED COMMAND:', cmd)
+│ +r = subprocess.run(cmd, shell=True, capture_output=True, text=True,
+│ +                   cwd='/home/kara/coding-hermes-scheduler/coding-herms-scheduler')
+│ +print('STDOUT:', r.stdout.strip())
+│ +print('EXIT:', r.returncode)
+Error: Gateway disconnected; turn outcome is unknown. Resume the printed session ID to check whether it completed or was interrupted; do not resend the work.
+
+session_id: local-85497b83edad0e38c304979623d2370c35296861c189604352048bf065c33321

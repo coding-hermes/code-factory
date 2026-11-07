@@ -6,7 +6,7 @@
 |---|---|
 | Module name | SHARED CONTRACT (`scripts/lib.sh`) |
 | Path | `/home/kara/code-factory/scripts/lib.sh` |
-| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `lib.sh` byte-identical since `47d68b4` — no file M0 cites changed in `47d68b4..08a2c8a`) |
+| Revision | derivation base `9372dc0`; `lib.sh` and every file M0 cites byte-identical through document HEAD `dbf810b` (verified this round: `git diff --name-only 9372dc0..dbf810b` touches only `scripts/panel_loop.py`, `scripts/panel_supervise.sh`, `scripts/reap_orphan_writers.py`, `prompts/foreman.md`, `prompts/unblock.md`, `scripts/board_read.py`, `docs/handbook/_panel/round-9/writer.txt` and the M11 chapter — none cited here) |
 | Language / runtime | bash 5.3.9 (measured: `bash --version`); sourced, never executed |
 | Owner lane | code-factory (node-side + control-host shell) |
 | Status | **VERIFIED** — `lib.sh` (78 lines) read in full; every cited line re-verified this round |
@@ -79,7 +79,7 @@ here; removed.
 
 ## 5. Settings register
 
-`lib.sh` carries one tunable constant and no env-var surface:
+`lib.sh` carries one tunable constant and no tunable env surface — the only environment read is the `FAILED` counter seed at `lib.sh:11` (`FAILED=${FAILED:-0}`, a per-script failure counter, not a setting):
 
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
@@ -98,13 +98,13 @@ chapter row to agree with.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| (local) | bunker CLI | out | `lib.sh:75` `bunker_exec` (composes `bunker exec … -- bash -lc`) | **external** — the `bunker` binary's exec handler, not in this repo | **UNVERIFIED (boundary)** — `bunker` is an external peer with no in-repo function to name; the composed command is nameable, the far side is not, so no "works" verdict is attached to an unnamed side (F0-1) |
+| (local) | bunker CLI | out | `lib.sh:75` `bunker_exec` (composes `bunker exec … -- bash -lc`) | **external** — the `bunker` binary's exec handler, not in this repo | **UNVERIFIED (boundary)** — `bunker` is an external peer with no in-repo function to name; the composed command is nameable, the far side is not, so no "works" verdict is attached to an unnamed side (F0-1). Missing evidence: a live-node observation of `bunker_exec` against the real `bunker` binary — not measured this round, so the state stays UNVERIFIED, not "works" |
 
 ## 7. Verification
 
 | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|
-| syntax | `bash -n scripts/lib.sh` | exit 0 | 2026-11-06, rev `08a2c8a` | PASS |
+| syntax | `bash -n scripts/lib.sh` | exit 0 | 2026-11-06, rev `dbf810b` | PASS (rc 0) |
 | who sources it (direct) | `grep -rl '\. "$HERE/lib.sh"' scripts/` | 11 files | 2026-11-06 | PASS (11) |
 | who sources it (total) | `grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` | 17 files | 2026-11-06 | PASS (17) |
 | fetch_verified fails closed | staged probe `ffc_probe.sh` — source lib.sh, fetch `http://127.0.0.1:1/nothing` with a wrong digest | rc 1, no artifact left | 2026-11-06 | **PASS** — `curl: (7) … Could not connect`, `rc=1`, `no artifact left` |
@@ -113,7 +113,7 @@ The probe is not shipped as a file in this repo; the complete invocation (B25) i
 that reproduce it against a refused loopback URL:
 
 ```
-$ printf '#!/bin/bash\n. /home/kara/code-factory/scripts/lib.sh\nfetch_verified http://127.0.0.1:1/nothing "$1" deliberately-wrong-digest\nprintf "rc=%s artifact=" "$?"; [ -e "$1" ] && echo yes || echo no\n' > /tmp/ffc_probe.sh && chmod +x /tmp/ffc_probe.sh
+$ printf '#!/bin/bash\n. /home/kara/code-factory/scripts/lib.sh\nfetch_verified http://127.0.0.1:1/nothing "$1" deliberately-wrong-digest\nprintf "rc=%%s artifact=" "$?"; [ -e "$1" ] && echo yes || echo no\n' > /tmp/ffc_probe.sh && chmod +x /tmp/ffc_probe.sh
 $ bash /tmp/ffc_probe.sh /tmp/ffc-artifact   # → curl: (7) … ; rc=1 artifact=no
 ```
 
@@ -160,7 +160,7 @@ rate are answerable only by the static greps above.
 
 ## 12. Cross-references
 
-- F2 PROVISIONING uses `require_disk` (M1) and `fetch_verified` (M5).
+- F2 PROVISIONING uses `require_disk` (M0, `lib.sh:48-57`) and `fetch_verified` (M0, `lib.sh:19-42`) — **flow chapter not written** (OUTLINE Part II, all 16 flows MISSING; README Part II).
 - M1 PROVISIONING sources `lib.sh`, resolves `bunker` via `have` (`:13`).
 - **M5 HARNESS owns `harness-vars.sh` (M5.S5).** The variable contract is **not** sourced by every
   installer: `install-hermes.sh`, `install-opencode.sh`, `install-deepseek.sh`,
@@ -183,4 +183,4 @@ rate are answerable only by the static greps above.
     `install-codex.sh` duplicates the validator; `install-claude-code.sh` sources `lib.sh` not
     `harness-vars.sh`.
 
-## RED field count: 1 (Metrics §8)
+## RED field count: 2. §8 Metrics — RED, absence-proved (`grep` → 0 matches). §6 (local) bunker edge — RED, not-measured: far side is the external `bunker` binary, wire unmeasured, so no "works" verdict attaches (missing evidence: a live-node `bunker_exec` observation). A boundary UNVERIFIED row is a RED under the single acceptance rule (OUTLINE Part VII.3), not an exemption — see manifest CROSS-SECTION DEPENDENCY on settling that rule document-wide (M4 vs M9/M12 read "terminal, not RED").

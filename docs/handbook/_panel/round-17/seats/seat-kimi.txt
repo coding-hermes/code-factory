@@ -1,0 +1,206 @@
+│ cache/scratch/citecheck-r17.py
+│ @@ -0,0 +1,60 @@
+│ +#!/usr/bin/env python3
+│ +"""Round-17 citation verifier: every `path:line` in the chapters vs the tree."""
+│ +import re, os
+│ +from pathlib import Path
+│ +
+│ +CH = Path("/home/kara/code-factory/docs/handbook/chapters")
+│ +ROOTS = [
+│ +    "/home/kara/code-factory",
+│ +    "/home/kara/coding-hermes-scheduler/coding-herms-scheduler",
+│ +    "/home/kara/crier",
+│ +    "/home/kara/crier-fleet",
+│ +    "/home/kara/.hermes/scripts",
+│ +]
+│ +CIT = re.compile(r"`(/?[\w.@+/-]*[\w-]+\.(?:go|py|sh|ts|js|md|toml|yaml|yml|json|jsonl)):(\d+)(?:-(\d+))?`")
+│ +
+│ +def resolve(p):
+│ +    raw = p.lstrip("/")
+│ +    cands = []
+│ +    if raw.startswith("home/"):
+│ +        cands.append("/" + raw)
+│ +    for r in ROOTS:
+│ +        cands.append(os.path.join(r, raw))
+│ +    # basename fallback
+│ +    base = os.path.basename(raw)
+│ +    for r in ROOTS:
+│ +        for dp, dn, fn in os.walk(r):
+│ +            if "/.git" in dp or "node_modules" in dp:
+│ +                continue
+│ +            if base in fn:
+│ +                cands.append(os.path.join(dp, base))
+│ +    for c in cands:
+│ +        if os.path.isfile(c):
+│ +            return c
+│ +    return None
+│ +
+│ +tot = 0
+│ +bad = []
+│ +files = set()
+│ +for f in sorted(CH.glob("M*.md")):
+│ +    text = f.read_text()
+│ +    for m in CIT.finditer(text):
+│ +        path, a = m.group(1), int(m.group(2))
+│ +        tot += 1
+│ +        r = resolve(path)
+│ +        if not r:
+│ +            bad.append((f.stem, path, a, "MISSING_FILE", ""))
+│ +            continue
+│ +        files.add(os.path.realpath(r))
+│ +        lines = open(r, errors="replace").read().splitlines()
+│ +        n = len(lines)
+│ +        if a > n:
+│ +            bad.append((f.stem, path, a, "LINE_OOR", f"file has {n} lines"))
+│ +        elif a < 1:
+│ +            bad.append((f.stem, path, a, "BAD_LINE", ""))
+│ +        elif not lines[a-1].strip():
+│ +            bad.append((f.stem, path, a, "LINE_EMPTY", ""))
+│ +
+│ +print(f"citations={tot} distinct_files={len(files)} problems={len(bad)}")
+│ +for b in bad:
+│ +    print("  %-9s %-52s :%-5s %-12s %s" % b)
+│ cache/scratch/cite_r17b.py
+│ @@ -0,0 +1,68 @@
+│ +#!/usr/bin/env python3
+│ +"""Round-17 citation verifier (fast variant): index only plausible subtrees."""
+│ +import os, re, subprocess
+│ +from pathlib import Path
+│ +
+│ +CH = Path("/home/kara/code-factory/docs/handbook/chapters")
+│ +ROOTS = [
+│ +    "/home/kara/code-factory",
+│ +    "/home/kara/coding-hermes-scheduler/coding-herms-scheduler",
+│ +    "/home/kara/crier",
+│ +    "/home/kara/crier-fleet",
+│ +]
+│ +SKIP = re.compile(r"/(\.git|node_modules|__pycache__|\.venv|dist|build|vendor|\.hermes/cache)/")
+│ +CIT = re.compile(r"`(/?[\w.@+/-]*[\w-]+\.(?:go|py|sh|ts|js|md|toml|yaml|yml|json|jsonl)):(\d+)(?:-(\d+))?`")
+│ +
+│ +index = {}
+│ +for r in ROOTS:
+│ +    for dp, dn, fn in os.walk(r):
+│ +        if SKIP.search(dp + "/"):
+│ +            dn[:] = []
+│ +            continue
+│ +        rel = os.path.relpath(dp, r)
+│ +        if rel.count(os.sep) > 4:
+│ +            dn[:] = []
+│ +            continue
+│ +        for f in fn:
+│ +            index.setdefault(f, []).append(os.path.join(dp, f))
+│ +index.setdefault("cf-inference-proxy.py", []).append("/home/kara/.hermes/scripts/cf-inference-proxy.py")
+│ +
+│ +def resolve(p):
+│ +    raw = p.lstrip("/")
+│ +    base = os.path.basename(raw)
+│ +    cands = index.get(base, [])
+│ +    if "/" in raw:
+│ +        exact = [c for c in cands if c.endswith("/" + raw) or c.endswith(raw)]
+│ +        if exact:
+│ +            return exact[0]
+│ +    if cands:
+│ +        # prefer code-factory then scheduler then crier
+│ +        order = {"/home/kara/code-factory": 0, "/home/kara/.hermes/scripts": 1}
+│ +        cands.sort(key=lambda c: (order.get(c.rsplit("/", 1)[0], 5), len(c)))
+│ +        return cands[0]
+│ +    return None
+│ +
+│ +tot = 0
+│ +bad = []
+│ +resolved_uniq = set()
+│ +for f in sorted(CH.glob("M*.md")):
+│ +    for m in CIT.finditer(f.read_text()):
+│ +        path, a = m.group(1), int(m.group(2))
+│ +        tot += 1
+│ +        r = resolve(path)
+│ +        if not r:
+│ +            bad.append((f.stem, path, a, "MISSING_FILE", ""))
+│ +            continue
+│ +        resolved_uniq.add(r)
+│ +        lines = open(r, errors="replace").read().splitlines()
+│ +        n = len(lines)
+│ +        if a > n:
+│ +            bad.append((f.stem, path, a, "LINE_OOR", f"{os.path.basename(r)} has {n} lines"))
+│ +        elif a < 1:
+│ +            bad.append((f.stem, path, a, "BAD_LINE", ""))
+│ +        elif not lines[a-1].strip():
+│ +            bad.append((f.stem, path, a, "LINE_EMPTY", ""))
+│ +
+│ +print(f"citations={tot} resolved_files={len(resolved_uniq)} problems={len(bad)}")
+│ +for b in bad:
+│ +    print("  %-9s %-50s :%-5s %-12s %s" % b)
+VERDICT: FAIL
+
+BLOCKING: 6 — findings that must be fixed before this chapter can be called written
+
+NON-BLOCKING: 4
+
+FINDINGS:
+
+1. FALSE CLAIM — M0, M1, M2, M3 (§1 Revision)
+Claim quoted: "`lib.sh` and every file M0 cites byte-identical through `3fba8a7` (current HEAD). `git diff --name-only 9372dc0..3fba8a7` touches only `scripts/panel_loop.py`, `scripts/panel_supervise.sh`, `scripts/reap_orphan_writers.py`, `docs/handbook/_panel/round-9/writer.txt` and the M11 chapter".
+Evidence: `3fba8a7` is NOT HEAD and was not HEAD when these chapters were written. Commit times: `3fba8a7` 21:34:28, `e07d031` 22:24:12, `ce2f875` 23:04:54; the four chapters' mtimes are 22:36–22:43, i.e. all four assert "current HEAD" for a commit already superseded at write time. The quoted diff output proves it: it omits `prompts/foreman.md` and `prompts/unblock.md`, which are exactly the files `e07d031` touched. `git rev-parse --short HEAD` now returns `ce2f875` (== `origin/main`).
+Fix: drop every "(current HEAD)" phrase; stamp the derivation base and state the checked range, e.g. "derived at `9372dc0`; M-cited files byte-identical through `e07d031` (checked 2026-11-06 22:24; document HEAD has since advanced to `ce2f875`)".
+
+2. CONTRADICTION — M0/M1/M2/M3 vs M4/M5/M6/M7/M8 vs M12 (document revision)
+Claim quoted: M4/M5/M7/M8: "`e07d031…` (code-factory HEAD == origin/main == gh/main, round-17 derivation)"; M12: "Locators re-verified at code-factory HEAD `e07d031` (this round)" while M12-C1 says the grep was "re-run this round at CF HEAD `3fba8a7`".
+Evidence: one document issue names two different code-factory HEADs, and M12 names both inside itself. `docs/MASTER-DOC-SCHEMA.md` §1 requires "One revision per document issue". Actual HEAD == `origin/main` == `ce2f875`, so neither stamp is current and every §7 "Last run … rev" cell (M0–M8) refers to a revision the document does not declare.
+Fix: one revision line for the whole issue (code-factory `ce2f875`, scheduler `251d11db`, crier `1587a03f`, crier-fleet `283bca9`, proxy sha256 `b12a0ac5…`), re-stamp §7, and delete the per-chapter claims of being "HEAD".
+
+3. FALSE CLAIM — M9 §1 and §4a, M10 §1 and §4a (host Go toolchain)
+Claim quoted: "`go env GOVERSION` resolves **go1.26.10**. Host bootstrap `go` = **go1.26.10** both at `/usr/bin/go` … and `/home/kara/.local/bin/go` (this round; the round-16 judges measured 1.26.8/1.26.5 — the host was upgraded to 1.26.10 since)" (M9); the same claim repeated in M10 with "`go build ./...` **PASS**" as its absence-detection.
+Evidence, measured this round: `cat /usr/lib/go-1.26/VERSION` → `go1.26.8`; `readlink -f /home/kara/.local/bin/go` → `/home/kara/sdk/go1.26.5/bin/go` and `/home/kara/.local/bin/go version` → `go1.26.5`; `/usr/bin/go version` from `/home/kara` → `go1.26.8`; only inside the module (`GOTOOLCHAIN=auto`) does `go version` print `go1.26.10`, because `/home/kara/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.10.linux-amd64` exists — i.e. the fetch already happened. The round-16 judges' 1.26.8/1.26.5 was CORRECT; the "host was upgraded" narrative is false.
+Fix: state the measured pair (`/usr/bin/go` = go1.26.8, `~/.local/bin/go` = go1.26.5) and that `go1.26.10` is selected by `GOTOOLCHAIN=auto` from the module cache; delete "no `GOTOOLCHAIN` fetch is needed" and the assertion that the binary defaults are met without a download.
+
+4. OMISSION — M5 §5 (`GO_PIN`), cross-referenced to M9 §4a
+Claim quoted: "`GO_PIN` | `go1.26.5` (`:7`) | exact version | the Go toolchain installed | drift installs an unmeasured toolchain".
+Evidence: `scripts/install-go.sh:7` `GO_PIN="go1.26.5"` (verified) while `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/go.mod` declares `go 1.26.0` + `toolchain go1.26.10` and `/home/kara/crier/go.mod` declares `go 1.26.10`. The register never states the consequence: a node provisioned through this installer carries a toolchain below both control-plane modules' declared floor, so any build of either module silently downloads `go1.26.10`. The one setting on the critical path has a "what breaks if changed" cell that describes drift, not the requirement it already violates.
+Fix: add the requirement row (scheduler `toolchain go1.26.10`, crier `go 1.26.10`) and the consequence "a node at `GO_PIN` cannot build either module without a `GOTOOLCHAIN` fetch"; either raise the pin or file the pin bump as a board row and say so.
+
+5. UNVERIFIED — M9 §9 (log-line inventory arithmetic)
+Claim quoted: "**378** call sites … producing **372 distinct format strings** … the remaining **376** sites (370 distinct strings) are uncovered".
+Evidence: 378 call sites reproduces (`grep -rn "log.Printf" internal/scheduler/*.go | grep -v _test.go | wc -l` → 378), but no command for 372/370 is quoted anywhere in §9 or §13, and three natural readings give different answers: 367 (quoted-first-arg extraction), 371 (`sed 's/^[[:space:]]*log\.Printf\(//' | sort -u`), 374 (`sed 's/.*log\.Printf(//' | sort -u`). A derived number presented as measured, feeding a RED total, is exactly what rule 1 excludes. (Method note: one of these three is what the writer must publish; the number is not yet settleable.)
+Fix: publish the exact command and its output for the distinct-string count, or restate the field as "378 sites; distinct-string count not measured".
+
+6. OMISSION — document level, evidenced by every chapter's §12
+Claim quoted (M0 §12, M2 §12, M3 §12, M4 §12, M5 §12, M11 §12, and identical text in M1, M6, M7, M8, M9, M10): "F1 DISPATCH AND SETTLEMENT is the primary flow … — **flow chapter not written** (OUTLINE Part II, all 16 flows MISSING)".
+Evidence: `ls docs/handbook/chapters/` → 13 files, `M0…M12` only; OUTLINE Part II requires 16 flow chapters and Parts I (surface inventory / invariants / I.9 non-coverage), V (global settings register), VI (risk quadrants), VII (work derivation) and VIII (delivery mechanisms) have no artifact at all. Every chapter's cross-references therefore point at content that does not exist, and no chapter can be turned into work for its primary flow (F1/F2/F5/F11 are the flows four chapters own).
+Fix: file the missing Parts as explicit, dated RED items with their own status word (the spine's reference check passes because the references are honest, not because the targets exist), and stop counting this handbook as satisfying OUTLINE Part II.
+
+NON-BLOCKING FINDINGS:
+
+7. Locator drift — M3 §4b: "`refuse` (`land-node-branch.sh:53-58`) is local, not shared". Measured: `refuse() {` is at `:55`, body `:55-60`; `:53` is a blank line before the comment. Fix: `:55-60`.
+8. Locator outside the named file — M10 §5: "`config/config.go:1139-1187` fixes the guard's env bounds". `config/config.go` is 1606 lines so the range exists, but the guard's `CR_GUARD_*` bounds live in `internal/guard/guard.go:49-55` (struct fields with their defaults) and `config/config.go`'s `cfg := Config{…}` block starts at `:621`. The row's citation does not name the file that defines those bounds. Fix: cite `internal/guard/guard.go:49-55` plus the `config/config.go` reader.
+9. Stale external stamp — M10 §1: crier HEAD is now `1587a03f` (one test-only commit past `e50e55ee`: `cmd/server/session_dispatch_live_test.go`). Non-test Go files are still byte-identical, so no content claim is affected; the stamp should say so explicitly.
+10. Gate provenance — M6 discloses that `scripts/handbook_spine.py` is uncommitted (443 working-tree lines vs 340 at HEAD, sha256 `afbc65fc…`). I confirmed the working tree differs by 161 insertions / 58 deletions, so `python3 scripts/handbook_spine.py → findings=0` is not reproducible from any commit. I did reproduce it against a redirected copy and verified the gate can fail: injected mutants produced `SETTING CONFLICT` (CF_MAX_TURNS 41 vs 40), `CONTRACT UNKNOWN ID` (CT-99), `CONTRACT STATE DISAGREEMENT` (CT-06 works vs broken), `DANGLING REFERENCE` (M13) and `COUNT CLAIM` (17 flows vs 16) — all rc 1. The gate has teeth; it must be committed before a round can cite it.
+
+DEFECT CLASSES: stale-revision-stamp; two-stamps-one-issue; unmeasured-value-presented-as-measured; host-environment drift mis-blamed on an upgrade; cross-module setting requirement absent from the register; locator off-by-two; locator citing the wrong file; missing document parts behind honest cross-references; uncommitted gate used as evidence.
+
+CHAPTER SCORECARD:
+- M0 SHARED CONTRACT — PARTIAL. 13/13 schema sections, every `lib.sh` line I checked is exact (78 lines; `say` :5, `ok/bad/warn/note` :6-9, `FAILED` :11, `fetch_verified` :19-42, `require_disk` :48-57, `bunker_exec` :75-78), grep counts 11/17 reproduce. Fails on finding 1 (false "current HEAD"). Its one RED is absence-proved.
+- M1 PROVISIONING — PARTIAL. Sections complete, all ten units' line counts reproduce (verify-node 241, node_seed 405, node_env 589, node_seed_drift 558, node_freshness 732, bunker_config_gen 724, node_gateway_auth 95, node_identity 111). Two REDs, one of them not-measured (live certification ladder) → not WRITTEN; plus finding 1.
+- M2 DISPATCH — PARTIAL. Strongest node chapter: §6 protected-delivery scoping, the dry-run lease correction, the same-batch duplicate finding are all real. Two REDs (live ladder not repeatable from this host) → not WRITTEN; plus finding 1.
+- M3 REPOSITORY — PARTIAL. Land-node-branch 308 / install-gitreins 180 / clone_lane 130 / repo_freshness 662 / selftest 4852 all reproduce, and the selftest arm bounds `:2463-2729` and `:3433-3670` land exactly on the BEGIN/END banners. Three REDs (hook enforcement, cf244 arm, metrics) → not WRITTEN; findings 1 and 7.
+- M4 BOARD — PARTIAL. Store claims are exact: 357 rows, 519 events, `tasks.jsonl` sha256 `5aa15431…` identical to `origin/main`. Fails on finding 2 (its stamp is no longer HEAD == origin/main).
+- M5 HARNESS — PARTIAL. Every number checks: harness-vars 318, harness_resolve 400, installers 375/592/673/101/113/98, helper sites 274 with the per-file split (9/98/86/13/36/15/17). Three REDs + findings 2 and 4.
+- M6 DOCUMENTATION — PARTIAL. Honest about the legacy pipeline being unbuildable against `M*.md`, and its spine blind-spot list is accurate — I independently confirmed the locator blind spot (findings 7, 8). Two REDs (its own gate reads `MASTER-DOC: FAIL` over 44 unit sections) → not WRITTEN.
+- M7 GITHUB — PARTIAL. Three REDs (mint never run — no App creds), self-reported and correctly labelled; the F7-3 correction (a different minter produces the scoped token) is a real, useful finding.
+- M8 SAFETY — PARTIAL. Only its §8 metrics RED, which is absence-proved, so content-wise it was the nearest to WRITTEN; finding 2's false "HEAD == origin/main" is what stops it.
+- M9 SCHEDULER — PARTIAL. Best-evidenced chapter and it still carries six declared REDs. Verified exact: 57 flags, 43 routes (all `/api/v1/`, mux at `internal/api/server.go:289-370`), 378 log sites, 30 tables, `buildForemanPrompt` :1249, `dispatchReplyVerdict` :713, `payload()` :175 emitting `board`/`text_b64` and no `run_id`, 7 `cmd/` dirs. Fails on findings 3 and 5.
+- M10 CRIER — PARTIAL. Handler locators exact (`HandleRegister` :598, `HandleDeliver` :990, `HandleRetrieve` :1690, `HandleAck` :1812), config defaults exact (8767 / 100 / 1<<20 / true), `HeaderServiceAudience` at `agentsig.go:35`, front `defaultListen` at `:39`, `deploy/crier.service:44`. Five REDs; findings 3 and 9.
+- M11 DISPATCHER — PARTIAL. Best log inventory in the document: all 23 call sites at the cited lines, `grep -n 'log('` = 25 (comment :81 + def :112), file 538 lines, HEAD `283bca9` current. Its kill-scope withdrawal (F11-8) is the kind of finding that pays for the chapter. Two REDs → not WRITTEN.
+- M12 INFERENCE PROXY — PARTIAL. Content sha256 `b12a0ac5…` and 273 lines reproduce exactly; the four grep sites reproduce; the streaming FAILING verdict is a demonstrated defect, not a hedge. Fails on finding 2's internal two-stamp contradiction.
+
+Summary of the mechanical layer: `python3 scripts/handbook_spine.py` → `chapters=13  canonical contracts=18  findings=0`, rc 0, and I verified the gate is capable of failing (five mutant classes, all caught). The spine is therefore doing its job and the document is clean on the checks it performs. Everything I am blocking on is in the classes it explicitly does not check — revision agreement, locator existence, and cross-module setting requirements — which is why a green spine and a FAIL verdict are consistent here, not contradictory.
+
+The document is not a skeleton: 13/13 chapters carry all 13 schema fields, 368 locators resolve to 84 real files with no missing file and no beyond-EOF line, and the evidence discipline is real. It is not writable yet either: two of the three things a stranger needs to trust it — *which revision this is* and *which toolchain the host actually has* — are currently stated falsely, and the missing 16 flows plus Parts I/V/VI/VII/VIII mean no chapter's cross-references land.
+
+PANEL REVIEW COMPLETE
+
+⚠️ File-mutation verifier: 1 file edit(s) FAILED this turn despite any wording above that may suggest otherwise. Run `git status` or `read_file` to confirm what actually landed.
+  • `/home/kara/.hermes/cache/scratch/citecheck.py` — [write_file] Refusing to overwrite `/home/kara/.hermes/cache/scratch/citecheck.py`: `/home/kara/.hermes/cache/scratch/citecheck.py` exists but this task has not seen its full current content (neve…
+
+session_id: local-dd565eaf0cf0e3a3b2787e513b798820300ed4d73b97ba63dc2f8931a047f7ab
+
+EXIT=0

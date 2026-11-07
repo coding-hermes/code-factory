@@ -6,10 +6,10 @@
 |---|---|
 | Module name | HARNESS |
 | Path | `/home/kara/code-factory/scripts/harness/` — `install-hermes.sh`, `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh`, `harness-vars.sh`; **and** `/home/kara/code-factory/scripts/` — `harness_resolve.py`, `install-go.sh`, `install-gitreins.sh`, `project-node.sh` |
-| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; no file M5 cites changed in `47d68b4..08a2c8a`) |
+| Revision | `dbf810b7adfa5231a8828f415e1dad6de26a4263` (code-factory HEAD == origin/main == gh/main, round-19 re-stamp; one commit past round-18's `ce2f875`). `git diff --name-only ce2f875..HEAD` = `prompts/foreman.md`, `scripts/board_read.py` (dbf810b). Neither is cited by M5, so every file M5 cites is byte-identical across `ce2f875..HEAD` |
 | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
 | Owner lane | code-factory (node-side) |
-| Status | **UNVERIFIED** — `harness-vars.sh` (318 lines), `harness_resolve.py` (400 lines), `install-hermes.sh` (375 lines), `install-gitreins.sh` (180 lines), `install-claude-code.sh` (settings surface), `install-codex.sh` (settings surface + partial body), `install-opencode.sh` (98 lines), `install-deepseek.sh` (101 lines), `install-pi-agent.sh` (113 lines) read this round; `install-claude-code.sh`/`install-codex.sh` full bodies not line-by-line; the conformance battery not run this round |
+| Status | **UNVERIFIED** — `harness-vars.sh` (318), `harness_resolve.py` (400), `install-hermes.sh` (375), `install-gitreins.sh` (180), `install-claude-code.sh` (673, read in full), `install-codex.sh` (592, read in full), `install-opencode.sh` (98), `install-deepseek.sh` (101), `install-pi-agent.sh` (113) all read this round; the conformance battery not run this round (needs a live node) |
 
 ## 2. Purpose, authority and position
 
@@ -117,7 +117,7 @@ entire harness settings surface):**
 
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
-| `GO_PIN` | `go1.26.5` (`:7`) | exact version | the Go toolchain installed | drift installs an unmeasured toolchain |
+| `GO_PIN` | `go1.26.5` (`:7`) | exact version | the Go toolchain installed | drift installs an unmeasured toolchain — **and the pin already violates the control-plane floor**: the scheduler `go.mod` declares `go 1.26.0` + `toolchain go1.26.10` (`coding-hermes-scheduler/coding-herms-scheduler/go.mod:3-5`) and crier declares `go 1.26.10` (`crier/go.mod:3`), so a node provisioned at `GO_PIN` cannot build either module without a `GOTOOLCHAIN=auto` fetch of `go1.26.10` (kimi #4). Raise the pin or file the bump as a board row |
 | `GO_SHA256_LINUX_AMD64` / `_ARM64` | `5c2c3b16…` / `fe4789e9…` (`:8-9`) | a digest | artifact integrity per architecture | a wrong digest is refused by `fetch_verified` |
 | `GO_DISK_FLOOR_GB` | **1** (`:10`) | GiB | install admission floor | a lower floor admits a too-small host |
 | `GO_PROBE_MODULE` / `GO_PROBE_VERSION` | `rsc.io/quote` / `v1.5.2` (`:11-12`) | a module@version | the cold-cache module proof | a changed probe no longer proves a working toolchain |
@@ -141,6 +141,18 @@ module surface:
 | `--node-harnesses` | None (`:351-356`) | comma list | restricts the selection to installed harnesses | selection must be one of them, else refused |
 | `--shims` | None (`:357-361`) | comma `family=name` / `harness:family=name` | shim bindings | a wrong binding routes a family to the wrong harness |
 | `--matrix-file` | None (`:362-366`) | a path | the harness table (default `DEFAULT_MATRIX_FILE`) | a wrong file reads the wrong matrix |
+
+**`project-node.sh` node-entrypoint scope controls (sol B13, added this round — the S3 entry has no §5 register, and a scoped run is NOT a certification).** `project-node.sh:37-49` reads the env, `:59-82` parses the CLI, `:20-28` documents the `--layers` scoping:
+
+| Setting | Default | Range | Governs | What breaks if changed |
+|---|---|---|---|---|
+| `NODE_PROJECT` / `--project` | none, **required** (`:37`, `:63`; `[ -z "$PROJECT" ] && { echo "--project is required …"; exit 2; }`) | a project name | the single project the node belongs to | an empty project refuses (a node belongs to exactly one project) |
+| `NODE_HARNESS` / `--harness` | `hermes` (`:38`, `:64`) | a harness name | which `install-$HARNESS.sh` the node runs | a wrong name computes a wrong installer path (`:440`) |
+| `NODE_REF` / `--ref` | `main` (`:40`, `:66`) | a git ref | the lane ref cloned | a wrong ref clones the wrong lane state |
+| `NODE_GATEWAY_PORT` / `--port` | `10800` (`:41`, `:67`) | a TCP port | the gateway port the installer targets | a wrong port installs against the wrong gateway |
+| `NODE_ROLE` / `--role` | `worker` (`:42`, `:68`) | a role name | the node role | a wrong role changes provisioning semantics |
+| `NODE_KINDS` / `--kinds` | none (`:47`, `:74-77` sets `KINDS_SET=1`) | a kind list | restricts toolchain-evidence population (`:110` gates on `KINDS_SET`) | a narrowed `--kinds` changes which toolchain rows are populated |
+| `--layers <list>` | none (unscoped) (`:70-73`) | a comma subset of `00,10,20,30,40` | **scoped check**: runs only the named layers | a scoped run is **NOT a node certification** — it prints one `SCOPE` line, prints `SKIP layer NN (out of scope)` for skipped layers, and **never writes `$HOME/.node/node.json` — not even under `--apply`** with every in-scope layer green (`:20-28`). A scoped run that excludes `00` does not resolve the disk floor |
 
 **Predicate correction (F0-6, owned here).** The credential-mode predicate is `[0-7]00`
 (`harness-vars.sh:203`) — modes `000..700` pass — while the refusal message (`:204`) claims "a key
@@ -178,7 +190,7 @@ and conformance pass rate are answerable only by reading the leg rows.
 
 ## 9. Log lines (verbatim)
 
-**Scope (B09, measured this round).** `grep -rcE '\b(ok|bad|warn|note)\s+"' scripts/harness/` sums to **215** helper call sites across the six installer scripts plus `harness-vars.sh`; `install-gitreins.sh` and `install-go.sh` add further rows. The 4 rows below are the evidentiary refusal/pin/foreman rows; the generic per-row helper surface is not inventoried one-per-site — the uncovered count is a named RED on this field.
+**Scope (B09, re-measured round 17 — glm #1).** `grep -rcE '\b(ok|bad|warn|note|say)\s+"' scripts/harness/` sums to **274** helper call sites across the six installer scripts plus `harness-vars.sh` (install-hermes 36, install-codex 86, install-claude-code 98, install-opencode 15, install-deepseek 13, install-pi-agent 17, harness-vars 9; the six installers alone sum to 265); `install-gitreins.sh` and `install-go.sh` add further rows. The 4 rows below are the evidentiary refusal/pin/foreman rows; the generic per-row helper surface is not inventoried one-per-site — the uncovered count is a named RED on this field.
 
 | Level | Line | Emitted when | Kind |
 |---|---|---|---|
@@ -221,17 +233,16 @@ and conformance pass rate are answerable only by reading the leg rows.
 
 ## 12. Cross-references
 
-- F2 PROVISIONING certifies what this module installs.
+- F2 PROVISIONING certifies what this module installs — **flow chapter not written** (OUTLINE Part II, all 16 flows MISSING).
 - M0 SHARED CONTRACT supplies `fetch_verified` (S5 `harness-vars.sh` is owned here, not M0).
 - M2 DISPATCH passes the CF_* set to the resolved harness at run time (via `node.json`, not the resolver).
 - M3 REPOSITORY owns the hook behaviour; `install-gitreins.sh` (S3) is the installer.
 
 ## 13. Evidence of record
 
-- Code read: `harness-vars.sh` (318), `harness_resolve.py` (400), `install-hermes.sh` (375),
-  `install-gitreins.sh` (180), `install-codex.sh` (`:47-60, 425-430` + settings), `install-claude-code.sh`
-  (`:34-115` + settings), `install-deepseek.sh` (101), `install-pi-agent.sh` (113), `install-opencode.sh` (98);
-  `project-node.sh:435-455`.
+- Code read (full, this round): `harness-vars.sh` (318), `harness_resolve.py` (400), `install-hermes.sh` (375),
+  `install-gitreins.sh` (180), `install-codex.sh` (592), `install-claude-code.sh` (673), `install-deepseek.sh` (101),
+  `install-pi-agent.sh` (113), `install-opencode.sh` (98); `project-node.sh:435-455`.
 - Board rows: CF-150, CF-192, CF-372 (complete), CF-376, CF-380.
 - **Findings:**
   - **F5-1** (carried) — `install-hermes.sh:108-115` refuses anything outside >=3.11,<3.14.
@@ -244,5 +255,11 @@ and conformance pass rate are answerable only by reading the leg rows.
   - **F5-5** (new, B02) — the "no production installer caller" claim was false: `project-node.sh:440`
     computes `install-$HARNESS.sh` and `:449-452` invokes it; the literal grep missed the computed
     path. The installers are unit-invoked (by the operator-invoked provisioning entry).
+  - **F5-6** (new, round 18) — `project-node.sh`'s node-entrypoint scope controls registered in §5
+    (`NODE_PROJECT`/`NODE_HARNESS`/`NODE_REF`/`NODE_GATEWAY_PORT`/`NODE_ROLE`/`NODE_KINDS` and the
+    `--layers` scoped-check switch that never writes `node.json`; sol B13). The `GO_PIN` "what breaks"
+    cell now names the control-plane floor it already violates: `GO_PIN=go1.26.5` vs scheduler
+    `toolchain go1.26.10` and crier `go 1.26.10`, so a node at the pin cannot build either module
+    without a `GOTOOLCHAIN` fetch (kimi #4).
 
-## RED field count: 4 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; M5-C2 contract state UNVERIFIED — a port/service is not a `file:function`; §9 inventory 4 of 215+ helper call sites — the descriptive per-measurement rows not tabulated one-per-site)
+## RED field count: 4 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; §9 inventory 4 of 274 helper call sites — the generic per-measurement rows not tabulated one-per-site; the Contracts-in-and-out field (§6) — not-measured: CT-17 (boundary, consumer external, not run) and M5-C2 (local edge, gateway one side only) stay UNVERIFIED). Boundary/local `UNVERIFIED` states are RED, not exemptions — see the single RED accounting rule in M4 (OUTLINE Part VII.3, `OUTLINE.md:266-282`).

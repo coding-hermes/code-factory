@@ -1,0 +1,391 @@
+│ docs/handbook/chapters/M0-shared-contract.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | SHARED CONTRACT (`scripts/lib.sh`) |
+│  | Path | `/home/kara/code-factory/scripts/lib.sh` |
+│ -| Revision | derivation base `9372dc0` (not "HEAD") — `lib.sh` and every file M0 cites byte-identical through `3fba8a7` (current HEAD). `git diff --name-only 9372dc0..3fba8a7` touches only `scripts/panel_loop.py`, `scripts/panel_supervise.sh`, `scripts/reap_orphan_writers.py`, `docs/handbook/_panel/round-9/writer.txt` and the M11 chapter — none cited here |
+│ +| Revision | derivation base `9372dc0`; `lib.sh` and every file M0 cites byte-identical through document HEAD `ce2f875` (verified this round: `git diff --name-only 9372dc0..ce2f875` touches only `scripts/panel_loop.py`, `scripts/panel_supervise.sh`, `scripts/reap_orphan_writers.py`, `prompts/foreman.md`, `prompts/unblock.md`, `docs/handbook/_panel/round-9/writer.txt` and the M11 chapter — none cited here) |
+│  | Language / runtime | bash 5.3.9 (measured: `bash --version`); sourced, never executed |
+│  | Owner lane | code-factory (node-side + control-host shell) |
+│  | Status | **VERIFIED** — `lib.sh` (78 lines) read in full; every cited line re-verified this round |
+│ docs/handbook/chapters/M0-shared-contract.md
+│ @@ -79,7 +79,7 @@
+│
+│  ## 5. Settings register
+│
+│ -`lib.sh` carries one tunable constant and no env-var surface:
+│ +`lib.sh` carries one tunable constant and no tunable env surface — the only environment read is the `FAILED` counter seed at `lib.sh:11` (`FAILED=${FAILED:-0}`, a per-script failure counter, not a setting):
+│
+│  | Setting | Default | Range | Governs | What breaks if changed |
+│  |---|---|---|---|---|
+│ docs/handbook/chapters/M0-shared-contract.md
+│ @@ -98,7 +98,7 @@
+│
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│ -| (local) | bunker CLI | out | `lib.sh:75` `bunker_exec` (composes `bunker exec … -- bash -lc`) | **external** — the `bunker` binary's exec handler, not in this repo | **UNVERIFIED (boundary)** — `bunker` is an external peer with no in-repo function to name; the composed command is nameable, the far side is not, so no "works" verdict is attached to an unnamed side (F0-1) |
+│ +| (local) | bunker CLI | out | `lib.sh:75` `bunker_exec` (composes `bunker exec … -- bash -lc`) | **external** — the `bunker` binary's exec handler, not in this repo | **UNVERIFIED (boundary)** — `bunker` is an external peer with no in-repo function to name; the composed command is nameable, the far side is not, so no "works" verdict is attached to an unnamed side (F0-1). Missing evidence: a live-node observation of `bunker_exec` against the real `bunker` binary — not measured this round, so the state stays UNVERIFIED, not "works" |
+│
+│  ## 7. Verification
+│
+│ docs/handbook/chapters/M0-shared-contract.md
+│ @@ -183,4 +183,4 @@
+│      `install-codex.sh` duplicates the validator; `install-claude-code.sh` sources `lib.sh` not
+│      `harness-vars.sh`.
+│
+│ -## RED field count: 1 (Metrics §8 — absence-proved). The §6 (local) bunker edge is a boundary contract (far side external, no in-repo function), so its UNVERIFIED state is terminal under the two-register convention (OUTLINE Part IV), not a RED — see manifest CROSS-SECTION DEPENDENCY on the RED-accounting rule (M4 vs M9/M12).
+│ +## RED field count: 2. §8 Metrics — RED, absence-proved (`grep` → 0 matches). §6 (local) bunker edge — RED, not-measured: far side is the external `bunker` binary, wire unmeasured, so no "works" verdict attaches (missing evidence: a live-node `bunker_exec` observation). A boundary UNVERIFIED row is a RED under the single acceptance rule (OUTLINE Part VII.3), not an exemption — see manifest CROSS-SECTION DEPENDENCY on settling that rule document-wide (M4 vs M9/M12 read "terminal, not RED").
+│ docs/handbook/chapters/M3-repository.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | REPOSITORY |
+│  | Path | `/home/kara/code-factory/scripts/` — `clone_lane.py`, `repo_freshness.py`, `land-node-branch.sh`; gates via `install-gitreins.sh` + `.gitleaks.toml` |
+│ -| Revision | derivation base `9372dc0` (not "HEAD") — every file M3 cites byte-identical through `3fba8a7` (current HEAD). `git diff --name-only 9372dc0..3fba8a7` touches no M3-cited file |
+│ +| Revision | derivation base `9372dc0`; every file M3 cites byte-identical through document HEAD `ce2f875` (verified this round: `git diff --name-only 9372dc0..ce2f875` touches no M3-cited file) |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side clone + control-host landing) |
+│  | Status | **VERIFIED (source)** — `land-node-branch.sh` (308), `install-gitreins.sh` (180), `clone_lane.py` (130), `repo_freshness.py` (662) read in full this round; the shipped landing arm `cf213-land-node-branch` (`tests/selftest.sh:2463-2729`) exercises the landing behaviours against a disposable bare remote (`SHIPPED_LANDING_ARM_RC=0`). **S3 hook *enforcement* is UNVERIFIED (sol B10):** the landing arm proves landing behaviour, not that git invokes the installed pre-commit gate — a disposable rejecting-commit fixture that resolves the effective `core.hooksPath` and proves a refused commit cannot advance HEAD is the missing evidence (§11) |
+│ docs/handbook/chapters/M3-repository.md
+│ @@ -60,7 +60,7 @@
+│
+│  | Import | Provider | Contract relied on | If it changes |
+│  |---|---|---|---|
+│ -| `lib.sh` | this repo | `ok`/`bad`/`say`/`note` | `refuse` (`land-node-branch.sh:53-58`) is local, not shared |
+│ +| `lib.sh` | this repo | `ok`/`bad`/`say`/`note` | `refuse` (`land-node-branch.sh:55-59`) is local, not shared |
+│  | gitreins guard | external | Tier 1 guards on staged changes, `--quality-async` | a bare `gitreins` on PATH can run a different version (DF-011) |
+│
+│  **4c. Service contracts** — see §6.
+│ docs/handbook/chapters/M3-repository.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | derivation base `9372dc0`; every file M3 cites byte-identical through document HEAD `ce2f875` (verified this round: `git diff --name-only 9372dc0..ce2f875` touches no M3-cited file) |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side clone + control-host landing) |
+│ -| Status | **VERIFIED (source)** — `land-node-branch.sh` (308), `install-gitreins.sh` (180), `clone_lane.py` (130), `repo_freshness.py` (662) read in full this round; the shipped landing arm `cf213-land-node-branch` (`tests/selftest.sh:2463-2729`) exercises the landing behaviours against a disposable bare remote (`SHIPPED_LANDING_ARM_RC=0`). **S3 hook *enforcement* is UNVERIFIED (sol B10):** the landing arm proves landing behaviour, not that git invokes the installed pre-commit gate — a disposable rejecting-commit fixture that resolves the effective `core.hooksPath` and proves a refused commit cannot advance HEAD is the missing evidence (§11) |
+│ +| Status | **UNVERIFIED** — `land-node-branch.sh` (308), `install-gitreins.sh` (180), `clone_lane.py` (130), `repo_freshness.py` (662) read in full this round, and the shipped landing arm `cf213-land-node-branch` (`tests/selftest.sh:2463-2729`) passed against a disposable bare remote (`SHIPPED_LANDING_ARM_RC=0`); but S3 hook *enforcement* is unproven (a rejecting-commit fixture that resolves the effective `core.hooksPath` is the missing evidence, §11), and the freshness arm `cf244-node-freshness` is unrun (§7) |
+│
+│  ## 2. Purpose, authority and position
+│
+│ docs/handbook/chapters/M3-repository.md
+│ @@ -216,4 +216,4 @@
+│      selftest arms); round-4's "invoked by the node's result envelope" was fabricated. S2 is
+│      operator-invoked (optional); the envelope names `branch`/`commit` but does not call the lander.
+│
+│ -## RED field count: 3 (Metrics §8 — absence-proved; §1/§11 S3 hook *enforcement* UNVERIFIED — a live rejecting-commit fixture is the missing evidence; §7 `cf244-node-freshness` arm UNVERIFIED — present (`:3433-3670`) but not re-run this round, counted this round per kimi B-10). §9 enumerates the house template plus the distinct evidentiary landing lines, with the 35 helper call sites counted-not-enumerated (command reproduced). CT-12 boundary-UNVERIFIED and M3-C1/M3-C2 local edges are terminal states under the two-register convention, not RED — see manifest CROSS-SECTION DEPENDENCY on M4 (RED accounting) and on the §9-exemption ruling.
+│ +## RED field count: 4. §8 Metrics — RED, absence-proved. §1/§11 S3 hook *enforcement* — RED, not-measured (a live rejecting-commit fixture is the missing evidence). §7 `cf244-node-freshness` arm — RED, not-measured (present `:3433-3670`, not re-run). §6 contracts — RED, not-measured: CT-12 (external judge binary, wire unmeasured) and the local edges M3-C1/M3-C2 stay UNVERIFIED, not "works". Boundary/local UNVERIFIED rows are RED under the single acceptance rule (OUTLINE Part VII.3), not exemptions — see manifest CROSS-SECTION DEPENDENCY on settling that rule document-wide (M4 reads "terminal, not RED") and on the §9-exemption ruling.
+│ docs/handbook/chapters/M1-provisioning.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | PROVISIONING |
+│  | Path | `/home/kara/code-factory/scripts/` — `bunker-server-install.sh`, `disk_floor.py`, `bunker-provision.sh`, `bunker_config_gen.py`, `node-create.sh`, `bunker-crier-connect.sh`, `node_identity.py`, `node_gateway_auth.py`, `node_seed.py`, `node_seed_drift.py`, `node_env.py`, `verify-node.sh`, `node_freshness.py` |
+│ -| Revision | derivation base `9372dc0` (not "HEAD") — every file M1 cites byte-identical through `3fba8a7` (current HEAD). `git diff --name-only 9372dc0..3fba8a7` touches no M1-cited file (only `scripts/panel_loop.py`, `scripts/panel_supervise.sh`, `scripts/reap_orphan_writers.py`, `docs/handbook/_panel/round-9/writer.txt`, M11). `scripts/verify-node.sh` is 241 lines at `3fba8a7` — the CF-270 `--port` fix (commit `f1d5cfb`) landed in `47d68b4..08a2c8a` and is unchanged since |
+│ +| Revision | derivation base `9372dc0`; every file M1 cites byte-identical through document HEAD `ce2f875` (verified this round: `git diff --name-only 9372dc0..ce2f875` touches no M1-cited file — only `scripts/panel_loop.py`, `scripts/panel_supervise.sh`, `scripts/reap_orphan_writers.py`, `prompts/foreman.md`, `prompts/unblock.md`, `docs/handbook/_panel/round-9/writer.txt`, M11). `scripts/verify-node.sh` is 241 lines at `ce2f875` — the CF-270 `--port` fix (commit `f1d5cfb`) landed in `47d68b4..08a2c8a` and is unchanged since |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side) |
+│  | Status | **VERIFIED (source)** — all ten units read line-by-line this round: `bunker-provision.sh` (probe `:175-249`, config loader `:95-123`, CLI `:561-609`, `destroy` `:550-558`), `disk_floor.py` `resolve()` `:115-141`, `verify-node.sh` (`:20-241`, 241 lines), `node_identity.py` (111), `node_seed.py` (405 — `build`/`apply_seed`/`check_seed`), `node_env.py` (589), `node_seed_drift.py` (558), `node_freshness.py` (732), `bunker_config_gen.py` (724), `node_gateway_auth.py` (95). **UNVERIFIED (behavioural)** — the certification ladder needs a live node (§7) and the registration wire M1-C1 has no in-repo producer (§6) |
+│ docs/handbook/chapters/M1-provisioning.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | derivation base `9372dc0`; every file M1 cites byte-identical through document HEAD `ce2f875` (verified this round: `git diff --name-only 9372dc0..ce2f875` touches no M1-cited file — only `scripts/panel_loop.py`, `scripts/panel_supervise.sh`, `scripts/reap_orphan_writers.py`, `prompts/foreman.md`, `prompts/unblock.md`, `docs/handbook/_panel/round-9/writer.txt`, M11). `scripts/verify-node.sh` is 241 lines at `ce2f875` — the CF-270 `--port` fix (commit `f1d5cfb`) landed in `47d68b4..08a2c8a` and is unchanged since |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side) |
+│ -| Status | **VERIFIED (source)** — all ten units read line-by-line this round: `bunker-provision.sh` (probe `:175-249`, config loader `:95-123`, CLI `:561-609`, `destroy` `:550-558`), `disk_floor.py` `resolve()` `:115-141`, `verify-node.sh` (`:20-241`, 241 lines), `node_identity.py` (111), `node_seed.py` (405 — `build`/`apply_seed`/`check_seed`), `node_env.py` (589), `node_seed_drift.py` (558), `node_freshness.py` (732), `bunker_config_gen.py` (724), `node_gateway_auth.py` (95). **UNVERIFIED (behavioural)** — the certification ladder needs a live node (§7) and the registration wire M1-C1 has no in-repo producer (§6) |
+│ +| Status | **UNVERIFIED** — all ten units read line-by-line this round (see §13 for the file list), but the certification ladder (§7) and the registration wire M1-C1 (§6) are not measured — both need a live node, so the behavioural half stays unmeasured |
+│
+│  ## 2. Purpose, authority and position
+│
+│ docs/handbook/chapters/M1-provisioning.md
+│ @@ -104,7 +104,19 @@
+│
+│  | Setting | Default | Range | Governs | What breaks if changed |
+│  |---|---|---|---|---|
+│ -| config keys | `PROJECT AGENT SERVER REPO REF HARNESS NAMESPACE NAMESPACES TTL CRIER_URL DUCKBRAIN_URL GIT_AUTHOR_* CONFIG_SET_* *_TOKEN_FILE …` (`:38-46` declares the full var surface; `:108-123` loads it) | KEY=VALUE lines only | provisioning inputs | an unknown key is refused (`:119`); a non-`KEY=VALUE` line is refused (`:103`) |
+│ +| `PROJECT` | none (`:38`) | a name | the project label; also the namespace fallback (raw `${NAMESPACES:-${NAMESPACE:-$PROJECT}}`, `:67`) | unset with no `NAMESPACES`/`NAMESPACE` → `bad "namespaces"` "no namespace declared and PROJECT is unset" (`:68-70`) |
+│ +| `AGENT` | none (`:38`) | an agent id | which node is provisioned/connected | unset on `--apply`/`--destroy` → named refusal (destroy `:553`); `--apply` probes `bunker info` for it |
+│ +| `SERVER` | none (`:38`) | a bunker host | the transport | unset → `bad server_declared` + `RESULT: FAIL` exit 1 (`bunker-server-install.sh:18-23`, `node-create.sh:90`) |
+│ +| `REPO` | none (`:38`) | a repo URL | what the node clones | a wrong URL clones the wrong tree |
+│ +| `REF` | none (`:38`) | a git ref | the branch the node clones | a wrong ref clones the wrong tree |
+│ +| `HARNESS` | none (`:38`) | a harness name | which installer the node runs | a wrong harness stages a different `install-<harness>.sh` |
+│ +| `NAMESPACES` | none (`:38`) | a comma list | the DuckBrain namespaces written to the node | precedence `NAMESPACES` > `NAMESPACE` > `PROJECT`; the first entry is primary and `NAMESPACE` is set to it (`:65-92`); an invalid slug is refused (`:78-82`) |
+│ +| `NAMESPACE` | none (`:38`) | a single alias | the legacy single-namespace key | folded into `NAMESPACES` by `resolve_namespaces` (`:67`) — it is an alias, not a second source |
+│ +| `CRIER_URL` | none (`:40`) | a bus URL | which bus the node targets | unset → node provisioned but not on the bus (`warn` at `:542`) |
+│ +| `DUCKBRAIN_URL` | none (`:40`) | a memory URL | which memory the node targets | unset → no memory configured for the node |
+│ +| `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` / `GIT_CO_AUTHOR` | none (`:39`) | a name / email / `Name <mail>` | the committing identity seeded to the node | unset → identity gate fails later (M3 `install-gitreins.sh:86-87`) |
+│ +| `CONFIG_SET_MODEL_PROVIDER` / `CONFIG_SET_MODEL_NAME` / `CONFIG_SET_GATEWAY_BIND` / `CONFIG_SET_GATEWAY_PORT` / `CONFIG_SET_AGENT_MAX_ITERATIONS` | none (`:43-44`) | the five allowed paths `model.provider model.name gateway.bind gateway.port agent.max_iterations` | `config_set_args` (`:128-134`) maps each to its dotted path, passed to `node_env.py --config-set` | an unknown path is refused by `node_env.py:253-256`; a repeated path takes the last value |
+│ +| `GITHUB_TOKEN_FILE` / `DUCKBRAIN_TOKEN_FILE` / `S3_ENV_FILE` / `CRIER_AGENT_KEY_FILE` / `CRIER_AUTH_TOKEN_FILE` / `NODE_ENV_FILE` | none (`:40-42`) | file paths (tilde-expanded, `:117`) | the credential/env files the node carries | a `~/` prefix is expanded by `expand_tilde` (`:59`); a missing file is a per-leg `bad` when the leg runs, not a load-time refusal |
+│  | `TTL` | **6h** (spawn fallback `${TTL:-6h}` at `:356`) | a Go duration | container spawn TTL | an absent/empty TTL falls back to 6h, not an error |
+│  | mode | `check`/`apply`/`destroy` (`:561-609`) | one of three | what the run does | `--destroy` requires `--yes` and a non-empty `--agent`, else exit 2 (`:552-554` — `:550` is `destroy() {`) |
+│
+│ docs/handbook/chapters/M1-provisioning.md
+│ @@ -274,6 +274,7 @@
+│  | — | `NODE CREATED: %s` (`node-create.sh:150`) | node round-trip PASS | evidentiary |
+│  | — | `NODE INCOMPLETE (%d)` (`node-create.sh:56`) | any create leg failed | evidentiary |
+│  | — | `RESULT: PASS` / `RESULT: FAIL (%d)` (`bunker-server-install.sh:21,73`) | control-host capability check terminal | evidentiary |
+│ +| — | `BUNKER APPLIED: %s` / `BUNKER INCOMPLETE (%d)` (`bunker-provision.sh:546`) | `--apply` terminal — rc 0 and `FAILED` 0 / otherwise | **evidentiary** — the apply outcome row (sol B04: these terminal lines were missing from the §9 inventory) |
+│
+│  ## 10. Failure modes, indications and recovery
+│
+│ docs/handbook/chapters/M1-provisioning.md
+│ @@ -347,4 +347,4 @@
+│      (`:4-5`) but dispatches neither: the script parses only an optional first-arg `--json` (`:16`)
+│      and runs the same capability checks regardless. Documented modes that are not dispatched.
+│
+│ -## RED field count: 2 (Metrics §8 — absence-proved; §7 certification ladder not run on a live node — needs a bunker agent). §9 now enumerates the four house templates plus every distinct non-template terminal line (`CRIER: CONNECTED/NOT CONNECTED/UNVERIFIED`, `NODE CREATED/INCOMPLETE`, `RESULT: PASS/FAIL`), with the 141 helper call sites counted-not-enumerated (say-inclusive grep reproduced = 108+33). M1-C1/M1-C2 boundary-UNVERIFIED states are terminal under the two-register convention (OUTLINE Part IV), not RED — see manifest CROSS-SECTION DEPENDENCY on M4 (RED accounting) and on the §9-exemption ruling (M5/M7/M9/M10 count the same field as RED).
+│ +## RED field count: 3. §8 Metrics — RED, absence-proved. §7 certification ladder — RED, not-measured (needs a live node). §6 contracts — RED, not-measured: M1-C1 registration (no in-repo producer, wire unmeasured) and M1-C2 bunker daemon (external far side, wire unmeasured) stay UNVERIFIED, not "works". Boundary UNVERIFIED rows are RED under the single acceptance rule (OUTLINE Part VII.3), not exemptions — see manifest CROSS-SECTION DEPENDENCY on settling that rule document-wide (M4 reads "terminal, not RED") and on the §9-exemption ruling (M5/M7/M9/M10 count the same field as RED). §9 now enumerates the four house templates plus every distinct non-template terminal line (`CRIER: CONNECTED/NOT CONNECTED/UNVERIFIED`, `NODE CREATED/INCOMPLETE`, `RESULT: PASS/FAIL`, `BUNKER APPLIED/INCOMPLETE`), with the 141 helper call sites counted-not-enumerated (say-inclusive grep reproduced = 108+33).
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | DISPATCH (NODE SIDE) |
+│  | Path | `/home/kara/code-factory/scripts/` — `add_family_lanes.py`, `configure_family.py`, `load_lane_config.py`, `lane_target.py`, `node-bus-worker.py` |
+│ -| Revision | derivation base `9372dc0` (not "HEAD") — every file M2 cites byte-identical through `3fba8a7` (current HEAD). `git diff --name-only 9372dc0..3fba8a7` touches no M2-cited file |
+│ +| Revision | derivation base `9372dc0`; every file M2 cites byte-identical through document HEAD `ce2f875` (verified this round: `git diff --name-only 9372dc0..ce2f875` touches no M2-cited file) |
+│  | Language / runtime | Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side); consumes scheduler + crier |
+│  | Status | **VERIFIED** for `node-bus-worker.py` (imports `:67-79`, `text_b64` decode `:989-999`, reply shape `:1176-1192`, `deliver` `:1208-1215`, settlement `:1389-1422`, CLI `:1425-1526`, identity resolution `:381-415`, `dispatch_wall` `:1200-1205`); `add_family_lanes.py`/`configure_family.py`/`load_lane_config.py` structure-mapped only |
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | derivation base `9372dc0`; every file M2 cites byte-identical through document HEAD `ce2f875` (verified this round: `git diff --name-only 9372dc0..ce2f875` touches no M2-cited file) |
+│  | Language / runtime | Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side); consumes scheduler + crier |
+│ -| Status | **VERIFIED** for `node-bus-worker.py` (imports `:67-79`, `text_b64` decode `:989-999`, reply shape `:1176-1192`, `deliver` `:1208-1215`, settlement `:1389-1422`, CLI `:1425-1526`, identity resolution `:381-415`, `dispatch_wall` `:1200-1205`); `add_family_lanes.py`/`configure_family.py`/`load_lane_config.py` structure-mapped only |
+│ +| Status | **UNVERIFIED** — source fully accounted this round (`node-bus-worker.py` 1546 lines read; `add_family_lanes.py` 105, `configure_family.py` 201, `load_lane_config.py` 45 read in full; `lane_target.py` exercised by its 40-test suite), but the live bus-worker ladder (§7) is not repeatable from this control host, so the behavioural half stays unmeasured |
+│
+│  ## 2. Purpose, authority and position
+│
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -83,7 +83,7 @@
+│  | `--home` | `$HOME` (`:1442-1445`) | an existing dir | the node root | a non-directory home → `FAIL  home — … is not a directory` exit 2 (`:1506-1510`) |
+│  | `--identity` | `$HOME/.node/node.json` (`:385`) | a path | node doc (project/repo/harness) | an unreadable path is tolerated (`required=False`, `:392`) — the worker falls back to the bus doc and may mis-target |
+│  | `--bus-identity` | `$HOME/.node/crier.json` (`:386`) | a path | bus doc (agent/project/url) | same tolerated-read rule (`:393`); a missing bus doc drops `agent`/`url` |
+│ -| `--key` | `$HOME/.node/agent.key` (`:387`) | a path | the ed25519 signing key | a missing key breaks `signer.headers()`; the reply is unsigned or refused |
+│ +| `--key` | `$HOME/.node/agent.key` (`:387`) | a path | the ed25519 signing key | a missing key is a **local** refusal before any network: `bad("signing_key", "…absent…")` return 1 at `:1278-1290` — no signer, no reply, no inbox request (sol B09: round-17 said "reply unsigned or refused", which is false — the worker never reaches `signer.headers()`) |
+│  | `--token-file` | `$HOME/.node/auth/crier.token` (`:388-390`) | a path | the bearer token | a missing token → 401 on the inbox read |
+│  | `--agent` | bus doc `.agent` or node doc `.agent` (`:394-396`) | an id | which agent id is used | overrides the doc; a wrong id targets a different agent's inbox |
+│  | `--project` | node doc `.project` or bus doc `.project` (`:397-402`) | a name | the project label | overrides the doc; cosmetic unless the harness reads it |
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -84,7 +84,7 @@
+│  | `--identity` | `$HOME/.node/node.json` (`:385`) | a path | node doc (project/repo/harness) | an unreadable path is tolerated (`required=False`, `:392`) — the worker falls back to the bus doc and may mis-target |
+│  | `--bus-identity` | `$HOME/.node/crier.json` (`:386`) | a path | bus doc (agent/project/url) | same tolerated-read rule (`:393`); a missing bus doc drops `agent`/`url` |
+│  | `--key` | `$HOME/.node/agent.key` (`:387`) | a path | the ed25519 signing key | a missing key is a **local** refusal before any network: `bad("signing_key", "…absent…")` return 1 at `:1278-1290` — no signer, no reply, no inbox request (sol B09: round-17 said "reply unsigned or refused", which is false — the worker never reaches `signer.headers()`) |
+│ -| `--token-file` | `$HOME/.node/auth/crier.token` (`:388-390`) | a path | the bearer token | a missing token → 401 on the inbox read |
+│ +| `--token-file` | `$HOME/.node/auth/crier.token` (`:388-390`) | a path | the bearer token | a missing token is a **local** refusal: `bad("bus_bearer", …)` return 1 at `:1291-1294`; the first network request (`GET /health`, `:1302`) is never reached, so there is no 401 (sol B09: round-17 said "401 on the inbox read", which is false) |
+│  | `--agent` | bus doc `.agent` or node doc `.agent` (`:394-396`) | an id | which agent id is used | overrides the doc; a wrong id targets a different agent's inbox |
+│  | `--project` | node doc `.project` or bus doc `.project` (`:397-402`) | a name | the project label | overrides the doc; cosmetic unless the harness reads it |
+│  | `--crier` | bus doc `.url` or node doc `.bus.base` (`:403-409`) | a URL | the bus base url | trailing `/` stripped (`:409`); a wrong url means every poll 404s |
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -110,6 +110,12 @@
+│  | `PID` | **`1755676` hardcoded** (`:24`) | a live process id | the `/proc/<PID>/environ` read of `SCHEDULER_OPERATOR_TOKEN` (`:25-28`) | no fallback: if that exact process is dead the import raises and nothing is configured (F2-2) |
+│  | `PACE_CEILING` | per-lane seconds (`:128-138`; docs/readme/perf `604800*8`, qa/releng `21600*8`, pm `86400*8`, dogfood `259200*8`, sync `21600*8`, duckbrain `0`) | hardcoded | the `cooldown_ceiling_s` written per lane (`:184`) | a wrong ceiling changes scheduler pacing |
+│  | `LANE_PROMPT` | base→prompt-file map (`:117-127`) | hardcoded | which `prompts/<base>.md` is copied into each lane (`:173-176`) | a missing prompt file writes an empty prompt (`:176`) |
+│ +
+│ +**`add_family_lanes.py` (S1, module-scope script — sol B08, read in full this round; 105 lines).** Registers the eight code-factory lane families. It shares the `API`/`DB`/`ROOT` defaults with `configure_family.py` (same values, `:14-17`), but its credential acquisition differs: `PID` is read from `systemctl --user show -p MainPID --value coding-hermes-scheduler` (`:18-23`, fallback `"0"`), **not** hardcoded — so `add_family_lanes.py` fails closed (the `/proc/<PID>/environ` read at `:25-32` raises `FileNotFoundError` when the service is dead), unlike `configure_family.py`'s hardcoded `PID="1755676"` (F2-2). Write sequence and partial-failure behaviour: (1) `os.makedirs(workdir, exist_ok=True)` per lane (`:69`); (2) `POST /api/v1/projects` — 201 → created, 409 → `existing` (idempotent), anything else → appended to `refused` and the loop `continue`s (`:70-81`); (3) `PUT /api/v1/projects/{name}` namespace for every accepted lane (`:82`); (4) a second, independent loop does direct SQL `UPDATE projects SET parent='code-factory', admission_mode='cooldown', prompt=?, prompt_mode='append' WHERE name=?` (`:87-96`); (5) readback prints `accepted:`/`refused:` and a `family:` SELECT (`:98-104`). Partial failure is per-step, not transactional: a refused POST still receives its step-4 SQL UPDATE because step 4 iterates `LANES` again independently (only the namespace PUT is skipped by the `continue`).
+│ +
+│ +| Setting | Default | Range | Governs | What breaks if changed |
+│ +|---|---|---|---|---|
+│ +| `LANES` | 8 hardcoded tuples `(name, workdir, namespace, prompt_name)` (`:50-65`) | fixed | which lane families are created | a wrong tuple creates the wrong lane family |
+│
+│  **`--dry-run` custody note (B08).** `--dry-run` (`node-bus-worker.py:1437-1441`, help "fetch and print the plan; run/post/ack nothing") does **not** avoid inbox custody mutation: `:1381-1385` prints `BUS WORKER: DRY RUN — nothing executed, nothing posted, nothing acked ({n} message(s) leased for {lease}s and left to expire)` — the messages were already **leased** before the dry-run branch, so a dry run holds inbox messages until their lease expires. It skips execution/post/ack, not the lease. The dry-run lease is **5 s** (`:1312` `lease = 5 if args.dry_run else args.lease_seconds`), not the configured `--lease-seconds` — a dry run holds each retrieved message for 5 s, distinct from a real run's lease.
+│
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -139,6 +139,8 @@
+│  the five covered systems, so the covered side is named and the far side is honestly marked
+│  external. The state for a boundary contract with no measured wire is **UNVERIFIED** — an outline
+│  "works" annotation is not implementation evidence (sol B03).
+│ +
+│ +**Operational contract (sol B05, added this round).** Field compatibility is not the whole contract. The measured run loop (read this round) is: retrieve one batch under a lease (`DEFAULT_LEASE_SECONDS=30`; dry-run 5 s, `:1312`) → per message decode `text_b64` (`:1357-1358`) → `process` executes (`:1374`) → `deliver` each result to `reply_to` (`:1389-1392`) → write the seen-cache only after *that* result's delivery succeeded (`:1394-1395`) → `save_seen` (failure only warns, `:1397-1403`) → ack last, only when the whole batch delivered (`:1407-1414`). Idempotency is the seen-cache (key `dispatch_key`, window `SEEN_LIMIT=200`), which deduplicates **across** batches only — two same-key messages in one batch both execute (§11). A crash between execution and delivery leaves the message unacked, so redelivery re-runs and the seen-cache makes that idempotent only when the cache survived. Timing: each `request` carries `timeout=args.timeout` (default 10 s) or `max(timeout, wait_seconds+timeout)` for a long poll (`:1321`). Refusal semantics: an undecodable `text_b64` (`:1022-1034`) or a `brief.digest` mismatch (`:1044-1052`) is refused with a named row and the message left unacked, before any network work (§10).
+│
+│  **Protected service delivery (sol B01, corrected this round).** The node's `deliver()` sends a body of
+│  `{"payload": result}` only (`node-bus-worker.py:1208-1215`); `Signer.headers()` (`:328-343`) supplies
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -195,6 +195,9 @@
+│  | — | `  FAIL  identity — …; refusing` (`:608`) | unparseable/absent identity | evidentiary |
+│  | — | `inbox — GET /agents/cf-node/inbox/stats -> 200` | a valid signed inbox read (FACT-04) | evidentiary |
+│  | — | `  FAIL  brief_digest — {label} brief.digest {expected[:16]}… != sha256(text) {actual[:16]}… — the brief was altered in flight; refused, not run` (`node-bus-worker.py:1050-1052`) | dispatch digest != sha256(text) | evidentiary — a brief.digest mismatch is refused, not warned |
+│ +| — | `BUS WORKER: IDLE` (`node-bus-worker.py:1349`) | no messages in the retrieved batch | **evidentiary** — the empty-inbox terminal (sol B04: these terminal lines were missing from the §9 inventory) |
+│ +| — | `BUS WORKER: DRY RUN — nothing executed, nothing posted, nothing acked ({n} message(s) leased for {lease}s and left to expire)` (`:1384-1385`) | `--dry-run` | **evidentiary** — the dry-run terminal, distinct from `IDLE` |
+│ +| — | `BUS WORKER: OK` / `BUS WORKER: FAIL` (`:1419`, `:1421`) | terminal — `all_ok and delivered_ok and acked_ok` / otherwise | **evidentiary** — the run outcome row |
+│
+│  ## 10. Failure modes, indications and recovery
+│
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -231,6 +231,16 @@
+│    dispatch key in a single retrieved batch therefore **both execute** before either result enters the
+│    cache. The idempotency window only deduplicates across batches, not within one. Round-4's
+│    "crash-before-persistence" discussion missed this same-batch case.
+│ +- **Failed delivery blocks later successful results from the seen-cache (sol B10, read this round).**
+│ +  `node-bus-worker.py:1389-1395` uses a **cumulative** `delivered_ok` flag: `delivered_ok =
+│ +  deliver(…) and delivered_ok` (`:1392`), and `seen[key] = result` only `if delivered_ok and key`
+│ +  (`:1394-1395`). Once one deliver fails, `delivered_ok` is permanently false for the rest of the
+│ +  batch, so a *later* successful deliver still executes but its result is **not** inserted into the
+│ +  seen-cache. Consequence: a redelivered batch re-runs that later result a second time, because its
+│ +  first (successful) delivery left no cache entry. The window is distinct from the same-batch
+│ +  duplicate above: there the cause is a shared pre-loaded `seen`, here it is a shared delivery flag.
+│ +  A code fix would gate caching on per-result delivery success and the batch ack on a separate
+│ +  aggregate (filed as F2-7, not fixed this round).
+│
+│  ## 12. Cross-references
+│
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -273,5 +273,9 @@
+│    - **F2-6** (new, kimi B-8) — S3's "active" classification cited internal call sites; the only
+│      in-repo invoker is `bunker-crier-connect.sh:53` (`--check` probe). The daemon leg
+│      (`--once`/`--loop`) is operator-invoked. Re-graded to split the two legs.
+│ +  - **F2-7** (new, sol B10) — the cumulative `delivered_ok` flag at `node-bus-worker.py:1389-1395`
+│ +    means one failed delivery blocks later successful results from the seen-cache, re-opening the
+│ +    duplicate-execution window on redelivery (§11). A code fix would gate caching on per-result
+│ +    delivery success and the batch ack on a separate aggregate; not fixed this round.
+│
+│  ## RED field count: 2 (Metrics §8 — absence-proved; §7 live bus-worker ladder not repeatable from this host). §5 now registers the worker CLI and the S1 lane-configuration units (no longer NAME ONLY — sol B07/B08); §9 enumerates the local templates plus the distinct evidentiary refusal lines, with the 70 call sites counted-not-enumerated (command reproduced). CT-09 "missing" and CT-11 boundary-UNVERIFIED are terminal states under the two-register convention, not RED — see manifest CROSS-SECTION DEPENDENCY on M4 (RED accounting) and on the §9-exemption ruling.
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -278,4 +278,4 @@
+│      duplicate-execution window on redelivery (§11). A code fix would gate caching on per-result
+│      delivery success and the batch ack on a separate aggregate; not fixed this round.
+│
+│ -## RED field count: 2 (Metrics §8 — absence-proved; §7 live bus-worker ladder not repeatable from this host). §5 now registers the worker CLI and the S1 lane-configuration units (no longer NAME ONLY — sol B07/B08); §9 enumerates the local templates plus the distinct evidentiary refusal lines, with the 70 call sites counted-not-enumerated (command reproduced). CT-09 "missing" and CT-11 boundary-UNVERIFIED are terminal states under the two-register convention, not RED — see manifest CROSS-SECTION DEPENDENCY on M4 (RED accounting) and on the §9-exemption ruling.
+│ +## RED field count: 3. §8 Metrics — RED, absence-proved. §7 live bus-worker ladder — RED, not-measured (needs a live cf-node). §6 contracts — RED, not-measured: CT-09 (missing producer, wire absent) and CT-11 (external session store, wire unmeasured) stay missing/UNVERIFIED, not "works". Boundary/missing contract states are RED under the single acceptance rule (OUTLINE Part VII.3), not exemptions — see manifest CROSS-SECTION DEPENDENCY on settling that rule document-wide (M4 reads "terminal, not RED") and on the §9-exemption ruling. §5 now registers the worker CLI and all three S1 lane-configuration units (`add_family_lanes.py` read in full this round — sol B08); §9 tabulates the four BUS WORKER terminal forms (`IDLE`, `DRY RUN`, `OK`, `FAIL`) in addition to the counted-not-enumerated 70 helper sites.
+│ docs/handbook/chapters/M0-shared-contract.md
+│ @@ -104,7 +104,7 @@
+│
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│ -| syntax | `bash -n scripts/lib.sh` | exit 0 | 2026-11-06, rev `3fba8a7` | PASS (rc 0) |
+│ +| syntax | `bash -n scripts/lib.sh` | exit 0 | 2026-11-06, rev `ce2f875` | PASS (rc 0) |
+│  | who sources it (direct) | `grep -rl '\. "$HERE/lib.sh"' scripts/` | 11 files | 2026-11-06 | PASS (11) |
+│  | who sources it (total) | `grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` | 17 files | 2026-11-06 | PASS (17) |
+│  | fetch_verified fails closed | staged probe `ffc_probe.sh` — source lib.sh, fetch `http://127.0.0.1:1/nothing` with a wrong digest | rc 1, no artifact left | 2026-11-06 | **PASS** — `curl: (7) … Could not connect`, `rc=1`, `no artifact left` |
+│ docs/handbook/chapters/M1-provisioning.md
+│ @@ -243,9 +243,9 @@
+│
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│ -| shell parse | `for f in scripts/bunker-server-install.sh scripts/bunker-provision.sh scripts/node-create.sh scripts/bunker-crier-connect.sh scripts/verify-node.sh; do bash -n "$f"; done` | exit 0 | 2026-11-06, rev `3fba8a7` | PASS (rc 0) |
+│ -| python compile | `python3 -m py_compile scripts/disk_floor.py scripts/node_identity.py scripts/node_gateway_auth.py scripts/node_seed.py scripts/node_seed_drift.py scripts/node_env.py scripts/node_freshness.py scripts/bunker_config_gen.py` | exit 0 | 2026-11-06, rev `3fba8a7` | PASS (rc 0) |
+│ -| disk floor unit | `python3 tests/test_disk_floor.py` | 12 tests pass | 2026-11-06, rev `3fba8a7` | **PASS** (Ran 12 tests, OK) |
+│ +| shell parse | `for f in scripts/bunker-server-install.sh scripts/bunker-provision.sh scripts/node-create.sh scripts/bunker-crier-connect.sh scripts/verify-node.sh; do bash -n "$f"; done` | exit 0 | 2026-11-06, rev `ce2f875` | PASS (rc 0) |
+│ +| python compile | `python3 -m py_compile scripts/disk_floor.py scripts/node_identity.py scripts/node_gateway_auth.py scripts/node_seed.py scripts/node_seed_drift.py scripts/node_env.py scripts/node_freshness.py scripts/bunker_config_gen.py` | exit 0 | 2026-11-06, rev `ce2f875` | PASS (rc 0) |
+│ +| disk floor unit | `python3 tests/test_disk_floor.py` | 12 tests pass | 2026-11-06, rev `ce2f875` | **PASS** (Ran 12 tests, OK) |
+│  | certification ladder | `scripts/verify-node.sh --agent <id> --server <host>` on a live node | per-leg observation | not run this round | **UNVERIFIED** (needs a live node; legs documented in §11) |
+│
+│  ## 8. Metrics
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -162,8 +162,8 @@
+│
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│ -| python compile | `python3 -m py_compile scripts/add_family_lanes.py scripts/configure_family.py scripts/load_lane_config.py scripts/lane_target.py scripts/node-bus-worker.py` | exit 0 | 2026-11-06, rev `3fba8a7` | PASS (rc 0) |
+│ -| lane target unit | `python3 tests/test_lane_target.py` | pass | 2026-11-06, rev `3fba8a7` | **PASS** (Ran 40 tests, OK) |
+│ +| python compile | `python3 -m py_compile scripts/add_family_lanes.py scripts/configure_family.py scripts/load_lane_config.py scripts/lane_target.py scripts/node-bus-worker.py` | exit 0 | 2026-11-06, rev `ce2f875` | PASS (rc 0) |
+│ +| lane target unit | `python3 tests/test_lane_target.py` | pass | 2026-11-06, rev `ce2f875` | **PASS** (Ran 40 tests, OK) |
+│  | bus worker ladder | `python3 ~/node-bus-worker.py --check` on cf-node | inbox GET → 200 with key+bearer | 2026-11-05, cf-node only | **UNVERIFIED** — a single-host 2026-11-05 run (FACT-04) is provenance, not this round's measured result; not repeatable from this control host (`~/node-bus-worker.py` does not exist here) |
+│
+│  ## 8. Metrics
+│ docs/handbook/chapters/M3-repository.md
+│ @@ -124,9 +124,9 @@
+│
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│ -| shell parse | `bash -n scripts/land-node-branch.sh` | exit 0 | 2026-11-06, rev `3fba8a7` | PASS (rc 0) |
+│ -| python compile | `python3 -m py_compile scripts/clone_lane.py scripts/repo_freshness.py` | exit 0 | 2026-11-06, rev `3fba8a7` | PASS (rc 0) |
+│ -| clone lane unit | `python3 tests/test_clone_lane.py` | 4 tests pass | 2026-11-06, rev `3fba8a7` | **PASS** (Ran 4 tests, OK) |
+│ +| shell parse | `bash -n scripts/land-node-branch.sh` | exit 0 | 2026-11-06, rev `ce2f875` | PASS (rc 0) |
+│ +| python compile | `python3 -m py_compile scripts/clone_lane.py scripts/repo_freshness.py` | exit 0 | 2026-11-06, rev `ce2f875` | PASS (rc 0) |
+│ +| clone lane unit | `python3 tests/test_clone_lane.py` | 4 tests pass | 2026-11-06, rev `ce2f875` | **PASS** (Ran 4 tests, OK) |
+│  | landing arm (shipped) | `tests/selftest.sh` arm `cf213-land-node-branch` (`:2463-2729`) | gate rejection, dry-run, successful landing, fresh-clone proof, repeat landing, refused push, no-ff isolation | 2026-11-06 | **PASS** — `SHIPPED_LANDING_ARM_RC=0`, `LANDING_ARM_FAILURES=0` (the arm creates a bare origin + clean clones and exercises all seven behaviours; B07) |
+│  | freshness gate | `tests/selftest.sh` arm `cf244-node-freshness` | freshness sub-cases PASS | 2026-11-06 | **UNVERIFIED** — arm present (`:3433-3670`), not re-run this round |
+│
+│ docs/handbook/chapters/M1-provisioning.md
+│ @@ -293,7 +293,7 @@
+│    inlined — an inlined heredoc shipped literal backslashes and reported a fully-provisioned node
+│    as empty.
+│  - Every `bunker exec` call in the probe runs under `timeout 45`/`timeout 60` (`:187`, `:225-226`).
+│ -- **Certification ladder** (`verify-node.sh`, **241 lines** at `3fba8a7` — the CF-270 `--port` fix, commit `f1d5cfb`, inserted +28/−1 near the top and shifted every round-9 locator ~+25; all re-pinned this round):
+│ +- **Certification ladder** (`verify-node.sh`, **241 lines** at `ce2f875` — the CF-270 `--port` fix, commit `f1d5cfb`, inserted +28/−1 near the top and shifted every round-9 locator ~+25; all re-pinned this round):
+│    - `:40-55` **port validation (NEW leg, CF-270)** — `--port` is validated **before any use**: a digit test (`:40-43`, `case "$PORT" in ''|*[!0-9]*)`), a 5-digit length cap (`:46`, `[ "${#PORT}" -le 5 ]`), then two `verify-node: --port must be digits 1-65535 (got: …)` → exit 2 refusals (`:47-50`, printf `:48` exit 2 `:49`; and `:52-55`, printf `:53` exit 2 `:54`), with a base-10 re-expansion `PORT=$((10#$PORT))` at `:51` between them. A non-digit `--port` is refused here and no longer interpolates into the remote `bash -lc` shell.
+│    - `:73-76` `agent_alive` — `bunker exec … echo ALIVE $(hostname)` must return `ALIVE*`; on
+│      failure `:76` prints `RESULT: FAIL` and exits 1 **before** any terminal `VERIFY:` form.
+│ docs/handbook/chapters/M1-provisioning.md
+│ @@ -347,4 +347,4 @@
+│      (`:4-5`) but dispatches neither: the script parses only an optional first-arg `--json` (`:16`)
+│      and runs the same capability checks regardless. Documented modes that are not dispatched.
+│
+│ -## RED field count: 3. §8 Metrics — RED, absence-proved. §7 certification ladder — RED, not-measured (needs a live node). §6 contracts — RED, not-measured: M1-C1 registration (no in-repo producer, wire unmeasured) and M1-C2 bunker daemon (external far side, wire unmeasured) stay UNVERIFIED, not "works". Boundary UNVERIFIED rows are RED under the single acceptance rule (OUTLINE Part VII.3), not exemptions — see manifest CROSS-SECTION DEPENDENCY on settling that rule document-wide (M4 reads "terminal, not RED") and on the §9-exemption ruling (M5/M7/M9/M10 count the same field as RED). §9 now enumerates the four house templates plus every distinct non-template terminal line (`CRIER: CONNECTED/NOT CONNECTED/UNVERIFIED`, `NODE CREATED/INCOMPLETE`, `RESULT: PASS/FAIL`, `BUNKER APPLIED/INCOMPLETE`), with the 141 helper call sites counted-not-enumerated (say-inclusive grep reproduced = 108+33).
+│ +## RED field count: 3. §8 Metrics — RED, absence-proved. §7 certification ladder — RED, not-measured (needs a live node). §6 (Contracts in and out) — RED, not-measured: M1-C1 registration (no in-repo producer, wire unmeasured) and M1-C2 bunker daemon (external far side, wire unmeasured) stay UNVERIFIED, not "works". Boundary UNVERIFIED rows are RED under the single acceptance rule (OUTLINE Part VII.3), not exemptions — see manifest CROSS-SECTION DEPENDENCY on settling that rule document-wide (M4 reads "terminal, not RED") and on the §9-exemption ruling (M5/M7/M9/M10 count the same field as RED). §9 now enumerates the four house templates plus every distinct non-template terminal line (`CRIER: CONNECTED/NOT CONNECTED/UNVERIFIED`, `NODE CREATED/INCOMPLETE`, `RESULT: PASS/FAIL`, `BUNKER APPLIED/INCOMPLETE`), with the 141 helper call sites counted-not-enumerated (say-inclusive grep reproduced = 108+33).
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -278,4 +278,4 @@
+│      duplicate-execution window on redelivery (§11). A code fix would gate caching on per-result
+│      delivery success and the batch ack on a separate aggregate; not fixed this round.
+│
+│ -## RED field count: 3. §8 Metrics — RED, absence-proved. §7 live bus-worker ladder — RED, not-measured (needs a live cf-node). §6 contracts — RED, not-measured: CT-09 (missing producer, wire absent) and CT-11 (external session store, wire unmeasured) stay missing/UNVERIFIED, not "works". Boundary/missing contract states are RED under the single acceptance rule (OUTLINE Part VII.3), not exemptions — see manifest CROSS-SECTION DEPENDENCY on settling that rule document-wide (M4 reads "terminal, not RED") and on the §9-exemption ruling. §5 now registers the worker CLI and all three S1 lane-configuration units (`add_family_lanes.py` read in full this round — sol B08); §9 tabulates the four BUS WORKER terminal forms (`IDLE`, `DRY RUN`, `OK`, `FAIL`) in addition to the counted-not-enumerated 70 helper sites.
+│ +## RED field count: 3. §8 Metrics — RED, absence-proved. §7 live bus-worker ladder — RED, not-measured (needs a live cf-node). §6 (Contracts in and out) — RED, not-measured: CT-09 (missing producer, wire absent) and CT-11 (external session store, wire unmeasured) stay missing/UNVERIFIED, not "works". Boundary/missing contract states are RED under the single acceptance rule (OUTLINE Part VII.3), not exemptions — see manifest CROSS-SECTION DEPENDENCY on settling that rule document-wide (M4 reads "terminal, not RED") and on the §9-exemption ruling. §5 now registers the worker CLI and all three S1 lane-configuration units (`add_family_lanes.py` read in full this round — sol B08); §9 tabulates the four BUS WORKER terminal forms (`IDLE`, `DRY RUN`, `OK`, `FAIL`) in addition to the counted-not-enumerated 70 helper sites.
+│ docs/handbook/chapters/M3-repository.md
+│ @@ -216,4 +216,4 @@
+│      selftest arms); round-4's "invoked by the node's result envelope" was fabricated. S2 is
+│      operator-invoked (optional); the envelope names `branch`/`commit` but does not call the lander.
+│
+│ -## RED field count: 4. §8 Metrics — RED, absence-proved. §1/§11 S3 hook *enforcement* — RED, not-measured (a live rejecting-commit fixture is the missing evidence). §7 `cf244-node-freshness` arm — RED, not-measured (present `:3433-3670`, not re-run). §6 contracts — RED, not-measured: CT-12 (external judge binary, wire unmeasured) and the local edges M3-C1/M3-C2 stay UNVERIFIED, not "works". Boundary/local UNVERIFIED rows are RED under the single acceptance rule (OUTLINE Part VII.3), not exemptions — see manifest CROSS-SECTION DEPENDENCY on settling that rule document-wide (M4 reads "terminal, not RED") and on the §9-exemption ruling.
+│ +## RED field count: 4. §8 Metrics — RED, absence-proved. §1/§11 S3 hook *enforcement* — RED, not-measured (a live rejecting-commit fixture is the missing evidence). §7 `cf244-node-freshness` arm — RED, not-measured (present `:3433-3670`, not re-run). §6 (Contracts in and out) — RED, not-measured: CT-12 (external judge binary, wire unmeasured) and the local edges M3-C1/M3-C2 stay UNVERIFIED, not "works". Boundary/local UNVERIFIED rows are RED under the single acceptance rule (OUTLINE Part VII.3), not exemptions — see manifest CROSS-SECTION DEPENDENCY on settling that rule document-wide (M4 reads "terminal, not RED") and on the §9-exemption ruling.
+All four of my chapters are now clean under the spine; the single remaining finding belongs to M4 (another writer's chapter). Writing the manifest.
+
+WRITER ROUND COMPLETE — Round 18, group s1 (M0–M3)
+
+CHAPTERS WRITTEN (all four, corrections applied this round):
+- M0-shared-contract.md
+- M1-provisioning.md
+- M2-dispatch.md
+- M3-repository.md
+
+CHAPTERS STILL SKELETON: none (all four carry all 13 schema sections).
+
+RED FIELD COUNT PER CHAPTER:
+- M0 — 2 RED. §8 Metrics (absence-proved). §6 (local) bunker edge (not-measured, external far side).
+- M1 — 3 RED. §8 Metrics (absence-proved). §7 certification ladder (not-measured, needs live node). §6 M1-C1/M1-C2 (not-measured, boundary).
+- M2 — 3 RED. §8 Metrics (absence-proved). §7 bus-worker ladder (not-measured, needs live cf-node). §6 CT-09/CT-11 (missing/not-measured, boundary).
+- M3 — 4 RED. §8 Metrics (absence-proved). §1/§11 S3 hook enforcement (not-measured). §7 cf244 freshness arm (not-measured). §6 CT-12/M3-C1/M3-C2 (not-measured, boundary/local).
+
+STATUS WORDS: M0 VERIFIED; M1/M2/M3 UNVERIFIED (single word per MASTER-DOC-SCHEMA §1; qualifiers moved to §13).
+
+CORRECTIONS APPLIED (mapped to round-17 findings):
+- Revision stamp: dropped every "(current HEAD)" parenthetical; re-stamped all four to document HEAD ce2f875 with the re-run diff `git diff --name-only 9372dc0..ce2f875` (grok 1 / kimi 1+2 / glm 2). §7 "rev" cells re-run and re-stamped to ce2f875.
+- M0 §5: "no env-var surface" corrected to "no tunable env surface; only read is FAILED seed at lib.sh:11" (grok 7).
+- M1 §1: compound "VERIFIED (source) … UNVERIFIED (behavioural)" collapsed to one word UNVERIFIED (grok 10).
+- M1 §5: collapsed "config keys" row split into 13 individual rows — PROJECT/AGENT/SERVER/REPO/REF/HARNESS/NAMESPACES/NAMESPACE/CRIER_URL/DUCKBRAIN_URL individually, GIT_AUTHOR_*, CONFIG_SET_*, *_TOKEN_FILE grouped, with namespace precedence :65-92 (sol B06).
+- M1 §9: added BUNKER APPLIED / BUNKER INCOMPLETE terminal lines (bunker-provision.sh:546) (sol B04).
+- M2 §1: "structure-mapped only" resolved — add_family_lanes.py (105), configure_family.py (201), load_lane_config.py (45) read in full this round.
+- M2 §5 --key/--token-file: corrected from "reply unsigned/401 on inbox read" to local refusal at :1278-1290 / :1291-1294 before any network (first request :1302) (sol B09).
+- M2 §5: add_family_lanes.py register added — PID via systemctl (not hardcoded, contrast with configure_family F2-2), LANES, write sequence + per-step partial-failure (sol B08).
+- M2 §9: added BUS WORKER IDLE/DRY RUN/OK/FAIL terminal forms (:1349, :1384-1385, :1419, :1421) (sol B04).
+- M2 §11: added cumulative delivered_ok finding — one failed delivery blocks later successful results from the seen-cache (:1389-1395), filed as F2-7 (sol B10).
+- M2 §6: added operational-contract paragraph (lease 30s/dry-run 5s, idempotency SEEN_LIMIT=200 across-batches-only, ack-last, timeouts, refusal semantics) (sol B05).
+- M3 §4b: refuse() locator corrected :53-58 → :55-59 (kimi 7).
+- M3 §1: compound status collapsed to one word UNVERIFIED.
+- Boundary contracts (all four): removed the "terminal, not RED" exemption; each §6 boundary/local row now names its missing evidence and is counted as a RED field under the single acceptance rule (sol B01).
+
+COMMANDS RUN (exit status recorded):
+- python3 scripts/handbook_spine.py  ->  exit 0 (initial: chapters=13 contracts=18 findings=0)
+- bash -n scripts/lib.sh  ->  exit 0
+- grep -rl '\. "$HERE/lib.sh"' scripts/ | wc -l  ->  11
+- grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/ | wc -l  ->  17
+- bash -n (5 M1 scripts: bunker-server-install/bunker-provision/node-create/bunker-crier-connect/verify-node)  ->  exit 0
+- python3 -m py_compile (8 M1 files)  ->  exit 0
+- python3 tests/test_disk_floor.py  ->  exit 0 (Ran 12 tests, OK)
+- python3 -m py_compile (5 M2 files)  ->  exit 0
+- python3 tests/test_lane_target.py  ->  exit 0 (Ran 40 tests, OK)
+- bash -n scripts/land-node-branch.sh  ->  exit 0
+- python3 -m py_compile scripts/clone_lane.py scripts/repo_freshness.py  ->  exit 0
+- python3 tests/test_clone_lane.py  ->  exit 0 (Ran 4 tests, OK)
+- ffc fetch_verified fails-closed probe (bash /tmp/ffc3.sh)  ->  rc=1 artifact=no
+- git diff --name-only 9372dc0..ce2f875  ->  listed 7 paths, none cited by M0–M3
+- python3 scripts/handbook_spine.py  ->  exit 1 (final: findings=1, one COUNT CLAIM in M4)
+
+SPINE SUMMARY LINE (final):
+chapters=13  canonical contracts=18
+findings=1  COUNT CLAIM=1
+
+CROSS-SECTION DEPENDENCIES:
+1. M4-board (owned by s2 writer) — the other writer's §13 RED-accounting paragraph contains the literal "§6 contract", which the spine's COUNT CLAIM check parses as a "6 contracts" total (document has 18). The other writer must reword it to "§6 (Contracts in and out)" or "the contract rows in §6" so the spine count check stops misfiring. This is the sole remaining spine finding and it is not in my group. I did not edit M4.
+2. Acceptance rule (OUTLINE Part VII.3 / M4 vs M9/M12) — grok finding 3 and sol B01 demand ONE document-wide rule on whether an absence-proved metrics RED and a boundary-UNVERIFIED row block WRITTEN. My four chapters now apply the conservative reading (both are RED, neither is an exemption) and cite "the single acceptance rule (OUTLINE Part VII.3)"; the document-level settlement of the rule itself is a CROSS-SECTION dependency on the OUTLINE/README/M4 owner.
+3. §9 "counted-not-enumerated" exemption (deepseek N3) — M0/M1/M2/M3 self-flag the template exemption as "the writer's argument; if the panel rejects it, the field is RED." The uniform ruling across M0–M8 (M5/M7 already count the same field as RED) is a CROSS-SECTION dependency on the M5/M7/M8 owner.
+
+Alignment note: my §6 cites canonical CT-03/CT-04/CT-09/CT-11 (M2) and CT-12 (M3), matching the peer chapters' ids; the spine's contract pair/state checks pass with zero findings, so the two ends of each shared interface agree on the same CT id.
+
+WRITER ROUND COMPLETE
+
+session_id: local-5c569be2693f9b01e73daffbe3ce2d11205a4ecb04be9f03b00f349b3c3468bc

@@ -1,0 +1,368 @@
+│ cache/scratch/panel16_claimcheck.py
+│ @@ -0,0 +1,274 @@
+│ +#!/usr/bin/env python3
+│ +"""Round-16 panel judge: batch-verify chapter file:line claims against code."""
+│ +import sys
+│ +
+│ +CF = "/home/kara/code-factory"
+│ +SCH = "/home/kara/coding-hermes-scheduler/coding-herms-scheduler"
+│ +CR = "/home/kara/crier"
+│ +FL = "/home/kara/crier-fleet"
+│ +PX = "/home/kara/.hermes/scripts/cf-inference-proxy.py"
+│ +
+│ +# (path, line, expected-substring, claim-id)
+│ +CHECKS = [
+│ +    # ---- M0 lib.sh ----
+│ +    (f"{CF}/scripts/lib.sh", 5, "say()", "M0:5 say"),
+│ +    (f"{CF}/scripts/lib.sh", 6, "PASS", "M0:6 ok"),
+│ +    (f"{CF}/scripts/lib.sh", 7, "FAIL", "M0:7 bad"),
+│ +    (f"{CF}/scripts/lib.sh", 11, "FAILED", "M0:11 FAILED"),
+│ +    (f"{CF}/scripts/lib.sh", 13, "have()", "M0:13 have"),
+│ +    (f"{CF}/scripts/lib.sh", 19, "fetch_verified()", "M0:19 fetch_verified"),
+│ +    (f"{CF}/scripts/lib.sh", 22, "--max-time 120", "M0:22 max-time 120"),
+│ +    (f"{CF}/scripts/lib.sh", 26, "digest mismatch", "M0:26 digest msg"),
+│ +    (f"{CF}/scripts/lib.sh", 32, "cannot create destination directory", "M0:32 mkdir msg"),
+│ +    (f"{CF}/scripts/lib.sh", 37, "cannot move verified download", "M0:37 mv msg"),
+│ +    (f"{CF}/scripts/lib.sh", 40, "chmod +x", "M0:40 chmod"),
+│ +    (f"{CF}/scripts/lib.sh", 45, "free_gb()", "M0:45 free_gb"),
+│ +    (f"{CF}/scripts/lib.sh", 48, "require_disk()", "M0:48 require_disk"),
+│ +    (f"{CF}/scripts/lib.sh", 54, "disk", "M0:54 disk floor fail row"),
+│ +    (f"{CF}/scripts/lib.sh", 60, "once()", "M0:60 once"),
+│ +    (f"{CF}/scripts/lib.sh", 67, "shq()", "M0:67 shq"),
+│ +    (f"{CF}/scripts/lib.sh", 75, "bunker_exec()", "M0:75 bunker_exec"),
+│ +    # ---- M1 ----
+│ +    (f"{CF}/scripts/bunker-provision.sh", 181, "have bunker", "M1:181 have bunker"),
+│ +    (f"{CF}/scripts/bunker-provision.sh", 182, "bunker_cli", "M1:182 bad bunker_cli"),
+│ +    (f"{CF}/scripts/bunker-provision.sh", 214, "github.token", "M1:214 -s token probe"),
+│ +    (f"{CF}/scripts/bunker-provision.sh", 233, "mode 600 (value not read)", "M1:233 mode-600 print"),
+│ +    (f"{CF}/scripts/bunker-provision.sh", 356, "6h", "M1:356 TTL fallback"),
+│ +    (f"{CF}/scripts/bunker-provision.sh", 454, "node_seed", "M1:454 node_seed build"),
+│ +    (f"{CF}/scripts/bunker-provision.sh", 550, "destroy()", "M1:550 destroy fn"),
+│ +    (f"{CF}/scripts/bunker-provision.sh", 552, "--yes", "M1:552 destroy refusal"),
+│ +    (f"{CF}/scripts/bunker-provision.sh", 589, "command line always wins", "M1:589 precedence note"),
+│ +    (f"{CF}/scripts/bunker-provision.sh", 601, "five", "M1:601 'five' comment"),
+│ +    (f"{CF}/scripts/bunker-provision.sh", 604, "DUCKBRAIN_URL", "M1:604 re-apply block"),
+│ +    (f"{CF}/scripts/disk_floor.py", 36, "worker", "M1 disk_floor:36 ROLE_DEFAULTS"),
+│ +    (f"{CF}/scripts/disk_floor.py", 37, "DEFAULT_ROLE", "M1 disk_floor:37"),
+│ +    (f"{CF}/scripts/disk_floor.py", 123, "unknown role", "M1 disk_floor:123-125"),
+│ +    (f"{CF}/scripts/verify-node.sh", 20, "--agent", "M1 vn:20 flags"),
+│ +    (f"{CF}/scripts/verify-node.sh", 40, "case", "M1 vn:40 port digit test"),
+│ +    (f"{CF}/scripts/verify-node.sh", 47, "digits 1-65535", "M1 vn:47 port refusal"),
+│ +    (f"{CF}/scripts/verify-node.sh", 51, "10#", "M1 vn:51 base-10"),
+│ +    (f"{CF}/scripts/verify-node.sh", 76, "RESULT: FAIL", "M1 vn:76 early fail"),
+│ +    (f"{CF}/scripts/verify-node.sh", 106, "UNVERIFIED", "M1 vn:106-110"),
+│ +    (f"{CF}/scripts/verify-node.sh", 133, "artifact", "M1 vn:133 artifact leg"),
+│ +    (f"{CF}/scripts/verify-node.sh", 150, "freshness", "M1 vn:150 checkout leg"),
+│ +    (f"{CF}/scripts/verify-node.sh", 177, "warn", "M1 vn:177 warn no unverified"),
+│ +    (f"{CF}/scripts/verify-node.sh", 225, "unverified", "M1 vn:225 seed unverified()"),
+│ +    (f"{CF}/scripts/verify-node.sh", 233, "VERIFY: FAIL", "M1 vn:233 precedence"),
+│ +    (f"{CF}/scripts/verify-node.sh", 241, "VERIFY: PASS", "M1 vn:241 PASS"),
+│ +    (f"{CF}/scripts/node_seed.py", 43, "node-seed.txt", "M1 seed:43 manifest"),
+│ +    (f"{CF}/scripts/node_seed.py", 44, "16", "M1 seed:44 budget"),
+│ +    (f"{CF}/scripts/node_seed.py", 130, "getsize", "M1 seed:130-140 size sum"),
+│ +    (f"{CF}/scripts/node_seed.py", 290, "rmtree", "M1 seed:290 force rmtree"),
+│ +    (f"{CF}/scripts/node_gateway_auth.py", 56, "basic_auth", "M1 gwa:56-61"),
+│ +    # ---- M2 ----
+│ +    (f"{CF}/scripts/node-bus-worker.py", 81, "DEFAULT_INBOX_LIMIT", "M2:81 inbox limit"),
+│ +    (f"{CF}/scripts/node-bus-worker.py", 82, "DEFAULT_LEASE_SECONDS", "M2:82 lease"),
+│ +    (f"{CF}/scripts/node-bus-worker.py", 84, "DEFAULT_HARNESS_WALL", "M2:84 harness wall"),
+│ +    (f"{CF}/scripts/node-bus-worker.py", 85, "SEEN_LIMIT", "M2:85 seen"),
+│ +    (f"{CF}/scripts/node-bus-worker.py", 113, "40", "M2:113 max turns"),
+│ +    (f"{CF}/scripts/node-bus-worker.py", 129, "def ok", "M2:129 local ok()"),
+│ +    (f"{CF}/scripts/node-bus-worker.py", 385, "node.json", "M2:385 identity"),
+│ +    (f"{CF}/scripts/node-bus-worker.py", 388, "crier.token", "M2:388 token file"),
+│ +    (f"{CF}/scripts/node-bus-worker.py", 608, "refusing", "M2:608 identity refusal"),
+│ +    (f"{CF}/scripts/node-bus-worker.py", 977, "def directive_text", "M2:977 directive_text"),
+│ +    (f"{CF}/scripts/node-bus-worker.py", 1007, "def process", "M2:1007 process"),
+│ +    (f"{CF}/scripts/node-bus-worker.py", 1176, "status", "M2:1176 reply"),
+│ +    (f"{CF}/scripts/node-bus-worker.py", 1187, "branch", "M2:1187 branch/commit"),
+│ +    (f"{CF}/scripts/node-bus-worker.py", 1200, "dispatch_wall", "M2:1200 dispatch_wall"),
+│ +    (f"{CF}/scripts/node-bus-worker.py", 1208, "def deliver", "M2:1208 deliver"),
+│ … omitted 196 diff line(s) across 1 additional file(s)/section(s)
+│ cache/scratch/panel16_spine_nc.py
+│ @@ -0,0 +1,74 @@
+│ +#!/usr/bin/env python3
+│ +"""Negative control for the handbook spine gate (round-16 judge)."""
+│ +import pathlib
+│ +import shutil
+│ +import subprocess
+│ +import sys
+│ +
+│ +BASE = pathlib.Path("/home/kara/.hermes/cache/scratch/spine_nc3")
+│ +SRC = pathlib.Path("/home/kara/code-factory")
+│ +
+│ +if BASE.exists():
+│ +    shutil.rmtree(BASE)
+│ +BASE.mkdir(parents=True)
+│ +shutil.copytree(SRC / "docs/handbook", BASE / "handbook")
+│ +spine = BASE / "spine_patched.py"
+│ +s = (SRC / "scripts/handbook_spine.py").read_text()
+│ +s = s.replace(
+│ +    'HB = Path("/home/kara/code-factory/docs/handbook")',
+│ +    f'HB = Path("{BASE}/handbook")',
+│ +)
+│ +assert "spine_nc3" in s
+│ +spine.write_text(s)
+│ +
+│ +
+│ +def run(label):
+│ +    r = subprocess.run(
+│ +        [sys.executable, str(spine)], capture_output=True, text=True
+│ +    )
+│ +    print(f"--- {label}: rc={r.returncode}")
+│ +    print(r.stdout.strip()[:1500])
+│ +    if r.stderr.strip():
+│ +        print("stderr:", r.stderr.strip()[:300])
+│ +    return r.returncode
+│ +
+│ +
+│ +chapters = BASE / "handbook/chapters"
+│ +m8 = chapters / "M8-safety.md"
+│ +orig = m8.read_text()
+│ +
+│ +# NC1: unregistered canonical id
+│ +m8.write_text(orig.replace("| (local) | filesystem | in |", "| CT-99 | filesystem | in |", 1))
+│ +rc1 = run("NC1 CT-99 injected")
+│ +m8.write_text(orig)
+│ +
+│ +# NC2: state disagreement on an internal contract (M11 CT-06 works -> broken)
+│ +m11 = chapters / "M11-dispatcher.md"
+│ +o11 = m11.read_text()
+│ +needle = "| CT-06 | scheduler | out |"
+│ +i = o11.find(needle)
+│ +assert i >= 0
+│ +j = o11.find("\n", i)
+│ +row = o11[i:j]
+│ +row2 = row.replace("**works**", "**broken**", 1)
+│ +assert row2 != row, row
+│ +m11.write_text(o11[:i] + row2 + o11[j:])
+│ +rc2 = run("NC2 CT-06 state flipped in M11")
+│ +m11.write_text(o11)
+│ +
+│ +# NC3: setting default conflict (M0 --max-time 120 vs a second chapter saying 240)
+│ +m1 = chapters / "M1-provisioning.md"
+│ +o1 = m1.read_text()
+│ +marker = "download stalling past 120 s fails"
+│ +assert marker in o1
+│ +m1.write_text(o1.replace(marker, "download stalling past 240 s fails", 1))
+│ +rc3 = run("NC3 setting default 120 vs 240")
+│ +m1.write_text(o1)
+│ +
+│ +# NC4: dangling reference
+│ +m1.write_text(o1.replace("see M5 §11", "see M99 §11", 1))
+│ +rc4 = run("NC4 dangling M99 reference")
+│ +m1.write_text(o1)
+│ +
+│ +print(f"RESULTS NC1={rc1} NC2={rc2} NC3={rc3} NC4={rc4}")
+│ +print("NEGATIVE CONTROL:", "FIRES" if {rc1, rc2, rc3, rc4} == {1} else "DID NOT ALL FIRE")
+│ cache/scratch/panel16_spine_nc2.py
+│ @@ -0,0 +1,53 @@
+│ +#!/usr/bin/env python3
+│ +"""Negative control round 2: SETTING CONFLICT + DANGLING REFERENCE."""
+│ +import pathlib
+│ +import shutil
+│ +import subprocess
+│ +import sys
+│ +
+│ +BASE = pathlib.Path("/home/kara/.hermes/cache/scratch/spine_nc4")
+│ +SRC = pathlib.Path("/home/kara/code-factory")
+│ +
+│ +if BASE.exists():
+│ +    shutil.rmtree(BASE)
+│ +BASE.mkdir(parents=True)
+│ +shutil.copytree(SRC / "docs/handbook", BASE / "handbook")
+│ +spine = BASE / "spine_patched.py"
+│ +s = (SRC / "scripts/handbook_spine.py").read_text()
+│ +s = s.replace(
+│ +    'HB = Path("/home/kara/code-factory/docs/handbook")',
+│ +    f'HB = Path("{BASE}/handbook")',
+│ +)
+│ +assert "spine_nc4" in s
+│ +spine.write_text(s)
+│ +
+│ +
+│ +def run(label):
+│ +    r = subprocess.run([sys.executable, str(spine)], capture_output=True, text=True)
+│ +    print(f"--- {label}: rc={r.returncode}")
+│ +    print(r.stdout.strip()[:1200])
+│ +    return r.returncode
+│ +
+│ +
+│ +chapters = BASE / "handbook/chapters"
+│ +
+│ +# NC3: CF_MAX_TURNS documented 40 in M5, flip to 400 (M2 also documents 40)
+│ +m5 = chapters / "M5-harness.md"
+│ +o5 = m5.read_text()
+│ +marker5 = "| `CF_MAX_TURNS` | 40 (`:276`) |"
+│ +assert marker5 in o5, "M5 marker missing"
+│ +m5.write_text(o5.replace(marker5, "| `CF_MAX_TURNS` | 400 (`:276`) |", 1))
+│ +rc3 = run("NC3 CF_MAX_TURNS 40 vs 400")
+│ +m5.write_text(o5)
+│ +
+│ +# NC4: dangling M99 reference in M0
+│ +m0 = chapters / "M0-shared-contract.md"
+│ +o0 = m0.read_text()
+│ +marker0 = "See M5 §11."
+│ +assert marker0 in o0, "M0 marker missing"
+│ +m0.write_text(o0.replace(marker0, "See M99 §11.", 1))
+│ +rc4 = run("NC4 dangling M99")
+│ +m0.write_text(o0)
+│ +
+│ +print(f"RESULTS NC3={rc3} NC4={rc4}")
+│ +print("NEGATIVE CONTROL 2:", "FIRES" if rc3 == 1 and rc4 == 1 else "DID NOT FIRE")
+All verification complete — 260+ claims checked across the 13 chapters, live gates re-run, spine negative-controlled. The verdict:
+
+```
+VERDICT: FAIL
+
+BLOCKING: 5 — findings that must be fixed before the affected chapters can be called written
+NON-BLOCKING: 5
+
+FINDINGS:
+
+BLOCKING
+
+1. kind FALSE CLAIM — chapter M5, §9 scope claim:
+   "grep -rcE '\b(ok|bad|warn|note|say)\s+"' scripts/harness/ sums to 215 helper call sites"
+   Evidence (measured this round): the exact quoted command sums to 274 across scripts/harness/
+   (install-hermes 36, install-codex 86, install-claude-code 98, install-opencode 15,
+   install-deepseek 13, install-pi-agent 17, harness-vars 9); the six installers without vars
+   sum to 265. No file-set variant yields 215. The RED arithmetic built on it ("§9 inventory
+   4 of 215") is wrong with it.
+   Fix: re-run the command, restate the total (274) and the uncovered count; re-issue the RED row.
+
+2. kind FALSE CLAIM — chapter M1, §9 scope claim:
+   "grep -cE '\b(ok|bad|warn|note)\s+"' scripts/bunker-provision.sh scripts/verify-node.sh
+   = 108 + 33 = 141 helper call sites"
+   Evidence: the quoted command measures 89 + 27 = 116. The reported 108 + 33 = 141 is
+   produced only by the say-inclusive pattern '\b(ok|bad|warn|note|say)\s+"' (measured:
+   108 + 33). The counts are right; the command quoted beside them does not reproduce them.
+   Fix: quote the say-inclusive command that yields 141 (the class of defect M0 §7 already
+   fixed once for round-3's over-escaped greps).
+
+3. kind FALSE CLAIM (misfiled locator) — chapter M7, §5 lifecycle table:
+   "JWT_BACKDATE / JWT_LIFETIME | 60 s / 540 s (:50-51)" and "TIMEOUT | 20 s (:52)" —
+   registered as github-app-refresh.sh controls.
+   Evidence: github-app-refresh.sh:50-52 is the argument-parse fallthrough
+   (`*) say "unknown argument: $1"; usage 2 ;;` / `esac` / `done`); refresh.sh defines no
+   JWT or TIMEOUT setting (grep: 0). JWT_BACKDATE = 60, JWT_LIFETIME = 540, TIMEOUT = 20
+   live at github-app-token.py:50, :51, :52 (measured). Right lines, wrong file.
+   Fix: attribute the three rows to github-app-token.py.
+
+4. kind CONTRADICTION — chapters M4 vs M9/M12, RED-accounting rule:
+   M4 §RED-rule: a boundary contract row "is a terminal state … and is not counted as a RED"
+   (echoed in M2/M3 footers, M5-M8). M9 §RED-count: "an UNVERIFIED contract state — boundary
+   or internal — is a named RED; only a measured-works state is not" (counts CT-01, CT-15);
+   M12 applies the same rule (counts CT-07, M12-C2).
+   Evidence: M4-board.md "RED accounting rule (uniform across M4/M5/M6/M7/M8…)" vs
+   M9-scheduler.md RED-count paragraph; both quoted in the chapters.
+   Fix: adopt one rule document-wide (the spine cannot catch this — it checks states, not
+   RED-count semantics) and restate the affected RED counts under it.
+
+5. kind FALSE CLAIM (grep result misquoted) — chapter M2, §3 S1 classification:
+   "grep -rn 'add_family_lanes\|configure_family\|load_lane_config' scripts/ matches only
+   the files themselves (run this round)"
+   Evidence: the command also matches scripts/handbook_spine.py:69 (a comment naming
+   load_lane_config.py as CT-05 producer). The operator-invoked classification is unaffected
+   (a spine comment is not a caller), but the quoted evidence does not reproduce as stated.
+   Fix: restate the match set ("the three files plus a spine comment and __pycache__").
+
+NON-BLOCKING
+
+6. kind UNVERIFIED (locator drift) — M7 §5: GIT_CREDENTIALS store-guard cited "(:131)";
+   :131 is `fi`; the guard is `if [ -f "$GIT_CREDENTIALS" ] && [ -s "$TOKEN_FILE" ]` at :134.
+   Fix: re-pin to :132-134.
+
+7. kind UNVERIFIED (locator drift) — M10 §3: "default lease 30 s (:1732-1743)"; actual
+   `leaseSecs := 30 * time.Second` at handler.go:1734, parse block to ~:1745. Semantics
+   (30 s default, historical `lease` wins over `lease_seconds`) verified correct at :1735-1745.
+   Fix: re-pin.
+
+8. kind UNVERIFIED (locator drift) — M7 §10: the quoted refusal "…is mode %04o; a private
+   key must be 0600" is cited (:344-348); the message text sits at github-app-token.py:349-350
+   (check block :342-351).
+   Fix: re-pin.
+
+9. kind PADDING risk (accepted, provisional) — M0/M1/M2/M3 §9 "counted-not-enumerated"
+   exemption: the four house templates are fully specified with measured counts and the
+   evidentiary rows are tabulated, so the distinct operator-visible formats ARE given — the
+   exemption is accepted for M0 this round. M1's rests on the wrong count (blocking #2);
+   M5 shows where the line is (uncovered sites named as RED). Fix: keep the exemption but
+   every count under it must be a command-reproducible number.
+
+10. kind OMISSION (document-level, declared) — Part II: all 16 flows remain MISSING; every
+    chapter cross-references this honestly and the OUTLINE tracks it, so it is not a
+    chapter-level deception — but the handbook cannot be called complete while Part II is
+    empty. Fix: the flow chapters remain the next work item.
+
+DEFECT CLASSES:
+quoted-command-vs-count mismatch (2); wrong-file locator (1); locator line-drift +2/+3 (2,
+non-blocking); acceptance-rule divergence / RED accounting (1); grep-result misquote (1);
+declared structural omission (flows).
+
+WHAT WAS VERIFIED CLEAN (so the next writer does not re-litigate it):
+- handbook_spine.py: findings=0 on the live tree is meaningful — four negative controls
+  (injected CT-99; CT-06 state flip; CF_MAX_TURNS 40-vs-400; dangling M99) each fire rc=1
+  with the correct kind. M6's documentation of the spine's checks matches the source
+  (finding kinds at :267/:278/:295/:320/:344/:365/:381/:389/:414, split_row :104).
+- ~260 claim checks: 191/219 exact-line hits on first try; every other sampled locator
+  adjudicated correct within its cited range (e.g. verify-node.sh:40-55 port refusals,
+  node_seed.py:130-140 getsize sum, handler.go:1729-1730 max-cap 400, service_auth.go:134-168,
+  dispatch.go:175/:202, dispatch_leg.go:713, admission_mode.go:98/:177/:230/:266-267).
+- Counts reproduced exactly: M0 78/11/17; M2 70; M3 selftest 4852 with arms at :2463-2729 and
+  :3433-3670; M7 103; M9 43 routes / 57 flags / 378+1 log.Printf sites / 372 distinct /
+  30 tables / 0 verdicts / 10 LoadRootConfig sites / 7 cmd dirs; M10 1895 / 91 / 3 / 67;
+  M11 538 / 25 / 0 asserts; M12 273 lines + sha256 b12a0ac5…e0b5; M6 443/268/461/170;
+  13 headings in each of 13 chapters; OUTLINE 48-submodule arithmetic holds.
+- Live reproduction: boardctl validate RESULT: OK (7 warnings) with 357/519 rows and drift
+  RESULT: OK at HEAD==origin/main==3fba8a7; master_doc_check FAIL 44/37/50; verify-patch
+  PASS (5 stages, 4 patches, 57432007…); proxy 401 no-token on live :8775, systemd active,
+  config/node.env.example:22,26 wiring as cited; crier `go build ./...` rc=0; scheduler
+  env-sensitive test trio green under `env -u SCHEDULER_OPERATOR_RESTART_APPROVED` (ambient
+  var confirmed =1 here, validating F9-6's mechanism); crier Go grep for board admission = 0
+  (F4-5); cf-inference-proxy streamed branch :200-224 sends no Content-Length /
+  Transfer-Encoding / Connection — M12's FAILING self-grade is code-accurate.
+- Internal contracts CT-02..CT-06 name both sides and every sampled side-locator checks out.
+
+CHAPTER SCORECARD:
+M0  — WRITTEN.  All 13 fields evidenced; the one RED (metrics) is absence-proved; lib.sh
+               read end-to-end by this judge; local edge terminal under the two-register rule.
+M1  — PARTIAL. §9 count defect (blocking #2); live certification ladder UNVERIFIED
+               (environment-gated, honestly named); otherwise dense and accurate.
+M2  — PARTIAL. §3 grep misquote (blocking #5); live bus-worker ladder not repeatable from
+               this host; F2-2 PID hardcode correctly carried as OPEN.
+M3  — PARTIAL. S3 hook *enforcement* unproven (no rejecting-commit fixture; the chapter says
+               so); cf244 arm unrun; all landed claims verified.
+M4  — WRITTEN. Every claim reproduced this round (357/519, OK-7, drift OK); one absence-proved
+               RED; boundary rows terminal.
+M5  — PARTIAL. §9 count false (blocking #1); conformance battery UNVERIFIED (live node);
+               F5-5's computed-call-site correction verified real (project-node.sh:440,449-452).
+M6  — PARTIAL. Status honestly RED (own gate reads FAIL over the legacy 44-unit corpus);
+               CT-18 render leg missing; spine documentation verified accurate in full.
+M7  — PARTIAL. Wrong-file locators (blocking #3) plus two drifted locators; mint UNVERIFIED
+               (no App creds on this host — terminal this round).
+M8  — WRITTEN. Both units small, read end-to-end by this judge, every claim and count
+               reproduced; one absence-proved RED.
+M9  — PARTIAL. Enormous verified surface (43/57/378/30 all reproduced), but S4 per-route
+               contracts and §9's 376-of-378 uncovered sites are named REDs, and its RED rule
+               conflicts with M4's (blocking #4).
+M10 — PARTIAL. Per-metric register and the log inventory beyond the 5 tabulated sites are
+               named REDs; lease-default locator drift (non-blocking #7); build reproduced.
+M11 — PARTIAL. Verification cannot fail (decoration tests, no asserts — verified 0), the
+               deadline-kill descendant guarantee honestly withdrawn (F11-8); metrics RED.
+M12 — PARTIAL. Streaming FAILING is a real, reproduced framing defect (confirmed at
+               :200-224); boundary REDs terminal under either accounting rule; hash, port,
+               admission and systemd claims all reproduced.
+
+The document is far closer than round 1: the two-register convention, the honest UNVERIFIED
+states and the measured counts survive adversarial re-measurement almost everywhere. The five
+blocking findings are mechanical (two wrong counts, one wrong file, one rule divergence, one
+misquoted grep) — fix them and re-run the spine; the chapter set then grades 3 WRITTEN /
+10 PARTIAL with no false claims outstanding.
+
+PANEL REVIEW COMPLETE
+```
+
+session_id: local-153731e58147d2e17168752db8c5b12fe48ee9cf9b19db4c98cf8a3ed16e2113
+
+EXIT=0

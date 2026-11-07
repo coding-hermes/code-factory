@@ -6,7 +6,7 @@
 |---|---|
 | Module name | SAFETY |
 | Path | `/home/kara/code-factory/scripts/` — `reclaim_disk.py`, `check_scan_scope.py` |
-| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `reclaim_disk.py`/`check_scan_scope.py` byte-identical since `47d68b4`) |
+| Revision | `dbf810b7adfa5231a8828f415e1dad6de26a4263` (code-factory HEAD == origin/main == gh/main, round-19 re-stamp; one commit past round-18's `ce2f875`). `git diff --name-only ce2f875..HEAD` = `prompts/foreman.md`, `scripts/board_read.py` (dbf810b). `reclaim_disk.py`/`check_scan_scope.py` are not among them, so both are byte-identical across `ce2f875..HEAD` |
 | Language / runtime | Python 3.14.9 + bash 5.3.9 (measured) |
 | Owner lane | code-factory (control host) |
 | Status | **VERIFIED** — `reclaim_disk.py` (169 lines) and `check_scan_scope.py` (118 lines) both read in full this round |
@@ -34,7 +34,7 @@ was policed (see F8-3).
 | S2 scan scope | `check_scan_scope.py` | **operator-invoked (optional)** | no production caller (`grep -rn check_scan_scope scripts/` → no caller; run manually this round) |
 
 **Finding (carried):** `verify-patch.sh` is **not** an M8 unit — OUTLINE assigns it to M6.S8
-(`OUTLINE.md:170`). M8 has two submodules (S1, S2).
+(`OUTLINE.md:176`). M8 has two submodules (S1, S2).
 
 ## 4. Dependencies
 
@@ -66,6 +66,13 @@ was policed (see F8-3).
 - `AGED_PARENTS` (`:21`): `.node/jobs`, `.node/clones` — children processed **with `aged=True`**; a child whose `st_mtime` age is `<= job_ttl_hours` is `kept` (`:90`), so the TTL is a **<= boundary (inclusive)** and governs only these two parents.
 - `PROTECTED` (`:22`): `repo`, `.node/node.json`, `.node/crier.json`, `.node/floor.toml` — refused via `safety_reason` (`:25-39`) before inspection.
 
+**Scanner root selector and `--json` (sol B16, added this round).** `check_scan_scope.py` takes an
+optional positional `root` (`:81-87`), defaulting to the script's `scripts/` parent's parent
+(`:91`); a root that is not a readable directory prints `RESULT: FAIL (unreadable path)` and exits 2
+(`:92-95`) — changing the root changes the evidence population. `reclaim_disk.py --json` (`:137`)
+appends a `json.dumps` of the result **after** the human-readable rows (`:163-164`), so `--json`
+stdout is mixed-format (rows, then one JSON document), not a standalone JSON document.
+
 ## 6. Contracts in and out
 
 M8 has **no entry in the canonical register** (CT-01..CT-18, OUTLINE Part IV): the filesystem reap
@@ -96,11 +103,18 @@ output (`reclaimed_bytes`/`reclaimed_mib` at `:121-123`), not emitted.
 
 | Level | Line | Emitted when | Kind |
 |---|---|---|---|
-| — | `  %s  %s — %s` (action ∈ `reap/keep/skip`, `:160`) | one row per target | evidentiary |
-| — | `  note reclaim — nothing to reclaim` (`:162`) | no bytes freed | descriptive |
-| — | `reclaim: %s` (stderr, `:145`) | ValueError/OSError | evidentiary |
+| — | `  %s  %s — %s` (action ∈ `reap/keep/skip`, `reclaim_disk.py:160`) | one row per target | evidentiary |
+| — | `  note reclaim — nothing to reclaim` (`reclaim_disk.py:162`) | no bytes freed | descriptive |
+| — | `reclaim: %s` (stderr, `reclaim_disk.py:145`) | ValueError/OSError | evidentiary |
+| — | `<BUILD_CACHES + AGED_PARENTS path list>`, one per line (`reclaim_disk.py:140` `targets`) | `reclaim_disk.py targets` | descriptive |
+| — | `json.dumps(result)` on stdout (`reclaim_disk.py:164` `--json`) | `--json` flag, appended after the human rows | evidentiary (machine-readable) |
 | — | `  OK  audit-scope: %d gitleaks claim(s) name their --log-opts` (`check_scan_scope.py:112`) | all claims name a scope | evidentiary |
-| — | `  OK  audit-scope: no posture docs found` (`:110`) | nothing matched | **descriptive** — proves nothing was policed (F8-3) |
+| — | `  OK  audit-scope: no posture docs found` (`check_scan_scope.py:110`) | nothing matched | **descriptive** — proves nothing was policed (F8-3) |
+| — | `RESULT: OK` (`check_scan_scope.py:113`) | scan clean | evidentiary |
+| — | `  FAIL  audit-scope: %s is not a readable directory` (`:93`) / `  FAIL  audit-scope: %s` (`:99`) | unreadable root / raised `UnreadablePath` | evidentiary |
+| — | `RESULT: FAIL (unreadable path)` (`:94`, `:100`) | the exit-2 path | evidentiary |
+| — | `  FAIL  audit-scope: %s:%d gitleaks claim names no --log-opts` (`:104`) | one violating line | evidentiary |
+| — | `RESULT: FAIL (%d violation(s))` (`:107`) | the exit-1 path | evidentiary |
 
 ## 10. Failure modes, indications and recovery
 
@@ -142,5 +156,8 @@ output (`reclaimed_bytes`/`reclaimed_mib` at `:121-123`), not emitted.
     rule, empty-selection = OK) documented; dispatcher `.cf-jobs` dirs are not a reap target.
   - **F8-4** (new) — `reclaim_disk.py` is invoked by `project-node.sh:212` (active);
     `check_scan_scope.py` has no production caller (operator-invoked, optional).
+  - **F8-5** (new, sol B16 / kimi B-10) — the scanner root selector and reclaim `--json` switch
+    registered; the §9 log inventory completed (the six FAIL/`RESULT: FAIL` scanner rows,
+    `RESULT: OK`, and the `targets`/`--json` reclaim outputs were previously untabulated).
 
-## RED field count: 1 (Metrics §8)
+## RED field count: 2 (Metrics §8 — absence-proved; the Contracts-in-and-out field (§6) — not-measured: the `(local)` filesystem edge is UNVERIFIED-boundary, the external peer has no function to name). Boundary `UNVERIFIED` states are RED, not exemptions — see the single RED accounting rule in M4 (OUTLINE Part VII.3, `OUTLINE.md:266-282`).

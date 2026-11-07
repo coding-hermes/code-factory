@@ -1,0 +1,413 @@
+│ cache/scratch/round17_judge_probe.py
+│ @@ -0,0 +1,85 @@
+│ +import contextlib
+│ +import importlib.util
+│ +import io
+│ +import json
+│ +import os
+│ +from pathlib import Path
+│ +import socket
+│ +import tempfile
+│ +import threading
+│ +from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+│ +import http.client
+│ +
+│ +ROOT = Path('/home/kara/code-factory')
+│ +def load(name, path):
+│ +    spec = importlib.util.spec_from_file_location(name, path)
+│ +    mod = importlib.util.module_from_spec(spec)
+│ +    spec.loader.exec_module(mod)
+│ +    return mod
+│ +
+│ +proxy = load('r17proxy', '/home/kara/.hermes/scripts/cf-inference-proxy.py')
+│ +proxy.load_tokens = lambda: {'fixture': 'local-fixture-token'}
+│ +proxy.upstream_key = lambda: 'local-fixture-upstream-key'
+│ +proxy.capture_request = lambda *a: None
+│ +proxy.log_usage = lambda rec: None
+│ +class Upstream(BaseHTTPRequestHandler):
+│ +    def do_POST(self):
+│ +        self.rfile.read(int(self.headers.get('Content-Length', '0')))
+│ +        body = b'data: {"test":true}\n\ndata: [DONE]\n\n'
+│ +        self.send_response(200)
+│ +        self.send_header('Content-Type', 'text/event-stream')
+│ +        self.send_header('Content-Length', str(len(body)))
+│ +        self.end_headers()
+│ +        self.wfile.write(body)
+│ +    def log_message(self, *args):
+│ +        pass
+│ +class Server(ThreadingHTTPServer):
+│ +    daemon_threads = True
+│ +    def handle_error(self, request, client_address):
+│ +        import sys
+│ +        print('PROXY_HANDLER_EXCEPTION=' + type(sys.exception()).__name__)
+│ +up = Server(('127.0.0.1', 0), Upstream)
+│ +proxy.UPSTREAM = 'http://127.0.0.1:%d' % up.server_port
+│ +pr = Server(('127.0.0.1', 0), proxy.Handler)
+│ +for srv in (up, pr):
+│ +    threading.Thread(target=srv.serve_forever, daemon=True).start()
+│ +try:
+│ +    c = http.client.HTTPConnection('127.0.0.1', pr.server_port, timeout=0.5)
+│ +    c.request('POST', '/v1/chat/completions', json.dumps({'model':'hermes','stream':True}), {'Authorization':'Bearer local-fixture-token'})
+│ +    r = c.getresponse()
+│ +    print('PROXY_STREAM_STATUS=%s FRAMING=%s' % (r.status, {k:r.getheader(k) for k in ('Content-Length','Transfer-Encoding','Connection')}))
+│ +    try:
+│ +        body = r.read()
+│ +        print('PROXY_STREAM_EOF_COMPLETED=True bytes=%d' % len(body))
+│ +    except (TimeoutError, socket.timeout) as exc:
+│ +        print('PROXY_STREAM_EOF_COMPLETED=False: ' + type(exc).__name__)
+│ +    c.close()
+│ +    c = http.client.HTTPConnection('127.0.0.1', pr.server_port, timeout=1)
+│ +    c.request('POST','/v1/chat/completions',json.dumps({'model':['hermes']}),{'Authorization':'Bearer local-fixture-token'})
+│ +    try:
+│ +        r = c.getresponse()
+│ +        print('PROXY_NONSTRING_MODEL_HTTP=%d' % r.status)
+│ +        r.read()
+│ +    except http.client.RemoteDisconnected:
+│ +        print('PROXY_NONSTRING_MODEL_HTTP=RemoteDisconnected')
+│ +    c.close()
+│ +finally:
+│ +    for srv in (pr, up):
+│ +        srv.shutdown()
+│ +        srv.server_close()
+│ +
+│ +reclaim = load('r17reclaim', ROOT/'scripts/reclaim_disk.py')
+│ +with tempfile.TemporaryDirectory(prefix='r17-reclaim-', dir=os.environ['TMPDIR']) as tmp:
+│ +    path = Path(tmp)/'.cache/pip/a'
+│ +    path.parent.mkdir(parents=True)
+│ +    path.write_bytes(b'fixture')
+│ +    result = reclaim.reclaim(tmp, dry_run=True)
+│ +    print('RECLAIM_DRY_RUN_BYTES=%d FILE_STILL_EXISTS=%s' % (result['reclaimed_bytes'], path.exists()))
+│ +
+│ … omitted 7 diff line(s) across 1 additional file(s)/section(s)
+VERDICT: FAIL
+BLOCKING: 26 — findings that must be fixed before the affected chapters can be called written
+NON-BLOCKING: 0
+
+FINDINGS:
+
+Review basis: all 13 module chapters, OUTLINE.md, MASTER-DOC-SCHEMA.md, and the implementation paths named below. Findings are grouped by independently fixable defect, not counted once per affected chapter.
+
+Path abbreviations:
+  CF = /home/kara/code-factory
+  SCH = /home/kara/coding-hermes-scheduler/coding-herms-scheduler
+  CR = /home/kara/crier
+  DISP = /home/kara/crier-fleet
+  PROXY = /home/kara/.hermes/scripts/cf-inference-proxy.py
+
+Required spine execution, independently repeated:
+  Command: python3 scripts/handbook_spine.py
+  Output: chapters=13  canonical contracts=18
+          findings=0
+  Exit: 0
+
+There are no spine-reported findings to add. This result does not establish schema completeness or semantic correctness: the implementation deliberately exempts boundary contracts and does not verify locator truth.
+
+B01 — CONTRADICTION — M0–M12: boundary contracts are being waived out of acceptance.
+
+  Claim: M4, lines 200–207: an external-peer contract is a “terminal state” and “is not counted as a RED.” Equivalent exemptions appear throughout the chapters.
+
+  Evidence: the quorum brief, lines 17–22, says unsupported claims are UNVERIFIED and blocking, and requires both contract implementations. MASTER-DOC-SCHEMA.md:56–57 likewise calls a one-sided contract a rumour. CF/scripts/handbook_spine.py:284–288 explicitly skips further checking of boundary contracts.
+
+  Fix: preserve honest external/unmeasured annotations, but do not turn them into acceptance exemptions. Identify the missing evidence and retain the blocking state. A human endpoint need not be invented as a function; that limitation must remain explicit rather than being counted as completed verification.
+
+B02 — OMISSION — M0–M8, M11, M12: critical-path metrics remain absent.
+
+  Claim: the affected chapters’ §8 says “RED — none.”
+
+  Evidence: independent source searches for prometheus|Counter|Gauge|Histogram|/metrics returned zero exact matches across CF/scripts, DISP/dispatcher.py and PROXY. The chapters also supply absence evidence. MASTER-DOC-SCHEMA.md:72–79 explicitly makes “none” RED; the handbook’s acceptance rule retains that requirement.
+
+  Fix: implement and document suitable observable metrics, or obtain an explicit schema exception. This is principally a documented system deficiency, not a charge that the writers concealed it. It nevertheless prevents WRITTEN under the supplied acceptance contract.
+
+B03 — OMISSION — document-wide; especially M1, M2, M3, M9, M11: operational flows remain unwritten.
+
+  Claim: cross-references repeatedly say “flow chapter not written.”
+
+  Evidence: OUTLINE.md:54–93 requires F1–F16, including branches, timing, duplicate/concurrent cases, empty-state behaviour and degradation. README.md:35–50 marks all sixteen missing. The independent file probe found no F-numbered flow chapter files.
+
+  Fix: deliver the operational flow sections, with executable exit checks and component handoffs. The README’s Part-III-only scope disclosure is honest, but it does not satisfy the complete outline requested by this brief.
+
+B04 — OMISSION — M1, M2, M3, M5, M6, M7, M9, M10: log inventories are incomplete; the template exemption is insufficient.
+
+  Claim: M1/M2/M3 argue that enumerating helper labels adds no operator knowledge and may be treated as padding. Other chapters explicitly leave most emitters untabulated.
+
+  Evidence: MASTER-DOC-SCHEMA.md:81–91 requires every operator-visible line, its trigger, and descriptive/evidentiary classification. Missing entries are not confined to interpolated helper labels. CF/scripts/node-bus-worker.py:1349,1384–1385,1419,1421 emits BUS WORKER terminal forms absent from M2’s §9 table. CF/scripts/bunker-provision.sh:546 emits BUNKER APPLIED/BUNKER INCOMPLETE, absent from M1’s claimed distinct-terminal inventory. M6 tabulates only the legacy checker despite covering the panel and spine.
+
+  Fix: generate a complete emitter inventory, including fixed labels, terminal forms and their conditions. Shared formatting may be factored out; distinct failure meanings and terminal outcomes may not.
+
+B05 — OMISSION — M2, M9, M10, M11: internal contract rows are not complete operational contracts.
+
+  Claim: CT-02/CT-03/CT-04/CT-06 are marked “works,” largely from named implementation sites and compatible fields.
+
+  Evidence: OUTLINE.md:209–210 also requires payload, timing, failure semantics and breaking-change policy. The §6 rows do not supply a complete version/compatibility and timing contract. For example, DISP/dispatcher.py:435 leases a message, :479 executes synchronously, and :508–519 delivers then acknowledges; field compatibility alone does not establish the operational behaviour of that sequence.
+
+  Fix: document each internal contract’s complete request/reply schema, correlation, deadlines, lease/retry/idempotency rules, refusal behaviour and compatibility policy. Attach a repeatable wire observation to the “works” scope rather than treating matching field names as end-to-end proof.
+
+B06 — OMISSION — M1: the provisioning input register still contains NAME ONLY entries.
+
+  Claim: §5 collapses “PROJECT AGENT SERVER REPO REF HARNESS NAMESPACE NAMESPACES … CONFIG_SET_* *_TOKEN_FILE …” into one config-keys row.
+
+  Evidence: CF/scripts/bunker-provision.sh:38–50 initializes these independently; :65–92 implements namespace precedence and normalization; :110–118 loads separate input classes; :128–134 maps independent configuration overrides; :564–609 implements CLI overrides. A generic KEY=VALUE range does not give these settings’ individual defaults, accepted values or consequences.
+
+  Fix: register each operational input individually, including namespace precedence, credential-file selectors and CONFIG_SET_* controls. State required/unset behaviour and distinguish syntactic validation from semantic validity.
+
+B07 — UNVERIFIED — M1, M2, M5, M7, M10, M11, M12: behavioural acceptance evidence is still missing.
+
+  Claim: verification tables retain “not run this round,” “needs a live node,” “no App creds,” or historical single-host results.
+
+  Evidence: M1 §7 certification; M2 §7 bus-worker ladder; M5 §7 conformance; M7 §7 token mint; M10 §7 signed-read ladder; M11 §7 live jobs; M12 §7 valid-token/disallowed-model admission. Compile checks cannot substitute for these behaviours. DISP/tests/test_durable_job.py:7–11 prints a result without asserting it.
+
+  Fix: provide concrete, runnable prerequisites and failure-capable behavioural checks, with captured outputs and source revisions. I did not execute authenticated node certification, credential minting or paid harness jobs in this review; those outcomes remain unverified, not implicitly passing.
+
+B08 — OMISSION — M2: add_family_lanes.py is inventoried but its controls and mutation sequence are not documented.
+
+  Claim: §5 supplies registers for load_lane_config.py and configure_family.py, but not add_family_lanes.py.
+
+  Evidence: CF/scripts/add_family_lanes.py:14–32 selects the scheduler/API and obtains its credential from the service process; :50–65 fixes the lane set; :69–82 creates directories and performs API mutations; :87–96 then updates the scheduler database directly.
+
+  Fix: document this script’s inputs, credential acquisition, API/SQL write sequence, partial-failure behaviour, defaults and readback. “Structure-mapped only” is an admission of unfinished coverage, not a completed submodule.
+
+B09 — FALSE CLAIM — M2: missing credentials are described as remote authentication failures when the worker refuses locally.
+
+  Claim: the --key row says a missing key breaks signing and “the reply is unsigned or refused”; --token-file says a missing token produces “401 on the inbox read.”
+
+  Evidence: CF/scripts/node-bus-worker.py:1278–1290 returns before polling when the key cannot be loaded; :1291–1294 returns locally when no bearer is available. The first network health request is at :1302, after both checks.
+
+  Fix: document the actual local signing_key/bus_bearer refusal and absence of outbound inbox/reply requests. Add negative tests that assert this ordering.
+
+B10 — OMISSION — M2: one failed delivery prevents later successful results in the batch from entering the seen-cache.
+
+  Claim: §11 describes the sequence as recording results “only after delivery succeeds.”
+
+  Evidence: CF/scripts/node-bus-worker.py:1389–1395 uses a cumulative delivered_ok variable. Once it becomes false, a later deliver() still executes, but the successful later result is not inserted because the cache condition tests cumulative batch success.
+
+  Fix: document this additional duplicate-execution window, separate from the already documented same-batch duplicate and crash-before-persistence cases. If corrected in code, use per-result delivery success for caching and a separate aggregate for batch acknowledgement.
+
+B11 — UNVERIFIED — M3: hook presence still does not prove commit-gate enforcement.
+
+  Claim: §1 and §11 correctly admit S3 enforcement is UNVERIFIED.
+
+  Evidence: CF/scripts/install-gitreins.sh:59–63 checks an executable file containing “gitreins”; :120–138 writes or retains that file. The generated hook exits successfully when policy is absent (:130–131). None of these observations establishes the effective core.hooksPath or proves a rejected commit cannot advance HEAD.
+
+  Fix: supply the missing disposable rejecting-commit oracle, resolving effective hook configuration and asserting the before/after commit identity. Keep S3 blocking until that evidence exists.
+
+B12 — OMISSION — M4: the drift checker’s controls are missing from the settings register.
+
+  Claim: §5 registers boardctl controls but does not register board_drift.py’s verification selectors.
+
+  Evidence: CF/scripts/board_drift.py:193–199 exposes --workdir, --ref, --repo, --published-dir and --no-head. In particular, --no-head changes what the check proves; selecting a different ref or published directory changes the comparison authority.
+
+  Fix: add default/range/consequence/reader entries for these controls, including an explicit statement of which proof --no-head removes.
+
+B13 — OMISSION — M5: project-node.sh’s scope controls are undocumented despite changing certification semantics.
+
+  Claim: S3 includes project-node.sh, but its controls are absent from §5.
+
+  Evidence: CF/scripts/project-node.sh:37–49 reads NODE_PROJECT, NODE_HARNESS, NODE_REF, NODE_GATEWAY_PORT, NODE_ROLE and NODE_KINDS; :59–82 parses the CLI. Lines 20–28 explicitly state that --layers is not node certification and suppresses node.json writing even under --apply. Lines 110–136 validate --kinds and change the toolchain evidence population.
+
+  Fix: register the node entrypoint’s settings and explain scoped-check versus full-certification output. Omitting this distinction lets a reader mistake a scoped PASS for a certified node.
+
+B14 — FALSE CLAIM — M6: entrypoint existence is still used as activation evidence.
+
+  Claim: S1 is “active” on “main() entrypoint; structure-mapped,” and S3 is “active” on the existence of main() and its selection glob.
+
+  Evidence: OUTLINE.md:113–119 requires an invoking lane, cron, timer or unit. An executable entrypoint establishes none of these. M6’s S9 row supplies actual panel_loop.py call sites; S1/S3 do not.
+
+  Fix: cite real invoking sites or classify those units as operator-invoked/unproven. Apply the same activation test already used to correct other chapters.
+
+B15 — CONTRADICTION — M6: CT-16 is called working while its named producer does not select this handbook.
+
+  Claim: §6 marks CT-16 “works,” naming master_doc_check.py as the producer of the handbook status word. §1 simultaneously says the legacy checker cannot select M-numbered chapters and is retired for this handbook.
+
+  Evidence: CF/scripts/master_doc_check.py:186–209 selects NN-*.md. Independently running:
+    python3 scripts/master_doc_check.py docs/handbook/chapters
+  produced:
+    FAIL  no module files (NN-*.md) in the resolved root
+    0 module(s): 0 VERIFIED, 0 error(s), 0 warning(s), 0 fact(s) in the ledger
+    MASTER-DOC: FAIL
+    exit 1
+
+  Fix: bind CT-16 to the actual chapter-aware producer/consumer path, or scope the legacy contract explicitly to the appendix corpus. A functioning legacy command is not a functioning handbook-status contract.
+
+B16 — CONTRADICTION — M6: the RED total excludes its own admitted incomplete evidence.
+
+  Claim: §1 says the rest of the documentation pipeline was not read line-by-line; §13 reports only two RED fields, status and metrics.
+
+  Evidence: M4:200–207 defines unread bodies and untabulated inventories as RED, while M6:12 explicitly leaves pipeline bodies unreviewed. M6’s small §9 inventory also does not cover the module-wide emitter surface.
+
+  Fix: count incomplete source and log coverage consistently, or complete that evidence. Do not use a two-field summary to imply that all other schema fields have been established.
+
+B17 — OMISSION — M7: first-install controls remain NAME ONLY.
+
+  Claim: §5’s setup paragraph lists --env-file, --token-file, --app-id, --installation-id, --key-file, --slug, --repo, --org, --name, --api-base and --yes.
+
+  Evidence: CF/scripts/github-app-setup.sh:32–43 assigns independent defaults; :76–95 parses the controls; :102 resolves a default repository. The paragraph does not register individual defaults/ranges/consequences for the listed controls, especially the approval and destination selectors.
+
+  Fix: add the actual per-setting register. The useful write-before-verify analysis does not fill the omitted setting fields.
+
+B18 — OMISSION — M9: auxiliary settings do not satisfy the consequence rule’s complete field contract.
+
+  Claim: §5 calls the auxiliary register “default + consequence,” then admits ranges and reader/precedence have not been verified per flag.
+
+  Evidence: M9:195–228. The table has no range column. SCH/cmd/schedulerd/main.go:174–200 includes simulation, session-reaping and automatic-disable controls with materially different bounds and mutation effects.
+
+  Fix: establish each control’s accepted range, validation behaviour, reader and effective precedence. Group-level prose does not satisfy per-setting registration.
+
+B19 — UNBUILDABLE — M9: the operator surface is a route list, not an operational contract.
+
+  Claim: §3 says all 43 routes are inventoried, but request/response shapes and write-authority readbacks are not written.
+
+  Evidence: M9:39–40 explicitly admits this. Knowing that projects/, pause, resume, hooks or groups exists does not tell an operator how to issue a valid mutation or prove its result.
+
+  Fix: write the run-affecting operator procedures with methods, payloads, authorization requirements, refusal responses and exact readback checks. A route census alone cannot be turned into safe operational work.
+
+B20 — UNBUILDABLE — M9: crash recovery stops at selector names.
+
+  Claim: §3 names write authorities and RecoverExecutionState, then says post-recovery indications remain unwritten.
+
+  Evidence: M9:124–141. The chapter identifies run, attempt, workspace-lease, outbox and projection responsibilities, but gives no executable per-failure recovery/readback sequence.
+
+  Fix: supply procedures distinguishing recoverable work, uncertain settlement, stale leases and pending delivery, with expected observations after every action. Naming a recovery selector is not a recovery procedure.
+
+B21 — OMISSION — M9, M10: emitted metrics still lack the schema-required per-metric contract.
+
+  Claim: both chapters initially describe metrics as “Measured — real, not RED,” then explicitly identify their per-metric registers as RED.
+
+  Evidence: M9:303–307 and M10:220–223 admit missing type/labels/question/scrape fields. MASTER-DOC-SCHEMA.md:72–75 requires those fields. Names, prefixes and aggregate wire shapes are not substitutes for exact metric semantics.
+
+  Fix: fill a per-metric register, including reset/window semantics, exact labels/domains, consumer/scrape location and the operator question answered. Make the section’s leading status agree with its incomplete contract.
+
+B22 — UNVERIFIED — M9: isolated package passes do not establish that the full suite is green.
+
+  Claim: §7 says “The suite is green when packages get an adequate timeout or run quiet” and classifies the observed failures as load artifacts rather than regressions.
+
+  Evidence: the chapter’s actual full-suite observation at 251d11db is FAIL. The cited counterchecks are an isolated scheduler-package pass and an isolated CTL002 pass; they are not a successful full-suite execution under the proposed corrected conditions.
+
+  Fix: report the narrower proven result. To establish the broader claim, capture a complete clean-environment full-suite pass with explicit timeout/parallelism and revision. I did not rerun the long Go suites, so this review does not independently certify that broader result.
+
+B23 — OMISSION — M10: settings coverage leaves run-affecting controls unregistered.
+
+  Claim: §5 supplies a selected control table and a partial storage-selection narrative.
+
+  Evidence: CR/config/config.go:634 and :697–716 implement MCP nudge controls; :656–665 assign federation and database-pool defaults; :771–786 validate database connection counts and their relationship. These settings are absent from the chapter’s register. The chapter also explicitly leaves the serving backend’s custody readback unwritten.
+
+  Fix: derive the register from the real configuration loader, document those controls’ defaults/bounds/consequences, and provide an operator command that establishes the active custody backend rather than merely describing resolution precedence.
+
+B24 — FALSE CLAIM — M11: log levels are presented as emitted attributes although the logger emits none.
+
+  Claim: §9 assigns warn/error/info levels to dispatcher lines.
+
+  Evidence: DISP/dispatcher.py:112–120 accepts one message string and emits only a timestamp plus that message to a file/stdout. Calls such as :97, :422 and :510 do not carry a severity parameter or structured level.
+
+  Fix: mark the actual emitted level as absent. If retaining operator-assigned severity, label it explicitly as inferred classification, not an emitted log level. Document the resulting filtering limitation.
+
+B25 — UNVERIFIED — M12: streaming is demonstrably failing, and the chapter does not ship its completion oracle.
+
+  Claim: §11 quotes a prior independent verifier’s status/header/timeout results but provides no complete repeatable command or shipped test.
+
+  Evidence: PROXY:200–224 sends HTTP/1.1 streaming responses without Content-Length, Transfer-Encoding or connection closure. I exercised the actual Handler against a finite local SSE upstream, without real credentials or provider calls. The probe produced:
+    PROXY_STREAM_STATUS=200
+    FRAMING={'Content-Length': None, 'Transfer-Encoding': None, 'Connection': None}
+    PROXY_STREAM_EOF_COMPLETED=False: TimeoutError
+
+  Repeat command:
+    python3 -B /home/kara/.hermes/cache/scratch/round17_judge_probe.py
+
+  Fix: ship a failure-capable, repository-owned framing/completion test and reference its invocation and output. Keep streaming FAILING until that oracle passes. The chapter’s current FAILING status is correct; prior-seat provenance alone does not satisfy repeatability.
+
+B26 — OMISSION — M12: malformed model types escape the documented admission/refusal model.
+
+  Claim: §10 describes malformed bodies as 400 and disallowed models as 403, without naming a handler-crash branch.
+
+  Evidence: PROXY:148 accepts any JSON model value; :155 uses it in set membership without verifying it is a string. The isolated actual-Handler probe sent a valid JSON body containing model=["hermes"] and produced:
+    PROXY_HANDLER_EXCEPTION=TypeError
+    PROXY_NONSTRING_MODEL_HTTP=RemoteDisconnected
+
+  Fix: document the current disconnect/error indication and add malformed-type admission cases to verification. If repaired, require string validation and prove a stable client error response with no upstream request.
+
+Independent checks that did reproduce:
+  disk-floor tests: 12 passed.
+  lane-target tests: 40 passed.
+  clone-lane tests: 4 passed.
+  harness-resolution tests: 28 passed.
+  reclaim tests: 9 passed.
+  scan-scope gate: 15 claims, RESULT: OK.
+  patch-chain gate: 5 stages, 4 patches, VERIFY-PATCH: PASS.
+  board validation: 357 tasks, 519 events, RESULT: OK with 7 warnings.
+  board drift: identical bytes, 0 divergent IDs, RESULT: OK.
+  proxy unauthenticated POST: HTTP 401.
+  proxy service: active/running.
+  proxy source digest matched the chapter.
+  legacy document gate: reproduced 44 modules, 37 declared VERIFIED, 50 errors, MASTER-DOC: FAIL.
+
+These successful checks are credited. They do not close the distinct blocking findings above.
+
+DEFECT CLASSES:
+
+  acceptance-exemption drift
+  absent critical-path observability
+  missing operational flows
+  incomplete log contracts
+  incomplete wire contracts
+  NAME-ONLY settings
+  missing behavioural oracles
+  incorrect failure-path description
+  batch settlement/cache omission
+  hook-presence versus enforcement
+  scope-changing controls omitted
+  entrypoint versus activation
+  wrong-corpus gate attribution
+  inconsistent RED accounting
+  route census versus procedure
+  incomplete recovery ladder
+  incomplete metric semantics
+  isolated-pass overgeneralization
+  invented emitted severity
+  unshipped stream oracle
+  malformed-input disconnect
+
+CHAPTER SCORECARD:
+
+  M0 — PARTIAL
+    Substantial source-backed helper documentation. Metrics remain RED; the boundary-contract exemption does not satisfy the brief.
+
+  M1 — PARTIAL
+    Useful provisioning and seed semantics. Config inputs remain incompletely registered, log coverage is incomplete, and certification was not exercised.
+
+  M2 — PARTIAL
+    Dispatch decoding and settlement ordering are meaningfully documented. Credential failure descriptions are wrong, add_family_lanes coverage is unfinished, and the cumulative delivery/cache branch is omitted.
+
+  M3 — PARTIAL
+    Landing behaviour and gate-by-default limitations are described. Commit-hook enforcement remains unproven; metrics and log completeness remain blocking.
+
+  M4 — PARTIAL
+    Store census, semantic validation and published-byte parity reproduced. Drift-check controls are omitted, and boundary-UNVERIFIED accounting weakens the mandated acceptance rule.
+
+  M5 — PARTIAL
+    Adapter distinctions and resolver isolation are useful and supported. Conformance remains unrun, project-node scope controls are omitted, and metrics/log coverage is incomplete.
+
+  M6 — PARTIAL
+    Legacy-pipeline limitations and spine implementation are substantially described. CT-16 is attributed to the wrong corpus, activation evidence is insufficient for two units, and the RED total omits admitted unfinished coverage.
+
+  M7 — PARTIAL
+    Credential-domain separation and refresh effects are useful. First-install controls remain NAME ONLY, mint behaviour is unverified, and the log register is incomplete.
+
+  M8 — PARTIAL
+    Reclaim tests and scan-scope behaviour reproduced. The implementation description is comparatively strong; the explicit metrics RED and unresolved boundary evidence still prevent WRITTEN.
+
+  M9 — PARTIAL
+    Admission ordering, durable stores and settlement source are substantially documented. Operator/recovery procedures, auxiliary setting ranges, metric contracts and logs remain incomplete; full-suite health is overgeneralized.
+
+  M10 — PARTIAL
+    Custody, protected-delivery authorization and guard degradation have meaningful source support. Configuration coverage, backend custody proof, per-metric semantics, module-wide logs and behavioural verification remain incomplete.
+
+  M11 — PARTIAL
+    Execution, replay and lossy output retention are well developed. Behavioural tests lack a failure oracle, runtime guarantees remain unverified, emitted severity is misrepresented, and metrics are absent.
+
+  M12 — PARTIAL
+    Admission refusal, source identity and stream-framing failure were independently reproduced. Streaming remains failing, its oracle is not shipped, malformed model types disconnect, and metrics are absent.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-52882b9adff4e3023eedefa6cd72c03e07390353c46df60f9b2f90a70e90a8a9
+
+EXIT=0

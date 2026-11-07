@@ -1,0 +1,114 @@
+VERDICT: FAIL
+
+BLOCKING: 2 — findings that must be fixed before this chapter set can be called written
+NON-BLOCKING: 6
+
+Verification basis: spine re-run by this seat (chapters=13, canonical contracts=18, findings=0, exit 0);
+~150 cited locators, defaults, counts and commands independently re-executed across all five code bases
+(code-factory @ce2f875, scheduler @251d11db, crier @1587a03f, crier-fleet @283bca9, cf-inference-proxy
+sha256 b12a0ac5…). Zero false claims found in the sample. Every quick unit test repeated OK
+(disk_floor 12, lane_target, clone_lane 4, harness_resolve 28, reclaim 9); both Go builds PASS; board
+census 357/519, boardctl validate OK (7 warnings), board_drift OK @e07d031, master_doc_check FAIL
+44/37/50 rc 1, verify-patch PASS (5 stages, 4 patches, 57432007…), proxy 401 + systemd active — all
+exactly as the chapters quote.
+
+FINDINGS:
+
+BLOCKING 1 — kind UNVERIFIED, chapter M6 (round certification).
+  Claim: §7 "spine … PASS — chapters=13 canonical contracts=18 findings=0" over a document whose
+  cross-chapter consistency is certified by scripts/handbook_spine.py.
+  Evidence: the gate is uncommitted working-tree content — working file 443 lines, sha256
+  afbc65fc7bfec…, `git status` M; `git show HEAD:scripts/handbook_spine.py` is 340 lines and lacks
+  the backtick-aware split_row, the CONTRACT ROW MISPARSE 6-column check and the CONTRACT UNKNOWN-ID
+  rejection (M6 F6-8 discloses this). A fresh clone at the stamped revision runs a weaker,
+  behaviorally different gate over the very §6 rows (M4 CT-10, M6 CT-16, M2 CT-09, M12 M12-C1) the
+  working-tree splitter exists to parse. The findings=0 certification every chapter's §7 leans on is
+  reproducible from no commit. I could repeat it only from the dirty tree.
+  Fix: commit scripts/handbook_spine.py and re-stamp. Note: the whole round-17 deliverable
+  (13 chapters + OUTLINE) is uncommitted mid-round, which is expected — the spine is the one file
+  where a conflicting, weaker version lives at HEAD.
+
+BLOCKING 2 — kind UNVERIFIED (stale quoted evidence), chapters M4, M5, M6, M7, M8 (§1).
+  Claim: "`git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` is empty — e07d031 touched
+  only prompts/…".
+  Evidence: the command now returns two paths — scripts/panel_loop.py, scripts/panel_supervise.sh —
+  because commit ce2f875 ("panel: the loop can own its own worktree") landed 2026-11-06T23:04:54-05,
+  after the chapters' last write (22:28–22:59) and before this judgment. The substance survives:
+  neither file is cited by M4/M5/M7/M8, and both M6-cited files were re-verified by this seat at
+  ce2f875 (panel_loop.py still 461 lines with :323/:357/:383/:385 resolving; panel_supervise.sh:41
+  and :42-43 resolve — the commit's change is a one-line REPO default above them). But the quoted
+  command's stated output no longer repeats — the exact staleness class M9 F9-12 and M10 F10-11
+  already treat as a defect in their own chapters; the code-factory group must hold itself to the
+  same rule. (M0–M3 pinned explicit ranges 9372dc0..3fba8a7, which I verified path-for-path and
+  which remain true; only their "(current HEAD)" parentheticals are stale.)
+  Fix: re-quote the diff with the two real paths, re-affirm cited-file byte-identity, re-stamp at
+  ce2f875.
+
+NON-BLOCKING 1 — M10: revision stamp drift e50e55ee → 1587a03f (one test-only commit, INT-CI-027);
+  `git diff --name-only e50e55ee..HEAD -- <all cited paths>` = 0 files (this seat). Stamp
+  methodology holds; re-stamp next round.
+NON-BLOCKING 2 — M10 §7: first full-suite repeat by this seat flaked one package; the second run was
+  clean rc 0 (41 ok / 3 no-test-files — exactly the chapter's numbers). "0 FAIL" is load-conditioned,
+  not unconditional; the chapter's own flakiness history already says so.
+NON-BLOCKING 3 — M9 §7: this seat's full ./internal/scheduler repeat at the same rev FAILED under
+  host load 12–20 (TestSCHEDGAP1666_SevenDaySimulation board_empty assertion + SCHED-GAP-1726
+  goroutine census); SCHEDGAP1666 passes solo at load 15. Corroborates F9-13; the load-window flake
+  set is wider than the chapter's named CTL002 instance — worth naming 1666 alongside it.
+NON-BLOCKING 4 — Part II: all 16 flows remain MISSING. No chapter claims otherwise and every
+  cross-reference says so; a pass on the module half must not be read as a finished handbook.
+NON-BLOCKING 5 — M4 §12 vs M9 §3: tasksAdmissionDue cited as :230-242 vs :230-243 — same function,
+  ±1 end line. Harmless.
+NON-BLOCKING 6 — M12 F12-7/F12-4: this seat verified the mechanism in code (:200-238 — upstream
+  status/headers sent before the first read; healthy stream returns with no Content-Length /
+  Transfer-Encoding / Connection; post-header failure attempts a second status → [200,502]). The
+  dynamic EOF-timeout repro remains a quoted third-party measurement this seat did not re-run.
+
+DEFECT CLASSES: stale-stamp evidence (quoted diff output raced by a later commit); uncommitted
+certification gate; honest absence-proved metrics REDs (system observability debt, filed, not
+hidden); environment-gated live-node/credential legs; load-window test flakes (green only quiet or
+solo); disclosed carried code defects (CF-355 silent success, stream framing, kill scope F11-8, PID
+hardcode F2-2, mode-600 lie F1-1, checkout false-green F1-5); doc-pipeline structural debt (legacy
+gate/renderer cannot select the M-chapters; render leg missing, CT-18).
+
+CHAPTER SCORECARD:
+  M0  — WRITTEN. Sole RED is the absence-proved metrics field; range stamp explicit and verified;
+        all anchors repeated this seat (lib.sh helpers line-for-line, 11/17 source counts,
+        fails-closed fetch path).
+  M1  — PARTIAL. Source-verified exhaustively (10 files, line counts exact); certification ladder
+        needs a live node — its own named RED.
+  M2  — PARTIAL. node-bus-worker verified end to end (reply dict, dry-run lease 5 s, same-batch
+        duplicate, settlement ordering); live ladder not repeatable from this host (FACT-04
+        provenance).
+  M3  — PARTIAL. Landing arm and gates verified; hook enforcement unproven (no rejecting-commit
+        fixture) and cf244 arm unrun — both named REDs.
+  M4  — PARTIAL. Substance complete — store, drift, validate, lock classifier, admission gate and
+        crier-negative all repeated by this seat — blocked solely by Blocking 2's stale §1 sentence.
+  M5  — PARTIAL. Conformance battery unrun (live node); §9 inventory partial; adapter-capability
+        matrix verified against every installer line cited; blocked by Blocking 2.
+  M6  — PARTIAL. Own gate reads FAIL over the legacy 44-unit corpus (filed CF-360/F6-1); render leg
+        missing; Blockings 1 and 2 both land here.
+  M7  — PARTIAL. Mint env-gated (no App creds); scoped-token attribution to fleet-gh-scope.py
+        verified; blocked by Blocking 2.
+  M8  — PARTIAL. Would be WRITTEN — sole RED absence-proved, both files verified and both §7 rows
+        repeated — except Blocking 2's stale §1 sentence.
+  M9  — PARTIAL. Six named REDs (per-metric contract, per-route contract, recovery readbacks,
+        aux-flag ranges, CT-05 unmeasured, log inventory); everything sampled — 24 flag defaults,
+        57/43/378/10 counts, payload(), dispatchReplyVerdict, packer order, metrics blocks —
+        verified verbatim; suite green only quiet.
+  M10 — PARTIAL. Five named REDs; handler/config/guard/client anchors all verified; the
+        default-ON metrics vs metrics.go:2 "opt-in" contradiction is real and correctly filed.
+  M11 — PARTIAL. Every settings row and log site verified (EXEC_TIMEOUT inert, kill-scope
+        withdrawal, ledger replay, excerpt semantics); live-job tests are decoration — its own
+        named RED.
+  M12 — PARTIAL. Admission/routing/capture verified and repeated (sha256, 401, systemd, all
+        constants); streaming FAILING is a demonstrated defect correctly carried as RED.
+
+The document is one commit and five re-quoted §1 cells away from a clean round. No false claim
+survived ~150 independent checks; the two blockers are reproducibility defects in the evidence
+layer, not in the prose.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-211e286526d53f3f43960cda6abe8cbe5ecd823e06e772432af952295fc6c688
+
+EXIT=0

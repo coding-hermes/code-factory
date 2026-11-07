@@ -1,0 +1,55 @@
+Verification complete. Every source claim I independently reproduced matched its cited `file:line` exactly; the spine gate runs clean. The document has converged on accuracy but is not yet callable "written" against its own Part VII.3 bar. Verdict follows.
+
+```
+VERDICT: FAIL
+BLOCKING: 4 — findings that must be fixed before these chapters can be called written
+NON-BLOCKING: 5
+```
+
+FINDINGS (blocking):
+
+1. UNBUILDABLE — M6. Claim: the documentation pipeline delivers the handbook ("S5 render", "S9 spine gate" is "the chapter-aware gate"). Evidence (measured this round): `python3 scripts/master_doc_check.py` → `44 module(s): 37 VERIFIED, 50 error(s) … MASTER-DOC: FAIL`, exit 1; `gen_nasa_handbook.py:253-260`, `master_doc_fill.py:422`, `master_doc_check.py:188` all select `[0-9][0-9]-*.md`, which does not match `M0-…-*.md`. The only chapter-aware gate is `handbook_spine.py` (structural; `chapters=13 canonical contracts=18 findings=0`), and there is no render leg — CT-18 (handbook→owner approval artifact) is UNVERIFIED. The document cannot be rendered or pass its own gate. Fix: point the renderer/fill/check globs at `M*.md` (or add a chapter-aware render path) so `MASTER-DOC` can pass over the delivered chapters and CT-18 gains a producer; this is F6-1, carried since round 3.
+
+2. UNVERIFIED (not-measured, closable) — M1/M3/M5/M9/M10. Claim: modules carry `Status: UNVERIFIED (bodies)` because files were read at settings surface only. Evidence: M1 `node_env.py` (589), `node_seed_drift.py` (558), `node_freshness.py` (732), `bunker_config_gen.py` (724) settings-surface only; M3 `repo_freshness.py` body unread; M5 `install-claude-code.sh`/`install-codex.sh` full bodies unread; M9 `tick_process.go`/`packer_select.go`/`namespace_alloc.go` grep-level; M10 1895-line `internal/registry/handler.go` body not line-by-line. Per OUTLINE Part VII.3 these are "not measured" REDs, not "absence proved", so the chapters are not WRITTEN. Fix: read the named bodies line-by-line and re-grade the §3/§5 rows they back; this is the writer's remaining diligence, not a code property.
+
+3. UNVERIFIED (incomplete log inventory) — M9. Claim: "§9 log inventory narrowed to the settlement/batch-dispatch surface (2 of 379 sites)". Evidence: `grep -rn "log.Printf" internal/scheduler/*.go | wc -l` = 379 (reproduced); 377 distinct operator-visible lines untabulated for the control plane's central module. Schema §6 requires every operator-visible line verbatim. Fix: tabulate the 377 remaining `log.Printf` sites (they are distinct strings, unlike the generic `ok`/`bad` helper rows).
+
+4. UNVERIFIED (incomplete log inventory) — M1/M2/M3/M5/M7. Claim: the per-measurement `ok`/`bad`/`warn`/`note` rows are "not inventoried one-per-site". Evidence (measured): M1 108+33=141 sites/5 tabulated, M2 70/4, M3 35/5, M5 215/4, M7 103/2. The chapters correctly name the uncovered count as RED, but the schema field remains unfilled. Fix: either complete the tabulation or get an explicit schema exemption that a generic repeated helper row may be counted rather than enumerated (the OUTLINE's "absence proved" rule).
+
+FINDINGS (non-blocking):
+
+1. Metrics RED across all 13 modules — "absence proved" via quoted `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics'` → 0 matches (reproduced for M0/M2/M9/M10/M12). OUTLINE Part VII.3 explicitly sanctions a chapter staying RED on metrics as a code property; board rows filed. Not a writing defect.
+
+2. Unrun live-node/credential ladders — M1 certification ladder (`verify-node.sh`), M2 bus-worker ladder (`~/node-bus-worker.py --check`), M5 conformance battery, M10 signed-read ladder, M7 token mint. Environment-gated (no live node / no App creds on this host), honestly UNVERIFIED with named reason. Cannot be closed from here.
+
+3. Code defects correctly surfaced (not writing defects): CF-355 open — verified `dispatchReplyVerdict` (`dispatch_leg.go:713-726`) reads only `payload["ok"]`; `node-bus-worker.py:1180` sends `status`; absence of `ok` = success. M12 F12-7 streaming FAILING — reproduced `_forward` sends no `Content-Length`/`Transfer-Encoding`/`Connection: close` (`cf-inference-proxy.py:206-224`). Both are demonstrated code defects the document carries as OPEN/FAILING.
+
+4. Boundary-contract UNVERIFIED states — CT-01/07/11/12/13/14/15/17 and M12-C1/M12-C2, M7-C1, M1-C1/M1-C2: every side is an external peer (human owner, gitreins/boardctl binary, duckbrain, gateway, GitHub API) with no in-repo `file:function`. The two-register convention (OUTLINE Part IV) sanctions marking the covered side + "external"; honest terminal state, not a rumour-with-verdict.
+
+5. Moving-tree revision drift — M4 §7 claims "HEAD == origin/main == 08a2c8a", but measured `git rev-parse HEAD` = `3fba8a7` (the tailnet-scrub commit) and `board_drift` reports HEAD == origin/main == 3fba8a7. The panel loop committed three times mid-derivation (`9372dc0`, `060c90e`, `242cc47`) plus `3fba8a7`, so chapters carry unsynchronized stamps (M0–M3 `9372dc0`, M4/M5/M7/M8 `08a2c8a`, M6 `242cc474`); the scheduler stamp `7a7afc0f` is one board-commit stale (`81ce9fc`). All cited FILES verified byte-identical through HEAD, so no substance is wrong — only the identity stamps. Fix: re-stamp every chapter to one derivation point and re-run `board_drift`.
+
+DEFECT CLASSES: unbuildable-delivery · not-measured-unread-bodies · incomplete-log-inventory · moving-tree-revision-drift · code-property-red (non-blocking) · environment-gated-unverified (non-blocking) · code-defect-surfaced (non-blocking)
+
+CHAPTER SCORECARD:
+
+- M0 WRITTEN — full read; every helper tabulated; all log lines present; only Metrics RED (absence-proved).
+- M4 WRITTEN — store verified 357 rows/519 events, `board_drift RESULT: OK`, 0 divergent ids; contract states honestly UNVERIFIED external; only Metrics RED + the stale HEAD stamp.
+- M8 WRITTEN — both files read in full, `test_reclaim` 9/9 + scan-scope 15 claims reproduced; only Metrics RED.
+- M11 WRITTEN — full read, complete 23-site log inventory reproduced, `EXEC_TIMEOUT` inert + `CF_DURABLE_JOB` path confirmed; only Metrics RED + decoration tests; F11-8 is a code defect the chapter surfaces.
+- M3 PARTIAL — landing arm shipped and run (`SHIPPED_LANDING_ARM_RC=0`); `repo_freshness.py` body unread, hook enforcement unverified.
+- M1 PARTIAL — four settings-surface-only bodies, certification ladder unrun, inventory partial.
+- M2 PARTIAL — `node-bus-worker.py` contracts verified exactly, but S1 trio structure-mapped, operational overrides NAME ONLY, inventory partial.
+- M5 PARTIAL — two full bodies unread, conformance unrun, inventory partial.
+- M6 PARTIAL — own gate reads FAIL (44/50), delivery pipeline UNBUILDABLE.
+- M7 PARTIAL — mint environment-gated; inventory partial.
+- M9 PARTIAL — settlement/admission authority verified exactly (30 tables/43 routes/57 flags/379 log sites reproduced), but S1 grep-level, 2/379 log inventory, per-route/per-write-authority unwritten.
+- M10 PARTIAL — ports/defaults/slog surface/91 test files verified exactly; handler body not line-by-line, per-metric contract unfilled, inventory partial.
+- M12 PARTIAL — sha256/273 lines/401/LISTEN/sinks reproduced; streaming FAILING (code defect), node-client half unprovable in-repo.
+
+This is the strongest round yet: zero FALSE CLAIMS, zero cross-chapter CONTRADICTIONS (spine = 0), and every spot-check reproduced. The blocker is no longer accuracy — it is the four closable structural gaps above, headed by the fact that the document's own delivery pipeline cannot select or pass it.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-f75323daa36a2f720b9fbdbafe0141e345ac7e9efcfd78f87450c7cbc5028067
+
+EXIT=0

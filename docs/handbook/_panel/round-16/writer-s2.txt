@@ -1,0 +1,492 @@
+│ cache/scratch/spine_split_probe.py
+│ @@ -0,0 +1,29 @@
+│ +#!/usr/bin/env python3
+│ +"""Round-16: check every chapter's §6 contract rows under a backtick-aware split."""
+│ +import re, glob, sys
+│ +sys.path.insert(0, "/home/kara/code-factory/scripts")
+│ +import handbook_spine as hs
+│ +
+│ +def split_row(line):
+│ +    cells, cur, in_bt = [], [], False
+│ +    for ch in line:
+│ +        if ch == "`":
+│ +            in_bt = not in_bt
+│ +            cur.append(ch)
+│ +        elif ch == "|" and not in_bt:
+│ +            cells.append("".join(cur)); cur = []
+│ +        else:
+│ +            cur.append(ch)
+│ +    cells.append("".join(cur))
+│ +    return [c.strip() for c in cells]
+│ +
+│ +for f in sorted(glob.glob("/home/kara/code-factory/docs/handbook/chapters/M*.md")):
+│ +    text = open(f).read()
+│ +    body = hs.section(text, 6)
+│ +    for ln, line in enumerate(body.splitlines(), 1):
+│ +        if not line.startswith("|") or set(line) <= set("|-: "):
+│ +            continue
+│ +        cells = split_row(line.strip("|"))
+│ +        if len(cells) != 6:
+│ +            print(f"{f}: §6 line {ln} -> {len(cells)} cells")
+│ +print("done")
+│ scripts/handbook_spine.py
+│ @@ -101,13 +101,38 @@
+│      return m.group(1) if m else ""
+│
+│
+│ +def split_row(line: str) -> list[str]:
+│ +    """Split a markdown table row on `|`, respecting backtick code spans.
+│ +
+│ +    A literal pipe inside backticks — a grep pattern like
+│ +    `grep -nE 'boardctl|tasks.jsonl|events.jsonl'`, or `MASTER-DOC: PASS\\|FAIL` —
+│ +    is cell content, not a column separator. The naive `str.split("|")` sliced
+│ +    such rows into 7–9 cells and read producer/consumer/state from shifted
+│ +    columns (grok round-15 #4: M4 CT-10, M6 CT-16, M2 CT-09, M12 M12-C1).
+│ +    """
+│ +    cells: list[str] = []
+│ +    cur: list[str] = []
+│ +    in_backtick = False
+│ +    for ch in line:
+│ +        if ch == "`":
+│ +            in_backtick = not in_backtick
+│ +            cur.append(ch)
+│ +        elif ch == "|" and not in_backtick:
+│ +            cells.append("".join(cur))
+│ +            cur = []
+│ +        else:
+│ +            cur.append(ch)
+│ +    cells.append("".join(cur))
+│ +    return [c.strip() for c in cells]
+│ +
+│ +
+│  def contract_rows(text: str) -> list[dict]:
+│      body = section(text, 6)
+│      rows = []
+│      for line in body.splitlines():
+│          if not line.startswith("|") or set(line) <= set("|-: "):
+│              continue
+│ -        cells = [c.strip() for c in line.strip("|").split("|")]
+│ +        cells = split_row(line.strip("|"))
+│          if len(cells) < 6 or cells[0].lower() == "id":
+│              continue
+│          rows.append(
+│ scripts/handbook_spine.py
+│ @@ -238,6 +238,25 @@
+│                  (name, row)
+│              )
+│
+│ +    # 0a. a §6 table row whose backtick-aware split is not exactly 6 columns is
+│ +    # malformed — a local id or a boundary row uses the same 6 columns, so an
+│ +    # off-count row is a defect, not a third shape (grok round-15 #4: "report a
+│ +    # row whose column count != 6 as a finding").
+│ +    for name, text in ch.items():
+│ +        body = section(text, 6)
+│ +        for i, line in enumerate(body.splitlines(), 1):
+│ +            if not line.startswith("|") or set(line) <= set("|-: "):
+│ +                continue
+│ +            cells = split_row(line.strip("|"))
+│ +            if len(cells) != 6:
+│ +                findings.append(
+│ +                    {
+│ +                        "kind": "CONTRACT ROW MISPARSE",
+│ +                        "subject": f"{name} §6 line {i}",
+│ +                        "detail": f"contract row has {len(cells)} columns, expected 6",
+│ +                    }
+│ +                )
+│ +
+│      # 0b. reject unknown canonical ids: a chapter citing a CT id outside the register
+│      # (e.g. CT-99) is a fabrication, not a local edge (sol B13 — the old loop only
+│      # iterated known ids, so an invented id passed silently).
+│ docs/handbook/chapters/M4-board.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | BOARD |
+│  | Path | `/home/kara/code-factory/.coding-hermes/board/tasks.jsonl` + `events.jsonl`; tools `/home/kara/code-factory/scripts/boardctl`, `board_lock.py`, `board_drift.py` |
+│ -| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; the board and `board_drift.py` changed in `47d68b4..08a2c8a` — the CF-270 close landed; re-verified round 15 — the files M4 cites are byte-identical `08a2c8a..242cc474`) |
+│ +| Revision | `3fba8a7eb258264cb957e07add2fbaea30262d70` (code-factory HEAD == origin/main, round-16 derivation; the board JSONL and `board_drift.py` are byte-identical `08a2c8a..3fba8a7` — `3fba8a7` touched only `_panel/round-9/writer.txt` and `M11-dispatcher.md`, neither of which M4 cites) |
+│  | Language / runtime | bash (boardctl wrapper) + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│  | Status | **VERIFIED (store)** — 357 rows / **519** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT reconciled** — `board_drift` `RESULT: OK`, byte parity identical on both files, 0 divergent ids, HEAD == origin/main == `08a2c8a` — both re-measured this round. The `boardctl` verb surface is the external executable's (`/home/kara/.local/bin/boardctl`), not this repo's |
+│ docs/handbook/chapters/M4-board.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | `3fba8a7eb258264cb957e07add2fbaea30262d70` (code-factory HEAD == origin/main, round-16 derivation; the board JSONL and `board_drift.py` are byte-identical `08a2c8a..3fba8a7` — `3fba8a7` touched only `_panel/round-9/writer.txt` and `M11-dispatcher.md`, neither of which M4 cites) |
+│  | Language / runtime | bash (boardctl wrapper) + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│ -| Status | **VERIFIED (store)** — 357 rows / **519** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT reconciled** — `board_drift` `RESULT: OK`, byte parity identical on both files, 0 divergent ids, HEAD == origin/main == `08a2c8a` — both re-measured this round. The `boardctl` verb surface is the external executable's (`/home/kara/.local/bin/boardctl`), not this repo's |
+│ +| Status | **VERIFIED (store)** — 357 rows / **519** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT reconciled** — `board_drift` `RESULT: OK`, byte parity identical on both files, 0 divergent ids, HEAD == origin/main == `3fba8a7` — both re-measured this round. The `boardctl` verb surface is the external executable's (`/home/kara/.local/bin/boardctl`), not this repo's |
+│
+│  ## 2. Purpose, authority and position
+│
+│ docs/handbook/chapters/M4-board.md
+│ @@ -106,7 +106,7 @@
+│  |---|---|---|---|---|
+│  | store census | `jq -r '.id' .coding-hermes/board/tasks.jsonl | wc -l` | 357 rows | 2026-11-06 | PASS (357) |
+│  | events count | `wc -l .coding-hermes/board/events.jsonl` | 519 lines | 2026-11-06 | PASS (519) |
+│ -| drift | `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-06 | **PASS** — `RESULT: OK`; byte parity `tasks.jsonl`/`events.jsonl` **identical** (sha256 `5aa15431…` / `783d556c…`); 357 vs 357 rows, **0 divergent ids: none**; HEAD=origin/main=`08a2c8a` |
+│ +| drift | `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-06 | **PASS** — `RESULT: OK`; byte parity `tasks.jsonl`/`events.jsonl` **identical** (sha256 `5aa15431…` / `783d556c…`); 357 vs 357 rows, **0 divergent ids: none**; HEAD=origin/main=`3fba8a7` |
+│  | semantic validate | `scripts/boardctl validate` | RESULT OK with named warnings | 2026-11-06 | **PASS** — `357 tasks, 519 events, 0 fixtures`, `key uniformity 357/357 (0 drift)`, `RESULT: OK (7 warning(s))` |
+│  | lock adjudication | `scripts/board_lock.py` on a held/unheld lock | ABSENT / HELD / RESIDUE named (`board_lock.py:149-158`) | 2026-11-06 | UNVERIFIED — the classifier was read in full but not exercised against a held/unheld fixture this round |
+│  | duplicate id refusal | `boardctl create --id CF-357 --title x` | refused | 2026-11-06 | **PASS** — `task id "CF-357" already exists … create aborted` |
+│ docs/handbook/chapters/M4-board.md
+│ @@ -113,7 +113,7 @@
+│
+│  **Drift re-measured (reconciled this round).** The CF-270 divergence the round-10 draft reported
+│  as live was **already reconciled before this round's derivation**: commit `4dc0ef0` ("board: close
+│ -CF-270") and `8ae4f82` are both in `origin/main`, so `board_drift` at HEAD `08a2c8a` returns
+│ +CF-270") and `8ae4f82` are both in `origin/main`, so `board_drift` at HEAD `3fba8a7` returns
+│  `RESULT: OK` — 357 vs 357 rows, 0 divergent ids, HEAD == origin/main. The round-10 draft's
+│  `RESULT: DRIFT (4 failed)` with 1 divergent id (CF-270, workdir=`pending` vs published=`complete`)
+│  and its 518-events count were a **pre-reconciliation snapshot presented as current**; both are
+│ docs/handbook/chapters/M4-board.md
+│ @@ -138,7 +138,7 @@
+│
+│  `boardctl` is an external binary (`/home/kara/.local/bin/boardctl`, measured this round — not in
+│  this repo), so these strings carry no in-repo `file:line`; they are quoted from the run output
+│ -captured this round (2026-11-06, rev `08a2c8a`) with the commands named (N9):
+│ +captured this round (2026-11-06, rev `3fba8a7`) with the commands named (N9):
+│
+│  | Level | Line | Emitted when | Kind |
+│  |---|---|---|---|
+│ docs/handbook/chapters/M4-board.md
+│ @@ -189,7 +189,7 @@
+│    - **F4-3** (carried) — CT-14/CT-13 (foreman→board / gitreins→board) states corrected from "works"/"broken" to **UNVERIFIED**: every
+│      side is an external peer, so no in-repo file:function exists to name.
+│    - **F4-4** (resolved) — the CF-270 divergence is **reconciled**: commit `4dc0ef0` closed CF-270 and
+│ -    is in `origin/main`; `board_drift` at HEAD `08a2c8a` returns `RESULT: OK` (357 vs 357, 0
+│ +    is in `origin/main`; `board_drift` at HEAD `3fba8a7` returns `RESULT: OK` (357 vs 357, 0
+│      divergent ids, byte parity identical, HEAD == origin/main). The round-10 draft reported the
+│      pre-reconciliation DRIFT as current; that reading is superseded. The events count is 519, not 518.
+│    - **F4-5** (new, B04) — the board-admission gate belongs to M9 alone; crier has no board admission.
+│ docs/handbook/chapters/M4-board.md
+│ @@ -194,4 +194,11 @@
+│      pre-reconciliation DRIFT as current; that reading is superseded. The events count is 519, not 518.
+│    - **F4-5** (new, B04) — the board-admission gate belongs to M9 alone; crier has no board admission.
+│
+│ -## RED field count: 2 (Metrics §8 — absence-proved; CT-14/CT-13 states UNVERIFIED — every side is an external peer)
+│ +## RED field count: 1 (Metrics §8 — absence-proved)
+│ +
+│ +**RED accounting rule (uniform across M4/M5/M6/M7/M8, round 16 — glm #4):** a §6 contract row whose
+│ +far side is an external peer (boundary or `(local)`, no in-repo `file:function`) is a *terminal
+│ +state* — `UNVERIFIED`/`broken` per OUTLINE Part IV — and is **not** counted as a RED, because there
+│ +is no in-repo code to measure and the state itself is the filed finding. RED counts only fields
+│ +where the writer's own evidence is incomplete (an unread body, an unrun ladder, an untabulated log
+│ +inventory) plus the absence-proved metric (§5 "none" is RED).
+│ docs/handbook/chapters/M5-harness.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | HARNESS |
+│  | Path | `/home/kara/code-factory/scripts/harness/` — `install-hermes.sh`, `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh`, `harness-vars.sh`; **and** `/home/kara/code-factory/scripts/` — `harness_resolve.py`, `install-go.sh`, `install-gitreins.sh`, `project-node.sh` |
+│ -| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; no file M5 cites changed in `47d68b4..08a2c8a`; re-verified round 15 — the files M5 cites are byte-identical `08a2c8a..242cc474`) |
+│ +| Revision | `3fba8a7eb258264cb957e07add2fbaea30262d70` (code-factory HEAD == origin/main, round-16 derivation; no file M5 cites changed in `08a2c8a..3fba8a7` — `3fba8a7` touched only `_panel/round-9/writer.txt` and `M11-dispatcher.md`) |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side) |
+│  | Status | **UNVERIFIED** — `harness-vars.sh` (318 lines), `harness_resolve.py` (400 lines), `install-hermes.sh` (375 lines), `install-gitreins.sh` (180 lines), `install-claude-code.sh` (settings surface), `install-codex.sh` (settings surface + partial body), `install-opencode.sh` (98 lines), `install-deepseek.sh` (101 lines), `install-pi-agent.sh` (113 lines) read this round; `install-claude-code.sh`/`install-codex.sh` full bodies not line-by-line; the conformance battery not run this round |
+│ docs/handbook/chapters/M5-harness.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | `3fba8a7eb258264cb957e07add2fbaea30262d70` (code-factory HEAD == origin/main, round-16 derivation; no file M5 cites changed in `08a2c8a..3fba8a7` — `3fba8a7` touched only `_panel/round-9/writer.txt` and `M11-dispatcher.md`) |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side) |
+│ -| Status | **UNVERIFIED** — `harness-vars.sh` (318 lines), `harness_resolve.py` (400 lines), `install-hermes.sh` (375 lines), `install-gitreins.sh` (180 lines), `install-claude-code.sh` (settings surface), `install-codex.sh` (settings surface + partial body), `install-opencode.sh` (98 lines), `install-deepseek.sh` (101 lines), `install-pi-agent.sh` (113 lines) read this round; `install-claude-code.sh`/`install-codex.sh` full bodies not line-by-line; the conformance battery not run this round |
+│ +| Status | **UNVERIFIED** — `harness-vars.sh` (318), `harness_resolve.py` (400), `install-hermes.sh` (375), `install-gitreins.sh` (180), `install-claude-code.sh` (673, read in full), `install-codex.sh` (592, read in full), `install-opencode.sh` (98), `install-deepseek.sh` (101), `install-pi-agent.sh` (113) all read this round; the conformance battery not run this round (needs a live node) |
+│
+│  ## 2. Purpose, authority and position
+│
+│ docs/handbook/chapters/M5-harness.md
+│ @@ -228,10 +228,9 @@
+│
+│  ## 13. Evidence of record
+│
+│ -- Code read: `harness-vars.sh` (318), `harness_resolve.py` (400), `install-hermes.sh` (375),
+│ -  `install-gitreins.sh` (180), `install-codex.sh` (`:47-60, 425-430` + settings), `install-claude-code.sh`
+│ -  (`:34-115` + settings), `install-deepseek.sh` (101), `install-pi-agent.sh` (113), `install-opencode.sh` (98);
+│ -  `project-node.sh:435-455`.
+│ +- Code read (full, this round): `harness-vars.sh` (318), `harness_resolve.py` (400), `install-hermes.sh` (375),
+│ +  `install-gitreins.sh` (180), `install-codex.sh` (592), `install-claude-code.sh` (673), `install-deepseek.sh` (101),
+│ +  `install-pi-agent.sh` (113), `install-opencode.sh` (98); `project-node.sh:435-455`.
+│  - Board rows: CF-150, CF-192, CF-372 (complete), CF-376, CF-380.
+│  - **Findings:**
+│    - **F5-1** (carried) — `install-hermes.sh:108-115` refuses anything outside >=3.11,<3.14.
+│ docs/handbook/chapters/M5-harness.md
+│ @@ -244,4 +244,4 @@
+│      computes `install-$HARNESS.sh` and `:449-452` invokes it; the literal grep missed the computed
+│      path. The installers are unit-invoked (by the operator-invoked provisioning entry).
+│
+│ -## RED field count: 4 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; M5-C2 contract state UNVERIFIED — a port/service is not a `file:function`; §9 inventory 4 of 215+ helper call sites — the descriptive per-measurement rows not tabulated one-per-site)
+│ +## RED field count: 3 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; §9 inventory 4 of 215 helper call sites — the generic per-measurement rows not tabulated one-per-site). M5-C2 (gateway port/service, local edge) is a terminal state, not a RED — see the uniform RED accounting rule stated in M4.
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | DOCUMENTATION |
+│  | Path | `/home/kara/code-factory/scripts/` — `master_doc_skeleton.py`, `master_doc_fill.py`, `master_doc_check.py`, `master_doc_panel.py`, `gen_nasa_handbook.py`, `gen_system_views.py`, `sheet_style.py`, `extract_owner_decisions.py`, `gen_unit_map.py`, `verify-patch.sh`, `panel_loop.py`, `ownership.py`, `handbook_spine.py` |
+│ -| Revision | `242cc47493e86e4bb0551cc0bb703360e6bf7386` (code-factory HEAD this round — re-derived because `panel_loop.py` and `handbook_spine.py` changed in `08a2c8a..242cc474` via `9372dc0` "sections written together", `060c90e` (CH fix) and `242cc474` (orphan-writer reap); every *other* file M6 cites is byte-identical across that range) |
+│ +| Revision | `3fba8a7eb258264cb957e07add2fbaea30262d70` (code-factory HEAD == origin/main, round-16 derivation; `panel_loop.py`, `panel_supervise.sh` and `handbook_spine.py` changed in `08a2c8a..3fba8a7` and their locators were re-pinned at HEAD this round; every *other* file M6 cites is byte-identical across that range) |
+│  | Language / runtime | Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│  | Status | **UNVERIFIED** — `master_doc_check.py` (268 lines) read in full and its FAIL reproduced; the rest of the pipeline (`master_doc_fill.py`, `gen_nasa_handbook.py`, `master_doc_panel.py`, `gen_unit_map.py`, …) not read line-by-line; the gate reads `MASTER-DOC: FAIL`. **The legacy fill/render/panel pipeline is UNBUILDABLE against these M-numbered chapters** (B13): `master_doc_check.py:188`, `gen_nasa_handbook.py:253-260` and `master_doc_fill.py:422` all select `[0-9][0-9]-*.md`, which does not match `M0-…-*.md`, so the legacy pipeline cannot select or deliver these chapters. **The chapter-aware gate is `handbook_spine.py` (S9)**, which *does* select `M*.md` and exits 1 on any finding (`python3 scripts/handbook_spine.py` → `chapters=13 canonical contracts=18 findings=0`, exit 0); the legacy fill/render/check pipeline is retired for the M-numbered handbook, and the render-to-owner-artifact leg remains missing (CT-18 UNVERIFIED, §6) |
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -200,7 +200,7 @@
+│
+│  - This handbook chapter is a product of M6's `panel_loop.py`.
+│  - M4 BOARD rows are the evidence-of-record entries the gate's locators point at.
+│ -- M8 SAFETY also touches `verify-patch.sh`; ownership is M6.S8 per OUTLINE (`OUTLINE.md:170`).
+│ +- M8 SAFETY also touches `verify-patch.sh`; ownership is M6.S8 per OUTLINE (`OUTLINE.md:176`).
+│
+│  ## 13. Evidence of record
+│
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -102,8 +102,12 @@
+│  column, so M9 ("broken") and M11 ("works") could both cite CT-06 and pass while flatly disagreeing.
+│  The state-agreement check (and the CT-05 boundary→internal re-grade) are added that round; round 12
+│  added the **`CONTRACT UNKNOWN ID`** check (`:216-227`) that rejects a chapter citing an id outside
+│ -CT-01..CT-18. The remaining blind spots are that it does **not** verify cited line numbers exist in
+│ -the cited file, and it trusts the chapters' self-reported status word rather than re-deriving it.
+│ +CT-01..CT-18. **Round 16 fixed the column-slicing blind spot (grok #4):** the §6 cell splitter is
+│ +now backtick-aware (`split_row`, `handbook_spine.py`), so a literal `|` inside a code span (a grep
+│ +pattern, or `MASTER-DOC: PASS\|FAIL`) is cell content, not a separator, and a §6 row that splits to
+│ +other than 6 columns is a `CONTRACT ROW MISPARSE` finding. The remaining blind spots are that it does
+│ +**not** verify cited line numbers exist in the cited file, and it trusts the chapters' self-reported
+│ +status word rather than re-deriving it.
+│
+│  **`panel_loop.py` settings and stop semantics (sol B14; re-pinned this round — `panel_loop.py` grew
+│  ~+70 lines in `08a2c8a..242cc474` when the parallel-writer path landed, so every prior locator
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -133,6 +133,16 @@
+│  the round cap (`:454-457`). A `STOP: no new defect class` exit is a successful process
+│  termination, not proof the document is aligned; the operator must read back the outstanding
+│  findings (the `CORRECTIONS.md` per round) separately.
+│ +
+│ +**Reconcile bypass (B03, sol — round 15, carried).** The parallel-writer branch runs when *either*
+│ +`--groups` is set *or* `--parallel > 1` (`panel_loop.py:357`), but the reconcile pass — the spine
+│ +run and reconciler that repairs cross-section seams — is gated on `--parallel > 1` alone
+│ +(`panel_loop.py:383`). With an explicit `--groups` list and the default `--parallel 1`, concurrent
+│ +writers therefore run with **no** reconciliation pass. In the live `panel_supervise.sh` invocation
+│ +the two are always passed together (`--parallel "${PANEL_PARALLEL:-3}" --groups "${PANEL_GROUPS:-}"`,
+│ +`panel_supervise.sh:42-43`), so the production path is covered, but a `--groups`-only run bypasses
+│ +the seam check. The gate should depend on the effective writer-group count, not the `--parallel`
+│ +switch.
+│
+│  ## 6. Contracts in and out
+│
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -237,5 +237,12 @@
+│    - **F6-5** (new, grok B5) — `handbook_spine.py` is the gate that actually selects these `M*.md`
+│      chapters and was undocumented in M6; added as S9 with its five checks, the BOUNDARY policy, and
+│      the state-agreement check (and its residual locator blind spot).
+│ -
+│ -## RED field count: 2 (Status §1 — own gate reads FAIL, Metrics §8)
+│ +  - **F6-6** (new, sol B03) — `--groups` with `--parallel=1` runs parallel writers with **no**
+│ +    reconcile pass (`panel_loop.py:357` vs `:383`); the live supervisor passes both
+│ +    (`panel_supervise.sh:42-43`), so the production path is covered. Code defect, filed.
+│ +  - **F6-7** (new, grok #4) — the spine §6 splitter was naive `str.split("|")` and mis-sliced any row
+│ +    carrying a `|` inside a code span (M4 CT-10, M6 CT-16, M2 CT-09, M12 M12-C1), reading
+│ +    producer/consumer/state from shifted columns. Fixed this round: backtick-aware `split_row` plus a
+│ +    `CONTRACT ROW MISPARSE` finding for a row that splits to other than 6 columns.
+│ +
+│ +## RED field count: 2 (Status §1 — own gate reads FAIL over the legacy 44-unit corpus; Metrics §8 — absence-proved). CT-16 works; CT-18 is a boundary terminal state (external owner), so neither §6 row is a RED — see the uniform RED accounting rule in M4.
+│ docs/handbook/chapters/M7-github.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | GITHUB |
+│  | Path | `/home/kara/code-factory/scripts/` — `github-app-setup.sh`, `github-app-token.py`, `github-app-refresh.sh` |
+│ -| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; no file M7 cites changed in `47d68b4..08a2c8a`; re-verified round 15 — the files M7 cites are byte-identical `08a2c8a..242cc474`) |
+│ +| Revision | `3fba8a7eb258264cb957e07add2fbaea30262d70` (code-factory HEAD == origin/main, round-16 derivation; no file M7 cites changed in `08a2c8a..3fba8a7` — `3fba8a7` touched only `_panel/round-9/writer.txt` and `M11-dispatcher.md`) |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│  | Status | **UNVERIFIED** — CLI surface measured (`github-app-token.py` exits 2 with no command); the settings/control regions read (`:107-117`, `:300-372`, `:579`; `github-app-refresh.sh:37-53,104-174`); mint not run (no App creds on this host) |
+│ docs/handbook/chapters/M7-github.md
+│ @@ -155,4 +155,4 @@
+│      `~/.hermes/scripts/gh-app-token.py` (a separate minter), and the node-token producer for M12 is
+│      unknown.
+│
+│ -## RED field count: 4 (Metrics §8 — absence-proved; §1 mint UNVERIFIED; M7-C1 contract state UNVERIFIED — consumer is an external API; §9 inventory 2 of 103 helper call sites — the descriptive rows not tabulated one-per-site)
+│ +## RED field count: 3 (Metrics §8 — absence-proved; §1 mint UNVERIFIED — environment-gated, no App creds on this host; §9 inventory 2 of 103 helper call sites — the generic per-measurement rows not tabulated one-per-site). M7-C1 (consumer is the external GitHub API) is a local edge, terminal, not a RED — see the uniform RED accounting rule in M4.
+│ docs/handbook/chapters/M8-safety.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | SAFETY |
+│  | Path | `/home/kara/code-factory/scripts/` — `reclaim_disk.py`, `check_scan_scope.py` |
+│ -| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `reclaim_disk.py`/`check_scan_scope.py` byte-identical since `47d68b4`; re-verified round 15 — byte-identical `08a2c8a..242cc474`) |
+│ +| Revision | `3fba8a7eb258264cb957e07add2fbaea30262d70` (code-factory HEAD == origin/main, round-16 derivation; `reclaim_disk.py`/`check_scan_scope.py` byte-identical `08a2c8a..3fba8a7` — `3fba8a7` touched only `_panel/round-9/writer.txt` and `M11-dispatcher.md`) |
+│  | Language / runtime | Python 3.14.9 + bash 5.3.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│  | Status | **VERIFIED** — `reclaim_disk.py` (169 lines) and `check_scan_scope.py` (118 lines) both read in full this round |
+│ docs/handbook/chapters/M8-safety.md
+│ @@ -34,7 +34,7 @@
+│  | S2 scan scope | `check_scan_scope.py` | **operator-invoked (optional)** | no production caller (`grep -rn check_scan_scope scripts/` → no caller; run manually this round) |
+│
+│  **Finding (carried):** `verify-patch.sh` is **not** an M8 unit — OUTLINE assigns it to M6.S8
+│ -(`OUTLINE.md:170`). M8 has two submodules (S1, S2).
+│ +(`OUTLINE.md:176`). M8 has two submodules (S1, S2).
+│
+│  ## 4. Dependencies
+│
+│ docs/handbook/chapters/M8-safety.md
+│ @@ -143,4 +143,4 @@
+│    - **F8-4** (new) — `reclaim_disk.py` is invoked by `project-node.sh:212` (active);
+│      `check_scan_scope.py` has no production caller (operator-invoked, optional).
+│
+│ -## RED field count: 1 (Metrics §8)
+│ +## RED field count: 1 (Metrics §8 — absence-proved). The `(local)` filesystem edge in §6 is a boundary terminal state (external peer), not a RED — see the uniform RED accounting rule in M4.
+│ docs/handbook/chapters/M4-board.md
+│ @@ -196,7 +196,7 @@
+│
+│  ## RED field count: 1 (Metrics §8 — absence-proved)
+│
+│ -**RED accounting rule (uniform across M4/M5/M6/M7/M8, round 16 — glm #4):** a §6 contract row whose
+│ +**RED accounting rule (uniform across M4/M5/M6/M7/M8, round 16 — glm #4):** a contract row in §6 whose
+│  far side is an external peer (boundary or `(local)`, no in-repo `file:function`) is a *terminal
+│  state* — `UNVERIFIED`/`broken` per OUTLINE Part IV — and is **not** counted as a RED, because there
+│  is no in-repo code to measure and the state itself is the filed finding. RED counts only fields
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -47,7 +47,7 @@
+│  | S6 corpus | `extract_owner_decisions.py` | **operator-invoked** | no in-repo caller (grep empty) |
+│  | S7 unit-map | `gen_unit_map.py` | **operator-invoked** | `main()`; no in-repo caller |
+│  | S8 patch-chain drift | `verify-patch.sh` | **operator-invoked** | no in-repo caller, no cron/timer; run manually this round (VERIFY-PATCH: PASS) |
+│ -| S9 spine gate | `handbook_spine.py` | **active** (unit-invoked) | `python3 scripts/handbook_spine.py` — the cross-chapter consistency gate that *does* select `M*.md` chapters (the legacy `[0-9][0-9]-*.md` globs in the fill/render/check pipeline do not). It is now invoked by `panel_loop.py:385,410` (the reconcile pass after a parallel write), not only manually. What it actually enforces (verified against `handbook_spine.py:192-374`): (1) each canonical id CT-01..CT-18 is **cited** (`CONTRACT UNREGISTERED`, `:234`) **and** an id outside the register is **rejected** (`CONTRACT UNKNOWN ID`, `:216-227` — added round 12; sol B01's "an injected CT-99 passes rc 0" is superseded); (2) cross-chapter producer/consumer **function-token** agreement (`CONTRACT ONE-SIDED` `:251`, `CONTRACT PAIR DISAGREEMENT` `:276`) and **state-word** agreement (`CONTRACT STATE DISAGREEMENT` `:300`) for the 5 internal contracts only; (3) setting-default conflicts (`SETTING CONFLICT`, `:321`) — `norm_default` strips backticked spans so defaults cited in different backtick refs compare equal, but a backticked-only default normalizes to the string itself (sol B13); (4) dangling M/F references (`DANGLING REFERENCE`, `:337/:345`); (5) prose count claims (`COUNT CLAIM`, `:370`) for module/chapter/flow/contract — `submodule` is `None` at `:357`, so no submodule count is ever compared |
+│ +| S9 spine gate | `handbook_spine.py` | **active** (unit-invoked) | `python3 scripts/handbook_spine.py` — the cross-chapter consistency gate that *does* select `M*.md` chapters (the legacy `[0-9][0-9]-*.md` globs in the fill/render/check pipeline do not). It is now invoked by `panel_loop.py:385,410` (the reconcile pass after a parallel write), not only manually. What it actually enforces (verified against `handbook_spine.py:217-439`): (1) each canonical id CT-01..CT-18 is **cited** (`CONTRACT UNREGISTERED`, `:234`) **and** an id outside the register is **rejected** (`CONTRACT UNKNOWN ID`, `:216-227` — added round 12; sol B01's "an injected CT-99 passes rc 0" is superseded); (2) cross-chapter producer/consumer **function-token** agreement (`CONTRACT ONE-SIDED` `:251`, `CONTRACT PAIR DISAGREEMENT` `:276`) and **state-word** agreement (`CONTRACT STATE DISAGREEMENT` `:300`) for the 5 internal contracts only; (3) setting-default conflicts (`SETTING CONFLICT`, `:321`) — `norm_default` strips backticked spans so defaults cited in different backtick refs compare equal, but a backticked-only default normalizes to the string itself (sol B13); (4) dangling M/F references (`DANGLING REFERENCE`, `:337/:345`); (5) prose count claims (`COUNT CLAIM`, `:370`) for module/chapter/flow/contract — `submodule` is `None` at `:357`, so no submodule count is ever compared |
+│
+│  Round-3 classified S5–S8 "active" on prose ("render the handbook", "extracts owner decisions",
+│  "measures who references a unit", "chain-break detection"). The classification rule requires the
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -47,7 +47,7 @@
+│  | S6 corpus | `extract_owner_decisions.py` | **operator-invoked** | no in-repo caller (grep empty) |
+│  | S7 unit-map | `gen_unit_map.py` | **operator-invoked** | `main()`; no in-repo caller |
+│  | S8 patch-chain drift | `verify-patch.sh` | **operator-invoked** | no in-repo caller, no cron/timer; run manually this round (VERIFY-PATCH: PASS) |
+│ -| S9 spine gate | `handbook_spine.py` | **active** (unit-invoked) | `python3 scripts/handbook_spine.py` — the cross-chapter consistency gate that *does* select `M*.md` chapters (the legacy `[0-9][0-9]-*.md` globs in the fill/render/check pipeline do not). It is now invoked by `panel_loop.py:385,410` (the reconcile pass after a parallel write), not only manually. What it actually enforces (verified against `handbook_spine.py:217-439`): (1) each canonical id CT-01..CT-18 is **cited** (`CONTRACT UNREGISTERED`, `:234`) **and** an id outside the register is **rejected** (`CONTRACT UNKNOWN ID`, `:216-227` — added round 12; sol B01's "an injected CT-99 passes rc 0" is superseded); (2) cross-chapter producer/consumer **function-token** agreement (`CONTRACT ONE-SIDED` `:251`, `CONTRACT PAIR DISAGREEMENT` `:276`) and **state-word** agreement (`CONTRACT STATE DISAGREEMENT` `:300`) for the 5 internal contracts only; (3) setting-default conflicts (`SETTING CONFLICT`, `:321`) — `norm_default` strips backticked spans so defaults cited in different backtick refs compare equal, but a backticked-only default normalizes to the string itself (sol B13); (4) dangling M/F references (`DANGLING REFERENCE`, `:337/:345`); (5) prose count claims (`COUNT CLAIM`, `:370`) for module/chapter/flow/contract — `submodule` is `None` at `:357`, so no submodule count is ever compared |
+│ +| S9 spine gate | `handbook_spine.py` | **active** (unit-invoked) | `python3 scripts/handbook_spine.py` — the cross-chapter consistency gate that *does* select `M*.md` chapters (the legacy `[0-9][0-9]-*.md` globs in the fill/render/check pipeline do not). It is now invoked by `panel_loop.py:385,410` (the reconcile pass after a parallel write), not only manually. What it actually enforces (verified against `handbook_spine.py:217-439`): (1) each canonical id CT-01..CT-18 is **cited** (`CONTRACT UNREGISTERED`, `:278`) **and** an id outside the register is **rejected** (`CONTRACT UNKNOWN ID`, `:216-227` — added round 12; sol B01's "an injected CT-99 passes rc 0" is superseded); (2) cross-chapter producer/consumer **function-token** agreement (`CONTRACT ONE-SIDED` `:251`, `CONTRACT PAIR DISAGREEMENT` `:276`) and **state-word** agreement (`CONTRACT STATE DISAGREEMENT` `:300`) for the 5 internal contracts only; (3) setting-default conflicts (`SETTING CONFLICT`, `:321`) — `norm_default` strips backticked spans so defaults cited in different backtick refs compare equal, but a backticked-only default normalizes to the string itself (sol B13); (4) dangling M/F references (`DANGLING REFERENCE`, `:337/:345`); (5) prose count claims (`COUNT CLAIM`, `:370`) for module/chapter/flow/contract — `submodule` is `None` at `:357`, so no submodule count is ever compared |
+│
+│  Round-3 classified S5–S8 "active" on prose ("render the handbook", "extracts owner decisions",
+│  "measures who references a unit", "chain-break detection"). The classification rule requires the
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -47,7 +47,7 @@
+│  | S6 corpus | `extract_owner_decisions.py` | **operator-invoked** | no in-repo caller (grep empty) |
+│  | S7 unit-map | `gen_unit_map.py` | **operator-invoked** | `main()`; no in-repo caller |
+│  | S8 patch-chain drift | `verify-patch.sh` | **operator-invoked** | no in-repo caller, no cron/timer; run manually this round (VERIFY-PATCH: PASS) |
+│ -| S9 spine gate | `handbook_spine.py` | **active** (unit-invoked) | `python3 scripts/handbook_spine.py` — the cross-chapter consistency gate that *does* select `M*.md` chapters (the legacy `[0-9][0-9]-*.md` globs in the fill/render/check pipeline do not). It is now invoked by `panel_loop.py:385,410` (the reconcile pass after a parallel write), not only manually. What it actually enforces (verified against `handbook_spine.py:217-439`): (1) each canonical id CT-01..CT-18 is **cited** (`CONTRACT UNREGISTERED`, `:278`) **and** an id outside the register is **rejected** (`CONTRACT UNKNOWN ID`, `:216-227` — added round 12; sol B01's "an injected CT-99 passes rc 0" is superseded); (2) cross-chapter producer/consumer **function-token** agreement (`CONTRACT ONE-SIDED` `:251`, `CONTRACT PAIR DISAGREEMENT` `:276`) and **state-word** agreement (`CONTRACT STATE DISAGREEMENT` `:300`) for the 5 internal contracts only; (3) setting-default conflicts (`SETTING CONFLICT`, `:321`) — `norm_default` strips backticked spans so defaults cited in different backtick refs compare equal, but a backticked-only default normalizes to the string itself (sol B13); (4) dangling M/F references (`DANGLING REFERENCE`, `:337/:345`); (5) prose count claims (`COUNT CLAIM`, `:370`) for module/chapter/flow/contract — `submodule` is `None` at `:357`, so no submodule count is ever compared |
+│ +| S9 spine gate | `handbook_spine.py` | **active** (unit-invoked) | `python3 scripts/handbook_spine.py` — the cross-chapter consistency gate that *does* select `M*.md` chapters (the legacy `[0-9][0-9]-*.md` globs in the fill/render/check pipeline do not). It is now invoked by `panel_loop.py:385,410` (the reconcile pass after a parallel write), not only manually. What it actually enforces (verified against `handbook_spine.py:217-439`): (1) each canonical id CT-01..CT-18 is **cited** (`CONTRACT UNREGISTERED`, `:278`) **and** an id outside the register is **rejected** (`CONTRACT UNKNOWN ID`, `:267` — added round 12; sol B01's "an injected CT-99 passes rc 0" is superseded); (2) cross-chapter producer/consumer **function-token** agreement (`CONTRACT ONE-SIDED` `:251`, `CONTRACT PAIR DISAGREEMENT` `:276`) and **state-word** agreement (`CONTRACT STATE DISAGREEMENT` `:300`) for the 5 internal contracts only; (3) setting-default conflicts (`SETTING CONFLICT`, `:321`) — `norm_default` strips backticked spans so defaults cited in different backtick refs compare equal, but a backticked-only default normalizes to the string itself (sol B13); (4) dangling M/F references (`DANGLING REFERENCE`, `:337/:345`); (5) prose count claims (`COUNT CLAIM`, `:370`) for module/chapter/flow/contract — `submodule` is `None` at `:357`, so no submodule count is ever compared |
+│
+│  Round-3 classified S5–S8 "active" on prose ("render the handbook", "extracts owner decisions",
+│  "measures who references a unit", "chain-break detection"). The classification rule requires the
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -47,7 +47,7 @@
+│  | S6 corpus | `extract_owner_decisions.py` | **operator-invoked** | no in-repo caller (grep empty) |
+│  | S7 unit-map | `gen_unit_map.py` | **operator-invoked** | `main()`; no in-repo caller |
+│  | S8 patch-chain drift | `verify-patch.sh` | **operator-invoked** | no in-repo caller, no cron/timer; run manually this round (VERIFY-PATCH: PASS) |
+│ -| S9 spine gate | `handbook_spine.py` | **active** (unit-invoked) | `python3 scripts/handbook_spine.py` — the cross-chapter consistency gate that *does* select `M*.md` chapters (the legacy `[0-9][0-9]-*.md` globs in the fill/render/check pipeline do not). It is now invoked by `panel_loop.py:385,410` (the reconcile pass after a parallel write), not only manually. What it actually enforces (verified against `handbook_spine.py:217-439`): (1) each canonical id CT-01..CT-18 is **cited** (`CONTRACT UNREGISTERED`, `:278`) **and** an id outside the register is **rejected** (`CONTRACT UNKNOWN ID`, `:267` — added round 12; sol B01's "an injected CT-99 passes rc 0" is superseded); (2) cross-chapter producer/consumer **function-token** agreement (`CONTRACT ONE-SIDED` `:251`, `CONTRACT PAIR DISAGREEMENT` `:276`) and **state-word** agreement (`CONTRACT STATE DISAGREEMENT` `:300`) for the 5 internal contracts only; (3) setting-default conflicts (`SETTING CONFLICT`, `:321`) — `norm_default` strips backticked spans so defaults cited in different backtick refs compare equal, but a backticked-only default normalizes to the string itself (sol B13); (4) dangling M/F references (`DANGLING REFERENCE`, `:337/:345`); (5) prose count claims (`COUNT CLAIM`, `:370`) for module/chapter/flow/contract — `submodule` is `None` at `:357`, so no submodule count is ever compared |
+│ +| S9 spine gate | `handbook_spine.py` | **active** (unit-invoked) | `python3 scripts/handbook_spine.py` — the cross-chapter consistency gate that *does* select `M*.md` chapters (the legacy `[0-9][0-9]-*.md` globs in the fill/render/check pipeline do not). It is now invoked by `panel_loop.py:385,410` (the reconcile pass after a parallel write), not only manually. What it actually enforces (verified against `handbook_spine.py:217-439`): (1) each canonical id CT-01..CT-18 is **cited** (`CONTRACT UNREGISTERED`, `:278`) **and** an id outside the register is **rejected** (`CONTRACT UNKNOWN ID`, `:267` — added round 12; sol B01's "an injected CT-99 passes rc 0" is superseded); (2) cross-chapter producer/consumer **function-token** agreement (`CONTRACT ONE-SIDED` `:295`, `CONTRACT PAIR DISAGREEMENT` `:320`) and **state-word** agreement (`CONTRACT STATE DISAGREEMENT` `:344`) for the 5 internal contracts only; (3) setting-default conflicts (`SETTING CONFLICT`, `:365`) — `norm_default` strips backticked spans so defaults cited in different backtick refs compare equal, but a backticked-only default normalizes to the string itself (sol B13); (4) dangling M/F references (`DANGLING REFERENCE`, `:337/:345`); (5) prose count claims (`COUNT CLAIM`, `:370`) for module/chapter/flow/contract — `submodule` is `None` at `:357`, so no submodule count is ever compared |
+│
+│  Round-3 classified S5–S8 "active" on prose ("render the handbook", "extracts owner decisions",
+│  "measures who references a unit", "chain-break detection"). The classification rule requires the
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -47,7 +47,7 @@
+│  | S6 corpus | `extract_owner_decisions.py` | **operator-invoked** | no in-repo caller (grep empty) |
+│  | S7 unit-map | `gen_unit_map.py` | **operator-invoked** | `main()`; no in-repo caller |
+│  | S8 patch-chain drift | `verify-patch.sh` | **operator-invoked** | no in-repo caller, no cron/timer; run manually this round (VERIFY-PATCH: PASS) |
+│ -| S9 spine gate | `handbook_spine.py` | **active** (unit-invoked) | `python3 scripts/handbook_spine.py` — the cross-chapter consistency gate that *does* select `M*.md` chapters (the legacy `[0-9][0-9]-*.md` globs in the fill/render/check pipeline do not). It is now invoked by `panel_loop.py:385,410` (the reconcile pass after a parallel write), not only manually. What it actually enforces (verified against `handbook_spine.py:217-439`): (1) each canonical id CT-01..CT-18 is **cited** (`CONTRACT UNREGISTERED`, `:278`) **and** an id outside the register is **rejected** (`CONTRACT UNKNOWN ID`, `:267` — added round 12; sol B01's "an injected CT-99 passes rc 0" is superseded); (2) cross-chapter producer/consumer **function-token** agreement (`CONTRACT ONE-SIDED` `:295`, `CONTRACT PAIR DISAGREEMENT` `:320`) and **state-word** agreement (`CONTRACT STATE DISAGREEMENT` `:344`) for the 5 internal contracts only; (3) setting-default conflicts (`SETTING CONFLICT`, `:365`) — `norm_default` strips backticked spans so defaults cited in different backtick refs compare equal, but a backticked-only default normalizes to the string itself (sol B13); (4) dangling M/F references (`DANGLING REFERENCE`, `:337/:345`); (5) prose count claims (`COUNT CLAIM`, `:370`) for module/chapter/flow/contract — `submodule` is `None` at `:357`, so no submodule count is ever compared |
+│ +| S9 spine gate | `handbook_spine.py` | **active** (unit-invoked) | `python3 scripts/handbook_spine.py` — the cross-chapter consistency gate that *does* select `M*.md` chapters (the legacy `[0-9][0-9]-*.md` globs in the fill/render/check pipeline do not). It is now invoked by `panel_loop.py:385,410` (the reconcile pass after a parallel write), not only manually. What it actually enforces (verified against `handbook_spine.py:217-439`): (1) each canonical id CT-01..CT-18 is **cited** (`CONTRACT UNREGISTERED`, `:278`) **and** an id outside the register is **rejected** (`CONTRACT UNKNOWN ID`, `:267` — added round 12; sol B01's "an injected CT-99 passes rc 0" is superseded); (2) cross-chapter producer/consumer **function-token** agreement (`CONTRACT ONE-SIDED` `:295`, `CONTRACT PAIR DISAGREEMENT` `:320`) and **state-word** agreement (`CONTRACT STATE DISAGREEMENT` `:344`) for the 5 internal contracts only; (3) setting-default conflicts (`SETTING CONFLICT`, `:365`) — `norm_default` strips backticked spans so defaults cited in different backtick refs compare equal, but a backticked-only default normalizes to the string itself (sol B13); (4) dangling M/F references (`DANGLING REFERENCE`, `:381/:389`); (5) prose count claims (`COUNT CLAIM`, `:414`) for module/chapter/flow/contract — `submodule` is `None` at `:401`, so no submodule count is ever compared |
+│
+│  Round-3 classified S5–S8 "active" on prose ("render the handbook", "extracts owner decisions",
+│  "measures who references a unit", "chain-break detection"). The classification rule requires the
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -93,7 +93,7 @@
+│  | fill `--model` | `""` (`:411`) | a model id | the seat model for `--engine hermes` | empty falls back to `openai/gpt-6.1-sol` (`:454`) |
+│  | fill `--dry-run` | false (`:413`) | flag | list candidates without provider calls or writes | **`--dry-run` suppresses all provider calls and writes** (`:438-440`); `--force` decides *which* documents may be rewritten — round-6 documented five controls and omitted the switches that decide whether writing or provider execution occurs (sol B11) |
+│
+│ -**Spine gate (S9, added this round — grok B5; re-verified at `242cc474`).** `handbook_spine.py`
+│ +**Spine gate (S9, added this round — grok B5; re-verified at `3fba8a7` this round).** `handbook_spine.py`
+│  carries no settings surface; its policy is four hardcoded sets: `CANON` (the 18 contract ids +
+│  expected producer/consumer systems), `BOUNDARY` (the **13** boundary contracts whose far side is a
+│  human/LLM/service with no in-repo file), the `SETTING_ROW`/`REF`/`COUNT_CLAIM` regexes, and the
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -101,7 +101,7 @@
+│  defect this gate exists to close: its predecessor compared function tokens but never the **state**
+│  column, so M9 ("broken") and M11 ("works") could both cite CT-06 and pass while flatly disagreeing.
+│  The state-agreement check (and the CT-05 boundary→internal re-grade) are added that round; round 12
+│ -added the **`CONTRACT UNKNOWN ID`** check (`:216-227`) that rejects a chapter citing an id outside
+│ +added the **`CONTRACT UNKNOWN ID`** check (`:267`) that rejects a chapter citing an id outside
+│  CT-01..CT-18. **Round 16 fixed the column-slicing blind spot (grok #4):** the §6 cell splitter is
+│  now backtick-aware (`split_row`, `handbook_spine.py`), so a literal `|` inside a code span (a grep
+│  pattern, or `MASTER-DOC: PASS\|FAIL`) is cell content, not a separator, and a §6 row that splits to
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -220,7 +220,7 @@
+│
+│  - Code read: `master_doc_check.py` (268 lines, read in full); `master_doc_fill.py:24-28, 390-422`;
+│    `gen_nasa_handbook.py:15-20, 247-262`; `master_doc_panel.py:55-80`; `panel_loop.py` (461 lines, read
+│ -  in full — re-pinned this round); `handbook_spine.py` (399 lines, read in full);
+│ +  in full — re-pinned this round); `handbook_spine.py` (443 lines, read in full);
+│    `ownership.py` (170 lines, read in full).
+│  - Commands run: `python3 scripts/master_doc_check.py` (FAIL, 44/37/50); `bash scripts/verify-patch.sh`
+│    (PASS); `grep -rn gen_nasa_handbook scripts/` (no caller).
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -109,7 +109,7 @@
+│  **not** verify cited line numbers exist in the cited file, and it trusts the chapters' self-reported
+│  status word rather than re-deriving it.
+│
+│ -**`panel_loop.py` settings and stop semantics (sol B14; re-pinned this round — `panel_loop.py` grew
+│ +**`panel_loop.py` settings and stop semantics (sol B14; re-pinned at `3fba8a7` this round — `panel_loop.py` grew
+│  ~+70 lines in `08a2c8a..242cc474` when the parallel-writer path landed, so every prior locator
+│  shifted).** The loop that produces this handbook carries its own controls; a process exit 0 is
+│  **not** document acceptance:
+All five chapters are corrected and the spine is clean. Final manifest:
+
+WRITER MANIFEST — ROUND 16 (group s2: M4–M8)
+
+Chapters written (5):
+- M4-board.md
+- M5-harness.md
+- M6-documentation.md
+- M7-github.md
+- M8-safety.md
+
+Chapters still skeleton: none (all five carry all 13 headings, code-derived bodies).
+
+RED field count per chapter:
+- M4: 1 (Metrics §8 — absence-proved)
+- M5: 3 (Metrics §8; §7 conformance battery unrun on a live node; §9 log inventory 4/215 helper sites)
+- M6: 2 (Status §1 own gate reads FAIL over the legacy 44-unit corpus; Metrics §8)
+- M7: 3 (Metrics §8; §1 mint UNVERIFIED — no App creds on host; §9 inventory 2/103 helper sites)
+- M8: 1 (Metrics §8 — absence-proved)
+
+Corrections applied (round-15 → this round):
+- Revision stamps re-derived to HEAD == origin/main = 3fba8a7 across all five chapters; cited-file byte-identity range stated (08a2c8a..3fba8a7). Kills the "five different revisions claim to be HEAD" contradiction (grok #2, glm #3, kimi B1, deepseek B5).
+- M4 §1/§7 HEAD literal fixed 08a2c8a → 3fba8a7, drift re-run and quoted from the actual command output (grok #1, kimi B3).
+- OUTLINE locator fixed: verify-patch.sh = M6.S8 at OUTLINE.md:176 (was :170 = M5.S5) in M6 §12 and M8 §3 (grok #3).
+- M5: install-claude-code.sh (673 lines) and install-codex.sh (592 lines) read in full this round; §1 Status and §13 evidence updated (deepseek B2).
+- M6: added sol B03 (--groups with --parallel=1 runs parallel writers with no reconcile pass, panel_loop.py:357 vs :383).
+- Spine code fix (M6.S9, my scope): backtick-aware §6 cell splitter + CONTRACT ROW MISPARSE finding (grok #4). Handbook_spine.py internals re-pinned in M6 §3/§5 to the shifted line numbers.
+- Uniform RED accounting rule (glm #4): boundary/local §6 rows with an external far side are terminal states, not REDs — stated once in M4 and referenced by M5–M8. RED counts re-derived accordingly.
+- deepseek B1 (M6 delivery pipeline unbuildable — [0-9][0-9]-*.md globs) retained as a named finding/UNVERIFIED (CT-18), not silently "fixed" — the code is the truth, the disagreement is filed.
+
+Commands run (exit status):
+- git rev-parse HEAD origin/main → 0 (3fba8a7 both)
+- git show --stat (×4 commits) → 0
+- git diff --name-only 08a2c8a..3fba8a7 → 0 (4 scripts changed, none cited by M4/M5/M7/M8)
+- python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main → 0, RESULT: OK (357 vs 357, 0 divergent ids, sha256 5aa15431…/783d556c…)
+- jq -r '.id' .coding-hermes/board/tasks.jsonl | wc -l → 0 → 357
+- wc -l < .coding-hermes/board/events.jsonl → 0 → 519
+- scripts/boardctl validate → 0, RESULT: OK (7 warning(s))
+- grep -nE 'boardctl|tasks.jsonl|events.jsonl' scripts/node-bus-worker.py | wc -l → 0 → 0 matches (CT-10 evidence)
+- python3 scripts/master_doc_check.py → 1 (44 module(s): 37 VERIFIED, 50 error(s), MASTER-DOC: FAIL)
+- bash scripts/verify-patch.sh → 0 (VERIFY-PATCH: PASS, 5 stages, 4 patches, 57432007…)
+- python3 scripts/handbook_spine.py → 0 (see summary line below)
+- for f in scripts/harness/*.sh; do bash -n "$f"; done → 0
+- python3 tests/test_harness_resolve.py → 0 (28 tests OK)
+- python3 -B scripts/github-app-token.py → 2 (usage, no mint)
+- python3 tests/test_reclaim.py → 0 (9 tests OK)
+- python3 scripts/check_scan_scope.py → 0 (15 gitleaks claims, RESULT: OK)
+- grep -rcE '\b(ok|bad|warn|note)\s+"' scripts/harness/ → 0 → 215 total
+- grep -rcE '\b(ok|bad|warn|note|say)\s+"' scripts/github-app-*.sh → 0 → 103 total
+- python3 -m py_compile scripts/handbook_spine.py → 0
+- grep -nE 'def (adjudicate|fd_holders|flock_probe|consumer_count|commits_after_mtime)' scripts/board_lock.py → 0 (M4 locators re-confirmed)
+
+Spine summary line: chapters=13  canonical contracts=18  findings=0
+
+CROSS-SECTION DEPENDENCIES:
+1. CT-10 (node → board) — M4 §6 asserts the node worker does not write board rows (broken; grep over scripts/node-bus-worker.py → 0 matches). M2 (s1 writer) owns the node worker. M2 must cite the same canonical id CT-10, not a local id, and must not claim node-bus-worker.py writes board rows; state must remain broken/UNVERIFIED, never "works".
+2. M4 §12 / M5 §12 cross-references: "M9 reads board rows as admission gates (internal/scheduler/admission_mode.go:230-242); M10 does not" and the M7→M11/M12 credential-domain split — these rest on s3 (M9–M12) and s1 (M2/M3) chapters not contradicting the ownership/credit attribution this round.
+
+Code change beyond chapters (disclosed): scripts/handbook_spine.py — added split_row() (backtick-aware §6 cell splitter) and a CONTRACT ROW MISPARSE finding, per grok round-15 #4. Compiles, runs, findings=0.
+
+WRITER ROUND COMPLETE
+
+session_id: local-20edb243454556921ce070866b5846fa8b00583d8f772ebaba1a721d52d6144a

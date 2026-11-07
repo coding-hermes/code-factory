@@ -1,0 +1,388 @@
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -6,10 +6,10 @@
+│  |---|---|
+│  | Module name | SCHEDULER |
+│  | Path | `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/` (Go) |
+│ -| Revision | `7a7afc0f` (scheduler repo HEAD at the round-15 stamp; HEAD has since advanced to `81ce9fcb` — "board: file SCHED-GAP-16998", a board-JSONL-only commit, so every cited Go file is byte-identical). Cited Go source files are byte-identical to the round-11 stamp `34e44897` — `git diff --name-only 34e44897..HEAD` returns only `.coding-hermes/board/events.jsonl`, `.coding-hermes/board/tasks.jsonl` and `.qa/chaos-probes/errorpath.sh`. Post-stamp commits: `972f11c8` (chmod +x the chaos errorpath probe, QA-CHS-187), `0927c552` (board close, `[ci skip]`), `7a7afc0f` (board close RELEASE-042, `[ci skip]`). The one cited-file change since `1771d3aa` remains `go.mod`'s toolchain bump (RELEASE-038 `9bc9e561`: `go 1.26.0` + `toolchain go1.26.10`) |
+│ -| Language / runtime | Go — `go.mod` declares `go 1.26.0` + `toolchain go1.26.10`; `go env GOVERSION` resolves **go1.26.10** (`GOTOOLCHAIN=auto`). Host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`); `/usr/bin/go` = **go1.26.9** (`/usr/lib/go-1.26/bin/go`; measured `readlink -f /usr/bin/go` + `/usr/bin/go version`) |
+│ +| Revision | `251d11db` (scheduler repo HEAD at this round's stamp). The round-15 stamp `7a7afc0f` is superseded; HEAD advanced through `81ce9fcb` (board JSONL), `b0da3761` + `bbefa36c` (QA-CHS-188 test-only), `384e5df7` ("scheduler: unblock before you block" — a `spawn.go` prompt-text change), to `251d11db`. `git diff --name-only 34e44897..HEAD` returns **five** paths: `.coding-hermes/board/events.jsonl`, `.coding-hermes/board/tasks.jsonl`, `.qa/chaos-probes/errorpath.sh`, `internal/scheduler/spawn.go`, `internal/scheduler/usage_pool_policy_test.go`. The only cited-file change is `spawn.go`: `384e5df7` appended an "UNBLOCK BEFORE YOU BLOCK" block to the `builtinForemanPrompt` string constant (+5 lines), which shifted `buildForemanPrompt` from `:1244` to `:1249` — a prompt-text-only change, no control-flow change. Every other cited Go file (`admission_mode.go`, `packer_select.go`, `slot_pool.go`, `tick_process.go`, `usage_pool_policy.go`, `dispatch_leg.go`, `bus/dispatch.go`, `main.go`, `server.go`, `server_metrics.go`, `loader.go`, `urgency.go`, `migrations.go`) is byte-identical to `34e44897` |
+│ +| Language / runtime | Go — `go.mod` declares `go 1.26.0` + `toolchain go1.26.10`; `go env GOVERSION` resolves **go1.26.10**. Host bootstrap `go` = **go1.26.10** both at `/usr/bin/go` (`/usr/lib/go-1.26/bin/go`, `readlink -f` + `/usr/bin/go version`) and `/home/kara/.local/bin/go` (this round; the round-16 judges measured 1.26.8/1.26.5 — the host was upgraded to 1.26.10 since, so no `GOTOOLCHAIN` fetch is needed) |
+│  | Owner lane | coding-hermes-scheduler (control plane) |
+│ -| Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:98-129, 143-208, 230-267`), the binary defaults (`cmd/schedulerd/main.go:95-200`), the auth path (`internal/api/auth.go:187-197`), the API route table (`internal/api/server.go:289-370`) and `config.example.toml` read this round; `tick_process.go`/`packer_select.go`/`namespace_alloc.go` read line-by-line this round (was grep-level — closed, deepseek #2); §9 log inventory narrowed to the settlement/batch-dispatch surface (2 of 378 operator-visible sites, the count corrected this round) with the uncovered count named as RED |
+│ +| Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:98-129, 143-208, 230-267`), the pack gate order (`packer_select.go:437-521`), the binary defaults (`cmd/schedulerd/main.go:95-200`), the auth path (`internal/api/auth.go:187-197`), the API route table (`internal/api/server.go:289-370`) and `config.example.toml` read this round; `tick_process.go`/`slot_pool.go`/`usage_pool_policy.go`/`migrations.go` re-read this round. The admission procedure (§3) is re-derived from the calling sequence (sol B17); the full 30-table census is named (grok #3) |
+│
+│  ## 2. Purpose, authority and position
+│
+│ @@ -32,86 +32,102 @@
+│  |---|---|---|---|
+│  | S1 admission and allocation | `admission_mode.go`, `tick_process.go`, `packer_select.go`, `namespace_alloc.go`, `usage_pool_policy.go` | **active** | `admission_mode.go:98` `admissionModeFor` (project override → namespace default → cooldown); `:112` `admissionModeForProject` (DB read); `tick_process.go:40` `evaluate()`; `packer_select.go:19` `Pack`; `namespace_alloc.go:131` `Allocate`; `usage_pool_policy.go:21` `reserveUsagePools` |
+│  | S2 execution and settlement | `spawn`, `slot_pool`, `lifecycle`, `dispatch_leg` | **active** | `dispatch_leg.go:260` `awaitDispatchReply`; `:262-336` constructs completed/failed/timeout outcomes |
+│ -| S3 durable state | `scheduler.db` + migration stores | **active** | live store has **30** tables (measured `sqlite3 … '.tables'`); see §5/§3 note for the run-correctness keys |
+│ +| S3 durable state | `scheduler.db` + migration stores | **active** | live store has **30** tables (measured `sqlite3 … '.tables'`); see the census below |
+│  | S4 operator surfaces | `cmd/schedulerd`, `scheduler-dispatch`, `scheduler-query`, `queueprobe`, `migrate`, `backfill-commit-signals`, `cooldown-residue` | **operator-invoked** | `ls cmd/` → 7 command dirs; no unit invokes another unit — these are CLI entrypoints an operator (or a foreman step) runs, not a scheduler lane |
+│ -
+│ -**Operator surfaces (B18, corrected this round — 43 routes, not 33).** The daemon mounts its HTTP
+│ -routes in `internal/api/server.go` (the `Handler()` tree spans `:289-370`, not just `:289-346`):
+│ -`grep -oE 'mux\.HandleFunc\("[^"]+"' internal/api/server.go | sort -u | wc -l` = **43** (measured).
+│ -The full set, all under `/api/v1/`, in mount order: `health`, `live`, `status`, `config`,
+│ -`projects`, `projects/`, `hooks`, `hooks/plan`, `hooks/{id}`, `hooks/reload`, `lanes/tree`,
+│ -`lanes`, `links`, `links/`, `cadence`, `namespaces`, `namespaces/`, `groups`, `groups/`,
+│ -`templates`, `templates/`, `ticks`, `ticks/`, `queue`, `openapi.json`, `metrics`, `evaluate`,
+│ -`pause`, `resume`, `events`, `events/stream`, `observatory`, `observatory/stream`,
+│ -`gateway-errors`, `features`, `features/prune-candidates`, `peers`, `peers/`, `agents`, `agents/`,
+│ -`federation/query`, `federation/catalogue`, `cooldown/residue`. Round-6 named 33; the ten added
+│ -this round are `hooks/reload`, `features`, `features/prune-candidates`, `peers`, `peers/`,
+│ -`agents`, `agents/`, `federation/query`, `federation/catalogue`, `cooldown/residue`. Auth on
+│ -mutations via `extractBearerOrHeaderToken` (`internal/api/auth.go:187-197`); the agent and
+│ -federation surfaces are operator-gated reads, not merely gated mutations (`server.go:356-366`).
+│ -The recovery commands (`reap-sessions`, `verify-board`, `migrate`) are CLI-only flags/subcommands,
+│ -not HTTP routes. Per-route request/response shapes and write-authority readbacks are **not**
+│ -written this round — the route inventory is complete (43), the per-route contract is not (a named
+│ -RED on S4, B17/B18).
+│  | S5 doctrine | `scheduler-rules.md`, `dispatch-spec.md`, `execution-contracts.md`, `execution-store.md`, `runbook-drain-restart.md`, `hop-liveness-watchdog.md` | **legacy (documentation)** | six doctrine docs present under `docs/`; presence is existence, not invocation — no unit reads them at runtime |
+│
+│ -**Ordered admission procedure (B16, written this round).** The composed decision sequence, in
+│ -order of authority:
+│ +**Operator surfaces.** The daemon mounts its HTTP routes in `internal/api/server.go` (the
+│ +`Handler()` tree spans `:289-370`): `grep -oE 'mux\.HandleFunc\("[^"]+"' internal/api/server.go | sort -u | wc -l` = **43** (measured). The full set, all under `/api/v1/`, in mount order: `health`, `live`, `status`, `config`, `projects`, `projects/`, `hooks`, `hooks/plan`, `hooks/{id}`, `hooks/reload`, `lanes/tree`, `lanes`, `links`, `links/`, `cadence`, `namespaces`, `namespaces/`, `groups`, `groups/`, `templates`, `templates/`, `ticks`, `ticks/`, `queue`, `openapi.json`, `metrics`, `evaluate`, `pause`, `resume`, `events`, `events/stream`, `observatory`, `observatory/stream`, `gateway-errors`, `features`, `features/prune-candidates`, `peers`, `peers/`, `agents`, `agents/`, `federation/query`, `federation/catalogue`, `cooldown/residue`. Auth on mutations via `extractBearerOrHeaderToken` (`internal/api/auth.go:187-197`). The recovery commands (`reap-sessions`, `verify-board`, `migrate`) are CLI-only flags/subcommands, not HTTP routes. Per-route request/response shapes and write-authority readbacks are **not** written this round — the route inventory is complete (43), the per-route contract is not (a named RED on S4).
+│ +
+│ +**Admission procedure (B17, re-derived this round from the calling sequence).** The order is the
+│ +packer's own execution order, not an alphabetized list of helpers. Packing is invoked at
+│ +`tick_process.go:285` (`multiPoolPacker.Pack`), and the per-project gate sequence inside `Pack`
+│ +(`packer_select.go`, namespace-mode path) is:
+│
+│  1. **Mode precedence** (`admission_mode.go:98-107` `admissionModeFor`): a project-level
+│     `cooldown`/`tasks` mode wins; otherwise the namespace's mode wins; otherwise **cooldown**.
+│     `admissionModeForProject` (`:112-129`) re-reads the same precedence from the DB for post-tick
+│ -   paths.
+│ -2. **Board ownership** (`boardOwnedByLane`, `:177-184`): an explicit `BoardOwnershipOwner`/
+│ -   `BoardOwnershipShared` override wins; otherwise the filesystem derivation (`laneOwnsBoard`,
+│ -   workdir containment, `:143-184`).
+│ -3. **Board workability** (`tasksAdmissionDue`, `:230-243`): for a tasks-mode lane, a `workable > 0`
+│ -   owned board grants the **cooldown waiver**; an empty workdir (`:231-232`), a non-owned board
+│ -   (`:234-236`), or an unreadable board (`:238-240`) returns false — which falls the lane back to
+│ -   its cooldown pin, **not an outright dispatch refusal** (the fail-open doc at `:222-229`). Round-8
+│ -   called a non-owned/empty board "a refusal" — that is wrong: this predicate decides the waiver,
+│ -   and `packer_select.go` performs the actual gates and cooldown decision on top of it.
+│ -4. **Last-tick failure** (`lastTickStatusFailed`, `:266-267`): a project whose
+│ -   `last_tick_status='failed'` stands the tasks-mode waiver down — the next tick paces on the full
+│ -   effective cooldown instead of re-admitting (SCHED-GAP-214).
+│ -5. **Usage-pool reservation** (`usage_pool_policy.go:26-63` `reserveUsagePools`). The boolean/error
+│ -   pair has **distinct outcomes (B14, sol)**: a *disabled* policy (`!policy.Enabled`) returns
+│ -   `(false, nil)` with no reservation and no refusal (enforcement off); a *nil DB authority*
+│ -   returns a **named authority-unavailable error**, not `(false, nil)` (`:26-30`); a missing/invalid
+│ -   `host_id` or empty pool set returns `ErrUsagePoolMissing`; a denied reservation emits a capacity
+│ -   event and returns `(false, nil)` (`:67-74`) — a *capacity denial*, distinguishable from disabled
+│ -   enforcement; remote lanes append `host:<id>`, local lanes append `LocalPoolID`; `ObserveOnly`
+│ -   checks without reserving; otherwise lease recovery runs, then `ReserveAll` enforces the
+│ -   reservation. Round-6 conflated "nil authority" with "disabled enforcement" — they are different
+│ -   outcomes with different caller obligations.
+│ -6. **Board-stasis gate** (`internal/scheduler/packer_select.go:462` `boardStasisBlocks(m.boardStasisGate, …)`, also `:602` `boardStasisBlockedQuiet`): a cooldown-mode **BUILDER** lane whose board file has not changed since its previous completed tick (mtime+size+content-digest fingerprint) is excluded from selection — no cooldown consumed. Tasks-mode and reporter-class lanes are exempt; an **unreadable board fails open** (the lane is not blocked); an operator `ForceEvaluate` bypasses it for one pass. Flag `board-stasis-gate` default **true** (`cmd/schedulerd/main.go:150`, SCHED-GAP-1678).
+│ … omitted 430 diff line(s) across 1 additional file(s)/section(s)
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -6,10 +6,10 @@
+│  |---|---|
+│  | Module name | CRIER |
+│  | Path | `/home/kara/crier/` (Go) |
+│ -| Revision | `0a372209` (crier repo HEAD at the round-15 stamp; HEAD has since advanced to `fa619c22` — three README-only merges, `git diff --name-only 0a372209..HEAD` = `README.md` only, so every cited Go file is byte-identical). Cited handler/guard/config/client files are byte-identical to the round-12 stamp `33c1f388` — `git diff --name-only 33c1f388..HEAD` returns only `.github/workflows/release.yml`, `Makefile`, `README.md`, `docs/releases.md`, `releng/*`, `scripts/release-upload.sh`, `scripts/release-upload-selftest.sh`. Post-stamp commits: `6d49c262` (README Quick Start v0.3.0, RELEASE-013), `7860836f` + `0a372209` (tag publisher idempotency, RELEASE-012). The two commits past the round-11 stamp `86c4c469` were `eb21ca03` (the idle-boot flake fix) and `dc15b2d6` (a board row) |
+│ -| Language / runtime | Go — `go.mod` declares `go 1.26.10` (a build/toolchain requirement, not a runtime one); host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`), `/usr/bin/go` = **go1.26.9** (`/usr/lib/go-1.26/bin/go`); `GOTOOLCHAIN=auto` auto-fetches 1.26.10 for this repo |
+│ +| Revision | `e50e55ee` (crier repo HEAD at this round's stamp). The round-15 stamp `0a372209` is superseded; HEAD advanced through `fa619c22` → `7220a22b` → `e50e55ee` (`c4d3c240` "load-insensitive session assertions + deterministic delivery_ms"). `git diff --name-only 0a372209..HEAD` returns **six** paths: `.coding-hermes/board/events.jsonl`, `.coding-hermes/board/tasks.jsonl`, `.gitreins/tasks.yaml`, `README.md`, `cmd/server/session_budget_cut_test.go`, `cmd/server/session_dispatch_live_test.go`. `git diff --name-only 33c1f388..HEAD` adds `.github/workflows/release.yml`, `Makefile`, `docs/releases.md`, `releng/*`, `scripts/release-upload*.sh`. Every cited **non-test** Go file (`internal/registry/handler.go`, `internal/guard/*.go`, `config/config.go`, `internal/registry/agentsig.go`, `internal/registry/service_auth.go`, `clients/python/crier_client.py`) is byte-identical to the round-12 stamp `33c1f388` — the only Go changes since then are two `cmd/server` test files |
+│ +| Language / runtime | Go — `go.mod` declares `go 1.26.10`; `go env GOVERSION` resolves **go1.26.10**. Host bootstrap `go` = **go1.26.10** both at `/usr/bin/go` (`/usr/lib/go-1.26/bin/go`) and `/home/kara/.local/bin/go` (this round; the round-16 judges measured 1.26.8/1.26.5 — the host was upgraded to 1.26.10 since) |
+│  | Owner lane | crier (control plane) |
+│ -| Status | **UNVERIFIED** — `internal/registry/handler.go` (deliver/retrieve/ack surfaces + the full 3-site slog surface), `internal/guard/guard.go` (pipeline, oversize branch, `errorResult`), `internal/guard/policy.go` (`ResolvePolicy`), `internal/guard/metrics.go`, `config/config.go` (controls + guard bounds + metrics default), `clients/python/crier_client.py`, `cmd/crier-front/main.go` read this round; the full 1895-line handler body read line-by-line this round (register, deliver, retrieve, ack, stats, idempotency, realms, per-peer policy, service-delivery auth, federation fallback — see §3) |
+│ +| Status | **UNVERIFIED** — `internal/registry/handler.go` (deliver/retrieve/ack surfaces + the full 3-site slog surface), `internal/guard/guard.go` (pipeline, oversize branch, `errorResult`, `audit`), `internal/guard/router.go` (saturation counter), `internal/guard/policy.go` (`ResolvePolicy`), `internal/guard/metrics.go`, `config/config.go` (controls + guard bounds + metrics default + service-delivery), `internal/registry/service_auth.go`, `clients/python/crier_client.py`, `clients/typescript/crier.ts`, `cmd/crier-front/main.go`, `cmd/crier-mcp/main.go`, `deploy/*` read this round; the full 1895-line handler body read line-by-line this round (register, deliver, retrieve, ack, stats, idempotency, realms, per-peer policy, service-delivery auth, federation fallback — see §3) |
+│
+│  ## 2. Purpose, authority and position
+│
+│ @@ -29,20 +29,21 @@
+│
+│  | Submodule | Unit | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│ -| S1 custody and transport | `internal/registry/handler.go` (1895 lines) | **active** | `HandleRegister` (`:598`), `HandleDeliver` (`:990`), `HandleRetrieve` (`:1690`), `HandleAck` (`:1812`) |
+│ -| S2 the guard | `internal/guard/guard.go` | **active** | `Guard.Check` (`:167`) is the choke point; pipeline documented at `:25-28`; oversize branch `:198-234`; `errorResult` `:318-361` |
+│ -| S3 binaries, ports, services | `config/config.go:622` port 8767; `crier-front/main.go:39` listen `127.0.0.1:8770` | **active** | read |
+│ -| S4 client libraries | `clients/python/crier_client.py`, `clients/typescript` | **active** | Python client read (`deliver` `:975`, `retrieve` `:1009`, `ack` `:1038`) |
+│ -
+│ -**Custody lifecycle (B20, written this round).** The wire contract of a retrieve, derived from the
+│ -handler and the Python client:
+│ -
+│ -- **Parameter aliases and precedence** (`internal/registry/handler.go:1711-1743`): the spec'd `limit`/`lease_seconds`
+│ -  alias the historical `max`/`lease`. When both spellings appear in one request, the historical
+│ -  `max`/`lease` **wins** — the alias fills in only what the historical name left absent
+│ -  (DF-CRIER-180).
+│ +| S1 custody and transport | `internal/registry/handler.go` (1895 lines) | **active** | HTTP handlers mounted by `cmd/server` and run under `deploy/crier.service` (`ExecStart=/usr/local/bin/crier -pidfile /run/crier/crier.pid`): `HandleRegister` (`:598`), `HandleDeliver` (`:990`), `HandleRetrieve` (`:1690`), `HandleAck` (`:1812`) |
+│ +| S2 the guard | `internal/guard/guard.go` | **active** | `Guard.Check` (`:167`) is the choke point, invoked from the deliver path; pipeline documented at `:25-28`; oversize branch `:198-234`; `errorResult` `:318-361`; `audit` `:430` |
+│ +| S3 binaries, ports, services | server `:8767`; front `127.0.0.1:8770`; MCP stdio bridge; deploy units | **active (server)** / **operator-invoked (front, mcp)** | `deploy/crier.service` `ExecStart` invokes the server; front listens via `cmd/crier-front/main.go:39` (`defaultListen = "127.0.0.1:8770"`); MCP is `cmd/crier-mcp/main.go` `server.Serve()` (`:219`) — an MCP stdio bridge (JSON-RPC over stdin/stdout), no port; the front's and MCP's production invokers are not in `deploy/` (no unit file names them) — activation UNVERIFIED for those two |
+│ +| S4 client libraries | `clients/python/crier_client.py`, `clients/typescript/crier.ts` | **active (python)** / **UNVERIFIED activation (typescript)** | Python client consumed by `crier-fleet/dispatcher.py` (M11 imports `crier_client`); the TypeScript client has no in-repo consumer found (`grep -rn 'crier.ts\|@/clients/typescript' cmd/ internal/` → 0) — its production invoker is out of scope |
+│ +
+│ +**Custody lifecycle.** The wire contract of a retrieve, derived from the handler and the Python
+│ +client:
+│ +
+│ +- **Parameter aliases and precedence** (`internal/registry/handler.go:1734-1745`): the spec'd
+│ +  `limit`/`lease_seconds` alias the historical `max`/`lease`. The parse block reads `lease` first,
+│ +  and only falls back to `lease_seconds` when `lease` is absent (`:1735-1743`) — so the historical
+│ +  name **wins** when both are present (DF-CRIER-180). Default lease is `leaseSecs := 30 * time.Second`
+│ +  (`:1734`), not `:1732-1743`.
+│  - **Defaults and bounds**: default batch **10** messages, capped at **100** (a `max > 100` returns
+│ -  400 `max must be <= 100`, `:1727-1730`); default lease **30 s** (`:1732-1743`).
+│ +  400 `max must be <= 100`, `:1728-1731`).
+│  - **Filter-after-claim** (`:1770-1775`, CRIER-TAGS §2.4): a retrieve leases first, then applies a
+│    tag filter in Go over the claimed batch. Entries the filter drops **stay leased until their lease
+│    expires** — they are not lost, they are briefly unavailable to another reader (a stated KNOWN
+│ @@ -56,29 +57,32 @@
+│    not returned again until its lease expires — an empty list after a failed ack is expected, not a
+│    lost message; `stats()` distinguishes "nothing queued" from "everything leased".
+│
+│ -**Protected service-delivery authorization (sol B01, documented this round).** `deliverAuthenticated`
+│ -calls `authorizeServiceDelivery` at `internal/registry/handler.go:1147` — before body decoding,
+│ -budgets, replay admission and every transport side effect. For a recipient registered in the
+│ -protected set (`h.serviceDeliveries`), `internal/registry/service_auth.go:128-168` requires: the
+│ -4-line signed-sender form (possession of the **sender** key, not the recipient key); a body `sender`
+│ -equal to the signed `X-Agent-ID`; no `principal_id`/`as_agent` (those are human identities, not
+│ -service delivery authorization); an allowlisted sender→recipient pair; and — only when a service
+│ -audience is configured — a nonempty `idempotency_key` and a matching `X-Crier-Service-Audience`
+│ -header. Both the node worker (`node-bus-worker.py:1208-1215`, body `{"payload": result}` only, no
+│ -sender/idempotency_key) and the dispatcher (`dispatcher.py:500-508`, sender but no
+│ -idempotency_key/audience) construct requests that do **not** carry these controls, so "works" for
+│ -CT-03/CT-04/CT-06 is scoped to **un-protected** recipients; whether protection is enabled on the
+│ -live relay is not asserted here.
+│ -
+│ -**TypeScript client surface (sol B22, added this round — was NAME ONLY).** `clients/typescript/crier.ts`
+│ -is a real consumer, not just a directory. `Crier` (`:564`) constructor (`:571-588`): validates
+│ -`baseUrl` starts `http(s)://` (`:573-575`); `agentId` from options; `token` = `options.token ??
+│ -process.env["CR_AUTH_TOKEN"] ?? undefined` (`:577`); `timeoutMs` default **30000** (`:578`); a signing
+│ -key is **mandatory** — no `key`/`keyPath` throws (`:584-587`). `fromEnv` (`:591-598`) reads
+│ -`CRIER_URL`/`CRIER_HTTP_URL` (default `http://localhost:8767`, `:561`), `CRIER_AGENT_ID`,
+│ -`CRIER_AGENT_PRIVATE_KEY_FILE`. Signing (`:603-625`) covers `METHOD\nPATH\nTS` with
+│ -`X-Agent-ID`/`X-Agent-Ts`/`X-Agent-Sig` headers — the same expression the server verifies
+│ -(`internal/registry/agentsig.go`).
+│ +**Protected service-delivery authorization (sol B01, corrected this round — the header is
+│ +`X-Crier-Audience`, not `X-Crier-Service-Audience`).** `deliverAuthenticated` calls
+│ +`authorizeServiceDelivery` at `internal/registry/handler.go:1147` — before body decoding, budgets,
+│ … omitted 327 diff line(s) across 1 additional file(s)/section(s)
+│ docs/handbook/chapters/M11-dispatcher.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | DISPATCHER (`crier-fleet`) |
+│  | Path | `/home/kara/crier-fleet/dispatcher.py` (538 lines) |
+│ -| Revision | `283bca91091933177ec521e52f37f1bc987cf7da` (crier-fleet HEAD, stamped this round) |
+│ +| Revision | `283bca91091933177ec521e52f37f1bc987cf7da` (crier-fleet HEAD, re-confirmed this round) |
+│  | Language / runtime | Python — `#!/usr/bin/env python3`, no pinned version; host `python3` = 3.14.9 |
+│  | Owner lane | crier-fleet (control plane) |
+│  | Status | **VERIFIED** — `dispatcher.py` read in full this round (job model, ledger, completion bridge, settings, loop, all 23 log lines); the live-job tests are decoration (no assert) and the synchronous `CF_DURABLE_JOB=0` path is unmeasured (§7) |
+│ @@ -20,11 +20,11 @@
+│
+│  **What breaks if this module is absent.** For agents whose deployment routes them through
+│  `crier-fleet`, no task leaves the bus: every dispatch sits in the inbox until it expires. This is
+│ -**not** the only inbox consumer (sol B18): `scripts/node-bus-worker.py` independently retrieves
+│ -inbox messages (`:1320-1340`), processes them (`:1374`), invokes the harness (`:1148-1149`),
+│ -delivers the reply (`:1389-1395`) and acknowledges (`:1528-1539`), with its own entrypoint that
+│ -does not import the dispatcher. The absence consequence is therefore scoped to agents served by
+│ -the control-host dispatcher, not a property of the bus as a whole.
+│ +**not** the only inbox consumer: `scripts/node-bus-worker.py` independently retrieves inbox
+│ +messages (`:1320-1340`), processes them (`:1374`), invokes the harness (`:1148-1149`), delivers
+│ +the reply (`:1389-1395`) and acknowledges (`:1528-1539`), with its own entrypoint that does not
+│ +import the dispatcher. The absence consequence is therefore scoped to agents served by the
+│ +control-host dispatcher, not a property of the bus as a whole.
+│
+│  **What breaks if it lies.** Two distinct modes:
+│  - A task recorded as done that never ran. The ledger replays a recorded result instead of
+│ @@ -47,7 +47,7 @@
+│  |---|---|---|---|
+│  | S1 job model and durable execution | `dispatch_durable` (`:215-331`); `dispatch` switch (`:334-358`) | **active** | start detached (`:291` `setsid sh`), poll, kill run.sh's process group (`:329`); `CF_DURABLE_JOB=0` selects the synchronous path. **The kill does NOT reach the GNU-timeout group holding the harness** (B01, F11-8) |
+│  | S2 ledger and idempotency | `ledger_load`/`ledger_put` (`:365-397`), replay (`:470-475`) | **active** | redelivery replays recorded result |
+│ -| S3 completion bridge | `deliver`-before-`ack` (`:500-519`), reply encoding | **active** | `reply_b64` never echoes the task body |
+│ +| S3 completion bridge | `deliver`-before-`ack` (`:500-519`), reply encoding | **active** | `reply_b64` never echoes the task body; `reply_len` measures the *selected excerpt*, not the full harness output (§11) |
+│  | S4 agent registry and scope | `AGENTS` (`:104-109`), per-dispatch scoped GitHub token (`:62-98`) | **active** | `fleet_agents.json` |
+│
+│  ## 4. Dependencies
+│ @@ -73,14 +73,14 @@
+│  | Setting | Default | Range | Governs | What breaks if changed |
+│  |---|---|---|---|---|
+│  | `DISPATCH_POLL_S` | 5 (`:43`) | positive float | poll interval | shorter polls raise bus load |
+│ -| `DISPATCH_PROGRESS_S` | 20 (`:45`) | positive int | seconds between progress lines the node runner writes | **no suppression branch exists** — the runner loop (`:250-257`) writes a line then `sleep {hb}`; `0` removes the delay (busy loop), a negative value fails the `sleep` and the loop continues. Round-4's "0 or negative suppresses progress" was false (sol B25) |
+│ +| `DISPATCH_PROGRESS_S` | 20 (`:45`) | positive int | seconds between progress lines the node runner writes | **no suppression branch exists** — the runner loop (`:250-257`) writes a line then `sleep {hb}`; `0` removes the delay (busy loop), a negative value fails the `sleep` and the loop continues |
+│  | `DISPATCH_LEASE_S` | 1800 (`:46`) | positive int | inbox lease | too long holds messages during a crash |
+│ -| `DISPATCH_EXEC_TIMEOUT` | `"400s"` (`:47`, a **string**) | — | **inert in this revision** — assigned at `:47` and never read (`grep -n EXEC_TIMEOUT dispatcher.py` → 1 match, the assignment itself; sol B22 AST check: exactly one `Store` reference, no load). The real per-call timeout is `_bunker`'s `timeout` argument (default 120, `:204-209`), with the outer subprocess capped at `timeout + 20` (`:209`). Round-5's "the timeout prefix on every `bunker exec` run" was **false** — this env var changes nothing at run time |
+│ -| `DISPATCH_TASK_S` | `"240"` (`:48`, a **string**) | positive int at use (`task_seconds`, `:196`) | fallback task duration | a non-numeric env value raises `ValueError` **at use** (`int(TASK_S)` at `:196`), not at admission (kimi 8) |
+│ +| `DISPATCH_EXEC_TIMEOUT` | `"400s"` (`:47`, a **string**) | — | **inert in this revision** — assigned at `:47` and never read (`grep -n EXEC_TIMEOUT dispatcher.py` → 1 match, the assignment itself). The real per-call timeout is `_bunker`'s `timeout` argument (default 120, `:204-209`), with the outer subprocess capped at `timeout + 20` (`:209`) |
+│ +| `DISPATCH_TASK_S` | `"240"` (`:48`, a **string**) | positive int at use (`task_seconds`, `:196`) | fallback task duration | a non-numeric env value raises `ValueError` **at use** (`int(TASK_S)` at `:196`), not at admission |
+│  | `DISPATCH_MARGIN_S` | 60 (`:52`) | positive int | reserve before the caller's deadline | see F11-4 |
+│  | `DISPATCH_TASK_CAP_S` | 7200 (`:53`) | positive int | ceiling on the envelope wall | a larger envelope wall is clamped |
+│  | `BUNKER_BIN` | `/home/kara/.local/bin/bunker` (`:60`) | absolute path | which bunker binary runs | PATH order would otherwise pick a wrong binary |
+│ -| `CF_DURABLE_JOB` | `"1"` (`:336`) | `"0"` or non-`"0"` | execution mode switch | **`"0"` selects the synchronous `hermes chat -q` path (`:334-358`)**, bypassing the detached start/poll job model (B23) |
+│ +| `CF_DURABLE_JOB` | `"1"` (`:336`) | `"0"` or non-`"0"` | execution mode switch | **`"0"` selects the synchronous `hermes chat -q` path (`:334-358`)**, bypassing the detached start/poll job model |
+│  | `DISPATCH_LOG` / `DISPATCH_PIDFILE` | `$FLEET/logs/dispatcher.log` / `$FLEET/dispatcher.pid` (`:41-42`) | a path | log/PID location | a wrong path loses the journal/lock |
+│  | `FLEET_GH_SCOPE` | `/home/kara/.hermes/scripts/fleet-gh-scope.py` (`:68`) | a path | scoped-token minter | a wrong path disables scoped tokens (non-fatal) |
+│  | `FLEET_AGENTS` / `FLEET_AGENTS_FILE` | `fleet_agents.json` (`:104-109`) | a dict / path | agent registry | empty → "no FLEET_AGENTS configured" |
+│ @@ -88,6 +88,17 @@
+│  | `TOKEN_FILE` (bearer) | `/home/kara/.hermes/secrets/crier-fleet.token` (`:39`, a constant) | a path | the bus bearer identity | a missing file → client construction fails (`client for %s failed`) |
+│  | `KEYS` (signing) | `$FLEET/keys` (`:40`, a constant) | a directory | the reply-signing key store | a missing key dir breaks reply signing |
+│
+│ +**Completion bridge — reply target and output retention (sol B24, documented this round).** The
+│ +reply target is `payload_reply_to(msg, default="orchestrator")` (`:158-163`): the envelope's
+│ +`payload.reply_to` string when present, otherwise `"orchestrator"` — the fallback recipient is
+│ +**not** configurable by env. Output retention is lossy and differs by mode: the durable path polls
+│ +only the **last 4000 bytes** of the job's `out.log` (`tail -c 4000`, `:304`) and then selects the
+│ +**last six nonempty lines** (`:320-321`), truncating the answer to 1500 chars on failure (`:323`)
+│ +and 8000 on success (`:324`); the synchronous path likewise takes the last six nonempty lines
+│ +(`:356-357`) capped at 8000 (`:358`). `reply_len` at `:504` measures this **selected excerpt**
+│ +(`len(output)`), not the harness's full output — a completion's evidence is the tail, never the
+│ +whole run.
+│ +
+│  ## 6. Contracts in and out
+│
+│  Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Rows that are
+│ @@ -97,13 +108,15 @@
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│  | CT-03 | crier | in | crier server `internal/registry/handler.go:1690` `HandleRetrieve` (the lease-granting side) | `dispatcher.py:435` `crier.retrieve` (the client side) | works |
+│ -| CT-06 | scheduler | out | `dispatcher.py:500-508` builds the completion reply `{in_reply_to, agent, ok, …}`; transported via crier `internal/registry/handler.go:990` `HandleDeliver` into the scheduler's inbox | scheduler `internal/scheduler/dispatch_leg.go:713` `dispatchReplyVerdict` | **works** — the dispatcher always sends `ok` (`:501`), which is exactly the field `dispatchReplyVerdict` reads. CF-355 (status-vs-ok) belongs to the **node worker** (CT-04), not this producer |
+│ -
+│ -**Protected service-delivery compatibility (sol B01).** The dispatcher supplies `sender` through
+│ … omitted 91 diff line(s) across 1 additional file(s)/section(s)
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | INFERENCE PROXY (`cf-inference-proxy.py`) |
+│  | Path | `/home/kara/.hermes/scripts/cf-inference-proxy.py` (273 lines) |
+│ -| Revision | content sha256 `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (lives outside any git repo; no git revision to stamp). Locators re-pinned at code-factory HEAD `3fba8a7` (the round-15 tailnet-scrub commit) |
+│ +| Revision | content sha256 `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (lives outside any git repo; no git revision to stamp). Locators re-verified at code-factory HEAD `e07d031` (this round) |
+│  | Language / runtime | Python — `#!/usr/bin/env python3`, no pinned version; **requires >= 3.10** (F12-5: `_forward` at `:164` declares `body: bytes \| None`, an evaluated union annotation) |
+│  | Owner lane | code-factory (control-host service, consumed by nodes) |
+│  | Status | **VERIFIED (admission/routing/capture), FAILING (streaming)** — read in full this round (273 lines); content sha256 reproduced; live 401 admission reproduced this round; the two sink paths corrected this round (F12-8). **Streaming completion is FAILING (sol B22):** the healthy SSE stream is unframed to completion (`:206-224`), reproduced as a `200` with no `Content-Length`/`Transfer-Encoding`/`Connection` and a client EOF timeout (§11 F12-7). A blanket VERIFIED would contradict that demonstrated defect — admission, routing and capture are verified, streaming is not |
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -224,8 +224,10 @@
+│    - **F12-9** (new, glm #1) — `panel_loop.py` locator re-pinned from `:145` to `:188` (round-15's
+│      `:145` is a `log = outdir / …` line; the `cf-inference-proxy` reference is `:188`).
+│
+│ -## RED field count: 5 — Metrics §8 (absence-proved); M12-C1 node-client half UNVERIFIED; M12-C2
+│ -upstream half UNVERIFIED (one-sided external boundary); CT-07 UNVERIFIED (boundary); stream
+│ -completion **FAILING** (F12-7 reproduced). Rule applied this round (glm #4): an UNVERIFIED contract
+│ -state — boundary or local — and a FAILING submodule are both named REDs; only a measured-`works`
+│ -state is not.
+│ +## RED field count: 2 — Metrics §8 (absence-proved); stream completion **FAILING** (F12-7
+│ +reproduced). **The boundary/local contracts are not REDs.** Uniform rule (settled this round): a
+│ +contract row whose far side is an external peer — boundary (CT-07) or a local edge with no in-repo
+│ +`file:function` on the node/upstream side (M12-C1, M12-C2) — is a **terminal** UNVERIFIED state and
+│ +is not counted as a RED; only an internal contract that was never measured, or a FAILING submodule,
+│ +is a RED. The streaming defect is a FAILING submodule (a demonstrated code defect), so it is RED;
+│ +the three UNVERIFIED contracts are terminal.
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -262,7 +262,8 @@
+│  |---|---|---|---|---|
+│  | build | `go build ./...` (scheduler repo) | exit 0 | 2026-11-07, rev `251d11db` (re-run this round) | **PASS** (rc 0) |
+│  | durable state | `sqlite3 ~/.hermes/coding-hermes/scheduler.db '.tables'` | tables listed | 2026-11-07 | **PASS** — 30 tables; no `verdicts` table |
+│ -| go test (clean env) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./...` | green | 2026-11-07, rev `251d11db` | **PASS (rc 0)** — see the note below for package count/duration |
+│ +| go test — internal/scheduler package (adequate timeout) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -count=1 -timeout 1800s` | green | 2026-11-07, rev `251d11db` | **PASS (rc 0)** — 376.454s |
+│ +| go test — full suite (default 600s timeout) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./...` | green | 2026-11-07, rev `251d11db` | **FAIL (rc 1) under parallel load** — `internal/scheduler` hit the 600s per-package timeout and `TestCTL002_EventsStream_SlowClientDoesNotBlockWritersOrLoseEvents` failed; both pass solo (see the note) |
+│  | go test (three env-sensitive tests) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -run 'TestSCHEDGAP091_DrainTimeoutStampsOrphan|TestOperatorRestartApprovalEnv|TestAbortInFlightTicks_OperatorApprovedStamp' -count=1` | green | 2026-11-07, rev `251d11db` | **PASS (rc 0)** — 0.259s |
+│
+│  **Env-contamination correction.** Round-4 reported `go test ./...` FAIL with a parked-goroutine
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -270,9 +270,16 @@
+│  census at suite exit. That FAIL is an artifact of the writer's shell carrying the ambient
+│  `SCHEDULER_OPERATOR_RESTART_APPROVED=1` (the var is load-bearing in `internal/scheduler/restart_approval.go`
+│  and `schedgap1608_operator_restart_test.go`). With the var **unset** the three operator-restart
+│ -tests pass in 0.259s and the full suite is green. The full-suite run at `251d11db` is recorded in
+│ -§13 with its package count and duration; the `internal/scheduler` package is the slow leg (~275 s
+│ -at `34e44897`, load-dependent) and is not a fixed value.
+│ +tests pass in 0.259s.
+│ +
+│ +**Load-window correction (F9-13, measured this round).** The full `go test ./...` at `251d11db`
+│ +did **not** pass this round: run in the default package-parallel mode under load it returned rc 1
+│ +with `internal/scheduler` hitting the 600s per-package timeout (panic: test timed out, hundreds of
+│ +parked `SimClock.run` goroutines) and `TestCTL002_EventsStream_SlowClient…` failing. Both are
+│ +load/parallelism artifacts, not code breaks: `internal/scheduler` alone finishes in 376.454s
+│ +(`-timeout 1800s`, rc 0) and `TestCTL002` alone passes in 4.656s (rc 0). The round-16 "25/25 PASS"
+│ +was at `34e44897` under a quiet host. The suite is green when packages get an adequate timeout or
+│ +run quiet; the 600s default under parallel load is the failure mode, not a test regression.
+│
+│  ## 8. Metrics
+│
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -363,8 +363,7 @@
+│    `internal/api/server_metrics.go:60-81, :87-119, :125-136, :195`, `config.example.toml` (full),
+│    `internal/database/migrations.go` (full 30-table census), `internal/config/loader.go:421-422`,
+│    `internal/scheduler/urgency.go:18-22`.
+│ -- Commands run: `go build ./...` (PASS); `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./...`
+│ -  (PASS — recorded in §7); the three env-sensitive tests (PASS, 0.259s);
+│ +- Commands run: `go build ./...` (PASS); `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -count=1 -timeout 1800s` (PASS, 376.454s); the three env-sensitive tests (PASS, 0.259s); `TestCTL002_EventsStream_SlowClient…` solo (PASS, 4.656s); the full `go test ./...` (rc 1 under parallel load — F9-13);
+│    `git diff --name-only 34e44897..HEAD` (5 paths, one cited `.go` file changed);
+│    `grep -n 'LoadRootConfig' cmd/schedulerd/main.go` (10 sites);
+│    `grep -rn "log.Printf" internal/scheduler/*.go | wc -l` (379 incl. one test line; 378 excluding);
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -385,6 +385,10 @@
+│    - **F9-10** (carried) — the run-correctness write authorities and the recovery selector are named (`execution_store.go`); per-failure-mode post-recovery indications remain unwritten.
+│    - **F9-11** (new, grok #3) — the `usage_pool*` family and `tick_workers` store keys are now named (the reservation's durable record), closing the "14 tables unnamed" omission.
+│    - **F9-12** (new, kimi B5/grok #8) — the closed-world `git diff` claim is withdrawn: HEAD advanced and `spawn.go` changed after the round-16 stamps; the diff is quoted with the real five paths and dated.
+│ +  - **F9-13** (new, this round) — the full `go test ./...` at `251d11db` under parallel load hit the
+│ +    600s per-package timeout in `internal/scheduler` plus the CTL002 load-window flake; both pass
+│ +    solo (`internal/scheduler` 376.454s, CTL002 4.656s). A load artifact, not a test regression — the
+│ +    round-16 "25/25 PASS" was at `34e44897` on a quiet host.
+│
+│  ## RED field count: 6 — §9 log inventory (376 of 378 operator-visible sites / 370 of 372 distinct
+│  strings uncovered, not-measured); §8 per-metric contract (blocks inventoried, per-metric
+All four chapters are written and the spine is green. Final manifest follows.
+
+---
+
+WRITER ROUND 17 MANIFEST — group s3 (M9/M10/M11/M12)
+
+Chapters written (all four, full evidence re-derived this round):
+- docs/handbook/chapters/M9-scheduler.md — rewritten
+- docs/handbook/chapters/M10-crier.md — rewritten
+- docs/handbook/chapters/M11-dispatcher.md — rewritten
+- docs/handbook/chapters/M12-inference-proxy.md — patched (§1 revision + §13 RED rule)
+
+Chapters still skeleton: none.
+
+RED field count per chapter:
+- M9 — 6 (log inventory 376/378; per-metric contract; S4 per-route shapes; S3 post-recovery indications; §5 flag range+precedence; CT-05 internal-unmeasured)
+- M10 — 5 (per-metric contract; log inventory beyond 6 tabulated sites; storage-selection custody-proof; signed-read ladder not repeatable from control host; TS-client + front/MCP activation)
+- M11 — 2 (metrics absence-proved; §7 live-job tests are decoration)
+- M12 — 2 (metrics absence-proved; streaming FAILING, F12-7 reproduced)
+
+Corrections applied (the blockings that were mine):
+- RED-accounting rule settled uniformly: boundary/local UNVERIFIED is terminal (not a RED); internal not-measured UNVERIFIED and FAILING submodules are REDs. M9 dropped CT-01/CT-15 from its count; M12 dropped CT-07/M12-C1/M12-C2. (deepseek#1, glm#4, kimi B-3, sol B02)
+- M9: admission procedure re-derived from the packer's call order (packer_select.go:437-521 → usage-pool reservation at slot_pool.go:569), not an alphabetized helper list (sol B17); 30-table census now names usage_pool* + tick_workers + the other 14 (grok#3); CT-05 consumer re-pinned spawn.go:1244→1249; CT-05 producer named module-scope, CT-06 producer named dispatcher.py:main (sol B03 / kimi N-5); revision re-stamped 251d11db with the real 5-path diff (kimi B5/grok#8); go 1.26.9/1.26.8 → 1.26.10 (kimi B7).
+- M10: header corrected to X-Crier-Audience (agentsig.go:35) (sol B01); lease default re-pinned handler.go:1734 (glm#7); S3 now names crier-mcp + the four deploy units (grok#2); slog §7 command fixed to -E form (grok#1); guard third log form "guard sanitize rewrite unavailable" added (sol B22); saturation counter redefined as saturation errors (sol B23); CR_SERVICE_DELIVERY_* + CR_AUTH_TOKEN registered (sol B21); false "supersedes broken CT-02" sentence deleted (kimi B-9); signed-read ladder moved into the RED count (kimi B-10); revision re-stamped e50e55ee (kimi B6/grok#8).
+- M11: output-retention (last 4000 bytes → last six lines) and "orchestrator" fallback recipient documented (sol B24); CT-06 producer named dispatcher.py:main (kimi N-5); header corrected (sol B01).
+- M12: RED count 5→2 under the settled rule.
+
+CROSS-SECTION DEPENDENCIES (chapters I do not own this round):
+- M4 §13 (and M0-M8 footers) must state the SAME RED-accounting rule I now state in M9/M12: a boundary/local contract row is a terminal UNVERIFIED, not a RED. My chapters now adopt that rule; if M4 still states a conflicting rule, the document-level contradiction (kimi B-3) returns.
+- M2 §6 must keep CT-03 producer = HandleRetrieve / consumer = node process, and CT-04 producer = node deliver / consumer = HandleDeliver, matching M10/M11 (I did not change those tokens on my side).
+- Document-level (not a chapter I own): the schema §1-8 vs chapter §1-13 numbering split (kimi B-4, grok#6) is unresolved — it requires a schema/OUTLINE decision, not a chapter edit.
+
+Commands run (exit status):
+- git log -1 (scheduler) → 251d11db, rc 0
+- git diff --name-only 34e44897..HEAD (scheduler) → 5 paths, rc 0
+- /usr/bin/go version → go1.26.10, rc 0; /home/kara/.local/bin/go version → go1.26.10, rc 0
+- go env GOVERSION (scheduler + crier) → go1.26.10, rc 0
+- git log -1 (crier) → e50e55ee, rc 0
+- git diff --name-only 0a372209..HEAD and 33c1f388..HEAD (crier), rc 0
+- git log -1 (crier-fleet) → 283bca9, rc 0; wc -l dispatcher.py → 538
+- go build ./... (scheduler) → rc 0
+- go build ./... (crier) → rc 0
+- go test -count=1 ./... (crier) → rc 0 (41 ok / 3 no test files / 0 FAIL)
+- env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -run '...3 tests...' -count=1 → rc 0, 0.259s
+- env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./... (scheduler, full) → rc 1 (F9-13: internal/scheduler 600s timeout under parallel load + CTL002 flake)
+- env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/api/ -run TestCTL002... -count=1 → rc 0, 4.656s
+- env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -count=1 -timeout 1800s → rc 0, 376.454s
+- sqlite3 ~/.hermes/coding-hermes/scheduler.db '.tables' → 30 tables, rc 0
+- grep -rn "log.Printf" internal/scheduler/*.go (378 excl test / 379 total / 372 distinct), rc 0
+- search_files flag count → 57; mux.HandleFunc count → 43
+- sha256sum cf-inference-proxy.py → b12a0ac5…, rc 0; wc -l → 273
+- systemctl --user is-active cf-inference-proxy.service → active, rc 0 (MainPID 2603939, active since 2026-11-05 09:21)
+- python3 -m py_compile dispatcher.py → rc 0 (Python 3.14.9)
+- python3 -m py_compile cf-inference-proxy.py → rc 0
+- curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8775/v1/chat/completions -d '{"model":"hermes"}' → 401
+- grep -rnE '8775|CF_PROXY|cf-inference-proxy' scripts/ config/ specs/ → 4 sites, rc 0
+- python3 scripts/handbook_spine.py → chapters=13 canonical contracts=18 findings=0, rc 0
+
+One honest note: the scheduler full suite did not pass this round as a single `go test ./...` — under parallel load the internal/scheduler package hit the 600s per-package timeout and the known CTL002 load-window flake fired. Both pass solo (376.454s and 4.656s). That is documented in M9 §7 as F9-13 rather than papered over as a green run.
+
+WRITER ROUND COMPLETE
+
+session_id: local-458f5fdabcb373be1517669c994b9623330cd32755dd5b58aabe3e582a89bf11

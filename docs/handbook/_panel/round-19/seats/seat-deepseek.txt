@@ -1,0 +1,100 @@
+Hermes couldn't start the model connection: Gateway inaccessible: 
+invalid_control_peer. Your message was not sent. Run `hermes doctor` to check 
+the setup, or /model to pick a different provider.
+Traceback (most recent call last):
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/cli_single_query.py", line 543, in _run_single_query_mode
+    exit_single_query(fail_code)  # credentials or agent init failed
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/quiet_single_query.py", line 40, in exit_single_query
+    sys.exit(code)
+    ~~~~~~~~^^^^^^
+SystemExit: 1
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<string>", line 131, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/main.py", line 3503, in main
+    if _try_fast_chat_launch():
+       ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/main.py", line 3131, in _try_fast_chat_launch
+    cmd_chat(args)
+    ~~~~~~~~^^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/main.py", line 1770, in cmd_chat
+    cli_main(**kwargs)
+    ~~~~~~~~^^^^^^^^^^
+  File "/home/kara/.hermes/hermes-agent/cli.py", line 1783, in main
+    _run_single_query_mode(cli, query, image, quiet, oneshot, stream_json=output_format == "stream-json")
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/cli_single_query.py", line 594, in _run_single_query_mode
+    _finalize_single_query(cli)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/cli_shutdown.py", line 365, in _finalize_single_query
+    _notify_single_query_session_finalize(cli)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/cli_shutdown.py", line 243, in _notify_single_query_session_finalize
+    for message in _notify_session_finalize(
+                   ~~~~~~~~~~~~~~~~~~~~~~~~^
+            session_id=session_id, platform=getattr(agent, "platform", None) or "cli", reason=reason):
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/cli_shutdown.py", line 185, in _notify_session_finalize
+    return session_end_messages(finalize_session(session_id=session_id, platform=platform, reason=reason))
+                                ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/lifecycle.py", line 97, in finalize_session
+    return _plugin_hooks("on_session_finalize", **kwargs)
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/lifecycle.py", line 27, in _plugin_hooks
+    return plugins.invoke_hook(hook_name, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/plugins.py", line 1811, in invoke_hook
+    return _delivery_manager().invoke_hook(hook_name, **kwargs)
+           ~~~~~~~~~~~~~~~~~^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/plugins.py", line 1796, in _delivery_manager
+    manager.discover_and_load()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/plugins.py", line 1234, in discover_and_load
+    self._discover_and_load_inner()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/plugins.py", line 1349, in _discover_and_load_inner
+    to_load = {k: m for k, m in winners.items() if self._gate_manifest(m, disabled, enabled)}
+                                                   ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/plugins.py", line 1369, in _gate_manifest
+    self._load_plugin(manifest)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/plugins_loader.py", line 544, in _load_plugin
+    self._load_plugin_scoped(manifest)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/plugins_loader.py", line 607, in _load_plugin_scoped
+    if run_with_load_deadline(plugin_key, ctx, _import_and_register):
+       ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/plugins_loader.py", line 122, in run_with_load_deadline
+    timeout = _resolve_plugin_load_timeout()
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/plugins_loader.py", line 73, in _resolve_plugin_load_timeout
+    plugins_cfg = (load_config_readonly() or {}).get("plugins")
+                   ~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/config.py", line 1987, in load_config_readonly
+    return _load_config_impl(want_deepcopy=False)
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/config.py", line 2226, in _load_config_impl
+    _, fast_sig = _load_config_cache_sig(config_path)
+                  ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/config.py", line 2114, in _load_config_cache_sig
+    user_sig: Optional[tuple[Any, ...]] = config_cache_version(config_path)
+                                          ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/config_backend.py", line 423, in config_cache_version
+    return backend.cache_version(home, version)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/config_backend.py", line 226, in cache_version
+    return (*version, racy_content_digest(self.config_path(home), self.version(home)))
+                                                                  ~~~~~~~~~~~~^^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/config_backend.py", line 220, in version
+    return self.version_path(self.config_path(home))
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/config_backend.py", line 185, in version_path
+    st = path.stat()  # before the import: a missing file must not need the utils stack (PM runtime)
+  File "/home/kara/.hermes/tools/python-3.14.9+20261021-linux-x64/lib/python3.14/pathlib/__init__.py", line 654, in stat
+    return os.stat(self, follow_symlinks=follow_symlinks)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kara/.hermes/hermes-agent/hermes_cli/cli_single_query.py", line 451, in _signal_handler_q
+    raise KeyboardInterrupt()
+KeyboardInterrupt

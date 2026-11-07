@@ -1,0 +1,282 @@
+⚠️  Primary auth failed — switching to fallback: fireworks / accounts/fireworks/models/deepseek-v4p1-flash-1017
+│ cache/scratch/citecheck15.py
+│ @@ -0,0 +1,55 @@
+│ +#!/usr/bin/env python3
+│ +"""Round-15: resolve every file:line citation and print the cited source line."""
+│ +import re, sys, os, glob
+│ +
+│ +ROOTS = [
+│ +    "/home/kara/code-factory",
+│ +    "/home/kara/coding-hermes-scheduler/coding-herms-scheduler",
+│ +    "/home/kara/coding-hermes-scheduler",
+│ +    "/home/kara/crier",
+│ +    "/home/kara/crier-fleet",
+│ +    "/home/kara/.hermes/scripts",
+│ +    "/home/kara/.hermes",
+│ +]
+│ +CITE = re.compile(r'([A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:py|go|sh|ts|js|yaml|toml|json|db)):(\d+)(?:-(\d+))?')
+│ +
+│ +def resolve(p):
+│ +    p = p.lstrip('./')
+│ +    for r in ROOTS:
+│ +        c = os.path.join(r, p)
+│ +        if os.path.isfile(c):
+│ +            return c
+│ +    return None
+│ +
+│ +def main():
+│ +    target = sys.argv[1] if len(sys.argv) > 1 else None
+│ +    files = sorted(glob.glob('/home/kara/code-factory/docs/handbook/chapters/M*.md'))
+│ +    if target:
+│ +        files = [f for f in files if target in os.path.basename(f)]
+│ +    unfound = []
+│ +    for f in files:
+│ +        print("=" * 18, os.path.basename(f), "=" * 18)
+│ +        seen = set()
+│ +        text = open(f, errors='replace').read()
+│ +        for m in CITE.finditer(text):
+│ +            path, ln, ln2 = m.group(1), int(m.group(2)), m.group(3)
+│ +            if (path, ln) in seen:
+│ +                continue
+│ +            seen.add((path, ln))
+│ +            real = resolve(path)
+│ +            if not real:
+│ +                print(f"?UNRESOLVED  {path}:{ln}")
+│ +                unfound.append((os.path.basename(f), path, ln))
+│ +                continue
+│ +            lines = open(real, errors='replace').read().splitlines()
+│ +            if ln > len(lines):
+│ +                print(f"?OOR {path}:{ln} (file has {len(lines)} lines)")
+│ +                unfound.append((os.path.basename(f), path, f"{ln}>LEN{len(lines)}"))
+│ +                continue
+│ +            print(f"  {path}:{ln}{'-'+ln2 if ln2 else ''} | {lines[ln-1].strip()[:150]}")
+│ +    if unfound:
+│ +        print("\n---- UNRESOLVED / OUT OF RANGE ----")
+│ +        for u in unfound:
+│ +            print(" ", u)
+│ +
+│ +main()
+│ cache/scratch/citecheck15.py
+│ @@ -1,6 +1,7 @@
+│  #!/usr/bin/env python3
+│  """Round-15: resolve every file:line citation and print the cited source line."""
+│  import re, sys, os, glob
+│ +from collections import defaultdict
+│
+│  ROOTS = [
+│      "/home/kara/code-factory",
+│ @@ -13,13 +14,31 @@
+│  ]
+│  CITE = re.compile(r'([A-Za-z0-9_][A-Za-z0-9_./-]*\.(?:py|go|sh|ts|js|yaml|toml|json|db)):(\d+)(?:-(\d+))?')
+│
+│ +IDX = defaultdict(list)
+│ +for r in ROOTS:
+│ +    for dp, dn, fn in os.walk(r):
+│ +        dn[:] = [d for d in dn if d not in ('.git', 'node_modules', '__pycache__', '.venv', 'dist', 'build')]
+│ +        for f in fn:
+│ +            IDX[f].append(os.path.join(dp, f))
+│ +
+│  def resolve(p):
+│      p = p.lstrip('./')
+│      for r in ROOTS:
+│          c = os.path.join(r, p)
+│          if os.path.isfile(c):
+│ -            return c
+│ -    return None
+│ +            return c, None
+│ +    if '/' in p:
+│ +        sub = [c for c in IDX.get(os.path.basename(p), []) if c.endswith('/' + p)]
+│ +        if len(sub) == 1:
+│ +            return sub[0], None
+│ +        if len(sub) > 1:
+│ +            return sub[0], f"ambiguous({len(sub)})"
+│ +    cands = IDX.get(os.path.basename(p), [])
+│ +    if len(cands) == 1:
+│ +        return cands[0], None
+│ +    if cands:
+│ +        return cands[0], f"AMBIG({len(cands)})"
+│ +    return None, None
+│
+│  def main():
+│      target = sys.argv[1] if len(sys.argv) > 1 else None
+│ @@ -36,17 +55,18 @@
+│              if (path, ln) in seen:
+│                  continue
+│              seen.add((path, ln))
+│ -            real = resolve(path)
+│ +            real, note = resolve(path)
+│              if not real:
+│                  print(f"?UNRESOLVED  {path}:{ln}")
+│                  unfound.append((os.path.basename(f), path, ln))
+│                  continue
+│              lines = open(real, errors='replace').read().splitlines()
+│              if ln > len(lines):
+│ -                print(f"?OOR {path}:{ln} (file has {len(lines)} lines)")
+│ +                print(f"?OOR {path}:{ln} (file {len(lines)}L, {real})")
+│                  unfound.append((os.path.basename(f), path, f"{ln}>LEN{len(lines)}"))
+│                  continue
+│ -            print(f"  {path}:{ln}{'-'+ln2 if ln2 else ''} | {lines[ln-1].strip()[:150]}")
+│ +            tag = f" [{note}]" if note else ""
+│ +            print(f"  {path}:{ln}{'-'+ln2 if ln2 else ''}{tag} | {lines[ln-1].strip()[:150]}")
+│      if unfound:
+│          print("\n---- UNRESOLVED / OUT OF RANGE ----")
+│          for u in unfound:
+│ .hermes/cache/scratch/citecheck15.py
+│ @@ -37,7 +37,15 @@
+│      if len(cands) == 1:
+│          return cands[0], None
+│      if cands:
+│ -        return cands[0], f"AMBIG({len(cands)})"
+│ +        # prefer a candidate long enough to contain the cited line, then the largest file
+│ +        sized = []
+│ +        for c in cands:
+│ +            try:
+│ +                sized.append((sum(1 for _ in open(c, errors='replace')), c))
+│ +            except Exception:
+│ +                pass
+│ +        sized.sort(reverse=True)
+│ +        return sized[0][1], f"AMBIG({len(cands)})"
+│      return None, None
+│
+│  def main():
+│ cache/scratch/ctstate15.py
+│ @@ -0,0 +1,46 @@
+│ +#!/usr/bin/env python3
+│ +"""Compare every chapter's CT state word against OUTLINE Part IV's declared state."""
+│ +import re, glob, os
+│ +
+│ +CH = '/home/kara/code-factory/docs/handbook/chapters'
+│ +OUT = open('/home/kara/code-factory/docs/handbook/OUTLINE.md').read()
+│ +
+│ +# OUTLINE bullets: - **CT-01 owner → scheduler** — ... · **UNVERIFIED (boundary)** ...
+│ +outline = {}
+│ +for m in re.finditer(r'\*\*(CT-\d\d)[^*]*\*\*(.*?)(?=\n- \*\*CT-|\n\n)', OUT, re.S):
+│ +    cid, body = m.group(1), m.group(2)
+│ +    st = re.search(r'\*\*(works[^*]*|broken|missing|UNVERIFIED[^*]*)\*\*', body, re.I)
+│ +    outline[cid] = (st.group(1).strip() if st else '??')
+│ +
+│ +def norm(s):
+│ +    s = s.lower()
+│ +    m = re.search(r'\b(works?|broken|missing|unverified)\b', s)
+│ +    return m.group(1) if m else s[:30]
+│ +
+│ +print("OUTLINE:", {k: norm(v) for k, v in outline.items()})
+│ +seen = {}
+│ +for f in sorted(glob.glob(CH + '/M*.md')):
+│ +    text = open(f).read()
+│ +    m = re.search(r'^##\s*6\..*?$(.*?)(?=^##\s)', text, re.S | re.M)
+│ +    body = m.group(1) if m else ''
+│ +    for line in body.splitlines():
+│ +        if not line.startswith('|') or set(line) <= set('|-: '):
+│ +            continue
+│ +        cells = [c.strip() for c in line.strip('|').split('|')]
+│ +        if len(cells) < 6:
+│ +            print(f"  ! {os.path.basename(f)}: §6 row with {len(cells)} cells: {line[:90]}")
+│ +            continue
+│ +        cid = re.search(r'CT-\d\d', cells[0])
+│ +        if not cid:
+│ +            continue
+│ +        cid = cid.group(0)
+│ +        st = norm(cells[5])
+│ +        seen.setdefault(cid, []).append((os.path.basename(f), st, cells[5][:60]))
+│ +
+│ +for cid in sorted(seen):
+│ +    o = norm(outline.get(cid, '??'))
+│ +    for ch, st, raw in seen[cid]:
+│ +        flag = '' if st == o else '   <<< DISAGREES WITH OUTLINE'
+│ +        print(f"{cid} outline={o:10s} {ch:22s} chapter={st:10s}{flag}")
+│ +print()
+│ +print("contracts never cited in any chapter §6:", sorted(set(outline) - set(seen)))
+│ cache/scratch/spineparse15.py
+│ @@ -0,0 +1,14 @@
+│ +import sys, glob, os, importlib.util
+│ +sys.path.insert(0, '/home/kara/code-factory/scripts')
+│ +spec = importlib.util.spec_from_file_location('hs', '/home/kara/code-factory/scripts/handbook_spine.py')
+│ +hs = importlib.util.module_from_spec(spec)
+│ +spec.loader.exec_module(hs)
+│ +for f in sorted(glob.glob('/home/kara/code-factory/docs/handbook/chapters/M*.md')):
+│ +    text = open(f).read()
+│ +    body = hs.section(text, 6)
+│ +    for line in body.splitlines():
+│ +        if not line.startswith('|') or set(line) <= set('|-: '):
+│ +            continue
+│ +        cells = [c.strip() for c in line.strip('|').split('|')]
+│ +        if len(cells) != 6:
+│ +            print(f"{os.path.basename(f)}: {len(cells)} cells | {line[:110]}")
+VERDICT: FAIL
+BLOCKING: 5 — findings that must be fixed before this chapter set can be called written
+NON-BLOCKING: 4
+
+FINDINGS
+
+1. FALSE CLAIM — M4 (§1 Status, §7 row 3, §9, F4-4)
+   Claim: "byte parity identical on both files, 0 divergent ids, HEAD == origin/main == `08a2c8a`", and §7: "HEAD=origin/main=`08a2c8a`".
+   Evidence (measured now): `git rev-parse HEAD origin/main` → `3fba8a7eb258264cb957e07add2fbaea30262d70` for both. `python3 scripts/board_drift.py check` re-run returns RESULT: OK but its own line reads "HEAD — git rev-parse HEAD: 3fba8a7e…; HEAD=3fba8a7e… origin/main=3fba8a7e…". The parity substance holds (sha256 5aa15431…/783d556c…, 357 vs 357, 0 divergent ids, both confirmed); the quoted measured sha does not.
+   Fix: re-run the drift command and quote its actual HEAD line; do not print a sha the command no longer emits.
+
+2. CONTRADICTION — document-wide, §1 Identity / schema §1 ("One revision per document issue")
+   Claims: M0/M1/M2/M3 "Revision = `9372dc0…` (code-factory HEAD, round-15 derivation)"; M4 "`08a2c8a2ea…` (code-factory HEAD at round-11 derivation)"; M5/M7/M8 "`08a2c8a2ea…` (round-11)"; M6 "`242cc47493…` (code-factory HEAD this round)"; M9 "`7a7afc0f` (scheduler repo HEAD, re-stamped round 15)".
+   Evidence: actual code-factory HEAD = 3fba8a7; actual scheduler HEAD = 81ce9fcb (`git log --oneline -1` → "board: file SCHED-GAP-16998"), whose diff vs 7a7afc0f is board JSONL only. Five different revisions claim to be "HEAD" in one document issue; two of them are demonstrably not HEAD.
+   Fix: one revision per document issue (or per repo, stated once in Part I), all §1 rows and all §9/§7 "Last run, rev" stamps regenerated from it; M4's stamp and M9's "re-stamped round 15" wording corrected together.
+
+3. FALSE CLAIM — M6 §12, M8 §3, §12 and F8-2
+   Claim: "ownership is M6.S8 per OUTLINE (`OUTLINE.md:170`)" / "`verify-patch.sh` is **not** an M8 unit — OUTLINE assigns it to M6.S8 (`OUTLINE.md:170`)".
+   Evidence: `OUTLINE.md:170` = "**S5 variable contract** (`harness/harness-vars.sh`, matrix §5, sourced by every installer)" — M5.S5. M6.S8 is at `OUTLINE.md:176` ("**S8 patch-chain drift gate** (`verify-patch.sh`)"). Verified identical at HEAD (`git show HEAD:docs/handbook/OUTLINE.md`) and in the working copy; the working-tree OUTLINE diff starts at line 208 and does not touch 170.
+   Fix: change both chapters to `OUTLINE.md:176`. (This is the citation class my mechanical locator sweep cannot catch: 317/317 `file:line` citations resolve in range, and this one resolves to the wrong content.)
+
+4. CONTRADICTION (gate false pass) — M2 §6 CT-09, M4 §6 CT-10, M6 §6 CT-16, M12 §6 M12-C1
+   Claim: `python3 scripts/handbook_spine.py` → "findings=0", taken as proof the register agrees.
+   Evidence: those four §6 rows carry a `|` inside a code span (`grep -nE 'duckbrain|/api/memories' …`, `grep -nE 'boardctl|tasks.jsonl|events.jsonl' …`, `MASTER-DOC: PASS\|FAIL`), so `handbook_spine.py:104-123` splits them into 7–9 cells and slices producer/consumer/state from shifted columns. A re-parse prints exactly those four rows as non-6-cell. Today all four are boundary/local rows (exempt from the both-sides and state checks), so no verdict is currently wrong — but the 0-findings result does not prove the internal pairs agree, and it will silently pass a mis-sliced internal row.
+   Fix: make the cell splitter backtick-aware (or require escaped `\|`), and report a row whose column count != 6 as a finding.
+
+5. UNBUILDABLE (document level) — Part II
+   Claim: OUTLINE "PART II — FLOWS (16)"; README "II.1 … II.16 … **MISSING**"; every chapter §12 says "flow chapter not written".
+   Evidence: `docs/handbook/chapters/` contains 13 files, all `M*.md`, zero flow chapters; README files it as F-ROOT-1. Ten of sixteen flows have no owning chapter anywhere, and F1/F2/F5 are the flows the three primary module chapters say they own.
+   Fix: either write the flow chapters or amend OUTLINE Part II to declare the flow set out of scope for this issue — a declared gap is acceptable, an OUTLINE that still promises 16 flows with 0 written is not.
+
+NON-BLOCKING
+
+6. UNVERIFIED (seat scope) — M10, M11, M12. I did not read these three bodies line-by-line; I verified only that their citations resolve, that the spine sees them, and specific rows (M11 §7's decoration rows, M10's contract rows). No seat may grade a chapter WRITTEN that it has not read, so they are PARTIAL by this seat regardless of what a prior round said.
+
+7. FALSE CLAIM (citation repeatability) — M10 `config.go:622`, `config.go:1139-1187`, `handler.go:1711`, `policy.go:172`; M9 `main.go:640`, `main.go:102-208`; M4 `board_lock.py:18`. Bare basenames in repos with many same-named files (my resolver found 281 `config.go`, 276 `handler.go`, 868 `main.go` candidates under the four roots) cannot be repeated by a stranger without guessing. Fix: full relative paths (`internal/config/config.go:622`, `cmd/schedulerd/main.go:640`).
+
+8. PADDING (cumulative) — the round-N correction narrative ("Round-4's … was false", "round-3 draft …", "sol B13", "kimi B42") occupies a large share of M1, M2, M3, M6, M9 and is not operator-usable. The facts it carries are real and often the best content in the chapter; the history belongs in Appendix D, not in §3/§5/§11.
+
+9. OMISSION (gate coverage) — no chapter documents that the spine never verifies a cited line exists, and M6 §10 states it as an M6 blind spot while the spine is the chapter-aware gate (S9). That gap is why finding 3 survived twelve rounds. Fix: one sentence in M6.S9 plus a spine check, or a board row.
+
+What I verified as true, so the next round does not re-litigate it
+- Spine: `python3 scripts/handbook_spine.py` → `chapters=13 canonical contracts=18 findings=0`, rc 0 (reproduced).
+- Every one of the 317 `file:line` citations resolves to a file of sufficient length; no dangling locator, no out-of-range line.
+- Exact reproductions: lib.sh sources 11 direct / 17 total; `tests/test_disk_floor.py` 12 tests OK; helper call sites 108+33 (bunker-provision/verify-node), 35 (land-node-branch), 70 (node-bus-worker), 215 (harness/), 103 (github-app-*), grep counts for `prometheus|Counter|Gauge|Histogram|/metrics` = 0 in every module where the chapter claims 0.
+- M4: 357 rows / 519 events; `boardctl validate` → "357 tasks, 519 events, 0 fixtures", "RESULT: OK (7 warning(s))" with exactly the seven warnings named; 20 subcommands, same set; duplicate-id refusal reproduced; drift RESULT: OK.
+- M6: `master_doc_check.py` → "44 module(s): 37 VERIFIED, 50 error(s)… MASTER-DOC: FAIL", exit 1; `verify-patch.sh` → 5 stages, 4 patches, 57432007…, PASS; `panel_loop.py:342/352-353` does make `--start-round` inert; the `[0-9][0-9]-*.md` globs at :188/:422/:253 really do exclude `M*.md`.
+- M9: 43 routes, 57 flag definitions, 379 `log.Printf`, 30 tables, 10 `LoadRootConfig` sites at exactly 640/673/762/854/870/968/995/1023/1054/1309; CT-02 payload carries `board` and `text_b64` and has no `run_id`; `dispatchReplyVerdict` scores absent `ok` as success (CF-355 real).
+- M0/M1/M2/M3/M5/M7/M8 line numbers and defaults: every spot-checked locator matched verbatim, including the two documented code defects (`bunker-provision.sh:233` claims mode 600 while `:214` tests `[ -s … ]`; `harness-vars.sh:203` accepts `[0-7]00` while `:204` demands 600) and the honest self-corrections (M1 F1-5 checkout-WARN asymmetry; M2 F2-3 `dispatch_wall` int() truncation).
+
+DEFECT CLASSES
+stale-measured-value · multi-revision-identity · wrong-locator-right-line · gate-column-misparse · declared-scope-gap · non-repeatable-bare-path · correction-history-padding
+
+CHAPTER SCORECARD
+- M0 WRITTEN→PARTIAL. Every helper cite exact, counts reproduce, metrics RED absence-proved. PARTIAL only because metrics is RED (schema §5) and §7 stamps an earlier rev than §1.
+- M1 PARTIAL. Strongest chapter read: ladder locators, `disk_floor` precedence, seed state machine, 108+33 counts all exact; four unit bodies unread by its own admission.
+- M2 PARTIAL. Contracts, reply fields, `dispatch_wall`, dry-run lease 5 s all exact; metrics RED; operational overrides NAME ONLY by its own admission.
+- M3 PARTIAL. Landing arm, hook generator, gate-by-default, freshness flags all exact; hook *enforcement* untested (its own RED).
+- M4 PARTIAL. Store and validate exact; findings 1 and 2 land here.
+- M5 PARTIAL. Installer/resolver/vars registers exact to the line; conformance unrun.
+- M6 PARTIAL. Gate behaviour and its own FAIL reproduced; finding 3 lands here.
+- M7 PARTIAL. Settings/lifecycle register exact; mint unrun, no App creds.
+- M8 PARTIAL. Both units read in full, exact; metrics RED; finding 3 repeats here.
+- M9 PARTIAL. Counts, defaults, admission order, store keys exact; 377 of 379 log sites uncovered by its own admission; finding 2 stamps it.
+- M10 PARTIAL. Citations resolve, CT rows parse (with finding 4); body not read by this seat.
+- M11 PARTIAL. CT-06/CT-03 rows and the `dispatchReplyVerdict` citation exact; body not read by this seat.
+- M12 PARTIAL. Local edge row and proxy health line exact; body not read by this seat.
+No chapter is SKELETON; none is WRITTEN, and under OUTLINE Part VII three of them (M0, M3, M8) cannot be until metrics exist or a schema exception is approved.
+
+PANEL REVIEW COMPLETE
+
+⚠️ File-mutation verifier: 1 file edit(s) FAILED this turn despite any wording above that may suggest otherwise. Run `git status` or `read_file` to confirm what actually landed.
+  • `/home/kara/.hermes/cache/scratch/citecheck.py` — [write_file] Refusing to overwrite `/home/kara/.hermes/cache/scratch/citecheck.py`: `/home/kara/.hermes/cache/scratch/citecheck.py` exists but this task has not seen its full current content (neve…
+
+session_id: local-6c6a4b2cfdae8c27ba15fea21b5db111bf326903a31b7e8f6e74e656898ed67e
+
+EXIT=0

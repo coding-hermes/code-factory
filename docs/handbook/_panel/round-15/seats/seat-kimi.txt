@@ -1,0 +1,105 @@
+VERDICT: FAIL
+
+BLOCKING: 10 — findings that must be fixed before this chapter can be called written
+NON-BLOCKING: 3
+
+Spine run (mandated): `python3 scripts/handbook_spine.py` → `chapters=13  canonical contracts=18  findings=0`, exit 0. No blocking CONTRADICTION is imposed by the spine this round. It cannot see locator existence, submodule counts, or README↔chapter status — the three places this verdict does find defects.
+
+FINDINGS:
+
+B1. FALSE CLAIM — M0, M1, M2, M3
+  Claim: Revision `9372dc004be5c5eaa5f49b383079862e0abf4ba8` "(code-factory HEAD, round-15 derivation)".
+  Evidence: `git log -1` → `3fba8a7…`; three commits landed after the stamp (`242cc47`, `060c90e`, `3fba8a7`). The content claim is true — `git diff --name-only 47d68b4..9372dc0` over each chapter's cited files returns nothing (`scripts/lib.sh`, `node-bus-worker.py`, `land-node-branch.sh`, `verify-node.sh` etc.), so only the stamp is wrong.
+  Fix: re-stamp to `3fba8a7` (or state "derived at 9372dc0; no cited file changed through 3fba8a7") and drop the words "HEAD".
+
+B2. FALSE CLAIM — M9
+  Claim: Revision `7a7afc0f` "(scheduler repo HEAD, re-stamped round 15)".
+  Evidence: `git log -1` in `/home/kara/coding-hermes-scheduler/coding-herms-scheduler` → `81ce9fcb` "board: file SCHED-GAP-16998". Cited Go files are still byte-identical to `34e44897` (`git diff --name-only 34e44897..HEAD` = both board JSONL + `.qa/chaos-probes/errorpath.sh`, no `.go`), so no locator is invalidated.
+  Fix: same as B1 — re-stamp, or say "derived at 7a7afc0f; HEAD has advanced by board-only commits".
+
+B3. FALSE CLAIM — M4
+  Claim (§7, verification table): drift re-measured this round with "HEAD=origin/main=`08a2c8a`".
+  Evidence: I ran the chapter's own command — `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` → `RESULT: OK`, `HEAD=3fba8a7… origin/main=3fba8a7…`, parity identical, 357 vs 357, 0 divergent ids, sha256 `5aa15431…`/`783d556c…` (matching the chapter). Only the HEAD value quoted in the row is wrong; a quoted command output that the command does not return is a false claim, not a rounding.
+  Fix: re-quote the HEAD line from an actual run.
+
+B4. CONTRADICTION — M10 (self, within §7)
+  Claim: same check, two revisions — table row: "`go test ./...` … 2026-11-06, rev `0a372209` (re-run this round) … PASS … `internal/registry` 7.569s"; prose immediately below: "Re-run this round at HEAD `33c1f388` … `internal/registry` 7.488s … the row is a clean PASS at `33c1f388`"; and earlier "ran them in 6.962 s". Three durations, two revisions, one "this round".
+  Evidence: chapter lines 147, 154, 164–168. The PASS itself reproduces — `go test -count=1 ./...` at HEAD `0a372209` → rc 0, 0 `FAIL` lines (my first run, under concurrent fleet load, returned an overall FAIL with no per-test FAIL line; the `-count=1` re-run was clean, consistent with the chapter's own flake history).
+  Fix: one run, one revision, one duration set; delete the `33c1f388` sentence or mark it as the round-11 measurement.
+
+B5. CONTRADICTION — OUTLINE Part VII.3 (acceptance gate)
+  Claim: "A chapter is **WRITTEN** only when its remaining RED fields are all 'absence proved' … " and, four lines later, "a module on the critical path with no metrics can never be WRITTEN until the module emits metrics or the schema explicitly approves a metrics exception".
+  Evidence: OUTLINE.md:266–282. Every one of the 13 chapters has an absence-proved metrics RED and no metrics; under the first sentence several are WRITTEN-eligible, under the last sentence none can ever be. README already applies the strict reading ("No chapter is `WRITTEN` this round").
+  Fix: state one rule. Until then no chapter can be graded deterministically and the scorecard below is advisory.
+
+B6. CONTRADICTION — README Part III vs M12 §1
+  Claim: README table `| III.13 | M12 INFERENCE PROXY | VERIFIED | PARTIAL |`; M12 §1 `Status | VERIFIED (admission/routing/capture), FAILING (streaming)`.
+  Evidence: README.md Part III row III.13; M12 line 12 ("**Streaming completion is FAILING** … reproduced as a `200` with no `Content-Length`/`Transfer-Encoding`/`Connection`").
+  Fix: one status word per module in both places; a chapter that is FAILING in a submodule is not "VERIFIED" in the index.
+
+B7. CONTRADICTION — OUTLINE Part II heading vs its own rows
+  Claim: "**Primary (5, rendered today)**" followed by F1–F5, each marked "*(MISSING)*"; README Part II lists all 16 as **MISSING**.
+  Evidence: OUTLINE.md:61–71; README.md Part II table.
+  Fix: delete "rendered today" — the phrase asserts a rendered state the document contradicts.
+
+B8. OMISSION — OUTLINE Part I.9 (no home anywhere)
+  Claim: I.9 "**What this census does NOT cover** — named areas, and services described only from the client side. Mandatory: a set that claims coverage it does not have was the root complaint in both quorum rounds."
+  Evidence: README Part I table stops at I.5 (`I.1`…`I.5`, README lines 21–31); no chapter carries an I.9; the closest thing is 13 per-chapter RED counts, which are not the mandated document-level negative census. The outline calls this field mandatory and it is absent.
+  Fix: write I.9 (named uncovered areas: Hermes gateway internals, task-router, duckbrain, boardctl, gitreins, session store, the 40 other fleet projects) or remove the mandate.
+
+B9. OMISSION — Part II: 0 of 16 flows written
+  Claim: every chapter's §12 says it — "F1 DISPATCH AND SETTLEMENT … **flow chapter not written**"; "F5 LANDING … **flow chapter not written**"; `docs/handbook/chapters/` contains 13 `M*.md` and no flow file.
+  Evidence: `ls docs/handbook/chapters/` (13 files, M0–M12 only); README Part II all 16 rows **MISSING**; OUTLINE Part II specifies 13 mandatory elements per flow. Declared as F-ROOT-1, but a declared omission is still an omission: a reader can describe each module and still cannot operate a run end to end, which is the complaint that produced v2.
+  Fix: write F1, F2 and F11 first — the three flows the chapters cite in §12 most often — each with the outline's per-flow element list.
+
+B10. FALSE CLAIM — M12 §6 (M12-C1)
+  Claim: the ERE `grep -rnE '8775|CF_PROXY|cf-inference-proxy' scripts/ config/ specs/` "matches **four** text sites: `scripts/panel_loop.py:145`, `scripts/master_doc_skeleton.py:25` and `:211` … and `config/node.env.example:22`".
+  Evidence: I ran it — the four text sites are real, but `panel_loop.py`'s match is at **:188**, not :145 (`scripts/panel_loop.py:188:  `/home/kara/crier-fleet`, `/home/kara/.hermes/scripts/cf-inference-proxy.py``). Lines 25, 211 and `config/node.env.example:22` are exact.
+  Fix: correct the locator and re-quote the command output.
+
+NON-BLOCKING:
+
+N1. FALSE CLAIM (locator drift) — M9 §6 and M10 §6 both cite the CT-02 producer as `internal/bus/dispatch.go:202` `payload()`. `payload()` is declared at `:175`; `:202` is the `p["text_b64"] = …` assignment inside it. Both chapters agree with each other (which is why the spine passes), so this is a shared locator error, not a disagreement. Fix: `dispatch.go:175` (or `:175-208`).
+
+N2. CONTRADICTION (minor, same chapter) — M9 §3 corrects the route tree to "`Handler()` tree spans `:289-370`, not just `:289-346`", while §13 evidence still lists "`internal/api/server.go:289-346`". Fix: make §13 carry the corrected range.
+
+N3. UNVERIFIED-BY-POLICY — M11 §5 gives `CRIER_URL` default as `http://<bus-host>:8767`, while `dispatcher.py:38` holds a literal address (the round-15 scrub commit `3fba8a7` removed that literal from the chapter and from `_panel/round-9/writer.txt`). The redaction is the right call for a public repo, but the row must say so, otherwise a reader treats `<bus-host>` as a configuration placeholder. Fix: add "(the host literal is redacted; see dispatcher.py:38)".
+
+DEFECT CLASSES:
+- stale-revision-stamp (4 chapters claim "HEAD" for a commit that is not HEAD)
+- quoted-output-not-reproducible (a measured HEAD value the command no longer prints)
+- self-inconsistent-verification-row (one check, two revisions, three durations)
+- index-vs-chapter-status-drift (README status disagrees with the chapter it indexes)
+- acceptance-gate-ambiguity (rule says WRITTEN is and is not reachable)
+- outline-self-contradiction ("rendered today" vs "MISSING")
+- mandated-section-absent (I.9)
+- whole-part-omission (Part II: 16/16 flows)
+- locator-off-by-N (function cited at a field's line; one grep site at the wrong line)
+- redaction-not-labelled
+
+REPEATABILITY (rule 4 — stated, not hidden):
+Repeated and matched: `handbook_spine.py` (0 findings); `board_drift check` (OK, both sha256s); `boardctl validate` (RESULT OK, 7 warnings, incl. the exact warnings the chapter names — free-form CF-034, priority/title CF-150/CF-192/CF-371, duplicate event id line 337, headerless board); `master_doc_check.py` (44 module(s), 37 VERIFIED, 50 errors, `MASTER-DOC: FAIL`); `test_disk_floor.py` (12), `test_harness_resolve.py` (28), `test_lane_target.py` (40), `test_reclaim.py` (9); `check_scan_scope.py` (15 claims, RESULT OK); lib.sh source counts (11/17); the 108+33, 35, 70 and 103 helper-site counts; scheduler `go build` (rc 0), 57 flags, 43 routes, 30 tables, 379 `log.Printf`, 10 `LoadRootConfig` sites, 8 migration table locators, all sampled `main.go` flag defaults; crier `go build` (rc 0), `go test -count=1 ./...` (rc 0), 1895-line handler, 91 registry test files, 3 slog sites, 67 `crier_*` strings, `crier_client.py` deliver/retrieve/ack at 975/1009/1038; dispatcher 538 lines, 25 `log(` lines, 23 sites, every settings locator sampled, `grep -c EXEC_TIMEOUT` = 1, both "test" scripts contain 0 assert/raise/exit; proxy sha256 `b12a0ac5…` (273 lines), live POST → 401, systemd unit active since 2026-11-05 09:21 PID 2603939 with `10-upstream.conf`.
+Not repeated, and therefore UNVERIFIED from this seat: the M3 shipped landing arm (`tests/selftest.sh` `:2463-2729` — 4,852-line whole-file runner with no arm filter, `SHIPPED_LANDING_ARM_RC=0` is the writer's measurement, not mine); the M9 full suite at `34e44897` (275.7 s quiet / 1100 s+ under fleet load — I ran `go build` only); the M1 `verify-node.sh` certification ladder and the M2/M10 node bus-worker ladder (both need a live node; `~/node-bus-worker.py` does not exist on this host, which the chapters already say); the M4 lock fixture; the M10 signed-read ladder. Each of these is already RED in its own chapter, so their absence adds no new blocking finding — but no reader should treat them as seen passing.
+
+CHAPTER SCORECARD:
+- M0 SHARED CONTRACT — PARTIAL. 13/13 headings, every claim located and reproduced (`lib.sh:5-9`, `:13`, `:19-42`, `:60-64`, `:67-70`, `:75-78` all exact; 11/17 source counts exact; metrics RED is genuinely absence-proved). Not WRITTEN: stamp says HEAD and is not (B1); metrics RED under the strict reading of VII.3 (B5).
+- M1 PROVISIONING — PARTIAL. Strong: port-validation ladder re-pinned to the exact 241-line file (`:40-55`, `:76`, `:225`, `:233-241` all exact), the "six not five" re-apply block is correct, the `--check` "mode 600" lie (`:214`/`:233`) is real. Not WRITTEN: four script bodies unread by its own admission, live ladder unrun, stamp stale (B1).
+- M2 DISPATCH — PARTIAL. Core worker locators verified (`:977`, `:1007`, `:1176-1192`, `:1200-1205`, `:1208`, `:1312`, `:1381-1385`, `:1389-1422`), 70 helper sites exact, the same-batch idempotency gap is a real read. Not WRITTEN: 4 REDs (name-only CLI overrides, non-repeatable ladder), stamp stale (B1).
+- M3 REPOSITORY — PARTIAL. Clone-is-a-lane-row correction, empty `--gate-cmd` default, hook-presence-is-not-enforcement are all correct and located exactly; the 35-site count is exact. Not WRITTEN: hook enforcement unproven (declared), `repo_freshness.py` body unread, landing arm not repeatable from here, stamp stale (B1).
+- M4 BOARD — PARTIAL. Every store number reproduces exactly (357/519, both sha256s, 0 divergent ids, 7 named warnings). Not WRITTEN: §7 quotes a HEAD that the command does not return (B3); lock classifier read but never exercised; metrics RED.
+- M5 HARNESS — PARTIAL. Register is the best-developed one in the set (12 declared/6 required CF_* vars exact, per-adapter pins and digests exact, `install-deepseek`/`-pi-agent` refuse `--apply` at the cited lines); F5-5's computed-call-site correction is right (`project-node.sh:439-452`). Not WRITTEN: foreign installer bodies partly unread, conformance battery unrun (CT-17), metrics RED.
+- M6 DOCUMENTATION — PARTIAL. The gate reproduces exactly (44/37/50, FAIL, exit 1), the spine anchor lines (`:216-227`, `:234`, `:251`, `:276`, `:300`, `:321`, `:337/:345`, `:357`, `:370`), `gen_nasa_handbook.py:18` and `:253-259`, and `panel_loop.py:323-332` are all exact, including the correct +1 offset a careless reader would doubt. Not WRITTEN: its own gate reads FAIL, the render leg does not select `M*.md` (CT-18 UNVERIFIED), metrics RED.
+- M7 GITHUB — PARTIAL. Settings/lifecycle lines exact (`:28`, `:120`, `:127-131`, `:344-352`, `:362`, `:371`, `:579`, `:719-723`), the "M7 does not mint the scoped token" correction is right (`fleet-gh-scope.py` → `gh-app-token.py`). Not WRITTEN: the mint has never run on this host; no canonical contract; metrics RED.
+- M8 SAFETY — PARTIAL. Both bodies read in full; TTL scope (`AGED_PARENTS` only, `<=` boundary), protected set, dry-run projections and the empty-selection "OK" all match the code and both commands reproduce. Not WRITTEN: metrics RED only — the closest chapter in the set to WRITTEN, which is exactly what B5 makes undecidable.
+- M9 SCHEDULER — PARTIAL. The most load-bearing chapter and the most accurate register I sampled: 57 flags, 43 routes, 30 tables, 379 log sites, 10 bootstrap sites, every sampled flag default and every `admission_mode.go`/`dispatch_leg.go`/migrations locator exact; the CT-06/CF-355 split is argued correctly from `:709-726`. Not WRITTEN: 5 declared REDs, stamp stale (B2), CT-02 locator drift (N1), §13 range drift (N2).
+- M10 CRIER — PARTIAL. Counts all reproduce (1895, 91, 3, 67), `go build` and `go test -count=1` green, custody/guard/auth locators exact, and the "supersedes OUTLINE's broken" argument is correct. Not WRITTEN: §7 reports the same run at two revisions with three durations (B4) — the single clearest self-contradiction in the set.
+- M11 DISPATCHER — PARTIAL. Read in full and honest about the thing most documents hide: the deadline kill does not reach the GNU-timeout group (`:260`, `:329`), and its own tests cannot fail (verified: 0 `assert`/`raise`/`sys.exit` in both). Every settings locator and all 23 log sites are exact. Not WRITTEN: metrics RED, live-job rows UNVERIFIED, `CRIER_URL` redaction unlabelled (N3).
+- M12 INFERENCE PROXY — PARTIAL. Hash, 273 lines, live 401, systemd PID/drop-in, sink paths (`:50`/`:52`) and the `[200, 502]` double-status correction all reproduce; the streaming FAILING verdict is properly distinguished from UNVERIFIED. Not WRITTEN: one stale grep locator (B10), node-client half UNVERIFIED, metrics RED, streaming FAILING.
+
+No chapter is WRITTEN. No chapter is SKELETON — every one carries all 13 headings, a code-derived body, and a RED count; the failures are stamp/locator/gate defects, not absent work.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-2f19fa5f00ba73eefe4e0518d2b67a7d6c91fc74b7886a0ff087d6fce0174eea
+
+EXIT=0

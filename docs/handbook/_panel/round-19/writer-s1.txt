@@ -1,0 +1,202 @@
+│ /tmp/ffc_probe3.sh
+│ @@ -0,0 +1,8 @@
+│ +#!/bin/bash
+│ +. /home/kara/code-factory/scripts/lib.sh
+│ +fetch_verified http://127.0.0.1:1/nothing /tmp/x-probe wanted-hash
+│ +echo "direct rc=$?"
+│ +fetch_verified http://127.0.0.1:1/nothing "$1" deliberately-wrong-digest
+│ +rc=$?
+│ +echo "captured rc=[$rc]"
+│ +[ -e "$1" ] && echo "artifact=yes" || echo "artifact=no"
+│ /tmp/verify_repro.sh
+│ @@ -0,0 +1,8 @@
+│ +#!/bin/bash
+│ +# Verify the byte-correct reproduction one-liner from M0 §7 produces rc=1.
+│ +printf '#!/bin/bash\n. /home/kara/code-factory/scripts/lib.sh\nfetch_verified http://127.0.0.1:1/nothing "$1" deliberately-wrong-digest\nrc=$?\nprintf "rc=%%s artifact=" "$rc"; [ -e "$1" ] && echo yes || echo no\n' > /tmp/ffc_probe_repro.sh
+│ +chmod +x /tmp/ffc_probe_repro.sh
+│ +echo "=== generated script content ==="
+│ +cat /tmp/ffc_probe_repro.sh
+│ +echo "=== run it ==="
+│ +bash /tmp/ffc_probe_repro.sh /tmp/ffc-artifact-repro 2>&1
+│ docs/handbook/chapters/M0-shared-contract.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | SHARED CONTRACT (`scripts/lib.sh`) |
+│  | Path | `/home/kara/code-factory/scripts/lib.sh` |
+│ -| Revision | derivation base `9372dc0`; `lib.sh` and every file M0 cites byte-identical through document HEAD `ce2f875` (verified this round: `git diff --name-only 9372dc0..ce2f875` touches only `scripts/panel_loop.py`, `scripts/panel_supervise.sh`, `scripts/reap_orphan_writers.py`, `prompts/foreman.md`, `prompts/unblock.md`, `docs/handbook/_panel/round-9/writer.txt` and the M11 chapter — none cited here) |
+│ +| Revision | derivation base `9372dc0`; `lib.sh` and every file M0 cites byte-identical through document HEAD `dbf810b` (verified this round: `git diff --name-only 9372dc0..dbf810b` touches only `scripts/panel_loop.py`, `scripts/panel_supervise.sh`, `scripts/reap_orphan_writers.py`, `prompts/foreman.md`, `prompts/unblock.md`, `scripts/board_read.py`, `docs/handbook/_panel/round-9/writer.txt` and the M11 chapter — none cited here) |
+│  | Language / runtime | bash 5.3.9 (measured: `bash --version`); sourced, never executed |
+│  | Owner lane | code-factory (node-side + control-host shell) |
+│  | Status | **VERIFIED** — `lib.sh` (78 lines) read in full; every cited line re-verified this round |
+│ docs/handbook/chapters/M1-provisioning.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | PROVISIONING |
+│  | Path | `/home/kara/code-factory/scripts/` — `bunker-server-install.sh`, `disk_floor.py`, `bunker-provision.sh`, `bunker_config_gen.py`, `node-create.sh`, `bunker-crier-connect.sh`, `node_identity.py`, `node_gateway_auth.py`, `node_seed.py`, `node_seed_drift.py`, `node_env.py`, `verify-node.sh`, `node_freshness.py` |
+│ -| Revision | derivation base `9372dc0`; every file M1 cites byte-identical through document HEAD `ce2f875` (verified this round: `git diff --name-only 9372dc0..ce2f875` touches no M1-cited file — only `scripts/panel_loop.py`, `scripts/panel_supervise.sh`, `scripts/reap_orphan_writers.py`, `prompts/foreman.md`, `prompts/unblock.md`, `docs/handbook/_panel/round-9/writer.txt`, M11). `scripts/verify-node.sh` is 241 lines at `ce2f875` — the CF-270 `--port` fix (commit `f1d5cfb`) landed in `47d68b4..08a2c8a` and is unchanged since |
+│ +| Revision | derivation base `9372dc0`; every file M1 cites byte-identical through document HEAD `dbf810b` (verified this round: `git diff --name-only 9372dc0..dbf810b` touches no M1-cited file — only `scripts/panel_loop.py`, `scripts/panel_supervise.sh`, `scripts/reap_orphan_writers.py`, `prompts/foreman.md`, `prompts/unblock.md`, `scripts/board_read.py`, `docs/handbook/_panel/round-9/writer.txt`, M11). `scripts/verify-node.sh` is 241 lines at `dbf810b` — the CF-270 `--port` fix (commit `f1d5cfb`) landed in `47d68b4..08a2c8a` and is unchanged since |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side) |
+│  | Status | **UNVERIFIED** — all ten units read line-by-line this round (see §13 for the file list), but the certification ladder (§7) and the registration wire M1-C1 (§6) are not measured — both need a live node, so the behavioural half stays unmeasured |
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | DISPATCH (NODE SIDE) |
+│  | Path | `/home/kara/code-factory/scripts/` — `add_family_lanes.py`, `configure_family.py`, `load_lane_config.py`, `lane_target.py`, `node-bus-worker.py` |
+│ -| Revision | derivation base `9372dc0`; every file M2 cites byte-identical through document HEAD `ce2f875` (verified this round: `git diff --name-only 9372dc0..ce2f875` touches no M2-cited file) |
+│ +| Revision | derivation base `9372dc0`; every file M2 cites byte-identical through document HEAD `dbf810b` (verified this round: `git diff --name-only 9372dc0..dbf810b` touches no M2-cited file — only `scripts/panel_loop.py`, `scripts/panel_supervise.sh`, `scripts/reap_orphan_writers.py`, `prompts/foreman.md`, `prompts/unblock.md`, `scripts/board_read.py`, `docs/handbook/_panel/round-9/writer.txt`, M11 — none cited here) |
+│  | Language / runtime | Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side); consumes scheduler + crier |
+│  | Status | **UNVERIFIED** — source fully accounted this round (`node-bus-worker.py` 1546 lines read; `add_family_lanes.py` 105, `configure_family.py` 201, `load_lane_config.py` 45 read in full; `lane_target.py` exercised by its 40-test suite), but the live bus-worker ladder (§7) is not repeatable from this control host, so the behavioural half stays unmeasured |
+│ docs/handbook/chapters/M3-repository.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | REPOSITORY |
+│  | Path | `/home/kara/code-factory/scripts/` — `clone_lane.py`, `repo_freshness.py`, `land-node-branch.sh`; gates via `install-gitreins.sh` + `.gitleaks.toml` |
+│ -| Revision | derivation base `9372dc0`; every file M3 cites byte-identical through document HEAD `ce2f875` (verified this round: `git diff --name-only 9372dc0..ce2f875` touches no M3-cited file) |
+│ +| Revision | derivation base `9372dc0`; every file M3 cites byte-identical through document HEAD `dbf810b` (verified this round: `git diff --name-only 9372dc0..dbf810b` touches no M3-cited file — only `scripts/panel_loop.py`, `scripts/panel_supervise.sh`, `scripts/reap_orphan_writers.py`, `prompts/foreman.md`, `prompts/unblock.md`, `scripts/board_read.py`, `docs/handbook/_panel/round-9/writer.txt`, M11 — none cited here) |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side clone + control-host landing) |
+│  | Status | **UNVERIFIED** — `land-node-branch.sh` (308), `install-gitreins.sh` (180), `clone_lane.py` (130), `repo_freshness.py` (662) read in full this round, and the shipped landing arm `cf213-land-node-branch` (`tests/selftest.sh:2463-2729`) passed against a disposable bare remote (`SHIPPED_LANDING_ARM_RC=0`); but S3 hook *enforcement* is unproven (a rejecting-commit fixture that resolves the effective `core.hooksPath` is the missing evidence, §11), and the freshness arm `cf244-node-freshness` is unrun (§7) |
+│ docs/handbook/chapters/M0-shared-contract.md
+│ @@ -104,7 +104,7 @@
+│
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│ -| syntax | `bash -n scripts/lib.sh` | exit 0 | 2026-11-06, rev `ce2f875` | PASS (rc 0) |
+│ +| syntax | `bash -n scripts/lib.sh` | exit 0 | 2026-11-06, rev `dbf810b` | PASS (rc 0) |
+│  | who sources it (direct) | `grep -rl '\. "$HERE/lib.sh"' scripts/` | 11 files | 2026-11-06 | PASS (11) |
+│  | who sources it (total) | `grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` | 17 files | 2026-11-06 | PASS (17) |
+│  | fetch_verified fails closed | staged probe `ffc_probe.sh` — source lib.sh, fetch `http://127.0.0.1:1/nothing` with a wrong digest | rc 1, no artifact left | 2026-11-06 | **PASS** — `curl: (7) … Could not connect`, `rc=1`, `no artifact left` |
+│ docs/handbook/chapters/M1-provisioning.md
+│ @@ -243,9 +243,9 @@
+│
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│ -| shell parse | `for f in scripts/bunker-server-install.sh scripts/bunker-provision.sh scripts/node-create.sh scripts/bunker-crier-connect.sh scripts/verify-node.sh; do bash -n "$f"; done` | exit 0 | 2026-11-06, rev `ce2f875` | PASS (rc 0) |
+│ -| python compile | `python3 -m py_compile scripts/disk_floor.py scripts/node_identity.py scripts/node_gateway_auth.py scripts/node_seed.py scripts/node_seed_drift.py scripts/node_env.py scripts/node_freshness.py scripts/bunker_config_gen.py` | exit 0 | 2026-11-06, rev `ce2f875` | PASS (rc 0) |
+│ -| disk floor unit | `python3 tests/test_disk_floor.py` | 12 tests pass | 2026-11-06, rev `ce2f875` | **PASS** (Ran 12 tests, OK) |
+│ +| shell parse | `for f in scripts/bunker-server-install.sh scripts/bunker-provision.sh scripts/node-create.sh scripts/bunker-crier-connect.sh scripts/verify-node.sh; do bash -n "$f"; done` | exit 0 | 2026-11-06, rev `dbf810b` | PASS (rc 0) |
+│ +| python compile | `python3 -m py_compile scripts/disk_floor.py scripts/node_identity.py scripts/node_gateway_auth.py scripts/node_seed.py scripts/node_seed_drift.py scripts/node_env.py scripts/node_freshness.py scripts/bunker_config_gen.py` | exit 0 | 2026-11-06, rev `dbf810b` | PASS (rc 0) |
+│ +| disk floor unit | `python3 tests/test_disk_floor.py` | 12 tests pass | 2026-11-06, rev `dbf810b` | **PASS** (Ran 12 tests, OK) |
+│  | certification ladder | `scripts/verify-node.sh --agent <id> --server <host>` on a live node | per-leg observation | not run this round | **UNVERIFIED** (needs a live node; legs documented in §11) |
+│
+│  ## 8. Metrics
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -162,8 +162,8 @@
+│
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│ -| python compile | `python3 -m py_compile scripts/add_family_lanes.py scripts/configure_family.py scripts/load_lane_config.py scripts/lane_target.py scripts/node-bus-worker.py` | exit 0 | 2026-11-06, rev `ce2f875` | PASS (rc 0) |
+│ -| lane target unit | `python3 tests/test_lane_target.py` | pass | 2026-11-06, rev `ce2f875` | **PASS** (Ran 40 tests, OK) |
+│ +| python compile | `python3 -m py_compile scripts/add_family_lanes.py scripts/configure_family.py scripts/load_lane_config.py scripts/lane_target.py scripts/node-bus-worker.py` | exit 0 | 2026-11-06, rev `dbf810b` | PASS (rc 0) |
+│ +| lane target unit | `python3 tests/test_lane_target.py` | pass | 2026-11-06, rev `dbf810b` | **PASS** (Ran 40 tests, OK) |
+│  | bus worker ladder | `python3 ~/node-bus-worker.py --check` on cf-node | inbox GET → 200 with key+bearer | 2026-11-05, cf-node only | **UNVERIFIED** — a single-host 2026-11-05 run (FACT-04) is provenance, not this round's measured result; not repeatable from this control host (`~/node-bus-worker.py` does not exist here) |
+│
+│  ## 8. Metrics
+│ docs/handbook/chapters/M3-repository.md
+│ @@ -124,9 +124,9 @@
+│
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│ -| shell parse | `bash -n scripts/land-node-branch.sh` | exit 0 | 2026-11-06, rev `ce2f875` | PASS (rc 0) |
+│ -| python compile | `python3 -m py_compile scripts/clone_lane.py scripts/repo_freshness.py` | exit 0 | 2026-11-06, rev `ce2f875` | PASS (rc 0) |
+│ -| clone lane unit | `python3 tests/test_clone_lane.py` | 4 tests pass | 2026-11-06, rev `ce2f875` | **PASS** (Ran 4 tests, OK) |
+│ +| shell parse | `bash -n scripts/land-node-branch.sh` | exit 0 | 2026-11-06, rev `dbf810b` | PASS (rc 0) |
+│ +| python compile | `python3 -m py_compile scripts/clone_lane.py scripts/repo_freshness.py` | exit 0 | 2026-11-06, rev `dbf810b` | PASS (rc 0) |
+│ +| clone lane unit | `python3 tests/test_clone_lane.py` | 4 tests pass | 2026-11-06, rev `dbf810b` | **PASS** (Ran 4 tests, OK) |
+│  | landing arm (shipped) | `tests/selftest.sh` arm `cf213-land-node-branch` (`:2463-2729`) | gate rejection, dry-run, successful landing, fresh-clone proof, repeat landing, refused push, no-ff isolation | 2026-11-06 | **PASS** — `SHIPPED_LANDING_ARM_RC=0`, `LANDING_ARM_FAILURES=0` (the arm creates a bare origin + clean clones and exercises all seven behaviours; B07) |
+│  | freshness gate | `tests/selftest.sh` arm `cf244-node-freshness` | freshness sub-cases PASS | 2026-11-06 | **UNVERIFIED** — arm present (`:3433-3670`), not re-run this round |
+│
+│ docs/handbook/chapters/M0-shared-contract.md
+│ @@ -113,7 +113,7 @@
+│  that reproduce it against a refused loopback URL:
+│
+│  ```
+│ -$ printf '#!/bin/bash\n. /home/kara/code-factory/scripts/lib.sh\nfetch_verified http://127.0.0.1:1/nothing "$1" deliberately-wrong-digest\nprintf "rc=%s artifact=" "$?"; [ -e "$1" ] && echo yes || echo no\n' > /tmp/ffc_probe.sh && chmod +x /tmp/ffc_probe.sh
+│ +$ printf '#!/bin/bash\n. /home/kara/code-factory/scripts/lib.sh\nfetch_verified http://127.0.0.1:1/nothing "$1" deliberately-wrong-digest\nprintf "rc=%%s artifact=" "$?"; [ -e "$1" ] && echo yes || echo no\n' > /tmp/ffc_probe.sh && chmod +x /tmp/ffc_probe.sh
+│  $ bash /tmp/ffc_probe.sh /tmp/ffc-artifact   # → curl: (7) … ; rc=1 artifact=no
+│  ```
+│
+│ docs/handbook/chapters/M1-provisioning.md
+│ @@ -293,7 +293,7 @@
+│    inlined — an inlined heredoc shipped literal backslashes and reported a fully-provisioned node
+│    as empty.
+│  - Every `bunker exec` call in the probe runs under `timeout 45`/`timeout 60` (`:187`, `:225-226`).
+│ -- **Certification ladder** (`verify-node.sh`, **241 lines** at `ce2f875` — the CF-270 `--port` fix, commit `f1d5cfb`, inserted +28/−1 near the top and shifted every round-9 locator ~+25; all re-pinned this round):
+│ +- **Certification ladder** (`verify-node.sh`, **241 lines** at `dbf810b` — the CF-270 `--port` fix, commit `f1d5cfb`, inserted +28/−1 near the top and shifted every round-9 locator ~+25; all re-pinned this round):
+│    - `:40-55` **port validation (NEW leg, CF-270)** — `--port` is validated **before any use**: a digit test (`:40-43`, `case "$PORT" in ''|*[!0-9]*)`), a 5-digit length cap (`:46`, `[ "${#PORT}" -le 5 ]`), then two `verify-node: --port must be digits 1-65535 (got: …)` → exit 2 refusals (`:47-50`, printf `:48` exit 2 `:49`; and `:52-55`, printf `:53` exit 2 `:54`), with a base-10 re-expansion `PORT=$((10#$PORT))` at `:51` between them. A non-digit `--port` is refused here and no longer interpolates into the remote `bash -lc` shell.
+│    - `:73-76` `agent_alive` — `bunker exec … echo ALIVE $(hostname)` must return `ALIVE*`; on
+│      failure `:76` prints `RESULT: FAIL` and exits 1 **before** any terminal `VERIFY:` form.
+│ /tmp/verify_chapter_probe.sh
+│ @@ -0,0 +1,8 @@
+│ +#!/bin/bash
+│ +# Run the EXACT reproduction one-liner now in M0 §7 (after the %%s fix).
+│ +cd /home/kara/code-factory
+│ +printf '#!/bin/bash\n. /home/kara/code-factory/scripts/lib.sh\nfetch_verified http://127.0.0.1:1/nothing "$1" deliberately-wrong-digest\nprintf "rc=%%s artifact=" "$?"; [ -e "$1" ] && echo yes || echo no\n' > /tmp/ffc_probe.sh && chmod +x /tmp/ffc_probe.sh
+│ +echo "=== generated /tmp/ffc_probe.sh ==="
+│ +cat /tmp/ffc_probe.sh
+│ +echo "=== run: bash /tmp/ffc_probe.sh /tmp/ffc-artifact ==="
+│ +bash /tmp/ffc_probe.sh /tmp/ffc-artifact 2>&1
+WRITER ROUND COMPLETE — Round 19, group s1 (M0–M3)
+
+MANIFEST
+
+CHAPTERS WRITTEN (all four; corrections verified and applied this round):
+- M0-shared-contract.md
+- M1-provisioning.md
+- M2-dispatch.md
+- M3-repository.md
+
+CHAPTERS STILL SKELETON: none. All four carry all 13 schema sections.
+
+WHAT THIS ROUND CHANGED (the code moved, the chapters followed):
+- Revision stamp: document HEAD moved ce2f875 → dbf810b (commit "board_read: the board is always readable"). Re-stamped §1 Revision + every §7 "rev" cell in all four chapters, with the re-derived diff `git diff --name-only 9372dc0..dbf810b` (8 files, none cited by M0–M3). The post-ce2f875 delta is only prompts/foreman.md (+20 lines) and scripts/board_read.py (new) — neither carries a content claim in any of my four chapters, so every file:line citation remains byte-identical.
+- M0 §7 probe fix: the reproduction one-liner's outer `printf` consumed the `%s`, so a literal copy printed `rc= artifact=no` (the "1" was dropped). Fixed `%s` → `%%s`; the command now reproduces `rc=1 artifact=no` byte-for-byte (verified).
+
+RED FIELD COUNT PER CHAPTER (carried from the chapters' own §RED lines, unchanged this round):
+- M0 — 2 RED. §8 Metrics (absence-proved). §6 (local) bunker edge (not-measured, external far side).
+- M1 — 3 RED. §8 Metrics (absence-proved). §7 certification ladder (not-measured, needs live node). §6 M1-C1/M1-C2 (not-measured, boundary).
+- M2 — 3 RED. §8 Metrics (absence-proved). §7 bus-worker ladder (not-measured, needs live cf-node). §6 CT-09 (missing) / CT-11 (boundary, not-measured).
+- M3 — 4 RED. §8 Metrics (absence-proved). §1/§11 S3 hook enforcement (not-measured). §7 cf244-node-freshness arm (not-measured). §6 CT-12/M3-C1/M3-C2 (boundary/local, not-measured).
+
+STATUS WORDS: M0 VERIFIED; M1/M2/M3 UNVERIFIED (single word per MASTER-DOC-SCHEMA §1).
+
+SPINE SUMMARY LINE (final):
+chapters=13  canonical contracts=18
+findings=0
+
+COMMANDS RUN (exit status recorded):
+- python3 scripts/handbook_spine.py → exit 0 (initial: findings=0)
+- git rev-parse --short HEAD → dbf810b
+- git diff --name-only 9372dc0..HEAD → 8 paths (panel_loop.py, panel_supervise.sh, reap_orphan_writers.py, prompts/foreman.md, prompts/unblock.md, scripts/board_read.py, round-9/writer.txt, M11)
+- git diff --name-only ce2f875..HEAD → prompts/foreman.md, scripts/board_read.py
+- wc -l on 23 cited files → all line counts reproduce (lib.sh 78; verify-node.sh 241; node-bus-worker.py 1546; land-node-branch.sh 308; install-gitreins.sh 180; clone_lane.py 130; repo_freshness.py 662; node_seed.py 405; node_env.py 589; node_seed_drift.py 558; node_freshness.py 732; bunker_config_gen.py 724; node_gateway_auth.py 95; node_identity.py 111; configure_family.py 201; add_family_lanes.py 105; load_lane_config.py 45) → exit 0
+- bash -n scripts/lib.sh → exit 0
+- grep -rl '\. "$HERE/lib.sh"' scripts/ | wc -l → 11
+- grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/ | wc -l → 17
+- for f in <5 M1 scripts>; do bash -n "$f"; done → exit 0
+- python3 -m py_compile <8 M1 files> → exit 0
+- python3 tests/test_disk_floor.py → exit 0 (Ran 12 tests, OK)
+- python3 -m py_compile <5 M2 files> → exit 0
+- python3 tests/test_lane_target.py → exit 0 (Ran 40 tests, OK)
+- bash -n scripts/land-node-branch.sh → exit 0
+- python3 -m py_compile scripts/clone_lane.py scripts/repo_freshness.py → exit 0
+- python3 tests/test_clone_lane.py → exit 0 (Ran 4 tests, OK)
+- metrics greps (M0/M1/M2/M3, prometheus|Counter|Gauge|Histogram|/metrics) → 0 each (absence-proved)
+- M1 helper-site grep → 108 + 33 = 141; M2 → 70; M3 → 35 (all reproduce)
+- CT-09 greps: grep -n duckbrain scripts/node-bus-worker.py → 0; grep -n /api/memories → 0
+- fetch_verified fails-closed probe (direct) → rc=1, artifact=no
+- M0 §7 reproduction one-liner (post-fix) → rc=1 artifact=no (byte-exact)
+- python3 scripts/handbook_spine.py → exit 0 (final: findings=0)
+
+CROSS-SECTION DEPENDENCIES:
+1. REVISION STAMP (new this round) — s2 (M4–M8) and s3 (M9–M12) must re-stamp their chapters to dbf810b. Exact claim each must satisfy: §1 Revision reads "document HEAD `dbf810b`" and each §7 "rev" cell matches. My four chapters are now at dbf810b; if any peer chapter stays at ce2f875, the document carries two revisions and violates MASTER-DOC-SCHEMA §1 "one revision per document issue".
+2. Acceptance rule (OUTLINE Part VII.3) — carried: one document-wide ruling on whether an absence-proved metrics RED and a boundary-UNVERIFIED row block WRITTEN. My chapters apply the conservative reading (both RED). M4 reads "terminal, not RED"; owner is OUTLINE/README/M4.
+3. §9 "counted-not-enumerated" exemption — carried: M0/M1/M2/M3 self-flag the helper-site template exemption as the writer's argument; if the panel rejects it the field is RED. Uniform ruling across M0–M8 belongs to the M5/M7/M8 owner.
+
+ALIGNMENT: my §6 cites canonical CT-03/CT-04/CT-09/CT-11 (M2) and CT-12 (M3), matching the peer chapters' ids; M0/M1 carry local-edge tags only (no canonical entry), per OUTLINE Part IV's two-register convention. The spine's contract pair/state/settings checks pass with zero findings, so the two ends of each shared interface agree on the same CT id.
+
+WRITER ROUND COMPLETE
+
+session_id: local-8f50210e42c4f2f82d149471d39896d3528e08555896629630551cff523573e9

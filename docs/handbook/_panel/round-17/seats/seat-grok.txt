@@ -1,0 +1,362 @@
+⚠️  Primary auth failed — switching to fallback: fireworks / accounts/fireworks/models/deepseek-v4p1-flash-1017
+│ cache/scratch/spine_probe.py
+│ @@ -0,0 +1,8 @@
+│ +import sys
+│ +sys.path.insert(0, '/home/kara/code-factory/scripts')
+│ +import handbook_spine as hs
+│ +ch = hs.chapters()
+│ +for name, text in ch.items():
+│ +    rows = hs.contract_rows(text)
+│ +    st = sum(1 for l in hs.section(text, 5).splitlines() if hs.SETTING_ROW.match(l))
+│ +    print(name, "s6_rows=", len(rows), "s5_setting_rows=", st)
+│ cache/scratch/inject.py
+│ @@ -0,0 +1,51 @@
+│ +import pathlib, re, subprocess, sys
+│ +
+│ +S = pathlib.Path("/home/kara/.hermes/cache/scratch/spine_t1")
+│ +CH = S / "docs/handbook/chapters"
+│ +M0 = CH / "M0-shared-contract.md"
+│ +M4 = CH / "M4-board.md"
+│ +orig0 = M0.read_text()
+│ +orig4 = M4.read_text()
+│ +
+│ +def run():
+│ +    r = subprocess.run([sys.executable, str(S / "scripts/handbook_spine.py")],
+│ +                       capture_output=True, text=True)
+│ +    return r.returncode, [l for l in r.stdout.splitlines()[1:] if l.strip()]
+│ +
+│ +try:
+│ +    # A: unknown canonical id
+│ +    M0.write_text(orig0.replace("| (local) | bunker CLI", "| CT-99 | bunker CLI"))
+│ +    print("A unknown ct id  ->", run())
+│ +
+│ +    # B: setting default conflict injected into M4 section 5
+│ +    M0.write_text(orig0)
+│ +    inj = orig4.replace("## 6. Contracts in and out",
+│ +                        "## 5. Settings register\n\n| Setting | Default | Range | Governs | Breaks |\n|---|---|---|---|---|\n| `CF_TIMEOUT_S` | 900 (`x:1`) | n/a | t | t |\n\n## 6. Contracts in and out", 1)
+│ +    M4.write_text(inj)
+│ +    print("B setting conflict ->", run())
+│ +
+│ +    # C: count claim lie
+│ +    M4.write_text(orig4.replace("## 12. Cross-references", "## 12. Cross-references\n\nThis handbook now documents 20 modules.\n", 1))
+│ +    print("C count claim    ->", run())
+│ +
+│ +    # D: dangling flow ref
+│ +    M4.write_text(orig4.replace("## 12. Cross-references", "## 12. Cross-references\n\nSee F42 for the flow.\n", 1))
+│ +    print("D dangling ref   ->", run())
+│ +
+│ +    # E: state disagreement on an INTERNAL contract (CT-02) across two chapters
+│ +    M9 = CH / "M9-scheduler.md"
+│ +    o9 = M9.read_text()
+│ +    M9.write_text(o9.replace("**works**", "**broken**", 1))
+│ +    print("E state disagree ->", run())
+│ +    M9.write_text(o9)
+│ +
+│ +    # F: one-sided internal contract (blank producer on CT-05 row)
+│ +    M2 = CH / "M2-dispatch.md"
+│ +    o2 = M2.read_text()
+│ +    M2.write_text(o2.replace("| `load_lane_config.py:31-37`", "| see M9", 1))
+│ +    print("F one-sided      ->", run())
+│ +    M2.write_text(o2)
+│ +finally:
+│ +    M0.write_text(orig0)
+│ +    M4.write_text(orig4)
+│ +print("restored ->", run()[0])
+│ cache/scratch/locator_audit17.py
+│ @@ -0,0 +1,53 @@
+│ +import re, pathlib
+│ +
+│ +CH = pathlib.Path("/home/kara/code-factory/docs/handbook/chapters")
+│ +ROOTS = [
+│ +    pathlib.Path("/home/kara/code-factory"),
+│ +    pathlib.Path("/home/kara/coding-hermes-scheduler/coding-herms-scheduler"),
+│ +    pathlib.Path("/home/kara/crier"),
+│ +    pathlib.Path("/home/kara/crier-fleet"),
+│ +    pathlib.Path("/home/kara/.hermes/scripts"),
+│ +]
+│ +LINE_RE = re.compile(r"(?<![\w/.-])([\w./-]+\.(?:py|go|sh|ts|js|toml|yaml|yml|jsonl|md)):(\d+)(?:[-–](\d+))?")
+│ +
+│ +def resolve(p):
+│ +    rel = p.lstrip("./")
+│ +    if rel.startswith("internal/") or rel.startswith("cmd/"):
+│ +        for r in (pathlib.Path("/home/kara/coding-hermes-scheduler/coding-herms-scheduler"),
+│ +                  pathlib.Path("/home/kara/crier")):
+│ +            if (r / rel).exists():
+│ +                return r / rel
+│ +    for r in ROOTS:
+│ +        cand = r / rel
+│ +        if cand.exists():
+│ +            return cand
+│ +    if "/" not in rel and (pathlib.Path("/home/kara/crier-fleet") / rel).exists():
+│ +        return pathlib.Path("/home/kara/crier-fleet") / rel
+│ +    return None
+│ +
+│ +missing, out_of_range = [], []
+│ +for f in sorted(CH.glob("M*.md")):
+│ +    text = f.read_text()
+│ +    for m in LINE_RE.finditer(text):
+│ +        p, start, end = m.group(1), int(m.group(2)), m.group(3)
+│ +        path = resolve(p)
+│ +        if path is None:
+│ +            missing.append((f.stem, p, start))
+│ +            continue
+│ +        try:
+│ +            n = sum(1 for _ in path.open("rb"))
+│ +        except Exception:
+│ +            continue
+│ +        hold = int(end) if end else start
+│ +        if hold > n:
+│ +            out_of_range.append((f.stem, p, hold, n))
+│ +
+│ +print("=== FILE NOT RESOLVABLE ===")
+│ +for row in missing:
+│ +    print(row)
+│ +print("count:", len(missing))
+│ +print()
+│ +print("=== LINE BEYOND EOF ===")
+│ +for row in out_of_range:
+│ +    print(row)
+│ +print("count:", len(out_of_range))
+VERDICT: FAIL
+
+BLOCKING: 5
+NON-BLOCKING: 9
+
+---
+
+SPINE (rule 3 of the brief, run as instructed)
+
+  $ python3 scripts/handbook_spine.py
+  chapters=13  canonical contracts=18
+  findings=0          exit 0
+
+  Treating that as "no blocked CONTRADICTION from the spine" — not as absolution. I falsified the
+  gate before trusting it (injected faults into a scratch copy):
+    injected CT-99 row            -> CONTRACT UNKNOWN ID, rc 1        fires
+    injected "20 modules" prose   -> COUNT CLAIM, rc 1                fires
+    injected "See F42"            -> DANGLING REFERENCE, rc 1         fires
+    flipped CT-02 state in M9     -> CONTRACT STATE DISAGREEMENT, rc 1 fires
+    injected CF_TIMEOUT_S conflict *outside* §5 -> findings=0         does NOT fire
+  The last one is the section-scoped scan the document already admits (M6 §5, blind spot (a)).
+  I also ran HEAD's committed spine (340 lines) against the same chapters: findings=0, so the
+  strengthened working-tree gate does not change the verdict, only its coverage.
+
+---
+
+FINDINGS
+
+1. CONTRADICTION + FALSE CLAIM — M0, M1, M2, M3 vs M4, M5, M6, M7, M8, M12
+   Claim (M0:9): "derivation base `9372dc0` ... byte-identical through `3fba8a7` (current HEAD)".
+   Claim (M4:9, repeated verbatim in M5/M6/M7/M8/M12): "`e07d031d...` (code-factory HEAD ==
+   origin/main == gh/main, round-17 derivation; `git diff --name-only 3fba8a7..HEAD -- scripts/
+   docs/ tests/` is empty ...)".
+   Evidence — measured:
+     git log -1                        -> ce2f875 2026-11-06 23:04:54  panel: the loop can own its own worktree
+     git log --format=%ci e07d031      -> 2026-11-06 22:24:12
+     git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/
+       scripts/panel_loop.py
+       scripts/panel_supervise.sh          <- the command the six chapters quote returns two paths
+   Two different commits are called HEAD for one repository, in one document issue, and neither is
+   HEAD. `3fba8a7` was already superseded at 22:24 by `e07d031`, before M0's mtime (22:36). Schema §1
+   requires one revision per issue; the schema's own worked example (MASTER-DOC-SCHEMA:110) puts the
+   revision in the identity row, so a reader uses it to check cited lines.
+   Fix: re-stamp every code-factory chapter to `ce2f875`, delete "current HEAD" phrasing, re-run and
+   re-quote the diff with its real two paths, and re-verify each cited locator in the post-commit
+   files (M6's `panel_loop.py` locators do still resolve at 461 lines; M5/M7/M8 cite none of the two
+   changed files, so their substance survives the re-stamp).
+
+2. CONTRADICTION — README (§ front matter) against the chapters it indexes
+   Claims:
+     README:162  "Does it open with a general arrangement? | Yes — Part I, rendered"
+     README:25   "I.1 ... **MISSING** (no rendered artifact — the renderer globs docs/master/...)"
+     README:84   "III.10 | M9 SCHEDULER | ... §9 log inventory 2/379, settings register incomplete"
+     README:85   "III.11 | M10 CRIER | UNVERIFIED | PARTIAL | handler body unread, §9 inventory
+                  non-exhaustive"
+     README:167  "Chapter completeness | 0 WRITTEN, 13 PARTIAL, 0 SKELETON (round 9)"
+   Evidence: M9:314 measures 378 `log.Printf` sites (I reproduced: 378 excluding `_test.go`, 379
+   including) — not 379 with 2 tabulated; M10:12 states "the full 1895-line handler body read
+   line-by-line this round" (I reproduced `wc -l internal/registry/handler.go` = 1895); README:162
+   contradicts README:25 in the same file, one screen apart. The status table is stamped round 9
+   in a round-17 document.
+   Fix: regenerate the Part III status table and the "Measured status" block from the chapters'
+   own §1/§13 (or delete the table and point at the chapters), and reconcile the Part I row.
+
+3. CONTRADICTION — the acceptance rule that decides every grade, stated three incompatible ways
+   OUTLINE:277-278: "Neither RED state is WRITTEN. A chapter is WRITTEN only when its remaining RED
+     fields are all 'absence proved'" — adjacent sentences, opposite instructions.
+   OUTLINE:271: "A module with no metrics is correctly RED ... not a defect in the writing."
+   README:69-71: "a chapter with a RED metrics field stays PARTIAL until the system emits metrics or
+     an explicit schema exception is approved."
+   M4:200-207: "RED accounting rule — one rule, document-wide ... a boundary UNVERIFIED row is a
+     terminal state, not a RED" (a third rule, which M0/M1/M2/M3/M5/M6/M7/M8/M12 then apply).
+   Consequence: 11 of 13 modules emit no metrics (every chapter's §8 absence-proof), so under
+   README's rule no chapter can ever be WRITTEN; under OUTLINE:271 they are all WRITTEN-eligible;
+   under the chapters' RED counts half the RED columns disappear. The document's central verdict is
+   unfalsifiable until one rule is chosen.
+   Fix: state the rule once (OUTLINE Part VII.3), have README and the chapters cite it by line, and
+   delete the other two formulations.
+
+4. OMISSION (document level) — OUTLINE Part II, all 16 flows
+   Quote (M9:351, and identically in all 13 chapters' §12): "F11 SCHEDULING ADMISSION is the primary
+   flow ... — **flow chapter not written** (OUTLINE Part II, all 16 flows MISSING)."
+   Evidence: `ls docs/handbook/chapters/` = 13 files, M0..M12 only; README:35-50 lists II.1-II.16
+   "MISSING"; README:164 "Are secondary flows covered? No"; README:56 files it as F-ROOT-1.
+   The outline calls the flows the panel's largest single finding (OUTLINE:73) and the thing that
+   makes the node deliverable ("A reader cannot operate a fleet from the node's side of it",
+   OUTLINE:6-9). Thirteen module chapters with sixteen flows deferred is a module census, not the
+   document the outline specifies. Filed ≠ written.
+   Fix: write Part II as its own chapters (the outline already fixes the field set per flow:
+   trigger · exit · actors · preconditions · numbered steps naming modules · branches · state ·
+   contracts · timing · duplicate case · empty case · degradation · diagram), or amend the outline's
+   deliverable claim and the README's "Yes — Part I, rendered" line in the same commit.
+
+5. OMISSION — M10, the capability delivery route
+   Claim (M10:32, S1 custody and transport): the handler surface is "`HandleRegister` (`:598`),
+   `HandleDeliver` (`:990`), `HandleRetrieve` (`:1690`), `HandleAck` (`:1812`)".
+   Evidence: crier registers a second deliver route — `cmd/server/main.go:112`
+   `r.HandleFunc("/capabilities/{capability}/inbox", h.HandleDeliverByCapability).Methods("POST")`,
+   implemented at `internal/registry/handler.go:1014`, with its own authorization rule at
+   `internal/registry/service_auth.go:117-126` ("capability routing cannot authorize a service
+   recipient") and its own counters (`crier_capability_routed_total`,
+   `crier_capability_unheld_total` — which M10:204-205 quotes in §8 without the route that emits
+   them). OUTLINE M10.S1 names "routing" as in scope. The chapter therefore documents the metrics of
+   a delivery path it never describes.
+   Fix: add the capability route to §3 S1 (handler + registration line + the refusal rule), add a
+   §10 failure-mode row for a capability addressed to a protected recipient, and cross-reference it
+   from §8.
+
+6. UNVERIFIED — M6 (and the CT-16 "works" row): the gate that certifies cross-chapter consistency is
+   uncommitted working-tree content
+   Quote (M6:9): "**Dirty-source disclosure (sol B10):** `scripts/handbook_spine.py` is
+   **uncommitted in the working tree** — the reviewed file is 443 lines, `git show
+   HEAD:scripts/handbook_spine.py` is 340 lines".
+   Evidence — reproduced: `git status --porcelain scripts/handbook_spine.py` → ` M`; working sha256
+   `afbc65fc...2163` (443 lines); `git show HEAD:...` sha256 `5f55a267...d2cf` (340 lines). The
+   checks M6 §5 credits to the gate (`CONTRACT UNKNOWN ID` :267, `CONTRACT ROW MISPARSE` :254,
+   backtick-aware `split_row`) do not exist at HEAD; HEAD's gate also returns findings=0, so the
+   verdict is stable but the *gate* a stranger gets is weaker than the one certified.
+   Fix: commit the spine (and pin M6's locators to the committed sha), or mark CT-16 and M6 §7's
+   spine row UNVERIFIED-by-revision. Disclosure is not the same as a reproducible artifact.
+
+7. FALSE CLAIM (minor) — M0 §5
+   Quote (M0:82): "`lib.sh` carries one tunable constant and no env-var surface".
+   Evidence: `scripts/lib.sh:11` — `FAILED=${FAILED:-0}` reads `FAILED` from the environment; a
+   caller that exports `FAILED=5` changes `bad()`'s counter semantics. The next sentence concedes the
+   point ("FAILED ... is a per-script failure counter, not a setting"), so the fix is one clause.
+   Fix: "no tunable env surface; the only environment read is the `FAILED` counter seed at `:11`".
+
+8. FALSE CLAIM (stale revision) — M10 §1
+   Quote (M10:9): "`e50e55ee` (crier repo HEAD at this round's stamp)".
+   Evidence: crier HEAD is `1587a03f` ("test(crier): keep the dead-endpoint control honest under a
+   privileged runner"), which changed only `cmd/server/session_dispatch_live_test.go`. The chapter's
+   six-path diff (`git diff --name-only 0a372209..HEAD` → 6 paths) and its claim that every cited
+   non-test Go file is byte-identical to `33c1f388` both still reproduce (verified: zero cited files
+   changed), so only the "HEAD" wording is false.
+   Fix: "stamp `e50e55ee`; HEAD `1587a03f` is a test-only commit, cited files byte-identical to
+   `33c1f388`".
+
+9. UNVERIFIED (citation imprecision) — M4 §2/§5/§11
+   Quote (M4:17, :81, :164): "a completion REQUIRES `--evidence-run-id` — `boardctl update --help`".
+   Evidence: `boardctl update --help` lists `[--evidence-run-id RUN]` and says nothing about a
+   requirement (grep for "required|complete|evidence" returns only the synopsis line). The
+   requirement is enforced at runtime and named there: I created a scratch board,
+   `boardctl -C <scratch> create --id BX-1 --title probe`, then `update BX-1 --status complete` →
+   "evidence run required: completion REFUSED ... `--evidence-run-id` is REQUIRED when setting
+   status "complete" (TR-251)". The behaviour is real; the cited source cannot show it.
+   Fix: cite the refusal string (and the TR-251 row) rather than `update --help`.
+
+10. CONTRADICTION (schema field) — M1 §1, M12 §1
+    Quote (M12:12): "Status | **VERIFIED (admission/routing/capture), FAILING (streaming)**";
+    (M1:12) "**VERIFIED (source)** ... **UNVERIFIED (behavioural)**".
+    Evidence: `MASTER-DOC-SCHEMA.md:21` — "Status | `VERIFIED` / `UNVERIFIED` / `FAILING` — never
+    blank, never 'done'". Two values in one field break any consumer that reads the word (the
+    schema's own gate, `master_doc_check.py:128-138`, key-words on the supplied status).
+    Fix: one status word per chapter (the weaker one) with the qualifier moved into §2/§13.
+
+11. CONTRADICTION (unfixed companion) — UNIT-MAP
+    Quote (M5:55-56): "OUTLINE v2 lists M5 as 5 submodules (S1–S5); `docs/UNIT-MAP.yaml` lists 3
+    (S1–S3). The two structure maps still disagree".
+    Evidence: `grep -oE 'M[0-9]+\.S[0-9]+' docs/UNIT-MAP.yaml | sort -u | wc -l` → **25** (the v1
+    count), while OUTLINE Part III declares **48** and the chapters' §3 tables carry 50 rows for 48
+    submodules (M1 splits S1, M3 splits S1 into a/b). README:28 calls the unit map "MAPPED (13
+    modules, 48 submodules)" — the map it points at does not contain them.
+    Fix: regenerate UNIT-MAP from the chapters (gen_unit_map.py exists) or downgrade I.4 to PARTIAL.
+
+12. CONTRADICTION (count terminology) — OUTLINE Counts
+    Quote (OUTLINE:311): "Submodule chapters | 25 | 48".
+    Evidence: 13 chapter files exist; 48 is a row count inside them, not a chapter count, and the
+    spine cannot catch it (`"submodule": None`, handbook_spine.py:401 — admitted at M6:117).
+    Fix: "Submodule rows (inside 13 chapters) | 25 | 48", or emit per-submodule chapters.
+
+13. UNBUILDABLE (document level) — OUTLINE Part VII
+    Quote (README:168): "Can a task list be derived? | **Not yet** — Part VII unwritten".
+    Evidence: README:145-146 VII.1/VII.2 "NOT WRITTEN"; no R-nnn table exists anywhere under
+    docs/handbook/. The chapters are individually actionable (each §13 files findings F*-n with
+    board-row ids), but the document cannot be converted into dispatchable tasks without a separate
+    derivation step it does not contain.
+    Fix: write VII.1/VII.2 from the chapters' §13 findings, or state in the outline that derivation
+    is out of scope for this issue.
+
+14. UNVERIFIED (not repeatable by this seat) — the live-ladder and long-suite rows
+    M9:265-267 (`internal/scheduler` 376.454s PASS; full `go test ./...` rc 1 under parallel load),
+    M10:175 (`go test -count=1 ./...`, 44 packages), M1:237 / M5:170 / M7:98 / M12:121 (live-node and
+    credential-gated ladders). I did not re-run any of these: the scheduler package run alone costs
+    376 s under the load this host is under, the live ladders need a bunker agent and App creds that
+    do not exist here. Every one of them is already marked UNVERIFIED/RED by its writer — the note is
+    that no judge can promote them, only a live node can.
+
+---
+
+DEFECT CLASSES
+
+  revision-stamp drift · two-HEADs-for-one-repo · stale front matter · acceptance-rule
+  self-contradiction · section-scoped gate blind spot · uncommitted evidence artifact ·
+  named-scope omission (route-without-documentation) · citation imprecision (help text vs
+  enforcement) · schema field drift (compound status word) · stale companion artifact
+  (UNIT-MAP) · count terminology (rows called chapters) · declared-but-unrun live ladders
+
+---
+
+CHAPTER SCORECARD
+
+  M0  PARTIAL   — §3/§4/§8-§11 verified against lib.sh line by line; one false clause ("no env-var
+                  surface", :11); metrics RED absence-proved.
+  M1  PARTIAL   — 10 units read, settings register complete; certification ladder unrun (RED),
+                  compound status word.
+  M2  PARTIAL   — reply dict, deliver, text_b64 refusal, dry-run lease all reproduced; live
+                  bus-worker ladder not repeatable from this host (RED).
+  M3  PARTIAL   — landing script + selftest arm locators exact; hook *enforcement* unproven, cf244
+                  arm unrun, 3 REDs.
+  M4  PARTIAL   — store measured live (357/519, validate OK +7 warnings, drift OK); §1 revision row
+                  false now, `update --help` cannot show the evidence-run rule.
+  M5  PARTIAL   — installer dispatch (`project-node.sh:440,449-452`), pins, CF_* predicates all
+                  verified; conformance battery unrun, §9 partial, stale revision row.
+  M6  PARTIAL   — master_doc_check FAIL reproduced (exit 1, 44/37/50), spine locators exact; own
+                  gate reads FAIL, the certifying spine is uncommitted.
+  M7  PARTIAL   — CLI surface (exit 2), MIN_AGE, refresh guards verified; mint unrun (no App creds),
+                  §9 partial.
+  M8  PARTIAL   — only metrics RED; reclaim TTL/targets and scanner surface verified. Closest to
+                  WRITTEN; blocked only by the shared revision row.
+  M9  PARTIAL   — 57 flags, 43 routes, 30 tables, 378 log sites, packer gate order, execution_store
+                  authorities all reproduced; six declared REDs.
+  M10 PARTIAL   — 1895-line handler, 3 slog sites, guard log forms, client surfaces verified; five
+                  REDs plus the undocumented capability route.
+  M11 PARTIAL   — 538 lines, 25 log( lines, EXEC_TIMEOUT inert, timeout-group kill defect all
+                  reproduced; metrics RED, live-job tests cannot fail.
+  M12 PARTIAL   — sha256, 273 lines, sink paths, 401 admission, framing defect reproduced; streaming
+                  FAILING, metrics RED.
+
+  0 WRITTEN, 13 PARTIAL, 0 SKELETON. The evidence discipline is real — I reproduced more than sixty
+  cited locators and every one I sampled resolved to the line claimed, and the spine's five checks
+  fire when faulted. What keeps this from PASS is not sloppiness in the chapters: it is that the
+  document's own status apparatus (revision rows, front matter, acceptance rule) is now false, and
+  the flow half of the outline does not exist.
+
+PANEL REVIEW COMPLETE
+
+⚠️ File-mutation verifier: 1 file edit(s) FAILED this turn despite any wording above that may suggest otherwise. Run `git status` or `read_file` to confirm what actually landed.
+  • `/home/kara/.hermes/cache/scratch/locator_audit.py` — [write_file] Refusing to overwrite `/home/kara/.hermes/cache/scratch/locator_audit.py`: `/home/kara/.hermes/cache/scratch/locator_audit.py` exists but this task has not seen its full current conte…
+
+session_id: local-d8ff3127c4859f6fc827bbcef6b8a5c3e2889db9506236e0d86646bd074c7f99
+
+EXIT=0

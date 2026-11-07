@@ -291,3 +291,500 @@
 │  `--simulate` (`:183`) suppresses real spawning and the `--auto-disable-*` trio (`:196-198`) drives
 │  a `projects.enabled=0` write — both are admission/execution controls, which round-6's "none is an
 │  admission/execution-settlement control" exclusion denied (**false**). The residual RED is that the
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | CRIER |
+│  | Path | `/home/kara/crier/` (Go) |
+│ -| Revision | `86c4c4695facaaf723bcc1d6ae80971ffb67fc97` (crier repo HEAD at round-11 derivation; the files changed since `691f0c78` are `internal/harness/*`, `cmd/server/harness*.go`, `cmd/server/metrics_state_test.go`, `specs/CRIER-HARNESS.md` — none of the handler/guard/config/client files M10 cites) |
+│ +| Revision | `33c1f3888d68a1ce404d422cbea4146485d95087` (crier repo HEAD at round-12 derivation; two commits past the round-11 stamp `86c4c469`: `eb21ca03` — "make the idle-boot detect-alert assertion order-insensitive", which fixes exactly the flake §7 documented — and `dc15b2d6` — a board row; the handler/guard/config/client files M10 cites are byte-identical across `86c4c469..33c1f388`) |
+│  | Language / runtime | Go — `go.mod` declares `go 1.26.10` (a build/toolchain requirement, not a runtime one); host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`), `/usr/bin/go` = **go1.26.9** (`/usr/lib/go-1.26/bin/go`); `GOTOOLCHAIN=auto` auto-fetches 1.26.10 for this repo |
+│  | Owner lane | crier (control plane) |
+│  | Status | **UNVERIFIED** — `internal/registry/handler.go` (deliver/retrieve/ack surfaces + the full 3-site slog surface), `internal/guard/guard.go` (pipeline, oversize branch, `errorResult`), `internal/guard/policy.go` (`ResolvePolicy`), `internal/guard/metrics.go`, `config/config.go` (controls + guard bounds + metrics default), `clients/python/crier_client.py`, `cmd/crier-front/main.go` read this round; the full 1895-line handler body still not read line-by-line (its slog surface *is* complete — see §9) |
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -133,7 +133,7 @@
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│  | build | `go build ./...` (crier repo) | exit 0 | 2026-11-06, rev `86c4c469` | **PASS** (rc 0) |
+│ -| go test | `go test ./...` | green | 2026-11-06, rev `86c4c469` | **FLAKY** — see the note below; not a clean PASS |
+│ +| go test | `go test ./...` | green | 2026-11-06, rev `33c1f388` | **PASS** (rc 0) — re-run at live HEAD this round; the FLAKY diagnosis at `86c4c469` is superseded by `eb21ca03` (see the note below) |
+│  | port fact | `grep -n 'Port' config/config.go` | 8767 | 2026-11-06 | PASS (`:622`) |
+│  | slog surface | `grep -c 'slog.\(Info\|Error\|Warn\|Debug\)' internal/registry/handler.go` | 3 | 2026-11-06 | **PASS** — exactly 3 sites (all in §9); no `log.Printf`/`fmt.Printf` in the handler |
+│  | signed-read ladder | `python3 ~/node-bus-worker.py --check` on cf-node | inbox 200 with key+bearer | 2026-11-05, cf-node only | PASS (FACT-04) — not repeatable from this control host |
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -143,15 +143,18 @@
+│  and `go test` ran them in 6.962 s. A green run over 91 test files is real, but it still does not
+│  prove line-by-line coverage of the 1895-line handler.
+│
+│ -**`go test` flakiness (kimi 3, re-measured this round).** `go test ./...` does **not** reliably
+│ -reproduce green at HEAD `86c4c469`. This round a fresh `go test -count=1 ./cmd/server/` FAILed
+│ -(`--- FAIL: TestSessionFanoutWebhookBodyVerdict`, 78.5s in one run, 34.3s in another) while a cached
+│ -full run reported green; kimi round-10 reproduced `--- FAIL: TestMetricsState_SeriesRenderOnIdleBoot`
+│ -twice (58.0s / 47.4s) with `crier_detect_alerts_total{signal="odd_hour_volume",severity="warning"} =
+│ -1, want 0`. Each named test passes in isolation under `-run` (0.327s), and the failing test differs
+│ -run-to-run — a within-`cmd/server` contamination or clock-sensitive failure, not a deterministic
+│ -regression. `internal/registry` (91 test files) ran green in 48.1s this round. The documented
+│ -command is therefore flaky, and the row is not a clean PASS.
+│ +**`go test` re-measured at live HEAD (was FLAKY at `86c4c469`).** Round-11 documented `go test ./...`
+│ +as FLAKY at `86c4c469` — two named tests (`TestSessionFanoutWebhookBodyVerdict`,
+│ +`TestMetricsState_SeriesRenderOnIdleBoot`) failing on different runs, the latter with
+│ +`crier_detect_alerts_total{signal="odd_hour_volume",severity="warning"} = 1, want 0`. Commit
+│ +`eb21ca03` ("test(cmd/server): make the idle-boot detect-alert assertion order-insensitive") landed
+│ +after that stamp and removes the order-sensitive assertion that was the documented flake
+│ +(QA-CRIER-56: `CR_DETECT_QUIET_HOURS` 01:00–05:00 UTC window contamination — the same clock-sensitive
+│ +root cause the round-11 note named). Re-run this round at HEAD `33c1f388`: `go build ./...` rc 0;
+│ +`go test ./cmd/server/ -run TestMetricsState_SeriesRenderOnIdleBoot -count=1` ok (0.323s);
+│ +`go test ./...` **green** (all packages ok; `internal/registry` 7.488s). The FLAKY row is therefore
+│ +**superseded** — the flake is fixed at the tree the chapter's HEAD now resolves to, and the row is a
+│ +clean PASS at `33c1f388`.
+│
+│  ## 8. Metrics
+│
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -201,7 +201,8 @@
+│  | info | `inbox deliver replayed` (`handler.go:1332`, `slog.Info`) | a redelivery replays a recorded deliver | evidentiary |
+│  | error | `registry stats after retrieve` (`handler.go:1795`, `slog.Error`) | stats read after retrieve fails | descriptive |
+│  | error | `registry store error` (`handler.go:1885`, `slog.Error`) | store write fails | descriptive |
+│ -| info | `observability: metrics enabled` (`observability.go:108`, `slog.Info`) | boot with metrics on (emitter is in `cmd/server/`, not the handler) | evidentiary |
+│ +| info | `guard` (`internal/guard/guard.go:430-455`, `slog` structured) — level **info** when `Decision==Allow` and not errored (`:454`), **warn** otherwise (`:452`); carries `msg, target, policy, chan, kind, decision, risk, request_id, provider, model, patterns, errored, quarantined, sanitized, reason, ms, payload_bytes` (`:432-450`) | a guard verdict is rendered | evidentiary |
+│ +| warn | `guard blocked` (`internal/guard/guard.go:456-458`, `slog.Warn`) — only when `Decision==Block`, with an extra `event=guard_blocked` attribute prepended | the router blocked the directive | evidentiary |
+│
+│  **Guard log surface (B22, sol).** The handler census above is file-local, not module-wide. M10
+│  owns the guard too, and `internal/guard/guard.go:430-457` emits `guard` and `guard blocked`
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -203,13 +203,13 @@
+│  | error | `registry store error` (`handler.go:1885`, `slog.Error`) | store write fails | descriptive |
+│  | info | `guard` (`internal/guard/guard.go:430-455`, `slog` structured) — level **info** when `Decision==Allow` and not errored (`:454`), **warn** otherwise (`:452`); carries `msg, target, policy, chan, kind, decision, risk, request_id, provider, model, patterns, errored, quarantined, sanitized, reason, ms, payload_bytes` (`:432-450`) | a guard verdict is rendered | evidentiary |
+│  | warn | `guard blocked` (`internal/guard/guard.go:456-458`, `slog.Warn`) — only when `Decision==Block`, with an extra `event=guard_blocked` attribute prepended | the router blocked the directive | evidentiary |
+│ -
+│ -**Guard log surface (B22, sol).** The handler census above is file-local, not module-wide. M10
+│ -owns the guard too, and `internal/guard/guard.go:430-457` emits `guard` and `guard blocked`
+│ -records carrying `request_id`, provider, model, patterns, decision, risk and error status —
+│ -operator-critical records absent from this file-local census. The module-wide log inventory is
+│ -therefore **not** complete: the three handler sites are, the guard's are not yet tabulated (a
+│ -named RED on this field).
+│ +| info | `observability: metrics enabled` (`observability.go:108`, `slog.Info`) | boot with metrics on (emitter is in `cmd/server/`, not the handler) | evidentiary |
+│ +
+│ +**Guard log surface (B22, sol — now tabulated).** The handler census above is file-local; M10 also
+│ +owns the guard, whose two sites (`guard`, `guard blocked`, `guard.go:430-458`) are tabulated above.
+│ +The module-wide log inventory is still not complete beyond these: the five rows cover the handler
+│ +(3) and the guard (2), but the webhook/store/detect/federation emitters' operator-visible lines are
+│ +not yet tabulated one-per-site (a named RED on this field).
+│
+│  ## 10. Failure modes, indications and recovery
+│
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -132,7 +132,7 @@
+│
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│ -| build | `go build ./...` (crier repo) | exit 0 | 2026-11-06, rev `86c4c469` | **PASS** (rc 0) |
+│ +| build | `go build ./...` (crier repo) | exit 0 | 2026-11-06, rev `33c1f388` | **PASS** (rc 0) |
+│  | go test | `go test ./...` | green | 2026-11-06, rev `33c1f388` | **PASS** (rc 0) — re-run at live HEAD this round; the FLAKY diagnosis at `86c4c469` is superseded by `eb21ca03` (see the note below) |
+│  | port fact | `grep -n 'Port' config/config.go` | 8767 | 2026-11-06 | PASS (`:622`) |
+│  | slog surface | `grep -c 'slog.\(Info\|Error\|Warn\|Debug\)' internal/registry/handler.go` | 3 | 2026-11-06 | **PASS** — exactly 3 sites (all in §9); no `log.Printf`/`fmt.Printf` in the handler |
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -248,10 +248,8 @@
+│    `internal/guard/policy.go:170-205`; `internal/guard/metrics.go:19-49`; `config/config.go:621-700, 1139-1187`;
+│    `clients/python/crier_client.py:960-1036`; `cmd/crier-front/main.go:39`;
+│    `cmd/server/observability.go:95-115, 160-175`; `internal/metrics/metrics.go:1-8`.
+│ -- Commands run: `go build ./...` (PASS); `go test ./...` (PASS); `ls internal/registry/*_test.go` (91);
+│ -  `grep -c 'slog.(Info|Error|Warn|Debug)' internal/registry/handler.go` (3);
+│ -  `grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u | wc -l` (67).
+│ -- Rev stamped: `86c4c469` (the changed files since `691f0c78` are harness-side; the handler/guard/config/client files M10 cites are byte-identical).
+│ +- Commands run: `go build ./...` (PASS); `go test ./...` (PASS at `33c1f388`, rc 0); `go test ./cmd/server/ -run TestMetricsState_SeriesRenderOnIdleBoot -count=1` (ok, 0.323s); `ls internal/registry/*_test.go` (91); `grep -c 'slog.(Info|Error|Warn|Debug)' internal/registry/handler.go` (3); `grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u | wc -l` (67).
+│ +- Rev re-stamped: `33c1f388` (two commits past `86c4c469`: `eb21ca03` the test fix, `dc15b2d6` a board row; the handler/guard/config/client files M10 cites are byte-identical across the range).
+│  - Board rows: CF-337, CF-361, CF-369.
+│  - **Findings:**
+│    - **F10-1** (carried) — auth order is headers → target → caller → timestamp → key → signature.
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -55,6 +55,16 @@
+│    or empty body returns `[]`; messages carry their batch `lease_id`. A held (leased) message is
+│    not returned again until its lease expires — an empty list after a failed ack is expected, not a
+│    lost message; `stats()` distinguishes "nothing queued" from "everything leased".
+│ +
+│ +**TypeScript client surface (sol B22, added this round — was NAME ONLY).** `clients/typescript/crier.ts`
+│ +is a real consumer, not just a directory. `Crier` (`:564`) constructor (`:571-588`): validates
+│ +`baseUrl` starts `http(s)://` (`:573-575`); `agentId` from options; `token` = `options.token ??
+│ +process.env["CR_AUTH_TOKEN"] ?? undefined` (`:577`); `timeoutMs` default **30000** (`:578`); a signing
+│ +key is **mandatory** — no `key`/`keyPath` throws (`:584-587`). `fromEnv` (`:591-598`) reads
+│ +`CRIER_URL`/`CRIER_HTTP_URL` (default `http://localhost:8767`, `:561`), `CRIER_AGENT_ID`,
+│ +`CRIER_AGENT_PRIVATE_KEY_FILE`. Signing (`:603-625`) covers `METHOD\nPATH\nTS` with
+│ +`X-Agent-ID`/`X-Agent-Ts`/`X-Agent-Sig` headers — the same expression the server verifies
+│ +(`internal/registry/agentsig.go`).
+│
+│  ## 4. Dependencies
+│
+│ docs/handbook/chapters/M11-dispatcher.md
+│ @@ -85,8 +85,9 @@
+│
+│  ## 6. Contracts in and out
+│
+│ -Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Local ids are
+│ -retired; each row carries the CT id its peer chapter cites.
+│ +Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Rows that are
+│ +cross-system contracts carry their CT id; an interface with no canonical entry is listed with a
+│ +`(local)` tag and is not a peer to any CT row, so it cannot be matched against another chapter.
+│
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -118,7 +118,7 @@
+│  | python compile | `python3 -m py_compile /home/kara/.hermes/scripts/cf-inference-proxy.py` | exit 0 | 2026-11-06 | PASS |
+│  | admission (no token) | `curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8775/v1/chat/completions -d '{"model":"hermes"}'` | 401 | 2026-11-06 | **PASS** — 401 (proxy live on `:8775`) |
+│  | systemd unit active | `systemctl --user status cf-inference-proxy.service` | loaded, enabled, `active (running)` | 2026-11-06 | **PASS** — active since 2026-11-05 09:21, Main PID 2603939, drop-in `10-upstream.conf` |
+│ -| admission (disallowed model, valid token) | POST `{"model":"definitely-not-allowed-model"}` with a valid node token | 403 `model not permitted` | 2026-11-06 | reproduced by round-3 judge kimi (`:155-160`); **not re-run by this writer** — the node token file was not read |
+│ +| admission (disallowed model, valid token) | POST `{"model":"definitely-not-allowed-model"}` with a valid node token | 403 `model not permitted` | 2026-11-06 | **UNVERIFIED** — not re-run this round (the node token file was not read); a round-3 judge reproduced the 403 at `:155-160` (provenance, not this round's measured evidence) |
+│
+│  ## 8. Metrics
+│
+│ docs/handbook/chapters/M4-board.md
+│ @@ -84,8 +84,9 @@
+│
+│  ## 6. Contracts in and out
+│
+│ -Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Local ids are
+│ -retired; each row carries the CT id its peer chapter cites.
+│ +Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Rows that are
+│ +cross-system contracts carry their CT id; an interface with no canonical entry is listed with a
+│ +`(local)` tag and is not a peer to any CT row, so it cannot be matched against another chapter.
+│
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -126,8 +126,9 @@
+│
+│  ## 6. Contracts in and out
+│
+│ -Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Local ids are
+│ -retired; each row carries the CT id its peer chapter cites.
+│ +Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Rows that are
+│ +cross-system contracts carry their CT id; an interface with no canonical entry is listed with a
+│ +`(local)` tag and is not a peer to any CT row, so it cannot be matched against another chapter.
+│
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -207,8 +207,9 @@
+│
+│  ## 6. Contracts in and out
+│
+│ -Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Local ids are
+│ -retired; each row carries the CT id its peer chapter cites, so two ends can be matched.
+│ +Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Rows that are
+│ +cross-system contracts carry their CT id; an interface with no canonical entry is listed with a
+│ +`(local)` tag and is not a peer to any CT row, so it cannot be matched against another chapter.
+│
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -125,8 +125,9 @@
+│
+│  ## 6. Contracts in and out
+│
+│ -Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Local ids are
+│ -retired; each row carries the CT id its peer chapter cites, so two ends can be matched.
+│ +Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Rows that are
+│ +cross-system contracts carry their CT id; an interface with no canonical entry is listed with a
+│ +`(local)` tag and is not a peer to any CT row, so it cannot be matched against another chapter.
+│
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│ docs/handbook/OUTLINE.md
+│ @@ -208,10 +208,20 @@
+│
+│  Each contract names **both sides**: producer file:function, consumer file:function,
+│  payload, timing, failure semantics, measured state, breaking-change policy. Current
+│ -(round 11, re-derived from the chapters): **5 of 18** internal contracts name both
+│ +(round 12, re-derived from the chapters' §6): **5 of 18** internal contracts name both
+│  `file:function` (CT-02, CT-03, CT-04, CT-05, CT-06); the remaining **13** are boundary contracts that
+│ -cite the covered side with the far side marked UNVERIFIED/external. The "0 of 18" figure below the fold is
+│ -pre-round-10 structure text.
+│ +cite the covered side with the far side marked external. The state column below is **re-derived from
+│ +the chapters this round**, not carried over from earlier structure text: nine rows disagreed with
+│ +their owning chapter (CT-01, CT-07, CT-11, CT-12, CT-13, CT-14, CT-15, CT-17, CT-18) and are corrected
+│ +here to the chapter's measured word.
+│ +
+│ +**Two-register convention (round 12).** The canonical register is CT-01..CT-18. A module interface
+│ +that is *not* a cross-system contract in this register — a local host operation or a third-party
+│ +service exchange with no peer chapter (M0 `bunker`; M1 registration + `bunker` daemon; M3 `git
+│ +remote`; M5 gateway `:10800`; M7 GitHub App mint; M8 filesystem reap; M12 node→proxy→upstream) — is
+│ +documented in the owning chapter's §6 with a local id or `(local)` tag, and is **not** a peer to any
+│ +CT row. Two chapters describing the same interface from opposite ends must carry the same CT id; a
+│ +local edge has no peer to agree with and is graded UNVERIFIED where the wire was not measured.
+│
+│  - **owner → scheduler** — lane enabled, cadence, weight, pin · **works**
+│  - **scheduler → crier** — envelope: run_id, corr_id, lane, board_row, text_b64 · **works (transport)** *(superseded — see CT-02: works; the former text_b64/text break CF-354 is fixed node-side, glm #2)*
+│ docs/handbook/OUTLINE.md
+│ @@ -223,24 +223,24 @@
+│  CT row. Two chapters describing the same interface from opposite ends must carry the same CT id; a
+│  local edge has no peer to agree with and is graded UNVERIFIED where the wire was not measured.
+│
+│ -- **owner → scheduler** — lane enabled, cadence, weight, pin · **works**
+│ -- **scheduler → crier** — envelope: run_id, corr_id, lane, board_row, text_b64 · **works (transport)** *(superseded — see CT-02: works; the former text_b64/text break CF-354 is fixed node-side, glm #2)*
+│ -- **crier → node** — inbox message + lease · **works** *(superseded — see M10-C2: works; the CF-354 field-mismatch is the node's consumption, M2-C1)*
+│ -- **node → crier** — reply: in_reply_to, corr_id, run_id, outcome · **works (transport)** *(superseded — see CT-04: works; the real reply fields are `status`/`dispatch_id`/`corr_id`, no `run_id`/`outcome`; CF-355 — node sends `status`, scheduler reads `ok` — is this reply's settlement defect, carried at CT-04)*
+│ -- **foreman → scheduler** — the lane's prompt text and skills it may load · **UNVERIFIED** *(internal — both ends in-repo: `load_lane_config.py:31-37` → `spawn.go:1244`; the "3 of 11 prompt files disagree" breakage is unmeasured, grok B3)*
+│ -- **crier → scheduler** — completion event for a finished run · **works (dispatcher leg)** *(CT-06: the dispatcher always sends `ok`, `dispatcher.py:501`; CF-355 is the node-reply leg, CT-04)*
+│ -- **router → gateway** — model choice for a prompt · **works**
+│ -- **crier → gateway** — hermes-session delivery (message becomes a session turn) · **works**
+│ -- **node → duckbrain** — R1 run record, R2 fleet index · **missing**
+│ -- **node → board** — row event with run_id and outcome · **broken**
+│ -- **node → sessionstore** — every turn, model, tokens · **works**
+│ -- **node → gitreins** — staged diff · **works**
+│ -- **gitreins → board** — verdict that closes a row · **broken**
+│ -- **foreman → board** — row created, row closed, evidence · **works**
+│ -- **foreman → duckbrain** — decisions, findings, goal · **works**
+│ -- **docsgate → handbook** — module status word · **works**
+│ -- **conformance → harness** — per-leg verdict (check, apply, smoke, vars, memory) · **broken**
+│ -- **handbook → owner** — the approval artifact · **works**
+│ +- **CT-01 owner → scheduler** — lane enabled, cadence, weight, pin · **UNVERIFIED (boundary)** *(M9 §6: the consumer `admissionModeForProject` is nameable; the producer is a human writing config, not a function)*
+│ +- **CT-02 scheduler → crier** — envelope `kind, lane, corr_id, scheduler_id, issued_at, board, workdir, reply_to, limits{text_b64…}` (field **`board`**, not `board_row`; there is **no** `run_id` member — `internal/bus/dispatch.go:175-208`) · **works** *(M9 §6 / M10 §6; CF-354 fixed node-side)*
+│ +- **CT-03 crier → node** — inbox message + lease · **works** *(M10 §6 / M2 §6 / M11 §6; the CF-354 field-mismatch is fixed node-side)*
+│ +- **CT-04 node → crier** — reply `env_version, dispatch_id, corr_id, status, …` (no `run_id`/`outcome`) · **works (transport)** *(M2 §6 / M10 §6; CF-355 — node sends `status`, scheduler reads `ok` — is this reply's settlement defect, carried at CT-04)*
+│ +- **CT-05 foreman → scheduler** — the lane's prompt text and skills it may load · **UNVERIFIED** *(internal — both ends in-repo: `load_lane_config.py:31-37` → `spawn.go:1244`; the "3 of 11 prompt files disagree" breakage is unmeasured, M9 §6)*
+│ +- **CT-06 crier → scheduler** — completion event for a finished run · **works (dispatcher leg)** *(M9 §6 / M11 §6: the dispatcher always sends `ok`, `dispatcher.py:501`; CF-355 is the node-reply leg, CT-04)*
+│ +- **CT-07 router → gateway** — model choice for a prompt · **UNVERIFIED (boundary)** *(M12 §6: neither side has an in-repo `file:function`)*
+│ +- **CT-08 crier → gateway** — hermes-session delivery (message becomes a session turn) · **works (crier side named)** *(M10 §6: producer `dispatch.go:369` + `hermesession.go:353` in-repo; the gateway consumer is out of scope)*
+│ +- **CT-09 node → duckbrain** — R1 run record, R2 fleet index · **missing** *(M2 §6: no in-repo producer on either side)*
+│ +- **CT-10 node → board** — row event with run_id and outcome · **broken** *(M4 §6: the node worker does not write board rows)*
+│ +- **CT-11 node → sessionstore** — every turn, model, tokens · **UNVERIFIED (boundary)** *(M2 §6: the Hermes session store is out of scope, no in-repo file on either side)*
+│ +- **CT-12 node → gitreins** — staged diff · **UNVERIFIED (boundary)** *(M3 §6: the generated pre-commit hook is in-repo; the judge binary is out of scope, wire unmeasured)*
+│ +- **CT-13 gitreins → board** — verdict that closes a row · **UNVERIFIED** *(M4 §6: every side is an external peer — the gitreins binary + the boardctl binary)*
+│ +- **CT-14 foreman → board** — row created, row closed, evidence · **UNVERIFIED** *(M4 §6: the store is measured (357/519) but the foreman→board write wire is not exercised in this repo)*
+│ +- **CT-15 foreman → duckbrain** — decisions, findings, goal · **UNVERIFIED (boundary)** *(M9 §6: neither side has an in-repo `file:function`)*
+│ +- **CT-16 docsgate → handbook** — module status word · **works** *(M6 §6: `master_doc_check.py:263` prints `MASTER-DOC: PASS|FAIL`, exit 1 = FAIL; a structural gate, not a truth gate)*
+│ +- **CT-17 conformance → harness** — per-leg verdict (check, apply, smoke, vars, memory) · **UNVERIFIED** *(M5 §6: the battery is in-repo, the operator/board consumer has no `file:function`; not run this round — needs a live node)*
+│ +- **CT-18 handbook → owner** — the approval artifact · **UNVERIFIED** *(M6 §6: the legacy renderer hardcodes `docs/master` and selects `[0-9][0-9]-*.md`, so it does not render these `M*.md` chapters; the spine is the chapter-aware gate, the render leg is missing)*
+│
+│  ## PART V — SETTINGS REGISTER
+│
+│ docs/handbook/OUTLINE.md
+│ @@ -263,6 +263,24 @@
+│  VII.3 **Acceptance gate per chapter** — what makes a chapter WRITTEN rather than merely
+│  present
+│
+│ +A chapter is **WRITTEN** only when every schema field (§1–§13) is filled with evidence and no false
+│ +claim survives. The decision rule that separates "absence proved" from "not measured":
+│ +
+│ +- **Absence proved** — a field is filled with a command whose output establishes the absence
+│ +  (e.g. `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' <file>` → 0 matches). This is a
+│ +  *filled* field with a RED value, not an empty one. A module with no metrics is **correctly** RED
+│ +  (schema §5: "none" is RED), and that RED is a *system* observability defect filed as board rows —
+│ +  not a defect in the writing.
+│ +- **Not measured** — a field whose evidence was never gathered (an unread body, an unrun live-node
+│ +  ladder, an unminted credential). This is **UNVERIFIED** and is a named RED on that field.
+│ +
+│ +Neither RED state is WRITTEN. A chapter is WRITTEN only when its remaining RED fields are all
+│ +"absence proved" (a measured system property) **and** every claim carries `file:line` or quoted
+│ +command output. Under the current schema a module on the critical path with no metrics can never be
+│ +WRITTEN until the module emits metrics or the schema explicitly approves a metrics exception — so
+│ +"WRITTEN" is a property of the code, not of the writer's diligence. A chapter that stays RED is a
+│ +valid outcome and a better one than a green chapter without evidence.
+│ +
+│  ## PART VIII — DELIVERY MECHANISMS (new)
+│
+│  Shipped mechanisms that change system behaviour and had no chapter:
+│ docs/handbook/OUTLINE.md
+│ @@ -284,8 +284,9 @@
+│  ## PART VIII — DELIVERY MECHANISMS (new)
+│
+│  Shipped mechanisms that change system behaviour and had no chapter:
+│ -- **VIII.1 `prompts/`** — 11 files; the `foreman → scheduler` contract is **broken**
+│ -  because 3 of 11 disagree
+│ +- **VIII.1 `prompts/`** — 11 files; the `foreman → scheduler` contract state is **UNVERIFIED**
+│ +  *(superseded by M9 §6 CT-05: the "3 of 11 disagree" breakage was never measured — no command
+│ +  establishes which three files disagree or on what — so it is unmeasured, not "broken")*
+│  - **VIII.2 `skills/`** — seeded to every node; a node's behaviour changes with the seed
+│  - **VIII.3 `config/`** — harness-matrix, node-seed, node.env.example, bunker.example,
+│    github-app.example
+│ scripts/handbook_spine.py
+│ @@ -137,9 +137,16 @@
+│      citation. Comparing whole cells reports a conflict that does not exist, which
+│      is exactly the noise that makes a checker ignorable.
+│      """
+│ -    s = re.sub(r"`[^`]*`", "", cell)  # drop backticked refs
+│ -    s = re.sub(r"\([^)]*\)", "", s)  # drop parentheticals
+│ +    s = re.sub(r"`[^`]*`", "", cell)          # drop backticked refs
+│ +    s = re.sub(r"\([^)]*\)", "", s)           # drop parentheticals
+│      s = s.strip().lower()
+│ +    if not s:
+│ +        # A cell that was only a backticked string: the value IS the string, not a
+│ +        # citation (sol B13 — the old code normalized `alpha` and `beta` both to '',
+│ +        # so a real string-default conflict was silently missed).
+│ +        m2 = re.search(r"`([^`]+)`", cell)
+│ +        if m2:
+│ +            return m2.group(1).strip().lower()[:24]
+│      m = re.match(r"^(-?\d+)", s)
+│      return m.group(1) if m else s[:24]
+│
+│ scripts/handbook_spine.py
+│ @@ -213,6 +213,19 @@
+│                  (name, row)
+│              )
+│
+│ +    # 0b. reject unknown canonical ids: a chapter citing a CT id outside the register
+│ +    # (e.g. CT-99) is a fabrication, not a local edge (sol B13 — the old loop only
+│ +    # iterated known ids, so an invented id passed silently).
+│ +    for cid in sorted(register):
+│ +        if cid not in CANON:
+│ +            findings.append(
+│ +                {
+│ +                    "kind": "CONTRACT UNKNOWN ID",
+│ +                    "subject": cid,
+│ +                    "detail": f"id {cid} cited by {', '.join(sorted({n for n, _ in register[cid]}))} but not in the canonical register CT-01..CT-18",
+│ +                }
+│ +            )
+│ +
+│      for cid, (label, prod, cons) in CANON.items():
+│          hits = register.get(cid, [])
+│          if not hits:
+│ cache/scratch/spine-hardening-probe.py
+│ @@ -0,0 +1,51 @@
+│ +#!/usr/bin/env python3
+│ +"""Verify the round-12 spine hardening: unknown CT id rejected, string-default conflict caught."""
+│ +import importlib.util, io, sys, json, contextlib
+│ +from pathlib import Path
+│ +
+│ +ROOT = Path("/home/kara/code-factory")
+│ +spec = importlib.util.spec_from_file_location("sp", ROOT / "scripts/handbook_spine.py")
+│ +sp = importlib.util.module_from_spec(spec)
+│ +sys.modules["sp"] = sp
+│ +spec.loader.exec_module(sp)
+│ +
+│ +print("norm_default(alpha) =", repr(sp.norm_default("`alpha`")))
+│ +print("norm_default(beta)  =", repr(sp.norm_default("`beta`")))
+│ +print("norm_default(40 (:276)) =", repr(sp.norm_default("40 (`:276`)")))
+│ +
+│ +original = sp.chapters()
+│ +
+│ +def run(label, mutate):
+│ +    fixture = dict(original)
+│ +    mutate(fixture)
+│ +    sp.chapters = lambda: fixture
+│ +    saved = sys.argv
+│ +    sys.argv = ["handbook_spine.py", "--json"]
+│ +    buf = io.StringIO()
+│ +    with contextlib.redirect_stdout(buf):
+│ +        rc = sp.main()
+│ +    sys.argv = saved
+│ +    res = json.loads(buf.getvalue())
+│ +    kinds = {f["kind"] for f in res["findings"]}
+│ +    print(f"{label}: rc={rc} findings={len(res['findings'])} kinds={sorted(kinds)}")
+│ +
+│ +def inject_ct99(d):
+│ +    d["M0-shared-contract"] = d["M0-shared-contract"].replace(
+│ +        "## 7. Verification",
+│ +        "| CT-99 | fake | out | `a.py:1` `send()` | `b.py:1` `read()` | works |\n\n## 7. Verification",
+│ +    )
+│ +
+│ +def inject_string_conflict(d):
+│ +    d["M0-shared-contract"] = d["M0-shared-contract"].replace(
+│ +        "## 6. Contracts",
+│ +        "| `ROUND12_TEST_SETTING` | `alpha` | path | routing | wrong target |\n\n## 6. Contracts",
+│ +    )
+│ +    d["M1-provisioning"] = d["M1-provisioning"].replace(
+│ +        "## 6. Contracts",
+│ +        "| `ROUND12_TEST_SETTING` | `beta` | path | routing | wrong target |\n\n## 6. Contracts",
+│ +    )
+│ +
+│ +run("unknown CT-99", inject_ct99)
+│ +run("string default conflict alpha/beta", inject_string_conflict)
+│ +sp.chapters = original
+│ +print("PROBE_COMPLETE")
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -195,4 +195,4 @@
+│      `complete` on the board (closed in commit `6184e52`). CF-355 (reply `status` vs `ok`) remains
+│      open.
+│
+│ -## RED field count: 3 (Metrics §8; §7 live bus-worker ladder not repeatable from this host; §9 inventory 4 of 70 helper call sites — the descriptive per-measurement rows not tabulated one-per-site)
+│ +## RED field count: 4 (Metrics §8 — absence-proved; §7 live bus-worker ladder not repeatable from this host; §9 inventory 4 of 70 helper call sites — the descriptive per-measurement rows not tabulated one-per-site; §5 operational overrides registered NAME ONLY — sol B06)
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -272,4 +272,4 @@
+│    - **F10-5** (new) — the handler's slog surface is complete (3/3, §9); the 67-string metric census
+│      is scoped (runtime vs test helpers vs exposition components), not a completed per-metric register.
+│
+│ -## RED field count: 5 (S1 handler 1895-line body not read line-by-line — the slog surface is complete but the body's non-slog semantics are not; §8 per-metric contract — series names inventoried but the type/labels/question/scrape table not filled; §9 guard log surface not tabulated — B22; §5 storage-selection custody-proof not written — B20; §7 `go test ./...` flaky — not a clean PASS at HEAD)
+│ +## RED field count: 4 (S1 handler 1895-line body not read line-by-line — the slog surface is complete but the body's non-slog semantics are not; §8 per-metric contract — series names inventoried but the type/labels/question/scrape table not filled; §9 log inventory incomplete beyond the 5 tabulated sites — the webhook/store/detect/federation emitters are not tabulated one-per-site; §5 storage-selection custody-proof not written — B20). The §7 `go test ./...` FLAKY RED is **resolved this round** — re-measured green at HEAD `33c1f388` after `eb21ca03`.
+│ docs/handbook/chapters/M0-shared-contract.md
+│ @@ -160,7 +160,7 @@
+│
+│  ## 12. Cross-references
+│
+│ -- F2 PROVISIONING uses `require_disk` (M1) and `fetch_verified` (M5).
+│ +- F2 PROVISIONING uses `require_disk` (M1) and `fetch_verified` (M5) — **flow chapter not written** (OUTLINE Part II, all 16 flows MISSING; README Part II).
+│  - M1 PROVISIONING sources `lib.sh`, resolves `bunker` via `have` (`:13`).
+│  - **M5 HARNESS owns `harness-vars.sh` (M5.S5).** The variable contract is **not** sourced by every
+│    installer: `install-hermes.sh`, `install-opencode.sh`, `install-deepseek.sh`,
+│ docs/handbook/chapters/M1-provisioning.md
+│ @@ -236,7 +236,7 @@
+│
+│  ## 12. Cross-references
+│
+│ -- F2 PROVISIONING AND CERTIFICATION is the primary flow this module owns.
+│ +- F2 PROVISIONING AND CERTIFICATION is the primary flow this module owns — **flow chapter not written** (OUTLINE Part II, all 16 flows MISSING).
+│  - M0 SHARED CONTRACT supplies `require_disk`/`have`/`bunker_exec`.
+│  - M3 REPOSITORY owns the seeded clone this module creates.
+│  - M5 HARNESS owns the harness the provisioner certifies.
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -168,7 +168,7 @@
+│
+│  ## 12. Cross-references
+│
+│ -- F1 DISPATCH AND SETTLEMENT is the primary flow; the node is the terminal actor.
+│ +- F1 DISPATCH AND SETTLEMENT is the primary flow; the node is the terminal actor — **flow chapter not written** (OUTLINE Part II, all 16 flows MISSING).
+│  - M9 SCHEDULER is the producer of the CT-03 envelope (CT-02 on its side) and the settlement consumer of CT-04's reply (`dispatchReplyVerdict` reads the node's reply).
+│  - M11 DISPATCHER is the *other* inbox consumer, which **also** decodes `text_b64`
+│    (`dispatcher.py:142-150`). The two consumers now agree on `text_b64`; CF-354 (the mismatch) is
+│ docs/handbook/chapters/M3-repository.md
+│ @@ -171,7 +171,7 @@
+│
+│  ## 12. Cross-references
+│
+│ -- F5 LANDING is the primary flow M3 owns.
+│ +- F5 LANDING is the primary flow M3 owns — **flow chapter not written** (OUTLINE Part II, all 16 flows MISSING).
+│  - M4 BOARD records the closeout; a commit message claiming a closeout is not one.
+│  - M0 SHARED CONTRACT supplies `ok`/`bad`/`say`.
+│  - The gate installer `install-gitreins.sh` is **M5.S3** (the installer); M3.S3 owns the hook
+│ docs/handbook/chapters/M4-board.md
+│ @@ -169,7 +169,7 @@
+│
+│  ## 12. Cross-references
+│
+│ -- F5 LANDING writes the board row a landing closes (M3).
+│ +- F5 LANDING writes the board row a landing closes (M3) — **flow chapter not written** (OUTLINE Part II, all 16 flows MISSING).
+│  - **M9 SCHEDULER reads board rows as admission gates** — `internal/scheduler/admission_mode.go:230-242`
+│    is the board-ownership/workability admission decision. **M10 CRIER does not** (B04): a source
+│    search across crier's Go files finds no `tasks.jsonl`, `board_ownership`, `boardWorkable` or
+│ docs/handbook/chapters/M5-harness.md
+│ @@ -221,7 +221,7 @@
+│
+│  ## 12. Cross-references
+│
+│ -- F2 PROVISIONING certifies what this module installs.
+│ +- F2 PROVISIONING certifies what this module installs — **flow chapter not written** (OUTLINE Part II, all 16 flows MISSING).
+│  - M0 SHARED CONTRACT supplies `fetch_verified` (S5 `harness-vars.sh` is owned here, not M0).
+│  - M2 DISPATCH passes the CF_* set to the resolved harness at run time (via `node.json`, not the resolver).
+│  - M3 REPOSITORY owns the hook behaviour; `install-gitreins.sh` (S3) is the installer.
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -292,7 +292,7 @@
+│
+│  ## 12. Cross-references
+│
+│ -- F11 SCHEDULING ADMISSION is the primary flow; F1 DISPATCH AND SETTLEMENT is its terminal half.
+│ +- F11 SCHEDULING ADMISSION is the primary flow; F1 DISPATCH AND SETTLEMENT is its terminal half — **flow chapter not written** (OUTLINE Part II, all 16 flows MISSING).
+│  - M10 CRIER is the transport (CT-02/CT-04 on its side; CT-03/CT-06 are the node/scheduler ends).
+│  - M2 DISPATCH (node side) and M11 DISPATCHER are the two inbox consumers.
+│  - M4 BOARD rows gate admission (S1); see M4 §12 for the M9-only ownership of that gate.
+│ docs/handbook/chapters/M11-dispatcher.md
+│ @@ -177,7 +177,7 @@
+│
+│  ## 12. Cross-references
+│
+│ -- F1 DISPATCH AND SETTLEMENT is the flow this module executes on the control box.
+│ +- F1 DISPATCH AND SETTLEMENT is the flow this module executes on the control box — **flow chapter not written** (OUTLINE Part II, all 16 flows MISSING).
+│  - M10 CRIER is the transport; M9 SCHEDULER is the settlement consumer.
+│  - The per-dispatch scoped token is minted by `fleet-gh-scope.py` → `~/.hermes/scripts/gh-app-token.py`
+│    (not M7's `github-app-token.py`) — see M7 §12.
+
+session_id: local-dbd5642620b49240fd9942554c110e72b7ab4b5c923cd9874d095451cb2677b8

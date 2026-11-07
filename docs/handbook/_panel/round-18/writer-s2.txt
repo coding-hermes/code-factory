@@ -1,0 +1,483 @@
+│ docs/handbook/chapters/M4-board.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | BOARD |
+│  | Path | `/home/kara/code-factory/.coding-hermes/board/tasks.jsonl` + `events.jsonl`; tools `/home/kara/code-factory/scripts/boardctl`, `board_lock.py`, `board_drift.py` |
+│ -| Revision | `e07d031d09f7fdf1af97360e66c02ea49a58d537` (code-factory HEAD == origin/main == gh/main, round-17 derivation; `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` is empty — `e07d031` touched only `prompts/foreman.md` and `prompts/unblock.md` — so every file M4 cites is byte-identical across `3fba8a7..e07d031`) |
+│ +| Revision | `ce2f87560144773d9119086c343b7ac2d243967b` (code-factory HEAD == origin/main == gh/main, round-18 re-stamp). `git diff --name-only 3fba8a7..HEAD` touches four paths — `prompts/foreman.md`, `prompts/unblock.md` (e07d031) and `scripts/panel_loop.py`, `scripts/panel_supervise.sh` (ce2f875); `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` returns those two script paths. None of the four changed files is cited by M4, so every file M4 cites is byte-identical across `3fba8a7..HEAD` |
+│  | Language / runtime | bash (boardctl wrapper) + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│  | Status | **VERIFIED (store)** — 357 rows / **519** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT reconciled** — `board_drift` `RESULT: OK`, byte parity identical on both files, 0 divergent ids, HEAD == origin/main == `e07d031` — both re-measured this round. The `boardctl` verb surface is the external executable's (`/home/kara/.local/bin/boardctl`), not this repo's |
+│ docs/handbook/chapters/M4-board.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | `ce2f87560144773d9119086c343b7ac2d243967b` (code-factory HEAD == origin/main == gh/main, round-18 re-stamp). `git diff --name-only 3fba8a7..HEAD` touches four paths — `prompts/foreman.md`, `prompts/unblock.md` (e07d031) and `scripts/panel_loop.py`, `scripts/panel_supervise.sh` (ce2f875); `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` returns those two script paths. None of the four changed files is cited by M4, so every file M4 cites is byte-identical across `3fba8a7..HEAD` |
+│  | Language / runtime | bash (boardctl wrapper) + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│ -| Status | **VERIFIED (store)** — 357 rows / **519** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT reconciled** — `board_drift` `RESULT: OK`, byte parity identical on both files, 0 divergent ids, HEAD == origin/main == `e07d031` — both re-measured this round. The `boardctl` verb surface is the external executable's (`/home/kara/.local/bin/boardctl`), not this repo's |
+│ +| Status | **VERIFIED (store)** — 357 rows / **519** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT reconciled** — `board_drift` `RESULT: OK`, byte parity identical on both files, 0 divergent ids, HEAD == origin/main == `ce2f875` — both re-measured this round. The `boardctl` verb surface is the external executable's (`/home/kara/.local/bin/boardctl`), not this repo's |
+│
+│  ## 2. Purpose, authority and position
+│
+│ docs/handbook/chapters/M4-board.md
+│ @@ -14,7 +14,9 @@
+│  ## 2. Purpose, authority and position
+│
+│  The fleet's durable record of what it decided and what it proved. It decides whether a row may
+│ -close (a completion REQUIRES `--evidence-run-id` — `boardctl update --help`), whether a re-detected
+│ +close (a completion REQUIRES `--evidence-run-id` — enforced at runtime, `boardctl update BX-1
+│ +--status complete` → `boardctl: evidence run required: completion REFUSED … --evidence-run-id is
+│ +REQUIRED when setting status "complete" (TR-251)`), whether a re-detected
+│  finding is refused, and whether two board copies have drifted. It may not decide the law itself:
+│  nine board rules exist only as chat, not in any module (CF-344).
+│
+│ docs/handbook/chapters/M4-board.md
+│ @@ -26,7 +26,8 @@
+│
+│  **What breaks if it lies.** A row that reports a closeout without the evidence is the mirror of
+│  the "commit message claiming a closeout" defect — a completion without a bound run is refused by
+│ -boardctl (`--status complete REQUIRES --evidence-run-id`, `boardctl update --help`).
+│ +boardctl (`update <id> --status complete` without `--evidence-run-id` → `evidence run required:
+│ +completion REFUSED … (TR-251)`, captured this round).
+│
+│  ## 3. Submodule inventory
+│
+│ docs/handbook/chapters/M4-board.md
+│ @@ -81,7 +81,7 @@
+│  | Setting | Default | Range | Governs | What breaks if changed |
+│  |---|---|---|---|---|
+│  | `-C <repo-or-board-dir>` | none (wrapper forces `-C "$ROOT"`) | a board dir | which board the verb targets | the wrapper pins it to the repo root so a bare `boardctl` cannot hit the wrong board |
+│ -| `update --status complete` | — | requires `--evidence-run-id` | row closeout | a completion without a bound run id is **refused** (`boardctl update --help`; TR-251) |
+│ +| `update --status complete` | — | requires `--evidence-run-id` | row closeout | a completion without a bound run id is **refused** (`evidence run required: completion REFUSED … --evidence-run-id is REQUIRED when setting status "complete" (TR-251)` — captured from `boardctl update BX-1 --status complete` this round; the `--help` synopsis lists `[--evidence-run-id RUN]` but does not state the requirement) |
+│  | `create` / `update` (id, fingerprint) | — | unique id; unique finding fingerprint | row identity | a duplicate id is refused (`task id "…" already exists — create aborted`); a duplicate finding fingerprint is refused |
+│  | `validate [--strict-keys] [--fail-on dangling-dep]` | — | flags | semantic validation strictness | `--strict-keys` tightens key uniformity; `--fail-on dangling-dep` promotes a dangling dependency from warning to failure (`boardctl validate --help`) |
+│
+│ docs/handbook/chapters/M4-board.md
+│ @@ -164,7 +164,8 @@
+│  ## 11. Limits and margins
+│
+│  - Rows are addressed by `id` + `status`, never index (a positional offset is not a durable key).
+│ -- `--status complete` without `--evidence-run-id` is refused (`boardctl update --help`, TR-251).
+│ +- `--status complete` without `--evidence-run-id` is refused (`evidence run required: completion
+│ +  REFUSED … (TR-251)` — the enforcement string, not the `--help` synopsis).
+│  - `boardctl validate` distinguishes warnings from failures; a headerless board skips header checks.
+│  - The `flock_probe` is advisory only: it proves *someone* holds an exclusive flock, not *who* or
+│    *why*; the `/proc/<pid>/fd` scan is subject to permission/race limits (`:60-61` skips
+│ docs/handbook/chapters/M4-board.md
+│ @@ -84,6 +84,16 @@
+│  | `update --status complete` | — | requires `--evidence-run-id` | row closeout | a completion without a bound run id is **refused** (`evidence run required: completion REFUSED … --evidence-run-id is REQUIRED when setting status "complete" (TR-251)` — captured from `boardctl update BX-1 --status complete` this round; the `--help` synopsis lists `[--evidence-run-id RUN]` but does not state the requirement) |
+│  | `create` / `update` (id, fingerprint) | — | unique id; unique finding fingerprint | row identity | a duplicate id is refused (`task id "…" already exists — create aborted`); a duplicate finding fingerprint is refused |
+│  | `validate [--strict-keys] [--fail-on dangling-dep]` | — | flags | semantic validation strictness | `--strict-keys` tightens key uniformity; `--fail-on dangling-dep` promotes a dangling dependency from warning to failure (`boardctl validate --help`) |
+│ +
+│ +**`board_drift.py` verification selectors (sol B12, added this round — the boardctl register is not the whole surface).** `scripts/board_drift.py:193-199` exposes the comparison-authority controls; `check()` runs `git rev-parse HEAD` and `merge-base --is-ancestor HEAD <ref>` (the `HEAD ancestry` row) to bind the comparison to a revision:
+│ +
+│ +| Setting | Default | Range | Governs | What breaks if changed |
+│ +|---|---|---|---|---|
+│ +| `--workdir` | the script's parent's parent (`board_drift.py:194`) | a checkout dir | the *workdir* board copy compared | a wrong workdir compares a different (possibly stale) local board |
+│ +| `--ref` | `origin/main` (`:196`) | a git ref | the *published* board copy compared (checked out at that ref) | a different ref compares against a non-canonical published state |
+│ +| `--repo` | none (`:197`) | a path | the repo whose ref/ancestry is checked | unset uses the workdir's own repo; a wrong repo checks ancestry against the wrong history |
+│ +| `--published-dir` | none (`:198`) | a path | an explicit published-board dir in place of the ref checkout | points the comparison at a board dir that is not the canonical published copy |
+│ +| `--no-head` | false (`:199`, `store_true`) | flag | **removes the HEAD/revision binding** — without it the check compares bytes but does not prove the published copy is an ancestor/HEAD of the checkout | dropping HEAD ancestry lets a drift pass on two byte-identical *stale* copies that both lag the canonical HEAD |
+│
+│  ## 6. Contracts in and out
+│
+│ docs/handbook/chapters/M4-board.md
+│ @@ -119,7 +119,7 @@
+│  |---|---|---|---|---|
+│  | store census | `jq -r '.id' .coding-hermes/board/tasks.jsonl | wc -l` | 357 rows | 2026-11-06 | PASS (357) |
+│  | events count | `wc -l .coding-hermes/board/events.jsonl` | 519 lines | 2026-11-06 | PASS (519) |
+│ -| drift | `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-06 | **PASS** — `RESULT: OK`; byte parity `tasks.jsonl`/`events.jsonl` **identical** (sha256 `5aa15431…` / `783d556c…`); 357 vs 357 rows, **0 divergent ids: none**; HEAD=origin/main=`e07d031` |
+│ +| drift | `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-06 | **PASS** — `RESULT: OK`; byte parity `tasks.jsonl`/`events.jsonl` **identical** (sha256 `5aa15431…` / `783d556c…`); 357 vs 357 rows, **0 divergent ids: none**; HEAD=origin/main=`ce2f875` |
+│  | semantic validate | `scripts/boardctl validate` | RESULT OK with named warnings | 2026-11-06 | **PASS** — `357 tasks, 519 events, 0 fixtures`, `key uniformity 357/357 (0 drift)`, `RESULT: OK (7 warning(s))` |
+│  | lock adjudication | `python3 scripts/board_lock.py <lock>` against ABSENT/HELD/RESIDUE fixtures | ABSENT / HELD / RESIDUE named (`board_lock.py:149-158`) | 2026-11-06 | **PASS** — a scratch fixture returned `ABSENT`, `RESIDUE consumers=0 commits_after_mtime=unknown`, and `HELD holder=pid-<n>` (a child held an exclusive flock) all rc 0 |
+│  | duplicate id refusal | `boardctl create --id CF-357 --title x` | refused | 2026-11-06 | **PASS** — `task id "CF-357" already exists … create aborted` |
+│ docs/handbook/chapters/M4-board.md
+│ @@ -126,7 +126,7 @@
+│
+│  **Drift re-measured (reconciled this round).** The CF-270 divergence the round-10 draft reported
+│  as live was **already reconciled before this round's derivation**: commit `4dc0ef0` ("board: close
+│ -CF-270") and `8ae4f82` are both in `origin/main`, so `board_drift` at HEAD `e07d031` returns
+│ +CF-270") and `8ae4f82` are both in `origin/main`, so `board_drift` at HEAD `ce2f875` returns
+│  `RESULT: OK` — 357 vs 357 rows, 0 divergent ids, HEAD == origin/main. The round-10 draft's
+│  `RESULT: DRIFT (4 failed)` with 1 divergent id (CF-270, workdir=`pending` vs published=`complete`)
+│  and its 518-events count were a **pre-reconciliation snapshot presented as current**; both are
+│ docs/handbook/chapters/M4-board.md
+│ @@ -184,7 +184,7 @@
+│  ## 12. Cross-references
+│
+│  - F5 LANDING writes the board row a landing closes (M3) — **flow chapter not written** (OUTLINE Part II, all 16 flows MISSING).
+│ -- **M9 SCHEDULER reads board rows as admission gates** — `internal/scheduler/admission_mode.go:230-242`
+│ +- **M9 SCHEDULER reads board rows as admission gates** — `internal/scheduler/admission_mode.go:230-243`
+│    is the board-ownership/workability admission decision. **M10 CRIER does not** (B04): a source
+│    search across crier's Go files finds no `tasks.jsonl`, `board_ownership`, `boardWorkable` or
+│    board/admission terminology — the bus operates on inbox messages and leases.
+│ docs/handbook/chapters/M4-board.md
+│ @@ -203,26 +203,19 @@
+│    - **F4-3** (carried) — CT-14/CT-13 (foreman→board / gitreins→board) states corrected from "works"/"broken" to **UNVERIFIED**: every
+│      side is an external peer, so no in-repo file:function exists to name.
+│    - **F4-4** (resolved) — the CF-270 divergence is **reconciled**: commit `4dc0ef0` closed CF-270 and
+│ -    is in `origin/main`; `board_drift` at HEAD `e07d031` returns `RESULT: OK` (357 vs 357, 0
+│ +    is in `origin/main`; `board_drift` at HEAD `ce2f875` returns `RESULT: OK` (357 vs 357, 0
+│      divergent ids, byte parity identical, HEAD == origin/main). The round-10 draft reported the
+│      pre-reconciliation DRIFT as current; that reading is superseded. The events count is 519, not 518.
+│    - **F4-5** (new, B04) — the board-admission gate belongs to M9 alone; crier has no board admission.
+│    - **F4-6** (new, sol B27) — S1/S2 re-classified from **active** to **operator-invoked (optional)**: a repo-wide grep finds no in-repo unit/cron/timer invoking `boardctl`/`board_lock`/`board_drift` (only `tests/selftest.sh` exercises them); a writer's manual run proves observation, not production activation. The foreman lane (external) is the intended caller.
+│ +  - **F4-7** (new, round 18) — `board_drift.py`'s comparison-authority controls (`--workdir`, `--ref`, `--repo`, `--published-dir`, `--no-head`, `:193-199`) registered in §5 (sol B12); the completion `--evidence-run-id` requirement re-cited to the runtime refusal string (`evidence run required: completion REFUSED … (TR-251)`) instead of `boardctl update --help`, which lists `[--evidence-run-id RUN]` but does not state the requirement (grok #9).
+│
+│  ## RED field count: 1 (Metrics §8 — absence-proved)
+│
+│ -**RED accounting rule — one rule, document-wide (round 17; glm #4 / kimi B-3 / sol B02).** A RED is a
+│ -field where the writer's own evidence is incomplete: an unread body, an unrun ladder, an untabulated
+│ -log inventory — plus the absence-proved metric (§8 "none" is RED). A contract row in §6 whose far side is
+│ -an **external peer** (a boundary CT or a `(local)` edge with no in-repo `file:function`) is a *terminal
+│ -state* — `UNVERIFIED`/`broken` per OUTLINE Part IV — and is **not** counted as a RED, because there is
+│ -no in-repo code to measure and the state itself is the filed finding. A §6 row for an **internal**
+│ -contract (both ends in covered code) whose wire was not measured **is** a RED (not-measured, not
+│ -terminal).
+│ -
+│ -**CROSS-SECTION DEPENDENCY (round 17).** The same rule must be applied by M9-scheduler and
+│ -M12-inference-proxy, which in round 16 counted boundary `UNVERIFIED` rows (CT-01/CT-15 in M9;
+│ -CT-07/M12-C2 in M12) inside their RED totals under a contradictory reading of the same "glm #4"
+│ -ruling. Those chapters are outside this writer's group; they must either adopt the boundary-terminal
+│ -rule above and stop counting boundary rows as REDs, or this chapter's RED count is not comparable to
+│ -theirs. M4/M5/M6/M7/M8 all apply the boundary-terminal rule stated here.
+│ +**RED accounting — the single rule, cited to OUTLINE Part VII.3 (`OUTLINE.md:266-282`) this round (grok #3 / sol B01).** A RED is a *schema field* (§1–§13) whose evidence is incomplete:
+│ +- **not measured** — an unread body, an unrun ladder, an untabulated log inventory, an unminted credential. This is **UNVERIFIED** and a named RED (`OUTLINE.md:277-278`).
+│ +- **absence proved** — a field filled by a command whose output establishes the absence (e.g. `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' … → 0 matches` for §8). This is a *filled* field with a RED value (`OUTLINE.md:271-273`).
+│ +
+│ +A §6 contract row's **state word** is not a schema field; it is contract content (OUTLINE Part IV's two-register convention, `OUTLINE.md:218-224`). For a boundary contract (CT-10/CT-13/CT-14), "no in-repo producer/consumer exists" is **absence-proved** — established by a quoted repo-wide grep, not assumed — so the `UNVERIFIED`/`broken` state is the *measured* result, and this chapter does **not** claim the contract works: it files the state as a finding (F4-3). Per sol B01 that state is retained as a blocking, named gap — the far-side wire is `UNVERIFIED` and no in-repo measurement can close it — not converted into an acceptance exemption. A §6 row for an **internal** contract (both ends in covered code) whose wire was not measured is `not measured` and **is** a RED.
+│ +
+│ +**CROSS-SECTION DEPENDENCY (round 18).** The acceptance rule above (OUTLINE Part VII.3) is the single authority this chapter grades itself against; M9-scheduler and M12-inference-proxy — outside this writer's group — must apply the same cited rule so their RED totals are comparable. Where a boundary contract's far side is external, the honest state is `UNVERIFIED`/`broken` (absence-proved), retained as a named finding, not a schema-field RED.
+│ docs/handbook/chapters/M5-harness.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | HARNESS |
+│  | Path | `/home/kara/code-factory/scripts/harness/` — `install-hermes.sh`, `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh`, `harness-vars.sh`; **and** `/home/kara/code-factory/scripts/` — `harness_resolve.py`, `install-go.sh`, `install-gitreins.sh`, `project-node.sh` |
+│ -| Revision | `e07d031d09f7fdf1af97360e66c02ea49a58d537` (code-factory HEAD == origin/main == gh/main, round-17 derivation; `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` is empty — `e07d031` touched only `prompts/foreman.md` and `prompts/unblock.md` — so every file M5 cites is byte-identical across `3fba8a7..e07d031`) |
+│ +| Revision | `ce2f87560144773d9119086c343b7ac2d243967b` (code-factory HEAD == origin/main == gh/main, round-18 re-stamp). `git diff --name-only 3fba8a7..HEAD` touches four paths — `prompts/foreman.md`, `prompts/unblock.md` (e07d031) and `scripts/panel_loop.py`, `scripts/panel_supervise.sh` (ce2f875); `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` returns those two script paths. None of the four changed files is cited by M5, so every file M5 cites is byte-identical across `3fba8a7..HEAD` |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side) |
+│  | Status | **UNVERIFIED** — `harness-vars.sh` (318), `harness_resolve.py` (400), `install-hermes.sh` (375), `install-gitreins.sh` (180), `install-claude-code.sh` (673, read in full), `install-codex.sh` (592, read in full), `install-opencode.sh` (98), `install-deepseek.sh` (101), `install-pi-agent.sh` (113) all read this round; the conformance battery not run this round (needs a live node) |
+│ docs/handbook/chapters/M5-harness.md
+│ @@ -117,7 +117,7 @@
+│
+│  | Setting | Default | Range | Governs | What breaks if changed |
+│  |---|---|---|---|---|
+│ -| `GO_PIN` | `go1.26.5` (`:7`) | exact version | the Go toolchain installed | drift installs an unmeasured toolchain |
+│ +| `GO_PIN` | `go1.26.5` (`:7`) | exact version | the Go toolchain installed | drift installs an unmeasured toolchain — **and the pin already violates the control-plane floor**: the scheduler `go.mod` declares `go 1.26.0` + `toolchain go1.26.10` (`coding-hermes-scheduler/coding-herms-scheduler/go.mod:3-5`) and crier declares `go 1.26.10` (`crier/go.mod:3`), so a node provisioned at `GO_PIN` cannot build either module without a `GOTOOLCHAIN=auto` fetch of `go1.26.10` (kimi #4). Raise the pin or file the bump as a board row |
+│  | `GO_SHA256_LINUX_AMD64` / `_ARM64` | `5c2c3b16…` / `fe4789e9…` (`:8-9`) | a digest | artifact integrity per architecture | a wrong digest is refused by `fetch_verified` |
+│  | `GO_DISK_FLOOR_GB` | **1** (`:10`) | GiB | install admission floor | a lower floor admits a too-small host |
+│  | `GO_PROBE_MODULE` / `GO_PROBE_VERSION` | `rsc.io/quote` / `v1.5.2` (`:11-12`) | a module@version | the cold-cache module proof | a changed probe no longer proves a working toolchain |
+│ docs/handbook/chapters/M5-harness.md
+│ @@ -141,6 +141,18 @@
+│  | `--node-harnesses` | None (`:351-356`) | comma list | restricts the selection to installed harnesses | selection must be one of them, else refused |
+│  | `--shims` | None (`:357-361`) | comma `family=name` / `harness:family=name` | shim bindings | a wrong binding routes a family to the wrong harness |
+│  | `--matrix-file` | None (`:362-366`) | a path | the harness table (default `DEFAULT_MATRIX_FILE`) | a wrong file reads the wrong matrix |
+│ +
+│ +**`project-node.sh` node-entrypoint scope controls (sol B13, added this round — the S3 entry has no §5 register, and a scoped run is NOT a certification).** `project-node.sh:37-49` reads the env, `:59-82` parses the CLI, `:20-28` documents the `--layers` scoping:
+│ +
+│ +| Setting | Default | Range | Governs | What breaks if changed |
+│ +|---|---|---|---|---|
+│ +| `NODE_PROJECT` / `--project` | none, **required** (`:37`, `:64`; `[ -z "$PROJECT" ] && { echo "--project is required …"; exit 2; }`) | a project name | the single project the node belongs to | an empty project refuses (a node belongs to exactly one project) |
+│ +| `NODE_HARNESS` / `--harness` | `hermes` (`:38`, `:65`) | a harness name | which `install-$HARNESS.sh` the node runs | a wrong name computes a wrong installer path (`:440`) |
+│ +| `NODE_REF` / `--ref` | `main` (`:40`, `:67`) | a git ref | the lane ref cloned | a wrong ref clones the wrong lane state |
+│ +| `NODE_GATEWAY_PORT` / `--port` | `10800` (`:41`, `:68`) | a TCP port | the gateway port the installer targets | a wrong port installs against the wrong gateway |
+│ +| `NODE_ROLE` / `--role` | `worker` (`:42`, `:69`) | a role name | the node role | a wrong role changes provisioning semantics |
+│ +| `NODE_KINDS` / `--kinds` | none (`:46`, `:75-76` sets `KINDS_SET=1`) | a kind list | restricts toolchain-evidence population | a narrowed `--kinds` changes which toolchain rows are populated |
+│ +| `--layers <list>` | none (unscoped) (`:70-73`) | a comma subset of `00,10,20,30,40` | **scoped check**: runs only the named layers | a scoped run is **NOT a node certification** — it prints one `SCOPE` line, prints `SKIP layer NN (out of scope)` for skipped layers, and **never writes `$HOME/.node/node.json` — not even under `--apply`** with every in-scope layer green (`:20-28`). A scoped run that excludes `00` does not resolve the disk floor |
+│
+│  **Predicate correction (F0-6, owned here).** The credential-mode predicate is `[0-7]00`
+│  (`harness-vars.sh:203`) — modes `000..700` pass — while the refusal message (`:204`) claims "a key
+│ docs/handbook/chapters/M5-harness.md
+│ @@ -146,12 +146,12 @@
+│
+│  | Setting | Default | Range | Governs | What breaks if changed |
+│  |---|---|---|---|---|
+│ -| `NODE_PROJECT` / `--project` | none, **required** (`:37`, `:64`; `[ -z "$PROJECT" ] && { echo "--project is required …"; exit 2; }`) | a project name | the single project the node belongs to | an empty project refuses (a node belongs to exactly one project) |
+│ -| `NODE_HARNESS` / `--harness` | `hermes` (`:38`, `:65`) | a harness name | which `install-$HARNESS.sh` the node runs | a wrong name computes a wrong installer path (`:440`) |
+│ -| `NODE_REF` / `--ref` | `main` (`:40`, `:67`) | a git ref | the lane ref cloned | a wrong ref clones the wrong lane state |
+│ -| `NODE_GATEWAY_PORT` / `--port` | `10800` (`:41`, `:68`) | a TCP port | the gateway port the installer targets | a wrong port installs against the wrong gateway |
+│ -| `NODE_ROLE` / `--role` | `worker` (`:42`, `:69`) | a role name | the node role | a wrong role changes provisioning semantics |
+│ -| `NODE_KINDS` / `--kinds` | none (`:46`, `:75-76` sets `KINDS_SET=1`) | a kind list | restricts toolchain-evidence population | a narrowed `--kinds` changes which toolchain rows are populated |
+│ +| `NODE_PROJECT` / `--project` | none, **required** (`:37`, `:63`; `[ -z "$PROJECT" ] && { echo "--project is required …"; exit 2; }`) | a project name | the single project the node belongs to | an empty project refuses (a node belongs to exactly one project) |
+│ +| `NODE_HARNESS` / `--harness` | `hermes` (`:38`, `:64`) | a harness name | which `install-$HARNESS.sh` the node runs | a wrong name computes a wrong installer path (`:440`) |
+│ +| `NODE_REF` / `--ref` | `main` (`:40`, `:66`) | a git ref | the lane ref cloned | a wrong ref clones the wrong lane state |
+│ +| `NODE_GATEWAY_PORT` / `--port` | `10800` (`:41`, `:67`) | a TCP port | the gateway port the installer targets | a wrong port installs against the wrong gateway |
+│ +| `NODE_ROLE` / `--role` | `worker` (`:42`, `:68`) | a role name | the node role | a wrong role changes provisioning semantics |
+│ +| `NODE_KINDS` / `--kinds` | none (`:47`, `:74-77` sets `KINDS_SET=1`) | a kind list | restricts toolchain-evidence population (`:110` gates on `KINDS_SET`) | a narrowed `--kinds` changes which toolchain rows are populated |
+│  | `--layers <list>` | none (unscoped) (`:70-73`) | a comma subset of `00,10,20,30,40` | **scoped check**: runs only the named layers | a scoped run is **NOT a node certification** — it prints one `SCOPE` line, prints `SKIP layer NN (out of scope)` for skipped layers, and **never writes `$HOME/.node/node.json` — not even under `--apply`** with every in-scope layer green (`:20-28`). A scoped run that excludes `00` does not resolve the disk floor |
+│
+│  **Predicate correction (F0-6, owned here).** The credential-mode predicate is `[0-7]00`
+│ docs/handbook/chapters/M5-harness.md
+│ @@ -255,5 +255,11 @@
+│    - **F5-5** (new, B02) — the "no production installer caller" claim was false: `project-node.sh:440`
+│      computes `install-$HARNESS.sh` and `:449-452` invokes it; the literal grep missed the computed
+│      path. The installers are unit-invoked (by the operator-invoked provisioning entry).
+│ -
+│ -## RED field count: 3 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; §9 inventory 4 of 274 helper call sites — the generic per-measurement rows not tabulated one-per-site). M5-C2 (gateway port/service, local edge) is a terminal state, not a RED — see the RED accounting rule in M4.
+│ +  - **F5-6** (new, round 18) — `project-node.sh`'s node-entrypoint scope controls registered in §5
+│ +    (`NODE_PROJECT`/`NODE_HARNESS`/`NODE_REF`/`NODE_GATEWAY_PORT`/`NODE_ROLE`/`NODE_KINDS` and the
+│ +    `--layers` scoped-check switch that never writes `node.json`; sol B13). The `GO_PIN` "what breaks"
+│ +    cell now names the control-plane floor it already violates: `GO_PIN=go1.26.5` vs scheduler
+│ +    `toolchain go1.26.10` and crier `go 1.26.10`, so a node at the pin cannot build either module
+│ +    without a `GOTOOLCHAIN` fetch (kimi #4).
+│ +
+│ +## RED field count: 3 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; §9 inventory 4 of 274 helper call sites — the generic per-measurement rows not tabulated one-per-site). M5-C2 (gateway port/service, local edge) is a boundary state, not a schema-field RED — see the single RED accounting rule in M4, cited to OUTLINE Part VII.3 (`OUTLINE.md:266-282`).
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | DOCUMENTATION |
+│  | Path | `/home/kara/code-factory/scripts/` — `master_doc_skeleton.py`, `master_doc_fill.py`, `master_doc_check.py`, `master_doc_panel.py`, `gen_nasa_handbook.py`, `gen_system_views.py`, `sheet_style.py`, `extract_owner_decisions.py`, `gen_unit_map.py`, `verify-patch.sh`, `panel_loop.py`, `ownership.py`, `handbook_spine.py` |
+│ -| Revision | `e07d031d09f7fdf1af97360e66c02ea49a58d537` (code-factory HEAD == origin/main == gh/main, round-17 derivation). **Dirty-source disclosure (sol B10):** `scripts/handbook_spine.py` is **uncommitted in the working tree** — the reviewed file is 443 lines, `git show HEAD:scripts/handbook_spine.py` is 340 lines, working sha256 `afbc65fc7bfec973969c27767bd5980b7d7ae5c1a3999c7d6511dfdaf3752163`; the backtick-aware `split_row`, `CONTRACT ROW MISPARSE`, `CONTRACT UNKNOWN ID` and backticked-default fallback are working-tree content not committed at HEAD, and their locators are pinned to the working tree. `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` is empty (`e07d031` touched only `prompts/`), so every *other* file M6 cites is byte-identical across `3fba8a7..e07d031` |
+│ +| Revision | `ce2f87560144773d9119086c343b7ac2d243967b` (code-factory HEAD == origin/main == gh/main, round-18 re-stamp). `git diff --name-only 3fba8a7..HEAD` touches four paths — `prompts/foreman.md`, `prompts/unblock.md` (e07d031) and `scripts/panel_loop.py`, `scripts/panel_supervise.sh` (ce2f875); the two script changes are one-line `PANEL_ROOT` env-default additions (`panel_loop.py:30`, `panel_supervise.sh:17`), and every `panel_loop.py`/`panel_supervise.sh` locator M6 cites still resolves (re-verified this round: `panel_loop.py` is 461 lines, `:34-35`, `:37-38`, `:323`, `:357`, `:383-385`; `panel_supervise.sh:41-43`). **Dirty-source disclosure (F6-8, carried — sol B10):** `scripts/handbook_spine.py` is **uncommitted working-tree content** — the reviewed file is 443 lines, `git show HEAD:scripts/handbook_spine.py` is 340 lines, working sha256 `afbc65fc7bfec973969c27767bd5980b7d7ae5c1a3999c7d6511dfdaf3752163`; the backtick-aware `split_row`, `CONTRACT ROW MISPARSE`, `CONTRACT UNKNOWN ID` and backticked-default fallback are working-tree content not committed at HEAD, and their locators are pinned to the working tree |
+│  | Language / runtime | Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│  | Status | **UNVERIFIED** — `master_doc_check.py` (268 lines) read in full and its FAIL reproduced; the rest of the pipeline (`master_doc_fill.py`, `gen_nasa_handbook.py`, `master_doc_panel.py`, `gen_unit_map.py`, …) not read line-by-line; the gate reads `MASTER-DOC: FAIL`. **The legacy fill/render/panel pipeline is UNBUILDABLE against these M-numbered chapters** (B13): `master_doc_check.py:188`, `gen_nasa_handbook.py:253-260` and `master_doc_fill.py:422` all select `[0-9][0-9]-*.md`, which does not match `M0-…-*.md`, so the legacy pipeline cannot select or deliver these chapters. **The chapter-aware gate is `handbook_spine.py` (S9)**, which *does* select `M*.md` and exits 1 on any finding (`python3 scripts/handbook_spine.py` → `chapters=13 canonical contracts=18 findings=0`, exit 0); the legacy fill/render/check pipeline is retired for the M-numbered handbook, and the render-to-owner-artifact leg remains missing (CT-18 UNVERIFIED, §6) |
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | `ce2f87560144773d9119086c343b7ac2d243967b` (code-factory HEAD == origin/main == gh/main, round-18 re-stamp). `git diff --name-only 3fba8a7..HEAD` touches four paths — `prompts/foreman.md`, `prompts/unblock.md` (e07d031) and `scripts/panel_loop.py`, `scripts/panel_supervise.sh` (ce2f875); the two script changes are one-line `PANEL_ROOT` env-default additions (`panel_loop.py:30`, `panel_supervise.sh:17`), and every `panel_loop.py`/`panel_supervise.sh` locator M6 cites still resolves (re-verified this round: `panel_loop.py` is 461 lines, `:34-35`, `:37-38`, `:323`, `:357`, `:383-385`; `panel_supervise.sh:41-43`). **Dirty-source disclosure (F6-8, carried — sol B10):** `scripts/handbook_spine.py` is **uncommitted working-tree content** — the reviewed file is 443 lines, `git show HEAD:scripts/handbook_spine.py` is 340 lines, working sha256 `afbc65fc7bfec973969c27767bd5980b7d7ae5c1a3999c7d6511dfdaf3752163`; the backtick-aware `split_row`, `CONTRACT ROW MISPARSE`, `CONTRACT UNKNOWN ID` and backticked-default fallback are working-tree content not committed at HEAD, and their locators are pinned to the working tree |
+│  | Language / runtime | Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│ -| Status | **UNVERIFIED** — `master_doc_check.py` (268 lines) read in full and its FAIL reproduced; the rest of the pipeline (`master_doc_fill.py`, `gen_nasa_handbook.py`, `master_doc_panel.py`, `gen_unit_map.py`, …) not read line-by-line; the gate reads `MASTER-DOC: FAIL`. **The legacy fill/render/panel pipeline is UNBUILDABLE against these M-numbered chapters** (B13): `master_doc_check.py:188`, `gen_nasa_handbook.py:253-260` and `master_doc_fill.py:422` all select `[0-9][0-9]-*.md`, which does not match `M0-…-*.md`, so the legacy pipeline cannot select or deliver these chapters. **The chapter-aware gate is `handbook_spine.py` (S9)**, which *does* select `M*.md` and exits 1 on any finding (`python3 scripts/handbook_spine.py` → `chapters=13 canonical contracts=18 findings=0`, exit 0); the legacy fill/render/check pipeline is retired for the M-numbered handbook, and the render-to-owner-artifact leg remains missing (CT-18 UNVERIFIED, §6) |
+│ +| Status | **UNVERIFIED** — `master_doc_check.py` (268 lines) read in full and its FAIL reproduced; `handbook_spine.py` (443 lines) and `panel_loop.py` (461 lines) read in full; the rest of the pipeline (`master_doc_fill.py`, `master_doc_skeleton.py`, `gen_nasa_handbook.py`, `master_doc_panel.py`, `gen_unit_map.py`, `gen_system_views.py`, `sheet_style.py`, `extract_owner_decisions.py`) read in part only — an unread-body RED named below, not hidden (sol B16). The legacy gate reads `MASTER-DOC: FAIL`. **The legacy fill/render/panel pipeline is UNBUILDABLE against these M-numbered chapters** (B13): `master_doc_check.py:188`, `gen_nasa_handbook.py:253-260` and `master_doc_fill.py:422` all select `[0-9][0-9]-*.md`, which does not match `M0-…-*.md`, so the legacy pipeline cannot select or deliver these chapters. **The chapter-aware gate is `handbook_spine.py` (S9)**, which *does* select `M*.md` and exits 1 on any finding (`python3 scripts/handbook_spine.py` → `chapters=13 canonical contracts=18 findings=0`, exit 0 — **UNVERIFIED-by-revision**: the gate is uncommitted working-tree content, F6-8); the legacy fill/render/check pipeline is retired for the M-numbered handbook, and the render-to-owner-artifact leg remains missing (CT-18 UNVERIFIED, §6) |
+│
+│  ## 2. Purpose, authority and position
+│
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -39,9 +39,9 @@
+│
+│  | Submodule | Unit | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│ -| S1 skeleton + census | `master_doc_skeleton.py` | **active** | `main()` entrypoint; structure-mapped |
+│ +| S1 skeleton + census | `master_doc_skeleton.py` | **operator-invoked (optional)** | `main()` entrypoint only — an entrypoint is not activation (sol B14); `grep -rn master_doc_skeleton scripts/ prompts/ config/` → 0 matches, and no `master_doc`/`handbook_spine`/`gen_nasa_handbook` job exists in `~/.hermes/cron/jobs.json`, so no unit/cron/timer invokes it |
+│  | S2 fill | `master_doc_fill.py` | **operator-invoked** | `main()` (`:393`); `--engine api\|hermes`, `--workers 2`, `--provider deepseek` (`:394-411`); no in-repo production caller |
+│ -| S3 gate | `master_doc_check.py` | **active** | `main()` at `:160`; selects `[0-9][0-9]-*.md` at `:188` |
+│ +| S3 gate | `master_doc_check.py` | **operator-invoked (optional)** | `main()` at `:160`; selects `[0-9][0-9]-*.md` at `:188` — an entrypoint is not activation (sol B14); no in-repo caller and no cron job invokes it |
+│  | S4 panel | `master_doc_panel.py`, `panel_loop.py`, `ownership.py` | **active** (panel), **optional** (ownership) | `panel_supervise.sh:41` invokes `python3 scripts/panel_loop.py --rounds 0 --max-seconds 0`; `ownership.py` has no code caller (`grep -rn ownership.py scripts/` → self only) |
+│  | S5 render | `gen_nasa_handbook.py`, `gen_system_views.py`, `sheet_style.py` | **operator-invoked** | `gen_nasa_handbook.py:247` `main()`; no in-repo caller (`grep -rn gen_nasa_handbook scripts/` → only `gen_unit_map.py:31` NOT_CALLERS) |
+│  | S6 corpus | `extract_owner_decisions.py` | **operator-invoked** | no in-repo caller (grep empty) |
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -160,7 +160,7 @@
+│
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│ -| CT-16 | docsgate | out | `master_doc_check.py:263` prints `MASTER-DOC: PASS\|FAIL` | **external** — "the handbook's status word", no in-repo function | works (exit 1 = FAIL) — but it is a structural gate, not a truth gate (F6-2) |
+│ +| CT-16 | docsgate | out | **two gates, two corpora (sol B15):** the *legacy* status word is `master_doc_check.py:263` (`MASTER-DOC: PASS\|FAIL`), which selects `[0-9][0-9]-*.md` (`:188`) — the appendix unit corpus, **not** these `M*.md` chapters; the *chapter-aware* gate for this handbook is `handbook_spine.py` (`findings=N`, exit 1 on any finding), which selects `M*.md` | **external** — "the handbook's status word", no in-repo consumer function | **works (spine leg) / legacy leg scoped to the appendix corpus** — the legacy `master_doc_check` reads `MASTER-DOC: FAIL` over 44 appendix units and does **not** select the M-chapters (F6-1); the spine leg reports `findings=0` but is **UNVERIFIED-by-revision** (uncommitted gate, F6-8). The status word is a structural/citation word, not a truth verdict (F6-2) |
+│  | CT-18 | handbook | out | `gen_nasa_handbook.py:247` `main()` (the render entry) | **external** — "the owner's approval artifact" (the owner is a human) | **UNVERIFIED** — the renderer hardcodes `docs/master` and selects `[0-9][0-9]-*.md`, so it does **not** render these `M*.md` chapters (see §11) |
+│
+│  CT-18 is a boundary contract: the consumer is a human owner, so "producer named + consumer
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -174,7 +174,7 @@
+│  | shell parse | `bash -n scripts/verify-patch.sh` | exit 0 | 2026-11-06 | PASS |
+│  | patch chain | `bash scripts/verify-patch.sh` | VERIFY-PATCH: PASS | 2026-11-06 | **PASS** — `5 stages, 4 patches, 57432007…` (the `deploy-doc` stage landed in commit `8ae4f82`, after the round-10 stamp's `4 stages, 3 patches, f393a681…`; re-quoted this round) |
+│  | doc gate over real modules | `python3 scripts/master_doc_check.py` | exit 1 with named errors | 2026-11-06 | **FAIL** — `44 module(s): 37 VERIFIED, 50 error(s), 0 warning(s), 10 fact(s)`, `MASTER-DOC: FAIL`, exit 1 |
+│ -| spine | `python3 scripts/handbook_spine.py` | `findings=0`, exit 0 | 2026-11-06 | **PASS** — `chapters=13  canonical contracts=18  findings=0` (after the CT-06 state reconciliation; the pre-fix run reported `CONTRACT STATE DISAGREEMENT=1` on CT-06) |
+│ +| spine | `python3 scripts/handbook_spine.py` | `findings=0`, exit 0 | 2026-11-06 | **PASS (dirty tree)** — `chapters=13  canonical contracts=18  findings=0`; **UNVERIFIED-by-revision** (F6-8): reproducible only from the uncommitted 443-line working tree, not from `git show HEAD:` (340 lines), so a fresh clone at the stamped revision runs a weaker gate |
+│
+│  ## 8. Metrics
+│
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -257,4 +257,4 @@
+│      not a committed round-16 file. The spine is pinned to the working tree with the dirty delta
+│      disclosed.
+│
+│ -## RED field count: 2 (Status §1 — own gate reads FAIL over the legacy 44-unit corpus; Metrics §8 — absence-proved). CT-16 works; CT-18 is a boundary terminal state (external owner), so neither §6 row is a RED — see the uniform RED accounting rule in M4.
+│ +## RED field count: 4 (Status §1 — own gate reads `MASTER-DOC: FAIL` over the legacy 44-unit corpus and the spine leg is UNVERIFIED-by-revision; Metrics §8 — absence-proved; §1/§3 unread pipeline bodies — `master_doc_skeleton.py`/`master_doc_fill.py`/`gen_nasa_handbook.py`/`master_doc_panel.py`/`gen_unit_map.py`/`gen_system_views.py`/`sheet_style.py`/`extract_owner_decisions.py` read in part only (sol B16); §9 log inventory — only the two legacy-gate lines tabulated, the module-wide emitter surface not inventoried one-per-site). CT-16 and CT-18 are boundary contract states (spine leg works from the dirty tree with the legacy leg scoped to the appendix corpus; the CT-18 render leg is UNVERIFIED — external owner, missing renderer), not schema-field REDs — per the single RED accounting rule in M4, cited to OUTLINE Part VII.3 (`OUTLINE.md:266-282`).
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -256,5 +256,12 @@
+│      gate checks are uncommitted working-tree content (443 lines vs HEAD's 340, sha256 `afbc65fc…`),
+│      not a committed round-16 file. The spine is pinned to the working tree with the dirty delta
+│      disclosed.
+│ +  - **F6-9** (new, round 18) — CT-16's producer is now bound to the actual chapter-aware gate, not
+│ +    the wrong-corpus legacy one: `master_doc_check.py` selects `[0-9][0-9]-*.md` (the appendix unit
+│ +    corpus) and reads `MASTER-DOC: FAIL`, while `handbook_spine.py` selects `M*.md` and reports
+│ +    `findings=N` (sol B15); the spine leg and M6 §7's spine row are marked **UNVERIFIED-by-revision**
+│ +    because the gate is uncommitted (glm B1 / grok #6 / kimi #10); S1/S3 reclassified operator-invoked
+│ +    (entrypoint is not activation, sol B14); the §1 Status and RED count now name the unread pipeline
+│ +    bodies instead of implying they were covered (sol B16).
+│
+│  ## RED field count: 4 (Status §1 — own gate reads `MASTER-DOC: FAIL` over the legacy 44-unit corpus and the spine leg is UNVERIFIED-by-revision; Metrics §8 — absence-proved; §1/§3 unread pipeline bodies — `master_doc_skeleton.py`/`master_doc_fill.py`/`gen_nasa_handbook.py`/`master_doc_panel.py`/`gen_unit_map.py`/`gen_system_views.py`/`sheet_style.py`/`extract_owner_decisions.py` read in part only (sol B16); §9 log inventory — only the two legacy-gate lines tabulated, the module-wide emitter surface not inventoried one-per-site). CT-16 and CT-18 are boundary contract states (spine leg works from the dirty tree with the legacy leg scoped to the appendix corpus; the CT-18 render leg is UNVERIFIED — external owner, missing renderer), not schema-field REDs — per the single RED accounting rule in M4, cited to OUTLINE Part VII.3 (`OUTLINE.md:266-282`).
+│ docs/handbook/chapters/M7-github.md
+│ @@ -75,7 +75,24 @@
+│  | `JWT_BACKDATE` / `JWT_LIFETIME` | 60 s / 540 s (`github-app-token.py:50-51`) | seconds | JWT exp/iat window | GitHub rejects exp >10 min out |
+│  | `TIMEOUT` | 20 s (`github-app-token.py:52`) | seconds | HTTP timeout | too short fails the mint |
+│
+│ -**`github-app-setup.sh` first-install controls (sol B15, added this round — the minter/refresher registers are not the whole module).** `github-app-setup.sh:76-95` exposes `MODE` (`--check`/`--apply`/`--manifest`), `--env-file`, `--token-file`, `--app-id`, `--installation-id`, `--key-file`, `--slug`, `--repo`, `--org`, `--name`, `--api-base`, `--yes`. `apply()` (`:225-292`) asks interactively for any missing answer (`:234-238`) and refuses a non-numeric id or a non-`ORG/NAME` repo before writing (`:241-244`); it **writes the env file before verifying** (`:256-272`) and **leaves it in place on verification failure** (`:287-291`, `GITHUB APP SETUP: INCOMPLETE`) — a written env file is not proof the pieces verify; only `GITHUB APP SETUP: READY` (`:280`) is.
+│ +**`github-app-setup.sh` first-install controls (sol B15 carried / sol B17 — the minter/refresher registers are not the whole module, and the NAME-ONLY list is now a per-setting register).** The setup script reads env defaults at `:32-43`, parses the CLI at `:76-95`, and resolves a default repository at `:102`:
+│ +
+│ +| Setting | Default | Range | Governs | What breaks if changed |
+│ +|---|---|---|---|---|
+│ +| `MODE` (`--check`/`--apply`/`--manifest`) | none (`:42`), `--check\|--apply` at `:78`, `--manifest` at `:79`; `[ -n "$MODE" ] || usage 2` | `check`/`apply`/`manifest` | whether the run verifies, writes, or prints the manifest | a missing mode exits 2 (no-op) |
+│ +| `--env-file` / `ENV_FILE` | `$GITHUB_APP_ENV_FILE` or `~/.config/code-factory/github-app.env` (`:32`, `:80`) | a path (tilde-expanded) | the App identity source written/read | a wrong path writes the credential to the wrong place |
+│ +| `--token-file` / `TOKEN_FILE` | `$GITHUB_APP_TOKEN_FILE` or `~/.config/code-factory/github.token` (`:33`, `:81`) | a path | the token destination | a wrong path mints the token to the wrong place |
+│ +| `--app-id` / `APP_ID` | empty (`:34`, `:82`) | numeric | the App identity | a non-numeric id is refused before writing (`:241-244`) |
+│ +| `--installation-id` / `INSTALLATION_ID` | empty (`:35`, `:83`) | numeric | the installation scope | a non-numeric id is refused before writing |
+│ +| `--key-file` / `KEY_FILE` | empty (`:36`, `:84`) | an RSA `.pem` path | the signing key | a missing/unreadable key fails verification |
+│ +| `--slug` / `SLUG` | empty (`:37`, `:85`) | a slug | the App slug | a wrong slug fails the manifest |
+│ +| `--repo` / `REPO` | empty (`:38`, `:86`); `default_repo()` at `:70` fills it at `:102` if unset | `ORG/NAME` | the target repository | a non-`ORG/NAME` repo is refused before writing (`:241-244`) |
+│ +| `--org` / `ORG` | empty (`:39`, `:87`) | an org name | the App's owning org | a wrong org fails the manifest |
+│ +| `--name` / `NAME` | `code-factory` (`:40`, `:88`) | a name | the App's display name | a wrong name mints under the wrong App identity |
+│ +| `--api-base` / `API_BASE` | `$GITHUB_API_BASE` or `https://api.github.com` (`:41`, `:89`) | a URL | the API endpoint (tests point it local) | a wrong base breaks the mint |
+│ +| `--yes` / `ASSUME_YES` | 0 (`:43`, `:90`) | flag | skips the interactive prompt | unset means `apply()` asks interactively for any missing answer (`:234-238`) |
+│ +
+│ +**Write-before-verify (carried).** `apply()` writes the env file **before** verifying it (`:256-272`) and leaves it in place on verification failure (`:287-291`, `GITHUB APP SETUP: INCOMPLETE`) — a written env file is not proof the pieces verify; only `GITHUB APP SETUP: READY` (`:280`) is.
+│
+│  ## 6. Contracts in and out
+│
+│ docs/handbook/chapters/M7-github.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | GITHUB |
+│  | Path | `/home/kara/code-factory/scripts/` — `github-app-setup.sh`, `github-app-token.py`, `github-app-refresh.sh` |
+│ -| Revision | `e07d031d09f7fdf1af97360e66c02ea49a58d537` (code-factory HEAD == origin/main == gh/main, round-17 derivation; `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` is empty — `e07d031` touched only `prompts/foreman.md` and `prompts/unblock.md` — so every file M7 cites is byte-identical across `3fba8a7..e07d031`) |
+│ +| Revision | `ce2f87560144773d9119086c343b7ac2d243967b` (code-factory HEAD == origin/main == gh/main, round-18 re-stamp). `git diff --name-only 3fba8a7..HEAD` touches four paths — `prompts/foreman.md`, `prompts/unblock.md` (e07d031) and `scripts/panel_loop.py`, `scripts/panel_supervise.sh` (ce2f875); `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` returns those two script paths. None of the four changed files is cited by M7, so every file M7 cites is byte-identical across `3fba8a7..HEAD` |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│  | Status | **UNVERIFIED** — CLI surface measured (`github-app-token.py` exits 2 with no command); the settings/control regions read (`:107-117`, `:300-372`, `:579`; `github-app-refresh.sh:37-53,104-174`); mint not run (no App creds on this host) |
+│ docs/handbook/chapters/M7-github.md
+│ @@ -178,5 +178,9 @@
+│    - **F7-5** (new, sol B14/B15) — the existing-store guarantee is local-mode only (node mode overwrites
+│      `~/.git-credentials` and sets a global helper); `github-app-setup.sh` controls and its
+│      write-before-verify behaviour registered.
+│ +  - **F7-6** (new, round 18) — the first-install NAME-ONLY list became a per-setting register: each of
+│ +    `MODE`/`--env-file`/`--token-file`/`--app-id`/`--installation-id`/`--key-file`/`--slug`/`--repo`/
+│ +    `--org`/`--name`/`--api-base`/`--yes` now carries its default, range, consequence and the
+│ +    write-before-verify interaction (`github-app-setup.sh:32-43`, `:76-95`, `:102`; sol B17).
+│
+│ -## RED field count: 3 (Metrics §8 — absence-proved; §1 mint UNVERIFIED — environment-gated, no App creds on this host; §9 inventory 2 of 103 helper call sites — the generic per-measurement rows not tabulated one-per-site). M7-C1 (consumer is the external GitHub API) is a local edge, terminal, not a RED — see the uniform RED accounting rule in M4.
+│ +## RED field count: 3 (Metrics §8 — absence-proved; §1 mint UNVERIFIED — environment-gated, no App creds on this host; §9 inventory 2 of 103 helper call sites — the generic per-measurement rows not tabulated one-per-site). M7-C1 (consumer is the external GitHub API) is a local edge, a boundary state, not a schema-field RED — see the single RED accounting rule in M4, cited to OUTLINE Part VII.3 (`OUTLINE.md:266-282`).
+│ docs/handbook/chapters/M8-safety.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | SAFETY |
+│  | Path | `/home/kara/code-factory/scripts/` — `reclaim_disk.py`, `check_scan_scope.py` |
+│ -| Revision | `e07d031d09f7fdf1af97360e66c02ea49a58d537` (code-factory HEAD == origin/main == gh/main, round-17 derivation; `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` is empty — `e07d031` touched only `prompts/foreman.md` and `prompts/unblock.md` — so `reclaim_disk.py`/`check_scan_scope.py` are byte-identical across `3fba8a7..e07d031`) |
+│ +| Revision | `ce2f87560144773d9119086c343b7ac2d243967b` (code-factory HEAD == origin/main == gh/main, round-18 re-stamp). `git diff --name-only 3fba8a7..HEAD` touches four paths — `prompts/foreman.md`, `prompts/unblock.md` (e07d031) and `scripts/panel_loop.py`, `scripts/panel_supervise.sh` (ce2f875); `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` returns those two script paths. `reclaim_disk.py`/`check_scan_scope.py` are not among them, so both are byte-identical across `3fba8a7..HEAD` |
+│  | Language / runtime | Python 3.14.9 + bash 5.3.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│  | Status | **VERIFIED** — `reclaim_disk.py` (169 lines) and `check_scan_scope.py` (118 lines) both read in full this round |
+│ docs/handbook/chapters/M8-safety.md
+│ @@ -160,4 +160,4 @@
+│      registered; the §9 log inventory completed (the six FAIL/`RESULT: FAIL` scanner rows,
+│      `RESULT: OK`, and the `targets`/`--json` reclaim outputs were previously untabulated).
+│
+│ -## RED field count: 1 (Metrics §8 — absence-proved). The `(local)` filesystem edge in §6 is a boundary terminal state (external peer), not a RED — see the uniform RED accounting rule in M4.
+│ +## RED field count: 1 (Metrics §8 — absence-proved). The `(local)` filesystem edge in §6 is a boundary state (external peer), not a schema-field RED — see the single RED accounting rule in M4, cited to OUTLINE Part VII.3 (`OUTLINE.md:266-282`).
+│ docs/handbook/chapters/M4-board.md
+│ @@ -210,12 +210,12 @@
+│    - **F4-6** (new, sol B27) — S1/S2 re-classified from **active** to **operator-invoked (optional)**: a repo-wide grep finds no in-repo unit/cron/timer invoking `boardctl`/`board_lock`/`board_drift` (only `tests/selftest.sh` exercises them); a writer's manual run proves observation, not production activation. The foreman lane (external) is the intended caller.
+│    - **F4-7** (new, round 18) — `board_drift.py`'s comparison-authority controls (`--workdir`, `--ref`, `--repo`, `--published-dir`, `--no-head`, `:193-199`) registered in §5 (sol B12); the completion `--evidence-run-id` requirement re-cited to the runtime refusal string (`evidence run required: completion REFUSED … (TR-251)`) instead of `boardctl update --help`, which lists `[--evidence-run-id RUN]` but does not state the requirement (grok #9).
+│
+│ -## RED field count: 1 (Metrics §8 — absence-proved)
+│ +## RED field count: 2 (Metrics §8 — absence-proved; the Contracts-in-and-out field (§6) — not-measured: CT-14/CT-13/CT-10 are boundary contracts whose wires were never measured)
+│
+│  **RED accounting — the single rule, cited to OUTLINE Part VII.3 (`OUTLINE.md:266-282`) this round (grok #3 / sol B01).** A RED is a *schema field* (§1–§13) whose evidence is incomplete:
+│ -- **not measured** — an unread body, an unrun ladder, an untabulated log inventory, an unminted credential. This is **UNVERIFIED** and a named RED (`OUTLINE.md:277-278`).
+│ +- **not measured** — an unread body, an unrun ladder, an untabulated log inventory, an unminted credential, or a contract wire never exercised. This is **UNVERIFIED** and a named RED (`OUTLINE.md:277-278`).
+│  - **absence proved** — a field filled by a command whose output establishes the absence (e.g. `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' … → 0 matches` for §8). This is a *filled* field with a RED value (`OUTLINE.md:271-273`).
+│
+│ -A §6 contract row's **state word** is not a schema field; it is contract content (OUTLINE Part IV's two-register convention, `OUTLINE.md:218-224`). For a boundary contract (CT-10/CT-13/CT-14), "no in-repo producer/consumer exists" is **absence-proved** — established by a quoted repo-wide grep, not assumed — so the `UNVERIFIED`/`broken` state is the *measured* result, and this chapter does **not** claim the contract works: it files the state as a finding (F4-3). Per sol B01 that state is retained as a blocking, named gap — the far-side wire is `UNVERIFIED` and no in-repo measurement can close it — not converted into an acceptance exemption. A §6 row for an **internal** contract (both ends in covered code) whose wire was not measured is `not measured` and **is** a RED.
+│ -
+│ -**CROSS-SECTION DEPENDENCY (round 18).** The acceptance rule above (OUTLINE Part VII.3) is the single authority this chapter grades itself against; M9-scheduler and M12-inference-proxy — outside this writer's group — must apply the same cited rule so their RED totals are comparable. Where a boundary contract's far side is external, the honest state is `UNVERIFIED`/`broken` (absence-proved), retained as a named finding, not a schema-field RED.
+│ +A **boundary contract** (CT-10/CT-13/CT-14) whose far side is an external peer is a **not-measured RED, not an exemption** (sol B01): the honest `UNVERIFIED`/`broken` state is retained as blocking, and the "no in-repo producer/consumer exists" grep is the *annotation* on that state, not a completion of it — no in-repo measurement can exercise the foreman→board, gitreins→board or node→board wire, so the §6 field stays RED. Round-17's "terminal state, not a RED" reading is **superseded** (grok #3 / sol B01) and deleted here, so the acceptance rule has one formulation document-wide.
+│ +
+│ +**CROSS-SECTION DEPENDENCY (round 18 — resolved).** This chapter now applies the same strict rule M1/M2/M3/M9/M12 already adopted: boundary/local contract `UNVERIFIED`/`broken` states are RED (not-measured), cited to OUTLINE Part VII.3. The round-17 divergence (M4 "terminal, not RED" vs M1/M2/M3 "RED, not exemptions") is closed.
+│ docs/handbook/chapters/M5-harness.md
+│ @@ -262,4 +262,4 @@
+│      `toolchain go1.26.10` and crier `go 1.26.10`, so a node at the pin cannot build either module
+│      without a `GOTOOLCHAIN` fetch (kimi #4).
+│
+│ -## RED field count: 3 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; §9 inventory 4 of 274 helper call sites — the generic per-measurement rows not tabulated one-per-site). M5-C2 (gateway port/service, local edge) is a boundary state, not a schema-field RED — see the single RED accounting rule in M4, cited to OUTLINE Part VII.3 (`OUTLINE.md:266-282`).
+│ +## RED field count: 4 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; §9 inventory 4 of 274 helper call sites — the generic per-measurement rows not tabulated one-per-site; the Contracts-in-and-out field (§6) — not-measured: CT-17 (boundary, consumer external, not run) and M5-C2 (local edge, gateway one side only) stay UNVERIFIED). Boundary/local `UNVERIFIED` states are RED, not exemptions — see the single RED accounting rule in M4 (OUTLINE Part VII.3, `OUTLINE.md:266-282`).
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -264,4 +264,4 @@
+│      (entrypoint is not activation, sol B14); the §1 Status and RED count now name the unread pipeline
+│      bodies instead of implying they were covered (sol B16).
+│
+│ -## RED field count: 4 (Status §1 — own gate reads `MASTER-DOC: FAIL` over the legacy 44-unit corpus and the spine leg is UNVERIFIED-by-revision; Metrics §8 — absence-proved; §1/§3 unread pipeline bodies — `master_doc_skeleton.py`/`master_doc_fill.py`/`gen_nasa_handbook.py`/`master_doc_panel.py`/`gen_unit_map.py`/`gen_system_views.py`/`sheet_style.py`/`extract_owner_decisions.py` read in part only (sol B16); §9 log inventory — only the two legacy-gate lines tabulated, the module-wide emitter surface not inventoried one-per-site). CT-16 and CT-18 are boundary contract states (spine leg works from the dirty tree with the legacy leg scoped to the appendix corpus; the CT-18 render leg is UNVERIFIED — external owner, missing renderer), not schema-field REDs — per the single RED accounting rule in M4, cited to OUTLINE Part VII.3 (`OUTLINE.md:266-282`).
+│ +## RED field count: 5 (Status §1 — own gate reads `MASTER-DOC: FAIL` over the legacy 44-unit corpus and the spine leg is UNVERIFIED-by-revision; Metrics §8 — absence-proved; §1/§3 unread pipeline bodies — `master_doc_skeleton.py`/`master_doc_fill.py`/`gen_nasa_handbook.py`/`master_doc_panel.py`/`gen_unit_map.py`/`gen_system_views.py`/`sheet_style.py`/`extract_owner_decisions.py` read in part only (sol B16); §9 log inventory — only the two legacy-gate lines tabulated, the module-wide emitter surface not inventoried one-per-site; the Contracts-in-and-out field (§6) — not-measured: CT-16's spine leg is UNVERIFIED-by-revision (uncommitted gate, F6-8) and CT-18's render leg is UNVERIFIED (external owner, missing renderer)). Boundary `UNVERIFIED` states are RED, not exemptions — see the single RED accounting rule in M4 (OUTLINE Part VII.3, `OUTLINE.md:266-282`).
+│ docs/handbook/chapters/M7-github.md
+│ @@ -183,4 +183,4 @@
+│      `--org`/`--name`/`--api-base`/`--yes` now carries its default, range, consequence and the
+│      write-before-verify interaction (`github-app-setup.sh:32-43`, `:76-95`, `:102`; sol B17).
+│
+│ -## RED field count: 3 (Metrics §8 — absence-proved; §1 mint UNVERIFIED — environment-gated, no App creds on this host; §9 inventory 2 of 103 helper call sites — the generic per-measurement rows not tabulated one-per-site). M7-C1 (consumer is the external GitHub API) is a local edge, a boundary state, not a schema-field RED — see the single RED accounting rule in M4, cited to OUTLINE Part VII.3 (`OUTLINE.md:266-282`).
+│ +## RED field count: 4 (Metrics §8 — absence-proved; §1 mint UNVERIFIED — environment-gated, no App creds on this host; §9 inventory 2 of 103 helper call sites — the generic per-measurement rows not tabulated one-per-site; the Contracts-in-and-out field (§6) — not-measured: M7-C1 (consumer is the external GitHub API) stays UNVERIFIED, the mint never run). Boundary/local `UNVERIFIED` states are RED, not exemptions — see the single RED accounting rule in M4 (OUTLINE Part VII.3, `OUTLINE.md:266-282`).
+│ docs/handbook/chapters/M8-safety.md
+│ @@ -160,4 +160,4 @@
+│      registered; the §9 log inventory completed (the six FAIL/`RESULT: FAIL` scanner rows,
+│      `RESULT: OK`, and the `targets`/`--json` reclaim outputs were previously untabulated).
+│
+│ -## RED field count: 1 (Metrics §8 — absence-proved). The `(local)` filesystem edge in §6 is a boundary state (external peer), not a schema-field RED — see the single RED accounting rule in M4, cited to OUTLINE Part VII.3 (`OUTLINE.md:266-282`).
+│ +## RED field count: 2 (Metrics §8 — absence-proved; the Contracts-in-and-out field (§6) — not-measured: the `(local)` filesystem edge is UNVERIFIED-boundary, the external peer has no function to name). Boundary `UNVERIFIED` states are RED, not exemptions — see the single RED accounting rule in M4 (OUTLINE Part VII.3, `OUTLINE.md:266-282`).
+│ docs/handbook/chapters/M4-board.md
+│ @@ -151,7 +151,7 @@
+│
+│  `boardctl` is an external binary (`/home/kara/.local/bin/boardctl`, measured this round — not in
+│  this repo), so these strings carry no in-repo `file:line`; they are quoted from the run output
+│ -captured this round (2026-11-06, rev `e07d031`) with the commands named (N9):
+│ +captured this round (2026-11-06, rev `ce2f875`) with the commands named (N9):
+│
+│  | Level | Line | Emitted when | Kind |
+│  |---|---|---|---|
+All edits verified, spine clean. Here is the manifest.
+
+WRITER ROUND COMPLETE — round 18, group s2 (support surfaces)
+
+CHAPTERS WRITTEN (all five, full §1–§13, evidence-attached)
+- M4-board          → docs/handbook/chapters/M4-board.md
+- M5-harness        → docs/handbook/chapters/M5-harness.md
+- M6-documentation  → docs/handbook/chapters/M6-documentation.md
+- M7-github         → docs/handbook/chapters/M7-github.md
+- M8-safety         → docs/handbook/chapters/M8-safety.md
+
+CHAPTERS STILL SKELETON: none in my group.
+
+RED FIELD COUNT PER CHAPTER
+- M4-board:          2  (Metrics §8 absence-proved; §6 Contracts-in-and-out not-measured — CT-14/CT-13/CT-10 boundary wires never measured)
+- M5-harness:        4  (Metrics; §7 conformance battery unrun/live-node; §9 inventory 4-of-274; §6 CT-17 + M5-C2 boundary)
+- M6-documentation:  5  (Status §1 gate FAIL + spine UNVERIFIED-by-revision; Metrics; unread pipeline bodies; §9 inventory partial; §6 CT-16/CT-18 boundary)
+- M7-github:         4  (Metrics; §1 mint unrun/no-creds; §9 inventory 2-of-103; §6 M7-C1 boundary)
+- M8-safety:         2  (Metrics; §6 (local) filesystem edge boundary)
+
+CORRECTIONS APPLIED (mapped to round-17 findings)
+- glm B2 / grok #1 / kimi #2 — re-stamped all five chapters to ce2f875, deleted "current HEAD", re-quoted `git diff --name-only 3fba8a7..HEAD` with its real two script paths (panel_loop.py, panel_supervise.sh).
+- grok #9 — M4 completion `--evidence-run-id` requirement re-cited to the runtime refusal string (`evidence run required: completion REFUSED … (TR-251)`, captured live), not `boardctl update --help`.
+- sol B12 — M4 §5 registers board_drift.py's `--workdir/--ref/--repo/--published-dir/--no-head` with the proof `--no-head` removes.
+- glm NB5 — M4 §12 `tasksAdmissionDue` corrected to `:230-243`.
+- kimi #4 — M5 §5 `GO_PIN` "what breaks" cell now names the control-plane floor it violates (scheduler `toolchain go1.26.10`, crier `go 1.26.10`).
+- sol B13 — M5 §5 registers project-node.sh scope controls (NODE_PROJECT/HARNESS/REF/GATEWAY_PORT/ROLE/KINDS + `--layers` never writes node.json).
+- sol B15 / glm B1 / grok #6 / kimi #10 — M6 §6 CT-16 bound to the chapter-aware gate (handbook_spine.py selects M*.md) with the legacy master_doc_check scoped to the appendix corpus; spine leg + M6 §7 marked UNVERIFIED-by-revision (gate uncommitted).
+- sol B14 — M6 S1/S3 reclassified operator-invoked (entrypoint is not activation; grep 0 matches + no cron job in jobs.json).
+- sol B16 — M6 §1 Status and RED count now name the unread pipeline bodies.
+- sol B17 — M7 §5 first-install controls converted from NAME-ONLY to a per-setting register (12 settings with default/range/consequence).
+- sol B01 / grok #3 — RED accounting aligned to the single OUTLINE Part VII.3 rule: boundary/local `UNVERIFIED`/`broken` states are RED (not-measured), not exemptions. M4's round-17 "terminal, not RED" reading is superseded and deleted. This closes the round-17 divergence with M1/M2/M3/M9/M12.
+
+CROSS-SECTION DEPENDENCIES (chapters I do not own)
+- M1-provisioning, M2-dispatch, M3-repository still carry the stale sentence "M4 reads 'terminal, not RED'" in their RED field count lines. M4 now reads "RED, not exemptions" (OUTLINE Part VII.3). Those three chapters must drop the stale reference. Prose-level only — the spine does not check it, so findings=0 is unaffected.
+- The certifying gate `scripts/handbook_spine.py` remains uncommitted (443 lines working tree vs 340 at `git show HEAD:`). M6 §7 and CT-16 carry UNVERIFIED-by-revision. The fix — committing the spine — is a repo/code action outside this writer's chapter scope.
+
+SPINE SUMMARY LINE
+chapters=13  canonical contracts=18
+findings=0
+
+COMMANDS RUN (with exit status)
+- git rev-parse HEAD                                       → ce2f8756014…  (0)
+- git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/  → 2 paths (0)
+- python3 scripts/handbook_spine.py                        → findings=0    (0)  [final]
+- python3 scripts/master_doc_check.py                      → MASTER-DOC: FAIL, 44 module(s): 37 VERIFIED, 50 error(s)  (1)
+- bash scripts/verify-patch.sh                             → VERIFY-PATCH: PASS, 5 stages/4 patches  (0)
+- jq -r '.id' .coding-hermes/board/tasks.jsonl | wc -l     → 357  (0)
+- wc -l .coding-hermes/board/events.jsonl                  → 519  (0)
+- scripts/boardctl validate                                → RESULT: OK (7 warning(s))  (0)
+- python3 scripts/board_drift.py check --workdir … --ref origin/main → RESULT: OK, 0 divergent ids, HEAD=ce2f875  (0)
+- boardctl -C <scratch> init; create BX-1; update BX-1 --status complete → "evidence run required: completion REFUSED … (TR-251)"  (0, refusal)
+- boardctl update --help                                   → lists [--evidence-run-id RUN], no REQUIRED wording  (0)
+- python3 tests/test_reclaim.py                            → 9 tests OK  (0)
+- python3 scripts/check_scan_scope.py                      → RESULT: OK, 15 claims  (0)
+- python3 tests/test_harness_resolve.py                    → 28 tests OK  (0)
+- python3 -B scripts/github-app-token.py                   → usage  (2)
+- grep/awk/sed locator verification (panel_loop.py:30/34-38/323/357/383-385; panel_supervise.sh:17/41-43; board_drift.py:193-199; project-node.sh:37-77; github-app-setup.sh:32-43/76-95/102; install-go.sh:7; go.mod toolchain floors)  (0)
+
+NOTE ON NOT-COMMITTED: the working tree already held the round-17 uncommitted chapter edits plus the uncommitted spine before this round; I did not commit anything (not asked). Every code-vs-document disagreement I found is filed as a finding in the round rather than papered over — notably CT-18's missing render leg (gen_nasa_handbook.py hardcodes docs/master, does not select M*.md) and the uncommitted spine gate.
+
+session_id: local-82be39ebd2c6ccf3e7d48043d4106d6167c94d7d3f6d59bc713518b06d398122

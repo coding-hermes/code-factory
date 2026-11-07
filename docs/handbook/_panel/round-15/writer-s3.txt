@@ -1,0 +1,133 @@
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | SCHEDULER |
+│  | Path | `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/` (Go) |
+│ -| Revision | `34e448974a49aec23c76ad9189b4cc85140d14c7` (scheduler repo HEAD at round-11 derivation; the only cited-file change since `1771d3aa` is `go.mod`'s toolchain bump — RELEASE-038, commit `9bc9e561` — every cited Go source file is byte-identical; the repo is live and the post-stamp commits are `972f11c8` (chmod +x a `.qa/chaos-probes` script — **not** a board commit) and `0927c552` (a board close, `[ci skip]`), so the earlier "board-only commits past this stamp" wording was imprecise) |
+│ +| Revision | `7a7afc0f` (scheduler repo HEAD, re-stamped round 15). Cited Go source files are byte-identical to the round-11 stamp `34e44897` — `git diff --name-only 34e44897..HEAD` returns only `.coding-hermes/board/events.jsonl`, `.coding-hermes/board/tasks.jsonl` and `.qa/chaos-probes/errorpath.sh`. Post-stamp commits: `972f11c8` (chmod +x the chaos errorpath probe, QA-CHS-187), `0927c552` (board close, `[ci skip]`), `7a7afc0f` (board close RELEASE-042, `[ci skip]`). The one cited-file change since `1771d3aa` remains `go.mod`'s toolchain bump (RELEASE-038 `9bc9e561`: `go 1.26.0` + `toolchain go1.26.10`) |
+│  | Language / runtime | Go — `go.mod` declares `go 1.26.0` + `toolchain go1.26.10`; `go env GOVERSION` resolves **go1.26.10** (`GOTOOLCHAIN=auto`). Host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`); `/usr/bin/go` = **go1.26.9** (`/usr/lib/go-1.26/bin/go`; measured `readlink -f /usr/bin/go` + `/usr/bin/go version`) |
+│  | Owner lane | coding-hermes-scheduler (control plane) |
+│  | Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:98-129, 143-208, 230-267`), the binary defaults (`cmd/schedulerd/main.go:95-200`), the auth path (`internal/api/auth.go:187-197`), the API route table (`internal/api/server.go:289-370`) and `config.example.toml` read this round; `tick_process.go`/`packer_select.go`/`namespace_alloc.go` grep-level, not line-by-line; §9 log inventory narrowed to the settlement/batch-dispatch surface (2 of 379 sites) with the uncovered count named as RED |
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -308,7 +308,7 @@
+│    (PASS, 25/25); the three env-sensitive tests (PASS, 0.409s); `grep -n 'LoadRootConfig' cmd/schedulerd/main.go` (10 sites);
+│    `grep -rn "log.Printf" internal/scheduler/*.go | wc -l` (379); `grep -cE 'flag\.(String|Int|Int64|Bool|Duration|Float64)' cmd/schedulerd/main.go` (57);
+│    `sqlite3 … '.tables'` (30 tables).
+│ -- Rev re-stamped: `34e44897` (the go.mod toolchain bump to go1.26.10, RELEASE-038 `9bc9e561`, is the one cited-file change since `1771d3aa`; every cited Go source file is byte-identical).
+│ +- Rev re-stamped: `7a7afc0f` (round 15). Cited Go source byte-identical to `34e44897` (`git diff --name-only 34e44897..HEAD` = board JSONL + `.qa/chaos-probes/errorpath.sh` only); the go.mod toolchain bump to go1.26.10 (RELEASE-038 `9bc9e561`) is the one cited-file change since `1771d3aa`.
+│  - Board rows: CF-334, CF-335, CF-337, CF-343, CF-346, CF-353, CF-354, CF-355.
+│  - **Findings:**
+│    - **F9-1** (carried) — settlement exists (`dispatch_leg.go:260-336`); the real defect is CF-355.
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | CRIER |
+│  | Path | `/home/kara/crier/` (Go) |
+│ -| Revision | `33c1f3888d68a1ce404d422cbea4146485d95087` (crier repo HEAD at round-12 derivation; two commits past the round-11 stamp `86c4c469`: `eb21ca03` — "make the idle-boot detect-alert assertion order-insensitive", which fixes exactly the flake §7 documented — and `dc15b2d6` — a board row; the handler/guard/config/client files M10 cites are byte-identical across `86c4c469..33c1f388`) |
+│ +| Revision | `0a372209` (crier repo HEAD, re-stamped round 15). Cited handler/guard/config/client files are byte-identical to the round-12 stamp `33c1f388` — `git diff --name-only 33c1f388..HEAD` returns only `.github/workflows/release.yml`, `Makefile`, `README.md`, `docs/releases.md`, `releng/*`, `scripts/release-upload.sh`, `scripts/release-upload-selftest.sh`. Post-stamp commits: `6d49c262` (README Quick Start v0.3.0, RELEASE-013), `7860836f` + `0a372209` (tag publisher idempotency, RELEASE-012). The two commits past the round-11 stamp `86c4c469` were `eb21ca03` (the idle-boot flake fix) and `dc15b2d6` (a board row) |
+│  | Language / runtime | Go — `go.mod` declares `go 1.26.10` (a build/toolchain requirement, not a runtime one); host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`), `/usr/bin/go` = **go1.26.9** (`/usr/lib/go-1.26/bin/go`); `GOTOOLCHAIN=auto` auto-fetches 1.26.10 for this repo |
+│  | Owner lane | crier (control plane) |
+│  | Status | **UNVERIFIED** — `internal/registry/handler.go` (deliver/retrieve/ack surfaces + the full 3-site slog surface), `internal/guard/guard.go` (pipeline, oversize branch, `errorResult`), `internal/guard/policy.go` (`ResolvePolicy`), `internal/guard/metrics.go`, `config/config.go` (controls + guard bounds + metrics default), `clients/python/crier_client.py`, `cmd/crier-front/main.go` read this round; the full 1895-line handler body still not read line-by-line (its slog surface *is* complete — see §9) |
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -260,7 +260,7 @@
+│    `clients/python/crier_client.py:960-1036`; `cmd/crier-front/main.go:39`;
+│    `cmd/server/observability.go:95-115, 160-175`; `internal/metrics/metrics.go:1-8`.
+│  - Commands run: `go build ./...` (PASS); `go test ./...` (PASS at `33c1f388`, rc 0); `go test ./cmd/server/ -run TestMetricsState_SeriesRenderOnIdleBoot -count=1` (ok, 0.323s); `ls internal/registry/*_test.go` (91); `grep -c 'slog.(Info|Error|Warn|Debug)' internal/registry/handler.go` (3); `grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u | wc -l` (67).
+│ -- Rev re-stamped: `33c1f388` (two commits past `86c4c469`: `eb21ca03` the test fix, `dc15b2d6` a board row; the handler/guard/config/client files M10 cites are byte-identical across the range).
+│ +- Rev re-stamped: `0a372209` (round 15; cited files byte-identical to `33c1f388`; post-stamp commits `6d49c262` README, `7860836f`/`0a372209` releng tag publisher).
+│  - Board rows: CF-337, CF-361, CF-369.
+│  - **Findings:**
+│    - **F10-1** (carried) — auth order is headers → target → caller → timestamp → key → signature.
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -229,7 +229,7 @@
+│
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│ -| build | `go build ./...` (scheduler repo) | exit 0 | 2026-11-06, rev `34e44897` | **PASS** (rc 0) |
+│ +| build | `go build ./...` (scheduler repo) | exit 0 | 2026-11-06, rev `7a7afc0f` (re-run this round) | **PASS** (rc 0) |
+│  | durable state | `sqlite3 ~/.hermes/coding-hermes/scheduler.db '.tables'` | tables listed | 2026-11-06 | **PASS** — 30 tables; no `verdicts` table |
+│  | go test (clean env) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./...` | green | 2026-11-06, rev `34e44897` | **PASS (rc 0)** — all 25 packages ok; `internal/scheduler` ran 275.7s (not cached) and passed |
+│  | go test (three env-sensitive tests) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -run 'TestSCHEDGAP091_DrainTimeoutStampsOrphan|TestOperatorRestartApprovalEnv|TestAbortInFlightTicks_OperatorApprovedStamp' -count=1` | green | 2026-11-06, rev `34e44897` | **PASS (rc 0)** — 0.409s |
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -143,8 +143,8 @@
+│
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│ -| build | `go build ./...` (crier repo) | exit 0 | 2026-11-06, rev `33c1f388` | **PASS** (rc 0) |
+│ -| go test | `go test ./...` | green | 2026-11-06, rev `33c1f388` | **PASS** (rc 0) — re-run at live HEAD this round; the FLAKY diagnosis at `86c4c469` is superseded by `eb21ca03` (see the note below) |
+│ +| build | `go build ./...` (crier repo) | exit 0 | 2026-11-06, rev `0a372209` (re-run this round) | **PASS** (rc 0) |
+│ +| go test | `go test ./...` | green | 2026-11-06, rev `0a372209` (re-run this round) | **PASS** (rc 0) — all packages ok (`internal/registry` 7.569s, `internal/mesh` 7.382s); the FLAKY diagnosis at `86c4c469` is superseded by `eb21ca03` (see the note below) |
+│  | port fact | `grep -n 'Port' config/config.go` | 8767 | 2026-11-06 | PASS (`:622`) |
+│  | slog surface | `grep -c 'slog.\(Info\|Error\|Warn\|Debug\)' internal/registry/handler.go` | 3 | 2026-11-06 | **PASS** — exactly 3 sites (all in §9); no `log.Printf`/`fmt.Printf` in the handler |
+│  | signed-read ladder | `python3 ~/node-bus-worker.py --check` on cf-node | inbox 200 with key+bearer | 2026-11-05, cf-node only | PASS (FACT-04) — not repeatable from this control host |
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -259,7 +259,7 @@
+│    `internal/guard/policy.go:170-205`; `internal/guard/metrics.go:19-49`; `config/config.go:621-700, 1139-1187`;
+│    `clients/python/crier_client.py:960-1036`; `cmd/crier-front/main.go:39`;
+│    `cmd/server/observability.go:95-115, 160-175`; `internal/metrics/metrics.go:1-8`.
+│ -- Commands run: `go build ./...` (PASS); `go test ./...` (PASS at `33c1f388`, rc 0); `go test ./cmd/server/ -run TestMetricsState_SeriesRenderOnIdleBoot -count=1` (ok, 0.323s); `ls internal/registry/*_test.go` (91); `grep -c 'slog.(Info|Error|Warn|Debug)' internal/registry/handler.go` (3); `grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u | wc -l` (67).
+│ +- Commands run: `go build ./...` (PASS, re-run round 15 at `0a372209`); `go test ./...` (PASS at `0a372209`, rc 0 — all packages ok); `go test ./cmd/server/ -run TestMetricsState_SeriesRenderOnIdleBoot -count=1` (ok, 0.323s); `ls internal/registry/*_test.go` (91); `grep -c 'slog.(Info|Error|Warn|Debug)' internal/registry/handler.go` (3); `grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u | wc -l` (67).
+│  - Rev re-stamped: `0a372209` (round 15; cited files byte-identical to `33c1f388`; post-stamp commits `6d49c262` README, `7860836f`/`0a372209` releng tag publisher).
+│  - Board rows: CF-337, CF-361, CF-369.
+│  - **Findings:**
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -272,4 +272,4 @@
+│    - **F10-5** (new) — the handler's slog surface is complete (3/3, §9); the 67-string metric census
+│      is scoped (runtime vs test helpers vs exposition components), not a completed per-metric register.
+│
+│ -## RED field count: 4 (S1 handler 1895-line body not read line-by-line — the slog surface is complete but the body's non-slog semantics are not; §8 per-metric contract — series names inventoried but the type/labels/question/scrape table not filled; §9 log inventory incomplete beyond the 5 tabulated sites — the webhook/store/detect/federation emitters are not tabulated one-per-site; §5 storage-selection custody-proof not written — B20). The §7 `go test ./...` FLAKY RED is **resolved this round** — re-measured green at HEAD `33c1f388` after `eb21ca03`.
+│ +## RED field count: 4 (S1 handler 1895-line body not read line-by-line — the slog surface is complete but the body's non-slog semantics are not; §8 per-metric contract — series names inventoried but the type/labels/question/scrape table not filled; §9 log inventory incomplete beyond the 5 tabulated sites — the webhook/store/detect/federation emitters are not tabulated one-per-site; §5 storage-selection custody-proof not written — B20). The §7 `go test ./...` FLAKY RED is **resolved this round** — re-measured green at HEAD `0a372209` after `eb21ca03`.
+All four chapters verified and re-stamped against live code. Final state confirmed: spine clean, builds/tests green.
+
+MANIFEST — WRITER ROUND 15 (group s3)
+
+Chapters written (4): M9-scheduler, M10-crier, M11-dispatcher, M12-inference-proxy
+Chapters still skeleton (0)
+
+RED field count per chapter:
+- M9-scheduler: 5
+- M10-crier: 4
+- M11-dispatcher: 2
+- M12-inference-proxy: 4
+Total: 15
+
+Spine summary line: chapters=13 canonical contracts=18 findings=0 (exit 0)
+
+Commands run with exit status:
+- python3 scripts/handbook_spine.py → rc 0 (findings=0, before and after all edits)
+- git diff --name-only 34e44897..HEAD (scheduler) → rc 0 (only .coding-hermes/board/*.jsonl + .qa/chaos-probes/errorpath.sh; cited Go source byte-identical)
+- git diff --name-only 33c1f388..HEAD (crier) → rc 0 (only .github/workflows/release.yml, Makefile, README.md, docs/releases.md, releng/*, scripts/release-upload*.sh; cited files byte-identical)
+- go build ./... (scheduler, rev 7a7afc0f) → rc 0
+- go build ./... (crier, rev 0a372209) → rc 0
+- go test ./... (crier, rev 0a372209) → rc 0 (all packages ok; internal/registry 7.569s, internal/mesh 7.382s)
+- grep -cE 'flag\.(String|Int|Int64|Bool|Duration|Float64)' cmd/schedulerd/main.go → 57, rc 0
+- grep -oE 'mux\.HandleFunc\("[^"]+"' internal/api/server.go | sort -u | wc -l → 43, rc 0
+- grep -rn 'log.Printf' internal/scheduler/*.go | wc -l → 379, rc 0
+- sqlite3 .../scheduler.db '.tables' → 30 tables, rc 0
+- wc -l internal/registry/handler.go → 1895, rc 0
+- grep -c 'slog.\(Info\|Error\|Warn\|Debug\)' internal/registry/handler.go → 3, rc 0
+- ls internal/registry/*_test.go | wc -l → 91, rc 0
+- grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u | wc -l → 67, rc 0
+- python3 -m py_compile dispatcher.py (crier-fleet) → rc 0; 538 lines
+- curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8775/v1/chat/completions -d '{"model":"hermes"}' → 401 (no-token, proxy live)
+- systemctl --user status cf-inference-proxy.service → active (running) since 2026-11-05 09:21:39
+- sha256sum cf-inference-proxy.py → b12a0ac5...e0b5 (matches M12 stamp), 273 lines
+- sed -n '175,208p' internal/bus/dispatch.go → confirmed payload() carries kind/lane/corr_id/scheduler_id/issued_at/board/workdir/reply_to/text_b64/limits (field board, no run_id) — M9 CT-02 accurate
+- sed -n '700,726p' internal/scheduler/dispatch_leg.go → confirmed dispatchReplyVerdict reads only payload["ok"], absence=SUCCESS — CF-355 live
+
+Work done this round:
+- M9 re-stamped to 7a7afc0f; disclosed the three post-stamp commits (972f11c8 chmod, 0927c552 board close, 7a7afc0f board close RELEASE-042), all non-source; go build re-run rc 0; all counts (57/43/379/30 tables) reproduced.
+- M10 re-stamped to 0a372209; disclosed the three post-stamp commits (6d49c262 README, 7860836f/0a372209 releng tag publisher); go build + go test re-run rc 0 (the §7 FLAKY RED confirmed superseded — clean green at HEAD); all counts (1895/3/91/67) reproduced; footer updated to RED=4 with the resolved-§7 note pointing at 0a372209.
+- M11 unchanged (crier-fleet HEAD still 283bca9 = the stamped rev); py_compile + 538-line count re-confirmed.
+- M12 unchanged (proxy sha256 + live 401 + systemd unit re-confirmed).
+
+CROSS-SECTION DEPENDENCY (chapters I do not own, owned by s1 — M2 DISPATCH node side):
+- CT-03 (crier → node): M2 must cite producer handler.go:1690 HandleRetrieve and consumer node-bus-worker.py:1007 process, state "works" (CF-354 fixed node-side). My M10 row already matches.
+- CT-04 (node → crier): M2 must cite producer node-bus-worker.py:1208 deliver and consumer handler.go:990 HandleDeliver, state "works (transport)" with CF-355 (node sends status, scheduler reads ok) carried at CT-04. My M10 row already matches.
+- CT-05 (foreman → scheduler): M2 must cite producer scripts/load_lane_config.py:31-37 and consumer internal/scheduler/spawn.go:1244 buildForemanPrompt, state "UNVERIFIED" (3-of-11 breakage unmeasured). My M9 row already matches.
+
+The spine reconcile pass after all three writers land will verify these seams; at my last run the spine is already at 0 findings.
+
+WRITER ROUND COMPLETE
+
+session_id: local-3bbbd2cfd2b62215f4678792b0f0ed9f1c3ba1606d3d0a297bba4dd0b27877c0

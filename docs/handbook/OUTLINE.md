@@ -208,29 +208,39 @@ modules get their own chapter.
 
 Each contract names **both sides**: producer file:function, consumer file:function,
 payload, timing, failure semantics, measured state, breaking-change policy. Current
-(round 11, re-derived from the chapters): **5 of 18** internal contracts name both
+(round 12, re-derived from the chapters' §6): **5 of 18** internal contracts name both
 `file:function` (CT-02, CT-03, CT-04, CT-05, CT-06); the remaining **13** are boundary contracts that
-cite the covered side with the far side marked UNVERIFIED/external. The "0 of 18" figure below the fold is
-pre-round-10 structure text.
+cite the covered side with the far side marked external. The state column below is **re-derived from
+the chapters this round**, not carried over from earlier structure text: nine rows disagreed with
+their owning chapter (CT-01, CT-07, CT-11, CT-12, CT-13, CT-14, CT-15, CT-17, CT-18) and are corrected
+here to the chapter's measured word.
 
-- **owner → scheduler** — lane enabled, cadence, weight, pin · **works**
-- **scheduler → crier** — envelope: run_id, corr_id, lane, board_row, text_b64 · **works (transport)** *(superseded — see CT-02: works; the former text_b64/text break CF-354 is fixed node-side, glm #2)*
-- **crier → node** — inbox message + lease · **works** *(superseded — see M10-C2: works; the CF-354 field-mismatch is the node's consumption, M2-C1)*
-- **node → crier** — reply: in_reply_to, corr_id, run_id, outcome · **works (transport)** *(superseded — see CT-04: works; the real reply fields are `status`/`dispatch_id`/`corr_id`, no `run_id`/`outcome`; CF-355 — node sends `status`, scheduler reads `ok` — is this reply's settlement defect, carried at CT-04)*
-- **foreman → scheduler** — the lane's prompt text and skills it may load · **UNVERIFIED** *(internal — both ends in-repo: `load_lane_config.py:31-37` → `spawn.go:1244`; the "3 of 11 prompt files disagree" breakage is unmeasured, grok B3)*
-- **crier → scheduler** — completion event for a finished run · **works (dispatcher leg)** *(CT-06: the dispatcher always sends `ok`, `dispatcher.py:501`; CF-355 is the node-reply leg, CT-04)*
-- **router → gateway** — model choice for a prompt · **works**
-- **crier → gateway** — hermes-session delivery (message becomes a session turn) · **works**
-- **node → duckbrain** — R1 run record, R2 fleet index · **missing**
-- **node → board** — row event with run_id and outcome · **broken**
-- **node → sessionstore** — every turn, model, tokens · **works**
-- **node → gitreins** — staged diff · **works**
-- **gitreins → board** — verdict that closes a row · **broken**
-- **foreman → board** — row created, row closed, evidence · **works**
-- **foreman → duckbrain** — decisions, findings, goal · **works**
-- **docsgate → handbook** — module status word · **works**
-- **conformance → harness** — per-leg verdict (check, apply, smoke, vars, memory) · **broken**
-- **handbook → owner** — the approval artifact · **works**
+**Two-register convention (round 12).** The canonical register is CT-01..CT-18. A module interface
+that is *not* a cross-system contract in this register — a local host operation or a third-party
+service exchange with no peer chapter (M0 `bunker`; M1 registration + `bunker` daemon; M3 `git
+remote`; M5 gateway `:10800`; M7 GitHub App mint; M8 filesystem reap; M12 node→proxy→upstream) — is
+documented in the owning chapter's §6 with a local id or `(local)` tag, and is **not** a peer to any
+CT row. Two chapters describing the same interface from opposite ends must carry the same CT id; a
+local edge has no peer to agree with and is graded UNVERIFIED where the wire was not measured.
+
+- **CT-01 owner → scheduler** — lane enabled, cadence, weight, pin · **UNVERIFIED (boundary)** *(M9 §6: the consumer `admissionModeForProject` is nameable; the producer is a human writing config, not a function)*
+- **CT-02 scheduler → crier** — envelope `kind, lane, corr_id, scheduler_id, issued_at, board, workdir, reply_to, limits{text_b64…}` (field **`board`**, not `board_row`; there is **no** `run_id` member — `internal/bus/dispatch.go:175-208`) · **works** *(M9 §6 / M10 §6; CF-354 fixed node-side)*
+- **CT-03 crier → node** — inbox message + lease · **works** *(M10 §6 / M2 §6 / M11 §6; the CF-354 field-mismatch is fixed node-side)*
+- **CT-04 node → crier** — reply `env_version, dispatch_id, corr_id, status, …` (no `run_id`/`outcome`) · **works (transport)** *(M2 §6 / M10 §6; CF-355 — node sends `status`, scheduler reads `ok` — is this reply's settlement defect, carried at CT-04)*
+- **CT-05 foreman → scheduler** — the lane's prompt text and skills it may load · **UNVERIFIED** *(internal — both ends in-repo: `load_lane_config.py:31-37` → `spawn.go:1244`; the "3 of 11 prompt files disagree" breakage is unmeasured, M9 §6)*
+- **CT-06 crier → scheduler** — completion event for a finished run · **works (dispatcher leg)** *(M9 §6 / M11 §6: the dispatcher always sends `ok`, `dispatcher.py:501`; CF-355 is the node-reply leg, CT-04)*
+- **CT-07 router → gateway** — model choice for a prompt · **UNVERIFIED (boundary)** *(M12 §6: neither side has an in-repo `file:function`)*
+- **CT-08 crier → gateway** — hermes-session delivery (message becomes a session turn) · **works (crier side named)** *(M10 §6: producer `dispatch.go:369` + `hermesession.go:353` in-repo; the gateway consumer is out of scope)*
+- **CT-09 node → duckbrain** — R1 run record, R2 fleet index · **missing** *(M2 §6: no in-repo producer on either side)*
+- **CT-10 node → board** — row event with run_id and outcome · **broken** *(M4 §6: the node worker does not write board rows)*
+- **CT-11 node → sessionstore** — every turn, model, tokens · **UNVERIFIED (boundary)** *(M2 §6: the Hermes session store is out of scope, no in-repo file on either side)*
+- **CT-12 node → gitreins** — staged diff · **UNVERIFIED (boundary)** *(M3 §6: the generated pre-commit hook is in-repo; the judge binary is out of scope, wire unmeasured)*
+- **CT-13 gitreins → board** — verdict that closes a row · **UNVERIFIED** *(M4 §6: every side is an external peer — the gitreins binary + the boardctl binary)*
+- **CT-14 foreman → board** — row created, row closed, evidence · **UNVERIFIED** *(M4 §6: the store is measured (357/519) but the foreman→board write wire is not exercised in this repo)*
+- **CT-15 foreman → duckbrain** — decisions, findings, goal · **UNVERIFIED (boundary)** *(M9 §6: neither side has an in-repo `file:function`)*
+- **CT-16 docsgate → handbook** — module status word · **works** *(M6 §6: `master_doc_check.py:263` prints `MASTER-DOC: PASS|FAIL`, exit 1 = FAIL; a structural gate, not a truth gate)*
+- **CT-17 conformance → harness** — per-leg verdict (check, apply, smoke, vars, memory) · **UNVERIFIED** *(M5 §6: the battery is in-repo, the operator/board consumer has no `file:function`; not run this round — needs a live node)*
+- **CT-18 handbook → owner** — the approval artifact · **UNVERIFIED** *(M6 §6: the legacy renderer hardcodes `docs/master` and selects `[0-9][0-9]-*.md`, so it does not render these `M*.md` chapters; the spine is the chapter-aware gate, the render leg is missing)*
 
 ## PART V — SETTINGS REGISTER
 
@@ -253,11 +263,30 @@ VII.2 Task list derived from chapters, each citing the section it closes ·
 VII.3 **Acceptance gate per chapter** — what makes a chapter WRITTEN rather than merely
 present
 
+A chapter is **WRITTEN** only when every schema field (§1–§13) is filled with evidence and no false
+claim survives. The decision rule that separates "absence proved" from "not measured":
+
+- **Absence proved** — a field is filled with a command whose output establishes the absence
+  (e.g. `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' <file>` → 0 matches). This is a
+  *filled* field with a RED value, not an empty one. A module with no metrics is **correctly** RED
+  (schema §5: "none" is RED), and that RED is a *system* observability defect filed as board rows —
+  not a defect in the writing.
+- **Not measured** — a field whose evidence was never gathered (an unread body, an unrun live-node
+  ladder, an unminted credential). This is **UNVERIFIED** and is a named RED on that field.
+
+Neither RED state is WRITTEN. A chapter is WRITTEN only when its remaining RED fields are all
+"absence proved" (a measured system property) **and** every claim carries `file:line` or quoted
+command output. Under the current schema a module on the critical path with no metrics can never be
+WRITTEN until the module emits metrics or the schema explicitly approves a metrics exception — so
+"WRITTEN" is a property of the code, not of the writer's diligence. A chapter that stays RED is a
+valid outcome and a better one than a green chapter without evidence.
+
 ## PART VIII — DELIVERY MECHANISMS (new)
 
 Shipped mechanisms that change system behaviour and had no chapter:
-- **VIII.1 `prompts/`** — 11 files; the `foreman → scheduler` contract is **broken**
-  because 3 of 11 disagree
+- **VIII.1 `prompts/`** — 11 files; the `foreman → scheduler` contract state is **UNVERIFIED**
+  *(superseded by M9 §6 CT-05: the "3 of 11 disagree" breakage was never measured — no command
+  establishes which three files disagree or on what — so it is unmeasured, not "broken")*
 - **VIII.2 `skills/`** — seeded to every node; a node's behaviour changes with the seed
 - **VIII.3 `config/`** — harness-matrix, node-seed, node.env.example, bunker.example,
   github-app.example

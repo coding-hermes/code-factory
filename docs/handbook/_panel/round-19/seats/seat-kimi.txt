@@ -1,0 +1,5 @@
+Hermes couldn't start the model connection: Gateway draining: not_ready. Your 
+message was not sent. Run `hermes doctor` to check the setup, or /model to pick 
+a different provider.
+
+EXIT=0

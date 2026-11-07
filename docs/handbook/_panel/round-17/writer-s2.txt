@@ -1,0 +1,532 @@
+│ cache/scratch/m4_lock_fixture.py
+│ @@ -0,0 +1,54 @@
+│ +#!/usr/bin/env python3
+│ +"""Exercise board_lock.py adjudicate against ABSENT / RESIDUE / HELD fixtures."""
+│ +import fcntl
+│ +import os
+│ +import subprocess
+│ +import sys
+│ +import tempfile
+│ +import time
+│ +from pathlib import Path
+│ +
+│ +CF = "/home/kara/code-factory"
+│ +BL = f"{CF}/scripts/board_lock.py"
+│ +
+│ +
+│ +def run(label, lockpath):
+│ +    r = subprocess.run([sys.executable, BL, str(lockpath)],
+│ +                       capture_output=True, text=True)
+│ +    print(f"--- {label}: rc={r.returncode}")
+│ +    print(f"    stdout: {r.stdout.strip()}")
+│ +    if r.stderr.strip():
+│ +        print(f"    stderr: {r.stderr.strip()[:200]}")
+│ +    return r.returncode, r.stdout.strip()
+│ +
+│ +
+│ +tmp = tempfile.mkdtemp(prefix="cf-lock-fixture-")
+│ +lock = Path(tmp) / "board.lock"
+│ +
+│ +# 1. ABSENT
+│ +rc1, out1 = run("ABSENT", lock)
+│ +
+│ +# 2. RESIDUE (present, no holder)
+│ +lock.write_text("")
+│ +rc2, out2 = run("RESIDUE", lock)
+│ +
+│ +# 3. HELD — hold an exclusive flock in this same process via a forked child
+│ +pid = os.fork()
+│ +if pid == 0:
+│ +    # child: hold the lock for 5s
+│ +    fd = os.open(lock, os.O_RDWR | os.O_CREAT)
+│ +    fcntl.flock(fd, fcntl.LOCK_EX)
+│ +    time.sleep(5)
+│ +    os._exit(0)
+│ +time.sleep(0.5)
+│ +rc3, out3 = run("HELD (child holds flock)", lock)
+│ +os.waitpid(pid, 0)
+│ +
+│ +lock.unlink(missing_ok=True)
+│ +os.rmdir(tmp)
+│ +
+│ +print(f"\nSUMMARY: ABSENT rc={rc1} | RESIDUE rc={rc2} | HELD rc={rc3}")
+│ +print(f"OUT: ABSENT='{out1}' RESIDUE='{out2}' HELD='{out3}'")
+│ +ok = (out1 == "ABSENT" and out2.startswith("RESIDUE") and out3.startswith("HELD"))
+│ +print(f"FIXTURE {'PASS' if ok else 'FAIL'}: ABSENT/HELD/RESIDUE all named" if ok else
+│ +      f"FIXTURE FAIL: one verdict did not match")
+│ docs/handbook/chapters/M4-board.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | BOARD |
+│  | Path | `/home/kara/code-factory/.coding-hermes/board/tasks.jsonl` + `events.jsonl`; tools `/home/kara/code-factory/scripts/boardctl`, `board_lock.py`, `board_drift.py` |
+│ -| Revision | `3fba8a7eb258264cb957e07add2fbaea30262d70` (code-factory HEAD == origin/main, round-16 derivation; the board JSONL and `board_drift.py` are byte-identical `08a2c8a..3fba8a7` — `3fba8a7` touched only `_panel/round-9/writer.txt` and `M11-dispatcher.md`, neither of which M4 cites) |
+│ +| Revision | `e07d031d09f7fdf1af97360e66c02ea49a58d537` (code-factory HEAD == origin/main == gh/main, round-17 derivation; `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` is empty — `e07d031` touched only `prompts/foreman.md` and `prompts/unblock.md` — so every file M4 cites is byte-identical across `3fba8a7..e07d031`) |
+│  | Language / runtime | bash (boardctl wrapper) + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│  | Status | **VERIFIED (store)** — 357 rows / **519** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT reconciled** — `board_drift` `RESULT: OK`, byte parity identical on both files, 0 divergent ids, HEAD == origin/main == `3fba8a7` — both re-measured this round. The `boardctl` verb surface is the external executable's (`/home/kara/.local/bin/boardctl`), not this repo's |
+│ docs/handbook/chapters/M4-board.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | `e07d031d09f7fdf1af97360e66c02ea49a58d537` (code-factory HEAD == origin/main == gh/main, round-17 derivation; `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` is empty — `e07d031` touched only `prompts/foreman.md` and `prompts/unblock.md` — so every file M4 cites is byte-identical across `3fba8a7..e07d031`) |
+│  | Language / runtime | bash (boardctl wrapper) + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│ -| Status | **VERIFIED (store)** — 357 rows / **519** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT reconciled** — `board_drift` `RESULT: OK`, byte parity identical on both files, 0 divergent ids, HEAD == origin/main == `3fba8a7` — both re-measured this round. The `boardctl` verb surface is the external executable's (`/home/kara/.local/bin/boardctl`), not this repo's |
+│ +| Status | **VERIFIED (store)** — 357 rows / **519** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT reconciled** — `board_drift` `RESULT: OK`, byte parity identical on both files, 0 divergent ids, HEAD == origin/main == `e07d031` — both re-measured this round. The `boardctl` verb surface is the external executable's (`/home/kara/.local/bin/boardctl`), not this repo's |
+│
+│  ## 2. Purpose, authority and position
+│
+│ docs/handbook/chapters/M4-board.md
+│ @@ -106,7 +106,7 @@
+│  |---|---|---|---|---|
+│  | store census | `jq -r '.id' .coding-hermes/board/tasks.jsonl | wc -l` | 357 rows | 2026-11-06 | PASS (357) |
+│  | events count | `wc -l .coding-hermes/board/events.jsonl` | 519 lines | 2026-11-06 | PASS (519) |
+│ -| drift | `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-06 | **PASS** — `RESULT: OK`; byte parity `tasks.jsonl`/`events.jsonl` **identical** (sha256 `5aa15431…` / `783d556c…`); 357 vs 357 rows, **0 divergent ids: none**; HEAD=origin/main=`3fba8a7` |
+│ +| drift | `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-06 | **PASS** — `RESULT: OK`; byte parity `tasks.jsonl`/`events.jsonl` **identical** (sha256 `5aa15431…` / `783d556c…`); 357 vs 357 rows, **0 divergent ids: none**; HEAD=origin/main=`e07d031` |
+│  | semantic validate | `scripts/boardctl validate` | RESULT OK with named warnings | 2026-11-06 | **PASS** — `357 tasks, 519 events, 0 fixtures`, `key uniformity 357/357 (0 drift)`, `RESULT: OK (7 warning(s))` |
+│  | lock adjudication | `scripts/board_lock.py` on a held/unheld lock | ABSENT / HELD / RESIDUE named (`board_lock.py:149-158`) | 2026-11-06 | UNVERIFIED — the classifier was read in full but not exercised against a held/unheld fixture this round |
+│  | duplicate id refusal | `boardctl create --id CF-357 --title x` | refused | 2026-11-06 | **PASS** — `task id "CF-357" already exists … create aborted` |
+│ docs/handbook/chapters/M4-board.md
+│ @@ -113,7 +113,7 @@
+│
+│  **Drift re-measured (reconciled this round).** The CF-270 divergence the round-10 draft reported
+│  as live was **already reconciled before this round's derivation**: commit `4dc0ef0` ("board: close
+│ -CF-270") and `8ae4f82` are both in `origin/main`, so `board_drift` at HEAD `3fba8a7` returns
+│ +CF-270") and `8ae4f82` are both in `origin/main`, so `board_drift` at HEAD `e07d031` returns
+│  `RESULT: OK` — 357 vs 357 rows, 0 divergent ids, HEAD == origin/main. The round-10 draft's
+│  `RESULT: DRIFT (4 failed)` with 1 divergent id (CF-270, workdir=`pending` vs published=`complete`)
+│  and its 518-events count were a **pre-reconciliation snapshot presented as current**; both are
+│ @@ -189,7 +189,7 @@
+│    - **F4-3** (carried) — CT-14/CT-13 (foreman→board / gitreins→board) states corrected from "works"/"broken" to **UNVERIFIED**: every
+│      side is an external peer, so no in-repo file:function exists to name.
+│    - **F4-4** (resolved) — the CF-270 divergence is **reconciled**: commit `4dc0ef0` closed CF-270 and
+│ -    is in `origin/main`; `board_drift` at HEAD `3fba8a7` returns `RESULT: OK` (357 vs 357, 0
+│ +    is in `origin/main`; `board_drift` at HEAD `e07d031` returns `RESULT: OK` (357 vs 357, 0
+│      divergent ids, byte parity identical, HEAD == origin/main). The round-10 draft reported the
+│      pre-reconciliation DRIFT as current; that reading is superseded. The events count is 519, not 518.
+│    - **F4-5** (new, B04) — the board-admission gate belongs to M9 alone; crier has no board admission.
+│ docs/handbook/chapters/M4-board.md
+│ @@ -138,7 +138,7 @@
+│
+│  `boardctl` is an external binary (`/home/kara/.local/bin/boardctl`, measured this round — not in
+│  this repo), so these strings carry no in-repo `file:line`; they are quoted from the run output
+│ -captured this round (2026-11-06, rev `3fba8a7`) with the commands named (N9):
+│ +captured this round (2026-11-06, rev `e07d031`) with the commands named (N9):
+│
+│  | Level | Line | Emitted when | Kind |
+│  |---|---|---|---|
+│ docs/handbook/chapters/M4-board.md
+│ @@ -30,8 +30,8 @@
+│
+│  | Submodule | Unit | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│ -| S1 write and validate rows | `boardctl` (wrapper), `board_lock.py` | **active** | `scripts/boardctl` is the stable entrypoint (`exec boardctl -C "$ROOT"`); `board_lock.py` adjudicates the lock (`adjudicate`, `:149`) |
+│ -| S2 compare board copies | `board_drift.py` | **active** | `python3 scripts/board_drift.py check …` → `RESULT: OK` this round (see §7) |
+│ +| S1 write and validate rows | `boardctl` (wrapper), `board_lock.py` | **operator-invoked (optional)** | no in-repo unit/cron/timer invokes them — `grep -rn 'boardctl\|board_lock' prompts/ config/` → 0 matches; only `tests/selftest.sh:458-462` (boardctl) and `:1789,1819` (board_lock) exercise them, and a test harness is not production. The foreman lane (external to this repo) is the intended operator |
+│ +| S2 compare board copies | `board_drift.py` | **operator-invoked (optional)** | no in-repo invoker — `grep -rn board_drift prompts/ config/` → 0 matches; only `tests/selftest.sh:1440` exercises it. This round's `RESULT: OK` is a manual run, not activation (sol B27) |
+│
+│  **`board_lock.py` classifier (B11, read in full this round).** `adjudicate` (`:149-158`) has
+│  **three** outcomes, in order:
+│ docs/handbook/chapters/M4-board.md
+│ @@ -108,7 +108,7 @@
+│  | events count | `wc -l .coding-hermes/board/events.jsonl` | 519 lines | 2026-11-06 | PASS (519) |
+│  | drift | `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-06 | **PASS** — `RESULT: OK`; byte parity `tasks.jsonl`/`events.jsonl` **identical** (sha256 `5aa15431…` / `783d556c…`); 357 vs 357 rows, **0 divergent ids: none**; HEAD=origin/main=`e07d031` |
+│  | semantic validate | `scripts/boardctl validate` | RESULT OK with named warnings | 2026-11-06 | **PASS** — `357 tasks, 519 events, 0 fixtures`, `key uniformity 357/357 (0 drift)`, `RESULT: OK (7 warning(s))` |
+│ -| lock adjudication | `scripts/board_lock.py` on a held/unheld lock | ABSENT / HELD / RESIDUE named (`board_lock.py:149-158`) | 2026-11-06 | UNVERIFIED — the classifier was read in full but not exercised against a held/unheld fixture this round |
+│ +| lock adjudication | `python3 scripts/board_lock.py <lock>` against ABSENT/HELD/RESIDUE fixtures | ABSENT / HELD / RESIDUE named (`board_lock.py:149-158`) | 2026-11-06 | **PASS** — a scratch fixture returned `ABSENT`, `RESIDUE consumers=0 commits_after_mtime=unknown`, and `HELD holder=pid-<n>` (a child held an exclusive flock) all rc 0 |
+│  | duplicate id refusal | `boardctl create --id CF-357 --title x` | refused | 2026-11-06 | **PASS** — `task id "CF-357" already exists … create aborted` |
+│
+│  **Drift re-measured (reconciled this round).** The CF-270 divergence the round-10 draft reported
+│ docs/handbook/chapters/M4-board.md
+│ @@ -193,6 +193,7 @@
+│      divergent ids, byte parity identical, HEAD == origin/main). The round-10 draft reported the
+│      pre-reconciliation DRIFT as current; that reading is superseded. The events count is 519, not 518.
+│    - **F4-5** (new, B04) — the board-admission gate belongs to M9 alone; crier has no board admission.
+│ +  - **F4-6** (new, sol B27) — S1/S2 re-classified from **active** to **operator-invoked (optional)**: a repo-wide grep finds no in-repo unit/cron/timer invoking `boardctl`/`board_lock`/`board_drift` (only `tests/selftest.sh` exercises them); a writer's manual run proves observation, not production activation. The foreman lane (external) is the intended caller.
+│
+│  ## RED field count: 1 (Metrics §8 — absence-proved)
+│
+│ docs/handbook/chapters/M4-board.md
+│ @@ -197,9 +197,18 @@
+│
+│  ## RED field count: 1 (Metrics §8 — absence-proved)
+│
+│ -**RED accounting rule (uniform across M4/M5/M6/M7/M8, round 16 — glm #4):** a contract row in §6 whose
+│ -far side is an external peer (boundary or `(local)`, no in-repo `file:function`) is a *terminal
+│ -state* — `UNVERIFIED`/`broken` per OUTLINE Part IV — and is **not** counted as a RED, because there
+│ -is no in-repo code to measure and the state itself is the filed finding. RED counts only fields
+│ -where the writer's own evidence is incomplete (an unread body, an unrun ladder, an untabulated log
+│ -inventory) plus the absence-proved metric (§5 "none" is RED).
+│ +**RED accounting rule — one rule, document-wide (round 17; glm #4 / kimi B-3 / sol B02).** A RED is a
+│ +field where the writer's own evidence is incomplete: an unread body, an unrun ladder, an untabulated
+│ +log inventory — plus the absence-proved metric (§8 "none" is RED). A §6 contract row whose far side is
+│ +an **external peer** (a boundary CT or a `(local)` edge with no in-repo `file:function`) is a *terminal
+│ +state* — `UNVERIFIED`/`broken` per OUTLINE Part IV — and is **not** counted as a RED, because there is
+│ +no in-repo code to measure and the state itself is the filed finding. A §6 row for an **internal**
+│ +contract (both ends in covered code) whose wire was not measured **is** a RED (not-measured, not
+│ +terminal).
+│ +
+│ +**CROSS-SECTION DEPENDENCY (round 17).** The same rule must be applied by M9-scheduler and
+│ +M12-inference-proxy, which in round 16 counted boundary `UNVERIFIED` rows (CT-01/CT-15 in M9;
+│ +CT-07/M12-C2 in M12) inside their RED totals under a contradictory reading of the same "glm #4"
+│ +ruling. Those chapters are outside this writer's group; they must either adopt the boundary-terminal
+│ +rule above and stop counting boundary rows as REDs, or this chapter's RED count is not comparable to
+│ +theirs. M4/M5/M6/M7/M8 all apply the boundary-terminal rule stated here.
+│ docs/handbook/chapters/M5-harness.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | HARNESS |
+│  | Path | `/home/kara/code-factory/scripts/harness/` — `install-hermes.sh`, `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh`, `harness-vars.sh`; **and** `/home/kara/code-factory/scripts/` — `harness_resolve.py`, `install-go.sh`, `install-gitreins.sh`, `project-node.sh` |
+│ -| Revision | `3fba8a7eb258264cb957e07add2fbaea30262d70` (code-factory HEAD == origin/main, round-16 derivation; no file M5 cites changed in `08a2c8a..3fba8a7` — `3fba8a7` touched only `_panel/round-9/writer.txt` and `M11-dispatcher.md`) |
+│ +| Revision | `e07d031d09f7fdf1af97360e66c02ea49a58d537` (code-factory HEAD == origin/main == gh/main, round-17 derivation; `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` is empty — `e07d031` touched only `prompts/foreman.md` and `prompts/unblock.md` — so every file M5 cites is byte-identical across `3fba8a7..e07d031`) |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side) |
+│  | Status | **UNVERIFIED** — `harness-vars.sh` (318), `harness_resolve.py` (400), `install-hermes.sh` (375), `install-gitreins.sh` (180), `install-claude-code.sh` (673, read in full), `install-codex.sh` (592, read in full), `install-opencode.sh` (98), `install-deepseek.sh` (101), `install-pi-agent.sh` (113) all read this round; the conformance battery not run this round (needs a live node) |
+│ docs/handbook/chapters/M5-harness.md
+│ @@ -178,7 +178,7 @@
+│
+│  ## 9. Log lines (verbatim)
+│
+│ -**Scope (B09, measured this round).** `grep -rcE '\b(ok|bad|warn|note)\s+"' scripts/harness/` sums to **215** helper call sites across the six installer scripts plus `harness-vars.sh`; `install-gitreins.sh` and `install-go.sh` add further rows. The 4 rows below are the evidentiary refusal/pin/foreman rows; the generic per-row helper surface is not inventoried one-per-site — the uncovered count is a named RED on this field.
+│ +**Scope (B09, re-measured round 17 — glm #1).** `grep -rcE '\b(ok|bad|warn|note|say)\s+"' scripts/harness/` sums to **274** helper call sites across the six installer scripts plus `harness-vars.sh` (install-hermes 36, install-codex 86, install-claude-code 98, install-opencode 15, install-deepseek 13, install-pi-agent 17, harness-vars 9; the six installers alone sum to 265); `install-gitreins.sh` and `install-go.sh` add further rows. The 4 rows below are the evidentiary refusal/pin/foreman rows; the generic per-row helper surface is not inventoried one-per-site — the uncovered count is a named RED on this field.
+│
+│  | Level | Line | Emitted when | Kind |
+│  |---|---|---|---|
+│ docs/handbook/chapters/M5-harness.md
+│ @@ -244,4 +244,4 @@
+│      computes `install-$HARNESS.sh` and `:449-452` invokes it; the literal grep missed the computed
+│      path. The installers are unit-invoked (by the operator-invoked provisioning entry).
+│
+│ -## RED field count: 3 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; §9 inventory 4 of 215 helper call sites — the generic per-measurement rows not tabulated one-per-site). M5-C2 (gateway port/service, local edge) is a terminal state, not a RED — see the uniform RED accounting rule stated in M4.
+│ +## RED field count: 3 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; §9 inventory 4 of 274 helper call sites — the generic per-measurement rows not tabulated one-per-site). M5-C2 (gateway port/service, local edge) is a terminal state, not a RED — see the RED accounting rule in M4.
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | DOCUMENTATION |
+│  | Path | `/home/kara/code-factory/scripts/` — `master_doc_skeleton.py`, `master_doc_fill.py`, `master_doc_check.py`, `master_doc_panel.py`, `gen_nasa_handbook.py`, `gen_system_views.py`, `sheet_style.py`, `extract_owner_decisions.py`, `gen_unit_map.py`, `verify-patch.sh`, `panel_loop.py`, `ownership.py`, `handbook_spine.py` |
+│ -| Revision | `3fba8a7eb258264cb957e07add2fbaea30262d70` (code-factory HEAD == origin/main, round-16 derivation; `panel_loop.py`, `panel_supervise.sh` and `handbook_spine.py` changed in `08a2c8a..3fba8a7` and their locators were re-pinned at HEAD this round; every *other* file M6 cites is byte-identical across that range) |
+│ +| Revision | `e07d031d09f7fdf1af97360e66c02ea49a58d537` (code-factory HEAD == origin/main == gh/main, round-17 derivation). **Dirty-source disclosure (sol B10):** `scripts/handbook_spine.py` is **uncommitted in the working tree** — the reviewed file is 443 lines, `git show HEAD:scripts/handbook_spine.py` is 340 lines, working sha256 `afbc65fc7bfec973969c27767bd5980b7d7ae5c1a3999c7d6511dfdaf3752163`; the backtick-aware `split_row`, `CONTRACT ROW MISPARSE`, `CONTRACT UNKNOWN ID` and backticked-default fallback are working-tree content not committed at HEAD, and their locators are pinned to the working tree. `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` is empty (`e07d031` touched only `prompts/`), so every *other* file M6 cites is byte-identical across `3fba8a7..e07d031` |
+│  | Language / runtime | Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│  | Status | **UNVERIFIED** — `master_doc_check.py` (268 lines) read in full and its FAIL reproduced; the rest of the pipeline (`master_doc_fill.py`, `gen_nasa_handbook.py`, `master_doc_panel.py`, `gen_unit_map.py`, …) not read line-by-line; the gate reads `MASTER-DOC: FAIL`. **The legacy fill/render/panel pipeline is UNBUILDABLE against these M-numbered chapters** (B13): `master_doc_check.py:188`, `gen_nasa_handbook.py:253-260` and `master_doc_fill.py:422` all select `[0-9][0-9]-*.md`, which does not match `M0-…-*.md`, so the legacy pipeline cannot select or deliver these chapters. **The chapter-aware gate is `handbook_spine.py` (S9)**, which *does* select `M*.md` and exits 1 on any finding (`python3 scripts/handbook_spine.py` → `chapters=13 canonical contracts=18 findings=0`, exit 0); the legacy fill/render/check pipeline is retired for the M-numbered handbook, and the render-to-owner-artifact leg remains missing (CT-18 UNVERIFIED, §6) |
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -107,7 +107,15 @@
+│  pattern, or `MASTER-DOC: PASS\|FAIL`) is cell content, not a separator, and a §6 row that splits to
+│  other than 6 columns is a `CONTRACT ROW MISPARSE` finding. The remaining blind spots are that it does
+│  **not** verify cited line numbers exist in the cited file, and it trusts the chapters' self-reported
+│ -status word rather than re-deriving it.
+│ +status word rather than re-deriving it. **Four further coverage limits (kimi N-4, sol B12):** (a) the
+│ +contract and setting scans are **section-scoped** — `contract_rows` reads only `section(text, 6)`
+│ +(`:130`) and the setting scan only `section(text, 5)` (`:356`), so a CT-id citation or a setting row
+│ +placed outside §6/§5 is not scanned (a controlled test returned `findings=0` for each when injected
+│ +outside those sections); (b) `norm_default` reduces a decimal default to its **integer prefix**
+│ +(`:175-176`), so `0.15` and `0.66` both normalize to `0` and a decimal-default conflict between
+│ +chapters does not fire; (c) `SETTING_ROW` (`:87`) recognizes only `[A-Z][A-Z0-9_]{3,}` names, so a
+│ +CLI-switch row (`--timeout`) is not recognized as a setting; (d) the flow count is hardcoded
+│ +(`"flow": 16` at `:398`), not derived from the flow chapters that actually exist (all 16 are MISSING).
+│
+│  **`panel_loop.py` settings and stop semantics (sol B14; re-pinned at `3fba8a7` this round — `panel_loop.py` grew
+│  ~+70 lines in `08a2c8a..242cc474` when the parallel-writer path landed, so every prior locator
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -252,5 +252,9 @@
+│      carrying a `|` inside a code span (M4 CT-10, M6 CT-16, M2 CT-09, M12 M12-C1), reading
+│      producer/consumer/state from shifted columns. Fixed this round: backtick-aware `split_row` plus a
+│      `CONTRACT ROW MISPARSE` finding for a row that splits to other than 6 columns.
+│ +  - **F6-8** (new, sol B10) — §1 revision attribution corrected: `handbook_spine.py`'s splitter and
+│ +    gate checks are uncommitted working-tree content (443 lines vs HEAD's 340, sha256 `afbc65fc…`),
+│ +    not a committed round-16 file. The spine is pinned to the working tree with the dirty delta
+│ +    disclosed.
+│
+│  ## RED field count: 2 (Status §1 — own gate reads FAIL over the legacy 44-unit corpus; Metrics §8 — absence-proved). CT-16 works; CT-18 is a boundary terminal state (external owner), so neither §6 row is a RED — see the uniform RED accounting rule in M4.
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -117,7 +117,7 @@
+│  CLI-switch row (`--timeout`) is not recognized as a setting; (d) the flow count is hardcoded
+│  (`"flow": 16` at `:398`), not derived from the flow chapters that actually exist (all 16 are MISSING).
+│
+│ -**`panel_loop.py` settings and stop semantics (sol B14; re-pinned at `3fba8a7` this round — `panel_loop.py` grew
+│ +**`panel_loop.py` settings and stop semantics (sol B14; re-pinned this round — `panel_loop.py` grew
+│  ~+70 lines in `08a2c8a..242cc474` when the parallel-writer path landed, so every prior locator
+│  shifted).** The loop that produces this handbook carries its own controls; a process exit 0 is
+│  **not** document acceptance:
+│ docs/handbook/chapters/M7-github.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | GITHUB |
+│  | Path | `/home/kara/code-factory/scripts/` — `github-app-setup.sh`, `github-app-token.py`, `github-app-refresh.sh` |
+│ -| Revision | `3fba8a7eb258264cb957e07add2fbaea30262d70` (code-factory HEAD == origin/main, round-16 derivation; no file M7 cites changed in `08a2c8a..3fba8a7` — `3fba8a7` touched only `_panel/round-9/writer.txt` and `M11-dispatcher.md`) |
+│ +| Revision | `e07d031d09f7fdf1af97360e66c02ea49a58d537` (code-factory HEAD == origin/main == gh/main, round-17 derivation; `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` is empty — `e07d031` touched only `prompts/foreman.md` and `prompts/unblock.md` — so every file M7 cites is byte-identical across `3fba8a7..e07d031`) |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│  | Status | **UNVERIFIED** — CLI surface measured (`github-app-token.py` exits 2 with no command); the settings/control regions read (`:107-117`, `:300-372`, `:579`; `github-app-refresh.sh:37-53,104-174`); mint not run (no App creds on this host) |
+│ docs/handbook/chapters/M7-github.md
+│ @@ -68,7 +68,7 @@
+│  | `MIN_AGE` | **2400 s** (`:28`) | non-negative int (spelling validated `:53`: `''\|*[!0-9]*` → exit 2) | skip the mint while the destination token is younger than this | a too-large value serves a near-expiry token while reporting fresh |
+│  | `ENV_FILE` | `$GITHUB_APP_ENV_FILE` or `~/.config/code-factory/github-app.env` (`:24`) | a path | the App identity source | absent file → `bad env_file`, exit 1 before any mint (`:57`) |
+│  | `TOKEN_FILE` | `~/.config/code-factory/github.token` (`:58`, after flag/env resolution) | a path | local-mode token destination | a wrong path mints the credential to the wrong place |
+│ -| `GIT_CREDENTIALS` | `~/.git-credentials` (`:29`) | a path | the credential-store rewrite target | the store is rewritten **only when it already exists** (`:131`) — the script never creates a second store |
+│ +| `GIT_CREDENTIALS` | `~/.git-credentials` (`:29`) | a path | the credential-store rewrite target | **local mode only:** the store is rewritten **only when it already exists** — guard `[ -f "$GIT_CREDENTIALS" ] && [ -s "$TOKEN_FILE" ]` at `:134` (comment `:132-133`) — so the script never creates a second store in local mode. **Node mode writes `$HOME/.git-credentials` unconditionally** (`:164`) and sets `git config --global credential.helper "store --file=…"` (`:166`) regardless of prior existence (sol B14) |
+│  | `--local` / `--node` | local (`:30`, `:103`) | mode | where the token lands | local writes `TOKEN_FILE`; node mints on this host, installs into `$NODE:$HOME/.node/auth/github.token`, then deletes the local copy (`:145-174`) |
+│  | `--min-age` | 2400 (`:28`) | seconds | refresh no-op window | `--min-age` vs token lifetime (3600 s) determines when a refresh is a no-op |
+│  | mode-600 check | — | exactly `600` | token-file privacy before the store is rewritten | `bad "mode"` exits 1 **before** the credential store rewrite (`:127-130`, CF-320) |
+│ docs/handbook/chapters/M7-github.md
+│ @@ -72,8 +72,8 @@
+│  | `--local` / `--node` | local (`:30`, `:103`) | mode | where the token lands | local writes `TOKEN_FILE`; node mints on this host, installs into `$NODE:$HOME/.node/auth/github.token`, then deletes the local copy (`:145-174`) |
+│  | `--min-age` | 2400 (`:28`) | seconds | refresh no-op window | `--min-age` vs token lifetime (3600 s) determines when a refresh is a no-op |
+│  | mode-600 check | — | exactly `600` | token-file privacy before the store is rewritten | `bad "mode"` exits 1 **before** the credential store rewrite (`:127-130`, CF-320) |
+│ -| `JWT_BACKDATE` / `JWT_LIFETIME` | 60 s / 540 s (`:50-51`) | seconds | JWT exp/iat window | GitHub rejects exp >10 min out |
+│ -| `TIMEOUT` | 20 s (`:52`) | seconds | HTTP timeout | too short fails the mint |
+│ +| `JWT_BACKDATE` / `JWT_LIFETIME` | 60 s / 540 s (`github-app-token.py:50-51`) | seconds | JWT exp/iat window | GitHub rejects exp >10 min out |
+│ +| `TIMEOUT` | 20 s (`github-app-token.py:52`) | seconds | HTTP timeout | too short fails the mint |
+│
+│  ## 6. Contracts in and out
+│
+│ docs/handbook/chapters/M7-github.md
+│ @@ -74,6 +74,8 @@
+│  | mode-600 check | — | exactly `600` | token-file privacy before the store is rewritten | `bad "mode"` exits 1 **before** the credential store rewrite (`:127-130`, CF-320) |
+│  | `JWT_BACKDATE` / `JWT_LIFETIME` | 60 s / 540 s (`github-app-token.py:50-51`) | seconds | JWT exp/iat window | GitHub rejects exp >10 min out |
+│  | `TIMEOUT` | 20 s (`github-app-token.py:52`) | seconds | HTTP timeout | too short fails the mint |
+│ +
+│ +**`github-app-setup.sh` first-install controls (sol B15, added this round — the minter/refresher registers are not the whole module).** `github-app-setup.sh:76-95` exposes `MODE` (`--check`/`--apply`/`--manifest`), `--env-file`, `--token-file`, `--app-id`, `--installation-id`, `--key-file`, `--slug`, `--repo`, `--org`, `--name`, `--api-base`, `--yes`. `apply()` (`:225-292`) asks interactively for any missing answer (`:234-238`) and refuses a non-numeric id or a non-`ORG/NAME` repo before writing (`:241-244`); it **writes the env file before verifying** (`:256-272`) and **leaves it in place on verification failure** (`:287-291`, `GITHUB APP SETUP: INCOMPLETE`) — a written env file is not proof the pieces verify; only `GITHUB APP SETUP: READY` (`:280`) is.
+│
+│  ## 6. Contracts in and out
+│
+│ docs/handbook/chapters/M7-github.md
+│ @@ -95,7 +95,7 @@
+│  | shell parse | `for f in scripts/github-app-*.sh; do bash -n "$f"; done` | exit 0 | 2026-11-06 | PASS (in 20/20 sweep) |
+│  | python compile | `python3 -m py_compile scripts/github-app-token.py` | exit 0 | 2026-11-06 | PASS |
+│  | CLI surface | `python3 -B scripts/github-app-token.py` | usage, exit 2 | 2026-11-06 | **PASS** (exit 2, usage) |
+│ -| token mint | `python3 scripts/github-app-token.py token` with `GITHUB_APP_ID` + `GITHUB_APP_INSTALLATION_ID` + `GITHUB_APP_PRIVATE_KEY_FILE` set (or `--env-file`); the mint-and-write path is `github-app-token.py:598-606` | fresh token, value not printed | not run this round | **UNVERIFIED** (no App creds on this host) |
+│ +| token mint | `python3 scripts/github-app-token.py token --env-file ~/.config/code-factory/github-app.env` — the App id, installation id and key path are read from the env **file** (`load_inputs` `:276-323` reads `GITHUB_APP_ID`/`GITHUB_APP_INSTALLATION_ID` via `read_env_file`, and `check_key_file` `:326-359` reads the key path the same way); exported `GITHUB_APP_ID`/… environment **variables are not merged** (sol B13). The mint-and-write path is `github-app-token.py:598-606` | fresh token, value not printed | not run this round | **UNVERIFIED** (no App creds on this host) |
+│
+│  ## 8. Metrics
+│
+│ docs/handbook/chapters/M7-github.md
+│ @@ -106,7 +106,7 @@
+│
+│  ## 9. Log lines (verbatim)
+│
+│ -**Scope (B09, measured this round).** `grep -rcE '\b(ok|bad|warn|note|say)\s+"' scripts/github-app-*.sh` sums to **103** helper call sites across the three scripts. The 2 rows below are the evidentiary no-op/refusal rows; the generic per-row helper surface is not inventoried one-per-site — the uncovered count is a named RED on this field.
+│ +**Scope (B09, measured this round).** `grep -rcE '\b(ok|bad|warn|note|say)\s+"' scripts/github-app-*.sh` sums to **103** helper call sites across the two shell scripts (`github-app-setup.sh` 80, `github-app-refresh.sh` 23; `github-app-token.py` is Python and has no shell helpers). The 2 rows below are the evidentiary no-op/refusal rows; the generic per-row helper surface is not inventoried one-per-site — the uncovered count is a named RED on this field.
+│
+│  | Level | Line | Emitted when | Kind |
+│  |---|---|---|---|
+│ docs/handbook/chapters/M7-github.md
+│ @@ -120,7 +120,7 @@
+│  | Token in argv | `ps` shows the value | a file-path credential | by design prevented — token never printed; refresh uses the cached file |
+│  | No command selected | usage, exit 2 | a real mint | pass `check`/`token` with the required file-path args |
+│  | Mode not 600 after mint | `bad "mode" … expected 600` (`:127-128`), exit 1 before rewriting the store | a secure token file | `chmod 600` the token file, re-run |
+│ -| Key file not 0600 | `… is mode %04o; a private key must be 0600` (`github-app-token.py:344-348`) | a valid key | `chmod 600` the `.pem` |
+│ +| Key file not 0600 | `… is mode %04o; a private key must be 0600` (`github-app-token.py:346-350` — mode check `:346`, message `:349-350`) | a valid key | `chmod 600` the `.pem` |
+│  | Node credential law incomplete | rotation-on-compromise, owner-only minting, per-project scoping unstated | a written law | **OPEN** — CF-347 |
+│
+│  ## 11. Limits and margins
+│ docs/handbook/chapters/M7-github.md
+│ @@ -156,5 +156,10 @@
+│      the node tokens". Both are **false**: the scoped token comes from `fleet-gh-scope.py` →
+│      `~/.hermes/scripts/gh-app-token.py` (a separate minter), and the node-token producer for M12 is
+│      unknown.
+│ +  - **F7-4** (new, sol B13) — the mint reads `GITHUB_APP_ID`/`GITHUB_APP_INSTALLATION_ID`/key path from
+│ +    the env **file**, not exported environment variables; the §7 invocation now names `--env-file`.
+│ +  - **F7-5** (new, sol B14/B15) — the existing-store guarantee is local-mode only (node mode overwrites
+│ +    `~/.git-credentials` and sets a global helper); `github-app-setup.sh` controls and its
+│ +    write-before-verify behaviour registered.
+│
+│  ## RED field count: 3 (Metrics §8 — absence-proved; §1 mint UNVERIFIED — environment-gated, no App creds on this host; §9 inventory 2 of 103 helper call sites — the generic per-measurement rows not tabulated one-per-site). M7-C1 (consumer is the external GitHub API) is a local edge, terminal, not a RED — see the uniform RED accounting rule in M4.
+│ docs/handbook/chapters/M8-safety.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | SAFETY |
+│  | Path | `/home/kara/code-factory/scripts/` — `reclaim_disk.py`, `check_scan_scope.py` |
+│ -| Revision | `3fba8a7eb258264cb957e07add2fbaea30262d70` (code-factory HEAD == origin/main, round-16 derivation; `reclaim_disk.py`/`check_scan_scope.py` byte-identical `08a2c8a..3fba8a7` — `3fba8a7` touched only `_panel/round-9/writer.txt` and `M11-dispatcher.md`) |
+│ +| Revision | `e07d031d09f7fdf1af97360e66c02ea49a58d537` (code-factory HEAD == origin/main == gh/main, round-17 derivation; `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` is empty — `e07d031` touched only `prompts/foreman.md` and `prompts/unblock.md` — so `reclaim_disk.py`/`check_scan_scope.py` are byte-identical across `3fba8a7..e07d031`) |
+│  | Language / runtime | Python 3.14.9 + bash 5.3.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│  | Status | **VERIFIED** — `reclaim_disk.py` (169 lines) and `check_scan_scope.py` (118 lines) both read in full this round |
+│ docs/handbook/chapters/M8-safety.md
+│ @@ -65,6 +65,13 @@
+│  - `BUILD_CACHES` (`:14-19`): `.cache/pip`, `.cache/uv`, `.cache/pre-commit`, `.cache/go-build`, `.npm/_cacache` — processed **with `aged=False`**, so they are removed on TTL-irrespective grounds (the `else` branch's `"build cache"` reason).
+│  - `AGED_PARENTS` (`:21`): `.node/jobs`, `.node/clones` — children processed **with `aged=True`**; a child whose `st_mtime` age is `<= job_ttl_hours` is `kept` (`:90`), so the TTL is a **<= boundary (inclusive)** and governs only these two parents.
+│  - `PROTECTED` (`:22`): `repo`, `.node/node.json`, `.node/crier.json`, `.node/floor.toml` — refused via `safety_reason` (`:25-39`) before inspection.
+│ +
+│ +**Scanner root selector and `--json` (sol B16, added this round).** `check_scan_scope.py` takes an
+│ +optional positional `root` (`:81-87`), defaulting to the script's `scripts/` parent's parent
+│ +(`:91`); a root that is not a readable directory prints `RESULT: FAIL (unreadable path)` and exits 2
+│ +(`:92-95`) — changing the root changes the evidence population. `reclaim_disk.py --json` (`:137`)
+│ +appends a `json.dumps` of the result **after** the human-readable rows (`:163-164`), so `--json`
+│ +stdout is mixed-format (rows, then one JSON document), not a standalone JSON document.
+│
+│  ## 6. Contracts in and out
+│
+│ docs/handbook/chapters/M8-safety.md
+│ @@ -103,11 +103,18 @@
+│
+│  | Level | Line | Emitted when | Kind |
+│  |---|---|---|---|
+│ -| — | `  %s  %s — %s` (action ∈ `reap/keep/skip`, `:160`) | one row per target | evidentiary |
+│ -| — | `  note reclaim — nothing to reclaim` (`:162`) | no bytes freed | descriptive |
+│ -| — | `reclaim: %s` (stderr, `:145`) | ValueError/OSError | evidentiary |
+│ +| — | `  %s  %s — %s` (action ∈ `reap/keep/skip`, `reclaim_disk.py:160`) | one row per target | evidentiary |
+│ +| — | `  note reclaim — nothing to reclaim` (`reclaim_disk.py:162`) | no bytes freed | descriptive |
+│ +| — | `reclaim: %s` (stderr, `reclaim_disk.py:145`) | ValueError/OSError | evidentiary |
+│ +| — | `<BUILD_CACHES + AGED_PARENTS path list>`, one per line (`reclaim_disk.py:140` `targets`) | `reclaim_disk.py targets` | descriptive |
+│ +| — | `json.dumps(result)` on stdout (`reclaim_disk.py:164` `--json`) | `--json` flag, appended after the human rows | evidentiary (machine-readable) |
+│  | — | `  OK  audit-scope: %d gitleaks claim(s) name their --log-opts` (`check_scan_scope.py:112`) | all claims name a scope | evidentiary |
+│ -| — | `  OK  audit-scope: no posture docs found` (`:110`) | nothing matched | **descriptive** — proves nothing was policed (F8-3) |
+│ +| — | `  OK  audit-scope: no posture docs found` (`check_scan_scope.py:110`) | nothing matched | **descriptive** — proves nothing was policed (F8-3) |
+│ +| — | `RESULT: OK` (`check_scan_scope.py:113`) | scan clean | evidentiary |
+│ +| — | `  FAIL  audit-scope: %s is not a readable directory` (`:93`) / `  FAIL  audit-scope: %s` (`:99`) | unreadable root / raised `UnreadablePath` | evidentiary |
+│ +| — | `RESULT: FAIL (unreadable path)` (`:94`, `:100`) | the exit-2 path | evidentiary |
+│ +| — | `  FAIL  audit-scope: %s:%d gitleaks claim names no --log-opts` (`:104`) | one violating line | evidentiary |
+│ +| — | `RESULT: FAIL (%d violation(s))` (`:107`) | the exit-1 path | evidentiary |
+│
+│  ## 10. Failure modes, indications and recovery
+│
+│ docs/handbook/chapters/M8-safety.md
+│ @@ -156,5 +156,8 @@
+│      rule, empty-selection = OK) documented; dispatcher `.cf-jobs` dirs are not a reap target.
+│    - **F8-4** (new) — `reclaim_disk.py` is invoked by `project-node.sh:212` (active);
+│      `check_scan_scope.py` has no production caller (operator-invoked, optional).
+│ +  - **F8-5** (new, sol B16 / kimi B-10) — the scanner root selector and reclaim `--json` switch
+│ +    registered; the §9 log inventory completed (the six FAIL/`RESULT: FAIL` scanner rows,
+│ +    `RESULT: OK`, and the `targets`/`--json` reclaim outputs were previously untabulated).
+│
+│  ## RED field count: 1 (Metrics §8 — absence-proved). The `(local)` filesystem edge in §6 is a boundary terminal state (external peer), not a RED — see the uniform RED accounting rule in M4.
+│ docs/handbook/chapters/M4-board.md
+│ @@ -199,7 +199,7 @@
+│
+│  **RED accounting rule — one rule, document-wide (round 17; glm #4 / kimi B-3 / sol B02).** A RED is a
+│  field where the writer's own evidence is incomplete: an unread body, an unrun ladder, an untabulated
+│ -log inventory — plus the absence-proved metric (§8 "none" is RED). A §6 contract row whose far side is
+│ +log inventory — plus the absence-proved metric (§8 "none" is RED). A contract row in §6 whose far side is
+│  an **external peer** (a boundary CT or a `(local)` edge with no in-repo `file:function`) is a *terminal
+│  state* — `UNVERIFIED`/`broken` per OUTLINE Part IV — and is **not** counted as a RED, because there is
+│  no in-repo code to measure and the state itself is the filed finding. A §6 row for an **internal**
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -93,7 +93,7 @@
+│  | fill `--model` | `""` (`:411`) | a model id | the seat model for `--engine hermes` | empty falls back to `openai/gpt-6.1-sol` (`:454`) |
+│  | fill `--dry-run` | false (`:413`) | flag | list candidates without provider calls or writes | **`--dry-run` suppresses all provider calls and writes** (`:438-440`); `--force` decides *which* documents may be rewritten — round-6 documented five controls and omitted the switches that decide whether writing or provider execution occurs (sol B11) |
+│
+│ -**Spine gate (S9, added this round — grok B5; re-verified at `3fba8a7` this round).** `handbook_spine.py`
+│ +**Spine gate (S9, added this round — grok B5; re-verified against the working tree this round).** `handbook_spine.py`
+│  carries no settings surface; its policy is four hardcoded sets: `CANON` (the 18 contract ids +
+│  expected producer/consumer systems), `BOUNDARY` (the **13** boundary contracts whose far side is a
+│  human/LLM/service with no in-repo file), the `SETTING_ROW`/`REF`/`COUNT_CLAIM` regexes, and the
+│ cache/scratch/cite_check_m45678.py
+│ @@ -0,0 +1,62 @@
+│ +#!/usr/bin/env python3
+│ +"""Verify every file:line citation in the writer's five chapters resolves in-range."""
+│ +import os, re, sys
+│ +from pathlib import Path
+│ +from collections import defaultdict
+│ +
+│ +CH = Path("/home/kara/code-factory/docs/handbook/chapters")
+│ +ROOTS = [
+│ +    Path("/home/kara/code-factory"),
+│ +    Path("/home/kara/coding-hermes-scheduler/coding-herms-scheduler"),
+│ +    Path("/home/kara/crier"),
+│ +    Path("/home/kara/crier-fleet"),
+│ +    Path("/home/kara/.hermes/scripts"),
+│ +]
+│ +index = defaultdict(list)
+│ +for root in ROOTS:
+│ +    if not root.exists():
+│ +        continue
+│ +    for dp, dn, fn in os.walk(root):
+│ +        dn[:] = [d for d in dn if d not in {".git","node_modules","vendor",".venv","__pycache__","target","dist"}]
+│ +        for f in fn:
+│ +            index[f].append(Path(dp)/f)
+│ +
+│ +LINE = re.compile(r"`?([\w./-]+\.(?:py|go|sh|ts|js|json|toml|yaml|md|jsonl|conf)):(\d{1,5})(?:-(\d{1,5}))?`?")
+│ +
+│ +def suffix_score(c, rel):
+│ +    a = Path(str(c)).parts[::-1]; b = Path(rel).parts[::-1]
+│ +    n = 0
+│ +    for x, y in zip(a, b):
+│ +        if x == y: n += 1
+│ +        else: break
+│ +    return n
+│ +
+│ +bad, okc, unresolved = [], 0, []
+│ +targets = ["M4-board.md","M5-harness.md","M6-documentation.md","M7-github.md","M8-safety.md"]
+│ +for name in targets:
+│ +    p = CH / name
+│ +    text = p.read_text(errors="replace")
+│ +    for m in LINE.finditer(text):
+│ +        fname, l1, l2 = m.group(1), int(m.group(2)), m.group(3)
+│ +        base = os.path.basename(fname)
+│ +        cands = index.get(base, [])
+│ +        if not cands:
+│ +            unresolved.append((name, fname, l1)); continue
+│ +        rel = fname.lstrip("./")
+│ +        best = max(suffix_score(c, rel) for c in cands)
+│ +        pref = [c for c in cands if suffix_score(c, rel) == best]
+│ +        pref.sort(key=lambda c: -sum(1 for _ in open(c, "rb")))
+│ +        c = pref[0]
+│ +        n = sum(1 for _ in open(c, "rb"))
+│ +        hi = int(l2) if l2 else l1
+│ +        if l1 > n or hi > n:
+│ +            bad.append((name, fname, l1, hi, n, str(c)))
+│ +        else:
+│ +            okc += 1
+│ +
+│ +print(f"citations in-range: {okc}")
+│ +print(f"OUT-OF-RANGE: {len(bad)}")
+│ +for b in bad: print("  OOR", b)
+│ +print(f"UNRESOLVED BASENAME: {len(unresolved)}")
+│ +for u in unresolved: print("  UNRESOLVED", u)
+│ +sys.exit(1 if (bad or unresolved) else 0)
+All corrections applied and verified. Spine is at zero findings. Here is the round-17 manifest.
+
+WRITER ROUND 17 MANIFEST — group s2 (M4-board, M5-harness, M6-documentation, M7-github, M8-safety)
+
+SPINE SUMMARY LINE
+chapters=13  canonical contracts=18
+findings=0
+
+CHAPTERS WRITTEN (5 of 5 in my group)
+M4-board.md          — written
+M5-harness.md        — written
+M6-documentation.md  — written
+M7-github.md         — written
+M8-safety.md         — written
+
+CHAPTERS STILL SKELETON
+None in my group.
+
+RED FIELD COUNT PER CHAPTER
+M4-board        — 1  (Metrics §8, absence-proved)
+M5-harness      — 3  (Metrics §8 absence-proved; §7 conformance battery unrun on a live node; §9 log inventory 4-of-274)
+M6-documentation— 2  (Status §1 own gate reads FAIL over legacy 44-unit corpus; Metrics §8 absence-proved)
+M7-github       — 3  (Metrics §8 absence-proved; §1 mint UNVERIFIED environment-gated; §9 log inventory 2-of-103)
+M8-safety       — 1  (Metrics §8, absence-proved)
+
+CROSS-SECTION DEPENDENCIES (chapters outside my group)
+1. RED-accounting rule (blocking-class, glm #4 / kimi B-3 / sol B02). Claim M9-scheduler and M12-inference-proxy must satisfy: "a §6 contract row whose far side is an external peer (a boundary CT or a (local) edge with no in-repo file:function) is a terminal state and is NOT counted as a RED; only an internal contract (both ends in covered code) whose wire was not measured is a RED." M9 currently counts CT-01/CT-15 and M12 counts CT-07/M12-C2 inside their RED totals under the opposite reading. M4 now states the single rule and the dependency explicitly (M4-board.md §13).
+2. Revision stamp. All 13 chapters must stamp the same revision. I re-stamped M4-M8 to e07d031 (HEAD == origin/main == gh/main). M0-M3 and M9-M12 still stamp 3fba8a7 and are outside my group; 3fba8a7..e07d031 touched only prompts/foreman.md + prompts/unblock.md, so every code citation is valid at either stamp, but the document issue stamp must be uniformed by those writers.
+
+CORRECTIONS APPLIED (round 16 -> round 17), by chapter
+M4 — re-stamped revision; lock-adjudication fixture actually run (was UNVERIFIED, now PASS — ABSENT/HELD/RESIDUE all named); S1/S2 re-graded active -> operator-invoked (sol B27: no in-repo invoker, grep 0); RED rule restated as one document-wide rule with the M9/M12 dependency filed.
+M5 — §9 count 215 -> 274 (glm #1 blocking; say-inclusive grep, per-file 36/86/98/15/13/17/9, six installers = 265); RED line "4 of 215" -> "4 of 274".
+M6 — spine dirty-source disclosure (sol B10: 443 vs 340 lines, sha256 afbc65fc…, uncommitted split_row/MISPARSE/UNKNOWN-ID); four added spine blind spots (section-scoped §5/§6, decimal-default integer-prefix normalization, CLI-setting non-recognition, hardcoded flow count — kimi N-4 / sol B12); stale-hash references removed.
+M7 — JWT_BACKDATE/JWT_LIFETIME/TIMEOUT re-attributed refresh.sh -> github-app-token.py:50-52 (glm #3 blocking); GIT_CREDENTIALS guard re-pinned :131 -> :132-134 with node-mode overwrite disclosed (sol B14); §10 key-mode refusal re-pinned :344-348 -> :346-350; mint invocation corrected to env-file not env-vars (sol B13); setup.sh controls + write-before-verify registered (sol B15); §9 "three scripts" -> two shell scripts.
+M8 — scanner root selector and reclaim --json registered (sol B16); §9 log inventory completed with the six FAIL/RESULT:FAIL scanner rows, RESULT: OK, and reclaim targets/--json outputs (kimi B-10).
+
+COMMANDS RUN (with exit status)
+1. git log -1 --oneline                                          -> e07d031, rc 0
+2. git show --stat e07d031                                       -> 2 files (prompts/), rc 0
+3. git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/   -> empty, rc 0
+4. grep -rcE '\b(ok|bad|warn|note|say)\s+"' scripts/harness/     -> 274, rc 0
+5. grep -rcE '\b(ok|bad|warn|note)\s+"' scripts/harness/         -> 215 (no-say variant), rc 0
+6. grep -hE '\b(ok|bad|warn|note|say)\s+"' scripts/github-app-*.sh | wc -l -> 103, rc 0
+7. python3 ~/.hermes/cache/scratch/m4_lock_fixture.py            -> FIXTURE PASS (ABSENT/RESIDUE/HELD), rc 0
+8. jq -r '.id' .coding-hermes/board/tasks.jsonl | wc -l          -> 357, rc 0
+9. wc -l < .coding-hermes/board/events.jsonl                     -> 519, rc 0
+10. python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main -> RESULT: OK, rc 0
+11. scripts/boardctl validate                                    -> RESULT: OK (7 warnings), rc 0
+12. python3 scripts/master_doc_check.py                          -> MASTER-DOC: FAIL (44/37/50), rc 1
+13. sha256sum scripts/handbook_spine.py                          -> afbc65fc7bfe…, rc 0
+14. python3 scripts/handbook_spine.py                            -> findings=0, rc 0 (final)
+15. python3 ~/.hermes/cache/scratch/cite_check_m45678.py         -> 114 in-range / 0 out-of-range / 0 unresolved, rc 0
+16. grep -rn 'boardctl\|board_lock\|board_drift' prompts/ config/ -> 0 matches, rc 1 (expected: no in-repo invoker)
+
+WRITER ROUND COMPLETE
+
+session_id: local-1c9fcbe02e734c6709ce413ae9ec8675f3dbea75f4e2dda7c74b6e3b263b71e4

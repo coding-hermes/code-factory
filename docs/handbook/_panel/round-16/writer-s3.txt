@@ -1,0 +1,637 @@
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | INFERENCE PROXY (`cf-inference-proxy.py`) |
+│  | Path | `/home/kara/.hermes/scripts/cf-inference-proxy.py` (273 lines) |
+│ -| Revision | content sha256 `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (lives outside any git repo; no revision to stamp) |
+│ +| Revision | content sha256 `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (lives outside any git repo; no git revision to stamp). Locators re-pinned at code-factory HEAD `3fba8a7` (the round-15 tailnet-scrub commit) |
+│  | Language / runtime | Python — `#!/usr/bin/env python3`, no pinned version; **requires >= 3.10** (F12-5: `_forward` at `:164` declares `body: bytes \| None`, an evaluated union annotation) |
+│  | Owner lane | code-factory (control-host service, consumed by nodes) |
+│  | Status | **VERIFIED (admission/routing/capture), FAILING (streaming)** — read in full this round (273 lines); content sha256 reproduced; live 401 admission reproduced this round; the two sink paths corrected this round (F12-8). **Streaming completion is FAILING (sol B22):** the healthy SSE stream is unframed to completion (`:206-224`), reproduced as a `200` with no `Content-Length`/`Transfer-Encoding`/`Connection` and a client EOF timeout (§11 F12-7). A blanket VERIFIED would contradict that demonstrated defect — admission, routing and capture are verified, streaming is not |
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -93,7 +93,7 @@
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│  | CT-07 | gateway | in (model choice) | **external** — the task-router's model choice (out of scope) | **external** — the Hermes gateway (out of scope) | **UNVERIFIED (boundary)** — neither side has an in-repo `file:function`, and the wire was not measured this round; an outline "works" annotation is not implementation evidence (sol B03) |
+│ -| M12-C1 | node | in | **unproven client half** — the proxy side is verified (401 on missing/unknown token, `:128-130`); the node side has no in-repo file that *calls* the proxy. `grep -rnE '8775\|CF_PROXY\|cf-inference-proxy' scripts/ config/ specs/` (ERE, re-run this round) matches **four** text sites: `scripts/panel_loop.py:145`, `scripts/master_doc_skeleton.py:25` and `:211` (self-references listing the path), and `config/node.env.example:22` — which is the **live assignment** `ENV_CF_PROXY_API_KEY=@~/.node/auth/provider.key`, not a comment. `config/node.env.example:26` comments `CONFIG_SET_MODEL_PROVIDER=cf-proxy -> model.provider`, so the producer half is config-driven: `node.env.example:22,26` → `node_env.py`/provisioner config generation → `~/.hermes/config.yaml` `model.provider=cf-proxy`. Round-4's quoted command omitted `-E`, so its bare-`\|` BRE returned **0** matches (measured rc 1) — the opposite of the row's claim (grok 2 / glm 4). | `cf-inference-proxy.py:135` `do_POST` → `_node` (`:136`) | **UNVERIFIED** — proxy side verified; the node-client call site is config-wired, not a `file:function` in this repo |
+│ +| M12-C1 | node | in | **unproven client half** — the proxy side is verified (401 on missing/unknown token, `:128-130`); the node side has no in-repo file that *calls* the proxy. `grep -rnE '8775\|CF_PROXY\|cf-inference-proxy' scripts/ config/ specs/` (ERE, re-run this round at CF HEAD `3fba8a7`) matches **four** text sites: `scripts/panel_loop.py:188` (locator re-pinned this round — round-15 cited `:145`, which is a `log = outdir / …` line), `scripts/master_doc_skeleton.py:25` and `:211` (self-references listing the path), and `config/node.env.example:22` — which is the **live assignment** `ENV_CF_PROXY_API_KEY=@~/.node/auth/provider.key`, not a comment. `config/node.env.example:26` comments `CONFIG_SET_MODEL_PROVIDER=cf-proxy -> model.provider`, so the producer half is config-driven: `node.env.example:22,26` → `node_env.py`/provisioner config generation → `~/.hermes/config.yaml` `model.provider=cf-proxy`. Round-4's quoted command omitted `-E`, so its bare-`\|` BRE returned **0** matches (measured rc 1) — the opposite of the row's claim (grok 2 / glm 4). | `cf-inference-proxy.py:135` `do_POST` → `_node` (`:136`) | **UNVERIFIED** — proxy side verified; the node-client call site is config-wired, not a `file:function` in this repo |
+│  | M12-C2 | upstream | out | `_forward` (`:164`) builds the upstream request with the control-host key | **rumour — one side only** (the upstream gateway/provider, not a function) | **UNVERIFIED** — external boundary with one side named; a "works" verdict on a rumour is not permitted (B06) |
+│
+│  The round-3 M12-C1 producer cell (\"node POST /v1/chat/completions with Authorization: Bearer ***\")
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -222,4 +222,8 @@
+│      the measured values are `cf-inference-usage.jsonl` (`:50`) and `cf-inference-requests.jsonl`
+│      (`:52`).
+│
+│ -## RED field count: 4 (Metrics §8 — absence-proved; M12-C1 node-client half UNVERIFIED; M12-C2 upstream half UNVERIFIED — one-sided external boundary; stream completion **FAILING** — F12-7 reproduced)
+│ +## RED field count: 5 — Metrics §8 (absence-proved); M12-C1 node-client half UNVERIFIED; M12-C2
+│ +upstream half UNVERIFIED (one-sided external boundary); CT-07 UNVERIFIED (boundary); stream
+│ +completion **FAILING** (F12-7 reproduced). Rule applied this round (glm #4): an UNVERIFIED contract
+│ +state — boundary or local — and a FAILING submodule are both named REDs; only a measured-`works`
+│ +state is not.
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -221,6 +221,8 @@
+│    - **F12-8** (new) — round-5 invented two sink filenames (`cf-usage.jsonl`, `cf-capture.jsonl`);
+│      the measured values are `cf-inference-usage.jsonl` (`:50`) and `cf-inference-requests.jsonl`
+│      (`:52`).
+│ +  - **F12-9** (new, glm #1) — `panel_loop.py` locator re-pinned from `:145` to `:188` (round-15's
+│ +    `:145` is a `log = outdir / …` line; the `cf-inference-proxy` reference is `:188`).
+│
+│  ## RED field count: 5 — Metrics §8 (absence-proved); M12-C1 node-client half UNVERIFIED; M12-C2
+│  upstream half UNVERIFIED (one-sided external boundary); CT-07 UNVERIFIED (boundary); stream
+│ docs/handbook/chapters/M11-dispatcher.md
+│ @@ -18,8 +18,13 @@
+│  calls, kill on deadline) and keeps a replay ledger. It may not decide admission
+│  or what the work is — that is the scheduler and the directive.
+│
+│ -**What breaks if this module is absent.** No task leaves the bus: every dispatch sits in the
+│ -inbox until it expires.
+│ +**What breaks if this module is absent.** For agents whose deployment routes them through
+│ +`crier-fleet`, no task leaves the bus: every dispatch sits in the inbox until it expires. This is
+│ +**not** the only inbox consumer (sol B18): `scripts/node-bus-worker.py` independently retrieves
+│ +inbox messages (`:1320-1340`), processes them (`:1374`), invokes the harness (`:1148-1149`),
+│ +delivers the reply (`:1389-1395`) and acknowledges (`:1528-1539`), with its own entrypoint that
+│ +does not import the dispatcher. The absence consequence is therefore scoped to agents served by
+│ +the control-host dispatcher, not a property of the bus as a whole.
+│
+│  **What breaks if it lies.** Two distinct modes:
+│  - A task recorded as done that never ran. The ledger replays a recorded result instead of
+│ docs/handbook/chapters/M11-dispatcher.md
+│ @@ -84,7 +84,7 @@
+│  | `DISPATCH_LOG` / `DISPATCH_PIDFILE` | `$FLEET/logs/dispatcher.log` / `$FLEET/dispatcher.pid` (`:41-42`) | a path | log/PID location | a wrong path loses the journal/lock |
+│  | `FLEET_GH_SCOPE` | `/home/kara/.hermes/scripts/fleet-gh-scope.py` (`:68`) | a path | scoped-token minter | a wrong path disables scoped tokens (non-fatal) |
+│  | `FLEET_AGENTS` / `FLEET_AGENTS_FILE` | `fleet_agents.json` (`:104-109`) | a dict / path | agent registry | empty → "no FLEET_AGENTS configured" |
+│ -| `CRIER_URL` (read as `BUS`) | `http://<bus-host>:8767` (`:38`) | an http(s) endpoint | which bus the dispatcher polls and replies to | a wrong URL polls/replies to the wrong bus |
+│ +| `CRIER_URL` (read as `BUS`) | `http://<bus-host>:8767` (`:38`) | an http(s) endpoint | which bus the dispatcher polls and replies to | a wrong URL polls/replies to the wrong bus. **The host literal is redacted** in this public chapter; the real default is the tailnet address at `dispatcher.py:38` (`BUS = os.environ.get("CRIER_URL", …)`) — `<bus-host>` is a placeholder, not a configured value |
+│  | `TOKEN_FILE` (bearer) | `/home/kara/.hermes/secrets/crier-fleet.token` (`:39`, a constant) | a path | the bus bearer identity | a missing file → client construction fails (`client for %s failed`) |
+│  | `KEYS` (signing) | `$FLEET/keys` (`:40`, a constant) | a directory | the reply-signing key store | a missing key dir breaks reply signing |
+│
+│ docs/handbook/chapters/M11-dispatcher.md
+│ @@ -98,6 +98,17 @@
+│  |---|---|---|---|---|---|
+│  | CT-03 | crier | in | crier server `internal/registry/handler.go:1690` `HandleRetrieve` (the lease-granting side) | `dispatcher.py:435` `crier.retrieve` (the client side) | works |
+│  | CT-06 | scheduler | out | `dispatcher.py:500-508` builds the completion reply `{in_reply_to, agent, ok, …}`; transported via crier `internal/registry/handler.go:990` `HandleDeliver` into the scheduler's inbox | scheduler `internal/scheduler/dispatch_leg.go:713` `dispatchReplyVerdict` | **works** — the dispatcher always sends `ok` (`:501`), which is exactly the field `dispatchReplyVerdict` reads. CF-355 (status-vs-ok) belongs to the **node worker** (CT-04), not this producer |
+│ +
+│ +**Protected service-delivery compatibility (sol B01).** The dispatcher supplies `sender` through
+│ +the Python client (`crier_client.Crier.deliver`, `:508`) but does **not** supply the protected
+│ +service-delivery controls — no body `idempotency_key`, no `X-Crier-Service-Audience` header. Crier
+│ +enforces those for a recipient registered as a protected service (`internal/registry/service_auth.go:128-168`,
+│ +called at `handler.go:1147`): a signed sender, a body sender matching the signed `X-Agent-ID`, an
+│ +allowlisted sender→recipient pair, and — when an audience is configured — a nonempty
+│ +`idempotency_key` and a matching audience. The dispatcher's reply leg is therefore compatible with
+│ +an **un-protected** scheduler recipient only; the "works" state above is scoped to that measured
+│ +recipient policy, and does not claim the constructed request succeeds against a protected service
+│ +recipient (not asserted to be enabled on the live relay).
+│
+│  ## 7. Verification
+│
+│ docs/handbook/chapters/M11-dispatcher.md
+│ @@ -219,5 +219,9 @@
+│      run.sh's process group; the harness runs under GNU timeout's own process group (`:260`, `:246-249`),
+│      so a surviving-harness failure mode exists and the descendant-termination guarantee is withdrawn
+│      until a test proves the kill reaches the harness group.
+│ +  - **F11-9** (new, sol B18) — the §2 absence consequence is scoped to control-host-dispatched
+│ +    agents; `node-bus-worker.py` is the independent inbox consumer.
+│ +  - **F11-10** (new, sol B01) — the dispatcher's reply leg supplies `sender` but no protected
+│ +    service-delivery `idempotency_key`/audience, so "works" is scoped to un-protected recipients.
+│
+│  ## RED field count: 2 (Metrics §8, live-job test row §7 — decoration, cannot fail)
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | CRIER |
+│  | Path | `/home/kara/crier/` (Go) |
+│ -| Revision | `0a372209` (crier repo HEAD, re-stamped round 15). Cited handler/guard/config/client files are byte-identical to the round-12 stamp `33c1f388` — `git diff --name-only 33c1f388..HEAD` returns only `.github/workflows/release.yml`, `Makefile`, `README.md`, `docs/releases.md`, `releng/*`, `scripts/release-upload.sh`, `scripts/release-upload-selftest.sh`. Post-stamp commits: `6d49c262` (README Quick Start v0.3.0, RELEASE-013), `7860836f` + `0a372209` (tag publisher idempotency, RELEASE-012). The two commits past the round-11 stamp `86c4c469` were `eb21ca03` (the idle-boot flake fix) and `dc15b2d6` (a board row) |
+│ +| Revision | `0a372209` (crier repo HEAD at the round-15 stamp; HEAD has since advanced to `fa619c22` — three README-only merges, `git diff --name-only 0a372209..HEAD` = `README.md` only, so every cited Go file is byte-identical). Cited handler/guard/config/client files are byte-identical to the round-12 stamp `33c1f388` — `git diff --name-only 33c1f388..HEAD` returns only `.github/workflows/release.yml`, `Makefile`, `README.md`, `docs/releases.md`, `releng/*`, `scripts/release-upload.sh`, `scripts/release-upload-selftest.sh`. Post-stamp commits: `6d49c262` (README Quick Start v0.3.0, RELEASE-013), `7860836f` + `0a372209` (tag publisher idempotency, RELEASE-012). The two commits past the round-11 stamp `86c4c469` were `eb21ca03` (the idle-boot flake fix) and `dc15b2d6` (a board row) |
+│  | Language / runtime | Go — `go.mod` declares `go 1.26.10` (a build/toolchain requirement, not a runtime one); host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`), `/usr/bin/go` = **go1.26.9** (`/usr/lib/go-1.26/bin/go`); `GOTOOLCHAIN=auto` auto-fetches 1.26.10 for this repo |
+│  | Owner lane | crier (control plane) |
+│  | Status | **UNVERIFIED** — `internal/registry/handler.go` (deliver/retrieve/ack surfaces + the full 3-site slog surface), `internal/guard/guard.go` (pipeline, oversize branch, `errorResult`), `internal/guard/policy.go` (`ResolvePolicy`), `internal/guard/metrics.go`, `config/config.go` (controls + guard bounds + metrics default), `clients/python/crier_client.py`, `cmd/crier-front/main.go` read this round; the full 1895-line handler body still not read line-by-line (its slog surface *is* complete — see §9) |
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | `0a372209` (crier repo HEAD at the round-15 stamp; HEAD has since advanced to `fa619c22` — three README-only merges, `git diff --name-only 0a372209..HEAD` = `README.md` only, so every cited Go file is byte-identical). Cited handler/guard/config/client files are byte-identical to the round-12 stamp `33c1f388` — `git diff --name-only 33c1f388..HEAD` returns only `.github/workflows/release.yml`, `Makefile`, `README.md`, `docs/releases.md`, `releng/*`, `scripts/release-upload.sh`, `scripts/release-upload-selftest.sh`. Post-stamp commits: `6d49c262` (README Quick Start v0.3.0, RELEASE-013), `7860836f` + `0a372209` (tag publisher idempotency, RELEASE-012). The two commits past the round-11 stamp `86c4c469` were `eb21ca03` (the idle-boot flake fix) and `dc15b2d6` (a board row) |
+│  | Language / runtime | Go — `go.mod` declares `go 1.26.10` (a build/toolchain requirement, not a runtime one); host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`), `/usr/bin/go` = **go1.26.9** (`/usr/lib/go-1.26/bin/go`); `GOTOOLCHAIN=auto` auto-fetches 1.26.10 for this repo |
+│  | Owner lane | crier (control plane) |
+│ -| Status | **UNVERIFIED** — `internal/registry/handler.go` (deliver/retrieve/ack surfaces + the full 3-site slog surface), `internal/guard/guard.go` (pipeline, oversize branch, `errorResult`), `internal/guard/policy.go` (`ResolvePolicy`), `internal/guard/metrics.go`, `config/config.go` (controls + guard bounds + metrics default), `clients/python/crier_client.py`, `cmd/crier-front/main.go` read this round; the full 1895-line handler body still not read line-by-line (its slog surface *is* complete — see §9) |
+│ +| Status | **UNVERIFIED** — `internal/registry/handler.go` (deliver/retrieve/ack surfaces + the full 3-site slog surface), `internal/guard/guard.go` (pipeline, oversize branch, `errorResult`), `internal/guard/policy.go` (`ResolvePolicy`), `internal/guard/metrics.go`, `config/config.go` (controls + guard bounds + metrics default), `clients/python/crier_client.py`, `cmd/crier-front/main.go` read this round; the full 1895-line handler body read line-by-line this round (register, deliver, retrieve, ack, stats, idempotency, realms, per-peer policy, service-delivery auth, federation fallback — see §3) |
+│
+│  ## 2. Purpose, authority and position
+│
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -31,7 +31,7 @@
+│  |---|---|---|---|
+│  | S1 custody and transport | `internal/registry/handler.go` (1895 lines) | **active** | `HandleRegister` (`:598`), `HandleDeliver` (`:990`), `HandleRetrieve` (`:1690`), `HandleAck` (`:1812`) |
+│  | S2 the guard | `internal/guard/guard.go` | **active** | `Guard.Check` (`:167`) is the choke point; pipeline documented at `:25-28`; oversize branch `:198-234`; `errorResult` `:318-361` |
+│ -| S3 binaries, ports, services | `config.go:622` port 8767; `crier-front/main.go:39` listen `127.0.0.1:8770` | **active** | read |
+│ +| S3 binaries, ports, services | `config/config.go:622` port 8767; `crier-front/main.go:39` listen `127.0.0.1:8770` | **active** | read |
+│  | S4 client libraries | `clients/python/crier_client.py`, `clients/typescript` | **active** | Python client read (`deliver` `:975`, `retrieve` `:1009`, `ack` `:1038`) |
+│
+│  **Custody lifecycle (B20, written this round).** The wire contract of a retrieve, derived from the
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -37,7 +37,7 @@
+│  **Custody lifecycle (B20, written this round).** The wire contract of a retrieve, derived from the
+│  handler and the Python client:
+│
+│ -- **Parameter aliases and precedence** (`handler.go:1711-1743`): the spec'd `limit`/`lease_seconds`
+│ +- **Parameter aliases and precedence** (`internal/registry/handler.go:1711-1743`): the spec'd `limit`/`lease_seconds`
+│    alias the historical `max`/`lease`. When both spellings appear in one request, the historical
+│    `max`/`lease` **wins** — the alias fills in only what the historical name left absent
+│    (DF-CRIER-180).
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -239,7 +239,7 @@
+│  - Signature enforcement is **conditional** on `h.requireAgentSig` (`agentsig.go:364-368`).
+│  - A held (leased) message is not returned again until its lease expires (`crier_client.py:1018-1021`).
+│  - Delivery idempotency has distinct replay and busy branches (`handler.go:1307-1365`).
+│ -- **Guard policy precedence (B21).** `policy.go:172-202` `ResolvePolicy`: first agent policy whose
+│ +- **Guard policy precedence (B21).** `internal/guard/policy.go:172-202` `ResolvePolicy`: first agent policy whose
+│    `channel_match` glob matches the session/thread key, then `serverDefault`
+│    (`CR_GUARD_DEFAULT_POLICY`), then `BuiltinDefaultPolicy()`. A channel-glob-only policy never
+│    matches an unchanneled message.
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -113,7 +113,7 @@
+│  | `Guard.KanbanQueueSize` | 100 (`:654`) | int | guard queue depth | smaller drops queued checks |
+│  | `Observability.EnableMetrics` | **true** (`:673`) | bool | `/metrics` mount | `CR_ENABLE_METRICS=false` disables it |
+│  | front `defaultListen` | `127.0.0.1:8770` (`crier-front/main.go:39`) | a loopback listen | the front's surface | binding off-loopback exposes the front |
+│ -| `CR_GUARD_TIMEOUT_MS` / `CR_GUARD_MAX_CONCURRENT` / `CR_GUARD_CIRCUIT_THRESHOLD` / `CR_GUARD_CIRCUIT_COOLDOWN_S` / `CR_GUARD_MAX_PAYLOAD_BYTES` / `CR_GUARD_RENDER_MAX_BYTES` | env, positive only (`config.go:1139-1187`) | int > 0 | guard tuning | a non-numeric or `<= 0` value → named error (`invalid CR_GUARD_…`), not a silent default |
+│ +| `CR_GUARD_TIMEOUT_MS` / `CR_GUARD_MAX_CONCURRENT` / `CR_GUARD_CIRCUIT_THRESHOLD` / `CR_GUARD_CIRCUIT_COOLDOWN_S` / `CR_GUARD_MAX_PAYLOAD_BYTES` / `CR_GUARD_RENDER_MAX_BYTES` | env, positive only (`config/config.go:1139-1187`) | int > 0 | guard tuning | a non-numeric or `<= 0` value → named error (`invalid CR_GUARD_…`), not a silent default |
+│
+│  **Metrics-default correction (F10-3).** `config.go:667-673` sets `EnableMetrics: true` by default;
+│  `CR_ENABLE_METRICS` is the disabling override; `cmd/server/observability.go:101-109` mounts
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -144,7 +144,7 @@
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│  | build | `go build ./...` (crier repo) | exit 0 | 2026-11-06, rev `0a372209` (re-run this round) | **PASS** (rc 0) |
+│ -| go test | `go test ./...` | green | 2026-11-06, rev `0a372209` (re-run this round) | **PASS** (rc 0) — all packages ok (`internal/registry` 7.569s, `internal/mesh` 7.382s); the FLAKY diagnosis at `86c4c469` is superseded by `eb21ca03` (see the note below) |
+│ +| go test | `go test -count=1 ./...` | green | 2026-11-06, rev `fa619c22` (re-run this round) | **PASS** (rc 0) — all 31 packages ok; `internal/registry` 27.677s, `internal/reads` 31.187s, `internal/session` 29.248s, `internal/federation` 26.355s (wall 54s). The `internal/registry` timing is load-dependent, not a fixed value — one run, one revision, one duration this round (kimi B4). The FLAKY diagnosis at `86c4c469` is superseded by `eb21ca03` (see the note below) |
+│  | port fact | `grep -n 'Port' config/config.go` | 8767 | 2026-11-06 | PASS (`:622`) |
+│  | slog surface | `grep -c 'slog.\(Info\|Error\|Warn\|Debug\)' internal/registry/handler.go` | 3 | 2026-11-06 | **PASS** — exactly 3 sites (all in §9); no `log.Printf`/`fmt.Printf` in the handler |
+│  | signed-read ladder | `python3 ~/node-bus-worker.py --check` on cf-node | inbox 200 with key+bearer | 2026-11-05, cf-node only | PASS (FACT-04) — not repeatable from this control host |
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -151,8 +151,9 @@
+│
+│  **Assurance-gap note (kimi 6, re-measured).** Round-3 reported `internal/registry` as "no tests to
+│  run". At the same revision the package has **91 test files** (measured: `ls internal/registry/*_test.go`),
+│ -and `go test` ran them in 6.962 s. A green run over 91 test files is real, but it still does not
+│ -prove line-by-line coverage of the 1895-line handler.
+│ +and `go test` runs them green. A green run over 91 test files is real assurance, and the 1895-line
+│ +handler body has now been read line-by-line this round — the two formerly-separate gaps (test
+│ +coverage vs body read) are both closed.
+│
+│  **`go test` re-measured at live HEAD (was FLAKY at `86c4c469`).** Round-11 documented `go test ./...`
+│  as FLAKY at `86c4c469` — two named tests (`TestSessionFanoutWebhookBodyVerdict`,
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -162,11 +162,8 @@
+│  `eb21ca03` ("test(cmd/server): make the idle-boot detect-alert assertion order-insensitive") landed
+│  after that stamp and removes the order-sensitive assertion that was the documented flake
+│  (QA-CRIER-56: `CR_DETECT_QUIET_HOURS` 01:00–05:00 UTC window contamination — the same clock-sensitive
+│ -root cause the round-11 note named). Re-run this round at HEAD `33c1f388`: `go build ./...` rc 0;
+│ -`go test ./cmd/server/ -run TestMetricsState_SeriesRenderOnIdleBoot -count=1` ok (0.323s);
+│ -`go test ./...` **green** (all packages ok; `internal/registry` 7.488s). The FLAKY row is therefore
+│ -**superseded** — the flake is fixed at the tree the chapter's HEAD now resolves to, and the row is a
+│ -clean PASS at `33c1f388`.
+│ +root cause the round-11 note named). The FLAKY row is therefore **superseded** — the flake is fixed,
+│ +and this round's single `go test -count=1 ./...` run at `fa619c22` is a clean PASS (31 packages, rc 0).
+│
+│  ## 8. Metrics
+│
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -131,7 +131,7 @@
+│
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│ -| CT-02 | scheduler | in | `<scheduler>/internal/bus/dispatch.go:202` `payload()` (envelope with `text_b64`, `board`) | `handler.go:990` `HandleDeliver` | **works (transport)** — crier delivers the envelope verbatim. The former `text_b64` vs `text` mismatch was a **node-consumption** defect, now fixed (the node decodes `text_b64` at `node-bus-worker.py:989`; CF-354 complete), so the scheduler→crier→node leg is now works end-to-end. **This supersedes OUTLINE Part IV's "scheduler → crier … broken" and README I.3's "10 works / 6 broken / 2 missing"** (glm #2) |
+│ +| CT-02 | scheduler | in | `<scheduler>/internal/bus/dispatch.go:175` `payload()` (the function is declared at `:175`; `:202` is the `p["text_b64"] = …` assignment inside it — envelope with `text_b64`, `board`) | `internal/registry/handler.go:990` `HandleDeliver` | **works (transport)** — crier delivers the envelope verbatim. The former `text_b64` vs `text` mismatch was a **node-consumption** defect, now fixed (the node decodes `text_b64` at `node-bus-worker.py:989`; CF-354 complete), so the scheduler→crier→node leg is now works end-to-end. **This supersedes OUTLINE Part IV's "scheduler → crier … broken" and README I.3's "10 works / 6 broken / 2 missing"** (glm #2) |
+│  | CT-03 | node | out | `handler.go:1690` `HandleRetrieve` (lease-granting side; the client library `crier_client.py:1009` is the consumer-side call) | `scripts/node-bus-worker.py:1007` `process` (the node's inbox consumer; decodes `text_b64` via `directive_text` `:977`) | works — lease/transport works, and the consumption field-mismatch (CF-354) is fixed |
+│  | CT-04 | node | in | **node's own HTTP deliver** — `node-bus-worker.py:1208` `deliver` (urllib, **not** `crier_client.py`; POST `/agents/{target}/inbox`) | `handler.go:990` `HandleDeliver` (accepts the reply verbatim) | **works (transport)** — crier accepts the reply verbatim. CF-355 is **this reply's** settlement defect: the node sends `status` (`node-bus-worker.py:1180`), the scheduler's `dispatchReplyVerdict` reads only `ok` — carried at CT-04 (node reply), not CT-06 (the dispatcher leg) |
+│  | CT-08 | gateway | out | crier `internal/registry/dispatch.go:369` `h.hermes.Deliver` (session delivery), implemented by `internal/hermesession/hermesession.go:353` `Client.Deliver` (token acquisition, session selection, chat execution, replay) — **in-repo** | **external** — the Hermes gateway (out of scope) | **works (crier side named)** — the producer is in-repo and named; only the gateway consumer is out of scope (round-9 correction: round-8 called the producer "external", which was false) |
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -132,7 +132,7 @@
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│  | CT-02 | scheduler | in | `<scheduler>/internal/bus/dispatch.go:175` `payload()` (the function is declared at `:175`; `:202` is the `p["text_b64"] = …` assignment inside it — envelope with `text_b64`, `board`) | `internal/registry/handler.go:990` `HandleDeliver` | **works (transport)** — crier delivers the envelope verbatim. The former `text_b64` vs `text` mismatch was a **node-consumption** defect, now fixed (the node decodes `text_b64` at `node-bus-worker.py:989`; CF-354 complete), so the scheduler→crier→node leg is now works end-to-end. **This supersedes OUTLINE Part IV's "scheduler → crier … broken" and README I.3's "10 works / 6 broken / 2 missing"** (glm #2) |
+│ -| CT-03 | node | out | `handler.go:1690` `HandleRetrieve` (lease-granting side; the client library `crier_client.py:1009` is the consumer-side call) | `scripts/node-bus-worker.py:1007` `process` (the node's inbox consumer; decodes `text_b64` via `directive_text` `:977`) | works — lease/transport works, and the consumption field-mismatch (CF-354) is fixed |
+│ +| CT-03 | node | out | `internal/registry/handler.go:1690` `HandleRetrieve` (lease-granting side; the client library `crier_client.py:1009` is the consumer-side call) | `scripts/node-bus-worker.py:1007` `process` (the node's inbox consumer; decodes `text_b64` via `directive_text` `:977`) | works — lease/transport works, and the consumption field-mismatch (CF-354) is fixed |
+│  | CT-04 | node | in | **node's own HTTP deliver** — `node-bus-worker.py:1208` `deliver` (urllib, **not** `crier_client.py`; POST `/agents/{target}/inbox`) | `handler.go:990` `HandleDeliver` (accepts the reply verbatim) | **works (transport)** — crier accepts the reply verbatim. CF-355 is **this reply's** settlement defect: the node sends `status` (`node-bus-worker.py:1180`), the scheduler's `dispatchReplyVerdict` reads only `ok` — carried at CT-04 (node reply), not CT-06 (the dispatcher leg) |
+│  | CT-08 | gateway | out | crier `internal/registry/dispatch.go:369` `h.hermes.Deliver` (session delivery), implemented by `internal/hermesession/hermesession.go:353` `Client.Deliver` (token acquisition, session selection, chat execution, replay) — **in-repo** | **external** — the Hermes gateway (out of scope) | **works (crier side named)** — the producer is in-repo and named; only the gateway consumer is out of scope (round-9 correction: round-8 called the producer "external", which was false) |
+│
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -133,7 +133,7 @@
+│  |---|---|---|---|---|---|
+│  | CT-02 | scheduler | in | `<scheduler>/internal/bus/dispatch.go:175` `payload()` (the function is declared at `:175`; `:202` is the `p["text_b64"] = …` assignment inside it — envelope with `text_b64`, `board`) | `internal/registry/handler.go:990` `HandleDeliver` | **works (transport)** — crier delivers the envelope verbatim. The former `text_b64` vs `text` mismatch was a **node-consumption** defect, now fixed (the node decodes `text_b64` at `node-bus-worker.py:989`; CF-354 complete), so the scheduler→crier→node leg is now works end-to-end. **This supersedes OUTLINE Part IV's "scheduler → crier … broken" and README I.3's "10 works / 6 broken / 2 missing"** (glm #2) |
+│  | CT-03 | node | out | `internal/registry/handler.go:1690` `HandleRetrieve` (lease-granting side; the client library `crier_client.py:1009` is the consumer-side call) | `scripts/node-bus-worker.py:1007` `process` (the node's inbox consumer; decodes `text_b64` via `directive_text` `:977`) | works — lease/transport works, and the consumption field-mismatch (CF-354) is fixed |
+│ -| CT-04 | node | in | **node's own HTTP deliver** — `node-bus-worker.py:1208` `deliver` (urllib, **not** `crier_client.py`; POST `/agents/{target}/inbox`) | `handler.go:990` `HandleDeliver` (accepts the reply verbatim) | **works (transport)** — crier accepts the reply verbatim. CF-355 is **this reply's** settlement defect: the node sends `status` (`node-bus-worker.py:1180`), the scheduler's `dispatchReplyVerdict` reads only `ok` — carried at CT-04 (node reply), not CT-06 (the dispatcher leg) |
+│ +| CT-04 | node | in | **node's own HTTP deliver** — `node-bus-worker.py:1208` `deliver` (urllib, **not** `crier_client.py`; POST `/agents/{target}/inbox`) | `internal/registry/handler.go:990` `HandleDeliver` (accepts the reply verbatim) | **works (transport)** — crier accepts the reply verbatim. CF-355 is **this reply's** settlement defect: the node sends `status` (`node-bus-worker.py:1180`), the scheduler's `dispatchReplyVerdict` reads only `ok` — carried at CT-04 (node reply), not CT-06 (the dispatcher leg) |
+│  | CT-08 | gateway | out | crier `internal/registry/dispatch.go:369` `h.hermes.Deliver` (session delivery), implemented by `internal/hermesession/hermesession.go:353` `Client.Deliver` (token acquisition, session selection, chat execution, replay) — **in-repo** | **external** — the Hermes gateway (out of scope) | **works (crier side named)** — the producer is in-repo and named; only the gateway consumer is out of scope (round-9 correction: round-8 called the producer "external", which was false) |
+│
+│  CT-08 is a boundary contract: the Hermes gateway is outside the five covered systems, so
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -55,6 +55,20 @@
+│    or empty body returns `[]`; messages carry their batch `lease_id`. A held (leased) message is
+│    not returned again until its lease expires — an empty list after a failed ack is expected, not a
+│    lost message; `stats()` distinguishes "nothing queued" from "everything leased".
+│ +
+│ +**Protected service-delivery authorization (sol B01, documented this round).** `deliverAuthenticated`
+│ +calls `authorizeServiceDelivery` at `internal/registry/handler.go:1147` — before body decoding,
+│ +budgets, replay admission and every transport side effect. For a recipient registered in the
+│ +protected set (`h.serviceDeliveries`), `internal/registry/service_auth.go:128-168` requires: the
+│ +4-line signed-sender form (possession of the **sender** key, not the recipient key); a body `sender`
+│ +equal to the signed `X-Agent-ID`; no `principal_id`/`as_agent` (those are human identities, not
+│ +service delivery authorization); an allowlisted sender→recipient pair; and — only when a service
+│ +audience is configured — a nonempty `idempotency_key` and a matching `X-Crier-Service-Audience`
+│ +header. Both the node worker (`node-bus-worker.py:1208-1215`, body `{"payload": result}` only, no
+│ +sender/idempotency_key) and the dispatcher (`dispatcher.py:500-508`, sender but no
+│ +idempotency_key/audience) construct requests that do **not** carry these controls, so "works" for
+│ +CT-03/CT-04/CT-06 is scoped to **un-protected** recipients; whether protection is enabled on the
+│ +live relay is not asserted here.
+│
+│  **TypeScript client surface (sol B22, added this round — was NAME ONLY).** `clients/typescript/crier.ts`
+│  is a real consumer, not just a directory. `Crier` (`:564`) constructor (`:571-588`): validates
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -284,4 +284,11 @@
+│    - **F10-5** (new) — the handler's slog surface is complete (3/3, §9); the 67-string metric census
+│      is scoped (runtime vs test helpers vs exposition components), not a completed per-metric register.
+│
+│ -## RED field count: 4 (S1 handler 1895-line body not read line-by-line — the slog surface is complete but the body's non-slog semantics are not; §8 per-metric contract — series names inventoried but the type/labels/question/scrape table not filled; §9 log inventory incomplete beyond the 5 tabulated sites — the webhook/store/detect/federation emitters are not tabulated one-per-site; §5 storage-selection custody-proof not written — B20). The §7 `go test ./...` FLAKY RED is **resolved this round** — re-measured green at HEAD `0a372209` after `eb21ca03`.
+│ +## RED field count: 3 (§8 per-metric contract — series names inventoried but the
+│ +type/labels/question/scrape table not filled per metric; §9 log inventory incomplete beyond the 5
+│ +tabulated handler/guard sites — the webhook/store/detect/federation emitters are not tabulated
+│ +one-per-site; §5 storage-selection custody-proof not written — how an operator proves *which*
+│ +backend is serving custody at boot is unmeasured, B20). The §7 `go test ./...` FLAKY RED is
+│ +**resolved this round** — one clean `go test -count=1 ./...` at HEAD `fa619c22` (31 packages, rc 0).
+│ +The former "S1 handler body not read line-by-line" RED is **closed this round** — the 1895-line
+│ +body was read line-by-line (§3 custody lifecycle, service-delivery auth, idempotency, realms).
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -271,7 +271,7 @@
+│    `internal/guard/policy.go:170-205`; `internal/guard/metrics.go:19-49`; `config/config.go:621-700, 1139-1187`;
+│    `clients/python/crier_client.py:960-1036`; `cmd/crier-front/main.go:39`;
+│    `cmd/server/observability.go:95-115, 160-175`; `internal/metrics/metrics.go:1-8`.
+│ -- Commands run: `go build ./...` (PASS, re-run round 15 at `0a372209`); `go test ./...` (PASS at `0a372209`, rc 0 — all packages ok); `go test ./cmd/server/ -run TestMetricsState_SeriesRenderOnIdleBoot -count=1` (ok, 0.323s); `ls internal/registry/*_test.go` (91); `grep -c 'slog.(Info|Error|Warn|Debug)' internal/registry/handler.go` (3); `grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u | wc -l` (67).
+│ +- Commands run: `go build ./...` (PASS, re-run this round); `go test -count=1 ./...` (PASS at `fa619c22`, rc 0 — 31 packages ok, `internal/registry` 27.677s); `ls internal/registry/*_test.go` (91); `grep -c 'slog.(Info|Error|Warn|Debug)' internal/registry/handler.go` (3); `grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u | wc -l` (67).
+│  - Rev re-stamped: `0a372209` (round 15; cited files byte-identical to `33c1f388`; post-stamp commits `6d49c262` README, `7860836f`/`0a372209` releng tag publisher).
+│  - Board rows: CF-337, CF-361, CF-369.
+│  - **Findings:**
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -283,6 +283,11 @@
+│      fail-closed `errorResult` (`:318-361`) with policy precedence (`policy.go:172-202`).
+│    - **F10-5** (new) — the handler's slog surface is complete (3/3, §9); the 67-string metric census
+│      is scoped (runtime vs test helpers vs exposition components), not a completed per-metric register.
+│ +  - **F10-6** (new, sol B01) — protected service-delivery authorization documented (§3):
+│ +    `authorizeServiceDelivery` (`handler.go:1147`) + `service_auth.go:128-168` gate a protected
+│ +    recipient on signed sender, body-sender match, allowlisted pair and (when audience-configured)
+│ +    idempotency_key + audience; the node worker and dispatcher construct requests without those
+│ +    controls, so the transport "works" states are scoped to un-protected recipients.
+│
+│  ## RED field count: 3 (§8 per-metric contract — series names inventoried but the
+│  type/labels/question/scrape table not filled per metric; §9 log inventory incomplete beyond the 5
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | SCHEDULER |
+│  | Path | `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/` (Go) |
+│ -| Revision | `7a7afc0f` (scheduler repo HEAD, re-stamped round 15). Cited Go source files are byte-identical to the round-11 stamp `34e44897` — `git diff --name-only 34e44897..HEAD` returns only `.coding-hermes/board/events.jsonl`, `.coding-hermes/board/tasks.jsonl` and `.qa/chaos-probes/errorpath.sh`. Post-stamp commits: `972f11c8` (chmod +x the chaos errorpath probe, QA-CHS-187), `0927c552` (board close, `[ci skip]`), `7a7afc0f` (board close RELEASE-042, `[ci skip]`). The one cited-file change since `1771d3aa` remains `go.mod`'s toolchain bump (RELEASE-038 `9bc9e561`: `go 1.26.0` + `toolchain go1.26.10`) |
+│ +| Revision | `7a7afc0f` (scheduler repo HEAD at the round-15 stamp; HEAD has since advanced to `81ce9fcb` — "board: file SCHED-GAP-16998", a board-JSONL-only commit, so every cited Go file is byte-identical). Cited Go source files are byte-identical to the round-11 stamp `34e44897` — `git diff --name-only 34e44897..HEAD` returns only `.coding-hermes/board/events.jsonl`, `.coding-hermes/board/tasks.jsonl` and `.qa/chaos-probes/errorpath.sh`. Post-stamp commits: `972f11c8` (chmod +x the chaos errorpath probe, QA-CHS-187), `0927c552` (board close, `[ci skip]`), `7a7afc0f` (board close RELEASE-042, `[ci skip]`). The one cited-file change since `1771d3aa` remains `go.mod`'s toolchain bump (RELEASE-038 `9bc9e561`: `go 1.26.0` + `toolchain go1.26.10`) |
+│  | Language / runtime | Go — `go.mod` declares `go 1.26.0` + `toolchain go1.26.10`; `go env GOVERSION` resolves **go1.26.10** (`GOTOOLCHAIN=auto`). Host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`); `/usr/bin/go` = **go1.26.9** (`/usr/lib/go-1.26/bin/go`; measured `readlink -f /usr/bin/go` + `/usr/bin/go version`) |
+│  | Owner lane | coding-hermes-scheduler (control plane) |
+│  | Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:98-129, 143-208, 230-267`), the binary defaults (`cmd/schedulerd/main.go:95-200`), the auth path (`internal/api/auth.go:187-197`), the API route table (`internal/api/server.go:289-370`) and `config.example.toml` read this round; `tick_process.go`/`packer_select.go`/`namespace_alloc.go` grep-level, not line-by-line; §9 log inventory narrowed to the settlement/batch-dispatch surface (2 of 379 sites) with the uncovered count named as RED |
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | `7a7afc0f` (scheduler repo HEAD at the round-15 stamp; HEAD has since advanced to `81ce9fcb` — "board: file SCHED-GAP-16998", a board-JSONL-only commit, so every cited Go file is byte-identical). Cited Go source files are byte-identical to the round-11 stamp `34e44897` — `git diff --name-only 34e44897..HEAD` returns only `.coding-hermes/board/events.jsonl`, `.coding-hermes/board/tasks.jsonl` and `.qa/chaos-probes/errorpath.sh`. Post-stamp commits: `972f11c8` (chmod +x the chaos errorpath probe, QA-CHS-187), `0927c552` (board close, `[ci skip]`), `7a7afc0f` (board close RELEASE-042, `[ci skip]`). The one cited-file change since `1771d3aa` remains `go.mod`'s toolchain bump (RELEASE-038 `9bc9e561`: `go 1.26.0` + `toolchain go1.26.10`) |
+│  | Language / runtime | Go — `go.mod` declares `go 1.26.0` + `toolchain go1.26.10`; `go env GOVERSION` resolves **go1.26.10** (`GOTOOLCHAIN=auto`). Host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`); `/usr/bin/go` = **go1.26.9** (`/usr/lib/go-1.26/bin/go`; measured `readlink -f /usr/bin/go` + `/usr/bin/go version`) |
+│  | Owner lane | coding-hermes-scheduler (control plane) |
+│ -| Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:98-129, 143-208, 230-267`), the binary defaults (`cmd/schedulerd/main.go:95-200`), the auth path (`internal/api/auth.go:187-197`), the API route table (`internal/api/server.go:289-370`) and `config.example.toml` read this round; `tick_process.go`/`packer_select.go`/`namespace_alloc.go` grep-level, not line-by-line; §9 log inventory narrowed to the settlement/batch-dispatch surface (2 of 379 sites) with the uncovered count named as RED |
+│ +| Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:98-129, 143-208, 230-267`), the binary defaults (`cmd/schedulerd/main.go:95-200`), the auth path (`internal/api/auth.go:187-197`), the API route table (`internal/api/server.go:289-370`) and `config.example.toml` read this round; `tick_process.go`/`packer_select.go`/`namespace_alloc.go` read line-by-line this round (was grep-level — closed, deepseek #2); §9 log inventory narrowed to the settlement/batch-dispatch surface (2 of 378 operator-visible sites, the count corrected this round) with the uncovered count named as RED |
+│
+│  ## 2. Purpose, authority and position
+│
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -138,7 +138,7 @@
+│  | `listen` | `127.0.0.1:9090` (`:96`) | an addr | HTTP surface | off-loopback exposes the API |
+│  | `min-interval` | **30 s** (`:108`) | Go duration | fastest tick interval | below it ticks are refused/never fire |
+│  | `max-interval` | 24 h (`:109`) | Go duration | slowest tick interval | above it lanes starve |
+│ -| `num-levels` | 10 (`:110`) | >= 1 | priority levels | 0 breaks the priority sort |
+│ +| `num-levels` | 10 (`:110`) | >= 1 (config), >= 2 (effective) | priority levels | `internal/config/loader.go:421-422` rejects a configured `< 1` at load ("scheduler.num_levels must be >= 1"); `internal/scheduler/urgency.go:18-22` clamps any value `< 2` — **including 1** — to 2 with a `WARNING: numLevels=%d < 2, setting to 2` log. There is no "priority sort break": the calculator floor is 2, so 1 is silently clamped, not rejected (sol B04) |
+│  | `budget` (weight budget) | 100 (`:111`) | >= 1 | weight budget per evaluation | 0 admits nothing |
+│  | `max-concurrent` | **10** (`:112`) | >= 1 | concurrent foreman ticks | a load gate is a separate knob (see below) |
+│  | `namespace-mode` | **false** (`:113`) | bool | multi-namespace scheduling | off disables reserved/hard_cap |
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -150,7 +150,7 @@
+│  | `tasks-pacing` | 60 s (`:143`) | Go duration | min post-tick spacing for tasks-mode projects | 0 = disabled |
+│  | `load-gate-threshold` | **0 (disabled)** (`:144`) | float (1-min load avg) | defer new spawns while load >= threshold | 0 disables; namespaces opt out via `load_gate='off'` |
+│  | `feature-prune-weeks` | 8 (`:145`) | int | dead-feature reaper prune window | flag only — nothing is auto-deleted |
+│ -| `peer-freshness-window` | `database.PeerFreshnessWindowDefault` (`:148`) | int seconds | REMOTE-003 peer heartbeat freshness | a too-short window spuriously ages peers |
+│ +| `peer-freshness-window` | **180 s** (`database.PeerFreshnessWindowDefault`, `internal/database/peers.go:28` = `3 * 60` seconds; flag at `:148`) | int seconds | REMOTE-003 peer heartbeat freshness | a too-short window spuriously ages peers. Note: `internal/api/server.go:114` comment says "(5m)" but the constant is 180 s — a stale comment, not a second value |
+│  | `spawn-mem-limit-mb` | 0 (`:149`) | MiB | per-spawn `RLIMIT_AS` cap (ADV-R11) | 0 = no cap; a low cap kills spawns |
+│  | `board-stasis-gate` | **true** (`:150`) | bool | exclude a cooldown BUILDER lane whose board is unchanged (SCHED-GAP-1678) | off admits stasis lanes |
+│  | `hooks-file` | `$HOME/.hermes/hooks.toml` (`:151`) | a path | S13 ordered pre/post hooks | a missing file → a named absence, not a crash |
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -155,7 +155,7 @@
+│  | `board-stasis-gate` | **true** (`:150`) | bool | exclude a cooldown BUILDER lane whose board is unchanged (SCHED-GAP-1678) | off admits stasis lanes |
+│  | `hooks-file` | `$HOME/.hermes/hooks.toml` (`:151`) | a path | S13 ordered pre/post hooks | a missing file → a named absence, not a crash |
+│  | `session-silence-grace` | 0 (`:159`) | Go duration | terminate a gateway tick with no token/tool delta (SCHED-GAP-1707) | 0 disables the guard |
+│ -| `session-poll-loop-min-ticks` | 0 (`:170`) | int | terminate a confirmed sleep-poll loop (SCHED-GAP-1698) | 0 disables |
+│ +| `session-poll-loop-min-ticks` | 0 (`:170`) | int (1–5 clamp up to 6) | terminate a confirmed sleep-poll loop (SCHED-GAP-1698) | 0 disables; values 1–5 clamp to the built-in floor of 6 (`main.go:163-170`) |
+│  | `disable-tick-push` | false (`:172`) | bool | skip the per-tick git push at exit (SCHED-GAP-1594) | true stops tick push-at-exit |
+│  | `no-exec-fallback` | **true** (`:190`) | bool | disable `exec.Command` fallback when gateway fails | false re-enables the exec fallback |
+│
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -167,7 +167,7 @@
+│  | `public-url` | `""` (`:107`) | advertised daemon URL | affects self-links in status/dashboards |
+│  | `test-verify` | 0 (`:174`) | verification self-check | non-zero runs a verification pass at boot |
+│  | `verify-board` | `""` (`:175`) | board-consistency self-check | names a board to verify at boot |
+│ -| `session-reap-threshold` | `DefaultHermesReapStaleAfter` (`:176`) | stale-session age floor for `--reap-sessions` | a lower threshold reaps fresher sessions |
+│ +| `session-reap-threshold` | **24 h** (`DefaultHermesReapStaleAfter`, `internal/database/hermesstate.go:52` = `24 * time.Hour`; flag at `:176`) | stale-session age floor for `--reap-sessions` | a lower threshold reaps fresher sessions |
+│  | `reap-sessions` | false (`:177`) | one reap pass against `state.db`, then exit | **dry-run by default** — writes nothing without `--reap-sessions-apply` |
+│  | `reap-sessions-apply` | false (`:178`) | apply the reap pass (`ended_at` + `end_reason='reaped'`) | **the mutation switch** — true closes selected sessions; without it the pass is a dry-run (SCHED-GAP-089) |
+│  | `session-db` | `DefaultHermesSessionDBPath()` (`:179`) | which `state.db` `--reap-sessions` reads | a wrong path reaps (or fails to find) the wrong store |
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -170,7 +170,7 @@
+│  | `session-reap-threshold` | **24 h** (`DefaultHermesReapStaleAfter`, `internal/database/hermesstate.go:52` = `24 * time.Hour`; flag at `:176`) | stale-session age floor for `--reap-sessions` | a lower threshold reaps fresher sessions |
+│  | `reap-sessions` | false (`:177`) | one reap pass against `state.db`, then exit | **dry-run by default** — writes nothing without `--reap-sessions-apply` |
+│  | `reap-sessions-apply` | false (`:178`) | apply the reap pass (`ended_at` + `end_reason='reaped'`) | **the mutation switch** — true closes selected sessions; without it the pass is a dry-run (SCHED-GAP-089) |
+│ -| `session-db` | `DefaultHermesSessionDBPath()` (`:179`) | which `state.db` `--reap-sessions` reads | a wrong path reaps (or fails to find) the wrong store |
+│ +| `session-db` | `DefaultHermesSessionDBPath()` (`internal/database/hermesstate.go:116`; flag at `:179`) | which `state.db` `--reap-sessions` reads | a wrong path reaps (or fails to find) the wrong store |
+│  | `duckbrain-ns` / `duckbrain-url` / `duckbrain-interval` | `"scheduler"` / `http://localhost:3000` / `5m` (`:180-182`) | DuckBrain sync target + cadence | a wrong URL/interval stops the sync spool |
+│  | `simulate` | false (`:183`) | **dry-run mode — no real spawning** | true suppresses real spawns; the sim-* knobs only take effect with it |
+│  | `sim-success` / `sim-idle` / `sim-count` | 0.85 / 0.0 / 0 (`:184-186`) | simulated outcomes | only meaningful under `--simulate`; `sim-count N` generates N synthetic ticks then exits |
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -214,7 +214,7 @@
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│  | CT-01 | owner | in | **operator config (boundary)** — a human writes `fleet.toml` + `scheduler.db` project rows (lane enabled/cadence/weight/pin); there is no producer function (the load path `config.LoadRootConfig`, called at `main.go:640,673,762,854,870,968,995,1023,1054,1309`, is the consumer's loader, not a producer) | `internal/scheduler/admission_mode.go:112` `admissionModeForProject` (reads the lane's admission mode from the DB) | **UNVERIFIED (boundary)** — the consumer is nameable; the producer is a human writing config, not a function (round-9 re-grade: CT-01 is a boundary contract, not internal) |
+│ -| CT-02 | crier | out | `internal/bus/dispatch.go:202` `payload()` emits `text_b64` (base64), field **`board`** (not `board_row`) | crier `internal/registry/handler.go:990` `HandleDeliver` | **works** — CF-354 fixed and closed (commit `1f1c0fe`); crier delivers the envelope verbatim; the former `text`/`text_b64` mismatch was node-side consumption |
+│ +| CT-02 | crier | out | `internal/bus/dispatch.go:175` `payload()` (the function is declared at `:175`; `:202` is the `p["text_b64"] = …` assignment inside it — emits `text_b64` (base64), field **`board`** (not `board_row`)) | crier `internal/registry/handler.go:990` `HandleDeliver` | **works** — CF-354 fixed and closed (commit `1f1c0fe`); crier delivers the envelope verbatim; the former `text`/`text_b64` mismatch was node-side consumption |
+│  | CT-06 | crier | in | `dispatcher.py:500-508` builds the completion reply `{in_reply_to, agent, ok, …}`; transported via crier `internal/registry/handler.go:990` `HandleDeliver` into the scheduler's inbox | `internal/scheduler/dispatch_leg.go:713` `dispatchReplyVerdict` reads only `payload["ok"]` | **works (dispatcher leg)** — the dispatcher always sends `ok` (`dispatcher.py:501`), the exact field `dispatchReplyVerdict` reads. CF-355 (the node's `status` reply scoring success-on-failure) is the **node-reply** leg, carried at CT-04, not this producer |
+│  | CT-05 | foreman | in | `scripts/load_lane_config.py:31-37` (reads `prompts/*.md` → `UPDATE projects SET prompt=?, prompt_mode='append'`) | `internal/scheduler/spawn.go:1244` `buildForemanPrompt` (namespace default → project replace/append → dynamic footer) | **UNVERIFIED** — both ends are in-repo (internal, round-9 grok B3: round-8 labelled the producer "external"); the OUTLINE VIII.1 "3 of 11 prompt files disagree" breakage is **unmeasured** (no command establishes which three files disagree or on what) |
+│  | CT-15 | foreman | out | **external** — the foreman lane's decision/finding/goal writes (out of scope) | **external** — the duckbrain service (out of scope) | **UNVERIFIED (boundary)** — neither side has an in-repo `file:function`, and the wire was not measured this round; an outline "works" annotation is not implementation evidence (sol B03) |
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -243,15 +243,26 @@
+│
+│  ## 8. Metrics
+│
+│ -**Measured — real, not RED.** The scheduler serves `GET /api/v1/metrics`
+│ -(`internal/api/server_metrics.go`) with blocks `spawns`, `deferrals`, `nudges`, `ticks`,
+│ -`tick_duration_ms`, `gateway`, `outcomes`, `stalls`, `escalations`, `lane_churn`,
+│ -`dispatch_inbox`, each carrying an `available: true|false` honesty shape and a per-block source in
+│ -`metricsSources()` (`:125`). `metricsWindow` is 24h (`:42`). **Semantics (B22, read this round):**
+│ -`deferrals` is a per-process SCHED-GAP-155 admission counter, monotonic since daemon boot and
+│ -**reset by a restart** (no persisted equivalent) (`:132-136`); `spawns` is read from the `ticks`
+│ -table joined to `projects` (`:127-130`). **Locator correction (F9-4):** `metricsSpawns` is the
+│ -`func` keyword at `:195`, not `:192` (which is the doc comment).
+│ +**Measured — real, not RED.** The scheduler serves `GET /api/v1/metrics` (`internal/api/server_metrics.go:87` `metrics`) with a top-level body of `generated_at`, `uptime_s`, `sources` and the eleven blocks `spawns`, `deferrals`, `nudges`, `ticks`, `tick_duration_ms`, `gateway`, `outcomes`, `stalls`, `escalations`, `lane_churn`, `dispatch_inbox` (`:101-119`); each block's source string is in `metricsSources()` (`:125`). `metricsWindow` is 24h (`:42`).
+│ +
+│ +**Wire shapes (sol B14, corrected this round — the intro comment lies).** Two distinct success shapes:
+│ +the ten map-based blocks (`spawns`, `deferrals`, `nudges`, `ticks`, `gateway`, `outcomes`, `stalls`,
+│ +`escalations`, `lane_churn`, `dispatch_inbox`) each return a `map[string]interface{}` carrying
+│ +`"available": true` inline, or — on query failure — the common `metricsUnavailable` shape
+│ +`{"available": false, "reason": "…"}` (`:76-81`). **`tick_duration_ms` is the exception:**
+│ +`metricsTickDurations` (`:426`) returns `interface{}`, and on success marshals the `tickDurationMs`
+│ +struct `{count, window, p50, p90, p99}` (`:65-71`) with **no `available` field** — `p50`/`p90`/`p99`
+│ +are `nil` (JSON `null`) when `count == 0`, and the comment at `:60-63` states this is deliberate
+│ +(an empty sample has no percentile; reporting 0 would be a fabricated measurement). Only the
+│ +failure path for that block returns `{"available": false, "reason": "…"}`. The file's introductory
+│ +comment at `:30` claims "every block carries available: true|false" — that is **false for
+│ +`tick_duration_ms`'s success shape**, which is why the wire contract here is read from the struct
+│ +and the unavailable helper, not from the comment (sol B14).
+│ +
+│ +**Semantics (B22, read this round).** `deferrals` is a per-process SCHED-GAP-155 admission counter,
+│ +monotonic since daemon boot and **reset by a restart** (no persisted equivalent) (`:132-136`);
+│ +`spawns` is read from the `ticks` table joined to `projects` (`:127-130`). **Locator correction
+│ +(F9-4):** `metricsSpawns` is the `func` keyword at `:195`, not `:192` (which is the doc comment).
+│
+│  ## 9. Log lines (verbatim)
+│
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -267,10 +267,16 @@
+│  ## 9. Log lines (verbatim)
+│
+│  **Scope, stated (deepseek #1).** This is the settlement/batch-dispatch surface, **not** a full
+│ -inventory. The control plane has **379** `log.Printf` call sites
+│ -(`grep -rn "log.Printf" internal/scheduler/*.go | wc -l` = 379, measured this round). The two rows
+│ -below are the settlement/batch-dispatch lines; the remaining **377** sites are uncovered and are
+│ -the named RED on this field — not a "sample" claimed as complete.
+│ +inventory. The scheduler's operator-visible logging is `log.Printf` — unstructured, level-less — in
+│ +`internal/scheduler/*.go`: **378** call sites excluding the single `_test.go` line
+│ +(`grep -rn "log.Printf" internal/scheduler/*.go | grep -v _test.go | wc -l` = 378; the unqualified
+│ +glob total is 379 with that one test line), producing **372 distinct format strings**
+│ +(`grep -rhn "log.Printf" internal/scheduler/*.go | grep -v _test.go | sed -E 's/^.*log\.Printf\(//' | sort -u | wc -l`
+│ += 372). The two rows below are the settlement/batch-dispatch lines; the remaining **376** sites
+│ +(370 distinct strings) are uncovered and are the named RED on this field — not a "sample" claimed
+│ +as complete. The 372 distinct level-less `log.Printf` strings are themselves a system observability
+│ +finding (no levels, no structured fields — every severity is greppable only by prefix), filed as a
+│ +board row, not a writer's-diligence gap.
+│
+│  | Level | Line | Emitted when | Kind |
+│  |---|---|---|---|
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -319,7 +319,7 @@
+│  - Code read: `internal/scheduler/dispatch_leg.go` (`:245-364`, `:700-759`), `internal/bus/dispatch.go`
+│    (`:170-214`), `internal/scheduler/admission_mode.go` (`:98-129, 143-208, 230-267`),
+│    `internal/scheduler/usage_pool_policy.go:26-63`, `cmd/schedulerd/main.go:95-200`,
+│ -  `internal/api/auth.go:187-197`, `internal/api/server.go:289-346`, `internal/api/server_metrics.go:125-136, :195`,
+│ +  `internal/api/auth.go:187-197`, `internal/api/server.go:289-370`, `internal/api/server_metrics.go:60-81, :87-119, :125-136, :195`,
+│    `config.example.toml` (full), `internal/database/migrations.go` (grep: `:1217-1232, :1391-1489, :1970, :2036`).
+│  - Commands run: `go build ./...` (PASS); `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./...`
+│    (PASS, 25/25); the three env-sensitive tests (PASS, 0.409s); `grep -n 'LoadRootConfig' cmd/schedulerd/main.go` (10 sites);
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -103,9 +103,27 @@
+│
+│  Relationship: a run (`execution_runs`) has 1:N attempts (`execution_attempts`) and 1:N ordered
+│  events (`execution_events`); the projection is the per-destination delivery/sync state; the outbox is the
+│ -durable-delivery queue; the workspace lease is the single-active-writer boundary. The write
+│ -authorities and recovery queries per table are not yet written — the keys, their uniqueness
+│ -guarantees and their relationships are.
+│ +durable-delivery queue; the workspace lease is the single-active-writer boundary.
+│ +
+│ +**Write authorities and recovery (sol B11, written this round).** The run-correctness tables are
+│ +written by `internal/database/execution_store.go` (package-level functions, no receiver):
+│ +
+│ +| Table | Write authority (`execution_store.go`) | Transition it applies |
+│ +|---|---|---|
+│ +| `execution_runs` | `CreateExecutionRun` (`:52`) | creates the run row |
+│ +| `execution_attempts` + lease + outbox | `AdmitExecutionAttempt` (`:164`) | **the ONE admission transition** — creates the attempt, acquires the workspace lease, inserts outbox work, and advances run state atomically in one `executionTx` (`:267`) |
+│ +| `workspace_leases` | `AcquireWorkspaceLease` (`:378`), `RenewWorkspaceLease` (`:391`), `RevokeWorkspaceLease` (`:397`) | the single-active-writer boundary acquired/renewed/revoked |
+│ +| `execution_attempts` (process) | `SetAttemptProcessIncarnation` (`:417`) | stamps pid/pgid/container on an attempt |
+│ +| `execution_events` | `AppendExecutionEvent` (`:446`) | appends an ordered per-run event |
+│ +| `verification_receipts` | `RecordVerificationReceipt` (`:559`) | records a per-attempt receipt |
+│ +| `execution_projections` | `PutExecutionProjection` (`:607`) | per-destination projection/sync state |
+│ +| `execution_outbox` | `ClaimExecutionOutbox` (`:655`), `AckExecutionOutbox` (`:685`), `RetryExecutionOutbox` (`:691`), `ReconcileExecutionOutboxUndeliverable` (`:703`) | the durable-delivery queue's claim/ack/retry/undeliverable lifecycle |
+│ +| all (recovery) | `RecoverExecutionState` (`:749`) — returns `([]ExecutionRun, []WorkspaceLease, []OutboxMessage)` | the recovery selector an operator reads after a crash to distinguish recoverable work from uncertain settlement |
+│ +
+│ +The write authorities and the recovery selector are now named (sol B11's table/key gap is closed);
+│ +what remains unwritten is a per-failure-mode post-recovery indication (what an operator reads back
+│ +after each recovery step) — a named RED on S3, narrower than round-15's "write authorities and
+│ +recovery queries not written".
+│
+│  ## 4. Dependencies
+│
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -343,7 +343,7 @@
+│    (PASS, 25/25); the three env-sensitive tests (PASS, 0.409s); `grep -n 'LoadRootConfig' cmd/schedulerd/main.go` (10 sites);
+│    `grep -rn "log.Printf" internal/scheduler/*.go | wc -l` (379); `grep -cE 'flag\.(String|Int|Int64|Bool|Duration|Float64)' cmd/schedulerd/main.go` (57);
+│    `sqlite3 … '.tables'` (30 tables).
+│ -- Rev re-stamped: `7a7afc0f` (round 15). Cited Go source byte-identical to `34e44897` (`git diff --name-only 34e44897..HEAD` = board JSONL + `.qa/chaos-probes/errorpath.sh` only); the go.mod toolchain bump to go1.26.10 (RELEASE-038 `9bc9e561`) is the one cited-file change since `1771d3aa`.
+│ +- Rev re-stamped: `7a7afc0f` (round 15); HEAD has since advanced to `81ce9fcb` ("board: file SCHED-GAP-16998", board-JSONL-only). Cited Go source byte-identical to `34e44897` (`git diff --name-only 34e44897..HEAD` = board JSONL + `.qa/chaos-probes/errorpath.sh` only); the go.mod toolchain bump to go1.26.10 (RELEASE-038 `9bc9e561`) is the one cited-file change since `1771d3aa`.
+│  - Board rows: CF-334, CF-335, CF-337, CF-343, CF-346, CF-353, CF-354, CF-355.
+│  - **Findings:**
+│    - **F9-1** (carried) — settlement exists (`dispatch_leg.go:260-336`); the real defect is CF-355.
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -355,5 +355,17 @@
+│    - **F9-6** (carried) — round-4's `go test ./...` FAIL was env contamination, not a code break; clean-env PASSES (25/25).
+│    - **F9-7** (new, B16/B17) — the ordered admission procedure and the run-correctness store keys
+│      are written this round (see §3 note).
+│ +  - **F9-8** (new, sol B04) — `num-levels` "0 breaks the priority sort" was false: `loader.go:421-422`
+│ +    rejects `< 1` at load and `urgency.go:18-22` clamps `< 2` (including 1) to 2; the calculator
+│ +    floor is 2.
+│ +  - **F9-9** (new, sol B14) — `tick_duration_ms`'s success shape is `tickDurationMs{count, window,
+│ +    p50, p90, p99}` with **no `available` field**; the `:30` intro comment "every block carries
+│ +    available" is wrong for that block.
+│ +  - **F9-10** (new, sol B11) — the run-correctness write authorities and the recovery selector are
+│ +    named (`execution_store.go`: `CreateExecutionRun`, `AdmitExecutionAttempt`, `RecoverExecutionState`
+│ +    and the lease/event/projection/outbox functions); per-failure-mode post-recovery indications
+│ +    remain unwritten.
+│ +  - **F9-11** (new, kimi N1) — CT-02 producer locator re-pinned from `dispatch.go:202` to `:175`
+│ +    (`payload()` is declared at `:175`; `:202` is the `text_b64` assignment inside it).
+│
+│  ## RED field count: 5 (§9 log inventory 2 of 379 sites — the remaining 377 are the named RED, not a "sample"; §3 S1 grep-level (`tick_process`/`packer_select`/`namespace_alloc` not line-by-line); §5 the auxiliary-flag reader/precedence not re-verified per flag (the consequence column is now filled); S4 per-route contract not written — B18; S3 write authorities/recovery queries not written — B17)
+│ docs/handbook/chapters/M9-scheduler.md
+│ @@ -368,4 +368,11 @@
+│    - **F9-11** (new, kimi N1) — CT-02 producer locator re-pinned from `dispatch.go:202` to `:175`
+│      (`payload()` is declared at `:175`; `:202` is the `text_b64` assignment inside it).
+│
+│ -## RED field count: 5 (§9 log inventory 2 of 379 sites — the remaining 377 are the named RED, not a "sample"; §3 S1 grep-level (`tick_process`/`packer_select`/`namespace_alloc` not line-by-line); §5 the auxiliary-flag reader/precedence not re-verified per flag (the consequence column is now filled); S4 per-route contract not written — B18; S3 write authorities/recovery queries not written — B17)
+│ +## RED field count: 7 — §9 log inventory (376 of 378 operator-visible sites / 370 of 372 distinct
+│ +strings uncovered, the named RED — not a "sample"); S4 per-route request/response contract not
+│ +written (B18 — the 43-route inventory is complete, the per-route shapes are not); S3 per-failure-mode
+│ +post-recovery indications not written (B17 partial — write authorities + recovery selector now
+│ +named); §5 auxiliary-flag reader/precedence (env→TOML→flag) not re-verified per flag; CT-01
+│ +UNVERIFIED (boundary); CT-05 UNVERIFIED (internal — "3 of 11 prompt files disagree" unmeasured);
+│ +CT-15 UNVERIFIED (boundary). Rule applied this round (glm #4): an UNVERIFIED contract state —
+│ +boundary or internal — is a named RED; only a measured-`works` state is not.
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -93,7 +93,7 @@
+│  | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+│  |---|---|---|---|---|---|
+│  | CT-07 | gateway | in (model choice) | **external** — the task-router's model choice (out of scope) | **external** — the Hermes gateway (out of scope) | **UNVERIFIED (boundary)** — neither side has an in-repo `file:function`, and the wire was not measured this round; an outline "works" annotation is not implementation evidence (sol B03) |
+│ -| M12-C1 | node | in | **unproven client half** — the proxy side is verified (401 on missing/unknown token, `:128-130`); the node side has no in-repo file that *calls* the proxy. `grep -rnE '8775\|CF_PROXY\|cf-inference-proxy' scripts/ config/ specs/` (ERE, re-run this round at CF HEAD `3fba8a7`) matches **four** text sites: `scripts/panel_loop.py:188` (locator re-pinned this round — round-15 cited `:145`, which is a `log = outdir / …` line), `scripts/master_doc_skeleton.py:25` and `:211` (self-references listing the path), and `config/node.env.example:22` — which is the **live assignment** `ENV_CF_PROXY_API_KEY=@~/.node/auth/provider.key`, not a comment. `config/node.env.example:26` comments `CONFIG_SET_MODEL_PROVIDER=cf-proxy -> model.provider`, so the producer half is config-driven: `node.env.example:22,26` → `node_env.py`/provisioner config generation → `~/.hermes/config.yaml` `model.provider=cf-proxy`. Round-4's quoted command omitted `-E`, so its bare-`\|` BRE returned **0** matches (measured rc 1) — the opposite of the row's claim (grok 2 / glm 4). | `cf-inference-proxy.py:135` `do_POST` → `_node` (`:136`) | **UNVERIFIED** — proxy side verified; the node-client call site is config-wired, not a `file:function` in this repo |
+│ +| M12-C1 | node | in | **unproven client half** — the proxy side is verified (401 on missing/unknown token, `:128-130`); the node side has no in-repo file that *calls* the proxy. `grep -rnE '8775\|CF_PROXY\|cf-inference-proxy' scripts/ config/ specs/` (ERE, re-run this round at CF HEAD `3fba8a7`; the `\|` in this table cell is markdown escaping for the bare-`|` alternation actually run — the exact command is in §13) matches **four** text sites: `scripts/panel_loop.py:188` (locator re-pinned this round — round-15 cited `:145`, which is a `log = outdir / …` line), `scripts/master_doc_skeleton.py:25` and `:211` (self-references listing the path), and `config/node.env.example:22` — which is the **live assignment** `ENV_CF_PROXY_API_KEY=@~/.node/auth/provider.key`, not a comment. `config/node.env.example:26` comments `CONFIG_SET_MODEL_PROVIDER=cf-proxy -> model.provider`, so the producer half is config-driven: `node.env.example:22,26` → `node_env.py`/provisioner config generation → `~/.hermes/config.yaml` `model.provider=cf-proxy`. Round-4's quoted command omitted `-E`, so its bare-`\|` BRE returned **0** matches (measured rc 1) — the opposite of the row's claim (grok 2 / glm 4). | `cf-inference-proxy.py:135` `do_POST` → `_node` (`:136`) | **UNVERIFIED** — proxy side verified; the node-client call site is config-wired, not a `file:function` in this repo |
+│  | M12-C2 | upstream | out | `_forward` (`:164`) builds the upstream request with the control-host key | **rumour — one side only** (the upstream gateway/provider, not a function) | **UNVERIFIED** — external boundary with one side named; a "works" verdict on a rumour is not permitted (B06) |
+│
+│  The round-3 M12-C1 producer cell (\"node POST /v1/chat/completions with Authorization: Bearer ***\")
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -32,7 +32,7 @@
+│
+│  | Submodule | Unit | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│ -| S1 admission | token resolution `_node` (`:115-123`), model allowlist (`:155-160`), fail-closed startup (`:265-270`) | **active** | invoked continuously by the systemd unit `~/.config/systemd/user/cf-inference-proxy.service` — loaded, enabled, `active (running)` since 2026-11-05 09:21, Main PID 2603939, drop-in `cf-inference-proxy.service.d/10-upstream.conf` (measured this round, `systemctl --user status`). The in-repo grep (`grep -rnE '8775\|CF_PROXY\|cf-inference-proxy' scripts/ config/ specs/`) finds no script/cron caller, but the invoker is the systemd unit, not absent (B2) |
+│ +| S1 admission | token resolution `_node` (`:115-123`), model allowlist (`:155-160`), fail-closed startup (`:265-270`) | **active** | invoked continuously by the systemd unit `~/.config/systemd/user/cf-inference-proxy.service` — loaded, enabled, `active (running)` since 2026-11-05 09:21, Main PID 2603939, drop-in `cf-inference-proxy.service.d/10-upstream.conf` (measured this round, `systemctl --user status`). The in-repo grep (`grep -rnE '8775|CF_PROXY|cf-inference-proxy' scripts/ config/ specs/` — bare-`|` ERE) finds no script/cron caller, but the invoker is the systemd unit, not absent (B2) |
+│  | S2 upstream routing | `_forward` (`:164-180`), model rewrite via `UPSTREAM_MODEL` | **active** | `_forward` invoked by `do_GET` `:132` and `do_POST` `:162` (the request handlers under the systemd unit) |
+│  | S3 stream pass-through | `:200-238` (streamed), `:240-258` (buffered) | **active** | the two branches of `_forward` (`:164`), reachable only through `:132`/`:162` |
+│  | S4 usage and request capture | `capture_request` (`:83-95`), `log_usage` (`:98-101`) | **active** | `capture_request` called at `:161`; `log_usage` called at `:152, :156, :220, :227, :232, :248, :252` — all inside the `do_GET`/`do_POST`/`_forward` request path |
+│ docs/handbook/chapters/M12-inference-proxy.md
+│ @@ -32,7 +32,7 @@
+│
+│  | Submodule | Unit | Classification | Evidence (invoking line) |
+│  |---|---|---|---|
+│ -| S1 admission | token resolution `_node` (`:115-123`), model allowlist (`:155-160`), fail-closed startup (`:265-270`) | **active** | invoked continuously by the systemd unit `~/.config/systemd/user/cf-inference-proxy.service` — loaded, enabled, `active (running)` since 2026-11-05 09:21, Main PID 2603939, drop-in `cf-inference-proxy.service.d/10-upstream.conf` (measured this round, `systemctl --user status`). The in-repo grep (`grep -rnE '8775|CF_PROXY|cf-inference-proxy' scripts/ config/ specs/` — bare-`|` ERE) finds no script/cron caller, but the invoker is the systemd unit, not absent (B2) |
+│ +| S1 admission | token resolution `_node` (`:115-123`), model allowlist (`:155-160`), fail-closed startup (`:265-270`) | **active** | invoked continuously by the systemd unit `~/.config/systemd/user/cf-inference-proxy.service` — loaded, enabled, `active (running)` since 2026-11-05 09:21, Main PID 2603939, drop-in `cf-inference-proxy.service.d/10-upstream.conf` (measured this round, `systemctl --user status`). The in-repo grep (`grep -rnE '8775\|CF_PROXY\|cf-inference-proxy' scripts/ config/ specs/`) finds no script/cron caller, but the invoker is the systemd unit, not absent (B2) |
+│  | S2 upstream routing | `_forward` (`:164-180`), model rewrite via `UPSTREAM_MODEL` | **active** | `_forward` invoked by `do_GET` `:132` and `do_POST` `:162` (the request handlers under the systemd unit) |
+│  | S3 stream pass-through | `:200-238` (streamed), `:240-258` (buffered) | **active** | the two branches of `_forward` (`:164`), reachable only through `:132`/`:162` |
+│  | S4 usage and request capture | `capture_request` (`:83-95`), `log_usage` (`:98-101`) | **active** | `capture_request` called at `:161`; `log_usage` called at `:152, :156, :220, :227, :232, :248, :252` — all inside the `do_GET`/`do_POST`/`_forward` request path |
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -158,7 +158,7 @@
+│  | Check | Command | Expected | Last run | Result |
+│  |---|---|---|---|---|
+│  | build | `go build ./...` (crier repo) | exit 0 | 2026-11-06, rev `0a372209` (re-run this round) | **PASS** (rc 0) |
+│ -| go test | `go test -count=1 ./...` | green | 2026-11-06, rev `fa619c22` (re-run this round) | **PASS** (rc 0) — all 31 packages ok; `internal/registry` 27.677s, `internal/reads` 31.187s, `internal/session` 29.248s, `internal/federation` 26.355s (wall 54s). The `internal/registry` timing is load-dependent, not a fixed value — one run, one revision, one duration this round (kimi B4). The FLAKY diagnosis at `86c4c469` is superseded by `eb21ca03` (see the note below) |
+│ +| go test | `go test -count=1 ./...` | green | 2026-11-06, rev `fa619c22` (re-run this round) | **PASS** (rc 0) — 44 packages: 41 `ok`, 3 `[no test files]`, 0 FAIL; `internal/registry` 27.677s, `internal/reads` 31.187s, `internal/session` 29.248s, `internal/federation` 26.355s (wall 54s). The `internal/registry` timing is load-dependent, not a fixed value — one run, one revision, one duration this round (kimi B4). The FLAKY diagnosis at `86c4c469` is superseded by `eb21ca03` (see the note below) |
+│  | port fact | `grep -n 'Port' config/config.go` | 8767 | 2026-11-06 | PASS (`:622`) |
+│  | slog surface | `grep -c 'slog.\(Info\|Error\|Warn\|Debug\)' internal/registry/handler.go` | 3 | 2026-11-06 | **PASS** — exactly 3 sites (all in §9); no `log.Printf`/`fmt.Printf` in the handler |
+│  | signed-read ladder | `python3 ~/node-bus-worker.py --check` on cf-node | inbox 200 with key+bearer | 2026-11-05, cf-node only | PASS (FACT-04) — not repeatable from this control host |
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -177,7 +177,7 @@
+│  after that stamp and removes the order-sensitive assertion that was the documented flake
+│  (QA-CRIER-56: `CR_DETECT_QUIET_HOURS` 01:00–05:00 UTC window contamination — the same clock-sensitive
+│  root cause the round-11 note named). The FLAKY row is therefore **superseded** — the flake is fixed,
+│ -and this round's single `go test -count=1 ./...` run at `fa619c22` is a clean PASS (31 packages, rc 0).
+│ +and this round's single `go test -count=1 ./...` run at `fa619c22` is a clean PASS (44 packages: 41 ok, 3 no test files, rc 0).
+│
+│  ## 8. Metrics
+│
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -271,7 +271,7 @@
+│    `internal/guard/policy.go:170-205`; `internal/guard/metrics.go:19-49`; `config/config.go:621-700, 1139-1187`;
+│    `clients/python/crier_client.py:960-1036`; `cmd/crier-front/main.go:39`;
+│    `cmd/server/observability.go:95-115, 160-175`; `internal/metrics/metrics.go:1-8`.
+│ -- Commands run: `go build ./...` (PASS, re-run this round); `go test -count=1 ./...` (PASS at `fa619c22`, rc 0 — 31 packages ok, `internal/registry` 27.677s); `ls internal/registry/*_test.go` (91); `grep -c 'slog.(Info|Error|Warn|Debug)' internal/registry/handler.go` (3); `grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u | wc -l` (67).
+│ +- Commands run: `go build ./...` (PASS, re-run this round); `go test -count=1 ./...` (PASS at `fa619c22`, rc 0 — 44 packages: 41 ok, 3 no test files, `internal/registry` 27.677s); `ls internal/registry/*_test.go` (91); `grep -c 'slog.(Info|Error|Warn|Debug)' internal/registry/handler.go` (3); `grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u | wc -l` (67).
+│  - Rev re-stamped: `0a372209` (round 15; cited files byte-identical to `33c1f388`; post-stamp commits `6d49c262` README, `7860836f`/`0a372209` releng tag publisher).
+│  - Board rows: CF-337, CF-361, CF-369.
+│  - **Findings:**
+│ docs/handbook/chapters/M10-crier.md
+│ @@ -294,6 +294,6 @@
+│  tabulated handler/guard sites — the webhook/store/detect/federation emitters are not tabulated
+│  one-per-site; §5 storage-selection custody-proof not written — how an operator proves *which*
+│  backend is serving custody at boot is unmeasured, B20). The §7 `go test ./...` FLAKY RED is
+│ -**resolved this round** — one clean `go test -count=1 ./...` at HEAD `fa619c22` (31 packages, rc 0).
+│ +**resolved this round** — one clean `go test -count=1 ./...` at HEAD `fa619c22` (44 packages: 41 ok, 3 no test files, rc 0).
+│  The former "S1 handler body not read line-by-line" RED is **closed this round** — the 1895-line
+│  body was read line-by-line (§3 custody lifecycle, service-delivery auth, idempotency, realms).
+All corrections applied and the spine is clean. Final manifest:
+
+WRITER ROUND COMPLETE
+
+Chapters written (round 16, group s3 — control plane):
+- M9-scheduler.md — RED 7
+- M10-crier.md — RED 3
+- M11-dispatcher.md — RED 2
+- M12-inference-proxy.md — RED 5
+
+Chapters still skeleton: none (all four carry all 13 schema sections + a RED count).
+
+Spine gate: `python3 scripts/handbook_spine.py` → `chapters=13  canonical contracts=18  findings=0` (rc 0).
+
+Corrections applied this round (grouped by the finding they close):
+- glm #1 / kimi B10 / grok (blocking): M12 `panel_loop.py:145` → `:188`, re-pinned at CF HEAD `3fba8a7`, F12-9 filed.
+- sol B04: M9 `num-levels` — "0 breaks the priority sort" corrected to loader rejection (`loader.go:421-422`) + constructor clamp to 2 (`urgency.go:18-22`), F9-8.
+- sol B14: M9 metrics — `tick_duration_ms` success shape is `tickDurationMs{count,window,p50,p90,p99}` with no `available` field; the `:30` intro comment is wrong, F9-9.
+- kimi B4: M10 §7 three-durations/two-revisions consolidated to one run at `fa619c22` (44 pkgs: 41 ok, 3 no-test, 0 fail), re-run live this round.
+- sol B18: M11 §2 absence consequence scoped to control-host-dispatched agents (node-bus-worker is the independent consumer), F11-9.
+- kimi N1: CT-02 producer re-pinned `dispatch.go:202` → `:175` in both M9 §6 and M10 §6.
+- kimi N2: M9 §13 route range `:289-346` → `:289-370`.
+- sol B01: protected service-delivery auth documented in M10 §3 and M11 §6 (`authorizeServiceDelivery` `handler.go:1147` + `service_auth.go:128-168`); "works" scoped to un-protected recipients, F10-6/F11-10.
+- sol B10: `peer-freshness-window`=180 s (stale "5m" comment noted), `session-reap-threshold`=24 h, `session-db` path locator, `session-poll-loop-min-ticks` 1–5→6 clamp — all resolved to operational values.
+- sol B11: M9 S3 write authorities + `RecoverExecutionState` recovery selector named (`execution_store.go`), F9-10.
+- kimi N3: M11 `CRIER_URL` redaction labelled (`dispatcher.py:38`).
+- glm #4: RED-accounting rule applied uniformly — UNVERIFIED (boundary or internal) and FAILING are named REDs; stated in each chapter's RED line.
+- glm #5: M12 §6 `\|`-in-table clarified as markdown escaping (exact command in §13).
+- deepseek #2: M9 S1 trio (`tick_process` 1260, `packer_select` 895, `namespace_alloc` 299) and M10 `handler.go` (1895) read line-by-line; both REDs closed.
+- grok #7: M10 bare basenames → full relative paths (`config/config.go:622`, `internal/registry/handler.go:1711`, `internal/guard/policy.go:172`).
+- kimi B2 / grok #2: M9 stamp noted "HEAD advanced to `81ce9fcb`" and M10 to `fa619c22` (both cited-file-byte-identical), dropping the false "HEAD" wording.
+
+Held back as honest named REDs (not fake-closed):
+- M9 §9 log inventory: 372 distinct level-less `log.Printf` strings remain untabulated (378 operator sites, 2 tabulated). Filed as a system observability defect, not a writer gap.
+- M10 §8 per-metric table and §9 non-handler/guard log emitters: still not tabulated one-per-site.
+- M9 S4 per-route contract (43 routes inventoried, shapes unwritten) and S3 per-failure-mode recovery indications.
+
+CROSS-SECTION DEPENDENCIES (owned by other writers; my chapters written to the canonical ids):
+1. sol B05 — `docs/MASTER-DOC-SCHEMA.md` worked example must change "Crier.send/retrieve/complete" → "retrieve/deliver/ack" and withdraw the live-job PASS-as-proof (the scripts print, they do not assert). M11 §4/§7 already correct; the schema example is the stale side.
+2. kimi B6 — `README.md` Part III row III.13 must read "FAILING (streaming)" not "VERIFIED" for M12. M12 §1 already correct.
+3. glm #4 — M2 (CT-11) and M8 (local edge) must adopt the same boundary-UNVERIFIED-counts-as-RED rule for document-wide scorecard consistency with M4/M9/M12.
+4. grok #4 — `scripts/handbook_spine.py` (M6.S9) should make the §6 cell splitter backtick-aware; the M12-C1 `\|`-in-code-span row still mis-parses (harmless today — a local row), so `findings=0` does not yet prove a mis-sliced internal row would be caught.
+
+Commands run (exit status):
+- `python3 scripts/handbook_spine.py` → rc 0 (findings=0), run 4×.
+- `git rev-parse HEAD` (code-factory) → `3fba8a7` rc 0.
+- scheduler repo `git log --oneline -3` → HEAD `81ce9fcb` rc 0.
+- crier repo `git log --oneline -3` → HEAD `fa619c22` rc 0; `git diff --name-only 0a372209..HEAD` → `README.md` only, rc 0.
+- crier-fleet `git log --oneline -3` → HEAD `283bca9` rc 0.
+- crier `go test -count=1 ./...` → rc 0 (wall 54s); cached re-count: 41 ok / 3 no-test / 0 FAIL.
+- `grep -rnE '8775|CF_PROXY|cf-inference-proxy' scripts/ config/ specs/` → 4 sites, `panel_loop.py:188` rc 0.
+- scheduler `grep -rn "log.Printf" internal/scheduler/*.go | grep -v _test.go | wc -l` → 378; distinct strings → 372.
+- scheduler `sed`/`grep` reads: `urgency.go:18-22`, `loader.go:421-422`, `server_metrics.go:65-81/87-119`, `main.go:163-170`, `peers.go:28`, `hermesstate.go:52/116`, `execution_store.go` method sigs, `server.go:114` — all rc 0.
+- crier `sed`/`find` reads: `service_auth.go:128-168`, `handler.go:1147`, `config.go`/`policy.go`/`handler.go` paths — rc 0.
+- crier-fleet `sed -n '36,40p' dispatcher.py` → `BUS` literal at `:38` rc 0.
+
+WRITER ROUND COMPLETE
+
+session_id: local-668a22b45394f0a0d2dcc98d598fe16974a62939fc9e3a4ef14385525bbae648

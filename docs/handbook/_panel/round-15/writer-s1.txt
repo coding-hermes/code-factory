@@ -1,0 +1,130 @@
+│ cache/scratch/cf213/run.sh
+│ @@ -0,0 +1,10 @@
+│ +#!/usr/bin/env bash
+│ +set -uo pipefail
+│ +HERE="/home/kara/code-factory"
+│ +. "$HERE/scripts/lib.sh"
+│ +fails=0
+│ +. /home/kara/.hermes/cache/scratch/cf213/arm.sh
+│ +echo "==== CF213 ARM DONE ===="
+│ +echo "fails=$fails"
+│ +if [ "$fails" -eq 0 ]; then echo "SHIPPED_LANDING_ARM_RC=0"; else echo "SHIPPED_LANDING_ARM_RC=1"; fi
+│ +exit "$fails"
+│ docs/handbook/chapters/M0-shared-contract.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | SHARED CONTRACT (`scripts/lib.sh`) |
+│  | Path | `/home/kara/code-factory/scripts/lib.sh` |
+│ -| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `lib.sh` byte-identical since `47d68b4` — no file M0 cites changed in `47d68b4..08a2c8a`) |
+│ +| Revision | `9372dc004be5c5eaa5f49b383079862e0abf4ba8` (code-factory HEAD, round-15 derivation; `lib.sh` byte-identical since `47d68b4` — no file M0 cites changed in `47d68b4..9372dc0`) |
+│  | Language / runtime | bash 5.3.9 (measured: `bash --version`); sourced, never executed |
+│  | Owner lane | code-factory (node-side + control-host shell) |
+│  | Status | **VERIFIED** — `lib.sh` (78 lines) read in full; every cited line re-verified this round |
+│ docs/handbook/chapters/M1-provisioning.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | PROVISIONING |
+│  | Path | `/home/kara/code-factory/scripts/` — `bunker-server-install.sh`, `disk_floor.py`, `bunker-provision.sh`, `bunker_config_gen.py`, `node-create.sh`, `bunker-crier-connect.sh`, `node_identity.py`, `node_gateway_auth.py`, `node_seed.py`, `node_seed_drift.py`, `node_env.py`, `verify-node.sh`, `node_freshness.py` |
+│ -| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `scripts/verify-node.sh` changed in `47d68b4..08a2c8a` — commit `f1d5cfb`, CF-270 — so every §9/§10/§11 ladder locator is re-pinned against the 241-line file) |
+│ +| Revision | `9372dc004be5c5eaa5f49b383079862e0abf4ba8` (code-factory HEAD, round-15 derivation; `scripts/verify-node.sh` changed in `47d68b4..08a2c8a` — commit `f1d5cfb`, CF-270 — so every §9/§10/§11 ladder locator is re-pinned against the 241-line file, still 241 lines at HEAD) |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side) |
+│  | Status | **UNVERIFIED (bodies)** — `bunker-provision.sh` `--check` probe, config loader (`:95-123`), CLI (`:561-609`), `destroy` (`:550-558`), `disk_floor.py` `resolve()` (`:115-141`), `verify-node.sh` (`:20-241`, 241 lines at HEAD — re-pinned after the CF-270 port fix), `node_identity.py` (111 lines, full), `node_seed.py` (405 lines, apply/build/check state machine) read this round; `node_env.py` (589), `node_seed_drift.py` (558), `node_freshness.py` (732), `bunker_config_gen.py` (724) read at their **settings surface** (argparse + constants), bodies not line-by-line; `node_gateway_auth.py` docstring read (B03 — it writes dashboard basic-auth, not a registration); body not line-by-line |
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | DISPATCH (NODE SIDE) |
+│  | Path | `/home/kara/code-factory/scripts/` — `add_family_lanes.py`, `configure_family.py`, `load_lane_config.py`, `lane_target.py`, `node-bus-worker.py` |
+│ -| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; every file M2 cites is byte-identical since `47d68b4`) |
+│ +| Revision | `9372dc004be5c5eaa5f49b383079862e0abf4ba8` (code-factory HEAD, round-15 derivation; every file M2 cites is byte-identical since `47d68b4`) |
+│  | Language / runtime | Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side); consumes scheduler + crier |
+│  | Status | **VERIFIED** for `node-bus-worker.py` contracts (imports `:66-78`, `text_b64` decode `:989-999`, reply shape `:1176-1192`, settlement `:1389-1422`, CLI `:1425-1499`, `dispatch_wall` `:1200-1205`); `add_family_lanes.py`/`configure_family.py`/`load_lane_config.py` structure-mapped only |
+│ docs/handbook/chapters/M3-repository.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | REPOSITORY |
+│  | Path | `/home/kara/code-factory/scripts/` — `clone_lane.py`, `repo_freshness.py`, `land-node-branch.sh`; gates via `install-gitreins.sh` + `.gitleaks.toml` |
+│ -| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `land-node-branch.sh`/`install-gitreins.sh`/`clone_lane.py` byte-identical since `47d68b4`; `tests/selftest.sh` changed — see §7) |
+│ +| Revision | `9372dc004be5c5eaa5f49b383079862e0abf4ba8` (code-factory HEAD, round-15 derivation; `land-node-branch.sh`/`install-gitreins.sh`/`clone_lane.py` byte-identical since `47d68b4`; `tests/selftest.sh` changed — see §7) |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side clone + control-host landing) |
+│  | Status | **VERIFIED (source + shipped landing arm)** — `land-node-branch.sh` (308 lines), `install-gitreins.sh` (180 lines), `clone_lane.py` (130 lines) read in full; the shipped landing arm `cf213-land-node-branch` (`tests/selftest.sh:2463-2729`) exercises the landing behaviours against a disposable bare remote and was run this round (`SHIPPED_LANDING_ARM_RC=0`); `repo_freshness.py` body not read line-by-line. **S3 hook *enforcement* is UNVERIFIED (sol B10):** the landing arm proves landing behaviour, not that git invokes the installed pre-commit gate — a disposable rejecting-commit fixture that resolves the effective `core.hooksPath` and proves a refused commit cannot advance HEAD is the missing evidence (§11) |
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | `9372dc004be5c5eaa5f49b383079862e0abf4ba8` (code-factory HEAD, round-15 derivation; every file M2 cites is byte-identical since `47d68b4`) |
+│  | Language / runtime | Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side); consumes scheduler + crier |
+│ -| Status | **VERIFIED** for `node-bus-worker.py` contracts (imports `:66-78`, `text_b64` decode `:989-999`, reply shape `:1176-1192`, settlement `:1389-1422`, CLI `:1425-1499`, `dispatch_wall` `:1200-1205`); `add_family_lanes.py`/`configure_family.py`/`load_lane_config.py` structure-mapped only |
+│ +| Status | **VERIFIED** for `node-bus-worker.py` contracts (imports `:67-79`, `text_b64` decode `:989-999`, reply shape `:1176-1192`, settlement `:1389-1422`, CLI `:1425-1499`, `dispatch_wall` `:1200-1205`); `add_family_lanes.py`/`configure_family.py`/`load_lane_config.py` structure-mapped only |
+│
+│  ## 2. Purpose, authority and position
+│
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -54,7 +54,7 @@
+│
+│  | Import | Provider | Contract relied on | If it changes |
+│  |---|---|---|---|
+│ -| `urllib.request` | stdlib | `node-bus-worker.py:66-78` imports urllib, **not** `crier_client`; the node speaks HTTP + ed25519 signing itself | n/a (stdlib) |
+│ +| `urllib.request` | stdlib | `node-bus-worker.py:78-79` imports urllib (`urllib.error`/`urllib.request`), **not** `crier_client`; the node speaks HTTP + ed25519 signing itself | n/a (stdlib) |
+│  | `lib.sh` / `harness-vars.sh` | this repo | shell helpers + CF_* validation on the run path | see M0 / M5 |
+│
+│  **4c. Service contracts** — see §6.
+│ docs/handbook/chapters/M2-dispatch.md
+│ @@ -178,7 +178,7 @@
+│
+│  ## 13. Evidence of record
+│
+│ -- Code read: `node-bus-worker.py:60-129, 381-382, 977-1010, 1176-1210, 1200-1205, 1389-1422, 1425-1499`.
+│ +- Code read: `node-bus-worker.py:60-129, 386-392, 977-1010, 1176-1210, 1200-1205, 1389-1422, 1425-1499`.
+│  - `docs/UNIT-MAP.yaml:78-102` (M2 S1–S3); `_facts.md` FACT-03/FACT-04.
+│  - Board rows: CF-354, CF-355, CF-356, CF-358, CF-359.
+│  - **Findings:**
+All four chapters are re-verified against the code at HEAD `9372dc0`, the spine is clean, and the one real drift found was fixed. Here is the manifest.
+
+WRITER ROUND 15 — group s1 (node foundation)
+
+Chapters written (4): M0-shared-contract, M1-provisioning, M2-dispatch, M3-repository
+Chapters still skeleton (0): none
+
+RED field count per chapter (total 12):
+  M0-shared-contract — 1 (Metrics §8, absence-proved)
+  M1-provisioning    — 4 (§1 four bodies read only at settings surface; §7 certification ladder not run live; Metrics §8; §9 inventory 5 of 141 helper call sites)
+  M2-dispatch        — 4 (Metrics §8; §7 live bus-worker ladder not repeatable here; §9 inventory 4 of 70 call sites; §5 operational overrides NAME ONLY)
+  M3-repository      — 3 (Metrics §8; §1 repo_freshness.py body unread + S3 hook enforcement UNVERIFIED; §9 inventory 5 of 35 call sites)
+
+Edits this round:
+  - Re-stamped Revision to HEAD 9372dc004be5c5eaa5f49b383079862e0abf4ba8 in all four chapters; source files confirmed byte-identical since 08a2c8a.
+  - M2: corrected import range :66-78 → :67-79 (urllib.request is at :79, line 66 blank) in §1 and §4b; corrected §13 read range 381-382 → 386-392.
+  - No contract-state or classification changes: code is unchanged, so the round-12 §6 canonical CT ids (CT-03, CT-04, CT-09, CT-11, CT-12) and the two-register local ids stand as written.
+
+Spine (post-edit): chapters=13  canonical contracts=18  findings=0  (exit 0)
+
+CROSS-SECTION DEPENDENCIES (my §6 rests on chapters I do not own):
+  - M2 §6 CT-03: I name crier producer internal/registry/handler.go:1690 HandleRetrieve. M10/M11 must cite the same. VERIFIED at /home/kara/crier@0a372209.
+  - M2 §6 CT-04: I name crier consumer internal/registry/handler.go:990 HandleDeliver. M10 must cite the same. VERIFIED at /home/kara/crier@0a372209.
+  - M1 §6 M1-C1 (local): crier producer handler.go:598 HandleRegister + :613 HandleRegisterByID; M10 must keep the id-in-path route on HandleRegisterByID (:613). VERIFIED.
+  - M0/M2 §12: the CF_* variable contract is M5.S5 (harness-vars.sh); M5 must not fold it back into M0.
+
+Commands run (exit status):
+  [0] git rev-parse HEAD → 9372dc004be5c5eaa5f49b383079862e0abf4ba8
+  [0] git diff --quiet 08a2c8a..HEAD -- scripts/... → no source file changed
+  [0] python3 scripts/handbook_spine.py → findings=0
+  [0] wc -l (19 source files) → lib.sh 78, node-bus-worker 1546, land-node-branch 308, install-gitreins 180, clone_lane 130, verify-node 241, disk_floor 175, node_seed 405, node_env 589, node_seed_drift 558, node_freshness 732, bunker_config_gen 724, node_identity 111, node_gateway_auth 95, lane_target 726, configure_family 201, add_family_lanes 105, load_lane_config 45
+  [0] bash -n (8 shell scripts) → all OK
+  [0] python3 -m py_compile (16 files) → OK
+  [0] python3 tests/test_disk_floor.py → 12 tests OK
+  [0] python3 tests/test_lane_target.py → 40 tests pass
+  [0] python3 tests/test_clone_lane.py → 4 tests OK
+  [0] grep sourcing → 11 direct / 17 total
+  [0] grep metrics → 0 matches (absence re-proved)
+  [0] wc -l tests/selftest.sh → 4852; cf213 arm at :2463-2729
+  [0] bash run.sh (extracted cf213 arm) → fails=0, SHIPPED_LANDING_ARM_RC=0
+  [0] grep Handle(Register|Deliver|Retrieve) crier handler.go → :598 / :990 / :1690
+
+WRITER ROUND COMPLETE
+
+⚠️ File-mutation verifier: 1 file edit(s) FAILED this turn despite any wording above that may suggest otherwise. Run `git status` or `read_file` to confirm what actually landed.
+  • `/home/kara/code-factory/docs/handbook/_panel/round-15/writer-s1.txt` — [write_file] Refusing to overwrite `/home/kara/code-factory/docs/handbook/_panel/round-15/writer-s1.txt`: `/home/kara/code-factory/docs/handbook/_panel/round-15/writer-s1.txt` was modified since y…
+
+session_id: local-9178f2251f8fd59f2fcc247cb070574da18df434a0ef8c7ac3aeb004bd584f15

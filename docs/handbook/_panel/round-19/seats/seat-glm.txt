@@ -1,0 +1,5 @@
+Error: Gateway disconnected; turn outcome is unknown. Resume the printed session ID to check whether it completed or was interrupted; do not resend the work.
+
+session_id: local-7ece696366bb0e1fe19e7e7e04ab724da3727928627de071ff1111eaafa57f84
+
+EXIT=0

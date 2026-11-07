@@ -1,0 +1,201 @@
+│ docs/handbook/chapters/M4-board.md
+│ @@ -5,7 +5,7 @@
+│  | Field | Value |
+│  |---|---|
+│  | Module name | BOARD |
+│ -| Path | `/home/kara/code-factory/.coding-hermes/board/tasks.jsonl` + `events.jsonl`; tools `/home/kara/code-factory/scripts/boardctl`, `board_lock.py`, `board_drift.py` |
+│ +| Path | `/home/kara/code-factory/.coding-hermes/board/tasks.jsonl` + `events.jsonl`; tools `/home/kara/code-factory/scripts/boardctl`, `board_lock.py`, `board_drift.py`, `board_read.py` |
+│  | Revision | `ce2f87560144773d9119086c343b7ac2d243967b` (code-factory HEAD == origin/main == gh/main, round-18 re-stamp). `git diff --name-only 3fba8a7..HEAD` touches four paths — `prompts/foreman.md`, `prompts/unblock.md` (e07d031) and `scripts/panel_loop.py`, `scripts/panel_supervise.sh` (ce2f875); `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` returns those two script paths. None of the four changed files is cited by M4, so every file M4 cites is byte-identical across `3fba8a7..HEAD` |
+│  | Language / runtime | bash (boardctl wrapper) + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│ docs/handbook/chapters/M4-board.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | BOARD |
+│  | Path | `/home/kara/code-factory/.coding-hermes/board/tasks.jsonl` + `events.jsonl`; tools `/home/kara/code-factory/scripts/boardctl`, `board_lock.py`, `board_drift.py`, `board_read.py` |
+│ -| Revision | `ce2f87560144773d9119086c343b7ac2d243967b` (code-factory HEAD == origin/main == gh/main, round-18 re-stamp). `git diff --name-only 3fba8a7..HEAD` touches four paths — `prompts/foreman.md`, `prompts/unblock.md` (e07d031) and `scripts/panel_loop.py`, `scripts/panel_supervise.sh` (ce2f875); `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` returns those two script paths. None of the four changed files is cited by M4, so every file M4 cites is byte-identical across `3fba8a7..HEAD` |
+│ +| Revision | `dbf810b7adfa5231a8828f415e1dad6de26a4263` (code-factory HEAD == origin/main == gh/main, round-19 re-stamp; one commit past the round-18 stamp `ce2f875`). `git diff --name-only ce2f875..HEAD` = `prompts/foreman.md`, `scripts/board_read.py` (dbf810b "board_read: the board is always readable"). `board_read.py` is a new board unit M4 now documents (§3 S3); `prompts/foreman.md` is the lane prompt that invokes it. `boardctl`, `board_lock.py`, `board_drift.py` are not in that diff, so all three are byte-identical across `ce2f875..HEAD` |
+│  | Language / runtime | bash (boardctl wrapper) + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│  | Status | **VERIFIED (store)** — 357 rows / **519** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT reconciled** — `board_drift` `RESULT: OK`, byte parity identical on both files, 0 divergent ids, HEAD == origin/main == `ce2f875` — both re-measured this round. The `boardctl` verb surface is the external executable's (`/home/kara/.local/bin/boardctl`), not this repo's |
+│ docs/handbook/chapters/M4-board.md
+│ @@ -9,7 +9,7 @@
+│  | Revision | `dbf810b7adfa5231a8828f415e1dad6de26a4263` (code-factory HEAD == origin/main == gh/main, round-19 re-stamp; one commit past the round-18 stamp `ce2f875`). `git diff --name-only ce2f875..HEAD` = `prompts/foreman.md`, `scripts/board_read.py` (dbf810b "board_read: the board is always readable"). `board_read.py` is a new board unit M4 now documents (§3 S3); `prompts/foreman.md` is the lane prompt that invokes it. `boardctl`, `board_lock.py`, `board_drift.py` are not in that diff, so all three are byte-identical across `ce2f875..HEAD` |
+│  | Language / runtime | bash (boardctl wrapper) + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│ -| Status | **VERIFIED (store)** — 357 rows / **519** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT reconciled** — `board_drift` `RESULT: OK`, byte parity identical on both files, 0 divergent ids, HEAD == origin/main == `ce2f875` — both re-measured this round. The `boardctl` verb surface is the external executable's (`/home/kara/.local/bin/boardctl`), not this repo's |
+│ +| Status | **VERIFIED (store)** — 357 rows / **519** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT reconciled** — `board_drift` `RESULT: OK`, byte parity identical on both files, 0 divergent ids, HEAD == origin/main == `dbf810b` — both re-measured this round; `board_read.py` (new, dbf810b) measured: `--source` → `{"source": "origin/main", "rows": 357}`, summary `dispatchable : 252` (92 complete / 13 in_progress / 252 pending). The `boardctl` verb surface is the external executable's (`/home/kara/.local/bin/boardctl`), not this repo's |
+│
+│  ## 2. Purpose, authority and position
+│
+│ docs/handbook/chapters/M4-board.md
+│ @@ -35,6 +35,7 @@
+│  |---|---|---|---|
+│  | S1 write and validate rows | `boardctl` (wrapper), `board_lock.py` | **operator-invoked (optional)** | no in-repo unit/cron/timer invokes them — `grep -rn 'boardctl\|board_lock' prompts/ config/` → 0 matches; only `tests/selftest.sh:458-462` (boardctl) and `:1789,1819` (board_lock) exercise them, and a test harness is not production. The foreman lane (external to this repo) is the intended operator |
+│  | S2 compare board copies | `board_drift.py` | **operator-invoked (optional)** | no in-repo invoker — `grep -rn board_drift prompts/ config/` → 0 matches; only `tests/selftest.sh:1440` exercises it. This round's `RESULT: OK` is a manual run, not activation (sol B27) |
+│ +| S3 read the board | `board_read.py` | **active (lane-invoked)** | invoked by the foreman lane prompt `prompts/foreman.md:42` (`python3 scripts/board_read.py --next 10`); the foreman is the `code-factory` project's lane (prompts/foreman.md:1-3). Self-contained read: `grep -nE 'boardctl|board_lock|board_drift' scripts/board_read.py` → 0 matches — it reads `origin/main:.coding-hermes/board/tasks.jsonl` via `git show` directly (`board_read.py:63-66`) |
+│
+│  **`board_lock.py` classifier (B11, read in full this round).** `adjudicate` (`:149-158`) has
+│  **three** outcomes, in order:
+│ docs/handbook/chapters/M4-board.md
+│ @@ -95,6 +95,15 @@
+│  | `--repo` | none (`:197`) | a path | the repo whose ref/ancestry is checked | unset uses the workdir's own repo; a wrong repo checks ancestry against the wrong history |
+│  | `--published-dir` | none (`:198`) | a path | an explicit published-board dir in place of the ref checkout | points the comparison at a board dir that is not the canonical published copy |
+│  | `--no-head` | false (`:199`, `store_true`) | flag | **removes the HEAD/revision binding** — without it the check compares bytes but does not prove the published copy is an ancestor/HEAD of the checkout | dropping HEAD ancestry lets a drift pass on two byte-identical *stale* copies that both lag the canonical HEAD |
+│ +
+│ +**`board_read.py` read controls (added round 19 — dbf810b introduced this unit; it reads, never writes).** `board_read.py:91-96` parses four CLI switches; `load()` (`:59-70`) resolves the board from `origin/main` → `origin/master` → `main` → `HEAD` → worktree, and `main()` prints the source it used:
+│ +
+│ +| Setting | Default | Range | Governs | What breaks if changed |
+│ +|---|---|---|---|---|
+│ +| `--root` | `.` (`:92`) | a checkout dir | which repo's board is read | a wrong root reads a different (or empty) board |
+│ +| `--json` | false (`:93`, `store_true`) | flag | print the canonical board as one JSON doc | without it a human summary prints instead |
+│ +| `--next` | 5 (`:94`) | int | how many dispatchable rows the summary lists | 0 lists none |
+│ +| `--source` | false (`:95`, `store_true`) | flag | print only `{source, rows}` | without it the full summary prints |
+│
+│  ## 6. Contracts in and out
+│
+│ docs/handbook/chapters/M4-board.md
+│ @@ -133,6 +133,7 @@
+│  | semantic validate | `scripts/boardctl validate` | RESULT OK with named warnings | 2026-11-06 | **PASS** — `357 tasks, 519 events, 0 fixtures`, `key uniformity 357/357 (0 drift)`, `RESULT: OK (7 warning(s))` |
+│  | lock adjudication | `python3 scripts/board_lock.py <lock>` against ABSENT/HELD/RESIDUE fixtures | ABSENT / HELD / RESIDUE named (`board_lock.py:149-158`) | 2026-11-06 | **PASS** — a scratch fixture returned `ABSENT`, `RESIDUE consumers=0 commits_after_mtime=unknown`, and `HELD holder=pid-<n>` (a child held an exclusive flock) all rc 0 |
+│  | duplicate id refusal | `boardctl create --id CF-357 --title x` | refused | 2026-11-06 | **PASS** — `task id "CF-357" already exists … create aborted` |
+│ +| board read (canonical ref) | `python3 scripts/board_read.py --source` | `{"source": "origin/main", "rows": 357}` | 2026-11-06 | **PASS** — source=origin/main, 357 rows; `--next 10` summary names `dispatchable : 252 pending rows` (92 complete / 13 in_progress / 252 pending) |
+│
+│  **Drift re-measured (reconciled this round).** The CF-270 divergence the round-10 draft reported
+│  as live was **already reconciled before this round's derivation**: commit `4dc0ef0` ("board: close
+│ docs/handbook/chapters/M4-board.md
+│ @@ -154,7 +154,7 @@
+│  ## 8. Metrics
+│
+│  **RED — none (absence-proved this round).** The board emits no counters or gauges as a service —
+│ -`grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' scripts/board_lock.py scripts/board_drift.py`
+│ +`grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' scripts/board_lock.py scripts/board_drift.py scripts/board_read.py`
+│  → 0 matches. Row counts are derived by `jq`/`wc`, not emitted. Churn, close-rate and age are all
+│  derived by hand.
+│
+│ docs/handbook/chapters/M4-board.md
+│ @@ -169,6 +169,8 @@
+│  | — | `boardctl: task id "%s" already exists in tasks.jsonl — create aborted` | duplicate id (captured from `boardctl create --id CF-357`) | evidentiary |
+│  | — | `[warn] tasks.jsonl line %d (task %s): guard_result "%s" is free-form — not in the guard_result vocabulary {PASS,FAIL,SKIP} …` | validate (captured from `boardctl validate`) | evidentiary |
+│  | — | `RESULT: OK` / `RESULT: OK (7 warning(s))` (`board_drift.py` / `boardctl validate`) | drift/validate completes | evidentiary |
+│ +| — | `board source : %s   (%d rows)` (`board_read.py:116`) | summary | descriptive — names the source read |
+│ +| — | `{"source": "%s", "rows": %d}` (`board_read.py:106`, `--source`) | `--source` flag | evidentiary — machine-readable, names the ref actually read |
+│
+│  ## 10. Failure modes, indications and recovery
+│
+│ docs/handbook/chapters/M4-board.md
+│ @@ -193,6 +193,10 @@
+│  - The `flock_probe` is advisory only: it proves *someone* holds an exclusive flock, not *who* or
+│    *why*; the `/proc/<pid>/fd` scan is subject to permission/race limits (`:60-61` skips
+│    un-inspectable pids).
+│ +- `board_read.py` never refuses: it reads the canonical ref (`origin/main`) first, falls back to the
+│ +  worktree only when no remote ref exists, and always prints the source (`:59-70`, `:116`). "The
+│ +  board is behind `origin/main`" is a reading instruction (read the ref), not a reason to refuse
+│ +  (dbf810b's own commit message).
+│
+│  ## 12. Cross-references
+│
+│ docs/handbook/chapters/M4-board.md
+│ @@ -226,6 +226,7 @@
+│    - **F4-5** (new, B04) — the board-admission gate belongs to M9 alone; crier has no board admission.
+│    - **F4-6** (new, sol B27) — S1/S2 re-classified from **active** to **operator-invoked (optional)**: a repo-wide grep finds no in-repo unit/cron/timer invoking `boardctl`/`board_lock`/`board_drift` (only `tests/selftest.sh` exercises them); a writer's manual run proves observation, not production activation. The foreman lane (external) is the intended caller.
+│    - **F4-7** (new, round 18) — `board_drift.py`'s comparison-authority controls (`--workdir`, `--ref`, `--repo`, `--published-dir`, `--no-head`, `:193-199`) registered in §5 (sol B12); the completion `--evidence-run-id` requirement re-cited to the runtime refusal string (`evidence run required: completion REFUSED … (TR-251)`) instead of `boardctl update --help`, which lists `[--evidence-run-id RUN]` but does not state the requirement (grok #9).
+│ +  - **F4-8** (new, round 19) — commit dbf810b added `scripts/board_read.py` (125 lines), a board READ unit, and it is **not in the OUTLINE's M4 submodule list** (`OUTLINE.md:164` names only S1 write/validate + S2 compare) nor in `docs/UNIT-MAP.yaml` (M4 S1–S2 only). A read unit is a third responsibility the outline has no home for; documented here as S3. It is the only M4 unit with a production (lane) invoker — `prompts/foreman.md:42` instructs the foreman lane to run `python3 scripts/board_read.py --next 10` — so the round-18 blanket claim "no in-repo unit/cron/timer invokes boardctl/board_lock/board_drift" must be scoped: it holds for boardctl/board_lock/board_drift but **not** for board_read.py (active, lane-invoked).
+│
+│  ## RED field count: 2 (Metrics §8 — absence-proved; the Contracts-in-and-out field (§6) — not-measured: CT-14/CT-13/CT-10 are boundary contracts whose wires were never measured)
+│
+│ docs/handbook/chapters/M5-harness.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | HARNESS |
+│  | Path | `/home/kara/code-factory/scripts/harness/` — `install-hermes.sh`, `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh`, `harness-vars.sh`; **and** `/home/kara/code-factory/scripts/` — `harness_resolve.py`, `install-go.sh`, `install-gitreins.sh`, `project-node.sh` |
+│ -| Revision | `ce2f87560144773d9119086c343b7ac2d243967b` (code-factory HEAD == origin/main == gh/main, round-18 re-stamp). `git diff --name-only 3fba8a7..HEAD` touches four paths — `prompts/foreman.md`, `prompts/unblock.md` (e07d031) and `scripts/panel_loop.py`, `scripts/panel_supervise.sh` (ce2f875); `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` returns those two script paths. None of the four changed files is cited by M5, so every file M5 cites is byte-identical across `3fba8a7..HEAD` |
+│ +| Revision | `dbf810b7adfa5231a8828f415e1dad6de26a4263` (code-factory HEAD == origin/main == gh/main, round-19 re-stamp; one commit past round-18's `ce2f875`). `git diff --name-only ce2f875..HEAD` = `prompts/foreman.md`, `scripts/board_read.py` (dbf810b). Neither is cited by M5, so every file M5 cites is byte-identical across `ce2f875..HEAD` |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (node-side) |
+│  | Status | **UNVERIFIED** — `harness-vars.sh` (318), `harness_resolve.py` (400), `install-hermes.sh` (375), `install-gitreins.sh` (180), `install-claude-code.sh` (673, read in full), `install-codex.sh` (592, read in full), `install-opencode.sh` (98), `install-deepseek.sh` (101), `install-pi-agent.sh` (113) all read this round; the conformance battery not run this round (needs a live node) |
+│ docs/handbook/chapters/M7-github.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | GITHUB |
+│  | Path | `/home/kara/code-factory/scripts/` — `github-app-setup.sh`, `github-app-token.py`, `github-app-refresh.sh` |
+│ -| Revision | `ce2f87560144773d9119086c343b7ac2d243967b` (code-factory HEAD == origin/main == gh/main, round-18 re-stamp). `git diff --name-only 3fba8a7..HEAD` touches four paths — `prompts/foreman.md`, `prompts/unblock.md` (e07d031) and `scripts/panel_loop.py`, `scripts/panel_supervise.sh` (ce2f875); `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` returns those two script paths. None of the four changed files is cited by M7, so every file M7 cites is byte-identical across `3fba8a7..HEAD` |
+│ +| Revision | `dbf810b7adfa5231a8828f415e1dad6de26a4263` (code-factory HEAD == origin/main == gh/main, round-19 re-stamp; one commit past round-18's `ce2f875`). `git diff --name-only ce2f875..HEAD` = `prompts/foreman.md`, `scripts/board_read.py` (dbf810b). Neither is cited by M7, so every file M7 cites is byte-identical across `ce2f875..HEAD` |
+│  | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│  | Status | **UNVERIFIED** — CLI surface measured (`github-app-token.py` exits 2 with no command); the settings/control regions read (`:107-117`, `:300-372`, `:579`; `github-app-refresh.sh:37-53,104-174`); mint not run (no App creds on this host) |
+│ docs/handbook/chapters/M8-safety.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | SAFETY |
+│  | Path | `/home/kara/code-factory/scripts/` — `reclaim_disk.py`, `check_scan_scope.py` |
+│ -| Revision | `ce2f87560144773d9119086c343b7ac2d243967b` (code-factory HEAD == origin/main == gh/main, round-18 re-stamp). `git diff --name-only 3fba8a7..HEAD` touches four paths — `prompts/foreman.md`, `prompts/unblock.md` (e07d031) and `scripts/panel_loop.py`, `scripts/panel_supervise.sh` (ce2f875); `git diff --name-only 3fba8a7..HEAD -- scripts/ docs/ tests/` returns those two script paths. `reclaim_disk.py`/`check_scan_scope.py` are not among them, so both are byte-identical across `3fba8a7..HEAD` |
+│ +| Revision | `dbf810b7adfa5231a8828f415e1dad6de26a4263` (code-factory HEAD == origin/main == gh/main, round-19 re-stamp; one commit past round-18's `ce2f875`). `git diff --name-only ce2f875..HEAD` = `prompts/foreman.md`, `scripts/board_read.py` (dbf810b). `reclaim_disk.py`/`check_scan_scope.py` are not among them, so both are byte-identical across `ce2f875..HEAD` |
+│  | Language / runtime | Python 3.14.9 + bash 5.3.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│  | Status | **VERIFIED** — `reclaim_disk.py` (169 lines) and `check_scan_scope.py` (118 lines) both read in full this round |
+│ docs/handbook/chapters/M6-documentation.md
+│ @@ -6,7 +6,7 @@
+│  |---|---|
+│  | Module name | DOCUMENTATION |
+│  | Path | `/home/kara/code-factory/scripts/` — `master_doc_skeleton.py`, `master_doc_fill.py`, `master_doc_check.py`, `master_doc_panel.py`, `gen_nasa_handbook.py`, `gen_system_views.py`, `sheet_style.py`, `extract_owner_decisions.py`, `gen_unit_map.py`, `verify-patch.sh`, `panel_loop.py`, `ownership.py`, `handbook_spine.py` |
+│ -| Revision | `ce2f87560144773d9119086c343b7ac2d243967b` (code-factory HEAD == origin/main == gh/main, round-18 re-stamp). `git diff --name-only 3fba8a7..HEAD` touches four paths — `prompts/foreman.md`, `prompts/unblock.md` (e07d031) and `scripts/panel_loop.py`, `scripts/panel_supervise.sh` (ce2f875); the two script changes are one-line `PANEL_ROOT` env-default additions (`panel_loop.py:30`, `panel_supervise.sh:17`), and every `panel_loop.py`/`panel_supervise.sh` locator M6 cites still resolves (re-verified this round: `panel_loop.py` is 461 lines, `:34-35`, `:37-38`, `:323`, `:357`, `:383-385`; `panel_supervise.sh:41-43`). **Dirty-source disclosure (F6-8, carried — sol B10):** `scripts/handbook_spine.py` is **uncommitted working-tree content** — the reviewed file is 443 lines, `git show HEAD:scripts/handbook_spine.py` is 340 lines, working sha256 `afbc65fc7bfec973969c27767bd5980b7d7ae5c1a3999c7d6511dfdaf3752163`; the backtick-aware `split_row`, `CONTRACT ROW MISPARSE`, `CONTRACT UNKNOWN ID` and backticked-default fallback are working-tree content not committed at HEAD, and their locators are pinned to the working tree |
+│ +| Revision | `dbf810b7adfa5231a8828f415e1dad6de26a4263` (code-factory HEAD == origin/main == gh/main, round-19 re-stamp; one commit past round-18's `ce2f875`). `git diff --name-only ce2f875..HEAD` = `prompts/foreman.md`, `scripts/board_read.py` (dbf810b) — neither is cited by M6, so every panel/gate locator M6 cites is byte-identical across `ce2f875..HEAD` (re-verified this round: `panel_loop.py` is 461 lines, `:30`/`:34-35`/`:37-38`/`:323`/`:357`/`:383-385` all resolve; `panel_supervise.sh` is 47 lines, `:41-43` resolves). **Dirty-source disclosure (F6-8, carried — sol B10):** `scripts/handbook_spine.py` is **uncommitted working-tree content** — the reviewed file is 443 lines, `git show HEAD:scripts/handbook_spine.py` is 340 lines, working sha256 `afbc65fc7bfec973969c27767bd5980b7d7ae5c1a3999c7d6511dfdaf3752163`; the backtick-aware `split_row`, `CONTRACT ROW MISPARSE`, `CONTRACT UNKNOWN ID` and backticked-default fallback are working-tree content not committed at HEAD, and their locators are pinned to the working tree |
+│  | Language / runtime | Python 3.14.9 (measured) |
+│  | Owner lane | code-factory (control host) |
+│  | Status | **UNVERIFIED** — `master_doc_check.py` (268 lines) read in full and its FAIL reproduced; `handbook_spine.py` (443 lines) and `panel_loop.py` (461 lines) read in full; the rest of the pipeline (`master_doc_fill.py`, `master_doc_skeleton.py`, `gen_nasa_handbook.py`, `master_doc_panel.py`, `gen_unit_map.py`, `gen_system_views.py`, `sheet_style.py`, `extract_owner_decisions.py`) read in part only — an unread-body RED named below, not hidden (sol B16). The legacy gate reads `MASTER-DOC: FAIL`. **The legacy fill/render/panel pipeline is UNBUILDABLE against these M-numbered chapters** (B13): `master_doc_check.py:188`, `gen_nasa_handbook.py:253-260` and `master_doc_fill.py:422` all select `[0-9][0-9]-*.md`, which does not match `M0-…-*.md`, so the legacy pipeline cannot select or deliver these chapters. **The chapter-aware gate is `handbook_spine.py` (S9)**, which *does* select `M*.md` and exits 1 on any finding (`python3 scripts/handbook_spine.py` → `chapters=13 canonical contracts=18 findings=0`, exit 0 — **UNVERIFIED-by-revision**: the gate is uncommitted working-tree content, F6-8); the legacy fill/render/check pipeline is retired for the M-numbered handbook, and the render-to-owner-artifact leg remains missing (CT-18 UNVERIFIED, §6) |
+Spine clean (findings=0). Round 19 complete for group s2.
+
+WRITER ROUND COMPLETE — round 19, group s2 (M4-board, M5-harness, M6-documentation, M7-github, M8-safety)
+
+WHAT MOVED THIS ROUND
+HEAD advanced one commit past the round-18 stamp: ce2f875 → dbf810b ("board_read: the board is always readable"), which added scripts/board_read.py (125 lines) and edited prompts/foreman.md. The code moved, so the document followed. All five chapters re-stamped to dbf810b with the closed-world diff re-derived against the correct range (`git diff --name-only ce2f875..HEAD` = prompts/foreman.md, scripts/board_read.py). M4 gained a third submodule S3 "read the board" (board_read.py), classified active (lane-invoked via prompts/foreman.md:42). Finding F4-8 filed: board_read.py is not in OUTLINE.md:164's M4 submodule list nor docs/UNIT-MAP.yaml — a READ unit with no outline home, documented as S3 rather than folded into S2.
+
+CHAPTERS WRITTEN (all five, full §1–§13, evidence-attached)
+- M4-board, M5-harness, M6-documentation, M7-github, M8-safety
+
+CHAPTERS STILL SKELETON: none in my group.
+
+RED FIELD COUNT PER CHAPTER
+- M4-board: 2 (Metrics §8 absence-proved; §6 CT-14/CT-13/CT-10 boundary wires never measured) — S3 is VERIFIED, no new RED
+- M5-harness: 4 (Metrics; §7 conformance battery unrun; §9 inventory 4-of-274; §6 CT-17 + M5-C2 boundary)
+- M6-documentation: 5 (Status §1 gate FAIL + spine UNVERIFIED-by-revision; Metrics; unread pipeline bodies; §9 partial; §6 CT-16/CT-18 boundary)
+- M7-github: 4 (Metrics; §1 mint unrun; §9 inventory 2-of-103; §6 M7-C1 boundary)
+- M8-safety: 2 (Metrics; §6 (local) filesystem edge boundary)
+
+CROSS-SECTION DEPENDENCIES: none new. My §6 contract ids (M4 CT-14/CT-13/CT-10, M5 CT-17, M6 CT-16/CT-18) are boundary contracts already reconciled to CT-01..CT-18; board_read.py is a local read unit with no peer chapter, so no new contract seam. Note for M2/M3 owner (prose-only, not spine-checked): nothing node-side needs to change — board_read.py is a control-host/foreman tool.
+
+SPINE SUMMARY LINE (pasted)
+chapters=13  canonical contracts=18
+findings=0
+
+COMMANDS RUN (exit status)
+- git rev-parse HEAD → dbf810b7adfa5231a8828f415e1dad6de26a4263 (0)
+- git diff --name-only ce2f875..HEAD → prompts/foreman.md, scripts/board_read.py (0)
+- git show dbf810b --stat → 2 files, +145 (0)
+- python3 scripts/handbook_spine.py → findings=0 (0) [final]
+- jq -r '.id' .coding-hermes/board/tasks.jsonl | wc -l → 357 (0)
+- wc -l < .coding-hermes/board/events.jsonl → 519 (0)
+- scripts/boardctl validate → RESULT: OK (7 warning(s)) (0)
+- python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main → RESULT: OK, 0 divergent ids, HEAD=dbf810b (0)
+- python3 scripts/board_read.py --source → {"source":"origin/main","rows":357} (0)
+- python3 -m py_compile scripts/board_read.py → OK (0)
+- grep -rn 'board_read' prompts/ config/ scripts/ → prompts/foreman.md:42,50 (0)
+- grep -nE 'boardctl|board_lock|board_drift' scripts/board_read.py → 0 matches (1, no-match = self-contained)
+- grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' scripts/board_read.py → 0 matches (1, no-match)
+- boardctl --help verb census → 20 subcommands (chapter §4 "20 subcommands" confirmed; UNIT-MAP's "21 verbs" is a pre-existing off-by-one, not this chapter) (0)
+- python3 tests/test_reclaim.py → 9 tests OK (0)
+- python3 scripts/check_scan_scope.py → RESULT: OK, 15 claims (0)
+- python3 tests/test_harness_resolve.py → 28 tests OK (0)
+- python3 -B scripts/github-app-token.py → usage, exit 2 (2, expected)
+- bash scripts/verify-patch.sh → VERIFY-PATCH: PASS, 5 stages/4 patches (0)
+- sha256sum scripts/handbook_spine.py → afbc65fc… unchanged; wc 443 vs git-show-HEAD 340 (gate still uncommitted, F6-8 holds) (0)
+
+NOT COMMITTED: not asked; the working tree holds the round-17/18 uncommitted chapter edits plus the uncommitted spine. The one real finding this round — board_read.py added to M4 as S3 plus the OUTLINE/UNIT-MAP gap (F4-8) — is filed in the chapter, not papered over.
+
+WRITER ROUND COMPLETE
+
+⚠️ File-mutation verifier: 1 file edit(s) FAILED this turn despite any wording above that may suggest otherwise. Run `git status` or `read_file` to confirm what actually landed.
+  • `/home/kara/code-factory/docs/handbook/_panel/round-19/writer-s2.txt` — [write_file] Refusing to overwrite `/home/kara/code-factory/docs/handbook/_panel/round-19/writer-s2.txt`: `/home/kara/code-factory/docs/handbook/_panel/round-19/writer-s2.txt` exists but this task…
+
+session_id: local-f9d354395f5674bde6aa621de40eb22c7d2b961c1548e14d0583c565acddf66c
