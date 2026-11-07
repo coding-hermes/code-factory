@@ -203,6 +203,22 @@ else
   seed_rows=$(mktemp); seed_json=$(mktemp)
   strict_seed_argv=""
   [ "${STRICT_SEED:-0}" -eq 1 ] && strict_seed_argv="--strict-seed"
+  # The strict sentence belongs to the CHECKER, not to this script (QA-CODE-FACTORY-2). On exit 1 the
+  # row below quotes node_seed_drift.py verbatim, so that path is safe by construction; the exit-3
+  # branch is not — a record the checker cannot read (0 bytes, unparseable) is EXIT_UNMEASURABLE
+  # whatever --strict-seed says, so this verifier has to write that FAIL row itself, and the wording
+  # re-typed here had drifted to `unknown is not a pass` (one word short). The selftest arm that greps
+  # the canonical phrase therefore went red whenever the seed leg could not be measured on an
+  # otherwise identical tree — measured 2026-11-06: PASS, PASS, FAIL, PASS across four guard runs of
+  # one hour. Ask the owning file for its sentence instead of keeping a second copy.
+  strict_seed_note=""
+  if [ "${STRICT_SEED:-0}" -eq 1 ]; then
+    strict_seed_note=$(python3 -B "$SEEDCHK" --strict-note 2>/dev/null)
+    # No fallback copy of the wording on purpose: if the owner cannot speak, the row says that rather
+    # than printing a sentence that no file owns — a fallback IS the drift this removes.
+    [ -z "$strict_seed_note" ] &&
+      strict_seed_note="(the checker did not answer --strict-note — its strict wording is unavailable)"
+  fi
   python3 -B "$SEEDCHK" --agent "$AGENT" --server "$SERVER" $strict_seed_argv --json >"$seed_json" 2>"$seed_rows"
   src=$?
   case "$src" in
@@ -216,7 +232,7 @@ else
       detail=$(grep -E '^  WARN  seed_drift — ' "$seed_rows" | sed -e 's/^  WARN  seed_drift — //' | head -1)
       [ -z "$detail" ] && detail=$(grep -E '^RESULT: ' "$seed_rows" | head -1 | sed -e 's/^RESULT: //')
       if [ "${STRICT_SEED:-0}" -eq 1 ]; then
-        bad "seed_drift" "${detail:-unmeasurable} (--strict-seed: unknown is not a pass)"
+        bad "seed_drift" "${detail:-unmeasurable}${strict_seed_note:+ $strict_seed_note}"
       else
         warn "seed_drift" "${detail:-unmeasurable} — the seed could not be measured; pass --strict-seed to refuse it"
         # A WARN row is not a pass and not a FAIL: the seed was never read, so VERIFY: PASS here

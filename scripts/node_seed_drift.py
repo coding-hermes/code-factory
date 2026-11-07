@@ -38,6 +38,14 @@ Usage:
   scripts/node_seed_drift.py --agent cf-node --server bunker-las-03 --strict-seed
   scripts/node_seed_drift.py --home /tmp/fixture-home
   scripts/node_seed_drift.py --home /tmp/fixture-home --json
+  scripts/node_seed_drift.py --strict-note
+
+--strict-note prints just the --strict-seed parenthetical and exits 0. It exists
+because this file owns that sentence and scripts/verify-node.sh needs it for a
+branch this probe never reaches: a record that does not parse is EXIT_UNMEASURABLE
+under --strict-seed too, so the verifier writes that FAIL row itself. It used to
+re-type the sentence there and the copy dropped the word `seed`; asking the owner
+for the string is what keeps the two from drifting apart (QA-CODE-FACTORY-2).
 
 stdlib only.
 """
@@ -66,6 +74,18 @@ RECORD_REL = os.path.join(".hermes", "seed-applied.json")
 # A drifted seed can name many paths; show enough to act on and point at
 # --json for the rest.
 MAX_SHOWN = 20
+
+# The parenthetical that says what --strict-seed refuses. It lives HERE because
+# this file owns the verdict: on exit 1 scripts/verify-node.sh quotes the row
+# built from it verbatim, but that verifier's exit-3 branch cannot quote
+# anything — a record this probe cannot read (0 bytes, unparseable) is
+# EXIT_UNMEASURABLE whatever --strict-seed says, so no strict FAIL row is ever
+# printed for it. The verifier used to re-type the sentence for that branch, and
+# the copy lost the word `seed` (`unknown is not a pass`), so the selftest arm
+# that greps the canonical phrase went red whenever the seed could not be
+# measured on an otherwise identical tree. The verifier now asks for this string
+# with --strict-note instead of keeping a second copy (QA-CODE-FACTORY-2).
+STRICT_NOTE = "(--strict-seed: an unknown seed is not a pass)"
 
 # The sibling seeder: the same script provisioning applies on the node, so the
 # verdict is the instrument's own, not a wrapper's reimplementation.
@@ -237,8 +257,7 @@ def finding_absent(record: str, strict: bool) -> dict:
             "exit_code": EXIT_DRIFT,
             "reason": "no seed record at %s" % record,
             "rows": [
-                "  FAIL  seed_drift — no seed record at %s (--strict-seed: an unknown seed is not a pass)"
-                % record
+                "  FAIL  seed_drift — no seed record at %s %s" % (record, STRICT_NOTE)
             ],
             "result": "RESULT: FAIL (no seed record at %s)" % record,
         }
@@ -504,11 +523,24 @@ def main(argv: Optional[list] = None) -> int:
         help="exec timeout in seconds; the bunker exec stream dies at 300 (default 180)",
     )
     ap.add_argument(
+        "--strict-note",
+        action="store_true",
+        help="print only the --strict-seed parenthetical on stdout and exit (its one source)",
+    )
+    ap.add_argument(
         "--json",
         action="store_true",
         help="emit one JSON object on stdout (rows go to stderr)",
     )
     opts = ap.parse_args(argv)
+
+    # The interface scripts/verify-node.sh captures: the sentence, and nothing else. No probe mode is
+    # needed for it — the wording is a constant, not a measurement — so this answers before the mode
+    # checks below and always exits 0. A caller that cannot read it must say so in its own row rather
+    # than fall back to a second copy of the sentence, which is exactly how the copy drifted.
+    if opts.strict_note:
+        print(STRICT_NOTE)
+        return EXIT_OK
 
     def usage_error(message: str) -> int:
         print(message, file=sys.stderr)

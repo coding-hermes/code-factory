@@ -4132,6 +4132,62 @@ else
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
+# one owning source (QA-CODE-FACTORY-2): the sentence may live in the checker, never again in the
+# verifier — a second copy is what drifted. Count the tracked scripts, not the fixtures.
+owners=$(grep -rlF --include='*.py' --include='*.sh' 'an unknown seed is not a pass' "$HERE/scripts" 2>/dev/null \
+  | sed -e "s|^$HERE/scripts/||" | paste -sd ',' -)
+if [ "$owners" = "node_seed_drift.py" ]; then
+  say "  PASS  the strict-seed sentence has one owning source: scripts/$owners"
+else
+  say "  FAIL  the strict-seed sentence is not owned by exactly one file (found in: ${owners:-nowhere})"
+  fails=$((fails+1))
+fi
+
+# the OTHER strict branch of the seed leg: an ABSENT record reaches the checker's own exit 1, so the
+# verifier quotes the checker's row and the wording is the checker's by construction (arm above). A
+# record that does not parse (here: 0 bytes) is EXIT_UNMEASURABLE = 3 whatever --strict-seed says, so
+# the verifier writes that FAIL row ITSELF — and the sentence re-typed there had lost the word `seed`
+# (`unknown is not a pass`), which made this suite's phrase arm depend on WHICH branch the seed leg
+# happened to take. `does not parse` only appears in the checker's WARN detail, so asserting it also
+# proves the run took exit 3 and not exit 1: this arm drives the divergent branch on purpose.
+: > "$vn_rec"
+out=$(vn_run "$vn/tree" --strict-seed); rc=$?
+if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: FAIL (1)' \
+  && printf '%s\n' "$out" | grep -Fq '  FAIL  seed_drift — ' \
+  && printf '%s\n' "$out" | grep -Fq 'does not parse' \
+  && printf '%s\n' "$out" | grep -Fq 'an unknown seed is not a pass'; then
+  say "  PASS  a 0-byte record under --strict-seed -> exit $rc, FAIL via the verifier's exit-3 branch with the checker's sentence"
+else
+  say "  FAIL  the exit-3 strict branch lost the checker's sentence (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# seeded negative for the arm above: mutate the ONE owning sentence in a scratch copy of the tree and
+# the same run must lose the phrase. Without it the arm could be greening on a sentence that came
+# from somewhere else and nobody would know the instrument was blind.
+vn_mut="$vn/mutant"
+mkdir -p "$vn_mut"
+cp -r "$vn/tree/scripts" "$vn_mut/scripts"
+sed -e 's/an unknown seed is not a pass/an unknown is not a pass/' \
+  "$vn/tree/scripts/node_seed_drift.py" > "$vn_mut/scripts/node_seed_drift.py"
+if cmp -s "$vn/tree/scripts/node_seed_drift.py" "$vn_mut/scripts/node_seed_drift.py"; then
+  say "  FAIL  the seeded negative mutated nothing — the arm above would prove nothing"; fails=$((fails+1))
+else
+  : > "$vn_rec"
+  out=$(vn_run "$vn_mut" --strict-seed); rc=$?
+  if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: FAIL (1)' \
+    && printf '%s\n' "$out" | grep -Fq '  FAIL  seed_drift — ' \
+    && ! printf '%s\n' "$out" | grep -Fq 'an unknown seed is not a pass'; then
+    say "  PASS  a scratch tree whose single source lost the phrase -> the arm above goes red (exit $rc, phrase absent)"
+  else
+    say "  FAIL  the phrase arm cannot fail: a mutated source still greened it (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+fi
+# the record is restored here because the arms below (missing seeder, then the green re-run) expect a
+# readable one; the sibling arms above restore the same way, from the pristine copy.
+cp "$vn/good-record.json" "$vn_rec"
+
 # the seeder itself gone: nothing could stage a check, and that is a named FAIL, not a warning.
 mv "$vn/tree/scripts/node_seed_drift.py" "$vn/node_seed_drift.py.bak"
 out=$(vn_run "$vn/tree"); rc=$?
