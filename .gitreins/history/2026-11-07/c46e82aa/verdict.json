@@ -1,0 +1,114 @@
+{
+  "task_id": "CF-003",
+  "task_title": "Per-repo deploy key, node runtime, shared module cache",
+  "task_criteria": [
+    "Implement and verify the board acceptance criteria for CF-003, with chapter/flow traceability and tests; do not claim live private-repo or bunker evidence unless actually exercised."
+  ],
+  "passed": false,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "4f32a50b6e7837bca72c00fcdd2a0d3e3d28eb32",
+  "working_tree_content_fingerprint": "f0702e55f3efd5aea93b1c25bbec76a461651e71eead6ff94a08a022ec53d9ce",
+  "working_tree_dirty_path_count": 0,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": false,
+      "any_failed": true,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2717 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261107T151011.272063Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": false,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n10:12AM INF scanned ~3933538 bytes (3.93 MB) in 1.36s\n10:12AM WRN leaks found: 2\nsecrets: gitleaks: findings found (exit 1)\nsecrets: harness state excluded from gitleaks scope (.gitreins/**)\nsecrets: builtin cross-check: Scanned 429 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 1,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261107T151011.272063Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n install-go.sh\n  PASS  bash -n install-node.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n panel_supervise.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n verify-patch.sh\n  PASS  bash -n harness-vars.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-deepseek.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n install-pi-agent.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n harness-node-e2e.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.oZJQV1fmP1/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n  PASS  uncreatable destination -> fetch_verified exit 1, no artifact installed\n  PASS  caller surfaced the failed install: 1 '^  FAIL  go:download' row, fixture exit 1\n6. no literal credential assignments\n  PASS  none found\n  section 6 tailnet-address (CF-378): no tracked file outside the board publishes a tailnet address\n  PASS  tailnet-address \u2014 0 tailnet-address hits in 337 tracked file(s) outside .coding-hermes/board and .gitreins\n  PASS  seeded fixture -> FAIL names docs/seeded.md:3; the out-of-range subnet stays green\n\n\u2026 [38120 chars omitted \u2014 497 line(s)] \u2026\n  PASS  occupied :10800 WITH dashboard.basic_auth keeps PASS port / PASS status_probe (only inference_key fails)\n56. a foreign harness is measured in a node, and verify-node.sh re-measures what the manifest records (CF-006)\n  PASS  node slice: the manifest records the measured harness, verify re-measures it, 4 red arms + a directive turn\n  PASS  with the adapter's binary row removed the manifest arm goes RED (exit 1) \u2014 the battery is falsifiable\n57. the brief digest binds every effectful field, and the pre-fix worker runs a tampered gate (CF-275)\n  PASS  a bound text+gate+repo/ref digest runs its gate; a tampered gate.cmd, a legacy text-only digest beside a gate, and a gate with no digest are each refused without the gate starting\n  PASS  pre-fix c05880d runs the gate whose cmd was altered after the digest was minted (fixture detects CF-275)\n58. per-repo deploy key, node runtime, shared module cache, footprint, orphan reap (CF-003)\n  PASS  five mechanisms with their refusal arms (deploy key, node pin, sealed GOMODCACHE, footprint, reap)\n  PASS  MEASURED shared GOMODCACHE 2097910 bytes; sealed rebuild added 0 bytes\n  PASS  layer 10 grades the owned node pin, not a PATH runtime\n  PASS  layer 40 clones with the declared key and pins core.sshCommand in that repo only\n  PASS  a 0644 deploy key is refused and the clone is not attempted\n  PASS  layer 00 measures the node footprint and admits it against the floor\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261107T151011.272063Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 Implement and verify the board acceptance criteria for CF-003, with chapter/flow traceability and tests; do not claim live private-repo or bunker evidence unless actually exercised.: Implementation is real and wired: scripts/deploy_key.py (0600 per-repo key + generated IdentitiesOnly ssh_config; refuses 0644 key, public key, HTTPS remote, unrequested rotation), scripts/install-node.sh (NODE_PIN v22.22.3, per-arch sha256, version readback, atomic swap, --tarball/--sha256 fixture seam), scripts/gomodcache.py (init/seed/seal/check/manifest), scripts/node_hygiene.py (footprint admission + orphan reap), consumed by project-node.sh layer 00 footprint (:242-260), layer 10 node install/owned-path precedence (:408-430) and go:modcache (:488-522), layer 40 repo_key/GIT_SSH_COMMAND/core.sshCommand (:853-925), node-create.sh --deploy-key/--gomodcache (:97-106, :163-190), bunker-server-install.sh --reap-orphans (:69-91). TESTS RUN FRESH: `python3 tests/test_node_provisioning.py` -> 'Ran 23 tests in 3.792s' / 'OK', exit 0, including 'MEASURED shared GOMODCACHE 2097910 bytes; sealed rebuild added 0 bytes'; `bash tests/selftest.sh` -> 'SELFTEST: PASS', exit 0, with \u00a758 (tests/selftest.sh:5273-5370) printing 6 PASS rows: unit battery, the MEASURED cache line, 'layer 10 grades the owned node pin, not a PATH runtime', 'layer 40 clones with the declared key and pins core.sshCommand in that repo only', 'a 0644 deploy key is refused and the clone is not attempted', 'layer 00 measures the node footprint and admits it against the floor'. Lint/compile: `bash -n` over the touched shell scripts rc=0; `python3 -m py_compile` over deploy_key.py/gomodcache.py/node_hygiene.py rc=0. Traceability present: docs/ACCEPTANCE-PLAN.md:173 (\u00a758 row naming all five mechanisms and the refusal arms), docs/handbook/chapters/M1-provisioning.md \u00a77 verification table (:196-207) and \u00a713 findings F1-6/F1-7/F1-8 (:310-324), docs/handbook/chapters/M5-harness.md:69 and :147-158 (S3 settings) and :297-303 (F5-8), specs/NODE.md \u00a7Credentials (:114-145) and \u00a7Disk floor (:147-190), README.md:131-134 and :169, plus the ch:trace row at tests/selftest.sh:5272. No live evidence is claimed: README.md:169 states 'no node has cloned the private GitLab with a real read-only key, so the clone itself stays unverified'; M1:205 marks the F2 live legs 'not run / UNVERIFIED'; the test docstring names the three live obligations (real private GitLab clone, the 11 node-dependent Go tests, reaping a live host) as not proven. Minor non-blocking gaps: the ch:trace `spec=` anchor `docs/handbook/OUTLINE.md#part-iii-m1-m5-f2` does not resolve (OUTLINE.md:95 is '## PART III \u2014 MODULES'); node-create.sh's --deploy-key preflight (:97-106) has no selftest arm (only layer-40 consumption is exercised); the install-node.sh fixture uses a synthetic tarball so the real v22.22.3 digest is not re-verified here \u2014 which the docs state explicitly rather than claiming.\nCF-003 is implemented across five mechanisms with refusal arms, 23 hermetic tests pass and the full selftest prints SELFTEST: PASS with six \u00a758 wiring rows, chapter/flow traceability is recorded in ACCEPTANCE-PLAN/M1/M5/NODE.md/README, and the live private-repo and bunker obligations are explicitly marked UNVERIFIED rather than claimed.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 Implement and verify the board acceptance criteria for CF-003, with chapter/flow traceability and tests; do not claim live private-repo or bunker evidence unless actually exercised.: Implementation is real and wired: scripts/deploy_key.py (0600 per-repo key + generated IdentitiesOnly ssh_config; refuses 0644 key, public key, HTTPS remote, unrequested rotation), scripts/install-node.sh (NODE_PIN v22.22.3, per-arch sha256, version readback, atomic swap, --tarball/--sha256 fixture seam), scripts/gomodcache.py (init/seed/seal/check/manifest), scripts/node_hygiene.py (footprint admission + orphan reap), consumed by project-node.sh layer 00 footprint (:242-260), layer 10 node install/owned-path precedence (:408-430) and go:modcache (:488-522), layer 40 repo_key/GIT_SSH_COMMAND/core.sshCommand (:853-925), node-create.sh --deploy-key/--gomodcache (:97-106, :163-190), bunker-server-install.sh --reap-orphans (:69-91). TESTS RUN FRESH: `python3 tests/test_node_provisioning.py` -> 'Ran 23 tests in 3.792s' / 'OK', exit 0, including 'MEASURED shared GOMODCACHE 2097910 bytes; sealed rebuild added 0 bytes'; `bash tests/selftest.sh` -> 'SELFTEST: PASS', exit 0, with \u00a758 (tests/selftest.sh:5273-5370) printing 6 PASS rows: unit battery, the MEASURED cache line, 'layer 10 grades the owned node pin, not a PATH runtime', 'layer 40 clones with the declared key and pins core.sshCommand in that repo only', 'a 0644 deploy key is refused and the clone is not attempted', 'layer 00 measures the node footprint and admits it against the floor'. Lint/compile: `bash -n` over the touched shell scripts rc=0; `python3 -m py_compile` over deploy_key.py/gomodcache.py/node_hygiene.py rc=0. Traceability present: docs/ACCEPTANCE-PLAN.md:173 (\u00a758 row naming all five mechanisms and the refusal arms), docs/handbook/chapters/M1-provisioning.md \u00a77 verification table (:196-207) and \u00a713 findings F1-6/F1-7/F1-8 (:310-324), docs/handbook/chapters/M5-harness.md:69 and :147-158 (S3 settings) and :297-303 (F5-8), specs/NODE.md \u00a7Credentials (:114-145) and \u00a7Disk floor (:147-190), README.md:131-134 and :169, plus the ch:trace row at tests/selftest.sh:5272. No live evidence is claimed: README.md:169 states 'no node has cloned the private GitLab with a real read-only key, so the clone itself stays unverified'; M1:205 marks the F2 live legs 'not run / UNVERIFIED'; the test docstring names the three live obligations (real private GitLab clone, the 11 node-dependent Go tests, reaping a live host) as not proven. Minor non-blocking gaps: the ch:trace `spec=` anchor `docs/handbook/OUTLINE.md#part-iii-m1-m5-f2` does not resolve (OUTLINE.md:95 is '## PART III \u2014 MODULES'); node-create.sh's --deploy-key preflight (:97-106) has no selftest arm (only layer-40 consumption is exercised); the install-node.sh fixture uses a synthetic tarball so the real v22.22.3 digest is not re-verified here \u2014 which the docs state explicitly rather than claiming.\nCF-003 is implemented across five mechanisms with refusal arms, 23 hermetic tests pass and the full selftest prints SELFTEST: PASS with six \u00a758 wiring rows, chapter/flow traceability is recorded in ACCEPTANCE-PLAN/M1/M5/NODE.md/README, and the live private-repo and bunker obligations are explicitly marked UNVERIFIED rather than claimed.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "Implement and verify the board acceptance criteria for CF-003, with chapter/flow traceability and tests; do not claim live private-repo or bunker evidence unless actually exercised.",
+                "status": "PASS",
+                "detail": "Implementation is real and wired: scripts/deploy_key.py (0600 per-repo key + generated IdentitiesOnly ssh_config; refuses 0644 key, public key, HTTPS remote, unrequested rotation), scripts/install-node.sh (NODE_PIN v22.22.3, per-arch sha256, version readback, atomic swap, --tarball/--sha256 fixture seam), scripts/gomodcache.py (init/seed/seal/check/manifest), scripts/node_hygiene.py (footprint admission + orphan reap), consumed by project-node.sh layer 00 footprint (:242-260), layer 10 node install/owned-path precedence (:408-430) and go:modcache (:488-522), layer 40 repo_key/GIT_SSH_COMMAND/core.sshCommand (:853-925), node-create.sh --deploy-key/--gomodcache (:97-106, :163-190), bunker-server-install.sh --reap-orphans (:69-91). TESTS RUN FRESH: `python3 tests/test_node_provisioning.py` -> 'Ran 23 tests in 3.792s' / 'OK', exit 0, including 'MEASURED shared GOMODCACHE 2097910 bytes; sealed rebuild added 0 bytes'; `bash tests/selftest.sh` -> 'SELFTEST: PASS', exit 0, with \u00a758 (tests/selftest.sh:5273-5370) printing 6 PASS rows: unit battery, the MEASURED cache line, 'layer 10 grades the owned node pin, not a PATH runtime', 'layer 40 clones with the declared key and pins core.sshCommand in that repo only', 'a 0644 deploy key is refused and the clone is not attempted', 'layer 00 measures the node footprint and admits it against the floor'. Lint/compile: `bash -n` over the touched shell scripts rc=0; `python3 -m py_compile` over deploy_key.py/gomodcache.py/node_hygiene.py rc=0. Traceability present: docs/ACCEPTANCE-PLAN.md:173 (\u00a758 row naming all five mechanisms and the refusal arms), docs/handbook/chapters/M1-provisioning.md \u00a77 verification table (:196-207) and \u00a713 findings F1-6/F1-7/F1-8 (:310-324), docs/handbook/chapters/M5-harness.md:69 and :147-158 (S3 settings) and :297-303 (F5-8), specs/NODE.md \u00a7Credentials (:114-145) and \u00a7Disk floor (:147-190), README.md:131-134 and :169, plus the ch:trace row at tests/selftest.sh:5272. No live evidence is claimed: README.md:169 states 'no node has cloned the private GitLab with a real read-only key, so the clone itself stays unverified'; M1:205 marks the F2 live legs 'not run / UNVERIFIED'; the test docstring names the three live obligations (real private GitLab clone, the 11 node-dependent Go tests, reaping a live host) as not proven. Minor non-blocking gaps: the ch:trace `spec=` anchor `docs/handbook/OUTLINE.md#part-iii-m1-m5-f2` does not resolve (OUTLINE.md:95 is '## PART III \u2014 MODULES'); node-create.sh's --deploy-key preflight (:97-106) has no selftest arm (only layer-40 consumption is exercised); the install-node.sh fixture uses a synthetic tarball so the real v22.22.3 digest is not re-verified here \u2014 which the docs state explicitly rather than claiming."
+              }
+            ],
+            "summary": "CF-003 is implemented across five mechanisms with refusal arms, 23 hermetic tests pass and the full selftest prints SELFTEST: PASS with six \u00a758 wiring rows, chapter/flow traceability is recorded in ACCEPTANCE-PLAN/M1/M5/NODE.md/README, and the live private-repo and bunker obligations are explicitly marked UNVERIFIED rather than claimed.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-003\n\nStage tier1: FAIL\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2717 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 Implement and verify the board acceptance criteria for CF-003, with chapter/flow traceability and tests; do not claim live private-repo or bunker evidence unless actually exercised.: Implementation is real and wired: scripts/deploy_key.py (0600 per-repo key + generated IdentitiesOnly ssh_config; refuses 0644 key, public key, HTTPS remote, unrequested rotation), scripts/install-node.sh (NODE_PIN v22.22.3, per-arch sha256, version readback, atomic swap, --tarball/--sha256 fixture seam), scripts/gomodcache.py (init/seed/seal/check/manifest), scripts/node_hygiene.py (footprint admission + orphan reap), consumed by project-node.sh layer 00 footprint (:242-260), layer 10 node install/owned-path precedence (:408-430) and go:modcache (:488-522), layer 40 repo_key/GIT_SSH_COMMAND/core.sshCommand (:853-925), node-create.sh --deploy-key/--gomodcache (:97-106, :163-190), bunker-server-install.sh --reap-orphans (:69-91). TESTS RUN FRESH: `python3 tests/test_node_provisioning.py` -> 'Ran 23 tests in 3.792s' / 'OK', exit 0, including 'MEASURED shared GOMODCACHE 2097910 bytes; sealed rebuild added 0 bytes'; `bash tests/selftest.sh` -> 'SELFTEST: PASS', exit 0, with \u00a758 (tests/selftest.sh:5273-5370) printing 6 PASS rows: unit battery, the MEASURED cache line, 'layer 10 grades the owned node pin, not a PATH runtime', 'layer 40 clones with the declared key and pins core.sshCommand in that repo only', 'a 0644 deploy key is refused and the clone is not attempted', 'layer 00 measures the node footprint and admits it against the floor'. Lint/compile: `bash -n` over the touched shell scripts rc=0; `python3 -m py_compile` over deploy_key.py/gomodcache.py/node_hygiene.py rc=0. Traceability present: docs/ACCEPTANCE-PLAN.md:173 (\u00a758 row naming all five mechanisms and the refusal arms), docs/handbook/chapters/M1-provisioning.md \u00a77 verification table (:196-207) and \u00a713 findings F1-6/F1-7/F1-8 (:310-324), docs/handbook/chapters/M5-harness.md:69 and :147-158 (S3 settings) and :297-303 (F5-8), specs/NODE.md \u00a7Credentials (:114-145) and \u00a7Disk floor (:147-190), README.md:131-134 and :169, plus the ch:trace row at tests/selftest.sh:5272. No live evidence is claimed: README.md:169 states 'no node has cloned the private GitLab with a real read-only key, so the clone itself stays unverified'; M1:205 marks the F2 live legs 'not run / UNVERIFIED'; the test docstring names the three live obligations (real private GitLab clone, the 11 node-dependent Go tests, reaping a live host) as not proven. Minor non-blocking gaps: the ch:trace `spec=` anchor `docs/handbook/OUTLINE.md#part-iii-m1-m5-f2` does not resolve (OUTLINE.md:95 is '## PART III \u2014 MODULES'); node-create.sh's --deploy-key preflight (:97-106) has no selftest arm (only layer-40 consumption is exercised); the install-node.sh fixture uses a synthetic tarball so the real v22.22.3 digest is not re-verified here \u2014 which the docs state explicitly rather than claiming.\nCF-003 is implemented across five mechanisms with refusal arms, 23 hermetic tests pass and the full selftest prints SELFTEST: PASS with six \u00a758 wiring rows, chapter/flow traceability is recorded in ACCEPTANCE-PLAN/M1/M5/NODE.md/README, and the live private-repo and bunker obligations are explicitly marked UNVERIFIED rather than claimed.\n\nOverall: FAIL \u2717",
+  "evaluated_at": "2026-11-07T15:15:53.254590",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-07T15:15:53.284711+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 172497,
+        "truncated": false,
+        "source": "git show 4f32a50b6e78"
+      }
+    ],
+    "task_id": "CF-003"
+  }
+}
