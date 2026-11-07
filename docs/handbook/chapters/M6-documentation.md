@@ -6,7 +6,7 @@
 |---|---|
 | Module name | DOCUMENTATION |
 | Path | `/home/kara/code-factory/scripts/` — `master_doc_skeleton.py`, `master_doc_fill.py`, `master_doc_check.py`, `master_doc_panel.py`, `gen_nasa_handbook.py`, `gen_system_views.py`, `sheet_style.py`, `extract_owner_decisions.py`, `gen_unit_map.py`, `verify-patch.sh`, `panel_loop.py`, `ownership.py`, `handbook_spine.py` |
-| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `patches/` and `scripts/verify-patch.sh`'s chain changed in `47d68b4..08a2c8a` — the `deploy-doc` stage landed) |
+| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; `panel_loop.py` was rewritten for `--groups`/`--parallel` and `panel_supervise.sh`/`reap_orphan_writers.py` were added in `08a2c8a..fbc19cb`; every M6 file:line re-pinned) |
 | Language / runtime | Python 3.14.9 (measured) |
 | Owner lane | code-factory (control host) |
 | Status | **UNVERIFIED** — `master_doc_check.py` (268 lines) read in full and its FAIL reproduced; the rest of the pipeline (`master_doc_fill.py`, `gen_nasa_handbook.py`, `master_doc_panel.py`, `gen_unit_map.py`, …) not read line-by-line; the gate reads `MASTER-DOC: FAIL`. **The legacy fill/render/panel pipeline is UNBUILDABLE against these M-numbered chapters** (B13): `master_doc_check.py:188`, `gen_nasa_handbook.py:253-260` and `master_doc_fill.py:422` all select `[0-9][0-9]-*.md`, which does not match `M0-…-*.md`, so the legacy pipeline cannot select or deliver these chapters. **The chapter-aware gate is `handbook_spine.py` (S9)**, which *does* select `M*.md` and exits 1 on any finding (`python3 scripts/handbook_spine.py` → `chapters=13 canonical contracts=18 findings=0`, exit 0); the legacy fill/render/check pipeline is retired for the M-numbered handbook, and the render-to-owner-artifact leg remains missing (CT-18 UNVERIFIED, §6) |
@@ -42,7 +42,7 @@ the gate now names at `:191-209` instead of silently passing.
 | S1 skeleton + census | `master_doc_skeleton.py` | **active** | `main()` entrypoint; structure-mapped |
 | S2 fill | `master_doc_fill.py` | **operator-invoked** | `main()` (`:393`); `--engine api\|hermes`, `--workers 2`, `--provider deepseek` (`:394-411`); no in-repo production caller |
 | S3 gate | `master_doc_check.py` | **active** | `main()` at `:160`; selects `[0-9][0-9]-*.md` at `:188` |
-| S4 panel | `master_doc_panel.py`, `panel_loop.py`, `ownership.py` | **active** (panel), **optional** (ownership) | `panel_loop.py` runs this loop; `ownership.py` has no code caller (`grep -rn ownership.py scripts/` → self only) |
+| S4 panel | `master_doc_panel.py`, `panel_loop.py`, `ownership.py`, `panel_supervise.sh`, `reap_orphan_writers.py` | **active** (panel), **optional** (ownership) | `panel_loop.py` runs this loop; `panel_supervise.sh` supervises it and restarts on crash/cap/provider outage (`panel_supervise.sh:30` `while true`); `reap_orphan_writers.py` kills writer sessions whose parent round died (ppid==1 + the writer-prompt signature, `reap_orphan_writers.py:47-49`); `ownership.py` has no code caller (`grep -rn ownership.py scripts/` → self only) |
 | S5 render | `gen_nasa_handbook.py`, `gen_system_views.py`, `sheet_style.py` | **operator-invoked** | `gen_nasa_handbook.py:247` `main()`; no in-repo caller (`grep -rn gen_nasa_handbook scripts/` → only `gen_unit_map.py:31` NOT_CALLERS) |
 | S6 corpus | `extract_owner_decisions.py` | **operator-invoked** | no in-repo caller (grep empty) |
 | S7 unit-map | `gen_unit_map.py` | **operator-invoked** | `main()`; no in-repo caller |
@@ -104,25 +104,28 @@ M11 ("works") could both cite CT-06 and pass while flatly disagreeing. The state
 it does **not** verify cited line numbers exist in the cited file, and it trusts the chapters'
 self-reported status word rather than re-deriving it.
 
-**`panel_loop.py` settings and stop semantics (sol B14, added this round).** The loop that produces
-this handbook carries its own controls; a process exit 0 is **not** document acceptance:
+**`panel_loop.py` settings and stop semantics (sol B14; re-pinned round 13).** The loop that
+produces this handbook carries its own controls; a process exit 0 is **not** document acceptance:
 
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
-| `--rounds` | 6 (`:280`) | int; **0 = no cap** (`:290-291` maps 0 → `10**9`) | **absolute round ceiling** — the loop condition (`:304` `while st["round"] < rounds`) compares the *stored* round against `--rounds`; it does **not** count iterations from `--start-round` (sol B12) | a cap is a session budget, not a definition of done |
-| `--max-seconds` | 21000 (`:281`) | int; 0 = no cap | the wall-clock budget | same |
-| `--start-round` | None (`:282`) | int | **inert in this revision** — `:295` assigns `args.start_round`, but `:305` (`rnd = st["round"] + 1`) overwrites it from stored state before the writer runs, so the loop always resumes at `st["round"] + 1` (sol B12) | the flag does not resume at a specific round as its help implies — it is an inert override |
-| `--writer-timeout` | 4200 (`:283`) | seconds | writer session deadline | too short kills the writer mid-round |
-| `--judge-timeout` | 2700 (`:284`) | seconds | judge session deadline | too short yields MISSING seats |
-| `--chapters` | "" (`:285`) | comma list | narrow the chapter set | empty = all chapters |
-| `PANEL_WRITER_MODEL` / `PANEL_WRITER_PROVIDER` | `deepseek-v4-pro` / `deepseek` (`:35-36`) | env override | writer seat model/provider | a wrong model runs the writer on an unmeasured seat |
-| `FANOUT` / `MANIFEST` | hardcoded `cf-quorum-20261104` scratch paths (`:32-33`) | a path | the external fanout script + seat manifest | a dated scratch dir that no longer exists breaks the loop |
+| `--rounds` | 6 (`:323`) | int; **0 = no cap** (`:340` maps 0 → `10**9`) | **absolute round ceiling** — the loop condition (`:351` `while st["round"] < rounds`) compares the *stored* round against `--rounds`; it does **not** count iterations from `--start-round` (sol B12) | a cap is a session budget, not a definition of done |
+| `--max-seconds` | 21000 (`:324`) | int; 0 = no cap (`:341` budget) | the wall-clock budget | same |
+| `--start-round` | None (`:325`) | int | **inert for the loop body** — `:342` (`rnd = args.start_round or (st["round"] + 1)`) sets only the printed "start round" value, then `:352` (`rnd = st["round"] + 1`) overwrites it from stored state before each writer runs, so the loop always resumes at `st["round"] + 1` (sol B12) | the flag does not resume at a specific round as its help implies — it is an inert override |
+| `--writer-timeout` | 4200 (`:326`) | seconds | writer session deadline | too short kills the writer mid-round |
+| `--judge-timeout` | 2700 (`:327`) | seconds | judge session deadline | too short yields MISSING seats |
+| `--chapters` | "" (`:328`) | comma list | narrow the chapter set | empty = all chapters |
+| `--groups` | "" (`:329`) | `M0,M1;M4,M5` semicolon-separated | explicit section groups (one writer per group, PANEL-LOOP's `--groups`) | overrides `--parallel`; a wrong grouping splits a contract seam across writers |
+| `--parallel` | 1 (`:331`) | int | writers per round (0/1 = single writer) | >1 splits chapters by interleaved slice when `--groups` is absent (`:365-366`) |
+| `PANEL_WRITER_MODEL` / `PANEL_WRITER_PROVIDER` | `deepseek-v4-pro` / `deepseek` (`:37-38`) | env override | writer seat model/provider | a wrong model runs the writer on an unmeasured seat |
+| `FANOUT` / `MANIFEST` | hardcoded `cf-quorum-20261104` scratch paths (`:34-35`) | a path | the external fanout script + seat manifest | a dated scratch dir that no longer exists breaks the loop |
 
-**Stop semantics (distinguish process success from acceptance).** `panel_loop.py:332-354` exits 0
-on two conditions: unanimous PASS, **or** `clean_streak >= 2` — two consecutive rounds with no
-*new defect class*, **even while blocking findings remain open**. A `STOP: no new defect class`
-exit is a successful process termination, not proof the document is aligned; the operator must
-read back the outstanding findings (the `CORRECTIONS.md` per round) separately.
+**Stop semantics (distinguish process success from acceptance).** `panel_loop.py:442-457` exits 0
+on three conditions: unanimous PASS (`:445`), `clean_streak >= 2` (`:447-451`) — two consecutive
+rounds with no *new defect class*, **even while blocking findings remain open** — or the cap
+(`:456`). A `STOP: no new defect class` exit is a successful process termination, not proof the
+document is aligned; the operator must read back the outstanding findings (the `CORRECTIONS.md`
+per round) separately.
 
 ## 6. Contracts in and out
 
@@ -198,8 +201,9 @@ it was this loop's own marker, not a log line, and is removed.)
 ## 13. Evidence of record
 
 - Code read: `master_doc_check.py` (268 lines, read in full); `master_doc_fill.py:24-28, 390-422`;
-  `gen_nasa_handbook.py:15-20, 247-262`; `master_doc_panel.py:55-80`; `panel_loop.py:25-75`;
-  `ownership.py` (170 lines, read in full).
+  `gen_nasa_handbook.py:15-20, 247-262`; `master_doc_panel.py:55-80`; `panel_loop.py:33-38, 321-461`
+  (main() + config, re-read this round); `panel_supervise.sh` (47 lines); `reap_orphan_writers.py`
+  (61 lines); `ownership.py` (170 lines, read in full).
 - Commands run: `python3 scripts/master_doc_check.py` (FAIL, 44/37/50); `bash scripts/verify-patch.sh`
   (PASS); `grep -rn gen_nasa_handbook scripts/` (no caller).
 - Board rows: CF-360, CF-374 (complete), CF-381.
@@ -212,8 +216,12 @@ it was this loop's own marker, not a log line, and is removed.)
     incompatible, dated selection paths.
   - **F6-4** (new) — S5–S8 have no in-repo invoker (grep empty); reclassified operator-invoked
     (optional), not "active".
-  - **F6-5** (new, grok B5) — `handbook_spine.py` is the gate that actually selects these `M*.md`
+  - **F6-5** (grok B5) — `handbook_spine.py` is the gate that actually selects these `M*.md`
     chapters and was undocumented in M6; added as S9 with its five checks, the BOUNDARY policy, and
     the state-agreement check (and its residual locator blind spot).
+  - **F6-6** (new, round 13) — `panel_loop.py` was rewritten for `--groups`/`--parallel` (the
+    PANEL-LOOP "sections written together" rule); `panel_supervise.sh` (supervisor) and
+    `reap_orphan_writers.py` (orphan reaper) are new S4 units. All M6 `panel_loop.py` locators
+    re-pinned to the rewritten file (`main()` at `:321`, config `:33-38`, stop `:442-457`).
 
 ## RED field count: 2 (Status §1 — own gate reads FAIL, Metrics §8)

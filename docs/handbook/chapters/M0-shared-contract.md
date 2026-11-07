@@ -6,7 +6,7 @@
 |---|---|
 | Module name | SHARED CONTRACT (`scripts/lib.sh`) |
 | Path | `/home/kara/code-factory/scripts/lib.sh` |
-| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `lib.sh` byte-identical since `47d68b4` — no file M0 cites changed in `47d68b4..08a2c8a`) |
+| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; `scripts/lib.sh` byte-identical since `47d68b4` — no file M0 cites changed in `08a2c8a..fbc19cb`) |
 | Language / runtime | bash 5.3.9 (measured: `bash --version`); sourced, never executed |
 | Owner lane | code-factory (node-side + control-host shell) |
 | Status | **VERIFIED** — `lib.sh` (78 lines) read in full; every cited line re-verified this round |

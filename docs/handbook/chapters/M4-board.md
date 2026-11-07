@@ -6,10 +6,10 @@
 |---|---|
 | Module name | BOARD |
 | Path | `/home/kara/code-factory/.coding-hermes/board/tasks.jsonl` + `events.jsonl`; tools `/home/kara/code-factory/scripts/boardctl`, `board_lock.py`, `board_drift.py` |
-| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; the board and `board_drift.py` changed in `47d68b4..08a2c8a` — the CF-270 close landed) |
+| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; `scripts/board_read.py` was added and `handbook_spine.py` re-lined in `08a2c8a..fbc19cb`; the board store advanced 519→520 events via an uncommitted CF-150 transition) |
 | Language / runtime | bash (boardctl wrapper) + Python 3.14.9 (measured) |
 | Owner lane | code-factory (control host) |
-| Status | **VERIFIED (store)** — 357 rows / **519** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT reconciled** — `board_drift` `RESULT: OK`, byte parity identical on both files, 0 divergent ids, HEAD == origin/main == `08a2c8a` — both re-measured this round. The `boardctl` verb surface is the external executable's (`/home/kara/.local/bin/boardctl`), not this repo's |
+| Status | **VERIFIED (store)** — 357 rows / **520** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT (working copy)** — `board_drift` `RESULT: DRIFT (4 failed)`, 1 divergent id (CF-150: workdir `in_progress` vs published `pending`), HEAD == origin/main == `fbc19cb` — the divergence is an uncommitted working-copy transition (event 520, actor `foreman`, 2026-11-07T06:09:41), not a committed divergence, and `board_read.py` resolves it to `origin/main` by design. The `boardctl` verb surface is the external executable's (`/home/kara/.local/bin/boardctl`), not this repo's |
 
 ## 2. Purpose, authority and position
 
@@ -31,7 +31,19 @@ boardctl (`--status complete REQUIRES --evidence-run-id`, `boardctl update --hel
 | Submodule | Unit | Classification | Evidence (invoking line) |
 |---|---|---|---|
 | S1 write and validate rows | `boardctl` (wrapper), `board_lock.py` | **active** | `scripts/boardctl` is the stable entrypoint (`exec boardctl -C "$ROOT"`); `board_lock.py` adjudicates the lock (`adjudicate`, `:149`) |
-| S2 compare board copies | `board_drift.py` | **active** | `python3 scripts/board_drift.py check …` → `RESULT: OK` this round (see §7) |
+| S2 compare board copies | `board_drift.py` | **active** | `python3 scripts/board_drift.py check …` → `RESULT: DRIFT (4 failed)` this round (see §7) |
+
+**`board_read.py` (new unit, added in `dbf810b`, not in OUTLINE's S1/S2 split — F4-6).** A 125-line
+read-only reader (`scripts/board_read.py`) that resolves the board from the **canonical ref
+(`origin/main`) first, the working copy only when there is no remote**. It exists because a dirty
+workdir previously made a tick refuse to read the board at all (252 pending rows invisible). The
+`load()` function returns `(rows, source)` and reports which source it used (`board_read.py:59`, the
+canonical-ref loop at `:63-71` tries `origin/main` → `origin/master` → `main` → `HEAD`, falling
+back to the worktree only when no ref resolves), so a lane can say "read from origin/main (local copy drifted by N rows)" instead of refusing. It
+never refuses: a malformed line is skipped (`parse`, `:46`, the `except json.JSONDecodeError:
+continue` at `:54-55`), not a reason to drop the whole
+board. Classification: **operator-invoked (optional)** — no cron/scheduler invokes it
+(`grep -rn board_read scripts/ tests/` → the unit itself only); a lane reads it on demand.
 
 **`board_lock.py` classifier (B11, read in full this round).** `adjudicate` (`:149-158`) has
 **three** outcomes, in order:
@@ -89,7 +101,7 @@ retired; each row carries the CT id its peer chapter cites.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| CT-14 | foreman | in | **external** — the foreman lives outside this repo; `grep -rn boardctl scripts/` matches the wrapper itself (`scripts/boardctl:2,9,11,15,16,21`), `board_lock.py:18,98,100` (its own `consumer_count` grep over the wrapper), `handbook_spine.py:58,71,74,75` (comments naming boardctl as a boundary peer), and `gen_unit_map.py:45` (a name list). No in-repo producer invokes `boardctl create` | the JSONL store `.coding-hermes/board/{tasks,events}.jsonl`, appended via the external `boardctl` binary (a file, not a function) | **UNVERIFIED** — the store is measured (357/519) but the foreman→board write wire is not exercised in this repo |
+| CT-14 | foreman | in | **external** — the foreman lives outside this repo; `grep -rn boardctl scripts/` matches the wrapper itself (`scripts/boardctl:2,9,11,15,16,21`), `board_lock.py:18,98,100` (its own `consumer_count` grep over the wrapper), `handbook_spine.py:58,75,78,79` (comments naming boardctl as a boundary peer), and `gen_unit_map.py:45` (a name list). No in-repo producer invokes `boardctl create` | the JSONL store `.coding-hermes/board/{tasks,events}.jsonl`, appended via the external `boardctl` binary (a file, not a function) | **UNVERIFIED** — the store is measured (357/520) but the foreman→board write wire is not exercised in this repo |
 | CT-13 | gitreins | in | **external** — the judge's verdict file (written by the gitreins binary, not in this repo) | `boardctl update --status complete` (the external binary; completion REQUIRES `--evidence-run-id`) | **UNVERIFIED** — round-3 carried "broken (OUTLINE §IV)" as an inherited state; the gitreins-verdict→board-close path was not re-run this round |
 | CT-10 | node | in | **external** — no in-repo producer writes a board row event: `grep -nE 'boardctl|tasks.jsonl|events.jsonl' scripts/node-bus-worker.py` → 0 matches | the JSONL store (the `boardctl` binary, out of scope) | **broken** — OUTLINE Part IV marks `node → board` broken; the node worker does not write board rows |
 
@@ -103,21 +115,24 @@ boundary contracts.
 
 | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|
-| store census | `jq -r '.id' .coding-hermes/board/tasks.jsonl | wc -l` | 357 rows | 2026-11-06 | PASS (357) |
-| events count | `wc -l .coding-hermes/board/events.jsonl` | 519 lines | 2026-11-06 | PASS (519) |
-| drift | `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-06 | **PASS** — `RESULT: OK`; byte parity `tasks.jsonl`/`events.jsonl` **identical** (sha256 `5aa15431…` / `783d556c…`); 357 vs 357 rows, **0 divergent ids: none**; HEAD=origin/main=`08a2c8a` |
-| semantic validate | `scripts/boardctl validate` | RESULT OK with named warnings | 2026-11-06 | **PASS** — `357 tasks, 519 events, 0 fixtures`, `key uniformity 357/357 (0 drift)`, `RESULT: OK (7 warning(s))` |
+| store census | `jq -r '.id' .coding-hermes/board/tasks.jsonl | wc -l` | 357 rows | 2026-11-07 | PASS (357) |
+| events count | `wc -l .coding-hermes/board/events.jsonl` | 520 lines | 2026-11-07 | PASS (520) |
+| drift | `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-07 | **DRIFT (4 failed)** — byte parity `tasks.jsonl`/`events.jsonl` **differ** (workdir sha256 `57203cb9…`/`f3d8802e…` vs published `5aa15431…`/`783d556c…`); 357 vs 357 rows, **1 divergent id: CF-150** (workdir `in_progress` vs published `pending`); HEAD=origin/main=`fbc19cb` |
+| semantic validate | `scripts/boardctl validate` | RESULT OK with named warnings | 2026-11-07 | **PASS** — `357 tasks, 520 events, 0 fixtures`, `key uniformity 357/357 (0 drift)`, `RESULT: OK (7 warning(s))` |
 | lock adjudication | `scripts/board_lock.py` on a held/unheld lock | ABSENT / HELD / RESIDUE named (`board_lock.py:149-158`) | 2026-11-06 | UNVERIFIED — the classifier was read in full but not exercised against a held/unheld fixture this round |
 | duplicate id refusal | `boardctl create --id CF-357 --title x` | refused | 2026-11-06 | **PASS** — `task id "CF-357" already exists … create aborted` |
 
-**Drift re-measured (reconciled this round).** The CF-270 divergence the round-10 draft reported
-as live was **already reconciled before this round's derivation**: commit `4dc0ef0` ("board: close
-CF-270") and `8ae4f82` are both in `origin/main`, so `board_drift` at HEAD `08a2c8a` returns
-`RESULT: OK` — 357 vs 357 rows, 0 divergent ids, HEAD == origin/main. The round-10 draft's
-`RESULT: DRIFT (4 failed)` with 1 divergent id (CF-270, workdir=`pending` vs published=`complete`)
-and its 518-events count were a **pre-reconciliation snapshot presented as current**; both are
-superseded. The instruction the round-10 draft itself issued — "`board_drift` must be re-run
-after that merge" — is now executed: it returns OK.
+**Drift re-measured (supersedes the round-11/12 reconciliation).** The round-10/11 CF-270
+divergence is still reconciled (commit `4dc0ef0` closed CF-270 and is in `origin/main`), but a
+**new, different divergence appeared this round**: `board_drift` at HEAD `fbc19cb` returns
+`RESULT: DRIFT (4 failed)` with **1 divergent id — CF-150** (workdir `in_progress` vs published
+`pending`). The cause is an **uncommitted working-copy transition**, not a committed divergence:
+event 520 (`task_id: CF-150`, `actor: foreman`, `2026-11-07T06:09:41`, `status: in_progress`) was
+appended to the working copy but not committed, so `origin/main` still carries CF-150 as `pending`.
+`HEAD == origin/main == fbc19cb` (the `HEAD ancestry` check PASSES); only the working copy differs.
+This is exactly the state `board_read.py` (new this round) is designed to resolve — it reads the
+canonical `origin/main` board when the working copy disagrees. The divergence is not a board defect
+to reconcile in-band; it is the panel loop's own runtime state and is documented, not "fixed".
 
 **Census-vs-validation correction (F4-2).** The `jq -r '.id' … | wc -l` check is a **census**,
 not integrity validation. The real validation is `boardctl validate`, which this round returned
@@ -136,8 +151,9 @@ derived by hand.
 ## 9. Log lines (verbatim)
 
 `boardctl` is an external binary (`/home/kara/.local/bin/boardctl`, measured this round — not in
-this repo), so these strings carry no in-repo `file:line`; they are quoted from the run output
-captured this round (2026-11-06, rev `08a2c8a`) with the commands named (N9):
+this repo), so these strings carry no in-repo `file:line`; the `validate` and `drift` rows are
+quoted from run output re-captured this round (2026-11-07, rev `fbc19cb`); the duplicate-id row is
+carried from the round-11/12 capture (N9):
 
 | Level | Line | Emitted when | Kind |
 |---|---|---|---|
@@ -177,7 +193,7 @@ captured this round (2026-11-06, rev `08a2c8a`) with the commands named (N9):
 
 ## 13. Evidence of record
 
-- Store: `.coding-hermes/board/tasks.jsonl` (357 rows), `events.jsonl` (519 lines).
+- Store: `.coding-hermes/board/tasks.jsonl` (357 rows), `events.jsonl` (520 lines).
 - `docs/UNIT-MAP.yaml:122-138` (M4 S1–S2).
 - Board rows: CF-344, CF-363, CF-119, CF-378 (CF-270 is now `complete` in both copies — reconciled, F4-4).
 - **Findings:**
@@ -188,9 +204,15 @@ captured this round (2026-11-06, rev `08a2c8a`) with the commands named (N9):
   - **F4-3** (carried) — CT-14/CT-13 (foreman→board / gitreins→board) states corrected from "works"/"broken" to **UNVERIFIED**: every
     side is an external peer, so no in-repo file:function exists to name.
   - **F4-4** (resolved) — the CF-270 divergence is **reconciled**: commit `4dc0ef0` closed CF-270 and
-    is in `origin/main`; `board_drift` at HEAD `08a2c8a` returns `RESULT: OK` (357 vs 357, 0
-    divergent ids, byte parity identical, HEAD == origin/main). The round-10 draft reported the
-    pre-reconciliation DRIFT as current; that reading is superseded. The events count is 519, not 518.
+    is in `origin/main`; the round-10 draft's pre-reconciliation DRIFT (CF-270 workdir `pending` vs
+    published `complete`) is superseded. A *new*, unrelated divergence (CF-150) is F4-6, not a
+    CF-270 regression.
   - **F4-5** (new, B04) — the board-admission gate belongs to M9 alone; crier has no board admission.
+  - **F4-6** (new, round 13) — `scripts/board_read.py` (added in `dbf810b`) is a new board READ
+    unit not in OUTLINE's S1/S2 split; it resolves the board from `origin/main` first, the dirty
+    working copy only when no remote exists. And `board_drift` now returns `RESULT: DRIFT (4
+    failed)` with 1 divergent id (CF-150: workdir `in_progress` vs published `pending`) — an
+    uncommitted working-copy transition (event 520, actor `foreman`), not a committed divergence;
+    HEAD == origin/main == `fbc19cb`. Documented, not reconciled in-band.
 
 ## RED field count: 2 (Metrics §8 — absence-proved; CT-14/CT-13 states UNVERIFIED — every side is an external peer)

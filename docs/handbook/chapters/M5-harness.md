@@ -6,7 +6,7 @@
 |---|---|
 | Module name | HARNESS |
 | Path | `/home/kara/code-factory/scripts/harness/` — `install-hermes.sh`, `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh`, `harness-vars.sh`; **and** `/home/kara/code-factory/scripts/` — `harness_resolve.py`, `install-go.sh`, `install-gitreins.sh`, `project-node.sh` |
-| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; no file M5 cites changed in `47d68b4..08a2c8a`) |
+| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; `project-node.sh` layer 20 gained the CF-150 `gateway_auth` staging block and `node-create.sh` re-lined in `08a2c8a..fbc19cb`; every M5 file:line re-pinned) |
 | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
 | Owner lane | code-factory (node-side) |
 | Status | **UNVERIFIED** — `harness-vars.sh` (318 lines), `harness_resolve.py` (400 lines), `install-hermes.sh` (375 lines), `install-gitreins.sh` (180 lines), `install-claude-code.sh` (settings surface), `install-codex.sh` (settings surface + partial body), `install-opencode.sh` (98 lines), `install-deepseek.sh` (101 lines), `install-pi-agent.sh` (113 lines) read this round; `install-claude-code.sh`/`install-codex.sh` full bodies not line-by-line; the conformance battery not run this round |
@@ -33,22 +33,23 @@ caller. The node's actual selection reads `node.json`'s `harness.cmd`/`harness.n
 (`node-bus-worker.py:459-469`); the dispatcher invokes Hermes directly (`dispatcher.py:260`). The
 resolver is a standalone selection facility, not the wired runtime authority round-2 claimed.
 
-**Finding F5-5 (B02, corrected this round).** Round-5's "the installers are operator-invoked; a
-source search finds no production invocation" was **false** — it was a *computed-call-site*
-blindness. `project-node.sh:440` builds the installer path from a variable
-(`inst="$HERE/harness/install-$HARNESS.sh"`), and `:449-452` invokes it with `--apply` (or
+**Finding F5-5 (B02, corrected round 11; re-pinned round 13).** Round-5's "the installers are
+operator-invoked; a source search finds no production invocation" was **false** — it was a
+*computed-call-site* blindness. `project-node.sh:498` builds the installer path from a variable
+(`inst="$HERE/harness/install-$HARNESS.sh"`), and `:508-510` invokes it with `--apply` (or
 `--check`) under `NODE_GATEWAY_PORT`. A literal `grep -rn 'install-hermes'` cannot match that, but
-the invocation is real and in-repo. `node-create.sh:24` stages the same computed path. The
-installers are therefore invoked by `project-node.sh` (a unit), which is itself operator-invoked —
-so the *chain* is operator-initiated even though the installers are unit-invoked.
+the invocation is real and in-repo. `node-create.sh:29` stages the same computed path (in the
+`staged=(…)` list, alongside the newly-staged `node_gateway_auth.py`). The installers are therefore
+invoked by `project-node.sh` (a unit), which is itself operator-invoked — so the *chain* is
+operator-initiated even though the installers are unit-invoked.
 
 ## 3. Submodule inventory
 
 | Submodule | Unit | Classification | Evidence (invoking line) |
 |---|---|---|---|
-| S1 hermes | `install-hermes.sh` | **active (unit-invoked)** | invoked by `project-node.sh:440` (computed `install-$HARNESS.sh`) / `:449-452` (`--apply`/`--check`), and staged by `node-create.sh:24`; `project-node.sh` is itself operator-invoked (the provisioning entry, no cron/scheduler invokes it) — F5-5 |
-| S2 foreign harnesses | `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh` | **active (unit-invoked)** | same computed dispatch `project-node.sh:440,449-452`; `install-claude-code.sh:36` sources `lib.sh`, the other four source `harness-vars.sh` |
-| S3 toolchain/gate/node | `install-go.sh`, `install-gitreins.sh`, `project-node.sh` | **active (unit-invoked)** | gate pin at `install-gitreins.sh:19`; `project-node.sh` is the one provisioning entry that invokes other units (`project-node.sh:173` disk_floor, `project-node.sh:212` reclaim, the harness adapter `:440/:449-452`) |
+| S1 hermes | `install-hermes.sh` | **active (unit-invoked)** | invoked by `project-node.sh:498` (computed `install-$HARNESS.sh`) / `:508-510` (`--apply`/`--check`), and staged by `node-create.sh:29`; `project-node.sh` is itself operator-invoked (the provisioning entry, no cron/scheduler invokes it) — F5-5 |
+| S2 foreign harnesses | `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh` | **active (unit-invoked)** | same computed dispatch `project-node.sh:498,508-510`; `install-claude-code.sh:36` sources `lib.sh`, the other four source `harness-vars.sh` |
+| S3 toolchain/gate/node | `install-go.sh`, `install-gitreins.sh`, `project-node.sh` | **active (unit-invoked)** | gate pin at `install-gitreins.sh:19`; `project-node.sh` is the one provisioning entry that invokes other units (`project-node.sh:173` disk_floor, `project-node.sh:212` reclaim, the harness adapter `:498/:508-510`, and the CF-150 `gateway_auth` staging block at `:448-497`) |
 | S4 harness resolution | `harness_resolve.py` | **optional** | no production caller (`grep -rln harness_resolve scripts/` → self + tests only); F5-2 |
 | S5 variable contract | `harness/harness-vars.sh` | **active** | sourced by `install-hermes.sh`, `install-opencode.sh:15`, `install-deepseek.sh`, `install-pi-agent.sh`, `install-codex.sh:47` (conditional) |
 
@@ -231,7 +232,7 @@ and conformance pass rate are answerable only by reading the leg rows.
 - Code read: `harness-vars.sh` (318), `harness_resolve.py` (400), `install-hermes.sh` (375),
   `install-gitreins.sh` (180), `install-codex.sh` (`:47-60, 425-430` + settings), `install-claude-code.sh`
   (`:34-115` + settings), `install-deepseek.sh` (101), `install-pi-agent.sh` (113), `install-opencode.sh` (98);
-  `project-node.sh:435-455`.
+  `project-node.sh:448-510`.
 - Board rows: CF-150, CF-192, CF-372 (complete), CF-376, CF-380.
 - **Findings:**
   - **F5-1** (carried) — `install-hermes.sh:108-115` refuses anything outside >=3.11,<3.14.
@@ -241,8 +242,17 @@ and conformance pass rate are answerable only by reading the leg rows.
     `--apply`, `install-opencode.sh` is UNVERIFIED/`--apply`-refusing, `install-claude-code.sh`
     sources `lib.sh` not `harness-vars.sh`.
   - **F5-4** — UNIT-MAP (3) vs OUTLINE (5) submodule split.
-  - **F5-5** (new, B02) — the "no production installer caller" claim was false: `project-node.sh:440`
-    computes `install-$HARNESS.sh` and `:449-452` invokes it; the literal grep missed the computed
-    path. The installers are unit-invoked (by the operator-invoked provisioning entry).
+  - **F5-5** (B02, re-pinned round 13) — the "no production installer caller" claim was false:
+    `project-node.sh:498` computes `install-$HARNESS.sh` and `:508-510` invokes it; the literal
+    grep missed the computed path. The installers are unit-invoked (by the operator-invoked
+    provisioning entry).
+  - **F5-6** (new, round 13) — `project-node.sh` layer 20 now stages `dashboard.basic_auth`
+    **before** the harness adapter runs (`:448-497`, CF-150): the hermes adapter refuses a public
+    bind unless `~/.hermes/config.yaml` parses to a non-empty `dashboard.basic_auth`, and no stage
+    in the create path wrote that block, so the documented path could print every other row and
+    still end `NODE: FAIL`. The block runs `node_gateway_auth.py` to write the block and a
+    mode-600 password file, or (in `--check`) a shell-builtin presence scan; it refuses to overwrite
+    a non-`basic_auth` dashboard block. `node-create.sh:29` stages `node_gateway_auth.py` alongside
+    the harness adapter. This is M1's producer invoked from M5's layer — a cross-module dependency.
 
 ## RED field count: 4 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; M5-C2 contract state UNVERIFIED — a port/service is not a `file:function`; §9 inventory 4 of 215+ helper call sites — the descriptive per-measurement rows not tabulated one-per-site)

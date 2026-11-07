@@ -114,10 +114,10 @@ to an open path.
 
 | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|
-| content hash | `sha256sum /home/kara/.hermes/scripts/cf-inference-proxy.py` | full digest | 2026-11-06 | **PASS** — `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` |
-| python compile | `python3 -m py_compile /home/kara/.hermes/scripts/cf-inference-proxy.py` | exit 0 | 2026-11-06 | PASS |
-| admission (no token) | `curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8775/v1/chat/completions -d '{"model":"hermes"}'` | 401 | 2026-11-06 | **PASS** — 401 (proxy live on `:8775`) |
-| systemd unit active | `systemctl --user status cf-inference-proxy.service` | loaded, enabled, `active (running)` | 2026-11-06 | **PASS** — active since 2026-11-05 09:21, Main PID 2603939, drop-in `10-upstream.conf` |
+| content hash | `sha256sum /home/kara/.hermes/scripts/cf-inference-proxy.py` | full digest | 2026-11-07 | **PASS** — `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (re-confirmed unchanged) |
+| python compile | `python3 -m py_compile /home/kara/.hermes/scripts/cf-inference-proxy.py` | exit 0 | 2026-11-07 | PASS |
+| admission (no token) | `curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8775/v1/chat/completions -d '{"model":"hermes"}'` | 401 | 2026-11-07 | **PASS** — 401 (proxy live on `:8775`) |
+| systemd unit active | `systemctl --user status cf-inference-proxy.service` | loaded, enabled, `active (running)` | 2026-11-07 | **PASS** — `active` (`systemctl --user is-active` → active) |
 | admission (disallowed model, valid token) | POST `{"model":"definitely-not-allowed-model"}` with a valid node token | 403 `model not permitted` | 2026-11-06 | reproduced by round-3 judge kimi (`:155-160`); **not re-run by this writer** — the node token file was not read |
 
 ## 8. Metrics
@@ -199,9 +199,9 @@ is a capture log, not an emitted metric.
 ## 13. Evidence of record
 
 - Code read: `cf-inference-proxy.py` (273 lines, read in full); content sha256
-  `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5`.
+  `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (re-confirmed this round — file unchanged, `wc -l` = 273).
 - Commands run: `sha256sum` (PASS); `python3 -m py_compile` (PASS); `curl` no-token → 401;
-  `systemctl --user status cf-inference-proxy.service` (active, Main PID 2603939);
+  `systemctl --user is-active cf-inference-proxy.service` (active);
   `grep -rnE '8775|CF_PROXY|cf-inference-proxy' scripts/ config/ specs/` (4 text sites, node client
   config-wired); `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' <proxy>` (0 matches);
   `sed -n '49,52p'` (sink constants, F12-8).

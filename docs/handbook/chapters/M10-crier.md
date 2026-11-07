@@ -6,8 +6,8 @@
 |---|---|
 | Module name | CRIER |
 | Path | `/home/kara/crier/` (Go) |
-| Revision | `86c4c4695facaaf723bcc1d6ae80971ffb67fc97` (crier repo HEAD at round-11 derivation; the files changed since `691f0c78` are `internal/harness/*`, `cmd/server/harness*.go`, `cmd/server/metrics_state_test.go`, `specs/CRIER-HARNESS.md` — none of the handler/guard/config/client files M10 cites) |
-| Language / runtime | Go — `go.mod` declares `go 1.26.10` (a build/toolchain requirement, not a runtime one); host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`), `/usr/bin/go` = **go1.26.9** (`/usr/lib/go-1.26/bin/go`); `GOTOOLCHAIN=auto` auto-fetches 1.26.10 for this repo |
+| Revision | `ae9fc57fdd4e9df7aff79c6d5a934d54329add95` (crier repo HEAD, re-stamped round 13; moved from `86c4c469` through 23 commits. Every file M10 cites — `internal/registry/handler.go`, `internal/guard/guard.go`, `internal/guard/policy.go`, `internal/guard/metrics.go`, `config/config.go`, `clients/python/crier_client.py`, `cmd/crier-front/main.go`, `cmd/server/observability.go`, `internal/metrics/metrics.go` — is byte-identical since `86c4c469` (verified `git diff --quiet 86c4c469..HEAD` per file). The post-stamp changes are `internal/buildinfo/buildinfo.go` (DF-CRIER-502), `cmd/server/*_test.go` (the flaky-test files), `internal/harness/opencode/*_test.go`, and board/docs/releng files — none cited) |
+| Language / runtime | Go — `go.mod` declares `go 1.26.10` (a build/toolchain requirement, not a runtime one); host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`), `/usr/bin/go` = **go1.26.8** (`/usr/lib/go-1.26/bin/go`; re-measured this round: `/usr/bin/go version` → `go1.26.8 linux/amd64`); `GOTOOLCHAIN=auto` auto-fetches 1.26.10 for this repo |
 | Owner lane | crier (control plane) |
 | Status | **UNVERIFIED** — `internal/registry/handler.go` (deliver/retrieve/ack surfaces + the full 3-site slog surface), `internal/guard/guard.go` (pipeline, oversize branch, `errorResult`), `internal/guard/policy.go` (`ResolvePolicy`), `internal/guard/metrics.go`, `config/config.go` (controls + guard bounds + metrics default), `clients/python/crier_client.py`, `cmd/crier-front/main.go` read this round; the full 1895-line handler body still not read line-by-line (its slog surface *is* complete — see §9) |
 
@@ -132,8 +132,8 @@ CT-08 is a boundary contract: the Hermes gateway is outside the five covered sys
 
 | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|
-| build | `go build ./...` (crier repo) | exit 0 | 2026-11-06, rev `86c4c469` | **PASS** (rc 0) |
-| go test | `go test ./...` | green | 2026-11-06, rev `86c4c469` | **FLAKY** — see the note below; not a clean PASS |
+| build | `go build ./...` (crier repo) | exit 0 | 2026-11-07, rev `ae9fc57f` | **PASS** (rc 0) |
+| go test | `go test ./...` | green | 2026-11-07, rev `ae9fc57f` | **PASS (0 FAIL, one fresh run)** — all packages ok including `cmd/server` (65.4s) and `internal/registry` (10.6s). See the flakiness note: a single green run at this HEAD does **not** retire the flaky finding |
 | port fact | `grep -n 'Port' config/config.go` | 8767 | 2026-11-06 | PASS (`:622`) |
 | slog surface | `grep -c 'slog.\(Info\|Error\|Warn\|Debug\)' internal/registry/handler.go` | 3 | 2026-11-06 | **PASS** — exactly 3 sites (all in §9); no `log.Printf`/`fmt.Printf` in the handler |
 | signed-read ladder | `python3 ~/node-bus-worker.py --check` on cf-node | inbox 200 with key+bearer | 2026-11-05, cf-node only | PASS (FACT-04) — not repeatable from this control host |
@@ -143,15 +143,19 @@ run". At the same revision the package has **91 test files** (measured: `ls inte
 and `go test` ran them in 6.962 s. A green run over 91 test files is real, but it still does not
 prove line-by-line coverage of the 1895-line handler.
 
-**`go test` flakiness (kimi 3, re-measured this round).** `go test ./...` does **not** reliably
-reproduce green at HEAD `86c4c469`. This round a fresh `go test -count=1 ./cmd/server/` FAILed
+**`go test` flakiness (kimi 3, re-measured this round).** `go test ./...` has historically **not**
+reliably reproduced green: round 12 (HEAD `86c4c469`) saw a fresh `go test -count=1 ./cmd/server/` FAIL
 (`--- FAIL: TestSessionFanoutWebhookBodyVerdict`, 78.5s in one run, 34.3s in another) while a cached
 full run reported green; kimi round-10 reproduced `--- FAIL: TestMetricsState_SeriesRenderOnIdleBoot`
 twice (58.0s / 47.4s) with `crier_detect_alerts_total{signal="odd_hour_volume",severity="warning"} =
 1, want 0`. Each named test passes in isolation under `-run` (0.327s), and the failing test differs
 run-to-run — a within-`cmd/server` contamination or clock-sensitive failure, not a deterministic
-regression. `internal/registry` (91 test files) ran green in 48.1s this round. The documented
-command is therefore flaky, and the row is not a clean PASS.
+regression. **This round (HEAD `ae9fc57f`) one fresh full run passed clean (0 FAIL, `cmd/server`
+65.4s).** The flaky-test files themselves changed since the round-12 stamp (`cmd/server/metrics_state_test.go`
++41, `cmd/server/session_budget_cut_test.go`, `cmd/server/session_dispatch_live_test.go`), so the green
+run is evidence the tests *can* pass at this HEAD, not proof of determinism — the flaky finding stands
+until a repeat run under load fails to reproduce a failure. `internal/registry` (91 test files) ran
+green this round.
 
 ## 8. Metrics
 
@@ -244,19 +248,21 @@ named RED on this field).
   `internal/guard/policy.go:170-205`; `internal/guard/metrics.go:19-49`; `config/config.go:621-700, 1139-1187`;
   `clients/python/crier_client.py:960-1036`; `cmd/crier-front/main.go:39`;
   `cmd/server/observability.go:95-115, 160-175`; `internal/metrics/metrics.go:1-8`.
-- Commands run: `go build ./...` (PASS); `go test ./...` (PASS); `ls internal/registry/*_test.go` (91);
+- Commands run: `go build ./...` (PASS); `go test ./...` (PASS, 0 FAIL, clean fresh run); `ls internal/registry/*_test.go` (91);
   `grep -c 'slog.(Info|Error|Warn|Debug)' internal/registry/handler.go` (3);
-  `grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u | wc -l` (67).
-- Rev stamped: `86c4c469` (the changed files since `691f0c78` are harness-side; the handler/guard/config/client files M10 cites are byte-identical).
+  `grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u | wc -l` (67);
+  `for f in <9 cited files>; git diff --quiet 86c4c469..HEAD -- "$f"` (all UNCHANGED); `/usr/bin/go version` (go1.26.8).
+- Rev stamped: `ae9fc57f` (moved from `86c4c469`; every cited file byte-identical — the post-stamp changes are buildinfo/tests/harness-test/board/docs, none cited).
 - Board rows: CF-337, CF-361, CF-369.
 - **Findings:**
   - **F10-1** (carried) — auth order is headers → target → caller → timestamp → key → signature.
-  - **F10-2** (corrected) — host go is 1.26.5; `GOTOOLCHAIN=auto` fetches 1.26.10 and build/test PASS.
+  - **F10-2** (corrected) — host bootstrap go is 1.26.5, `/usr/bin/go` is 1.26.8 (re-measured; was 1.26.9 at round 12); `GOTOOLCHAIN=auto` fetches 1.26.10 and build/test PASS.
   - **F10-3** — metrics are default-ON (`EnableMetrics: true`), not opt-in; `metrics.go:2` still
     says "opt-in" (contradicting artifact, locator re-pinned from `:5` to `:2`).
   - **F10-4** (carried) — guard degradation policy written: oversize branch (`:198-234`) and fail-open/
     fail-closed `errorResult` (`:318-361`) with policy precedence (`policy.go:172-202`).
   - **F10-5** (new) — the handler's slog surface is complete (3/3, §9); the 67-string metric census
     is scoped (runtime vs test helpers vs exposition components), not a completed per-metric register.
+  - **F10-6** (new, round 13) — repo moved `86c4c469`→`ae9fc57f`; all 9 cited files byte-identical; one fresh `go test ./...` passed clean (0 FAIL, `cmd/server` 65.4s), but the flaky-test files (`cmd/server/*_test.go`) changed since the stamp, so a single green run does not retire the flaky finding.
 
-## RED field count: 5 (S1 handler 1895-line body not read line-by-line — the slog surface is complete but the body's non-slog semantics are not; §8 per-metric contract — series names inventoried but the type/labels/question/scrape table not filled; §9 guard log surface not tabulated — B22; §5 storage-selection custody-proof not written — B20; §7 `go test ./...` flaky — not a clean PASS at HEAD)
+## RED field count: 5 (S1 handler 1895-line body not read line-by-line — the slog surface is complete but the body's non-slog semantics are not; §8 per-metric contract — series names inventoried but the type/labels/question/scrape table not filled; §9 guard log surface not tabulated — B22; §5 storage-selection custody-proof not written — B20; §7 `go test ./...` — one fresh clean run at HEAD `ae9fc57f`, but the flaky finding is not retired (single run ≠ determinism))

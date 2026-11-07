@@ -98,7 +98,7 @@ cross-system contracts carry their CT id; an interface with no canonical entry i
 
 | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|
-| python compile | `python3 -m py_compile dispatcher.py` | exit 0 | 2026-11-06, rev `283bca9` | PASS |
+| python compile | `python3 -m py_compile dispatcher.py` | exit 0 | 2026-11-07, rev `283bca9` (re-confirmed unchanged) | PASS |
 | live job tests | `tests/test_durable_job.py` / `test_job_kill.py` | failure oracle | not run this round | **UNVERIFIED** — these scripts print results but do not assert (`tests/test_durable_job.py` contains no `assert`/`raise`/`exit`), so they cannot fail (F11-2, glm 8) |
 
 The round-3 "source read (538 lines) PASS" row was decoration — reading the file cannot fail. It
@@ -185,8 +185,8 @@ lines — `:81` a comment mentioning `log()` and `:112` the `def log(` definitio
 ## 13. Evidence of record
 
 - Code read: `dispatcher.py` (538 lines, read in full this round).
-- Commands run: `python3 -m py_compile dispatcher.py` (PASS); `grep -n 'log(' dispatcher.py` (25 lines: 23 call sites + comment `:81` + def `:112`); `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' dispatcher.py` (0 matches).
-- Rev stamped: `283bca9`.
+- Commands run: `python3 -m py_compile dispatcher.py` (PASS); `grep -n 'log(' dispatcher.py` (25 lines: 23 call sites + comment `:81` + def `:112`); `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' dispatcher.py` (0 matches); `grep -n EXEC_TIMEOUT dispatcher.py` (1 match, `:47` — inert).
+- Rev stamped: `283bca9` (re-confirmed this round: `git rev-parse HEAD` = `283bca91091933177ec521e52f37f1bc987cf7da`, `wc -l dispatcher.py` = 538).
 - Board rows: CF-334, CF-355, CF-365.
 - **Findings:**
   - **F11-1** (carried) — no pinned Python; calls `retrieve`/`deliver`/`ack`, never `send`/`complete`.

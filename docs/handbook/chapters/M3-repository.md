@@ -6,10 +6,10 @@
 |---|---|
 | Module name | REPOSITORY |
 | Path | `/home/kara/code-factory/scripts/` — `clone_lane.py`, `repo_freshness.py`, `land-node-branch.sh`; gates via `install-gitreins.sh` + `.gitleaks.toml` |
-| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `land-node-branch.sh`/`install-gitreins.sh`/`clone_lane.py` byte-identical since `47d68b4`; `tests/selftest.sh` changed — see §7) |
+| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; `land-node-branch.sh`/`install-gitreins.sh`/`clone_lane.py`/`repo_freshness.py` byte-identical since `47d68b4`; `tests/selftest.sh` grew +150 lines to 5,002 in `08a2c8a..fbc19cb` — every §1/§7 arm locator re-pinned this round, see §7) |
 | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
 | Owner lane | code-factory (node-side clone + control-host landing) |
-| Status | **VERIFIED (source + shipped landing arm)** — `land-node-branch.sh` (308 lines), `install-gitreins.sh` (180 lines), `clone_lane.py` (130 lines) read in full; the shipped landing arm `cf213-land-node-branch` (`tests/selftest.sh:2463-2729`) exercises the landing behaviours against a disposable bare remote and was run this round (`SHIPPED_LANDING_ARM_RC=0`); `repo_freshness.py` body not read line-by-line. **S3 hook *enforcement* is UNVERIFIED (sol B10):** the landing arm proves landing behaviour, not that git invokes the installed pre-commit gate — a disposable rejecting-commit fixture that resolves the effective `core.hooksPath` and proves a refused commit cannot advance HEAD is the missing evidence (§11) |
+| Status | **VERIFIED (source + both shipped arms)** — `land-node-branch.sh` (308 lines), `install-gitreins.sh` (180 lines), `clone_lane.py` (130 lines) read in full; the shipped landing arm `cf213-land-node-branch` (`tests/selftest.sh:2464-2730`) and the freshness arm `cf244-node-freshness` (`:3434-3671`) were both run standalone this round (`SHIPPED_LANDING_ARM_RC=0`, `LANDING_ARM_FAILURES=0`; `SHIPPED_FRESHNESS_ARM_RC=0`, `FRESHNESS_ARM_FAILURES=0`); `repo_freshness.py` body not read line-by-line (its 662-line source is unread, though its behaviour is exercised by the cf244 arm's 13 sub-cases). **S3 hook *enforcement* is UNVERIFIED (sol B10):** the landing arm proves landing behaviour, not that git invokes the installed pre-commit gate — a disposable rejecting-commit fixture that resolves the effective `core.hooksPath` and proves a refused commit cannot advance HEAD is the missing evidence (§11) |
 
 ## 2. Purpose, authority and position
 
@@ -22,7 +22,7 @@ stale. It may not decide what work is *worth* landing — that is the foreman/bo
 `land-node-branch.sh` is the landing path for a finished node task — the result envelope names
 `branch` and `commit` (`node-bus-worker.py:1187-1188`) and this script is what an operator (or an
 out-of-repo foreman step) runs with `--branch/--commit` to merge them. **Nothing in-repo invokes it**
-(F3-5): `grep -rn 'land-node-branch' scripts/ tests/` matches the script itself (`scripts/land-node-branch.sh:2,4,120`) and the selftest arm (`tests/selftest.sh:2463,2469,2470,2471,2477,2506,2729` — the BEGIN banner, the `bash -n` syntax arm, and the `cf213` usage arm). The envelope *names* the fields; it does
+(F3-5): `grep -rn 'land-node-branch' scripts/ tests/` matches the script itself (`scripts/land-node-branch.sh:2,4,120`) and the selftest arm (`tests/selftest.sh:2464,2470,2471,2472,2478,2507,2730` — the BEGIN banner, the `bash -n` syntax arm, and the `cf213` usage arm). The envelope *names* the fields; it does
 not *call* the lander. M3 owns F5 LANDING, a primary flow — but the landing step is operator-triggered.
 
 **What breaks if it lies.** A landing that reports success without the commit actually in
@@ -35,7 +35,7 @@ proof, never to the merge (`:23`).
 | Submodule | Unit | Classification | Evidence (invoking line) |
 |---|---|---|---|
 | S1a clone a lane row | `clone_lane.py` | **operator-invoked (optional)** | `clone_lane.py:129` `main()` is the entrypoint; `grep -rn 'clone_lane' scripts/ tests/` matches only the file itself and `tests/test_clone_lane.py` — no lane/cron/timer/unit invokes it (B07 / sol B09 re-grade: was misclassified **active** on the strength of a `main()` entrypoint, which proves executability, not activation) |
-| S1b track freshness | `repo_freshness.py` | **unproven** | no in-repo invoker measured — `grep -rn 'repo_freshness' scripts/ tests/ config/` matches a comment (`verify-node.sh:155`), a docstring (`node_freshness.py:7`), and a selftest parse check (`tests/selftest.sh:2328`); the OUTLINE *active* rule is not satisfied by evidence, and the body is unread this round |
+| S1b track freshness | `repo_freshness.py` | **unproven** | no in-repo invoker measured — `grep -rn 'repo_freshness' scripts/ tests/ config/` matches a comment (`verify-node.sh:155`), a docstring (`node_freshness.py:7`), and a selftest parse check (`tests/selftest.sh:2329`); the OUTLINE *active* rule is not satisfied by evidence, and the body is unread this round |
 | S2 land a branch | `land-node-branch.sh` | **operator-invoked (optional)** | owns F5 LANDING; **no in-repo invoker** — `grep -rn 'land-node-branch' scripts/ tests/` matches only the script itself and `tests/selftest.sh` (syntax + usage arms). Round-4's "invoked by the node's result envelope" was fabricated (grok 4 / sol B04 / glm 2); an operator or out-of-repo foreman step runs it with `--branch/--commit` from the envelope |
 | S3 commit hooks and gates | `install-gitreins.sh`, `.gitleaks.toml`, `core.hooksPath` | **active** | hook generated by `install-gitreins.sh:124-136` into the target repo's `.git/hooks/pre-commit` |
 
@@ -108,25 +108,25 @@ consumer (`land-node-branch.sh`) is operator-triggered, not called by the envelo
 |---|---|---|---|---|
 | shell parse | `bash -n scripts/land-node-branch.sh` | exit 0 | 2026-11-06 | PASS |
 | python compile | `python3 -m py_compile scripts/clone_lane.py scripts/repo_freshness.py` | exit 0 | 2026-11-06 | PASS |
-| landing arm (shipped) | `tests/selftest.sh` arm `cf213-land-node-branch` (`:2463-2729`) | gate rejection, dry-run, successful landing, fresh-clone proof, repeat landing, refused push, no-ff isolation | 2026-11-06 | **PASS** — `SHIPPED_LANDING_ARM_RC=0`, `LANDING_ARM_FAILURES=0` (the arm creates a bare origin + clean clones and exercises all seven behaviours; B07) |
-| freshness gate | `tests/selftest.sh` arm `cf244-node-freshness` | freshness sub-cases PASS | 2026-11-06 | **UNVERIFIED** — arm present (`:3433-3670`), not re-run this round |
+| landing arm (shipped) | `tests/selftest.sh` arm `cf213-land-node-branch` (`:2464-2730`) | gate rejection, dry-run, successful landing, fresh-clone proof, repeat landing, refused push, no-ff isolation | 2026-11-07 | **PASS** — `SHIPPED_LANDING_ARM_RC=0`, `LANDING_ARM_FAILURES=0` (the arm creates a bare origin + clean clones and exercises all seven behaviours; B07) |
+| freshness gate | `tests/selftest.sh` arm `cf244-node-freshness` (`:3434-3671`) | freshness sub-cases PASS (sync, drift, dirty edit, detached HEAD, no-origin, bunker mode, provisioning fallback, `--apply` node.json record) | 2026-11-07 | **PASS** — `SHIPPED_FRESHNESS_ARM_RC=0`, `FRESHNESS_ARM_FAILURES=0` (13 sub-cases against disposable local git fixtures, run standalone this round) |
 
 **Behavioral verification (B07, corrected this round).** Round-6 said "none is shipped" — false.
-`tests/selftest.sh` arm `cf213-land-node-branch` (`:2463-2729`) ships a disposable local
-bare remote plus clean worktree fixture and exercises gate rejection (`:2541-2548`), dry-run
-(`:2551-2563`), successful landing and fresh-clone proof (`:2566-2584`), repeat landing
-(`:2586-2595`), refused push (`:2597-2615`) and no-ff isolation (`:2618-2708`). This round the arm
+`tests/selftest.sh` arm `cf213-land-node-branch` (`:2464-2730`) ships a disposable local
+bare remote plus clean worktree fixture and exercises gate rejection (`:2547-2551`), dry-run
+(`:2558-2565`), successful landing and fresh-clone proof (`:2572-2586`), repeat landing
+(`:2597-2606`), refused push (`:2627-2632`) and no-ff isolation (`:2662-2725`). This round the arm
 was run independently: `SHIPPED_LANDING_ARM_RC=0`, `LANDING_ARM_FAILURES=0`. The landing behaviours
 are now exercised; what remains unread line-by-line is `repo_freshness.py` (the freshness half),
 not the landing half.
 
 **Note (B04 / grok 9).** Round-3 cited "selftest.sh arm 41 / arm 51 / arm 33" — `selftest.sh` is
-**4,852 lines** (measured `wc -l tests/selftest.sh` this round) with *named* arms
+**5,002 lines** (measured `wc -l tests/selftest.sh` this round) with *named* arms
 (`cf213-land-node-branch`, `cf244-node-freshness`,
 `cf250-seed-drift`, `board-arm`, …), and `grep -nE '\barm (33|41|51)\b' tests/selftest.sh` returns
 nothing. The numbered-arm pointers were unrepeatable; they are replaced with the named arms above.
-The arm locators `:2463-2729` (cf213) and `:3433-3670` (cf244) still resolve exactly at this line
-count (kimi non-blocking 4).
+The arm locators `:2464-2730` (cf213) and `:3434-3671` (cf244) still resolve exactly at this line
+count (re-pinned this round after `tests/selftest.sh` grew +150 lines in `08a2c8a..fbc19cb`).
 
 ## 8. Metrics
 
@@ -180,8 +180,11 @@ are answerable only by reading the `LANDED:` / `LAND: REFUSED` rows.
 ## 13. Evidence of record
 
 - Code read: `land-node-branch.sh` (308 lines), `install-gitreins.sh` (180 lines), `clone_lane.py` (130 lines).
-- Commands run: `bash -n scripts/land-node-branch.sh`; `./scripts/land-node-branch.sh --dry-run`
-  (refused: dirty/scratch workdir); `grep -nE '\barm (33|41|51)\b' tests/selftest.sh` (0 matches).
+- Commands run: `bash -n scripts/land-node-branch.sh`; `python3 -m py_compile scripts/clone_lane.py
+  scripts/repo_freshness.py`; the `cf213-land-node-branch` arm extracted and run standalone
+  (`SHIPPED_LANDING_ARM_RC=0`, `LANDING_ARM_FAILURES=0`); the `cf244-node-freshness` arm extracted
+  and run standalone (`SHIPPED_FRESHNESS_ARM_RC=0`, `FRESHNESS_ARM_FAILURES=0`, 13 sub-cases);
+  `grep -nE '\barm (33|41|51)\b' tests/selftest.sh` (0 matches); `wc -l tests/selftest.sh` (5,002).
 - **Findings:**
   - **F3-1** (carried) — `clone_lane --to == --from` guard ships: `refuse_same_lane` (`:38-45`)
     is called at `:65-68`, *before* `sqlite3.connect` (`:70`); CF-357 is `complete`.
@@ -195,4 +198,4 @@ are answerable only by reading the `LANDED:` / `LAND: REFUSED` rows.
     selftest arms); round-4's "invoked by the node's result envelope" was fabricated. S2 is
     operator-invoked (optional); the envelope names `branch`/`commit` but does not call the lander.
 
-## RED field count: 3 (Metrics §8 — absence-proved; §1 status — `repo_freshness.py` body unread and S3 hook enforcement UNVERIFIED (the landing arm does not prove git invokes the gate); §9 inventory 5 of 35 helper call sites)
+## RED field count: 3 (Metrics §8 — absence-proved; §1 status — `repo_freshness.py` body not read line-by-line (behaviour exercised by the cf244 arm, source unread) and S3 hook *enforcement* UNVERIFIED (the landing arm proves landing behaviour, not that git invokes the installed pre-commit gate); §9 inventory 5 of 35 helper call sites)
