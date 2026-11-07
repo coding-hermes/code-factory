@@ -1837,8 +1837,9 @@ say "33. the board lock adjudicator proves a holder before calling a lock held (
 # `.coding-hermes/board/.lock` is 0-byte residue with no shipped consumer and, before
 # CF-119, no ignore rule, yet lanes stood down on its presence. scripts/board_lock.py
 # must classify an unheld file as RESIDUE, call a lock HELD only when a live process
-# proves it, and never mutate the file (a classifier that deletes would be a second
-# defect). Verdict token is asserted, not the counts: the fixture lock lives outside a
+# proves it, never mutate the file (a classifier that deletes would be a second
+# defect), and refuse to answer RESIDUE when its own probe could not run (CF-259).
+# Verdict token is asserted, not the counts: the fixture lock lives outside a
 # git repository, so commits_after_mtime is honestly `unknown` there.
 tmpd=$(mktemp -d)
 mkdir -p "$tmpd/board"
@@ -1887,6 +1888,30 @@ else
   say "  FAIL  flock-held lock not classified HELD (holder_ready=$holder_ready rc=$rc): $out"
   fails=$((fails+1))
 fi
+# CF-259: a lock the process cannot open is an UNKNOWN observation, not a clean negative.
+# Before the fix `adjudicate` mapped every non-held probe result to RESIDUE, so an
+# unreadable lock printed "RESIDUE consumers=0 commits_after_mtime=unknown" with exit 0 —
+# "no barrier, proceed with the board write", i.e. the safety check failed OPEN. The
+# verdict must now be an ERROR line with a non-zero exit; RESIDUE is reserved for a probe
+# that actually ran and proved the file unheld.
+noread="$tmpd/board/noread.lock"
+: > "$noread"
+chmod 000 "$noread"
+if python3 -B -c 'import sys; open(sys.argv[1], "rb").close()' "$noread" 2>/dev/null; then
+  say "  SKIP  CF-259 unreadable lock — this user (uid $(id -u)) can read mode-000 files, so the ERROR path cannot be provoked"
+else
+  out=$(python3 -B "$HERE/scripts/board_lock.py" "$noread" 2>&1); rc=$?
+  if [ "$rc" -ne 0 ] \
+    && ! printf '%s\n' "$out" | grep -Eq '^RESIDUE' \
+    && printf '%s\n' "$out" | grep -Eq '^(ERROR|UNKNOWN) '; then
+    say "  PASS  unreadable lock -> not RESIDUE, exit $rc ($out)"
+  else
+    say "  FAIL  an unreadable lock was folded into a clean negative (rc=$rc): $out"
+    fails=$((fails+1))
+  fi
+fi
+chmod 600 "$noread"
+rm -f "$noread"
 rm -rf "$tmpd"
 
 # CF-163 AC3: a secret-scan claim must name its scope. The public repo also publishes

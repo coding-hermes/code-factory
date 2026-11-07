@@ -30,7 +30,7 @@ boardctl (`--status complete REQUIRES --evidence-run-id`, `boardctl update --hel
 
 | Submodule | Unit | Classification | Evidence (invoking line) |
 |---|---|---|---|
-| S1 write and validate rows | `boardctl` (wrapper), `board_lock.py` | **active** | `scripts/boardctl` is the stable entrypoint (`exec boardctl -C "$ROOT"`); `board_lock.py` adjudicates the lock (`adjudicate`, `:149`) |
+| S1 write and validate rows | `boardctl` (wrapper), `board_lock.py` | **active** | `scripts/boardctl` is the stable entrypoint (`exec boardctl -C "$ROOT"`); `board_lock.py` adjudicates the lock (`adjudicate`, `:166`) |
 | S2 compare board copies | `board_drift.py` | **active** | `python3 scripts/board_drift.py check …` → `RESULT: DRIFT (4 failed)` this round (see §7) |
 
 **`board_read.py` (new unit, added in `dbf810b`, not in OUTLINE's S1/S2 split — F4-6).** A 125-line
@@ -45,27 +45,36 @@ continue` at `:54-55`), not a reason to drop the whole
 board. Classification: **operator-invoked (optional)** — no cron/scheduler invokes it
 (`grep -rn board_read scripts/ tests/` → the unit itself only); a lane reads it on demand.
 
-**`board_lock.py` classifier (B11, read in full this round).** `adjudicate` (`:149-158`) has
-**three** outcomes, in order:
+**`board_lock.py` classifier (B11; re-read in full for CF-259 this round).** `adjudicate`
+(`:166-185`) has **four** outcomes, in order:
 
-1. **ABSENT** (`:150-151`) — the lock path does not exist. No lock, no holder, nothing to wait on.
+1. **ABSENT** (`:167-168`) — the lock path does not exist. No lock, no holder, nothing to wait on.
 2. **HELD** — a *live* holder is proven by either (a) an open `/proc/<pid>/fd` entry (excluding
-   this process) that resolves to the path (`fd_holders`, `:49-70`), or (b) a non-blocking
-   exclusive `flock` probe that fails `EWOULDBLOCK`/`EAGAIN` (`flock_probe`, `:73-94`).
-3. **RESIDUE** (`:158`) — the file exists but no live holder is proven; the verdict names the two
+   this process) that resolves to the path (`fd_holders`, `:59-80`), or (b) a non-blocking
+   exclusive `flock` probe that fails `EWOULDBLOCK`/`EAGAIN` (`flock_probe`, `:83-104`).
+3. **ERROR** (`:175-180`) — the `flock` probe could not run: the path could not be opened
+   (`probe=open-failed`) or `flock` itself failed with a non-contention errno (`probe=errno-<n>`).
+   The line reads `ERROR lock=<path> probe=<detail> is not a clean negative — the lock state is
+   UNKNOWN` and `main` (`:188-201`) returns exit **3**. Nothing is proven, so this verdict is
+   never permission to write the board.
+4. **RESIDUE** (`:181-185`) — the probe ran and proved no holder; the verdict names the two
    hand-derivation counts: `consumers=<n>` (lines matching `flock|fcntl` under `scripts/boardctl*`,
-   `consumer_count` `:97-107`) and `commits_after_mtime=<n|unknown>` (board commits after the lock's
-   mtime, `git log --since=@<mtime>`, `commits_after_mtime` `:118-146`; `unknown` is never invented).
+   `consumer_count` `:107-117`) and `commits_after_mtime=<n|unknown>` (board commits after the lock's
+   mtime, `git log --since=@<mtime>`, `commits_after_mtime` `:128-156`; `unknown` is never invented).
 
-The classifier never creates, truncates or deletes the lock path (`:21`). **Degraded observation
-(B08, sol):** `flock_probe` (`:73-94`) can return an *indeterminate* probe error (open-failed or a
-non-contention errno), and the `/proc` scan skips inaccessible processes (`:58-61`); `adjudicate`
-(`:149-158`) maps every non-held probe result to RESIDUE, so RESIDUE includes degraded observation,
-not only positively-established staleness. Operator actions by outcome: ABSENT → proceed (no
-barrier); HELD → wait (a holder is live, do not force); RESIDUE → the file is likely a stale
-artifact, not a barrier — proceed and file a row to have it removed deliberately, but a RESIDUE
-verdict from a failed/unreadable probe (not from a clean scan) is an UNKNOWN observation, not a
-proof of staleness.
+The classifier never creates, truncates or deletes the lock path (`:28`). **Degraded observation
+(B08, sol; repaired by CF-259):** `flock_probe` (`:83-104`) can return an *indeterminate* probe
+error (open-failed or a non-contention errno), and before CF-259 `adjudicate` mapped every
+non-held probe result to RESIDUE, so a lock this process could not even open printed
+`RESIDUE consumers=0 commits_after_mtime=unknown` and exited 0 — a fail-open safety check that
+told a lane "no barrier, proceed with the board write". That measurement is now its own outcome:
+the probe error is the ERROR verdict at `:175-180` with a non-zero exit (3), and RESIDUE is
+reserved for a probe that actually ran and proved the file unheld. The `/proc` scan skipping
+inaccessible processes (`:70-71`) stays a clean observation by design and does not by itself
+produce ERROR. Operator actions by outcome: ABSENT → proceed (no barrier); HELD → wait (a holder
+is live, do not force); ERROR → the lock state is UNKNOWN — stop and diagnose the path
+(permissions, filesystem) instead of writing the board on an unproven negative; RESIDUE → the
+file is a stale artifact, not a barrier — proceed and file a row to have it removed deliberately.
 
 ## 4. Dependencies
 
@@ -101,7 +110,7 @@ retired; each row carries the CT id its peer chapter cites.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| CT-14 | foreman | in | **external** — the foreman lives outside this repo; `grep -rn boardctl scripts/` matches the wrapper itself (`scripts/boardctl:2,9,11,15,16,21`), `board_lock.py:18,98,100` (its own `consumer_count` grep over the wrapper), `handbook_spine.py:58,75,78,79` (comments naming boardctl as a boundary peer), and `gen_unit_map.py:45` (a name list). No in-repo producer invokes `boardctl create` | the JSONL store `.coding-hermes/board/{tasks,events}.jsonl`, appended via the external `boardctl` binary (a file, not a function) | **UNVERIFIED** — the store is measured (357/520) but the foreman→board write wire is not exercised in this repo |
+| CT-14 | foreman | in | **external** — the foreman lives outside this repo; `grep -rn boardctl scripts/` matches the wrapper itself (`scripts/boardctl:2,9,11,15,16,21`), `board_lock.py:19,108,110` (its own `consumer_count` grep over the wrapper), `handbook_spine.py:58,75,78,79` (comments naming boardctl as a boundary peer), and `gen_unit_map.py:45` (a name list). No in-repo producer invokes `boardctl create` | the JSONL store `.coding-hermes/board/{tasks,events}.jsonl`, appended via the external `boardctl` binary (a file, not a function) | **UNVERIFIED** — the store is measured (357/520) but the foreman→board write wire is not exercised in this repo |
 | CT-13 | gitreins | in | **external** — the judge's verdict file (written by the gitreins binary, not in this repo) | `boardctl update --status complete` (the external binary; completion REQUIRES `--evidence-run-id`) | **UNVERIFIED** — round-3 carried "broken (OUTLINE §IV)" as an inherited state; the gitreins-verdict→board-close path was not re-run this round |
 | CT-10 | node | in | **external** — no in-repo producer writes a board row event: `grep -nE 'boardctl|tasks.jsonl|events.jsonl' scripts/node-bus-worker.py` → 0 matches | the JSONL store (the `boardctl` binary, out of scope) | **broken** — OUTLINE Part IV marks `node → board` broken; the node worker does not write board rows |
 
@@ -119,7 +128,7 @@ boundary contracts.
 | events count | `wc -l .coding-hermes/board/events.jsonl` | 520 lines | 2026-11-07 | PASS (520) |
 | drift | `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-07 | **DRIFT (4 failed)** — byte parity `tasks.jsonl`/`events.jsonl` **differ** (workdir sha256 `57203cb9…`/`f3d8802e…` vs published `5aa15431…`/`783d556c…`); 357 vs 357 rows, **1 divergent id: CF-150** (workdir `in_progress` vs published `pending`); HEAD=origin/main=`fbc19cb` |
 | semantic validate | `scripts/boardctl validate` | RESULT OK with named warnings | 2026-11-07 | **PASS** — `357 tasks, 520 events, 0 fixtures`, `key uniformity 357/357 (0 drift)`, `RESULT: OK (7 warning(s))` |
-| lock adjudication | `scripts/board_lock.py` on a held/unheld lock | ABSENT / HELD / RESIDUE named (`board_lock.py:149-158`) | 2026-11-06 | UNVERIFIED — the classifier was read in full but not exercised against a held/unheld fixture this round |
+| lock adjudication | `scripts/board_lock.py` on an absent / unheld / unreadable / held lock | ABSENT / HELD / RESIDUE / ERROR named (`board_lock.py:166-185`) | 2026-11-07 | **PASS** — 0-byte lock → `RESIDUE consumers=0 commits_after_mtime=unknown` exit 0; chmod-000 lock → `ERROR lock=… probe=open-failed …` exit 3 (CF-259); absent path → `ABSENT` exit 0; HELD arm is `tests/selftest.sh` §33 |
 | duplicate id refusal | `boardctl create --id CF-357 --title x` | refused | 2026-11-06 | **PASS** — `task id "CF-357" already exists … create aborted` |
 
 **Drift re-measured (supersedes the round-11/12 reconciliation).** The round-10/11 CF-270

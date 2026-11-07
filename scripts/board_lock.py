@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """board_lock.py — classify a board lock file; never mutate it.
 
-`.coding-hermes/board/.lock` has no shipped consumer, no ignore rule and no
-holder, yet every lane treats its presence as an ownership barrier (CF-119).
-A file nobody opens is not a held lock: it is residue that must not stop board
-work, and must not be deleted either. This adjudicator makes the classification
-re-runnable instead of hand-derived by every tick.
+`.coding-hermes/board/.lock` has no shipped consumer, is ignored by `.gitignore`
+and has no holder, yet every lane treats its presence as an ownership barrier
+(CF-119). A file nobody opens is not a held lock: it is residue that must not
+stop board work, and must not be deleted either. This adjudicator makes the
+classification re-runnable instead of hand-derived by every tick.
 
 A present lock is HELD only when a live holder is proven:
 
@@ -13,21 +13,30 @@ A present lock is HELD only when a live holder is proven:
      path, or
   2. a non-blocking exclusive `flock` probe that fails with `EWOULDBLOCK`.
 
-Otherwise a present file is RESIDUE, and the verdict names the two counts the
-hand derivation used to require: shipped consumers matching `flock|fcntl` under
+After that, the flock probe must succeed to prove a clean negative. Otherwise a
+present file is RESIDUE, and the verdict names the two counts the hand
+derivation used to require: shipped consumers matching `flock|fcntl` under
 `scripts/boardctl*`, and board commits whose commit time is after the lock's
 mtime. An absent path is ABSENT.
+
+A probe that cannot run (the path cannot be opened, or flock fails with a
+non-contention errno) proves nothing and is never folded into RESIDUE: it is
+ERROR, exit 3, and the lock state is UNKNOWN. A partial `/proc` fd scan — a
+process that raced exit or is not ours to inspect — stays a clean observation
+and does not by itself produce ERROR.
 
 The classifier never creates, truncates or deletes the lock path.
 
 Usage:
   board_lock.py [PATH]        # default: <repo root>/.coding-hermes/board/.lock
 
-Output: exactly one verdict line, exit 0.
+Output: exactly one verdict line, and the exit code names the outcome.
 
-  ABSENT
-  HELD holder=pid-1234 | HELD holder=flock-eagain
-  RESIDUE consumers=<n> commits_after_mtime=<n|unknown>
+  ABSENT                                                  exit 0
+  HELD holder=pid-1234 | HELD holder=flock-eagain          exit 0
+  RESIDUE consumers=<n> commits_after_mtime=<n|unknown>    exit 0
+  ERROR lock=<path> probe=<detail> is not a clean negative — the lock state is UNKNOWN
+                                                          exit 3
 """
 
 from __future__ import annotations
@@ -40,6 +49,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LOCK = REPO_ROOT / ".coding-hermes" / "board" / ".lock"
@@ -146,16 +156,33 @@ def commits_after_mtime(lock: Path) -> str:
     return str(len(result.stdout.splitlines()))
 
 
-def adjudicate(lock: Path) -> str:
+class Verdict(NamedTuple):
+    """One verdict line and the exit code that carries its outcome."""
+
+    line: str
+    exit_code: int
+
+
+def adjudicate(lock: Path) -> Verdict:
     if not lock.exists():
-        return "ABSENT"
+        return Verdict("ABSENT", 0)
     holders = fd_holders(lock)
     if holders:
-        return f"HELD holder=pid-{holders[0]}"
+        return Verdict(f"HELD holder=pid-{holders[0]}", 0)
     verdict, detail = flock_probe(lock)
     if verdict == "held":
-        return f"HELD holder={detail}"
-    return f"RESIDUE consumers={consumer_count()} commits_after_mtime={commits_after_mtime(lock)}"
+        return Verdict(f"HELD holder={detail}", 0)
+    if verdict == "error":
+        return Verdict(
+            f"ERROR lock={lock} probe={detail} is not a clean negative — "
+            "the lock state is UNKNOWN",
+            3,
+        )
+    return Verdict(
+        f"RESIDUE consumers={consumer_count()} "
+        f"commits_after_mtime={commits_after_mtime(lock)}",
+        0,
+    )
 
 
 def main() -> int:
@@ -169,8 +196,9 @@ def main() -> int:
         help="lock path (default: %(default)s)",
     )
     args = parser.parse_args()
-    print(adjudicate(Path(args.path).expanduser()))
-    return 0
+    result = adjudicate(Path(args.path).expanduser())
+    print(result.line)
+    return result.exit_code
 
 
 if __name__ == "__main__":

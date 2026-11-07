@@ -51,21 +51,39 @@ python3 scripts/board_lock.py            # default path .coding-hermes/board/.lo
 python3 scripts/board_lock.py <path>     # any lock path
 ```
 
-It prints exactly one verdict line and exits 0, and never creates, truncates or deletes
-the lock:
+It prints exactly one verdict line, and the exit code names the outcome. It never creates,
+truncates or deletes the lock:
 
 - `ABSENT` — nothing exists at the path.
 - `HELD holder=<pid>` — a live process holds an open fd on the path, or a non-blocking
   exclusive `flock` probe failed with `EWOULDBLOCK`. A held lock means wait.
-- `RESIDUE consumers=<n> commits_after_mtime=<n|unknown>` — no holder is proven. Proceed
-  with the board write, and **do not delete the file**: residue is recorded, not removed
-  (CF-049 tracks the separate handoff that clears it from the registered workdir).
+- `RESIDUE consumers=<n> commits_after_mtime=<n|unknown>` — the probe ran and proved no
+  holder. Proceed with the board write, and **do not delete the file**: residue is
+  recorded, not removed (CF-049 tracks the separate handoff that clears it from the
+  registered workdir).
+- `ERROR lock=<path> probe=<detail> is not a clean negative — the lock state is UNKNOWN` —
+  the adjudicator's own probe could not run (the lock could not be opened, or `flock`
+  failed with a non-contention errno), so nothing is proven. This is **not** residue and
+  **not** permission to write; it is an unknown observation.
+
+| Verdict | Exit code |
+|---|---|
+| `ABSENT` | 0 |
+| `HELD holder=…` | 0 |
+| `RESIDUE consumers=…` | 0 |
+| `ERROR lock=…` | 3 |
+
+Exit 0 always means the classification itself is clean; a non-zero exit means the
+observation failed. A partial `/proc` fd scan (a process that raced exit, or one this user
+cannot inspect) is by design not an error — only the `flock` probe's failure to run is.
 
 `commits_after_mtime` counts board commits whose commit time is after the lock's mtime —
 the number that proves the file never excluded a writer (`unknown` when Git cannot
-answer). The file is git-ignored so a clone never carries it as untracked noise.
-`tests/selftest.sh` arm 33 proves both arms on fixtures: an unheld 0-byte lock reports
-`RESIDUE`, and a lock held by a live `flock` reports `HELD`.
+answer). The file is git-ignored (`.gitignore:20`) so a clone never carries it as
+untracked noise. `tests/selftest.sh` arm 33 proves three arms on fixtures: an unheld
+0-byte lock reports `RESIDUE`, a lock held by a live `flock` reports `HELD` with exit 0,
+and a lock the process cannot open reports an `ERROR` line with a non-zero exit and not
+`RESIDUE`.
 
 ## Publish-drift census
 
