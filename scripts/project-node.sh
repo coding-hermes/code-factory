@@ -47,6 +47,13 @@ SCOPED=0
 KINDS="${NODE_KINDS:-}"
 KINDS_SET=0
 [ -n "${NODE_KINDS+set}" ] && KINDS_SET=1
+# What layer 20 MEASURED about the harness (CF-006). Layer 90 carries these into node.json, so the
+# manifest records the build that is on the node instead of the pin a config asked for. A value the
+# adapter never printed stays EMPTY here and the manifest says why it is empty — an invented version
+# is worse than a named absence, and a null without a reason is junk.
+HARNESS_VERSION=""
+HARNESS_VERSION_ROW=""
+HARNESS_BINARY=""
 STATE="$HOME/.node"
 # The checkout this script works, cloned by layer 40. Layer 10 reads it BEFORE the
 # clone for kind evidence (CF-218), so it is resolved here, once, for both layers.
@@ -299,6 +306,30 @@ row_tail() {  # $1 text -> its last non-empty line, capped: one row stays one li
   printf '%s\n' "$1" | awk 'NF { last=$0 } END { print last }' | cut -c1-240
 }
 
+harness_measurement() {  # harness_measurement <adapter-log> <version|binary> [value|path]
+  # The adapter's own `  PASS  <row> — <value>` line is the ONLY measurement of the harness in this
+  # system (CF-006). Read it back from the log layer 20 captured instead of parsing `--version`
+  # again here: a second parser is a second answer to "which build is on this node", and the two
+  # disagree the first time an adapter changes how it reads a version.
+  #
+  # `path` mode answers "where does the binary live": adapters annotate the binary row in different
+  # ways (`<path> (installed by this adapter)`, `<path> runs`, a bare `<path>`), so the first token
+  # that is an absolute path is the path and the annotation is not part of it.
+  local log="$1" row="${2:-}" what="${3:-value}"
+  [ -r "$log" ] && [ -n "$row" ] || return 0
+  awk -v r="$row" -v what="$what" '
+    index($0, "  PASS  " r " — ") == 1 {
+      sub("^  PASS  " r " — ", "")
+      if ($0 == "") next
+      if (what == "path") {
+        n = split($0, f, " ")
+        for (i = 1; i <= n; i++) if (substr(f[i], 1, 1) == "/") { print f[i]; exit }
+        next
+      }
+      print; exit
+    }' "$log" 2>/dev/null
+}
+
 go_proxy_row() {  # $1 = go binary -> one row: the node's own proxy resolves a pinned module
   local gb="$1" proxy dir rc out tmo=""
   proxy="$("$gb" env GOPROXY 2>/dev/null | head -1)"
@@ -512,6 +543,15 @@ if in_scope 20; then
     rc=$?
     adapter_fails="$(grep -c '^  FAIL' "$adapter_log")" || true
     cat "$adapter_log"
+    # CF-006: keep the adapter's measurement before the log is removed. `version` is the row that
+    # says which build is on the node; `binary` says where it is. An adapter that measured neither
+    # leaves these empty and node.json records the absence and its reason instead of the pin.
+    HARNESS_VERSION_ROW="$(harness_measurement "$adapter_log" version)"
+    # A trailing `(pin 0.166.0)` is adapter bookkeeping about the row, not part of the version, so
+    # it is stripped from the VALUE and kept in `version_row`. A value with no annotation is
+    # carried unchanged.
+    HARNESS_VERSION="${HARNESS_VERSION_ROW%% (*}"
+    HARNESS_BINARY="$(harness_measurement "$adapter_log" binary path)"
     rm -f "$adapter_log"
     FAILED=$((FAILED + adapter_fails))
   fi
@@ -836,9 +876,13 @@ if [ "$SCOPED" -eq 1 ]; then
 else
   say "[90] manifest"
   if [ "$MODE" = apply ] && [ "$FAILED" -eq 0 ]; then
-    python3 - "$STATE/node.json" "$PROJECT" "$HARNESS" "$PORT" "$REPO" "$REF" "$(hostname)" "$STATE/freshness.json" <<'PY'
+    python3 - "$STATE/node.json" "$PROJECT" "$HARNESS" "$PORT" "$REPO" "$REF" "$(hostname)" "$STATE/freshness.json" \
+      "$HARNESS_VERSION" "$HARNESS_VERSION_ROW" "$HARNESS_BINARY" "$MODE" <<'PY'
 import json, sys, time
 path, project, harness, port, repo, ref, host, fresh_path = sys.argv[1:9]
+# Names distinct from the freshness variables below: `measured` in this body is the checkout
+# measurement, and reusing it silently replaced the harness version with a dict of git state.
+hver, hver_row, hbin, hmode = (sys.argv[9:13] + ["", "", "", ""])[:4]
 # The checkout's measured state (CF-244). It is carried into the manifest so a
 # node can never claim an identity without saying which tree it holds: status is
 # the CHECK's own verdict (a dirty checkout is a FAIL there, because a local edit
@@ -862,9 +906,26 @@ try:
     }
 except (OSError, ValueError) as exc:
     freshness["reason"] = "checkout freshness was not measured by layer 40: %s" % exc
+# The harness block (CF-006) records the build the ADAPTER measured, not the pin the config asked
+# for: the name, the version that was read back and where that binary lives. When the adapter
+# printed no version row the field is null and carries the reason — a manifest that silently
+# omitted it would let verify-node.sh certify a harness nobody ever measured.
+harness_obj = {"name": harness, "port": int(port),
+               "adapter": "scripts/harness/install-%s.sh" % harness}
+if hver:
+    harness_obj["version"] = hver
+    harness_obj["version_row"] = hver_row or hver
+    harness_obj["version_source"] = "the adapter's own `PASS version` row in --%s" % (hmode or "check")
+else:
+    harness_obj["version"] = None
+    harness_obj["version_reason"] = (
+        "the adapter printed no `PASS version` row in --%s, so this node records no measured build"
+        % (hmode or "check"))
+if hbin:
+    harness_obj["binary"] = hbin
 json.dump({"node_id": host, "project": project,
            "repo": {"origin": repo, "ref": ref, "path": "/home/" + __import__("os").environ.get("USER", "node") + "/repo"},
-           "harness": {"name": harness, "port": int(port)},
+           "harness": harness_obj,
            "bus": {"base": __import__("os").environ.get("CRIER_BASE", "http://crier.example:8767")},
            "freshness": freshness,
            "created_by": "project-node.sh v1",

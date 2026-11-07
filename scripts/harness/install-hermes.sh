@@ -359,6 +359,10 @@ if [ "$MODE" = "--apply" ]; then
   else
     note "already installed: $("$h" --version 2>/dev/null | head -1)"
   fi
+  # CF-006: --apply names the binary it placed, so the node manifest can record where the harness
+  # lives and verify-node.sh can measure THAT binary rather than whatever PATH resolves (the venv
+  # binary is under $HOME and normally is not on PATH at all).
+  [ -x "$VENV/bin/hermes" ] && ok "binary" "$VENV/bin/hermes"
 
   if ! (command -v ss >/dev/null && ss -tln 2>/dev/null | grep -q ":$PORT ") 2>/dev/null; then
     if auth_reason=$(check_public_bind_auth); then

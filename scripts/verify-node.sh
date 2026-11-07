@@ -12,6 +12,7 @@
 #   4. (optional) an artifact on the node hashes the same on both sides
 #   5. the checkout the node will work is the tree origin/main has (CF-244)
 #   6. the seed the node carries is the digests its seed record still names (CF-250)
+#   7. the harness the manifest records is the one on the node (CF-006)
 # A version string is not evidence: step 2 must be a live HTTP answer from this host.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -244,6 +245,113 @@ else
   esac
   rm -f "$seed_rows" "$seed_json"
 fi
+
+# 7. the harness the manifest records is the one on the node (CF-006)
+# Steps 1-6 prove the agent answers, the gateway is up, the gate is closed and the tree and seed
+# are the ones recorded — none of them reads the manifest's harness block. A node provisioned with
+# `codex` whose manifest names codex 0.166.0 passed every earlier step with a different harness on
+# it (or with the binary gone), because the harness was only ever a name in a JSON file. The values
+# come from layer 20 of project-node.sh, which quotes the adapter's own `PASS version` row; this leg
+# re-measures the node and compares. A manifest that recorded NO version is a WARN + UNVERIFIED
+# rather than a silent pass (an unknown build is not a measured one). Two round trips: the binary's
+# path is only known after the manifest is parsed here.
+HM=$(bunker exec --server "$SERVER" "$AGENT" -- bash -lc '
+  if [ -r "$HOME/.node/node.json" ]; then
+    printf "PRESENT\n"
+    cat "$HOME/.node/node.json"
+  else
+    printf "ABSENT\n"
+  fi' 2>/dev/null)
+case "${HM%%$'\n'*}" in
+  PRESENT)
+    hm_file=$(mktemp)
+    printf '%s\n' "${HM#*$'\n'}" > "$hm_file"
+    # Fields are joined with \x1f, not a tab: IFS treats tab (and space/newline) as WHITESPACE and
+    # collapses runs of it, so a manifest with an empty version shifted every later field by one and
+    # this row compared the binary PATH as if it were the version.
+    hm_parsed=$(python3 -B - "$hm_file" <<'PY'
+import json, sys
+SEP = "\x1f"
+
+
+def clean(value):
+    return str(value or "").replace(SEP, " ").replace("\t", " ").replace("\n", " ")
+
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        doc = json.load(handle)
+except (OSError, ValueError) as exc:
+    print(SEP.join(["UNREADABLE", "", "", clean(exc), ""]))
+    raise SystemExit(0)
+if not isinstance(doc, dict):
+    print(SEP.join(["UNREADABLE", "", "", "not a JSON object", ""]))
+    raise SystemExit(0)
+harness = doc.get("harness") or {}
+if not isinstance(harness, dict):
+    print(SEP.join(["UNREADABLE", "", "", "harness is not an object", ""]))
+    raise SystemExit(0)
+version = harness.get("version")
+print(SEP.join(["OK", clean(harness.get("name")), clean(version if isinstance(version, str) else ""),
+                clean(harness.get("version_reason")), clean(harness.get("binary"))]))
+PY
+)
+    rm -f "$hm_file"
+    hm_status="" hm_name="" hm_version="" hm_reason="" hm_bin=""
+    IFS=$'\x1f' read -r hm_status hm_name hm_version hm_reason hm_bin <<EOF
+$hm_parsed
+EOF
+    case "$hm_status" in
+      UNREADABLE)
+        bad "harness_identity" "~/.node/node.json cannot be read as a manifest (${hm_reason:-no reason given}) — this node's identity record is broken; re-run --apply"
+        ;;
+      OK)
+        if [ -z "$hm_name" ]; then
+          bad "harness_identity" "~/.node/node.json names no harness (harness.name absent or empty) — nothing says what runs this node"
+        elif [ -z "$hm_version" ]; then
+          warn "harness_identity" "manifest names harness $hm_name with no measured version (${hm_reason:-no reason recorded}) — the build on this node is unmeasured"
+          unverified "harness_identity: the manifest records harness $hm_name but no measured version"
+        else
+          hm_target="${hm_bin:-$hm_name}"
+          # The recorded path travels as a POSITIONAL argument to a FIXED remote body, so a value
+          # read from the node's own manifest cannot be re-parsed as shell syntax.
+          hm_out=$(bunker exec --server "$SERVER" "$AGENT" -- bash -lc '
+            p="${1:-}"
+            [ -n "$p" ] || exit 4
+            case "$p" in
+              */*) : ;;
+              *) p=$(command -v "$p" 2>/dev/null) || exit 3 ;;
+            esac
+            [ -x "$p" ] || exit 3
+            printf "%s\t" "$p"
+            "$p" --version 2>/dev/null | head -1' _ "$hm_target" 2>/dev/null)
+          hm_rc=$?
+          hm_path="${hm_out%%$'\t'*}"
+          hm_measured="${hm_out#*$'\t'}"
+          hm_measured="$(printf '%s' "$hm_measured" | head -1)"
+          if [ "$hm_rc" -eq 3 ] || [ -z "$hm_measured" ]; then
+            bad "harness_identity" "manifest names harness $hm_name $hm_version at ${hm_target:-no path}, but nothing executable there answers --version — the harness the node claims is not on the node"
+          else
+            case "$hm_measured" in
+              *"$hm_version"*)
+                ok "harness_identity" "$hm_name $hm_version (manifest) measured at $hm_path — $hm_measured" ;;
+              *)
+                bad "harness_identity" "manifest says $hm_name $hm_version, but $hm_path measures '$hm_measured' — the node is not running the harness it recorded (re-run --apply, or fix the manifest)" ;;
+            esac
+          fi
+        fi
+        ;;
+      *)
+        bad "harness_identity" "~/.node/node.json could not be parsed locally (parser returned nothing) — the harness the node claims is unmeasured"
+        ;;
+    esac
+    ;;
+  ABSENT|*)
+    # Nothing is provisioned yet: legs 5 and 6 already carry that story, and a note here says
+    # exactly what was NOT checked instead of letting a missing manifest look like a passing leg.
+    note "harness_identity — no ~/.node/node.json on the node, so the manifest's harness name and version are not checked"
+    ;;
+esac
 
 say ""
 if [ "$FAILED" -gt 0 ]; then say "VERIFY: FAIL ($FAILED)"; exit 1; fi

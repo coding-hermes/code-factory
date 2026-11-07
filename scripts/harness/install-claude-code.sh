@@ -459,6 +459,9 @@ do_apply() {
   if [ -x "$BIN" ] && [ "$v" = "$CLAUDE_CODE_PIN" ]; then
     note "already installed at pin $CLAUDE_CODE_PIN — nothing to do (idempotent)"
     installed_package_identity || true
+    # CF-006: the idempotent path names the binary too, so a node manifest records where the
+    # harness lives on a second --apply exactly as it does on the first.
+    ok "binary" "$BIN"
     return 0
   fi
   [ -x "$BIN" ] && note "installed version ${v:-unreadable} != pin $CLAUDE_CODE_PIN — installing the pin"

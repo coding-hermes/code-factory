@@ -455,6 +455,10 @@ case "$MODE" in
         bad "version" "installed binary reads back '${v:-unreadable}' != pin $PIN — removed"
       fi
     fi
+    # CF-006: --apply names the binary it placed. The node manifest records this path, so
+    # verify-node.sh measures THAT binary on the node instead of whatever PATH happens to resolve
+    # — an owned pin under $HOME is frequently not on PATH at all.
+    [ -x "$BIN" ] && ok "binary" "$BIN"
     # The shim is what makes crier's LookupBinary find the pin on PATH. Never overwrite a real
     # host binary: the adapter labels it host-provided, and so does this.
     if [ -x "$BIN" ]; then
