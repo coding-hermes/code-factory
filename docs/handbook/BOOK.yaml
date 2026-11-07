@@ -64,9 +64,13 @@ parts:
     files: []
 
 figures:
-  - {code: FM-1, file: figures/00-system-map.svg, caption: "System map — components and layers, coloured by contract state"}
-  - {code: FM-2, file: figures/00-board-row-lifecycle.svg, caption: "Board row lifecycle, including the paths that are not forward"}
-  - {code: FM-3, file: figures/F1-dispatch.svg, caption: "F1 dispatch and settlement — seven messages, five actors"}
+  - {code: FM-1, file: figures/system-map.svg, caption: "System map — 27 components, edges keyed CT-01…CT-18"}
+  - {code: FM-2, file: figures/board-lifecycle.svg, caption: "Board row lifecycle, including the paths that are not forward"}
+  - {code: FM-3, file: figures/tick-lifecycle.svg, caption: "Scheduler tick lifecycle"}
+  # Per-module centered views (13) and per-flow diagrams (F1…F16) live on disk as
+  # module-M0…module-M12.svg and F1…F16.svg; the builder mounts each chapter with its
+  # own centered view and each flow chapter with its diagram, so they are not listed here.
+  - {code: II-1, file: figures/F1.svg, caption: "F1 dispatch and settlement"}
 
 rules:
   - "One id resolves to exactly one object across the set; ids are never reused."
