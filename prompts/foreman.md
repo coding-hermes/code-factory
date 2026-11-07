@@ -36,6 +36,19 @@ does not exist yet, writing it is part of the row, not a follow-up.
 - If the handbook and the code disagree, the code is right and the disagreement is a finding
   to file — never quietly adopt the document.
 
+## Before you block, classify
+
+A dirty checkout is not automatically a block. Run `python3 scripts/ownership.py status`
+first and follow `prompts/unblock.md`:
+
+- `held-by-live-worker` → **stand down**, report STOOD DOWN with the owner pid. Do not write
+  a blocked receipt: nothing is wrong, something is working.
+- `residue` → **dispose it**: publish anything whose sha256 exists nowhere else, delete only
+  byte-identical duplicates, gitignore the producer's output dir. Then take your row.
+- `unowned-changes` → attribute to a live session, then commit or revert.
+- Blocked receipt only when ownership is genuinely ambiguous AND the action is owner-only
+  (credential, policy, spend) AND you can name the one command that unblocks it.
+
 ## Ground rules (all lanes)
 
 - Read `AGENTS.md` first. It is the working agreement: specs are the design authority, every
