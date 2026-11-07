@@ -60,8 +60,10 @@ Reproduce the chain stage by stage and compare each result with
 | shell-toolkit | `fleet-ops-shell-toolkit.patch` | `82a3bf3418f1f521e3941334d796e09e1088512eb0f75ddd89d468d36f81d976` |
 | backup-heuristic | `fleet-ops-backup-heuristic.patch` | `77d1deb2bd97e61f88b90497590f9d6601003584e380ac9fbc97ccc8d6cd7829` |
 | ci-markers | `fleet-ops-ci-markers.patch` | `f393a681a59ef80d8386d00dd15074e78701d8244f5cd447544322785b2ef6e6` |
+| deploy-doc | `fleet-ops-deploy-doc.patch` | `57432007b324f382a90bf7405a8bb50735a87a145ed95f5e0e5b782b964e7687` |
 
-The last digest is the module that was live on 2026-11-05.
+The `ci-markers` digest was the module live on 2026-11-05; `deploy-doc` is the module live from
+2026-11-07 (SCHED-GAP-16989 — the arm graded filename spelling, not the deploy path).
 
 ## The drift gate
 
