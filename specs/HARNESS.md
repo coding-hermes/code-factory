@@ -16,8 +16,48 @@ A **harness** is whatever runs the work inside a node. The factory must not care
 | Version | `--check` prints the binary's ownership and measured version; a version mismatch names both the measured value and the pin and FAILs, not just "ok". |
 | Invoke | Accepts a directive (text) and a working directory; runs unattended. |
 | Report | Emits the model it actually served (requested vs served), when it has one. |
-| Fail | Non-zero exit on failure; never a silent success. |
+| Fail | Non-zero exit on failure; never a silent success. Every adapter ends with the verdict line defined in "The verdict line" below, including a ladder that stops early. |
 | Idempotent | Re-running install changes nothing. |
+
+### The verdict line
+
+Every adapter ends its output with **one** verdict line, and that line is decided by the row counts
+it just printed — never by `$FAILED` alone (CF-141):
+
+| Line | When | Exit |
+|---|---|---|
+| `<LABEL>: FAIL (n)` | at least one `  FAIL` row; `n` is that count | 1 |
+| `<LABEL>: UNVERIFIED` | at least one `  WARN` row and no `  FAIL` row | **3** |
+| `<LABEL>: PASS` | no `FAIL` and no `WARN` row — every contract row PASSed | 0 |
+
+`<LABEL>` is the harness name in capitals (`HERMES`, `CODEX`, `CLAUDE-CODE`, `OPENCODE`,
+`PI-AGENT`, `DEEPSEEK`). `UNVERIFIED` exits **3**, not 0: nothing was certified, and a caller that
+reads "exit 0" as support would read an unmeasured ladder as a supported one. It is the same status
+`verify-node.sh` uses for an unverified manifest (`VERIFY: UNVERIFIED`), so a node and an adapter
+answer "measured?" the same way.
+
+There is one implementation — `verdict()` in `scripts/lib.sh` — and `warn()` counts the rows it
+prints, so six adapters cannot drift. A `WARN` row is a measurement of absence (a surface the build
+does not advertise, an install this repo does not own), which is why it cannot sit beside `PASS`:
+before this rule an adapter whose own banner said `UNVERIFIED adapter` printed `OPENCODE: PASS` and
+exited 0 with two `WARN` rows above the verdict. `tests/selftest.sh` §59 keeps the rule falsifiable
+(three arms on one stub adapter, plus the real adapter on the row's probe and the pre-fix adapter
+`d4f2600` as the red control).
+
+The row-count rule is the `--check` rule, because `--check` is the certification claim a caller acts
+on. The modes that DO something (`--apply`, `--turn`, `--app-server`) pass `action` to `verdict()`:
+there a `WARN` is advice about a run that already happened (a `$HOME/.local/bin` PATH hint, an
+`[experimental]` subcommand this repo does not use), so only `FAIL` rows decide and a measured
+install still ends exit 0. Without that split `install-codex.sh --apply` — a harness this repo has
+measured — would report `UNVERIFIED` for a successful install merely because it also warned that
+`$HOME/.local/bin` is not on `PATH`.
+
+Two lines are deliberately **not** verdicts, because nothing was measured: a usage/contract refusal
+exits 2 with a named reason (`CODEX: REFUSED (<leg>)`, `OPENCODE: FAIL (n) — contract refused;
+nothing was installed or run`), and claude-code's `--turn` without a credential exits 3 as
+`CLAUDE-CODE: SKIP (…)`. A ladder that stops early still reaches the verdict for the rows it did
+print: `install-hermes.sh` refusing an out-of-range interpreter prints `FAIL python — …` and then
+`HERMES: FAIL (1)`, not a bare exit with no summary.
 
 ## Adapters and their measured state
 

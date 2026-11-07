@@ -423,7 +423,7 @@ leg_vars() {  # <id> <adapter file>
 
 # ----------------------------------------------------------------------- legs
 leg_check() {  # <id> <adapter file> <binary> <generation>
-  local id="$1" file="$2" bin="$3" gen="$4" path out rc value bad_rows empty
+  local id="$1" file="$2" bin="$3" gen="$4" path out rc value bad_rows warn_rows empty
   path="$ADAPTER_DIR/$file"
   if [ ! -f "$path" ]; then
     emit "$id" check FAIL "no adapter at scripts/harness/$file — the harness is named and cannot be certified"
@@ -468,6 +468,14 @@ leg_check() {  # <id> <adapter file> <binary> <generation>
     emit "$id" check PASS "adapter exit 0 — $value"
   else
     bad_rows="$(printf '%s\n' "$out" | awk 'index($0,"  FAIL  ")==1' | sed 's/^  FAIL  //' | joinrows)"
+    if [ -z "$bad_rows" ] && [ "$rc" -eq 3 ]; then
+      # Exit 3 is the adapter's own `UNVERIFIED` verdict (specs/HARNESS.md "The verdict line",
+      # CF-141): it printed WARN rows and certified nothing. Naming the WARN rows is what makes
+      # this leg readable — "no FAIL row printed" would describe the opposite of what happened.
+      warn_rows="$(printf '%s\n' "$out" | awk 'index($0,"  WARN  ")==1' | sed 's/^  WARN  //' | joinrows)"
+      emit "$id" check FAIL "adapter exit 3 (UNVERIFIED) — ${warn_rows:-no WARN row printed}"
+      return 0
+    fi
     emit "$id" check FAIL "adapter exit $rc — ${bad_rows:-no FAIL row printed}"
   fi
   # Report, do not repair: an adapter row that warns while the capability exists.

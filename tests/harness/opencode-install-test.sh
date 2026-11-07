@@ -19,6 +19,10 @@
 #   G  --apply refuses by name, exits 1, and places nothing in the throwaway HOME
 #   H  an owned $HOME prefix that is not on PATH is resolved and measured, not reported absent
 #
+# The verdict line follows the ROWS (specs/HARNESS.md "The verdict line", CF-141): every case whose
+# rows include a WARN must end `OPENCODE: UNVERIFIED` and exit 3, and only the all-PASS case (H, an
+# owned binary advertising a surface) may end `OPENCODE: PASS` with exit 0.
+#
 # Exit 0 only when every non-skipped assertion passed.
 
 set -uo pipefail
@@ -195,12 +199,13 @@ grep -q '^  PASS  [a-z_]* — $' "$O" && no "B1 a PASS row carried an empty meas
 say ""
 say "C. a v1 stub whose help goes to stderr is measured, not warned about"
 O="$SB/c1.out"; rc=$(runp "$SB/v1/bin" "$SB/home" "$O" --check)
-if [ "$rc" = "0" ] && grep -qF "PASS  binary — $SB/v1/bin/opencode" "$O" \
+if [ "$rc" = "3" ] && grep -qF "PASS  binary — $SB/v1/bin/opencode" "$O" \
    && grep -qF 'PASS  version — 1.18.29' "$O" \
    && grep -qF 'PASS  generation — v1 (measured 1.18.29)' "$O" \
    && grep -qF 'PASS  non_interactive — the `run` surface is advertised' "$O" \
-   && grep -qF 'OPENCODE: PASS' "$O"; then
-  ok "C1 version, generation and non_interactive are each measured and quoted (exit 0)"
+   && grep -qF 'WARN  user_space_binary' "$O" \
+   && grep -qF 'OPENCODE: UNVERIFIED' "$O" && ! grep -qF 'OPENCODE: PASS' "$O"; then
+  ok "C1 version, generation and non_interactive are each measured and quoted (exit 3: a PATH stub is not a \$HOME install, so UNVERIFIED — never PASS)"
 else
   no "C1 the v1 stub was not measured on every row (exit $rc)"
   printf '%s\n' "$(printf '%s\n' "$(sed -n '/PASS\|WARN\|FAIL/p' "$O")" | sed 's/^/    | /')"
@@ -239,10 +244,11 @@ fi
 say ""
 say "D. the generation row follows the measured version, whichever stream the help uses"
 O="$SB/d1.out"; rc=$(runp "$SB/v2/bin" "$SB/home" "$O" --check)
-if [ "$rc" = "0" ] && grep -qF 'PASS  version — 2.3.1' "$O" \
+if [ "$rc" = "3" ] && grep -qF 'PASS  version — 2.3.1' "$O" \
    && grep -qF 'PASS  generation — v2 (measured 2.3.1)' "$O" \
-   && grep -qF 'PASS  non_interactive — the `run` surface is advertised' "$O"; then
-  ok "D1 a v2 binary is reported as v2 (exit 0)"
+   && grep -qF 'PASS  non_interactive — the `run` surface is advertised' "$O" \
+   && grep -qF 'OPENCODE: UNVERIFIED' "$O"; then
+  ok "D1 a v2 binary is reported as v2 (exit 3: the PATH stub is not an owned install, so UNVERIFIED)"
 else
   no "D1 a v2 binary was not reported as v2 (exit $rc)"
 fi
@@ -251,10 +257,11 @@ fi
 say ""
 say "E. a binary that answers no --version gets WARN rows, never an empty PASS"
 O="$SB/e1.out"; rc=$(runp "$SB/nover/bin" "$SB/home" "$O" --check)
-if [ "$rc" = "0" ] && grep -qF 'WARN  version — binary answered no --version' "$O" \
+if [ "$rc" = "3" ] && grep -qF 'WARN  version — binary answered no --version' "$O" \
    && grep -qF 'WARN  generation — no measured version' "$O" \
+   && grep -qF 'OPENCODE: UNVERIFIED' "$O" && ! grep -qF 'OPENCODE: PASS' "$O" \
    && ! grep -q '^  PASS  version' "$O" && ! grep -q '^  PASS  generation' "$O"; then
-  ok "E1 the unmeasurable version is a named WARN (exit 0), not a PASS with no value"
+  ok "E1 the unmeasurable version is a named WARN (exit 3, OPENCODE: UNVERIFIED), not a PASS with no value"
 else
   no "E1 an unmeasurable version did not warn by name (exit $rc)"
 fi
@@ -263,9 +270,10 @@ fi
 say ""
 say "F. a binary that advertises no surface is warned about, naming both probes"
 O="$SB/f1.out"; rc=$(runp "$SB/nosurf/bin" "$SB/home" "$O" --check)
-if [ "$rc" = "0" ] \
-   && grep -qF 'WARN  non_interactive — neither `--help` nor `run --help` advertises run/exec/serve, on stdout or stderr' "$O"; then
-  ok "F1 the absent surface is named with both probes (exit 0)"
+if [ "$rc" = "3" ] \
+   && grep -qF 'WARN  non_interactive — neither `--help` nor `run --help` advertises run/exec/serve, on stdout or stderr' "$O" \
+   && grep -qF 'OPENCODE: UNVERIFIED' "$O" && ! grep -qF 'OPENCODE: PASS' "$O"; then
+  ok "F1 the absent surface is named with both probes (exit 3, OPENCODE: UNVERIFIED)"
 else
   no "F1 the absent surface was not named with both probes (exit $rc)"
 fi
@@ -292,8 +300,9 @@ cp "$SB/v1/bin/opencode" "$H_HOME/.opencode/bin/opencode"
 O="$SB/h1.out"; rc=$(runp "$SB/nobin" "$H_HOME" "$O" --check)
 if [ "$rc" = "0" ] && grep -qF "PASS  binary — $H_HOME/.opencode/bin/opencode" "$O" \
    && grep -qF 'PASS  user_space_binary' "$O" && grep -qF 'PASS  version — 1.18.29' "$O" \
+   && grep -qF 'OPENCODE: PASS' "$O" \
    && ! grep -qF 'binary_provenance' "$O"; then
-  ok "H1 the \$HOME-owned binary is named by path and measured (exit 0)"
+  ok "H1 the \$HOME-owned binary is named by path and measured — every row PASS, 'OPENCODE: PASS', exit 0"
 else
   no "H1 a \$HOME-owned binary that is not on PATH was not measured (exit $rc)"
 fi

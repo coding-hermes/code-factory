@@ -405,13 +405,14 @@ case "$MODE" in
     fi
     report_auth
     say ""
-    [ "$FAILED" -eq 0 ] && { say "CODEX: PASS"; exit 0; } || { say "CODEX: FAIL ($FAILED)"; exit 1; }
+    verdict CODEX
+    exit $?
     ;;
 
   --apply)
     target=$(target_triple) || refuse "arch" \
       "no measured codex artefact for ${CF_CODEX_ARCH:-$(uname -m)}/$(uname -s) in $RELEASE — this installer pins x86_64-unknown-linux-musl only"
-    require_disk "$HOME" "$DISK_FLOOR_GB" || { say ""; say "CODEX: FAIL ($FAILED)"; exit 1; }
+    require_disk "$HOME" "$DISK_FLOOR_GB" || { say ""; verdict CODEX action; exit $?; }
     if [ -x "$BIN" ]; then
       v=$(codex_version "$BIN") || v="unknown"
       if at_pin "$v"; then
@@ -420,7 +421,7 @@ case "$MODE" in
         at_pin "$v" && ok "version" "$v (pin $PIN)" || bad "version" "$v != pin $PIN"
       else
         note "$BIN reports ${v:-unreadable} != pin $PIN — replacing"
-        rm -rf "$PREFIX" || { bad "install" "cannot remove $PREFIX"; exit 1; }
+        rm -rf "$PREFIX" || { bad "install" "cannot remove $PREFIX"; say ""; verdict CODEX action; exit $?; }
       fi
     fi
     if [ ! -x "$BIN" ]; then
@@ -428,23 +429,23 @@ case "$MODE" in
       want="${CF_CODEX_SHA256:-$SHA256}"
       say "apply"
       note "fetching $url"
-      tmpdir=$(umask 077; mktemp -d) || { bad "download" "cannot create a temp dir"; exit 1; }
+      tmpdir=$(umask 077; mktemp -d) || { bad "download" "cannot create a temp dir"; say ""; verdict CODEX action; exit $?; }
       tarball="$tmpdir/codex.tar.gz"
       if ! fetch_verified "$url" "$tarball" "$want"; then
         rm -rf "$tmpdir"
         bad "download" "download or digest check failed for $url (want sha256 $want)"
-        say ""; say "CODEX: FAIL ($FAILED)"; exit 1
+        say ""; verdict CODEX action; exit $?
       fi
       ok "download" "sha256 matches the pin ($want)"
       member=$(tar tzf "$tarball" 2>/dev/null | grep -E "^codex-[^/]+$" | head -1)
       if [ -z "$member" ]; then
-        rm -rf "$tmpdir"; bad "layout" "tarball has no top-level codex-<target> member"; say ""; say "CODEX: FAIL ($FAILED)"; exit 1
+        rm -rf "$tmpdir"; bad "layout" "tarball has no top-level codex-<target> member"; say ""; verdict CODEX action; exit $?
       fi
-      mkdir -p "$PREFIX/bin" || { rm -rf "$tmpdir"; bad "install" "cannot create $PREFIX/bin"; exit 1; }
+      mkdir -p "$PREFIX/bin" || { rm -rf "$tmpdir"; bad "install" "cannot create $PREFIX/bin"; say ""; verdict CODEX action; exit $?; }
       if ! tar xzf "$tarball" -C "$tmpdir" "$member" 2>/dev/null; then
-        rm -rf "$tmpdir"; bad "install" "extraction failed for $member"; say ""; say "CODEX: FAIL ($FAILED)"; exit 1
+        rm -rf "$tmpdir"; bad "install" "extraction failed for $member"; say ""; verdict CODEX action; exit $?
       fi
-      install -m 0755 "$tmpdir/$member" "$BIN" || { rm -rf "$tmpdir"; bad "install" "cannot place $BIN"; exit 1; }
+      install -m 0755 "$tmpdir/$member" "$BIN" || { rm -rf "$tmpdir"; bad "install" "cannot place $BIN"; say ""; verdict CODEX action; exit $?; }
       rm -rf "$tmpdir"
       v=$(codex_version "$BIN") || v="unknown"
       if at_pin "$v"; then
@@ -476,12 +477,13 @@ case "$MODE" in
     fi
     report_auth
     say ""
-    [ "$FAILED" -eq 0 ] && { say "CODEX: PASS"; exit 0; } || { say "CODEX: FAIL ($FAILED)"; exit 1; }
+    verdict CODEX action
+    exit $?
     ;;
 
   --app-server)
     b="$(bin_for_run)"
-    [ -n "$b" ] || { bad "app_server" "no binary — run --apply first"; say ""; say "CODEX: FAIL ($FAILED)"; exit 1; }
+    [ -n "$b" ] || { bad "app_server" "no binary — run --apply first"; say ""; verdict CODEX action; exit $?; }
     v=$(codex_version "$b") || v="unknown"
     note "binary $b ($v)"
     coproc CF_AS { "$b" app-server 2>/dev/null; }
@@ -498,12 +500,13 @@ case "$MODE" in
       *) bad "app_server" "unexpected initialize answer: $(printf '%.120s' "$line")" ;;
     esac
     say ""
-    [ "$FAILED" -eq 0 ] && { say "CODEX: PASS"; exit 0; } || { say "CODEX: FAIL ($FAILED)"; exit 1; }
+    verdict CODEX action
+    exit $?
     ;;
 
   --turn)
     b="$(bin_for_run)"
-    [ -n "$b" ] || { bad "turn" "no codex binary — run --apply first"; say ""; say "CODEX: FAIL ($FAILED)"; exit 1; }
+    [ -n "$b" ] || { bad "turn" "no codex binary — run --apply first"; say ""; verdict CODEX action; exit $?; }
     v=$(codex_version "$b") || v="unknown"
     [ -x "$BIN" ] && ok "binary" "$BIN ($v)" \
       || warn "binary" "host-provided $b ($v) — the pin is unowned"
@@ -528,9 +531,9 @@ case "$MODE" in
     trap cleanup EXIT INT TERM
     if [ -n "${VAR[CF_API_KEY_FILE]:-}" ]; then
       mkdir -p "$cache_root" && chmod 700 "$cache_root" \
-        || { bad "turn_home" "cannot create the turn cache root $cache_root"; exit 1; }
+        || { bad "turn_home" "cannot create the turn cache root $cache_root"; say ""; verdict CODEX action; exit $?; }
       turn_home=$(umask 077; mktemp -d "$cache_root/run.XXXXXXXX") \
-        || { turn_home=""; bad "turn_home" "cannot create a turn directory under $cache_root"; exit 1; }
+        || { turn_home=""; bad "turn_home" "cannot create a turn directory under $cache_root"; say ""; verdict CODEX action; exit $?; }
       {
         printf 'model = "%s"\n' "$model"
         printf 'model_provider = "%s"\n' "$provider"
@@ -591,6 +594,7 @@ case "$MODE" in
     fi
     rm -f "$stdout_f" "$stderr_f"
     say ""
-    [ "$FAILED" -eq 0 ] && { say "CODEX: PASS"; exit 0; } || { say "CODEX: FAIL ($FAILED)"; exit 1; }
+    verdict CODEX action
+    exit $?
     ;;
 esac

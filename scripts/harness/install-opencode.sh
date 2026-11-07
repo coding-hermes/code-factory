@@ -136,8 +136,9 @@ fi
 
 if [ "$MODE" = "--apply" ]; then
   bad "apply" "refused — the opencode install ladder is unmeasured here. Measure it, record it in specs/HARNESS.md, then implement this leg."
-  say ""; say "OPENCODE: FAIL ($FAILED)"; exit 1
+  say ""; verdict OPENCODE; exit $?
 fi
 
 say ""
-[ "$FAILED" -eq 0 ] && { say "OPENCODE: PASS"; exit 0; } || { say "OPENCODE: FAIL ($FAILED)"; exit 1; }
+verdict OPENCODE
+exit $?

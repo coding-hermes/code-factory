@@ -217,12 +217,17 @@ else
   no "B4 a second --apply changed something (rc=$rc, $efore -> $eafter)"
 fi
 
-# B5 — --check on the installed fake home PASSes the binary and version legs.
+# B5 — --check on the installed fake home measures the binary and version legs. It ends UNVERIFIED
+# (exit 3), not PASS: two of this adapter's own rows are standing WARNs — `app_server` ([experimental]
+# subcommand present, unused by crier) and `auth` (no CF_API_KEY_FILE and no $HOME/.codex/auth.json in
+# this throwaway HOME). A WARN row cannot sit beside PASS (specs/HARNESS.md "The verdict line", CF-141).
 O="$SB/b5.out"
 rc=$(clean_env HOME="$FAKEHOME" "$INSTALLER" --check >"$O" 2>&1; echo $?)
-[ "$rc" = "0" ] && grep -q "PASS  binary — $FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex" "$O" \
-  && ok "B5 --check PASSes a binary this adapter installed and names the path it measured" \
-  || { no "B5 --check should PASS on the installed pin (rc=$rc)"; sed 's/^/        /' "$O"; }
+[ "$rc" = "3" ] && grep -q "PASS  binary — $FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex" "$O" \
+  && grep -q 'PASS  version — ' "$O" && grep -q 'WARN  auth' "$O" \
+  && grep -qx 'CODEX: UNVERIFIED' "$O" \
+  && ok "B5 --check measures the installed pin and ends 'CODEX: UNVERIFIED' (exit 3) on its own WARN rows" \
+  || { no "B5 --check did not measure the installed pin with a row-count verdict (rc=$rc)"; sed 's/^/        /' "$O"; }
 
 # B6 — a version that is not the pin FAILs and names both values.
 MIS="$SB/home-mismatch"

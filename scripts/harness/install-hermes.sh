@@ -283,7 +283,9 @@ if [ "$CFV_MODE" = "contract" ]; then
   exit 0
 fi
 
-check_python_compatibility || exit 1
+# An interpreter refusal stops the ladder, but it does not stop the verdict: a caller must be able to
+# tell `FAIL python` + `HERMES: FAIL (1)` from a crash that printed rows and died (CF-141).
+check_python_compatibility || { say ""; verdict HERMES; exit $?; }
 
 h=$(hb)
 version=
@@ -340,13 +342,13 @@ if [ "$MODE" = "--apply" ]; then
     if [ -x "$VENV/bin/hermes" ]; then
       note "venv version ${version:-unknown} != pin $PIN — installing pin"
     fi
-    "$PYTHON_BIN" -m venv "$VENV" || { bad "venv" "creation failed"; exit 1; }
+    "$PYTHON_BIN" -m venv "$VENV" || { bad "venv" "creation failed"; say ""; verdict HERMES action; exit $?; }
     log_template="$HOME/.hermes-install-$PORT.XXXXXXXX.log"
     if pip_log=$(umask 077; mktemp "$log_template" 2>&1); then
       : # mktemp creates a private log before pip is invoked.
     else
       bad "install_log" "cannot create $log_template — $pip_log"
-      exit 1
+      say ""; verdict HERMES action; exit $?
     fi
     "$VENV/bin/python" -m pip install --no-cache-dir "hermes-agent==$PIN" >"$pip_log" 2>&1
     rc=$?
@@ -354,7 +356,7 @@ if [ "$MODE" = "--apply" ]; then
       ok "install" "$("$VENV/bin/hermes" --version 2>/dev/null | head -1)"
     else
       bad "install" "pip exited $rc — log: $pip_log"
-      exit 1
+      say ""; verdict HERMES action; exit $?
     fi
   else
     note "already installed: $("$h" --version 2>/dev/null | head -1)"
@@ -389,4 +391,5 @@ if [ "$MODE" = "--apply" ]; then
 fi
 
 say ""
-[ "$FAILED" -eq 0 ] && { say "HERMES: PASS"; exit 0; } || { say "HERMES: FAIL ($FAILED)"; exit 1; }
+if [ "$MODE" = "--apply" ]; then verdict HERMES action; else verdict HERMES; fi
+exit $?

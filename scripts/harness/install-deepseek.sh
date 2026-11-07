@@ -94,8 +94,9 @@ note "non_interactive — none documented for this harness row (tests/harness-co
 
 if [ "$MODE" = "--apply" ]; then
   bad "apply" "refused — no measured deepseek install ladder in this repo (no pin, no artifact digest, nothing recorded in specs/HARNESS.md). Measure a ladder, record it, then implement this leg."
-  say ""; say "DEEPSEEK: FAIL ($FAILED)"; exit 1
+  say ""; verdict DEEPSEEK; exit $?
 fi
 
 say ""
-[ "$FAILED" -eq 0 ] && { say "DEEPSEEK: PASS"; exit 0; } || { say "DEEPSEEK: FAIL ($FAILED)"; exit 1; }
+verdict DEEPSEEK
+exit $?

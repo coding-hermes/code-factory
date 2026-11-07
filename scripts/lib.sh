@@ -5,10 +5,33 @@
 say()  { printf '%s\n' "$*"; }
 ok()   { printf '  PASS  %s — %s\n' "$1" "$2"; }
 bad()  { printf '  FAIL  %s — %s\n' "$1" "$2"; FAILED=$((FAILED+1)); }
-warn() { printf '  WARN  %s — %s\n' "$1" "$2"; }
+warn() { printf '  WARN  %s — %s\n' "$1" "$2"; WARNED=$((WARNED+1)); }
 note() { printf '  ..    %s\n' "$*"; }
 
 FAILED=${FAILED:-0}
+# A WARN row is a measured absence, so it is counted. Reading only $FAILED let an adapter print
+# `PASS` beside its own WARN rows (CF-141).
+WARNED=${WARNED:-0}
+
+# The verdict line every adapter ends with. The vocabulary and the row-count rule are
+# specs/HARNESS.md "The verdict line"; there is one implementation so six adapters cannot drift:
+#   FAIL (n)    at least one FAIL row            -> exit 1
+#   UNVERIFIED  at least one WARN row, no FAIL   -> exit 3
+#   PASS        no FAIL and no WARN row          -> exit 0
+# Exit 3 (not 0) because nothing was certified: an adapter whose install ladder is unmeasured
+# must not exit like a green one. Usage/contract refusals are a different case — nothing was
+# measured at all — and keep their own named line and exit 2.
+# `action` is for the modes that DO something (--apply/--turn/--app-server): their WARN rows are
+# advice about a run that already happened (a PATH hint, an experimental subcommand) and do not
+# unmake it, so only FAIL rows decide. Certification (`--check`) is the mode that may only answer
+# PASS when every row passed — that is the claim callers act on.
+verdict() {  # verdict <LABEL> [action] — prints the line, returns the status the caller exits with
+  local label="$1" mode="${2:-check}"
+  if [ "${FAILED:-0}" -gt 0 ]; then say "$label: FAIL ($FAILED)"; return 1; fi
+  if [ "$mode" != "action" ] && [ "${WARNED:-0}" -gt 0 ]; then say "$label: UNVERIFIED"; return 3; fi
+  say "$label: PASS"
+  return 0
+}
 
 have() { command -v "$1" >/dev/null 2>&1 && command -v "$1" || true; }
 

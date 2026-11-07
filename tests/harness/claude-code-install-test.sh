@@ -202,7 +202,12 @@ else
 fi
 
 out3=$(HOME="$SCRATCH_HOME" "$SUT" --check 2>&1); rc3=$?
-[ "$rc3" -eq 0 ] && pass "--check now exits 0" || fail "--check still fails after --apply (exit $rc3)"
+# --check after --apply reports the pin it installed. It ends UNVERIFIED (exit 3) rather than PASS
+# because this throwaway HOME has no credential, so the adapter's own `auth` row warns — a WARN row
+# cannot sit beside PASS (specs/HARNESS.md "The verdict line", CF-141).
+[ "$rc3" -eq 3 ] && printf '%s' "$out3" | grep -qx 'CLAUDE-CODE: UNVERIFIED' \
+  && pass "--check after --apply ends 'CLAUDE-CODE: UNVERIFIED' (exit 3) on its own WARN auth row" \
+  || fail "--check after --apply did not end with the verdict its rows require (exit $rc3)"
 printf '%s' "$out3" | grep -q "PASS  version — $PIN" && pass "--check reports the measured version $PIN" \
   || fail "--check does not report the measured version $PIN"
 

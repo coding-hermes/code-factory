@@ -671,6 +671,5 @@ if [ "$SKIPPED" -eq 1 ]; then
   say "CLAUDE-CODE: SKIP (no credential — nothing measured, nothing claimed)"
   exit 3
 fi
-if [ "$FAILED" -eq 0 ]; then say "CLAUDE-CODE: PASS"; exit 0; fi
-say "CLAUDE-CODE: FAIL ($FAILED)"
-exit 1
+if [ "$MODE" = "--check" ]; then verdict CLAUDE-CODE; else verdict CLAUDE-CODE action; fi
+exit $?

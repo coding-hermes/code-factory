@@ -106,8 +106,9 @@ fi
 
 if [ "$MODE" = "--apply" ]; then
   bad "apply" "refused — no measured pi install ladder in this repo (no pin, no artifact digest, nothing recorded in specs/HARNESS.md); a binary on PATH is a host state, not an installer. Measure a ladder, record it, then implement this leg."
-  say ""; say "PI-AGENT: FAIL ($FAILED)"; exit 1
+  say ""; verdict PI-AGENT; exit $?
 fi
 
 say ""
-[ "$FAILED" -eq 0 ] && { say "PI-AGENT: PASS"; exit 0; } || { say "PI-AGENT: FAIL ($FAILED)"; exit 1; }
+verdict PI-AGENT
+exit $?

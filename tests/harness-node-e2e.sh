@@ -52,11 +52,24 @@ for a in hermes claude-code codex opencode deepseek pi-agent; do
   out=$(env -i PATH="$PATH" HOME="$AH" /bin/bash "$f" --check 2>&1); rc=$?
   rows=$(printf '%s\n' "$out" | grep -c '^  \(PASS\|FAIL\|WARN\) ')
   help=$(env -i PATH="$PATH" HOME="$AH" /bin/bash "$f" --help 2>&1)
-  if [ "$rc" -le 1 ] && [ "${rows:-0}" -ge 1 ] \
+  # Exit 3 is a MEASURED answer, not a failure: it is `UNVERIFIED`, the verdict an adapter whose
+  # rows include a WARN must print (specs/HARNESS.md "The verdict line", CF-141). What this arm
+  # requires is a named row set AND one verdict line consistent with it — 0/PASS, 3/UNVERIFIED,
+  # or 1/FAIL (n) — so an adapter that prints rows and then dies has no verdict and fails here.
+  verdict_line="$(printf '%s\n' "$out" | grep -v '^$' | tail -1)"
+  fails=$(printf '%s\n' "$out" | grep -c '^  FAIL  ')
+  warns=$(printf '%s\n' "$out" | grep -c '^  WARN  ')
+  if [ "$fails" -gt 0 ]; then want="FAIL ($fails)"; wantrc=1
+  elif [ "$warns" -gt 0 ]; then want="UNVERIFIED"; wantrc=3
+  else want="PASS"; wantrc=0
+  fi
+  if [ "$rc" -eq "$wantrc" ] && [ "${rows:-0}" -ge 1 ] && [ -n "$verdict_line" ] \
+     && printf '%s' "$verdict_line" | grep -Eq ": (PASS|UNVERIFIED|FAIL \([0-9]+\))$" \
+     && printf '%s' "$verdict_line" | grep -Fq ": $want" \
      && printf '%s' "$help" | grep -q -- '--check' && printf '%s' "$help" | grep -q -- '--apply'; then
-    ok "adapter:$a" "--check exits $rc with ${rows} named row(s); --help documents --check and --apply"
+    ok "adapter:$a" "--check exits $rc with ${rows} named row(s) ending '$verdict_line'; --help documents --check and --apply"
   else
-    bad "adapter:$a" "--check exit $rc, ${rows:-0} named row(s), or --help does not document both modes"
+    bad "adapter:$a" "--check exit $rc (want $wantrc for $fails FAIL / $warns WARN rows), ${rows:-0} named row(s), verdict '${verdict_line:-none}', or --help does not document both modes"
   fi
 done
 for a in opencode deepseek pi-agent; do

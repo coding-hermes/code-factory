@@ -5633,5 +5633,171 @@ else
 fi
 rm -rf "$cf003"
 
+# ch:trace row=CF-141 spec=docs/handbook/OUTLINE.md#M5-HARNESS wave=none:serial-worker test=selftest:59 doc=specs/HARNESS.md,M5-harness.md evidence=tests/selftest.sh commit=none:self-referential-hash memory=none:foreman-closeout
+say "59. an adapter's verdict counts its WARN rows, not just its FAIL rows (CF-141)"
+# Measured defect (d4f2600): every adapter ended with
+#   [ "$FAILED" -eq 0 ] && { say "X: PASS"; exit 0; } || { say "X: FAIL ($FAILED)"; exit 1; }
+# and lib.sh's warn() counted nothing, so an adapter whose own banner says `UNVERIFIED adapter`
+# printed `OPENCODE: PASS` and exited 0 beside two WARN rows. specs/HARNESS.md "The verdict line"
+# is the authority: FAIL (n) / UNVERIFIED / PASS, decided by row counts. One fixture, three arms —
+# only the rows the stub prints change, so nothing but the count can decide the verdict.
+cf141="$(mktemp -d)"
+mkdir -p "$cf141/bin" "$cf141/home/work" "$cf141/harness-bin"
+cat > "$cf141/bin/stub-adapter.sh" <<'FIX'
+#!/usr/bin/env bash
+. "${FIXTURE_LIB:?}"
+case "${STUB_ROWS:-pass}" in
+  warn) warn "non_interactive" "fixture: no non-interactive surface advertised"
+        warn "user_space_binary" "fixture: nothing installed under $HOME" ;;
+  fail) bad  "binary" "fixture: absent — no stub binary on this HOST" ;;
+  pass) ok   "binary" "$0" ;;
+esac
+say ""
+verdict STUB
+exit $?
+FIX
+chmod +x "$cf141/bin/stub-adapter.sh"
+cf141_arm() {  # cf141_arm <rows> — the arms differ only in this one value
+  env -i PATH="$cf141/bin:/usr/bin:/bin" HOME="$cf141/home" \
+    FIXTURE_LIB="$HERE/scripts/lib.sh" STUB_ROWS="$1" \
+    /bin/bash "$cf141/bin/stub-adapter.sh" 2>&1
+}
+
+# ARM (a): a WARN row is a measurement, not a green tick. Two WARN rows and no FAIL row must be
+# UNVERIFIED with a nonzero exit, and `PASS` must not appear at all.
+out=$(cf141_arm warn); rc=$?
+printf '%s\n' "$out" > "$cf141/a.out"
+if [ "$rc" -eq 3 ] \
+   && [ "$(printf '%s\n' "$out" | grep -Fxc 'STUB: UNVERIFIED')" = 1 ] \
+   && [ "$(printf '%s\n' "$out" | grep -c '^  WARN  ')" = 2 ] \
+   && ! printf '%s\n' "$out" | grep -qF 'STUB: PASS'; then
+  say "  PASS  a WARN row -> 'STUB: UNVERIFIED', exit 3, never PASS ($(printf '%s\n' "$out" | grep -c '^  WARN  ') WARN rows)"
+else
+  say "  FAIL  a WARN row did not end UNVERIFIED (exit $rc): $(printf '%s\n' "$out" | grep -E 'STUB: ' | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+
+# ARM (b): the same fixture with a FAIL row is FAIL (n) — the count is on the line — and nonzero.
+out=$(cf141_arm fail); rc=$?
+printf '%s\n' "$out" > "$cf141/b.out"
+if [ "$rc" -eq 1 ] \
+   && [ "$(printf '%s\n' "$out" | grep -Fxc 'STUB: FAIL (1)')" = 1 ] \
+   && ! printf '%s\n' "$out" | grep -qE '^STUB: (PASS|UNVERIFIED)$'; then
+  say "  PASS  a FAIL row -> 'STUB: FAIL (1)', exit 1, never PASS/UNVERIFIED"
+else
+  say "  FAIL  a FAIL row did not end FAIL (n) with a nonzero exit (exit $rc): $(printf '%s\n' "$out" | grep -E 'STUB: ' | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+
+# ARM (c): every row PASS is the ONLY state that may print PASS, and it exits 0. Without this arm
+# "never PASS" could be satisfied by an adapter that can never go green.
+out=$(cf141_arm pass); rc=$?
+printf '%s\n' "$out" > "$cf141/c.out"
+if [ "$rc" -eq 0 ] \
+   && [ "$(printf '%s\n' "$out" | grep -Fxc 'STUB: PASS')" = 1 ] \
+   && ! printf '%s\n' "$out" | grep -qE '^STUB: (FAIL|UNVERIFIED)'; then
+  say "  PASS  all rows PASS -> 'STUB: PASS', exit 0"
+else
+  say "  FAIL  an all-PASS fixture did not print PASS with exit 0 (exit $rc): $(printf '%s\n' "$out" | grep -E 'STUB: ' | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+
+# ARM (d): the row's own probe, against the REAL adapter. A PATH-local stub whose --help
+# advertises no run/exec/serve mode: two WARN rows, no FAIL row, so the verdict is UNVERIFIED.
+cat > "$cf141/harness-bin/opencode" <<'FIX'
+#!/bin/sh
+if [ "$1" = "--version" ]; then echo 9.9.9; else echo "opencode cli help"; fi
+FIX
+chmod +x "$cf141/harness-bin/opencode"
+cf141_opencode() {  # cf141_opencode <adapter>
+  env -i PATH="$cf141/harness-bin:/usr/bin:/bin" HOME="$cf141/home" /bin/bash "$1" --check 2>&1
+}
+out=$(cf141_opencode "$HERE/scripts/harness/install-opencode.sh"); rc=$?
+printf '%s\n' "$out" > "$cf141/d.out"
+if [ "$rc" -eq 3 ] \
+   && [ "$(printf '%s\n' "$out" | grep -Fxc 'OPENCODE: UNVERIFIED')" = 1 ] \
+   && [ "$(printf '%s\n' "$out" | grep -c '^  WARN  ')" = 2 ] \
+   && ! printf '%s\n' "$out" | grep -qF 'OPENCODE: PASS'; then
+  say "  PASS  install-opencode.sh --check on the row's stub -> 'OPENCODE: UNVERIFIED', exit 3, never PASS"
+else
+  say "  FAIL  the real adapter still misreports the verdict (exit $rc): $(printf '%s\n' "$out" | grep -E 'OPENCODE: ' | tr '\n' ' ')"
+  fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# The control that makes arm (d) falsifiable: the revision the row was raised on, on the SAME
+# fixture, must print PASS and exit 0 — so the arm above is green because the adapter changed,
+# not because the stub is new.
+cp -r "$HERE/scripts" "$cf141/prefix-scripts"
+mkdir -p "$cf141/prefix"
+mv "$cf141/prefix-scripts" "$cf141/prefix/scripts"
+if git -C "$HERE" show d4f2600:scripts/harness/install-opencode.sh > "$cf141/prefix/scripts/harness/install-opencode.sh" 2>/dev/null; then
+  chmod +x "$cf141/prefix/scripts/harness/install-opencode.sh"
+  pre_out=$(cf141_opencode "$cf141/prefix/scripts/harness/install-opencode.sh"); pre_rc=$?
+  if [ "$pre_rc" -eq 0 ] \
+     && printf '%s\n' "$pre_out" | grep -qF 'OPENCODE: PASS' \
+     && [ "$(printf '%s\n' "$pre_out" | grep -c '^  WARN  ')" = 2 ]; then
+    say "  PASS  pre-fix d4f2600 prints 'OPENCODE: PASS' with exit 0 beside the same two WARN rows — the arm is falsifiable"
+  else
+    say "  FAIL  the pre-fix control did not reproduce PASS-beside-WARN (exit $pre_rc): $(printf '%s\n' "$pre_out" | grep -E 'OPENCODE: ' | tr '\n' ' ')"
+    fails=$((fails+1))
+  fi
+else
+  say "  FAIL  pre-fix source unavailable (git show d4f2600:scripts/harness/install-opencode.sh)"
+  fails=$((fails+1))
+fi
+
+# ARM (e): every shipped adapter reaches a verdict line, and that line is the one ITS OWN row
+# counts require. install-hermes.sh used to `exit 1` at the interpreter gate with rows and no
+# verdict (CF-141), so a caller could not tell a verdict from a crash.
+cf141_bad=""
+for name in opencode hermes claude-code codex pi-agent deepseek; do
+  case "$name" in
+    opencode) label=OPENCODE ;;
+    hermes) label=HERMES ;;
+    claude-code) label=CLAUDE-CODE ;;
+    codex) label=CODEX ;;
+    pi-agent) label=PI-AGENT ;;
+    deepseek) label=DEEPSEEK ;;
+  esac
+  out=$(env -i PATH="$cf141/bin:/usr/bin:/bin" HOME="$cf141/home" \
+        /bin/bash "$HERE/scripts/harness/install-$name.sh" --check 2>&1); rc=$?
+  f=$(printf '%s\n' "$out" | grep -c '^  FAIL  ')
+  wn=$(printf '%s\n' "$out" | grep -c '^  WARN  ')
+  last=$(printf '%s\n' "$out" | grep -v '^$' | tail -1)
+  if [ "$f" -gt 0 ]; then want="FAIL ($f)"; wrc=1
+  elif [ "$wn" -gt 0 ]; then want="UNVERIFIED"; wrc=3
+  else want="PASS"; wrc=0
+  fi
+  printf '%s\t%s\t%s\n' "$name" "$want" "$last" >> "$cf141/vocab.table"
+  if [ "$last" != "$label: $want" ] || [ "$rc" -ne "$wrc" ]; then
+    cf141_bad="$cf141_bad $name('$last',rc=$rc,want='$label: $want')"
+  fi
+done
+if [ -z "$cf141_bad" ]; then
+  say "  PASS  all six adapters end with the verdict their row counts require (table in the scratch dir)"
+else
+  say "  FAIL  adapter verdict(s) disagree with the printed rows:$cf141_bad"
+  fails=$((fails+1))
+fi
+
+# ARM (f): criterion 4's named symptom — an unsupported interpreter. The ladder stops, but the
+# verdict does not: `FAIL python` AND `HERMES: FAIL (1)`, exit 1, not a bare exit.
+printf '#!/bin/sh\necho "Python 3.14.9"\n' > "$cf141/bin/python-unsupported"
+chmod +x "$cf141/bin/python-unsupported"
+out=$(env -i PATH="$cf141/bin:/usr/bin:/bin" HOME="$cf141/home" \
+  HERMES_PYTHON_BIN="$cf141/bin/python-unsupported" \
+  /bin/bash "$HERE/scripts/harness/install-hermes.sh" --check 2>&1); rc=$?
+printf '%s\n' "$out" > "$cf141/f.out"
+if [ "$rc" -eq 1 ] \
+   && printf '%s\n' "$out" | grep -q '^  FAIL  python — ' \
+   && [ "$(printf '%s\n' "$out" | grep -Fxc 'HERMES: FAIL (1)')" = 1 ]; then
+  say "  PASS  an unsupported interpreter ends 'HERMES: FAIL (1)', exit 1, after the named row"
+else
+  say "  FAIL  the interpreter refusal printed no verdict line (exit $rc): $(printf '%s\n' "$out" | tail -1)"
+  fails=$((fails+1))
+fi
+rm -rf "$cf141"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
