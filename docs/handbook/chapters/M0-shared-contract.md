@@ -6,7 +6,7 @@
 |---|---|
 | Module name | SHARED CONTRACT (`scripts/lib.sh`) |
 | Path | `/home/kara/code-factory/scripts/lib.sh` |
-| Revision | `943ef984dc093e5780605ac6e54cd043122126ef` (code-factory HEAD, 2026-11-06) |
+| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `lib.sh` byte-identical since `47d68b4` — no file M0 cites changed in `47d68b4..08a2c8a`) |
 | Language / runtime | bash 5.3.9 (measured: `bash --version`); sourced, never executed |
 | Owner lane | code-factory (node-side + control-host shell) |
 | Status | **VERIFIED** — `lib.sh` (78 lines) read in full; every cited line re-verified this round |
@@ -51,7 +51,7 @@ here; removed.
 | `say()` | `:5` | args → prints verbatim | none |
 | `ok()` / `bad()` / `warn()` / `note()` | `:6-9` | `bad` increments the per-script `FAILED` counter (`:7`) | treat PASS/FAIL rows as descriptive, not proof (F0-4) |
 | `have()` | `:13` | `command -v` **or `true`** — an absent binary yields an **empty, success** result | caller must test the *empty* result, not the exit code; empty `have` output = "not found" |
-| `fetch_verified()` | `:19-42` | url/dest/digest → 0 on digest-verified install, 1 on any failure | the pinned-download primitive (F0-2) |
+| `fetch_verified()` | `:19-42` | url/dest/digest → 0 on digest-verified install, 1 on any failure; the verified artifact is made executable best-effort — `chmod +x "$dest" 2>/dev/null \|\| true` (`:40`), so a **failed chmod is swallowed** and the install still returns 0 (the exit code is the INSTALL, not the chmod — `lib.sh:18`) | the pinned-download primitive (F0-2) |
 | `free_gb()` | `:45` | path → `%.1f` GB free | used by `require_disk` only |
 | `require_disk()` | `:48-57` | path/floor → `ok` or `bad` + return 1 | the disk-floor admission |
 | `once()` | `:60-64` | sentinel + command → runs command only if sentinel absent, then writes a timestamped sentinel | **no concurrency lock**: `:62` checks then `:63` runs with no `flock` — two racers both run; the sentinel is `date -u` text, not a digest |
@@ -67,6 +67,11 @@ here; removed.
 | bash | >= 4 | node + control host | `set -u` + undefined helper aborts the caller |
 | curl | any | node + control host | `curl -fsSL` nonzero → `fetch_verified` returns 1 (`lib.sh:22`) |
 | sha256sum | any | with curl | digest mismatch → return 1 (`lib.sh:24-27`) |
+| mktemp | any | with curl | a failed `mktemp` (`:21`) leaves `tmp` unset — `fetch_verified` then acts on an empty path, not a named refusal (no `mktemp` failure branch exists) |
+| rm | any | with curl | `rm -f` at `:22/:25/:31/:36` is best-effort cleanup, never a refusal |
+| cut / dirname / mkdir / mv | any | with curl | `mkdir -p` failure → named stderr + return 1 (`:30-34`); `mv` failure → named stderr + return 1 (`:35-39`) |
+| chmod | any | with curl | **best-effort**: `chmod +x "$dest" 2>/dev/null \|\| true` (`:40`) — a failed chmod is swallowed; the artifact is left non-executable and the install still returns 0 |
+| df / awk | any | with curl | `free_gb` (`:45`) depends on `df`+`awk`; a missing `df` yields an empty `free` and `require_disk`'s awk admission (`:51`) mis-decides the floor |
 
 **4b. Library contracts** — `lib.sh` imports nothing; it is the bottom of the shell stack.
 
@@ -85,18 +90,21 @@ contract settings (`CF_MAX_TURNS`, `CF_TIMEOUT_S`, `CF_API_KEY_FILE`, …) live 
 
 ## 6. Contracts in and out
 
+M0 has **no entry in the canonical register** (CT-01..CT-18, OUTLINE Part IV). `lib.sh` is the
+bottom of the shell stack and exposes no cross-system wire contract: its only outbound call is a
+local library composition (`bunker_exec`), not an interface two chapters describe from opposite
+ends. That edge is listed below with a `(local)` tag — it is not a canonical id and has no peer
+chapter row to agree with.
+
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| M0-C1 | bunker CLI | out | `lib.sh:75` `bunker_exec` (composes `bunker exec … -- bash -lc`) | **rumour — one side only** (the external `bunker` binary's exec handler, not in this repo) | works as a **bunker** contract, not a crier contract (F0-1) |
-
-The one-sided flag here is the correct completion: `bunker` is an external peer with no in-repo
-function to name.
+| (local) | bunker CLI | out | `lib.sh:75` `bunker_exec` (composes `bunker exec … -- bash -lc`) | **external** — the `bunker` binary's exec handler, not in this repo | **UNVERIFIED (boundary)** — `bunker` is an external peer with no in-repo function to name; the composed command is nameable, the far side is not, so no "works" verdict is attached to an unnamed side (F0-1) |
 
 ## 7. Verification
 
 | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|
-| syntax | `bash -n scripts/lib.sh` | exit 0 | 2026-11-06, rev `943ef98` | PASS |
+| syntax | `bash -n scripts/lib.sh` | exit 0 | 2026-11-06, rev `08a2c8a` | PASS |
 | who sources it (direct) | `grep -rl '\. "$HERE/lib.sh"' scripts/` | 11 files | 2026-11-06 | PASS (11) |
 | who sources it (total) | `grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` | 17 files | 2026-11-06 | PASS (17) |
 | fetch_verified fails closed | staged probe `ffc_probe.sh` — source lib.sh, fetch `http://127.0.0.1:1/nothing` with a wrong digest | rc 1, no artifact left | 2026-11-06 | **PASS** — `curl: (7) … Could not connect`, `rc=1`, `no artifact left` |
@@ -112,7 +120,7 @@ $ bash /tmp/ffc_probe.sh /tmp/ffc-artifact   # → curl: (7) … ; rc=1 artifact
 An independent verifier reproduced `fetch_rc=1 artifact_present=no` from this same helper
 (`round5_verifier_probe.py`); the probe artifact itself is not a repo file.
 
-The round-3 chapter's literal source-count commands were over-escaped and returned rc 1 / 0
+The round-3 draft's literal source-count commands were over-escaped and returned rc 1 / 0
 matches (sol B05). The commands above are the corrected expressions, re-run this round.
 
 ## 8. Metrics

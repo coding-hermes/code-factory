@@ -6,10 +6,10 @@
 |---|---|
 | Module name | SCHEDULER |
 | Path | `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/` (Go) |
-| Revision | `1771d3aad61e6c1ce2845e3f1450f88aa73340b3` (scheduler repo HEAD, re-stamped this round) |
-| Language / runtime | Go — `go.mod` declares `go 1.26.0` + `toolchain go1.26.6`; `go env GOVERSION` resolves **go1.26.6** (`GOTOOLCHAIN=auto`). Host `go version` = **go1.26.5** (default PATH `/home/kara/.local/bin/go`); `/usr/bin/go` = go1.26.8, `/snap/bin/go` = go1.27.1 |
+| Revision | `34e448974a49aec23c76ad9189b4cc85140d14c7` (scheduler repo HEAD at round-11 derivation; the only cited-file change since `1771d3aa` is `go.mod`'s toolchain bump — RELEASE-038, commit `9bc9e561` — every cited Go source file is byte-identical; the repo is live and the post-stamp commits are `972f11c8` (chmod +x a `.qa/chaos-probes` script — **not** a board commit) and `0927c552` (a board close, `[ci skip]`), so the earlier "board-only commits past this stamp" wording was imprecise) |
+| Language / runtime | Go — `go.mod` declares `go 1.26.0` + `toolchain go1.26.10`; `go env GOVERSION` resolves **go1.26.10** (`GOTOOLCHAIN=auto`). Host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`); `/usr/bin/go` = **go1.26.9** (`/usr/lib/go-1.26/bin/go`; measured `readlink -f /usr/bin/go` + `/usr/bin/go version`) |
 | Owner lane | coding-hermes-scheduler (control plane) |
-| Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:98-129, 143-208, 230-267`), the binary defaults (`cmd/schedulerd/main.go:95-200`), the auth path (`internal/api/auth.go:187-197`), the API route table (`internal/api/server.go:289-346`) and `config.example.toml` read this round; `tick_process.go`/`packer_select.go`/`namespace_alloc.go` grep-level, not line-by-line; §9 log inventory narrowed to the settlement/batch-dispatch surface (2 of 379 sites) with the uncovered count named as RED |
+| Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:98-129, 143-208, 230-267`), the binary defaults (`cmd/schedulerd/main.go:95-200`), the auth path (`internal/api/auth.go:187-197`), the API route table (`internal/api/server.go:289-370`) and `config.example.toml` read this round; `tick_process.go`/`packer_select.go`/`namespace_alloc.go` grep-level, not line-by-line; §9 log inventory narrowed to the settlement/batch-dispatch surface (2 of 379 sites) with the uncovered count named as RED |
 
 ## 2. Purpose, authority and position
 
@@ -23,7 +23,7 @@ or settled.
 
 **What breaks if it lies.** `dispatchReplyVerdict` (`dispatch_leg.go:713-726`) reads only
 `payload["ok"]` and treats the *absence* of a verdict as success (`:709-712`). A node reply
-carrying `status:"failed"` (the field `node-bus-worker.py:1132` actually sends) and no `ok` is
+carrying `status:"failed"` (the field `node-bus-worker.py:1180` actually sends) and no `ok` is
 scored a success — the control-plane half of the silent-success defect (CF-355).
 
 ## 3. Submodule inventory
@@ -35,14 +35,24 @@ scored a success — the control-plane half of the silent-success defect (CF-355
 | S3 durable state | `scheduler.db` + migration stores | **active** | live store has **30** tables (measured `sqlite3 … '.tables'`); see §5/§3 note for the run-correctness keys |
 | S4 operator surfaces | `cmd/schedulerd`, `scheduler-dispatch`, `scheduler-query`, `queueprobe`, `migrate`, `backfill-commit-signals`, `cooldown-residue` | **operator-invoked** | `ls cmd/` → 7 command dirs; no unit invokes another unit — these are CLI entrypoints an operator (or a foreman step) runs, not a scheduler lane |
 
-**Operator surfaces (B18).** The daemon mounts its HTTP routes in `internal/api/server.go:289-346`
-(auth on mutations via `extractBearerOrHeaderToken`, `internal/api/auth.go:187-197`): read surfaces
-`/api/v1/{health,live,status,config,projects,projects/,hooks,hooks/plan,hooks/{id},lanes/tree,lanes,links,links/,cadence,namespaces,namespaces/,groups,groups/,templates,templates/,ticks,ticks/,queue,openapi.json,metrics}`;
-mutations `/api/v1/{evaluate,pause,resume,events}` plus `events/stream`; observatory
-`/api/v1/observatory{,/stream}` and `/api/v1/gateway-errors`. The recovery commands
-(`reap-sessions`, `verify-board`, `migrate`) are CLI-only flags/subcommands, not HTTP routes.
-Per-route request/response shapes and write-authority readbacks are **not** written this round —
-the route inventory is, the per-route contract is not (a named RED on S4, B18).
+**Operator surfaces (B18, corrected this round — 43 routes, not 33).** The daemon mounts its HTTP
+routes in `internal/api/server.go` (the `Handler()` tree spans `:289-370`, not just `:289-346`):
+`grep -oE 'mux\.HandleFunc\("[^"]+"' internal/api/server.go | sort -u | wc -l` = **43** (measured).
+The full set, all under `/api/v1/`, in mount order: `health`, `live`, `status`, `config`,
+`projects`, `projects/`, `hooks`, `hooks/plan`, `hooks/{id}`, `hooks/reload`, `lanes/tree`,
+`lanes`, `links`, `links/`, `cadence`, `namespaces`, `namespaces/`, `groups`, `groups/`,
+`templates`, `templates/`, `ticks`, `ticks/`, `queue`, `openapi.json`, `metrics`, `evaluate`,
+`pause`, `resume`, `events`, `events/stream`, `observatory`, `observatory/stream`,
+`gateway-errors`, `features`, `features/prune-candidates`, `peers`, `peers/`, `agents`, `agents/`,
+`federation/query`, `federation/catalogue`, `cooldown/residue`. Round-6 named 33; the ten added
+this round are `hooks/reload`, `features`, `features/prune-candidates`, `peers`, `peers/`,
+`agents`, `agents/`, `federation/query`, `federation/catalogue`, `cooldown/residue`. Auth on
+mutations via `extractBearerOrHeaderToken` (`internal/api/auth.go:187-197`); the agent and
+federation surfaces are operator-gated reads, not merely gated mutations (`server.go:356-366`).
+The recovery commands (`reap-sessions`, `verify-board`, `migrate`) are CLI-only flags/subcommands,
+not HTTP routes. Per-route request/response shapes and write-authority readbacks are **not**
+written this round — the route inventory is complete (43), the per-route contract is not (a named
+RED on S4, B17/B18).
 | S5 doctrine | `scheduler-rules.md`, `dispatch-spec.md`, `execution-contracts.md`, `execution-store.md`, `runbook-drain-restart.md`, `hop-liveness-watchdog.md` | **legacy (documentation)** | six doctrine docs present under `docs/`; presence is existence, not invocation — no unit reads them at runtime |
 
 **Ordered admission procedure (B16, written this round).** The composed decision sequence, in
@@ -55,19 +65,27 @@ order of authority:
 2. **Board ownership** (`boardOwnedByLane`, `:177-184`): an explicit `BoardOwnershipOwner`/
    `BoardOwnershipShared` override wins; otherwise the filesystem derivation (`laneOwnsBoard`,
    workdir containment, `:143-184`).
-3. **Board workability** (`tasksAdmissionDue`, `:230-242`): for a tasks-mode lane, admission
-   requires an owned, readable, workable board with `workable > 0`; an empty workdir or
-   non-owned board is a refusal (`:232-239`).
+3. **Board workability** (`tasksAdmissionDue`, `:230-243`): for a tasks-mode lane, a `workable > 0`
+   owned board grants the **cooldown waiver**; an empty workdir (`:231-232`), a non-owned board
+   (`:234-236`), or an unreadable board (`:238-240`) returns false — which falls the lane back to
+   its cooldown pin, **not an outright dispatch refusal** (the fail-open doc at `:222-229`). Round-8
+   called a non-owned/empty board "a refusal" — that is wrong: this predicate decides the waiver,
+   and `packer_select.go` performs the actual gates and cooldown decision on top of it.
 4. **Last-tick failure** (`lastTickStatusFailed`, `:266-267`): a project whose
    `last_tick_status='failed'` stands the tasks-mode waiver down — the next tick paces on the full
    effective cooldown instead of re-admitting (SCHED-GAP-214).
-5. **Usage-pool reservation** (`usage_pool_policy.go:26-63` `reserveUsagePools`): a disabled
-   policy (`!policy.Enabled`) or nil authority returns `(false, nil)` — no reservation, no
-   refusal; a missing/invalid `host_id` or empty pool set returns `ErrUsagePoolMissing`; remote
-   lanes append `host:<id>`, local lanes append `LocalPoolID`; `ObserveOnly` checks without
-   reserving (a `Denied` decision logs and returns `false, nil`); otherwise lease recovery runs,
-   then `ReserveAll` enforces the reservation. Refusal outcomes are `false, <named error>`, not a
-   silent drop.
+5. **Usage-pool reservation** (`usage_pool_policy.go:26-63` `reserveUsagePools`). The boolean/error
+   pair has **distinct outcomes (B14, sol)**: a *disabled* policy (`!policy.Enabled`) returns
+   `(false, nil)` with no reservation and no refusal (enforcement off); a *nil DB authority*
+   returns a **named authority-unavailable error**, not `(false, nil)` (`:26-30`); a missing/invalid
+   `host_id` or empty pool set returns `ErrUsagePoolMissing`; a denied reservation emits a capacity
+   event and returns `(false, nil)` (`:67-74`) — a *capacity denial*, distinguishable from disabled
+   enforcement; remote lanes append `host:<id>`, local lanes append `LocalPoolID`; `ObserveOnly`
+   checks without reserving; otherwise lease recovery runs, then `ReserveAll` enforces the
+   reservation. Round-6 conflated "nil authority" with "disabled enforcement" — they are different
+   outcomes with different caller obligations.
+6. **Board-stasis gate** (`internal/scheduler/packer_select.go:462` `boardStasisBlocks(m.boardStasisGate, …)`, also `:602` `boardStasisBlockedQuiet`): a cooldown-mode **BUILDER** lane whose board file has not changed since its previous completed tick (mtime+size+content-digest fingerprint) is excluded from selection — no cooldown consumed. Tasks-mode and reporter-class lanes are exempt; an **unreadable board fails open** (the lane is not blocked); an operator `ForceEvaluate` bypasses it for one pass. Flag `board-stasis-gate` default **true** (`cmd/schedulerd/main.go:150`, SCHED-GAP-1678).
+7. **Load gate** (`internal/scheduler/load_gate.go:63` `loadGateActive()`; threshold installed by `SetLoadGateThreshold` `:38`, flag `load-gate-threshold` default **0** at `main.go:144`): when enabled and the 1-minute load average is at or above the threshold, new spawns are **deferred, not dropped** — work runs once load falls. Namespaces opt out via `load_gate='off'` (`namespaceLoadGateOff`, `:93`); an unknown/empty namespace or a DB error does **not** opt out (the gate applies), and a missing telemetry reading fails open. 0 = disabled (SCHED-GAP-125).
 
 **Durable-state store keys (B17, written this round).** The 30-table store's run-correctness
 keys and their relationships, at `internal/database/migrations.go`:
@@ -80,11 +98,11 @@ keys and their relationships, at `internal/database/migrations.go`:
 | `execution_attempts` | `:1427` (+`step_gen_idx :1970`) | attempt generation; `step`/`gen` uniqueness (`execution_attempts_step_gen_idx`) |
 | `execution_events` | `:1449` (+`run_idx :1458`) | per-run event sequence (`run_id, event_id`) |
 | `verification_receipts` | `:1460` | per-attempt verification receipt |
-| `execution_projections` | `:1470` | the materialized run state |
+| `execution_projections` | `:1470` | **per-destination projection/sync state** (NOT the materialized run state): `PRIMARY KEY(run_id, projection)`, `projection ∈ {task_router, duckbrain, board, notification}`, storing `state`, `idempotency_key`, `payload_digest`, `remote_id`, `attempts`, `last_error` — delivery state per sink, distinct from `execution_runs`' authoritative lifecycle (sol B16) |
 | `execution_outbox` | `:1479` (+`pending_idx :1489`) | durable-delivery queue, pending by `state, available_at, created_at` |
 
 Relationship: a run (`execution_runs`) has 1:N attempts (`execution_attempts`) and 1:N ordered
-events (`execution_events`); the projection is the materialized run state; the outbox is the
+events (`execution_events`); the projection is the per-destination delivery/sync state; the outbox is the
 durable-delivery queue; the workspace lease is the single-active-writer boundary. The write
 authorities and recovery queries per table are not yet written — the keys, their uniqueness
 guarantees and their relationships are.
@@ -95,7 +113,7 @@ guarantees and their relationships are.
 
 | Dependency | Version constraint | Where | How absence is detected |
 |---|---|---|---|
-| Go toolchain | `go 1.26.0` + `toolchain go1.26.6` (`go.mod`) | build host | `GOTOOLCHAIN=auto` auto-selects 1.26.6 (build PASS); with `GOTOOLCHAIN=local` the 1.26.5 host would be below the toolchain directive |
+| Go toolchain | `go 1.26.0` + `toolchain go1.26.10` (`go.mod`) | build host | `GOTOOLCHAIN=auto` auto-selects 1.26.10 (build PASS); with `GOTOOLCHAIN=local` the 1.26.5 host would be below the toolchain directive |
 | SQLite (scheduler.db) | via `modernc.org/sqlite v1.60.1` | control host | DB open failure |
 
 **4b. Library contracts**
@@ -141,23 +159,42 @@ definitions**, measured with `grep -cE 'flag\.(String|Int|Int64|Bool|Duration|Fl
 | `disable-tick-push` | false (`:172`) | bool | skip the per-tick git push at exit (SCHED-GAP-1594) | true stops tick push-at-exit |
 | `no-exec-fallback` | **true** (`:190`) | bool | disable `exec.Command` fallback when gateway fails | false re-enables the exec fallback |
 
-**Auxiliary / routing / lifecycle flags (name = default; consequence is scoped, not expanded per
-row).** Remaining 32 of the 57: `tls-cert`/`tls-key` `""` (`:102-103`, HTTPS pair), `public-url`
-`""` (`:107`), `test-verify` `0` (`:174`), `verify-board` `""` (`:175`), `session-reap-threshold`
-`DefaultHermesReapStaleAfter` (`:176`), `reap-sessions` false (`:177`), `reap-sessions-apply` false
-(`:178`), `session-db` `DefaultHermesSessionDBPath()` (`:179`), `duckbrain-ns` `"scheduler"`,
-`duckbrain-url` `http://localhost:3000`, `duckbrain-interval` 5m (`:180-182`), `simulate` false,
-`sim-success` 0.85, `sim-idle` 0.0, `sim-count` 0 (`:183-186`), `gateway-url`
-`http://127.0.0.1:8642`, `gateway-key` `$API_SERVER_KEY` (`:187-188`), `model-rates-file`
-`$SCHEDULER_MODEL_RATES_FILE` (`:189`), `foreman-home` `$HOME/.hermes/foreman` (`:191`),
-`sim-setup` false, `sim-ticks` 10 (`:192-193`), `config` `""` (`:194`), `failure-window` 100,
-`auto-disable-failure-rate` 0, `auto-disable-window` 100, `auto-disable-min-ticks` 50 (`:195-198`),
-`groups-file` `""`, `templates-file` `""` (`:199-200`), plus `log-file`/`show-config`/`schema`/
-`version` (after `:200`). These are simulation (`sim-*`), verification (`test-verify`,
-`verify-board`), DuckBrain sync, routing/pricing, or auto-disable controls — none is an
-admission/execution-settlement control, so their consequence is scoped to their own subsystem. The
-57-flag boundary is the quoted grep above; the consequence column is **not expanded per row** for
-these, which is a named RED on the register (deepseek #2 / sol B19), not a hidden gap.
+**Auxiliary / routing / lifecycle flags (default + consequence, expanded this round — sol B15).** The remaining 33 of the 57, with the consequence column filled per row from the flag help text at `cmd/schedulerd/main.go:102-208`:
+
+| Setting | Default | Governs | Consequence if changed |
+|---|---|---|---|
+| `tls-cert` / `tls-key` | `""` (`:102-103`) | HTTPS listener pair | both set → TLS on; one without the other → no usable cert |
+| `public-url` | `""` (`:107`) | advertised daemon URL | affects self-links in status/dashboards |
+| `test-verify` | 0 (`:174`) | verification self-check | non-zero runs a verification pass at boot |
+| `verify-board` | `""` (`:175`) | board-consistency self-check | names a board to verify at boot |
+| `session-reap-threshold` | `DefaultHermesReapStaleAfter` (`:176`) | stale-session age floor for `--reap-sessions` | a lower threshold reaps fresher sessions |
+| `reap-sessions` | false (`:177`) | one reap pass against `state.db`, then exit | **dry-run by default** — writes nothing without `--reap-sessions-apply` |
+| `reap-sessions-apply` | false (`:178`) | apply the reap pass (`ended_at` + `end_reason='reaped'`) | **the mutation switch** — true closes selected sessions; without it the pass is a dry-run (SCHED-GAP-089) |
+| `session-db` | `DefaultHermesSessionDBPath()` (`:179`) | which `state.db` `--reap-sessions` reads | a wrong path reaps (or fails to find) the wrong store |
+| `duckbrain-ns` / `duckbrain-url` / `duckbrain-interval` | `"scheduler"` / `http://localhost:3000` / `5m` (`:180-182`) | DuckBrain sync target + cadence | a wrong URL/interval stops the sync spool |
+| `simulate` | false (`:183`) | **dry-run mode — no real spawning** | true suppresses real spawns; the sim-* knobs only take effect with it |
+| `sim-success` / `sim-idle` / `sim-count` | 0.85 / 0.0 / 0 (`:184-186`) | simulated outcomes | only meaningful under `--simulate`; `sim-count N` generates N synthetic ticks then exits |
+| `gateway-url` / `gateway-key` | `http://127.0.0.1:8642` / `$API_SERVER_KEY` (`:187-188`) | the gateway endpoint + key | a wrong URL/key makes every foreman turn fail. An empty `gateway-url` does **not** alone authorize `exec.Command` fallback: the fallback requires `no-exec-fallback=false` (default **true**, `:190`); with the default, a nil gateway client **DEFERS the tick** (transport deferral, `spawn.go:1717-1754` → `transientGatewayDeferral`, not a lane failure) rather than exec-spawning — the two controls interact (sol B17) |
+| `model-rates-file` | `$SCHEDULER_MODEL_RATES_FILE` (`:189`) | price-sticker JSON applied over builtin rates | a wrong sticker file re-prices the cost model (ADV-R09/G8) |
+| `foreman-home` | `$HOME/.hermes/foreman` (`:191`) | `HERMES_HOME` for foreman sessions | a wrong path points foreman at the wrong state |
+| `sim-setup` / `sim-ticks` | false / 10 (`:192-193`) | 13-project dry-run fixture | `sim-setup` creates the fixture; `sim-ticks` sets its tick count |
+| `config` | `""` (`:194`) | TOML fleet config path | a wrong path loads no (or the wrong) fleet config |
+| `failure-window` | 100 (`:195`) | per-project tick window for the `/api/v1/status` failure-rate breakdown | a larger window smooths the breakdown |
+| `auto-disable-failure-rate` | **0 = off** (`:196`) | per-project failure-rate threshold (0.0–1.0) for auto-disable | a non-zero threshold arms `internal/scheduler/alert_escalation.go:462-548` to write `projects.enabled=0` on sustained failure — an **execution-settlement** consequence, not simulation (SCHED-GAP-018) |
+| `auto-disable-window` | 100 (`:197`) | ticks over which the auto-disable rate is computed | a shorter window disables faster on noise |
+| `auto-disable-min-ticks` | 50 (`:198`) | minimum ticks before auto-disable may fire | too low disables projects on thin evidence |
+| `groups-file` / `templates-file` | `""` (`:199-200`) | deploy group/template JSONL paths | empty = default `<db dir>` paths; a wrong path reads the wrong deploy blocks |
+| `log-file` | `defaultLogPath()` (`:205`) | structured tick log destination | empty disables; a wrong path loses the tick journal |
+| `show-config` | false (`:206`) | print resolved config (CLI + env) as TOML, exit | read-only introspection switch |
+| `schema` | false (`:207`) | output JSON Schema for `schedulerd.toml`, exit | read-only introspection switch |
+| `version` | false (`:208`) | print version/build info, exit | read-only introspection switch |
+
+The consequence column is now filled for all 33 (from the flag help text at `main.go:102-208`).
+`--simulate` (`:183`) suppresses real spawning and the `--auto-disable-*` trio (`:196-198`) drives
+a `projects.enabled=0` write — both are admission/execution controls, which round-6's "none is an
+admission/execution-settlement control" exclusion denied (**false**). The residual RED is that the
+*reader* and *precedence* of each flag (env override → TOML → flag) are documented for the group
+but not re-verified per flag this round.
 
 **Load correction (F9-3, re-derived this round).** Round-4 claimed the `[daemon]` / `[gateway]` /
 `[duckbrain]` root sections are "not loaded until FEAT-005 wires `LoadConfig`". **That is FALSE.**
@@ -170,20 +207,31 @@ statement about the daemon.
 
 ## 6. Contracts in and out
 
+Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Local ids are
+retired; each row carries the CT id its peer chapter cites, so two ends can be matched.
+
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| M9-C1 | owner | in | **operator config** — `fleet.toml` + `scheduler.db` project rows (lane enabled/cadence/weight/pin); the load path is `config.LoadRootConfig` (`internal/config/loader.go`, called at `main.go:640,673,762,854,870,968,995,1023,1054,1309`) | `internal/scheduler/admission_mode.go:112` `admissionModeForProject` (reads the lane's admission mode from the DB) | **UNVERIFIED** — the consumer is nameable; the producer is operator config, not a function (N5: root config *is* loaded through `LoadRootConfig`; only the example file's NOTE is stale) |
-| M9-C2 | crier | out | `internal/bus/dispatch.go:202` `payload()` emits `text_b64` (base64), field **`board`** (not `board_row`) | **node** `scripts/node-bus-worker.py:986` `process` reads `text` (not `text_b64`); **dispatcher** `dispatcher.py:142-150` decodes `text_b64` — the two consumers disagree | **broken** — CF-354: node reads `text`, scheduler sends `text_b64` |
-| M9-C3 | crier | in | completion reply | `dispatch_leg.go:713` `dispatchReplyVerdict` reads only `payload["ok"]` | **broken** — CF-355: node sends `status`, scheduler reads `ok` |
+| CT-01 | owner | in | **operator config (boundary)** — a human writes `fleet.toml` + `scheduler.db` project rows (lane enabled/cadence/weight/pin); there is no producer function (the load path `config.LoadRootConfig`, called at `main.go:640,673,762,854,870,968,995,1023,1054,1309`, is the consumer's loader, not a producer) | `internal/scheduler/admission_mode.go:112` `admissionModeForProject` (reads the lane's admission mode from the DB) | **UNVERIFIED (boundary)** — the consumer is nameable; the producer is a human writing config, not a function (round-9 re-grade: CT-01 is a boundary contract, not internal) |
+| CT-02 | crier | out | `internal/bus/dispatch.go:202` `payload()` emits `text_b64` (base64), field **`board`** (not `board_row`) | crier `internal/registry/handler.go:990` `HandleDeliver` | **works** — CF-354 fixed and closed (commit `1f1c0fe`); crier delivers the envelope verbatim; the former `text`/`text_b64` mismatch was node-side consumption |
+| CT-06 | crier | in | `dispatcher.py:500-508` builds the completion reply `{in_reply_to, agent, ok, …}`; transported via crier `internal/registry/handler.go:990` `HandleDeliver` into the scheduler's inbox | `internal/scheduler/dispatch_leg.go:713` `dispatchReplyVerdict` reads only `payload["ok"]` | **works (dispatcher leg)** — the dispatcher always sends `ok` (`dispatcher.py:501`), the exact field `dispatchReplyVerdict` reads. CF-355 (the node's `status` reply scoring success-on-failure) is the **node-reply** leg, carried at CT-04, not this producer |
+| CT-05 | foreman | in | `scripts/load_lane_config.py:31-37` (reads `prompts/*.md` → `UPDATE projects SET prompt=?, prompt_mode='append'`) | `internal/scheduler/spawn.go:1244` `buildForemanPrompt` (namespace default → project replace/append → dynamic footer) | **UNVERIFIED** — both ends are in-repo (internal, round-9 grok B3: round-8 labelled the producer "external"); the OUTLINE VIII.1 "3 of 11 prompt files disagree" breakage is **unmeasured** (no command establishes which three files disagree or on what) |
+| CT-15 | foreman | out | **external** — the foreman lane's decision/finding/goal writes (out of scope) | **external** — the duckbrain service (out of scope) | **UNVERIFIED (boundary)** — neither side has an in-repo `file:function`, and the wire was not measured this round; an outline "works" annotation is not implementation evidence (sol B03) |
+
+CT-01 and CT-15 are boundary contracts: the owner is a human and duckbrain is a service outside
+the five covered systems, so the covered side is named and the far side is marked external. The
+state for a boundary contract with no measured wire is **UNVERIFIED**. CT-05 is **internal** (both
+ends are in-repo files), so its row names both `file:function`; its state is UNVERIFIED because the
+"3 of 11 disagree" breakage was never measured, not because a side is external.
 
 ## 7. Verification
 
 | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|
-| build | `go build ./...` (scheduler repo) | exit 0 | 2026-11-06, rev `1771d3aa` | **PASS** (rc 0) |
+| build | `go build ./...` (scheduler repo) | exit 0 | 2026-11-06, rev `34e44897` | **PASS** (rc 0) |
 | durable state | `sqlite3 ~/.hermes/coding-hermes/scheduler.db '.tables'` | tables listed | 2026-11-06 | **PASS** — 30 tables; no `verdicts` table |
-| go test (clean env) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./...` | green | 2026-11-06, rev `1771d3aa` | **PASS (rc 0)** — all 25 packages ok; `internal/scheduler` ran 158.3s (not cached) and passed |
-| go test (three env-sensitive tests) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -run 'TestSCHEDGAP091_DrainTimeoutStampsOrphan|TestOperatorRestartApprovalEnv|TestAbortInFlightTicks_OperatorApprovedStamp' -count=1` | green | 2026-11-06, rev `1771d3aa` | **PASS (rc 0)** — 0.409s |
+| go test (clean env) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./...` | green | 2026-11-06, rev `34e44897` | **PASS (rc 0)** — all 25 packages ok; `internal/scheduler` ran 275.7s (not cached) and passed |
+| go test (three env-sensitive tests) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -run 'TestSCHEDGAP091_DrainTimeoutStampsOrphan|TestOperatorRestartApprovalEnv|TestAbortInFlightTicks_OperatorApprovedStamp' -count=1` | green | 2026-11-06, rev `34e44897` | **PASS (rc 0)** — 0.409s |
 
 **Env-contamination correction (F9-6).** Round-4 reported `go test ./...` FAIL with
 `SCHED-GAP-1726 goroutine census: 1 goroutine(s) still parked in evalDrain at suite exit`. That
@@ -222,7 +270,7 @@ the named RED on this field — not a "sample" claimed as complete.
 | Failure | Presents as | Distinguished from | Recovery |
 |---|---|---|---|
 | Silent success | pass for a `status:"failed"` reply | a real pass | **OPEN** — CF-355 (`dispatch_leg.go:713-726`) |
-| `text_b64` vs `text` mismatch | node cannot execute the dispatch | a malformed envelope | **OPEN** — CF-354 |
+| `text_b64` undecodable | the node refuses the dispatch (`node-bus-worker.py:1022-1034`) | a malformed envelope | **resolved** — CF-354 (complete): the node decodes `text_b64` first |
 | Deadline expiry | `DispatchStateExpired`, `TickTimeout` (`:291-314`) | a failed reply (`TickFailed`, `:316-325`) | the reply is PARTIAL, named `dispatch_deadline` |
 | No authoritative lane inventory | 8 vs 16 vs 1 lanes across three modules | a single census | **OPEN** — CF-335 |
 | Env-contaminated test | the operator-restart tests FAIL only when `SCHEDULER_OPERATOR_RESTART_APPROVED=1` is ambient | a code break | unset the var (`env -u … go test`); F9-6 |
@@ -244,7 +292,7 @@ the named RED on this field — not a "sample" claimed as complete.
 ## 12. Cross-references
 
 - F11 SCHEDULING ADMISSION is the primary flow; F1 DISPATCH AND SETTLEMENT is its terminal half.
-- M10 CRIER is the transport (M9-C2/C3).
+- M10 CRIER is the transport (CT-02/CT-04 on its side; CT-03/CT-06 are the node/scheduler ends).
 - M2 DISPATCH (node side) and M11 DISPATCHER are the two inbox consumers.
 - M4 BOARD rows gate admission (S1); see M4 §12 for the M9-only ownership of that gate.
 
@@ -259,7 +307,7 @@ the named RED on this field — not a "sample" claimed as complete.
   (PASS, 25/25); the three env-sensitive tests (PASS, 0.409s); `grep -n 'LoadRootConfig' cmd/schedulerd/main.go` (10 sites);
   `grep -rn "log.Printf" internal/scheduler/*.go | wc -l` (379); `grep -cE 'flag\.(String|Int|Int64|Bool|Duration|Float64)' cmd/schedulerd/main.go` (57);
   `sqlite3 … '.tables'` (30 tables).
-- Rev re-stamped: `1771d3aa`.
+- Rev re-stamped: `34e44897` (the go.mod toolchain bump to go1.26.10, RELEASE-038 `9bc9e561`, is the one cited-file change since `1771d3aa`; every cited Go source file is byte-identical).
 - Board rows: CF-334, CF-335, CF-337, CF-343, CF-346, CF-353, CF-354, CF-355.
 - **Findings:**
   - **F9-1** (carried) — settlement exists (`dispatch_leg.go:260-336`); the real defect is CF-355.
@@ -272,4 +320,4 @@ the named RED on this field — not a "sample" claimed as complete.
   - **F9-7** (new, B16/B17) — the ordered admission procedure and the run-correctness store keys
     are written this round (see §3 note).
 
-## RED field count: 5 (§9 log inventory 2 of 379 sites — the remaining 377 are the named RED, not a "sample"; §3 S1 grep-level (`tick_process`/`packer_select`/`namespace_alloc` not line-by-line); §5 the auxiliary-flag consequence column not expanded per row; S4 per-route contract not written — B18; S3 write authorities/recovery queries not written — B17)
+## RED field count: 5 (§9 log inventory 2 of 379 sites — the remaining 377 are the named RED, not a "sample"; §3 S1 grep-level (`tick_process`/`packer_select`/`namespace_alloc` not line-by-line); §5 the auxiliary-flag reader/precedence not re-verified per flag (the consequence column is now filled); S4 per-route contract not written — B18; S3 write authorities/recovery queries not written — B17)

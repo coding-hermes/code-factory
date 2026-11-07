@@ -1,0 +1,96 @@
+⚠️  Primary auth failed — switching to fallback: fireworks / accounts/fireworks/models/deepseek-v4p1-flash-1017
+VERDICT: FAIL
+BLOCKING: 9
+NON-BLOCKING: 4
+
+FINDINGS
+
+B1. FALSE CLAIM — document scope (README I.1–I.5, II.1–II.5; OUTLINE F1–F5)
+Claim: "I.1 … **RENDERED** (sheet 2)", "II.1 DISPATCH … **RENDERED** (sheet 5)" and OUTLINE "F1 DISPATCH AND SETTLEMENT … *(RENDERED)*" … "F5 LANDING *(RENDERED)*".
+Evidence: no rendered artifact exists in the tree — `find /home/kara/code-factory -name '*handbook*.pdf'` → 0 results; `find docs/handbook -maxdepth 2 -name '*.pdf' -o -name '*.png'` → 0 results. The renderer's input root is gone: `ls docs/master` → "No such file or directory", and `scripts/gen_nasa_handbook.py:253-260` globs `docs/master/[0-9][0-9]-*.md` and returns 1 with `no modules found` on an empty selection — M6 §11 says the same thing. So five primary flows and all of Part I are asserted as delivered artifacts that cannot be produced and are not present.
+Fix: delete every "RENDERED" status (Part I and II.1–II.5) or commit the actual sheets with a path; F1–F5 must be marked MISSING until a flow chapter exists, because every chapter's "F1 is the primary flow this module owns" (M0 §12, M2 §12, M3 §12, M11 §12) currently points at nothing.
+
+B2. CONTRADICTION — contract register, all parts
+Claim: OUTLINE:204-206 "**5 of 18** internal contracts name both `file:function` (CT-02, CT-03, CT-04, CT-05, CT-06); the remaining 14 are boundary contracts".
+Evidence: 5 + 14 = 19 of 18. The spine's register is 18 CANON − 13 BOUNDARY = 5 internal (`scripts/handbook_spine.py:34-84`; `grep -c '^    "CT-'` → 31 = 18 + 13). M9:206 states "CT-05 is **internal**". README's prose states the opposite split — "Four contracts (CT-02, CT-03, CT-04, CT-06) are *internal* … Fourteen (CT-01, CT-05, CT-07..CT-18) are *boundary*" — while its own table two paragraphs later says "5 of 18 internal … 14 boundary contracts". M6:98 repeats "the 14 boundary contracts".
+Fix: adopt 5 internal / 13 boundary (CT-01, CT-07…CT-18 boundary; CT-05 internal) in OUTLINE Part IV, both README passages, and M6 §5; add a spine assertion that reads the outline's stated split and compares it to `len(CANON) - len(BOUNDARY)`.
+
+B3. CONTRADICTION — submodule count
+Claim: OUTLINE:274 "Submodule chapters … 47"; README I.4 "13 modules, 47 submodules".
+Evidence: the chapters define 48 submodule rows — M0 1, M1 5, M2 3, M3 3, M4 2, M5 5, M6 **9**, M7 1, M8 2, M9 5, M10 4, M11 4, M12 4. M6's §3 table carries S1–S9 because M6 §5 added "**Spine gate (S9, added this round)**". The spine cannot see this: `handbook_spine.py:308` sets `"submodule": None`, and the count loop skips a None target (line 318).
+Fix: state 48 everywhere, add M6.S9 to the OUTLINE's M6 list, and make the spine parse `^| S<n>` rows inside §3 instead of hardcoding.
+
+B4. FALSE CLAIM — M4, §1 Status and §7
+Claim: "**DRIFT (board copies)** — `board_drift` `RESULT: DRIFT (4 failed)` with 1 divergent id (CF-270) against `origin/main=4dc0ef0`"; §7 "357 vs 357 rows, **1 divergent id: CF-270**".
+Evidence, measured now: `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` → every row PASS, "board rows — 357 vs 357 rows; 0 divergent ids: none", "HEAD ancestry … origin/main=8ae4f823…", `RESULT: OK`. `wc -l .coding-hermes/board/events.jsonl` → **519**, not the 518 the chapter stamps in §1, §7 and §13. The divergence was reconciled after the stamp (47d68b4), and the chapter's own instruction — "must be re-run after that merge" — was not executed before delivery.
+Fix: re-run board_drift and boardctl validate at the delivery revision, re-stamp the Status row, and if the measurement is deliberately as-of 47d68b4, say "as-of" in the Status cell rather than presenting it as current.
+
+B5. FALSE CLAIM — M6, §7
+Claim: "patch chain … **PASS** — `4 stages, 3 patches, f393a681…`".
+Evidence: `bash scripts/verify-patch.sh` now prints "5 stages, 4 patches, 57432007b324f382…" and `patches/fleet-ops-chain.sha256:13` carries the `deploy-doc` stage. The 4/3 figure was exact at 47d68b4 (chain file had 4 stage lines) — the row is stamp-stale, not invented.
+Fix: re-run and re-stamp; add the stage count to the row's date so a reader can date the reading.
+
+B6. FALSE CLAIM — M9, §1
+Claim: "`go.mod` declares `go 1.26.0` + `toolchain go1.26.6`; `go env GOVERSION` resolves **go1.26.6**".
+Evidence: `go.mod` today declares `toolchain go1.26.10` (commit 9bc9e561, "build: bump go.mod toolchain floor to go1.26.10 (RELEASE-038)", 20:10 today); `go env GOVERSION` → `go1.26.10`. At the stamped 1771d3aa the claim is exact (`git show 1771d3aa:go.mod` → `toolchain go1.26.6`).
+Fix: re-stamp §1 and the §4a runtime row; the pinned-version assertion is the one line an operator will copy into a build.
+
+B7. CONTRADICTION — M3.S1 (secondary instance M1.S1)
+Claim: "S1 clone and track freshness | `clone_lane.py`, `repo_freshness.py` | **active** | `clone_lane.py:129` `main()` is the entrypoint (**operator-invoked; no in-repo caller**)".
+Evidence: the row's own evidence satisfies the OUTLINE's *optional* rule (OUTLINE:109-113) and not its *active* rule. `grep -rn 'clone_lane' scripts/` matches only the file itself and tests. Same defect in M1.S1: the row is classified **active** on the strength of `disk_floor.py` → `project-node.sh:173`, while the other unit in the row, `bunker-server-install.sh`, has no invoker at all (`grep -rn 'bunker-server-install' scripts/ tests/` → its own docstring plus `tests/selftest.sh:1754`; a test arm is not a lane, cron, timer or unit).
+Fix: split the rows per unit and label: `clone_lane.py` optional, `repo_freshness.py` unproven until its caller is measured; `disk_floor.py` active, `bunker-server-install.sh` optional.
+
+B8. OMISSION — M9, §3 ordered admission procedure
+Claim: "**Ordered admission procedure** … The composed decision sequence, in order of authority:" — five steps, ending at usage-pool reservation.
+Evidence: the code applies two further admission gates that the sequence never mentions, both registered in M9's own §5 as admission controls: board-stasis (`internal/scheduler/packer_select.go:456-469` `boardStasisBlocks(m.boardStasisGate, …)` and `:595-602` `boardStasisBlockedQuiet`; `cmd/schedulerd/main.go:150` "exclude a cooldown-mode BUILDER lane … while its board file has NOT changed") and the load gate (`main.go:144` "Defer new spawns while the 1-minute load average is at or above this value"). A reader implementing admission from §3 ships without either gate, and §5 and §3 disagree about what admission is.
+Fix: add both gates as numbered steps with their predicates, their position inside `packer_select`, and what each does on unreadable input (stasis fails open; load defers rather than drops).
+
+B9. OMISSION — log inventories presented as verbatim, M1/M2/M3/M5/M7 §9
+Claim: each chapter heads §9 "Log lines (verbatim)" and lists a handful of rows; MASTER-DOC-SCHEMA §6 requires "Every operator-visible line, verbatim, with its level and the condition that triggers it".
+Evidence (site counts measured now): M1 lists 5 rows against 55 `ok|bad|note|warn|say` sites in `bunker-provision.sh` alone plus 21 in `verify-node.sh`; M2 lists 4 against 70 `ok()/bad()/warn()/note()` calls in `node-bus-worker.py`; M3 lists 5 against 35 in `land-node-branch.sh`; M5 lists 4 against six installers plus `harness-vars.sh`; M7 lists 2 against three scripts. None states a scope, and none counts the gap in its RED total (M1 = 3, M2 = 2, M3 = 2, M5 = 3, M7 = 3). Contrast M9 §9 ("2 of 379 … the named RED"), M11 §9 (23/23 call sites, verified complete), M12 §9 (4/4 print sites) and M0 §9 (7/7), which do this correctly.
+Fix: add the measured site count and scope sentence to each §9 (as M9 does), and add §9 to each chapter's RED count until the inventory is complete.
+
+N1. UNVERIFIED — M1, §11 (stamp-scoped locators)
+Claim: "the checkout unmeasurable case prints `warn` at `:150` … The seed leg … does call `unverified()` at `:194-198`" and "`:205-214` precedence".
+Evidence: at the delivered HEAD `scripts/verify-node.sh` is 241 lines — `:150` and `:194-198` are comments, the `warn` is `:177`, `unverified()` is `:225`, and the FAIL/UNVERIFIED/PASS precedence block is `:232-241`; `agent_alive` is `:75-76`, not `:50-54`/`:53`. At 47d68b4 (214 lines) all four citations are exact, so the claim is true and the locator is stale.
+Fix: put the revision on each verification row, or cite `git show 47d68b4:scripts/verify-node.sh:150`.
+
+N2. CONTRADICTION — chapter heading structure
+Claim: OUTLINE:99-131 "The corrected thirteen" headings begin "1. Purpose, authority and operational position · 2. Consequences of absence, and of false report".
+Evidence: all 13 chapters begin "1. Identity · 2. Purpose, authority and position", folding the absence/false-report content into §2 (e.g. M4:14-27). This follows MASTER-DOC-SCHEMA §1 ("Identity" first), so the two governing documents disagree and neither was amended; no content is lost, which is why this is non-blocking.
+Fix: amend OUTLINE Part III to the delivered order (Identity 1, Purpose-and-consequences 2) and say the schema wins.
+
+N3. FALSE CLAIM — M6, §5 (gate coverage)
+Claim: the spine "Enforces: … (5) count claims".
+Evidence: `handbook_spine.py:308` sets `"submodule": None`, so no submodule count is ever compared; `COUNT_CLAIM` (line 88) requires the noun immediately after the number, so "14 boundary contracts" cannot match; the outline and README are never read. That is precisely how B2 and B3 passed a gate that reports `findings=0`.
+Fix: narrow the sentence in M6 §5 to the five checks it actually performs, or extend the checker to submodule counts, adjective-tolerant count phrases, and the outline/README as inputs.
+
+N4. PADDING — revision archaeology, all chapters
+Claim: the chapters interleave prior-round corrections with the claims: M9 §5 "Round-4 claimed … **That is FALSE.**", M3 §7 "Note (B04 / grok 9). Round-3 cited …", M2 §3 "Round-4's 'no production caller' was false", M5 §2 "Round-5's … was **false**".
+Evidence: these sentences identify a previous seat, not a behaviour of the system; an operator cannot act on them, and they sit inside the fields that must be acted on. The OUTLINE already reserves the home for them: Appendix D "Change log and supersession record" (OUTLINE:263-264).
+Fix: move the correction history to Appendix D and leave one line per chapter pointing at it.
+
+DEFECT CLASSES
+stale-stamp evidence (claims true at stamped rev, false at delivered HEAD); unregistered count drift; internal/boundary register disagreement across document parts; classification-vs-own-rule drift; scope-claim inflation (RENDERED artifacts, "verbatim" inventories); gate blind spot reported as coverage; omission of live admission gates from the composed sequence; process archaeology as prose.
+
+CHAPTER SCORECARD
+M0 — PARTIAL. Every helper locator verified against `lib.sh` (5-9, 13, 19-42, 45, 48-57, 60-64, 67-70, 75-78), both greps reproduce exactly (11 / 17), 7/7 log lines. Held back only by the panel's own rule that a RED metrics field keeps a chapter PARTIAL.
+M1 — PARTIAL. Substance is sound (bunker-provision.sh:181/:214/:233, disk_floor.py:36-37, :68-71 all exact), but S1 conflates an active unit with an optional one (B7), §9 is 5 rows of 76 sites (B9), and four §11 locators no longer resolve at HEAD (N1).
+M2 — PARTIAL. Best-verified node chapter: `directive_text:977`, `process:1007`, reply `:1176-1192`, `deliver:1208`, `dispatch_wall:1200-1205`, `configure_family.py:24-28,17,149` all exact; 0-match greps reproduce. Held by §9 4-of-70 (B9) and metrics RED.
+M3 — PARTIAL. Landing citations are exact (`:38,55-59,74-75,192,206,244,278-300,304,307`) and the shipped arm reproduces (`cf213` :2463-2729). S1 is misclassified against its own evidence (B7) and §9 lists 5 of 35 lander sites (B9).
+M4 — PARTIAL. Store, verbs and lock classifier are accurately documented (`board_lock.py:149-158`, ABSENT/HELD/RESIDUE), but its Status asserts DRIFT on a board that is now in byte parity (B4).
+M5 — PARTIAL. Adapter registers verified to the line (`install-hermes.sh:23,24,26`, `install-codex.sh:47,49,51,56,57,60`, `install-claude-code.sh:36,39,40,43`, `harness-vars.sh:203-204`, 28 unit tests). Held by §9 4 rows and self-declared unread bodies.
+M6 — PARTIAL. Gate readings reproduce exactly (`44 module(s): 37 VERIFIED, 50 error(s)`, exit 1; spine 0). Holds the wrong boundary count (B2), a stale patch-chain row (B5), and a gate-coverage claim the checker cannot support (N3).
+M7 — PARTIAL. Lifecycle controls are located correctly (`github-app-refresh.sh:24,28-30,55-61,103-135`; token.py mode check 346-351). Mint unrun (declared), §9 is 2 rows (B9).
+M8 — PARTIAL. Both units read in full and both readings reproduce (`9 tests OK`; `15 gitleaks claim(s)`); only the RED metrics field holds it.
+M9 — PARTIAL. The strongest control-plane chapter on the wire side (43 routes reproduce exactly, 57 flags, 379 log sites, 30 tables, `dispatchReplyVerdict:713-726`), but its composed admission sequence omits two live gates (B8) and its toolchain stamp is stale (B6).
+M10 — PARTIAL. Handler surfaces, 91 test files, 3 slog sites and 67 metric strings all reproduce; the 1895-line body and the guard log surface are declared unread, which is honest and is why it is PARTIAL.
+M11 — PARTIAL. Closest to WRITTEN: 23/23 log call sites, every setting locator exact, py_compile and the process-group claim both check out, and it withdraws the descendant-kill guarantee on its own evidence. Held by metrics RED and the asserting-free live tests it names.
+M12 — PARTIAL. Content sha256 reproduces byte-for-byte, 401 admission reproduced live (401, unit `active`), both sinks corrected to the real paths. Held by the unframed SSE stream (F12-7) and the config-wired, unproven node client.
+No chapter is SKELETON; no chapter reaches WRITTEN on its own RED ledger, and none may be called written while B1–B9 stand.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-0f5106db9870121343a8a61da831bc1d20b91a6a76c8289876ac5ad7a099e09c
+
+EXIT=0

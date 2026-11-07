@@ -5,11 +5,11 @@
 | Field | Value |
 |---|---|
 | Module name | DOCUMENTATION |
-| Path | `/home/kara/code-factory/scripts/` — `master_doc_skeleton.py`, `master_doc_fill.py`, `master_doc_check.py`, `master_doc_panel.py`, `gen_nasa_handbook.py`, `gen_system_views.py`, `sheet_style.py`, `extract_owner_decisions.py`, `gen_unit_map.py`, `verify-patch.sh`, `panel_loop.py`, `ownership.py` |
-| Revision | `943ef984dc093e5780605ac6e54cd043122126ef` (code-factory HEAD, 2026-11-06) |
+| Path | `/home/kara/code-factory/scripts/` — `master_doc_skeleton.py`, `master_doc_fill.py`, `master_doc_check.py`, `master_doc_panel.py`, `gen_nasa_handbook.py`, `gen_system_views.py`, `sheet_style.py`, `extract_owner_decisions.py`, `gen_unit_map.py`, `verify-patch.sh`, `panel_loop.py`, `ownership.py`, `handbook_spine.py` |
+| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `patches/` and `scripts/verify-patch.sh`'s chain changed in `47d68b4..08a2c8a` — the `deploy-doc` stage landed) |
 | Language / runtime | Python 3.14.9 (measured) |
 | Owner lane | code-factory (control host) |
-| Status | **UNVERIFIED** — `master_doc_check.py` (268 lines) read in full and its FAIL reproduced; the rest of the pipeline (`master_doc_fill.py`, `gen_nasa_handbook.py`, `master_doc_panel.py`, `gen_unit_map.py`, …) not read line-by-line; the gate reads `MASTER-DOC: FAIL`. **The fill/render/panel pipeline is UNBUILDABLE against these M-numbered chapters** (B13): `master_doc_check.py:188`, `gen_nasa_handbook.py:253-260` and `master_doc_fill.py:422` all select `[0-9][0-9]-*.md`, which does not match `M0-…-*.md`, so no chapter-aware path exists from source selection to delivered artifact |
+| Status | **UNVERIFIED** — `master_doc_check.py` (268 lines) read in full and its FAIL reproduced; the rest of the pipeline (`master_doc_fill.py`, `gen_nasa_handbook.py`, `master_doc_panel.py`, `gen_unit_map.py`, …) not read line-by-line; the gate reads `MASTER-DOC: FAIL`. **The legacy fill/render/panel pipeline is UNBUILDABLE against these M-numbered chapters** (B13): `master_doc_check.py:188`, `gen_nasa_handbook.py:253-260` and `master_doc_fill.py:422` all select `[0-9][0-9]-*.md`, which does not match `M0-…-*.md`, so the legacy pipeline cannot select or deliver these chapters. **The chapter-aware gate is `handbook_spine.py` (S9)**, which *does* select `M*.md` and exits 1 on any finding (`python3 scripts/handbook_spine.py` → `chapters=13 canonical contracts=18 findings=0`, exit 0); the legacy fill/render/check pipeline is retired for the M-numbered handbook, and the render-to-owner-artifact leg remains missing (CT-18 UNVERIFIED, §6) |
 
 ## 2. Purpose, authority and position
 
@@ -18,8 +18,11 @@ The system's description of itself, and the gate that checks the *structure* of 
 **reports the document's declared status — it does not recompute it** (F6-2, corrected this round).
 `panel_loop.py` is the loop this handbook chapter is a product of.
 
-**What breaks if this module is absent.** The system cannot describe itself, and no one can check
-the description.
+**What breaks if this module is absent.** The gate that grades the description is gone: a document
+can lose its structure, cite lines that no longer exist, or stamp VERIFIED without locators, and
+nothing refuses it. Concretely, without `master_doc_check.py` the empty-selection PASS returns — a
+root with zero `NN-*.md` modules printing a vacuous `MASTER-DOC: PASS` — which is the exact failure
+the gate now names at `:191-209` instead of silently passing.
 
 **What breaks if it lies.** Two distinct failure modes:
 - The PASS-over-zero failure (fixed): `DEFAULT_ROOTS` (`master_doc_check.py:52`) falls back to
@@ -28,7 +31,7 @@ the description.
   `master_doc_check.py:128-138` reads the document's *supplied* status and imposes citation
   requirements (`VERIFIED` needs >=3 locators and at least one cited FACT-nn); `:214-216` retains
   and counts that supplied status. It does **not** verify that cited code supports the prose. The
-  live result — `44 module(s): 37 VERIFIED, 50 error(s)`, `MASTER-DOC: FAIL` — shows 37 modules
+  live result — `44 module(s): 37 VERIFIED, 50 error(s)`, `MASTER-DOC: FAIL` — shows 37 unit sections
   stamped VERIFIED alongside 50 errors: the stamp is the document's own claim, re-emitted, not a
   re-derivation of truth.
 
@@ -44,6 +47,7 @@ the description.
 | S6 corpus | `extract_owner_decisions.py` | **operator-invoked** | no in-repo caller (grep empty) |
 | S7 unit-map | `gen_unit_map.py` | **operator-invoked** | `main()`; no in-repo caller |
 | S8 patch-chain drift | `verify-patch.sh` | **operator-invoked** | no in-repo caller, no cron/timer; run manually this round (VERIFY-PATCH: PASS) |
+| S9 spine gate | `handbook_spine.py` | **operator-invoked** (run manually each round) | `python3 scripts/handbook_spine.py` — the cross-chapter consistency gate that *does* select `M*.md` chapters (the legacy `[0-9][0-9]-*.md` globs in the fill/render/check pipeline do not). What it actually enforces (verified against `handbook_spine.py:178-336`): (1) each canonical id CT-01..CT-18 is **cited** — it does **not** reject an unknown CT id (sol B01: an injected CT-99 passes rc 0); (2) cross-chapter producer/consumer **function-token** and **state-word** agreement for the 5 internal contracts only; (3) setting-default conflicts where `norm_default` yields a comparable value — it strips backticked spans, so defaults cited in different backtick refs compare equal, but a backticked-only default normalizes to '' (sol B01: `norm_default('`alpha`')` = ''); (4) dangling M/F references; (5) prose count claims (module/chapter/flow/contract — `submodule` is `None` at `:308`, so no submodule count is ever compared) |
 
 Round-3 classified S5–S8 "active" on prose ("render the handbook", "extracts owner decisions",
 "measures who references a unit", "chain-break detection"). The classification rule requires the
@@ -83,13 +87,55 @@ invokes it; the writer/judge session runs it manually. Classification: **optiona
 | fill `--engine` | `api` (`master_doc_fill.py:409-412`) | `api` / `hermes` | which seat fills a module | `hermes` runs a real seat; `api` is one completions call |
 | fill `--workers` | 2 (`:396`) | positive int | parallel fill workers | **0 or negative raises `ValueError: max_workers must be greater than 0`** — there is no serial fallback; `1` is serial execution (`ThreadPoolExecutor(max_workers=a.workers)` at `:450`). Round-4's "0 serialises" was false (sol B14) |
 | fill `--provider` | `deepseek` (`:397`) | a `PROVIDERS` key | fill provider | an unknown provider is refused |
+| fill `--limit` | 0 (`:395`) | int | cap on modules filled in one run | 0 = no cap; a positive N fills only the first N candidates |
+| fill `--force` | false (`:401`) | flag | refill modules already FILLED/VERIFIED | without it, already-complete modules are skipped |
+| fill `--only` | `""` (`:404`) | comma prefixes | narrow the candidate set (e.g. `05-,07-`) | a prefix matching none yields an empty run |
+| fill `--model` | `""` (`:411`) | a model id | the seat model for `--engine hermes` | empty falls back to `openai/gpt-6.1-sol` (`:454`) |
+| fill `--dry-run` | false (`:413`) | flag | list candidates without provider calls or writes | **`--dry-run` suppresses all provider calls and writes** (`:438-440`); `--force` decides *which* documents may be rewritten — round-6 documented five controls and omitted the switches that decide whether writing or provider execution occurs (sol B11) |
+
+**Spine gate (S9, added this round — grok B5).** `handbook_spine.py` carries no settings surface;
+its policy is four hardcoded sets: `CANON` (the 18 contract ids + expected producer/consumer
+systems), `BOUNDARY` (the **13** boundary contracts whose far side is a human/LLM/service with no
+in-repo file), the `SETTING_ROW`/`REF`/`COUNT_CLAIM` regexes, and the internal-vs-boundary split
+that decides which contracts must name both `file:function`. The round-9 defect this gate exists to
+close: its predecessor compared function tokens but never the **state** column, so M9 ("broken") and
+M11 ("works") could both cite CT-06 and pass while flatly disagreeing. The state-agreement check
+(and the CT-05 boundary→internal re-grade) are added this round; the remaining blind spots are that
+it does **not** verify cited line numbers exist in the cited file, and it trusts the chapters'
+self-reported status word rather than re-deriving it.
+
+**`panel_loop.py` settings and stop semantics (sol B14, added this round).** The loop that produces
+this handbook carries its own controls; a process exit 0 is **not** document acceptance:
+
+| Setting | Default | Range | Governs | What breaks if changed |
+|---|---|---|---|---|
+| `--rounds` | 6 (`:280`) | int; **0 = no cap** (`:290-291` maps 0 → `10**9`) | **absolute round ceiling** — the loop condition (`:304` `while st["round"] < rounds`) compares the *stored* round against `--rounds`; it does **not** count iterations from `--start-round` (sol B12) | a cap is a session budget, not a definition of done |
+| `--max-seconds` | 21000 (`:281`) | int; 0 = no cap | the wall-clock budget | same |
+| `--start-round` | None (`:282`) | int | **inert in this revision** — `:295` assigns `args.start_round`, but `:305` (`rnd = st["round"] + 1`) overwrites it from stored state before the writer runs, so the loop always resumes at `st["round"] + 1` (sol B12) | the flag does not resume at a specific round as its help implies — it is an inert override |
+| `--writer-timeout` | 4200 (`:283`) | seconds | writer session deadline | too short kills the writer mid-round |
+| `--judge-timeout` | 2700 (`:284`) | seconds | judge session deadline | too short yields MISSING seats |
+| `--chapters` | "" (`:285`) | comma list | narrow the chapter set | empty = all chapters |
+| `PANEL_WRITER_MODEL` / `PANEL_WRITER_PROVIDER` | `deepseek-v4-pro` / `deepseek` (`:35-36`) | env override | writer seat model/provider | a wrong model runs the writer on an unmeasured seat |
+| `FANOUT` / `MANIFEST` | hardcoded `cf-quorum-20261104` scratch paths (`:32-33`) | a path | the external fanout script + seat manifest | a dated scratch dir that no longer exists breaks the loop |
+
+**Stop semantics (distinguish process success from acceptance).** `panel_loop.py:332-354` exits 0
+on two conditions: unanimous PASS, **or** `clean_streak >= 2` — two consecutive rounds with no
+*new defect class*, **even while blocking findings remain open**. A `STOP: no new defect class`
+exit is a successful process termination, not proof the document is aligned; the operator must
+read back the outstanding findings (the `CORRECTIONS.md` per round) separately.
 
 ## 6. Contracts in and out
 
+Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Local ids are
+retired; each row carries the CT id its peer chapter cites.
+
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| M6-C1 | docsgate | out | `master_doc_check.py:263` prints `MASTER-DOC: PASS\|FAIL` | **external** — "the handbook's status word", no in-repo function | works (exit 1 = FAIL) — but it is a structural gate, not a truth gate (F6-2) |
-| M6-C2 | handbook | out | `gen_nasa_handbook.py:247` `main()` (the render entry) | **external** — "the owner's approval artifact", no in-repo function | **UNVERIFIED** — the renderer hardcodes `docs/master` and selects `[0-9][0-9]-*.md`, so it does **not** render these `M*.md` chapters (see §11) |
+| CT-16 | docsgate | out | `master_doc_check.py:263` prints `MASTER-DOC: PASS\|FAIL` | **external** — "the handbook's status word", no in-repo function | works (exit 1 = FAIL) — but it is a structural gate, not a truth gate (F6-2) |
+| CT-18 | handbook | out | `gen_nasa_handbook.py:247` `main()` (the render entry) | **external** — "the owner's approval artifact" (the owner is a human) | **UNVERIFIED** — the renderer hardcodes `docs/master` and selects `[0-9][0-9]-*.md`, so it does **not** render these `M*.md` chapters (see §11) |
+
+CT-18 is a boundary contract: the consumer is a human owner, so "producer named + consumer
+marked external" is the honest terminal state, not a chapter defect.
 
 ## 7. Verification
 
@@ -97,8 +143,9 @@ invokes it; the writer/judge session runs it manually. Classification: **optiona
 |---|---|---|---|---|
 | python compile | `python3 -m py_compile scripts/master_doc_*.py scripts/gen_*.py scripts/sheet_style.py scripts/extract_owner_decisions.py scripts/panel_loop.py scripts/ownership.py` | exit 0 | 2026-11-06 | PASS |
 | shell parse | `bash -n scripts/verify-patch.sh` | exit 0 | 2026-11-06 | PASS |
-| patch chain | `bash scripts/verify-patch.sh` | VERIFY-PATCH: PASS | 2026-11-06 | **PASS** — `4 stages, 3 patches, f393a681…` |
+| patch chain | `bash scripts/verify-patch.sh` | VERIFY-PATCH: PASS | 2026-11-06 | **PASS** — `5 stages, 4 patches, 57432007…` (the `deploy-doc` stage landed in commit `8ae4f82`, after the round-10 stamp's `4 stages, 3 patches, f393a681…`; re-quoted this round) |
 | doc gate over real modules | `python3 scripts/master_doc_check.py` | exit 1 with named errors | 2026-11-06 | **FAIL** — `44 module(s): 37 VERIFIED, 50 error(s), 0 warning(s), 10 fact(s)`, `MASTER-DOC: FAIL`, exit 1 |
+| spine | `python3 scripts/handbook_spine.py` | `findings=0`, exit 0 | 2026-11-06 | **PASS** — `chapters=13  canonical contracts=18  findings=0` (after the CT-06 state reconciliation; the pre-fix run reported `CONTRACT STATE DISAGREEMENT=1` on CT-06) |
 
 ## 8. Metrics
 
@@ -123,9 +170,11 @@ it was this loop's own marker, not a log line, and is removed.)
 |---|---|---|---|
 | Stale locators | 50 locator errors naming nonexistent `docs/master` paths | a vacuous PASS (now named, not silent) | **OPEN** — re-point the unit locators to the real root |
 | Gate does not select these chapters | the glob `[0-9][0-9]-*.md` (`:188`) does not match `M0-shared-contract.md` | a chapter-aware gate | **OPEN** — add a chapter-aware gate or a separate path (F6-1) |
-| File-shaped census | 44 modules, 0 of docs/tests/prompts/skills/config covered | a system-shaped census | **OPEN** — CF-360 |
+| File-shaped census | 44 unit sections, 0 of docs/tests/prompts/skills/config covered | a system-shaped census | **OPEN** — CF-360 |
 | Panel selection is stale | `master_doc_panel.py:67-71` globs `docs/master` (deleted); `panel_loop.py:33-34` depends on a fanout script + seat manifest under a dated scratch dir; `unfinished_chapters` (`:62-70`) searches `III.*` ids, not `M*.md` filenames | a deployable panel loop | **OPEN** — F6-3: the two panel mechanisms use incompatible selection conventions |
 | Stale doc drift | unit 12 still records CF-320 as live | current doc | **OPEN** — CF-381 |
+| Spine state blind spot (closed) | M9 and M11 both cite CT-06 with different state words and the spine passed | a gate that compares states | **resolved this round** — the spine now compares the normalized state word for internal contracts, and CT-06 is reconciled to "works (dispatcher leg)" |
+| Spine locator blind spot (open) | a chapter cites a line that does not exist, or a line outside the cited file | a gate that verifies locators | **OPEN** — the spine checks the *presence* of a `file:line` pattern, not that the line exists at that number in that file (grok B6) |
 
 ## 11. Limits and margins
 
@@ -155,7 +204,7 @@ it was this loop's own marker, not a log line, and is removed.)
   (PASS); `grep -rn gen_nasa_handbook scripts/` (no caller).
 - Board rows: CF-360, CF-374 (complete), CF-381.
 - **Findings:**
-  - **F6-1** (carried) — the gate exits 1 over 44 modules/50 errors; the `[0-9][0-9]-*.md` glob
+  - **F6-1** (carried) — the gate exits 1 over 44 unit sections / 50 errors; the `[0-9][0-9]-*.md` glob
     does not select these M-numbered chapters.
   - **F6-2** — the gate is structural/citation, not a semantic truth verifier (`:128-138`, `:214-216`).
     Round-3's "recomputes VERIFIED" claim was **false** — the gate reports the supplied status.
@@ -163,5 +212,8 @@ it was this loop's own marker, not a log line, and is removed.)
     incompatible, dated selection paths.
   - **F6-4** (new) — S5–S8 have no in-repo invoker (grep empty); reclassified operator-invoked
     (optional), not "active".
+  - **F6-5** (new, grok B5) — `handbook_spine.py` is the gate that actually selects these `M*.md`
+    chapters and was undocumented in M6; added as S9 with its five checks, the BOUNDARY policy, and
+    the state-agreement check (and its residual locator blind spot).
 
 ## RED field count: 2 (Status §1 — own gate reads FAIL, Metrics §8)

@@ -6,10 +6,10 @@
 |---|---|
 | Module name | REPOSITORY |
 | Path | `/home/kara/code-factory/scripts/` — `clone_lane.py`, `repo_freshness.py`, `land-node-branch.sh`; gates via `install-gitreins.sh` + `.gitleaks.toml` |
-| Revision | `943ef984dc093e5780605ac6e54cd043122126ef` (code-factory HEAD, 2026-11-06) |
+| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `land-node-branch.sh`/`install-gitreins.sh`/`clone_lane.py` byte-identical since `47d68b4`; `tests/selftest.sh` changed — see §7) |
 | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
 | Owner lane | code-factory (node-side clone + control-host landing) |
-| Status | **VERIFIED (source)** — `land-node-branch.sh` (295 lines), `install-gitreins.sh` (180 lines), `clone_lane.py` (130 lines) read in full; **behavioral verification UNVERIFIED** (B10): the landing dry-run was refused on a dirty/scratch workdir, and the freshness arm was not re-run — `repo_freshness.py` body not read line-by-line |
+| Status | **VERIFIED (source + shipped landing arm)** — `land-node-branch.sh` (308 lines), `install-gitreins.sh` (180 lines), `clone_lane.py` (130 lines) read in full; the shipped landing arm `cf213-land-node-branch` (`tests/selftest.sh:2463-2729`) exercises the landing behaviours against a disposable bare remote and was run this round (`SHIPPED_LANDING_ARM_RC=0`); `repo_freshness.py` body not read line-by-line. **S3 hook *enforcement* is UNVERIFIED (sol B10):** the landing arm proves landing behaviour, not that git invokes the installed pre-commit gate — a disposable rejecting-commit fixture that resolves the effective `core.hooksPath` and proves a refused commit cannot advance HEAD is the missing evidence (§11) |
 
 ## 2. Purpose, authority and position
 
@@ -20,24 +20,24 @@ stale. It may not decide what work is *worth* landing — that is the foreman/bo
 
 **What breaks if this module is absent.** The node has no right tree and work cannot leave it.
 `land-node-branch.sh` is the landing path for a finished node task — the result envelope names
-`branch` and `commit` (`node-bus-worker.py:1139-1140`) and this script is what an operator (or an
+`branch` and `commit` (`node-bus-worker.py:1187-1188`) and this script is what an operator (or an
 out-of-repo foreman step) runs with `--branch/--commit` to merge them. **Nothing in-repo invokes it**
-(F3-5): `grep -rn 'land-node-branch' scripts/ tests/` matches only the script itself and
-`tests/selftest.sh:2465,2473,2502` (syntax + usage arms). The envelope *names* the fields; it does
+(F3-5): `grep -rn 'land-node-branch' scripts/ tests/` matches the script itself (`scripts/land-node-branch.sh:2,4,120`) and the selftest arm (`tests/selftest.sh:2463,2469,2470,2471,2477,2506,2729` — the BEGIN banner, the `bash -n` syntax arm, and the `cf213` usage arm). The envelope *names* the fields; it does
 not *call* the lander. M3 owns F5 LANDING, a primary flow — but the landing step is operator-triggered.
 
 **What breaks if it lies.** A landing that reports success without the commit actually in
 `origin/main` is the exact defect the script is built to refuse: it pushes an explicit object,
-re-fetches, and proves `git merge-base --is-ancestor` (`:265-283`). The PASS row belongs to the
-proof, never to the merge (`:22-24`).
+re-fetches, and proves `git merge-base --is-ancestor` (`:278-300`). The PASS row belongs to the
+proof, never to the merge (`:23`).
 
 ## 3. Submodule inventory
 
 | Submodule | Unit | Classification | Evidence (invoking line) |
 |---|---|---|---|
-| S1 clone and track freshness | `clone_lane.py`, `repo_freshness.py` | **active** | `clone_lane.py:129` `main()` is the entrypoint (operator-invoked; no in-repo caller). `repo_freshness.py` body unread this round |
+| S1a clone a lane row | `clone_lane.py` | **operator-invoked (optional)** | `clone_lane.py:129` `main()` is the entrypoint; `grep -rn 'clone_lane' scripts/ tests/` matches only the file itself and `tests/test_clone_lane.py` — no lane/cron/timer/unit invokes it (B07 / sol B09 re-grade: was misclassified **active** on the strength of a `main()` entrypoint, which proves executability, not activation) |
+| S1b track freshness | `repo_freshness.py` | **unproven** | no in-repo invoker measured — `grep -rn 'repo_freshness' scripts/ tests/ config/` matches a comment (`verify-node.sh:155`), a docstring (`node_freshness.py:7`), and a selftest parse check (`tests/selftest.sh:2328`); the OUTLINE *active* rule is not satisfied by evidence, and the body is unread this round |
 | S2 land a branch | `land-node-branch.sh` | **operator-invoked (optional)** | owns F5 LANDING; **no in-repo invoker** — `grep -rn 'land-node-branch' scripts/ tests/` matches only the script itself and `tests/selftest.sh` (syntax + usage arms). Round-4's "invoked by the node's result envelope" was fabricated (grok 4 / sol B04 / glm 2); an operator or out-of-repo foreman step runs it with `--branch/--commit` from the envelope |
-| S3 commit hooks and gates | `install-gitreins.sh`, `.gitleaks.toml`, `core.hooksPath` | **active** | hook generated by `install-gitreins.sh:120-138` into the target repo's `.git/hooks/pre-commit` |
+| S3 commit hooks and gates | `install-gitreins.sh`, `.gitleaks.toml`, `core.hooksPath` | **active** | hook generated by `install-gitreins.sh:124-136` into the target repo's `.git/hooks/pre-commit` |
 
 **Finding F3-2.** `clone_lane.py` does **not** clone a git repository. It clones a **lane row** in
 the scheduler DB: it reads the source `projects` row (`:74`), copies its fields (`:82-97`), and
@@ -51,7 +51,7 @@ not by `clone_lane.py`.
 
 | Dependency | Version constraint | Where | How absence is detected |
 |---|---|---|---|
-| git | any (`rev-parse`, `merge-base`, `worktree`, `ls-remote`) | control host | `refuse workdir "not a git worktree"` (`:91-93`) |
+| git | any (`rev-parse`, `merge-base`, `worktree`, `ls-remote`) | control host | `refuse workdir "not a git worktree"` (`:124`) |
 | bash | >= 4 | control host | `set -u` + `lib.sh` helper abort |
 | gitreins (gate) | `== 0.17.1` pin | node venv, absolute path | `bad "gitreins" "version $ver != pin $PIN"` (`install-gitreins.sh:53`) |
 | gitleaks rules | `sk-api-key`, `ghp_`, `glpat-`, `AIza` custom rules | `.gitleaks.toml:11-33` | gitreins guard run |
@@ -70,31 +70,36 @@ not by `clone_lane.py`.
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
 | `GITREINS_PIN` | `0.17.1` (`install-gitreins.sh:19`) | exact version | gate binary pin | a non-matching installed version → `bad "gitreins" "version … != pin"` (`:53`) |
-| `GITREINS_VENV` | `$HOME/gitreins-venv` (`:23`) | a `$HOME` path | where the pinned binary lives | the hook hardcodes this venv path (`:120-138`); moving it breaks the hook |
-| `REMOTE` / `MAIN` | `origin` / `main` (`land-node-branch.sh:36`) | git ref names | push/fetch targets | a different remote is an explicit operator choice |
-| `GATE` (`--gate-cmd`) | **empty** (`:36`), set only by `--gate-cmd` (`:76`) | a shell command | the optional pre-merge gate | **when empty, no gate runs** (`:171-193`): `land-node-branch.sh` publishes with no project gate by default |
-| `repo_freshness --bound` | 0 (`repo_freshness.py:558`) | int commits | behind-count before a workdir is FAIL | a higher bound tolerates a staler workdir |
-| `repo_freshness --gate` | off (`:564`) | flag | exit 1 when any workdir FAILs | without it a stale row does **not** fail the process |
-| `repo_freshness --strict` | off (`:569`) | flag | escalate WARN (unmeasurable) → FAIL | without it an unknown measurement does **not** fail |
-| `repo_freshness --no-fetch` | off (`:574`) | flag | measure local refs only, no network | on it avoids mutation/fetch |
-| `repo_freshness --max-fetch-age` | None (`:580`) | seconds | FAIL when the last fetch is older | off by default |
-| `repo_freshness --jobs` | 8 (`:587`) | int | parallel workdir probes | lower serialises |
-| `repo_freshness --timeout` | 60 s (`:590`) | int | per-git-command timeout | too low fails slow remotes |
+| `GITREINS_VENV` | `$HOME/gitreins-venv` (`:23`) | a `$HOME` path | where the pinned binary lives | the hook hardcodes this venv path (`:134`); moving it breaks the hook |
+| `REMOTE` / `MAIN` | `origin` / `main` (`land-node-branch.sh:38`) | git ref names | push/fetch targets | a different remote is an explicit operator choice |
+| `GATE` (`--gate-cmd`) | **empty** (`:38`), set only by `--gate-cmd` (`:108`) | a shell command | the optional pre-merge gate | **when empty, no gate runs** (`run_gate` guards `[ -n "$GATE" ] || return 0` at `:75`): `land-node-branch.sh` publishes with no project gate by default |
+| `repo_freshness --bound` | 0 (`repo_freshness.py:559`) | int commits | behind-count before a workdir is FAIL | a higher bound tolerates a staler workdir |
+| `repo_freshness --gate` | off (`:565`) | flag | exit 1 when any workdir FAILs | without it a stale row does **not** fail the process |
+| `repo_freshness --strict` | off (`:570`) | flag | escalate WARN (unmeasurable) → FAIL | without it an unknown measurement does **not** fail |
+| `repo_freshness --no-fetch` | off (`:575`) | flag | measure local refs only, no network | on it avoids mutation/fetch |
+| `repo_freshness --max-fetch-age` | None (`:581`) | seconds | FAIL when the last fetch is older | off by default |
+| `repo_freshness --jobs` | 8 (`:588`) | int | parallel workdir probes | lower serialises |
+| `repo_freshness --timeout` | 60 s (`:591`) | int | per-git-command timeout | too low fails slow remotes |
 
-**Gate-by-default correction (F3-3).** `land-node-branch.sh:36` initialises `GATE=""`; `:76` sets it
-only from `--gate-cmd`; `:171-193` runs a gate only when `GATE` is non-empty. A landing with no
-`--gate-cmd` runs **no** project gate.
+**Gate-by-default correction (F3-3).** `land-node-branch.sh:38` initialises `GATE=""`; `:108` sets it
+only from `--gate-cmd`; `run_gate` (`:74`) guards `[ -n "$GATE" ] || return 0` (`:75`) and is called
+at `:192`/`:206`. A landing with no `--gate-cmd` runs **no** project gate.
 
 ## 6. Contracts in and out
 
+Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). M3's own interfaces
+(M3-C1, M3-C2) are not among the 18; the canonical id M3 participates in is CT-12 (`node →
+gitreins` staged diff), cited as a boundary contract.
+
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| M3-C1 | git remote (origin) | out | `land-node-branch.sh:265` `git push $REMOTE $merge_sha:refs/heads/$MAIN` | the remote's `refs/heads/<main>` (external) | works (explicit object, never `HEAD`) |
-| M3-C2 | node | in | `scripts/node-bus-worker.py:1139-1140` builds `branch`/`commit` (the reply envelope's `git_field(…rev-parse…)` entries) | `land-node-branch.sh:127-149` resolves `MAIN_REF` and `branch_ref` (operator-triggered, not auto-invoked — F3-5) | works (both must be fetchable; the envelope names the fields, an operator runs the lander) |
+| CT-12 | gitreins | out | **in-repo, generated** — `install-gitreins.sh:124-135` writes the pre-commit hook into the target repo's `.git/hooks/pre-commit`; the hook `cd`s and invokes `gitreins guard --quality-async` against the **already-staged** changes — it does **not** stage the diff itself (sol B08) | **external** — the gitreins binary the hook invokes (out of scope) | **UNVERIFIED (boundary)** — the hook side is in-repo and nameable; the wire to the judge binary was not measured this round; "works" is not asserted without a measured observation (sol B03) |
+| M3-C1 | git remote (origin) | out | `land-node-branch.sh:278` `git push $REMOTE $merge_sha:refs/heads/$MAIN` | the remote's `refs/heads/<main>` (external) | works (explicit object, never `HEAD`) |
+| M3-C2 | node | in | `scripts/node-bus-worker.py:1187-1188` builds `branch`/`commit` (the reply envelope's `git_field(…rev-parse…)` entries) | `land-node-branch.sh:127-149` resolves `MAIN_REF` and `branch_ref` (operator-triggered, not auto-invoked — F3-5) | works (both must be fetchable; the envelope names the fields, an operator runs the lander) |
 
 The round-3 M3-C2 producer was "rumour — one side only". The producer is nameable: it is
-`node-bus-worker.py`'s reply envelope (`:1128-1144`), specifically the `branch`/`commit` fields at
-`:1139-1140`. Both sides are now named. Naming both sides does **not** make S2 "active" — the
+`node-bus-worker.py`'s reply envelope (`:1176-1192`), specifically the `branch`/`commit` fields at
+`:1187-1188`. Both sides are now named. Naming both sides does **not** make S2 "active" — the
 consumer (`land-node-branch.sh`) is operator-triggered, not called by the envelope (F3-5).
 
 ## 7. Verification
@@ -103,21 +108,25 @@ consumer (`land-node-branch.sh`) is operator-triggered, not called by the envelo
 |---|---|---|---|---|
 | shell parse | `bash -n scripts/land-node-branch.sh` | exit 0 | 2026-11-06 | PASS |
 | python compile | `python3 -m py_compile scripts/clone_lane.py scripts/repo_freshness.py` | exit 0 | 2026-11-06 | PASS |
-| dry-run (fixture) | `./scripts/land-node-branch.sh --dry-run --workdir <clean-worktree> --branch node/test --commit <sha>` | `LAND: DRY-RUN — 0 commands run` | 2026-11-06 | **refused on a dirty/scratch workdir** — `workdir_clean`/`not a git worktree` refusal (needs a clean git worktree fixture; the round-3 "0 commands run" PASS was not reproducible without one) |
-| freshness gate | `tests/selftest.sh` arm `cf244-node-freshness` | freshness sub-cases PASS | 2026-11-06 | arm present (`:3413-3650`); not re-run this round (see note) |
+| landing arm (shipped) | `tests/selftest.sh` arm `cf213-land-node-branch` (`:2463-2729`) | gate rejection, dry-run, successful landing, fresh-clone proof, repeat landing, refused push, no-ff isolation | 2026-11-06 | **PASS** — `SHIPPED_LANDING_ARM_RC=0`, `LANDING_ARM_FAILURES=0` (the arm creates a bare origin + clean clones and exercises all seven behaviours; B07) |
+| freshness gate | `tests/selftest.sh` arm `cf244-node-freshness` | freshness sub-cases PASS | 2026-11-06 | **UNVERIFIED** — arm present (`:3433-3670`), not re-run this round |
 
-**Behavioral verification is UNVERIFIED (B10).** Syntax checking (`bash -n`, `py_compile`) does not
-exercise the landing behaviours: successful dry-run, gate rejection, successful landing, repeated
-landing, rejected ancestry, and failed remote-proof. Those live in `land-node-branch.sh:145-214`
-(ancestry/idempotency/gate/local-main refusal) and `:265-287` (push, post-push fetch, ancestry
-verification, remote disagreement). A disposable local bare remote plus a clean worktree fixture is
-the missing evidence; none is shipped, so §1 keeps **behavioral** status UNVERIFIED while the
-*source* is read in full.
+**Behavioral verification (B07, corrected this round).** Round-6 said "none is shipped" — false.
+`tests/selftest.sh` arm `cf213-land-node-branch` (`:2463-2729`) ships a disposable local
+bare remote plus clean worktree fixture and exercises gate rejection (`:2541-2548`), dry-run
+(`:2551-2563`), successful landing and fresh-clone proof (`:2566-2584`), repeat landing
+(`:2586-2595`), refused push (`:2597-2615`) and no-ff isolation (`:2618-2708`). This round the arm
+was run independently: `SHIPPED_LANDING_ARM_RC=0`, `LANDING_ARM_FAILURES=0`. The landing behaviours
+are now exercised; what remains unread line-by-line is `repo_freshness.py` (the freshness half),
+not the landing half.
 
 **Note (B04 / grok 9).** Round-3 cited "selftest.sh arm 41 / arm 51 / arm 33" — `selftest.sh` is
-4,591 lines with *named* arms (`cf213-land-node-branch`, `cf244-node-freshness`,
+**4,852 lines** (measured `wc -l tests/selftest.sh` this round) with *named* arms
+(`cf213-land-node-branch`, `cf244-node-freshness`,
 `cf250-seed-drift`, `board-arm`, …), and `grep -nE '\barm (33|41|51)\b' tests/selftest.sh` returns
 nothing. The numbered-arm pointers were unrepeatable; they are replaced with the named arms above.
+The arm locators `:2463-2729` (cf213) and `:3433-3670` (cf244) still resolve exactly at this line
+count (kimi non-blocking 4).
 
 ## 8. Metrics
 
@@ -128,24 +137,25 @@ are answerable only by reading the `LANDED:` / `LAND: REFUSED` rows.
 
 ## 9. Log lines (verbatim)
 
+**Scope (B09, measured this round).** `grep -cE '\b(ok|bad|warn|note|say)\s+"' scripts/land-node-branch.sh` = **35** helper call sites. The 5 rows below are the evidentiary landing/installer rows; the generic per-row helper surface is not inventoried one-per-site — the uncovered count is a named RED on this field, not a "sample" claimed complete.
+
 | Level | Line | Emitted when | Kind |
 |---|---|---|---|
-| — | `LANDED: %s @ %s in %s/%s (pushed %s, tip %s)` (`:291`) | ancestry proof passes | evidentiary |
-| — | `LAND: REFUSED — %s` (`:56`) | any precondition fails before merge | evidentiary |
-| — | `LAND: FAIL (%d)` (`:294`) | push did not land the commit | evidentiary |
-| — | `LAND: DRY-RUN — 0 commands run, nothing merged or pushed, no ref moved` (`:231`) | `--dry-run` | evidentiary |
+| — | `LANDED: %s @ %s in %s/%s (pushed %s, tip %s)` (`:304`) | ancestry proof passes | evidentiary |
+| — | `LAND: REFUSED — %s` (`:58`) | any precondition fails before merge | evidentiary |
+| — | `LAND: FAIL (%d)` (`:307`) | push did not land the commit | evidentiary |
+| — | `LAND: DRY-RUN — 0 commands run, nothing merged or pushed, no ref moved` (`:244`) | `--dry-run` | evidentiary |
 | — | `installed ${ver:-nothing} but the pin is $PIN (log $log)` (`install-gitreins.sh:105`) | installed version != pin | evidentiary |
 
 ## 10. Failure modes, indications and recovery
 
 | Failure | Presents as | Distinguished from | Recovery |
 |---|---|---|---|
-| Branch not a descendant | `refuse descendant … rebase the branch` (`:167`) | a commit-not-on-branch refusal | rebase the node branch onto remote main |
-| `--no-ff` would publish strays | `refuse no_ff_local … would publish them on its push` (`:214`) | ff-only refusal | fast-forward or reset local main first |
-| Push accepted but proof fails | `LAND: FAIL` with `NOT an ancestor` (`:282`) | a merge conflict | re-run; investigate remote branch movement |
-| Post-push fetch failed | `post-push fetch failed … verifying against the tracking ref` (`:276`) | a fresh remote proof | ancestry test falls back to the tracking ref; `ls-remote` disagreement only warns (`:284-287`) |
-| Python lint gate does not refuse | a tracked `.py` with an unused variable is committed — `scripts/panel_loop.py:114` assigns `rc` and never reads it (F841) | a gate that blocks the commit | **OPEN** — the python-lint selftest arm flags it, but it does not refuse a commit |
-| Gate silently not run | `pre-commit` hook exits 0 when `.gitreins/config.yaml` absent (`install-gitreins.sh:130-131`); and `--gate-cmd` unset runs no gate at all (`:171-193`) | a graded commit | by design but dangerous — the bypass must be disclosed when used (M3.S3, quorum 5/5) |
+| Branch not a descendant | `refuse descendant … rebase the branch` (`:202`) | a commit-not-on-branch refusal | rebase the node branch onto remote main |
+| `--no-ff` would publish strays | `refuse no_ff_local … would publish them on its push` (`:223`/`:227`) | ff-only refusal | fast-forward or reset local main first |
+| Push accepted but proof fails | `LAND: FAIL` with `NOT an ancestor` (`:295`) | a merge conflict | re-run; investigate remote branch movement |
+| Post-push fetch failed | `post-push fetch failed … verifying against the tracking ref` (`:288-289`) | a fresh remote proof | ancestry test falls back to the tracking ref; `ls-remote` disagreement only warns (`:299`) |
+| Gate silently not run | `pre-commit` hook exits 0 when `.gitreins/config.yaml` absent (`install-gitreins.sh:130-131`); and `--gate-cmd` unset runs no gate at all (`run_gate` guard `:74-75`) | a graded commit | by design but dangerous — the bypass must be disclosed when used (M3.S3, quorum 5/5) |
 
 ## 11. Limits and margins
 
@@ -169,18 +179,20 @@ are answerable only by reading the `LANDED:` / `LAND: REFUSED` rows.
 
 ## 13. Evidence of record
 
-- Code read: `land-node-branch.sh` (295 lines), `install-gitreins.sh` (180 lines), `clone_lane.py` (130 lines).
+- Code read: `land-node-branch.sh` (308 lines), `install-gitreins.sh` (180 lines), `clone_lane.py` (130 lines).
 - Commands run: `bash -n scripts/land-node-branch.sh`; `./scripts/land-node-branch.sh --dry-run`
   (refused: dirty/scratch workdir); `grep -nE '\barm (33|41|51)\b' tests/selftest.sh` (0 matches).
 - **Findings:**
   - **F3-1** (carried) — `clone_lane --to == --from` guard ships: `refuse_same_lane` (`:38-45`)
     is called at `:65-68`, *before* `sqlite3.connect` (`:70`); CF-357 is `complete`.
   - **F3-2** — `clone_lane.py` clones a **lane row**, not a git repository (`:74-118`).
-  - **F3-3** — `--gate-cmd` defaults to empty (`:36`); no gate runs without it (`:171-193`).
+  - **F3-3** — `--gate-cmd` defaults to empty (`:38`); no gate runs without it (`:74-75`).
   - **F3-4** (new) — the numbered "arm 41/51" citations were unrepeatable (`selftest.sh` arms are
-    named); the F841 at `panel_loop.py:114` is real but flagged by the python-lint arm, not "arm 51".
+    named). The round-8 failure-mode row citing an F841 at `panel_loop.py:114` was **false**:
+    `grep -nE 'rc\s*=|rc=' scripts/panel_loop.py` → 0 matches (the file assigns no such `rc`); the
+    row is removed this round rather than re-pointed at a defect that does not exist.
   - **F3-5** (new) — `land-node-branch.sh` has no in-repo invoker (grep matches only the script +
     selftest arms); round-4's "invoked by the node's result envelope" was fabricated. S2 is
     operator-invoked (optional); the envelope names `branch`/`commit` but does not call the lander.
 
-## RED field count: 2 (Metrics §8 — absence-proved; §1 behavioral verification UNVERIFIED — B10: landing dry-run refused, freshness arm not re-run, no clean fixture)
+## RED field count: 3 (Metrics §8 — absence-proved; §1 status — `repo_freshness.py` body unread and S3 hook enforcement UNVERIFIED (the landing arm does not prove git invokes the gate); §9 inventory 5 of 35 helper call sites)

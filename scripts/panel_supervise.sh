@@ -37,7 +37,9 @@ while true; do
   esac
 
   echo "$(date -Is) launching panel_loop (no cap), prior status=$status" >> "$LOG"
-  python3 scripts/panel_loop.py --rounds 0 --max-seconds 0 >> "$LOG" 2>&1
+  python3 scripts/panel_loop.py --rounds 0 --max-seconds 0 \
+    --parallel "${PANEL_PARALLEL:-3}" \
+    --groups "${PANEL_GROUPS:-}" >> "$LOG" 2>&1
   rc=$?
   echo "$(date -Is) panel_loop exited rc=$rc" >> "$LOG"
   sleep 30

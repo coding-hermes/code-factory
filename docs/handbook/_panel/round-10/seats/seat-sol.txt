@@ -1,0 +1,498 @@
+│ cache/scratch/round10_judge_probes.py
+│ @@ -0,0 +1,95 @@
+│ +#!/usr/bin/env python3
+│ +"""Read-only source review and isolated local fixtures; no real credentials."""
+│ +import ast
+│ +import contextlib
+│ +import http.client
+│ +import importlib.util
+│ +import io
+│ +import json
+│ +import os
+│ +from pathlib import Path
+│ +import subprocess
+│ +import tempfile
+│ +import threading
+│ +from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+│ +from unittest.mock import patch
+│ +
+│ +ROOT = Path('/home/kara/code-factory')
+│ +def load(path, name):
+│ +    spec = importlib.util.spec_from_file_location(name, str(path))
+│ +    mod = importlib.util.module_from_spec(spec)
+│ +    spec.loader.exec_module(mod)
+│ +    return mod
+│ +spine = load(ROOT/'scripts/handbook_spine.py', 'review_spine')
+│ +chapters = spine.chapters()
+│ +print('CHAPTER_COUNT', len(chapters), 'CANON', len(spine.CANON), 'BOUNDARY', len(spine.BOUNDARY), 'INTERNAL', len(set(spine.CANON)-spine.BOUNDARY))
+│ +print('RED_DECLARATIONS', {name: text.split('## RED field count: ')[-1].splitlines()[0] for name,text in chapters.items()})
+│ +print('SPINE_NORMALIZED_STRING_DEFAULTS', repr(spine.norm_default('`alpha`')), repr(spine.norm_default('`beta`')))
+│ +# Challenge the actual checker in memory, leaving the files untouched.
+│ +mutated = dict(chapters)
+│ +mutated['M0-shared-contract'] = mutated['M0-shared-contract'].replace('## 6. Contracts in and out', '## 6. Contracts in and out\n\n| CT-99 | invented | out | `fake.py:missing` | `fake.go:missing` | works |')
+│ +buf=io.StringIO()
+│ +with patch.object(spine, 'chapters', return_value=mutated), contextlib.redirect_stdout(buf), patch('sys.argv', ['handbook_spine.py']):
+│ +    rc=spine.main()
+│ +print('UNKNOWN_CONTRACT_MUTATION', 'rc='+str(rc), repr(buf.getvalue()))
+│ +mutated=dict(chapters)
+│ +mutated['M0-shared-contract']=mutated['M0-shared-contract'].replace('## 5. Settings register', '## 5. Settings register\n\n| TEST_DEFAULT | `alpha` | any | test | test |')
+│ +mutated['M1-provisioning']=mutated['M1-provisioning'].replace('## 5. Settings register', '## 5. Settings register\n\n| TEST_DEFAULT | `beta` | any | test | test |')
+│ +buf=io.StringIO()
+│ +with patch.object(spine, 'chapters', return_value=mutated), contextlib.redirect_stdout(buf), patch('sys.argv', ['handbook_spine.py']):
+│ +    rc=spine.main()
+│ +print('CONFLICTING_STRING_DEFAULTS_MUTATION', 'rc='+str(rc), repr(buf.getvalue()))
+│ +# Execute only the real pure directive decoder, avoiding worker side effects.
+│ +node_ast=ast.parse((ROOT/'scripts/node-bus-worker.py').read_text())
+│ +node_ns={'base64': __import__('base64'), 'DIRECTIVE_MEMBERS':('task','text','prompt','message','body')}
+│ +exec(compile(ast.Module(body=[n for n in node_ast.body if isinstance(n,ast.FunctionDef) and n.name=='directive_text'],type_ignores=[]),'<actual node decoder>','exec'),node_ns)
+│ +dispatch_ast=ast.parse(Path('/home/kara/crier-fleet/dispatcher.py').read_text())
+│ +dispatch_ns={'base64':__import__('base64'), 'json':json, 'log':lambda s:None}
+│ +exec(compile(ast.Module(body=[n for n in dispatch_ast.body if isinstance(n,ast.FunctionDef) and n.name=='payload_task'],type_ignores=[]),'<actual dispatcher decoder>','exec'),dispatch_ns)
+│ +from types import SimpleNamespace
+│ +payload={'text_b64':'!!!invalid!!!','text':'legacy replacement directive'}
+│ +print('NODE_BAD_B64',node_ns['directive_text'](payload))
+│ +print('DISPATCHER_BAD_B64',repr(dispatch_ns['payload_task'](SimpleNamespace(payload=payload))))
+│ +# A synthetic token local to this isolated fixture; never inspect token files or call live upstreams.
+│ +proxy=load(Path('/home/kara/.hermes/scripts/cf-inference-proxy.py'),'review_proxy')
+│ +class Upstream(BaseHTTPRequestHandler):
+│ +    def do_POST(self):
+│ +        self.rfile.read(int(self.headers.get('Content-Length','0')))
+│ +        body=b'data: [DONE]\n\n'
+│ +        self.send_response(200)
+│ +        self.send_header('Content-Type','text/event-stream')
+│ +        self.send_header('Content-Length',str(len(body)))
+│ +        self.end_headers()
+│ +        self.wfile.write(body)
+│ +    def log_message(self,*args):pass
+│ +up=ThreadingHTTPServer(('127.0.0.1',0),Upstream)
+│ +px=ThreadingHTTPServer(('127.0.0.1',0),proxy.Handler)
+│ +proxy.UPSTREAM='http://127.0.0.1:'+str(up.server_port)
+│ +proxy.UPSTREAM_MODEL=''
+│ +proxy.upstream_key=lambda:'synthetic-fixture-key'
+│ +proxy.load_tokens=lambda:{'fixture-node':'synthetic-fixture-token'}
+│ +proxy.log_usage=lambda rec:None
+│ +proxy.capture_request=lambda *args:None
+│ +threads=[threading.Thread(target=s.serve_forever,daemon=True) for s in (up,px)]
+│ +for t in threads:t.start()
+│ +try:
+│ +    conn=http.client.HTTPConnection('127.0.0.1',px.server_port,timeout=0.7)
+│ +    conn.request('POST','/v1/chat/completions',json.dumps({'model':'hermes','stream':True}),{'Authorization':'Bearer synthetic-fixture-token','Content-Type':'application/json'})
+│ +    r=conn.getresponse()
+│ … omitted 17 diff line(s) across 1 additional file(s)/section(s)
+VERDICT: FAIL
+BLOCKING: 22 — findings that must be fixed before the affected chapters can be called written
+NON-BLOCKING: 1
+
+FINDINGS:
+
+Review basis:
+  Read all thirteen chapters, OUTLINE.md, MASTER-DOC-SCHEMA.md, the spine checker, and implementation regions across all five covered systems. Judged the working-tree chapters, not previous seats’ verdicts.
+
+  Required spine command reproduced:
+    python3 scripts/handbook_spine.py
+    chapters=13  canonical contracts=18
+    findings=0
+    exit 0
+
+  Therefore there are no findings emitted by the required spine run to promote to blocking CONTRADICTION findings. Its zero does not establish semantic correctness: independent fault-injection checks below demonstrate missed defects.
+
+  Other verification reproduced:
+    tests/test_disk_floor.py: 12 tests, OK
+    tests/test_lane_target.py: 40 tests, OK
+    tests/test_harness_resolve.py: 28 tests, OK
+    tests/test_reclaim.py: 9 tests, OK
+    check_scan_scope.py: 15 claims, RESULT: OK
+    master_doc_check.py: 44 modules, 37 declared VERIFIED, 50 errors, MASTER-DOC: FAIL
+    board_drift.py: RESULT: DRIFT (4 failed), CF-270 pending locally versus complete in origin/main
+    boardctl validate: 357 tasks, 518 events, RESULT: OK (7 warning(s))
+    Live inference proxy, unauthenticated POST: HTTP 401
+    Proxy content hash: b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5
+
+  Isolated probes used synthetic credentials, loopback fixture servers and in-memory mutations, not real provider calls. Reproduction script:
+    /home/kara/.hermes/cache/scratch/round10_judge_probes.py
+
+  I did not repeat the full Go build/test suites, live-node certification, harness installation/conformance or GitHub App minting. Their historical PASS claims are not fresh execution evidence from this judge. A final compound aggregate command was approval-blocked; no results from that command are claimed here.
+
+B01 — FALSE CLAIM — M6
+  Claim:
+    The spine “Enforces … canonical contract ids … setting-default conflicts” (M6:50).
+
+  Evidence:
+    scripts/handbook_spine.py:200-213 checks whether expected canonical IDs appear; it never rejects an additional unknown CT ID.
+    scripts/handbook_spine.py:126-137 strips every backticked span from a default, including the value itself.
+
+    Independently executed in-memory mutations:
+      Add CT-99: rc=0, findings=0.
+      Document TEST_DEFAULT as `alpha` in one chapter and `beta` in another: rc=0, findings=0.
+      norm_default('`alpha`') and norm_default('`beta`') both returned ''.
+
+  Fix:
+    State the actual enforcement boundary. Reject unknown CT IDs and preserve literal default values during normalization. Add negative tests for both mutations before claiming these guarantees.
+
+B02 — CONTRADICTION — M6; OUTLINE Part IV
+  Claim:
+    M6:98 calls BOUNDARY “the 14 boundary contracts.”
+    OUTLINE:204-206 says five internal contracts leave fourteen boundary contracts.
+
+  Evidence:
+    Executing the checker’s actual data structures produced:
+      CANON=18
+      BOUNDARY=13
+      INTERNAL=5
+
+    scripts/handbook_spine.py:64-84 contains the boundary set. CT-05 is explicitly excluded from it.
+
+  Fix:
+    Derive these counts from CANON and BOUNDARY instead of maintaining prose copies. Correct the boundary count to thirteen. Extend the count gate to cover the outline and this policy census.
+
+B03 — UNVERIFIED — M0, M2, M3, M4, M5, M6, M7, M8, M9, M10, M12
+  Claim:
+    “One side named + the other marked missing/external” is an “honest terminal state, not a chapter defect” (for example M2:94-96 and M10:133-134).
+
+  Evidence:
+    The brief supplies no exemption from the both-sides rule. MASTER-DOC-SCHEMA.md:56-57 explicitly requires both implementation sides.
+
+    Several rows additionally declare works without verifying the wire:
+      M2:89, CT-11: both sides external, state works.
+      M9:202, CT-15: both sides external, justification “OUTLINE Part IV.”
+      M12:95, CT-07: both sides external, justification “OUTLINE Part IV.”
+
+    An outline assertion is not implementation evidence or measured output.
+
+  Fix:
+    Keep unavailable sides explicitly UNVERIFIED and blocking; do not grant a completion exemption or inherit works from the outline. Supply accessible implementation references and repeatable observations where available. Obtain an explicit scope/contract waiver from the owner if a boundary is intentionally not verifiable.
+
+B04 — OMISSION — all chapters, §6
+  Claim:
+    The contract tables constitute “Contracts in and out.”
+
+  Evidence:
+    Their common columns are ID, peer, direction, producer, consumer and state. OUTLINE:200-203 also requires payload, timing, failure semantics and breaking-change policy.
+
+    For example M11:93-94 identifies retrieve and completion endpoints but supplies no complete lease/deadline compatibility contract. The code’s actual receive and completion operations are dispatcher.py:435 and :500-519. M10’s Python client has explicit required-ID and lease behavior at clients/python/crier_client.py:1038-1078 that is not captured in a complete canonical contract record.
+
+  Fix:
+    Give every interface one authoritative detailed contract containing all required fields. Chapters may link to it rather than duplicate it. A producer/consumer name table is not the full wire contract.
+
+B05 — OMISSION — M0–M8, M11, M12
+  Claim:
+    Each affected §8 declares “RED — none,” while several §1 status cells still declare VERIFIED.
+
+  Evidence:
+    These chapters explicitly leave the required metrics field RED. MASTER-DOC-SCHEMA.md:72-79 and OUTLINE:123 make absence a RED field, not an optional omission. Independently inspected lib.sh, dispatcher.py and cf-inference-proxy.py contain the documented print/log paths but no metric registry.
+
+  Fix:
+    Preserve the honest RED declarations and mark the chapters PARTIAL. Resolve the observability requirement with actual type/label/question/scrape contracts, or obtain an explicit schema waiver. Do not silently treat an absence-proved RED as a completed required field.
+
+B06 — UNVERIFIED — M1, M2, M5, M7, M10
+  Claim:
+    Verification rows include live-node certification, a node-local signed-read ladder, harness conformance and token minting.
+
+  Evidence:
+    M1:150 and M5:141 explicitly say not run.
+    M2:104 and M10:144 give `python3 ~/node-bus-worker.py --check` on another machine, without a complete control-host-to-node invocation.
+    M7:91 gives `python3 scripts/github-app-token.py token …`, which is not an executable verification command.
+
+    The small unit suites reproduced successfully, but they do not certify these integration wires.
+
+  Fix:
+    Supply exact commands, required credential-file names without credential values, execution location, prerequisites, expected refusal/success observations and revision-stamped results. Until repeated, retain these checks as blocking UNVERIFIED. I could not repeat them from the instructions supplied.
+
+B07 — OMISSION — M1
+  Claim:
+    §5 is the provisioning settings register.
+
+  Evidence:
+    It has no operational register for node_env.py and omits node_freshness.py controls.
+    scripts/node_env.py:473-486 accepts --env-file and repeatable --config-set, and requires check/apply mode.
+    :495-503 targets HOME/.hermes/.env and config.yaml.
+    :548-556 carries unmanaged variables forward.
+    scripts/node_freshness.py:677-702 defines --path=repo, --timeout=180 and refusal below one second.
+
+    These controls alter configuration preservation, measurement location and failure behavior.
+
+  Fix:
+    Register these controls individually with defaults, accepted values, precedence, consumers and consequences. Explain unmanaged-variable preservation and the freshness timeout refusal. “Settings surface read” is not a written settings contract.
+
+B08 — OMISSION — M2
+  Claim:
+    §5 documents dispatch controls; --harness-wall/--timeout defaults are given as DEFAULT_HARNESS_WALL/DEFAULT_TIMEOUT (M2:77).
+
+  Evidence:
+    scripts/node-bus-worker.py:83-84 defines the actual defaults as 10 and 1800 seconds.
+    :1437-1476 exposes --dry-run and identity, token, workdir, harness and gateway overrides absent from the register.
+    :1381-1385 explicitly says a dry run has already leased messages and leaves them to expire.
+
+  Fix:
+    Expand symbolic defaults into values and register the omitted operational controls. State prominently that --dry-run avoids execution/post/ack but does not avoid inbox custody mutation: it leases messages.
+
+B09 — CONTRADICTION — M3
+  Claim:
+    S1 is “active,” supported by clone_lane.py’s main entrypoint, while the same cell says “operator-invoked; no in-repo caller” (M3:37).
+
+  Evidence:
+    OUTLINE:108-113 requires an invoking scheduler lane, cron, timer or unit for active classification. A main entrypoint proves direct executability, not activation. The chapter also correctly establishes at :41-45 that clone_lane.py copies scheduler lane rows, not repository checkouts.
+
+  Fix:
+    Classify clone_lane.py according to an actual invoker, or mark it operator-invoked. Classify repo_freshness.py separately rather than assigning both files one unsupported activation status. Keep lane-row cloning distinct from checkout creation.
+
+B10 — UNVERIFIED — M3
+  Claim:
+    The chapter is “VERIFIED (source + shipped behavioral arm)” (M3:12), including ownership of commit hooks and gates.
+
+  Evidence:
+    scripts/install-gitreins.sh:59-63 checks an executable file containing the word gitreins.
+    :120-122 preserves an existing matching hook.
+    M3:159-164 correctly acknowledges that effective core.hooksPath is not resolved and a rejecting-commit fixture is missing.
+
+    The documented landing behavior test does not prove that Git invokes the installed commit gate.
+
+  Fix:
+    Separate landing verification from hook verification. Supply a disposable repository test that resolves the effective hook path and proves a deliberately rejected commit cannot advance HEAD. Keep S3 UNVERIFIED until that test is exercised.
+
+B11 — UNBUILDABLE — M4
+  Claim:
+    A clean RESIDUE permits proceeding; degraded RESIDUE means “do NOT proceed” and requires establishing observation quality (M4:153-154).
+
+  Evidence:
+    scripts/board_lock.py:73-94 distinguishes free from error internally.
+    :149-158 discards the error detail and emits the same RESIDUE form for both.
+
+    A fault-injected execution of the actual adjudicate function with flock_probe=('error','open-failed') returned:
+      RESIDUE consumers=0 commits_after_mtime=unknown
+
+  Fix:
+    Provide an exact independent probe that distinguishes the cases, or expose UNKNOWN/error detail from the classifier. Until then, the safe documented action for an indistinguishable RESIDUE must be to stop and investigate. The current branching procedure asks the operator to observe information its command suppresses.
+
+B12 — OMISSION — M5
+  Claim:
+    §5 supplies the harness and toolchain settings register; the Go dependency is merely “pinned” (M5:66).
+
+  Evidence:
+    scripts/install-go.sh:7-15 defines go1.26.5, architecture-specific digests, a 1 GiB floor, rsc.io/quote v1.5.2, check mode and GO_INSTALL_ROOT defaulting to HOME/go-toolchain.
+    :53-85 performs a cold-cache module proof with a 30-second timeout and explicit GOPROXY handling.
+
+    These values and their operational consequences are absent from M5’s register.
+
+  Fix:
+    Document the installer pin, artifact checks, root override, disk floor, network proof, timeout and cache-cleanup behavior. “Pinned” is NAME ONLY when the pin and its consequences are not registered.
+
+B13 — UNBUILDABLE — M6
+  Claim:
+    M6 owns fill, gate, render and delivery of this handbook.
+
+  Evidence:
+    The chapter itself acknowledges an incompatible selection path at :165-170.
+    scripts/gen_nasa_handbook.py:253-260 selects NN-*.md and refuses an empty selection.
+    scripts/master_doc_check.py:186-209 also selects NN-*.md.
+    Actual renderer execution printed:
+      no modules found
+    Actual fill dry run printed:
+      todo=0 provider=deepseek workers=2
+
+    The delivered sources are M*.md chapters.
+
+  Fix:
+    Establish one working chapter-aware fill/check/render path and document an invocation that consumes the real chapter set and produces an inspectable artifact. Until that exists, this module is accurately described as broken, but cannot be called written as an operational delivery procedure.
+
+B14 — OMISSION — M6
+  Claim:
+    panel_loop.py is the loop producing the handbook, but its settings and termination behavior are not registered.
+
+  Evidence:
+    scripts/panel_loop.py:278-294 defines rounds, max-seconds, start-round, writer/judge timeouts and uncapped interpretations.
+    :332-354 can exit successfully after two rounds with no new defect class, even without unanimous PASS.
+    :33-37 also defines external scratch dependencies and writer model/provider overrides.
+
+  Fix:
+    Register these controls individually. Distinguish successful process termination from document acceptance, including the no-new-defect-class exit while blockers remain. Give the operator a readback procedure for the actual stop reason and outstanding findings.
+
+B15 — OMISSION — M9
+  Claim:
+    “Remaining 32 of the 57” settings are listed with consequences “not expanded per row” (M9:160-180).
+
+  Evidence:
+    cmd/schedulerd/main.go:174-208 contains concrete verification, session-reaping, routing, simulation, failure-rate disable and output controls.
+    Examples include --reap-sessions-apply, --auto-disable-failure-rate, --auto-disable-min-ticks and --config.
+
+    The chapter explicitly acknowledges that the required consequence column is missing.
+
+  Fix:
+    Expand each setting into default, valid range, reader, precedence and a specific consequence. Mutation switches and auto-disable thresholds cannot be discharged by a group label. These entries remain NAME ONLY under the brief.
+
+B16 — OMISSION — M9
+  Claim:
+    §3 presents an “Ordered admission procedure” (M9:58-86).
+
+  Evidence:
+    The actual MultiPoolPacker.Pack path includes:
+      packer_select.go:36-42 — flat fallback versus namespace allocation.
+      :47-80 — namespace concurrency accounting.
+      :136-164 — disabled namespace, allocation and budget filtering.
+      :216-251 — starvation, pending-work and bump urgency adjustments.
+      :264-287 — held-lane rotation preceding ordinary urgency.
+
+    These mechanisms affect which run is admitted but are not composed into the chapter’s procedure.
+
+  Fix:
+    Trace actual call order through evaluation, allocation, candidate filtering, scoring, rotation, concurrency and spawn reservation. State the refusal/deferral and observable reason for each gate. The existing five-item list is a partial account, not an operational admission algorithm.
+
+B17 — OMISSION — M9
+  Claim:
+    S3 durable state and S4 operator surfaces are documented.
+
+  Evidence:
+    M9:105-106 explicitly leaves write authorities and recovery queries unwritten.
+    :52-55 explicitly leaves per-route request/response shapes and write-authority readbacks unwritten.
+
+    Table keys and route names do not tell an operator how to recover a run, mutate a lane safely or verify the resulting authority state.
+
+  Fix:
+    For run-critical stores, name the writer, legal transitions, recovery selector and idempotency boundary. For operator mutations, document auth, input, failure response and exact readback. Retain S3/S4 as PARTIAL until these procedures exist.
+
+B18 — OMISSION — M9, M10
+  Claim:
+    Required log and metric inventories are present.
+
+  Evidence:
+    M9:240-244 explicitly inventories only two of its measured 379 scheduler logging sites.
+    M10:177-180 explicitly leaves the per-metric type/labels/question/scrape contract incomplete.
+    M10:198-203 explicitly leaves guard logs untabulated.
+    crier/internal/guard/guard.go:430-457 contains the omitted guard audit surface.
+
+  Fix:
+    Finish the operator-relevant inventory at the declared module scope. Provide verbatim templates, triggering conditions and evidentiary limitations, and complete per-metric contracts. Naming uncovered sites is honest RED reporting, not completion of the field.
+
+B19 — OMISSION — M10
+  Claim:
+    Storage custody is described principally as PostgreSQL versus SQLite (M10:114-119).
+
+  Evidence:
+    config/config.go:113-123 can resolve to memory.
+    :732-767 implements database URL precedence, explicit backend selection and refusal rules.
+    :770-808 implements pool settings and constraints.
+
+    The memory mode is run-correctness relevant because custody can be process-local rather than durable. The chapter does not provide a complete default/range/consequence register or a running-backend proof.
+
+  Fix:
+    Document memory, SQLite and PostgreSQL; all selection inputs and precedence; durability consequences; startup refusal conditions; and an exact means of proving the serving backend. Do not leave custody choice as a named-but-unwritten RED.
+
+B20 — FALSE CLAIM — M10
+  Claim:
+    Guard.Timeout: “too short fails checks open.”
+    Guard.MaxConcurrent: “0 or overflow saturates the guard” (M10:96-97).
+
+  Evidence:
+    internal/guard/guard.go:332-357 makes an error outcome depend on FailClosed, policy action and high-confidence deterministic evidence. A short timeout does not universally produce an allow.
+    config/config.go:1154-1158 refuses CR_GUARD_MAX_CONCURRENT<=0 at startup; that configuration does not simply run a saturated guard.
+
+  Fix:
+    Make consequences conditional on the actual error policy and deterministic evidence. Distinguish rejected configuration from runtime saturation, and distinguish supported values from invalid inputs.
+
+B21 — UNVERIFIED — M11
+  Claim:
+    Status is VERIFIED, although live-job tests are “decoration” and an execution mode remains unmeasured (M11:12).
+
+  Evidence:
+    tests/test_durable_job.py:7-11 invokes a real dispatch and prints its result without a result-dependent failure exit.
+    tests/test_job_kill.py:23-35 computes and prints PASS/FAIL but likewise does not fail the process on a bad result.
+    dispatcher.py:336-358 contains the separate synchronous execution path.
+    :326-331 performs deadline termination, whose descendant behavior the chapter itself leaves unresolved.
+
+  Fix:
+    Label source inspection, syntax validity and behavioral certification separately. Add result-dependent failing oracles for both modes, timeout termination, descendant survival, reply delivery and replay. I did not run these live-node scripts; a source read and py_compile do not establish their operational guarantees.
+
+B22 — CONTRADICTION — M12
+  Claim:
+    §1 declares VERIFIED for “routing, streaming, capture,” while §11 says streaming correctness is UNVERIFIED until completion/framing passes.
+
+  Evidence:
+    cf-inference-proxy.py:105 selects HTTP/1.1.
+    :206-224 sends streaming headers without Content-Length, Transfer-Encoding or Connection: close, then returns without closing the response.
+
+    I exercised the actual Handler against a finite loopback SSE upstream using synthetic credentials:
+      ISOLATED_STREAM 200
+      Content-Length absent
+      Transfer-Encoding absent
+      Connection absent
+      ISOLATED_STREAM_EOF False TimeoutError
+
+    This reproduces the documented healthy-stream completion defect, independently of earlier seats.
+
+  Fix:
+    Grade streaming FAILING, admission separately verified, and the node/upstream integration separately UNVERIFIED. Ship a repeatable framing/completion oracle. Keep the chapter PARTIAL until it supplies a working streaming contract or a clearly bounded failure procedure rather than a blanket VERIFIED status.
+
+N01 — NON-BLOCKING — CONTRADICTION — M4
+  Claim:
+    “All four rows” in the contract discussion (M4:96).
+
+  Evidence:
+    M4:92-94 contains three rows: CT-14, CT-13 and CT-10.
+
+  Fix:
+    Change “four” to “three,” or avoid the maintained count. This is editorial and does not change the underlying contract findings.
+
+DEFECT CLASSES:
+  checker false negatives;
+  conflicting census claims;
+  unsupported boundary exemptions;
+  incomplete wire contracts;
+  unresolved required fields;
+  unreproducible integration checks;
+  missing setting consequences;
+  activation misclassification;
+  unproven gate enforcement;
+  unobservable recovery branches;
+  disconnected document delivery;
+  undocumented stop semantics;
+  incomplete admission authority;
+  missing custody guarantees;
+  incorrect degradation consequences;
+  non-failing verification oracles;
+  inconsistent verification status
+
+CHAPTER SCORECARD:
+  M0 — PARTIAL
+    The shell helper account is substantive and source-backed. Mandatory metrics remain RED, and the one-sided external-contract completion exemption is unsupported.
+
+  M1 — PARTIAL
+    Provisioning and seed behavior have useful evidence. Environment/freshness controls are missing from the register, live certification is unverified, and metrics remain RED.
+
+  M2 — PARTIAL
+    Directive decoding and settlement ordering are materially documented. Operational switches, dry-run lease effects, complete defaults and repeatable live verification remain incomplete.
+
+  M3 — PARTIAL
+    Landing mechanics and optional gating are described with code references. Activation classification is inconsistent, effective hook enforcement lacks a negative proof, and metrics remain RED.
+
+  M4 — PARTIAL
+    The store census and drift observations reproduced. The clean/degraded RESIDUE recovery branch cannot be followed using the documented classifier output; external write wires and metrics remain unresolved.
+
+  M5 — PARTIAL
+    The shared variable contract and adapter differences are useful. Toolchain controls are incompletely registered, live conformance remains unverified, and metrics remain RED.
+
+  M6 — PARTIAL
+    The chapter honestly identifies substantial pipeline breakage. Delivery still does not consume the chapter set, spine guarantees exceed enforcement, and panel termination controls are unwritten.
+
+  M7 — PARTIAL
+    Credential domains and several lifecycle controls are distinguished. Minting lacks a complete repeatable invocation and current behavioral evidence; the external wire and metrics remain RED.
+
+  M8 — PARTIAL
+    Target roots, TTL behavior and scan scope are concrete; the reclaim and scope checks reproduced. Required metrics remain RED, and the external-contract completion rule is not satisfied.
+
+  M9 — PARTIAL
+    Settlement, selected defaults and store keys are substantive. Admission composition, auxiliary-setting consequences, mutation/readback contracts, recovery authorities and log coverage remain incomplete.
+
+  M10 — PARTIAL
+    Transport, signed reads and several guard branches are source-backed. Storage custody, metric contracts, guard logs and integration verification remain incomplete; two setting consequences contradict code.
+
+  M11 — PARTIAL
+    The source-level job, ledger and completion descriptions are substantial. VERIFIED overstates behavioral assurance: the shipped result scripts lack failing oracles, execution modes are not fully certified, and metrics remain RED.
+
+  M12 — PARTIAL
+    Hash, live unauthenticated refusal and the streaming failure reproduced. Blanket VERIFIED conflicts with the demonstrated framing defect; client/upstream contracts and metrics remain unresolved.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-6b779dc6b314ff03ff1fd9aee6c47734c13c96e4a0c920b3b733c86e06df318a
+
+EXIT=0

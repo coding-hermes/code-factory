@@ -17,6 +17,28 @@ triage  →  _panel/round-N/CORRECTIONS.md     (dedupe, classify, rank)
 repeat  →  writer applies CORRECTIONS, round N+1
 ```
 
+## Sections are written together, not one at a time
+
+Serial section work loses to itself: a correction in M9 changes what M2 must say about
+the same contract, so the next round fixes M2 and breaks M9, forever. Bane's rule —
+*do multiple sections at once, or they conflict as you fix things* — is implemented as
+`--groups`, one writer per section group, all in the same round:
+
+```
+s1  M0 M1 M2 M3      node foundation
+s2  M4 M5 M6 M7 M8   support surfaces (board, harness, docs, github, safety)
+s3  M9 M10 M11 M12   control plane (scheduler, crier, dispatcher, proxy)
+```
+
+The groups are cut along contract seams rather than alphabetically, so the chapters that
+share the most interfaces move together. Each writer owns only its files, is told not to
+edit outside them, and must record a `CROSS-SECTION DEPENDENCY` when its correctness
+depends on a chapter it does not own.
+
+Concurrent writers cannot see each other's edits within a round, so the seams are checked
+before anyone judges: `handbook_spine.py` runs, and if it reports anything a **reconcile
+pass** corrects only the named inconsistencies against the code, then re-runs the spine.
+
 Stop conditions, in order — first one reached wins:
 
 1. **UNANIMOUS PASS** — all five seats return `VERDICT: PASS` with zero blocking findings.

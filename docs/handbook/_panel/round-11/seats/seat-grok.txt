@@ -1,0 +1,126 @@
+⚠️  Primary auth failed — switching to fallback: fireworks / accounts/fireworks/models/deepseek-v4p1-flash-1017
+VERDICT: FAIL
+BLOCKING: 8
+NON-BLOCKING: 4
+
+WHAT I RAN (rule 4, stated up front)
+```
+python3 scripts/handbook_spine.py                -> chapters=13 canonical contracts=18 findings=0 exit 0
+grep -rl '\. "$HERE/lib.sh"' scripts/            -> 11      full-regex variant -> 17
+wc -l scripts/lib.sh                             -> 78 (helpers at :5-9 :13 :19 :45 :48 :60 :67 :75)
+python3 tests/test_disk_floor.py                 -> Ran 12, OK
+python3 tests/test_harness_resolve.py            -> Ran 28, OK
+python3 tests/test_reclaim.py                    -> Ran 9, OK
+python3 tests/test_lane_target.py                -> rc 0
+python3 scripts/check_scan_scope.py              -> OK, 15 claims, rc 0
+bash scripts/verify-patch.sh                     -> VERIFY-PATCH: PASS (5 stages, 4 patches, 57432007…)
+scripts/boardctl validate                        -> RESULT: OK (7 warning(s))
+wc -l .coding-hermes/board/events.jsonl          -> 519          jq ids -> 357
+grep -cE 'flag\.(String|Int|...)' cmd/schedulerd/main.go -> 57    routes -> 43
+grep -rn log.Printf internal/scheduler/*.go|wc -l -> 379          sqlite3 .tables -> 30
+crier handler.go -> 1895 lines, 3 slog sites (:1332 :1795 :1885)  registry tests -> 91
+crier_ metric strings -> 67        go build ./... -> rc 0 (scheduler AND crier)
+sha256sum cf-inference-proxy.py -> b12a0ac5…e0b5 (matches M12), 273 lines
+```
+I did NOT repeat: the live-node legs (M1 certification ladder, M2/M10 `node-bus-worker.py --check`, M5 conformance battery), M7's mint (no App creds), M12's disallowed-model 403 (did not read the node token file), and the Go test suites (builds only — so M9's "25/25 green" and M10's flakiness claim are unconfirmed by me in either direction).
+
+The spine reports zero findings. That is not evidence of consistency; it is evidence about the gate. `has_fq()` (handbook_spine.py:121-123) only proves a `file:line` *pattern* exists — it never opens the file. Submodule counts are never compared (`"submodule": None`, :308). OUTLINE Part IV is never read. Every finding below sits in exactly those blind spots.
+
+FINDINGS
+
+1. kind UNBUILDABLE — chapters: all 13 — claim: OUTLINE.md:253 `VII.3 Acceptance gate per chapter — what makes a chapter WRITTEN rather than merely present`, and it is the whole content of Part VII (one line, no criterion).
+   evidence: MASTER-DOC-SCHEMA.md:7-8 `A module section that cannot fill a required field is not "incomplete" — it is RED, and the empty field is the finding`; schema §5 `If the module emits none, write "none" — and that is a RED field`. Measured from the chapters' own footers: 40 RED fields across 13 chapters (M0 1, M1 4, M2 3, M3 3, M4 2, M5 4, M6 2, M7 4, M8 1, M9 5, M10 5, M11 2, M12 4), and Metrics is `RED — none` in 11 of 13 chapters (only M9 and M10 emit metrics). So under the document's own field contract no chapter can be WRITTEN — not this round, not any round — and there is no written gate to say otherwise.
+   fix: write VII.3 with a decision rule that distinguishes "absence proved" from "not measured", and state whether metrics absence is a terminal accepted state; until then "WRITTEN" is a word without a referent and every round ends PARTIAL by construction.
+
+2. kind OMISSION — chapters: all 13 (§12 of each) — claim: M1 §12 `F2 PROVISIONING AND CERTIFICATION is the primary flow this module owns.`; M3 §12 `F5 LANDING is the primary flow M3 owns.`; M9 §12 `F11 SCHEDULING ADMISSION is the primary flow`; M11 §12 `F1 DISPATCH AND SETTLEMENT is the flow this module executes on the control box.`
+   evidence: no flow artifact exists anywhere — `docs/handbook/` contains chapters/ (13 files), OUTLINE.md, README.md, PANEL-LOOP.md and nothing else; README Part II marks all 16 rows `**MISSING**`, and README:47 admits `Parts I (beyond the rendered sheets), II.6–II.10, IV (as a re-derived register), V, VI, VII and VIII have no chapters`. The spine passes every F-reference because REF only range-checks F1–F16 (handbook_spine.py:87, :295-300). A reader who turns to the page each chapter names finds nothing; a chapter cannot be called written while its own cross-reference is a promise.
+   fix: either write the owning flow for each chapter (F1, F2, F5, F11 first — they are called "primary" and "owned"), or change §12 to cite a written artifact.
+
+3. kind UNBUILDABLE — chapter: M6 — claim: `So no chapter-aware path exists from source selection to delivered artifact` (M6 §1 status), and CT-18 state `**UNVERIFIED** — the renderer hardcodes docs/master and selects [0-9][0-9]-*.md, so it does not render these M*.md chapters`.
+   evidence (measured by this seat): master_doc_check.py:188 `sorted(root.glob("[0-9][0-9]-*.md"))`, master_doc_fill.py:422 same glob, gen_nasa_handbook.py:253-259 same glob + `no modules found` refusal; `python3 scripts/master_doc_check.py` returns `44 module(s): 37 VERIFIED, 50 error(s)` / `MASTER-DOC: FAIL` — 44 appendix unit files, zero of the 13 chapters. Consequence: the delivered handbook is un-gated and un-rendered by its own pipeline, so the only gate that reads it is the one in finding 1's blind spot.
+   fix: add the chapter-aware selection to check/fill/render (the glob is three lines) and re-stamp CT-18 with a producer that actually emits these files.
+
+4. kind CONTRADICTION — chapter: M4 — claim: `the store is measured (357/518) but the foreman→board write wire is not exercised in this repo` (M4 §6, CT-14 row).
+   evidence: `wc -l .coding-hermes/board/events.jsonl` = 519, measured this seat; M4's own §1 (`357 rows / **519** events`), §7 (519) and §13 (519) all say 519.
+   fix: 518 -> 519.
+
+5. kind CONTRADICTION — chapter: M10 — claim: §7 row `| go test | go test ./... | green | 2026-11-06, rev 86c4c469 | **FLAKY** — see the note below; not a clean PASS |` versus §13 `Commands run: go build ./... (PASS); go test ./... (PASS)`.
+   evidence: the two sentences are in the same chapter; the §7 row and its own flakiness note (`go test ./... does not reliably reproduce green at HEAD`, two named failures reproduced by two different seats) say the run is not a pass, and §13 records it as PASS. A verification record that disagrees with itself cannot be cited as evidence by anyone.
+   fix: delete `(PASS)` in §13; record `go test ./... — FLAKY at 86c4c469, failing test varies; see §7`.
+
+6. kind CONTRADICTION — chapters: M3, M5, README — claim: M3 §3 `| S1 clone a lane row | clone_lane.py | ...` and `| S1 track freshness | repo_freshness.py | ...`; M5 §3 F5-4 `OUTLINE v2 lists M5 as 5 submodules (S1–S5); docs/UNIT-MAP.yaml lists 3 (S1–S3). The two structure maps still disagree`.
+   evidence: M3's table has two distinct units under one id, so `M3.S1` is ambiguous; row count 49 vs distinct ids 48, which is the only way README I.4's `13 modules, 48 submodules` and OUTLINE's `48 submodules` hold. The spine cannot see it (submodule count is `None`, handbook_spine.py:308), and the M5 map disagreement is still open. A structure count with two source maps and a duplicate id has no authority.
+   fix: give the two units unique ids (S1/S1b) and resolve UNIT-MAP vs OUTLINE to one map, then re-count.
+
+7. kind CONTRADICTION — chapters: M2/M4/M6/M9/M10/M11 vs M0/M1/M3/M5/M7/M8/M12 — claim (six chapters, verbatim): `Local ids are retired; each row carries the CT id its peer chapter cites, so two ends can be matched.`
+   evidence: ten local ids are live — M0-C1, M1-C1, M1-C2, M3-C1, M3-C2, M5-C2, M7-C1, M8-C1, M12-C1, M12-C2. Worse, M7 and M8 cite no canonical CT id at all (their whole §6 is M7-C1 / M8-C1), so two real interfaces — GitHub App installation-token mint, and the filesystem reap boundary — sit outside OUTLINE Part IV's 18. Part IV's "18 interfaces" is therefore not the complete register, and the one mechanism built to match two ends (the CT id) does not apply to the chapters that most need it.
+   fix: either register the two interfaces canonically and say which local ids remain as sub-edges of a CT, or delete the "retired" sentence and state the two-register convention once, in Part IV.
+
+8. kind CONTRADICTION — document register: OUTLINE Part IV vs seven chapter §6 rows — claim: OUTLINE.md:209-214 re-derives only the both-sides count (`Current (round 11, re-derived from the chapters): 5 of 18 internal contracts name both file:function`), while the per-contract state column below it still reads:
+   evidence (outline -> chapter): CT-01 `works` -> M9 `UNVERIFIED (boundary)`; CT-07 `works` -> M12 `UNVERIFIED (boundary)`; CT-11 `works` -> M2 `UNVERIFIED (boundary)`; CT-13 `broken` -> M4 `UNVERIFIED`; CT-14 `works` -> M4 `UNVERIFIED`; CT-17 `broken` -> M5 `UNVERIFIED`; CT-18 `works` -> M6 `UNVERIFIED`. Only CT-02/03/04 carry `(superseded — see …)` notes. Seven of eighteen rows of the register a reader will actually use are contradicted by the chapter that measures them. The spine passes because it never reads OUTLINE Part IV.
+   fix: re-derive the state column from the chapters this round, or annotate every superseded row with the chapter that supersedes it; an outline that says "works" over a chapter that says "UNVERIFIED" is the exact rumour-with-a-verdict the chapters were written to kill.
+
+NON-BLOCKING
+
+9. kind PADDING — chapters: 12 of 13 (70 passages match `Round-[0-9]|round-[0-9]`) — example claims: M6 §5 `Round-4's "0 serialises" was false (sol B14)`; M2 §11 `Round-4's "crash-before-persistence" discussion missed this same-batch case.`; M3 §7 `Round-6 said "none is shipped" — false.`
+   evidence: these sentences are about the panel's history, not about the machine; OUTLINE already allocates the home for them (Appendix D, `Change log and supersession record`). They are readable, they are not actionable, and they grow every round — M9 carries ten, M12 eight.
+   fix: keep one clause where the correction changes what an operator does (M0's `have()` empty-success, M11's withdrawn kill guarantee), move the rest to Appendix D.
+
+10. kind OMISSION — chapter: M0 — claim: `**Exported helper inventory (B09, completed this round — every helper in lib.sh)**`, with `fetch_verified()` described as `url/dest/digest -> 0 on digest-verified install, 1 on any failure`.
+    evidence: lib.sh:40 `chmod +x "$dest" 2>/dev/null || true` — every verified download is made executable and a failed chmod is swallowed; the function's own comment at :18 calls the exit code "the INSTALL, not the best-effort chmod". An operator reading the inventory will not know the primitive silently chmods the artifact.
+    fix: add one row/one clause: successful install chmods +x, failure ignored.
+
+11. kind locator drift — chapter: M1 — claim: `:44-53 port validation (NEW leg, CF-270) ... a digit test (:44-46), a 5-digit length cap (:47), then two ... refusals (:48-49 and :51-54)`.
+    evidence (measured): digit test is :40-43, the length cap is :46, the refusals are :47-50 and :52-55 (printf :48 and :53, `exit 2` :49 and :54). The strings and the two refusals are exactly as described; the block bounds are off by ~4 lines, in a chapter that states `all re-pinned this round`.
+    fix: correct the five ranges; substance needs no change.
+
+12. kind UNVERIFIED (record) — chapter: M3 — claim: `| freshness gate | tests/selftest.sh arm cf244-node-freshness | freshness sub-cases PASS | 2026-11-06 | arm present (:3433-3670); not re-run this round (see note) |`.
+    evidence: the Result column carries neither PASS nor UNVERIFIED, so the row cannot be counted or contradicted — in a table whose contract (schema §4) is `Expected/Result` with a stamp. The honest word is UNVERIFIED.
+    fix: `UNVERIFIED — arm present, not run this round`.
+
+DEFECT CLASSES
+```
+gate-cannot-see-the-artifact      (spine blind to locators/submodules/Part IV; doc gate blind to M*.md)
+unreachable-definition-of-done    (RED-field rule vs "WRITTEN"; VII.3 unwritten)
+declared-but-absent artifact      (16 flows, Parts I/V-VIII referenced by chapters)
+stale-annotation contradiction    (OUTLINE Part IV state column, 7 of 18 rows)
+count drift after re-measurement  (518 vs 519)
+verification-record self-contradiction (M10 FLAKY vs PASS)
+duplicate register id / two-authority structure map (M3 S1 x2, UNIT-MAP vs OUTLINE)
+register convention fork          (10 live local ids in 7 chapters that say ids are retired)
+panel-changelog padding           (70 round-N passages)
+bounded locator drift             (M1 port-leg ranges)
+```
+
+CHAPTER SCORECARD — 0 WRITTEN, 13 PARTIAL, 0 SKELETON
+```
+M0  PARTIAL  Body and every cited line verified by me (78 lines, helpers :5-:75, 11/17 sourcing greps).
+             Not WRITTEN: 1 RED field (metrics); helper table omits lib.sh:40 chmod.
+M1  PARTIAL  Locators exact where I checked (bunker-provision :214/:233/:601/:604-609, disk_floor :36/:123,
+             verify-node 241 lines, TTL :355-356); 4 RED fields (4 unread bodies, live ladder unrun).
+M2  PARTIAL  Constants exact (:81-85, :113-114, :1479-1489); CT-09 absence reproduced (0 matches); 3 RED.
+M3  PARTIAL  Sizes exact (308/180/130/4852); F3-5 (no in-repo lander caller) and duplicate-S1 defect.
+M4  PARTIAL  All quoted output reproduced (357 rows, 519 events, validate OK 7 warnings); 518/519 contradiction.
+M5  PARTIAL  Every pin locator exact (install-hermes :23/:24/:26, codex :47/:49/:51/:56-60, claude :36/:39/:40/:43,
+             harness-vars :28/:31/:203-204/:276-281); 4 RED (conformance unrun, UNIT-MAP fork).
+M6  PARTIAL  verify-patch output reproduced verbatim (5 stages, 4 patches, 57432007…); chapters invisible to its
+             own gate and renderer; CT-18 unproduced.
+M7  PARTIAL  CLI/exit-2 reproduced; mint never run; only a local contract id (finding 7); 4 RED.
+M8  PARTIAL  Both files read in full by me too; 9 tests and 15-claim scan reproduced; 1 RED (metrics).
+M9  PARTIAL  Strongest evidence in the set: 57 flags, 43 routes (enumeration exact), 30 tables, 379 sites,
+             migration locators, build rc 0; 5 RED (2/379 logs, three packages grep-level, S3/S4 contracts unrun).
+M10 PARTIAL  1895 lines, 3 slog sites, 91 test files, 67 metrics, config defaults :622-673 all exact; build rc 0;
+             5 RED plus the FLAKY/PASS contradiction.
+M11 PARTIAL  538 lines, 23 log sites, inert DISPATCH_EXEC_TIMEOUT reproduced (:47 only); kill guarantee withdrawn
+             (F11-8) and tests cannot fail (F11-2).
+M12 PARTIAL/F text hash, 273 lines, sink paths :50/:52 and the unframed SSE path :206-224 all confirmed; streaming
+             is FAILING with a demonstrated defect and no shipped oracle.
+```
+
+The chapters are, on the evidence I could reproduce, unusually accurate: every line number I sampled resolved, every quoted count matched, both Go builds pass, and the weaknesses the chapters admit are real weaknesses, not cover. That does not make this round a pass. The document still cannot be delivered (finding 3), cannot be graded complete under its own rules (finding 1), points at 16 flows that do not exist (finding 2), and its register — the one table a reader trusts to know what is connected — is wrong on seven of eighteen rows (finding 8). Fixing those is work; softening them would cost another loop.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-febff1cabde19f0e1101e4a61758a4755d198b804ce844af6217f7d6581c3ee7
+
+EXIT=0

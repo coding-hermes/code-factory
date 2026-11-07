@@ -6,7 +6,7 @@
 |---|---|
 | Module name | GITHUB |
 | Path | `/home/kara/code-factory/scripts/` — `github-app-setup.sh`, `github-app-token.py`, `github-app-refresh.sh` |
-| Revision | `943ef984dc093e5780605ac6e54cd043122126ef` (code-factory HEAD, 2026-11-06) |
+| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; no file M7 cites changed in `47d68b4..08a2c8a`) |
 | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
 | Owner lane | code-factory (control host) |
 | Status | **UNVERIFIED** — CLI surface measured (`github-app-token.py` exits 2 with no command); the settings/control regions read (`:107-117`, `:300-372`, `:579`; `github-app-refresh.sh:37-53,104-174`); mint not run (no App creds on this host) |
@@ -77,6 +77,11 @@ stale token while reporting fresh silently pushes with an expired credential.
 
 ## 6. Contracts in and out
 
+M7 has **no entry in the canonical register** (CT-01..CT-18, OUTLINE Part IV): the GitHub App
+installation-token mint is a node→github.com credential exchange, not one of the 18 cross-system
+contracts, and no peer chapter describes it from the opposite end. It is listed below as a local
+edge; the mint was never run on this host (no App creds), so the state is UNVERIFIED.
+
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
 | M7-C1 | GitHub | out | `github-app-token.py:362` `mint()` (JWT → installation token; POST at `:371`) | **external service** — `github.com`'s `POST /app/installations/{id}/access_tokens` API operation, not an in-repo `file:function` | **UNVERIFIED** — the mint was never run (no App creds on this host); the consumer is an external API, so the state is UNVERIFIED, not "works" (kimi B42) |
@@ -88,7 +93,7 @@ stale token while reporting fresh silently pushes with an expired credential.
 | shell parse | `for f in scripts/github-app-*.sh; do bash -n "$f"; done` | exit 0 | 2026-11-06 | PASS (in 20/20 sweep) |
 | python compile | `python3 -m py_compile scripts/github-app-token.py` | exit 0 | 2026-11-06 | PASS |
 | CLI surface | `python3 -B scripts/github-app-token.py` | usage, exit 2 | 2026-11-06 | **PASS** (exit 2, usage) |
-| token mint | `python3 scripts/github-app-token.py token …` (needs App creds) | fresh token, value not printed | not run this round | **UNVERIFIED** (no App creds on this host) |
+| token mint | `python3 scripts/github-app-token.py token` with `GITHUB_APP_ID` + `GITHUB_APP_INSTALLATION_ID` + `GITHUB_APP_PRIVATE_KEY_FILE` set (or `--env-file`); the mint-and-write path is `github-app-token.py:598-606` | fresh token, value not printed | not run this round | **UNVERIFIED** (no App creds on this host) |
 
 ## 8. Metrics
 
@@ -98,6 +103,8 @@ scripts/github-app-refresh.sh scripts/github-app-setup.sh` → 0 matches. Token 
 latency are answerable only by reading the refresh log.
 
 ## 9. Log lines (verbatim)
+
+**Scope (B09, measured this round).** `grep -rcE '\b(ok|bad|warn|note|say)\s+"' scripts/github-app-*.sh` sums to **103** helper call sites across the three scripts. The 2 rows below are the evidentiary no-op/refusal rows; the generic per-row helper surface is not inventoried one-per-site — the uncovered count is a named RED on this field.
 
 | Level | Line | Emitted when | Kind |
 |---|---|---|---|
@@ -148,4 +155,4 @@ latency are answerable only by reading the refresh log.
     `~/.hermes/scripts/gh-app-token.py` (a separate minter), and the node-token producer for M12 is
     unknown.
 
-## RED field count: 3 (Metrics §8 — absence-proved; §1 mint UNVERIFIED; M7-C1 contract state UNVERIFIED — consumer is an external API)
+## RED field count: 4 (Metrics §8 — absence-proved; §1 mint UNVERIFIED; M7-C1 contract state UNVERIFIED — consumer is an external API; §9 inventory 2 of 103 helper call sites — the descriptive rows not tabulated one-per-site)

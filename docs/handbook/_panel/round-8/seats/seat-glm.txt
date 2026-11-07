@@ -1,0 +1,169 @@
+All verification is done. The M0 fail-closed probe reproduced (connection refused, no artifact left; the empty rc= in my output is my own shell-quoting artifact, not the chapter's). Full verdict:
+
+════════════════════════════════════════════════════════════════════
+
+VERDICT: FAIL
+
+BLOCKING: 5 — findings that must be fixed before these chapters can be called written
+NON-BLOCKING: 5
+
+FINDINGS:
+
+BLOCKING
+
+1. FALSE CLAIM — M3-repository — "land-node-branch.sh (295 lines)" and every locator into it
+   are false at the chapter's own stamped revision (226ae37).
+   Evidence: `git show 226ae37e:scripts/land-node-branch.sh | wc -l` = 308 (not 295);
+   `git log 226ae37e..HEAD -- scripts/land-node-branch.sh` is empty — no drift after stamp.
+   Measured at the stamp: `LANDED:` is :304 (cited :291 — :291 is `remote_tip=$(git rev-parse…)`);
+   `LAND: FAIL ($FAILED)` is :307 (cited :294); `LAND: DRY-RUN — 0 commands…` is :244 (cited :231);
+   `LAND: REFUSED` is :58 (cited :56 — :56 is `bad "$1" "$2"`); refuse-descendant is :202 (cited
+   :167, a comment); no_ff_local is :223/:227 (cited :214); `REMOTE/MAIN/GATE=""` defaults are
+   :38 (cited :36, which is `. "$HERE/lib.sh"`); `--gate-cmd` is :108 (cited :76, the dry-run
+   branch); the push/proof block is :276-292 (cited :265-283). Also "selftest.sh is 4,591
+   lines" (measured 4737) and the cf244 arm ":3413-3650" (measured BEGIN :3433 / END :3670).
+   The claims' *content* is true — I re-ran the entire battery: `SELFTEST: PASS`, rc 0, landing
+   arm green — but the evidence column is wrong at the stamp, which rule 1 makes blocking.
+   Fix: re-derive every land-node-branch.sh and selftest.sh locator at the stamped revision
+   (or re-stamp at the measured HEAD), and correct the two line-count claims.
+
+2. FALSE CLAIM — M2-dispatch — the settlement-ordering locators point at the wrong code.
+   Claim quoted: "Settlement ordering (B10…) node-bus-worker.py:1300-1367: execute (process) →
+   deliver each result → write the seen-cache only after delivery succeeds → ack last".
+   Evidence: :1300-1367 is the `--check` ladder plus the start of the message loop. The real
+   settlement block is :1389-1421 (deliver :1392, `seen[key]` :1394-1395, `save_seen` :1398,
+   its OSError warn :1399-1403 — cited ":1352-1354"; ack skip :1407-1414 — cited ":1358-1365").
+   The same-batch duplicate loop cited ":1304-1331"/":1341-1347" is actually :1361-1396.
+   Settings constants are off by one: DEFAULT_INBOX_LIMIT :80→81, DEFAULT_LEASE_SECONDS
+   :81→82, SEEN_LIMIT :84→85, CF_MAX_TURNS :112→113, CF_TIMEOUT_S :113→114. §1 "reply shape
+   :1128-1144" is the dry-run "WOULD" rows; the reply dict is :1176-1192 — which M2's own §6
+   cites correctly, so the chapter contradicts itself. File is byte-identical 226ae37..HEAD
+   (`git diff` empty) — not post-stamp drift. Fix: re-pin the settlement block, the constants,
+   and §1 to the measured lines.
+
+3. CONTRADICTION — M3 / M5 / M9 vs M2 (and vs the file) on node-bus-worker.py locators.
+   Claim quoted (M3 M3-C2): "node-bus-worker.py:1139-1140 builds branch/commit"; (M9 §2):
+   "status:\"failed\" (the field node-bus-worker.py:1132 actually sends)"; (M5 F5-2): "reads
+   node.json's harness.cmd/harness.name (node-bus-worker.py:407-409)".
+   Evidence: branch/commit are built at :1187-1188; the reply `status` field is :1179 (:1132
+   is a dry-run `say`); the harness read is :412-414 (:407-409 is crier-URL handling). M2 §6
+   correctly cites the reply envelope at :1176-1192. Four chapters cite one file with
+   mutually inconsistent anchors; a reader cannot tell which is right without re-deriving.
+   Fix: adopt M2 §6's anchors as canonical and re-derive M3/M5/M9.
+
+4. FALSE CLAIM (count) — M4-board — "events.jsonl (515 lines)" re-measured "2026-11-06 at
+   HEAD 226ae37".
+   Evidence: `git show 226ae37e:.coding-hermes/board/events.jsonl | wc -l` = 518; working
+   tree = 518. The count was false at its own stamp (the 357-tasks figure IS correct).
+   Related, not a defect: board_drift now reads `RESULT: DRIFT (4 failed)` with 1 divergent
+   id (CF-270) because origin/main moved to 4dc0ef0 — the chapter explicitly predicts this
+   and instructs a re-run after merge, so only the 515 is wrong. Fix: re-count, re-stamp.
+
+5. FALSE CLAIM — M10-crier — the Guard settings rows are shifted one line up.
+   Evidence (cited → measured in config/config.go): Guard.Enabled :644→645 (:644 is
+   `Guard: GuardConfig{`), Timeout :645→646, MaxConcurrent :646→647, CircuitThreshold
+   :647→648, CircuitCooldown :648→649, MaxPayloadBytes :649→650, RenderMaxBytes :650→651,
+   DeepSeekBaseURL/Model :651-652→652-653, KanbanQueueSize :653→654. All values are correct
+   and the Webhook rows (:636-642) are exact, so the shift is confined to the Guard block —
+   nine rows of a load-bearing register, each one line off. Fix: shift the nine rows.
+
+NON-BLOCKING
+
+1. CONTRADICTION (disclosed) — OUTLINE Part IV row "node → crier — reply: in_reply_to,
+   corr_id, run_id, outcome · broken" carries no supersession annotation while its two
+   siblings do. M2 CT-04 measures works (transport) and shows the real reply fields (no
+   run_id/outcome exist); M2 §6 flags the row as stale and the README declares the whole
+   register stale until Part IV is re-rendered. Fix: annotate the row like its siblings.
+
+2. M1-provisioning — "Five flags were assigned during parsing and then overwritten by
+   load_config (:604-608)": six assignments follow (:604-609 — DUCKBRAIN_URL,
+   GITHUB_TOKEN_FILE, DUCKBRAIN_TOKEN_FILE, CRIER_AGENT_KEY_FILE, CRIER_AUTH_TOKEN_FILE,
+   S3_ENV_FILE). The chapter inherited the code comment's "five" without counting. Fix: six.
+
+3. M12-inference-proxy — grep site "scripts/panel_loop.py:136" is actually :145 (the other
+   three sites are exact and the count of four is correct). Fix: re-pin.
+
+4. M5-harness / structural — UNIT-MAP.yaml lists 3 submodules for M5, OUTLINE lists 5
+   (F5-4, disclosed in-chapter). Two structure maps disagree; the fix belongs to the maps,
+   not the chapter.
+
+5. README — "Chapter completeness | … (round 5)" carries a stale round tag in the round-8
+   document. Cosmetic.
+
+DEFECT CLASSES:
+LOCATOR-ROT (citations false at the chapter's own stamped revision — the dominant class,
+M2/M3/M4/M10/M12); COUNT-DRIFT (counts false at own stamp); OFF-BY-ONE citation families
+(M2 constants, M10 Guard block); INTERNAL-CONTRADICTION (chapters disagreeing on the same
+file's anchors); DISCLOSED-STALE register rows (outline Part IV, README tags — disclosed,
+so non-blocking).
+
+Spine: `python3 scripts/handbook_spine.py` → findings=0 (repeated by me; chapters=13,
+canonical contracts=18). That clean result is not evidence against the above: the spine
+checks document-internal consistency only (canonical ids, duplicate setting defaults,
+dangling M/F refs, document-level totals). It cannot validate file:line targets or
+repo-level counts, which is where every blocking defect lives.
+
+Repeatability (rule 4) — repeated by me this round: lib.sh helper/line audit and the 11/17
+sourcing greps; fetch_verified fail-closed probe (connection refused, no artifact left);
+disk-floor 12/12; lane-target 40/40; harness-resolve 28/28; reclaim 9/9; scan-scope "15
+claims" RESULT OK; boardctl validate `RESULT: OK (7 warning(s))` with the exact named
+warnings; 357-task census; boardctl 20-verb surface; M6 doc gate `44 module(s): 37
+VERIFIED, 50 error(s)` / `MASTER-DOC: FAIL` rc 1 (exact); verify-patch `4 stages, 3
+patches, f393a681…` PASS (exact); full `tests/selftest.sh` PASS rc 0 (landing arm green);
+scheduler `go build` rc 0 + the three env-sensitive tests PASS; crier `go build` rc 0 +
+`internal/registry` test ok, 91 test files, 3-site slog surface, 67-string metric census;
+dispatcher.py compile, 538 lines, no-assert test check, 25 log( lines; proxy sha256
+b12a0ac5… exact, live 401 reproduced, systemd unit active with the 10-upstream.conf
+drop-in. NOT repeated by me: scheduler full `go test ./...` (25 pkgs) and crier full
+`go test ./...` beyond internal/registry — chapter claims both green, I verified builds and
+subsets; the cf-node bus-worker ladder (chapter itself marks it not repeatable from this
+host); the M7 mint (no App creds — chapter marks UNVERIFIED). Claims that verified exactly
+with zero drift: M0 (all), M6 (all), M7 (all), M8 (all), M11 (all ~50 sampled locators),
+M9 (all 40+ sampled locators incl. 43 routes / 57 flags / 10× LoadRootConfig / 379 log
+sites / 30 tables / flag defaults / admission / migrations), M1's B05 false-green asymmetry
+(:150 warn-without-unverified vs :198 seed-with-unverified — true).
+
+CHAPTER SCORECARD:
+
+M0 SHARED CONTRACT — PARTIAL. Every locator and grep re-verified exact; PARTIAL only
+because Metrics is a proven-RED field (schema §5, round-2 B03 ruling).
+M1 PROVISIONING — PARTIAL. Sampled locators exact (mode-600 lie, floor precedence, TTL
+fallback, ladder asymmetry all real); four unit bodies declared unread; five-vs-six count
+nit.
+M2 DISPATCH — PARTIAL. Content true (reply shape, PID hardcode, lane_target caller,
+crier cap, 40/40 tests), but settlement/constants/§1 locator rot is blocking.
+M3 REPOSITORY — PARTIAL. Behaviorally the strongest (full selftest PASS re-run; gate-empty
+default, no-invoker grep, rmtree-with-report all true), but the evidence column for
+land-node-branch.sh and selftest.sh is false at the stamp — blocking.
+M4 BOARD — PARTIAL. Validate/lock/admission-board locators exact and the 7 warnings
+reproduce verbatim; events count false at stamp — blocking.
+M5 HARNESS — PARTIAL. Declared UNVERIFIED; installer/pin/flag registers exact; rides the
+node-bus-worker locator contradiction.
+M6 DOCUMENTATION — PARTIAL. Everything reproduced exactly, including its own gate's FAIL
+(44/37/50) and the honest UNBUILDABLE finding against the M*-blind fill/render pipeline
+(`[0-9][0-9]-*.md` globs confirmed at :188/:422/:253-259).
+M7 GITHUB — PARTIAL. Exact throughout; mint honestly UNVERIFIED (no creds on host).
+M8 SAFETY — PARTIAL. Exact throughout (targets, TTL semantics, 15-claim scan); Metrics RED.
+M9 SCHEDULER — PARTIAL. Measured counts all reproduce (43/57/10/379/30, every flag default,
+admission ladder, store keys, env-contamination correction confirmed by my clean-env test
+run); one drifted node-bus-worker anchor rides finding 3; declared REDs are honest.
+M10 CRIER — PARTIAL. Nearly everything exact (revision, 43 routes region, ports, custody
+bounds, 3-site slog, 91 files, 67 census, policy/guard/client locators); the Guard settings
+block is uniformly off by one — blocking.
+M11 DISPATCHER — PARTIAL. The cleanest chapter: every sampled locator exact, revision and
+line counts exact, decoration-test finding true; PARTIAL for RED metrics and the
+cannot-fail test row, both declared.
+M12 INFERENCE PROXY — PARTIAL. sha256/401/systemd/locators reproduced; one drifted grep
+site; REDs (node-client half, stream completion) declared.
+
+The set is closer than round 7's: false factual claims of the old kind (fabricated
+callers, invented filenames, wrong verb surfaces) are gone, and the honest-UNVERIFIED
+discipline is real. What remains is a citation-hygiene defect: one file's locators
+(node-bus-worker.py) and two chapters' registers were never re-derived against the
+revision they stamp. That is cheap to fix and exactly what rule 1 exists for.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-14a96dcabf58df74991ec0cb64b803c74925f75d2665642688b51f888c3588a1
+
+EXIT=0

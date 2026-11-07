@@ -1,0 +1,55 @@
+I've read the brief, OUTLINE, MASTER-DOC-SCHEMA, all 13 chapters, the README, and the spine script; run the spine; and spot-verified the load-bearing claims against the actual code. Verdict follows.
+
+VERDICT: FAIL
+
+BLOCKING: 3
+NON-BLOCKING: 6
+
+FINDINGS:
+
+1. kind UNBUILDABLE — M6 — claim: "The fill/render/panel pipeline is UNBUILDABLE against these M-numbered chapters" (M6 §1 Status, B13). Evidence: `master_doc_fill.py:422`, `gen_nasa_handbook.py:253-260` and `master_doc_check.py:188` all select `[0-9][0-9]-*.md`, which does not match `M0-shared-contract.md` … `M12-inference-proxy.md`. Verified against the sources. Fix: make the selection glob chapter-aware (accept `M[0-9]+-*.md` alongside `[0-9][0-9]-*.md`), or add a separate chapter-aware fill/render/panel path. Until then the handbook cannot be produced by its own toolchain, and this is the single most load-bearing blocker.
+
+2. kind UNVERIFIED (NAME ONLY) — M9 — claim: "Auxiliary / routing / lifecycle flags … consequence is scoped, not expanded per row" (M9 §5, 32 of 57 flags). Evidence: `cmd/schedulerd/main.go` measured `grep -cE 'flag\.(String|Int|Int64|Bool|Duration|Float64)'` = 57 (verified); 25 flags carry default+range+consequence, 32 carry name+default only. Per rule 3 a name with no consequence counts as unwritten. Fix: fill default/range/consequence for the remaining 32 flags (the chapter itself names this a RED on the register, deepseek #2 / sol B19).
+
+3. kind UNVERIFIED — M9 — claim: "the remaining 377 sites are uncovered and are the named RED on this field" (M9 §9). Evidence: `grep -rn "log.Printf" internal/scheduler/*.go | wc -l` = 379 (verified); only 2 sites are tabulated in §9. The schema §6 requires every operator-visible line, verbatim. Fix: complete the log-line inventory (or file a scoped board row and cite it as the standing exception).
+
+NON-BLOCKING (honestly self-reported, not writing defects):
+
+4. OMISSION (scope) — F-ROOT-1 — Parts I (beyond rendered sheets), II.6–II.16 (11 of 16 flows), and Parts V/VI/VII/VIII have no chapters. Stated explicitly in README ("This round's deliverable is Part III only") and filed. Non-blocking for the Part III deliverable, but it is the largest structural gap and is what makes "Can a task list be derived?" answer "Not yet" (Part VII unwritten).
+
+5. RED Metrics × 11 modules — M0, M1, M2, M3, M4, M5, M6, M7, M8, M11, M12 all report Metrics "none" (absence-proved by repo-wide grep, quoted with command and 0-match output). This is a system observability defect (board rows filed), not a writing defect; per the round-2 B03 ruling it keeps those chapters PARTIAL, correctly.
+
+6. Environmental UNVERIFIED — M1/M5/M7: certification ladder, conformance battery and token mint unrun because they require a live node or GitHub App creds absent on this host. Correctly labelled, not fabricated.
+
+7. Boundary-contract UNVERIFIED — CT-01/05/07-18 (14 of 18) name the covered side and mark the far side rumour/missing/external. Correct per OUTLINE I.9; the spine treats these as complete.
+
+8. Stale outline text — OUTLINE M9.S3 "26 tables" vs measured 30 (F9-2); OUTLINE Part IV "10 works / 6 broken / 2 missing" vs re-derived per-contract state. Both superseded in-chapter; outline-side, not chapter-side.
+
+9. Minor README RED-column drift — README lists M2 RED "Metrics" but M2's own RED count is 2 (Metrics §8 + §7 ladder not repeatable); M3 README "S2 operator-invoked" vs M3's §1 repo_freshness body unread. Cosmetic; not a count claim the spine weighs.
+
+DEFECT CLASSES: UNBUILDABLE (pipeline glob mismatch) · NAME-ONLY settings (M9 auxiliary flags) · RED fields (metrics-absent, unread bodies, unrun verification) · UNVERIFIED boundary contracts (external peers) · OMISSION (out-of-scope parts/flows). FALSE CLAIM: none found. CONTRADICTION: none (spine 0 findings; cross-chapter producer/consumer agreement holds). PADDING: none.
+
+CHAPTER SCORECARD (all against code; every spot-checked claim verified true):
+M0 PARTIAL — Metrics RED; otherwise complete and source-verified.
+M1 PARTIAL — Metrics RED; four unit bodies unread line-by-line; certification ladder unrun.
+M2 PARTIAL — Metrics RED; live bus-worker ladder not repeatable from this host.
+M3 PARTIAL — Metrics RED; repo_freshness.py body unread.
+M4 PARTIAL — Metrics RED; CT-13/CT-14 UNVERIFIED (external peers).
+M5 PARTIAL — Metrics RED; foreign installer bodies unread; conformance unrun.
+M6 PARTIAL — Metrics RED; own gate reads MASTER-DOC FAIL; pipeline UNBUILDABLE (blocking #1).
+M7 PARTIAL — Metrics RED; mint UNVERIFIED; M7-C1 UNVERIFIED.
+M8 PARTIAL — Metrics RED (sole RED; bodies read in full).
+M9 PARTIAL — 5 RED fields; settings register and log inventory incomplete (blocking #2, #3).
+M10 PARTIAL — 4 RED fields (handler body, per-metric contract, guard log surface, custody-proof).
+M11 PARTIAL — Metrics RED; live-job tests are decoration (0 assert, verified).
+M12 PARTIAL — Metrics RED; node-client half and stream completion UNVERIFIED.
+
+Verification performed this round, all reproduced independently: spine (`chapters=13 canonical contracts=18 findings=0`, rc 0); CF-355 `dispatchReplyVerdict` reads only `payload["ok"]`, absence-of-verdict = success (dispatch_leg.go); node reply fields are `status/dispatch_id/corr_id/…` with no `run_id`/`outcome` (node-bus-worker.py:1176-1192); `dispatch_wall` accepts-then-`int()`-converts, no clamp (node-bus-worker.py:1200-1205); cf-inference-proxy.py = 273 lines, sinks `cf-inference-usage.jsonl`/`cf-inference-requests.jsonl`, `bytes | None` at :164, stream path emits headers with no framing; scheduler 30 tables / 43 routes / 57 flags / 379 log.Printf; crier 3 slog sites / 91 test files / 67 metric strings; dispatcher 25 `log(` lines / 0 assert in test_durable_job.py.
+
+Net: this is the strongest round yet — zero false claims, zero contradictions, spine-clean, and every precise count I re-ran matched the chapter text. It fails on buildability and completeness, not on accuracy: no chapter is WRITTEN, M6's own toolchain cannot select these M-numbered chapters, and M9's settings/log registers are materially unfilled. Those three are the blocking remainder.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-3a9bc7973d7a09ff269e02350e05006e3a4cbdeb2a18f2c8582b0e164921359e
+
+EXIT=0

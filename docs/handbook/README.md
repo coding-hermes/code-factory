@@ -22,21 +22,21 @@ for. Read this first; everything else is detail hanging off it.
 
 | § | Contents | Source | Status |
 |---|---|---|---|
-| I.1 | Master system view — six layers, components, contracts | `docs/SYSTEM-MODEL.yaml` → `gen_system_views.py` | **RENDERED** (sheet 2) |
-| I.2 | Component register — 27 components | same, sheet 3 | **RENDERED** |
-| I.3 | Contract register — 18 cross-boundary interfaces with measured state | same, sheet 4 | **RENDERED** (register text says "10 works / 6 broken / 2 missing" — see Part IV note) |
-| I.4 | Unit map — which module and submodule each unit serves | `docs/UNIT-MAP.yaml` | **MAPPED** (13 modules, 47 submodules) |
+| I.1 | Master system view — six layers, components, contracts | `docs/SYSTEM-MODEL.yaml` → `gen_system_views.py` | **MISSING** (no rendered artifact — the renderer globs `docs/master/[0-9][0-9]-*.md`, which does not exist) |
+| I.2 | Component register — 27 components | same, sheet 3 | **MISSING** |
+| I.3 | Contract register — 18 cross-boundary interfaces with measured state | same, sheet 4 | **MISSING** (register text says "10 works / 6 broken / 2 missing" — see Part IV note) |
+| I.4 | Unit map — which module and submodule each unit serves | `docs/UNIT-MAP.yaml` | **MAPPED** (13 modules, 48 submodules) |
 | I.5 | Boundary and actors | `docs/RUMSFELD.md` | **PARTIAL** |
 
 ## PART II — OPERATIONAL FLOWS
 
 | § | Flow | Class | Status |
 |---|---|---|---|
-| II.1 | DISPATCH — a lane tick reaches a node and work is logged | primary | **RENDERED** (sheet 5) |
-| II.2 | PROVISIONING — a bare host becomes a working node | primary | **RENDERED** (sheet 6) |
-| II.3 | RUN CAPTURE AND SEARCH | primary | **RENDERED** (sheet 7) |
-| II.4 | DOCUMENTATION | primary | **RENDERED** (sheet 8) |
-| II.5 | LANDING | primary | **RENDERED** (sheet 9) |
+| II.1 | DISPATCH — a lane tick reaches a node and work is logged | primary | **MISSING** |
+| II.2 | PROVISIONING — a bare host becomes a working node | primary | **MISSING** |
+| II.3 | RUN CAPTURE AND SEARCH | primary | **MISSING** |
+| II.4 | DOCUMENTATION | primary | **MISSING** |
+| II.5 | LANDING | primary | **MISSING** |
 | II.6 | MAINTENANCE | secondary | **MISSING** |
 | II.7 | MONITORING | secondary | **MISSING** |
 | II.8 | RECOVERY | secondary | **MISSING** |
@@ -97,33 +97,33 @@ leaves the statuses PARTIAL where the evidence says so.
 |---|---|---|
 | IV.1–IV.18 | the 18-interface register (sheet 4) | **stale** — the register's "10 works / 6 broken / 2 missing" is the outline's structure text, not re-derived from the chapters |
 
-**Register-of-record re-scope (glm #2, applied round 6).** The OUTLINE Part IV rows
-"scheduler → crier — envelope … **broken**" and "crier → node — inbox + lease … **works**" are
-superseded by M10-C1/M10-C2 this round: the scheduler→crier envelope leg **works (transport)** —
-crier delivers the envelope verbatim (`handler.go:990` `HandleDeliver`), and the `text_b64` vs
-`text` mismatch (CF-354) is a **node-consumption** defect on the scheduler→node semantic leg
-(`node-bus-worker.py:986` reads `text`, `<scheduler>/internal/bus/dispatch.go:202` emits
-`text_b64`), not a scheduler→crier break. The "10 works / 6 broken / 2 missing" count is therefore
-not re-derived and stays stale until Part IV is written chapter-by-chapter; the per-row truth is in
-the chapters (M9-C2/M9-C3, M10-C1/M10-C2/M10-C3, M2-C1/M2-C2), which are the authority.
+**Canonical register (round 9).** The 18 interfaces are now cited by their canonical id
+`CT-01..CT-18` in the owning chapters' §6, replacing the round-2..round-7 local ids (M2-C1,
+M9-C2, …) that left two ends un-matchable. Mapping (id → contract → owning chapters):
 
-The rule: *a contract with one side named is a rumour.* Measured this round across
-the 25 contract rows the chapters actually carry:
+- CT-01 owner→scheduler (M9) · CT-02 scheduler→crier (M9, M10) · CT-03 crier→node (M10, M2, M11) ·
+  CT-04 node→crier (M2, M10) · CT-05 foreman→scheduler (M9) · CT-06 crier→scheduler (M9, M11) ·
+  CT-07 router→gateway (M12) · CT-08 crier→gateway (M10) · CT-09 node→duckbrain (M2) ·
+  CT-10 node→board (M4) · CT-11 node→sessionstore (M2) · CT-12 node→gitreins (M3) ·
+  CT-13 gitreins→board (M4) · CT-14 foreman→board (M4) · CT-15 foreman→duckbrain (M9) ·
+  CT-16 docsgate→handbook (M6) · CT-17 conformance→harness (M5) · CT-18 handbook→owner (M6).
 
-- **4** name both producer and consumer `file:function` (M10-C1, M10-C2, M10-C3,
-  M11-C1). Round-4's "6" (M2-C1, M2-C2, M10-C1, M10-C3, M11-C1, M11-C2) counted
-  file:line citations (e.g. `node-bus-worker.py:986`) as a named function; the rule
-  requires a *function* on both sides. Under the strict rule the count is 4.
-- The remaining 21 rows name one side, a `file:line`, a protocol, or an external
-  service — and are now honestly marked **`rumour — one side only`** or `UNVERIFIED`
-  in their chapter.
-- **State words re-derived:** `broken` survives only where both sides were read
-  (CF-354 at M2-C1/M9-C2; CF-355 at M2-C2/M9-C3/M10-C3 — M10-C1 is now correctly
-  `works (transport)` since the text/text_b64 break is node-side). Every state word
-  inherited from OUTLINE without an in-chapter measurement is now `UNMEASURED`.
-- The two contracts the register calls *missing* — `crier → scheduler` completion
-  event and `node → duckbrain` — have **no owning chapter** and remain a Part I.9
-  gap.
+**Internal vs boundary.** Five contracts (CT-02, CT-03, CT-04, CT-05, CT-06) are *internal* —
+both ends are files in the five covered systems, and each row names both `file:function`.
+Thirteen (CT-01, CT-07..CT-18) are *boundary* — one end is a human, an LLM lane, a document, or a
+service outside the five covered systems — so "the covered side named + the far side marked
+rumour/missing/UNVERIFIED" is the honest terminal state. `scripts/handbook_spine.py` enforces
+both sides only for the internal five, and additionally checks that two chapters citing one internal
+contract agree on the same producer/consumer function (the round-8 pair-disagreement fix). The
+measured state of each row lives in the chapters,
+which are the authority; the sheet-4 "10 works / 6 broken / 2 missing" count is the outline's
+structure text and stays stale until Part IV is re-rendered.
+
+**Supersessions (carried, now in CT terms).** OUTLINE Part IV's "scheduler → crier … broken" and
+"crier → node … works" are superseded: CT-02 works (transport), and the former `text_b64` vs
+`text` mismatch (CF-354) is fixed node-side (`node-bus-worker.py:977` decodes `text_b64` first).
+CF-355 (node sends `status`, scheduler reads `ok`) is carried at **CT-04** (the node reply's
+settlement), not CT-06 — CT-06 is the dispatcher completion leg, which always sends `ok` and works.
 
 ## PART V — SETTINGS REGISTER
 
@@ -162,9 +162,9 @@ its promotion path is not maintained.
 | Does it open with a general arrangement? | Yes — Part I, rendered |
 | Are modules framed as subsystems or as files? | Subsystems (13 modules); 13 chapters exist |
 | Are secondary flows covered? | **No** — II.6–II.10 missing |
-| Are contracts both-sided? | **No — 4 of 25** by the strict `file:function` rule; the rest marked `rumour`/`UNVERIFIED` |
+| Are contracts both-sided? | 5 of 18 internal contracts name both `file:function` (CT-02, CT-03, CT-04, CT-05, CT-06); 13 boundary contracts cite the id with the far side marked external (round 11) |
 | Are settings documented with effects? | Partially — node-side + scheduler registers written; V.2/V.3 unregistered |
-| Chapter completeness | 0 WRITTEN, 13 PARTIAL, 0 SKELETON (round 5) |
+| Chapter completeness | 0 WRITTEN, 13 PARTIAL, 0 SKELETON (round 9) |
 | Can a task list be derived? | **Not yet** — Part VII unwritten |
 
 **Round-5 findings (filed in the chapters):** the two FALSE CLAIMs that inverted

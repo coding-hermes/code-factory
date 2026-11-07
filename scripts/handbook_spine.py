@@ -52,6 +52,37 @@ CANON = {
     "CT-18": ("handbook → owner", "handbook", "owner"),
 }
 
+# Boundary contracts: one end is an actor with no implementation file in the
+# handbook's covered code — a human (owner), an LLM lane (foreman), or a service
+# outside the five covered systems (router, gateway, duckbrain, sessionstore,
+# boardctl, gitreins). For these, "cited under the canonical id, the covered side
+# named, the far side honestly marked rumour/missing/UNVERIFIED" is the correct
+# completion (OUTLINE Part I.9 "described only from the client side", and Part IV's
+# own "missing" annotations). The spine therefore demands both sides only for
+# INTERNAL contracts, where both ends live in covered code. A boundary contract is
+# a finding only when no chapter cites its canonical id at all.
+BOUNDARY = {
+    "CT-01",  # owner -> scheduler  : the producer is a human writing fleet.toml + DB rows,
+              #                      not a function (round-9 re-grade; was miscounted internal)
+    # CT-05 (foreman -> scheduler) is INTERNAL, not boundary: both ends live in covered
+    # code — producer scripts/load_lane_config.py:31-37 (copies prompts/*.md into
+    # projects.prompt), consumer internal/scheduler/spawn.go:1244 buildForemanPrompt
+    # (round-9 grok B3: the "foreman is an LLM lane" exemption was a covered-implementation
+    # mislabelled external).
+    "CT-07",  # router -> gateway   : task-router and the Hermes gateway, both out of scope
+    "CT-08",  # crier -> gateway    : the Hermes gateway (out of scope)
+    "CT-09",  # node -> duckbrain   : the duckbrain service (out of scope)
+    "CT-10",  # node -> board       : the boardctl binary (out of scope)
+    "CT-11",  # node -> sessionstore: the Hermes session store (out of scope)
+    "CT-12",  # node -> gitreins    : the gitreins binary (out of scope)
+    "CT-13",  # gitreins -> board   : gitreins + boardctl binaries (out of scope)
+    "CT-14",  # foreman -> board    : the foreman lane + boardctl (out of scope)
+    "CT-15",  # foreman -> duckbrain: the foreman lane + duckbrain (out of scope)
+    "CT-16",  # docsgate -> handbook  : consumer is the handbook document, not a function
+    "CT-17",  # conformance -> harness: consumer is the operator/board (FACT-08), not a function
+    "CT-18",  # handbook -> owner     : the owner is a human
+}
+
 SETTING_ROW = re.compile(r"^\|\s*`?([A-Z][A-Z0-9_]{3,})`?\s*\|\s*([^|]{1,60})\|")
 REF = re.compile(r"\b(?:M\d{1,2}|F\d{1,2})\b")
 COUNT_CLAIM = re.compile(r"\b(\d{1,3})\s+(modules?|flows?|contracts?|chapters?|submodules?)\b", re.I)
@@ -106,6 +137,44 @@ def norm_default(cell: str) -> str:
     return m.group(1) if m else s[:24]
 
 
+def norm_state(cell: str) -> str:
+    """Canonical state word from a contract-state cell.
+
+    'works (transport)' -> 'works'; 'broken — CF-355…' -> 'broken'. Only the
+    leading keyword is compared, so a parenthetical scope note ('works,
+    dispatcher leg') cannot be mistaken for a state disagreement (the round-9
+    CT-06 finding: M9 said 'broken', M11 said 'works', the spine passed because
+    it compared function tokens but never the state column).
+    """
+    m = re.search(r"\b(works?|broken|missing|unverified)\b", cell.lower())
+    return m.group(1) if m else cell.strip().lower()[:24]
+
+
+def func_tokens(cell: str) -> set[str]:
+    """Function-name tokens in a contract cell.
+
+    A function token is a backticked bare identifier that either immediately follows
+    a `file:line` reference (`\\`handler.go:990\\` \\`HandleDeliver\\``) or carries a
+    `()` call suffix (`\\`payload()\\``). Field names (`board`, `text_b64`) and dotted
+    names (`crier.deliver`) are excluded, so a clarifying "field X (not Y)" cannot be
+    mistaken for a function-name disagreement.
+    """
+    toks = re.findall(r"`([^`]+)`", cell)
+    out: set[str] = set()
+    prev_is_loc = False
+    for t in toks:
+        t = t.strip()
+        is_loc = bool(re.search(r":\d", t))
+        called = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)\(\)", t)
+        bare = re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", t)
+        if called:
+            out.add(called.group(1))
+        elif bare and prev_is_loc:
+            out.add(t)
+        prev_is_loc = is_loc
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", action="store_true")
@@ -137,12 +206,61 @@ def main() -> int:
                 "detail": f"{label} — no chapter cites canonical id {cid}; chapters invent local ids (M2-C1, M9-C2), so the two ends cannot be matched",
             })
             continue
+        if cid in BOUNDARY:
+            # Cited is sufficient: the far side is external by design, so "one side
+            # named + the other marked rumour/missing" is the honest terminal state,
+            # not a chapter defect.
+            continue
         sides = [h for h in hits if has_fq(h[1]["producer"]) and has_fq(h[1]["consumer"])]
         if not sides:
             findings.append({
                 "kind": "CONTRACT ONE-SIDED",
                 "subject": cid,
                 "detail": f"{label} — cited in {', '.join(h[0] for h in hits)} but no row names both implementations as file:line",
+            })
+
+    # 1b. cross-chapter agreement: an internal contract's two ends live in two (or more)
+    # chapters, and those chapters must name the SAME producer/consumer FUNCTION, not just
+    # *some* file token. This is the check the docstring promised and round-8 found missing:
+    # has_fq() only proves a file:line pattern EXISTS; it cannot tell that M2 named
+    # HandleDeliver while M10 named HandleRetrieve for the same canonical id. A cell with no
+    # function token is skipped (a consumer may be legitimately plural — the retrieve surface
+    # feeds both the node worker and the dispatcher).
+    for cid, (label, prod, cons) in CANON.items():
+        if cid in BOUNDARY:
+            continue
+        hits = register.get(cid, [])
+        if len(hits) < 2:
+            continue
+        for role, key in (("producer", "producer"), ("consumer", "consumer")):
+            nonempty = {name: frozenset(func_tokens(row[key])) for name, row in hits}
+            nonempty = {n: t for n, t in nonempty.items() if t}
+            if len(set(nonempty.values())) > 1:
+                findings.append({
+                    "kind": "CONTRACT PAIR DISAGREEMENT",
+                    "subject": cid,
+                    "detail": f"{label} — {role} differs across chapters: "
+                              + "; ".join(f"{n}: {sorted(t)}" for n, t in sorted(nonempty.items())),
+                })
+
+    # 1c. cross-chapter state agreement (round-9 CT-06 finding): two chapters that
+    # describe one internal contract from opposite ends must state the SAME state
+    # word. The round-8/9 pair check compared producer/consumer function tokens but
+    # never the state column, so M9 ("broken") and M11 ("works") for CT-06 passed
+    # while flatly disagreeing. Parenthetical scope notes are normalized away.
+    for cid, (label, prod, cons) in CANON.items():
+        if cid in BOUNDARY:
+            continue
+        hits = register.get(cid, [])
+        if len(hits) < 2:
+            continue
+        states = {norm_state(row["state"]) for _, row in hits}
+        if len(states) > 1:
+            findings.append({
+                "kind": "CONTRACT STATE DISAGREEMENT",
+                "subject": cid,
+                "detail": f"{label} — state differs across chapters: "
+                          + "; ".join(f"{name}: {norm_state(row['state'])}" for name, row in hits),
             })
 
     # 2. settings: same name, different default in two chapters
@@ -190,7 +308,11 @@ def main() -> int:
         "submodule": None,
     }
     for name, text in ch.items():
-        for num, word in COUNT_CLAIM.findall(text):
+        # Quoted command output ("44 module(s): 37 VERIFIED…") is not a count claim
+        # about this document; it is a literal tool string. Strip backtick spans so
+        # the count check only weighs prose totals, not quoted evidence.
+        prose = re.sub(r"`[^`]*`", "", text)
+        for num, word in COUNT_CLAIM.findall(prose):
             key = word.lower().rstrip("s")
             want = actual.get(key)
             if want and int(num) != want:

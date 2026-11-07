@@ -70,6 +70,7 @@ inbox until it expires.
 | `DISPATCH_POLL_S` | 5 (`:43`) | positive float | poll interval | shorter polls raise bus load |
 | `DISPATCH_PROGRESS_S` | 20 (`:45`) | positive int | seconds between progress lines the node runner writes | **no suppression branch exists** — the runner loop (`:250-257`) writes a line then `sleep {hb}`; `0` removes the delay (busy loop), a negative value fails the `sleep` and the loop continues. Round-4's "0 or negative suppresses progress" was false (sol B25) |
 | `DISPATCH_LEASE_S` | 1800 (`:46`) | positive int | inbox lease | too long holds messages during a crash |
+| `DISPATCH_EXEC_TIMEOUT` | `"400s"` (`:47`, a **string**) | — | **inert in this revision** — assigned at `:47` and never read (`grep -n EXEC_TIMEOUT dispatcher.py` → 1 match, the assignment itself; sol B22 AST check: exactly one `Store` reference, no load). The real per-call timeout is `_bunker`'s `timeout` argument (default 120, `:204-209`), with the outer subprocess capped at `timeout + 20` (`:209`). Round-5's "the timeout prefix on every `bunker exec` run" was **false** — this env var changes nothing at run time |
 | `DISPATCH_TASK_S` | `"240"` (`:48`, a **string**) | positive int at use (`task_seconds`, `:196`) | fallback task duration | a non-numeric env value raises `ValueError` **at use** (`int(TASK_S)` at `:196`), not at admission (kimi 8) |
 | `DISPATCH_MARGIN_S` | 60 (`:52`) | positive int | reserve before the caller's deadline | see F11-4 |
 | `DISPATCH_TASK_CAP_S` | 7200 (`:53`) | positive int | ceiling on the envelope wall | a larger envelope wall is clamped |
@@ -78,13 +79,19 @@ inbox until it expires.
 | `DISPATCH_LOG` / `DISPATCH_PIDFILE` | `$FLEET/logs/dispatcher.log` / `$FLEET/dispatcher.pid` (`:41-42`) | a path | log/PID location | a wrong path loses the journal/lock |
 | `FLEET_GH_SCOPE` | `/home/kara/.hermes/scripts/fleet-gh-scope.py` (`:68`) | a path | scoped-token minter | a wrong path disables scoped tokens (non-fatal) |
 | `FLEET_AGENTS` / `FLEET_AGENTS_FILE` | `fleet_agents.json` (`:104-109`) | a dict / path | agent registry | empty → "no FLEET_AGENTS configured" |
+| `CRIER_URL` (read as `BUS`) | `http://100.97.236.14:8767` (`:38`) | an http(s) endpoint | which bus the dispatcher polls and replies to | a wrong URL polls/replies to the wrong bus |
+| `TOKEN_FILE` (bearer) | `/home/kara/.hermes/secrets/crier-fleet.token` (`:39`, a constant) | a path | the bus bearer identity | a missing file → client construction fails (`client for %s failed`) |
+| `KEYS` (signing) | `$FLEET/keys` (`:40`, a constant) | a directory | the reply-signing key store | a missing key dir breaks reply signing |
 
 ## 6. Contracts in and out
 
+Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Local ids are
+retired; each row carries the CT id its peer chapter cites.
+
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| M11-C1 | crier | in | crier server `internal/registry/handler.go:1690` `HandleRetrieve` (the lease-granting side) | `dispatcher.py:435` `crier.retrieve` (the client side) | works |
-| M11-C2 | scheduler | out | `dispatcher.py:500-508` builds `{in_reply_to, agent, ok, seconds, task_len, reply_b64, reply_len}` and `crier.deliver` | scheduler `dispatchReplyVerdict` (`dispatch_leg.go:713`) | **works** — the dispatcher always sends `ok` (`:501`), which is exactly the field `dispatchReplyVerdict` reads. CF-355 (status-vs-ok) belongs to the **node worker** (M2-C2 / M9-C3), not this producer |
+| CT-03 | crier | in | crier server `internal/registry/handler.go:1690` `HandleRetrieve` (the lease-granting side) | `dispatcher.py:435` `crier.retrieve` (the client side) | works |
+| CT-06 | scheduler | out | `dispatcher.py:500-508` builds the completion reply `{in_reply_to, agent, ok, …}`; transported via crier `internal/registry/handler.go:990` `HandleDeliver` into the scheduler's inbox | scheduler `internal/scheduler/dispatch_leg.go:713` `dispatchReplyVerdict` | **works** — the dispatcher always sends `ok` (`:501`), which is exactly the field `dispatchReplyVerdict` reads. CF-355 (status-vs-ok) belongs to the **node worker** (CT-04), not this producer |
 
 ## 7. Verification
 
@@ -139,7 +146,7 @@ lines — `:81` a comment mentioning `log()` and `:112` the `def log(` definitio
 
 | Failure | Presents as | Distinguished from | Recovery |
 |---|---|---|---|
-| Harness overruns deadline | `DONE:124`, job killed | a crash (`DONE:1` + traceback) | automatic; check the `rc=` log |
+| Harness overruns deadline | `DONE:124`, job killed (`:319` `job … finished rc=…`) | a crash (`DONE:1` + traceback) | **partial** — the kill at `:329` terminates run.sh's process group; whether the GNU-timeout group holding `hermes` and its children dies with it is **unverified** (F11-8). Do not assume automatic descendant termination; check for surviving harness processes after the deadline |
 | Local client/key/config failure | `client for %s failed` (`:422`) — `client_for` (`:128-132`) builds a `Crier`, no network call | a node execution failure | check `KEYS`/token/`BUS` config, not the node |
 | Node unreachable | a later `bunker exec` failure (`_bunker`, `:204-212`) with no job dir | a local client failure | check the bunker node, not the client config |
 | Reply refused by guard | task runs, answer lost | a timeout | base64 on both legs (`:484-499`) |

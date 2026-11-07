@@ -9,7 +9,7 @@
 | Revision | content sha256 `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (lives outside any git repo; no revision to stamp) |
 | Language / runtime | Python — `#!/usr/bin/env python3`, no pinned version; **requires >= 3.10** (F12-5: `_forward` at `:164` declares `body: bytes \| None`, an evaluated union annotation) |
 | Owner lane | code-factory (control-host service, consumed by nodes) |
-| Status | **VERIFIED** — read in full this round (273 lines: admission, routing, streaming, capture); content sha256 reproduced; live 401 admission reproduced this round; **the two sink paths corrected this round** (F12-8: round-5 named nonexistent `cf-usage.jsonl`/`cf-capture.jsonl`) |
+| Status | **VERIFIED (admission/routing/capture), FAILING (streaming)** — read in full this round (273 lines); content sha256 reproduced; live 401 admission reproduced this round; the two sink paths corrected this round (F12-8). **Streaming completion is FAILING (sol B22):** the healthy SSE stream is unframed to completion (`:206-224`), reproduced as a `200` with no `Content-Length`/`Transfer-Encoding`/`Connection` and a client EOF timeout (§11 F12-7). A blanket VERIFIED would contradict that demonstrated defect — admission, routing and capture are verified, streaming is not |
 
 ## 2. Purpose, authority and position
 
@@ -86,10 +86,15 @@ when a different name is configured — the diagnostic lies about which variable
 
 ## 6. Contracts in and out
 
+Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). The proxy's own
+interfaces (M12-C1, M12-C2) are not among the 18; the canonical id the proxy sits adjacent to is
+CT-07 (`router → gateway` model choice), cited as a boundary contract.
+
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| M12-C1 | node | in | **unproven client half** — the proxy side is verified (401 on missing/unknown token, `:128-130`); the node side has no in-repo file that *calls* the proxy. `grep -rnE '8775\|CF_PROXY\|cf-inference-proxy' scripts/ config/ specs/` (ERE, re-run this round) matches **four** text sites: `scripts/panel_loop.py:136`, `scripts/master_doc_skeleton.py:25` and `:211` (self-references listing the path), and `config/node.env.example:22` — which is the **live assignment** `ENV_CF_PROXY_API_KEY=@~/.node/auth/provider.key`, not a comment. `config/node.env.example:26` comments `CONFIG_SET_MODEL_PROVIDER=cf-proxy -> model.provider`, so the producer half is config-driven: `node.env.example:22,26` → `node_env.py`/provisioner config generation → `~/.hermes/config.yaml` `model.provider=cf-proxy`. Round-4's quoted command omitted `-E`, so its bare-`\|` BRE returned **0** matches (measured rc 1) — the opposite of the row's claim (grok 2 / glm 4). | `cf-inference-proxy.py:135` `do_POST` → `_node` (`:136`) | **UNVERIFIED** — proxy side verified; the node-client call site is config-wired, not a `file:function` in this repo |
-| M12-C2 | upstream | out | `_forward` (`:164`) builds the upstream request with the control-host key | **rumour — one side only** (the upstream gateway/provider, not a function) | works — external boundary |
+| CT-07 | gateway | in (model choice) | **external** — the task-router's model choice (out of scope) | **external** — the Hermes gateway (out of scope) | **UNVERIFIED (boundary)** — neither side has an in-repo `file:function`, and the wire was not measured this round; an outline "works" annotation is not implementation evidence (sol B03) |
+| M12-C1 | node | in | **unproven client half** — the proxy side is verified (401 on missing/unknown token, `:128-130`); the node side has no in-repo file that *calls* the proxy. `grep -rnE '8775\|CF_PROXY\|cf-inference-proxy' scripts/ config/ specs/` (ERE, re-run this round) matches **four** text sites: `scripts/panel_loop.py:145`, `scripts/master_doc_skeleton.py:25` and `:211` (self-references listing the path), and `config/node.env.example:22` — which is the **live assignment** `ENV_CF_PROXY_API_KEY=@~/.node/auth/provider.key`, not a comment. `config/node.env.example:26` comments `CONFIG_SET_MODEL_PROVIDER=cf-proxy -> model.provider`, so the producer half is config-driven: `node.env.example:22,26` → `node_env.py`/provisioner config generation → `~/.hermes/config.yaml` `model.provider=cf-proxy`. Round-4's quoted command omitted `-E`, so its bare-`\|` BRE returned **0** matches (measured rc 1) — the opposite of the row's claim (grok 2 / glm 4). | `cf-inference-proxy.py:135` `do_POST` → `_node` (`:136`) | **UNVERIFIED** — proxy side verified; the node-client call site is config-wired, not a `file:function` in this repo |
+| M12-C2 | upstream | out | `_forward` (`:164`) builds the upstream request with the control-host key | **rumour — one side only** (the upstream gateway/provider, not a function) | **UNVERIFIED** — external boundary with one side named; a "works" verdict on a rumour is not permitted (B06) |
 
 The round-3 M12-C1 producer cell (\"node POST /v1/chat/completions with Authorization: Bearer ***\")
 was a broken table row (an unclosed code span, a `***` redaction artifact, a pipe inside the cell)
@@ -171,12 +176,21 @@ is a capture log, not an emitted metric.
   and returns at `:224` without marking the connection closed. A healthy upstream that finishes its
   SSE cleanly therefore leaves the downstream response unframed: a client reading to EOF times out
   even though every byte was forwarded. This is not an upstream-failure case — it is the *healthy*
-  case. Streaming correctness is UNVERIFIED until an HTTP-completion/framing test passes.
+  case. An independent verifier exercised the actual `Handler` against a finite local SSE upstream
+  and measured `PROXY_STREAM_STATUS=200`, `CONTENT_LENGTH=None`, `TRANSFER_ENCODING=None`,
+  `CONNECTION=None`, `PROXY_STREAM_EOF_COMPLETED=False: TimeoutError` (sol B24) — the reproducible
+  failure to cite. **Streaming correctness is FAILING** — the framing defect is reproduced, so a
+  repeatable framing/completion oracle is the missing evidence; it is a demonstrated defect, not a
+  merely unverified property (sol B22).
 
 ## 12. Cross-references
 
-- The node reaches the proxy over the tailnet via operator-configured `CF_BASE_URL`; no node file
-  in this repo references the proxy (see M12-C1).
+- The node reaches the proxy over the tailnet via operator-configured `CF_BASE_URL`. **No direct
+  client function calls the proxy from this repo** — but node *configuration* does reference it:
+  `config/node.env.example:22` (`ENV_CF_PROXY_API_KEY=@~/.node/auth/provider.key`) and `:26`
+  (`CONFIG_SET_MODEL_PROVIDER=cf-proxy -> model.provider`) wire the proxy as the node's provider
+  (see M12-C1). Configuration evidence, actual call-site evidence, and successful live use are
+  distinct; only the configuration reference is established (B25, sol).
 - **M7 GITHUB does not produce the node tokens.** The proxy loads `TOKENS_PATH` (a JSON mapping,
   `:48`, `:65-72`) and compares bearer tokens against it (`:115-123`); the producer of that mapping
   is unknown (B16, M7 §12).
@@ -208,4 +222,4 @@ is a capture log, not an emitted metric.
     the measured values are `cf-inference-usage.jsonl` (`:50`) and `cf-inference-requests.jsonl`
     (`:52`).
 
-## RED field count: 3 (Metrics §8 — absence-proved; M12-C1 node-client half UNVERIFIED; stream completion UNVERIFIED — F12-7)
+## RED field count: 4 (Metrics §8 — absence-proved; M12-C1 node-client half UNVERIFIED; M12-C2 upstream half UNVERIFIED — one-sided external boundary; stream completion **FAILING** — F12-7 reproduced)

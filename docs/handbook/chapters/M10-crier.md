@@ -6,8 +6,8 @@
 |---|---|
 | Module name | CRIER |
 | Path | `/home/kara/crier/` (Go) |
-| Revision | `691f0c78fc75717295abf3bd85aaa9192616aac0` (crier repo HEAD, stamped this round) |
-| Language / runtime | Go — `go.mod` declares `go 1.26.10` (a build/toolchain requirement, not a runtime one); host `go version` = **go1.26.5** (default PATH), `/usr/bin/go` = 1.26.8, `/snap/bin/go` = 1.27.1; `GOTOOLCHAIN=auto` auto-fetches 1.26.10 for this repo |
+| Revision | `86c4c4695facaaf723bcc1d6ae80971ffb67fc97` (crier repo HEAD at round-11 derivation; the files changed since `691f0c78` are `internal/harness/*`, `cmd/server/harness*.go`, `cmd/server/metrics_state_test.go`, `specs/CRIER-HARNESS.md` — none of the handler/guard/config/client files M10 cites) |
+| Language / runtime | Go — `go.mod` declares `go 1.26.10` (a build/toolchain requirement, not a runtime one); host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`), `/usr/bin/go` = **go1.26.9** (`/usr/lib/go-1.26/bin/go`); `GOTOOLCHAIN=auto` auto-fetches 1.26.10 for this repo |
 | Owner lane | crier (control plane) |
 | Status | **UNVERIFIED** — `internal/registry/handler.go` (deliver/retrieve/ack surfaces + the full 3-site slog surface), `internal/guard/guard.go` (pipeline, oversize branch, `errorResult`), `internal/guard/policy.go` (`ResolvePolicy`), `internal/guard/metrics.go`, `config/config.go` (controls + guard bounds + metrics default), `clients/python/crier_client.py`, `cmd/crier-front/main.go` read this round; the full 1895-line handler body still not read line-by-line (its slog surface *is* complete — see §9) |
 
@@ -92,15 +92,15 @@ bounds. Individual rows (B21, expanded this round):
 | `Webhook.CircuitThreshold` | 10 (`:640`) | int | circuit-open threshold | lower opens the circuit sooner |
 | `Webhook.BatchMaxMessages` | 10 (`:641`) | int | batch size | larger batches raise latency |
 | `Webhook.BatchFlushInterval` | 5 s (`:642`) | duration | batch flush cadence | too long delays delivery |
-| `Guard.Enabled` | true (`:644`) | bool | guard on/off | off lets untrusted directives through |
-| `Guard.Timeout` | 10 s (`:645`) | duration | per-check LLM timeout | too short fails checks open |
-| `Guard.MaxConcurrent` | 8 (`:646`) | int | check concurrency semaphore | 0 or overflow saturates the guard |
-| `Guard.CircuitThreshold` | 10 (`:647`) | int | guard circuit threshold | lower opens the guard circuit sooner |
-| `Guard.CircuitCooldown` | 300 s (`:648`) | duration | circuit reopen cooldown | too short thrashes the circuit |
-| `Guard.MaxPayloadBytes` | 65536 (`:649`) | bytes | payload ceiling before the router | a raise admits a bigger untrusted payload |
-| `Guard.RenderMaxBytes` | 32768 (`:650`) | bytes | render ceiling | a raise sends more to the router |
-| `Guard.DeepSeekBaseURL` / `Guard.Model` | `https://api.deepseek.com/v1` / `deepseek-v4-flash` (`:651-652`) | a URL / model | the guard's router | a change re-routes the guard verdicts |
-| `Guard.KanbanQueueSize` | 100 (`:653`) | int | guard queue depth | smaller drops queued checks |
+| `Guard.Enabled` | true (`:645`) | bool | guard on/off | off lets untrusted directives through |
+| `Guard.Timeout` | 10 s (`:646`) | duration | per-check LLM timeout | a short timeout's outcome is **conditional on the error policy**, not a blanket fail-open: `guard.go:332-357` `errorResult` depends on `FailClosed`, `policy.Action` and high-confidence deterministic evidence (sol B20) |
+| `Guard.MaxConcurrent` | 8 (`:647`) | int | check concurrency semaphore | **`<= 0` is refused at startup, not a saturated guard**: `config.go:1154-1158` rejects `CR_GUARD_MAX_CONCURRENT<=0` with a named error; runtime saturation is the distinct failure counted by `crier_guard_saturated_total` (`internal/guard/metrics.go:22`) |
+| `Guard.CircuitThreshold` | 10 (`:648`) | int | guard circuit threshold | lower opens the guard circuit sooner |
+| `Guard.CircuitCooldown` | 300 s (`:649`) | duration | circuit reopen cooldown | too short thrashes the circuit |
+| `Guard.MaxPayloadBytes` | 65536 (`:650`) | bytes | payload ceiling before the router | a raise admits a bigger untrusted payload |
+| `Guard.RenderMaxBytes` | 32768 (`:651`) | bytes | render ceiling | a raise sends more to the router |
+| `Guard.DeepSeekBaseURL` / `Guard.Model` | `https://api.deepseek.com/v1` / `deepseek-v4-flash` (`:652-653`) | a URL / model | the guard's router | a change re-routes the guard verdicts |
+| `Guard.KanbanQueueSize` | 100 (`:654`) | int | guard queue depth | smaller drops queued checks |
 | `Observability.EnableMetrics` | **true** (`:673`) | bool | `/metrics` mount | `CR_ENABLE_METRICS=false` disables it |
 | front `defaultListen` | `127.0.0.1:8770` (`crier-front/main.go:39`) | a loopback listen | the front's surface | binding off-loopback exposes the front |
 | `CR_GUARD_TIMEOUT_MS` / `CR_GUARD_MAX_CONCURRENT` / `CR_GUARD_CIRCUIT_THRESHOLD` / `CR_GUARD_CIRCUIT_COOLDOWN_S` / `CR_GUARD_MAX_PAYLOAD_BYTES` / `CR_GUARD_RENDER_MAX_BYTES` | env, positive only (`config.go:1139-1187`) | int > 0 | guard tuning | a non-numeric or `<= 0` value → named error (`invalid CR_GUARD_…`), not a silent default |
@@ -111,20 +111,29 @@ bounds. Individual rows (B21, expanded this round):
 `internal/metrics/metrics.go:2` still calls the surface "the opt-in GET /metrics surface" — the
 comment (line **2**, not 5) disagrees with the default-ON config.
 
+**Storage-selection controls (B20, sol — expanded with the memory backend, sol B19).** `config/config.go:113-123` `ResolvedRegistryBackend()` resolves the custody backend in this precedence: an explicit `CR_REGISTRY_BACKEND` (`Registry.Backend`, `:104`) → a `sqlite:` `Database.URL` → any non-empty `Database.URL` (`postgres`) → **`memory`**. `:732-767` implements database-URL precedence plus explicit backend validation and refusal conditions; `:770-808` implements pool controls. The **memory** backend is process-local and demo-only: held deliveries and inboxes are **lost on restart** (`config.go:550-551`), so custody is not durable under it. A register that names only the driver rows and transport defaults is incomplete; how an operator proves *which* backend is actually serving custody (readback of the resolved backend at boot) is not yet written (a named RED on §5).
+
 ## 6. Contracts in and out
+
+Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Local ids are
+retired; each row carries the CT id its peer chapter cites, so two ends can be matched.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| M10-C1 | scheduler | in | `<scheduler>/internal/bus/dispatch.go:202` `payload()` (envelope with `text_b64`, `board`) | `handler.go:990` `HandleDeliver` | **works (transport)** — crier delivers the envelope verbatim; the `text_b64` vs `text` mismatch is a **node-consumption** defect (`node-bus-worker.py:986` reads `text`), carried at M2-C1/M9-C2, not a crier defect. Round-4's "broken (CF-354)" mis-scoped the break (kimi B55). **This supersedes OUTLINE Part IV's "scheduler → crier … broken" and README I.3's "10 works / 6 broken / 2 missing"** — the register-of-record re-scope is applied in the README this round (glm #2) |
-| M10-C2 | node | out | `handler.go:1690` `HandleRetrieve` (lease); client side `crier_client.py:1009` `retrieve` | `scripts/node-bus-worker.py:972` `process` (the node's inbox consumer; reads `text` at `:986`) | works |
-| M10-C3 | node | in | **node's own HTTP deliver** — `node-bus-worker.py:1160` `deliver` (urllib, **not** `crier_client.py`) | `<scheduler>/internal/scheduler/dispatch_leg.go:713` `dispatchReplyVerdict` | **broken** — CF-355 (scheduler reads `ok`; node sends `status`) |
+| CT-02 | scheduler | in | `<scheduler>/internal/bus/dispatch.go:202` `payload()` (envelope with `text_b64`, `board`) | `handler.go:990` `HandleDeliver` | **works (transport)** — crier delivers the envelope verbatim. The former `text_b64` vs `text` mismatch was a **node-consumption** defect, now fixed (the node decodes `text_b64` at `node-bus-worker.py:989`; CF-354 complete), so the scheduler→crier→node leg is now works end-to-end. **This supersedes OUTLINE Part IV's "scheduler → crier … broken" and README I.3's "10 works / 6 broken / 2 missing"** (glm #2) |
+| CT-03 | node | out | `handler.go:1690` `HandleRetrieve` (lease-granting side; the client library `crier_client.py:1009` is the consumer-side call) | `scripts/node-bus-worker.py:1007` `process` (the node's inbox consumer; decodes `text_b64` via `directive_text` `:977`) | works — lease/transport works, and the consumption field-mismatch (CF-354) is fixed |
+| CT-04 | node | in | **node's own HTTP deliver** — `node-bus-worker.py:1208` `deliver` (urllib, **not** `crier_client.py`; POST `/agents/{target}/inbox`) | `handler.go:990` `HandleDeliver` (accepts the reply verbatim) | **works (transport)** — crier accepts the reply verbatim. CF-355 is **this reply's** settlement defect: the node sends `status` (`node-bus-worker.py:1180`), the scheduler's `dispatchReplyVerdict` reads only `ok` — carried at CT-04 (node reply), not CT-06 (the dispatcher leg) |
+| CT-08 | gateway | out | crier `internal/registry/dispatch.go:369` `h.hermes.Deliver` (session delivery), implemented by `internal/hermesession/hermesession.go:353` `Client.Deliver` (token acquisition, session selection, chat execution, replay) — **in-repo** | **external** — the Hermes gateway (out of scope) | **works (crier side named)** — the producer is in-repo and named; only the gateway consumer is out of scope (round-9 correction: round-8 called the producer "external", which was false) |
+
+CT-08 is a boundary contract: the Hermes gateway is outside the five covered systems, so
+"one side named + the other marked external" is the honest terminal state, not a chapter defect.
 
 ## 7. Verification
 
 | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|
-| build | `go build ./...` (crier repo) | exit 0 | 2026-11-06, rev `691f0c78` | **PASS** (rc 0) |
-| go test | `go test ./...` | green | 2026-11-06, rev `691f0c78` | **PASS** (rc 0); `internal/registry` ran 6.962 s over **91 test files** |
+| build | `go build ./...` (crier repo) | exit 0 | 2026-11-06, rev `86c4c469` | **PASS** (rc 0) |
+| go test | `go test ./...` | green | 2026-11-06, rev `86c4c469` | **FLAKY** — see the note below; not a clean PASS |
 | port fact | `grep -n 'Port' config/config.go` | 8767 | 2026-11-06 | PASS (`:622`) |
 | slog surface | `grep -c 'slog.\(Info\|Error\|Warn\|Debug\)' internal/registry/handler.go` | 3 | 2026-11-06 | **PASS** — exactly 3 sites (all in §9); no `log.Printf`/`fmt.Printf` in the handler |
 | signed-read ladder | `python3 ~/node-bus-worker.py --check` on cf-node | inbox 200 with key+bearer | 2026-11-05, cf-node only | PASS (FACT-04) — not repeatable from this control host |
@@ -133,6 +142,16 @@ comment (line **2**, not 5) disagrees with the default-ON config.
 run". At the same revision the package has **91 test files** (measured: `ls internal/registry/*_test.go`),
 and `go test` ran them in 6.962 s. A green run over 91 test files is real, but it still does not
 prove line-by-line coverage of the 1895-line handler.
+
+**`go test` flakiness (kimi 3, re-measured this round).** `go test ./...` does **not** reliably
+reproduce green at HEAD `86c4c469`. This round a fresh `go test -count=1 ./cmd/server/` FAILed
+(`--- FAIL: TestSessionFanoutWebhookBodyVerdict`, 78.5s in one run, 34.3s in another) while a cached
+full run reported green; kimi round-10 reproduced `--- FAIL: TestMetricsState_SeriesRenderOnIdleBoot`
+twice (58.0s / 47.4s) with `crier_detect_alerts_total{signal="odd_hour_volume",severity="warning"} =
+1, want 0`. Each named test passes in isolation under `-run` (0.327s), and the failing test differs
+run-to-run — a within-`cmd/server` contamination or clock-sensitive failure, not a deterministic
+regression. `internal/registry` (91 test files) ran green in 48.1s this round. The documented
+command is therefore flaky, and the row is not a clean PASS.
 
 ## 8. Metrics
 
@@ -181,6 +200,13 @@ is **withdrawn** with this measured count (deepseek #3):
 | error | `registry store error` (`handler.go:1885`, `slog.Error`) | store write fails | descriptive |
 | info | `observability: metrics enabled` (`observability.go:108`, `slog.Info`) | boot with metrics on (emitter is in `cmd/server/`, not the handler) | evidentiary |
 
+**Guard log surface (B22, sol).** The handler census above is file-local, not module-wide. M10
+owns the guard too, and `internal/guard/guard.go:430-457` emits `guard` and `guard blocked`
+records carrying `request_id`, provider, model, patterns, decision, risk and error status —
+operator-critical records absent from this file-local census. The module-wide log inventory is
+therefore **not** complete: the three handler sites are, the guard's are not yet tabulated (a
+named RED on this field).
+
 ## 10. Failure modes, indications and recovery
 
 | Failure | Presents as | Distinguished from | Recovery |
@@ -207,7 +233,7 @@ is **withdrawn** with this measured count (deepseek #3):
 
 ## 12. Cross-references
 
-- M9 SCHEDULER is the producer (M10-C1) and the settlement consumer (M10-C3).
+- M9 SCHEDULER is the producer (CT-02) and the settlement consumer of the node reply (CT-04) and the dispatcher completion (CT-06).
 - M2 DISPATCH (node) and M11 DISPATCHER are the two inbox consumers; only M11 imports `crier_client`.
 - M0 SHARED CONTRACT's `bunker_exec` is *not* a crier contract (F0-1).
 
@@ -221,7 +247,7 @@ is **withdrawn** with this measured count (deepseek #3):
 - Commands run: `go build ./...` (PASS); `go test ./...` (PASS); `ls internal/registry/*_test.go` (91);
   `grep -c 'slog.(Info|Error|Warn|Debug)' internal/registry/handler.go` (3);
   `grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u | wc -l` (67).
-- Rev stamped: `691f0c78`.
+- Rev stamped: `86c4c469` (the changed files since `691f0c78` are harness-side; the handler/guard/config/client files M10 cites are byte-identical).
 - Board rows: CF-337, CF-361, CF-369.
 - **Findings:**
   - **F10-1** (carried) — auth order is headers → target → caller → timestamp → key → signature.
@@ -233,4 +259,4 @@ is **withdrawn** with this measured count (deepseek #3):
   - **F10-5** (new) — the handler's slog surface is complete (3/3, §9); the 67-string metric census
     is scoped (runtime vs test helpers vs exposition components), not a completed per-metric register.
 
-## RED field count: 2 (S1 handler 1895-line body not read line-by-line — the slog surface is complete but the body's non-slog semantics are not; §8 metric contract — series names inventoried but the per-metric type/labels/question/scrape table not filled)
+## RED field count: 5 (S1 handler 1895-line body not read line-by-line — the slog surface is complete but the body's non-slog semantics are not; §8 per-metric contract — series names inventoried but the type/labels/question/scrape table not filled; §9 guard log surface not tabulated — B22; §5 storage-selection custody-proof not written — B20; §7 `go test ./...` flaky — not a clean PASS at HEAD)

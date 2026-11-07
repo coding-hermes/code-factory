@@ -6,7 +6,7 @@
 |---|---|
 | Module name | SAFETY |
 | Path | `/home/kara/code-factory/scripts/` — `reclaim_disk.py`, `check_scan_scope.py` |
-| Revision | `943ef984dc093e5780605ac6e54cd043122126ef` (code-factory HEAD, 2026-11-06) |
+| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `reclaim_disk.py`/`check_scan_scope.py` byte-identical since `47d68b4`) |
 | Language / runtime | Python 3.14.9 + bash 5.3.9 (measured) |
 | Owner lane | code-factory (control host) |
 | Status | **VERIFIED** — `reclaim_disk.py` (169 lines) and `check_scan_scope.py` (118 lines) both read in full this round |
@@ -63,14 +63,19 @@ was policed (see F8-3).
 **Exact targets (B15).** `reclaim_disk.py:14-22` fixes three constant sets:
 
 - `BUILD_CACHES` (`:14-19`): `.cache/pip`, `.cache/uv`, `.cache/pre-commit`, `.cache/go-build`, `.npm/_cacache` — processed **with `aged=False`**, so they are removed on TTL-irrespective grounds (the `else` branch's `"build cache"` reason).
-- `AGED_PARENTS` (`:20`): `.node/jobs`, `.node/clones` — children processed **with `aged=True`**; a child whose `st_mtime` age is `<= job_ttl_hours` is `kept` (`:90`), so the TTL is a **<= boundary (inclusive)** and governs only these two parents.
-- `PROTECTED` (`:21`): `repo`, `.node/node.json`, `.node/crier.json`, `.node/floor.toml` — refused via `safety_reason` (`:25-39`) before inspection.
+- `AGED_PARENTS` (`:21`): `.node/jobs`, `.node/clones` — children processed **with `aged=True`**; a child whose `st_mtime` age is `<= job_ttl_hours` is `kept` (`:90`), so the TTL is a **<= boundary (inclusive)** and governs only these two parents.
+- `PROTECTED` (`:22`): `repo`, `.node/node.json`, `.node/crier.json`, `.node/floor.toml` — refused via `safety_reason` (`:25-39`) before inspection.
 
 ## 6. Contracts in and out
 
+M8 has **no entry in the canonical register** (CT-01..CT-18, OUTLINE Part IV): the filesystem reap
+boundary is a local host operation (`reclaim_disk.py` → the directory tree it enumerates), not a
+cross-system contract with a peer chapter describing the same interface from the opposite end. It
+is listed below as a local edge.
+
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| M8-C1 | filesystem | in | `reclaim_disk.py:42` `reclaim()` | **rumour — one side only** ("the target roots it enumerates", no function) | works (containment + symlink + protected checks at `:25-39`) — filesystem is an external peer, rumour correct |
+| (local) | filesystem | in | `reclaim_disk.py:42` `reclaim()` | **external** — the target roots it enumerates, no function | **UNVERIFIED (boundary)** — containment + symlink + protected checks at `:25-39` are in-repo and verified; the filesystem itself is an external peer with no function to name, so no "works" verdict is attached |
 
 ## 7. Verification
 
@@ -117,8 +122,9 @@ output (`reclaimed_bytes`/`reclaimed_mib` at `:121-123`), not emitted.
 ## 12. Cross-references
 
 - M6 DOCUMENTATION owns `verify-patch.sh` (M6.S8), not M8.
-- M3 REPOSITORY cites job/clone dirs as landing evidence, which M8's reaper must not delete.
-- M11 DISPATCHER's `.cf-jobs` dirs are outside this reaper's targets (F8-3).
+- M11 DISPATCHER's `.cf-jobs` dirs are outside this reaper's targets (F8-3). It is M11 — not M3 — that
+  cites job/clone dirs as landing evidence; M3's `clone_lane.py` clones a *lane row*, not a git
+  checkout (M3 F3-2). M8's reaper must not delete M11's `.cf-jobs` or M1's node job dirs.
 - M1 PROVISIONING invokes `reclaim_disk.py run` via `project-node.sh:212`.
 
 ## 13. Evidence of record

@@ -1,0 +1,38 @@
+Verification complete. I read all 13 chapters, the OUTLINE, the SCHEMA, and the spine script; ran the spine gate (clean); then independently re-verified ~25 load-bearing specific claims against the live code at the listed paths. Results below.
+
+VERDICT: FAIL
+BLOCKING: 2
+NON-BLOCKING: 1
+
+FINDINGS:
+
+1. [FALSE CLAIM / stale measurement] M4-board — §7 verification row and §13 F4-4 both report a live board drift and an events count that re-measurement disproves. Claim quoted: "drift … RESULT: DRIFT (4 failed) … 1 divergent id: CF-270 (workdir=pending, published=complete) … HEAD=47d68b4 vs origin/main=4dc0ef0" and "events count … 518 lines" (also "357 rows / 518 events" in §1). Evidence: re-ran `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` → RESULT: OK, byte parity identical on both tasks.jsonl and events.jsonl, "357 vs 357 rows; 0 divergent ids", HEAD=8ae4f82=origin/main. `wc -l .coding-hermes/board/events.jsonl` → 519 (not 518). `git rev-parse HEAD` → 8ae4f823334746733f3448d543f7d8a5c4162dec. The divergence the chapter flags as "must be reconciled" was already reconciled (commit 4dc0ef0 closed CF-270; it is in origin/main). Fix: re-run board_drift and rewrite the §7 row to RESULT: OK; correct the events count 518→519 in §1 and §7; mark F4-4 resolved-by-4dc0ef0 rather than live.
+
+2. [FALSE CLAIM / stale locators] M1-provisioning — every certification-ladder locator in §11 points at a verify-node.sh that no longer exists at those lines. Claim quoted: "agent_alive … :50-54 … :53 RESULT: FAIL … gateway_reachable :57-87 … checkout_freshness :118-155 … :150 … seed_drift :157-202 … :194-198 … :205-214 precedence", plus §1 "verify-node.sh (:20-214)". Evidence: current `scripts/verify-node.sh` is 241 lines (was 214 at the stamped revision). Commit f1d5cfb "fix(verify-node): refuse a non-digit --port" (CF-270) inserted +28/−1 near the top of the file. Measured current positions: agent_alive :75-76 (RESULT: FAIL at :76), gateway_reachable :98-113, unauth_refused :119-129, artifact_digest :139-141, checkout_freshness :150-177, seed_drift :188-225, terminal VERIFY forms :233-241. Every §11 leg line number is shifted ~+25. Fix: re-pin the §11 ladder table against the 241-line file, or state explicitly the revision those locators describe.
+
+3. [UNVERIFIED / revision-drift, systemic] all chapters — the Identity "Revision" stamps are not the current HEADs. Evidence: code-factory HEAD = 8ae4f82 (5 commits ahead of the stamped 47d68b4: f1d5cfb, 7281f5a, 24580c1, 4dc0ef0, 8ae4f82); scheduler HEAD = 3496308b (ahead of the stamped 1771d3aa). crier (691f0c78) and crier-fleet (283bca91) stamps MATCH their live HEADs. Every other specific locator I verified — lib.sh all 78 lines, node-bus-worker.py directive_text :977 / reply :1176-1192 / dispatch_wall :1200-1205 / deliver :1208, dispatcher.py EXEC_TIMEOUT :47 (inert, 1 ref) / 25 log( sites (23 calls), scheduler 57 flags / 379 log.Printf / 43 routes / 30 tables / dispatchReplyVerdict reads only payload["ok"], crier 3 slog sites / 91 test files / HandleRegister:598 / HandleDeliver:990 / HandleRetrieve:1690 / HandleAck:1812 / metrics.go:2 "opt-in", proxy sink paths :50/:52 / LISTEN :53 / live 401, M0 source-count 17, and test counts 40/28/12/9 (all run green) — remains exact at HEAD, because only verify-node.sh and the board changed in code-factory and no scheduler source changed. Fix: re-stamp identity fields to current HEAD at merge, or state the derivation revision as an explicit snapshot date.
+
+DEFECT CLASSES: stale-measurement (snapshot lag), stale-locator (line drift after a fix landing mid-round), revision-drift.
+
+CHAPTER SCORECARD:
+M0-shared-contract — WRITTEN (every helper location and the 17-source count verified exact)
+M1-provisioning — PARTIAL (certification-ladder §11 locators shifted by the CF-270 verify-node fix)
+M2-dispatch — WRITTEN (directive_text, reply shape, dispatch_wall, deliver all exact; 40 tests green)
+M3-repository — WRITTEN (308-line lander, gate-default and no-invoker claims consistent)
+M4-board — PARTIAL (drift row and events count stale; store is now OK/519/0-divergent)
+M5-harness — WRITTEN (28 harness_resolve tests green; F5-2/F5-5 call-site analysis holds)
+M6-documentation — WRITTEN (gate reads MASTER-DOC: FAIL; spine gate added and clean)
+M7-github — WRITTEN (UNVERIFIED status honest; no mint possible on this host)
+M8-safety — WRITTEN (9 reclaim tests green; scan-scope surface exact)
+M9-scheduler — WRITTEN (57/379/43/30 all measured-correct; CF-355 dispatchReplyVerdict confirmed against dispatch_leg.go:713-726)
+M10-crier — WRITTEN (3 slog sites, 91 test files, handler funcs at exact lines, metrics.go:2 "opt-in" contradiction real)
+M11-dispatcher — WRITTEN (EXEC_TIMEOUT inert proven, 23/25 log-site census exact)
+M12-inference-proxy — WRITTEN (sink paths, LISTEN, live 401 all exact; F12-7 framing-correct)
+
+Overall: the document is genuinely rigorous — the spine gate passes and ~25 independent specific claims I re-derived against live code are exact, including the hardest ones (dispatchReplyVerdict's ok-only read, the inert EXEC_TIMEOUT, the 57/379/43/30 scheduler census, the 3-slog-site handler census). The two blocking findings share one root cause: five commits landed after the writer's 47d68b4 snapshot — the CF-270 verify-node fix and its board close — which moved verify-node.sh's line numbers and resolved the board drift the document still reports as live. Both are small mechanical fixes, but a reader acting on today's §4/M4 would chase a phantom CF-270 divergence and grep verify-node.sh at dead line numbers, so neither chapter can be called written until re-measured.
+
+PANEL REVIEW COMPLETE
+
+session_id: local-0753a4c9d1d3920e5323adb83a7b037567fcc670e96cbbab73047cd7907c5f52
+
+EXIT=0

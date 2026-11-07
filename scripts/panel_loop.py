@@ -107,13 +107,14 @@ def writer_prompt(rnd: int, chapters: list[str] | None) -> str:
     )
 
 
-def run_writer(rnd: int, chapters: list[str] | None, timeout_s: int) -> tuple[bool, Path]:
+def run_writer(rnd: int, chapters: list[str] | None, timeout_s: int,
+               tag: str = "", prompt: str | None = None) -> tuple[bool, Path]:
     outdir = PANEL / f"round-{rnd}"
     outdir.mkdir(parents=True, exist_ok=True)
-    log = outdir / "writer.txt"
+    log = outdir / (f"writer-{tag}.txt" if tag else "writer.txt")
     cmd = [
         "timeout", str(timeout_s),
-        "hermes", "chat", "-q", writer_prompt(rnd, chapters),
+        "hermes", "chat", "-q", prompt or writer_prompt(rnd, chapters),
         "-m", WRITER_MODEL, "--provider", WRITER_PROVIDER,
         "-Q", "--ignore-rules", "--max-turns", "200",
     ]
@@ -123,6 +124,47 @@ def run_writer(rnd: int, chapters: list[str] | None, timeout_s: int) -> tuple[bo
         subprocess.call(cmd, stdout=fh, stderr=subprocess.STDOUT, cwd=str(ROOT))
     ok = "WRITER ROUND COMPLETE" in log.read_text(errors="replace")
     return ok, log
+
+
+def run_writers_parallel(rnd: int, groups: list[list[str]], timeout_s: int) -> tuple[bool, list[Path]]:
+    """Run one writer per section group, concurrently.
+
+    Serial single-section edits lose: a fix in M9 invalidates what M2 says about the
+    same contract, and the next round corrects M2 while breaking M9 again. Section
+    groups written in the SAME round, against the same spine, converge instead of
+    chasing each other. They are separate files, so there is no write conflict —
+    the only conflict is semantic, and handbook_spine.py plus the reconcile pass
+    are what catch it.
+    """
+    outdir = PANEL / f"round-{rnd}"
+    outdir.mkdir(parents=True, exist_ok=True)
+    procs = []
+    for i, group in enumerate(groups, 1):
+        tag = f"s{i}"
+        log = outdir / f"writer-{tag}.txt"
+        prompt = writer_prompt(rnd, group) + (
+            f" You own ONLY these sections this round: {', '.join(group)}. "
+            "Do not edit chapters outside your group — another writer owns them in the "
+            "same round. If your section's correctness depends on a chapter you do not own, "
+            "record it in your manifest as CROSS-SECTION DEPENDENCY with the exact claim the "
+            "other chapter must satisfy, and write yours to match the canonical contract id."
+        )
+        cmd = [
+            "timeout", str(timeout_s),
+            "hermes", "chat", "-q", prompt,
+            "-m", WRITER_MODEL, "--provider", WRITER_PROVIDER,
+            "-Q", "--ignore-rules", "--max-turns", "200",
+        ]
+        fh = log.open("w")
+        procs.append((tag, log, fh, subprocess.Popen(
+            cmd, stdout=fh, stderr=subprocess.STDOUT, cwd=str(ROOT))))
+    results = []
+    for tag, log, fh, p in procs:
+        p.wait()
+        fh.close()
+        results.append(log)
+    ok = all("WRITER ROUND COMPLETE" in p.read_text(errors="replace") for p in results)
+    return ok, results
 
 
 def judge_brief(rnd: int, chapters: list[str] | None) -> Path:
@@ -283,6 +325,10 @@ def main() -> int:
     ap.add_argument("--writer-timeout", type=int, default=4200)
     ap.add_argument("--judge-timeout", type=int, default=2700)
     ap.add_argument("--chapters", default="")
+    ap.add_argument("--groups", default="",
+                    help="explicit section groups, e.g. 'M0,M1;M4,M5' — overrides --parallel")
+    ap.add_argument("--parallel", type=int, default=1,
+                    help="writers per round, one per section group (0/1 = single writer)")
     args = ap.parse_args()
 
     chapters = [c.strip() for c in args.chapters.split(",") if c.strip()] or None
@@ -307,13 +353,63 @@ def main() -> int:
         save_state(st)
 
         print(f"\n=== ROUND {rnd} — writer ===", flush=True)
-        ok, log = run_writer(rnd, chapters, args.writer_timeout)
-        print(f"writer complete={ok} log={log}", flush=True)
+        if args.groups or args.parallel > 1:
+            all_ch = chapters or sorted(p.stem for p in CH.glob("M*.md"))
+            if not all_ch:
+                print("no chapters to write — aborting round", flush=True)
+                break
+            if args.groups:
+                groups = [[c.strip() for c in g.split(",") if c.strip()]
+                          for g in args.groups.split(";") if g.strip()]
+            else:
+                groups = [all_ch[i::args.parallel] for i in range(args.parallel)]
+            print(f"parallel writers: {len(groups)} groups — " +
+                  " | ".join(f"s{i+1}={len(g)}({g[0]}..{g[-1]})" for i, g in enumerate(groups)),
+                  flush=True)
+            ok, logs = run_writers_parallel(rnd, groups, args.writer_timeout)
+            print(f"writers complete_all={ok} logs={len(logs)}", flush=True)
+        else:
+            ok, log = run_writer(rnd, chapters, args.writer_timeout)
+            print(f"writer complete={ok} log={log}", flush=True)
         if not ok:
             st["history"].append({"round": rnd, "status": "writer-incomplete", "at": now()})
             save_state(st)
-            print("writer did not print ROUND COMPLETE — round does not count", flush=True)
+            print("a writer did not print ROUND COMPLETE — round does not count", flush=True)
             continue
+
+        # Reconcile: concurrent writers cannot see each other's edits this round, so the
+        # seams between their sections are checked before anyone judges them.
+        if args.parallel > 1:
+            spine = subprocess.run(
+                [sys.executable, str(ROOT / "scripts" / "handbook_spine.py")],
+                capture_output=True, text=True, cwd=str(ROOT))
+            summary = (spine.stdout or "").splitlines()
+            head = " / ".join(summary[:2])
+            print(f"spine after parallel write: {head}", flush=True)
+            if spine.returncode != 0:
+                print("=== RECONCILE PASS — spine findings between concurrent sections ===", flush=True)
+                rec = (
+                    "You are the reconciler for the code-factory handbook. Concurrent writers "
+                    "just edited different chapter groups in docs/handbook/chapters/ and could "
+                    "not see each other's work. `python3 scripts/handbook_spine.py` reports "
+                    "contradictions between their sections. Fix ONLY the cross-section "
+                    "inconsistencies it reports — do not rewrite prose, do not change a claim "
+                    "that is not named in a finding. Where two chapters disagree, determine the "
+                    "truth from the code and correct the wrong side, citing file:line. Re-run the "
+                    "spine until it reports zero findings, then print your summary and "
+                    "RECONCILE COMPLETE."
+                )
+                subprocess.call(
+                    ["timeout", str(args.writer_timeout), "hermes", "chat", "-q", rec,
+                     "-m", WRITER_MODEL, "--provider", WRITER_PROVIDER,
+                     "-Q", "--ignore-rules", "--max-turns", "120"],
+                    stdout=(PANEL / f"round-{rnd}" / "reconcile.txt").open("w"),
+                    stderr=subprocess.STDOUT, cwd=str(ROOT))
+                spine = subprocess.run(
+                    [sys.executable, str(ROOT / "scripts" / "handbook_spine.py")],
+                    capture_output=True, text=True, cwd=str(ROOT))
+                print("spine after reconcile: " + " / ".join((spine.stdout or "").splitlines()[:2]),
+                      flush=True)
 
         print(f"=== ROUND {rnd} — panel ===", flush=True)
         brief = judge_brief(rnd, chapters)
