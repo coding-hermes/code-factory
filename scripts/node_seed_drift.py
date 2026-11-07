@@ -25,13 +25,29 @@ The verdict is the seeder's own verdict — the wrapper does not reimplement the
 digest comparison, it delegates to scripts/node_seed.py and parses its rows, so
 the two cannot drift apart.
 
-Exit codes: 0 matched, 1 drifted (or an absent record under --strict-seed),
-2 usage, 3 could not measure — no record, a record that does not parse, an exec
-that would not answer, or no transport. "Could not measure" is not drift, on
-purpose: a node still being provisioned has no seed record yet, and telling an
-operator a copy is broken when it was never applied is a false FAIL. The
-default verdict for it is WARN; --strict-seed refuses the unknown instead
-(same doctrine as the checkout freshness leg).
+Exit codes: 0 matched, 1 drifted (or an absent record under --strict-seed, or a
+record that declares no files), 2 usage, 3 could not measure — no record, a
+record that does not parse, an exec that would not answer, or no transport.
+"Could not measure" is not drift, on purpose: a node still being provisioned has
+no seed record yet, and telling an operator a copy is broken when it was never
+applied is a false FAIL. The default verdict for it is WARN; --strict-seed
+refuses the unknown instead (same doctrine as the checkout freshness leg).
+
+CF-379 — the ruling on an EMPTY collection. A record whose `files` list is empty
+(or absent, or not a list) is not an unmeasurable seed and not a matched one: it
+declares nothing, so there is no digest any file on the node could agree with,
+and `0 files present and matching` certified a node whose seed applied nothing.
+It is therefore refused at EXIT_DRIFT with a row that says the record declares no
+files — a FAIL, not a WARN: the record was read and it is conclusively empty, so
+there is nothing unknown left to warn about. A zero-file node is not a legitimate
+state of a seeded node; an operator who wants a node with no seed should not
+leave a seed record on it, and the absent-record WARN below already covers that
+honestly. The ruling lives here rather than in scripts/node_seed.py because the
+seeder's `check` prints the same `N files present and matching` row for any N —
+this wrapper is what turns that row into a verdict, so this is the file that must
+refuse N == 0. A reason field on the record does NOT rescue an empty collection:
+the probe's whole purpose is proving digests, and a record that names none
+proves nothing, so no opt-out is offered and none is silently honoured.
 
 Usage:
   scripts/node_seed_drift.py --agent cf-node --server bunker-las-03
@@ -91,6 +107,29 @@ STRICT_NOTE = "(--strict-seed: an unknown seed is not a pass)"
 # verdict is the instrument's own, not a wrapper's reimplementation.
 SEED_SIBLING_NAME = "node_seed.py"
 
+# CF-379: the two shapes a record with nothing to check comes in. The prose lives
+# HERE and is reused by both modes — the node-side preflight reports a token
+# (`EMPTY=empty` / `EMPTY=absent`), never a sentence, so this file keeps the one
+# copy of the wording the row prints (the QA-CODE-FACTORY-2 lesson).
+EMPTY_COLLECTION = "the files collection is empty"
+EMPTY_ABSENT = "the files collection is absent or not a list"
+EMPTY_TOKENS = {"empty": EMPTY_COLLECTION, "absent": EMPTY_ABSENT}
+
+
+def declared_files(doc) -> str:
+    """'' when the record declares at least one file, else the reason it declares none.
+
+    The predicate reads the RECORD, not the seeder's output: `check` prints the
+    same PASS row for 0 files as for 13, so nothing downstream of it can tell the
+    difference (CF-379).
+    """
+    files = doc.get("files") if isinstance(doc, dict) else None
+    if not isinstance(files, list):
+        return EMPTY_ABSENT
+    if not files:
+        return EMPTY_COLLECTION
+    return ""
+
 
 def run(cmd: list, timeout: int):
     """One command's result. A timeout and a missing binary are results too."""
@@ -134,6 +173,21 @@ if ! python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$REC" >/dev/nul
   echo "RECORD=2"
   exit 0
 fi
+# CF-379: the record parses, but does it DECLARE anything? A record whose files collection is empty (or
+# absent, or not a list) certifies no digest, and node_seed.py check prints `0 files present and
+# matching` for it — a green by construction. Refuse it here, before the seeder is staged, and report a
+# TOKEN rather than a sentence: the wording is node_seed_drift.py's to own, so a copy cannot drift.
+EMPTY_TOK=$(python3 -c 'import json,sys
+doc = json.load(open(sys.argv[1]))
+files = doc.get("files") if isinstance(doc, dict) else None
+if isinstance(files, list) and files: print("")
+elif isinstance(files, list): print("empty")
+else: print("absent")' "$REC" 2>/dev/null)
+if [ -n "$EMPTY_TOK" ]; then
+  echo "RECORD=3"
+  echo "EMPTY=$EMPTY_TOK"
+  exit 0
+fi
 echo "RECORD=1"
 STAGED="$(mktemp /tmp/node-seed-check-XXXXXX)"
 SEED_OUT="$(mktemp /tmp/node-seed-check-out-XXXXXX)"
@@ -172,7 +226,7 @@ def parse_remote(text: str) -> dict:
         if inside:
             data["seed_rows"].append(line)
             continue
-        for key in ("HOME", "RECORD", "SEED_RC"):
+        for key in ("HOME", "RECORD", "EMPTY", "SEED_RC"):
             if line.startswith(key + "="):
                 data[key] = line.split("=", 1)[1]
     return data
@@ -212,9 +266,16 @@ def rows_from_check(check_lines: list) -> tuple:
 
 
 def finding_ok(record: str, count: int) -> dict:
-    row = "  PASS  seed_drift — %s: %d seeded files present and matching" % (
+    # CF-379: `check` prints `0 files present and matching` and exits 0 for an empty record, so a
+    # count of zero can reach this function from the seeder's own row. It is not a match: nothing
+    # was declared, so nothing agreed. Refuse it here too, belt and braces, in case a path ever
+    # reaches the verdict without the record preflight.
+    if count < 1:
+        return finding_empty(record, EMPTY_COLLECTION)
+    row = "  PASS  seed_drift — %s: %d seeded file%s present and matching" % (
         record,
         count,
+        "" if count == 1 else "s",
     )
     return {
         "status": "PASS",
@@ -222,6 +283,30 @@ def finding_ok(record: str, count: int) -> dict:
         "reason": "",
         "rows": [row],
         "result": "RESULT: PASS",
+    }
+
+
+def finding_empty(record: str, reason: str) -> dict:
+    """A record that declares no files: FAIL, never PASS and never a WARN.
+
+    The row names the empty collection so the operator can act on the cause
+    (a build whose manifest/globs matched nothing, an empty tar, a record
+    written before any file was staged) rather than on a digest mismatch that
+    does not exist.
+    """
+    row = (
+        "  FAIL  seed_drift — %s: the record declares no files (%s) — an empty seed certifies nothing"
+        % (
+            record,
+            reason,
+        )
+    )
+    return {
+        "status": "FAIL",
+        "exit_code": EXIT_DRIFT,
+        "reason": "the record at %s declares no files (%s)" % (record, reason),
+        "rows": [row],
+        "result": "RESULT: FAIL (the record at %s declares no files)" % record,
     }
 
 
@@ -331,42 +416,50 @@ def probe_local(home_arg: str, timeout: int, seed_script: str, strict: bool) -> 
         out["record_present"] = True
         try:
             with open(record, encoding="utf-8") as fh:
-                json.load(fh)
+                doc = json.load(fh)
         except (OSError, ValueError) as exc:
             verdict = finding_corrupt(record, strict)
             out["error"] = str(exc)[:200]
         else:
-            rc, text, err = run(
-                [
-                    sys.executable,
-                    "-B",
-                    seed_script,
-                    "check",
-                    "--record",
-                    record,
-                    "--home",
-                    home,
-                ],
-                timeout,
-            )
-            lines = (text or "").splitlines() + (err or "").splitlines()
-            count, drifted, absent = rows_from_check(lines)
-            out["drifted"] = drifted
-            out["absent"] = absent
-            out["file_count"] = count
-            if rc == 0 and count is not None:
-                verdict = finding_ok(record, count)
-            elif rc == 1 and (drifted or absent):
-                verdict = finding_drift(record, count, drifted, absent)
+            # CF-379: a record that parses but declares no files is refused BEFORE the seeder runs —
+            # `check` would print `PASS ... 0 files present and matching` and exit 0 for it, which is
+            # the green this row closes. Nothing is measured here because there is nothing to measure.
+            reason = declared_files(doc)
+            if reason:
+                out["file_count"] = 0
+                verdict = finding_empty(record, reason)
             else:
-                out["error"] = (
-                    (err or text).strip().splitlines()[0][:200]
-                    if (err or text).strip()
-                    else "exit %d" % rc
+                rc, text, err = run(
+                    [
+                        sys.executable,
+                        "-B",
+                        seed_script,
+                        "check",
+                        "--record",
+                        record,
+                        "--home",
+                        home,
+                    ],
+                    timeout,
                 )
-                verdict = finding_unmeasurable(
-                    "node_seed.py check printed no verdict (exit %d)" % rc
-                )
+                lines = (text or "").splitlines() + (err or "").splitlines()
+                count, drifted, absent = rows_from_check(lines)
+                out["drifted"] = drifted
+                out["absent"] = absent
+                out["file_count"] = count
+                if rc == 0 and count is not None:
+                    verdict = finding_ok(record, count)
+                elif rc == 1 and (drifted or absent):
+                    verdict = finding_drift(record, count, drifted, absent)
+                else:
+                    out["error"] = (
+                        (err or text).strip().splitlines()[0][:200]
+                        if (err or text).strip()
+                        else "exit %d" % rc
+                    )
+                    verdict = finding_unmeasurable(
+                        "node_seed.py check printed no verdict (exit %d)" % rc
+                    )
     out.update(verdict)
     return out
 
@@ -429,6 +522,16 @@ def probe_bunker(
         out["record_present"] = True
         out["error"] = "the seed record at %s does not parse" % record
         out.update(finding_corrupt(record, strict))
+        return out
+    # CF-379: the node's preflight read a record that parses and declares no files. The node sends a
+    # TOKEN (`EMPTY=empty` / `EMPTY=absent`); the sentence the row prints is owned here, so a copy on
+    # the remote side cannot drift from it.
+    if data.get("RECORD") == "3":
+        out["record_present"] = True
+        out["file_count"] = 0
+        out.update(
+            finding_empty(record, EMPTY_TOKENS.get(data.get("EMPTY", ""), EMPTY_ABSENT))
+        )
         return out
     if data.get("RECORD") != "1":
         out["error"] = (

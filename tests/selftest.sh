@@ -4221,6 +4221,62 @@ else
   fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
 fi
 
+# CF-379: a record that PARSES but declares no files. node_seed.py check prints `0 files present
+# and matching` and exits 0 for it, so the wrapper's PASS branch — "the seeder exited 0 with a
+# parseable count" — certified a node whose seed applied nothing. The record is not UNMEASURABLE:
+# it was read and it is conclusively empty, so the verdict is a named FAIL on the empty collection.
+printf '{"files": []}' > "$vn_rec"
+out=$(vn_run "$vn/tree"); rc=$?
+if [ "$rc" -eq 1 ] \
+  && printf '%s\n' "$out" | grep -Fxq 'VERIFY: FAIL (1)' \
+  && printf '%s\n' "$out" | grep -Fq '  FAIL  seed_drift — ' \
+  && printf '%s\n' "$out" | grep -Fq 'the record declares no files' \
+  && printf '%s\n' "$out" | grep -Fq 'the files collection is empty' \
+  && ! printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS'; then
+  say "  PASS  a seed record that declares no files -> exit $rc, VERIFY: FAIL naming the empty collection (not a PASS)"
+else
+  say "  FAIL  an empty seed record was not a named FAIL (exit $rc): $(printf '%s\n' "$out" | grep -E '^VERIFY|seed_drift' | head -3 | tr '\n' ' ')"
+  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# The CF-379 control: the SAME empty record through the checker at 226bae2 — the row's measured
+# premise commit — inside the SAME verifier must still reach VERIFY: PASS and print `0 seeded files
+# present and matching`. Without it the arm above could be green on a fixture that refuses every
+# seed. Spliced from the pre-fix revision, not hand-written: `declared_files()` does not exist there,
+# so there is no refusal to weaken and the control cannot drift into a stub of the fix.
+vn_pfx="$vn/prefix-cf379/scripts"
+mkdir -p "$vn_pfx"
+cp -r "$vn/tree/scripts/." "$vn_pfx/"
+if git -C "$HERE" show 226bae2:scripts/node_seed_drift.py > "$vn_pfx/node_seed_drift.py" 2>/dev/null; then
+  if cmp -s "$vn_pfx/node_seed_drift.py" "$vn/tree/scripts/node_seed_drift.py"; then
+    say "  FAIL  the CF-379 control is not a pre-fix checker — byte-identical to the tree under test"; fails=$((fails+1))
+  else
+    out=$(vn_run "$vn/prefix-cf379"); rc=$?
+    if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
+      && printf '%s\n' "$out" | grep -Fq '0 seeded files present and matching'; then
+      say "  PASS  pre-fix 226bae2 certifies the same empty record: VERIFY: PASS, exit $rc (the fixture detects CF-379)"
+    else
+      say "  FAIL  pre-fix 226bae2 control did not pass the empty record (exit $rc)"; fails=$((fails+1))
+      printf '%s\n' "$out" | sed 's/^/    | /'
+    fi
+  fi
+else
+  say "  FAIL  pre-fix source 226bae2:scripts/node_seed_drift.py unavailable"; fails=$((fails+1))
+fi
+
+# Green control for the two arms above: the record restored — its two seeded files still match —
+# must reach VERIFY: PASS again, naming a count greater than zero. A red that cannot go green
+# proves nothing, and this is the count a pass is supposed to look like.
+cp "$vn/good-record.json" "$vn_rec"
+out=$(vn_run "$vn/tree"); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
+  && printf '%s\n' "$out" | grep -Fq '2 seeded files present and matching'; then
+  say "  PASS  the record restored with its 2 seeded files -> VERIFY: PASS, exit $rc (a pass names a count above zero)"
+else
+  say "  FAIL  the restored two-file record did not verify (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
 # absent record: no seed was ever applied — unmeasured, so the gate refuses to call it verified.
 mv "$vn_rec" "$vn/record.bak"
 out=$(vn_run "$vn/tree"); rc=$?

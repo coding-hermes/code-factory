@@ -197,6 +197,11 @@ fi
 # answers VERIFY: UNVERIFIED and exits 3 rather than printing PASS for a seed nobody read
 # (CF-291: an empty or unparseable record used to end in `VERIFY: PASS`, exit 0). With
 # --strict-seed the same case is a FAIL instead, so a gate can refuse on "unknown" outright.
+# CF-379: a record that PARSES but declares no files is neither of those. The checker refuses it
+# itself with a FAIL row naming the empty collection and exit 1 — the case below already folds
+# exit 1 into `bad`, so the gate answers VERIFY: FAIL with no new verb and no new branch here. A
+# record that declares nothing cannot be a peer of one that declares a digest set: `0 files present
+# and matching` used to reach VERIFY: PASS for a node whose seed applied nothing.
 SEEDCHK="$HERE/node_seed_drift.py"
 if [ ! -r "$SEEDCHK" ]; then
   bad "seed_drift" "$SEEDCHK missing — the node's seed is unmeasured"
