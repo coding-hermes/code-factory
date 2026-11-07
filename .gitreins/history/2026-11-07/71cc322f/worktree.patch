@@ -1,0 +1,726 @@
+diff --git a/.coding-hermes/board/events.jsonl b/.coding-hermes/board/events.jsonl
+index 8fad83c..3d983cd 100644
+--- a/.coding-hermes/board/events.jsonl
++++ b/.coding-hermes/board/events.jsonl
+@@ -517,3 +517,4 @@
+ {"id": 517, "timestamp": "2026-11-06T22:57:55+00:00", "event_type": "task_completed", "task_id": "CF-303", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
+ {"id": 518, "timestamp": "2026-11-06T23:43:49+00:00", "event_type": "task_completed", "task_id": "CF-354", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
+ {"id": 519, "timestamp": "2026-11-07T00:05:34+00:00", "event_type": "task_completed", "task_id": "CF-270", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
++{"id": 520, "timestamp": "2026-11-07T06:09:41+00:00", "event_type": "task_updated", "task_id": "CF-150", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}"}
+diff --git a/.coding-hermes/board/tasks.jsonl b/.coding-hermes/board/tasks.jsonl
+index 8246bb5..7555b54 100644
+--- a/.coding-hermes/board/tasks.jsonl
++++ b/.coding-hermes/board/tasks.jsonl
+@@ -122,7 +122,7 @@
+ {"id":"CF-147","title":"P3 — the CF-123 census-port fix is protected by no gate arm: reverting one token of the call site keeps the single-run gate green while two concurrent runs red each other again","status":"pending","priority":"P3","complexity":3,"created_at":"2026-11-04T02:38:28Z","updated_at":"2026-11-04T02:38:28Z","detail":{"fingerprint":"495c612cd16435d71bbc00df25e8fd8ae9501e556df690ab7cf33259b76d73ff"},"reasoning":"Review of commit 72d51bc (\"fix(selftest): census fixtures bind ephemeral ports so concurrent gate runs cannot red each other. Addresses CF-117.\"), measured 2026-11-03 21:24-21:26 -05 by tick code-factory-review-2026-11-04-02-20-15 from throwaway clones (family barrier live: sibling lanes writing the board).\n\nWHAT THE COMMIT GETS RIGHT (measured, not read):\n1. The new suite is load-bearing. Overlaying the tip's tests/selftest.sh on the true parent 25d1e71 (whose cf089-census-standin.py has no --port-file) reds all eight census arms with NAMED rows and rc=1: \"census fetch guard (exit 99): fixture did not start on port unknown: usage: cf089-census-standin.py [-h] [--port PORT]\" and the seven siblings -> SELFTEST: FAIL (8). The same parent tree with its OWN pre-fix suite is SELFTEST: PASS rc=0, so the overlay, not the tree, is what reds.\n2. The port class is gone. Six whole-gate runs at the tip in three rounds of two concurrent clones produced port_red_lines=0 (no bind failure, no \"Failed to connect to 127.0.0.1 port 190xx\"), and the single arm produced none either.\n3. The doc is honest about its residual: docs/audits/code-factory-perf-2026-11-03-concurrency.md states that two concurrent runs still red each other through scripts/verify-node.sh:42's fixed /tmp/node-status.json (CF-072 AC-2), and its own table shows 2 of 3 rounds with a red arm.\n\nTHE DEFECT (this row):\nThe property the commit establishes is protected by nothing in the gate. cf089_run passes \"--port 0 --port-file $tmpd/port\" on one line of tests/selftest.sh; replacing that \"--port 0\" with a literal port (the pre-fix shape, one token) leaves the whole gate green:\n\n  sed -i 's/--port 0 --port-file/--port 19022 --port-file/' tests/selftest.sh\n  bash tests/selftest.sh                      -> SELFTEST: PASS rc=0        (mutation invisible)\n  two concurrent runs of the same mutation    -> both arms rc=1, FAIL (5) / FAIL (4), 10 and 8 port-red lines\n\nSo the regression that CF-117 cost a P2 row and a measured control to fix can come back through a single-token edit, and the only instrument that would catch it is a manual two-arm control that no tick re-runs. Old CF-117's core sentence — \"two gate runs at one HEAD red each other\" — becomes true again the moment someone \"simplifies\" the call site, with the gate still green.\n\nRelated, recorded but NOT filed as a row (documentation/provenance, no executable defect):\n- The commit SUBJECT (\"cannot red each other\") is stronger than its evidence: 1 of 6 concurrent arms red in this tick's sample and the commit's own audit doc prints 2 of 3 rounds with a red arm. The doc attributes those reds to CF-072 and states the residual in prose, so the code is right and the durable explanation exists; only the git subject overstates, and a commit body is immutable, so tightening the message is not available after the fact.\n- The commit's ch:trace marker reads row=CF-117. Today CF-117 is an unrelated pending finding (the publish-drift census), and the row that carries 72d51bc is CF-123 — the ports row was filed under the already-taken id CF-117 at 15:47 (2ab0f85), closed at 15:49 (31da857), then renumbered on merge (e42f267). CF-123's own reasoning already records that renumber, so the ledger does carry the binding; what is missing is only a forward pointer from CF-117, which is why this is recorded here rather than filed as a separate row.\n\nAcceptance criterion 1 asks the gate to own the property; it does not ask for a new product feature, and no assertion in the existing suite is loosened — the 53 named PASS rows stay byte-identical (verified against 25d1e71) with the new arm's rows added on top.","acceptance_criteria":"AC0 — reproduce on the current tree from the repo root. The probe prints `mutated-single rc=0` and `conc-a rc=1` / `conc-b rc=1` today; at the fixed tip the same probe must print non-zero for `mutated-single` (a named FAIL row) with the two concurrent arms unchanged in meaning:\n\n    tmp=$(mktemp -d)\n    git clone -q . \"$tmp/a\"\n    git clone -q . \"$tmp/b\"\n    sed -i 's/--port 0 --port-file/--port 19022 --port-file/' \"$tmp/a/tests/selftest.sh\" \"$tmp/b/tests/selftest.sh\"\n    ( cd \"$tmp/a\" && bash tests/selftest.sh >/dev/null 2>&1; echo \"mutated-single rc=$?\" )\n    ( cd \"$tmp/a\" && bash tests/selftest.sh >/dev/null 2>&1; echo \"conc-a rc=$?\" ) &\n    ( cd \"$tmp/b\" && bash tests/selftest.sh >/dev/null 2>&1; echo \"conc-b rc=$?\" ) &\n    wait\n    rm -rf \"$tmp\"\n\nMeasured 2026-11-03 21:37 -05 at 1da7f24: mutated-single rc=0, conc-a rc=1, conc-b rc=1 (identical at 47a0490 at 21:26; `git diff --name-only 47a0490 1da7f24 -- tests/ scripts/ specs/` = 0, so the pre-fix measurement carries).\n\nAC1 — the gate owns the census-port property. tests/selftest.sh gains an arm that starts TWO census fixtures concurrently (two cf089_run invocations, or two stand-in processes) and requires that each published a DISTINCT port and that both readiness probes answered 200 on their own port; the arm prints one named PASS row when they are distinct and one named FAIL row naming both ports when they collide. Deleting or weakening the arm turns the gate red only through that named row.\n\nAC2 — the arm is load-bearing against the exact regression. With AC1 landed, AC0's mutation of the call site makes the suite exit non-zero with that named FAIL row, and the same mutation on the pre-AC1 tree still prints SELFTEST: PASS (the control that proves the arm, not the sed, is what reds).\n\nAC3 — nothing is loosened. `bash -n tests/selftest.sh` and `python3 -m py_compile docs/audits/cf089-census-standin.py` exit 0; the sorted set of existing PASS row labels at the new tree is a superset of the 53 labels at 25d1e71 with no rename, no deletion and no change of assertion strength; `bash tests/selftest.sh` is SELFTEST: PASS rc=0 on a quiet host and the 8 census arms (§22-§27) stay green.\n\nAC4 — the residual stays attributed, not hidden. The new arm does not touch scripts/verify-node.sh; the CF-072 auth-arm race must still be reproducible at the new tree (two concurrent runs, one arm red on an auth row) and must NOT be masked by a lock or by serialising the suite.","probe":"tmp=$(mktemp -d)\ngit clone -q . \"$tmp/a\"\ngit clone -q . \"$tmp/b\"\nsed -i 's/--port 0 --port-file/--port 19022 --port-file/' \"$tmp/a/tests/selftest.sh\" \"$tmp/b/tests/selftest.sh\"\n( cd \"$tmp/a\" && bash tests/selftest.sh >/dev/null 2>&1; echo \"mutated-single rc=$?\" )\n( cd \"$tmp/a\" && bash tests/selftest.sh >/dev/null 2>&1; echo \"conc-a rc=$?\" ) &\n( cd \"$tmp/b\" && bash tests/selftest.sh >/dev/null 2>&1; echo \"conc-b rc=$?\" ) &\nwait\nrm -rf \"$tmp\""}
+ {"id":"CF-148","title":"P2 — CF-053 was closed against an isolation criterion the fleet violates, and lane_target.py scan certifies a shared checkout as ok","status":"pending","priority":"P2","complexity":3,"created_at":"2026-11-04T02:39:07Z","updated_at":"2026-11-04T02:39:07Z","detail":{"evidence":[{"run_id":"code-factory-duckbrain-qa-2026-11-04-02-20-15","ts":"2026-11-04T02:37:00Z","artifacts":["docs/audits/code-factory-qa-duckbrain-2026-11-04.md"]}]},"reasoning":"CF-053's acceptance criterion 4 reads: 'Concurrent lanes do not share one mutable checkout: two lanes must not write the same board from the same working tree.' Its closure evidence is the opposite of that criterion — the 18 satellite lanes were repointed ONTO one checkout. Measured 2026-11-04 by the QA lane: 'select count(*), count(distinct workdir) from projects where name like code-factory% and enabled=1' returns 19 lanes / 1 workdir, and the family block in the fleet config names the same workdir for every lane, so both surfaces agree. The consequence is already on the record from a sibling lane: docs/audits/code-factory-pm-2026-11-04-02-20-15.md records a sibling commit landing on main in that shared checkout while its judge ran, with a second gitreins process live; git log since 2026-11-03 18:00 shows pm, sync, duckbrain, dogfood and qa interleaving commits into the one tree within minutes, and three sibling lanes were running on it simultaneously at this tick's start. The instrument that closed the row cannot see it: two lanes pointed at the same checkout scan bad: 0 / ok: true / rc=0 (probe below), tests/selftest.sh section 11 asserts target parsing and home-repo rejection only, and scripts/lane_target.py carries no duplicate-workdir leg. Distinct from CF-097 (the repo-url guard lost the workdir arm's not_home_repo check) and from CF-061 (verify passes on a mid-merge checkout): this is the missing SHARING leg, and it is the leg CF-053 AC4 promised.","acceptance_criteria":"0. Reproduce on the current tree: the probe below prints \"bad\": 0, \"ok\": true and scan_rc=0 for two lanes whose workdir is the same checkout.\n1. scripts/lane_target.py scan reports a named failure when two or more rows resolve to one workdir: after the fix, the SAME probe exits non-zero and names both lane names plus the shared path, and a scan of the live code-factory family (19 lanes, 1 workdir) reds naming that path — the instrument must be able to fail on the fleet it certifies.\n2. tests/selftest.sh gains an arm in the lane-target section that exercises the new leg both ways: two rows on one workdir print a named FAIL, two distinct workdirs print PASS; bash tests/selftest.sh prints SELFTEST: PASS at the fixed tree.\n3. CF-053 criterion 4 is dispositioned on the board: either the family is split onto distinct targets and the live scan is green, or the criterion is replaced with a recorded decision naming the accepted risk. No complete row may assert a criterion the live fleet violates.\n4. Do NOT repoint the live lanes as a side effect of this fix: moving 19 production lanes is an owner decision. Land the gate and the selftest arm, keep CF-053 open for the decision, and record which of the two remedies the owner chose.","probe":"d=$(mktemp -d); printf '{\"name\":\"lane-a\",\"workdir\":\"%s\",\"repo_url\":\"local:%s\",\"enabled\":true}\\n{\"name\":\"lane-b\",\"workdir\":\"%s\",\"repo_url\":\"local:%s\",\"enabled\":true}\\n' \"$PWD\" \"$PWD\" \"$PWD\" \"$PWD\" > \"$d/lanes.jsonl\"; python3 scripts/lane_target.py scan \"$d/lanes.jsonl\" | grep -E '\"(bad|ok)\"' | tail -2; echo \"scan_rc=${PIPESTATUS[0]}\"; rm -rf \"$d\""}
+ {"id":"CF-149","title":"P4 — CF-123's concurrency probe counts a negative-fixture row as a cross-arm red: unique_red_rows=1 against its own documented 0","status":"pending","priority":"P4","complexity":2,"created_at":"2026-11-04T02:39:07Z","updated_at":"2026-11-04T02:39:07Z","detail":{"evidence":[{"run_id":"code-factory-duckbrain-qa-2026-11-04-02-20-15","ts":"2026-11-04T02:37:00Z","artifacts":["docs/audits/code-factory-qa-duckbrain-2026-11-04.md"]}]},"reasoning":"CF-123 closed the two-simultaneous-gate-runs defect and recorded a probe whose header documents the post-fix expectation 'a_rc=0, b_rc=0, both SELFTEST: PASS, unique_red_rows=0 in both arms'. Re-run by the QA lane at tip bafdb41 the operative claims hold (a_rc=0, b_rc=0, both SELFTEST: PASS, port_red_lines=0) but unique_red_rows=1 in EACH arm, so the probe contradicts its own documented output. The unique row in each arm is the same message — 'disk_floor — resolver missing or unreadable: <mktemp dir>/scripts/disk_floor.py' — a deliberate negative fixture asserted by tests/selftest.sh:509 whose text embeds $HERE, the arm's own mktemp path. The probe diffs raw FAIL-row text with comm, so a per-run path alone makes a row 'unique', and the counter cannot distinguish a real cross-arm race (the defect the probe exists to catch) from a negative arm that always prints. This is an instrument defect, not a regression of the port fix: the port fix reproduces.","acceptance_criteria":"0. Reproduce on the current tree: the probe below prints two 'unique_red_rows=1' lines, each followed by the same disk_floor negative-fixture message at a different temp path.\n1. The probe normalizes per-run paths (mktemp/scratch roots, ports) before the set difference, or restricts the comparison to rows that cannot carry a per-run path; at the fixed probe two concurrent PASS runs print unique_red_rows=0 in both arms while a_rc, b_rc, both SELFTEST lines and port_red_lines are unchanged.\n2. The red arm survives normalization: with one arm's tree mutated to emit a genuine extra failing row, the normalized counter reports it as unique for that arm only.\n3. The probe's own documented expectation and its measured output agree at the fixed tree, and CF-123's recorded probe field carries the corrected text so the next QA tick re-runs the version that matches its documentation.","probe":"d=$(mktemp -d); jq -r 'select(.id==\"CF-123\").probe' .coding-hermes/board/tasks.jsonl > \"$d/p.sh\"; bash \"$d/p.sh\" > \"$d/out\" 2>&1; grep -E 'unique_red_rows=|^    ' \"$d/out\"; rm -rf \"$d\""}
+-{"id": "CF-150", "title": "P3 — the documented node create path can never start its gateway: no step in node-create.sh, project-node.sh or install-hermes.sh stages dashboard.basic_auth, and no doc says how", "status": "pending", "priority": "P1", "complexity": 3, "created_at": "2026-11-04T02:43:03Z", "updated_at": "2026-11-05T16:50:10Z", "detail": null, "reasoning": "Dogfood walk 2026-11-04 (tick code-factory-duckbrain-dogfood-2026-11-04-02-20-15) from a clean copy of origin/main @ 1da7f24, control host only. scripts/harness/install-hermes.sh:94 greps ~/.hermes/config.yaml for basic_auth and :100 refuses gateway_start when it is absent; nothing in the create path writes that file (grep -c basic_auth and grep -c hermes/config.yaml are 0 for scripts/node-create.sh and scripts/project-node.sh), and node-create.sh --staged-files stages only project-node.sh, lib.sh, disk_floor.py, reclaim_disk.py and harness/install-<harness>.sh. Measured, verbatim transcript in docs/audits/cf-dogfood-2026-11-04-gateway-apply.txt: fresh HOME, env -i, HERMES_PYTHON_BIN=/usr/bin/python3.12, `bash scripts/harness/install-hermes.sh --apply` prints `PASS  install — Hermes Agent v0.19.0 (2026.7.20)` followed by `FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml` and `HERMES: FAIL (4)` rc=1. docs/OPERATIONS.md:80 states the requirement but names no command that stages the block; the README's step 3 ('make one') does not mention it. Consequence: a reader following README step 3 ends NODE INCOMPLETE, verify-node.sh gateway_reachable cannot pass, and the Status table's round trip (CF-004) is unreachable by the documented path. Distinct from CF-071 (that row is about the gate's substring validation being too LENIENT once a config exists; this row is that no documented step produces the config at all). Raised from P3 to P1 on 2026-11-05 after reading the branch structure: the auth gate at scripts/harness/install-hermes.sh:202-210 is reached only from the NOT-LISTENING branch (:240 `if [ \"$MODE\" = \"--apply\" ]`), while the listening branch (:232-238) checks only the port and /api/status. A gateway already bound to 0.0.0.0 with no dashboard.basic_auth is therefore certified `PASS port` + `PASS status_probe` — an authenticated probe from 127.0.0.1 does not prove the public bind is protected.", "acceptance_criteria": "0. Reproduce on the current tree (from the repo root): `jq -r 'select(.id==\"CF-150\").probe' .coding-hermes/board/tasks.jsonl > p.sh && bash p.sh` prints `installer_basic_auth=3 create_path_basic_auth=scripts/node-create.sh:0,scripts/project-node.sh:0, create_path_config_yaml=scripts/node-create.sh:0,scripts/project-node.sh:0,`, prints the `scripts/harness/install-hermes.sh:100` refusal line, and exits 0 today.\n1. One documented, scripted step stages a node `~/.hermes/config.yaml` carrying a non-empty `dashboard.basic_auth` block, with the credential supplied as a mode-600 file (never an argument, per AGENTS.md rule 8), so `install-hermes.sh --apply` in a fresh HOME reaches the launch path instead of the refusal: the run prints a launch or reachability row for `gateway_start` rather than `refused: a public bind needs dashboard.basic_auth`.\n2. Negative control in the same run: with the staged block removed, `--apply` still prints the exact refusal wording and exits nonzero, so the new step is a producer and not a weakened gate.\n3. `README.md` (step 3 or the Status table) and `docs/OPERATIONS.md` name who stages the block and with which command, and state what a freshly created node is expected to reach; the text matches the command the tree ships.\n4. `bash tests/selftest.sh` prints `SELFTEST: PASS` at the fixed tip, with a numbered section that fails on the pre-fix tree (fixture: staged config present -> gate passes; absent -> named refusal), and `scripts/boardctl validate` prints `RESULT: OK`.", "probe": "echo \"installer_basic_auth=$(grep -c basic_auth scripts/harness/install-hermes.sh) create_path_basic_auth=$(grep -c basic_auth scripts/node-create.sh scripts/project-node.sh | tr '\\n' ',') create_path_config_yaml=$(grep -c hermes/config.yaml scripts/node-create.sh scripts/project-node.sh | tr '\\n' ',') \"; grep -n 'refused: a public bind needs dashboard.basic_auth' scripts/harness/install-hermes.sh; echo rc=0"}
++{"id": "CF-150", "title": "P3 — the documented node create path can never start its gateway: no step in node-create.sh, project-node.sh or install-hermes.sh stages dashboard.basic_auth, and no doc says how", "status": "in_progress", "priority": "P1", "complexity": 3, "created_at": "2026-11-04T02:43:03Z", "updated_at": "2026-11-07T06:09:41Z", "detail": null, "reasoning": "Dogfood walk 2026-11-04 (tick code-factory-duckbrain-dogfood-2026-11-04-02-20-15) from a clean copy of origin/main @ 1da7f24, control host only. scripts/harness/install-hermes.sh:94 greps ~/.hermes/config.yaml for basic_auth and :100 refuses gateway_start when it is absent; nothing in the create path writes that file (grep -c basic_auth and grep -c hermes/config.yaml are 0 for scripts/node-create.sh and scripts/project-node.sh), and node-create.sh --staged-files stages only project-node.sh, lib.sh, disk_floor.py, reclaim_disk.py and harness/install-<harness>.sh. Measured, verbatim transcript in docs/audits/cf-dogfood-2026-11-04-gateway-apply.txt: fresh HOME, env -i, HERMES_PYTHON_BIN=/usr/bin/python3.12, `bash scripts/harness/install-hermes.sh --apply` prints `PASS  install — Hermes Agent v0.19.0 (2026.7.20)` followed by `FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml` and `HERMES: FAIL (4)` rc=1. docs/OPERATIONS.md:80 states the requirement but names no command that stages the block; the README's step 3 ('make one') does not mention it. Consequence: a reader following README step 3 ends NODE INCOMPLETE, verify-node.sh gateway_reachable cannot pass, and the Status table's round trip (CF-004) is unreachable by the documented path. Distinct from CF-071 (that row is about the gate's substring validation being too LENIENT once a config exists; this row is that no documented step produces the config at all). Raised from P3 to P1 on 2026-11-05 after reading the branch structure: the auth gate at scripts/harness/install-hermes.sh:202-210 is reached only from the NOT-LISTENING branch (:240 `if [ \"$MODE\" = \"--apply\" ]`), while the listening branch (:232-238) checks only the port and /api/status. A gateway already bound to 0.0.0.0 with no dashboard.basic_auth is therefore certified `PASS port` + `PASS status_probe` — an authenticated probe from 127.0.0.1 does not prove the public bind is protected.", "acceptance_criteria": "0. Reproduce on the current tree (from the repo root): `jq -r 'select(.id==\"CF-150\").probe' .coding-hermes/board/tasks.jsonl > p.sh && bash p.sh` prints `installer_basic_auth=3 create_path_basic_auth=scripts/node-create.sh:0,scripts/project-node.sh:0, create_path_config_yaml=scripts/node-create.sh:0,scripts/project-node.sh:0,`, prints the `scripts/harness/install-hermes.sh:100` refusal line, and exits 0 today.\n1. One documented, scripted step stages a node `~/.hermes/config.yaml` carrying a non-empty `dashboard.basic_auth` block, with the credential supplied as a mode-600 file (never an argument, per AGENTS.md rule 8), so `install-hermes.sh --apply` in a fresh HOME reaches the launch path instead of the refusal: the run prints a launch or reachability row for `gateway_start` rather than `refused: a public bind needs dashboard.basic_auth`.\n2. Negative control in the same run: with the staged block removed, `--apply` still prints the exact refusal wording and exits nonzero, so the new step is a producer and not a weakened gate.\n3. `README.md` (step 3 or the Status table) and `docs/OPERATIONS.md` name who stages the block and with which command, and state what a freshly created node is expected to reach; the text matches the command the tree ships.\n4. `bash tests/selftest.sh` prints `SELFTEST: PASS` at the fixed tip, with a numbered section that fails on the pre-fix tree (fixture: staged config present -> gate passes; absent -> named refusal), and `scripts/boardctl validate` prints `RESULT: OK`.", "probe": "echo \"installer_basic_auth=$(grep -c basic_auth scripts/harness/install-hermes.sh) create_path_basic_auth=$(grep -c basic_auth scripts/node-create.sh scripts/project-node.sh | tr '\\n' ',') create_path_config_yaml=$(grep -c hermes/config.yaml scripts/node-create.sh scripts/project-node.sh | tr '\\n' ',') \"; grep -n 'refused: a public bind needs dashboard.basic_auth' scripts/harness/install-hermes.sh; echo rc=0", "foreman_note": "foreman tick code-factory-2026-11-07-05-29-36: dispatched worker (deepseek-v4-flash @ deepseek-foreman); gitreins task CF-150 started; producer scripts/node_gateway_auth.py already exists but is wired only into bunker-provision.sh"}
+ {"id":"CF-151","title":"P4 — README Status row 3's cited command measures the CONTROL host's key, so the row's 'missing' state can never be contradicted there","status":"complete","priority":"P4","complexity":3,"created_at":"2026-11-04T02:43:34Z","updated_at":"2026-11-04T09:13:30Z","detail":{"renumbered_from":"CF-150","renumbered_reason":"sibling dogfood commit e657d98 filed CF-150 on the published board first; this row moved to the next free id rather than splitting the closure","fingerprint":"d99436d0e7b59bf5412c23c9fe8deecdcb13bc068c2761e3afe86082a2d2fb0b","evidence":[{"run_id":"5b0baa08","ts":"2026-11-04T09:13:30Z","tree_fp":"6e913dd57558288025d637a8325228e847b252bd4688a6f66aabb83453ab77a9","artifacts":[".gitreins/history/2026-11-04/28522447/verdict.json"]}]},"reasoning":"README Status row 3 (Node inference credential) states '**missing**' and cites `HERMES_PYTHON_BIN=python3.12 scripts/harness/install-hermes.sh --check` -> `FAIL inference_key`. Measured at d02916e on 2026-11-04: on this control host the same command prints 5 gate rows and `PASS  inference_key — a provider key is present in ~/.hermes/.env`, so the row's cited command contradicts the row's own state cell on any keyed host. The row describes a node's credential; the command inspects the control host's ~/.hermes/.env. Nothing in the tree measures a NODE's inference credential, so the state can neither be reproduced nor refuted by the command the status table promises.","acceptance_criteria":"1. Reproduce at the fixed tree: print Status row 3 verbatim, then run HERMES_PYTHON_BIN=python3.12 scripts/harness/install-hermes.sh --check on a host whose ~/.hermes/.env carries a provider key and show 'PASS  inference_key' (5 gate rows, rc 1 from the port arm) beside the row's '**missing**' claim.\n2. Reword row 3 so its re-run cell measures what the State cell asserts: either a node-scoped command (executed on the node, e.g. through the bunker client) that fails when the node has no credential, or an explicit statement that the state is a node-state not measurable from the control host plus the command that would measure it. A control-host key check may stay, but must be labelled as such.\n3. If any new check is added it carries a fixture proving it can FAIL (AGENTS.md rule 2), and a tests/selftest.sh arm binds the rewording so the row cannot silently regain a command that measures a different host.\n4. bash tests/selftest.sh prints SELFTEST: PASS; scripts/boardctl validate prints RESULT: OK.","commit_hash":"4ce1e48fce8ba8182d9182f7658b210d51b69869","worker_summary":"README Status row 3 now states a NODE credential state, names the node-scoped measurement and labels the control-host key gate as control-host evidence; selftest section 37 binds the rewording; section census re-pinned to 37."}
+ {"id":"CF-152","title":"P3 — verify-node.sh certifies the auth gate from /tmp/node-status.json, a fixed path a second run rewrites: an OPEN gateway prints auth_gate PASS","status":"pending","priority":"P3","complexity":2,"created_at":"2026-11-04T02:58:00Z","updated_at":"2026-11-04T02:58:00Z","detail":{"evidence":[{"run_id":"code-factory-docs-qa-2026-11-04-02-39-16","ts":"2026-11-04T02:58:00Z","artifacts":["~/.hermes/stand-in/docs/code-factory/qa-2026-11-03-evidence.md"]}]},"reasoning":"Re-run by the QA lane at origin/main 2c48149 (scripts/verify-node.sh md5 6b370f4f6c365cd806bdcb3058e1fb7f). CF-077 closed the STATUS-CODE domain of verify-node.sh's auth arms (only 401/302/403 may pass) and reproduces green across 401/302/403/200/404/000/500; nothing tested where the body it greps comes from. scripts/verify-node.sh:42 writes the /api/status body to the fixed path /tmp/node-status.json and :45-47 greps that same path, so the graded bytes are not bound to the response this run received. node-create.sh:110 calls verify-node.sh from the control host, and the fleet already carries the sibling defect CF-123 ('two gate runs at one HEAD red each other') for shared host artifacts, so a second run — or any other writer — can substitute the body between the script's own curl and its grep. The probe below holds the response constant (auth_required:false, an OPEN gateway) and varies only whether a second writer rewrites the file: arm A prints 'FAIL  auth_gate … auth_required:true not measured' and VERIFY: FAIL (1) (correct), arm B prints 'PASS  auth_gate — auth_required:true' and VERIFY: PASS on the same response, certifying an open node. Boundary vs CF-077: the refusal CODE set is correct today; the body's provenance is unverified. Boundary vs CF-127 (install-hermes.sh pipes into a fixed /tmp/hermes-install.log): that row is diagnosability of an install log; this one is a security verdict sourced from another run's bytes.","acceptance_criteria":"0. Reproduce on the current tree: the probe below prints armA_rc=1 with 'FAIL  auth_gate — /api/status -> 200; auth_required:true not measured' and armB_rc=0 with 'PASS  auth_gate — auth_required:true (a public bind must not be open)' plus 'VERIFY: PASS', although the /api/status body this run received says auth_required:false in both arms.\n1. The /api/status body is captured to a path unique to the run (mktemp) or consumed without a second reader, so no other process can substitute the bytes being graded; after the fix arm B prints 'FAIL  auth_gate' and 'VERIFY: FAIL (1)'.\n2. tests/selftest.sh carries one falsifiable arm per shape: (a) HTTP 200 with auth_required:false and no interleave FAILs auth_gate; (b) HTTP 200 with auth_required:true PASSes it; (c) a file left at the path the script uses cannot green (a); reverting the unique-path change reds (c) with the named row.\n3. bash tests/selftest.sh prints SELFTEST: PASS at the fixed tip.","probe":"d=$(mktemp -d); mkdir -p \"$d/bin\"; printf '%s\\n' '#!/bin/sh' 'case \"$*\" in *ALIVE*) echo \"ALIVE probe-host\";; *\"hostname -I\"*) echo 127.0.0.1;; *) :;; esac' > \"$d/bin/bunker\"; printf '%s\\n' '#!/bin/sh' 'out=\"\"; prev=\"\"; for a in \"$@\"; do [ \"$prev\" = \"-o\" ] && out=\"$a\"; prev=\"$a\"; done' \"case \\\"\\$*\\\" in *api/status*) [ -n \\\"\\$out\\\" ] && printf '%s' '{\\\"auth_required\\\":false}' > \\\"\\$out\\\"; [ \\\"\\${SECOND:-0}\\\" = 1 ] && printf '%s' '{\\\"auth_required\\\":true}' > \\\"\\$out\\\"; printf 200;; *api/system/stats*) printf 401;; *) printf 000;; esac\" > \"$d/bin/curl\"; chmod +x \"$d/bin/bunker\" \"$d/bin/curl\"; rm -f /tmp/node-status.json; echo ARM_A_no_second_writer:; SECOND=0 PATH=\"$d/bin:$PATH\" BUNKER_SERVER=p bash scripts/verify-node.sh --agent qa-probe --server p | grep -E 'auth_gate|VERIFY'; echo \"armA_rc=${PIPESTATUS[0]}\"; rm -f /tmp/node-status.json; echo ARM_B_shared_path_rewritten:; SECOND=1 PATH=\"$d/bin:$PATH\" BUNKER_SERVER=p bash scripts/verify-node.sh --agent qa-probe --server p | grep -E 'auth_gate|VERIFY'; echo \"armB_rc=${PIPESTATUS[0]}\"; rm -f /tmp/node-status.json; rm -rf \"$d\""}
+ {"id":"CF-153","title":"P3 — the create path cannot honour the remedy its own error prints: node-create.sh has no --ref flag, so a repo whose default branch is not 'main' can never be created by README step 3","status":"complete","priority":"P3","complexity":2,"created_at":"2026-11-04T02:55:17Z","updated_at":"2026-11-04T07:36:09Z","detail":{"evidence":[{"run_id":"code-factory-dogfood-2026-11-04-02-39-16","ts":"2026-11-04T03:20:00Z","artifacts":["docs/audits/code-factory-dogfood-2026-11-04-02-39-16.md"]},{"run_id":"a516e16f","ts":"2026-11-04T07:36:09Z","tree_fp":"77dd94bca3605173ce3051d40c5dac6d02e36df48db03e52494331f6c056e4ca","artifacts":[".gitreins/history/2026-11-04/a516e16f/verdict.json"]}]},"reasoning":"Dogfood walk 2026-11-04 (tick code-factory-dogfood-2026-11-04-02-39-16) at the published tip c29c024, under the family barrier (sibling lane code-factory status=running), from a throwaway clone: `git diff --name-only f26a608 c29c024 -- scripts/ README.md` = 0 files, so the arms hold at both tips.\n\nARM A (the control-host create path), verbatim:\n  $ BUNKER_SERVER=no-such-server bash scripts/node-create.sh --project p --repo https://github.com/git/git --harness hermes --ref master\n  unknown arg: --ref\n  rc=2\n\nARM B (the node-side entry point, layer 40 only, fresh HOME):\n  $ HOME=$(mktemp -d) bash scripts/project-node.sh --apply --layers 40 --project refproof --repo https://github.com/git/git\n  [40] repo\n    ..    cloning https://github.com/git/git @ main\n    FAIL  repo_clone — ref 'main' was not found; pass --ref <branch-or-tag>\n  NODE: FAIL (1)\n\nThe node's failure text names `--ref` as the remedy; the only documented control-host command that creates a node rejects that exact flag, and does not say which command accepts it. Mechanism, from the tree: scripts/project-node.sh:33 `REF=\"${NODE_REF:-main}\"` and :53 `--ref) REF=\"$2\"` (the node side supports the selection); scripts/node-create.sh:56-67 parses --project/--repo/--harness/--agent/--ttl/--port/--staged-files only, so --ref falls to the `*)` arm at :65; :103 forwards exactly NODE_PROJECT and NODE_GATEWAY_PORT into the node's `bash -lc` and passes --project/--harness/--repo, never a ref, so NODE_REF cannot cross either and there is no second route. README.md:80-81 states \"`--ref` defaults to `main`, so a public repo whose default branch is named differently needs `--ref <branch>`\". Consequence: a repo whose default branch is not main (git.git, linux, a large share of GitHub) cannot be turned into a node by README step 3, and the operator's only feedback is a rejection of the flag the previous error told them to use.\n\nNot a duplicate, checked row by row on the c29c024 board: CF-034 (complete) is --ref on project-node.sh plus clone-failure wording, not the control-host create path having no flag; CF-126 (pending) is CRIER_URL not handed to the node — same control→node handoff family, different variable, different layer (00 vs 40), different remedy; CF-125 (pending) is --harness typo vs unmeasured adapter; CF-041 (complete) is Quick start env-ordering and a nonexistent --agent.","acceptance_criteria":"0. Reproduce on the current tree from the repo root: the probe below prints `unknown arg: --ref` with arm_create_rc=2 and prints `FAIL  repo_clone — ref 'main' was not found; pass --ref <branch-or-tag>` in the layer-40 arm, and leaves no agent behind (BUNKER_SERVER is deliberately a nonexistent server).\n1. scripts/node-create.sh accepts a ref selection — a `--ref <branch-or-tag>` flag, or documented NODE_REF forwarding — and passes it through to the node's `project-node.sh --ref`, so a node created for a public repo whose default branch is not `main` reaches `PASS  repo_clone` naming the branch it cloned instead of `ref 'main' was not found`.\n2. The self-contradiction is closed in the same commit, one of two ways, and the commit message says which: the flag exists and README.md:80-81's advice is reachable from step 3, or README.md:80-81 stops offering `--ref` as the create-path remedy and names the command that does take it.\n3. Negative control: on the pre-fix tree the probe's two arms disagree exactly as recorded here (a command tells the operator to pass a flag; the command the operator is told to run rejects it). The new gate arm must fail on that tree.\n4. `bash scripts/node-create.sh --staged-files` stays at its shipped five-file set and rc=0 (the ref must not change the staged set), and a failed create still prints the explicit-server destroy command naming the agent it spawned.\n5. `bash tests/selftest.sh` prints `SELFTEST: PASS` at the fixed tip with the new arm visible as a named PASS row (AGENTS.md rule 2), and `bash scripts/boardctl validate` prints `RESULT: OK`.","probe":"cd \"$(git rev-parse --show-toplevel)\" || exit 99; echo ARM_create_path:; BUNKER_SERVER=no-such-server bash scripts/node-create.sh --project p --repo https://github.com/git/git --harness hermes --ref master 2>&1 | head -2; echo \"arm_create_rc=${PIPESTATUS[0]}\"; echo ARM_node_layer40:; H=$(mktemp -d); HOME=\"$H\" bash scripts/project-node.sh --apply --layers 40 --project p --repo https://github.com/git/git 2>&1 | tail -3; rm -rf \"$H\"; echo \"pre-fix: 'unknown arg: --ref' (rc=2) + \\\"ref 'main' was not found; pass --ref <branch-or-tag>\\\"\"","commit_hash":"a112726696b1c8afc34c012b2eed260db1ba42ee","guard_result":"PASS","ci_result":"SKIP","worker_summary":"node-create.sh now parses --ref (and NODE_REF) and forwards it escaped into the node payload as --ref '<quoted>' to project-node.sh; README step 3 and the --ref paragraph name the reachable remedy; selftest section 35 is red on the pre-fix tree (unknown arg: --ref, rc 2) and green after, with a stub transport asserting the forwarded ref (incl. a quoted ref). Evidence: docs/audits/code-factory-readme-2026-11-04-07-18-14.md; bash tests/selftest.sh SELFTEST: PASS 109 PASS/19 intentional FAIL rows; boardctl validate RESULT: OK (3 warnings); layer-40 arm now PASS repo_clone @ 750f5de for git.git --ref master; gitreins CF-153 PASS run a516e16f bound to a112726."}
+diff --git a/docs/handbook/chapters/M0-shared-contract.md b/docs/handbook/chapters/M0-shared-contract.md
+index 298b253..b0b80f9 100644
+--- a/docs/handbook/chapters/M0-shared-contract.md
++++ b/docs/handbook/chapters/M0-shared-contract.md
+@@ -6,7 +6,7 @@
+ |---|---|
+ | Module name | SHARED CONTRACT (`scripts/lib.sh`) |
+ | Path | `/home/kara/code-factory/scripts/lib.sh` |
+-| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `lib.sh` byte-identical since `47d68b4` — no file M0 cites changed in `47d68b4..08a2c8a`) |
++| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; `scripts/lib.sh` byte-identical since `47d68b4` — no file M0 cites changed in `08a2c8a..fbc19cb`) |
+ | Language / runtime | bash 5.3.9 (measured: `bash --version`); sourced, never executed |
+ | Owner lane | code-factory (node-side + control-host shell) |
+ | Status | **VERIFIED** — `lib.sh` (78 lines) read in full; every cited line re-verified this round |
+diff --git a/docs/handbook/chapters/M1-provisioning.md b/docs/handbook/chapters/M1-provisioning.md
+index b985eb4..707f501 100644
+--- a/docs/handbook/chapters/M1-provisioning.md
++++ b/docs/handbook/chapters/M1-provisioning.md
+@@ -6,7 +6,7 @@
+ |---|---|
+ | Module name | PROVISIONING |
+ | Path | `/home/kara/code-factory/scripts/` — `bunker-server-install.sh`, `disk_floor.py`, `bunker-provision.sh`, `bunker_config_gen.py`, `node-create.sh`, `bunker-crier-connect.sh`, `node_identity.py`, `node_gateway_auth.py`, `node_seed.py`, `node_seed_drift.py`, `node_env.py`, `verify-node.sh`, `node_freshness.py` |
+-| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `scripts/verify-node.sh` changed in `47d68b4..08a2c8a` — commit `f1d5cfb`, CF-270 — so every §9/§10/§11 ladder locator is re-pinned against the 241-line file) |
++| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; `scripts/verify-node.sh` changed in `47d68b4..08a2c8a` — commit `f1d5cfb`, CF-270 — so every §9/§10/§11 ladder locator is re-pinned against the 241-line file; `scripts/node-create.sh` changed in `08a2c8a..fbc19cb` — commit `85a7271`, CF-150 — staging `node_gateway_auth.py` as the eighth staged file, already reflected in §3 S3 and §11) |
+ | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+ | Owner lane | code-factory (node-side) |
+ | Status | **UNVERIFIED (bodies)** — `bunker-provision.sh` `--check` probe, config loader (`:95-123`), CLI (`:561-609`), `destroy` (`:550-558`), `disk_floor.py` `resolve()` (`:115-141`), `verify-node.sh` (`:20-241`, 241 lines at HEAD — re-pinned after the CF-270 port fix), `node_identity.py` (111 lines, full), `node_seed.py` (405 lines, apply/build/check state machine) read this round; `node_env.py` (589), `node_seed_drift.py` (558), `node_freshness.py` (732), `bunker_config_gen.py` (724) read at their **settings surface** (argparse + constants), bodies not line-by-line; `node_gateway_auth.py` docstring read (B03 — it writes dashboard basic-auth, not a registration); body not line-by-line |
+diff --git a/docs/handbook/chapters/M10-crier.md b/docs/handbook/chapters/M10-crier.md
+index a596dfd..e50e780 100644
+--- a/docs/handbook/chapters/M10-crier.md
++++ b/docs/handbook/chapters/M10-crier.md
+@@ -6,8 +6,8 @@
+ |---|---|
+ | Module name | CRIER |
+ | Path | `/home/kara/crier/` (Go) |
+-| Revision | `86c4c4695facaaf723bcc1d6ae80971ffb67fc97` (crier repo HEAD at round-11 derivation; the files changed since `691f0c78` are `internal/harness/*`, `cmd/server/harness*.go`, `cmd/server/metrics_state_test.go`, `specs/CRIER-HARNESS.md` — none of the handler/guard/config/client files M10 cites) |
+-| Language / runtime | Go — `go.mod` declares `go 1.26.10` (a build/toolchain requirement, not a runtime one); host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`), `/usr/bin/go` = **go1.26.9** (`/usr/lib/go-1.26/bin/go`); `GOTOOLCHAIN=auto` auto-fetches 1.26.10 for this repo |
++| Revision | `ae9fc57fdd4e9df7aff79c6d5a934d54329add95` (crier repo HEAD, re-stamped round 13; moved from `86c4c469` through 23 commits. Every file M10 cites — `internal/registry/handler.go`, `internal/guard/guard.go`, `internal/guard/policy.go`, `internal/guard/metrics.go`, `config/config.go`, `clients/python/crier_client.py`, `cmd/crier-front/main.go`, `cmd/server/observability.go`, `internal/metrics/metrics.go` — is byte-identical since `86c4c469` (verified `git diff --quiet 86c4c469..HEAD` per file). The post-stamp changes are `internal/buildinfo/buildinfo.go` (DF-CRIER-502), `cmd/server/*_test.go` (the flaky-test files), `internal/harness/opencode/*_test.go`, and board/docs/releng files — none cited) |
++| Language / runtime | Go — `go.mod` declares `go 1.26.10` (a build/toolchain requirement, not a runtime one); host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`), `/usr/bin/go` = **go1.26.8** (`/usr/lib/go-1.26/bin/go`; re-measured this round: `/usr/bin/go version` → `go1.26.8 linux/amd64`); `GOTOOLCHAIN=auto` auto-fetches 1.26.10 for this repo |
+ | Owner lane | crier (control plane) |
+ | Status | **UNVERIFIED** — `internal/registry/handler.go` (deliver/retrieve/ack surfaces + the full 3-site slog surface), `internal/guard/guard.go` (pipeline, oversize branch, `errorResult`), `internal/guard/policy.go` (`ResolvePolicy`), `internal/guard/metrics.go`, `config/config.go` (controls + guard bounds + metrics default), `clients/python/crier_client.py`, `cmd/crier-front/main.go` read this round; the full 1895-line handler body still not read line-by-line (its slog surface *is* complete — see §9) |
+ 
+@@ -132,8 +132,8 @@ CT-08 is a boundary contract: the Hermes gateway is outside the five covered sys
+ 
+ | Check | Command | Expected | Last run | Result |
+ |---|---|---|---|---|
+-| build | `go build ./...` (crier repo) | exit 0 | 2026-11-06, rev `86c4c469` | **PASS** (rc 0) |
+-| go test | `go test ./...` | green | 2026-11-06, rev `86c4c469` | **FLAKY** — see the note below; not a clean PASS |
++| build | `go build ./...` (crier repo) | exit 0 | 2026-11-07, rev `ae9fc57f` | **PASS** (rc 0) |
++| go test | `go test ./...` | green | 2026-11-07, rev `ae9fc57f` | **PASS (0 FAIL, one fresh run)** — all packages ok including `cmd/server` (65.4s) and `internal/registry` (10.6s). See the flakiness note: a single green run at this HEAD does **not** retire the flaky finding |
+ | port fact | `grep -n 'Port' config/config.go` | 8767 | 2026-11-06 | PASS (`:622`) |
+ | slog surface | `grep -c 'slog.\(Info\|Error\|Warn\|Debug\)' internal/registry/handler.go` | 3 | 2026-11-06 | **PASS** — exactly 3 sites (all in §9); no `log.Printf`/`fmt.Printf` in the handler |
+ | signed-read ladder | `python3 ~/node-bus-worker.py --check` on cf-node | inbox 200 with key+bearer | 2026-11-05, cf-node only | PASS (FACT-04) — not repeatable from this control host |
+@@ -143,15 +143,19 @@ run". At the same revision the package has **91 test files** (measured: `ls inte
+ and `go test` ran them in 6.962 s. A green run over 91 test files is real, but it still does not
+ prove line-by-line coverage of the 1895-line handler.
+ 
+-**`go test` flakiness (kimi 3, re-measured this round).** `go test ./...` does **not** reliably
+-reproduce green at HEAD `86c4c469`. This round a fresh `go test -count=1 ./cmd/server/` FAILed
++**`go test` flakiness (kimi 3, re-measured this round).** `go test ./...` has historically **not**
++reliably reproduced green: round 12 (HEAD `86c4c469`) saw a fresh `go test -count=1 ./cmd/server/` FAIL
+ (`--- FAIL: TestSessionFanoutWebhookBodyVerdict`, 78.5s in one run, 34.3s in another) while a cached
+ full run reported green; kimi round-10 reproduced `--- FAIL: TestMetricsState_SeriesRenderOnIdleBoot`
+ twice (58.0s / 47.4s) with `crier_detect_alerts_total{signal="odd_hour_volume",severity="warning"} =
+ 1, want 0`. Each named test passes in isolation under `-run` (0.327s), and the failing test differs
+ run-to-run — a within-`cmd/server` contamination or clock-sensitive failure, not a deterministic
+-regression. `internal/registry` (91 test files) ran green in 48.1s this round. The documented
+-command is therefore flaky, and the row is not a clean PASS.
++regression. **This round (HEAD `ae9fc57f`) one fresh full run passed clean (0 FAIL, `cmd/server`
++65.4s).** The flaky-test files themselves changed since the round-12 stamp (`cmd/server/metrics_state_test.go`
+++41, `cmd/server/session_budget_cut_test.go`, `cmd/server/session_dispatch_live_test.go`), so the green
++run is evidence the tests *can* pass at this HEAD, not proof of determinism — the flaky finding stands
++until a repeat run under load fails to reproduce a failure. `internal/registry` (91 test files) ran
++green this round.
+ 
+ ## 8. Metrics
+ 
+@@ -244,19 +248,21 @@ named RED on this field).
+   `internal/guard/policy.go:170-205`; `internal/guard/metrics.go:19-49`; `config/config.go:621-700, 1139-1187`;
+   `clients/python/crier_client.py:960-1036`; `cmd/crier-front/main.go:39`;
+   `cmd/server/observability.go:95-115, 160-175`; `internal/metrics/metrics.go:1-8`.
+-- Commands run: `go build ./...` (PASS); `go test ./...` (PASS); `ls internal/registry/*_test.go` (91);
++- Commands run: `go build ./...` (PASS); `go test ./...` (PASS, 0 FAIL, clean fresh run); `ls internal/registry/*_test.go` (91);
+   `grep -c 'slog.(Info|Error|Warn|Debug)' internal/registry/handler.go` (3);
+-  `grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u | wc -l` (67).
+-- Rev stamped: `86c4c469` (the changed files since `691f0c78` are harness-side; the handler/guard/config/client files M10 cites are byte-identical).
++  `grep -rhoE 'crier_[a-z_]+' internal/ cmd/ --include='*.go' | sort -u | wc -l` (67);
++  `for f in <9 cited files>; git diff --quiet 86c4c469..HEAD -- "$f"` (all UNCHANGED); `/usr/bin/go version` (go1.26.8).
++- Rev stamped: `ae9fc57f` (moved from `86c4c469`; every cited file byte-identical — the post-stamp changes are buildinfo/tests/harness-test/board/docs, none cited).
+ - Board rows: CF-337, CF-361, CF-369.
+ - **Findings:**
+   - **F10-1** (carried) — auth order is headers → target → caller → timestamp → key → signature.
+-  - **F10-2** (corrected) — host go is 1.26.5; `GOTOOLCHAIN=auto` fetches 1.26.10 and build/test PASS.
++  - **F10-2** (corrected) — host bootstrap go is 1.26.5, `/usr/bin/go` is 1.26.8 (re-measured; was 1.26.9 at round 12); `GOTOOLCHAIN=auto` fetches 1.26.10 and build/test PASS.
+   - **F10-3** — metrics are default-ON (`EnableMetrics: true`), not opt-in; `metrics.go:2` still
+     says "opt-in" (contradicting artifact, locator re-pinned from `:5` to `:2`).
+   - **F10-4** (carried) — guard degradation policy written: oversize branch (`:198-234`) and fail-open/
+     fail-closed `errorResult` (`:318-361`) with policy precedence (`policy.go:172-202`).
+   - **F10-5** (new) — the handler's slog surface is complete (3/3, §9); the 67-string metric census
+     is scoped (runtime vs test helpers vs exposition components), not a completed per-metric register.
++  - **F10-6** (new, round 13) — repo moved `86c4c469`→`ae9fc57f`; all 9 cited files byte-identical; one fresh `go test ./...` passed clean (0 FAIL, `cmd/server` 65.4s), but the flaky-test files (`cmd/server/*_test.go`) changed since the stamp, so a single green run does not retire the flaky finding.
+ 
+-## RED field count: 5 (S1 handler 1895-line body not read line-by-line — the slog surface is complete but the body's non-slog semantics are not; §8 per-metric contract — series names inventoried but the type/labels/question/scrape table not filled; §9 guard log surface not tabulated — B22; §5 storage-selection custody-proof not written — B20; §7 `go test ./...` flaky — not a clean PASS at HEAD)
++## RED field count: 5 (S1 handler 1895-line body not read line-by-line — the slog surface is complete but the body's non-slog semantics are not; §8 per-metric contract — series names inventoried but the type/labels/question/scrape table not filled; §9 guard log surface not tabulated — B22; §5 storage-selection custody-proof not written — B20; §7 `go test ./...` — one fresh clean run at HEAD `ae9fc57f`, but the flaky finding is not retired (single run ≠ determinism))
+diff --git a/docs/handbook/chapters/M11-dispatcher.md b/docs/handbook/chapters/M11-dispatcher.md
+index 93eb26b..dbb0b94 100644
+--- a/docs/handbook/chapters/M11-dispatcher.md
++++ b/docs/handbook/chapters/M11-dispatcher.md
+@@ -98,7 +98,7 @@ cross-system contracts carry their CT id; an interface with no canonical entry i
+ 
+ | Check | Command | Expected | Last run | Result |
+ |---|---|---|---|---|
+-| python compile | `python3 -m py_compile dispatcher.py` | exit 0 | 2026-11-06, rev `283bca9` | PASS |
++| python compile | `python3 -m py_compile dispatcher.py` | exit 0 | 2026-11-07, rev `283bca9` (re-confirmed unchanged) | PASS |
+ | live job tests | `tests/test_durable_job.py` / `test_job_kill.py` | failure oracle | not run this round | **UNVERIFIED** — these scripts print results but do not assert (`tests/test_durable_job.py` contains no `assert`/`raise`/`exit`), so they cannot fail (F11-2, glm 8) |
+ 
+ The round-3 "source read (538 lines) PASS" row was decoration — reading the file cannot fail. It
+@@ -185,8 +185,8 @@ lines — `:81` a comment mentioning `log()` and `:112` the `def log(` definitio
+ ## 13. Evidence of record
+ 
+ - Code read: `dispatcher.py` (538 lines, read in full this round).
+-- Commands run: `python3 -m py_compile dispatcher.py` (PASS); `grep -n 'log(' dispatcher.py` (25 lines: 23 call sites + comment `:81` + def `:112`); `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' dispatcher.py` (0 matches).
+-- Rev stamped: `283bca9`.
++- Commands run: `python3 -m py_compile dispatcher.py` (PASS); `grep -n 'log(' dispatcher.py` (25 lines: 23 call sites + comment `:81` + def `:112`); `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' dispatcher.py` (0 matches); `grep -n EXEC_TIMEOUT dispatcher.py` (1 match, `:47` — inert).
++- Rev stamped: `283bca9` (re-confirmed this round: `git rev-parse HEAD` = `283bca91091933177ec521e52f37f1bc987cf7da`, `wc -l dispatcher.py` = 538).
+ - Board rows: CF-334, CF-355, CF-365.
+ - **Findings:**
+   - **F11-1** (carried) — no pinned Python; calls `retrieve`/`deliver`/`ack`, never `send`/`complete`.
+diff --git a/docs/handbook/chapters/M12-inference-proxy.md b/docs/handbook/chapters/M12-inference-proxy.md
+index 69a0315..c3a2e56 100644
+--- a/docs/handbook/chapters/M12-inference-proxy.md
++++ b/docs/handbook/chapters/M12-inference-proxy.md
+@@ -114,10 +114,10 @@ to an open path.
+ 
+ | Check | Command | Expected | Last run | Result |
+ |---|---|---|---|---|
+-| content hash | `sha256sum /home/kara/.hermes/scripts/cf-inference-proxy.py` | full digest | 2026-11-06 | **PASS** — `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` |
+-| python compile | `python3 -m py_compile /home/kara/.hermes/scripts/cf-inference-proxy.py` | exit 0 | 2026-11-06 | PASS |
+-| admission (no token) | `curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8775/v1/chat/completions -d '{"model":"hermes"}'` | 401 | 2026-11-06 | **PASS** — 401 (proxy live on `:8775`) |
+-| systemd unit active | `systemctl --user status cf-inference-proxy.service` | loaded, enabled, `active (running)` | 2026-11-06 | **PASS** — active since 2026-11-05 09:21, Main PID 2603939, drop-in `10-upstream.conf` |
++| content hash | `sha256sum /home/kara/.hermes/scripts/cf-inference-proxy.py` | full digest | 2026-11-07 | **PASS** — `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (re-confirmed unchanged) |
++| python compile | `python3 -m py_compile /home/kara/.hermes/scripts/cf-inference-proxy.py` | exit 0 | 2026-11-07 | PASS |
++| admission (no token) | `curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8775/v1/chat/completions -d '{"model":"hermes"}'` | 401 | 2026-11-07 | **PASS** — 401 (proxy live on `:8775`) |
++| systemd unit active | `systemctl --user status cf-inference-proxy.service` | loaded, enabled, `active (running)` | 2026-11-07 | **PASS** — `active` (`systemctl --user is-active` → active) |
+ | admission (disallowed model, valid token) | POST `{"model":"definitely-not-allowed-model"}` with a valid node token | 403 `model not permitted` | 2026-11-06 | reproduced by round-3 judge kimi (`:155-160`); **not re-run by this writer** — the node token file was not read |
+ 
+ ## 8. Metrics
+@@ -199,9 +199,9 @@ is a capture log, not an emitted metric.
+ ## 13. Evidence of record
+ 
+ - Code read: `cf-inference-proxy.py` (273 lines, read in full); content sha256
+-  `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5`.
++  `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (re-confirmed this round — file unchanged, `wc -l` = 273).
+ - Commands run: `sha256sum` (PASS); `python3 -m py_compile` (PASS); `curl` no-token → 401;
+-  `systemctl --user status cf-inference-proxy.service` (active, Main PID 2603939);
++  `systemctl --user is-active cf-inference-proxy.service` (active);
+   `grep -rnE '8775|CF_PROXY|cf-inference-proxy' scripts/ config/ specs/` (4 text sites, node client
+   config-wired); `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' <proxy>` (0 matches);
+   `sed -n '49,52p'` (sink constants, F12-8).
+diff --git a/docs/handbook/chapters/M2-dispatch.md b/docs/handbook/chapters/M2-dispatch.md
+index 55af5f8..410916c 100644
+--- a/docs/handbook/chapters/M2-dispatch.md
++++ b/docs/handbook/chapters/M2-dispatch.md
+@@ -6,7 +6,7 @@
+ |---|---|
+ | Module name | DISPATCH (NODE SIDE) |
+ | Path | `/home/kara/code-factory/scripts/` — `add_family_lanes.py`, `configure_family.py`, `load_lane_config.py`, `lane_target.py`, `node-bus-worker.py` |
+-| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; every file M2 cites is byte-identical since `47d68b4`) |
++| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; every file M2 cites is byte-identical since `47d68b4`) |
+ | Language / runtime | Python 3.14.9 (measured) |
+ | Owner lane | code-factory (node-side); consumes scheduler + crier |
+ | Status | **VERIFIED** for `node-bus-worker.py` contracts (imports `:66-78`, `text_b64` decode `:989-999`, reply shape `:1176-1192`, settlement `:1389-1422`, CLI `:1425-1499`, `dispatch_wall` `:1200-1205`); `add_family_lanes.py`/`configure_family.py`/`load_lane_config.py` structure-mapped only |
+diff --git a/docs/handbook/chapters/M3-repository.md b/docs/handbook/chapters/M3-repository.md
+index ceb3845..14a9793 100644
+--- a/docs/handbook/chapters/M3-repository.md
++++ b/docs/handbook/chapters/M3-repository.md
+@@ -6,10 +6,10 @@
+ |---|---|
+ | Module name | REPOSITORY |
+ | Path | `/home/kara/code-factory/scripts/` — `clone_lane.py`, `repo_freshness.py`, `land-node-branch.sh`; gates via `install-gitreins.sh` + `.gitleaks.toml` |
+-| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `land-node-branch.sh`/`install-gitreins.sh`/`clone_lane.py` byte-identical since `47d68b4`; `tests/selftest.sh` changed — see §7) |
++| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; `land-node-branch.sh`/`install-gitreins.sh`/`clone_lane.py`/`repo_freshness.py` byte-identical since `47d68b4`; `tests/selftest.sh` grew +150 lines to 5,002 in `08a2c8a..fbc19cb` — every §1/§7 arm locator re-pinned this round, see §7) |
+ | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+ | Owner lane | code-factory (node-side clone + control-host landing) |
+-| Status | **VERIFIED (source + shipped landing arm)** — `land-node-branch.sh` (308 lines), `install-gitreins.sh` (180 lines), `clone_lane.py` (130 lines) read in full; the shipped landing arm `cf213-land-node-branch` (`tests/selftest.sh:2463-2729`) exercises the landing behaviours against a disposable bare remote and was run this round (`SHIPPED_LANDING_ARM_RC=0`); `repo_freshness.py` body not read line-by-line. **S3 hook *enforcement* is UNVERIFIED (sol B10):** the landing arm proves landing behaviour, not that git invokes the installed pre-commit gate — a disposable rejecting-commit fixture that resolves the effective `core.hooksPath` and proves a refused commit cannot advance HEAD is the missing evidence (§11) |
++| Status | **VERIFIED (source + both shipped arms)** — `land-node-branch.sh` (308 lines), `install-gitreins.sh` (180 lines), `clone_lane.py` (130 lines) read in full; the shipped landing arm `cf213-land-node-branch` (`tests/selftest.sh:2464-2730`) and the freshness arm `cf244-node-freshness` (`:3434-3671`) were both run standalone this round (`SHIPPED_LANDING_ARM_RC=0`, `LANDING_ARM_FAILURES=0`; `SHIPPED_FRESHNESS_ARM_RC=0`, `FRESHNESS_ARM_FAILURES=0`); `repo_freshness.py` body not read line-by-line (its 662-line source is unread, though its behaviour is exercised by the cf244 arm's 13 sub-cases). **S3 hook *enforcement* is UNVERIFIED (sol B10):** the landing arm proves landing behaviour, not that git invokes the installed pre-commit gate — a disposable rejecting-commit fixture that resolves the effective `core.hooksPath` and proves a refused commit cannot advance HEAD is the missing evidence (§11) |
+ 
+ ## 2. Purpose, authority and position
+ 
+@@ -22,7 +22,7 @@ stale. It may not decide what work is *worth* landing — that is the foreman/bo
+ `land-node-branch.sh` is the landing path for a finished node task — the result envelope names
+ `branch` and `commit` (`node-bus-worker.py:1187-1188`) and this script is what an operator (or an
+ out-of-repo foreman step) runs with `--branch/--commit` to merge them. **Nothing in-repo invokes it**
+-(F3-5): `grep -rn 'land-node-branch' scripts/ tests/` matches the script itself (`scripts/land-node-branch.sh:2,4,120`) and the selftest arm (`tests/selftest.sh:2463,2469,2470,2471,2477,2506,2729` — the BEGIN banner, the `bash -n` syntax arm, and the `cf213` usage arm). The envelope *names* the fields; it does
++(F3-5): `grep -rn 'land-node-branch' scripts/ tests/` matches the script itself (`scripts/land-node-branch.sh:2,4,120`) and the selftest arm (`tests/selftest.sh:2464,2470,2471,2472,2478,2507,2730` — the BEGIN banner, the `bash -n` syntax arm, and the `cf213` usage arm). The envelope *names* the fields; it does
+ not *call* the lander. M3 owns F5 LANDING, a primary flow — but the landing step is operator-triggered.
+ 
+ **What breaks if it lies.** A landing that reports success without the commit actually in
+@@ -35,7 +35,7 @@ proof, never to the merge (`:23`).
+ | Submodule | Unit | Classification | Evidence (invoking line) |
+ |---|---|---|---|
+ | S1a clone a lane row | `clone_lane.py` | **operator-invoked (optional)** | `clone_lane.py:129` `main()` is the entrypoint; `grep -rn 'clone_lane' scripts/ tests/` matches only the file itself and `tests/test_clone_lane.py` — no lane/cron/timer/unit invokes it (B07 / sol B09 re-grade: was misclassified **active** on the strength of a `main()` entrypoint, which proves executability, not activation) |
+-| S1b track freshness | `repo_freshness.py` | **unproven** | no in-repo invoker measured — `grep -rn 'repo_freshness' scripts/ tests/ config/` matches a comment (`verify-node.sh:155`), a docstring (`node_freshness.py:7`), and a selftest parse check (`tests/selftest.sh:2328`); the OUTLINE *active* rule is not satisfied by evidence, and the body is unread this round |
++| S1b track freshness | `repo_freshness.py` | **unproven** | no in-repo invoker measured — `grep -rn 'repo_freshness' scripts/ tests/ config/` matches a comment (`verify-node.sh:155`), a docstring (`node_freshness.py:7`), and a selftest parse check (`tests/selftest.sh:2329`); the OUTLINE *active* rule is not satisfied by evidence, and the body is unread this round |
+ | S2 land a branch | `land-node-branch.sh` | **operator-invoked (optional)** | owns F5 LANDING; **no in-repo invoker** — `grep -rn 'land-node-branch' scripts/ tests/` matches only the script itself and `tests/selftest.sh` (syntax + usage arms). Round-4's "invoked by the node's result envelope" was fabricated (grok 4 / sol B04 / glm 2); an operator or out-of-repo foreman step runs it with `--branch/--commit` from the envelope |
+ | S3 commit hooks and gates | `install-gitreins.sh`, `.gitleaks.toml`, `core.hooksPath` | **active** | hook generated by `install-gitreins.sh:124-136` into the target repo's `.git/hooks/pre-commit` |
+ 
+@@ -108,25 +108,25 @@ consumer (`land-node-branch.sh`) is operator-triggered, not called by the envelo
+ |---|---|---|---|---|
+ | shell parse | `bash -n scripts/land-node-branch.sh` | exit 0 | 2026-11-06 | PASS |
+ | python compile | `python3 -m py_compile scripts/clone_lane.py scripts/repo_freshness.py` | exit 0 | 2026-11-06 | PASS |
+-| landing arm (shipped) | `tests/selftest.sh` arm `cf213-land-node-branch` (`:2463-2729`) | gate rejection, dry-run, successful landing, fresh-clone proof, repeat landing, refused push, no-ff isolation | 2026-11-06 | **PASS** — `SHIPPED_LANDING_ARM_RC=0`, `LANDING_ARM_FAILURES=0` (the arm creates a bare origin + clean clones and exercises all seven behaviours; B07) |
+-| freshness gate | `tests/selftest.sh` arm `cf244-node-freshness` | freshness sub-cases PASS | 2026-11-06 | **UNVERIFIED** — arm present (`:3433-3670`), not re-run this round |
++| landing arm (shipped) | `tests/selftest.sh` arm `cf213-land-node-branch` (`:2464-2730`) | gate rejection, dry-run, successful landing, fresh-clone proof, repeat landing, refused push, no-ff isolation | 2026-11-07 | **PASS** — `SHIPPED_LANDING_ARM_RC=0`, `LANDING_ARM_FAILURES=0` (the arm creates a bare origin + clean clones and exercises all seven behaviours; B07) |
++| freshness gate | `tests/selftest.sh` arm `cf244-node-freshness` (`:3434-3671`) | freshness sub-cases PASS (sync, drift, dirty edit, detached HEAD, no-origin, bunker mode, provisioning fallback, `--apply` node.json record) | 2026-11-07 | **PASS** — `SHIPPED_FRESHNESS_ARM_RC=0`, `FRESHNESS_ARM_FAILURES=0` (13 sub-cases against disposable local git fixtures, run standalone this round) |
+ 
+ **Behavioral verification (B07, corrected this round).** Round-6 said "none is shipped" — false.
+-`tests/selftest.sh` arm `cf213-land-node-branch` (`:2463-2729`) ships a disposable local
+-bare remote plus clean worktree fixture and exercises gate rejection (`:2541-2548`), dry-run
+-(`:2551-2563`), successful landing and fresh-clone proof (`:2566-2584`), repeat landing
+-(`:2586-2595`), refused push (`:2597-2615`) and no-ff isolation (`:2618-2708`). This round the arm
++`tests/selftest.sh` arm `cf213-land-node-branch` (`:2464-2730`) ships a disposable local
++bare remote plus clean worktree fixture and exercises gate rejection (`:2547-2551`), dry-run
++(`:2558-2565`), successful landing and fresh-clone proof (`:2572-2586`), repeat landing
++(`:2597-2606`), refused push (`:2627-2632`) and no-ff isolation (`:2662-2725`). This round the arm
+ was run independently: `SHIPPED_LANDING_ARM_RC=0`, `LANDING_ARM_FAILURES=0`. The landing behaviours
+ are now exercised; what remains unread line-by-line is `repo_freshness.py` (the freshness half),
+ not the landing half.
+ 
+ **Note (B04 / grok 9).** Round-3 cited "selftest.sh arm 41 / arm 51 / arm 33" — `selftest.sh` is
+-**4,852 lines** (measured `wc -l tests/selftest.sh` this round) with *named* arms
++**5,002 lines** (measured `wc -l tests/selftest.sh` this round) with *named* arms
+ (`cf213-land-node-branch`, `cf244-node-freshness`,
+ `cf250-seed-drift`, `board-arm`, …), and `grep -nE '\barm (33|41|51)\b' tests/selftest.sh` returns
+ nothing. The numbered-arm pointers were unrepeatable; they are replaced with the named arms above.
+-The arm locators `:2463-2729` (cf213) and `:3433-3670` (cf244) still resolve exactly at this line
+-count (kimi non-blocking 4).
++The arm locators `:2464-2730` (cf213) and `:3434-3671` (cf244) still resolve exactly at this line
++count (re-pinned this round after `tests/selftest.sh` grew +150 lines in `08a2c8a..fbc19cb`).
+ 
+ ## 8. Metrics
+ 
+@@ -180,8 +180,11 @@ are answerable only by reading the `LANDED:` / `LAND: REFUSED` rows.
+ ## 13. Evidence of record
+ 
+ - Code read: `land-node-branch.sh` (308 lines), `install-gitreins.sh` (180 lines), `clone_lane.py` (130 lines).
+-- Commands run: `bash -n scripts/land-node-branch.sh`; `./scripts/land-node-branch.sh --dry-run`
+-  (refused: dirty/scratch workdir); `grep -nE '\barm (33|41|51)\b' tests/selftest.sh` (0 matches).
++- Commands run: `bash -n scripts/land-node-branch.sh`; `python3 -m py_compile scripts/clone_lane.py
++  scripts/repo_freshness.py`; the `cf213-land-node-branch` arm extracted and run standalone
++  (`SHIPPED_LANDING_ARM_RC=0`, `LANDING_ARM_FAILURES=0`); the `cf244-node-freshness` arm extracted
++  and run standalone (`SHIPPED_FRESHNESS_ARM_RC=0`, `FRESHNESS_ARM_FAILURES=0`, 13 sub-cases);
++  `grep -nE '\barm (33|41|51)\b' tests/selftest.sh` (0 matches); `wc -l tests/selftest.sh` (5,002).
+ - **Findings:**
+   - **F3-1** (carried) — `clone_lane --to == --from` guard ships: `refuse_same_lane` (`:38-45`)
+     is called at `:65-68`, *before* `sqlite3.connect` (`:70`); CF-357 is `complete`.
+@@ -195,4 +198,4 @@ are answerable only by reading the `LANDED:` / `LAND: REFUSED` rows.
+     selftest arms); round-4's "invoked by the node's result envelope" was fabricated. S2 is
+     operator-invoked (optional); the envelope names `branch`/`commit` but does not call the lander.
+ 
+-## RED field count: 3 (Metrics §8 — absence-proved; §1 status — `repo_freshness.py` body unread and S3 hook enforcement UNVERIFIED (the landing arm does not prove git invokes the gate); §9 inventory 5 of 35 helper call sites)
++## RED field count: 3 (Metrics §8 — absence-proved; §1 status — `repo_freshness.py` body not read line-by-line (behaviour exercised by the cf244 arm, source unread) and S3 hook *enforcement* UNVERIFIED (the landing arm proves landing behaviour, not that git invokes the installed pre-commit gate); §9 inventory 5 of 35 helper call sites)
+diff --git a/docs/handbook/chapters/M4-board.md b/docs/handbook/chapters/M4-board.md
+index 23336a6..8b21c21 100644
+--- a/docs/handbook/chapters/M4-board.md
++++ b/docs/handbook/chapters/M4-board.md
+@@ -6,10 +6,10 @@
+ |---|---|
+ | Module name | BOARD |
+ | Path | `/home/kara/code-factory/.coding-hermes/board/tasks.jsonl` + `events.jsonl`; tools `/home/kara/code-factory/scripts/boardctl`, `board_lock.py`, `board_drift.py` |
+-| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; the board and `board_drift.py` changed in `47d68b4..08a2c8a` — the CF-270 close landed) |
++| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; `scripts/board_read.py` was added and `handbook_spine.py` re-lined in `08a2c8a..fbc19cb`; the board store advanced 519→520 events via an uncommitted CF-150 transition) |
+ | Language / runtime | bash (boardctl wrapper) + Python 3.14.9 (measured) |
+ | Owner lane | code-factory (control host) |
+-| Status | **VERIFIED (store)** — 357 rows / **519** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT reconciled** — `board_drift` `RESULT: OK`, byte parity identical on both files, 0 divergent ids, HEAD == origin/main == `08a2c8a` — both re-measured this round. The `boardctl` verb surface is the external executable's (`/home/kara/.local/bin/boardctl`), not this repo's |
++| Status | **VERIFIED (store)** — 357 rows / **520** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT (working copy)** — `board_drift` `RESULT: DRIFT (4 failed)`, 1 divergent id (CF-150: workdir `in_progress` vs published `pending`), HEAD == origin/main == `fbc19cb` — the divergence is an uncommitted working-copy transition (event 520, actor `foreman`, 2026-11-07T06:09:41), not a committed divergence, and `board_read.py` resolves it to `origin/main` by design. The `boardctl` verb surface is the external executable's (`/home/kara/.local/bin/boardctl`), not this repo's |
+ 
+ ## 2. Purpose, authority and position
+ 
+@@ -31,7 +31,19 @@ boardctl (`--status complete REQUIRES --evidence-run-id`, `boardctl update --hel
+ | Submodule | Unit | Classification | Evidence (invoking line) |
+ |---|---|---|---|
+ | S1 write and validate rows | `boardctl` (wrapper), `board_lock.py` | **active** | `scripts/boardctl` is the stable entrypoint (`exec boardctl -C "$ROOT"`); `board_lock.py` adjudicates the lock (`adjudicate`, `:149`) |
+-| S2 compare board copies | `board_drift.py` | **active** | `python3 scripts/board_drift.py check …` → `RESULT: OK` this round (see §7) |
++| S2 compare board copies | `board_drift.py` | **active** | `python3 scripts/board_drift.py check …` → `RESULT: DRIFT (4 failed)` this round (see §7) |
++
++**`board_read.py` (new unit, added in `dbf810b`, not in OUTLINE's S1/S2 split — F4-6).** A 125-line
++read-only reader (`scripts/board_read.py`) that resolves the board from the **canonical ref
++(`origin/main`) first, the working copy only when there is no remote**. It exists because a dirty
++workdir previously made a tick refuse to read the board at all (252 pending rows invisible). The
++`load()` function returns `(rows, source)` and reports which source it used (`board_read.py:59`, the
++canonical-ref loop at `:63-71` tries `origin/main` → `origin/master` → `main` → `HEAD`, falling
++back to the worktree only when no ref resolves), so a lane can say "read from origin/main (local copy drifted by N rows)" instead of refusing. It
++never refuses: a malformed line is skipped (`parse`, `:46`, the `except json.JSONDecodeError:
++continue` at `:54-55`), not a reason to drop the whole
++board. Classification: **operator-invoked (optional)** — no cron/scheduler invokes it
++(`grep -rn board_read scripts/ tests/` → the unit itself only); a lane reads it on demand.
+ 
+ **`board_lock.py` classifier (B11, read in full this round).** `adjudicate` (`:149-158`) has
+ **three** outcomes, in order:
+@@ -89,7 +101,7 @@ retired; each row carries the CT id its peer chapter cites.
+ 
+ | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+ |---|---|---|---|---|---|
+-| CT-14 | foreman | in | **external** — the foreman lives outside this repo; `grep -rn boardctl scripts/` matches the wrapper itself (`scripts/boardctl:2,9,11,15,16,21`), `board_lock.py:18,98,100` (its own `consumer_count` grep over the wrapper), `handbook_spine.py:58,71,74,75` (comments naming boardctl as a boundary peer), and `gen_unit_map.py:45` (a name list). No in-repo producer invokes `boardctl create` | the JSONL store `.coding-hermes/board/{tasks,events}.jsonl`, appended via the external `boardctl` binary (a file, not a function) | **UNVERIFIED** — the store is measured (357/519) but the foreman→board write wire is not exercised in this repo |
++| CT-14 | foreman | in | **external** — the foreman lives outside this repo; `grep -rn boardctl scripts/` matches the wrapper itself (`scripts/boardctl:2,9,11,15,16,21`), `board_lock.py:18,98,100` (its own `consumer_count` grep over the wrapper), `handbook_spine.py:58,75,78,79` (comments naming boardctl as a boundary peer), and `gen_unit_map.py:45` (a name list). No in-repo producer invokes `boardctl create` | the JSONL store `.coding-hermes/board/{tasks,events}.jsonl`, appended via the external `boardctl` binary (a file, not a function) | **UNVERIFIED** — the store is measured (357/520) but the foreman→board write wire is not exercised in this repo |
+ | CT-13 | gitreins | in | **external** — the judge's verdict file (written by the gitreins binary, not in this repo) | `boardctl update --status complete` (the external binary; completion REQUIRES `--evidence-run-id`) | **UNVERIFIED** — round-3 carried "broken (OUTLINE §IV)" as an inherited state; the gitreins-verdict→board-close path was not re-run this round |
+ | CT-10 | node | in | **external** — no in-repo producer writes a board row event: `grep -nE 'boardctl|tasks.jsonl|events.jsonl' scripts/node-bus-worker.py` → 0 matches | the JSONL store (the `boardctl` binary, out of scope) | **broken** — OUTLINE Part IV marks `node → board` broken; the node worker does not write board rows |
+ 
+@@ -103,21 +115,24 @@ boundary contracts.
+ 
+ | Check | Command | Expected | Last run | Result |
+ |---|---|---|---|---|
+-| store census | `jq -r '.id' .coding-hermes/board/tasks.jsonl | wc -l` | 357 rows | 2026-11-06 | PASS (357) |
+-| events count | `wc -l .coding-hermes/board/events.jsonl` | 519 lines | 2026-11-06 | PASS (519) |
+-| drift | `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-06 | **PASS** — `RESULT: OK`; byte parity `tasks.jsonl`/`events.jsonl` **identical** (sha256 `5aa15431…` / `783d556c…`); 357 vs 357 rows, **0 divergent ids: none**; HEAD=origin/main=`08a2c8a` |
+-| semantic validate | `scripts/boardctl validate` | RESULT OK with named warnings | 2026-11-06 | **PASS** — `357 tasks, 519 events, 0 fixtures`, `key uniformity 357/357 (0 drift)`, `RESULT: OK (7 warning(s))` |
++| store census | `jq -r '.id' .coding-hermes/board/tasks.jsonl | wc -l` | 357 rows | 2026-11-07 | PASS (357) |
++| events count | `wc -l .coding-hermes/board/events.jsonl` | 520 lines | 2026-11-07 | PASS (520) |
++| drift | `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-07 | **DRIFT (4 failed)** — byte parity `tasks.jsonl`/`events.jsonl` **differ** (workdir sha256 `57203cb9…`/`f3d8802e…` vs published `5aa15431…`/`783d556c…`); 357 vs 357 rows, **1 divergent id: CF-150** (workdir `in_progress` vs published `pending`); HEAD=origin/main=`fbc19cb` |
++| semantic validate | `scripts/boardctl validate` | RESULT OK with named warnings | 2026-11-07 | **PASS** — `357 tasks, 520 events, 0 fixtures`, `key uniformity 357/357 (0 drift)`, `RESULT: OK (7 warning(s))` |
+ | lock adjudication | `scripts/board_lock.py` on a held/unheld lock | ABSENT / HELD / RESIDUE named (`board_lock.py:149-158`) | 2026-11-06 | UNVERIFIED — the classifier was read in full but not exercised against a held/unheld fixture this round |
+ | duplicate id refusal | `boardctl create --id CF-357 --title x` | refused | 2026-11-06 | **PASS** — `task id "CF-357" already exists … create aborted` |
+ 
+-**Drift re-measured (reconciled this round).** The CF-270 divergence the round-10 draft reported
+-as live was **already reconciled before this round's derivation**: commit `4dc0ef0` ("board: close
+-CF-270") and `8ae4f82` are both in `origin/main`, so `board_drift` at HEAD `08a2c8a` returns
+-`RESULT: OK` — 357 vs 357 rows, 0 divergent ids, HEAD == origin/main. The round-10 draft's
+-`RESULT: DRIFT (4 failed)` with 1 divergent id (CF-270, workdir=`pending` vs published=`complete`)
+-and its 518-events count were a **pre-reconciliation snapshot presented as current**; both are
+-superseded. The instruction the round-10 draft itself issued — "`board_drift` must be re-run
+-after that merge" — is now executed: it returns OK.
++**Drift re-measured (supersedes the round-11/12 reconciliation).** The round-10/11 CF-270
++divergence is still reconciled (commit `4dc0ef0` closed CF-270 and is in `origin/main`), but a
++**new, different divergence appeared this round**: `board_drift` at HEAD `fbc19cb` returns
++`RESULT: DRIFT (4 failed)` with **1 divergent id — CF-150** (workdir `in_progress` vs published
++`pending`). The cause is an **uncommitted working-copy transition**, not a committed divergence:
++event 520 (`task_id: CF-150`, `actor: foreman`, `2026-11-07T06:09:41`, `status: in_progress`) was
++appended to the working copy but not committed, so `origin/main` still carries CF-150 as `pending`.
++`HEAD == origin/main == fbc19cb` (the `HEAD ancestry` check PASSES); only the working copy differs.
++This is exactly the state `board_read.py` (new this round) is designed to resolve — it reads the
++canonical `origin/main` board when the working copy disagrees. The divergence is not a board defect
++to reconcile in-band; it is the panel loop's own runtime state and is documented, not "fixed".
+ 
+ **Census-vs-validation correction (F4-2).** The `jq -r '.id' … | wc -l` check is a **census**,
+ not integrity validation. The real validation is `boardctl validate`, which this round returned
+@@ -136,8 +151,9 @@ derived by hand.
+ ## 9. Log lines (verbatim)
+ 
+ `boardctl` is an external binary (`/home/kara/.local/bin/boardctl`, measured this round — not in
+-this repo), so these strings carry no in-repo `file:line`; they are quoted from the run output
+-captured this round (2026-11-06, rev `08a2c8a`) with the commands named (N9):
++this repo), so these strings carry no in-repo `file:line`; the `validate` and `drift` rows are
++quoted from run output re-captured this round (2026-11-07, rev `fbc19cb`); the duplicate-id row is
++carried from the round-11/12 capture (N9):
+ 
+ | Level | Line | Emitted when | Kind |
+ |---|---|---|---|
+@@ -177,7 +193,7 @@ captured this round (2026-11-06, rev `08a2c8a`) with the commands named (N9):
+ 
+ ## 13. Evidence of record
+ 
+-- Store: `.coding-hermes/board/tasks.jsonl` (357 rows), `events.jsonl` (519 lines).
++- Store: `.coding-hermes/board/tasks.jsonl` (357 rows), `events.jsonl` (520 lines).
+ - `docs/UNIT-MAP.yaml:122-138` (M4 S1–S2).
+ - Board rows: CF-344, CF-363, CF-119, CF-378 (CF-270 is now `complete` in both copies — reconciled, F4-4).
+ - **Findings:**
+@@ -188,9 +204,15 @@ captured this round (2026-11-06, rev `08a2c8a`) with the commands named (N9):
+   - **F4-3** (carried) — CT-14/CT-13 (foreman→board / gitreins→board) states corrected from "works"/"broken" to **UNVERIFIED**: every
+     side is an external peer, so no in-repo file:function exists to name.
+   - **F4-4** (resolved) — the CF-270 divergence is **reconciled**: commit `4dc0ef0` closed CF-270 and
+-    is in `origin/main`; `board_drift` at HEAD `08a2c8a` returns `RESULT: OK` (357 vs 357, 0
+-    divergent ids, byte parity identical, HEAD == origin/main). The round-10 draft reported the
+-    pre-reconciliation DRIFT as current; that reading is superseded. The events count is 519, not 518.
++    is in `origin/main`; the round-10 draft's pre-reconciliation DRIFT (CF-270 workdir `pending` vs
++    published `complete`) is superseded. A *new*, unrelated divergence (CF-150) is F4-6, not a
++    CF-270 regression.
+   - **F4-5** (new, B04) — the board-admission gate belongs to M9 alone; crier has no board admission.
++  - **F4-6** (new, round 13) — `scripts/board_read.py` (added in `dbf810b`) is a new board READ
++    unit not in OUTLINE's S1/S2 split; it resolves the board from `origin/main` first, the dirty
++    working copy only when no remote exists. And `board_drift` now returns `RESULT: DRIFT (4
++    failed)` with 1 divergent id (CF-150: workdir `in_progress` vs published `pending`) — an
++    uncommitted working-copy transition (event 520, actor `foreman`), not a committed divergence;
++    HEAD == origin/main == `fbc19cb`. Documented, not reconciled in-band.
+ 
+ ## RED field count: 2 (Metrics §8 — absence-proved; CT-14/CT-13 states UNVERIFIED — every side is an external peer)
+diff --git a/docs/handbook/chapters/M5-harness.md b/docs/handbook/chapters/M5-harness.md
+index abb2188..67891c7 100644
+--- a/docs/handbook/chapters/M5-harness.md
++++ b/docs/handbook/chapters/M5-harness.md
+@@ -6,7 +6,7 @@
+ |---|---|
+ | Module name | HARNESS |
+ | Path | `/home/kara/code-factory/scripts/harness/` — `install-hermes.sh`, `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh`, `harness-vars.sh`; **and** `/home/kara/code-factory/scripts/` — `harness_resolve.py`, `install-go.sh`, `install-gitreins.sh`, `project-node.sh` |
+-| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; no file M5 cites changed in `47d68b4..08a2c8a`) |
++| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; `project-node.sh` layer 20 gained the CF-150 `gateway_auth` staging block and `node-create.sh` re-lined in `08a2c8a..fbc19cb`; every M5 file:line re-pinned) |
+ | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+ | Owner lane | code-factory (node-side) |
+ | Status | **UNVERIFIED** — `harness-vars.sh` (318 lines), `harness_resolve.py` (400 lines), `install-hermes.sh` (375 lines), `install-gitreins.sh` (180 lines), `install-claude-code.sh` (settings surface), `install-codex.sh` (settings surface + partial body), `install-opencode.sh` (98 lines), `install-deepseek.sh` (101 lines), `install-pi-agent.sh` (113 lines) read this round; `install-claude-code.sh`/`install-codex.sh` full bodies not line-by-line; the conformance battery not run this round |
+@@ -33,22 +33,23 @@ caller. The node's actual selection reads `node.json`'s `harness.cmd`/`harness.n
+ (`node-bus-worker.py:459-469`); the dispatcher invokes Hermes directly (`dispatcher.py:260`). The
+ resolver is a standalone selection facility, not the wired runtime authority round-2 claimed.
+ 
+-**Finding F5-5 (B02, corrected this round).** Round-5's "the installers are operator-invoked; a
+-source search finds no production invocation" was **false** — it was a *computed-call-site*
+-blindness. `project-node.sh:440` builds the installer path from a variable
+-(`inst="$HERE/harness/install-$HARNESS.sh"`), and `:449-452` invokes it with `--apply` (or
++**Finding F5-5 (B02, corrected round 11; re-pinned round 13).** Round-5's "the installers are
++operator-invoked; a source search finds no production invocation" was **false** — it was a
++*computed-call-site* blindness. `project-node.sh:498` builds the installer path from a variable
++(`inst="$HERE/harness/install-$HARNESS.sh"`), and `:508-510` invokes it with `--apply` (or
+ `--check`) under `NODE_GATEWAY_PORT`. A literal `grep -rn 'install-hermes'` cannot match that, but
+-the invocation is real and in-repo. `node-create.sh:24` stages the same computed path. The
+-installers are therefore invoked by `project-node.sh` (a unit), which is itself operator-invoked —
+-so the *chain* is operator-initiated even though the installers are unit-invoked.
++the invocation is real and in-repo. `node-create.sh:29` stages the same computed path (in the
++`staged=(…)` list, alongside the newly-staged `node_gateway_auth.py`). The installers are therefore
++invoked by `project-node.sh` (a unit), which is itself operator-invoked — so the *chain* is
++operator-initiated even though the installers are unit-invoked.
+ 
+ ## 3. Submodule inventory
+ 
+ | Submodule | Unit | Classification | Evidence (invoking line) |
+ |---|---|---|---|
+-| S1 hermes | `install-hermes.sh` | **active (unit-invoked)** | invoked by `project-node.sh:440` (computed `install-$HARNESS.sh`) / `:449-452` (`--apply`/`--check`), and staged by `node-create.sh:24`; `project-node.sh` is itself operator-invoked (the provisioning entry, no cron/scheduler invokes it) — F5-5 |
+-| S2 foreign harnesses | `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh` | **active (unit-invoked)** | same computed dispatch `project-node.sh:440,449-452`; `install-claude-code.sh:36` sources `lib.sh`, the other four source `harness-vars.sh` |
+-| S3 toolchain/gate/node | `install-go.sh`, `install-gitreins.sh`, `project-node.sh` | **active (unit-invoked)** | gate pin at `install-gitreins.sh:19`; `project-node.sh` is the one provisioning entry that invokes other units (`project-node.sh:173` disk_floor, `project-node.sh:212` reclaim, the harness adapter `:440/:449-452`) |
++| S1 hermes | `install-hermes.sh` | **active (unit-invoked)** | invoked by `project-node.sh:498` (computed `install-$HARNESS.sh`) / `:508-510` (`--apply`/`--check`), and staged by `node-create.sh:29`; `project-node.sh` is itself operator-invoked (the provisioning entry, no cron/scheduler invokes it) — F5-5 |
++| S2 foreign harnesses | `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh` | **active (unit-invoked)** | same computed dispatch `project-node.sh:498,508-510`; `install-claude-code.sh:36` sources `lib.sh`, the other four source `harness-vars.sh` |
++| S3 toolchain/gate/node | `install-go.sh`, `install-gitreins.sh`, `project-node.sh` | **active (unit-invoked)** | gate pin at `install-gitreins.sh:19`; `project-node.sh` is the one provisioning entry that invokes other units (`project-node.sh:173` disk_floor, `project-node.sh:212` reclaim, the harness adapter `:498/:508-510`, and the CF-150 `gateway_auth` staging block at `:448-497`) |
+ | S4 harness resolution | `harness_resolve.py` | **optional** | no production caller (`grep -rln harness_resolve scripts/` → self + tests only); F5-2 |
+ | S5 variable contract | `harness/harness-vars.sh` | **active** | sourced by `install-hermes.sh`, `install-opencode.sh:15`, `install-deepseek.sh`, `install-pi-agent.sh`, `install-codex.sh:47` (conditional) |
+ 
+@@ -231,7 +232,7 @@ and conformance pass rate are answerable only by reading the leg rows.
+ - Code read: `harness-vars.sh` (318), `harness_resolve.py` (400), `install-hermes.sh` (375),
+   `install-gitreins.sh` (180), `install-codex.sh` (`:47-60, 425-430` + settings), `install-claude-code.sh`
+   (`:34-115` + settings), `install-deepseek.sh` (101), `install-pi-agent.sh` (113), `install-opencode.sh` (98);
+-  `project-node.sh:435-455`.
++  `project-node.sh:448-510`.
+ - Board rows: CF-150, CF-192, CF-372 (complete), CF-376, CF-380.
+ - **Findings:**
+   - **F5-1** (carried) — `install-hermes.sh:108-115` refuses anything outside >=3.11,<3.14.
+@@ -241,8 +242,17 @@ and conformance pass rate are answerable only by reading the leg rows.
+     `--apply`, `install-opencode.sh` is UNVERIFIED/`--apply`-refusing, `install-claude-code.sh`
+     sources `lib.sh` not `harness-vars.sh`.
+   - **F5-4** — UNIT-MAP (3) vs OUTLINE (5) submodule split.
+-  - **F5-5** (new, B02) — the "no production installer caller" claim was false: `project-node.sh:440`
+-    computes `install-$HARNESS.sh` and `:449-452` invokes it; the literal grep missed the computed
+-    path. The installers are unit-invoked (by the operator-invoked provisioning entry).
++  - **F5-5** (B02, re-pinned round 13) — the "no production installer caller" claim was false:
++    `project-node.sh:498` computes `install-$HARNESS.sh` and `:508-510` invokes it; the literal
++    grep missed the computed path. The installers are unit-invoked (by the operator-invoked
++    provisioning entry).
++  - **F5-6** (new, round 13) — `project-node.sh` layer 20 now stages `dashboard.basic_auth`
++    **before** the harness adapter runs (`:448-497`, CF-150): the hermes adapter refuses a public
++    bind unless `~/.hermes/config.yaml` parses to a non-empty `dashboard.basic_auth`, and no stage
++    in the create path wrote that block, so the documented path could print every other row and
++    still end `NODE: FAIL`. The block runs `node_gateway_auth.py` to write the block and a
++    mode-600 password file, or (in `--check`) a shell-builtin presence scan; it refuses to overwrite
++    a non-`basic_auth` dashboard block. `node-create.sh:29` stages `node_gateway_auth.py` alongside
++    the harness adapter. This is M1's producer invoked from M5's layer — a cross-module dependency.
+ 
+ ## RED field count: 4 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; M5-C2 contract state UNVERIFIED — a port/service is not a `file:function`; §9 inventory 4 of 215+ helper call sites — the descriptive per-measurement rows not tabulated one-per-site)
+diff --git a/docs/handbook/chapters/M6-documentation.md b/docs/handbook/chapters/M6-documentation.md
+index 388b31b..12bfdba 100644
+--- a/docs/handbook/chapters/M6-documentation.md
++++ b/docs/handbook/chapters/M6-documentation.md
+@@ -6,7 +6,7 @@
+ |---|---|
+ | Module name | DOCUMENTATION |
+ | Path | `/home/kara/code-factory/scripts/` — `master_doc_skeleton.py`, `master_doc_fill.py`, `master_doc_check.py`, `master_doc_panel.py`, `gen_nasa_handbook.py`, `gen_system_views.py`, `sheet_style.py`, `extract_owner_decisions.py`, `gen_unit_map.py`, `verify-patch.sh`, `panel_loop.py`, `ownership.py`, `handbook_spine.py` |
+-| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `patches/` and `scripts/verify-patch.sh`'s chain changed in `47d68b4..08a2c8a` — the `deploy-doc` stage landed) |
++| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; `panel_loop.py` was rewritten for `--groups`/`--parallel` and `panel_supervise.sh`/`reap_orphan_writers.py` were added in `08a2c8a..fbc19cb`; every M6 file:line re-pinned) |
+ | Language / runtime | Python 3.14.9 (measured) |
+ | Owner lane | code-factory (control host) |
+ | Status | **UNVERIFIED** — `master_doc_check.py` (268 lines) read in full and its FAIL reproduced; the rest of the pipeline (`master_doc_fill.py`, `gen_nasa_handbook.py`, `master_doc_panel.py`, `gen_unit_map.py`, …) not read line-by-line; the gate reads `MASTER-DOC: FAIL`. **The legacy fill/render/panel pipeline is UNBUILDABLE against these M-numbered chapters** (B13): `master_doc_check.py:188`, `gen_nasa_handbook.py:253-260` and `master_doc_fill.py:422` all select `[0-9][0-9]-*.md`, which does not match `M0-…-*.md`, so the legacy pipeline cannot select or deliver these chapters. **The chapter-aware gate is `handbook_spine.py` (S9)**, which *does* select `M*.md` and exits 1 on any finding (`python3 scripts/handbook_spine.py` → `chapters=13 canonical contracts=18 findings=0`, exit 0); the legacy fill/render/check pipeline is retired for the M-numbered handbook, and the render-to-owner-artifact leg remains missing (CT-18 UNVERIFIED, §6) |
+@@ -42,7 +42,7 @@ the gate now names at `:191-209` instead of silently passing.
+ | S1 skeleton + census | `master_doc_skeleton.py` | **active** | `main()` entrypoint; structure-mapped |
+ | S2 fill | `master_doc_fill.py` | **operator-invoked** | `main()` (`:393`); `--engine api\|hermes`, `--workers 2`, `--provider deepseek` (`:394-411`); no in-repo production caller |
+ | S3 gate | `master_doc_check.py` | **active** | `main()` at `:160`; selects `[0-9][0-9]-*.md` at `:188` |
+-| S4 panel | `master_doc_panel.py`, `panel_loop.py`, `ownership.py` | **active** (panel), **optional** (ownership) | `panel_loop.py` runs this loop; `ownership.py` has no code caller (`grep -rn ownership.py scripts/` → self only) |
++| S4 panel | `master_doc_panel.py`, `panel_loop.py`, `ownership.py`, `panel_supervise.sh`, `reap_orphan_writers.py` | **active** (panel), **optional** (ownership) | `panel_loop.py` runs this loop; `panel_supervise.sh` supervises it and restarts on crash/cap/provider outage (`panel_supervise.sh:30` `while true`); `reap_orphan_writers.py` kills writer sessions whose parent round died (ppid==1 + the writer-prompt signature, `reap_orphan_writers.py:47-49`); `ownership.py` has no code caller (`grep -rn ownership.py scripts/` → self only) |
+ | S5 render | `gen_nasa_handbook.py`, `gen_system_views.py`, `sheet_style.py` | **operator-invoked** | `gen_nasa_handbook.py:247` `main()`; no in-repo caller (`grep -rn gen_nasa_handbook scripts/` → only `gen_unit_map.py:31` NOT_CALLERS) |
+ | S6 corpus | `extract_owner_decisions.py` | **operator-invoked** | no in-repo caller (grep empty) |
+ | S7 unit-map | `gen_unit_map.py` | **operator-invoked** | `main()`; no in-repo caller |
+@@ -104,25 +104,28 @@ M11 ("works") could both cite CT-06 and pass while flatly disagreeing. The state
+ it does **not** verify cited line numbers exist in the cited file, and it trusts the chapters'
+ self-reported status word rather than re-deriving it.
+ 
+-**`panel_loop.py` settings and stop semantics (sol B14, added this round).** The loop that produces
+-this handbook carries its own controls; a process exit 0 is **not** document acceptance:
++**`panel_loop.py` settings and stop semantics (sol B14; re-pinned round 13).** The loop that
++produces this handbook carries its own controls; a process exit 0 is **not** document acceptance:
+ 
+ | Setting | Default | Range | Governs | What breaks if changed |
+ |---|---|---|---|---|
+-| `--rounds` | 6 (`:280`) | int; **0 = no cap** (`:290-291` maps 0 → `10**9`) | **absolute round ceiling** — the loop condition (`:304` `while st["round"] < rounds`) compares the *stored* round against `--rounds`; it does **not** count iterations from `--start-round` (sol B12) | a cap is a session budget, not a definition of done |
+-| `--max-seconds` | 21000 (`:281`) | int; 0 = no cap | the wall-clock budget | same |
+-| `--start-round` | None (`:282`) | int | **inert in this revision** — `:295` assigns `args.start_round`, but `:305` (`rnd = st["round"] + 1`) overwrites it from stored state before the writer runs, so the loop always resumes at `st["round"] + 1` (sol B12) | the flag does not resume at a specific round as its help implies — it is an inert override |
+-| `--writer-timeout` | 4200 (`:283`) | seconds | writer session deadline | too short kills the writer mid-round |
+-| `--judge-timeout` | 2700 (`:284`) | seconds | judge session deadline | too short yields MISSING seats |
+-| `--chapters` | "" (`:285`) | comma list | narrow the chapter set | empty = all chapters |
+-| `PANEL_WRITER_MODEL` / `PANEL_WRITER_PROVIDER` | `deepseek-v4-pro` / `deepseek` (`:35-36`) | env override | writer seat model/provider | a wrong model runs the writer on an unmeasured seat |
+-| `FANOUT` / `MANIFEST` | hardcoded `cf-quorum-20261104` scratch paths (`:32-33`) | a path | the external fanout script + seat manifest | a dated scratch dir that no longer exists breaks the loop |
+-
+-**Stop semantics (distinguish process success from acceptance).** `panel_loop.py:332-354` exits 0
+-on two conditions: unanimous PASS, **or** `clean_streak >= 2` — two consecutive rounds with no
+-*new defect class*, **even while blocking findings remain open**. A `STOP: no new defect class`
+-exit is a successful process termination, not proof the document is aligned; the operator must
+-read back the outstanding findings (the `CORRECTIONS.md` per round) separately.
++| `--rounds` | 6 (`:323`) | int; **0 = no cap** (`:340` maps 0 → `10**9`) | **absolute round ceiling** — the loop condition (`:351` `while st["round"] < rounds`) compares the *stored* round against `--rounds`; it does **not** count iterations from `--start-round` (sol B12) | a cap is a session budget, not a definition of done |
++| `--max-seconds` | 21000 (`:324`) | int; 0 = no cap (`:341` budget) | the wall-clock budget | same |
++| `--start-round` | None (`:325`) | int | **inert for the loop body** — `:342` (`rnd = args.start_round or (st["round"] + 1)`) sets only the printed "start round" value, then `:352` (`rnd = st["round"] + 1`) overwrites it from stored state before each writer runs, so the loop always resumes at `st["round"] + 1` (sol B12) | the flag does not resume at a specific round as its help implies — it is an inert override |
++| `--writer-timeout` | 4200 (`:326`) | seconds | writer session deadline | too short kills the writer mid-round |
++| `--judge-timeout` | 2700 (`:327`) | seconds | judge session deadline | too short yields MISSING seats |
++| `--chapters` | "" (`:328`) | comma list | narrow the chapter set | empty = all chapters |
++| `--groups` | "" (`:329`) | `M0,M1;M4,M5` semicolon-separated | explicit section groups (one writer per group, PANEL-LOOP's `--groups`) | overrides `--parallel`; a wrong grouping splits a contract seam across writers |
++| `--parallel` | 1 (`:331`) | int | writers per round (0/1 = single writer) | >1 splits chapters by interleaved slice when `--groups` is absent (`:365-366`) |
++| `PANEL_WRITER_MODEL` / `PANEL_WRITER_PROVIDER` | `deepseek-v4-pro` / `deepseek` (`:37-38`) | env override | writer seat model/provider | a wrong model runs the writer on an unmeasured seat |
++| `FANOUT` / `MANIFEST` | hardcoded `cf-quorum-20261104` scratch paths (`:34-35`) | a path | the external fanout script + seat manifest | a dated scratch dir that no longer exists breaks the loop |
++
++**Stop semantics (distinguish process success from acceptance).** `panel_loop.py:442-457` exits 0
++on three conditions: unanimous PASS (`:445`), `clean_streak >= 2` (`:447-451`) — two consecutive
++rounds with no *new defect class*, **even while blocking findings remain open** — or the cap
++(`:456`). A `STOP: no new defect class` exit is a successful process termination, not proof the
++document is aligned; the operator must read back the outstanding findings (the `CORRECTIONS.md`
++per round) separately.
+ 
+ ## 6. Contracts in and out
+ 
+@@ -198,8 +201,9 @@ it was this loop's own marker, not a log line, and is removed.)
+ ## 13. Evidence of record
+ 
+ - Code read: `master_doc_check.py` (268 lines, read in full); `master_doc_fill.py:24-28, 390-422`;
+-  `gen_nasa_handbook.py:15-20, 247-262`; `master_doc_panel.py:55-80`; `panel_loop.py:25-75`;
+-  `ownership.py` (170 lines, read in full).
++  `gen_nasa_handbook.py:15-20, 247-262`; `master_doc_panel.py:55-80`; `panel_loop.py:33-38, 321-461`
++  (main() + config, re-read this round); `panel_supervise.sh` (47 lines); `reap_orphan_writers.py`
++  (61 lines); `ownership.py` (170 lines, read in full).
+ - Commands run: `python3 scripts/master_doc_check.py` (FAIL, 44/37/50); `bash scripts/verify-patch.sh`
+   (PASS); `grep -rn gen_nasa_handbook scripts/` (no caller).
+ - Board rows: CF-360, CF-374 (complete), CF-381.
+@@ -212,8 +216,12 @@ it was this loop's own marker, not a log line, and is removed.)
+     incompatible, dated selection paths.
+   - **F6-4** (new) — S5–S8 have no in-repo invoker (grep empty); reclassified operator-invoked
+     (optional), not "active".
+-  - **F6-5** (new, grok B5) — `handbook_spine.py` is the gate that actually selects these `M*.md`
++  - **F6-5** (grok B5) — `handbook_spine.py` is the gate that actually selects these `M*.md`
+     chapters and was undocumented in M6; added as S9 with its five checks, the BOUNDARY policy, and
+     the state-agreement check (and its residual locator blind spot).
++  - **F6-6** (new, round 13) — `panel_loop.py` was rewritten for `--groups`/`--parallel` (the
++    PANEL-LOOP "sections written together" rule); `panel_supervise.sh` (supervisor) and
++    `reap_orphan_writers.py` (orphan reaper) are new S4 units. All M6 `panel_loop.py` locators
++    re-pinned to the rewritten file (`main()` at `:321`, config `:33-38`, stop `:442-457`).
+ 
+ ## RED field count: 2 (Status §1 — own gate reads FAIL, Metrics §8)
+diff --git a/docs/handbook/chapters/M7-github.md b/docs/handbook/chapters/M7-github.md
+index 2ff84ff..4b5f598 100644
+--- a/docs/handbook/chapters/M7-github.md
++++ b/docs/handbook/chapters/M7-github.md
+@@ -6,7 +6,7 @@
+ |---|---|
+ | Module name | GITHUB |
+ | Path | `/home/kara/code-factory/scripts/` — `github-app-setup.sh`, `github-app-token.py`, `github-app-refresh.sh` |
+-| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; no file M7 cites changed in `47d68b4..08a2c8a`) |
++| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; no M7-cited file (`github-app-*.sh`, `github-app-token.py`) changed in `08a2c8a..fbc19cb` — claims carried, stamp advanced) |
+ | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
+ | Owner lane | code-factory (control host) |
+ | Status | **UNVERIFIED** — CLI surface measured (`github-app-token.py` exits 2 with no command); the settings/control regions read (`:107-117`, `:300-372`, `:579`; `github-app-refresh.sh:37-53,104-174`); mint not run (no App creds on this host) |
+diff --git a/docs/handbook/chapters/M8-safety.md b/docs/handbook/chapters/M8-safety.md
+index b116586..18a13fe 100644
+--- a/docs/handbook/chapters/M8-safety.md
++++ b/docs/handbook/chapters/M8-safety.md
+@@ -6,7 +6,7 @@
+ |---|---|
+ | Module name | SAFETY |
+ | Path | `/home/kara/code-factory/scripts/` — `reclaim_disk.py`, `check_scan_scope.py` |
+-| Revision | `08a2c8a2ea3a44445da2f1013c545b568c7bf352` (code-factory HEAD at round-11 derivation; `reclaim_disk.py`/`check_scan_scope.py` byte-identical since `47d68b4`) |
++| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; `reclaim_disk.py`/`check_scan_scope.py` byte-identical since `47d68b4`; `project-node.sh:212` re-verified — the reclaim invocation line is unchanged) |
+ | Language / runtime | Python 3.14.9 + bash 5.3.9 (measured) |
+ | Owner lane | code-factory (control host) |
+ | Status | **VERIFIED** — `reclaim_disk.py` (169 lines) and `check_scan_scope.py` (118 lines) both read in full this round |
+diff --git a/docs/handbook/chapters/M9-scheduler.md b/docs/handbook/chapters/M9-scheduler.md
+index bc67bef..c4ad2c8 100644
+--- a/docs/handbook/chapters/M9-scheduler.md
++++ b/docs/handbook/chapters/M9-scheduler.md
+@@ -6,10 +6,10 @@
+ |---|---|
+ | Module name | SCHEDULER |
+ | Path | `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/` (Go) |
+-| Revision | `34e448974a49aec23c76ad9189b4cc85140d14c7` (scheduler repo HEAD at round-11 derivation; the only cited-file change since `1771d3aa` is `go.mod`'s toolchain bump — RELEASE-038, commit `9bc9e561` — every cited Go source file is byte-identical; the repo is live and the post-stamp commits are `972f11c8` (chmod +x a `.qa/chaos-probes` script — **not** a board commit) and `0927c552` (a board close, `[ci skip]`), so the earlier "board-only commits past this stamp" wording was imprecise) |
+-| Language / runtime | Go — `go.mod` declares `go 1.26.0` + `toolchain go1.26.10`; `go env GOVERSION` resolves **go1.26.10** (`GOTOOLCHAIN=auto`). Host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`); `/usr/bin/go` = **go1.26.9** (`/usr/lib/go-1.26/bin/go`; measured `readlink -f /usr/bin/go` + `/usr/bin/go version`) |
++| Revision | `6606f856746f2e2c802fa4e1d37a6b2afef0b85e` (scheduler repo HEAD, re-stamped round 13; moved from `34e44897` through 15 commits. The cited files `cmd/schedulerd/main.go` (57 flags), `internal/scheduler/dispatch_leg.go`, `internal/scheduler/admission_mode.go`, `internal/scheduler/usage_pool_policy.go`, `internal/bus/dispatch.go`, `internal/api/*`, `internal/database/migrations.go` are byte-identical since `34e44897`; `internal/scheduler/packer_select.go` gained +12 lines (board-stasis gate now at `:474`/`:614`), `internal/scheduler/spawn.go` gained +7 (buildForemanPrompt now `:1249`), and a new file `internal/scheduler/noop_pacing.go` (149 lines) added a NOOP-PACING admission step) |
++| Language / runtime | Go — `go.mod` declares `go 1.26.0` + `toolchain go1.26.10`; `go env GOVERSION` resolves **go1.26.10** (`GOTOOLCHAIN=auto`). Host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`); `/usr/bin/go` = **go1.26.8** (`/usr/lib/go-1.26/bin/go`; re-measured this round: `/usr/bin/go version` → `go1.26.8 linux/amd64`, `readlink -f /usr/bin/go` → `/usr/lib/go-1.26/bin/go`, binary dated Oct 5) |
+ | Owner lane | coding-hermes-scheduler (control plane) |
+-| Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:98-129, 143-208, 230-267`), the binary defaults (`cmd/schedulerd/main.go:95-200`), the auth path (`internal/api/auth.go:187-197`), the API route table (`internal/api/server.go:289-370`) and `config.example.toml` read this round; `tick_process.go`/`packer_select.go`/`namespace_alloc.go` grep-level, not line-by-line; §9 log inventory narrowed to the settlement/batch-dispatch surface (2 of 379 sites) with the uncovered count named as RED |
++| Status | **UNVERIFIED** — settlement (`dispatch_leg.go:260-336, :713-726`), `internal/bus/dispatch.go:175-208`, the admission authority (`admission_mode.go:98-129, 143-208, 230-267`), the binary defaults (`cmd/schedulerd/main.go:95-200`), the auth path (`internal/api/auth.go:187-197`), the API route table (`internal/api/server.go:289-370`) and `config.example.toml` read this round; `tick_process.go`/`packer_select.go`/`namespace_alloc.go` grep-level, not line-by-line; §9 log inventory narrowed to the settlement/batch-dispatch surface (2 of 382 sites) with the uncovered count named as RED |
+ 
+ ## 2. Purpose, authority and position
+ 
+@@ -30,7 +30,7 @@ scored a success — the control-plane half of the silent-success defect (CF-355
+ 
+ | Submodule | Unit | Classification | Evidence (invoking line) |
+ |---|---|---|---|
+-| S1 admission and allocation | `admission_mode.go`, `tick_process.go`, `packer_select.go`, `namespace_alloc.go`, `usage_pool_policy.go` | **active** | `admission_mode.go:98` `admissionModeFor` (project override → namespace default → cooldown); `:112` `admissionModeForProject` (DB read); `tick_process.go:40` `evaluate()`; `packer_select.go:19` `Pack`; `namespace_alloc.go:131` `Allocate`; `usage_pool_policy.go:21` `reserveUsagePools` |
++| S1 admission and allocation | `admission_mode.go`, `tick_process.go`, `packer_select.go`, `namespace_alloc.go`, `usage_pool_policy.go`, `noop_pacing.go` | **active** | `admission_mode.go:98` `admissionModeFor` (project override → namespace default → cooldown); `:112` `admissionModeForProject` (DB read); `tick_process.go:40` `evaluate()`; `packer_select.go:19` `Pack`; `namespace_alloc.go:131` `Allocate`; `usage_pool_policy.go:21` `reserveUsagePools`; `noop_pacing.go:74` `tasksNoopStreakDeferred` (new, see NOOP-PACING step below) |
+ | S2 execution and settlement | `spawn`, `slot_pool`, `lifecycle`, `dispatch_leg` | **active** | `dispatch_leg.go:260` `awaitDispatchReply`; `:262-336` constructs completed/failed/timeout outcomes |
+ | S3 durable state | `scheduler.db` + migration stores | **active** | live store has **30** tables (measured `sqlite3 … '.tables'`); see §5/§3 note for the run-correctness keys |
+ | S4 operator surfaces | `cmd/schedulerd`, `scheduler-dispatch`, `scheduler-query`, `queueprobe`, `migrate`, `backfill-commit-signals`, `cooldown-residue` | **operator-invoked** | `ls cmd/` → 7 command dirs; no unit invokes another unit — these are CLI entrypoints an operator (or a foreman step) runs, not a scheduler lane |
+@@ -84,8 +84,9 @@ order of authority:
+    checks without reserving; otherwise lease recovery runs, then `ReserveAll` enforces the
+    reservation. Round-6 conflated "nil authority" with "disabled enforcement" — they are different
+    outcomes with different caller obligations.
+-6. **Board-stasis gate** (`internal/scheduler/packer_select.go:462` `boardStasisBlocks(m.boardStasisGate, …)`, also `:602` `boardStasisBlockedQuiet`): a cooldown-mode **BUILDER** lane whose board file has not changed since its previous completed tick (mtime+size+content-digest fingerprint) is excluded from selection — no cooldown consumed. Tasks-mode and reporter-class lanes are exempt; an **unreadable board fails open** (the lane is not blocked); an operator `ForceEvaluate` bypasses it for one pass. Flag `board-stasis-gate` default **true** (`cmd/schedulerd/main.go:150`, SCHED-GAP-1678).
++6. **Board-stasis gate** (`internal/scheduler/packer_select.go:474` `boardStasisBlocks(m.boardStasisGate, …)`, also `:614` `boardStasisBlockedQuiet`): a cooldown-mode **BUILDER** lane whose board file has not changed since its previous completed tick (mtime+size+content-digest fingerprint) is excluded from selection — no cooldown consumed. Tasks-mode and reporter-class lanes are exempt; an **unreadable board fails open** (the lane is not blocked); an operator `ForceEvaluate` bypasses it for one pass. Flag `board-stasis-gate` default **true** (`cmd/schedulerd/main.go:150`, SCHED-GAP-1678).
+ 7. **Load gate** (`internal/scheduler/load_gate.go:63` `loadGateActive()`; threshold installed by `SetLoadGateThreshold` `:38`, flag `load-gate-threshold` default **0** at `main.go:144`): when enabled and the 1-minute load average is at or above the threshold, new spawns are **deferred, not dropped** — work runs once load falls. Namespaces opt out via `load_gate='off'` (`namespaceLoadGateOff`, `:93`); an unknown/empty namespace or a DB error does **not** opt out (the gate applies), and a missing telemetry reading fails open. 0 = disabled (SCHED-GAP-125).
++8. **NOOP-PACING (new this round, F9-9)** (`internal/scheduler/packer_select.go:395` `tasksNoopStreakDeferred(pu.Project.NoProgressTicks, pu.Project.CooldownFloorS, &lt, now)` → `continue`, with `noteNoopPacing` (`:396`) and `tasksNoopCooldown` (`:397`) logging; the arithmetic lives in `internal/scheduler/noop_pacing.go:59` `tasksNoopCooldown` / `:74` `tasksNoopStreakDeferred`): a **tasks-admitted** lane that produces no artifact of its own work is not work-driven — it is spinning. N consecutive no-artifact ticks (outcome `dry_run` with `commits=0` and `files_changed=0`) space the next admission by the lane's own `cooldown_floor_s`, doubling per consecutive no-op tick up to 8× the floor (`database.AdaptiveCeilingFloorMultiplier`, `noop_pacing.go:39`); the first no-op already costs the full floor. Any artifact resets the streak to 0 and restores the plain cooldown waiver. This closes the measured defect (live 2026-11-06, task-router-foreman): 76 spawns/day, 63 `dry_run` with `admit_reason='early'`, 50/75 inter-spawn gaps under 5 min, while `projects.no_progress_ticks` stayed 0 because its only writer runs behind the opt-in `adaptive_cooldown` check the lane had at 0 — the no-op tick burned nothing, reset no counter, and re-admitted on the 60 s pacing floor alone (`noop_pacing.go:10-30` documents the measured defect). The stand-down is **distinct** from SCHED-GAP-214 (which stands the waiver down only after a *failed* tick — `last_tick_status='failed'`): a `dry_run` completes CLEANLY and never reaches that path.
+ 
+ **Durable-state store keys (B17, written this round).** The 30-table store's run-correctness
+ keys and their relationships, at `internal/database/migrations.go`:
+@@ -174,7 +175,7 @@ definitions**, measured with `grep -cE 'flag\.(String|Int|Int64|Bool|Duration|Fl
+ | `duckbrain-ns` / `duckbrain-url` / `duckbrain-interval` | `"scheduler"` / `http://localhost:3000` / `5m` (`:180-182`) | DuckBrain sync target + cadence | a wrong URL/interval stops the sync spool |
+ | `simulate` | false (`:183`) | **dry-run mode — no real spawning** | true suppresses real spawns; the sim-* knobs only take effect with it |
+ | `sim-success` / `sim-idle` / `sim-count` | 0.85 / 0.0 / 0 (`:184-186`) | simulated outcomes | only meaningful under `--simulate`; `sim-count N` generates N synthetic ticks then exits |
+-| `gateway-url` / `gateway-key` | `http://127.0.0.1:8642` / `$API_SERVER_KEY` (`:187-188`) | the gateway endpoint + key | a wrong URL/key makes every foreman turn fail. An empty `gateway-url` does **not** alone authorize `exec.Command` fallback: the fallback requires `no-exec-fallback=false` (default **true**, `:190`); with the default, a nil gateway client **DEFERS the tick** (transport deferral, `spawn.go:1717-1754` → `transientGatewayDeferral`, not a lane failure) rather than exec-spawning — the two controls interact (sol B17) |
++| `gateway-url` / `gateway-key` | `http://127.0.0.1:8642` / `$API_SERVER_KEY` (`:187-188`) | the gateway endpoint + key | a wrong URL/key makes every foreman turn fail. An empty `gateway-url` does **not** alone authorize `exec.Command` fallback: the fallback requires `no-exec-fallback=false` (default **true**, `:190`); with the default, a nil gateway client **DEFERS the tick** (transport deferral, `spawn.go:698` `transientGatewayDeferral` def, call site `:1759`, not a lane failure) rather than exec-spawning — the two controls interact (sol B17) |
+ | `model-rates-file` | `$SCHEDULER_MODEL_RATES_FILE` (`:189`) | price-sticker JSON applied over builtin rates | a wrong sticker file re-prices the cost model (ADV-R09/G8) |
+ | `foreman-home` | `$HOME/.hermes/foreman` (`:191`) | `HERMES_HOME` for foreman sessions | a wrong path points foreman at the wrong state |
+ | `sim-setup` / `sim-ticks` | false / 10 (`:192-193`) | 13-project dry-run fixture | `sim-setup` creates the fixture; `sim-ticks` sets its tick count |
+@@ -213,9 +214,9 @@ retired; each row carries the CT id its peer chapter cites, so two ends can be m
+ | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
+ |---|---|---|---|---|---|
+ | CT-01 | owner | in | **operator config (boundary)** — a human writes `fleet.toml` + `scheduler.db` project rows (lane enabled/cadence/weight/pin); there is no producer function (the load path `config.LoadRootConfig`, called at `main.go:640,673,762,854,870,968,995,1023,1054,1309`, is the consumer's loader, not a producer) | `internal/scheduler/admission_mode.go:112` `admissionModeForProject` (reads the lane's admission mode from the DB) | **UNVERIFIED (boundary)** — the consumer is nameable; the producer is a human writing config, not a function (round-9 re-grade: CT-01 is a boundary contract, not internal) |
+-| CT-02 | crier | out | `internal/bus/dispatch.go:202` `payload()` emits `text_b64` (base64), field **`board`** (not `board_row`) | crier `internal/registry/handler.go:990` `HandleDeliver` | **works** — CF-354 fixed and closed (commit `1f1c0fe`); crier delivers the envelope verbatim; the former `text`/`text_b64` mismatch was node-side consumption |
++| CT-02 | crier | out | `internal/bus/dispatch.go:175` `payload()` emits `text_b64` (base64 at line 202), field **`board`** (not `board_row`) | crier `internal/registry/handler.go:990` `HandleDeliver` | **works** — CF-354 fixed and closed (commit `1f1c0fe`); crier delivers the envelope verbatim; the former `text`/`text_b64` mismatch was node-side consumption |
+ | CT-06 | crier | in | `dispatcher.py:500-508` builds the completion reply `{in_reply_to, agent, ok, …}`; transported via crier `internal/registry/handler.go:990` `HandleDeliver` into the scheduler's inbox | `internal/scheduler/dispatch_leg.go:713` `dispatchReplyVerdict` reads only `payload["ok"]` | **works (dispatcher leg)** — the dispatcher always sends `ok` (`dispatcher.py:501`), the exact field `dispatchReplyVerdict` reads. CF-355 (the node's `status` reply scoring success-on-failure) is the **node-reply** leg, carried at CT-04, not this producer |
+-| CT-05 | foreman | in | `scripts/load_lane_config.py:31-37` (reads `prompts/*.md` → `UPDATE projects SET prompt=?, prompt_mode='append'`) | `internal/scheduler/spawn.go:1244` `buildForemanPrompt` (namespace default → project replace/append → dynamic footer) | **UNVERIFIED** — both ends are in-repo (internal, round-9 grok B3: round-8 labelled the producer "external"); the OUTLINE VIII.1 "3 of 11 prompt files disagree" breakage is **unmeasured** (no command establishes which three files disagree or on what) |
++| CT-05 | foreman | in | `scripts/load_lane_config.py:31-37` (reads `prompts/*.md` → `UPDATE projects SET prompt=?, prompt_mode='append'`) | `internal/scheduler/spawn.go:1249` `buildForemanPrompt` (namespace default → project replace/append → dynamic footer; the builtin prompt text changed this round — it now instructs "read your own board with `board_read.py`" and "unblock before you block", `spawn.go:1208-1214`) | **UNVERIFIED** — both ends are in-repo (internal, round-9 grok B3: round-8 labelled the producer "external"); the OUTLINE VIII.1 "3 of 11 prompt files disagree" breakage is **unmeasured** (no command establishes which three files disagree or on what) |
+ | CT-15 | foreman | out | **external** — the foreman lane's decision/finding/goal writes (out of scope) | **external** — the duckbrain service (out of scope) | **UNVERIFIED (boundary)** — neither side has an in-repo `file:function`, and the wire was not measured this round; an outline "works" annotation is not implementation evidence (sol B03) |
+ 
+ CT-01 and CT-15 are boundary contracts: the owner is a human and duckbrain is a service outside
+@@ -228,10 +229,10 @@ ends are in-repo files), so its row names both `file:function`; its state is UNV
+ 
+ | Check | Command | Expected | Last run | Result |
+ |---|---|---|---|---|
+-| build | `go build ./...` (scheduler repo) | exit 0 | 2026-11-06, rev `34e44897` | **PASS** (rc 0) |
+-| durable state | `sqlite3 ~/.hermes/coding-hermes/scheduler.db '.tables'` | tables listed | 2026-11-06 | **PASS** — 30 tables; no `verdicts` table |
+-| go test (clean env) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./...` | green | 2026-11-06, rev `34e44897` | **PASS (rc 0)** — all 25 packages ok; `internal/scheduler` ran 275.7s (not cached) and passed |
+-| go test (three env-sensitive tests) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -run 'TestSCHEDGAP091_DrainTimeoutStampsOrphan|TestOperatorRestartApprovalEnv|TestAbortInFlightTicks_OperatorApprovedStamp' -count=1` | green | 2026-11-06, rev `34e44897` | **PASS (rc 0)** — 0.409s |
++| build | `go build ./...` (scheduler repo) | exit 0 | 2026-11-07, rev `6606f856` | **PASS** (rc 0) |
++| durable state | `sqlite3 ~/.hermes/coding-hermes/scheduler.db '.tables'` | tables listed | 2026-11-07 | **PASS** — 30 application tables (`.tables`); no `verdicts` table. `sqlite_master WHERE type='table'` = 32 (the 2 extra are SQLite-internal, not application tables) |
++| go test (clean env) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./...` | green | 2026-11-07, rev `6606f856` | **FAIL (1 package)** — `internal/scheduler` (the main package) passed in 246.9s; `internal/api` FAILed `TestPERF001R2StatusPassAB` (a load-sensitive perf A/B: in-window `/api/v1/status` max 2.79s vs 1.65s budget) while this suite ran concurrently with the crier suite and the rest of the verification. The test passes in isolation (`-run 'TestPERF001R2StatusPassAB' -count=1` → `ok 0.646s`), so the failure is a load-window flake, not a code regression (F9-10). 24 of 25 packages ok |
++| go test (three env-sensitive tests) | `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./internal/scheduler/ -run 'TestSCHEDGAP091_DrainTimeoutStampsOrphan|TestOperatorRestartApprovalEnv|TestAbortInFlightTicks_OperatorApprovedStamp' -count=1` | green | 2026-11-07, rev `6606f856` | **PASS (rc 0)** — 0.247s |
+ 
+ **Env-contamination correction (F9-6).** Round-4 reported `go test ./...` FAIL with
+ `SCHED-GAP-1726 goroutine census: 1 goroutine(s) still parked in evalDrain at suite exit`. That
+@@ -255,9 +256,10 @@ table joined to `projects` (`:127-130`). **Locator correction (F9-4):** `metrics
+ ## 9. Log lines (verbatim)
+ 
+ **Scope, stated (deepseek #1).** This is the settlement/batch-dispatch surface, **not** a full
+-inventory. The control plane has **379** `log.Printf` call sites
+-(`grep -rn "log.Printf" internal/scheduler/*.go | wc -l` = 379, measured this round). The two rows
+-below are the settlement/batch-dispatch lines; the remaining **377** sites are uncovered and are
++inventory. The control plane has **382** `log.Printf` call sites
++(`grep -rn "log.Printf" internal/scheduler/*.go | wc -l` = 382, measured this round — up from 379
++at round 12; the 3 new sites are in the NOOP-PACING path). The two rows
++below are the settlement/batch-dispatch lines; the remaining **380** sites are uncovered and are
+ the named RED on this field — not a "sample" claimed as complete.
+ 
+ | Level | Line | Emitted when | Kind |
+@@ -302,16 +304,18 @@ the named RED on this field — not a "sample" claimed as complete.
+   (`:170-214`), `internal/scheduler/admission_mode.go` (`:98-129, 143-208, 230-267`),
+   `internal/scheduler/usage_pool_policy.go:26-63`, `cmd/schedulerd/main.go:95-200`,
+   `internal/api/auth.go:187-197`, `internal/api/server.go:289-346`, `internal/api/server_metrics.go:125-136, :195`,
+-  `config.example.toml` (full), `internal/database/migrations.go` (grep: `:1217-1232, :1391-1489, :1970, :2036`).
++  `config.example.toml` (full), `internal/database/migrations.go` (grep: `:1217-1232, :1391-1489, :1970, :2036`),
++  `internal/scheduler/noop_pacing.go` (full — 149 lines, NOOP-PACING), `internal/scheduler/packer_select.go:385-400` (the no-op gate insertion), `internal/scheduler/spawn.go:1208-1214, :698, :1249, :1759`.
+ - Commands run: `go build ./...` (PASS); `env -u SCHEDULER_OPERATOR_RESTART_APPROVED go test ./...`
+-  (PASS, 25/25); the three env-sensitive tests (PASS, 0.409s); `grep -n 'LoadRootConfig' cmd/schedulerd/main.go` (10 sites);
+-  `grep -rn "log.Printf" internal/scheduler/*.go | wc -l` (379); `grep -cE 'flag\.(String|Int|Int64|Bool|Duration|Float64)' cmd/schedulerd/main.go` (57);
+-  `sqlite3 … '.tables'` (30 tables).
+-- Rev re-stamped: `34e44897` (the go.mod toolchain bump to go1.26.10, RELEASE-038 `9bc9e561`, is the one cited-file change since `1771d3aa`; every cited Go source file is byte-identical).
++  (FAIL 1/25 — `internal/api` `TestPERF001R2StatusPassAB`, load flake; `internal/scheduler` passed 246.9s); the three env-sensitive tests (PASS, 0.247s); the flaky perf test in isolation (`ok 0.646s`);
++  `grep -n 'LoadRootConfig' cmd/schedulerd/main.go` (10 sites);
++  `grep -rn "log.Printf" internal/scheduler/*.go | wc -l` (382); `grep -cE 'flag\.(String|Int|Int64|Bool|Duration|Float64)' cmd/schedulerd/main.go` (57);
++  `sqlite3 … '.tables'` (30 tables); `grep -n 'func tasksNoop' internal/scheduler/noop_pacing.go` (`:59/:74/:94`); `git diff --stat 34e44897..HEAD`.
++- Rev re-stamped: `6606f856` (moved from `34e44897` through 15 commits; cited files byte-identical except `packer_select.go` +12, `spawn.go` +7, and the new `noop_pacing.go`).
+ - Board rows: CF-334, CF-335, CF-337, CF-343, CF-346, CF-353, CF-354, CF-355.
+ - **Findings:**
+   - **F9-1** (carried) — settlement exists (`dispatch_leg.go:260-336`); the real defect is CF-355.
+-  - **F9-2** (carried) — 30 tables, not 26; no `verdicts` table.
++  - **F9-2** (carried) — 30 application tables, not 26; no `verdicts` table (32 in `sqlite_master`, 2 internal).
+   - **F9-3** (corrected) — `LoadRootConfig` IS loaded at boot (`main.go:640,673,762,854,870,968,995,1023,1054,1309`), three-layer merge in `loader.go`. The only residue: `config.example.toml`'s header NOTE is stale.
+   - **F9-4** — `metricsSpawns` is at `:195`, not `:192`.
+   - **F9-5** (carried) — binary defaults are 30s/10/false (`main.go:108/:112/:113`); the six
+@@ -319,5 +323,8 @@ the named RED on this field — not a "sample" claimed as complete.
+   - **F9-6** (carried) — round-4's `go test ./...` FAIL was env contamination, not a code break; clean-env PASSES (25/25).
+   - **F9-7** (new, B16/B17) — the ordered admission procedure and the run-correctness store keys
+     are written this round (see §3 note).
++  - **F9-8** (new, round 13) — the repo moved `34e44897`→`6606f856`; `packer_select.go` +12 and `spawn.go` +7 shifted the board-stasis (`:462/:602`→`:474/:614`) and `buildForemanPrompt` (`:1244`→`:1249`) locators; `transientGatewayDeferral` re-pinned to def `:698` / call `:1759`.
++  - **F9-9** (new, round 13) — NOOP-PACING is a new admission step (`packer_select.go:395`, `noop_pacing.go:59/:74/:94`); a tasks-admitted lane producing no artifact is spaced by `cooldown_floor_s` (doubling, 8× cap) — closing the measured 76-spawns/day dry-churn defect.
++  - **F9-10** (new, round 13) — the full suite now FAILs `internal/api` on `TestPERF001R2StatusPassAB` under concurrent load (max 2.79s vs 1.65s budget); passes in isolation (0.646s) — a load-window flake, not a regression.
+ 
+-## RED field count: 5 (§9 log inventory 2 of 379 sites — the remaining 377 are the named RED, not a "sample"; §3 S1 grep-level (`tick_process`/`packer_select`/`namespace_alloc` not line-by-line); §5 the auxiliary-flag reader/precedence not re-verified per flag (the consequence column is now filled); S4 per-route contract not written — B18; S3 write authorities/recovery queries not written — B17)
++## RED field count: 5 (§9 log inventory 2 of 382 sites — the remaining 380 are the named RED, not a "sample"; §3 S1 grep-level (`tick_process`/`packer_select`/`namespace_alloc` not line-by-line — `noop_pacing.go`/`packer_select.go:385-400`/`spawn.go` ARE read this round); §5 the auxiliary-flag reader/precedence not re-verified per flag (the consequence column is now filled); S4 per-route contract not written — B18; S3 write authorities/recovery queries not written — B17)
