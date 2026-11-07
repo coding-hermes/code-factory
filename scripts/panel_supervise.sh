@@ -36,6 +36,7 @@ while true; do
       ;;
   esac
 
+  python3 scripts/reap_orphan_writers.py >> "$LOG" 2>&1
   echo "$(date -Is) launching panel_loop (no cap), prior status=$status" >> "$LOG"
   python3 scripts/panel_loop.py --rounds 0 --max-seconds 0 \
     --parallel "${PANEL_PARALLEL:-3}" \
