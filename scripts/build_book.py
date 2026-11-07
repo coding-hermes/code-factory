@@ -64,9 +64,13 @@ EXTRA_CSS = (
 )
 
 # Runs in Chrome before --print-to-pdf writes. Splits any .page div taller than one
-# page's content area: trailing blocks move to a new .page div with a cloned dochead;
-# a table taller than a page gives up trailing rows to a cloned table headed by the
-# same thead with a "table continues" placard. One render, no measurement round-trips.
+# page's content area by FORWARD assembly: walk the content in reading order, move the
+# first block that crosses the budget and everything after it (in order, appended) to a
+# new .page div inserted after this one with a cloned dochead; a table crossing the
+# budget splits between rows, the first non-fitting row opening a continuation table
+# (same colgroup, cloned thead, "table continues" placard) — or the whole table moves
+# when no body row fits, so no sheet ever ends on a header with zero rows. One render,
+# no measurement round-trips.
 PAGINATE_JS = """
 (function () {
   var MAX = 920; // px; A4 content area is ~979 px (259 mm at 96 dpi) — budget kept
@@ -134,66 +138,179 @@ PAGINATE_JS = """
   Array.prototype.slice.call(document.querySelectorAll('table')).forEach(balanceTable);
 
   // --- page splitting ----------------------------------------------------------
-  // Split one .page div: peel trailing blocks off the end (reading order preserved by
-  // inserting each at the TOP of the continuation) until the source fits one page.
-  // After every move the continuation is re-measured; an element that overflows it is
-  // reopened on a fresh page — Chrome must never be left to flow content onto a
-  // page of its own, because such a page carries no running head.
+  // FORWARD assembly. The previous version peeled trailing blocks off the end and
+  // inserted each at the top of ONE continuation div; that keeps order only while
+  // everything fits on that one continuation. When the continuation itself overflowed,
+  // a reopen path opened yet another page and kept peeling into it — page k+1 always
+  // received content EARLIER than page k, so every multi-page split imposed in reverse
+  // (Part IV printed CT-18..01, M0 §13..§8) and a continuation table opened for one
+  // table could inherit rows from a different one. Now: walk the content IN reading
+  // order, find the first block whose bottom crosses the budget, move it and everything
+  // after it (appended, in order) to a new page inserted after this one; repeat on the
+  // new page. The page sequence IS the reading order by construction.
+  function bottomIn(pg, el) {
+    return el.getBoundingClientRect().bottom - pg.getBoundingClientRect().top;
+  }
+  function makePage(pg) {
+    var np = document.createElement('div');
+    np.className = 'page';
+    var hd = cloneHead(pg);
+    if (hd) np.appendChild(hd);
+    return np;
+  }
+  function openCont(np, tbl) {
+    var cont = document.createElement('p');
+    cont.className = 'tbl-cont';
+    cont.textContent = 'Table continues';
+    np.appendChild(cont);
+    var nt = document.createElement('table');
+    var cg = tbl.querySelector('colgroup');
+    if (cg) nt.appendChild(cg.cloneNode(true));
+    nt.style.tableLayout = 'fixed';
+    var th = tbl.querySelector('thead');
+    if (th) nt.appendChild(th.cloneNode(true));
+    var tb = document.createElement('tbody');
+    nt.appendChild(tb);
+    np.appendChild(nt);
+    return tb;
+  }
   function splitPage(pg) {
-    var anchor = { el: pg };
-    var np = null;
+    var tail = pg; // last page of the chain so far — every new page inserts after it
+    var cur = pg;
     var guard = 0;
-    var lastTable = null;
-    function newPage() {
-      np = document.createElement('div');
-      np.className = 'page';
-      var hd = cloneHead(pg);
-      if (hd) np.appendChild(hd);
-      anchor.el.parentNode.insertBefore(np, anchor.el.nextSibling);
-      anchor.el = np;
-    }
-    function openTable() {
-      newPage();
-      var cont = document.createElement('p');
-      cont.className = 'tbl-cont';
-      cont.textContent = 'Table continues';
-      np.appendChild(cont);
-      var nt = document.createElement('table');
-      var cg = lastTable.querySelector('colgroup');
-      if (cg) nt.appendChild(cg.cloneNode(true));
-      nt.style.tableLayout = 'fixed';
-      var th = lastTable.querySelector('thead');
-      if (th) nt.appendChild(th.cloneNode(true));
-      nt.appendChild(document.createElement('tbody'));
-      np.appendChild(nt);
-      np._tb = nt.tBodies[0];
-    }
-    while (h(pg) > MAX && guard++ < 600) {
-      var kids = contentKids(pg);
-      if (!kids.length) break;
-      var last = kids[kids.length - 1];
-      if (last.tagName === 'TABLE' && last.rows.length > 1) {
-        lastTable = last;
-        if (!np || !np._tb) openTable();
-        var row = last.rows[last.rows.length - 1];
-        np._tb.insertBefore(row, np._tb.firstChild);
-        if (h(np) > MAX) {  // the row overflowed this continuation — reopen
-          np._tb.removeChild(row);
-          openTable();
-          np._tb.insertBefore(row, np._tb.firstChild);
+    while (h(cur) > MAX && guard++ < 1000) {
+      var kids = contentKids(cur);
+      // first cut point in reading order: the first kid that crosses the budget —
+      // except a table, which is cut at its first non-fitting ROW (only a table that
+      // straddles the cut decomposes; tables entirely after it move whole, so no
+      // empty table skeleton is ever left behind on the source page)
+      var kidIdx = -1, cutRow = -1, straddleTbl = null;
+      for (k = 0; k < kids.length; k++) {
+        var kd = kids[k];
+        if (kd.tagName === 'TABLE' && kd.rows.length > 1) {
+          var cr = -1;
+          for (var r3 = 0; r3 < kd.rows.length; r3++)
+            if (bottomIn(cur, kd.rows[r3]) > MAX - 12) { cr = r3; break; }
+          if (cr === -1) continue; // table fits (border/margin sliver) — keep scanning
+          kidIdx = k; cutRow = cr; straddleTbl = kd; break;
         }
+        if (bottomIn(cur, kd) > MAX - 12) { kidIdx = k; break; }
+      }
+      if (kidIdx < 0) break; // overflow without a crossing unit — nothing to split
+      if (kidIdx === 0 && kids.length === 1 && !straddleTbl) break; // unsplittable block
+      var wholeTable = false;
+      if (straddleTbl) {
+        var headRows = straddleTbl.tHead ? straddleTbl.tHead.rows.length : 0;
+        // a cut that would leave the source table header-only moves the whole table
+        // instead; and a whole-table move is pointless when the table already opens
+        // this page and still does not fit — accept that sheet's overflow
+        wholeTable = cutRow <= headRows;
+        if (wholeTable && kidIdx === 0) break;
+      }
+      // units to carry forward, in reading order
+      var units = [];
+      if (wholeTable || !straddleTbl) {
+        for (k = kidIdx; k < kids.length; k++) units.push({ kid: kids[k] });
       } else {
-        if (!np) newPage();
-        np.insertBefore(last, contentKids(np)[0] || null);
-        if (h(np) > MAX) {  // the block overflowed this continuation — reopen
-          var node = last;
-          np.removeChild(node);
-          newPage();
-          np.appendChild(node);
+        for (k = cutRow; k < straddleTbl.rows.length; k++)
+          units.push({ kid: straddleTbl, row: straddleTbl.rows[k] });
+        for (k = kidIdx + 1; k < kids.length; k++) units.push({ kid: kids[k] });
+      }
+      var np = makePage(pg);
+      tail.parentNode.insertBefore(np, tail.nextSibling);
+      tail = np;
+      if (wholeTable) {
+        // a "table continues" placard travels with the table it belongs to
+        if (kidIdx > 0 && kids[kidIdx - 1].classList &&
+            kids[kidIdx - 1].classList.contains('tbl-cont'))
+          np.appendChild(kids[kidIdx - 1]);
+        for (k = 0; k < units.length; k++) np.appendChild(units[k].kid);
+        cur = np;
+        continue;
+      }
+      // fill pages forward: rows of one table flow into a continuation table
+      // (placard, cloned thead and colgroup) that opens on each new page; when a page
+      // fills, the unit that crossed moves to the NEXT page — nothing ever moves back
+      // to the source, so the source keeps nothing below the cut and the page sequence
+      // is the reading order by construction. A whole table carried as a unit that
+      // still cannot fit a fresh page decomposes into its rows the same way (the
+      // element itself is dropped — its rows live on under a cloned thead).
+      var target = np;
+      var lastKid = null;
+      var tb = null;
+      function dismantleCont() { // drop a continuation frame left with zero rows
+        if (tb && !tb.rows.length) {
+          var nt = tb.parentNode;
+          var plac = nt.previousElementSibling;
+          if (plac && plac.classList && plac.classList.contains('tbl-cont'))
+            target.removeChild(plac);
+          target.removeChild(nt);
         }
       }
+      for (k = 0; k < units.length; k++) {
+        var un = units[k];
+        if (un.row) {
+          var placedRow = false;
+          while (!placedRow) {
+            var freshPage = !contentKids(target).length;
+            if (un.kid !== lastKid) { tb = openCont(target, un.kid); lastKid = un.kid; }
+            tb.appendChild(un.row);
+            if (h(target) <= MAX) { placedRow = true; break; }
+            if (freshPage) break; // a row taller than any sheet — accept
+            tb.removeChild(un.row);
+            dismantleCont();
+            lastKid = null;
+            var npR = makePage(pg);
+            tail.parentNode.insertBefore(npR, tail.nextSibling);
+            tail = npR; target = npR;
+          }
+        } else {
+          var kd = un.kid;
+          var bigTable = kd.tagName === 'TABLE' && kd.rows.length > 1;
+          var placedKid = false;
+          while (!placedKid) {
+            var freshPage2 = !contentKids(target).length;
+            target.appendChild(kd);
+            lastKid = null;
+            if (h(target) <= MAX) { placedKid = true; break; }
+            if (!bigTable) {
+              if (freshPage2) { placedKid = true; break; } // monster block — accept
+              target.removeChild(kd);
+            } else {
+              // decompose the table where it sits: body rows flow into continuation
+              // tables, the element is dropped once its rows are placed (snapshot the
+              // rows first — the list is live and shrinks as rows move out)
+              target.removeChild(kd);
+              var bodyStart = kd.tHead ? kd.tHead.rows.length : 0;
+              var allRows = Array.prototype.slice.call(kd.rows);
+              for (var ri = bodyStart; ri < allRows.length; ri++) {
+                var rrow = allRows[ri];
+                var placedR = false;
+                while (!placedR) {
+                  var freshPage3 = !contentKids(target).length;
+                  if (kd !== lastKid) { tb = openCont(target, kd); lastKid = kd; }
+                  tb.appendChild(rrow);
+                  if (h(target) <= MAX) { placedR = true; break; }
+                  if (freshPage3) break; // monster row — accept
+                  tb.removeChild(rrow);
+                  dismantleCont();
+                  lastKid = null;
+                  var npR2 = makePage(pg);
+                  tail.parentNode.insertBefore(npR2, tail.nextSibling);
+                  tail = npR2; target = npR2;
+                }
+              }
+              placedKid = true; break;
+            }
+            var npK = makePage(pg);
+            tail.parentNode.insertBefore(npK, tail.nextSibling);
+            tail = npK; target = npK;
+          }
+        }
+      }
+      cur = target;
     }
-    return np;
+    return tail;
   }
   var pages = Array.prototype.slice.call(document.querySelectorAll('.page'));
   for (var i = 0; i < pages.length; i++) {
