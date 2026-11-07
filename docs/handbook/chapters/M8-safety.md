@@ -6,10 +6,10 @@
 |---|---|
 | Module name | SAFETY |
 | Path | `/home/kara/code-factory/scripts/` — `reclaim_disk.py`, `check_scan_scope.py` |
-| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; `reclaim_disk.py`/`check_scan_scope.py` byte-identical since `47d68b4`; `project-node.sh:212` re-verified — the reclaim invocation line is unchanged) |
+| Revision | `0e01a6faa9947594ddfe791681de737fe9ec0872` (code-factory HEAD measured; **CF-307 rewrote `check_scan_scope.py` in this chapter's commit — S2 is 196 lines now**, `reclaim_disk.py` byte-identical since `47d68b4`; `project-node.sh:212` re-verified — the reclaim invocation line is unchanged) |
 | Language / runtime | Python 3.14.9 + bash 5.3.9 (measured) |
 | Owner lane | code-factory (control host) |
-| Status | **VERIFIED** — `reclaim_disk.py` (169 lines) and `check_scan_scope.py` (118 lines) both read in full |
+| Status | **VERIFIED** — `reclaim_disk.py` (169 lines) and `check_scan_scope.py` (196 lines) both read in full |
 
 ## 2. Purpose, authority and position
 
@@ -23,8 +23,9 @@ the disk the fleet must not fill gets filled.
 
 **What breaks if it lies.** A reaper that deletes a directory a module cites as evidence silently
 destroys the evidence of record. The TTL governs *age*, not *citation*; the two are currently
-conflated (CF-290, CF-368). And a scan-scope check that passes on "no docs found" proves nothing
-was policed (see F8-3).
+conflated (CF-290, CF-368). And a scan-scope check that passes on a surface it never read proves
+nothing was policed — CF-307 makes that branch unreachable, and a surface that *was* read and is
+empty now says so in its own words (see F8-3).
 
 ## 3. Submodule inventory
 
@@ -83,7 +84,8 @@ is listed below as a local edge.
 |---|---|---|---|---|
 | python compile | `python3 -m py_compile scripts/reclaim_disk.py scripts/check_scan_scope.py` | exit 0 | 2026-11-06 | PASS |
 | reclaim unit | `python3 tests/test_reclaim.py` | pass | 2026-11-06 | **PASS** (9 tests, rc 0) |
-| scan scope | `python3 scripts/check_scan_scope.py` | RESULT OK, claims named | 2026-11-06 | **PASS** — `15 gitleaks claim(s) name their --log-opts`, rc 0 |
+| scan scope | `python3 scripts/check_scan_scope.py` | RESULT OK, claims named | 2026-11-07 | **PASS** — `15 gitleaks claim(s) name their --log-opts`, rc 0 |
+| scan scope surface | `python3 -B tests/test_scan_scope.py` | pass | 2026-11-07 | **PASS** (7 arms, rc 0; 5 of them red against the pre-CF-307 tool) |
 
 ## 8. Metrics
 
@@ -99,8 +101,9 @@ output (`reclaimed_bytes`/`reclaimed_mib` at `:121-123`), not emitted.
 | — | `  %s  %s — %s` (action ∈ `reap/keep/skip`, `:160`) | one row per target | evidentiary |
 | — | `  note reclaim — nothing to reclaim` (`:162`) | no bytes freed | descriptive |
 | — | `reclaim: %s` (stderr, `:145`) | ValueError/OSError | evidentiary |
-| — | `  OK  audit-scope: %d gitleaks claim(s) name their --log-opts` (`check_scan_scope.py:112`) | all claims name a scope | evidentiary |
-| — | `  OK  audit-scope: no posture docs found` (`:110`) | nothing matched | **descriptive** — proves nothing was policed (F8-3) |
+| — | `  OK  audit-scope: %d gitleaks claim(s) name their --log-opts` (`check_scan_scope.py:187-190`) | all claims name a scope | evidentiary |
+| — | `  OK  audit-scope: audit surface read, 0 posture docs` (`:180`) | `docs/audits` was read and holds no matching document | **descriptive** — the surface was read and is empty (F8-3); shares no wording with the failure branch |
+| — | `  FAIL  audit-scope: <path> missing / unreadable / is not a directory / is a dangling symlink` + `RESULT: FAIL (unreadable path)` (`:159-168`, raised at `:61-112`) | a path the gate must read is absent or unreadable | evidentiary — exit 2, never a green |
 
 ## 10. Failure modes, indications and recovery
 
@@ -108,7 +111,7 @@ output (`reclaimed_bytes`/`reclaimed_mib` at `:121-123`), not emitted.
 |---|---|---|---|
 | Evidence dir reaped | a job dir cited as evidence disappears | a cache-only reap | **OPEN** — CF-290, CF-368: the TTL exists but no evidence-reference exclusion rule does |
 | Dispatcher jobs never reaped | `reclaim_disk.py:21` `AGED_PARENTS` lists only `.node/jobs` and `.node/clones`; dispatcher jobs under `/home/bunker-<agent>/.cf-jobs` (`dispatcher.py:200-201`) are **not** a reap target | a uniform job-dir reaper | **OPEN** — F8-3: the dispatcher-job retention path has no reaper |
-| Scanner proves nothing | `no posture docs found` → RESULT OK | a real clean scan | the empty-selection branch (`check_scan_scope.py:109-114`) is OK by design (F8-3) |
+| Scanner proves nothing | the gate exits 2 with `FAIL audit-scope: <path> …` — it never prints a green it did not measure | a real clean scan (claims named, exit 0), or a surface READ and empty (`audit surface read, 0 posture docs`, exit 0) | CF-307: `audit_docs` (`check_scan_scope.py:61-92`) stats and `os.scandir`s `docs/audits` instead of globbing it, and a dangling or unreadable optional file is `FAIL` exit 2 (`:96-112`); the old `no posture docs found` branch is gone (F8-3) |
 
 ## 11. Limits and margins
 
@@ -116,8 +119,13 @@ output (`reclaimed_bytes`/`reclaimed_mib` at `:121-123`), not emitted.
   (`repo`, `.node/node.json`, `.node/crier.json`, `.node/floor.toml`) before any inspection.
 - The TTL's mtime basis is the target's `st_mtime` (`:90`).
 - `check_scan_scope.py` scans only `docs/audits/code-factory-releng-*.md` and
-  `docs/SECURITY-TRIAGE.md` (`:31-32`); the rule is a **case-sensitive, same-physical-line**
-  substring check (`:64-68`: `"gitleaks" in line` and `"--log-opts" in line`), exit 0/1/2.
+  `docs/SECURITY-TRIAGE.md` (`:46-48`); the rule is a **case-sensitive, same-physical-line**
+  substring check (`:131-135`: `"gitleaks" in line` and `"--log-opts" in line`), exit 0/1/2.
+- `docs/audits` must exist and be listable: `os.stat` + `os.scandir` (`:61-92`) replaced the
+  pre-CF-307 `Path.glob`, which answered an empty selection for a directory it could not read.
+  Absent, non-directory or permission-denied is `FAIL` exit 2, as is an optional fixed file that
+  is a dangling symlink or unreadable (`:96-112`); plain absence of the optional file is not
+  fatal but is named in the OK line.
 
 ## 12. Cross-references
 
@@ -129,9 +137,11 @@ output (`reclaimed_bytes`/`reclaimed_mib` at `:121-123`), not emitted.
 
 ## 13. Evidence of record
 
-- Code read: `reclaim_disk.py` (169 lines) and `check_scan_scope.py` (118 lines), both in full.
+- Code read: `reclaim_disk.py` (169 lines) and `check_scan_scope.py` (196 lines), both in full.
 - Commands run: `python3 tests/test_reclaim.py` (9 pass); `python3 scripts/check_scan_scope.py`
-  (RESULT OK, 15 claims); `grep -rn check_scan_scope scripts/` (no caller).
+  (RESULT OK, 15 claims); `python3 -B tests/test_scan_scope.py` (7 arms pass, rc 0 — the same
+  battery is red on 5 of 7 arms against the pre-CF-307 tool extracted with `git show`);
+  `grep -rn check_scan_scope scripts/` (no caller).
 - `docs/UNIT-MAP.yaml:222-236` (M8 S1–S2).
 - Board rows: CF-290, CF-341, CF-368.
 - **Findings:**
@@ -139,7 +149,9 @@ output (`reclaimed_bytes`/`reclaimed_mib` at `:121-123`), not emitted.
     evidence retention, not the absence of a TTL.
   - **F8-2** (carried) — `verify-patch.sh` is M6.S8, not M8.
   - **F8-3** — `check_scan_scope.py`'s exact surface (two path patterns, case-sensitive same-line
-    rule, empty-selection = OK) documented; dispatcher `.cf-jobs` dirs are not a reap target.
+    rule) documented. **CF-307:** "empty-selection = OK" is gone — a surface that cannot be read is
+    `FAIL` exit 2, and a surface that was read and is empty says so (`audit surface read, 0 posture
+    docs`, exit 0), so the two are distinguishable. Dispatcher `.cf-jobs` dirs are not a reap target.
   - **F8-4** (new) — `reclaim_disk.py` is invoked by `project-node.sh:212` (active);
     `check_scan_scope.py` has no production caller (operator-invoked, optional).
 

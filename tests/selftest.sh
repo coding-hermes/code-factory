@@ -1332,6 +1332,15 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_reclaim.py" >/dev/null
 else
   say "  FAIL  reclaim contract"; fails=$((fails+1))
 fi
+# CF-307: the scan-scope gate must never print a green it did not measure. Its
+# surface resolution is exercised arm-by-arm (unreadable dir, dangling symlink,
+# root one level off, readable-but-empty, unscoped, scoped) in a python unit leg
+# so a regression to the old glob/exists resolution turns the suite red.
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_scan_scope.py" >/dev/null 2>&1; then
+  say "  PASS  scan scope names every surface outcome (unreadable != empty)"
+else
+  say "  FAIL  scan-scope surface resolution (CF-307)"; fails=$((fails+1))
+fi
 # CF-091 intra-family repo_url agreement: satellites of one family must carry the
 # primary's repo_url, not just any valid git root (two different-but-valid roots
 # both PASS per row, which is the defect this arm pins).
