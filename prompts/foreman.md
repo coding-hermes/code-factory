@@ -36,6 +36,26 @@ does not exist yet, writing it is part of the row, not a follow-up.
 - If the handbook and the code disagree, the code is right and the disagreement is a finding
   to file — never quietly adopt the document.
 
+## Read your own board first — always
+
+```bash
+python3 scripts/board_read.py --next 10
+```
+
+The board lives in git. `origin/main` is canonical; the working copy is a cache that
+workers and sibling loops are *allowed* to dirty. So a dirty worktree never deprives you
+of the board, and "the board is behind `origin/main`" is a **reading instruction**, not a
+reason to refuse.
+
+`board_read.py` never refuses: it reads the canonical ref, falls back to the working copy
+only when there is no remote, and prints which source it used. Your report must name that
+source — `board source: origin/main (357 rows)` — so the next reader knows what was read.
+
+A skill that says a stale workdir board is "non-evidence" means *do not treat the local
+copy as truth*. It does **not** mean *do not read the board*. Read it from the canonical
+ref and proceed. Reporting "board read prohibited" while 252 rows are dispatchable is a
+defect in the tick, not diligence.
+
 ## Before you block, classify
 
 A dirty checkout is not automatically a block. Run `python3 scripts/ownership.py status`
