@@ -1,39 +1,39 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="170.0mm" viewBox="0 0 680 344.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="344.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#111111"/></marker></defs><text x="668.0" y="22.0" font-size="9.50" font-weight="400" fill="#666666" text-anchor="end">time flows down · every step cites its chapter or contract</text>
-<rect x="67.0" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
-<text x="106.7" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">OPERATOR</text>
-<line x1="107" y1="70" x2="107" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
-<rect x="138.6" y="36.0" width="122.8" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
-<text x="200.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">GITHUB CREDENTIALS</text>
-<line x1="200" y1="70" x2="200" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
-<rect x="253.7" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
-<text x="293.3" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">NODE</text>
-<line x1="293" y1="70" x2="293" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
-<rect x="345.7" y="36.0" width="81.8" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
-<text x="386.7" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">SCOPE MINTER</text>
-<line x1="387" y1="70" x2="387" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
-<rect x="440.3" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
-<text x="480.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">DISPATCHER</text>
-<line x1="480" y1="70" x2="480" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
-<rect x="522.2" y="36.0" width="102.3" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
-<text x="573.3" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">INFERENCE PROXY</text>
-<line x1="573" y1="70" x2="573" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
-<text x="10.0" y="87.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">1</text>
-<line x1="106.7" y1="84.0" x2="200.0" y2="84.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
-<text x="300.0" y="76.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">mint from an 0600 App private key — JWT →</text>
-<text x="300.0" y="89.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">installation token (M7 §5)</text>
-<text x="10.0" y="133.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">2</text>
-<line x1="200.0" y1="130.0" x2="106.7" y2="130.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
-<text x="310.0" y="122.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="end">token written to a 0600 file; the value is never</text>
-<text x="310.0" y="135.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="end">printed (M7 §7)</text>
-<text x="10.0" y="179.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">3</text>
-<line x1="200.0" y1="176.0" x2="293.3" y2="176.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
-<text x="309.3" y="168.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">refresh --node installs auth/github.token on the</text>
-<text x="309.3" y="181.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">node (M7 §5)</text>
-<text x="10.0" y="225.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">4</text>
-<line x1="386.7" y1="222.0" x2="480.0" y2="222.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
-<text x="370.0" y="214.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">fleet-gh-scope mints the per-dispatch scoped token</text>
-<text x="370.0" y="227.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">(M11 §6)</text>
-<text x="10.0" y="271.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">5</text>
-<line x1="293.3" y1="268.0" x2="573.3" y2="268.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
-<text x="433.3" y="260.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="middle">node bearer checked against the token file —</text>
-<text x="433.3" y="273.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="middle">fail-closed admission (M12 §6)</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="88.5mm" viewBox="0 0 680 354.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="354.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
+<rect x="67.0" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="106.7" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">OPERATOR</text>
+<polyline points="106.7,70.0 106.7,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="138.6" y="36.0" width="122.8" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="200.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">GITHUB CREDENTIALS</text>
+<polyline points="200.0,70.0 200.0,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="253.7" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="293.3" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">NODE</text>
+<polyline points="293.3,70.0 293.3,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="345.7" y="36.0" width="81.8" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="386.7" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">SCOPE MINTER</text>
+<polyline points="386.7,70.0 386.7,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="440.3" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="480.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">DISPATCHER</text>
+<polyline points="480.0,70.0 480.0,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="522.2" y="36.0" width="102.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="573.3" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">INFERENCE PROXY</text>
+<polyline points="573.3,70.0 573.3,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="10.0" y="87.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
+<polyline points="106.7,84.0 200.0,84.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="300.0" y="76.0" font-size="9.50" fill="#000000" text-anchor="start">mint from an 0600 App private key — JWT →</text>
+<text x="300.0" y="89.0" font-size="9.50" fill="#000000" text-anchor="start">installation token (M7 §5)</text>
+<text x="10.0" y="133.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
+<polyline points="200.0,130.0 106.7,130.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="310.0" y="122.0" font-size="9.50" fill="#000000" text-anchor="end">token written to a 0600 file; the value is never</text>
+<text x="310.0" y="135.0" font-size="9.50" fill="#000000" text-anchor="end">printed (M7 §7)</text>
+<text x="10.0" y="179.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
+<polyline points="200.0,176.0 293.3,176.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="309.3" y="168.0" font-size="9.50" fill="#000000" text-anchor="start">refresh --node installs auth/github.token on the</text>
+<text x="309.3" y="181.0" font-size="9.50" fill="#000000" text-anchor="start">node (M7 §5)</text>
+<text x="10.0" y="225.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
+<polyline points="386.7,222.0 480.0,222.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="370.0" y="214.0" font-size="9.50" fill="#000000" text-anchor="start">fleet-gh-scope mints the per-dispatch scoped token</text>
+<text x="370.0" y="227.0" font-size="9.50" fill="#000000" text-anchor="start">(M11 §6)</text>
+<text x="10.0" y="271.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
+<polyline points="293.3,268.0 573.3,268.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="433.3" y="260.0" font-size="9.50" fill="#000000" text-anchor="middle">node bearer checked against the token file —</text>
+<text x="433.3" y="273.0" font-size="9.50" fill="#000000" text-anchor="middle">fail-closed admission (M12 §6)</text></g></svg>

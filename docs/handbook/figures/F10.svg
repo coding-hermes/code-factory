@@ -1,31 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="170.0mm" viewBox="0 0 680 298.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="298.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#111111"/></marker></defs><text x="668.0" y="22.0" font-size="9.50" font-weight="400" fill="#666666" text-anchor="end">time flows down · every step cites its chapter or contract</text>
-<rect x="67.0" y="36.0" width="98.0" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
-<text x="116.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">OPERATOR</text>
-<line x1="116" y1="70" x2="116" y2="282" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
-<rect x="179.0" y="36.0" width="98.0" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
-<text x="228.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">PROVISIONER</text>
-<line x1="228" y1="70" x2="228" y2="282" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
-<rect x="291.0" y="36.0" width="98.0" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
-<text x="340.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">BUNKER DAEMON</text>
-<line x1="340" y1="70" x2="340" y2="282" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
-<rect x="403.0" y="36.0" width="98.0" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
-<text x="452.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">SAFETY</text>
-<line x1="452" y1="70" x2="452" y2="282" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
-<rect x="515.0" y="36.0" width="98.0" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
-<text x="564.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">NODE</text>
-<line x1="564" y1="70" x2="564" y2="282" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
-<text x="10.0" y="87.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">1</text>
-<line x1="116.0" y1="84.0" x2="228.0" y2="84.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
-<text x="300.0" y="76.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">--destroy requires --yes and a named agent (M1 §5)</text>
-<text x="10.0" y="133.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">2</text>
-<line x1="228.0" y1="130.0" x2="340.0" y2="130.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
-<text x="356.0" y="122.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">container and per-agent home removed on the server</text>
-<text x="356.0" y="135.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">(M1 §5)</text>
-<text x="10.0" y="179.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">3</text>
-<line x1="228.0" y1="176.0" x2="452.0" y2="176.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
-<text x="340.0" y="168.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="middle">orphan homes/keys reaped against a live-registry</text>
-<text x="340.0" y="181.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="middle">check (M1 §10)</text>
-<text x="10.0" y="225.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">4</text>
-<line x1="228.0" y1="222.0" x2="564.0" y2="222.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
-<text x="396.0" y="214.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="middle">rebuild — the seed reapplies from the manifest,</text>
-<text x="396.0" y="227.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="middle">drift named per file (M1 §3 S4)</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="77.0mm" viewBox="0 0 680 308.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="308.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
+<rect x="67.0" y="36.0" width="98.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="116.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">OPERATOR</text>
+<polyline points="116.0,70.0 116.0,288.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="179.0" y="36.0" width="98.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="228.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">PROVISIONER</text>
+<polyline points="228.0,70.0 228.0,288.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="291.0" y="36.0" width="98.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="340.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">BUNKER DAEMON</text>
+<polyline points="340.0,70.0 340.0,288.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="403.0" y="36.0" width="98.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="452.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">SAFETY</text>
+<polyline points="452.0,70.0 452.0,288.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="515.0" y="36.0" width="98.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="564.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">NODE</text>
+<polyline points="564.0,70.0 564.0,288.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="10.0" y="87.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
+<polyline points="116.0,84.0 228.0,84.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="300.0" y="76.0" font-size="9.50" fill="#000000" text-anchor="start">--destroy requires --yes and a named agent (M1 §5)</text>
+<text x="10.0" y="133.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
+<polyline points="228.0,130.0 340.0,130.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="356.0" y="122.0" font-size="9.50" fill="#000000" text-anchor="start">container and per-agent home removed on the server</text>
+<text x="356.0" y="135.0" font-size="9.50" fill="#000000" text-anchor="start">(M1 §5)</text>
+<text x="10.0" y="179.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
+<polyline points="228.0,176.0 452.0,176.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="340.0" y="168.0" font-size="9.50" fill="#000000" text-anchor="middle">orphan homes/keys reaped against a live-registry</text>
+<text x="340.0" y="181.0" font-size="9.50" fill="#000000" text-anchor="middle">check (M1 §10)</text>
+<text x="10.0" y="225.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
+<polyline points="228.0,222.0 564.0,222.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="396.0" y="214.0" font-size="9.50" fill="#000000" text-anchor="middle">rebuild — the seed reapplies from the manifest,</text>
+<text x="396.0" y="227.0" font-size="9.50" fill="#000000" text-anchor="middle">drift named per file (M1 §3 S4)</text></g></svg>

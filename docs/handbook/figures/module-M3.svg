@@ -1,19 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="170.0mm" viewBox="0 0 680 542.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="542.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#111111"/></marker></defs><text x="24.0" y="38.0" font-size="17.00" font-weight="700" fill="#111111" text-anchor="start">M3 — REPOSITORY</text>
-<text x="24.0" y="60.0" font-size="9.50" font-weight="400" fill="#555555" text-anchor="start">the node has the right tree, and work can leave it (M3 §2)</text>
-<rect x="265.0" y="172.0" width="150.0" height="84.0" fill="#ffffff" stroke="#111111" stroke-width="2.2"/>
-<text x="340.0" y="192.0" font-size="11.00" font-weight="400" fill="#666666" text-anchor="middle">M3</text>
-<text x="340.0" y="212.0" font-size="13.00" font-weight="700" fill="#111111" text-anchor="middle">REPOSITORY</text>
-<text x="340.0" y="232.0" font-size="9.50" font-weight="400" fill="#555555" text-anchor="middle">LANDER, COMMIT GATE</text>
-<text x="20.0" y="158.0" font-size="9.50" font-weight="700" fill="#666666" text-anchor="start">INPUTS — upstream contracts</text>
-<rect x="20.0" y="172.0" width="210.0" height="44.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
-<text x="30.0" y="190.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">no cross-system contract</text>
-<text x="30.0" y="205.0" font-size="9.50" font-weight="400" fill="#999999" text-anchor="start">none in Part IV or the chapter&#x27;s §6</text>
-<text x="450.0" y="158.0" font-size="9.50" font-weight="700" fill="#666666" text-anchor="start">OUTPUTS — downstream contracts</text>
-<line x1="417.0" y1="206.0" x2="450.0" y2="197.0" stroke="#555555" stroke-width="1.8" stroke-dasharray="2 5" marker-end="url(#ar)"/>
-<rect x="450.0" y="172.0" width="210.0" height="50.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
-<text x="460.0" y="188.0" font-size="9.50" font-weight="700" fill="#555555" text-anchor="start">CT-12 · M3 → COMMIT GATE  [UNVERIFIED]</text>
-<text x="460.0" y="202.0" font-size="9.50" font-weight="400" fill="#555555" text-anchor="start">staged diff</text>
-<text x="24.0" y="306.0" font-size="9.50" font-weight="700" fill="#666666" text-anchor="start">FLOWS THIS MODULE PARTICIPATES IN</text>
-<text x="24.0" y="328.0" font-size="9.50" font-weight="400" fill="#111111" text-anchor="start">F5 LANDING — How does work reach main?</text>
-<text x="24.0" y="368.0" font-size="9.50" font-weight="400" fill="#111111" text-anchor="start">F9 DEGRADATION — A dependency is gone — what does the system do?</text>
-<g id="legend"><rect x="436" y="42" width="250" height="107" fill="#ffffff" stroke="#bbbbbb" stroke-width="1"/><text x="448" y="56" font-size="9.5" font-weight="700" fill="#111111">contract state — line style + ink</text><line x1="448" y1="69" x2="496" y2="69" stroke="#14532d" stroke-width="3.5"/><text x="506" y="72" font-size="9" fill="#14532d">PROVEN</text><line x1="448" y1="85" x2="496" y2="85" stroke="#8a5200" stroke-width="3.5" stroke-dasharray="9 6"/><text x="506" y="88" font-size="9" fill="#8a5200">PARTIAL</text><line x1="448" y1="101" x2="496" y2="101" stroke="#a11d1d" stroke-width="3.5" stroke-dasharray="9 6"/><text x="506" y="105" font-size="9" fill="#a11d1d">BROKEN</text><line x1="448" y1="117" x2="496" y2="117" stroke="#a11d1d" stroke-width="3.5" stroke-dasharray="2 5"/><text x="506" y="121" font-size="9" fill="#a11d1d">MISSING</text><line x1="448" y1="133" x2="496" y2="133" stroke="#555555" stroke-width="3.5" stroke-dasharray="2 5"/><text x="506" y="137" font-size="9" fill="#555555">UNVERIFIED</text></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="140.5mm" viewBox="0 0 680 562.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="562.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="24.0" y="38.0" font-size="17.00" fill="#000000" text-anchor="start">M3 — REPOSITORY</text>
+<text x="24.0" y="60.0" font-size="9.50" fill="#000000" text-anchor="start">the node has the right tree, and work can leave it (M3 §2)</text>
+<rect x="265.0" y="172.0" width="150.0" height="84.0" fill="#ffffff" stroke="#000000" stroke-width="2.2"/>
+<text x="340.0" y="192.0" font-size="11.00" fill="#000000" text-anchor="middle">M3</text>
+<text x="340.0" y="212.0" font-size="13.00" fill="#000000" text-anchor="middle">REPOSITORY</text>
+<text x="340.0" y="232.0" font-size="8.40" fill="#000000" text-anchor="middle">LANDER, COMMIT GATE</text>
+<text x="20.0" y="158.0" font-size="8.40" fill="#000000" text-anchor="start">INPUTS — UPSTREAM CONTRACTS</text>
+<rect x="20.0" y="172.0" width="210.0" height="44.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="30.0" y="190.0" font-size="9.50" fill="#000000" text-anchor="start">no cross-system contract</text>
+<text x="30.0" y="205.0" font-size="8.40" fill="#000000" text-anchor="start">none in Part IV or the chapter&#x27;s §6</text>
+<text x="450.0" y="158.0" font-size="8.40" fill="#000000" text-anchor="start">OUTPUTS — DOWNSTREAM CONTRACTS</text>
+<polyline points="417.0,206.0 450.0,197.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+<rect x="450.0" y="172.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="460.0" y="188.0" font-size="8.40" fill="#000000" text-anchor="start">CT-12 · M3 -&gt; COMMIT GATE  [UNVERIFIED]</text>
+<text x="460.0" y="202.0" font-size="8.40" fill="#000000" text-anchor="start">staged diff</text>
+<text x="24.0" y="306.0" font-size="8.40" fill="#000000" text-anchor="start">FLOWS THIS MODULE PARTICIPATES IN</text>
+<text x="24.0" y="328.0" font-size="9.50" fill="#000000" text-anchor="start">F5 LANDING — How does work reach main?</text>
+<text x="24.0" y="368.0" font-size="9.50" fill="#000000" text-anchor="start">F9 DEGRADATION — A dependency is gone — what does the system do?</text>
+<text x="430.0" y="44.0" font-size="8.40" fill="#000000" text-anchor="start">CONTRACT STATE — LINE STYLE</text>
+<polyline points="430.0,57.0 464.0,57.0" fill="none" stroke="#000000" stroke-width="1.4"/>
+<text x="472.0" y="60.0" font-size="8.40" fill="#000000" text-anchor="start">solid — exercised with evidence</text>
+<polyline points="430.0,73.0 464.0,73.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="12 7"/>
+<text x="472.0" y="75.9" font-size="8.40" fill="#000000" text-anchor="start">long dash — holds in part</text>
+<polyline points="430.0,88.9 464.0,88.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="4 3"/>
+<text x="472.0" y="91.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
+<polyline points="430.0,104.9 464.0,104.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+<text x="472.0" y="107.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
+<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>

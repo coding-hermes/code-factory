@@ -1,69 +1,80 @@
 #!/usr/bin/env python3
-"""build_book.py — build the handbook from BOOK.yaml in the ONE house style.
+"""build_book.py — build the handbook from BOOK.yaml, rendered through the
+nasa-handbook skill's OWN machinery.
 
-The nasa-handbook root design is a page genre carried by sheet_style.py: cover, dochead,
-stamped folio, print. A builder that writes its own CSS produces the costume the skill
-names as a defect ("three ad-hoc stylesheets produce an artifact measurably worse than the
-document it is meant to join"). This builder imports the house style and adds nothing:
+The skill ships the page genre as a template (assets/template.html: complete CSS,
+@font-face for Routed Gothic / Letter Gothic / Iowan-or-Georgia serif, page skeleton)
+plus fonts, a renderer (render.sh: PDF + fit line, exit 3 on overflow) and a checker
+(check.py: page size, black-and-white only, fonts, 300 dpi tiles). The earlier
+pipeline hand-rolled its CSS in sheet_style.py and caught overflow only in its own
+gate — the skill names exactly that as the defect. This builder now:
 
-  - handbook_lint first: markdown debris (stray backslash-newline, unbalanced backticks,
-    markdown pipes inside code spans, stray quote escapes) fails the build before render
-  - cover via sheet_style.cover()
-  - a dochead on EVERY rendered page: content that flows past one sheet is split at print
-    time by a pagination script Chrome runs before printing — blocks move to a new .page
-    div with a cloned running head, tall tables split between rows with the header
-    repeated and a "table continues" placard — so no page exists that content merely
-    flowed onto
-  - folio applied AFTER print via sheet_style.stamp()  (Chrome has no margin-box folio)
-  - gap sheets that name what is missing, in black bold per genre
-  - after print: every non-cover page must carry the running head, and body blocks must
-    end above the footer band (<=276 mm of 297)
+  - takes the CSS from the skill's template, verbatim (scripts/book_style.py)
+  - copies the skill's fonts next to the built page; @font-face registers them
+  - keeps the per-sheet assembly: lint -> cover -> running head on EVERY page ->
+    forward-assembly pagination (blocks that cross the budget move to a new .page
+    div with a cloned head, thumb tab and dated foot; tables split between rows
+    with the header repeated and a "table continues" placard) -> print ->
+    folio stamped after print in LETTER GOTHIC
+  - wires the skill's own gates as build steps: the render.sh-style fit line
+    (exit 3 on overflow) and check.py (page size, black/white only, font census,
+    300 dpi tiles), then the book's own furniture + fit gates
 
-    python3 scripts/build_book.py --out /home/kara/code-factory-reports/handbook/CF2A-01-w1.pdf
+    python3 scripts/build_book.py --out /home/kara/code-factory-reports/handbook/CF2A-01-w9.pdf
 """
 from __future__ import annotations
 
 import argparse
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 import time
 
+import fitz  # pymupdf  # noqa: E402
 import yaml
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-import fitz  # pymupdf — also sheet_style's renderer-side dependency  # noqa: E402
 from gen_nasa_handbook import inline, md_blocks  # noqa: E402
-from sheet_style import CSS_PORTRAIT as CSS, cover, dochead, print_pdf, stamp  # noqa: E402
+import book_style as bs  # noqa: E402
 import handbook_lint  # noqa: E402
 
 ROOT = HERE.parent
 HB = ROOT / "docs/handbook"
 BOOK = HB / "BOOK.yaml"
+SKILL = pathlib.Path("/home/kara/.hermes/skills/nasa-handbook")
+NASA_CHECK = SKILL / "scripts/check.py"
 IMG_RE = re.compile(r"^!\[([^\]]*)\]\((figures/[^)]+\.svg)\)\s*$")
 
 # The fit gate: body blocks must end above the footer band (275 mm guidance, ~0.35 mm
-# PDF block rounding -> 276).
+# PDF block rounding -> 276). The template's own data-fit check is the finer gate.
 FIT_LIMIT_MM = 276
 
-EXTRA_CSS = (
-    "table{border-collapse:collapse;width:100%}td,th{border:1pt solid #000;padding:4px 8px;"
-    "font-size:12px;text-align:left}"
-    ".gap{color:#000;font-weight:700}"
-    ".tbl-cont{font-family:'Helvetica Neue',Arial,sans-serif;font-size:6.5pt;"
-    "letter-spacing:0.14em;text-transform:uppercase;color:#444;margin:0 0 1mm}"
-    # a table whose columns' min-content sums wider than the page makes Chrome
-    # shrink-to-fit the WHOLE document (body type printed at 2/3 spec size);
-    # anywhere-breaking inside cells is what keeps min-content <= column width
-    "td,th,p,li,code,pre{overflow-wrap:anywhere}"
-    # pin layout to the exact print content width (A4 minus the 16 mm side margins):
-    # the pagination script measures heights in the screen viewport, which must equal
-    # the print layout or every sheet overflows and reflows at print time
-    "body{width:178mm}"
-    "img{max-width:100%}"
-)
+# Figure fit = the generator's model, exactly: scale = min(1, 170/w, 250/h).
+FIG_W_MM, FIG_H_MM = 170.0, 250.0
+
+
+def svg_fit(path: pathlib.Path) -> str:
+    """Constrain a figure by BOTH dimensions (skill: a figure sized only by height
+    clips silently at print width). The generator emits true-aspect mm attrs and
+    its floor gate models this same rule."""
+    head = path.read_text()[:600]
+    w = re.search(r'width="([\d.]+)mm"', head)
+    h = re.search(r'height="([\d.]+)mm"', head)
+    if not (w and h):
+        return f'<img style="width:{FIG_W_MM}mm" src="file://{path}"/>'
+    w_mm, h_mm = float(w.group(1)), float(h.group(1))
+    scale = min(1.0, FIG_W_MM / w_mm, FIG_H_MM / h_mm)
+    return f'<img style="width:{w_mm * scale:.1f}mm" src="file://{path}"/>'
+
+
+def pdf_page_count(pdf_path) -> int:
+    d = fitz.open(pdf_path)
+    n = d.page_count
+    d.close()
+    return n
 
 # Runs in Chrome before --print-to-pdf writes. Splits any .page div taller than one
 # page's content area by FORWARD assembly: walk the content in reading order, move the
@@ -74,13 +85,37 @@ EXTRA_CSS = (
 # when no body row fits, so no sheet ever ends on a header with zero rows. One render,
 # no measurement round-trips.
 PAGINATE_JS = """
-(function () {
-  var MAX = 920; // px; A4 content area is ~979 px (259 mm at 96 dpi) — budget kept
-                 // under the print-time reflow so the fit gate (276 mm) never trips
+document.fonts.ready.then(function () {
+  // The template's page is a fixed 210x297 mm div with overflow hidden; content must
+  // end above the .foot. Budget = footer top minus a 24 px (6 mm) safety margin —
+  // measured, not guessed, so print-time reflow cannot surprise the fit gate.
+  // (The cover is a .page with no foot — measure the first page that has one.)
+  var pagesAll = document.querySelectorAll('.page');
+  var page0 = null, foot0 = null;
+  for (var p0 = 0; p0 < pagesAll.length; p0++) {
+    var f0 = pagesAll[p0].querySelector('.foot');
+    if (f0) { page0 = pagesAll[p0]; foot0 = f0; break; }
+  }
+  var MAX = Math.floor(foot0.getBoundingClientRect().top
+                       - page0.getBoundingClientRect().top) - 24;
   function h(el) { return el.scrollHeight; }
+  // a .page div is FIXED at 297 mm (overflow hidden), so the page's own scrollHeight
+  // is constant — measure the CONTENT children's reach, not the sheet's
+  function contentBottom(pg) {
+    var m2 = 0;
+    contentKids(pg).forEach(function (k2) {
+      var b2 = k2.getBoundingClientRect().bottom - pg.getBoundingClientRect().top;
+      if (b2 > m2) m2 = b2;
+    });
+    return m2;
+  }
   function cloneHead(pg) {
-    var hd = pg.querySelector('.dochead');
+    var hd = pg.querySelector('.head');
     return hd ? hd.cloneNode(true) : null;
+  }
+  function cloneFoot(pg) {
+    var ft = pg.querySelector('.foot');
+    return ft ? ft.cloneNode(true) : null;
   }
   function makePage(pg) {
     var np = document.createElement('div');
@@ -90,6 +125,9 @@ PAGINATE_JS = """
     // the thumb tab travels with the sheet: every page of a part carries it
     var tab = pg.querySelector('.tab');
     if (tab) np.appendChild(tab.cloneNode(true));
+    // the dated foot travels with the sheet (its .sub names the section)
+    var ft = cloneFoot(pg);
+    if (ft) np.appendChild(ft);
     return np;
   }
   // every continuation opened, so a post-pagination pass can print real unit
@@ -98,7 +136,8 @@ PAGINATE_JS = """
   function contentKids(el) {
     var a = [];
     for (var c = el.firstChild; c; c = c.nextSibling)
-      if (c.nodeType === 1 && !(c.classList && c.classList.contains('dochead'))) a.push(c);
+      if (c.nodeType === 1 && c.classList && !c.classList.contains('head')
+          && !c.classList.contains('foot') && !c.classList.contains('tab')) a.push(c);
     return a;
   }
 
@@ -189,7 +228,7 @@ PAGINATE_JS = """
     var tail = pg; // last page of the chain so far — every new page inserts after it
     var cur = pg;
     var guard = 0;
-    while (h(cur) > MAX && guard++ < 1000) {
+    while (contentBottom(cur) > MAX && guard++ < 1000) {
       var kids = contentKids(cur);
       // first cut point in reading order: the first kid that crosses the budget —
       // except a table, which is cut at its first non-fitting ROW (only a table that
@@ -268,7 +307,7 @@ PAGINATE_JS = """
             var freshPage = !contentKids(target).length;
             if (un.kid !== lastKid) { tb = openCont(target, un.kid, un.idx); lastKid = un.kid; }
             tb.appendChild(un.row);
-            if (h(target) <= MAX) { placedRow = true; break; }
+            if (contentBottom(target) <= MAX) { placedRow = true; break; }
             if (freshPage) break; // a row taller than any sheet — accept
             tb.removeChild(un.row);
             dismantleCont();
@@ -285,7 +324,7 @@ PAGINATE_JS = """
             var freshPage2 = !contentKids(target).length;
             target.appendChild(kd);
             lastKid = null;
-            if (h(target) <= MAX) { placedKid = true; break; }
+            if (contentBottom(target) <= MAX) { placedKid = true; break; }
             if (!bigTable) {
               if (freshPage2) { placedKid = true; break; } // monster block — accept
               target.removeChild(kd);
@@ -303,7 +342,7 @@ PAGINATE_JS = """
                   var freshPage3 = !contentKids(target).length;
                   if (kd !== lastKid) { tb = openCont(target, kd, ri - bodyStart); lastKid = kd; }
                   tb.appendChild(rrow);
-                  if (h(target) <= MAX) { placedR = true; break; }
+                  if (contentBottom(target) <= MAX) { placedR = true; break; }
                   if (freshPage3) break; // monster row — accept
                   tb.removeChild(rrow);
                   dismantleCont();
@@ -329,7 +368,7 @@ PAGINATE_JS = """
   for (var i = 0; i < pages.length; i++) {
     var np = splitPage(pages[i]);
     var g = 0;
-    while (np && h(np) > MAX && g++ < 10) np = splitPage(np);
+    while (np && contentBottom(np) > MAX && g++ < 10) np = splitPage(np);
   }
 
   // --- continuation placards: real unit counts ---------------------------------
@@ -364,7 +403,27 @@ PAGINATE_JS = """
       L.plac.textContent = label + ' \u2014 units ' + a + '\u2013' + b + ' of ' + total;
     });
   });
-})();
+
+  // --- the template's fit check, over EVERY page --------------------------------
+  // .page hides overflow, so an overfull page fails silently without this.
+  // render.sh reads <html data-fit> and exits 3 on OVERFLOW; build_book.py gates
+  // the same string.
+  var worst = Infinity;
+  Array.prototype.slice.call(document.querySelectorAll('.page')).forEach(function (page) {
+    var foot = page.querySelector('.foot');
+    if (!foot) return;
+    var bottom = 0;
+    Array.prototype.slice.call(page.children).forEach(function (el) {
+      if (el === foot || el.classList.contains('tab') || el.classList.contains('head')) return;
+      bottom = Math.max(bottom, el.getBoundingClientRect().bottom);
+    });
+    var free = (foot.getBoundingClientRect().top - bottom) * 25.4 / 96;
+    if (free < worst) worst = free;
+  });
+  document.documentElement.dataset.fit = worst >= 0
+    ? 'ok, ' + worst.toFixed(1) + ' mm free above the footer (worst page)'
+    : 'OVERFLOW by ' + (-worst).toFixed(1) + ' mm';
+});
 """
 
 
@@ -566,45 +625,46 @@ def main() -> int:
 
     # The .page container is what makes overflow measurable (skill: without it the fit
     # script no-ops and every page is silently unconstrained). The cover is its own page
-    # div — a cover carries no dochead. The pagination script bounds every sheet so every
-    # rendered page is a real .page div carrying its running head.
+    # div — a cover carries no dochead, no tab, no foot. The pagination script bounds
+    # every sheet so every rendered page is a real .page div carrying head + tab + foot.
     title = doc["title"].upper()
-    cover_html = cover(doc_id, doc["title"], doc["subtitle"],
-                       (f"ISSUE {today}", doc["classification"], doc["scope"].strip()))
-    pages_html = (f'<div class="page">{cover_html}</div>'
-                  + "".join(f'<div class="page">{dochead(doc_id, s, title=title)}{t}'
-                            f'{chr(10).join(b)}</div>' for s, b, t in sheets))
-    html_doc = (f"<!doctype html><html><head><meta charset='utf-8'><style>{CSS}"
-                f"{EXTRA_CSS}</style></head><body>{pages_html}"
+    title_line = f"{title} — SYSTEM HANDBOOK"
+    cover_html = bs.cover(doc_id, title, doc["subtitle"],
+                          (f"ISSUE {today}", doc["classification"], doc["scope"].strip()))
+    pages_html = f'<div class="page">{cover_html}</div>'
+    for s, b, t in sheets:
+        pages_html += (f'<div class="page">{bs.head_html(doc_id, title_line, s)}{t}'
+                       f'{chr(10).join(b)}{bs.foot_html(s, today)}</div>')
+    html_doc = (f"<!doctype html><html><head><meta charset='utf-8'><style>{bs.load_css()}"
+                f"{bs.BOOK_CSS}</style></head><body>{pages_html}"
                 f"<script>{PAGINATE_JS}</script></body></html>")
 
-    out_html = pathlib.Path(a.out).with_suffix(".html")
+    out_path = pathlib.Path(a.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_html = out_path.with_suffix(".html")
     out_html.write_text(html_doc)
-    print_pdf(out_html, a.out)
+    # the template's @font-face urls are relative (fonts/...) — copy the skill's
+    # licensed fonts next to the built page
+    font_dir = out_path.parent / "fonts"
+    font_dir.mkdir(exist_ok=True)
+    for f in bs.FONTS.iterdir():
+        shutil.copy2(f, font_dir / f.name)
 
-    # per-page subsystem name for the footer: each rendered page's own running head
-    # names the part/section it belongs to (continuations clone it). The head is
-    # letter-spaced, so extraction can inject spaces between characters — match by
-    # whitespace-stripped section text against the builder's own sheet sections.
-    probe = fitz.open(a.out)
-    sec_compact = [(s, re.sub(r"\s+", "", s)) for s, _, _ in sheets]
-    # longest section name first: a short section that is a prefix of a longer one
-    # (e.g. "PART III" vs "PART III · FIGURE 3.5") must not win the suffix match
-    sec_compact.sort(key=lambda t: -len(t[1]))
-    subsys: list[str] = []
-    for i, pg in enumerate(probe, 1):
-        name = ""
-        if i > 1:
-            top = re.sub(r"\s+", "", " ".join(
-                b[4] for b in pg.get_text("blocks") if b[1] < 80))
-            for s, comp in sec_compact:
-                if comp and comp in top:
-                    name = s
-                    break
-        subsys.append(name)
-    probe.close()
+    bs.print_pdf(out_html, a.out)
 
-    stamp(a.out, doc_id, right=f"issue {today}", footer=f"change {today}", subsys=subsys)
+    # --- the skill's own gates -------------------------------------------------
+    # render.sh-style: read <html data-fit> (the template's fit check over every
+    # page) and fail LOUDLY on overflow — .page { overflow: hidden } hides it otherwise.
+    fit, npages = bs.fit_line(out_html)
+    print(f"fit: {fit}")
+    if fit.startswith("OVERFLOW"):
+        print("page overflows: cut words or a table row, don't shrink type")
+        return 3
+    if npages != pdf_page_count(a.out):
+        print(f"PAGE FAIL: {npages} .page divs but {pdf_page_count(a.out)} PDF pages")
+        return 2
+
+    bs.stamp(a.out, doc_id, right=f"issue {today}")
 
     # Furniture check: every page after the cover must carry the running head in its top
     # band (the stamp's doc number sits in the footer band and does not count) — a page
@@ -645,7 +705,7 @@ def main() -> int:
         w = pg.rect.width
         near_edge = [d for d in pg.get_drawings()
                      if d.get("fill") == (0, 0, 0) and d["rect"].x1 > w - 2.5
-                     and (d["rect"].x1 - d["rect"].x0) < 20]
+                     and (d["rect"].x1 - d["rect"].x0) < 26]  # the skill's tab: 8.5 mm
         if not near_edge:
             no_tab.append(i)
         for d in pg.get_drawings():
@@ -669,10 +729,32 @@ def main() -> int:
     if grey:
         print(f"FURNITURE FAIL: {len(grey)} #999999 stroke/fill drawing(s), first: {grey[0]}")
         return 2
-    print(f"OK {a.out} ({pathlib.Path(a.out).stat().st_size} bytes) · {pdf.page_count} pages · "
-          f"dochead + folio on every page · fit clean · "
+
+    # --- the skill's check.py: page size, black-and-white only, font census ------
+    # tiles land in the 24h-pruned scratch: they are a review artifact, not a deliverable
+    tiles = pathlib.Path("/home/kara/.hermes/cache/scratch") / f"tiles-{out_path.stem}"
+    r = subprocess.run(
+        [sys.executable, str(NASA_CHECK), a.out, "--pages", str(pdf.page_count),
+         "--out", str(tiles)],
+        capture_output=True, text=True, timeout=600,
+    )
+    print(r.stdout[-3000:] if r.stdout else "", end="")
+    if r.returncode != 0:
+        print(f"CHECK FAIL: nasa check.py exited {r.returncode}")
+        return 2
+
+    # font census: the genre needs the skill's faces actually IN the file
+    census = bs.font_census(a.out)
+    have_rg = any("RoutedGothic" in f.replace(" ", "") for f in census)
+    have_lg = any("LetterGothic" in f.replace(" ", "") for f in census)
+    if not (have_rg and have_lg):
+        print(f"FONT FAIL: Routed Gothic and Letter Gothic must embed; got {sorted(census)}")
+        return 2
+
+    print(f"OK {a.out} ({out_path.stat().st_size} bytes) · {pdf.page_count} pages · "
+          f"head + tab + dated foot on every page · fit clean ({fit}) · "
           f"{len(table_codes)} table codes · {placards} continuation unit counts · "
-          f"{notices} notice labels · tabs on all pages · zero #999999 strokes")
+          f"{notices} notice labels · check.py green · fonts: {sorted(census)}")
     return 0
 
 

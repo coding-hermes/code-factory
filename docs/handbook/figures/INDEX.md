@@ -1,7 +1,8 @@
 # Figures
 
 Generated from `docs/SYSTEM-MODEL.yaml` by `scripts/gen_handbook_figures.py`.
-Every label is verified >= 2.05 mm at the builder's print scale.
+Genre: nasa-handbook line drafting — black ink, line-style state, Routed Gothic labels.
+Every label is verified >= 2.05 mm at the builder's print scale; ink is black/white only.
 
 | figure | what it answers |
 |---|---|
