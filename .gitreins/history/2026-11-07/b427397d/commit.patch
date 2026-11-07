@@ -1,0 +1,192 @@
+commit 66598c9d33a1927cff06ad89f5c9f35418cebfdd
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Sat Nov 7 14:21:48 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Sat Nov 7 14:21:48 2026 -0500
+
+    fix(lane_target): repo-url rejects a home-rooted repo (CF-097)
+    
+    `repo-url` and `verify` probe the same kind of root but disagreed about what a
+    valid root is: `verify_local` applies the `not_home_repo` check and rejects a
+    path whose git top level IS $HOME (exit 4), while `check_repo_url` only compared
+    the top level with the target and accepted that same path (exit 0).
+    
+    Measured at the pre-fix tip with HOME set to an initialized git repo:
+      verify   <HOME> -> rc 4, `"check": "not_home_repo"`, `"ok": false`
+      repo-url <HOME> -> rc 0, `PASS repo_url '<HOME>' -- root '<HOME>' HEAD <sha>`
+    After the change both arms exit 4 for that path, and repo-url names the condition:
+    `FAIL repo_url '<HOME>' -- not_home_repo: git top level is the home directory
+    '<HOME>'`.
+    
+    `check_repo_url` now resolves the home exactly as `verify_local` resolves its
+    default (`os.path.realpath(os.path.expanduser("~"))`) and raises RuntimeError,
+    which `repo_urls()` already maps to exit 4, so no new exit code is introduced.
+    The verify/workdir arm, the scan path and remote repo_urls are untouched: an
+    ordinary non-home git root still PASSes exactly as before.
+    
+    Tests: a new `RepoURLHomeRoot` class drives both arms with HOME pointed inside
+    the fixture -- the home-rooted repo is rejected by repo-url as well as by verify
+    naming `not_home_repo`, a non-home real git root is still accepted, and a
+    subdirectory of the home repo is still reported as the ordinary top-level
+    mismatch rather than the home condition. The class is red against the pre-fix
+    file (one failure at the repo-url exit-code assertion), so it pins the defect
+    rather than restating the fix.
+    
+    tests/selftest.sh section 19 gains the matching arm plus a red control that runs
+    the pre-fix revision from history: against a32f234 the arm prints
+    `FAIL  repo-url accepted a home-rooted repo -- missing not_home_repo check
+    (verify exit 4, repo-url exit 0)`, and the control prints the pre-fix acceptance.
+    
+    Gates: python3 -B tests/test_lane_target.py (43 tests, OK); bash tests/selftest.sh
+    (SELFTEST: PASS); bash scripts/boardctl validate (RESULT: OK (7 warning(s)));
+    bash docs/audits/cf198-section-mapping.sh (arms_plan=61 arms_tree=61, RESULT: OK).
+    
+    Addresses CF-097
+---
+ scripts/lane_target.py    |  9 +++++++
+ tests/selftest.sh         | 40 +++++++++++++++++++++++++++++++
+ tests/test_lane_target.py | 60 +++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 109 insertions(+)
+
+diff --git a/scripts/lane_target.py b/scripts/lane_target.py
+index a56e0fd..630c00b 100644
+--- a/scripts/lane_target.py
++++ b/scripts/lane_target.py
+@@ -497,6 +497,15 @@ def check_repo_url(raw: str, allow_remote: bool) -> str:
+         raise RuntimeError(f"not a git root (git: {top['value']})")
+     if os.path.realpath(top["value"]) != root:
+         raise RuntimeError(f"not a git root (git: top level is {top['value']!r})")
++    # CF-097: the same stand-in defect the workdir arm rejects. A path whose git top
++    # level IS $HOME is a home meta-repo, not a project checkout, so `repo-url` and
++    # `verify` must agree about it. The home is resolved exactly as verify_local()
++    # resolves its default (`~`, i.e. $HOME), so both arms name the same directory.
++    home_real = os.path.realpath(os.path.expanduser("~"))
++    if root == home_real:
++        raise RuntimeError(
++            f"not_home_repo: git top level is the home directory {home_real!r}"
++        )
+     head = _git(root, "rev-parse", "--verify", "HEAD")
+     if head.returncode:
+         raise RuntimeError(f"cannot read HEAD (git: {head.stderr.strip()})")
+diff --git a/tests/selftest.sh b/tests/selftest.sh
+index f91884e..05a8019 100755
+--- a/tests/selftest.sh
++++ b/tests/selftest.sh
+@@ -1217,6 +1217,46 @@ else
+   say "  FAIL  repo_url guard fixture (accepted exit $accepted_rc, rejected exit $rejected_rc)"
+   fails=$((fails+1))
+ fi
++# CF-097: `repo-url` and `verify` probe the same kind of root, so a path whose git
++# top level IS $HOME must be refused by repo-url with the reason verify already gives
++# (`not_home_repo`, exit 4) instead of being reported as a valid root. HOME is set to
++# the fixture, so this measures the same directory both arms resolve and never the
++# host's real home.
++home_root="$tmpd/home"
++mkdir -p "$home_root"
++git init -q -b main "$home_root"
++git -C "$home_root" -c user.email=fixture@example.invalid -c user.name=fixture \
++  commit -qm fixture --allow-empty
++home_real=$(cd "$home_root" && pwd -P)
++home_head=$(git -C "$home_real" rev-parse HEAD)
++home_verify=$(env HOME="$home_real" python3 -B "$HERE/scripts/lane_target.py" verify "$home_real" 2>&1); home_verify_rc=$?
++home_refused=$(env HOME="$home_real" python3 -B "$HERE/scripts/lane_target.py" repo-url "$home_real" 2>&1); home_refused_rc=$?
++if [ "$home_verify_rc" -eq 4 ] && [ "$home_refused_rc" -eq 4 ] \
++  && printf '%s\n' "$home_verify" | grep -A1 -F '"check": "not_home_repo"' | grep -Fq '"ok": false' \
++  && printf '%s\n' "$home_refused" | grep -Fxq "FAIL repo_url '$home_real' — not_home_repo: git top level is the home directory '$home_real'" \
++  && printf '%s\n' "$home_refused" | grep -Fxq 'repo_url: 1 rejected, 0 accepted'; then
++  say "  PASS  repo-url refuses the home-rooted repo verify refuses (exit 4, not_home_repo)"
++else
++  say "  FAIL  repo-url accepted a home-rooted repo — missing not_home_repo check (verify exit $home_verify_rc, repo-url exit $home_refused_rc)"
++  fails=$((fails+1))
++fi
++# ARM (red control): the same fixture against the revision this row was raised on
++# (a32f234), which carries no home check on the repo-url arm. It must report the home
++# root as an accepted root — pointed at the fixed script the control fails, so the arm
++# above discriminates rather than merely passing.
++if git -C "$HERE" show a32f234:scripts/lane_target.py > "$tmpd/lane_target_prefix.py" 2>/dev/null; then
++  prefix_out=$(env HOME="$home_real" python3 -B "$tmpd/lane_target_prefix.py" repo-url "$home_real" 2>&1); prefix_rc=$?
++  if [ "$prefix_rc" -eq 0 ] \
++    && printf '%s\n' "$prefix_out" | grep -Fxq "PASS repo_url '$home_real' — root '$home_real' HEAD $home_head" \
++    && ! printf '%s\n' "$prefix_out" | grep -q 'not_home_repo'; then
++    say "  PASS  pre-fix a32f234 accepts the home-rooted repo — the repo-url arm is falsifiable"
++  else
++    say "  FAIL  the pre-fix control did not reproduce the missing not_home_repo check (exit $prefix_rc)"
++    fails=$((fails+1))
++  fi
++else
++  say "  FAIL  pre-fix source unavailable (git show a32f234:scripts/lane_target.py)"; fails=$((fails+1))
++fi
+ rm -rf "$tmpd"
+ 
+ # CF-007 AC3: reclaim-before-refusal, using the shipped scripts in a local HOME.
+diff --git a/tests/test_lane_target.py b/tests/test_lane_target.py
+index aa2a8e7..69af04a 100644
+--- a/tests/test_lane_target.py
++++ b/tests/test_lane_target.py
+@@ -306,6 +306,66 @@ class RepoURL(unittest.TestCase):
+         self.assertIn("cannot classify target", out.stdout)
+ 
+ 
++class RepoURLHomeRoot(unittest.TestCase):
++    """CF-097: `repo-url` and `verify` must agree that a $HOME-rooted repo is no root.
++
++    Both arms are driven with HOME pointing INSIDE the fixture — the subprocess gets
++    `HOME=<fixture>` and `verify_local` gets the same directory as its `home` — so
++    neither leg reads the host's real home and the pair cannot pass by agreeing about
++    a directory this test never built.
++    """
++
++    def setUp(self):
++        self.root = tempfile.mkdtemp(prefix="lane-target-home-root-")
++        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
++        self.home = os.path.join(self.root, "home")
++        os.makedirs(self.home)
++        _git(self.home, "init", "-q", "-b", "main")
++        _git(self.home, "commit", "-q", "--allow-empty", "-m", "fixture")
++        self.home_real = os.path.realpath(self.home)
++
++    def run_check(self, *args):
++        return subprocess.run(
++            [sys.executable, "-B", str(lane_target.__file__), "repo-url", *args],
++            capture_output=True,
++            text=True,
++            env={**os.environ, "HOME": self.home_real},
++        )
++
++    def test_home_rooted_repo_rejected_by_both_arms(self):
++        verified = lane_target.verify_local(self.home_real, home=self.home_real)
++        self.assertFalse(verified["ok"])
++        checks = {c["check"]: c["ok"] for c in verified["checks"]}
++        self.assertFalse(checks["not_home_repo"])
++        out = self.run_check(self.home_real)
++        self.assertEqual(out.returncode, 4, out.stdout + out.stderr)
++        self.assertIn(
++            f"FAIL repo_url {self.home_real!r} — not_home_repo: git top level is "
++            f"the home directory {self.home_real!r}",
++            out.stdout,
++        )
++        self.assertIn("repo_url: 1 rejected, 0 accepted", out.stdout)
++        self.assertNotIn("PASS repo_url", out.stdout)
++
++    def test_non_home_root_still_accepted_under_fixture_home(self):
++        repo = fixture()["repo"]
++        head = lane_target._git(repo, "rev-parse", "HEAD").stdout.strip()
++        out = self.run_check(repo)
++        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
++        self.assertIn(f"PASS repo_url {repo!r} — root {repo!r} HEAD {head}", out.stdout)
++        self.assertIn("repo_url: 0 rejected, 1 accepted", out.stdout)
++
++    def test_subdirectory_of_home_repo_names_the_top_level_mismatch(self):
++        # Order matters: only a target that IS the home directory carries the
++        # not_home_repo reason; a path inside it is still the ordinary mismatch.
++        sub = os.path.join(self.home_real, "sub")
++        os.makedirs(sub)
++        out = self.run_check(sub)
++        self.assertEqual(out.returncode, 4, out.stdout + out.stderr)
++        self.assertIn(f"top level is {self.home_real!r}", out.stdout)
++        self.assertNotIn("not_home_repo", out.stdout)
++
++
+ def two_roots() -> dict[str, str]:
+     """Two real, different git roots for the CF-091 family-agreement tests."""
+     root = tempfile.mkdtemp(prefix="lane-family-")
