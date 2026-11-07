@@ -1,19 +1,40 @@
 # M0 — SHARED CONTRACT
 
+## 0. Set-wide chapter crosswalk (numbering prep)
+
+The chapters are filed under module ids M0–M12. Set-wide numbering (global §3.x) is applied
+at build time; the builder keys on this table. Local `## n.` section numbers below are
+per-module and are not global numbers.
+
+| Module id | Intended global chapter number |
+|---|---|
+| M0 | 3.1 |
+| M1 | 3.2 |
+| M2 | 3.3 |
+| M3 | 3.4 |
+| M4 | 3.5 |
+| M5 | 3.6 |
+| M6 | 3.7 |
+| M7 | 3.8 |
+| M8 | 3.9 |
+| M9 | 3.10 |
+| M10 | 3.11 |
+| M11 | 3.12 |
+| M12 | 3.13 |
+
 ## 1. Identity
 
 | Field | Value |
 |---|---|
 | Module name | SHARED CONTRACT (`scripts/lib.sh`) |
 | Path | `/home/kara/code-factory/scripts/lib.sh` |
-| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; `scripts/lib.sh` byte-identical since `47d68b4` — no file M0 cites changed in `08a2c8a..fbc19cb`) |
+| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; `scripts/lib.sh` byte-identical since `47d68b4` — no file M0 cites changed in `08a2c8a..fbc19cb`) |
 | Language / runtime | bash 5.3.9 (measured: `bash --version`); sourced, never executed |
 | Owner lane | code-factory (node-side + control-host shell) |
-| Status | **VERIFIED** — `lib.sh` (78 lines) read in full; every cited line re-verified this round |
+| Status | **VERIFIED** — `lib.sh` (78 lines) read in full; every cited line re-verified |
 
 The variable contract (`scripts/harness/harness-vars.sh`, 318 lines) is **not** part of M0.
-OUTLINE M0.S1 is the *shell* contract only; `harness-vars.sh` is M5.S5 (see §12). Round-2/round-3
-labelled both "S1" here; that double-ownership is corrected this round.
+OUTLINE M0.S1 is the *shell* contract only; `harness-vars.sh` is M5.S5 (see §12).
 
 ## 2. Purpose, authority and position
 
@@ -27,8 +48,7 @@ reads the directive, never spawns a harness, never touches the bus.
 **What breaks if this module is absent.** Every installer and checker fails on undefined
 `ok`/`bad`/`FAILED` before doing anything. Seventeen shell scripts source `lib.sh` — 11 direct
 (`grep -rl '\. "$HERE/lib.sh"' scripts/` → 11) plus 6 in `scripts/harness/` that source
-`$HERE/../lib.sh` (`grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` → 17). Both commands were
-run this round and their counts verified.
+`$HERE/../lib.sh` (`grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` → 17). Both counts are verified.
 
 **What breaks if it lies.** `fetch_verified` (`lib.sh:19-42`) is the pinned-download primitive
 every installer relies on; a false digest match installs a wrong or tampered binary and reports
@@ -39,12 +59,11 @@ provisioner proceed onto a host it must refuse.
 
 | Submodule | File | Classification | Evidence (invoking line) |
 |---|---|---|---|
-| S1 shell contract | `lib.sh` | **active** | sourced by 17 scripts — `grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` → 17 (run this round) |
+| S1 shell contract | `lib.sh` | **active** | sourced by 17 scripts — `grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` → 17 |
 
-`harness-vars.sh` is **not** an M0 submodule (M5.S5, OUTLINE M5). Round-3 listed a second "S1"
-here; removed.
+`harness-vars.sh` is **not** an M0 submodule (M5.S5, OUTLINE M5).
 
-**Exported helper inventory (B09, completed this round — every helper in `lib.sh`):**
+**Exported helper inventory (B09 — every helper in `lib.sh`):**
 
 | Helper | `lib.sh` | Inputs → output / exit | Caller obligations |
 |---|---|---|---|
@@ -118,14 +137,12 @@ $ bash /tmp/ffc_probe.sh /tmp/ffc-artifact   # → curl: (7) … ; rc=1 artifact
 ```
 
 An independent verifier reproduced `fetch_rc=1 artifact_present=no` from this same helper
-(`round5_verifier_probe.py`); the probe artifact itself is not a repo file.
-
-The round-3 draft's literal source-count commands were over-escaped and returned rc 1 / 0
-matches (sol B05). The commands above are the corrected expressions, re-run this round.
+(`round5_verifier_probe.py`); the probe artifact itself is not a repo file. The source-count
+commands above are the corrected expressions (B05).
 
 ## 8. Metrics
 
-**RED — none (absence-proved this round).** `lib.sh` emits no counters, gauges or histograms —
+**RED — none (absence-proved).** `lib.sh` emits no counters, gauges or histograms —
 `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' scripts/lib.sh` → 0 matches (the only
 writes are `printf` rows and the `FAILED` integer at `lib.sh:11`). Sourcing frequency and refusal
 rate are answerable only by the static greps above.
@@ -139,8 +156,8 @@ rate are answerable only by the static greps above.
 | — | `  WARN  %s — %s` (`lib.sh:8`) | `warn` called | descriptive |
 | — | `  ..    %s` (`lib.sh:9`) | `note` called | descriptive |
 | — | `digest mismatch for %s: want %s got %s` (`lib.sh:26`, stderr) | `fetch_verified` digest mismatch | **evidentiary** — only after the sha256 comparison failed |
-| — | `cannot create destination directory %s for %s` (`lib.sh:32`, stderr) | `mkdir -p` of the artifact dir fails | **evidentiary** (B24, added this round) |
-| — | `cannot move verified download into place at %s for %s` (`lib.sh:37`, stderr) | `mv` of the verified artifact fails | **evidentiary** (B24, added this round) |
+| — | `cannot create destination directory %s for %s` (`lib.sh:32`, stderr) | `mkdir -p` of the artifact dir fails | **evidentiary** (B24) |
+| — | `cannot move verified download into place at %s for %s` (`lib.sh:37`, stderr) | `mv` of the verified artifact fails | **evidentiary** (B24) |
 
 ## 10. Failure modes, indications and recovery
 
@@ -173,7 +190,7 @@ rate are answerable only by the static greps above.
 ## 13. Evidence of record
 
 - Code: `scripts/lib.sh` (78 lines) — read in full.
-- Commands run this round: `bash -n scripts/lib.sh`; `grep -rl '\. "$HERE/lib.sh"' scripts/` (11);
+- Commands run: `bash -n scripts/lib.sh`; `grep -rl '\. "$HERE/lib.sh"' scripts/` (11);
   `grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` (17); `ffc_probe.sh` (fetch_verified fails
   closed, rc 1, no artifact).
 - **Findings:**

@@ -6,7 +6,7 @@
 |---|---|
 | Module name | DISPATCH (NODE SIDE) |
 | Path | `/home/kara/code-factory/scripts/` — `add_family_lanes.py`, `configure_family.py`, `load_lane_config.py`, `lane_target.py`, `node-bus-worker.py` |
-| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; every file M2 cites is byte-identical since `47d68b4`) |
+| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; every file M2 cites is byte-identical since `47d68b4`) |
 | Language / runtime | Python 3.14.9 (measured) |
 | Owner lane | code-factory (node-side); consumes scheduler + crier |
 | Status | **VERIFIED** for `node-bus-worker.py` contracts (imports `:66-78`, `text_b64` decode `:989-999`, reply shape `:1176-1192`, settlement `:1389-1422`, CLI `:1425-1499`, `dispatch_wall` `:1200-1205`); `add_family_lanes.py`/`configure_family.py`/`load_lane_config.py` structure-mapped only |
@@ -30,8 +30,8 @@ side is CF-355 (a failed result with no `ok` is recorded as success).
 
 | Submodule | Unit | Classification | Evidence (invoking line) |
 |---|---|---|---|
-| S1 declare and configure lanes | `add_family_lanes.py`, `configure_family.py`, `load_lane_config.py` | **operator-invoked** | no in-repo caller — `grep -rn 'add_family_lanes\|configure_family\|load_lane_config' scripts/` matches only the files themselves (run this round). `configure_family.py:24-28` reads the scheduler operator token at module import |
-| S2 resolve a target | `lane_target.py` | **active** | `scripts/configure_family.py:17` imports it and `:149` calls `lane_target.parse(workdir)` then branches on the result — a production caller **in-repo** (grok 3 / sol B09). Round-4's "no production caller" was false. Passing the parse does not prove a remote checkout exists (it is structural parsing, not remote verification) |
+| S1 declare and configure lanes | `add_family_lanes.py`, `configure_family.py`, `load_lane_config.py` | **operator-invoked** | no in-repo caller — `grep -rn 'add_family_lanes\|configure_family\|load_lane_config' scripts/` matches only the files themselves. `configure_family.py:24-28` reads the scheduler operator token at module import |
+| S2 resolve a target | `lane_target.py` | **active** | `scripts/configure_family.py:17` imports it and `:149` calls `lane_target.parse(workdir)` then branches on the result — a production caller **in-repo** (3 / B09). An earlier citation of "no production caller" was false. Passing the parse does not prove a remote checkout exists (it is structural parsing, not remote verification) |
 | S3 consume the inbox, sign, reply | `node-bus-worker.py` | **active** | decodes the directive (`directive_text`, `:977`), consumes one dispatch (`process`, `:1007`), builds the reply (`:1176-1192`), delivers (`:1208`), settles (`:1389-1422`) |
 
 **Finding F2-2.** `configure_family.py:24-28` hardcodes `PID = "1755676"` and reads
@@ -76,7 +76,7 @@ is established.
 | `--interval` | 15 (`:1489`) | positive int | seconds between `--loop` polls | 0 starves the loop |
 | `--harness-wall` / `--timeout` | **1800 / 10** (`node-bus-worker.py:84` `DEFAULT_HARNESS_WALL`, `:83` `DEFAULT_TIMEOUT`; the CLI defaults at `:1491-1499` read these) | positive int | per-run wall / per-request timeout | see F2-3 for the wall fallback |
 
-**`--dry-run` custody note (B08, added this round).** `--dry-run` (`node-bus-worker.py:1437-1441`, help "fetch and print the plan; run/post/ack nothing") does **not** avoid inbox custody mutation: `:1381-1385` prints `BUS WORKER: DRY RUN — nothing executed, nothing posted, nothing acked ({n} message(s) leased for {lease}s and left to expire)` — the messages were already **leased** before the dry-run branch, so a dry run holds inbox messages until their lease expires. It skips execution/post/ack, not the lease. The dry-run lease is **5 s** (`:1312` `lease = 5 if args.dry_run else args.lease_seconds`), not the configured `--lease-seconds` — a dry run holds each retrieved message for 5 s, distinct from a real run's lease. Unregistered operational overrides: `--home`, `--identity`, `--bus-identity`, `--key`, `--token-file`, `--agent`, `--project`, `--crier`, `--workdir`, `--harness-cmd`, `--gateway-port` (`:1443-1476`) — these select identity/credentials/destination/executable template but are registered **NAME ONLY** (default/validation/consequence not individually stated), a named RED on this field, not a completed register.
+**`--dry-run` custody note (B08).** `--dry-run` (`node-bus-worker.py:1437-1441`, help "fetch and print the plan; run/post/ack nothing") does **not** avoid inbox custody mutation: `:1381-1385` prints `BUS WORKER: DRY RUN — nothing executed, nothing posted, nothing acked ({n} message(s) leased for {lease}s and left to expire)` — the messages were already **leased** before the dry-run branch, so a dry run holds inbox messages until their lease expires. It skips execution/post/ack, not the lease. The dry-run lease is **5 s** (`:1312` `lease = 5 if args.dry_run else args.lease_seconds`), not the configured `--lease-seconds` — a dry run holds each retrieved message for 5 s, distinct from a real run's lease. Unregistered operational overrides: `--home`, `--identity`, `--bus-identity`, `--key`, `--token-file`, `--agent`, `--project`, `--crier`, `--workdir`, `--harness-cmd`, `--gateway-port` (`:1443-1476`) — these select identity/credentials/destination/executable template but are registered **NAME ONLY** (default/validation/consequence not individually stated), a named RED on this field, not a completed register.
 
 ## 6. Contracts in and out
 
@@ -89,7 +89,7 @@ cross-system contracts carry their CT id; an interface with no canonical entry i
 | CT-03 | crier | in (inbox) | crier `internal/registry/handler.go:1690` `HandleRetrieve` (the lease-granting side) | `scripts/node-bus-worker.py:1007` `process` consumes one dispatch (decodes `text_b64` first via `directive_text` `:977`, then the legacy plain members for older senders) | **works** — CF-354 fixed in commit `1f1c0fe` (decodes `text_b64`), board-closed in commit `6184e52` (F2-5) |
 | CT-04 | crier | out (reply) | `scripts/node-bus-worker.py:1176` builds `{status:"failed"/"completed", dispatch_id, corr_id, …}` (`:1176-1192`) and `:1208` `deliver()` POSTs it to `/agents/{target}/inbox` | crier `internal/registry/handler.go:990` `HandleDeliver` (accepts the reply verbatim) | **works (transport)** — crier accepts the reply verbatim. CF-355 is **this reply's** settlement defect: the node sends `status` (`:1180`), the scheduler's `dispatchReplyVerdict` reads only `ok` — carried at CT-04 (node reply), not CT-06 (the dispatcher leg) |
 | CT-09 | duckbrain | out | **missing** — no in-repo producer: `grep -nE 'duckbrain|/api/memories' scripts/node-bus-worker.py` → 0 matches; the node's R1/R2 duckbrain sync is not implemented in the node worker | **external** — the duckbrain service (out of scope) | **missing** — OUTLINE Part IV marks `node → duckbrain` missing; no in-repo file on either side |
-| CT-11 | sessionstore | out | **external** — the Hermes agent runtime records turns to its own `state.db` (out of scope; not a code-factory script) | **external** — the Hermes session store (out of scope) | **UNVERIFIED (boundary)** — neither side has an in-repo `file:function`, and the wire was not measured this round; "works" is not asserted without a measured observation |
+| CT-11 | sessionstore | out | **external** — the Hermes agent runtime records turns to its own `state.db` (out of scope; not a code-factory script) | **external** — the Hermes session store (out of scope) | **UNVERIFIED (boundary)** — neither side has an in-repo `file:function`, and the wire was not measured; "works" is not asserted without a measured observation |
 
 The real reply fields are `env_version, dispatch_id, corr_id, status, host_identity, harness,
 vars, exit_codes, gate_exit, branch, commit, artifacts, wall_s, finished_at`
@@ -97,7 +97,7 @@ vars, exit_codes, gate_exit, branch, commit, artifacts, wall_s, finished_at`
 shape is stale). CT-09 and CT-11 are boundary contracts: their far side is a service outside
 the five covered systems, so the covered side is named and the far side is honestly marked
 external. The state for a boundary contract with no measured wire is **UNVERIFIED** — an outline
-"works" annotation is not implementation evidence (sol B03).
+"works" annotation is not implementation evidence (B03).
 
 ## 7. Verification
 
@@ -105,11 +105,11 @@ external. The state for a boundary contract with no measured wire is **UNVERIFIE
 |---|---|---|---|---|
 | python compile | `python3 -m py_compile scripts/add_family_lanes.py scripts/configure_family.py scripts/load_lane_config.py scripts/lane_target.py scripts/node-bus-worker.py` | exit 0 | 2026-11-06 | PASS |
 | lane target unit | `python3 tests/test_lane_target.py` | pass | 2026-11-06 | **PASS** (40 tests, rc 0) |
-| bus worker ladder | `python3 ~/node-bus-worker.py --check` on cf-node | inbox GET → 200 with key+bearer | 2026-11-05, cf-node only | **UNVERIFIED** — a single-host 2026-11-05 run (FACT-04) is provenance, not this round's measured result; not repeatable from this control host (`~/node-bus-worker.py` does not exist here) |
+| bus worker ladder | `python3 ~/node-bus-worker.py --check` on cf-node | inbox GET → 200 with key+bearer | 2026-11-05, cf-node only | **UNVERIFIED** — a single-host 2026-11-05 run (FACT-04) is provenance, not a current measured result; not repeatable from this control host (`~/node-bus-worker.py` does not exist here) |
 
 ## 8. Metrics
 
-**RED — none (absence-proved this round).** The node-side dispatch path emits no counters or
+**RED — none (absence-proved).** The node-side dispatch path emits no counters or
 gauges. `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics'
 scripts/node-bus-worker.py scripts/lane_target.py scripts/configure_family.py
 scripts/add_family_lanes.py scripts/load_lane_config.py` → 0 matches. Dispatch count, reply latency
@@ -120,7 +120,7 @@ and refusal count are answerable only by grepping the bus worker log.
 The worker does **not** source `lib.sh` — it is Python. It re-implements `lib.sh`'s row
 vocabulary locally at `node-bus-worker.py:129-141` (`def ok` `:129` prints `  PASS  {name} — {value}`,
 `def bad` `:133` → `  FAIL …`, `def warn` `:137` → `  WARN …`, `def note` `:141` → `  ..    …`), a
-copy that can drift (the reason M0 F0-4 matters). **Scope (B09, measured this round):**
+copy that can drift (the reason M0 F0-4 matters). **Scope (B09, measured):**
 `grep -cE '^\s*(ok|bad|warn|note)\(' scripts/node-bus-worker.py` = **70** call sites. The
 observable surface is therefore per-measurement helper rows, not a fixed set of distinct strings;
 the evidentiary rows below are the refusals, which name the rule. The generic per-measurement
@@ -154,16 +154,16 @@ on this field, not a "sample" claimed complete:
   `args.harness_wall` or `DEFAULT_HARNESS_WALL`. It does **not** clamp: a fractional positive below
   1 is converted by `int()` to **0** (not refused), and an out-of-range value falls back rather
   than being bounded.
-- **Settlement ordering (B10, read this round).** `node-bus-worker.py:1389-1422`: execute
+- **Settlement ordering (B10).** `node-bus-worker.py:1389-1422`: execute
   (`process`) → deliver each result → write the seen-cache **only after delivery succeeds**
   (`seen[key] = result` when `delivered_ok`, `:1394-1395`) → ack last. `save_seen` failure only
   warns (`:1398-1403`), so a crash before persistence is not covered by durable replay; ack is
   skipped when delivery failed, "so redelivery is the safer outcome" (`:1407-1414`).
-- **Same-batch duplicate (B10 correction, sol B10).** `node-bus-worker.py:1355-1379` processes every
+- **Same-batch duplicate (B10 correction).** `node-bus-worker.py:1355-1379` processes every
   leased message in a batch using the *same initially loaded* `seen` dictionary; the cache is not
   updated until the later delivery loop (`:1389-1395`). Two previously-unseen messages sharing one
   dispatch key in a single retrieved batch therefore **both execute** before either result enters the
-  cache. The idempotency window only deduplicates across batches, not within one. Round-4's
+  cache. The idempotency window only deduplicates across batches, not within one. An earlier
   "crash-before-persistence" discussion missed this same-batch case.
 
 ## 12. Cross-references
@@ -185,7 +185,7 @@ on this field, not a "sample" claimed complete:
   - **F2-1** (carried) — the node imports `urllib` (`:66-78`), not `crier_client`.
   - **F2-2** — `configure_family.py:24-28` hardcodes PID `1755676` and reads its environ at import.
   - **F2-3** — `dispatch_wall` does not clamp; it accepts-then-int-converts or falls back.
-  - **F2-4** (corrected) — round-4 said `add_family_lanes.py`/`configure_family.py`/
+  - **F2-4** (corrected) — an earlier citation said `add_family_lanes.py`/`configure_family.py`/
     `load_lane_config.py` **and** `lane_target.py` have no in-repo production caller. The S1 trio's
     "no caller" holds, but `lane_target.py` (S2) **does** have one: `configure_family.py:17,149`.
     S1 activation remains operator/fleet-config invoked; S2 is active via `configure_family.py`.

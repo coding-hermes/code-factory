@@ -6,10 +6,10 @@
 |---|---|
 | Module name | HARNESS |
 | Path | `/home/kara/code-factory/scripts/harness/` — `install-hermes.sh`, `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh`, `harness-vars.sh`; **and** `/home/kara/code-factory/scripts/` — `harness_resolve.py`, `install-go.sh`, `install-gitreins.sh`, `project-node.sh` |
-| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; `project-node.sh` layer 20 gained the CF-150 `gateway_auth` staging block and `node-create.sh` re-lined in `08a2c8a..fbc19cb`; every M5 file:line re-pinned) |
+| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; `project-node.sh` layer 20 gained the CF-150 `gateway_auth` staging block and `node-create.sh` re-lined in `08a2c8a..fbc19cb`; every M5 file:line re-pinned) |
 | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
 | Owner lane | code-factory (node-side) |
-| Status | **UNVERIFIED** — `harness-vars.sh` (318 lines), `harness_resolve.py` (400 lines), `install-hermes.sh` (388 lines, +13 for the CF-192 occupied-port auth gate), `install-gitreins.sh` (180 lines), `install-claude-code.sh` (settings surface), `install-codex.sh` (settings surface + partial body), `install-opencode.sh` (98 lines), `install-deepseek.sh` (101 lines), `install-pi-agent.sh` (113 lines) read this round; `install-claude-code.sh`/`install-codex.sh` full bodies not line-by-line; the conformance battery not run this round |
+| Status | **UNVERIFIED** — `harness-vars.sh` (318 lines), `harness_resolve.py` (400 lines), `install-hermes.sh` (388 lines, +13 for the CF-192 occupied-port auth gate), `install-gitreins.sh` (180 lines), `install-claude-code.sh` (settings surface), `install-codex.sh` (settings surface + partial body), `install-opencode.sh` (98 lines), `install-deepseek.sh` (101 lines), `install-pi-agent.sh` (113 lines) read; `install-claude-code.sh`/`install-codex.sh` full bodies not line-by-line; the conformance battery not run |
 
 ## 2. Purpose, authority and position
 
@@ -31,11 +31,10 @@ referenced only by itself, `tests/selftest.sh` and `tests/test_harness_resolve.p
 caller. The node's actual selection reads `node.json`'s `harness.cmd`/`harness.name`
 (`node-bus-worker.py:412-414`, default `hermes`) and builds the harness argv directly
 (`node-bus-worker.py:459-469`); the dispatcher invokes Hermes directly (`dispatcher.py:260`). The
-resolver is a standalone selection facility, not the wired runtime authority round-2 claimed.
+resolver is a standalone selection facility, not the wired runtime authority.
 
-**Finding F5-5 (B02, corrected round 11; re-pinned round 13).** Round-5's "the installers are
-operator-invoked; a source search finds no production invocation" was **false** — it was a
-*computed-call-site* blindness. `project-node.sh:498` builds the installer path from a variable
+**Finding F5-5 (B02).** A literal source search misses the production invocation — a
+*computed-call-site* case. `project-node.sh:498` builds the installer path from a variable
 (`inst="$HERE/harness/install-$HARNESS.sh"`), and `:508-510` invokes it with `--apply` (or
 `--check`) under `NODE_GATEWAY_PORT`. A literal `grep -rn 'install-hermes'` cannot match that, but
 the invocation is real and in-repo. `node-create.sh:29` stages the same computed path (in the
@@ -98,7 +97,7 @@ operator-initiated even though the installers are unit-invoked.
 | `CF_HARNESS_OPTS` | unset | `key=value[,key=value]`, no secret (`:268-271`) | harness-specific options | a secret-shaped value refused |
 | `--contract` mode | — | requires all 6 `CFV_REQUIRED` (`:31`, `:313-315`) | acceptance check | a missing required var refused (`dropped:$missing`) |
 
-**Per-adapter installation registers (B12, added this round — the shared CF_* table is not the
+**Per-adapter installation registers (B12 — the shared CF_* table is not the
 entire harness settings surface):**
 
 | Setting | Default | Range | Governs | What breaks if changed |
@@ -115,7 +114,7 @@ entire harness settings surface):**
 | `CLAUDE_CODE_SHASUM` (claude) | `c11067a3…` (`:40`) | a digest | artifact integrity | a wrong digest is refused |
 | `NODE_MIN_MAJOR` (claude) | `22` (`:43`) | Node major | the Node floor | a lower Node violates the pin's `engines` |
 
-**`install-go.sh` (S3) — the Go toolchain installer register (sol B12, added this round; "pinned" was NAME ONLY).** `install-go.sh:7-14` fixes the pin, digests, floor and probe; `:52-81` is the cold-cache module proof:
+**`install-go.sh` (S3) — the Go toolchain installer register (B12; "pinned" was NAME ONLY).** `install-go.sh:7-14` fixes the pin, digests, floor and probe; `:52-81` is the cold-cache module proof:
 
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
@@ -129,7 +128,7 @@ entire harness settings surface):**
 | module proof GOPROXY | `$GOPROXY` or the toolchain's own `env GOPROXY` (`:53-57`) | a URL | which proxy resolves the probe | a misconfigured proxy fails the proof |
 | `GO_DL_BASE` | `https://go.dev/dl` (`:138`, `url="${GO_DL_BASE:-https://go.dev/dl}/$archive"`) | a URL | the toolchain download mirror | a wrong mirror fails `fetch_verified` on every install |
 
-**Resolver controls (sol B10, added this round).** `harness_resolve.py:327-372` exposes seven
+**Resolver controls (B10).** `harness_resolve.py:327-372` exposes seven
 selection/refusal controls; the shared CF_* table and the installer tables above are not the whole
 module surface:
 
@@ -168,7 +167,7 @@ among the 18; the canonical id M5 participates in is CT-17 (`conformance → har
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| CT-17 | conformance battery | in | `tests/harness-conformance.sh` (the battery, per-leg rows) | **external** — the operator/board reads the leg verdicts as FACT-08 certification; no in-repo code consumer | **UNVERIFIED** — not run this round (needs a live node) |
+| CT-17 | conformance battery | in | `tests/harness-conformance.sh` (the battery, per-leg rows) | **external** — the operator/board reads the leg verdicts as FACT-08 certification; no in-repo code consumer | **UNVERIFIED** — not run (needs a live node) |
 | M5-C2 | gateway | out | `install-hermes.sh:352` `hermes serve` | **rumour — one side only** (the node gateway on `:10800`, a port/service, not a function) | **UNVERIFIED** — a port/service is not a `file:function`; the "works" state was inherited, not measured (B22) |
 | M5-C3 | adapter caller — battery `leg_check`, layer 20, operator | out | `scripts/lib.sh:24` `verdict()` — one verdict line decided by row counts (`FAIL (n)` exit 1 / `UNVERIFIED` exit 3 / `PASS` exit 0); `warn()` (`lib.sh:8`) counts the rows it prints, so `FAILED` is not the only counter | `tests/harness-conformance.sh` `leg_check` (reads the `  FAIL` rows and the adapter's exit status), `scripts/project-node.sh:609-621` (layer 20 folds the adapter's FAIL rows into `NODE: FAIL (n)`), `tests/selftest.sh` §59 (asserts the line by name for three row counts) | **PASS** — measured 2026-11-07, §59 arms (a)–(f); the contract is `specs/HARNESS.md` "The verdict line" |
 
@@ -191,27 +190,27 @@ said `UNVERIFIED adapter` — the adapter's own summary contradicted its own row
 | occupied-port auth gate | `bash tests/selftest.sh` (section 55, arm E) | occupied `:10800` + no `dashboard.basic_auth` -> exit nonzero with the named `FAIL  port` row and no `PASS port`/`PASS status_probe`/`HERMES: PASS`; occupied + valid block keeps both PASS rows | 2026-11-07 | **PASS** (red pre-fix run in `docs/audits/code-factory-CF-192.probe.txt`) |
 | python compile | `python3 -m py_compile scripts/harness_resolve.py` | exit 0 | 2026-11-06 | PASS |
 | harness resolve unit | `python3 tests/test_harness_resolve.py` | pass | 2026-11-06 | **PASS** (28 tests, rc 0) |
-| conformance legs | `tests/harness-conformance.sh` | per-leg green on a real node | not run this round | **UNVERIFIED** (needs a live node) |
+| conformance legs | `tests/harness-conformance.sh` | per-leg green on a real node | not run | **UNVERIFIED** (needs a live node) |
 | node pin fixture | `python3 tests/test_node_provisioning.py` (`InstallNode`) | `--check` red before install; `--apply` installs, `node --version` reads back `v22.22.3`; second `--apply` changes nothing; a wrong digest installs nothing; a binary printing `v22.22.2` fails the readback | 2026-11-07 | **PASS** (fixture archive; the real download is the digest-pinned `https://nodejs.org/dist/v22.22.3/…`, hashed after download when the pin was written) |
 | owned-runtime precedence | `bash tests/selftest.sh` §58 | `PASS tool:node — $HOME/node-toolchain/current/bin/node (v22.22.3)` with the fixture home's own runtime, not the host's PATH node | 2026-11-07 | **PASS** (fixture) |
 | sealed shared cache | `python3 tests/test_node_provisioning.py` (`GoModCache`) | sealed cache builds with `GOPROXY=off` and adds **0 bytes**; a cold cache cannot; an unseeded module is refused with `permission denied` | 2026-11-07 | **PASS** (`MEASURED shared GOMODCACHE 2097910 bytes; sealed rebuild added 0 bytes`) |
 
 ## 8. Metrics
 
-**RED — none (absence-proved this round).** No harness installer or resolver emits counters or
+**RED — none (absence-proved).** No harness installer or resolver emits counters or
 gauges — `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' scripts/harness/*.sh
 scripts/harness_resolve.py scripts/install-gitreins.sh` → 0 matches. Install count, pin-drift count
 and conformance pass rate are answerable only by reading the leg rows.
 
 ## 9. Log lines (verbatim)
 
-**Scope (B09, measured this round).** `grep -rcE '\b(ok|bad|warn|note)\s+"' scripts/harness/` sums to **215** helper call sites across the six installer scripts plus `harness-vars.sh`; `install-gitreins.sh` and `install-go.sh` add further rows. The 4 rows below are the evidentiary refusal/pin/foreman rows; the generic per-row helper surface is not inventoried one-per-site — the uncovered count is a named RED on this field.
+**Scope (B09, measured).** `grep -rcE '\b(ok|bad|warn|note)\s+"' scripts/harness/` sums to **215** helper call sites across the six installer scripts plus `harness-vars.sh`; `install-gitreins.sh` and `install-go.sh` add further rows. The 4 rows below are the evidentiary refusal/pin/foreman rows; the generic per-row helper surface is not inventoried one-per-site — the uncovered count is a named RED on this field.
 
 | Level | Line | Emitted when | Kind |
 |---|---|---|---|
 | — | `CONTRACT: REFUSED (%s)` (`harness-vars.sh:66`) | any CF_* refusal | evidentiary |
 | — | `installed ${ver:-nothing} but the pin is $PIN (log $log)` (`install-gitreins.sh:105`) | installed version != pin | evidentiary |
-| — | `FAIL harness_foreman_requires_hermes: lane=<L> harness=<H>` (`harness_resolve.py:284`, surfaced by `print(f"FAIL {exc}")` at `:388`) | a bound foreman lane selected non-hermes | evidentiary — round-5 cited `:53` (the module docstring's refusal list, not the emitter); `:388` is the print, `:389` is `return 2` (grok A) |
+| — | `FAIL harness_foreman_requires_hermes: lane=<L> harness=<H>` (`harness_resolve.py:284`, surfaced by `print(f"FAIL {exc}")` at `:388`) | a bound foreman lane selected non-hermes | evidentiary — `:388` is the print, `:389` is `return 2` (A) |
 | — | `  PASS  %s — %s` / `  FAIL  %s — %s` (`lib.sh:6-7`) | every installer row | descriptive (see M0 F0-4) |
 | — | `  FAIL  port — listening on :10800 (not started by this adapter; auth unverified — a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — <reason>)` (`install-hermes.sh:318`) | an occupied gateway port whose `~/.hermes/config.yaml` parses to no non-empty `dashboard.basic_auth` | evidentiary — counted, so the layer ends `HERMES: FAIL (n)` (CF-192) |
 
@@ -232,7 +231,7 @@ and conformance pass rate are answerable only by reading the leg rows.
 - The resolver is fail-closed: an unknown harness, an uninstalled selection, or a non-hermes
   foreman all refuse with a named reason and exit 2 (`:46-56`, `:387-389`) — but it is only
   reachable when invoked directly (F5-2).
-- **Adapter capability matrix (F5-3, completed this round):** the installers are not uniform.
+- **Adapter capability matrix (F5-3):** the installers are not uniform.
   - `install-hermes.sh` — installs and certifies at `HERMES_PIN` 0.19.0; python >=3.11,<3.14.
   - `install-codex.sh` — installs at `CF_CODEX_PIN` 0.166.0; sources `harness-vars.sh`
     **conditionally** (`:47`), re-implements its own validator and credential predicate (`600|400`),
@@ -280,11 +279,11 @@ and conformance pass rate are answerable only by reading the leg rows.
     `--apply`, `install-opencode.sh` is UNVERIFIED/`--apply`-refusing, `install-claude-code.sh`
     sources `lib.sh` not `harness-vars.sh`.
   - **F5-4** — UNIT-MAP (3) vs OUTLINE (5) submodule split.
-  - **F5-5** (B02, re-pinned round 13) — the "no production installer caller" claim was false:
+  - **F5-5** (B02) — the "no production installer caller" claim was false:
     `project-node.sh:498` computes `install-$HARNESS.sh` and `:508-510` invokes it; the literal
     grep missed the computed path. The installers are unit-invoked (by the operator-invoked
     provisioning entry).
-  - **F5-6** (new, round 13) — `project-node.sh` layer 20 now stages `dashboard.basic_auth`
+  - **F5-6** (CF-150) — `project-node.sh` layer 20 now stages `dashboard.basic_auth`
     **before** the harness adapter runs (`:448-497`, CF-150): the hermes adapter refuses a public
     bind unless `~/.hermes/config.yaml` parses to a non-empty `dashboard.basic_auth`, and no stage
     in the create path wrote that block, so the documented path could print every other row and

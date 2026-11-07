@@ -9,7 +9,7 @@
 | Revision | content sha256 `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (lives outside any git repo; no revision to stamp) |
 | Language / runtime | Python — `#!/usr/bin/env python3`, no pinned version; **requires >= 3.10** (F12-5: `_forward` at `:164` declares `body: bytes | None`, an evaluated union annotation) |
 | Owner lane | code-factory (control-host service, consumed by nodes) |
-| Status | **VERIFIED (admission/routing/capture), FAILING (streaming)** — read in full this round (273 lines); content sha256 reproduced; live 401 admission reproduced this round; the two sink paths corrected this round (F12-8). **Streaming completion is FAILING (sol B22):** the healthy SSE stream is unframed to completion (`:206-224`), reproduced as a `200` with no `Content-Length`/`Transfer-Encoding`/`Connection` and a client EOF timeout (§11 F12-7). A blanket VERIFIED would contradict that demonstrated defect — admission, routing and capture are verified, streaming is not |
+| Status | **VERIFIED (admission/routing/capture), FAILING (streaming)** — read in full (273 lines); content sha256 reproduced; live 401 admission reproduced; the two sink paths corrected (F12-8). **Streaming completion is FAILING (B22):** the healthy SSE stream is unframed to completion (`:206-224`), reproduced as a `200` with no `Content-Length`/`Transfer-Encoding`/`Connection` and a client EOF timeout (§11 F12-7). A blanket VERIFIED would contradict that demonstrated defect — admission, routing and capture are verified, streaming is not |
 
 ## 2. Purpose, authority and position
 
@@ -25,14 +25,14 @@ inference path", CF-351).
 **What breaks if it lies.** A fail-closed admission that fails open routes an untrusted or
 off-contract model to the upstream and spends the fleet's credit on a dearer model. In the settings
 register, a sink path that does not exist on disk sends an operator looking at the wrong file —
-round-5 shipped two invented filenames here (F12-8), which is the exact "what breaks if it lies"
+two invented filenames shipped in an earlier register revision (F12-8), which is the exact "what breaks if it lies"
 failure for a paths register.
 
 ## 3. Submodule inventory
 
 | Submodule | Unit | Classification | Evidence (invoking line) |
 |---|---|---|---|
-| S1 admission | token resolution `_node` (`:115-123`), model allowlist (`:155-160`), fail-closed startup (`:265-270`) | **active** | invoked continuously by the systemd unit `~/.config/systemd/user/cf-inference-proxy.service` — loaded, enabled, `active (running)` since 2026-11-05 09:21, Main PID 2603939, drop-in `cf-inference-proxy.service.d/10-upstream.conf` (measured this round, `systemctl --user status`). The in-repo grep (`grep -rnE '8775\|CF_PROXY\|cf-inference-proxy' scripts/ config/ specs/`) finds no script/cron caller, but the invoker is the systemd unit, not absent (B2) |
+| S1 admission | token resolution `_node` (`:115-123`), model allowlist (`:155-160`), fail-closed startup (`:265-270`) | **active** | invoked continuously by the systemd unit `~/.config/systemd/user/cf-inference-proxy.service` — loaded, enabled, `active (running)` since 2026-11-05 09:21, Main PID 2603939, drop-in `cf-inference-proxy.service.d/10-upstream.conf` (measured, `systemctl --user status`). The in-repo grep (`grep -rnE '8775\|CF_PROXY\|cf-inference-proxy' scripts/ config/ specs/`) finds no script/cron caller, but the invoker is the systemd unit, not absent (B2) |
 | S2 upstream routing | `_forward` (`:164-180`), model rewrite via `UPSTREAM_MODEL` | **active** | `_forward` invoked by `do_GET` `:132` and `do_POST` `:162` (the request handlers under the systemd unit) |
 | S3 stream pass-through | `:200-238` (streamed), `:240-258` (buffered) | **active** | the two branches of `_forward` (`:164`), reachable only through `:132`/`:162` |
 | S4 usage and request capture | `capture_request` (`:83-95`), `log_usage` (`:98-101`) | **active** | `capture_request` called at `:161`; `log_usage` called at `:152, :156, :220, :227, :232, :248, :252` — all inside the `do_GET`/`do_POST`/`_forward` request path |
@@ -71,11 +71,11 @@ failure for a paths register.
 | `MAX_BODY` | 4 MiB (`:54`) | positive int | request body ceiling | a body `> MAX_BODY` → 400 (`:142-143`) |
 | `LISTEN` | `("0.0.0.0", 8775)` (`:53`) | **a hardcoded constant, not a setting** | proxy listener | no env/flag override; binds 0.0.0.0 so the tailnet can reach it |
 
-**F12-8 (paths, corrected this round).** Both sinks are hardcoded `pathlib.Path` constants, not
-environment settings. Round-5 wrote `~/.hermes/logs/cf-usage.jsonl` (`:49`) and
+**F12-8 (paths, corrected).** Both sinks are hardcoded `pathlib.Path` constants, not
+environment settings. An earlier register revision carried `~/.hermes/logs/cf-usage.jsonl` (`:49`) and
 `~/.hermes/logs/cf-capture.jsonl` (`:50`) — neither exists. The measured values are
 `USAGE_LOG = …/cf-inference-usage.jsonl` (`:50`) and `CAPTURE_LOG = …/cf-inference-requests.jsonl`
-(`:52`; `:51` is the "last 200 requests only" comment). An operator following the round-5 register
+(`:52`; `:51` is the "last 200 requests only" comment). An operator following that earlier register
 would open two files that are never written. F12-6's consequence analysis is unchanged — it was
 correct and is now attached to the real paths.
 
@@ -92,18 +92,16 @@ CT-07 (`router → gateway` model choice), cited as a boundary contract.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| CT-07 | gateway | in (model choice) | **external** — the task-router's model choice (out of scope) | **external** — the Hermes gateway (out of scope) | **UNVERIFIED (boundary)** — neither side has an in-repo `file:function`, and the wire was not measured this round; an outline "works" annotation is not implementation evidence (sol B03) |
-| M12-C1 | node | in | **unproven client half** — the proxy side is verified (401 on missing/unknown token, `:128-130`); the node side has no in-repo file that *calls* the proxy. `grep -rnE '8775\|CF_PROXY\|cf-inference-proxy' scripts/ config/ specs/` (ERE, re-run this round) matches **four** text sites: `scripts/panel_loop.py:145`, `scripts/master_doc_skeleton.py:25` and `:211` (self-references listing the path), and `config/node.env.example:22` — which is the **live assignment** `ENV_CF_PROXY_API_KEY=@~/.node/auth/provider.key`, not a comment. `config/node.env.example:26` comments `CONFIG_SET_MODEL_PROVIDER=cf-proxy -> model.provider`, so the producer half is config-driven: `node.env.example:22,26` → `node_env.py`/provisioner config generation → `~/.hermes/config.yaml` `model.provider=cf-proxy`. Round-4's quoted command omitted `-E`, so its bare-`\|` BRE returned **0** matches (measured rc 1) — the opposite of the row's claim (grok 2 / glm 4). | `cf-inference-proxy.py:135` `do_POST` → `_node` (`:136`) | **UNVERIFIED** — proxy side verified; the node-client call site is config-wired, not a `file:function` in this repo |
+| CT-07 | gateway | in (model choice) | **external** — the task-router's model choice (out of scope) | **external** — the Hermes gateway (out of scope) | **UNVERIFIED (boundary)** — neither side has an in-repo `file:function`, and the wire was not measured; an outline "works" annotation is not implementation evidence (B03) |
+| M12-C1 | node | in | **unproven client half** — the proxy side is verified (401 on missing/unknown token, `:128-130`); the node side has no in-repo file that *calls* the proxy. `grep -rnE '8775\|CF_PROXY\|cf-inference-proxy' scripts/ config/ specs/` (ERE, re-run) matches **four** text sites: `scripts/panel_loop.py:145`, `scripts/master_doc_skeleton.py:25` and `:211` (self-references listing the path), and `config/node.env.example:22` — which is the **live assignment** `ENV_CF_PROXY_API_KEY=@~/.node/auth/provider.key`, not a comment. `config/node.env.example:26` comments `CONFIG_SET_MODEL_PROVIDER=cf-proxy -> model.provider`, so the producer half is config-driven: `node.env.example:22,26` → `node_env.py`/provisioner config generation → `~/.hermes/config.yaml` `model.provider=cf-proxy`. A quoted command omitting `-E` runs a bare-`\|` BRE and returns **0** matches (measured rc 1) — the opposite of the row's earlier claim. | `cf-inference-proxy.py:135` `do_POST` → `_node` (`:136`) | **UNVERIFIED** — proxy side verified; the node-client call site is config-wired, not a `file:function` in this repo |
 | M12-C2 | upstream | out | `_forward` (`:164`) builds the upstream request with the control-host key | **rumour — one side only** (the upstream gateway/provider, not a function) | **UNVERIFIED** — external boundary with one side named; a "works" verdict on a rumour is not permitted (B06) |
 
-The round-3 M12-C1 producer cell ("node POST /v1/chat/completions with Authorization: Bearer ***")
-was a broken table row (an unclosed code span, a `***` redaction artifact, a pipe inside the cell)
-with an unnamed producer. It is replaced by the empty-grep proof above; the client half is
+The M12-C1 producer evidence is the empty-grep and config-driven chain above; the client half is
 unproven, so the state is UNVERIFIED, not "works".
 
 The CONTRACT section (`:9-19`) documents three routes — `POST /v1/chat/completions`,
 `GET /v1/models`, `GET /health` (no auth) — and states: "There is no anonymous path and no
-fallback: a node that cannot authenticate cannot spend money." **Corrected (kimi B65):** the
+fallback: a node that cannot authenticate cannot spend money." **Corrected (B65):** the
 "no anonymous path" wording is an overstatement — `GET /health` **is** unauthenticated
 (`cf-inference-proxy.py:12` and the handler at `:126-127`). The true claim is "no anonymous
 *paid/model* path": a request that reaches `_node` without a valid token is refused 401, so an
@@ -118,11 +116,11 @@ to an open path.
 | python compile | `python3 -m py_compile /home/kara/.hermes/scripts/cf-inference-proxy.py` | exit 0 | 2026-11-07 | PASS |
 | admission (no token) | `curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8775/v1/chat/completions -d '{"model":"hermes"}'` | 401 | 2026-11-07 | **PASS** — 401 (proxy live on `:8775`) |
 | systemd unit active | `systemctl --user status cf-inference-proxy.service` | loaded, enabled, `active (running)` | 2026-11-07 | **PASS** — `active` (`systemctl --user is-active` → active) |
-| admission (disallowed model, valid token) | POST `{"model":"definitely-not-allowed-model"}` with a valid node token | 403 `model not permitted` | 2026-11-06 | reproduced by round-3 judge kimi (`:155-160`); **not re-run by this writer** — the node token file was not read |
+| admission (disallowed model, valid token) | POST `{"model":"definitely-not-allowed-model"}` with a valid node token | 403 `model not permitted` | 2026-11-06 | reproduced in an earlier judge run (`:155-160`); **not re-run** — the node token file was not read |
 
 ## 8. Metrics
 
-**RED — none (absence-proved this round).** The proxy emits no counters, gauges or histograms.
+**RED — none (absence-proved).** The proxy emits no counters, gauges or histograms.
 `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' /home/kara/.hermes/scripts/cf-inference-proxy.py`
 → 0 matches (the file carries no metric registry). It **does** append structured capture/usage
 JSONL — `capture_request` (`:83-95`) and `log_usage` (`:98-101`) with
@@ -156,7 +154,7 @@ is a capture log, not an emitted metric.
 
 - Fail-closed startup: no token file or no upstream key → `sys.exit(2)` before binding (`:265-270`).
 - `MAX_BODY` 4 MiB (`:54`); upstream timeout 300s (`:204`, `:241`).
-- **F12-4 (streaming guarantee correction).** The round-2/round-3 claim "a 502 is returned only
+- **F12-4 (streaming guarantee correction).** The earlier claim "a 502 is returned only
   when the failure happens before the first byte" conflates two distinct cases (B24). The stream
   path sends the upstream status and headers first (`:206-210`), then reads chunks. If `urlopen`
   itself fails, no headers were sent and the 502 is clean. If a later read fails **before the first
@@ -171,17 +169,17 @@ is a capture log, not an emitted metric.
   raise into the request path (`:220-238`, `:252-253`). The `CAPTURE_LOG` comment claims "last 200
   requests only" (`:51`) but the code appends indefinitely — no truncation or retention is
   implemented.
-- **F12-7 (stream-completion defect, sol B28).** `_forward`'s streaming path (`:206-210`) sends the
+- **F12-7 (stream-completion defect, B28).** `_forward`'s streaming path (`:206-210`) sends the
   upstream status/headers but neither `Content-Length`, `Transfer-Encoding`, nor `Connection: close`,
   and returns at `:224` without marking the connection closed. A healthy upstream that finishes its
   SSE cleanly therefore leaves the downstream response unframed: a client reading to EOF times out
   even though every byte was forwarded. This is not an upstream-failure case — it is the *healthy*
   case. An independent verifier exercised the actual `Handler` against a finite local SSE upstream
   and measured `PROXY_STREAM_STATUS=200`, `CONTENT_LENGTH=None`, `TRANSFER_ENCODING=None`,
-  `CONNECTION=None`, `PROXY_STREAM_EOF_COMPLETED=False: TimeoutError` (sol B24) — the reproducible
+  `CONNECTION=None`, `PROXY_STREAM_EOF_COMPLETED=False: TimeoutError` (B24) — the reproducible
   failure to cite. **Streaming correctness is FAILING** — the framing defect is reproduced, so a
   repeatable framing/completion oracle is the missing evidence; it is a demonstrated defect, not a
-  merely unverified property (sol B22).
+  merely unverified property (B22).
 
 ## 12. Cross-references
 
@@ -190,7 +188,7 @@ is a capture log, not an emitted metric.
   `config/node.env.example:22` (`ENV_CF_PROXY_API_KEY=@~/.node/auth/provider.key`) and `:26`
   (`CONFIG_SET_MODEL_PROVIDER=cf-proxy -> model.provider`) wire the proxy as the node's provider
   (see M12-C1). Configuration evidence, actual call-site evidence, and successful live use are
-  distinct; only the configuration reference is established (B25, sol).
+  distinct; only the configuration reference is established (B25).
 - **M7 GITHUB does not produce the node tokens.** The proxy loads `TOKENS_PATH` (a JSON mapping,
   `:48`, `:65-72`) and compares bearer tokens against it (`:115-123`); the producer of that mapping
   is unknown (B16, M7 §12).
@@ -199,7 +197,7 @@ is a capture log, not an emitted metric.
 ## 13. Evidence of record
 
 - Code read: `cf-inference-proxy.py` (273 lines, read in full); content sha256
-  `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (re-confirmed this round — file unchanged, `wc -l` = 273).
+  `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (re-confirmed — file unchanged, `wc -l` = 273).
 - Commands run: `sha256sum` (PASS); `python3 -m py_compile` (PASS); `curl` no-token → 401;
   `systemctl --user is-active cf-inference-proxy.service` (active);
   `grep -rnE '8775|CF_PROXY|cf-inference-proxy' scripts/ config/ specs/` (4 text sites, node client
@@ -218,7 +216,7 @@ is a capture log, not an emitted metric.
     unimplemented comment.
   - **F12-7** (carried) — the healthy SSE stream is not framed to completion (no Content-Length /
     Transfer-Encoding / Connection: close), so a client reading to EOF times out even on success.
-  - **F12-8** (new) — round-5 invented two sink filenames (`cf-usage.jsonl`, `cf-capture.jsonl`);
+  - **F12-8** (new) — an earlier register revision carried two invented sink filenames (`cf-usage.jsonl`, `cf-capture.jsonl`);
     the measured values are `cf-inference-usage.jsonl` (`:50`) and `cf-inference-requests.jsonl`
     (`:52`).
 

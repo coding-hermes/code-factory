@@ -6,10 +6,10 @@
 |---|---|
 | Module name | SAFETY |
 | Path | `/home/kara/code-factory/scripts/` — `reclaim_disk.py`, `check_scan_scope.py` |
-| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; `reclaim_disk.py`/`check_scan_scope.py` byte-identical since `47d68b4`; `project-node.sh:212` re-verified — the reclaim invocation line is unchanged) |
+| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; `reclaim_disk.py`/`check_scan_scope.py` byte-identical since `47d68b4`; `project-node.sh:212` re-verified — the reclaim invocation line is unchanged) |
 | Language / runtime | Python 3.14.9 + bash 5.3.9 (measured) |
 | Owner lane | code-factory (control host) |
-| Status | **VERIFIED** — `reclaim_disk.py` (169 lines) and `check_scan_scope.py` (118 lines) both read in full this round |
+| Status | **VERIFIED** — `reclaim_disk.py` (169 lines) and `check_scan_scope.py` (118 lines) both read in full |
 
 ## 2. Purpose, authority and position
 
@@ -31,7 +31,7 @@ was policed (see F8-3).
 | Submodule | Unit | Classification | Evidence (invoking line) |
 |---|---|---|---|
 | S1 disk | `reclaim_disk.py` | **active** | invoked by `project-node.sh:212` (`python3 "$HERE/reclaim_disk.py" run --root "$HOME" --json`) during provisioning |
-| S2 scan scope | `check_scan_scope.py` | **operator-invoked (optional)** | no production caller (`grep -rn check_scan_scope scripts/` → no caller; run manually this round) |
+| S2 scan scope | `check_scan_scope.py` | **operator-invoked (optional)** | no production caller (`grep -rn check_scan_scope scripts/` → no caller; run manually) |
 
 **Finding (carried):** `verify-patch.sh` is **not** an M8 unit — OUTLINE assigns it to M6.S8
 (`OUTLINE.md:170`). M8 has two submodules (S1, S2).
@@ -87,7 +87,7 @@ is listed below as a local edge.
 
 ## 8. Metrics
 
-**RED — none (absence-proved this round).** No counters or gauges —
+**RED — none (absence-proved).** No counters or gauges —
 `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' scripts/reclaim_disk.py
 scripts/check_scan_scope.py` → 0 matches. Bytes reclaimed and files scanned are derived from the run
 output (`reclaimed_bytes`/`reclaimed_mib` at `:121-123`), not emitted.

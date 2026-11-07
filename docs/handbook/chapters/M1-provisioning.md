@@ -6,10 +6,10 @@
 |---|---|
 | Module name | PROVISIONING |
 | Path | `/home/kara/code-factory/scripts/` — `bunker-server-install.sh`, `disk_floor.py`, `bunker-provision.sh`, `bunker_config_gen.py`, `node-create.sh`, `bunker-crier-connect.sh`, `node_identity.py`, `node_gateway_auth.py`, `node_seed.py`, `node_seed_drift.py`, `node_env.py`, `verify-node.sh`, `node_freshness.py` |
-| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; `scripts/verify-node.sh` changed in `47d68b4..08a2c8a` — commit `f1d5cfb`, CF-270 — so every §9/§10/§11 ladder locator is re-pinned against the 241-line file; `scripts/node-create.sh` changed in `08a2c8a..fbc19cb` — commit `85a7271`, CF-150 — staging `node_gateway_auth.py` as the eighth staged file, already reflected in §3 S3 and §11) |
+| Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; `scripts/verify-node.sh` changed in `47d68b4..08a2c8a` — commit `f1d5cfb`, CF-270 — so every §9/§10/§11 ladder locator is re-pinned against the 241-line file; `scripts/node-create.sh` changed in `08a2c8a..fbc19cb` — commit `85a7271`, CF-150 — staging `node_gateway_auth.py` as the eighth staged file, already reflected in §3 S3 and §11) |
 | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
 | Owner lane | code-factory (node-side) |
-| Status | **UNVERIFIED (bodies)** — `bunker-provision.sh` `--check` probe, config loader (`:95-123`), CLI (`:561-609`), `destroy` (`:550-558`), `disk_floor.py` `resolve()` (`:115-141`), `verify-node.sh` (`:20-241`, 241 lines at HEAD — re-pinned after the CF-270 port fix), `node_identity.py` (111 lines, full), `node_seed.py` (405 lines, apply/build/check state machine) read this round; `node_env.py` (589), `node_seed_drift.py` (558), `node_freshness.py` (732), `bunker_config_gen.py` (724) read at their **settings surface** (argparse + constants), bodies not line-by-line; `node_gateway_auth.py` docstring read (B03 — it writes dashboard basic-auth, not a registration); body not line-by-line |
+| Status | **UNVERIFIED (bodies)** — `bunker-provision.sh` `--check` probe, config loader (`:95-123`), CLI (`:561-609`), `destroy` (`:550-558`), `disk_floor.py` `resolve()` (`:115-141`), `verify-node.sh` (`:20-241`, 241 lines at HEAD — re-pinned after the CF-270 port fix), `node_identity.py` (111 lines, full), `node_seed.py` (405 lines, apply/build/check state machine) read; `node_env.py` (589), `node_seed_drift.py` (558), `node_freshness.py` (732), `bunker_config_gen.py` (724) read at their **settings surface** (argparse + constants), bodies not line-by-line; `node_gateway_auth.py` docstring read (B03 — it writes dashboard basic-auth, not a registration); body not line-by-line |
 
 ## 2. Purpose, authority and position
 
@@ -23,7 +23,7 @@ module (`docs/UNIT-MAP.yaml:9`).
 membership, no seeded repo, so the scheduler has nothing to dispatch to and every lane sits in
 the inbox until it expires.
 
-**What breaks if it lies.** Two measured lies this round:
+**What breaks if it lies.** Two measured lies:
 - `bunker-provision.sh` `--check` reports a credential "mode 600" while testing only file
   non-emptiness: `:214` probes `[ -s "$HOME/.node/auth/github.token" ]`, and `:233` prints
   `token file installed, mode 600 (value not read)`. A provisioner proceeds with an insecure
@@ -36,13 +36,13 @@ the inbox until it expires.
 | Submodule | Unit | Classification | Evidence (invoking line) |
 |---|---|---|---|
 | S1 qualify the host — disk floor | `disk_floor.py` | **active** | `disk_floor.py` is invoked by `project-node.sh:173` (`python3 "$HERE/disk_floor.py" … resolve …`), not by `bunker-provision.sh` (F1-4). `node_hygiene.py footprint` is invoked by `project-node.sh` layer 00 (the row that admits the measured node footprint against that floor) and `node_hygiene.py reap` by `bunker-server-install.sh` when `BUNKER_HOMES_DIR`/`BUNKER_KEYS_DIR` are named (CF-003) |
-| S1 qualify the host — bunker server | `bunker-server-install.sh` | **operator-invoked (optional)** | no invoker — `grep -rn 'bunker-server-install' scripts/ tests/` matches only its own docstring and `tests/selftest.sh:1754`; a test arm is not a lane/cron/timer/unit (grok B7 re-grade: the row previously classified both units **active** on `disk_floor.py`'s caller alone) |
-| S2 create the container + config | `bunker-provision.sh`, `bunker_config_gen.py`, `node-create.sh`, `bunker-crier-connect.sh`, `deploy_key.py` | **operator-invoked** | `bunker-provision.sh` is the orchestrator (probe `:175-249`) but has **no in-repo invoker** — `grep -rn 'bunker-provision' scripts/` matches `bunker-provision.sh` itself (`:2,5,6,7,178,336,522`) and `bunker_config_gen.py` (`:2,4,337,492`, docstring/description text naming the config it generates); an operator runs it (glm 2). `deploy_key.py install` is invoked by `node-create.sh --deploy-key` inside the new agent (CF-003) |
+| S1 qualify the host — bunker server | `bunker-server-install.sh` | **operator-invoked (optional)** | no invoker — `grep -rn 'bunker-server-install' scripts/ tests/` matches only its own docstring and `tests/selftest.sh:1754`; a test arm is not a lane/cron/timer/unit (B7: the row previously classified both units **active** on `disk_floor.py`'s caller alone) |
+| S2 create the container + config | `bunker-provision.sh`, `bunker_config_gen.py`, `node-create.sh`, `bunker-crier-connect.sh`, `deploy_key.py` | **operator-invoked** | `bunker-provision.sh` is the orchestrator (probe `:175-249`) but has **no in-repo invoker** — `grep -rn 'bunker-provision' scripts/` matches `bunker-provision.sh` itself (`:2,5,6,7,178,336,522`) and `bunker_config_gen.py` (`:2,4,337,492`, docstring/description text naming the config it generates); an operator runs it (finding 2). `deploy_key.py install` is invoked by `node-create.sh --deploy-key` inside the new agent (CF-003) |
 | S3 identity and bus membership | `node_identity.py`, `node_gateway_auth.py` | **active** | `node_gateway_auth.py` staged and run inside `bunker-provision.sh:483-495`; `node_identity.py` at `:518-533`; the standalone create path now runs it too — `node-create.sh` stages the file and `project-node.sh` layer 20 runs it before the harness adapter (CF-150), which is the gap CF-192 recorded |
 | S4 seed prompts/skills/env | `node_seed.py`, `node_seed_drift.py`, `node_env.py` | **active** | `node_seed.py build` at `bunker-provision.sh:454`; `node_env.py --check` at `:147` / `--apply` at `:426` |
 | S5 prove the node works | `verify-node.sh`, `node_freshness.py` | **active** | `verify-node.sh` is the certification ladder (`:20-241`, 241 lines at HEAD); `node_freshness.py` folded in at `:150-177` |
 
-**S4 seed state machine (B06, written this round).** `node_seed.py` is three commands:
+**S4 seed state machine (B06).** `node_seed.py` is three commands:
 
 - `build` (`:114-164`) — on the control host: walks the manifest (`DEFAULT_MANIFEST`,
   `config/node-seed.txt`, `:43`), hashes every file (`sha256 per file`), writes the tarball and
@@ -63,8 +63,7 @@ seed and is reported `preserved … (changed locally; --force to replace)` — a
 seed leg will flag it as drift. The `--force` path **does** report the affected paths before
 deleting: `node_seed.py:280-288` prints `changed <path>`, `removed <path>` and
 `local-only <path> (removed by --force)` for every new/changed/removed/local-only file, then
-`rmtree` at `:290`. Round-6's "deletes without reporting them as data loss" was **false** (B02,
-sol): force is destructive and names the affected paths; whether that constitutes a sufficiently
+`rmtree` at `:290`. An earlier citation that the `--force` path "deletes without reporting them as data loss" was **false** (B02): force is destructive and names the affected paths; whether that constitutes a sufficiently
 explicit warning/confirmation is a separate question.
 
 ## 4. Dependencies
@@ -109,7 +108,7 @@ explicit warning/confirmation is a separate question.
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
 | `--manifest` (build) | `config/node-seed.txt` (`:43`, `:374`) | a path | which files enter the seed | a wrong manifest seeds a different procedure |
-| `--budget` (build) | **16 MiB** (`DEFAULT_BUDGET`, `:44`, `:377`) | bytes | **aggregate uncompressed source-file byte ceiling** — `node_seed.py:130-140` sums `os.path.getsize(path)` per manifest file and compares the *total* against `args.budget` **before** the archive is created (`:147-150`); compression, tar headers and filesystem overhead are **not** bounded by this check (sol B05) | a larger budget admits a bloated seed; a budget under the raw source total is refused (`seed_budget` FAIL, return 1, `:135-140`) |
+| `--budget` (build) | **16 MiB** (`DEFAULT_BUDGET`, `:44`, `:377`) | bytes | **aggregate uncompressed source-file byte ceiling** — `node_seed.py:130-140` sums `os.path.getsize(path)` per manifest file and compares the *total* against `args.budget` **before** the archive is created (`:147-150`); compression, tar headers and filesystem overhead are **not** bounded by this check (B05) | a larger budget admits a bloated seed; a budget under the raw source total is refused (`seed_budget` FAIL, return 1, `:135-140`) |
 | `--force` (apply) | false (`:387-390`) | flag | wholesale replace of `prompts/`+`skills/` | true deletes node-local edits via `rmtree` (`:290`) after reporting each affected path (`:280-288`) — destructive, names what it removes |
 | `--home` (apply/check) | `~` (`:383`, `:393`) | a path | the node `.hermes` root | a wrong home installs/checks the wrong tree |
 
@@ -122,7 +121,7 @@ explicit warning/confirmation is a separate question.
 | `--ttl` | `6h` (`:108`, `:517`) | a Go duration | config TTL | a wrong TTL expires containers early |
 | `--force` / `--check` | off / off (`:523-524`) | flags | rewrite-a-differing-config / read-only drift check | `--check` is read-only; `--force` rewrites a differing config |
 
-**`node_env.py` (S4, settings surface — sol B07, added this round).** The env-file writer's controls:
+**`node_env.py` (S4, settings surface — B07).** The env-file writer's controls:
 
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
@@ -133,7 +132,7 @@ explicit warning/confirmation is a separate question.
 | target paths | `$HOME/.hermes/.env` + `$HOME/.hermes/config.yaml` (`:495-496`) | fixed | what is rewritten | a wrong HOME rewrites the wrong tree |
 | unmanaged variables | carried forward (`:548-556`) | per-variable | variables present in the node's `.env` but not declared | each unmanaged var emits `WARN unmanaged:<name>` and `note "{n} unmanaged var(s) would carry forward on a re-provision"` — preserved, not dropped |
 
-**`node_freshness.py` (S5, settings surface — sol B07, added this round).**
+**`node_freshness.py` (S5, settings surface — B07).**
 
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
@@ -168,7 +167,7 @@ explicit warning/confirmation is a separate question.
 | `reap --min-age-minutes` | **60** | minutes | grace before an orphan is removed | a younger entry is kept (an agent being created is not an orphan) |
 | `reap --registry` | none — **required** | id list or `bunker list` output | which ids are live | absent/unreadable → `FAIL reap_registry`, nothing removed |
 
-**Config-vs-CLI precedence (locator re-pinned this round).** `load_config` (`:96-123`) parses the file as data
+**Config-vs-CLI precedence (locator re-pinned).** `load_config` (`:96-123`) parses the file as data
 (never sources it), then the CLI flags are re-applied on top — "the command line always wins"
 (`:589`). Six flags were assigned during parsing and then overwritten by `load_config`, so they
 are applied again after the config (`:604-609`) — a documented precedence bug fixed by re-ordering.
@@ -185,12 +184,11 @@ are applied again after the config (`:604-609`) — a documented precedence bug 
 Neither of M1's two edges is a canonical CT id (OUTLINE Part IV, CT-01..CT-18): node→crier
 **registration** (POST `/agents`) and the `bunker` daemon are host-level operations, not
 cross-system contracts with a peer chapter describing the same interface from the opposite end.
-Both are listed below with local ids; the state is UNVERIFIED where the wire was not measured this
-round.
+Both are listed below with local ids; the state is UNVERIFIED where the wire was not measured.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| M1-C1 | crier | out | **none in-repo** — `bunker-crier-connect.sh` stages `$HOME/.node/crier.json` and probes the inbox via `node-bus-worker.py --check` (`:13`, `:33`, `:53`, `:114-118`); it does **not** issue a registration request or write `auth/crier.token` (sol B06). **Neither `node_identity.py` (`:50-107`, merges/replaces local JSON) nor `node_gateway_auth.py` (`:29-91`, writes dashboard basic-auth + a password file) registers an agent** (B03, sol): the actual key-generation/registration producer is not established in any code read this round | crier `internal/registry/handler.go:598` `HandleRegister` (POST `/agents`) and `:613` `HandleRegisterByID` (POST `/agents/{id}`) — round-4 cited only `HandleRegister` for the id-in-path route, which is wrong (kimi B08) | **UNVERIFIED** — the token/registration exchange was not re-run this round, and the in-repo producer half is not established |
+| M1-C1 | crier | out | **none in-repo** — `bunker-crier-connect.sh` stages `$HOME/.node/crier.json` and probes the inbox via `node-bus-worker.py --check` (`:13`, `:33`, `:53`, `:114-118`); it does **not** issue a registration request or write `auth/crier.token` (B06). **Neither `node_identity.py` (`:50-107`, merges/replaces local JSON) nor `node_gateway_auth.py` (`:29-91`, writes dashboard basic-auth + a password file) registers an agent** (B03): the actual key-generation/registration producer is not established in any code read | crier `internal/registry/handler.go:598` `HandleRegister` (POST `/agents`) and `:613` `HandleRegisterByID` (POST `/agents/{id}`) — an earlier citation listed only `HandleRegister` for the id-in-path route (B08) | **UNVERIFIED** — the token/registration exchange was not re-run, and the in-repo producer half is not established |
 | M1-C2 | bunker daemon | out | `lib.sh:75` `bunker_exec` | **rumour — one side only** (the external `bunker` binary) | works (short create/exec/cp calls) |
 
 ## 7. Verification
@@ -204,11 +202,11 @@ round.
 | layer wiring (10/40/00) | `bash tests/selftest.sh` §58 | `PASS tool:node — $HOME/node-toolchain/current/bin/node (v22.22.3)`, `PASS repo_key` + `PASS repo_key:config`, a 0644 key → `FAIL repo_key` **and** `FAIL repo_clone — not attempted`, `PASS footprint` / `PASS footprint:floor` | 2026-11-07 | **PASS** (fixtures only) |
 | **F2 legs (CREATED vs VERIFIED)** | `node-create.sh --project P --repo git@gitlab… --deploy-key K` then `verify-node.sh --agent A --server S` | the clone succeeds under the per-repo key, the repo's suite runs (node-dependent tests included), the cache adds 0 bytes, `VERIFY: PASS` | not run | **UNVERIFIED** — needs the real read-only deploy key and a fresh bunker node; this repo proves the mechanism, not the grant |
 | gateway auth staged before the adapter | `bash tests/selftest.sh` §55 (`project-node.sh --apply --project <p> --layers 20` in a fixture home) | `PASS gateway_auth — dashboard.basic_auth present …; password in …/.node/auth/gateway.pass (mode 600, value not printed)` and the adapter's `PASS gateway_start — /api/status -> 200`; the same adapter still refuses without the block | 2026-11-07 | **PASS** (fixture only — no live node run) |
-| certification ladder | `scripts/verify-node.sh --agent <id> --server <host>` on a live node | per-leg observation | not run this round | **UNVERIFIED** (needs a live node; legs documented in §11) |
+| certification ladder | `scripts/verify-node.sh --agent <id> --server <host>` on a live node | per-leg observation | not run | **UNVERIFIED** (needs a live node; legs documented in §11) |
 
 ## 8. Metrics
 
-**RED — none (absence-proved this round).** No provisioner script exports counters, gauges or
+**RED — none (absence-proved).** No provisioner script exports counters, gauges or
 histograms — `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' scripts/bunker-provision.sh
 scripts/disk_floor.py scripts/verify-node.sh scripts/node_*.py scripts/bunker_config_gen.py
 scripts/node-create.sh scripts/bunker-crier-connect.sh scripts/bunker-server-install.sh` → 0 matches.
@@ -216,7 +214,7 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
 
 ## 9. Log lines (verbatim)
 
-**Scope (B09, measured this round).** `grep -cE '\b(ok|bad|warn|note|say)\s+"' scripts/bunker-provision.sh scripts/verify-node.sh` = **108 + 33** helper call sites. The 5 rows below are the evidentiary refusal/lie-case rows (F1-1, CF-224); the generic per-row helper surface is not inventoried one-per-site — the uncovered count is a named RED on this field.
+**Scope (B09, measured).** `grep -cE '\b(ok|bad|warn|note|say)\s+"' scripts/bunker-provision.sh scripts/verify-node.sh` = **108 + 33** helper call sites. The 5 rows below are the evidentiary refusal/lie-case rows (F1-1, CF-224); the generic per-row helper surface is not inventoried one-per-site — the uncovered count is a named RED on this field.
 
 | Level | Line | Emitted when | Kind |
 |---|---|---|---|
@@ -255,7 +253,7 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
   gate. An existing `basic_auth` block is left untouched (a re-run changes nothing); a `dashboard`
   block that is not `basic_auth` is a counted FAIL row and is not overwritten. `--check` reports the
   same block read-only and FAILs when it is absent, naming the refused bind.
-- **Certification ladder** (`verify-node.sh`, **241 lines** at `08a2c8a` — the CF-270 `--port` fix, commit `f1d5cfb`, inserted +28/−1 near the top and shifted every round-9 locator ~+25; all re-pinned this round):
+- **Certification ladder** (`verify-node.sh`, **241 lines** at `08a2c8a` — the CF-270 `--port` fix, commit `f1d5cfb`, inserted +28/−1 near the top and shifted every prior locator ~+25; all re-pinned):
   - `:40-55` **port validation (NEW leg, CF-270)** — `--port` is validated **before any use**: a digit test (`:40-43`, `case "$PORT" in ''|*[!0-9]*)`), a 5-digit length cap (`:46`, `[ "${#PORT}" -le 5 ]`), then two `verify-node: --port must be digits 1-65535 (got: …)` → exit 2 refusals (`:47-50`, printf `:48` exit 2 `:49`; and `:52-55`, printf `:53` exit 2 `:54`), with a base-10 re-expansion `PORT=$((10#$PORT))` at `:51` between them. A non-digit `--port` is refused here and no longer interpolates into the remote `bash -lc` shell.
   - `:73-76` `agent_alive` — `bunker exec … echo ALIVE $(hostname)` must return `ALIVE*`; on
     failure `:76` prints `RESULT: FAIL` and exits 1 **before** any terminal `VERIFY:` form.
@@ -327,7 +325,7 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
   - **F1-2** — unknown explicit role raises `FloorError` (`disk_floor.py:123-125`, exit 2); only an
     absent role defaults to worker.
   - **F1-3** — floor precedence read and confirmed (`:115-141`).
-  - **F1-4** (carried) — round-3 said `disk_floor.py` is "invoked by bunker-provision.sh"; measured,
+  - **F1-4** (carried) — an earlier citation said `disk_floor.py` is "invoked by bunker-provision.sh"; measured,
     the caller is `project-node.sh:173`. `node_seed.py`'s caller is `bunker-provision.sh:454`.
   - **F1-5** (new, B05) — the checkout leg's unmeasurable→WARN does **not** set UNVERIFIED, so
     `VERIFY: PASS` is reachable with an unmeasured checkout; the seed leg does set it. Asymmetric

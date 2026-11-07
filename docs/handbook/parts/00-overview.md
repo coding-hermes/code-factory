@@ -1,7 +1,7 @@
 # Part 0 — Overview
 
-*Read this page before any chapter. It is the only page that asks you to hold the whole
-thing at once; everything after it is detail.*
+*Read this page before any chapter. It is the only page that presents the whole
+system at once; everything after it is detail.*
 
 ## What this system is for
 
@@ -74,5 +74,5 @@ promises is unproven, the contract register (Part IV) marks that side RED.
 | VII | How does a work item get derived, dispatched and judged? |
 | VIII | How is the book itself delivered and kept true? |
 
-If a chapter and the code disagree, the code is right and the disagreement is a finding.
+If a chapter and the code disagree, the code is authoritative and the disagreement is a finding.
 This book is evidence, not authority.

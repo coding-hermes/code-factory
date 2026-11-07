@@ -6,10 +6,10 @@
 |---|---|
 | Module name | DISPATCHER (`crier-fleet`) |
 | Path | `/home/kara/crier-fleet/dispatcher.py` (538 lines) |
-| Revision | `283bca91091933177ec521e52f37f1bc987cf7da` (crier-fleet HEAD, stamped this round) |
+| Revision | `283bca91091933177ec521e52f37f1bc987cf7da` (crier-fleet HEAD) |
 | Language / runtime | Python — `#!/usr/bin/env python3`, no pinned version; host `python3` = 3.14.9 |
 | Owner lane | crier-fleet (control plane) |
-| Status | **VERIFIED** — `dispatcher.py` read in full this round (job model, ledger, completion bridge, settings, loop, all 23 log lines); the live-job tests are decoration (no assert) and the synchronous `CF_DURABLE_JOB=0` path is unmeasured (§7) |
+| Status | **VERIFIED** — `dispatcher.py` read in full (job model, ledger, completion bridge, settings, loop, all 23 log lines); the live-job tests are decoration (no assert) and the synchronous `CF_DURABLE_JOB=0` path is unmeasured (§7) |
 
 ## 2. Purpose, authority and position
 
@@ -25,13 +25,13 @@ inbox until it expires.
 - A task recorded as done that never ran. The ledger replays a recorded result instead of
   re-running a redelivery (`dispatcher.py:470-475`) — **but only for a task whose result reached
   the ledger before the crash** (F11-3).
-- **The deadline kill does not kill the harness's children (B01, corrected this round).** The
+- **The deadline kill does not kill the harness's children (B01).** The
   runner template starts the harness as `timeout {limit} … hermes chat -q … &` (`:260`); GNU
   timeout puts the command in **its own process group** (`:246-249` documents this). The deadline
   kill at `:329` sends `kill -TERM -$(cat {d}/pid)` — `pid` is run.sh's own `$$` (`:291` runs
   `setsid sh run.sh`), so it kills **run.sh's** process group (run.sh + the heartbeat subshell +
   the `timeout` wrapper), *not* the separate timeout group holding `hermes` and its children. An
-  independent disposable execution (sol round-5) measured `timeout_still_live=True` after the
+  independent disposable execution measured `timeout_still_live=True` after the
   runner group was terminated. The "kill the process GROUP so nothing keeps spending" guarantee is
   **withdrawn** until a test proves the deadline path kills the harness group and its children
   (F11-8).
@@ -68,10 +68,10 @@ inbox until it expires.
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
 | `DISPATCH_POLL_S` | 5 (`:43`) | positive float | poll interval | shorter polls raise bus load |
-| `DISPATCH_PROGRESS_S` | 20 (`:45`) | positive int | seconds between progress lines the node runner writes | **no suppression branch exists** — the runner loop (`:250-257`) writes a line then `sleep {hb}`; `0` removes the delay (busy loop), a negative value fails the `sleep` and the loop continues. Round-4's "0 or negative suppresses progress" was false (sol B25) |
+| `DISPATCH_PROGRESS_S` | 20 (`:45`) | positive int | seconds between progress lines the node runner writes | **no suppression branch exists** — the runner loop (`:250-257`) writes a line then `sleep {hb}`; `0` removes the delay (busy loop), a negative value fails the `sleep` and the loop continues; 0 or negative does not suppress progress (B25) |
 | `DISPATCH_LEASE_S` | 1800 (`:46`) | positive int | inbox lease | too long holds messages during a crash |
-| `DISPATCH_EXEC_TIMEOUT` | `"400s"` (`:47`, a **string**) | — | **inert in this revision** — assigned at `:47` and never read (`grep -n EXEC_TIMEOUT dispatcher.py` → 1 match, the assignment itself; sol B22 AST check: exactly one `Store` reference, no load). The real per-call timeout is `_bunker`'s `timeout` argument (default 120, `:204-209`), with the outer subprocess capped at `timeout + 20` (`:209`). Round-5's "the timeout prefix on every `bunker exec` run" was **false** — this env var changes nothing at run time |
-| `DISPATCH_TASK_S` | `"240"` (`:48`, a **string**) | positive int at use (`task_seconds`, `:196`) | fallback task duration | a non-numeric env value raises `ValueError` **at use** (`int(TASK_S)` at `:196`), not at admission (kimi 8) |
+| `DISPATCH_EXEC_TIMEOUT` | `"400s"` (`:47`, a **string**) | — | **inert in this revision** — assigned at `:47` and never read (`grep -n EXEC_TIMEOUT dispatcher.py` → 1 match, the assignment itself; B22 AST check: exactly one `Store` reference, no load). The real per-call timeout is `_bunker`'s `timeout` argument (default 120, `:204-209`), with the outer subprocess capped at `timeout + 20` (`:209`); this env var adds no timeout prefix to `bunker exec` and changes nothing at run time |
+| `DISPATCH_TASK_S` | `"240"` (`:48`, a **string**) | positive int at use (`task_seconds`, `:196`) | fallback task duration | a non-numeric env value raises `ValueError` **at use** (`int(TASK_S)` at `:196`), not at admission |
 | `DISPATCH_MARGIN_S` | 60 (`:52`) | positive int | reserve before the caller's deadline | see F11-4 |
 | `DISPATCH_TASK_CAP_S` | 7200 (`:53`) | positive int | ceiling on the envelope wall | a larger envelope wall is clamped |
 | `BUNKER_BIN` | `/home/kara/.local/bin/bunker` (`:60`) | absolute path | which bunker binary runs | PATH order would otherwise pick a wrong binary |
@@ -99,14 +99,14 @@ cross-system contracts carry their CT id; an interface with no canonical entry i
 | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|
 | python compile | `python3 -m py_compile dispatcher.py` | exit 0 | 2026-11-07, rev `283bca9` (re-confirmed unchanged) | PASS |
-| live job tests | `tests/test_durable_job.py` / `test_job_kill.py` | failure oracle | not run this round | **UNVERIFIED** — these scripts print results but do not assert (`tests/test_durable_job.py` contains no `assert`/`raise`/`exit`), so they cannot fail (F11-2, glm 8) |
+| live job tests | `tests/test_durable_job.py` / `test_job_kill.py` | failure oracle | not run | **UNVERIFIED** — these scripts print results but do not assert (`tests/test_durable_job.py` contains no `assert`/`raise`/`exit`), so they cannot fail (F11-2) |
 
-The round-3 "source read (538 lines) PASS" row was decoration — reading the file cannot fail. It
-is removed; the body read is recorded in §1/§13 instead.
+A "source read (538 lines)" row cannot be a test — reading a file cannot fail; the body read is
+recorded in §1/§13 instead.
 
 ## 8. Metrics
 
-**RED — none (absence-proved this round).** The dispatcher emits no counters, gauges or histograms
+**RED — none (absence-proved).** The dispatcher emits no counters, gauges or histograms
 — `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' dispatcher.py` → 0 matches. Dispatch
 rate, job duration, kill count and redelivery count are answerable only by grepping the log. (It
 appends a `dispatch-ledger.jsonl`, but that is a replay ledger, not an emitted metric.)
@@ -128,7 +128,7 @@ lines — `:81` a comment mentioning `log()` and `:112` the `def log(` definitio
 | error | `dispatcher already running as pid %s — exiting this copy` (`:405`) | double start | evidentiary |
 | info | `no FLEET_AGENTS configured — nothing to dispatch` (`:413`) | empty registry | evidentiary |
 | info | `dispatcher up: %d agents, bus=%s, poll=%ss, lease=%ss` (`:415`) | start | descriptive |
-| error | `client for %s failed: %s` (`:422`) | **local client construction fails** — `client_for` (`:128-132`) only builds a `Crier` (URL parse, key load, token); no network call, so this is a credential/client-config failure, not node unreachability (kimi B64 / sol B26) | descriptive |
+| error | `client for %s failed: %s` (`:422`) | **local client construction fails** — `client_for` (`:128-132`) only builds a `Crier` (URL parse, key load, token); no network call, so this is a credential/client-config failure, not node unreachability (B64 / B26) | descriptive |
 | info | `dispatch ledger: %d recorded result(s) — redeliveries replay instead of re-running` (`:425`) | start | evidentiary |
 | error | `retrieve failed for %s: %s` (`:437`) | poll error | descriptive |
 | error | `empty task %s -> %s: refusing, acking so it stops looping` (`:446`) | blank directive | evidentiary |
@@ -165,9 +165,9 @@ lines — `:81` a comment mentioning `log()` and `:112` the `def log(` definitio
   `dispatch` waits synchronously for a job to finish (`:479`) before servicing the next message.
   One long job blocks polling and execution for every later agent in the process — no per-agent
   concurrency. The worst case is unmeasured.
-- **F11-6 (B23 corrected, sol B24).** `dispatch` (`:334-358`) selects `dispatch_durable` only when
+- **F11-6 (B23, B24).** `dispatch` (`:334-358`) selects `dispatch_durable` only when
   `CF_DURABLE_JOB != "0"`; `CF_DURABLE_JOB=0` runs `bunker exec … hermes chat -q` synchronously
-  with `timeout (limit+30)`. Round-4 claimed the synchronous path has "no replay ledger" — **false**:
+  with `timeout (limit+30)`. The synchronous path is **not** ledger-less:
   `main()` checks the ledger before calling `dispatch` (`:470-475`) and records either execution
   mode's result after it (`:481-483`). `CF_DURABLE_JOB=0` bypasses the detached start/poll/kill
   supervision, but it still participates in the outer replay ledger. The crash-before-ledger-write
@@ -184,9 +184,9 @@ lines — `:81` a comment mentioning `log()` and `:112` the `def log(` definitio
 
 ## 13. Evidence of record
 
-- Code read: `dispatcher.py` (538 lines, read in full this round).
+- Code read: `dispatcher.py` (538 lines, read in full).
 - Commands run: `python3 -m py_compile dispatcher.py` (PASS); `grep -n 'log(' dispatcher.py` (25 lines: 23 call sites + comment `:81` + def `:112`); `grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' dispatcher.py` (0 matches); `grep -n EXEC_TIMEOUT dispatcher.py` (1 match, `:47` — inert).
-- Rev stamped: `283bca9` (re-confirmed this round: `git rev-parse HEAD` = `283bca91091933177ec521e52f37f1bc987cf7da`, `wc -l dispatcher.py` = 538).
+- Rev stamped: `283bca9` (re-confirmed: `git rev-parse HEAD` = `283bca91091933177ec521e52f37f1bc987cf7da`, `wc -l dispatcher.py` = 538).
 - Board rows: CF-334, CF-355, CF-365.
 - **Findings:**
   - **F11-1** (carried) — no pinned Python; calls `retrieve`/`deliver`/`ack`, never `send`/`complete`.
