@@ -533,3 +533,4 @@
 {"id": 533, "timestamp": "2026-11-07T17:12:53+00:00", "event_type": "task_completed", "task_id": "CF-379", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
 {"id": 534, "timestamp": "2026-11-07T19:34:07+00:00", "event_type": "task_completed", "task_id": "CF-097", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
 {"id": 535, "timestamp": "2026-11-07T20:48:17+00:00", "event_type": "task_completed", "task_id": "CF-141", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
+{"id": 536, "timestamp": "2026-11-07T20:52:33+00:00", "event_type": "task_created", "task_id": "CF-384", "actor": "foreman", "detail": "{\"id\":\"CF-384\",\"status\":\"pending\"}"}
