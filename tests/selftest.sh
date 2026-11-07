@@ -5412,7 +5412,7 @@ else
 fi
 rm -rf "$cf275"
 
-# ch:trace row=CF-003 spec=docs/handbook/OUTLINE.md#part-iii-m1-m5-f2 wave=none:single-shared-checkout test=tests/test_node_provisioning.py doc=docs/handbook/chapters/M1-provisioning.md prompt=CF-003-brief evidence=tests/test_node_provisioning.py witness=bash tests/selftest.sh verdict=none:foreman-lifecycle commit=none:worker-commit-pending memory=none:foreman-closeout
+# ch:trace row=CF-003 spec=specs/NODE.md#credentials--per-repo-deploy-keys wave=none:single-shared-checkout test=tests/test_node_provisioning.py doc=docs/handbook/chapters/M1-provisioning.md prompt=CF-003-brief evidence=tests/test_node_provisioning.py witness=bash tests/selftest.sh verdict=none:foreman-lifecycle commit=none:worker-commit-pending memory=none:foreman-closeout
 say "58. per-repo deploy key, node runtime, shared module cache, footprint, orphan reap (CF-003)"
 # Two layers of proof. The unit battery owns the mechanisms (a key refused at 0644, a wrong
 # digest installing nothing, a sealed cache that builds with GOPROXY=off and refuses to grow,
@@ -5495,6 +5495,90 @@ if [ "$rc" -ne 0 ] \
 else
   say "  FAIL  a readable deploy key did not block the clone (exit $rc)"; fails=$((fails+1))
   printf '%s\n' "$out" | grep -E 'repo_key|repo_clone|NODE:' | sed 's/^/    | /'
+fi
+
+# ARM (CF-003 spawn gate): the credential is validated on the CONTROL HOST before an agent
+# exists, not after the bytes have been copied into one. Measured at the pre-fix revision
+# (4f32a50): a mode-600 `.pub`, a mode-600 junk file and a passphrase-protected key each printed
+# `PASS deploy_key — … mode 600` and went on to spawn; an HTTPS remote with a valid key did the
+# same and only failed inside the node. Every arm below runs node-create.sh with NO BUNKER_SERVER,
+# so a refusal is reached without a server, a bunker client or a spawned agent — and the green
+# arm proves the gate ADMITS a usable credential by continuing to `server_declared`.
+if ! command -v ssh-keygen >/dev/null 2>&1; then
+  say "  SKIP  the node-create spawn gate — ssh-keygen absent from PATH, a deploy key cannot be measured here"
+else
+  mkdir -p "$cf003/keys"
+  mkdir -p "$cf003/create-home"
+  ssh-keygen -q -t ed25519 -N '' -f "$cf003/keys/real" -C cf003-fixture >/dev/null 2>&1
+  ssh-keygen -q -t ed25519 -N 'passphrase' -f "$cf003/keys/enc" -C cf003-fixture >/dev/null 2>&1
+  cp "$cf003/keys/real.pub" "$cf003/keys/public.key"
+  printf 'not a key at all\n' > "$cf003/keys/junk.key"
+  chmod 600 "$cf003/keys/real" "$cf003/keys/enc" "$cf003/keys/public.key" "$cf003/keys/junk.key"
+  cf003_create() {
+    env -u BUNKER_SERVER HOME="$cf003/create-home" NODE_PROJECT=demo \
+      CRIER_URL=http://127.0.0.1:9 \
+      bash "$HERE/scripts/node-create.sh" --project demo --repo "$1" --deploy-key "$2" 2>&1
+  }
+  gate_fail='  FAIL  deploy_key:loadable — '
+  for unusable in public.key junk.key enc; do
+    out=$(cf003_create git@gitlab.example:group/repo.git "$cf003/keys/$unusable"); rc=$?
+    if [ "$rc" -eq 1 ] \
+       && [ "$(printf '%s\n' "$out" | grep -cF "$gate_fail")" = 1 ] \
+       && printf '%s\n' "$out" | grep -qF -- "$cf003/keys/$unusable does not load as an unencrypted private key" \
+       && ! printf '%s\n' "$out" | grep -q '^  FAIL  server_declared' \
+       && ! printf '%s\n' "$out" | grep -q '^  ..    spawning'; then
+      say "  PASS  node-create refuses $unusable at the spawn gate, before any agent exists (exit $rc)"
+    else
+      say "  FAIL  node-create accepted $unusable as a deploy key (exit $rc)"; fails=$((fails+1))
+      printf '%s\n' "$out" | sed 's/^/    | /'
+    fi
+  done
+  # The other half of the same credential: an HTTPS remote can never be cloned with a deploy key.
+  out=$(cf003_create https://gitlab.example/group/repo.git "$cf003/keys/real"); rc=$?
+  if [ "$rc" -eq 1 ] \
+     && [ "$(printf '%s\n' "$out" | grep -cF '  FAIL  deploy_key:repo — https://gitlab.example/group/repo.git is not an SSH remote')" = 1 ] \
+     && ! printf '%s\n' "$out" | grep -q '^  FAIL  server_declared'; then
+    say "  PASS  node-create refuses a deploy key on an HTTPS remote at the spawn gate (exit $rc)"
+  else
+    say "  FAIL  an HTTPS remote was accepted with a deploy key (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+  # GREEN control: a real 0600 key on an SSH remote passes both rows and the run proceeds to the
+  # next precondition. Without this, "refuses everything" would read as a pass.
+  out=$(cf003_create git@gitlab.example:group/repo.git "$cf003/keys/real"); rc=$?
+  if [ "$rc" -eq 1 ] \
+     && [ "$(printf '%s\n' "$out" | grep -Fxc -- "  PASS  deploy_key — $cf003/keys/real mode 600")" = 1 ] \
+     && [ "$(printf '%s\n' "$out" | grep -Fxc -- "  PASS  deploy_key:loadable — $cf003/keys/real loads as an unencrypted private key")" = 1 ] \
+     && [ "$(printf '%s\n' "$out" | grep -Fxc -- '  PASS  deploy_key:repo — git@gitlab.example:group/repo.git is an SSH remote')" = 1 ] \
+     && printf '%s\n' "$out" | grep -q '^  FAIL  server_declared' \
+     && ! printf '%s\n' "$out" | grep -q '^  FAIL  deploy_key'; then
+    say "  PASS  a usable read-only key passes the spawn gate and the run continues past it"
+  else
+    say "  FAIL  the spawn gate did not admit a usable deploy key (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+  # RED proof: the same public-key fixture against the revision this row was raised on must NOT be
+  # refused. Pointed at the fixed script the control fails, so the arm discriminates.
+  mkdir -p "$cf003/prefix"
+  cp -r "$HERE/scripts" "$cf003/prefix/scripts"
+  if git -C "$HERE" show 4f32a50:scripts/node-create.sh > "$cf003/prefix/scripts/node-create.sh" 2>/dev/null; then
+    chmod +x "$cf003/prefix/scripts/node-create.sh"
+    out=$(env -u BUNKER_SERVER HOME="$cf003/create-home" NODE_PROJECT=demo CRIER_URL=http://127.0.0.1:9 \
+      bash "$cf003/prefix/scripts/node-create.sh" --project demo \
+      --repo git@gitlab.example:group/repo.git --deploy-key "$cf003/keys/public.key" 2>&1); rc=$?
+    if [ "$rc" -eq 1 ] \
+       && ! printf '%s\n' "$out" | grep -q 'deploy_key:loadable' \
+       && printf '%s\n' "$out" | grep -qF -- "$cf003/keys/public.key mode 600" \
+       && printf '%s\n' "$out" | grep -q '^  FAIL  server_declared'; then
+      say "  PASS  pre-fix 4f32a50 accepts the public key as a deploy key — the gate arm is falsifiable"
+    else
+      say "  FAIL  the pre-fix control did not reproduce the unvalidated spawn gate (exit $rc)"; fails=$((fails+1))
+      printf '%s\n' "$out" | sed 's/^/    | /'
+    fi
+  else
+    say "  FAIL  pre-fix source unavailable (git show 4f32a50:scripts/node-create.sh)"; fails=$((fails+1))
+  fi
+  unset -f cf003_create
 fi
 
 # ARM: layer 00 reports the footprint it will occupy against the resolved floor.

@@ -11,8 +11,11 @@
 # `FAIL agent` that names the remedy and exits 1 without touching the agent (CF-051).
 # --ref is the branch or tag the node clones; it defaults to main (or $NODE_REF) and is the
 # remedy project-node.sh names when a repo's default branch is not main.
-# --deploy-key <file> injects a read-only per-repo SSH deploy key: the key is validated here
-# (readable, mode 600) BEFORE any agent is spawned, copied to the node, installed through
+# --deploy-key <file> injects a read-only per-repo SSH deploy key: the credential is validated
+# here BEFORE any agent is spawned — readable, mode 600, loads as an unencrypted private key
+# (ssh-keygen), and the remote is an SSH URL. A `.pub`, a junk file, an encrypted key or an
+# HTTPS/local remote is a named refusal, not a clone that fails after the agent exists. The key
+# is then copied to the node, installed through
 # scripts/deploy_key.py as $HOME/.node/keys/<project>.key (mode 600) with a generated
 # $HOME/.node/keys/ssh_config, and handed to project-node.sh as NODE_DEPLOY_KEY. The key's
 # bytes are never an argv value and never printed. --gomodcache <node path> points the node
@@ -92,9 +95,14 @@ if [ -z "${CRIER_URL:-}" ]; then
   bad "crier_url" "CRIER_URL unset or empty — export CRIER_URL=http://crier.example:8767"
   exit 1
 fi
-# A credential is validated before an agent exists: a key that is unreadable or readable by
-# group/other is a named refusal here, not a clone failure 40 seconds later on the node.
+# A credential is validated before an agent exists: a key that is unreadable, readable by
+# group/other, or that ssh cannot load is a named refusal here, not a clone failure 40
+# seconds later on the node.
 if [ -n "$DEPLOY_KEY" ]; then
+  if [ -z "$REPO" ]; then
+    bad "deploy_key" "$DEPLOY_KEY given with no --repo — a deploy key belongs to one repository"
+    exit 1
+  fi
   if [ ! -r "$DEPLOY_KEY" ]; then
     bad "deploy_key" "$DEPLOY_KEY is unreadable — the node would clone without a credential"
     exit 1
@@ -103,6 +111,33 @@ if [ -n "$DEPLOY_KEY" ]; then
   case "$dk_mode" in
     600|400) ok "deploy_key" "$DEPLOY_KEY mode $dk_mode" ;;
     *) bad "deploy_key" "$DEPLOY_KEY mode $dk_mode — group/other can read it (chmod 600)"; exit 1 ;;
+  esac
+  # A readable 0600 file is not yet a credential (CF-003). deploy_key.py refuses a public key, a
+  # non-key file and a passphrase-protected key INSIDE the node — that is after the agent exists
+  # and the bytes have been copied. Ask the client that will present the key instead: ssh-keygen
+  # loads it, so a mode-600 `.pub`, a junk file and an encrypted key are each a named refusal on
+  # the control host, before the spawn. The public half it derives is discarded, never printed.
+  skg=$(have ssh-keygen) || {
+    bad "deploy_key" "ssh-keygen absent — cannot prove $DEPLOY_KEY is a private key (install openssh-client)"
+    exit 1
+  }
+  if ! "$skg" -y -P '' -f "$DEPLOY_KEY" </dev/null >/dev/null 2>&1; then
+    bad "deploy_key:loadable" "$DEPLOY_KEY does not load as an unencrypted private key (ssh-keygen -y refuses it) — a public key, an encrypted key or a non-key file cannot authenticate the clone"
+    exit 1
+  fi
+  ok "deploy_key:loadable" "$DEPLOY_KEY loads as an unencrypted private key"
+  # The remote form is the other half of the same credential: a deploy key authenticates SSH and
+  # nothing else, so the classes that provably cannot work are refused here rather than by
+  # deploy_key.py install after the spawn. The exact SSH form stays the install step's job, so a
+  # form this gate does not recognise gets no row rather than a PASS it did not measure.
+  case "$REPO" in
+    https://*|http://*|file://*)
+      bad "deploy_key:repo" "$REPO is not an SSH remote — a deploy key authenticates SSH only; use git@<host>:<group>/<repo>.git (or drop --deploy-key)"
+      exit 1 ;;
+    /*|~*|./*|../*)
+      bad "deploy_key:repo" "$REPO is a local path — no key is needed or injected (drop --deploy-key)"
+      exit 1 ;;
+    ssh://*|*@*:*) ok "deploy_key:repo" "$REPO is an SSH remote" ;;
   esac
 fi
 if [ -n "$GOMODCACHE" ]; then

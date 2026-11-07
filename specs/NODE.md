@@ -133,9 +133,14 @@ and prints the **one** clone command a stranger can paste:
 GIT_SSH_COMMAND='ssh -F ~/.node/keys/ssh_config' GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch main <repo> ~/repo
 ```
 
-`scripts/node-create.sh --deploy-key <file>` is the spawn path: the key is validated on the control
-host **before any agent is spawned**, copied to the node as a file (never an argv value), installed
-by `deploy_key.py`, and the incoming copy is deleted in the same round trip. `project-node.sh`
+`scripts/node-create.sh --deploy-key <file>` is the spawn path: the credential is validated on the
+control host **before any agent is spawned** — the file is readable, its mode is 600/400, and it
+must load as an **unencrypted private key** (`ssh-keygen -y`, the same client that will present it),
+with the remote in SSH form. A mode-600 `.pub`, a non-key file, a passphrase-protected key and an
+HTTPS (or local-path) remote are each a named refusal there — `FAIL deploy_key:loadable` /
+`FAIL deploy_key:repo` — so the failure lands before an agent exists instead of after its bytes have
+been copied in. The key is then copied to the node as a file (never an argv value), installed by
+`deploy_key.py`, and the incoming copy is deleted in the same round trip. `project-node.sh`
 layer 40 consumes it as `NODE_DEPLOY_KEY` (+ optional `NODE_SSH_CONFIG`): the clone runs under a
 process-scoped `GIT_SSH_COMMAND`, and `core.sshCommand` is written into that one repository after a
 successful clone so later fetches use the same identity. **Read-only is the key's server-side grant**;
