@@ -1,0 +1,114 @@
+{
+  "task_id": "CF-192",
+  "task_title": "install-hermes.sh: the occupied-port branch must not certify an unauthenticated public bind",
+  "task_criteria": [
+    "1. scripts/harness/install-hermes.sh occupied-port branch no longer prints ok port + PASS and HERMES: PASS on a config with no dashboard.basic_auth: it prints the existing auth refusal or a NAMED row stating the listener was not started by this adapter and its auth is unverified, and exits nonzero. 2. tests/selftest.sh gains an arm that drives the occupied-port branch with a listener stub and a no-basic_auth config, asserting the named FAIL row and rejecting the decoy substring; its red proof on the pre-fix tree and green proof on the fixed tree are both printed in the tick evidence. 3. The two existing green paths stay green in the same run: free port + valid basic_auth reaches PASS gateway_start, free port + no basic_auth prints the exact CF-071 refusal wording. 4. bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at the landing commit. 5. docs/handbook/chapters/M5-harness.md records the new occupied-port behaviour (this row changes M5's install layer)."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "e12c9a84f05c5a3b48dc6b7117e02c07d7bed8ae",
+  "working_tree_content_fingerprint": "f9cfc46766357bfeaa65f3dfb20c8ea5c43c845bfc234408c07102b87bee42e0",
+  "working_tree_dirty_path_count": 0,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261107T100539.739597Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n5:13AM INF scanned ~3583661 bytes (3.58 MB) in 1.06s\n5:13AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 411 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261107T100539.739597Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n install-go.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n panel_supervise.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n verify-patch.sh\n  PASS  bash -n harness-vars.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-deepseek.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n install-pi-agent.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.LAHUIYPRqu/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n  PASS  uncreatable destination -> fetch_verified exit 1, no artifact installed\n  PASS  caller surfaced the failed install: 1 '^  FAIL  go:download' row, fixture exit 1\n6. no literal credential assignments\n  PASS  none found\n  section 6 tailnet-address (CF-378): no tracked file outside the board publishes a tailnet address\n  PASS  tailnet-address \u2014 0 tailnet-address hits in 319 tracked file(s) outside .coding-hermes/board and .gitreins\n  PASS  seeded fixture -> FAIL names docs/seeded.md:3; the out-of-range subnet stays green\n\n\u2026 [35794 chars omitted \u2014 475 line(s)] \u2026\n  PASS  existing --agent -> reuse row printed, staging reached, node created (exit 0)\n  PASS  pre-fix revision reports the false reuse row and stages anyway (fixture detects CF-051)\n54. the bus worker decodes the wire directive member, and the pre-fix revision cannot (CF-354)\n  PASS  text_b64 decoded to the harness bytes, legacy text still runs, corrupt text_b64 / absent instruction / base64 digest each refused\n  PASS  pre-fix 5b11bdc refuses the text_b64 dispatch with the brief row (fixture detects CF-354)\n55. the create path stages dashboard.basic_auth before the adapter, and the gate still refuses without it (CF-150)\n  PASS  staged set carries node_gateway_auth.py (8 files)\n  PASS  no dashboard.basic_auth -> exit 1, refusal named, serve never launched\n  PASS  layer 20 staged a non-empty basic_auth block and a mode 600 password file, secret never printed\n  PASS  staged home: gateway_start PASSes, no refusal row, serve launched (exit 1 is inference_key)\n  PASS  a dashboard block without basic_auth -> one counted FAIL row, NODE: FAIL (1), config untouched\n  PASS  occupied :10800 without dashboard.basic_auth -> exit 1, named FAIL port row, HERMES: FAIL (1), nothing certified\n  FAIL  port \u2014 listening on :10800 (not started by this adapter; auth unverified \u2014 a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml \u2014 block absent)\n  PASS  occupied :10800 WITH dashboard.basic_auth keeps PASS port / PASS status_probe (only inference_key fails)\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261107T100539.739597Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 1. scripts/harness/install-hermes.sh occupied-port branch no longer prints ok port + PASS and HERMES: PASS on a config with no dashboard.basic_auth: it prints the existing auth refusal or a NAMED row stating the listener was not started by this adapter and its auth is unverified, and exits nonzero. 2. tests/selftest.sh gains an arm that drives the occupied-port branch with a listener stub and a no-basic_auth config, asserting the named FAIL row and rejecting the decoy substring; its red proof on the pre-fix tree and green proof on the fixed tree are both printed in the tick evidence. 3. The two existing green paths stay green in the same run: free port + valid basic_auth reaches PASS gateway_start, free port + no basic_auth prints the exact CF-071 refusal wording. 4. bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at the landing commit. 5. docs/handbook/chapters/M5-harness.md records the new occupied-port behaviour (this row changes M5's install layer).: PASS (code inspection): install-hermes.sh:302-323 occupied-port branch now calls check_public_bind_auth (line 310). If it fails, only bad \"port\" \"listening on :$PORT (not started by this adapter; auth unverified \u2014 ... ${port_auth_reason})\" is printed (line 321) \u2014 no ok port, no status_probe PASS. bad() increments FAILED (scripts/lib.sh:7), and line 388 exits 1 with HERMES: FAIL ($FAILED). Need runtime confirmation.\nPartial verdict \u2014 all verified criteria passed",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 1. scripts/harness/install-hermes.sh occupied-port branch no longer prints ok port + PASS and HERMES: PASS on a config with no dashboard.basic_auth: it prints the existing auth refusal or a NAMED row stating the listener was not started by this adapter and its auth is unverified, and exits nonzero. 2. tests/selftest.sh gains an arm that drives the occupied-port branch with a listener stub and a no-basic_auth config, asserting the named FAIL row and rejecting the decoy substring; its red proof on the pre-fix tree and green proof on the fixed tree are both printed in the tick evidence. 3. The two existing green paths stay green in the same run: free port + valid basic_auth reaches PASS gateway_start, free port + no basic_auth prints the exact CF-071 refusal wording. 4. bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at the landing commit. 5. docs/handbook/chapters/M5-harness.md records the new occupied-port behaviour (this row changes M5's install layer).: PASS (code inspection): install-hermes.sh:302-323 occupied-port branch now calls check_public_bind_auth (line 310). If it fails, only bad \"port\" \"listening on :$PORT (not started by this adapter; auth unverified \u2014 ... ${port_auth_reason})\" is printed (line 321) \u2014 no ok port, no status_probe PASS. bad() increments FAILED (scripts/lib.sh:7), and line 388 exits 1 with HERMES: FAIL ($FAILED). Need runtime confirmation.\nPartial verdict \u2014 all verified criteria passed",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "1. scripts/harness/install-hermes.sh occupied-port branch no longer prints ok port + PASS and HERMES: PASS on a config with no dashboard.basic_auth: it prints the existing auth refusal or a NAMED row stating the listener was not started by this adapter and its auth is unverified, and exits nonzero. 2. tests/selftest.sh gains an arm that drives the occupied-port branch with a listener stub and a no-basic_auth config, asserting the named FAIL row and rejecting the decoy substring; its red proof on the pre-fix tree and green proof on the fixed tree are both printed in the tick evidence. 3. The two existing green paths stay green in the same run: free port + valid basic_auth reaches PASS gateway_start, free port + no basic_auth prints the exact CF-071 refusal wording. 4. bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at the landing commit. 5. docs/handbook/chapters/M5-harness.md records the new occupied-port behaviour (this row changes M5's install layer).",
+                "status": "PASS",
+                "detail": "PASS (code inspection): install-hermes.sh:302-323 occupied-port branch now calls check_public_bind_auth (line 310). If it fails, only bad \"port\" \"listening on :$PORT (not started by this adapter; auth unverified \u2014 ... ${port_auth_reason})\" is printed (line 321) \u2014 no ok port, no status_probe PASS. bad() increments FAILED (scripts/lib.sh:7), and line 388 exits 1 with HERMES: FAIL ($FAILED). Need runtime confirmation."
+              }
+            ],
+            "summary": "Partial verdict \u2014 all verified criteria passed",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-192\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 1. scripts/harness/install-hermes.sh occupied-port branch no longer prints ok port + PASS and HERMES: PASS on a config with no dashboard.basic_auth: it prints the existing auth refusal or a NAMED row stating the listener was not started by this adapter and its auth is unverified, and exits nonzero. 2. tests/selftest.sh gains an arm that drives the occupied-port branch with a listener stub and a no-basic_auth config, asserting the named FAIL row and rejecting the decoy substring; its red proof on the pre-fix tree and green proof on the fixed tree are both printed in the tick evidence. 3. The two existing green paths stay green in the same run: free port + valid basic_auth reaches PASS gateway_start, free port + no basic_auth prints the exact CF-071 refusal wording. 4. bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at the landing commit. 5. docs/handbook/chapters/M5-harness.md records the new occupied-port behaviour (this row changes M5's install layer).: PASS (code inspection): install-hermes.sh:302-323 occupied-port branch now calls check_public_bind_auth (line 310). If it fails, only bad \"port\" \"listening on :$PORT (not started by this adapter; auth unverified \u2014 ... ${port_auth_reason})\" is printed (line 321) \u2014 no ok port, no status_probe PASS. bad() increments FAILED (scripts/lib.sh:7), and line 388 exits 1 with HERMES: FAIL ($FAILED). Need runtime confirmation.\nPartial verdict \u2014 all verified criteria passed\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-07T10:17:52.932812",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-07T10:17:52.952167+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 30524,
+        "truncated": false,
+        "source": "git show e12c9a84f05c"
+      }
+    ],
+    "task_id": "CF-192"
+  }
+}
