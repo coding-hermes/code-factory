@@ -72,21 +72,66 @@ if [ "$CFV_MODE" = "contract" ]; then
   exit 0
 fi
 
-p=$(have opencode)
+# Resolve the binary the way the §"conformance is measured" rule requires: the `$HOME`-owned prefix
+# first, PATH second. opencode's own installer places it at ~/.opencode/bin/opencode, which
+# `command -v` cannot see unless that directory is exported — a name-only resolution reported
+# "absent" for a binary the very next row reported as installed under $HOME, and the conformance
+# battery's smoke leg then had no measured path to execute.
+owned="$HOME/.opencode/bin/opencode"
+p=""
+from_path=0
+if [ -x "$owned" ]; then
+  p="$owned"
+else
+  p=$(have opencode)
+  [ -n "$p" ] && from_path=1
+fi
+v=""
 if [ -n "$p" ]; then
   ok "binary" "$p"
-  ok "version" "$("$p" --version 2>/dev/null | head -1)"
+  v="$("$p" --version 2>/dev/null | head -1)"
+  # A PASS with no measured value is a lie (tests/harness-conformance.sh `empty_adapter_rows`
+  # turns one into a FAIL); deepseek and pi-agent warn here, and this adapter printed an empty
+  # version row instead. Probe first, then report what the probe actually returned.
+  if [ -n "$v" ]; then ok "version" "$v"; else warn "version" "binary answered no --version"; fi
+  if [ "$from_path" = 1 ]; then
+    note "binary_provenance — PATH-provided; this repo records no opencode install ladder, so a PATH binary is host state, not an install it made"
+  fi
 else
-  bad "binary" "absent — no opencode in this node"
+  bad "binary" "absent — no opencode at $owned and none on PATH"
 fi
 
 if [ -x "$HOME/.opencode/bin/opencode" ]; then ok "user_space_binary" "$HOME/.opencode/bin/opencode"; else warn "user_space_binary" "not installed under \$HOME"; fi
 
-# Its non-interactive surface is the contract (specs/HARNESS.md §"what a foreign harness must gain").
-if [ -n "$p" ] && "$p" --help 2>/dev/null | grep -qi 'run\|exec\|serve'; then
-  ok "non_interactive" "a run/exec/serve mode is advertised"
+# `generation`: the conformance table carries a generation column because opencode v1 and v2 share a
+# binary name, so a v1 binary must never certify the v2 row. Reporting the measured major gives that
+# row an adapter-measured value instead of a battery-side guess about whether a gate exists.
+if [ -n "$v" ]; then
+  major="${v%%.*}"
+  case "$major" in
+    ''|*[!0-9]*) warn "generation" "no major version in '$v' — this build's generation cannot be certified" ;;
+    *) ok "generation" "v$major (measured $v)" ;;
+  esac
 else
-  warn "non_interactive" "could not confirm a non-interactive mode"
+  warn "generation" "no measured version — the generation cannot be certified"
+fi
+
+# Its non-interactive surface is the contract (specs/HARNESS.md §"what a foreign harness must gain").
+# These CLIs write --help to STDERR (measured on opencode 1.18.29: 4285 B on stderr, 0 B on stdout,
+# and `run --help` likewise), so a stdout-only probe answered "could not confirm" for a binary whose
+# own help advertises `run` in those same bytes — a false negative in a machine-readable row. Read
+# both streams and quote the word that matched, so the row carries a measurement.
+if [ -n "$p" ]; then
+  help=$({ "$p" --help; "$p" run --help; } 2>&1)
+  surface=$(printf '%s\n' "$help" | grep -oiE '(^|[[:space:]])(run|exec|serve)([[:space:]]|$)' | head -1 | tr -d '[:space:]')
+  surface="${surface:-}"
+  if [ -n "$surface" ]; then
+    ok "non_interactive" "the \`$surface\` surface is advertised (help read from stdout and stderr)"
+  else
+    warn "non_interactive" "neither \`--help\` nor \`run --help\` advertises run/exec/serve, on stdout or stderr"
+  fi
+else
+  warn "non_interactive" "no binary to probe"
 fi
 
 if [ "$MODE" = "--apply" ]; then

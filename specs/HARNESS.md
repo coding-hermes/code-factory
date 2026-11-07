@@ -73,6 +73,23 @@ not measured (the pin covers `x86_64-unknown-linux-musl` only). `tests/harness/c
 is its proof: refusals, the digest floor, idempotence, the version-mismatch arm, and — when a
 credential exists — one real turn.
 
+Opencode's adapter measures three things it used to guess at, and `--apply` still refuses by name
+(no ladder is recorded here). It resolves the binary from the `$HOME` prefix its own installer uses
+(`~/.opencode/bin/opencode`) before `PATH`, so an owned binary that `command -v` cannot see is
+named and measured rather than reported absent; it prints `version` only as `PASS` when the probe
+returned a value, and warns by name otherwise, because a `PASS` with no measured value is a lie the
+battery rewrites into a `FAIL`; and it prints a `generation` row (`v1`/`v2` from the measured
+major), because opencode v1 and v2 share a binary name and the conformance table's `opencode-v2`
+row must never be certified by a v1 binary — the battery quotes that row when the generations
+disagree instead of asserting the adapter has no gate. Its `non_interactive` row reads `--help`
+from stdout **and** stderr: the real binary writes help to stderr only (measured on 1.18.29: 4285 B
+on stderr, 0 B on stdout), so a stdout-only probe reported "could not confirm" for a surface the
+same bytes advertised. `tests/harness/opencode-install-test.sh` is the proof, offline: the
+refusals, the absent-binary failure path, a stub whose help goes to stderr only, the v1/v2
+generation rows, an unmeasurable version, a binary advertising no surface, the `--apply` refusal,
+and the owned-prefix resolution — with the pre-fix adapter (`45bd4bd`) run against the same stub as
+the red control that turns the `non_interactive` arm green only because it changed.
+
 ## A node records the harness it measured
 
 The battery above certifies a HOST. The two measurements below are the node's, and both were

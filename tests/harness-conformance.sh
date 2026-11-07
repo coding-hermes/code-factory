@@ -450,11 +450,18 @@ leg_check() {  # <id> <adapter file> <binary> <generation>
     [ -n "$value" ] || { emit "$id" check FAIL "adapter exited 0 but printed no PASS row to quote"; return 0; }
     # Generation gate: an adapter that cannot tell v1 from v2 must not certify v2.
     if [ "$gen" != "0" ] && [ -n "$(have "$bin")" ]; then
-      local ver major
+      local ver major gen_row
       ver="$(ver_of "$bin")"
       major="${ver%%.*}"
       if [ "${major:-}" != "$gen" ]; then
-        emit "$id" check FAIL "adapter passes on $bin $ver but this harness is the v$gen generation — the adapter has no generation gate"
+        # Quote the adapter's own `generation` row when it reports one (install-opencode.sh does),
+        # so this row names the measured generation instead of claiming no gate exists.
+        gen_row="$(adapter_row "$out" PASS generation)"
+        if [ -n "$gen_row" ]; then
+          emit "$id" check FAIL "the adapter's own row says \`$gen_row\` but this harness row is the v$gen generation — a v${major:-unknown} binary cannot certify v$gen"
+        else
+          emit "$id" check FAIL "adapter passes on $bin $ver but this harness is the v$gen generation — the adapter has no generation gate"
+        fi
         return 0
       fi
     fi
@@ -466,7 +473,7 @@ leg_check() {  # <id> <adapter file> <binary> <generation>
   # Report, do not repair: an adapter row that warns while the capability exists.
   if [ "$id" = opencode ] && printf '%s\n' "$out" | grep -q 'WARN  non_interactive'; then
     if ( cd "$WORK" && timeout 30 opencode run --help >/dev/null 2>&1 </dev/null ); then
-      note_row "$id: the adapter warned non_interactive could not be confirmed while \`opencode run --help\` exits 0 — its probe greps stdout and opencode writes help to stderr"
+      note_row "$id: the adapter warned non_interactive could not be confirmed while \`opencode run --help\` exits 0 — its probe now reads stdout AND stderr (the pre-fix one read stdout only, and opencode writes help to stderr), so a warning here is a surface this build does not advertise, not the old blind spot"
     fi
   fi
   # A refusal of the interpreter is worth naming with the knob that moves past it,
