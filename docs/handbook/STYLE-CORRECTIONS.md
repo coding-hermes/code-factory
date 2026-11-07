@@ -56,3 +56,35 @@ no caption · `§` reference to a missing heading · `M\d+-C\d+`, `Part 0`, `§I
 `SYSTEM-MODEL.yaml` defines 5 flows (F1–F5) and 16 components. The outline claims 16 flows and
 27 components. **F6–F16 cannot be drawn until they exist as steps**, and the dispatcher and
 proxy must be added as components before any map is honest.
+
+## Wave 2 — the visual graph, closed (this round)
+
+Defect 5 of this file is addressed at the model, not in prose:
+
+- `docs/SYSTEM-MODEL.yaml` now defines **27 components** — the dispatcher (M11) and the
+  inference proxy (M12) have boxes, joined by the guard, the scope minter, the provisioner,
+  the verifier, the lander, the safety reaper, the doc panel and the spine gate — every one
+  traceable to its module chapter, with `impl` the only volatile column.
+- **F6–F16 exist as steps** (16 flows total). Every step cites the chapter text or contract
+  row it came from; nothing is invented. Where a chapter measures a contract UNVERIFIED or
+  MISSING, the model says so, and the contract states are the five-state vocabulary
+  (`PROVEN | PARTIAL | BROKEN | MISSING | UNVERIFIED`), keyed `CT-01..CT-18` on every edge.
+- `scripts/gen_handbook_figures.py` generates **32 figures**: the full system map
+  (`system-map.svg`), one centred view per module (`module-M0..M12.svg` — inputs left,
+  outputs right, flows below, drawn mechanically from the model), one sequence diagram per
+  flow (`F1..F16.svg`), and the two state machines (`board-lifecycle.svg`,
+  `tick-lifecycle.svg`). Edges carry `CT-nn` labels, state is line style + dark ink on
+  white — no pastel chips — and every sheet carries a legend.
+- Print legibility is a **gate in the generator**: build_book.py constrains a landscape
+  figure to 170 mm (portrait 200 mm), so every shipped SVG is measured at that scale and
+  the build fails if the smallest label prints below 2.05 mm. Measured minimum across the
+  set: 2.18 mm (system map), 2.25 mm (module views), 2.38 mm (flows), 2.51/3.41 mm
+  (state machines). All 32 parse as XML.
+
+Known residue, disclosed: on the system map the CT-nn labels of edges that share both
+endpoints can sit close enough to read as one token (CT-01/CT-05, CT-02/CT-06); graphviz
+places mid-edge labels and a 27-node, 18-edge map has no collision-free spline layout at
+this print width. The module views disambiguate every such pair one-to-one. `BOOK.yaml`
+still lists the three old figure names (`00-system-map`, `00-board-row-lifecycle`,
+`F1-dispatch`); the builder manifest needs those three rows re-pointed at
+`system-map.svg`, `board-lifecycle.svg`, `F1.svg` and the module/flow figures filed in.

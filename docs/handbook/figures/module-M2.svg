@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="243.5mm" height="243.5mm" viewBox="0 0 680 974.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="974.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#111111"/></marker></defs><text x="24.0" y="38.0" font-size="17.00" font-weight="700" fill="#111111" text-anchor="start">M2 — DISPATCH (NODE SIDE)</text>
+<text x="24.0" y="60.0" font-size="9.50" font-weight="400" fill="#555555" text-anchor="start">whose turn it is becomes a brief, a run and a reply (M2 §2)</text>
+<rect x="265.0" y="172.0" width="150.0" height="84.0" fill="#ffffff" stroke="#111111" stroke-width="2.2"/>
+<text x="340.0" y="192.0" font-size="11.00" font-weight="400" fill="#666666" text-anchor="middle">M2</text>
+<text x="340.0" y="212.0" font-size="13.00" font-weight="700" fill="#111111" text-anchor="middle">DISPATCH (NODE SIDE)</text>
+<text x="20.0" y="158.0" font-size="9.50" font-weight="700" fill="#666666" text-anchor="start">INPUTS — upstream contracts</text>
+<line x1="230.0" y1="197.0" x2="263.0" y2="206.0" stroke="#14532d" stroke-width="1.8" marker-end="url(#ar)"/>
+<rect x="20.0" y="172.0" width="210.0" height="50.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="30.0" y="188.0" font-size="9.50" font-weight="700" fill="#14532d" text-anchor="start">CT-03 · CRIER → M2  [PROVEN]</text>
+<text x="30.0" y="202.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">inbox message + lease</text>
+<text x="450.0" y="158.0" font-size="9.50" font-weight="700" fill="#666666" text-anchor="start">OUTPUTS — downstream contracts</text>
+<line x1="417.0" y1="187.3" x2="450.0" y2="197.0" stroke="#8a5200" stroke-width="1.8" stroke-dasharray="9 6" marker-end="url(#ar)"/>
+<rect x="450.0" y="172.0" width="210.0" height="50.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="460.0" y="188.0" font-size="9.50" font-weight="700" fill="#8a5200" text-anchor="start">CT-04 · M2 → CRIER  [PARTIAL]</text>
+<text x="460.0" y="202.0" font-size="9.50" font-weight="400" fill="#8a5200" text-anchor="start">reply: status, dispatch_id, corr_id, branch,</text>
+<text x="460.0" y="214.0" font-size="9.50" font-weight="400" fill="#8a5200" text-anchor="start">commit, artifacts</text>
+<line x1="417.0" y1="206.0" x2="450.0" y2="253.0" stroke="#a11d1d" stroke-width="1.8" stroke-dasharray="2 5" marker-end="url(#ar)"/>
+<rect x="450.0" y="228.0" width="210.0" height="50.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="460.0" y="244.0" font-size="9.50" font-weight="700" fill="#a11d1d" text-anchor="start">CT-09 · M2 → DUCKBRAIN  [MISSING]</text>
+<text x="460.0" y="258.0" font-size="9.50" font-weight="400" fill="#a11d1d" text-anchor="start">R1 run record, R2 fleet index</text>
+<line x1="417.0" y1="224.7" x2="450.0" y2="309.0" stroke="#555555" stroke-width="1.8" stroke-dasharray="2 5" marker-end="url(#ar)"/>
+<rect x="450.0" y="284.0" width="210.0" height="50.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="460.0" y="300.0" font-size="9.50" font-weight="700" fill="#555555" text-anchor="start">CT-11 · M2 → SESSIONS  [UNVERIFIED]</text>
+<text x="460.0" y="314.0" font-size="9.50" font-weight="400" fill="#555555" text-anchor="start">every turn, model, tokens</text>
+<text x="24.0" y="370.0" font-size="9.50" font-weight="700" fill="#666666" text-anchor="start">FLOWS THIS MODULE PARTICIPATES IN</text>
+<text x="24.0" y="392.0" font-size="9.50" font-weight="400" fill="#111111" text-anchor="start">F1 DISPATCH — How does a board row become work?</text>
+<text x="24.0" y="432.0" font-size="9.50" font-weight="400" fill="#111111" text-anchor="start">F2 PROVISIONING — How does a bare host become a node?</text>
+<text x="24.0" y="472.0" font-size="9.50" font-weight="400" fill="#111111" text-anchor="start">F3 MEMORY — How does a run become searchable?</text>
+<text x="24.0" y="512.0" font-size="9.50" font-weight="400" fill="#111111" text-anchor="start">F5 LANDING — How does work reach main?</text>
+<text x="24.0" y="552.0" font-size="9.50" font-weight="400" fill="#111111" text-anchor="start">F6 MAINTENANCE — What keeps disks, branches, caches and freshness honest?</text>
+<text x="24.0" y="592.0" font-size="9.50" font-weight="400" fill="#111111" text-anchor="start">F8 RECOVERY — What happens after a crash, restart or orphaned run?</text>
+<text x="24.0" y="632.0" font-size="9.50" font-weight="400" fill="#111111" text-anchor="start">F9 DEGRADATION — A dependency is gone — what does the system do?</text>
+<text x="24.0" y="672.0" font-size="9.50" font-weight="400" fill="#111111" text-anchor="start">F10 TEARDOWN / REBUILD — How is a node or lane removed without residue?</text>
+<text x="24.0" y="712.0" font-size="9.50" font-weight="400" fill="#111111" text-anchor="start">F12 CREDENTIAL LIFECYCLE — How does a credential stay fresh, scoped and out of</text>
+<text x="36.0" y="724.0" font-size="9.50" font-weight="400" fill="#111111" text-anchor="start">argv?</text>
+<text x="24.0" y="752.0" font-size="9.50" font-weight="400" fill="#111111" text-anchor="start">F14 OBSERVABILITY INGESTION — Where does a tick, turn or message become a</text>
+<text x="36.0" y="764.0" font-size="9.50" font-weight="400" fill="#111111" text-anchor="start">visible, attributed line?</text>
+<g id="legend"><rect x="436" y="42" width="250" height="107" fill="#ffffff" stroke="#bbbbbb" stroke-width="1"/><text x="448" y="56" font-size="9.5" font-weight="700" fill="#111111">contract state — line style + ink</text><line x1="448" y1="69" x2="496" y2="69" stroke="#14532d" stroke-width="3.5"/><text x="506" y="72" font-size="9" fill="#14532d">PROVEN</text><line x1="448" y1="85" x2="496" y2="85" stroke="#8a5200" stroke-width="3.5" stroke-dasharray="9 6"/><text x="506" y="88" font-size="9" fill="#8a5200">PARTIAL</text><line x1="448" y1="101" x2="496" y2="101" stroke="#a11d1d" stroke-width="3.5" stroke-dasharray="9 6"/><text x="506" y="105" font-size="9" fill="#a11d1d">BROKEN</text><line x1="448" y1="117" x2="496" y2="117" stroke="#a11d1d" stroke-width="3.5" stroke-dasharray="2 5"/><text x="506" y="121" font-size="9" fill="#a11d1d">MISSING</text><line x1="448" y1="133" x2="496" y2="133" stroke="#555555" stroke-width="3.5" stroke-dasharray="2 5"/><text x="506" y="137" font-size="9" fill="#555555">UNVERIFIED</text></g></svg>

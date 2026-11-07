@@ -3,7 +3,14 @@
 # The point of this file: a box here is a RESPONSIBILITY, not a path. Paths live in `impl` and are
 # marked volatile — if a script moves, the model does not change, only its implementation note does.
 #
-# Edit this, then run scripts/gen_system_views.py. Every diagram is generated from this file.
+# Every component, contract and flow step below is TRACEABLE: a component to its module chapter
+# (docs/handbook/chapters/M*.md), a contract to the Part IV register (CT-01..CT-18) or a chapter's
+# own local row (M1-C1, M3-C1, M7-C1, M12-C1, M12-C2), a flow step to chapter text. Nothing here is
+# invented — where a chapter marks a wire UNVERIFIED or MISSING, the model says so.
+#
+# Edit this, then run scripts/gen_handbook_figures.py. Every diagram is generated from this file.
+# Contract state vocabulary (STYLE-CORRECTIONS §"CT-nn stays a registry id"):
+#   PROVEN | PARTIAL | BROKEN | MISSING | UNVERIFIED
 
 doc:
   id: CF2A-10
@@ -30,6 +37,9 @@ layers:
     name: EVIDENCE
     blurb: what a human reads
 
+# 27 components. `module` keys each box to its chapter (M0-M12); components outside the 13
+# modules (the human, the model router, the gateway, the bunker daemon, the memory and session
+# stores) carry no module — the chapters name them boundary peers, not owned subsystems.
 components:
   - id: owner
     name: OPERATOR
@@ -42,7 +52,8 @@ components:
     name: SCHEDULER
     role: whose turn it is
     layer: control
-    owns: Whose turn it is; lane admission (tasks vs cooldown); per-lane cadence, weight, pin
+    module: M9
+    owns: Whose turn it is; lane admission (tasks vs cooldown); per-lane cadence, weight, pin; settlement of every dispatch
     not: Does not run work, does not know what a diff contains
     impl: [coding-hermes-scheduler]
   - id: foreman
@@ -52,13 +63,38 @@ components:
     owns: Turns a board row into a brief; verifies returned evidence; closes rows
     not: Does not grade its own homework
     impl: [prompts/foreman.md, skills/code-factory-foreman]
+  - id: github
+    name: GITHUB CREDENTIALS
+    role: forge authentication
+    layer: control
+    module: M7
+    owns: Mints, caches and refreshes GitHub App installation tokens; never a token in argv (M7 §2)
+    not: Does not mint the per-dispatch scoped token or the node tokens (M7 §12)
+    impl: [scripts/github-app-setup.sh, scripts/github-app-token.py, scripts/github-app-refresh.sh]
+  - id: scoper
+    name: SCOPE MINTER
+    role: per-dispatch token
+    layer: control
+    module: M11
+    owns: Mints the per-dispatch scoped GitHub token the dispatcher injects (M11 §3 S4)
+    not: A separate minter from M7's github-app-token.py (M7 §12)
+    impl: ['~/.hermes/scripts/fleet-gh-scope.py']
   - id: crier
     name: CRIER (bus)
     role: carries and signs messages
     layer: transport
-    owns: Delivery with per-agent signature, leases, replies, idempotency
-    not: Does not decide, does not execute
+    module: M10
+    owns: Delivery with per-agent signature, leases, replies, idempotency (M10 §2)
+    not: Does not decide, does not execute; no board admission (M4 §12 B04)
     impl: [crier]
+  - id: guard
+    name: GUARD
+    role: screens every directive
+    layer: governance
+    module: M10
+    owns: Pattern pre-scan → payload render → LLM router verdict → escalation → sanitize quarantine on delivered messages (M10 §3 S2)
+    not: A false pass lets an untrusted directive reach a node (M10 §2)
+    impl: [crier internal/guard/guard.go]
   - id: router
     name: TASK-ROUTER
     role: picks the model
@@ -73,6 +109,14 @@ components:
     owns: Session API, /api/status, dashboard auth, session records
     not: Does not schedule or store the ledger
     impl: [hermes gateway]
+  - id: proxy
+    name: INFERENCE PROXY
+    role: holds the provider key
+    layer: transport
+    module: M12
+    owns: The only holder of the provider credential; admits nodes by token, models by allowlist, streams or buffers (M12 §2)
+    not: No anonymous paid path; a node never sees a provider key (M12 §2)
+    impl: ['~/.hermes/scripts/cf-inference-proxy.py']
   - id: bunker
     name: BUNKER DAEMON
     role: hosts the containers
@@ -84,21 +128,48 @@ components:
     name: NODE
     role: one project, one node
     layer: execution
-    owns: One project per node; repo clone, seeded prompts/skills, env, identity, bus worker
+    module: M2
+    owns: One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
     not: Does not decide what to work on
     impl: [scripts/project-node.sh, scripts/node-bus-worker.py]
   - id: harness
     name: HARNESS
     role: the coding loop
     layer: execution
-    owns: The coding loop inside the node (hermes, codex, claude-code, opencode, pi, dsh)
+    module: M5
+    owns: The coding loop inside the node (hermes, codex, claude-code, opencode, pi, dsh) at pins (M5 §2)
     not: Does not write the board
     impl: [scripts/harness/*]
+  - id: dispatcher
+    name: DISPATCHER
+    role: executes the dispatch
+    layer: execution
+    module: M11
+    owns: Runs the work inside the agent's container via bunker exec — start detached, poll, deadline kill; keeps the replay ledger (M11 §2)
+    not: May not decide admission or what the work is (M11 §2)
+    impl: ['~/crier-fleet/dispatcher.py']
+  - id: provisioner
+    name: PROVISIONER
+    role: bare host to node
+    layer: execution
+    module: M1
+    owns: Qualifies the host (disk floor), creates the container, mints identity, seeds prompts/skills/env, connects the bus (M1 §2)
+    not: Does not certify the result — that is the verifier (M1 §12)
+    impl: [scripts/bunker-provision.sh, scripts/project-node.sh, scripts/node-create.sh]
+  - id: lander
+    name: LANDER
+    role: work into main
+    layer: execution
+    module: M3
+    owns: Merges a worker branch and proves the commit is an ancestor of origin/main (M3 §2)
+    not: Operator-triggered — the envelope names branch/commit, it does not call the lander (M3 §2 F3-5)
+    impl: [scripts/land-node-branch.sh]
   - id: board
     name: BOARD
     role: the plan and its state
     layer: memory
-    owns: Append-only record of work and its state; the fleet's plan
+    module: M4
+    owns: Append-only record of work and its state; the fleet's plan (M4 §2)
     not: Not a run log; rows are reused across attempts
     impl: [.coding-hermes/board/tasks.jsonl, scripts/boardctl]
   - id: duckbrain
@@ -114,166 +185,272 @@ components:
     layer: memory
     owns: Every model turn, its model, tokens and cost
     not: Not the plan, not the product
-    impl: [~/.hermes/state.db]
+    impl: ['~/.hermes/state.db']
   - id: gitreins
     name: COMMIT GATE
     role: grades the commit
     layer: governance
-    owns: Pre-commit grading (secrets, lint, tests) and the verdict that lands work
+    module: M3
+    owns: Pre-commit grading (secrets, lint, tests) and the verdict that lands work (M3 §2)
     not: Does not decide what to build
     impl: [gitreins]
   - id: docsgate
     name: DOC GATE
     role: grades the document
     layer: governance
-    owns: Whether a document is citable (sections, locators, facts, earned VERIFIED)
+    module: M6
+    owns: Whether a document is citable (sections, locators, facts, earned VERIFIED) — a structural gate, not a truth verifier (M6 §2 F6-2)
     not: Cannot tell whether a sentence is true
     impl: [scripts/master_doc_check.py]
   - id: conformance
     name: CONFORMANCE BATTERY
     role: grades the harness
     layer: governance
-    owns: Whether a harness is supported, measured per leg on a real node
+    module: M5
+    owns: Whether a harness is supported, measured per leg on a real node (M5 §2)
     not: Does not install anything by itself
     impl: [tests/harness-conformance.sh]
+  - id: verifier
+    name: NODE VERIFIER
+    role: certifies the node
+    layer: governance
+    module: M1
+    owns: The certification ladder — agent, gateway, auth, artifact, tree, seed; VERIFIED is earned per leg (M1 §11)
+    not: An unreachable port is UNVERIFIED (exit 3), not FAIL (M1 §10 CF-224)
+    impl: [scripts/verify-node.sh]
+  - id: safety
+    name: SAFETY
+    role: reaper and scan scope
+    layer: governance
+    module: M8
+    owns: Reaps build caches and expired job dirs; refuses a gitleaks claim without its --log-opts scope (M8 §2)
+    not: The TTL governs age, not citation — it can delete a dir a module cites as evidence (M8 §2)
+    impl: [scripts/reclaim_disk.py, scripts/check_scan_scope.py]
+  - id: panel
+    name: DOC PANEL
+    role: independent seats
+    layer: governance
+    module: M6
+    owns: Three seats grade a module independently; splits are reported, never voted away (M6 §3 S4)
+    not: A STOP exit is process success, not document acceptance (M6 §5)
+    impl: [scripts/panel_loop.py, scripts/master_doc_panel.py]
+  - id: spine
+    name: SPINE GATE
+    role: cross-chapter consistency
+    layer: governance
+    module: M6
+    owns: Canonical CT ids cited; producer/consumer and state agreement; dangling refs; count claims (M6 §3 S9)
+    not: Checks locator presence, not that the cited line exists (M6 §3 S9)
+    impl: [scripts/handbook_spine.py]
   - id: handbook
     name: HANDBOOK
     role: what you approve
     layer: evidence
+    module: M6
     owns: The readable system description plus its own deficiency register
     not: Not the source of truth
-    impl: [scripts/gen_nasa_handbook.py]
+    impl: [scripts/gen_nasa_handbook.py, scripts/build_book.py]
 
 # Every edge is a CONTRACT: what crosses, in which direction, sync or async, and what the receiver
-# must be able to do with it. `state` is one of: works | broken | missing | external.
+# must be able to do with it. CT-01..CT-18 are the canonical register (Part IV); the M*-C* rows are
+# chapter-local contracts (M1 §6, M3 §6, M7 §6, M12 §6). States are the chapters' round-13
+# measurements, not the outline's structure text.
 contracts:
-  - from: owner
+  # ---- canonical register CT-01..CT-18 (Part IV order) ----
+  - id: CT-01
+    from: owner
     to: scheduler
     carries: lane enabled, cadence, weight, pin
     mode: config
-    state: works
-  - from: scheduler
+    state: UNVERIFIED
+    note: boundary — the producer is a human writing fleet.toml and scheduler.db project rows; the consumer is admission_mode.go:112 admissionModeForProject (M9 §6)
+  - id: CT-02
+    from: scheduler
     to: crier
-    carries: "envelope: run_id, corr_id, lane, board_row, text_b64"
+    carries: "envelope: run_id, corr_id, lane, board, text_b64"
     mode: async, bearer + signature
-    state: broken
-    note: crier rejects an unsigned or misnamed body; the scheduler sends text_b64
-  - from: crier
+    state: PROVEN
+    note: CF-354 fixed — crier HandleDeliver delivers the envelope verbatim (M9 §6, M10 §6)
+  - id: CT-03
+    from: crier
     to: node
     carries: inbox message + lease
     mode: pull, 30 s lease
-    state: works
-  - from: node
+    state: PROVEN
+    note: the node worker (M2 §6) and the dispatcher (M11 §6) are the two consumers
+  - id: CT-04
+    from: node
     to: crier
-    carries: "reply: in_reply_to, corr_id, run_id, outcome"
+    carries: "reply: status, dispatch_id, corr_id, branch, commit, artifacts"
     mode: async, signed
-    state: broken
-    note: audience is the header X-Crier-Audience, never a body field; sender is stored but not verified
-  - from: foreman
+    state: PARTIAL
+    note: transport works; settlement reads only `ok` — CF-355 open (M2 §6, M9 §6)
+  - id: CT-05
+    from: foreman
     to: scheduler
     carries: the lane's prompt text and skills it may load
     mode: seeded config
-    state: broken
-    note: only 3 of 14 lanes match the shipped prompt; the live foreman prompt is 1,832 chars vs 3,390
-  - from: crier
+    state: UNVERIFIED
+    note: both ends in-repo (load_lane_config.py:31 → spawn.go:1249 buildForemanPrompt); the "3 of 14 lanes disagree" breakage was never measured (M9 §6)
+  - id: CT-06
+    from: crier
     to: scheduler
     carries: completion event for a finished run
     mode: async
-    state: missing
-    note: CF-337 — nothing writes completions back
-  - from: router
+    state: PROVEN
+    note: the dispatcher leg works — it always sends `ok`, the field dispatchReplyVerdict reads (M11 §6)
+  - id: CT-07
+    from: router
     to: gateway
     carries: model choice for a prompt
     mode: in-band
-    state: works
-  - from: crier
+    state: UNVERIFIED
+    note: boundary — neither side has an in-repo file:function; the wire was not measured (M12 §6)
+  - id: CT-08
+    from: crier
     to: gateway
     carries: hermes-session delivery (message becomes a session turn)
     mode: sync, 30 s
-    state: works
-  - from: node
+    state: PROVEN
+    note: crier side named — hermesession.go:353 Client.Deliver (M10 §6)
+  - id: CT-09
+    from: node
     to: duckbrain
     carries: "R1 run record, R2 fleet index"
     mode: http, x-api-key
-    state: missing
-    note: node-bus-worker has zero DuckBrain calls (CF-329)
-  - from: node
+    state: MISSING
+    note: node-bus-worker has zero DuckBrain calls (CF-329, M2 §6)
+  - id: CT-10
+    from: node
     to: board
     carries: row event with run_id and outcome
     mode: append
-    state: broken
-    note: no run_id exists; events do not name an attempt
-  - from: node
+    state: BROKEN
+    note: the node worker writes no board rows — no in-repo producer (M4 §6)
+  - id: CT-11
+    from: node
     to: sessionstore
     carries: every turn, model, tokens
     mode: writes via gateway
-    state: works
-  - from: node
+    state: UNVERIFIED
+    note: boundary — both ends are the Hermes runtime, out of scope (M2 §6)
+  - id: CT-12
+    from: node
     to: gitreins
     carries: staged diff
     mode: pre-commit hook
-    state: works
-  - from: gitreins
+    state: UNVERIFIED
+    note: the hook side is named (install-gitreins.sh:124); hook enforcement — that git invokes it — is unproven (M3 §6, M3 §11)
+  - id: CT-13
+    from: gitreins
     to: board
     carries: verdict that closes a row
     mode: human/foreman action
-    state: broken
-    note: verdicts cite commits; boardctl takes an exclusive flock on .lock, and no verdict closes a row
-  - from: foreman
+    state: UNVERIFIED
+    note: completion requires --evidence-run-id (boardctl update); the verdict→close path was not re-run (M4 §6)
+  - id: CT-14
+    from: foreman
     to: board
     carries: row created, row closed, evidence
     mode: boardctl
-    state: works
-  - from: foreman
+    state: UNVERIFIED
+    note: the store is measured (357 rows / 520 events); the foreman write wire is not exercised in this repo (M4 §6)
+  - id: CT-15
+    from: foreman
     to: duckbrain
     carries: decisions, findings, goal
     mode: mcp / http
-    state: works
-  - from: docsgate
+    state: UNVERIFIED
+    note: boundary — the foreman lane and the duckbrain service are out of scope (M9 §6)
+  - id: CT-16
+    from: docsgate
     to: handbook
     carries: module status word
     mode: read at build
-    state: works
-  - from: conformance
+    state: PROVEN
+    note: a structural gate, not a truth gate (M6 §6 F6-2)
+  - id: CT-17
+    from: conformance
     to: harness
     carries: per-leg verdict (check, apply, smoke, vars, memory)
     mode: executed
-    state: broken
-    note: vars and memory have no executor (CF-328)
-  - from: handbook
+    state: UNVERIFIED
+    note: not run this round (needs a live node); vars and memory had no executor (CF-328) (M5 §6)
+  - id: CT-18
+    from: handbook
     to: owner
     carries: the approval artifact
     mode: read
-    state: works
+    state: UNVERIFIED
+    note: the legacy renderer hardcodes docs/master and does not select the M*.md chapters (M6 §6)
+  # ---- chapter-local contracts ----
+  - id: M12-C1
+    from: node
+    to: proxy
+    carries: chat completion with a node bearer token
+    mode: http, bearer node token
+    state: UNVERIFIED
+    note: proxy side verified (401 without a token); the node client half is config-wired, no call site in this repo (M12 §6)
+  - id: M12-C2
+    from: proxy
+    to: gateway
+    carries: forwarded inference with the control-host key
+    mode: http, 300 s timeout
+    state: UNVERIFIED
+    note: external boundary — the upstream is a rumour with one side named; healthy streams are unframed to completion, F12-7 (M12 §6)
+  - id: M7-C1
+    from: github
+    to: node
+    carries: installation token installed at auth/github.token, mode 0600
+    mode: https api, JWT mint
+    state: UNVERIFIED
+    note: the mint was never run on this host (no App creds); the consumer is the node's credential file, not a function (M7 §6)
+  - id: M1-C1
+    from: node
+    to: crier
+    carries: agent registration + token exchange
+    mode: https, POST /agents
+    state: UNVERIFIED
+    note: the in-repo producer half is not established; crier HandleRegister/HandleRegisterByID named (M1 §6)
+  - id: M1-C2
+    from: provisioner
+    to: bunker
+    carries: create, exec, cp against the agent container
+    mode: bunker CLI
+    state: PROVEN
+    note: short create/exec/cp calls measured across M1's batteries (M1 §6)
 
+# F1-F5 carried from the outline; F6-F10 secondary; F11-F16 quorum-added. Each step names the
+# component pair and a what that cites the chapter text or contract row it came from.
 flows:
   - id: F1
     name: DISPATCH
     question: How does a board row become work?
     steps:
-      - [scheduler, crier, "envelope with run_id"]
-      - [crier, node, "inbox pull, lease 30 s"]
+      - [scheduler, crier, "envelope with run_id (CT-02)"]
+      - [crier, node, "inbox pull, lease 30 s (CT-03)"]
       - [node, harness, "brief + workdir + credentials"]
       - [harness, node, "diff + evidence"]
-      - [node, crier, "reply: outcome + artifacts"]
-      - [crier, scheduler, "completion event"]
+      - [node, crier, "reply: status + artifacts (CT-04)"]
+      - [crier, scheduler, "completion event (CT-06)"]
       - [scheduler, board, "row state changes, attempt recorded"]
+    note: rescoped per OUTLINE — begins at the node's inbox; admission is F11
   - id: F2
     name: PROVISIONING
     question: How does a bare host become a node?
     steps:
       - [owner, scheduler, "lane declared: project, harness, pin"]
-      - [node, bunker, "container created, home, keys"]
-      - [node, node, "layers: base, harness, bus, repo"]
+      - [provisioner, bunker, "container created, home, keys (M1 §3 S2)"]
+      - [provisioner, node, "layers: base, harness, bus, repo (M1 §3)"]
       - [node, duckbrain, "identity + namespace credential"]
-      - [owner, node, "verify-node measures the result"]
+      - [verifier, node, "verify-node measures the result — CREATED ≠ VERIFIED (M1 §12)"]
   - id: F3
     name: MEMORY
     question: How does a run become searchable?
     steps:
-      - [node, duckbrain, "R1 detail record"]
-      - [node, duckbrain, "R2 fleet index record"]
-      - [foreman, duckbrain, "R3 weekly rollup"]
+      - [node, duckbrain, "R1 detail record (CT-09, missing)"]
+      - [node, duckbrain, "R2 fleet index record (CT-09, missing)"]
+      - [foreman, duckbrain, "R3 weekly rollup (CT-15)"]
       - [owner, duckbrain, "recall by project, week, lane"]
   - id: F4
     name: DOCUMENTATION
@@ -281,14 +458,195 @@ flows:
     steps:
       - [foreman, docsgate, "skeleton + source"]
       - [foreman, docsgate, "seat fills, cites file:line"]
-      - [docsgate, foreman, "PASS or named refusals"]
-      - [foreman, foreman, "panel: 3 seats grade independently"]
-      - [handbook, owner, "PDF with status per module"]
+      - [docsgate, foreman, "PASS or named refusals (CT-16)"]
+      - [panel, foreman, "3 seats grade independently; splits reported, never voted away (M6 §3 S4)"]
+      - [spine, handbook, "cross-chapter consistency: CT ids, states, dangling refs (M6 §3 S9)"]
+      - [handbook, owner, "PDF with status per module (CT-18)"]
   - id: F5
     name: LANDING
     question: How does work reach main?
     steps:
-      - [node, gitreins, "commit on a node branch"]
-      - [gitreins, foreman, "verdict"]
-      - [foreman, board, "row closed with evidence"]
-      - [foreman, crier, "completed work announced"]
+      - [node, gitreins, "commit on a node branch; the gate grades the staged diff (CT-12)"]
+      - [gitreins, foreman, "verdict returned to the foreman (CT-13)"]
+      - [owner, lander, "lander merges the branch and proves ancestry on origin/main (M3 §2)"]
+      - [foreman, board, "row closed with evidence (CT-14)"]
+  - id: F6
+    name: MAINTENANCE
+    question: What keeps disks, branches, caches and freshness honest?
+    steps:
+      - [provisioner, safety, "layer 00 — reclaim_disk reaps build caches and job dirs past the 24 h TTL (M8 §3 S1)"]
+      - [provisioner, safety, "node_hygiene reap removes orphan homes/keys after a 60-minute grace (M1 §5)"]
+      - [node, node, "repo_freshness measures how far a workdir lags origin (M3 §5)"]
+      - [verifier, node, "node_freshness measures branch/HEAD/lag on the node (M1 §11)"]
+      - [safety, node, "protected paths refused before inspection: repo, node.json, crier.json (M8 §5)"]
+  - id: F7
+    name: MONITORING
+    question: How does anyone learn the machine is unwell?
+    steps:
+      - [scheduler, owner, "GET /api/v1/metrics — spawns, deferrals, ticks, tick duration (M9 §8)"]
+      - [scheduler, owner, "/api/v1/status — per-project failure-rate breakdown (M9 §5)"]
+      - [crier, owner, "/metrics, default-ON — guard and inbox series (M10 §8)"]
+      - [proxy, owner, "usage JSONL per request: node, model, status, bytes (M12 §8)"]
+    note: 11 of 13 modules emit no metrics — answerable only by grepping logs; the largest remaining system defect
+  - id: F8
+    name: RECOVERY
+    question: What happens after a crash, restart or orphaned run?
+    steps:
+      - [dispatcher, dispatcher, "redelivery replays the recorded result instead of re-running (M11 §3 S2)"]
+      - [crier, node, "an unacked message redelivers after lease expiry; an empty list is not a lost message (M10 §11)"]
+      - [scheduler, sessionstore, "--reap-sessions closes stale sessions; dry-run without --apply (M9 §5)"]
+      - [board, foreman, "board_read resolves the board from origin/main when the working copy drifts (M4 §3)"]
+      - [owner, board, "board_lock ERROR verdict — lock state unknown: stop and diagnose, never write (M4 §3)"]
+  - id: F9
+    name: DEGRADATION
+    question: A dependency is gone — what does the system do?
+    steps:
+      - [gateway, scheduler, "gateway fails: the tick is deferred, not exec-spawned (no-exec-fallback=true) (M9 §5)"]
+      - [scheduler, node, "load gate: new spawns deferred while load ≥ threshold (M9 §3)"]
+      - [guard, node, "guard provider outage: fail-open unless the policy is FailClosed (M10 §10)"]
+      - [proxy, node, "proxy fails closed at startup: no token file or no upstream key → exit 2 (M12 §11)"]
+      - [gitreins, node, "gate absent: the pre-commit hook exits 0 — a silent bypass that must be disclosed (M3 §10)"]
+  - id: F10
+    name: TEARDOWN / REBUILD
+    question: How is a node or lane removed without residue?
+    steps:
+      - [owner, provisioner, "--destroy requires --yes and a named agent (M1 §5)"]
+      - [provisioner, bunker, "container and per-agent home removed on the server (M1 §5)"]
+      - [provisioner, safety, "orphan homes/keys reaped against a live-registry check (M1 §10)"]
+      - [provisioner, node, "rebuild — the seed reapplies from the manifest, drift named per file (M1 §3 S4)"]
+  - id: F11
+    name: SCHEDULING ADMISSION
+    question: Does a lane's tick get admitted, and why not?
+    steps:
+      - [scheduler, scheduler, "cadence tick fires; admission mode — project override → namespace → cooldown (M9 §3)"]
+      - [scheduler, board, "board ownership and workability decide the tasks waiver (M9 §3)"]
+      - [scheduler, scheduler, "usage pools reserved, or a capacity denial emitted (M9 §3)"]
+      - [scheduler, board, "board-stasis gate excludes an unchanged cooldown builder lane (M9 §3)"]
+      - [scheduler, scheduler, "NOOP-PACING spaces a no-artifact lane, doubling to 8× the floor (M9 §3)"]
+      - [scheduler, crier, "admitted — the envelope is dispatched (CT-02)"]
+    note: refused means a named reason — budget hold, cooldown, load gate, fairness, namespace allocation (OUTLINE F11)
+  - id: F12
+    name: CREDENTIAL LIFECYCLE
+    question: How does a credential stay fresh, scoped and out of argv?
+    steps:
+      - [owner, github, "mint from an 0600 App private key — JWT → installation token (M7 §5)"]
+      - [github, owner, "token written to a 0600 file; the value is never printed (M7 §7)"]
+      - [github, node, "refresh --node installs auth/github.token on the node (M7 §5)"]
+      - [scoper, dispatcher, "fleet-gh-scope mints the per-dispatch scoped token (M11 §6)"]
+      - [node, proxy, "node bearer checked against the token file — fail-closed admission (M12 §6)"]
+  - id: F13
+    name: UPGRADE AND MIGRATION
+    question: How does a pinned bump or schema change reach the running system?
+    steps:
+      - [owner, harness, "pin bump — the installer fetches a digest-checked artifact (M5 §5)"]
+      - [harness, owner, "installed version read back against the pin; drift named (M5 §10)"]
+      - [owner, scheduler, "migration stores apply schema change to the 30-table store (M9 §3)"]
+      - [owner, board, "boardctl normalize-statuses migrates the row vocabulary (M4 §4)"]
+  - id: F14
+    name: OBSERVABILITY INGESTION
+    question: Where does a tick, turn or message become a visible, attributed line?
+    steps:
+      - [node, sessionstore, "every turn, model, tokens and cost recorded (CT-11)"]
+      - [scheduler, sessionstore, "tick and spawn counters served at /api/v1/metrics (M9 §8)"]
+      - [proxy, proxy, "usage and capture JSONL appended per request; capture loss is silent (M12 §11)"]
+      - [foreman, duckbrain, "decisions, findings and goals written to durable memory (CT-15)"]
+      - [scheduler, duckbrain, "scheduler syncs its namespace every 5 m (M9 §5)"]
+  - id: F15
+    name: BACKUP AND RESTORE
+    question: Can an artifact be restored and proven?
+    steps:
+      - [owner, board, "board_drift compares the checkout's board against origin/main row by row (M4 §7)"]
+      - [scheduler, board, "--verify-board checks board consistency at boot (M9 §5)"]
+      - [owner, duckbrain, "restore into a scratch home; a known row read back (OUTLINE F15)"]
+  - id: F16
+    name: MULTI-NODE FAN-OUT
+    question: How does one directive reach several nodes, each with its own receipt?
+    steps:
+      - [scheduler, dispatcher, "envelope addressed to each target agent in the registry (M11 §3 S4)"]
+      - [dispatcher, bunker, "bunker exec runs the harness inside each target container (M11 §3 S1)"]
+      - [dispatcher, crier, "reply delivered before ack; a redelivery replays, never re-runs (M11 §3 S3)"]
+      - [dispatcher, dispatcher, "serial loop — one long job head-of-line-blocks later agents (M11 §11 F11-5)"]
+      - [crier, scheduler, "completion settles per dispatch (CT-06)"]
+
+# The 13 modules (docs/UNIT-MAP.yaml, chapters M0-M12): what each module view centres on.
+# contracts_in / contracts_out are the chapter §6 tables, by id; flows_owned is the README/OUTLINE
+# owner row; the generator derives every other flow participation from the steps themselves.
+modules:
+  - id: M0
+    name: SHARED CONTRACT
+    blurb: the shell substrate every node-side module sources — ok/bad/warn/note, fetch_verified, require_disk (M0 §2)
+    components: []
+    contracts_in: []
+    contracts_out: []
+  - id: M1
+    name: PROVISIONING
+    blurb: a bare host becomes a node with an identity, a bus membership and a seeded repo (M1 §2)
+    components: [provisioner, verifier]
+    contracts_in: []
+    contracts_out: [M1-C1, M1-C2]
+  - id: M2
+    name: DISPATCH (NODE SIDE)
+    blurb: whose turn it is becomes a brief, a run and a reply (M2 §2)
+    components: [node]
+    contracts_in: [CT-03]
+    contracts_out: [CT-04, CT-09, CT-11]
+  - id: M3
+    name: REPOSITORY
+    blurb: the node has the right tree, and work can leave it (M3 §2)
+    components: [lander, gitreins]
+    contracts_in: []
+    contracts_out: [CT-12]
+  - id: M4
+    name: BOARD
+    blurb: the fleet remembers what it decided and what it proved (M4 §2)
+    components: [board]
+    contracts_in: [CT-10, CT-13, CT-14]
+    contracts_out: []
+  - id: M5
+    name: HARNESS
+    blurb: the agent inside the node can actually code, and its commits are graded (M5 §2)
+    components: [harness, conformance]
+    contracts_in: [CT-17]
+    contracts_out: []
+  - id: M6
+    name: DOCUMENTATION
+    blurb: the system describes itself, and someone can check the description (M6 §2)
+    components: [docsgate, panel, spine, handbook]
+    contracts_in: []
+    contracts_out: [CT-16, CT-18]
+  - id: M7
+    name: GITHUB
+    blurb: the fleet can authenticate to the forge without a long-lived token in argv (M7 §2)
+    components: [github]
+    contracts_in: []
+    contracts_out: [M7-C1]
+  - id: M8
+    name: SAFETY
+    blurb: the checks that must be able to fail, and the disk they must not fill (M8 §2)
+    components: [safety]
+    contracts_in: []
+    contracts_out: []
+  - id: M9
+    name: SCHEDULER
+    blurb: the control plane's clock and admission authority (M9 §2)
+    components: [scheduler]
+    contracts_in: [CT-01, CT-05, CT-06]
+    contracts_out: [CT-02, CT-15]
+  - id: M10
+    name: CRIER
+    blurb: the bus — registration, routing, leases, retrieval, ack, TTL, dead letters (M10 §2)
+    components: [crier, guard]
+    contracts_in: [CT-02, CT-04]
+    contracts_out: [CT-03, CT-08]
+  - id: M11
+    name: DISPATCHER
+    blurb: one loop for every agent on every box; executes the work inside the container (M11 §2)
+    components: [dispatcher, scoper]
+    contracts_in: [CT-03]
+    contracts_out: [CT-06]
+  - id: M12
+    name: INFERENCE PROXY
+    blurb: the only thing holding the real provider credential (M12 §2)
+    components: [proxy]
+    contracts_in: [CT-07, M12-C1]
+    contracts_out: [M12-C2]

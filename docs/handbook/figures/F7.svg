@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="170.0mm" viewBox="0 0 680 344.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="344.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#111111"/></marker></defs><text x="668.0" y="22.0" font-size="9.50" font-weight="400" fill="#666666" text-anchor="end">time flows down · every step cites its chapter or contract</text>
+<rect x="67.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="130.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">SCHEDULER</text>
+<line x1="130" y1="70" x2="130" y2="262" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
+<rect x="207.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="270.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">OPERATOR</text>
+<line x1="270" y1="70" x2="270" y2="262" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
+<rect x="347.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="410.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">CRIER (bus)</text>
+<line x1="410" y1="70" x2="410" y2="262" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
+<rect x="487.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="550.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">INFERENCE PROXY</text>
+<line x1="550" y1="70" x2="550" y2="262" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
+<text x="10.0" y="87.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">1</text>
+<line x1="130.0" y1="84.0" x2="270.0" y2="84.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="300.0" y="76.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">GET /api/v1/metrics — spawns, deferrals, ticks, tick</text>
+<text x="300.0" y="89.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">duration (M9 §8)</text>
+<text x="10.0" y="133.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">2</text>
+<line x1="130.0" y1="130.0" x2="270.0" y2="130.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="300.0" y="122.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">/api/v1/status — per-project failure-rate breakdown</text>
+<text x="300.0" y="135.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">(M9 §5)</text>
+<text x="10.0" y="179.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">3</text>
+<line x1="410.0" y1="176.0" x2="270.0" y2="176.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="310.0" y="168.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="end">/metrics, default-ON — guard and inbox series (M10</text>
+<text x="310.0" y="181.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="end">§8)</text>
+<text x="10.0" y="225.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">4</text>
+<line x1="550.0" y1="222.0" x2="270.0" y2="222.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="410.0" y="214.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="middle">usage JSONL per request: node, model, status, bytes</text>
+<text x="410.0" y="227.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="middle">(M12 §8)</text>
+<rect x="6" y="262" width="668" height="22" fill="#ffffff"/>
+<text x="10.0" y="276.0" font-size="9.50" font-weight="400" fill="#8a5200" text-anchor="start">note: 11 of 13 modules emit no metrics — answerable only by grepping logs; the largest remaining system defect</text></svg>

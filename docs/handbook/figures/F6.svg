@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="170.0mm" viewBox="0 0 680 344.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="344.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#111111"/></marker></defs><text x="668.0" y="22.0" font-size="9.50" font-weight="400" fill="#666666" text-anchor="end">time flows down · every step cites its chapter or contract</text>
+<rect x="67.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="130.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">PROVISIONER</text>
+<line x1="130" y1="70" x2="130" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
+<rect x="207.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="270.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">SAFETY</text>
+<line x1="270" y1="70" x2="270" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
+<rect x="347.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="410.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">NODE</text>
+<line x1="410" y1="70" x2="410" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
+<rect x="487.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="550.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">NODE VERIFIER</text>
+<line x1="550" y1="70" x2="550" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
+<text x="10.0" y="87.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">1</text>
+<line x1="130.0" y1="84.0" x2="270.0" y2="84.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="300.0" y="76.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">layer 00 — reclaim_disk reaps build caches and job</text>
+<text x="300.0" y="89.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">dirs past the 24 h TTL (M8 §3 S1)</text>
+<text x="10.0" y="133.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">2</text>
+<line x1="130.0" y1="130.0" x2="270.0" y2="130.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="300.0" y="122.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">node_hygiene reap removes orphan homes/keys after a</text>
+<text x="300.0" y="135.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">60-minute grace (M1 §5)</text>
+<text x="10.0" y="179.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">3</text>
+<path d="M402,174 h22 v26 h-22" fill="none" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="360.0" y="168.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">repo_freshness measures how far a workdir</text>
+<text x="360.0" y="181.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">lags origin (M3 §5)</text>
+<text x="10.0" y="225.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">4</text>
+<line x1="550.0" y1="222.0" x2="410.0" y2="222.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="380.0" y="214.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="end">node_freshness measures branch/HEAD/lag on the node</text>
+<text x="380.0" y="227.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="end">(M1 §11)</text>
+<text x="10.0" y="271.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">5</text>
+<line x1="270.0" y1="268.0" x2="410.0" y2="268.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="370.0" y="260.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">protected paths refused before inspection: repo,</text>
+<text x="370.0" y="273.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">node.json, crier.json (M8 §5)</text></svg>

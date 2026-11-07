@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="170.0mm" viewBox="0 0 680 344.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="344.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#111111"/></marker></defs><text x="668.0" y="22.0" font-size="9.50" font-weight="400" fill="#666666" text-anchor="end">time flows down · every step cites its chapter or contract</text>
+<rect x="60.9" y="36.0" width="68.2" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="95.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">DISPATCHER</text>
+<line x1="95" y1="70" x2="95" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
+<rect x="127.5" y="36.0" width="75.0" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="165.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">CRIER (bus)</text>
+<line x1="165" y1="70" x2="165" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
+<rect x="207.0" y="36.0" width="56.0" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="235.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">NODE</text>
+<line x1="235" y1="70" x2="235" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
+<rect x="274.3" y="36.0" width="61.4" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="305.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">SCHEDULER</text>
+<line x1="305" y1="70" x2="305" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
+<rect x="330.7" y="36.0" width="88.7" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="375.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">SESSION STORE</text>
+<line x1="375" y1="70" x2="375" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
+<rect x="417.0" y="36.0" width="56.0" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="445.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">BOARD</text>
+<line x1="445" y1="70" x2="445" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
+<rect x="460.4" y="36.0" width="109.1" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="515.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">FOREMAN (Hermes)</text>
+<line x1="515" y1="70" x2="515" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
+<rect x="557.0" y="36.0" width="56.0" height="30.0" fill="#ffffff" stroke="#111111" stroke-width="1.8"/>
+<text x="585.0" y="56.0" font-size="11.00" font-weight="700" fill="#111111" text-anchor="middle">OPERATOR</text>
+<line x1="585" y1="70" x2="585" y2="328" stroke="#bbbbbb" stroke-width="1" stroke-dasharray="5 5"/>
+<text x="10.0" y="87.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">1</text>
+<path d="M87,82 h22 v26 h-22" fill="none" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="119.0" y="76.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">redelivery replays the recorded result</text>
+<text x="119.0" y="89.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">instead of re-running (M11 §3 S2)</text>
+<text x="10.0" y="133.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">2</text>
+<line x1="165.0" y1="130.0" x2="235.0" y2="130.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="300.0" y="122.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">an unacked message redelivers after lease expiry; an</text>
+<text x="300.0" y="135.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">empty list is not a lost message (M10 §11)</text>
+<text x="10.0" y="179.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">3</text>
+<line x1="305.0" y1="176.0" x2="375.0" y2="176.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="370.0" y="168.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">--reap-sessions closes stale sessions; dry-run</text>
+<text x="370.0" y="181.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">without --apply (M9 §5)</text>
+<text x="10.0" y="225.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">4</text>
+<line x1="445.0" y1="222.0" x2="515.0" y2="222.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="370.0" y="214.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">board_read resolves the board from origin/main when</text>
+<text x="370.0" y="227.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="start">the working copy drifts (M4 §3)</text>
+<text x="10.0" y="271.0" font-size="9.50" font-weight="400" fill="#888888" text-anchor="start">5</text>
+<line x1="585.0" y1="268.0" x2="445.0" y2="268.0" stroke="#111111" stroke-width="1.8" marker-end="url(#ar)"/>
+<text x="515.0" y="260.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="middle">board_lock ERROR verdict — lock state unknown: stop</text>
+<text x="515.0" y="273.0" font-size="9.50" font-weight="400" fill="#14532d" text-anchor="middle">and diagnose, never write (M4 §3)</text></svg>
