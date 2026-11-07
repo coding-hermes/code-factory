@@ -1,0 +1,114 @@
+{
+  "task_id": "CF-383",
+  "task_title": "Tier-1 secrets fails on gitignored bytecode",
+  "task_criteria": [
+    "Fix the tier-1 secrets false positive without blunting the scanner. Four facts must hold: (1) gitleaks detect --no-git run from /home/kara/code-factory reports no leaks with generated __pycache__ bytecode present, and the .gitleaks.toml allowlist entry for bytecode is the reason; (2) a control arm proves the same config still reports a synthetic PEM placed OUTSIDE __pycache__ (e.g. a .py file), so the allowlist is scoped, not a mute; (3) tests/selftest.sh owns the property with an arm that generates a .pyc carrying a PEM marker and requires a clean gitleaks run, prints a named SKIP when the gitleaks binary is absent, and FAILs if the allowlist entry is removed; (4) docs/handbook/chapters/M3-repository.md section 3 submodule S3, the gitleaks rules row in section 5, and the section 7 verification table name the exclusion and why tier-1 scans the working tree. Verify by running the commands and quoting their output. Do not run the full tests/selftest.sh suite as the criterion; grade the four facts from the files and targeted commands."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "dcab929909d1e63c2df95df8804b9700230234e7",
+  "working_tree_content_fingerprint": "f6dfa4349dedf95c527045197cf27be63b912a0fcf29ae6789ccb8cb8f0f7204",
+  "working_tree_dirty_path_count": 0,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261107T154339.836049Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n10:52AM INF scanned ~2968125 bytes (2.97 MB) in 1.05s\n10:52AM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 430 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261107T154339.836049Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n install-go.sh\n  PASS  bash -n install-node.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n panel_supervise.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n verify-patch.sh\n  PASS  bash -n harness-vars.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-deepseek.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n install-pi-agent.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n harness-node-e2e.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.CSFTycgNgW/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n  PASS  uncreatable destination -> fetch_verified exit 1, no artifact installed\n  PASS  caller surfaced the failed install: 1 '^  FAIL  go:download' row, fixture exit 1\n6. no literal credential assignments\n  PASS  none found\n  section 6 tailnet-address (CF-378): no tracked file outside the board publishes a tailnet address\n  PASS  tailnet-address \u2014 0 tailnet-address hits in 338 tracked file(s) outside .coding-hermes/board and .gitreins\n  PASS  seeded fixture -> FAIL names docs/seeded.md:3; the out-of-range subnet stays green\n\n\u2026 [38486 chars omitted \u2014 501 line(s)] \u2026\n  PASS  occupied :10800 WITH dashboard.basic_auth keeps PASS port / PASS status_probe (only inference_key fails)\n56. a foreign harness is measured in a node, and verify-node.sh re-measures what the manifest records (CF-006)\n  PASS  node slice: the manifest records the measured harness, verify re-measures it, 4 red arms + a directive turn\n  PASS  with the adapter's binary row removed the manifest arm goes RED (exit 1) \u2014 the battery is falsifiable\n57. the brief digest binds every effectful field, and the pre-fix worker runs a tampered gate (CF-275)\n  PASS  a bound text+gate+repo/ref digest runs its gate; a tampered gate.cmd, a legacy text-only digest beside a gate, and a gate with no digest are each refused without the gate starting\n  PASS  pre-fix c05880d runs the gate whose cmd was altered after the digest was minted (fixture detects CF-275)\n58. per-repo deploy key, node runtime, shared module cache, footprint, orphan reap (CF-003)\n  PASS  five mechanisms with their refusal arms (deploy key, node pin, sealed GOMODCACHE, footprint, reap)\n  PASS  MEASURED shared GOMODCACHE 2097910 bytes; sealed rebuild added 0 bytes\n  PASS  layer 10 grades the owned node pin, not a PATH runtime\n  PASS  layer 40 clones with the declared key and pins core.sshCommand in that repo only\n  PASS  a 0644 deploy key is refused and the clone is not attempted\n  PASS  layer 00 measures the node footprint and admits it against the floor\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261107T154339.836049Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 Fix the tier-1 secrets false positive without blunting the scanner. Four facts must hold: (1) gitleaks detect --no-git run from /home/kara/code-factory reports no leaks with generated __pycache__ bytecode present, and the .gitleaks.toml allowlist entry for bytecode is the reason; (2) a control arm proves the same config still reports a synthetic PEM placed OUTSIDE __pycache__ (e.g. a .py file), so the allowlist is scoped, not a mute; (3) tests/selftest.sh owns the property with an arm that generates a .pyc carrying a PEM marker and requires a clean gitleaks run, prints a named SKIP when the gitleaks binary is absent, and FAILs if the allowlist entry is removed; (4) docs/handbook/chapters/M3-repository.md section 3 submodule S3, the gitleaks rules row in section 5, and the section 7 verification table name the exclusion and why tier-1 scans the working tree. Verify by running the commands and quoting their output. Do not run the full tests/selftest.sh suite as the criterion; grade the four facts from the files and targeted commands.: All four facts verified with live output. FACT 1: `cd /home/kara/code-factory && gitleaks detect --no-git --no-banner --redact` -> EXIT=0, 'INF scanned ~2968297 bytes (2.97 MB)', 'INF no leaks found', with 6 .pyc files present in tests/__pycache__ (incl. test_node_provisioning.cpython-314.pyc). Causation proven: copied .gitleaks.toml+tests to /tmp/cf383a, stripped the two entries via grep -vxF, re-ran -> EXIT=1, 'WRN leaks found: 1', JSON report `private-key tests/__pycache__/test_node_provisioning.cpython-314.pyc 35` \u2014 the exact original finding, so the allowlist entry is the reason. .gitleaks.toml:57-58 holds `'''__pycache__/'''` and `'''\\.pyc$'''` with a CF-383 comment naming the reason; all pre-existing entries retained. FACT 2: /tmp/cf383b with PEM in tests/__pycache__/fixture.cpython-314.pyc + anchor.py -> EXIT=0, 'scanned ~18 bytes', report `[]`; same PEM written to tests/plain.py -> EXIT=1, 'WRN leaks found: 1', report `private-key tests/plain.py 1` \u2014 scoped, not a mute. FACT 3: tests/selftest.sh:1954-2041 section 34; ran the arm in isolation (extracted lines 1954-2041, NOT the full suite) -> 'PASS bytecode-allowlist \u2014 a PEM in tests/__pycache__/*.pyc yields no finding (18 bytes graded)', 'PASS bytecode-allowlist-control', 'PASS bytecode-allowlist-loadbearing', FAILS=0. SKIP path: ran with PATH=/tmp/nogitleaks (no gitleaks) -> 'SKIP bytecode-allowlist \u2014 gitleaks absent from PATH, tier-1 secrets not measurable here' (named SKIP, not a silent pass). FAIL-on-removal: temporarily stripped the two entries from the real .gitleaks.toml and re-ran -> 'FAIL bytecode-allowlist \u2014 a PEM in tests/__pycache__/*.pyc was graded as a secret (exit 1, 131 bytes graded)', FAILS=1; config restored, `git status --porcelain` empty. Anti-vacuity guard requires graded bytes > 0 (18 bytes graded). FACT 4: docs/handbook/chapters/M3-repository.md:40 (\u00a73 submodule S3 row) names the bytecode exclusion (`'''__pycache__/'''`, `'''\\.pyc$'''`, `:57-58`) and states 'tier-1 grades the working tree (gitleaks detect --no-git) while the commit guard grades staged files only'; :83 (\u00a75 settings register, `.gitleaks.toml` `[allowlist].paths` row) names the exclusion, the reason, and that deleting the entries reds `bytecode-allowlist-loadbearing`; :114-115 (\u00a77 verification table) carry the 'tier-1 secrets scope' row ('no leaks found', exit 0, working tree vs staged files) and the 'bytecode allowlist arm (shipped)' row naming all three arms.\n",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 Fix the tier-1 secrets false positive without blunting the scanner. Four facts must hold: (1) gitleaks detect --no-git run from /home/kara/code-factory reports no leaks with generated __pycache__ bytecode present, and the .gitleaks.toml allowlist entry for bytecode is the reason; (2) a control arm proves the same config still reports a synthetic PEM placed OUTSIDE __pycache__ (e.g. a .py file), so the allowlist is scoped, not a mute; (3) tests/selftest.sh owns the property with an arm that generates a .pyc carrying a PEM marker and requires a clean gitleaks run, prints a named SKIP when the gitleaks binary is absent, and FAILs if the allowlist entry is removed; (4) docs/handbook/chapters/M3-repository.md section 3 submodule S3, the gitleaks rules row in section 5, and the section 7 verification table name the exclusion and why tier-1 scans the working tree. Verify by running the commands and quoting their output. Do not run the full tests/selftest.sh suite as the criterion; grade the four facts from the files and targeted commands.: All four facts verified with live output. FACT 1: `cd /home/kara/code-factory && gitleaks detect --no-git --no-banner --redact` -> EXIT=0, 'INF scanned ~2968297 bytes (2.97 MB)', 'INF no leaks found', with 6 .pyc files present in tests/__pycache__ (incl. test_node_provisioning.cpython-314.pyc). Causation proven: copied .gitleaks.toml+tests to /tmp/cf383a, stripped the two entries via grep -vxF, re-ran -> EXIT=1, 'WRN leaks found: 1', JSON report `private-key tests/__pycache__/test_node_provisioning.cpython-314.pyc 35` \u2014 the exact original finding, so the allowlist entry is the reason. .gitleaks.toml:57-58 holds `'''__pycache__/'''` and `'''\\.pyc$'''` with a CF-383 comment naming the reason; all pre-existing entries retained. FACT 2: /tmp/cf383b with PEM in tests/__pycache__/fixture.cpython-314.pyc + anchor.py -> EXIT=0, 'scanned ~18 bytes', report `[]`; same PEM written to tests/plain.py -> EXIT=1, 'WRN leaks found: 1', report `private-key tests/plain.py 1` \u2014 scoped, not a mute. FACT 3: tests/selftest.sh:1954-2041 section 34; ran the arm in isolation (extracted lines 1954-2041, NOT the full suite) -> 'PASS bytecode-allowlist \u2014 a PEM in tests/__pycache__/*.pyc yields no finding (18 bytes graded)', 'PASS bytecode-allowlist-control', 'PASS bytecode-allowlist-loadbearing', FAILS=0. SKIP path: ran with PATH=/tmp/nogitleaks (no gitleaks) -> 'SKIP bytecode-allowlist \u2014 gitleaks absent from PATH, tier-1 secrets not measurable here' (named SKIP, not a silent pass). FAIL-on-removal: temporarily stripped the two entries from the real .gitleaks.toml and re-ran -> 'FAIL bytecode-allowlist \u2014 a PEM in tests/__pycache__/*.pyc was graded as a secret (exit 1, 131 bytes graded)', FAILS=1; config restored, `git status --porcelain` empty. Anti-vacuity guard requires graded bytes > 0 (18 bytes graded). FACT 4: docs/handbook/chapters/M3-repository.md:40 (\u00a73 submodule S3 row) names the bytecode exclusion (`'''__pycache__/'''`, `'''\\.pyc$'''`, `:57-58`) and states 'tier-1 grades the working tree (gitleaks detect --no-git) while the commit guard grades staged files only'; :83 (\u00a75 settings register, `.gitleaks.toml` `[allowlist].paths` row) names the exclusion, the reason, and that deleting the entries reds `bytecode-allowlist-loadbearing`; :114-115 (\u00a77 verification table) carry the 'tier-1 secrets scope' row ('no leaks found', exit 0, working tree vs staged files) and the 'bytecode allowlist arm (shipped)' row naming all three arms.\n",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "Fix the tier-1 secrets false positive without blunting the scanner. Four facts must hold: (1) gitleaks detect --no-git run from /home/kara/code-factory reports no leaks with generated __pycache__ bytecode present, and the .gitleaks.toml allowlist entry for bytecode is the reason; (2) a control arm proves the same config still reports a synthetic PEM placed OUTSIDE __pycache__ (e.g. a .py file), so the allowlist is scoped, not a mute; (3) tests/selftest.sh owns the property with an arm that generates a .pyc carrying a PEM marker and requires a clean gitleaks run, prints a named SKIP when the gitleaks binary is absent, and FAILs if the allowlist entry is removed; (4) docs/handbook/chapters/M3-repository.md section 3 submodule S3, the gitleaks rules row in section 5, and the section 7 verification table name the exclusion and why tier-1 scans the working tree. Verify by running the commands and quoting their output. Do not run the full tests/selftest.sh suite as the criterion; grade the four facts from the files and targeted commands.",
+                "status": "PASS",
+                "detail": "All four facts verified with live output. FACT 1: `cd /home/kara/code-factory && gitleaks detect --no-git --no-banner --redact` -> EXIT=0, 'INF scanned ~2968297 bytes (2.97 MB)', 'INF no leaks found', with 6 .pyc files present in tests/__pycache__ (incl. test_node_provisioning.cpython-314.pyc). Causation proven: copied .gitleaks.toml+tests to /tmp/cf383a, stripped the two entries via grep -vxF, re-ran -> EXIT=1, 'WRN leaks found: 1', JSON report `private-key tests/__pycache__/test_node_provisioning.cpython-314.pyc 35` \u2014 the exact original finding, so the allowlist entry is the reason. .gitleaks.toml:57-58 holds `'''__pycache__/'''` and `'''\\.pyc$'''` with a CF-383 comment naming the reason; all pre-existing entries retained. FACT 2: /tmp/cf383b with PEM in tests/__pycache__/fixture.cpython-314.pyc + anchor.py -> EXIT=0, 'scanned ~18 bytes', report `[]`; same PEM written to tests/plain.py -> EXIT=1, 'WRN leaks found: 1', report `private-key tests/plain.py 1` \u2014 scoped, not a mute. FACT 3: tests/selftest.sh:1954-2041 section 34; ran the arm in isolation (extracted lines 1954-2041, NOT the full suite) -> 'PASS bytecode-allowlist \u2014 a PEM in tests/__pycache__/*.pyc yields no finding (18 bytes graded)', 'PASS bytecode-allowlist-control', 'PASS bytecode-allowlist-loadbearing', FAILS=0. SKIP path: ran with PATH=/tmp/nogitleaks (no gitleaks) -> 'SKIP bytecode-allowlist \u2014 gitleaks absent from PATH, tier-1 secrets not measurable here' (named SKIP, not a silent pass). FAIL-on-removal: temporarily stripped the two entries from the real .gitleaks.toml and re-ran -> 'FAIL bytecode-allowlist \u2014 a PEM in tests/__pycache__/*.pyc was graded as a secret (exit 1, 131 bytes graded)', FAILS=1; config restored, `git status --porcelain` empty. Anti-vacuity guard requires graded bytes > 0 (18 bytes graded). FACT 4: docs/handbook/chapters/M3-repository.md:40 (\u00a73 submodule S3 row) names the bytecode exclusion (`'''__pycache__/'''`, `'''\\.pyc$'''`, `:57-58`) and states 'tier-1 grades the working tree (gitleaks detect --no-git) while the commit guard grades staged files only'; :83 (\u00a75 settings register, `.gitleaks.toml` `[allowlist].paths` row) names the exclusion, the reason, and that deleting the entries reds `bytecode-allowlist-loadbearing`; :114-115 (\u00a77 verification table) carry the 'tier-1 secrets scope' row ('no leaks found', exit 0, working tree vs staged files) and the 'bytecode allowlist arm (shipped)' row naming all three arms."
+              }
+            ],
+            "summary": "",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-383\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 Fix the tier-1 secrets false positive without blunting the scanner. Four facts must hold: (1) gitleaks detect --no-git run from /home/kara/code-factory reports no leaks with generated __pycache__ bytecode present, and the .gitleaks.toml allowlist entry for bytecode is the reason; (2) a control arm proves the same config still reports a synthetic PEM placed OUTSIDE __pycache__ (e.g. a .py file), so the allowlist is scoped, not a mute; (3) tests/selftest.sh owns the property with an arm that generates a .pyc carrying a PEM marker and requires a clean gitleaks run, prints a named SKIP when the gitleaks binary is absent, and FAILs if the allowlist entry is removed; (4) docs/handbook/chapters/M3-repository.md section 3 submodule S3, the gitleaks rules row in section 5, and the section 7 verification table name the exclusion and why tier-1 scans the working tree. Verify by running the commands and quoting their output. Do not run the full tests/selftest.sh suite as the criterion; grade the four facts from the files and targeted commands.: All four facts verified with live output. FACT 1: `cd /home/kara/code-factory && gitleaks detect --no-git --no-banner --redact` -> EXIT=0, 'INF scanned ~2968297 bytes (2.97 MB)', 'INF no leaks found', with 6 .pyc files present in tests/__pycache__ (incl. test_node_provisioning.cpython-314.pyc). Causation proven: copied .gitleaks.toml+tests to /tmp/cf383a, stripped the two entries via grep -vxF, re-ran -> EXIT=1, 'WRN leaks found: 1', JSON report `private-key tests/__pycache__/test_node_provisioning.cpython-314.pyc 35` \u2014 the exact original finding, so the allowlist entry is the reason. .gitleaks.toml:57-58 holds `'''__pycache__/'''` and `'''\\.pyc$'''` with a CF-383 comment naming the reason; all pre-existing entries retained. FACT 2: /tmp/cf383b with PEM in tests/__pycache__/fixture.cpython-314.pyc + anchor.py -> EXIT=0, 'scanned ~18 bytes', report `[]`; same PEM written to tests/plain.py -> EXIT=1, 'WRN leaks found: 1', report `private-key tests/plain.py 1` \u2014 scoped, not a mute. FACT 3: tests/selftest.sh:1954-2041 section 34; ran the arm in isolation (extracted lines 1954-2041, NOT the full suite) -> 'PASS bytecode-allowlist \u2014 a PEM in tests/__pycache__/*.pyc yields no finding (18 bytes graded)', 'PASS bytecode-allowlist-control', 'PASS bytecode-allowlist-loadbearing', FAILS=0. SKIP path: ran with PATH=/tmp/nogitleaks (no gitleaks) -> 'SKIP bytecode-allowlist \u2014 gitleaks absent from PATH, tier-1 secrets not measurable here' (named SKIP, not a silent pass). FAIL-on-removal: temporarily stripped the two entries from the real .gitleaks.toml and re-ran -> 'FAIL bytecode-allowlist \u2014 a PEM in tests/__pycache__/*.pyc was graded as a secret (exit 1, 131 bytes graded)', FAILS=1; config restored, `git status --porcelain` empty. Anti-vacuity guard requires graded bytes > 0 (18 bytes graded). FACT 4: docs/handbook/chapters/M3-repository.md:40 (\u00a73 submodule S3 row) names the bytecode exclusion (`'''__pycache__/'''`, `'''\\.pyc$'''`, `:57-58`) and states 'tier-1 grades the working tree (gitleaks detect --no-git) while the commit guard grades staged files only'; :83 (\u00a75 settings register, `.gitleaks.toml` `[allowlist].paths` row) names the exclusion, the reason, and that deleting the entries reds `bytecode-allowlist-loadbearing`; :114-115 (\u00a77 verification table) carry the 'tier-1 secrets scope' row ('no leaks found', exit 0, working tree vs staged files) and the 'bytecode allowlist arm (shipped)' row naming all three arms.\n\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-07T15:54:30.068102",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-07T15:54:30.088621+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 16664,
+        "truncated": false,
+        "source": "git show dcab929909d1"
+      }
+    ],
+    "task_id": "CF-383"
+  }
+}
