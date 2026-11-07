@@ -40,7 +40,7 @@ the gate now names at `:191-209` instead of silently passing.
 | Submodule | Unit | Classification | Evidence (invoking line) |
 |---|---|---|---|
 | S1 skeleton + census | `master_doc_skeleton.py` | **active** | `main()` entrypoint; structure-mapped |
-| S2 fill | `master_doc_fill.py` | **operator-invoked** | `main()` (`:393`); `--engine api\|hermes`, `--workers 2`, `--provider deepseek` (`:394-411`); no in-repo production caller |
+| S2 fill | `master_doc_fill.py` | **operator-invoked** | `main()` (`:393`); `--engine api|hermes`, `--workers 2`, `--provider deepseek` (`:394-411`); no in-repo production caller |
 | S3 gate | `master_doc_check.py` | **active** | `main()` at `:160`; selects `[0-9][0-9]-*.md` at `:188` |
 | S4 panel | `master_doc_panel.py`, `panel_loop.py`, `ownership.py`, `panel_supervise.sh`, `reap_orphan_writers.py` | **active** (panel), **optional** (ownership) | `panel_loop.py` runs this loop; `panel_supervise.sh` supervises it and restarts on crash/cap/provider outage (`panel_supervise.sh:30` `while true`); `reap_orphan_writers.py` kills writer sessions whose parent round died (ppid==1 + the writer-prompt signature, `reap_orphan_writers.py:47-49`); `ownership.py` has no code caller (`grep -rn ownership.py scripts/` → self only) |
 | S5 render | `gen_nasa_handbook.py`, `gen_system_views.py`, `sheet_style.py` | **operator-invoked** | `gen_nasa_handbook.py:247` `main()`; no in-repo caller (`grep -rn gen_nasa_handbook scripts/` → only `gen_unit_map.py:31` NOT_CALLERS) |
@@ -134,7 +134,7 @@ retired; each row carries the CT id its peer chapter cites.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| CT-16 | docsgate | out | `master_doc_check.py:263` prints `MASTER-DOC: PASS\|FAIL` | **external** — "the handbook's status word", no in-repo function | works (exit 1 = FAIL) — but it is a structural gate, not a truth gate (F6-2) |
+| CT-16 | docsgate | out | `master_doc_check.py:263` prints `MASTER-DOC: PASS|FAIL` | **external** — "the handbook's status word", no in-repo function | works (exit 1 = FAIL) — but it is a structural gate, not a truth gate (F6-2) |
 | CT-18 | handbook | out | `gen_nasa_handbook.py:247` `main()` (the render entry) | **external** — "the owner's approval artifact" (the owner is a human) | **UNVERIFIED** — the renderer hardcodes `docs/master` and selects `[0-9][0-9]-*.md`, so it does **not** render these `M*.md` chapters (see §11) |
 
 CT-18 is a boundary contract: the consumer is a human owner, so "producer named + consumer

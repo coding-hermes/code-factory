@@ -7,7 +7,7 @@
 | Module name | INFERENCE PROXY (`cf-inference-proxy.py`) |
 | Path | `/home/kara/.hermes/scripts/cf-inference-proxy.py` (273 lines) |
 | Revision | content sha256 `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (lives outside any git repo; no revision to stamp) |
-| Language / runtime | Python — `#!/usr/bin/env python3`, no pinned version; **requires >= 3.10** (F12-5: `_forward` at `:164` declares `body: bytes \| None`, an evaluated union annotation) |
+| Language / runtime | Python — `#!/usr/bin/env python3`, no pinned version; **requires >= 3.10** (F12-5: `_forward` at `:164` declares `body: bytes | None`, an evaluated union annotation) |
 | Owner lane | code-factory (control-host service, consumed by nodes) |
 | Status | **VERIFIED (admission/routing/capture), FAILING (streaming)** — read in full this round (273 lines); content sha256 reproduced; live 401 admission reproduced this round; the two sink paths corrected this round (F12-8). **Streaming completion is FAILING (sol B22):** the healthy SSE stream is unframed to completion (`:206-224`), reproduced as a `200` with no `Content-Length`/`Transfer-Encoding`/`Connection` and a client EOF timeout (§11 F12-7). A blanket VERIFIED would contradict that demonstrated defect — admission, routing and capture are verified, streaming is not |
 
@@ -96,17 +96,17 @@ CT-07 (`router → gateway` model choice), cited as a boundary contract.
 | M12-C1 | node | in | **unproven client half** — the proxy side is verified (401 on missing/unknown token, `:128-130`); the node side has no in-repo file that *calls* the proxy. `grep -rnE '8775\|CF_PROXY\|cf-inference-proxy' scripts/ config/ specs/` (ERE, re-run this round) matches **four** text sites: `scripts/panel_loop.py:145`, `scripts/master_doc_skeleton.py:25` and `:211` (self-references listing the path), and `config/node.env.example:22` — which is the **live assignment** `ENV_CF_PROXY_API_KEY=@~/.node/auth/provider.key`, not a comment. `config/node.env.example:26` comments `CONFIG_SET_MODEL_PROVIDER=cf-proxy -> model.provider`, so the producer half is config-driven: `node.env.example:22,26` → `node_env.py`/provisioner config generation → `~/.hermes/config.yaml` `model.provider=cf-proxy`. Round-4's quoted command omitted `-E`, so its bare-`\|` BRE returned **0** matches (measured rc 1) — the opposite of the row's claim (grok 2 / glm 4). | `cf-inference-proxy.py:135` `do_POST` → `_node` (`:136`) | **UNVERIFIED** — proxy side verified; the node-client call site is config-wired, not a `file:function` in this repo |
 | M12-C2 | upstream | out | `_forward` (`:164`) builds the upstream request with the control-host key | **rumour — one side only** (the upstream gateway/provider, not a function) | **UNVERIFIED** — external boundary with one side named; a "works" verdict on a rumour is not permitted (B06) |
 
-The round-3 M12-C1 producer cell (\"node POST /v1/chat/completions with Authorization: Bearer ***\")
+The round-3 M12-C1 producer cell ("node POST /v1/chat/completions with Authorization: Bearer ***")
 was a broken table row (an unclosed code span, a `***` redaction artifact, a pipe inside the cell)
 with an unnamed producer. It is replaced by the empty-grep proof above; the client half is
-unproven, so the state is UNVERIFIED, not \"works\".
+unproven, so the state is UNVERIFIED, not "works".
 
 The CONTRACT section (`:9-19`) documents three routes — `POST /v1/chat/completions`,
-`GET /v1/models`, `GET /health` (no auth) — and states: \"There is no anonymous path and no
-fallback: a node that cannot authenticate cannot spend money.\" **Corrected (kimi B65):** the
-\"no anonymous path\" wording is an overstatement — `GET /health` **is** unauthenticated
-(`cf-inference-proxy.py:12` and the handler at `:126-127`). The true claim is \"no anonymous
-*paid/model* path\": a request that reaches `_node` without a valid token is refused 401, so an
+`GET /v1/models`, `GET /health` (no auth) — and states: "There is no anonymous path and no
+fallback: a node that cannot authenticate cannot spend money." **Corrected (kimi B65):** the
+"no anonymous path" wording is an overstatement — `GET /health` **is** unauthenticated
+(`cf-inference-proxy.py:12` and the handler at `:126-127`). The true claim is "no anonymous
+*paid/model* path": a request that reaches `_node` without a valid token is refused 401, so an
 unauthenticated caller cannot spend money. There is no fallback that downgrades a refused caller
 to an open path.
 
@@ -156,20 +156,20 @@ is a capture log, not an emitted metric.
 
 - Fail-closed startup: no token file or no upstream key → `sys.exit(2)` before binding (`:265-270`).
 - `MAX_BODY` 4 MiB (`:54`); upstream timeout 300s (`:204`, `:241`).
-- **F12-4 (streaming guarantee correction).** The round-2/round-3 claim \"a 502 is returned only
-  when the failure happens before the first byte\" conflates two distinct cases (B24). The stream
+- **F12-4 (streaming guarantee correction).** The round-2/round-3 claim "a 502 is returned only
+  when the failure happens before the first byte" conflates two distinct cases (B24). The stream
   path sends the upstream status and headers first (`:206-210`), then reads chunks. If `urlopen`
   itself fails, no headers were sent and the 502 is clean. If a later read fails **before the first
   chunk**, headers were already sent, so the attempted 502 is a second status after the 200 —
   `[200, 502]`, not a valid standalone 502. If it fails **after** a chunk, the stream just ends.
 - **F12-5 (interpreter constraint).** `_forward` at `:164` declares `body: bytes | None` — an
   evaluated union annotation with no `from __future__ import annotations`. This requires
-  **Python >= 3.10**; \"Python 3.x, stdlib only\" was an insufficient constraint.
+  **Python >= 3.10**; "Python 3.x, stdlib only" was an insufficient constraint.
 - **F12-6 (capture/usage failure semantics, B26).** `capture_request` (`:83-95`) truncates the raw
   body to 120000 chars and swallows every exception (`except Exception: pass`) — capture loss is
   silent. `log_usage` (`:98-101`) has **no** exception suppression, so a usage-sink failure can
-  raise into the request path (`:220-238`, `:252-253`). The `CAPTURE_LOG` comment claims \"last 200
-  requests only\" (`:51`) but the code appends indefinitely — no truncation or retention is
+  raise into the request path (`:220-238`, `:252-253`). The `CAPTURE_LOG` comment claims "last 200
+  requests only" (`:51`) but the code appends indefinitely — no truncation or retention is
   implemented.
 - **F12-7 (stream-completion defect, sol B28).** `_forward`'s streaming path (`:206-210`) sends the
   upstream status/headers but neither `Content-Length`, `Transfer-Encoding`, nor `Connection: close`,
@@ -211,10 +211,10 @@ is a capture log, not an emitted metric.
   - **F12-2** (carried) — the CONTRACT section is in the code (`:9-19`), not in any spec.
   - **F12-3** — the credential selector is configurable but the startup error hardcodes
     `API_SERVER_KEY` (`:269`).
-  - **F12-4** — the \"502 before first byte\" claim is corrected: headers are sent before the first
+  - **F12-4** — the "502 before first byte" claim is corrected: headers are sent before the first
     read, so a read failure before the first chunk yields `[200, 502]`, not a standalone 502.
-  - **F12-5** — Python >= 3.10 required (`:164` union annotation), not \"3.x\".
-  - **F12-6** — capture loss is silent; usage-write failure is not; \"last 200 requests\" is an
+  - **F12-5** — Python >= 3.10 required (`:164` union annotation), not "3.x".
+  - **F12-6** — capture loss is silent; usage-write failure is not; "last 200 requests" is an
     unimplemented comment.
   - **F12-7** (carried) — the healthy SSE stream is not framed to completion (no Content-Length /
     Transfer-Encoding / Connection: close), so a client reading to EOF times out even on success.

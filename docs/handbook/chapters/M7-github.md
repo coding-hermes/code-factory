@@ -65,7 +65,7 @@ stale token while reporting fresh silently pushes with an expired credential.
 
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
-| `MIN_AGE` | **2400 s** (`:28`) | non-negative int (spelling validated `:53`: `''\|*[!0-9]*` → exit 2) | skip the mint while the destination token is younger than this | a too-large value serves a near-expiry token while reporting fresh |
+| `MIN_AGE` | **2400 s** (`:28`) | non-negative int (spelling validated `:53`: `''|*[!0-9]*` → exit 2) | skip the mint while the destination token is younger than this | a too-large value serves a near-expiry token while reporting fresh |
 | `ENV_FILE` | `$GITHUB_APP_ENV_FILE` or `~/.config/code-factory/github-app.env` (`:24`) | a path | the App identity source | absent file → `bad env_file`, exit 1 before any mint (`:57`) |
 | `TOKEN_FILE` | `~/.config/code-factory/github.token` (`:58`, after flag/env resolution) | a path | local-mode token destination | a wrong path mints the credential to the wrong place |
 | `GIT_CREDENTIALS` | `~/.git-credentials` (`:29`) | a path | the credential-store rewrite target | the store is rewritten **only when it already exists** (`:131`) — the script never creates a second store |

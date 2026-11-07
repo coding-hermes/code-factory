@@ -72,7 +72,7 @@ operator-initiated even though the installers are unit-invoked.
 
 | Import | Provider | Contract relied on | If it changes |
 |---|---|---|---|
-| `lib.sh` `fetch_verified` | this repo | pinned, digest-checked download, never `curl \| sh` | see M0 |
+| `lib.sh` `fetch_verified` | this repo | pinned, digest-checked download, never `curl | sh` | see M0 |
 | `harness-vars.sh` | this repo (S5) | CF_* validation: path-only credential, no ambient key, `$HOME`-scoped workdir | a contract loosening re-opens lane contamination |
 | `harness-matrix.json` | this repo (`config/`) | `by_family`, `hosts`, `shims`, `default` (`load_matrix`, `:188-216`) | a malformed table → `harness_matrix_invalid` refusal |
 

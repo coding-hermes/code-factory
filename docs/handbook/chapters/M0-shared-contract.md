@@ -51,7 +51,7 @@ here; removed.
 | `say()` | `:5` | args → prints verbatim | none |
 | `ok()` / `bad()` / `warn()` / `note()` | `:6-9` | `bad` increments the per-script `FAILED` counter (`:7`) | treat PASS/FAIL rows as descriptive, not proof (F0-4) |
 | `have()` | `:13` | `command -v` **or `true`** — an absent binary yields an **empty, success** result | caller must test the *empty* result, not the exit code; empty `have` output = "not found" |
-| `fetch_verified()` | `:19-42` | url/dest/digest → 0 on digest-verified install, 1 on any failure; the verified artifact is made executable best-effort — `chmod +x "$dest" 2>/dev/null \|\| true` (`:40`), so a **failed chmod is swallowed** and the install still returns 0 (the exit code is the INSTALL, not the chmod — `lib.sh:18`) | the pinned-download primitive (F0-2) |
+| `fetch_verified()` | `:19-42` | url/dest/digest → 0 on digest-verified install, 1 on any failure; the verified artifact is made executable best-effort — `chmod +x "$dest" 2>/dev/null || true` (`:40`), so a **failed chmod is swallowed** and the install still returns 0 (the exit code is the INSTALL, not the chmod — `lib.sh:18`) | the pinned-download primitive (F0-2) |
 | `free_gb()` | `:45` | path → `%.1f` GB free | used by `require_disk` only |
 | `require_disk()` | `:48-57` | path/floor → `ok` or `bad` + return 1 | the disk-floor admission |
 | `once()` | `:60-64` | sentinel + command → runs command only if sentinel absent, then writes a timestamped sentinel | **no concurrency lock**: `:62` checks then `:63` runs with no `flock` — two racers both run; the sentinel is `date -u` text, not a digest |
@@ -70,7 +70,7 @@ here; removed.
 | mktemp | any | with curl | a failed `mktemp` (`:21`) leaves `tmp` unset — `fetch_verified` then acts on an empty path, not a named refusal (no `mktemp` failure branch exists) |
 | rm | any | with curl | `rm -f` at `:22/:25/:31/:36` is best-effort cleanup, never a refusal |
 | cut / dirname / mkdir / mv | any | with curl | `mkdir -p` failure → named stderr + return 1 (`:30-34`); `mv` failure → named stderr + return 1 (`:35-39`) |
-| chmod | any | with curl | **best-effort**: `chmod +x "$dest" 2>/dev/null \|\| true` (`:40`) — a failed chmod is swallowed; the artifact is left non-executable and the install still returns 0 |
+| chmod | any | with curl | **best-effort**: `chmod +x "$dest" 2>/dev/null || true` (`:40`) — a failed chmod is swallowed; the artifact is left non-executable and the install still returns 0 |
 | df / awk | any | with curl | `free_gb` (`:45`) depends on `df`+`awk`; a missing `df` yields an empty `free` and `require_disk`'s awk admission (`:51`) mis-decides the floor |
 
 **4b. Library contracts** — `lib.sh` imports nothing; it is the bottom of the shell stack.

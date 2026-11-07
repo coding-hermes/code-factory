@@ -20,10 +20,11 @@ MODULES = REPO / "docs/master"
 CSS = """
 @page { size: A4; margin: 20mm 16mm 18mm 16mm; }
 html { font-size: 9.1pt; }
-body { font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif; color: #111; line-height: 1.34;
+body { font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif; color: #000; line-height: 1.34;
        letter-spacing: 0.01em; margin: 0; }
 h1 { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 14pt; letter-spacing: 0.06em;
-     text-transform: uppercase; border-bottom: 1.6pt solid #111; padding-bottom: 2mm; margin: 0 0 4mm; }
+     text-transform: uppercase; border-bottom: 1.6pt solid #000; padding-bottom: 2mm; margin: 0 0 4mm;
+     page-break-after: avoid; }
 h2 { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 10.6pt; letter-spacing: 0.1em;
      text-transform: uppercase; margin: 6mm 0 2mm; border-bottom: 0.6pt solid #666; padding-bottom: 1mm;
      page-break-after: avoid; }
@@ -77,7 +78,31 @@ def inline(text):
     return text
 
 
+def split_cells(row: str) -> list[str]:
+    """Split a table row on pipes that are OUTSIDE inline code spans.
+
+    A pipe inside backticks is content (a grep pattern, `bytes | None`); splitting
+    on it tore cells apart and left stray backslash fragments in the printed row.
+    """
+    cells, buf, in_code = [], [], False
+    for ch in row:
+        if ch == "`":
+            in_code = not in_code
+            buf.append(ch)
+        elif ch == "|" and not in_code:
+            cells.append("".join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+    cells.append("".join(buf))
+    return cells
+
+
 def md_to_html(lines):
+    return "\n".join(md_blocks(lines))
+
+
+def md_blocks(lines):
     out, i, n = [], 0, len(lines)
     while i < n:
         line = lines[i]
@@ -105,7 +130,7 @@ def md_to_html(lines):
             while i < n and lines[i].lstrip().startswith("|"):
                 rows.append(lines[i])
                 i += 1
-            cells = [[c.strip() for c in r.strip().strip("|").split("|")] for r in rows]
+            cells = [[c.strip() for c in split_cells(r.strip().strip("|"))] for r in rows]
             body = [
                 c
                 for c in cells
@@ -131,6 +156,15 @@ def md_to_html(lines):
             while i < n and re.match(r"^\s*([-*]|\d+\.)\s+", lines[i]):
                 items.append(re.sub(r"^\s*([-*]|\d+\.)\s+", "", lines[i]))
                 i += 1
+                # Hanging-indent continuation lines belong to this item. Left
+                # alone they rendered as orphaned paragraphs after the list.
+                # An indented line that is itself a list item is a (flattened)
+                # sub-item, not a continuation.
+                while i < n and re.match(r"^\s{2,}\S", lines[i]) and not re.match(
+                    r"^\s*([-*]|\d+\.)\s+", lines[i]
+                ):
+                    items[-1] += " " + lines[i].strip()
+                    i += 1
             tag = "ol" if ordered else "ul"
             out.append(
                 "<%s>%s</%s>"
@@ -160,7 +194,7 @@ def md_to_html(lines):
             para.append(lines[i].strip())
             i += 1
         out.append("<p>%s</p>" % inline(" ".join(para)))
-    return "\n".join(out)
+    return out
 
 
 def status_of(text):
