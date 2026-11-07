@@ -129,7 +129,7 @@ lands uncounted (`CF-113`, pending, owns that separate fix).
 | §9 every prompt the README names exists | README lane tables / the family loaders |
 | §10 Hermes refuses an unsupported Python | `specs/HARNESS.md` install obligation (adapter contract, not harness parity) |
 | §11 lane workdir targets parse and verify | `specs/NODE.md` workdir targets — parsing only, not `CF-112` dispatch |
-| §12 node disk floor resolves from CLI/env/config | `CF-109` (requirement arm — resolution only) |
+| §12 node disk floor resolves from CLI/env/config | `CF-109` (requirement arm — resolution only) and board `CF-082` (a decimal floor is preserved through resolution and admission, with a pre-fix control) |
 | §13 provisioning names its floor and refuses below it | `CF-109` (requirement arm — malformed-value refusal; the below-floor boundary is still untested) |
 | §14 harness-adapter FAIL rows counted in the summary | board `CF-055` + `CF-102`'s `NODE: FAIL (n)` equality |
 | §15 the README status re-run line carries the exit status | documentation honesty, board `CF-054` (`--layers 30,40`) |

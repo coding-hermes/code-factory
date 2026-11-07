@@ -28,8 +28,43 @@ class ParseValue(unittest.TestCase):
         for raw in ("7G", "7GiB", "7gib", "7 G"):
             self.assertEqual(disk_floor.parse_value(raw), 7)
 
-    def test_decimal_rounds_down_to_whole_gib(self):
-        self.assertEqual(disk_floor.parse_value("1.9G"), 1)
+    def test_decimal_is_preserved_not_truncated(self):
+        # CF-082: a decimal floor used to resolve DOWN (5.9G -> 5), so admission
+        # enforced a lower number than the operator wrote.
+        self.assertEqual(disk_floor.parse_value("5.9G"), 5.9)
+        self.assertEqual(disk_floor.parse_value("5.9"), 5.9)
+        self.assertEqual(disk_floor.parse_value(5.9), 5.9)
+        self.assertEqual(disk_floor.parse_value("1.5G"), 1.5)
+
+    def test_integral_values_stay_whole_numbers(self):
+        # No regression to 5.0-ish output: an integral floor is an int, so the
+        # --explain payload and the bare print stay whole numbers.
+        for raw in ("5G", "5GiB", "5.0G", "5", 5, 5.0, 12):
+            value = disk_floor.parse_value(raw)
+            self.assertIsInstance(value, int, f"{raw!r} should parse to an int")
+            self.assertEqual(value, 5 if str(raw).startswith("5") else 12)
+
+    def test_three_decimals_are_three_distinct_floors(self):
+        floors = [disk_floor.parse_value(v) for v in ("5.1G", "5.5G", "5.9G")]
+        self.assertEqual(floors, [5.1, 5.5, 5.9])
+        self.assertEqual(len(set(floors)), 3)
+
+    def test_decimal_floor_is_never_below_the_requested_number(self):
+        for raw in ("5.1G", "5.5G", "5.9G", "1.9G", "12.25"):
+            requested = float(raw.rstrip("G"))
+            self.assertGreaterEqual(disk_floor.parse_value(raw), requested)
+
+    def test_bounds_apply_to_the_decimal(self):
+        self.assertEqual(disk_floor.parse_value("4096G"), 4096)
+        self.assertEqual(disk_floor.parse_value("1.0001G"), 1.0001)
+        for raw in ("0.5G", "0.999", "4096.5G"):
+            with self.assertRaises(disk_floor.FloorError):
+                disk_floor.parse_value(raw)
+
+    def test_non_finite_values_fail_closed(self):
+        for raw in (float("nan"), float("inf"), float("-inf")):
+            with self.assertRaises(disk_floor.FloorError):
+                disk_floor.parse_value(raw)
 
     def test_rejects_nonsense(self):
         for raw in ("", "lots", "7TB", "-3", "0", "99999", True):
@@ -90,6 +125,24 @@ class Resolve(unittest.TestCase):
     def test_unknown_role_fails(self):
         with self.assertRaises(disk_floor.FloorError):
             disk_floor.resolve("toaster")
+
+    def test_every_rung_preserves_a_decimal_floor(self):
+        # CF-082: truncation was not a CLI-only bug — the config rungs fed the same
+        # parse_value, so a config decimal was silently lowered the same way.
+        cfg = self._cfg('[disk]\nworker_gib = "5.9G"\ndefault = "5.5"\n')
+        self.assertEqual(disk_floor.resolve("worker", cli="5.1G"), (5.1, "cli"))
+        self.assertEqual(disk_floor.resolve("worker", env="5.5G"), (5.5, "env"))
+        self.assertEqual(
+            disk_floor.resolve("worker", config_path=cfg), (5.9, "config-role")
+        )
+        self.assertEqual(
+            disk_floor.resolve("builder", config_path=cfg), (5.5, "config-default")
+        )
+        # The built-in role defaults are whole GiB and stay ints.
+        absent = os.path.join(self.tmp, "absent.toml")
+        gib, source = disk_floor.resolve("worker", config_path=absent)
+        self.assertIsInstance(gib, int)
+        self.assertEqual((gib, source), (5, "role-default"))
 
 
 if __name__ == "__main__":

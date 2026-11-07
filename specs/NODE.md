@@ -141,7 +141,7 @@ The floor is operator policy, so it is configurable — and the precedence is fi
 | 4 | config `[disk] default_gib` | `default_gib = "6"` |
 | 5 | built-in role default | see below |
 
-Role defaults: `worker` 5 GiB, `builder` 10 GiB, `full` 20 GiB. The role is selected with `--role` or `NODE_ROLE`. Accepted value forms: `7`, `7G`, `7GiB`, `1.5G` (whole GiB, 1–4096).
+Role defaults: `worker` 5 GiB, `builder` 10 GiB, `full` 20 GiB. The role is selected with `--role` or `NODE_ROLE`. Accepted value forms: `7`, `7G`, `7GiB`, `1.5G` in GiB, bounded to 1–4096. A decimal is **preserved**, never truncated: `1.5G` is a 1.5 GiB floor and `5.9G` is a 5.9 GiB floor, so admission enforces the number the operator wrote (CF-082); whole values stay whole numbers (`5G` resolves to `5`, not `5.0`).
 
 A malformed value fails closed **before** any install, clone or adapter run: `FAIL disk-floor: NODE_DISK_FLOOR: 'plenty' is not a size…`. A typo never lowers a floor, and a below-floor node refuses admission naming both the measured free space and the configured floor, plus the source that set it.
 

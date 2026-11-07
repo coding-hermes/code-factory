@@ -2,8 +2,10 @@
 #
 # Precedence, highest first:
 #   --disk-floor  >  NODE_DISK_FLOOR  >  [disk] <role>_gib  >  [disk] default_gib  >  role default
-# Values are whole GiB; "8", "8G", "8GiB" and "1.5G" are all accepted. Anything
-# else fails closed before any install runs, so a typo cannot lower a floor.
+# Values are GiB; "8", "8G", "8GiB" and "1.5G" are all accepted. A decimal is kept
+# as written (1.5G is a 1.5 GiB floor, never truncated to 1), so admission enforces
+# the number you wrote. Anything else fails closed before any install runs, so a
+# typo cannot lower a floor.
 
 [disk]
 default_gib = "6"

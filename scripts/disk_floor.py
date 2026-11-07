@@ -15,8 +15,11 @@ Precedence, highest first:
   4. built-in role default
 
 Accepted values: "<int>" or "<int>G" / "<int>GiB" / "<decimal>G" in GiB.
-Anything else fails closed (exit 2) rather than silently falling back to a
-default — a typo must not lower a floor.
+A decimal is PRESERVED, never truncated: "5.9G" is a 5.9 GiB floor, so the
+number admission enforces is the number the operator wrote. Integral values
+still print and compare as whole numbers (5, not 5.0). Anything else fails
+closed (exit 2) rather than silently falling back to a default — a typo must
+not lower a floor (CF-082).
 
 Usage:
   disk_floor.py resolve [--role worker|builder|full] [--cli V] [--env V]
@@ -28,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -44,16 +48,27 @@ class FloorError(ValueError):
     pass
 
 
-def parse_value(raw: object, origin: str = "value") -> int:
-    """Parse a floor value in GiB. Raises FloorError for anything ambiguous."""
+def _gib_text(gib: float) -> str:
+    """Render a size for a message: integral floors stay whole numbers."""
+    return str(int(gib)) if gib.is_integer() else repr(gib)
+
+
+def parse_value(raw: object, origin: str = "value") -> float:
+    """Parse a floor value in GiB. Raises FloorError for anything ambiguous.
+
+    The value is kept as written: a decimal floor is never truncated down
+    (CF-082 — "5.9G" used to resolve to 5 GiB, admitting a host below the number
+    the operator wrote). Integral values are returned as ``int`` so the
+    ``--explain`` payload and the bare print keep whole numbers as whole numbers.
+    """
     if raw is None:
         raise FloorError(f"{origin}: no value")
     if isinstance(raw, bool):
         raise FloorError(f"{origin}: booleans are not sizes")
     if isinstance(raw, int):
-        gib = raw
+        gib = float(raw)
     elif isinstance(raw, float):
-        gib = int(raw)
+        gib = raw
     else:
         text = str(raw).strip()
         if not text:
@@ -64,12 +79,18 @@ def parse_value(raw: object, origin: str = "value") -> int:
                 f"{origin}: {text!r} is not a size; use GiB as an integer or "
                 "'7G' / '7GiB' / '1.5G'"
             )
-        gib = int(float(m.group("num")))
+        gib = float(m.group("num"))
+    if not math.isfinite(gib):
+        raise FloorError(f"{origin}: {gib} is not a finite size")
     if gib < MIN_GIB:
-        raise FloorError(f"{origin}: {gib} GiB is below the minimum of {MIN_GIB} GiB")
+        raise FloorError(
+            f"{origin}: {_gib_text(gib)} GiB is below the minimum of {MIN_GIB} GiB"
+        )
     if gib > MAX_GIB:
-        raise FloorError(f"{origin}: {gib} GiB exceeds the maximum of {MAX_GIB} GiB")
-    return gib
+        raise FloorError(
+            f"{origin}: {_gib_text(gib)} GiB exceeds the maximum of {MAX_GIB} GiB"
+        )
+    return int(gib) if gib.is_integer() else gib
 
 
 def load_config(path: Optional[str]) -> dict:
@@ -117,8 +138,13 @@ def resolve(
     cli: Optional[str] = None,
     env: Optional[str] = None,
     config_path: Optional[str] = None,
-) -> tuple[int, str]:
-    """Return (gib, source) applying the documented precedence."""
+) -> tuple[float, str]:
+    """Return (gib, source) applying the documented precedence.
+
+    ``gib`` is a float when the operator wrote a decimal floor and an int when
+    the value is whole, so a decimal policy is enforced exactly and a whole one
+    still prints as a whole number.
+    """
     if role not in ROLE_DEFAULTS:
         raise FloorError(
             f"unknown role {role!r}; expected one of {', '.join(sorted(ROLE_DEFAULTS))}"

@@ -708,6 +708,64 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_disk_floor.py" >/dev/n
 else
   say "  FAIL  disk floor contract"; fails=$((fails+1))
 fi
+# CF-082: a decimal floor is preserved, never truncated down (5.9G used to resolve to
+# 5, so admission enforced a lower number than the operator wrote). Two layers are
+# graded here — the resolver's JSON and bare print, then the admission ROW from the
+# real lib.sh require_disk against a df shim reporting exactly 5.5 GB free. The pre-fix
+# resolver is re-run from git, so these arms are falsifiable in the suite itself and not
+# only in the unit file. Part of section 12: no new numbered section and no census change
+# (arms_tree stays 58), the CF-230 precedent.
+cf082=$(mktemp -d)
+mkdir -p "$cf082/bin"
+cat > "$cf082/bin/df" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' 'Filesystem 1024-blocks Used Available Capacity Mounted on' 'fixture 20971520 15204352 5767168 74% /'
+EOF
+chmod +x "$cf082/bin/df"
+cf082_explain() { python3 "$HERE/scripts/disk_floor.py" resolve --cli "$1" --explain; }
+cf082_bare() { python3 "$HERE/scripts/disk_floor.py" resolve --cli "$1"; }
+cf082_bad=""
+for pair in '5.9G:5.9' '5.5G:5.5' '5.1G:5.1' '5G:5' '5:5' '1.5G:1.5'; do
+  value=${pair%%:*}
+  want=${pair##*:}
+  want_json="{\"role\": \"worker\", \"floor_gib\": $want, \"source\": \"cli\"}"
+  if [ "$(cf082_explain "$value")" != "$want_json" ] || [ "$(cf082_bare "$value")" != "$want" ]; then
+    cf082_bad="$cf082_bad ${value}->$(cf082_bare "$value" 2>&1)"
+  fi
+done
+if [ -z "$cf082_bad" ]; then
+  say "  PASS  CF-082 decimals preserved: 5.9G -> 5.9, 5.5G -> 5.5, 5.1G -> 5.1, 1.5G -> 1.5; integral 5G -> 5 in JSON and bare print"
+else
+  say "  FAIL  CF-082 a decimal floor did not survive resolution:$cf082_bad"; fails=$((fails+1))
+fi
+# One admission arm per pole: 5.1 PASSes and 5.9 FAILs, both against a host whose only
+# free space is 5.5 GB. The literal rows are asserted, not a substring: the printed floor
+# is the operator's own number, which is what used to hide the truncation.
+cf082_pass=$( (PATH="$cf082/bin:$PATH"; require_disk "$HOME" "$(cf082_bare 5.1G)") 2>&1 ); cf082_pass_rc=$?
+cf082_fail=$( (PATH="$cf082/bin:$PATH"; require_disk "$HOME" "$(cf082_bare 5.9G)") 2>&1 ); cf082_fail_rc=$?
+cf082_pass_want='  PASS  disk — 5.5 GB free (floor 5.1 GB)'
+cf082_fail_want="  FAIL  disk — 5.5 GB free < floor 5.9 GB at $HOME"
+if [ "$cf082_pass_rc" -eq 0 ] && [ "$cf082_pass" = "$cf082_pass_want" ] \
+  && [ "$cf082_fail_rc" -eq 1 ] && [ "$cf082_fail" = "$cf082_fail_want" ]; then
+  say "  PASS  CF-082 admission on 5.5 GB free: floor 5.1 GB admitted, floor 5.9 GB refused, both rows name the written floor"
+  printf '%s\n' "$cf082_pass" "$cf082_fail"
+else
+  say "  FAIL  CF-082 admission did not split 5.1G from 5.9G (pass rc $cf082_pass_rc: $cf082_pass / fail rc $cf082_fail_rc: $cf082_fail)"; fails=$((fails+1))
+fi
+# The control: the resolver as shipped at deafbc3 truncates the same value. Without this
+# row a green here could be a resolver that never had the defect, or an arm that never ran.
+if git -C "$HERE" show deafbc3:scripts/disk_floor.py > "$cf082/pre-fix.py" 2>/dev/null; then
+  pre_out=$(python3 "$cf082/pre-fix.py" resolve --cli 5.9G --explain 2>&1); pre_rc=$?
+  pre_want='{"role": "worker", "floor_gib": 5, "source": "cli"}'
+  if [ "$pre_rc" -eq 0 ] && [ "$pre_out" = "$pre_want" ]; then
+    say "  PASS  CF-082 pre-fix control: the deafbc3 resolver truncates 5.9G to $pre_want"
+  else
+    say "  FAIL  CF-082 pre-fix control did not reproduce the truncation (exit $pre_rc): $pre_out"; fails=$((fails+1))
+  fi
+else
+  say "  FAIL  CF-082 pre-fix control: deafbc3:scripts/disk_floor.py is unavailable"; fails=$((fails+1))
+fi
+rm -rf "$cf082"
 # CF-357: a lane may not be cloned onto itself. `--from X --to X` used to rewrite the source
 # row as the destination and disable a LIVE lane. The arm proves the refusal lands before any
 # database is opened: exit 2, stderr naming --to/--from and the lane, the source row unchanged,
