@@ -5191,5 +5191,48 @@ fi
 rm -rf "$cf150"
 # END gateway-basic-auth
 
+# BEGIN cf006-harness-node
+# ch:trace row=CF-006 spec=docs/handbook/OUTLINE.md#M5 wave=none:serial-worker test=tests/harness-node-e2e.sh doc=specs/HARNESS.md evidence=tests/harness-node-e2e.sh witness=none:local-fixture verdict=none:foreman-will-run-gitreins commit=HEAD memory=none:foreman-closeout
+say "56. a foreign harness is measured in a node, and verify-node.sh re-measures what the manifest records (CF-006)"
+# The failure this closes: node.json carried harness{name,port} only and verify-node.sh never
+# opened it, so a node provisioned with one harness and running another still printed VERIFY: PASS.
+# The arms live in tests/harness-node-e2e.sh (real adapters, real project-node.sh --apply, real
+# verify-node.sh, one stub transport); this section drives that battery and proves it can go RED.
+cf006="$HERE/tests/harness-node-e2e.sh"
+if [ ! -x "$cf006" ]; then
+  say "  FAIL  tests/harness-node-e2e.sh is absent — the node slice has no test"; fails=$((fails+1))
+else
+  out=$(bash "$cf006" 2>&1); rc=$?
+  if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'HARNESS-NODE-E2E: PASS' \
+     && printf '%s\n' "$out" | grep -Fq 'PASS  node:manifest — harness{name:codex, version:' \
+     && printf '%s\n' "$out" | grep -Fq 'PASS  verify:green — a node created with codex -> VERIFY: PASS' \
+     && printf '%s\n' "$out" | grep -Fq 'PASS  verify:red-version' \
+     && printf '%s\n' "$out" | grep -Fq 'PASS  verify:null-version' \
+     && printf '%s\n' "$out" | grep -Fq 'PASS  turn:directive'; then
+    say "  PASS  node slice: the manifest records the measured harness, verify re-measures it, 4 red arms + a directive turn"
+  else
+    say "  FAIL  the node slice battery did not pass (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out" | grep -E '^  FAIL|^HARNESS' | head -8 | sed 's/^/    | /'
+  fi
+  # A green child proves nothing unless it can go red on the same tree: drop the `binary` row from
+  # a COPY of the codex adapter, so the node manifest records no binary, and the manifest arm must
+  # FAIL. The mutation is confined to $cf006t — this checkout is never written.
+  cf006t=$(mktemp -d)
+  mkdir -p "$cf006t/tree/tests"
+  cp -r "$HERE/scripts" "$cf006t/tree/scripts"
+  cp "$cf006" "$cf006t/tree/tests/harness-node-e2e.sh"
+  sed -i '/ok "binary"/d' "$cf006t/tree/scripts/harness/install-codex.sh"
+  out=$(bash "$cf006t/tree/tests/harness-node-e2e.sh" 2>&1); rc=$?
+  if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -Fq 'FAIL  node:manifest' \
+     && printf '%s\n' "$out" | grep -Fq 'HARNESS-NODE-E2E: FAIL'; then
+    say "  PASS  with the adapter's binary row removed the manifest arm goes RED (exit $rc) — the battery is falsifiable"
+  else
+    say "  FAIL  the node slice battery stayed green without the binary measurement (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out" | grep -E '^  FAIL|^HARNESS' | head -6 | sed 's/^/    | /'
+  fi
+  rm -rf "$cf006t"
+fi
+# END cf006-harness-node
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

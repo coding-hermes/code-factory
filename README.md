@@ -128,9 +128,12 @@ scripts/         node checks and provisioners: bunker-server-install.sh, bunker-
                  bunker-crier-connect.sh, bunker_config_gen.py (writes one provision config per
                  project from the scheduler registry), project-node.sh, node-create.sh,
                  verify-node.sh, lib.sh
-scripts/harness/ install-<harness>.sh — shipped: hermes, claude-code, opencode.
-                 codex, aider, goose and pi-agent are documented in specs/HARNESS.md and ship
-                 no installer yet (CF-006)
+scripts/harness/ install-<harness>.sh — one per harness. Shipping an install ladder: hermes,
+                 claude-code, codex. Check-only (`--apply` refuses by name until a ladder is
+                 measured): opencode, deepseek, pi-agent. aider and goose ship no adapter.
+                 The node manifest records the harness version and binary an adapter measured;
+                 verify-node.sh re-measures it (specs/HARNESS.md "A node records the harness it
+                 measured")
 scripts/ (lanes) load_lane_config.py, add_family_lanes.py, clone_lane.py, configure_family.py —
                  configure this repo's lane family in the scheduler; see "The lanes" below
 scripts/boardctl the board entrypoint (docs/BOARD.md); fails closed when the fleet boardctl is

@@ -12,7 +12,7 @@ A **harness** is whatever runs the work inside a node. The factory must not care
 
 | Obligation | How |
 |---|---|
-| Install | `scripts/harness/install-<name>.sh --check` reports absence; `--apply` installs user-space. |
+| Install | `scripts/harness/install-<name>.sh --check` reports absence; `--apply` installs user-space and prints the `binary` row it placed, so the node manifest can record where the harness lives (see "A node records the harness it measured"). |
 | Version | `--check` prints the binary's ownership and measured version; a version mismatch names both the measured value and the pin and FAILs, not just "ok". |
 | Invoke | Accepts a directive (text) and a working directory; runs unattended. |
 | Report | Emits the model it actually served (requested vs served), when it has one. |
@@ -72,6 +72,66 @@ rule as hermes applies, and `--apply` refuses by name on any arch whose artefact
 not measured (the pin covers `x86_64-unknown-linux-musl` only). `tests/harness/codex-install-test.sh`
 is its proof: refusals, the digest floor, idempotence, the version-mismatch arm, and — when a
 credential exists — one real turn.
+
+## A node records the harness it measured
+
+The battery above certifies a HOST. The two measurements below are the node's, and both were
+missing: `~/.node/node.json` carried `harness{name, port}` only, and `verify-node.sh` never opened
+it — so a node provisioned with one harness and running another, or with the harness binary gone,
+still printed `VERIFY: PASS`.
+
+**1. The manifest records the build, not the pin.** Layer 20 of `project-node.sh` captures the
+adapter's output; `harness_measurement` reads the adapter's own `PASS version` and `PASS binary`
+rows back out of it (one parser — a second `--version` parse would be a second answer to "which
+build is on this node"), and layer 90 writes them into `node.json`:
+
+```json
+"harness": {"name": "codex", "port": 10800,
+            "adapter": "scripts/harness/install-codex.sh",
+            "version": "0.166.0", "version_row": "0.166.0 (pin 0.166.0)",
+            "version_source": "the adapter's own `PASS version` row in --apply",
+            "binary": "/home/<uid>/.local/codex/0.166.0/bin/codex"}
+```
+
+`version` is the value the adapter MEASURED, never the pin copied from a default. When the adapter
+printed no version row the field is `null` and carries `version_reason`: a null without a reason is
+junk, and a version nobody read is worse than a named absence. Because the manifest is built from
+that log, every adapter's `--apply` prints the `binary` row it placed — a `$HOME`-owned pin
+(codex) or venv binary (hermes) is normally not on `PATH` at all, and a verifier that resolved the
+NAME would measure whatever else the host happens to have.
+
+**2. `verify-node.sh` re-measures it — leg 7, `harness_identity`** (two `bunker exec` round trips:
+the manifest, then the binary it names, taken as a positional argument so a value from the node
+cannot be re-parsed as shell):
+
+| Manifest says | Node answers | Verdict |
+|---|---|---|
+| `codex 0.166.0` at `<path>` | `<path> --version` contains `0.166.0` | `PASS harness_identity — codex 0.166.0 (manifest) measured at <path> — codex-cli 0.166.0` |
+| `codex 0.166.0` at `<path>` | a different version | `FAIL` naming both values; `VERIFY: FAIL` |
+| `codex …` at `<path>` | nothing executable there | `FAIL` — the harness the node claims is not on the node |
+| `codex` with `version: null` and a reason | — | `WARN` + `VERIFY: UNVERIFIED` (exit 3): an unknown build is not a measured one |
+| no `node.json` (unprovisioned) | — | a `..` note naming what was NOT checked — not a `PASS` row |
+
+The last row is why the leg can be added without lying about fixtures: absence is reported as
+absence, and `VERIFY: PASS` is unreachable for a node whose manifest disagrees with its binary.
+
+**The measured / unverified boundary.** `tests/harness-node-e2e.sh` drives this slice offline
+end to end: the real adapters, the real `project-node.sh --apply` (unscoped, so it writes
+`node.json`), the real `verify-node.sh`, one stub transport and one stub HTTP probe. Its arms are
+the adapter `--check`/`--help` surface, the three unmeasured ladders refusing `--apply` by name and
+installing nothing, a codex node whose manifest records name+version+binary measured by the
+adapter, `VERIFY: PASS` with `harness_identity`, four red arms (tampered version, absent binary,
+null version → `UNVERIFIED`, absent manifest → note), and the manifest's own binary answering a
+directive non-interactively with JSONL events and the directive's token in an artifact.
+
+What that does **not** prove, and this file does not claim: the fixture `codex` is a script, not
+the pinned musl artefact, and no model is called. It proves the WIRING — adapter measurement →
+manifest → directive → machine-readable events → verifier — not the real turn. The real turn for a
+foreign harness is the conformance battery's smoke leg (a token the battery chose, bytes re-read on
+the control host) and the CF-227 codex measurement in the table above. Running this slice against
+a real node (`project-node.sh --apply --harness codex`, then `verify-node.sh --agent <id>`) is
+**UNVERIFIED** at this commit: the host that wrote it had no reachable bunker server
+(`bunker: server "bunker-las-03" is offline`). It is a named open leg, not a completed one.
 
 ## Why hermes first
 

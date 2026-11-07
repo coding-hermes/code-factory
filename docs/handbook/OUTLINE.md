@@ -168,7 +168,10 @@ modules get their own chapter.
   gate and node entry (`install-go.sh`, `install-gitreins.sh`, `project-node.sh`) ·
   **S4 harness resolution** (`harness_resolve.py`, `specs/HARNESS-MATRIX.md` §4) ·
   **S5 variable contract** (`harness/harness-vars.sh`, matrix §5, sourced by every
-  installer)
+  installer) · **S6 the node's harness measurement** (layer 20 reads the adapter's
+  `version`/`binary` rows into `node.json`; `verify-node.sh` leg 7 `harness_identity`
+  re-measures them; proven offline by `tests/harness-node-e2e.sh`, live-node leg
+  UNVERIFIED — `specs/HARNESS.md` "A node records the harness it measured")
 - **M6 DOCUMENTATION** — S1 skeleton and census (`master_doc_skeleton.py`) · S2 fill
   (`master_doc_fill.py`) · S3 gate (`master_doc_check.py`) · S4 panel
   (`master_doc_panel.py`) · S5 render (`gen_nasa_handbook.py`, `gen_system_views.py`,
