@@ -9,7 +9,7 @@
 | Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD at round-13 derivation; `project-node.sh` layer 20 gained the CF-150 `gateway_auth` staging block and `node-create.sh` re-lined in `08a2c8a..fbc19cb`; every M5 file:line re-pinned) |
 | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
 | Owner lane | code-factory (node-side) |
-| Status | **UNVERIFIED** — `harness-vars.sh` (318 lines), `harness_resolve.py` (400 lines), `install-hermes.sh` (375 lines), `install-gitreins.sh` (180 lines), `install-claude-code.sh` (settings surface), `install-codex.sh` (settings surface + partial body), `install-opencode.sh` (98 lines), `install-deepseek.sh` (101 lines), `install-pi-agent.sh` (113 lines) read this round; `install-claude-code.sh`/`install-codex.sh` full bodies not line-by-line; the conformance battery not run this round |
+| Status | **UNVERIFIED** — `harness-vars.sh` (318 lines), `harness_resolve.py` (400 lines), `install-hermes.sh` (388 lines, +13 for the CF-192 occupied-port auth gate), `install-gitreins.sh` (180 lines), `install-claude-code.sh` (settings surface), `install-codex.sh` (settings surface + partial body), `install-opencode.sh` (98 lines), `install-deepseek.sh` (101 lines), `install-pi-agent.sh` (113 lines) read this round; `install-claude-code.sh`/`install-codex.sh` full bodies not line-by-line; the conformance battery not run this round |
 
 ## 2. Purpose, authority and position
 
@@ -166,6 +166,7 @@ CT-17 is a boundary contract: the consumer (operator/board reading the verdicts)
 | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|
 | shell parse | `for f in scripts/harness/*.sh; do bash -n "$f"; done` | exit 0 | 2026-11-06 | PASS (in 20/20 sweep) |
+| occupied-port auth gate | `bash tests/selftest.sh` (section 55, arm E) | occupied `:10800` + no `dashboard.basic_auth` -> exit nonzero with the named `FAIL  port` row and no `PASS port`/`PASS status_probe`/`HERMES: PASS`; occupied + valid block keeps both PASS rows | 2026-11-07 | **PASS** (red pre-fix run in `docs/audits/code-factory-CF-192.probe.txt`) |
 | python compile | `python3 -m py_compile scripts/harness_resolve.py` | exit 0 | 2026-11-06 | PASS |
 | harness resolve unit | `python3 tests/test_harness_resolve.py` | pass | 2026-11-06 | **PASS** (28 tests, rc 0) |
 | conformance legs | `tests/harness-conformance.sh` | per-leg green on a real node | not run this round | **UNVERIFIED** (needs a live node) |
@@ -187,13 +188,14 @@ and conformance pass rate are answerable only by reading the leg rows.
 | — | `installed ${ver:-nothing} but the pin is $PIN (log $log)` (`install-gitreins.sh:105`) | installed version != pin | evidentiary |
 | — | `FAIL harness_foreman_requires_hermes: lane=<L> harness=<H>` (`harness_resolve.py:284`, surfaced by `print(f"FAIL {exc}")` at `:388`) | a bound foreman lane selected non-hermes | evidentiary — round-5 cited `:53` (the module docstring's refusal list, not the emitter); `:388` is the print, `:389` is `return 2` (grok A) |
 | — | `  PASS  %s — %s` / `  FAIL  %s — %s` (`lib.sh:6-7`) | every installer row | descriptive (see M0 F0-4) |
+| — | `  FAIL  port — listening on :10800 (not started by this adapter; auth unverified — a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — <reason>)` (`install-hermes.sh:318`) | an occupied gateway port whose `~/.hermes/config.yaml` parses to no non-empty `dashboard.basic_auth` | evidentiary — counted, so the layer ends `HERMES: FAIL (n)` (CF-192) |
 
 ## 10. Failure modes, indications and recovery
 
 | Failure | Presents as | Distinguished from | Recovery |
 |---|---|---|---|
 | Version drift | `installed X but the pin is Y` | a clean install | re-run `--apply` at the pin |
-| Auth gate skipped | install on an occupied :10800 does not run the gate | a gated install | CF-150/CF-192 |
+| Auth gate skipped | **fixed (CF-192)** — an occupied `:10800` with no `dashboard.basic_auth` now emits one counted `FAIL  port — listening on :10800 (not started by this adapter; auth unverified — …)` row and the layer ends `HERMES: FAIL (n)`; before the fix the occupied-port branch printed `PASS port` / `PASS status_probe` / `HERMES: PASS` and exited 0 without ever evaluating the block | a gated install: the SAME port with a non-empty `dashboard.basic_auth` still prints `PASS port — listening on :10800` / `PASS status_probe — /api/status -> 200`, so a gateway a previous `--apply` started is not called a failure | write the block (`scripts/node_gateway_auth.py <config.yaml> <password-file>`, or layer 20's staging in `project-node.sh:448-497`) and re-run `--apply`; the port row turns PASS on the next run |
 | Interpreter out of range | `hermes-agent … requires python >=3.11,<3.14` | a python absence | install a 3.11–3.13 interpreter |
 | Unsupported adapter claims support | `install-deepseek.sh`/`install-pi-agent.sh` refuse `--apply` with "no measured install ladder" | a certified adapter | treat them as check-only until a ladder is measured (F5-3) |
 | Worker seat not in registry | `deepseek-v4-flash@deepseek-foreman` absent | a valid seat | **OPEN** — CF-376 |
@@ -254,5 +256,16 @@ and conformance pass rate are answerable only by reading the leg rows.
     mode-600 password file, or (in `--check`) a shell-builtin presence scan; it refuses to overwrite
     a non-`basic_auth` dashboard block. `node-create.sh:29` stages `node_gateway_auth.py` alongside
     the harness adapter. This is M1's producer invoked from M5's layer — a cross-module dependency.
+  - **F5-7** (new, CF-192) — the occupied-port branch used to certify a public bind without auth.
+    When anything already listened on `:$PORT` (`install-hermes.sh:302`), the adapter printed
+    `PASS port` / `PASS status_probe` and **never evaluated `dashboard.basic_auth`**, so `--apply`
+    ended `HERMES: PASS` with exit 0 on a no-auth config — a `127.0.0.1` probe answers on an
+    unauthenticated `0.0.0.0` gateway too, and the refusal lived only in the not-listening branch
+    (`:351`). The branch now calls `check_public_bind_auth` (the same single parser, not a second
+    one) and emits one counted `FAIL port — listening on :10800 (not started by this adapter; auth
+    unverified — …)` row (`:318`) when the block is absent; an occupied port WITH a valid block keeps
+    both PASS rows, so a gateway a previous `--apply` started is still certifiable. Witness:
+    `tests/selftest.sh` section 55 arm E (red arm + auth-carrying green arm); red and fixed
+    transcripts in `docs/audits/code-factory-CF-192.probe.txt`.
 
 ## RED field count: 4 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; M5-C2 contract state UNVERIFIED — a port/service is not a `file:function`; §9 inventory 4 of 215+ helper call sites — the descriptive per-measurement rows not tabulated one-per-site)

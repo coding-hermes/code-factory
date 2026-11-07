@@ -1,0 +1,153 @@
+CF-192 probe — the occupied-port branch certified an unauthenticated public bind
+================================================================================
+
+Row:  P3 — install-hermes.sh turns its own public-bind auth gate OFF when a listener already
+      occupies the port: --apply prints PASS port / PASS status_probe / HERMES: PASS on a config
+      with no basic_auth.
+Repo: /home/kara/code-factory
+Base: 2ff60b59cceafbcc2d4a42e032256df01a5c3da5 ("chore(gitreins): publish the CF-150 verdict
+      bundle (run 71cc322f)") — the pre-fix tree of the RED capture below.
+Host: Linux 7.0.0-38-generic, bash 5.3.9, python3 3.12/3.14 both present.
+
+The defect (as read, not re-litigated)
+--------------------------------------
+scripts/harness/install-hermes.sh:302 took the occupied-port branch whenever
+
+    (command -v ss >/dev/null && ss -tln 2>/dev/null | grep -q ":$PORT ") 2>/dev/null
+
+and then printed `PASS port — listening on :$PORT` and `PASS status_probe — /api/status -> 200`
+without ever calling check_public_bind_auth — the gate lived only in the NOT-listening branch
+(:351, the CF-071 refusal). A 127.0.0.1 probe proves reachability, not protection: it answers on
+an unauthenticated 0.0.0.0 gateway too. Result: `HERMES: PASS`, exit 0, on a public bind with no
+dashboard.basic_auth.
+
+How the arm drives it (tests/selftest.sh, section 55, arm E)
+-----------------------------------------------------------
+Reuses the CF-150 fixture: one mktemp -d with stub bin/{python,hermes,nohup,sleep,curl}, node
+homes that start where a fresh node starts, and the cf150_env runner. Two additions:
+
+  * $cf150/listen-bin/ss — exits 0 and prints a real LISTEN line
+    `LISTEN 0 128 0.0.0.0:10800 0.0.0.0:*` (the shared ss exits 1 and keeps the other arms on the
+    not-listening path). cf150_env gained CF150_BIN_PREFIX to put it first on PATH.
+  * $cf150/listening-home — config.yaml = "model: {}" (NO dashboard block) plus a dummy
+    ~/.hermes/.env provider key, so inference_key cannot be the row that fails: the port gate is
+    the only thing under test. curl already answers 200 via CF150_HTTP_CODE.
+
+Two assertions in one run:
+  E-red    listening + no basic_auth  -> exit nonzero, exactly one named
+           `FAIL  port — listening on :10800 (not started by this adapter; auth unverified — …)`,
+           `HERMES: FAIL (1)`, no `HERMES: PASS`, no `PASS port` / `PASS status_probe`,
+           no `unbound variable` / `FAILED:` decoy, serve never launched.
+  E-green  the SAME listener on the home arm B staged basic_auth into -> `PASS port — listening on
+           :10800` and `PASS status_probe — /api/status -> 200` must survive ("fail on any
+           listener" is not a fix). Only inference_key fails there: `HERMES: FAIL (1)`.
+
+RED — the new arm against the UNFIXED scripts/harness/install-hermes.sh
+-----------------------------------------------------------------------
+Command (arm added first, adapter untouched):
+
+    $ bash tests/selftest.sh
+    ...
+    55. the create path stages dashboard.basic_auth before the adapter, and the gate still refuses without it (CF-150)
+      PASS  staged set carries node_gateway_auth.py (8 files)
+      PASS  no dashboard.basic_auth -> exit 1, refusal named, serve never launched
+      PASS  layer 20 staged a non-empty basic_auth block and a mode 600 password file, secret never printed
+      PASS  staged home: gateway_start PASSes, no refusal row, serve launched (exit 1 is inference_key)
+      PASS  a dashboard block without basic_auth -> one counted FAIL row, NODE: FAIL (1), config untouched
+      FAIL  an occupied :10800 with no dashboard.basic_auth was certified (exit 0)
+        | harness: hermes (pin 0.19.0, port 10800)
+        |   ..    contract:CF_API_KEY_FILE — unset (no credential path; a paid lane supplies one)
+        |   ..    contract:CF_MODEL = unset
+        |   ..    contract:CF_PROVIDER = unset
+        |   ..    contract:CF_BASE_URL = unset
+        |   ..    contract:CF_API_KEY_FILE = unset
+        |   ..    contract:CF_WORKDIR = unset
+        |   ..    contract:CF_NAMESPACE = unset
+        |   ..    contract:CF_RUN_ID = unset
+        |   ..    contract:CF_LANE = unset
+        |   ..    contract:CF_SKILLS_DIR = unset
+        |   ..    contract:CF_HARNESS_OPTS = unset
+        |   ..    contract:CF_MAX_TURNS = unset
+        |   ..    contract:CF_TIMEOUT_S = unset
+        |   PASS  python — 3.12.3 (hermes-agent 0.19.0 requires >=3.11,<3.14)
+        |   PASS  binary — /var/tmp/hermes-scratch/tmp.BV7Rjj1npN/listening-home/hermes-venv/bin/hermes
+        |   PASS  version — 0.19.0 (pin 0.19.0)
+        |   PASS  port — listening on :10800
+        |   PASS  status_probe — /api/status -> 200
+        |   PASS  inference_key — a provider key is present in ~/.hermes/.env (value not read)
+        | apply
+        |   ..    already installed: hermes 0.19.0
+        |
+        | HERMES: PASS
+      PASS  occupied :10800 WITH dashboard.basic_auth keeps PASS port / PASS status_probe (only inference_key fails)
+
+    SELFTEST: FAIL (1)
+    [exit] EXIT:1
+
+That is the row's claim, measured: `PASS port` + `PASS status_probe` + `HERMES: PASS` + exit 0 on a
+config with no dashboard.basic_auth. The suite exit is 1 only because arm E is red.
+
+FIX — scripts/harness/install-hermes.sh (388 lines, +13)
+-------------------------------------------------------
+One gate, one parser: the occupied-port branch now calls check_public_bind_auth — the same shell
+function (same strict YAML subset, same refusal reasons) the --apply start path already uses; no
+second parser was written and node_gateway_auth.py was not touched (it is the WRITER, not the
+validator, and its messages are pinned by other arms).
+
+    if (command -v ss >/dev/null && ss -tln 2>/dev/null | grep -q ":$PORT ") 2>/dev/null; then
+      if port_auth_reason=$(check_public_bind_auth); then
+        ok "port" "listening on :$PORT"
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 ".../api/status" ...)
+        [ "$code" = 200 ] && ok "status_probe" "/api/status -> 200" || bad "status_probe" "/api/status -> $code"
+      else
+        bad "port" "listening on :$PORT (not started by this adapter; auth unverified — a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — ${port_auth_reason:-block absent (config check failed)})"
+      fi
+    else
+      ... unchanged (the CF-071 refusal and the --apply start path are untouched) ...
+
+The FAIL row is counted by bad(), so the layer line is truthful (`HERMES: FAIL (n)`, exit 1). The
+NOT-listening branch, the CF-071 refusal wording and the status_probe/LISTENING PASS rows for an
+authenticated port are byte-identical to before.
+
+GREEN — the same arm against the fixed tree
+-------------------------------------------
+    $ bash -n scripts/harness/install-hermes.sh && bash tests/selftest.sh
+    ...
+    55. the create path stages dashboard.basic_auth before the adapter, and the gate still refuses without it (CF-150)
+      PASS  staged set carries node_gateway_auth.py (8 files)
+      PASS  no dashboard.basic_auth -> exit 1, refusal named, serve never launched
+      PASS  layer 20 staged a non-empty basic_auth block and a mode 600 password file, secret never printed
+      PASS  staged home: gateway_start PASSes, no refusal row, serve launched (exit 1 is inference_key)
+      PASS  a dashboard block without basic_auth -> one counted FAIL row, NODE: FAIL (1), config untouched
+      PASS  occupied :10800 without dashboard.basic_auth -> exit 1, named FAIL port row, HERMES: FAIL (1), nothing certified
+      FAIL  port — listening on :10800 (not started by this adapter; auth unverified — a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent)
+      PASS  occupied :10800 WITH dashboard.basic_auth keeps PASS port / PASS status_probe (only inference_key fails)
+
+    SELFTEST: PASS
+    [exit] EXIT:0
+
+(The `FAIL  port …` line under the passing arm is the arm PRINTING the row it matched — the arm
+asserts exactly one such line, not its absence; the adapter's own exit is 1 with `HERMES: FAIL (1)`.)
+
+Arms A and C in the same run cover AC2's two green paths unchanged:
+  A  free port + no basic_auth -> `FAIL  gateway_start — refused: a public bind needs
+     dashboard.basic_auth in ~/.hermes/config.yaml — block absent`, serve never launched.
+  C  free port + valid basic_auth -> `PASS  gateway_start — /api/status -> 200`, serve launched.
+
+Gates at the landing tree
+-------------------------
+    $ bash -n scripts/harness/install-hermes.sh
+    (no output, exit 0)
+    $ bash tests/selftest.sh
+    SELFTEST: PASS                                   (exit 0)
+    $ bash scripts/boardctl validate
+    RESULT: OK                                       (7 warnings, unchanged)
+
+Files
+-----
+    scripts/harness/install-hermes.sh        the gate (occupied-port branch) + header note
+    tests/selftest.sh                        section 55 arm E (listening stub, listening-home,
+                                             CF150_BIN_PREFIX) — no new numbered section
+    docs/handbook/chapters/M5-harness.md     §1 line count, §7 verification row, §9 log line,
+                                             §10 failure mode, §13 F5-7
+    docs/audits/code-factory-CF-192.probe.txt  this file

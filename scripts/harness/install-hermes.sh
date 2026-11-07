@@ -14,7 +14,9 @@
 # a value, never ambient), and every accepted name is recorded (CF-229).
 #
 # A public bind ALWAYS requires auth (since the June 2026 hardening; --insecure is a no-op),
-# so --apply refuses to start a gateway without dashboard.basic_auth configured.
+# so --apply refuses to start a gateway without dashboard.basic_auth configured — and the same gate
+# is evaluated when a listener ALREADY owns the port, because a port this adapter did not start is
+# still a public bind (CF-192).
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/../lib.sh"
@@ -300,10 +302,21 @@ fi
 
 # gateway
 if (command -v ss >/dev/null && ss -tln 2>/dev/null | grep -q ":$PORT ") 2>/dev/null; then
-  ok "port" "listening on :$PORT"
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$PORT/api/status" 2>/dev/null || echo 000)
-  # NOTE: `hermes serve` has no /health (302 to login); /api/status is the probe.
-  [ "$code" = 200 ] && ok "status_probe" "/api/status -> 200" || bad "status_probe" "/api/status -> $code"
+  # An occupied port is not evidence that the bind is legal: a 127.0.0.1 probe answers on an
+  # unauthenticated 0.0.0.0 gateway too. Evaluate the SAME gate the --apply start path uses (one
+  # parser: check_public_bind_auth) before certifying anything. Measured before this check
+  # (CF-192): --apply printed PASS port / PASS status_probe / HERMES: PASS and exited 0 on an
+  # occupied :$PORT whose config carried no dashboard.basic_auth.
+  if port_auth_reason=$(check_public_bind_auth); then
+    ok "port" "listening on :$PORT"
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$PORT/api/status" 2>/dev/null || echo 000)
+    # NOTE: `hermes serve` has no /health (302 to login); /api/status is the probe.
+    [ "$code" = 200 ] && ok "status_probe" "/api/status -> 200" || bad "status_probe" "/api/status -> $code"
+  else
+    # A gateway a previous --apply started still certifies (the branch above); a listener without
+    # the block does not, and the row is counted so the layer line stays truthful.
+    bad "port" "listening on :$PORT (not started by this adapter; auth unverified — a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — ${port_auth_reason:-block absent (config check failed)})"
+  fi
 else
   if [ "$MODE" = "--apply" ]; then
     # Do not count a FAIL for a state this run is about to change: --check still reports it

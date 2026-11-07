@@ -4897,6 +4897,7 @@ for name, config in (
     ("refused-home", "model: {}\n"),
     ("staged-home", "model: {}\n"),
     ("conflict-home", "dashboard:\n  theme: dark\n"),
+    ("listening-home", "model: {}\n"),
 ):
     home = root / name
     (home / ".hermes").mkdir(parents=True)
@@ -4904,6 +4905,21 @@ for name, config in (
     (home / ".hermes/config.yaml").write_text(config)
     (home / "hermes-venv/bin/hermes").symlink_to(root / "bin/hermes")
     (home / "hermes-venv/bin/python").symlink_to(root / "bin/python")
+# CF-192: a listener that this adapter did NOT start. The adapter's occupied-port branch greps
+# `ss -tln` for ":<port> ", so this stub answers with a real LISTEN line (the shared `ss` above
+# exits 1 and keeps every other arm on the not-listening path).
+listen = root / "listen-bin"
+listen.mkdir()
+(listen / "ss").write_text(
+    "#!/usr/bin/env bash\n"
+    "printf '%s\\n' 'LISTEN 0 128 0.0.0.0:10800 0.0.0.0:*'\n"
+    "exit 0\n"
+)
+(listen / "ss").chmod(0o755)
+# The adapter's last counting row is inference_key. This home carries a dummy key (existence is all
+# the row reads, the value is never used) so the ONLY row that can fail it is the port gate — that
+# is what makes the pre-fix run reproduce the row's claim literally: PASS on a no-auth public bind.
+(root / "listening-home/.hermes/.env").write_text("FIXTURE_API_KEY=fixture-not-a-key\n")
 # The staged entry point, with a stub adapter: arm B proves the STAGING step, not the install
 # ladder the adapter already owns.
 tree = root / "tree/scripts"
@@ -4917,7 +4933,9 @@ PY
 then
   cf150_env() {  # cf150_env <home> <command...>
     rm -f "$cf150/launch"
-    env -i PATH="$cf150/bin:/usr/local/bin:/usr/bin:/bin" HOME="$1" \
+    # CF150_BIN_PREFIX (optional) puts a stub dir ahead of the shared one — arm E uses it to swap
+    # in the listening `ss` while every shared stub (python, hermes, curl, sleep) still resolves.
+    env -i PATH="${CF150_BIN_PREFIX:+$CF150_BIN_PREFIX:}$cf150/bin:/usr/local/bin:/usr/bin:/bin" HOME="$1" \
       HERMES_PYTHON_BIN="$cf150/bin/python" HERMES_PIN=0.19.0 NODE_GATEWAY_PORT=10800 \
       CF150_PY="$cf150_python" CF150_FIXTURE="$cf150" CF150_HTTP_CODE=200 \
       NODE_PROJECT=fixture "${@:2}"
@@ -4990,6 +5008,42 @@ then
   else
     say "  FAIL  the unreconcilable dashboard block was not a counted FAIL (exit $rc)"; fails=$((fails+1))
     printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+  # ARM E (CF-192): an occupied port is NOT evidence that the bind is legal. Measured at the
+  # unfixed revision: with a listener on :10800 and a config carrying NO dashboard.basic_auth,
+  # `--apply` printed `PASS port` / `PASS status_probe` / `HERMES: PASS` and exited 0 — a
+  # 127.0.0.1 probe answers on an unauthenticated 0.0.0.0 gateway too, so the occupied branch
+  # skipped the one gate that makes a public bind legal. Two arms on the listening stub: E-red
+  # (no auth) must name a FAIL port row and never certify; E-green (the staged home arm B already
+  # gave basic_auth) must keep today's PASS rows — "fail on any listener" is not a fix.
+  CF150_BIN_PREFIX="$cf150/listen-bin"
+  out=$(cf150_env "$cf150/listening-home" /bin/bash "$HERE/scripts/harness/install-hermes.sh" --apply 2>&1); rc=$?
+  cf192_row='  FAIL  port — listening on :10800 (not started by this adapter; auth unverified — a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent)'
+  if [ "$rc" -ne 0 ] \
+    && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$cf192_row")" = 1 ] \
+    && [ "$(printf '%s\n' "$out" | grep -Fxc 'HERMES: FAIL (1)')" = 1 ] \
+    && ! printf '%s\n' "$out" | grep -Fq 'HERMES: PASS' \
+    && ! printf '%s\n' "$out" | grep -Eq '^  PASS  (port|status_probe)' \
+    && ! printf '%s\n' "$out" | grep -Eq 'unbound variable|^FAILED:' \
+    && [ ! -f "$cf150/launch" ]; then
+    say "  PASS  occupied :10800 without dashboard.basic_auth -> exit $rc, named FAIL port row, HERMES: FAIL (1), nothing certified"
+    printf '%s\n' "$cf192_row"
+  else
+    say "  FAIL  an occupied :10800 with no dashboard.basic_auth was certified (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+  # E-green: the SAME listener with the block arm B staged. A gateway a previous --apply started
+  # must still be certifiable; in this home only inference_key may fail.
+  out=$(cf150_env "$cf150/staged-home" /bin/bash "$HERE/scripts/harness/install-hermes.sh" --apply 2>&1); rc=$?
+  unset CF150_BIN_PREFIX
+  if [ "$rc" -eq 1 ] \
+    && [ "$(printf '%s\n' "$out" | grep -Fxc '  PASS  port — listening on :10800')" = 1 ] \
+    && [ "$(printf '%s\n' "$out" | grep -Fxc '  PASS  status_probe — /api/status -> 200')" = 1 ] \
+    && [ "$(printf '%s\n' "$out" | grep -Fxc 'HERMES: FAIL (1)')" = 1 ]; then
+    say "  PASS  occupied :10800 WITH dashboard.basic_auth keeps PASS port / PASS status_probe (only inference_key fails)"
+  else
+    say "  FAIL  the auth-carrying occupied port lost its PASS rows (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out" | grep -E 'PASS|FAIL' | tail -4 | sed 's/^/    | /'
   fi
   unset -f cf150_env
 else
