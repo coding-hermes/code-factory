@@ -88,12 +88,17 @@ tick times out), `CF-137` (a failed dispatch is never acked, so it redelivers th
 forever) and `CF-138` (the dispatcher still kills a real task on a caller-derived timeout — 32.1 s in
 the 02:35Z runs; the old 243 s constant the row's title names is in no shipped file, `grep -rn '243'
 scripts/ specs/` = 0 hits) far below the 15 m 40 s the scheduler budgets for the same tick — then
-`CF-139`, and one row this re-measure added: `CF-150` (the documented create path stages no
-`dashboard.basic_auth`, so `install-hermes.sh:112` refuses the public bind and a node created by the
-documented path never starts the gateway the directive leg has to reach. Reproduced 2026-11-04T06:13Z:
-`installer_basic_auth=3 create_path_basic_auth=scripts/node-create.sh:0,scripts/project-node.sh:0,`
-plus `refused: a public bind needs dashboard.basic_auth`, probe exit 0).
+`CF-139`.
 <!-- milestone-blockers:end -->
+
+Closed since this list was written (`row=complete`, so it is no longer a blocker and the check
+rejects a citation of it): `CF-150` — the documented create path staged no `dashboard.basic_auth`, so
+`install-hermes.sh` refused the public bind and a node created by the documented path never started
+the gateway the directive leg has to reach (reproduced 2026-11-04T06:13Z:
+`installer_basic_auth=3 create_path_basic_auth=scripts/node-create.sh:0,scripts/project-node.sh:0,`
+plus `refused: a public bind needs dashboard.basic_auth`, probe exit 0). Closed 2026-11-07: layer 20
+of `scripts/project-node.sh` runs the staged `scripts/node_gateway_auth.py` before the adapter, and
+`tests/selftest.sh` §55 holds the refusal and the staged-block pass as a pair.
 The list is decidable, not editorial: every id cited in it resolves to exactly one of two
 namespaces — `row=<status>` from `jq -r 'select(.id=="<id>") | .status' .coding-hermes/board/tasks.jsonl`,
 or `requirement-only` when the id names a row of the requirements table above and no board row carries
