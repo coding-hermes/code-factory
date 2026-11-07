@@ -27,7 +27,7 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path("/home/kara/code-factory")
+ROOT = Path(os.environ.get("PANEL_ROOT", "/home/kara/code-factory"))
 HB = ROOT / "docs" / "handbook"
 PANEL = HB / "_panel"
 CH = HB / "chapters"
