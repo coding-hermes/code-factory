@@ -1,0 +1,114 @@
+{
+  "task_id": "CF-003",
+  "task_title": "Per-repo deploy key + node runtime + shared module cache",
+  "task_criteria": [
+    "Advance CF-003 acceptance criteria with tested implementation; preserve live handbook-owned paths; commit code and tests."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "5ffb87b518d8c1cba382a3af6102e4ba2aebc363",
+  "working_tree_content_fingerprint": "95d9effa569f784d32ad42c1493988bd5050a288ac8896709df1f8fc5ec5d0e9",
+  "working_tree_dirty_path_count": 0,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261107T174342.648781Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n12:50PM INF scanned ~2993244 bytes (2.99 MB) in 1.01s\n12:50PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 430 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261107T174342.648781Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n install-go.sh\n  PASS  bash -n install-node.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n panel_supervise.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n verify-patch.sh\n  PASS  bash -n harness-vars.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-deepseek.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n install-pi-agent.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n harness-node-e2e.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.F2SXrw5JSe/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n  PASS  uncreatable destination -> fetch_verified exit 1, no artifact installed\n  PASS  caller surfaced the failed install: 1 '^  FAIL  go:download' row, fixture exit 1\n6. no literal credential assignments\n  PASS  none found\n  section 6 tailnet-address (CF-378): no tracked file outside the board publishes a tailnet address\n  PASS  tailnet-address \u2014 0 tailnet-address hits in 338 tracked file(s) outside .coding-hermes/board and .gitreins\n  PASS  seeded fixture -> FAIL names docs/seeded.md:3; the out-of-range subnet stays green\n\n\u2026 [39263 chars omitted \u2014 508 line(s)] \u2026\n57. the brief digest binds every effectful field, and the pre-fix worker runs a tampered gate (CF-275)\n  PASS  a bound text+gate+repo/ref digest runs its gate; a tampered gate.cmd, a legacy text-only digest beside a gate, and a gate with no digest are each refused without the gate starting\n  PASS  pre-fix c05880d runs the gate whose cmd was altered after the digest was minted (fixture detects CF-275)\n58. per-repo deploy key, node runtime, shared module cache, footprint, orphan reap (CF-003)\n  PASS  five mechanisms with their refusal arms (deploy key, node pin, sealed GOMODCACHE, footprint, reap)\n  PASS  MEASURED shared GOMODCACHE 2097910 bytes; sealed rebuild added 0 bytes\n  PASS  layer 10 grades the owned node pin, not a PATH runtime\n  PASS  layer 40 clones with the declared key and pins core.sshCommand in that repo only\n  PASS  a 0644 deploy key is refused and the clone is not attempted\n  PASS  node-create refuses public.key at the spawn gate, before any agent exists (exit 1)\n  PASS  node-create refuses junk.key at the spawn gate, before any agent exists (exit 1)\n  PASS  node-create refuses enc at the spawn gate, before any agent exists (exit 1)\n  PASS  node-create refuses a deploy key on an HTTPS remote at the spawn gate (exit 1)\n  PASS  a usable read-only key passes the spawn gate and the run continues past it\n  PASS  pre-fix 4f32a50 accepts the public key as a deploy key \u2014 the gate arm is falsifiable\n  PASS  layer 00 measures the node footprint and admits it against the floor\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261107T174342.648781Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 Advance CF-003 acceptance criteria with tested implementation; preserve live handbook-owned paths; commit code and tests.: TESTED IMPLEMENTATION: `python3 tests/test_node_provisioning.py` -> \"Ran 23 tests in 4.642s / OK\" (exit 0). Fresh `bash tests/selftest.sh` -> \"SELFTEST: PASS\", EXIT=0, 429 PASS rows / 61 FAIL rows (all negative fixtures) / 0 SKIP \u2014 matching the commit message exactly. Section 58 all 12 rows PASS, including the 6 new spawn-gate arms (public.key, junk.key, encrypted key, HTTPS remote each refused with exit 1 before any agent exists; a green control admits a usable key and continues to server_declared; a red proof that pre-fix 4f32a50 accepted the public key). `bash -n $(git ls-files \"*.sh\")` -> LINT_OK. `bash scripts/boardctl validate` -> \"RESULT: OK (7 warning(s))\" (pre-existing only). ACCEPTANCE CRITERIA ADVANCED: docs/ACCEPTANCE-PLAN.md \u00a758 row rewritten in HEAD to name the `deploy_key:loadable` / `deploy_key:repo` refusals and the 4f32a50 red proof; specs/NODE.md credentials section now documents the ssh-keygen -y loadability and SSH-remote requirements; scripts/node-create.sh:115-141 implements the gate ahead of the spawn at :199, keeping the pre-existing unreadable/0644/no-repo refusals. HANDBOOK-OWNED PATHS PRESERVED: HEAD (5ffb87b) touches zero docs/handbook/ files \u2014 only docs/ACCEPTANCE-PLAN.md, scripts/node-create.sh, specs/NODE.md, tests/selftest.sh \u2014 and it moved the ch:trace spec= OFF the non-resolving docs/handbook/OUTLINE.md#part-iii-m1-m5-f2 anchor onto specs/NODE.md#credentials--per-repo-deploy-keys; `git status --porcelain` returns 0 lines, so no live/uncommitted handbook workstream was disturbed. COMMITTED CODE AND TESTS: commit 5ffb87b, 4 files, +133/-9, including tests/selftest.sh (+86) and scripts/node-create.sh (+43), with \"ch:trace: CF-003\" in the message.\nCF-003 advances with a real, discriminating spawn-gate fix backed by a fresh green selftest (429 PASS / 0 SKIP, exit 0) and 23 passing unit tests, leaves every docs/handbook/ path untouched, and commits both code and tests.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 Advance CF-003 acceptance criteria with tested implementation; preserve live handbook-owned paths; commit code and tests.: TESTED IMPLEMENTATION: `python3 tests/test_node_provisioning.py` -> \"Ran 23 tests in 4.642s / OK\" (exit 0). Fresh `bash tests/selftest.sh` -> \"SELFTEST: PASS\", EXIT=0, 429 PASS rows / 61 FAIL rows (all negative fixtures) / 0 SKIP \u2014 matching the commit message exactly. Section 58 all 12 rows PASS, including the 6 new spawn-gate arms (public.key, junk.key, encrypted key, HTTPS remote each refused with exit 1 before any agent exists; a green control admits a usable key and continues to server_declared; a red proof that pre-fix 4f32a50 accepted the public key). `bash -n $(git ls-files \"*.sh\")` -> LINT_OK. `bash scripts/boardctl validate` -> \"RESULT: OK (7 warning(s))\" (pre-existing only). ACCEPTANCE CRITERIA ADVANCED: docs/ACCEPTANCE-PLAN.md \u00a758 row rewritten in HEAD to name the `deploy_key:loadable` / `deploy_key:repo` refusals and the 4f32a50 red proof; specs/NODE.md credentials section now documents the ssh-keygen -y loadability and SSH-remote requirements; scripts/node-create.sh:115-141 implements the gate ahead of the spawn at :199, keeping the pre-existing unreadable/0644/no-repo refusals. HANDBOOK-OWNED PATHS PRESERVED: HEAD (5ffb87b) touches zero docs/handbook/ files \u2014 only docs/ACCEPTANCE-PLAN.md, scripts/node-create.sh, specs/NODE.md, tests/selftest.sh \u2014 and it moved the ch:trace spec= OFF the non-resolving docs/handbook/OUTLINE.md#part-iii-m1-m5-f2 anchor onto specs/NODE.md#credentials--per-repo-deploy-keys; `git status --porcelain` returns 0 lines, so no live/uncommitted handbook workstream was disturbed. COMMITTED CODE AND TESTS: commit 5ffb87b, 4 files, +133/-9, including tests/selftest.sh (+86) and scripts/node-create.sh (+43), with \"ch:trace: CF-003\" in the message.\nCF-003 advances with a real, discriminating spawn-gate fix backed by a fresh green selftest (429 PASS / 0 SKIP, exit 0) and 23 passing unit tests, leaves every docs/handbook/ path untouched, and commits both code and tests.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "Advance CF-003 acceptance criteria with tested implementation; preserve live handbook-owned paths; commit code and tests.",
+                "status": "PASS",
+                "detail": "TESTED IMPLEMENTATION: `python3 tests/test_node_provisioning.py` -> \"Ran 23 tests in 4.642s / OK\" (exit 0). Fresh `bash tests/selftest.sh` -> \"SELFTEST: PASS\", EXIT=0, 429 PASS rows / 61 FAIL rows (all negative fixtures) / 0 SKIP \u2014 matching the commit message exactly. Section 58 all 12 rows PASS, including the 6 new spawn-gate arms (public.key, junk.key, encrypted key, HTTPS remote each refused with exit 1 before any agent exists; a green control admits a usable key and continues to server_declared; a red proof that pre-fix 4f32a50 accepted the public key). `bash -n $(git ls-files \"*.sh\")` -> LINT_OK. `bash scripts/boardctl validate` -> \"RESULT: OK (7 warning(s))\" (pre-existing only). ACCEPTANCE CRITERIA ADVANCED: docs/ACCEPTANCE-PLAN.md \u00a758 row rewritten in HEAD to name the `deploy_key:loadable` / `deploy_key:repo` refusals and the 4f32a50 red proof; specs/NODE.md credentials section now documents the ssh-keygen -y loadability and SSH-remote requirements; scripts/node-create.sh:115-141 implements the gate ahead of the spawn at :199, keeping the pre-existing unreadable/0644/no-repo refusals. HANDBOOK-OWNED PATHS PRESERVED: HEAD (5ffb87b) touches zero docs/handbook/ files \u2014 only docs/ACCEPTANCE-PLAN.md, scripts/node-create.sh, specs/NODE.md, tests/selftest.sh \u2014 and it moved the ch:trace spec= OFF the non-resolving docs/handbook/OUTLINE.md#part-iii-m1-m5-f2 anchor onto specs/NODE.md#credentials--per-repo-deploy-keys; `git status --porcelain` returns 0 lines, so no live/uncommitted handbook workstream was disturbed. COMMITTED CODE AND TESTS: commit 5ffb87b, 4 files, +133/-9, including tests/selftest.sh (+86) and scripts/node-create.sh (+43), with \"ch:trace: CF-003\" in the message."
+              }
+            ],
+            "summary": "CF-003 advances with a real, discriminating spawn-gate fix backed by a fresh green selftest (429 PASS / 0 SKIP, exit 0) and 23 passing unit tests, leaves every docs/handbook/ path untouched, and commits both code and tests.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-003\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 Advance CF-003 acceptance criteria with tested implementation; preserve live handbook-owned paths; commit code and tests.: TESTED IMPLEMENTATION: `python3 tests/test_node_provisioning.py` -> \"Ran 23 tests in 4.642s / OK\" (exit 0). Fresh `bash tests/selftest.sh` -> \"SELFTEST: PASS\", EXIT=0, 429 PASS rows / 61 FAIL rows (all negative fixtures) / 0 SKIP \u2014 matching the commit message exactly. Section 58 all 12 rows PASS, including the 6 new spawn-gate arms (public.key, junk.key, encrypted key, HTTPS remote each refused with exit 1 before any agent exists; a green control admits a usable key and continues to server_declared; a red proof that pre-fix 4f32a50 accepted the public key). `bash -n $(git ls-files \"*.sh\")` -> LINT_OK. `bash scripts/boardctl validate` -> \"RESULT: OK (7 warning(s))\" (pre-existing only). ACCEPTANCE CRITERIA ADVANCED: docs/ACCEPTANCE-PLAN.md \u00a758 row rewritten in HEAD to name the `deploy_key:loadable` / `deploy_key:repo` refusals and the 4f32a50 red proof; specs/NODE.md credentials section now documents the ssh-keygen -y loadability and SSH-remote requirements; scripts/node-create.sh:115-141 implements the gate ahead of the spawn at :199, keeping the pre-existing unreadable/0644/no-repo refusals. HANDBOOK-OWNED PATHS PRESERVED: HEAD (5ffb87b) touches zero docs/handbook/ files \u2014 only docs/ACCEPTANCE-PLAN.md, scripts/node-create.sh, specs/NODE.md, tests/selftest.sh \u2014 and it moved the ch:trace spec= OFF the non-resolving docs/handbook/OUTLINE.md#part-iii-m1-m5-f2 anchor onto specs/NODE.md#credentials--per-repo-deploy-keys; `git status --porcelain` returns 0 lines, so no live/uncommitted handbook workstream was disturbed. COMMITTED CODE AND TESTS: commit 5ffb87b, 4 files, +133/-9, including tests/selftest.sh (+86) and scripts/node-create.sh (+43), with \"ch:trace: CF-003\" in the message.\nCF-003 advances with a real, discriminating spawn-gate fix backed by a fresh green selftest (429 PASS / 0 SKIP, exit 0) and 23 passing unit tests, leaves every docs/handbook/ path untouched, and commits both code and tests.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-07T17:59:06.245267",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-07T17:59:06.272892+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 26852,
+        "truncated": false,
+        "source": "git show 5ffb87b518d8"
+      }
+    ],
+    "task_id": "CF-003"
+  }
+}
