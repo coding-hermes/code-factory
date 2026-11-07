@@ -49,7 +49,7 @@ operator-initiated even though the installers are unit-invoked.
 |---|---|---|---|
 | S1 hermes | `install-hermes.sh` | **active (unit-invoked)** | invoked by `project-node.sh:498` (computed `install-$HARNESS.sh`) / `:508-510` (`--apply`/`--check`), and staged by `node-create.sh:29`; `project-node.sh` is itself operator-invoked (the provisioning entry, no cron/scheduler invokes it) — F5-5 |
 | S2 foreign harnesses | `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh` | **active (unit-invoked)** | same computed dispatch `project-node.sh:498,508-510`; `install-claude-code.sh:36` sources `lib.sh`, the other four source `harness-vars.sh` |
-| S3 toolchain/gate/node | `install-go.sh`, `install-gitreins.sh`, `project-node.sh` | **active (unit-invoked)** | gate pin at `install-gitreins.sh:19`; `project-node.sh` is the one provisioning entry that invokes other units (`project-node.sh:173` disk_floor, `project-node.sh:212` reclaim, the harness adapter `:498/:508-510`, and the CF-150 `gateway_auth` staging block at `:448-497`) |
+| S3 toolchain/gate/node | `install-go.sh`, **`install-node.sh`**, **`gomodcache.py`**, `install-gitreins.sh`, `project-node.sh` | **active (unit-invoked)** | gate pin at `install-gitreins.sh:19`; `project-node.sh` is the one provisioning entry that invokes other units (`project-node.sh:173` disk_floor, `project-node.sh:212` reclaim, `install-go.sh --apply` in the `go` kind branch, `install-node.sh --apply` in the `node` kind branch `:396-414`, `gomodcache.py check` in the `go:modcache` row `:488-505`, the harness adapter `:498/:508-510`, and the CF-150 `gateway_auth` staging block at `:448-497`) |
 | S4 harness resolution | `harness_resolve.py` | **optional** | no production caller (`grep -rln harness_resolve scripts/` → self + tests only); F5-2 |
 | S5 variable contract | `harness/harness-vars.sh` | **active** | sourced by `install-hermes.sh`, `install-opencode.sh:15`, `install-deepseek.sh`, `install-pi-agent.sh`, `install-codex.sh:47` (conditional) |
 
@@ -66,6 +66,7 @@ operator-initiated even though the installers are unit-invoked.
 | pinned harness version | per-installer exact pin (`HERMES_PIN=0.19.0`, `GITREINS_PIN=0.17.1`, `CF_CODEX_PIN=0.166.0`, `CLAUDE_CODE_PIN=2.1.318`) | node venv | installed version read back vs pin |
 | go toolchain | pinned | `install-go.sh` digest-checked | digest mismatch → refuse |
 | Node (claude-code) | **>= 22** (`install-claude-code.sh:43` `NODE_MIN_MAJOR=22`) | node | the pin's `engines` requirement |
+| Node runtime (kind `node`, CF-003) | **exactly `v22.22.3`** (`install-node.sh` `NODE_PIN`), digest-pinned per arch (`linux-x64` `2e5d1356…`, `linux-arm64` `1c4a9933…`) | node, `$HOME/node-toolchain/<pin>` | `sha256sum` mismatch → `FAIL node_dist`, nothing extracted; a binary whose `--version` is not the pin → `FAIL node` naming what it printed |
 
 **4b. Library contracts**
 
@@ -143,6 +144,18 @@ module surface:
 | `--shims` | None (`:357-361`) | comma `family=name` / `harness:family=name` | shim bindings | a wrong binding routes a family to the wrong harness |
 | `--matrix-file` | None (`:362-366`) | a path | the harness table (default `DEFAULT_MATRIX_FILE`) | a wrong file reads the wrong matrix |
 
+**Node runtime and shared module cache (S3, CF-003):**
+
+| Setting | Default | Range | Governs | What breaks if changed |
+|---|---|---|---|---|
+| `NODE_PIN` | **`v22.22.3`** (`install-node.sh:26`) | one released Node version | the runtime every `node`-kind node gets | the layer grades whatever version the archive yields; a different pin needs its digests re-pinned |
+| `NODE_SHA256_LINUX_X64` / `_ARM64` | `2e5d1356…` / `1c4a9933…` | 64 hex per arch | archive integrity | a mismatch is `FAIL node_dist`; nothing is extracted |
+| `--root` | `$HOME/node-toolchain` (`NODE_INSTALL_ROOT`) | an absolute path | where the pin is installed; **an explicit root makes `--check` a scoped question** (a PATH runtime cannot answer it) | a wrong root installs beside the runtime the layer grades |
+| `--tarball` + `--sha256` | none | a local archive + its digest | the fixture seam; the digest is still verified | either alone is refused (`--tarball needs --sha256`) |
+| `gomodcache.py --dir` | none (required) | a directory | which cache is seeded/sealed/checked | a wrong dir seals the wrong tree |
+| `gomodcache.py seal` | — | — | removes **every** write bit and records bytes/entries | an unsealed cache drifts per node back toward 656 MB |
+| `NODE_GOMODCACHE` | none | an absolute node path | whether layer 10 admits a shared cache | unset → `WARN go:modcache` (private cache), declared-but-unsealed → counted FAIL |
+
 **Predicate correction (F0-6, owned here).** The credential-mode predicate is `[0-7]00`
 (`harness-vars.sh:203`) — modes `000..700` pass — while the refusal message (`:204`) claims "a key
 file must be 600". The ambient-key checks (`:176`, `:181`) test **non-emptiness**, not set-ness:
@@ -170,6 +183,9 @@ CT-17 is a boundary contract: the consumer (operator/board reading the verdicts)
 | python compile | `python3 -m py_compile scripts/harness_resolve.py` | exit 0 | 2026-11-06 | PASS |
 | harness resolve unit | `python3 tests/test_harness_resolve.py` | pass | 2026-11-06 | **PASS** (28 tests, rc 0) |
 | conformance legs | `tests/harness-conformance.sh` | per-leg green on a real node | not run this round | **UNVERIFIED** (needs a live node) |
+| node pin fixture | `python3 tests/test_node_provisioning.py` (`InstallNode`) | `--check` red before install; `--apply` installs, `node --version` reads back `v22.22.3`; second `--apply` changes nothing; a wrong digest installs nothing; a binary printing `v22.22.2` fails the readback | 2026-11-07 | **PASS** (fixture archive; the real download is the digest-pinned `https://nodejs.org/dist/v22.22.3/…`, hashed after download when the pin was written) |
+| owned-runtime precedence | `bash tests/selftest.sh` §58 | `PASS tool:node — $HOME/node-toolchain/current/bin/node (v22.22.3)` with the fixture home's own runtime, not the host's PATH node | 2026-11-07 | **PASS** (fixture) |
+| sealed shared cache | `python3 tests/test_node_provisioning.py` (`GoModCache`) | sealed cache builds with `GOPROXY=off` and adds **0 bytes**; a cold cache cannot; an unseeded module is refused with `permission denied` | 2026-11-07 | **PASS** (`MEASURED shared GOMODCACHE 2097910 bytes; sealed rebuild added 0 bytes`) |
 
 ## 8. Metrics
 
@@ -197,6 +213,8 @@ and conformance pass rate are answerable only by reading the leg rows.
 | Version drift | `installed X but the pin is Y` | a clean install | re-run `--apply` at the pin |
 | Auth gate skipped | **fixed (CF-192)** — an occupied `:10800` with no `dashboard.basic_auth` now emits one counted `FAIL  port — listening on :10800 (not started by this adapter; auth unverified — …)` row and the layer ends `HERMES: FAIL (n)`; before the fix the occupied-port branch printed `PASS port` / `PASS status_probe` / `HERMES: PASS` and exited 0 without ever evaluating the block | a gated install: the SAME port with a non-empty `dashboard.basic_auth` still prints `PASS port — listening on :10800` / `PASS status_probe — /api/status -> 200`, so a gateway a previous `--apply` started is not called a failure | write the block (`scripts/node_gateway_auth.py <config.yaml> <password-file>`, or layer 20's staging in `project-node.sh:448-497`) and re-run `--apply`; the port row turns PASS on the next run |
 | Interpreter out of range | `hermes-agent … requires python >=3.11,<3.14` | a python absence | install a 3.11–3.13 interpreter |
+| Node runtime absent or wrong | `FAIL tool:node — missing — kind node needs a Node runtime …` (check) / `FAIL node — <path> reports 'vX' — want v22.22.3` (a lying binary) | a graded pass `PASS tool:node — $HOME/node-toolchain/current/bin/node (v22.22.3)` | `project-node.sh --apply` runs `install-node.sh`, which refuses a digest mismatch instead of extracting; `install-node.sh --check --root <r>` answers the scoped question |
+| Shared cache writable or grown | `FAIL modcache_seal — … writable path(s)` / `FAIL modcache_manifest — ±N bytes since seal` | `PASS modcache_seal — … read-only (no write bits, owner included)` | `gomodcache.py seal` on the prewarm host; a node never needs write access to a cache it does not own |
 | Unsupported adapter claims support | `install-deepseek.sh`/`install-pi-agent.sh` refuse `--apply` with "no measured install ladder" | a certified adapter | treat them as check-only until a ladder is measured (F5-3) |
 | Worker seat not in registry | `deepseek-v4-flash@deepseek-foreman` absent | a valid seat | **OPEN** — CF-376 |
 
@@ -224,7 +242,11 @@ and conformance pass rate are answerable only by reading the leg rows.
 
 ## 12. Cross-references
 
-- F2 PROVISIONING certifies what this module installs.
+- F2 PROVISIONING certifies what this module installs. CF-003 adds the two toolchain contracts that
+  flow through this module: the `node` kind's pinned runtime (`install-node.sh`, graded by layer 10
+  from the owned path) and the sealed shared `GOMODCACHE` (`gomodcache.py`, admitted by the
+  `go:modcache` row). Neither is part of the harness binary; both are part of the node the harness
+  runs on, which is why M5's S3 owns them.
 - M0 SHARED CONTRACT supplies `fetch_verified` (S5 `harness-vars.sh` is owned here, not M0).
 - M2 DISPATCH passes the CF_* set to the resolved harness at run time (via `node.json`, not the resolver).
 - M3 REPOSITORY owns the hook behaviour; `install-gitreins.sh` (S3) is the installer.
@@ -235,7 +257,12 @@ and conformance pass rate are answerable only by reading the leg rows.
   `install-gitreins.sh` (180), `install-codex.sh` (`:47-60, 425-430` + settings), `install-claude-code.sh`
   (`:34-115` + settings), `install-deepseek.sh` (101), `install-pi-agent.sh` (113), `install-opencode.sh` (98);
   `project-node.sh:448-510`.
-- Board rows: CF-150, CF-192, CF-372 (complete), CF-376, CF-380.
+- **CF-003 slice, read 2026-11-07:** `scripts/install-node.sh` (whole file — pin, per-arch digests,
+  `--check`/`--apply`, owned `current` symlink, version readback, fixture seam),
+  `scripts/gomodcache.py` (whole file — `init`/`seed`/`seal`/`unseal`/`check`/`measure`/`env`/`wire`),
+  `scripts/project-node.sh:390-424` (node kind), `:488-505` (`go:modcache`), `tests/test_node_provisioning.py`
+  (`InstallNode`, `GoModCache`), `tests/selftest.sh` §58.
+- Board rows: CF-150, CF-192, CF-372 (complete), CF-376, CF-380, **CF-003**.
 - **Findings:**
   - **F5-1** (carried) — `install-hermes.sh:108-115` refuses anything outside >=3.11,<3.14.
   - **F5-2** — `harness_resolve.py` has no production caller; runtime selection is
@@ -267,5 +294,12 @@ and conformance pass rate are answerable only by reading the leg rows.
     both PASS rows, so a gateway a previous `--apply` started is still certifiable. Witness:
     `tests/selftest.sh` section 55 arm E (red arm + auth-carrying green arm); red and fixed
     transcripts in `docs/audits/code-factory-CF-192.probe.txt`.
+  - **F5-8** (new, CF-003) — S3 listed only `install-go.sh` as a toolchain and layer 10 graded a
+    `node` runtime it never installed: `PASS tool:node` was reachable off an ambient PATH binary
+    (so a node could certify a runtime it did not own, and a fresh node with none failed 11 Go tests
+    that shell out to it). `install-node.sh` (pin `v22.22.3`, per-arch digest, version readback) and
+    owned-path precedence close the mechanism half; the pinned archive was downloaded and hashed
+    when the pin was written (31,059,464 bytes, `2e5d1356…`), and the fixture proves the ladder, not
+    the download. The sealed-cache half is F1-8 (M1).
 
 ## RED field count: 4 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; M5-C2 contract state UNVERIFIED — a port/service is not a `file:function`; §9 inventory 4 of 215+ helper call sites — the descriptive per-measurement rows not tabulated one-per-site)

@@ -36,11 +36,11 @@ reason the object exists: the paths belong upstream, not in the node's tree.
 
 | Layer | Establishes | Depends on |
 |---|---|---|
-| 00 preflight | arch, disk ≥ floor, memory, and HTTP 200 from the only two endpoints this layer probes — `$CRIER_URL/health` and `https://pypi.org/simple/` (`scripts/project-node.sh:190`). Each is requested with the method that measures it: `https://pypi.org/simple/` with **HEAD**, because the index is ~48 MB and a GET under an 8 s budget reports `000` on a healthy link (measured on `cf-node` 2026-11-05 — GET `000` after 44 MB received, HEAD `200` in 0.29 s); `$CRIER_URL/health` with **GET**, because a HEAD against that GET-only handler answers `405`, which is a method verdict and not a reachability fault (same host, same tick). With `CRIER_URL` unset the reach block is skipped entirely and the layer prints `FAIL crier_url` instead of two probe rows. Reachability to a Go module proxy is **not** measured by this layer: it probes these two endpoints only. The Go proxy is graded one layer later — layer 10 resolves the pinned `rsc.io/quote@v1.5.2` through the node's own `GOPROXY` when the kind set includes Go (`scripts/project-node.sh`, `go_proxy_row`), which supersedes the CF-164 statement that `GOPROXY` / `GOPRIVATE` appeared nowhere under `scripts/` (CF-218) | — |
-| 10 base | the toolchain the project **kind** needs — `go`: `scripts/install-go.sh` installs the digest-pinned `go1.26.5` user-space archive during `--apply`, reads that binary's `go version` back, and resolves `rsc.io/quote@v1.5.2` through the node's own `GOPROXY` with a cold `GOMODCACHE`, `GOTOOLCHAIN=local`, `GOSUMDB=off`, empty `GOFLAGS`, and a 30 s timeout; `--check` remains read-only and names the absent Go binary as a failure; `rust`: `cargo --version` read back; `node`: `node --version` read back; `python`: `python3` + `venv` — plus the fixed base set (`python3`, `git`, `curl`, `tar`, `sha256sum`) and WARN-only `jq`/`rg`. The kind set comes from evidence, first hit wins, and the `kinds` row names which evidence produced it: **(a)** `--kinds <csv>` / `NODE_KINDS` (`go,rust,node,python,generic`), validated before any layer runs — an empty or unknown element is a named `FAIL kinds` and exits 1; **(b)** the workspace `$HOME/repo` when a clone is already present (`go.mod`→go, `Cargo.toml`→rust, `package.json`→node, `pyproject.toml`\|`setup.py`→python); **(c)** the generic fallback, which the layer **prints as a fallback** (`WARN kinds — generic fallback …`) instead of silently grading the old fixed list. `node` keeps its pre-CF-218 WARN shape only in that fallback; once `node` is a declared or derived kind its absence is `FAIL tool:node`. The layer prints its own census command — `bash scripts/project-node.sh --check --project <p> --layers 10`, one node per run — so the fleet counts it was written against can be re-measured: 61 distinct repo origins, go 27, node 22, python 16, rust 5 (CF-218, CF-219) | preflight |
+| 00 preflight | arch, disk ≥ floor, memory, and HTTP 200 from the only two endpoints this layer probes — `$CRIER_URL/health` and `https://pypi.org/simple/` (`scripts/project-node.sh:190`). Each is requested with the method that measures it: `https://pypi.org/simple/` with **HEAD**, because the index is ~48 MB and a GET under an 8 s budget reports `000` on a healthy link (measured on `cf-node` 2026-11-05 — GET `000` after 44 MB received, HEAD `200` in 0.29 s); `$CRIER_URL/health` with **GET**, because a HEAD against that GET-only handler answers `405`, which is a method verdict and not a reachability fault (same host, same tick). With `CRIER_URL` unset the reach block is skipped entirely and the layer prints `FAIL crier_url` instead of two probe rows. Reachability to a Go module proxy is **not** measured by this layer: it probes these two endpoints only. The Go proxy is graded one layer later — layer 10 resolves the pinned `rsc.io/quote@v1.5.2` through the node's own `GOPROXY` when the kind set includes Go (`scripts/project-node.sh`, `go_proxy_row`), which supersedes the CF-164 statement that `GOPROXY` / `GOPRIVATE` appeared nowhere under `scripts/` (CF-218). Layer 00 also measures the **footprint** this node will occupy — checkout, Go and Node toolchains, harness home, node state and a declared module cache — and admits the total plus 2 GiB working room against free space, and the total against the resolved floor (`scripts/node_hygiene.py footprint`, CF-003) | — |
+| 10 base | the toolchain the project **kind** needs — `go`: `scripts/install-go.sh` installs the digest-pinned `go1.26.5` user-space archive during `--apply`, reads that binary's `go version` back, and resolves `rsc.io/quote@v1.5.2` through the node's own `GOPROXY` with a cold `GOMODCACHE`, `GOTOOLCHAIN=local`, `GOSUMDB=off`, empty `GOFLAGS`, and a 30 s timeout; `--check` remains read-only and names the absent Go binary as a failure; `rust`: `cargo --version` read back; `node`: `node --version` read back; `python`: `python3` + `venv` — plus the fixed base set (`python3`, `git`, `curl`, `tar`, `sha256sum`) and WARN-only `jq`/`rg`. The kind set comes from evidence, first hit wins, and the `kinds` row names which evidence produced it: **(a)** `--kinds <csv>` / `NODE_KINDS` (`go,rust,node,python,generic`), validated before any layer runs — an empty or unknown element is a named `FAIL kinds` and exits 1; **(b)** the workspace `$HOME/repo` when a clone is already present (`go.mod`→go, `Cargo.toml`→rust, `package.json`→node, `pyproject.toml`\|`setup.py`→python); **(c)** the generic fallback, which the layer **prints as a fallback** (`WARN kinds — generic fallback …`) instead of silently grading the old fixed list. `node` keeps its pre-CF-218 WARN shape only in that fallback; once `node` is a declared or derived kind its absence is `FAIL tool:node`. The layer prints its own census command — `bash scripts/project-node.sh --check --project <p> --layers 10`, one node per run — so the fleet counts it was written against can be re-measured: 61 distinct repo origins, go 27, node 22, python 16, rust 5 (CF-218, CF-219). Under `--apply` a `node` kind is **provisioned**, not only graded: `scripts/install-node.sh` installs the digest-pinned `v22.22.3` archive under `$HOME/node-toolchain`, reads that binary's `--version` back, and the layer grades `$HOME/node-toolchain/current/bin/node` before any PATH runtime. A fresh node had no `node` at all, so a Go repo whose tests shell out to it failed 11 tests while this layer printed a green — the row graded an ambient PATH binary it had never installed (CF-003) | preflight |
 | 20 harness | the harness binary plus the adapter's own gate rows, printed verbatim (`python`, `binary`, `version`, `port`, `inference_key`, and `gateway_start` when that block runs); `gateway_start` is a refusal on any node whose `~/.hermes/config.yaml` does not parse to a non-empty `dashboard.basic_auth` username and password (`scripts/harness/install-hermes.sh:119–266`). Before the adapter runs, this layer stages that block through `scripts/node_gateway_auth.py` (`--apply`) or reports whether it is already there (`--check`; read-only, and an absent block is a FAIL because the consequence is a refused gateway). The password is generated on the node into `$HOME/.node/auth/gateway.pass`, mode 600, and is never printed or passed in argv (CF-150) | base |
 | 30 bus | a crier identity file at `$HOME/.node/crier.json` and its mode 600 | harness |
-| 40 repo | the repo cloned at a pinned ref, and the checkout measured against `origin/main` by `scripts/node_freshness.py` (or its node-side fallback): branch, HEAD, ancestry, lag, uncommitted paths (`scripts/project-node.sh`, `freshness_measure`) | base |
+| 40 repo | the repo cloned at a pinned ref, and the checkout measured against `origin/main` by `scripts/node_freshness.py` (or its node-side fallback): branch, HEAD, ancestry, lag, uncommitted paths (`scripts/project-node.sh`, `freshness_measure`). With `NODE_DEPLOY_KEY` declared, the clone runs under `GIT_SSH_COMMAND='ssh -F <ssh_config>'` built from a mode-600 per-repo key; a key readable by group/other **blocks the clone** instead of falling back to an ambient identity, and `core.sshCommand` is pinned into that one repository afterwards (CF-003) | base |
 | 90 verify | the node manifest (`$HOME/.node/node.json`), written only when every layer passed | all |
 
 Three capabilities that the design describes are **not** established by any shipped layer, and this
@@ -111,11 +111,83 @@ same exit codes.
 - **N-5** A node refuses to start work below the disk floor, and says the number; reap before refusing.
 - **N-6** Destroying the agent destroys the node; the scripts must rebuild it exactly.
 
+## Credentials — per-repo deploy keys
+
+A private repo is cloned with a key that belongs to **that repo**, never with an account key and
+never with an identity the agent happens to have. The whole path is `scripts/deploy_key.py`:
+
+```
+scripts/deploy_key.py install --home ~ --repo git@gitlab.example:group/repo.git --key <file>
+scripts/deploy_key.py check   --home ~ --repo git@gitlab.example:group/repo.git
+```
+
+`install` refuses a key that is group/other-readable (`FAIL key_mode — … is 0644`), a public key,
+an HTTPS remote (a deploy key authenticates SSH; it cannot authenticate HTTPS) and a non-SSH path;
+it copies the bytes into `$HOME/.node/keys/<name>.key` at mode 600, regenerates
+`$HOME/.node/keys/ssh_config` (one `Host` block per host, `IdentitiesOnly yes`, `BatchMode yes`,
+`StrictHostKeyChecking accept-new`, one `IdentityFile` per repo) and records the repo→key mapping in
+`$HOME/.node/keys/keys.json`. `check` proves the file mode, the config's agreement with the registry
+and prints the **one** clone command a stranger can paste:
+
+```
+GIT_SSH_COMMAND='ssh -F ~/.node/keys/ssh_config' GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch main <repo> ~/repo
+```
+
+`scripts/node-create.sh --deploy-key <file>` is the spawn path: the key is validated on the control
+host **before any agent is spawned**, copied to the node as a file (never an argv value), installed
+by `deploy_key.py`, and the incoming copy is deleted in the same round trip. `project-node.sh`
+layer 40 consumes it as `NODE_DEPLOY_KEY` (+ optional `NODE_SSH_CONFIG`): the clone runs under a
+process-scoped `GIT_SSH_COMMAND`, and `core.sshCommand` is written into that one repository after a
+successful clone so later fetches use the same identity. **Read-only is the key's server-side grant**;
+the client cannot prove it, and this repo does not claim it: what is proven locally is the 0600
+file, the `IdentitiesOnly` config, and that the clone uses them. Cloning the real private GitLab
+from a fresh node with a real read-only key is a live obligation (`tests/test_node_provisioning.py`
+proves the mechanism against a fixture; see "Verification" there).
+
 ## Disk floor
 
 Measured components per repo node: 97 MB repo + 656 MB module cache + toolchain + harness. Build cache is not provisioned by shipped scripts and is excluded.
 
 Floor = repo + harness + 2 GB working room. The ladder reads free space and refuses below the floor **with the number in the refusal**.
+
+**Shared module cache.** The 656 MB is the same bytes for every node of a repo, so it is seeded
+once and sealed read-only rather than re-downloaded per node:
+
+```
+scripts/gomodcache.py init  --dir /srv/cf/gomod
+scripts/gomodcache.py seed  --dir /srv/cf/gomod --module <repo>
+scripts/gomodcache.py seal  --dir /srv/cf/gomod     # chmod a-w, record bytes/entries
+scripts/gomodcache.py check --dir /srv/cf/gomod     # FAILs on any write bit or size drift
+scripts/gomodcache.py wire  --dir /srv/cf/gomod     # go env -w GOMODCACHE=<dir>
+```
+
+A sealed cache makes the no-re-download property **checkable**: with the proxy disabled
+(`GOPROXY=off`) a build that touches an already-seeded module succeeds and adds 0 bytes, while a
+module that is absent is refused with `permission denied` instead of silently growing the cache.
+Declaring the cache on a node (`NODE_GOMODCACHE`, passed by `node-create.sh --gomodcache`) makes
+layer 10 print its size and refuse it when it is writable or has drifted; when it is not declared the
+layer says so (`WARN go:modcache — this node keeps a private module cache`) rather than leaving the
+absence unexplained.
+
+**Footprint admission.** Layer 00 measures the components this node will occupy
+(`scripts/node_hygiene.py footprint`: checkout, `node-toolchain`, `go-toolchain`, `.hermes`, `.node`
+and a declared module cache), prints each size, and refuses admission when the total plus 2 GiB of
+working room exceeds free space, or when the total exceeds the resolved floor. An undeclared module
+cache reports `not-declared`, never a silent zero.
+
+**Orphan reaping.** A bunker host accumulates homes and keys whose agent no longer exists. They are
+reaped against the server's own agent list, never against a guess:
+
+```
+BUNKER_HOMES_DIR=<dir> BUNKER_KEYS_DIR=<dir> scripts/bunker-server-install.sh --reap-orphans
+# or, directly:
+scripts/node_hygiene.py reap --homes-dir D --keys-dir D --registry <list> [--apply]
+```
+
+Check mode removes nothing and exits non-zero for every orphan it would remove, so it gates a
+scale-up; apply mode removes only entries whose id is absent from the registry, older than the grace
+window, and directly under the named directory. Symlinks are never followed and the target of one is
+never touched.
 
 Before refusing, `--apply` runs `scripts/reclaim_disk.py run --root "$HOME" --json`
 against bounded user-space targets: `.cache/pip`, `.cache/uv`, `.cache/pre-commit`,

@@ -3,6 +3,8 @@
 #
 #   ./bunker-server-install.sh --check     # measure, exit non-zero on a gap
 #   ./bunker-server-install.sh --apply     # install what is missing (user-space)
+#   ./bunker-server-install.sh --reap-orphans   # with BUNKER_HOMES_DIR/BUNKER_KEYS_DIR set,
+#                                               # remove orphan homes and keys (CF-003)
 #
 # A "bunker server" is the daemon that hosts agents. It is NOT the same machine as the
 # scheduler: the control host designs work, the bunker server runs nodes.
@@ -13,7 +15,11 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 
 SERVER="${BUNKER_SERVER:-}"
 JSON=0
-[ "${1:-}" = "--json" ] && JSON=1
+REAP_ORPHANS=0
+case "${1:-}" in
+  --json) JSON=1 ;;
+  --reap-orphans) REAP_ORPHANS=1 ;;
+esac
 
 if [ -z "$SERVER" ]; then
   bad "server_declared" "BUNKER_SERVER unset — the client has no server to talk to"
@@ -60,7 +66,30 @@ fi
 if [ -n "$b" ] && [ "${rc:-1}" -eq 0 ]; then
   st=$("$b" status --server "$SERVER" 2>&1 | head -20)
   say "$st" | sed 's/^/  ..    /'
-  say "$st" | grep -qi 'orphan' && warn "residue" "orphan homes/keys reported by the server — reap before scaling"
+  # CF-003: an orphan home/key is disk the next node needs. With the server's homes/keys
+  # directories named, the reaper measures them against the live agent list; without them
+  # this stays the WARN it has always been (the layout is declared, never guessed).
+  if [ -n "${BUNKER_HOMES_DIR:-}" ] || [ -n "${BUNKER_KEYS_DIR:-}" ]; then
+    reg_tmp=$(mktemp) || reg_tmp=""
+    if [ -n "$reg_tmp" ]; then
+      printf '%s\n' "$("$b" list --server "$SERVER" 2>/dev/null)" > "$reg_tmp"
+      reap_args=(reap --registry "$reg_tmp")
+      [ -n "${BUNKER_HOMES_DIR:-}" ] && reap_args+=(--homes-dir "$BUNKER_HOMES_DIR")
+      [ -n "${BUNKER_KEYS_DIR:-}" ] && reap_args+=(--keys-dir "$BUNKER_KEYS_DIR")
+      [ "${REAP_ORPHANS:-0}" -eq 1 ] && reap_args+=(--apply)
+      if reap_out=$(python3 "$HERE/node_hygiene.py" "${reap_args[@]}" 2>&1); then
+        printf '%s\n' "$reap_out"
+      else
+        printf '%s\n' "$reap_out"
+        reap_fails=$(printf '%s\n' "$reap_out" | grep -c '^  FAIL') || true
+        FAILED=$((FAILED + reap_fails))
+        [ "$reap_fails" -eq 0 ] && bad "residue" "reaper exited non-zero without a FAIL row"
+      fi
+      rm -f "$reg_tmp"
+    fi
+  else
+    say "$st" | grep -qi 'orphan' && warn "residue" "orphan homes/keys reported by the server — set BUNKER_HOMES_DIR/BUNKER_KEYS_DIR and re-run with --reap-orphans"
+  fi
 fi
 
 # 5. the control host's own prerequisites

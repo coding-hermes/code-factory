@@ -35,9 +35,9 @@ the inbox until it expires.
 
 | Submodule | Unit | Classification | Evidence (invoking line) |
 |---|---|---|---|
-| S1 qualify the host — disk floor | `disk_floor.py` | **active** | `disk_floor.py` is invoked by `project-node.sh:173` (`python3 "$HERE/disk_floor.py" … resolve …`), not by `bunker-provision.sh` (F1-4) |
+| S1 qualify the host — disk floor | `disk_floor.py` | **active** | `disk_floor.py` is invoked by `project-node.sh:173` (`python3 "$HERE/disk_floor.py" … resolve …`), not by `bunker-provision.sh` (F1-4). `node_hygiene.py footprint` is invoked by `project-node.sh` layer 00 (the row that admits the measured node footprint against that floor) and `node_hygiene.py reap` by `bunker-server-install.sh` when `BUNKER_HOMES_DIR`/`BUNKER_KEYS_DIR` are named (CF-003) |
 | S1 qualify the host — bunker server | `bunker-server-install.sh` | **operator-invoked (optional)** | no invoker — `grep -rn 'bunker-server-install' scripts/ tests/` matches only its own docstring and `tests/selftest.sh:1754`; a test arm is not a lane/cron/timer/unit (grok B7 re-grade: the row previously classified both units **active** on `disk_floor.py`'s caller alone) |
-| S2 create the container + config | `bunker-provision.sh`, `bunker_config_gen.py`, `node-create.sh`, `bunker-crier-connect.sh` | **operator-invoked** | `bunker-provision.sh` is the orchestrator (probe `:175-249`) but has **no in-repo invoker** — `grep -rn 'bunker-provision' scripts/` matches `bunker-provision.sh` itself (`:2,5,6,7,178,336,522`) and `bunker_config_gen.py` (`:2,4,337,492`, docstring/description text naming the config it generates); an operator runs it (glm 2) |
+| S2 create the container + config | `bunker-provision.sh`, `bunker_config_gen.py`, `node-create.sh`, `bunker-crier-connect.sh`, `deploy_key.py` | **operator-invoked** | `bunker-provision.sh` is the orchestrator (probe `:175-249`) but has **no in-repo invoker** — `grep -rn 'bunker-provision' scripts/` matches `bunker-provision.sh` itself (`:2,5,6,7,178,336,522`) and `bunker_config_gen.py` (`:2,4,337,492`, docstring/description text naming the config it generates); an operator runs it (glm 2). `deploy_key.py install` is invoked by `node-create.sh --deploy-key` inside the new agent (CF-003) |
 | S3 identity and bus membership | `node_identity.py`, `node_gateway_auth.py` | **active** | `node_gateway_auth.py` staged and run inside `bunker-provision.sh:483-495`; `node_identity.py` at `:518-533`; the standalone create path now runs it too — `node-create.sh` stages the file and `project-node.sh` layer 20 runs it before the harness adapter (CF-150), which is the gap CF-192 recorded |
 | S4 seed prompts/skills/env | `node_seed.py`, `node_seed_drift.py`, `node_env.py` | **active** | `node_seed.py build` at `bunker-provision.sh:454`; `node_env.py --check` at `:147` / `--apply` at `:426` |
 | S5 prove the node works | `verify-node.sh`, `node_freshness.py` | **active** | `verify-node.sh` is the certification ladder (`:20-241`, 241 lines at HEAD); `node_freshness.py` folded in at `:150-177` |
@@ -140,6 +140,34 @@ explicit warning/confirmation is a separate question.
 | `--path` | `repo` (`:677-682`) | a remote path (relative to agent home) | which checkout is measured | a wrong path measures a different tree |
 | `--timeout` | **180 s** (`:684-689`) | int >= 1 | per-command bunker exec timeout | `< 1` is refused: `--timeout must be >= 1, got N` → `RESULT: FAIL (usage…)`, `EXIT_USAGE` (`:701-702`); the help notes the bunker exec stream dies at 300 |
 
+**`node-create.sh` (S2, create path — CF-003):**
+
+| Setting | Default | Range | Governs | What breaks if changed |
+|---|---|---|---|---|
+| `--deploy-key FILE` | none | an SSH private key, owner-only mode | injects the per-repo credential at spawn | a readable key is refused (`FAIL deploy_key — … mode 0644`) **before any agent is spawned**; unset means the node clones with whatever identity it has |
+| `--gomodcache PATH` | none | an **absolute path on the node** | points the node at a sealed shared module cache | a relative path is refused (`FAIL gomodcache`); unset leaves a private cache and layer 10 prints the WARN |
+| `--ref R` | `main` (or `NODE_REF`) | a git ref | the branch or tag cloned | unchanged by CF-003 |
+
+**`deploy_key.py` (S2):**
+
+| Setting | Default | Range | Governs | What breaks if changed |
+|---|---|---|---|---|
+| subcommand | — | `install` / `check` / `show` | mutating install / read-only proof / fingerprint listing | `check` never writes; `show` prints sha256 prefixes, never key material |
+| key file mode | — | `0600` or `0400` accepted | who can read the key | `0644` is `FAIL key_mode` and **nothing is installed** |
+| key body | — | a private OpenSSH/PEM header | accepted material | a public key (`ssh-*`, `ecdsa-*`) is `FAIL key_file` |
+| remote form | — | `git@host:path` or `ssh://[user@]host[:port]/path` | what a deploy key can authenticate | HTTPS/local forms are `FAIL repo` naming why |
+| `--replace` | off | flag | rotation of a key already registered for that repo | a different key without it is refused, so a rotation is never silent |
+
+**`node_hygiene.py` (S1):**
+
+| Setting | Default | Range | Governs | What breaks if changed |
+|---|---|---|---|---|
+| `footprint --working-room-mib` | **2048** (`WORKING_ROOM_MIB`) | MiB | headroom added to the measured components before admission | a shortfall is `FAIL footprint:room` naming the bytes short |
+| `footprint --floor-gib` | none (measured only) | GiB | whether the total is admitted against the resolved floor | without it the layer notes the total is measured but not admitted |
+| `footprint --modcache` | none → `not-declared` | path | whether the shared cache counts toward the footprint | an undeclared cache is named, never a silent zero |
+| `reap --min-age-minutes` | **60** | minutes | grace before an orphan is removed | a younger entry is kept (an agent being created is not an orphan) |
+| `reap --registry` | none — **required** | id list or `bunker list` output | which ids are live | absent/unreadable → `FAIL reap_registry`, nothing removed |
+
 **Config-vs-CLI precedence (locator re-pinned this round).** `load_config` (`:96-123`) parses the file as data
 (never sources it), then the CLI flags are re-applied on top — "the command line always wins"
 (`:589`). Six flags were assigned during parsing and then overwritten by `load_config`, so they
@@ -169,9 +197,12 @@ round.
 
 | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|
-| shell parse | `for f in scripts/bunker-*.sh scripts/node-create.sh scripts/verify-node.sh scripts/bunker-crier-connect.sh; do bash -n "$f"; done` | exit 0 | 2026-11-06 | PASS (in 20/20 sweep) |
-| python compile | `python3 -m py_compile scripts/disk_floor.py scripts/node_identity.py scripts/node_gateway_auth.py scripts/node_seed.py scripts/node_seed_drift.py scripts/node_env.py scripts/node_freshness.py` | exit 0 | 2026-11-06 | PASS |
+| shell parse | `for f in scripts/bunker-*.sh scripts/node-create.sh scripts/verify-node.sh scripts/bunker-crier-connect.sh scripts/install-node.sh; do bash -n "$f"; done` | exit 0 | 2026-11-07 | PASS |
+| python compile | `python3 -m py_compile scripts/disk_floor.py scripts/node_identity.py scripts/node_gateway_auth.py scripts/node_seed.py scripts/node_seed_drift.py scripts/node_env.py scripts/node_freshness.py scripts/deploy_key.py scripts/gomodcache.py scripts/node_hygiene.py` | exit 0 | 2026-11-07 | PASS |
 | disk floor unit | `python3 tests/test_disk_floor.py` | 12 tests pass | 2026-11-06 | **PASS** (rc 0) |
+| credential / runtime / cache / footprint / reap battery | `python3 tests/test_node_provisioning.py` | 23 tests: 0644 key refused, HTTPS remote refused, public key refused, rotation gated, per-host config merge, node pin read back, wrong digest installs nothing, lying binary fails, sealed cache builds with `GOPROXY=off` and refuses to grow, footprint components exact, orphan reap spares live ids and symlinks | 2026-11-07 | **PASS** (rc 0; `MEASURED shared GOMODCACHE 2097910 bytes; sealed rebuild added 0 bytes`) |
+| layer wiring (10/40/00) | `bash tests/selftest.sh` §58 | `PASS tool:node — $HOME/node-toolchain/current/bin/node (v22.22.3)`, `PASS repo_key` + `PASS repo_key:config`, a 0644 key → `FAIL repo_key` **and** `FAIL repo_clone — not attempted`, `PASS footprint` / `PASS footprint:floor` | 2026-11-07 | **PASS** (fixtures only) |
+| **F2 legs (CREATED vs VERIFIED)** | `node-create.sh --project P --repo git@gitlab… --deploy-key K` then `verify-node.sh --agent A --server S` | the clone succeeds under the per-repo key, the repo's suite runs (node-dependent tests included), the cache adds 0 bytes, `VERIFY: PASS` | not run | **UNVERIFIED** — needs the real read-only deploy key and a fresh bunker node; this repo proves the mechanism, not the grant |
 | gateway auth staged before the adapter | `bash tests/selftest.sh` §55 (`project-node.sh --apply --project <p> --layers 20` in a fixture home) | `PASS gateway_auth — dashboard.basic_auth present …; password in …/.node/auth/gateway.pass (mode 600, value not printed)` and the adapter's `PASS gateway_start — /api/status -> 200`; the same adapter still refuses without the block | 2026-11-07 | **PASS** (fixture only — no live node run) |
 | certification ladder | `scripts/verify-node.sh --agent <id> --server <host>` on a live node | per-leg observation | not run this round | **UNVERIFIED** (needs a live node; legs documented in §11) |
 
@@ -205,6 +236,10 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
 | Gateway auth block absent at layer 20 | `FAIL gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent` from the adapter | a staged block — `project-node.sh` layer 20 runs `node_gateway_auth.py` before the adapter and prints `PASS gateway_auth — dashboard.basic_auth present …` (CF-150) | re-run `project-node.sh --apply`; a `dashboard` block that is not `basic_auth` stays a counted FAIL and needs a human |
 | Unreachable port | exit 3 `UNVERIFIED`, not FAIL (`verify-node.sh:106-110`) | a failed port (exit != 0) | read the port row (CF-224) |
 | `--destroy` without `--yes` | `refusing to destroy without --yes (would remove agent $AGENT on $SERVER)`, exit 2 (`:552`) | an authorised destroy | pass `--yes` and a non-empty `--agent` (`:553` also refuses an unset AGENT) |
+| Deploy key readable by group/other | `FAIL repo_key — … mode 0644 — group/other can read it (chmod 600)` and, with no clone yet, `FAIL repo_clone — not attempted — the declared deploy key is unusable (see repo_key)` | a working key (`PASS repo_key — … mode 600`) | `chmod 600` the key and re-run; `node-create.sh --deploy-key` refuses it before spawning anything |
+| Shared module cache writable or drifted | `FAIL modcache_seal — N writable path(s)` / `FAIL modcache_manifest — ±N bytes since seal` | a sealed cache (`PASS modcache_seal — … read-only (no write bits, owner included)`) | `gomodcache.py seal` on the prewarm host; a node must never write the shared cache |
+| Footprint above the floor or the working room | `FAIL footprint:room — X required (Y + 2048 MiB working room) > Z free — short S` / `FAIL footprint:floor — … exceeds the N GiB floor` | a footprint with headroom (`PASS footprint:room — … headroom …`) | reap (`node_hygiene.py reap`, `reclaim_disk.py run`) or move the node; admission refuses before the host fills |
+| Orphan homes/keys on the server | `FAIL orphans — N orphan(s) would be reaped (… live kept, … inside grace): <paths>` (check), `PASS orphans — reaped N …` (apply) | `PASS orphans — none — … live entries kept` | `bunker-server-install.sh --reap-orphans` with `BUNKER_HOMES_DIR`/`BUNKER_KEYS_DIR` named |
 
 ## 11. Limits and margins
 
@@ -245,7 +280,12 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
 
 ## 12. Cross-references
 
-- F2 PROVISIONING AND CERTIFICATION is the primary flow this module owns.
+- F2 PROVISIONING AND CERTIFICATION is the primary flow this module owns. The CF-003 legs sit on
+  it: the per-repo deploy key is a **precondition** of the repo leg (layer 40), the Node runtime and
+  the sealed module cache are **provisioning** of layer 10, and the footprint row is the **admission**
+  half of layer 00. CREATED still means `node-create.sh` returned `NODE CREATED`; VERIFIED still means
+  `verify-node.sh` returned `VERIFY: PASS` — the new legs do not blur that line, and a fixture run
+  (§58) is explicitly not a certification.
 - M0 SHARED CONTRACT supplies `require_disk`/`have`/`bunker_exec`.
 - M3 REPOSITORY owns the seeded clone this module creates.
 - M5 HARNESS owns the harness the provisioner certifies.
@@ -256,9 +296,32 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
   `disk_floor.py:36-40, 115-141`, `verify-node.sh:20-241`, `node_identity.py` (full),
   `node_seed.py:43-44, 114-164, 205-333, 373-394`; settings surfaces of `node_env.py`,
   `node_seed_drift.py`, `node_freshness.py`, `bunker_config_gen.py`.
+- **CF-003 slice, read and re-measured 2026-11-07:** `scripts/deploy_key.py` (whole file),
+  `scripts/install-node.sh` (whole file), `scripts/gomodcache.py` (whole file),
+  `scripts/node_hygiene.py` (whole file), `scripts/node-create.sh` (staged set `:31-40`, key
+  preflight `:95-113`, injection `:160-185`, provision env `:190`), `scripts/project-node.sh`
+  (layer 00 footprint `:242-260`, layer 10 node `:390-424`, layer 10 `go:modcache` `:488-505`,
+  layer 40 `repo_key` `:853-889`, `core.sshCommand` `:916-925`), `scripts/bunker-server-install.sh`
+  (`:60-89`), `tests/test_node_provisioning.py`, `tests/selftest.sh` §58.
 - `docs/UNIT-MAP.yaml:26-77` (M1 S1–S5).
-- Board rows: CF-192 (auth gate), CF-224 (unreachable = UNVERIFIED), CF-379 (zero-file seed).
+- Board rows: CF-192 (auth gate), CF-224 (unreachable = UNVERIFIED), CF-379 (zero-file seed),
+  **CF-003** (deploy key + node runtime + shared module cache + footprint + orphan reap).
 - **Findings:**
+  - **F1-6** (new, CF-003) — the layer-40 error text already said
+    `repository access failed; private repos need a deploy key`, but **no stage injected one**:
+    `node-create.sh` staged eight files and copied no credential, and the control host only reached
+    the private GitLab through an `insteadOf` rewrite. The message named a remedy the system did not
+    implement. `--deploy-key` + `deploy_key.py` close the mechanism; the live clone remains
+    UNVERIFIED in this repo.
+  - **F1-7** (new, CF-003) — layer 10 graded `have node`, an ambient PATH binary, and never
+    provisioned a runtime, so a node could print `PASS tool:node` for a binary it did not own (and a
+    fresh node with no `node` failed 11 Go tests that shell out to it). `install-node.sh` +
+    owned-path precedence fix both halves; the spec said `node: node --version read back` and was
+    silent about provisioning, now stated.
+  - **F1-8** (new, CF-003) — `specs/NODE.md` counted **656 MB of module cache per node** with no
+    mechanism behind the number. `gomodcache.py` makes it shared and sealed, and the fixture measures
+    the property: 2,097,910 bytes seeded once, **0 bytes added** by a sealed rebuild with
+    `GOPROXY=off`.
   - **F1-1** (carried) — `bunker-provision.sh:181` resolves `bunker` via `have` (PATH); `:233`
     claims "mode 600" while `:214` tests only `[ -s … ]`.
   - **F1-2** — unknown explicit role raises `FloorError` (`disk_floor.py:123-125`, exit 2); only an

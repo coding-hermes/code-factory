@@ -1961,9 +1961,9 @@ mkdir -p "$tmpd/scripts/harness" "$tmpd/bin"
 no_ref=$(bash "$HERE/scripts/node-create.sh" --staged-files 2>&1); no_rc=$?
 with_ref=$(bash "$HERE/scripts/node-create.sh" --staged-files --ref master 2>&1); ref_rc=$?
 if [ "$no_rc" -eq 0 ] && [ "$ref_rc" -eq 0 ] && [ "$with_ref" = "$no_ref" ] \
-  && [ "$(printf '%s\n' "$with_ref" | grep -c .)" -eq 8 ] \
+  && [ "$(printf '%s\n' "$with_ref" | grep -c .)" -eq 12 ] \
   && ! printf '%s\n' "$with_ref" | grep -Fq 'unknown arg:'; then
-  say "  PASS  --staged-files --ref master -> exit 0, same eight-file staged set"
+  say "  PASS  --staged-files --ref master -> exit 0, same twelve-file staged set"
 else
   say "  FAIL  --ref rejected or changed the staged set (exit $no_rc/$ref_rc)"; fails=$((fails+1))
 fi
@@ -2045,7 +2045,8 @@ with tempfile.TemporaryDirectory(prefix="cf159-") as directory:
         path.chmod(0o755)
 
     for name in ("node-create.sh", "lib.sh", "project-node.sh", "install-go.sh", "disk_floor.py",
-                 "reclaim_disk.py", "node_gateway_auth.py"):
+                 "reclaim_disk.py", "node_gateway_auth.py", "install-node.sh", "node_hygiene.py",
+                 "gomodcache.py", "deploy_key.py"):
         shutil.copyfile(root / "scripts" / name, scripts / name)
     shutil.copyfile(root / "scripts/harness/install-hermes.sh", scripts / "harness/install-hermes.sh")
     # The adapter sources this (CF-229); the fixture's staging tree must be a complete node.
@@ -5267,6 +5268,103 @@ else
   fails=$((fails+1))
 fi
 rm -rf "$cf275"
+
+# ch:trace row=CF-003 spec=docs/handbook/OUTLINE.md#part-iii-m1-m5-f2 wave=none:single-shared-checkout test=tests/test_node_provisioning.py doc=docs/handbook/chapters/M1-provisioning.md prompt=CF-003-brief evidence=tests/test_node_provisioning.py witness=bash tests/selftest.sh verdict=none:foreman-lifecycle commit=none:worker-commit-pending memory=none:foreman-closeout
+say "58. per-repo deploy key, node runtime, shared module cache, footprint, orphan reap (CF-003)"
+# Two layers of proof. The unit battery owns the mechanisms (a key refused at 0644, a wrong
+# digest installing nothing, a sealed cache that builds with GOPROXY=off and refuses to grow,
+# a footprint that adds up, a reaper that spares live ids and symlinks). The shell arms below
+# prove the WIRING: layer 10 must grade the runtime the ladder provisioned rather than an
+# ambient PATH node, layer 40 must use the declared key for the clone and refuse a readable
+# key instead of cloning without one, and layer 00 must print a footprint row.
+cf003=$(mktemp -d)
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_node_provisioning.py" >"$cf003/out" 2>&1; then
+  say "  PASS  five mechanisms with their refusal arms (deploy key, node pin, sealed GOMODCACHE, footprint, reap)"
+  if grep -q 'MEASURED shared GOMODCACHE' "$cf003/out"; then
+    say "  PASS  $(grep -m1 'MEASURED shared GOMODCACHE' "$cf003/out" | sed 's/^ *//')"
+  else
+    say "  ..    no MEASURED line: the go-backed no-download arm skipped (no Go toolchain here)"
+  fi
+else
+  say "  FAIL  the CF-003 unit battery (tests/test_node_provisioning.py)"
+  fails=$((fails+1))
+  sed 's/^/    | /' "$cf003/out"
+fi
+
+# ARM: layer 10 grades the OWNED pin. A fresh node has no node at all; the row must name
+# $HOME/node-toolchain/current/bin/node, not whichever node an ambient image exposes.
+mkdir -p "$cf003/home/node-toolchain/current/bin"
+printf '#!/bin/sh\necho v22.22.3\n' > "$cf003/home/node-toolchain/current/bin/node"
+chmod +x "$cf003/home/node-toolchain/current/bin/node"
+out=$(env HOME="$cf003/home" NODE_PROJECT=demo CRIER_URL=http://127.0.0.1:9 \
+  bash "$HERE/scripts/project-node.sh" --check --project demo --kinds node --layers 10 2>&1); rc=$?
+expected="  PASS  tool:node — $cf003/home/node-toolchain/current/bin/node (v22.22.3)"
+if [ "$rc" -eq 0 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ]; then
+  say "  PASS  layer 10 grades the owned node pin, not a PATH runtime"
+else
+  say "  FAIL  layer 10 did not name the owned node runtime (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | grep -E 'tool:node|NODE:' | sed 's/^/    | /'
+fi
+
+# ARM: layer 40 clones with the declared per-repo key and pins it into that one repository.
+git init -q -b main "$cf003/src"
+git -C "$cf003/src" config user.email fixture@example.invalid
+git -C "$cf003/src" config user.name fixture
+echo fixture > "$cf003/src/README"
+git -C "$cf003/src" add README
+git -C "$cf003/src" commit -qm fixture
+for arm in green red; do
+  mkdir -p "$cf003/$arm/.node/keys"
+  printf -- '-----BEGIN OPENSSH PRIVATE KEY-----\nFIXTURE\n-----END OPENSSH PRIVATE KEY-----\n' \
+    > "$cf003/$arm/.node/keys/project.key"
+  printf 'Host gitlab.example\n  IdentitiesOnly yes\n  IdentityFile %s\n' \
+    "$cf003/$arm/.node/keys/project.key" > "$cf003/$arm/.node/keys/ssh_config"
+  chmod 600 "$cf003/$arm/.node/keys/ssh_config"
+done
+chmod 600 "$cf003/green/.node/keys/project.key"
+chmod 644 "$cf003/red/.node/keys/project.key"
+out=$(env HOME="$cf003/green" NODE_PROJECT=demo CRIER_URL=http://127.0.0.1:9 \
+  NODE_DEPLOY_KEY="$cf003/green/.node/keys/project.key" \
+  NODE_SSH_CONFIG="$cf003/green/.node/keys/ssh_config" \
+  bash "$HERE/scripts/project-node.sh" --apply --project demo --repo "$cf003/src" --ref main --layers 40 2>&1); rc=$?
+key_row="  PASS  repo_key — $cf003/green/.node/keys/project.key mode 600"
+conf_row="  PASS  repo_key:config — core.sshCommand set in $cf003/green/repo (this repository only)"
+if [ "$rc" -eq 0 ] \
+   && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$key_row")" = 1 ] \
+   && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$conf_row")" = 1 ]; then
+  say "  PASS  layer 40 clones with the declared key and pins core.sshCommand in that repo only"
+else
+  say "  FAIL  layer 40 did not use the declared deploy key (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | grep -E 'repo_key|repo_clone|repo —|NODE:' | sed 's/^/    | /'
+fi
+# CONTROL: the same fixture with the key readable by group/other must refuse the clone
+# rather than fall back to an ambient identity.
+out=$(env HOME="$cf003/red" NODE_PROJECT=demo CRIER_URL=http://127.0.0.1:9 \
+  NODE_DEPLOY_KEY="$cf003/red/.node/keys/project.key" \
+  NODE_SSH_CONFIG="$cf003/red/.node/keys/ssh_config" \
+  bash "$HERE/scripts/project-node.sh" --apply --project demo --repo "$cf003/src" --ref main --layers 40 2>&1); rc=$?
+bad_key="  FAIL  repo_key — $cf003/red/.node/keys/project.key mode 644 — group/other can read it (chmod 600)"
+no_clone='  FAIL  repo_clone — not attempted — the declared deploy key is unusable (see repo_key)'
+if [ "$rc" -ne 0 ] \
+   && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$bad_key")" = 1 ] \
+   && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$no_clone")" = 1 ]; then
+  say "  PASS  a 0644 deploy key is refused and the clone is not attempted"
+else
+  say "  FAIL  a readable deploy key did not block the clone (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | grep -E 'repo_key|repo_clone|NODE:' | sed 's/^/    | /'
+fi
+
+# ARM: layer 00 reports the footprint it will occupy against the resolved floor.
+out=$(env HOME="$cf003/home" NODE_PROJECT=demo CRIER_URL=http://127.0.0.1:9 \
+  bash "$HERE/scripts/project-node.sh" --check --project demo --layers 00 2>&1)
+if printf '%s\n' "$out" | grep -q '^  PASS  footprint — ' \
+   && printf '%s\n' "$out" | grep -q '^  PASS  footprint:floor — '; then
+  say "  PASS  layer 00 measures the node footprint and admits it against the floor"
+else
+  say "  FAIL  layer 00 printed no footprint row"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+rm -rf "$cf003"
 
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

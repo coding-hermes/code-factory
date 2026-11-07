@@ -239,6 +239,24 @@ if in_scope 00; then
   fi
   mem=$(awk '/MemAvailable/{printf "%d", $2/1024}' /proc/meminfo)
   [ "${mem:-0}" -ge 1024 ] && ok "mem" "${mem} MB" || bad "mem" "${mem} MB < 1024"
+  # Footprint, not just free space: the floor is admission policy, and the number that
+  # decides admission is what THIS node will occupy. Bounded component set only (repo,
+  # toolchains, harness home, node state, declared module cache), so the row stays cheap
+  # on a host with a large $HOME. A measured footprint above the floor refuses admission
+  # here rather than at 98 % disk (CF-003, specs/NODE.md "Disk floor").
+  if command -v python3 >/dev/null 2>&1 && [ -r "$HERE/node_hygiene.py" ]; then
+    fp_args=(footprint --root "$HOME" --floor-gib "$FLOOR_GIB" --floor-source "${FLOOR_SRC:-role-default}")
+    [ -n "${NODE_GOMODCACHE:-}" ] && fp_args+=(--modcache "$NODE_GOMODCACHE")
+    fp_out="$(python3 "$HERE/node_hygiene.py" "${fp_args[@]}" 2>&1)"; fp_rc=$?
+    printf '%s\n' "$fp_out"
+    fp_fails="$(printf '%s\n' "$fp_out" | grep -c '^  FAIL')" || true
+    FAILED=$((FAILED + fp_fails))
+    if [ "$fp_rc" -ne 0 ] && [ "$fp_fails" -eq 0 ]; then
+      bad "footprint" "measurement exited $fp_rc without a FAIL row"
+    fi
+  else
+    warn "footprint" "node_hygiene.py or python3 unavailable — component sizes are unmeasured"
+  fi
   CRIER="${CRIER_URL:-}"
   if [ -z "$CRIER" ]; then
     bad "crier_url" "CRIER_URL unset — the node has nothing to connect to (export CRIER_URL=http://crier.example:8767)"
@@ -388,7 +406,36 @@ if in_scope 10; then
   done
 
   if has_kind node; then
-    p=$(have node)
+    # Apply provisions the pinned runtime, the same way the go branch installs its pin: a
+    # kind-node repo whose tests shell out to `node` cannot run on a fresh agent, which is
+    # exactly how a Go repo reported 11 failing tests with `exec: node: not found` (CF-003).
+    # Check stays read-only and grades what is already there.
+    node_root="${NODE_INSTALL_ROOT:-$HOME/node-toolchain}"
+    if [ "$MODE" = apply ]; then
+      if ! node_install_log="$(mktemp)"; then
+        bad "tool:node" "cannot create installer log"
+      elif [ ! -x "$HERE/install-node.sh" ]; then
+        bad "tool:node" "installer missing or not executable: $HERE/install-node.sh"
+        rm -f "$node_install_log"
+      else
+        "$HERE/install-node.sh" --apply >"$node_install_log" 2>&1
+        node_install_rc=$?
+        cat "$node_install_log"
+        node_install_fails="$(grep -c '^  FAIL' "$node_install_log")" || true
+        FAILED=$((FAILED + node_install_fails))
+        if [ "$node_install_rc" -ne 0 ] && [ "$node_install_fails" -eq 0 ]; then
+          bad "tool:node" "installer exited $node_install_rc without a FAIL row"
+        fi
+        rm -f "$node_install_log"
+      fi
+    fi
+    # The owned pin wins over PATH: a node must run the runtime this ladder provisioned,
+    # not whatever an ambient image happens to expose.
+    if [ -x "$node_root/current/bin/node" ]; then
+      p="$node_root/current/bin/node"
+    else
+      p=$(have node)
+    fi
     if [ -z "$p" ]; then
       bad "tool:node" "missing — kind node needs a Node runtime (a package.json repo cannot install or test here)"
     else
@@ -456,6 +503,24 @@ if in_scope 10; then
       if [ "$grc" -eq 0 ] && [ -n "$gv" ]; then
         ok "tool:go" "$gb ($gv)"
         go_proxy_row "$gb"
+        # A private GOMODCACHE costs every node the same 656 MB re-download (CF-003). When a
+        # shared cache is declared, prove it is sealed and read-only; when it is not, say so
+        # instead of leaving the absence unexplained — the node keeps a private copy.
+        if [ -n "${NODE_GOMODCACHE:-}" ]; then
+          if [ ! -r "$HERE/gomodcache.py" ]; then
+            bad "go:modcache" "declared $NODE_GOMODCACHE but $HERE/gomodcache.py is missing"
+          else
+            mc_out="$(python3 "$HERE/gomodcache.py" check --dir "$NODE_GOMODCACHE" 2>&1)"; mc_rc=$?
+            printf '%s\n' "$mc_out"
+            mc_fails="$(printf '%s\n' "$mc_out" | grep -c '^  FAIL')" || true
+            FAILED=$((FAILED + mc_fails))
+            if [ "$mc_rc" -ne 0 ] && [ "$mc_fails" -eq 0 ]; then
+              bad "go:modcache" "check exited $mc_rc without a FAIL row"
+            fi
+          fi
+        else
+          warn "go:modcache" "not declared — this node keeps a private module cache (~656 MB per node); set NODE_GOMODCACHE to a sealed shared cache"
+        fi
       else
         bad "tool:go" "$gb — 'go version' failed (exit $grc): ${gv:-no output}"
       fi
@@ -786,13 +851,44 @@ PY
 }
 
 REPO_READY=0
+KEY_BLOCKED=0
 if in_scope 40; then
   say "[40] repo"
+  # Per-repo credentials (CF-003). node-create.sh copies the key to $HOME/.node/keys and
+  # runs deploy_key.py install there, which writes the mode-600 key plus an ssh_config
+  # carrying `IdentitiesOnly yes`. Here the key is only USED, and only for this clone:
+  # GIT_SSH_COMMAND is scoped to this process, so no global git identity changes and no
+  # other repo on the node inherits the credential. A declared key that is unreadable or
+  # group/world-readable blocks the clone instead of falling back to an ambient identity.
+  if [ -n "${NODE_DEPLOY_KEY:-}" ]; then
+    ssh_cfg="${NODE_SSH_CONFIG:-$(dirname "$NODE_DEPLOY_KEY")/ssh_config}"
+    if [ ! -r "$NODE_DEPLOY_KEY" ]; then
+      bad "repo_key" "$NODE_DEPLOY_KEY declared but unreadable — refusing to clone without the credential"
+      KEY_BLOCKED=1
+    else
+      key_mode=$(stat -c '%a' "$NODE_DEPLOY_KEY" 2>/dev/null || echo '?')
+      case "$key_mode" in
+        600|400) ok "repo_key" "$NODE_DEPLOY_KEY mode $key_mode" ;;
+        *) bad "repo_key" "$NODE_DEPLOY_KEY mode $key_mode — group/other can read it (chmod 600)"; KEY_BLOCKED=1 ;;
+      esac
+      if [ "$KEY_BLOCKED" -eq 0 ] && [ ! -r "$ssh_cfg" ]; then
+        bad "repo_key" "$ssh_cfg absent — ssh has no identity for this repo (deploy_key.py install writes it)"
+        KEY_BLOCKED=1
+      fi
+      if [ "$KEY_BLOCKED" -eq 0 ]; then
+        export GIT_SSH_COMMAND="ssh -F $ssh_cfg"
+        export GIT_TERMINAL_PROMPT=0
+        ok "repo_key:ssh" "GIT_SSH_COMMAND='ssh -F $ssh_cfg' (this process only)"
+      fi
+    fi
+  fi
   # $RP was resolved once at the top (layer 10 reads it for kind evidence before the
   # clone exists); the clone target is the same path layer 40 has always used.
   if [ -d "$RP/.git" ]; then
     ok "repo" "$RP @ $(git -C "$RP" rev-parse --short HEAD)"
     REPO_READY=1
+  elif [ "$KEY_BLOCKED" -eq 1 ]; then
+    bad "repo_clone" "not attempted — the declared deploy key is unusable (see repo_key)"
   else
     if [ "$MODE" = apply ] && [ -n "$REPO" ]; then
       say "  ..    cloning $REPO @ $REF"
@@ -816,6 +912,16 @@ if in_scope 40; then
       rm -f "$clone_log"
     else
       bad "repo" "$RP absent (pass --repo to clone)"
+    fi
+  fi
+
+  # The clone inherited GIT_SSH_COMMAND; a node that fetches or pushes afterwards must use
+  # the same identity, so pin it into THAT repository's config — never the global one.
+  if [ "$REPO_READY" -eq 1 ] && [ -n "${GIT_SSH_COMMAND:-}" ]; then
+    if git -C "$RP" config core.sshCommand "$GIT_SSH_COMMAND" 2>/dev/null; then
+      ok "repo_key:config" "core.sshCommand set in $RP (this repository only)"
+    else
+      bad "repo_key:config" "cannot set core.sshCommand in $RP"
     fi
   fi
 
