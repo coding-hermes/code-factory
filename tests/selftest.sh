@@ -1878,9 +1878,9 @@ mkdir -p "$tmpd/scripts/harness" "$tmpd/bin"
 no_ref=$(bash "$HERE/scripts/node-create.sh" --staged-files 2>&1); no_rc=$?
 with_ref=$(bash "$HERE/scripts/node-create.sh" --staged-files --ref master 2>&1); ref_rc=$?
 if [ "$no_rc" -eq 0 ] && [ "$ref_rc" -eq 0 ] && [ "$with_ref" = "$no_ref" ] \
-  && [ "$(printf '%s\n' "$with_ref" | grep -c .)" -eq 7 ] \
+  && [ "$(printf '%s\n' "$with_ref" | grep -c .)" -eq 8 ] \
   && ! printf '%s\n' "$with_ref" | grep -Fq 'unknown arg:'; then
-  say "  PASS  --staged-files --ref master -> exit 0, same seven-file staged set"
+  say "  PASS  --staged-files --ref master -> exit 0, same eight-file staged set"
 else
   say "  FAIL  --ref rejected or changed the staged set (exit $no_rc/$ref_rc)"; fails=$((fails+1))
 fi
@@ -1961,7 +1961,8 @@ with tempfile.TemporaryDirectory(prefix="cf159-") as directory:
         path.write_text(text)
         path.chmod(0o755)
 
-    for name in ("node-create.sh", "lib.sh", "project-node.sh", "install-go.sh", "disk_floor.py", "reclaim_disk.py"):
+    for name in ("node-create.sh", "lib.sh", "project-node.sh", "install-go.sh", "disk_floor.py",
+                 "reclaim_disk.py", "node_gateway_auth.py"):
         shutil.copyfile(root / "scripts" / name, scripts / name)
     shutil.copyfile(root / "scripts/harness/install-hermes.sh", scripts / "harness/install-hermes.sh")
     # The adapter sources this (CF-229); the fixture's staging tree must be a complete node.
@@ -4796,6 +4797,11 @@ fi
 # print the false PASS and stage into the absent agent, or this section proves nothing.
 mkdir -p "$tmpd/before"
 cp -a "$tmpd/scripts/." "$tmpd/before/" 2>/dev/null
+# Pair the pre-fix node-create.sh with the project-node.sh of the SAME revision: the staging
+# manifest validator reads project-node.sh's $HERE references, and the current one now names
+# node_gateway_auth.py (CF-150), which the pre-fix manifest does not stage — mixing revisions
+# would fail the control for the wrong reason.
+git -C "$HERE" show 943ef98:scripts/project-node.sh > "$tmpd/before/project-node.sh" 2>/dev/null || true
 if git -C "$HERE" show 943ef98:scripts/node-create.sh > "$tmpd/before/node-create.sh" 2>/dev/null; then
   out=$(cf051_run "$tmpd/before/node-create.sh" 1 "$tmpd/before.log"); rc=$?
   if [ "$rc" -eq 0 ] \
@@ -4847,6 +4853,150 @@ else
   fails=$((fails+1))
 fi
 rm -rf "$cf354"
+
+# ch:trace row=CF-150 spec=specs/NODE.md#layer-20 test=tests/selftest.sh::gateway-basic-auth doc=docs/OPERATIONS.md prompt=none:worker-brief evidence=tests/selftest.sh::gateway-basic-auth witness=none:local-fixture verdict=none:foreman-verifies commit=none:self-referential-hash memory=none:foreman-owns
+# BEGIN gateway-basic-auth
+say "55. the create path stages dashboard.basic_auth before the adapter, and the gate still refuses without it (CF-150)"
+# Layer 20 asks the Hermes adapter to start a PUBLIC bind; the adapter refuses that bind unless
+# ~/.hermes/config.yaml parses to a non-empty dashboard.basic_auth, and NOTHING in the create path
+# wrote it — so a freshly created node could never reach NODE: PASS (CF-150). The arms below are
+# offline and touch no real HOME: one mktemp -d holds the stub bin, three node homes that start
+# exactly where a fresh node starts, and a copy of the staged entry point.
+#   staged  node-create.sh stages the producer that writes the block
+#   A       the adapter still REFUSES a config without the block, and never starts serve
+#   B       project-node.sh --apply --layers 20 stages a non-empty block and a mode-600 file,
+#           and never prints the secret
+#   C       the adapter in that staged home no longer prints the refusal: gateway_start PASSes
+#   D       a dashboard block the producer cannot reconcile is a FAIL row the parent counts
+cf150=$(mktemp -d)
+cf150_python=$(command -v python3)
+if python3 - "$cf150" <<'PY'
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+(root / "bin").mkdir()
+# The same stub surface section 10 (CF-071) measured: a python inside the pin's range, a venv
+# hermes that reports the pin and records its own launch, an ss that sees no listener (so the
+# adapter takes the start-the-gateway branch), and a curl that answers 200.
+stubs = {
+    "python": '#!/usr/bin/env bash\nif [ "$1" = --version ]; then echo \'Python 3.12.3\'; exit 0; fi\nexec "${CF150_PY:?}" "$@"\n',
+    "hermes": '#!/usr/bin/env bash\nif [ "$1" = --version ]; then echo \'hermes 0.19.0\'; exit 0; fi\n[ "$*" = \'serve --host 0.0.0.0 --port 10800 --skip-build\' ] || exit 99\nprintf \'%s\\n\' \'serve launch reached\' > "${CF150_FIXTURE:?}/launch"\n',
+    "ss": "#!/usr/bin/env bash\nexit 1\n",
+    "nohup": '#!/usr/bin/env bash\nexec "$@"\n',
+    "sleep": '#!/usr/bin/env bash\nfor ((i=0; i<100; i++)); do\n  [ ! -f "${CF150_FIXTURE:?}/launch" ] || exit 0\n  /bin/sleep 0.01\ndone\nexit 1\n',
+    "curl": '#!/usr/bin/env bash\nprintf \'%s\' "${CF150_HTTP_CODE:?}"\n',
+}
+for name, text in stubs.items():
+    path = root / "bin" / name
+    path.write_text(text)
+    path.chmod(0o755)
+# A node home as a fresh node has it: a config with NO dashboard block (or one the producer must
+# refuse), and the adapter's venv already at the pin — so --apply never reaches pip, no network.
+for name, config in (
+    ("refused-home", "model: {}\n"),
+    ("staged-home", "model: {}\n"),
+    ("conflict-home", "dashboard:\n  theme: dark\n"),
+):
+    home = root / name
+    (home / ".hermes").mkdir(parents=True)
+    (home / "hermes-venv/bin").mkdir(parents=True)
+    (home / ".hermes/config.yaml").write_text(config)
+    (home / "hermes-venv/bin/hermes").symlink_to(root / "bin/hermes")
+    (home / "hermes-venv/bin/python").symlink_to(root / "bin/python")
+# The staged entry point, with a stub adapter: arm B proves the STAGING step, not the install
+# ladder the adapter already owns.
+tree = root / "tree/scripts"
+(tree / "harness").mkdir(parents=True)
+(tree / "harness/install-hermes.sh").write_text(
+    '#!/usr/bin/env bash\n. "$(dirname "$0")/../lib.sh"\n'
+    'ok "stub" "adapter reached"\nexit 0\n'
+)
+(tree / "harness/install-hermes.sh").chmod(0o755)
+PY
+then
+  cf150_env() {  # cf150_env <home> <command...>
+    rm -f "$cf150/launch"
+    env -i PATH="$cf150/bin:/usr/local/bin:/usr/bin:/bin" HOME="$1" \
+      HERMES_PYTHON_BIN="$cf150/bin/python" HERMES_PIN=0.19.0 NODE_GATEWAY_PORT=10800 \
+      CF150_PY="$cf150_python" CF150_FIXTURE="$cf150" CF150_HTTP_CODE=200 \
+      NODE_PROJECT=fixture "${@:2}"
+  }
+  cp "$HERE/scripts/project-node.sh" "$HERE/scripts/lib.sh" "$HERE/scripts/disk_floor.py" \
+     "$HERE/scripts/node_gateway_auth.py" "$cf150/tree/scripts/" || fails=$((fails+1))
+
+  # ARM staged: the file the entry point runs is actually staged by node-create.sh. The manifest
+  # validator derives that from project-node.sh's own $HERE references, so dropping
+  # node_gateway_auth.py from the manifest turns this red.
+  cf150_staged=$(bash "$HERE/scripts/node-create.sh" --staged-files 2>&1); cf150_staged_rc=$?
+  if [ "$cf150_staged_rc" -eq 0 ] && printf '%s\n' "$cf150_staged" | grep -Fxq 'node_gateway_auth.py'; then
+    say "  PASS  staged set carries node_gateway_auth.py ($(printf '%s\n' "$cf150_staged" | grep -c .) files)"
+  else
+    say "  FAIL  node_gateway_auth.py is not in the staged set (exit $cf150_staged_rc)"; fails=$((fails+1))
+    printf '%s\n' "$cf150_staged" | sed 's/^/    | /'
+  fi
+
+  # ARM A: the negative control. Without the block the adapter refuses BY NAME, exits nonzero and
+  # never launches serve — the gate this row must not weaken.
+  out=$(cf150_env "$cf150/refused-home" /bin/bash "$HERE/scripts/harness/install-hermes.sh" --apply 2>&1); rc=$?
+  cf150_refusal='  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent'
+  if [ "$rc" -ne 0 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$cf150_refusal")" = 1 ] \
+    && [ ! -f "$cf150/launch" ]; then
+    say "  PASS  no dashboard.basic_auth -> exit $rc, refusal named, serve never launched"
+  else
+    say "  FAIL  the adapter did not refuse a config without dashboard.basic_auth (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out" | grep -E 'PASS|FAIL' | tail -4 | sed 's/^/    | /'
+  fi
+
+  # ARM B: layer 20 stages the block BEFORE the adapter runs.
+  out=$(cf150_env "$cf150/staged-home" /bin/bash "$cf150/tree/scripts/project-node.sh" \
+    --apply --project fixture --layers 20 2>&1); rc=$?
+  cf150_pass="  PASS  gateway_auth — dashboard.basic_auth present in $cf150/staged-home/.hermes/config.yaml; password in $cf150/staged-home/.node/auth/gateway.pass (mode 600, value not printed)"
+  cf150_mode=$(stat -c '%a' "$cf150/staged-home/.node/auth/gateway.pass" 2>/dev/null || true)
+  cf150_secret=$(cat "$cf150/staged-home/.node/auth/gateway.pass" 2>/dev/null || true)
+  if [ "$rc" -eq 0 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$cf150_pass")" = 1 ] \
+    && grep -Eq '^    username: [^ ]' "$cf150/staged-home/.hermes/config.yaml" \
+    && grep -Eq '^    password: [^ ]' "$cf150/staged-home/.hermes/config.yaml" \
+    && [ "$cf150_mode" = 600 ] && [ -n "$cf150_secret" ] \
+    && ! printf '%s' "$out" | grep -Fq -- "$cf150_secret"; then
+    say "  PASS  layer 20 staged a non-empty basic_auth block and a mode $cf150_mode password file, secret never printed"
+  else
+    say "  FAIL  layer 20 did not stage the block (exit $rc, mode ${cf150_mode:-missing})"; fails=$((fails+1))
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+
+  # ARM C: the gate is satisfied by what the staging step wrote — the refusal is gone and the
+  # adapter reaches its gateway_start PASS. The run still exits 1 on inference_key (a fresh node
+  # has no provider key yet), which is a different row from the refusal.
+  out=$(cf150_env "$cf150/staged-home" /bin/bash "$HERE/scripts/harness/install-hermes.sh" --apply 2>&1); rc=$?
+  if [ "$(printf '%s\n' "$out" | grep -Fxc '  PASS  gateway_start — /api/status -> 200')" = 1 ] \
+    && ! printf '%s\n' "$out" | grep -Fq 'refused: a public bind needs dashboard.basic_auth' \
+    && [ "$(cat "$cf150/launch" 2>/dev/null)" = 'serve launch reached' ]; then
+    say "  PASS  staged home: gateway_start PASSes, no refusal row, serve launched (exit $rc is inference_key)"
+  else
+    say "  FAIL  the staged home still refuses the public bind (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out" | grep -E 'PASS|FAIL' | tail -4 | sed 's/^/    | /'
+  fi
+
+  # ARM D: a dashboard block the producer cannot reconcile is a FAIL row the parent COUNTS, so
+  # NODE: FAIL (n) stays truthful, and the node's own config is left untouched.
+  out=$(cf150_env "$cf150/conflict-home" /bin/bash "$cf150/tree/scripts/project-node.sh" \
+    --apply --project fixture --layers 20 2>&1); rc=$?
+  if [ "$rc" -eq 1 ] \
+    && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL  gateway_auth — could not stage dashboard.basic_auth in ')" = 1 ] \
+    && printf '%s\n' "$out" | grep -Fxq 'NODE: FAIL (1)' \
+    && [ "$(cat "$cf150/conflict-home/.hermes/config.yaml")" = "$(printf 'dashboard:\n  theme: dark')" ]; then
+    say "  PASS  a dashboard block without basic_auth -> one counted FAIL row, NODE: FAIL (1), config untouched"
+  else
+    say "  FAIL  the unreconcilable dashboard block was not a counted FAIL (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+  unset -f cf150_env
+else
+  say "  FAIL  CF-150 fixture setup (stdlib Python required)"; fails=$((fails+1))
+fi
+rm -rf "$cf150"
+# END gateway-basic-auth
 
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

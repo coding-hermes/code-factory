@@ -437,6 +437,64 @@ fi
 # ---------------------------------------------------------------- 20 harness
 if in_scope 20; then
   say "[20] harness"
+  # CF-150: this layer asks the adapter to start a PUBLIC bind, and the adapter refuses that
+  # bind unless ~/.hermes/config.yaml parses to a non-empty dashboard.basic_auth
+  # (install-hermes.sh:check_public_bind_auth; the refusal row is emitted at the gate). No
+  # stage in the create path wrote that block, so the documented path could print every other
+  # row and still end NODE: FAIL. Stage it HERE, before the adapter runs, through the one
+  # producer that knows the block's shape (scripts/node_gateway_auth.py, staged by
+  # node-create.sh): the password is generated on the node, stored in a mode-600 file, and
+  # never printed, never passed in argv.
+  if [ "$HARNESS" = hermes ]; then
+    gw_config="$HOME/.hermes/config.yaml"
+    gw_pass="$STATE/auth/gateway.pass"
+    if [ "$MODE" = apply ]; then
+      if [ ! -r "$HERE/node_gateway_auth.py" ]; then
+        bad "gateway_auth" "stager missing: $HERE/node_gateway_auth.py — nothing can write dashboard.basic_auth, so the gateway gate will refuse the public bind"
+      else
+        gw_dir="${gw_pass%/*}"
+        mkdir -p "$gw_dir" 2>/dev/null && chmod 700 "$gw_dir" 2>/dev/null
+        # An existing basic_auth block is left untouched (second run changes nothing); a
+        # dashboard block that is NOT basic_auth is refused by the producer, not overwritten.
+        if gw_out=$(python3 "$HERE/node_gateway_auth.py" "$gw_config" "$gw_pass" 2>&1); then
+          gw_mode=$(stat -c '%a' "$gw_pass" 2>/dev/null || true)
+          if [ "$gw_mode" = 600 ]; then
+            ok "gateway_auth" "dashboard.basic_auth present in $gw_config; password in $gw_pass (mode $gw_mode, value not printed)"
+          else
+            bad "gateway_auth" "$gw_pass mode ${gw_mode:-unreadable} — a gateway password file must be mode 600"
+          fi
+        else
+          gw_rc=$?
+          bad "gateway_auth" "could not stage dashboard.basic_auth in $gw_config (exit $gw_rc): $(row_tail "$gw_out")"
+        fi
+      fi
+    else
+      # --check is read-only: no secret is generated and nothing is written. The adapter's
+      # parser stays the authority; this row only says whether --apply has work to do, and an
+      # absent block is a FAIL because the consequence is a refused gateway. Read with shell
+      # builtins only — this layer still runs under section 2's empty PATH.
+      gw_present=0 gw_block=0
+      if [ -r "$gw_config" ]; then
+        while IFS= read -r gw_line || [ -n "$gw_line" ]; do
+          case "$gw_line" in
+            ''|'#'*) : ;;
+            "dashboard:"*) gw_block=1 ;;
+            [[:space:]]*)
+              if [ "$gw_block" = 1 ] && [[ "$gw_line" =~ ^[[:space:]]+basic_auth: ]]; then
+                gw_present=1
+              fi
+              ;;
+            *) gw_block=0 ;;
+          esac
+        done < "$gw_config"
+      fi
+      if [ "$gw_present" = 1 ]; then
+        ok "gateway_auth" "dashboard.basic_auth present in $gw_config (presence only — the adapter's gate is the authority)"
+      else
+        bad "gateway_auth" "dashboard.basic_auth absent from $gw_config — the gateway gate will refuse a public bind; --apply stages the block (CF-150)"
+      fi
+    fi
+  fi
   inst="$HERE/harness/install-$HARNESS.sh"
   if [ ! -x "$inst" ]; then
     bad "harness:$HARNESS" "no adapter at scripts/harness/install-$HARNESS.sh"

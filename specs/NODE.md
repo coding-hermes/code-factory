@@ -38,7 +38,7 @@ reason the object exists: the paths belong upstream, not in the node's tree.
 |---|---|---|
 | 00 preflight | arch, disk ≥ floor, memory, and HTTP 200 from the only two endpoints this layer probes — `$CRIER_URL/health` and `https://pypi.org/simple/` (`scripts/project-node.sh:190`). Each is requested with the method that measures it: `https://pypi.org/simple/` with **HEAD**, because the index is ~48 MB and a GET under an 8 s budget reports `000` on a healthy link (measured on `cf-node` 2026-11-05 — GET `000` after 44 MB received, HEAD `200` in 0.29 s); `$CRIER_URL/health` with **GET**, because a HEAD against that GET-only handler answers `405`, which is a method verdict and not a reachability fault (same host, same tick). With `CRIER_URL` unset the reach block is skipped entirely and the layer prints `FAIL crier_url` instead of two probe rows. Reachability to a Go module proxy is **not** measured by this layer: it probes these two endpoints only. The Go proxy is graded one layer later — layer 10 resolves the pinned `rsc.io/quote@v1.5.2` through the node's own `GOPROXY` when the kind set includes Go (`scripts/project-node.sh`, `go_proxy_row`), which supersedes the CF-164 statement that `GOPROXY` / `GOPRIVATE` appeared nowhere under `scripts/` (CF-218) | — |
 | 10 base | the toolchain the project **kind** needs — `go`: `scripts/install-go.sh` installs the digest-pinned `go1.26.5` user-space archive during `--apply`, reads that binary's `go version` back, and resolves `rsc.io/quote@v1.5.2` through the node's own `GOPROXY` with a cold `GOMODCACHE`, `GOTOOLCHAIN=local`, `GOSUMDB=off`, empty `GOFLAGS`, and a 30 s timeout; `--check` remains read-only and names the absent Go binary as a failure; `rust`: `cargo --version` read back; `node`: `node --version` read back; `python`: `python3` + `venv` — plus the fixed base set (`python3`, `git`, `curl`, `tar`, `sha256sum`) and WARN-only `jq`/`rg`. The kind set comes from evidence, first hit wins, and the `kinds` row names which evidence produced it: **(a)** `--kinds <csv>` / `NODE_KINDS` (`go,rust,node,python,generic`), validated before any layer runs — an empty or unknown element is a named `FAIL kinds` and exits 1; **(b)** the workspace `$HOME/repo` when a clone is already present (`go.mod`→go, `Cargo.toml`→rust, `package.json`→node, `pyproject.toml`\|`setup.py`→python); **(c)** the generic fallback, which the layer **prints as a fallback** (`WARN kinds — generic fallback …`) instead of silently grading the old fixed list. `node` keeps its pre-CF-218 WARN shape only in that fallback; once `node` is a declared or derived kind its absence is `FAIL tool:node`. The layer prints its own census command — `bash scripts/project-node.sh --check --project <p> --layers 10`, one node per run — so the fleet counts it was written against can be re-measured: 61 distinct repo origins, go 27, node 22, python 16, rust 5 (CF-218, CF-219) | preflight |
-| 20 harness | the harness binary plus the adapter's own gate rows, printed verbatim (`python`, `binary`, `version`, `port`, `inference_key`, and `gateway_start` when that block runs); `gateway_start` is a refusal on any node whose `~/.hermes/config.yaml` does not parse to a non-empty `dashboard.basic_auth` username and password (`scripts/harness/install-hermes.sh:119–266`) | base |
+| 20 harness | the harness binary plus the adapter's own gate rows, printed verbatim (`python`, `binary`, `version`, `port`, `inference_key`, and `gateway_start` when that block runs); `gateway_start` is a refusal on any node whose `~/.hermes/config.yaml` does not parse to a non-empty `dashboard.basic_auth` username and password (`scripts/harness/install-hermes.sh:119–266`). Before the adapter runs, this layer stages that block through `scripts/node_gateway_auth.py` (`--apply`) or reports whether it is already there (`--check`; read-only, and an absent block is a FAIL because the consequence is a refused gateway). The password is generated on the node into `$HOME/.node/auth/gateway.pass`, mode 600, and is never printed or passed in argv (CF-150) | base |
 | 30 bus | a crier identity file at `$HOME/.node/crier.json` and its mode 600 | harness |
 | 40 repo | the repo cloned at a pinned ref, and the checkout measured against `origin/main` by `scripts/node_freshness.py` (or its node-side fallback): branch, HEAD, ancestry, lag, uncommitted paths (`scripts/project-node.sh`, `freshness_measure`) | base |
 | 90 verify | the node manifest (`$HOME/.node/node.json`), written only when every layer passed | all |
@@ -46,18 +46,22 @@ reason the object exists: the paths belong upstream, not in the node's tree.
 Three capabilities that the design describes are **not** established by any shipped layer, and this
 table no longer claims them:
 
-- **A started gateway on a freshly created node.** Layer 20 runs the adapter with `--apply`
-  (`scripts/project-node.sh:228`), and the adapter starts `hermes serve` only when
-  `~/.hermes/config.yaml` already parses to a non-empty `dashboard.basic_auth` username and password
+- **A started gateway on a freshly created node — the gate is satisfied, the start is not
+  certified.** Layer 20 runs the adapter with `--apply`, and the adapter starts `hermes serve` only
+  when `~/.hermes/config.yaml` parses to a non-empty `dashboard.basic_auth` username and password
   (`scripts/harness/install-hermes.sh:119–266`, gate at `:351–369`); otherwise it prints
   `FAIL gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml`.
-  No shipped stage writes that file — `scripts/node-create.sh --staged-files` prints seven files
-  (`project-node.sh`, `install-go.sh`, `lib.sh`, `disk_floor.py`, `reclaim_disk.py`,
-  `harness/harness-vars.sh`, `harness/install-hermes.sh`) and
-  no `config.yaml`, and no script under `scripts/` redirects into it — so on a node created by
-  `scripts/node-create.sh` layer 20 ends `HERMES: FAIL (n)`, the ladder ends `NODE: FAIL (n)`, and
-  `NODE: PASS` is unreachable. Whether a bunker agent image already ships that file is **not
-  measured** by this repo. CF-150 owns the create-path fix; it is the source of this cell.
+  The create path now WRITES that block instead of assuming it: `scripts/node-create.sh
+  --staged-files` stages eight files — `project-node.sh`, `install-go.sh`, `lib.sh`,
+  `disk_floor.py`, `reclaim_disk.py`, `node_gateway_auth.py`, `harness/harness-vars.sh` and
+  `harness/install-hermes.sh` — and layer 20 runs `node_gateway_auth.py` before the adapter, which
+  writes the block and a mode-600 `$HOME/.node/auth/gateway.pass` on the node, the password never
+  printed and never in argv (CF-150). What that is worth is measured against a fixture, not a live
+  node: `tests/selftest.sh` §55 shows the same adapter printing the refusal above and never
+  launching `serve` without the block, and `PASS gateway_start — /api/status -> 200` with it. No
+  created node has run this ladder since the change, and `NODE: PASS` still needs every row,
+  including the `inference_key` this repo cannot supply. Whether a bunker agent image already ships
+  that file is **not measured** by this repo.
 - **A node-side bus worker.** Layer 30 starts and checks no process and opens no socket:
   `scripts/project-node.sh:244-249` tests `-f $STATE/crier.json`, then `stat -c '%a'` against `600`,
   and prints `crier_identity` / `crier_mode`. Whether a worker is running on the node is unmeasured

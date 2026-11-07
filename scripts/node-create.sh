@@ -23,8 +23,10 @@ LIST_STAGED=0 SPAWNED=0
 
 staged_files() {
   local file source line ref base rest
+  # node_gateway_auth.py is here because project-node.sh layer 20 runs it: the harness adapter
+  # refuses a public bind without dashboard.basic_auth, and no other stage writes it (CF-150).
   local -a staged=(project-node.sh install-go.sh lib.sh disk_floor.py reclaim_disk.py
-                   harness/harness-vars.sh "harness/install-$HARNESS.sh")
+                   node_gateway_auth.py harness/harness-vars.sh "harness/install-$HARNESS.sh")
   local pattern='\$HERE/([a-zA-Z0-9_./$-]+)'
   for file in "${staged[@]}"; do
     [ -f "$HERE/$file" ] || { bad "staged_set" "missing scripts/$file" >&2; return 1; }
