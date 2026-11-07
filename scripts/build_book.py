@@ -26,14 +26,16 @@ from __future__ import annotations
 import argparse
 import pathlib
 import re
+import subprocess
 import sys
+import time
 
 import yaml
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import fitz  # pymupdf — also sheet_style's renderer-side dependency  # noqa: E402
-from gen_nasa_handbook import md_blocks  # noqa: E402
+from gen_nasa_handbook import inline, md_blocks  # noqa: E402
 from sheet_style import CSS_PORTRAIT as CSS, cover, dochead, print_pdf, stamp  # noqa: E402
 import handbook_lint  # noqa: E402
 
@@ -47,7 +49,7 @@ IMG_RE = re.compile(r"^!\[([^\]]*)\]\((figures/[^)]+\.svg)\)\s*$")
 FIT_LIMIT_MM = 276
 
 EXTRA_CSS = (
-    "table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:4px 8px;"
+    "table{border-collapse:collapse;width:100%}td,th{border:1pt solid #000;padding:4px 8px;"
     "font-size:12px;text-align:left}"
     ".gap{color:#000;font-weight:700}"
     ".tbl-cont{font-family:'Helvetica Neue',Arial,sans-serif;font-size:6.5pt;"
@@ -80,6 +82,19 @@ PAGINATE_JS = """
     var hd = pg.querySelector('.dochead');
     return hd ? hd.cloneNode(true) : null;
   }
+  function makePage(pg) {
+    var np = document.createElement('div');
+    np.className = 'page';
+    var hd = cloneHead(pg);
+    if (hd) np.appendChild(hd);
+    // the thumb tab travels with the sheet: every page of a part carries it
+    var tab = pg.querySelector('.tab');
+    if (tab) np.appendChild(tab.cloneNode(true));
+    return np;
+  }
+  // every continuation opened, so a post-pagination pass can print real unit
+  // counts ('units a–b of N') once each table chain's final row distribution is known
+  var LINKS = [];
   function contentKids(el) {
     var a = [];
     for (var c = el.firstChild; c; c = c.nextSibling)
@@ -151,19 +166,14 @@ PAGINATE_JS = """
   function bottomIn(pg, el) {
     return el.getBoundingClientRect().bottom - pg.getBoundingClientRect().top;
   }
-  function makePage(pg) {
-    var np = document.createElement('div');
-    np.className = 'page';
-    var hd = cloneHead(pg);
-    if (hd) np.appendChild(hd);
-    return np;
-  }
-  function openCont(np, tbl) {
+  function openCont(np, tbl, firstUnit) {
     var cont = document.createElement('p');
     cont.className = 'tbl-cont';
     cont.textContent = 'Table continues';
     np.appendChild(cont);
     var nt = document.createElement('table');
+    // a continuation inherits its source table's identity (reg -> register placard)
+    if (tbl.className) nt.className = tbl.className;
     var cg = tbl.querySelector('colgroup');
     if (cg) nt.appendChild(cg.cloneNode(true));
     nt.style.tableLayout = 'fixed';
@@ -172,6 +182,7 @@ PAGINATE_JS = """
     var tb = document.createElement('tbody');
     nt.appendChild(tb);
     np.appendChild(nt);
+    LINKS.push({ src: tbl, cont: nt, plac: cont, first: firstUnit });
     return tb;
   }
   function splitPage(pg) {
@@ -213,16 +224,18 @@ PAGINATE_JS = """
         for (k = kidIdx; k < kids.length; k++) units.push({ kid: kids[k] });
       } else {
         for (k = cutRow; k < straddleTbl.rows.length; k++)
-          units.push({ kid: straddleTbl, row: straddleTbl.rows[k] });
+          units.push({ kid: straddleTbl, row: straddleTbl.rows[k],
+                       idx: k - (straddleTbl.tHead ? straddleTbl.tHead.rows.length : 0) });
         for (k = kidIdx + 1; k < kids.length; k++) units.push({ kid: kids[k] });
       }
       var np = makePage(pg);
       tail.parentNode.insertBefore(np, tail.nextSibling);
       tail = np;
       if (wholeTable) {
-        // a "table continues" placard travels with the table it belongs to
+        // a "table continues" placard / TABLE code caption travels with the table it belongs to
         if (kidIdx > 0 && kids[kidIdx - 1].classList &&
-            kids[kidIdx - 1].classList.contains('tbl-cont'))
+            (kids[kidIdx - 1].classList.contains('tbl-cont') ||
+             kids[kidIdx - 1].classList.contains('tbl-cap')))
           np.appendChild(kids[kidIdx - 1]);
         for (k = 0; k < units.length; k++) np.appendChild(units[k].kid);
         cur = np;
@@ -253,7 +266,7 @@ PAGINATE_JS = """
           var placedRow = false;
           while (!placedRow) {
             var freshPage = !contentKids(target).length;
-            if (un.kid !== lastKid) { tb = openCont(target, un.kid); lastKid = un.kid; }
+            if (un.kid !== lastKid) { tb = openCont(target, un.kid, un.idx); lastKid = un.kid; }
             tb.appendChild(un.row);
             if (h(target) <= MAX) { placedRow = true; break; }
             if (freshPage) break; // a row taller than any sheet — accept
@@ -288,7 +301,7 @@ PAGINATE_JS = """
                 var placedR = false;
                 while (!placedR) {
                   var freshPage3 = !contentKids(target).length;
-                  if (kd !== lastKid) { tb = openCont(target, kd); lastKid = kd; }
+                  if (kd !== lastKid) { tb = openCont(target, kd, ri - bodyStart); lastKid = kd; }
                   tb.appendChild(rrow);
                   if (h(target) <= MAX) { placedR = true; break; }
                   if (freshPage3) break; // monster row — accept
@@ -318,6 +331,39 @@ PAGINATE_JS = """
     var g = 0;
     while (np && h(np) > MAX && g++ < 10) np = splitPage(np);
   }
+
+  // --- continuation placards: real unit counts ---------------------------------
+  // Run AFTER all pagination: only then is each source table's row distribution
+  // across its continuation tables final. Units are body rows, numbered in
+  // reading order across the chain (source first, continuations in order).
+  var groups = [];
+  LINKS.forEach(function (L) {
+    if (!L.cont.isConnected) return; // dismantled continuation frame
+    var g2 = null;
+    for (var i2 = 0; i2 < groups.length; i2++)
+      if (groups[i2].src === L.src) { g2 = groups[i2]; break; }
+    if (!g2) { g2 = { src: L.src, conts: [] }; groups.push(g2); }
+    g2.conts.push(L);
+  });
+  groups.forEach(function (g2) {
+    function bodyRows(t) {
+      return t.rows.length - (t.tHead ? t.tHead.rows.length : 0);
+    }
+    var chain = [g2.src];
+    g2.conts.forEach(function (L) { chain.push(L.cont); });
+    var total = 0;
+    chain.forEach(function (t) { total += bodyRows(t); });
+    var done = 0;
+    g2.conts.forEach(function (L) {
+      var n = bodyRows(L.cont);
+      if (n <= 0) return;
+      var a = done + 1, b = done + n;
+      done = b;
+      var label = L.cont.classList.contains('reg')
+        ? 'Contract register continues' : 'Table continues';
+      L.plac.textContent = label + ' \u2014 units ' + a + '\u2013' + b + ' of ' + total;
+    });
+  });
 })();
 """
 
@@ -333,7 +379,13 @@ def svg_fit(path: pathlib.Path) -> str:
 
 
 def body_blocks(text: str) -> tuple[list[str], list]:
-    """Markdown -> block list; ![alt](figures/x.svg) lines are pulled out to become their own sheets."""
+    """Markdown -> block list; two pulls happen before the generic block walker:
+
+    - ![alt](figures/x.svg) lines become their own sheets (returned separately);
+    - a markdown blockquote opening 'NOTE:'/'CAUTION:'/'WARNING:' becomes a genre
+      notice block (black left band + caps label) instead of prose. Other quotes,
+      if any ever appear, fall through to the paragraph walker untouched.
+    """
     kept, figs = [], []
     for line in text.splitlines():
         m = IMG_RE.match(line.strip())
@@ -342,7 +394,35 @@ def body_blocks(text: str) -> tuple[list[str], list]:
             figs.append(p if p.exists() else None)
         else:
             kept.append(line)
-    return md_blocks(kept), figs
+    blocks: list[str] = []
+    buf: list[str] = []
+
+    def flush() -> None:
+        if buf:
+            blocks.extend(md_blocks(buf))
+            buf.clear()
+
+    i, n = 0, len(kept)
+    while i < n:
+        if kept[i].lstrip().startswith(">"):
+            grp = []
+            while i < n and kept[i].lstrip().startswith(">"):
+                grp.append(re.sub(r"^\s*>\s?", "", kept[i]))
+                i += 1
+            m = re.match(r"(NOTE|CAUTION|WARNING)\s*:\s*(.+)", " ".join(grp).strip())
+            if m:
+                flush()
+                blocks.append(
+                    f'<div class="notice"><span class="lbl">{m.group(1)}</span>'
+                    f'<span class="txt">{inline(m.group(2))}</span></div>'
+                )
+                continue
+            buf.extend(f"> {g}" for g in grp)
+            continue
+        buf.append(kept[i])
+        i += 1
+    flush()
+    return blocks, figs
 
 
 def main() -> int:
@@ -365,7 +445,65 @@ def main() -> int:
     # Figure codes live in BOOK.yaml, not in filenames: one id resolves to one object.
     fig_codes = {str(f["file"]): str(f["code"]) for f in book.get("figures", [])}
 
-    sheets: list[tuple[str, list[str]]] = []  # (dochead section, html blocks)
+    sheets: list[tuple[str, list[str], str]] = []  # (dochead section, html blocks, tab html)
+
+    # --- S2b thumb tabs: a 3-letter code per part, stepped down the page edge ----
+    PART_TAB = {"FM": "FMD", "I": "ARR", "II": "FLW", "III": "MOD",
+                "IV": "REG", "V": "SET", "VI": "RSK", "VII": "WRK", "VIII": "DLV"}
+
+    def tab_html(p_id: str, p_idx: int) -> str:
+        code = PART_TAB.get(p_id)
+        if not code:
+            return ""
+        top = 22 + (p_idx % 9) * 16  # mm; dictionary-style stepped position per part
+        return f'<div class="tab" style="top:{top}mm">{code}</div>'
+
+    # --- S2c change bars: files edited after the folio issue date ----------------
+    issue_epoch = time.mktime(time.strptime(today, "%Y-%m-%d"))
+
+    def changed_since_issue(f: pathlib.Path) -> bool:
+        if f.stat().st_mtime > issue_epoch:  # uncommitted working-tree edits
+            return True
+        try:
+            out = subprocess.run(
+                ["git", "-C", str(ROOT), "log", "-1", "--format=%at", "--", str(f)],
+                capture_output=True, text=True,
+            ).stdout.strip()
+            return bool(out) and int(out) > issue_epoch
+        except (ValueError, OSError):
+            return False
+
+    def mark_changed(blocks: list[str]) -> list[str]:
+        out = []
+        for b in blocks:
+            for tag in ("p", "pre", "ul", "ol"):
+                if b.startswith(f"<{tag}>"):
+                    b = b.replace(f"<{tag}>", f'<{tag} class="chg">', 1)
+                    break
+            out.append(b)
+        return out
+
+    # --- S1 table codes: TABLE x.y-n, assigned mechanically from the manifest ----
+    counters: dict[tuple[str, int], int] = {}
+
+    def code_tables(blocks: list[str], x: str, y: int, reg: bool) -> list[str]:
+        out = []
+        head = ""
+        for b in blocks:
+            mh = re.match(r"^<h[123]>(.*)</h[123]>$", b, re.S)
+            if mh:
+                head = re.sub(r"<[^>]+>", "", mh.group(1)).strip()
+            if b.startswith("<table"):
+                n = counters.get((x, y), 0) + 1
+                counters[(x, y)] = n
+                cap = f"TABLE {x}.{y}-{n}"
+                if head:
+                    cap += f" — {head}"
+                out.append(f'<div class="tbl-cap">{cap}</div>')
+                if reg:
+                    b = b.replace("<table>", '<table class="reg">', 1)
+            out.append(b)
+        return out
 
     rows = ""
     for p in book["parts"]:
@@ -375,20 +513,25 @@ def main() -> int:
     sheets.append(("CONTENTS",
                    [f"<h1>CONTENTS</h1>"
                     f"<table><thead><tr><th>Part</th><th>Title</th><th>State</th></tr>"
-                    f"</thead><tbody>{rows}</tbody></table>"]))
+                    f"</thead><tbody>{rows}</tbody></table>"], tab_html("FM", 0)))
 
-    for p in book["parts"]:
+    for p_idx, p in enumerate(book["parts"]):
+        tab = tab_html(p["id"], p_idx)
         if not p["files"]:
             sheets.append((f"PART {p['id']}",
                            [f"<h1>PART {p['id']} — {p['title']}</h1>",
                             "<p class='gap'>NOT WRITTEN. This sheet exists so the gap is visible in "
-                            "the bound book rather than invisible in the file tree.</p>"]))
+                            "the bound book rather than invisible in the file tree.</p>"], tab))
             continue
-        for rel in p["files"]:
+        # the owning code x.y: x = part prefix (or part id), y = the module number
+        # for chapters/M<n>, else the file's 1-based position within the part
+        x = str(p.get("prefix", p["id"]))
+        for f_idx, rel in enumerate(p["files"], 1):
             f = HB / rel
             if not f.exists():
                 sheets.append(("BUILD ERROR",
-                               [f"<h1>BUILD ERROR</h1><p>{rel} is in the manifest and not on disk.</p>"]))
+                               [f"<h1>BUILD ERROR</h1><p>{rel} is in the manifest and not on disk.</p>"],
+                               tab))
                 continue
             # A module chapter opens with its own centered view: the hero figure sheet is
             # mounted BEFORE the chapter text, coded <part prefix>.<n> from the manifest
@@ -396,24 +539,30 @@ def main() -> int:
             mmod = re.match(r"chapters/M(\d+)-", rel)
             if mmod:
                 n = mmod.group(1)
+                y = int(n)
                 hero = HB / f"figures/module-M{n}.svg"
                 code = f"{p.get('prefix', p['id'])}.{n}"
                 if hero.exists():
                     sheets.append((f"PART {p['id']} · FIGURE {code}",
                                    [f"<h2>FIGURE {code} — MODULE M{n} CENTERED VIEW — as of {today}</h2>",
-                                    svg_fit(hero)]))
+                                    svg_fit(hero)], tab))
                 else:
                     sheets.append(("BUILD ERROR",
                                    [f"<h1>BUILD ERROR</h1><p>figures/module-M{n}.svg is the "
-                                    f"centered view of {rel} and is not on disk.</p>"]))
+                                    f"centered view of {rel} and is not on disk.</p>"], tab))
+            else:
+                y = f_idx
             blocks, figs = body_blocks(f.read_text())
-            sheets.append((f"PART {p['id']} · {p['title'].upper()}", blocks))
+            blocks = code_tables(blocks, x, y, reg=(rel == "parts/IV-contract-register.md"))
+            if changed_since_issue(f):
+                blocks = mark_changed(blocks)
+            sheets.append((f"PART {p['id']} · {p['title'].upper()}", blocks, tab))
             for fig in figs:  # one figure per sheet, hero-sized, caption carries the snapshot date
                 if fig is None:
                     continue
                 code = fig_codes.get(str(fig.relative_to(HB)), fig.stem.upper())
                 sheets.append((f"PART {p['id']} · FIGURE {code}",
-                               [f"<h2>FIGURE {code} — as of {today}</h2>", svg_fit(fig)]))
+                               [f"<h2>FIGURE {code} — as of {today}</h2>", svg_fit(fig)], tab))
 
     # The .page container is what makes overflow measurable (skill: without it the fit
     # script no-ops and every page is silently unconstrained). The cover is its own page
@@ -423,8 +572,8 @@ def main() -> int:
     cover_html = cover(doc_id, doc["title"], doc["subtitle"],
                        (f"ISSUE {today}", doc["classification"], doc["scope"].strip()))
     pages_html = (f'<div class="page">{cover_html}</div>'
-                  + "".join(f'<div class="page">{dochead(doc_id, s, title=title)}'
-                            f'{chr(10).join(b)}</div>' for s, b in sheets))
+                  + "".join(f'<div class="page">{dochead(doc_id, s, title=title)}{t}'
+                            f'{chr(10).join(b)}</div>' for s, b, t in sheets))
     html_doc = (f"<!doctype html><html><head><meta charset='utf-8'><style>{CSS}"
                 f"{EXTRA_CSS}</style></head><body>{pages_html}"
                 f"<script>{PAGINATE_JS}</script></body></html>")
@@ -432,7 +581,30 @@ def main() -> int:
     out_html = pathlib.Path(a.out).with_suffix(".html")
     out_html.write_text(html_doc)
     print_pdf(out_html, a.out)
-    stamp(a.out, doc_id, right=f"issue {today}")
+
+    # per-page subsystem name for the footer: each rendered page's own running head
+    # names the part/section it belongs to (continuations clone it). The head is
+    # letter-spaced, so extraction can inject spaces between characters — match by
+    # whitespace-stripped section text against the builder's own sheet sections.
+    probe = fitz.open(a.out)
+    sec_compact = [(s, re.sub(r"\s+", "", s)) for s, _, _ in sheets]
+    # longest section name first: a short section that is a prefix of a longer one
+    # (e.g. "PART III" vs "PART III · FIGURE 3.5") must not win the suffix match
+    sec_compact.sort(key=lambda t: -len(t[1]))
+    subsys: list[str] = []
+    for i, pg in enumerate(probe, 1):
+        name = ""
+        if i > 1:
+            top = re.sub(r"\s+", "", " ".join(
+                b[4] for b in pg.get_text("blocks") if b[1] < 80))
+            for s, comp in sec_compact:
+                if comp and comp in top:
+                    name = s
+                    break
+        subsys.append(name)
+    probe.close()
+
+    stamp(a.out, doc_id, right=f"issue {today}", footer=f"change {today}", subsys=subsys)
 
     # Furniture check: every page after the cover must carry the running head in its top
     # band (the stamp's doc number sits in the footer band and does not count) — a page
@@ -462,8 +634,45 @@ def main() -> int:
     if bad:
         print(f"FIT FAIL on {len(bad)} page(s), first: page {bad[0][0]} body ends {bad[0][1]} mm (limit 275)")
         return 2
+
+    # W7 furniture gates: table codes, thumb tabs, genre notices, ink.
+    all_text = "".join(pg.get_text() for pg in pdf)
+    no_tab = []
+    grey = []
+    for i, pg in enumerate(pdf, 1):
+        if i == 1:
+            continue
+        w = pg.rect.width
+        near_edge = [d for d in pg.get_drawings()
+                     if d.get("fill") == (0, 0, 0) and d["rect"].x1 > w - 2.5
+                     and (d["rect"].x1 - d["rect"].x0) < 20]
+        if not near_edge:
+            no_tab.append(i)
+        for d in pg.get_drawings():
+            for key in ("color", "fill"):
+                c = d.get(key)
+                if c and all(abs(v - 0.6) < 0.02 for v in c):
+                    grey.append((i, key))
+                    break
+    table_codes = re.findall(r"TABLE [A-Z0-9]+\.\d+-\d+", all_text)
+    notices = len(re.findall(r"\b(?:NOTE|CAUTION|WARNING)\b", all_text))
+    placards = len(re.findall(r"units \d+[–-]\d+ of \d+", all_text, re.I))
+    if len(table_codes) <= 100:
+        print(f"FURNITURE FAIL: {len(table_codes)} TABLE x.y-n codes in the book (need >100)")
+        return 2
+    if no_tab:
+        print(f"FURNITURE FAIL: pages without a thumb tab: {no_tab[:8]}")
+        return 2
+    if notices < 1:
+        print("FURNITURE FAIL: no NOTE/CAUTION/WARNING block rendered")
+        return 2
+    if grey:
+        print(f"FURNITURE FAIL: {len(grey)} #999999 stroke/fill drawing(s), first: {grey[0]}")
+        return 2
     print(f"OK {a.out} ({pathlib.Path(a.out).stat().st_size} bytes) · {pdf.page_count} pages · "
-          f"dochead + folio on every page · fit clean")
+          f"dochead + folio on every page · fit clean · "
+          f"{len(table_codes)} table codes · {placards} continuation unit counts · "
+          f"{notices} notice labels · tabs on all pages · zero #999999 strokes")
     return 0
 
 

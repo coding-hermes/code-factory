@@ -43,6 +43,10 @@ def main() -> int:
         "close it — a register that reads as complete while half its wires are one-sided is worse",
         "than an honest gap.",
         "",
+        "> CAUTION: a row whose State reads PROVEN while its sender guarantee or receiver",
+        "> requirement reads RED is self-contradictory — one side is measured, the other is not.",
+        "> Treat such a row as UNVERIFIED until both sides carry citations.",
+        "",
         "| id | from → to | carries | mode | state |",
         "|---|---|---|---|---|",
     ]
