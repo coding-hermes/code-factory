@@ -30,6 +30,7 @@ from pathlib import Path
 ROOT = Path("/home/kara/code-factory")
 HB = ROOT / "docs" / "handbook"
 PANEL = HB / "_panel"
+CH = HB / "chapters"
 FANOUT = Path("/home/kara/.hermes/cache/scratch/cf-quorum-20261104/quorum_fanout_staggered.sh")
 MANIFEST = Path("/home/kara/.hermes/cache/scratch/cf-quorum-20261104/seats.manifest")
 
