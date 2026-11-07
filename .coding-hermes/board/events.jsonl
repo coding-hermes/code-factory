@@ -524,3 +524,6 @@
 {"id": 524, "timestamp": "2026-11-07T13:02:41+00:00", "event_type": "task_completed", "task_id": "CF-259", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
 {"id": 525, "timestamp": "2026-11-07T14:37:57+00:00", "event_type": "task_completed", "task_id": "CF-275", "actor": "foreman", "detail": "{\"status\":\"complete\"}"}
 {"id": 526, "timestamp": "2026-11-07T14:38:07+00:00", "event_type": "task_created", "task_id": "CF-382", "actor": "foreman", "detail": "{\"id\":\"CF-382\",\"status\":\"pending\"}"}
+{"id": 527, "timestamp": "2026-11-07T15:33:15+00:00", "event_type": "task_created", "task_id": "CF-383", "actor": "foreman", "detail": "{\"id\":\"CF-383\",\"status\":\"pending\"}"}
+{"id": 528, "timestamp": "2026-11-07T15:33:21+00:00", "event_type": "task_updated", "task_id": "CF-383", "actor": "foreman", "detail": "{\"status\":\"in_progress\"}"}
+{"id": 529, "timestamp": "2026-11-07T15:33:21+00:00", "event_type": "audit", "task_id": "CF-383", "actor": "foreman", "detail": "selected for tick code-factory-2026-11-07-12-48-51; dispatched to a worker (deepseek-v4-flash/deepseek-foreman). Reproduced the tier-1 secrets false positive at HEAD f10d625: gitleaks detect --no-git reports 1 private-key finding in tests/__pycache__/test_node_provisioning.cpython-314.pyc; allowlist probe makes it clean."}
