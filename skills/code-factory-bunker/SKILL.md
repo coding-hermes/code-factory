@@ -257,7 +257,7 @@ Refusals, in the order they are decided — none of them runs anything:
 `signing_key` | the key file is absent, world-readable, encrypted, not PKCS#8 or not ed25519 | the node cannot sign; **do not invent a key and do not borrow another agent's** |
 `bus_bearer` | neither the token file nor `CRIER_AUTH_TOKEN` supplies a token | a signature alone is still a 401 |
 `bus_health` | `/health` answers `000` | the URL, or the route to it, is the problem |
-`brief_digest` | `brief.digest` ≠ sha256(`text`) | the brief was altered in flight: refused, result posted, message acked |
+`brief_digest` | `brief.digest` ≠ cf-brief-v1 (sha256 over the canonical object of `text` + `gate` + `repo` + `ref` + `workdir` + `vars`), OR a legacy text-only `sha256(text)` beside a `gate`, OR a `gate` with no digest | the brief — or its executable `gate.cmd` — was altered in flight and is unbound: refused, result posted, message acked |
 `brief_project` | the dispatch names another project | the bus routed a directive to the wrong bunker |
 `brief_workdir` | the dispatch names a workdir outside the clone | refused; this node writes only inside its clone and `$HOME` |
 

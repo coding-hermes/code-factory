@@ -139,6 +139,8 @@ Until the end-to-end path exists:
 
 Do not accept the node's self-reported digest as proof. A digest mismatch is FAIL and the node stays quarantined until investigation and a fresh passing `--check` plus round trip.
 
+**The `brief.digest` is the dispatch's trust boundary, and it sits over the executable too.** It is the node's only in-flight integrity check: crier carries bytes, the control host does not sign the dispatch body, and the node has no second way to tell an altered brief from the one that was sent. So anything the node will *execute* has to be inside the digest — `gate.cmd` above all, because `scripts/node-bus-worker.py` hands it to `/bin/sh -lc` in the clone (`run_gate()`, `scripts/node-bus-worker.py:943`). A text-only digest there is a live hole: a brief whose gate was rewritten in flight passes verification and then runs attacker-chosen shell. The contract (`specs/ENVELOPE.md`, scheme cf-brief-v1) hashes a canonical object of the decoded text, `gate`, `repo`, `ref`, `workdir` and `vars`; a legacy text-only digest is refused by the named `brief_digest` row as soon as the brief carries a gate, and a gate with **no** digest at all is refused for the same reason. The rule to keep: **a node must not execute a brief field the digest does not bind** — if a new executed member appears in the envelope, it goes into the canonical object in the same change, or the node refuses it. Run `python3 tests/test_brief_digest_binding.py` (also selftest section 57) to see both directions: a valid brief runs its gate, and the same brief with only `gate.cmd` changed is refused with the gate never starting.
+
 ## 7. Verification checklist and evidence
 
 Before admission, retain non-secret evidence with timestamps and exact measured values:

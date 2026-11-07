@@ -5234,5 +5234,39 @@ else
 fi
 # END cf006-harness-node
 
+# ch:trace row=CF-275 spec=specs/ENVELOPE.md#dispatch-control-host--node-inbox test=tests/selftest.sh::brief-digest-binding doc=docs/OPERATIONS.md prompt=none:worker-brief evidence=tests/selftest.sh::brief-digest-binding witness=none:local-fixture verdict=none:foreman-verifies commit=none:self-referential-hash memory=none:foreman-owns
+say "57. the brief digest binds every effectful field, and the pre-fix worker runs a tampered gate (CF-275)"
+# The failure this closes: brief.digest was sha256 over the directive TEXT alone while run_gate()
+# hands gate.cmd to `/bin/sh -lc` in the clone, so a brief rewritten in flight verified and then
+# executed attacker-chosen shell. The fixture asserts SIDE EFFECTS — a marker file the gate writes,
+# or does not — not intentions: six arms, four of them refusal paths. No network, no credential,
+# everything under one mktemp -d.
+cf275=$(mktemp -d)
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_brief_digest_binding.py" >"$cf275/out" 2>&1; then
+  say "  PASS  a bound text+gate+repo/ref digest runs its gate; a tampered gate.cmd, a legacy text-only digest beside a gate, and a gate with no digest are each refused without the gate starting"
+else
+  say "  FAIL  the brief digest binding on the receiving side (tests/test_brief_digest_binding.py)"
+  fails=$((fails+1))
+  sed 's/^/    | /' "$cf275/out"
+fi
+# ARM (red control): the SAME fixture against the revision this row was raised on. It must RUN the
+# altered gate; pointed at the fixed worker the control fails, so it discriminates rather than
+# merely passing.
+if git -C "$HERE" show c05880d:scripts/node-bus-worker.py > "$cf275/node-bus-worker.py" 2>/dev/null; then
+  if CF_BUS_WORKER_SOURCE="$cf275/node-bus-worker.py" CF_BRIEF_DIGEST_PREFIX_CONTROL=1 \
+       PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_brief_digest_binding.py" \
+       >"$cf275/prefix" 2>&1; then
+    say "  PASS  pre-fix c05880d runs the gate whose cmd was altered after the digest was minted (fixture detects CF-275)"
+  else
+    say "  FAIL  pre-fix control did not reproduce the tampered-gate execution"
+    fails=$((fails+1))
+    sed 's/^/    | /' "$cf275/prefix"
+  fi
+else
+  say "  FAIL  pre-fix source unavailable (git show c05880d:scripts/node-bus-worker.py)"
+  fails=$((fails+1))
+fi
+rm -rf "$cf275"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
