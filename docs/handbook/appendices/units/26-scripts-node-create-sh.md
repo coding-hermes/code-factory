@@ -376,7 +376,9 @@ unless `--staged-files`), `--repo` (empty; an empty repo is legal and means "no 
   (exit 0). `harness/harness-vars.sh` joined the set with CF-229, when the adapters began sourcing
   the shared §5 contract. The repository suite pins the same count as a literal — "same seven-file
   staged set" [tests/selftest.sh:1667] — so changing the set is a suite change too, which is part of
-  why the gap below has survived.
+  why the gap below has survived. **Corrected 2026-11-07 (CF-150):** the set is **eight** items —
+  `node_gateway_auth.py` joined it so layer 20 can stage `dashboard.basic_auth` before the harness
+  adapter — and the suite literal moved with it (`tests/selftest.sh` §35 now pins eight).
 - **CF-276 is CONFIRMED on its three legs.** (a) `docs/OPERATIONS.md:209` says of
   `scripts/node-bus-worker.py` that "it is staged by provisioning" [docs/OPERATIONS.md:209].
   (b) The staged set at [scripts/node-create.sh:23] does not contain it, the `cp` loop copies only

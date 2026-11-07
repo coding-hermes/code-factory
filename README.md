@@ -35,6 +35,24 @@ On a host with no bunker server, no Crier and no repo, all three commands reach 
 fail with the missing value named. That is the honest result on a fresh host, and every message
 tells you which value to supply.
 
+**What step 3 writes for you.** A gateway on `0.0.0.0` needs `dashboard.basic_auth` in the node's
+`~/.hermes/config.yaml`, and the create path stages it instead of leaving it to you:
+`scripts/node-create.sh` copies `node_gateway_auth.py` into the node (it is one of the files
+`--staged-files` prints), and `project-node.sh` layer 20 runs it before the harness adapter —
+
+```bash
+python3 "$HERE/node_gateway_auth.py" "$HOME/.hermes/config.yaml" "$HOME/.node/auth/gateway.pass"
+```
+
+— with `$HERE` = `~/node-scripts` on the node and `$HOME/.node/auth` created mode 700 first. The
+password is generated on the node, kept in that file at mode 600, and never printed or passed in
+argv; an existing `basic_auth` block is left untouched, so a re-run changes nothing. A freshly
+created node is expected to reach `PASS gateway_start — /api/status -> 200` from the adapter. It is
+not expected to reach `NODE: PASS` yet: `inference_key` fails until the node has its own provider
+key, and layer 30 fails until a crier identity is staged. The adapter still refuses the public bind
+by name when the block is absent — that gate is not weakened, and `tests/selftest.sh` §55 drives
+both states of it.
+
 ## Provisioning a node from a config file
 
 One project, one bunker. Every lane of a project enters through crier and lands in that project's

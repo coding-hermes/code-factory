@@ -38,7 +38,7 @@ the inbox until it expires.
 | S1 qualify the host — disk floor | `disk_floor.py` | **active** | `disk_floor.py` is invoked by `project-node.sh:173` (`python3 "$HERE/disk_floor.py" … resolve …`), not by `bunker-provision.sh` (F1-4) |
 | S1 qualify the host — bunker server | `bunker-server-install.sh` | **operator-invoked (optional)** | no invoker — `grep -rn 'bunker-server-install' scripts/ tests/` matches only its own docstring and `tests/selftest.sh:1754`; a test arm is not a lane/cron/timer/unit (grok B7 re-grade: the row previously classified both units **active** on `disk_floor.py`'s caller alone) |
 | S2 create the container + config | `bunker-provision.sh`, `bunker_config_gen.py`, `node-create.sh`, `bunker-crier-connect.sh` | **operator-invoked** | `bunker-provision.sh` is the orchestrator (probe `:175-249`) but has **no in-repo invoker** — `grep -rn 'bunker-provision' scripts/` matches `bunker-provision.sh` itself (`:2,5,6,7,178,336,522`) and `bunker_config_gen.py` (`:2,4,337,492`, docstring/description text naming the config it generates); an operator runs it (glm 2) |
-| S3 identity and bus membership | `node_identity.py`, `node_gateway_auth.py` | **active** | `node_gateway_auth.py` staged and run inside `bunker-provision.sh:483-495`; `node_identity.py` at `:518-533`; the standalone `node-create.sh` never calls it (CF-192) |
+| S3 identity and bus membership | `node_identity.py`, `node_gateway_auth.py` | **active** | `node_gateway_auth.py` staged and run inside `bunker-provision.sh:483-495`; `node_identity.py` at `:518-533`; the standalone create path now runs it too — `node-create.sh` stages the file and `project-node.sh` layer 20 runs it before the harness adapter (CF-150), which is the gap CF-192 recorded |
 | S4 seed prompts/skills/env | `node_seed.py`, `node_seed_drift.py`, `node_env.py` | **active** | `node_seed.py build` at `bunker-provision.sh:454`; `node_env.py --check` at `:147` / `--apply` at `:426` |
 | S5 prove the node works | `verify-node.sh`, `node_freshness.py` | **active** | `verify-node.sh` is the certification ladder (`:20-241`, 241 lines at HEAD); `node_freshness.py` folded in at `:150-177` |
 
@@ -172,6 +172,7 @@ round.
 | shell parse | `for f in scripts/bunker-*.sh scripts/node-create.sh scripts/verify-node.sh scripts/bunker-crier-connect.sh; do bash -n "$f"; done` | exit 0 | 2026-11-06 | PASS (in 20/20 sweep) |
 | python compile | `python3 -m py_compile scripts/disk_floor.py scripts/node_identity.py scripts/node_gateway_auth.py scripts/node_seed.py scripts/node_seed_drift.py scripts/node_env.py scripts/node_freshness.py` | exit 0 | 2026-11-06 | PASS |
 | disk floor unit | `python3 tests/test_disk_floor.py` | 12 tests pass | 2026-11-06 | **PASS** (rc 0) |
+| gateway auth staged before the adapter | `bash tests/selftest.sh` §55 (`project-node.sh --apply --project <p> --layers 20` in a fixture home) | `PASS gateway_auth — dashboard.basic_auth present …; password in …/.node/auth/gateway.pass (mode 600, value not printed)` and the adapter's `PASS gateway_start — /api/status -> 200`; the same adapter still refuses without the block | 2026-11-07 | **PASS** (fixture only — no live node run) |
 | certification ladder | `scripts/verify-node.sh --agent <id> --server <host>` on a live node | per-leg observation | not run this round | **UNVERIFIED** (needs a live node; legs documented in §11) |
 
 ## 8. Metrics
@@ -201,7 +202,7 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
 | Missing `lib.sh` | undefined `ok`/`have`/`bad`, shell aborts nonzero | a real check failure | restore `scripts/lib.sh` |
 | Credential mode not verified | `--check` passes on file non-emptiness, claims "mode 600" | a real 0600 stat | stage `stat -c '%a'`; open defect F1-1 |
 | Unknown explicit role | `FAIL disk-floor: unknown role …`, exit 2 (`disk_floor.py:123-125`, `:169-171`) | an absent role (which defaults to worker) | pass a valid role or drop the flag (F1-2) |
-| Standalone create path skips auth gate | `node-create.sh` completes without `node_gateway_auth.py` | the provisioner path (which wires it) | route through `bunker-provision.sh --apply` (CF-192) |
+| Gateway auth block absent at layer 20 | `FAIL gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent` from the adapter | a staged block — `project-node.sh` layer 20 runs `node_gateway_auth.py` before the adapter and prints `PASS gateway_auth — dashboard.basic_auth present …` (CF-150) | re-run `project-node.sh --apply`; a `dashboard` block that is not `basic_auth` stays a counted FAIL and needs a human |
 | Unreachable port | exit 3 `UNVERIFIED`, not FAIL (`verify-node.sh:106-110`) | a failed port (exit != 0) | read the port row (CF-224) |
 | `--destroy` without `--yes` | `refusing to destroy without --yes (would remove agent $AGENT on $SERVER)`, exit 2 (`:552`) | an authorised destroy | pass `--yes` and a non-empty `--agent` (`:553` also refuses an unset AGENT) |
 
@@ -211,6 +212,14 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
   inlined — an inlined heredoc shipped literal backslashes and reported a fully-provisioned node
   as empty.
 - Every `bunker exec` call in the probe runs under `timeout 45`/`timeout 60` (`:187`, `:225-226`).
+- **Layer 20 stages the block its adapter gates on (CF-150), in this order.** `project-node.sh`
+  creates `$HOME/.node/auth` mode 700, runs
+  `python3 "$HERE/node_gateway_auth.py" "$HOME/.hermes/config.yaml" "$HOME/.node/auth/gateway.pass"`
+  — the password is generated on the node, written at mode 600, never printed and never in argv —
+  and only then invokes `harness/install-$HARNESS.sh --apply`, whose `gateway_start` row is the
+  gate. An existing `basic_auth` block is left untouched (a re-run changes nothing); a `dashboard`
+  block that is not `basic_auth` is a counted FAIL row and is not overwritten. `--check` reports the
+  same block read-only and FAILs when it is absent, naming the refused bind.
 - **Certification ladder** (`verify-node.sh`, **241 lines** at `08a2c8a` — the CF-270 `--port` fix, commit `f1d5cfb`, inserted +28/−1 near the top and shifted every round-9 locator ~+25; all re-pinned this round):
   - `:40-55` **port validation (NEW leg, CF-270)** — `--port` is validated **before any use**: a digit test (`:40-43`, `case "$PORT" in ''|*[!0-9]*)`), a 5-digit length cap (`:46`, `[ "${#PORT}" -le 5 ]`), then two `verify-node: --port must be digits 1-65535 (got: …)` → exit 2 refusals (`:47-50`, printf `:48` exit 2 `:49`; and `:52-55`, printf `:53` exit 2 `:54`), with a base-10 re-expansion `PORT=$((10#$PORT))` at `:51` between them. A non-digit `--port` is refused here and no longer interpolates into the remote `bash -lc` shell.
   - `:73-76` `agent_alive` — `bunker exec … echo ALIVE $(hostname)` must return `ALIVE*`; on

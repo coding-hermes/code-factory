@@ -33,12 +33,18 @@ not mean the module is correct: §6 records three measured defects in it.
   `gateway_auth` row (`scripts/bunker-provision.sh:490-491`), and deletes the staged copy afterwards
   (`scripts/bunker-provision.sh:495`). It runs **before** the node-plumbing step that invokes
   `node-create.sh` (`scripts/bunker-provision.sh:499-504`).
-- **Who does not call it.** `scripts/node-create.sh` and `scripts/project-node.sh` contain zero
-  occurrences of either `auth` or `config.yaml` (measured: `grep -n 'auth\|config.yaml'` exits 1 for
-  both files). `node-create.sh` stages seven files, none of them this script and none a config
-  (`scripts/node-create.sh:23`). This is precisely CF-150: the standalone create path
-  (`node-create.sh` → `project-node.sh --apply` at `scripts/node-create.sh:121`) never reaches the only
-  writer of the block.
+- **Who does not call it.** `scripts/node-create.sh` and `scripts/project-node.sh` contained zero
+  occurrences of either `auth` or `config.yaml` (measured at this appendix's revision: `grep -n
+  'auth\|config.yaml'` exited 1 for both files). `node-create.sh` staged seven files, none of them
+  this script and none a config (`scripts/node-create.sh:23`). That was precisely CF-150: the
+  standalone create path (`node-create.sh` → `project-node.sh --apply` at `scripts/node-create.sh:121`)
+  never reached the only writer of the block. **Corrected 2026-11-07 (CF-150):** the staged set is
+  now eight files and layer 20 does reach the writer — `node-create.sh:26-30` stages
+  `node_gateway_auth.py`, and `scripts/project-node.sh` runs it before the harness adapter on
+  `--apply` (staging the block, printing one `gateway_auth` row) or reports its presence read-only on
+  `--check`; the security shape is unchanged (password generated on the node, mode-600 file, never
+  printed, never in argv), and `install-hermes.sh` still refuses the bind without a valid block.
+  Evidence: `tests/selftest.sh` §55.
 - **`install-hermes.sh` reads the block five times and never writes it.** The five occurrences are a
   comment (`scripts/harness/install-hermes.sh:11`), the parser's membership test, comment probe and
   value fetch (`scripts/harness/install-hermes.sh:202`, `:204`, `:206`), and the refusal message
