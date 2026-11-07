@@ -1,0 +1,75 @@
+# BOOK.yaml — the handbook as data. One manifest, one numbering, one contents table.
+#
+# The book was hand-assembled from a directory that no longer exists (docs/master), so the
+# delivered PDF had no cover, no folio and no document number while the markdown did. Build
+# from this file instead: every sheet gets its address here, and the contents table is
+# generated from it, so an index that disagrees with the pages cannot be produced.
+
+doc:
+  id: CF2A-01
+  title: CODE FACTORY
+  subtitle: "System handbook — arrangement, flows, modules, contracts, settings"
+  issue: "2026-11-07"
+  scope: >
+    Every component that can change the behaviour or correctness of a run: the scheduler that
+    admits it, the transport that carries it, the node that executes it, the harness that edits
+    code, and the gates that decide whether to believe the result. Third-party internals are out
+    of scope; code beats this document wherever they disagree.
+  classification: INTERNAL
+
+parts:
+  - id: FM
+    title: Front matter
+    files:
+      - parts/00-overview.md
+  - id: I
+    title: System arrangement
+    files: []
+  - id: II
+    title: Flows
+    files: []
+  - id: III
+    title: Modules
+    prefix: 3
+    files:
+      - chapters/M0-shared-contract.md
+      - chapters/M1-provisioning.md
+      - chapters/M2-dispatch.md
+      - chapters/M3-repository.md
+      - chapters/M4-board.md
+      - chapters/M5-harness.md
+      - chapters/M6-documentation.md
+      - chapters/M7-github.md
+      - chapters/M8-safety.md
+      - chapters/M9-scheduler.md
+      - chapters/M10-crier.md
+      - chapters/M11-dispatcher.md
+      - chapters/M12-inference-proxy.md
+  - id: IV
+    title: Contract register
+    prefix: 4
+    files:
+      - parts/IV-contract-register.md
+  - id: V
+    title: Settings register
+    files: []
+  - id: VI
+    title: Failure and risk
+    files: []
+  - id: VII
+    title: Work derivation
+    files: []
+  - id: VIII
+    title: Delivery
+    files: []
+
+figures:
+  - {code: FM-1, file: figures/00-system-map.svg, caption: "System map — components and layers, coloured by contract state"}
+  - {code: FM-2, file: figures/00-board-row-lifecycle.svg, caption: "Board row lifecycle, including the paths that are not forward"}
+  - {code: FM-3, file: figures/F1-dispatch.svg, caption: "F1 dispatch and settlement — seven messages, five actors"}
+
+rules:
+  - "One id resolves to exactly one object across the set; ids are never reused."
+  - "A chapter that measures a contract state different from Part IV amends the register row in the same commit."
+  - "The contents table is generated from this file; a file present on disk and absent here is a build error."
+  - "A part with no files renders as one page naming what is missing — never silently skipped."
