@@ -26,7 +26,7 @@ merely attempted.
 
 ## The system, as a map
 
-![System map](figures/system-map.svg)
+![FIGURE 0.1](figures/system-map.svg)
 
 Boxes are responsibilities. Paths live in the model's `impl` field and are deliberately
 volatile — a script can move without the system changing. Colour is the contract state:
@@ -44,7 +44,7 @@ Read the map in layers, bottom of the stack upward:
 
 ## How a row moves
 
-![Board row lifecycle](figures/board-lifecycle.svg)
+![FIGURE 0.2](figures/board-lifecycle.svg)
 
 The forward path is the easy half. The half that decides whether a factory is honest is
 the other one: a row that cannot proceed goes **blocked** with a named blocker, a row
@@ -54,7 +54,7 @@ moves forward is a board that is lying about something.
 
 ## One dispatch, end to end
 
-![F1 dispatch](figures/F1.svg)
+![FIGURE 2.1](figures/F1.svg)
 
 Seven messages, three systems, one row. Note what each side had to promise: the scheduler
 promises a well-formed envelope with a run id; crier promises delivery and a lease; the

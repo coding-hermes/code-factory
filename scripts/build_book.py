@@ -245,6 +245,8 @@ def main() -> int:
     doc = book["doc"]
     doc_id = doc["id"]
     today = str(doc["issue"])
+    # Figure codes live in BOOK.yaml, not in filenames: one id resolves to one object.
+    fig_codes = {str(f["file"]): str(f["code"]) for f in book.get("figures", [])}
 
     sheets: list[tuple[str, list[str]]] = []  # (dochead section, html blocks)
 
@@ -271,12 +273,28 @@ def main() -> int:
                 sheets.append(("BUILD ERROR",
                                [f"<h1>BUILD ERROR</h1><p>{rel} is in the manifest and not on disk.</p>"]))
                 continue
+            # A module chapter opens with its own centered view: the hero figure sheet is
+            # mounted BEFORE the chapter text, coded <part prefix>.<n> from the manifest
+            # (Part III's prefix 3 + chapter M<n> -> FIGURE 3.<n>) with the issue date.
+            mmod = re.match(r"chapters/M(\d+)-", rel)
+            if mmod:
+                n = mmod.group(1)
+                hero = HB / f"figures/module-M{n}.svg"
+                code = f"{p.get('prefix', p['id'])}.{n}"
+                if hero.exists():
+                    sheets.append((f"PART {p['id']} · FIGURE {code}",
+                                   [f"<h2>FIGURE {code} — MODULE M{n} CENTERED VIEW — as of {today}</h2>",
+                                    svg_fit(hero)]))
+                else:
+                    sheets.append(("BUILD ERROR",
+                                   [f"<h1>BUILD ERROR</h1><p>figures/module-M{n}.svg is the "
+                                    f"centered view of {rel} and is not on disk.</p>"]))
             blocks, figs = body_blocks(f.read_text())
             sheets.append((f"PART {p['id']} · {p['title'].upper()}", blocks))
             for fig in figs:  # one figure per sheet, hero-sized, caption carries the snapshot date
                 if fig is None:
                     continue
-                code = fig.stem.upper()
+                code = fig_codes.get(str(fig.relative_to(HB)), fig.stem.upper())
                 sheets.append((f"PART {p['id']} · FIGURE {code}",
                                [f"<h2>FIGURE {code} — as of {today}</h2>", svg_fit(fig)]))
 

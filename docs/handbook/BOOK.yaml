@@ -64,13 +64,42 @@ parts:
     files: []
 
 figures:
-  - {code: FM-1, file: figures/system-map.svg, caption: "System map — 27 components, edges keyed CT-01…CT-18"}
-  - {code: FM-2, file: figures/board-lifecycle.svg, caption: "Board row lifecycle, including the paths that are not forward"}
-  - {code: FM-3, file: figures/tick-lifecycle.svg, caption: "Scheduler tick lifecycle"}
-  # Per-module centered views (13) and per-flow diagrams (F1…F16) live on disk as
-  # module-M0…module-M12.svg and F1…F16.svg; the builder mounts each chapter with its
-  # own centered view and each flow chapter with its diagram, so they are not listed here.
-  - {code: II-1, file: figures/F1.svg, caption: "F1 dispatch and settlement"}
+  # Part 0 — Overview (the three whole-system views)
+  - {code: 0.1, file: figures/system-map.svg, caption: "System map — 27 components, edges keyed CT-01…CT-18"}
+  - {code: 0.2, file: figures/board-lifecycle.svg, caption: "Board row lifecycle, including the paths that are not forward"}
+  - {code: 0.3, file: figures/tick-lifecycle.svg, caption: "Scheduler tick lifecycle"}
+  # Part III — per-module centered views, one per module chapter, mounted as its hero
+  # figure sheet before the chapter text (code = part prefix 3 + module number).
+  - {code: 3.0, file: figures/module-M0.svg, caption: "Module M0 shared contract — centered view"}
+  - {code: 3.1, file: figures/module-M1.svg, caption: "Module M1 provisioning — centered view"}
+  - {code: 3.2, file: figures/module-M2.svg, caption: "Module M2 dispatch — centered view"}
+  - {code: 3.3, file: figures/module-M3.svg, caption: "Module M3 repository — centered view"}
+  - {code: 3.4, file: figures/module-M4.svg, caption: "Module M4 board — centered view"}
+  - {code: 3.5, file: figures/module-M5.svg, caption: "Module M5 harness — centered view"}
+  - {code: 3.6, file: figures/module-M6.svg, caption: "Module M6 documentation — centered view"}
+  - {code: 3.7, file: figures/module-M7.svg, caption: "Module M7 github — centered view"}
+  - {code: 3.8, file: figures/module-M8.svg, caption: "Module M8 safety — centered view"}
+  - {code: 3.9, file: figures/module-M9.svg, caption: "Module M9 scheduler — centered view"}
+  - {code: 3.10, file: figures/module-M10.svg, caption: "Module M10 crier — centered view"}
+  - {code: 3.11, file: figures/module-M11.svg, caption: "Module M11 dispatcher — centered view"}
+  - {code: 3.12, file: figures/module-M12.svg, caption: "Module M12 inference proxy — centered view"}
+  # Part II — per-flow diagrams F1…F16
+  - {code: 2.1, file: figures/F1.svg, caption: "F1 dispatch and settlement"}
+  - {code: 2.2, file: figures/F2.svg, caption: "F2"}
+  - {code: 2.3, file: figures/F3.svg, caption: "F3"}
+  - {code: 2.4, file: figures/F4.svg, caption: "F4"}
+  - {code: 2.5, file: figures/F5.svg, caption: "F5"}
+  - {code: 2.6, file: figures/F6.svg, caption: "F6"}
+  - {code: 2.7, file: figures/F7.svg, caption: "F7"}
+  - {code: 2.8, file: figures/F8.svg, caption: "F8"}
+  - {code: 2.9, file: figures/F9.svg, caption: "F9"}
+  - {code: 2.10, file: figures/F10.svg, caption: "F10"}
+  - {code: 2.11, file: figures/F11.svg, caption: "F11"}
+  - {code: 2.12, file: figures/F12.svg, caption: "F12"}
+  - {code: 2.13, file: figures/F13.svg, caption: "F13"}
+  - {code: 2.14, file: figures/F14.svg, caption: "F14"}
+  - {code: 2.15, file: figures/F15.svg, caption: "F15"}
+  - {code: 2.16, file: figures/F16.svg, caption: "F16"}
 
 rules:
   - "One id resolves to exactly one object across the set; ids are never reused."
