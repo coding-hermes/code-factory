@@ -26,3 +26,7 @@ __pycache__/
 
 # Foreman ownership claim — the panel loop holds the checkout while it writes.
 .coding-hermes/panel.lock
+
+# panel loop runtime state (rounds are transcripts; tracking them lets a checkout rewind
+# the counter — it rewound 17 -> 12 and killed five rounds of work)
+docs/handbook/_panel/
