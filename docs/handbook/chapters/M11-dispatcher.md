@@ -79,14 +79,15 @@ inbox until it expires.
 | `DISPATCH_LOG` / `DISPATCH_PIDFILE` | `$FLEET/logs/dispatcher.log` / `$FLEET/dispatcher.pid` (`:41-42`) | a path | log/PID location | a wrong path loses the journal/lock |
 | `FLEET_GH_SCOPE` | `/home/kara/.hermes/scripts/fleet-gh-scope.py` (`:68`) | a path | scoped-token minter | a wrong path disables scoped tokens (non-fatal) |
 | `FLEET_AGENTS` / `FLEET_AGENTS_FILE` | `fleet_agents.json` (`:104-109`) | a dict / path | agent registry | empty → "no FLEET_AGENTS configured" |
-| `CRIER_URL` (read as `BUS`) | `http://100.97.236.14:8767` (`:38`) | an http(s) endpoint | which bus the dispatcher polls and replies to | a wrong URL polls/replies to the wrong bus |
+| `CRIER_URL` (read as `BUS`) | `http://<bus-host>:8767` (`:38`) | an http(s) endpoint | which bus the dispatcher polls and replies to | a wrong URL polls/replies to the wrong bus |
 | `TOKEN_FILE` (bearer) | `/home/kara/.hermes/secrets/crier-fleet.token` (`:39`, a constant) | a path | the bus bearer identity | a missing file → client construction fails (`client for %s failed`) |
 | `KEYS` (signing) | `$FLEET/keys` (`:40`, a constant) | a directory | the reply-signing key store | a missing key dir breaks reply signing |
 
 ## 6. Contracts in and out
 
-Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Local ids are
-retired; each row carries the CT id its peer chapter cites.
+Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Rows that are
+cross-system contracts carry their CT id; an interface with no canonical entry is listed with a
+`(local)` tag and is not a peer to any CT row, so it cannot be matched against another chapter.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
@@ -176,7 +177,7 @@ lines — `:81` a comment mentioning `log()` and `:112` the `def log(` definitio
 
 ## 12. Cross-references
 
-- F1 DISPATCH AND SETTLEMENT is the flow this module executes on the control box.
+- F1 DISPATCH AND SETTLEMENT is the flow this module executes on the control box — **flow chapter not written** (OUTLINE Part II, all 16 flows MISSING).
 - M10 CRIER is the transport; M9 SCHEDULER is the settlement consumer.
 - The per-dispatch scoped token is minted by `fleet-gh-scope.py` → `~/.hermes/scripts/gh-app-token.py`
   (not M7's `github-app-token.py`) — see M7 §12.
