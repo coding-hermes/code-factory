@@ -1217,6 +1217,46 @@ else
   say "  FAIL  repo_url guard fixture (accepted exit $accepted_rc, rejected exit $rejected_rc)"
   fails=$((fails+1))
 fi
+# CF-097: `repo-url` and `verify` probe the same kind of root, so a path whose git
+# top level IS $HOME must be refused by repo-url with the reason verify already gives
+# (`not_home_repo`, exit 4) instead of being reported as a valid root. HOME is set to
+# the fixture, so this measures the same directory both arms resolve and never the
+# host's real home.
+home_root="$tmpd/home"
+mkdir -p "$home_root"
+git init -q -b main "$home_root"
+git -C "$home_root" -c user.email=fixture@example.invalid -c user.name=fixture \
+  commit -qm fixture --allow-empty
+home_real=$(cd "$home_root" && pwd -P)
+home_head=$(git -C "$home_real" rev-parse HEAD)
+home_verify=$(env HOME="$home_real" python3 -B "$HERE/scripts/lane_target.py" verify "$home_real" 2>&1); home_verify_rc=$?
+home_refused=$(env HOME="$home_real" python3 -B "$HERE/scripts/lane_target.py" repo-url "$home_real" 2>&1); home_refused_rc=$?
+if [ "$home_verify_rc" -eq 4 ] && [ "$home_refused_rc" -eq 4 ] \
+  && printf '%s\n' "$home_verify" | grep -A1 -F '"check": "not_home_repo"' | grep -Fq '"ok": false' \
+  && printf '%s\n' "$home_refused" | grep -Fxq "FAIL repo_url '$home_real' — not_home_repo: git top level is the home directory '$home_real'" \
+  && printf '%s\n' "$home_refused" | grep -Fxq 'repo_url: 1 rejected, 0 accepted'; then
+  say "  PASS  repo-url refuses the home-rooted repo verify refuses (exit 4, not_home_repo)"
+else
+  say "  FAIL  repo-url accepted a home-rooted repo — missing not_home_repo check (verify exit $home_verify_rc, repo-url exit $home_refused_rc)"
+  fails=$((fails+1))
+fi
+# ARM (red control): the same fixture against the revision this row was raised on
+# (a32f234), which carries no home check on the repo-url arm. It must report the home
+# root as an accepted root — pointed at the fixed script the control fails, so the arm
+# above discriminates rather than merely passing.
+if git -C "$HERE" show a32f234:scripts/lane_target.py > "$tmpd/lane_target_prefix.py" 2>/dev/null; then
+  prefix_out=$(env HOME="$home_real" python3 -B "$tmpd/lane_target_prefix.py" repo-url "$home_real" 2>&1); prefix_rc=$?
+  if [ "$prefix_rc" -eq 0 ] \
+    && printf '%s\n' "$prefix_out" | grep -Fxq "PASS repo_url '$home_real' — root '$home_real' HEAD $home_head" \
+    && ! printf '%s\n' "$prefix_out" | grep -q 'not_home_repo'; then
+    say "  PASS  pre-fix a32f234 accepts the home-rooted repo — the repo-url arm is falsifiable"
+  else
+    say "  FAIL  the pre-fix control did not reproduce the missing not_home_repo check (exit $prefix_rc)"
+    fails=$((fails+1))
+  fi
+else
+  say "  FAIL  pre-fix source unavailable (git show a32f234:scripts/lane_target.py)"; fails=$((fails+1))
+fi
 rm -rf "$tmpd"
 
 # CF-007 AC3: reclaim-before-refusal, using the shipped scripts in a local HOME.

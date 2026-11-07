@@ -497,6 +497,15 @@ def check_repo_url(raw: str, allow_remote: bool) -> str:
         raise RuntimeError(f"not a git root (git: {top['value']})")
     if os.path.realpath(top["value"]) != root:
         raise RuntimeError(f"not a git root (git: top level is {top['value']!r})")
+    # CF-097: the same stand-in defect the workdir arm rejects. A path whose git top
+    # level IS $HOME is a home meta-repo, not a project checkout, so `repo-url` and
+    # `verify` must agree about it. The home is resolved exactly as verify_local()
+    # resolves its default (`~`, i.e. $HOME), so both arms name the same directory.
+    home_real = os.path.realpath(os.path.expanduser("~"))
+    if root == home_real:
+        raise RuntimeError(
+            f"not_home_repo: git top level is the home directory {home_real!r}"
+        )
     head = _git(root, "rev-parse", "--verify", "HEAD")
     if head.returncode:
         raise RuntimeError(f"cannot read HEAD (git: {head.stderr.strip()})")

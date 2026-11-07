@@ -306,6 +306,66 @@ class RepoURL(unittest.TestCase):
         self.assertIn("cannot classify target", out.stdout)
 
 
+class RepoURLHomeRoot(unittest.TestCase):
+    """CF-097: `repo-url` and `verify` must agree that a $HOME-rooted repo is no root.
+
+    Both arms are driven with HOME pointing INSIDE the fixture — the subprocess gets
+    `HOME=<fixture>` and `verify_local` gets the same directory as its `home` — so
+    neither leg reads the host's real home and the pair cannot pass by agreeing about
+    a directory this test never built.
+    """
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix="lane-target-home-root-")
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        self.home = os.path.join(self.root, "home")
+        os.makedirs(self.home)
+        _git(self.home, "init", "-q", "-b", "main")
+        _git(self.home, "commit", "-q", "--allow-empty", "-m", "fixture")
+        self.home_real = os.path.realpath(self.home)
+
+    def run_check(self, *args):
+        return subprocess.run(
+            [sys.executable, "-B", str(lane_target.__file__), "repo-url", *args],
+            capture_output=True,
+            text=True,
+            env={**os.environ, "HOME": self.home_real},
+        )
+
+    def test_home_rooted_repo_rejected_by_both_arms(self):
+        verified = lane_target.verify_local(self.home_real, home=self.home_real)
+        self.assertFalse(verified["ok"])
+        checks = {c["check"]: c["ok"] for c in verified["checks"]}
+        self.assertFalse(checks["not_home_repo"])
+        out = self.run_check(self.home_real)
+        self.assertEqual(out.returncode, 4, out.stdout + out.stderr)
+        self.assertIn(
+            f"FAIL repo_url {self.home_real!r} — not_home_repo: git top level is "
+            f"the home directory {self.home_real!r}",
+            out.stdout,
+        )
+        self.assertIn("repo_url: 1 rejected, 0 accepted", out.stdout)
+        self.assertNotIn("PASS repo_url", out.stdout)
+
+    def test_non_home_root_still_accepted_under_fixture_home(self):
+        repo = fixture()["repo"]
+        head = lane_target._git(repo, "rev-parse", "HEAD").stdout.strip()
+        out = self.run_check(repo)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn(f"PASS repo_url {repo!r} — root {repo!r} HEAD {head}", out.stdout)
+        self.assertIn("repo_url: 0 rejected, 1 accepted", out.stdout)
+
+    def test_subdirectory_of_home_repo_names_the_top_level_mismatch(self):
+        # Order matters: only a target that IS the home directory carries the
+        # not_home_repo reason; a path inside it is still the ordinary mismatch.
+        sub = os.path.join(self.home_real, "sub")
+        os.makedirs(sub)
+        out = self.run_check(sub)
+        self.assertEqual(out.returncode, 4, out.stdout + out.stderr)
+        self.assertIn(f"top level is {self.home_real!r}", out.stdout)
+        self.assertNotIn("not_home_repo", out.stdout)
+
+
 def two_roots() -> dict[str, str]:
     """Two real, different git roots for the CF-091 family-agreement tests."""
     root = tempfile.mkdtemp(prefix="lane-family-")
