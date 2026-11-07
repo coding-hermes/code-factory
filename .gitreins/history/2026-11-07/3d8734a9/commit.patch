@@ -1,0 +1,448 @@
+commit a852c731fcfd559c8c8d4330a1634fe451713b76
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Sat Nov 7 11:59:25 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Sat Nov 7 11:59:25 2026 -0500
+
+    fix(node): refuse a seed record that declares zero files
+    
+    A well-formed seed record whose `files` collection is empty certified the node:
+    scripts/node_seed_drift.py took node_seed.py check's `PASS ... 0 files present and
+    matching` row (exit 0) as a measurement, so a node whose seed applied NOTHING — an
+    empty manifest, an empty tar, or a record written before any file was staged —
+    reached `RESULT: PASS` and, through scripts/verify-node.sh, `VERIFY: PASS` exit 0.
+    CF-291 closed the 0-byte/unparseable record; this is the parseable empty-collection
+    case, which stayed green by construction.
+    
+    Ruling recorded (in the checker's docstring and at finding_empty()): a record that
+    declares no files is never a pass, with or without a reason field on it. The record
+    was READ and it is conclusively empty, so the verdict is a named FAIL (EXIT_DRIFT,
+    exit 1) — not a WARN and not "could not measure". A node that is meant to carry no
+    seed should carry no seed record; the absent-record WARN (exit 3) already says that
+    honestly, and inventing an opt-out field would let a silent empty collection back in.
+    
+    What changed:
+    - scripts/node_seed_drift.py: `declared_files(doc)` reads the RECORD, not the
+      seeder's row, and both modes refuse an empty (or absent / non-list) collection
+      BEFORE node_seed.py check runs — the local probe, and the node-side preflight
+      (RECORD=3 plus an `EMPTY=empty|absent` token, so the sentence the row prints is
+      owned in one place and cannot be copied onto the remote side). `finding_ok()`
+      refuses count < 1 as belt and braces, and the PASS row now reads `1 seeded file`
+      rather than `1 seeded files`. Exit-code vocabulary and the --json shape unchanged.
+    - scripts/verify-node.sh: no new verb and no new branch — the checker's exit 1 is
+      already the `bad` case, so the gate answers `VERIFY: FAIL (1)`. The step-6 comment
+      now records that, instead of the reader having to infer it.
+    - tests/selftest.sh §48 (inside the existing section, no new section): two arms over
+      the REAL verifier plus their control.
+    - specs/NODE.md and docs/OPERATIONS.md: `N seeded files present and matching` is
+      documented as a pass for N > 0 only, and an empty record as a FAIL (CF-379).
+    
+    Measured before/after, fixture `{"files": []}` at home/.hermes/seed-applied.json:
+      before (checker at 226bae2): `  PASS  seed_drift — ...: 0 seeded files present and
+        matching` / `RESULT: PASS` / rc=0
+      after: `  FAIL  seed_drift — ...: the record declares no files (the files
+        collection is empty) — an empty seed certifies nothing` /
+        `RESULT: FAIL (the record at ... declares no files)` / rc=1
+      same fixture through scripts/verify-node.sh: before `VERIFY: PASS` rc=0, after
+        `VERIFY: FAIL (1)` rc=1 (`--strict-seed` also FAIL, rc=1)
+      green control (two seeded files): `VERIFY: PASS` rc=0, row `2 seeded files present
+        and matching`
+      0-byte / corrupt / absent / --strict-seed arms keep their verdicts (WARN exit 3,
+        WARN exit 3, WARN exit 3, FAIL exit 1) — re-measured, not assumed.
+    
+    Discrimination arm, committed rather than ad hoc: the same empty record run through
+    the checker at 226bae2 — the row's premise commit, spliced with `git show` so it is
+    the real pre-fix file and not a stub of the fix — inside the same verifier prints
+    `PASS ... 0 seeded files present and matching` / `VERIFY: PASS` exit 0. The new arm's
+    exact condition evaluated ARM=GREEN on this tree and ARM=RED on that tree.
+    
+    Out of scope, named here: docs/handbook/chapters, docs/handbook/_panel and
+    docs/handbook/appendices/units/{31,32,36}-*.md still present `0 seeded files present
+    and matching` as a pass and cite node_seed_drift.py line numbers this change shifts —
+    those paths belong to the separate panel loop, so they were left untouched and still
+    need the same correction. Pre-existing docs/OPERATIONS.md text also still describes
+    the pre-CF-063 `${BUNKER_SERVER:?}` guard; that claim was left alone because it is
+    another row's business, and nothing here restates it as true.
+    
+    Guard: `bash tests/selftest.sh` printed `SELFTEST: PASS` at this tree (423 PASS rows,
+    61 intentional FAIL rows inside negative fixtures, `359/359 rows parse`);
+    `bash docs/audits/cf198-section-mapping.sh` printed `RESULT: OK` with
+    `arms_plan=61 arms_tree=61` (the arms live inside §48, so no census change). The repo
+    ships no CI workflow, so no CI run exists for this commit.
+    
+    ch:trace: CF-379
+---
+ docs/OPERATIONS.md         |   4 +-
+ scripts/node_seed_drift.py | 181 +++++++++++++++++++++++++++++++++++----------
+ scripts/verify-node.sh     |   5 ++
+ specs/NODE.md              |   2 +-
+ tests/selftest.sh          |  56 ++++++++++++++
+ 5 files changed, 206 insertions(+), 42 deletions(-)
+
+diff --git a/docs/OPERATIONS.md b/docs/OPERATIONS.md
+index 274b413..69b7e33 100644
+--- a/docs/OPERATIONS.md
++++ b/docs/OPERATIONS.md
+@@ -134,7 +134,7 @@ Until the end-to-end path exists:
+ 
+ 1. Keep the scheduler target disarmed; do not dispatch real work through a bespoke poller and report it as proof of the intended system.
+ 2. On a designated test node only, verify node/harness state with `scripts/project-node.sh --check --project P` and the selected adapter's `--check`.
+-3. Use `scripts/verify-node.sh --agent ID --server NAME --port PORT [--artifact PATH]` from the control host to check agent exec, gateway `/api/status`, unauthenticated stats rejection and (if supplied) a downloaded artifact's SHA-256 equality. Required environment: `BUNKER_SERVER` must be set even when `--server NAME` is supplied — `scripts/verify-node.sh:17` expands `${BUNKER_SERVER:?…}` in its variable-assignment line, which runs before the argument loop at `:18-26` parses `--server` (`:21`), so the flag cannot satisfy the guard: without the variable the script stops at `:17` printing `BUNKER_SERVER: set BUNKER_SERVER to your bunker server name` and exits 1 (measured 2026-11-04: `env -u BUNKER_SERVER ./scripts/verify-node.sh --agent probe-agent --server some-server --port 10800` prints that line and returns 1; the same command with the variable set reaches the `agent_alive` probe). CF-063 owns relaxing the guard; until it lands the env var is not optional. Evidence: `docs/audits/code-factory-docs-2026-11-04-verify-env.md`. This does **not** prove crier delivery, inference, task execution, result envelope, or scheduler admission.
++3. Use `scripts/verify-node.sh --agent ID --server NAME --port PORT [--artifact PATH]` from the control host to check agent exec, gateway `/api/status`, unauthenticated stats rejection, (if supplied) a downloaded artifact's SHA-256 equality, the checkout the node will work (step 5) and the node's seeded prompts and skills against the digests its seed record names (step 6). Step 6 passes only a seed record that declares **at least one** file: a record whose `files` collection is empty (or absent) prints `FAIL seed_drift — …: the record declares no files (…) — an empty seed certifies nothing` and ends `VERIFY: FAIL`, so `N seeded files present and matching` is a pass for `N > 0` only (CF-379 — `0 seeded files present and matching` used to certify a node whose seed applied nothing). Required environment: `BUNKER_SERVER` must be set even when `--server NAME` is supplied — `scripts/verify-node.sh:17` expands `${BUNKER_SERVER:?…}` in its variable-assignment line, which runs before the argument loop at `:18-26` parses `--server` (`:21`), so the flag cannot satisfy the guard: without the variable the script stops at `:17` printing `BUNKER_SERVER: set BUNKER_SERVER to your bunker server name` and exits 1 (measured 2026-11-04: `env -u BUNKER_SERVER ./scripts/verify-node.sh --agent probe-agent --server some-server --port 10800` prints that line and returns 1; the same command with the variable set reaches the `agent_alive` probe). CF-063 owns relaxing the guard; until it lands the env var is not optional. Evidence: `docs/audits/code-factory-docs-2026-11-04-verify-env.md`. This does **not** prove crier delivery, inference, task execution, result envelope, or scheduler admission.
+ 4. Mark a node **verified for work** only after a real dispatch/result round trip has completed, the control host has recomputed each digest from received bytes, and the foreman independently accepts the work. No current repository command demonstrates that full criterion.
+ 
+ Do not accept the node's self-reported digest as proof. A digest mismatch is FAIL and the node stays quarantined until investigation and a fresh passing `--check` plus round trip.
+@@ -208,7 +208,7 @@ Teardown as a whole is **BLOCKED / NOT YET**. One step of it is now a tracked co
+ | `scripts/project-node.sh --check --project P` | In-node layer checks | Creates `$HOME/.node`; requires crier URL and identity; not pure read-only. |
+ | `scripts/project-node.sh --apply --project P --harness hermes --repo URL --ref REF` | In-node provisioning | Requires bus identity and provider/auth preconfiguration; do not use for production until secure path exists. |
+ | `scripts/node-create.sh --project P --repo URL --harness hermes [--agent ID] [--ttl 6h] [--port 10800]` | Control-host spawn/stage/provision/verify orchestrator; requires `BUNKER_SERVER` **and** `CRIER_URL` (refuses on either before any bunker call) | Incomplete: no secure bus bundle, no full lifecycle or round trip. |
+-| `scripts/verify-node.sh --agent ID --server NAME --port 10800 [--artifact PATH]` | Gateway/auth and optional artifact byte digest checks; `BUNKER_SERVER` must be set even when `--server` is passed (`scripts/verify-node.sh:17`, guarded before the argument loop) | Does not verify crier, scheduler, inference, or task completion. |
++| `scripts/verify-node.sh --agent ID --server NAME --port 10800 [--artifact PATH]` | Gateway/auth and optional artifact byte digest checks, checkout freshness and the node's seed record — a seed record that declares no files is a `FAIL seed_drift` (`N seeded files present and matching` passes only for `N > 0`, CF-379); `BUNKER_SERVER` must be set even when `--server` is passed (`scripts/verify-node.sh:17`, guarded before the argument loop) | Does not verify crier, scheduler, inference, or task completion. |
+ | `scripts/harness/install-hermes.sh --check\|--apply` | Hermes adapter check/install/start | Must configure basic auth and inference key out of band; current check may fail if gateway is not already running. |
+ | `scripts/harness/install-opencode.sh --check\|--apply` | OpenCode adapter check/refusal | `--apply` refuses until ladder is measured. |
+ | `scripts/harness/install-claude-code.sh --check\|--apply` | Claude Code prerequisite check/refusal | `--apply` refuses until ladder is measured. |
+diff --git a/scripts/node_seed_drift.py b/scripts/node_seed_drift.py
+index 85cf74b..2d28127 100644
+--- a/scripts/node_seed_drift.py
++++ b/scripts/node_seed_drift.py
+@@ -25,13 +25,29 @@ The verdict is the seeder's own verdict — the wrapper does not reimplement the
+ digest comparison, it delegates to scripts/node_seed.py and parses its rows, so
+ the two cannot drift apart.
+ 
+-Exit codes: 0 matched, 1 drifted (or an absent record under --strict-seed),
+-2 usage, 3 could not measure — no record, a record that does not parse, an exec
+-that would not answer, or no transport. "Could not measure" is not drift, on
+-purpose: a node still being provisioned has no seed record yet, and telling an
+-operator a copy is broken when it was never applied is a false FAIL. The
+-default verdict for it is WARN; --strict-seed refuses the unknown instead
+-(same doctrine as the checkout freshness leg).
++Exit codes: 0 matched, 1 drifted (or an absent record under --strict-seed, or a
++record that declares no files), 2 usage, 3 could not measure — no record, a
++record that does not parse, an exec that would not answer, or no transport.
++"Could not measure" is not drift, on purpose: a node still being provisioned has
++no seed record yet, and telling an operator a copy is broken when it was never
++applied is a false FAIL. The default verdict for it is WARN; --strict-seed
++refuses the unknown instead (same doctrine as the checkout freshness leg).
++
++CF-379 — the ruling on an EMPTY collection. A record whose `files` list is empty
++(or absent, or not a list) is not an unmeasurable seed and not a matched one: it
++declares nothing, so there is no digest any file on the node could agree with,
++and `0 files present and matching` certified a node whose seed applied nothing.
++It is therefore refused at EXIT_DRIFT with a row that says the record declares no
++files — a FAIL, not a WARN: the record was read and it is conclusively empty, so
++there is nothing unknown left to warn about. A zero-file node is not a legitimate
++state of a seeded node; an operator who wants a node with no seed should not
++leave a seed record on it, and the absent-record WARN below already covers that
++honestly. The ruling lives here rather than in scripts/node_seed.py because the
++seeder's `check` prints the same `N files present and matching` row for any N —
++this wrapper is what turns that row into a verdict, so this is the file that must
++refuse N == 0. A reason field on the record does NOT rescue an empty collection:
++the probe's whole purpose is proving digests, and a record that names none
++proves nothing, so no opt-out is offered and none is silently honoured.
+ 
+ Usage:
+   scripts/node_seed_drift.py --agent cf-node --server bunker-las-03
+@@ -91,6 +107,29 @@ STRICT_NOTE = "(--strict-seed: an unknown seed is not a pass)"
+ # verdict is the instrument's own, not a wrapper's reimplementation.
+ SEED_SIBLING_NAME = "node_seed.py"
+ 
++# CF-379: the two shapes a record with nothing to check comes in. The prose lives
++# HERE and is reused by both modes — the node-side preflight reports a token
++# (`EMPTY=empty` / `EMPTY=absent`), never a sentence, so this file keeps the one
++# copy of the wording the row prints (the QA-CODE-FACTORY-2 lesson).
++EMPTY_COLLECTION = "the files collection is empty"
++EMPTY_ABSENT = "the files collection is absent or not a list"
++EMPTY_TOKENS = {"empty": EMPTY_COLLECTION, "absent": EMPTY_ABSENT}
++
++
++def declared_files(doc) -> str:
++    """'' when the record declares at least one file, else the reason it declares none.
++
++    The predicate reads the RECORD, not the seeder's output: `check` prints the
++    same PASS row for 0 files as for 13, so nothing downstream of it can tell the
++    difference (CF-379).
++    """
++    files = doc.get("files") if isinstance(doc, dict) else None
++    if not isinstance(files, list):
++        return EMPTY_ABSENT
++    if not files:
++        return EMPTY_COLLECTION
++    return ""
++
+ 
+ def run(cmd: list, timeout: int):
+     """One command's result. A timeout and a missing binary are results too."""
+@@ -134,6 +173,21 @@ if ! python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$REC" >/dev/nul
+   echo "RECORD=2"
+   exit 0
+ fi
++# CF-379: the record parses, but does it DECLARE anything? A record whose files collection is empty (or
++# absent, or not a list) certifies no digest, and node_seed.py check prints `0 files present and
++# matching` for it — a green by construction. Refuse it here, before the seeder is staged, and report a
++# TOKEN rather than a sentence: the wording is node_seed_drift.py's to own, so a copy cannot drift.
++EMPTY_TOK=$(python3 -c 'import json,sys
++doc = json.load(open(sys.argv[1]))
++files = doc.get("files") if isinstance(doc, dict) else None
++if isinstance(files, list) and files: print("")
++elif isinstance(files, list): print("empty")
++else: print("absent")' "$REC" 2>/dev/null)
++if [ -n "$EMPTY_TOK" ]; then
++  echo "RECORD=3"
++  echo "EMPTY=$EMPTY_TOK"
++  exit 0
++fi
+ echo "RECORD=1"
+ STAGED="$(mktemp /tmp/node-seed-check-XXXXXX)"
+ SEED_OUT="$(mktemp /tmp/node-seed-check-out-XXXXXX)"
+@@ -172,7 +226,7 @@ def parse_remote(text: str) -> dict:
+         if inside:
+             data["seed_rows"].append(line)
+             continue
+-        for key in ("HOME", "RECORD", "SEED_RC"):
++        for key in ("HOME", "RECORD", "EMPTY", "SEED_RC"):
+             if line.startswith(key + "="):
+                 data[key] = line.split("=", 1)[1]
+     return data
+@@ -212,9 +266,16 @@ def rows_from_check(check_lines: list) -> tuple:
+ 
+ 
+ def finding_ok(record: str, count: int) -> dict:
+-    row = "  PASS  seed_drift — %s: %d seeded files present and matching" % (
++    # CF-379: `check` prints `0 files present and matching` and exits 0 for an empty record, so a
++    # count of zero can reach this function from the seeder's own row. It is not a match: nothing
++    # was declared, so nothing agreed. Refuse it here too, belt and braces, in case a path ever
++    # reaches the verdict without the record preflight.
++    if count < 1:
++        return finding_empty(record, EMPTY_COLLECTION)
++    row = "  PASS  seed_drift — %s: %d seeded file%s present and matching" % (
+         record,
+         count,
++        "" if count == 1 else "s",
+     )
+     return {
+         "status": "PASS",
+@@ -225,6 +286,30 @@ def finding_ok(record: str, count: int) -> dict:
+     }
+ 
+ 
++def finding_empty(record: str, reason: str) -> dict:
++    """A record that declares no files: FAIL, never PASS and never a WARN.
++
++    The row names the empty collection so the operator can act on the cause
++    (a build whose manifest/globs matched nothing, an empty tar, a record
++    written before any file was staged) rather than on a digest mismatch that
++    does not exist.
++    """
++    row = (
++        "  FAIL  seed_drift — %s: the record declares no files (%s) — an empty seed certifies nothing"
++        % (
++            record,
++            reason,
++        )
++    )
++    return {
++        "status": "FAIL",
++        "exit_code": EXIT_DRIFT,
++        "reason": "the record at %s declares no files (%s)" % (record, reason),
++        "rows": [row],
++        "result": "RESULT: FAIL (the record at %s declares no files)" % record,
++    }
++
++
+ def finding_drift(record: str, count, drifted: list, absent: list) -> dict:
+     details = list(drifted) + ["%s absent on the node" % p for p in absent]
+     shown = details[:MAX_SHOWN]
+@@ -331,42 +416,50 @@ def probe_local(home_arg: str, timeout: int, seed_script: str, strict: bool) ->
+         out["record_present"] = True
+         try:
+             with open(record, encoding="utf-8") as fh:
+-                json.load(fh)
++                doc = json.load(fh)
+         except (OSError, ValueError) as exc:
+             verdict = finding_corrupt(record, strict)
+             out["error"] = str(exc)[:200]
+         else:
+-            rc, text, err = run(
+-                [
+-                    sys.executable,
+-                    "-B",
+-                    seed_script,
+-                    "check",
+-                    "--record",
+-                    record,
+-                    "--home",
+-                    home,
+-                ],
+-                timeout,
+-            )
+-            lines = (text or "").splitlines() + (err or "").splitlines()
+-            count, drifted, absent = rows_from_check(lines)
+-            out["drifted"] = drifted
+-            out["absent"] = absent
+-            out["file_count"] = count
+-            if rc == 0 and count is not None:
+-                verdict = finding_ok(record, count)
+-            elif rc == 1 and (drifted or absent):
+-                verdict = finding_drift(record, count, drifted, absent)
++            # CF-379: a record that parses but declares no files is refused BEFORE the seeder runs —
++            # `check` would print `PASS ... 0 files present and matching` and exit 0 for it, which is
++            # the green this row closes. Nothing is measured here because there is nothing to measure.
++            reason = declared_files(doc)
++            if reason:
++                out["file_count"] = 0
++                verdict = finding_empty(record, reason)
+             else:
+-                out["error"] = (
+-                    (err or text).strip().splitlines()[0][:200]
+-                    if (err or text).strip()
+-                    else "exit %d" % rc
+-                )
+-                verdict = finding_unmeasurable(
+-                    "node_seed.py check printed no verdict (exit %d)" % rc
++                rc, text, err = run(
++                    [
++                        sys.executable,
++                        "-B",
++                        seed_script,
++                        "check",
++                        "--record",
++                        record,
++                        "--home",
++                        home,
++                    ],
++                    timeout,
+                 )
++                lines = (text or "").splitlines() + (err or "").splitlines()
++                count, drifted, absent = rows_from_check(lines)
++                out["drifted"] = drifted
++                out["absent"] = absent
++                out["file_count"] = count
++                if rc == 0 and count is not None:
++                    verdict = finding_ok(record, count)
++                elif rc == 1 and (drifted or absent):
++                    verdict = finding_drift(record, count, drifted, absent)
++                else:
++                    out["error"] = (
++                        (err or text).strip().splitlines()[0][:200]
++                        if (err or text).strip()
++                        else "exit %d" % rc
++                    )
++                    verdict = finding_unmeasurable(
++                        "node_seed.py check printed no verdict (exit %d)" % rc
++                    )
+     out.update(verdict)
+     return out
+ 
+@@ -430,6 +523,16 @@ def probe_bunker(
+         out["error"] = "the seed record at %s does not parse" % record
+         out.update(finding_corrupt(record, strict))
+         return out
++    # CF-379: the node's preflight read a record that parses and declares no files. The node sends a
++    # TOKEN (`EMPTY=empty` / `EMPTY=absent`); the sentence the row prints is owned here, so a copy on
++    # the remote side cannot drift from it.
++    if data.get("RECORD") == "3":
++        out["record_present"] = True
++        out["file_count"] = 0
++        out.update(
++            finding_empty(record, EMPTY_TOKENS.get(data.get("EMPTY", ""), EMPTY_ABSENT))
++        )
++        return out
+     if data.get("RECORD") != "1":
+         out["error"] = (
+             "the node's answer carried no RECORD verdict (first line: %s)"
+diff --git a/scripts/verify-node.sh b/scripts/verify-node.sh
+index 6801f66..36471a0 100755
+--- a/scripts/verify-node.sh
++++ b/scripts/verify-node.sh
+@@ -197,6 +197,11 @@ fi
+ # answers VERIFY: UNVERIFIED and exits 3 rather than printing PASS for a seed nobody read
+ # (CF-291: an empty or unparseable record used to end in `VERIFY: PASS`, exit 0). With
+ # --strict-seed the same case is a FAIL instead, so a gate can refuse on "unknown" outright.
++# CF-379: a record that PARSES but declares no files is neither of those. The checker refuses it
++# itself with a FAIL row naming the empty collection and exit 1 — the case below already folds
++# exit 1 into `bad`, so the gate answers VERIFY: FAIL with no new verb and no new branch here. A
++# record that declares nothing cannot be a peer of one that declares a digest set: `0 files present
++# and matching` used to reach VERIFY: PASS for a node whose seed applied nothing.
+ SEEDCHK="$HERE/node_seed_drift.py"
+ if [ ! -r "$SEEDCHK" ]; then
+   bad "seed_drift" "$SEEDCHK missing — the node's seed is unmeasured"
+diff --git a/specs/NODE.md b/specs/NODE.md
+index d565584..3205917 100644
+--- a/specs/NODE.md
++++ b/specs/NODE.md
+@@ -243,7 +243,7 @@ Rules:
+ - `lane_target.py plan <projects.jsonl> --agent <id> --server <server> [--suffix /repo] [--prefix P]` emits the intended `bunker://<agent>/<home><suffix>` target per lane. The agent's home is **resolved from the agent**, never templated: homes are `/home/bunker-<full-id>`, so a `{agent}` template builds a wrong path that still parses.
+ - `lane_target.py scan <projects.jsonl> [--allow-remote]` checks every row and exits nonzero if any target is invalid.
+ - `scripts/node_freshness.py --agent A --server S [--path REL]` proves the **checkout** a node will work is the tree `origin/main` has: branch, HEAD, whether HEAD is an ancestor of `origin/main`, the lag count and the files that differ, plus every uncommitted path — gathered in ONE `bunker exec` round trip, with the agent's home resolved from the agent (never templated). `--workdir PATH` measures a local checkout with no bunker, no network and no database; `--json` emits the object layer 90 stores in the manifest. Exit codes: `0` PASS, `1` drift or dirty, `2` usage or unreachable — an unmeasurable node is not a PASS. A repo with no `origin` remote is a FAIL naming that, and the comparison ref falls back to `origin/HEAD` (named in the row) so a `trunk`-default repo is measured instead of mislabelled. `scripts/verify-node.sh` folds the verdict into `VERIFY:` (step 5; unmeasurable is WARN unless `--strict-freshness`).
+-- `scripts/node_seed_drift.py --agent A --server S` (or `--home DIR`) proves the **seed** a node carries is still what its digest record pins: it runs `scripts/node_seed.py`'s own `check` — the seeder is staged to a temp path on the node and removed again inside ONE `bunker exec` round trip, because provisioning deletes the node-side copy after it applies — with the record the seed left (`$HOME/.hermes/seed-applied.json`, home `$HOME`), so the verdict is the instrument's own and the wrapper cannot drift from it. The PASS row counts the seeded files; the FAIL row names each drifted path with the expected and measured digest prefixes and each path absent on the node; the wrapper never reimplements the digest comparison. Exit codes: `0` matched, `1` drift (or an absent record under `--strict-seed`), `2` usage, `3` could not measure — a node still being provisioned has no seed record, a corrupt record is not a tampered copy, and "cannot measure" is not drift; both are WARN, and `--strict-seed` refuses the unknown. `scripts/verify-node.sh` folds it into `VERIFY:` as step 6: a drifted seed alone drives `VERIFY: FAIL`, an unmeasurable seed is WARN (FAIL under `--strict-seed`).
++- `scripts/node_seed_drift.py --agent A --server S` (or `--home DIR`) proves the **seed** a node carries is still what its digest record pins: it runs `scripts/node_seed.py`'s own `check` — the seeder is staged to a temp path on the node and removed again inside ONE `bunker exec` round trip, because provisioning deletes the node-side copy after it applies — with the record the seed left (`$HOME/.hermes/seed-applied.json`, home `$HOME`), so the verdict is the instrument's own and the wrapper cannot drift from it. The PASS row counts the seeded files and **only a count greater than zero can produce one**: a record whose `files` collection is empty — or absent, or not a list — is refused with `FAIL seed_drift — <record>: the record declares no files (<shape>) — an empty seed certifies nothing` and exit `1`, because nothing it declares could agree with anything on the node, while the seeder's own `check` prints the same `0 files present and matching` row and exits 0 for it (CF-379: `0 files present and matching` certified a node whose seed applied nothing). No reason field on the record rescues it: the probe exists to prove digests, and a record that names none proves nothing; a node that is meant to carry no seed should carry no seed record, which is the absent-record WARN below. The FAIL row names each drifted path with the expected and measured digest prefixes and each path absent on the node; the wrapper never reimplements the digest comparison. Exit codes: `0` matched, `1` drift (or a record that declares no files, or an absent record under `--strict-seed`), `2` usage, `3` could not measure — a node still being provisioned has no seed record, a corrupt record is not a tampered copy, and "cannot measure" is not drift; both are WARN, and `--strict-seed` refuses the unknown. `scripts/verify-node.sh` folds it into `VERIFY:` as step 6: a drifted seed alone drives `VERIFY: FAIL`, a record that declares no files drives `VERIFY: FAIL` the same way (the checker's exit `1` is already the `bad` branch — no new verb), and an unmeasurable seed is WARN (FAIL under `--strict-seed`).
+ - Lane writers (`scripts/configure_family.py`) only `mkdir` a **local** target; a remote target is registered verbatim and materialised by the node side.
+ 
+ ## Failure semantics
+diff --git a/tests/selftest.sh b/tests/selftest.sh
+index 4101aa6..400799d 100755
+--- a/tests/selftest.sh
++++ b/tests/selftest.sh
+@@ -4221,6 +4221,62 @@ else
+   fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
+ fi
+ 
++# CF-379: a record that PARSES but declares no files. node_seed.py check prints `0 files present
++# and matching` and exits 0 for it, so the wrapper's PASS branch — "the seeder exited 0 with a
++# parseable count" — certified a node whose seed applied nothing. The record is not UNMEASURABLE:
++# it was read and it is conclusively empty, so the verdict is a named FAIL on the empty collection.
++printf '{"files": []}' > "$vn_rec"
++out=$(vn_run "$vn/tree"); rc=$?
++if [ "$rc" -eq 1 ] \
++  && printf '%s\n' "$out" | grep -Fxq 'VERIFY: FAIL (1)' \
++  && printf '%s\n' "$out" | grep -Fq '  FAIL  seed_drift — ' \
++  && printf '%s\n' "$out" | grep -Fq 'the record declares no files' \
++  && printf '%s\n' "$out" | grep -Fq 'the files collection is empty' \
++  && ! printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS'; then
++  say "  PASS  a seed record that declares no files -> exit $rc, VERIFY: FAIL naming the empty collection (not a PASS)"
++else
++  say "  FAIL  an empty seed record was not a named FAIL (exit $rc): $(printf '%s\n' "$out" | grep -E '^VERIFY|seed_drift' | head -3 | tr '\n' ' ')"
++  fails=$((fails+1)); printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++
++# The CF-379 control: the SAME empty record through the checker at 226bae2 — the row's measured
++# premise commit — inside the SAME verifier must still reach VERIFY: PASS and print `0 seeded files
++# present and matching`. Without it the arm above could be green on a fixture that refuses every
++# seed. Spliced from the pre-fix revision, not hand-written: `declared_files()` does not exist there,
++# so there is no refusal to weaken and the control cannot drift into a stub of the fix.
++vn_pfx="$vn/prefix-cf379/scripts"
++mkdir -p "$vn_pfx"
++cp -r "$vn/tree/scripts/." "$vn_pfx/"
++if git -C "$HERE" show 226bae2:scripts/node_seed_drift.py > "$vn_pfx/node_seed_drift.py" 2>/dev/null; then
++  if cmp -s "$vn_pfx/node_seed_drift.py" "$vn/tree/scripts/node_seed_drift.py"; then
++    say "  FAIL  the CF-379 control is not a pre-fix checker — byte-identical to the tree under test"; fails=$((fails+1))
++  else
++    out=$(vn_run "$vn/prefix-cf379"); rc=$?
++    if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
++      && printf '%s\n' "$out" | grep -Fq '0 seeded files present and matching'; then
++      say "  PASS  pre-fix 226bae2 certifies the same empty record: VERIFY: PASS, exit $rc (the fixture detects CF-379)"
++    else
++      say "  FAIL  pre-fix 226bae2 control did not pass the empty record (exit $rc)"; fails=$((fails+1))
++      printf '%s\n' "$out" | sed 's/^/    | /'
++    fi
++  fi
++else
++  say "  FAIL  pre-fix source 226bae2:scripts/node_seed_drift.py unavailable"; fails=$((fails+1))
++fi
++
++# Green control for the two arms above: the record restored — its two seeded files still match —
++# must reach VERIFY: PASS again, naming a count greater than zero. A red that cannot go green
++# proves nothing, and this is the count a pass is supposed to look like.
++cp "$vn/good-record.json" "$vn_rec"
++out=$(vn_run "$vn/tree"); rc=$?
++if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
++  && printf '%s\n' "$out" | grep -Fq '2 seeded files present and matching'; then
++  say "  PASS  the record restored with its 2 seeded files -> VERIFY: PASS, exit $rc (a pass names a count above zero)"
++else
++  say "  FAIL  the restored two-file record did not verify (exit $rc)"; fails=$((fails+1))
++  printf '%s\n' "$out" | sed 's/^/    | /'
++fi
++
+ # absent record: no seed was ever applied — unmeasured, so the gate refuses to call it verified.
+ mv "$vn_rec" "$vn/record.bak"
+ out=$(vn_run "$vn/tree"); rc=$?
