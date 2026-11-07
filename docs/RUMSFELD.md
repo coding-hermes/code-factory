@@ -1,10 +1,27 @@
 # RUMSFELD REGISTER — what we know, what we don't, and what we never asked
 
-**Status: WORKING DOCUMENT — not VERIFIED.** It records a four-quadrant audit run on 2026-11-05 against
-`b446562` (with the index corrected at `572e11b`), and every entry names the evidence it rests on. It is
-not a module in the `docs/master` sense: it does not describe one file, and it is *supposed* to contain
-open questions. When an item closes, it moves into a module with a measurement, and this file keeps the
-line saying where it went.
+**Status: WORKING DOCUMENT — HISTORICAL SNAPSHOT, not VERIFIED, and not a current measurement.** It
+records a four-quadrant audit run on 2026-11-05 **measured at tip `b446562`**
+(`b446562e6717dab2ab91712ff188db9727649f79`; the census index it cites was corrected at `572e11b`), and
+every entry names the evidence it rests on. The audit was **not re-run at the current HEAD**: unless a row
+names a later tip in its own cell — the `tests/selftest.sh` census row does, at `388c7cb` — read every
+figure here as a statement about `b446562` alone. The drift is large and cheap to check, which is why the
+date stamp is not pedantry: `docs/master/`, the module set most of this register indexes, **does not exist
+at `c068e87`** — the delivered documents are the `docs/handbook/` chapters plus the per-unit pages under
+`docs/handbook/appendices/units/`, which is the fallback root `scripts/master_doc_check.py` resolves when
+`docs/master` is absent; the census row's 56 arms read **61** at `c068e87`
+(`bash docs/audits/cf198-section-mapping.sh` → `arms_plan=61 arms_tree=61`); `git ls-files '*.py' | wc -l`
+returns 33 at `b446562` and **56** at `c068e87`; and `bash scripts/boardctl validate` reports **359 task
+rows / 531 events** at `c068e87` against the 338 rows recorded in Q1(iii) below. Re-measuring this register
+at HEAD is a separate piece of work, not a property this page claims.
+
+The gate that would grade a document of this kind is **M6.S3** (`scripts/master_doc_check.py`, which selects
+`[0-9][0-9]-*.md` under its resolved module root and so selects nothing here — this register sits outside
+it); its subject, which repository gate ran and what that gate graded, is **M3.S3**.
+
+It is not a module in the `docs/master` sense: it does not describe one file, and it is *supposed* to
+contain open questions. When an item closes, it moves into a module with a measurement, and this file keeps
+the line saying where it went.
 
 The purpose is to shrink the list. A quadrant that does not say **what would settle this** is a note, not
 a register entry.
@@ -59,7 +76,7 @@ own measurement. The distinction matters: a carried fact is only as fresh as its
 | host: 16 CPU, 59 GiB RAM, `/` 1.8 T with **294 G free (84 % used)** | measured |
 | control host Python **3.14.9**; cf-node **3.13.5** — and the hermes adapter FAILs here on `>=3.11,<3.14` | measured; constraint violated on the control host, satisfied on the node |
 | listening: `schedulerd` 127.0.0.1:9090, `crier` *:8767, `hermes` :8642/:8643, `chimera` :8765, `off-by-one` :8766 | measured |
-| `scripts/` 42 files / 13,944 lines; `docs/` 165 / 27,835; `specs/` 7 / 949; `tests/` 7 / 5,507; `docs/master` 44 modules | measured |
+| `scripts/` 42 files / 13,944 lines; `docs/` 165 / 27,835; `specs/` 7 / 949; `tests/` 7 / 5,507; `docs/master` 44 modules | measured at `b446562`; **not re-derived** — at `c068e87` the same tracked-file method (`git ls-files <dir> \| xargs wc -l`) returns scripts 63 / 20,409, docs 215 / 40,656, specs 7 / 1,177, tests 15 / 10,696, and `docs/master` no longer exists (see the header note) |
 | `tests/selftest.sh` 4,687 lines, **53 numbered sections + 3 lettered (§4b §7b §31b) = 56 arms**, 380 `PASS` rows (`grep -c '^  PASS'` over a clean-worktree run at `388c7cb`) | measured 2026-11-06; see "Rejected findings" |
 | cf-node running, 835 MB used, no public URL; the network boundary is explicitly **not verified** | measured |
 | GitReins armed: `config.yaml`, `tasks.yaml`, `worktrees.json`, `usage.jsonl`, `logs` all present | measured |
