@@ -2568,6 +2568,98 @@ else
   say "  FAIL  gitreins installer accepted an empty identity (exit $rc)"; fails=$((fails+1))
 fi
 
+# CF-266: `--check` used to certify a hook it could never run. installed() fell back to whatever
+# `gitreins` was on PATH and reported both sources identically, so apply() answered "already at
+# pin (no install)", created no venv, then wrote a hook pinned to $VENV/bin/gitreins — the first
+# commit in that repo died with "No such file or directory". Three offline arms: the check must
+# name the interpreter it cannot run; --apply with only a PATH binary must create the venv or
+# refuse, never write a dead hook; and once the venv carries the pin the hook it writes must
+# really execute, measured by the stub's own marker on a real commit.
+cf266_tmp=$(mktemp -d)
+cf266_home="$cf266_tmp/home"
+mkdir -p "$cf266_home" "$cf266_tmp/bin"
+cf266_pin=$(grep -m1 '^PIN=' "$HERE/scripts/install-gitreins.sh" | sed 's/[^0-9.]//g')
+cat > "$cf266_tmp/bin/gitreins" <<STUB
+#!/usr/bin/env bash
+[ "\${1:-}" = --version ] && { echo "gitreins $cf266_pin"; exit 0; }
+exit 0
+STUB
+chmod +x "$cf266_tmp/bin/gitreins"
+# Every git call reads the fixture home only: an ambient global core.hooksPath would bypass the
+# hook under test and make the commit arm vacuous.
+cf266_git() { env -u GIT_CONFIG_GLOBAL -u GIT_CONFIG_SYSTEM HOME="$cf266_home" XDG_CONFIG_HOME="$cf266_home/.config" git "$@"; }
+cf266_git config --global user.name fixture
+cf266_git config --global user.email fixture@example.invalid
+cf266_run() {  # cf266_run <repo> <mode...> — the installer exactly as a node would run it, no network
+  local repo="$1"; shift
+  env -u GIT_CO_AUTHOR HOME="$cf266_home" XDG_CONFIG_HOME="$cf266_home/.config" \
+    PATH="$cf266_tmp/bin:$PATH" PIP_NO_INDEX=1 GITREINS_VENV="$cf266_tmp/venv" NODE_REPO="$repo" \
+    /bin/bash "$HERE/scripts/install-gitreins.sh" "$@"
+}
+# a repo whose hook names an interpreter that is not there — the shape apply() used to write
+cf266_seed() {  # cf266_seed <repo> <hook:yes|no>
+  local repo="$1" hook="$1/.git/hooks/pre-commit"
+  git init -q -b main "$repo"
+  mkdir -p "$repo/.gitreins"; printf 'guards: []\n' > "$repo/.gitreins/config.yaml"
+  [ "$2" = yes ] || return 0
+  cat > "$hook" <<HOOK
+#!/usr/bin/env bash
+# (DF-011): a bare \`gitreins\` resolves via PATH
+REPO_ROOT="\$(git rev-parse --show-toplevel)"
+if [ ! -f "\$REPO_ROOT/.gitreins/config.yaml" ]; then
+    exit 0
+fi
+cd "\$REPO_ROOT"
+$cf266_tmp/venv/bin/gitreins guard --quality-async
+exit \$?
+HOOK
+  chmod +x "$hook"
+}
+cf266_hookbin() { [ -r "$1/.git/hooks/pre-commit" ] && sed -n 's/^\(.*\/gitreins\) guard.*/\1/p' "$1/.git/hooks/pre-commit" | head -1; }
+
+cf266_seed "$cf266_tmp/repo-broken" yes
+out=$(cf266_run "$cf266_tmp/repo-broken" --check 2>&1); rc=$?
+if [ "$rc" -ne 0 ] \
+  && printf '%s\n' "$out" | grep -Fq "  FAIL  hook" \
+  && printf '%s\n' "$out" | grep -Fq "calls $cf266_tmp/venv/bin/gitreins which does not exist" \
+  && ! printf '%s\n' "$out" | grep -q 'GITREINS: PASS'; then
+  say "  PASS  CF-266: --check names the hook interpreter that is absent and never says GITREINS: PASS"
+else
+  say "  FAIL  CF-266: --check certified a hook whose interpreter is absent (exit $rc): $(printf '%s\n' "$out" | grep -Ei 'hook|GITREINS' | head -3 | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+
+cf266_seed "$cf266_tmp/repo-apply" no
+out=$(cf266_run "$cf266_tmp/repo-apply" --apply --author-name fixture --author-email fixture@example.invalid 2>&1); rc=$?
+cf266_bin=$(cf266_hookbin "$cf266_tmp/repo-apply")
+if [ "$rc" -eq 0 ] && [ -n "$cf266_bin" ] && [ -x "$cf266_bin" ]; then
+  say "  PASS  CF-266: --apply provisioned the venv and pinned its hook to an executable ($cf266_bin)"
+elif [ "$rc" -ne 0 ] && [ ! -e "$cf266_tmp/repo-apply/.git/hooks/pre-commit" ] \
+  && printf '%s\n' "$out" | grep -Eq '  FAIL  (venv|install|hook) — '; then
+  say "  PASS  CF-266: --apply refused with a named row instead of writing a hook it cannot run (exit $rc)"
+else
+  say "  FAIL  CF-266: --apply reported exit $rc and left hook=${cf266_bin:-none} behind"; fails=$((fails+1))
+fi
+
+mkdir -p "$cf266_tmp/venv/bin"
+cat > "$cf266_tmp/venv/bin/gitreins" <<STUB
+#!/usr/bin/env bash
+[ "\${1:-}" = --version ] && { echo "gitreins $cf266_pin"; exit 0; }
+[ "\${1:-}" = guard ] && { : > "$cf266_tmp/guard-ran"; exit 0; }
+exit 0
+STUB
+chmod +x "$cf266_tmp/venv/bin/gitreins"
+out=$(cf266_run "$cf266_tmp/repo-apply" --apply --author-name fixture --author-email fixture@example.invalid 2>&1); rc=$?
+cf266_git -C "$cf266_tmp/repo-apply" commit -q --allow-empty -m t; crc=$?
+cf266_bin=$(cf266_hookbin "$cf266_tmp/repo-apply")
+if [ "$rc" -eq 0 ] && [ "$crc" -eq 0 ] && [ -n "$cf266_bin" ] && [ -x "$cf266_bin" ] && [ -f "$cf266_tmp/guard-ran" ]; then
+  say "  PASS  CF-266: the hook apply wrote executes on a real commit ($cf266_bin guard ran)"
+else
+  say "  FAIL  CF-266: hook did not run on commit (apply=$rc commit=$crc hook=${cf266_bin:-none} marker=$([ -f "$cf266_tmp/guard-ran" ] && echo yes || echo no))"
+  fails=$((fails+1))
+fi
+rm -rf "$cf266_tmp"
+
 # a namespace declaration is validated before any host is touched
 out=$(/bin/bash "$HERE/scripts/bunker-provision.sh" --check --project demo --agent a --server s --namespaces 'bad slug!' 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q "FAIL  namespaces — .* not a namespace slug"; then
