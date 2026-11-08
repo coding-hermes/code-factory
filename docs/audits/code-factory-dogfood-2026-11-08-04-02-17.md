@@ -140,3 +140,50 @@ auth staging the README documents does not work — it does, one directory too l
 
 No product code was changed by this walk. The only writes are this evidence file and the two board
 rows. The canonical checkout was not written to; the walk copy is under the tick's scratch root.
+
+## Addendum 2026-11-08b — REFIRE-B (records-only): this tick id was dispatched twice
+
+REFIRE-B — the id `code-factory-dogfood-2026-11-08-04-02-17` fired a second time. The first fire is
+recorded above and landed as `86d13c4` (2026-11-07T23:23:48-05:00). Per the duplicate-fire rule this
+fire re-verified from scratch and **re-measured nothing and added no rows**.
+
+| Leg | Command | Result |
+|---|---|---|
+| Published ref | `git fetch origin main; git rev-list --left-right --count HEAD...origin/main` | HEAD `2044c6f708f2404956ce651ecac39db0e27b82b7` = `origin/main`, parity `0 0` |
+| Board size / dup ids | `git show HEAD:.coding-hermes/board/tasks.jsonl \| jq -r .id \| sort \| uniq -d \| wc -l` | 364 rows, **0** duplicate ids |
+| This tick's rows | `jq -rc 'select(.id=="CF-387" or .id=="CF-388")'` on the committed board | CF-387 ×1 (pending), CF-388 ×1 (pending) |
+| Anchors still live at HEAD | `grep -n` on the cited code | `node_hygiene.py:47 ("harness", ".hermes")`; `node_gateway_auth.py:64` makedirs(password dir) only, `:79 tmp = config + ".cf-tmp"` |
+| CI | `gh run list --repo coding-hermes/code-factory --limit 3` | `[]` — the documented no-workflow state; gate is `tests/selftest.sh` + the GitReins guard |
+| GitReins for this tick | `.gitreins/tasks.yaml` | task `CF-387` status `complete`; verdict bundle published in `949e116` (PASS at `86d13c4`) |
+
+**Gap found and closed by this fire — the first fire's closeout dropped the board events.**
+`git show --stat 86d13c4` is 2 files (`tasks.jsonl` + the audit file), so the two `task_created`
+events `boardctl` had written at `04:23:28Z` (ids 542/543, 20 s before that commit) never landed:
+`git show HEAD:.coding-hermes/board/events.jsonl | jq 'select(.task_id=="CF-387" or .task_id=="CF-388")'`
+returned **zero** rows while both board rows were committed. A GitReins judge had since captured the
+residue in `949e116`'s `worktree.patch` (10 lines) without it ever being committed. Producer and
+disposition are established — the timestamps are this tick's own first fire, and the only live
+repo-cwd writers at re-verification time were two sibling GitReins judges running `tests/selftest.sh`
+(pids 135738, 147075, both on other lanes' worktrees) plus a `code-factory` lane tick at
+`cf-tick-20261108-0416`; none of them owns this board path. The two events are landed in the same
+commit as this addendum.
+
+**Validator, no new class.** `bash scripts/boardctl validate` on the HEAD-reconstructed board:
+`RESULT: OK (17 warning(s))`; the same command on the working tree carrying the two events:
+`RESULT: OK (17 warning(s))`. All 17 are pre-existing classes (9 deferred rows with no
+`defer_reason`, 2 free-form `guard_result`/`ci_result` on CF-034, 3 title/priority mismatches, the
+legacy duplicate event id 336, headerless board).
+
+**Install-leg census (fresh, read-only, no agent launched this fire).** One `curl -w` invocation over
+all seven configured servers: `404` (bunkerd alive — its `/health` answer) on **bunker-las-02,
+bunker-mvp, dedi-2**; `000` (down) on bunker-las-01, bunker-las-03, bunker-las-04, cube-las-00. The
+first fire's spawn and teardown proof stands for its own run; this fire deliberately spent no spawn
+because it produced no new product evidence.
+
+**Rows stay live.** Product surfaces that moved between the first fire's pinned SHA `40db7d8` and
+HEAD are `README.md`, `docs/handbook/chapters/M5-harness.md`, `scripts/harness/install-aider.sh`,
+`scripts/harness/install-goose.sh`, `tests/harness-conformance.sh`, `tests/selftest.sh` — none of
+them is a surface either row's acceptance criteria measures (`node_hygiene.py`,
+`node_gateway_auth.py` and `project-node.sh` are unchanged), so CF-387 and CF-388 are neither stale
+nor fixed at the published tip.
+
