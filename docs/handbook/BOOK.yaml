@@ -24,10 +24,13 @@ parts:
       - parts/00-overview.md
   - id: I
     title: System arrangement
-    files: []
+    files:
+      - parts/I-system-arrangement.md
   - id: II
     title: Flows
-    files: []
+    prefix: 2
+    files:
+      - parts/II-flows.md
   - id: III
     title: Modules
     prefix: 3
@@ -52,16 +55,20 @@ parts:
       - parts/IV-contract-register.md
   - id: V
     title: Settings register
-    files: []
+    files:
+      - parts/V-settings.md
   - id: VI
     title: Failure and risk
-    files: []
+    files:
+      - parts/VI-failure-risk.md
   - id: VII
     title: Work derivation
-    files: []
+    files:
+      - parts/VII-work-derivation.md
   - id: VIII
     title: Delivery
-    files: []
+    files:
+      - parts/VIII-delivery.md
 
 figures:
   # Part 0 — Overview (the three whole-system views)
