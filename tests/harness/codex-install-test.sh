@@ -726,6 +726,61 @@ rc=$(run_home "$ISO_HOME" "$O" "$INSTALLER" --check "${FULL_SET[@]}" --workdir "
       --api-key-file "$ISO_HOME/keys/two-line.key")
 expect_refused "E3 a CF_API_KEY_FILE holding two lines is refused by name" "$O" "$rc" "more than one line"
 
+# T-A (CF-278 HIGH) — `wc -l` counts NEWLINE bytes, not lines. A key file whose bytes are two tokens
+# separated by ONE newline with NO trailing newline measured 1 under the old guard, passed it, and
+# was then embedded whole by key_token="$(cat …)" — a raw newline inside a JSON string, which is the
+# parse error the guard claims to prevent. The fixture measures its own shape first, so the arm can
+# only go green against the byte layout `wc -l` miscounts.
+TA_KEY="$ISO_HOME/keys/no-trailing-nl.key"
+printf '%s\n%s' "$SYNTH_KEY" 'second-token-no-trailing-newline' >"$TA_KEY"
+chmod 600 "$TA_KEY"
+ta_wcl=$(wc -l <"$TA_KEY")
+ta_nl=$(tr -dc '\n' <"$TA_KEY" | wc -c)
+ta_last=$(tail -c 1 "$TA_KEY" | tr -d '\n' | wc -c)
+if [ "$ta_nl" = "1" ] && [ "$ta_last" = "1" ]; then
+  ok "T-A fixture is the shape the old guard miscounted: $ta_wcl newline (wc -l reports 1), 2 tokens, no trailing newline"
+else
+  no "T-A fixture is not the intended shape (newlines=$ta_nl, last byte non-newline=$ta_last) — the arm would prove nothing"
+fi
+O="$SB/ta.out"
+rc=$(run_home "$ISO_HOME" "$O" "$INSTALLER" --check "${FULL_SET[@]}" --workdir "$ISO_HOME/work" \
+      --api-key-file "$TA_KEY")
+expect_refused "T-A a two-token key file with no trailing newline is refused as multi-line" "$O" "$rc" "more than one line"
+grep -qF -- 'second-token-no-trailing-newline' "$O" \
+  && no "T-A the refusal printed the key file's content" \
+  || ok "T-A the refusal printed no part of the key file"
+
+# T-B (CF-278 MEDIUM) — a key file whose only byte is a newline. The command substitution turns it
+# into an EMPTY token, which the write path serialised as {"OPENAI_API_KEY":""} into the isolated
+# auth.json: a credential file that authenticates as nothing. It must be refused by name, in --check
+# AND in --turn (the mode that writes auth.json), and no isolated auth.json may exist afterwards.
+TB_HOME="$SB/home-blank-key"
+mkdir -p "$TB_HOME/work" "$TB_HOME/keys"
+git -C "$TB_HOME/work" init -q >/dev/null 2>&1
+git -C "$TB_HOME/work" -c user.email=cf278@local -c user.name=cf278 commit -q --allow-empty -m init >/dev/null 2>&1
+TB_KEY="$TB_HOME/keys/blank.key"
+printf '\n' >"$TB_KEY"; chmod 600 "$TB_KEY"
+tb_bytes=$(wc -c <"$TB_KEY"); tb_tokens=$(tr -d '\n' <"$TB_KEY" | wc -c)
+if [ "$tb_bytes" = "1" ] && [ "$tb_tokens" = "0" ]; then
+  ok "T-B fixture is a one-byte file whose only byte is a newline — one empty awk record, zero-length token"
+else
+  no "T-B fixture is not a lone newline ($tb_bytes bytes, $tb_tokens non-newline bytes)"
+fi
+O="$SB/tb1.out"
+rc=$(run_home "$TB_HOME" "$O" "$INSTALLER" --check "${FULL_SET[@]}" --workdir "$TB_HOME/work" \
+      --api-key-file "$TB_KEY")
+expect_refused "T-B a CF_API_KEY_FILE whose only byte is a newline is refused as a blank token" "$O" "$rc" "no key token"
+O="$SB/tb2.out"
+rc=$(run_home "$TB_HOME" "$O" "$INSTALLER" --turn "${FULL_SET[@]}" --workdir "$TB_HOME/work" \
+      --api-key-file "$TB_KEY")
+expect_refused "T-B --turn refuses the same blank key (the mode that writes auth.json)" "$O" "$rc" "no key token"
+tb_auth=$(find "$TB_HOME" -name auth.json -print 2>/dev/null | wc -l)
+[ "$tb_auth" = "0" ] && ok "T-B no isolated auth.json was produced under the fake \$HOME" \
+  || no "T-B $tb_auth auth.json file(s) were produced for a blank key"
+[ -e "$TB_HOME/.cache/cf-codex" ] \
+  && no "T-B the blank-key refusal still created the turn cache root" \
+  || ok "T-B the blank-key refusal created nothing under \$HOME/.cache"
+
 # ---------------------------------------------------------------------------------------------
 say ""
 say "codex installer test: $PASS passed, $FAIL failed, $SKIP skipped"

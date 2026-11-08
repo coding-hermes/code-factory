@@ -277,7 +277,7 @@ inside_turn_cache() {
 }
 
 check_api_key_file() {
-  local path="${VAR[CF_API_KEY_FILE]:-}" mode
+  local path="${VAR[CF_API_KEY_FILE]:-}" mode key_lines _cf_key_probe
   [ -n "$path" ] || return 0
   # A VALUE is refused before anything looks it up, and the value is never echoed (matrix §5,
   # AGENTS.md r8): a key-shaped string, or a bare opaque token with no path separator.
@@ -302,9 +302,29 @@ check_api_key_file() {
   # The key is written into a copy of auth.json for an isolated CODEX_HOME, so it must not be
   # able to break out of a JSON string. One line, one bare token: a second line would pass the
   # per-line grep below and then be concatenated into a key that authenticates as nothing.
-  if [ "$(wc -l <"$path" 2>/dev/null || echo 0)" -gt 1 ]; then
+  #
+  # CF-278: `wc -l` counts NEWLINE bytes, not lines. A key file whose bytes are two tokens
+  # separated by a single newline and with NO trailing newline measured 1, passed this guard, and
+  # was then embedded whole by key_token="$(cat …)" — a raw newline inside a JSON string, which is
+  # exactly the parse error this guard exists to prevent. Count real RECORDS with awk, and refuse a
+  # blank token independently: a file whose only byte is a newline is ONE empty record to awk and a
+  # zero-length token to `cat`, which wrote {"OPENAI_API_KEY":""} into the isolated auth.json.
+  key_lines=$(awk 'END{print NR}' "$path" 2>/dev/null)
+  case "${key_lines:-}" in
+    ''|*[!0-9]*) refuse "credential" "cannot count the lines of CF_API_KEY_FILE: $path" ;;
+  esac
+  if [ "$key_lines" -gt 1 ]; then
     refuse "credential" "CF_API_KEY_FILE holds more than one line — it must be a single bare key token (value not read)"
   fi
+  # The record count alone cannot prove the token carries no newline (a file ending in one newline
+  # is one record either way), so the token that will actually be embedded — the command
+  # substitution's own output — is measured directly. Neither refusal prints the value.
+  _cf_key_probe="$(cat "$path" 2>/dev/null)"
+  case "$_cf_key_probe" in
+    '') refuse "credential" "CF_API_KEY_FILE holds no key token — the value is blank once its trailing newline is stripped (value not printed)" ;;
+    *$'\n'*) refuse "credential" "CF_API_KEY_FILE carries a newline inside the key token — it must be a single bare token on one line (value not printed)" ;;
+  esac
+  unset _cf_key_probe
   if LC_ALL=C grep -q '[^A-Za-z0-9._-]' "$path" 2>/dev/null; then
     refuse "credential" "CF_API_KEY_FILE contains characters that are not a bare key token — refusing to copy it"
   fi
@@ -429,6 +449,20 @@ report_doctor() {  # report_doctor <binary> — honest, optional, and slow
     '') warn "doctor" "doctor --json output carried no overallStatus" ;;
     *) warn "doctor" "overallStatus: $status — name the failing check before blaming the harness" ;;
   esac
+}
+
+# CF-278: `{ … } >"$file" || { bad …; verdict CODEX action; exit $?; }` propagated the HELPER's
+# status, not the failed write's — by then `$?` is what `verdict` returned, so a write that failed
+# could exit 0 and read as a served turn. The failing write's status is captured at the failure
+# point and IS the exit code, normalised to 1 when it is somehow zero so the failure is always
+# visible as a non-zero exit.
+turn_home_fail() {  # turn_home_fail <rc> <leg> <reason>
+  local rc="$1"
+  case "$rc" in ''|*[!0-9]*|0) rc=1 ;; esac
+  bad "$2" "$3"
+  say ""
+  verdict CODEX action
+  exit "$rc"
 }
 
 # --- modes -----------------------------------------------------------------------------------
@@ -610,16 +644,16 @@ case "$MODE" in
     trap cleanup EXIT INT TERM
     if [ -n "${VAR[CF_API_KEY_FILE]:-}" ]; then
       mkdir -p "$cache_root" && chmod 700 "$cache_root" \
-        || { bad "turn_home" "cannot create the turn cache root $cache_root"; say ""; verdict CODEX action; exit $?; }
+        || turn_home_fail $? "turn_home" "cannot create the turn cache root $cache_root"
       turn_home=$(umask 077; mktemp -d "$cache_root/run.XXXXXXXX") \
-        || { turn_home=""; bad "turn_home" "cannot create a turn directory under $cache_root"; say ""; verdict CODEX action; exit $?; }
+        || { th_rc=$?; turn_home=""; turn_home_fail "$th_rc" "turn_home" "cannot create a turn directory under $cache_root"; }
       {
         printf 'model = "%s"\n' "$model"
         printf 'model_provider = "%s"\n' "$provider"
         printf 'sandbox_mode = "%s"\n' "$DEFAULT_SANDBOX"
         printf 'approval_policy = "never"\n'
       } >"$turn_home/config.toml" && chmod 600 "$turn_home/config.toml" \
-        || { bad "turn_home" "cannot write the isolated config.toml under $turn_home"; say ""; verdict CODEX action; exit $?; }
+        || turn_home_fail $? "turn_home" "cannot write the isolated config.toml under $turn_home"
       # The copy is deleted by the EXIT trap (CF-108: a credential file is deleted after use).
       #
       # CF-278: the key is embedded as a BARE TOKEN — the file's trailing newline is stripped by the
@@ -629,9 +663,19 @@ case "$MODE" in
       # associative-array key, which is the shape that killed this branch with `unbound variable`
       # while --check stayed green. A write that fails is named here rather than passing as a home
       # the turn will find credential-less.
-      key_token="$(cat "${VAR[CF_API_KEY_FILE]}")"
+      #
+      # CF-278: the substitution also turns a file whose only byte is a newline into an EMPTY
+      # string, which was written as {"OPENAI_API_KEY":""} — a credential-shaped file that
+      # authenticates as nothing. A blank or newline-carrying token is refused here, before
+      # auth.json exists, so a turn can never be started on one.
+      key_token="$(cat "${VAR[CF_API_KEY_FILE]}")" \
+        || turn_home_fail $? "turn_home" "cannot read CF_API_KEY_FILE for the isolated turn home"
+      case "$key_token" in
+        '') turn_home_fail 1 "turn_home" "CF_API_KEY_FILE holds a blank key token — refusing to write an isolated auth.json (value not printed)" ;;
+        *$'\n'*) turn_home_fail 1 "turn_home" "CF_API_KEY_FILE holds a newline inside the key token — refusing to write an isolated auth.json (value not printed)" ;;
+      esac
       { printf '{"OPENAI_API_KEY":"%s"}\n' "$key_token"; } >"$turn_home/auth.json" \
-        || { bad "turn_home" "cannot write the isolated auth.json under $turn_home"; say ""; verdict CODEX action; exit $?; }
+        || turn_home_fail $? "turn_home" "cannot write the isolated auth.json under $turn_home"
       chmod 600 "$turn_home/auth.json"
       ok "turn_home" "$turn_home (isolated config + key, mode 600, deleted on exit)"
     else
