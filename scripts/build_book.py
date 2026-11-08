@@ -48,6 +48,19 @@ BOOK = HB / "BOOK.yaml"
 SKILL = pathlib.Path("/home/kara/.hermes/skills/nasa-handbook")
 NASA_CHECK = SKILL / "scripts/check.py"
 IMG_RE = re.compile(r"^!\[([^\]]*)\]\((figures/[^)]+\.svg)\)\s*$")
+# inline-figure marker: parts/II keeps image lines AT their reading position
+# (V2-LAYOUT-01) instead of pulling them out to distant trailing sheets
+FIG_MARK = re.compile(r"^__FIG__\t(.+)$")
+# a Part II flow heading: "<h2>2.7 F7 — MONITORING</h2>"; §2.17 (subflow families)
+# gets its own sheet the same way
+FLOW_HEAD = re.compile(r"^<h2>2\.\d+\s+(F\d+|Subflows)\b")
+# a figure ≤ INLINE_FIG_MAX_MM rides on the flow's sheet directly above its
+# explanatory paragraph; a taller one gets its own sheet (hero-sized) with the
+# prose continuing on the immediately following sheet, flow id repeated (V2-LAYOUT-01)
+INLINE_FIG_MAX_MM = 200.0
+# measured: content starts ~28 mm below the page top and the budget ends ~272 mm,
+# so heading + reference + figure + caption share one sheet only up to ~200 mm
+SEP_FIG_MAX_MM = 200.0
 
 # The fit gate: body blocks must end above the footer band (275 mm guidance, ~0.35 mm
 # PDF block rounding -> 276). The template's own data-fit check is the finer gate.
@@ -57,18 +70,30 @@ FIT_LIMIT_MM = 276
 FIG_W_MM, FIG_H_MM = 170.0, 250.0
 
 
-def svg_fit(path: pathlib.Path) -> str:
+def svg_fit(path: pathlib.Path, h_max: float = FIG_H_MM) -> str:
     """Constrain a figure by BOTH dimensions (skill: a figure sized only by height
     clips silently at print width). The generator emits true-aspect mm attrs and
-    its floor gate models this same rule."""
+    its floor gate models this same rule. h_max tightens the height ceiling for a
+    figure that must share a sheet with heading, reference line and caption."""
     head = path.read_text()[:600]
     w = re.search(r'width="([\d.]+)mm"', head)
     h = re.search(r'height="([\d.]+)mm"', head)
     if not (w and h):
         return f'<img style="width:{FIG_W_MM}mm" src="file://{path}"/>'
     w_mm, h_mm = float(w.group(1)), float(h.group(1))
-    scale = min(1.0, FIG_W_MM / w_mm, FIG_H_MM / h_mm)
+    scale = min(1.0, FIG_W_MM / w_mm, h_max / h_mm)
     return f'<img style="width:{w_mm * scale:.1f}mm" src="file://{path}"/>'
+
+
+def fig_scaled_h(path: pathlib.Path) -> float:
+    """The figure's height in mm after the svg_fit rule (full ceiling)."""
+    head = path.read_text()[:600]
+    w = re.search(r'width="([\d.]+)mm"', head)
+    h = re.search(r'height="([\d.]+)mm"', head)
+    if not (w and h):
+        return FIG_H_MM
+    w_mm, h_mm = float(w.group(1)), float(h.group(1))
+    return h_mm * min(1.0, FIG_W_MM / w_mm, FIG_H_MM / h_mm)
 
 
 def pdf_page_count(pdf_path) -> int:
@@ -429,10 +454,12 @@ document.fonts.ready.then(function () {
 """
 
 
-def body_blocks(text: str) -> tuple[list[str], list]:
+def body_blocks(text: str, inline_figs: bool = False) -> tuple[list[str], list]:
     """Markdown -> block list; two pulls happen before the generic block walker:
 
-    - ![alt](figures/x.svg) lines become their own sheets (returned separately);
+    - ![alt](figures/x.svg) lines become their own sheets (returned separately) —
+      EXCEPT with inline_figs=True, where each image line is kept in place as an
+      __FIG__ marker block for the caller to mount at its reading position;
     - a markdown blockquote opening 'NOTE:'/'CAUTION:'/'WARNING:' becomes a genre
       notice block (black left band + caps label) instead of prose. Other quotes,
       if any ever appear, fall through to the paragraph walker untouched.
@@ -441,8 +468,11 @@ def body_blocks(text: str) -> tuple[list[str], list]:
     for line in text.splitlines():
         m = IMG_RE.match(line.strip())
         if m:
-            p = HB / m.group(2)
-            figs.append(p if p.exists() else None)
+            if inline_figs:
+                kept.append(f"__FIG__\t{m.group(2)}")
+            else:
+                p = HB / m.group(2)
+                figs.append(p if p.exists() else None)
         else:
             kept.append(line)
     blocks: list[str] = []
@@ -455,6 +485,12 @@ def body_blocks(text: str) -> tuple[list[str], list]:
 
     i, n = 0, len(kept)
     while i < n:
+        m = FIG_MARK.match(kept[i])
+        if m:
+            flush()
+            blocks.append(kept[i])
+            i += 1
+            continue
         if kept[i].lstrip().startswith(">"):
             grp = []
             while i < n and kept[i].lstrip().startswith(">"):
@@ -474,6 +510,68 @@ def body_blocks(text: str) -> tuple[list[str], list]:
         i += 1
     flush()
     return blocks, figs
+
+
+def flow_sheets(
+    p: dict, blocks: list[str], fig_codes: dict[str, str], today: str, tab: str
+) -> list[tuple[str, list[str], str]]:
+    """Part II flow mounting (V2-LAYOUT-01): each flow is ONE continuous section —
+    heading, figure, caption and explanatory paragraph together at the reading
+    position. A figure that fits is mounted hero-sized inline, directly above its
+    caption and paragraph; a figure too large for a text sheet gets its own sheet
+    (hero-sized, reference line in the prose) with the paragraph beginning on the
+    immediately following sheet. Each flow opens its own sheet whose dochead names
+    the flow id, so every pagination continuation repeats it."""
+    part_head = f"PART {p['id']} · {p['title'].upper()}"
+    # split the part at its flow headings; the opener keeps the plain part head
+    groups: list[tuple[str, list[str]]] = []
+    cur_id, cur = "", []
+    for b in blocks:
+        m = FLOW_HEAD.match(b)
+        if m:
+            groups.append((cur_id, cur))
+            cur_id, cur = m.group(1), [b]
+        else:
+            cur.append(b)
+    groups.append((cur_id, cur))
+
+    out: list[tuple[str, list[str], str]] = []
+    for fid, fblocks in groups:
+        section = f"{part_head} · {fid}" if fid else part_head
+        sheet: list[str] = []
+
+        def flush() -> None:
+            if sheet:
+                out.append((section, list(sheet), tab))
+                sheet.clear()
+
+        for b in fblocks:
+            m = FIG_MARK.match(b)
+            if not m:
+                sheet.append(b)
+                continue
+            fig = HB / m.group(1)
+            if not fig.exists():
+                continue
+            code = fig_codes.get(m.group(1), fig.stem.upper())
+            cap = f"<h2>FIGURE {code} — as of {today}</h2>"
+            if fig_scaled_h(fig) <= INLINE_FIG_MAX_MM:
+                # hero-sized inline at the reading position: image, then caption,
+                # then the explanatory paragraph (the next block in reading order)
+                sheet.extend([svg_fit(fig), cap])
+            else:
+                ref = (
+                    f"<p>FIGURE {code} is taller than one text sheet allows; it is "
+                    "mounted hero-sized below with its caption, and this "
+                    "flow&#8217;s explanatory paragraph begins directly beneath it "
+                    "on the following sheet — the flow id is repeated on every "
+                    "continuation head.</p>"
+                )
+                sheet.append(ref)
+                flush()
+                out.append((section, [svg_fit(fig, h_max=SEP_FIG_MAX_MM), cap], tab))
+        flush()
+    return out
 
 
 def main() -> int:
@@ -652,13 +750,21 @@ def main() -> int:
                     )
             else:
                 y = f_idx
-            blocks, figs = body_blocks(f.read_text())
+            blocks, figs = body_blocks(
+                f.read_text(), inline_figs=(rel == "parts/II-flows.md")
+            )
             blocks = code_tables(
                 blocks, x, y, reg=(rel == "parts/IV-contract-register.md")
             )
             if changed_since_issue(f):
                 blocks = mark_changed(blocks)
-            sheets.append((f"PART {p['id']} · {p['title'].upper()}", blocks, tab))
+            if rel == "parts/II-flows.md":
+                # V2-LAYOUT-01: flow figures mount at their reading position, never
+                # pulled out to distant trailing sheets
+                sheets.extend(flow_sheets(p, blocks, fig_codes, today, tab))
+                figs = []
+            else:
+                sheets.append((f"PART {p['id']} · {p['title'].upper()}", blocks, tab))
             for fig in (
                 figs
             ):  # one figure per sheet, hero-sized, caption carries the snapshot date
