@@ -1,0 +1,279 @@
+commit a54b9fea15aadeef0821919ca83868db50db032d
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Sat Nov 7 19:48:41 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Sat Nov 7 19:48:41 2026 -0500
+
+    harness(codex): classify non-blocking rows as notes so --check can reach PASS
+    
+    `install-codex.sh --check` on a healthy host could not print `CODEX: PASS`: two of its
+    rows were standing WARNs about environment facts the measured exec adapter does not
+    need, and `verdict()` (scripts/lib.sh) correctly refuses to sit a WARN beside PASS.
+    
+    Classify at the call site, per row — `warn()` and `verdict()` are untouched, so every
+    other adapter's WARN rows still produce `<LABEL>: UNVERIFIED` with exit 3:
+    
+    - `app_server` present -> `..` note. crier@6422c851 runs exec mode and never starts a
+      sidecar (`grep -rn app-server` over it is empty), so a sidecar existing cannot block a
+      dispatched run. Its ABSENCE stays a named FAIL, unchanged.
+    - `auth` with an ambient $HOME/.codex/auth.json -> `..` note. A credential exists and a
+      turn can authenticate; where the host login came from is not something this adapter
+      certifies.
+    - `auth` with NEITHER a key file nor a host login -> stays a WARN (a genuine blocker:
+      an unattended turn cannot authenticate), so `CODEX: UNVERIFIED` / exit 3 remains
+      reachable for a real absence.
+    
+    Both notes keep their text, so the information the WARN rows carried is still printed.
+    
+    specs/HARNESS.md gains "Which conditions are notes, and which are WARNs" — the decision
+    table naming `app_server` and `auth` literally, the absence question that decides a row's
+    class, and the statement that classification is a call-site decision. M5-harness.md §6
+    (M5-C3) carries the same distinction plus a §7 verification row.
+    
+    Proof (tests/harness/codex-install-test.sh, arms B5/B5b — both required, so neither the
+    old defect nor "delete the warnings" can pass):
+    - B5: pinned binary + host login -> `CODEX: PASS` exit 0, `app_server` and `auth` printed
+      as notes, zero WARN rows.
+    - B5b: the same pinned binary with no credential surface -> `WARN auth` named and
+      `CODEX: UNVERIFIED` exit 3 with no FAIL row.
+    
+    Verified: bash -n (install-codex.sh, codex-install-test.sh, selftest.sh);
+    tests/harness/codex-install-test.sh --hermetic (48 passed, 0 failed, 1 skipped,
+    RESULT: PASS); bash tests/selftest.sh (SELFTEST: PASS, §59 six-adapter table green);
+    bash scripts/boardctl validate (RESULT: OK); the adapter on this host prints
+    `CODEX: PASS` exit 0 with both rows as notes.
+    
+    ch:trace row=CF-384 spec=specs/HARNESS.md#verdict-line wave=none:serial-worker test=tests/harness/codex-install-test.sh::codex-warn-classification doc=docs/handbook/chapters/M5-harness.md prompt=/home/kara/.hermes/cache/scratch/code-factory-2026-11-07-23-36-05/CF-384-brief.txt evidence=tests/harness/codex-install-test.sh verdict=none:foreman-runs-gitreins-after-worker commit=none:worker-commit-created-at-exit memory=none:foreman-writes-after-publish witness=none:foreman-verifies
+    STATUS: complete
+    TIER: T1
+    EVIDENCE: tests/harness/codex-install-test.sh
+    
+    Addresses CF-384
+---
+ docs/handbook/chapters/M5-harness.md | 19 +++++++++++-
+ scripts/harness/install-codex.sh     | 15 +++++++--
+ specs/HARNESS.md                     | 34 +++++++++++++++++++--
+ tests/harness/codex-install-test.sh  | 59 ++++++++++++++++++++++++++++++------
+ 4 files changed, 113 insertions(+), 14 deletions(-)
+
+diff --git a/docs/handbook/chapters/M5-harness.md b/docs/handbook/chapters/M5-harness.md
+index 50f01ce..ad72170 100644
+--- a/docs/handbook/chapters/M5-harness.md
++++ b/docs/handbook/chapters/M5-harness.md
+@@ -169,7 +169,7 @@ among the 18; the canonical id M5 participates in is CT-17 (`conformance → har
+ |---|---|---|---|---|---|
+ | CT-17 | conformance battery | in | `tests/harness-conformance.sh` (the battery, per-leg rows) | **external** — the operator/board reads the leg verdicts as FACT-08 certification; no in-repo code consumer | **UNVERIFIED** — not run (needs a live node) |
+ | M5-C2 | gateway | out | `install-hermes.sh:352` `hermes serve` | **rumour — one side only** (the node gateway on `:10800`, a port/service, not a function) | **UNVERIFIED** — a port/service is not a `file:function`; the "works" state was inherited, not measured (B22) |
+-| M5-C3 | adapter caller — battery `leg_check`, layer 20, operator | out | `scripts/lib.sh:24` `verdict()` — one verdict line decided by row counts (`FAIL (n)` exit 1 / `UNVERIFIED` exit 3 / `PASS` exit 0); `warn()` (`lib.sh:8`) counts the rows it prints, so `FAILED` is not the only counter | `tests/harness-conformance.sh` `leg_check` (reads the `  FAIL` rows and the adapter's exit status), `scripts/project-node.sh:609-621` (layer 20 folds the adapter's FAIL rows into `NODE: FAIL (n)`), `tests/selftest.sh` §59 (asserts the line by name for three row counts) | **PASS** — measured 2026-11-07, §59 arms (a)–(f); the contract is `specs/HARNESS.md` "The verdict line" |
++| M5-C3 | adapter caller — battery `leg_check`, layer 20, operator | out | `scripts/lib.sh:24` `verdict()` — one verdict line decided by row counts (`FAIL (n)` exit 1 / `UNVERIFIED` exit 3 / `PASS` exit 0); `warn()` (`lib.sh:8`) counts the rows it prints, so `FAILED` is not the only counter | `tests/harness-conformance.sh` `leg_check` (reads the `  FAIL` rows and the adapter's exit status), `scripts/project-node.sh:609-621` (layer 20 folds the adapter's FAIL rows into `NODE: FAIL (n)`), `tests/selftest.sh` §59 (asserts the line by name for three row counts) | **PASS** — measured 2026-11-07, §59 arms (a)–(f); the contract is `specs/HARNESS.md` "The verdict line", and the note-versus-`WARN` classification of individual rows (CF-384) is its "Which conditions are notes, and which are WARNs", held by `tests/harness/codex-install-test.sh` arms B5/B5b |
+ 
+ CT-17 is a boundary contract: the consumer (operator/board reading the verdicts) has no in-repo
+ `file:function`, so "producer named + consumer marked external" is the honest terminal state.
+@@ -180,6 +180,22 @@ exit 3, and any `FAIL` row makes it `FAIL (n)` with exit 1. Before CF-141 the li
+ `$FAILED` alone, so `OPENCODE: PASS` was printed beside two `WARN` rows under a banner that already
+ said `UNVERIFIED adapter` — the adapter's own summary contradicted its own rows.
+ 
++**Note versus `WARN` is part of this contract (CF-384).** Because a `WARN` row decides the verdict,
++each row's class is a substantive decision made at the adapter call site, never a change to
++`verdict()`: a row whose *absence* stops a run of the surface the adapter is measured on stays a
++`WARN` (it moves the line), while a row reporting an environment FACT the adapter does not need is a
++`..` note (it carries its text and moves nothing). `scripts/lib.sh` is untouched, so every other
++adapter's `WARN` rows still produce `<LABEL>: UNVERIFIED` with exit 3. The codex adapter decided two
++rows: `app_server` present is a note — crier@6422c851 runs exec mode and `grep -rn app-server` over it
++returns nothing, so a sidecar existing cannot block a dispatched run (its absence stays a named
++`FAIL`); and `auth` with an ambient `$HOME/.codex/auth.json` is a note — a credential exists and a turn
++can authenticate — while `auth` with **neither** a key file nor a host login stays a `WARN`, because
++an unattended turn genuinely cannot authenticate. The decision table is `specs/HARNESS.md` "Which
++conditions are notes, and which are WARNs"; `tests/harness/codex-install-test.sh` arms B5 (pinned
++binary + host login → `CODEX: PASS`, exit 0, both rows printed as notes, zero `WARN` rows) and B5b
++(the same binary, no credential surface → `WARN auth` + `CODEX: UNVERIFIED`, exit 3) hold the
++distinction in both directions, so the `PASS` is not reachable by deleting the warning mechanism.
++
+ ## 7. Verification
+ 
+ | Check | Command | Expected | Last run | Result |
+@@ -187,6 +203,7 @@ said `UNVERIFIED adapter` — the adapter's own summary contradicted its own row
+ | shell parse | `for f in scripts/harness/*.sh; do bash -n "$f"; done` | exit 0 | 2026-11-06 | PASS (in 20/20 sweep) |
+ | adapter verdict vocabulary | `bash tests/selftest.sh` (section 59, arms a–c) | one stub adapter, three row counts: `WARN` → `STUB: UNVERIFIED` exit 3 (never `PASS`), `FAIL` → `STUB: FAIL (1)` exit 1, all-`PASS` → `STUB: PASS` exit 0 | 2026-11-07 | **PASS** (fixture) |
+ | verdict on the real adapters | `bash tests/selftest.sh` (section 59, arms d–f) | `install-opencode.sh --check` on the row's PATH stub → `OPENCODE: UNVERIFIED` exit 3 with two `WARN` rows, while pre-fix `d4f2600` on the same stub prints `OPENCODE: PASS` exit 0 (red control); each of the six adapters' verdict line equals the one its own `FAIL`/`WARN` counts require; an unsupported interpreter ends `FAIL python — …` + `HERMES: FAIL (1)` exit 1 | 2026-11-07 | **PASS** (fixture) |
++| codex note-versus-`WARN` classification (M5-C3, CF-384) | `bash tests/harness/codex-install-test.sh --hermetic` (arms B5, B5b) | pinned binary + host login → `CODEX: PASS` exit 0, `app_server` and `auth` printed as `..` notes with their text, zero `WARN` rows; the same binary with no credential surface → `WARN auth — no CF_API_KEY_FILE and no $HOME/.codex/auth.json` + `CODEX: UNVERIFIED` exit 3, no `FAIL` row (so the exit is the WARN, not a failure) | 2026-11-07 | **PASS** (fixture, 48 passed / 0 failed / 1 skipped) |
+ | occupied-port auth gate | `bash tests/selftest.sh` (section 55, arm E) | occupied `:10800` + no `dashboard.basic_auth` -> exit nonzero with the named `FAIL  port` row and no `PASS port`/`PASS status_probe`/`HERMES: PASS`; occupied + valid block keeps both PASS rows | 2026-11-07 | **PASS** (red pre-fix run in `docs/audits/code-factory-CF-192.probe.txt`) |
+ | python compile | `python3 -m py_compile scripts/harness_resolve.py` | exit 0 | 2026-11-06 | PASS |
+ | harness resolve unit | `python3 tests/test_harness_resolve.py` | pass | 2026-11-06 | **PASS** (28 tests, rc 0) |
+diff --git a/scripts/harness/install-codex.sh b/scripts/harness/install-codex.sh
+index 8b9c8d6..a0de746 100755
+--- a/scripts/harness/install-codex.sh
++++ b/scripts/harness/install-codex.sh
+@@ -304,13 +304,20 @@ check_workdir() {
+ }
+ 
+ # --- check legs ------------------------------------------------------------------------------
++# CF-384: a row is classified by whether its ABSENCE blocks a run of the surface crier uses.
++# `warn` is the verdict-moving row (a genuine absence); `note` records an environment FACT the
++# measured exec adapter does not need, so it cannot move the verdict. The decision table for these
++# two rows is specs/HARNESS.md "Which conditions are notes, and which are WARNs".
+ report_auth() {
+   local host_login="$HOME/.codex/auth.json" mode
+   if [ -n "${VAR[CF_API_KEY_FILE]:-}" ]; then return 0; fi          # validated and reported above
+   if [ -f "$host_login" ]; then
+     mode=$(stat -c '%a' "$host_login" 2>/dev/null || echo '?')
+-    warn "auth" "\$HOME/.codex/auth.json exists (mode $mode) — a host login is ambient state, not a directive; fine for a measured turn, not for a node"
++    # Ambient, not a directive — but a credential EXISTS, so an unattended turn can authenticate.
++    # crier never needs this repo's opinion of where the login came from, so it is a note.
++    note "auth — \$HOME/.codex/auth.json exists (mode $mode) — a host login is ambient state, not a directive; fine for a measured turn, not for a node"
+   else
++    # A genuine blocker: with no key file and no host login there is nothing to authenticate with.
+     warn "auth" "no CF_API_KEY_FILE and no \$HOME/.codex/auth.json — an unattended turn will fail at auth"
+   fi
+ }
+@@ -344,7 +351,11 @@ report_app_server() {  # report_app_server <binary>
+   h=$("$b" app-server --help 2>/dev/null)
+   case "$h" in
+     *app\ server*|*app-server*)
+-      warn "app_server" "[experimental] app-server subcommand present — crier@6422c851 does not use it (exec mode); probe with --app-server" ;;
++      # CF-384: the subcommand existing is an environment FACT, not an absence — crier runs exec
++      # mode and never starts a sidecar, so its presence cannot block a turn and never moves the
++      # verdict. Its ABSENCE is the opposite: it is a named FAIL, because a sidecar consumer could
++      # not be served (that arm below is unchanged).
++      note "app_server — [experimental] app-server subcommand present — crier@6422c851 does not use it (exec mode); probe with --app-server" ;;
+     *) bad "app_server" "no app-server subcommand (a sidecar consumer could not be served)"; return 1 ;;
+   esac
+ }
+diff --git a/specs/HARNESS.md b/specs/HARNESS.md
+index 18d2b06..21a1ed2 100644
+--- a/specs/HARNESS.md
++++ b/specs/HARNESS.md
+@@ -19,6 +19,8 @@ A **harness** is whatever runs the work inside a node. The factory must not care
+ | Fail | Non-zero exit on failure; never a silent success. Every adapter ends with the verdict line defined in "The verdict line" below, including a ladder that stops early. |
+ | Idempotent | Re-running install changes nothing. |
+ 
++<a id="verdict-line"></a>
++
+ ### The verdict line
+ 
+ Every adapter ends its output with **one** verdict line, and that line is decided by the row counts
+@@ -46,8 +48,8 @@ exited 0 with two `WARN` rows above the verdict. `tests/selftest.sh` §59 keeps
+ 
+ The row-count rule is the `--check` rule, because `--check` is the certification claim a caller acts
+ on. The modes that DO something (`--apply`, `--turn`, `--app-server`) pass `action` to `verdict()`:
+-there a `WARN` is advice about a run that already happened (a `$HOME/.local/bin` PATH hint, an
+-`[experimental]` subcommand this repo does not use), so only `FAIL` rows decide and a measured
++there a `WARN` is advice about a run that already happened (a `$HOME/.local/bin` PATH hint, a
++`model_served` the harness did not report), so only `FAIL` rows decide and a measured
+ install still ends exit 0. Without that split `install-codex.sh --apply` — a harness this repo has
+ measured — would report `UNVERIFIED` for a successful install merely because it also warned that
+ `$HOME/.local/bin` is not on `PATH`.
+@@ -59,6 +61,34 @@ nothing was installed or run`), and claude-code's `--turn` without a credential
+ print: `install-hermes.sh` refusing an out-of-range interpreter prints `FAIL python — …` and then
+ `HERMES: FAIL (1)`, not a bare exit with no summary.
+ 
++## Which conditions are notes, and which are WARNs
++
++The verdict rule above says a `WARN` row cannot sit beside `PASS`. That makes the CLASS of each row a
++substantive decision, and CF-384 settled it for the two codex rows that had been warning about facts
++the adapter does not need — a healthy host therefore could not reach `CODEX: PASS`:
++
++| Row (adapter) | Condition measured | Class | Why |
++|---|---|---|---|
++| `app_server` (codex) | the `[experimental]` app-server subcommand is **present** | `..` note | crier@6422c851 runs **exec** mode and starts no sidecar — its own doc comment names "two verified surfaces: exec create / exec resume", and `grep -rn app-server` over crier returns nothing. A sidecar existing cannot block any run this repo dispatches, so it is an environment FACT the row records (with its text, and the `--app-server` pointer) and it does not move the verdict. |
++| `app_server` (codex) | the subcommand is **absent** | `FAIL` (unchanged) | the mirror case, and strictly stronger than a `WARN`: a consumer that wanted the sidecar could not be served, and the row names that. |
++| `auth` (codex) | no `CF_API_KEY_FILE`, but `$HOME/.codex/auth.json` **exists** | `..` note | an ambient host login. A credential exists, a turn can authenticate, and where the host's login came from is not something this adapter certifies — the row is printed so the provenance stays visible, and it is a note so a working host is not reported unproven for it. |
++| `auth` (codex) | **neither** a key file nor a host login | `WARN` (unchanged) | a genuine blocker: an unattended turn fails at auth, and "nothing to authenticate with" is exactly the absence this row exists to name. It keeps `CODEX: UNVERIFIED` with exit 3. |
++| any other adapter's row | any `WARN` | `WARN` (unchanged) | the rule above applies verbatim: `<LABEL>: UNVERIFIED`, exit 3. |
++
++The question a row answers is **"does the absence of the thing this row reports stop a run of the
++surface the adapter is measured on?"** If it does, the row is a `WARN` and the verdict moves; if the
++row reports a fact the adapter does not need, it is a note. Classification is a **call-site** decision
++per row — `warn()` and `verdict()` in `scripts/lib.sh` are untouched, so a generic `WARN` row still
++makes `--check` `UNVERIFIED` with exit 3, and no other adapter's rows changed. Deleting the warning
++mechanism would be a different change and is not what this table authorises.
++
++`tests/harness/codex-install-test.sh` keeps the decision falsifiable in both directions, which is why
++the pair exists rather than one arm: **B5** runs `--check` on the pinned binary in a home with a host
++login and requires `CODEX: PASS` with exit 0, both rows printed as notes and **zero** `WARN` rows;
++**B5b** runs the same pinned binary in a home with no credential surface at all and requires the named
++`WARN auth` row and `CODEX: UNVERIFIED` with exit 3. B5 alone would pass an adapter that deleted its
++warnings; B5b alone would pass the defect the row was raised on.
++
+ ## Adapters and their measured state
+ 
+ | Harness | Method | State (2026-10-29) |
+diff --git a/tests/harness/codex-install-test.sh b/tests/harness/codex-install-test.sh
+index 6c412cb..07cfe5a 100755
+--- a/tests/harness/codex-install-test.sh
++++ b/tests/harness/codex-install-test.sh
+@@ -16,6 +16,16 @@
+ #             green leg that never ran is not.
+ #
+ # Exit 0 only when every non-skipped assertion passed.
++#
++# ch:trace row=CF-384 spec=specs/HARNESS.md#verdict-line wave=none:serial-worker test=tests/harness/codex-install-test.sh::codex-warn-classification doc=docs/handbook/chapters/M5-harness.md prompt=/home/kara/.hermes/cache/scratch/code-factory-2026-11-07-23-36-05/CF-384-brief.txt evidence=tests/harness/codex-install-test.sh verdict=none:foreman-runs-gitreins-after-worker commit=none:worker-commit-created-at-exit memory=none:foreman-writes-after-publish witness=none:foreman-verifies
++# STATUS: complete
++# TIER: T1
++# EVIDENCE: tests/harness/codex-install-test.sh
++#
++# CF-384: the arms B5 (positive) and B5b (negative) are the `codex-warn-classification` pair. B5
++# proves the two former WARN rows (app_server, auth-with-host-login) are notes that cannot move the
++# verdict; B5b proves a genuine WARN (no credential surface at all) still ends `CODEX: UNVERIFIED`
++# with exit 3. Both are required: either one alone is satisfiable by the wrong code.
+ set -uo pipefail
+ HERE_REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+ INSTALLER="$HERE_REPO/scripts/harness/install-codex.sh"
+@@ -217,17 +227,48 @@ else
+   no "B4 a second --apply changed something (rc=$rc, $efore -> $eafter)"
+ fi
+ 
+-# B5 — --check on the installed fake home measures the binary and version legs. It ends UNVERIFIED
+-# (exit 3), not PASS: two of this adapter's own rows are standing WARNs — `app_server` ([experimental]
+-# subcommand present, unused by crier) and `auth` (no CF_API_KEY_FILE and no $HOME/.codex/auth.json in
+-# this throwaway HOME). A WARN row cannot sit beside PASS (specs/HARNESS.md "The verdict line", CF-141).
++# B5 — CF-384 codex-warn-classification, POSITIVE arm. --check on the installed fake home measures
++# the binary and version legs and ends PASS (exit 0): the two rows this adapter used to WARN on are
++# environment FACTS the measured exec adapter does not need, so they are notes —
++#   app_server  the [experimental] subcommand exists (crier runs exec mode, never a sidecar)
++#   auth        a host login exists (~/.codex/auth.json), so a turn can authenticate
++# Neither absence-blocks a run, so neither may move the verdict (specs/HARNESS.md "Which conditions
++# are notes, and which are WARNs"). Their TEXT is still printed, so the information is not lost.
++mkdir -p "$FAKEHOME/.codex"
++printf '%s\n' '{"fixture":"host login placeholder — no credential value"}' >"$FAKEHOME/.codex/auth.json"
++chmod 600 "$FAKEHOME/.codex/auth.json"
+ O="$SB/b5.out"
+ rc=$(clean_env HOME="$FAKEHOME" "$INSTALLER" --check >"$O" 2>&1; echo $?)
+-[ "$rc" = "3" ] && grep -q "PASS  binary — $FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex" "$O" \
+-  && grep -q 'PASS  version — ' "$O" && grep -q 'WARN  auth' "$O" \
+-  && grep -qx 'CODEX: UNVERIFIED' "$O" \
+-  && ok "B5 --check measures the installed pin and ends 'CODEX: UNVERIFIED' (exit 3) on its own WARN rows" \
+-  || { no "B5 --check did not measure the installed pin with a row-count verdict (rc=$rc)"; sed 's/^/        /' "$O"; }
++if [ "$rc" = "0" ] && grep -q "PASS  binary — $FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex" "$O" \
++  && grep -q 'PASS  version — ' "$O" \
++  && grep -qF '  ..    app_server — [experimental] app-server subcommand present' "$O" \
++  && grep -qF '  ..    auth — $HOME/.codex/auth.json exists (mode 600)' "$O" \
++  && [ "$(grep -c '^  WARN  ' "$O")" = 0 ] \
++  && grep -qx 'CODEX: PASS' "$O"; then
++  ok "B5 codex-warn-classification: --check on the installed pin with a host login ends 'CODEX: PASS' (exit 0); app_server and auth are printed as notes, 0 WARN rows"
++else
++  no "B5 codex-warn-classification: --check did not reach PASS with the two former WARN rows as notes (rc=$rc, $(grep -c '^  WARN  ' "$O") WARN rows)"; sed 's/^/        /' "$O"
++fi
++
++# B5b — CF-384 codex-warn-classification, NEGATIVE arm. The PASS above must not be reachable by
++# deleting the warning mechanism: the same pinned binary in a home with NO credential surface at all
++# still prints a genuine `WARN auth` row and ends UNVERIFIED with exit 3. app_server still exists on
++# this binary, so the only row that can move the verdict here is the auth absence.
++# The B5 login is removed first so no later arm inherits it — D2 below keeps the state it had before.
++rm -f "$FAKEHOME/.codex/auth.json"
++NOCRED="$SB/home-nocred"
++mkdir -p "$NOCRED/.local"
++cp -r "$FAKEHOME/.local/codex" "$NOCRED/.local/codex"
++O="$SB/b5b.out"
++rc=$(clean_env HOME="$NOCRED" "$INSTALLER" --check >"$O" 2>&1; echo $?)
++if [ "$rc" = "3" ] && grep -q '^  WARN  auth — no CF_API_KEY_FILE and no \$HOME/.codex/auth.json' "$O" \
++  && grep -qF '  ..    app_server — [experimental] app-server subcommand present' "$O" \
++  && [ "$(grep -c '^  FAIL  ' "$O")" = 0 ] \
++  && grep -qx 'CODEX: UNVERIFIED' "$O"; then
++  ok "B5b codex-warn-classification: a genuine WARN (no credential surface) still ends 'CODEX: UNVERIFIED' (exit 3) — the WARN mechanism is intact, the notes are not the reason PASS is reachable"
++else
++  no "B5b codex-warn-classification: a forced no-credential run did not end UNVERIFIED with a named WARN auth row (rc=$rc)"; sed 's/^/        /' "$O"
++fi
+ 
+ # B6 — a version that is not the pin FAILs and names both values.
+ MIS="$SB/home-mismatch"

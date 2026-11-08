@@ -1,0 +1,123 @@
+{
+  "task_id": "CF-384",
+  "task_title": "Codex adapter WARN classification",
+  "task_criteria": [
+    "Implement CF-384: classify codex --check app_server and auth rows as notes where non-blocking, preserve genuine WARN exit 3, update specs and handbook M5-C3, and pass the stated tests."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "a54b9fea15aadeef0821919ca83868db50db032d",
+  "pass_class": "judged",
+  "tier2_skipped": false,
+  "working_tree_content_fingerprint": "fa612790f42eb81303b9322f92ea7c2daff6fa1b87799a1ef5e6e28d49166ce3",
+  "working_tree_dirty_path_count": 0,
+  "items": [
+    {
+      "criterion": "Implement CF-384: classify codex --check app_server and auth rows as notes where non-blocking, preserve genuine WARN exit 3, update specs and handbook M5-C3, and pass the stated tests.",
+      "status": "PASS",
+      "detail": "(a) Classification at the call site: scripts/harness/install-codex.sh:311-325 `report_auth()` now emits `note \"auth \u2014 $HOME/.codex/auth.json exists (mode $mode) \u2026\"` when a host login exists and keeps `warn \"auth\" \"no CF_API_KEY_FILE and no $HOME/.codex/auth.json \u2026\"` when neither surface exists; scripts/harness/install-codex.sh:349-360 `report_app_server()` emits `note \"app_server \u2014 [experimental] app-server subcommand present \u2026\"` when present and keeps `bad \"app_server\" \"no app-server subcommand \u2026\"` when absent. Both are reached from `--check` at install-codex.sh:410 (`report_app_server \"$b\"`) and :417 (`report_auth`). (b) WARN mechanism untouched: `git show --stat HEAD` lists only 4 files (install-codex.sh, specs/HARNESS.md, M5-harness.md, codex-install-test.sh) \u2014 scripts/lib.sh is not modified, so `warn()`/`verdict()` (lib.sh:8, lib.sh:24-30) still turn any WARN row into `<LABEL>: UNVERIFIED` exit 3 for every other adapter (e.g. install-claude-code.sh:381,393; install-opencode.sh:104 still call `warn`). (c) Specs: specs/HARNESS.md:64-90 adds \"Which conditions are notes, and which are WARNs\" with a decision table naming `app_server` (present \u2192 note, absent \u2192 FAIL) and `auth` (host login \u2192 note, neither \u2192 WARN) literally, plus the call-site rule. (d) Handbook M5-C3: docs/handbook/chapters/M5-harness.md:172 (M5-C3 row now cites the note-vs-WARN classification and arms B5/B5b), :183-197 (\"Note versus `WARN` is part of this contract (CF-384)\"), and :208 (section 7 verification row for `bash tests/harness/codex-install-test.sh --hermetic` arms B5/B5b). (e) Tests run fresh: `bash tests/harness/codex-install-test.sh --hermetic` \u2192 exit_code 0, decisive lines `PASS  B5 codex-warn-classification: --check on the installed pin with a host login ends 'CODEX: PASS' (exit 0); app_server and auth are printed as notes, 0 WARN rows`, `PASS  B5b codex-warn-classification: a genuine WARN (no credential surface) still ends 'CODEX: UNVERIFIED' (exit 3)`, and `codex installer test: 48 passed, 0 failed, 1 skipped` / `RESULT: PASS`. `bash -n scripts/harness/install-codex.sh && bash -n tests/harness/codex-install-test.sh` \u2192 `bash -n OK`. Note: the repo's guard test_command is `bash tests/selftest.sh`, which does not invoke codex-install-test.sh (grep for `codex-install-test` in tests/selftest.sh returns nothing); the stated test for this change is the standalone script, which I ran directly and it is green."
+    }
+  ],
+  "merge_recommendation": "no_concerns_found",
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261108T004950.139833Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n7:55PM INF scanned ~3149099 bytes (3.15 MB) in 951ms\n7:55PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 469 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261108T004950.139833Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n install-go.sh\n  PASS  bash -n install-node.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n panel_supervise.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n verify-patch.sh\n  PASS  bash -n harness-vars.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-deepseek.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n install-pi-agent.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n harness-node-e2e.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.pPOj7TGkEj/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n  PASS  uncreatable destination -> fetch_verified exit 1, no artifact installed\n  PASS  caller surfaced the failed install: 1 '^  FAIL  go:download' row, fixture exit 1\n6. no literal credential assignments\n  PASS  none found\n  section 6 tailnet-address (CF-378): no tracked file outside the board publishes a tailnet address\n  PASS  tailnet-address \u2014 0 tailnet-address hits in 378 tracked file(s) outside .coding-hermes/board and .gitreins\n  PASS  seeded fixture -> FAIL names docs/seeded.md:3; the out-of-range subnet stays green\n\n\u2026 [40186 chars omitted \u2014 517 line(s)] \u2026\n  PASS  layer 10 grades the owned node pin, not a PATH runtime\n  PASS  layer 40 clones with the declared key and pins core.sshCommand in that repo only\n  PASS  a 0644 deploy key is refused and the clone is not attempted\n  PASS  node-create refuses public.key at the spawn gate, before any agent exists (exit 1)\n  PASS  node-create refuses junk.key at the spawn gate, before any agent exists (exit 1)\n  PASS  node-create refuses enc at the spawn gate, before any agent exists (exit 1)\n  PASS  node-create refuses a deploy key on an HTTPS remote at the spawn gate (exit 1)\n  PASS  a usable read-only key passes the spawn gate and the run continues past it\n  PASS  pre-fix 4f32a50 accepts the public key as a deploy key \u2014 the gate arm is falsifiable\n  PASS  layer 00 measures the node footprint and admits it against the floor\n59. an adapter's verdict counts its WARN rows, not just its FAIL rows (CF-141)\n  PASS  a WARN row -> 'STUB: UNVERIFIED', exit 3, never PASS (2 WARN rows)\n  PASS  a FAIL row -> 'STUB: FAIL (1)', exit 1, never PASS/UNVERIFIED\n  PASS  all rows PASS -> 'STUB: PASS', exit 0\n  PASS  install-opencode.sh --check on the row's stub -> 'OPENCODE: UNVERIFIED', exit 3, never PASS\n  PASS  pre-fix d4f2600 prints 'OPENCODE: PASS' with exit 0 beside the same two WARN rows \u2014 the arm is falsifiable\n  PASS  all six adapters end with the verdict their row counts require (table in the scratch dir)\n  PASS  an unsupported interpreter ends 'HERMES: FAIL (1)', exit 1, after the named row\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261108T004950.139833Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 Implement CF-384: classify codex --check app_server and auth rows as notes where non-blocking, preserve genuine WARN exit 3, update specs and handbook M5-C3, and pass the stated tests.: (a) Classification at the call site: scripts/harness/install-codex.sh:311-325 `report_auth()` now emits `note \"auth \u2014 $HOME/.codex/auth.json exists (mode $mode) \u2026\"` when a host login exists and keeps `warn \"auth\" \"no CF_API_KEY_FILE and no $HOME/.codex/auth.json \u2026\"` when neither surface exists; scripts/harness/install-codex.sh:349-360 `report_app_server()` emits `note \"app_server \u2014 [experimental] app-server subcommand present \u2026\"` when present and keeps `bad \"app_server\" \"no app-server subcommand \u2026\"` when absent. Both are reached from `--check` at install-codex.sh:410 (`report_app_server \"$b\"`) and :417 (`report_auth`). (b) WARN mechanism untouched: `git show --stat HEAD` lists only 4 files (install-codex.sh, specs/HARNESS.md, M5-harness.md, codex-install-test.sh) \u2014 scripts/lib.sh is not modified, so `warn()`/`verdict()` (lib.sh:8, lib.sh:24-30) still turn any WARN row into `<LABEL>: UNVERIFIED` exit 3 for every other adapter (e.g. install-claude-code.sh:381,393; install-opencode.sh:104 still call `warn`). (c) Specs: specs/HARNESS.md:64-90 adds \"Which conditions are notes, and which are WARNs\" with a decision table naming `app_server` (present \u2192 note, absent \u2192 FAIL) and `auth` (host login \u2192 note, neither \u2192 WARN) literally, plus the call-site rule. (d) Handbook M5-C3: docs/handbook/chapters/M5-harness.md:172 (M5-C3 row now cites the note-vs-WARN classification and arms B5/B5b), :183-197 (\"Note versus `WARN` is part of this contract (CF-384)\"), and :208 (section 7 verification row for `bash tests/harness/codex-install-test.sh --hermetic` arms B5/B5b). (e) Tests run fresh: `bash tests/harness/codex-install-test.sh --hermetic` \u2192 exit_code 0, decisive lines `PASS  B5 codex-warn-classification: --check on the installed pin with a host login ends 'CODEX: PASS' (exit 0); app_server and auth are printed as notes, 0 WARN rows`, `PASS  B5b codex-warn-classification: a genuine WARN (no credential surface) still ends 'CODEX: UNVERIFIED' (exit 3)`, and `codex installer test: 48 passed, 0 failed, 1 skipped` / `RESULT: PASS`. `bash -n scripts/harness/install-codex.sh && bash -n tests/harness/codex-install-test.sh` \u2192 `bash -n OK`. Note: the repo's guard test_command is `bash tests/selftest.sh`, which does not invoke codex-install-test.sh (grep for `codex-install-test` in tests/selftest.sh returns nothing); the stated test for this change is the standalone script, which I ran directly and it is green.\nCF-384 is delivered: the two non-blocking codex rows are notes at the call site, the genuine auth-absence WARN still yields CODEX: UNVERIFIED/exit 3, specs and handbook M5-C3 document the decision table, and the stated hermetic test suite passes (48 passed, 0 failed, 1 skipped, exit 0).",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 Implement CF-384: classify codex --check app_server and auth rows as notes where non-blocking, preserve genuine WARN exit 3, update specs and handbook M5-C3, and pass the stated tests.: (a) Classification at the call site: scripts/harness/install-codex.sh:311-325 `report_auth()` now emits `note \"auth \u2014 $HOME/.codex/auth.json exists (mode $mode) \u2026\"` when a host login exists and keeps `warn \"auth\" \"no CF_API_KEY_FILE and no $HOME/.codex/auth.json \u2026\"` when neither surface exists; scripts/harness/install-codex.sh:349-360 `report_app_server()` emits `note \"app_server \u2014 [experimental] app-server subcommand present \u2026\"` when present and keeps `bad \"app_server\" \"no app-server subcommand \u2026\"` when absent. Both are reached from `--check` at install-codex.sh:410 (`report_app_server \"$b\"`) and :417 (`report_auth`). (b) WARN mechanism untouched: `git show --stat HEAD` lists only 4 files (install-codex.sh, specs/HARNESS.md, M5-harness.md, codex-install-test.sh) \u2014 scripts/lib.sh is not modified, so `warn()`/`verdict()` (lib.sh:8, lib.sh:24-30) still turn any WARN row into `<LABEL>: UNVERIFIED` exit 3 for every other adapter (e.g. install-claude-code.sh:381,393; install-opencode.sh:104 still call `warn`). (c) Specs: specs/HARNESS.md:64-90 adds \"Which conditions are notes, and which are WARNs\" with a decision table naming `app_server` (present \u2192 note, absent \u2192 FAIL) and `auth` (host login \u2192 note, neither \u2192 WARN) literally, plus the call-site rule. (d) Handbook M5-C3: docs/handbook/chapters/M5-harness.md:172 (M5-C3 row now cites the note-vs-WARN classification and arms B5/B5b), :183-197 (\"Note versus `WARN` is part of this contract (CF-384)\"), and :208 (section 7 verification row for `bash tests/harness/codex-install-test.sh --hermetic` arms B5/B5b). (e) Tests run fresh: `bash tests/harness/codex-install-test.sh --hermetic` \u2192 exit_code 0, decisive lines `PASS  B5 codex-warn-classification: --check on the installed pin with a host login ends 'CODEX: PASS' (exit 0); app_server and auth are printed as notes, 0 WARN rows`, `PASS  B5b codex-warn-classification: a genuine WARN (no credential surface) still ends 'CODEX: UNVERIFIED' (exit 3)`, and `codex installer test: 48 passed, 0 failed, 1 skipped` / `RESULT: PASS`. `bash -n scripts/harness/install-codex.sh && bash -n tests/harness/codex-install-test.sh` \u2192 `bash -n OK`. Note: the repo's guard test_command is `bash tests/selftest.sh`, which does not invoke codex-install-test.sh (grep for `codex-install-test` in tests/selftest.sh returns nothing); the stated test for this change is the standalone script, which I ran directly and it is green.\nCF-384 is delivered: the two non-blocking codex rows are notes at the call site, the genuine auth-absence WARN still yields CODEX: UNVERIFIED/exit 3, specs and handbook M5-C3 document the decision table, and the stated hermetic test suite passes (48 passed, 0 failed, 1 skipped, exit 0).",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "Implement CF-384: classify codex --check app_server and auth rows as notes where non-blocking, preserve genuine WARN exit 3, update specs and handbook M5-C3, and pass the stated tests.",
+                "status": "PASS",
+                "detail": "(a) Classification at the call site: scripts/harness/install-codex.sh:311-325 `report_auth()` now emits `note \"auth \u2014 $HOME/.codex/auth.json exists (mode $mode) \u2026\"` when a host login exists and keeps `warn \"auth\" \"no CF_API_KEY_FILE and no $HOME/.codex/auth.json \u2026\"` when neither surface exists; scripts/harness/install-codex.sh:349-360 `report_app_server()` emits `note \"app_server \u2014 [experimental] app-server subcommand present \u2026\"` when present and keeps `bad \"app_server\" \"no app-server subcommand \u2026\"` when absent. Both are reached from `--check` at install-codex.sh:410 (`report_app_server \"$b\"`) and :417 (`report_auth`). (b) WARN mechanism untouched: `git show --stat HEAD` lists only 4 files (install-codex.sh, specs/HARNESS.md, M5-harness.md, codex-install-test.sh) \u2014 scripts/lib.sh is not modified, so `warn()`/`verdict()` (lib.sh:8, lib.sh:24-30) still turn any WARN row into `<LABEL>: UNVERIFIED` exit 3 for every other adapter (e.g. install-claude-code.sh:381,393; install-opencode.sh:104 still call `warn`). (c) Specs: specs/HARNESS.md:64-90 adds \"Which conditions are notes, and which are WARNs\" with a decision table naming `app_server` (present \u2192 note, absent \u2192 FAIL) and `auth` (host login \u2192 note, neither \u2192 WARN) literally, plus the call-site rule. (d) Handbook M5-C3: docs/handbook/chapters/M5-harness.md:172 (M5-C3 row now cites the note-vs-WARN classification and arms B5/B5b), :183-197 (\"Note versus `WARN` is part of this contract (CF-384)\"), and :208 (section 7 verification row for `bash tests/harness/codex-install-test.sh --hermetic` arms B5/B5b). (e) Tests run fresh: `bash tests/harness/codex-install-test.sh --hermetic` \u2192 exit_code 0, decisive lines `PASS  B5 codex-warn-classification: --check on the installed pin with a host login ends 'CODEX: PASS' (exit 0); app_server and auth are printed as notes, 0 WARN rows`, `PASS  B5b codex-warn-classification: a genuine WARN (no credential surface) still ends 'CODEX: UNVERIFIED' (exit 3)`, and `codex installer test: 48 passed, 0 failed, 1 skipped` / `RESULT: PASS`. `bash -n scripts/harness/install-codex.sh && bash -n tests/harness/codex-install-test.sh` \u2192 `bash -n OK`. Note: the repo's guard test_command is `bash tests/selftest.sh`, which does not invoke codex-install-test.sh (grep for `codex-install-test` in tests/selftest.sh returns nothing); the stated test for this change is the standalone script, which I ran directly and it is green."
+              }
+            ],
+            "summary": "CF-384 is delivered: the two non-blocking codex rows are notes at the call site, the genuine auth-absence WARN still yields CODEX: UNVERIFIED/exit 3, specs and handbook M5-C3 document the decision table, and the stated hermetic test suite passes (48 passed, 0 failed, 1 skipped, exit 0).",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-384\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 Implement CF-384: classify codex --check app_server and auth rows as notes where non-blocking, preserve genuine WARN exit 3, update specs and handbook M5-C3, and pass the stated tests.: (a) Classification at the call site: scripts/harness/install-codex.sh:311-325 `report_auth()` now emits `note \"auth \u2014 $HOME/.codex/auth.json exists (mode $mode) \u2026\"` when a host login exists and keeps `warn \"auth\" \"no CF_API_KEY_FILE and no $HOME/.codex/auth.json \u2026\"` when neither surface exists; scripts/harness/install-codex.sh:349-360 `report_app_server()` emits `note \"app_server \u2014 [experimental] app-server subcommand present \u2026\"` when present and keeps `bad \"app_server\" \"no app-server subcommand \u2026\"` when absent. Both are reached from `--check` at install-codex.sh:410 (`report_app_server \"$b\"`) and :417 (`report_auth`). (b) WARN mechanism untouched: `git show --stat HEAD` lists only 4 files (install-codex.sh, specs/HARNESS.md, M5-harness.md, codex-install-test.sh) \u2014 scripts/lib.sh is not modified, so `warn()`/`verdict()` (lib.sh:8, lib.sh:24-30) still turn any WARN row into `<LABEL>: UNVERIFIED` exit 3 for every other adapter (e.g. install-claude-code.sh:381,393; install-opencode.sh:104 still call `warn`). (c) Specs: specs/HARNESS.md:64-90 adds \"Which conditions are notes, and which are WARNs\" with a decision table naming `app_server` (present \u2192 note, absent \u2192 FAIL) and `auth` (host login \u2192 note, neither \u2192 WARN) literally, plus the call-site rule. (d) Handbook M5-C3: docs/handbook/chapters/M5-harness.md:172 (M5-C3 row now cites the note-vs-WARN classification and arms B5/B5b), :183-197 (\"Note versus `WARN` is part of this contract (CF-384)\"), and :208 (section 7 verification row for `bash tests/harness/codex-install-test.sh --hermetic` arms B5/B5b). (e) Tests run fresh: `bash tests/harness/codex-install-test.sh --hermetic` \u2192 exit_code 0, decisive lines `PASS  B5 codex-warn-classification: --check on the installed pin with a host login ends 'CODEX: PASS' (exit 0); app_server and auth are printed as notes, 0 WARN rows`, `PASS  B5b codex-warn-classification: a genuine WARN (no credential surface) still ends 'CODEX: UNVERIFIED' (exit 3)`, and `codex installer test: 48 passed, 0 failed, 1 skipped` / `RESULT: PASS`. `bash -n scripts/harness/install-codex.sh && bash -n tests/harness/codex-install-test.sh` \u2192 `bash -n OK`. Note: the repo's guard test_command is `bash tests/selftest.sh`, which does not invoke codex-install-test.sh (grep for `codex-install-test` in tests/selftest.sh returns nothing); the stated test for this change is the standalone script, which I ran directly and it is green.\nCF-384 is delivered: the two non-blocking codex rows are notes at the call site, the genuine auth-absence WARN still yields CODEX: UNVERIFIED/exit 3, specs and handbook M5-C3 document the decision table, and the stated hermetic test suite passes (48 passed, 0 failed, 1 skipped, exit 0).\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-08T00:57:07.899023",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-08T00:57:07.921875+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 23332,
+        "truncated": false,
+        "source": "git show a54b9fea15aa"
+      }
+    ],
+    "task_id": "CF-384"
+  }
+}
