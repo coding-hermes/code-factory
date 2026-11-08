@@ -25,5 +25,5 @@
 <text x="472.0" y="91.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
 <polyline points="430.0,104.9 464.0,104.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
 <text x="472.0" y="107.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
-<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3"/>
-<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dash-dot — no evidence either way</text></g></svg>
+<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>

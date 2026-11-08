@@ -20,7 +20,7 @@ Every label is verified >= 2.05 mm at the builder's print scale; ink is black/wh
 | `module-M10.svg` | M10 CRIER — inputs left, outputs right, flows below |
 | `module-M11.svg` | M11 DISPATCHER — inputs left, outputs right, flows below |
 | `module-M12.svg` | M12 INFERENCE PROXY — inputs left, outputs right, flows below |
-| `F1.svg` | F1 DISPATCH — How does a board row become work? |
+| `F1.svg` | F1 DISPATCH — How does a board row become settled, published work? |
 | `F2.svg` | F2 PROVISIONING — How does a bare host become a node? |
 | `F3.svg` | F3 MEMORY — How does a run become searchable? |
 | `F4.svg` | F4 DOCUMENTATION — How does a component become an approved document? |

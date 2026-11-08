@@ -1,38 +1,48 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="88.5mm" viewBox="0 0 680 354.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="354.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="106.5mm" viewBox="0 0 680 426.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="426.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
 <rect x="67.0" y="36.0" width="66.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="100.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">OPERATOR</text>
-<polyline points="100.0,70.0 100.0,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="100.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">OPERATOR</text>
+<polyline points="100.0,70.0 100.0,406.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="147.0" y="36.0" width="66.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="180.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">SCHEDULER</text>
-<polyline points="180.0,70.0 180.0,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<rect x="222.5" y="36.0" width="75.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="260.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">PROVISIONER</text>
-<polyline points="260.0,70.0 260.0,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<rect x="295.7" y="36.0" width="88.7" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="340.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">BUNKER DAEMON</text>
-<polyline points="340.0,70.0 340.0,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="180.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">SCHEDULER</text>
+<polyline points="180.0,70.0 180.0,406.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="222.6" y="36.0" width="74.8" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="260.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">PROVISIONER</text>
+<polyline points="260.0,70.0 260.0,406.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="302.0" y="36.0" width="76.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="340.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">BUNKER DAEMON</text>
+<polyline points="340.0,70.0 340.0,406.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="387.0" y="36.0" width="66.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="420.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">NODE</text>
-<polyline points="420.0,70.0 420.0,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="420.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">NODE</text>
+<polyline points="420.0,70.0 420.0,406.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="467.0" y="36.0" width="66.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="500.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">DUCKBRAIN</text>
-<polyline points="500.0,70.0 500.0,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<rect x="535.7" y="36.0" width="88.7" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="580.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">NODE VERIFIER</text>
-<polyline points="580.0,70.0 580.0,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<text x="10.0" y="87.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
-<polyline points="100.0,84.0 180.0,84.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="300.0" y="76.0" font-size="9.50" fill="#000000" text-anchor="start">lane declared: project, harness, pin</text>
-<text x="10.0" y="133.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
-<polyline points="260.0,130.0 340.0,130.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="356.0" y="122.0" font-size="9.50" fill="#000000" text-anchor="start">container created, home, keys (M1 §3 S2)</text>
-<text x="10.0" y="179.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
-<polyline points="260.0,176.0 420.0,176.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="340.0" y="168.0" font-size="9.50" fill="#000000" text-anchor="middle">layers: base, harness, bus, repo (M1 §3)</text>
-<text x="10.0" y="225.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
-<polyline points="420.0,222.0 500.0,222.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="370.0" y="214.0" font-size="9.50" fill="#000000" text-anchor="start">identity + namespace credential</text>
-<text x="10.0" y="271.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
-<polyline points="580.0,268.0 420.0,268.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="500.0" y="260.0" font-size="9.50" fill="#000000" text-anchor="middle">verify-node measures the result — CREATED ≠ VERIFIED</text>
-<text x="500.0" y="273.0" font-size="9.50" fill="#000000" text-anchor="middle">(M1 §12)</text></g></svg>
+<text x="500.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">DUCKBRAIN</text>
+<polyline points="500.0,70.0 500.0,406.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="542.0" y="36.0" width="76.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="580.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">NODE VERIFIER</text>
+<polyline points="580.0,70.0 580.0,406.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="10.0" y="113.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
+<polyline points="100.0,110.0 180.0,110.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="300.0" y="102.0" font-size="9.50" fill="#000000" text-anchor="start">lane declared: project,</text>
+<text x="300.0" y="89.0" font-size="9.50" fill="#000000" text-anchor="start">harness, pin</text>
+<text x="10.0" y="159.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
+<polyline points="260.0,156.0 340.0,156.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="356.0" y="148.0" font-size="9.50" fill="#000000" text-anchor="start">container created, home,</text>
+<text x="356.0" y="135.0" font-size="9.50" fill="#000000" text-anchor="start">keys (M1 §3 S2)</text>
+<text x="10.0" y="205.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
+<polyline points="260.0,202.0 420.0,202.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="340.0" y="194.0" font-size="9.50" fill="#000000" text-anchor="middle">layers: base, harness,</text>
+<text x="340.0" y="181.0" font-size="9.50" fill="#000000" text-anchor="middle">bus, repo (M1 §3)</text>
+<text x="10.0" y="251.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
+<polyline points="260.0,248.0 420.0,248.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="340.0" y="240.0" font-size="9.50" fill="#000000" text-anchor="middle">DuckBrain installed in</text>
+<text x="340.0" y="227.0" font-size="9.50" fill="#000000" text-anchor="middle">every Bunker — same</text>
+<text x="340.0" y="214.0" font-size="9.50" fill="#000000" text-anchor="middle">logical memory view as</text>
+<text x="10.0" y="297.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
+<polyline points="420.0,294.0 500.0,294.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="370.0" y="286.0" font-size="9.50" fill="#000000" text-anchor="start">identity + namespace</text>
+<text x="370.0" y="273.0" font-size="9.50" fill="#000000" text-anchor="start">credential</text>
+<text x="10.0" y="343.0" font-size="9.50" fill="#000000" text-anchor="start">6</text>
+<polyline points="580.0,340.0 420.0,340.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="500.0" y="332.0" font-size="9.50" fill="#000000" text-anchor="middle">verify-node measures the</text>
+<text x="500.0" y="345.0" font-size="9.50" fill="#000000" text-anchor="middle">result — CREATED ≠</text>
+<text x="500.0" y="358.0" font-size="9.50" fill="#000000" text-anchor="middle">VERIFIED (M1 §12)</text></g></svg>

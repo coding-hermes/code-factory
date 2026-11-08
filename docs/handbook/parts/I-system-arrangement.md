@@ -2,19 +2,36 @@
 
 ![System map](figures/system-map.svg)
 
-The factory is 27 components on six layers, joined by 23 contracts (`CT-01`…`CT-23`,
-Part IV) and exercised by 16 flows (Part II). A box on the map is a responsibility, not
-a path; the path that implements a box lives in its `impl` note and may move without the
-system changing. Solid lines are interfaces that work as documented, dashed lines are
-broken and named, dotted lines are designed but not built.
+The factory is 27 components on six layers, joined by contracts (`CT-01`…`CT-23`
+plus the `CT-06R` foreman-return leg, Part IV) and exercised by 16 flows (Part II).
+A box on the map is a responsibility, not a path; the path that implements a box
+lives in its `impl` note and may move without the system changing. Every box also
+carries a role/host boundary: components tagged BUNKER execute inside the Bunker
+deployment/execution boundary — the Bunker daemon's create/exec/cp surface, in a
+fresh image-backed or persistent-container profile chosen per Bunker — and untagged
+components run on the control host. Solid lines are interfaces that work as
+documented, dashed lines are broken and named, dotted lines are designed but not
+built.
 
 The stack reads bottom-up: control decides, transport carries, execution does the work,
 memory remembers, governance decides whether to believe the result, and evidence is what
-a human finally reads. Five components sit in control, four in transport, six in
+a human finally reads. Five components sit in control, three in transport, seven in
 execution, three in memory, eight in governance, one in evidence. Six of the 27 — the
 operator, the task-router, the gateway, the bunker daemon, DuckBrain and the session
 store — sit outside the 13 module chapters (M0–M12) and are documented as boundary
 peers; the remaining 21 each key to one module chapter in Part III.
+
+Two resolved decisions fix the arrangement and are repeated wherever they matter.
+First, the project foreman runs **inside its Bunker**; Crier is the launch/return
+boundary — the scheduler's envelope enters the Bunker through Crier, and the
+foreman's response returns through Crier to the scheduler on the control host, which
+records it and triggers subsequent processing. Second, **DuckBrain is installed in
+every Bunker** and must expose the same logical project memory data/view as the
+controller; the physical shared-service or replication topology and the offline
+behavior are still open specifications, and this book treats the shared view as a
+requirement, not an installed fact. The Task Router is a third, explicit boundary:
+it is future and not part of the MVP, placed after Node and before Harness, and the
+MVP bypasses it — Hermes is the fixed MVP harness.
 
 ## 1.1 Control plane — decides what should happen
 
@@ -47,15 +64,21 @@ peers; the remaining 21 each key to one module chapter in Part III.
 ### FOREMAN (Hermes)
 
 - **Module:** none of its own; its behaviour is seeded config consumed by the scheduler.
+- **Location:** inside its Bunker — a resolved decision, not an implementation
+  detail. It never runs on the control host.
 - **Owns:** turning a board row into a brief, verifying returned evidence, closing rows.
-  Does not grade its own homework — a judge seat does.
+  Does not grade its own homework — a judge seat does. Its response is a durable
+  return: it travels through Crier back to the scheduler, which records it and
+  triggers subsequent processing.
 - **Fed by:** nothing in the register names an inbound wire.
 - **Feeds:** `CT-05` — the lane's prompt text and skills it may load; both ends are
   in-repo (`load_lane_config.py:31` → `spawn.go:1249` `buildForemanPrompt`), state
   UNVERIFIED because the disagreement was never measured (M9 §6). `CT-14` — row create,
   close and evidence via boardctl; the store is measured (357 rows, 520 events), the
   foreman write wire is not exercised (M4 §6). `CT-15` — decisions, findings and goals
-  to DuckBrain, a boundary wire (M9 §6).
+  to the DuckBrain installed in its own Bunker, a boundary wire (M9 §6). `CT-06R` —
+  the durable return leg of its response through Crier, UNVERIFIED until Part IV
+  cites the producing call.
 - **Impl:** `prompts/foreman.md`, `skills/code-factory-foreman`.
 
 ### GITHUB CREDENTIALS
@@ -85,8 +108,10 @@ peers; the remaining 21 each key to one module chapter in Part III.
 ### CRIER (bus)
 
 - **Module:** M10 (`docs/handbook/chapters/M10-crier.md`).
-- **Owns:** delivery with per-agent signature, leases, replies, idempotency (M10 §2).
-  Does not decide, does not execute, holds no board admission (M4 §12 B04).
+- **Owns:** the launch/return boundary between the control host and the Bunkers —
+  delivery with per-agent signature, leases, replies, idempotency (M10 §2). The
+  foreman's response returns through Crier to the scheduler; delivery is not task
+  acceptance. Does not decide, does not execute, holds no board admission (M4 §12 B04).
 - **Fed by:** `CT-02` — the scheduler's signed envelope, accepted by
   `internal/registry/handler.go:990` `HandleDeliver` into the durable inbox, verbatim
   after the CF-354 fix (M10 §6). `CT-04` — the node's reply (PARTIAL). `CT-22` — agent
@@ -114,8 +139,14 @@ peers; the remaining 21 each key to one module chapter in Part III.
 ### TASK-ROUTER
 
 - **Module:** none — boundary peer.
-- **Owns:** which model answers a prompt; lane chains, caps, PAYG ordering. Does not
-  carry work.
+- **Status:** future and NOT PART OF THE MVP. It is placed after Node and before
+  Harness, with a future selection responsibility — harness selection. The MVP
+  bypasses this point entirely: Hermes is the fixed MVP harness, and the node routes
+  to it directly.
+- **Owns:** today, which model answers a prompt; lane chains, caps, PAYG ordering.
+  Harness selection is the user's stated future design intent, not a capability the
+  current router documentation establishes — the two selection roles are kept
+  separate and are never equated. Does not carry work.
 - **Fed by:** nothing in the register names an inbound wire.
 - **Feeds:** `CT-07` — the model choice for a prompt, in-band. State: UNVERIFIED;
   neither side has an in-repo `file:function` and the wire was not measured (M12 §6).
@@ -162,6 +193,7 @@ peers; the remaining 21 each key to one module chapter in Part III.
 ### NODE
 
 - **Module:** M2 (`docs/handbook/chapters/M2-dispatch.md`), the node half of the bus.
+- **Location:** inside its Bunker; the node never executes on the control host.
 - **Owns:** one project per node; repo clone, seeded prompts/skills, env, identity, bus
   worker (M2 §2). Does not decide what to work on.
 - **Fed by:** `CT-03` — the leased inbox message (`node-bus-worker.py:1356,1383`); the
@@ -234,7 +266,10 @@ peers; the remaining 21 each key to one module chapter in Part III.
 
 - **Module:** M4 (`docs/handbook/chapters/M4-board.md`).
 - **Owns:** the append-only record of work and its state; the fleet's plan (M4 §2). Not
-  a run log — rows are reused across attempts.
+  a run log — rows are reused across attempts. The board lives in each project repo,
+  so a local working copy and the remote copy are distinct until a recorded refresh or
+  publication reconciles them; the scheduler's lane hooks own that synchronization,
+  and Figure 2.1 shows the copies and their refresh order explicitly.
 - **Fed by:** `CT-10` — node row events, BROKEN: no in-repo producer (M4 §6). `CT-13` —
   the verdict that closes a row; completion requires `--evidence-run-id` and the
   verdict-to-close path was not re-run (M4 §6). `CT-14` — foreman writes, UNVERIFIED
@@ -246,10 +281,14 @@ peers; the remaining 21 each key to one module chapter in Part III.
 ### DUCKBRAIN
 
 - **Module:** none — boundary peer.
+- **Location:** installed in every Bunker and on the control host. A resolved decision
+  requires a per-Bunker instance to expose the same logical project memory data/view
+  as the controller; the physical shared-service/replication topology and the offline
+  behavior are unresolved and are never assumed here.
 - **Owns:** namespaced durable memory; run records, findings, recall. Does not own the
   plan or the code.
 - **Fed by:** `CT-09` — node run records, MISSING (CF-329, M2 §6). `CT-15` — foreman
-  decisions and findings, UNVERIFIED boundary (M9 §6).
+  decisions and findings through the Bunker's own instance, UNVERIFIED boundary (M9 §6).
 - **Feeds:** recall by project, week and lane (Part II, F3).
 - **Impl:** `duckbrain`.
 
@@ -341,8 +380,10 @@ peers; the remaining 21 each key to one module chapter in Part III.
 ### HANDBOOK
 
 - **Module:** M6 (`docs/handbook/chapters/M6-documentation.md`).
-- **Owns:** the readable system description plus its own deficiency register. Not the
-  source of truth — code beats this document wherever they disagree.
+- **Owns:** the readable system description plus its own deficiency register. The
+  approved target behavior is the authority for normative requirements; this book
+  records implementation coverage and deviations against it — the source snapshot is
+  evidence, not the requirement.
 - **Fed by:** `CT-16` — the module status word (UNVERIFIED, see DOC GATE).
 - **Feeds:** `CT-18` — the approval artifact to the operator. State: UNVERIFIED; the
   legacy renderer hardcodes `docs/master` and does not select the M*.md chapters
@@ -351,9 +392,10 @@ peers; the remaining 21 each key to one module chapter in Part III.
 
 ## 1.7 The contract surface, as a count
 
-Of the 23 register rows, 4 are PROVEN (`CT-02`, `CT-03`, `CT-06`, `CT-08` — all of them
-crier wires), 1 is PARTIAL (`CT-04`, the reply whose settlement reads only `ok`), 1 is
-BROKEN (`CT-10`, the node-to-board wire with no producer), 1 is MISSING (`CT-09`, the
-node-to-DuckBrain wire with zero call sites), and 16 are UNVERIFIED. The map's dashed
-and dotted lines carry the other 19 rows; a reader who wants the closing command for any one
-of them finds it in Part IV.
+Of the 24 modelled rows — `CT-01`…`CT-18`, the five chapter-local rows and the
+`CT-06R` foreman-return leg — 4 are PROVEN (`CT-02`, `CT-03`, `CT-06`, `CT-08` — all
+of them crier wires), 1 is PARTIAL (`CT-04`, the reply whose settlement reads only
+`ok`), 1 is BROKEN (`CT-10`, the node-to-board wire with no producer), 1 is MISSING
+(`CT-09`, the node-to-DuckBrain wire with zero call sites), and 17 are UNVERIFIED.
+The map's dashed and dotted lines carry the states; a reader who wants the closing
+command for any one of them finds it in Part IV.

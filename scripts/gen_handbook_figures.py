@@ -73,7 +73,6 @@ STATE_LEGEND = [
 
 SHORT = {
     "FOREMAN (Hermes)": "FOREMAN",
-    "TASK-ROUTER": "ROUTER",
     "GITHUB CREDENTIALS": "GITHUB",
     "INFERENCE PROXY": "PROXY",
     "BUNKER DAEMON": "BUNKER",
@@ -238,7 +237,7 @@ def system_map_sheet(model) -> Sheet:
     """The map is taller than the 250 mm figure band, so it prints scaled down —
     its type sizes start above the shared sizes so the PRINTED label still clears
     the 2.05 mm floor (the gate verifies this against the real scale)."""
-    TINY, SMALL, TITLE = 12.0, 13.4, 19.0
+    TINY, SMALL, TITLE = 17.5, 18.5, 24.0
     by_layer = {layer["id"]: [] for layer in model["layers"]}
     for c in model["components"]:
         by_layer[c["layer"]].append(c)
@@ -252,24 +251,40 @@ def system_map_sheet(model) -> Sheet:
         [8.0] + [col_x[i] + BW + COLGAP / 2 for i in range(cols - 1)] + [672.0]
     )
 
-    GH = 140  # gutter between panels (holds routing lanes)
-    LANE0, LANE_STEP, N_LANES = 12, 16, 8
+    GH = 180  # gutter between panels (holds routing lanes)
+    LANE0, LANE_STEP, N_LANES = 12, 18, 10
     panels = []
-    y = 10
+    y = 64  # title band above the first panel
     for layer in model["layers"]:
         members = by_layer[layer["id"]]
         rows = max(1, -(-len(members) // cols))
         ph = NAME_H + rows * (BH + ROWGAP) + 8
         panels.append((layer, members, y, ph, rows))
         y += ph + GH
-    H = y - GH + 96  # legend band below the last panel
+    # legend band + host-boundary notes are sized from their ACTUAL line counts,
+    # not guessed — the old fixed 96-unit tail let the legend render past the
+    # viewBox edge
+    TINY_ = TINY
+    legend_h = TINY_ + len(STATE_LEGEND) * TINY_ * 1.9
+    notes = [
+        "A BUNKER TAG MARKS A COMPONENT THAT EXECUTES INSIDE THE BUNKER DEPLOYMENT / "
+        "EXECUTION BOUNDARY; UNTAGGED COMPONENTS RUN ON THE CONTROL HOST.",
+        "THE PROJECT FOREMAN RUNS IN ITS BUNKER; ITS RESPONSE RETURNS THROUGH CRIER "
+        "TO THE SCHEDULER, WHICH RECORDS IT AND TRIGGERS SUBSEQUENT PROCESSING "
+        "(CT-06R → CT-06).",
+        "DUCKBRAIN IS INSTALLED IN EVERY BUNKER AND EXPOSES THE SAME LOGICAL PROJECT "
+        "MEMORY DATA/VIEW AS THE CONTROLLER — PHYSICAL TOPOLOGY REMAINS UNRESOLVED.",
+    ]
+    note_lines = [ln for n in notes for ln in wrap(n, 62)]
+    notes_h = len(note_lines) * (TINY_ + 3) + 22
+    H = y - GH + legend_h + notes_h + 24
 
     sh = Sheet(H)
-    sh.text(16, 28, "CODE FACTORY — SYSTEM MAP", TITLE)
+    sh.text(16, 30, "CODE FACTORY — SYSTEM MAP", TITLE)
     sh.text(
         664,
-        26,
-        "WIRE CT-nn IS KEYED TO THE CONTRACT REGISTER (PART IV)",
+        52,
+        "WIRES KEYED TO THE CONTRACT REGISTER (PART IV)",
         TINY,
         anchor="end",
     )
@@ -285,9 +300,18 @@ def system_map_sheet(model) -> Sheet:
             sh.box(bx, by, BW, BH)
             name = SHORT.get(c["name"], c["name"])
             lines = wrap(name, 22)[:2]
+            tagged = bool(c.get("host") == "bunker" or c.get("tag"))
             y0 = by + BH / 2 - (len(lines) - 1) * SMALL / 2 + SMALL * 0.35
+            if tagged:
+                y0 -= 5  # clear the tag strip at the bottom of the box
             for j, ln in enumerate(lines):
                 sh.text(bx + BW / 2, y0 + j * SMALL, ln, SMALL, anchor="middle")
+            if c.get("tag"):
+                sh.text(bx + BW / 2, by + BH - 5, c["tag"], TINY, anchor="middle")
+            if c.get("host") == "bunker" and name != "BUNKER":
+                # role/host boundary: a tagged box executes INSIDE the Bunker
+                # deployment/execution boundary; untagged boxes sit on the control host
+                sh.text(bx + BW - 5, by + BH - 5, "BUNKER", TINY, anchor="end")
 
     gutter_top = {i: panels[i][2] + panels[i][3] for i in range(len(panels) - 1)}
     lanes: dict[int, list[float]] = {i: [] for i in range(len(panels) - 1)}
@@ -301,6 +325,7 @@ def system_map_sheet(model) -> Sheet:
 
     for k in sorted(model["contracts"], key=lambda k: k.get("id", "")):
         cid = str(k.get("id", ""))
+        sig = k.get("signal")
         a, b = by_id.get(k["from"]), by_id.get(k["to"])
         if not a or not b or a["id"] not in pos or b["id"] not in pos:
             continue
@@ -317,15 +342,20 @@ def system_map_sheet(model) -> Sheet:
                 arrow=True,
             )
             sh.text((x1 + x2) / 2, ly - 5, cid, TINY, anchor="middle")
+            if sig:
+                sh.text((x1 + x2) / 2, ly + 14, sig, TINY, anchor="middle")
         elif la < lb:
             x1 = ax + aw / 2
             x2 = bx + bw / 2
+            lx = (x1 + x2) / 2 + k.get("label_dx", 0)
             if lb - la == 1:
                 ly = lane(la)
                 sh.poly(
                     [(x1, ay + ah), (x1, ly), (x2, ly), (x2, by)], dash=dash, arrow=True
                 )
-                sh.text((x1 + x2) / 2, ly - 5, cid, TINY, anchor="middle")
+                sh.text(lx, ly - 5, cid, TINY, anchor="middle")
+                if sig:
+                    sh.text(lx, ly + 14, sig, TINY, anchor="middle")
             else:
                 g1, g2 = lane(la), lane(lb - 1)
                 xc = corridors.claim(ay + ah, by)
@@ -335,6 +365,8 @@ def system_map_sheet(model) -> Sheet:
                     arrow=True,
                 )
                 sh.text((x1 + xc) / 2, g1 - 5, cid, TINY, anchor="middle")
+                if sig:
+                    sh.text((x1 + xc) / 2, g1 + 14, sig, TINY, anchor="middle")
         else:
             x1 = ax + aw / 2
             x2 = bx + bw / 2
@@ -344,6 +376,8 @@ def system_map_sheet(model) -> Sheet:
                     [(x1, ay), (x1, ly), (x2, ly), (x2, by + bh)], dash=dash, arrow=True
                 )
                 sh.text((x1 + x2) / 2, ly - 5, cid, TINY, anchor="middle")
+                if sig:
+                    sh.text((x1 + x2) / 2, ly + 14, sig, TINY, anchor="middle")
             else:
                 g1, g2 = lane(la - 1), lane(lb)
                 xc = corridors.claim(ay, by + bh)
@@ -353,10 +387,27 @@ def system_map_sheet(model) -> Sheet:
                     arrow=True,
                 )
                 sh.text((x1 + xc) / 2, g1 - 5, cid, TINY, anchor="middle")
+                if sig:
+                    sh.text((x1 + xc) / 2, g1 + 14, sig, TINY, anchor="middle")
 
+    yl = H - notes_h - legend_h - 4
     legend_block(
-        sh, 16, H - 76, STATE_LEGEND, "CONTRACT STATE — LINE STYLE, INK ONLY", fs=TINY
+        sh, 16, yl, STATE_LEGEND, "CONTRACT STATE — LINE STYLE, INK ONLY", fs=TINY
     )
+    sh.hair(16, yl + legend_h + 8, 664, yl + legend_h + 8)
+    notes = [
+        "A BUNKER TAG MARKS A COMPONENT THAT EXECUTES INSIDE THE BUNKER DEPLOYMENT / "
+        "EXECUTION BOUNDARY; UNTAGGED COMPONENTS RUN ON THE CONTROL HOST.",
+        "THE PROJECT FOREMAN RUNS IN ITS BUNKER; ITS RESPONSE RETURNS THROUGH CRIER "
+        "TO THE SCHEDULER, WHICH RECORDS IT AND TRIGGERS SUBSEQUENT PROCESSING "
+        "(CT-06R → CT-06).",
+        "DUCKBRAIN IS INSTALLED IN EVERY BUNKER AND EXPOSES THE SAME LOGICAL PROJECT "
+        "MEMORY DATA/VIEW AS THE CONTROLLER — PHYSICAL TOPOLOGY REMAINS UNRESOLVED.",
+    ]
+    ny = yl + legend_h + 26
+    for ln in note_lines:
+        sh.text(16, ny, ln, TINY)
+        ny += TINY + 3
     return sh
 
 
@@ -366,7 +417,7 @@ def sm_sheet(states, edges, title, note) -> Sheet:
     V (straight down), G (gutter route), S (side-channel return)."""
     BW, BH = 130, 44
     col_x = [120, 340, 560]
-    row_y = [70, 170, 270, 370, 470, 570]
+    row_y = [70, 170, 270, 370, 470, 570, 670]
     pos = {}
     for sid, label, c, r in states:
         pos[sid] = (col_x[c] - BW / 2, row_y[r] - BH / 2, c, r)
@@ -472,26 +523,44 @@ def board_lifecycle() -> Sheet:
     states = [
         ("pending", ["PENDING", "DISPATCHABLE"], 1, 0),
         ("claimed", ["CLAIMED", "BY A TICK"], 1, 1),
-        ("running", ["IN PROGRESS", "WORKER EXECUTING"], 1, 2),
-        ("review", ["REVIEW", "VERDICT EXPECTED"], 1, 3),
-        ("complete", ["COMPLETE", "EVIDENCE BOUND"], 1, 4),
+        ("running", ["IN PROGRESS", "FOREMAN/WORKER RUN"], 1, 2),
+        ("guard", ["COMMIT GUARD", "GITREINS TIER 1"], 1, 3),
+        ("review", ["ACCEPTANCE JUDGMENT", "TIER 2 VERDICT"], 1, 4),
+        ("integrate", ["INTEGRATION /", "PUBLICATION"], 1, 5),
+        ("complete", ["COMPLETE", "EVIDENCE-BOUND"], 1, 6),
         ("deferred", ["DEFERRED", "NOT THIS CADENCE"], 0, 0),
         ("blocked", ["BLOCKED", "OWNERSHIP OR DEFECT"], 2, 2),
     ]
     edges = [
         ("pending", "claimed", "TICK SELECTS", "V"),
-        ("claimed", "running", "GITREINS START", "V"),
-        ("running", "review", "COMMIT LANDED", "V"),
-        ("review", "complete", "VERDICT + EVIDENCE", "V"),
-        # return: review right edge -> channel x=440 -> running right edge, 10 BELOW
-        # the WORKER DIED line so the two arrowheads on that edge never share a y
+        # foreman/worker start — GitReins belongs to the pre-commit review plumbing,
+        # not to the start transition (user correction on the w10 issue)
+        ("claimed", "running", "FOREMAN / WORKER START", "V"),
+        ("running", "guard", "COMMIT STAGED", "V"),
+        ("guard", "review", "GUARD PASSED", "V"),
+        ("review", "integrate", "VERDICT ACCEPTED", "V"),
+        ("integrate", "complete", "PUBLISHED + EVIDENCE BOUND", "V"),
+        # rework: acceptance verdict returns to the worker (preserved channel)
         (
             "review",
             "running",
             (
-                [(405, 370), (440, 370), (440, 280), (405, 280)],
-                "CHANGES REQUESTED",
+                [(405, 470), (440, 470), (440, 280), (405, 280)],
+                "CHANGES REQUESTED -> WORKER REWORK",
                 448,
+                375,
+                -90,
+            ),
+            "S",
+        ),
+        # guard failure also returns to the worker, on its own left-side channel
+        (
+            "guard",
+            "running",
+            (
+                [(275, 370), (230, 370), (230, 280), (275, 280)],
+                "GUARD FAIL -> REWORK",
+                224,
                 325,
                 -90,
             ),
@@ -499,16 +568,29 @@ def board_lifecycle() -> Sheet:
         ),
         ("pending", "deferred", "DEPENDENCY UNMET", "H"),
         ("pending", "blocked", "CANNOT PROCEED", "G"),
-        # return: blocked top -> left part of pending's bottom edge, x=396 clear of
-        # the TICK SELECTS riser at 340; one perpendicular crossing (no dot) at G's riser
+        # deferred return trigger: the condition that makes a deferred row
+        # dispatchable again is named on the figure (user redline)
+        (
+            "deferred",
+            "pending",
+            (
+                [(120, 92), (120, 114), (300, 114), (300, 92)],
+                "RETURN: DEPENDENCY MET / CADENCE",
+                208,
+                110,
+                None,
+            ),
+            "S",
+        ),
+        # blocked/unblock path (preserved)
         (
             "blocked",
             "pending",
             (
-                [(560, 248), (560, 117), (396, 117), (396, 92)],
+                [(560, 248), (560, 126), (450, 126), (450, 92)],
                 "BLOCKER ROW CLOSED",
-                478,
-                113,
+                505,
+                122,
                 None,
             ),
             "S",
@@ -519,8 +601,8 @@ def board_lifecycle() -> Sheet:
         states,
         edges,
         "BOARD ROW LIFECYCLE — INCLUDING THE PATHS THAT ARE NOT FORWARD",
-        "A ROW LEAVES THE BOARD ONLY THROUGH COMPLETE. BLOCKED AND DEFERRED ARE "
-        "STATES OF PENDING, NOT EXITS.",
+        "COMPLETION CONSUMES AN ACCEPTED VERDICT, PUBLICATION PROOF AND RETAINED "
+        "EVIDENCE — NEVER THE GITREINS INTERNAL STATUS ALONE.",
     )
 
 
@@ -713,10 +795,15 @@ def seq_sheet(model, flow) -> Sheet:
     n = len(actors)
     margin = 60
     cell = (Sheet.W - margin * 2) / n
+    # label width adapts to lifeline density: an 8-lifeline sheet cannot carry the
+    # 52-char labels a 4-lifeline sheet can, without the texts colliding
+    w_self = max(18, int(cell * 2.4 / (F_SMALL * 0.62)))
+    w_pair = max(18, int(cell * 1.9 / (F_SMALL * 0.62)))
     rowh = 46
-    top = 84
+    top = 110  # leaves room for a first step's upward-stacked label under the headers
     steps = flow["steps"]
-    extra = 1 if flow.get("note") else 0
+    note_lines = wrap(flow["note"], 116)[:2] if flow.get("note") else []
+    extra = len(note_lines)
     h = top + rowh * (len(steps) + extra) + 40
     sh = Sheet(h)
     ax = {a: margin + i * cell + cell / 2 for i, a in enumerate(actors)}
@@ -733,10 +820,12 @@ def seq_sheet(model, flow) -> Sheet:
     for a in actors:
         x = ax[a]
         name = by_id[a]["name"]
-        bw = max(cell - 14, len(name) * F_BODY * 0.62)
+        bw = min(cell - 4, max(cell - 14, len(name) * F_SMALL * 0.62 + 10))
         sh.box(x - bw / 2, 36, bw, 30)
-        for i, ln in enumerate(wrap(name, int(bw / (F_BODY * 0.6)))[:1]):
-            sh.text(x, 56, ln, F_BODY, anchor="middle")
+        nl = wrap(name, int(bw / (F_SMALL * 0.6)))[:2]
+        y0 = 56 if len(nl) == 1 else 46
+        for i, ln in enumerate(nl):
+            sh.text(x, y0 + i * 12, ln, F_SMALL, anchor="middle")
         sh.hair(x, 70, x, lifeline_end, dash="3 4")
 
     for i, (a, b, what) in enumerate(steps):
@@ -766,13 +855,21 @@ def seq_sheet(model, flow) -> Sheet:
                     if anchor == "start"
                     else max(min(tx, 380), 310)
                 )
-        lines = wrap(what, 44 if a == b else 52)[:2]
+        lines = wrap(what, w_self if a == b else w_pair)[:3]
+        last = i == len(steps) - 1
         for j, ln in enumerate(lines):
-            sh.text(tx, y - 8 + j * 13, ln, F_SMALL, anchor=anchor)
-    if flow.get("note"):
+            if a == b or last:
+                # self-loops label beside the loop; the LAST step labels below its
+                # arrow, where the lifeline tail leaves free space
+                sh.text(tx, y - 8 + j * 13, ln, F_SMALL, anchor=anchor)
+            else:
+                # stack UPWARD so no label line is struck through by its own arrow
+                sh.text(tx, y - 8 - j * 13, ln, F_SMALL, anchor=anchor)
+    if note_lines:
         y = top + len(steps) * rowh + 8
         sh.hair(6, y - 14, Sheet.W - 6, y - 14)
-        sh.text(10, y, "NOTE. " + flow["note"], F_SMALL)
+        for j, ln in enumerate(note_lines):
+            sh.text(10, y + j * 15, ("NOTE. " if j == 0 else "      ") + ln, F_SMALL)
     return sh
 
 

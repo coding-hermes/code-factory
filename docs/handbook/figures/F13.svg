@@ -1,29 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="77.0mm" viewBox="0 0 680 308.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="308.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="83.5mm" viewBox="0 0 680 334.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="334.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
 <rect x="67.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="130.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">OPERATOR</text>
-<polyline points="130.0,70.0 130.0,288.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="130.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">OPERATOR</text>
+<polyline points="130.0,70.0 130.0,314.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="207.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="270.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">HARNESS</text>
-<polyline points="270.0,70.0 270.0,288.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="270.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">HARNESS</text>
+<polyline points="270.0,70.0 270.0,314.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="347.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="410.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">SCHEDULER</text>
-<polyline points="410.0,70.0 410.0,288.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="410.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">SCHEDULER</text>
+<polyline points="410.0,70.0 410.0,314.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="487.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="550.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">BOARD</text>
-<polyline points="550.0,70.0 550.0,288.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<text x="10.0" y="87.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
-<polyline points="130.0,84.0 270.0,84.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="300.0" y="76.0" font-size="9.50" fill="#000000" text-anchor="start">pin bump — the installer fetches a digest-checked</text>
-<text x="300.0" y="89.0" font-size="9.50" fill="#000000" text-anchor="start">artifact (M5 §5)</text>
-<text x="10.0" y="133.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
-<polyline points="270.0,130.0 130.0,130.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="310.0" y="122.0" font-size="9.50" fill="#000000" text-anchor="end">installed version read back against the pin; drift</text>
-<text x="310.0" y="135.0" font-size="9.50" fill="#000000" text-anchor="end">named (M5 §10)</text>
-<text x="10.0" y="179.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
-<polyline points="130.0,176.0 410.0,176.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="270.0" y="168.0" font-size="9.50" fill="#000000" text-anchor="middle">migration stores apply schema change to the 30-table</text>
-<text x="270.0" y="181.0" font-size="9.50" fill="#000000" text-anchor="middle">store (M9 §3)</text>
-<text x="10.0" y="225.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
-<polyline points="130.0,222.0 550.0,222.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="340.0" y="214.0" font-size="9.50" fill="#000000" text-anchor="middle">boardctl normalize-statuses migrates the row</text>
-<text x="340.0" y="227.0" font-size="9.50" fill="#000000" text-anchor="middle">vocabulary (M4 §4)</text></g></svg>
+<text x="550.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">BOARD</text>
+<polyline points="550.0,70.0 550.0,314.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="10.0" y="113.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
+<polyline points="130.0,110.0 270.0,110.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="300.0" y="102.0" font-size="9.50" fill="#000000" text-anchor="start">pin bump — the installer fetches a</text>
+<text x="300.0" y="89.0" font-size="9.50" fill="#000000" text-anchor="start">digest-checked artifact (M5 §5)</text>
+<text x="10.0" y="159.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
+<polyline points="270.0,156.0 130.0,156.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="310.0" y="148.0" font-size="9.50" fill="#000000" text-anchor="end">installed version read back against the pin;</text>
+<text x="310.0" y="135.0" font-size="9.50" fill="#000000" text-anchor="end">drift named (M5 §10)</text>
+<text x="10.0" y="205.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
+<polyline points="130.0,202.0 410.0,202.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="270.0" y="194.0" font-size="9.50" fill="#000000" text-anchor="middle">migration stores apply schema change to the</text>
+<text x="270.0" y="181.0" font-size="9.50" fill="#000000" text-anchor="middle">30-table store (M9 §3)</text>
+<text x="10.0" y="251.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
+<polyline points="130.0,248.0 550.0,248.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="340.0" y="240.0" font-size="9.50" fill="#000000" text-anchor="middle">boardctl normalize-statuses migrates the row</text>
+<text x="340.0" y="253.0" font-size="9.50" fill="#000000" text-anchor="middle">vocabulary (M4 §4)</text></g></svg>

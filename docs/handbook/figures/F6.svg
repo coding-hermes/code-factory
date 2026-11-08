@@ -1,33 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="88.5mm" viewBox="0 0 680 354.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="354.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="95.0mm" viewBox="0 0 680 380.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="380.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
 <rect x="67.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="130.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">PROVISIONER</text>
-<polyline points="130.0,70.0 130.0,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="130.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">PROVISIONER</text>
+<polyline points="130.0,70.0 130.0,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="207.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="270.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">SAFETY</text>
-<polyline points="270.0,70.0 270.0,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="270.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">SAFETY</text>
+<polyline points="270.0,70.0 270.0,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="347.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="410.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">NODE</text>
-<polyline points="410.0,70.0 410.0,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="410.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">NODE</text>
+<polyline points="410.0,70.0 410.0,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="487.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="550.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">NODE VERIFIER</text>
-<polyline points="550.0,70.0 550.0,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<text x="10.0" y="87.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
-<polyline points="130.0,84.0 270.0,84.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="300.0" y="76.0" font-size="9.50" fill="#000000" text-anchor="start">layer 00 — reclaim_disk reaps build caches and job</text>
-<text x="300.0" y="89.0" font-size="9.50" fill="#000000" text-anchor="start">dirs past the 24 h TTL (M8 §3 S1)</text>
-<text x="10.0" y="133.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
-<polyline points="130.0,130.0 270.0,130.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="300.0" y="122.0" font-size="9.50" fill="#000000" text-anchor="start">node_hygiene reap removes orphan homes/keys after a</text>
-<text x="300.0" y="135.0" font-size="9.50" fill="#000000" text-anchor="start">60-minute grace (M1 §5)</text>
-<text x="10.0" y="179.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
-<polyline points="402.0,174.0 424.0,174.0 424.0,200.0 402.0,200.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="360.0" y="168.0" font-size="9.50" fill="#000000" text-anchor="start">repo_freshness measures how far a workdir</text>
-<text x="360.0" y="181.0" font-size="9.50" fill="#000000" text-anchor="start">lags origin (M3 §5)</text>
-<text x="10.0" y="225.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
-<polyline points="550.0,222.0 410.0,222.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="380.0" y="214.0" font-size="9.50" fill="#000000" text-anchor="end">node_freshness measures branch/HEAD/lag on the node</text>
-<text x="380.0" y="227.0" font-size="9.50" fill="#000000" text-anchor="end">(M1 §11)</text>
-<text x="10.0" y="271.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
-<polyline points="270.0,268.0 410.0,268.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="370.0" y="260.0" font-size="9.50" fill="#000000" text-anchor="start">protected paths refused before inspection: repo,</text>
-<text x="370.0" y="273.0" font-size="9.50" fill="#000000" text-anchor="start">node.json, crier.json (M8 §5)</text></g></svg>
+<text x="550.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">NODE VERIFIER</text>
+<polyline points="550.0,70.0 550.0,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="10.0" y="113.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
+<polyline points="130.0,110.0 270.0,110.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="300.0" y="102.0" font-size="9.50" fill="#000000" text-anchor="start">layer 00 — reclaim_disk reaps build caches</text>
+<text x="300.0" y="89.0" font-size="9.50" fill="#000000" text-anchor="start">and job dirs past the 24 h TTL (M8 §3 S1)</text>
+<text x="10.0" y="159.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
+<polyline points="130.0,156.0 270.0,156.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="300.0" y="148.0" font-size="9.50" fill="#000000" text-anchor="start">node_hygiene reap removes orphan homes/keys</text>
+<text x="300.0" y="135.0" font-size="9.50" fill="#000000" text-anchor="start">after a 60-minute grace (M1 §5)</text>
+<text x="10.0" y="205.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
+<polyline points="402.0,200.0 424.0,200.0 424.0,226.0 402.0,226.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="360.0" y="194.0" font-size="9.50" fill="#000000" text-anchor="start">repo_freshness measures how far a workdir lags origin (M3</text>
+<text x="360.0" y="207.0" font-size="9.50" fill="#000000" text-anchor="start">§5)</text>
+<text x="10.0" y="251.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
+<polyline points="550.0,248.0 410.0,248.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="380.0" y="240.0" font-size="9.50" fill="#000000" text-anchor="end">node_freshness measures branch/HEAD/lag on</text>
+<text x="380.0" y="227.0" font-size="9.50" fill="#000000" text-anchor="end">the node (M1 §11)</text>
+<text x="10.0" y="297.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
+<polyline points="270.0,294.0 410.0,294.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="370.0" y="286.0" font-size="9.50" fill="#000000" text-anchor="start">protected paths refused before inspection:</text>
+<text x="370.0" y="299.0" font-size="9.50" fill="#000000" text-anchor="start">repo, node.json, crier.json (M8 §5)</text></g></svg>

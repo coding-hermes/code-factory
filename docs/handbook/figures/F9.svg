@@ -1,39 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="88.5mm" viewBox="0 0 680 354.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="354.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
-<rect x="58.9" y="36.0" width="95.5" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="106.7" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">HERMES GATEWAY</text>
-<polyline points="106.7,70.0 106.7,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="95.0mm" viewBox="0 0 680 380.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="380.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
+<rect x="62.0" y="36.0" width="89.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="106.7" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">HERMES GATEWAY</text>
+<polyline points="106.7,70.0 106.7,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="160.3" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="200.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">SCHEDULER</text>
-<polyline points="200.0,70.0 200.0,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="200.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">SCHEDULER</text>
+<polyline points="200.0,70.0 200.0,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="253.7" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="293.3" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">NODE</text>
-<polyline points="293.3,70.0 293.3,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="293.3" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">NODE</text>
+<polyline points="293.3,70.0 293.3,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="347.0" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="386.7" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">GUARD</text>
-<polyline points="386.7,70.0 386.7,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<rect x="428.9" y="36.0" width="102.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="480.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">INFERENCE PROXY</text>
-<polyline points="480.0,70.0 480.0,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="386.7" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">GUARD</text>
+<polyline points="386.7,70.0 386.7,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="435.3" y="36.0" width="89.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="480.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">INFERENCE PROXY</text>
+<polyline points="480.0,70.0 480.0,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="533.7" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="573.3" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">COMMIT GATE</text>
-<polyline points="573.3,70.0 573.3,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<text x="10.0" y="87.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
-<polyline points="106.7,84.0 200.0,84.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="300.0" y="76.0" font-size="9.50" fill="#000000" text-anchor="start">gateway fails: the tick is deferred, not</text>
-<text x="300.0" y="89.0" font-size="9.50" fill="#000000" text-anchor="start">exec-spawned (no-exec-fallback=true) (M9 §5)</text>
-<text x="10.0" y="133.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
-<polyline points="200.0,130.0 293.3,130.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="309.3" y="122.0" font-size="9.50" fill="#000000" text-anchor="start">load gate: new spawns deferred while load ≥</text>
-<text x="309.3" y="135.0" font-size="9.50" fill="#000000" text-anchor="start">threshold (M9 §3)</text>
-<text x="10.0" y="179.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
-<polyline points="386.7,176.0 293.3,176.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="310.0" y="168.0" font-size="9.50" fill="#000000" text-anchor="end">guard provider outage: fail-open unless the policy</text>
-<text x="310.0" y="181.0" font-size="9.50" fill="#000000" text-anchor="end">is FailClosed (M10 §10)</text>
-<text x="10.0" y="225.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
-<polyline points="480.0,222.0 293.3,222.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="386.7" y="214.0" font-size="9.50" fill="#000000" text-anchor="middle">proxy fails closed at startup: no token file or no</text>
-<text x="386.7" y="227.0" font-size="9.50" fill="#000000" text-anchor="middle">upstream key → exit 2 (M12 §11)</text>
-<text x="10.0" y="271.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
-<polyline points="573.3,268.0 293.3,268.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="433.3" y="260.0" font-size="9.50" fill="#000000" text-anchor="middle">gate absent: the pre-commit hook exits 0 — a silent</text>
-<text x="433.3" y="273.0" font-size="9.50" fill="#000000" text-anchor="middle">bypass that must be disclosed (M3 §10)</text></g></svg>
+<text x="573.3" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">COMMIT GATE</text>
+<polyline points="573.3,70.0 573.3,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="10.0" y="113.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
+<polyline points="106.7,110.0 200.0,110.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="300.0" y="102.0" font-size="9.50" fill="#000000" text-anchor="start">gateway fails: the tick is</text>
+<text x="300.0" y="89.0" font-size="9.50" fill="#000000" text-anchor="start">deferred, not exec-spawned</text>
+<text x="300.0" y="76.0" font-size="9.50" fill="#000000" text-anchor="start">(no-exec-fallback=true) (M9</text>
+<text x="10.0" y="159.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
+<polyline points="200.0,156.0 293.3,156.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="309.3" y="148.0" font-size="9.50" fill="#000000" text-anchor="start">load gate: new spawns deferred</text>
+<text x="309.3" y="135.0" font-size="9.50" fill="#000000" text-anchor="start">while load ≥ threshold (M9 §3)</text>
+<text x="10.0" y="205.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
+<polyline points="386.7,202.0 293.3,202.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="310.0" y="194.0" font-size="9.50" fill="#000000" text-anchor="end">guard provider outage:</text>
+<text x="310.0" y="181.0" font-size="9.50" fill="#000000" text-anchor="end">fail-open unless the policy is</text>
+<text x="310.0" y="168.0" font-size="9.50" fill="#000000" text-anchor="end">FailClosed (M10 §10)</text>
+<text x="10.0" y="251.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
+<polyline points="480.0,248.0 293.3,248.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="386.7" y="240.0" font-size="9.50" fill="#000000" text-anchor="middle">proxy fails closed at startup:</text>
+<text x="386.7" y="227.0" font-size="9.50" fill="#000000" text-anchor="middle">no token file or no upstream</text>
+<text x="386.7" y="214.0" font-size="9.50" fill="#000000" text-anchor="middle">key → exit 2 (M12 §11)</text>
+<text x="10.0" y="297.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
+<polyline points="573.3,294.0 293.3,294.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="433.3" y="286.0" font-size="9.50" fill="#000000" text-anchor="middle">gate absent: the pre-commit</text>
+<text x="433.3" y="299.0" font-size="9.50" fill="#000000" text-anchor="middle">hook exits 0 — a silent bypass</text>
+<text x="433.3" y="312.0" font-size="9.50" fill="#000000" text-anchor="middle">that must be disclosed (M3</text></g></svg>

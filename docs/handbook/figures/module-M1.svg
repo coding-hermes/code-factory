@@ -10,13 +10,13 @@
 <text x="30.0" y="190.0" font-size="9.50" fill="#000000" text-anchor="start">no cross-system contract</text>
 <text x="30.0" y="205.0" font-size="8.40" fill="#000000" text-anchor="start">none in Part IV or the chapter&#x27;s §6</text>
 <text x="450.0" y="158.0" font-size="8.40" fill="#000000" text-anchor="start">OUTPUTS — DOWNSTREAM CONTRACTS</text>
-<polyline points="417.0,192.0 450.0,197.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
+<polyline points="417.0,192.0 450.0,197.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
 <rect x="450.0" y="172.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="460.0" y="188.0" font-size="8.40" fill="#000000" text-anchor="start">M1-C1 · M1 -&gt; CRIER  [UNVERIFIED]</text>
 <text x="460.0" y="202.0" font-size="8.40" fill="#000000" text-anchor="start">agent registration + token exchange</text>
-<polyline points="417.0,220.0 450.0,253.0" fill="none" stroke="#000000" stroke-width="1.4" marker-end="url(#ar)"/>
+<polyline points="417.0,220.0 450.0,253.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
 <rect x="450.0" y="228.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="460.0" y="244.0" font-size="8.40" fill="#000000" text-anchor="start">M1-C2 · M1 -&gt; BUNKER  [PROVEN]</text>
+<text x="460.0" y="244.0" font-size="8.40" fill="#000000" text-anchor="start">M1-C2 · M1 -&gt; BUNKER  [UNVERIFIED]</text>
 <text x="460.0" y="258.0" font-size="8.40" fill="#000000" text-anchor="start">create, exec, cp against the agent container</text>
 <text x="24.0" y="314.0" font-size="8.40" fill="#000000" text-anchor="start">FLOWS THIS MODULE PARTICIPATES IN</text>
 <text x="24.0" y="336.0" font-size="9.50" fill="#000000" text-anchor="start">F2 PROVISIONING — How does a bare host become a node?</text>
@@ -31,5 +31,5 @@
 <text x="472.0" y="91.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
 <polyline points="430.0,104.9 464.0,104.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
 <text x="472.0" y="107.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
-<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3"/>
-<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dash-dot — no evidence either way</text></g></svg>
+<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="147.0mm" viewBox="0 0 680 588.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="588.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="16.0" y="26.0" font-size="17.00" fill="#000000" text-anchor="start">BOARD ROW LIFECYCLE — INCLUDING THE PATHS THAT ARE NOT FORWARD</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="197.0mm" viewBox="0 0 680 788.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="788.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="16.0" y="26.0" font-size="17.00" fill="#000000" text-anchor="start">BOARD ROW LIFECYCLE — INCLUDING THE PATHS THAT ARE NOT FORWARD</text>
 <rect x="275.0" y="48.0" width="130.0" height="44.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="340.0" y="68.6" font-size="9.50" fill="#000000" text-anchor="middle">PENDING</text>
 <text x="340.0" y="78.1" font-size="9.50" fill="#000000" text-anchor="middle">DISPATCHABLE</text>
@@ -7,13 +7,19 @@
 <text x="340.0" y="178.1" font-size="9.50" fill="#000000" text-anchor="middle">BY A TICK</text>
 <rect x="275.0" y="248.0" width="130.0" height="44.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="340.0" y="268.6" font-size="9.50" fill="#000000" text-anchor="middle">IN PROGRESS</text>
-<text x="340.0" y="278.1" font-size="9.50" fill="#000000" text-anchor="middle">WORKER EXECUTING</text>
+<text x="340.0" y="278.1" font-size="9.50" fill="#000000" text-anchor="middle">FOREMAN/WORKER RUN</text>
 <rect x="275.0" y="348.0" width="130.0" height="44.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="340.0" y="368.6" font-size="9.50" fill="#000000" text-anchor="middle">REVIEW</text>
-<text x="340.0" y="378.1" font-size="9.50" fill="#000000" text-anchor="middle">VERDICT EXPECTED</text>
+<text x="340.0" y="368.6" font-size="9.50" fill="#000000" text-anchor="middle">COMMIT GUARD</text>
+<text x="340.0" y="378.1" font-size="9.50" fill="#000000" text-anchor="middle">GITREINS TIER 1</text>
 <rect x="275.0" y="448.0" width="130.0" height="44.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="340.0" y="468.6" font-size="9.50" fill="#000000" text-anchor="middle">COMPLETE</text>
-<text x="340.0" y="478.1" font-size="9.50" fill="#000000" text-anchor="middle">EVIDENCE BOUND</text>
+<text x="340.0" y="468.6" font-size="9.50" fill="#000000" text-anchor="middle">ACCEPTANCE JUDGMENT</text>
+<text x="340.0" y="478.1" font-size="9.50" fill="#000000" text-anchor="middle">TIER 2 VERDICT</text>
+<rect x="275.0" y="548.0" width="130.0" height="44.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="340.0" y="568.6" font-size="9.50" fill="#000000" text-anchor="middle">INTEGRATION /</text>
+<text x="340.0" y="578.1" font-size="9.50" fill="#000000" text-anchor="middle">PUBLICATION</text>
+<rect x="275.0" y="648.0" width="130.0" height="44.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="340.0" y="668.6" font-size="9.50" fill="#000000" text-anchor="middle">COMPLETE</text>
+<text x="340.0" y="678.1" font-size="9.50" fill="#000000" text-anchor="middle">EVIDENCE-BOUND</text>
 <rect x="55.0" y="48.0" width="130.0" height="44.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="120.0" y="68.6" font-size="9.50" fill="#000000" text-anchor="middle">DEFERRED</text>
 <text x="120.0" y="78.1" font-size="9.50" fill="#000000" text-anchor="middle">NOT THIS CADENCE</text>
@@ -23,20 +29,28 @@
 <polyline points="340.0,92.0 340.0,150.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
 <text x="346.0" y="122.0" font-size="8.40" fill="#000000" text-anchor="start">TICK SELECTS</text>
 <polyline points="340.0,192.0 340.0,250.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="346.0" y="222.0" font-size="8.40" fill="#000000" text-anchor="start">GITREINS START</text>
+<text x="346.0" y="222.0" font-size="8.40" fill="#000000" text-anchor="start">FOREMAN / WORKER START</text>
 <polyline points="340.0,292.0 340.0,350.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="346.0" y="322.0" font-size="8.40" fill="#000000" text-anchor="start">COMMIT LANDED</text>
+<text x="346.0" y="322.0" font-size="8.40" fill="#000000" text-anchor="start">COMMIT STAGED</text>
 <polyline points="340.0,392.0 340.0,450.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="346.0" y="422.0" font-size="8.40" fill="#000000" text-anchor="start">VERDICT + EVIDENCE</text>
-<polyline points="405.0,370.0 440.0,370.0 440.0,280.0 405.0,280.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text transform="translate(448.0 325.0) rotate(-90)" font-size="8.40" fill="#000000" text-anchor="middle">CHANGES REQUESTED</text>
+<text x="346.0" y="422.0" font-size="8.40" fill="#000000" text-anchor="start">GUARD PASSED</text>
+<polyline points="340.0,492.0 340.0,550.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="346.0" y="522.0" font-size="8.40" fill="#000000" text-anchor="start">VERDICT ACCEPTED</text>
+<polyline points="340.0,592.0 340.0,650.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="346.0" y="622.0" font-size="8.40" fill="#000000" text-anchor="start">PUBLISHED + EVIDENCE BOUND</text>
+<polyline points="405.0,470.0 440.0,470.0 440.0,280.0 405.0,280.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text transform="translate(448.0 375.0) rotate(-90)" font-size="8.40" fill="#000000" text-anchor="middle">CHANGES REQUESTED -&gt; WORKER REWORK</text>
+<polyline points="275.0,370.0 230.0,370.0 230.0,280.0 275.0,280.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text transform="translate(224.0 325.0) rotate(-90)" font-size="8.40" fill="#000000" text-anchor="middle">GUARD FAIL -&gt; REWORK</text>
 <polyline points="275.0,70.0 187.0,70.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
 <text x="230.0" y="64.0" font-size="8.40" fill="#000000" text-anchor="middle">DEPENDENCY UNMET</text>
 <polyline points="340.0,92.0 340.0,104.0 560.0,104.0 560.0,248.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
 <text x="450.0" y="100.0" font-size="8.40" fill="#000000" text-anchor="middle">CANNOT PROCEED</text>
-<polyline points="560.0,248.0 560.0,117.0 396.0,117.0 396.0,92.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="478.0" y="113.0" font-size="8.40" fill="#000000" text-anchor="middle">BLOCKER ROW CLOSED</text>
+<polyline points="120.0,92.0 120.0,114.0 300.0,114.0 300.0,92.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="208.0" y="110.0" font-size="8.40" fill="#000000" text-anchor="middle">RETURN: DEPENDENCY MET / CADENCE</text>
+<polyline points="560.0,248.0 560.0,126.0 450.0,126.0 450.0,92.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="505.0" y="122.0" font-size="8.40" fill="#000000" text-anchor="middle">BLOCKER ROW CLOSED</text>
 <polyline points="405.0,270.0 493.0,270.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
 <text x="450.0" y="264.0" font-size="8.40" fill="#000000" text-anchor="middle">WORKER DIED</text>
-<polyline points="16.0,552.0 664.0,552.0" fill="none" stroke="#000000" stroke-width="0.7"/>
-<text x="16.0" y="564.0" font-size="8.40" fill="#000000" text-anchor="start">NOTE. A ROW LEAVES THE BOARD ONLY THROUGH COMPLETE. BLOCKED AND DEFERRED ARE STATES OF PENDING, NOT EXITS.</text></g></svg>
+<polyline points="16.0,752.0 664.0,752.0" fill="none" stroke="#000000" stroke-width="0.7"/>
+<text x="16.0" y="764.0" font-size="8.40" fill="#000000" text-anchor="start">NOTE. COMPLETION CONSUMES AN ACCEPTED VERDICT, PUBLICATION PROOF AND RETAINED EVIDENCE — NEVER THE GITREINS INTERNAL STATUS ALONE.</text></g></svg>

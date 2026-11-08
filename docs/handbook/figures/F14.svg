@@ -1,37 +1,42 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="88.5mm" viewBox="0 0 680 354.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="354.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="95.0mm" viewBox="0 0 680 380.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="380.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
 <rect x="67.0" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="106.7" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">NODE</text>
-<polyline points="106.7,70.0 106.7,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<rect x="155.7" y="36.0" width="88.7" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="200.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">SESSION STORE</text>
-<polyline points="200.0,70.0 200.0,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="106.7" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">NODE</text>
+<polyline points="106.7,70.0 106.7,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="156.7" y="36.0" width="86.6" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="200.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">SESSION STORE</text>
+<polyline points="200.0,70.0 200.0,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="253.7" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="293.3" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">SCHEDULER</text>
-<polyline points="293.3,70.0 293.3,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<rect x="335.5" y="36.0" width="102.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="386.7" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">INFERENCE PROXY</text>
-<polyline points="386.7,70.0 386.7,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<rect x="425.4" y="36.0" width="109.1" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="480.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">FOREMAN (Hermes)</text>
-<polyline points="480.0,70.0 480.0,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="293.3" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">SCHEDULER</text>
+<polyline points="293.3,70.0 293.3,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="342.0" y="36.0" width="89.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="386.7" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">INFERENCE PROXY</text>
+<polyline points="386.7,70.0 386.7,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="435.3" y="36.0" width="89.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="480.0" y="46.0" font-size="9.50" fill="#000000" text-anchor="middle">FOREMAN</text>
+<text x="480.0" y="58.0" font-size="9.50" fill="#000000" text-anchor="middle">(Hermes)</text>
+<polyline points="480.0,70.0 480.0,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="533.7" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="573.3" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">DUCKBRAIN</text>
-<polyline points="573.3,70.0 573.3,334.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<text x="10.0" y="87.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
-<polyline points="106.7,84.0 200.0,84.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="300.0" y="76.0" font-size="9.50" fill="#000000" text-anchor="start">every turn, model, tokens and cost recorded (CT-11)</text>
-<text x="10.0" y="133.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
-<polyline points="293.3,130.0 200.0,130.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="310.0" y="122.0" font-size="9.50" fill="#000000" text-anchor="end">tick and spawn counters served at /api/v1/metrics</text>
-<text x="310.0" y="135.0" font-size="9.50" fill="#000000" text-anchor="end">(M9 §8)</text>
-<text x="10.0" y="179.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
-<polyline points="378.7,174.0 400.7,174.0 400.7,200.0 378.7,200.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="360.0" y="168.0" font-size="9.50" fill="#000000" text-anchor="start">usage and capture JSONL appended per</text>
-<text x="360.0" y="181.0" font-size="9.50" fill="#000000" text-anchor="start">request; capture loss is silent (M12 §11)</text>
-<text x="10.0" y="225.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
-<polyline points="480.0,222.0 573.3,222.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="370.0" y="214.0" font-size="9.50" fill="#000000" text-anchor="start">decisions, findings and goals written to durable</text>
-<text x="370.0" y="227.0" font-size="9.50" fill="#000000" text-anchor="start">memory (CT-15)</text>
-<text x="10.0" y="271.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
-<polyline points="293.3,268.0 573.3,268.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="433.3" y="260.0" font-size="9.50" fill="#000000" text-anchor="middle">scheduler syncs its namespace every 5 m (M9 §5)</text></g></svg>
+<text x="573.3" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">DUCKBRAIN</text>
+<polyline points="573.3,70.0 573.3,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="10.0" y="113.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
+<polyline points="106.7,110.0 200.0,110.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="300.0" y="102.0" font-size="9.50" fill="#000000" text-anchor="start">every turn, model, tokens and</text>
+<text x="300.0" y="89.0" font-size="9.50" fill="#000000" text-anchor="start">cost recorded (CT-11)</text>
+<text x="10.0" y="159.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
+<polyline points="293.3,156.0 200.0,156.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="310.0" y="148.0" font-size="9.50" fill="#000000" text-anchor="end">tick and spawn counters served</text>
+<text x="310.0" y="135.0" font-size="9.50" fill="#000000" text-anchor="end">at /api/v1/metrics (M9 §8)</text>
+<text x="10.0" y="205.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
+<polyline points="378.7,200.0 400.7,200.0 400.7,226.0 378.7,226.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="360.0" y="194.0" font-size="9.50" fill="#000000" text-anchor="start">usage and capture JSONL appended per</text>
+<text x="360.0" y="207.0" font-size="9.50" fill="#000000" text-anchor="start">request; capture loss is silent (M12</text>
+<text x="360.0" y="220.0" font-size="9.50" fill="#000000" text-anchor="start">§11)</text>
+<text x="10.0" y="251.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
+<polyline points="480.0,248.0 573.3,248.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="370.0" y="240.0" font-size="9.50" fill="#000000" text-anchor="start">decisions, findings and goals</text>
+<text x="370.0" y="227.0" font-size="9.50" fill="#000000" text-anchor="start">written to durable memory</text>
+<text x="370.0" y="214.0" font-size="9.50" fill="#000000" text-anchor="start">(CT-15)</text>
+<text x="10.0" y="297.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
+<polyline points="293.3,294.0 573.3,294.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="433.3" y="286.0" font-size="9.50" fill="#000000" text-anchor="middle">scheduler syncs its namespace</text>
+<text x="433.3" y="299.0" font-size="9.50" fill="#000000" text-anchor="middle">every 5 m (M9 §5)</text></g></svg>

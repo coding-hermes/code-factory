@@ -10,11 +10,12 @@ doc:
   title: CODE FACTORY
   subtitle: "System handbook — arrangement, flows, modules, contracts, settings"
   issue: "2026-11-07"
-  scope: >
+  scope: >-
     Every component that can change the behaviour or correctness of a run: the scheduler that
     admits it, the transport that carries it, the node that executes it, the harness that edits
     code, and the gates that decide whether to believe the result. Third-party internals are out
-    of scope; code beats this document wherever they disagree.
+    of scope. Approved target behavior governs this book's normative requirements; source and
+    deployment evidence show implementation coverage and deviations.
   classification: INTERNAL
 
 parts:

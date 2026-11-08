@@ -1,39 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="100.0mm" viewBox="0 0 680 400.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="400.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
-<rect x="52.1" y="36.0" width="109.1" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="106.7" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">FOREMAN (Hermes)</text>
-<polyline points="106.7,70.0 106.7,380.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="106.5mm" viewBox="0 0 680 426.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="426.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
+<rect x="62.0" y="36.0" width="89.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="106.7" y="46.0" font-size="9.50" fill="#000000" text-anchor="middle">FOREMAN</text>
+<text x="106.7" y="58.0" font-size="9.50" fill="#000000" text-anchor="middle">(Hermes)</text>
+<polyline points="106.7,70.0 106.7,406.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="160.3" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="200.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">DOC GATE</text>
-<polyline points="200.0,70.0 200.0,380.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="200.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">DOC GATE</text>
+<polyline points="200.0,70.0 200.0,406.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="253.7" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="293.3" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">DOC PANEL</text>
-<polyline points="293.3,70.0 293.3,380.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="293.3" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">DOC PANEL</text>
+<polyline points="293.3,70.0 293.3,406.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="347.0" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="386.7" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">SPINE GATE</text>
-<polyline points="386.7,70.0 386.7,380.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="386.7" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">SPINE GATE</text>
+<polyline points="386.7,70.0 386.7,406.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="440.3" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="480.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">HANDBOOK</text>
-<polyline points="480.0,70.0 480.0,380.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="480.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">HANDBOOK</text>
+<polyline points="480.0,70.0 480.0,406.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="533.7" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="573.3" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">OPERATOR</text>
-<polyline points="573.3,70.0 573.3,380.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<text x="10.0" y="87.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
-<polyline points="106.7,84.0 200.0,84.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="300.0" y="76.0" font-size="9.50" fill="#000000" text-anchor="start">skeleton + source</text>
-<text x="10.0" y="133.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
-<polyline points="106.7,130.0 200.0,130.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="300.0" y="122.0" font-size="9.50" fill="#000000" text-anchor="start">seat fills, cites file:line</text>
-<text x="10.0" y="179.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
-<polyline points="200.0,176.0 106.7,176.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="310.0" y="168.0" font-size="9.50" fill="#000000" text-anchor="end">PASS or named refusals (CT-16)</text>
-<text x="10.0" y="225.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
-<polyline points="293.3,222.0 106.7,222.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="200.0" y="214.0" font-size="9.50" fill="#000000" text-anchor="middle">3 seats grade independently; splits reported, never</text>
-<text x="200.0" y="227.0" font-size="9.50" fill="#000000" text-anchor="middle">voted away (M6 §3 S4)</text>
-<text x="10.0" y="271.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
-<polyline points="386.7,268.0 480.0,268.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="370.0" y="260.0" font-size="9.50" fill="#000000" text-anchor="start">cross-chapter consistency: CT ids, states, dangling</text>
-<text x="370.0" y="273.0" font-size="9.50" fill="#000000" text-anchor="start">refs (M6 §3 S9)</text>
-<text x="10.0" y="317.0" font-size="9.50" fill="#000000" text-anchor="start">6</text>
-<polyline points="480.0,314.0 573.3,314.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="370.0" y="306.0" font-size="9.50" fill="#000000" text-anchor="start">PDF with status per module (CT-18)</text></g></svg>
+<text x="573.3" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">OPERATOR</text>
+<polyline points="573.3,70.0 573.3,406.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="10.0" y="113.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
+<polyline points="106.7,110.0 200.0,110.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="300.0" y="102.0" font-size="9.50" fill="#000000" text-anchor="start">skeleton + source</text>
+<text x="10.0" y="159.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
+<polyline points="106.7,156.0 200.0,156.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="300.0" y="148.0" font-size="9.50" fill="#000000" text-anchor="start">seat fills, cites file:line</text>
+<text x="10.0" y="205.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
+<polyline points="200.0,202.0 106.7,202.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="310.0" y="194.0" font-size="9.50" fill="#000000" text-anchor="end">PASS or named refusals (CT-16)</text>
+<text x="10.0" y="251.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
+<polyline points="293.3,248.0 106.7,248.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="200.0" y="240.0" font-size="9.50" fill="#000000" text-anchor="middle">3 seats grade independently;</text>
+<text x="200.0" y="227.0" font-size="9.50" fill="#000000" text-anchor="middle">splits reported, never voted</text>
+<text x="200.0" y="214.0" font-size="9.50" fill="#000000" text-anchor="middle">away (M6 §3 S4)</text>
+<text x="10.0" y="297.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
+<polyline points="386.7,294.0 480.0,294.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="370.0" y="286.0" font-size="9.50" fill="#000000" text-anchor="start">cross-chapter consistency: CT</text>
+<text x="370.0" y="273.0" font-size="9.50" fill="#000000" text-anchor="start">ids, states, dangling refs (M6</text>
+<text x="370.0" y="260.0" font-size="9.50" fill="#000000" text-anchor="start">§3 S9)</text>
+<text x="10.0" y="343.0" font-size="9.50" fill="#000000" text-anchor="start">6</text>
+<polyline points="480.0,340.0 573.3,340.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="370.0" y="332.0" font-size="9.50" fill="#000000" text-anchor="start">PDF with status per module</text>
+<text x="370.0" y="345.0" font-size="9.50" fill="#000000" text-anchor="start">(CT-18)</text></g></svg>

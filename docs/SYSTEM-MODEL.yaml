@@ -60,8 +60,9 @@ components:
     name: FOREMAN (Hermes)
     role: turns a row into work
     layer: control
-    owns: Turns a board row into a brief; verifies returned evidence; closes rows
-    not: Does not grade its own homework
+    host: bunker
+    owns: Runs inside its Bunker; turns a board row into a brief; verifies returned evidence; closes rows
+    not: Does not grade its own homework; its response returns through Crier to the scheduler (resolved decision 1)
     impl: [prompts/foreman.md, skills/code-factory-foreman]
   - id: github
     name: GITHUB CREDENTIALS
@@ -81,11 +82,11 @@ components:
     impl: ['~/.hermes/scripts/fleet-gh-scope.py']
   - id: crier
     name: CRIER (bus)
-    role: carries and signs messages
+    role: launch and return boundary
     layer: transport
     module: M10
-    owns: Delivery with per-agent signature, leases, replies, idempotency (M10 §2)
-    not: Does not decide, does not execute; no board admission (M4 §12 B04)
+    owns: The launch/return boundary between control host and Bunkers — delivery with per-agent signature, leases, replies, idempotency (M10 §2); the foreman response returns through Crier to the scheduler
+    not: Does not decide, does not execute; no board admission (M4 §12 B04); delivery is not task acceptance
     impl: [crier]
   - id: guard
     name: GUARD
@@ -95,13 +96,6 @@ components:
     owns: Pattern pre-scan → payload render → LLM router verdict → escalation → sanitize quarantine on delivered messages (M10 §3 S2)
     not: A false pass lets an untrusted directive reach a node (M10 §2)
     impl: [crier internal/guard/guard.go]
-  - id: router
-    name: TASK-ROUTER
-    role: picks the model
-    layer: transport
-    owns: Which model answers a prompt; lane chains, caps, PAYG ordering
-    not: Does not carry work
-    impl: [task-router]
   - id: gateway
     name: HERMES GATEWAY
     role: session API
@@ -119,31 +113,43 @@ components:
     impl: ['~/.hermes/scripts/cf-inference-proxy.py']
   - id: bunker
     name: BUNKER DAEMON
-    role: hosts the containers
+    role: the deployment and execution boundary
     layer: execution
-    owns: Hosts agent containers; create/exec/cp; per-agent home
+    host: bunker
+    owns: The Bunker deployment/execution boundary itself — hosts agent containers; create/exec/cp; per-agent home
     not: Does not own credentials or config
     impl: [bunker]
   - id: node
     name: NODE
     role: one project, one node
     layer: execution
+    host: bunker
     module: M2
-    owns: One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
+    owns: One project per node; the node runs inside its Bunker; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
     not: Does not decide what to work on
     impl: [scripts/project-node.sh, scripts/node-bus-worker.py]
+  - id: router
+    name: TASK-ROUTER
+    role: future harness selection
+    layer: execution
+    tag: FUTURE
+    owns: FUTURE and NOT PART OF MVP — placed after Node and before Harness; a future selection responsibility (harness selection is design intent; today's router documentation describes provider/model selection)
+    not: The MVP bypasses this point and uses the fixed Hermes harness directly; do not equate future harness selection with the separate current model/provider route
+    impl: [task-router]
   - id: harness
     name: HARNESS
     role: the coding loop
     layer: execution
+    host: bunker
     module: M5
-    owns: The coding loop inside the node (hermes, codex, claude-code, opencode, pi, dsh) at pins (M5 §2)
+    owns: The coding loop inside the node — Hermes is the fixed MVP harness — plus codex, claude-code, opencode, pi, dsh at pins (M5 §2)
     not: Does not write the board
     impl: [scripts/harness/*]
   - id: dispatcher
     name: DISPATCHER
     role: executes the dispatch
     layer: execution
+    host: bunker
     module: M11
     owns: Runs the work inside the agent's container via bunker exec — start detached, poll, deadline kill; keeps the replay ledger (M11 §2)
     not: May not decide admission or what the work is (M11 §2)
@@ -169,15 +175,16 @@ components:
     role: the plan and its state
     layer: memory
     module: M4
-    owns: Append-only record of work and its state; the fleet's plan (M4 §2)
-    not: Not a run log; rows are reused across attempts
+    owns: Append-only record of work and its state; the fleet's plan; the board lives in each project repo, with local and remote copies the scheduler keeps synchronized (M4 §2)
+    not: Not a run log; rows are reused across attempts; a local copy and the remote copy are distinct until a recorded refresh or publication reconciles them
     impl: [.coding-hermes/board/tasks.jsonl, scripts/boardctl]
   - id: duckbrain
     name: DUCKBRAIN
     role: searchable memory
     layer: memory
-    owns: Namespaced durable memory; run records, findings, recall
-    not: Does not own the plan or the code
+    host: bunker
+    owns: Namespaced durable memory; run records, findings, recall; installed in every Bunker and on the control host
+    not: Does not own the plan or the code; a per-Bunker instance must expose the same logical project memory data/view as the controller — physical shared-service/replication topology and offline behavior remain unspecified (resolved decision 2)
     impl: [duckbrain]
   - id: sessionstore
     name: SESSION STORE
@@ -281,9 +288,10 @@ contracts:
     carries: inbox message + lease
     mode: pull, 30 s lease
     state: PROVEN
+    signal: LAUNCH
     sender_guarantee: "crier internal/registry/handler.go:990 — deliver(): durable inbox write with lease/ack/TTL semantics"
     receiver_requirement: "scripts/node-bus-worker.py:1356,1383 — signed GET /agents/<id>/inbox retrieve, then /inbox/ack"
-    note: the node worker (M2 §6) and the dispatcher (M11 §6) are the two consumers
+    note: the node worker (M2 §6) and the dispatcher (M11 §6) are the two consumers; the node executes inside its Bunker — Crier is the launch boundary (resolved decision 1)
   - id: CT-04
     from: node
     to: crier
@@ -304,16 +312,26 @@ contracts:
     carries: completion event for a finished run
     mode: async
     state: PROVEN
+    signal: FOREMAN RETURN
     sender_guarantee: "crier internal/registry/handler.go:170,1452 — the answering message carries ReplyTo correlation into the scheduler's durable inbox"
     receiver_requirement: "internal/scheduler/dispatch_leg.go:713 — dispatchReplyVerdict reads the correlated payload's ok (first message wins, :428)"
-    note: the dispatcher leg works — it always sends `ok`, the field dispatchReplyVerdict reads (M11 §6)
+    note: the resolved return path — the Bunker foreman's response travels through Crier back to the scheduler on the control host, which records it and triggers subsequent processing (resolved decision 1); the dispatcher leg works — it always sends `ok`, the field dispatchReplyVerdict reads (M11 §6)
+  - id: CT-06R
+    from: foreman
+    to: crier
+    carries: the foreman's durable response (return leg of CT-06)
+    mode: async, signed
+    state: UNVERIFIED
+    signal: RETURN LEG
+    label_dx: 70
+    note: resolved decision 1 — Crier is the launch/return boundary; the foreman response enters Crier inside the Bunker and leaves for the scheduler, which records it and triggers subsequent processing; the foreman-side producing call is not yet contract-cited, so this leg is UNVERIFIED until Part IV reconciles it with CT-06
   - id: CT-07
     from: router
     to: gateway
     carries: model choice for a prompt
     mode: in-band
     state: UNVERIFIED
-    note: boundary — neither side has an in-repo file:function; the wire was not measured (M12 §6)
+    note: boundary — neither side has an in-repo file:function; the wire was not measured (M12 §6). The Task Router itself is FUTURE and NOT PART OF MVP, placed after Node and before Harness with future harness-selection responsibility; do not equate that future selection with this separate current model/provider route
   - id: CT-08
     from: crier
     to: gateway
@@ -372,7 +390,8 @@ contracts:
     carries: decisions, findings, goal
     mode: mcp / http
     state: UNVERIFIED
-    note: boundary — the foreman lane and the duckbrain service are out of scope (M9 §6)
+    signal: SHARED VIEW
+    note: boundary — the foreman lane and the duckbrain service are out of scope (M9 §6); the foreman writes through the DuckBrain installed in its own Bunker, which must expose the same logical project memory data/view as the controller (resolved decision 2; physical topology unresolved)
   - id: CT-16
     from: docsgate
     to: handbook
@@ -438,16 +457,26 @@ contracts:
 flows:
   - id: F1
     name: DISPATCH
-    question: How does a board row become work?
+    question: How does a board row become settled, published work?
     steps:
-      - [scheduler, crier, "envelope with run_id (CT-02)"]
-      - [crier, node, "inbox pull, lease 30 s (CT-03)"]
-      - [node, harness, "brief + workdir + credentials"]
-      - [harness, node, "diff + evidence"]
-      - [node, crier, "reply: status + artifacts (CT-04)"]
-      - [crier, scheduler, "completion event (CT-06)"]
-      - [scheduler, board, "row state changes, attempt recorded"]
-    note: rescoped per OUTLINE — begins at the node's inbox; admission is F11
+      - [scheduler, board, "refresh local + remote repo/board copies BEFORE eligibility"]
+      - [scheduler, board, "board-check verifier hook: WORK / NO-WORK / UNREADABLE"]
+      - [scheduler, scheduler, "no-work → cooldown/defer; unreadable → diagnose, never dispatch"]
+      - [scheduler, scheduler, "admission (F11); GAP: today's PRE hook runs AFTER admission"]
+      - [scheduler, crier, "envelope: run_id, corr_id, lane, board, text_b64 (CT-02)"]
+      - [crier, node, "inbox pull + lease (CT-03) — launch into the Bunker"]
+      - [node, foreman, "foreman/worker start: brief + workspace in the Bunker"]
+      - [foreman, harness, "MVP: the foreman invokes the fixed Hermes harness directly"]
+      - [node, router, "FUTURE: Task Router between Node and Harness — NOT PART OF MVP"]
+      - [harness, foreman, "diff + evidence returned"]
+      - [foreman, foreman, "commit guard (Tier 1), then acceptance judgment (Tier 2)"]
+      - [foreman, duckbrain, "memory write — Bunker DuckBrain, shared controller view (CT-15)"]
+      - [foreman, board, "integration/publication: results + board changes (CT-14)"]
+      - [foreman, crier, "foreman response — the durable return leg through Crier (CT-06R)"]
+      - [crier, scheduler, "scheduler records completion, triggers follow-up (CT-06)"]
+      - [scheduler, scheduler, "POST hook runs AFTER outcome — cannot change the tick"]
+      - [scheduler, board, "end-of-lane sync: reconcile board copies; evidence bound"]
+    note: refresh-before-eligibility and the end verifier are the approved target; existing PRE/POST hook phases sit after admission and after outcome recording — that integration gap is shown, not concealed
   - id: F2
     name: PROVISIONING
     question: How does a bare host become a node?
@@ -455,6 +484,7 @@ flows:
       - [owner, scheduler, "lane declared: project, harness, pin"]
       - [provisioner, bunker, "container created, home, keys (M1 §3 S2)"]
       - [provisioner, node, "layers: base, harness, bus, repo (M1 §3)"]
+      - [provisioner, node, "DuckBrain installed in every Bunker — same logical memory view as the controller (resolved decision 2)"]
       - [node, duckbrain, "identity + namespace credential"]
       - [verifier, node, "verify-node measures the result — CREATED ≠ VERIFIED (M1 §12)"]
   - id: F3
@@ -531,13 +561,14 @@ flows:
     name: SCHEDULING ADMISSION
     question: Does a lane's tick get admitted, and why not?
     steps:
+      - [scheduler, board, "repo/board refresh BEFORE eligibility; the checked revision is recorded (approved target; see F1 gap note)"]
       - [scheduler, scheduler, "cadence tick fires; admission mode — project override → namespace → cooldown (M9 §3)"]
-      - [scheduler, board, "board ownership and workability decide the tasks waiver (M9 §3)"]
+      - [scheduler, board, "board ownership and workability decide the tasks waiver — WORK, NO-WORK and UNREADABLE are distinct outcomes (M9 §3)"]
       - [scheduler, scheduler, "usage pools reserved, or a capacity denial emitted (M9 §3)"]
       - [scheduler, board, "board-stasis gate excludes an unchanged cooldown builder lane (M9 §3)"]
       - [scheduler, scheduler, "NOOP-PACING spaces a no-artifact lane, doubling to 8× the floor (M9 §3)"]
       - [scheduler, crier, "admitted — the envelope is dispatched (CT-02)"]
-    note: refused means a named reason — budget hold, cooldown, load gate, fairness, namespace allocation (OUTLINE F11)
+    note: refused means a named reason — budget hold, cooldown, load gate, fairness, namespace allocation (OUTLINE F11); an unreadable board is never treated as no work
   - id: F12
     name: CREDENTIAL LIFECYCLE
     question: How does a credential stay fresh, scoped and out of argv?

@@ -8,11 +8,11 @@
 <rect x="20.0" y="172.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="30.0" y="188.0" font-size="8.40" fill="#000000" text-anchor="start">CT-10 · NODE -&gt; M4  [BROKEN]</text>
 <text x="30.0" y="202.0" font-size="8.40" fill="#000000" text-anchor="start">row event with run_id and outcome</text>
-<polyline points="230.0,253.0 263.0,206.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
+<polyline points="230.0,253.0 263.0,206.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
 <rect x="20.0" y="228.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="30.0" y="244.0" font-size="8.40" fill="#000000" text-anchor="start">CT-13 · COMMIT GATE -&gt; M4  [UNVERIFIED]</text>
 <text x="30.0" y="258.0" font-size="8.40" fill="#000000" text-anchor="start">verdict that closes a row</text>
-<polyline points="230.0,309.0 263.0,224.7" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
+<polyline points="230.0,309.0 263.0,224.7" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
 <rect x="20.0" y="284.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="30.0" y="300.0" font-size="8.40" fill="#000000" text-anchor="start">CT-14 · FOREMAN -&gt; M4  [UNVERIFIED]</text>
 <text x="30.0" y="314.0" font-size="8.40" fill="#000000" text-anchor="start">row created, row closed, evidence</text>
@@ -21,7 +21,7 @@
 <text x="460.0" y="190.0" font-size="9.50" fill="#000000" text-anchor="start">no cross-system contract</text>
 <text x="460.0" y="205.0" font-size="8.40" fill="#000000" text-anchor="start">none in Part IV or the chapter&#x27;s §6</text>
 <text x="24.0" y="370.0" font-size="8.40" fill="#000000" text-anchor="start">FLOWS THIS MODULE PARTICIPATES IN</text>
-<text x="24.0" y="392.0" font-size="9.50" fill="#000000" text-anchor="start">F1 DISPATCH — How does a board row become work?</text>
+<text x="24.0" y="392.0" font-size="9.50" fill="#000000" text-anchor="start">F1 DISPATCH — How does a board row become settled, published work?</text>
 <text x="24.0" y="432.0" font-size="9.50" fill="#000000" text-anchor="start">F5 LANDING — How does work reach main?</text>
 <text x="24.0" y="472.0" font-size="9.50" fill="#000000" text-anchor="start">F8 RECOVERY — What happens after a crash, restart or orphaned run?</text>
 <text x="24.0" y="512.0" font-size="9.50" fill="#000000" text-anchor="start">F11 SCHEDULING ADMISSION — Does a lane&#x27;s tick get admitted, and why not?</text>
@@ -37,5 +37,5 @@
 <text x="472.0" y="91.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
 <polyline points="430.0,104.9 464.0,104.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
 <text x="472.0" y="107.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
-<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3"/>
-<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dash-dot — no evidence either way</text></g></svg>
+<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>

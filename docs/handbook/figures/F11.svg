@@ -1,35 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="111.5mm" viewBox="0 0 680 446.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="446.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="141.0mm" viewBox="0 0 680 564.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="564.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
 <rect x="67.0" y="36.0" width="172.7" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="153.3" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">SCHEDULER</text>
-<polyline points="153.3,70.0 153.3,354.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="153.3" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">SCHEDULER</text>
+<polyline points="153.3,70.0 153.3,426.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="253.7" y="36.0" width="172.7" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="340.0" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">BOARD</text>
-<polyline points="340.0,70.0 340.0,354.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="340.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">BOARD</text>
+<polyline points="340.0,70.0 340.0,426.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="440.3" y="36.0" width="172.7" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="526.7" y="56.0" font-size="11.00" fill="#000000" text-anchor="middle">CRIER (bus)</text>
-<polyline points="526.7,70.0 526.7,354.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<text x="10.0" y="87.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
-<polyline points="145.3,82.0 167.3,82.0 167.3,108.0 145.3,108.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="177.3" y="76.0" font-size="9.50" fill="#000000" text-anchor="start">cadence tick fires; admission mode — project</text>
-<text x="177.3" y="89.0" font-size="9.50" fill="#000000" text-anchor="start">override → namespace → cooldown (M9 §3)</text>
-<text x="10.0" y="133.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
-<polyline points="153.3,130.0 340.0,130.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="356.0" y="122.0" font-size="9.50" fill="#000000" text-anchor="start">board ownership and workability decide the tasks</text>
-<text x="356.0" y="135.0" font-size="9.50" fill="#000000" text-anchor="start">waiver (M9 §3)</text>
-<text x="10.0" y="179.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
-<polyline points="145.3,174.0 167.3,174.0 167.3,200.0 145.3,200.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="177.3" y="168.0" font-size="9.50" fill="#000000" text-anchor="start">usage pools reserved, or a capacity denial</text>
-<text x="177.3" y="181.0" font-size="9.50" fill="#000000" text-anchor="start">emitted (M9 §3)</text>
-<text x="10.0" y="225.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
-<polyline points="153.3,222.0 340.0,222.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="356.0" y="214.0" font-size="9.50" fill="#000000" text-anchor="start">board-stasis gate excludes an unchanged cooldown</text>
-<text x="356.0" y="227.0" font-size="9.50" fill="#000000" text-anchor="start">builder lane (M9 §3)</text>
-<text x="10.0" y="271.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
-<polyline points="145.3,266.0 167.3,266.0 167.3,292.0 145.3,292.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="177.3" y="260.0" font-size="9.50" fill="#000000" text-anchor="start">NOOP-PACING spaces a no-artifact lane,</text>
-<text x="177.3" y="273.0" font-size="9.50" fill="#000000" text-anchor="start">doubling to 8× the floor (M9 §3)</text>
-<text x="10.0" y="317.0" font-size="9.50" fill="#000000" text-anchor="start">6</text>
-<polyline points="153.3,314.0 526.7,314.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="340.0" y="306.0" font-size="9.50" fill="#000000" text-anchor="middle">admitted — the envelope is dispatched (CT-02)</text>
-<polyline points="6.0,354.0 674.0,354.0" fill="none" stroke="#000000" stroke-width="0.7"/>
-<text x="10.0" y="368.0" font-size="9.50" fill="#000000" text-anchor="start">NOTE. refused means a named reason — budget hold, cooldown, load gate, fairness, namespace allocation (OUTLINE F11)</text></g></svg>
+<text x="526.7" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">CRIER (bus)</text>
+<polyline points="526.7,70.0 526.7,426.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="10.0" y="113.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
+<polyline points="153.3,110.0 340.0,110.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="356.0" y="102.0" font-size="9.50" fill="#000000" text-anchor="start">repo/board refresh BEFORE eligibility; the checked revision</text>
+<text x="356.0" y="89.0" font-size="9.50" fill="#000000" text-anchor="start">is recorded (approved target; see F1 gap note)</text>
+<text x="10.0" y="159.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
+<polyline points="145.3,154.0 167.3,154.0 167.3,180.0 145.3,180.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="177.3" y="148.0" font-size="9.50" fill="#000000" text-anchor="start">cadence tick fires; admission mode — project override → namespace → cooldown</text>
+<text x="177.3" y="161.0" font-size="9.50" fill="#000000" text-anchor="start">(M9 §3)</text>
+<text x="10.0" y="205.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
+<polyline points="153.3,202.0 340.0,202.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="356.0" y="194.0" font-size="9.50" fill="#000000" text-anchor="start">board ownership and workability decide the tasks waiver —</text>
+<text x="356.0" y="181.0" font-size="9.50" fill="#000000" text-anchor="start">WORK, NO-WORK and UNREADABLE are distinct outcomes (M9 §3)</text>
+<text x="10.0" y="251.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
+<polyline points="145.3,246.0 167.3,246.0 167.3,272.0 145.3,272.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="177.3" y="240.0" font-size="9.50" fill="#000000" text-anchor="start">usage pools reserved, or a capacity denial emitted (M9 §3)</text>
+<text x="10.0" y="297.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
+<polyline points="153.3,294.0 340.0,294.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="356.0" y="286.0" font-size="9.50" fill="#000000" text-anchor="start">board-stasis gate excludes an unchanged cooldown builder</text>
+<text x="356.0" y="273.0" font-size="9.50" fill="#000000" text-anchor="start">lane (M9 §3)</text>
+<text x="10.0" y="343.0" font-size="9.50" fill="#000000" text-anchor="start">6</text>
+<polyline points="145.3,338.0 167.3,338.0 167.3,364.0 145.3,364.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="177.3" y="332.0" font-size="9.50" fill="#000000" text-anchor="start">NOOP-PACING spaces a no-artifact lane, doubling to 8× the floor (M9 §3)</text>
+<text x="10.0" y="389.0" font-size="9.50" fill="#000000" text-anchor="start">7</text>
+<polyline points="153.3,386.0 526.7,386.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<text x="340.0" y="378.0" font-size="9.50" fill="#000000" text-anchor="middle">admitted — the envelope is dispatched (CT-02)</text>
+<polyline points="6.0,426.0 674.0,426.0" fill="none" stroke="#000000" stroke-width="0.7"/>
+<text x="10.0" y="440.0" font-size="9.50" fill="#000000" text-anchor="start">NOTE. refused means a named reason — budget hold, cooldown, load gate, fairness, namespace allocation (OUTLINE F11); an</text>
+<text x="10.0" y="455.0" font-size="9.50" fill="#000000" text-anchor="start">      unreadable board is never treated as no work</text></g></svg>
