@@ -1,33 +1,62 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="95.0mm" viewBox="0 0 680 380.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="380.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="132.0mm" viewBox="0 0 680 528.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="528.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="12.0" y="22.0" font-size="17.00" fill="#000000" text-anchor="start">F6 — MAINTENANCE</text>
+<text x="668.0" y="22.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT · DASHED = CONDITIONAL BRANCH</text>
 <rect x="67.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="130.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">PROVISIONER</text>
-<polyline points="130.0,70.0 130.0,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="130.0,70.0 130.0,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="207.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="270.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">SAFETY</text>
-<polyline points="270.0,70.0 270.0,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="270.0,70.0 270.0,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="347.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="410.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">NODE</text>
-<polyline points="410.0,70.0 410.0,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="410.0,70.0 410.0,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="487.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="550.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">NODE VERIFIER</text>
-<polyline points="550.0,70.0 550.0,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<text x="10.0" y="113.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
-<polyline points="130.0,110.0 270.0,110.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="300.0" y="102.0" font-size="9.50" fill="#000000" text-anchor="start">layer 00 — reclaim_disk reaps build caches</text>
-<text x="300.0" y="89.0" font-size="9.50" fill="#000000" text-anchor="start">and job dirs past the 24 h TTL (M8 §3 S1)</text>
-<text x="10.0" y="159.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
-<polyline points="130.0,156.0 270.0,156.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="300.0" y="148.0" font-size="9.50" fill="#000000" text-anchor="start">node_hygiene reap removes orphan homes/keys</text>
-<text x="300.0" y="135.0" font-size="9.50" fill="#000000" text-anchor="start">after a 60-minute grace (M1 §5)</text>
-<text x="10.0" y="205.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
-<polyline points="402.0,200.0 424.0,200.0 424.0,226.0 402.0,226.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="360.0" y="194.0" font-size="9.50" fill="#000000" text-anchor="start">repo_freshness measures how far a workdir lags origin (M3</text>
-<text x="360.0" y="207.0" font-size="9.50" fill="#000000" text-anchor="start">§5)</text>
-<text x="10.0" y="251.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
-<polyline points="550.0,248.0 410.0,248.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="380.0" y="240.0" font-size="9.50" fill="#000000" text-anchor="end">node_freshness measures branch/HEAD/lag on</text>
-<text x="380.0" y="227.0" font-size="9.50" fill="#000000" text-anchor="end">the node (M1 §11)</text>
-<text x="10.0" y="297.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
-<polyline points="270.0,294.0 410.0,294.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="370.0" y="286.0" font-size="9.50" fill="#000000" text-anchor="start">protected paths refused before inspection:</text>
-<text x="370.0" y="299.0" font-size="9.50" fill="#000000" text-anchor="start">repo, node.json, crier.json (M8 §5)</text></g></svg>
+<polyline points="550.0,70.0 550.0,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="10.0" y="123.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
+<polyline points="130.0,120.0 270.0,120.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="297.0" y="90.9" width="231.5" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="99.0" font-size="9.50" fill="#000000" text-anchor="start">MAINTENANCE TRIGGER: PERIODIC OR CAPACITY</text>
+<rect x="297.0" y="103.9" width="50.0" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="112.0" font-size="9.50" fill="#000000" text-anchor="start">PRESSURE</text>
+<text x="10.0" y="169.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
+<polyline points="262.0,164.0 284.0,164.0 284.0,190.0 262.0,190.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="291.0" y="136.9" width="248.0" height="10.9" fill="#ffffff"/>
+<text x="294.0" y="145.0" font-size="9.50" fill="#000000" text-anchor="start">LOCAL: INVENTORY CANDIDATES — ACTIVE-CLAIM +</text>
+<rect x="291.0" y="149.9" width="154.5" height="10.9" fill="#ffffff"/>
+<text x="294.0" y="158.0" font-size="9.50" fill="#000000" text-anchor="start">PROTECTED-PATH CHECKS FIRST</text>
+<text x="10.0" y="215.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
+<polyline points="130.0,212.0 270.0,212.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="297.0" y="182.9" width="237.0" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="191.0" font-size="9.50" fill="#000000" text-anchor="start">ALTERNATIVE A: RECLAIM DISK — CACHES + JOB</text>
+<rect x="297.0" y="195.9" width="165.5" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="204.0" font-size="9.50" fill="#000000" text-anchor="start">DIRS PAST 24 H TTL (M8 §3 S1)</text>
+<text x="10.0" y="261.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
+<polyline points="130.0,258.0 270.0,258.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="297.0" y="228.9" width="248.0" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="237.0" font-size="9.50" fill="#000000" text-anchor="start">ALTERNATIVE B: NODE HYGIENE — ORPHAN HOMES /</text>
+<rect x="297.0" y="241.9" width="149.0" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="250.0" font-size="9.50" fill="#000000" text-anchor="start">KEYS, 60 MIN GRACE (M1 §5)</text>
+<text x="10.0" y="307.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
+<polyline points="270.0,304.0 410.0,304.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="367.0" y="274.9" width="237.0" height="10.9" fill="#ffffff"/>
+<text x="370.0" y="283.0" font-size="9.50" fill="#000000" text-anchor="start">PROTECTED PATHS REFUSED BEFORE INSPECTION:</text>
+<rect x="367.0" y="287.9" width="198.5" height="10.9" fill="#ffffff"/>
+<text x="370.0" y="296.0" font-size="9.50" fill="#000000" text-anchor="start">REPO, NODE.JSON, CRIER.JSON (M8 §5)</text>
+<text x="10.0" y="353.0" font-size="9.50" fill="#000000" text-anchor="start">6</text>
+<polyline points="402.0,348.0 424.0,348.0 424.0,374.0 402.0,374.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="357.0" y="320.9" width="314.0" height="10.9" fill="#ffffff"/>
+<text x="360.0" y="329.0" font-size="9.50" fill="#000000" text-anchor="start">ALTERNATIVE C: REPO FRESHNESS MEASURES LAG VS ORIGIN (M3</text>
+<rect x="357.0" y="333.9" width="22.5" height="10.9" fill="#ffffff"/>
+<text x="360.0" y="342.0" font-size="9.50" fill="#000000" text-anchor="start">§5)</text>
+<text x="10.0" y="399.0" font-size="9.50" fill="#000000" text-anchor="start">7</text>
+<polyline points="550.0,396.0 410.0,396.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="126.5" y="366.9" width="253.5" height="10.9" fill="#ffffff"/>
+<text x="380.0" y="375.0" font-size="9.50" fill="#000000" text-anchor="end">ALTERNATIVE D: NODE FRESHNESS — BRANCH / HEAD</text>
+<rect x="297.0" y="379.9" width="83.0" height="10.9" fill="#ffffff"/>
+<text x="380.0" y="388.0" font-size="9.50" fill="#000000" text-anchor="end">/ LAG (M1 §11)</text>
+<text x="10.0" y="445.0" font-size="9.50" fill="#000000" text-anchor="start">8</text>
+<polyline points="270.0,442.0 130.0,442.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="62.0" y="412.9" width="248.0" height="10.9" fill="#ffffff"/>
+<text x="310.0" y="421.0" font-size="9.50" fill="#000000" text-anchor="end">RESULT: BYTES RECLAIMED + RETAINED / REFUSED</text>
+<rect x="265.5" y="425.9" width="44.5" height="10.9" fill="#ffffff"/>
+<text x="310.0" y="434.0" font-size="9.50" fill="#000000" text-anchor="end">REASONS</text></g></svg>

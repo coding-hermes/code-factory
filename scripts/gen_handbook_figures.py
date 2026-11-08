@@ -662,133 +662,491 @@ def tick_lifecycle() -> Sheet:
 
 
 # --------------------------------------------------------------------------- module views
+def _host_tag(cid: str, comp) -> str:
+    if comp is None:
+        return "EXTERNAL PEER"
+    if comp.get("host") == "bunker":
+        return "IN THE BUNKER"
+    if cid == "crier":
+        return "LAUNCH/RETURN BOUNDARY"
+    if cid == "scheduler":
+        return "CONTROL PLANE"
+    if comp.get("tag"):
+        return f"CONTROL HOST · {comp['tag']}"
+    return "CONTROL HOST"
+
+
+def _enclosure(sh: Sheet, x, y, w, h, label):
+    """Dashed host/bus boundary wrapper around one box, label inside top-left.
+    A finer dash than the module panel's 6 4, so the two boundary levels read apart."""
+    sh.add(
+        f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" fill="none" '
+        f'stroke="{INK}" stroke-width="1.0" stroke-dasharray="2.5 2.5"/>'
+    )
+    sh.text(x + 3, y + 9.5, label, F_TINY)
+
+
 def module_sheet(model, mod) -> Sheet:
     by_id = {c["id"]: c for c in model["components"]}
     contracts = {k.get("id", f"{k['from']}->{k['to']}"): k for k in model["contracts"]}
-    mcomps = [by_id[cid] for cid in mod.get("components", []) if cid in by_id]
+    mids = [cid for cid in mod.get("components", []) if cid in by_id]
+    mset = set(mids)
+    ins_list, outs_list = mod.get("contracts_in", []), mod.get("contracts_out", [])
 
-    def row(cid):
+    # Wires are classified by the REGISTER's own direction; the module's in/out
+    # lists only pick which contracts the view shows and give boundary wires
+    # (neither endpoint owned here) their side.
+    wires, seen = [], set()
+    for cid in ins_list + outs_list:
+        if cid in seen or cid not in contracts:
+            continue
+        seen.add(cid)
         k = contracts[cid]
-        frm, to = by_id.get(k["from"]), by_id.get(k["to"])
-        return k, (frm["name"] if frm else k["from"]), (to["name"] if to else k["to"])
+        f, t = k["from"], k["to"]
+        if f in mset and t in mset:
+            wires.append(dict(cid=cid, k=k, kind="I"))
+        elif t in mset:
+            wires.append(dict(cid=cid, k=k, kind="IN", peer=f, target=t))
+        elif f in mset:
+            wires.append(dict(cid=cid, k=k, kind="OUT", peer=t, target=f))
+        else:
+            d = "IN" if cid in ins_list else "OUT"
+            wires.append(
+                dict(cid=cid, k=k, kind=d, peer=f if d == "IN" else t, target=None)
+            )
 
-    ins = [(cid,) + row(cid) for cid in mod.get("contracts_in", [])]
-    outs = [(cid,) + row(cid) for cid in mod.get("contracts_out", [])]
+    part = [
+        fl
+        for fl in model["flows"]
+        if mset & {x for a, b, _ in fl["steps"] for x in (a, b)}
+    ]
 
-    part = []
-    for fl in model["flows"]:
-        actors = {x for a, b, _ in fl["steps"] for x in (a, b)}
-        if any(cid in actors for cid in mod.get("components", [])):
-            part.append(fl)
+    # ---- geometry (units are quarter-mm; see Sheet) ----
+    PW = 150  # peer box width
+    PLX, PRX = 24, 506  # peer column left edges
+    PAN_L, PAN_R, PAN_W = 264, 416, 152  # module boundary panel
+    CB_L, CB_W, CH = 272, 136, 52  # component boxes
+    TOP, CPITCH = 100, 66
+    n_stack = max(len(mids), 1)
+    comp_cy = [TOP + 50 + i * CPITCH for i in range(n_stack)]
+    panel_bottom = comp_cy[-1] + CH / 2 + 30
+    panel_cy = TOP + (panel_bottom - TOP) / 2
 
-    colw = 210
-    lx, rx = 20, Sheet.W - 20 - colw
-    cx = Sheet.W / 2
-    cy = 206
-    rowh = 56
-    rows = max(len(ins), len(outs), 1)
-    h = cy + 100 + rows * rowh + 60 + max(len(part), 1) * 40 + 60
-    sh = Sheet(h)
+    # ---- peer rows per side: entry slots per target, then a collision pass ----
+    rows_by_side: dict[str, list] = {}
+    for side in ("IN", "OUT"):
+        sw = [w for w in wires if w["kind"] == side]
+        groups: dict = {}
+        for w in sw:
+            groups.setdefault(w["target"], []).append(w)
+        for tgt, g in groups.items():
+            n = len(g)
+            for i, w in enumerate(g):
+                off = (i - (n - 1) / 2) * (26 if tgt is None else 20)
+                w["entry"] = panel_cy + off if tgt is None else comp_cy[mids.index(tgt)] + off
+        # global separation pass: a boundary port may not sit on a component's
+        # entry line, or their labels collide (CT-02 vs CT-15 on M9)
+        entries = sorted(sw, key=lambda w: w["entry"])
+        for i in range(1, len(entries)):
+            prev = entries[i - 1]["entry"]
+            if entries[i]["entry"] < prev + 22:
+                e = entries[i]
+                if e["target"] is None:  # ports have edge freedom — move them
+                    e["entry"] = min(prev + 22, panel_bottom - 14)
+                elif entries[i - 1]["target"] is None:
+                    entries[i - 1]["entry"] = max(
+                        e["entry"] - 22, TOP + 14
+                    )
+                    entries[i]["entry"] = max(e["entry"], entries[i - 1]["entry"] + 22)
+        merged: dict = {}
+        for w in sorted(sw, key=lambda w: w["entry"]):
+            p = w["peer"]
+            if p in merged:
+                merged[p]["ks"].append(w)
+            else:
+                merged[p] = dict(peer=p, ks=[w], h=34 + 24)
+        rows, ytop = [], 128
+        for r in sorted(merged.values(), key=lambda r: r["ks"][0]["entry"]):
+            top = max(r["ks"][0]["entry"] - r["h"] / 2, ytop)
+            r["y"] = top
+            ytop = top + r["h"] + 26  # room for the next row's enclosure label
+            rows.append(r)
+        for i, r in enumerate(rows):  # corridor per row, in row order: no crossings
+            r["cx"] = (186 + 10 * i) if side == "IN" else (494 - 10 * i)
+        rows_by_side[side] = rows
 
-    sh.text(24, 38, f"{mod['id']} — {mod['name']}", F_TITLE)
-    yy = 60
-    for ln in wrap(mod["blurb"], 74)[:2]:
+    band_bottom = panel_bottom
+    for side in ("IN", "OUT"):
+        for r in rows_by_side[side]:
+            band_bottom = max(band_bottom, r["y"] + r["h"])
+
+    sh = Sheet(10)  # true height fixed once the bottom band is placed
+
+    sh.text(24, 34, f"{mod['id']} — {mod['name']}", F_TITLE)
+    yy = 56
+    for ln in wrap(mod["blurb"].upper(), 96)[:2]:
         sh.text(24, yy, ln, F_SMALL)
-        yy += 13
+        yy += 12
+    sh.text(24, 84, "CONTRACTS INTO THE MODULE", F_TINY)
+    sh.text(656, 84, "CONTRACTS OUT OF THE MODULE", F_TINY, anchor="end")
 
-    # centre box with the module's components
-    sh.box(cx - 75, cy - 34, 150, 84, sw=2.2)
-    sh.text(cx, cy - 14, mod["id"], F_BODY, anchor="middle")
-    sh.text(cx, cy + 6, mod["name"], F_HEAD, anchor="middle")
-    comps_txt = (
-        ", ".join(c["name"] for c in mcomps)
-        if mcomps
-        else "no bus component — the shell substrate (M0 §6)"
-    )
-    if (
-        len(mcomps) != 1
-        or SHORT.get(mcomps[0]["name"], mcomps[0]["name"]) not in mod["name"]
-    ):
-        for i, ln in enumerate(wrap(comps_txt, 34)[:2]):
-            sh.text(cx, cy + (26 + i * 12), ln, F_TINY, anchor="middle")
+    # ---- module boundary panel and its components ----
+    sh.panel(PAN_L, TOP, PAN_W, panel_bottom - TOP)
+    sh.text(PAN_L + 6, panel_bottom - 8, f"MODULE BOUNDARY — {mod['id']}", F_TINY)
+    for i, cid in enumerate(mids):
+        c = by_id[cid]
+        cy = comp_cy[i]
+        sh.box(CB_L, cy - CH / 2, CB_W, CH)
+        nls = wrap(SHORT.get(c["name"], c["name"]), 26)
+        if len(nls) == 1:
+            sh.text(CB_L + CB_W / 2, cy - 4, nls[0], F_SMALL, anchor="middle")
+        else:
+            sh.text(CB_L + CB_W / 2, cy - 12, nls[0], F_SMALL, anchor="middle")
+            sh.text(CB_L + CB_W / 2, cy - 2, nls[1], F_SMALL, anchor="middle")
+        sh.text(CB_L + CB_W / 2, cy + 14, _host_tag(cid, c), F_TINY, anchor="middle")
+        tag = _host_tag(cid, c)
+        if tag == "IN THE BUNKER":
+            _enclosure(
+                sh, CB_L - 6, cy - CH / 2 - 20, CB_W + 12, CH + 28,
+                "BUNKER EXECUTION BOUNDARY",
+            )
+        elif cid == "crier":
+            _enclosure(
+                sh, CB_L - 6, cy - CH / 2 - 20, CB_W + 12, CH + 28,
+                "CRIER · LAUNCH / RETURN BOUNDARY",
+            )
+    if not mids:  # M0 — the shell substrate, no bus component
+        cy = comp_cy[0]
+        sh.box(CB_L, cy - CH / 2 - 5, CB_W, CH + 10)
+        sh.text(CB_L + CB_W / 2, cy - 12, "SHELL SUBSTRATE", F_SMALL, anchor="middle")
+        sh.text(CB_L + CB_W / 2, cy - 1, "NO BUS COMPONENT", F_TINY, anchor="middle")
+        sh.text(CB_L + CB_W / 2, cy + 11, "OK · BAD · WARN · NOTE", F_TINY, anchor="middle")
+        sh.text(CB_L + CB_W / 2, cy + 21, "FETCH_VERIFIED · REQUIRE_DISK", F_TINY, anchor="middle")
 
-    def contract_block(items, x, side):
-        y0 = cy - 34
-        sh.text(
-            x,
-            y0 - 14,
-            "INPUTS — UPSTREAM CONTRACTS"
-            if side == "l"
-            else "OUTPUTS — DOWNSTREAM CONTRACTS",
-            F_TINY,
-        )
-        if not items:
-            sh.box(x, y0, colw, 44)
-            sh.text(x + 10, y0 + 18, "no cross-system contract", F_SMALL)
-            sh.text(x + 10, y0 + 33, "none in Part IV or the chapter's §6", F_TINY)
-            return
-        for i, (cid, k, peer_from, peer_to) in enumerate(items):
-            y = y0 + i * rowh
-            card_h = rowh - 6
-            yc = y + card_h / 2
-            dash = STATE_DASH.get(k["state"], STATE_DASH["UNVERIFIED"])
-            if side == "l":
-                sh.poly(
-                    [
-                        (x + colw, yc),
-                        (cx - 77, cy - 28 + (i + 0.5) * (56 / max(len(items), 1))),
-                    ],
-                    sw=1.4,
-                    dash=dash,
-                    arrow=True,
-                )
+    if not rows_by_side["IN"]:
+        sh.text(24, 130, "NO UPSTREAM CONTRACTS", F_TINY)
+    if not rows_by_side["OUT"]:
+        sh.text(656, 130, "NO DOWNSTREAM CONTRACTS", F_TINY, anchor="end")
+
+    def draw_wire(w, y_peer, cx):
+        k = w["k"]
+        dash = STATE_DASH.get(k["state"], STATE_DASH["UNVERIFIED"])
+        ye = w["entry"]
+        if w["kind"] == "IN":
+            x_end = 271.2 if w["target"] is not None else 262.8
+            if abs(y_peer - ye) < 8:
+                sh.line(174, ye, x_end, ye, sw=1.4, dash=dash, arrow=True)
+                lab = (174 + x_end) / 2
             else:
                 sh.poly(
-                    [
-                        (cx + 77, cy - 28 + (i + 0.5) * (56 / max(len(items), 1))),
-                        (x, yc),
-                    ],
-                    sw=1.4,
-                    dash=dash,
-                    arrow=True,
+                    [(174, y_peer), (cx, y_peer), (cx, ye), (x_end, ye)],
+                    sw=1.4, dash=dash, arrow=True,
                 )
-            sh.box(x, y, colw, card_h)
-            peer = SHORT.get(
-                peer_to if side == "r" else peer_from,
-                peer_to if side == "r" else peer_from,
-            )
-            label = (
-                f"{peer} -> {mod['id']}" if side == "l" else f"{mod['id']} -> {peer}"
-            )
-            sh.text(x + 10, y + 16, f"{cid} · {label}  [{k['state']}]", F_TINY)
-            lines = wrap(k["carries"], 46)[:2]
-            for j, ln in enumerate(lines):
-                sh.text(x + 10, y + (30 + j * 12), ln, F_TINY)
+                lab = (cx + x_end) / 2
+        else:
+            x0 = 408 if w["target"] is not None else PAN_R
+            if abs(y_peer - ye) < 8:
+                sh.line(x0, ye, 504.8, ye, sw=1.4, dash=dash, arrow=True)
+                lab = (x0 + 504.8) / 2
+            else:
+                sh.poly(
+                    [(x0, ye), (cx, ye), (cx, y_peer), (504.8, y_peer)],
+                    sw=1.4, dash=dash, arrow=True,
+                )
+                lab = (x0 + cx) / 2
+        sh.text(lab, ye - 5, w["cid"], F_TINY, anchor="middle")
 
-    contract_block(ins, lx, "l")
-    contract_block(outs, rx, "r")
+    # ---- peer boxes (contract id · signal, state), boundary enclosures, wires ----
+    for side in ("IN", "OUT"):
+        for r in rows_by_side[side]:
+            x = PLX if side == "IN" else PRX
+            y, hh = r["y"], r["h"]
+            comp = by_id.get(r["peer"])
+            name = SHORT.get(comp["name"], comp["name"]) if comp else str(r["peer"]).upper()
+            sh.box(x, y, PW, hh)
+            sh.text(x + 10, y + 15, name, F_SMALL)
+            sh.text(x + 10, y + 26, _host_tag(r["peer"], comp), F_TINY)
+            ty = y + 37
+            for w in r["ks"]:
+                sig = w["k"].get("signal")
+                sh.text(x + 10, ty, f"{w['cid']} · {sig}" if sig else w["cid"], F_TINY)
+                sh.text(x + 10, ty + 11, str(w["k"]["state"]), F_TINY)
+                ty += 22
+            tag = _host_tag(r["peer"], comp)
+            if tag == "IN THE BUNKER":
+                _enclosure(sh, x - 6, y - 20, PW + 12, hh + 28, "BUNKER EXECUTION BOUNDARY")
+            elif r["peer"] == "crier":
+                _enclosure(sh, x - 6, y - 20, PW + 12, hh + 28, "CRIER · LAUNCH / RETURN BOUNDARY")
+            for w in r["ks"]:
+                draw_wire(w, y + hh / 2, r["cx"])
 
-    fy = max(cy + 100, cy - 34 + rows * rowh + 30)
+    # ---- internal contracts: both endpoints are this module's components ----
+    for w in [w for w in wires if w["kind"] == "I"]:
+        k = w["k"]
+        dash = STATE_DASH.get(k["state"], STATE_DASH["UNVERIFIED"])
+        ip, ic = mids.index(k["from"]), mids.index(k["to"])
+        y1, y2 = comp_cy[ip], comp_cy[ic]
+        txt = f"{w['cid']} · {k['state']}"
+        wdt = len(txt) * 4.3
+        if abs(ip - ic) == 1:  # adjacent in the stack: through the shared gap
+            x = CB_L + CB_W / 2
+            if ic > ip:
+                sh.line(x, y1 + CH / 2, x, y2 - CH / 2 - 1, sw=1.4, dash=dash, arrow=True)
+            else:
+                sh.line(x, y1 - CH / 2, x, y2 + CH / 2 + 1, sw=1.4, dash=dash, arrow=True)
+            mid = (y1 + y2) / 2
+            sh.add(
+                f'<rect x="{x - wdt / 2 - 3:.1f}" y="{mid - 5:.1f}" width="{wdt + 6:.1f}" '
+                f'height="10" fill="{PAPER}"/>'
+            )
+            sh.text(x, mid + 2.5, txt, F_TINY, anchor="middle")
+        else:  # around through the inner margin between boxes and panel edge
+            xc = 412
+            sh.poly(
+                [(CB_L + CB_W, y1), (xc, y1), (xc, y2), (CB_L + CB_W - 1.2, y2)],
+                sw=1.4, dash=dash, arrow=True,
+            )
+            gap_centers = [
+                (comp_cy[i] + CH / 2 + comp_cy[i + 1] - CH / 2) / 2
+                for i in range(len(mids) - 1)
+            ]
+            mid = min(gap_centers, key=lambda g: abs(g - (y1 + y2) / 2))
+            sh.add(
+                f'<rect x="{xc - wdt - 8:.1f}" y="{mid - 5:.1f}" width="{wdt + 6:.1f}" '
+                f'height="10" fill="{PAPER}"/>'
+            )
+            sh.text(xc - 5, mid + 2.5, txt, F_TINY, anchor="end")
+
+    # ---- flows this module participates in ----
+    fy = band_bottom + 30
     sh.text(24, fy, "FLOWS THIS MODULE PARTICIPATES IN", F_TINY)
     if part:
         for i, fl in enumerate(part):
-            txt = f"{fl['id']} {fl['name']} — {fl['question']}"
-            for j, ln in enumerate(wrap(txt, 78)[:2]):
-                sh.text(24 + j * 12, fy + 22 + i * 40 + j * 12, ln, F_SMALL)
+            r_, c_ = divmod(i, 3)
+            sh.text(24 + c_ * 212, fy + 16 + r_ * 15, f"{fl['id']}  {fl['name']}".upper(), F_SMALL)
+        flow_bottom = fy + 16 + ((len(part) - 1) // 3) * 15
     else:
-        sh.text(
-            24, fy + 22, "none — no flow step names this module's components", F_SMALL
-        )
+        sh.text(24, fy + 16, "NONE — NO FLOW STEP NAMES THIS MODULE'S COMPONENTS", F_SMALL)
+        flow_bottom = fy + 16
 
-    legend_block(sh, Sheet.W - 250, 44, STATE_LEGEND, "CONTRACT STATE — LINE STYLE")
+    ly = flow_bottom + 30
+    legend_block(sh, 24, ly, STATE_LEGEND, "CONTRACT STATE — LINE STYLE, INK ONLY")
+    by_ = ly + F_TINY * 1.9 * 5 + 8
+    sh.add(
+        f'<rect x="24" y="{by_:.1f}" width="9" height="6" fill="none" stroke="{INK}" '
+        f'stroke-width="1.0" stroke-dasharray="2.5 2.5"/>'
+    )
+    sh.text(40, by_ + 5.5, "DASHED PANEL — MODULE / HOST / BUS BOUNDARY", F_TINY)
+    nx, ny = 330, ly + 10
+    for note in (
+        "A BUNKER ENCLOSURE MARKS A COMPONENT THAT EXECUTES INSIDE THE BUNKER "
+        "DEPLOYMENT / EXECUTION BOUNDARY; UNTAGGED BOXES RUN ON THE CONTROL HOST.",
+        "THE CRIER ENCLOSURE MARKS THE LAUNCH / RETURN BOUNDARY BETWEEN THE "
+        "CONTROL HOST AND THE BUNKERS (M10 §2).",
+        "EACH PEER BOX CARRIES ITS CONTRACT ID, SIGNAL AND MEASURED STATE; THE "
+        "WIRE STYLE REPEATS THE STATE (LEGEND, LEFT).",
+    ):
+        for ln in wrap(note, 74):
+            sh.text(nx, ny, ln, F_TINY)
+            ny += 11
+    sh.h = max(by_ + 6, ny) + 16
     return sh
 
 
 # --------------------------------------------------------------------------- flow sequences
+# CF2A-01 v2 flow-coverage review — DRAWING CORRECTIONS for F1..F16. The model's
+# flow steps remain the provenance record; these overrides redraw the DIAGRAM
+# only: correct sender/receiver/direction on every arrow, request separated
+# from response, local computation as a local (self) action, conditional
+# behavior as a named branch (dashed arrow), and current implementation
+# limitations labelled IMPL EVIDENCE — never drawn as approved target steps.
+# A 4th element "BR" marks a conditional branch arrow.
+FLOW_FIXES = {
+    "F1": [
+        (["scheduler", "board", "REFRESH + READ: LOCAL + REMOTE BOARD COPIES"]),
+        (["board", "scheduler", "READ RESULT: BOARD COPY + WORKABILITY CHECK"]),
+        (["scheduler", "scheduler", "LOCAL: ADMISSION (F11) — PRE HOOK RUNS AFTER (IMPL EVIDENCE)"]),
+        (["scheduler", "crier", "FOREMAN-ROUND REQUEST + ALLOWANCE (CT-02)"]),
+        (["crier", "node", "CUSTODY: DURABLE INBOX WRITE, 30 S LEASE (CT-03)"]),
+        (["node", "crier", "INBOX PULL REQUEST — SIGNED GET"]),
+        (["crier", "node", "LEASED DELIVERY RESPONSE — LAUNCH INTO THE BUNKER"]),
+        (["node", "foreman", "FOREMAN START INSIDE THE BUNKER: BRIEF + WORKSPACE"]),
+        (["foreman", "foreman", "LOCAL: READ BOARD + MEMORY, SELECT WORK, BUILD BRIEFS"]),
+        (["foreman", "harness", "WAVE N: WORKER BRIEF — MVP: FIXED HERMES HARNESS"]),
+        (["harness", "foreman", "DIFF + EVIDENCE RETURNED"]),
+        (["foreman", "foreman", "LOCAL: GUARD (TIER 1) THEN JUDGMENT (TIER 2)"]),
+        (["foreman", "board", "FOREMAN BOARD CLOSEOUT: ROWS + EVIDENCE (CT-14)"]),
+        (["foreman", "duckbrain", "WORKER / WAVE / ROUND MEMORY (CT-15)"]),
+        (["foreman", "foreman", "WAVE LOOP: NEXT COMPATIBLE WAVE — ALLOWANCE NOT REPLENISHED"]),
+        (["foreman", "crier", "ROUND REPORT — DURABLE RETURN LEG (CT-06R)"]),
+        (["crier", "scheduler", "CORRELATED COMPLETION EVENT (CT-06)"]),
+        (["scheduler", "scheduler", "LOCAL: SETTLEMENT IN THE EXECUTION STORE — NOT THE BOARD"]),
+        (["scheduler", "board", "END-OF-LANE: SYNC COPIES, BIND EVIDENCE"]),
+    ],
+    "F2": [
+        (["owner", "scheduler", "DESIRED DEPLOYMENT: HOST, PROJECT, PROFILE, PIN"]),
+        (["scheduler", "provisioner", "PROVISIONING HANDOFF: DESIRED STATE + PROFILE"]),
+        (["provisioner", "bunker", "CONTAINER CREATED, HOME, KEYS (M1 §3 S2)"]),
+        (["provisioner", "node", "LAYERS: BASE, HARNESS, BUS, REPO (M1 §3)"]),
+        (["provisioner", "node", "DUCKBRAIN IN EVERY BUNKER — SAME LOGICAL MEMORY VIEW"]),
+        (["github", "node", "CREDENTIAL ISSUED SEPARATELY FROM ITS INSTALL (M7-C1)"]),
+        (["node", "duckbrain", "IDENTITY + NAMESPACE CREDENTIAL — SERVICE AUTHENTICATION"]),
+        (["verifier", "node", "VERIFY-NODE MEASURES IT — CREATED ≠ VERIFIED (M1 §12)"]),
+        (["verifier", "scheduler", "VERIFICATION RESULT RETURNS TO THE MANAGER"]),
+        (["node", "crier", "VERIFIED CRIER REGISTRATION + BINDING (M1-C1)"]),
+        (["scheduler", "scheduler", "LOCAL: ADMISSION ENABLED ONLY AFTER THE READINESS BINDING"]),
+    ],
+    "F3": [
+        (["node", "duckbrain", "R1 RUN RECORD — WRITER: NODE WORKER (CT-09, MISSING)"]),
+        (["node", "duckbrain", "R2 FLEET INDEX — WRITER: NODE WORKER (CT-09, MISSING)"]),
+        (["foreman", "duckbrain", "WORKER / WAVE RECORDS — WRITER: FOREMAN (CT-15)"]),
+        (["foreman", "duckbrain", "FINAL-ROUND SUMMARY AT SETTLEMENT — DISTINCT RECORD"]),
+        (["foreman", "duckbrain", "R3 WEEKLY ROLLUP — ADDITIONAL, NEVER THE ROUND RECORD"]),
+        (["owner", "duckbrain", "RECALL REQUEST: BY PROJECT, WEEK, LANE"]),
+        (["duckbrain", "owner", "RECALL RESULTS WITH PROVENANCE + FRESHNESS"]),
+        (["foreman", "foreman", "LOCAL: PRE-BRIEF RECALL SHAPES THE WORK SELECTION"]),
+        (["duckbrain", "duckbrain", "LOCAL: GIT-BACKED NAMESPACE PERSIST + PENDING-SYNC STATE"]),
+    ],
+    "F4": [
+        (["owner", "handbook", "SOURCE / REQUIREMENTS INTAKE: REDLINES + ACCEPTED ISSUE"]),
+        (["foreman", "docsgate", "SKELETON + SOURCE DELIVERED"]),
+        (["panel", "docsgate", "SEAT AUTHORS: FILLS, CITES FILE:LINE"]),
+        (["docsgate", "foreman", "STRUCTURAL PASS OR NAMED REFUSALS (CT-16) — NOT ACCEPTANCE"]),
+        (["panel", "foreman", "INDEPENDENT SEMANTIC REVIEW: 3 SEATS, SPLITS REPORTED (M6 §3 S4)"]),
+        (["panel", "foreman", "BRANCH — REJECTED FINDINGS RETURN: CORRECTION LOOP", "BR"]),
+        (["spine", "handbook", "CROSS-DOCUMENT CHECKS: CT IDS, STATES, DANGLING REFS (M6 §3 S9)"]),
+        (["handbook", "handbook", "LOCAL: BUILD + RENDER QA — PAGES INSPECTED, UNIQUE IDS"]),
+        (["handbook", "owner", "VERSIONED REVIEW PACKAGE — DRAFT / ACCEPTED STATUS (CT-18)"]),
+    ],
+    "F5": [
+        (["node", "gitreins", "COMMIT ON A NODE BRANCH — GUARD GRADES THE STAGED DIFF (CT-12)"]),
+        (["gitreins", "node", "BRANCH — GUARD REFUSAL RETURNS FOR CORRECTION", "BR"]),
+        (["gitreins", "foreman", "INDEPENDENT ACCEPTANCE VERDICT + EVIDENCE (CT-13)"]),
+        (["owner", "lander", "LANDER MERGES BY THE CONFIGURED PR / DIRECT-MERGE POLICY"]),
+        (["lander", "lander", "LOCAL: MERGED-TREE VERIFICATION — INVALIDATED CHECKS RERUN"]),
+        (["lander", "foreman", "PUBLICATION PROOF: COMMIT ANCESTOR OF ORIGIN/MAIN (M3 §2)"]),
+        (["foreman", "board", "ROW CLOSED ONLY AFTER VERDICT + PROOF MATCH (CT-14)"]),
+        (["foreman", "duckbrain", "WORKER / WAVE MEMORY THROUGH RECOVERABLE CLOSEOUT (CT-15)"]),
+    ],
+    "F6": [
+        (["provisioner", "safety", "MAINTENANCE TRIGGER: PERIODIC OR CAPACITY PRESSURE"]),
+        (["safety", "safety", "LOCAL: INVENTORY CANDIDATES — ACTIVE-CLAIM + PROTECTED-PATH CHECKS FIRST"]),
+        (["provisioner", "safety", "ALTERNATIVE A: RECLAIM DISK — CACHES + JOB DIRS PAST 24 H TTL (M8 §3 S1)"]),
+        (["provisioner", "safety", "ALTERNATIVE B: NODE HYGIENE — ORPHAN HOMES / KEYS, 60 MIN GRACE (M1 §5)"]),
+        (["safety", "node", "PROTECTED PATHS REFUSED BEFORE INSPECTION: REPO, NODE.JSON, CRIER.JSON (M8 §5)"]),
+        (["node", "node", "ALTERNATIVE C: REPO FRESHNESS MEASURES LAG VS ORIGIN (M3 §5)"]),
+        (["verifier", "node", "ALTERNATIVE D: NODE FRESHNESS — BRANCH / HEAD / LAG (M1 §11)"]),
+        (["safety", "provisioner", "RESULT: BYTES RECLAIMED + RETAINED / REFUSED REASONS"]),
+    ],
+    "F7": [
+        (["owner", "scheduler", "READ REQUEST: GET /API/V1/METRICS — SPAWNS, DEFERRALS, TICKS (M9 §8)"]),
+        (["scheduler", "owner", "METRICS RESPONSE"]),
+        (["owner", "scheduler", "READ REQUEST: /API/V1/STATUS — PER-PROJECT FAILURE RATES (M9 §5)"]),
+        (["scheduler", "owner", "STATUS RESPONSE"]),
+        (["owner", "crier", "READ REQUEST: /METRICS — GUARD + INBOX SERIES (M10 §8)"]),
+        (["crier", "owner", "METRICS RESPONSE"]),
+        (["proxy", "proxy", "FILE APPEND: USAGE JSONL PER REQUEST — A LOG, NOT AN HTTP READ (M12 §8)"]),
+        (["proxy", "owner", "USAGE JSONL READ OUT: NODE, MODEL, STATUS, BYTES"]),
+        (["owner", "owner", "LOCAL: ATTRIBUTE THE DEVIATION → AUTHORIZED REMEDIATION"]),
+    ],
+    "F8": [
+        (["dispatcher", "dispatcher", "BRANCH A — REPLAY: REDELIVERY REPLAYS THE RECORDED RESULT"]),
+        (["crier", "node", "BRANCH B — LEASE EXPIRY: UNACKED REDELIVERS, NOT LOST"]),
+        (["scheduler", "sessionstore", "BRANCH C — REAP: --REAP-SESSIONS, DRY-RUN FIRST"]),
+        (["sessionstore", "scheduler", "REAP RESULT: STALE SESSIONS CLOSED ONLY ON --APPLY"]),
+        (["board", "foreman", "BRANCH D — BOARD READ RESOLVES FROM ORIGIN/MAIN (M4 §3)"]),
+        (["board", "owner", "LOCK CHECK RESULT: ERROR — LOCK STATE UNKNOWN (M4 §3)"]),
+        (["owner", "owner", "LOCAL: STOP AND DIAGNOSE — NEVER WRITE ON AN UNKNOWN LOCK"]),
+        (["scheduler", "board", "CONVERGE: STATE + READINESS RECONCILED, THEN RETRY"]),
+    ],
+    "F9": [
+        (["gateway", "scheduler", "MODE: GATEWAY FAILS — TICK DEFERRED, NOT EXEC-SPAWNED (M9 §5)"]),
+        (["scheduler", "node", "MODE: LOAD GATE — SPAWNS DEFERRED WHILE LOAD ≥ THRESHOLD (M9 §3)"]),
+        (["guard", "node", "MODE: GUARD PROVIDER OUTAGE — FAIL-OPEN UNLESS FAILCLOSED (M10 §10)"]),
+        (["proxy", "node", "MODE: PROXY FAILS CLOSED AT STARTUP — NO TOKEN / NO KEY → EXIT 2 (M12 §11)"]),
+        (["node", "node", "IMPL EVIDENCE: ABSENT HOOK EXITS 0 — A SILENT BYPASS TO DISPOSE (M3 §10)"]),
+        (["node", "gitreins", "EXIT BRANCH — GATE RESTORED: PRE-COMMIT GRADING RESUMES", "BR"]),
+        (["scheduler", "gateway", "EXIT BRANCH — DEPENDENCY BACK: ADMISSION RE-EVALUATED, MODE CLEARED", "BR"]),
+    ],
+    "F10": [
+        (["owner", "provisioner", "INTENT: STOP / REMOVE / REBUILD — AUTHORITY + RETENTION (M1 §5)"]),
+        (["provisioner", "node", "DRAIN: NO NEW ASSIGNMENTS; ACTIVE WORK QUIESCED / CHECKPOINTED"]),
+        (["provisioner", "node", "PRESERVE: WORKSPACE, MEMORY, EVIDENCE BEFORE DESTRUCTION"]),
+        (["provisioner", "bunker", "DESTROY: CONTAINER + PER-AGENT HOME REMOVED (M1 §5)"]),
+        (["provisioner", "safety", "ORPHAN HOMES / KEYS REAPED VS A LIVE-REGISTRY CHECK (M1 §10)"]),
+        (["provisioner", "node", "REBUILD: SEED REAPPLIES FROM THE MANIFEST, DRIFT NAMED (M1 §3 S4)"]),
+        (["node", "crier", "RE-REGISTER: NEW BINDING AFTER READINESS (M1-C1)"]),
+        (["verifier", "node", "VERIFY: CREATED ≠ VERIFIED BEFORE WORK RE-ENABLED (M1 §12)"]),
+        (["verifier", "owner", "LIFECYCLE RESULT + RETAINED EVIDENCE REPORTED"]),
+    ],
+    "F11": [
+        (["scheduler", "board", "REFRESH BEFORE ELIGIBILITY: REPO + BOARD COPIES, REVISION RECORDED"]),
+        (["board", "scheduler", "READ RESULT: BOARD VERSION + OWNERSHIP"]),
+        (["scheduler", "scheduler", "LOCAL: ADMISSION MODE — OVERRIDE → NAMESPACE → COOLDOWN (M9 §3)"]),
+        (["scheduler", "scheduler", "LOCAL: BOARD-STASIS GATE — A SCHEDULER DECISION FROM OBSERVATIONS"]),
+        (["scheduler", "scheduler", "LOCAL: USAGE POOLS RESERVED, OR A CAPACITY DENIAL EMITTED (M9 §3)"]),
+        (["scheduler", "board", "WORKABILITY: WORK / NO-WORK / UNREADABLE ARE DISTINCT (M9 §3)"]),
+        (["scheduler", "scheduler", "IMPL EVIDENCE: NOOP-PACING SPACES A NO-ARTIFACT LANE, 2× TO 8× FLOOR"]),
+        (["scheduler", "crier", "ADMITTED: THE ENVELOPE IS DISPATCHED (CT-02)"]),
+        (["scheduler", "scheduler", "DEFERRED: NAMED REASON + NEXT ELIGIBLE WAKEUP — NEVER DROPPED"]),
+        (["scheduler", "board", "AFTER SETTLEMENT: FINAL REFRESH + BOARD-CHECK VERIFIER, RESULT RECORDED"]),
+    ],
+    "F12": [
+        (["owner", "github", "ISSUE: JWT FROM THE 0600 APP KEY → INSTALLATION TOKEN (M7 §5)"]),
+        (["github", "owner", "TOKEN TO A 0600 FILE — THE VALUE IS NEVER PRINTED (M7 §7)"]),
+        (["github", "node", "INSTALL: REFRESH --NODE WRITES AUTH/GITHUB.TOKEN (M7 §5)"]),
+        (["node", "github", "READBACK: INSTALLED CREDENTIAL CHECKED AGAINST THE ISSUE"]),
+        (["scoper", "dispatcher", "SEPARATE DOMAIN: PER-DISPATCH SCOPED TOKEN (M11 §6)"]),
+        (["node", "proxy", "SEPARATE DOMAIN: NODE BEARER ≠ GITHUB TOKEN — FAIL-CLOSED (M12 §6)"]),
+        (["owner", "github", "BRANCH — EXPIRY / LEAK SIGNAL: RENEW OR REVOKE WITH AUTHORITY", "BR"]),
+        (["github", "node", "REPLACEMENT ACCESS INSTALLED; OLD AUTHORITY DENIED (M7 §12)"]),
+    ],
+    "F13": [
+        (["owner", "harness", "DESIRED PIN + COMPATIBILITY MATRIX (M5 §5)"]),
+        (["harness", "harness", "LOCAL: INSTALLER FETCHES A DIGEST-CHECKED ARTIFACT, APPLIES (M5 §5)"]),
+        (["harness", "owner", "READBACK: INSTALLED VERSION VS PIN; DRIFT NAMED (M5 §10)"]),
+        (["owner", "scheduler", "MIGRATION STORES APPLY THE SCHEMA CHANGE (M9 §3)"]),
+        (["owner", "board", "MIGRATE: BOARDCTL NORMALIZE-STATUSES — ROW VOCABULARY (M4 §4)"]),
+        (["scheduler", "owner", "EFFECTIVE RUNTIME READINESS RESULT"]),
+        (["scheduler", "scheduler", "BRANCH — FAILED APPLY: ROLLBACK OR NAMED FORWARD RECOVERY", "BR"]),
+    ],
+    "F14": [
+        (["node", "sessionstore", "EMIT: EVERY TURN, MODEL, TOKENS, COST → SESSION SINK (CT-11)"]),
+        (["scheduler", "sessionstore", "EMIT: TICK + SPAWN COUNTERS → SESSION SINK (M9 §8)"]),
+        (["proxy", "proxy", "APPEND: USAGE JSONL — CAPTURE LOSS SILENT (IMPL EVIDENCE, M12 §11)"]),
+        (["foreman", "duckbrain", "MEMORY RECORDS — PROVENANCE DISTINCT FROM TOKEN TELEMETRY (CT-15)"]),
+        (["scheduler", "duckbrain", "NAMESPACE SYNC EVERY 5 M — SYNCHRONIZATION, NOT TELEMETRY (M9 §5)"]),
+        (["owner", "sessionstore", "READOUT: OPERATOR QUERY, CORRELATED BY RUN / TASK IDS"]),
+    ],
+    "F15": [
+        (["owner", "board", "BACKUP SCOPE + TRIGGER: REPO/BOARD, MEMORY, SCHEDULER/CRIER STATE (M4 §7)"]),
+        (["owner", "board", "SNAPSHOT: BOARD_DRIFT COMPARES CHECKOUT VS ORIGIN/MAIN ROW BY ROW (M4 §7)"]),
+        (["scheduler", "board", "CHECKPOINT: --VERIFY-BOARD AT BOOT (M9 §5)"]),
+        (["owner", "duckbrain", "SNAPSHOT: DUCKBRAIN HISTORY + DATA TO THE BACKUP DESTINATION"]),
+        (["owner", "duckbrain", "RESTORE: INTO A SCRATCH HOME — ISOLATED, NOT LIVE (OUTLINE F15)"]),
+        (["duckbrain", "owner", "MEMORY READBACK: A KNOWN ROW READ BACK PROVES THE RESTORE"]),
+        (["owner", "board", "BOARD READBACK: REPRESENTATIVE ROWS VIA BOARDCTL"]),
+        (["owner", "owner", "LOCAL: RECOVERY-POINT SELECTION + REVOKED-SECRET POLICY BEFORE RESUME"]),
+    ],
+    "F16": [
+        (["scheduler", "crier", "PER-TARGET DISPATCH: ENVELOPE TO EACH REGISTRY AGENT (M11 §3 S4)"]),
+        (["crier", "dispatcher", "CRIER DELIVERY BOUNDARY: CUSTODY + REPLAY IDENTITY"]),
+        (["dispatcher", "bunker", "EXEC: BUNKER EXEC RUNS THE HARNESS IN EACH TARGET CONTAINER (M11 §3 S1)"]),
+        (["dispatcher", "crier", "RESULT + ACK: REPLY DELIVERED BEFORE ACK (M11 §3 S3)"]),
+        (["crier", "scheduler", "SETTLEMENT: COMPLETION SETTLES PER DISPATCH (CT-06)"]),
+        (["dispatcher", "dispatcher", "IMPL EVIDENCE: SERIAL LOOP — ONE LONG JOB HEAD-OF-LINE-BLOCKS LATER AGENTS (M11 §11 F11-5)"]),
+        (["dispatcher", "dispatcher", "REDELIVERY: REPLAYS THE RECORDED RESULT — NEVER RERUNS (M11 §3 S3)"]),
+    ],
+}
+
+
 def seq_sheet(model, flow) -> Sheet:
     by_id = {c["id"]: c for c in model["components"]}
+    # Drawing corrections first (review), then the model's own steps.
+    raw = FLOW_FIXES.get(flow["id"], flow["steps"])
+    steps = [(s[0], s[1], s[2], (s[3] if len(s) > 3 else None)) for s in raw]
     actors = []
-    for a, b, _ in flow["steps"]:
+    for a, b, _, _ in steps:
         for x in (a, b):
             if x not in actors:
                 actors.append(x)
@@ -799,20 +1157,26 @@ def seq_sheet(model, flow) -> Sheet:
     # 52-char labels a 4-lifeline sheet can, without the texts colliding
     w_self = max(18, int(cell * 2.4 / (F_SMALL * 0.62)))
     w_pair = max(18, int(cell * 1.9 / (F_SMALL * 0.62)))
-    rowh = 46
-    top = 110  # leaves room for a first step's upward-stacked label under the headers
-    steps = flow["steps"]
+    top = 120  # title band above; leaves room for a first step's stacked label
     note_lines = wrap(flow["note"], 116)[:2] if flow.get("note") else []
     extra = len(note_lines)
-    h = top + rowh * (len(steps) + extra) + 40
+    need = len(steps) + extra
+    # keep the sheet within the 250 mm figure band so the print-scale label
+    # floor (2.05 mm = 8.2 units) is not silently scaled below itself
+    rowh = min(46, max(34, (990 - 40 - top) // max(need, 1)))
+    h = top + rowh * need + 40
     sh = Sheet(h)
     ax = {a: margin + i * cell + cell / 2 for i, a in enumerate(actors)}
     lifeline_end = h - 20 if not extra else top + rowh * len(steps) - 6
 
+    # unique figure reference on the sheet itself — the sheet is citable as its
+    # own flow number regardless of the builder's running figure code
+    sh.text(12, 22, f"{flow['id']} — {flow['name']}", F_TITLE)
     sh.text(
         Sheet.W - 12,
-        24,
-        "TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT",
+        22,
+        "TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT · "
+        "DASHED = CONDITIONAL BRANCH",
         F_TINY,
         anchor="end",
     )
@@ -828,9 +1192,22 @@ def seq_sheet(model, flow) -> Sheet:
             sh.text(x, y0 + i * 12, ln, F_SMALL, anchor="middle")
         sh.hair(x, 70, x, lifeline_end, dash="3 4")
 
-    for i, (a, b, what) in enumerate(steps):
+    for i, (a, b, what, kind) in enumerate(steps):
         y = top + i * rowh
         x1, x2 = ax[a], ax[b]
+        br = "6 4" if kind == "BR" else None
+
+        def wtext(x, y_, s, anchor):
+            # paper-backed label: an intermediate dashed lifeline is interrupted
+            # behind the text instead of striking through it (parts-strip rule)
+            wdt = len(s) * 5.5 + 6
+            rx = x - wdt / 2 if anchor == "middle" else (x - wdt if anchor == "end" else x - 3)
+            sh.add(
+                f'<rect x="{rx:.1f}" y="{y_ - 8.1:.1f}" width="{wdt:.1f}" '
+                f'height="10.9" fill="{PAPER}"/>'
+            )
+            sh.text(x, y_, s, F_SMALL, anchor=anchor)
+
         sh.text(10, y + 3, f"{i + 1}", F_SMALL)
         if a == b:
             sh.poly(
@@ -841,10 +1218,11 @@ def seq_sheet(model, flow) -> Sheet:
                     (x1 - 8, y + 24),
                 ],
                 arrow=True,
+                dash=br,
             )
             tx, anchor = min(x1 + 24, Sheet.W - 320), "start"
         else:
-            sh.line(x1, y, x2, y, arrow=True)
+            sh.line(x1, y, x2, y, arrow=True, dash=br)
             tx, anchor = (x1 + x2) / 2, "middle"
             if abs(x2 - x1) < cell * 1.5:
                 right = x2 >= x1
@@ -855,16 +1233,19 @@ def seq_sheet(model, flow) -> Sheet:
                     if anchor == "start"
                     else max(min(tx, 380), 310)
                 )
-        lines = wrap(what, w_self if a == b else w_pair)[:3]
-        last = i == len(steps) - 1
+        maxlines = 3 if rowh >= 44 else 2
+        wrapped = wrap(what, w_self if a == b else w_pair)
+        if len(wrapped) > maxlines:  # never drop words silently
+            raise RuntimeError(
+                f"{flow['id']} step {i + 1}: label needs {len(wrapped)} lines "
+                f"(cap {maxlines}) — shorten it: {what!r}"
+            )
+        lines = wrapped[:maxlines]
+        # lines read TOP-DOWN inside a block sitting just above its own arrow —
+        # an upward stack reads backwards, and a downward one strikes the arrow
+        nl = len(lines)
         for j, ln in enumerate(lines):
-            if a == b or last:
-                # self-loops label beside the loop; the LAST step labels below its
-                # arrow, where the lifeline tail leaves free space
-                sh.text(tx, y - 8 + j * 13, ln, F_SMALL, anchor=anchor)
-            else:
-                # stack UPWARD so no label line is struck through by its own arrow
-                sh.text(tx, y - 8 - j * 13, ln, F_SMALL, anchor=anchor)
+            wtext(tx, y - 8 - (nl - 1 - j) * 13, ln, anchor)
     if note_lines:
         y = top + len(steps) * rowh + 8
         sh.hair(6, y - 14, Sheet.W - 6, y - 14)
@@ -874,6 +1255,49 @@ def seq_sheet(model, flow) -> Sheet:
 
 
 # --------------------------------------------------------------------------- gates
+def fig_fill(svg: str) -> float:
+    """Drawn-content bounding box as a fraction of the sheet area — the B7 gate:
+    a sheet whose drawing stops halfway down is blankness, not breathing room."""
+    vb = re.search(r'viewBox="0 0 ([\d.]+) ([\d.]+)"', svg)
+    W, H = float(vb.group(1)), float(vb.group(2))
+    body = svg.split("</defs>", 1)[-1]  # the marker def's dummy path stays out
+    xs, ys = [], []
+    for m in re.finditer(r"<(rect|line|polyline|text|circle|ellipse)\b([^>]*?)/?>", body):
+        at = m.group(2)
+        if m.group(1) == "polyline" or "points" in at:
+            for px, py in re.findall(r"(-?[\d.]+),(-?[\d.]+)", at):
+                xs.append(float(px))
+                ys.append(float(py))
+        vals = {
+            k: float(v)
+            for k, v in re.findall(
+                r'\b(x1|x2|y1|y2|cx|cy|width|height|rx|ry|r)="(-?[\d.]+)"', at
+            )
+        }
+        x = re.search(r'\bx="(-?[\d.]+)"', at)
+        y = re.search(r'\by="(-?[\d.]+)"', at)
+        if m.group(1) == "rect" and float(vals.get("width", 0)) > W - 10:
+            continue  # the full-canvas paper rect is not content
+        if x:
+            xs.append(float(x.group(1)))
+        if y:
+            ys.append(float(y.group(1)))
+        if "x1" in vals:
+            xs += [vals["x1"], vals["x2"]]
+            ys += [vals["y1"], vals["y2"]]
+        if "cx" in vals:
+            r = vals.get("r", vals.get("rx", 1.0))
+            xs += [vals["cx"] - r, vals["cx"] + r]
+            ys += [vals["cy"] - (vals.get("ry", r)), vals["cy"] + (vals.get("ry", r))]
+        if "width" in vals and x:
+            xs.append(float(x.group(1)) + vals["width"])
+        if "height" in vals and y:
+            ys.append(float(y.group(1)) + vals["height"])
+    if not xs or not ys:
+        return 0.0
+    return max(0.0, (max(xs) - min(xs)) * (max(ys) - min(ys))) / (W * H)
+
+
 def bw_gate(svg: str, fname: str) -> str | None:
     """No colour anywhere: every fill/stroke must be pure black or pure white."""
     bad = set()
@@ -938,7 +1362,7 @@ def main() -> int:
         made.append((p.name, title))
 
     # ---- GATES: XML parses, labels clear the floor, ink is black and white only ----
-    failures, report = [], []
+    failures, report, fills = [], [], []
     for fname, _desc in made:
         f = OUT / fname
         try:
@@ -956,6 +1380,13 @@ def main() -> int:
         err = bw_gate(svg, fname)
         if err:
             failures.append(err)
+        if fname.startswith("module-"):
+            fill = fig_fill(svg)
+            fills.append((fname, fill))
+            if fill < 0.70:
+                failures.append(
+                    f"{fname}: drawing covers only {fill:.0%} of the sheet (floor 70%)"
+                )
 
     index = [
         "# Figures",
@@ -973,6 +1404,8 @@ def main() -> int:
     print(f"{len(made)} figures -> {OUT.relative_to(ROOT)}")
     for fname, mm in report:
         print(f"  {fname:<24} min label {mm:.2f} mm")
+    for fname, fill in fills:
+        print(f"  {fname:<24} drawn fill   {fill:.0%}")
     if failures:
         print("FIGURE GATE FAIL:")
         for x in failures:

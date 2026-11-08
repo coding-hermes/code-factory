@@ -1,45 +1,73 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="95.0mm" viewBox="0 0 680 380.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="380.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="668.0" y="24.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="132.0mm" viewBox="0 0 680 528.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="528.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="12.0" y="22.0" font-size="17.00" fill="#000000" text-anchor="start">F12 — CREDENTIAL LIFECYCLE</text>
+<text x="668.0" y="22.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT · DASHED = CONDITIONAL BRANCH</text>
 <rect x="67.0" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="106.7" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">OPERATOR</text>
-<polyline points="106.7,70.0 106.7,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="106.7,70.0 106.7,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="155.3" y="36.0" width="89.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="200.0" y="46.0" font-size="9.50" fill="#000000" text-anchor="middle">GITHUB</text>
 <text x="200.0" y="58.0" font-size="9.50" fill="#000000" text-anchor="middle">CREDENTIALS</text>
-<polyline points="200.0,70.0 200.0,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="200.0,70.0 200.0,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="253.7" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="293.3" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">NODE</text>
-<polyline points="293.3,70.0 293.3,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="293.3,70.0 293.3,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="346.3" y="36.0" width="80.7" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="386.7" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">SCOPE MINTER</text>
-<polyline points="386.7,70.0 386.7,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="386.7,70.0 386.7,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="440.3" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="480.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">DISPATCHER</text>
-<polyline points="480.0,70.0 480.0,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="480.0,70.0 480.0,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="528.7" y="36.0" width="89.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="573.3" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">INFERENCE PROXY</text>
-<polyline points="573.3,70.0 573.3,360.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<text x="10.0" y="113.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
-<polyline points="106.7,110.0 200.0,110.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="300.0" y="102.0" font-size="9.50" fill="#000000" text-anchor="start">mint from an 0600 App private</text>
-<text x="300.0" y="89.0" font-size="9.50" fill="#000000" text-anchor="start">key — JWT → installation token</text>
-<text x="300.0" y="76.0" font-size="9.50" fill="#000000" text-anchor="start">(M7 §5)</text>
-<text x="10.0" y="159.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
-<polyline points="200.0,156.0 106.7,156.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="310.0" y="148.0" font-size="9.50" fill="#000000" text-anchor="end">token written to a 0600 file;</text>
-<text x="310.0" y="135.0" font-size="9.50" fill="#000000" text-anchor="end">the value is never printed (M7</text>
-<text x="310.0" y="122.0" font-size="9.50" fill="#000000" text-anchor="end">§7)</text>
-<text x="10.0" y="205.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
-<polyline points="200.0,202.0 293.3,202.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="309.3" y="194.0" font-size="9.50" fill="#000000" text-anchor="start">refresh --node installs</text>
-<text x="309.3" y="181.0" font-size="9.50" fill="#000000" text-anchor="start">auth/github.token on the node</text>
-<text x="309.3" y="168.0" font-size="9.50" fill="#000000" text-anchor="start">(M7 §5)</text>
-<text x="10.0" y="251.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
-<polyline points="386.7,248.0 480.0,248.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="370.0" y="240.0" font-size="9.50" fill="#000000" text-anchor="start">fleet-gh-scope mints the</text>
-<text x="370.0" y="227.0" font-size="9.50" fill="#000000" text-anchor="start">per-dispatch scoped token (M11</text>
-<text x="370.0" y="214.0" font-size="9.50" fill="#000000" text-anchor="start">§6)</text>
-<text x="10.0" y="297.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
-<polyline points="293.3,294.0 573.3,294.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<text x="433.3" y="286.0" font-size="9.50" fill="#000000" text-anchor="middle">node bearer checked against</text>
-<text x="433.3" y="299.0" font-size="9.50" fill="#000000" text-anchor="middle">the token file — fail-closed</text>
-<text x="433.3" y="312.0" font-size="9.50" fill="#000000" text-anchor="middle">admission (M12 §6)</text></g></svg>
+<polyline points="573.3,70.0 573.3,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<text x="10.0" y="123.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
+<polyline points="106.7,120.0 200.0,120.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="297.0" y="77.9" width="160.0" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="86.0" font-size="9.50" fill="#000000" text-anchor="start">ISSUE: JWT FROM THE 0600 APP</text>
+<rect x="297.0" y="90.9" width="160.0" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="99.0" font-size="9.50" fill="#000000" text-anchor="start">KEY → INSTALLATION TOKEN (M7</text>
+<rect x="297.0" y="103.9" width="22.5" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="112.0" font-size="9.50" fill="#000000" text-anchor="start">§5)</text>
+<text x="10.0" y="169.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
+<polyline points="200.0,166.0 106.7,166.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="161.0" y="136.9" width="149.0" height="10.9" fill="#ffffff"/>
+<text x="310.0" y="145.0" font-size="9.50" fill="#000000" text-anchor="end">TOKEN TO A 0600 FILE — THE</text>
+<rect x="139.0" y="149.9" width="171.0" height="10.9" fill="#ffffff"/>
+<text x="310.0" y="158.0" font-size="9.50" fill="#000000" text-anchor="end">VALUE IS NEVER PRINTED (M7 §7)</text>
+<text x="10.0" y="215.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
+<polyline points="200.0,212.0 293.3,212.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="306.3" y="182.9" width="171.0" height="10.9" fill="#ffffff"/>
+<text x="309.3" y="191.0" font-size="9.50" fill="#000000" text-anchor="start">INSTALL: REFRESH --NODE WRITES</text>
+<rect x="306.3" y="195.9" width="143.5" height="10.9" fill="#ffffff"/>
+<text x="309.3" y="204.0" font-size="9.50" fill="#000000" text-anchor="start">AUTH/GITHUB.TOKEN (M7 §5)</text>
+<text x="10.0" y="261.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
+<polyline points="293.3,258.0 200.0,258.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="139.0" y="228.9" width="171.0" height="10.9" fill="#ffffff"/>
+<text x="310.0" y="237.0" font-size="9.50" fill="#000000" text-anchor="end">READBACK: INSTALLED CREDENTIAL</text>
+<rect x="166.5" y="241.9" width="143.5" height="10.9" fill="#ffffff"/>
+<text x="310.0" y="250.0" font-size="9.50" fill="#000000" text-anchor="end">CHECKED AGAINST THE ISSUE</text>
+<text x="10.0" y="307.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
+<polyline points="386.7,304.0 480.0,304.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="367.0" y="274.9" width="165.5" height="10.9" fill="#ffffff"/>
+<text x="370.0" y="283.0" font-size="9.50" fill="#000000" text-anchor="start">SEPARATE DOMAIN: PER-DISPATCH</text>
+<rect x="367.0" y="287.9" width="121.5" height="10.9" fill="#ffffff"/>
+<text x="370.0" y="296.0" font-size="9.50" fill="#000000" text-anchor="start">SCOPED TOKEN (M11 §6)</text>
+<text x="10.0" y="353.0" font-size="9.50" fill="#000000" text-anchor="start">6</text>
+<polyline points="293.3,350.0 573.3,350.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="347.8" y="307.9" width="171.0" height="10.9" fill="#ffffff"/>
+<text x="433.3" y="316.0" font-size="9.50" fill="#000000" text-anchor="middle">SEPARATE DOMAIN: NODE BEARER ≠</text>
+<rect x="358.8" y="320.9" width="149.0" height="10.9" fill="#ffffff"/>
+<text x="433.3" y="329.0" font-size="9.50" fill="#000000" text-anchor="middle">GITHUB TOKEN — FAIL-CLOSED</text>
+<rect x="408.3" y="333.9" width="50.0" height="10.9" fill="#ffffff"/>
+<text x="433.3" y="342.0" font-size="9.50" fill="#000000" text-anchor="middle">(M12 §6)</text>
+<text x="10.0" y="399.0" font-size="9.50" fill="#000000" text-anchor="start">7</text>
+<polyline points="106.7,396.0 200.0,396.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4" marker-end="url(#ar)"/>
+<rect x="297.0" y="366.9" width="171.0" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="375.0" font-size="9.50" fill="#000000" text-anchor="start">BRANCH — EXPIRY / LEAK SIGNAL:</text>
+<rect x="297.0" y="379.9" width="171.0" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="388.0" font-size="9.50" fill="#000000" text-anchor="start">RENEW OR REVOKE WITH AUTHORITY</text>
+<text x="10.0" y="445.0" font-size="9.50" fill="#000000" text-anchor="start">8</text>
+<polyline points="200.0,442.0 293.3,442.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="306.3" y="412.9" width="165.5" height="10.9" fill="#ffffff"/>
+<text x="309.3" y="421.0" font-size="9.50" fill="#000000" text-anchor="start">REPLACEMENT ACCESS INSTALLED;</text>
+<rect x="306.3" y="425.9" width="165.5" height="10.9" fill="#ffffff"/>
+<text x="309.3" y="434.0" font-size="9.50" fill="#000000" text-anchor="start">OLD AUTHORITY DENIED (M7 §12)</text></g></svg>
