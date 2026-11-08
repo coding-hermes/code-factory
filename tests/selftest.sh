@@ -5532,6 +5532,97 @@ then
     say "  FAIL  the auth-carrying occupied port lost its PASS rows (exit $rc)"; fails=$((fails+1))
     printf '%s\n' "$out" | grep -E 'PASS|FAIL' | tail -4 | sed 's/^/    | /'
   fi
+  # ch:trace row=CF-388 spec=specs/NODE.md#layer-20 test=tests/selftest.sh::gateway-fresh-home doc=README.md prompt=none:worker-brief evidence=tests/selftest.sh::gateway-fresh-home witness=none:local-fixture verdict=none:foreman-verifies commit=none:self-referential-hash memory=none:foreman-owns
+  # CF-388: every arm above starts from a home that ALREADY has ~/.hermes (a config file is written
+  # there before the writer runs), so not one of them could see the state the create path actually
+  # starts from: a freshly created node has no ~/.hermes at all — the adapter that owns it runs
+  # later in this same layer, and install-hermes.sh never creates it. Measured at 2dcef4c, the
+  # writer opened <config>.cf-tmp into that absent directory and died with FileNotFoundError, so
+  # layer 20 printed `FAIL gateway_auth` and the adapter then refused the bind. F/G below start
+  # from an empty HOME (the writer alone, and the whole layer-20 path) and H is the control: the
+  # SAME two probes against the pre-fix writer must fail, or this section proves nothing.
+  cf388=$(mktemp -d)
+  mkdir -p "$cf388/f" "$cf388/g" "$cf388/h" "$cf388/h2"
+  cf388_pre=absent
+  [ ! -e "$cf388/f/.hermes" ] || cf388_pre=present
+  if [ "$cf388_pre" = absent ]; then
+    say "  PASS  fixture starts where a fresh node starts: HOME exists, .hermes does not"
+  else
+    say "  FAIL  the CF-388 fixture pre-created .hermes — the arm cannot see the defect"; fails=$((fails+1))
+  fi
+
+  # ARM F: the producer alone, invoked exactly as layer 20 invokes it, against a HOME with no
+  # ~/.hermes. env -i proves the success cannot come from an ambient HOME or PATH.
+  out=$(env -i HOME="$cf388/f" "$cf150_python" "$HERE/scripts/node_gateway_auth.py" \
+    "$cf388/f/.hermes/config.yaml" "$cf388/f/.node/auth/gateway.pass" 2>&1); rc=$?
+  cf388_secret=$(cat "$cf388/f/.node/auth/gateway.pass" 2>/dev/null || true)
+  cf388_mode=$(stat -c '%a' "$cf388/f/.node/auth/gateway.pass" 2>/dev/null || true)
+  cf388_blocks=0
+  [ -f "$cf388/f/.hermes/config.yaml" ] && cf388_blocks=$(grep -c 'basic_auth:' "$cf388/f/.hermes/config.yaml" || true)
+  if [ "$rc" -eq 0 ] \
+    && [ "$cf388_blocks" -ge 1 ] \
+    && grep -Eq '^    username: [^ ]' "$cf388/f/.hermes/config.yaml" \
+    && grep -Eq '^    password: [^ ]' "$cf388/f/.hermes/config.yaml" \
+    && [ "$cf388_mode" = 600 ] && [ -n "$cf388_secret" ] \
+    && [ "$(printf '%s\n' "$out" | grep -c '^PASS  gateway_auth — added dashboard.basic_auth ')" = 1 ] \
+    && [ "$(printf '%s\n' "$out" | grep -c '^PASS  gateway_auth — password stored at .*mode 600 (not printed)$')" = 1 ] \
+    && ! printf '%s' "$out" | grep -Fq -- "$cf388_secret"; then
+    say "  PASS  no ~/.hermes -> exit $rc, block created, password mode $cf388_mode, secret never printed"
+  else
+    say "  FAIL  the writer did not stage the block on a HOME with no ~/.hermes (exit $rc, blocks ${cf388_blocks:-0}, mode ${cf388_mode:-missing})"; fails=$((fails+1))
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+
+  # ARM G: the whole layer-20 path from the same empty HOME — the row the create path prints, and
+  # the row README promises. The block must be staged BEFORE the adapter's gate, and the secret
+  # must not travel in the output the node logs.
+  out=$(cf150_env "$cf388/g" /bin/bash "$cf150/tree/scripts/project-node.sh" \
+    --apply --project fixture --layers 20 2>&1); rc=$?
+  cf388_g_pass="  PASS  gateway_auth — dashboard.basic_auth present in $cf388/g/.hermes/config.yaml; password in $cf388/g/.node/auth/gateway.pass (mode 600, value not printed)"
+  cf388_g_secret=$(cat "$cf388/g/.node/auth/gateway.pass" 2>/dev/null || true)
+  cf388_g_blocks=0
+  [ -f "$cf388/g/.hermes/config.yaml" ] && cf388_g_blocks=$(grep -c 'basic_auth:' "$cf388/g/.hermes/config.yaml" || true)
+  if [ "$rc" -eq 0 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$cf388_g_pass")" = 1 ] \
+    && ! printf '%s\n' "$out" | grep -q '^  FAIL  gateway_auth' \
+    && [ "$cf388_g_blocks" -ge 1 ] \
+    && [ -n "$cf388_g_secret" ] && ! printf '%s' "$out" | grep -Fq -- "$cf388_g_secret"; then
+    say "  PASS  layer 20 on a fresh HOME -> gateway_auth PASSes, block written, secret never printed (exit $rc)"
+  else
+    say "  FAIL  layer 20 could not stage the block on a fresh HOME (exit $rc)"; fails=$((fails+1))
+    printf '%s\n' "$out" | sed 's/^/    | /'
+  fi
+
+  # ARM H (pre-fix control): the revision this row was raised on. h1 is the producer alone — it
+  # must die without creating anything, exactly as measured; h2 drives the same layer-20 path, so
+  # the counted FAIL row the create path printed is reproduced rather than asserted from memory.
+  if git -C "$HERE" show 2dcef4c:scripts/node_gateway_auth.py > "$cf388/prefix-writer.py" 2>/dev/null; then
+    out=$(env -i HOME="$cf388/h" "$cf150_python" "$cf388/prefix-writer.py" \
+      "$cf388/h/.hermes/config.yaml" "$cf388/h/.node/auth/gateway.pass" 2>&1); rc=$?
+    if [ "$rc" -ne 0 ] && [ ! -e "$cf388/h/.hermes/config.yaml" ] \
+      && printf '%s\n' "$out" | grep -Fq 'FileNotFoundError'; then
+      say "  PASS  pre-fix 2dcef4c on a fresh HOME -> exit $rc, FileNotFoundError, nothing created (fixture detects CF-388)"
+    else
+      say "  FAIL  the pre-fix producer did not fail on a HOME with no ~/.hermes (exit $rc)"; fails=$((fails+1))
+      printf '%s\n' "$out" | sed 's/^/    | /'
+    fi
+    cp -a "$cf150/tree" "$cf388/pretree"
+    cp "$cf388/prefix-writer.py" "$cf388/pretree/scripts/node_gateway_auth.py"
+    out=$(cf150_env "$cf388/h2" /bin/bash "$cf388/pretree/scripts/project-node.sh" \
+      --apply --project fixture --layers 20 2>&1); rc=$?
+    if [ "$rc" -ne 0 ] \
+      && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL  gateway_auth — could not stage dashboard.basic_auth in ')" = 1 ] \
+      && ! printf '%s\n' "$out" | grep -Fq 'PASS  gateway_auth — dashboard.basic_auth present in' \
+      && [ ! -e "$cf388/h2/.hermes/config.yaml" ]; then
+      say "  PASS  pre-fix layer 20 on a fresh HOME -> one counted FAIL gateway_auth row, no block, exit $rc"
+    else
+      say "  FAIL  the pre-fix layer 20 did not report the staging failure (exit $rc)"; fails=$((fails+1))
+      printf '%s\n' "$out" | sed 's/^/    | /'
+    fi
+  else
+    say "  FAIL  pre-fix source unavailable (git show 2dcef4c:scripts/node_gateway_auth.py)"
+    fails=$((fails+1))
+  fi
+  rm -rf "$cf388"
   unset -f cf150_env
 else
   say "  FAIL  CF-150 fixture setup (stdlib Python required)"; fails=$((fails+1))

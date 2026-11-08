@@ -8,10 +8,13 @@ node. This adds the block when it is absent and leaves an existing one untouched
   node_gateway_auth.py <config.yaml> <password-file> [<username>]
 
 The password is generated on the node, written to <password-file> at mode 600, and NEVER
-printed — stdout carries the fact and the paths, not the secret.
+printed — stdout carries the fact and the paths, not the secret. A freshly created node has no
+~/.hermes yet (the adapter that owns it runs later in the same layer), so the config's parent
+directory is created here, mode 700, when it is absent.
 
-Exit 0 = the block is present (added now or already there); 1 = the file could not be read;
-2 = the file already has a dashboard block that is NOT basic_auth (left untouched, named).
+Exit 0 = the block is present (added now or already there); 1 = the config could not be read, or
+its directory could not be created / the file could not be written; 2 = the file already has a
+dashboard block that is NOT basic_auth (left untouched, named).
 """
 
 import os
@@ -59,6 +62,23 @@ def main(argv: list) -> int:
             file=sys.stderr,
         )
         return 2
+
+    # CF-388: on a freshly created node ~/.hermes does not exist yet — the harness adapter that
+    # creates it runs LATER in the same layer — so the config's parent is this writer's
+    # precondition, not the caller's. 0700 because that directory holds the gateway credential.
+    # Nothing is created when the block is already present (the early return above), so a re-run
+    # still changes nothing; a failure here is named and exits nonzero rather than escaping as a
+    # traceback, because the caller's row would then report a staging failure with no reason.
+    config_dir = os.path.dirname(config)
+    if config_dir:
+        try:
+            os.makedirs(config_dir, mode=0o700, exist_ok=True)
+        except OSError as exc:
+            print(
+                f"FAIL  gateway_auth — cannot create {config_dir} ({exc})",
+                file=sys.stderr,
+            )
+            return 1
 
     password = secrets.token_urlsafe(24)
     os.makedirs(os.path.dirname(password_file) or ".", exist_ok=True)

@@ -46,12 +46,19 @@ python3 "$HERE/node_gateway_auth.py" "$HOME/.hermes/config.yaml" "$HOME/.node/au
 
 — with `$HERE` = `~/node-scripts` on the node and `$HOME/.node/auth` created mode 700 first. The
 password is generated on the node, kept in that file at mode 600, and never printed or passed in
-argv; an existing `basic_auth` block is left untouched, so a re-run changes nothing. A freshly
-created node is expected to reach `PASS gateway_start — /api/status -> 200` from the adapter. It is
-not expected to reach `NODE: PASS` yet: `inference_key` fails until the node has its own provider
-key, and layer 30 fails until a crier identity is staged. The adapter still refuses the public bind
-by name when the block is absent — that gate is not weakened, and `tests/selftest.sh` §55 drives
-both states of it.
+argv; an existing `basic_auth` block is left untouched, so a re-run changes nothing. The writer also
+creates the config's own directory when it is absent — `~/.hermes`, mode 700 — because a freshly
+created node has none: the harness adapter that owns `~/.hermes` runs *later* in the same layer. So
+layer 20 stages the block before that adapter's gate runs, and `gateway_auth` reaches PASS on a HOME
+where `~/.hermes` does not exist at all; `tests/selftest.sh` §55 drives exactly that state, and
+carries the pre-fix writer as its control. What that leaves is a specific set of rows rather than a
+finished node: with the block in place the adapter's `gateway_start` row is gated on the gateway
+answering rather than on auth, a node is still not expected to reach `NODE: PASS` (`inference_key`
+fails until the node has its own provider key, and layer 30 fails until a crier identity is
+staged), and with no block in the config the adapter still refuses the public bind by name and
+unchanged — `FAIL gateway_start — refused: a public bind needs dashboard.basic_auth in
+~/.hermes/config.yaml`. That gate is not weakened; `tests/selftest.sh` §55 drives both of its states.
+No created node has been measured live by this repository: the §55 arms run against a stub harness.
 
 ## Provisioning a node from a config file
 
