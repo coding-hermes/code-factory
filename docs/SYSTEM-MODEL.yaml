@@ -263,6 +263,8 @@ contracts:
     carries: lane enabled, cadence, weight, pin
     mode: config
     state: UNVERIFIED
+    sender_guarantee: "the owner declares it — fleet.example.toml:15,35 (per-lane weight, enabled); project admission rows in scheduler.db are the source of record"
+    receiver_requirement: "internal/scheduler/admission_mode.go:112 — admissionModeForProject resolves the project row (override → namespace default → cooldown)"
     note: boundary — the producer is a human writing fleet.toml and scheduler.db project rows; the consumer is admission_mode.go:112 admissionModeForProject (M9 §6)
   - id: CT-02
     from: scheduler
@@ -270,6 +272,8 @@ contracts:
     carries: "envelope: run_id, corr_id, lane, board, text_b64"
     mode: async, bearer + signature
     state: PROVEN
+    sender_guarantee: "internal/bus/dispatch.go:202,266 — BuildDispatch renders run_id/corr_id/lane/board/text_b64 and signs before POST"
+    receiver_requirement: "crier internal/registry/handler.go:990 — HandleDeliver accepts the by-id delivery into the durable inbox"
     note: CF-354 fixed — crier HandleDeliver delivers the envelope verbatim (M9 §6, M10 §6)
   - id: CT-03
     from: crier
@@ -277,6 +281,8 @@ contracts:
     carries: inbox message + lease
     mode: pull, 30 s lease
     state: PROVEN
+    sender_guarantee: "crier internal/registry/handler.go:990 — deliver(): durable inbox write with lease/ack/TTL semantics"
+    receiver_requirement: "scripts/node-bus-worker.py:1356,1383 — signed GET /agents/<id>/inbox retrieve, then /inbox/ack"
     note: the node worker (M2 §6) and the dispatcher (M11 §6) are the two consumers
   - id: CT-04
     from: node
@@ -298,6 +304,8 @@ contracts:
     carries: completion event for a finished run
     mode: async
     state: PROVEN
+    sender_guarantee: "crier internal/registry/handler.go:170,1452 — the answering message carries ReplyTo correlation into the scheduler's durable inbox"
+    receiver_requirement: "internal/scheduler/dispatch_leg.go:713 — dispatchReplyVerdict reads the correlated payload's ok (first message wins, :428)"
     note: the dispatcher leg works — it always sends `ok`, the field dispatchReplyVerdict reads (M11 §6)
   - id: CT-07
     from: router
@@ -312,6 +320,8 @@ contracts:
     carries: hermes-session delivery (message becomes a session turn)
     mode: sync, 30 s
     state: PROVEN
+    sender_guarantee: "crier internal/hermesession/hermesession.go:353 — Client.Deliver; :554 POSTs /api/sessions at the gateway origin"
+    receiver_requirement: "hermes gateway/platforms/api_server.py:1763 — POST /api/sessions creates the session row from the delivered message"
     note: crier side named — hermesession.go:353 Client.Deliver (M10 §6)
   - id: CT-09
     from: node
@@ -340,6 +350,7 @@ contracts:
     carries: staged diff
     mode: pre-commit hook
     state: UNVERIFIED
+    sender_guarantee: "scripts/install-gitreins.sh:124 — the pre-commit hook pins $VENV/bin/gitreins guard --quality-async on every seeded repo"
     note: the hook side is named (install-gitreins.sh:124); hook enforcement — that git invokes it — is unproven (M3 §6, M3 §11)
   - id: CT-13
     from: gitreins
@@ -367,8 +378,9 @@ contracts:
     to: handbook
     carries: module status word
     mode: read at build
-    state: PROVEN
-    note: a structural gate, not a truth gate (M6 §6 F6-2)
+    state: UNVERIFIED
+    sender_guarantee: "scripts/master_doc_check.py:263 — prints MASTER-DOC: PASS|FAIL and exits 1 on FAIL"
+    note: a structural gate, not a truth gate (M6 §6 F6-2); downgraded from PROVEN — the handbook build reads no MASTER-DOC output, so the receiver half is uncited
   - id: CT-17
     from: conformance
     to: harness
@@ -417,8 +429,9 @@ contracts:
     to: bunker
     carries: create, exec, cp against the agent container
     mode: bunker CLI
-    state: PROVEN
-    note: short create/exec/cp calls measured across M1's batteries (M1 §6)
+    state: UNVERIFIED
+    sender_guarantee: "scripts/bunker-provision.sh:504 — the node-create.sh stage drives create/exec/cp against the agent container"
+    note: short create/exec/cp calls measured across M1's batteries (M1 §6); downgraded from PROVEN — the daemon's accept side has no in-repo file:function to cite
 
 # F1-F5 carried from the outline; F6-F10 secondary; F11-F16 quorum-added. Each step names the
 # component pair and a what that cites the chapter text or contract row it came from.

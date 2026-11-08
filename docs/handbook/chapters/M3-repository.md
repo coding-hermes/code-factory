@@ -203,3 +203,16 @@ are answerable only by reading the `LANDED:` / `LAND: REFUSED` rows.
     operator-invoked (optional); the envelope names `branch`/`commit` but does not call the lander.
 
 ## RED field count: 3 (Metrics §8 — absence-proved; §1 status — `repo_freshness.py` body not read line-by-line (behaviour exercised by the cf244 arm, source unread) and S3 hook *enforcement* UNVERIFIED (the landing arm proves landing behaviour, not that git invokes the installed pre-commit gate); §9 inventory 5 of 35 helper call sites)
+
+## FLIGHT DATA FILE - M3 REPOSITORY
+
+```checklist
+TITLE: M3 REPOSITORY
+WHO: NODE OPERATOR
+TREE - git -C $HOME/repo status; origin and branch read back as seeded
+√ CLEAN - the seeded tree is the pinned ref, worktree clean
+HOOK - read .git/hooks/pre-commit
+√ PINNED - hook runs the ABSOLUTE gitreins path (install-gitreins.sh:124), never bare gitreins
+PUSH - git push --dry-run from the worktree
+√ REMOTE - push reaches origin or names the exact credential gap
+```

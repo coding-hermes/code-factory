@@ -221,3 +221,16 @@ is a capture log, not an emitted metric.
     (`:52`).
 
 ## RED field count: 4 (Metrics §8 — absence-proved; M12-C1 node-client half UNVERIFIED; M12-C2 upstream half UNVERIFIED — one-sided external boundary; stream completion **FAILING** — F12-7 reproduced)
+
+## FLIGHT DATA FILE - M12 INFERENCE PROXY
+
+```checklist
+TITLE: M12 INFERENCE PROXY
+WHO: CONTROL HOST
+NO TOKEN - POST a completion with no bearer
+√ 401 - named refusal, nothing forwarded
+ALLOWLIST - request a model off the allowlist
+√ REFUSED - named refusal, no upstream call, no key spent
+STREAM - send stream: true
+√ FIRST BYTE - headers go out immediately; first_byte logged, never buffered
+```

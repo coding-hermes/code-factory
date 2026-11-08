@@ -156,3 +156,16 @@ latency are answerable only by reading the refresh log.
     unknown.
 
 ## RED field count: 4 (Metrics §8 — absence-proved; §1 mint UNVERIFIED; M7-C1 contract state UNVERIFIED — consumer is an external API; §9 inventory 2 of 103 helper call sites — the descriptive rows not tabulated one-per-site)
+
+## FLIGHT DATA FILE - M7 GITHUB
+
+```checklist
+TITLE: M7 GITHUB
+WHO: CONTROL HOST
+MINT - mint the App installation token
+√ FILE - token lands in auth/github.token, mode 0600, never in argv
+SCOPE - read fleet-repo-scope.json before a job requests a token
+√ SCOPED - the repo is listed; an unlisted repo is refused before minting
+REFRESH - re-mint after expiry and confirm the old token is rejected
+√ ROTATES - new token works, old token 401s
+```

@@ -196,3 +196,16 @@ on this field, not a "sample" claimed complete:
     open.
 
 ## RED field count: 3 (Metrics §8; §7 live bus-worker ladder not repeatable from this host; §9 inventory 4 of 70 helper call sites — the descriptive per-measurement rows not tabulated one-per-site)
+
+## FLIGHT DATA FILE - M2 DISPATCH - NODE SIDE
+
+```checklist
+TITLE: M2 DISPATCH - NODE SIDE
+WHO: NODE OPERATOR
+POLL - node-bus-worker.py --once --dry-run
+√ EXIT 0 - row PASS, fetch verified, nothing acked (the 5 s lease returns the batch)
+RUN - node-bus-worker.py --once
+√ REPLY - brief verified, harness run, reply acked, exit 0
+SIGNATURE - replay a retrieve with a tampered header
+√ REFUSED - 401 naming the signer; no harness run, no ack
+```

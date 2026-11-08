@@ -113,6 +113,10 @@ comment (line **2**, not 5) disagrees with the default-ON config.
 
 **Storage-selection controls (B20; memory backend B19).** `config/config.go:113-123` `ResolvedRegistryBackend()` resolves the custody backend in this precedence: an explicit `CR_REGISTRY_BACKEND` (`Registry.Backend`, `:104`) → a `sqlite:` `Database.URL` → any non-empty `Database.URL` (`postgres`) → **`memory`**. `:732-767` implements database-URL precedence plus explicit backend validation and refusal conditions; `:770-808` implements pool controls. The **memory** backend is process-local and demo-only: held deliveries and inboxes are **lost on restart** (`config.go:550-551`), so custody is not durable under it. A register that names only the driver rows and transport defaults is incomplete; how an operator proves *which* backend is actually serving custody (readback of the resolved backend at boot) is not yet written (a named RED on §5).
 
+> WARNING: the `memory` registry backend is process-local and demo-only — held deliveries and
+> inboxes are lost on restart (`config.go:550-551`). Custody is not durable under it; any
+> deployment that must survive a daemon restart requires a `sqlite:` or `postgres` backend.
+
 ## 6. Contracts in and out
 
 Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Local ids are
@@ -266,3 +270,16 @@ named RED on this field).
   - **F10-6** — repo moved `86c4c469`→`ae9fc57f`; all 9 cited files byte-identical; one fresh `go test ./...` passed clean (0 FAIL, `cmd/server` 65.4s), but the flaky-test files (`cmd/server/*_test.go`) changed since the earlier measurement, so a single green run does not retire the flaky finding.
 
 ## RED field count: 5 (S1 handler 1895-line body not read line-by-line — the slog surface is complete but the body's non-slog semantics are not; §8 per-metric contract — series names inventoried but the type/labels/question/scrape table not filled; §9 guard log surface not tabulated — B22; §5 storage-selection custody-proof not written — B20; §7 `go test ./...` — one fresh clean run at HEAD `ae9fc57f`, but the flaky finding is not retired (single run ≠ determinism))
+
+## FLIGHT DATA FILE - M10 CRIER
+
+```checklist
+TITLE: M10 CRIER
+WHO: CONTROL HOST
+REGISTER - sign and POST /agents
+√ 200 - identity accepted, signing key stored
+DELIVER - POST a signed envelope to the agent inbox
+√ INBOX - durable inbox row written, lease started
+RESTART - restart the daemon under the memory backend
+√ EMPTY - inboxes are empty after restart (WARNING: memory custody is not durable)
+```

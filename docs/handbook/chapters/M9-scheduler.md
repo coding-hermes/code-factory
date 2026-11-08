@@ -160,6 +160,11 @@ definitions**, measured with `grep -cE 'flag\.(String|Int|Int64|Bool|Duration|Fl
 | `disable-tick-push` | false (`:172`) | bool | skip the per-tick git push at exit (SCHED-GAP-1594) | true stops tick push-at-exit |
 | `no-exec-fallback` | **true** (`:190`) | bool | disable `exec.Command` fallback when gateway fails | false re-enables the exec fallback |
 
+> WARNING: the daemon's HTTP surface is loopback by construction — `listen` defaults to
+> `127.0.0.1:9090` (`cmd/schedulerd/main.go:96`). Binding it off-loopback exposes the API
+> beyond the host it runs on. Do not move `listen` off `127.0.0.1` without an authenticating
+> front end in front of it.
+
 **Auxiliary / routing / lifecycle flags (default + consequence, expanded (B15)).** The remaining 33 of the 57, with the consequence column filled per row from the flag help text at `cmd/schedulerd/main.go:102-208`:
 
 | Setting | Default | Governs | Consequence if changed |
@@ -327,3 +332,16 @@ the named RED on this field — not a "sample" claimed as complete.
   - **F9-10** (new) — the full suite now FAILs `internal/api` on `TestPERF001R2StatusPassAB` under concurrent load (max 2.79s vs 1.65s budget); passes in isolation (0.646s) — a load-window flake, not a regression.
 
 ## RED field count: 5 (§9 log inventory 2 of 382 sites — the remaining 380 are the named RED, not a "sample"; §3 S1 grep-level (`tick_process`/`packer_select`/`namespace_alloc` not line-by-line — `noop_pacing.go`/`packer_select.go:385-400`/`spawn.go` ARE read); §5 the auxiliary-flag reader/precedence not re-verified per flag (the consequence column is now filled); S4 per-route contract not written — B18; S3 write authorities/recovery queries not written — B17)
+
+## FLIGHT DATA FILE - M9 SCHEDULER
+
+```checklist
+TITLE: M9 SCHEDULER
+WHO: CONTROL HOST
+LISTEN - curl the daemon on 127.0.0.1:9090
+√ LOOPBACK - answers on loopback only (WARNING: off-loopback exposes the API)
+TICK - observe one cadence tick in the log
+√ DISPOSITION - the tick line names admitted or deferred, never dropped
+GATE - hold a lane at cooldown and fire a tick
+√ SKIPPED - the lane is skipped with its reason; no spawn
+```

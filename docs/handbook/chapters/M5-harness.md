@@ -311,3 +311,16 @@ and conformance pass rate are answerable only by reading the leg rows.
     the download. The sealed-cache half is F1-8 (M1).
 
 ## RED field count: 4 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; M5-C2 contract state UNVERIFIED — a port/service is not a `file:function`; §9 inventory 4 of 215+ helper call sites — the descriptive per-measurement rows not tabulated one-per-site)
+
+## FLIGHT DATA FILE - M5 HARNESS
+
+```checklist
+TITLE: M5 HARNESS
+WHO: NODE OPERATOR
+RESOLVE - resolve the pinned harness binary and args for the lane
+√ BINARY - one binary, one arg set, no PATH drift
+SMOKE - run the harness on a scratch brief
+√ COMMIT - a commit lands carrying the co-author trailer
+GRADE - run the gitreins guard on a staged change
+√ VERDICT - PASS or FAIL with named criteria, never a silent skip
+```

@@ -201,3 +201,16 @@ rate are answerable only by the static greps above.
     `harness-vars.sh`.
 
 ## RED field count: 1 (Metrics §8)
+
+## FLIGHT DATA FILE - M0 SHARED CONTRACT
+
+```checklist
+TITLE: M0 SHARED CONTRACT
+WHO: NODE OPERATOR
+SELFTEST - run the full battery: bash tests/selftest.sh
+√ EXIT 0 - every section prints PASS; a FAIL names its fixture
+HELPERS - source lib.sh and fire ok/bad/warn/note once each
+√ FORMAT - exactly one prefixed line per call, exit status preserved
+DISK FLOOR - call require_disk on a host below the floor
+√ REFUSAL - named refusal, nonzero exit, nothing written
+```

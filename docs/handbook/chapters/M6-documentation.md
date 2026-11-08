@@ -222,3 +222,16 @@ coverage are derived by the census, not emitted.
     re-pinned to the rewritten file (`main()` at `:321`, config `:33-38`, stop `:442-457`).
 
 ## RED field count: 2 (Status §1 — own gate reads FAIL, Metrics §8)
+
+## FLIGHT DATA FILE - M6 DOCUMENTATION
+
+```checklist
+TITLE: M6 DOCUMENTATION
+WHO: DOC PANEL
+LINT - python3 scripts/master_doc_check.py
+√ PASS - MASTER-DOC: PASS, exit 0; a FAIL names the section and line
+BUILD - python3 scripts/build_book.py --out <pdf>
+√ GATES - lint, fit, furniture and check.py all green; page count printed
+CROSSWALK - spot-check one M-id against its chapter section
+√ MATCHES - the crosswalk row and the chapter agree
+```

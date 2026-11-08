@@ -156,3 +156,16 @@ output (`reclaimed_bytes`/`reclaimed_mib` at `:121-123`), not emitted.
     `check_scan_scope.py` has no production caller (operator-invoked, optional).
 
 ## RED field count: 1 (Metrics §8)
+
+## FLIGHT DATA FILE - M8 SAFETY
+
+```checklist
+TITLE: M8 SAFETY
+WHO: NODE OPERATOR
+FAIL PATH - offer a change the gate must refuse
+√ REFUSED - named reason, nonzero exit, nothing merged
+DISK - run require_disk with the floor raised above free space
+√ REFUSAL - named refusal before the host fills
+SECRETS - run the secret scan on a staged token
+√ CAUGHT - scan names the file and line; commit blocked
+```

@@ -205,3 +205,16 @@ lines — `:81` a comment mentioning `log()` and `:112` the `def log(` definitio
     until a test proves the kill reaches the harness group.
 
 ## RED field count: 2 (Metrics §8, live-job test row §7 — decoration, cannot fail)
+
+## FLIGHT DATA FILE - M11 DISPATCHER
+
+```checklist
+TITLE: M11 DISPATCHER
+WHO: CONTROL HOST
+POLL - run one dispatcher cycle against a queued agent
+√ LEASE - exactly one message leased; the run starts
+REPLY - let the worker finish
+√ LEDGER - dispatch-ledger.jsonl grows by one line naming the corr id
+FRESHNESS - compare dispatcher service start to its script mtime
+√ CURRENT - no negative elapsed in the journal (a stale poller lies about time)
+```

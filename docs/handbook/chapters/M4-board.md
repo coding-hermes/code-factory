@@ -225,3 +225,16 @@ carried from an earlier capture (N9):
     HEAD == origin/main == `fbc19cb`. Documented, not reconciled in-band.
 
 ## RED field count: 2 (Metrics §8 — absence-proved; CT-14/CT-13 states UNVERIFIED — every side is an external peer)
+
+## FLIGHT DATA FILE - M4 BOARD
+
+```checklist
+TITLE: M4 BOARD
+WHO: CONTROL HOST
+READ - read the board store; rows and events counted separately
+√ PARSE - every line parses; a duplicate id is named, never silently dropped
+APPEND - boardctl update with --evidence-run-id on a closed row
+√ EVENT - events grow by exactly one row; the store prints the new count
+RECONCILE - audit a claimed-done row against its evidence
+√ MATCH - the row closes only on evidence tied to the exact tree
+```

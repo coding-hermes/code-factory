@@ -332,3 +332,18 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
     false-green path.
 
 ## RED field count: 4 (Status §1 — `node_env`/`node_seed_drift`/`node_freshness`/`bunker_config_gen` bodies not read line-by-line; §7 certification ladder not run on a live node; Metrics §8 — absence-proved; §9 inventory 5 of 141 helper call sites — the descriptive rows not tabulated one-per-site)
+
+## FLIGHT DATA FILE - M1 PROVISIONING
+
+```checklist
+TITLE: M1 PROVISIONING
+WHO: CONTROL HOST
+CHECK - ./scripts/bunker-provision.sh --config <conf> --check
+√ ROWS - node/agent/repo/auth rows PASS; a lone FAIL inputs is a replay gap, not a node defect
+APPLY - ./scripts/bunker-provision.sh --apply
+√ RESOLVED - one resolved line names project, agent, server, repo, ref, harness, namespace, TTL
+BUS - bunker-crier-connect.sh --stage, then --apply, then re-probe the inbox
+√ 200 - signed read accepted, queue depth printed
+ROSTER - read fleet_agents.json and fleet-repo-scope.json
+√ MEMBER - the agent is in both stores before any dispatch
+```

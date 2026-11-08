@@ -86,6 +86,16 @@ td, th, p, li, code, pre { overflow-wrap: anywhere; }
 .notice .txt { display: block; font-size: 7.4pt; line-height: 1.28; }
 img { max-width: 100%; }
 
+/* Flight Data File checklist card, per the template's own .card: black title bar,
+   numbered steps, verification lines — and LETTER GOTHIC ONLY, the one face the
+   template reserves for crew checklists. */
+.card { border: 0.8pt solid var(--ink); font-family: var(--selectric); font-size: 7.1pt;
+        line-height: 1.3; letter-spacing: 0; margin: 2.5mm 0; break-inside: avoid; }
+.card .bar { background: var(--ink); color: var(--paper); font-weight: 700;
+             padding: 0.5mm 1.8mm; display: flex; justify-content: space-between; }
+.card ol { list-style: none; margin: 0; padding: 0.8mm 1.8mm 1mm; }
+.card li { display: grid; grid-template-columns: 3.2mm 1fr; white-space: pre; }
+
 /* ---- cover (a cover carries no dochead) ---- */
 .cover { text-align: center; padding-top: 66mm; }
 .cover .doc { letter-spacing: 0.3em; font-size: 10pt; }
