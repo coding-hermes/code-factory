@@ -5953,6 +5953,48 @@ for cf006_pair in aider:AIDER goose:GOOSE; do
   fi
 done
 rm -rf "$cf006"
+# ch:trace row=CF-050 spec=docs/ACCEPTANCE-PLAN.md#section-61 wave=none:serial-worker test=tests/selftest.sh::CF050_publish_gate doc=docs/ACCEPTANCE-PLAN.md evidence=none:no-frozen-transcript witness=none:not-published verdict=none:foreman-runs-gitreins commit=none:foreman-commit memory=none:foreman-closeout
+# CF-050: the published tree must not gain new absolute host-home paths. The measured baseline
+# counts legacy files so cleanup remains a separate row; this gate blocks only regressions.
+cf050_publish_gate() {
+  local root=$1 baseline=$2 hits count paths
+  hits=$(git -C "$root" grep -lIE '/home/[a-z][a-z0-9_-]*/' HEAD -- . \
+    ':!.gitreins/**' ':!.coding-hermes/board/**' 2>/dev/null || true)
+  count=$(printf '%s\n' "$hits" | grep -c . || true)
+  paths=$(printf '%s\n' "$hits" | sed 's/^HEAD://' | sort -u | sed -n '1,10p' | tr '\n' ' ')
+  if [ "$count" -gt "$baseline" ]; then
+    say "  FAIL  publish paths — baseline $baseline, current $count; paths: ${paths% }"
+    return 1
+  fi
+  say "  PASS  publish paths — baseline $baseline, current $count"
+  return 0
+}
+say "61. the published tree does not add absolute host-home paths (CF-050)"
+cf050_publish_gate "$HERE" 143 || fails=$((fails+1))
+# Red proof: a committed fixture exercises the same git-grep path as HEAD. Build the path from
+# pieces so this test does not itself seed the production tree with a host-specific literal.
+cf050=$(mktemp -d)
+git init -q -b trunk "$cf050/seed"
+mkdir -p "$cf050/seed/docs"
+printf '/%s/%s/fixture\n' home "${USER:-user}" > "$cf050/seed/docs/fixture.md"
+git -C "$cf050/seed" add docs/fixture.md
+git -C "$cf050/seed" -c user.name=fixture -c user.email=fixture@example.invalid commit -qm fixture
+out=$(cf050_publish_gate "$cf050/seed" 0 2>&1); rc=$?
+if [ "$rc" -ne 0 ] \
+   && printf '%s\n' "$out" | grep -Eq '^  FAIL  publish paths — baseline 0, current 1; paths: docs/fixture\.md$'; then
+  say "  PASS  seeded fixture -> FAIL names docs/fixture.md; gate is falsifiable"
+else
+  say "  FAIL  seeded fixture did not trigger the named publish-path row: $out"; fails=$((fails+1))
+fi
+git -C "$cf050/seed" rm -q docs/fixture.md
+git -C "$cf050/seed" -c user.name=fixture -c user.email=fixture@example.invalid commit -qm clean
+out=$(cf050_publish_gate "$cf050/seed" 0 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '  PASS  publish paths — baseline 0, current 0'; then
+  say "  PASS  removed fixture -> clean control passes"
+else
+  say "  FAIL  removed fixture did not restore PASS: $out"; fails=$((fails+1))
+fi
+rm -rf "$cf050"
 
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
