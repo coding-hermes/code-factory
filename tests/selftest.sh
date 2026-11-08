@@ -1568,6 +1568,66 @@ then
 else
   say "  FAIL  publish-drift fixture setup"; fails=$((fails+1))
 fi
+# ch:trace row=CF-128 spec=AGENTS.md#rules wave=none:serial test=tests/selftest.sh::drift-head-ancestry doc=none:board-row prompt=none:foreman-brief evidence=tests/selftest.sh::drift-head-ancestry witness=none:local-fixture verdict=none:foreman-judges commit=none:self-referential-hash memory=none:foreman-writes
+# CF-128: every arm above passes --published-dir, and that flag suppresses the HEAD-ancestry leg
+# outright (`if not args.no_head and not args.published_dir`). The documented Git form — a real
+# --ref and no published dir — therefore had no arm at all: the whole block could be deleted and
+# this suite still printed SELFTEST: PASS. These two arms drive that form in both directions on a
+# scratch repository whose board matches its own ref, so the ancestry row alone decides the verdict.
+drift_fixture_git() {  # $1=repo, rest=git args — hermetic identity, no host hooks or global config
+  local repo="$1"; shift
+  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+    git -C "$repo" -c user.email=fixture@example.invalid -c user.name=fixture \
+      -c commit.gpgsign=false -c core.hooksPath=/dev/null "$@"
+}
+drift_git_form() {  # $1=repo $2=ref -> prints the tool report, returns the tool's exit status
+  env -u GIT_DIR -u GIT_WORK_TREE GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+    python3 -B "$HERE/scripts/board_drift.py" check --workdir "$1" --ref "$2" 2>&1
+}
+drift_repo="$tmpd/head-ancestry"
+mkdir -p "$drift_repo/.coding-hermes/board"
+printf '%s\n' '{"id":"CF-001","title":"fixture","status":"pending"}' \
+  > "$drift_repo/.coding-hermes/board/tasks.jsonl"
+printf '%s\n' '{"event_type":"created","target_id":"CF-001"}' \
+  > "$drift_repo/.coding-hermes/board/events.jsonl"
+drift_fixture_git "$drift_repo" init -q -b main \
+  && drift_fixture_git "$drift_repo" add -A \
+  && drift_fixture_git "$drift_repo" commit -qm 'board fixture' \
+  && drift_fixture_git "$drift_repo" commit -qm 'ref tip' --allow-empty
+drift_base=$(drift_fixture_git "$drift_repo" rev-parse HEAD~1 2>/dev/null)
+drift_tip=$(drift_fixture_git "$drift_repo" rev-parse HEAD 2>/dev/null)
+if [ -n "$drift_base" ] && [ -n "$drift_tip" ]; then
+  # Green direction: HEAD is the first commit and --ref names the second -> PASS row, RESULT: OK.
+  drift_fixture_git "$drift_repo" checkout -q --detach "$drift_base"
+  drift_out=$(drift_git_form "$drift_repo" main); drift_rc=$?
+  if [ "$drift_rc" -eq 0 ] \
+    && printf '%s\n' "$drift_out" | grep -Fq 'PASS  HEAD ancestry' \
+    && printf '%s\n' "$drift_out" | grep -Fxq 'RESULT: OK' \
+    && ! printf '%s\n' "$drift_out" | grep -Fq 'Traceback (most recent call last)'; then
+    say "  PASS  git-form ancestry present (HEAD=$drift_base ancestor of main=$drift_tip) -> RESULT: OK"
+  else
+    say "  FAIL  git-form ancestry present (exit $drift_rc)"; fails=$((fails+1))
+    printf '%s\n' "$drift_out"
+  fi
+  # Red direction: a sibling commit off the same base is NOT an ancestor of --ref -> FAIL + DRIFT.
+  # `1 failed` is asserted exactly: every other row of this fixture is green, so a widening gap
+  # elsewhere in the tool cannot make this arm pass for the wrong reason.
+  drift_fixture_git "$drift_repo" checkout -q --detach "$drift_base" \
+    && drift_fixture_git "$drift_repo" commit -qm 'sibling' --allow-empty
+  drift_sibling=$(drift_fixture_git "$drift_repo" rev-parse HEAD 2>/dev/null)
+  drift_out=$(drift_git_form "$drift_repo" main); drift_rc=$?
+  if [ "$drift_rc" -eq 1 ] \
+    && printf '%s\n' "$drift_out" | grep -Fq "FAIL  HEAD ancestry — HEAD=$drift_sibling main=$drift_tip; " \
+    && printf '%s\n' "$drift_out" | grep -Fxq 'RESULT: DRIFT (1 failed)' \
+    && ! printf '%s\n' "$drift_out" | grep -Fq 'Traceback (most recent call last)'; then
+    say "  PASS  git-form ancestry absent (HEAD=$drift_sibling not an ancestor of main=$drift_tip) -> RESULT: DRIFT"
+  else
+    say "  FAIL  git-form ancestry absent (exit $drift_rc)"; fails=$((fails+1))
+    printf '%s\n' "$drift_out"
+  fi
+else
+  say "  FAIL  git-form ancestry fixture setup"; fails=$((fails+1))
+fi
 rm -rf "$tmpd"
 
 say "30. README Status rows 1 and 3 cite the interpreter-qualified --check"
