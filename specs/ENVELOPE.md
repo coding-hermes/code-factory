@@ -94,7 +94,11 @@ is never copied into a log or a reply.
 {
   "env_version": 1,
   "dispatch_id": "uuid",
+  "corr_id": "lane-<ts>-<seq>",
+  "in_reply_to": "<relay message id the dispatch arrived under>",
   "status": "completed | failed | refused",
+  "ok": true,
+  "reply_b64": "<base64 of the UTF-8 report the scheduler records on the tick>",
   "host_identity": "node-host-1",
   "harness": {"name": "hermes", "served_model": "openai/gpt-6.1-sol"},
   "vars": {"CF_MODEL": {"set": true, "len": 17}, "CF_API_KEY_FILE": {"set": true, "len": 27},
@@ -118,6 +122,89 @@ and unverified is FAIL.
 It is what makes two runs comparable: the same lane, model and options show the same receipt, and
 a run whose receipt differs can be diffed instead of guessed at.
 
+### `ok` is the verdict; `status` is the node's own classification
+
+`status` says what the node thinks happened. **`ok` is the field the scheduler reads**, and its
+**absence reads as success** (`dispatchReplyVerdict`, `internal/scheduler/dispatch_leg.go`). A
+result that says `"status": "failed"` and omits `ok` is therefore closed as a **completed** tick —
+the failure is invisible to the control host, which is the defect this rule exists to prevent.
+
+So, for every result:
+
+- `status: "completed"` ⇔ `"ok": true`.
+- `status: "failed"` or `"refused"` ⇒ `"ok": false`, **plus a reason** the scheduler can record:
+  `error` (a short string; the scheduler's verdict reads it before anything else) and `reply_b64`
+  (the node's own words, which become the tick's text). A failing gate must name the gate and its
+  exit code, not just its own exit status.
+- A failure is still **delivered and then acked**. Withholding the ack would only loop the work.
+
+`reply_b64` travels base64, and for the same reason the directive does: the relay's control-key
+pre-match refuses prose that quotes JSON (`stringified_json`, `403 GUARD_BLOCKED`), and a real
+report quotes board rows and curl bodies. The scheduler decodes `reply_b64` first
+(`dispatchReplyText`), so this is the one field whose text reaches the tick row.
+
+### The path home
+
+1. The node executes the dispatch (harness, then `gate`).
+2. It **POSTs the result envelope into the inbox named by the dispatch's `reply_to`** — the
+   scheduler's own bus identity, which the scheduler sets on every dispatch it hands out:
+   `POST /agents/<reply_to>/inbox`, with the envelope as the body's **`payload` object** (crier
+   requires `payload` to be present and to be a JSON object — `docs/openapi.yaml` →
+   `inboxDeliver`), `sender` naming the producing agent (it must equal `X-Agent-ID` on a
+   service-authenticated recipient), `request_id` carrying the `corr_id`, and `idempotency_key`
+   as the retry key below.
+3. Only **after** that delivery is accepted does the node **ack** the dispatch message.
+
+A blank `reply_to` is a named refusal at the node, not a request to `/agents//inbox`: a result
+addressed to nobody is a silent loss.
+
+### Correlation semantics
+
+- `corr_id` is the scheduler's join key and the node echoes it **verbatim**; `dispatch_id` is the
+  node's and is echoed too.
+- `in_reply_to` is the relay message id the dispatch arrived under. The scheduler correlates on
+  **`in_reply_to` first**, then on `corr_id`, then on the original dispatch echoed inside `task`
+  (`correlateDispatchReply`, `dispatch_leg.go`). It is the identity of the hand-out that decides,
+  never the arrival order.
+- **A result that names neither key never completes a tick.** The awaiting tick keeps polling,
+  then records `no correlated reply for corr=<the one it waited for>` and expires. The message is
+  not silently dropped either: it is *named* in the tick detail
+  (`[dispatch-inbox] seen=N correlated=0 uncorrelated=N keys=<the keys it claimed> acked=…
+  deferred=…`) and settled — acked when it can belong to nobody, **deferred** when its identity
+  names another in-flight hand-out, which is then left for its owner.
+- Corollary for the node: never rewrite, truncate or regenerate the correlation identity. A
+  result whose `corr_id` was "helpfully" fixed up is residue that completes nothing.
+
+### Durable delivery, and the delivery budget
+
+- crier's blocking budget (`timeout_ms`, default **30000 ms**, range `0..120000`,
+  `internal/registry/handler.go`) bounds a **blocking** delivery to a webhook or session
+  recipient. It does **not** bound an inbox delivery: an inbox recipient is a durable store — the
+  message is written and remains retrievable until it is acked or expires.
+- A delivery whose **answer** is lost (relay unreachable, connection dropped, `504` from budget
+  exhaustion) stored nothing on the relay's side, so it is **not** a delivered result. The node
+  must retry, and it must not redo the work: the result is recorded in the node's seen-cache at
+  **execution** time, so a redelivered dispatch re-delivers the recorded result.
+- Every delivery carries an `idempotency_key` derived from the **dispatch alone** (never from the
+  attempt count or the clock). A retry inside the relay's deduplication window
+  (`CR_IDEMPOTENCY_WINDOW_S`, 24 h by default) is answered with the **first** accept — same
+  message id, nothing stored — so retrying is safe and produces exactly one result. crier caps the
+  key at 128 characters.
+- A result that reaches the inbox **after** the scheduler's own await window is still delivered
+  and still in the inbox — not dropped — but it does not retroactively complete that tick: the
+  tick was already recorded as expired and the late message is settled and named as above.
+
+### Ack after delivery
+
+- The dispatch message is acked **only after** its result's delivery is accepted. A crash between
+  execution and delivery, a refused delivery, or a lost answer leaves the message unacked, so the
+  relay returns it and the result is re-sent.
+- Acknowledgement is **per message**, not per batch: one result that failed to deliver must not
+  leave an unrelated message unacked, and one accepted result must not ack a message whose own
+  delivery never landed.
+- This is at-least-once delivery of the result with exactly-once *storage* of it (the idempotency
+  key), not exactly-once execution of the work.
+
 ## Reserved field names (crier guard)
 
 crier's prompt-injection guard rejects any JSON whose keys match
@@ -135,3 +222,7 @@ here, and any new field is added to this spec first.
   previous result returned rather than the work being done twice.
 - A node acks a dispatch **only after** the result message is delivered. A crash between
   execution and delivery causes redelivery — hence idempotency, not exactly-once.
+- The two directions have **separate** idempotency keys: the dispatch's (minted by the scheduler)
+  keeps the work from being handed out twice, and the result's (derived from the dispatch by the
+  node, `scripts/node-bus-worker.py` `delivery_key()`) keeps one result from being STORED twice
+  when a delivery is retried. They are not interchangeable and neither is ever regenerated.

@@ -41,6 +41,15 @@ Refusals (named, non-zero exit, no side effects when possible):
   brief_project a dispatch names a project other than this node's
   brief_workdir a dispatch names a workdir that is not inside this node's clone
 
+The RESULT leg, in one line: a dispatch is executed, and the result envelope is POSTed into
+`reply_to`'s inbox BEFORE the dispatch is acked anywhere. The envelope carries the scheduler's
+verdict field (`ok`), the correlation identity (`corr_id`, plus `in_reply_to` = the relay message
+id the dispatch arrived under) and the node's own words in `reply_b64`; `specs/ENVELOPE.md`
+§Result is the authority. The delivery body carries an `idempotency_key` derived from the dispatch
+alone, so a retry after a lost answer is answered with the FIRST accept instead of storing a
+second result — and the seen-cache is written at EXECUTION, so a redelivery re-delivers the
+recorded result rather than running the work twice.
+
 --check is read-only: it measures and prints, never runs the harness, never posts, never acks,
 and its inbox row reads `/agents/<id>/inbox/stats` (a signed read that leases nothing, so a
 check cannot hide a waiting dispatch from the worker for the lease window). `--once --dry-run`
@@ -78,6 +87,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 DEFAULT_INBOX_LIMIT = 10
@@ -85,6 +95,14 @@ DEFAULT_LEASE_SECONDS = 30
 DEFAULT_TIMEOUT = 10
 DEFAULT_HARNESS_WALL = 1800
 SEEN_LIMIT = 200
+# `reply_b64` lands in a scheduler tick row, not in a log file: bound it there rather than shipping
+# an unbounded harness transcript through the bus.
+REPLY_MAX_CHARS = 4000
+# The tail of the harness output that rides in `reply_b64` beside the receipt line.
+REPLY_TAIL_CHARS = 1500
+# crier caps a delivery's `idempotency_key` at 128 characters (docs/openapi.yaml, inboxDeliver); a
+# key the relay would refuse is not a retry key, so the key is built to fit.
+IDEMPOTENCY_KEY_MAX = 128
 
 # specs/HARNESS-MATRIX.md §5 — the one set a node passes to a harness. Names are stable; the
 # directive is the only source, and nothing here is ever read from the worker's own environment.
@@ -886,6 +904,36 @@ def dispatch_key(doc):
     )
 
 
+def delivery_key(dispatch, result):
+    """The relay's dedupe key for ONE dispatch's result, stable across every retry.
+
+    crier answers a second delivery carrying the same key for the same agent inside its
+    deduplication window (`CR_IDEMPOTENCY_WINDOW_S`, 24h by default) with the FIRST accept — same
+    message id, nothing stored (docs/openapi.yaml, inboxDeliver). That is what makes a retry after
+    a lost answer a retry and not a second result, so the key is derived from the DISPATCH alone:
+    never from the run's timing and never from the attempt count.
+    """
+    base = dispatch_key(dispatch) or str(result.get("dispatch_id") or "")
+    if not base:
+        base = str(result.get("corr_id") or "") or "no-id"
+    return f"{base}:result"[:IDEMPOTENCY_KEY_MAX]
+
+
+def result_reply(status, summary, tail=""):
+    """`reply_b64`: the text the scheduler records on the tick, base64 of UTF-8.
+
+    It travels base64 for the same reason the directive does — the relay's control-key pre-match
+    refuses prose that quotes JSON (`stringified_json`) and a harness report routinely does — and
+    the scheduler decodes `reply_b64` first (`dispatchReplyText`), so this is the one field that
+    reaches the tick row as the node's own words.
+    """
+    text = f"node result: {status} — {summary}"
+    tail = (tail or "").strip()
+    if tail:
+        text += "\n" + tail
+    return base64.b64encode(text[:REPLY_MAX_CHARS].encode("utf-8")).decode("ascii")
+
+
 def run_harness(ident, prompt, timeout_s, values=None):
     """Run the harness once. Returns (exit_code, seconds, stdout, stderr, note).
 
@@ -961,13 +1009,24 @@ def run_gate(clone, gate, timeout_s):
     return completed.returncode, time.time() - started, ""
 
 
-def refusal(ident, dispatch, reason, detail):
+def refusal(ident, dispatch, reason, detail, in_reply_to=""):
     """Build a refusal result for a dispatch this node will not execute."""
+    summary = f"refused by {reason}: {detail}"
     return {
         "env_version": 1,
         "dispatch_id": str(dispatch.get("dispatch_id") or ""),
         "corr_id": str(dispatch.get("corr_id") or ""),
+        # The scheduler's PRIMARY correlation key: the relay message id this dispatch arrived
+        # under. corr_id is the join key the scheduler mints; both are echoed verbatim.
+        "in_reply_to": str(in_reply_to or ""),
         "status": "refused",
+        # `ok` is the SCHEDULER'S verdict field, not a restatement of this envelope's status:
+        # dispatchReplyVerdict() reads `ok` and treats its ABSENCE as success, so a refusal that
+        # only said status=refused would close the tick as completed (specs/ENVELOPE.md
+        # §Correlation and idempotency).
+        "ok": False,
+        "error": summary,
+        "reply_b64": result_reply("refused", summary),
         "host_identity": socket.gethostname(),
         "harness": {"name": ident.harness_name},
         "exit_codes": [],
@@ -1148,8 +1207,14 @@ def print_brief_digest(path):
     return 0
 
 
-def process(dispatch, ident, signer, args, seen):
-    """Handle ONE dispatch. Returns (rows_ok, result_dict or None, message_ids_to_ack)."""
+def process(dispatch, ident, signer, args, seen, in_reply_to=""):
+    """Handle ONE dispatch. Returns (rows_ok, result_dict or None, message_ids_to_ack).
+
+    `in_reply_to` is the relay message id the dispatch arrived under. It is echoed on the result
+    so the scheduler can correlate on its PRIMARY key (`payload["in_reply_to"] == receipt
+    .MessageID`) as well as on `corr_id` — a result that names neither is residue, and residue
+    never completes a tick.
+    """
     dispatch_id = str(dispatch.get("dispatch_id") or "")
     corr_id = str(dispatch.get("corr_id") or "")
     key = dispatch_key(dispatch)
@@ -1174,6 +1239,7 @@ def process(dispatch, ident, signer, args, seen):
             dispatch,
             "text_b64",
             "dispatch carries a `text_b64` that does not decode to UTF-8 text",
+            in_reply_to=in_reply_to,
         )
         return False, result, True
     if not text:
@@ -1182,7 +1248,13 @@ def process(dispatch, ident, signer, args, seen):
             f"{label} carries no `text` — a dispatch without an instruction is a bug, "
             f"refusing rather than inventing one",
         )
-        result = refusal(ident, dispatch, "brief", "dispatch carries no `text`")
+        result = refusal(
+            ident,
+            dispatch,
+            "brief",
+            "dispatch carries no `text`",
+            in_reply_to=in_reply_to,
+        )
         return False, result, True
 
     # The digest is the node's only in-flight integrity check, so it must cover what the node will
@@ -1191,7 +1263,9 @@ def process(dispatch, ident, signer, args, seen):
     verdict, detail = brief_digest_verdict(dispatch, text)
     if verdict == "refuse":
         bad("brief_digest", f"{label} {detail}")
-        result = refusal(ident, dispatch, "brief_digest", detail)
+        result = refusal(
+            ident, dispatch, "brief_digest", detail, in_reply_to=in_reply_to
+        )
         return False, result, True
     if verdict == "bound":
         ok(
@@ -1225,6 +1299,7 @@ def process(dispatch, ident, signer, args, seen):
             dispatch,
             "brief_project",
             f"dispatch project {claimed_project!r} != node project {ident.project!r}",
+            in_reply_to=in_reply_to,
         )
         return False, result, True
     ok("brief_project", f"{label} {ident.project or '?'} is this node's project")
@@ -1242,6 +1317,7 @@ def process(dispatch, ident, signer, args, seen):
                 dispatch,
                 "brief_workdir",
                 f"workdir {workdir!r} is not inside {ident.repo_path!r}",
+                in_reply_to=in_reply_to,
             )
             return False, result, True
         ok("brief_workdir", f"{workdir} is inside the clone")
@@ -1252,7 +1328,13 @@ def process(dispatch, ident, signer, args, seen):
     if var_problems:
         for problem in var_problems:
             bad("vars", f"{label} {problem}")
-        result = refusal(ident, dispatch, "vars", "; ".join(var_problems)[:500])
+        result = refusal(
+            ident,
+            dispatch,
+            "vars",
+            "; ".join(var_problems)[:500],
+            in_reply_to=in_reply_to,
+        )
         result["vars"] = section5_receipt(values)
         return False, result, True
     if values:
@@ -1295,50 +1377,94 @@ def process(dispatch, ident, signer, args, seen):
     code, seconds, stdout, stderr, note = run_harness(ident, text, wall, values)
     if note:
         bad("harness", f"{label} {note}")
-        result = refusal(ident, dispatch, "harness", note)
+        result = refusal(ident, dispatch, "harness", note, in_reply_to=in_reply_to)
+        # A harness that could not run is a FAILED result, not a refusal of the brief: the
+        # dispatch was accepted and the work did not happen. `ok` stays false so the scheduler
+        # closes the tick as FAILED with this reason instead of as a success.
         result["status"] = "failed"
+        result["ok"] = False
+        result["error"] = note
+        result["reply_b64"] = result_reply(
+            "failed", f"harness did not complete — {note}"
+        )
         result["wall_s"] = round(seconds, 1)
         result["vars"] = section5_receipt(values)
         return False, result, True
     ok("harness", f"{label} exit {code} in {seconds:.1f}s (wall limit {wall}s)")
 
     gate_exit = None
+    gate_expect = 0
     gate = dispatch.get("gate")
     if isinstance(gate, dict):
         gate_exit, gate_seconds, gate_note = run_gate(ident.repo_path, gate, wall)
         if gate_note:
             bad("gate", f"{label} {gate_note}")
         else:
-            expect = gate.get("expect_exit", 0)
-            row = ok if gate_exit == expect else bad
+            gate_expect = gate.get("expect_exit", 0)
+            row = ok if gate_exit == gate_expect else bad
             row(
                 "gate",
-                f"{label} `{gate['cmd']}` exit {gate_exit} (expected {expect}) in {gate_seconds:.1f}s",
+                f"{label} `{gate['cmd']}` exit {gate_exit} (expected {gate_expect}) in {gate_seconds:.1f}s",
             )
 
-    failed_status = code != 0 or (
-        gate_exit is not None and gate_exit != (gate or {}).get("expect_exit", 0)
+    # The node's own reasons, in the node's own words: this is what the scheduler records as the
+    # tick's failure text when `ok` is false, and what an operator reads instead of guessing at an
+    # exit code.
+    reasons = []
+    if code != 0:
+        reasons.append(f"harness exit {code}")
+    if gate_exit is not None and gate_exit != gate_expect:
+        reasons.append(
+            f"gate `{gate.get('cmd')}` exit {gate_exit}, expected {gate_expect}"
+        )
+    failed_status = bool(reasons)
+    reason_text = "; ".join(reasons)
+    status = "failed" if failed_status else "completed"
+
+    branch = git_field(ident.repo_path, "rev-parse", "--abbrev-ref", "HEAD")
+    commit = git_field(ident.repo_path, "rev-parse", "HEAD")
+    summary = (
+        f"dispatch={dispatch_id or '?'} corr={corr_id or '?'} host={socket.gethostname()} "
+        f"harness={ident.harness_name} exit={code} "
+        f"gate={gate_exit if gate_exit is not None else '-'} "
+        f"branch={branch or '-'} commit={(commit or '-')[:12]} wall={seconds:.1f}s"
     )
+    if reason_text:
+        summary += f" — {reason_text}"
     result = {
         "env_version": 1,
         "dispatch_id": dispatch_id,
         "corr_id": corr_id,
-        "status": "failed" if failed_status else "completed",
+        # The relay message id the dispatch arrived under — the scheduler's PRIMARY correlation
+        # key. corr_id is the join key it mints; both travel verbatim so a result that names
+        # either one is an answer to this hand-out and nothing else is.
+        "in_reply_to": str(in_reply_to or ""),
+        "status": status,
+        # `ok` is the scheduler's verdict (`dispatchReplyVerdict`). Its ABSENCE reads as success,
+        # so a failed run must say so HERE and not only in `status` — a status-only failure would
+        # complete the tick as a success (CF-211).
+        "ok": not failed_status,
+        "reply_b64": result_reply(
+            status, summary, one_line(stdout or stderr, REPLY_TAIL_CHARS)
+        ),
         "host_identity": socket.gethostname(),
         "harness": {"name": ident.harness_name},
         # The §5 run receipt: name + set/unset + length, never a value, so two runs compare.
         "vars": section5_receipt(values),
         "exit_codes": [code],
         "gate_exit": gate_exit,
-        "branch": git_field(ident.repo_path, "rev-parse", "--abbrev-ref", "HEAD"),
-        "commit": git_field(ident.repo_path, "rev-parse", "HEAD"),
+        "branch": branch,
+        "commit": commit,
         "artifacts": [],
         "wall_s": round(seconds, 1),
         "finished_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
+    if reason_text:
+        # Read by the scheduler's verdict BEFORE `reply_b64`, so the reason is the short one
+        # rather than the whole transcript.
+        result["error"] = reason_text
     tail = one_line(stderr or stdout, 300)
     if tail:
-        # The spec has no free-text field; the evidence rides in `refusal` only on refusal.
         say(f"  NOTE  harness output — {tail}")
     return not failed_status, result, True
 
@@ -1351,9 +1477,38 @@ def dispatch_wall(dispatch, args):
     return args.harness_wall or DEFAULT_HARNESS_WALL
 
 
-def deliver(signer, ident, target, result, args):
-    body = json.dumps({"payload": result}, separators=(",", ":")).encode()
-    path = f"/agents/{target}/inbox"
+def deliver(signer, ident, target, result, args, in_reply_to="", idempotency_key=""):
+    """POST one result envelope into `target`'s inbox. True only on an accepted delivery.
+
+    The body is the documented deliver shape (crier `docs/openapi.yaml` → `inboxDeliver`): the
+    envelope under `payload` (REQUIRED, and a JSON object), `sender` naming the agent that produced
+    it, `request_id` as the correlation passthrough, and `idempotency_key` as the retry key.
+
+    A blank target is never posted: `/agents//inbox` addresses nobody, and a result addressed to
+    nobody is a silent loss — so that is a named row here instead of a request.
+    """
+    target = str(target or "").strip()
+    if not target:
+        bad(
+            "reply",
+            "the dispatch names no reply_to and --reply-to is empty — a result addressed to "
+            "nobody is dropped, so nothing was posted",
+        )
+        return False
+    envelope = dict(result)
+    if in_reply_to and not envelope.get("in_reply_to"):
+        envelope["in_reply_to"] = str(in_reply_to)
+    key = (idempotency_key or delivery_key({}, envelope))[:IDEMPOTENCY_KEY_MAX]
+    body = json.dumps(
+        {
+            "payload": envelope,
+            "sender": ident.agent,
+            "request_id": str(envelope.get("corr_id") or ""),
+            "idempotency_key": key,
+        },
+        separators=(",", ":"),
+    ).encode()
+    path = f"/agents/{urllib.parse.quote(target, safe='')}/inbox"
     status, answer = request(
         "POST",
         f"{ident.url}{path}",
@@ -1363,16 +1518,21 @@ def deliver(signer, ident, target, result, args):
     )
     if status in (200, 201):
         try:
-            message_id = (json.loads(answer) or {}).get("id", "?")
+            accepted = (json.loads(answer) or {}).get("id", "?")
         except Exception:  # noqa: BLE001 - the status is the measurement
-            message_id = "?"
+            accepted = "?"
         ok(
             "reply",
-            f"POST {path} -> {status:03d} (message {message_id}, corr_id "
-            f"{result.get('corr_id') or '?'} preserved)",
+            f"POST {path} -> {status:03d} (message {accepted}, corr_id "
+            f"{envelope.get('corr_id') or '?'} preserved, status "
+            f"{envelope.get('status') or '?'}, key {key})",
         )
         return True
-    bad("reply", f"POST {path} -> {status:03d} ({one_line(answer, 120) or 'no body'})")
+    bad(
+        "reply",
+        f"POST {path} -> {status:03d} ({one_line(answer, 120) or 'no body'}) — the dispatch "
+        f"stays unacked so the result is retried (key {key})",
+    )
     return False
 
 
@@ -1496,9 +1656,10 @@ def once(ident, args):
         return 0
 
     seen = {} if args.dry_run else load_seen(ident.seen_path)
-    acked, results, all_ok = [], [], True
+    results, all_ok = [], True
     for message in messages:
         raw = message.get("payload") or ""
+        message_id = str(message.get("id") or "")
         try:
             decoded = base64.b64decode(raw) if isinstance(raw, str) else bytes(raw)
             dispatch = json.loads(decoded)
@@ -1517,12 +1678,18 @@ def once(ident, args):
             )
             all_ok = False
             continue
-        good, result, should_ack = process(dispatch, ident, signer, args, seen)
+        good, result, should_ack = process(
+            dispatch, ident, signer, args, seen, in_reply_to=message_id
+        )
         all_ok = all_ok and good
-        if result is not None:
-            results.append((dispatch, result))
-        if should_ack:
-            acked.append(message.get("id"))
+        if result is not None and should_ack:
+            key = dispatch_key(dispatch)
+            if key:
+                # Recorded at EXECUTION, not at delivery: a crash — or an answer lost between
+                # here and the relay — must re-DELIVER this result, never re-run the work
+                # (specs/ENVELOPE.md §Correlation and idempotency).
+                seen[key] = result
+            results.append((dispatch, result, message_id))
 
     if args.dry_run:
         say("")
@@ -1532,13 +1699,8 @@ def once(ident, args):
         )
         return 0 if all_ok else 1
 
-    delivered_ok = True
-    for dispatch, result in results:
-        target = dispatch.get("reply_to") or args.reply_to
-        delivered_ok = deliver(signer, ident, target, result, args) and delivered_ok
-        key = dispatch_key(dispatch)
-        if delivered_ok and key:
-            seen[key] = result
+    # The result cache is written BEFORE the first delivery, so the execution is on disk even if
+    # the process dies mid-delivery and the message comes back.
     if results:
         try:
             save_seen(ident.seen_path, seen)
@@ -1548,17 +1710,45 @@ def once(ident, args):
                 f"could not record the seen-cache at {ident.seen_path} ({exc})",
             )
 
+    # Delivered FIRST, acked second, and each message is judged on ITS OWN delivery: one failed
+    # result must not leave an unrelated message unacked, and one accepted result must not ack a
+    # message whose delivery never landed.
+    delivered_ok = True
+    ackable = []
+    for dispatch, result, message_id in results:
+        target = dispatch.get("reply_to") or args.reply_to
+        delivered = deliver(
+            signer,
+            ident,
+            target,
+            result,
+            args,
+            in_reply_to=message_id,
+            idempotency_key=delivery_key(dispatch, result),
+        )
+        delivered_ok = delivered and delivered_ok
+        if delivered and message_id:
+            ackable.append(message_id)
+
     # acking is the last step on purpose: a crash between execution and delivery causes
-    # redelivery, and the seen-cache makes that redelivery idempotent.
+    # redelivery, and the seen-cache plus the relay's idempotency key make that redelivery
+    # deliver the SAME result instead of running the work again.
     acked_ok = True
-    if acked and delivered_ok:
-        acked_ok = ack(signer, ident, lease_id, acked, args)
-    elif acked:
+    undelivered = [mid for _, _, mid in results if mid and mid not in ackable]
+    if ackable:
+        acked_ok = ack(signer, ident, lease_id, ackable, args)
+    if undelivered:
         warn(
             "ack",
-            f"{len(acked)} message(s) left unacked — their result did not reach the bus, "
+            f"{len(undelivered)} message(s) left unacked — their result did not reach the bus, "
             f"so redelivery is the safer outcome",
         )
+    elif results:
+        for message_id in (mid for _, _, mid in results if not mid):
+            warn(
+                "ack",
+                f"a message with no id cannot be acked (result for {message_id!r})",
+            )
 
     say("")
     if all_ok and delivered_ok and acked_ok:

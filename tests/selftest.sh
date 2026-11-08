@@ -6297,5 +6297,61 @@ fi
 rm -rf "$cf224"
 # END cf224-transport
 
+# ch:trace row=CF-211 spec=specs/ENVELOPE.md#result-node--reply_to-inbox wave=none:serial-worker test=tests/test_bus_result_delivery.py doc=specs/ENVELOPE.md prompt=none:worker-brief evidence=tests/test_bus_result_delivery.py witness=none:local-fixture verdict=none:foreman-runs-judge commit=none:self-referential-hash memory=none:foreman-closeout
+say "63. a node result completes a tick, fails one, and a wrong corr_id completes nothing (CF-211)"
+# The scheduler always had the RECEIVING half: dispatch_leg.go polls its own inbox, correlates by
+# in_reply_to / corr_id, acks and derives a verdict. What had never been exercised is the
+# PRODUCING half — and two things were missing from it. The scheduler reads `payload["ok"]` and
+# treats its ABSENCE as success, so a node that only said `"status": "failed"` had its failure
+# closed as a COMPLETED tick; and a result was cached only AFTER delivery, so a refused or lost
+# delivery re-ran the harness instead of re-sending the result. The fixture drives the REAL worker
+# CLI against one stub relay that speaks crier's documented inbox surface, and models the
+# scheduler's consumer from its own code (pinned by anchors in dispatch_leg.go when a checkout is
+# present) plus the scheduler's own test names. No network, no credential, no live node.
+cf211=$(mktemp -d)
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_bus_result_delivery.py" \
+     >"$cf211/out" 2>&1; then
+  say "  PASS  completed + failed results POST to reply_to before the ack; a mismatched corr_id expires the tick and is named; a refused/lost delivery retries with the same key and never re-runs the work"
+else
+  say "  FAIL  the result leg on the producing side (tests/test_bus_result_delivery.py)"
+  fails=$((fails+1))
+  sed 's/^/    | /' "$cf211/out"
+fi
+# ARM (red control): the SAME fixture against the revision this row was raised on. It must show no
+# `ok`/`in_reply_to`/idempotency key, a failed gate read as a completed tick, and a redelivery that
+# re-runs the harness — pointed at the fixed worker the control fails, so it discriminates.
+if git -C "$HERE" show 9af58a0:scripts/node-bus-worker.py > "$cf211/node-bus-worker.py" 2>/dev/null; then
+  if CF_BUS_WORKER_SOURCE="$cf211/node-bus-worker.py" CF_BUS_RESULT_PREFIX_CONTROL=1 \
+       PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_bus_result_delivery.py" \
+       >"$cf211/prefix" 2>&1; then
+    say "  PASS  pre-fix 9af58a0 completes a failed gate and re-runs on redelivery (fixture detects CF-211)"
+  else
+    say "  FAIL  pre-fix control did not reproduce the result-leg defect"
+    fails=$((fails+1))
+    sed 's/^/    | /' "$cf211/prefix"
+  fi
+else
+  say "  FAIL  pre-fix source unavailable (git show 9af58a0:scripts/node-bus-worker.py)"
+  fails=$((fails+1))
+fi
+# The contract the arms assert is only the contract if the spec states it: the verdict field, the
+# path home, the correlation rule, the durable-delivery rule and the ack-after-delivery rule.
+cf211_doc_missing=""
+for cf211_anchor in \
+  '`ok` is the field the scheduler reads' \
+  'POSTs the result envelope into the inbox named by the dispatch' \
+  'never completes a tick' \
+  'idempotency_key` derived from the **dispatch alone**' \
+  'only after** its result' ; do
+  grep -Fq -- "$cf211_anchor" "$HERE/specs/ENVELOPE.md" || cf211_doc_missing="$cf211_doc_missing [$cf211_anchor]"
+done
+if [ -z "$cf211_doc_missing" ]; then
+  say "  PASS  specs/ENVELOPE.md states the verdict field, the path home, the correlation rule, the delivery budget/key and the ack-after-delivery rule"
+else
+  say "  FAIL  specs/ENVELOPE.md no longer documents:$cf211_doc_missing"
+  fails=$((fails+1))
+fi
+rm -rf "$cf211"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
