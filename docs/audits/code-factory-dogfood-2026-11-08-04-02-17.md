@@ -187,3 +187,12 @@ them is a surface either row's acceptance criteria measures (`node_hygiene.py`,
 `node_gateway_auth.py` and `project-node.sh` are unchanged), so CF-387 and CF-388 are neither stale
 nor fixed at the published tip.
 
+**Judging decision, stated so the next fire does not have to guess.** No GitReins task was created
+and no `task complete` was run for this fire. The deliverable is bookkeeping-only (two `task_created`
+events plus this records line), it has no board row of its own to bind a verdict to, and two sibling
+judges were live in the same checkout at the time — the project skill serialises judges, so a third
+concurrent judge would have collided rather than graded. The commit's own Tier 1 battery ran through
+the commit guard and passed (`Tier 1: DEGRADED PASS (skips: lint=no staged files)`, `tests (full) ✓`,
+`secrets ✓`; `guard-20261108T043610.598702Z.log`). This tick's lifecycle for the rows it filed
+(`CF-387`, verdict `9ccb5dfd` = PASS at `86d13c4`, published by `949e116`) was already complete and is
+verified above, not re-run.
