@@ -13,16 +13,61 @@
 
 ## 2. Purpose, authority and position
 
-Authenticates the fleet to the forge without a long-lived token in argv. It decides how a GitHub
-**App installation token** is minted, cached and refreshed. It may not decide which repos the fleet
-may touch — that is the App installation scope. (It does **not** mint the per-dispatch scoped token
-M11 consumes, nor the node tokens M12 admits — see §12.)
+Authenticates the fleet to the forge without a long-lived token in argv. M7 is **forge credential
+management**: per-owner/instance app registration/installation, token minting scoped to the
+repositories and permissions a job requires, delivery to Bunker nodes, and the full
+issue/expire/renew/revoke/decommission lifecycle. It is not the installation of a Git server on a
+Bunker, and it does not decide which repos the fleet may touch — that is the app installation
+scope. (It does **not** mint the per-dispatch scoped token M11 consumes, nor the node tokens M12
+admits — see §12.)
+
+**Forge coverage is an extensible contract, not a GitHub-only assumption.** GitHub is the
+confirmed MVP forge; the module defines a forge/auth **contract** (register / install / pair /
+authorize / issue / deliver / refresh / revoke / offboard) with provider adapters behind it, and
+GitLab is the required first equivalent. Ambiguous dictated forge names are **resolved before any
+product is named** — an unrecognized or phonetically ambiguous host name is a clarification
+question, not a silent substitution.
 
 **What breaks if this module is absent.** The fleet cannot authenticate without a human PAT — or
 a token leaks into `ps` output (FACT-05: credentials travel as file paths, never argv values).
 
 **What breaks if it lies.** A mint that prints the token value is a leak; a refresh that serves a
 stale token while reporting fresh silently pushes with an expired credential.
+
+**Required behavior (normative).** Approved target behavior governs; the script audit in §3–§13
+is implementation coverage, not the requirement.
+
+- **Per-owner/instance app identity.** Each owner/deployment registers and installs its **own**
+  app — account/organization prerequisites, registration versus installation, authorization, key
+  generation, repository selection, setup pairing and success checks are specified steps. The
+  customer-owned app model is not silently replaced by a shared fleet identity.
+- **Mappings, not conventions.** Versioned mapping tables bind forge host/owner, app and
+  installation ids, repository ids, project/lane/job role, Bunker server/node, credential
+  reference, required permissions, issuer/renewal owner and effective state. Unmapped or
+  excessive scope is denied **before issuance**.
+- **Token narrowing is a mint-time duty.** Token requests are narrowed to the required
+  repositories and permissions in the request body. **Checking installation coverage alone does
+  not narrow the token** — a mint without a repository/permission restriction inherits the
+  installation's full repo set and granted permissions, which is a defect, not a default.
+- **Signing authority stays on the control side.** The App signing key never leaves the
+  control-host credential issuer; nodes receive only the scoped runtime credentials and Git/client
+  configuration they need, through a defined delivery/activation contract.
+- **Complete lifecycle with triggers.** Deployment/onboarding/rebuild/resume, pre-dispatch
+  validity checks, renewal-before-expiry, **permission-change detection** (app or installation
+  permission/repo changes reconcile or revoke existing caches), cache validity, and
+  decommission/offboarding are each specified with owner, trigger, success/failure/unknown
+  results and recovery. **Token-file age alone is not validity**: issuer expiry metadata,
+  remaining-lifetime margin, revocation and scope identity are checked before reuse; expiry proof
+  is different from explicit revocation, and a new mint or file replacement is not revocation
+  evidence.
+- **Credential domains are separate.** M7's app-token helper, M11's per-dispatch scope helper and
+  the node credential consumers are distinct producers with distinct policies; **none of them is
+  proxy-token issuance** (M12's inference node tokens are a separate domain). Naming a helper is
+  naming one path, not collapsing the domains.
+- **Complete settings, mappings and metrics.** Every credential operation carries its settings
+  (paths, modes, margins, endpoints), its mapping row and its metrics (issue/check/delivery/
+  renew/revoke outcomes and durations, expiry headroom, refused scopes, stale mappings, partial
+  activations) — grep absence in the current scripts is coverage evidence, not the metric design.
 
 ## 3. Submodule inventory
 

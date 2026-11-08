@@ -9,14 +9,24 @@
 | Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; `panel_loop.py` was rewritten for `--groups`/`--parallel` and `panel_supervise.sh`/`reap_orphan_writers.py` were added in `08a2c8a..fbc19cb`; every M6 file:line re-pinned) |
 | Language / runtime | Python 3.14.9 (measured) |
 | Owner lane | code-factory (control host) |
-| Status | **UNVERIFIED** — `master_doc_check.py` (268 lines) read in full and its FAIL reproduced; the rest of the pipeline (`master_doc_fill.py`, `gen_nasa_handbook.py`, `master_doc_panel.py`, `gen_unit_map.py`, …) not read line-by-line; the gate reads `MASTER-DOC: FAIL`. **The legacy fill/render/panel pipeline is UNBUILDABLE against these M-numbered chapters** (B13): `master_doc_check.py:188`, `gen_nasa_handbook.py:253-260` and `master_doc_fill.py:422` all select `[0-9][0-9]-*.md`, which does not match `M0-…-*.md`, so the legacy pipeline cannot select or deliver these chapters. **The chapter-aware gate is `handbook_spine.py` (S9)**, which *does* select `M*.md` and exits 1 on any finding (`python3 scripts/handbook_spine.py` → `chapters=13 canonical contracts=18 findings=0`, exit 0); the legacy fill/render/check pipeline is retired for the M-numbered handbook, and the render-to-owner-artifact leg remains missing (CT-18 UNVERIFIED, §6) |
+| Status | **UNVERIFIED** — `master_doc_check.py` (268 lines) read in full and its FAIL reproduced; the rest of the pipeline (`master_doc_fill.py`, `gen_nasa_handbook.py`, `master_doc_panel.py`, `gen_unit_map.py`, …) not read line-by-line; the gate reads `MASTER-DOC: FAIL`. **The legacy fill/render/panel pipeline is UNBUILDABLE against these M-numbered chapters** (B13): `master_doc_check.py:188`, `gen_nasa_handbook.py:253-260` and `master_doc_fill.py:422` all select `[0-9][0-9]-*.md`, which does not match `M0-…-*.md`, so the legacy pipeline cannot select or deliver these chapters. **The chapter-aware gate is `handbook_spine.py` (S9)**, which *does* select `M*.md` and exits 1 on any finding (`python3 scripts/handbook_spine.py` → `chapters=13 canonical contracts=18 findings=0`, exit 0); the legacy fill/render/check pipeline is retired for the M-numbered handbook, the supported render path is the manifest-driven `build_book.py` (§2), and the owner-delivery leg (CT-18) keeps its UNVERIFIED state until a full run's evidence closes it (§6, §7) |
 
 ## 2. Purpose, authority and position
 
-The system's description of itself, and the gate that checks the *structure* of that description.
-`master_doc_check.py` validates headings, locator existence/bounds and citation requirements, then
-**reports the document's declared status — it does not recompute it** (F6-2).
-`panel_loop.py` is the loop this handbook chapter is a product of.
+The system's description of itself, and the gates that check that description on its way to the
+owner.
+
+**The supported build path is the manifest-driven builder (redline correction — this chapter
+previously documented only the retired legacy renderer).** `scripts/build_book.py` reads the
+`docs/handbook/BOOK.yaml` manifest (document id/issue, parts, chapters, figures, tables), runs the
+source lint (`handbook_lint.py`), assembles each sheet, renders the PDF and gates the render: the
+fit line (exit 3 on overflow), the furniture check (running head on every page, notice blocks
+present), the skill's external checker (page size, monochrome-ink, font census, 300 dpi tiles) and
+a font census of the finished artifact. The legacy `gen_nasa_handbook.py` / `master_doc_fill.py` /
+`master_doc_check.py` pipeline selects `[0-9][0-9]-*.md` and cannot see these `M*.md` chapters at
+all; it is **retired for this book**, and `master_doc_check.py` survives only as the unit-section
+gate. `panel_loop.py` is the loop this handbook chapter is a product of, and
+`handbook_spine.py` (S9) is the cross-chapter consistency gate that does select `M*.md`.
 
 **What breaks if this module is absent.** The gate that grades the description is gone: a document
 can lose its structure, cite lines that no longer exist, or stamp VERIFIED without locators, and
@@ -34,6 +44,40 @@ the gate now names at `:191-209` instead of silently passing.
   live result — `44 module(s): 37 VERIFIED, 50 error(s)`, `MASTER-DOC: FAIL` — shows 37 unit sections
   stamped VERIFIED alongside 50 errors: the stamp is the document's own claim, re-emitted, not a
   re-derivation of truth.
+
+**Required behavior (normative).** Approved target behavior governs; the script audits and dated
+measurements in §3–§13 are implementation coverage, not the requirement.
+
+- **Six review stages, distinct and separately owned.** The documentation pipeline separates:
+  (1) **generation**, (2) **structural checks**, (3) **semantic/buildability review**,
+  (4) **evidence review**, (5) **visual checks**, and (6) **open blockers and owner acceptance**.
+  Each stage has its own owner, inputs, result vocabulary and failure paths; no stage's green
+  implies another's.
+- **A checker exit-zero is not acceptance, and a reviewer budget-stop is not acceptance.**
+  `panel_loop.py` exits 0 on a reached cap or a no-new-defect-class clean streak (§5) while
+  blocking findings can remain open, and a structural gate's exit 0 says nothing about semantic
+  truth (F6-2). Owner acceptance is a recorded human decision bound to the exact artifact
+  identity, issued only when the open-blocker list is empty or explicitly waived.
+- **Multi-page sections for engineering depth.** Chapters carry complete engineering contracts,
+  settings, credentials, required metrics and recovery in multi-page sections, preserving the
+  original nasa-handbook standard (clear technical idea, operating sequence, explanatory diagrams,
+  purposeful tables and procedure cards, printed page/figure/table numbering, dated running
+  furniture, monochrome print quality). Page count alone proves nothing.
+- **Inventories after behavior.** Large source-audit and revision inventories are placed **after**
+  the required behavior they cover, never before it; they are coverage evidence, not the
+  specification.
+- **Staged, revisioned output with exact-artifact checks.** Generated artifacts are staged with
+  their retained gate reports; a release is published only when its required checks are satisfied;
+  every delivery binds the source/dependency/manifest revisions, dirty-state status and the
+  artifact's exact identity (hash, page count, issue date).
+- **Rendered-page and tile inspection.** Blank Page fields, orphan headings/continuations,
+  heading-only figure pages and clipped schemas are caught on the **rendered** pages and 300 dpi
+  tiles — labels, arrows and collisions inspected, not inferred from source; fit, fonts and page
+  size are enforced gates, not a printed census.
+- **Authority.** Approved target behavior governs the specification; source locators and current
+  counters show implementation coverage and deviations. A mismatch is recorded as
+  implementation/document nonconformance, not adopted as the requirement (BOOK.yaml's "code beats
+  this document" phrasing describes as-built evidence priority, not normative authority).
 
 ## 3. Submodule inventory
 

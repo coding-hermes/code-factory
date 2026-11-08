@@ -13,10 +13,16 @@
 
 ## 2. Purpose, authority and position
 
-Keeps the checks able to fail and the disk able to serve. `reclaim_disk.py` reaps fixed
-user-space caches and expired node job/clone directories; `check_scan_scope.py` exists so a
-gitleaks claim cannot be stated without naming its `--log-opts` scope. It may not decide what
-counts as evidence to retain — a TTL is not an evidence-reference exclusion rule.
+Keeps the checks able to fail and the disk able to serve. **M8's implemented scope is narrow and
+must stay honestly narrow**: `reclaim_disk.py` reaps fixed user-space caches and expired node
+job/clone directories, and `check_scan_scope.py` exists so a gitleaks claim cannot be stated
+without naming its `--log-opts` scope. **Cache/job cleanup plus scan-scope text checking is not
+system-wide safety** — it is not a package uninstaller, a secret scanner or a factory-wide safety
+layer. **Package uninstall belongs to the harness lifecycle (M5)**, not to this module's cleanup
+classes. M8 defines the cleanup policy and triggers, and coordinates the protection of active
+work, shared infrastructure, credentials, retained evidence and archives with the modules that own
+them (M1 disk admission, M3 commit gates, M5 harness lifecycle, M7 credentials). It may not decide
+what counts as evidence to retain — a TTL is not an evidence-reference exclusion rule.
 
 **What breaks if this module is absent.** The checks that must be able to fail stop failing, and
 the disk the fleet must not fill gets filled.
@@ -26,6 +32,47 @@ destroys the evidence of record. The TTL governs *age*, not *citation*; the two 
 conflated (CF-290, CF-368). And a scan-scope check that passes on a surface it never read proves
 nothing was policed — CF-307 makes that branch unreachable, and a surface that *was* read and is
 empty now says so in its own words (see F8-3).
+
+**Required behavior (normative).** Approved target behavior governs; the two-tool audit in §3–§13
+is implementation coverage, not the safety requirement.
+
+- **Safe candidate selection.** Cleanup eligibility is an allowlisted-class decision: cache versus
+  package/image/volume versus job data; root and mount boundaries; **ownership, active-run/lease
+  and reference checks** before any target is eligible. The TTL is one condition, never the whole
+  eligibility decision — directory mtime alone does not prove a run inactive, a cache unused or a
+  directory unreferenced by completion evidence. Protected paths, retained evidence, unpushed/
+  uncommitted work and shared/read-only caches are excluded by rule.
+- **Dry-run versus actual deletion; logical versus measured bytes.** Dry-run mutates nothing and
+  reports **projected** totals distinctly labeled; apply reports **logical** file bytes reclaimed,
+  which is not a measured free-space delta — the caller's post-cleanup free-space recheck is the
+  physical measurement and is preserved as a distinct fact.
+- **Partial failure and recovery.** Bounded deletion work with defined behavior for disappearing,
+  unreadable or open targets, low disk mid-run, cancellation and **partial completion** in the
+  result contract; skipped/refused/protected/active/unknown targets carry reason codes. When safe
+  cleanup cannot restore the resource floor, admission stops and escalates — the policy never
+  solves pressure by deleting valid evidence or live workloads.
+- **Safety metrics.** Pre/post free bytes and inode headroom, planned versus actual reclaimed
+  logical bytes and measured capacity gain, cleanup attempts/outcomes/durations, skipped/refused
+  targets by reason, partial errors and admission failures — with owners, units and readout.
+  Absence of counters in the current scripts is coverage evidence, not the metric design.
+- **Bunker baseline protection with Terminal Jail disabled.** The Bunker must satisfy baseline
+  protection **on its own**, documented from its actual deployment mode — not asserted from
+  security prose: host-provisioning prerequisites, effective capabilities, **egress/network policy
+  (defaults open/shared until configured)**, **per-file versus aggregate disk behavior (the disk
+  limit is per-file, not a usage quota)**, and the limits of each execution path (image-backed
+  fresh exec, persistent container, detached unit). Deployment conformance is measured on the
+  deployed host; source review alone does not establish it.
+- **Optional Terminal Jail — disabled by default, enforcing when enabled.** Terminal Jail is
+  optional and off until an operator enables and configures it. When enabled, covered Hermes
+  terminal/tool paths run through the enforcing wrapper with **no unguarded fallback**: required
+  enforcement refuses when the wrapper, policy or required capability is unavailable, and
+  unavailable-backend behavior is explicit policy, not a silent degrade. **The observer plugin's
+  presence proves no enforcement** — it logs, it does not wrap or block; enforcement requires the
+  standalone guarded executor path. **The workload cannot control the policy**: prevention of
+  unauthorized disablement or weakening by the workload is required, while authorized operator
+  configuration stays available. Terminal Jail does not replace retained-evidence policy,
+  credential scoping, acceptance judgment or publication proof — those owners keep their
+  obligations.
 
 ## 3. Submodule inventory
 
@@ -129,6 +176,8 @@ output (`reclaimed_bytes`/`reclaimed_mib` at `:121-123`), not emitted.
 
 ## 12. Cross-references
 
+- **Package uninstall is M5's, not M8's** — installed harnesses/toolchains are harness-lifecycle
+  operations (M5), and the reaper's cache/job classes must never silently extend to them.
 - M6 DOCUMENTATION owns `verify-patch.sh` (M6.S8), not M8.
 - M11 DISPATCHER's `.cf-jobs` dirs are outside this reaper's targets (F8-3). It is M11 — not M3 — that
   cites job/clone dirs as landing evidence; M3's `clone_lane.py` clones a *lane row*, not a git

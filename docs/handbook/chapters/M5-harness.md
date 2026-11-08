@@ -13,9 +13,14 @@
 
 ## 2. Purpose, authority and position
 
-Decides which harness a *resolved selection* names — `harness_resolve.py`, so "why would this run
-in Codex?" is answerable with `--explain`. It also installs harnesses at pins. It may not decide
-*what* the run does — that is the directive.
+M5 owns the **harness lifecycle** inside the Bunker: install, configure, update, start/stop/restart,
+uninstall and runtime packaging — with the effective settings, credentials and readiness evidence
+each operation needs. It may not decide *what* the run does — that is the directive — and, for the
+MVP, it does not decide *which* harness runs either: the user-approved MVP fixes **Hermes** (with
+the Oh My Hermes operating layer) for every lane, and harness **selection** belongs to the future
+Task Router, placed after Node and before Harness. `harness_resolve.py` remains a standalone
+selection facility with no production caller (F5-2), retained for that future mode — it is not the
+runtime authority, and the MVP does not wire it merely to make the inventory look complete.
 
 **What breaks if this module is absent.** The agent inside the node cannot code, and its commits
 are not graded. A harness counts as supported only when the conformance battery's legs pass on a
@@ -25,6 +30,53 @@ real node (`_facts.md` FACT-08).
 installs a wrong or tampered binary ("a version string is not evidence until it is measured",
 `install-gitreins.sh:12-13`). A silent acceptance of a credential value lets two lanes on one node
 contaminate each other (matrix §5).
+
+**Required behavior (normative).** Approved target behavior governs this chapter; the source
+inventory in §3 and the pin/verdict history are implementation coverage, not the requirement.
+
+- **Full lifecycle ownership.** Installation, configuration, update/upgrade, start/stop/restart,
+  uninstall and cleanup of harnesses on Bunker-hosted nodes are M5 operations, each with a named
+  caller, input, output, state change, idempotency rule and recovery path. Effective settings —
+  what the harness actually enforces after translating the factory request through environment,
+  config and CLI — are an M5 readback duty: accepted or printed settings must not silently differ
+  from enforced settings.
+- **Exact harness identity.** The MVP harness is Hermes at the measured pin (`HERMES_PIN=0.19.0`,
+  §5). The user's "Oh My Hermes" operating layer is **Oh My Hermes (omh)** — npm package
+  `oh-my-hermes`, source repository `rlaope/oh-my-hermes`, pinned-matrix version 4.0.5
+  (`specs/HARNESS-MATRIX.md:51`), a configuration/operating layer **over** Hermes, not a peer
+  engine. Five same-named forks exist, so provenance is verified before the integrated release is
+  named; the exact deployed build/pin is confirmed and re-pinned during implementation
+  reconciliation. A matrix row is a supported option, not a deployment fact.
+- **Per-Bunker execution context, mounts and persistence.** Every harness runs in a Bunker. Bunker
+  supplies **image-backed fresh exec by default and opt-in persistent containers**; M5 documents the
+  selected per-Bunker deployment profile: image/host/persistent context, the repository/worktree
+  mount and its read/write scope, and where installed packages, dependencies, caches,
+  configuration, sessions and evidence live. **A fresh image-backed exec starts from the image
+  rootfs: installs made into a fresh rootfs do not survive the next exec.** Anything that must
+  persist lives in a mounted home/cache/volume or in an opt-in persistent container — never in the
+  rootfs of an image-backed exec — and the profile states which lifecycle boundary (restart,
+  container replacement, upgrade, uninstall) preserves which class of state. Lifecycle recovery
+  (draining active sessions, configuration migration, rollback, failed/partial-install repair,
+  re-certification before admission) is specified per profile, not left to operator inference.
+- **Policy access.** The harness's tool/subprocess permissions, sandbox mode, network access and
+  resource controls are per-profile configuration with effective-value verification on the actual
+  invocation surface; a workdir under `$HOME` is an input-validation rule, not proof a tool stays
+  inside the project.
+- **DuckBrain integration.** Every Bunker carries DuckBrain and exposes the **same logical
+  project-memory view as the controller**; the harness's namespace/lane memory writes land in that
+  shared view (CT-09/CT-15 boundaries). Per-harness ad-hoc memory outside the shared namespace is
+  not a factory feature.
+- **Optional Terminal Jail.** Terminal Jail is optional and **disabled by default**; operators
+  explicitly enable and configure it. When enabled, M5's setup/configuration replaces the Hermes
+  ordinary Bash/terminal execution path with the guarded executor and provides **no unguarded
+  fallback** — covered execution paths refuse rather than run unwrapped when the wrapper, policy or
+  required capability is unavailable. It is never auto-enabled, and Bunker baseline protection does
+  not depend on it (M8 owns the safety-policy requirements).
+- **Real harness activity versus accepted/published work.** A conformance leg, smoke turn or live
+  session proves **real harness activity** — nothing more. **Accepted** (independent judgment) and
+  **published** (landed tree) are distinct downstream facts with distinct owners (M3 grading,
+  acceptance judgment, landing, board closure). Readiness evidence is likewise distinct from task
+  acceptance; neither may stand in for the other in board or memory records.
 
 **Finding F5-2.** `harness_resolve.py` is **not** the runtime resolver. A repo-wide search finds it
 referenced only by itself, `tests/selftest.sh` and `tests/test_harness_resolve.py` — no production
@@ -293,6 +345,9 @@ and conformance pass rate are answerable only by reading the leg rows.
 - M0 SHARED CONTRACT supplies `fetch_verified` (S5 `harness-vars.sh` is owned here, not M0).
 - M2 DISPATCH passes the CF_* set to the resolved harness at run time (via `node.json`, not the resolver).
 - M3 REPOSITORY owns the hook behaviour; `install-gitreins.sh` (S3) is the installer.
+- M8 SAFETY owns the safety-policy requirements for the optional Terminal Jail layer and the
+  cleanup policy for caches/job dirs; **package uninstall is an M5 lifecycle operation**, not an
+  M8 cleanup class. The future Task Router, not M5, owns harness selection.
 
 ## 13. Evidence of record
 
