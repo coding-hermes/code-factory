@@ -37,9 +37,10 @@ layers:
     name: EVIDENCE
     blurb: what a human reads
 
-# 27 components. `module` keys each box to its chapter (M0-M12); components outside the 13
+# 28 components. `module` keys each box to its chapter (M0-M12); components outside the 13
 # modules (the human, the model router, the gateway, the bunker daemon, the memory and session
-# stores) carry no module — the chapters name them boundary peers, not owned subsystems.
+# stores, the factory manager) carry no module — the chapters name them boundary peers, not
+# owned subsystems.
 components:
   - id: owner
     name: OPERATOR
@@ -80,6 +81,28 @@ components:
     owns: Mints the per-dispatch scoped GitHub token the dispatcher injects (M11 §3 S4)
     not: A separate minter from M7's github-app-token.py (M7 §12)
     impl: ['~/.hermes/scripts/fleet-gh-scope.py']
+  - id: manager
+    name: FACTORY MANAGER
+    role: deterministic IaC reconciliation
+    layer: control
+    tag: UNBUILT
+    owns: >-
+      The deterministic infrastructure-as-code control service — declared desired state and a
+      durable observed inventory for the whole Factory; settings mapping and adapters for the
+      participating systems; deterministic diff/plan and authorized idempotent apply/reconcile;
+      continuous drift detection, readiness and scoped repair; host-loss replacement placement
+      and Crier/scheduler binding updates (V2-ARCH-01)
+    not: >-
+      Infrastructure convergence is deterministic code, never LLM-improvised tool sequencing;
+      does not choose tasks (foreman), admit lanes or settle rounds (scheduler), deliver work
+      (Crier), provide per-host execution/isolation (Bunker) or hold Boardctl work authority —
+      Boardctl carries project work, not configuration authority (V2-SET-08)
+    note: >-
+      A required target component that is not yet built — impl is TARGET-UNIMPLEMENTED. The
+      implementation language and concrete storage/HTTP framework are explicitly undecided;
+      Go, Python and Rust were named as possibilities and no selection was made (V2-ARCH-01,
+      V2-ARCH-03)
+    impl: [TARGET-UNIMPLEMENTED]
   - id: crier
     name: CRIER (bus)
     role: launch and return boundary
