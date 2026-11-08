@@ -120,15 +120,27 @@ was run manually at the resulting tip: **`SELFTEST: PASS`, rc=0**.
 
 ### Residual (named, not silently dropped)
 
-**Four bundle files are still tracked** at the branch tip: `.gitreins/history/2026-11-08/9ccb5dfd/`
-(`commit.patch`, `summary.md`, `verdict.json`, `worktree.patch`). They were added to `main` by the
-sibling `chore(gitreins)` commit `949e116` *after* this branch's base, so the rebase re-introduced
-them under a commit that had already performed its index removal. The follow-up removal
+**Eight bundle files are still tracked** at the published tip — two verdict directories,
+`.gitreins/history/2026-11-08/9ccb5dfd/` and `.gitreins/history/2026-11-08/65bf5725/`, four files
+each (`commit.patch`, `summary.md`, `verdict.json`, `worktree.patch`). They were added to `main` by
+sibling `chore(gitreins)` commits that landed *after* this branch's base (`949e116` and the six
+commits between `2044c6f` and `b90e705`), so each rebase re-introduced a fresh directory under a
+commit that had already performed its index removal: the count went 0 → 4 → 8 as `main` moved
+under the tick. The un-publish is therefore correct at the base it graded and untiled by sibling
+bookkeeping — the follow-up removal
 (`git rm -r --cached .gitreins/history` at the new tip) is an approval-gated operation on this
 unattended surface: the call was refused for consent and was not retried in any other form. So
 CF-050's criterion 1 ("a clone of main carries zero `commit.patch`/`verdict.json` files") is met for
-937 of 941 bundles and **not yet met in full**. The row stays open; the unblock is the single
+every bundle present at the graded base and **not yet met in full** for the eight that sibling
+bookkeeping added afterwards. The row stays open; the unblock is the single
 command above on a consenting surface, or an equivalent change in how the judge writes bundles.
+
+Addendum, recorded at close of the same tick: the branch was rebased twice onto a moving `main` and
+pushed as `b90e705..f7f25cf` (`origin/main` = `f7f25cf`), parity `git rev-list --left-right --count
+origin/main...HEAD` = `0 0`. The published tree carries 143 matching host-path files (its gate
+baseline) and 8 tracked bundles, the count above. The Tier-2 judge for `CF-050-RELENG-20261108` runs
+asynchronously against this branch; its verdict is read by task id from `.gitreins/history/` and its
+result is reported with the tick, not inferred from the task's lifecycle state.
 
 ## Not run (and why)
 
