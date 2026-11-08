@@ -232,6 +232,8 @@ LINT - python3 scripts/master_doc_check.py
 √ PASS - MASTER-DOC: PASS, exit 0; a FAIL names the section and line
 BUILD - python3 scripts/build_book.py --out <pdf>
 √ GATES - lint, fit, furniture and check.py all green; page count printed
+FIGURE FIT - svg_fit scales a sheet by min(1, 170/w_mm, 250/h_mm), aspect kept
+√ ONE RULE - the builder's fit rule and gen_handbook_figures.min_label_mm agree
 CROSSWALK - spot-check one M-id against its chapter section
 √ MATCHES - the crosswalk row and the chapter agree
 ```

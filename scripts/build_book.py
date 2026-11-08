@@ -22,6 +22,7 @@ gate — the skill names exactly that as the defect. This builder now:
 
     python3 scripts/build_book.py --out /home/kara/code-factory-reports/handbook/CF2A-01-w9.pdf
 """
+
 from __future__ import annotations
 
 import argparse
@@ -75,6 +76,7 @@ def pdf_page_count(pdf_path) -> int:
     n = d.page_count
     d.close()
     return n
+
 
 # Runs in Chrome before --print-to-pdf writes. Splits any .page div taller than one
 # page's content area by FORWARD assembly: walk the content in reading order, move the
@@ -427,16 +429,6 @@ document.fonts.ready.then(function () {
 """
 
 
-def svg_fit(path: pathlib.Path) -> str:
-    """Constrain a figure by its wider dimension so nothing clips or prints sub-legible."""
-    head = path.read_text()[:400]
-    w = re.search(r'width="([\d.]+)', head)
-    h = re.search(r'height="([\d.]+)', head)
-    if w and h and float(w.group(1)) >= float(h.group(1)):
-        return f'<img style="width:170mm" src="file://{path}"/>'
-    return f'<img style="height:200mm" src="file://{path}"/>'
-
-
 def body_blocks(text: str) -> tuple[list[str], list]:
     """Markdown -> block list; two pulls happen before the generic block walker:
 
@@ -504,11 +496,22 @@ def main() -> int:
     # Figure codes live in BOOK.yaml, not in filenames: one id resolves to one object.
     fig_codes = {str(f["file"]): str(f["code"]) for f in book.get("figures", [])}
 
-    sheets: list[tuple[str, list[str], str]] = []  # (dochead section, html blocks, tab html)
+    sheets: list[
+        tuple[str, list[str], str]
+    ] = []  # (dochead section, html blocks, tab html)
 
     # --- S2b thumb tabs: a 3-letter code per part, stepped down the page edge ----
-    PART_TAB = {"FM": "FMD", "I": "ARR", "II": "FLW", "III": "MOD",
-                "IV": "REG", "V": "SET", "VI": "RSK", "VII": "WRK", "VIII": "DLV"}
+    PART_TAB = {
+        "FM": "FMD",
+        "I": "ARR",
+        "II": "FLW",
+        "III": "MOD",
+        "IV": "REG",
+        "V": "SET",
+        "VI": "RSK",
+        "VII": "WRK",
+        "VIII": "DLV",
+    }
 
     def tab_html(p_id: str, p_idx: int) -> str:
         code = PART_TAB.get(p_id)
@@ -526,7 +529,8 @@ def main() -> int:
         try:
             out = subprocess.run(
                 ["git", "-C", str(ROOT), "log", "-1", "--format=%at", "--", str(f)],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             ).stdout.strip()
             return bool(out) and int(out) > issue_epoch
         except (ValueError, OSError):
@@ -566,21 +570,38 @@ def main() -> int:
 
     rows = ""
     for p in book["parts"]:
-        state = (f"{len(p['files'])} chapters" if p["files"]
-                 else "<b>NOT WRITTEN — gap sheet follows</b>")
+        state = (
+            f"{len(p['files'])} chapters"
+            if p["files"]
+            else "<b>NOT WRITTEN — gap sheet follows</b>"
+        )
         rows += f"<tr><td>{p['id']}</td><td>{p['title']}</td><td>{state}</td></tr>"
-    sheets.append(("CONTENTS",
-                   [f"<h1>CONTENTS</h1>"
-                    f"<table><thead><tr><th>Part</th><th>Title</th><th>State</th></tr>"
-                    f"</thead><tbody>{rows}</tbody></table>"], tab_html("FM", 0)))
+    sheets.append(
+        (
+            "CONTENTS",
+            [
+                f"<h1>CONTENTS</h1>"
+                f"<table><thead><tr><th>Part</th><th>Title</th><th>State</th></tr>"
+                f"</thead><tbody>{rows}</tbody></table>"
+            ],
+            tab_html("FM", 0),
+        )
+    )
 
     for p_idx, p in enumerate(book["parts"]):
         tab = tab_html(p["id"], p_idx)
         if not p["files"]:
-            sheets.append((f"PART {p['id']}",
-                           [f"<h1>PART {p['id']} — {p['title']}</h1>",
-                            "<p class='gap'>NOT WRITTEN. This sheet exists so the gap is visible in "
-                            "the bound book rather than invisible in the file tree.</p>"], tab))
+            sheets.append(
+                (
+                    f"PART {p['id']}",
+                    [
+                        f"<h1>PART {p['id']} — {p['title']}</h1>",
+                        "<p class='gap'>NOT WRITTEN. This sheet exists so the gap is visible in "
+                        "the bound book rather than invisible in the file tree.</p>",
+                    ],
+                    tab,
+                )
+            )
             continue
         # the owning code x.y: x = part prefix (or part id), y = the module number
         # for chapters/M<n>, else the file's 1-based position within the part
@@ -588,9 +609,15 @@ def main() -> int:
         for f_idx, rel in enumerate(p["files"], 1):
             f = HB / rel
             if not f.exists():
-                sheets.append(("BUILD ERROR",
-                               [f"<h1>BUILD ERROR</h1><p>{rel} is in the manifest and not on disk.</p>"],
-                               tab))
+                sheets.append(
+                    (
+                        "BUILD ERROR",
+                        [
+                            f"<h1>BUILD ERROR</h1><p>{rel} is in the manifest and not on disk.</p>"
+                        ],
+                        tab,
+                    )
+                )
                 continue
             # A module chapter opens with its own centered view: the hero figure sheet is
             # mounted BEFORE the chapter text, coded <part prefix>.<n> from the manifest
@@ -602,26 +629,49 @@ def main() -> int:
                 hero = HB / f"figures/module-M{n}.svg"
                 code = f"{p.get('prefix', p['id'])}.{n}"
                 if hero.exists():
-                    sheets.append((f"PART {p['id']} · FIGURE {code}",
-                                   [f"<h2>FIGURE {code} — MODULE M{n} CENTERED VIEW — as of {today}</h2>",
-                                    svg_fit(hero)], tab))
+                    sheets.append(
+                        (
+                            f"PART {p['id']} · FIGURE {code}",
+                            [
+                                f"<h2>FIGURE {code} — MODULE M{n} CENTERED VIEW — as of {today}</h2>",
+                                svg_fit(hero),
+                            ],
+                            tab,
+                        )
+                    )
                 else:
-                    sheets.append(("BUILD ERROR",
-                                   [f"<h1>BUILD ERROR</h1><p>figures/module-M{n}.svg is the "
-                                    f"centered view of {rel} and is not on disk.</p>"], tab))
+                    sheets.append(
+                        (
+                            "BUILD ERROR",
+                            [
+                                f"<h1>BUILD ERROR</h1><p>figures/module-M{n}.svg is the "
+                                f"centered view of {rel} and is not on disk.</p>"
+                            ],
+                            tab,
+                        )
+                    )
             else:
                 y = f_idx
             blocks, figs = body_blocks(f.read_text())
-            blocks = code_tables(blocks, x, y, reg=(rel == "parts/IV-contract-register.md"))
+            blocks = code_tables(
+                blocks, x, y, reg=(rel == "parts/IV-contract-register.md")
+            )
             if changed_since_issue(f):
                 blocks = mark_changed(blocks)
             sheets.append((f"PART {p['id']} · {p['title'].upper()}", blocks, tab))
-            for fig in figs:  # one figure per sheet, hero-sized, caption carries the snapshot date
+            for fig in (
+                figs
+            ):  # one figure per sheet, hero-sized, caption carries the snapshot date
                 if fig is None:
                     continue
                 code = fig_codes.get(str(fig.relative_to(HB)), fig.stem.upper())
-                sheets.append((f"PART {p['id']} · FIGURE {code}",
-                               [f"<h2>FIGURE {code} — as of {today}</h2>", svg_fit(fig)], tab))
+                sheets.append(
+                    (
+                        f"PART {p['id']} · FIGURE {code}",
+                        [f"<h2>FIGURE {code} — as of {today}</h2>", svg_fit(fig)],
+                        tab,
+                    )
+                )
 
     # The .page container is what makes overflow measurable (skill: without it the fit
     # script no-ops and every page is silently unconstrained). The cover is its own page
@@ -629,15 +679,23 @@ def main() -> int:
     # every sheet so every rendered page is a real .page div carrying head + tab + foot.
     title = doc["title"].upper()
     title_line = f"{title} — SYSTEM HANDBOOK"
-    cover_html = bs.cover(doc_id, title, doc["subtitle"],
-                          (f"ISSUE {today}", doc["classification"], doc["scope"].strip()))
+    cover_html = bs.cover(
+        doc_id,
+        title,
+        doc["subtitle"],
+        (f"ISSUE {today}", doc["classification"], doc["scope"].strip()),
+    )
     pages_html = f'<div class="page">{cover_html}</div>'
     for s, b, t in sheets:
-        pages_html += (f'<div class="page">{bs.head_html(doc_id, title_line, s)}{t}'
-                       f'{chr(10).join(b)}{bs.foot_html(s, today)}</div>')
-    html_doc = (f"<!doctype html><html><head><meta charset='utf-8'><style>{bs.load_css()}"
-                f"{bs.BOOK_CSS}</style></head><body>{pages_html}"
-                f"<script>{PAGINATE_JS}</script></body></html>")
+        pages_html += (
+            f'<div class="page">{bs.head_html(doc_id, title_line, s)}{t}'
+            f"{chr(10).join(b)}{bs.foot_html(s, today)}</div>"
+        )
+    html_doc = (
+        f"<!doctype html><html><head><meta charset='utf-8'><style>{bs.load_css()}"
+        f"{bs.BOOK_CSS}</style></head><body>{pages_html}"
+        f"<script>{PAGINATE_JS}</script></body></html>"
+    )
 
     out_path = pathlib.Path(a.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -692,7 +750,9 @@ def main() -> int:
         if maxy > FIT_LIMIT_MM:
             bad.append((i, round(maxy, 1)))
     if bad:
-        print(f"FIT FAIL on {len(bad)} page(s), first: page {bad[0][0]} body ends {bad[0][1]} mm (limit 275)")
+        print(
+            f"FIT FAIL on {len(bad)} page(s), first: page {bad[0][0]} body ends {bad[0][1]} mm (limit 275)"
+        )
         return 2
 
     # W7 furniture gates: table codes, thumb tabs, genre notices, ink.
@@ -703,9 +763,13 @@ def main() -> int:
         if i == 1:
             continue
         w = pg.rect.width
-        near_edge = [d for d in pg.get_drawings()
-                     if d.get("fill") == (0, 0, 0) and d["rect"].x1 > w - 2.5
-                     and (d["rect"].x1 - d["rect"].x0) < 26]  # the skill's tab: 8.5 mm
+        near_edge = [
+            d
+            for d in pg.get_drawings()
+            if d.get("fill") == (0, 0, 0)
+            and d["rect"].x1 > w - 2.5
+            and (d["rect"].x1 - d["rect"].x0) < 26
+        ]  # the skill's tab: 8.5 mm
         if not near_edge:
             no_tab.append(i)
         for d in pg.get_drawings():
@@ -718,7 +782,9 @@ def main() -> int:
     notices = len(re.findall(r"\b(?:NOTE|CAUTION|WARNING)\b", all_text))
     placards = len(re.findall(r"units \d+[–-]\d+ of \d+", all_text, re.I))
     if len(table_codes) <= 100:
-        print(f"FURNITURE FAIL: {len(table_codes)} TABLE x.y-n codes in the book (need >100)")
+        print(
+            f"FURNITURE FAIL: {len(table_codes)} TABLE x.y-n codes in the book (need >100)"
+        )
         return 2
     if no_tab:
         print(f"FURNITURE FAIL: pages without a thumb tab: {no_tab[:8]}")
@@ -727,16 +793,27 @@ def main() -> int:
         print("FURNITURE FAIL: no NOTE/CAUTION/WARNING block rendered")
         return 2
     if grey:
-        print(f"FURNITURE FAIL: {len(grey)} #999999 stroke/fill drawing(s), first: {grey[0]}")
+        print(
+            f"FURNITURE FAIL: {len(grey)} #999999 stroke/fill drawing(s), first: {grey[0]}"
+        )
         return 2
 
     # --- the skill's check.py: page size, black-and-white only, font census ------
     # tiles land in the 24h-pruned scratch: they are a review artifact, not a deliverable
     tiles = pathlib.Path("/home/kara/.hermes/cache/scratch") / f"tiles-{out_path.stem}"
     r = subprocess.run(
-        [sys.executable, str(NASA_CHECK), a.out, "--pages", str(pdf.page_count),
-         "--out", str(tiles)],
-        capture_output=True, text=True, timeout=600,
+        [
+            sys.executable,
+            str(NASA_CHECK),
+            a.out,
+            "--pages",
+            str(pdf.page_count),
+            "--out",
+            str(tiles),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=600,
     )
     print(r.stdout[-3000:] if r.stdout else "", end="")
     if r.returncode != 0:
@@ -748,13 +825,17 @@ def main() -> int:
     have_rg = any("RoutedGothic" in f.replace(" ", "") for f in census)
     have_lg = any("LetterGothic" in f.replace(" ", "") for f in census)
     if not (have_rg and have_lg):
-        print(f"FONT FAIL: Routed Gothic and Letter Gothic must embed; got {sorted(census)}")
+        print(
+            f"FONT FAIL: Routed Gothic and Letter Gothic must embed; got {sorted(census)}"
+        )
         return 2
 
-    print(f"OK {a.out} ({out_path.stat().st_size} bytes) · {pdf.page_count} pages · "
-          f"head + tab + dated foot on every page · fit clean ({fit}) · "
-          f"{len(table_codes)} table codes · {placards} continuation unit counts · "
-          f"{notices} notice labels · check.py green · fonts: {sorted(census)}")
+    print(
+        f"OK {a.out} ({out_path.stat().st_size} bytes) · {pdf.page_count} pages · "
+        f"head + tab + dated foot on every page · fit clean ({fit}) · "
+        f"{len(table_codes)} table codes · {placards} continuation unit counts · "
+        f"{notices} notice labels · check.py green · fonts: {sorted(census)}"
+    )
     return 0
 
 

@@ -30,6 +30,7 @@ the builder's print scale; no colour anywhere except pure black/white.
 
     python3 scripts/gen_handbook_figures.py
 """
+
 from __future__ import annotations
 
 import html
@@ -44,7 +45,10 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 MODEL = ROOT / "docs/SYSTEM-MODEL.yaml"
 OUT = ROOT / "docs/handbook/figures"
 
-PRINT_W_MM, PRINT_H_MM = 170.0, 250.0   # builder's constraints: 179 mm column, 250 mm figure band
+PRINT_W_MM, PRINT_H_MM = (
+    170.0,
+    250.0,
+)  # builder's constraints: 179 mm column, 250 mm figure band
 FLOOR_MM = 2.05
 
 INK = "#000000"
@@ -53,11 +57,11 @@ FF = "Routed Gothic Narrow, Routed Gothic, sans-serif"
 
 # contract state -> line style on the wire (genre: black ink only)
 STATE_DASH = {
-    "PROVEN":     None,            # solid
-    "PARTIAL":    "12 7",          # long dash
-    "BROKEN":     "4 3",           # fine dash
-    "MISSING":    "1.5 3.5",       # dotted
-    "UNVERIFIED": "1.5 3.5",       # dotted — no evidence either way
+    "PROVEN": None,  # solid
+    "PARTIAL": "12 7",  # long dash
+    "BROKEN": "4 3",  # fine dash
+    "MISSING": "1.5 3.5",  # dotted
+    "UNVERIFIED": "1.5 3.5",  # dotted — no evidence either way
 }
 STATE_LEGEND = [
     ("PROVEN", "solid — exercised with evidence"),
@@ -68,9 +72,14 @@ STATE_LEGEND = [
 ]
 
 SHORT = {
-    "FOREMAN (Hermes)": "FOREMAN", "TASK-ROUTER": "ROUTER", "GITHUB CREDENTIALS": "GITHUB",
-    "INFERENCE PROXY": "PROXY", "BUNKER DAEMON": "BUNKER", "CONFORMANCE BATTERY": "CONFORMANCE",
-    "SESSION STORE": "SESSIONS", "CRIER (bus)": "CRIER",
+    "FOREMAN (Hermes)": "FOREMAN",
+    "TASK-ROUTER": "ROUTER",
+    "GITHUB CREDENTIALS": "GITHUB",
+    "INFERENCE PROXY": "PROXY",
+    "BUNKER DAEMON": "BUNKER",
+    "CONFORMANCE BATTERY": "CONFORMANCE",
+    "SESSION STORE": "SESSIONS",
+    "CRIER (bus)": "CRIER",
 }
 
 
@@ -86,9 +95,13 @@ def min_label_mm(svg: str) -> float:
     aw = float(re.search(r'width="([\d.]+)', head).group(1))
     ah = float(re.search(r'height="([\d.]+)', head).group(1))
     vb = re.search(r'viewBox="[\d.]+ [\d.]+ ([\d.]+) ([\d.]+)"', svg)
-    vw, vh = float(vb.group(1)), float(vb.group(2))
+    vw = float(vb.group(1))
     scale = min(1.0, PRINT_W_MM / aw, PRINT_H_MM / ah)
-    return min(sizes_) * scale * aw / vw if (sizes_ := [float(v) for v in re.findall(r'font-size="([\d.]+)', svg)]) else 99.0
+    return (
+        min(sizes_) * scale * aw / vw
+        if (sizes_ := [float(v) for v in re.findall(r'font-size="([\d.]+)', svg)])
+        else 99.0
+    )
 
 
 def wrap(s: str, width: int) -> list[str]:
@@ -106,10 +119,10 @@ def wrap(s: str, width: int) -> list[str]:
     return lines
 
 
-F_SMALL = 9.5   # 2.35 mm at print scale
-F_TINY = 8.4    # 2.10 mm — secondary lines, wire names
-F_BODY = 11.0   # 2.75 mm
-F_HEAD = 13.0   # 3.25 mm
+F_SMALL = 9.5  # 2.35 mm at print scale
+F_TINY = 8.4  # 2.10 mm — secondary lines, wire names
+F_BODY = 11.0  # 2.75 mm
+F_HEAD = 13.0  # 3.25 mm
 F_TITLE = 17.0  # 4.25 mm
 
 
@@ -118,8 +131,8 @@ class Sheet:
     so the 2.05 mm floor is 8.2 units and every font choice below stays above it.
     Line weights in genre units: hairline 0.7 (0.175 mm), object 1.8 (0.45 mm)."""
 
-    UPX = 4                      # user units per mm at print scale
-    W = int(PRINT_W_MM * UPX)    # 680 units = 170 mm
+    UPX = 4  # user units per mm at print scale
+    W = int(PRINT_W_MM * UPX)  # 680 units = 170 mm
     FLOOR_U = 8.2
 
     def __init__(self, h_units: float):
@@ -135,27 +148,37 @@ class Sheet:
         if rotate is not None:
             # transform ONLY: x/y attrs would translate a second time inside the
             # rotated frame and throw the label off the canvas
-            self.add(f'<text transform="translate({x:.1f} {y:.1f}) rotate({rotate})" '
-                     f'font-size="{size:.2f}" fill="{fill}" text-anchor="{anchor}">{esc(s)}</text>')
+            self.add(
+                f'<text transform="translate({x:.1f} {y:.1f}) rotate({rotate})" '
+                f'font-size="{size:.2f}" fill="{fill}" text-anchor="{anchor}">{esc(s)}</text>'
+            )
         else:
-            self.add(f'<text x="{x:.1f}" y="{y:.1f}" font-size="{size:.2f}" fill="{fill}" '
-                     f'text-anchor="{anchor}">{esc(s)}</text>')
+            self.add(
+                f'<text x="{x:.1f}" y="{y:.1f}" font-size="{size:.2f}" fill="{fill}" '
+                f'text-anchor="{anchor}">{esc(s)}</text>'
+            )
 
     # ---- structure -----------------------------------------------------------
     def box(self, x, y, w, h, sw=1.8):
-        self.add(f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" '
-                 f'fill="{PAPER}" stroke="{INK}" stroke-width="{sw}"/>')
+        self.add(
+            f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" '
+            f'fill="{PAPER}" stroke="{INK}" stroke-width="{sw}"/>'
+        )
 
     def panel(self, x, y, w, h):
-        self.add(f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" fill="none" '
-                 f'stroke="{INK}" stroke-width="1.2" stroke-dasharray="6 4"/>')
+        self.add(
+            f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" fill="none" '
+            f'stroke="{INK}" stroke-width="1.2" stroke-dasharray="6 4"/>'
+        )
 
     def poly(self, pts, sw=1.2, dash=None, arrow=False):
         d = f' stroke-dasharray="{dash}"' if dash else ""
         m = ' marker-end="url(#ar)"' if arrow else ""
         p = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
-        self.add(f'<polyline points="{p}" fill="none" stroke="{INK}" '
-                 f'stroke-width="{sw}"{d}{m}/>')
+        self.add(
+            f'<polyline points="{p}" fill="none" stroke="{INK}" '
+            f'stroke-width="{sw}"{d}{m}/>'
+        )
 
     def line(self, x1, y1, x2, y2, sw=1.2, dash=None, arrow=False):
         self.poly([(x1, y1), (x2, y2)], sw=sw, dash=dash, arrow=arrow)
@@ -170,8 +193,8 @@ class Sheet:
         # TRUE aspect attrs; the builder scales with min(1, 170/w, 250/h) and both
         # sides' gates model that rule, so the print-scale floor is honest.
         head = (
-            f'<svg xmlns="http://www.w3.org/2000/svg" width="{self.W/self.UPX:.1f}mm" '
-            f'height="{self.h/self.UPX:.1f}mm" viewBox="0 0 {self.W} {self.h:.1f}" '
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{self.W / self.UPX:.1f}mm" '
+            f'height="{self.h / self.UPX:.1f}mm" viewBox="0 0 {self.W} {self.h:.1f}" '
             f'preserveAspectRatio="xMidYMid meet">'
             f'<rect width="{self.W}" height="{self.h:.1f}" fill="{PAPER}"/>'
             '<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" '
@@ -187,7 +210,9 @@ def legend_block(sh: Sheet, x: float, y: float, entries, title: str, fs=F_TINY):
     sh.text(x, y, title, fs)
     for i, (state, name) in enumerate(entries):
         ly = y + fs * 1.9 * (i + 1)
-        sh.line(x, ly - fs * 0.35, x + 34, ly - fs * 0.35, sw=1.4, dash=STATE_DASH[state])
+        sh.line(
+            x, ly - fs * 0.35, x + 34, ly - fs * 0.35, sw=1.4, dash=STATE_DASH[state]
+        )
         sh.text(x + 42, ly, name, fs)
 
 
@@ -197,7 +222,7 @@ class Corridors:
     x and an exclusive y-interval, so two contracts never share a stretch of line."""
 
     def __init__(self, slots: list[float]):
-        self.slots = {x: [] for x in slots}   # x -> list of (lo, hi) taken intervals
+        self.slots = {x: [] for x in slots}  # x -> list of (lo, hi) taken intervals
 
     def claim(self, lo: float, hi: float) -> float:
         lo, hi = min(lo, hi), max(lo, hi)
@@ -214,7 +239,7 @@ def system_map_sheet(model) -> Sheet:
     its type sizes start above the shared sizes so the PRINTED label still clears
     the 2.05 mm floor (the gate verifies this against the real scale)."""
     TINY, SMALL, TITLE = 12.0, 13.4, 19.0
-    by_layer = {l["id"]: [] for l in model["layers"]}
+    by_layer = {layer["id"]: [] for layer in model["layers"]}
     for c in model["components"]:
         by_layer[c["layer"]].append(c)
     by_id = {c["id"]: c for c in model["components"]}
@@ -223,28 +248,36 @@ def system_map_sheet(model) -> Sheet:
     NAME_H = 18
     cols = 4
     col_x = [PX + i * (BW + COLGAP) for i in range(cols)]
-    corridors = Corridors([8.0] + [col_x[i] + BW + COLGAP / 2 for i in range(cols - 1)] + [672.0])
+    corridors = Corridors(
+        [8.0] + [col_x[i] + BW + COLGAP / 2 for i in range(cols - 1)] + [672.0]
+    )
 
-    GH = 140           # gutter between panels (holds routing lanes)
+    GH = 140  # gutter between panels (holds routing lanes)
     LANE0, LANE_STEP, N_LANES = 12, 16, 8
     panels = []
     y = 10
-    for l in model["layers"]:
-        members = by_layer[l["id"]]
+    for layer in model["layers"]:
+        members = by_layer[layer["id"]]
         rows = max(1, -(-len(members) // cols))
         ph = NAME_H + rows * (BH + ROWGAP) + 8
-        panels.append((l, members, y, ph, rows))
+        panels.append((layer, members, y, ph, rows))
         y += ph + GH
-    H = y - GH + 96   # legend band below the last panel
+    H = y - GH + 96  # legend band below the last panel
 
     sh = Sheet(H)
     sh.text(16, 28, "CODE FACTORY — SYSTEM MAP", TITLE)
-    sh.text(664, 26, "WIRE CT-nn IS KEYED TO THE CONTRACT REGISTER (PART IV)", TINY, anchor="end")
+    sh.text(
+        664,
+        26,
+        "WIRE CT-nn IS KEYED TO THE CONTRACT REGISTER (PART IV)",
+        TINY,
+        anchor="end",
+    )
 
-    pos = {}   # comp id -> (x, y, w, h, layer index)
-    for li, (l, members, py, ph, rows) in enumerate(panels):
+    pos = {}  # comp id -> (x, y, w, h, layer index)
+    for li, (layer, members, py, ph, rows) in enumerate(panels):
         sh.panel(PX, py, 648, ph)
-        sh.text(PX + 6, py + NAME_H - 6, l["name"], SMALL)
+        sh.text(PX + 6, py + NAME_H - 6, layer["name"], SMALL)
         for i, c in enumerate(members):
             r, k = divmod(i, cols)
             bx, by = col_x[k], py + NAME_H + r * (BH + ROWGAP)
@@ -278,36 +311,52 @@ def system_map_sheet(model) -> Sheet:
             g = min(la, len(panels) - 2)
             ly = lane(g)
             x1, x2 = sorted((ax + 30, bx + bw - 30))
-            sh.poly([(x1, ay + ah), (x1, ly), (x2, ly), (x2, by + bh)], dash=dash, arrow=True)
+            sh.poly(
+                [(x1, ay + ah), (x1, ly), (x2, ly), (x2, by + bh)],
+                dash=dash,
+                arrow=True,
+            )
             sh.text((x1 + x2) / 2, ly - 5, cid, TINY, anchor="middle")
         elif la < lb:
             x1 = ax + aw / 2
             x2 = bx + bw / 2
             if lb - la == 1:
                 ly = lane(la)
-                sh.poly([(x1, ay + ah), (x1, ly), (x2, ly), (x2, by)], dash=dash, arrow=True)
+                sh.poly(
+                    [(x1, ay + ah), (x1, ly), (x2, ly), (x2, by)], dash=dash, arrow=True
+                )
                 sh.text((x1 + x2) / 2, ly - 5, cid, TINY, anchor="middle")
             else:
                 g1, g2 = lane(la), lane(lb - 1)
                 xc = corridors.claim(ay + ah, by)
-                sh.poly([(x1, ay + ah), (x1, g1), (xc, g1), (xc, g2), (x2, g2), (x2, by)],
-                        dash=dash, arrow=True)
+                sh.poly(
+                    [(x1, ay + ah), (x1, g1), (xc, g1), (xc, g2), (x2, g2), (x2, by)],
+                    dash=dash,
+                    arrow=True,
+                )
                 sh.text((x1 + xc) / 2, g1 - 5, cid, TINY, anchor="middle")
         else:
             x1 = ax + aw / 2
             x2 = bx + bw / 2
             if la - lb == 1:
                 ly = lane(lb)
-                sh.poly([(x1, ay), (x1, ly), (x2, ly), (x2, by + bh)], dash=dash, arrow=True)
+                sh.poly(
+                    [(x1, ay), (x1, ly), (x2, ly), (x2, by + bh)], dash=dash, arrow=True
+                )
                 sh.text((x1 + x2) / 2, ly - 5, cid, TINY, anchor="middle")
             else:
                 g1, g2 = lane(la - 1), lane(lb)
                 xc = corridors.claim(ay, by + bh)
-                sh.poly([(x1, ay), (x1, g1), (xc, g1), (xc, g2), (x2, g2), (x2, by + bh)],
-                        dash=dash, arrow=True)
+                sh.poly(
+                    [(x1, ay), (x1, g1), (xc, g1), (xc, g2), (x2, g2), (x2, by + bh)],
+                    dash=dash,
+                    arrow=True,
+                )
                 sh.text((x1 + xc) / 2, g1 - 5, cid, TINY, anchor="middle")
 
-    legend_block(sh, 16, H - 76, STATE_LEGEND, "CONTRACT STATE — LINE STYLE, INK ONLY", fs=TINY)
+    legend_block(
+        sh, 16, H - 76, STATE_LEGEND, "CONTRACT STATE — LINE STYLE, INK ONLY", fs=TINY
+    )
     return sh
 
 
@@ -421,13 +470,13 @@ def sm_sheet(states, edges, title, note) -> Sheet:
 
 def board_lifecycle() -> Sheet:
     states = [
-        ("pending",  ["PENDING", "DISPATCHABLE"], 1, 0),
-        ("claimed",  ["CLAIMED", "BY A TICK"], 1, 1),
-        ("running",  ["IN PROGRESS", "WORKER EXECUTING"], 1, 2),
-        ("review",   ["REVIEW", "VERDICT EXPECTED"], 1, 3),
+        ("pending", ["PENDING", "DISPATCHABLE"], 1, 0),
+        ("claimed", ["CLAIMED", "BY A TICK"], 1, 1),
+        ("running", ["IN PROGRESS", "WORKER EXECUTING"], 1, 2),
+        ("review", ["REVIEW", "VERDICT EXPECTED"], 1, 3),
         ("complete", ["COMPLETE", "EVIDENCE BOUND"], 1, 4),
         ("deferred", ["DEFERRED", "NOT THIS CADENCE"], 0, 0),
-        ("blocked",  ["BLOCKED", "OWNERSHIP OR DEFECT"], 2, 2),
+        ("blocked", ["BLOCKED", "OWNERSHIP OR DEFECT"], 2, 2),
     ]
     edges = [
         ("pending", "claimed", "TICK SELECTS", "V"),
@@ -436,56 +485,98 @@ def board_lifecycle() -> Sheet:
         ("review", "complete", "VERDICT + EVIDENCE", "V"),
         # return: review right edge -> channel x=440 -> running right edge, 10 BELOW
         # the WORKER DIED line so the two arrowheads on that edge never share a y
-        ("review", "running",
-         ([(405, 370), (440, 370), (440, 280), (405, 280)],
-          "CHANGES REQUESTED", 448, 325, -90), "S"),
+        (
+            "review",
+            "running",
+            (
+                [(405, 370), (440, 370), (440, 280), (405, 280)],
+                "CHANGES REQUESTED",
+                448,
+                325,
+                -90,
+            ),
+            "S",
+        ),
         ("pending", "deferred", "DEPENDENCY UNMET", "H"),
         ("pending", "blocked", "CANNOT PROCEED", "G"),
         # return: blocked top -> left part of pending's bottom edge, x=396 clear of
         # the TICK SELECTS riser at 340; one perpendicular crossing (no dot) at G's riser
-        ("blocked", "pending",
-         ([(560, 248), (560, 117), (396, 117), (396, 92)],
-          "BLOCKER ROW CLOSED", 478, 113, None), "S"),
+        (
+            "blocked",
+            "pending",
+            (
+                [(560, 248), (560, 117), (396, 117), (396, 92)],
+                "BLOCKER ROW CLOSED",
+                478,
+                113,
+                None,
+            ),
+            "S",
+        ),
         ("running", "blocked", "WORKER DIED", "H"),
     ]
-    return sm_sheet(states, edges,
-                    "BOARD ROW LIFECYCLE — INCLUDING THE PATHS THAT ARE NOT FORWARD",
-                    "A ROW LEAVES THE BOARD ONLY THROUGH COMPLETE. BLOCKED AND DEFERRED ARE "
-                    "STATES OF PENDING, NOT EXITS.")
+    return sm_sheet(
+        states,
+        edges,
+        "BOARD ROW LIFECYCLE — INCLUDING THE PATHS THAT ARE NOT FORWARD",
+        "A ROW LEAVES THE BOARD ONLY THROUGH COMPLETE. BLOCKED AND DEFERRED ARE "
+        "STATES OF PENDING, NOT EXITS.",
+    )
 
 
 def tick_lifecycle() -> Sheet:
     states = [
-        ("fires",     ["TICK FIRES", "CADENCE DUE"], 1, 0),
-        ("evaluate",  ["EVALUATE", "MODE, BOARD, POOLS,"], 1, 1),
-        ("admitted",  ["ADMITTED", "ENVELOPE OUT (CT-02)"], 1, 2),
-        ("await",     ["AWAIT REPLY", "WALL_S / TICK-TIMEOUT"], 1, 3),
-        ("settle",    ["SETTLE", "DISPATCH_LEG.GO"], 1, 4),
+        ("fires", ["TICK FIRES", "CADENCE DUE"], 1, 0),
+        ("evaluate", ["EVALUATE", "MODE, BOARD, POOLS,"], 1, 1),
+        ("admitted", ["ADMITTED", "ENVELOPE OUT (CT-02)"], 1, 2),
+        ("await", ["AWAIT REPLY", "WALL_S / TICK-TIMEOUT"], 1, 3),
+        ("settle", ["SETTLE", "DISPATCH_LEG.GO"], 1, 4),
         ("completed", ["COMPLETED", "REPLY OK"], 0, 5),
-        ("failed",    ["FAILED", "REPLY FAILED"], 1, 5),
-        ("timeout",   ["TIMEOUT", "DISPATCH_DEADLINE"], 2, 5),
-        ("deferred",  ["DEFERRED", "LOAD GATE, GATEWAY,"], 0, 2),
+        ("failed", ["FAILED", "REPLY FAILED"], 1, 5),
+        ("timeout", ["TIMEOUT", "DISPATCH_DEADLINE"], 2, 5),
+        ("deferred", ["DEFERRED", "LOAD GATE, GATEWAY,"], 0, 2),
     ]
     edges = [
         ("fires", "evaluate", "TICK_PROCESS.GO", "V"),
         ("evaluate", "admitted", "WAIVER OR COOLDOWN", "V"),
         # gate holds: evaluate left edge (low) -> corridor x=230 -> deferred right edge
-        ("evaluate", "deferred",
-         ([(275, 182), (230, 182), (230, 270), (185, 270)],
-          "GATE HOLDS", 224, 226, -90), "S"),
+        (
+            "evaluate",
+            "deferred",
+            (
+                [(275, 182), (230, 182), (230, 270), (185, 270)],
+                "GATE HOLDS",
+                224,
+                226,
+                -90,
+            ),
+            "S",
+        ),
         # retried: deferred top -> left margin riser -> evaluate left edge (high)
-        ("deferred", "evaluate",
-         ([(120, 248), (120, 158), (275, 158)],
-          "RETRIED, NOT DROPPED", 197, 154, None), "S"),
+        (
+            "deferred",
+            "evaluate",
+            (
+                [(120, 248), (120, 158), (275, 158)],
+                "RETRIED, NOT DROPPED",
+                197,
+                154,
+                None,
+            ),
+            "S",
+        ),
         ("admitted", "await", "CRIER LEASE 30 S", "V"),
         ("await", "settle", "REPLY OR DEADLINE", "V"),
         ("settle", "completed", None, "G"),
         ("settle", "failed", None, "G"),
         ("settle", "timeout", None, "G"),
     ]
-    return sm_sheet(states, edges,
-                    "SCHEDULER TICK LIFECYCLE — ADMISSION, DISPATCH, SETTLEMENT (M9 §3)",
-                    "A DEFERRED TICK IS RETRIED AT THE NEXT CADENCE, NEVER DROPPED.")
+    return sm_sheet(
+        states,
+        edges,
+        "SCHEDULER TICK LIFECYCLE — ADMISSION, DISPATCH, SETTLEMENT (M9 §3)",
+        "A DEFERRED TICK IS RETRIED AT THE NEXT CADENCE, NEVER DROPPED.",
+    )
 
 
 # --------------------------------------------------------------------------- module views
@@ -527,16 +618,28 @@ def module_sheet(model, mod) -> Sheet:
     sh.box(cx - 75, cy - 34, 150, 84, sw=2.2)
     sh.text(cx, cy - 14, mod["id"], F_BODY, anchor="middle")
     sh.text(cx, cy + 6, mod["name"], F_HEAD, anchor="middle")
-    comps_txt = ", ".join(c["name"] for c in mcomps) if mcomps \
+    comps_txt = (
+        ", ".join(c["name"] for c in mcomps)
+        if mcomps
         else "no bus component — the shell substrate (M0 §6)"
-    if len(mcomps) != 1 or SHORT.get(mcomps[0]["name"], mcomps[0]["name"]) not in mod["name"]:
+    )
+    if (
+        len(mcomps) != 1
+        or SHORT.get(mcomps[0]["name"], mcomps[0]["name"]) not in mod["name"]
+    ):
         for i, ln in enumerate(wrap(comps_txt, 34)[:2]):
             sh.text(cx, cy + (26 + i * 12), ln, F_TINY, anchor="middle")
 
     def contract_block(items, x, side):
         y0 = cy - 34
-        sh.text(x, y0 - 14, "INPUTS — UPSTREAM CONTRACTS" if side == "l"
-                else "OUTPUTS — DOWNSTREAM CONTRACTS", F_TINY)
+        sh.text(
+            x,
+            y0 - 14,
+            "INPUTS — UPSTREAM CONTRACTS"
+            if side == "l"
+            else "OUTPUTS — DOWNSTREAM CONTRACTS",
+            F_TINY,
+        )
         if not items:
             sh.box(x, y0, colw, 44)
             sh.text(x + 10, y0 + 18, "no cross-system contract", F_SMALL)
@@ -548,15 +651,33 @@ def module_sheet(model, mod) -> Sheet:
             yc = y + card_h / 2
             dash = STATE_DASH.get(k["state"], STATE_DASH["UNVERIFIED"])
             if side == "l":
-                sh.poly([(x + colw, yc), (cx - 77, cy - 28 + (i + 0.5) * (56 / max(len(items), 1)))],
-                        sw=1.4, dash=dash, arrow=True)
+                sh.poly(
+                    [
+                        (x + colw, yc),
+                        (cx - 77, cy - 28 + (i + 0.5) * (56 / max(len(items), 1))),
+                    ],
+                    sw=1.4,
+                    dash=dash,
+                    arrow=True,
+                )
             else:
-                sh.poly([(cx + 77, cy - 28 + (i + 0.5) * (56 / max(len(items), 1))), (x, yc)],
-                        sw=1.4, dash=dash, arrow=True)
+                sh.poly(
+                    [
+                        (cx + 77, cy - 28 + (i + 0.5) * (56 / max(len(items), 1))),
+                        (x, yc),
+                    ],
+                    sw=1.4,
+                    dash=dash,
+                    arrow=True,
+                )
             sh.box(x, y, colw, card_h)
-            peer = SHORT.get(peer_to if side == "r" else peer_from,
-                             peer_to if side == "r" else peer_from)
-            label = f"{peer} -> {mod['id']}" if side == "l" else f"{mod['id']} -> {peer}"
+            peer = SHORT.get(
+                peer_to if side == "r" else peer_from,
+                peer_to if side == "r" else peer_from,
+            )
+            label = (
+                f"{peer} -> {mod['id']}" if side == "l" else f"{mod['id']} -> {peer}"
+            )
             sh.text(x + 10, y + 16, f"{cid} · {label}  [{k['state']}]", F_TINY)
             lines = wrap(k["carries"], 46)[:2]
             for j, ln in enumerate(lines):
@@ -573,7 +694,9 @@ def module_sheet(model, mod) -> Sheet:
             for j, ln in enumerate(wrap(txt, 78)[:2]):
                 sh.text(24 + j * 12, fy + 22 + i * 40 + j * 12, ln, F_SMALL)
     else:
-        sh.text(24, fy + 22, "none — no flow step names this module's components", F_SMALL)
+        sh.text(
+            24, fy + 22, "none — no flow step names this module's components", F_SMALL
+        )
 
     legend_block(sh, Sheet.W - 250, 44, STATE_LEGEND, "CONTRACT STATE — LINE STYLE")
     return sh
@@ -599,8 +722,13 @@ def seq_sheet(model, flow) -> Sheet:
     ax = {a: margin + i * cell + cell / 2 for i, a in enumerate(actors)}
     lifeline_end = h - 20 if not extra else top + rowh * len(steps) - 6
 
-    sh.text(Sheet.W - 12, 24, "TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT",
-            F_TINY, anchor="end")
+    sh.text(
+        Sheet.W - 12,
+        24,
+        "TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT",
+        F_TINY,
+        anchor="end",
+    )
 
     for a in actors:
         x = ax[a]
@@ -616,8 +744,15 @@ def seq_sheet(model, flow) -> Sheet:
         x1, x2 = ax[a], ax[b]
         sh.text(10, y + 3, f"{i + 1}", F_SMALL)
         if a == b:
-            sh.poly([(x1 - 8, y - 2), (x1 + 14, y - 2), (x1 + 14, y + 24), (x1 - 8, y + 24)],
-                    arrow=True)
+            sh.poly(
+                [
+                    (x1 - 8, y - 2),
+                    (x1 + 14, y - 2),
+                    (x1 + 14, y + 24),
+                    (x1 - 8, y + 24),
+                ],
+                arrow=True,
+            )
             tx, anchor = min(x1 + 24, Sheet.W - 320), "start"
         else:
             sh.line(x1, y, x2, y, arrow=True)
@@ -626,7 +761,11 @@ def seq_sheet(model, flow) -> Sheet:
                 right = x2 >= x1
                 tx = (max(x1, x2) + 16) if right else (min(x1, x2) - 16)
                 anchor = "start" if right else "end"
-                tx = min(max(tx, 300), Sheet.W - 310) if anchor == "start" else max(min(tx, 380), 310)
+                tx = (
+                    min(max(tx, 300), Sheet.W - 310)
+                    if anchor == "start"
+                    else max(min(tx, 380), 310)
+                )
         lines = wrap(what, 44 if a == b else 52)[:2]
         for j, ln in enumerate(lines):
             sh.text(tx, y - 8 + j * 13, ln, F_SMALL, anchor=anchor)
@@ -660,14 +799,23 @@ def main() -> int:
 
     p = OUT / "system-map.svg"
     p.write_text(system_map_sheet(model).emit())
-    made.append(("system-map.svg",
-                 f"{len(model['components'])} components in {len(model['layers'])} layers; "
-                 f"every edge is a numbered contract"))
+    made.append(
+        (
+            "system-map.svg",
+            f"{len(model['components'])} components in {len(model['layers'])} layers; "
+            f"every edge is a numbered contract",
+        )
+    )
 
     for mod in model["modules"]:
         p = OUT / f"module-{mod['id']}.svg"
         p.write_text(module_sheet(model, mod).emit(""))
-        made.append((p.name, f"{mod['id']} {mod['name']} — inputs left, outputs right, flows below"))
+        made.append(
+            (
+                p.name,
+                f"{mod['id']} {mod['name']} — inputs left, outputs right, flows below",
+            )
+        )
 
     for fl in model["flows"]:
         if not fl.get("steps"):
@@ -677,11 +825,19 @@ def main() -> int:
         made.append((p.name, f"{fl['id']} {fl['name']} — {fl['question']}"))
 
     for name, title in (
-        ("board-lifecycle", "board row state — including the paths that are not 'forward'"),
-        ("tick-lifecycle", "scheduler tick state — admission, dispatch, settlement (M9 §3)"),
+        (
+            "board-lifecycle",
+            "board row state — including the paths that are not 'forward'",
+        ),
+        (
+            "tick-lifecycle",
+            "scheduler tick state — admission, dispatch, settlement (M9 §3)",
+        ),
     ):
         p = OUT / f"{name}.svg"
-        p.write_text((board_lifecycle if name == "board-lifecycle" else tick_lifecycle)().emit())
+        p.write_text(
+            (board_lifecycle if name == "board-lifecycle" else tick_lifecycle)().emit()
+        )
         made.append((p.name, title))
 
     # ---- GATES: XML parses, labels clear the floor, ink is black and white only ----
@@ -697,17 +853,23 @@ def main() -> int:
         mm = min_label_mm(svg)
         report.append((fname, mm))
         if mm < FLOOR_MM:
-            failures.append(f"{fname}: smallest label prints at {mm:.2f} mm (floor {FLOOR_MM})")
+            failures.append(
+                f"{fname}: smallest label prints at {mm:.2f} mm (floor {FLOOR_MM})"
+            )
         err = bw_gate(svg, fname)
         if err:
             failures.append(err)
 
-    index = ["# Figures", "",
-             "Generated from `docs/SYSTEM-MODEL.yaml` by `scripts/gen_handbook_figures.py`.",
-             "Genre: nasa-handbook line drafting — black ink, line-style state, Routed Gothic labels.",
-             "Every label is verified >= 2.05 mm at the builder's print scale; ink is black/white only.",
-             "",
-             "| figure | what it answers |", "|---|---|"]
+    index = [
+        "# Figures",
+        "",
+        "Generated from `docs/SYSTEM-MODEL.yaml` by `scripts/gen_handbook_figures.py`.",
+        "Genre: nasa-handbook line drafting — black ink, line-style state, Routed Gothic labels.",
+        "Every label is verified >= 2.05 mm at the builder's print scale; ink is black/white only.",
+        "",
+        "| figure | what it answers |",
+        "|---|---|",
+    ]
     index += [f"| `{f}` | {q} |" for f, q in made]
     (OUT / "INDEX.md").write_text("\n".join(index) + "\n")
 
@@ -719,7 +881,10 @@ def main() -> int:
         for x in failures:
             print("  " + x)
         return 2
-    print("figure gate: all SVGs parse; all labels >= %.2f mm at print scale; black/white only" % FLOOR_MM)
+    print(
+        "figure gate: all SVGs parse; all labels >= %.2f mm at print scale; black/white only"
+        % FLOOR_MM
+    )
     return 0
 
 
