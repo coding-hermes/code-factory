@@ -16,6 +16,16 @@
 #             green leg that never ran is not.
 #
 # Exit 0 only when every non-skipped assertion passed.
+#
+# ch:trace row=CF-384 spec=specs/HARNESS.md#verdict-line wave=none:serial-worker test=tests/harness/codex-install-test.sh::codex-warn-classification doc=docs/handbook/chapters/M5-harness.md prompt=/home/kara/.hermes/cache/scratch/code-factory-2026-11-07-23-36-05/CF-384-brief.txt evidence=tests/harness/codex-install-test.sh verdict=none:foreman-runs-gitreins-after-worker commit=none:worker-commit-created-at-exit memory=none:foreman-writes-after-publish witness=none:foreman-verifies
+# STATUS: complete
+# TIER: T1
+# EVIDENCE: tests/harness/codex-install-test.sh
+#
+# CF-384: the arms B5 (positive) and B5b (negative) are the `codex-warn-classification` pair. B5
+# proves the two former WARN rows (app_server, auth-with-host-login) are notes that cannot move the
+# verdict; B5b proves a genuine WARN (no credential surface at all) still ends `CODEX: UNVERIFIED`
+# with exit 3. Both are required: either one alone is satisfiable by the wrong code.
 set -uo pipefail
 HERE_REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 INSTALLER="$HERE_REPO/scripts/harness/install-codex.sh"
@@ -217,17 +227,48 @@ else
   no "B4 a second --apply changed something (rc=$rc, $efore -> $eafter)"
 fi
 
-# B5 — --check on the installed fake home measures the binary and version legs. It ends UNVERIFIED
-# (exit 3), not PASS: two of this adapter's own rows are standing WARNs — `app_server` ([experimental]
-# subcommand present, unused by crier) and `auth` (no CF_API_KEY_FILE and no $HOME/.codex/auth.json in
-# this throwaway HOME). A WARN row cannot sit beside PASS (specs/HARNESS.md "The verdict line", CF-141).
+# B5 — CF-384 codex-warn-classification, POSITIVE arm. --check on the installed fake home measures
+# the binary and version legs and ends PASS (exit 0): the two rows this adapter used to WARN on are
+# environment FACTS the measured exec adapter does not need, so they are notes —
+#   app_server  the [experimental] subcommand exists (crier runs exec mode, never a sidecar)
+#   auth        a host login exists (~/.codex/auth.json), so a turn can authenticate
+# Neither absence-blocks a run, so neither may move the verdict (specs/HARNESS.md "Which conditions
+# are notes, and which are WARNs"). Their TEXT is still printed, so the information is not lost.
+mkdir -p "$FAKEHOME/.codex"
+printf '%s\n' '{"fixture":"host login placeholder — no credential value"}' >"$FAKEHOME/.codex/auth.json"
+chmod 600 "$FAKEHOME/.codex/auth.json"
 O="$SB/b5.out"
 rc=$(clean_env HOME="$FAKEHOME" "$INSTALLER" --check >"$O" 2>&1; echo $?)
-[ "$rc" = "3" ] && grep -q "PASS  binary — $FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex" "$O" \
-  && grep -q 'PASS  version — ' "$O" && grep -q 'WARN  auth' "$O" \
-  && grep -qx 'CODEX: UNVERIFIED' "$O" \
-  && ok "B5 --check measures the installed pin and ends 'CODEX: UNVERIFIED' (exit 3) on its own WARN rows" \
-  || { no "B5 --check did not measure the installed pin with a row-count verdict (rc=$rc)"; sed 's/^/        /' "$O"; }
+if [ "$rc" = "0" ] && grep -q "PASS  binary — $FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex" "$O" \
+  && grep -q 'PASS  version — ' "$O" \
+  && grep -qF '  ..    app_server — [experimental] app-server subcommand present' "$O" \
+  && grep -qF '  ..    auth — $HOME/.codex/auth.json exists (mode 600)' "$O" \
+  && [ "$(grep -c '^  WARN  ' "$O")" = 0 ] \
+  && grep -qx 'CODEX: PASS' "$O"; then
+  ok "B5 codex-warn-classification: --check on the installed pin with a host login ends 'CODEX: PASS' (exit 0); app_server and auth are printed as notes, 0 WARN rows"
+else
+  no "B5 codex-warn-classification: --check did not reach PASS with the two former WARN rows as notes (rc=$rc, $(grep -c '^  WARN  ' "$O") WARN rows)"; sed 's/^/        /' "$O"
+fi
+
+# B5b — CF-384 codex-warn-classification, NEGATIVE arm. The PASS above must not be reachable by
+# deleting the warning mechanism: the same pinned binary in a home with NO credential surface at all
+# still prints a genuine `WARN auth` row and ends UNVERIFIED with exit 3. app_server still exists on
+# this binary, so the only row that can move the verdict here is the auth absence.
+# The B5 login is removed first so no later arm inherits it — D2 below keeps the state it had before.
+rm -f "$FAKEHOME/.codex/auth.json"
+NOCRED="$SB/home-nocred"
+mkdir -p "$NOCRED/.local"
+cp -r "$FAKEHOME/.local/codex" "$NOCRED/.local/codex"
+O="$SB/b5b.out"
+rc=$(clean_env HOME="$NOCRED" "$INSTALLER" --check >"$O" 2>&1; echo $?)
+if [ "$rc" = "3" ] && grep -q '^  WARN  auth — no CF_API_KEY_FILE and no \$HOME/.codex/auth.json' "$O" \
+  && grep -qF '  ..    app_server — [experimental] app-server subcommand present' "$O" \
+  && [ "$(grep -c '^  FAIL  ' "$O")" = 0 ] \
+  && grep -qx 'CODEX: UNVERIFIED' "$O"; then
+  ok "B5b codex-warn-classification: a genuine WARN (no credential surface) still ends 'CODEX: UNVERIFIED' (exit 3) — the WARN mechanism is intact, the notes are not the reason PASS is reachable"
+else
+  no "B5b codex-warn-classification: a forced no-credential run did not end UNVERIFIED with a named WARN auth row (rc=$rc)"; sed 's/^/        /' "$O"
+fi
 
 # B6 — a version that is not the pin FAILs and names both values.
 MIS="$SB/home-mismatch"

@@ -304,13 +304,20 @@ check_workdir() {
 }
 
 # --- check legs ------------------------------------------------------------------------------
+# CF-384: a row is classified by whether its ABSENCE blocks a run of the surface crier uses.
+# `warn` is the verdict-moving row (a genuine absence); `note` records an environment FACT the
+# measured exec adapter does not need, so it cannot move the verdict. The decision table for these
+# two rows is specs/HARNESS.md "Which conditions are notes, and which are WARNs".
 report_auth() {
   local host_login="$HOME/.codex/auth.json" mode
   if [ -n "${VAR[CF_API_KEY_FILE]:-}" ]; then return 0; fi          # validated and reported above
   if [ -f "$host_login" ]; then
     mode=$(stat -c '%a' "$host_login" 2>/dev/null || echo '?')
-    warn "auth" "\$HOME/.codex/auth.json exists (mode $mode) — a host login is ambient state, not a directive; fine for a measured turn, not for a node"
+    # Ambient, not a directive — but a credential EXISTS, so an unattended turn can authenticate.
+    # crier never needs this repo's opinion of where the login came from, so it is a note.
+    note "auth — \$HOME/.codex/auth.json exists (mode $mode) — a host login is ambient state, not a directive; fine for a measured turn, not for a node"
   else
+    # A genuine blocker: with no key file and no host login there is nothing to authenticate with.
     warn "auth" "no CF_API_KEY_FILE and no \$HOME/.codex/auth.json — an unattended turn will fail at auth"
   fi
 }
@@ -344,7 +351,11 @@ report_app_server() {  # report_app_server <binary>
   h=$("$b" app-server --help 2>/dev/null)
   case "$h" in
     *app\ server*|*app-server*)
-      warn "app_server" "[experimental] app-server subcommand present — crier@6422c851 does not use it (exec mode); probe with --app-server" ;;
+      # CF-384: the subcommand existing is an environment FACT, not an absence — crier runs exec
+      # mode and never starts a sidecar, so its presence cannot block a turn and never moves the
+      # verdict. Its ABSENCE is the opposite: it is a named FAIL, because a sidecar consumer could
+      # not be served (that arm below is unchanged).
+      note "app_server — [experimental] app-server subcommand present — crier@6422c851 does not use it (exec mode); probe with --app-server" ;;
     *) bad "app_server" "no app-server subcommand (a sidecar consumer could not be served)"; return 1 ;;
   esac
 }

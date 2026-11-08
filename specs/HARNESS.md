@@ -19,6 +19,8 @@ A **harness** is whatever runs the work inside a node. The factory must not care
 | Fail | Non-zero exit on failure; never a silent success. Every adapter ends with the verdict line defined in "The verdict line" below, including a ladder that stops early. |
 | Idempotent | Re-running install changes nothing. |
 
+<a id="verdict-line"></a>
+
 ### The verdict line
 
 Every adapter ends its output with **one** verdict line, and that line is decided by the row counts
@@ -46,8 +48,8 @@ exited 0 with two `WARN` rows above the verdict. `tests/selftest.sh` §59 keeps 
 
 The row-count rule is the `--check` rule, because `--check` is the certification claim a caller acts
 on. The modes that DO something (`--apply`, `--turn`, `--app-server`) pass `action` to `verdict()`:
-there a `WARN` is advice about a run that already happened (a `$HOME/.local/bin` PATH hint, an
-`[experimental]` subcommand this repo does not use), so only `FAIL` rows decide and a measured
+there a `WARN` is advice about a run that already happened (a `$HOME/.local/bin` PATH hint, a
+`model_served` the harness did not report), so only `FAIL` rows decide and a measured
 install still ends exit 0. Without that split `install-codex.sh --apply` — a harness this repo has
 measured — would report `UNVERIFIED` for a successful install merely because it also warned that
 `$HOME/.local/bin` is not on `PATH`.
@@ -58,6 +60,34 @@ nothing was installed or run`), and claude-code's `--turn` without a credential 
 `CLAUDE-CODE: SKIP (…)`. A ladder that stops early still reaches the verdict for the rows it did
 print: `install-hermes.sh` refusing an out-of-range interpreter prints `FAIL python — …` and then
 `HERMES: FAIL (1)`, not a bare exit with no summary.
+
+## Which conditions are notes, and which are WARNs
+
+The verdict rule above says a `WARN` row cannot sit beside `PASS`. That makes the CLASS of each row a
+substantive decision, and CF-384 settled it for the two codex rows that had been warning about facts
+the adapter does not need — a healthy host therefore could not reach `CODEX: PASS`:
+
+| Row (adapter) | Condition measured | Class | Why |
+|---|---|---|---|
+| `app_server` (codex) | the `[experimental]` app-server subcommand is **present** | `..` note | crier@6422c851 runs **exec** mode and starts no sidecar — its own doc comment names "two verified surfaces: exec create / exec resume", and `grep -rn app-server` over crier returns nothing. A sidecar existing cannot block any run this repo dispatches, so it is an environment FACT the row records (with its text, and the `--app-server` pointer) and it does not move the verdict. |
+| `app_server` (codex) | the subcommand is **absent** | `FAIL` (unchanged) | the mirror case, and strictly stronger than a `WARN`: a consumer that wanted the sidecar could not be served, and the row names that. |
+| `auth` (codex) | no `CF_API_KEY_FILE`, but `$HOME/.codex/auth.json` **exists** | `..` note | an ambient host login. A credential exists, a turn can authenticate, and where the host's login came from is not something this adapter certifies — the row is printed so the provenance stays visible, and it is a note so a working host is not reported unproven for it. |
+| `auth` (codex) | **neither** a key file nor a host login | `WARN` (unchanged) | a genuine blocker: an unattended turn fails at auth, and "nothing to authenticate with" is exactly the absence this row exists to name. It keeps `CODEX: UNVERIFIED` with exit 3. |
+| any other adapter's row | any `WARN` | `WARN` (unchanged) | the rule above applies verbatim: `<LABEL>: UNVERIFIED`, exit 3. |
+
+The question a row answers is **"does the absence of the thing this row reports stop a run of the
+surface the adapter is measured on?"** If it does, the row is a `WARN` and the verdict moves; if the
+row reports a fact the adapter does not need, it is a note. Classification is a **call-site** decision
+per row — `warn()` and `verdict()` in `scripts/lib.sh` are untouched, so a generic `WARN` row still
+makes `--check` `UNVERIFIED` with exit 3, and no other adapter's rows changed. Deleting the warning
+mechanism would be a different change and is not what this table authorises.
+
+`tests/harness/codex-install-test.sh` keeps the decision falsifiable in both directions, which is why
+the pair exists rather than one arm: **B5** runs `--check` on the pinned binary in a home with a host
+login and requires `CODEX: PASS` with exit 0, both rows printed as notes and **zero** `WARN` rows;
+**B5b** runs the same pinned binary in a home with no credential surface at all and requires the named
+`WARN auth` row and `CODEX: UNVERIFIED` with exit 3. B5 alone would pass an adapter that deleted its
+warnings; B5b alone would pass the defect the row was raised on.
 
 ## Adapters and their measured state
 
