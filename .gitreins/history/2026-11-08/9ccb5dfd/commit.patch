@@ -1,0 +1,196 @@
+commit 86d13c490f66ba914290dce4a933f16bea730c3c
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Sat Nov 7 23:23:48 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Sat Nov 7 23:23:48 2026 -0500
+
+    board: file CF-387 (step-2 footprint cost) and CF-388 (gateway_auth dies on a fresh node) — dogfood walk 2026-11-08
+    
+    Walked README Quick start at pinned origin/main 40db7d8 in a git-archive copy of
+    that SHA, because two sibling lanes held the shared checkout. Steps 1 and 3 reach
+    repo-convention rows and CF-145's fix holds; the two rows filed here are what the
+    walk found that no row owned.
+    
+    CF-387 — layer 00 of README step 2 spends 29.85 s of a 48.48 s run inside
+    node_hygiene.py's footprint row (31.97 s standalone), walking $HOME/.hermes
+    (131 GB) against a 5 GiB admission floor, while project-node.sh:242-246 claims
+    the row "stays cheap on a host with a large $HOME".
+    
+    CF-388 — on a live node created by the documented path, layer 20's gateway_auth
+    staging dies with FileNotFoundError on ~/.hermes/config.yaml.cf-tmp: the config
+    file's parent directory is never created (:79-83, while :64 creates only the
+    password file's directory). gateway_start then refuses the public bind, so the
+    behaviour README.md:50-51 promises is unreachable on a fresh node. Re-running the
+    writer after the adapter creates ~/.hermes passes, so the defect is the
+    precondition and its ordering, not the writer.
+    
+    The node was reaped in the same tick (destroy rc=0, local key removed, id absent
+    from the post-destroy census).
+    
+    Addresses CF-387, CF-388. Evidence: docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md
+    
+    ch:trace row=CF-387 spec=README.md#quick-start test=tests/selftest.sh::selftest doc=none:code-comment-claim evidence=docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md witness=cmd:footprint-31.97s-126718MiB verdict=none:judged-after-commit commit=none:self-referential-hash memory=none:no-lane-role-token
+    ch:trace row=CF-388 spec=README.md#what-step-3-writes-for-you test=tests/selftest.sh::selftest doc=README.md evidence=docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md witness=cmd:live-node-create-rc1-FileNotFoundError verdict=none:judged-after-commit commit=none:self-referential-hash memory=none:no-lane-role-token
+---
+ .coding-hermes/board/tasks.jsonl                   |   2 +
+ .../code-factory-dogfood-2026-11-08-04-02-17.md    | 142 +++++++++++++++++++++
+ 2 files changed, 144 insertions(+)
+
+diff --git a/.coding-hermes/board/tasks.jsonl b/.coding-hermes/board/tasks.jsonl
+index d70d2ca..bd8b805 100644
+--- a/.coding-hermes/board/tasks.jsonl
++++ b/.coding-hermes/board/tasks.jsonl
+@@ -360,3 +360,5 @@
+ {"id":"CF-384","title":"P3 \u2014 codex --check can never print PASS: two standing WARN rows make a measured adapter read UNVERIFIED on every host","status":"complete","priority":"P3","complexity":2,"created_at":"2026-11-07T20:52:33Z","updated_at":"2026-11-08T00:58:36Z","detail":{"fingerprint":"b507ec847ca7381154e65d77e272378394a80bfb184d28ae45536c394766e756","evidence":[{"run_id":"a29a9bf8","ts":"2026-11-08T00:58:36Z"}]},"reasoning":"Measured at f144831 by the CF-141 worker and re-measured by this foreman tick. CF-141 gave every adapter an honest row-count verdict (PASS only when every row is PASS, UNVERIFIED when a WARN exists, FAIL (n) on FAIL). That vocabulary is right, but install-codex.sh now returns UNVERIFIED/exit 3 on every host because two rows are unconditional warns: app_server (subcommand present, [experimental], crier does not use it) and auth (a host login is ambient state). specs/HARNESS.md records codex as having a MEASURED install ladder, and the same run prints four PASS rows (binary, version, three exec_contract rows), so a permanently-UNVERIFIED verdict for a measured adapter is a row-CLASSIFICATION defect, not a measurement one. Same shape on claude-code and pi-agent on a host without a directive credential. Not CF-141: the verdict rule is not reopened here; only which rows may move it. Rule 2 of AGENTS.md still applies \u2014 the new PASS must stay reachable and a genuine WARN must still flip the verdict.","acceptance_criteria":"0. Reproduce at the current tip from the repo root: out=$(bash scripts/harness/install-codex.sh --check 2>&1); rc=$? -> four PASS rows (binary, version, exec_contract x3), two WARN rows (app_server, auth), then CODEX: UNVERIFIED with rc=3, for an adapter whose ladder specs/HARNESS.md records as measured.\n1. Each WARN row in install-codex.sh gets a named decision in specs/HARNESS.md: a row reporting an environment fact the adapter does not need (app_server unused by crier, auth ambient) becomes a note and does not move the verdict; a row whose absence genuinely blocks a run stays a WARN. The decision table names both rows literally.\n2. After the change the same command prints CODEX: PASS and exit 0 on a host with the pinned binary, with the two former WARN rows still printed as notes carrying their text; and a genuine WARN still yields CODEX: UNVERIFIED with exit 3 (prove it by forcing one, e.g. a PATH-local stub or an unset credential), so the PASS is not made reachable by deleting the warning mechanism.\n3. tests/selftest.sh section 59 (the six-adapter row-count table) and tests/harness-conformance.sh check leg still behave, and bash tests/selftest.sh prints SELFTEST: PASS with no new FAIL rows.\n4. specs/HARNESS.md states which conditions are notes versus WARNs and why, and docs/handbook/chapters/M5-harness.md section 6 (contract M5-C3) carries the distinction; bash scripts/boardctl validate prints RESULT: OK.","probe":"out=$(bash scripts/harness/install-codex.sh --check 2>&1); rc=$?; printf '%s\\n' \"$out\" | grep -E '^(  (PASS|WARN|FAIL)|CODEX:)' | tail -9; echo rc=$rc","capability_tags":[],"foreman_note":null,"worker_status":"pending","commit_hash":null,"guard_result":null,"ci_result":null,"worker_summary":null}
+ {"id":"CF-385","title":"The tracked python surface is red at b52df08: ruff F811/F841/E741 shipped with handbook W9, so selftest section 51 and every tier-1 lint and tests leg fail on an untouched tree","status":"pending","priority":"P1","complexity":2,"created_at":"2026-11-08T00:36:29Z","updated_at":"2026-11-08T00:36:29Z","detail":{"fingerprint":"01eb67b0976374cd3427dcf4aebb68135d7c26facfe428451bb6d8cee1900104"},"reasoning":"CF-385 filed and closed in the same tick, because it was the gate blocking CF-307's last clause and every python commit's tier-1.\n\nMeasured at b52df08 / 6447606 (2026-11-07, this tick): `ruff check --output-format=concise $(git ls-files '*.py')` exited 1 with five findings, all in handbook machinery untouched by CF-307 \u2014\n  scripts/build_book.py:430:5 F811 Redefinition of unused `svg_fit` from line 59\n  scripts/gen_handbook_figures.py:89:9 F841 Local variable `vh` is assigned to but never used\n  scripts/gen_handbook_figures.py:217:33 E741 Ambiguous variable name: `l`\n  scripts/gen_handbook_figures.py:232:9 E741 Ambiguous variable name: `l`\n  scripts/gen_handbook_figures.py:245:14 E741 Ambiguous variable name: `l`\nAttribution: `git diff --stat 0e01a6f b52df08 -- scripts/build_book.py scripts/gen_handbook_figures.py` is empty, and `git log -1` on both files names 0e01a6f (handbook W9, 18:38:02). Consequence measured by the CF-307 judge: `bash tests/selftest.sh` section 51 FAILed on an unmodified checkout, and the tier-1 lint AND tests legs red on every run, so no python commit could be judged on its merits (same class as CF-090 / CF-254).\n\nF811 was load-bearing, not cosmetic: W9 added a both-dimension svg_fit at line 59 (scale = min(1, 170/w_mm, 250/h_mm)) \u2014 the rule gen_handbook_figures.min_label_mm documents as \"EXACTLY the builder's fit rule\" \u2014 but an older wider-dimension version sat at line 430 and, being the later binding, shadowed it. W9's intended rule never executed. Fix: keep the W9 definition, delete the shadowed one, so builder and print-scale floor gate model one rule. The other four are output-neutral (`vh` computed and discarded; three `l` loop vars renamed `layer` in system_map_sheet). `ruff format` was then applied to both files because the commit guard's lint leg demands it (the files had never been formatted; that is whitespace-only churn, disclosed).\n\nVerified after the change: ruff check -> All checks passed (exit 0), no `# noqa` added; py_compile both files -> 0; `python3 scripts/build_book.py --out <scratch>/cf385-book.pdf` -> exit 0, \"125 pages ... fit clean (ok, 2.0 mm free above the footer (worst page)) \u00b7 137 table codes \u00b7 check.py green\", fonts include Letter Gothic Code and Routed Gothic \u2014 the build's own fit line and check.py are the instruments that would catch a figure now allowed to print up to 250 mm tall instead of being fixed at 200 mm.\n\nCommit f9f2ce2 (three files: scripts/build_book.py, scripts/gen_handbook_figures.py, docs/handbook/chapters/M6-documentation.md, which now carries the fit rule in its flight-data checklist). Commit guard at f9f2ce2: \"Tier 1 Guards: PASS (test mode: full) \u2014 secrets clean, lint ok, tests (full)\"; the tests leg is `bash tests/selftest.sh`, so section 51 is green at the tip.\n\nGitReins: task CF-385 created, started, completed; judge was run and KILLED mid-tier-2 after an instrument loop \u2014 its verification wrapper polls the book build with `sh -c sleep 27; tail -8 /tmp/cf385rev/build12.log` while one build takes ~90 s, so it could never observe completion and spent 18 attempts. No verdict.json was written; the row is closed as verdict=none:judge-instrument-loop (poll window shorter than the gate it watches), NOT on a fabricated pass. The merge decision rests on the guard PASS above plus the direct measurements in this note.","probe":null,"capability_tags":[],"foreman_note":null,"worker_status":"pending","commit_hash":null,"guard_result":null,"ci_result":null,"worker_summary":null,"deferred":true,"defer_reason":"LANDED at f9f2ce2 (guard Tier 1 PASS incl. full selftest; ruff clean; book build green). Outstanding: tier-2 verdict only \u2014 the judge was killed after 18 build attempts with a 27 s poll window against a ~90 s build (instrument loop), so no verdict.json exists. A later tick should judge and close, not re-implement.","defer_review_by":"2026-11-09"}
+ {"id":"CF-386","title":"P3 \u2014 a complete row can cite a FAIL verdict from another commit as its only closure evidence, with no disclosure","status":"pending","priority":"P3","complexity":3,"created_at":"2026-11-08T04:15:05Z","updated_at":"2026-11-08T04:15:05Z","detail":{"fingerprint":"e874c860926b0650a3d013ba25adb9b2d457311017a6e4cf3e5447e7de4945d4"},"reasoning":"CF-307 (closed 2026-11-08T00:36:29Z) carries exactly one detail.evidence entry: run_id 21b706ef and no artifacts key. That run resolves to the tracked artifact .gitreins/history/2026-11-08/21b706ef/verdict.json, whose envelope says passed=false and binds commit 6447606 (a handbook commit) while the row binds b52df08 (the CF-307 fix). The single failing arm was the repo-wide clause \"bash tests/selftest.sh passes\", unmet at that handbook tip; the verdict records the gate behaviour itself as delivered. The row carries no foreman_note and no probe, and its closing event detail is only {\"status\":\"complete\"}. cf181 cannot see this class because a row with no artifacts has no envelope for it to compare. CF-150 has the same FAIL-verdict shape but DOES disclose it in its foreman_note (tier2 verdict 0b3170ab INCOMPLETE, cap), so it is not an instance. Measured at origin/main 40db7d8: 106 complete rows, 5 unbound (CF-150, CF-275, CF-288, CF-307, CF-384). The sync lane rebound CF-275 in the same tick (verdict adbcd66a passes at the row own commit), leaving 4.","probe":null,"capability_tags":[],"foreman_note":null,"worker_status":"pending","commit_hash":null,"guard_result":null,"ci_result":null,"worker_summary":null,"acceptance_criteria":"A1: CF-307 either cites a tracked artifact whose envelope binds b52df08 with passed true, or carries a foreman_note naming run 21b706ef and stating why its FAIL is superseded by later measurement. A closure that still rests on an undisclosed FAIL fails this arm.\nA2: a committed census command prints fail_verdict_closures=<n> and rows=<ids> over the board; it prints 1 / CF-307 at filing and must print 0 after the repair. Run it as python3 docs/audits/<name>.py and quote both lines.\nA3: the instrument red arm is run, not assumed: against a fixture board in which one complete row cites a tracked passed=false verdict, the same command names that row id, prints the count 1, and exits 0.\nA4: bash scripts/boardctl validate still prints RESULT: OK and bash tests/selftest.sh still prints SELFTEST: PASS at the tip that closes this row."}
++{"id":"CF-387","title":"P4 \u2014 README step 2 costs 48 s on the control host: layer 00's footprint walks $HOME/.hermes (131 GB) against a 5 GiB floor, and the source comment claims it stays cheap","status":"pending","priority":"P4","complexity":3,"created_at":"2026-11-08T04:23:28Z","updated_at":"2026-11-08T04:23:28Z","detail":{"fingerprint":"c50919aaa6df73c0d9e473bb1b30d823c6d431864a7846db26c39e21ed21f7d5"},"reasoning":"Dogfood walk 2026-11-08 (tick code-factory-dogfood-2026-11-08-04-02-17) at pinned origin/main 40db7d8cff851a64f8030ed62d835f344e886419, run from a git-archive copy of that SHA because two sibling lanes held the shared checkout. README Quick start step 2 \u2014 `bash ./scripts/project-node.sh --check --project myproject` \u2014 costs 48.48 s wall on the control host. Layer attribution from the same copy: `--layers 00` = 29.85 s, `--layers 10/20/30/40` = 0.08/0.07/0.02/0.02 s. The cost is the footprint row: `python3 scripts/node_hygiene.py footprint --root $HOME --floor-gib 5 --floor-source role-default` = 31.97 s, rc=1, printing `PASS  footprint \u2014 126718.0 MiB measured at /home/kara: repo 0.0 MiB, node_toolchain 0.0 MiB, go_toolchain 0.0 MiB, harness 126718.0 MiB, node_state 0.0 MiB, modcache 0.0 MiB` and then `FAIL  footprint:floor \u2014 126718.0 MiB exceeds the 5 GiB floor (2475.0 %) from role-default`. `$HOME/.hermes` is 131 GB (`du -sh`) and is the `harness` component in scripts/node_hygiene.py:43-49, so the walk is over the operator's whole harness tree. scripts/project-node.sh:242-246 states the opposite in its own comment \u2014 \"Bounded component set only (repo, toolchains, harness home, node state, declared module cache), so the row stays cheap on a host with a large $HOME\" \u2014 measured false: the set is bounded in count, not in size, and its one unbounded member dominates the measurement and the floor. The FAIL names a percentage and no remedy, so a stranger running README step 2 on the control host is told their home is 2475 % over a floor with no next step; it is a NODE property being measured on the wrong machine. On a real node the same row is instant and clean (`PASS footprint \u2014 0.0 MiB`, `PASS footprint:floor \u2014 0.0 MiB of the 5 GiB floor`, measured in the same tick's live create run), so this is a control-host arm only. Not owned by CF-003 or CF-040 (footprint named incidentally, other subjects) or PERF-013 (selftest CPU, not the user-facing check). Evidence: docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md section 1a.","probe":null,"capability_tags":[],"foreman_note":null,"worker_status":"pending","commit_hash":null,"guard_result":null,"ci_result":null,"worker_summary":null,"acceptance_criteria":"1. Reproduce from a clean published copy with CRIER_URL and BUNKER_SERVER unset: `time bash ./scripts/project-node.sh --check --project myproject --layers 00` spends more than 20 s in layer 00 and prints `FAIL  footprint:floor \u2014 <N> MiB exceeds the 5 GiB floor (<P> %)`.\n2. The footprint row's cost is bounded independently of `$HOME/.hermes` size \u2014 on a host whose `.hermes` exceeds 100 GB the measurement completes in under 5 s \u2014 or the comment at scripts/project-node.sh:242-246 is corrected to state the real cost and the condition it depends on.\n3. The `footprint:floor` FAIL names an actionable remedy for the control-host case and says which machine the number describes, so a stranger running README step 2 can tell that step 2 is a node-side check.\n4. `bash tests/selftest.sh` prints SELFTEST: PASS, and any new check carries a fixture that proves it can FAIL (AGENTS.md rule 2)."}
++{"id":"CF-388","title":"P2 \u2014 layer 20's gateway_auth staging dies on a freshly created node: node_gateway_auth.py writes ~/.hermes/config.yaml.cf-tmp before ~/.hermes exists, so gateway_start still refuses the documented create path","status":"pending","priority":"P2","complexity":3,"created_at":"2026-11-08T04:23:28Z","updated_at":"2026-11-08T04:23:28Z","detail":{"fingerprint":"ad969b16f41310d86d3f4025259da760e5c1f3bb1985268580ac945615c44ab8"},"reasoning":"Dogfood walk 2026-11-08 (tick code-factory-dogfood-2026-11-08-04-02-17) at pinned origin/main 40db7d8cff851a64f8030ed62d835f344e886419. A node host was available this time \u2014 of the three configured bunker servers two answered `connection refused` and one answered an empty census (`No agents found.`) \u2014 and a real Crier was listening on the control host (`/health` 200), so one spawn was spent on the documented path itself: `BUNKER_SERVER=<empty-host> CRIER_URL=http://<control-host>:8767 bash scripts/node-create.sh --project cf-dogfood --repo https://github.com/github/gitignore --harness hermes --ttl 1h` \u2192 rc=1, 155 s, 97 lines. It passed spawn, staged (12 files), disk_floor, arch/role/disk/mem, footprint, footprint:room, footprint:floor, crier_url, `reach:<crier>/health \u2014 200`, `reach:https://pypi.org/simple/ \u2014 200`, the base tools, `python \u2014 3.13.5`, `install \u2014 Hermes Agent v0.19.0 (2026.7.20)`, `binary \u2014 \u2026/hermes-venv/bin/hermes`, `repo_clone \u2014 \u2026 /repo @ 41862c8` and `freshness \u2014 branch=main head=41862c8 behind=0 ancestor=true`. Layer 20 printed `FAIL  gateway_auth \u2014 could not stage dashboard.basic_auth in /home/bunker-node-cf-dogfood-231753/.hermes/config.yaml (exit 1): FileNotFoundError: [Errno 2] No such file or directory: '/home/bunker-node-cf-dogfood-231753/.hermes/config.yaml.cf-tmp'` and then `FAIL  gateway_start \u2014 refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml \u2014 block absent (config unreadable)`. Cause: scripts/node_gateway_auth.py:64 creates the directory for the PASSWORD file (`os.makedirs(os.path.dirname(password_file), exist_ok=True)`) but nothing creates the directory for the CONFIG file \u2014 :79-83 builds `tmp = config + \".cf-tmp\"` and opens it directly. On a freshly created node `~/.hermes/` does not exist yet: the harness adapter that creates it runs after this step inside layer 20. README.md:50-51 promises \"A freshly created node is expected to reach `PASS gateway_start \u2014 /api/status -> 200` from the adapter\", which is unreachable on the documented create path. CF-150 (complete) added this mechanism and closed on acceptance criterion 1 requiring that `install-hermes.sh --apply` in a fresh HOME print \"a launch or reachability row for `gateway_start` rather than `refused: a public bind needs dashboard.basic_auth`\" \u2014 that exact refusal is the line measured here, so on a fresh node the mechanism does not reach its own criterion. Discriminating arm, which separates \"broken writer\" from \"missing parent\": after the adapter's install created `~/.hermes` on the same node, the same writer re-run printed `PASS  gateway_auth \u2014 added dashboard.basic_auth (user node) to \u2026/.hermes/config.yaml`, `PASS  gateway_auth \u2014 password stored at \u2026/.node/auth/gateway.pass, mode 600 (not printed)`, auth_rc=0. The writer is correct; the defect is its precondition and ordering. Must not be merged with CF-292 (the 8-line `basic_auth` window can false-PASS), CF-193/CF-194 (the GATE's consumer-side YAML parsing and HERMES_HOME root) or CF-150 itself (that row added the step; this is the step's own precondition on the only state the create path runs in). Node reaped in the same tick: `bunker destroy` rc=0, home 431.4 MB archived, local SSH key removed, id absent from the post-destroy census. Evidence: docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md sections 2 and 2a.","probe":null,"capability_tags":[],"foreman_note":null,"worker_status":"pending","commit_hash":null,"guard_result":null,"ci_result":null,"worker_summary":null,"acceptance_criteria":"1. Reproduce on any HOME whose `.hermes` directory does not exist: `H=$(mktemp -d); python3 scripts/node_gateway_auth.py \"$H/.hermes/config.yaml\" \"$H/.node/auth/gateway.pass\"; echo rc=$?` prints a raw `FileNotFoundError` naming `config.yaml.cf-tmp` and rc=1 on the pre-fix tree, and `bash scripts/project-node.sh --check --project p` then prints `FAIL gateway_auth` followed by `FAIL gateway_start \u2026 block absent`.\n2. The writer creates the config file's parent directory when it is absent, so the same command on a fresh HOME exits 0 and writes a `dashboard.basic_auth` block, with the password file mode 600 and never printed (AGENTS.md rule 8).\n3. On the documented create path a freshly created node reaches a `gateway_start` launch or reachability row and does not print `refused: a public bind needs dashboard.basic_auth` \u2014 CF-150 acceptance criterion 1 re-asserted at the state the create path actually runs in.\n4. Negative control in the same run: with the staged block removed, `install-hermes.sh --apply` still prints the exact refusal wording and exits nonzero, so the fix is a producer and not a weakened gate.\n5. `bash tests/selftest.sh` prints SELFTEST: PASS with a numbered section that fails on the pre-fix tree, and README.md:50-51 states what a freshly created node actually reaches."}
+diff --git a/docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md b/docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md
+new file mode 100644
+index 0000000..707899b
+--- /dev/null
++++ b/docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md
+@@ -0,0 +1,142 @@
++# Dogfood walk — tick code-factory-dogfood-2026-11-08-04-02-17
++
++Target identity: `origin/main` **40db7d8cff851a64f8030ed62d835f344e886419**, pinned for the whole
++walk. Canonical checkout `/home/kara/code-factory` was clean (`git status --porcelain -uall` = 0
++lines) and at parity (`git rev-list --left-right --count HEAD...origin/main` = `0 0`) when the walk
++started, but **two sibling lanes were running `tests/selftest.sh` in that same checkout** (a
++`code-factory` lane publishing the CF-006 verdict bundle and a `code-factory-sync` lane at
++`04-02-17`), so every arm below ran in a `git archive` copy of the pinned SHA at
++`<scratch>/walk` — 1327 files, `README.md`/`AGENTS.md`/`tests/selftest.sh` present. The canonical
++checkout was not written to.
++
++Host: control host, `CRIER_URL` and `BUNKER_SERVER` unset in the walk environment (the documented
++fresh-host scenario).
++
++## 1. Quick start, walked literally
++
++| Step | Command | rc | wall | first deciding row |
++|---|---|---|---|---|
++| 1 | `bash scripts/bunker-server-install.sh --check` | 1 | 0.01 s | `FAIL server_declared — BUNKER_SERVER unset — the client has no server to talk to` |
++| 2 | `bash ./scripts/project-node.sh --check --project myproject` | 1 | **48.48 s** | `FAIL footprint:floor — 126606.8 MiB exceeds the 5 GiB floor (2472.8 %)` |
++| 3 | `bash scripts/node-create.sh --project myrepo --repo https://github.com/you/myrepo --harness hermes` | 1 | 0.02 s | `FAIL crier_url — CRIER_URL unset or empty` |
++
++All three reach a repo-convention `FAIL` row naming the missing value, and steps 1 and 3 no longer
++abort in bash (`line 14:`/`line 70:`). **This is liveness confirmation of CF-145's fix, not a
++finding** — CF-145's acceptance criteria 1 and 2 asked for exactly these two rows. Step 3 now names
++`CRIER_URL` where CF-145 AC2 said `BUNKER_SERVER`; the substance (a named result row before any
++checker, no shell abort, nonzero exit) holds, so no row is filed against the wording.
++
++### 1a. Where step 2's 48 s goes
++
++| Arm | wall | note |
++|---|---|---|
++| `--layers 00` | 29.85 s | the `footprint` row alone: `python3 scripts/node_hygiene.py footprint --root $HOME --floor-gib 5` → **31.97 s**, rc=1 |
++| `--layers 10` | 0.08 s | |
++| `--layers 20` | 0.07 s | |
++| `--layers 30` | 0.02 s | |
++| `--layers 40` | 0.02 s | |
++
++`scripts/node_hygiene.py:43-49` measures five components, and the `harness` component is
++`$HOME/.hermes` — **131 GB / 126718 MiB on this host**, against a 5 GiB admission floor.
++`scripts/project-node.sh:242-246` states the opposite in its own comment:
++
++> Bounded component set only (repo, toolchains, harness home, node state, declared module cache),
++> **so the row stays cheap on a host with a large $HOME**.
++
++The set is bounded in *count*, not in *size*: the one member that is unbounded dominates the
++measurement, costs ~30 s of the 48 s first check, and then fails at 2475 % of the floor with no
++remedy named. On a real node the same row is instant and clean (`footprint 0.0 MiB`, `PASS
++footprint:floor` — see section 2), so this is a control-host arm only. Filed as **CF-387**.
++
++## 2. Node create against a live host (the lane's agent-spend)
++
++A node host was **available**: of the three configured bunker servers, two refused
++(`dial tcp … connection refused`) and one answered `No agents found.` at an empty census. A real
++Crier was listening on the control host (`/health` → 200). One spawn was spent, at the pinned tip:
++
++```
++BUNKER_SERVER=<empty-host> CRIER_URL=http://<control-host>:8767 \
++  bash scripts/node-create.sh --project cf-dogfood \
++       --repo https://github.com/github/gitignore --harness hermes --ttl 1h
++```
++rc=1, 155 s, 97 lines. Measured legs:
++
++- **PASS** spawn `node-cf-dogfood-231753` · staged (12 files) · disk_floor · arch/role/disk/mem ·
++  footprint `0.0 MiB` · footprint:room · footprint:floor `0.0 MiB of the 5 GiB floor` ·
++  crier_url · `reach:<crier>/health — 200` · `reach:https://pypi.org/simple/ — 200` ·
++  tool:python3/git/curl/tar/sha256sum · python:venv · `python — 3.13.5` ·
++  `install — Hermes Agent v0.19.0 (2026.7.20)` · `binary — …/hermes-venv/bin/hermes` ·
++  `repo_clone — … /repo @ 41862c8` · `freshness — branch=main head=41862c8 behind=0 ancestor=true`
++- **WARN** `kinds — generic fallback`, `tool:rg — missing`, `tool:node — missing`
++- **FAIL** `gateway_auth`, `binary` (pre-apply), `inference_key`, `gateway_start`, `crier_identity`
++- Layers 30/40 outcomes are as `README.md:51-53` predicts for `inference_key` and `crier_identity`.
++
++### 2a. The defect: layer 20's auth staging dies on a fresh node
++
++```
++  FAIL  gateway_auth — could not stage dashboard.basic_auth in
++        /home/bunker-node-cf-dogfood-231753/.hermes/config.yaml (exit 1):
++        FileNotFoundError: [Errno 2] No such file or directory:
++        '/home/bunker-node-cf-dogfood-231753/.hermes/config.yaml.cf-tmp'
++...
++  FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in
++        ~/.hermes/config.yaml — block absent (config unreadable)
++```
++
++`scripts/node_gateway_auth.py:64` creates the directory for the **password** file
++(`os.makedirs(os.path.dirname(password_file) …)`) but nothing creates the directory for the
++**config** file: `:79-83` builds `tmp = config + ".cf-tmp"` and opens it. On a freshly created node
++`~/.hermes/` does not exist yet — the harness adapter that creates it runs *after* this step in
++layer 20 — so the temp write raises `FileNotFoundError` and the staging never lands.
++
++`README.md:50-51` promises the opposite: *"A freshly created node is expected to reach `PASS
++gateway_start — /api/status -> 200` from the adapter."* That is unreachable on the documented
++create path, and the row that added this mechanism (CF-150) closed on the criterion that
++`--apply` in a fresh HOME must *not* print `refused: a public bind needs dashboard.basic_auth` —
++which is the exact line measured above.
++
++**Discriminating arm** (separates "broken writer" from "missing parent directory"). After the
++adapter's install created `~/.hermes` on the same node, the same writer was re-run:
++
++```
++PASS  gateway_auth — added dashboard.basic_auth (user node) to …/.hermes/config.yaml
++PASS  gateway_auth — password stored at …/.node/auth/gateway.pass, mode 600 (not printed)
++auth_rc=0
++```
++So the writer is correct and the defect is its precondition/ordering. Filed as **CF-388**.
++
++Distinct from, and must not be merged with: **CF-150** (complete — added the staging step),
++**CF-292** (pending — the 8-line `basic_auth` window can false-PASS), **CF-193/CF-194**
++(pending — the *gate's* YAML parsing and `HERMES_HOME` root, consumer side).
++
++### 2b. Teardown is proven, not merely attempted
++
++- `bunker info` on the agent: `Created At 20:18:16`, `Expires At 21:18:16` — **the documented
++  `--ttl 1h` measured exactly 3600 s**, an arm no earlier record covers.
++- `bunker destroy <agent> --server <host>` → rc=0, `home 431.4 MB`, `Removed local SSH key`.
++- Post-destroy census lists **no** agent with this run's id.
++- One *other* agent (`2764ae84`, created 20:21:19) appeared on the host inside this window and was
++  neither created nor touched by this run — the host answered `No agents found.` at the start of
++  the walk, so it belongs to a concurrent lane, not to this one.
++
++## 3. Failure paths (walked because a stranger hits them first)
++
++| Probe | Result | Classification |
++|---|---|---|
++| `bunker list` with no `--server` | rc=1, names the default server and `connection refused` | honest, no row |
++| `bunker list --server <s>` × 3 | 1 empty + reachable, 2 offline | routing evidence for section 2 |
++| `node-create.sh … --harness bogus` (CRIER_URL set) | rc=1, `FAIL staged_set — missing scripts/harness/install-bogus.sh` | **liveness of CF-125** (typo indistinguishable from documented-but-unmeasured) — no new row |
++| `project-node.sh --check --project p --bogus-flag` | rc=2, `unknown arg: --bogus-flag` | honest, no row |
++| step 1 run twice | rc 1/1, byte-identical output | idempotent (AGENTS.md rule 5) |
++
++## 4. What a new user would have done next
++
++On the control host: read step 2 as "run this here", wait 48 s, and be told their home is 2475 %
++over a 5 GiB floor — a number about the wrong machine, with no next step. On the node: reach
++`FAIL gateway_auth` with a Python traceback, then `gateway_start: block absent`, and conclude the
++auth staging the README documents does not work — it does, one directory too late.
++
++## 5. Boundary
++
++No product code was changed by this walk. The only writes are this evidence file and the two board
++rows. The canonical checkout was not written to; the walk copy is under the tick's scratch root.

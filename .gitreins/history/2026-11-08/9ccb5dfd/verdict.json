@@ -1,0 +1,167 @@
+{
+  "task_id": "CF-387",
+  "task_title": "Dogfood walk 2026-11-08: file the fresh-node gateway_auth staging defect and the control-host footprint cost",
+  "task_criteria": [
+    "At HEAD of the canonical worktree, `.coding-hermes/board/tasks.jsonl` contains a row whose id is CF-387 and a row whose id is CF-388, both with status `pending`, and both with a non-empty acceptance_criteria field. `docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md` exists at HEAD and is non-empty. Verify with: jq -r \"select(.id==\\\"CF-387\\\" or .id==\\\"CF-388\\\") | .id + \\\" \\\" + .status + \\\" \\\" + ((.acceptance_criteria // \\\"\\\")|length|tostring)\" .coding-hermes/board/tasks.jsonl"
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "86d13c490f66ba914290dce4a933f16bea730c3c",
+  "pass_class": "judged",
+  "tier2_skipped": false,
+  "working_tree_content_fingerprint": "9c9025cbc3a245a30a6f6b165cda83f4bd0773596325f9f1db77747b6e1f7530",
+  "working_tree_dirty_path_count": 1,
+  "items": [
+    {
+      "criterion": "At HEAD of the canonical worktree, `.coding-hermes/board/tasks.jsonl` contains a row whose id is CF-387 and a row whose id is CF-388, both with status `pending`, and both with a non-empty acceptance_criteria field. `docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md` exists at HEAD and is non-empty. Verify with: jq -r \"select(.id==\\\"CF-387\\\" or .id==\\\"CF-388\\\") | .id + \\\" \\\" + .status + \\\" \\\" + ((.acceptance_criteria // \\\"\\\")|length|tostring)\" .coding-hermes/board/tasks.jsonl",
+      "status": "PASS",
+      "detail": "Ran the exact command at HEAD (86d13c4): `jq -r 'select(.id==\"CF-387\" or .id==\"CF-388\") | .id + \" \" + .status + \" \" + ((.acceptance_criteria // \"\")|length|tostring)' .coding-hermes/board/tasks.jsonl` -> exit 0, output `CF-387 pending 888` / `CF-388 pending 1301`. Same result via `git show HEAD:.coding-hermes/board/tasks.jsonl` (so it holds at HEAD, not just the worktree). Exactly 2 matching rows; `jq -r .id | sort | uniq -d` is empty (no duplicate ids). `git cat-file -e HEAD:docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md` -> EXISTS_AT_HEAD, 8664 bytes with substantive sections 1/1a/2/2a/2b/3/4/5. `bash scripts/boardctl validate` -> `RESULT: OK (17 warning(s))`, exit 0, and none of the 17 warnings names CF-387 or CF-388 (no title/priority mismatch: CF-387 priority=P4 title prefix P4, CF-388 priority=P2 title prefix P2)."
+    },
+    {
+      "criterion": "The two filed rows must not duplicate an existing board row's subject: CF-388's defect (node_gateway_auth.py writes config.yaml.cf-tmp before ~/.hermes exists) must not already be owned by another open row, and the row must say why it is distinct.",
+      "status": "PASS",
+      "detail": "CF-292 (pending) is about the 8-line basic_auth window false-PASSing; its AC3 'A missing ~/.hermes is a named FAIL with no partial write' concerns the check's parser/partial write, not the writer's missing parent directory. CF-193/CF-194 are the consumer gate's YAML parsing and HERMES_HOME root; CF-150 is complete (it added the staging step). CF-388's reasoning states the boundary explicitly: 'Must not be merged with CF-292 (the 8-line `basic_auth` window can false-PASS), CF-193/CF-194 (the GATE's consumer-side YAML parsing and HERMES_HOME root) or CF-150 itself', and docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md:104-107 repeats it. CF-387 likewise names CF-003/CF-040/PERF-013 as non-owners. No duplicate id and no duplicate detail.fingerprint across the 182 fingerprinted rows (`uniq -d | wc -l` = 0).",
+      "derived": true
+    },
+    {
+      "criterion": "The defect each row describes must be real in the tree at HEAD: scripts/node_gateway_auth.py must create the password file's parent dir (:64) but not the config file's parent before opening `config + \".cf-tmp\"` (:79-80), and scripts/project-node.sh:242-246 must carry the \"stays cheap on a host with a large $HOME\" comment while node_hygiene.py walks $HOME/.hermes.",
+      "status": "PASS",
+      "detail": "scripts/node_gateway_auth.py:64 `os.makedirs(os.path.dirname(password_file) or \".\", exist_ok=True)` creates only the password file's directory; :79-80 `tmp = config + \".cf-tmp\"` then `with open(tmp, \"w\")` with no makedirs for the config's parent -> FileNotFoundError on a fresh HOME, exactly as CF-388 states. scripts/project-node.sh:242-246 carries 'Bounded component set only (repo, toolchains, harness home, node state, declared module cache), so the row stays cheap on a host with a large $HOME'; scripts/node_hygiene.py:43-49 lists `(\"harness\", \".hermes\")` and cmd_footprint (:93-113) measures it via dir_bytes/os.walk (:76) against --floor-gib, so the comment is measurably false on a large $HOME. Both filed defects are real at HEAD.",
+      "derived": true
+    },
+    {
+      "criterion": "The audit doc must be the evidence the rows cite and must actually contain the measurements the rows assert (48.48 s step 2, 29.85 s layer 00, 31.97 s footprint, 126718 MiB / 2475 %, the FileNotFoundError on config.yaml.cf-tmp, the discriminating re-run arm), so a reader can trace row -> evidence.",
+      "status": "PASS",
+      "detail": "docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md:20 (step 2 48.48 s, `FAIL footprint:floor \u2014 126606.8 MiB exceeds the 5 GiB floor (2472.8 %)`), :33 (`--layers 00` 29.85 s; footprint 31.97 s rc=1), :40 (131 GB / 126718 MiB; node_hygiene.py:43-49 harness=.hermes), :42-47 (project-node.sh:242-246 comment quoted, 2475 % of floor), :79-80 (FileNotFoundError on '/home/bunker-node-cf-dogfood-231753/.hermes/config.yaml.cf-tmp'), :88-90 (node_gateway_auth.py:64 vs :79-83 analysis), :96-101 (discriminating re-run arm: PASS gateway_auth, auth_rc=0). Every number the two rows assert is present in the cited doc, and both rows cite it by path.",
+      "derived": true
+    }
+  ],
+  "merge_recommendation": "no_concerns_found",
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261108T042503.335743Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n11:25PM INF scanned ~3196794 bytes (3.20 MB) in 1.12s\n11:25PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 479 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261108T042503.335743Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n install-go.sh\n  PASS  bash -n install-node.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n panel_supervise.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n verify-patch.sh\n  PASS  bash -n harness-vars.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-deepseek.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n install-pi-agent.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n harness-node-e2e.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.9rjxF7L07E/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n  PASS  uncreatable destination -> fetch_verified exit 1, no artifact installed\n  PASS  caller surfaced the failed install: 1 '^  FAIL  go:download' row, fixture exit 1\n6. no literal credential assignments\n  PASS  none found\n  section 6 tailnet-address (CF-378): no tracked file outside the board publishes a tailnet address\n  PASS  tailnet-address \u2014 0 tailnet-address hits in 388 tracked file(s) outside .coding-hermes/board and .gitreins\n  PASS  seeded fixture -> FAIL names docs/seeded.md:3; the out-of-range subnet stays green\n\n\u2026 [40657 chars omitted \u2014 520 line(s)] \u2026\n  PASS  layer 10 grades the owned node pin, not a PATH runtime\n  PASS  layer 40 clones with the declared key and pins core.sshCommand in that repo only\n  PASS  a 0644 deploy key is refused and the clone is not attempted\n  PASS  node-create refuses public.key at the spawn gate, before any agent exists (exit 1)\n  PASS  node-create refuses junk.key at the spawn gate, before any agent exists (exit 1)\n  PASS  node-create refuses enc at the spawn gate, before any agent exists (exit 1)\n  PASS  node-create refuses a deploy key on an HTTPS remote at the spawn gate (exit 1)\n  PASS  a usable read-only key passes the spawn gate and the run continues past it\n  PASS  pre-fix 4f32a50 accepts the public key as a deploy key \u2014 the gate arm is falsifiable\n  PASS  layer 00 measures the node footprint and admits it against the floor\n59. an adapter's verdict counts its WARN rows, not just its FAIL rows (CF-141)\n  PASS  a WARN row -> 'STUB: UNVERIFIED', exit 3, never PASS (2 WARN rows)\n  PASS  a FAIL row -> 'STUB: FAIL (1)', exit 1, never PASS/UNVERIFIED\n  PASS  all rows PASS -> 'STUB: PASS', exit 0\n  PASS  install-opencode.sh --check on the row's stub -> 'OPENCODE: UNVERIFIED', exit 3, never PASS\n  PASS  pre-fix d4f2600 prints 'OPENCODE: PASS' with exit 0 beside the same two WARN rows \u2014 the arm is falsifiable\n  PASS  all six adapters end with the verdict their row counts require (table in the scratch dir)\n  PASS  an unsupported interpreter ends 'HERMES: FAIL (1)', exit 1, after the named row\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261108T042503.335743Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": true,
+      "any_failed": false,
+      "summary": "COMPLETE\n  \u2713 At HEAD of the canonical worktree, `.coding-hermes/board/tasks.jsonl` contains a row whose id is CF-387 and a row whose id is CF-388, both with status `pending`, and both with a non-empty acceptance_criteria field. `docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md` exists at HEAD and is non-empty. Verify with: jq -r \"select(.id==\\\"CF-387\\\" or .id==\\\"CF-388\\\") | .id + \\\" \\\" + .status + \\\" \\\" + ((.acceptance_criteria // \\\"\\\")|length|tostring)\" .coding-hermes/board/tasks.jsonl: Ran the exact command at HEAD (86d13c4): `jq -r 'select(.id==\"CF-387\" or .id==\"CF-388\") | .id + \" \" + .status + \" \" + ((.acceptance_criteria // \"\")|length|tostring)' .coding-hermes/board/tasks.jsonl` -> exit 0, output `CF-387 pending 888` / `CF-388 pending 1301`. Same result via `git show HEAD:.coding-hermes/board/tasks.jsonl` (so it holds at HEAD, not just the worktree). Exactly 2 matching rows; `jq -r .id | sort | uniq -d` is empty (no duplicate ids). `git cat-file -e HEAD:docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md` -> EXISTS_AT_HEAD, 8664 bytes with substantive sections 1/1a/2/2a/2b/3/4/5. `bash scripts/boardctl validate` -> `RESULT: OK (17 warning(s))`, exit 0, and none of the 17 warnings names CF-387 or CF-388 (no title/priority mismatch: CF-387 priority=P4 title prefix P4, CF-388 priority=P2 title prefix P2).\n  \u2713 The two filed rows must not duplicate an existing board row's subject: CF-388's defect (node_gateway_auth.py writes config.yaml.cf-tmp before ~/.hermes exists) must not already be owned by another open row, and the row must say why it is distinct.: CF-292 (pending) is about the 8-line basic_auth window false-PASSing; its AC3 'A missing ~/.hermes is a named FAIL with no partial write' concerns the check's parser/partial write, not the writer's missing parent directory. CF-193/CF-194 are the consumer gate's YAML parsing and HERMES_HOME root; CF-150 is complete (it added the staging step). CF-388's reasoning states the boundary explicitly: 'Must not be merged with CF-292 (the 8-line `basic_auth` window can false-PASS), CF-193/CF-194 (the GATE's consumer-side YAML parsing and HERMES_HOME root) or CF-150 itself', and docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md:104-107 repeats it. CF-387 likewise names CF-003/CF-040/PERF-013 as non-owners. No duplicate id and no duplicate detail.fingerprint across the 182 fingerprinted rows (`uniq -d | wc -l` = 0).\n  \u2713 The defect each row describes must be real in the tree at HEAD: scripts/node_gateway_auth.py must create the password file's parent dir (:64) but not the config file's parent before opening `config + \".cf-tmp\"` (:79-80), and scripts/project-node.sh:242-246 must carry the \"stays cheap on a host with a large $HOME\" comment while node_hygiene.py walks $HOME/.hermes.: scripts/node_gateway_auth.py:64 `os.makedirs(os.path.dirname(password_file) or \".\", exist_ok=True)` creates only the password file's directory; :79-80 `tmp = config + \".cf-tmp\"` then `with open(tmp, \"w\")` with no makedirs for the config's parent -> FileNotFoundError on a fresh HOME, exactly as CF-388 states. scripts/project-node.sh:242-246 carries 'Bounded component set only (repo, toolchains, harness home, node state, declared module cache), so the row stays cheap on a host with a large $HOME'; scripts/node_hygiene.py:43-49 lists `(\"harness\", \".hermes\")` and cmd_footprint (:93-113) measures it via dir_bytes/os.walk (:76) against --floor-gib, so the comment is measurably false on a large $HOME. Both filed defects are real at HEAD.\n  \u2713 The audit doc must be the evidence the rows cite and must actually contain the measurements the rows assert (48.48 s step 2, 29.85 s layer 00, 31.97 s footprint, 126718 MiB / 2475 %, the FileNotFoundError on config.yaml.cf-tmp, the discriminating re-run arm), so a reader can trace row -> evidence.: docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md:20 (step 2 48.48 s, `FAIL footprint:floor \u2014 126606.8 MiB exceeds the 5 GiB floor (2472.8 %)`), :33 (`--layers 00` 29.85 s; footprint 31.97 s rc=1), :40 (131 GB / 126718 MiB; node_hygiene.py:43-49 harness=.hermes), :42-47 (project-node.sh:242-246 comment quoted, 2475 % of floor), :79-80 (FileNotFoundError on '/home/bunker-node-cf-dogfood-231753/.hermes/config.yaml.cf-tmp'), :88-90 (node_gateway_auth.py:64 vs :79-83 analysis), :96-101 (discriminating re-run arm: PASS gateway_auth, auth_rc=0). Every number the two rows assert is present in the cited doc, and both rows cite it by path.\nBoth board rows (CF-387, CF-388) exist at HEAD with status pending and non-empty acceptance_criteria, the cited audit doc exists at HEAD with 8664 bytes of matching evidence, boardctl validate returns RESULT: OK, and the two defects each row describes are verifiably real in the tree.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": true,
+          "output": "COMPLETE\n  \u2713 At HEAD of the canonical worktree, `.coding-hermes/board/tasks.jsonl` contains a row whose id is CF-387 and a row whose id is CF-388, both with status `pending`, and both with a non-empty acceptance_criteria field. `docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md` exists at HEAD and is non-empty. Verify with: jq -r \"select(.id==\\\"CF-387\\\" or .id==\\\"CF-388\\\") | .id + \\\" \\\" + .status + \\\" \\\" + ((.acceptance_criteria // \\\"\\\")|length|tostring)\" .coding-hermes/board/tasks.jsonl: Ran the exact command at HEAD (86d13c4): `jq -r 'select(.id==\"CF-387\" or .id==\"CF-388\") | .id + \" \" + .status + \" \" + ((.acceptance_criteria // \"\")|length|tostring)' .coding-hermes/board/tasks.jsonl` -> exit 0, output `CF-387 pending 888` / `CF-388 pending 1301`. Same result via `git show HEAD:.coding-hermes/board/tasks.jsonl` (so it holds at HEAD, not just the worktree). Exactly 2 matching rows; `jq -r .id | sort | uniq -d` is empty (no duplicate ids). `git cat-file -e HEAD:docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md` -> EXISTS_AT_HEAD, 8664 bytes with substantive sections 1/1a/2/2a/2b/3/4/5. `bash scripts/boardctl validate` -> `RESULT: OK (17 warning(s))`, exit 0, and none of the 17 warnings names CF-387 or CF-388 (no title/priority mismatch: CF-387 priority=P4 title prefix P4, CF-388 priority=P2 title prefix P2).\n\n\u2026 [2187 chars omitted \u2014 2 line(s)] \u2026\n  \u2713 The audit doc must be the evidence the rows cite and must actually contain the measurements the rows assert (48.48 s step 2, 29.85 s layer 00, 31.97 s footprint, 126718 MiB / 2475 %, the FileNotFoundError on config.yaml.cf-tmp, the discriminating re-run arm), so a reader can trace row -> evidence.: docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md:20 (step 2 48.48 s, `FAIL footprint:floor \u2014 126606.8 MiB exceeds the 5 GiB floor (2472.8 %)`), :33 (`--layers 00` 29.85 s; footprint 31.97 s rc=1), :40 (131 GB / 126718 MiB; node_hygiene.py:43-49 harness=.hermes), :42-47 (project-node.sh:242-246 comment quoted, 2475 % of floor), :79-80 (FileNotFoundError on '/home/bunker-node-cf-dogfood-231753/.hermes/config.yaml.cf-tmp'), :88-90 (node_gateway_auth.py:64 vs :79-83 analysis), :96-101 (discriminating re-run arm: PASS gateway_auth, auth_rc=0). Every number the two rows assert is present in the cited doc, and both rows cite it by path.\nBoth board rows (CF-387, CF-388) exist at HEAD with status pending and non-empty acceptance_criteria, the cited audit doc exists at HEAD with 8664 bytes of matching evidence, boardctl validate returns RESULT: OK, and the two defects each row describes are verifiably real in the tree.",
+          "error": "",
+          "data": {
+            "verdict": "COMPLETE",
+            "items": [
+              {
+                "criterion": "At HEAD of the canonical worktree, `.coding-hermes/board/tasks.jsonl` contains a row whose id is CF-387 and a row whose id is CF-388, both with status `pending`, and both with a non-empty acceptance_criteria field. `docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md` exists at HEAD and is non-empty. Verify with: jq -r \"select(.id==\\\"CF-387\\\" or .id==\\\"CF-388\\\") | .id + \\\" \\\" + .status + \\\" \\\" + ((.acceptance_criteria // \\\"\\\")|length|tostring)\" .coding-hermes/board/tasks.jsonl",
+                "status": "PASS",
+                "detail": "Ran the exact command at HEAD (86d13c4): `jq -r 'select(.id==\"CF-387\" or .id==\"CF-388\") | .id + \" \" + .status + \" \" + ((.acceptance_criteria // \"\")|length|tostring)' .coding-hermes/board/tasks.jsonl` -> exit 0, output `CF-387 pending 888` / `CF-388 pending 1301`. Same result via `git show HEAD:.coding-hermes/board/tasks.jsonl` (so it holds at HEAD, not just the worktree). Exactly 2 matching rows; `jq -r .id | sort | uniq -d` is empty (no duplicate ids). `git cat-file -e HEAD:docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md` -> EXISTS_AT_HEAD, 8664 bytes with substantive sections 1/1a/2/2a/2b/3/4/5. `bash scripts/boardctl validate` -> `RESULT: OK (17 warning(s))`, exit 0, and none of the 17 warnings names CF-387 or CF-388 (no title/priority mismatch: CF-387 priority=P4 title prefix P4, CF-388 priority=P2 title prefix P2)."
+              },
+              {
+                "criterion": "The two filed rows must not duplicate an existing board row's subject: CF-388's defect (node_gateway_auth.py writes config.yaml.cf-tmp before ~/.hermes exists) must not already be owned by another open row, and the row must say why it is distinct.",
+                "status": "PASS",
+                "detail": "CF-292 (pending) is about the 8-line basic_auth window false-PASSing; its AC3 'A missing ~/.hermes is a named FAIL with no partial write' concerns the check's parser/partial write, not the writer's missing parent directory. CF-193/CF-194 are the consumer gate's YAML parsing and HERMES_HOME root; CF-150 is complete (it added the staging step). CF-388's reasoning states the boundary explicitly: 'Must not be merged with CF-292 (the 8-line `basic_auth` window can false-PASS), CF-193/CF-194 (the GATE's consumer-side YAML parsing and HERMES_HOME root) or CF-150 itself', and docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md:104-107 repeats it. CF-387 likewise names CF-003/CF-040/PERF-013 as non-owners. No duplicate id and no duplicate detail.fingerprint across the 182 fingerprinted rows (`uniq -d | wc -l` = 0).",
+                "derived": true
+              },
+              {
+                "criterion": "The defect each row describes must be real in the tree at HEAD: scripts/node_gateway_auth.py must create the password file's parent dir (:64) but not the config file's parent before opening `config + \".cf-tmp\"` (:79-80), and scripts/project-node.sh:242-246 must carry the \"stays cheap on a host with a large $HOME\" comment while node_hygiene.py walks $HOME/.hermes.",
+                "status": "PASS",
+                "detail": "scripts/node_gateway_auth.py:64 `os.makedirs(os.path.dirname(password_file) or \".\", exist_ok=True)` creates only the password file's directory; :79-80 `tmp = config + \".cf-tmp\"` then `with open(tmp, \"w\")` with no makedirs for the config's parent -> FileNotFoundError on a fresh HOME, exactly as CF-388 states. scripts/project-node.sh:242-246 carries 'Bounded component set only (repo, toolchains, harness home, node state, declared module cache), so the row stays cheap on a host with a large $HOME'; scripts/node_hygiene.py:43-49 lists `(\"harness\", \".hermes\")` and cmd_footprint (:93-113) measures it via dir_bytes/os.walk (:76) against --floor-gib, so the comment is measurably false on a large $HOME. Both filed defects are real at HEAD.",
+                "derived": true
+              },
+              {
+                "criterion": "The audit doc must be the evidence the rows cite and must actually contain the measurements the rows assert (48.48 s step 2, 29.85 s layer 00, 31.97 s footprint, 126718 MiB / 2475 %, the FileNotFoundError on config.yaml.cf-tmp, the discriminating re-run arm), so a reader can trace row -> evidence.",
+                "status": "PASS",
+                "detail": "docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md:20 (step 2 48.48 s, `FAIL footprint:floor \u2014 126606.8 MiB exceeds the 5 GiB floor (2472.8 %)`), :33 (`--layers 00` 29.85 s; footprint 31.97 s rc=1), :40 (131 GB / 126718 MiB; node_hygiene.py:43-49 harness=.hermes), :42-47 (project-node.sh:242-246 comment quoted, 2475 % of floor), :79-80 (FileNotFoundError on '/home/bunker-node-cf-dogfood-231753/.hermes/config.yaml.cf-tmp'), :88-90 (node_gateway_auth.py:64 vs :79-83 analysis), :96-101 (discriminating re-run arm: PASS gateway_auth, auth_rc=0). Every number the two rows assert is present in the cited doc, and both rows cite it by path.",
+                "derived": true
+              }
+            ],
+            "summary": "Both board rows (CF-387, CF-388) exist at HEAD with status pending and non-empty acceptance_criteria, the cited audit doc exists at HEAD with 8664 bytes of matching evidence, boardctl validate returns RESULT: OK, and the two defects each row describes are verifiably real in the tree.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-387\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: PASS\n  COMPLETE\n  \u2713 At HEAD of the canonical worktree, `.coding-hermes/board/tasks.jsonl` contains a row whose id is CF-387 and a row whose id is CF-388, both with status `pending`, and both with a non-empty acceptance_criteria field. `docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md` exists at HEAD and is non-empty. Verify with: jq -r \"select(.id==\\\"CF-387\\\" or .id==\\\"CF-388\\\") | .id + \\\" \\\" + .status + \\\" \\\" + ((.acceptance_criteria // \\\"\\\")|length|tostring)\" .coding-hermes/board/tasks.jsonl: Ran the exact command at HEAD (86d13c4): `jq -r 'select(.id==\"CF-387\" or .id==\"CF-388\") | .id + \" \" + .status + \" \" + ((.acceptance_criteria // \"\")|length|tostring)' .coding-hermes/board/tasks.jsonl` -> exit 0, output `CF-387 pending 888` / `CF-388 pending 1301`. Same result via `git show HEAD:.coding-hermes/board/tasks.jsonl` (so it holds at HEAD, not just the worktree). Exactly 2 matching rows; `jq -r .id | sort | uniq -d` is empty (no duplicate ids). `git cat-file -e HEAD:docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md` -> EXISTS_AT_HEAD, 8664 bytes with substantive sections 1/1a/2/2a/2b/3/4/5. `bash scripts/boardctl validate` -> `RESULT: OK (17 warning(s))`, exit 0, and none of the 17 warnings names CF-387 or CF-388 (no title/priority mismatch: CF-387 priority=P4 title prefix P4, CF-388 priority=P2 title prefix P2).\n  \u2713 The two filed rows must not duplicate an existing board row's subject: CF-388's defect (node_gateway_auth.py writes config.yaml.cf-tmp before ~/.hermes exists) must not already be owned by another open row, and the row must say why it is distinct.: CF-292 (pending) is about the 8-line basic_auth window false-PASSing; its AC3 'A missing ~/.hermes is a named FAIL with no partial write' concerns the check's parser/partial write, not the writer's missing parent directory. CF-193/CF-194 are the consumer gate's YAML parsing and HERMES_HOME root; CF-150 is complete (it added the staging step). CF-388's reasoning states the boundary explicitly: 'Must not be merged with CF-292 (the 8-line `basic_auth` window can false-PASS), CF-193/CF-194 (the GATE's consumer-side YAML parsing and HERMES_HOME root) or CF-150 itself', and docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md:104-107 repeats it. CF-387 likewise names CF-003/CF-040/PERF-013 as non-owners. No duplicate id and no duplicate detail.fingerprint across the 182 fingerprinted rows (`uniq -d | wc -l` = 0).\n  \u2713 The defect each row describes must be real in the tree at HEAD: scripts/node_gateway_auth.py must create the password file's parent dir (:64) but not the config file's parent before opening `config + \".cf-tmp\"` (:79-80), and scripts/project-node.sh:242-246 must carry the \"stays cheap on a host with a large $HOME\" comment while node_hygiene.py walks $HOME/.hermes.: scripts/node_gateway_auth.py:64 `os.makedirs(os.path.dirname(password_file) or \".\", exist_ok=True)` creates only the password file's directory; :79-80 `tmp = config + \".cf-tmp\"` then `with open(tmp, \"w\")` with no makedirs for the config's parent -> FileNotFoundError on a fresh HOME, exactly as CF-388 states. scripts/project-node.sh:242-246 carries 'Bounded component set only (repo, toolchains, harness home, node state, declared module cache), so the row stays cheap on a host with a large $HOME'; scripts/node_hygiene.py:43-49 lists `(\"harness\", \".hermes\")` and cmd_footprint (:93-113) measures it via dir_bytes/os.walk (:76) against --floor-gib, so the comment is measurably false on a large $HOME. Both filed defects are real at HEAD.\n  \u2713 The audit doc must be the evidence the rows cite and must actually contain the measurements the rows assert (48.48 s step 2, 29.85 s layer 00, 31.97 s footprint, 126718 MiB / 2475 %, the FileNotFoundError on config.yaml.cf-tmp, the discriminating re-run arm), so a reader can trace row -> evidence.: docs/audits/code-factory-dogfood-2026-11-08-04-02-17.md:20 (step 2 48.48 s, `FAIL footprint:floor \u2014 126606.8 MiB exceeds the 5 GiB floor (2472.8 %)`), :33 (`--layers 00` 29.85 s; footprint 31.97 s rc=1), :40 (131 GB / 126718 MiB; node_hygiene.py:43-49 harness=.hermes), :42-47 (project-node.sh:242-246 comment quoted, 2475 % of floor), :79-80 (FileNotFoundError on '/home/bunker-node-cf-dogfood-231753/.hermes/config.yaml.cf-tmp'), :88-90 (node_gateway_auth.py:64 vs :79-83 analysis), :96-101 (discriminating re-run arm: PASS gateway_auth, auth_rc=0). Every number the two rows assert is present in the cited doc, and both rows cite it by path.\nBoth board rows (CF-387, CF-388) exist at HEAD with status pending and non-empty acceptance_criteria, the cited audit doc exists at HEAD with 8664 bytes of matching evidence, boardctl validate returns RESULT: OK, and the two defects each row describes are verifiably real in the tree.\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-08T04:27:32.938026",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-08T04:27:32.972143+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 31012,
+        "truncated": false,
+        "source": "git show 86d13c490f66"
+      },
+      {
+        "name": "worktree",
+        "label": "Working-tree diff (graded)",
+        "file": "worktree.patch",
+        "bytes": 1093,
+        "truncated": false,
+        "source": "git diff HEAD (working tree)"
+      }
+    ],
+    "task_id": "CF-387"
+  }
+}
