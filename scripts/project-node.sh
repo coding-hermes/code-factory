@@ -216,12 +216,27 @@ if in_scope 00; then
         say "NODE: FAIL ($FAILED)"
         exit 1
       fi
+      # Rehearse, then reap (CF-290): the projected set is printed and recorded before a
+      # single byte is deleted, so a refusal is judged against a named plan. Build caches
+      # are TTL-gated by newest subtree mtime, so a cache in active use is not "stale".
+      if ! REHEARSAL="$(python3 "$HERE/reclaim_disk.py" run --root "$HOME" --dry-run --json 2>&1)"; then
+        bad "disk_floor" "reclaim rehearsal failed: $REHEARSAL"
+        say "NODE: FAIL ($FAILED)"
+        exit 1
+      fi
+      say "${REHEARSAL%$'\n'*}"
+      projected=$(printf '%s\n' "${REHEARSAL##*$'\n'}" | python3 -c 'import json,sys; d=json.load(sys.stdin); rows=["%s (%s)"%(e["name"],e["reason"]) for e in d["entries"] if e["action"]=="reaped"]; print(", ".join(rows) if rows else "none")' 2>/dev/null) || projected=unreadable
+      say "  note reclaim — rehearsal projects: ${projected} (nothing deleted yet)"
       if ! RECLAIM="$(python3 "$HERE/reclaim_disk.py" run --root "$HOME" --json 2>&1)"; then
         bad "disk_floor" "reclaim failed: $RECLAIM"
         say "NODE: FAIL ($FAILED)"
         exit 1
       fi
       say "${RECLAIM%$'\n'*}"
+      # The deleted set is part of this run's own output: a later reader can name what
+      # was removed without re-running the reaper against a tree that no longer exists.
+      removed=$(printf '%s\n' "${RECLAIM##*$'\n'}" | python3 -c 'import json,sys; d=json.load(sys.stdin); rows=["%s (%s)"%(e["name"],e["reason"]) for e in d["entries"] if e["action"]=="reaped"]; print(", ".join(rows) if rows else "none")' 2>/dev/null) || removed=unreadable
+      say "  note reclaim — removed: ${removed}"
       freed=$(printf '%s\n' "${RECLAIM##*$'\n'}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["reclaimed_mib"])' 2>/dev/null) || {
         bad "disk_floor" "reclaimer returned no reclaimed size"
         say "NODE: FAIL ($FAILED)"

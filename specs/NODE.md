@@ -194,16 +194,20 @@ scale-up; apply mode removes only entries whose id is absent from the registry, 
 window, and directly under the named directory. Symlinks are never followed and the target of one is
 never touched.
 
-Before refusing, `--apply` runs `scripts/reclaim_disk.py run --root "$HOME" --json`
-against bounded user-space targets: `.cache/pip`, `.cache/uv`, `.cache/pre-commit`,
-`.cache/go-build`, and `.npm/_cacache` are removed whole; immediate job directories
-under `.node/jobs` and stale clones under `.node/clones` are removed only when their
-mtime exceeds the TTL (default 24 hours, configurable with `--job-ttl-hours`).
+Before refusing, `--apply` runs `scripts/reclaim_disk.py run --root "$HOME" --dry-run --json`
+(a rehearsal that prints the projected set and deletes nothing) and then the same call without
+`--dry-run`, against bounded user-space targets: `.cache/pip`, `.cache/uv`, `.cache/pre-commit`,
+`.cache/go-build`, and `.npm/_cacache` are removed only when the **newest mtime anywhere in their
+subtree** exceeds the cache TTL (default 24 hours, configurable with `--cache-ttl-hours`), and
+immediate job directories under `.node/jobs` and stale clones under `.node/clones` are removed only
+when the same measure exceeds the job TTL (default 24 hours, `--job-ttl-hours`). A cache written
+seconds ago is kept, because a directory's own mtime does not move when a file deep inside it is
+rewritten.
 Targets are fixed, resolved inside the real root, and symlinks are never followed.
 The repo and node identity/configuration files are never targets. The reclaimer
-refuses `/` and non-directory roots, supports `--dry-run`, and reports reclaimed bytes.
-The ladder re-measures free space after reclaim and refuses only if still below the
-floor. `--check` never reclaims: it reports the existing disk failure, explains what
+refuses `/` and non-directory roots, supports `--dry-run`, and reports reclaimed bytes
+plus the deleted set. The ladder re-measures free space after reclaim and refuses only if still
+below the floor. `--check` never reclaims: it reports the existing disk failure, explains what
 `--apply` would reap first, and keeps measuring the other layers.
 
 ### Configurable floors (roles)

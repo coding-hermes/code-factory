@@ -1269,6 +1269,9 @@ mkdir -p "$tmpd/scripts" "$tmpd/bin" "$tmpd/home/.cache/pip"
 cp "$HERE/scripts/project-node.sh" "$HERE/scripts/lib.sh" "$HERE/scripts/disk_floor.py" \
   "$HERE/scripts/reclaim_disk.py" "$tmpd/scripts/"
 dd if=/dev/zero of="$tmpd/home/.cache/pip/payload" bs=4096 count=2 2>/dev/null
+# CF-290: build caches are TTL-gated by the NEWEST mtime in the subtree, so this fixture
+# must be genuinely stale — writing the payload moved the cache dir's own mtime to now.
+touch -d '48 hours ago' "$tmpd/home/.cache/pip/payload" "$tmpd/home/.cache/pip"
 cat > "$tmpd/bin/curl" <<'EOF'
 #!/usr/bin/env bash
 printf '200'
@@ -1303,6 +1306,9 @@ else
   say "  FAIL  check mutated the cache or stopped measuring (exit $rc)"; fails=$((fails+1))
 fi
 # Positive control: df becomes green only after the real reclaimer removes pip.
+# CF-290: age the cache the check arm just wrote — a fresh cache is now kept, so a
+# non-stale fixture would leave df red and prove nothing about the reclaimer.
+touch -d '48 hours ago' "$tmpd/home/.cache/pip/payload" "$tmpd/home/.cache/pip"
 cat > "$tmpd/bin/df" <<'EOF'
 #!/usr/bin/env bash
 blocks=0
@@ -1330,8 +1336,66 @@ else
   say "  FAIL  missing reclaimer escaped counting (exit $rc)"; fails=$((fails+1))
 fi
 rm -rf "$tmpd"
+# CF-290: two behaviours this reclaimer did not have — a build cache is age-gated by the
+# NEWEST mtime in its subtree, and an outside-root path is answered instead of spinning
+# forever (at `/`, `Path("/").parent == Path("/")`, so the pre-fix walk never returned).
+# Each arm is paired with the pre-fix source from c32b53c, so a revert turns it red.
+cf290=$(mktemp -d)
+mkdir -p "$cf290/home/.cache/pip/fresh" "$cf290/home/.cache/uv/old" "$cf290/outside"
+dd if=/dev/zero of="$cf290/home/.cache/pip/fresh/blob" bs=4096 count=1 2>/dev/null
+dd if=/dev/zero of="$cf290/home/.cache/uv/old/blob" bs=4096 count=1 2>/dev/null
+touch -d '48 hours ago' "$cf290/home/.cache/uv/old/blob" "$cf290/home/.cache/uv/old" "$cf290/home/.cache/uv"
+cf290_out=$(python3 -B "$HERE/scripts/reclaim_disk.py" run --root "$cf290/home" --json 2>&1); cf290_rc=$?
+if [ "$cf290_rc" -eq 0 ] \
+  && [ -f "$cf290/home/.cache/pip/fresh/blob" ] \
+  && [ ! -e "$cf290/home/.cache/uv" ] \
+  && printf '%s\n' "$cf290_out" | grep -Fq 'keep  .cache/pip — fresh (' \
+  && printf '%s\n' "$cf290_out" | grep -Fq 'reap  .cache/uv — '; then
+  say "  PASS  fresh build cache kept by the newest-subtree-mtime age gate, aged sibling reaped"
+else
+  say "  FAIL  build-cache age gate (exit $cf290_rc)"; fails=$((fails+1)); printf '%s\n' "$cf290_out"
+fi
+cat > "$cf290/probe.py" <<'EOF'
+import importlib.util as util
+import sys
+from pathlib import Path
+
+spec = util.spec_from_file_location("probe", sys.argv[1])
+module = util.module_from_spec(spec)
+spec.loader.exec_module(module)
+print(module.safety_reason(Path(sys.argv[2]), Path(sys.argv[3])))
+EOF
+if git -C "$HERE" show c32b53c:scripts/reclaim_disk.py > "$cf290/prefix.py" 2>/dev/null; then
+  mkdir -p "$cf290/pre/.cache/pip"
+  dd if=/dev/zero of="$cf290/pre/.cache/pip/blob" bs=4096 count=1 2>/dev/null
+  python3 -B "$cf290/prefix.py" run --root "$cf290/pre" >/dev/null 2>&1
+  if [ ! -e "$cf290/pre/.cache/pip/blob" ]; then
+    say "  PASS  pre-fix c32b53c reaps a fresh build cache — the age-gate arm is falsifiable"
+  else
+    say "  FAIL  the pre-fix control kept a fresh cache; the age-gate arm cannot discriminate"
+    fails=$((fails+1))
+  fi
+  timeout 5s python3 -B "$cf290/probe.py" "$cf290/prefix.py" "$cf290/home" "$cf290/outside" >/dev/null 2>&1
+  prefix_rc=$?
+  if [ "$prefix_rc" -eq 124 ]; then
+    say "  PASS  pre-fix c32b53c never returns on an outside-root path (timeout 5s -> exit 124)"
+  else
+    say "  FAIL  the pre-fix control returned on an outside-root path (exit $prefix_rc); the arm cannot discriminate"
+    fails=$((fails+1))
+  fi
+else
+  say "  FAIL  pre-fix source unavailable (git show c32b53c:scripts/reclaim_disk.py)"
+  fails=$((fails+1))
+fi
+probe_out=$(timeout 20s python3 -B "$cf290/probe.py" "$HERE/scripts/reclaim_disk.py" "$cf290/home" "$cf290/outside" 2>&1); probe_rc=$?
+if [ "$probe_rc" -eq 0 ] && [ "$probe_out" = "skipped:outside-root" ]; then
+  say "  PASS  outside-root path returns skipped:outside-root under a bounded containment walk"
+else
+  say "  FAIL  outside-root containment (exit $probe_rc, output '$probe_out')"; fails=$((fails+1))
+fi
+rm -rf "$cf290"
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_reclaim.py" >/dev/null 2>&1; then
-  say "  PASS  reclaim targets, TTL, symlink safety, protected files, dry-run and idempotence"
+  say "  PASS  reclaim targets, cache+job TTL, symlink safety, protected files, dry-run and idempotence"
 else
   say "  FAIL  reclaim contract"; fails=$((fails+1))
 fi
