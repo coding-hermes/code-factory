@@ -2,35 +2,47 @@
 # verify-node.sh — control host: is this node actually usable?
 #
 #   ./verify-node.sh --agent <id> [--server <name>] [--port 10800]
+#                    [--transport node-address|published-port|tunnel|bunker-exec [--transport-address HOST:PORT]]
 #   ./verify-node.sh --agent <id> --artifact <path-on-node>
 #   ./verify-node.sh --agent <id> --strict-freshness
 #
 # Checks, in order of what they prove:
 #   1. the agent is alive and exec-able
-#   2. the gateway answers from HERE over the tailnet (not from inside itself)
+#   2. the gateway answers from HERE over a NAMED transport (never from inside the node — CF-224)
 #   3. the gateway's auth gate is closed (unauthenticated request must be 401/302/403)
 #   4. (optional) an artifact on the node hashes the same on both sides
 #   5. the checkout the node will work is the tree origin/main has (CF-244)
 #   6. the seed the node carries is the digests its seed record still names (CF-250)
 #   7. the harness the manifest records is the one on the node (CF-006)
 # A version string is not evidence: step 2 must be a live HTTP answer from this host.
+# A bunker node has NO LAN address by default, so its own address is not a transport this host can
+# use: --transport published-port (a port published on the bunker host) or --transport tunnel (an
+# SSH forward opened here) carries the probe; --transport bunker-exec runs it inside the node and
+# can therefore never certify one. specs/NODE.md "Transport" is the contract.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
 
 AGENT="" SERVER="${BUNKER_SERVER:-}" PORT=10800 ARTIFACT="" STRICT_FRESHNESS=0 STRICT_SEED=0
+# CF-224: the transport that carries the gateway probe. Default is the node's own address (the LAN
+# case, unchanged). NODE_TRANSPORT / NODE_TRANSPORT_ADDRESS let a spawn path (node-create.sh, which
+# inherits this environment) declare a bunker transport without new argv plumbing; the flags win.
+TRANSPORT="${NODE_TRANSPORT:-node-address}"
+TRANSPORT_ADDR="${NODE_TRANSPORT_ADDRESS:-}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --agent) AGENT="$2"; shift 2 ;;
     --server) SERVER="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
+    --transport) TRANSPORT="$2"; shift 2 ;;
+    --transport-address) TRANSPORT_ADDR="$2"; shift 2 ;;
     --artifact) ARTIFACT="$2"; shift 2 ;;
     --strict-freshness) STRICT_FRESHNESS=1; shift ;;
     --strict-seed) STRICT_SEED=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
-[ -z "$AGENT" ] && { echo "usage: $0 --agent ID [--server NAME] [--port P] [--artifact PATH] [--strict-freshness] [--strict-seed]"; exit 2; }
+[ -z "$AGENT" ] && { echo "usage: $0 --agent ID [--server NAME] [--port P] [--transport T [--transport-address HOST:PORT]] [--artifact PATH] [--strict-freshness] [--strict-seed]"; exit 2; }
 # CF-270: --port was taken verbatim into PORT and then expanded LOCALLY inside a double-quoted
 # string that was handed to a REMOTE `bash -lc`, so
 #     --port "10800'; touch /tmp/cf270-canary; echo '"
@@ -58,6 +70,56 @@ fi
 # environment variable being set first: the documented flag was dead.
 [ -z "$SERVER" ] && { echo "set BUNKER_SERVER or pass --server <name>" >&2; exit 2; }
 
+# CF-224: resolve/validate the transport BEFORE any probe, so a bad value is a usage refusal naming
+# the accepted set instead of a run that probes something nobody declared.
+case "$TRANSPORT" in
+  node-address|published-port|tunnel|bunker-exec) : ;;
+  *)
+    printf 'verify-node: --transport must be node-address, published-port, tunnel or bunker-exec (got: %s)\n' "$TRANSPORT" >&2
+    exit 2 ;;
+esac
+T_HOST="" T_PORT=""
+case "$TRANSPORT" in
+  published-port|tunnel)
+    case "$TRANSPORT_ADDR" in
+      '') printf 'verify-node: --transport %s needs --transport-address HOST:PORT — the endpoint on THIS host that forwards to the node (nothing is invented)\n' "$TRANSPORT" >&2; exit 2 ;;
+    esac
+    case "$TRANSPORT_ADDR" in
+      *:*) T_HOST="${TRANSPORT_ADDR%:*}" T_PORT="${TRANSPORT_ADDR##*:}" ;;
+      *) T_HOST="" T_PORT="" ;;
+    esac
+    if [ -z "$T_HOST" ] || [ -z "$T_PORT" ]; then
+      printf 'verify-node: --transport-address must be HOST:PORT (got: %s)\n' "$TRANSPORT_ADDR" >&2
+      exit 2
+    fi
+    # The same digit rule as --port, for the same reason: a value that reaches a shell must be an
+    # integer and nothing else. This one is only ever used by the LOCAL curl (never interpolated
+    # into a remote body), but a silent non-numeric port would still make curl report a transport
+    # gap that is really a typo.
+    case "$T_PORT" in
+      ''|*[!0-9]*) T_PORT_OK=0 ;;
+      *) T_PORT_OK=1 ;;
+    esac
+    [ "${#T_PORT}" -le 5 ] || T_PORT_OK=0
+    if [ "$T_PORT_OK" -ne 1 ]; then
+      printf 'verify-node: --transport-address port must be digits 1-65535 (got: %s)\n' "$T_PORT" >&2
+      exit 2
+    fi
+    T_PORT=$((10#$T_PORT))
+    if [ "$T_PORT" -lt 1 ] || [ "$T_PORT" -gt 65535 ]; then
+      printf 'verify-node: --transport-address port must be digits 1-65535 (got: %s)\n' "$T_PORT" >&2
+      exit 2
+    fi
+    ;;
+  *)
+    # An address with no transport that uses one is a half-declaration: refuse it rather than
+    # ignore a value the operator believes is in force.
+    [ -z "$TRANSPORT_ADDR" ] || {
+      printf 'verify-node: --transport-address is used by --transport published-port|tunnel only (got --transport %s)\n' "$TRANSPORT" >&2
+      exit 2
+    } ;;
+esac
+
 # UNVERIFIED is not one story: a leg can be unmeasurable because this host has no transport to
 # the node (CF-224) or because the thing it measures cannot be read at all (CF-291, the seed).
 # Each unmeasurable leg therefore NAMES itself here, and the final line repeats the reasons, so
@@ -77,58 +139,130 @@ case "$out" in
   *) bad "agent_alive" "$(printf '%s' "$out" | head -1)"; say ""; say "RESULT: FAIL"; exit 1 ;;
 esac
 
-# 2. gateway reachable from the control host
-ip=$(bunker exec --server "$SERVER" "$AGENT" -- bash -lc 'hostname -I' 2>/dev/null | awk '{print $1}')
-if [ -z "$ip" ]; then bad "node_ip" "could not read hostname -I"; else ok "node_ip" "$ip"; fi
-url="http://$ip:$PORT/api/status"
-# curl writes 000 itself on failure; appending `|| echo 000` produced "000000", which matched no
-# case and fell through to a FAIL that named a code no HTTP server can return.
-code=$(curl -s -o /tmp/node-status.json -w '%{http_code}' --max-time 8 "$url" 2>/dev/null); code=${code:-000}
-
-# A bunker container has no address the control host can reach unless a transport is published, so
-# "000" here means UNVERIFIED, not broken. The distinction matters: FAIL sends an operator to fix a
-# node that works, PASS would be a lie, so UNVERIFIED is its own verdict (CF-224) — and it must name
-# the transport it could not use.
+# 2. gateway reachable from the control host, through a NAMED transport (CF-224)
+#
+# The failure this closes: the verifier read `hostname -I` off the node and then probed that address
+# from here. On a LAN node that is a real measurement. On a bunker it is not — the agent runs in its
+# own network namespace, so the address it reports is one this host cannot route to, and the only
+# other probe available was `curl 127.0.0.1` run INSIDE the node, which answers whatever the node's
+# own loopback answers and proves nothing about reachability. So:
+#   * the probe always runs HERE, in this shell's own process tree, never through `bunker exec`;
+#   * a loopback answer measured inside the node is a FAIL, not a PASS (`--transport bunker-exec`);
+#   * every row names the transport that carried it, and an unavailable transport is named
+#     ("no published port for cf-node:10800") instead of printing a bare 000.
+# Transports (contract: specs/NODE.md "Transport"):
+#   node-address    the node's own address, `hostname -I` — the LAN case, unchanged default
+#   published-port  a port published on the bunker host, probed from HERE (--transport-address)
+#   tunnel          an SSH forward opened on THIS host, probed from HERE (--transport-address)
+#   bunker-exec     the probe runs INSIDE the node — diagnostic only, it cannot certify a node
 # CF-270: the port and the path travel as POSITIONAL ARGUMENTS to the remote shell, so neither
 # value can be re-parsed as shell syntax: the remote body is a FIXED single-quoted string that
 # only reads its own "$1"/"$2". The old form expanded $PORT locally inside a double-quoted
 # string, and a value carrying a quote closed the single quotes and ran on the node.
 inside() { bunker exec --server "$SERVER" "$AGENT" -- bash -lc 'curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://127.0.0.1:$1$2"' _ "$PORT" "$1" 2>/dev/null; }
+# Which transport is in force, printed before the probe so a run cannot be read as a LAN check when
+# it was not one.
+T_WHY=""
+case "$TRANSPORT" in
+  node-address)
+    ip=$(bunker exec --server "$SERVER" "$AGENT" -- bash -lc 'hostname -I' 2>/dev/null | awk '{print $1}')
+    case "$ip" in
+      '')
+        T_WHY="no address for $AGENT (hostname -I could not be read)"
+        bad "node_ip" "could not read hostname -I" ;;
+      127.*|::1|localhost)
+        # A node that reports only loopback has no address this host can use; probing it from here
+        # would hit THIS host's own loopback and could certify the wrong process.
+        T_WHY="no LAN address for $AGENT (hostname -I -> $ip: a request from this host would probe THIS host's loopback, not the node)"
+        warn "node_ip" "$ip is a loopback address — the node reports no address this host can use (a bunker node has no LAN address by default)"
+        warn "transport" "node-address $ip:$PORT — refused: a probe to a loopback address measures this host, not the node; pass --transport published-port or --transport tunnel" ;;
+      *)
+        T_HOST="$ip" T_PORT="$PORT"
+        ok "node_ip" "$ip"
+        ok "transport" "node-address $T_HOST:$T_PORT — the node's own address, probed from this host (the LAN case; a bunker node has no LAN address by default)" ;;
+    esac
+    ;;
+  published-port)
+    ok "transport" "published-port $T_HOST:$T_PORT — a port published on the bunker host, probed from this host (never inside the node)" ;;
+  tunnel)
+    ok "transport" "tunnel $T_HOST:$T_PORT — an SSH forward opened on this host; the probe leaves this host and re-enters the node" ;;
+  bunker-exec)
+    T_WHY="transport bunker-exec runs the probe INSIDE the node (127.0.0.1:$PORT): it proves the harness answers its own loopback, not that anything outside the node can reach it"
+    ;;
+esac
 
-if [ "$code" = 200 ]; then
-  ok "gateway_reachable" "$url -> 200"
-  grep -Eq '"auth_required"[[:space:]]*:[[:space:]]*true[[:space:]]*[,}]' /tmp/node-status.json 2>/dev/null \
-    && ok "auth_gate" "auth_required:true (a public bind must not be open)" \
-    || bad "auth_gate" "/api/status -> $code; auth_required:true not measured — check dashboard.basic_auth"
-elif [ "$code" = 000 ]; then
-  in_code=$(inside /api/status)
-  case "$in_code" in
+if [ "$TRANSPORT" = bunker-exec ]; then
+  # Criterion: a loopback check inside the node is a FAIL, not a PASS. It is reported with the code
+  # it measured so the operator sees the harness is up, and it still refuses to certify the node.
+  in_status=$(inside /api/status)
+  bad "transport" "$T_WHY"
+  bad "gateway_reachable" "loopback inside the node -> ${in_status:-no answer} (transport: bunker-exec) — a request that did not leave the node proves nothing about reachability, so this is a FAIL, not a PASS"
+  note "auth_gate and unauth_refused are not attempted: no request from this host reaches the node"
+elif [ -n "$T_HOST" ]; then
+  url="http://$T_HOST:$T_PORT/api/status"
+  # curl writes 000 itself on failure; appending `|| echo 000` produced "000000", which matched no
+  # case and fell through to a FAIL that named a code no HTTP server can return.
+  status_body=$(mktemp)
+  code=$(curl -s -o "$status_body" -w '%{http_code}' --max-time 8 "$url" 2>/dev/null); code=${code:-000}
+  case "$code" in
     200)
-      warn "gateway_reachable" "no transport from this host to $ip:$PORT — the gateway answers 200 INSIDE the node, so this is unverified, not failed (CF-224: publish a port or define the transport)"
-      unverified "the node answered inside itself, but this host has no transport to it" ;;
-    *)
-      warn "gateway_reachable" "no transport to $ip:$PORT, and the gateway does not answer inside the node either ($in_code) — the harness is not up"
-      unverified "this host has no transport to $ip:$PORT, and the gateway does not answer inside the node either ($in_code)" ;;
+      ok "gateway_reachable" "$url -> 200 (transport: $TRANSPORT)"
+      grep -Eq '"auth_required"[[:space:]]*:[[:space:]]*true[[:space:]]*[,}]' "$status_body" 2>/dev/null \
+        && ok "auth_gate" "auth_required:true (a public bind must not be open)" \
+        || bad "auth_gate" "/api/status -> $code; auth_required:true not measured — check dashboard.basic_auth"
+      ;;
+    000)
+      # Nothing answered at the declared endpoint. That is UNVERIFIED, not FAIL: the node may work
+      # perfectly behind a transport this host has not been given — but the row must say WHICH
+      # transport it could not use, and a bare 000 names nothing.
+      case "$TRANSPORT" in
+        published-port) T_WHY="no published port for $AGENT:$PORT (nothing answered at $T_HOST:$T_PORT)" ;;
+        tunnel)         T_WHY="no tunnel endpoint for $AGENT:$PORT (nothing answered at $T_HOST:$T_PORT)" ;;
+        *)              T_WHY="no route from this host to $T_HOST:$T_PORT (the node's own address is unreachable from here; a bunker node has no LAN address by default — pass --transport published-port or --transport tunnel)" ;;
+      esac
+      in_code=$(inside /api/status)
+      case "$in_code" in
+        200) warn "gateway_reachable" "$T_WHY — the gateway answers 200 INSIDE the node, so this is unverified, not failed (transport: $TRANSPORT)" ;;
+        *)   warn "gateway_reachable" "$T_WHY — and the gateway does not answer inside the node either (${in_code:-no answer}) — the harness is not up" ;;
+      esac
+      unverified "gateway_reachable: $T_WHY" ;;
+    *) bad "gateway_reachable" "$url -> $code (transport: $TRANSPORT; is the harness running on 0.0.0.0:$PORT?)" ;;
   esac
+  rm -f "$status_body"
 else
-  bad "gateway_reachable" "$url -> $code (is the harness running on 0.0.0.0:$PORT?)"
+  # No endpoint was probed: the transport row above already named the reason (loopback address, or
+  # an address that could not be read). Still a measured absence, so it is not a pass.
+  warn "gateway_reachable" "unverified — $T_WHY (transport: $TRANSPORT)"
+  unverified "gateway_reachable: $T_WHY"
 fi
 
 # 3. unauthenticated access must be refused
-code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "http://$ip:$PORT/api/system/stats" 2>/dev/null); code=${code:-000}
-case "$code" in
-  401|302|403) ok "unauth_refused" "/api/system/stats -> $code" ;;
-  200) bad "unauth_refused" "/api/system/stats -> 200 — the node is OPEN to the tailnet" ;;
-  000)
-    in_code=$(inside /api/system/stats)
-    case "$in_code" in
-      401|302|403) warn "unauth_refused" "unverified from here (no transport); inside the node it answers $in_code" ;;
-      200)         bad "unauth_refused" "/api/system/stats -> 200 INSIDE the node — the gateway is open" ;;
-      *)           warn "unauth_refused" "unverified: no transport from here, and $in_code inside the node" ;;
-    esac
-    unverified "the auth gate could not be measured from this host: no transport to http://$ip:$PORT/api/system/stats" ;;
-  *) bad "unauth_refused" "/api/system/stats -> $code — auth refusal not verified" ;;
-esac
+if [ "$TRANSPORT" = bunker-exec ]; then
+  :  # not measured from outside; the note in step 2 says so
+elif [ -n "$T_HOST" ]; then
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "http://$T_HOST:$T_PORT/api/system/stats" 2>/dev/null); code=${code:-000}
+  case "$code" in
+    401|302|403) ok "unauth_refused" "/api/system/stats -> $code" ;;
+    200) bad "unauth_refused" "/api/system/stats -> 200 — the node is OPEN (transport: $TRANSPORT)" ;;
+    000)
+      case "$TRANSPORT" in
+        published-port) T_WHY="no published port for $AGENT:$PORT (nothing answered at $T_HOST:$T_PORT)" ;;
+        tunnel)         T_WHY="no tunnel endpoint for $AGENT:$PORT (nothing answered at $T_HOST:$T_PORT)" ;;
+        *)              T_WHY="no route from this host to $T_HOST:$T_PORT (a bunker node has no LAN address by default)" ;;
+      esac
+      in_code=$(inside /api/system/stats)
+      case "$in_code" in
+        401|302|403) warn "unauth_refused" "unverified — $T_WHY; inside the node it answers $in_code" ;;
+        200)         bad "unauth_refused" "/api/system/stats -> 200 INSIDE the node — the gateway is open" ;;
+        *)           warn "unauth_refused" "unverified — $T_WHY; and ${in_code:-no answer} inside the node" ;;
+      esac
+      unverified "unauth_refused: $T_WHY" ;;
+    *) bad "unauth_refused" "/api/system/stats -> $code — auth refusal not verified" ;;
+  esac
+else
+  warn "unauth_refused" "unverified — $T_WHY (transport: $TRANSPORT)"
+  unverified "unauth_refused: $T_WHY"
+fi
 
 # 4. optional artifact integrity
 if [ -n "$ARTIFACT" ]; then

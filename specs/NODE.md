@@ -251,8 +251,61 @@ Rules:
 - `scripts/node_seed_drift.py --agent A --server S` (or `--home DIR`) proves the **seed** a node carries is still what its digest record pins: it runs `scripts/node_seed.py`'s own `check` — the seeder is staged to a temp path on the node and removed again inside ONE `bunker exec` round trip, because provisioning deletes the node-side copy after it applies — with the record the seed left (`$HOME/.hermes/seed-applied.json`, home `$HOME`), so the verdict is the instrument's own and the wrapper cannot drift from it. The PASS row counts the seeded files and **only a count greater than zero can produce one**: a record whose `files` collection is empty — or absent, or not a list — is refused with `FAIL seed_drift — <record>: the record declares no files (<shape>) — an empty seed certifies nothing` and exit `1`, because nothing it declares could agree with anything on the node, while the seeder's own `check` prints the same `0 files present and matching` row and exits 0 for it (CF-379: `0 files present and matching` certified a node whose seed applied nothing). No reason field on the record rescues it: the probe exists to prove digests, and a record that names none proves nothing; a node that is meant to carry no seed should carry no seed record, which is the absent-record WARN below. The FAIL row names each drifted path with the expected and measured digest prefixes and each path absent on the node; the wrapper never reimplements the digest comparison. Exit codes: `0` matched, `1` drift (or a record that declares no files, or an absent record under `--strict-seed`), `2` usage, `3` could not measure — a node still being provisioned has no seed record, a corrupt record is not a tampered copy, and "cannot measure" is not drift; both are WARN, and `--strict-seed` refuses the unknown. `scripts/verify-node.sh` folds it into `VERIFY:` as step 6: a drifted seed alone drives `VERIFY: FAIL`, a record that declares no files drives `VERIFY: FAIL` the same way (the checker's exit `1` is already the `bad` branch — no new verb), and an unmeasurable seed is WARN (FAIL under `--strict-seed`).
 - Lane writers (`scripts/configure_family.py`) only `mkdir` a **local** target; a remote target is registered verbatim and materialised by the node side.
 
+## Transport — how the control host reaches a node's gateway
+
+**A bunker node has no LAN address by default.** The agent runs in its own network namespace, so the
+address `hostname -I` answers inside it (`172.x`, `10.x`) is one the control host cannot route to.
+Any claim that such a node is "reachable" has to name the path the request actually took. On a node
+that shares a LAN with the control host — the original case — the node's own address is that path;
+anywhere else it is not, and a verifier that assumes it will report a green node as unverified (or,
+worse, certify one by probing a loopback address that answers on the control host).
+
+`scripts/verify-node.sh` therefore takes an explicit transport, and **every row it prints names the
+transport that carried the probe, with the HTTP code it measured**:
+
+| `--transport` | What it is | Where the probe runs | Can it produce `VERIFY: PASS`? |
+|---|---|---|---|
+| `node-address` (default) | the node's own address from `hostname -I` | control host | yes — **only** when that address is not loopback and the control host can reach it (the LAN case) |
+| `published-port` | a port published on the bunker host for this agent's gateway (`--transport-address HOST:PORT`) | control host | yes — the request leaves this host and arrives at the node as an outside request |
+| `tunnel` | an SSH forward opened on the control host to the node's gateway (`ssh -N -L 18080:127.0.0.1:10800 …`, then `--transport-address 127.0.0.1:18080`) | control host, into the forward | yes — a loopback endpoint is legal here **because the declaration says what it is**: the request originates on this host and re-enters the node through the tunnel |
+| `bunker-exec` | the probe run through the bunker CLI, INSIDE the node (`curl http://127.0.0.1:<port>/…`) | the node itself | **never** |
+
+Why these three and not a fourth: publishing a port needs no credential in the node and no local
+daemon; a tunnel needs only the SSH access the operator already has to the bunker host; and running
+the probe through the bunker CLI needs nothing but the CLI — but it measures the node's own loopback,
+so it is kept as a diagnostic and graded `FAIL`. `--transport published-port|tunnel` requires
+`--transport-address HOST:PORT` and refuses to invent one; `NODE_TRANSPORT` and
+`NODE_TRANSPORT_ADDRESS` carry the same values into a spawn path (`scripts/node-create.sh` runs the
+verifier as a child, so an exported pair reaches it without new argv).
+
+Two graded consequences:
+
+- **A loopback inside the node is a `FAIL`, not a `PASS`.** `--transport bunker-exec` prints
+  `FAIL gateway_reachable — loopback inside the node -> 200 (transport: bunker-exec) — a request
+  that did not leave the node proves nothing about reachability, so this is a FAIL, not a PASS` and
+  the run ends `VERIFY: FAIL (n)`. It reports the code it measured so the operator can see the
+  harness is up; it still refuses to certify the node.
+- **An unavailable transport is named, never `000`.** When the declared transport answers nothing,
+  the row says which one and to what endpoint — `WARN gateway_reachable — no published port for
+  cf-node:10800 (nothing answered at <host>:10800)` / `no tunnel endpoint for cf-node:10800 …` /
+  `no route from this host to <ip>:10800 (a bunker node has no LAN address by default — pass
+  --transport published-port or --transport tunnel)` — and the run ends `VERIFY: UNVERIFIED`,
+  exit 3. That is distinct from `FAIL` on purpose: nothing is broken and nothing is proven. A
+  *non-200 answer* from the transport (404, 500) stays a `FAIL`, because the node was reached and
+  answered wrongly. A node that reports only a loopback address is refused the same way — probing
+  it from here would measure the control host's own loopback, not the node.
+
+What this still does not prove: that the port or tunnel an operator declares is the node's gateway
+rather than some other listener, and any round trip whose artifact digest is recomputed on the
+control host (that remains CF-004). The transport proves the request came from outside the node,
+not what the node did with it.
+
 ## Failure semantics
 
+- Gateway unreachable through the declared transport → `VERIFY: UNVERIFIED`, exit 3, naming the
+  transport and the endpoint (`no published port for cf-node:10800`). The node is not called broken
+  and it is not certified; a *non-200 answer* through a working transport is a FAIL instead. A probe
+  that never left the node (`--transport bunker-exec`) is a FAIL, whatever it measured.
 - Harness down → layer 20 FAIL; no work is accepted.
 - Bus identity missing → layer 30 FAIL; the node is invisible, which is worse than empty.
 - Repo dirty at provision time → WARN, not FAIL (the node may be mid-task); `verify` still runs.

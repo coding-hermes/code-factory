@@ -202,6 +202,7 @@ Both are listed below with local ids; the state is UNVERIFIED where the wire was
 | layer wiring (10/40/00) | `bash tests/selftest.sh` §58 | `PASS tool:node — $HOME/node-toolchain/current/bin/node (v22.22.3)`, `PASS repo_key` + `PASS repo_key:config`, a 0644 key → `FAIL repo_key` **and** `FAIL repo_clone — not attempted`, `PASS footprint` / `PASS footprint:floor` | 2026-11-07 | **PASS** (fixtures only) |
 | **F2 legs (CREATED vs VERIFIED)** | `node-create.sh --project P --repo git@gitlab… --deploy-key K` then `verify-node.sh --agent A --server S` | the clone succeeds under the per-repo key, the repo's suite runs (node-dependent tests included), the cache adds 0 bytes, `VERIFY: PASS` | not run | **UNVERIFIED** — needs the real read-only deploy key and a fresh bunker node; this repo proves the mechanism, not the grant |
 | gateway auth staged before the adapter | `bash tests/selftest.sh` §55 (`project-node.sh --apply --project <p> --layers 20` in a fixture home) | `PASS gateway_auth — dashboard.basic_auth present …; password in …/.node/auth/gateway.pass (mode 600, value not printed)` and the adapter's `PASS gateway_start — /api/status -> 200`; the same adapter still refuses without the block | 2026-11-07 | **PASS** (fixture only — no live node run) |
+| verify-node transport (CF-224) | `bash tests/selftest.sh` §62 | the pre-fix `bf16c05` verifier has no `--transport` (`unknown arg`, exit 2) and certifies a loopback-only node `VERIFY: PASS`; this tree refuses the same fixture `VERIFY: UNVERIFIED`, PASSes `node-address`/`published-port`/`tunnel` runs with the transport named in the row, names a dead published port (`no published port for cf-fixture:10800`) without printing `000`, and grades `--transport bunker-exec` `VERIFY: FAIL (2)` | 2026-11-08 | **PASS** (offline fixtures only — no bunker, no network; `docs/audits/cf-224-verify-transport-2026-11-08.md`) |
 | certification ladder | `scripts/verify-node.sh --agent <id> --server <host>` on a live node | per-leg observation | not run | **UNVERIFIED** (needs a live node; legs documented in §11) |
 
 ## 8. Metrics
@@ -232,7 +233,7 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
 | Credential mode not verified | `--check` passes on file non-emptiness, claims "mode 600" | a real 0600 stat | stage `stat -c '%a'`; open defect F1-1 |
 | Unknown explicit role | `FAIL disk-floor: unknown role …`, exit 2 (`disk_floor.py:123-125`, `:169-171`) | an absent role (which defaults to worker) | pass a valid role or drop the flag (F1-2) |
 | Gateway auth block absent at layer 20 | `FAIL gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent` from the adapter | a staged block — `project-node.sh` layer 20 runs `node_gateway_auth.py` before the adapter and prints `PASS gateway_auth — dashboard.basic_auth present …` (CF-150) | re-run `project-node.sh --apply`; a `dashboard` block that is not `basic_auth` stays a counted FAIL and needs a human |
-| Unreachable port | exit 3 `UNVERIFIED`, not FAIL (`verify-node.sh:106-110`) | a failed port (exit != 0) | read the port row (CF-224) |
+| Unreachable port, or no transport to it | exit 3 `VERIFY: UNVERIFIED` naming the transport it could not use — `no published port for cf-node:10800`, `no tunnel endpoint …`, `no route from this host to …` (`verify-node.sh:217-228`) | a measured **non-200** through a working transport (FAIL, `:229`), and a probe that never left the node (`--transport bunker-exec`, a counted FAIL at `:198-201`) | read the `transport` row and declare a path the control host can take: `--transport published-port` or `--transport tunnel`, each with `--transport-address HOST:PORT` (CF-224) |
 | `--destroy` without `--yes` | `refusing to destroy without --yes (would remove agent $AGENT on $SERVER)`, exit 2 (`:552`) | an authorised destroy | pass `--yes` and a non-empty `--agent` (`:553` also refuses an unset AGENT) |
 | Deploy key readable by group/other | `FAIL repo_key — … mode 0644 — group/other can read it (chmod 600)` and, with no clone yet, `FAIL repo_clone — not attempted — the declared deploy key is unusable (see repo_key)` | a working key (`PASS repo_key — … mode 600`) | `chmod 600` the key and re-run; `node-create.sh --deploy-key` refuses it before spawning anything |
 | Shared module cache writable or drifted | `FAIL modcache_seal — N writable path(s)` / `FAIL modcache_manifest — ±N bytes since seal` | a sealed cache (`PASS modcache_seal — … read-only (no write bits, owner included)`) | `gomodcache.py seal` on the prewarm host; a node must never write the shared cache |
@@ -253,27 +254,42 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
   gate. An existing `basic_auth` block is left untouched (a re-run changes nothing); a `dashboard`
   block that is not `basic_auth` is a counted FAIL row and is not overwritten. `--check` reports the
   same block read-only and FAILs when it is absent, naming the refused bind.
-- **Certification ladder** (`verify-node.sh`, **241 lines** at `08a2c8a` — the CF-270 `--port` fix, commit `f1d5cfb`, inserted +28/−1 near the top and shifted every prior locator ~+25; all re-pinned):
-  - `:40-55` **port validation (NEW leg, CF-270)** — `--port` is validated **before any use**: a digit test (`:40-43`, `case "$PORT" in ''|*[!0-9]*)`), a 5-digit length cap (`:46`, `[ "${#PORT}" -le 5 ]`), then two `verify-node: --port must be digits 1-65535 (got: …)` → exit 2 refusals (`:47-50`, printf `:48` exit 2 `:49`; and `:52-55`, printf `:53` exit 2 `:54`), with a base-10 re-expansion `PORT=$((10#$PORT))` at `:51` between them. A non-digit `--port` is refused here and no longer interpolates into the remote `bash -lc` shell.
-  - `:73-76` `agent_alive` — `bunker exec … echo ALIVE $(hostname)` must return `ALIVE*`; on
-    failure `:76` prints `RESULT: FAIL` and exits 1 **before** any terminal `VERIFY:` form.
-  - `:95-113` `gateway_reachable` — `/api/status` → 200, plus `auth_required:true`; `000` from
-    the control host with an in-node 200 is `UNVERIFIED`, not `FAIL` (`:106-110`).
-  - `:116-129` `unauth_refused` — `/api/system/stats` must return 401/302/403, never 200.
-  - `:133-141` `artifact_digest` — sha256 of the staged artifact compared node-vs-host, only when
+- **Certification ladder** (`verify-node.sh`, **504 lines** at this tree — the CF-224 transport legs inserted the transport validation and the named-transport rows below step 1 and shifted every prior locator; the earlier `241 lines` pin was `08a2c8a` after the CF-270 `--port` fix, and all locators are re-pinned here):
+  - `:53-68` **port validation (CF-270)** — `--port` is validated **before any use**: a digit test (`:53-56`, `case "$PORT" in ''|*[!0-9]*)`), a 5-digit length cap (`:59`, `[ "${#PORT}" -le 5 ]`), then two `verify-node: --port must be digits 1-65535 (got: …)` → exit 2 refusals (`:60-63`; and `:65-68`), with a base-10 re-expansion `PORT=$((10#$PORT))` at `:64` between them. A non-digit `--port` is refused here and no longer interpolates into the remote `bash -lc` shell.
+  - `:73-121` **transport validation (NEW legs, CF-224)** — `--transport` is one of `node-address` (default), `published-port`, `tunnel`, `bunker-exec` (`:75-81`, anything else prints the accepted set and exits 2); `published-port`/`tunnel` **require** `--transport-address HOST:PORT` (`:84-88`), split into `T_HOST`/`T_PORT` (`:89-93`), and the port carries the same digit/1-65535 rule as `--port` (`:100-115`); an address with a transport that does not use one is refused (`:117-120`). `NODE_TRANSPORT`/`NODE_TRANSPORT_ADDRESS` (read at `:30-31`) are the spawn-path form; flags win.
+  - `:135-141` `agent_alive` — `bunker exec … echo ALIVE $(hostname)` must return `ALIVE*`; on
+    failure `:140` prints `RESULT: FAIL` and exits 1 **before** any terminal `VERIFY:` form.
+  - `:163-192` **transport rows (NEW leg, CF-224)** — the transport in force is printed as its own
+    `PASS transport — <name> <host>:<port> …` row before the probe, so a run cannot be read as a LAN
+    check when it was not one: `node-address` prints the `hostname -I` address (`:180-182`) and
+    **refuses** a loopback one (`:173-178` — a probe to `127.0.0.1` from here measures the control
+    host), the two declared transports print their endpoint from the flags (`:185-188`), and
+    `bunker-exec` states up front that the probe will not leave the node (`:189-190`).
+  - `:194-237` `gateway_reachable` — the probe always runs on the control host, in this shell's own
+    process tree. `--transport bunker-exec` is a counted **FAIL** naming the loopback code it
+    measured (`:198-201`), never a PASS. A 200 prints `$url -> 200 (transport: <name>)` plus the
+    `auth_required:true` gate (`:209-212`); `000` from a working transport is a named WARN that also
+    sets UNVERIFIED — `no published port for cf-node:10800`, `no tunnel endpoint …`, `no route from
+    this host to …` (`:217-228`) — and a **non-200** answer stays a FAIL (`:229`). No row prints a
+    bare `000` any more (CF-224 criterion 4).
+  - `:239-266` `unauth_refused` — `/api/system/stats` must return 401/302/403, never 200; a `000`
+    with no transport is a WARN that sets UNVERIFIED and names the transport (`:247-259`).
+  - `:267-279` `artifact_digest` — sha256 of the staged artifact compared node-vs-host, only when
     `--artifact` is given.
-  - `:150-177` `checkout_freshness` — `node_freshness.py` measures branch/HEAD/ancestor/lag; default
+  - `:280-318` `checkout_freshness` — `node_freshness.py` measures branch/HEAD/ancestor/lag; default
     maps PASS→PASS, drift/dirty→FAIL, unmeasurable→WARN; `--strict-freshness` promotes
-    unmeasurable→FAIL. **Asymmetry (B05):** the checkout unmeasurable case prints `warn` at `:177`
+    unmeasurable→FAIL. **Asymmetry (B05):** the checkout unmeasurable case prints `warn` at `:312`
     **without calling `unverified()`**, so the gate can still finish `VERIFY: PASS` (exit 0) with an
-    unmeasured checkout. The seed leg (below) does call `unverified()` at `:225`, which is why a
+    unmeasured checkout. The seed leg (below) does call `unverified()`, which is why a
     seed WARN yields `VERIFY: UNVERIFIED` (exit 3) but a checkout WARN does not — a false-green path
     when freshness is an acceptance condition and `--strict-freshness` was not passed.
-  - `:188-225` `seed_drift` — `node_seed_drift.py` re-runs the seeder's own check; PASS→PASS,
+  - `:319-387` `seed_drift` — `node_seed_drift.py` re-runs the seeder's own check; PASS→PASS,
     drift→FAIL, unmeasurable→WARN **which sets UNVERIFIED, not PASS** (`unverified "seed_drift: …"`
-    at `:225`, CF-291); `--strict-seed` promotes unmeasurable→FAIL.
-  - `:233-241` precedence — `VERIFY: FAIL (N)` at `:233` (exit 1), `VERIFY: UNVERIFIED — …` at
-    `:237` (exit 3), `VERIFY: PASS` at `:241` (exit 0). FAIL wins over UNVERIFIED; UNVERIFIED (with
+    at `:381`, CF-291); `--strict-seed` promotes unmeasurable→FAIL.
+  - `:388-494` `harness_identity` — the manifest's harness name/version re-measured on the node
+    (CF-006); an unmeasured version is WARN + UNVERIFIED.
+  - `:495-504` precedence — `VERIFY: FAIL (N)` at `:496` (exit 1), `VERIFY: UNVERIFIED — …` at
+    `:500` (exit 3), `VERIFY: PASS` at `:504` (exit 0). FAIL wins over UNVERIFIED; UNVERIFIED (with
     the leg name) is distinct from FAIL ("nothing is broken and nothing is proven — CF-224").
 
 ## 12. Cross-references

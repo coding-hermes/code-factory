@@ -1104,9 +1104,12 @@ python3 -B "$HERE/scripts/node_seed.py" apply --tar "$tmpd/seed.tar" \
   --record "$tmpd/seed.tar.json" --home "$tmpd/home" >/dev/null 2>&1
 cat > "$tmpd/bin/bunker" <<'EOF'
 #!/usr/bin/env bash
+# CF-224: the node reports a ROUTABLE address (TEST-NET-1, never actually routed — the stub curl
+# answers for it). A loopback address is refused by the verifier now, so a fixture that echoed
+# 127.0.0.1 would measure that refusal instead of the auth legs these arms name.
 for a in "$@"; do
   case "$a" in *seed-applied.json*) exec bash -c "${!#}" ;; esac
-  case "$a" in *hostname\ -I*) echo 127.0.0.1; exit 0 ;; esac
+  case "$a" in *hostname\ -I*) echo 192.0.2.10; exit 0 ;; esac
 done
 echo ALIVE fixture
 EOF
@@ -5995,6 +5998,212 @@ else
   say "  FAIL  removed fixture did not restore PASS: $out"; fails=$((fails+1))
 fi
 rm -rf "$cf050"
+
+# ch:trace row=CF-224 spec=F2/M1.S5 wave=none:serial test=tests/selftest.sh::section-62 doc=docs/OPERATIONS.md,specs/NODE.md prompt=/home/kara/.hermes/cache/scratch/code-factory-20261108-133437/brief-CF-224.txt evidence=docs/audits/cf-224-verify-transport-2026-11-08.md witness=none:offline-fixture verdict=none:foreman-runs-judge commit=none:self-referential-hash memory=none:foreman-writes-receipt
+say "62. verify-node names its transport, and a probe that never leaves the node is a FAIL (CF-224)"
+# The failure this closes: the verifier read `hostname -I` off the node and probed that address from
+# the control host, so a bunker node (no LAN address by default) reported itself unverified while a
+# completely green one printed `VERIFY: PASS` off a loopback address that answered on the CONTROL
+# host. The arms below drive the REAL verifier over one fixture node home with a stub transport and
+# a stub HTTP probe (no bunker, no network): the loopback fixture is measured twice — through the
+# pre-fix verifier, which certifies it, and through this one, which refuses — and each transport is
+# exercised for its PASS row and for its named unavailable row.
+cf224=$(mktemp -d)
+mkdir -p "$cf224/bin" "$cf224/tree" "$cf224/prefix" "$cf224/home/.hermes" "$cf224/seed-src/prompts"
+cp -r "$HERE/scripts" "$cf224/tree/scripts"
+rm -rf "$cf224/tree/scripts/__pycache__"
+cp -r "$cf224/tree/scripts" "$cf224/prefix/scripts"
+cf224_prefix=1
+git -C "$HERE" show bf16c05:scripts/verify-node.sh > "$cf224/prefix/scripts/verify-node.sh" 2>/dev/null || cf224_prefix=0
+# One stub transport for every leg: `hostname -I` answers FIXTURE_IP when one is set (the loopback
+# arm), otherwise the body runs locally with the real positional convention — the freshness and seed
+# legs then measure the fixture home exactly as they measure a node.
+cat > "$cf224/bin/bunker" <<'EOF'
+#!/usr/bin/env bash
+if [ -n "${FIXTURE_IP:-}" ]; then
+  for a in "$@"; do
+    case "$a" in *hostname\ -I*) printf '%s\n' "$FIXTURE_IP"; exit 0 ;; esac
+  done
+fi
+args=("$@")
+i=0
+while [ "$i" -lt "${#args[@]}" ]; do
+  case "${args[$i]}" in bash|sh) break ;; esac
+  i=$((i + 1))
+done
+[ "$i" -lt "${#args[@]}" ] || { printf 'stub bunker: no shell in argv\n' >&2; exit 2; }
+shell="${args[$i]}"
+body="${args[$((i + 2))]:-}"
+rest=("${args[@]:$((i + 3))}")
+exec "$shell" -c "$body" "${rest[@]}"
+EOF
+# One stub probe. `127.0.0.1:10800` is the INSIDE-the-node probe (the verifier's in-node diagnostic),
+# anything else is the control-host probe the transport under test carries; the two are answered
+# from different variables so an arm cannot confuse "the node answers itself" with "this host
+# reached it".
+cat > "$cf224/bin/curl" <<'EOF'
+#!/usr/bin/env bash
+o="" u=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o) o="$2"; shift 2 ;;
+    -*) shift ;;
+    *) u="$1"; shift ;;
+  esac
+done
+hp="${u#*://}"; hp="${hp%%/*}"
+case "$hp" in 127.0.0.1:10800) inner=1 ;; *) inner=0 ;; esac
+case "$u" in
+  */api/system/stats) if [ "$inner" = 1 ]; then c="${CURL_IN_STATS:-401}"; else c="${CURL_STATS:-401}"; fi ;;
+  *)                  if [ "$inner" = 1 ]; then c="${CURL_IN:-200}"; else c="${CURL_CODE:-200}"; fi ;;
+esac
+if [ -n "$o" ] && [ "$o" != /dev/null ]; then printf '%s' '{"status":"ok","auth_required":true}' > "$o"; fi
+printf '%s' "$c"
+EOF
+chmod +x "$cf224/bin/bunker" "$cf224/bin/curl"
+# The fixture node home: a real applied seed record and a clean checkout level with its origin, so
+# steps 1/5/6 are green and the only thing any arm below moves is the transport.
+printf 'prompts/foreman.md\n' > "$cf224/seed.manifest"
+printf 'the foreman procedure\n' > "$cf224/seed-src/prompts/foreman.md"
+python3 -B "$HERE/scripts/node_seed.py" build --manifest "$cf224/seed.manifest" \
+  --repo-root "$cf224/seed-src" --out "$cf224/seed.tar" >/dev/null 2>&1
+python3 -B "$HERE/scripts/node_seed.py" apply --tar "$cf224/seed.tar" \
+  --record "$cf224/seed.tar.json" --home "$cf224/home" >/dev/null 2>&1
+git init -q -b main --bare "$cf224/origin.git"
+git clone -q "$cf224/origin.git" "$cf224/home/repo" 2>/dev/null
+git -C "$cf224/home/repo" -c user.email=fixture@example.invalid -c user.name=fixture \
+  commit -qm fixture --allow-empty
+git -C "$cf224/home/repo" push -q -u origin main
+git -C "$cf224/home/repo" fetch -q origin
+cf224_run() {  # cf224_run <tree> [verify-node args...] — the fixture home is the "node"
+  local tree="$1"; shift
+  env -i PATH="$cf224/bin:$PATH" HOME="$cf224/home" FIXTURE_IP="${FIXTURE_IP:-}" \
+    CURL_CODE="${CURL_CODE:-200}" CURL_IN="${CURL_IN:-200}" \
+    CURL_STATS="${CURL_STATS:-401}" CURL_IN_STATS="${CURL_IN_STATS:-401}" \
+    /bin/bash "$tree/scripts/verify-node.sh" --agent cf-fixture --server fixture "$@" 2>&1
+}
+
+# 1. The pre-fix control: this verifier had no transport at all, so an operator on a bunker could
+#    not even declare one. That is the row's premise, measured rather than asserted.
+if [ "$cf224_prefix" -eq 1 ]; then
+  out=$(cf224_run "$cf224/prefix" --transport published-port --transport-address 203.0.113.9:10800); rc=$?
+  if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -Fq 'unknown arg: --transport'; then
+    say "  PASS  pre-fix bf16c05 has no --transport: exit $rc, 'unknown arg: --transport' (CF-224 premise)"
+  else
+    say "  FAIL  the pre-fix verifier did not refuse --transport (exit $rc): $(printf '%s\n' "$out" | head -2 | tr '\n' ' ')"
+    fails=$((fails+1))
+  fi
+else
+  say "  FAIL  pre-fix source bf16c05:scripts/verify-node.sh unavailable"; fails=$((fails+1))
+fi
+
+# 2. The wrong behaviour, recorded: a node that reports only loopback PASSes the pre-fix verifier
+#    because the probe answered on THIS host — nothing names a transport, so nothing exposes it.
+if [ "$cf224_prefix" -eq 1 ]; then
+  out=$(FIXTURE_IP=127.0.0.1 cf224_run "$cf224/prefix"); rc=$?
+  if [ "$rc" -eq 0 ] \
+    && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
+    && printf '%s\n' "$out" | grep -Fxq '  PASS  gateway_reachable — http://127.0.0.1:10800/api/status -> 200' \
+    && ! printf '%s\n' "$out" | grep -q '^  PASS  transport'; then
+    say "  PASS  pre-fix bf16c05 certifies a loopback-only node: VERIFY: PASS, exit $rc, no transport row (the fixture detects CF-224)"
+  else
+    say "  FAIL  the pre-fix loopback control did not pass (exit $rc): $(printf '%s\n' "$out" | grep -E '^(  (PASS|FAIL|WARN))|^VERIFY' | head -5 | tr '\n' ' ')"
+    fails=$((fails+1))
+  fi
+fi
+
+# 3. Same fixture, this verifier: a loopback address is not a transport, so the run cannot pass.
+out=$(FIXTURE_IP=127.0.0.1 cf224_run "$cf224/tree"); rc=$?
+if [ "$rc" -eq 3 ] \
+  && printf '%s\n' "$out" | grep -Fq '  WARN  transport — node-address 127.0.0.1:10800 — refused:' \
+  && printf '%s\n' "$out" | grep -Fq 'no LAN address for cf-fixture' \
+  && printf '%s\n' "$out" | grep -Eq '^VERIFY: UNVERIFIED' \
+  && ! printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
+  && ! printf '%s\n' "$out" | grep -Fq 'PASS  gateway_reachable'; then
+  say "  PASS  a loopback-only node -> exit $rc, named transport refusal, VERIFY: UNVERIFIED (never a PASS row)"
+else
+  say "  FAIL  a loopback node was not refused as unverified (exit $rc): $(printf '%s\n' "$out" | grep -E '^(  (PASS|FAIL|WARN))|^VERIFY' | head -5 | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+
+# 4. The local behaviour is preserved: a node on a reachable address still verifies, and the row now
+#    says which transport carried the probe.
+out=$(FIXTURE_IP=192.0.2.10 cf224_run "$cf224/tree"); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
+  && printf '%s\n' "$out" | grep -Fxq '  PASS  transport — node-address 192.0.2.10:10800 — the node'"'"'s own address, probed from this host (the LAN case; a bunker node has no LAN address by default)' \
+  && printf '%s\n' "$out" | grep -Fxq '  PASS  gateway_reachable — http://192.0.2.10:10800/api/status -> 200 (transport: node-address)'; then
+  say "  PASS  a reachable node-address -> VERIFY: PASS, exit $rc, the row names node-address and the measured 200"
+else
+  say "  FAIL  a reachable node-address did not verify (exit $rc): $(printf '%s\n' "$out" | grep -E '^(  (PASS|FAIL|WARN))|^VERIFY' | head -5 | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+
+# 5. A published port is the bunker transport: the probe runs HERE and the row names it.
+out=$(cf224_run "$cf224/tree" --transport published-port --transport-address 203.0.113.9:10800); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
+  && printf '%s\n' "$out" | grep -Fq '  PASS  transport — published-port 203.0.113.9:10800 — a port published on the bunker host, probed from this host (never inside the node)' \
+  && printf '%s\n' "$out" | grep -Fxq '  PASS  gateway_reachable — http://203.0.113.9:10800/api/status -> 200 (transport: published-port)'; then
+  say "  PASS  --transport published-port -> VERIFY: PASS, exit $rc, the gateway row names the transport and the code"
+else
+  say "  FAIL  a published port did not verify (exit $rc): $(printf '%s\n' "$out" | grep -E '^(  (PASS|FAIL|WARN))|^VERIFY' | head -5 | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+
+# 6. An unavailable transport is NAMED, and no row prints a bare 000 (criterion 4).
+out=$(CURL_CODE=000 cf224_run "$cf224/tree" --transport published-port --transport-address 203.0.113.9:10800); rc=$?
+cf224_why=$(printf '%s\n' "$out" | grep -F '  WARN  gateway_reachable — no published port for cf-fixture:10800')
+if [ "$rc" -eq 3 ] && [ -n "$cf224_why" ] \
+  && printf '%s\n' "$out" | grep -Eq '^VERIFY: UNVERIFIED' \
+  && ! printf '%s\n' "$out" | grep -Eq -- '-> 000|000000'; then
+  say "  PASS  no published port -> exit $rc, 'no published port for cf-fixture:10800' in the row, and no 000 anywhere in the output"
+else
+  say "  FAIL  an unavailable published port was not named (exit $rc): $(printf '%s\n' "$out" | grep -E '^(  (PASS|FAIL|WARN))|^VERIFY' | head -5 | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+
+# 7. A tunnel endpoint on THIS host is legal even when it is loopback, because the declaration says
+#    what it is: the request still originates here and re-enters the node through the forward.
+out=$(cf224_run "$cf224/tree" --transport tunnel --transport-address 127.0.0.1:18080); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'VERIFY: PASS' \
+  && printf '%s\n' "$out" | grep -Fxq '  PASS  gateway_reachable — http://127.0.0.1:18080/api/status -> 200 (transport: tunnel)'; then
+  say "  PASS  --transport tunnel 127.0.0.1:18080 -> VERIFY: PASS, exit $rc (a declared forward, not a node-internal loopback)"
+else
+  say "  FAIL  a declared tunnel endpoint did not verify (exit $rc): $(printf '%s\n' "$out" | grep -E '^(  (PASS|FAIL|WARN))|^VERIFY' | head -5 | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+
+# 8. Criterion 3: a probe that never leaves the node is a FAIL, not a PASS — even though it measures
+#    a 200 from the gateway's own loopback.
+out=$(cf224_run "$cf224/tree" --transport bunker-exec); rc=$?
+if [ "$rc" -eq 1 ] \
+  && printf '%s\n' "$out" | grep -Fq '  FAIL  gateway_reachable — loopback inside the node -> 200 (transport: bunker-exec)' \
+  && printf '%s\n' "$out" | grep -Fq 'a request that did not leave the node proves nothing about reachability, so this is a FAIL, not a PASS' \
+  && printf '%s\n' "$out" | grep -Fxq 'VERIFY: FAIL (2)' \
+  && ! printf '%s\n' "$out" | grep -Fq 'PASS  gateway_reachable' \
+  && ! printf '%s\n' "$out" | grep -Eq '^VERIFY: (PASS|UNVERIFIED)'; then
+  say "  PASS  --transport bunker-exec -> exit $rc, named loopback FAIL, VERIFY: FAIL (2) (never PASS, never UNVERIFIED)"
+else
+  say "  FAIL  an in-node loopback probe was not a FAIL (exit $rc): $(printf '%s\n' "$out" | grep -E '^(  (PASS|FAIL|WARN))|^VERIFY' | head -6 | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+
+# 9. The transport flags fail closed as usage, so no run silently probes something nobody declared.
+cf224_usage() {  # cf224_usage <expect-substring> [args...]
+  local want="$1"; shift
+  local got rc2
+  got=$(FIXTURE_IP=192.0.2.10 cf224_run "$cf224/tree" "$@" 2>&1); rc2=$?
+  [ "$rc2" -eq 2 ] && printf '%s\n' "$got" | grep -Fq -- "$want"
+}
+if cf224_usage '--transport must be node-address, published-port, tunnel or bunker-exec (got: bogus)' --transport bogus \
+  && cf224_usage '--transport published-port needs --transport-address HOST:PORT' --transport published-port \
+  && cf224_usage '--transport-address is used by --transport published-port|tunnel only' \
+       --transport node-address --transport-address 203.0.113.9:10800; then
+  say "  PASS  a bad transport, a missing address and an address with no transport are each exit 2 with a named refusal"
+else
+  say "  FAIL  the transport usage refusals did not all hold"; fails=$((fails+1))
+fi
+rm -rf "$cf224"
+# END cf224-transport
 
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
