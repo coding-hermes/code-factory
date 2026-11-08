@@ -6,7 +6,10 @@ sheet wins — fix it in the same tick.
 
 Authority: `specs/HARNESS-MATRIX.md` (harness selection), `specs/NODE.md` (node contract),
 `docs/MVP-PLAN.md` (workstream order). Measured state below is at revision `3b1e826` and must be
-re-measured, not quoted, before a row is closed.
+re-measured, not quoted, before a row is closed; §3's register was re-measured against the board at
+`3d1b642` on 2026-11-08 and every cited row that has since closed is marked **closed** with what it
+shipped (`bash scripts/boardctl validate` → `RESULT: OK (17 warning(s))` at that tip; the board
+carries 366 rows / 549 events, 109 `complete`).
 
 ---
 
@@ -34,7 +37,7 @@ re-measured, not quoted, before a row is closed.
 | 2 result | node → reply with `corr_id` → scheduler correlates, acks, completes the tick | tick reaches `completed`; poll 10 s, lease 45 s — measured in the scheduler's code, not in this repo |
 | 3 memory | node → DuckBrain, namespace = project, one record per run | read back byte-identical: `run_id, lane, harness, model_requested, model_served, provider_binding, commit` |
 | 4 credential | one bundle, mode 600, deleted both sides; paths only, never values | file present at 600 on the node; no value in any log |
-| 5 artifact | node → control host, with sha256 | **partial**: `verify-node.sh --artifact` returns ONE file and recomputes its digest; a run cannot yet declare its own artifact set (`CF-211`) |
+| 5 artifact | node → control host, with sha256 | **partial**: `verify-node.sh --artifact` returns ONE file and recomputes its digest; a run cannot yet declare its own artifact set — re-measured 2026-11-08, `CF-211` was the result leg and is closed, so the gap now sits with `CF-392` |
 
 ---
 
@@ -44,14 +47,14 @@ Ordered as the loop should take them: S3 blockers first, then S5, then scale.
 
 | Ref | Now | Target | Row |
 |---|---|---|---|
-| D-1 | node has no prompts, no skills; the foreman there improvises | provisioning seeds `prompts/` + declared skills, digest-recorded, ~16 MB budget, drift check | `CF-220` |
-| D-6 | only some lanes return a result; 5 replies sit unacked | every lane replies with `corr_id`; uncorrelated replies are acked with a reason | `CF-211` |
-| D-2 | no Go toolchain graded or installed (Go = 27 of 61 repo origins) | layer 10 grades go per project kind; `install-go.sh` pins it and proves a module resolves | `CF-218`, `CF-219` |
-| D-3 | 6 of 7 harnesses unproven; adapters/installers missing or stubs | five conformance legs per harness on a real node | `CF-225`, `CF-227`, `CF-228` |
-| D-4 | harness decided by whichever binary the node got | directive > lane > model-family default > hermes, with the reason recorded | `CF-230` |
-| D-5 | installers take no declared inputs; a key could arrive in argv | `CF_*` contract everywhere; a value credential is a `FAIL` | `CF-229` |
+| D-1 | node has no prompts, no skills; the foreman there improvises | provisioning seeds `prompts/` + declared skills, digest-recorded, ~16 MB budget, drift check | `CF-220` **closed** — the seeder ships; the residual (a seeded node consuming a real directive) stays with `CF-249` |
+| D-6 | only some lanes return a result; 5 replies sit unacked | every lane replies with `corr_id`; uncorrelated replies are acked with a reason | `CF-211` **closed** — `scripts/node-bus-worker.py` posts the result envelope (`ok`, `error`, `reply_b64`, `in_reply_to`) under an idempotency key and acks after delivery; the other lanes stay unmeasured |
+| D-2 | no Go toolchain graded or installed (Go = 27 of 61 repo origins) | layer 10 grades go per project kind; `install-go.sh` pins it and proves a module resolves | `CF-218` **closed** (layer 10 derives the kind set and resolves a pinned module), `CF-219` **closed** (`install-go.sh` installs at a digest pin) |
+| D-3 | 6 of 7 harnesses unproven; adapters/installers missing or stubs | five conformance legs per harness on a real node | `CF-225` **closed** (claude-code), `CF-227` **closed** (codex); `CF-228` **pending** (pi/pi-agent) — five legs on a real node are still unproven for every harness but hermes |
+| D-4 | harness decided by whichever binary the node got | directive > lane > model-family default > hermes, with the reason recorded | `CF-230` **closed** — selection is data-driven and records its reason |
+| D-5 | installers take no declared inputs; a key could arrive in argv | `CF_*` contract everywhere; a value credential is a `FAIL` | `CF-229` **closed** — the `CF_*` contract ships across the harness installers |
 | D-7 | control host cannot reach a node's gateway | defined transport; `UNVERIFIED` is its own verdict | `CF-224` |
-| D-8 | nothing defines what comes back from a node | artifact return: path, sha256, size, recomputed on return | `CF-211` |
+| D-8 | nothing defines what comes back from a node | artifact return: path, sha256, size, recomputed on return | `CF-211` **closed** — `specs/ENVELOPE.md` §Result defines the verdict field, the path home, the correlation rule, the delivery budget/key and ack-after-delivery; the artifact SET (path + sha256 + size per file) is still undefined and now sits with `CF-392` |
 | D-9 | one DuckBrain token reads any namespace | per-key namespace scoping | `CF-208` |
 | D-10 | the node's inference path points at a deferred proxy | a live endpoint per node, seat measured after dispatch | `CF-012`, `CF-171` |
 | D-11 | one node, 17 lanes with no path to it | one bunker per project, every lane routed by crier | `CF-210` |
