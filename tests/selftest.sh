@@ -2513,11 +2513,12 @@ else
   fails=$((fails+1))
 fi
 
-# the preflight must validate the credential FILES it will read, before it touches a host
-if grep -q 'every named credential and profile file is readable' "$HERE/scripts/bunker-provision.sh"; then
-  say "  PASS  the preflight names every credential file it cannot read"
+# the preflight must validate the credential FILES it will read, before it touches a host, and its
+# passing row must NAME them: "every file is readable" without a path proves nothing was measured
+if grep -q 'ok "inputs" "readable: ' "$HERE/scripts/bunker-provision.sh"; then
+  say "  PASS  the preflight names every credential file it read"
 else
-  say "  FAIL  the preflight reads credential files it never validated"; fails=$((fails+1))
+  say "  FAIL  the preflight reports readability without naming a file"; fails=$((fails+1))
 fi
 
 # every documented config key must parse: a key that exists in the variables but not in the
@@ -2688,12 +2689,243 @@ fi
 rm -rf "$tmpd"
 
 out=$(/bin/bash "$HERE/scripts/bunker-provision.sh" --destroy --project demo --agent a --server s 2>&1); rc=$?
-if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q 'refusing to destroy without --yes'; then
-  say "  PASS  destroy without --yes is refused, exit $rc"
+if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q 'refusing to destroy without --yes' \
+   && printf '%s\n' "$out" | grep -q 'would remove agent a on s'; then
+  say "  PASS  destroy without --yes is refused, exit $rc, naming the exact agent and server it would remove"
 else
-  say "  FAIL  destroy ran without confirmation (exit $rc)"; fails=$((fails+1))
+  say "  FAIL  destroy ran without confirmation, or did not name agent a on s (exit $rc)"; fails=$((fails+1))
 fi
 rm -rf "$tmpd"
+
+# --- CF-214 (continued): the config is data, the command line wins over it, and the credentials
+# move as FILES. The fixture is a bunker client whose `exec` really runs the staged command against
+# a fixture HOME, so a staged file really lands and a staged install really executes — a stub that
+# only echoed would let every hygiene row pass without measuring anything.
+cf214=$(mktemp -d)
+mkdir -p "$cf214/bin" "$cf214/home/tmp"
+: > "$cf214/argv.log"; : > "$cf214/argv.log.modes"
+cat > "$cf214/bin/bunker" <<'FBUNKER'
+#!/usr/bin/env bash
+# fixture bunker client — $BUNKER_FAKE_HOME plays the node. Every argv is appended to the log, so a
+# secret that reached a command line is visible to the assertion that greps for it.
+set -uo pipefail
+printf '%s\n' "$*" >> "${BUNKER_FAKE_LOG:?BUNKER_FAKE_LOG unset}"
+cmd="${1:-}"; [ $# -gt 0 ] && shift
+case "$cmd" in
+  list) printf '%s\n' "${BUNKER_FAKE_SERVER:-demo-server}" ;;
+  info) exit 0 ;;
+  spawn) : > "${BUNKER_FAKE_LOG}.spawn" ;;
+  cp)
+    src="${1:-}"; dst="${2:-}"; dst="${dst#*:}"
+    case "$dst" in /*) ;; *) dst="$BUNKER_FAKE_HOME/$dst" ;; esac
+    mkdir -p "$(dirname "$dst")"
+    printf '%s %s\n' "$(stat -c '%a' "$src")" "$(basename "$dst")" >> "${BUNKER_FAKE_LOG}.modes"
+    cp "$src" "$dst" ;;
+  exec)
+    while [ $# -gt 0 ] && [ "$1" != "--" ]; do shift; done
+    [ $# -gt 0 ] && shift
+    case "${BUNKER_FAKE_FAIL:-}" in
+      '') ;;
+      *) case "$*" in *"$BUNKER_FAKE_FAIL"*) exit 1 ;; esac ;;
+    esac
+    HOME="$BUNKER_FAKE_HOME" TMPDIR="$BUNKER_FAKE_HOME/tmp" "$@"; exit $? ;;
+  destroy) exit 0 ;;
+esac
+exit 0
+FBUNKER
+chmod +x "$cf214/bin/bunker"
+cf214_run() {  # cf214_run <provisioner args...>; CF214_EXTRA_PATH prefixes the fixture PATH
+  env -i PATH="${CF214_EXTRA_PATH:-}$cf214/bin:/usr/bin:/bin" HOME="$cf214/home" TMPDIR="$cf214/home/tmp" \
+    BUNKER_FAKE_LOG="$cf214/argv.log" BUNKER_FAKE_HOME="$cf214/home" \
+    BUNKER_FAKE_FAIL="${BUNKER_FAKE_FAIL:-}" \
+    /bin/bash "$HERE/scripts/bunker-provision.sh" "$@"
+}
+
+# (a) --check is READ-ONLY. The probe has to travel as a file (bunker's exec does not forward
+# stdin), so the run must remove it again: before CF-214 every check left cf-probe.sh in the
+# node's home for good, which made "read-only" a claim about intent rather than a measurement.
+out=$(cf214_run --check --project demo --agent demo-node --server demo-server 2>&1); rc=$?
+cf214_left=$(find "$cf214/home" -type f | wc -l)
+if printf '%s\n' "$out" | grep -q 'PASS  agent — demo-node exists' \
+   && grep -q 'cf-probe' "$cf214/argv.log" && [ "$cf214_left" -eq 0 ] && [ "$rc" -ne 0 ]; then
+  say "  PASS  CF-214: --check probed the node, left no file behind, and an unmeasured node is a FAIL (exit $rc)"
+else
+  say "  FAIL  CF-214: --check left $cf214_left file(s) on the node or never probed (exit $rc)"
+  fails=$((fails+1))
+fi
+
+# (b) --apply reuses an existing agent, and the credential leg is files-only: one mode-600 bundle
+# in, installed at 600, deleted on both sides, and the value never on stdout or on any argv.
+cf214_tok="SYNTHETIC-CF214-CREDENTIAL-NOT-A-SECRET"
+printf '%s\n' "$cf214_tok" > "$cf214/gh.token"; chmod 600 "$cf214/gh.token"
+out=$(cf214_run --apply --project demo --repo https://example.invalid/x.git --agent demo-node \
+      --server demo-server --harness none --github-token-file "$cf214/gh.token" 2>&1); rc=$?
+cf214_inst="$cf214/home/.node/auth/github.token"
+cf214_mode=$(stat -c %a "$cf214_inst" 2>/dev/null || echo absent)
+cf214_val=$(cat "$cf214_inst" 2>/dev/null || true)
+cf214_out_leak=$(printf '%s\n' "$out" | grep -c "$cf214_tok")
+cf214_arg_leak=$(grep -c "$cf214_tok" "$cf214/argv.log")
+# the bundle's own mode at the moment it was copied in — not the mode of some later artefact
+cf214_bundle_mode=$(awk '$2 == "cf-auth.bundle" {print $1}' "$cf214/argv.log.modes" | tail -1)
+cf214_bundle=$([ -e "$cf214/home/cf-auth.bundle" ] && echo left || echo gone)
+cf214_tmpfiles=$(find "$cf214/home/tmp" -type f | wc -l)
+cf214_cred=$(stat -c %a "$cf214/home/.git-credentials" 2>/dev/null || echo absent)
+if [ "$cf214_mode" = 600 ] && [ "$cf214_val" = "$cf214_tok" ] && [ "$cf214_out_leak" -eq 0 ] \
+   && [ "$cf214_arg_leak" -eq 0 ] && [ "$cf214_bundle_mode" = 600 ] && [ "$cf214_bundle" = gone ] \
+   && [ "$cf214_tmpfiles" -eq 0 ] && [ "$cf214_cred" = 600 ] && [ ! -e "$cf214/argv.log.spawn" ] \
+   && printf '%s\n' "$out" | grep -q 'PASS  agent — demo-node reused (no second agent)'; then
+  say "  PASS  CF-214: one 600 bundle in, installed at 600, gone from both sides, no secret in stdout or argv, existing agent reused (no second agent)"
+else
+  say "  FAIL  CF-214 credential leg: mode=$cf214_mode value=$([ "$cf214_val" = "$cf214_tok" ] && echo match || echo mismatch) stdout-leak=$cf214_out_leak argv-leak=$cf214_arg_leak bundle-cp-mode=${cf214_bundle_mode:-none} bundle=$cf214_bundle local-tmp=$cf214_tmpfiles git-credentials=$cf214_cred spawn=$([ -e "$cf214/argv.log.spawn" ] && echo yes || echo no)"
+  fails=$((fails+1))
+fi
+
+# (c) the credential rows are MEASURED, not asserted. Two reds, both of which passed silently
+# before CF-214: a node reporting a non-600 mode, and a bundle the node could not delete.
+# (c1) the fixture shims `stat` so the snippet's own mode line says 644; the row must follow it.
+mkdir -p "$cf214/sbin"
+cat > "$cf214/sbin/stat" <<'FSTAT'
+#!/usr/bin/env bash
+# fixture stat — every file under .node/auth reports mode 644
+case "$*" in
+  *".node/auth/"*) printf '644\n' ;;
+  *) exec /usr/bin/stat "$@" ;;
+esac
+FSTAT
+chmod +x "$cf214/sbin/stat"
+CF214_EXTRA_PATH="$cf214/sbin:"
+out=$(cf214_run --apply --project demo --repo https://example.invalid/x.git --agent demo-node \
+      --server demo-server --harness none --github-token-file "$cf214/gh.token" 2>&1)
+CF214_EXTRA_PATH=""
+if printf '%s\n' "$out" | grep -q 'FAIL  auth — installed but not mode 600: github.token=644' \
+   && ! printf '%s\n' "$out" | grep -q 'PASS  auth — installed under'; then
+  say "  PASS  CF-214: the auth row follows the mode the node reported (644 -> FAIL), it does not assert 'mode 600'"
+else
+  say "  FAIL  CF-214: the auth row certified mode 600 while the node reported 644"
+  fails=$((fails+1))
+fi
+# (c2) a bundle the node cannot remove is a credential leak: it must be a named row, not `|| true`
+BUNKER_FAKE_FAIL=cf-auth.bundle
+out=$(cf214_run --apply --project demo --repo https://example.invalid/x.git --agent demo-node \
+      --server demo-server --harness none --github-token-file "$cf214/gh.token" 2>&1); rc=$?
+unset BUNKER_FAKE_FAIL
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  auth_bundle — could not delete' \
+   && printf '%s\n' "$out" | grep -q 'FAIL  auth — the bundle install failed on the node'; then
+  say "  PASS  CF-214: an install that fails and a bundle the node cannot delete are both named FAIL rows (exit $rc)"
+else
+  say "  FAIL  CF-214: a failed install or an undeletable bundle was not named (exit $rc)"
+  fails=$((fails+1))
+fi
+
+# (d) the command line wins over the file for every key the requirement names: agent, server, repo,
+# ref, harness, namespace, crier URL, duckbrain URL and the token-file paths.
+cat > "$cf214/cli.conf" <<'CONF'
+PROJECT=conf-project
+AGENT=conf-agent
+SERVER=conf-server
+REPO=https://conf.invalid/r.git
+REF=conf-ref
+HARNESS=conf-harness
+NAMESPACE=conf-ns
+CRIER_URL=http://conf.invalid:1
+DUCKBRAIN_URL=http://conf.invalid:3000
+GITHUB_TOKEN_FILE=/dev/null
+CONF
+out=$(cf214_run --config "$cf214/cli.conf" --check --project cli-project --agent cli-agent \
+      --server cli-server --repo https://cli.invalid/r.git --ref cli-ref --harness cli-harness \
+      --namespace cli-ns --crier-url http://cli.invalid:2 --duckbrain-url http://cli.invalid:3001 \
+      --github-token-file /nonexistent/cf214.token 2>&1)
+cf214_win=yes
+for cf214_need in 'project=cli-project agent=cli-agent server=cli-server' \
+                   'repo=https://cli.invalid/r.git' 'ref=cli-ref' 'harness=cli-harness' \
+                   'namespaces=cli-ns' 'crier=http://cli.invalid:2' \
+                   'duckbrain=http://cli.invalid:3001' \
+                   'not readable: GITHUB_TOKEN_FILE(/nonexistent/cf214.token)'; do
+  printf '%s\n' "$out" | grep -qF -- "$cf214_need" || cf214_win="no:$cf214_need"
+done
+for cf214_lost in 'conf-agent' 'conf-server' 'conf.invalid'; do
+  printf '%s\n' "$out" | grep -qF -- "$cf214_lost" && cf214_win="file-won:$cf214_lost"
+done
+# and a passing inputs row names the file it read, so "readable" is a measurement and a --flag that
+# silently lost is visible as a path change rather than as nothing at all
+cf214_conf_out=$(cf214_run --config "$cf214/cli.conf" --check --agent demo-node --server demo-server 2>&1)
+printf '%s\n' "$cf214_conf_out" | grep -qF 'PASS  inputs — readable: GITHUB_TOKEN_FILE=/dev/null' \
+  || cf214_win="no:inputs-row-names-the-file"
+if [ "$cf214_win" = yes ]; then
+  say "  PASS  CF-214: the command line won over the config for agent/server/repo/ref/harness/namespace/crier/duckbrain/token-file"
+else
+  say "  FAIL  CF-214: config precedence — $cf214_win"
+  fails=$((fails+1))
+fi
+
+# (e) crier connect: CONNECTED is a claim about a 200, and 401/403/404/000 are named distinctly.
+mkdir -p "$cf214/cbin"
+cat > "$cf214/cbin/curl" <<'FCURL'
+#!/usr/bin/env bash
+# fixture curl — /health answers 200, every other route answers $FIXTURE_CODE
+case "$*" in
+  */health*) printf '200' ;;
+  *) printf '%s' "${FIXTURE_CODE:-200}" ;;
+esac
+exit 0
+FCURL
+chmod +x "$cf214/cbin/curl"
+printf '{"agent":"demo-node","project":"demo","url":"http://crier.invalid:8767"}\n' > "$cf214/home/.node/crier.json"
+cf214_crier() {  # cf214_crier <inbox code>
+  env -i PATH="$cf214/cbin:$cf214/bin:/usr/bin:/bin" HOME="$cf214/home" FIXTURE_CODE="$1" \
+    BUNKER_FAKE_LOG="$cf214/argv.log" BUNKER_FAKE_HOME="$cf214/home" \
+    /bin/bash "$HERE/scripts/bunker-crier-connect.sh" --check --agent demo-node \
+    --server demo-server --url http://crier.invalid:8767 2>&1
+}
+cf214_codes=yes
+for cf214_arm in '403|FAIL  inbox — .*-> 403 \(owner mismatch or guard refused\)' \
+                  '404|FAIL  inbox — .*-> 404 \(agent is genuinely not registered on the bus\)' \
+                  '000|FAIL  inbox — .*-> 000 \(no answer: refused, unresolvable or timed out' \
+                  '401|WARN  inbox — .*-> 401 — expected for an unsigned read'; do
+  cf214_code="${cf214_arm%%|*}"; cf214_want="${cf214_arm#*|}"
+  cf214_cout=$(cf214_crier "$cf214_code")
+  printf '%s\n' "$cf214_cout" | grep -qE -- "  $cf214_want" || cf214_codes="no:$cf214_code"
+  printf '%s\n' "$cf214_cout" | grep -q 'CRIER: CONNECTED' && cf214_codes="connected-on-$cf214_code"
+done
+cf214_cout=$(cf214_crier 200); cf214_rc=$?
+printf '%s\n' "$cf214_cout" | grep -q 'CRIER: UNVERIFIED' || cf214_codes="no:200-unverified"
+printf '%s\n' "$cf214_cout" | grep -q 'CRIER: CONNECTED' && cf214_codes="connected-on-unsigned-200"
+[ "$cf214_rc" -eq 3 ] || cf214_codes="unsigned-200-exit-$cf214_rc"
+if [ "$cf214_codes" = yes ]; then
+  say "  PASS  CF-214: crier connect names 401/403/404/000 distinctly and never says CONNECTED without a signed 200 (unsigned 200 -> UNVERIFIED, exit 3)"
+else
+  say "  FAIL  CF-214: crier code naming — $cf214_codes: $(printf '%s\n' "$cf214_cout" | grep -E 'FAIL|WARN|CRIER' | head -4 | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+# (f) the skill ships with the scripts it documents. A skill that names a script nobody ships — or a
+# mode the script refuses — is drift the operator only discovers at the command line.
+cf214_skill="$HERE/skills/code-factory-bunker/SKILL.md"
+cf214_missing=""
+for cf214_cmd in 'bunker-provision.sh' 'bunker-crier-connect.sh' '--check' '--apply' '--destroy' '--yes'; do
+  grep -qF -- "$cf214_cmd" "$cf214_skill" 2>/dev/null || cf214_missing="$cf214_missing $cf214_cmd"
+done
+if [ -z "$cf214_missing" ]; then
+  say "  PASS  CF-214: skills/code-factory-bunker/SKILL.md ships in the repo and names both scripts and check/apply/destroy(--yes)"
+else
+  say "  FAIL  CF-214: the repo skill does not name:$cf214_missing"; fails=$((fails+1))
+fi
+# The fleet copy lives outside this repo and does not exist on a clean box: absent is a NOTE, while a
+# present copy that disagrees on the scripts is a FAIL (its owning lane reconciles it, not this test).
+cf214_fleet="${CF214_FLEET_SKILL:-$HOME/.hermes/skills/coding-hermes/code-factory-bunker/SKILL.md}"
+if [ -r "$cf214_fleet" ]; then
+  cf214_split=""
+  for cf214_cmd in 'bunker-provision.sh' 'bunker-crier-connect.sh'; do
+    grep -qF -- "$cf214_cmd" "$cf214_fleet" || cf214_split="$cf214_split $cf214_cmd"
+  done
+  if [ -z "$cf214_split" ]; then
+    say "  PASS  CF-214: the fleet skill copy names the same two scripts as the repo copy"
+  else
+    say "  FAIL  CF-214: the fleet skill copy does not name:$cf214_split"; fails=$((fails+1))
+  fi
+else
+  say "  NOTE  CF-214: no fleet skill copy at $cf214_fleet — repo copy only (not a failure on a clean host)"
+fi
+rm -rf "$cf214"
 
 # CF-212: the control host dispatches into local workdirs that nothing refreshes, so a
 # lane can work a stale tree. The probe enumerates workdirs from the scheduler DB,

@@ -20,14 +20,20 @@ bunker boundary is the isolation unit. If you want a second project, provision a
 
 Both live in `scripts/` and share `scripts/lib.sh`. Both take `--check` (read-only, every row
 names the value it measured) and `--apply` (idempotent). Neither takes a secret as an argument.
+`--check` stages its probe as a file (bunker's `exec` does not forward stdin) and deletes it again
+in the same run, so a check leaves nothing in the node's home.
 
 | script | does | refuses when |
 |---|---|---|
 `bunker-provision.sh` | config + agent lifecycle + clone + auth bundle + node identity + delegates crier connect | a check row FAILs and cannot be repaired; the config has a non-`KEY=VALUE` line |
-`bunker-crier-connect.sh` | writes `$HOME/.node/crier.json` in the node, then probes `<crier>/agents/<agent>/inbox` | the inbox does not answer **200**; a 401/403/404 is a FAIL naming the code |
+`bunker-crier-connect.sh` | writes `$HOME/.node/crier.json` in the node, then proves the agent's own inbox with a **signed** read | the signed read is not a **200** — an unsigned answer is `UNVERIFIED` (exit 3), never `CONNECTED`; `401`/`403`/`404`/`000` are named distinctly |
 
 `node-create.sh` / `project-node.sh` / `verify-node.sh` remain the plumbing underneath; the
 provisioner calls `node-create.sh` rather than re-implementing staging and layer checks.
+
+`bunker-crier-connect.sh` takes `--check`, `--apply` and `--stage`. `--stage` writes
+`$HOME/.node/crier.json` (agent, project, url; mode 600) and stops there — the provisioner stages
+the identity before the node's bus layer exists, then proves it with `--apply` after the clone.
 
 ## Config file
 
@@ -68,6 +74,29 @@ scripts/bunker-provision.sh --config ~/.config/code-factory/cf.conf --check
 scripts/bunker-provision.sh --config ~/.config/code-factory/cf.conf --apply --agent cf-node-2
 scripts/bunker-provision.sh --config ~/.config/code-factory/cf.conf --destroy --yes
 ```
+
+Every key the config accepts has a flag that overrides it, applied **after** the file is parsed:
+
+| flag | overrides | notes |
+|---|---|---|
+| `--project` | `PROJECT` | |
+| `--agent` | `AGENT` | the agent the config names is reused; this renames the target, it never spawns a second one |
+| `--server` | `SERVER` | |
+| `--repo` | `REPO` | |
+| `--ref` | `REF` | |
+| `--harness` | `HARNESS` | |
+| `--namespace` / `--namespaces` | `NAMESPACE` / `NAMESPACES` | the first entry stays primary |
+| `--crier-url` | `CRIER_URL` | |
+| `--duckbrain-url` | `DUCKBRAIN_URL` | |
+| `--github-token-file` | `GITHUB_TOKEN_FILE` | a path, never a value; a leading `~/` is expanded here |
+| `--duckbrain-token-file` | `DUCKBRAIN_TOKEN_FILE` | |
+| `--crier-agent-key-file` | `CRIER_AGENT_KEY_FILE` | |
+| `--crier-auth-token-file` | `CRIER_AUTH_TOKEN_FILE` | |
+| `--s3-env-file` | `S3_ENV_FILE` | |
+| `--node-env-file` | `NODE_ENV_FILE` | |
+| `--config-set K=V` | the matching `CONFIG_SET_*` | repeatable |
+
+`--check` echoes what it resolved in one row (`resolved repo=… ref=… harness=… namespaces=… ttl=… crier=… duckbrain=…`) and its `inputs` row names every credential file with its path, so a flag that silently lost to the file is visible instead of invisible.
 
 ## The commit gate lives on the node
 
@@ -195,7 +224,7 @@ a host, so a refused declaration is a named `FAIL env_profile` row rather than a
 6. gateway auth — `dashboard.basic_auth` ensured, password generated on the node
 7. node plumbing — `node-create.sh` (repo, harness, layers) now that every input is in place
 8. identity — merge into `$HOME/.node/node.json`, preserving its schema
-9. crier proof — `bunker-crier-connect.sh --apply`, which only reports CONNECTED on a 200 inbox
+9. crier proof — `bunker-crier-connect.sh --apply`, which only reports CONNECTED on a **signed** 200 read of the agent's inbox
 10. nothing else. Run `--check` yourself afterwards: `--apply` printing PASS is not evidence.
 
 ## Reading a failure

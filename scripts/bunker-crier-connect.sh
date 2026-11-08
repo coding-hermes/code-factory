@@ -54,10 +54,14 @@ say "crier-connect --check — agent=$AGENT url=$URL"
   fi
   if [ -n "$via_node" ]; then
     case "$via_node" in
-      *"PASS  inbox"*) ok "inbox" "signed read accepted on the node: $via_node"; SIGNED_READ=1 ;;
+      *"PASS  inbox"*)
+        ok "inbox" "signed read accepted on the node: $via_node"; SIGNED_READ=1
+        # The requirement names <crier>/agents/<agent>/inbox, so that exact route is measured from
+        # this host as well and its code named. It is a note, not a gate: a hardened bus answers 401
+        # to an unsigned read even for a registered agent, so it can never by itself prove connection.
+        note "inbox_host $URL/agents/$AGENT/inbox -> $(probe) (unsigned, from this control host)" ;;
       *)               bad "inbox" "the node's own signed probe failed: $via_node" ;;
     esac
-    case "$via_node" in *"PASS  inbox"*) ;; *) : ;; esac
     if [ "${FAILED:-0}" -gt 0 ]; then
       say ""
       say "CRIER: NOT CONNECTED (${FAILED})"
@@ -66,10 +70,11 @@ say "crier-connect --check — agent=$AGENT url=$URL"
   else
   code=$(probe)
   case "$code" in
-    200) ok "inbox" "$URL/agents/$AGENT/inbox -> 200" ;;
+    200) ok "inbox" "$URL/agents/$AGENT/inbox -> 200 (unsigned: proves the route, not this agent's key)" ;;
     401) warn "inbox" "$URL/agents/$AGENT/inbox -> 401 — expected for an unsigned read (crier checks the signer before it looks the agent up); the signed probe needs agent.key + crier.token on the node" ;;
     403) bad "inbox" "$URL/agents/$AGENT/inbox -> 403 (owner mismatch or guard refused)" ;;
     404) bad "inbox" "$URL/agents/$AGENT/inbox -> 404 (agent is genuinely not registered on the bus)" ;;
+    000) bad "inbox" "$URL/agents/$AGENT/inbox -> 000 (no answer: refused, unresolvable or timed out — the URL or the route to it, not the agent)" ;;
     *)   bad "inbox" "$URL/agents/$AGENT/inbox -> $code" ;;
   esac
   fi

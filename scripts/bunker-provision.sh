@@ -31,6 +31,7 @@
 # Idempotent: an existing agent is reused, an existing clone is fast-forwarded, an existing
 # node.json is rewritten only when a value differs, and a second profile apply changes nothing.
 # --check is read-only and names every measured value; it never writes.
+# ch:trace row=CF-214 spec=docs/handbook/OUTLINE.md#M1-PROVISIONING wave=none:serial-worker test=tests/selftest.sh::CF-214 evidence=none:worker-implementation-awaits-foreman-gitreins witness=none:live-node-not-authorized verdict=none:foreman-judge-pending commit=none:worker-sha memory=none:foreman-closeout
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/lib.sh"
@@ -159,16 +160,19 @@ check() {
   # Every credential and profile the apply will READ must exist here, now. Discovering it at bundle
   # time is a failed provision ten minutes into a host touch, and it is also the only row that proves
   # a --flag actually reached the variable (the flags used to be overwritten by the config file).
-  local missing=""
+  local missing="" readable=""
   for pair in "GITHUB_TOKEN_FILE:$GITHUB_TOKEN_FILE" "DUCKBRAIN_TOKEN_FILE:$DUCKBRAIN_TOKEN_FILE" \
               "CRIER_AGENT_KEY_FILE:$CRIER_AGENT_KEY_FILE" "CRIER_AUTH_TOKEN_FILE:$CRIER_AUTH_TOKEN_FILE" \
               "S3_ENV_FILE:$S3_ENV_FILE" "NODE_ENV_FILE:$NODE_ENV_FILE"; do
     local name="${pair%%:*}" f="${pair#*:}"
     [ -z "$f" ] && continue
     [ -r "$f" ] || missing="$missing $name($f)"
+    # The passing row names the files too: a row that says "every file is readable" without
+    # naming one cannot prove that a --flag reached the variable instead of the config.
+    [ -r "$f" ] && readable="${readable:+$readable }$name=$f"
   done
   if [ -z "$missing" ]; then
-    ok "inputs" "every named credential and profile file is readable"
+    ok "inputs" "readable: ${readable:-none declared}"
   else
     bad "inputs" "not readable:$missing"
   fi
@@ -176,7 +180,7 @@ check() {
   local b info sha branch dirty harness_bin code
   resolve_namespaces || return 1
   say "bunker-provision --check — project=${PROJECT:-<unset>} agent=${AGENT:-<unset>} server=${SERVER:-<unset>}"
-  note "resolved repo=${REPO:-<unset>} ref=${REF:-main} harness=${HARNESS:-hermes} namespaces=${NAMESPACES:-$PROJECT} (primary ${NAMESPACE:-$PROJECT}) ttl=${TTL:-default(6h)}"
+  note "resolved repo=${REPO:-<unset>} ref=${REF:-main} harness=${HARNESS:-hermes} namespaces=${NAMESPACES:-$PROJECT} (primary ${NAMESPACE:-$PROJECT}) ttl=${TTL:-default(6h)} crier=${CRIER_URL:-unset} duckbrain=${DUCKBRAIN_URL:-unset}"
 
   b=$(have bunker)
   [ -n "$b" ] || { bad "bunker_cli" "no bunker client on PATH"; return 1; }
@@ -203,7 +207,8 @@ check() {
   # The probe is STAGED, not inlined. A single-quoted heredoc full of escaped quotes shipped
   # literal backslashes to the node, every path failed there, and the check reported a fully
   # provisioned node as empty — a false negative that would have sent an operator to re-provision.
-  local pf; pf=$(mktemp)
+  local pf pfname="cf-probe.$$.sh"
+  pf=$(mktemp)
   cat > "$pf" <<'CFPROBE'
     cd "$HOME/repo" 2>/dev/null || { echo "repo=absent"; exit 0; }
     echo "repo=present"
@@ -222,8 +227,13 @@ check() {
     echo "hermes=$(if [ -x "$HOME/hermes-venv/bin/hermes" ] || [ -x "$HOME/.local/bin/hermes" ] || command -v hermes >/dev/null 2>&1; then echo present; else echo absent; fi)"
     echo "gw_auth=$(grep -q basic_auth: "$HOME/.hermes/config.yaml" 2>/dev/null && echo present || echo absent)"
 CFPROBE
-  timeout 60 "$b" cp "$pf" "$AGENT:cf-probe.sh" --server "$SERVER" >/dev/null 2>&1 || true
-  probe=$(timeout 60 "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'bash "$HOME/cf-probe.sh"' 2>/dev/null) || true
+  timeout 60 "$b" cp "$pf" "$AGENT:$pfname" --server "$SERVER" >/dev/null 2>&1 || true
+  probe=$(timeout 60 "$b" exec --server "$SERVER" "$AGENT" -- bash -lc "bash \"\$HOME/$pfname\"" 2>/dev/null) || true
+  # --check must leave nothing behind. The probe has to travel as a FILE (bunker's exec does not
+  # forward stdin), so it is removed again in the same run; before CF-214 every check left a
+  # cf-probe.sh in the node's home for good, which made "read-only" a claim about intent only.
+  timeout 60 "$b" exec --server "$SERVER" "$AGENT" -- bash -lc "rm -f \"\$HOME/$pfname\"" >/dev/null 2>&1 \
+    || bad "probe" "could not remove the staged probe $pfname from the node — this --check left a file behind"
   rm -f "$pf"
 
   case "$probe" in *repo=present*) ok "repo" "clone present ($(printf '%s' "$probe" | sed -n 's/^sha=//p') branch $(printf '%s' "$probe" | sed -n 's/^branch=//p'), $(printf '%s' "$probe" | sed -n 's/^dirty=//p') dirty)" ;;
@@ -365,8 +375,14 @@ apply() {
   bundle_paths x > "$tmp"
   if [ -s "$tmp" ]; then
     say "  ..    installing auth bundle (before the clone)"
-    if "$b" cp "$tmp" "$AGENT:cf-auth.bundle" --server "$SERVER" >/dev/null 2>&1 &&
-       "$b" exec --server "$SERVER" "$AGENT" -- bash -lc '
+    if ! "$b" cp "$tmp" "$AGENT:cf-auth.bundle" --server "$SERVER" >/dev/null 2>&1; then
+      bad "auth" "could not copy the bundle into $AGENT"; rc=1
+    else
+      # The row must follow what the NODE measured. It used to print "installed under
+      # $HOME/.node/auth, mode 600" as a literal: nothing compared the modes the snippet reports,
+      # and the node-side delete was a `|| true`, so a bundle left behind was silent (CF-214).
+      local auth_out auth_rc modes off
+      auth_out=$("$b" exec --server "$SERVER" "$AGENT" -- bash -lc '
          set -e
          mkdir -p "$HOME/.node/auth"; chmod 700 "$HOME/.node" "$HOME/.node/auth"
          umask 077
@@ -387,10 +403,27 @@ apply() {
            git config --global credential.helper "store --file=$HOME/.git-credentials"
          fi
          for f in "$HOME/.node/auth/"*; do [ -e "$f" ] && printf "  %s mode %s\n" "$(basename "$f")" "$(stat -c %a "$f")"; done
-       ' 2>&1 | sed 's/^/  ..    /'
-    then ok "auth" "installed under \$HOME/.node/auth, mode 600"
-    else bad "auth" "bundle install failed"; rc=1; fi
-    "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'rm -f "$HOME/cf-auth.bundle"' >/dev/null 2>&1 || true
+       ' 2>&1); auth_rc=$?
+      printf '%s\n' "$auth_out" | sed 's/^/  ..    /'
+      modes=$(printf '%s\n' "$auth_out" | sed -n 's/^  \([A-Za-z0-9._-]*\) mode \([0-7]*\)$/\1=\2/p')
+      off=$(printf '%s\n' "$modes" | grep -v '=600$' | tr '\n' ' ')
+      if [ "$auth_rc" -ne 0 ]; then
+        bad "auth" "the bundle install failed on the node (exit $auth_rc) — rows above"; rc=1
+      elif [ -z "$modes" ]; then
+        bad "auth" "the node installed no file it could measure — nothing was proven"; rc=1
+      elif [ -n "$off" ]; then
+        bad "auth" "installed but not mode 600: $off"; rc=1
+      else
+        ok "auth" "installed under \$HOME/.node/auth at mode 600: $(printf '%s' "$modes" | tr '\n' ' ')"
+      fi
+      # Deletion is part of the contract, not cleanup advice: a bundle left behind is a credential
+      # leak with a friendly name (the skill's own rule). Prove it is gone instead of `|| true`-ing it.
+      if "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'rm -f "$HOME/cf-auth.bundle"; [ ! -e "$HOME/cf-auth.bundle" ]' >/dev/null 2>&1; then
+        ok "auth_bundle" "staged bundle deleted on the node; the local copy is removed too"
+      else
+        bad "auth_bundle" "could not delete \$HOME/cf-auth.bundle from the node — credential residue"; rc=1
+      fi
+    fi
   else
     warn "auth" "no token files named in config — the clone will run unauthenticated"
   fi
