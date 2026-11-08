@@ -550,5 +550,183 @@ fi
 
 # ---------------------------------------------------------------------------------------------
 say ""
+say "E. CF-278 — the isolated CF_API_KEY_FILE branch runs, and its temporary auth.json exists for the turn only"
+# ---------------------------------------------------------------------------------------------
+# ch:trace row=CF-278 spec=docs/handbook/OUTLINE.md#M5-HARNESS wave=none:serial-worker test=tests/harness/codex-install-test.sh::E1-isolated-credential-branch doc=specs/HARNESS.md evidence=none:worker-test-output witness=none:worker-local verdict=none:open-finding commit=none:open memory=none:pending-closeout
+# E1 is not a --check arm and not a grep: the stub codex records CODEX_HOME and the auth.json it
+# is actually handed DURING the turn (mode + bytes, copied out to a capture dir), and writes the
+# token artifact, so the same arm proves both halves — the file exists for the turn and is gone
+# after it. E2 is the red control: the pre-fix revision (45bd4bd, whose turn branch interpolates a
+# bare $VAR[CF_RUN_ID]) runs against the same fixture and must die with `unbound variable` before
+# the stub is ever reached, so this arm goes red if that branch is unreachable again. E3 proves the
+# single-line key admission is live rather than decorative.
+ISO_HOME="$SB/home-isolated"
+ISO_CAP="$SB/iso-capture"
+ISO_STUB="$SB/stub-iso"
+ISO_FILE="cf278-turn.txt"
+ISO_TOKEN="CF-278-TOKEN-5c1e"
+# The one-line JSON the turn must be handed — built from the key file's VALUE, never printed.
+printf '{"OPENAI_API_KEY":"%s"}\n' "$SYNTH_KEY" >"$SB/iso-expected-auth.json"
+mkdir -p "$ISO_HOME/work" "$ISO_HOME/keys" "$ISO_CAP" "$ISO_STUB"
+git -C "$ISO_HOME/work" init -q >/dev/null 2>&1
+git -C "$ISO_HOME/work" -c user.email=cf278@local -c user.name=cf278 commit -q --allow-empty -m init >/dev/null 2>&1
+# A key file written the ordinary way: one token, one trailing newline. That newline is the
+# difference between a readable auth.json and a JSON string broken across two lines.
+printf '%s\n' "$SYNTH_KEY" >"$ISO_HOME/keys/provider.key"; chmod 600 "$ISO_HOME/keys/provider.key"
+
+cat >"$ISO_STUB/codex" <<'STUBEOF'
+#!/usr/bin/env bash
+# CF-278 E1: a codex that measures the credential the installer handed it for THIS turn.
+case "${1:-}" in
+  --version) echo "codex-cli 0.166.0"; exit 0 ;;
+  exec)
+    cap="${CAPTURE_DIR:?}"; ch="${CODEX_HOME:-}"
+    printf '%s\n' "$ch" >"$cap/codex_home"
+    printf '%s\n' "$PWD" >"$cap/pwd"
+    if [ -f "$ch/auth.json" ]; then
+      printf '%s\n' "$(stat -c '%a' "$ch/auth.json")" >"$cap/auth.mode"
+      cp "$ch/auth.json" "$cap/auth.during.json"
+    fi
+    if [ -f "$ch/config.toml" ]; then
+      printf '%s\n' "$(stat -c '%a' "$ch/config.toml")" >"$cap/config.mode"
+      cp "$ch/config.toml" "$cap/config.during.toml"
+    fi
+    printf '%s\n' "${CF_TURN_TOKEN:-}" >"${CF_TURN_FILE:-codex-turn.txt}"
+    echo '{"type":"thread.started","thread_id":"cf278-iso"}'
+    exit 0 ;;
+esac
+echo "cf278 stub codex: unsupported $*" >&2; exit 64
+STUBEOF
+chmod +x "$ISO_STUB/codex"
+
+O="$SB/e1.out"
+rc=$(clean_env -u XDG_CACHE_HOME HOME="$ISO_HOME" PATH="$ISO_STUB:/usr/local/bin:/usr/bin:/bin" \
+     CAPTURE_DIR="$ISO_CAP" CF_TURN_FILE="$ISO_FILE" CF_TURN_TOKEN="$ISO_TOKEN" \
+     "$INSTALLER" --turn --model gpt-5.6-luna --provider openai-codex --namespace code-factory \
+     --run-id cf278-iso --lane cf-qa --workdir "$ISO_HOME/work" \
+     --api-key-file "$ISO_HOME/keys/provider.key" >"$O" 2>&1; echo $?)
+iso_dir=$(sed -n 's/^  PASS  turn_home — \([^ ]*\) (isolated.*/\1/p' "$O" | head -1)
+case "$iso_dir" in
+  "$ISO_HOME/.cache/cf-codex/run."*)
+    ok "E1 the isolated-credential branch runs end to end (rc=$rc): turn_home is a mktemp leaf $iso_dir" ;;
+  *)
+    no "E1 the isolated-credential branch did not run (rc=$rc, turn_home='${iso_dir:-none}')"; sed 's/^/        /' "$O" | tail -15 ;;
+esac
+cap_home="$(head -1 "$ISO_CAP/codex_home" 2>/dev/null || true)"
+if [ -n "$cap_home" ] && [ "$cap_home" = "$iso_dir" ]; then
+  ok "E1 the turn was really executed with CODEX_HOME=$cap_home (the stub recorded it)"
+else
+  no "E1 the stub codex was not reached with the reported turn home (recorded '${cap_home:-none}', reported '${iso_dir:-none}')"
+fi
+[ "$cap_home" = "$ISO_HOME/.codex" ] \
+  && no "E1 the isolated branch fell back to the host login directory \$HOME/.codex" \
+  || ok "E1 CODEX_HOME was an isolated home, not \$HOME/.codex"
+if [ -f "$ISO_CAP/auth.during.json" ]; then
+  printf '{"OPENAI_API_KEY":"%s"}\n' "$SYNTH_KEY" >"$SB/iso-expected-auth.json"
+  cmp -s "$ISO_CAP/auth.during.json" "$SB/iso-expected-auth.json" \
+    && ok "E1 during the turn \$CODEX_HOME/auth.json held exactly one line of JSON: {\"OPENAI_API_KEY\":\"<the key>\"}" \
+    || no "E1 the auth.json handed to the turn is not the expected one-line JSON (a key file's trailing newline must not be embedded in the string)"
+  [ "$(cat "$ISO_CAP/auth.mode" 2>/dev/null)" = "600" ] \
+    && ok "E1 the temporary auth.json was mode 600 while the turn ran" \
+    || no "E1 the temporary auth.json mode was '$(cat "$ISO_CAP/auth.mode" 2>/dev/null)' — expected 600"
+else
+  no "E1 no auth.json existed under CODEX_HOME while the turn ran — the branch never handed the key to the turn"
+fi
+if [ -f "$ISO_CAP/config.during.toml" ] && [ "$(cat "$ISO_CAP/config.mode" 2>/dev/null)" = "600" ] \
+   && grep -qx 'model = "gpt-5.6-luna"' "$ISO_CAP/config.during.toml" \
+   && grep -qx 'model_provider = "openai"' "$ISO_CAP/config.during.toml"; then
+  ok "E1 the isolated config.toml pinned model + provider on disk (mode 600), so neither is inherited from ~/.codex"
+else
+  no "E1 the isolated config.toml was missing, world-readable, or did not pin model/provider"
+fi
+if [ -n "$iso_dir" ] && [ ! -e "$iso_dir" ]; then
+  ok "E1 the isolated home is gone after the turn — the temporary auth.json was removed with it"
+elif [ -n "$iso_dir" ]; then
+  no "E1 the isolated home survived the turn: $iso_dir"
+else
+  no "E1 no isolated home was reported, so its removal could not be measured"
+fi
+iso_left=$(find "$ISO_HOME" -name auth.json -print 2>/dev/null | wc -l)
+[ "$iso_left" = "0" ] && ok "E1 no auth.json survives anywhere under the fake \$HOME" \
+  || no "E1 $iso_left auth.json file(s) survived under the fake \$HOME"
+[ -e "$ISO_HOME/.codex" ] && no "E1 the adapter created the host login directory \$HOME/.codex" \
+  || ok "E1 \$HOME/.codex was never created"
+grep -qF -- "$SYNTH_KEY" "$O" && no "E1 the key value was printed into the installer output" \
+  || ok "E1 the key value never appears in the installer output"
+
+# E2 — the red control. The same fixture against the pre-fix tree: the branch must die on the
+# expansion, before any credential file is written and before the stub is reached.
+PREFIX278_REV="${CF278_PREFIX_REV:-45bd4bd}"
+P278="$SB/prefix-cf278"
+RED_HOME="$SB/home-isolated-prefix"
+RED_CAP="$SB/iso-capture-prefix"
+mkdir -p "$P278/scripts/harness" "$RED_HOME/work" "$RED_HOME/keys" "$RED_CAP"
+git -C "$RED_HOME/work" init -q >/dev/null 2>&1
+git -C "$RED_HOME/work" -c user.email=cf278@local -c user.name=cf278 commit -q --allow-empty -m init >/dev/null 2>&1
+printf '%s\n' "$SYNTH_KEY" >"$RED_HOME/keys/provider.key"; chmod 600 "$RED_HOME/keys/provider.key"
+cp "$HERE_REPO/scripts/lib.sh" "$P278/scripts/lib.sh"
+if git -C "$HERE_REPO" show "$PREFIX278_REV:scripts/harness/install-codex.sh" >"$P278/scripts/harness/install-codex.sh" 2>/dev/null; then
+  chmod +x "$P278/scripts/harness/install-codex.sh"
+  O="$SB/e2.out"
+  rc=$(clean_env -u XDG_CACHE_HOME HOME="$RED_HOME" PATH="$ISO_STUB:/usr/local/bin:/usr/bin:/bin" \
+       CAPTURE_DIR="$RED_CAP" CF_TURN_FILE="$ISO_FILE" CF_TURN_TOKEN="$ISO_TOKEN" \
+       "$P278/scripts/harness/install-codex.sh" --turn --model gpt-5.6-luna --provider openai-codex \
+       --namespace code-factory --run-id cf278-iso --lane cf-qa --workdir "$RED_HOME/work" \
+       --api-key-file "$RED_HOME/keys/provider.key" >"$O" 2>&1; echo $?)
+  red_left=$(find "$RED_HOME" -name auth.json -print 2>/dev/null | wc -l)
+  if [ "$rc" != "0" ] && grep -q 'unbound variable' "$O" \
+     && [ ! -f "$RED_CAP/codex_home" ] && [ "$red_left" = "0" ]; then
+    ok "E2 the pre-fix adapter ($PREFIX278_REV) dies with 'unbound variable' before the stub is reached and writes no auth.json — E1 is falsifiable"
+  else
+    no "E2 the pre-fix control did not fail on the expansion (rc=$rc, stub reached=$([ -f "$RED_CAP/codex_home" ] && echo yes || echo no), auth.json left=$red_left)"
+    sed 's/^/        /' "$O" | tail -6
+  fi
+else
+  skip "E2 the pre-fix revision $PREFIX278_REV is unavailable here (git show $PREFIX278_REV:scripts/harness/install-codex.sh)"
+fi
+
+# E2b — the SECOND half of that branch has its own control. The tree this change was made on
+# (7cedd1f) still copies the key file's trailing newline INTO the JSON string, so the auth.json it
+# hands the turn is not parseable at all. Against that tree the E1 byte assertion fails, which is
+# what makes it a measurement rather than a restatement of the current code.
+PREPATCH278_REV="${CF278_PREPATCH_REV:-7cedd1f}"
+P278B="$SB/prepatch-cf278"
+PB_HOME="$SB/home-isolated-prepatch"
+PB_CAP="$SB/iso-capture-prepatch"
+mkdir -p "$P278B/scripts/harness" "$PB_HOME/work" "$PB_HOME/keys" "$PB_CAP"
+git -C "$PB_HOME/work" init -q >/dev/null 2>&1
+git -C "$PB_HOME/work" -c user.email=cf278@local -c user.name=cf278 commit -q --allow-empty -m init >/dev/null 2>&1
+printf '%s\n' "$SYNTH_KEY" >"$PB_HOME/keys/provider.key"; chmod 600 "$PB_HOME/keys/provider.key"
+cp "$HERE_REPO/scripts/lib.sh" "$P278B/scripts/lib.sh"
+if git -C "$HERE_REPO" show "$PREPATCH278_REV:scripts/harness/install-codex.sh" >"$P278B/scripts/harness/install-codex.sh" 2>/dev/null; then
+  chmod +x "$P278B/scripts/harness/install-codex.sh"
+  O="$SB/e2b.out"
+  rc=$(clean_env -u XDG_CACHE_HOME HOME="$PB_HOME" PATH="$ISO_STUB:/usr/local/bin:/usr/bin:/bin" \
+       CAPTURE_DIR="$PB_CAP" CF_TURN_FILE="$ISO_FILE" CF_TURN_TOKEN="$ISO_TOKEN" \
+       "$P278B/scripts/harness/install-codex.sh" --turn --model gpt-5.6-luna --provider openai-codex \
+       --namespace code-factory --run-id cf278-iso --lane cf-qa --workdir "$PB_HOME/work" \
+       --api-key-file "$PB_HOME/keys/provider.key" >"$O" 2>&1; echo $?)
+  if [ "$rc" = "0" ] && [ -f "$PB_CAP/auth.during.json" ] \
+     && ! cmp -s "$PB_CAP/auth.during.json" "$SB/iso-expected-auth.json" \
+     && [ "$(wc -l <"$PB_CAP/auth.during.json")" -gt 1 ]; then
+    ok "E2b the pre-patch adapter ($PREPATCH278_REV) embeds the key file's newline in auth.json (two lines, not the expected one) — the E1 byte assertion is falsifiable"
+  else
+    no "E2b the pre-patch control did not reproduce the embedded newline (rc=$rc, auth.json captured=$([ -f "$PB_CAP/auth.during.json" ] && echo yes || echo no))"
+  fi
+else
+  skip "E2b the pre-patch revision $PREPATCH278_REV is unavailable here (git show $PREPATCH278_REV:scripts/harness/install-codex.sh)"
+fi
+
+# E3 — a two-line key file is refused by name. The per-line token grep alone accepted it and the
+# auth.json would then carry a key no provider ever issued; admission is where that fails closed.
+printf '%s\n%s\n' "$SYNTH_KEY" 'second-line' >"$ISO_HOME/keys/two-line.key"
+chmod 600 "$ISO_HOME/keys/two-line.key"
+O="$SB/e3.out"
+rc=$(run_home "$ISO_HOME" "$O" "$INSTALLER" --check "${FULL_SET[@]}" --workdir "$ISO_HOME/work" \
+      --api-key-file "$ISO_HOME/keys/two-line.key")
+expect_refused "E3 a CF_API_KEY_FILE holding two lines is refused by name" "$O" "$rc" "more than one line"
+
+# ---------------------------------------------------------------------------------------------
+say ""
 say "codex installer test: $PASS passed, $FAIL failed, $SKIP skipped"
 [ "$FAIL" -eq 0 ] && { say "RESULT: PASS"; exit 0; } || { say "RESULT: FAIL"; exit 1; }

@@ -300,7 +300,11 @@ check_api_key_file() {
   esac
   [ -s "$path" ] || refuse "credential" "CF_API_KEY_FILE is empty: $path"
   # The key is written into a copy of auth.json for an isolated CODEX_HOME, so it must not be
-  # able to break out of a JSON string.
+  # able to break out of a JSON string. One line, one bare token: a second line would pass the
+  # per-line grep below and then be concatenated into a key that authenticates as nothing.
+  if [ "$(wc -l <"$path" 2>/dev/null || echo 0)" -gt 1 ]; then
+    refuse "credential" "CF_API_KEY_FILE holds more than one line — it must be a single bare key token (value not read)"
+  fi
   if LC_ALL=C grep -q '[^A-Za-z0-9._-]' "$path" 2>/dev/null; then
     refuse "credential" "CF_API_KEY_FILE contains characters that are not a bare key token — refusing to copy it"
   fi
@@ -614,9 +618,20 @@ case "$MODE" in
         printf 'model_provider = "%s"\n' "$provider"
         printf 'sandbox_mode = "%s"\n' "$DEFAULT_SANDBOX"
         printf 'approval_policy = "never"\n'
-      } >"$turn_home/config.toml" && chmod 600 "$turn_home/config.toml"
+      } >"$turn_home/config.toml" && chmod 600 "$turn_home/config.toml" \
+        || { bad "turn_home" "cannot write the isolated config.toml under $turn_home"; say ""; verdict CODEX action; exit $?; }
       # The copy is deleted by the EXIT trap (CF-108: a credential file is deleted after use).
-      { printf '{"OPENAI_API_KEY":"'; cat "${VAR[CF_API_KEY_FILE]}"; printf '"}\n'; } >"$turn_home/auth.json"
+      #
+      # CF-278: the key is embedded as a BARE TOKEN — the file's trailing newline is stripped by the
+      # command substitution, because a raw newline inside a JSON string is a parse error and a key
+      # file written by `printf '%s\n'` (or any editor) is the normal case, not the edge case. The
+      # path is spelled ${VAR[CF_API_KEY_FILE]}: a bare $VAR[...] is a word expansion, not the
+      # associative-array key, which is the shape that killed this branch with `unbound variable`
+      # while --check stayed green. A write that fails is named here rather than passing as a home
+      # the turn will find credential-less.
+      key_token="$(cat "${VAR[CF_API_KEY_FILE]}")"
+      { printf '{"OPENAI_API_KEY":"%s"}\n' "$key_token"; } >"$turn_home/auth.json" \
+        || { bad "turn_home" "cannot write the isolated auth.json under $turn_home"; say ""; verdict CODEX action; exit $?; }
       chmod 600 "$turn_home/auth.json"
       ok "turn_home" "$turn_home (isolated config + key, mode 600, deleted on exit)"
     else
