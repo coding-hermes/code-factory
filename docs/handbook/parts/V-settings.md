@@ -1,0 +1,472 @@
+# Part V — Settings register
+
+Every setting the thirteen module chapters register, in one place. `Where it lives` names
+the file and the mechanism (env var, flag, config key or hardcoded constant). `Default`
+carries the chapter's citation; a setting with no known default reads `unknown` with the
+reason — never blank. `Changes` is the consequence of moving it, from the chapter's own
+measured words. The cross-ref names the chapter section that owns the row; the locators
+there are the authority, and a chapter that re-pins a locator amends this register in the
+same commit. Locators are quoted from the chapters' measured revisions; where later
+commits have shifted a line, the chapter's citation stands until the chapter re-pins it.
+
+Where a module's settings live in several files, the module carries one table per file,
+matching the chapter's own subdivision. Constants that a chapter explicitly excludes from
+its settings surface (`FAILED` in M0, `LISTEN` in M12, the spine gate's four hardcoded
+sets in M6) are named in a note, not given rows — the chapters refuse them the status of
+settings and this register records that refusal rather than overruling it.
+
+## M0 — shared contract
+
+`lib.sh` carries one tunable constant and no env-var surface (M0 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `fetch_verified` `--max-time` | `scripts/lib.sh:22`, hardcoded | 120 s | fixed | download stall ceiling — a download stalling past 120 s fails with rc 1; lowering it rejects slow-but-valid mirrors | M0 §5 |
+
+`FAILED` (`lib.sh:11`) is a per-script failure counter, not a setting. The `CF_*` variable
+contract lives under M5 below.
+
+## M1 — provisioning
+
+**`disk_floor.py`** (M1 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `ROLE_DEFAULTS` | `disk_floor.py:36` | `{"worker": 5, "builder": 10, "full": 20}` GiB | 1..4096 GiB (`MIN_GIB`/`MAX_GIB`) | admission floor per role — a value outside the range is refused (`:68-71`) | M1 §5 |
+| `DEFAULT_ROLE` | `disk_floor.py:37` | `worker` | one of the role keys | which floor applies when no role is named — an unknown explicit role is refused, not defaulted (F1-2, raise at `:123-125`) | M1 §5 |
+
+Floor precedence, verified (F1-3): `--disk-floor` → `NODE_DISK_FLOOR` → the `[disk]`
+config key (`{role}_gib`, then `default`) → `ROLE_DEFAULTS[role]` (`disk_floor.py:115-141`).
+
+**`bunker-provision.sh`** (M1 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| config keys | `bunker-provision.sh:38-46` (declared), `:108-123` (loaded) | see the declared surface | KEY=VALUE lines only | provisioning inputs — an unknown key is refused (`:119`); a non-`KEY=VALUE` line is refused (`:103`) | M1 §5 |
+| `TTL` | spawn fallback `${TTL:-6h}` (`:356`) | 6h | a Go duration | container spawn TTL — an absent or empty TTL falls back to 6h, not an error | M1 §5 |
+| mode | `:561-609` | — | `check` / `apply` / `destroy` | what the run does — `--destroy` requires `--yes` and a non-empty `--agent`, else exit 2 (`:552-554`) | M1 §5 |
+
+**`node_seed.py`** (M1 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `--manifest` (build) | `node_seed.py:43`, `:374` | `config/node-seed.txt` | a path | which files enter the seed — a wrong manifest seeds a different procedure | M1 §5 |
+| `--budget` (build) | `DEFAULT_BUDGET` `:44`, `:377` | 16 MiB | bytes | aggregate uncompressed source-file byte ceiling — the total is compared before the archive is created (`:130-150`); compression and tar overhead are not bounded (B05); a budget under the raw source total is refused (`seed_budget` FAIL, return 1) | M1 §5 |
+| `--force` (apply) | `:387-390` | false | flag | wholesale replace of `prompts/`+`skills/` — true deletes node-local edits via `rmtree` (`:290`) after reporting each path (`:280-288`); destructive, names what it removes | M1 §5 |
+| `--home` (apply/check) | `:383`, `:393` | `~` | a path | the node `.hermes` root — a wrong home installs or checks the wrong tree | M1 §5 |
+
+**`bunker_config_gen.py`** (M1 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `--harness` | `:107`, `:515` | `hermes` | a harness name | the node's default harness — a wrong default changes every generated node config | M1 §5 |
+| `--ref` | `:106`, `:516` | `main` | a git ref | the seeded branch — a wrong ref seeds the wrong tree | M1 §5 |
+| `--ttl` | `:108`, `:517` | `6h` | a Go duration | config TTL — a wrong TTL expires containers early | M1 §5 |
+| `--force` / `--check` | `:523-524` | off / off | flags | rewrite a differing config / read-only drift check — `--check` is read-only | M1 §5 |
+
+Config-vs-CLI precedence: `load_config` (`:96-123`) parses the file as data, then the CLI
+flags are re-applied on top — the command line always wins (`:589`); six flags are
+re-applied after the config (`:604-609`).
+
+**`node_env.py`** (M1 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `--env-file` | `node_env.py` | none — required with `--config-set` | a path | which declared profile is read — absent with no `--config-set` → `Refusal` "nothing declared" (`:484-485`) | M1 §5 |
+| `--config-set` | `:474-481` | none, repeatable | `KEY=VALUE` | additional overrides applied after the file — a malformed set is refused at parse (`:476`) | M1 §5 |
+| mode | `:482-483` | none — required | `--check` or `--apply` | whether the run mutates — no mode → `Refusal` "one of --check or --apply is required" | M1 §5 |
+| `HOME` | `:491-494` | required | env | where the paths resolve — unset → `Refusal` "HOME is unset" | M1 §5 |
+| target paths | `:495-496` | `$HOME/.hermes/.env` + `$HOME/.hermes/config.yaml` | fixed | what is rewritten — a wrong HOME rewrites the wrong tree | M1 §5 |
+| unmanaged variables | `:548-556` | carried forward | per-variable | variables present but not declared — each emits `WARN unmanaged:<name>`; preserved, not dropped | M1 §5 |
+
+**`node_freshness.py`** (M1 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `--path` | `:677-682` | `repo` | a remote path relative to agent home | which checkout is measured — a wrong path measures a different tree | M1 §5 |
+| `--timeout` | `:684-689` | 180 s | int >= 1 | per-command bunker exec timeout — `< 1` is refused (`RESULT: FAIL (usage…)`); the help notes the bunker exec stream dies at 300 | M1 §5 |
+
+**`node-create.sh`** (M1 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `--deploy-key FILE` | `node-create.sh` | none | an SSH private key, owner-only mode | injects the per-repo credential at spawn — a readable key is refused before any agent is spawned; unset means the node clones with whatever identity it has | M1 §5 |
+| `--gomodcache PATH` | `node-create.sh` | none | an absolute path on the node | points the node at a sealed shared module cache — a relative path is refused; unset leaves a private cache and layer 10 prints the WARN | M1 §5 |
+| `--ref R` | `node-create.sh` | `main` (or `NODE_REF`) | a git ref | the branch or tag cloned | M1 §5 |
+
+**`deploy_key.py`** (M1 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| subcommand | `deploy_key.py` | none | `install` / `check` / `show` | mutating install / read-only proof / fingerprint listing — `check` never writes; `show` prints sha256 prefixes, never key material | M1 §5 |
+| key file mode | `deploy_key.py` | — | `0600` or `0400` accepted | who can read the key — `0644` is `FAIL key_mode` and nothing is installed | M1 §5 |
+| key body | `deploy_key.py` | — | a private OpenSSH/PEM header | accepted material — a public key (`ssh-*`, `ecdsa-*`) is `FAIL key_file` | M1 §5 |
+| remote form | `deploy_key.py` | — | `git@host:path` or `ssh://[user@]host[:port]/path` | what a deploy key can authenticate — HTTPS/local forms are `FAIL repo` naming why | M1 §5 |
+| `--replace` | `deploy_key.py` | off | flag | rotation of a key already registered for that repo — a different key without it is refused, so a rotation is never silent | M1 §5 |
+
+**`node_hygiene.py`** (M1 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `footprint --working-room-mib` | `WORKING_ROOM_MIB` | 2048 | MiB | headroom added to the measured components before admission — a shortfall is `FAIL footprint:room` naming the bytes short | M1 §5 |
+| `footprint --floor-gib` | `node_hygiene.py` | none (measured only) | GiB | whether the total is admitted against the resolved floor — without it the total is measured but not admitted | M1 §5 |
+| `footprint --modcache` | `node_hygiene.py` | none → `not-declared` | path | whether the shared cache counts toward the footprint — an undeclared cache is named, never a silent zero | M1 §5 |
+| `reap --min-age-minutes` | `node_hygiene.py` | 60 | minutes | grace before an orphan is removed — a younger entry is kept (an agent being created is not an orphan) | M1 §5 |
+| `reap --registry` | `node_hygiene.py` | none — required | id list or `bunker list` output | which ids are live — absent or unreadable → `FAIL reap_registry`, nothing removed | M1 §5 |
+
+## M2 — dispatch
+
+`node-bus-worker.py` fixes the run-budget and inbox constants (`:81-114`) and the CLI
+(`:1425-1499`) (M2 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `CF_MAX_TURNS` | `node-bus-worker.py:113` | 40 | 1..1000 | turn budget — out of range refused | M2 §5 |
+| `CF_TIMEOUT_S` | `:114` | 1800 | 1..86400 | wall-clock per turn — out of range refused | M2 §5 |
+| `DEFAULT_INBOX_LIMIT` | `:81` | 10 | positive int; the bus caps a batch at 100 (`handler.go:1718-1731` returns 400 `max must be <= 100`) | inbox batch size — larger batches raise per-poll latency; a value >100 is refused by the bus, not the worker | M2 §5 |
+| `DEFAULT_LEASE_SECONDS` | `:82` | 30 | positive int | lease on each retrieve — too long holds messages during a crash | M2 §5 |
+| `SEEN_LIMIT` | `:85` | 200 | positive int | idempotency window — a smaller window re-runs a redelivered dispatch | M2 §5 |
+| `--reply-to` | `:1479-1480` | `scheduler` | an agent id | result recipient when the dispatch names none — a wrong default drops replies | M2 §5 |
+| `--wait-seconds` | `:1486` | 0 | 0..120 (`:1511`) | inbox long-poll budget — outside 0..120 → exit 2 (the bus answers 400 outside it) | M2 §5 |
+| `--interval` | `:1489` | 15 | positive int | seconds between `--loop` polls — 0 starves the loop | M2 §5 |
+| `--harness-wall` / `--timeout` | `DEFAULT_HARNESS_WALL` `:84`, `DEFAULT_TIMEOUT` `:83`; CLI defaults at `:1491-1499` | 1800 / 10 | positive int | per-run wall / per-request timeout — see F2-3 for the wall fallback (a fractional positive below 1 converts to 0, an out-of-range value falls back rather than being bounded) | M2 §5, §11 |
+| `--dry-run` lease | `:1312` (`lease = 5 if args.dry_run else args.lease_seconds`) | 5 s | fixed | a dry run leases each retrieved message for 5 s — it skips execution, post and ack, not the lease (B08) | M2 §5 |
+| `--home`, `--identity`, `--bus-identity`, `--key`, `--token-file`, `--agent`, `--project`, `--crier`, `--workdir`, `--harness-cmd`, `--gateway-port` | `:1443-1476` | unknown — registered NAME ONLY (M2 §5): default, validation and consequence are not individually stated; a named RED on this field | — | identity/credential/destination/executable selection — the surface exists, its per-variable contract does not | M2 §5 |
+
+## M3 — repository
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `GITREINS_PIN` | `install-gitreins.sh:19` | `0.17.1` | exact version | gate binary pin — a non-matching installed version → `bad "gitreins" "version … != pin"` (`:53`) | M3 §5 |
+| `GITREINS_VENV` | `:23` | `$HOME/gitreins-venv` | a `$HOME` path | where the pinned binary lives — the hook hardcodes this venv path (`:134`); moving it breaks the hook | M3 §5 |
+| `REMOTE` / `MAIN` | `land-node-branch.sh:38` | `origin` / `main` | git ref names | push/fetch targets — a different remote is an explicit operator choice | M3 §5 |
+| `GATE` (`--gate-cmd`) | `:38`, set only by `--gate-cmd` (`:108`) | empty | a shell command | the optional pre-merge gate — when empty no gate runs (`run_gate` guards `[ -n "$GATE" ] || return 0` at `:75`); the landing publishes with no project gate by default (F3-3) | M3 §5 |
+| `repo_freshness --bound` | `repo_freshness.py:559` | 0 | int commits | behind-count before a workdir is FAIL — a higher bound tolerates a staler workdir | M3 §5 |
+| `repo_freshness --gate` | `:565` | off | flag | exit 1 when any workdir FAILs — without it a stale row does not fail the process | M3 §5 |
+| `repo_freshness --strict` | `:570` | off | flag | escalate WARN (unmeasurable) → FAIL — without it an unknown measurement does not fail | M3 §5 |
+| `repo_freshness --no-fetch` | `:575` | off | flag | measure local refs only, no network — on it avoids mutation/fetch | M3 §5 |
+| `repo_freshness --max-fetch-age` | `:581` | None | seconds | FAIL when the last fetch is older — off by default | M3 §5 |
+| `repo_freshness --jobs` | `:588` | 8 | int | parallel workdir probes — lower serialises | M3 §5 |
+| `repo_freshness --timeout` | `:591` | 60 s | int | per-git-command timeout — too low fails slow remotes | M3 §5 |
+| `.gitleaks.toml` `[allowlist].paths` | `.gitleaks.toml:57-58` | bytecode entries `__pycache__/` + `\.pyc$` | unanchored regex list matched against the file path | which files tier-1 grades — tier-1 grades the working tree while the commit guard grades staged files only; deleting the entries reds selftest §34 `bytecode-allowlist-loadbearing`; widening one mutes real sources and reds `bytecode-allowlist` / `bytecode-allowlist-control` | M3 §5 |
+
+## M4 — board
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `-C <repo-or-board-dir>` | `boardctl` wrapper | none — the wrapper forces `-C "$ROOT"` | a board dir | which board the verb targets — the wrapper pins it to the repo root so a bare `boardctl` cannot hit the wrong board | M4 §5 |
+| `update --status complete` | `boardctl update` | — | requires `--evidence-run-id` | row closeout — a completion without a bound run id is refused (TR-251) | M4 §5 |
+| `create` / `update` (id, fingerprint) | `boardctl` | — | unique id; unique finding fingerprint | row identity — a duplicate id is refused (`task id "…" already exists — create aborted`); a duplicate finding fingerprint is refused | M4 §5 |
+| `validate [--strict-keys] [--fail-on dangling-dep]` | `boardctl validate` | — | flags | semantic validation strictness — `--strict-keys` tightens key uniformity; `--fail-on dangling-dep` promotes a dangling dependency from warning to failure | M4 §5 |
+
+## M5 — harness
+
+**`harness-vars.sh` (S5)** — the `CF_*` surface; `CFV_DECLARED` (`:28-29`, 12 vars) and
+`CFV_REQUIRED` (`:31`, 6 vars) define it (M5 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `CF_MAX_TURNS` | `harness-vars.sh:276` | 40 | integer 1..1000 (`:281`) | turn budget — 0 or >1000 refused; loosening lets a run spin unbounded | M5 §5 |
+| `CF_TIMEOUT_S` | `:277` | 1800 | integer 1..86400 (`:287`) | wall-clock per turn — refusal outside range; `install-codex.sh` re-defaults to 300 (see the adapter table) | M5 §5 |
+| `CF_MODEL` | `:225` | unset — required in `--contract` | no spaces | model id — a model id with spaces refused | M5 §5 |
+| `CF_PROVIDER` / `CF_NAMESPACE` / `CF_LANE` | `:226-231` | unset | lowercase `[a-z0-9._-]` | lane/namespace naming — an uppercase or symbol name refused | M5 §5 |
+| `CF_RUN_ID` | `:236` | unset | `[A-Za-z0-9._:-]` | correlation id — a non-id value refused | M5 §5 |
+| `CF_BASE_URL` | `:216`, `:219` | unset | http(s), no userinfo | harness endpoint — a URL carrying `user:pass@` is refused (credential-in-URL) | M5 §5 |
+| `CF_API_KEY_FILE` | `:203` | unset | a path, mode `[0-7]00` | credential delivery — a VALUE refused; missing/empty file refused; mode 644 refused (`:204`); the predicate accepts modes `000..700` while the refusal message claims "a key file must be 600" (F0-6) | M5 §5 |
+| `CF_API_KEY` + `CFV_AMBIENT_KEYS` (`:33`) | `:176-185` | unset | must be empty | ambient credential ban — a non-empty value refused; the check tests non-emptiness, so `CF_API_KEY=""` is accepted (F0-6) | M5 §5 |
+| `CF_WORKDIR` | `:244-249` | unset | exists, resolves inside `$HOME` | harness write boundary — outside `$HOME` refused | M5 §5 |
+| `CF_SKILLS_DIR` | `:258` | unset | a path | skills root — warns (not fails) if the dir does not exist yet (`:260`) | M5 §5 |
+| `CF_HARNESS_OPTS` | `:268-271` | unset | `key=value[,key=value]`, no secret | harness-specific options — a secret-shaped value refused | M5 §5 |
+| `--contract` mode | `:313-315` | — | requires all 6 `CFV_REQUIRED` | acceptance check — a missing required var refused (`dropped:$missing`) | M5 §5 |
+
+**Per-adapter installation registers (B12)** (M5 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `NODE_GATEWAY_PORT` (hermes) | `install-hermes.sh:23` | 10800 | a TCP port | the gateway port the adapter installs against — a wrong port installs against the wrong gateway | M5 §5 |
+| `HERMES_PIN` (hermes) | `:24` | `0.19.0` | exact version | the pinned hermes build — a drift installs an unmeasured build | M5 §5 |
+| `HERMES_PYTHON_BIN` (hermes) | `:26` | `python3` | a python path | the interpreter the pin runs under — a wrong interpreter breaks the >=3.11,<3.14 gate | M5 §5 |
+| `CF_CODEX_PIN` (codex) | `install-codex.sh:49` | `0.166.0` | exact version | the codex pin — drift installs an unmeasured build | M5 §5 |
+| `SHA256` / `CF_CODEX_SHA256` (codex) | `:51` / override at `:428` | `a0bf572d…` | a digest | artifact integrity — a wrong digest is refused by `fetch_verified` | M5 §5 |
+| `DISK_FLOOR_GB` (codex) | `:56` | 1.0 | GiB | admission floor — a lower floor admits a too-small host | M5 §5 |
+| `DEFAULT_SANDBOX` (codex) | `:57` | `workspace-write` | a sandbox mode | codex write boundary — a wider sandbox loosens containment | M5 §5 |
+| `TIMEOUT_S` (codex) | `:60` | `CF_TIMEOUT_S` or 300 | seconds | per-turn wall — the codex adapter re-defaults the shared 1800 to 300 | M5 §5 |
+| `CLAUDE_CODE_PIN` (claude) | `install-claude-code.sh:39` | `2.1.318` | exact version | the claude pin — drift installs an unmeasured build | M5 §5 |
+| `CLAUDE_CODE_SHASUM` (claude) | `:40` | `c11067a3…` | a digest | artifact integrity — a wrong digest is refused | M5 §5 |
+| `NODE_MIN_MAJOR` (claude) | `:43` | 22 | Node major | the Node floor — a lower Node violates the pin's `engines` | M5 §5 |
+
+**`install-go.sh` (S3)** — the Go toolchain installer register (B12) (M5 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `GO_PIN` | `install-go.sh:7` | `go1.26.5` | exact version | the Go toolchain installed — drift installs an unmeasured toolchain | M5 §5 |
+| `GO_SHA256_LINUX_AMD64` / `_ARM64` | `:8-9` | `5c2c3b16…` / `fe4789e9…` | a digest | artifact integrity per architecture — a wrong digest is refused by `fetch_verified` | M5 §5 |
+| `GO_DISK_FLOOR_GB` | `:10` | 1 | GiB | install admission floor — a lower floor admits a too-small host | M5 §5 |
+| `GO_PROBE_MODULE` / `GO_PROBE_VERSION` | `:11-12` | `rsc.io/quote` / `v1.5.2` | a module@version | the cold-cache module proof — a changed probe no longer proves a working toolchain | M5 §5 |
+| `MODE` | `:13`, first positional | `--check` | `--check` / `--apply` | what the run does — any other arg → usage, exit 2 (`:18-20`) | M5 §5 |
+| `GO_INSTALL_ROOT` | `:14` | `$HOME/go-toolchain` | a path | where the pinned toolchain lives — a wrong root installs or checks the wrong toolchain | M5 §5 |
+| module proof `timeout` | `:73` | 30 s | seconds | the `go mod download` proof ceiling — too short fails a slow-but-valid proxy | M5 §5 |
+| module proof GOPROXY | `:53-57` | `$GOPROXY` or the toolchain's own `env GOPROXY` | a URL | which proxy resolves the probe — a misconfigured proxy fails the proof | M5 §5 |
+| `GO_DL_BASE` | `:138` (`url="${GO_DL_BASE:-https://go.dev/dl}/$archive"`) | `https://go.dev/dl` | a URL | the toolchain download mirror — a wrong mirror fails `fetch_verified` on every install | M5 §5 |
+
+**Resolver controls (B10)** — `harness_resolve.py:327-372` (M5 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `--explain` | `:328-332` | none — required | a model id | which model to resolve — omitted → argparse exits 2 | M5 §5 |
+| `--lane` | `:333` | None | a lane name | lane-scoped resolution — a wrong lane reads the wrong lane config | M5 §5 |
+| `--lane-class` | `:335-339` | None, derived | `foreman` / `satellite` | overrides the lane-class derivation — a forced `foreman` on a satellite changes the refusal path (non-hermes foreman refused, `:284`) | M5 §5 |
+| `--directive-harness` | `:341-345` | None | a harness name | pins the harness above everything (directive > lane > matrix) — forces a harness the matrix would refuse | M5 §5 |
+| `--lane-harness` | `:346-350` | None | a harness name | pins the harness above the matrix — overrides the matrix for one lane | M5 §5 |
+| `--node-harnesses` | `:351-356` | None | comma list | restricts the selection to installed harnesses — selection must be one of them, else refused | M5 §5 |
+| `--shims` | `:357-361` | None | comma `family=name` / `harness:family=name` | shim bindings — a wrong binding routes a family to the wrong harness | M5 §5 |
+| `--matrix-file` | `:362-366` | None | a path | the harness table (default `DEFAULT_MATRIX_FILE`) — a wrong file reads the wrong matrix | M5 §5 |
+
+**Node runtime and shared module cache (S3, CF-003)** (M5 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `NODE_PIN` | `install-node.sh:26` | `v22.22.3` | one released Node version | the runtime every `node`-kind node gets — the layer grades whatever version the archive yields; a different pin needs its digests re-pinned | M5 §5 |
+| `NODE_SHA256_LINUX_X64` / `_ARM64` | `install-node.sh` | `2e5d1356…` / `1c4a9933…` | 64 hex per arch | archive integrity — a mismatch is `FAIL node_dist`; nothing is extracted | M5 §5 |
+| `--root` | `NODE_INSTALL_ROOT` | `$HOME/node-toolchain` | an absolute path | where the pin is installed — an explicit root makes `--check` a scoped question (a PATH runtime cannot answer it); a wrong root installs beside the runtime the layer grades | M5 §5 |
+| `--tarball` + `--sha256` | `install-node.sh` | none | a local archive + its digest | the fixture seam; the digest is still verified — either alone is refused (`--tarball needs --sha256`) | M5 §5 |
+| `gomodcache.py --dir` | `gomodcache.py` | none — required | a directory | which cache is seeded/sealed/checked — a wrong dir seals the wrong tree | M5 §5 |
+| `gomodcache.py seal` | `gomodcache.py` | — | — | removes every write bit and records bytes/entries — an unsealed cache drifts per node back toward 656 MB | M5 §5 |
+| `NODE_GOMODCACHE` | node env | none | an absolute node path | whether layer 10 admits a shared cache — unset → `WARN go:modcache` (private cache); declared-but-unsealed → counted FAIL | M5 §5 |
+
+## M6 — documentation
+
+**`master_doc_check.py` / `master_doc_fill.py`** (M6 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `CF_MASTER_DIR` | `master_doc_fill.py:26`, `master_doc_check.py:67` | unset | a directory | overrides root resolution — pointing it at a nonexistent dir yields a named failure | M6 §5 |
+| `DEFAULT_ROOTS` | `master_doc_check.py:52` | `("docs/master", "docs/handbook/appendices/units")` | existing dirs | root discovery order — `docs/master` no longer exists, so the gate resolves to `appendices/units` | M6 §5 |
+| fill `--engine` | `master_doc_fill.py:409-412` | `api` | `api` / `hermes` | which seat fills a module — `hermes` runs a real seat; `api` is one completions call | M6 §5 |
+| fill `--workers` | `:396` | 2 | positive int | parallel fill workers — 0 or negative raises `ValueError: max_workers must be greater than 0` (no serial fallback); `1` is serial execution (`:450`) (B14) | M6 §5 |
+| fill `--provider` | `:397` | `deepseek` | a `PROVIDERS` key | fill provider — an unknown provider is refused | M6 §5 |
+| fill `--limit` | `:395` | 0 | int | cap on modules filled in one run — 0 = no cap; a positive N fills only the first N candidates | M6 §5 |
+| fill `--force` | `:401` | false | flag | refill modules already FILLED/VERIFIED — without it, already-complete modules are skipped | M6 §5 |
+| fill `--only` | `:404` | `""` | comma prefixes | narrow the candidate set (e.g. `05-,07-`) — a prefix matching none yields an empty run | M6 §5 |
+| fill `--model` | `:411` | `""` | a model id | the seat model for `--engine hermes` — empty falls back to `openai/gpt-6.1-sol` (`:454`) | M6 §5 |
+| fill `--dry-run` | `:413` | false | flag | list candidates without provider calls or writes — `--dry-run` suppresses all provider calls and writes (`:438-440`); `--force` decides which documents may be rewritten (B11) | M6 §5 |
+
+**Spine gate (S9, B5).** `handbook_spine.py` carries no settings surface; its policy is
+four hardcoded sets: `CANON` (the contract ids plus expected producer/consumer systems),
+`BOUNDARY` (the 13 boundary contracts whose far side has no in-repo file), the
+`SETTING_ROW`/`REF`/`COUNT_CLAIM` regexes, and the internal-vs-boundary split (M6 §5).
+No rows — the absence of a surface is itself the register entry.
+
+**`panel_loop.py` settings and stop semantics (B14)** (M6 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `--rounds` | `panel_loop.py:323` | 6 | int; 0 = no cap (`:340` maps 0 → `10**9`) | absolute round ceiling — the loop condition (`:351`) compares the stored round against `--rounds`; it does not count iterations from `--start-round` (B12); a cap is a session budget, not a definition of done | M6 §5 |
+| `--max-seconds` | `:324` | 21000 | int; 0 = no cap (`:341`) | the wall-clock budget — same stop semantics as `--rounds` | M6 §5 |
+| `--start-round` | `:325` | None | int | inert for the loop body — `:342` sets only the printed value, then `:352` overwrites it from stored state before each writer runs (B12); the flag does not resume at a specific round as its help implies | M6 §5 |
+| `--writer-timeout` | `:326` | 4200 | seconds | writer session deadline — too short kills the writer mid-round | M6 §5 |
+| `--judge-timeout` | `:327` | 2700 | seconds | judge session deadline — too short yields MISSING seats | M6 §5 |
+| `--chapters` | `:328` | `""` | comma list | narrow the chapter set — empty = all chapters | M6 §5 |
+| `--groups` | `:329` | `""` | `M0,M1;M4,M5` semicolon-separated | explicit section groups (one writer per group) — overrides `--parallel`; a wrong grouping splits a contract seam across writers | M6 §5 |
+| `--parallel` | `:331` | 1 | int | writers per round (0/1 = single writer) — >1 splits chapters by interleaved slice when `--groups` is absent (`:365-366`) | M6 §5 |
+| `PANEL_WRITER_MODEL` / `PANEL_WRITER_PROVIDER` | `:37-38` | `deepseek-v4-pro` / `deepseek` | env override | writer seat model/provider — a wrong model runs the writer on an unmeasured seat | M6 §5 |
+| `FANOUT` / `MANIFEST` | `:34-35` | hardcoded `cf-quorum-20261104` scratch paths | a path | the external fanout script + seat manifest — a dated scratch dir that no longer exists breaks the loop | M6 §5 |
+
+Stop semantics: `panel_loop.py:442-457` exits 0 on unanimous PASS (`:445`), on
+`clean_streak >= 2` (`:447-451` — two consecutive rounds with no new defect class, even
+while blocking findings remain open), or on the cap (`:456`). A `STOP: no new defect
+class` exit is a successful process termination, not proof the document is aligned.
+
+## M7 — github
+
+**`github-app-token.py` / `github-app-refresh.sh`** (M7 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| subcommand | `github-app-token.py` | none | `check` / `token` / `jwt` / `manifest` | which credential operation runs — a bare invocation performs no mint: usage, exit 2 | M7 §5 |
+| `GITHUB_APP_ID` | `:295`, `:304-305` | unset | numeric | the App identity — unset or non-numeric → named problem; no mint | M7 §5 |
+| `GITHUB_APP_INSTALLATION_ID` | `:307`, `:316-320` | unset | numeric | the installation scope — unset or non-numeric → named problem | M7 §5 |
+| `GITHUB_APP_PRIVATE_KEY_FILE` | `:326-358` | unset | a path, mode exactly 0600 | the RSA signing key — absent, wrong mode, or parse failure all refused by name | M7 §5 |
+| `--env-file` | `GITHUB_APP_ENV_FILE` or `DEFAULT_ENV_FILE` `~/.config/code-factory/github-app.env` (`:45`, argparse `:110`) | see lives-in | a path | the App's identity source — absent env file → mint fails | M7 §5 |
+| `--api-base` | `GITHUB_API_BASE` or `DEFAULT_API` `https://api.github.com` (`:47`, argparse `:115`) | see lives-in | a URL | API endpoint (tests point it local) — a wrong base breaks the mint | M7 §5 |
+| token destination | `args.out` or `GITHUB_APP_TOKEN_FILE` or `DEFAULT_TOKEN_FILE` (`:579`) | see lives-in | a path | where the token is written — a wrong path writes the credential to the wrong place | M7 §5 |
+| `--if-older` | `:719-723` | 0 | seconds | no-op while the destination token is younger than N — 0 = always re-mint | M7 §5 |
+| refresh controls | `github-app-refresh.sh:37-53` | per-flag | `--env-file --token-file --node --server --min-age --git-credentials --api-base --local --dry-run --quiet` | local vs node install, write/no-write — `--dry-run` prevents mutation (exits before mint/write at `:106` and `:154`); `--quiet` suppresses selected output only (`say_q` at `:55`) and does not prevent minting — the two flags are distinct controls (B16); `--node` installs into `$NODE:$HOME/.node/auth/github.token` (`:145-174`) | M7 §5 |
+
+**Lifecycle controls, individually registered (B14)** (M7 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `MIN_AGE` | `github-app-refresh.sh:28` | 2400 s | non-negative int (spelling validated at `:53` → exit 2) | skip the mint while the destination token is younger than this — a too-large value serves a near-expiry token while reporting fresh | M7 §5 |
+| `ENV_FILE` | `:24` | `$GITHUB_APP_ENV_FILE` or `~/.config/code-factory/github-app.env` | a path | the App identity source — absent file → `bad env_file`, exit 1 before any mint (`:57`) | M7 §5 |
+| `TOKEN_FILE` | `:58`, after flag/env resolution | `~/.config/code-factory/github.token` | a path | local-mode token destination — a wrong path mints the credential to the wrong place | M7 §5 |
+| `GIT_CREDENTIALS` | `:29` | `~/.git-credentials` | a path | the credential-store rewrite target — the store is rewritten only when it already exists (`:131`); the script never creates a second store | M7 §5 |
+| `--local` / `--node` | `:30`, `:103` | local | mode | where the token lands — local writes `TOKEN_FILE`; node mints on this host, installs into `$NODE:$HOME/.node/auth/github.token`, then deletes the local copy (`:145-174`) | M7 §5 |
+| `--min-age` | `:28` | 2400 | seconds | refresh no-op window — `--min-age` vs token lifetime (3600 s) determines when a refresh is a no-op | M7 §5 |
+| mode-600 check | `:127-130` | — | exactly `600` | token-file privacy before the store is rewritten — `bad "mode"` exits 1 before the credential store rewrite (CF-320) | M7 §5 |
+| `JWT_BACKDATE` / `JWT_LIFETIME` | `:50-51` | 60 s / 540 s | seconds | JWT exp/iat window — GitHub rejects exp >10 min out | M7 §5 |
+| `TIMEOUT` | `:52` | 20 s | seconds | HTTP timeout — too short fails the mint | M7 §5 |
+
+## M8 — safety
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `--job-ttl-hours` | `reclaim_disk.py:42`, `:135` | 24 | finite, nonnegative (`:46-47`) | how old a job/clone dir must be before reaping — the TTL applies only to `AGED_PARENTS` children (`.node/jobs`, `.node/clones`); build caches are reaped without any age condition (`:102-103` vs `:104-111`, B15); a non-finite or negative value → `ValueError` (`:47`) | M8 §5 |
+| `--root` | `:134` | required | a directory other than `/` (`:44-45`) | the reap boundary — `/` or a non-directory → `ValueError` (`:45`) | M8 §5 |
+| `--dry-run` | `reclaim_disk.py` | false | boolean | whether anything is deleted — true → nothing unlinked (`:78-79`); byte totals are still printed as projected (`would free`), not actually reclaimed (`:119-123`, B15) | M8 §5 |
+
+Exact targets (B15): `BUILD_CACHES` (`:14-19` — `.cache/pip`, `.cache/uv`,
+`.cache/pre-commit`, `.cache/go-build`, `.npm/_cacache`) are processed with `aged=False`;
+`AGED_PARENTS` (`:21` — `.node/jobs`, `.node/clones`) with `aged=True`, where the TTL is a
+`<=` boundary (inclusive); `PROTECTED` (`:22` — `repo`, `.node/node.json`,
+`.node/crier.json`, `.node/floor.toml`) are refused via `safety_reason` (`:25-39`) before
+inspection.
+
+## M9 — scheduler
+
+**Binary defaults (B18/F9-3).** The daemon's actual flag defaults are in
+`cmd/schedulerd/main.go` (flag definitions span `:95-200+`); `config.example.toml` is the
+example register and its commented values are not the runtime defaults. The full flag
+surface is 57 definitions (`grep -cE 'flag\.(String|Int|Int64|Bool|Duration|Float64)'
+cmd/schedulerd/main.go` = 57). The three-layer merge is struct defaults → the TOML file →
+`SCHEDULER_*` environment overrides (`internal/config/loader.go` `applyEnvOverrides`);
+`config.LoadRootConfig` is called ten times at boot (M9 §5). The residual RED: the reader
+and precedence of each flag are documented for the group but not re-verified per flag.
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `db` | `cmd/schedulerd/main.go:95` | `$HOME/.hermes/coding-hermes/scheduler.db` | a path | SQLite store — a wrong path opens a different store | M9 §5 |
+| `listen` | `:96` | `127.0.0.1:9090` | an addr | HTTP surface — off-loopback exposes the API (see the WARNING below) | M9 §5 |
+| `min-interval` | `:108` | 30 s | Go duration | fastest tick interval — below it ticks are refused or never fire | M9 §5 |
+| `max-interval` | `:109` | 24 h | Go duration | slowest tick interval — above it lanes starve | M9 §5 |
+| `num-levels` | `:110` | 10 | >= 1 | priority levels — 0 breaks the priority sort | M9 §5 |
+| `budget` (weight budget) | `:111` | 100 | >= 1 | weight budget per evaluation — 0 admits nothing | M9 §5 |
+| `max-concurrent` | `:112` | 10 | >= 1 | concurrent foreman ticks — a load gate is a separate knob | M9 §5 |
+| `namespace-mode` | `:113` | false | bool | multi-namespace scheduling — off disables reserved/hard_cap | M9 §5 |
+| `tick-timeout` | `:114` | 7200 s (2 h) | Go duration | wall-clock before a tick is killed — too short kills legitimate ticks | M9 §5 |
+| `api-read-timeout` | `:122` | 5 s | Go duration | per-request deadline for heavy read surfaces — a stalled DB helper returns 504 naming it (SCHED-GAP-1575-B) | M9 §5 |
+| `gateway-response-timeout` | `:128` | 30 m | Go duration | per-turn POST deadline (min of this and tick-timeout) — 0 disables | M9 §5 |
+| `gateway-transient-retries` | `:138` | 3 | int | 5xx/refused retry count (SCHED-GAP-1681) — 0 = single attempt | M9 §5 |
+| `slot-patience` | `:142` | 5 m | Go duration | how long a spawn waits for a free slot — the drop emits a `slot_pool` event (ADV-R08/G3) | M9 §5 |
+| `tasks-pacing` | `:143` | 60 s | Go duration | min post-tick spacing for tasks-mode projects — 0 = disabled | M9 §5 |
+| `load-gate-threshold` | `:144` | 0 (disabled) | float (1-min load avg) | defer new spawns while load >= threshold — 0 disables; namespaces opt out via `load_gate='off'` | M9 §5 |
+| `feature-prune-weeks` | `:145` | 8 | int | dead-feature reaper prune window — flag only, nothing is auto-deleted | M9 §5 |
+| `peer-freshness-window` | `:148` | `database.PeerFreshnessWindowDefault` | int seconds | REMOTE-003 peer heartbeat freshness — a too-short window spuriously ages peers | M9 §5 |
+| `spawn-mem-limit-mb` | `:149` | 0 | MiB | per-spawn `RLIMIT_AS` cap (ADV-R11) — 0 = no cap; a low cap kills spawns | M9 §5 |
+| `board-stasis-gate` | `:150` | true | bool | exclude a cooldown BUILDER lane whose board is unchanged (SCHED-GAP-1678) — off admits stasis lanes | M9 §5 |
+| `hooks-file` | `:151` | `$HOME/.hermes/hooks.toml` | a path | S13 ordered pre/post hooks — a missing file → a named absence, not a crash | M9 §5 |
+| `session-silence-grace` | `:159` | 0 | Go duration | terminate a gateway tick with no token/tool delta (SCHED-GAP-1707) — 0 disables the guard | M9 §5 |
+| `session-poll-loop-min-ticks` | `:170` | 0 | int | terminate a confirmed sleep-poll loop (SCHED-GAP-1698) — 0 disables | M9 §5 |
+| `disable-tick-push` | `:172` | false | bool | skip the per-tick git push at exit (SCHED-GAP-1594) — true stops tick push-at-exit | M9 §5 |
+| `no-exec-fallback` | `:190` | true | bool | disable `exec.Command` fallback when the gateway fails — false re-enables the exec fallback | M9 §5 |
+
+> WARNING: the daemon's HTTP surface is loopback by construction — `listen` defaults to
+> `127.0.0.1:9090` (`cmd/schedulerd/main.go:96`). Binding it off-loopback exposes the API
+> beyond the host it runs on.
+
+**Auxiliary / routing / lifecycle flags** — the remaining 33 of the 57, grouped as the
+chapter groups them; ranges not registered in M9 §5 read `not registered` (M9 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `tls-cert` / `tls-key` | `:102-103` | `""` / `""` | not registered | HTTPS listener pair — both set → TLS on; one without the other → no usable cert | M9 §5 |
+| `public-url` | `:107` | `""` | not registered | advertised daemon URL — affects self-links in status/dashboards | M9 §5 |
+| `test-verify` | `:174` | 0 | not registered | verification self-check — non-zero runs a verification pass at boot | M9 §5 |
+| `verify-board` | `:175` | `""` | not registered | board-consistency self-check — names a board to verify at boot | M9 §5 |
+| `session-reap-threshold` | `:176` | `DefaultHermesReapStaleAfter` | not registered | stale-session age floor for `--reap-sessions` — a lower threshold reaps fresher sessions | M9 §5 |
+| `reap-sessions` | `:177` | false | not registered | one reap pass against `state.db`, then exit — dry-run by default, writes nothing without `--reap-sessions-apply` | M9 §5 |
+| `reap-sessions-apply` | `:178` | false | not registered | apply the reap pass (`ended_at` + `end_reason='reaped'`) — the mutation switch; without it the pass is a dry-run (SCHED-GAP-089) | M9 §5 |
+| `session-db` | `:179` | `DefaultHermesSessionDBPath()` | not registered | which `state.db` `--reap-sessions` reads — a wrong path reaps (or fails to find) the wrong store | M9 §5 |
+| `duckbrain-ns` / `duckbrain-url` / `duckbrain-interval` | `:180-182` | `scheduler` / `http://localhost:3000` / `5m` | not registered | DuckBrain sync target + cadence — a wrong URL/interval stops the sync spool | M9 §5 |
+| `simulate` | `:183` | false | not registered | dry-run mode, no real spawning — true suppresses real spawns; the sim-* knobs only take effect with it | M9 §5 |
+| `sim-success` / `sim-idle` / `sim-count` | `:184-186` | 0.85 / 0.0 / 0 | not registered | simulated outcomes — only meaningful under `--simulate`; `sim-count N` generates N synthetic ticks then exits | M9 §5 |
+| `gateway-url` / `gateway-key` | `:187-188` | `http://127.0.0.1:8642` / `$API_SERVER_KEY` | not registered | the gateway endpoint + key — a wrong URL/key makes every foreman turn fail; an empty `gateway-url` does not alone authorize `exec.Command` fallback: the fallback requires `no-exec-fallback=false` (default true); with the default a nil gateway client DEFERS the tick (`spawn.go:698` `transientGatewayDeferral`, call site `:1759`, a transport deferral, not a lane failure) (B17) | M9 §5 |
+| `model-rates-file` | `:189` | `$SCHEDULER_MODEL_RATES_FILE` | not registered | price-sticker JSON applied over builtin rates — a wrong sticker file re-prices the cost model (ADV-R09/G8) | M9 §5 |
+| `foreman-home` | `:191` | `$HOME/.hermes/foreman` | not registered | `HERMES_HOME` for foreman sessions — a wrong path points foreman at the wrong state | M9 §5 |
+| `sim-setup` / `sim-ticks` | `:192-193` | false / 10 | not registered | 13-project dry-run fixture — `sim-setup` creates the fixture; `sim-ticks` sets its tick count | M9 §5 |
+| `config` | `:194` | `""` | not registered | TOML fleet config path — a wrong path loads no (or the wrong) fleet config | M9 §5 |
+| `failure-window` | `:195` | 100 | not registered | per-project tick window for the `/api/v1/status` failure-rate breakdown — a larger window smooths the breakdown | M9 §5 |
+| `auto-disable-failure-rate` | `:196` | 0 (off) | 0.0–1.0 | per-project failure-rate threshold for auto-disable — a non-zero threshold arms `internal/scheduler/alert_escalation.go:462-548` to write `projects.enabled=0` on sustained failure, an execution-settlement consequence, not simulation (SCHED-GAP-018) | M9 §5 |
+| `auto-disable-window` | `:197` | 100 | not registered | ticks over which the auto-disable rate is computed — a shorter window disables faster on noise | M9 §5 |
+| `auto-disable-min-ticks` | `:198` | 50 | not registered | minimum ticks before auto-disable may fire — too low disables projects on thin evidence | M9 §5 |
+| `groups-file` / `templates-file` | `:199-200` | `""` / `""` | not registered | deploy group/template JSONL paths — empty = default `<db dir>` paths; a wrong path reads the wrong deploy blocks | M9 §5 |
+| `log-file` | `:205` | `defaultLogPath()` | not registered | structured tick log destination — empty disables; a wrong path loses the tick journal | M9 §5 |
+| `show-config` | `:206` | false | not registered | print resolved config (CLI + env) as TOML, exit — read-only introspection switch | M9 §5 |
+| `schema` | `:207` | false | not registered | output JSON Schema for `schedulerd.toml`, exit — read-only introspection switch | M9 §5 |
+| `version` | `:208` | false | not registered | print version/build info, exit — read-only introspection switch | M9 §5 |
+
+## M10 — crier
+
+`config/config.go:621-674` fixes the defaults; `config/config.go:1139-1187` fixes the
+guard's env bounds (M10 §5):
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `Port` | `config/config.go:622` | `8767` | a TCP port | the bus HTTP surface — a change orphans every node/dispatcher | M10 §5 |
+| `RateLimitPerMinute` | `:627` | 100 | int | per-caller rate limit — 0 disables the limit | M10 §5 |
+| `InboxMaxBodyBytes` | `:628` | `1 << 20` | bytes | deliver body ceiling — larger bodies admitted unbounded | M10 §5 |
+| `RequireAgentSig` | `:629` | true | bool | signed-read enforcement — off → `requireAgent` returns true without a signature (`agentsig.go:364-368`) | M10 §5 |
+| `Webhook.Timeout` | `:636` | 30 s | duration | webhook call timeout — a lower timeout drops deliveries | M10 §5 |
+| `Webhook.MaxRetries` | `:637` | 5 | int | webhook retry count — lower = fewer redeliveries | M10 §5 |
+| `Webhook.RedeliverEvery` | `:638` | 30 s | duration | redelivery spacing — too fast floods the target | M10 §5 |
+| `Webhook.ProbeEvery` | `:639` | 60 s | duration | webhook health probe — slower probes miss outages | M10 §5 |
+| `Webhook.CircuitThreshold` | `:640` | 10 | int | circuit-open threshold — lower opens the circuit sooner | M10 §5 |
+| `Webhook.BatchMaxMessages` | `:641` | 10 | int | batch size — larger batches raise latency | M10 §5 |
+| `Webhook.BatchFlushInterval` | `:642` | 5 s | duration | batch flush cadence — too long delays delivery | M10 §5 |
+| `Guard.Enabled` | `:645` | true | bool | guard on/off — off lets untrusted directives through | M10 §5 |
+| `Guard.Timeout` | `:646` | 10 s | duration | per-check LLM timeout — a short timeout's outcome is conditional on the error policy, not a blanket fail-open: `guard.go:332-357` `errorResult` depends on `FailClosed`, `policy.Action` and high-confidence deterministic evidence (B20) | M10 §5 |
+| `Guard.MaxConcurrent` | `:647` | 8 | int | check concurrency semaphore — `<= 0` is refused at startup, not a saturated guard: `config.go:1154-1158` rejects `CR_GUARD_MAX_CONCURRENT<=0` with a named error; runtime saturation is the distinct failure counted by `crier_guard_saturated_total` (`internal/guard/metrics.go:22`) | M10 §5 |
+| `Guard.CircuitThreshold` | `:648` | 10 | int | guard circuit threshold — lower opens the guard circuit sooner | M10 §5 |
+| `Guard.CircuitCooldown` | `:649` | 300 s | duration | circuit reopen cooldown — too short thrashes the circuit | M10 §5 |
+| `Guard.MaxPayloadBytes` | `:650` | 65536 | bytes | payload ceiling before the router — a raise admits a bigger untrusted payload | M10 §5 |
+| `Guard.RenderMaxBytes` | `:651` | 32768 | bytes | render ceiling — a raise sends more to the router | M10 §5 |
+| `Guard.DeepSeekBaseURL` / `Guard.Model` | `:652-653` | `https://api.deepseek.com/v1` / `deepseek-v4-flash` | a URL / model | the guard's router — a change re-routes the guard verdicts | M10 §5 |
+| `Guard.KanbanQueueSize` | `:654` | 100 | int | guard queue depth — smaller drops queued checks | M10 §5 |
+| `Observability.EnableMetrics` | `:673` | true | bool | `/metrics` mount — `CR_ENABLE_METRICS=false` disables it; metrics are default-ON, not opt-in (F10-3); the comment at `internal/metrics/metrics.go:2` calling it "opt-in" disagrees with the default-ON config | M10 §5 |
+| front `defaultListen` | `crier-front/main.go:39` | `127.0.0.1:8770` | a loopback listen | the front's surface — binding off-loopback exposes the front | M10 §5 |
+| `CR_GUARD_TIMEOUT_MS` / `CR_GUARD_MAX_CONCURRENT` / `CR_GUARD_CIRCUIT_THRESHOLD` / `CR_GUARD_CIRCUIT_COOLDOWN_S` / `CR_GUARD_MAX_PAYLOAD_BYTES` / `CR_GUARD_RENDER_MAX_BYTES` | `config.go:1139-1187` | env, positive only | int > 0 | guard tuning — a non-numeric or `<= 0` value → named error (`invalid CR_GUARD_…`), not a silent default | M10 §5 |
+| `CR_REGISTRY_BACKEND` / `Registry.Backend` | `config/config.go:104`, resolved by `ResolvedRegistryBackend()` `:113-123` | resolution chain: explicit backend → a `sqlite:` `Database.URL` → any non-empty `Database.URL` (postgres) → `memory` | an enum of the three backends | which backend serves custody — the `memory` backend is process-local and demo-only; see Part VI for the WARNING; how an operator proves which backend is actually serving custody (readback of the resolved backend at boot) is not yet written — a named RED on this register (M10 §5) | M10 §5 |
+
+Guard policy precedence (B21): `policy.go:172-202` `ResolvePolicy` — first agent policy
+whose `channel_match` glob matches the session/thread key, then `serverDefault`
+(`CR_GUARD_DEFAULT_POLICY`), then `BuiltinDefaultPolicy()`; a channel-glob-only policy
+never matches an unchanneled message.
+
+## M11 — dispatcher
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `DISPATCH_POLL_S` | `dispatcher.py:43` | 5 | positive float | poll interval — shorter polls raise bus load | M11 §5 |
+| `DISPATCH_PROGRESS_S` | `:45` | 20 | positive int | seconds between progress lines the node runner writes — no suppression branch exists: the runner loop (`:250-257`) writes a line then `sleep {hb}`; 0 removes the delay (busy loop), a negative value fails the `sleep` and the loop continues; 0 or negative does not suppress progress (B25) | M11 §5 |
+| `DISPATCH_LEASE_S` | `:46` | 1800 | positive int | inbox lease — too long holds messages during a crash | M11 §5 |
+| `DISPATCH_EXEC_TIMEOUT` | `:47` | `"400s"` (a string) | — | inert in this revision — assigned at `:47` and never read (B22 AST check: exactly one `Store` reference, no load); the real per-call timeout is `_bunker`'s `timeout` argument (default 120, `:204-209`), with the outer subprocess capped at `timeout + 20` (`:209`); this env var adds no timeout prefix to `bunker exec` and changes nothing at run time | M11 §5 |
+| `DISPATCH_TASK_S` | `:48` | `"240"` (a string) | positive int at use (`task_seconds`, `:196`) | fallback task duration — a non-numeric env value raises `ValueError` at use (`int(TASK_S)` at `:196`), not at admission | M11 §5 |
+| `DISPATCH_MARGIN_S` | `:52` | 60 | positive int | reserve before the caller's deadline — see F11-4: the reserve is intended, not guaranteed (`task_seconds(10)` and `task_seconds(60)` both return 30) | M11 §5 |
+| `DISPATCH_TASK_CAP_S` | `:53` | 7200 | positive int | ceiling on the envelope wall — a larger envelope wall is clamped | M11 §5 |
+| `BUNKER_BIN` | `:60` | `/home/kara/.local/bin/bunker` | absolute path | which bunker binary runs — PATH order would otherwise pick a wrong binary | M11 §5 |
+| `CF_DURABLE_JOB` | `:336` | `"1"` | `"0"` or non-`"0"` | execution mode switch — `"0"` selects the synchronous `hermes chat -q` path (`:334-358`), bypassing the detached start/poll job model (B23); the synchronous path still participates in the outer replay ledger; the crash-before-ledger-write gap (F11-3) applies to both modes | M11 §5 |
+| `DISPATCH_LOG` / `DISPATCH_PIDFILE` | `:41-42` | `$FLEET/logs/dispatcher.log` / `$FLEET/dispatcher.pid` | a path | log/PID location — a wrong path loses the journal/lock | M11 §5 |
+| `FLEET_GH_SCOPE` | `:68` | `/home/kara/.hermes/scripts/fleet-gh-scope.py` | a path | scoped-token minter — a wrong path disables scoped tokens (non-fatal) | M11 §5 |
+| `FLEET_AGENTS` / `FLEET_AGENTS_FILE` | `:104-109` | `fleet_agents.json` | a dict / path | agent registry — empty → "no FLEET_AGENTS configured" | M11 §5 |
+| `CRIER_URL` (read as `BUS`) | `:38` | `http://<bus-host>:8767` | an http(s) endpoint | which bus the dispatcher polls and replies to — a wrong URL polls or replies to the wrong bus | M11 §5 |
+| `TOKEN_FILE` (bearer) | `:39`, a constant | `/home/kara/.hermes/secrets/crier-fleet.token` | a path | the bus bearer identity — a missing file → client construction fails (`client for %s failed`) | M11 §5 |
+| `KEYS` (signing) | `:40`, a constant | `$FLEET/keys` | a directory | the reply-signing key store — a missing key dir breaks reply signing | M11 §5 |
+
+## M12 — inference proxy
+
+| Setting | Lives in | Default | Range | Changes | Cross-ref |
+|---|---|---|---|---|---|
+| `CF_PROXY_UPSTREAM` | proxy source `:43` | `http://127.0.0.1:8642` | an http(s) endpoint | where node inference is served — pointing at a provider gives nodes their own lane; the key still never leaves the host | M12 §5 |
+| `CF_PROXY_UPSTREAM_MODEL` | `:45` | `""` | a model name or empty | model rewrite — non-empty rewrites the requested model before forwarding (`:166-170`) | M12 §5 |
+| `CF_PROXY_UPSTREAM_KEY_ENV` | `:47` | `API_SERVER_KEY` | an env var name | which credential the proxy reads — a renamed credential must be coordinated with the endpoint; the startup error at `:269` hardcodes `API_SERVER_KEY` in its message even when a different name is configured — the diagnostic lies about which variable it checked (F12-3) | M12 §5 |
+| `CF_PROXY_ALLOWED_MODELS` | `:60-62` | `hermes` | comma list | which models a node may ask for — empty env = deny all, never "allow everything" (`:58-59`) | M12 §5 |
+| `TOKENS_PATH` | `:48` | `/home/kara/.hermes/secrets/cf-node-tokens.json` | a JSON file | the node-token mapping read at request time — a missing file → `FATAL: no token file`, exit 2 (`:265-267`) | M12 §5 |
+| `ENV_PATH` | `:49`, read by `upstream_key` `:75-80` | `/home/kara/.hermes/.env` | an env file | where the upstream key is scanned — a renamed file must match the provisioner | M12 §5 |
+| `USAGE_LOG` | `:50` | `/home/kara/.hermes/logs/cf-inference-usage.jsonl` | a path | usage capture sink — a failing sink raises into the request path (F12-6); both sinks are hardcoded `pathlib.Path` constants, not environment settings (F12-8); an earlier register revision carried two invented filenames — an operator following it would open two files that are never written | M12 §5 |
+| `CAPTURE_LOG` | `:52` | `/home/kara/.hermes/logs/cf-inference-requests.jsonl` | a path | request capture sink — capture loss is silent (`capture_request` swallows every exception); the "last 200 requests only" comment (`:51`) is not implemented — the log appends indefinitely (F12-6) | M12 §5 |
+| upstream timeout | `:204`, `:241` | 300 s | seconds | `urlopen` timeout on both stream and buffered legs — a shorter timeout truncates long generations | M12 §5 |
+| `MAX_BODY` | `:54` | 4 MiB | positive int | request body ceiling — a body `> MAX_BODY` → 400 (`:142-143`) | M12 §5 |
+| `LISTEN` | `:53` | `("0.0.0.0", 8775)` | a hardcoded constant, not a setting | proxy listener — no env/flag override; binds 0.0.0.0 so the tailnet can reach it | M12 §5 |
+
+Fail-closed startup: no token file or no upstream key → `sys.exit(2)` before binding
+(`:265-270`). The `_forward` union annotation requires Python >= 3.10 (F12-5).
