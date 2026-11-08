@@ -1,7 +1,7 @@
 # Dogfood walk — tick code-factory-dogfood-2026-11-08-04-02-17
 
 Target identity: `origin/main` **40db7d8cff851a64f8030ed62d835f344e886419**, pinned for the whole
-walk. Canonical checkout `/home/kara/code-factory` was clean (`git status --porcelain -uall` = 0
+walk. Canonical checkout `~/code-factory` was clean (`git status --porcelain -uall` = 0
 lines) and at parity (`git rev-list --left-right --count HEAD...origin/main` = `0 0`) when the walk
 started, but **two sibling lanes were running `tests/selftest.sh` in that same checkout** (a
 `code-factory` lane publishing the CF-006 verdict bundle and a `code-factory-sync` lane at
@@ -75,9 +75,9 @@ rc=1, 155 s, 97 lines. Measured legs:
 
 ```
   FAIL  gateway_auth — could not stage dashboard.basic_auth in
-        /home/bunker-node-cf-dogfood-231753/.hermes/config.yaml (exit 1):
+        /home/<node-user>/.hermes/config.yaml (exit 1):
         FileNotFoundError: [Errno 2] No such file or directory:
-        '/home/bunker-node-cf-dogfood-231753/.hermes/config.yaml.cf-tmp'
+        '/home/<node-user>/.hermes/config.yaml.cf-tmp'
 ...
   FAIL  gateway_start — refused: a public bind needs dashboard.basic_auth in
         ~/.hermes/config.yaml — block absent (config unreadable)
