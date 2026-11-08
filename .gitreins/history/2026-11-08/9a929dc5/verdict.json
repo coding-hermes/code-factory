@@ -1,0 +1,84 @@
+{
+  "task_id": "CF-128",
+  "task_title": "selftest \u00a729 HEAD-ancestry coverage (bounded criteria)",
+  "task_criteria": [
+    "Criterion A: tests/selftest.sh section 29 has two git-form arms that drive 'python3 scripts/board_drift.py check --workdir <repo> --ref <ref>' with NO --published-dir and NO --no-head. Proof: run 'bash tests/selftest.sh 2>&1 | grep git-form ancestry' and quote two PASS lines, one naming an ancestor case with RESULT: OK and one naming a sibling commit with RESULT: DRIFT. The arms assert the literal rows 'PASS  HEAD ancestry' and 'FAIL  HEAD ancestry'.\nFAILIF: either arm is absent, or both arms only cover one direction.\nPROOF: the two quoted PASS lines at HEAD.",
+    "Criterion B: at HEAD, 'bash tests/selftest.sh' prints 'SELFTEST: PASS' with exit 0, and the seven existing publish-drift fixture arms still print PASS rows.\nFAILIF: SELFTEST is not PASS, or a publish-drift arm regressed.\nPROOF: quoted SELFTEST line plus the seven publish-drift PASS lines.",
+    "Criterion C: the new arms are causally falsifiable. In a worktree of HEAD with scripts/board_drift.py's condition 'if not args.no_head and not args.published_dir:' replaced by 'if False:', the suite prints 'SELFTEST: FAIL (2)' with rows 'FAIL  git-form ancestry present' and 'FAIL  git-form ancestry absent'. The graded repo tree must be unmodified afterwards: 'git status --porcelain' empty and sha256 of scripts/board_drift.py equal to 'git show HEAD:scripts/board_drift.py | sha256sum'.\nFAILIF: the disabled run still prints SELFTEST: PASS, or the graded tree carries an edit.\nPROOF: quoted disabled-run lines and the clean-tree/sha256 comparison."
+  ],
+  "passed": true,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "168935666fdcb5e43a6e410597f46a49057f3d66",
+  "pass_class": "tier1-only",
+  "tier2_skipped": true,
+  "working_tree_content_fingerprint": "77f5d5981bb546a47a0666dfb7184c3f44b083d785cdab22b9d0a2b3987a9cae",
+  "working_tree_dirty_path_count": 6,
+  "items": [],
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261108T011737.145269Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n8:58PM INF scanned ~3155986 bytes (3.16 MB) in 1.41s\n8:58PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 469 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261108T011737.145269Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n install-go.sh\n  PASS  bash -n install-node.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n panel_supervise.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n verify-patch.sh\n  PASS  bash -n harness-vars.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-deepseek.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n install-pi-agent.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n harness-node-e2e.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.y7oKvURogu/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n  PASS  uncreatable destination -> fetch_verified exit 1, no artifact installed\n  PASS  caller surfaced the failed install: 1 '^  FAIL  go:download' row, fixture exit 1\n6. no literal credential assignments\n  PASS  none found\n  section 6 tailnet-address (CF-378): no tracked file outside the board publishes a tailnet address\n  PASS  tailnet-address \u2014 0 tailnet-address hits in 378 tracked file(s) outside .coding-hermes/board and .gitreins\n  PASS  seeded fixture -> FAIL names docs/seeded.md:3; the out-of-range subnet stays green\n\n\u2026 [40502 chars omitted \u2014 519 line(s)] \u2026\n  PASS  layer 10 grades the owned node pin, not a PATH runtime\n  PASS  layer 40 clones with the declared key and pins core.sshCommand in that repo only\n  PASS  a 0644 deploy key is refused and the clone is not attempted\n  PASS  node-create refuses public.key at the spawn gate, before any agent exists (exit 1)\n  PASS  node-create refuses junk.key at the spawn gate, before any agent exists (exit 1)\n  PASS  node-create refuses enc at the spawn gate, before any agent exists (exit 1)\n  PASS  node-create refuses a deploy key on an HTTPS remote at the spawn gate (exit 1)\n  PASS  a usable read-only key passes the spawn gate and the run continues past it\n  PASS  pre-fix 4f32a50 accepts the public key as a deploy key \u2014 the gate arm is falsifiable\n  PASS  layer 00 measures the node footprint and admits it against the floor\n59. an adapter's verdict counts its WARN rows, not just its FAIL rows (CF-141)\n  PASS  a WARN row -> 'STUB: UNVERIFIED', exit 3, never PASS (2 WARN rows)\n  PASS  a FAIL row -> 'STUB: FAIL (1)', exit 1, never PASS/UNVERIFIED\n  PASS  all rows PASS -> 'STUB: PASS', exit 0\n  PASS  install-opencode.sh --check on the row's stub -> 'OPENCODE: UNVERIFIED', exit 3, never PASS\n  PASS  pre-fix d4f2600 prints 'OPENCODE: PASS' with exit 0 beside the same two WARN rows \u2014 the arm is falsifiable\n  PASS  all six adapters end with the verdict their row counts require (table in the scratch dir)\n  PASS  an unsupported interpreter ends 'HERMES: FAIL (1)', exit 1, after the named row\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261108T011737.145269Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    }
+  },
+  "summary": "Judge Result: CF-128\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nOverall: PASS \u2713",
+  "evaluated_at": "2026-11-08T02:00:23.582382",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-08T02:00:23.605576+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 8318,
+        "truncated": false,
+        "source": "git show 168935666fdc"
+      }
+    ],
+    "task_id": "CF-128"
+  }
+}

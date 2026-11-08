@@ -1,0 +1,123 @@
+{
+  "task_id": "CF-128",
+  "task_title": "selftest \u00a729 ancestry legs: add --ref/no-published-dir arm plus disabled-block control",
+  "task_criteria": [
+    "tests/selftest.sh section 29 gains an arm that runs scripts/board_drift.py check with a real --ref and NO --published-dir and NO --no-head on a fixture whose HEAD is not an ancestor of the ref, asserting a 'FAIL  HEAD ancestry' row plus RESULT: DRIFT; the same section asserts the green direction ('PASS  HEAD ancestry', RESULT: OK) on a fixture whose HEAD is an ancestor of the ref; with the ancestry block forced disabled the suite prints SELFTEST: FAIL naming the ancestry arm; bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at the fixed tip; the seven existing --published-dir arms still pass unchanged."
+  ],
+  "passed": false,
+  "worktree": "/home/kara/code-factory",
+  "branch": "main",
+  "commit": "168935666fdcb5e43a6e410597f46a49057f3d66",
+  "pass_class": "judged",
+  "tier2_skipped": false,
+  "working_tree_content_fingerprint": "507e623bbc76bcf046996e435bf0557c26c4f8dc27899172c61c0ff7ca776d34",
+  "working_tree_dirty_path_count": 0,
+  "items": [
+    {
+      "criterion": "tests/selftest.sh section 29 gains an arm that runs scripts/board_drift.py check with a real --ref and NO --published-dir and NO --no-head on a fixture whose HEAD is not an ancestor of the ref, asserting a 'FAIL  HEAD ancestry' row plus RESULT: DRIFT; the same section asserts the green direction ('PASS  HEAD ancestry', RESULT: OK) on a fixture whose HEAD is an ancestor of the ref; with the ancestry block forced disabled the suite prints SELFTEST: FAIL naming the ancestry arm; bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at the fixed tip; the seven existing --published-dir arms still pass unchanged.",
+      "status": "UNVERIFIED",
+      "detail": "Not examined \u2014 evaluation ended before this criterion was reached (no judgement was made about it)"
+    }
+  ],
+  "merge_recommendation": "no_concerns_found",
+  "stages": {
+    "tier1": {
+      "id": "tier1",
+      "passed": true,
+      "any_failed": false,
+      "summary": "  \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10",
+      "steps": [
+        {
+          "id": "lint",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261108T011737.145269Z.log"
+          }
+        },
+        {
+          "id": "secrets",
+          "type": "script",
+          "passed": true,
+          "output": "secrets: scanners=gitleaks+builtin cross-check\nscanners: nice=nice -n 10\n8:34PM INF scanned ~3154954 bytes (3.15 MB) in 1.27s\n8:34PM INF no leaks found\nsecrets: gitleaks: clean\nsecrets: builtin cross-check: Scanned 469 files \u2014 clean (excluded harness state: .gitreins/**)\nsecrets: builtin cross-check status: clean\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261108T011737.145269Z.log",
+            "secrets_scanners": [
+              "gitleaks",
+              "builtin"
+            ]
+          }
+        },
+        {
+          "id": "tests",
+          "type": "script",
+          "passed": true,
+          "output": "scanners: nice=nice -n 10\n1. every script parses\n  PASS  bash -n bunker-crier-connect.sh\n  PASS  bash -n bunker-provision.sh\n  PASS  bash -n bunker-server-install.sh\n  PASS  bash -n github-app-refresh.sh\n  PASS  bash -n github-app-setup.sh\n  PASS  bash -n install-gitreins.sh\n  PASS  bash -n install-go.sh\n  PASS  bash -n install-node.sh\n  PASS  bash -n land-node-branch.sh\n  PASS  bash -n lib.sh\n  PASS  bash -n node-create.sh\n  PASS  bash -n panel_supervise.sh\n  PASS  bash -n project-node.sh\n  PASS  bash -n verify-node.sh\n  PASS  bash -n verify-patch.sh\n  PASS  bash -n harness-vars.sh\n  PASS  bash -n install-claude-code.sh\n  PASS  bash -n install-codex.sh\n  PASS  bash -n install-deepseek.sh\n  PASS  bash -n install-hermes.sh\n  PASS  bash -n install-opencode.sh\n  PASS  bash -n install-pi-agent.sh\n  PASS  bash -n harness-conformance.sh\n  PASS  bash -n harness-node-e2e.sh\n  PASS  bash -n selftest.sh\n2. the node checker FAILS on an empty PATH\n  PASS  empty PATH -> exit 1\n  PASS  report contains named FAIL rows\n3. unreachable Crier reports one HTTP status code\n  PASS  unreachable URL -> one 000 status\n4. clone errors distinguish missing refs from repository access\n  PASS  missing ref names main and --ref without a private-repo hint\n  PASS  repository access failure retains deploy-key hint\n4b. clone failure after successful ref resolution is not an access failure\n  PASS  resolved main clone failure names the ref without missing-ref or private-repo hints\n5. fetch_verified refuses a wrong digest\n  PASS  correct digest accepted\ndigest mismatch for file:///var/tmp/hermes-scratch/tmp.ivlS94gt6e/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\n  PASS  wrong digest refused\n  PASS  uncreatable destination -> fetch_verified exit 1, no artifact installed\n  PASS  caller surfaced the failed install: 1 '^  FAIL  go:download' row, fixture exit 1\n6. no literal credential assignments\n  PASS  none found\n  section 6 tailnet-address (CF-378): no tracked file outside the board publishes a tailnet address\n  PASS  tailnet-address \u2014 0 tailnet-address hits in 378 tracked file(s) outside .coding-hermes/board and .gitreins\n  PASS  seeded fixture -> FAIL names docs/seeded.md:3; the out-of-range subnet stays green\n\n\u2026 [40502 chars omitted \u2014 519 line(s)] \u2026\n  PASS  layer 10 grades the owned node pin, not a PATH runtime\n  PASS  layer 40 clones with the declared key and pins core.sshCommand in that repo only\n  PASS  a 0644 deploy key is refused and the clone is not attempted\n  PASS  node-create refuses public.key at the spawn gate, before any agent exists (exit 1)\n  PASS  node-create refuses junk.key at the spawn gate, before any agent exists (exit 1)\n  PASS  node-create refuses enc at the spawn gate, before any agent exists (exit 1)\n  PASS  node-create refuses a deploy key on an HTTPS remote at the spawn gate (exit 1)\n  PASS  a usable read-only key passes the spawn gate and the run continues past it\n  PASS  pre-fix 4f32a50 accepts the public key as a deploy key \u2014 the gate arm is falsifiable\n  PASS  layer 00 measures the node footprint and admits it against the floor\n59. an adapter's verdict counts its WARN rows, not just its FAIL rows (CF-141)\n  PASS  a WARN row -> 'STUB: UNVERIFIED', exit 3, never PASS (2 WARN rows)\n  PASS  a FAIL row -> 'STUB: FAIL (1)', exit 1, never PASS/UNVERIFIED\n  PASS  all rows PASS -> 'STUB: PASS', exit 0\n  PASS  install-opencode.sh --check on the row's stub -> 'OPENCODE: UNVERIFIED', exit 3, never PASS\n  PASS  pre-fix d4f2600 prints 'OPENCODE: PASS' with exit 0 beside the same two WARN rows \u2014 the arm is falsifiable\n  PASS  all six adapters end with the verdict their row counts require (table in the scratch dir)\n  PASS  an unsupported interpreter ends 'HERMES: FAIL (1)', exit 1, after the named row\n\nSELFTEST: PASS\n",
+          "error": "",
+          "data": {
+            "exit_code": 0,
+            "guard_log": "/home/kara/code-factory/.gitreins/logs/guard-20261108T011737.145269Z.log"
+          }
+        }
+      ],
+      "coverage": "secrets+lint+tests"
+    },
+    "tier2": {
+      "id": "tier2",
+      "passed": false,
+      "any_failed": true,
+      "summary": "INCOMPLETE\n  \u2014 tests/selftest.sh section 29 gains an arm that runs scripts/board_drift.py check with a real --ref and NO --published-dir and NO --no-head on a fixture whose HEAD is not an ancestor of the ref, asserting a 'FAIL  HEAD ancestry' row plus RESULT: DRIFT; the same section asserts the green direction ('PASS  HEAD ancestry', RESULT: OK) on a fixture whose HEAD is an ancestor of the ref; with the ancestry block forced disabled the suite prints SELFTEST: FAIL naming the ancestry arm; bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at the fixed tip; the seven existing --published-dir arms still pass unchanged.: Not examined \u2014 evaluation ended before this criterion was reached (no judgement was made about it)\n  \u2717 Coverage FAILED \u2014 not passing: tests/selftest.sh section 29 gains an arm that runs scripts/board_drift.py check with a real --ref and NO --published-dir and NO --no-head on a fixture whose HEAD is not an ancestor of the ref, asserting a 'FAIL  HEAD ancestry' row plus RESULT: DRIFT; the same section asserts the green direction ('PASS  HEAD ancestry', RESULT: OK) on a fixture whose HEAD is an ancestor of the ref; with the ancestry block forced disabled the suite prints SELFTEST: FAIL naming the ancestry arm; bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at the fixed tip; the seven existing --published-dir arms still pass unchanged.\nCap exceeded: Iteration cap (100) reached (100.6 used). Increase max_iterations or split criteria. Partial verdict \u2014 0 of 1 criteria graded, 1 ungraded. The run spent 3,191,956 in / 13,967 out over 100.6 iterations.",
+      "steps": [
+        {
+          "id": "tier2",
+          "type": "ai_eval",
+          "passed": false,
+          "output": "INCOMPLETE\n  \u2014 tests/selftest.sh section 29 gains an arm that runs scripts/board_drift.py check with a real --ref and NO --published-dir and NO --no-head on a fixture whose HEAD is not an ancestor of the ref, asserting a 'FAIL  HEAD ancestry' row plus RESULT: DRIFT; the same section asserts the green direction ('PASS  HEAD ancestry', RESULT: OK) on a fixture whose HEAD is an ancestor of the ref; with the ancestry block forced disabled the suite prints SELFTEST: FAIL naming the ancestry arm; bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at the fixed tip; the seven existing --published-dir arms still pass unchanged.: Not examined \u2014 evaluation ended before this criterion was reached (no judgement was made about it)\n  \u2717 Coverage FAILED \u2014 not passing: tests/selftest.sh section 29 gains an arm that runs scripts/board_drift.py check with a real --ref and NO --published-dir and NO --no-head on a fixture whose HEAD is not an ancestor of the ref, asserting a 'FAIL  HEAD ancestry' row plus RESULT: DRIFT; the same section asserts the green direction ('PASS  HEAD ancestry', RESULT: OK) on a fixture whose HEAD is an ancestor of the ref; with the ancestry block forced disabled the suite prints SELFTEST: FAIL naming the ancestry arm; bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at the fixed tip; the seven existing --published-dir arms still pass unchanged.\nCap exceeded: Iteration cap (100) reached (100.6 used). Increase max_iterations or split criteria. Partial verdict \u2014 0 of 1 criteria graded, 1 ungraded. The run spent 3,191,956 in / 13,967 out over 100.6 iterations.",
+          "error": "",
+          "data": {
+            "verdict": "INCOMPLETE",
+            "items": [
+              {
+                "criterion": "tests/selftest.sh section 29 gains an arm that runs scripts/board_drift.py check with a real --ref and NO --published-dir and NO --no-head on a fixture whose HEAD is not an ancestor of the ref, asserting a 'FAIL  HEAD ancestry' row plus RESULT: DRIFT; the same section asserts the green direction ('PASS  HEAD ancestry', RESULT: OK) on a fixture whose HEAD is an ancestor of the ref; with the ancestry block forced disabled the suite prints SELFTEST: FAIL naming the ancestry arm; bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at the fixed tip; the seven existing --published-dir arms still pass unchanged.",
+                "status": "UNVERIFIED",
+                "detail": "Not examined \u2014 evaluation ended before this criterion was reached (no judgement was made about it)"
+              }
+            ],
+            "summary": "Cap exceeded: Iteration cap (100) reached (100.6 used). Increase max_iterations or split criteria. Partial verdict \u2014 0 of 1 criteria graded, 1 ungraded. The run spent 3,191,956 in / 13,967 out over 100.6 iterations.",
+            "provenance": {
+              "model": "deepseek-v4-flash",
+              "base_url_source": "GITREINS_LLM_BASE_URL",
+              "api_key_source": "GITREINS_LLM_API_KEY"
+            }
+          }
+        }
+      ],
+      "model": "deepseek-v4-flash",
+      "base_url_source": "GITREINS_LLM_BASE_URL",
+      "api_key_source": "GITREINS_LLM_API_KEY"
+    }
+  },
+  "summary": "Judge Result: CF-128\n\nStage tier1: PASS\n    \u2713 lint: scanners: nice=nice -n 10\n  \u2713 secrets: secrets: scanners=gitleaks+builtin cross-check\n  \u2713 tests: scanners: nice=nice -n 10\n\nStage tier2: FAIL\n  INCOMPLETE\n  \u2014 tests/selftest.sh section 29 gains an arm that runs scripts/board_drift.py check with a real --ref and NO --published-dir and NO --no-head on a fixture whose HEAD is not an ancestor of the ref, asserting a 'FAIL  HEAD ancestry' row plus RESULT: DRIFT; the same section asserts the green direction ('PASS  HEAD ancestry', RESULT: OK) on a fixture whose HEAD is an ancestor of the ref; with the ancestry block forced disabled the suite prints SELFTEST: FAIL naming the ancestry arm; bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at the fixed tip; the seven existing --published-dir arms still pass unchanged.: Not examined \u2014 evaluation ended before this criterion was reached (no judgement was made about it)\n  \u2717 Coverage FAILED \u2014 not passing: tests/selftest.sh section 29 gains an arm that runs scripts/board_drift.py check with a real --ref and NO --published-dir and NO --no-head on a fixture whose HEAD is not an ancestor of the ref, asserting a 'FAIL  HEAD ancestry' row plus RESULT: DRIFT; the same section asserts the green direction ('PASS  HEAD ancestry', RESULT: OK) on a fixture whose HEAD is an ancestor of the ref; with the ancestry block forced disabled the suite prints SELFTEST: FAIL naming the ancestry arm; bash tests/selftest.sh prints SELFTEST: PASS and bash scripts/boardctl validate prints RESULT: OK at the fixed tip; the seven existing --published-dir arms still pass unchanged.\nCap exceeded: Iteration cap (100) reached (100.6 used). Increase max_iterations or split criteria. Partial verdict \u2014 0 of 1 criteria graded, 1 ungraded. The run spent 3,191,956 in / 13,967 out over 100.6 iterations.\n\nOverall: FAIL \u2717",
+  "evaluated_at": "2026-11-08T01:46:32.040384",
+  "supersedes": null,
+  "superseded_by": null,
+  "evidence": {
+    "collected_at": "2026-11-08T01:46:32.062245+00:00",
+    "items": [
+      {
+        "name": "patch",
+        "label": "Landed commit patch",
+        "file": "commit.patch",
+        "bytes": 8318,
+        "truncated": false,
+        "source": "git show 168935666fdc"
+      }
+    ],
+    "task_id": "CF-128"
+  }
+}
