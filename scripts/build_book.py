@@ -609,6 +609,7 @@ def main() -> int:
         "VI": "RSK",
         "VII": "WRK",
         "VIII": "DLV",
+        "IX": "DSP",
     }
 
     def tab_html(p_id: str, p_idx: int) -> str:

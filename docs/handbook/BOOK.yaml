@@ -70,6 +70,10 @@ parts:
     title: Delivery
     files:
       - parts/VIII-delivery.md
+  - id: IX
+    title: Disposition log
+    files:
+      - parts/IX-disposition-log.md
 
 figures:
   # Part 0 — Overview (the three whole-system views)
