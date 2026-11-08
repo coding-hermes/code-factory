@@ -351,19 +351,381 @@ cited.
 CT-17 (conformance → harness, UNVERIFIED) is the wire that would grade harness claims and
 was not run this round (needs a live node; CF-328).
 
-## 13. Risk summary
+## 13. Stale boards and stale claims
 
-| # | Failure class | Worst case | Open guard |
-|---|---|---|---|
-| 1 | Silent success | Work that never happened closes a row and spends the lane's cadence | CF-355 |
-| 2 | Custody lost on restart | Every held delivery and inbox vanishes with the daemon | backend selection default; readback RED |
-| 3 | Custody lost on crash | A redelivered task executes twice | F11-3, seen-cache warns only |
-| 4 | Deadline kill misses children | A killed job keeps spending inference | F11-8 (guarantee withdrawn), `DISPATCH_EXEC_TIMEOUT` inert |
-| 5 | Untrusted directive reaches a node | Guard fail-open delivers an untrusted prompt to a node | `FailClosed` opt-in; CF-369 |
-| 6 | Provisioning admits what it must refuse | A tampered binary or an under-floor host passes admission | F1-1, B05 |
-| 7 | Credential exposed or mode claim lies | A token in argv, a 0644 key accepted by a lying predicate | F0-6, CF-347 |
-| 8 | Work lands without proof | An ungraded diff on main; a closeout with no evidence | CT-10 BROKEN; gate off by default |
-| 9 | Control plane exposed by binding | The scheduler API reachable off-host | no CT — named gap |
-| 10 | Evidence destroyed or never written | The record of a run is unrecoverable | CF-290/368, CT-09, CT-10 |
-| 11 | The record that lies | An operator acts on invented paths or re-emitted stamps | F6-2, B6 blind spots |
-| 12 | Unproven wires | A failure with no measured signal | 16 UNVERIFIED rows |
+**What fails.** The board is two stores in git, `origin/main` is the canonical copy, and
+the working copy is a cache other writers are allowed to dirty (VII §2). Three stale-state
+failures follow: a node claims or works a row from a copy another actor already closed; a
+workdir is stale relative to its remote and the tolerance is configured wide
+(`repo_freshness --bound`, default 0, M3 §5); and an unreadable board is mistaken for an
+empty one — the review requires the work/no-work/unreadable distinction to be explicit
+(M4 review), and the current read path never refuses, it only reports its source.
+
+**Affected invariant.** One row, one claim, one current copy: eligibility is decided
+against the canonical revision.
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): work age, backlog depth,
+cross-copy drift and failed transitions with collection/readout (M4 review). Today:
+`repo_freshness` behind-counts and `board_read.py load`'s source report are the only
+measured signals.
+
+**Visible state.** A dispatch executes against a row already closed; a tick reports no
+work on a board whose canonical copy holds dispatchable rows.
+
+**Containment.** `board_lock.py adjudicate` returns ERROR when the lock state is unknown —
+exit 3, never permission to write (M4 §3, CF-259); the read path reports which ref it
+resolved, so a stale-source read is at least visible.
+
+**Owner.** The scheduler owns claim exclusivity; the foreman owns refresh-before-work
+(Figure 2.1 requirement, TARGET).
+
+**Retry / recovery.** Re-fetch `origin/main`, re-evaluate eligibility, re-derive the
+claim; a claim made on a stale copy is re-derived, never resumed.
+
+**Proof.** The tick line names the board revision it worked from (required; not yet
+produced by any in-repo actor — a named gap). Contracts: CT-01 (UNVERIFIED side), CT-14
+(UNVERIFIED).
+
+## 14. Unknown verdicts
+
+**What fails.** The settlement reader treats the absence of a verdict as success (§1), and
+the legacy reply path accepts missing verdicts (M9 review). A dispatch that never settles
+leaves the run neither pass nor fail; a judge session that times out returns MISSING seats;
+a replayed ledger entry can carry a result whose verdict field is empty. Unknown is a
+distinct outcome class and today no counter separates it from success.
+
+**Affected invariant.** Every execution settles to a named outcome: pass, fail or unknown —
+never silence.
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): a settlement-outcome counter with
+`unknown` as a distinct class, built on the availability-aware scheduler telemetry (M9
+review). Today: no signal — the silence is the defect.
+
+**Visible state.** Rows held `in_progress` past their deadline; a scheduler pass row with
+no verdict in the correlated reply.
+
+**Containment.** The typed settlement/verification/quiescence records exist in the newer
+path; the open defect is that data structures alone do not prove every runtime path uses
+them (M9 review).
+
+**Owner.** The scheduler owns settlement; gitreins owns the grade.
+
+**Retry / recovery.** Re-grade, never infer: a missing verdict is re-run through the judge,
+not defaulted to pass (CF-355 open on both halves, §1).
+
+**Proof.** A verdict that names its criteria and whose exit matches its rows (VII §6).
+Contracts: CT-04 (PARTIAL), CT-13 (UNVERIFIED).
+
+## 15. Publication and memory projections fail after the work is done
+
+**What fails.** Execution, independent verification, publication, board close and memory
+projection are separate stages with separate owners, and the later stages fail silently
+today: the node worker writes no board rows (CT-10, BROKEN) and makes zero DuckBrain calls
+(CT-09, MISSING, CF-329), so a landed commit can be invisible to the next cadence and to
+shared memory. Crier delivery alone is not task acceptance, and a transport worker's lack
+of direct writes does not prove the foreman path lacks them (M2 review) — the projection
+path must be specified, not inferred absent.
+
+**Affected invariant.** Published work is projected to every record sink — board and shared
+memory — before the run is done; no sink is optional.
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): per-sink projection success/failure
+counters and backlog age. Today: absence of rows is the only signal, and nothing counts it.
+
+**Visible state.** `LANDED:` proof rows with the board row still `in_progress`; a completed
+tree with no memory record.
+
+**Containment.** Closeout verbs refuse incomplete evidence (`--evidence-run-id`, TR-251);
+the landing proves ancestry before it pushes (§8).
+
+**Owner.** The foreman owns closeout and projections; the register reassigns memory/board
+producers to the foreman projection path, not the transport worker (Part IV review).
+
+**Retry / recovery.** Closeout verbs are idempotent re-runs: re-close with the same
+evidence run id; re-write the memory projection from the run record.
+
+**Proof.** One new event line per closure bound to the exact tree, plus a memory readback
+naming the run (required; producers do not exist yet). Contracts: CT-10 (BROKEN), CT-09
+(MISSING), CT-14 (UNVERIFIED).
+
+## 16. Replay, uncertain starts and orphans
+
+**What fails.** The dispatcher's replay ledger is written after the task runs
+(`dispatcher.py:479` vs `:481`, F11-3) and a failed ledger write is swallowed (`:397`) — a
+crash in the window re-runs work whose result was lost. A detached start whose ledger row
+never lands is an uncertain start: the node may be executing with no record anywhere.
+Orphaned node agents — created, never registered — accumulate until the hygiene reaper
+removes them after the age grace. The review requires durable intent and a native run
+identity before execution; a post-execution replay ledger is insufficient for crash-safe
+execution (M11 review).
+
+**Affected invariant.** Every start is recorded before it executes; every result is
+recorded before it is acknowledged.
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): `replayed_results`,
+`uncertain_starts`, `reconciled_starts`, orphan counts and quiescence latency (M11 review).
+Today: `ledger write failed …` and the hygiene `FAIL orphans` row.
+
+**Visible state.** A job with no ledger row; `DONE:124` with processes still alive (§4);
+`FAIL orphans — N orphan(s) would be reaped`.
+
+**Containment.** Redelivery is the chosen safer outcome (ack last, §3); the reaper runs
+only against a supplied live-id registry after the grace (`reap --min-age-minutes`,
+default 60).
+
+**Owner.** The dispatcher owns jobs and receipts; node hygiene owns orphans.
+
+**Retry / recovery.** Reconcile at startup against the bus inbox and the ledger; reap
+orphans after the grace; treat re-execution as possible after any crash (§3).
+
+**Proof.** A ledger row keyed by the native run identity, written before execution
+(required, not yet implemented). Contract: CT-23 (UNVERIFIED).
+
+## 17. Authentication, scope and expiry
+
+**What fails.** Credentials expire while their files persist: token-file age alone is not
+validity, and expiry proof is different from explicit revocation (M7 review). A mint can
+serve a token whose scope exceeds the required repositories — checking installation
+coverage does not narrow the token (M7 review). A refresh that serves a stale token while
+reporting fresh silently pushes with an expired credential (§7).
+
+**Affected invariant.** Every credential in use is unexpired, minimally scoped, and
+provably revoked when retired.
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): expiry headroom, expired/unknown
+credential counts, refused scope/permission mismatches, renewal lag and revocation
+completion (M7 review). Today: mode checks and `--min-age` windows only.
+
+**Visible state.** Git authentication failing mid-landing; a mint refusing a scope; a token
+file younger than `MIN_AGE` serving as fresh.
+
+**Containment.** The mode-600 check exits 1 before the credential-store rewrite (CF-320);
+`--dry-run` exits before mint or write; the scoped minter (`FLEET_GH_SCOPE`) narrows at
+issuance.
+
+**Owner.** The M7 credential issuer owns forge credentials; the M12 proxy owner owns node
+tokens — the domains are distinct (M7 review).
+
+**Retry / recovery.** Re-mint on expiry; revocation is always explicit, never implied by
+age; decommissioning removes the delivered credential, not just the mapping.
+
+**Proof.** Mint/refresh outcome records carrying scope and expiry metadata (required).
+Contracts: CT-21, CT-19 (both UNVERIFIED).
+
+## 18. Wrong served route and truncation
+
+**What fails.** The proxy rewrites the requested model when `CF_PROXY_UPSTREAM_MODEL` is
+set (`:166-170`), so the served model can differ from the requested one, and no
+requested-versus-served identity contract is yet written (M12 review). The 300 s upstream
+timeout on both stream and buffered legs truncates long generations; a body over `MAX_BODY`
+is refused with 400. A client can receive a completion that names a model it did not ask
+for, or a partial answer that looks whole.
+
+**Affected invariant.** The served response is the requested route, complete, or a named
+error — never a silent substitution or a silent cut.
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): requested-vs-served model
+mismatch counter and partial/completion/error classification per response (M12 review).
+Today: usage-log records exist; the mismatch is not counted.
+
+**Visible state.** A usage record whose served model differs from the request; a
+completion cut at the timeout boundary.
+
+**Containment.** The model allowlist (403 outside `CF_PROXY_ALLOWED_MODELS`) and the body
+ceiling are measured on the proxy side (M12 §6); the timeout is configuration, not policy.
+
+**Owner.** The M12 proxy owner owns the route; the router policy owner owns the effective
+model mapping.
+
+**Retry / recovery.** Client retry within its budget; no automatic completion resume —
+a truncated stream is a named failure, not a shorter answer.
+
+**Proof.** Buffered and streamed schemas with framing/completion/partial/error behavior,
+conformed on the actual path (required; CT-19/CT-20 evidence, not stale local IDs — M12
+review). Contracts: CT-19, CT-20 (UNVERIFIED).
+
+## 19. Proxy streaming completion
+
+**What fails.** The reported healthy-stream completion defect: a stream that reports
+healthy at its first byte can still fail at completion. A first-byte-only flight card
+cannot close the defect (M12 review). The local proxy source/runtime was not supplied for
+independent validation, so the defect is retained with that qualification, not closed and
+not dismissed (handoff, M12).
+
+**Affected invariant.** Stream completion framing is proved on the actual path, not
+inferred from connection health.
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): per-stream completion outcome with
+error/cancel classes, distinguished from connection-establishment outcomes.
+
+**Visible state.** A client-side truncated stream recorded as successful upstream.
+
+**Containment.** None measured. The defect stays open.
+
+**Owner.** The proxy maintainer, once versioned source lands (handoff §6).
+
+**Retry / recovery.** The client observes the truncation; recovery is the same named
+failure as §18.
+
+**Proof.** Actual-path conformance evidence with maintained versioned source (required
+before the defect can close). Contracts: CT-19, CT-20 (UNVERIFIED).
+
+## 20. Shared-memory consistency
+
+**What fails.** DuckBrain must be installed in every Bunker and expose the same logical
+project memory view as the controller (user decision, handoff §1.2) — but installing
+identical software does not itself provide the same data view (handoff §6). Until the
+shared topology is specified, the failure modes are unbounded: a Bunker reading a
+namespace the controller has not written, divergent bidirectional projections, offline
+edits conflicting on reconnect.
+
+**Affected invariant.** One logical memory view across control host and Bunkers, with
+defined authority, consistency and conflict behavior.
+
+**Detection / metric.** Undefined — the topology itself is UNRESOLVED (Part V matrix).
+
+**Visible state.** A Bunker foreman reasoning over memory the controller cannot see, or the
+reverse.
+
+**Containment.** None specified. Until then, Bunker-local memory reads are treated the way
+the board treats a dirty worktree: a cache, never authority (VII §2's rule applied to
+memory).
+
+**Owner.** Unresolved — assigned when the topology decision lands (handoff §6, carried).
+
+**Retry / recovery.** Unspecified; the offline/reconnect and replication-conflict behaviors
+are named follow-ups, not designed semantics.
+
+**Proof.** Cross-host readback showing the same logical row from both sides (required).
+Contract: none — a named gap; CT-09 (MISSING) covers the node-side producer only.
+
+## 21. Restore
+
+**What fails.** A restore that loses lease, idempotency or identity state re-executes held
+messages or orphans in-flight custody. The review requires the restore procedure for every
+configured registry/session store — consistent snapshots, retained identities and
+idempotency state, service drain/restart and restored-delivery verification — and keeps
+backup-created, backup-validated and restore-drill-passed distinct: a skipped drill is not
+a proven restore (M10 review). Existing scripts, units and historical drills do not prove
+fleet deployment or off-host recovery (M10 review).
+
+**Affected invariant.** Durable custody survives a full host loss: every held delivery and
+identity is recoverable, and nothing is re-executed that was already acknowledged.
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): backup age and last-verified-restore
+age, per store (M10 review).
+
+**Visible state.** After a restore: inboxes empty, idempotency window reset, duplicate
+executions.
+
+**Containment.** A durable backend is a deployment requirement (§2); the memory backend's
+data loss on restart is a negative control, not production readiness (M10 review).
+
+**Owner.** The Crier store owner.
+
+**Retry / recovery.** Follow the restore procedure for the configured backend; verify by
+restored-delivery checks, not by daemon liveness.
+
+**Proof.** A restore-drill record naming the store revision, snapshot and verification
+result. Contracts: CT-02, CT-03 (PROVEN on the transport — the store is outside their
+measured sides).
+
+## 22. Upgrade drift
+
+**What fails.** Pins exist so drift is measurable: `GITREINS_PIN` 0.17.1, `HERMES_PIN`
+0.19.0, `CF_CODEX_PIN`, `CLAUDE_CODE_PIN`, `NODE_PIN`, `GO_PIN` (Part V rows). A deployed
+version that drifts from its pin is an unmeasured build serving production; a config
+drift (`bunker_config_gen.py --check`) is the same defect in settings form. The review
+requires reconcile between configured installer pins, current upstream upgrades and
+deployed versions (M3 review) and continuous version/config-drift metrics (M5 review).
+
+**Affected invariant.** Every deployed binary and config matches a named pin, and every
+pin change is a deliberate recorded act.
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): version/config drift counters and
+conformance-leg age (M5 review). Today: installer version checks
+(`bad "gitreins" "version … != pin"`) and `--check` runs only at install or on demand.
+
+**Visible state.** An installer FAIL row; a node whose binary is newer than the pin;
+`node_freshness` reporting a checkout behind its ref.
+
+**Containment.** Refusal on mismatch at install; `--check` modes are read-only drift
+probes.
+
+**Owner.** Harness lifecycle (M5) owns the harness pins; M3 owns the gitreins pin; M1 owns
+node image pins.
+
+**Retry / recovery.** Re-run the installer `--apply` to re-pin; an intentional upgrade is a
+pin change with its digest re-pinned, never silent drift.
+
+**Proof.** A recorded `--check` exit 0 at the pinned version, dated. Contract: CT-17
+(UNVERIFIED — the conformance leg that would grade harness claims was not run, CF-328).
+
+## 23. Bunker protections, qualified by effective profile
+
+Bunker provides baseline protection for normal operation independently of Terminal Jail
+(user decision, handoff §1.3), but its guarantees are path-dependent: the host-user, fresh
+image-backed, persistent-container and detached-unit paths differ in default capabilities
+and provisioning prerequisites (handoff §4). Egress defaults open, network defaults
+shared, and disk size is per-file, not an aggregate quota — "Bunker limits disk" is false
+until the profile says otherwise. Every claim of Bunker containment in this part (§4
+process kills, §5 directive filtering, §6 admission) therefore reads *Bunker contains X
+under the effective profile, proven by readback* — never bare *Bunker contains X*.
+Deployment mode/profile and live conformance remain to be verified; source availability
+does not close that question (handoff §1.3). Terminal Jail is optional and disabled by
+default; when enabled, Hermes execution uses the guarded path with no unguarded fallback —
+and observer-plugin presence alone proves no enforcement (M8 review).
+
+## 24. Risk summary — prioritized, with the review's mapping
+
+The classes are ordered by consequence, not by uncited-line counts: a class that can close
+work that never happened, spend after death, or lose custody outranks one that only
+delays or degrades. The mapping columns are the review's: affected invariant, detection
+metric, visible state, containment, owner, retry/recovery, proof — split across two
+tables to hold the page.
+
+| Pri | Class | Affected invariant | Detection / metric | Visible state |
+|---|---|---|---|---|
+| 1 | Silent success (§1) | no execution settles as success without a verdict | settlement outcomes incl. `unknown` (TARGET) | a failed reply closes a row |
+| 2 | Untrusted directive reaches a node (§5) | no untrusted prompt executes on a node | guard verdicts, `crier_guard_saturated_total` | `errored`-flagged allows |
+| 3 | Provisioning admits what it must refuse (§6) | admission refuses tampered and under-floor inputs | admission FAIL rows (measured); conformance legs (TARGET) | PASS rows that never probed |
+| 4 | Custody lost on restart (§2) | durable custody across restarts | backend readback (RED) | empty inboxes after restart |
+| 5 | Custody lost on crash (§3, §16) | recorded-before-ack; durable intent before start | `uncertain_starts`, replay counters (TARGET) | duplicate execution |
+| 6 | Deadline kill misses children (§4) | a killed job stops spending | quiescence latency, survivors (TARGET) | tokens spent after kill |
+| 7 | Credential exposed / expired / over-scoped (§7, §17) | credentials unexpired, minimal, revocable | expiry headroom, refused scopes (TARGET) | auth failures mid-landing |
+| 8 | Work lands without proof (§8) | publication carries gate and evidence proof | landing proof rows (measured) | ungraded diff on main |
+| 9 | Stale boards and claims (§13) | eligibility on the canonical revision | work age, drift (TARGET) | work on closed rows |
+| 10 | Unknown verdicts (§14) | every run settles to a named outcome | settlement `unknown` class (TARGET) | rows past deadline |
+| 11 | Failed publication / projections (§15) | published work reaches every record sink | per-sink projection counters (TARGET) | landed commit, open row |
+| 12 | Control plane exposed by binding (§9) | daemons bind to their intended surface | admission legs (measured) | API off-host |
+| 13 | Wrong served route / truncation (§18) | served equals requested, complete or error | mismatch, partial classes (TARGET) | silent model substitution |
+| 14 | Proxy streaming completion (§19) | completion framing proved on the path | per-stream outcomes (TARGET) | truncated "success" |
+| 15 | Evidence destroyed or never written (§10) | retained evidence outlives reaping | reap/refusal counters (measured) | cited dir vanishes |
+| 16 | The record that lies (§11) | registers point at real files, real states | spine/doc gates (measured) | invented sink paths |
+| 17 | Shared-memory consistency (§20) | one logical memory view | undefined — UNRESOLVED | divergent namespaces |
+| 18 | Restore (§21) | custody survives host loss | backup/restore ages (TARGET) | duplicates after restore |
+| 19 | Upgrade drift (§22) | deployed equals pinned | drift counters (TARGET) | unmeasured build serving |
+| 20 | Unproven wires (§12) | every guarantee cited on both sides | the register itself | RED sides, no signal |
+
+| Pri | Class | Containment | Owner | Retry / recovery | Proof of recovery |
+|---|---|---|---|---|---|
+| 1 | Silent success | read the reply body, not the verdict bit | scheduler settlement owner | close CF-355 on both halves | reply `status` and `ok` agree on every settlement |
+| 2 | Untrusted directive | `FailClosed`, `RequireAgentSig` on | Crier guard owner | re-enable, re-deliver, audit `Result.Patterns` | no unsigned read; policy verdicts recorded |
+| 3 | Admission refusals | named fail-before-side-effect refusals | provisioning owner | re-run with correct inputs | refusal rows present where they must fire |
+| 4 | Custody on restart | explicit durable backend | Crier store owner | configure, restart, redeliver | restart drill with redelivery |
+| 5 | Custody on crash | ack last; redelivery over loss | dispatcher owner | startup reconciliation | ledger keyed by native run id, pre-execution |
+| 6 | Surviving children | check survivors after every kill | dispatcher owner | manual group kill | zero survivors after deadline |
+| 7 | Credentials | mode checks, `--dry-run`, scoped mint | credential issuer owner | re-mint, explicit revoke | outcome records with scope/expiry |
+| 8 | Landing proof | `--gate-cmd`, ancestry proof | landing owner | rebase, re-land | `LANDED:` rows with gate rows |
+| 9 | Stale boards | lock ERROR never writes | scheduler + foreman | re-fetch, re-derive | tick names its board revision |
+| 10 | Unknown verdicts | typed settlement records | scheduler + judge | re-grade, never infer | verdict with named criteria |
+| 11 | Failed projections | evidence-bound closeout verbs | foreman | idempotent re-close, re-project | one event + memory readback per run |
+| 12 | Exposed binding | loopback default, auth gates | daemon owners | re-point, add front end | admission legs pass |
+| 13 | Route/truncation | allowlists, body ceiling | proxy owner | named failure to client | requested = served in usage log |
+| 14 | Streaming | none measured | proxy maintainer | client retry | actual-path conformance evidence |
+| 15 | Evidence loss | `PROTECTED` set, dry-run | safety owner | reaper rule fix (CF-290/368) | cited evidence survives a reap |
+| 16 | Lying record | spine comparison, same-commit amend | documentation owner | re-pin locators | register matches disk |
+| 17 | Memory consistency | treat local reads as cache | unresolved | unspecified | cross-host readback |
+| 18 | Restore | durable backend requirement | Crier store owner | restore procedure + drill | restore-drill record |
+| 19 | Drift | refuse-on-mismatch install | pin owners | re-apply the pin | dated `--check` exit 0 |
+| 20 | Unproven wires | five-state vocabulary, same-commit amend | contract owners | cite both ends | register row leaves UNVERIFIED |

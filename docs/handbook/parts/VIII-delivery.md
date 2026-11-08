@@ -106,7 +106,60 @@ The corollary governs the working tree: a build run against a tree whose sources
 is not a near-miss, it is a different artifact, and its output is not cited as evidence
 about the book. The build's OK line is the only delivery receipt.
 
-## VIII.5 Worked example — the 2026-11-07 wave sequence
+## VIII.5 The disposition log as a standing gate
+
+The gates in VIII.2 grade the artifact; the disposition log grades the review. Every
+finding — from the CF2A-01 running review, the audit rubric, or any later pass — is
+recorded in the change/redline disposition log and receives exactly one disposition:
+**adopted**, **rejected**, **deferred**, or **unresolved**. The log row carries the
+finding's identity bound to the actual supplied revision it was raised against, the
+disposition, the rationale, the owner, the replacement section, figure or contract that
+implements it, and the relevant proof — a build line, a command, or a quoted page. More
+pages or more audit history do not establish a corrected buildable specification; the
+disposition log, not the page count, is the record that the review was answered.
+
+The rule is a standing gate with the same teeth as the build gates:
+
+1. A finding with no recorded disposition is an open blocker. A release whose findings
+   are not all dispositioned does not ship, regardless of gate color.
+2. A rejection states why the review standard does not apply — it is a decision, not a
+   silence. An adoption names what replaces the defect, so the same finding cannot be
+   re-adopted and re-fixed in different waves without anyone noticing.
+3. Deferred and unresolved rows are re-decided at the next pass, never dropped: the next
+   pass reviews newly filled pages while checking earlier redlines (handoff §3, Part
+   VIII), and the log is the checklist that pass works from.
+4. Dispositions are monotonic in visibility: a row may move from unresolved to adopted,
+   never from adopted back to silently absent.
+
+The log is where the review's "explicit dispositions with exact revision identities"
+requirement (handoff §1.9) lives. A wave that folds review findings into the parts and
+does not leave each finding dispositioned in the log has moved the defect, not closed it.
+
+## VIII.6 Draft, release and approval identity
+
+A draft, a release and an approval are three distinct facts about three distinct
+artifacts, and each is identified exactly. No artifact carries two of the states at once,
+and no state is claimed without its identity.
+
+- **Draft.** Rendered output whose gates passed but whose review is open. Identified by
+  document id, issue date, the exact source commit (full sha, not a branch name), and the
+  build's OK line. A draft is not cited as evidence of correctness anywhere in the book.
+- **Release.** The artifact published with its required checks satisfied. Identified by
+  document id and revision, the exact source commit sha, the PDF's hash, the retained
+  gate reports, and the disposition-log state — every finding dispositioned, or the open
+  ones named. A release with failed or unapproved output staged beside it identifies that
+  output explicitly; it is never silently bundled (M6 review, deliverable integrity).
+- **Approval.** The owner's recorded decision, bound to the exact release identity — id,
+  revision, commit sha and artifact hash. An approval of "the handbook" without that
+  identity approves nothing; human approval is an external decision contract, not an
+  unverifiable destination (M6 review).
+
+Supersession is explicit: a new release names the release it replaces, and the replaced
+artifact is retained, not overwritten — a re-print that is indistinguishable from its
+predecessor cannot be read in order of authority. CT-18 carries the approval artifact and
+stays UNVERIFIED until this identity chain exists end to end (Part IV).
+
+## VIII.7 Worked example — the 2026-11-07 wave sequence
 
 The same day produced the book's first full delivery cycle, and it is the worked example
 because every rule above was exercised once:
@@ -148,7 +201,7 @@ fix order as the group boundary, and the re-audit is the loop's own evidence dis
 every grade carries page evidence, and a finding that cannot be repeated by a command or a
 quoted line does not count (PANEL-LOOP.md, "Judge rules").
 
-## VIII.6 What delivery owes the reader
+## VIII.8 What delivery owes the reader
 
 The delivery surface is two contracts in the register. CT-16 carries the module status
 word from the documentation gate to the handbook, read at build time; CT-18 carries the

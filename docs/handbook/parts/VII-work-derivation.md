@@ -195,3 +195,86 @@ What each hop must be able to prove, in one line per hop:
 > CAUTION: a hop that cannot produce its proof is a finding to file, not a prose
 > placeholder. Any RED field the row touches stays RED until a command proves it
 > (prompts/foreman.md, "Rules that come from the document").
+
+## VII.8 Work-item authorities
+
+Every transition a row can undergo is an authority: a named actor, deciding on named
+evidence, recording a named board event. Where the current implementation states no
+authority, the row says so rather than inventing one.
+
+| Action | Authority | Decided on what evidence | What the board records |
+|---|---|---|---|
+| create | the foreman (or an operator standing in) | a row is filed with acceptance criteria someone else can re-run (prompts/foreman.md) | a `pending` row with a unique id; a duplicate id is refused |
+| split | the actor who owns the row at split time | a row too large for one bounded run is divided; each child carries its own id and acceptance criteria | new rows with unique ids; a duplicate finding fingerprint is refused (M4 §5) |
+| priority | the scheduler, through lane weights and admission order | lane weight, cadence and the weight budget — never per-row whim (M9 §3) | no row edit; priority is an admission property, not a board field |
+| defer | the foreman | an unmet dependency, named | a `deferred` row carrying the dependency (M4 §12) |
+| unblock | the foreman, after the dependency clears | the one command that unblocks the row, recorded at block time (VII §7) | a `blocked` → `pending` transition naming the resolving command |
+| cancel | unstated — a named gap | — | the board schema carries no cancel verb; cancellation authority is an owner decision (TARGET-UNIMPLEMENTED) |
+
+Two authority rules bound the table. First, a worker never cancels and never re-prioritizes:
+those decisions belong to the scheduler and the owner, and a worker that cannot proceed
+files a block or stands down — "a dirty checkout held by a live worker is a stand-down, not
+a block" (VII §7). Second, deferral and blocking are distinct states with distinct records:
+`deferred` waits on a dependency, `blocked` waits on a fix, and conflating them hides which
+one a stale row needs.
+
+**Retry lineage.** A rework and a retry are different lineages. Rework is a
+changes-requested verdict sending the same row back to the worker: the row keeps its id,
+the new run gets a new run id, and the board's events log accumulates both. Retry is a
+failed or lost execution run again: the corr_id changes per dispatch attempt, the row id
+does not. The lineage rule is that the board must be able to name every attempt — dispatch
+id, corr id, run id, verdict — for the row it closed. The current store cannot honor that
+rule end to end: the node worker writes no board rows (CT-10, BROKEN), so attempt lineage
+lives only in the scheduler ledger, and the review's stale-claim and unknown-verdict
+classes (VI §13, §14) are the failure modes of that gap.
+
+## VII.9 Resource, path and model constraints
+
+The constraints a dispatched run operates inside, and what enforces each:
+
+| Constraint | Boundary | Enforced by |
+|---|---|---|
+| write boundary | the run writes only inside `$HOME`; `CF_WORKDIR` must resolve inside it | `harness-vars.sh` refusal (M5 §5) |
+| turn budget | `CF_MAX_TURNS` 1..1000 | refusal out of range (M5 §5) |
+| wall clock | `CF_TIMEOUT_S` 1..86400 per turn; the dispatcher's own envelope ceiling `DISPATCH_TASK_CAP_S` 7200 | refusal / clamp (M5 §5, M11 §5) |
+| disk floor | per-role admission floor before any spawn | `disk_floor.py` refusal, role- and range-checked (M1 §5) |
+| memory cap | per-spawn `RLIMIT_AS` when `spawn-mem-limit-mb` is set | the scheduler at spawn (M9 §5); 0 disables — a profile choice, not a guarantee |
+| shared cache | a shared Go module cache must be a sealed absolute path | relative path refused; declared-but-unsealed is a counted FAIL (M1 §5) |
+| credential form | keys as file paths, mode 0600-class, never values in argv or env | `CF_API_KEY_FILE` predicate; ambient-key ban (M5 §5) |
+| model route | a node may request only an allowlisted model | 403 outside `CF_PROXY_ALLOWED_MODELS`; the allowed list denies all when empty (M12 §5) |
+| target identity | work lands on the envelope's exact commit, in a detached worktree | the lander's ancestry proof (M3, VII §7) |
+| Bunker quota | disk size is per-file, not an aggregate quota; egress defaults open | the effective deployment profile — qualified, not guaranteed (V §matrix, VI §23) |
+
+The constraint rows are target requirements, not a summary of what the scripts happen to
+check: where an enforcement exists it is cited, and where the boundary is a profile
+qualification it is marked as one.
+
+## VII.10 Required work metrics, derived from intended behavior
+
+Metrics are derived from the intended chain in VII §1, not from what current scripts
+emit: every hop that can refuse, delay, duplicate or lie gets a metric whose definition
+exists before any instrumentation does (review acceptance standard; user decision 7 —
+existing scripts prove observed implementation, not the metric design). Each metric
+carries a definition, an owner and a readout; a count without those three is not a
+metric.
+
+| Metric | The intended question | Definition (units) | Owner |
+|---|---|---|---|
+| `admission_outcomes_total{admitted, deferred, refused, noop_paced}` | is the cadence spending on work, and where does it refuse? | counter, per lane and outcome class (M9 §3's named decisions) | scheduler |
+| `dispatch_to_settlement_seconds` | how long from envelope to correlated durable result? | histogram, seconds, per lane | scheduler |
+| `settlement_outcomes_total{pass, fail, unknown}` | does every execution settle to a named outcome? | counter; `unknown` is distinct, never folded into pass (CF-355, VI §14) | scheduler |
+| `refusals_total{no_directive, digest_mismatch, out_of_range, ...}` | what does the node refuse, and why? | counter, one bounded class per refusal reason (M2 §11) | node worker |
+| `rework_rate` | how much accepted work needed a changes-requested round? | changes-requested verdicts per closed row, ratio | gitreins / board |
+| `closeout_evidence_rate` | is every closure evidence-bound? | closures with `--evidence-run-id` over all closures, ratio | board |
+| `lineage_completeness` | can the board name every attempt for a closed row? | closed rows with a full attempt lineage over all closed rows (TARGET — CT-10 BROKEN, VII §8) | board |
+| `board_work_age_seconds` / `board_drift` | is work staling between copies? | age of the oldest dispatchable row; behind-count of the working copy (M4 review) | scheduler |
+| `queue_depth` / `oldest_message_age_seconds` | is the bus holding real work or draining it? | gauge, seconds (M10 review definitions) | Crier store owner |
+| `replayed_results` / `uncertain_starts` / `orphans_reaped` | is execution crash-safe? | counters (M11 review definitions, VI §16) | dispatcher |
+| `expiry_headroom_seconds` / `refused_scope_total` | will credentials die mid-run, and is scope narrowing real? | minimum headroom gauge; refusal counter by class (M7 review) | credential issuer |
+
+Grep absence in current scripts is coverage evidence, not the metric design: where a
+definition above has no emitter, the metric is required behavior with the emitter named as
+TARGET-UNIMPLEMENTED — the same three-state discipline the settings register uses (V,
+"The four review columns and the three states").
+Every metric's collection and readout ownership follows its owner row; a metric nobody
+reads out is a definition, not a control.

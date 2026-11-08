@@ -15,6 +15,67 @@ its settings surface (`FAILED` in M0, `LISTEN` in M12, the spine gate's four har
 sets in M6) are named in a note, not given rows — the chapters refuse them the status of
 settings and this register records that refusal rather than overruling it.
 
+## The four review columns and the three states
+
+The review requires the register to carry, for every expected setting, the exact
+configuration method, scope and owner, type/units/range/default, requiredness,
+validation and errors, precedence and interactions, activation, and a redacted effective
+readback. The per-module tables above carry the first three natively (`Lives in` is the
+configuration method and owner section; `Default` and `Range` are the type and bounds).
+The remaining four dimensions are carried in one place — the deployment-profile matrix
+below — because they are properties of a deployment, not of a single file:
+
+- **Requiredness** — whether a deployment may omit the setting, and what a missing value
+  costs: refusal, fallback, or a silent default that is itself the hazard (the memory
+  registry backend, VI §2).
+- **Validation / errors** — what rejects a wrong value, and the named error it emits.
+- **Precedence / activation** — the order of overrides, and the moment a change takes
+  effect: the next exec, the next spawn, the next tick, or a restart.
+- **Redacted effective readback** — the command or boot line that proves which value is
+  actually serving, with credential material never printed. A setting whose readback is
+  not yet written is a named RED, not a silent gap.
+
+Every deployment-profile row carries one of three states:
+
+- **SUPPORTED** — implemented and measured in the pinned source; the row cites the
+  measured surface or the per-module table that does.
+- **TARGET-UNIMPLEMENTED** — approved target behavior the current implementation does not
+  yet provide; the row states the requirement and makes no implementation claim.
+- **UNRESOLVED** — a user decision or the review leaves the value open; the row names the
+  open question and does not guess.
+
+The per-module rows above are SUPPORTED unless the row itself names a RED, UNVERIFIED or
+refusal condition; those markings are the same three states applied to a single setting.
+
+## Deployment profiles — the per-Bunker dimension
+
+No universal Bunker execution mode is selected (user decision, handoff §1.8). The Factory
+target is per-Bunker configuration with setup and readback: each Bunker carries a named
+deployment profile, and every dimension below is set and proven per Bunker. The matrix is
+the authoritative cross-module statement of that surface; the module chapters own the
+rows' details.
+
+| Dimension | State | Requiredness | Validation / errors | Precedence / activation | Redacted effective readback |
+|---|---|---|---|---|---|
+| Profile selection and identity (M1, M5) | TARGET-UNIMPLEMENTED | required — no Bunker reaches readiness without a named profile | readiness must validate effective host/isolation/resource/network/storage settings and real cross-host memory, inference and repo use; install success alone is insufficient | per-Bunker Factory settings override published defaults; platform examples establish no native support | the profile named in the readiness record — procedure not yet written (RED) |
+| Host: user and isolation basis (M1, M5, M8) | SUPPORTED paths, choice UNRESOLVED | exactly one execution path per Bunker | provisioning prerequisites differ by path (host-user, fresh image-backed, persistent container, detached unit) and each must be verified, not assumed | set at spawn; a fresh exec inherits nothing | agent identity in `.node/node.json`; a per-path conformance readback is pending |
+| Image (M5) | SUPPORTED; pin TARGET | the image carries the exact Hermes/Oh My Hermes build | `HERMES_PIN` and digest checks refuse a wrong build at install (M5 §5) | pin change is a deliberate re-provision, not drift | `install-hermes.sh --check` against the pin |
+| Persistence (M5) | SUPPORTED (opt-in), assignment TARGET | which Factory state survives the next exec must be stated per profile | a fresh rootfs install does not survive the next exec — no validation can assume it does | persistent containers are opt-in; the default is ephemeral | the profile's persistence row in the readiness record (pending) |
+| Mounts (M1, M5) | SUPPORTED measured; contract TARGET | dependency/package/cache/session/evidence persistence mounts declared per profile | a relative `--gomodcache` is refused; a declared-but-unsealed cache is a counted FAIL | mount changes take effect at the next spawn | `node_hygiene.py footprint --modcache` names the cache or prints `not-declared` |
+| Shared DuckBrain identity and topology (M1, M4, M5) | UNRESOLVED | every Bunker exposes the same logical project memory view as the controller (user decision) | none yet — consistency, authority, namespace/auth mapping, offline/reconnect and conflict behavior are unspecified | — | cross-host readback of the same logical row (not yet built) |
+| Crier (M10) | SUPPORTED; selected profile TARGET | a durable registry backend on every deployment holding real work | `CR_GUARD_*` bounds refuse non-numeric and `<= 0` at startup with a named error | explicit `CR_REGISTRY_BACKEND` → `sqlite:` URL → postgres URL → `memory` (the last is the hazard); changes activate on restart | which backend is actually serving custody has no readback — a named RED on M10 §5 |
+| Board sync and hooks (M4, M9) | TARGET-UNIMPLEMENTED | scheduler-facing reads, claim/sync paths, local and remote board copies and the required lane hooks with a board-check verifier | an unreadable board is distinct from an empty one; the distinction is required behavior, current input handling is partial | PRE hooks follow selection, POST follows outcome recording and cannot change that tick's result | `repo_freshness` and `board_read.py load` report the source used |
+| Forge credentials (M7) | SUPPORTED mint/check; delivery TARGET | per-Bunker scoped delivery, activation and readback for forge credentials | wrong key mode refused by name before any mint or store rewrite | control-side signing authority; only scoped credentials reach nodes | fingerprint listing (`show` prints sha256 prefixes, never material) |
+| Model credentials (M12, M5) | SUPPORTED; proxy source UNVERIFIED | node-proxy tokens distinct from forge credentials; keys as file paths, never values | `CF_API_KEY` value refused; key-file mode `[0-7]00` accepted while the message claims 600 (F0-6); no token file or no upstream key → exit 2 before binding | env read at request time; startup is fail-closed | token file mode and presence checks; no credential value ever printed |
+| Gates and landing (M3) | SUPPORTED | every landing that needs a project gate passes `--gate-cmd` | a wrong gitreins version is refused (`bad "gitreins" "version … != pin"`); a hook bypass is legal only when disclosed in the commit message | gate runs in a detached worktree at the node's commit | the `LANDED:` / `LAND: REFUSED` proof rows |
+| Resources, safety and cleanup (M8, M9, M1) | SUPPORTED, profile-qualified | per-role disk floors, spawn memory caps and reap boundaries set before admission | out-of-range floors and roles refused by name (`MIN_GIB`/`MAX_GIB`, unknown role) | `--disk-floor` → `NODE_DISK_FLOOR` → `[disk]` config → `ROLE_DEFAULTS`; Terminal Jail stays disabled until an operator configures it, and enabled mode has no unguarded fallback | `disk_floor` admission rows; `footprint` measured components |
+| Metrics (all modules) | TARGET-UNIMPLEMENTED | every required metric has a definition, units, collection and readout owner | — | — | dashboards/readouts per module — definitions first (Part VII.10) |
+| Documentation release (M6, Part VIII) | SUPPORTED builder; policy in Part VIII | staged, revisioned output; release only with required checks satisfied | lint, fit, page-parity and checker gates exit non-zero and stop the build | gates run in order; the first failure stops delivery | the build's OK line — the only delivery receipt |
+
+> WARNING: at the pinned Bunker source, egress defaults open, network defaults shared,
+> and disk size is per-file, not an aggregate quota. Any Part VI claim of Bunker
+> containment is qualified by the profile actually deployed (VI §23).
+
 ## M0 — shared contract
 
 `lib.sh` carries one tunable constant and no env-var surface (M0 §5):
