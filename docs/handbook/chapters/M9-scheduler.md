@@ -15,8 +15,13 @@
 
 The control plane's clock and admission authority. It decides when a lane's cadence tick fires,
 whether it is admitted (eligibility, tasks-vs-cooldown, board gates, fairness, budget
-reservation), and how a dispatch settles. It may not decide what the foreman *does* with the work
-— that is the directive it hands off.
+reservation), how a turn is allocated, and how a dispatch settles durably. It does **not** do the
+work: the foreman runs **inside its Bunker** (resolved decision), task selection and worker
+execution belong to that foreman, and the finished response returns **through Crier** to the
+scheduler on the control host, which records it and triggers subsequent processing. Admission,
+turn allocation and durable result recording are this module's job — the foreman's
+task/worker work inside the Bunker is not, and neither are acceptance judgment, publication or
+the board/memory projections that follow a recorded result.
 
 **What breaks if this module is absent.** No cadence tick fires; nothing is admitted, dispatched
 or settled.
@@ -25,6 +30,61 @@ or settled.
 `payload["ok"]` and treats the *absence* of a verdict as success (`:709-712`). A node reply
 carrying `status:"failed"` (the field `node-bus-worker.py:1180` actually sends) and no `ok` is
 scored a success — the control-plane half of the silent-success defect (CF-355).
+
+**Required behavior (normative).** Approved target behavior governs; the code inventory in
+§3–§13 is implementation coverage, not the requirement.
+
+- **One admission-to-closure chain.** The scheduler owns the composed sequence: fresh board →
+  eligibility → reservation/claim → hooks → Crier invocation → correlated durable result →
+  acceptance/publication/projections → verifier/sync → next cadence. Each step has a named owner
+  and a durable transition: caller/cadence; board refresh and eligibility; a named
+  admitted/deferred/no-work/error result; budget and workspace ownership; required preflight
+  hooks; Crier dispatch and Hermes execution in the Bunker; a correlated durable terminal result;
+  independent acceptance; publication and board/memory projection; the end-of-lane verifier/sync;
+  and the next eligibility/cooldown decision. A scheduler tick, an execution run and a board item
+  are distinct state machines; transport deadline and job lifetime are separately bounded, and
+  quiescence of remote children is proven for the selected execution path, not assumed.
+- **Legacy reply path vs typed settlement.** The newer typed execution settlement (`§3` store
+  keys: `execution_runs`, `execution_attempts`, `verification_receipts`, `execution_events`,
+  `execution_outbox`, `execution_projections`) requires durable outcome, connector settlement,
+  independent verification and descendant quiescence. **The new data structures do not prove every
+  runtime path uses them**: the legacy `dispatchReplyVerdict` reply path that scores
+  missing-verdict replies as success is still the inspected behavior for its callers (CF-355), and
+  the supported path plus the migration from legacy `ok`/`status` replies to the closed typed
+  result is to be reconciled, not assumed away by the schema's existence.
+- **Hook semantics.** PRE hooks run after selection/slot acquisition; POST hooks run after the
+  outcome is recorded and cannot change that tick's result. Hook-plan/freshness/verification
+  behavior is mandatory target policy, not decoration: an invalid hook plan emits an event and can
+  run without hooks, and a hook being configured does not prove it ran or that its result gates
+  completion. **Failures in required later stages (publication, verification, synchronization)
+  must remain visible in Factory completion** even when execution itself succeeded, with recovery
+  and release of acquired resources — execution success and Factory completion are different facts.
+- **Named decisions and complete control surfaces.** Every evaluation returns a stable disposition
+  — and the no-work / defer / error outcomes are named decisions, not predicate side effects: an
+  unreadable board denying a tasks-mode cooldown waiver (fail-open, §3 step 3) is distinct from no
+  eligible work, and both are distinct from a mandatory safety/ownership failure. Boardctl, the
+  board reader and the scheduler share one canonical eligibility definition. Settings
+  precedence/activation across flags, TOML, environment and persisted state; API mutation
+  authorization and per-route request/response readback schemas (a 43-route inventory is not a
+  per-route contract); and leases/restart/outbox/projection recovery are all required contracts,
+  with no secret values in resolved configuration readbacks.
+- **Metrics on availability-aware telemetry.** Required scheduler measures — admission decisions
+  by bounded disposition/reason/mode, eligible-to-dispatch and run durations, queue depth and
+  oldest eligible age, board snapshot age and read failures, hook outcomes by phase, reserved/used
+  capacity, active/stale leases, malformed/duplicate/late replies, execution-versus-acceptance
+  outcomes, projection backlog and orphan recovery — build on the existing `/api/v1/metrics`
+  availability shape: an `available: false` block with a reason, never a fabricated zero, with
+  boot-reset counters distinguished from persisted windows.
+- **Preserved failures and stated load assumptions.** The reported full-suite failure under
+  concurrent load (§7, `TestPERF001R2StatusPassAB`) is preserved as reported: an isolated re-run
+  passing does not dismiss a failure under supported concurrency. The supported load environment
+  and acceptance budget are to be defined, and the concurrent-load failure kept distinct from
+  isolated success until closed by evidence at that load.
+- **Boundary contracts are not exempt.** Boundary services and human producers (the owner writing
+  config, the DuckBrain service) still carry input/output, authorization, delivery and
+  verification contracts. DuckBrain write ownership is a foreman/projection concern — the
+  scheduler's `execution_projections` store has a `duckbrain` sink (§3) — not an automatic direct
+  scheduler write; absence of a write in one component never proves the Factory lacks the path.
 
 ## 3. Submodule inventory
 
@@ -212,7 +272,7 @@ statement about the daemon.
 
 ## 6. Contracts in and out
 
-Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Local ids are
+Canonical ids are the register of record (Part IV, CT-01..CT-23). Local ids are
 retired; each row carries the CT id its peer chapter cites, so two ends can be matched.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
@@ -301,6 +361,10 @@ the named RED on this field — not a "sample" claimed as complete.
 - M10 CRIER is the transport (CT-02/CT-04 on its side; CT-03/CT-06 are the node/scheduler ends).
 - M2 DISPATCH (node side) and M11 DISPATCHER are the two inbox consumers.
 - M4 BOARD rows gate admission (S1); see M4 §12 for the M9-only ownership of that gate.
+- DuckBrain memory projections are the **foreman/projection** concern (the `execution_projections`
+  duckbrain sink above is delivery state per sink, not a scheduler-owned memory write); boundary
+  services and human producers stay bound by their input/output/auth/verification contracts
+  regardless of what this chapter's source scope covers.
 
 ## 13. Evidence of record
 

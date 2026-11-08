@@ -13,10 +13,16 @@
 
 ## 2. Purpose, authority and position
 
-The only thing holding the real provider credential (CF-002: no provider key leaves the control
-host). A node gets a NODE TOKEN, never a provider key, and this proxy forwards on the node's
-behalf. It decides which node may call (token), which model may run (allowlist), and whether the
-call is streamed through or buffered. It is a **control-host** service, not a node-local one
+The control-side inference boundary in the resolved chain: **Bunker Hermes → node-token
+admission → this proxy → gateway/router/provider → response/usage**. A node gets a NODE TOKEN,
+never a provider or gateway key, and this proxy forwards on the node's behalf. **Node-proxy
+tokens and forge credentials are separate credential domains** — M7/M11 mint forge scope; this
+token only admits a node to the proxy. The credential holders must be named precisely: the proxy
+holds the control-host **gateway credential** (`CF_PROXY_UPSTREAM_KEY_ENV`), and any upstream
+gateway/router may itself hold the actual provider keys — so "only holder of the real provider
+credential" is a control-side claim, and the invariant is **no real provider key ever reaches a
+Bunker**. It decides which node may call (token), which model may run (allowlist), and whether
+the call is streamed through or buffered. It is a **control-host** service, not a node-local one
 (F12-1).
 
 **What breaks if this module is absent.** The node has no inference path ("the node's only
@@ -27,6 +33,40 @@ off-contract model to the upstream and spends the fleet's credit on a dearer mod
 register, a sink path that does not exist on disk sends an operator looking at the wrong file —
 two invented filenames shipped in an earlier register revision (F12-8), which is the exact "what breaks if it lies"
 failure for a paths register.
+
+**Required behavior (normative).** Approved target behavior governs; the local-script audit in
+§3–§13 is implementation coverage of one unversioned file, not the requirement.
+
+- **Complete buffered and streamed contracts.** Allowed endpoints/methods/auth, request and
+  response schemas, models/token/tool/stream options, body/content-type limits, status/error
+  vocabulary, deadlines and client obligations; stream framing/termination, partial data and
+  pre/post-header failures (F12-4's `[200, 502]`), backpressure/flush and buffering, downstream
+  disconnect cancellation with upstream cleanup, and usage/accounting settlement. **A finite
+  successful stream must finish at the client; a partial or error stream must never become an
+  accepted complete answer.**
+- **The healthy-stream completion defect stays open.** F12-7 (a healthy SSE stream left unframed
+  to completion — no `Content-Length`/`Transfer-Encoding`/`Connection: close` — so a client
+  reading to EOF times out) is a demonstrated defect. **The flight card's first-byte check cannot
+  close it**: closing evidence is successful completion, truncation/error signaling, cancellation
+  and usage settlement — not first-byte forwarding.
+- **Effective model policy and requested-vs-served identity.** The global allowlist plus optional
+  rewrite requires requested/chosen/resolved/actually-served model identity with the policy check
+  applied to the **effective** route; the Hermes harness choice is not a model/provider route and
+  must not be equated with one.
+- **Node-token lifecycle, explicit capture policy.** The token mapping's producer/administrator,
+  versioned schema, binding to Bunker/project/namespace and permitted routes/operations/budgets,
+  expiry, secure delivery, renewal overlap, revocation/readback and decommissioning are required
+  contracts — issuance integrates with M1 deployment and M5 harness configuration, separate from
+  forge-app credentials. Per-project/model/budget/concurrency rules and the **raw prompt capture
+  policy** (enablement, redaction, size, retention) are explicit contract, not code comments —
+  F12-6's silent capture loss and unimplemented retention are coverage gaps against that contract.
+- **Source qualification — defects retained.** The local proxy source/runtime was **not supplied
+  for independent validation**: the implementation is an unversioned script outside any git repo,
+  known only by content digest. The reported streaming/capture defects are retained **with that
+  qualification**, and a maintained, versioned source package (or a documented replacement on the
+  selected gateway/router) with actual-path conformance evidence is required for a reproducible
+  build/deploy/upgrade/restore. A workstation path plus a service-active check does not supply
+  that contract.
 
 ## 3. Submodule inventory
 
@@ -86,18 +126,21 @@ when a different name is configured — the diagnostic lies about which variable
 
 ## 6. Contracts in and out
 
-Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). The proxy's own
-interfaces (M12-C1, M12-C2) are not among the 18; the canonical id the proxy sits adjacent to is
-CT-07 (`router → gateway` model choice), cited as a boundary contract.
+Canonical ids are the register of record (Part IV, CT-01..CT-23). The proxy's two interfaces
+are **CT-19** (node → proxy) and **CT-20** (proxy → gateway) — the former local labels M12-C1/
+M12-C2 are retired. CT-07 is the **router → gateway** model-choice contract, one hop away from
+this module: the model-selection boundary the proxy participates in on the forwarding side is
+CT-20, and any figure or table that labels the node→proxy or proxy→gateway hop "CT-07" is wrong.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
 | CT-07 | gateway | in (model choice) | **external** — the task-router's model choice (out of scope) | **external** — the Hermes gateway (out of scope) | **UNVERIFIED (boundary)** — neither side has an in-repo `file:function`, and the wire was not measured; an outline "works" annotation is not implementation evidence (B03) |
-| M12-C1 | node | in | **unproven client half** — the proxy side is verified (401 on missing/unknown token, `:128-130`); the node side has no in-repo file that *calls* the proxy. `grep -rnE '8775\|CF_PROXY\|cf-inference-proxy' scripts/ config/ specs/` (ERE, re-run) matches **four** text sites: `scripts/panel_loop.py:145`, `scripts/master_doc_skeleton.py:25` and `:211` (self-references listing the path), and `config/node.env.example:22` — which is the **live assignment** `ENV_CF_PROXY_API_KEY=@~/.node/auth/provider.key`, not a comment. `config/node.env.example:26` comments `CONFIG_SET_MODEL_PROVIDER=cf-proxy -> model.provider`, so the producer half is config-driven: `node.env.example:22,26` → `node_env.py`/provisioner config generation → `~/.hermes/config.yaml` `model.provider=cf-proxy`. A quoted command omitting `-E` runs a bare-`\|` BRE and returns **0** matches (measured rc 1) — the opposite of the row's earlier claim. | `cf-inference-proxy.py:135` `do_POST` → `_node` (`:136`) | **UNVERIFIED** — proxy side verified; the node-client call site is config-wired, not a `file:function` in this repo |
-| M12-C2 | upstream | out | `_forward` (`:164`) builds the upstream request with the control-host key | **rumour — one side only** (the upstream gateway/provider, not a function) | **UNVERIFIED** — external boundary with one side named; a "works" verdict on a rumour is not permitted (B06) |
+| CT-19 | node | in | **unproven client half** — the proxy side is verified (401 on missing/unknown token, `:128-130`); the node side has no in-repo file that *calls* the proxy. `grep -rnE '8775\|CF_PROXY\|cf-inference-proxy' scripts/ config/ specs/` (ERE, re-run) matches **four** text sites: `scripts/panel_loop.py:145`, `scripts/master_doc_skeleton.py:25` and `:211` (self-references listing the path), and `config/node.env.example:22` — which is the **live assignment** `ENV_CF_PROXY_API_KEY=@~/.node/auth/provider.key`, not a comment. `config/node.env.example:26` comments `CONFIG_SET_MODEL_PROVIDER=cf-proxy -> model.provider`, so the producer half is config-driven: `node.env.example:22,26` → `node_env.py`/provisioner config generation → `~/.hermes/config.yaml` `model.provider=cf-proxy`. A quoted command omitting `-E` runs a bare-`\|` BRE and returns **0** matches (measured rc 1) — the opposite of the row's earlier claim. | `cf-inference-proxy.py:135` `do_POST` → `_node` (`:136`) | **UNVERIFIED** — proxy side verified; the node-client call site is config-wired, not a `file:function` in this repo |
+| CT-20 | upstream | out | `_forward` (`:164`) builds the upstream request with the control-host key | **rumour — one side only** (the upstream gateway/provider, not a function) | **UNVERIFIED** — external boundary with one side named; a "works" verdict on a rumour is not permitted (B06) |
 
-The M12-C1 producer evidence is the empty-grep and config-driven chain above; the client half is
-unproven, so the state is UNVERIFIED, not "works".
+The CT-19 producer evidence is the empty-grep and config-driven chain above; the client half is
+unproven, so the state is UNVERIFIED, not "works". Existing node configuration is evidence of
+intended integration, not proof of a successful authorized request.
 
 The CONTRACT section (`:9-19`) documents three routes — `POST /v1/chat/completions`,
 `GET /v1/models`, `GET /health` (no auth) — and states: "There is no anonymous path and no
@@ -187,7 +230,7 @@ is a capture log, not an emitted metric.
   client function calls the proxy from this repo** — but node *configuration* does reference it:
   `config/node.env.example:22` (`ENV_CF_PROXY_API_KEY=@~/.node/auth/provider.key`) and `:26`
   (`CONFIG_SET_MODEL_PROVIDER=cf-proxy -> model.provider`) wire the proxy as the node's provider
-  (see M12-C1). Configuration evidence, actual call-site evidence, and successful live use are
+  (see CT-19). Configuration evidence, actual call-site evidence, and successful live use are
   distinct; only the configuration reference is established (B25).
 - **M7 GITHUB does not produce the node tokens.** The proxy loads `TOKENS_PATH` (a JSON mapping,
   `:48`, `:65-72`) and compares bearer tokens against it (`:115-123`); the producer of that mapping
@@ -220,7 +263,7 @@ is a capture log, not an emitted metric.
     the measured values are `cf-inference-usage.jsonl` (`:50`) and `cf-inference-requests.jsonl`
     (`:52`).
 
-## RED field count: 4 (Metrics §8 — absence-proved; M12-C1 node-client half UNVERIFIED; M12-C2 upstream half UNVERIFIED — one-sided external boundary; stream completion **FAILING** — F12-7 reproduced)
+## RED field count: 4 (Metrics §8 — absence-proved; CT-19 node-client half UNVERIFIED; CT-20 upstream half UNVERIFIED — one-sided external boundary; stream completion **FAILING** — F12-7 reproduced, and a first-byte-only flight card cannot close it)
 
 ## FLIGHT DATA FILE - M12 INFERENCE PROXY
 
@@ -232,5 +275,8 @@ NO TOKEN - POST a completion with no bearer
 ALLOWLIST - request a model off the allowlist
 √ REFUSED - named refusal, no upstream call, no key spent
 STREAM - send stream: true
-√ FIRST BYTE - headers go out immediately; first_byte logged, never buffered
+FIRST BYTE - headers go out immediately; first_byte logged, never buffered
+! COMPLETION - OPEN (F12-7): a healthy stream is unframed to completion — a client
+  reading to EOF times out. First-byte success does NOT close the streaming
+  contract; closing evidence is completion/truncation/cancel/usage settlement.
 ```

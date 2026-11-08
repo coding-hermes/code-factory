@@ -15,16 +15,44 @@ than an honest gap.
 > Treat such a row as UNVERIFIED until both sides carry citations. The generator
 > enforces this: a PROVEN state with an uncited side prints as UNVERIFIED.
 
+**Register requirements (normative).** Approved target behavior governs; the per-entry citations
+below are implementation coverage, not the contracts.
+
+- **One versioned registry, 23 entries.** CT-01..CT-23 below are the register of record. The
+  older 18-entry assumptions in chapter headers and the build spine are reconciled to this count,
+  and figures, tables and cross-references are generated/validated from this one versioned
+  registry — unknown/duplicate ids, missing definitions and retired local labels (e.g. M12's
+  former M12-C1/M12-C2, now CT-19/CT-20) are rejected. Reconciliation is not done by changing the
+  count alone: each entry's endpoints, directions and actors must match the chapter that cites it
+  (CT-07 is router → gateway model choice; the proxy's legs are CT-19/CT-20).
+- **Full contracts independent of citations.** Every entry specifies: types/units/required fields
+  with examples; side effects; auth/scope; correlation and generations; ordering/idempotency;
+  deadlines, leases and retries; the error vocabulary; durability; telemetry; and recovery. A
+  `file:line` citation establishes provenance or implementation coverage — it cannot define
+  required field types, validation, side effects, deadlines or observable success/failure, and
+  integration tests qualify evidence without replacing the normative contract.
+- **Producers reassigned per the resolved architecture.** Memory and board projections belong to
+  the **Bunker foreman/projection path** (e.g. the scheduler's `execution_projections` duckbrain/
+  board sinks), not to whatever component happens to lack a direct write. CT-09/CT-10's
+  MISSING/BROKEN states must not be inferred from the node bus worker's absence of writes —
+  absence in a transport worker does not prove the Factory has no board/memory path. Guard, judge,
+  landing/closure and the credential stages stay distinct: a GitReins verdict is not itself an
+  automatic board close or landing event (CT-12/CT-13).
+- **Human/external consumers get complete observable contracts.** Boundary entries are specified
+  by observable behavior — CT-18 as a revisioned delivery/decision receipt, CT-23 against the
+  pinned Bunker public CLI/proto interface with versioned integration evidence — not by inventing
+  internal encode functions or requiring access to third-party internals.
+
 | id | from → to | carries | mode | state |
 |---|---|---|---|---|
 | CT-01 | owner → scheduler | lane enabled, cadence, weight, pin | config | UNVERIFIED |
 | CT-02 | scheduler → crier | envelope: run_id, corr_id, lane, board, text_b64 | async, bearer + signature | PROVEN |
-| CT-03 | crier → node | inbox message + lease | pull, 30 s lease | PROVEN |
+| CT-03 | crier → node | inbox message + lease | pull; retrieval grants the lease (default 30 s, requester-adjustable) | PROVEN |
 | CT-04 | node → crier | reply: status, dispatch_id, corr_id, branch, commit, artifacts | async, signed | PARTIAL |
 | CT-05 | foreman → scheduler | the lane's prompt text and skills it may load | seeded config | UNVERIFIED |
 | CT-06 | crier → scheduler | completion event for a finished run | async | PROVEN |
 | CT-07 | router → gateway | model choice for a prompt | in-band | UNVERIFIED |
-| CT-08 | crier → gateway | hermes-session delivery (message becomes a session turn) | sync, 30 s | PROVEN |
+| CT-08 | crier → gateway | hermes-session delivery (message becomes a session turn) | sync (the 30 s figure is its historical mode/version's timeout, not a universal bound) | PROVEN |
 | CT-09 | node → duckbrain | R1 run record, R2 fleet index | http, x-api-key | MISSING |
 | CT-10 | node → board | row event with run_id and outcome | append | BROKEN |
 | CT-11 | node → sessionstore | every turn, model, tokens | writes via gateway | UNVERIFIED |
@@ -68,12 +96,15 @@ than an honest gap.
 ### CT-03 — crier → node
 
 - **Carries:** inbox message + lease
-- **Mode:** pull, 30 s lease
+- **Mode:** pull; **retrieval grants the lease — delivery does not**. The 30 s lease is the
+  retrieve default and is requester-adjustable (M11 leases 1800 s); it is not a delivery or
+  job-runtime bound. The historical "nothing beyond 30 seconds" claim is scoped to its
+  historical mode/version, not a universal task-runtime assumption
 - **State:** PROVEN
 - **Sends because:** Delivery with per-agent signature, leases, replies, idempotency (M10 §2)
 - **Receives because:** One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
 - **Measured defect:** the node worker (M2 §6) and the dispatcher (M11 §6) are the two consumers
-- **Sender guarantee:** crier internal/registry/handler.go:990 — deliver(): durable inbox write with lease/ack/TTL semantics
+- **Sender guarantee:** crier internal/registry/handler.go:1690 HandleRetrieve — the lease-granting retrieval (delivery at handler.go:990 writes the durable inbox and starts no lease); default lease 30 s at :1732-1743, requester-adjustable
 - **Receiver requirement:** scripts/node-bus-worker.py:1356,1383 — signed GET /agents/<id>/inbox retrieve, then /inbox/ack
 
 ### CT-04 — node → crier
@@ -126,7 +157,8 @@ than an honest gap.
 ### CT-08 — crier → gateway
 
 - **Carries:** hermes-session delivery (message becomes a session turn)
-- **Mode:** sync, 30 s
+- **Mode:** sync — the "30 s" figure belongs to the historical cluster-baseline mode/version;
+  the selected mode/version owns its own HTTP/session/timeout clocks, stated independently
 - **State:** PROVEN
 - **Sends because:** Delivery with per-agent signature, leases, replies, idempotency (M10 §2)
 - **Receives because:** Session API, /api/status, dashboard auth, session records
@@ -141,7 +173,7 @@ than an honest gap.
 - **State:** MISSING
 - **Sends because:** One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
 - **Receives because:** Namespaced durable memory; run records, findings, recall
-- **Measured defect:** node-bus-worker has zero DuckBrain calls (CF-329, M2 §6)
+- **Measured defect:** node-bus-worker has zero DuckBrain calls (CF-329, M2 §6) — but that absence in a transport worker does NOT establish the Factory has no memory path: the expected producer is the Bunker foreman/projection flow (e.g. the scheduler's execution_projections duckbrain sink), and the register row must be re-assessed against that path, installation, auth, namespaces and shared-view semantics — not against one worker's writes
 - **Sender guarantee:** RED — no `file:line` in the model states what `node` commits to.
 - **Receiver requirement:** RED — what `duckbrain` accepts and rejects is not stated here.
 - **To close:** quote the encode site in `node` and the decode/validate site in `duckbrain`, then replace the RED line with those citations.
@@ -153,7 +185,7 @@ than an honest gap.
 - **State:** BROKEN
 - **Sends because:** One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
 - **Receives because:** Append-only record of work and its state; the fleet's plan (M4 §2)
-- **Measured defect:** the node worker writes no board rows — no in-repo producer (M4 §6)
+- **Measured defect:** the node worker writes no board rows — no in-repo producer (M4 §6). That absence does not make the board path BROKEN system-wide: the expected board-event producer is the Bunker foreman/projection flow, not the node bus worker; the state is scoped to this producer/consumer pair until re-assigned and measured
 - **Sender guarantee:** RED — no `file:line` in the model states what `node` commits to.
 - **Receiver requirement:** RED — what `board` accepts and rejects is not stated here.
 - **To close:** quote the encode site in `node` and the decode/validate site in `board`, then replace the RED line with those citations.
@@ -249,7 +281,7 @@ than an honest gap.
 - **State:** UNVERIFIED
 - **Sends because:** The readable system description plus its own deficiency register
 - **Receives because:** Intent, priorities, approval
-- **Measured defect:** the legacy renderer hardcodes docs/master and does not select the M*.md chapters (M6 §6)
+- **Measured defect:** the legacy renderer hardcodes docs/master and does not select the M*.md chapters (M6 §6). CT-18's contract is a revisioned delivery/decision receipt — an observable human/external boundary, specifiable without inventing an internal encode function for the owner
 - **Sender guarantee:** RED — no `file:line` in the model states what `handbook` commits to.
 - **Receiver requirement:** RED — what `owner` accepts and rejects is not stated here.
 - **To close:** quote the encode site in `handbook` and the decode/validate site in `owner`, then replace the RED line with those citations.
@@ -309,7 +341,7 @@ than an honest gap.
 - **State:** UNVERIFIED
 - **Sends because:** Qualifies the host (disk floor), creates the container, mints identity, seeds prompts/skills/env, connects the bus (M1 §2)
 - **Receives because:** Hosts agent containers; create/exec/cp; per-agent home
-- **Measured defect:** short create/exec/cp calls measured across M1's batteries (M1 §6); downgraded from PROVEN — the daemon's accept side has no in-repo file:function to cite
+- **Measured defect:** short create/exec/cp calls measured across M1's batteries (M1 §6); downgraded from PROVEN — the daemon's accept side has no in-repo file:function to cite. CT-23's normative contract rests on the pinned Bunker public CLI/proto interface (observable request/response/stream/exit/auth/capability semantics with versioned integration evidence); the external daemon's internal functions need not be invented as an in-repo consumer
 - **Sender guarantee:** scripts/bunker-provision.sh:504 — the node-create.sh stage drives create/exec/cp against the agent container
 - **Receiver requirement:** RED — what `bunker` accepts and rejects is not stated here.
 - **To close:** quote the encode site in `provisioner` and the decode/validate site in `bunker`, then replace the RED line with those citations.

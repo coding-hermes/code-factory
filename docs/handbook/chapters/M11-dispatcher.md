@@ -9,7 +9,7 @@
 | Revision | `283bca91091933177ec521e52f37f1bc987cf7da` (crier-fleet HEAD) |
 | Language / runtime | Python — `#!/usr/bin/env python3`, no pinned version; host `python3` = 3.14.9 |
 | Owner lane | crier-fleet (control plane) |
-| Status | **VERIFIED** — `dispatcher.py` read in full (job model, ledger, completion bridge, settings, loop, all 23 log lines); the live-job tests are decoration (no assert) and the synchronous `CF_DURABLE_JOB=0` path is unmeasured (§7) |
+| Status | **VERIFIED (source read) — defects handbook-reported pending revalidation** — `dispatcher.py` read in full (job model, ledger, completion bridge, settings, loop, all 23 log lines); the live-job tests are decoration (no assert) and the synchronous `CF_DURABLE_JOB=0` path is unmeasured (§7). **A source-read VERIFIED is not tested runtime correctness:** the underlying crier-fleet implementation was not supplied in the linked public repositories for independent revalidation, so the reported defects below (F11-3/4/5/8) remain **handbook-reported** until source/runtime revalidation closes them |
 
 ## 2. Purpose, authority and position
 
@@ -17,6 +17,17 @@ Runs on the control box, one loop for every agent on every box, and executes the
 the agent's container via `bunker exec`. It decides the job model (start detached, poll with short
 calls, kill on deadline) and keeps a replay ledger. It may not decide admission
 or what the work is — that is the scheduler and the directive.
+
+**Role vs the other execution paths (to be reconciled, not assumed).** This dispatcher, the M2
+node bus worker and Crier's harness/session invocation layer (M10) are three distinct execution
+authorities. The specification must **choose or explicitly partition them**, name their supported
+target agents, and prevent competing execution authorities or incompatible result formats; none
+is removed merely because another adapter exists. With the foreman resolved to run **in the
+Bunker** and return through Crier, this central control-host dispatcher is a
+**retained/migration path** — it executes on the control box via `bunker exec`, not inside the
+Bunker — unless and until a decided partition says otherwise. A maintained, versioned source
+package is the buildable authority for it and its scoped-token helper; none was supplied
+publicly, which is an access/provenance limitation, not proof the component does not exist.
 
 **What breaks if this module is absent.** No task leaves the bus: every dispatch sits in the
 inbox until it expires.
@@ -35,6 +46,42 @@ inbox until it expires.
   runner group was terminated. The "kill the process GROUP so nothing keeps spending" guarantee is
   **withdrawn** until a test proves the deadline path kills the harness group and its children
   (F11-8).
+
+**Required behavior (normative).** Approved target behavior governs; the source read in §3–§13
+is implementation coverage of one local revision, not the crash-safety requirement.
+
+- **The reported defects are required-behavior contracts, carried as handbook-reported.**
+  Crash-before-ledger persistence (duplicate-execution risk), swallowed ledger-write failures,
+  serial fleet head-of-line blocking, a caller budget silently expanded to a 30 s floor instead
+  of refused, and incomplete descendant termination are not a defect appendix — each names a
+  recovery/behavior obligation of the target dispatcher. They remain handbook-reported until the
+  versioned source and runtime are revalidated.
+- **Crash-safe execution, not a post-execution replay ledger.** Durable intent persisted
+  **before** launch; native run identity (Bunker job/container/process incarnation) bound to
+  dispatch/task/run/attempt generations, idempotency key and input digest; **uncertain-start
+  reconciliation against that native identity** — never a rerun merely because a result is
+  missing; lease renewal across long jobs; durable result with **outbox-before-ack** (visible
+  persistence failures, journaled writes); bounded per-agent/node/global concurrency with fair
+  polling and backpressure so one long job cannot block the fleet; one authoritative task
+  deadline with explicit launch/poll/transfer/cleanup reserves (insufficient remaining budget is
+  **refused**, not raised to a floor); and **proven** zero-descendant quiescence of the harness
+  plus its helpers in the actual Bunker backend, with evidence preserved when a kill fails.
+  **A post-execution replay ledger is insufficient for crash-safe execution.**
+- **Scoped forge credentials — required or refused.** The per-dispatch scoped-token helper is a
+  credential authority distinct from M7's app-token minter (M7 §12), reconciled to the user's
+  per-instance app model. Whether credentials are required per job, per-operation
+  permission/repository limits, and issuance/renewal/revocation are part of the contract;
+  **missing required access must be a named preflight refusal**, not "dispatching without
+  GH_TOKEN" (the current warn-and-continue, §9 `:97`). No secret in argv or logs; ephemeral
+  credentials removed at job completion/decommission.
+- **Falsifiable scenarios, not print-only tests.** The live-job "tests" print without asserting
+  (§7) and cannot fail. The required conformance evidence is failure-capable scenarios on the
+  selected implementation: crash before/after launch and result persistence, reply or ack
+  failure, lease expiry during a long job, unavailable scope issuer, malformed result, tiny
+  remaining wall, invalid settings, simultaneous agents, cancellation with nested children, and
+  restart recovery — verifying artifact/workspace identity and result counts, not ledger growth.
+  Service start time vs script mtime is provenance context; loaded build/content identity and a
+  real heartbeat are the freshness evidence.
 
 ## 3. Submodule inventory
 
@@ -85,7 +132,7 @@ inbox until it expires.
 
 ## 6. Contracts in and out
 
-Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Rows that are
+Canonical ids are the register of record (Part IV, CT-01..CT-23). Rows that are
 cross-system contracts carry their CT id; an interface with no canonical entry is listed with a
 `(local)` tag and is not a peer to any CT row, so it cannot be matched against another chapter.
 
@@ -217,4 +264,6 @@ REPLY - let the worker finish
 √ LEDGER - dispatch-ledger.jsonl grows by one line naming the corr id
 FRESHNESS - compare dispatcher service start to its script mtime
 √ CURRENT - no negative elapsed in the journal (a stale poller lies about time)
+  (provenance context only — loaded build/content identity plus a real heartbeat
+  is the required freshness evidence)
 ```

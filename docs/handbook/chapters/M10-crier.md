@@ -13,9 +13,13 @@
 
 ## 2. Purpose, authority and position
 
-The bus: registration, routing, acceptance, leases, retrieval, ack, TTL, transfer and dead
-letters. Every node↔scheduler message rides crier. It decides who may read whose inbox (signed
-read) and what the guard may block.
+The bus: registration, routing, acceptance, durable custody, leases, retrieval, ack, TTL,
+transfer and dead letters. Every node↔scheduler message rides crier, and Crier is the resolved
+**launch/return boundary** for the Bunker foreman: the foreman is launched through Crier and its
+response returns through Crier to the scheduler on the control host. It decides who may read
+whose inbox (signed read) and what the guard may block. It does **not** decide task acceptance:
+a transport response, a lease, an acknowledgment and the task's independent acceptance are four
+separate facts, and Crier owns only the first three.
 
 **What breaks if this module is absent.** The bus is gone; no node message or scheduler envelope
 moves.
@@ -24,6 +28,54 @@ moves.
 router verdict → escalation → sanitize quarantine (`guard.go:25-28`). A false pass lets an
 untrusted directive reach a node. The reverse guarantee is the signed-read ladder, whose actual
 order is documented below (§10) — not "signature before lookup".
+
+**Required behavior (normative).** Approved target behavior governs; the source inventory in
+§3–§13 is implementation coverage, not the requirement.
+
+- **Retained custody semantics, selected profile still to be specified.** Custody aliases,
+  lease/ack/TTL, signatures, guard policies and degradation, storage-backend selection, metrics
+  and the existing adapters (webhook, session/harness) are retained (§3, §5, §8). The **selected
+  Factory invocation/return profile and execution location** must still be written: durable pull
+  inbox vs webhook vs Hermes-session vs harness-bound ingress, the executor's Bunker boundary,
+  reply target, envelope/schema version and compatibility negotiation. A source snapshot
+  establishes what the adapters *can* do; it does not establish the MVP wiring.
+- **Four separate facts.** A delivery's transport acceptance (with its guard verdict), the
+  consumer's lease, the consumer's acknowledgment, and the task's execution outcome/independent
+  acceptance are separate facts with separate owners. A successful transport response — or a
+  decoder fix on one leg — never proves the Factory workflow was accepted. Fan-out is separate
+  recipients and receipts, not one global success.
+- **Complete wire contracts.** Full register/deliver/retrieve/ack/session schemas with
+  versioning, payload encoding and size limits, auth/scopes, correlation to task/run/attempt
+  generations, idempotency-key scope/retention/conflicts and exactly which side may replay,
+  lease renewal, and job deadlines are required contracts. The fragments in §3 (aliases, bounds,
+  filter-after-claim, TTL semantics) are coverage evidence for parts of them, not the contracts
+  themselves; the client library's existence is not a schema.
+- **The 30-second claim is scoped, not universal.** The historical cluster-baseline statement
+  that Crier cannot carry work beyond 30 seconds is scoped to its historical mode/version — it is
+  not a universal task-runtime assumption. The 30 s retrieve lease is the *default* and is
+  requester-adjustable (M11's dispatcher leases 1800 s); HTTP, lease, job, heartbeat, retry and
+  retention clocks are stated independently, and long-job durability across disconnect/restart
+  remains the requirement.
+- **Retrieval grants the lease — delivery does not.** A retrieve grants the consumer an inbox
+  lease; delivery writes the durable inbox and starts no lease. The flight card below is
+  corrected accordingly, and any diagram or procedure that says "delivery starts the lease" is
+  wrong.
+- **The memory-backend restart drill is a negative control, not readiness.** Restarting under the
+  `memory` backend and observing empty inboxes demonstrates **non-durability** — it is a negative
+  control, not production-readiness evidence. Durable custody must be proven under the **selected**
+  backend (`sqlite:`/`postgres`): restart → retrieve → ack with retained identities, idempotency
+  state and held deliveries. Backup-created ≠ backup-validated ≠ restore-drill-passed, and
+  historical drills do not prove this fleet's off-host recovery.
+- **Degraded counters are not emptiness.** `HandleRetrieve`'s post-retrieve stats path logs an
+  error while the returned queue-depth/leased counters can degrade to zero (`handler.go:1795`).
+  Zero counters after a stats error cannot prove an empty queue — unavailable/partial-state must
+  be carried to operational consumers. Filter-after-claim also leaves nonmatching messages
+  temporarily leased, which must not be read as backlog or as its absence.
+- **Separately enforceable guarantees.** Signature/ACL enforcement — including the conditional
+  `RequireAgentSig` off-switch — and Bunker safety guarantees are kept separately enforceable: a
+  guard allow with `errored=true` is not a clean check, deterministic auth/ACL/resource-isolation
+  contracts survive guard degradation, and the transport guard is not execution safety or
+  accepted work.
 
 ## 3. Submodule inventory
 
@@ -42,7 +94,10 @@ handler and the Python client:
   `max`/`lease` **wins** — the alias fills in only what the historical name left absent
   (DF-CRIER-180).
 - **Defaults and bounds**: default batch **10** messages, capped at **100** (a `max > 100` returns
-  400 `max must be <= 100`, `:1727-1730`); default lease **30 s** (`:1732-1743`).
+  400 `max must be <= 100`, `:1727-1730`); default lease **30 s** (`:1732-1743` — a requester-adjustable
+  default, not a fixed bound; M11's dispatcher leases 1800 s). **The lease starts at retrieval**:
+  delivery (`HandleDeliver`) writes the durable inbox; it is the retrieve (`HandleRetrieve`, `:1690`)
+  that grants the consumer's lease — never the reverse.
 - **Filter-after-claim** (`:1770-1775`, CRIER-TAGS §2.4): a retrieve leases first, then applies a
   tag filter in Go over the claimed batch. Entries the filter drops **stay leased until their lease
   expires** — they are not lost, they are briefly unavailable to another reader (a stated KNOWN
@@ -119,7 +174,7 @@ comment (line **2**, not 5) disagrees with the default-ON config.
 
 ## 6. Contracts in and out
 
-Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Local ids are
+Canonical ids are the register of record (Part IV, CT-01..CT-23). Local ids are
 retired; each row carries the CT id its peer chapter cites, so two ends can be matched.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
@@ -226,6 +281,7 @@ named RED on this field).
 | **Oversized payload** | guard skips the LLM and branches on deterministic evidence (`guard.go:198-234`): high-confidence prematch → Block; low-confidence → Allow (errored); none → Allow "oversize" (errored) | a normal LLM verdict | automatic — the deterministic pre-scan result is always carried on `Result.Patterns` |
 | **Guard error (provider outage)** | `errorResult` (`guard.go:318-361`) defaults to **fail-open** (Allow, errored) unless `policy.FailClosed`, which applies `errorAction(policy.Action)` (default block); a high-confidence prematch escalates even a fail-open to block/high | a clean verdict | set `FailClosed` on the policy to fail closed |
 | Empty retrieve ≠ lost message | `[]` after a failed ack while a message is leased | a lost message | use `stats()` to tell "nothing queued" from "everything leased" (`crier_client.py:1018-1021`) |
+| **Stats error degrades counters to zero** | `HandleRetrieve` logs `registry stats after retrieve` (`:1795`) while the returned queue-depth/leased counters can read 0 | proof of an empty queue | treat the counters as **unavailable** for that read — zero after a stats error cannot prove emptiness; carry unavailable/partial-state to consumers |
 
 ## 11. Limits and margins
 
@@ -279,7 +335,8 @@ WHO: CONTROL HOST
 REGISTER - sign and POST /agents
 √ 200 - identity accepted, signing key stored
 DELIVER - POST a signed envelope to the agent inbox
-√ INBOX - durable inbox row written, lease started
+√ INBOX - durable inbox row written (no lease yet — RETRIEVE grants the lease, not delivery)
 RESTART - restart the daemon under the memory backend
-√ EMPTY - inboxes are empty after restart (WARNING: memory custody is not durable)
+√ EMPTY - inboxes are empty after restart (NEGATIVE CONTROL: this proves memory custody is
+  NOT durable — readiness requires the durable-backend restart/retrieve/ack proof)
 ```
