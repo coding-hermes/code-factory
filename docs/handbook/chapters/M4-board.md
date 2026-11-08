@@ -224,6 +224,94 @@ carried from an earlier capture (N9):
     uncommitted working-copy transition (event 520, actor `foreman`), not a committed divergence;
     HEAD == origin/main == `fbc19cb`. Documented, not reconciled in-band.
 
+## 14. Wave-2 redline — review requirements (target behavior vs implementation coverage)
+
+Per the CF2A-01 review handoff (§1.7, §2): **approved target behavior governs this chapter**; the
+store census, drift measurements and grep counts in §§1–13 are implementation coverage evidence,
+not authority. Resolved architecture applied throughout: the foreman runs inside its Bunker with
+Crier as the launch/return boundary (handoff §1.1); DuckBrain memory is a separate system — the
+board is **not** the project memory (§2 stands).
+
+**R1 — Per-project placement with Boardctl as the shared engine (required).** The board lives
+**in each project repository** — the store at §1 is this repo's instance of a per-project store,
+not one central Code Factory board. Boardctl is the separately maintained shared **engine** acting
+on that per-project store (the §3 wrapper/§4 dependency rows are the integration seam). The
+chapter must state: per-project board identity/root, the pinned supported upstream Boardctl
+release and its installation/compatibility contract (the `dev` executable and the public v0.2.0
+release are distinct facts; §13's version finding is the coverage evidence), and how copies of a
+project repo and its board **synchronize across hosts** — a boundary/dependency must still be a
+specified interface (review notes M4, observations and proposals).
+
+**R2 — ONE eligibility/dependency rule shared by every consumer (required).** Exactly one
+canonical eligibility/dependency rule must be written and shared by **Boardctl, the board reader,
+the scheduler (M9) and the foreman**. Current coverage shows conflicting definitions: the reader
+counts blocked/deferred as satisfied dependencies (§13 F4-6 context; `board_read.py` TERMINAL
+vocabulary), while the scheduler scanner requires completed-vocabulary prerequisites and excludes
+blocked/deferred — and the Figure 0.2 requirement is that blocked/deferred remain **incomplete**.
+The normative rule must decide blocked-vs-deferred representation, deferral reason/review/return
+path, cancelled prerequisites, fixtures and missing-dependency/cycle handling, and every consumer
+must be aligned to it; eligibility is defined separately from open-row count (review notes M4,
+proposal "one lifecycle and workability definition").
+
+**R3 — Authoritative revision and copies (required).** The chapter must define which board state
+— local working copy, node copy, control-host copy, published ref — is **authoritative** for
+scheduling, claims and closeout; bind every read to repository/ref/commit and freshness; assign
+the publish-vs-refresh owners (refresh before admission, publish/refresh at lane end); explain
+how an uncommitted in-progress claim (the measured CF-150 divergence, §7) stays visible when the
+published state still says pending; and define an atomic claim/revision precondition across
+dispatchers plus recovery of abandoned claims, so independent clones cannot schedule the same
+task. Which actor publishes versus merely refreshes is required content, not optional detail
+(review notes M4, proposal "authoritative copies, freshness and claims").
+
+**R4 — Empty vs unreadable/malformed/stale are distinct observations (required).** The reader
+contract must return separate, named results for: healthy-empty board, no-workable-items, missing
+board, unreadable/stale source, skipped/corrupt rows, and invalid dependencies — and must state
+whether partial observation is allowed, what remains visible, what blocks scheduling, and how
+alerts/repair work. Current coverage shows the gap: the reader silently skips malformed JSON and
+returns success for a missing board (§13 F4-6 context), so an empty list can stand for an
+observation failure — that must never satisfy the target contract, and the reader's
+skip-vs-error behavior, the scheduler's malformed-work policy and the validation/flight-card
+guarantees must be unified (review notes M4, proposal "corrupt or unavailable board semantics").
+§7's stale-RESIDUE/ERROR rows are the same distinction applied to locks.
+
+**R5 — Closure bar: accepted verdict + published proof (required).** A row closes only on the
+mandatory evidence chain: task/acceptance criteria → run → passing verdict and required checks →
+exact tested tree/commit → applicable merged/**published** object and proof → durable artifact
+references → authorized completion event — with a named validator for every link, including
+non-code tasks and any explicitly permitted exceptions. Mere provenance or the existence of an
+evidence directory is **insufficient**; a run id, an optional commit field, or a census of rows
+carrying references is not proof of a passing verdict or current-main publication. The upstream
+completion gate (provenance + evidence-run requirement, §6 CT-13 row) is a reusable component;
+the chapter must assign the checks it does not perform (verdict payload, tree equivalence,
+remote-main ancestry) and define malformed/missing/expired/mismatched evidence plus retry/idempotent
+closeout behavior (review notes M4, proposal "evidence sufficient for completion").
+
+**R6 — Partial-write recovery (required).** Row updates and event appends are two file writes; a
+lock around them is not a transaction. The engine can persist a task row and then fail its audit
+event (upstream write path, review notes M4 source findings) — the chapter must define
+recoverable partial-result statuses, operation/event identity, replay/deduplication and repair so
+callers neither assume nothing happened nor blindly repeat a completion, plus backup/restore
+consistency across rows, events, evidence and the git revision, validated before scheduling
+resumes.
+
+**R7 — Scheduler-facing reads in the text (required).** M9 reads board rows as its admission
+gates — that outgoing contract belongs in this chapter's text and in Figure 3.4 (the figure's
+"no outgoing cross-system contract" label is a specification omission to fix, review notes M4
+observations). The claim/sync paths between scheduler reads, foreman claims and published state
+must be drawn and owned; CT-10/13/14 are direct or mediated paths to be reconciled — a worker
+need not mutate the board directly if an explicit foreman contract owns that action (resolved:
+the foreman, via Crier, is the return path; the scheduler records).
+
+**R8 — Required board metrics (required).** Task counts by canonical status and by
+workable/unmet/unknown eligibility, oldest pending/blocked/deferred ages, claim/transition/closeout
+rates, evidence rejections vs independently verified completions, parse/validation failures,
+duplicate suppressions, lock wait/contention/unknown outcomes, drift/freshness/publication lag,
+conflicts, partial writes and repair/replay results — each with units, bounded dimensions,
+emit/collect/readout ownership, empty-denominator policy and acceptance verification (review
+notes M4, proposal "required board metrics"). Upstream stats/doctor reports (§4b verb surface)
+are reusable components; a grep proving no Prometheus calls is coverage evidence, not the metric
+design.
+
 ## RED field count: 2 (Metrics §8 — absence-proved; CT-14/CT-13 states UNVERIFIED — every side is an external peer)
 
 ## FLIGHT DATA FILE - M4 BOARD

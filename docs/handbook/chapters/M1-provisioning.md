@@ -331,6 +331,95 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
     `VERIFY: PASS` is reachable with an unmeasured checkout; the seed leg does set it. Asymmetric
     false-green path.
 
+## 14. Wave-2 redline — review requirements (target behavior vs implementation coverage)
+
+Per the CF2A-01 review handoff (§1.7, §2): **approved target behavior governs this chapter**; the
+source locators, grep counts and test ladders in §§1–13 are implementation coverage evidence, not
+authority. The normative provisioning specification — required behavior and its stable contracts —
+must let a reader build the intended system independently of the current script layout
+(handoff §1.7; review notes M1, user-directed change 1). Resolved architecture applied throughout:
+the project foreman runs inside its Bunker; Crier is the launch/return boundary; the scheduler on
+the control host records the returned response (handoff §1.1); DuckBrain is installed/integrated in
+**every** Bunker and must expose the same logical project-memory data/view as the controller
+(handoff §1.2); Terminal Jail is optional, **disabled by default**, and Bunker supplies baseline
+protection independently of it (handoff §1.3–§1.4); Hermes is the fixed MVP harness with the exact
+Hermes/Oh My Hermes build pinned, and Task Router is future/non-MVP, placed after Node and before
+Harness (handoff §1.5).
+
+**R1 — Two separate onboarding flows, each with caller and next consumer (required).**
+
+*Flow A — new-host/Bunker onboarding* (creates a schedulable node):
+
+| # | Step | Caller / location | Next consumer | Failure behavior |
+|---|---|---|---|---|
+| A1 | Admission: disk floor + footprint vs role floor | operator/orchestrator, control host (`disk_floor.py` via `project-node.sh` layer 00) | all later steps | refuse before the host fills; nothing created |
+| A2 | Bunker server prep (homes/keys, orphan reap) | operator, control host (`bunker-server-install.sh`) | A3 | server-level refusal, nothing spawned |
+| A3 | Agent create + per-Bunker config generate/readback | operator via `bunker-provision.sh --apply` / `node-create.sh` | A4 | partial artifacts named; destroy/retry contract below |
+| A4 | Credentials issued and installed — all five classes (R4) | control host + node, per class issuer | A5–A9 | a class that fails to install blocks its dependent legs only |
+| A5 | Bus membership: Crier identity + registration/token exchange, verified signed read | **producer currently unestablished — a named spec gap**; consumer `bunker-crier-connect.sh` staging + inbox probe | M2 dispatch | an unverified bus membership is not schedulable |
+| A6 | Repo + **embedded board** checkout (the board ships inside the project repo, M4) | provisioner (M1 owns the checkout; M3 manages it afterwards) | M3/M4 | seed drift gates readiness |
+| A7 | Harness install: **exact Hermes/Oh My Hermes build pin** + tools/settings | provisioner via M5 installers | M5 lifecycle | version readback required, not name-only |
+| A8 | Inference access: node-scoped proxy credential + endpoint/model policy + **end-to-end inference proof** | M1 provisions; M12 owns the proxy credential chain | M5 run path | config-present-without-a-successful-request is not readiness |
+| A9 | DuckBrain integration in the Bunker, same logical memory view as controller | provisioner | M1–M12 memory projections | shared topology/offline behavior: still to be specified (handoff §6) |
+| A10 | Readiness: certification ladder **plus effective-behavior validation** (R5); machine-readable readiness report | `verify-node.sh` | **M9 admission** — only a verified node is schedulable | CREATED ≠ CONFIGURED ≠ CONNECTED ≠ VERIFIED |
+
+*Flow B — new-project onboarding* (introduces an application/repo to the factory): caller is the
+operator on the control host; steps: scheduler project/lane row creation (`clone_lane.py` copies a
+**scheduler row** with `enabled=0` — it is scheduler configuration, not a git operation, F3-2) →
+actual repository checkout as a separate provisioning action (Flow A's repo leg / M1) → per-project
+board init in the project repo (M4 `boardctl init`) → per-project hook/gate policy (M3
+`install-gitreins.sh` + project `.gitleaks.toml`) → forge identity/credential mapping (M7). Next
+consumer: **M9 admission** reads the board; **M2 dispatch** when the lanes activate. Both flows
+must state who triggers each step, which component runs it, and the success/failure transitions —
+an abbreviated wildcard config surface does not satisfy the contract (review notes M1, observations).
+
+**R2 — Stable request, artifact, readiness and partial-failure contracts (required).** Request:
+the complete supported config/CLI/environment interface with validation, defaults and precedence
+(CLI > config file > role defaults — the documented precedence, §5), and a minimal full example
+for a fresh node. Artifacts: stable schemas and postconditions — node identity, repository
+location/ref, credential ownership/permissions, bus identity/token state, seed manifest/digest/
+applied record, and a machine-readable readiness report with an explicit required-check list and
+an unavailable-result policy. Partial failure: how failures propagate, what partial artifacts
+remain, what is safely retryable (idempotent re-run vs forced reseed), what cleanup/teardown
+destroys, and what evidence is required before the node becomes schedulable. Who records
+successful/failed provisioning, writes durable memory and closes any board item must be assigned
+to an owning orchestrator via a result/evidence contract — not invented as direct module writes
+(review notes M1, change 10 and observation).
+
+**R3 — Full Bunker provisioning list (required).** Provisioning must cover, as one normative
+list: compatible Bunker CLI/daemon/profile/capabilities; the chosen execution context
+(host-user / fresh image-backed / persistent container / detached unit — matched versions and
+effective capabilities, not assumed containment); the **exact pinned Hermes/Oh My Hermes build**;
+tools and settings; the project repo **with its embedded board**; the Crier identity; authenticated
+inference access; and DuckBrain on every Bunker (review notes M1 + handoff §1.2, §3-M1). The
+harness installation chain connects to M5 through a precise integration contract; Task Router is
+future and outside this list.
+
+**R4 — Distinct credential classes (required).** Five classes with separate producers, scopes,
+delivery, renewal and revocation, never interchangeable: (1) forge/GitHub (app installation,
+scoped tokens, deploy keys — clone/fetch vs push vs merge permissions documented separately; a
+read-only deploy-key proof does not establish publication capability); (2) Crier bus
+(key generation, registration, token exchange — producer to be named); (3) Bunker-control;
+(4) proxy/model access (node-scoped, preserving the control-host provider-secret boundary —
+provider keys are **not** copied to workers); (5) memory/DuckBrain. Each needs issuer, secure
+installation, expiry, renewal, revocation and error reporting (review notes M1, changes 4/8;
+handoff §3-M1).
+
+**R5 — Deployment-specific safe defaults, per-Bunker configuration with readback, and
+effective-behavior validation before readiness (required).** No universal Bunker execution mode is
+selected (handoff §1.8): the chapter must publish safe defaults/guidelines per deployment profile
+and support per-Bunker Factory configuration with setup **and readback** (a written config is not
+a read-back config). Before a node is declared ready, provisioning must validate **effective**
+host/isolation/resource/network/storage settings and real cross-host memory, inference and repo
+use — install success alone is insufficient (handoff §3-M1). This subsumes the snapshot's measured
+false-green paths (F1-1 credential-mode claim, F1-5 unmeasurable-checkout PASS): the target
+behavior is that no readiness verdict may rest on an unverified or unmeasured leg.
+
+**R6 — Provisioning metrics (required).** Attempts/outcomes, stage failures and refusals by
+reason, readiness results and useful step durations — each with meaning/type/unit, bounded
+dimensions, an identified emitter and readout (review notes M1, change 11). §8's absence-proved
+RED is current coverage only.
+
 ## RED field count: 4 (Status §1 — `node_env`/`node_seed_drift`/`node_freshness`/`bunker_config_gen` bodies not read line-by-line; §7 certification ladder not run on a live node; Metrics §8 — absence-proved; §9 inventory 5 of 141 helper call sites — the descriptive rows not tabulated one-per-site)
 
 ## FLIGHT DATA FILE - M1 PROVISIONING

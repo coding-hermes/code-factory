@@ -195,6 +195,66 @@ on this field, not a "sample" claimed complete:
     `complete` on the board (closed in commit `6184e52`). CF-355 (reply `status` vs `ok`) remains
     open.
 
+## 14. Wave-2 redline — review requirements (target behavior vs implementation coverage)
+
+Per the CF2A-01 review handoff (§1.7, §2): **approved target behavior governs this chapter**; the
+source locators and grep counts in §§1–13 are implementation coverage evidence, not authority.
+Resolved architecture applied throughout: the project foreman runs **inside its Bunker**; **Crier
+is the launch/return boundary** — Crier delivers work to the foreman in the Bunker and returns the
+foreman's response to the scheduler on the control host, which records it and triggers subsequent
+processing (handoff §1.1); DuckBrain is present in every Bunker with the same logical memory view
+as the controller (handoff §1.2); Hermes is the fixed MVP harness and Task Router is
+future/non-MVP, placed after Node and before Harness (handoff §1.5) — future harness selection is
+not the current model/provider route and must not be conflated with it.
+
+**R1 — Consumer/invocation boundary (required).** The chapter must define the boundary among the
+three consumers that exist today: (a) **Crier's harness-adapter layer** — its public
+register/deliver/receipt interface, disabled by default, with per-adapter probing and structured
+delivery outcomes; (b) **the node-bus-worker pull path** — a transport/execution adapter that
+leases from the inbox and builds the harness invocation itself (§3 S3); (c) **the central
+dispatcher** (M11) — the *other* inbox consumer. Under the resolved architecture, Crier
+launches/delivers to the Bunker foreman and returns its response to the scheduler; any
+implementation that keeps the pull worker or an alternative consumer side-by-side requires an
+**explicit partition or documented migration**, not silent coexistence. The presence of Crier
+adapters does not establish that the pull path uses them, and the pull path's direct
+harness-argv construction does not establish the foreman path's invocation shape (review notes
+M2, observations). The MVP must name its single execution owner and, if both modes exist,
+selection/identity/no-double-execution semantics per mode.
+
+**R2 — Versioned schemas, identities, correlation, generations (required).** Complete versioned
+**brief / envelope / result / error** schemas are required content: required fields, types,
+requiredness, unknown-field policy, and a pinned release of the bus API they belong to
+(review notes M2, open question 3). Identities and correlation: agent id, dispatch id,
+correlation id, run/generation identity — every redelivery, retry and reply must be attributable
+to its generation so a replayed or re-executed dispatch is distinguishable from the first
+execution. Also required: settings/credentials at the integration boundary (inherited Crier/harness
+settings named with defaults and validation, not name-only override lists — §5's RED), workspace
+ownership, deadlines and leases, and **replay / cancel / restart** behavior including the
+seen-cache and same-batch duplicate semantics measured in §11.
+
+**R3 — Separated outcome facts (required).** These six facts are distinct and must never be
+collapsed: (1) **transport acceptance** — Crier accepted/leased the message (a delivery receipt is
+transport, not acceptance); (2) **executor start** — the harness actually began; (3) **execution
+outcome** — the run's own result; (4) **independent acceptance** — the GitReins judge's verdict on
+the work (M3); (5) **publication** — the landed/pushed object (M3); (6) **board and memory
+projections** — the M4 closeout and DuckBrain records. A successful HTTP status or delivery
+receipt says nothing about (2)–(6); execution success says nothing about (4)–(6) (review notes
+M2: "execution can succeed while publication or refresh fails"). Under the resolved architecture,
+the Bunker foreman's projections to board/memory are first-class; a transport worker that happens
+to lack direct board/memory writes does **not** prove the foreman path lacks them — do not infer
+system absence from the transport worker's write surface (handoff §3 Part IV).
+
+**R4 — Required metrics with owner and readout (required).** The dispatch path must support:
+attempt/outcome counts by class, refusal/failure classes, delivery/execution/reply latency,
+queue depth and wait, retries/redeliveries/duplicates, cancellations, and projection-lag
+measurements — each with meaning/type/unit, bounded dimensions, an **emission owner**, a
+collection point and a named operator **readout** (handoff §3-M2). Where the chosen integration
+adopts Crier's harness-registry telemetry (per-adapter dispatch/outcome counts, error classes,
+delivery-duration histogram — §6 coverage), M2 must state which instruments it reuses and what
+end-to-end attribution remains missing; existing upstream metrics do not automatically instrument
+an unrelated node-worker path. §8's absence-proved RED describes the snapshot, not the metric
+design.
+
 ## RED field count: 3 (Metrics §8; §7 live bus-worker ladder not repeatable from this host; §9 inventory 4 of 70 helper call sites — the descriptive per-measurement rows not tabulated one-per-site)
 
 ## FLIGHT DATA FILE - M2 DISPATCH - NODE SIDE

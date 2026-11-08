@@ -200,6 +200,80 @@ rate are answerable only by the static greps above.
     `install-codex.sh` duplicates the validator; `install-claude-code.sh` sources `lib.sh` not
     `harness-vars.sh`.
 
+## 14. Wave-2 redline — review requirements (target behavior vs implementation coverage)
+
+Per the CF2A-01 review handoff (§1.7, §2): **approved target behavior governs this chapter**; the
+source locators, grep counts and probe transcripts in §§1–13 are implementation coverage
+evidence, not authority. Source snapshots, deployed effective behavior, historical observations
+and approved requirements are distinct record classes and are never interchangeable. Every
+requirement below that the measured snapshot does not satisfy is a requirement on the next
+revision, not a defect in the evidence.
+
+**R1 — Stable public interface independent of filenames (required).** The supported integration
+surface is the helper name/signature set in §3 — not `lib.sh` line numbers. Every `lib.sh:NN`
+locator in this chapter identifies the measured revision only; it changes with any edit and is not
+part of the contract. Public surface: `say`, `ok`, `bad`, `warn`, `note`, `have`,
+`fetch_verified`, `free_gb`, `require_disk`, `once`, `shq`, `bunker_exec`, plus the `FAILED` /
+`WARNED` counters with their documented semantics. Everything else in the file is internal. A
+signature change, output-format change or status-meaning change is a breaking public-interface
+change requiring a version/compatibility statement and caller reconciliation — the compatibility
+policy is itself required content (review notes M0, open question 2).
+
+**R2 — Complete per-helper contracts: who calls, why, inputs, outputs, exit codes, side effects,
+result propagation (required).** Each public helper carries one stable contract entry: purpose and
+the reason a caller reaches for it; which caller roles/scripts invoke it; required and optional
+inputs with types, allowed forms, defaults/units and validation preconditions; returned values,
+exit codes, printed output; failure and warning conditions; state changes and side effects; and
+the caller's obligations — including how the caller must **propagate the result** (a caller that
+ignores a returned 1 or an empty `have` result violates the contract). §3's inventory table is
+the seed, not the finished depth: an integrating agent must be able to use the documented
+interface from this chapter alone, without reverse-engineering the source (review notes M0,
+acceptance criterion "handbook sufficient for integration"). Caller/dependency flow is required
+content: installers and verification scripts source this module; the helpers call local tools
+(`curl`, `sha256sum`, `mktemp`, `df`/`awk`) and cross the Bunker boundary via `bunker_exec` — the
+direction of control and responsibility must be readable from the chapter.
+
+**R3 — The newer final-verdict helper; warnings/UNVERIFIED are separate from accepted success
+(required, user-approved for inclusion).** The current shared contract defines `verdict(label,
+mode)` and a warning counter that the §3 inventory predates; both belong in the public surface.
+Required semantics: **check mode** — any recorded failure → `FAIL`; warnings without failure →
+`UNVERIFIED`; no failure and no warning → `PASS`. **Action mode** — a warning is advice about an
+operation already attempted and does not by itself change a successful result. The caller must
+**use the returned result**, not a printed row. Two boundaries are fixed: a printed `PASS` row
+never proves a check ran (§9's descriptive/evidentiary split), and this helper summarizes
+setup/check results only — it is **not** the GitReins acceptance judge (M3) and **not** board
+closure (M4). Audit action/check/final-result semantics so a warning can never be silently folded
+into an accepted success.
+
+**R4 — Valid worked examples (required).** The chapter must carry a short caller-to-helper
+example showing all three outcome classes and the caller consuming the returned result, e.g.
+(target shape; the shipped file is the coverage reference):
+
+```
+. ./scripts/lib.sh
+have curl            || bad "deps" "curl not found"
+fetch_verified "$URL" "$DEST" "$DIGEST" \
+  && ok "fetch" "digest verified" \
+  || bad "fetch" "refused: digest mismatch or download failure"
+verify_all && verdict "setup" check   # FAIL | UNVERIFIED | PASS — branch on it:
+case "$?" in 0) proceed ;; 3) warn "setup" "warnings present — unverified, not accepted" ;;
+              *) fail-fast with the recorded failures ;;
+esac
+```
+
+Success, warning/unverified and failure paths must each be shown with the caller's distinct
+handling (review notes M0, proposal accepted as method).
+
+**R5 — Required invocation/outcome/duration/error telemetry with collection and readout
+(required).** The module must specify (not merely lack) per-helper invocation counters, outcome
+classes (success / failure / warning / refusal-by-reason), durations where operationally useful,
+and error categories — with an explicitly assigned emission owner (shared helper vs caller),
+a collection point, an operator readout, and failure behavior when telemetry itself cannot be
+written. §8's absence-proved RED describes the current snapshot only; per-script `FAILED`/`WARNED`
+variables are per-process state, **not** fleet-level telemetry, and do not satisfy this
+requirement (review notes M0, user-directed change 2). Metric meaning/type/unit and bounded
+dimensions follow the cross-cutting metrics standard (handoff §2).
+
 ## RED field count: 1 (Metrics §8)
 
 ## FLIGHT DATA FILE - M0 SHARED CONTRACT

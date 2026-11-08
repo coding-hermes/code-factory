@@ -202,6 +202,83 @@ are answerable only by reading the `LANDED:` / `LAND: REFUSED` rows.
     fabricated. S2 is
     operator-invoked (optional); the envelope names `branch`/`commit` but does not call the lander.
 
+## 14. Wave-2 redline — review requirements (target behavior vs implementation coverage)
+
+Per the CF2A-01 review handoff (§1.7, §2): **approved target behavior governs this chapter**; the
+source locators, selftest-arm results and grep counts in §§1–13 are implementation coverage
+evidence, not authority. M3 is the **repository** module: it manages per-project repository
+readiness and publication; it does **not** define the worker execution contract (a prior spoken
+description of M3 as the execution contract was corrected in the record, review notes M3).
+
+**R1 — Per-project repo/gate management placement (required).** The chapter must state which
+repository-management responsibilities are central and which belong to each managed project
+repository: hooks, gate policy and secret-scanning configuration are **per-project** (each target
+repo carries its own hook/policy/configuration); the central scripts supply the management
+utilities. Placement fixes already established and to be kept normative: `clone_lane.py` copies a
+**scheduler row** — it is scheduler configuration and belongs with M9, or its presence in M3 must
+be explicitly justified (review notes M3, proposal "module scope and lifecycle"); the **actual git
+checkout is a separate provisioning action owned by M1**; GitReins performs grading; Gitleaks
+supplies secret-scanning rules; the foreman/board owns task selection and closeout. One normative
+lifecycle flow is required: M1 checkout creation → M9 admission/refresh → M2 result delivery →
+foreman authorization → M3 branch validation/gating/landing → remote proof → M4/decision-memory
+closeout — with caller, location (node vs control host) and trigger for every step.
+
+**R2 — Mandatory vs optional gate policy, and guard vs acceptance judge (required).** The policy
+must define which Tier-1 guards, acceptance-judge grades and project/CI checks are **mandatory**
+at which boundaries, and what happens when policy/binary/hook configuration is missing, the wrong
+version, or ineffective. Current coverage shows the gap the policy must close: `--gate-cmd`
+defaults empty and no gate runs without it (F3-3), and the generated hook exits 0 when
+`.gitreins/config.yaml` is absent (§11) — a disclosed bypass is not a policy; required production
+behavior and authorized-exception semantics must be stated. Two distinct roles must not be
+conflated: the **guard** (commit-time, staged changes — CT-12) rejects bad commits; the
+**acceptance judge** (GitReins) independently grades the work. Neither a successful commit, an
+empty gate command, nor a passing ancestry test is acceptance evidence by itself.
+
+**R3 — Worker branch vs merged/published tree; landing/closure ownership (required).** The
+landing contract must reconcile the node-result-branch mode (the landing helper merges a named
+remote branch/commit) with the foreman worktree mode (worker branches stay local; only the
+foreman pushes), and document auto-merge and PR modes as explicit supported paths. Branch-tree
+grading and merged-tree verification are different checks; the chapter must say who performs each
+and require evidence for the object **actually published** (the explicit merge object, never
+HEAD — §2). Ownership is fixed by the resolved architecture: the **foreman** — running inside its
+Bunker, with Crier as the launch/return boundary (handoff §1.1) — authorizes landing and owns
+publication and closure; M4 records the closeout. The landing utility's lack of an in-repo caller
+(F3-5) means it is operator/foreman-invoked; the envelope naming `branch`/`commit` does not call
+the lander.
+
+**R4 — Verdict/evidence bound to exact objects (required).** Verdicts and evidence must bind to
+the exact implementation commit, the exact integration (merged) tree and the exact published
+object — with remote/ref identity and observation time. The landing helper's command-line
+contract currently carries no mandatory verdict/evidence input (§13 source finding): the required
+behavior is that a landing without a bound accepted verdict and retained evidence references is
+refused, and that a **best-effort refresh warning can never silently establish publication
+proof** — post-push fetch failure must leave visible uncertainty (the §10 row's tracking-ref
+fallback is coverage evidence of the gap, not the target behavior).
+
+**R5 — Publication concurrency, retry and authentication (required).** Specify the owner of
+serialized integration per repository/branch, worktree isolation, competing remote updates,
+conflict handling and revalidation; idempotency across restart/retry; preservation of worker
+output; the merged-locally-but-not-pushed state and its recovery; and bounded retry/escalation
+with named recovery actors. Authentication: cross-reference the M1/M7 credential owner — minimum
+read/fetch, worker-branch push and protected-main/PR-merge permissions per supported forge; whose
+identity operates on node vs control host; and behavior on expired or insufficient credentials.
+M3 does not mint credentials (review notes M3, proposal "repository authentication").
+
+**R6 — Version reconciliation (required).** The installed GitReins pin (0.17.1, §5) and the
+current upstream releases must be reconciled: the chapter must state the intended supported
+release, the installed pin, migration/compatibility behavior, and must not assume current
+upstream changes have reached the factory's older default pin (review notes M3, change 2). The
+same reconciliation applies to hook-path semantics: the shipped hook-installer checks a
+conventional `.git/hooks/pre-commit` without resolving an effective `core.hooksPath` (§11) — the
+required behavior is effective-invocation proof (a deliberately rejected commit that cannot
+advance HEAD), which is also the missing evidence named in §1's status.
+
+**R7 — Required repository metrics (required).** Freshness checks and lag/age/unmeasurable
+results, gate runs/outcomes/skips, landing attempts and refusals by reason, merge/push/proof
+outcomes and durations, retries/conflicts, and publication-to-closeout failures — each with
+meaning, units, bounded labels, emitter/collector/readout owners and verification (review notes
+M3, proposal "required repository metrics"). §8's absence-proved RED is current coverage only.
+
 ## RED field count: 3 (Metrics §8 — absence-proved; §1 status — `repo_freshness.py` body not read line-by-line (behaviour exercised by the cf244 arm, source unread) and S3 hook *enforcement* UNVERIFIED (the landing arm proves landing behaviour, not that git invokes the installed pre-commit gate); §9 inventory 5 of 35 helper call sites)
 
 ## FLIGHT DATA FILE - M3 REPOSITORY
