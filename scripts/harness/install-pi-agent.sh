@@ -89,9 +89,18 @@ else
   bad "binary" "absent — no pi in this node (specs/HARNESS-MATRIX.md names oh-my-pi at npm @oh-my-pi/pi-coding-agent; nothing here installs it)"
 fi
 
-# An auth file is a credential, not a binary, and a credential alone certifies nothing.
+# An auth file is a credential, not a binary, and a credential alone certifies nothing. Its
+# CLASS depends on what the row is next to (CF-006): with a measured binary above it, the auth
+# file is a host FACT the check does not need and cannot block anything — a note. With no binary,
+# the same file is the difference between "nothing to authenticate with" and "a credential whose
+# harness is missing", so it stays a WARN beside the named `FAIL binary` (the verdict is FAIL
+# either way, and the row keeps the credential visible instead of pretending it is an install).
 if [ -s "$HOME/.pi/agent/auth.json" ]; then
-  warn "credential_file" "$HOME/.pi/agent/auth.json is present, but a credential file is not a binary — the binary row above is the one that decides"
+  if [ -n "$p" ]; then
+    note "credential_file — $HOME/.pi/agent/auth.json present (host state; a credential file is not a binary, and the measured binary above is what --check certifies)"
+  else
+    warn "credential_file" "$HOME/.pi/agent/auth.json is present, but a credential file is not a binary — the binary row above is the one that decides"
+  fi
 else
   note "credential_file — no ~/.pi/agent/auth.json in this \$HOME"
 fi

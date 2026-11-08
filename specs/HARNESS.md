@@ -82,6 +82,24 @@ per row — `warn()` and `verdict()` in `scripts/lib.sh` are untouched, so a gen
 makes `--check` `UNVERIFIED` with exit 3, and no other adapter's rows changed. Deleting the warning
 mechanism would be a different change and is not what this table authorises.
 
+CF-006 extended the same call-site decision to three more rows, each measured on the control host
+(`docs/audits/cf006-codex-exec-sidecar-and-check-classification.md`):
+
+| Row (adapter) | Condition measured | Class | Why |
+|---|---|---|---|
+| `code_mode` (codex) | the exec file-write sidecar `codex-code-mode-host` is **present** beside the binary | `PASS` row | it is a measured artefact, not a fact about the environment: it is the binary `codex exec` spawns for every tool call, and the ladder installs it at a recorded digest. |
+| `code_mode` (codex) | the sidecar is **absent** | `WARN` | a genuine blocker of the measured surface. Measured 2026-11-08: every tool call fails closed (`ERROR … failed to spawn code-mode host … No such file or directory`) and the turn exits 0 having written no artifact — a harness that answers but cannot touch the worktree. A binary-only pin therefore ends `CODEX: UNVERIFIED`, never `PASS`. |
+| `auth` (claude-code) | **no** credential (no `CF_API_KEY_FILE`, no `ANTHROPIC_API_KEY`, no `~/.claude/.credentials.json`) | `..` note | `--check` certifies the INSTALL — the adapter's own contract is "Exit 0 only when the pin is installed here" — and a credential is a RUN input. Its absence is reported where it decides something: `--turn` prints `CLAUDE-CODE: SKIP (no credential …)` and exits 3. As a `WARN` it made the check leg unpassable on every host without an Anthropic credential, even with the pin installed and its version read back. |
+| `auth` (claude-code) | `ANTHROPIC_API_KEY` **exported** into the ambient environment | `FAIL contract:ambient` (unchanged) | contamination of the directive: two lanes on one node could inherit each other's key. That is not the same row as an absent credential, and it still refuses the run. |
+| `credential_file` (pi-agent) | `~/.pi/agent/auth.json` present **and** the binary row PASSed | `..` note | with a measured binary the file is host state the check does not need. The pre-fix row warned "a credential file is not a binary — the binary row above is the one that decides" while that binary row had just PASSed: its own text said the binary decides and the verdict said otherwise. |
+| `credential_file` (pi-agent) | the file present and **no** binary | `WARN` (unchanged) | a credential alone certifies nothing, and the named `FAIL binary` beside it is what makes the verdict `FAIL (n)`. |
+
+`tests/harness/adapter-check-classification-test.sh` keeps each decision falsifiable in both
+directions on ONE fixture: the fixed adapter reaches `PASS` where the harness is installed and
+measured, the pre-fix adapter (`dc7641f`) does not, and the negatives (an ambient exported key; a
+credential with no binary) still refuse. `tests/harness/codex-install-test.sh` B8 does the same for
+`code_mode` inside the install ladder, with the pre-fix revision as the red control.
+
 `tests/harness/codex-install-test.sh` keeps the decision falsifiable in both directions, which is why
 the pair exists rather than one arm: **B5** runs `--check` on the pinned binary in a home with a host
 login and requires `CODEX: PASS` with exit 0, both rows printed as notes and **zero** `WARN` rows;
@@ -91,14 +109,14 @@ warnings; B5b alone would pass the defect the row was raised on.
 
 ## Adapters and their measured state
 
-| Harness | Method | State (2026-10-29) |
+| Harness | Method | State (each row names its own measurement; re-measured 2026-11-08 for CF-006) |
 |---|---|---|
 | **hermes** | Python `>=3.11,<3.14`; `python3 -m venv` + `pip install hermes-agent==0.19.0`; `hermes serve --host 0.0.0.0 --port P --skip-build` | **MEASURED working**: 32 s install, `/api/status` 200 over tailnet, 133 JSON-RPC methods, `session.create` + `prompt.submit`. Needs a provider key in `~/.hermes/.env`. |
-| **opencode** | standalone binary; `opencode` CLI or server mode | not measured here — the fleet's `examples/agent-ecosystem` runs it in a container |
-| **claude-code** | `npm i -g @anthropic-ai/claude-code` (needs node) | not measured here; node absent in base image |
-| **codex** | release tarball `codex-x86_64-unknown-linux-musl.tar.gz` from `rust-v0.166.0`, sha256-pinned, installed under `$HOME/.local/codex/<pin>`; **exec** mode (`codex exec --json -s <mode> -m <model> -- <text>`, `exec resume <id>`) | **MEASURED** (CF-227, 2026-11-04, `scripts/harness/install-codex.sh`): 7 s install, version read back `codex-cli 0.166.0`, idempotent second `--apply`, and one real turn wrote a fixed token with `model_served` read from codex's own rollout record. The **app-server** sidecar is `[experimental]` and **nothing in crier uses it** — `codex.go` names "two verified surfaces: exec create / exec resume", and `grep -rn app-server` over crier is empty; `--app-server` probes it anyway (an `initialize` over stdio answers with a `userAgent`). |
-| **aider** | `pip install aider-chat` (venv) | not measured |
-| **goose** | binary | not measured |
+| **opencode** | standalone binary; `opencode` CLI or server mode | not measured as an INSTALL (no pin, no ladder — `--apply` refuses by name). A real smoke turn WAS measured on the control host by the conformance battery (binary 1.18.29 at `~/.opencode/bin/opencode`, `smoke.txt` carrying the battery's token — `docs/HARNESS-CONFORMANCE.md`, 2026-11-06 run). No v2 artefact exists (matrix §9). |
+| **claude-code** | `npm i -g @anthropic-ai/claude-code` (needs node ≥22) | **MEASURED install ladder** (CF-225, 2026-11-04, `scripts/harness/install-claude-code.sh`): `npm --prefix $HOME/.local/harness/npm` of `@anthropic-ai/claude-code@2.1.318` with the registry's integrity + shasum verified before download, version read back `2.1.318 (Claude Code)`, second `--apply` a no-op. The measured non-interactive surface is `--turn` (`--print --output-format json --bare`); with no credential it prints `CLAUDE-CODE: SKIP (…)` and exits 3. Still not a *supported* harness: crier has no claude adapter (CRIER-HARNESS-11) and matrix I4 needs the five legs on a real node. |
+| **codex** | release tarball `codex-x86_64-unknown-linux-musl.tar.gz` from `rust-v0.166.0`, sha256-pinned, installed under `$HOME/.local/codex/<pin>`; **exec** mode (`codex exec --json -s <mode> -m <model> -- <text>`, `exec resume <id>`) | **MEASURED** (CF-227, 2026-11-04, `scripts/harness/install-codex.sh`): 7 s install, version read back `codex-cli 0.166.0`, idempotent second `--apply`, and one real turn wrote a fixed token with `model_served` read from codex's own rollout record. **CF-006 (re-measured 2026-11-08): the ladder also installs the exec file-write sidecar `codex-code-mode-host`** — a SEPARATE release asset, sha256-pinned, placed beside the binary because codex spawns it from its own directory. Without it every tool call fails closed (`ERROR … failed to spawn code-mode host … No such file or directory`) and the turn exits 0 having written no artifact; with it the turn writes the token and the battery's `codex:smoke` leg PASSes. The **app-server** sidecar is `[experimental]` and **nothing in crier uses it** — `codex.go` names "two verified surfaces: exec create / exec resume", and `grep -rn app-server` over crier is empty; `--app-server` probes it anyway (an `initialize` over stdio answers with a `userAgent`). |
+| **aider** | `pip install aider-chat` (venv) | not measured, and **no adapter file ships** (CF-006): there is no pinned ladder, no artefact digest and no measured non-interactive surface in this repo, so the factory does not name it as selectable and nothing installs it. Named here so the absence is a stated one rather than a missing row. |
+| **goose** | binary | not measured, and **no adapter file ships** (CF-006): same as aider — no ladder, no digest, no measured surface. |
 | **pi-agent** | `scripts/harness/install-pi-agent.sh`; binary `pi`, non-interactive surface `pi -p --no-session "<prompt>"` | not measured as an install (no pin, no artefact digest); the adapter ships a documented `--check`/`--contract` and refuses `--apply` by name |
 | **deepseek** | `scripts/harness/install-deepseek.sh`; the conformance row probes the binary `deepseek` (the matrix names DeepSeek's own harness at npm `@deepseek-ai/dsh`, CLI `dsh`, absent from both trees) | not measured (no binary, no ladder); the adapter ships a documented `--check`/`--contract` and refuses `--apply` by name |
 
@@ -108,11 +126,31 @@ version matches. `--apply` creates the venv and installs `hermes-agent==$HERMES_
 when the venv binary is absent, regardless of PATH. A venv version mismatch is named
 and reinstalls the pin; only a matching venv binary earns "already installed".
 
-**hermes** and **codex** have measured install ladders in this repo (`install-hermes.sh`,
-`install-codex.sh`, both proved by a script that can go red). `opencode`, `claude-code`,
-`deepseek` and `pi-agent` ship a documented `--check`/`--contract` and a method, and are marked
-`UNVERIFIED` until someone runs them; `aider` and `goose` ship no adapter file at all. An
-unverified installer is not a supported installer, and the script says so out loud.
+**hermes**, **codex** and **claude-code** have measured install ladders in this repo
+(`install-hermes.sh`, `install-codex.sh`, `install-claude-code.sh`, each proved by a test that can go
+red). `opencode`, `deepseek` and `pi-agent` ship a real `--check` and a `--contract` and refuse
+`--apply` by name, because no ladder for them has been measured here. `aider` and `goose` ship **no
+adapter file at all**: they are named in the table above so their absence is a stated one, they are
+not selectable, and nothing in this repo installs them. An unverified installer is not a supported
+installer, and the script says so out loud.
+
+### What every adapter's `--check` said on the control host, 2026-11-08
+
+Recorded so a later reader can tell a leftover red from a regression, and so no row is mistaken for
+support:
+
+| Adapter | `--check` verdict | What decided it |
+|---|---|---|
+| hermes | `FAIL (1)` | `python3` on `PATH` is 3.14.9 and the pin requires `<3.14`; the ladder stops there by design. `HERMES_PYTHON_BIN=python3.12` reaches the binary/version/port rows. |
+| codex | `PASS` | pin 0.166.0 installed, version read back, exec contract advertised, exec sidecar present, app-server present (note), host login (note). |
+| claude-code | `PASS` | pin 2.1.318 installed by this adapter, version read back; no credential is a note, and `--turn` is where one would be required (SKIP, exit 3). |
+| opencode | `UNVERIFIED` (exit 3) | binary 1.18.29 measured and its `run` surface advertised, but `user_space_binary` is a genuine WARN here: no install ladder is measured, so `--apply` refuses. |
+| deepseek | `FAIL (1)` | no `deepseek` binary; no ladder (matrix names `@deepseek-ai/dsh`, CLI `dsh`, absent from both trees). |
+| pi-agent | `PASS` | `pi` 1.5.0 measured on `PATH`, `-p` surface advertised; the auth file is a note beside a measured binary. Its install ladder is still unmeasured, so `--apply` refuses by name. |
+
+An `UNVERIFIED` or `FAIL` above is a measurement, not a defect: only codex, claude-code and hermes
+have ladders this repo can reproduce, and the conformance matrix refuses to promote any of them to
+"supported" without the five legs on a real node.
 
 ## Conformance is measured, not claimed
 
@@ -134,13 +172,20 @@ invoked cannot look green; a genuinely absent binary is still a `SKIP` that name
 
 A `SKIP` names the exact credential or binary that is missing, and it is not evidence of support:
 this spec's table is a claim about a method, the matrix is a measurement of a host, and only the
-matrix may be quoted as "works here". A harness named in the tables above with no adapter file is
-a `FAIL`, never a skip. `tests/selftest.sh` §44 keeps the battery itself able to fail.
+matrix may be quoted as "works here". A harness the BATTERY names with no adapter file is a `FAIL`,
+never a skip. `aider` and `goose` are the other case: this spec names them with no adapter file and
+they are deliberately outside the battery's census, because neither has a pin, a digest or a measured
+surface to probe — their absence is stated in the table above and nothing in the tree installs them.
+`tests/selftest.sh` §45 keeps the battery itself able to fail.
 
 Codex certifies only `$HOME/.local/codex/<pin>/bin/codex`; the same host-provided-versus-owned
 rule as hermes applies, and `--apply` refuses by name on any arch whose artefact digest it has
-not measured (the pin covers `x86_64-unknown-linux-musl` only). `tests/harness/codex-install-test.sh`
-is its proof: refusals, the digest floor, idempotence, the version-mismatch arm, and — when a
+not measured (the pin covers `x86_64-unknown-linux-musl` only). The pin is TWO artefacts of the
+same release — the CLI and the exec file-write sidecar `codex-code-mode-host`, each sha256-pinned
+and each refused on a digest mismatch — because a CLI without the sidecar answers a directive and
+cannot write the artifact the node's work depends on. `tests/harness/codex-install-test.sh`
+is its proof: refusals, the digest floor for both artefacts, idempotence, the version-mismatch
+arm, the sidecar-absent arm (with the pre-fix adapter as the red control), and — when a
 credential exists — one real turn.
 
 Opencode's adapter measures three things it used to guess at, and `--apply` still refuses by name
@@ -207,9 +252,10 @@ end to end: the real adapters, the real `project-node.sh --apply` (unscoped, so 
 `node.json`), the real `verify-node.sh`, one stub transport and one stub HTTP probe. Its arms are
 the adapter `--check`/`--help` surface, the three unmeasured ladders refusing `--apply` by name and
 installing nothing, a codex node whose manifest records name+version+binary measured by the
-adapter, `VERIFY: PASS` with `harness_identity`, four red arms (tampered version, absent binary,
-null version → `UNVERIFIED`, absent manifest → note), and the manifest's own binary answering a
-directive non-interactively with JSONL events and the directive's token in an artifact.
+adapter and whose `--apply` placed the exec sidecar from a digest-checked local mirror, `VERIFY:
+PASS` with `harness_identity`, four red arms (tampered version, absent binary, null version →
+`UNVERIFIED`, absent manifest → note), and the manifest's own binary answering a directive
+non-interactively with JSONL events and the directive's token in an artifact.
 
 What that does **not** prove, and this file does not claim: the fixture `codex` is a script, not
 the pinned musl artefact, and no model is called. It proves the WIRING — adapter measurement →

@@ -1,0 +1,196 @@
+CF-006 — frozen command transcript (2026-11-08, control host karaHermes-mde-7840hs)
+=====================================================================================
+
+Every block below is a command that was RUN on this tree, with the output it produced.
+Base revision for this work: dc7641f ("board: close CF-128 — selftest §29 HEAD-ancestry arms").
+Nothing in this file was edited after the runs; the report that cites it is
+docs/audits/cf006-codex-exec-sidecar-and-check-classification.md.
+
+-------------------------------------------------------------------------------------
+1. BASELINE — tests/harness-conformance.sh BEFORE this change (adapter defects + host state)
+-------------------------------------------------------------------------------------
+$ bash tests/harness-conformance.sh
+  FAIL  hermes:check — adapter exit 1 — python — hermes-agent 0.19.0 requires python >=3.11,<3.14; found 3.14.9
+  FAIL  claude-code:check — adapter exit 3 (UNVERIFIED) — auth — no credential: ANTHROPIC_API_KEY unset, CF_API_KEY_FILE unset, /home/kara/.claude/.credentials.json absent — --turn will skip
+  PASS  codex:check — adapter exit 0 — version — 0.166.0 (pin 0.166.0)
+  FAIL  codex:smoke — exited 0 without writing smoke.txt
+  PASS  opencode:check — adapter exit 0 — version — 1.18.29
+  PASS  opencode:smoke — smoke.txt contains CF-CONF-opencode-519606 (24 B, ... exit 0 ...)
+  FAIL  opencode-v2:check — the adapter's own row says `generation — v1 (measured 1.18.29)` but this harness row is the v2 generation — a v1 binary cannot certify v2
+  FAIL  deepseek:check — adapter exit 1 — binary — absent — no deepseek in this node (the matrix measures no binary here; the package it names is npm @deepseek-ai/dsh, CLI dsh)
+  FAIL  pi-agent:check — adapter exit 3 (UNVERIFIED) — credential_file — /home/kara/.pi/agent/auth.json is present, but a credential file is not a binary — the binary row above is the one that decides
+summary: 12 pass, 6 fail, 11 skip
+HARNESS CONFORMANCE: FAIL (6)
+
+-------------------------------------------------------------------------------------
+2. ATTRIBUTION of `codex:smoke — exited 0 without writing smoke.txt`
+-------------------------------------------------------------------------------------
+The battery stores each turn's log under its run directory. The codex turn on this host:
+
+  workdir: ~/.harness-conformance/run-20261108T021432Z-1139939/smoke/codex
+  model: gpt-6-luna
+  provider: openai
+  warning: Code Mode is unavailable because failed to spawn code-mode host
+           /home/kara/.local/codex/0.166.0/bin/codex-code-mode-host: host executable was not found.
+           Code mode will fail closed; enable `features.code_mode_host` and install
+           `codex-code-mode-host`.
+  ERROR codex_core::tools::router: error=failed to spawn code-mode host
+        /home/kara/.local/codex/0.166.0/bin/codex-code-mode-host: No such file or directory (os error 2)
+  codex
+  I couldn't create `smoke.txt`: the command runner failed to start because its code-mode host is missing.
+
+`ls /home/kara/.local/codex/0.166.0/bin/` at that moment: `codex` only (319346888 bytes).
+So the pinned install produced a harness that answered the directive in JSON and could not touch the
+worktree: the artifact leg failed, not the transport. This is an INSTALL defect of our own ladder,
+not a battery defect — the battery reported exactly what happened.
+
+-------------------------------------------------------------------------------------
+3. THE SIDECAR IS A SEPARATE, DIGESTED RELEASE ASSET (digest cross-checked two ways)
+-------------------------------------------------------------------------------------
+$ curl -sS https://api.github.com/repos/openai/codex/releases/tags/rust-v0.166.0 | jq '<asset filter>'
+  codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz   28565521   sha256:7588334fd47bc4003d970b70dfd4d1e4578491b1e9baa72976a4c2d7e97590da
+  codex-x86_64-unknown-linux-musl.tar.gz                 121764138   sha256:a0bf572d2f93f056c6712a6da348e96078dc84f3885fd7be67807ef389cb3978
+  (the second digest equals the SHA256 already recorded in scripts/harness/install-codex.sh, which is
+   the check that the API's digests and this repo's pin refer to the same artefacts)
+
+$ curl -sSL -o cmh.tar.gz https://github.com/openai/codex/releases/download/rust-v0.166.0/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz
+$ sha256sum cmh.tar.gz
+  7588334fd47bc4003d970b70dfd4d1e4578491b1e9baa72976a4c2d7e97590da  cmh.tar.gz
+$ tar tzf cmh.tar.gz
+  codex-code-mode-host-x86_64-unknown-linux-musl
+  (a single member, no nesting — the installer extracts exactly that name)
+
+-------------------------------------------------------------------------------------
+4. RED ARM — a binary-only pin is UNVERIFIED, and the sidecar fixes it
+-------------------------------------------------------------------------------------
+$ mv ~/.local/codex/0.166.0/bin/codex-code-mode-host <scratch>/sidecar.saved
+$ bash scripts/harness/install-codex.sh --check ; echo rc=$?
+  WARN  code_mode — absent at /home/kara/.local/codex/0.166.0/bin/codex-code-mode-host — every exec tool call
+        fails closed ('failed to spawn code-mode host'), so a turn answers a directive and writes no artifact;
+        --apply installs it (sha256 7588334fd47bc4003d970b70dfd4d1e4578491b1e9baa72976a4c2d7e97590da)
+  ..
+CODEX: UNVERIFIED
+rc=3
+
+$ bash scripts/harness/install-codex.sh --apply
+  PASS  install — /home/kara/.local/codex/0.166.0/bin/codex (0.166.0) unchanged
+  PASS  version — 0.166.0 (pin 0.166.0)
+  PASS  binary — /home/kara/.local/codex/0.166.0/bin/codex
+  PASS  code_mode — /home/kara/.local/codex/0.166.0/bin/codex-code-mode-host (sha256 7588334fd47bc4003d970b70dfd4d1e4578491b1e9baa72976a4c2d7e97590da verified before extraction)
+  PASS  path — /home/kara/.local/bin/codex -> /home/kara/.local/codex/0.166.0/bin/codex
+  PASS  path_env — $HOME/.local/bin is on PATH
+CODEX: PASS
+rc=0
+
+$ bash scripts/harness/install-codex.sh --check ; echo rc=$?
+  PASS  code_mode — /home/kara/.local/codex/0.166.0/bin/codex-code-mode-host (file-writing exec sidecar present; answers --help)
+CODEX: PASS
+rc=0
+
+-------------------------------------------------------------------------------------
+5. A REAL TURN THROUGH THE PINNED LADDER (criterion 3, end to end)
+-------------------------------------------------------------------------------------
+$ CF_MODEL=gpt-6-luna CF_PROVIDER=openai-codex CF_WORKDIR=~/.cache/cf006-turn \
+  CF_NAMESPACE=code-factory CF_RUN_ID=cf006-cmh-turn CF_LANE=code-factory-qa \
+  bash scripts/harness/install-codex.sh --turn
+  PASS  workdir — /home/kara/.cache/cf006-turn is a git work tree
+  PASS  binary — /home/kara/.local/codex/0.166.0/bin/codex (0.166.0)
+  PASS  turn_home — $HOME/.codex (host login; the model and provider are still pinned on argv)
+  PASS  turn_exit — exit 0
+  PASS  thread — 01a1b8f5-0ab2-7da2-9618-49c61b420cf8 (parsed from the thread.started event, as crier does)
+  PASS  model_served — requested gpt-6-luna → served gpt-6-luna
+  PASS  artifact — /home/kara/.cache/cf006-turn/codex-turn.txt contains the fixed token (sha256 5eda6787f05c05891cdee66c684c8c671fcdfbbfb8f73963cb8434f4ae51d057)
+CODEX: PASS
+$ cat ~/.cache/cf006-turn/codex-turn.txt
+  CF-227-TOKEN-7f3a9c
+
+(A direct invocation with the sidecar present, in a scratch clone, showed the same thing from the
+model's side: `exec /bin/bash -lc "printf '%s' 'CF-CM-…' > smoke.txt" … succeeded in 0ms`.)
+
+-------------------------------------------------------------------------------------
+6. TESTS — every new/changed arm, with its pre-fix control
+-------------------------------------------------------------------------------------
+$ bash tests/harness/codex-install-test.sh
+  PASS  mirror artefact built locally (sha256 82961a5f760f…)
+  PASS  mirror sidecar built locally (sha256 de7ddc07ed1f…)
+  PASS  B2 a digest mismatch FAILs the download leg and names both digests
+  PASS  B2 a mismatched download installs nothing
+  PASS  B2b a sidecar digest mismatch FAILs the code_mode leg, places no sidecar, and exits 1 (the binary itself was verified)
+  PASS  B3 --apply installs the pin and reads the version back
+  PASS  B3 the exec sidecar is installed beside the pin and reported by the ladder
+  PASS  B4 a second --apply is a no-op (exit 0, binary and sidecar unchanged: …)
+  PASS  B5 codex-warn-classification: --check on the installed pin with a host login ends 'CODEX: PASS' (exit 0); app_server and auth are printed as notes, 0 WARN rows
+  PASS  B5b codex-warn-classification: a genuine WARN (no credential surface) still ends 'CODEX: UNVERIFIED' (exit 3)
+  PASS  B6 a version mismatch names both the measured value and the pin and FAILs
+  PASS  B7 a PATH binary is labelled host-provided and FAILs the binary leg
+  PASS  B8 a pin installed without its exec sidecar ends 'CODEX: UNVERIFIED' (exit 3) with a named code_mode WARN
+  PASS  B8 the pre-fix adapter (dc7641f) calls that same binary-only pin 'CODEX: PASS' with no code_mode row — the arm is falsifiable
+  PASS  C0 the installed pin answers: codex-cli 0.166.0
+  PASS  C1 the app-server sidecar starts on stdio and answers initialize: …
+  PASS  C2 one real turn (host login ~/.codex/auth.json) wrote /home/kara/.cache/cf227-turn.…/codex-turn.txt containing the fixed token
+  PASS  C2 model_served: requested gpt-5.6-luna → served gpt-5.6-luna
+  … (further arms in the same run: A1–A11 refusals, D1a–D3c CF_RUN_ID admission and turn-home
+    containment — 57 arms total in that run's own summary line)
+codex installer test: 57 passed, 0 failed, 0 skipped
+RESULT: PASS
+
+$ bash tests/harness/adapter-check-classification-test.sh
+  PASS  claude-code: the pin installed with no credential reaches 'CLAUDE-CODE: PASS' (exit 0); auth is a note, 0 WARN rows
+  PASS  claude-code: the pre-fix adapter (dc7641f) calls the same installed pin 'CLAUDE-CODE: UNVERIFIED' (exit 3) — the arm is falsifiable
+  PASS  claude-code: an ambient exported key is still refused by name (exit 1) and its value is never echoed
+  PASS  pi-agent: a measured binary with an auth.json reaches 'PI-AGENT: PASS' (exit 0); credential_file is a note, 0 WARN rows
+  PASS  pi-agent: the pre-fix adapter (dc7641f) calls the same measured binary 'PI-AGENT: UNVERIFIED' (exit 3) — the arm is falsifiable
+  PASS  pi-agent: a credential file with no binary is still 'PI-AGENT: FAIL (1)' with a named FAIL binary (the credential certifies nothing)
+classification test: 6 passed, 0 failed, 0 skipped
+RESULT: PASS
+
+$ bash tests/harness-node-e2e.sh
+  (six `adapter:<name>` rows, one per shipped adapter, each `--check` named-rows + verdict line and
+   both modes documented in --help; three `adapter:<name>` rows proving an unmeasured ladder refuses
+   --apply by name and installs nothing into a throwaway HOME; then:)
+  PASS  fixture:seed — a one-file seed applied to the fixture node home
+  PASS  node:apply — project-node.sh --apply --harness codex -> NODE: PASS; version 0.166.0 and the exec sidecar placed by the adapter
+  PASS  node:manifest — harness{name:codex, version:0.166.0, binary:…/.local/codex/0.166.0/bin/codex} — measured by the adapter, not copied from the pin
+  PASS  verify:green — a node created with codex -> VERIFY: PASS, harness_identity re-measured at the manifest's own binary
+  PASS  verify:red-version — … VERIFY: FAIL (1)
+  PASS  verify:red-binary — … exit 1
+  PASS  verify:null-version — … WARN + VERIFY: UNVERIFIED, exit 3
+  PASS  verify:absent-manifest — … exit 0 (not a PASS row)
+  PASS  turn:directive — exit 0, 3 JSON events on stdout (thread.started + turn.completed), artifact holds the directive's token
+HARNESS-NODE-E2E: PASS
+
+$ bash tests/selftest.sh
+  … 442 PASS rows …
+  PASS  node slice: the manifest records the measured harness, verify re-measures it, 4 red arms + a directive turn
+  PASS  with the adapter's binary row removed the manifest arm goes RED (exit …) — the battery is falsifiable
+  PASS  adapter --check classification: measured installs reach PASS, the pre-fix adapters do not, and the ambient/credential-only negatives still refuse
+SELFTEST: PASS
+rc=0
+
+$ bash scripts/boardctl validate
+  rows: 361 tasks, 540 events, 0 fixtures
+  key uniformity: 361/361 rows carry only canon keys (0 drift)
+  … 17 pre-existing warnings (defer_reason, free-form guard_result/ci_result, duplicate legacy event id) …
+RESULT: OK (17 warning(s))
+rc=0
+
+-------------------------------------------------------------------------------------
+7. AFTER — conformance matrix on the same host, same command
+-------------------------------------------------------------------------------------
+$ bash tests/harness-conformance.sh
+  PASS  claude-code:check — adapter exit 0 — version — 2.1.318 (pin 2.1.318)
+  PASS  codex:check — adapter exit 0 — version — 0.166.0 (pin 0.166.0)
+  PASS  codex:smoke — smoke.txt contains CF-CONF-codex-0d7fa8 (20 B, sha256 9883be175023..., exit 0; token sha256 9883be175023...; provider openai, model gpt-6-luna; binary /home/kara/.local/codex/0.166.0/bin/codex (the path its --check measured))
+  PASS  pi-agent:check — adapter exit 0 — version — 1.5.0
+  FAIL  hermes:check — adapter exit 1 — python — hermes-agent 0.19.0 requires python >=3.11,<3.14; found 3.14.9
+  FAIL  opencode-v2:check — the adapter's own row says `generation — v1 (measured 1.18.29)` but this harness row is the v2 generation — a v1 binary cannot certify v2
+  FAIL  deepseek:check — adapter exit 1 — binary — absent — no deepseek in this node (… npm @deepseek-ai/dsh, CLI dsh)
+summary: 15 pass, 3 fail, 11 skip
+HARNESS CONFORMANCE: FAIL (3)
+
+The three remaining FAILs are measurements, not defects, and none of them is a harness this repo
+can install: hermes cannot run on this host's `python3` (3.14.9 vs the pin's `<3.14`; the battery
+prints the `HERMES_PYTHON_BIN=python3.12` knob), no opencode v2 artefact exists (matrix §9), and no
+`deepseek`/`dsh` binary exists here at all. `docs/HARNESS-CONFORMANCE.md` is a generated file and was
+NOT regenerated in this change (it is outside the brief's file fence); it still records the
+2026-11-06 run, and the section above is the 2026-11-08 measurement.

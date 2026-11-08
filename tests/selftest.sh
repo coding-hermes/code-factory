@@ -5484,6 +5484,34 @@ else
     printf '%s\n' "$out" | grep -E '^  FAIL|^HARNESS' | head -6 | sed 's/^/    | /'
   fi
   rm -rf "$cf006t"
+
+  # CF-006: criterion 1 says every adapter has a `--check` that is REAL. Two of them classified a
+  # row that does not stop an install as a WARN, so on a host where the harness was installed and
+  # measured they could not reach PASS: claude-code warned about a missing credential (a run input,
+  # already reported as `--turn` SKIP) and pi-agent warned that an auth file "is not a binary"
+  # beside a binary row that had just PASSed. The classification test pins both, each against the
+  # PRE-FIX adapter from the same fixture, and keeps two negative arms (an ambient exported key,
+  # a credential with no binary) so the fix cannot be "silence every non-green row".
+  cf006c="$HERE/tests/harness/adapter-check-classification-test.sh"
+  if [ ! -f "$cf006c" ]; then
+    say "  FAIL  tests/harness/adapter-check-classification-test.sh is absent — the --check classification has no test"
+    fails=$((fails+1))
+  else
+    out=$(bash "$cf006c" 2>&1); rc=$?
+    if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'RESULT: PASS' \
+       && printf '%s\n' "$out" | grep -Fq "claude-code: the pin installed with no credential reaches 'CLAUDE-CODE: PASS'" \
+       && printf '%s\n' "$out" | grep -Fq 'claude-code: the pre-fix adapter' \
+       && printf '%s\n' "$out" | grep -Fq 'pi-agent: a measured binary with an auth.json reaches' \
+       && printf '%s\n' "$out" | grep -Fq 'pi-agent: the pre-fix adapter' \
+       && printf '%s\n' "$out" | grep -Fq 'claude-code: an ambient exported key is still refused by name' \
+       && printf '%s\n' "$out" | grep -Fq 'pi-agent: a credential file with no binary is still'; then
+      say "  PASS  adapter --check classification: measured installs reach PASS, the pre-fix adapters do not, and the ambient/credential-only negatives still refuse"
+    else
+      say "  FAIL  the adapter --check classification test did not pass (exit $rc)"
+      fails=$((fails+1))
+      printf '%s\n' "$out" | grep -E '^  FAIL|^RESULT' | head -6 | sed 's/^/    | /'
+    fi
+  fi
 fi
 # END cf006-harness-node
 

@@ -134,6 +134,17 @@ esac
 CODEX_STUB
   chmod +x "$CODEX_BIN"
 
+  # CF-006: the exec file-write sidecar is a SECOND pinned artefact of the same release, fetched by
+  # the adapter from its own URL. The fixture mirrors it locally (digest computed here) so the
+  # node's `--apply` exercises the real sidecar leg with no network — and a node provisioned from
+  # this adapter records a harness that can write, not one that only answers.
+  CMH_MEMBER="codex-code-mode-host-x86_64-unknown-linux-musl"
+  mkdir -p "$W/cmh-root"
+  printf '#!/usr/bin/env bash\nprintf "Usage: codex-code-mode-host [OPTIONS]\\n"\n' > "$W/cmh-root/$CMH_MEMBER"
+  chmod +x "$W/cmh-root/$CMH_MEMBER"
+  tar czf "$W/cmh.tar.gz" -C "$W/cmh-root" "$CMH_MEMBER" || bad "fixture:sidecar" "cannot build the fixture sidecar tarball"
+  CMH_SHA="$(sha256sum "$W/cmh.tar.gz" | cut -d' ' -f1)"
+
   # Node state the earlier layers measure: an applied seed (verify leg 6), a clone level with its
   # origin (verify leg 5), a bus identity at mode 600 (layer 30) and a fixture HTTP probe (layer 00).
   mkdir -p "$W/seed/prompts" "$NODE/.node"
@@ -158,6 +169,11 @@ CODEX_STUB
 
   cat > "$BIN/curl" <<'CURL_STUB'
 #!/usr/bin/env bash
+# CF-006: a `file://` argument is the fixture's own artefact mirror (the codex ladder fetches its
+# two pinned artefacts that way). Only the HTTP probe is stubbed — a real curl serves the mirror.
+for a in "$@"; do
+  case "$a" in file://*) exec /usr/bin/curl "$@" ;; esac
+done
 o=""; u=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -197,6 +213,7 @@ BUNKER_STUB
   node_apply() {  # the real provisioning entry, unscoped, against the fixture node home
     env -i PATH="$BIN:$PATH" HOME="$NODE" NODE_PROJECT=demo NODE_DISK_FLOOR=1 \
       FIXTURE_CODEX_VERSION="$pin" CRIER_URL=http://fixture.invalid:8767 \
+      CF_CODEX_CMH_URL="file://$W/cmh.tar.gz" CF_CODEX_CMH_SHA256="$CMH_SHA" \
       /bin/bash "$TREE/scripts/project-node.sh" --apply --project demo --harness codex --kinds generic 2>&1
   }
   node_verify() {  # the real verifier, same home, stubbed transport
@@ -206,11 +223,15 @@ BUNKER_STUB
 
   out=$(node_apply); rc=$?
   if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'NODE: PASS' \
-     && printf '%s\n' "$out" | grep -Fxq "  PASS  version — $pin (pin $pin)"; then
-    ok "node:apply" "project-node.sh --apply --harness codex -> NODE: PASS; the adapter's own row reads $pin"
+     && printf '%s\n' "$out" | grep -Fxq "  PASS  version — $pin (pin $pin)" \
+     && printf '%s\n' "$out" | grep -Fq "  PASS  code_mode — $NODE/.local/codex/$pin/bin/codex-code-mode-host"; then
+    ok "node:apply" "project-node.sh --apply --harness codex -> NODE: PASS; version $pin and the exec sidecar placed by the adapter"
   else
     bad "node:apply" "the fixture node did not provision cleanly (exit $rc)"
-    printf '%s\n' "$out" | grep -E '^  (PASS|FAIL|WARN)|^NODE' | tail -8 | sed 's/^/    | /'
+    # Attribution, not a tail: the row that failed may be anywhere in a long adapter log, and a
+    # `tail -8` of the run can hide it behind PASS rows (this arm was red once and printed only the
+    # last layers). Print every FAIL row and the summary line.
+    printf '%s\n' "$out" | grep -E '^  (FAIL|WARN) |^NODE' | sed 's/^/    | /'
   fi
 
   manifest_row=$(python3 -B - "$NODE/.node/node.json" <<'PY'

@@ -180,6 +180,28 @@ tar czf "$TAR" -C "$SB/mirror/root" codex-x86_64-unknown-linux-musl
 TAR_SHA=$(sha256sum "$TAR" | cut -d' ' -f1)
 ok "mirror artefact built locally (sha256 ${TAR_SHA:0:12}…)"
 
+# CF-006: the exec file-write sidecar is a SECOND pinned artefact of the same release. The fixture
+# mirrors it too, so the sidecar leg is measured with no network and its digest is enforced exactly
+# like the main one — a ladder that installed it from an unpinned URL would not be testable here.
+CMH_STUB="$SB/mirror/root-cmh/codex-code-mode-host-x86_64-unknown-linux-musl"
+mkdir -p "$(dirname "$CMH_STUB")"
+cat >"$CMH_STUB" <<'CMHEOF'
+#!/usr/bin/env bash
+case "${1:-}" in
+  -h|--help) printf 'Usage: codex-code-mode-host [OPTIONS]\n'; exit 0 ;;
+  *) exit 0 ;;
+esac
+CMHEOF
+chmod +x "$CMH_STUB"
+CMH_TAR="$SB/mirror/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz"
+tar czf "$CMH_TAR" -C "$SB/mirror/root-cmh" codex-code-mode-host-x86_64-unknown-linux-musl
+CMH_SHA=$(sha256sum "$CMH_TAR" | cut -d' ' -f1)
+ok "mirror sidecar built locally (sha256 ${CMH_SHA:0:12}…)"
+# Both artefacts the ladder fetches are redirected at the local mirror for every --apply arm below;
+# an arm that forgets one would reach the network, so the pair travels together.
+MIRROR_ENV=(CF_CODEX_URL="file://$TAR" CF_CODEX_SHA256="$TAR_SHA"
+            CF_CODEX_CMH_URL="file://$CMH_TAR" CF_CODEX_CMH_SHA256="$CMH_SHA")
+
 # B1 — --check on an empty home reports absence, and says so with a FAIL.
 BARE="$SB/home-bare"; mkdir -p "$BARE"
 O="$SB/b1.out"
@@ -192,6 +214,7 @@ grep -q 'FAIL  binary — absent' "$O" && [ "$rc" = "1" ] \
 # B2 — a digest that does not match the pin refuses, and nothing is installed.
 O="$SB/b2.out"
 rc=$(clean_env HOME="$FAKEHOME" CF_CODEX_URL="file://$TAR" CF_CODEX_SHA256="0000000000000000000000000000000000000000000000000000000000000000" \
+     CF_CODEX_CMH_URL="file://$CMH_TAR" CF_CODEX_CMH_SHA256="$CMH_SHA" \
      "$INSTALLER" --apply >"$O" 2>&1; echo $?)
 [ "$rc" = "1" ] && grep -q 'FAIL  download' "$O" && grep -q 'digest mismatch' "$O" \
   && ok "B2 a digest mismatch FAILs the download leg and names both digests" \
@@ -200,9 +223,26 @@ rc=$(clean_env HOME="$FAKEHOME" CF_CODEX_URL="file://$TAR" CF_CODEX_SHA256="0000
   && no "B2 a mismatched download still left a binary behind" \
   || ok "B2 a mismatched download installs nothing"
 
+# B2b — the SIDECAR digest is enforced the same way, and a mismatch leaves no sidecar behind: the
+# binary lands (its own digest matched) but the run exits nonzero rather than producing a harness
+# that answers and cannot write. This is the arm that keeps the CF-006 fix from becoming "fetch
+# whatever the URL serves".
+CMHM_HOME="$SB/home-cmh-mismatch"; mkdir -p "$CMHM_HOME"
+O="$SB/b2b.out"
+rc=$(clean_env HOME="$CMHM_HOME" "${MIRROR_ENV[@]}" \
+     CF_CODEX_CMH_SHA256="1111111111111111111111111111111111111111111111111111111111111111" \
+     "$INSTALLER" --apply >"$O" 2>&1; echo $?)
+if [ "$rc" = "1" ] && grep -q 'FAIL  code_mode' "$O" && grep -q 'digest mismatch' "$O" \
+   && [ ! -e "$CMHM_HOME/.local/codex/$PIN_DEFAULT/bin/codex-code-mode-host" ] \
+   && [ -x "$CMHM_HOME/.local/codex/$PIN_DEFAULT/bin/codex" ]; then
+  ok "B2b a sidecar digest mismatch FAILs the code_mode leg, places no sidecar, and exits 1 (the binary itself was verified)"
+else
+  no "B2b the sidecar digest mismatch was not refused by name (rc=$rc, sidecar $([ -e "$CMHM_HOME/.local/codex/$PIN_DEFAULT/bin/codex-code-mode-host" ] && echo present || echo absent))"; sed 's/^/        /' "$O" | tail -12
+fi
+
 # B3 — the pinned install succeeds, user-space, and reads the version back.
 O="$SB/b3.out"
-rc=$(clean_env HOME="$FAKEHOME" CF_CODEX_URL="file://$TAR" CF_CODEX_SHA256="$TAR_SHA" \
+rc=$(clean_env HOME="$FAKEHOME" "${MIRROR_ENV[@]}" \
      "$INSTALLER" --apply >"$O" 2>&1; echo $?)
 if [ "$rc" = "0" ] && grep -q 'PASS  install' "$O" && grep -q "PASS  version — $PIN_DEFAULT (pin $PIN_DEFAULT)" "$O"; then
   ok "B3 --apply installs the pin and reads the version back"
@@ -212,19 +252,28 @@ fi
 [ -x "$FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex" ] \
   && ok "B3 the binary lives under \$HOME/.local/codex/$PIN_DEFAULT (user-space, no root)" \
   || no "B3 the binary is not at the pinned user-space path"
+# CF-006: the sidecar is placed beside the binary it pairs with, which is the only path codex
+# loads it from, and the ladder names it.
+[ -x "$FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex-code-mode-host" ] \
+  && grep -q "PASS  code_mode — $FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex-code-mode-host" "$O" \
+  && ok "B3 the exec sidecar is installed beside the pin and reported by the ladder" \
+  || no "B3 the exec sidecar was not installed/reported beside the pin"
 [ -L "$FAKEHOME/.local/bin/codex" ] && ok "B3 the ~/.local/bin shim points at the pin" \
   || no "B3 no ~/.local/bin/codex shim"
 
 # B4 — idempotence: a second --apply changes nothing and exits 0.
-efore=$(stat -c '%i %Y %s' "$FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex")
+BEFORE=$(stat -c '%i %Y %s' "$FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex")
+CMH_BEFORE=$(stat -c '%i %Y %s' "$FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex-code-mode-host")
 O="$SB/b4.out"
-rc=$(clean_env HOME="$FAKEHOME" CF_CODEX_URL="file://$TAR" CF_CODEX_SHA256="$TAR_SHA" \
+rc=$(clean_env HOME="$FAKEHOME" "${MIRROR_ENV[@]}" \
      "$INSTALLER" --apply >"$O" 2>&1; echo $?)
-eafter=$(stat -c '%i %Y %s' "$FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex")
-if [ "$rc" = "0" ] && grep -q 'already installed' "$O" && [ "$efore" = "$eafter" ]; then
-  ok "B4 a second --apply is a no-op (exit 0, binary unchanged: $eafter)"
+BIN_AFTER=$(stat -c '%i %Y %s' "$FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex")
+CMH_AFTER=$(stat -c '%i %Y %s' "$FAKEHOME/.local/codex/$PIN_DEFAULT/bin/codex-code-mode-host")
+if [ "$rc" = "0" ] && grep -q 'already installed' "$O" && [ "$BEFORE" = "$BIN_AFTER" ] \
+   && [ "$CMH_BEFORE" = "$CMH_AFTER" ]; then
+  ok "B4 a second --apply is a no-op (exit 0, binary and sidecar unchanged: $BIN_AFTER / $CMH_AFTER)"
 else
-  no "B4 a second --apply changed something (rc=$rc, $efore -> $eafter)"
+  no "B4 a second --apply changed something (rc=$rc, $BEFORE -> $BIN_AFTER, $CMH_BEFORE -> $CMH_AFTER)"
 fi
 
 # B5 — CF-384 codex-warn-classification, POSITIVE arm. --check on the installed fake home measures
@@ -292,6 +341,41 @@ rc=$(clean_env HOME="$SB/home-host" PATH="$HOSTBIN:/usr/local/bin:/usr/bin:/bin"
 grep -q 'host-provided' "$O" && [ "$rc" = "1" ] \
   && ok "B7 a PATH binary is labelled host-provided and FAILs the binary leg" \
   || no "B7 a PATH binary must be labelled host-provided (rc=$rc)"
+
+# B8 — CF-006: the `code_mode` row is what turns a binary-only pin red, and the PRE-FIX adapter
+# (which printed no such row) calls the same tree PASS. Both halves are needed: without the row the
+# defect is invisible, and without the control the row could be decoration. The pre-fix revision is
+# the tree this change was made on, run against the same fake HOME with a host login so that the
+# ONLY difference left is the sidecar.
+CMH_MISS="$SB/home-cmh-missing"
+mkdir -p "$CMH_MISS/.codex"
+cp -r "$FAKEHOME/.local" "$CMH_MISS/.local"
+rm -f "$CMH_MISS/.local/codex/$PIN_DEFAULT/bin/codex-code-mode-host"
+printf '%s\n' '{"fixture":"host login placeholder — no credential value"}' >"$CMH_MISS/.codex/auth.json"
+chmod 600 "$CMH_MISS/.codex/auth.json"
+O="$SB/b8.out"
+rc=$(clean_env HOME="$CMH_MISS" "$INSTALLER" --check >"$O" 2>&1; echo $?)
+if [ "$rc" = "3" ] && grep -q '^  WARN  code_mode — absent at ' "$O" \
+   && grep -qx 'CODEX: UNVERIFIED' "$O" && [ "$(grep -c '^  FAIL  ' "$O")" = 0 ]; then
+  ok "B8 a pin installed without its exec sidecar ends 'CODEX: UNVERIFIED' (exit 3) with a named code_mode WARN"
+else
+  no "B8 a binary-only pin did not go UNVERIFIED with a named code_mode row (rc=$rc)"; sed 's/^/        /' "$O" | tail -12
+fi
+PREFIX_REV="${CF006_PREFIX_REV:-dc7641f}"
+PREFIX_TREE="$SB/prefix"; mkdir -p "$PREFIX_TREE/scripts/harness"
+cp "$HERE_REPO/scripts/lib.sh" "$PREFIX_TREE/scripts/lib.sh"
+if git -C "$HERE_REPO" show "$PREFIX_REV:scripts/harness/install-codex.sh" >"$PREFIX_TREE/scripts/harness/install-codex.sh" 2>/dev/null; then
+  chmod +x "$PREFIX_TREE/scripts/harness/install-codex.sh"
+  O="$SB/b8-prefix.out"
+  rc=$(clean_env HOME="$CMH_MISS" "$PREFIX_TREE/scripts/harness/install-codex.sh" --check >"$O" 2>&1; echo $?)
+  if [ "$rc" = "0" ] && grep -qx 'CODEX: PASS' "$O" && ! grep -q 'code_mode' "$O"; then
+    ok "B8 the pre-fix adapter ($PREFIX_REV) calls that same binary-only pin 'CODEX: PASS' with no code_mode row — the arm is falsifiable"
+  else
+    no "B8 the pre-fix control did not reproduce the false PASS (rc=$rc)"; sed 's/^/        /' "$O" | tail -8
+  fi
+else
+  skip "B8 the pre-fix revision $PREFIX_REV is unavailable here (git show $PREFIX_REV:scripts/harness/install-codex.sh)"
+fi
 
 # ---------------------------------------------------------------------------------------------
 say ""

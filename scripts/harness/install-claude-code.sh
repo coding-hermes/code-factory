@@ -390,7 +390,14 @@ probe_auth() {
     found=1
   fi
   [ "$found" -eq 1 ] && return 0
-  warn "auth" "no credential: ANTHROPIC_API_KEY unset, CF_API_KEY_FILE unset, $HOME/.claude/.credentials.json absent — --turn will skip"
+  # CF-006: a missing credential is a NOTE in --check, not a WARN. --check certifies the install
+  # (this adapter's own contract: "Exit 0 only when the pin is installed here"), and a credential
+  # is a RUN input, not an install condition — the missing one is already reported where it
+  # decides something, as `CLAUDE-CODE: SKIP (no credential …)` exit 3 from --turn. Classifying it
+  # as a WARN here made the check leg unable to pass on any host without an Anthropic credential,
+  # even with the pin installed and version read back. An ambient exported key above stays a WARN:
+  # that is contamination of the directive, which does block an unattended run.
+  note "auth — no credential: ANTHROPIC_API_KEY unset, CF_API_KEY_FILE unset, $HOME/.claude/.credentials.json absent; --turn will SKIP and name it (a credential is a run input, not an install condition)"
   return 1
 }
 

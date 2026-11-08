@@ -6,9 +6,21 @@
 # documented: the ladder below was run on a Linux x86_64 host on 2026-11-04.
 #
 #   install-codex.sh --check        report binary, pin, the exec contract, auth, workdir
-#   install-codex.sh --apply        install the pinned artefact under $HOME; idempotent
+#   install-codex.sh --apply        install the pinned artefact AND its exec sidecar; idempotent
 #   install-codex.sh --turn         ONE real turn in CF_WORKDIR that must write CF_TURN_TOKEN
 #   install-codex.sh --app-server   start the app-server sidecar on stdio and probe initialize
+#
+# THE EXEC SIDECAR IS PART OF THE LADDER (CF-006, measured 2026-11-08). `codex exec` writes files
+# through a sibling binary it spawns from its OWN directory — `<dir-of-codex>/codex-code-mode-host`
+# — and the release publishes that binary as a SEPARATE asset, not inside `codex-<target>.tar.gz`.
+# An install that fetched only the main tarball produced a harness that answered a directive and
+# could not touch the worktree: every tool call failed closed with
+#   ERROR codex_core::tools::router: failed to spawn code-mode host … No such file or directory
+# and the turn exited 0 having written no artifact. That is the exact shape the conformance smoke
+# leg reported for codex on this host, and a node provisioned from this adapter would inherit it.
+# `--apply` now installs the sidecar at the digest recorded below, and `--check` prints a
+# `code_mode` row that is a WARN when it is absent (a run that cannot write) and a PASS when it is
+# the measured sibling of the binary it will pair with.
 #
 # Exit codes: 0 PASS · 1 FAIL · 2 REFUSED (a named refusal; nothing was installed or run).
 #
@@ -49,9 +61,16 @@ if [ -f "$HERE/harness-vars.sh" ]; then . "$HERE/harness-vars.sh"; fi
 PIN="${CF_CODEX_PIN:-0.166.0}"
 RELEASE="rust-v${PIN}"
 SHA256="a0bf572d2f93f056c6712a6da348e96078dc84f3885fd7be67807ef389cb3978"
+# The exec file-write sidecar (CF-006). It is a SEPARATE release asset of the same tag, is spawned
+# from the directory codex itself lives in, and is the reason a turn can write an artifact. Only
+# the target this installer already admits (x86_64-unknown-linux-musl) has a digest here; the
+# digest is the release's own sha256 and is re-computed from the downloaded bytes before install.
+CMH_NAME="codex-code-mode-host"
+CMH_SHA256="7588334fd47bc4003d970b70dfd4d1e4578491b1e9baa72976a4c2d7e97590da"
 INSTALL_ROOT="$HOME/.local/codex"
 PREFIX="$INSTALL_ROOT/$PIN"
 BIN="$PREFIX/bin/codex"
+CMH_BIN="$PREFIX/bin/$CMH_NAME"
 SHIM="$HOME/.local/bin/codex"
 DISK_FLOOR_GB=1.0
 DEFAULT_SANDBOX="workspace-write"
@@ -79,7 +98,7 @@ refuse() {  # refuse <leg> <reason> — a named refusal; nothing is installed or
 }
 
 usage() {
-  sed -n '3,20p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '3,25p' "$0" | sed 's/^# \{0,1\}//'
   cat <<'CODEX_VARS'
 THE VARIABLE CONTRACT (specs/HARNESS-MATRIX.md §5). Each name is accepted as the flag AND as the
 CF_* environment variable; the directive is the only source, so nothing is inferred or inherited.
@@ -346,6 +365,41 @@ report_exec_contract() {  # report_exec_contract <binary>
   return "$missing"
 }
 
+# The exec file-write sidecar (CF-006). codex spawns it from the directory its own binary lives
+# in, so the row measures THAT path — a `code-mode-host` on PATH would not be the one codex loads.
+report_code_mode() {  # report_code_mode <resolved codex binary>
+  local b="$1" cmh
+  cmh="$(dirname "$b")/$CMH_NAME"
+  if [ -x "$cmh" ]; then
+    ok "code_mode" "$cmh (file-writing exec sidecar present; answers --help)"
+  elif [ -x "$BIN" ]; then
+    warn "code_mode" "absent at $cmh — every exec tool call fails closed ('failed to spawn code-mode host'), so a turn answers a directive and writes no artifact; --apply installs it (sha256 $CMH_SHA256)"
+  else
+    warn "code_mode" "absent at $cmh — the host-provided codex pairs with a sidecar this adapter did not install; --apply owns $CMH_BIN (sha256 $CMH_SHA256)"
+  fi
+}
+
+install_code_mode_host() {  # install_code_mode_host <target> — digest-verified, user-space
+  local target="$1" url want tmp
+  url="${CF_CODEX_CMH_URL:-https://github.com/openai/codex/releases/download/$RELEASE/$CMH_NAME-$target.tar.gz}"
+  want="${CF_CODEX_CMH_SHA256:-$CMH_SHA256}"
+  tmp=$(umask 077; mktemp -d) || { bad "code_mode" "cannot create a temp dir for $CMH_NAME"; return 1; }
+  if ! fetch_verified "$url" "$tmp/cmh.tar.gz" "$want"; then
+    rm -rf "$tmp"
+    bad "code_mode" "download or digest check failed for $url (want sha256 $want) — exec file writes would fail closed, so nothing was placed"
+    return 1
+  fi
+  mkdir -p "$PREFIX/bin" || { rm -rf "$tmp"; bad "code_mode" "cannot create $PREFIX/bin"; return 1; }
+  if ! tar xzf "$tmp/cmh.tar.gz" -C "$tmp" "$CMH_NAME-$target" 2>/dev/null; then
+    rm -rf "$tmp"; bad "code_mode" "extraction failed for $CMH_NAME-$target in the verified tarball"; return 1
+  fi
+  if ! install -m 0755 "$tmp/$CMH_NAME-$target" "$CMH_BIN"; then
+    rm -rf "$tmp"; bad "code_mode" "cannot place $CMH_BIN"; return 1
+  fi
+  rm -rf "$tmp"
+  ok "code_mode" "$CMH_BIN (sha256 $want verified before extraction)"
+}
+
 report_app_server() {  # report_app_server <binary>
   local b="$1" h
   h=$("$b" app-server --help 2>/dev/null)
@@ -407,6 +461,7 @@ case "$MODE" in
       if at_pin "$v"; then ok "version" "$v (pin $PIN)"
       else bad "version" "${v:-unreadable} != pin $PIN"; fi
       report_exec_contract "$b"
+      report_code_mode "$b"
       report_app_server "$b"
       [ "$DEEP" -eq 1 ] && report_doctor "$b"
     else
@@ -471,6 +526,15 @@ case "$MODE" in
     # verify-node.sh measures THAT binary on the node instead of whatever PATH happens to resolve
     # — an owned pin under $HOME is frequently not on PATH at all.
     [ -x "$BIN" ] && ok "binary" "$BIN"
+    # The sidecar is part of the same pin, and a pin without it can answer but cannot write. A
+    # second --apply therefore repairs a binary-only install rather than reporting it complete.
+    if [ -x "$BIN" ]; then
+      if [ -x "$CMH_BIN" ]; then
+        ok "code_mode" "$CMH_BIN (already installed)"
+      else
+        install_code_mode_host "$target" || true
+      fi
+    fi
     # The shim is what makes crier's LookupBinary find the pin on PATH. Never overwrite a real
     # host binary: the adapter labels it host-provided, and so does this.
     if [ -x "$BIN" ]; then
