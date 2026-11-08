@@ -115,8 +115,8 @@ warnings; B5b alone would pass the defect the row was raised on.
 | **opencode** | standalone binary; `opencode` CLI or server mode | not measured as an INSTALL (no pin, no ladder — `--apply` refuses by name). A real smoke turn WAS measured on the control host by the conformance battery (binary 1.18.29 at `~/.opencode/bin/opencode`, `smoke.txt` carrying the battery's token — `docs/HARNESS-CONFORMANCE.md`, 2026-11-06 run). No v2 artefact exists (matrix §9). |
 | **claude-code** | `npm i -g @anthropic-ai/claude-code` (needs node ≥22) | **MEASURED install ladder** (CF-225, 2026-11-04, `scripts/harness/install-claude-code.sh`): `npm --prefix $HOME/.local/harness/npm` of `@anthropic-ai/claude-code@2.1.318` with the registry's integrity + shasum verified before download, version read back `2.1.318 (Claude Code)`, second `--apply` a no-op. The measured non-interactive surface is `--turn` (`--print --output-format json --bare`); with no credential it prints `CLAUDE-CODE: SKIP (…)` and exits 3. Still not a *supported* harness: crier has no claude adapter (CRIER-HARNESS-11) and matrix I4 needs the five legs on a real node. |
 | **codex** | release tarball `codex-x86_64-unknown-linux-musl.tar.gz` from `rust-v0.166.0`, sha256-pinned, installed under `$HOME/.local/codex/<pin>`; **exec** mode (`codex exec --json -s <mode> -m <model> -- <text>`, `exec resume <id>`) | **MEASURED** (CF-227, 2026-11-04, `scripts/harness/install-codex.sh`): 7 s install, version read back `codex-cli 0.166.0`, idempotent second `--apply`, and one real turn wrote a fixed token with `model_served` read from codex's own rollout record. **CF-006 (re-measured 2026-11-08): the ladder also installs the exec file-write sidecar `codex-code-mode-host`** — a SEPARATE release asset, sha256-pinned, placed beside the binary because codex spawns it from its own directory. Without it every tool call fails closed (`ERROR … failed to spawn code-mode host … No such file or directory`) and the turn exits 0 having written no artifact; with it the turn writes the token and the battery's `codex:smoke` leg PASSes. The **app-server** sidecar is `[experimental]` and **nothing in crier uses it** — `codex.go` names "two verified surfaces: exec create / exec resume", and `grep -rn app-server` over crier is empty; `--app-server` probes it anyway (an `initialize` over stdio answers with a `userAgent`). |
-| **aider** | `pip install aider-chat` (venv) | not measured, and **no adapter file ships** (CF-006): there is no pinned ladder, no artefact digest and no measured non-interactive surface in this repo, so the factory does not name it as selectable and nothing installs it. Named here so the absence is a stated one rather than a missing row. |
-| **goose** | binary | not measured, and **no adapter file ships** (CF-006): same as aider — no ladder, no digest, no measured surface. |
+| **aider** | `scripts/harness/install-aider.sh`; binary `aider`. The documented method is `pip install aider-chat` into a venv — **documented, not measured** | not measured (no pin, no artefact digest, no measured non-interactive surface); the adapter ships a real `--check`/`--contract`, prints the documented method as a `..` note and refuses `--apply` by name, so a harness this spec names can no longer be silent in the battery (CF-006) |
+| **goose** | `scripts/harness/install-goose.sh`; binary `goose`. The documented method is a standalone release binary — **documented, not measured** | not measured (no release tag, no artefact digest, no measured non-interactive surface); the adapter ships a real `--check`/`--contract` and refuses `--apply` by name (CF-006) |
 | **pi-agent** | `scripts/harness/install-pi-agent.sh`; binary `pi`, non-interactive surface `pi -p --no-session "<prompt>"` | not measured as an install (no pin, no artefact digest); the adapter ships a documented `--check`/`--contract` and refuses `--apply` by name |
 | **deepseek** | `scripts/harness/install-deepseek.sh`; the conformance row probes the binary `deepseek` (the matrix names DeepSeek's own harness at npm `@deepseek-ai/dsh`, CLI `dsh`, absent from both trees) | not measured (no binary, no ladder); the adapter ships a documented `--check`/`--contract` and refuses `--apply` by name |
 
@@ -128,11 +128,15 @@ and reinstalls the pin; only a matching venv binary earns "already installed".
 
 **hermes**, **codex** and **claude-code** have measured install ladders in this repo
 (`install-hermes.sh`, `install-codex.sh`, `install-claude-code.sh`, each proved by a test that can go
-red). `opencode`, `deepseek` and `pi-agent` ship a real `--check` and a `--contract` and refuse
-`--apply` by name, because no ladder for them has been measured here. `aider` and `goose` ship **no
-adapter file at all**: they are named in the table above so their absence is a stated one, they are
-not selectable, and nothing in this repo installs them. An unverified installer is not a supported
-installer, and the script says so out loud.
+red). `opencode`, `deepseek`, `pi-agent`, `aider` and `goose` ship a real `--check` and a
+`--contract` and refuse `--apply` by name, because no ladder for them has been measured here. `aider`
+and `goose` were the last two with **no adapter file at all** — a harness this spec names and the
+battery cannot see produces no row, which is the failure mode this section exists to forbid; both now
+ship `install-aider.sh`/`install-goose.sh`, so each prints named rows and exactly one verdict line
+(`AIDER: …` / `GOOSE: …`) and the battery's census carries them. What they do **not** gain is a
+ladder: `--apply` refuses by name for both, their conformance `smoke` column is unmeasured, and
+nothing in this repo installs or selects them. An unverified installer is not a supported installer,
+and the script says so out loud.
 
 ### What every adapter's `--check` said on the control host, 2026-11-08
 
@@ -147,6 +151,8 @@ support:
 | opencode | `UNVERIFIED` (exit 3) | binary 1.18.29 measured and its `run` surface advertised, but `user_space_binary` is a genuine WARN here: no install ladder is measured, so `--apply` refuses. |
 | deepseek | `FAIL (1)` | no `deepseek` binary; no ladder (matrix names `@deepseek-ai/dsh`, CLI `dsh`, absent from both trees). |
 | pi-agent | `PASS` | `pi` 1.5.0 measured on `PATH`, `-p` surface advertised; the auth file is a note beside a measured binary. Its install ladder is still unmeasured, so `--apply` refuses by name. |
+| aider | `FAIL (1)` | no `aider` binary on the control host and no ladder this repo measured; the documented method (`pip install aider-chat` into a venv) is printed as a `..` note, and `--apply` refuses by name. |
+| goose | `FAIL (1)` | no `goose` binary and no ladder; the documented method (a standalone release binary) is a `..` note, and `--apply` refuses by name. |
 
 An `UNVERIFIED` or `FAIL` above is a measurement, not a defect: only codex, claude-code and hermes
 have ladders this repo can reproduce, and the conformance matrix refuses to promote any of them to
@@ -173,10 +179,12 @@ invoked cannot look green; a genuinely absent binary is still a `SKIP` that name
 A `SKIP` names the exact credential or binary that is missing, and it is not evidence of support:
 this spec's table is a claim about a method, the matrix is a measurement of a host, and only the
 matrix may be quoted as "works here". A harness the BATTERY names with no adapter file is a `FAIL`,
-never a skip. `aider` and `goose` are the other case: this spec names them with no adapter file and
-they are deliberately outside the battery's census, because neither has a pin, a digest or a measured
-surface to probe — their absence is stated in the table above and nothing in the tree installs them.
-`tests/selftest.sh` §45 keeps the battery itself able to fail.
+never a skip. `aider` and `goose` used to be outside the battery's census because they had no adapter
+file; both now ship one, so the battery names them and each prints rows: a missing binary is a named
+`FAIL` in the `check` leg, and their `smoke` columns stay unmeasured (there is no measured
+non-interactive surface to probe for either), which the battery prints as a `SKIP` that says so.
+`tests/selftest.sh` §45 keeps the battery itself able to fail, and §60 holds these two adapters to
+the refusal side.
 
 Codex certifies only `$HOME/.local/codex/<pin>/bin/codex`; the same host-provided-versus-owned
 rule as hermes applies, and `--apply` refuses by name on any arch whose artefact digest it has

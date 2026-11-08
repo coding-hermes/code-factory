@@ -134,7 +134,9 @@ scripts/ (CF-003) deploy_key.py (per-repo read-only deploy key + one generated s
                  admission + orphan home/key reaper)
 scripts/harness/ install-<harness>.sh — one per harness. Shipping an install ladder: hermes,
                  claude-code, codex. Check-only (`--apply` refuses by name until a ladder is
-                 measured): opencode, deepseek, pi-agent. aider and goose ship no adapter.
+                 measured): opencode, deepseek, pi-agent, aider, goose — the last two are
+                 documented methods (pip venv / release binary) with no measured ladder, so
+                 their adapters print rows and refuse to install anything.
                  The node manifest records the harness version and binary an adapter measured;
                  verify-node.sh re-measures it (specs/HARNESS.md "A node records the harness it
                  measured")

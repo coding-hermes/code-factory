@@ -116,7 +116,9 @@ codex|install-codex.sh|codex|0|codex exec --skip-git-repo-check -s workspace-wri
 opencode|install-opencode.sh|opencode|1|opencode run \"<prompt>\"|1
 opencode-v2|install-opencode.sh|opencode|2|opencode run \"<prompt>\"|0
 deepseek|install-deepseek.sh|deepseek|0|(none documented)|0
-pi-agent|install-pi-agent.sh|pi|0|pi -p --no-session \"<prompt>\"|1"
+pi-agent|install-pi-agent.sh|pi|0|pi -p --no-session \"<prompt>\"|1
+aider|install-aider.sh|aider|0|(none documented)|0
+goose|install-goose.sh|goose|0|(none documented)|0"
 
 selected() {
   [ -z "$ONLY" ] && return 0

@@ -5,11 +5,11 @@
 | Field | Value |
 |---|---|
 | Module name | HARNESS |
-| Path | `/home/kara/code-factory/scripts/harness/` — `install-hermes.sh`, `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh`, `harness-vars.sh`; **and** `/home/kara/code-factory/scripts/` — `harness_resolve.py`, `install-go.sh`, `install-gitreins.sh`, `project-node.sh` |
+| Path | `/home/kara/code-factory/scripts/harness/` — `install-hermes.sh`, `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh`, `install-aider.sh`, `install-goose.sh`, `harness-vars.sh`; **and** `/home/kara/code-factory/scripts/` — `harness_resolve.py`, `install-go.sh`, `install-gitreins.sh`, `project-node.sh` |
 | Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; `project-node.sh` layer 20 gained the CF-150 `gateway_auth` staging block and `node-create.sh` re-lined in `08a2c8a..fbc19cb`; every M5 file:line re-pinned) |
 | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
 | Owner lane | code-factory (node-side) |
-| Status | **UNVERIFIED** — `harness-vars.sh` (318 lines), `harness_resolve.py` (400 lines), `install-hermes.sh` (388 lines, +13 for the CF-192 occupied-port auth gate), `install-gitreins.sh` (180 lines), `install-claude-code.sh` (settings surface), `install-codex.sh` (settings surface + partial body), `install-opencode.sh` (98 lines), `install-deepseek.sh` (101 lines), `install-pi-agent.sh` (113 lines) read; `install-claude-code.sh`/`install-codex.sh` full bodies not line-by-line; the conformance battery not run |
+| Status | **UNVERIFIED** — `harness-vars.sh` (318 lines), `harness_resolve.py` (400 lines), `install-hermes.sh` (388 lines, +13 for the CF-192 occupied-port auth gate), `install-gitreins.sh` (180 lines), `install-claude-code.sh` (settings surface), `install-codex.sh` (settings surface + partial body), `install-opencode.sh` (98 lines), `install-deepseek.sh` (101 lines), `install-pi-agent.sh` (113 lines), `install-aider.sh` (110 lines), `install-goose.sh` (111 lines) read; `install-claude-code.sh`/`install-codex.sh` full bodies not line-by-line; the conformance battery not run |
 
 ## 2. Purpose, authority and position
 
@@ -47,10 +47,21 @@ operator-initiated even though the installers are unit-invoked.
 | Submodule | Unit | Classification | Evidence (invoking line) |
 |---|---|---|---|
 | S1 hermes | `install-hermes.sh` | **active (unit-invoked)** | invoked by `project-node.sh:498` (computed `install-$HARNESS.sh`) / `:508-510` (`--apply`/`--check`), and staged by `node-create.sh:29`; `project-node.sh` is itself operator-invoked (the provisioning entry, no cron/scheduler invokes it) — F5-5 |
-| S2 foreign harnesses | `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh` | **active (unit-invoked)** | same computed dispatch `project-node.sh:498,508-510`; `install-claude-code.sh:36` sources `lib.sh`, the other four source `harness-vars.sh` |
+| S2 foreign harnesses | `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh`, `install-aider.sh`, `install-goose.sh` | **active (unit-invoked)** | same computed dispatch `project-node.sh:498,508-510`; `install-claude-code.sh:36` sources `lib.sh`, the other six source `harness-vars.sh` |
 | S3 toolchain/gate/node | `install-go.sh`, **`install-node.sh`**, **`gomodcache.py`**, `install-gitreins.sh`, `project-node.sh` | **active (unit-invoked)** | gate pin at `install-gitreins.sh:19`; `project-node.sh` is the one provisioning entry that invokes other units (`project-node.sh:173` disk_floor, `project-node.sh:212` reclaim, `install-go.sh --apply` in the `go` kind branch, `install-node.sh --apply` in the `node` kind branch `:396-414`, `gomodcache.py check` in the `go:modcache` row `:488-505`, the harness adapter `:498/:508-510`, and the CF-150 `gateway_auth` staging block at `:448-497`) |
 | S4 harness resolution | `harness_resolve.py` | **optional** | no production caller (`grep -rln harness_resolve scripts/` → self + tests only); F5-2 |
-| S5 variable contract | `harness/harness-vars.sh` | **active** | sourced by `install-hermes.sh`, `install-opencode.sh:15`, `install-deepseek.sh`, `install-pi-agent.sh`, `install-codex.sh:47` (conditional) |
+| S5 variable contract | `harness/harness-vars.sh` | **active** | sourced by `install-hermes.sh`, `install-opencode.sh:15`, `install-deepseek.sh`, `install-pi-agent.sh`, `install-aider.sh:21`, `install-goose.sh:22`, `install-codex.sh:47` (conditional) |
+
+**S2 no longer has a silent member.** `aider` and `goose` were named in `specs/HARNESS.md` with **no
+adapter file**, which is the one state this module forbids: a harness the spec names and the
+conformance battery cannot see produces no row at all, so nothing can go red (the S4-style silence,
+not a refusal). Both now ship a real `--check`/`--contract` —
+`scripts/harness/install-aider.sh:2-17` (documented method `pip install aider-chat` into a venv) and
+`scripts/harness/install-goose.sh:2-17` (documented method: a standalone release binary) — and both
+refuse `--apply` **by name** until someone measures a ladder and records it in `specs/HARNESS.md`
+(`install-aider.sh:103-106`, `install-goose.sh:104-107`). What they are **not** is measured: neither
+has a pin, an artefact digest or a measured non-interactive surface, so their conformance `smoke`
+column stays `0` and the battery prints a `SKIP` naming what is missing rather than a green row.
 
 **Finding F5-4.** OUTLINE v2 lists M5 as 5 submodules (S1–S5); `docs/UNIT-MAP.yaml` lists 3
 (S1–S3). The two structure maps still disagree; the 5-submodule reading is authoritative here.
@@ -202,6 +213,7 @@ distinction in both directions, so the `PASS` is not reachable by deleting the w
 |---|---|---|---|---|
 | shell parse | `for f in scripts/harness/*.sh; do bash -n "$f"; done` | exit 0 | 2026-11-06 | PASS (in 20/20 sweep) |
 | adapter verdict vocabulary | `bash tests/selftest.sh` (section 59, arms a–c) | one stub adapter, three row counts: `WARN` → `STUB: UNVERIFIED` exit 3 (never `PASS`), `FAIL` → `STUB: FAIL (1)` exit 1, all-`PASS` → `STUB: PASS` exit 0 | 2026-11-07 | **PASS** (fixture) |
+| aider/goose ship an adapter that refuses to install (CF-006, S2) | `bash tests/selftest.sh` (section 60) | in a scratch `$HOME`: each adapter's `--check` prints at least one named row and exactly one `<LABEL>: …` verdict line that equals what its own `PASS`/`WARN`/`FAIL` counts require; each `--apply` exits 1 with a `FAIL apply — refused` row naming the unmeasured ladder, that same derived verdict, and zero executable files placed | 2026-11-08 | **PASS** (fixture) |
 | verdict on the real adapters | `bash tests/selftest.sh` (section 59, arms d–f) | `install-opencode.sh --check` on the row's PATH stub → `OPENCODE: UNVERIFIED` exit 3 with two `WARN` rows, while pre-fix `d4f2600` on the same stub prints `OPENCODE: PASS` exit 0 (red control); each of the six adapters' verdict line equals the one its own `FAIL`/`WARN` counts require; an unsupported interpreter ends `FAIL python — …` + `HERMES: FAIL (1)` exit 1 | 2026-11-07 | **PASS** (fixture) |
 | codex note-versus-`WARN` classification (M5-C3, CF-384) | `bash tests/harness/codex-install-test.sh --hermetic` (arms B5, B5b) | pinned binary + host login → `CODEX: PASS` exit 0, `app_server` and `auth` printed as `..` notes with their text, zero `WARN` rows; the same binary with no credential surface → `WARN auth — no CF_API_KEY_FILE and no $HOME/.codex/auth.json` + `CODEX: UNVERIFIED` exit 3, no `FAIL` row (so the exit is the WARN, not a failure) | 2026-11-07 | **PASS** (fixture, 48 passed / 0 failed / 1 skipped) |
 | occupied-port auth gate | `bash tests/selftest.sh` (section 55, arm E) | occupied `:10800` + no `dashboard.basic_auth` -> exit nonzero with the named `FAIL  port` row and no `PASS port`/`PASS status_probe`/`HERMES: PASS`; occupied + valid block keeps both PASS rows | 2026-11-07 | **PASS** (red pre-fix run in `docs/audits/code-factory-CF-192.probe.txt`) |
@@ -264,6 +276,12 @@ and conformance pass rate are answerable only by reading the leg rows.
     sources `harness-vars.sh`.
   - `install-pi-agent.sh` — **`--apply` refused** (`:107-109`): "no measured pi install ladder";
     sources `harness-vars.sh`.
+  - `install-aider.sh` — **`--apply` refused** (`:103-106`): the aider ladder is unmeasured, and the
+    documented method (`pip install aider-chat` into a venv) is printed as a `..` note beside a real
+    `--check`; sources `harness-vars.sh` (`:21`). Closes CF-006's last silent row for aider.
+  - `install-goose.sh` — **`--apply` refused** (`:104-107`): same shape, documented method a
+    standalone release binary; sources `harness-vars.sh` (`:22`). Neither adapter downloads anything,
+    so no network call exists in any mode.
 
 ## 12. Cross-references
 
@@ -280,7 +298,8 @@ and conformance pass rate are answerable only by reading the leg rows.
 
 - Code read: `harness-vars.sh` (318), `harness_resolve.py` (400), `install-hermes.sh` (375),
   `install-gitreins.sh` (180), `install-codex.sh` (`:47-60, 425-430` + settings), `install-claude-code.sh`
-  (`:34-115` + settings), `install-deepseek.sh` (101), `install-pi-agent.sh` (113), `install-opencode.sh` (98);
+  (`:34-115` + settings), `install-deepseek.sh` (101), `install-pi-agent.sh` (113), `install-opencode.sh` (98),
+  `install-aider.sh` (110), `install-goose.sh` (111);
   `project-node.sh:448-510`.
 - **CF-003 slice, read 2026-11-07:** `scripts/install-node.sh` (whole file — pin, per-arch digests,
   `--check`/`--apply`, owned `current` symlink, version readback, fixture seam),

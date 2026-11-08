@@ -5896,5 +5896,63 @@ else
 fi
 rm -rf "$cf141"
 
+# ch:trace row=CF-006 spec=specs/HARNESS.md#adapters-and-their-measured-state wave=none:serial test=tests/selftest.sh::aider-goose-adapter doc=docs/handbook/chapters/M5-harness.md prompt=none:worker-brief evidence=tests/selftest.sh witness=none:local-fixture verdict=none:foreman-will-run-gitreins commit=none:self-referential-hash memory=none:foreman-closeout
+say "60. every harness the spec names now has an adapter: aider and goose go red by name, never silent (CF-006)"
+# Measured defect: specs/HARNESS.md names eight harnesses and states its own rule — "A harness named in
+# the tables above with no adapter file is a FAIL, never a skip" — while scripts/harness/ shipped no
+# install-aider.sh/install-goose.sh and tests/harness-conformance.sh listed neither, so both harnesses
+# produced NO row at all. The fixed state is asserted on both surfaces here: each adapter prints named
+# rows and exactly ONE verdict line, the verdict is the one its own PASS/WARN/FAIL counts require (so
+# a hand-written `say "X: PASS"` or a bare exit code cannot satisfy the arm), and each --apply is a
+# named refusal that places nothing on disk.
+cf006="$(mktemp -d)"
+mkdir -p "$cf006/home"
+for cf006_pair in aider:AIDER goose:GOOSE; do
+  cf006_id="${cf006_pair%%:*}"; cf006_label="${cf006_pair##*:}"
+  cf006_adapter="$HERE/scripts/harness/install-$cf006_id.sh"
+
+  # ARM (a): --check is a real check — named rows, one verdict line, and the verdict the rows imply.
+  out=$(env -i PATH="$PATH" HOME="$cf006/home" /bin/bash "$cf006_adapter" --check 2>&1); rc=$?
+  printf '%s\n' "$out" > "$cf006/$cf006_id.check.out"
+  rows=$(printf '%s\n' "$out" | grep -c '^  \(PASS\|FAIL\|WARN\)  ')
+  f=$(printf '%s\n' "$out" | grep -c '^  FAIL  ')
+  wn=$(printf '%s\n' "$out" | grep -c '^  WARN  ')
+  if [ "$f" -gt 0 ]; then want="FAIL ($f)"; wrc=1
+  elif [ "$wn" -gt 0 ]; then want="UNVERIFIED"; wrc=3
+  else want="PASS"; wrc=0
+  fi
+  verdicts=$(printf '%s\n' "$out" | grep -Ec "^$cf006_label: (PASS|UNVERIFIED|FAIL \([0-9]+\))$")
+  last=$(printf '%s\n' "$out" | grep -v '^$' | tail -1)
+  if [ "${rows:-0}" -ge 1 ] && [ "${verdicts:-0}" -eq 1 ] && [ "$last" = "$cf006_label: $want" ] \
+     && [ "$rc" -eq "$wrc" ]; then
+    say "  PASS  $cf006_id --check — $rows named row(s), one verdict line '$last', exit $rc (the rows require it)"
+  else
+    say "  FAIL  $cf006_id --check — ${rows:-0} named row(s), ${verdicts:-0} '$cf006_label:' verdict line(s) ('${last:-none}'), exit $rc; the rows require '$cf006_label: $want' and exit $wrc"
+    fails=$((fails+1))
+  fi
+
+  # ARM (b): --apply refuses BY NAME, ends FAIL (n) over its own rows, exits 1, and installs nothing.
+  # A scratch HOME per harness, so "placed nothing" is measured rather than asserted.
+  cf006_h="$cf006/home-$cf006_id"; mkdir -p "$cf006_h"
+  out=$(env -i PATH="$PATH" HOME="$cf006_h" /bin/bash "$cf006_adapter" --apply 2>&1); rc=$?
+  printf '%s\n' "$out" > "$cf006/$cf006_id.apply.out"
+  f=$(printf '%s\n' "$out" | grep -c '^  FAIL  ')
+  wn=$(printf '%s\n' "$out" | grep -c '^  WARN  ')
+  [ "$f" -gt 0 ] && want="FAIL ($f)" || { [ "$wn" -gt 0 ] && want="UNVERIFIED" || want="PASS"; }
+  verdicts=$(printf '%s\n' "$out" | grep -Fxc "$cf006_label: $want")
+  placed=$(find "$cf006_h" -type f -perm -u+x 2>/dev/null | wc -l)
+  if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q '^  FAIL  apply — refused' \
+     && printf '%s\n' "$out" | grep -qi 'unmeasured' \
+     && [ "$verdicts" -eq 1 ] && [ "${placed:-1}" -eq 0 ] \
+     && ! printf '%s\n' "$out" | grep -q '^  PASS  install'; then
+    say "  PASS  $cf006_id --apply — refused by name ($(printf '%s\n' "$out" | grep -c '^  FAIL  apply — refused') row + '$cf006_label: $want'), exit $rc, 0 executable(s) placed in a scratch \$HOME"
+  else
+    say "  FAIL  $cf006_id --apply — exit $rc (want 1), ${verdicts:-0} '$cf006_label: $want' line(s), ${placed:-?} executable(s) placed, or the refusal is not named"
+    printf '%s\n' "$out" | tail -3 | sed 's/^/    | /'
+    fails=$((fails+1))
+  fi
+done
+rm -rf "$cf006"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
