@@ -136,6 +136,9 @@ So, for every result:
   `error` (a short string; the scheduler's verdict reads it before anything else) and `reply_b64`
   (the node's own words, which become the tick's text). A failing gate must name the gate and its
   exit code, not just its own exit status.
+- A gate that could **not run** (no `cmd`, or a command the node could not start) is a FAILED
+  result too: the node's own row for it is a FAIL, and a result may not claim `ok: true` for a
+  brief whose gate never produced an exit code.
 - A failure is still **delivered and then acked**. Withholding the ack would only loop the work.
 
 `reply_b64` travels base64, and for the same reason the directive does: the relay's control-key

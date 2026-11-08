@@ -41,6 +41,8 @@ scheduler checkout is present; it never silently passes a disagreement.
             NOT re-run the harness, and the ack follows the accepted delivery
   A6 green  an answer lost after the relay stored it (dropped connection) still lands exactly
             once: the retry is answered with the FIRST accept id
+  A7 green  a gate that could not run is a FAILED result — never a completed tick on work
+            nobody gated (the node's own FAIL row and the envelope agree)
 
 Run directly: `python3 tests/test_bus_result_delivery.py` — exit 0 on success, 1 on failure.
 The red control runs the SAME fixture against a pre-fix worker source and requires the defect:
@@ -946,6 +948,40 @@ class BusResultDeliveryTest(Rig):
         )
         self.assert_delivered_before_acked()
 
+    # -- A7 --------------------------------------------------------------------------------
+    def test_a7_a_gate_that_could_not_run_is_not_a_pass(self):
+        """A7  a gate that could not run is a FAILED result, never a completed tick"""
+        dispatch = dispatch_envelope(
+            "d-a7", self.fixture.corr_id, reply_to="scheduler", gate={}
+        )
+        self.relay.seed(self.fixture.message_id, dispatch)
+
+        code, output = self.run_once()
+        self.assertIn(
+            "FAIL  gate",
+            output,
+            f"an unrunnable gate did not print a FAIL row: {output}",
+        )
+        self.assertNotEqual(0, code, "a run whose gate never ran exited 0")
+        payload = self.delivered_payload()
+        self.assertIs(
+            False,
+            payload.get("ok"),
+            f"a run whose gate never ran said ok: {payload}",
+        )
+        self.assertEqual("failed", payload.get("status"))
+        self.assertIn("gate did not run", str(payload.get("error") or ""))
+
+        received = consumer_await(
+            [{"payload": payload}],
+            {"corr_id": self.fixture.corr_id, "message_id": self.fixture.message_id},
+        )
+        self.assertEqual(
+            "failed",
+            received["state"],
+            f"a tick completed on work nobody gated: {received}",
+        )
+
 
 # ---------------------------------------------------------------------------------------------
 # the consumer pin — the model above must still be the scheduler's code
@@ -1087,6 +1123,7 @@ ARMS = (
     "test_a4_mismatched_corr_id_never_completes_the_tick",
     "test_a5_budget_exhaustion_is_retried_not_dropped",
     "test_a6_lost_answer_still_lands_exactly_once",
+    "test_a7_a_gate_that_could_not_run_is_not_a_pass",
 )
 
 CONTROL_ARMS = (

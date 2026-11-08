@@ -1393,6 +1393,7 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
     ok("harness", f"{label} exit {code} in {seconds:.1f}s (wall limit {wall}s)")
 
     gate_exit = None
+    gate_note = ""
     gate_expect = 0
     gate = dispatch.get("gate")
     if isinstance(gate, dict):
@@ -1409,11 +1410,14 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
 
     # The node's own reasons, in the node's own words: this is what the scheduler records as the
     # tick's failure text when `ok` is false, and what an operator reads instead of guessing at an
-    # exit code.
+    # exit code. A gate that could NOT run is one of them: the row above already says FAIL, and a
+    # result that called that "completed" would complete a tick on work nobody gated.
     reasons = []
     if code != 0:
         reasons.append(f"harness exit {code}")
-    if gate_exit is not None and gate_exit != gate_expect:
+    if gate_note:
+        reasons.append(f"gate did not run: {gate_note}")
+    elif gate_exit is not None and gate_exit != gate_expect:
         reasons.append(
             f"gate `{gate.get('cmd')}` exit {gate_exit}, expected {gate_expect}"
         )
