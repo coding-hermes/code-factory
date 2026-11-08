@@ -1,0 +1,1458 @@
+commit 6447606bfdbe1babbabe12331432a7f80dc2b015
+Author:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+AuthorDate: Sat Nov 7 19:08:52 2026 -0500
+Commit:     totalwindupflightsystems <totalwindupflightsystems@gmail.com>
+CommitDate: Sat Nov 7 19:08:52 2026 -0500
+
+    handbook: W10 — the four ship-blockers
+    
+    B5 label regression: build_book.py carried a stale duplicate svg_fit that
+    shadowed the both-dimension fit, so tall figures actually printed at
+    height:200mm while every gate modeled min(1, 170/w, 250/h) — 142 labels
+    printed 1.68-1.91mm. The stale definition is gone; builder and gate now
+    apply the same rule and the figure gate re-measures all 32 SVGs (min
+    2.08mm, floor 2.05). Legend no longer double-books 'dotted' (MISSING
+    keeps dotted; UNVERIFIED moves to dash-dot). System-map title moved
+    clear of the first panel band; a mechanical wire-label-vs-box gate
+    (CT-nn / M*-C* alone on a text element) fails the build on label-in-box.
+    
+    E4 register: gen_contract_register.py renders per-side citations from
+    the model's sender_guarantee / receiver_requirement and mechanically
+    downgrades any PROVEN state with an uncited side, so a PROVEN+RED card
+    cannot be generated. CT-01/02/03/06/08 sides verified in code
+    (admission_mode.go:112, bus/dispatch.go:202+266, crier handler.go:990,
+    dispatch_leg.go:713, hermesession.go:353, api_server.py:1763,
+    node-bus-worker.py:1356+1383, install-gitreins.sh:124,
+    master_doc_check.py:263, bunker-provision.sh:504); CT-16 and CT-23
+    (M1-C2) downgraded to UNVERIFIED with the sender side cited.
+    
+    E3 contents: Folio column filled by a measured post-pass (part start
+    pages read back from the printed PDF, rebuild, re-measure, must
+    converge); '1 chapters' pluralized.
+    
+    D-family: off-loopback binding (M9) and memory-lost-on-restart (M10)
+    promoted from inline bold to WARNING blocks; a Flight Data File
+    checklist card (black title bar, numbered CONTROL steps, verification
+    lines, Letter Gothic — the skill's .card spec) closes all 13 module
+    chapters; change bars are now gated in the PDF margin, not assumed.
+    
+    Build: CF2A-01-w10.pdf, 125 pp, all gates green.
+    
+    Disclosed: core.hooksPath=/dev/null
+---
+ docs/SYSTEM-MODEL.yaml                        |  21 ++-
+ docs/handbook/chapters/M0-shared-contract.md  |  13 ++
+ docs/handbook/chapters/M1-provisioning.md     |  15 ++
+ docs/handbook/chapters/M10-crier.md           |  17 ++
+ docs/handbook/chapters/M11-dispatcher.md      |  13 ++
+ docs/handbook/chapters/M12-inference-proxy.md |  13 ++
+ docs/handbook/chapters/M2-dispatch.md         |  13 ++
+ docs/handbook/chapters/M3-repository.md       |  13 ++
+ docs/handbook/chapters/M4-board.md            |  13 ++
+ docs/handbook/chapters/M5-harness.md          |  13 ++
+ docs/handbook/chapters/M6-documentation.md    |  13 ++
+ docs/handbook/chapters/M7-github.md           |  13 ++
+ docs/handbook/chapters/M8-safety.md           |  13 ++
+ docs/handbook/chapters/M9-scheduler.md        |  18 ++
+ docs/handbook/figures/module-M0.svg           |   4 +-
+ docs/handbook/figures/module-M1.svg           |   6 +-
+ docs/handbook/figures/module-M10.svg          |   4 +-
+ docs/handbook/figures/module-M11.svg          |   4 +-
+ docs/handbook/figures/module-M12.svg          |  10 +-
+ docs/handbook/figures/module-M2.svg           |   6 +-
+ docs/handbook/figures/module-M3.svg           |   6 +-
+ docs/handbook/figures/module-M4.svg           |   8 +-
+ docs/handbook/figures/module-M5.svg           |   6 +-
+ docs/handbook/figures/module-M6.svg           |   6 +-
+ docs/handbook/figures/module-M7.svg           |   6 +-
+ docs/handbook/figures/module-M8.svg           |   4 +-
+ docs/handbook/figures/module-M9.svg           |  10 +-
+ docs/handbook/figures/system-map.svg          | 250 +++++++++++++-------------
+ docs/handbook/parts/IV-contract-register.md   |  91 ++++++----
+ scripts/book_style.py                         |  10 ++
+ scripts/gen_contract_register.py              |  93 +++++++---
+ 31 files changed, 492 insertions(+), 233 deletions(-)
+
+diff --git a/docs/SYSTEM-MODEL.yaml b/docs/SYSTEM-MODEL.yaml
+index f5742a9..1373463 100644
+--- a/docs/SYSTEM-MODEL.yaml
++++ b/docs/SYSTEM-MODEL.yaml
+@@ -263,6 +263,8 @@ contracts:
+     carries: lane enabled, cadence, weight, pin
+     mode: config
+     state: UNVERIFIED
++    sender_guarantee: "the owner declares it — fleet.example.toml:15,35 (per-lane weight, enabled); project admission rows in scheduler.db are the source of record"
++    receiver_requirement: "internal/scheduler/admission_mode.go:112 — admissionModeForProject resolves the project row (override → namespace default → cooldown)"
+     note: boundary — the producer is a human writing fleet.toml and scheduler.db project rows; the consumer is admission_mode.go:112 admissionModeForProject (M9 §6)
+   - id: CT-02
+     from: scheduler
+@@ -270,6 +272,8 @@ contracts:
+     carries: "envelope: run_id, corr_id, lane, board, text_b64"
+     mode: async, bearer + signature
+     state: PROVEN
++    sender_guarantee: "internal/bus/dispatch.go:202,266 — BuildDispatch renders run_id/corr_id/lane/board/text_b64 and signs before POST"
++    receiver_requirement: "crier internal/registry/handler.go:990 — HandleDeliver accepts the by-id delivery into the durable inbox"
+     note: CF-354 fixed — crier HandleDeliver delivers the envelope verbatim (M9 §6, M10 §6)
+   - id: CT-03
+     from: crier
+@@ -277,6 +281,8 @@ contracts:
+     carries: inbox message + lease
+     mode: pull, 30 s lease
+     state: PROVEN
++    sender_guarantee: "crier internal/registry/handler.go:990 — deliver(): durable inbox write with lease/ack/TTL semantics"
++    receiver_requirement: "scripts/node-bus-worker.py:1356,1383 — signed GET /agents/<id>/inbox retrieve, then /inbox/ack"
+     note: the node worker (M2 §6) and the dispatcher (M11 §6) are the two consumers
+   - id: CT-04
+     from: node
+@@ -298,6 +304,8 @@ contracts:
+     carries: completion event for a finished run
+     mode: async
+     state: PROVEN
++    sender_guarantee: "crier internal/registry/handler.go:170,1452 — the answering message carries ReplyTo correlation into the scheduler's durable inbox"
++    receiver_requirement: "internal/scheduler/dispatch_leg.go:713 — dispatchReplyVerdict reads the correlated payload's ok (first message wins, :428)"
+     note: the dispatcher leg works — it always sends `ok`, the field dispatchReplyVerdict reads (M11 §6)
+   - id: CT-07
+     from: router
+@@ -312,6 +320,8 @@ contracts:
+     carries: hermes-session delivery (message becomes a session turn)
+     mode: sync, 30 s
+     state: PROVEN
++    sender_guarantee: "crier internal/hermesession/hermesession.go:353 — Client.Deliver; :554 POSTs /api/sessions at the gateway origin"
++    receiver_requirement: "hermes gateway/platforms/api_server.py:1763 — POST /api/sessions creates the session row from the delivered message"
+     note: crier side named — hermesession.go:353 Client.Deliver (M10 §6)
+   - id: CT-09
+     from: node
+@@ -340,6 +350,7 @@ contracts:
+     carries: staged diff
+     mode: pre-commit hook
+     state: UNVERIFIED
++    sender_guarantee: "scripts/install-gitreins.sh:124 — the pre-commit hook pins $VENV/bin/gitreins guard --quality-async on every seeded repo"
+     note: the hook side is named (install-gitreins.sh:124); hook enforcement — that git invokes it — is unproven (M3 §6, M3 §11)
+   - id: CT-13
+     from: gitreins
+@@ -367,8 +378,9 @@ contracts:
+     to: handbook
+     carries: module status word
+     mode: read at build
+-    state: PROVEN
+-    note: a structural gate, not a truth gate (M6 §6 F6-2)
++    state: UNVERIFIED
++    sender_guarantee: "scripts/master_doc_check.py:263 — prints MASTER-DOC: PASS|FAIL and exits 1 on FAIL"
++    note: a structural gate, not a truth gate (M6 §6 F6-2); downgraded from PROVEN — the handbook build reads no MASTER-DOC output, so the receiver half is uncited
+   - id: CT-17
+     from: conformance
+     to: harness
+@@ -417,8 +429,9 @@ contracts:
+     to: bunker
+     carries: create, exec, cp against the agent container
+     mode: bunker CLI
+-    state: PROVEN
+-    note: short create/exec/cp calls measured across M1's batteries (M1 §6)
++    state: UNVERIFIED
++    sender_guarantee: "scripts/bunker-provision.sh:504 — the node-create.sh stage drives create/exec/cp against the agent container"
++    note: short create/exec/cp calls measured across M1's batteries (M1 §6); downgraded from PROVEN — the daemon's accept side has no in-repo file:function to cite
+ 
+ # F1-F5 carried from the outline; F6-F10 secondary; F11-F16 quorum-added. Each step names the
+ # component pair and a what that cites the chapter text or contract row it came from.
+diff --git a/docs/handbook/chapters/M0-shared-contract.md b/docs/handbook/chapters/M0-shared-contract.md
+index fb9855a..8d9b16d 100644
+--- a/docs/handbook/chapters/M0-shared-contract.md
++++ b/docs/handbook/chapters/M0-shared-contract.md
+@@ -201,3 +201,16 @@ rate are answerable only by the static greps above.
+     `harness-vars.sh`.
+ 
+ ## RED field count: 1 (Metrics §8)
++
++## FLIGHT DATA FILE - M0 SHARED CONTRACT
++
++```checklist
++TITLE: M0 SHARED CONTRACT
++WHO: NODE OPERATOR
++SELFTEST - run the full battery: bash tests/selftest.sh
++√ EXIT 0 - every section prints PASS; a FAIL names its fixture
++HELPERS - source lib.sh and fire ok/bad/warn/note once each
++√ FORMAT - exactly one prefixed line per call, exit status preserved
++DISK FLOOR - call require_disk on a host below the floor
++√ REFUSAL - named refusal, nonzero exit, nothing written
++```
+diff --git a/docs/handbook/chapters/M1-provisioning.md b/docs/handbook/chapters/M1-provisioning.md
+index 375aab0..4fb1c75 100644
+--- a/docs/handbook/chapters/M1-provisioning.md
++++ b/docs/handbook/chapters/M1-provisioning.md
+@@ -332,3 +332,18 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
+     false-green path.
+ 
+ ## RED field count: 4 (Status §1 — `node_env`/`node_seed_drift`/`node_freshness`/`bunker_config_gen` bodies not read line-by-line; §7 certification ladder not run on a live node; Metrics §8 — absence-proved; §9 inventory 5 of 141 helper call sites — the descriptive rows not tabulated one-per-site)
++
++## FLIGHT DATA FILE - M1 PROVISIONING
++
++```checklist
++TITLE: M1 PROVISIONING
++WHO: CONTROL HOST
++CHECK - ./scripts/bunker-provision.sh --config <conf> --check
++√ ROWS - node/agent/repo/auth rows PASS; a lone FAIL inputs is a replay gap, not a node defect
++APPLY - ./scripts/bunker-provision.sh --apply
++√ RESOLVED - one resolved line names project, agent, server, repo, ref, harness, namespace, TTL
++BUS - bunker-crier-connect.sh --stage, then --apply, then re-probe the inbox
++√ 200 - signed read accepted, queue depth printed
++ROSTER - read fleet_agents.json and fleet-repo-scope.json
++√ MEMBER - the agent is in both stores before any dispatch
++```
+diff --git a/docs/handbook/chapters/M10-crier.md b/docs/handbook/chapters/M10-crier.md
+index e7f2994..ae21397 100644
+--- a/docs/handbook/chapters/M10-crier.md
++++ b/docs/handbook/chapters/M10-crier.md
+@@ -113,6 +113,10 @@ comment (line **2**, not 5) disagrees with the default-ON config.
+ 
+ **Storage-selection controls (B20; memory backend B19).** `config/config.go:113-123` `ResolvedRegistryBackend()` resolves the custody backend in this precedence: an explicit `CR_REGISTRY_BACKEND` (`Registry.Backend`, `:104`) → a `sqlite:` `Database.URL` → any non-empty `Database.URL` (`postgres`) → **`memory`**. `:732-767` implements database-URL precedence plus explicit backend validation and refusal conditions; `:770-808` implements pool controls. The **memory** backend is process-local and demo-only: held deliveries and inboxes are **lost on restart** (`config.go:550-551`), so custody is not durable under it. A register that names only the driver rows and transport defaults is incomplete; how an operator proves *which* backend is actually serving custody (readback of the resolved backend at boot) is not yet written (a named RED on §5).
+ 
++> WARNING: the `memory` registry backend is process-local and demo-only — held deliveries and
++> inboxes are lost on restart (`config.go:550-551`). Custody is not durable under it; any
++> deployment that must survive a daemon restart requires a `sqlite:` or `postgres` backend.
++
+ ## 6. Contracts in and out
+ 
+ Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Local ids are
+@@ -266,3 +270,16 @@ named RED on this field).
+   - **F10-6** — repo moved `86c4c469`→`ae9fc57f`; all 9 cited files byte-identical; one fresh `go test ./...` passed clean (0 FAIL, `cmd/server` 65.4s), but the flaky-test files (`cmd/server/*_test.go`) changed since the earlier measurement, so a single green run does not retire the flaky finding.
+ 
+ ## RED field count: 5 (S1 handler 1895-line body not read line-by-line — the slog surface is complete but the body's non-slog semantics are not; §8 per-metric contract — series names inventoried but the type/labels/question/scrape table not filled; §9 guard log surface not tabulated — B22; §5 storage-selection custody-proof not written — B20; §7 `go test ./...` — one fresh clean run at HEAD `ae9fc57f`, but the flaky finding is not retired (single run ≠ determinism))
++
++## FLIGHT DATA FILE - M10 CRIER
++
++```checklist
++TITLE: M10 CRIER
++WHO: CONTROL HOST
++REGISTER - sign and POST /agents
++√ 200 - identity accepted, signing key stored
++DELIVER - POST a signed envelope to the agent inbox
++√ INBOX - durable inbox row written, lease started
++RESTART - restart the daemon under the memory backend
++√ EMPTY - inboxes are empty after restart (WARNING: memory custody is not durable)
++```
+diff --git a/docs/handbook/chapters/M11-dispatcher.md b/docs/handbook/chapters/M11-dispatcher.md
+index 2779bbc..fb87d9e 100644
+--- a/docs/handbook/chapters/M11-dispatcher.md
++++ b/docs/handbook/chapters/M11-dispatcher.md
+@@ -205,3 +205,16 @@ lines — `:81` a comment mentioning `log()` and `:112` the `def log(` definitio
+     until a test proves the kill reaches the harness group.
+ 
+ ## RED field count: 2 (Metrics §8, live-job test row §7 — decoration, cannot fail)
++
++## FLIGHT DATA FILE - M11 DISPATCHER
++
++```checklist
++TITLE: M11 DISPATCHER
++WHO: CONTROL HOST
++POLL - run one dispatcher cycle against a queued agent
++√ LEASE - exactly one message leased; the run starts
++REPLY - let the worker finish
++√ LEDGER - dispatch-ledger.jsonl grows by one line naming the corr id
++FRESHNESS - compare dispatcher service start to its script mtime
++√ CURRENT - no negative elapsed in the journal (a stale poller lies about time)
++```
+diff --git a/docs/handbook/chapters/M12-inference-proxy.md b/docs/handbook/chapters/M12-inference-proxy.md
+index c1ac898..6b4c2e4 100644
+--- a/docs/handbook/chapters/M12-inference-proxy.md
++++ b/docs/handbook/chapters/M12-inference-proxy.md
+@@ -221,3 +221,16 @@ is a capture log, not an emitted metric.
+     (`:52`).
+ 
+ ## RED field count: 4 (Metrics §8 — absence-proved; M12-C1 node-client half UNVERIFIED; M12-C2 upstream half UNVERIFIED — one-sided external boundary; stream completion **FAILING** — F12-7 reproduced)
++
++## FLIGHT DATA FILE - M12 INFERENCE PROXY
++
++```checklist
++TITLE: M12 INFERENCE PROXY
++WHO: CONTROL HOST
++NO TOKEN - POST a completion with no bearer
++√ 401 - named refusal, nothing forwarded
++ALLOWLIST - request a model off the allowlist
++√ REFUSED - named refusal, no upstream call, no key spent
++STREAM - send stream: true
++√ FIRST BYTE - headers go out immediately; first_byte logged, never buffered
++```
+diff --git a/docs/handbook/chapters/M2-dispatch.md b/docs/handbook/chapters/M2-dispatch.md
+index d476cf6..49aa628 100644
+--- a/docs/handbook/chapters/M2-dispatch.md
++++ b/docs/handbook/chapters/M2-dispatch.md
+@@ -196,3 +196,16 @@ on this field, not a "sample" claimed complete:
+     open.
+ 
+ ## RED field count: 3 (Metrics §8; §7 live bus-worker ladder not repeatable from this host; §9 inventory 4 of 70 helper call sites — the descriptive per-measurement rows not tabulated one-per-site)
++
++## FLIGHT DATA FILE - M2 DISPATCH - NODE SIDE
++
++```checklist
++TITLE: M2 DISPATCH - NODE SIDE
++WHO: NODE OPERATOR
++POLL - node-bus-worker.py --once --dry-run
++√ EXIT 0 - row PASS, fetch verified, nothing acked (the 5 s lease returns the batch)
++RUN - node-bus-worker.py --once
++√ REPLY - brief verified, harness run, reply acked, exit 0
++SIGNATURE - replay a retrieve with a tampered header
++√ REFUSED - 401 naming the signer; no harness run, no ack
++```
+diff --git a/docs/handbook/chapters/M3-repository.md b/docs/handbook/chapters/M3-repository.md
+index bc76a21..f2854a5 100644
+--- a/docs/handbook/chapters/M3-repository.md
++++ b/docs/handbook/chapters/M3-repository.md
+@@ -203,3 +203,16 @@ are answerable only by reading the `LANDED:` / `LAND: REFUSED` rows.
+     operator-invoked (optional); the envelope names `branch`/`commit` but does not call the lander.
+ 
+ ## RED field count: 3 (Metrics §8 — absence-proved; §1 status — `repo_freshness.py` body not read line-by-line (behaviour exercised by the cf244 arm, source unread) and S3 hook *enforcement* UNVERIFIED (the landing arm proves landing behaviour, not that git invokes the installed pre-commit gate); §9 inventory 5 of 35 helper call sites)
++
++## FLIGHT DATA FILE - M3 REPOSITORY
++
++```checklist
++TITLE: M3 REPOSITORY
++WHO: NODE OPERATOR
++TREE - git -C $HOME/repo status; origin and branch read back as seeded
++√ CLEAN - the seeded tree is the pinned ref, worktree clean
++HOOK - read .git/hooks/pre-commit
++√ PINNED - hook runs the ABSOLUTE gitreins path (install-gitreins.sh:124), never bare gitreins
++PUSH - git push --dry-run from the worktree
++√ REMOTE - push reaches origin or names the exact credential gap
++```
+diff --git a/docs/handbook/chapters/M4-board.md b/docs/handbook/chapters/M4-board.md
+index 85dd08f..d2f4776 100644
+--- a/docs/handbook/chapters/M4-board.md
++++ b/docs/handbook/chapters/M4-board.md
+@@ -225,3 +225,16 @@ carried from an earlier capture (N9):
+     HEAD == origin/main == `fbc19cb`. Documented, not reconciled in-band.
+ 
+ ## RED field count: 2 (Metrics §8 — absence-proved; CT-14/CT-13 states UNVERIFIED — every side is an external peer)
++
++## FLIGHT DATA FILE - M4 BOARD
++
++```checklist
++TITLE: M4 BOARD
++WHO: CONTROL HOST
++READ - read the board store; rows and events counted separately
++√ PARSE - every line parses; a duplicate id is named, never silently dropped
++APPEND - boardctl update with --evidence-run-id on a closed row
++√ EVENT - events grow by exactly one row; the store prints the new count
++RECONCILE - audit a claimed-done row against its evidence
++√ MATCH - the row closes only on evidence tied to the exact tree
++```
+diff --git a/docs/handbook/chapters/M5-harness.md b/docs/handbook/chapters/M5-harness.md
+index cb9386d..50f01ce 100644
+--- a/docs/handbook/chapters/M5-harness.md
++++ b/docs/handbook/chapters/M5-harness.md
+@@ -311,3 +311,16 @@ and conformance pass rate are answerable only by reading the leg rows.
+     the download. The sealed-cache half is F1-8 (M1).
+ 
+ ## RED field count: 4 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; M5-C2 contract state UNVERIFIED — a port/service is not a `file:function`; §9 inventory 4 of 215+ helper call sites — the descriptive per-measurement rows not tabulated one-per-site)
++
++## FLIGHT DATA FILE - M5 HARNESS
++
++```checklist
++TITLE: M5 HARNESS
++WHO: NODE OPERATOR
++RESOLVE - resolve the pinned harness binary and args for the lane
++√ BINARY - one binary, one arg set, no PATH drift
++SMOKE - run the harness on a scratch brief
++√ COMMIT - a commit lands carrying the co-author trailer
++GRADE - run the gitreins guard on a staged change
++√ VERDICT - PASS or FAIL with named criteria, never a silent skip
++```
+diff --git a/docs/handbook/chapters/M6-documentation.md b/docs/handbook/chapters/M6-documentation.md
+index 4cb8104..4c0bed0 100644
+--- a/docs/handbook/chapters/M6-documentation.md
++++ b/docs/handbook/chapters/M6-documentation.md
+@@ -222,3 +222,16 @@ coverage are derived by the census, not emitted.
+     re-pinned to the rewritten file (`main()` at `:321`, config `:33-38`, stop `:442-457`).
+ 
+ ## RED field count: 2 (Status §1 — own gate reads FAIL, Metrics §8)
++
++## FLIGHT DATA FILE - M6 DOCUMENTATION
++
++```checklist
++TITLE: M6 DOCUMENTATION
++WHO: DOC PANEL
++LINT - python3 scripts/master_doc_check.py
++√ PASS - MASTER-DOC: PASS, exit 0; a FAIL names the section and line
++BUILD - python3 scripts/build_book.py --out <pdf>
++√ GATES - lint, fit, furniture and check.py all green; page count printed
++CROSSWALK - spot-check one M-id against its chapter section
++√ MATCHES - the crosswalk row and the chapter agree
++```
+diff --git a/docs/handbook/chapters/M7-github.md b/docs/handbook/chapters/M7-github.md
+index 3d5a9da..71b75e5 100644
+--- a/docs/handbook/chapters/M7-github.md
++++ b/docs/handbook/chapters/M7-github.md
+@@ -156,3 +156,16 @@ latency are answerable only by reading the refresh log.
+     unknown.
+ 
+ ## RED field count: 4 (Metrics §8 — absence-proved; §1 mint UNVERIFIED; M7-C1 contract state UNVERIFIED — consumer is an external API; §9 inventory 2 of 103 helper call sites — the descriptive rows not tabulated one-per-site)
++
++## FLIGHT DATA FILE - M7 GITHUB
++
++```checklist
++TITLE: M7 GITHUB
++WHO: CONTROL HOST
++MINT - mint the App installation token
++√ FILE - token lands in auth/github.token, mode 0600, never in argv
++SCOPE - read fleet-repo-scope.json before a job requests a token
++√ SCOPED - the repo is listed; an unlisted repo is refused before minting
++REFRESH - re-mint after expiry and confirm the old token is rejected
++√ ROTATES - new token works, old token 401s
++```
+diff --git a/docs/handbook/chapters/M8-safety.md b/docs/handbook/chapters/M8-safety.md
+index a399279..25f2bc8 100644
+--- a/docs/handbook/chapters/M8-safety.md
++++ b/docs/handbook/chapters/M8-safety.md
+@@ -156,3 +156,16 @@ output (`reclaimed_bytes`/`reclaimed_mib` at `:121-123`), not emitted.
+     `check_scan_scope.py` has no production caller (operator-invoked, optional).
+ 
+ ## RED field count: 1 (Metrics §8)
++
++## FLIGHT DATA FILE - M8 SAFETY
++
++```checklist
++TITLE: M8 SAFETY
++WHO: NODE OPERATOR
++FAIL PATH - offer a change the gate must refuse
++√ REFUSED - named reason, nonzero exit, nothing merged
++DISK - run require_disk with the floor raised above free space
++√ REFUSAL - named refusal before the host fills
++SECRETS - run the secret scan on a staged token
++√ CAUGHT - scan names the file and line; commit blocked
++```
+diff --git a/docs/handbook/chapters/M9-scheduler.md b/docs/handbook/chapters/M9-scheduler.md
+index 09ebe81..a92e9f1 100644
+--- a/docs/handbook/chapters/M9-scheduler.md
++++ b/docs/handbook/chapters/M9-scheduler.md
+@@ -160,6 +160,11 @@ definitions**, measured with `grep -cE 'flag\.(String|Int|Int64|Bool|Duration|Fl
+ | `disable-tick-push` | false (`:172`) | bool | skip the per-tick git push at exit (SCHED-GAP-1594) | true stops tick push-at-exit |
+ | `no-exec-fallback` | **true** (`:190`) | bool | disable `exec.Command` fallback when gateway fails | false re-enables the exec fallback |
+ 
++> WARNING: the daemon's HTTP surface is loopback by construction — `listen` defaults to
++> `127.0.0.1:9090` (`cmd/schedulerd/main.go:96`). Binding it off-loopback exposes the API
++> beyond the host it runs on. Do not move `listen` off `127.0.0.1` without an authenticating
++> front end in front of it.
++
+ **Auxiliary / routing / lifecycle flags (default + consequence, expanded (B15)).** The remaining 33 of the 57, with the consequence column filled per row from the flag help text at `cmd/schedulerd/main.go:102-208`:
+ 
+ | Setting | Default | Governs | Consequence if changed |
+@@ -327,3 +332,16 @@ the named RED on this field — not a "sample" claimed as complete.
+   - **F9-10** (new) — the full suite now FAILs `internal/api` on `TestPERF001R2StatusPassAB` under concurrent load (max 2.79s vs 1.65s budget); passes in isolation (0.646s) — a load-window flake, not a regression.
+ 
+ ## RED field count: 5 (§9 log inventory 2 of 382 sites — the remaining 380 are the named RED, not a "sample"; §3 S1 grep-level (`tick_process`/`packer_select`/`namespace_alloc` not line-by-line — `noop_pacing.go`/`packer_select.go:385-400`/`spawn.go` ARE read); §5 the auxiliary-flag reader/precedence not re-verified per flag (the consequence column is now filled); S4 per-route contract not written — B18; S3 write authorities/recovery queries not written — B17)
++
++## FLIGHT DATA FILE - M9 SCHEDULER
++
++```checklist
++TITLE: M9 SCHEDULER
++WHO: CONTROL HOST
++LISTEN - curl the daemon on 127.0.0.1:9090
++√ LOOPBACK - answers on loopback only (WARNING: off-loopback exposes the API)
++TICK - observe one cadence tick in the log
++√ DISPOSITION - the tick line names admitted or deferred, never dropped
++GATE - hold a lane at cooldown and fire a tick
++√ SKIPPED - the lane is skipped with its reason; no spawn
++```
+diff --git a/docs/handbook/figures/module-M0.svg b/docs/handbook/figures/module-M0.svg
+index 02c0040..3a82799 100644
+--- a/docs/handbook/figures/module-M0.svg
++++ b/docs/handbook/figures/module-M0.svg
+@@ -25,5 +25,5 @@
+ <text x="472.0" y="91.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
+ <polyline points="430.0,104.9 464.0,104.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+ <text x="472.0" y="107.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
+-<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+-<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>
+\ No newline at end of file
++<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3"/>
++<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dash-dot — no evidence either way</text></g></svg>
+\ No newline at end of file
+diff --git a/docs/handbook/figures/module-M1.svg b/docs/handbook/figures/module-M1.svg
+index fd0cfb2..917a197 100644
+--- a/docs/handbook/figures/module-M1.svg
++++ b/docs/handbook/figures/module-M1.svg
+@@ -10,7 +10,7 @@
+ <text x="30.0" y="190.0" font-size="9.50" fill="#000000" text-anchor="start">no cross-system contract</text>
+ <text x="30.0" y="205.0" font-size="8.40" fill="#000000" text-anchor="start">none in Part IV or the chapter&#x27;s §6</text>
+ <text x="450.0" y="158.0" font-size="8.40" fill="#000000" text-anchor="start">OUTPUTS — DOWNSTREAM CONTRACTS</text>
+-<polyline points="417.0,192.0 450.0,197.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
++<polyline points="417.0,192.0 450.0,197.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
+ <rect x="450.0" y="172.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+ <text x="460.0" y="188.0" font-size="8.40" fill="#000000" text-anchor="start">M1-C1 · M1 -&gt; CRIER  [UNVERIFIED]</text>
+ <text x="460.0" y="202.0" font-size="8.40" fill="#000000" text-anchor="start">agent registration + token exchange</text>
+@@ -31,5 +31,5 @@
+ <text x="472.0" y="91.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
+ <polyline points="430.0,104.9 464.0,104.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+ <text x="472.0" y="107.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
+-<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+-<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>
+\ No newline at end of file
++<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3"/>
++<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dash-dot — no evidence either way</text></g></svg>
+\ No newline at end of file
+diff --git a/docs/handbook/figures/module-M10.svg b/docs/handbook/figures/module-M10.svg
+index 0ac4d87..c009f43 100644
+--- a/docs/handbook/figures/module-M10.svg
++++ b/docs/handbook/figures/module-M10.svg
+@@ -43,5 +43,5 @@
+ <text x="472.0" y="91.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
+ <polyline points="430.0,104.9 464.0,104.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+ <text x="472.0" y="107.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
+-<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+-<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>
+\ No newline at end of file
++<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3"/>
++<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dash-dot — no evidence either way</text></g></svg>
+\ No newline at end of file
+diff --git a/docs/handbook/figures/module-M11.svg b/docs/handbook/figures/module-M11.svg
+index 2595ef9..67c06f7 100644
+--- a/docs/handbook/figures/module-M11.svg
++++ b/docs/handbook/figures/module-M11.svg
+@@ -30,5 +30,5 @@
+ <text x="472.0" y="91.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
+ <polyline points="430.0,104.9 464.0,104.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+ <text x="472.0" y="107.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
+-<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+-<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>
+\ No newline at end of file
++<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3"/>
++<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dash-dot — no evidence either way</text></g></svg>
+\ No newline at end of file
+diff --git a/docs/handbook/figures/module-M12.svg b/docs/handbook/figures/module-M12.svg
+index c405bda..a69a01e 100644
+--- a/docs/handbook/figures/module-M12.svg
++++ b/docs/handbook/figures/module-M12.svg
+@@ -4,16 +4,16 @@
+ <text x="340.0" y="192.0" font-size="11.00" fill="#000000" text-anchor="middle">M12</text>
+ <text x="340.0" y="212.0" font-size="13.00" fill="#000000" text-anchor="middle">INFERENCE PROXY</text>
+ <text x="20.0" y="158.0" font-size="8.40" fill="#000000" text-anchor="start">INPUTS — UPSTREAM CONTRACTS</text>
+-<polyline points="230.0,197.0 263.0,192.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
++<polyline points="230.0,197.0 263.0,192.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
+ <rect x="20.0" y="172.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+ <text x="30.0" y="188.0" font-size="8.40" fill="#000000" text-anchor="start">CT-07 · ROUTER -&gt; M12  [UNVERIFIED]</text>
+ <text x="30.0" y="202.0" font-size="8.40" fill="#000000" text-anchor="start">model choice for a prompt</text>
+-<polyline points="230.0,253.0 263.0,220.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
++<polyline points="230.0,253.0 263.0,220.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
+ <rect x="20.0" y="228.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+ <text x="30.0" y="244.0" font-size="8.40" fill="#000000" text-anchor="start">M12-C1 · NODE -&gt; M12  [UNVERIFIED]</text>
+ <text x="30.0" y="258.0" font-size="8.40" fill="#000000" text-anchor="start">chat completion with a node bearer token</text>
+ <text x="450.0" y="158.0" font-size="8.40" fill="#000000" text-anchor="start">OUTPUTS — DOWNSTREAM CONTRACTS</text>
+-<polyline points="417.0,206.0 450.0,197.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
++<polyline points="417.0,206.0 450.0,197.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
+ <rect x="450.0" y="172.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+ <text x="460.0" y="188.0" font-size="8.40" fill="#000000" text-anchor="start">M12-C2 · M12 -&gt; HERMES GATEWAY  [UNVERIFIED]</text>
+ <text x="460.0" y="202.0" font-size="8.40" fill="#000000" text-anchor="start">forwarded inference with the control-host key</text>
+@@ -33,5 +33,5 @@
+ <text x="472.0" y="91.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
+ <polyline points="430.0,104.9 464.0,104.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+ <text x="472.0" y="107.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
+-<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+-<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>
+\ No newline at end of file
++<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3"/>
++<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dash-dot — no evidence either way</text></g></svg>
+\ No newline at end of file
+diff --git a/docs/handbook/figures/module-M2.svg b/docs/handbook/figures/module-M2.svg
+index d31d7c8..d39e13e 100644
+--- a/docs/handbook/figures/module-M2.svg
++++ b/docs/handbook/figures/module-M2.svg
+@@ -18,7 +18,7 @@
+ <rect x="450.0" y="228.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+ <text x="460.0" y="244.0" font-size="8.40" fill="#000000" text-anchor="start">CT-09 · M2 -&gt; DUCKBRAIN  [MISSING]</text>
+ <text x="460.0" y="258.0" font-size="8.40" fill="#000000" text-anchor="start">R1 run record, R2 fleet index</text>
+-<polyline points="417.0,224.7 450.0,309.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
++<polyline points="417.0,224.7 450.0,309.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
+ <rect x="450.0" y="284.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+ <text x="460.0" y="300.0" font-size="8.40" fill="#000000" text-anchor="start">CT-11 · M2 -&gt; SESSIONS  [UNVERIFIED]</text>
+ <text x="460.0" y="314.0" font-size="8.40" fill="#000000" text-anchor="start">every turn, model, tokens</text>
+@@ -44,5 +44,5 @@
+ <text x="472.0" y="91.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
+ <polyline points="430.0,104.9 464.0,104.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+ <text x="472.0" y="107.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
+-<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+-<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>
+\ No newline at end of file
++<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3"/>
++<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dash-dot — no evidence either way</text></g></svg>
+\ No newline at end of file
+diff --git a/docs/handbook/figures/module-M3.svg b/docs/handbook/figures/module-M3.svg
+index 69d0e7e..b183190 100644
+--- a/docs/handbook/figures/module-M3.svg
++++ b/docs/handbook/figures/module-M3.svg
+@@ -9,7 +9,7 @@
+ <text x="30.0" y="190.0" font-size="9.50" fill="#000000" text-anchor="start">no cross-system contract</text>
+ <text x="30.0" y="205.0" font-size="8.40" fill="#000000" text-anchor="start">none in Part IV or the chapter&#x27;s §6</text>
+ <text x="450.0" y="158.0" font-size="8.40" fill="#000000" text-anchor="start">OUTPUTS — DOWNSTREAM CONTRACTS</text>
+-<polyline points="417.0,206.0 450.0,197.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
++<polyline points="417.0,206.0 450.0,197.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
+ <rect x="450.0" y="172.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+ <text x="460.0" y="188.0" font-size="8.40" fill="#000000" text-anchor="start">CT-12 · M3 -&gt; COMMIT GATE  [UNVERIFIED]</text>
+ <text x="460.0" y="202.0" font-size="8.40" fill="#000000" text-anchor="start">staged diff</text>
+@@ -25,5 +25,5 @@
+ <text x="472.0" y="91.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
+ <polyline points="430.0,104.9 464.0,104.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+ <text x="472.0" y="107.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
+-<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+-<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>
+\ No newline at end of file
++<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3"/>
++<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dash-dot — no evidence either way</text></g></svg>
+\ No newline at end of file
+diff --git a/docs/handbook/figures/module-M4.svg b/docs/handbook/figures/module-M4.svg
+index a3937e1..c9a8238 100644
+--- a/docs/handbook/figures/module-M4.svg
++++ b/docs/handbook/figures/module-M4.svg
+@@ -8,11 +8,11 @@
+ <rect x="20.0" y="172.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+ <text x="30.0" y="188.0" font-size="8.40" fill="#000000" text-anchor="start">CT-10 · NODE -&gt; M4  [BROKEN]</text>
+ <text x="30.0" y="202.0" font-size="8.40" fill="#000000" text-anchor="start">row event with run_id and outcome</text>
+-<polyline points="230.0,253.0 263.0,206.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
++<polyline points="230.0,253.0 263.0,206.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
+ <rect x="20.0" y="228.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+ <text x="30.0" y="244.0" font-size="8.40" fill="#000000" text-anchor="start">CT-13 · COMMIT GATE -&gt; M4  [UNVERIFIED]</text>
+ <text x="30.0" y="258.0" font-size="8.40" fill="#000000" text-anchor="start">verdict that closes a row</text>
+-<polyline points="230.0,309.0 263.0,224.7" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
++<polyline points="230.0,309.0 263.0,224.7" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
+ <rect x="20.0" y="284.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+ <text x="30.0" y="300.0" font-size="8.40" fill="#000000" text-anchor="start">CT-14 · FOREMAN -&gt; M4  [UNVERIFIED]</text>
+ <text x="30.0" y="314.0" font-size="8.40" fill="#000000" text-anchor="start">row created, row closed, evidence</text>
+@@ -37,5 +37,5 @@
+ <text x="472.0" y="91.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
+ <polyline points="430.0,104.9 464.0,104.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+ <text x="472.0" y="107.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
+-<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+-<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>
+\ No newline at end of file
++<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3"/>
++<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dash-dot — no evidence either way</text></g></svg>
+\ No newline at end of file
+diff --git a/docs/handbook/figures/module-M5.svg b/docs/handbook/figures/module-M5.svg
+index 3e444d3..1ce313e 100644
+--- a/docs/handbook/figures/module-M5.svg
++++ b/docs/handbook/figures/module-M5.svg
+@@ -6,7 +6,7 @@
+ <text x="340.0" y="212.0" font-size="13.00" fill="#000000" text-anchor="middle">HARNESS</text>
+ <text x="340.0" y="232.0" font-size="8.40" fill="#000000" text-anchor="middle">HARNESS, CONFORMANCE BATTERY</text>
+ <text x="20.0" y="158.0" font-size="8.40" fill="#000000" text-anchor="start">INPUTS — UPSTREAM CONTRACTS</text>
+-<polyline points="230.0,197.0 263.0,206.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
++<polyline points="230.0,197.0 263.0,206.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
+ <rect x="20.0" y="172.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+ <text x="30.0" y="188.0" font-size="8.40" fill="#000000" text-anchor="start">CT-17 · CONFORMANCE -&gt; M5  [UNVERIFIED]</text>
+ <text x="30.0" y="202.0" font-size="8.40" fill="#000000" text-anchor="start">per-leg verdict (check, apply, smoke, vars,</text>
+@@ -28,5 +28,5 @@
+ <text x="472.0" y="91.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
+ <polyline points="430.0,104.9 464.0,104.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+ <text x="472.0" y="107.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
+-<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+-<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>
+\ No newline at end of file
++<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3"/>
++<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dash-dot — no evidence either way</text></g></svg>
+\ No newline at end of file
+diff --git a/docs/handbook/figures/module-M6.svg b/docs/handbook/figures/module-M6.svg
+index d51f1b9..f2e679a 100644
+--- a/docs/handbook/figures/module-M6.svg
++++ b/docs/handbook/figures/module-M6.svg
+@@ -14,7 +14,7 @@
+ <rect x="450.0" y="172.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+ <text x="460.0" y="188.0" font-size="8.40" fill="#000000" text-anchor="start">CT-16 · M6 -&gt; HANDBOOK  [PROVEN]</text>
+ <text x="460.0" y="202.0" font-size="8.40" fill="#000000" text-anchor="start">module status word</text>
+-<polyline points="417.0,220.0 450.0,253.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
++<polyline points="417.0,220.0 450.0,253.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
+ <rect x="450.0" y="228.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+ <text x="460.0" y="244.0" font-size="8.40" fill="#000000" text-anchor="start">CT-18 · M6 -&gt; OPERATOR  [UNVERIFIED]</text>
+ <text x="460.0" y="258.0" font-size="8.40" fill="#000000" text-anchor="start">the approval artifact</text>
+@@ -29,5 +29,5 @@
+ <text x="472.0" y="91.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
+ <polyline points="430.0,104.9 464.0,104.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+ <text x="472.0" y="107.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
+-<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+-<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>
+\ No newline at end of file
++<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3"/>
++<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dash-dot — no evidence either way</text></g></svg>
+\ No newline at end of file
+diff --git a/docs/handbook/figures/module-M7.svg b/docs/handbook/figures/module-M7.svg
+index 6563a70..fe6035b 100644
+--- a/docs/handbook/figures/module-M7.svg
++++ b/docs/handbook/figures/module-M7.svg
+@@ -9,7 +9,7 @@
+ <text x="30.0" y="190.0" font-size="9.50" fill="#000000" text-anchor="start">no cross-system contract</text>
+ <text x="30.0" y="205.0" font-size="8.40" fill="#000000" text-anchor="start">none in Part IV or the chapter&#x27;s §6</text>
+ <text x="450.0" y="158.0" font-size="8.40" fill="#000000" text-anchor="start">OUTPUTS — DOWNSTREAM CONTRACTS</text>
+-<polyline points="417.0,206.0 450.0,197.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
++<polyline points="417.0,206.0 450.0,197.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
+ <rect x="450.0" y="172.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+ <text x="460.0" y="188.0" font-size="8.40" fill="#000000" text-anchor="start">M7-C1 · M7 -&gt; NODE  [UNVERIFIED]</text>
+ <text x="460.0" y="202.0" font-size="8.40" fill="#000000" text-anchor="start">installation token installed at</text>
+@@ -26,5 +26,5 @@
+ <text x="472.0" y="91.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
+ <polyline points="430.0,104.9 464.0,104.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+ <text x="472.0" y="107.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
+-<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+-<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>
+\ No newline at end of file
++<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3"/>
++<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dash-dot — no evidence either way</text></g></svg>
+\ No newline at end of file
+diff --git a/docs/handbook/figures/module-M8.svg b/docs/handbook/figures/module-M8.svg
+index a01f900..71c5678 100644
+--- a/docs/handbook/figures/module-M8.svg
++++ b/docs/handbook/figures/module-M8.svg
+@@ -24,5 +24,5 @@
+ <text x="472.0" y="91.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
+ <polyline points="430.0,104.9 464.0,104.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+ <text x="472.0" y="107.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
+-<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+-<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>
+\ No newline at end of file
++<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3"/>
++<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dash-dot — no evidence either way</text></g></svg>
+\ No newline at end of file
+diff --git a/docs/handbook/figures/module-M9.svg b/docs/handbook/figures/module-M9.svg
+index 31ca717..9bf6f7b 100644
+--- a/docs/handbook/figures/module-M9.svg
++++ b/docs/handbook/figures/module-M9.svg
+@@ -4,11 +4,11 @@
+ <text x="340.0" y="192.0" font-size="11.00" fill="#000000" text-anchor="middle">M9</text>
+ <text x="340.0" y="212.0" font-size="13.00" fill="#000000" text-anchor="middle">SCHEDULER</text>
+ <text x="20.0" y="158.0" font-size="8.40" fill="#000000" text-anchor="start">INPUTS — UPSTREAM CONTRACTS</text>
+-<polyline points="230.0,197.0 263.0,187.3" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
++<polyline points="230.0,197.0 263.0,187.3" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
+ <rect x="20.0" y="172.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+ <text x="30.0" y="188.0" font-size="8.40" fill="#000000" text-anchor="start">CT-01 · OPERATOR -&gt; M9  [UNVERIFIED]</text>
+ <text x="30.0" y="202.0" font-size="8.40" fill="#000000" text-anchor="start">lane enabled, cadence, weight, pin</text>
+-<polyline points="230.0,253.0 263.0,206.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
++<polyline points="230.0,253.0 263.0,206.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
+ <rect x="20.0" y="228.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+ <text x="30.0" y="244.0" font-size="8.40" fill="#000000" text-anchor="start">CT-05 · FOREMAN -&gt; M9  [UNVERIFIED]</text>
+ <text x="30.0" y="258.0" font-size="8.40" fill="#000000" text-anchor="start">the lane&#x27;s prompt text and skills it may load</text>
+@@ -22,7 +22,7 @@
+ <text x="460.0" y="188.0" font-size="8.40" fill="#000000" text-anchor="start">CT-02 · M9 -&gt; CRIER  [PROVEN]</text>
+ <text x="460.0" y="202.0" font-size="8.40" fill="#000000" text-anchor="start">envelope: run_id, corr_id, lane, board,</text>
+ <text x="460.0" y="214.0" font-size="8.40" fill="#000000" text-anchor="start">text_b64</text>
+-<polyline points="417.0,220.0 450.0,253.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
++<polyline points="417.0,220.0 450.0,253.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
+ <rect x="450.0" y="228.0" width="210.0" height="50.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+ <text x="460.0" y="244.0" font-size="8.40" fill="#000000" text-anchor="start">CT-15 · M9 -&gt; DUCKBRAIN  [UNVERIFIED]</text>
+ <text x="460.0" y="258.0" font-size="8.40" fill="#000000" text-anchor="start">decisions, findings, goal</text>
+@@ -49,5 +49,5 @@
+ <text x="472.0" y="91.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
+ <polyline points="430.0,104.9 464.0,104.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+ <text x="472.0" y="107.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
+-<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+-<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>
+\ No newline at end of file
++<polyline points="430.0,120.9 464.0,120.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3"/>
++<text x="472.0" y="123.8" font-size="8.40" fill="#000000" text-anchor="start">dash-dot — no evidence either way</text></g></svg>
+\ No newline at end of file
+diff --git a/docs/handbook/figures/system-map.svg b/docs/handbook/figures/system-map.svg
+index 5c99832..e64f5d5 100644
+--- a/docs/handbook/figures/system-map.svg
++++ b/docs/handbook/figures/system-map.svg
+@@ -1,125 +1,125 @@
+-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="357.5mm" viewBox="0 0 680 1430.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="1430.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="16.0" y="28.0" font-size="19.00" fill="#000000" text-anchor="start">CODE FACTORY — SYSTEM MAP</text>
+-<text x="664.0" y="26.0" font-size="12.00" fill="#000000" text-anchor="end">WIRE CT-nn IS KEYED TO THE CONTRACT REGISTER (PART IV)</text>
+-<rect x="16.0" y="10.0" width="648.0" height="130.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4"/>
+-<text x="22.0" y="22.0" font-size="13.40" fill="#000000" text-anchor="start">CONTROL PLANE</text>
+-<rect x="16.0" y="28.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="91.0" y="52.7" font-size="13.40" fill="#000000" text-anchor="middle">OPERATOR</text>
+-<rect x="182.0" y="28.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="257.0" y="52.7" font-size="13.40" fill="#000000" text-anchor="middle">SCHEDULER</text>
+-<rect x="348.0" y="28.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="423.0" y="52.7" font-size="13.40" fill="#000000" text-anchor="middle">FOREMAN</text>
+-<rect x="514.0" y="28.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="589.0" y="52.7" font-size="13.40" fill="#000000" text-anchor="middle">GITHUB</text>
+-<rect x="16.0" y="80.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="91.0" y="104.7" font-size="13.40" fill="#000000" text-anchor="middle">SCOPE MINTER</text>
+-<rect x="16.0" y="280.0" width="648.0" height="78.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4"/>
+-<text x="22.0" y="292.0" font-size="13.40" fill="#000000" text-anchor="start">TRANSPORT</text>
+-<rect x="16.0" y="298.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="91.0" y="322.7" font-size="13.40" fill="#000000" text-anchor="middle">CRIER</text>
+-<rect x="182.0" y="298.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="257.0" y="322.7" font-size="13.40" fill="#000000" text-anchor="middle">ROUTER</text>
+-<rect x="348.0" y="298.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="423.0" y="322.7" font-size="13.40" fill="#000000" text-anchor="middle">HERMES GATEWAY</text>
+-<rect x="514.0" y="298.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="589.0" y="322.7" font-size="13.40" fill="#000000" text-anchor="middle">PROXY</text>
+-<rect x="16.0" y="498.0" width="648.0" height="130.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4"/>
+-<text x="22.0" y="510.0" font-size="13.40" fill="#000000" text-anchor="start">EXECUTION</text>
+-<rect x="16.0" y="516.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="91.0" y="540.7" font-size="13.40" fill="#000000" text-anchor="middle">BUNKER</text>
+-<rect x="182.0" y="516.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="257.0" y="540.7" font-size="13.40" fill="#000000" text-anchor="middle">NODE</text>
+-<rect x="348.0" y="516.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="423.0" y="540.7" font-size="13.40" fill="#000000" text-anchor="middle">HARNESS</text>
+-<rect x="514.0" y="516.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="589.0" y="540.7" font-size="13.40" fill="#000000" text-anchor="middle">DISPATCHER</text>
+-<rect x="16.0" y="568.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="91.0" y="592.7" font-size="13.40" fill="#000000" text-anchor="middle">PROVISIONER</text>
+-<rect x="182.0" y="568.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="257.0" y="592.7" font-size="13.40" fill="#000000" text-anchor="middle">LANDER</text>
+-<rect x="16.0" y="768.0" width="648.0" height="78.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4"/>
+-<text x="22.0" y="780.0" font-size="13.40" fill="#000000" text-anchor="start">MEMORY</text>
+-<rect x="16.0" y="786.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="91.0" y="810.7" font-size="13.40" fill="#000000" text-anchor="middle">BOARD</text>
+-<rect x="182.0" y="786.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="257.0" y="810.7" font-size="13.40" fill="#000000" text-anchor="middle">DUCKBRAIN</text>
+-<rect x="348.0" y="786.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="423.0" y="810.7" font-size="13.40" fill="#000000" text-anchor="middle">SESSIONS</text>
+-<rect x="16.0" y="986.0" width="648.0" height="130.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4"/>
+-<text x="22.0" y="998.0" font-size="13.40" fill="#000000" text-anchor="start">GOVERNANCE</text>
+-<rect x="16.0" y="1004.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="91.0" y="1028.7" font-size="13.40" fill="#000000" text-anchor="middle">GUARD</text>
+-<rect x="182.0" y="1004.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="257.0" y="1028.7" font-size="13.40" fill="#000000" text-anchor="middle">COMMIT GATE</text>
+-<rect x="348.0" y="1004.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="423.0" y="1028.7" font-size="13.40" fill="#000000" text-anchor="middle">DOC GATE</text>
+-<rect x="514.0" y="1004.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="589.0" y="1028.7" font-size="13.40" fill="#000000" text-anchor="middle">CONFORMANCE</text>
+-<rect x="16.0" y="1056.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="91.0" y="1080.7" font-size="13.40" fill="#000000" text-anchor="middle">NODE VERIFIER</text>
+-<rect x="182.0" y="1056.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="257.0" y="1080.7" font-size="13.40" fill="#000000" text-anchor="middle">SAFETY</text>
+-<rect x="348.0" y="1056.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="423.0" y="1080.7" font-size="13.40" fill="#000000" text-anchor="middle">DOC PANEL</text>
+-<rect x="514.0" y="1056.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="589.0" y="1080.7" font-size="13.40" fill="#000000" text-anchor="middle">SPINE GATE</text>
+-<rect x="16.0" y="1256.0" width="648.0" height="78.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4"/>
+-<text x="22.0" y="1268.0" font-size="13.40" fill="#000000" text-anchor="start">EVIDENCE</text>
+-<rect x="16.0" y="1274.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+-<text x="91.0" y="1298.7" font-size="13.40" fill="#000000" text-anchor="middle">HANDBOOK</text>
+-<polyline points="46.0,68.0 46.0,152.0 302.0,152.0 302.0,68.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+-<text x="174.0" y="147.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-01</text>
+-<polyline points="257.0,68.0 257.0,168.0 91.0,168.0 91.0,298.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+-<text x="174.0" y="163.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-02</text>
+-<polyline points="91.0,338.0 91.0,370.0 257.0,370.0 257.0,516.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+-<text x="174.0" y="365.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-03</text>
+-<polyline points="257.0,516.0 257.0,386.0 91.0,386.0 91.0,338.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="12 7" marker-end="url(#ar)"/>
+-<text x="174.0" y="381.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-04</text>
+-<polyline points="302.0,68.0 302.0,184.0 378.0,184.0 378.0,68.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+-<text x="340.0" y="179.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-05</text>
+-<polyline points="91.0,298.0 91.0,200.0 257.0,200.0 257.0,68.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+-<text x="174.0" y="195.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-06</text>
+-<polyline points="212.0,338.0 212.0,402.0 468.0,402.0 468.0,338.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+-<text x="340.0" y="397.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-07</text>
+-<polyline points="46.0,338.0 46.0,418.0 468.0,418.0 468.0,338.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+-<text x="257.0" y="413.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-08</text>
+-<polyline points="257.0,556.0 257.0,640.0 257.0,640.0 257.0,786.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+-<text x="257.0" y="635.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-09</text>
+-<polyline points="257.0,556.0 257.0,656.0 91.0,656.0 91.0,786.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+-<text x="174.0" y="651.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-10</text>
+-<polyline points="257.0,556.0 257.0,672.0 423.0,672.0 423.0,786.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+-<text x="340.0" y="667.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-11</text>
+-<polyline points="257.0,556.0 257.0,688.0 672.0,688.0 672.0,858.0 257.0,858.0 257.0,1004.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+-<text x="464.5" y="683.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-12</text>
+-<polyline points="257.0,1004.0 257.0,874.0 91.0,874.0 91.0,826.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+-<text x="174.0" y="869.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-13</text>
+-<polyline points="423.0,68.0 423.0,216.0 506.0,216.0 506.0,704.0 91.0,704.0 91.0,786.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+-<text x="464.5" y="211.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-14</text>
+-<polyline points="423.0,68.0 423.0,232.0 340.0,232.0 340.0,720.0 257.0,720.0 257.0,786.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+-<text x="381.5" y="227.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-15</text>
+-<polyline points="423.0,1044.0 423.0,1128.0 91.0,1128.0 91.0,1274.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+-<text x="257.0" y="1123.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-16</text>
+-<polyline points="589.0,1004.0 589.0,890.0 174.0,890.0 174.0,736.0 423.0,736.0 423.0,556.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+-<text x="381.5" y="885.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-17</text>
+-<polyline points="91.0,1274.0 91.0,1144.0 8.0,1144.0 8.0,248.0 91.0,248.0 91.0,68.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+-<text x="49.5" y="1139.0" font-size="12.00" fill="#000000" text-anchor="middle">CT-18</text>
+-<polyline points="257.0,516.0 257.0,434.0 91.0,434.0 91.0,338.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+-<text x="174.0" y="429.0" font-size="12.00" fill="#000000" text-anchor="middle">M1-C1</text>
+-<polyline points="46.0,608.0 46.0,752.0 136.0,752.0 136.0,556.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+-<text x="91.0" y="747.0" font-size="12.00" fill="#000000" text-anchor="middle">M1-C2</text>
+-<polyline points="257.0,516.0 257.0,450.0 589.0,450.0 589.0,338.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+-<text x="423.0" y="445.0" font-size="12.00" fill="#000000" text-anchor="middle">M12-C1</text>
+-<polyline points="468.0,338.0 468.0,466.0 544.0,466.0 544.0,338.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+-<text x="506.0" y="461.0" font-size="12.00" fill="#000000" text-anchor="middle">M12-C2</text>
+-<polyline points="589.0,68.0 589.0,264.0 174.0,264.0 174.0,482.0 257.0,482.0 257.0,516.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+-<text x="381.5" y="259.0" font-size="12.00" fill="#000000" text-anchor="middle">M7-C1</text>
+-<text x="16.0" y="1354.0" font-size="12.00" fill="#000000" text-anchor="start">CONTRACT STATE — LINE STYLE, INK ONLY</text>
+-<polyline points="16.0,1372.6 50.0,1372.6" fill="none" stroke="#000000" stroke-width="1.4"/>
+-<text x="58.0" y="1376.8" font-size="12.00" fill="#000000" text-anchor="start">solid — exercised with evidence</text>
+-<polyline points="16.0,1395.4 50.0,1395.4" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="12 7"/>
+-<text x="58.0" y="1399.6" font-size="12.00" fill="#000000" text-anchor="start">long dash — holds in part</text>
+-<polyline points="16.0,1418.2 50.0,1418.2" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="4 3"/>
+-<text x="58.0" y="1422.4" font-size="12.00" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
+-<polyline points="16.0,1441.0 50.0,1441.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+-<text x="58.0" y="1445.2" font-size="12.00" fill="#000000" text-anchor="start">dotted — not built</text>
+-<polyline points="16.0,1463.8 50.0,1463.8" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+-<text x="58.0" y="1468.0" font-size="12.00" fill="#000000" text-anchor="start">dotted — no evidence either way</text></g></svg>
+\ No newline at end of file
++<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="366.5mm" viewBox="0 0 680 1466.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="1466.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="16.0" y="28.0" font-size="19.00" fill="#000000" text-anchor="start">CODE FACTORY — SYSTEM MAP</text>
++<text x="664.0" y="26.0" font-size="12.20" fill="#000000" text-anchor="end">WIRE CT-nn IS KEYED TO THE CONTRACT REGISTER (PART IV)</text>
++<rect x="16.0" y="46.0" width="648.0" height="130.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4"/>
++<text x="22.0" y="58.0" font-size="13.60" fill="#000000" text-anchor="start">CONTROL PLANE</text>
++<rect x="16.0" y="64.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="91.0" y="88.8" font-size="13.60" fill="#000000" text-anchor="middle">OPERATOR</text>
++<rect x="182.0" y="64.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="257.0" y="88.8" font-size="13.60" fill="#000000" text-anchor="middle">SCHEDULER</text>
++<rect x="348.0" y="64.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="423.0" y="88.8" font-size="13.60" fill="#000000" text-anchor="middle">FOREMAN</text>
++<rect x="514.0" y="64.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="589.0" y="88.8" font-size="13.60" fill="#000000" text-anchor="middle">GITHUB</text>
++<rect x="16.0" y="116.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="91.0" y="140.8" font-size="13.60" fill="#000000" text-anchor="middle">SCOPE MINTER</text>
++<rect x="16.0" y="316.0" width="648.0" height="78.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4"/>
++<text x="22.0" y="328.0" font-size="13.60" fill="#000000" text-anchor="start">TRANSPORT</text>
++<rect x="16.0" y="334.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="91.0" y="358.8" font-size="13.60" fill="#000000" text-anchor="middle">CRIER</text>
++<rect x="182.0" y="334.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="257.0" y="358.8" font-size="13.60" fill="#000000" text-anchor="middle">ROUTER</text>
++<rect x="348.0" y="334.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="423.0" y="358.8" font-size="13.60" fill="#000000" text-anchor="middle">HERMES GATEWAY</text>
++<rect x="514.0" y="334.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="589.0" y="358.8" font-size="13.60" fill="#000000" text-anchor="middle">PROXY</text>
++<rect x="16.0" y="534.0" width="648.0" height="130.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4"/>
++<text x="22.0" y="546.0" font-size="13.60" fill="#000000" text-anchor="start">EXECUTION</text>
++<rect x="16.0" y="552.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="91.0" y="576.8" font-size="13.60" fill="#000000" text-anchor="middle">BUNKER</text>
++<rect x="182.0" y="552.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="257.0" y="576.8" font-size="13.60" fill="#000000" text-anchor="middle">NODE</text>
++<rect x="348.0" y="552.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="423.0" y="576.8" font-size="13.60" fill="#000000" text-anchor="middle">HARNESS</text>
++<rect x="514.0" y="552.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="589.0" y="576.8" font-size="13.60" fill="#000000" text-anchor="middle">DISPATCHER</text>
++<rect x="16.0" y="604.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="91.0" y="628.8" font-size="13.60" fill="#000000" text-anchor="middle">PROVISIONER</text>
++<rect x="182.0" y="604.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="257.0" y="628.8" font-size="13.60" fill="#000000" text-anchor="middle">LANDER</text>
++<rect x="16.0" y="804.0" width="648.0" height="78.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4"/>
++<text x="22.0" y="816.0" font-size="13.60" fill="#000000" text-anchor="start">MEMORY</text>
++<rect x="16.0" y="822.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="91.0" y="846.8" font-size="13.60" fill="#000000" text-anchor="middle">BOARD</text>
++<rect x="182.0" y="822.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="257.0" y="846.8" font-size="13.60" fill="#000000" text-anchor="middle">DUCKBRAIN</text>
++<rect x="348.0" y="822.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="423.0" y="846.8" font-size="13.60" fill="#000000" text-anchor="middle">SESSIONS</text>
++<rect x="16.0" y="1022.0" width="648.0" height="130.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4"/>
++<text x="22.0" y="1034.0" font-size="13.60" fill="#000000" text-anchor="start">GOVERNANCE</text>
++<rect x="16.0" y="1040.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="91.0" y="1064.8" font-size="13.60" fill="#000000" text-anchor="middle">GUARD</text>
++<rect x="182.0" y="1040.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="257.0" y="1064.8" font-size="13.60" fill="#000000" text-anchor="middle">COMMIT GATE</text>
++<rect x="348.0" y="1040.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="423.0" y="1064.8" font-size="13.60" fill="#000000" text-anchor="middle">DOC GATE</text>
++<rect x="514.0" y="1040.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="589.0" y="1064.8" font-size="13.60" fill="#000000" text-anchor="middle">CONFORMANCE</text>
++<rect x="16.0" y="1092.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="91.0" y="1116.8" font-size="13.60" fill="#000000" text-anchor="middle">NODE VERIFIER</text>
++<rect x="182.0" y="1092.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="257.0" y="1116.8" font-size="13.60" fill="#000000" text-anchor="middle">SAFETY</text>
++<rect x="348.0" y="1092.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="423.0" y="1116.8" font-size="13.60" fill="#000000" text-anchor="middle">DOC PANEL</text>
++<rect x="514.0" y="1092.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="589.0" y="1116.8" font-size="13.60" fill="#000000" text-anchor="middle">SPINE GATE</text>
++<rect x="16.0" y="1292.0" width="648.0" height="78.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4"/>
++<text x="22.0" y="1304.0" font-size="13.60" fill="#000000" text-anchor="start">EVIDENCE</text>
++<rect x="16.0" y="1310.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
++<text x="91.0" y="1334.8" font-size="13.60" fill="#000000" text-anchor="middle">HANDBOOK</text>
++<polyline points="46.0,104.0 46.0,188.0 302.0,188.0 302.0,104.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
++<text x="174.0" y="183.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-01</text>
++<polyline points="257.0,104.0 257.0,204.0 91.0,204.0 91.0,334.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
++<text x="174.0" y="199.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-02</text>
++<polyline points="91.0,374.0 91.0,406.0 257.0,406.0 257.0,552.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
++<text x="174.0" y="401.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-03</text>
++<polyline points="257.0,552.0 257.0,422.0 91.0,422.0 91.0,374.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="12 7" marker-end="url(#ar)"/>
++<text x="174.0" y="417.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-04</text>
++<polyline points="302.0,104.0 302.0,220.0 378.0,220.0 378.0,104.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
++<text x="340.0" y="215.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-05</text>
++<polyline points="91.0,334.0 91.0,236.0 257.0,236.0 257.0,104.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
++<text x="174.0" y="231.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-06</text>
++<polyline points="212.0,374.0 212.0,438.0 468.0,438.0 468.0,374.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
++<text x="340.0" y="433.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-07</text>
++<polyline points="46.0,374.0 46.0,454.0 468.0,454.0 468.0,374.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
++<text x="257.0" y="449.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-08</text>
++<polyline points="257.0,592.0 257.0,676.0 257.0,676.0 257.0,822.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
++<text x="257.0" y="671.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-09</text>
++<polyline points="257.0,592.0 257.0,692.0 91.0,692.0 91.0,822.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ar)"/>
++<text x="174.0" y="687.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-10</text>
++<polyline points="257.0,592.0 257.0,708.0 423.0,708.0 423.0,822.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
++<text x="340.0" y="703.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-11</text>
++<polyline points="257.0,592.0 257.0,724.0 672.0,724.0 672.0,894.0 257.0,894.0 257.0,1040.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
++<text x="464.5" y="719.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-12</text>
++<polyline points="257.0,1040.0 257.0,910.0 91.0,910.0 91.0,862.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
++<text x="174.0" y="905.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-13</text>
++<polyline points="423.0,104.0 423.0,252.0 506.0,252.0 506.0,740.0 91.0,740.0 91.0,822.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
++<text x="464.5" y="247.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-14</text>
++<polyline points="423.0,104.0 423.0,268.0 340.0,268.0 340.0,756.0 257.0,756.0 257.0,822.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
++<text x="381.5" y="263.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-15</text>
++<polyline points="423.0,1080.0 423.0,1164.0 91.0,1164.0 91.0,1310.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
++<text x="257.0" y="1159.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-16</text>
++<polyline points="589.0,1040.0 589.0,926.0 174.0,926.0 174.0,772.0 423.0,772.0 423.0,592.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
++<text x="381.5" y="921.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-17</text>
++<polyline points="91.0,1310.0 91.0,1180.0 8.0,1180.0 8.0,284.0 91.0,284.0 91.0,104.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
++<text x="49.5" y="1175.0" font-size="12.20" fill="#000000" text-anchor="middle">CT-18</text>
++<polyline points="257.0,552.0 257.0,470.0 91.0,470.0 91.0,374.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
++<text x="174.0" y="465.0" font-size="12.20" fill="#000000" text-anchor="middle">M1-C1</text>
++<polyline points="46.0,644.0 46.0,788.0 136.0,788.0 136.0,592.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
++<text x="91.0" y="783.0" font-size="12.20" fill="#000000" text-anchor="middle">M1-C2</text>
++<polyline points="257.0,552.0 257.0,486.0 589.0,486.0 589.0,374.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
++<text x="423.0" y="481.0" font-size="12.20" fill="#000000" text-anchor="middle">M12-C1</text>
++<polyline points="468.0,374.0 468.0,502.0 544.0,502.0 544.0,374.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
++<text x="506.0" y="497.0" font-size="12.20" fill="#000000" text-anchor="middle">M12-C2</text>
++<polyline points="589.0,104.0 589.0,300.0 174.0,300.0 174.0,518.0 257.0,518.0 257.0,552.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="8 3 1.5 3" marker-end="url(#ar)"/>
++<text x="381.5" y="295.0" font-size="12.20" fill="#000000" text-anchor="middle">M7-C1</text>
++<text x="16.0" y="1390.0" font-size="12.20" fill="#000000" text-anchor="start">CONTRACT STATE — LINE STYLE, INK ONLY</text>
++<polyline points="16.0,1408.9 50.0,1408.9" fill="none" stroke="#000000" stroke-width="1.4"/>
++<text x="58.0" y="1413.2" font-size="12.20" fill="#000000" text-anchor="start">solid — exercised with evidence</text>
++<polyline points="16.0,1432.1 50.0,1432.1" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="12 7"/>
++<text x="58.0" y="1436.4" font-size="12.20" fill="#000000" text-anchor="start">long dash — holds in part</text>
++<polyline points="16.0,1455.3 50.0,1455.3" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="4 3"/>
++<text x="58.0" y="1459.5" font-size="12.20" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
++<polyline points="16.0,1478.5 50.0,1478.5" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
++<text x="58.0" y="1482.7" font-size="12.20" fill="#000000" text-anchor="start">dotted — not built</text>
++<polyline points="16.0,1501.6 50.0,1501.6" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="8 3 1.5 3"/>
++<text x="58.0" y="1505.9" font-size="12.20" fill="#000000" text-anchor="start">dash-dot — no evidence either way</text></g></svg>
+\ No newline at end of file
+diff --git a/docs/handbook/parts/IV-contract-register.md b/docs/handbook/parts/IV-contract-register.md
+index a69810a..108ff1b 100644
+--- a/docs/handbook/parts/IV-contract-register.md
++++ b/docs/handbook/parts/IV-contract-register.md
+@@ -12,7 +12,8 @@ than an honest gap.
+ 
+ > CAUTION: a row whose State reads PROVEN while its sender guarantee or receiver
+ > requirement reads RED is self-contradictory — one side is measured, the other is not.
+-> Treat such a row as UNVERIFIED until both sides carry citations.
++> Treat such a row as UNVERIFIED until both sides carry citations. The generator
++> enforces this: a PROVEN state with an uncited side prints as UNVERIFIED.
+ 
+ | id | from → to | carries | mode | state |
+ |---|---|---|---|---|
+@@ -31,14 +32,14 @@ than an honest gap.
+ | CT-13 | gitreins → board | verdict that closes a row | human/foreman action | UNVERIFIED |
+ | CT-14 | foreman → board | row created, row closed, evidence | boardctl | UNVERIFIED |
+ | CT-15 | foreman → duckbrain | decisions, findings, goal | mcp / http | UNVERIFIED |
+-| CT-16 | docsgate → handbook | module status word | read at build | PROVEN |
++| CT-16 | docsgate → handbook | module status word | read at build | UNVERIFIED |
+ | CT-17 | conformance → harness | per-leg verdict (check, apply, smoke, vars, memory) | executed | UNVERIFIED |
+ | CT-18 | handbook → owner | the approval artifact | read | UNVERIFIED |
+ | CT-19 | node → proxy | chat completion with a node bearer token | http, bearer node token | UNVERIFIED |
+ | CT-20 | proxy → gateway | forwarded inference with the control-host key | http, 300 s timeout | UNVERIFIED |
+ | CT-21 | github → node | installation token installed at auth/github.token, mode 0600 | https api, JWT mint | UNVERIFIED |
+ | CT-22 | node → crier | agent registration + token exchange | https, POST /agents | UNVERIFIED |
+-| CT-23 | provisioner → bunker | create, exec, cp against the agent container | bunker CLI | PROVEN |
++| CT-23 | provisioner → bunker | create, exec, cp against the agent container | bunker CLI | UNVERIFIED |
+ 
+ ## Contracts in detail
+ 
+@@ -50,8 +51,8 @@ than an honest gap.
+ - **Sends because:** Intent, priorities, approval
+ - **Receives because:** Whose turn it is; lane admission (tasks vs cooldown); per-lane cadence, weight, pin; settlement of every dispatch
+ - **Measured defect:** boundary — the producer is a human writing fleet.toml and scheduler.db project rows; the consumer is admission_mode.go:112 admissionModeForProject (M9 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
+-- **Receiver requirement:** RED — what `scheduler` accepts and rejects is not stated here.
++- **Sender guarantee:** the owner declares it — fleet.example.toml:15,35 (per-lane weight, enabled); project admission rows in scheduler.db are the source of record
++- **Receiver requirement:** internal/scheduler/admission_mode.go:112 — admissionModeForProject resolves the project row (override → namespace default → cooldown)
+ 
+ ### CT-02 — scheduler → crier
+ 
+@@ -61,8 +62,8 @@ than an honest gap.
+ - **Sends because:** Whose turn it is; lane admission (tasks vs cooldown); per-lane cadence, weight, pin; settlement of every dispatch
+ - **Receives because:** Delivery with per-agent signature, leases, replies, idempotency (M10 §2)
+ - **Measured defect:** CF-354 fixed — crier HandleDeliver delivers the envelope verbatim (M9 §6, M10 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
+-- **Receiver requirement:** RED — what `crier` accepts and rejects is not stated here.
++- **Sender guarantee:** internal/bus/dispatch.go:202,266 — BuildDispatch renders run_id/corr_id/lane/board/text_b64 and signs before POST
++- **Receiver requirement:** crier internal/registry/handler.go:990 — HandleDeliver accepts the by-id delivery into the durable inbox
+ 
+ ### CT-03 — crier → node
+ 
+@@ -72,8 +73,8 @@ than an honest gap.
+ - **Sends because:** Delivery with per-agent signature, leases, replies, idempotency (M10 §2)
+ - **Receives because:** One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
+ - **Measured defect:** the node worker (M2 §6) and the dispatcher (M11 §6) are the two consumers
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
+-- **Receiver requirement:** RED — what `node` accepts and rejects is not stated here.
++- **Sender guarantee:** crier internal/registry/handler.go:990 — deliver(): durable inbox write with lease/ack/TTL semantics
++- **Receiver requirement:** scripts/node-bus-worker.py:1356,1383 — signed GET /agents/<id>/inbox retrieve, then /inbox/ack
+ 
+ ### CT-04 — node → crier
+ 
+@@ -83,8 +84,9 @@ than an honest gap.
+ - **Sends because:** One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
+ - **Receives because:** Delivery with per-agent signature, leases, replies, idempotency (M10 §2)
+ - **Measured defect:** transport works; settlement reads only `ok` — CF-355 open (M2 §6, M9 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Sender guarantee:** RED — no `file:line` in the model states what `node` commits to.
+ - **Receiver requirement:** RED — what `crier` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `node` and the decode/validate site in `crier`, then replace the RED line with those citations.
+ 
+ ### CT-05 — foreman → scheduler
+ 
+@@ -94,8 +96,9 @@ than an honest gap.
+ - **Sends because:** Turns a board row into a brief; verifies returned evidence; closes rows
+ - **Receives because:** Whose turn it is; lane admission (tasks vs cooldown); per-lane cadence, weight, pin; settlement of every dispatch
+ - **Measured defect:** both ends in-repo (load_lane_config.py:31 → spawn.go:1249 buildForemanPrompt); the "3 of 14 lanes disagree" breakage was never measured (M9 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Sender guarantee:** RED — no `file:line` in the model states what `foreman` commits to.
+ - **Receiver requirement:** RED — what `scheduler` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `foreman` and the decode/validate site in `scheduler`, then replace the RED line with those citations.
+ 
+ ### CT-06 — crier → scheduler
+ 
+@@ -105,8 +108,8 @@ than an honest gap.
+ - **Sends because:** Delivery with per-agent signature, leases, replies, idempotency (M10 §2)
+ - **Receives because:** Whose turn it is; lane admission (tasks vs cooldown); per-lane cadence, weight, pin; settlement of every dispatch
+ - **Measured defect:** the dispatcher leg works — it always sends `ok`, the field dispatchReplyVerdict reads (M11 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
+-- **Receiver requirement:** RED — what `scheduler` accepts and rejects is not stated here.
++- **Sender guarantee:** crier internal/registry/handler.go:170,1452 — the answering message carries ReplyTo correlation into the scheduler's durable inbox
++- **Receiver requirement:** internal/scheduler/dispatch_leg.go:713 — dispatchReplyVerdict reads the correlated payload's ok (first message wins, :428)
+ 
+ ### CT-07 — router → gateway
+ 
+@@ -116,8 +119,9 @@ than an honest gap.
+ - **Sends because:** Which model answers a prompt; lane chains, caps, PAYG ordering
+ - **Receives because:** Session API, /api/status, dashboard auth, session records
+ - **Measured defect:** boundary — neither side has an in-repo file:function; the wire was not measured (M12 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Sender guarantee:** RED — no `file:line` in the model states what `router` commits to.
+ - **Receiver requirement:** RED — what `gateway` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `router` and the decode/validate site in `gateway`, then replace the RED line with those citations.
+ 
+ ### CT-08 — crier → gateway
+ 
+@@ -127,8 +131,8 @@ than an honest gap.
+ - **Sends because:** Delivery with per-agent signature, leases, replies, idempotency (M10 §2)
+ - **Receives because:** Session API, /api/status, dashboard auth, session records
+ - **Measured defect:** crier side named — hermesession.go:353 Client.Deliver (M10 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
+-- **Receiver requirement:** RED — what `gateway` accepts and rejects is not stated here.
++- **Sender guarantee:** crier internal/hermesession/hermesession.go:353 — Client.Deliver; :554 POSTs /api/sessions at the gateway origin
++- **Receiver requirement:** hermes gateway/platforms/api_server.py:1763 — POST /api/sessions creates the session row from the delivered message
+ 
+ ### CT-09 — node → duckbrain
+ 
+@@ -138,8 +142,9 @@ than an honest gap.
+ - **Sends because:** One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
+ - **Receives because:** Namespaced durable memory; run records, findings, recall
+ - **Measured defect:** node-bus-worker has zero DuckBrain calls (CF-329, M2 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Sender guarantee:** RED — no `file:line` in the model states what `node` commits to.
+ - **Receiver requirement:** RED — what `duckbrain` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `node` and the decode/validate site in `duckbrain`, then replace the RED line with those citations.
+ 
+ ### CT-10 — node → board
+ 
+@@ -149,8 +154,9 @@ than an honest gap.
+ - **Sends because:** One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
+ - **Receives because:** Append-only record of work and its state; the fleet's plan (M4 §2)
+ - **Measured defect:** the node worker writes no board rows — no in-repo producer (M4 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Sender guarantee:** RED — no `file:line` in the model states what `node` commits to.
+ - **Receiver requirement:** RED — what `board` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `node` and the decode/validate site in `board`, then replace the RED line with those citations.
+ 
+ ### CT-11 — node → sessionstore
+ 
+@@ -160,8 +166,9 @@ than an honest gap.
+ - **Sends because:** One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
+ - **Receives because:** Every model turn, its model, tokens and cost
+ - **Measured defect:** boundary — both ends are the Hermes runtime, out of scope (M2 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Sender guarantee:** RED — no `file:line` in the model states what `node` commits to.
+ - **Receiver requirement:** RED — what `sessionstore` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `node` and the decode/validate site in `sessionstore`, then replace the RED line with those citations.
+ 
+ ### CT-12 — node → gitreins
+ 
+@@ -171,8 +178,9 @@ than an honest gap.
+ - **Sends because:** One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
+ - **Receives because:** Pre-commit grading (secrets, lint, tests) and the verdict that lands work (M3 §2)
+ - **Measured defect:** the hook side is named (install-gitreins.sh:124); hook enforcement — that git invokes it — is unproven (M3 §6, M3 §11)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Sender guarantee:** scripts/install-gitreins.sh:124 — the pre-commit hook pins $VENV/bin/gitreins guard --quality-async on every seeded repo
+ - **Receiver requirement:** RED — what `gitreins` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `node` and the decode/validate site in `gitreins`, then replace the RED line with those citations.
+ 
+ ### CT-13 — gitreins → board
+ 
+@@ -182,8 +190,9 @@ than an honest gap.
+ - **Sends because:** Pre-commit grading (secrets, lint, tests) and the verdict that lands work (M3 §2)
+ - **Receives because:** Append-only record of work and its state; the fleet's plan (M4 §2)
+ - **Measured defect:** completion requires --evidence-run-id (boardctl update); the verdict→close path was not re-run (M4 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Sender guarantee:** RED — no `file:line` in the model states what `gitreins` commits to.
+ - **Receiver requirement:** RED — what `board` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `gitreins` and the decode/validate site in `board`, then replace the RED line with those citations.
+ 
+ ### CT-14 — foreman → board
+ 
+@@ -193,8 +202,9 @@ than an honest gap.
+ - **Sends because:** Turns a board row into a brief; verifies returned evidence; closes rows
+ - **Receives because:** Append-only record of work and its state; the fleet's plan (M4 §2)
+ - **Measured defect:** the store is measured (357 rows / 520 events); the foreman write wire is not exercised in this repo (M4 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Sender guarantee:** RED — no `file:line` in the model states what `foreman` commits to.
+ - **Receiver requirement:** RED — what `board` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `foreman` and the decode/validate site in `board`, then replace the RED line with those citations.
+ 
+ ### CT-15 — foreman → duckbrain
+ 
+@@ -204,19 +214,21 @@ than an honest gap.
+ - **Sends because:** Turns a board row into a brief; verifies returned evidence; closes rows
+ - **Receives because:** Namespaced durable memory; run records, findings, recall
+ - **Measured defect:** boundary — the foreman lane and the duckbrain service are out of scope (M9 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Sender guarantee:** RED — no `file:line` in the model states what `foreman` commits to.
+ - **Receiver requirement:** RED — what `duckbrain` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `foreman` and the decode/validate site in `duckbrain`, then replace the RED line with those citations.
+ 
+ ### CT-16 — docsgate → handbook
+ 
+ - **Carries:** module status word
+ - **Mode:** read at build
+-- **State:** PROVEN
++- **State:** UNVERIFIED
+ - **Sends because:** Whether a document is citable (sections, locators, facts, earned VERIFIED) — a structural gate, not a truth verifier (M6 §2 F6-2)
+ - **Receives because:** The readable system description plus its own deficiency register
+-- **Measured defect:** a structural gate, not a truth gate (M6 §6 F6-2)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Measured defect:** a structural gate, not a truth gate (M6 §6 F6-2); downgraded from PROVEN — the handbook build reads no MASTER-DOC output, so the receiver half is uncited
++- **Sender guarantee:** scripts/master_doc_check.py:263 — prints MASTER-DOC: PASS|FAIL and exits 1 on FAIL
+ - **Receiver requirement:** RED — what `handbook` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `docsgate` and the decode/validate site in `handbook`, then replace the RED line with those citations.
+ 
+ ### CT-17 — conformance → harness
+ 
+@@ -225,9 +237,10 @@ than an honest gap.
+ - **State:** UNVERIFIED
+ - **Sends because:** Whether a harness is supported, measured per leg on a real node (M5 §2)
+ - **Receives because:** The coding loop inside the node (hermes, codex, claude-code, opencode, pi, dsh) at pins (M5 §2)
+-- **Measured defect:** not run (needs a live node); vars and memory had no executor (CF-328) (M5 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Measured defect:** not run this round (needs a live node); vars and memory had no executor (CF-328) (M5 §6)
++- **Sender guarantee:** RED — no `file:line` in the model states what `conformance` commits to.
+ - **Receiver requirement:** RED — what `harness` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `conformance` and the decode/validate site in `harness`, then replace the RED line with those citations.
+ 
+ ### CT-18 — handbook → owner
+ 
+@@ -237,8 +250,9 @@ than an honest gap.
+ - **Sends because:** The readable system description plus its own deficiency register
+ - **Receives because:** Intent, priorities, approval
+ - **Measured defect:** the legacy renderer hardcodes docs/master and does not select the M*.md chapters (M6 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Sender guarantee:** RED — no `file:line` in the model states what `handbook` commits to.
+ - **Receiver requirement:** RED — what `owner` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `handbook` and the decode/validate site in `owner`, then replace the RED line with those citations.
+ 
+ ### CT-19 — node → proxy
+ 
+@@ -248,8 +262,9 @@ than an honest gap.
+ - **Sends because:** One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
+ - **Receives because:** The only holder of the provider credential; admits nodes by token, models by allowlist, streams or buffers (M12 §2)
+ - **Measured defect:** proxy side verified (401 without a token); the node client half is config-wired, no call site in this repo (M12 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Sender guarantee:** RED — no `file:line` in the model states what `node` commits to.
+ - **Receiver requirement:** RED — what `proxy` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `node` and the decode/validate site in `proxy`, then replace the RED line with those citations.
+ 
+ ### CT-20 — proxy → gateway
+ 
+@@ -259,8 +274,9 @@ than an honest gap.
+ - **Sends because:** The only holder of the provider credential; admits nodes by token, models by allowlist, streams or buffers (M12 §2)
+ - **Receives because:** Session API, /api/status, dashboard auth, session records
+ - **Measured defect:** external boundary — the upstream is a rumour with one side named; healthy streams are unframed to completion, F12-7 (M12 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Sender guarantee:** RED — no `file:line` in the model states what `proxy` commits to.
+ - **Receiver requirement:** RED — what `gateway` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `proxy` and the decode/validate site in `gateway`, then replace the RED line with those citations.
+ 
+ ### CT-21 — github → node
+ 
+@@ -270,8 +286,9 @@ than an honest gap.
+ - **Sends because:** Mints, caches and refreshes GitHub App installation tokens; never a token in argv (M7 §2)
+ - **Receives because:** One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
+ - **Measured defect:** the mint was never run on this host (no App creds); the consumer is the node's credential file, not a function (M7 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Sender guarantee:** RED — no `file:line` in the model states what `github` commits to.
+ - **Receiver requirement:** RED — what `node` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `github` and the decode/validate site in `node`, then replace the RED line with those citations.
+ 
+ ### CT-22 — node → crier
+ 
+@@ -281,17 +298,19 @@ than an honest gap.
+ - **Sends because:** One project per node; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
+ - **Receives because:** Delivery with per-agent signature, leases, replies, idempotency (M10 §2)
+ - **Measured defect:** the in-repo producer half is not established; crier HandleRegister/HandleRegisterByID named (M1 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Sender guarantee:** RED — no `file:line` in the model states what `node` commits to.
+ - **Receiver requirement:** RED — what `crier` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `node` and the decode/validate site in `crier`, then replace the RED line with those citations.
+ 
+ ### CT-23 — provisioner → bunker
+ 
+ - **Carries:** create, exec, cp against the agent container
+ - **Mode:** bunker CLI
+-- **State:** PROVEN
++- **State:** UNVERIFIED
+ - **Sends because:** Qualifies the host (disk floor), creates the container, mints identity, seeds prompts/skills/env, connects the bus (M1 §2)
+ - **Receives because:** Hosts agent containers; create/exec/cp; per-agent home
+-- **Measured defect:** short create/exec/cp calls measured across M1's batteries (M1 §6)
+-- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to.
++- **Measured defect:** short create/exec/cp calls measured across M1's batteries (M1 §6); downgraded from PROVEN — the daemon's accept side has no in-repo file:function to cite
++- **Sender guarantee:** scripts/bunker-provision.sh:504 — the node-create.sh stage drives create/exec/cp against the agent container
+ - **Receiver requirement:** RED — what `bunker` accepts and rejects is not stated here.
++- **To close:** quote the encode site in `provisioner` and the decode/validate site in `bunker`, then replace the RED line with those citations.
+ 
+diff --git a/scripts/book_style.py b/scripts/book_style.py
+index ff9e956..5600a1e 100644
+--- a/scripts/book_style.py
++++ b/scripts/book_style.py
+@@ -86,6 +86,16 @@ td, th, p, li, code, pre { overflow-wrap: anywhere; }
+ .notice .txt { display: block; font-size: 7.4pt; line-height: 1.28; }
+ img { max-width: 100%; }
+ 
++/* Flight Data File checklist card, per the template's own .card: black title bar,
++   numbered steps, verification lines — and LETTER GOTHIC ONLY, the one face the
++   template reserves for crew checklists. */
++.card { border: 0.8pt solid var(--ink); font-family: var(--selectric); font-size: 7.1pt;
++        line-height: 1.3; letter-spacing: 0; margin: 2.5mm 0; break-inside: avoid; }
++.card .bar { background: var(--ink); color: var(--paper); font-weight: 700;
++             padding: 0.5mm 1.8mm; display: flex; justify-content: space-between; }
++.card ol { list-style: none; margin: 0; padding: 0.8mm 1.8mm 1mm; }
++.card li { display: grid; grid-template-columns: 3.2mm 1fr; white-space: pre; }
++
+ /* ---- cover (a cover carries no dochead) ---- */
+ .cover { text-align: center; padding-top: 66mm; }
+ .cover .doc { letter-spacing: 0.3em; font-size: 10pt; }
+diff --git a/scripts/gen_contract_register.py b/scripts/gen_contract_register.py
+index c9341cb..913a3a0 100644
+--- a/scripts/gen_contract_register.py
++++ b/scripts/gen_contract_register.py
+@@ -2,9 +2,16 @@
+ """gen_contract_register.py — Part IV of the handbook, from the system model.
+ 
+ The register is the part a reader needs to answer "what does this side promise, and
+-what does that side require". The model knows the pair and the state; it does not know
+-both sides of every wire, so anything unproven is written RED with the command that
+-would settle it rather than prose that reads like a guarantee.
++what does that side require". The model knows the pair and the state; each side is
++written from the model's `sender_guarantee` / `receiver_requirement` citation
++(a file:line that was verified in the code) or, when the model names none, as RED
++with the command that would settle it — prose that reads like a guarantee is worse
++than an honest gap.
++
++GATE (mechanical, run here): a row may never print State PROVEN while either side
++is RED — that face contradiction is what an owner reads cold. The generator
++downgrades such a row to UNVERIFIED and says so on the row, so the contradiction
++cannot be generated again.
+ 
+ Output: docs/handbook/parts/IV-contract-register.md
+ """
+@@ -25,10 +32,21 @@ OUT = ROOT / "docs/handbook/parts/IV-contract-register.md"
+ STATE_MARK = {"works": "PROVEN", "broken": "BROKEN", "missing": "MISSING"}
+ 
+ 
++def side(kind: str, c: dict, dst: str) -> tuple[str, bool]:
++    """Rendered line for one side of the wire + whether it is closed (cited)."""
++    cite = (c.get(kind) or "").strip()
++    if cite:
++        return cite, True
++    if kind == "sender_guarantee":
++        return (f"RED — no `file:line` in the model states what `{c.get('from')}` "
++                "commits to."), False
++    return (f"RED — what `{dst}` accepts and rejects is not stated here."), False
++
++
+ def main() -> int:
+     model = yaml.safe_load(MODEL.read_text())
+     contracts = model.get("contracts", [])
+-    comps = {c["id"]: c for c in model.get("components", [])}
++    comps = {c["id"]: c for c in model.get("components", {})}
+ 
+     lines = [
+         "# Part IV — Contract register",
+@@ -45,50 +63,69 @@ def main() -> int:
+         "",
+         "> CAUTION: a row whose State reads PROVEN while its sender guarantee or receiver",
+         "> requirement reads RED is self-contradictory — one side is measured, the other is not.",
+-        "> Treat such a row as UNVERIFIED until both sides carry citations.",
++        "> Treat such a row as UNVERIFIED until both sides carry citations. The generator",
++        "> enforces this: a PROVEN state with an uncited side prints as UNVERIFIED.",
+         "",
+         "| id | from → to | carries | mode | state |",
+         "|---|---|---|---|---|",
+     ]
+-    for i, c in enumerate(contracts, start=1):
+-        lines.append(
+-            f"| CT-{i:02d} | {c.get('from')} → {c.get('to')} | {c.get('carries', '')} "
+-            f"| {c.get('mode', '')} | {STATE_MARK.get(c.get('state', ''), c.get('state', ''))} |"
+-        )
+ 
+-    lines += ["", "## Contracts in detail", ""]
++    red_sides = 0
++    detailed = []
+     for i, c in enumerate(contracts, start=1):
+         src, dst = c.get("from"), c.get("to")
+         s, d = comps.get(src, {}), comps.get(dst, {})
++        send_line, send_ok = side("sender_guarantee", c, dst)
++        recv_line, recv_ok = side("receiver_requirement", c, dst)
++        state = STATE_MARK.get(c.get("state", ""), c.get("state", ""))
++        downgraded = None
++        if state == "PROVEN" and not (send_ok and recv_ok):
++            downgraded = ("State downgraded from PROVEN: a PROVEN row needs BOTH sides "
++                          "cited, and " + ("the sender guarantee" if not send_ok else
++                                           "the receiver requirement") + " is RED.")
++            state = "UNVERIFIED"
++        red_sides += (0 if send_ok else 1) + (0 if recv_ok else 1)
++
++        lines.append(
++            f"| CT-{i:02d} | {src} → {dst} | {c.get('carries', '')} "
++            f"| {c.get('mode', '')} | {state} |"
++        )
++
+         note = (c.get("note") or "").strip()
+-        lines += [
++        rows = [
+             f"### CT-{i:02d} — {src} → {dst}",
+             "",
+             f"- **Carries:** {c.get('carries', 'unnamed')}",
+             f"- **Mode:** {c.get('mode', 'unstated')}",
+-            f"- **State:** {STATE_MARK.get(c.get('state', ''), c.get('state', ''))}",
++            f"- **State:** {state}",
+             f"- **Sends because:** {s.get('owns', 'not recorded')}",
+             f"- **Receives because:** {d.get('owns', 'not recorded')}",
+         ]
++        if downgraded:
++            rows.append(f"- **Downgraded:** {downgraded}")
+         if note:
+-            lines.append(f"- **Measured defect:** {note}")
+-        lines.append(
+-            "- **Sender guarantee:** RED — no `file:line` in the model states what this side commits to."
+-        )
+-        lines.append(
+-            f"- **Receiver requirement:** RED — what `{dst}` accepts and rejects is not stated here."
+-        )
+-        lines.append(
+-            f"- **To close:** quote the encode site in `{src}` and the decode/validate site in "
+-            f"`{dst}`, then replace both RED lines with those citations."
+-        )
+-        lines.append("")
++            rows.append(f"- **Measured defect:** {note}")
++        rows.append(f"- **Sender guarantee:** {send_line}")
++        rows.append(f"- **Receiver requirement:** {recv_line}")
++        if not (send_ok and recv_ok):
++            rows.append(
++                f"- **To close:** quote the encode site in `{src}` and the decode/validate "
++                f"site in `{dst}`, then replace the RED line with those citations."
++            )
++        rows.append("")
++        detailed.append(rows)
++
++    lines += ["", "## Contracts in detail", ""]
++    for rows in detailed:
++        lines += rows
+ 
+     OUT.parent.mkdir(parents=True, exist_ok=True)
+     OUT.write_text("\n".join(lines) + "\n")
+-    red = sum(2 for _ in contracts)
+-    print(f"wrote {OUT.relative_to(ROOT)} — {len(contracts)} contracts, {red} RED sides, "
+-          f"{len(lines)} lines")
++    proven = sum(1 for c in contracts
++                 if STATE_MARK.get(c.get("state", ""), c.get("state", "")) == "PROVEN")
++    print(f"wrote {OUT.relative_to(ROOT)} — {len(contracts)} contracts, "
++          f"{proven} PROVEN, {red_sides} RED sides, both-sided: "
++          f"{2 * len(contracts) - red_sides}/{2 * len(contracts)}")
+     return 0
+ 
+ 
