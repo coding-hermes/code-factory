@@ -12,16 +12,82 @@ carries at least one RED side — a guarantee no `file:line` in the model states
 failure on those wires has no measured early warning. Where no canonical contract covers
 a failure, the subsection says so; an unguarded failure is a risk entry, not a hidden one.
 
+## 0. Stable risk identifiers, the notice convention and the recovery chain
+
+**Stable risk IDs (V2-RSK-05).** Every class in this part carries a stable identifier
+`R-nn`, assigned by section number and never reused or renumbered. A class that must be
+split continues its identifier with a letter suffix (R-08a, R-08b). The identifier, not
+the page number, is what other sections, settings cards and the disposition log cite:
+
+| ID | Class | § | ID | Class | § |
+|---|---|---|---|---|---|
+| R-01 | A failed run settles as a pass | 1 | R-18 | Wrong served route and truncation | 18 |
+| R-02 | Custody lost on restart | 2 | R-19 | Proxy streaming completion | 19 |
+| R-03 | Custody lost on crash | 3 | R-20 | Shared-memory consistency | 20 |
+| R-04 | Deadline kill misses the harness's children | 4 | R-21 | Restore | 21 |
+| R-05 | An untrusted directive reaches a node | 5 | R-22 | Upgrade drift | 22 |
+| R-06 | Provisioning admits what it must refuse | 6 | R-23 | Bunker protections, qualified | 23 |
+| R-07 | A credential is exposed, or the mode claim lies | 7 | R-25 | Divergent configuration generations | 25 |
+| R-08 | Work lands without proof | 8 | R-26 | Partial propagation | 26 |
+| R-09 | The control plane is exposed by binding | 9 | R-27 | Stale dual ownership — partitioned host | 27 |
+| R-10 | Evidence destroyed, or never written | 10 | R-28 | Failed rebind after replacement | 28 |
+| R-11 | The record that lies | 11 | R-29 | Budget exhaustion or silent reset | 29 |
+| R-12 | Unproven wires | 12 | R-30 | Local memory loss vs HTTP outage | 30 |
+| R-13 | Stale boards and stale claims | 13 | R-31 | Memory synchronization conflicts | 31 |
+| R-14 | Unknown verdicts | 14 | R-32 | Unavailable verifier or model | 32 |
+| R-15 | Publication and memory projections fail | 15 | R-33 | Resource pressure and unsafe cleanup | 33 |
+| R-16 | Replay, uncertain starts and orphans | 16 | R-33 | Resource pressure and unsafe cleanup | 33 |
+| R-17 | Authentication, scope and expiry | 17 | | | |
+
+NOTE: the former summary section §24 carried no risk identifier (it indexes classes, it
+is not one); this wave renumbers it to §34 to keep sections in reading order. No R-id
+was dropped or reassigned.
+
+**Notice convention.** This document defines its own accepted scheme, used deliberately:
+**NOTE** is informational — a fact the operator should know, no action implied;
+**CAUTION** flags a hazard to data or equipment — a procedure that can lose custody,
+evidence or availability if skipped; **WARNING** flags a hazard an operator must not
+proceed past. This book carries no personnel hazards, so WARNING is reserved for the
+stopping-grade hazards (custody loss, exposed control planes) — the reader should expect
+CAUTION for most operational risks and treat WARNING as the rarer, harder stop.
+
+**The recovery chain (V2-RSK-03).** Managed repair follows one ordered chain, and every
+class section after §25 names where its recovery sits on it. Each step is classified
+**automatic** (the management layer or owning component does it), **operator-invoked**
+(a documented runbook command an operator or authorized agent runs), or **unsupported**
+(named, with the gap recorded):
+
+| Step | What happens | Typical class |
+|---|---|---|
+| 1. Detection | the deviation or failure is observed through its signal/metric | automatic (where the metric exists — many are TARGET) |
+| 2. Classification | the failure is attributed to component, principal and scope; severity/priority assigned | automatic, with operator confirmation on ambiguous attribution |
+| 3. Desired/observed status | the affected scope is marked degraded/blocked/retrying against its desired generation | automatic |
+| 4. Authorized scoped repair | the configured repair runs under its declared authority — credential renewal, config correction, service restart, route/registration repair, memory fallback/sync, or full replacement only when needed | automatic for scoped repairs; operator-invoked for unqualified or cross-domain actions |
+| 5. Readback / end-to-end readiness | the failed operation is re-proven and end-to-end readiness verified — not just liveness | automatic |
+| 6. Routing/admission resume | Crier/scheduler bindings and admission re-enabled; recovery evidence retained | automatic |
+
+Two repair rules bound every class. A permission denial is never repaired by silently
+increasing access — revocation or a denied permission is not authority to expand a grant
+(V2-OPS-01). And not every service failure justifies recreating the host: the scoped
+repair is the first authority tried, and full replacement (F2/F8) is the fallback, not the
+default. Repair and test evidence is recorded separately from approved target policy — a
+drill record proves the drill, not the deployment.
+
 ## 1. A failed run settles as a pass
 
 **What fails.** The settlement reader `dispatchReplyVerdict`
 (`internal/scheduler/dispatch_leg.go:713-726`) reads only `payload["ok"]` and treats the
 absence of a verdict as success (`:709-712`). A node reply carrying `status:"failed"` —
 the field `node-bus-worker.py:1180` actually sends — and no `ok` is scored a success: the
-control-plane half of the silent-success defect, CF-355 open (M9 §11). The node-side
+control-plane half of the silent-success defect, CF-355 open (M9 §2). The node-side
 mirror: a worker that replies with a false `ok` records a pass for work that never
-happened (M2 §2). The dispatcher leg always sends `ok` (CT-06's measured defect, M11 §6),
-so the one settlement wire that works is the one that carries no verdict information.
+happened (M2 §2). One reconciliation before either transport claim is used (V2-RSK-04):
+the dispatcher leg always sends `ok` — including its documented failed-result reporting,
+which writes `ok: false` with error detail (M11 §6) — so that leg *does* carry verdict
+information and the reader's ok-only policy happens to score it correctly. What the
+dispatcher leg never carries is the node worker's `status` verdict field; the defect is
+the reader ignoring that field on the leg that sends it, not the dispatcher's own failed
+reporting.
 
 **Signal.** A board row closes complete while the worker's reply body says
 `status:"failed"`; a scheduler pass row whose correlated reply carries no `ok` field.
@@ -202,16 +268,22 @@ bearer token's client half is config-wired only).
 
 ## 8. Work lands without proof
 
-**What fails.** The landing path can publish ungraded and the record can close without
-evidence. `land-node-branch.sh` initialises `GATE=""` and `run_gate` returns 0 on an
+**What fails.** The landing path can publish ungraded, and a record can close with
+insufficiently verified evidence. One clarification first (V2-RSK-04): the board store
+does not both accept and refuse an absent evidence ID — `boardctl update --status
+complete` **refuses** a completion with no bound run id (TR-251), unconditionally. The
+gap is not ID presence but evidence completeness: the store requires that *an* id be
+named, and does not verify that the id resolves to a real run, that the run's verdict is
+passing, or that the evidence ties to the exact merged tree and the published
+destination — the verification/provenance/exact-tree/publication completeness gap the
+review names. `land-node-branch.sh` initialises `GATE=""` and `run_gate` returns 0 on an
 empty gate (`:74-75`), so a landing with no `--gate-cmd` runs no project gate (F3-3); the
 pre-commit hook exits 0 when `.gitreins/config.yaml` is absent (`install-gitreins.sh:
 130-131`) — a bypass that is by design but must be disclosed when used (M3 §10). Nothing
 in-repo invokes the lander at all (F3-5): the result envelope names `branch` and `commit`
 (`node-bus-worker.py:1187-1188`) but does not call it — the landing step is
 operator-triggered. On the record side, the node worker writes no board rows — no
-in-repo producer exists (CT-10, BROKEN), and a completion without a bound run id is
-refused by `boardctl update` (TR-251).
+in-repo producer exists (CT-10, BROKEN).
 
 **Signal.** `refuse descendant … rebase the branch` (`:202`) or a missing gate row in the
 landing log; a closed row with no evidence run id (which boardctl refuses); a landing
@@ -676,7 +748,293 @@ does not close that question (handoff §1.3). Terminal Jail is optional and disa
 default; when enabled, Hermes execution uses the guarded path with no unguarded fallback —
 and observer-plugin presence alone proves no enforcement (M8 review).
 
-## 24. Risk summary — prioritized, with the review's mapping
+## 25. Divergent desired and effective configuration generations
+
+**What fails.** The management layer's desired state advances a generation, but the
+effective state of a participating system never reaches it: an adapter change failed, a
+node was unreachable during propagation, or the observed inventory recorded a readback
+that was stale on arrival. The system then runs on an old generation while reporting the
+new one — divergent generations, the configuration form of R-01.
+
+**Affected invariant.** Every scope's effective state carries the generation it was
+reconciled from; desired, observed and effective agree or the divergence is visible.
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): per-scope
+`config_generation{desired, effective}` gauges and a divergence counter, collected by the
+manager's readback (V.6 step 7). Today: no manager exists; per-system drift probes
+(`bunker_config_gen.py --check`, M1 §5) are the partial predecessor.
+
+**Visible state.** A Bunker serving settings from generation N-1 while the store holds
+generation N; a diff/plan that reports no changes against an out-of-date observation.
+
+**Containment.** Generation compare-and-swap on every update (V.6 step 5); a generation
+whose reconciliation is incomplete is degraded, never silently current.
+
+**Owner / repair.** The management service owns reconciliation; repair is the scoped
+re-apply of the lagging adapter (recovery chain step 4, automatic), with rollback or
+forward repair per F13 on a failed apply.
+
+**Recoverability limit / residual exposure.** A scope whose effective readback is RED
+(V.3 card 2) cannot prove which generation it serves — the divergence is detectable only
+on the surfaces that have readback.
+
+**Verification case.** Apply generation N to a two-Bunker scope with one node drained;
+assert the divergence is reported, the drained node converges after rejoin, and no
+surface reports converged until readback agrees.
+
+## 26. Partial propagation of configuration
+
+**What fails.** A configuration change reaches some participants and not others: the
+per-node acknowledgements of V.6 step 6 are incomplete, and no operator looks. Distinct
+from R-25 — there the store and a node disagree about generations; here the change is
+half-applied with no generation tracking to even name it.
+
+**Affected invariant.** A configuration change is all-or-recorded: every participant
+acknowledges, and the unacknowledged set is visible.
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): `config_propagation_pending`
+gauge with per-node acknowledgement ages. Today: nothing counts propagation.
+
+**Visible state.** Two Bunkers in one project running different mount or memory
+configurations; a retry loop that stops on the first success.
+
+**Containment.** Idempotent adapter applies with retry/backoff (V.6 step 6); a node that
+did not acknowledge is degraded, not converged.
+
+**Owner / repair.** The management service; scoped repair is re-apply to the
+unacknowledged nodes only.
+
+**Verification case.** Drop one node's acknowledgement during a settings apply; assert
+the scope reports degraded, the retry converges it, and the audit event names both
+attempts.
+
+> CAUTION: re-running a destructive adapter step against an already-converged node to
+> "make propagation even" violates idempotency expectations — re-apply must be the
+> idempotent declared apply, never a manual replay of side effects.
+
+## 27. Stale dual ownership — the partitioned old host
+
+**What fails.** A Bunker host is partitioned, presumed lost, and replaced (F2/F8). The
+old host was not dead: it keeps running its foreman, holding claims and answering Crier
+on a stale route. Two owners now act for one project identity — the failure the fencing
+rule exists for. Unreachability did not prove termination, and replay by the replacement
+is not automatically safe.
+
+**Affected invariant.** One active owner per project/Bunker identity at a time,
+enforced by lease and fencing, not by reachability assumptions.
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): dual-ownership detector — two
+live claimants for one identity within a lease window; lease-expiry vs heartbeat metrics.
+Today: nothing fences at the Factory level.
+
+**Visible state.** Both old and new Bunkers writing the board; a claim honored on two
+hosts; duplicate workers on one task.
+
+**Containment.** Explicit active-owner/lease semantics: the replacement acquires the
+lease, the old holder's writes are fenced by identity (claim/lease tokens carried on
+board writes and Crier registration), and a partitioned host whose lease expired is
+refused on reconnect rather than re-admitted silently.
+
+**Owner / repair.** The management service owns the lease and fencing decision;
+operator-invoked quarantine of the partitioned host if it cannot be reached to drain.
+
+**Recoverability limit / residual exposure.** A partitioned host holding unsynchronized
+local memory may lose the unsynchronized portion on quarantine (R-30's loss limit).
+
+**Verification case.** Partition a Bunker mid-round, replace it, heal the partition;
+assert the old host's post-partition writes are refused by fence check and the audit log
+names both identities.
+
+## 28. Failed Crier/scheduler rebind after replacement
+
+**What fails.** A replacement Bunker is provisioned and ready (F2), but the rebind
+fails or is incomplete: Crier registration not updated, scheduler target still pointing
+at the old endpoint, or the two views disagree. A later foreman round is delivered to a
+dead route or never delivered — readiness without reachability.
+
+**Affected invariant.** Crier routing and scheduler knowledge are updated as one
+coordinated step, verified together before admission resumes.
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): rebind-success counter and a
+binding-consistency check across both views (V2-ARCH-01's "verification of both
+controller views"). Today: none — F8's binding update is target behavior.
+
+**Visible state.** A ready Bunker that receives no rounds; delivery timeouts to a stale
+endpoint; the scheduler showing readiness the bus cannot reach.
+
+**Containment.** F2's step 6 — confirm matching identity/readiness before enabling
+admission; the consistency check is the negative control that keeps a half-rebind from
+admitting.
+
+**Owner / repair.** The management service owns the coordinated update; scoped repair
+re-runs registration and scheduler update, then readback (recovery chain steps 4–6).
+
+**Verification case.** Break the scheduler half of a rebind; assert admission stays
+disabled, the inconsistency is named by both views, and the repair re-enables only after
+readback agrees.
+
+## 29. Round worker-budget exhaustion or silent reset
+
+**What fails.** Two opposite failures of the round budget (V2-Q-02): exhaustion without
+a named stop reason — the round ends with spent allowance and unreported remaining work —
+or a silent reset, where a wave boundary, retry or crash recovery replenishes an
+allowance that should stay consumed, and the round regains workers it no longer owns.
+
+**Affected invariant.** The total-worker allowance is fixed at round admission,
+monotonically consumed across waves, and never replenished — not by a new wave, not by a
+retry, not by a restart.
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): `worker_budget{round, used,
+remaining}` observable per round and per wave (Part I §6; VII §14's budget metric);
+a replenishment is a counted anomaly. Today: no budget accounting exists in the measured
+scheduler/foreman surfaces.
+
+**Visible state.** A round report missing budget use; waves totalling more workers than
+the allowance; a crash-resumed round with its full allowance back.
+
+**Containment.** Durable reservation/consumption/release accounting (VII §16): the
+allowance is recorded before the first wave and updated before each next wave; crash
+recovery reads the ledger, never re-derives it.
+
+**Owner / repair.** The foreman owns allocation within the round; the scheduler owns
+admission and the allowance grant; repair after a silent reset is to fence the round
+(R-27) and re-account from the durable ledger — never to "top up" silently.
+
+**Verification case.** Run a round whose waves sum past a mis-set allowance; assert
+admission refuses; crash a round after two waves and assert the resumed round reports the
+consumed remainder, not the full grant.
+
+## 30. Local memory loss versus HTTP outage — distinct classes
+
+> CAUTION: treating these two as one failure mode produces both false alarms (an outage
+> declared as data loss) and silent loss (data loss excused as an outage).
+
+**What fails.** Two different things, and conflating them is itself a defect. An **HTTP
+outage** is the DuckBrain service path being unavailable while the local Git-backed
+namespace repositories remain intact and usable — queries and supported local persistence
+continue against the same namespace/data root (V2-Q-04), with synchronization pending.
+**Local memory loss** is damage to the namespace data itself — a lost host, a corrupted
+store, an unsynchronized Bunker destroyed before sync. The first is a transport state;
+the second is unrecoverable loss of the unsynchronized portion.
+
+**Affected invariant.** Memory unavailability never implies memory loss; local
+persistence, Git commit and remote synchronization remain distinct acknowledgement
+states (V2-FLW-05).
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): distinct counters —
+`memory_http_unavailable`, `memory_pending_sync`, `memory_local_write_failures` — plus
+sync freshness per namespace. Today: a board note when DuckBrain is down (which is not a
+memory write, VII §14) and nothing else.
+
+**Visible state.** A foreman continuing to work with pending-sync entries during an
+outage (correct); a lost Bunker whose worker entries existed nowhere else (loss).
+
+**Containment.** On outage: continue useful work; durable pending entries at every
+required worker/wave/round level; local persistence as the durable record. On loss: the
+unsynchronized portion is unrecoverable — say so in the recovery record rather than
+reconstructing it from scheduler notes and Git history, which retain only parts of the
+trail.
+
+**Owner / repair.** The foreman owns pending-entry durability; the sync owner (V.7
+example `sync.owner`) owns reconciliation; repair after HTTP recovery is the scheduled
+synchronization with conflict handling (R-31).
+
+**Recoverability limit / residual exposure.** An unsynchronized host lost takes its
+unsynchronized entries with it; that limit is stated in every backup/restore claim
+(F15).
+
+**Verification case.** Stop the DuckBrain HTTP service mid-round; assert local
+persistence succeeds, pending sync is reported, and the round continues; then destroy the
+namespace store and assert the recovery record names the lost unsynchronized entries
+instead of claiming restoration.
+
+## 31. Memory synchronization conflicts
+
+**What fails.** The controller and Bunker copies of a project namespace accept
+divergent writes while disconnected (R-30's outage path), and on reconnect the
+synchronization must merge them. Conflict behaviors — last-writer-wins, Git merge, or
+duplication — are unspecified today (the shared topology is UNRESOLVED, Part V matrix),
+so a conflict can silently drop one side's record or duplicate both.
+
+**Affected invariant.** Synchronization has a declared owner, merge/conflict rule and
+duplicate handling; freshness is visible to subsequent readers (F3 step 6).
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): `memory_sync_conflicts` and
+`memory_sync_duplicates` counters with per-namespace freshness gauges. Today: none.
+
+**Visible state.** A worker entry present on the controller copy and absent on the
+Bunker copy; the same entry twice with two ids.
+
+**Containment.** Until the topology decision lands, the containment is the cache rule:
+a remote copy is a cache, never authority (R-20), and the local Git-backed namespace is
+the durable record.
+
+**Owner / repair.** Assigned when the topology decision lands (R-20's owner note);
+until then UNSUPPORTED — the gap is recorded, not filled with an invented merge rule.
+
+**Verification case.** With the topology specified: diverge two copies by one worker
+entry each, synchronize, and assert both entries survive once each with correlation
+intact.
+
+## 32. Unavailable verifier or model
+
+**What fails.** The independent acceptance judge, the GitReins guard, or the model
+behind a worker is unreachable — work stalls at verification, not at execution. Two
+wrong responses: grading the work anyway (a verdict without its verifier — the R-01
+family in a new coat), or declaring the *work* failed when the *verifier* failed.
+
+**Affected invariant.** Verification is a named dependency: an unavailable verifier
+makes outcomes **unknown**, never pass and never silently failed.
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): `verifier_unavailable_total`
+and verdict-latency per verifier, with the F9 degraded-mode classification. Today:
+MISSING seats from a timed-out judge session (VII §6) are the only measured signal.
+
+**Visible state.** Rows held ungraded with live workers; a round report claiming
+completion with no verdicts; a proxy outage surfacing as "worker failure".
+
+**Containment.** F9's classification: record the selected degraded mode, defer verdict-
+dependent closure, preserve partial work and evidence with stable identities; a
+verification outage does not fail the underlying execution record.
+
+**Owner / repair.** The scheduler owns degraded-mode policy; gitreins owns the grade;
+the proxy owner owns model availability (R-18/R-19). Repair is verifier recovery, then
+re-grade — never inference of a verdict (VI §14's rule).
+
+**Verification case.** Stop the judge mid-round; assert outcomes record `unknown`,
+closure verbs refuse, and the resumed round re-grades rather than accepting the gap.
+
+## 33. Resource pressure and unsafe cleanup ordering
+
+**What fails.** Disk or memory pressure on a Bunker triggers cleanup before ownership
+and evidence checks run: the reaper takes a directory a module cites as evidence (R-10),
+a live worker's checkout, or pending memory sync data (R-30) — pressure converts into
+silent loss. The unsafe ordering is the defect: protection after selection.
+
+**Affected invariant.** Cleanup resolves live ownership, protected paths, evidence
+retention and pending synchronization *before* selecting destructive actions (F6 step 2).
+
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): pressure gauges per Bunker with
+cleanup-refusal counters. Today: `disk_floor` admission rows and the hygiene footprint
+measured at admission only (M1 §5) — nothing watches mid-round pressure.
+
+**Visible state.** A cited evidence dir gone after a pressure-driven reap; a worker
+killed by an OOM while its claim stays held; pending-sync data deleted with its host.
+
+**Containment.** The measured refusals hold: `PROTECTED` paths refused before
+inspection, `--dry-run` projected bytes, `reap --registry` required (M8 §5). The target
+adds the ordering rule: pressure escalates through events/metrics (V2-OPS-02) and the
+F6 sequence, never through an unordered local sweep.
+
+**Owner / repair.** The safety owner (M8) owns cleanup authority; the management
+service owns pressure observation; repair of an unsafe cleanup is the R-10 recovery
+(a reaped evidence directory is unrecoverable — prevention is the only real fix).
+
+**Verification case.** Fill a Bunker past its floor mid-round with a protected evidence
+dir present; assert the cleanup refuses protected paths, reports the pressure, and no
+cited directory disappears.
+
+## 34. Risk summary — prioritized, with the review's mapping
 
 The classes are ordered by consequence, not by uncited-line counts: a class that can close
 work that never happened, spend after death, or lose custody outranks one that only
@@ -729,3 +1087,17 @@ tables to hold the page.
 | 18 | Restore | durable backend requirement | Crier store owner | restore procedure + drill | restore-drill record |
 | 19 | Drift | refuse-on-mismatch install | pin owners | re-apply the pin | dated `--check` exit 0 |
 | 20 | Unproven wires | five-state vocabulary, same-commit amend | contract owners | cite both ends | register row leaves UNVERIFIED |
+
+The manager and state-store classes added this wave, on the same columns:
+
+| Pri | Class | Containment | Owner | Retry / recovery | Proof of recovery |
+|---|---|---|---|---|---|
+| 21 | Divergent config generations (R-25) | generation CAS; incomplete reconciliation is degraded | management service | scoped adapter re-apply, rollback/forward per F13 | desired/effective gauges agree |
+| 22 | Partial propagation (R-26) | per-node acks, retry/backoff | management service | re-apply to unacknowledged nodes only | ack set complete, audit names attempts |
+| 23 | Stale dual ownership (R-27) | lease + fencing by identity | management service | fence, quarantine, re-account | post-partition writes refused |
+| 24 | Failed rebind (R-28) | binding-consistency check before admission | management service | re-run registration + scheduler update | both views agree at readback |
+| 25 | Budget exhaustion/reset (R-29) | durable reservation ledger, monotonic spend | foreman + scheduler | fence and re-account from ledger | resumed round reports consumed remainder |
+| 26 | Memory loss vs outage (R-30) | distinct ack states; local record durable | foreman + sync owner | sync on recovery; name lost portion | pending-sync converges; loss record honest |
+| 27 | Memory sync conflicts (R-31) | cache rule until topology lands | unresolved (R-20) | unspecified — gap recorded | both diverged entries survive once |
+| 28 | Unavailable verifier/model (R-32) | outcomes `unknown`, closure defers | scheduler + gitreins + proxy | verifier recovery, re-grade | re-grade replaces the gap |
+| 29 | Pressure/unsafe cleanup (R-33) | protection before selection | safety owner (M8) | prevention (recovery is R-10) | cited evidence survives pressure |

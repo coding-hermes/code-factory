@@ -1,5 +1,363 @@
 # Part V — Settings register
 
+## V.0 The governing control model
+
+The Factory's foundation is a deterministic infrastructure-as-code management layer. It
+holds declared desired state, observes actual state, maps and manages the settings of its
+participating systems, and continuously reconciles drift and failures so the project
+execution environment remains available and correct. LLM foremen and agents plan and
+implement project work; the infrastructure convergence mechanism is deterministic code —
+infrastructure maintenance never depends on an agent improvising the manual sequence of
+many tools.
+
+This part defines that layer's configuration contract. The inventory of measured
+surfaces (M0–M12) follows in "The measured inventory"; the contract governs the whole
+system, including the components the thirteen module chapters predate.
+
+**Authority boundary (V2-SET-08, user-resolved).** The configuration file is the declared
+desired-state authority, editable by the human user or an authorized agent acting on the
+user's behalf, through the documented validation/update interface of V.6. Boardctl
+remains the work authority: it carries project tasks, claims and evidence, and no setting
+in this register makes Boardctl a configuration authority or requires a repo-linked
+configuration format. Three versioned representations are kept separate:
+
+| Representation | What it is | Owner | Where it lives |
+|---|---|---|---|
+| **Desired** | the declared intent — host pools, capacity, access, policy | the user or an authorized agent | the configuration file (versioned, generation-numbered) |
+| **Observed** | the management service's durable inventory of actual state | the management/reconciliation service | its state store |
+| **Effective** | the values actually serving, read back from each participating system | each owning subsystem, read back by the manager | subsystem surfaces, exposed through readback contracts |
+
+Reconciliation status — converged, degraded, failed, per scope — is durably recorded
+against the generation it describes. A generation whose reconciliation never completed
+does not silently become the current truth.
+
+**Allocation shortfall is exposed, never absorbed.** Project configuration declares an
+eligible pool of hosts and host/Bunker resource and storage requirements or limits. The
+manager maps them into a deterministic allocation contract and may rebalance Bunkers
+across eligible surviving capacity after host loss — without changing desired counts,
+access or policy. When allocation cannot converge, the manager preserves the desired
+request and reports the exact unsatisfied requirements and affected scope as visible
+operational state and evidence (metrics, V.6 events); it does not silently lower the
+desired state to match the shortfall.
+
+**Operational maintenance does not rewrite intent.** Authorized operational maintenance —
+credential expiry renewal, configured leak-triggered revocation and replacement, placement
+repair — is part of managed current state. Automatically changing a credential or a
+placement never authorizes rewriting the user's desired access, capacity or policy intent.
+
+**Field classes.** Every field in the desired-state schema is classified as one of:
+**user intent** (changes only through the declared update interface), **derived** (computed
+from intent, recorded but not independently editable), **observed** (written only by the
+manager from readback), **secret reference** (names a credential, safe to print), or
+**secret material** (never appears in desired state at all — V.4). Which fields may change
+automatically follows from the class: observed fields change continuously; secret
+references change only through rotation procedures; user intent never changes
+automatically.
+
+No repository location, serialization language, or numeric limit for the desired-state
+file is selected by the review; the schema below defines shape and semantics. Examples
+render in YAML for readability — the serialization is an implementation choice, not a
+decision recorded here.
+
+## V.1 Scopes and the complete participating-system inventory (V2-SET-01)
+
+Every setting belongs to a scope, and every participating system has a settings surface
+in exactly one of the five classes of V.2. A settings pass covers the full system — not
+only the thirteen original module tables.
+
+**Configuration scopes:**
+
+| Scope | What it binds | Decided by | Examples |
+|---|---|---|---|
+| global | Factory-wide defaults | user intent | default deployment profile, event/webhook endpoints, retention policy |
+| deployment | one chosen deployment topology (Kubernetes, Compose, homelab/VPN, standalone) | user intent per deployment | profile selection, connectivity endpoints, bootstrap ownership |
+| profile | one named per-Bunker profile | user intent per profile | isolation basis, persistence, mounts, resource controls |
+| project | one project's desired runtime | user intent per project | repo, eligible host pool, resource/storage requirements, memory namespace |
+| Bunker | one Bunker's effective configuration | profile application + operational state | resolved mounts, installed credentials (as references), agent identity |
+| lane | one scheduling lane | user intent per lane | cadence, admission mode, weight, model routing |
+| job | one dispatched job | the dispatching actor | turn budget, wall clock, worktree, brief |
+
+**Participating systems — the complete surface:**
+
+| System | Settings surface | Register owner | State |
+|---|---|---|---|
+| Management/reconciliation service | desired-state store, reconciliation policy, allocation, health/repair | this part (V.0–V.8) | TARGET-UNIMPLEMENTED — the service is a v2 product requirement |
+| Scheduler (M9) | 57 daemon flags, three-layer merge | measured inventory below | SUPPORTED |
+| Crier bus (M10) | config.go defaults + `CR_*` env bounds | measured inventory below | SUPPORTED |
+| Dispatcher (M11) | `DISPATCH_*` env surface | measured inventory below | SUPPORTED; inert rows named |
+| Bunker platform (M1/M5/M8) | provisioning config keys, spawn/mount/resource controls | measured inventory below | SUPPORTED paths; profile choice UNRESOLVED |
+| Harness adapters (M5) | `CF_*` variable contract + per-adapter pins | measured inventory below | SUPPORTED; Hermes pinned for MVP |
+| Inference proxy (M12) | `CF_PROXY_*` env + fixed constants | measured inventory below | SUPPORTED; upstream source UNVERIFIED |
+| Boardctl board (M4) | wrapper verbs and validation flags | measured inventory below | SUPPORTED — work authority, not configuration authority |
+| DuckBrain memory | namespace/data-root configuration, sync target | Part V (this part) + M4/M5 review | local namespace SUPPORTED; shared topology UNRESOLVED |
+| GitReins (M3) | version pin, hook installation | measured inventory below | SUPPORTED |
+| Forge credential issuers | GitHub App (M7); GitLab and other required forges | M7 + provider-adapter rows | GitHub SUPPORTED (mint UNVERIFIED); additional providers TARGET-UNIMPLEMENTED — provider list is not invented |
+| Model router / provider access | resolver controls (M5), proxy route (M12) | measured inventory below | SUPPORTED |
+| Handbook builder (M6) | build gates, fill engine | measured inventory below | SUPPORTED |
+
+Systems outside the original M0–M12 module chapters carry their settings in the
+target-schema sections of this part; where a required capability has no native surface,
+the affected profile is marked unsupported with a named reason — a hardcoded
+implementation choice must not silently veto a required target setting. Existing
+subsystem schema/readback facilities (the scheduler's `schema`/`show-config` switches,
+M9 §5) are reused through adapters rather than duplicated.
+
+## V.2 Setting classification
+
+Every control in this register is one of five classes. Listing a variable does not make
+it a supported control; the class is part of the contract.
+
+| Class | Definition | Examples (measured) |
+|---|---|---|
+| **NATIVE** | the owning subsystem exposes the control directly — env var, flag, config key or API — and changing it changes behavior | `CR_REGISTRY_BACKEND` (M10); scheduler `listen` (M9); `CF_MAX_TURNS` (M5) |
+| **WRAPPER-MAPPED** | a Factory adapter maps a canonical key onto a native control; the canonical key is the contract | `node_env.py --config-set KEY=VALUE` → `$HOME/.hermes/.env` / `config.yaml` (M1); `bunker_config_gen.py` flags → node config (M1) |
+| **FIXED CONSTANT** | hardcoded in the implementation; named because a reader may mistake it for a setting | the proxy `LISTEN` bind (M12); `fetch_verified --max-time` 120 s (M0); the spine gate's four sets (M6) |
+| **INERT / DEPRECATED** | present in the surface but without effect in this revision | `DISPATCH_EXEC_TIMEOUT` — assigned, never read (B22, M11); `panel_loop.py --start-round`'s resume semantics (B12, M6) |
+| **REQUIRED-BUT-UNSUPPORTED** | the approved target requires the control; no native surface exists; the affected profile is unsupported with a named reason | per-Bunker profile readiness readback (V, matrix row RED); cross-system timing validation (V.5) |
+
+Constants that a chapter explicitly excludes from its settings surface are named in a
+note, not given rows — the chapters refuse them the status of settings and this register
+records that refusal rather than overruling it. Where a required target setting needs a
+code change to exist, it is classified here — not presented as available.
+
+## V.3 The per-setting contract (V2-SET-02)
+
+Every supported setting carries the full contract, in one place. A row without all
+twelve fields is a named RED on the missing fields, not a complete card:
+
+1. **Canonical key** — the stable identifier, namespaced by scope (e.g.
+   `project.worker_budget.total`).
+2. **Native mapping** — the exact env var / flag / config key / API field each
+   participating system reads it from, or "none" for a target setting.
+3. **Scope** — one of the seven of V.1.
+4. **Purpose** — what the setting decides.
+5. **Type / units** — with byte/second/count stated.
+6. **Range / enum** — valid values; the refusal outside them.
+7. **Default / absence semantics** — what unset, empty and zero each mean, separately.
+8. **Dependencies** — cross-field constraints and interactions.
+9. **Validation + typed error** — what rejects a wrong value and the named error emitted.
+10. **Authorized editor** — which field class (V.0) and which actor may change it.
+11. **Activation** — next exec / next spawn / next tick / restart / reconcile.
+12. **Effective readback** — the command that proves which value is serving, redacted per
+    V.4; plus **examples**.
+
+Two worked cards, one target and one measured:
+
+**Card 1 — `foreman.round.worker_budget.total`** (target setting, V2-Q-02):
+
+| Field | Value |
+|---|---|
+| Canonical key | `foreman.round.worker_budget.total` |
+| Native mapping | none — the scheduler injects an allowance; the foreman allocates it across waves |
+| Scope | lane (per-project lane running foreman rounds) |
+| Purpose | the total number of workers available to one foreman round, across all its waves |
+| Type / units | integer, workers |
+| Range / enum | >= 1; a value < 1 refused at admission |
+| Default / absence | TARGET: a declared default is a specification detail this register leaves to implementation reconciliation; absence refuses admission (fail-closed) rather than defaulting silently — unset, empty and zero are the same refusal |
+| Dependencies | distinct from concurrent-workers and from any wave-count limit (no separate fixed wave cap is imposed); bounded by any platform concurrency ceiling, which is a separate setting |
+| Validation + typed error | admission validates the round request; error class `BUDGET_INVALID` names the field and the offending value |
+| Authorized editor | user intent |
+| Activation | the next admitted round; a running round's allowance is fixed at admission |
+| Effective readback | the round report's budget-use section (remaining allowance observable per round and per wave) |
+| Examples | `total: 8` admits a round that may launch up to 8 workers across any number of compatible waves; a failed start consumes the reservation unless the accounting mode returns it (VII §16) |
+
+**Card 2 — `CR_REGISTRY_BACKEND`** (measured, M10 §5):
+
+| Field | Value |
+|---|---|
+| Canonical key | `transport.registry.backend` |
+| Native mapping | env `CR_REGISTRY_BACKEND`; resolved by `ResolvedRegistryBackend()` (`config/config.go:113-123`) |
+| Scope | global (the bus custody store) |
+| Purpose | which registry backend holds deliveries and inboxes |
+| Type / units | enum: `memory`, `sqlite`, `postgres` |
+| Range / enum | the three backends; resolution chain: explicit backend → a `sqlite:` `Database.URL` → any non-empty `Database.URL` (postgres) → `memory` |
+| Default / absence | absence resolves to `memory` — process-local, demo-only; absence is itself the hazard (VI §2) |
+| Dependencies | `Database.URL` participates in the resolution chain |
+| Validation + typed error | the `CR_GUARD_*` bounds refuse non-numeric/`<= 0` values with a named error; the backend itself is not range-validated — an unreachable `sqlite:` URL fails at use |
+| Authorized editor | user intent (operational) |
+| Activation | restart |
+| Effective readback | **no readback exists — a named RED on M10 §5**; the card's own honesty rule: a setting whose readback is not yet written is a RED, not a silent gap |
+| Examples | `CR_REGISTRY_BACKEND=sqlite` → durable custody across restart; unset on a deployment holding real work is the VI §2 failure class |
+
+## V.4 Secrets: stores, references and redaction (V2-SET-04)
+
+**No secret backend is selected by the review.** This register defines the contract any
+supported store must meet, and the reference/redaction rules that hold regardless of
+which backend is chosen.
+
+**Secret-reference syntax.** Desired state, management API payloads and plan/diff output
+name credentials only as references, canonically
+`secretref://<domain>/<name>` — e.g. `secretref://forge/github/app-private-key`,
+`secretref://model/proxy/upstream-key`. `<domain>` is one of the separately-mapped
+authority domains below; the reference resolves through the store configured for that
+domain. Secret material never appears in: desired-state files, API responses, plan/diff
+output, logs, webhook events, or backups of desired state. Each of those surfaces carries
+an explicit redaction rule — a reference passes verbatim; a value is refused at write
+time (validation, V.6) and elided at read time.
+
+**Authority domains, mapped separately:**
+
+| Domain | Holds | Read a value | Hold a reference only |
+|---|---|---|---|
+| forge | GitHub App identity/private key, GitLab and other provider credentials, deploy keys | the issuing boundary (control-side signing authority, M7) | nodes and Bunkers (scoped per-repo credentials only) |
+| bunker | Bunker control/agent authentication | the Bunker installer/operator boundary | Crier, scheduler, workloads |
+| transport | Crier bus bearer, dispatcher signing keys | the dispatcher/bus on their host | — |
+| model | inference proxy upstream key, node tokens | the proxy owner's env boundary (M12) | nodes (token files by path, never values) |
+| memory | DuckBrain/local-filesystem authorization | the memory service owner | foremen and workers |
+
+**Issuance vs installation.** The native issuer (GitHub App JWT mint, provider API)
+retains signing/administrative authority at its boundary; Bunker
+installation/provisioning scripts are the delivery mechanism that puts scoped credential
+references and material into the required runtime locations (user decision). Installation
+is verified by readback without exposing values: fingerprint listings (sha256 prefixes),
+mode checks and presence probes — never printed material.
+
+**Lifecycle.** Expiry, renewal, rotation and revocation are operational capabilities with
+declared authority (V.0): renewal follows the native provider lifecycle; a configured
+leak signal triggers revocation and replacement; revocation is explicit, never implied by
+age; revoked state is preserved across backup/restore so a restore cannot reactivate
+compromised credentials (VI §21, §17).
+
+**Mode predicates — measured vs target.** The measured surface contains two lying
+predicates: `harness-vars.sh:203` accepts any mode `[0-7]00` while its refusal message
+claims "a key file must be 600", and its ambient-key check accepts `CF_API_KEY=""` (F0-6);
+`bunker-provision.sh --check` reports "mode 600" while probing only non-emptiness (F1-1).
+The target law is: private-key material at mode 0600-class, enforced by a predicate whose
+refusal message states what it actually tested. The measured behavior stays recorded in
+the inventory rows and the finding IDs; it is not normalized into the target law, and the
+target is not claimed as deployed.
+
+## V.5 Timing, lease and budget compatibility (V2-SET-06)
+
+These are different quantities and must never be conflated:
+
+| Quantity | Native surface | Order of magnitude (measured) | Class |
+|---|---|---|---|
+| Total workers per foreman round | target `foreman.round.worker_budget.total` (V.3 card 1) | configurable | REQUIRED-BUT-UNSUPPORTED |
+| Concurrent workers within a wave | distinct setting; bounded by any platform concurrency ceiling | configurable, separate | REQUIRED-BUT-UNSUPPORTED (ceiling: profile) |
+| Per-turn wall clock | `CF_TIMEOUT_S` (M5) | 1800 s (codex adapter re-defaults 300) | NATIVE |
+| Turn budget | `CF_MAX_TURNS` (M5) | 40 | NATIVE |
+| Crier inbox lease | `DEFAULT_LEASE_SECONDS` (M2) / retrieve lease | 30 s | NATIVE |
+| Inbox long-poll budget | `--wait-seconds` (M2) | 0..120 s | NATIVE |
+| Dispatcher envelope wall | `DISPATCH_TASK_CAP_S` (M11) | 7200 s | NATIVE |
+| Scheduler tick wall | `tick-timeout` (M9) | 7200 s | NATIVE |
+| Per-request transport call | `fetch_verified --max-time` (M0) | 120 s | FIXED CONSTANT |
+| Inert "timeout" | `DISPATCH_EXEC_TIMEOUT` (M11) | — | INERT |
+
+**Compatibility validation at admission.** Impossible combinations are validated when
+configuration is applied, not discovered at runtime: a round budget below one worker; a
+per-turn wall × turn budget exceeding the envelope cap; a lease shorter than the longest
+legitimate poll interval; a tick timeout shorter than the round it launches. The
+cross-field check is a target requirement — where no cross-system validation exists today
+it is TARGET-UNIMPLEMENTED, and the affected combination is recorded here rather than
+implied safe. Hardcoded account-specific paths (`BUNKER_BIN`, `TOKEN_FILE`, M11/M12) are
+replaced by declared profile mappings in the target; the hardcoded values remain recorded
+in the inventory as measured evidence. The supported Hermes variant, GitReins policy
+version, binaries, images and adapters are pinned with migration compatibility
+(`HERMES_PIN` 0.19.0, `GITREINS_PIN` 0.17.1, et al., inventory below) — pins are
+re-verified at implementation reconciliation, never copied forward as freshly approved.
+
+## V.6 The configuration lifecycle and propagation (V2-SET-03)
+
+The lifecycle is an ordered chain; each stage owns an outcome:
+
+1. **Authorized update.** A desired-state edit arrives through the documented
+   validation/update interface — file write or management API call, by an authorized
+   editor (V.0). The management HTTP surface is published as OpenAPI, generated from the
+   same model as the configuration schemas, so API contracts and settings schemas cannot
+   drift apart.
+2. **Validation.** Schema validation plus cross-field checks (V.5): a wrong value is
+   refused with its typed error before anything is persisted; secret material in desired
+   state is refused at this boundary (V.4).
+3. **Versioned persistence.** The accepted edit is stored as a new generation of the
+   desired state; the previous generation is retained.
+4. **Deterministic diff/plan.** The manager computes desired-vs-observed differences as
+   a plan; plan output carries secret references, never material.
+5. **Reconciliation.** Queued or immediate per the setting's activation class; concurrent
+   edits resolve by generation compare-and-swap — a stale generation is refused with a
+   named conflict error, never last-writer-wins silently.
+6. **Ordered adapter changes.** Each participating system's adapter applies its share;
+   idempotent re-apply; partial propagation is tracked per node with acknowledgements and
+   retried with backoff — a node that did not acknowledge is degraded, not converged.
+7. **Effective readback.** Each change is proven by the setting's readback (V.3 field
+   12); a setting whose readback fails leaves the scope degraded.
+8. **Status.** Converged / degraded / failed is recorded against the generation, exposed
+   via the management API, metrics and configured webhooks (V2-OPS-02); activation
+   barriers, safe restart/drain, rollback or forward repair follow the owning flow (F13).
+
+Installed settings survive daemon restart, replacement placement and resync: a
+re-provisioned host re-applies the desired generation through F2 rather than inheriting a
+competing config source, and no unmanaged source silently overwrites a managed value.
+The lifecycle control-flow figure is a named gap in this revision — this wave's scope
+keeps figures/ unchanged — and the ordered steps above are the normative statement until
+the figure lands.
+
+## V.7 Example desired-state file and resolved-state comparison (V2-SET-07)
+
+A complete example (YAML for readability; the serialization is not decided):
+
+```yaml
+# CF2A desired state — generation 17
+generation: 17
+deployment:
+  profile: homelab-vpn            # Kubernetes | compose | homelab-vpn | standalone
+projects:
+  - id: code-factory
+    repo: secretref://forge/github/deploy-key.cf2a
+    eligible_hosts: [h1, h2, h3]
+    bunkers:
+      count: 2                    # desired count — shortfall is exposed, never absorbed
+      requirements:
+        disk_gib: 40
+        memory_gib: 8
+      memory:
+        namespace: code-factory   # same logical view as the controller
+        sync: {owner: manager, target: secretref://memory/duckbrain-url}
+    lanes:
+      - name: builder
+        admission: tasks
+        foreman:
+          round:
+            worker_budget: {total: 8}
+events:
+  webhooks:
+    - endpoint: secretref://events/ops-webhook
+      subscriptions: [progress, state, allocation.shortfall, failure]
+safety:
+  terminal_jail: disabled         # optional; disabled by default (resolved decision)
+```
+
+Resolved-state comparison (how the same file reads back):
+
+| Key | Desired | Observed | Effective | Status |
+|---|---|---|---|---|
+| `projects[code-factory].bunkers.count` | 2 | 1 allocated, 1 unallocatable (disk_gib 40 short on every eligible host) | 1 Bunker serving | **DEGRADED — allocation shortfall exposed**: desired count unchanged, unsatisfied requirement named (`disk_gib: 40`), affected scope `projects/code-factory` |
+| `projects[code-factory].lanes[builder].foreman.round.worker_budget.total` | 8 | injected at admission | 8, remaining 3 after two waves | CONVERGED |
+| `deployment.profile` | homelab-vpn | profile applied | readback via readiness record | CONVERGED (readback procedure itself RED — matrix) |
+| `safety.terminal_jail` | disabled | not enabled | no guarded path in use | CONVERGED — NOTE: enabling it is an operator act, and enabled mode has no unguarded fallback |
+| repo credential | `secretref://forge/github/deploy-key.cf2a` | reference only everywhere | installed key file, mode 0600, fingerprint `SHA256:…` | CONVERGED — fingerprint readback only, value never printed |
+
+## V.8 Operator setting index
+
+| The operator needs to… | Setting / card | Where |
+|---|---|---|
+| size a foreman round's workforce | `foreman.round.worker_budget.total` (V.3 card 1); never a wave count | V.3, V.5 |
+| make bus custody survive a restart | `transport.registry.backend` (V.3 card 2) | V.3, VI §2 |
+| keep credentials out of logs and plans | reference syntax and redaction rules | V.4 |
+| declare where projects may run and what they need | project host pool + requirements | V.0 allocation, V.7 example |
+| know why a Bunker count is short | allocation-shortfall exposure | V.0, V.7 |
+| read back what is actually serving | per-setting readback field; RED where missing | V.3 field 12 |
+| tune timing without creating an impossible combination | compatibility validation | V.5 |
+| know which measured variables are not settings | classification | V.2, inventory notes |
+| audit a configuration change | lifecycle stages, audit events | V.6 |
+
+---
+
+## The measured inventory (M0–M12)
+
+Everything above is the governing contract; what follows is the measured settings
+inventory of the thirteen module chapters, retained with its first-batch discipline.
+
 Every setting the thirteen module chapters register, in one place. `Where it lives` names
 the file and the mechanism (env var, flag, config key or hardcoded constant). `Default`
 carries the chapter's citation; a setting with no known default reads `unknown` with the

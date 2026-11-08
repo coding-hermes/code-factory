@@ -1,10 +1,22 @@
 # Part VII — Work derivation
 
-A row is the unit of work; this part follows one row from the moment it is written to the
-moment it closes. Every hop names the contract that carries it, and every contract cites
-the chapter that measured it. The chain is: a row is filed, a tick admits it, the bus
-carries it, a harness executes it under a brief, a judge grades the result, and the row
-closes on evidence — or it does not close at all.
+The unit of work this part derives is the **project**: a person tells their agent what
+project they want, the agent turns that intent into a Boardctl-backed plan, and the
+Factory builds the requested project end to end, producing an integrated, usable result
+demonstrated against the project's acceptance criteria. The chain that does it is:
+
+**project → initiative/acceptance plan → Boardctl tasks/dependencies → foreman round →
+compatible worker waves → execution attempts → verified integration → project
+acceptance** (§11).
+
+Within that chain, the execution hop is what the rest of this part has always measured:
+a row is filed, a tick admits it, the bus carries it, a harness executes it under a
+brief, a judge grades the result, and the row closes on evidence — or it does not close
+at all. Every hop names the contract that carries it, and every contract cites the
+chapter that measured it. Two rules the chain inherits from the mission: a quiet board,
+one commit, or a successful tick is not project completion evidence (§11), and the
+deterministic IaC control loop of Part V is the supporting control that keeps
+infrastructure ready — it is not itself the work derivation (§11.9).
 
 ## VII.1 The chain, as a table
 
@@ -271,6 +283,9 @@ metric.
 | `queue_depth` / `oldest_message_age_seconds` | is the bus holding real work or draining it? | gauge, seconds (M10 review definitions) | Crier store owner |
 | `replayed_results` / `uncertain_starts` / `orphans_reaped` | is execution crash-safe? | counters (M11 review definitions, VI §16) | dispatcher |
 | `expiry_headroom_seconds` / `refused_scope_total` | will credentials die mid-run, and is scope narrowing real? | minimum headroom gauge; refusal counter by class (M7 review) | credential issuer |
+| `worker_budget{used, remaining}` | how much of the round's total-worker allowance is spent, per round and per wave? | gauge, workers; observable per wave, never reset at a wave boundary (V2-Q-02, §16) | foreman (round report) / scheduler (admission) |
+| `round_stop_reasons_total{reason}` | why did rounds stop — useful-work exhaustion, budget spent, or a required condition? | counter, one named reason class per stop (§11.8) | foreman |
+| `project_acceptance_progress{initiative}` | how much of the accepted plan is delivered and verified? | derived: accepted/verified integration results over planned acceptance criteria (§11.9) | foreman / board |
 
 Grep absence in current scripts is coverage evidence, not the metric design: where a
 definition above has no emitter, the metric is required behavior with the emitter named as
@@ -278,3 +293,257 @@ TARGET-UNIMPLEMENTED — the same three-state discipline the settings register u
 "The four review columns and the three states").
 Every metric's collection and readout ownership follows its owner row; a metric nobody
 reads out is a definition, not a control.
+
+## VII.11 The project derivation chain — from conversational intent to acceptance
+
+The scopes are distinct and each has one owner:
+
+| Scope | What it is | Owner | Where it is recorded |
+|---|---|---|---|
+| **project** | the requested outcome: what the person asked to have built, with its acceptance criteria | the user, with their agent as proxy | the project's initiative plan and Boardctl plan rows |
+| **initiative** | a coherent slice of the project — a milestone with an acceptance plan | the agent, refined with the user | initiative rows on the board |
+| **task** | one bounded, dispatchable unit with acceptance criteria someone else can re-run | the foreman (filing) / scheduler (admission) | `tasks.jsonl` (VII §2) |
+| **round** | one scheduler-admitted span of foreman work covering a board scope, e.g. an initiative | the foreman executes; the scheduler admits and settles | round record returned through Crier |
+| **wave** | one compatible grouping of tasks launched together within the round's remaining budget | the foreman | wave manifests + wave memory entry (§14) |
+| **attempt** | one worker execution of one task (retry lineage per §8) | the worker, verified independently | attempt lineage + worker memory entry (§14) |
+
+**Intake and refinement.** Conversational intent is refined with the user into the
+initiative plan *before* tasks exist: what will be accepted as done, in what order, and
+what is explicitly out of scope. The plan is expressed as Boardctl tasks with
+dependencies and per-task acceptance criteria — the board row contract of §2, at plan
+granularity.
+
+**Decomposition and specifications before implementation.** A task that cannot state its
+acceptance criteria is not dispatchable; it is refined until it can, or blocked with the
+named refinement work (VII §7's block discipline). Specifications precede implementation
+where the task's criteria cannot be re-run without one — the judge grades against named
+criteria (VII §6), and a criterion that exists nowhere cannot be named.
+
+**Prioritization, eligibility and unblocking.** The scheduler owns priority through lane
+weights and admission (VII §3, §8); the foreman selects among eligible tasks and claims
+them; completed tasks unblock their dependents, and the foreman re-reads eligibility as
+each wave's results land (F1 step 6). A round "aims to accomplish as much useful work as
+possible until further progress is unavailable" — one board item is not the round limit
+(user decision).
+
+**Useful-work and stopping rules.** A round continues while three conditions hold:
+eligible useful work exists, remaining total-worker allowance permits (a cap, never a
+quota — no workers are spawned merely to exhaust it), and required operating conditions
+(memory write paths, verification) are available or degraded per their resolved policy.
+The round ends with a **named stop reason** (§12's round record): `work_exhausted`,
+`budget_spent`, `blocked`, `degraded`, or a required-condition failure. Stopping without
+a name is a defect.
+
+**Project delivery versus perpetual maintenance.** Project acceptance is defined by the
+requested outcome — integrated, usable behavior demonstrated against the plan's criteria,
+including deployment where deployment belongs to that project's scope. Maintenance that
+follows (upgrades, hygiene, new initiatives on the same repo) is a new plan, not a
+continuation of the old acceptance.
+
+**The quiet-board fallacy.** None of these is project completion evidence: a quiet board
+(rows may simply never have been filed), one merged commit (one attempt of one task),
+a green build (a mechanical gate, VIII §9), or a successful tick (transport, not
+verification). Completion is claimed only from the project-acceptance record of §11.9.
+
+**The supporting control loop.** The deterministic IaC layer of Part V keeps the
+execution environment ready: readiness, drift repair, replacement placement. It derives
+no work; when it cannot keep readiness, its shortfall is exposed (V §V.0) and work
+admission degrades per policy — the work chain never silently assumes infrastructure
+that the control loop reports absent.
+
+### VII.11.9 The project-acceptance record
+
+Project acceptance is a distinct record, produced at the end of the derivation chain and
+bound to the initiative plan: every acceptance criterion named, with the verified
+integration result that demonstrates it (attempt lineage, merged-tree proof, publication
+evidence — §12, §7), the rounds that carried them, and the residual work explicitly
+deferred. An acceptance demonstration is re-runnable by someone else — the same rule a
+single row's evidence has always had (§5, "a command someone else can re-run"), applied
+at project scope. The record is what turns "the board went quiet" into "the project is
+delivered."
+
+## VII.12 Owned state transitions
+
+Every state change in the chain names its owner. A transition without a named owner is a
+gap recorded as one (§8's cancel row), never silently assigned:
+
+| Transition | Owner | Meaning | Recorded where |
+|---|---|---|---|
+| admit lane / create run record | scheduler | the round is admitted; the allowance granted | scheduler execution history |
+| custody / delivery of the round request | Crier | transport accepted the envelope with its lease | Crier registry (durable backend required, VI §2) |
+| execution boundary | Bunker | the foreman process is launched inside the Bunker | Bunker spawn record |
+| scope selection / claims / briefing | foreman | eligible tasks claimed, briefs issued with criteria | board claims + brief manifests |
+| implementation | worker | the attempt produces its commit in an isolated worktree | attempt lineage; worker memory entry (§14) |
+| independent acceptance | GitReins judge | the staged diff is graded against named criteria | verdict bound to the attempt (VII §6) |
+| verification / integration / publication | foreman | merged-tree proof, integration checks, publication | `LANDED:` proof rows (VII §7) |
+| board closeout | foreman | task rows closed with `--evidence-run-id` | board events (VII §2) |
+| memory projection | foreman | worker/wave/round entries persisted | DuckBrain namespace (§14) |
+| round return | foreman → Crier | the correlated round report returns through Crier | round report envelope |
+| settlement | scheduler | the round result is durably recorded; the execution history is distinct from the board's truth | scheduler records |
+
+**Three records that must not be conflated** (V2-WRK-02): a **preliminary execution
+receipt** — delivery accepted, worker running, heartbeats — proves custody, not outcome;
+a **verified/published task closeout** — merged-tree proof plus evidence-bound board
+close; and the **final round accounting** — all waves, budget use, stop reason. A
+preliminary receipt is never cited as a closeout; the merged-tree proof is what separates
+"branch passed" from "the tree that was published contains the work."
+
+**The allowance across waves.** The round's total-worker allowance is consumed
+monotonically: each wave's launches debit the remainder, results never credit it back
+except through the declared failed-start accounting (§16), and a new wave never
+replenishes it. Newly eligible work after each wave competes for what remains.
+
+## VII.13 Correlation and result schemas
+
+The canonical correlation, versioned, with the truthful mapping of what exists today
+(V2-WRK-03 — existing fields are mapped, not invented, and not discarded):
+
+| Canonical field | Meaning | Exists today as | Producer |
+|---|---|---|---|
+| `round_id` | identifies the foreman round | none — no field; correlated only in the scheduler's tick records | (target) foreman round envelope |
+| `wave_id` | round-scoped wave ordinal | none | (target) foreman |
+| `task_id` | board row id | board row `id` | board |
+| `attempt_id` | one worker execution | none as a field; `dispatch_id` + `corr_id` pair identifies one dispatch attempt | node worker (partial) |
+| `dispatch_id` | dispatch envelope identity | `dispatch_id` (`node-bus-worker.py` reply, `:1176-1192`) | node worker / dispatcher |
+| `corr_id` | end-to-end correlation | `corr_id` (same reply) | scheduler envelope |
+| `run_id` | execution run identity | **absent** from the reply (M2 §6, measured); required in closeout proof tables | (target) — canonical, emitted when implementation catches up |
+| `status` | typed outcome: pass/fail/unverified/partial/unknown | `status` exists; the value domain is untyped in the reader (`dispatch_leg.go:713-726` reads only `ok`) | node worker |
+| `ok` | legacy boolean verdict bit | `ok` (dispatcher always sets it, M11 §6; node worker does not, M2 §6) | dispatcher (reliably), node worker (not) |
+
+Rules the schemas impose:
+
+- **Missing status does not imply success.** A reader that treats absence as pass is the
+  R-01 defect; the canonical schema requires a typed outcome — `pass`, `fail`,
+  `unverified`, `partial` — and `unknown` when no verdict exists (VI §14).
+- **The mapping is truthful.** Producers, consumers, registries and examples are updated
+  together with the schema: no prose fix invents a field the implementation does not emit
+  (there is no `run_id` in the reply today), and no integration contract silently drops
+  the required correlation (the closeout proof table requires a run id — the target
+  schema names it; until emitted, the gap is named here and in M2 §6).
+- **Compatibility translation is explicit.** A consumer receiving the legacy
+  `{dispatch_id, corr_id, status, ok}` form maps it through this table; an unsupported
+  schema version is refused, not coerced.
+
+## VII.14 Memory contracts — per worker, per wave, per round
+
+Three record types (V2-Q-03, user-resolved), kept distinct and correlated; the **writer
+is the foreman unless a section specifies otherwise** — the user required that every
+worker *have* an entry, and did not require workers to hold direct memory-write
+credentials (F3 step 3: "persist … through the designated supported writer; do not assume
+all workers require direct write credentials"):
+
+| Record | Written by | When | Carries | Idempotency key |
+|---|---|---|---|---|
+| **worker-outcome entry** | the foreman, persisting the worker's report | at each attempt's closeout | what the worker did, its typed outcome, task/round/wave/attempt ids, commit and evidence references | `(round_id, attempt_id)` |
+| **wave-summary entry** | the foreman | after each wave completes | its workers and results, integration/verification outcomes, newly eligible or remaining work, budget after the wave | `(round_id, wave_id)` |
+| **round-summary entry** | the foreman | at round stop/settlement | all waves, aggregate outcomes, budget use, stop reason, correlation to every worker and wave record | `round_id` |
+
+Rules:
+
+- **Task-level traceability is preserved through linked records** — multiple worker
+  attempts on one task remain distinguishable — without inventing a fourth mandatory
+  record type.
+- **No weekly-rollup substitution.** The scheduler's DuckBrain sync cadence (5 minutes,
+  M9 §5) is a transport schedule; no aggregate of worker/wave records substitutes for
+  the final round entry.
+- **Board-task state and audit events remain foreman-owned**; scheduler settlement is a
+  separate execution record (§12). A board note that DuckBrain is unavailable is not a
+  completed memory write.
+- **Outage path (V2-Q-04):** on temporary unavailability the foreman continues useful
+  work and creates durable pending entries at every level, using the local Git-backed
+  namespace (supported local persistence) when the HTTP path is down; pending
+  synchronization is tracked and reported (VI §30). Scheduler records and Git history
+  retain *parts* of the trail and do not substitute for the full pending entries.
+
+## VII.15 Board synchronization before eligibility
+
+Eligibility, claims and cleanup are decided against a synchronized board — never against
+a stale local copy:
+
+1. Before a round begins, the foreman synchronizes the controller and Bunker board
+   copies: fetch the canonical ref (`origin/main`, VII §2), resolve the working copy's
+   drift, and record the board revision the round works from.
+2. Claims are made only after synchronization; a claim made on a stale copy is re-derived,
+   never resumed (VI §13).
+3. Between waves, results that change eligibility (closes, unblocks) are written through
+   the board's own write path and re-read before the next wave is composed.
+4. Cleanup at round end classifies against the same synchronized revision.
+
+The revision the round worked from is part of the round report — the proof §2's read-path
+rule demands ("it reports which source it used"), bound into the round contract.
+
+## VII.16 Round crash recovery without double-counting
+
+A round that crashes mid-flight recovers from durable state, and three accounting rules
+keep the recovery honest:
+
+- **Budget is read from the ledger, never re-derived.** The reservation/consumption
+  ledger (§12) is updated *before* each wave launches; a recovered round resumes with the
+  consumed remainder, not a fresh allowance (R-29's silent-reset class).
+- **Work is resumed, never restarted.** Completed tasks are identified by their
+  evidence-bound board closeout plus merged-tree proof; a recovered round does not
+  re-execute them. An attempt whose outcome is unknown (crash between execution and
+  result) is re-run under a new attempt id after the idempotency check — the attempt
+  lineage (§8) records both, and the duplicate-prevention keys of §14 keep both records.
+- **Memory writes complete before the round reports.** The recovered round reconciles
+  pending memory entries (§14's outage path) before its round-summary entry; the report
+  states local-persistence, Git-commit and remote-synchronization as distinct states
+  (V2-FLW-05's acknowledgement discipline).
+
+The recovery sequence is F8's, applied at round scope: detect and persist the incident,
+fence stale actors (R-27), reconcile Crier custody and scheduler attempts against the
+ledger and published commits, resume, and retain the recovery evidence.
+
+## VII.17 Worked example — one project through the whole chain
+
+A worked end-to-end example (V2-WRK-05), with every step bound to its schema, setting
+and observable evidence. Actors and locations are named per step.
+
+**Intake.** The person tells their agent: "build the export-CSV feature for the report
+tool." The agent refines it into an initiative plan with acceptance criteria — "a CSV
+export that round-trips the current report columns, verified by a runnable check" — and
+files the initiative on the project board (actor: agent, control host; evidence: an
+initiative row with criteria someone else can re-run, §2's create rule).
+
+**Dependency plan.** The foreman (next admitted round, inside its Bunker) decomposes the
+initiative: three tasks — T1 "export function with tests", T2 "CLI flag wiring", T3
+"round-trip verification harness" — with dependencies T1 → T3, T2 → T3 (boardctl create
+with dependencies, Bunker board; §2's uniqueness rules).
+
+**First round, wave 1.** The scheduler admits the round with a total-worker allowance of
+2 (V.3 card 1). T1 and T2 are both eligible (independent); T3 waits on them both. The
+foreman claims T1 and T2
+(board claims, after board synchronization per §15), briefs two workers in isolated
+worktrees (§5's brief contract; `CF_*` variables, credentials as paths). Both implement;
+both pass the commit guard and the independent judge (§6). The foreman verifies
+integration — merged-tree proof (§12) — and closes T1 and T2 with evidence run ids
+(`boardctl update --status complete --evidence-run-id …`; refusal without one, §2).
+It persists two worker-outcome entries and wave 1's wave-summary entry (§14; writer:
+foreman; DuckBrain namespace, local record). Budget: 2 of 2 consumed.
+
+**Wave 2 — and the rejection.** T3 unblocked by T1+T2. Budget: the round is spent — the
+foreman stops with stop reason `budget_spent`, returns the round report through Crier
+(all waves, outcomes, budget use, remaining work: T3), and the scheduler settles it
+durably (§12). No worker was spawned for T3 — the cap is not a quota (§11).
+
+**Second round; fixup.** The next admitted round claims T3 (allowance 1). The worker's
+attempt 1 fails the judge: the round-trip check drops a column ("changes-requested", §8's
+rework lineage). The foreman persists the worker-outcome entry for attempt 1, re-briefs,
+attempt 2 passes, integration is verified, T3 closes with its evidence id. **Partial
+outage:** during wave 1 of this round the DuckBrain HTTP path goes down; the foreman
+continues, persists the entries through the local namespace writer, marks them
+pending-sync (§14's outage path), and the round report states the three acknowledgement
+levels distinctly. The sync completes after recovery (VI §30's repair).
+
+**Project acceptance.** The acceptance demonstration (§11.9) re-runs the round-trip
+check against the published tree, names all three criteria met, cites the attempt
+lineage (two attempts on T3, one on T1/T2), the round reports, and the merged-tree
+proofs. The project is delivered — not because the board went quiet, but because the
+acceptance record demonstrates the requested outcome.
+
+**Blocked and deferred, for contrast.** If T2's brief had named an unmet dependency, the
+row goes `deferred` carrying the dependency; if its check needed a fix nobody filed, it
+goes `blocked` with the one command that unblocks it (§7). A worker that cannot proceed
+on a healthy system stands down — that is *busy/working*, not failed (§7's
+"nothing is wrong, something is working"). The four states — busy, blocked, deferred,
+failed — are distinct records with distinct owners.

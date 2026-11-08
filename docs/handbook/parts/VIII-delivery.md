@@ -104,7 +104,9 @@ quietly absent part (BOOK.yaml, rule 3).
 
 The corollary governs the working tree: a build run against a tree whose sources fail lint
 is not a near-miss, it is a different artifact, and its output is not cited as evidence
-about the book. The build's OK line is the only delivery receipt.
+about the book. The build's OK line is the only *mechanical* delivery receipt — it closes
+the build/render stage and no other stage; the semantic, conformance and owner stages
+carry their own results (VIII.9).
 
 ## VIII.5 The disposition log as a standing gate
 
@@ -201,10 +203,181 @@ fix order as the group boundary, and the re-audit is the loop's own evidence dis
 every grade carries page evidence, and a finding that cannot be repeated by a command or a
 quoted line does not count (PANEL-LOOP.md, "Judge rules").
 
-## VIII.8 What delivery owes the reader
+## VIII.8 What delivery owes the reader — and the two wires that are not connected
 
-The delivery surface is two contracts in the register. CT-16 carries the module status
-word from the documentation gate to the handbook, read at build time; CT-18 carries the
-approval artifact from the handbook to the owner, and its state is the register's own:
-UNVERIFIED until the build runs and the OK line exists (Part IV). A delivered book with no
-green OK line is a rumour of a book — the same rule the rest of the system runs on.
+Two contracts in the register carry the delivery surface, and both must be stated
+truthfully (V2-DLV-02):
+
+- **CT-16 (docsgate → handbook, UNVERIFIED).** The closing paragraph of earlier
+  revisions said the module status word is "read at build time"; the register's own
+  measured defect row says the opposite — *the handbook build reads no MASTER-DOC
+  output*, so the receiver half is uncited (Part IV, CT-16). The register row is the
+  authority: the wire is a target requirement, not a connected one, and no gate result
+  is claimed to flow across it today. Saying "read at build" while the builder reads
+  nothing is exactly the record-that-lies class (VI §11) — this paragraph is the
+  correction.
+- **CT-18 (handbook → owner, UNVERIFIED).** The owner-approval artifact is not
+  verified by a build. A green OK line is a machine result about the artifact; the
+  owner's acceptance is a human decision contract bound to the release identity
+  (VIII.6). Structured gate-result fields and their enforcement/readback are defined in
+  VIII.9/VIII.10 — and none of them closes CT-18. A green build cannot automatically
+  close a human/owner acceptance boundary.
+
+A delivered book with no green OK line is a rumour of a book; a delivered book with one
+is still only *mechanically* delivered (VIII.4) — the same rule the rest of the system
+runs on, applied to the book itself.
+
+## VIII.9 The seven acceptance results
+
+Delivery is seven separate results, each with its own evidence; no single line closes
+more than its own stage (V2-DLV-01). A process cap, a no-new-defect-class STOP, or the
+build's OK line cannot alone establish acceptance:
+
+| # | Result | What it closes | Evidence | Closed by |
+|---|---|---|---|---|
+| 1 | Source validation | the markdown sources are valid, citable and lint-clean | gate 1 exit 0 (VIII.2) | mechanical |
+| 2 | Artifact build/render | the PDF exists, paginated, furniture complete | the OK line (gates 2–11) | mechanical |
+| 3 | Visual QA | rendered pages actually show what the sources say — layout semantics, labels, adjacency | the layout-semantics battery (VIII.12) on 300 dpi tiles | review, page-evidenced |
+| 4 | Specification/interface completeness | the book specifies a buildable system — schemas, contracts, settings, flows | the acceptance-package map (VIII.13) checked against the product definition | review, page-evidenced |
+| 5 | Cross-section consistency | parts, chapters, register and figures agree | the spine gate (M6 §5) + the same-commit amend rule + cross-page reconciliation | mechanical + review |
+| 6 | Operational conformance | the specified behavior is implementable against the measured sources — states, contracts, settings map to real surfaces | source locators verified against measured revisions; UNVERIFIED contract rows named, not hidden | review with source evidence |
+| 7 | Owner acceptance | the owner accepts the release | the recorded decision bound to the release identity (VIII.6) — CT-18 | human, external to this pipeline |
+
+Results 1–2 are mechanical; 3–6 are review results with page or source evidence; 7 is an
+external decision. A release claims a stage only with that stage's recorded result, and
+the working-draft/accepted distinction of VIII.6 governs which of them a delivered
+artifact may cite.
+
+## VIII.10 The release manifest
+
+A release publishes a machine-readable manifest binding the artifact to everything that
+was claimed about it (V2-DLV-01, V2-DLV-02):
+
+```json
+{
+  "doc_id": "CF2A-01",
+  "revision": "vd",
+  "source_commit": "<full sha of the tree the build ran against>",
+  "document_sha256": "<hash of the delivered PDF>",
+  "artifacts": [{"path": "CF2A-01-vd.pdf", "pages": 182}],
+  "checks": [
+    {"stage": "lint",          "tool": "handbook_lint.py", "result": "pass", "exit": 0},
+    {"stage": "build",         "tool": "build_book.py",    "result": "pass", "ok_line": "<the verbatim OK line>"},
+    {"stage": "visual_qa",     "tool": "layout-semantics battery", "result": "<pass|fail|pending>", "findings": []},
+    {"stage": "completeness",  "result": "pending", "open": ["V2-* dispositions not yet adopted"]},
+    {"stage": "owner_acceptance", "result": "open", "note": "human decision; never implied by any check"}
+  ],
+  "dispositions": {"log": "change/redline disposition log", "open_count": 0,
+                   "open_ids": []}
+}
+```
+
+Rules: the manifest is generated at release time, not hand-written; a check with no
+recorded result is `pending`, never assumed pass; the disposition state is part of the
+manifest (VIII.5's standing gate); and the produced approval *package* is separate from
+the owner approval *decision* — the manifest carries the former and names the latter as
+open until CT-18's decision record exists.
+
+## VIII.11 Per-stage failure behavior and negative controls
+
+Every build stage's failure behavior is exact, and refusals are proven by negative
+controls (V2-DLV-03). The gate table of VIII.2, completed with each stage's failure
+outcome:
+
+| Gate | On failure | Exit | Negative control |
+|---|---|---|---|
+| 1. markdown lint | stops the build; nothing prints | 2 | a file with a stray backslash-newline is refused before any render |
+| 2. manifest assembly | renders a visible BUILD ERROR sheet naming the missing file — **and does not by itself stop the build with a nonzero exit**; that limitation is a named defect of the current builder, closed when assembly failure is promoted to an exit | — (in-book) | remove a manifest file; the BUILD ERROR sheet must appear and the release must not be cut from that build |
+| 3. pagination | splits content forward; an unsplittable overflow falls through to gate 4 | — | a page that cannot split shows OVERFLOW at gate 4 |
+| 4. fit line | stops the build | 3 | an oversized block yields `data-fit` OVERFLOW and exit 3 |
+| 5. page parity | stops the build | 2 | — |
+| 6. folio stamp | stamps after print; no failure path | — | — |
+| 7. running heads | stops the build, naming the headless pages | 2 | — |
+| 8. body fit | stops the build, naming page and measurement | 2 | — |
+| 9. furniture | stops the build on missing tab, no notice label, or grey ink | 2 | a `#999999` stroke is refused by the ink check |
+| 10. skill checker | stops the build | 2 | — |
+| 11. font census | stops the build | 2 | a build with a missing face is refused |
+
+The prose rule "every gate fails nonzero" holds for every gate **except** stage 2's
+in-book BUILD ERROR sheet — the table above is the authority over the summary sentence,
+and the summary sentence has been corrected to match (the record-that-lies class, VI
+§11). Missing placeholder sheets render as named BUILD ERROR pages, never silently blank.
+
+**Finding-ID arithmetic, made explicit.** The 2026-11-07 baseline audit returned **26**
+findings (families A–E). The W3 re-audit's per-finding table carries **32** dispositions:
+the 26 baseline findings re-graded, plus **6** new rows raised against the rebuilt
+artifact (new regressions and splits introduced by the waves); 12 + 12 + 8 = 32 is the
+sum over that table, not a recount of 26. Four of the new rows are the W6 correctness
+wave's R1–R4; the full per-row identities are the re-audit table's record
+(AUDIT-2026-11-07.md). Both denominators are now stated wherever the counts are quoted.
+
+**Historical page counts are historical.** The 68-page house-style build, the 184-page
+W3 build and the 156-page W6 build are dated evidence about those artifacts, each with
+its identity — they are not proof about the current revision; the current revision's page
+count is stated only by its own build line (VIII.6's identity rules).
+
+**Review scope.** The gate commands and negative controls above are recorded as
+specification, not executed against source-document instructions as part of any review;
+the review reads the record.
+
+## VIII.12 Layout-semantics tests
+
+Fit and counts are necessary and not sufficient; the delivered pages are tested for the
+intended layout semantics (V2-DLV-04):
+
+| Test | Asserts |
+|---|---|
+| unique IDs | every figure/table id resolves to exactly one object in the set (BOOK.yaml rule 1) |
+| heading-with-content | no heading is stranded without its first paragraph (no title-only sheets) |
+| prose-under-diagram | each flow image is followed directly by its own explanatory text — no collected prose blocks pages away |
+| unambiguous labels | line labels, arrows and boundaries are readable and do not cross text; leaders keep 0.6 mm clearance |
+| readable widths / intact tokens | no over-shrunk cells; identifiers wrap intact, not broken |
+| continuation identity | a split table repeats its identity and declares "units a–b of N" at the break |
+| folios and navigation | every page carries completed page/revision furniture; the contents locates what it lists |
+| fonts by role | Routed Gothic on drawing faces, Letter Gothic on the checklist card, the serif on prose — by role, not merely present somewhere; print-scale legibility on 300 dpi tiles |
+
+**Font substitutions, assessed explicitly.** The sampled PDF embeds
+LiberationSerif/DejaVuSansMono alongside Routed Gothic/Letter Gothic: the serif
+substitution is the documented cross-platform body fallback (Georgia-class, acceptable
+per the skill); DejaVuSansMono in code spans is accepted as the mono role. Each
+substitution is a recorded acceptance in the manifest's visual-QA result, not a silent
+pass.
+
+**Footer-claim discipline.** Footer text is not declared absent or clipped from a
+preview render alone: coordinate inspection of sampled pages found the footer words
+present and no off-page characters. Blank field *values* and visual layout defects are
+distinct findings and are recorded as the one that they are.
+
+## VIII.13 The acceptance package map — and the three acceptance scopes
+
+The complete build-from-spec acceptance package (V2-DLV-05) — what a reader must be able
+to check out of this book to build and accept the system:
+
+| Package element | Where it lives |
+|---|---|
+| Governing mission/architecture | Front matter, Part I |
+| Deployment/capability profiles | Part V matrix; Part I arrangement |
+| Desired-state and settings/secret schemas | Part V (V.0–V.8) |
+| Management OpenAPI/utility contracts and native adapters | Part V V.6; Part IV register |
+| State machines | Part VII (§2, §3, §11–§12); figures/board-lifecycle |
+| Full normal/failure flows | Part II (F1–F16), Part VI (R-01…R-33) |
+| Operational metrics/readout | Part VII §10; module §8 registers |
+| Recovery/backup/revocation | Part VI (§17, §21, §25–§33); F8/F12/F15 |
+| Version/source compatibility | Part V V.5 (pins); M5/M3 |
+| Conformance scenarios | Part VI verification cases; CT-17 (UNVERIFIED, named) |
+
+**Three separate acceptance scopes, never merged:**
+
+1. **Handbook delivery** — the artifact of this part: gates, manifest, dispositions
+   (VIII.1–VIII.12).
+2. **Factory installation/readiness** — the specified infrastructure actually
+   deployed and read back: profiles, credentials, memory, bindings verified per Part V
+   and F2 — a different artifact (the deployment) with different evidence.
+3. **Application/project delivery** — a requested project built end to end and accepted
+   per Part VII §11.9 — a third scope again.
+
+An acceptance in one scope closes nothing in another: a green handbook build does not
+install the Factory, and an installed Factory does not deliver a project. Every agreed
+user redline is mapped bidirectionally to its revised page/interface/figure and its
+disposition-log row (VIII.5); source/version and user-feedback changes are tracked
+through all affected artifacts in both directions.
