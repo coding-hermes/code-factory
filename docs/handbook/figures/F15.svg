@@ -1,60 +1,69 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="132.0mm" viewBox="0 0 680 528.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="528.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="12.0" y="22.0" font-size="17.00" fill="#000000" text-anchor="start">F15 — BACKUP AND RESTORE</text>
 <text x="668.0" y="22.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT · DASHED = CONDITIONAL BRANCH</text>
-<rect x="67.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="130.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">OPERATOR</text>
-<polyline points="130.0,70.0 130.0,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<rect x="207.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="270.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">BOARD</text>
-<polyline points="270.0,70.0 270.0,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<rect x="347.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="410.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">SCHEDULER</text>
-<polyline points="410.0,70.0 410.0,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<rect x="487.0" y="36.0" width="126.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="550.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">DUCKBRAIN</text>
-<polyline points="550.0,70.0 550.0,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="67.0" y="36.0" width="98.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="116.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">OPERATOR</text>
+<polyline points="116.0,70.0 116.0,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="178.8" y="36.0" width="98.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="228.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">FACTORY MANAGER</text>
+<polyline points="228.0,70.0 228.0,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="291.0" y="36.0" width="98.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="340.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">BOARD</text>
+<polyline points="340.0,70.0 340.0,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="403.0" y="36.0" width="98.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="452.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">SCHEDULER</text>
+<polyline points="452.0,70.0 452.0,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="515.0" y="36.0" width="98.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="564.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">DUCKBRAIN</text>
+<polyline points="564.0,70.0 564.0,508.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <text x="10.0" y="123.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
-<polyline points="130.0,120.0 270.0,120.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="297.0" y="90.9" width="242.5" height="10.9" fill="#ffffff"/>
-<text x="300.0" y="99.0" font-size="9.50" fill="#000000" text-anchor="start">BACKUP SCOPE + TRIGGER: REPO/BOARD, MEMORY,</text>
-<rect x="297.0" y="103.9" width="165.5" height="10.9" fill="#ffffff"/>
-<text x="300.0" y="112.0" font-size="9.50" fill="#000000" text-anchor="start">SCHEDULER/CRIER STATE (M4 §7)</text>
+<polyline points="116.0,120.0 228.0,120.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="297.0" y="77.9" width="198.5" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="86.0" font-size="9.50" fill="#000000" text-anchor="start">BACKUP SCOPE + TRIGGER: REPO/BOARD,</text>
+<rect x="297.0" y="90.9" width="187.5" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="99.0" font-size="9.50" fill="#000000" text-anchor="start">MEMORY, SCHEDULER/CRIER STATE (M4</text>
+<rect x="297.0" y="103.9" width="22.5" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="112.0" font-size="9.50" fill="#000000" text-anchor="start">§7)</text>
 <text x="10.0" y="169.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
-<polyline points="130.0,166.0 270.0,166.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="297.0" y="136.9" width="237.0" height="10.9" fill="#ffffff"/>
-<text x="300.0" y="145.0" font-size="9.50" fill="#000000" text-anchor="start">SNAPSHOT: BOARD_DRIFT COMPARES CHECKOUT VS</text>
-<rect x="297.0" y="149.9" width="171.0" height="10.9" fill="#ffffff"/>
-<text x="300.0" y="158.0" font-size="9.50" fill="#000000" text-anchor="start">ORIGIN/MAIN ROW BY ROW (M4 §7)</text>
+<polyline points="228.0,166.0 340.0,166.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="353.0" y="123.9" width="171.0" height="10.9" fill="#ffffff"/>
+<text x="356.0" y="132.0" font-size="9.50" fill="#000000" text-anchor="start">SNAPSHOT: BOARD_DRIFT COMPARES</text>
+<rect x="353.0" y="136.9" width="193.0" height="10.9" fill="#ffffff"/>
+<text x="356.0" y="145.0" font-size="9.50" fill="#000000" text-anchor="start">CHECKOUT VS ORIGIN/MAIN ROW BY ROW</text>
+<rect x="353.0" y="149.9" width="44.5" height="10.9" fill="#ffffff"/>
+<text x="356.0" y="158.0" font-size="9.50" fill="#000000" text-anchor="start">(M4 §7)</text>
 <text x="10.0" y="215.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
-<polyline points="410.0,212.0 270.0,212.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="73.0" y="195.9" width="237.0" height="10.9" fill="#ffffff"/>
-<text x="310.0" y="204.0" font-size="9.50" fill="#000000" text-anchor="end">CHECKPOINT: --VERIFY-BOARD AT BOOT (M9 §5)</text>
+<polyline points="228.0,212.0 452.0,212.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="243.5" y="182.9" width="193.0" height="10.9" fill="#ffffff"/>
+<text x="340.0" y="191.0" font-size="9.50" fill="#000000" text-anchor="middle">CHECKPOINT: --VERIFY-BOARD AT BOOT</text>
+<rect x="317.8" y="195.9" width="44.5" height="10.9" fill="#ffffff"/>
+<text x="340.0" y="204.0" font-size="9.50" fill="#000000" text-anchor="middle">(M9 §5)</text>
 <text x="10.0" y="261.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
-<polyline points="130.0,258.0 550.0,258.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="224.2" y="228.9" width="231.5" height="10.9" fill="#ffffff"/>
-<text x="340.0" y="237.0" font-size="9.50" fill="#000000" text-anchor="middle">SNAPSHOT: DUCKBRAIN HISTORY + DATA TO THE</text>
-<rect x="287.5" y="241.9" width="105.0" height="10.9" fill="#ffffff"/>
-<text x="340.0" y="250.0" font-size="9.50" fill="#000000" text-anchor="middle">BACKUP DESTINATION</text>
+<polyline points="228.0,258.0 564.0,258.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="299.5" y="228.9" width="193.0" height="10.9" fill="#ffffff"/>
+<text x="396.0" y="237.0" font-size="9.50" fill="#000000" text-anchor="middle">SNAPSHOT: DUCKBRAIN HISTORY + DATA</text>
+<rect x="324.2" y="241.9" width="143.5" height="10.9" fill="#ffffff"/>
+<text x="396.0" y="250.0" font-size="9.50" fill="#000000" text-anchor="middle">TO THE BACKUP DESTINATION</text>
 <text x="10.0" y="307.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
-<polyline points="130.0,304.0 550.0,304.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="216.0" y="274.9" width="248.0" height="10.9" fill="#ffffff"/>
-<text x="340.0" y="283.0" font-size="9.50" fill="#000000" text-anchor="middle">RESTORE: INTO A SCRATCH HOME — ISOLATED, NOT</text>
-<rect x="287.5" y="287.9" width="105.0" height="10.9" fill="#ffffff"/>
-<text x="340.0" y="296.0" font-size="9.50" fill="#000000" text-anchor="middle">LIVE (OUTLINE F15)</text>
+<polyline points="220.0,302.0 242.0,302.0 242.0,328.0 220.0,328.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="249.0" y="274.9" width="204.0" height="10.9" fill="#ffffff"/>
+<text x="252.0" y="283.0" font-size="9.50" fill="#000000" text-anchor="start">LOCAL: RESTORE INTO A SCRATCH HOME —</text>
+<rect x="249.0" y="287.9" width="182.0" height="10.9" fill="#ffffff"/>
+<text x="252.0" y="296.0" font-size="9.50" fill="#000000" text-anchor="start">ISOLATED, NOT LIVE (OUTLINE F15)</text>
 <text x="10.0" y="353.0" font-size="9.50" fill="#000000" text-anchor="start">6</text>
-<polyline points="550.0,350.0 130.0,350.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="213.2" y="320.9" width="253.5" height="10.9" fill="#ffffff"/>
-<text x="340.0" y="329.0" font-size="9.50" fill="#000000" text-anchor="middle">MEMORY READBACK: A KNOWN ROW READ BACK PROVES</text>
-<rect x="306.8" y="333.9" width="66.5" height="10.9" fill="#ffffff"/>
-<text x="340.0" y="342.0" font-size="9.50" fill="#000000" text-anchor="middle">THE RESTORE</text>
+<polyline points="564.0,350.0 228.0,350.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="302.2" y="320.9" width="187.5" height="10.9" fill="#ffffff"/>
+<text x="396.0" y="329.0" font-size="9.50" fill="#000000" text-anchor="middle">MEMORY READBACK: A KNOWN ROW READ</text>
+<rect x="329.8" y="333.9" width="132.5" height="10.9" fill="#ffffff"/>
+<text x="396.0" y="342.0" font-size="9.50" fill="#000000" text-anchor="middle">BACK PROVES THE RESTORE</text>
 <text x="10.0" y="399.0" font-size="9.50" fill="#000000" text-anchor="start">7</text>
-<polyline points="130.0,396.0 270.0,396.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="297.0" y="366.9" width="220.5" height="10.9" fill="#ffffff"/>
-<text x="300.0" y="375.0" font-size="9.50" fill="#000000" text-anchor="start">BOARD READBACK: REPRESENTATIVE ROWS VIA</text>
-<rect x="297.0" y="379.9" width="50.0" height="10.9" fill="#ffffff"/>
-<text x="300.0" y="388.0" font-size="9.50" fill="#000000" text-anchor="start">BOARDCTL</text>
+<polyline points="340.0,396.0 228.0,396.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="111.5" y="366.9" width="198.5" height="10.9" fill="#ffffff"/>
+<text x="310.0" y="375.0" font-size="9.50" fill="#000000" text-anchor="end">BOARD READBACK: REPRESENTATIVE ROWS</text>
+<rect x="238.0" y="379.9" width="72.0" height="10.9" fill="#ffffff"/>
+<text x="310.0" y="388.0" font-size="9.50" fill="#000000" text-anchor="end">VIA BOARDCTL</text>
 <text x="10.0" y="445.0" font-size="9.50" fill="#000000" text-anchor="start">8</text>
-<polyline points="122.0,440.0 144.0,440.0 144.0,466.0 122.0,466.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="151.0" y="412.9" width="308.5" height="10.9" fill="#ffffff"/>
-<text x="154.0" y="421.0" font-size="9.50" fill="#000000" text-anchor="start">LOCAL: RECOVERY-POINT SELECTION + REVOKED-SECRET POLICY</text>
-<rect x="151.0" y="425.9" width="77.5" height="10.9" fill="#ffffff"/>
-<text x="154.0" y="434.0" font-size="9.50" fill="#000000" text-anchor="start">BEFORE RESUME</text></g></svg>
+<polyline points="228.0,442.0 116.0,442.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="133.5" y="412.9" width="176.5" height="10.9" fill="#ffffff"/>
+<text x="310.0" y="421.0" font-size="9.50" fill="#000000" text-anchor="end">RECOVERY-POINT + REVOKED-SECRET</text>
+<rect x="194.0" y="425.9" width="116.0" height="10.9" fill="#ffffff"/>
+<text x="310.0" y="434.0" font-size="9.50" fill="#000000" text-anchor="end">POLICY BEFORE RESUME</text></g></svg>

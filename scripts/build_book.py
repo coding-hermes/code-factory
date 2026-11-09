@@ -515,13 +515,13 @@ def body_blocks(text: str, inline_figs: bool = False) -> tuple[list[str], list]:
 def flow_sheets(
     p: dict, blocks: list[str], fig_codes: dict[str, str], today: str, tab: str
 ) -> list[tuple[str, list[str], str]]:
-    """Part II flow mounting (V2-LAYOUT-01): each flow is ONE continuous section —
-    heading, figure, caption and explanatory paragraph together at the reading
-    position. A figure that fits is mounted hero-sized inline, directly above its
-    caption and paragraph; a figure too large for a text sheet gets its own sheet
-    (hero-sized, reference line in the prose) with the paragraph beginning on the
-    immediately following sheet. Each flow opens its own sheet whose dochead names
-    the flow id, so every pagination continuation repeats it."""
+    """Mount each Part II flow as an ordered unit (V2-LAYOUT-01).
+
+    The heading, figure, dated caption and the first explanatory paragraph stay
+    together before later steps/branches/contracts are allowed to paginate. A
+    figure that cannot share that unit gets a dedicated figure sheet followed by
+    the flow prose; all continuation sheets retain the flow id in the head.
+    """
     part_head = f"PART {p['id']} · {p['title'].upper()}"
     # split the part at its flow headings; the opener keeps the plain part head
     groups: list[tuple[str, list[str]]] = []
@@ -545,31 +545,63 @@ def flow_sheets(
                 out.append((section, list(sheet), tab))
                 sheet.clear()
 
-        for b in fblocks:
+        i = 0
+        while i < len(fblocks):
+            b = fblocks[i]
             m = FIG_MARK.match(b)
             if not m:
                 sheet.append(b)
+                i += 1
                 continue
             fig = HB / m.group(1)
             if not fig.exists():
+                i += 1
                 continue
             code = fig_codes.get(m.group(1), fig.stem.upper())
             cap = f"<h2>FIGURE {code} — as of {today}</h2>"
+            # The first prose block after the marker is the flow explanation. Keep
+            # it in the same non-splittable intro unit as the figure and caption;
+            # pagination may move that unit, but cannot strand its explanation.
+            para = None
+            para_i = i + 1
+            while para_i < len(fblocks):
+                candidate = fblocks[para_i]
+                if candidate.startswith("<p>"):
+                    para = candidate
+                    break
+                if FLOW_HEAD.match(candidate) or FIG_MARK.match(candidate):
+                    break
+                para_i += 1
+            intro = [svg_fit(fig), cap]
+            if para is not None:
+                intro.append(para)
+            intro_unit = "<div class=\"flow-intro\">" + "".join(intro) + "</div>"
             if fig_scaled_h(fig) <= INLINE_FIG_MAX_MM:
-                # hero-sized inline at the reading position: image, then caption,
-                # then the explanatory paragraph (the next block in reading order)
-                sheet.extend([svg_fit(fig), cap])
+                sheet.append(intro_unit)
+                i = para_i + 1 if para is not None else i + 1
+                continue
+
+            # Tall figures still carry the heading, figure, caption and explanation
+            # as one designed spread unit. Scale the hero to leave room for the
+            # explanation instead of emitting a title-only sheet or moving prose to
+            # an unrelated trailing sheet.
+            ref = (
+                f"<p>FIGURE {code} is reduced to share this flow sheet with its "
+                "explanatory paragraph; the flow id is repeated on continuation "
+                "heads.</p>"
+            )
+            sheet.append(ref)
+            sheet.extend(intro)
+            flush()
+            if para is not None:
+                # The unscaled intro above is replaced by a bounded hero on the
+                # dedicated sheet; keep the paragraph adjacent to its caption.
+                prior = out.pop()
+                bounded = list(prior[1][:-len(intro)]) if len(intro) else list(prior[1])
+                out.append((section, bounded + [svg_fit(fig, h_max=SEP_FIG_MAX_MM), cap, para], tab))
+                i = para_i + 1
             else:
-                ref = (
-                    f"<p>FIGURE {code} is taller than one text sheet allows; it is "
-                    "mounted hero-sized below with its caption, and this "
-                    "flow&#8217;s explanatory paragraph begins directly beneath it "
-                    "on the following sheet — the flow id is repeated on every "
-                    "continuation head.</p>"
-                )
-                sheet.append(ref)
-                flush()
-                out.append((section, [svg_fit(fig, h_max=SEP_FIG_MAX_MM), cap], tab))
+                i += 1
         flush()
     return out
 

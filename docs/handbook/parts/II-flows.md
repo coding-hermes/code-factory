@@ -127,42 +127,48 @@ satisfied requirements.
 ![FIGURE 2.2](figures/F2.svg)
 
 F2 turns a declared host/project deployment into a ready Bunker runtime, and it is
-the path for three distinct intents: factory bootstrap, adding a project, and
-replacing a failed runtime. It runs when the operator (or the management layer, on
-host loss) declares a lane or a replacement. The management layer selects eligible
-capacity under the deployment profile, drives the declared installation path, and
-verifies the effective application, configuration, credentials, project files and
-memory — creation alone does not make a target ready for scheduled work. The
-handoffs run from the desired-deployment request through host selection and the
-Bunker/native installation path to readback verification and finally a verified
-Crier/scheduler binding. The result is proven by a verifier ladder with every leg
-VERIFIED, a readback of effective host/isolation/resource settings, and a
-registered routing binding that matches the verified identity and readiness.
+the path for three distinct intents: Factory bootstrap, adding a project, and
+replacing a failed runtime. The Factory manager is the deterministic owner of
+desired state, observed inventory, reconciliation and binding activation; Scheduler
+remains the admission and settlement owner. The manager selects eligible capacity
+under the deployment profile, drives the declared installation path, and asks the
+node verifier to measure the effective application, configuration, credentials,
+project files and memory — creation alone does not make a target ready for
+scheduled work. The handoffs run from the desired-deployment request to the manager,
+through host selection and Bunker/native installation, to verifier readback; the
+manager then registers the verified Crier binding and hands Scheduler the readiness
+identity and effective version. The result is proven by a verifier ladder with every
+leg VERIFIED, a readback of effective host/isolation/resource settings, and a
+binding whose identity/version matches the readiness result.
 
 **Preconditions and inputs:** the host meets the disk floor; the lane declaration exists; the Bunker deployment profile is chosen for this Bunker. Inputs: the lane declaration (project, harness, pin); the node manifest (prompts, skills, env); the seed repo and embedded board; Crier registration material; the per-Bunker DuckBrain namespace credential.
 
 **Steps:**
 
-1. Validate the desired project/repo, deployment profile, host pool,
-   resource/storage requirements and references to credentials and versions;
-   distinguish factory bootstrap from adding a project or replacing a failed
-   runtime (M1 §3).
-2. Select an eligible host using current health and capacity — the host must meet
-   the disk floor; reserve and account for the allocation and persist a resumable
-   provisioning operation.
-3. Use the declared Bunker/native installation path to prepare the project
-   workspace, repository and embedded Boardctl board, local DuckBrain namespace,
-   Hermes and model access (M1 §3 S2 — container, per-agent home, layered node).
-4. Provision/install authorized configuration and scoped credential
-   references/material using the documented distribution path; keep issuance
-   authority distinct from installation (resolved decision: install/provisioning
+1. The manager validates the desired project/repo, deployment profile, host pool,
+   resource/storage requirements and references to credentials and versions; it
+   distinguishes Factory bootstrap, adding a project and replacing a failed runtime
+   (M1 §3).
+2. The manager selects an eligible host using current health and capacity — the host
+   meets the disk floor — reserves and accounts for the allocation, and persists a
+   resumable provisioning operation.
+3. The provisioner uses the declared Bunker/native installation path to prepare the
+   project workspace, repository and embedded Boardctl board, local DuckBrain
+   namespace, Hermes and model access (M1 §3 S2 — container, per-agent home,
+   layered node).
+4. The provisioner installs authorized configuration and scoped credential
+   references/material using the documented distribution path; issuance authority
+   remains distinct from installation (resolved decision: install/provisioning
    scripts transport credentials).
-5. Read back effective state and verify repository access, application readiness,
-   memory paths, runtime permissions and required service connectivity — CREATED
-   is not VERIFIED (M1 §12).
-6. Register or replace the target binding in Crier and scheduler; confirm matching
-   identity/readiness before enabling admission, and retain evidence and the actual
-   allocation.
+5. The node verifier reads back effective state and verifies repository access,
+   application readiness, memory paths, runtime permissions and required service
+   connectivity — CREATED is not VERIFIED (M1 §12). Its result includes the
+   verified identity and effective version.
+6. The manager registers or replaces the Crier binding only after matching
+   identity/readiness readback, then hands Scheduler the binding generation and
+   readiness identity; admission remains disabled until that readback is accepted.
+7. The manager retains the operation, allocation and verifier evidence, including
+   the refusal or partial state when any required leg is not complete.
 
 **Exceptional branches:** the certification ladder awards VERIFIED per leg — agent,
 gateway, auth, artifact, tree, seed — and an unreachable port is UNVERIFIED
@@ -644,18 +650,21 @@ definition — the gap is the finding.
 ![FIGURE 2.10](figures/F10.svg)
 
 F10 removes an explicitly selected deployment under its lifecycle policy, and
-rebuild restores a desired runtime and its required state. Stopping, replacing and
-permanently deleting a project are different intents, and planned removal, repair
-and host-loss replacement take different paths through the same flow. It runs on
-operator request (destroy is operator-gated) or from the management layer after
-host loss. Evidence, memory and durable records remain subject to retention even
-when runtime resources are destroyed — "no residue" never authorizes erasing
+rebuild restores a desired runtime and its required state. The Factory manager owns
+intent, durable operation state, fencing, retention and final binding activation;
+Scheduler only receives the resulting readiness state for admission. Stopping,
+replacing and permanently deleting a project are different intents, and planned
+removal, repair and host-loss replacement take different paths through the same
+flow. It runs on operator request (destroy is operator-gated) or from the manager
+after host loss. Evidence, memory and durable records remain subject to retention
+even when runtime resources are destroyed — "no residue" never authorizes erasing
 audit history. The handoffs run from intent resolution and draining through
 quiescence and preservation, revocation and binding removal, to destruction of
-eligible resources and, for rebuild, re-application of desired state through F2
-with verified readiness before work re-enables. The result is proven by the
-registry no longer listing the agent, the home gone, and a rebuild's seed diff
-naming every restored file — readback, not intention.
+eligible resources and, for rebuild, re-application of desired state through F2;
+the verifier returns identity/version/readiness to the manager before the manager
+activates a new binding. The result is proven by the registry no longer listing the
+agent, the home gone, and a rebuild's seed diff naming every restored file —
+readback, not intention.
 
 **Preconditions and inputs:** destroy is operator-gated; the target agent is named; nothing active holds the node's work. Inputs: the agent name and `--yes`; the seed manifest for rebuild.
 
@@ -664,18 +673,20 @@ naming every restored file — readback, not intention.
 1. Resolve the requested stop/remove/rebuild intent, target, configured authority
    and retention policy; mark the deployment draining and prevent new assignments
    (`--destroy` requires `--yes` and a named agent, M1 §5).
-2. Quiesce or checkpoint active work and prove process/claim state; preserve
-   required workspace, memory, evidence and durable control records.
-3. Revoke or retire old identity/access as appropriate and remove stale
-   routing/scheduler bindings without erasing audit history.
-4. Destroy only eligible resources using the supported Bunker/platform path — the
-   provisioner removes the container and the per-agent home (M1 §5) — then verify
-   actual remaining resources and ownership.
-5. For rebuild/replacement, reapply desired state, restore preserved data and
-   install valid replacement access through F2 — the rebuild reapplies the seed
-   from the manifest, naming drift per file (M1 §3 S4).
-6. Verify application readiness and new bindings before re-enabling work; emit
-   lifecycle and failure events with retained operation history.
+2. The manager quiesces or checkpoints active work and proves process/claim state;
+   it preserves required workspace, memory, evidence and durable control records.
+3. The manager revokes or retires old identity/access as appropriate and removes
+   stale routing/scheduler bindings without erasing audit history.
+4. The provisioner destroys only eligible resources using the supported
+   Bunker/platform path — it removes the container and per-agent home (M1 §5) —
+   then returns actual remaining resources and ownership to the manager.
+5. For rebuild/replacement, the manager reapplies desired state, restores preserved
+   data and installs valid replacement access through F2; the seed reapplies from
+   the manifest and names drift per file (M1 §3 S4).
+6. The node verifier measures application readiness and returns identity/version/
+   readiness evidence to the manager. The manager activates the new binding and
+   only then enables work; it emits lifecycle and failure events with retained
+   operation history.
 
 **Exceptional branches:** the orphan-home reap runs against a live-registry check
 (M1 §10), and the reaper's 60-minute grace refuses a home reclaimed inside the
@@ -967,19 +978,20 @@ is a named gap (M9 §8).
 ![FIGURE 2.15](figures/F15.svg)
 
 F15 preserves a defined recoverable state of the Factory and project, then proves
-that state can run again. It runs on the configured backup trigger and on any
-restore drill or disaster recovery. Board consistency and one known-row read are
-useful checks but do not create a backup or establish cross-component recovery:
-the consistency boundary spans the project repository/board, local DuckBrain
-data/history, scheduler/Crier records, configuration/manifests and required
-evidence. Credentials and revoked authority require a recovery policy separate
-from ordinary data restoration — restoring a backup must never reactivate
-compromised or revoked credentials (V2-FLW-08). The actors are the configured
-backup owner, the restore operator, and the provisioning path that brings a
-replacement deployment up through F2. The result is proven by representative board
-and memory records verified from the restored copy, execution recovery, accepted
-publications, application readiness, and recorded actual loss/recovery evidence —
-a copied file is not a restored one.
+that state can run again. The Factory manager owns the backup operation, manifest,
+checkpoint boundary, isolated restore and activation decision; Boardctl, Scheduler
+and DuckBrain provide the source-specific readbacks. It runs on the configured
+backup trigger and on any restore drill or disaster recovery. Board consistency and
+one known-row read are useful checks but do not create a backup or establish
+cross-component recovery: the consistency boundary spans the project
+repository/board, local DuckBrain data/history, scheduler/Crier records,
+configuration/manifests and required evidence. Credentials and revoked authority
+require a recovery policy separate from ordinary data restoration — restoring a
+backup must never reactivate compromised or revoked credentials (V2-FLW-08). The
+manager restores through F2 only after isolated checks pass. The result is proven
+by representative board and memory records verified from the restored copy,
+execution recovery, accepted publications, application readiness, and recorded
+actual loss/recovery evidence — a copied file is not a restored one.
 
 **Preconditions and inputs:** a backup exists; a scratch environment is available for the restore drill. Inputs: the backup artifact; the known row/record to read back; the board's origin/main copy.
 

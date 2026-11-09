@@ -1,26 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="143.5mm" viewBox="0 0 680 574.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="574.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="12.0" y="22.0" font-size="17.00" fill="#000000" text-anchor="start">F10 — TEARDOWN / REBUILD</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="155.0mm" viewBox="0 0 680 620.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="620.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="12.0" y="22.0" font-size="17.00" fill="#000000" text-anchor="start">F10 — TEARDOWN / REBUILD</text>
 <text x="668.0" y="22.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT · DASHED = CONDITIONAL BRANCH</text>
 <rect x="67.0" y="36.0" width="66.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="100.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">OPERATOR</text>
-<polyline points="100.0,70.0 100.0,554.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<rect x="142.6" y="36.0" width="74.8" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="180.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">PROVISIONER</text>
-<polyline points="180.0,70.0 180.0,554.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<rect x="227.0" y="36.0" width="66.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="260.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">NODE</text>
-<polyline points="260.0,70.0 260.0,554.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="100.0,70.0 100.0,600.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="142.0" y="36.0" width="76.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="180.0" y="46.0" font-size="9.50" fill="#000000" text-anchor="middle">FACTORY</text>
+<text x="180.0" y="58.0" font-size="9.50" fill="#000000" text-anchor="middle">MANAGER</text>
+<polyline points="180.0,70.0 180.0,600.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="222.6" y="36.0" width="74.8" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="260.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">PROVISIONER</text>
+<polyline points="260.0,70.0 260.0,600.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="302.0" y="36.0" width="76.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="340.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">BUNKER DAEMON</text>
-<polyline points="340.0,70.0 340.0,554.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="340.0,70.0 340.0,600.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="387.0" y="36.0" width="66.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="420.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">SAFETY</text>
-<polyline points="420.0,70.0 420.0,554.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<rect x="462.6" y="36.0" width="74.8" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="500.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">CRIER (bus)</text>
-<polyline points="500.0,70.0 500.0,554.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
-<rect x="542.0" y="36.0" width="76.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="580.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">NODE VERIFIER</text>
-<polyline points="580.0,70.0 580.0,554.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="420.0,70.0 420.0,600.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="462.0" y="36.0" width="76.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="500.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">NODE VERIFIER</text>
+<polyline points="500.0,70.0 500.0,600.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<rect x="542.6" y="36.0" width="74.8" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
+<text x="580.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">CRIER (bus)</text>
+<polyline points="580.0,70.0 580.0,600.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <text x="10.0" y="123.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
 <polyline points="100.0,120.0 180.0,120.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
 <rect x="297.0" y="77.9" width="132.5" height="10.9" fill="#ffffff"/>
@@ -46,21 +47,21 @@
 <rect x="297.0" y="195.9" width="66.5" height="10.9" fill="#ffffff"/>
 <text x="300.0" y="204.0" font-size="9.50" fill="#000000" text-anchor="start">DESTRUCTION</text>
 <text x="10.0" y="261.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
-<polyline points="180.0,258.0 340.0,258.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="202.0" y="215.9" width="116.0" height="10.9" fill="#ffffff"/>
-<text x="260.0" y="224.0" font-size="9.50" fill="#000000" text-anchor="middle">DESTROY: CONTAINER +</text>
-<rect x="196.5" y="228.9" width="127.0" height="10.9" fill="#ffffff"/>
-<text x="260.0" y="237.0" font-size="9.50" fill="#000000" text-anchor="middle">PER-AGENT HOME REMOVED</text>
-<rect x="237.8" y="241.9" width="44.5" height="10.9" fill="#ffffff"/>
-<text x="260.0" y="250.0" font-size="9.50" fill="#000000" text-anchor="middle">(M1 §5)</text>
+<polyline points="260.0,258.0 340.0,258.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="353.0" y="215.9" width="116.0" height="10.9" fill="#ffffff"/>
+<text x="356.0" y="224.0" font-size="9.50" fill="#000000" text-anchor="start">DESTROY: CONTAINER +</text>
+<rect x="353.0" y="228.9" width="127.0" height="10.9" fill="#ffffff"/>
+<text x="356.0" y="237.0" font-size="9.50" fill="#000000" text-anchor="start">PER-AGENT HOME REMOVED</text>
+<rect x="353.0" y="241.9" width="44.5" height="10.9" fill="#ffffff"/>
+<text x="356.0" y="250.0" font-size="9.50" fill="#000000" text-anchor="start">(M1 §5)</text>
 <text x="10.0" y="307.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
-<polyline points="180.0,304.0 420.0,304.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="244.8" y="261.9" width="110.5" height="10.9" fill="#ffffff"/>
-<text x="300.0" y="270.0" font-size="9.50" fill="#000000" text-anchor="middle">ORPHAN HOMES / KEYS</text>
-<rect x="228.2" y="274.9" width="143.5" height="10.9" fill="#ffffff"/>
-<text x="300.0" y="283.0" font-size="9.50" fill="#000000" text-anchor="middle">REAPED VS A LIVE-REGISTRY</text>
-<rect x="258.5" y="287.9" width="83.0" height="10.9" fill="#ffffff"/>
-<text x="300.0" y="296.0" font-size="9.50" fill="#000000" text-anchor="middle">CHECK (M1 §10)</text>
+<polyline points="260.0,304.0 420.0,304.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="284.8" y="261.9" width="110.5" height="10.9" fill="#ffffff"/>
+<text x="340.0" y="270.0" font-size="9.50" fill="#000000" text-anchor="middle">ORPHAN HOMES / KEYS</text>
+<rect x="268.2" y="274.9" width="143.5" height="10.9" fill="#ffffff"/>
+<text x="340.0" y="283.0" font-size="9.50" fill="#000000" text-anchor="middle">REAPED VS A LIVE-REGISTRY</text>
+<rect x="298.5" y="287.9" width="83.0" height="10.9" fill="#ffffff"/>
+<text x="340.0" y="296.0" font-size="9.50" fill="#000000" text-anchor="middle">CHECK (M1 §10)</text>
 <text x="10.0" y="353.0" font-size="9.50" fill="#000000" text-anchor="start">6</text>
 <polyline points="180.0,350.0 260.0,350.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
 <rect x="297.0" y="307.9" width="132.5" height="10.9" fill="#ffffff"/>
@@ -71,23 +72,31 @@
 <text x="300.0" y="342.0" font-size="9.50" fill="#000000" text-anchor="start">NAMED (M1 §3 S4)</text>
 <text x="10.0" y="399.0" font-size="9.50" fill="#000000" text-anchor="start">7</text>
 <polyline points="260.0,396.0 500.0,396.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="311.0" y="366.9" width="138.0" height="10.9" fill="#ffffff"/>
-<text x="380.0" y="375.0" font-size="9.50" fill="#000000" text-anchor="middle">RE-REGISTER: NEW BINDING</text>
-<rect x="313.8" y="379.9" width="132.5" height="10.9" fill="#ffffff"/>
-<text x="380.0" y="388.0" font-size="9.50" fill="#000000" text-anchor="middle">AFTER READINESS (M1-C1)</text>
+<rect x="330.2" y="353.9" width="99.5" height="10.9" fill="#ffffff"/>
+<text x="380.0" y="362.0" font-size="9.50" fill="#000000" text-anchor="middle">VERIFY: CREATED ≠</text>
+<rect x="322.0" y="366.9" width="116.0" height="10.9" fill="#ffffff"/>
+<text x="380.0" y="375.0" font-size="9.50" fill="#000000" text-anchor="middle">VERIFIED BEFORE WORK</text>
+<rect x="324.8" y="379.9" width="110.5" height="10.9" fill="#ffffff"/>
+<text x="380.0" y="388.0" font-size="9.50" fill="#000000" text-anchor="middle">RE-ENABLED (M1 §12)</text>
 <text x="10.0" y="445.0" font-size="9.50" fill="#000000" text-anchor="start">8</text>
-<polyline points="580.0,442.0 260.0,442.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="370.2" y="399.9" width="99.5" height="10.9" fill="#ffffff"/>
-<text x="420.0" y="408.0" font-size="9.50" fill="#000000" text-anchor="middle">VERIFY: CREATED ≠</text>
-<rect x="362.0" y="412.9" width="116.0" height="10.9" fill="#ffffff"/>
-<text x="420.0" y="421.0" font-size="9.50" fill="#000000" text-anchor="middle">VERIFIED BEFORE WORK</text>
-<rect x="364.8" y="425.9" width="110.5" height="10.9" fill="#ffffff"/>
-<text x="420.0" y="434.0" font-size="9.50" fill="#000000" text-anchor="middle">RE-ENABLED (M1 §12)</text>
+<polyline points="500.0,442.0 180.0,442.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="284.8" y="399.9" width="110.5" height="10.9" fill="#ffffff"/>
+<text x="340.0" y="408.0" font-size="9.50" fill="#000000" text-anchor="middle">VERIFIED IDENTITY +</text>
+<rect x="284.8" y="412.9" width="110.5" height="10.9" fill="#ffffff"/>
+<text x="340.0" y="421.0" font-size="9.50" fill="#000000" text-anchor="middle">VERSION / READINESS</text>
+<rect x="320.5" y="425.9" width="39.0" height="10.9" fill="#ffffff"/>
+<text x="340.0" y="434.0" font-size="9.50" fill="#000000" text-anchor="middle">RESULT</text>
 <text x="10.0" y="491.0" font-size="9.50" fill="#000000" text-anchor="start">9</text>
-<polyline points="580.0,488.0 100.0,488.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="287.5" y="445.9" width="105.0" height="10.9" fill="#ffffff"/>
-<text x="340.0" y="454.0" font-size="9.50" fill="#000000" text-anchor="middle">LIFECYCLE RESULT +</text>
-<rect x="290.2" y="458.9" width="99.5" height="10.9" fill="#ffffff"/>
-<text x="340.0" y="467.0" font-size="9.50" fill="#000000" text-anchor="middle">RETAINED EVIDENCE</text>
-<rect x="315.0" y="471.9" width="50.0" height="10.9" fill="#ffffff"/>
-<text x="340.0" y="480.0" font-size="9.50" fill="#000000" text-anchor="middle">REPORTED</text></g></svg>
+<polyline points="180.0,488.0 580.0,488.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="311.0" y="458.9" width="138.0" height="10.9" fill="#ffffff"/>
+<text x="380.0" y="467.0" font-size="9.50" fill="#000000" text-anchor="middle">RE-REGISTER: NEW BINDING</text>
+<rect x="313.8" y="471.9" width="132.5" height="10.9" fill="#ffffff"/>
+<text x="380.0" y="480.0" font-size="9.50" fill="#000000" text-anchor="middle">AFTER READINESS (M1-C1)</text>
+<text x="10.0" y="537.0" font-size="9.50" fill="#000000" text-anchor="start">10</text>
+<polyline points="180.0,534.0 100.0,534.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="205.0" y="491.9" width="105.0" height="10.9" fill="#ffffff"/>
+<text x="310.0" y="500.0" font-size="9.50" fill="#000000" text-anchor="end">LIFECYCLE RESULT +</text>
+<rect x="210.5" y="504.9" width="99.5" height="10.9" fill="#ffffff"/>
+<text x="310.0" y="513.0" font-size="9.50" fill="#000000" text-anchor="end">RETAINED EVIDENCE</text>
+<rect x="260.0" y="517.9" width="50.0" height="10.9" fill="#ffffff"/>
+<text x="310.0" y="526.0" font-size="9.50" fill="#000000" text-anchor="end">REPORTED</text></g></svg>

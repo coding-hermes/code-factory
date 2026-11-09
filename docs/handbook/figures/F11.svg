@@ -28,15 +28,15 @@
 <rect x="174.3" y="241.9" width="363.5" height="10.9" fill="#ffffff"/>
 <text x="177.3" y="250.0" font-size="9.50" fill="#000000" text-anchor="start">LOCAL: BOARD-STASIS GATE — A SCHEDULER DECISION FROM OBSERVATIONS</text>
 <text x="10.0" y="307.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
-<polyline points="145.3,302.0 167.3,302.0 167.3,328.0 145.3,328.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="174.3" y="287.9" width="363.5" height="10.9" fill="#ffffff"/>
-<text x="177.3" y="296.0" font-size="9.50" fill="#000000" text-anchor="start">LOCAL: USAGE POOLS RESERVED, OR A CAPACITY DENIAL EMITTED (M9 §3)</text>
+<polyline points="153.3,304.0 340.0,304.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="353.0" y="274.9" width="319.5" height="10.9" fill="#ffffff"/>
+<text x="356.0" y="283.0" font-size="9.50" fill="#000000" text-anchor="start">WORKABILITY: WORK / NO-WORK / UNREADABLE ARE DISTINCT (M9</text>
+<rect x="353.0" y="287.9" width="22.5" height="10.9" fill="#ffffff"/>
+<text x="356.0" y="296.0" font-size="9.50" fill="#000000" text-anchor="start">§3)</text>
 <text x="10.0" y="353.0" font-size="9.50" fill="#000000" text-anchor="start">6</text>
-<polyline points="153.3,350.0 340.0,350.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="353.0" y="320.9" width="319.5" height="10.9" fill="#ffffff"/>
-<text x="356.0" y="329.0" font-size="9.50" fill="#000000" text-anchor="start">WORKABILITY: WORK / NO-WORK / UNREADABLE ARE DISTINCT (M9</text>
-<rect x="353.0" y="333.9" width="22.5" height="10.9" fill="#ffffff"/>
-<text x="356.0" y="342.0" font-size="9.50" fill="#000000" text-anchor="start">§3)</text>
+<polyline points="145.3,348.0 167.3,348.0 167.3,374.0 145.3,374.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="174.3" y="333.9" width="363.5" height="10.9" fill="#ffffff"/>
+<text x="177.3" y="342.0" font-size="9.50" fill="#000000" text-anchor="start">LOCAL: USAGE POOLS RESERVED, OR A CAPACITY DENIAL EMITTED (M9 §3)</text>
 <text x="10.0" y="399.0" font-size="9.50" fill="#000000" text-anchor="start">7</text>
 <polyline points="145.3,394.0 167.3,394.0 167.3,420.0 145.3,420.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
 <rect x="174.3" y="379.9" width="380.0" height="10.9" fill="#ffffff"/>
@@ -53,8 +53,8 @@
 <polyline points="153.3,534.0 340.0,534.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
 <rect x="353.0" y="504.9" width="308.5" height="10.9" fill="#ffffff"/>
 <text x="356.0" y="513.0" font-size="9.50" fill="#000000" text-anchor="start">AFTER SETTLEMENT: FINAL REFRESH + BOARD-CHECK VERIFIER,</text>
-<rect x="353.0" y="517.9" width="88.5" height="10.9" fill="#ffffff"/>
-<text x="356.0" y="526.0" font-size="9.50" fill="#000000" text-anchor="start">RESULT RECORDED</text>
+<rect x="353.0" y="517.9" width="165.5" height="10.9" fill="#ffffff"/>
+<text x="356.0" y="526.0" font-size="9.50" fill="#000000" text-anchor="start">DURABLE INCOMPLETE ON FAILURE</text>
 <polyline points="6.0,574.0 674.0,574.0" fill="none" stroke="#000000" stroke-width="0.7"/>
 <text x="10.0" y="588.0" font-size="9.50" fill="#000000" text-anchor="start">NOTE. refused means a named reason — budget hold, cooldown, load gate, fairness, namespace allocation (OUTLINE F11); an</text>
 <text x="10.0" y="603.0" font-size="9.50" fill="#000000" text-anchor="start">      unreadable board is never treated as no work</text></g></svg>

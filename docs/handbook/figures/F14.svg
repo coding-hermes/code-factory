@@ -32,13 +32,13 @@
 <rect x="297.0" y="103.9" width="72.0" height="10.9" fill="#ffffff"/>
 <text x="300.0" y="112.0" font-size="9.50" fill="#000000" text-anchor="start">SINK (CT-11)</text>
 <text x="10.0" y="169.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
-<polyline points="260.0,166.0 180.0,166.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="205.0" y="123.9" width="105.0" height="10.9" fill="#ffffff"/>
-<text x="310.0" y="132.0" font-size="9.50" fill="#000000" text-anchor="end">EMIT: TICK + SPAWN</text>
-<rect x="177.5" y="136.9" width="132.5" height="10.9" fill="#ffffff"/>
-<text x="310.0" y="145.0" font-size="9.50" fill="#000000" text-anchor="end">COUNTERS → SESSION SINK</text>
-<rect x="265.5" y="149.9" width="44.5" height="10.9" fill="#ffffff"/>
-<text x="310.0" y="158.0" font-size="9.50" fill="#000000" text-anchor="end">(M9 §8)</text>
+<polyline points="252.0,164.0 274.0,164.0 274.0,190.0 252.0,190.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="281.0" y="123.9" width="171.0" height="10.9" fill="#ffffff"/>
+<text x="284.0" y="132.0" font-size="9.50" fill="#000000" text-anchor="start">LOCAL: TICK + SPAWN COUNTERS —</text>
+<rect x="281.0" y="136.9" width="165.5" height="10.9" fill="#ffffff"/>
+<text x="284.0" y="145.0" font-size="9.50" fill="#000000" text-anchor="start">SCHEDULER METRICS SURFACE (M9</text>
+<rect x="281.0" y="149.9" width="22.5" height="10.9" fill="#ffffff"/>
+<text x="284.0" y="158.0" font-size="9.50" fill="#000000" text-anchor="start">§8)</text>
 <text x="10.0" y="215.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
 <polyline points="332.0,210.0 354.0,210.0 354.0,236.0 332.0,236.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
 <rect x="357.0" y="169.9" width="165.5" height="10.9" fill="#ffffff"/>
@@ -64,10 +64,10 @@
 <rect x="330.2" y="287.9" width="99.5" height="10.9" fill="#ffffff"/>
 <text x="380.0" y="296.0" font-size="9.50" fill="#000000" text-anchor="middle">TELEMETRY (M9 §5)</text>
 <text x="10.0" y="353.0" font-size="9.50" fill="#000000" text-anchor="start">6</text>
-<polyline points="580.0,350.0 180.0,350.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="311.0" y="307.9" width="138.0" height="10.9" fill="#ffffff"/>
-<text x="380.0" y="316.0" font-size="9.50" fill="#000000" text-anchor="middle">READOUT: OPERATOR QUERY,</text>
-<rect x="311.0" y="320.9" width="138.0" height="10.9" fill="#ffffff"/>
-<text x="380.0" y="329.0" font-size="9.50" fill="#000000" text-anchor="middle">CORRELATED BY RUN / TASK</text>
-<rect x="368.8" y="333.9" width="22.5" height="10.9" fill="#ffffff"/>
-<text x="380.0" y="342.0" font-size="9.50" fill="#000000" text-anchor="middle">IDS</text></g></svg>
+<polyline points="580.0,350.0 260.0,350.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="353.8" y="307.9" width="132.5" height="10.9" fill="#ffffff"/>
+<text x="420.0" y="316.0" font-size="9.50" fill="#000000" text-anchor="middle">READOUT: METRICS QUERY,</text>
+<rect x="351.0" y="320.9" width="138.0" height="10.9" fill="#ffffff"/>
+<text x="420.0" y="329.0" font-size="9.50" fill="#000000" text-anchor="middle">CORRELATED BY RUN / TASK</text>
+<rect x="408.8" y="333.9" width="22.5" height="10.9" fill="#ffffff"/>
+<text x="420.0" y="342.0" font-size="9.50" fill="#000000" text-anchor="middle">IDS</text></g></svg>
