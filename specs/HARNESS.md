@@ -33,7 +33,7 @@ it just printed — never by `$FAILED` alone (CF-141):
 | `<LABEL>: PASS` | no `FAIL` and no `WARN` row — every contract row PASSed | 0 |
 
 `<LABEL>` is the harness name in capitals (`HERMES`, `CODEX`, `CLAUDE-CODE`, `OPENCODE`,
-`PI-AGENT`, `DEEPSEEK`). `UNVERIFIED` exits **3**, not 0: nothing was certified, and a caller that
+`PI-AGENT`, `DEEPSEEK`, `DSH`). `UNVERIFIED` exits **3**, not 0: nothing was certified, and a caller that
 reads "exit 0" as support would read an unmeasured ladder as a supported one. It is the same status
 `verify-node.sh` uses for an unverified manifest (`VERIFY: UNVERIFIED`), so a node and an adapter
 answer "measured?" the same way.
@@ -118,7 +118,8 @@ warnings; B5b alone would pass the defect the row was raised on.
 | **aider** | `scripts/harness/install-aider.sh`; binary `aider`. The documented method is `pip install aider-chat` into a venv — **documented, not measured** | not measured (no pin, no artefact digest, no measured non-interactive surface); the adapter ships a real `--check`/`--contract`, prints the documented method as a `..` note and refuses `--apply` by name, so a harness this spec names can no longer be silent in the battery (CF-006) |
 | **goose** | `scripts/harness/install-goose.sh`; binary `goose`. The documented method is a standalone release binary — **documented, not measured** | not measured (no release tag, no artefact digest, no measured non-interactive surface); the adapter ships a real `--check`/`--contract` and refuses `--apply` by name (CF-006) |
 | **pi-agent** | `scripts/harness/install-pi-agent.sh`; binary `pi`, non-interactive surface `pi -p --no-session "<prompt>"` | not measured as an install (no pin, no artefact digest); the adapter ships a documented `--check`/`--contract` and refuses `--apply` by name |
-| **deepseek** | `scripts/harness/install-deepseek.sh`; the conformance row probes the binary `deepseek` (the matrix names DeepSeek's own harness at npm `@deepseek-ai/dsh`, CLI `dsh`, absent from both trees) | not measured (no binary, no ladder); the adapter ships a documented `--check`/`--contract` and refuses `--apply` by name |
+| **deepseek** | `scripts/harness/install-deepseek.sh`; the conformance row probes the binary `deepseek` | not measured (no `deepseek` binary, no ladder for one); the adapter ships a documented `--check`/`--contract` and refuses `--apply` by name. **This is not DeepSeek's harness** — that is `dsh`, the row above it in the matrix and the `dsh` row below here |
+| **dsh** | `scripts/harness/install-dsh.sh`; npm `@deepseek-ai/dsh` at pin `0.2.1-rc.5`, launcher `$HOME/.local/harness/dsh/bin/dsh`, non-interactive surface `dsh <profile> --json "<task>"` (measured with the `headless` profile) | **MEASURED install + one measured turn** (CF-226, 2026-11-08): registry integrity + shasum pinned before download, version read back `0.2.1-rc.5`, second `--apply` a 0.2 s no-op with a byte-identical tree, one turn wrote `dsh-turn.txt` carrying the fixed token in ~11 s and the model was read from dsh's own session record. The pin is an **RC**, so the version is re-measured from the registry by `--pin-status`, and a plugin-layer failure is reported per layer (`--layers`) instead of as one verdict. No crier adapter — see "dsh — the adapter decision" below |
 
 Hermes certifies only `$HOME/hermes-venv/bin/hermes` at `HERMES_PIN` (default `0.19.0`).
 A PATH-provided binary is labelled host-provided and FAILs the binary row, even if its
@@ -126,10 +127,11 @@ version matches. `--apply` creates the venv and installs `hermes-agent==$HERMES_
 when the venv binary is absent, regardless of PATH. A venv version mismatch is named
 and reinstalls the pin; only a matching venv binary earns "already installed".
 
-**hermes**, **codex** and **claude-code** have measured install ladders in this repo
-(`install-hermes.sh`, `install-codex.sh`, `install-claude-code.sh`, each proved by a test that can go
-red). `opencode`, `deepseek`, `pi-agent`, `aider` and `goose` ship a real `--check` and a
-`--contract` and refuse `--apply` by name, because no ladder for them has been measured here. `aider`
+**hermes**, **codex**, **claude-code** and **dsh** have measured install ladders in this repo
+(`install-hermes.sh`, `install-codex.sh`, `install-claude-code.sh`, `install-dsh.sh`, each proved by a
+test that can go red). `opencode`, `deepseek`, `pi-agent`, `aider` and `goose` ship a real `--check`
+and a `--contract` and refuse `--apply` by name, because no ladder for them has been measured here.
+`aider`
 and `goose` were the last two with **no adapter file at all** — a harness this spec names and the
 battery cannot see produces no row, which is the failure mode this section exists to forbid; both now
 ship `install-aider.sh`/`install-goose.sh`, so each prints named rows and exactly one verdict line
@@ -149,14 +151,72 @@ support:
 | codex | `PASS` | pin 0.166.0 installed, version read back, exec contract advertised, exec sidecar present, app-server present (note), host login (note). |
 | claude-code | `PASS` | pin 2.1.318 installed by this adapter, version read back; no credential is a note, and `--turn` is where one would be required (SKIP, exit 3). |
 | opencode | `UNVERIFIED` (exit 3) | binary 1.18.29 measured and its `run` surface advertised, but `user_space_binary` is a genuine WARN here: no install ladder is measured, so `--apply` refuses. |
-| deepseek | `FAIL (1)` | no `deepseek` binary; no ladder (matrix names `@deepseek-ai/dsh`, CLI `dsh`, absent from both trees). |
+| deepseek | `FAIL (1)` | no `deepseek` binary; no ladder for one. This row measures a DIFFERENT binary from the `dsh` row below — DeepSeek's own harness is `dsh` |
+| dsh | `PASS` | pin `0.2.1-rc.5` installed by this adapter (package identity + `dsh --version` read back), bin symlink resolved into the pinned package, headless profile present, and the composed plugin tree measured (98 entries, 5 disabled); a missing credential is a `..` note, because `--turn` is where one decides. |
 | pi-agent | `PASS` | `pi` 1.5.0 measured on `PATH`, `-p` surface advertised; the auth file is a note beside a measured binary. Its install ladder is still unmeasured, so `--apply` refuses by name. |
 | aider | `FAIL (1)` | no `aider` binary on the control host and no ladder this repo measured; the documented method (`pip install aider-chat` into a venv) is printed as a `..` note, and `--apply` refuses by name. |
 | goose | `FAIL (1)` | no `goose` binary and no ladder; the documented method (a standalone release binary) is a `..` note, and `--apply` refuses by name. |
 
-An `UNVERIFIED` or `FAIL` above is a measurement, not a defect: only codex, claude-code and hermes
-have ladders this repo can reproduce, and the conformance matrix refuses to promote any of them to
-"supported" without the five legs on a real node.
+An `UNVERIFIED` or `FAIL` above is a measurement, not a defect: only codex, claude-code, dsh and
+hermes have ladders this repo can reproduce, and the conformance matrix refuses to promote any of
+them to "supported" without the five legs on a real node.
+
+## dsh — the installer, the layers, and the adapter decision
+
+DeepSeek's harness is real, and `scripts/harness/install-dsh.sh` is this repo's measurement of it. Two
+things about it are not like the other adapters, and both are decisions this section records rather
+than prose that a reader has to infer.
+
+**1. It is an RC, so the pin is re-measured, not remembered.** `DSH_PIN`, `DSH_SHASUM` and
+`DSH_INTEGRITY` are three constants at the top of the installer, adopted together or not at all. One
+command re-measures them from the registry without installing anything or reading a credential:
+
+```bash
+scripts/harness/install-dsh.sh --pin-status
+#   PASS  dist_tags — latest=0.2.2-rc.1 pin=0.2.1-rc.5 (a NEWER RC exists)
+#   PASS  provenance — … registry integrity + shasum match the recorded pin …
+```
+
+A registry that serves **different bytes for the same version** is a `FAIL`, not a warning: the point
+of pinning is that a version string names one set of bytes. Adopting a newer RC is the edit
+`--pin-status` prints — the three constants together, then `--apply`, `--layers`, `--turn`, and a
+recorded measurement in this file and in the matrix's §2 row.
+
+**2. A failure is reported PER LAYER.** The pin's own startup output already knows where a plugin
+failure happened, and this adapter quotes it rather than flattening it:
+
+| Layer | What the installer measures | Fails as |
+|---|---|---|
+| `package` | npm package identity at the pin, and that each bundle the profile declares is installed | `FAIL layer:package` naming the bundle |
+| `resolved` | the `bin/dsh` symlink resolves inside the pinned package, and `--version` reads the pin back | `FAIL layer:resolved` naming the target or the bundle |
+| `enabled` | the composed plugin tree (`--dump-config`: entry count, disabled ids, bundle layers) | `FAIL layer:enabled` naming the disabled plugin |
+| `service` | one boot: does the tree mount, or does a required plugin wait on a service nothing provides | `FAIL layer:service` naming the service and the plugins waiting on it |
+| `tool` | the tool registry the run was given (`request/header` in dsh's session record) | `SKIP` naming that the run stopped before a model request |
+| `permission` | `permission/preset`, `approval/policy`, `sandbox/mode` from the record | `SKIP` naming the absent events |
+
+Two measured facts make those rows possible, and both are the reason `--check` parses stderr:
+`dsh --dump-config` **exits 0 while a bundle is missing** (it prints `skipping profile bundle … cannot
+resolve profile bundle …` and composes a partial tree), and a required-plugin failure prints a
+`Plugins waiting for services (k)` table (`agent-loop (required)  llm`, …). A boot that fails only at
+the credential seam is a `PASS layer:service`, because a credential is a run input and the plugin tree
+demonstrably mounted.
+
+**The crier adapter: decided, not forgotten.** crier ships no `dsh` adapter, and adding one is a
+change to a different repository's release surface. The decision recorded here is **defer it**, with
+the prerequisites named so the deferral cannot be mistaken for an omission:
+
+- the measured non-interactive surface is `dsh <profile> --json "<task>"`, whose NDJSON stream is
+  `session` / `status` / `thinking` / `tool_call` / `tool_result` / `text` / `final` — enough for a
+  crier adapter to correlate a run and read its final text, but it carries **no model id**, so
+  `model_served` would have to come from dsh's session record (`assistant/message` →
+  `source{kind:"model", provider, model}`), exactly as this installer reads it;
+- the failure taxonomy an adapter must forward is the six-layer one above; an adapter that reported
+  "dsh failed" would lose the only information a plugin harness gives you;
+- and `--session-id` can only ADOPT an existing session, so the run id is a map-only join
+  (`specs/HARNESS-MEMORY.md` §3.6), not a stamp.
+
+Until an adapter exists, `dsh` can only be driven by the node's own worker (the installer's `--turn`,
+which this repo has measured), and the matrix's `memory` leg stays unwritten for it.
 
 ## Conformance is measured, not claimed
 

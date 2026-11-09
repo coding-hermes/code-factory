@@ -1,0 +1,223 @@
+CF-226 — DeepSeek Harness (dsh) probe transcript
+=================================================
+
+What this is: the measured evidence behind `scripts/harness/install-dsh.sh` — a pinned
+install of npm `@deepseek-ai/dsh` 0.2.1-rc.5 (an RC), one real turn, the per-layer
+diagnosis, the credential refusals, and the RC re-measurement. Nothing below is composed
+from memory: each block is the output of the command named above it, on the control host,
+2026-11-08/09 (node 22.22.3, npm 10.9.8, Linux x86_64).
+
+Absolutely no credential VALUE appears in this file: a key is only ever named as a PATH,
+and the turn's key file is read inside the child shell. `$HOME` is rendered as `~`.
+
+Sections
+  1. Cold install in a throwaway $HOME, and a second --apply that changes nothing
+     (captured by `CF_DSH_TEST_APPLY=1 tests/harness/dsh-install-test.sh`; the scratch tree
+     held no prior dsh state, so the `provenance` and `install` rows are a real download)
+  2. --check on the control host after that install
+  3. --pin-status — how an RC pin is re-measured from the registry
+  4. --layers with a credential — all six layers measured
+  5. --turn — one real turn, its artifact, and the model dsh recorded
+  6. Refusals — a credential VALUE, and an ambient DEEPSEEK_API_KEY
+  7. Per-layer attribution — a disabled plugin, and a bundle that is not installed
+  8. --apply against an installed pin (idempotent, no npm call)
+
+What this does NOT prove: that a crier adapter exists (it does not; the decision is recorded
+in specs/HARNESS.md §"dsh — the adapter decision"), that the DuckBrain `memory` leg is
+written (the foreman owns it), or that this ladder installs on a node without node ≥ 22 —
+the pin declares no `engines` field, so a lower major is reported as unmeasured, not refused.
+
+
+1. Cold install in a throwaway $HOME (tests/harness/dsh-install-test.sh, CF_DSH_TEST_APPLY=1)
+-------------------------------------------------------------------------------------------
+3. --apply installs the pin user-space, and a second run changes nothing
+        harness: dsh (@deepseek-ai/dsh pin 0.2.1-rc.5, profile headless, state ~/.cf226-dsh-test.ST6atY/home/.dsh)
+          note: the pin is an RC — re-measure it with --pin-status (registry integrity + a newer-RC check)
+          PASS  contract:CF_API_KEY_FILE — ~/.hermes/cache/scratch/dsh-probe/key (mode 600, content not read)
+          ..    contract:CF_MODEL = deepseek-flash
+          ..    contract:CF_PROVIDER = unset
+          ..    contract:CF_BASE_URL = unset
+          ..    contract:CF_API_KEY_FILE = <set: 46 chars; content never recorded>
+          ..    contract:CF_WORKDIR = unset
+          ..    contract:CF_NAMESPACE = unset
+          ..    contract:CF_RUN_ID = unset
+          ..    contract:CF_LANE = unset
+          ..    contract:CF_SKILLS_DIR = unset
+          ..    contract:CF_HARNESS_OPTS = unset
+          ..    contract:CF_MAX_TURNS = unset
+          ..    contract:CF_TIMEOUT_S = unset
+          PASS  prefix — ~/.cf226-dsh-test.ST6atY/home/.local/harness/dsh (user-space, under $HOME)
+          PASS  node — ~/.local/bin/node (v22.22.3); the pin declares no engines field, and this ladder was measured on major 22
+          PASS  disk — 416.4 GB free (floor 2.0 GB)
+          PASS  provenance — @deepseek-ai/dsh@0.2.1-rc.5 — registry integrity + shasum match the recorded pin; upstream https://github.com/deepseek-ai/deepseek-harness
+          ..    npm install --global --prefix ~/.cf226-dsh-test.ST6atY/home/.local/harness/dsh @deepseek-ai/dsh@0.2.1-rc.5
+          PASS  install — npm exited 0 (618 packages)
+          PASS  package — @deepseek-ai/dsh@0.2.1-rc.5 at ~/.cf226-dsh-test.ST6atY/home/.local/harness/dsh/lib/node_modules/@deepseek-ai/dsh (pin 0.2.1-rc.5)
+          PASS  version_readback — 0.2.1-rc.5 — matches pin 0.2.1-rc.5
+          PASS  resolved — ~/.cf226-dsh-test.ST6atY/home/.local/harness/dsh/bin/dsh -> ~/.cf226-dsh-test.ST6atY/home/.local/harness/dsh/lib/node_modules/@deepseek-ai/dsh/lib/bin.js
+          PASS  profile — ~/.cf226-dsh-test.ST6atY/home/.dsh/profiles/headless scaffolded by the pinned launcher (profile headless)
+          PASS  enabled — 98 plugin entries composed from @deepseek-ai/dsh-base,@deepseek-ai/dsh-headless; disabled: tool-plugin-manager,hmr,authorization,deepseek-account,credentials
+          PASS  footprint — ~/.cf226-dsh-test.ST6atY/home/.local/harness/dsh — 858M under $HOME (618 packages measured)
+          ..    path_env — ~/.cf226-dsh-test.ST6atY/home/.local/harness/dsh/bin is not on PATH; add it, or call ~/.cf226-dsh-test.ST6atY/home/.local/harness/dsh/bin/dsh by path (the conformance battery resolves the adapter's own binary row)
+
+        DSH: PASS
+  PASS  --apply exits 0 (first run)
+  PASS  the launcher is at $HOME/.local/harness/dsh/bin/dsh (user-space)
+  PASS  registry integrity + shasum verified before download
+  PASS  the version was read back and matches the pin (0.2.1-rc.5)
+  PASS  --apply exits 0 on the second run (idempotent)
+  PASS  the second run says 'already installed at pin' (no npm call)
+  PASS  the installed tree is byte-for-byte unchanged (b74ffafcca6b1844d5838a510e2aec9f25d2bbddd8ab520c58393c98fe429be7)
+
+
+-------------------------------------------------------------------------------
+
+2-8. Live captures (the same installer, on the control host)
+-----------------------------------------------------------
+### $ scripts/harness/install-dsh.sh --check
+harness: dsh (@deepseek-ai/dsh pin 0.2.1-rc.5, profile headless, state ~/.dsh)
+  note: the pin is an RC — re-measure it with --pin-status (registry integrity + a newer-RC check)
+  ..    contract:CF_API_KEY_FILE — unset (no credential path; a paid lane supplies one)
+  ..    contract:CF_MODEL = unset
+  ..    contract:CF_PROVIDER = unset
+  ..    contract:CF_BASE_URL = unset
+  ..    contract:CF_API_KEY_FILE = unset
+  ..    contract:CF_WORKDIR = unset
+  ..    contract:CF_NAMESPACE = unset
+  ..    contract:CF_RUN_ID = unset
+  ..    contract:CF_LANE = unset
+  ..    contract:CF_SKILLS_DIR = unset
+  ..    contract:CF_HARNESS_OPTS = unset
+  ..    contract:CF_MAX_TURNS = unset
+  ..    contract:CF_TIMEOUT_S = unset
+  PASS  node — ~/.local/bin/node (v22.22.3); the pin declares no engines field, and this ladder was measured on major 22
+  ..    npm — ~/.local/bin/npm (10.9.8) (used by --apply)
+  PASS  prefix — ~/.local/harness/dsh (user-space, under $HOME)
+  PASS  package — @deepseek-ai/dsh@0.2.1-rc.5 at ~/.local/harness/dsh/lib/node_modules/@deepseek-ai/dsh (pin 0.2.1-rc.5)
+  PASS  binary — ~/.local/harness/dsh/bin/dsh (installed by this adapter)
+  PASS  version — 0.2.1-rc.5 (pin 0.2.1-rc.5)
+  PASS  resolved — ~/.local/harness/dsh/bin/dsh -> ~/.local/harness/dsh/lib/node_modules/@deepseek-ai/dsh/lib/bin.js
+  PASS  profile — ~/.dsh/profiles/headless (profile headless)
+  PASS  enabled — 98 plugin entries composed from @deepseek-ai/dsh-base,@deepseek-ai/dsh-headless; disabled: tool-plugin-manager,hmr,authorization,deepseek-account,credentials
+  ..    auth — no credential (a credential is a RUN input, not an install condition; --turn will SKIP and name it)
+
+DSH: PASS
+[exit 0]
+
+### $ scripts/harness/install-dsh.sh --pin-status
+harness: dsh (@deepseek-ai/dsh pin 0.2.1-rc.5, profile headless, state ~/.dsh)
+  note: the pin is an RC — re-measure it with --pin-status (registry integrity + a newer-RC check)
+  ..    contract:CF_API_KEY_FILE — unset (no credential path; a paid lane supplies one)
+  ..    contract:CF_MODEL = unset
+  ..    contract:CF_PROVIDER = unset
+  ..    contract:CF_BASE_URL = unset
+  ..    contract:CF_API_KEY_FILE = unset
+  ..    contract:CF_WORKDIR = unset
+  ..    contract:CF_NAMESPACE = unset
+  ..    contract:CF_RUN_ID = unset
+  ..    contract:CF_LANE = unset
+  ..    contract:CF_SKILLS_DIR = unset
+  ..    contract:CF_HARNESS_OPTS = unset
+  ..    contract:CF_MAX_TURNS = unset
+  ..    contract:CF_TIMEOUT_S = unset
+  PASS  dist_tags — latest=0.2.2-rc.1 pin=0.2.1-rc.5 (a NEWER RC exists)
+  PASS  provenance — @deepseek-ai/dsh@0.2.1-rc.5 — registry integrity + shasum match the recorded pin; upstream https://github.com/deepseek-ai/deepseek-harness
+  PASS  pin_status — the registry still serves the recorded bytes for 0.2.1-rc.5, so the pin is unchanged; re-measure again before promoting it
+  ..    adopting 0.2.2-rc.1 = edit DSH_PIN, DSH_SHASUM and DSH_INTEGRITY together in scripts/harness/install-dsh.sh, then re-run --apply, --layers and --turn and record the measurement in specs/HARNESS.md
+
+DSH: PASS
+[exit 0]
+
+### $ CF_API_KEY_FILE=~/…/deepseek.key scripts/harness/install-dsh.sh --layers
+harness: dsh (@deepseek-ai/dsh pin 0.2.1-rc.5, profile headless, state ~/.dsh)
+  note: the pin is an RC — re-measure it with --pin-status (registry integrity + a newer-RC check)
+  PASS  contract:CF_API_KEY_FILE — ~/.hermes/cache/scratch/dsh-probe/key (mode 600, content not read)
+layers: package -> resolved -> enabled -> service -> tool -> permission (profile headless)
+  PASS  package — @deepseek-ai/dsh@0.2.1-rc.5 at ~/.local/harness/dsh/lib/node_modules/@deepseek-ai/dsh (pin 0.2.1-rc.5)
+  PASS  layer:package — @deepseek-ai/dsh@0.2.1-rc.5 present; the profile's bundle package(s) resolve in the installed tree (@deepseek-ai/dsh-base,@deepseek-ai/dsh-headless)
+  PASS  resolved — ~/.local/harness/dsh/bin/dsh -> ~/.local/harness/dsh/lib/node_modules/@deepseek-ai/dsh/lib/bin.js
+  PASS  version — 0.2.1-rc.5 (pin 0.2.1-rc.5)
+  PASS  enabled — 98 plugin entries composed from @deepseek-ai/dsh-base,@deepseek-ai/dsh-headless; disabled: tool-plugin-manager,hmr,authorization,deepseek-account,credentials
+  PASS  layer:service — one boot answered (exit 0); the plugin tree mounted and the LLM route deepseek-official served a request
+  PASS  layer:tool — 25 tool(s) in the run's request header (record: sessions/--home-kara--/session-7eca149a-e0bb-4240-b6f1-97ad68e9eadf/session.v4.jsonl.zstd)
+  PASS  layer:permission — permission/preset=workspace-write, approval/policy=ask, sandbox/mode=workspace-write — measured, not inherited: dsh recorded them on the session
+
+DSH: PASS
+[exit 0]
+
+### $ CF_API_KEY_FILE=<mode-600 key> CF_MODEL=deepseek-v4-pro CF_PROVIDER=deepseek CF_WORKDIR=<scratch> CF_RUN_ID=cf226-evidence CF_LANE=code-factory-qa scripts/harness/install-dsh.sh --turn
+harness: dsh (@deepseek-ai/dsh pin 0.2.1-rc.5, profile headless, state ~/.dsh)
+  note: the pin is an RC — re-measure it with --pin-status (registry integrity + a newer-RC check)
+  PASS  contract:CF_API_KEY_FILE — ~/.hermes/cache/scratch/dsh-probe/key (mode 600, content not read)
+  PASS  contract:CF_WORKDIR — ~/.hermes/cache/scratch/dsh-ev.U2QA41 (inside $HOME)
+  PASS  contract:required — the §5 run set is complete (12 declared, 6 required)
+  ..    turn: @deepseek-ai/dsh@0.2.1-rc.5 profile headless in ~/.hermes/cache/scratch/dsh-ev.U2QA41 (model deepseek-v4-pro, provider deepseek-official, timeout 300s)
+  PASS  turn_exit — exit 0
+  PASS  model_served — requested deepseek-v4-pro → recorded deepseek-v4-pro (provider deepseek-official; dsh logs ONE model id per request, so 'recorded' is the honest word — specs/HARNESS-MEMORY.md §3.6)
+  PASS  turn_outcome — dsh's own record: turn/end reason.kind=completed
+  PASS  tool — 25 tool(s) registered for the run: bash,create_goal,edit,exit_plan_mode,get_goal,glob,grep,interrupt_agent,job_kill,job_list,job_output,list_agents,read,read_image,send_message,skill,subagent,sub
+  PASS  permission — session record: permission/preset=workspace-write, approval/policy=ask, sandbox/mode=workspace-write
+  PASS  artifact — ~/.hermes/cache/scratch/dsh-ev.U2QA41/dsh-turn.txt contains the fixed token (sha256 ad6a207fa2fdb139b43f97fadaf40721c73917173317890779df5da450c262a1)
+record harness=dsh harness_version=0.2.1-rc.5 model_requested=deepseek-v4-pro model_recorded=deepseek-v4-pro run_id=cf226-evidence lane=code-factory-qa namespace=code-factory workdir=~/.hermes/cache/scratch/dsh-ev.U2QA41
+record memory=not-written (leg 'memory' belongs to the foreman; this adapter echoes the fields it must hand over)
+
+DSH: PASS
+[exit 0]
+
+### the artifact the turn wrote:
+total 4
+-rw------- 1 kara kara 19 Nov  8 22:16 dsh-turn.txt
+
+### $ cat <scratch>/dsh-turn.txt
+CF-226-TOKEN-4e8b1d
+[sha256 ad6a207fa2fdb139b43f97fadaf40721c73917173317890779df5da450c262a1]
+
+### $ CF_API_KEY_FILE=sk-… scripts/harness/install-dsh.sh --check   (a credential VALUE, not a path)
+  FAIL  contract:CF_API_KEY_FILE — refused — a credential VALUE was passed, not a path; the contract is path-only (length 30, value not printed)
+DSH: FAIL (1) — contract refused; nothing was installed or run
+[exit 2]
+
+### $ DEEPSEEK_API_KEY=<set> scripts/harness/install-dsh.sh --check   (an ambient key)
+  FAIL  contract:ambient — refused — DEEPSEEK_API_KEY is set in the ambient environment; dsh reads it from the launching environment, so a lane that exported it would silently become the credential source. unset DEEPSEEK_API_KEY and pass CF_API_KEY_FILE=<path> (matrix §5)
+DSH: FAIL (1) — contract refused; nothing was installed or run
+[exit 2]
+
+### $ DSH_HOME=<scratch profile whose patch layer disables llm> scripts/harness/install-dsh.sh --layers
+harness: dsh (@deepseek-ai/dsh pin 0.2.1-rc.5, profile headless, state ~/.hermes/cache/scratch/dsh-layerA.0pzgw4)
+  note: the pin is an RC — re-measure it with --pin-status (registry integrity + a newer-RC check)
+layers: package -> resolved -> enabled -> service -> tool -> permission (profile headless)
+  PASS  package — @deepseek-ai/dsh@0.2.1-rc.5 at ~/.local/harness/dsh/lib/node_modules/@deepseek-ai/dsh (pin 0.2.1-rc.5)
+  PASS  layer:package — @deepseek-ai/dsh@0.2.1-rc.5 present; the profile's bundle package(s) resolve in the installed tree (@deepseek-ai/dsh-base,@deepseek-ai/dsh-headless)
+  PASS  resolved — ~/.local/harness/dsh/bin/dsh -> ~/.local/harness/dsh/lib/node_modules/@deepseek-ai/dsh/lib/bin.js
+  PASS  version — 0.2.1-rc.5 (pin 0.2.1-rc.5)
+  PASS  enabled — 98 plugin entries composed from @deepseek-ai/dsh-base,@deepseek-ai/dsh-headless; disabled: tool-plugin-manager,hmr,llm,authorization,deepseek-account,credentials
+  FAIL  layer:enabled — plugin(s) llm DISABLED in the profile's patch layer (~/.hermes/cache/scratch/dsh-layerA.0pzgw4/profiles/headless/cordis.patch.yml), and 1 required plugin(s) did not activate; the pin names what waits on them: agent-loop→llm; session-title-llm→llm; llm-pi-ai→llm; compaction-basic→llm; command-compact→compaction; session-checkpoint-policy→llm; llm-deepseek→llm; llm-deepseek-account→llm — re-enable in the patch layer (the pinned tree itself is intact)
+  ..    layer:tool, layer:permission — not measured: the service layer failed
+
+DSH: FAIL (1)
+[exit 1]
+
+### $ DSH_HOME=<scratch profile declaring an uninstalled bundle> scripts/harness/install-dsh.sh --layers
+harness: dsh (@deepseek-ai/dsh pin 0.2.1-rc.5, profile headless, state ~/.hermes/cache/scratch/dsh-layerB.tgnYrc)
+  note: the pin is an RC — re-measure it with --pin-status (registry integrity + a newer-RC check)
+layers: package -> resolved -> enabled -> service -> tool -> permission (profile headless)
+  PASS  package — @deepseek-ai/dsh@0.2.1-rc.5 at ~/.local/harness/dsh/lib/node_modules/@deepseek-ai/dsh (pin 0.2.1-rc.5)
+  FAIL  layer:package — bundle package(s) absent from the installed tree: @deepseek-ai/dsh-missing-bundle — the launcher will SKIP them and still exit 0
+  ..    layer:resolved, layer:enabled, layer:service, layer:tool, layer:permission — not measured: the package layer failed (a bundle that is not installed cannot be composed, so a boot would measure a partial tree, not this harness)
+
+DSH: FAIL (1)
+[exit 1]
+
+### $ scripts/harness/install-dsh.sh --apply   (second run against an installed pin — idempotent)
+harness: dsh (@deepseek-ai/dsh pin 0.2.1-rc.5, profile headless, state ~/.dsh)
+  note: the pin is an RC — re-measure it with --pin-status (registry integrity + a newer-RC check)
+  PASS  prefix — ~/.local/harness/dsh (user-space, under $HOME)
+  ..    already installed at pin 0.2.1-rc.5 — nothing to do (idempotent)
+  PASS  package — @deepseek-ai/dsh@0.2.1-rc.5 at ~/.local/harness/dsh/lib/node_modules/@deepseek-ai/dsh (pin 0.2.1-rc.5)
+  PASS  binary — ~/.local/harness/dsh/bin/dsh
+  PASS  version — 0.2.1-rc.5 (pin 0.2.1-rc.5)
+  PASS  resolved — ~/.local/harness/dsh/bin/dsh -> ~/.local/harness/dsh/lib/node_modules/@deepseek-ai/dsh/lib/bin.js
+  ..    profile headless already scaffolded at ~/.dsh/profiles/headless — left untouched (a patch layer is user state)
+
+DSH: PASS
+[exit 0]

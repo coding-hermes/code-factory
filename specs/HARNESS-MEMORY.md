@@ -98,11 +98,12 @@ run that never happened (`specs/FLEET-MEMORY.md:87`).
 
 | | |
 |---|---|
-| store | event-sourced: `<root>/--<cwd>--/<id>/session.v3.jsonl.zstd`, 63 event types, `flock`, fsync per batch |
+| store | event-sourced: `<root>/--<cwd>--/<id>/session.v4.jsonl.zstd` at pinned `0.2.1-rc.5` (**measured** — CF-226 installed the pin and read the record; the earlier v3 path in this row was a source-read of a different revision), one JSON event per line, `flock`, fsync per batch |
 | identity | `--session-id` **adopts** an existing session only; a fresh id cannot be set — map-only |
 | capture | two options: (a) the `SessionTelemetryBackend` seam (`emit`/`flush`/`shutdown`) mounted via `dsh --patch overlay.yml` — no fork; (b) wrapper capture of `--json`, which is explicitly "a projection, not the log" and truncates at 8 KiB/string |
-| gap | **`model_served` is structurally unavailable**: `normalizeModelInfo` throws unless `resolved.id === model`, so dsh can only echo the request. `baseURL` never enters the log, so a shim is invisible in `provider_binding` |
-| status | source-read only; no adapter, no exporter |
+| gap | **`model_served` cannot be separated from the request**: `normalizeModelInfo` throws unless `resolved.id === model`, so dsh logs ONE model id. **Measured** at the pin: `assistant/message` → `data.message.source{kind:"model", provider, model}` and `request/header` → `config{provider, model}` carry the same id, and `--json` carries none at all — so `install-dsh.sh --turn` prints `model_requested` beside a model it labels **recorded**, never "served". `baseURL` never enters the log, so a shim is invisible in `provider_binding` |
+| what IS in the record (measured) | `turn/end` → `reason.kind` (`completed` / `error` + message), `request/header` → `header.tools[]` (25 tools in the measured headless run), `permission/preset` + `approval/policy` + `sandbox/mode` (`workspace-write` / `ask` / `workspace-write`) |
+| status | **installer measured** (`scripts/harness/install-dsh.sh`, one real turn); no adapter and no exporter, and no crier adapter by recorded decision (`specs/HARNESS.md` §"dsh — the adapter decision") |
 
 ## 4. What every adapter must do — five behaviours, not four
 

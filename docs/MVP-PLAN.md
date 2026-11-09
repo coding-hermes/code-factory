@@ -107,7 +107,7 @@ Rows, in the order they unblock each other:
 | **CF-227** | codex: the adapter exists in crier, the binary and the installer do not |
 | **CF-225** | claude-code: no adapter in crier, no installer here |
 | **CF-228** | pi: the adapter is named `pi`; oh-my-pi needs bun |
-| **CF-226** | deepseek-harness (`dsh`, npm `@deepseek-ai/dsh` 0.2.1-rc.5) is real and absent from both repos — installer at a pinned RC; the earlier "not a thing" was true of our trees, not of the world |
+| **CF-226** | deepseek-harness (`dsh`, npm `@deepseek-ai/dsh` 0.2.1-rc.5) is real and was absent from both repos — installer at a pinned RC; **landed** in `scripts/harness/install-dsh.sh` (measured install + one measured turn, per-layer plugin diagnosis, the RC pin re-measured by `--pin-status`, and the crier adapter deferred by a recorded decision); the earlier "not a thing" was true of our trees, not of the world |
 | **CF-232** | the docs still said the foreman runs on the control host (fixed) |
 | `CRIER-HARNESS-9/10/11/12` | crier's side: the pi-agent alias, the opencode-v2 decision, claude-code, and unknown names failing at load |
 

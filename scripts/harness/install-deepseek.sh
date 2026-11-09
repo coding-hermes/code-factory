@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
-# install-deepseek.sh — adapter for the deepseek harness.
+# install-deepseek.sh — adapter for the `deepseek` binary.
 #
-# UNVERIFIED: this repo has measured no `deepseek` binary on any node it owns and records no
-# install ladder for one. The matrix names DeepSeek's own harness as npm `@deepseek-ai/dsh`
-# (CLI `dsh`, 0.2.1-rc.5), reported absent from both trees (specs/HARNESS-MATRIX.md); the
-# conformance table probes the binary name `deepseek`, which is what this adapter resolves. So
-# --check is real, --contract is honest, and --apply refuses by name instead of pretending to
+# UNVERIFIED: this repo has measured no binary literally named `deepseek` on any node it owns and
+# records no install ladder for one. This adapter probes that binary name because the conformance
+# table's `deepseek` row was written around it.
+#
+# DeepSeek's OWN harness is a different thing, and it IS measured here: npm `@deepseek-ai/dsh`,
+# CLI `dsh`, installed and turned by `scripts/harness/install-dsh.sh` (CF-226; pin 0.2.1-rc.5). That
+# row is `dsh` in tests/harness-conformance.sh, with its own installer, its own adapter rows and its
+# own spec section (specs/HARNESS.md §"dsh — the installer, the layers, and the adapter decision").
+# Nothing here says a DeepSeek harness does not exist: it says this binary name has not been
+# measured, and the harness that does exist has an installer next door.
+#
+# So --check is real, --contract is honest, and --apply refuses by name instead of pretending to
 # install something nobody has measured.
 #
 # The §5 input contract is one implementation, scripts/harness/harness-vars.sh: every declared
@@ -32,10 +39,12 @@ MODES
                Never touches the network.
   --contract   Validate the §5 set below and exit 0, or exit 2 with a named refusal. Installs
                nothing, runs nothing: the acceptance check the conformance battery calls.
-  --apply      REFUSED. This repo has measured no `deepseek` binary and no install ladder for
-               one (specs/HARNESS-MATRIX.md names npm `@deepseek-ai/dsh`, CLI `dsh`, as absent
-               from both trees). Measure a ladder, record it in specs/HARNESS.md, then implement
-               this leg. A named refusal, not a silent success.
+  --apply      REFUSED. This repo has measured no binary named `deepseek` and no install ladder for
+               one. DeepSeek's own harness is npm `@deepseek-ai/dsh`, CLI `dsh`, and it IS measured
+               here — by scripts/harness/install-dsh.sh at pin 0.2.1-rc.5 (CF-226). This leg is for
+               the `deepseek` binary name the conformance row probes; measure a ladder for THAT,
+               record it in specs/HARNESS.md, then implement this leg. A named refusal, not a
+               silent success.
   --help, -h   This text.
 
 DEEPSEEK_USAGE
@@ -85,7 +94,7 @@ if [ -n "$p" ]; then
   v="$("$p" --version 2>/dev/null | head -1)"
   if [ -n "$v" ]; then ok "version" "$v"; else warn "version" "binary answered no --version"; fi
 else
-  bad "binary" "absent — no deepseek in this node (the matrix measures no binary here; the package it names is npm @deepseek-ai/dsh, CLI dsh)"
+  bad "binary" "absent — no deepseek in this node (this row probes the binary name 'deepseek'; DeepSeek's own harness is npm @deepseek-ai/dsh, CLI dsh, and scripts/harness/install-dsh.sh installs and measures it)"
 fi
 
 # Neither spec documents a non-interactive surface for the `deepseek` row, so there is nothing to
@@ -93,7 +102,7 @@ fi
 note "non_interactive — none documented for this harness row (tests/harness-conformance.sh); no surface to advertise"
 
 if [ "$MODE" = "--apply" ]; then
-  bad "apply" "refused — no measured deepseek install ladder in this repo (no pin, no artifact digest, nothing recorded in specs/HARNESS.md). Measure a ladder, record it, then implement this leg."
+  bad "apply" "refused — no measured install ladder for a binary named 'deepseek' in this repo (no pin, no artifact digest). DeepSeek's own harness is a different package and IS measured by scripts/harness/install-dsh.sh; for this binary name, measure a ladder, record it, then implement this leg."
   say ""; verdict DEEPSEEK; exit $?
 fi
 

@@ -35,6 +35,11 @@
 #                     `model_provider`/`model` from the ambient ~/.codex/config.toml: a host
 #                     profile that names a router this repo never installed turns every smoke
 #                     turn into a measurement of that router (CF-227).
+#   HC_DSH_KEY_FILE   path to a mode-600 file holding a DeepSeek key, for the `dsh` smoke turn
+#                     (CF-226). It is a PATH and not an exported key on purpose: install-dsh.sh
+#                     refuses an ambient DEEPSEEK_API_KEY, so exporting one to smoke the turn would
+#                     also make that harness's `check` leg refuse the whole run. The file is read
+#                     inside the turn's own subshell and never printed.
 #
 # The battery never installs anything without --install, never writes outside $HOME,
 # never reads a credential value (existence and validity only), and never invents a
@@ -110,11 +115,15 @@ note_row() { printf '  ..    %s\n' "$*"; printf 'note\t-\tNOTE\t%s\n' "$(clean "
 
 # ---------------------------------------------------------------- harness table
 # id | adapter file | binary | generation | non-interactive smoke | smoke measured here
+# CF-226: `dsh` is DeepSeek's own harness, and `dsh headless` is the pin's non-interactive profile
+# ("answer one task and exit"), measured with --json (NDJSON run events). It is a separate id from
+# `deepseek` below, which probes a DIFFERENT binary (`deepseek`) that this repo has still not measured.
 HARNESSES="hermes|install-hermes.sh|hermes|0|hermes -z \"<prompt>\"|1
 claude-code|install-claude-code.sh|claude|0|claude -p \"<prompt>\"|1
 codex|install-codex.sh|codex|0|codex exec --skip-git-repo-check -s workspace-write -c model_provider=\"openai\" -m <model> -- \"<prompt>\"|1
 opencode|install-opencode.sh|opencode|1|opencode run \"<prompt>\"|1
 opencode-v2|install-opencode.sh|opencode|2|opencode run \"<prompt>\"|0
+dsh|install-dsh.sh|dsh|0|dsh headless --json \"<prompt>\"|1
 deepseek|install-deepseek.sh|deepseek|0|(none documented)|0
 pi-agent|install-pi-agent.sh|pi|0|pi -p --no-session \"<prompt>\"|1
 aider|install-aider.sh|aider|0|(none documented)|0
@@ -185,6 +194,19 @@ cred_deepseek() {
   if [ -n "${DEEPSEEK_API_KEY:-}" ]; then printf 'DEEPSEEK_API_KEY is set'
   else printf 'DEEPSEEK_API_KEY'; return 1; fi
 }
+# CF-226: `dsh` reads its key from the launching environment, so the smoke turn needs one — but a
+# PATH is preferred over an exported value, because install-dsh.sh refuses an ambient
+# DEEPSEEK_API_KEY and exporting one would make that harness's `check` leg refuse too.
+cred_dsh() {
+  if [ -n "${HC_DSH_KEY_FILE:-}" ] && [ -s "${HC_DSH_KEY_FILE:-}" ]; then
+    printf 'HC_DSH_KEY_FILE=%s (mode %s, content not read)' "$HC_DSH_KEY_FILE" \
+      "$(stat -c '%a' "$HC_DSH_KEY_FILE" 2>/dev/null || echo '?')"
+  elif [ -n "${DEEPSEEK_API_KEY:-}" ]; then
+    printf 'DEEPSEEK_API_KEY is set in the battery environment'
+  else
+    printf 'HC_DSH_KEY_FILE (a mode-600 file) or DEEPSEEK_API_KEY — dsh reads the key from its launching environment'; return 1
+  fi
+}
 cred_pi() {
   local f="$HOME/.pi/agent/auth.json" providers p out valid=""
   if [ ! -s "$f" ]; then printf '~/.pi/agent/auth.json'; return 1; fi
@@ -241,6 +263,14 @@ smoke_turn() {  # smoke_turn <id> <dir> <prompt>
     codex)      ( cd "$dir" && timeout "$TIMEOUT" codex exec --skip-git-repo-check -s workspace-write \
                   -c "model_provider=\"$CODEX_PROVIDER\"" -m "$CODEX_MODEL" -- "$prompt" </dev/null ) ;;
     opencode|opencode-v2) ( cd "$dir" && timeout "$TIMEOUT" opencode run "$prompt" </dev/null ) ;;
+    # CF-226: the key comes from a FILE (HC_DSH_KEY_FILE) when one is given, and only then from the
+    # battery's own environment. Read in this subshell, exported for this process only: an exported
+    # key is never echoed, and the harness's own adapter refuses one in the ambient environment.
+    dsh)        ( cd "$dir" && \
+                  if [ -n "${HC_DSH_KEY_FILE:-}" ] && [ -s "${HC_DSH_KEY_FILE:-}" ]; then
+                    DEEPSEEK_API_KEY="$(cat "$HC_DSH_KEY_FILE")"; export DEEPSEEK_API_KEY
+                  fi; \
+                  timeout "$TIMEOUT" dsh headless --json "$prompt" </dev/null ) ;;
     pi-agent)   ( cd "$dir" && timeout "$TIMEOUT" pi -p --no-session "$prompt" </dev/null ) ;;
     *)          return 127 ;;
   esac
@@ -545,6 +575,7 @@ leg_smoke() {  # <id> <binary> <generation> <measured>
     claude-code) cred="$(cred_claude)" || cred_rc=$? ;;
     codex) cred="$(cred_codex)" || cred_rc=$? ;;
     opencode|opencode-v2) cred="$(cred_opencode)" || cred_rc=$? ;;
+    dsh) cred="$(cred_dsh)" || cred_rc=$? ;;
     deepseek) cred="$(cred_deepseek)" || cred_rc=$? ;;
     pi-agent) cred="$(cred_pi)" || cred_rc=$? ;;
   esac

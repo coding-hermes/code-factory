@@ -140,10 +140,13 @@ scripts/ (CF-003) deploy_key.py (per-repo read-only deploy key + one generated s
                  gomodcache.py (sealed shared Go module cache), node_hygiene.py (footprint
                  admission + orphan home/key reaper)
 scripts/harness/ install-<harness>.sh — one per harness. Shipping an install ladder: hermes,
-                 claude-code, codex. Check-only (`--apply` refuses by name until a ladder is
-                 measured): opencode, deepseek, pi-agent, aider, goose — the last two are
-                 documented methods (pip venv / release binary) with no measured ladder, so
-                 their adapters print rows and refuse to install anything.
+                 claude-code, codex, dsh (DeepSeek's own harness, `@deepseek-ai/dsh` at an RC
+                 pin — install-dsh.sh also reports a plugin-layer failure per layer and re-measures
+                 the RC pin with --pin-status). Check-only (`--apply` refuses by name until a
+                 ladder is measured): opencode, deepseek, pi-agent, aider, goose — `deepseek`
+                 here probes a binary of that name, NOT DeepSeek's harness (that is `dsh`); the
+                 last two are documented methods (pip venv / release binary) with no measured
+                 ladder, so their adapters print rows and refuse to install anything.
                  The node manifest records the harness version and binary an adapter measured;
                  verify-node.sh re-measures it (specs/HARNESS.md "A node records the harness it
                  measured")

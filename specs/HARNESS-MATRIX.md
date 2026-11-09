@@ -53,12 +53,20 @@ failure, because one is fixed by installing and the other only by changing confi
 | **oh-my-pi (omp)** | `@oh-my-pi/pi-coding-agent` (npm) / `omp` | **18.16.0**; engine **bun ≥1.4.4**; ~82 MB; repo `can1357/oh-my-pi` | pi's coding agent with session management | crier's adapter is named **`pi`**, so the spelling `pi-agent` fails; no installer |
 | **codex** | codex CLI / `codex` | **0.166.0** pin, read back as `codex-cli 0.166.0` | OpenAI's coding agent; **`exec` is the measured surface** (`codex exec --json -s <mode> -c model_provider="openai" -m <model> -- <text>`), app-server is `[experimental]` and unused in crier | **MEASURED install** (`scripts/harness/install-codex.sh`: musl tarball, sha256-pinned, user-space under `$HOME/.local/codex/<pin>`, idempotent; the same ladder installs the sha256-pinned `codex-code-mode-host` sidecar beside the binary — without it every exec tool call fails closed and a turn exits 0 having written no artifact, CF-006); adapter in crier (`internal/harness/codex/`). The conformance smoke turn **pins `-c model_provider="openai" -m <model>` on argv**: an ambient `~/.codex/config.toml` may name a router this repo never installed, and a turn that inherits it measures that router, not codex |
 | **claude-code** | `@anthropic-ai/claude-code` (npm) | **2.1.318 pin**, read back as `2.1.318 (Claude Code)` | Anthropic's coding agent | **MEASURED install ladder** (`scripts/harness/install-claude-code.sh`, CF-225: registry integrity + shasum pinned, user-space npm prefix under `$HOME`, idempotent second `--apply`); **absent from crier entirely** (`CRIER-HARNESS-11`), so it is not a *supported* harness — I4 needs the five legs on a node |
-| **deepseek-harness (dsh)** | `@deepseek-ai/dsh` (npm) / `dsh` | **0.2.1-rc.5**; repo `deepseek-ai/deepseek-harness` | DeepSeek's own open-source harness: "everything is a plugin" (Cordis); `npx @deepseek-ai/dsh web`, or build from source with pnpm | **absent from both repos** |
+| **deepseek-harness (dsh)** | `@deepseek-ai/dsh` (npm) / `dsh` | **0.2.1-rc.5** pinned; `latest` on the registry is `0.2.2-rc.1`; repo `deepseek-ai/deepseek-harness` | DeepSeek's own open-source harness: "everything is a plugin" (Cordis); non-interactive surface `dsh headless "<task>"` (`--json` for NDJSON run events) | **MEASURED install ladder** (`scripts/harness/install-dsh.sh`, CF-226: `npm --prefix` under `$HOME/.local/harness/dsh`, registry integrity + shasum pinned, 618 packages / 858 MB, idempotent second `--apply`, version read back `0.2.1-rc.5`) **and one measured turn** (`dsh-turn.txt` carrying a fixed token, `model` read from dsh's own session record, 25 tools registered, `permission/preset=workspace-write`). No crier adapter: the decision is recorded in `specs/HARNESS.md` §"dsh — the adapter decision" |
 
 **Correction recorded, not quietly edited.** The previous revision of this file said "there is no
 deepseek harness". That was measured against *our* two trees and then stated as a fact about the
 world. It is real: `deepseek-ai/deepseek-harness`, CLI `dsh`, npm `@deepseek-ai/dsh`. That it is an
-RC at `0.2.x` is a reason to pin it and re-measure often, not a reason to deny it exists.
+RC at `0.2.x` is a reason to pin it and re-measure often, not a reason to deny it exists. **CF-226
+replaced the sentence with a measurement:** `scripts/harness/install-dsh.sh` installs
+`@deepseek-ai/dsh@0.2.1-rc.5` under `$HOME`, reads `dsh --version` back, is idempotent, and runs one
+real turn — so the row above no longer says "absent from both repos", it says what was measured.
+The pin is an exact prerelease version, and `install-dsh.sh --pin-status` is the one command that
+re-measures it: the registry must still serve the recorded `dist.integrity`/`dist.shasum`, and a
+newer RC (`0.2.2-rc.1` at the time of writing) is named with the exact three-constant edit that
+adopts it. The `deepseek` row the conformance battery also carries probes a **different** binary
+named `deepseek`; that one is still unmeasured and its adapter still refuses `--apply` by name.
 
 **oh-my-hermes is a layer, not a peer.** It configures Hermes' providers and installs workflow
 skills; it does not replace the agent. That makes it the natural answer to "how do we set up 13
@@ -190,8 +198,9 @@ None of these blocks a first end-to-end run, and all of them are large:
 - **switching/management surface (§6)** — `--explain` plus a safe node-level config editor;
 - **oh-my-hermes integration** — decide whether OMH becomes the supported way to configure a node's
   providers (provenance-pinned) or stays optional;
-- **dsh adapter + installer** — a crier adapter for `deepseek-harness` and an installer at a pinned
-  RC, with per-layer diagnosis when a plugin layer fails;
+- **dsh crier adapter** — the installer, the pinned ladder, the per-layer diagnosis and one measured
+  turn land with CF-226; a crier adapter for `deepseek-harness` is a separate decision, recorded in
+  `specs/HARNESS.md` §"dsh — the adapter decision" with what an adapter would have to parse;
 - **per-harness provider probing** — a `--probe-provider` leg that asks the harness what it can
   reach instead of trusting this table;
 - **harness swap without reprovisioning** — the §6 path proven by a test that flips a family and
@@ -203,7 +212,10 @@ None of these blocks a first end-to-end run, and all of them are large:
 
 - **opencode v2** has no artefact (`opencode2` = `0.0.1-security`; `opencode-ai@latest` = 1.19.5).
 - **claude-code is unimplemented in crier** (`CRIER-HARNESS-11`); the matrix cannot promise it.
-- **dsh is an RC** (`0.2.1-rc.5`): pin it, re-measure often, and expect plugin-layer failures to
-  need the layer-by-layer diagnosis its own docs describe.
+- **dsh is an RC** (`0.2.1-rc.5` pinned; `0.2.2-rc.1` is the registry's `latest` at the time of
+  writing): pin it to an exact prerelease version, re-measure it with `install-dsh.sh --pin-status`
+  before promoting it, and expect plugin-layer failures to need the layer-by-layer diagnosis its own
+  startup table describes — `install-dsh.sh --layers` reports package → resolved → enabled → service
+  → tool → permission rather than one verdict about the harness.
 - **aider and goose** stay out of this matrix: unmeasured, unlisted, not promised, and they ship no
   adapter file at all (`specs/HARNESS.md` names them so the absence is stated, not missing).
