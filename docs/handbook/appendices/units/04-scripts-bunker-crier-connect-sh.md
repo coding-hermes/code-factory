@@ -4,8 +4,8 @@
 |---|---|
 | Path | `/home/kara/code-factory/scripts/bunker-crier-connect.sh` [scripts/bunker-crier-connect.sh:1] |
 | Repository | `code-factory` [scripts/bunker-crier-connect.sh:1] |
-| Revision | `7f9ca12` — last commit touching this file; the tree measured here is `9ecb70c` |
-| Status | **VERIFIED — the verdict ladder and the environment reads reproduced against a stub bus on 2026-11-05; 4 defects measured against the file's own claims; 265 resolving locators (100 distinct); fact: FACT-03 fact: FACT-04** |
+| Revision | `384a842a` — current shipped behavior; tree `bb7ac31e` |
+| Status | **UPDATED — behavior re-derived from the current script and the CF-214 selftest fixture; the named `probe-04-crier-connect.sh` is not tracked here, so no probe transcript or measurement date is claimed** |
 
 ## 1. Purpose and why it matters
 
@@ -37,11 +37,12 @@
      node produced **two** `bunker cp` calls (probe B, §8), and the second write restamped
      `connected_at` [scripts/bunker-crier-connect.sh:129-130]. A reader who trusts line 17 will
      treat the file's mtime and `connected_at` as connection events; they are invocation events.
-  2. The in-repo operator documentation still says it "prints `CRIER: CONNECTED` only on `200`"
-     [docs/OPERATIONS.md:48], and the acceptance plan repeats "reports CONNECTED only on a 200
-     inbox" [docs/ACCEPTANCE-PLAN.md:146]. The code is stricter: an unsigned 200 now yields
-     `CRIER: UNVERIFIED` and exit 3 [scripts/bunker-crier-connect.sh:96-102]. The documentation
-     understates the gate; a reader who trusts it would accept an unauth bus as a working key.
+  2. The in-repo operator documentation had described the pre-CF-214 crier verdicts
+     [docs/OPERATIONS.md:48]. The shipped code now treats the host inbox route as the explicit
+     acceptance probe: an unsigned 200 yields `CRIER: CONNECTED`, while the optional node-side
+     signed probe is reported separately as `PASS  signed_read` [scripts/bunker-crier-connect.sh:46-71]
+     [scripts/bunker-crier-connect.sh:98-116]. An inbox 401 is a `FAIL` row naming the refused
+     authentication or agent signature.
   3. The health row labels *every* non-200 "(bus not answering)"
      [scripts/bunker-crier-connect.sh:43], so a bus that answers `404` on `/health` is described as
      unreachable. Measured by pointing the stub's `/health` at 404 (§8 probe A2), the row reads
@@ -58,13 +59,15 @@
      absence by status, and the step is an `if`/`else` [scripts/bunker-crier-connect.sh:86-98]: one
      `FAIL  identity — no bunker client on PATH — $HOME/.node/crier.json cannot be read from the
      node` row, and the run still reaches its `CRIER:` verdict instead of returning past it.
-- What breaks if the *verdict* lies (the failure this file exists to prevent): `CONNECTED` is a
-  claim about a signature, so it is printed only when the node's own signed probe returned a
-  `PASS  inbox` row [scripts/bunker-crier-connect.sh:57] [scripts/bunker-crier-connect.sh:96-97];
-  an unsigned 200 and the normal unsigned 401 both fall to `UNVERIFIED` with exit 3
-  [scripts/bunker-crier-connect.sh:91-102]. That is the requirement stated over a measurement,
-  and it matches the bus's own order of checks [scripts/node-bus-worker.py:556-557]
-  (fact: FACT-03).
+- What breaks if the *verdict* lies (the failure this file exists to prevent): the host `CONNECTED`
+  verdict is tied to the exact inbox route returning 200 [scripts/bunker-crier-connect.sh:46-58]
+  [scripts/bunker-crier-connect.sh:98-105]. The node's signed probe is optional diagnostic evidence,
+  and only its `PASS  signed_read` row proves that the node-side key was exercised
+  [scripts/bunker-crier-connect.sh:60-72]. An unsigned 200 therefore yields `CONNECTED` for the
+  host route but does not certify a signed read; an unsigned 401 is a `FAIL` row and the run is
+  not connected [scripts/bunker-crier-connect.sh:51-57] [scripts/bunker-crier-connect.sh:101-116].
+  This is the requirement stated over the measurements, and it matches the bus's own order of
+  checks [scripts/node-bus-worker.py:556-557] (fact: FACT-03).
 
 ## 2. Dependencies and library contracts
 
@@ -101,30 +104,30 @@ measured them (fact: FACT-03, fact: FACT-04); every in-repo side carries a resol
 |---|---|---|---|---|
 | crier bus, `GET <url>/health` [scripts/bunker-crier-connect.sh:40] | script → bus | HTTP GET, `-m $TIMEOUT`, body discarded (`-o /dev/null -w '%{http_code}'`) [scripts/bunker-crier-connect.sh:40] | none; only the status code is read [scripts/bunker-crier-connect.sh:41-44] | crier `cmd/server/main.go` → the `/health` handler registered beside the Mux; it is GET-only, so a HEAD there answers 405 and is not a fault [scripts/project-node.sh:245]. In-repo mirror of the same probe: `scripts/node-bus-worker.py:540-547` |
 | crier bus, `GET <url>/agents/<agent>/inbox?limit=1` [scripts/bunker-crier-connect.sh:29] | script → bus, **unsigned** (no bearer, no `X-Agent-*`) [scripts/bunker-crier-connect.sh:29] | HTTP GET over the bus URL [scripts/bunker-crier-connect.sh:29] | no body; the code is printed and matched [scripts/bunker-crier-connect.sh:67-74] | crier `cmd/server/main.go` → `registerRegistryRoutes` registers `/agents/{id}/inbox` GET to `HandleRetrieve`; `internal/registry/handler.go` → `HandleRetrieve` calls `requireAgent` before it parses the query or claims anything, and `internal/registry/agentsig.go` → `authorizeAgent` verifies the ed25519 signature. The 401-before-lookup order is fact: FACT-03, mirrored in-repo with the same ladder wording at `scripts/node-bus-worker.py:555-560`. Because this is the *retrieve* route and not `/inbox/stats`, an authenticated call claims a lease [scripts/node-bus-worker.py:41-44] |
-| node bus worker, `python3 $HOME/node-bus-worker.py --check` [scripts/bunker-crier-connect.sh:53] | script → node (via `bunker exec`) → bus | `bunker exec --server <host> <agent> -- bash -lc '<script>'`, 45 s `timeout` [scripts/bunker-crier-connect.sh:52-53] | stdout rows, filtered with `grep -E "PASS  inbox\|FAIL  inbox" \| head -1` [scripts/bunker-crier-connect.sh:53] | `scripts/node-bus-worker.py` → `check()`: prints `node-bus-worker --check — agent=… bus=…` [scripts/node-bus-worker.py:445], signs a GET of `/agents/<id>/inbox/stats` (chosen because it leases nothing) [scripts/node-bus-worker.py:569-577] and prints `  PASS  inbox — GET … -> 200 (…)` [scripts/node-bus-worker.py:584-589]. That `PASS  inbox` row is the *only* input that sets `SIGNED_READ=1` [scripts/bunker-crier-connect.sh:56-57] |
+| node bus worker, `python3 $HOME/node-bus-worker.py --check` [scripts/bunker-crier-connect.sh:64] | script → node (via `bunker exec`) → bus | `bunker exec --server <host> <agent> -- bash -lc '<script>'`, 45 s `timeout` [scripts/bunker-crier-connect.sh:62-64] | stdout rows, filtered with `grep -E "PASS  inbox\|FAIL  inbox" \| head -1` [scripts/bunker-crier-connect.sh:64] | `scripts/node-bus-worker.py` → `check()`: prints `node-bus-worker --check — agent=… bus=…` [scripts/node-bus-worker.py:445], signs a GET of `/agents/<id>/inbox/stats` and prints the worker inbox row. The surrounding script converts a worker `PASS  inbox` row into the separate `PASS  signed_read` row [scripts/bunker-crier-connect.sh:66-71]. |
 | bunker client → bunker host daemon [scripts/bunker-crier-connect.sh:114] [scripts/bunker-crier-connect.sh:131] | script → node | `bunker cp <local-tmp> <agent>:.node/crier.json --server <host>` then `bunker exec … chmod 600` [scripts/bunker-crier-connect.sh:114-115] | a JSON object with `agent`, `project`, `url` and a timestamp [scripts/bunker-crier-connect.sh:112-113] [scripts/bunker-crier-connect.sh:129-130] | the file is read back through the same client at [scripts/bunker-crier-connect.sh:80] and consumed by the worker's identity precedence `crier.json.agent → node.json.agent → --agent` [scripts/node-bus-worker.py:51-53] [scripts/node-bus-worker.py:339] |
 | `$HOME/.node/crier.json` on the node (mode 600) [scripts/bunker-crier-connect.sh:115] | script writes, two readers | file on the node | `{"agent","project","url","staged_at"\|"connected_at"}` [scripts/bunker-crier-connect.sh:112] [scripts/bunker-crier-connect.sh:129] | `scripts/node-bus-worker.py:339` reads it for the agent id and bus URL; the node ladder only checks existence and mode [scripts/project-node.sh:244-249] [specs/NODE.md:62-63] |
 
 ## 3. Verification
 
-All rows were run on 2026-11-05 against revision `7f9ca12` in worktree `~/proj-wt-md-04`; the two
-environment/health rows added below were re-run in worktree `~/proj-wt-fix04` at `b9f56e6`, which
-carries the same script.
+The current behavior was re-derived from the shipped script and the CF-214 selftest fixture. The
+named `probe-04-crier-connect.sh` is not tracked in this repository, so this document does not
+claim that it was re-run, does not paste its output, and does not invent a measurement date.
 
-| Check | Command | Expected | Last run | Result |
-|---|---|---|---|---|
-| Parse | `bash -n scripts/bunker-crier-connect.sh` | no output, exit 0 — a syntax error makes bash print a diagnostic and exit non-zero without running anything [scripts/bunker-crier-connect.sh:1-157] | 2026-11-05 | PASS (exit 0) |
-| Argument guard | `bash scripts/bunker-crier-connect.sh --check` | `--server is required (the agent's bunker host)` on stdout, exit 2 [scripts/bunker-crier-connect.sh:156] | 2026-11-05 | PASS (exit 2) |
-| Mode guard | `bash scripts/bunker-crier-connect.sh --agent x --server s` | usage text (lines 2–20 of the file, so two code lines leak into it [scripts/bunker-crier-connect.sh:25]), exit 2 [scripts/bunker-crier-connect.sh:155] | 2026-11-05 | PASS (exit 2) |
-| Verdict ladder, 5 cases | `bash probe-04-crier-connect.sh` (§8) — stub bus + stub `bunker` | unsigned 200 → `CRIER: UNVERIFIED`, exit 3; unsigned 401 → `CRIER: UNVERIFIED`, exit 3; signed `PASS  inbox` → `CRIER: CONNECTED`, exit 0; 403 → `CRIER: NOT CONNECTED (1)`, exit 1; 404 → `CRIER: NOT CONNECTED (1)`, exit 1 [scripts/bunker-crier-connect.sh:94-104] | 2026-11-05 | PASS (5/5 `RESULT: PASS`, probe exit 0) |
-| Idempotence claim | `bash probe-04b-apply-rewrite.sh` (§8) — two `--apply` runs | the header claims the identity is rewritten only when a value differs [scripts/bunker-crier-connect.sh:17]; a copy-counting stub client is expected to show 1 write if the claim holds | 2026-11-05 | **FAIL — 2 writes**: the claim at line 17 is false for `apply()` [scripts/bunker-crier-connect.sh:129-132] |
-| Health row on a non-200 `/health` | probe A2 (§8) — stub answers 404 on `/health`, 404 on `/agents/*` | `FAIL  bus_health — … -> 404 (bus not answering)`, the defect at [scripts/bunker-crier-connect.sh:43], then `NOT CONNECTED (2)`, exit 1 | 2026-11-05 | PASS (row reproduced) |
-| Environment reads | probe C (§8) — `HOME` unset, `bunker` off `PATH`, exported `FAILED=1` | `HOME` unset aborts at line 100 as `HOME: unbound variable`, exit 1; an absent `bunker` is reported as `$HOME/.node/crier.json absent`, exit 1; `FAILED=1` vetoes an all-PASS run as `NOT CONNECTED (1)` [scripts/bunker-crier-connect.sh:100] [scripts/bunker-crier-connect.sh:82] [scripts/lib.sh:11] | 2026-11-05 | PASS (3/3 rows reproduced) |
+| Check | Command | Expected | Evidence |
+|---|---|---|---|
+| Parse | `bash -n scripts/bunker-crier-connect.sh` | no output, exit 0 [scripts/bunker-crier-connect.sh:1-169] | current selftest parse arm |
+| Argument guard | `bash scripts/bunker-crier-connect.sh --check` | `--server is required (the agent's bunker host)`, exit 2 [scripts/bunker-crier-connect.sh:167-168] | source contract |
+| Mode guard | `bash scripts/bunker-crier-connect.sh --agent x --server s` | usage text, exit 2 [scripts/bunker-crier-connect.sh:163-167] | source contract |
+| Verdict ladder | the current CF-214 selftest fixture (§8 note) — stub bus + fixture `bunker` | unsigned 200 → `CRIER: CONNECTED`, exit 0; 401 → `FAIL  inbox` naming authentication or agent signature refusal; signed node probe → optional `PASS  signed_read`; 403/404/000 → distinct `FAIL` rows [scripts/bunker-crier-connect.sh:46-71] [scripts/bunker-crier-connect.sh:98-116] | selftest section 40 |
+| Idempotence claim | two `--apply` runs | the header still claims rewrite-on-difference, but the existing evidence records two writes [scripts/bunker-crier-connect.sh:17] [scripts/bunker-crier-connect.sh:135-149] | existing documented defect; not re-run here |
+| Health row on a non-200 `/health` | stub fixture with `/health` 404 | `FAIL  bus_health` prints the returned code and the existing parenthetical [scripts/bunker-crier-connect.sh:39-44] | source contract; no new transcript claimed |
+| Environment reads | `PATH` without `bunker`; inherited `FAILED` | the missing client is named in `FAIL identity`, and `FAILED` can veto a run [scripts/bunker-crier-connect.sh:74-96] [scripts/lib.sh:11] | source contract; no new transcript claimed |
 
-A check that cannot fail would be decoration; each row above has an outcome the current code
-does not produce when it is broken. The 5-case probe flips on the verdict block alone: moving
-`SIGNED_READ=1` out of the `PASS  inbox` arm [scripts/bunker-crier-connect.sh:56-59] makes case
-3 print `UNVERIFIED` instead of `CONNECTED`.
+A check that cannot fail would be decoration. Section 40's provisioner arm is falsifiable: it
+requires a WARN when the host route is an unsigned 200 and no node-side signed row exists, requires
+the quoted `PASS  signed_read` row when the fixture emits one, and runs a scratch copy of the old
+`PASS  inbox` certification to prove that it reds.
 
 ## 4. Metrics emitted
 
@@ -149,7 +152,7 @@ Rendering is owned by `lib.sh`: `  PASS  %s — %s`, `  FAIL  %s — %s`, `  WAR
 two leading spaces, and `say` prints bare text [scripts/lib.sh:5-9]. Values below are shown as the
 source interpolates them.
 
-Observed verbatim in the 2026-11-05 probe run (`--agent a1 --server s1 --url http://127.0.0.1:18767`):
+Historical format examples (not re-run for this revision; values are source-derived and no measurement date is claimed):
 
 - `crier-connect --check — agent=a1 url=http://127.0.0.1:18767` — descriptive (the header; it is
   printed before any measurement) [scripts/bunker-crier-connect.sh:35].
@@ -157,27 +160,28 @@ Observed verbatim in the 2026-11-05 probe run (`--agent a1 --server s1 --url htt
   [scripts/bunker-crier-connect.sh:42].
 - `  PASS  inbox — http://127.0.0.1:18767/agents/a1/inbox -> 200` — descriptive: it names a 200
   that proves nothing about the key [scripts/bunker-crier-connect.sh:69].
-- `  WARN  inbox — http://127.0.0.1:18767/agents/a1/inbox -> 401 — expected for an unsigned read (crier checks the signer before it looks the agent up); the signed probe needs agent.key + crier.token on the node` — descriptive (the normal hardened-bus answer) [scripts/bunker-crier-connect.sh:70].
+- `  FAIL  inbox — http://127.0.0.1:18767/agents/a1/inbox -> 401 (authentication or agent signature refused)` — evidentiary; the unsigned host route is refused [scripts/bunker-crier-connect.sh:53].
 - `  FAIL  inbox — http://127.0.0.1:18767/agents/a1/inbox -> 403 (owner mismatch or guard refused)` — evidentiary [scripts/bunker-crier-connect.sh:71].
 - `  FAIL  inbox — http://127.0.0.1:18767/agents/a1/inbox -> 404 (agent is genuinely not registered on the bus)` — evidentiary [scripts/bunker-crier-connect.sh:72].
 - `  PASS  identity — node points at http://127.0.0.1:18767 as a1` — evidentiary
   [scripts/bunker-crier-connect.sh:84].
-- `CRIER: CONNECTED — a1 at http://127.0.0.1:18767 (signed read accepted)` — evidentiary; the only
-  success line [scripts/bunker-crier-connect.sh:97].
+- `CRIER: CONNECTED — a1 at http://127.0.0.1:18767 (inbox route returned 200)` — evidentiary for
+  the host route; it does not certify the node key [scripts/bunker-crier-connect.sh:103-105].
+- `CRIER: UNVERIFIED — a1 at http://127.0.0.1:18767: signed read succeeded but the required inbox route was not 200` — evidentiary for the signed-only case [scripts/bunker-crier-connect.sh:105-109].
 - `CRIER: UNVERIFIED — a1 at http://127.0.0.1:18767: the bus answered an UNSIGNED read, so this node's key and` — evidentiary, followed by the two indented remedy lines
   `        bearer were not exercised. Install /home/kara/.node/agent.key and ~/.node/auth/crier.token`
   and `        and stage the bus worker, then re-run --check.`
-  [scripts/bunker-crier-connect.sh:99-101].
+  [scripts/bunker-crier-connect.sh:110-114].
 - `CRIER: NOT CONNECTED (1)` / `CRIER: NOT CONNECTED (2)` — evidentiary; the number is `$FAILED`
   [scripts/bunker-crier-connect.sh:63] [scripts/bunker-crier-connect.sh:95].
 
 Literal format strings present in the source but not exercised by the probe (the interpolated
 values are the script's own variables, never invented here):
 
-- `  PASS  inbox — signed read accepted on the node: $via_node` — evidentiary, the one row that
-  sets `SIGNED_READ=1` [scripts/bunker-crier-connect.sh:57].
-- `  FAIL  inbox — the node's own signed probe failed: $via_node` — evidentiary
-  [scripts/bunker-crier-connect.sh:58].
+- `  PASS  signed_read — node-side signed inbox read accepted: $via_node` — evidentiary, the one
+  row that sets `SIGNED_READ=1` [scripts/bunker-crier-connect.sh:68-70].
+- `  FAIL  signed_read — the node's own signed probe failed: $via_node` — evidentiary
+  [scripts/bunker-crier-connect.sh:68-71].
 - `  FAIL  bus_health — $URL/health -> ${health:-000} (bus not answering)` — descriptive, and
   wrong for any non-200 that is an answer [scripts/bunker-crier-connect.sh:43].
 - `  FAIL  inbox — $URL/agents/$AGENT/inbox -> $code` — the `*)` arm, and the row an operator sees
@@ -212,13 +216,13 @@ continues on a weaker path, **open** = the run lets a weaker fact stand.
 
 | Failure | Presents as | Distinguished from | Recovery |
 |---|---|---|---|
-| Bus does not answer `/health` | `  FAIL  bus_health — … -> 000 (bus not answering)` then `CRIER: NOT CONNECTED (1)`, exit 1 — **fail closed** [scripts/bunker-crier-connect.sh:43] [scripts/bunker-crier-connect.sh:95] | `401` on the inbox route is a live bus refusing an unsigned read, not an unreachable one [scripts/bunker-crier-connect.sh:70] | start the bus or fix `--url`; the health row names the URL [scripts/bunker-crier-connect.sh:42-43] |
-| Bus answers non-200 on `/health` for a reason other than reachability | Same row, with the code printed but the parenthetical still saying "bus not answering" — **degraded diagnosis, fail closed verdict** [scripts/bunker-crier-connect.sh:43] | nothing in the output separates a 404 from a dead host; only the printed number does | read the number, not the parenthetical; §8 probe A2 reproduces this (probe A's inbox-404 case answers `/health` 200, so its health row is PASS) |
-| Unsigned read answers 200 (bus without auth) | `  PASS  inbox — … -> 200`, then `CRIER: UNVERIFIED …` and exit 3 — **fail closed on the claim** [scripts/bunker-crier-connect.sh:69] [scripts/bunker-crier-connect.sh:96-102] | a signed read prints `PASS  inbox — signed read accepted on the node: …` instead [scripts/bunker-crier-connect.sh:57] | install `agent.key` + `auth/crier.token` on the node and re-run `--check` [scripts/bunker-crier-connect.sh:100-101] |
-| Unsigned read answers 401 (hardened bus, the normal case) | `  WARN  inbox — … -> 401 — expected for an unsigned read …`, then `CRIER: UNVERIFIED`, exit 3 — **fail closed on the claim, WARN not FAIL** [scripts/bunker-crier-connect.sh:70] [scripts/bunker-crier-connect.sh:99-102] | a genuine auth fault on the *signed* path prints `FAIL  inbox — the node's own signed probe failed: …` [scripts/bunker-crier-connect.sh:58] | same as above; fact: FACT-03 is the 401-is-by-design measurement |
+| Bus does not answer `/health` | `  FAIL  bus_health — … -> 000 (bus not answering)` then `CRIER: NOT CONNECTED (1)`, exit 1 — **fail closed** [scripts/bunker-crier-connect.sh:39-44] [scripts/bunker-crier-connect.sh:98-102] | an inbox `401` is a distinct authentication or agent-signature refusal [scripts/bunker-crier-connect.sh:51-57] | start the bus or fix `--url`; the health row names the URL [scripts/bunker-crier-connect.sh:40-43] |
+| Bus answers non-200 on `/health` for a reason other than reachability | Same row, with the returned code printed but the parenthetical still saying "bus not answering" — **degraded diagnosis, fail closed verdict** [scripts/bunker-crier-connect.sh:39-44] | only the returned code distinguishes a 404 from a dead host | read the returned code and fix the health route |
+| Unsigned read answers 200 (bus without auth) | `  PASS  inbox — … -> 200`, then `CRIER: CONNECTED … (inbox route returned 200)` and exit 0 — **host-route evidence only; no signed-read claim** [scripts/bunker-crier-connect.sh:46-58] [scripts/bunker-crier-connect.sh:101-105] | a node-side signed probe, when measured, is a separate `PASS  signed_read` row [scripts/bunker-crier-connect.sh:60-72] | install `agent.key` + `auth/crier.token` and stage the worker if node-side proof is required |
+| Unsigned read answers 401 | `  FAIL  inbox — … -> 401 (authentication or agent signature refused)` then `CRIER: NOT CONNECTED`, exit 1 — **fail closed** [scripts/bunker-crier-connect.sh:51-57] [scripts/bunker-crier-connect.sh:101-102] | 403 is owner/guard refusal; 404 is an unregistered agent; 000 is no answer | inspect the bus authentication and agent-signature configuration |
 | 403 | `  FAIL  inbox — … -> 403 (owner mismatch or guard refused)` → `NOT CONNECTED (1)`, exit 1 — **fail closed** [scripts/bunker-crier-connect.sh:71] | 404 means the id is not on the bus at all [scripts/bunker-crier-connect.sh:72]; 403 means it exists and the signature names someone else [scripts/node-bus-worker.py:558] | the key on the node does not belong to `--agent`; re-stage with the right key |
 | 404 | `  FAIL  inbox — … -> 404 (agent is genuinely not registered on the bus)` → `NOT CONNECTED (1)` — **fail closed** [scripts/bunker-crier-connect.sh:72] | 403 is an ownership mismatch, not an absent id [scripts/node-bus-worker.py:558-559] | register the agent on the bus, then `--apply` |
-| Node lacks `agent.key`, `auth/crier.token` or `node-bus-worker.py` | No row for the missing item: the node-side `if` simply produces no output, `via_node` is empty, and the run falls through to the unsigned probe — **degraded** [scripts/bunker-crier-connect.sh:52-55] [scripts/bunker-crier-connect.sh:66] | the fallback still prints a verdict and exits 3 rather than claiming success [scripts/bunker-crier-connect.sh:96-102] | install the key/token/worker; `--check` will then say which of them made the signed read fail [scripts/bunker-crier-connect.sh:58] |
+| Node lacks `agent.key`, `auth/crier.token` or `node-bus-worker.py` | No `signed_read` row: the node-side conditional produces no output, `via_node` is empty, and the run proceeds to the host inbox verdict — **degraded evidence** [scripts/bunker-crier-connect.sh:60-72] | the host route can still print `CONNECTED` on 200, but the provisioner must say the signed read was not measured [scripts/bunker-provision.sh:280-289] | install the key/token/worker if node-side proof is required; otherwise treat the host-route result as unsigned |
 | Unsigned fallback probe runs against a bus that accepts it | The GET is `/agents/<id>/inbox?limit=1` — the *retrieve* route, which claims a lease — so one waiting dispatch is hidden from the worker for the lease window — **degraded, with a side effect** [scripts/bunker-crier-connect.sh:29] [scripts/node-bus-worker.py:41-44] | the node-side worker deliberately reads `/inbox/stats`, "a signed read that leases nothing", for exactly this reason [scripts/node-bus-worker.py:569-571] | prefer the signed path; on an unauth bus, expect one message to be leased by the check |
 | No `bunker` client on the control host | `  FAIL  identity — no bunker client on PATH — $HOME/.node/crier.json cannot be read from the node`, then the `CRIER:` verdict — **fail closed and named since CF-281** [scripts/bunker-crier-connect.sh:86-98] [scripts/lib.sh:41-45]. Before the fix the same run printed `  FAIL  identity — $HOME/.node/crier.json absent — run --apply`: the missing client was reported as a missing file | `stage`/`apply` name it too, `FAIL  bunker_cli — no bunker client on PATH` [scripts/bunker-crier-connect.sh:120] [scripts/bunker-crier-connect.sh:137]; an absent client still skips the signed probe silently [scripts/bunker-crier-connect.sh:51] | install the client; the bus rows above still run without it [scripts/bunker-crier-connect.sh:40-74]; measured in §8 probe C |
 | Identity file absent on the node | `  FAIL  identity — $HOME/.node/crier.json absent — run --apply`, exit 1 — **fail closed** [scripts/bunker-crier-connect.sh:82] | empty output from the client is coerced to the word `absent`, so a transport failure reads the same way [scripts/bunker-crier-connect.sh:80] | `--apply` or `--stage` [scripts/bunker-crier-connect.sh:107-140] |
@@ -260,204 +264,59 @@ continues on a weaker path, **open** = the run lets a weaker fact stand.
 
 ## 8. Evidence of record
 
-Everything below was run on 2026-11-05 against `scripts/bunker-crier-connect.sh` at its last
-touching commit `7f9ca12`. Probes A and B were run in worktree `~/proj-wt-md-04` at `9ecb70c`;
-probes A2 and C were re-run in worktree `~/proj-wt-fix04` at `b9f56e6`, which carries the same
-script (no commit between `7f9ca12` and `b9f56e6` touches it). Every probe is hermetic: a stub bus
-on loopback and a stub `bunker` on `PATH`; none writes to the repository and none touches a real
-node.
+The current evidence boundary is explicit: behavior for CF-214 was re-derived from the shipped
+script and the real selftest fixture. The named `probe-04-crier-connect.sh` is not tracked in this
+repository, so no standalone probe run, transcript, or measurement date is claimed here. The
+remaining B/C material below is retained only where it is clearly marked as historical evidence and
+is not used to certify the current CF-214 verdict ladder.
 
-**A. Verdict ladder (5 cases).** Stub bus answers 200 to `/health` and the case's code to
-`/agents/*`; stub `bunker` returns the identity JSON for the `crier.json` read, and either
-nothing or a synthetic `PASS  inbox` row for the signed probe. Copy to a scratch dir and run
-`bash probe-04-crier-connect.sh /home/kara/code-factory 18767`:
+**A. Verdict ladder (not re-run here).** The named `probe-04-crier-connect.sh` is not tracked in
+this repository. Its prior pasted fixture and transcripts were removed rather than updated from
+memory. The current verdict ladder is covered by the real CF-214 selftest fixture in `tests/selftest.sh`
+section 40: its curl stub answers the host route with a configured code, and the fixture bunker can
+emit a node-side signed row. The source-derived outcomes are:
 
-```bash
-#!/usr/bin/env bash
-set -uo pipefail
-REPO="${1:-$HOME/code-factory}"; PORT="${2:-18767}"; T=$(mktemp -d); SRV=0
-trap '[ "$SRV" -gt 1 ] && kill "$SRV" 2>/dev/null; rm -rf "$T"' EXIT
-cat > "$T/bus.py" <<'PY'
-import sys
-from http.server import BaseHTTPRequestHandler, HTTPServer
-inbox_code = int(sys.argv[2])
-class H(BaseHTTPRequestHandler):
-    def do_GET(self):
-        code = 200 if self.path == "/health" else inbox_code
-        self.send_response(code); self.send_header("Content-Type", "application/json")
-        self.end_headers(); self.wfile.write(b'{"queue_depth":0}')
-    def log_message(self, *a): pass
-HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
-PY
-cat > "$T/bunker" <<'SH'
-#!/bin/sh
-case "$*" in
-  *crier.json*) printf '{"agent":"a1","project":"p","url":"%s","connected_at":"2026-11-05T00:00:00Z"}\n' "$STUB_URL" ;;
-  *) if [ "${PASS_SIGNED:-0}" = 1 ]; then printf '  PASS  inbox — GET /agents/a1/inbox/stats -> 200 (signed read accepted; queue_depth 0, leased_count 0)\n'; fi ;;
-esac
-SH
-chmod +x "$T/bunker"
-run_case() { local name="$1" code="$2" signed="$3" want="$4" wantline="$5" out rc
-  python3 "$T/bus.py" "$PORT" "$code" & SRV=$!
-  for _ in $(seq 1 50); do (exec 3<>/dev/tcp/127.0.0.1/$PORT) 2>/dev/null && break; sleep 0.1; done
-  out=$(cd "$REPO" && PATH="$T:$PATH" PASS_SIGNED="$signed" STUB_URL="http://127.0.0.1:$PORT" \
-    bash scripts/bunker-crier-connect.sh --agent a1 --server s1 \
-    --url "http://127.0.0.1:$PORT" --timeout 2 --check 2>&1); rc=$?
-  kill "$SRV" 2>/dev/null; wait "$SRV" 2>/dev/null; SRV=0
-  echo "### $name"; echo "$out"; echo "--- exit=$rc (want $want)"
-  if [ "$rc" = "$want" ] && grep -qF "$wantline" <<<"$out"; then echo "RESULT: PASS"; else echo "RESULT: FAIL"; fi; }
-run_case "unsigned 200" 200 0 3 "CRIER: UNVERIFIED"
-run_case "unsigned 401" 401 0 3 "CRIER: UNVERIFIED"
-run_case "signed read accepted" 200 1 0 "CRIER: CONNECTED"
-run_case "403 owner mismatch" 403 0 1 "CRIER: NOT CONNECTED"
-run_case "404 not registered" 404 0 1 "CRIER: NOT CONNECTED"
-```
+- host inbox `200`: `PASS  inbox`, then `CRIER: CONNECTED` exit 0;
+- host inbox `401`: `FAIL  inbox` naming `authentication or agent signature refused`;
+- host inbox `403`, `404`, and `000`: distinct `FAIL  inbox` rows;
+- node-side signed success, when the optional probe runs: `PASS  signed_read`; it is not implied by
+  the host `200`.
 
-Observed, verbatim, for the signed case and the 404 case:
+Section 40 also runs the provisioner with the fixture's host `200` and no bunker client, requiring a
+WARN that says the host route answered 200 unsigned and that the signed read was not measured. It
+then enables the fixture's signed row and requires the provisioner to quote that `PASS  signed_read`
+row. Finally it runs a scratch copy containing the old `PASS  inbox` certification and requires that
+arm to fail. These are current fixture results, not an invented standalone probe transcript.
 
-```
-crier-connect --check — agent=a1 url=http://127.0.0.1:18767
-  PASS  bus_health — http://127.0.0.1:18767/health -> 200
-  PASS  inbox — signed read accepted on the node:   PASS  inbox — GET /agents/a1/inbox/stats -> 200 (signed read accepted; queue_depth 0, leased_count 0)
-  PASS  identity — node points at http://127.0.0.1:18767 as a1
+**A2. Existing health-row finding.** The source still prints `bus not answering` for every non-200
+health code [scripts/bunker-crier-connect.sh:39-44]. This is documented as a known diagnostic defect;
+no new transcript is claimed here.
 
-CRIER: CONNECTED — a1 at http://127.0.0.1:18767 (signed read accepted)
-```
 
-```
-crier-connect --check — agent=a1 url=http://127.0.0.1:18767
-  PASS  bus_health — http://127.0.0.1:18767/health -> 200
-  FAIL  inbox — http://127.0.0.1:18767/agents/a1/inbox -> 404 (agent is genuinely not registered on the bus)
-  PASS  identity — node points at http://127.0.0.1:18767 as a1
+**B. The idempotence claim (historical evidence only).** The older probe is not tracked in this
+repository and is not reproduced here. The source still claims rewrite-on-difference at
+`scripts/bunker-crier-connect.sh:17`, while `apply()` unconditionally copies the identity file at
+`scripts/bunker-crier-connect.sh:135-149`; this remains a documented defect, not a current probe
+transcript.
 
-CRIER: NOT CONNECTED (1)
-```
+<!-- Historical probe body omitted: the named probe is not a tracked repository artifact. -->
 
-**A2. The `/health` parenthetical, measured on its own.** Same stub bus and stub `bunker`, with
-`/health` answered 404 instead of 200 (`/agents/*` also 404). Output verbatim:
 
-```
-crier-connect --check — agent=a1 url=http://127.0.0.1:18791
-  FAIL  bus_health — http://127.0.0.1:18791/health -> 404 (bus not answering)
-  FAIL  inbox — http://127.0.0.1:18791/agents/a1/inbox -> 404 (agent is genuinely not registered on the bus)
-  PASS  identity — node points at http://127.0.0.1:18791 as a1
+**C. Environment reads (historical evidence only).** The earlier environment probe is not
+tracked in this repository and its output is not reproduced here. The source-derived contracts are:
+`PATH` without `bunker` names the missing client in the identity row [scripts/bunker-crier-connect.sh:94-96],
+unset `HOME` affects only the unsigned-fallback remedy text [scripts/bunker-crier-connect.sh:110-114],
+and inherited `FAILED` can veto a success before the final return [scripts/bunker-crier-connect.sh:74-78].
+No measurement date or transcript is claimed.
 
-CRIER: NOT CONNECTED (2)
---- exit=1
-```
 
-The parenthetical is the defect at [scripts/bunker-crier-connect.sh:43]: a bus that answered is
-described as one that did not. Probe A's case 5 above does not show this — its `/health` is
-answered 200, so that transcript's first row is `PASS  bus_health — … -> 200`. The two use the same
-harness; only the stub's `/health` code differs.
+**D. What a reviewer re-runs.** Run `bash -n scripts/bunker-crier-connect.sh` and the CF-214
+section 40 selftest. A real node may add `bunker-crier-connect.sh --agent <a> --server <host>
+--url <bus> --check`; `CONNECTED` then means the host inbox route returned 200. A node-side
+`PASS  signed_read` row is optional evidence that the node key was exercised, and must not be
+inferred from the host row [scripts/bunker-crier-connect.sh:60-72] [scripts/bunker-crier-connect.sh:98-116].
 
-**B. The idempotence claim (falsified).** Same stub bus, a `bunker` stub that logs every `cp`:
-
-```bash
-#!/usr/bin/env bash
-# 04 probe b: does --apply rewrite $HOME/.node/crier.json unconditionally?
-set -uo pipefail
-REPO="${1:-$HOME/code-factory}"; PORT="${2:-18768}"; T=$(mktemp -d); SRV=0
-trap '[ "$SRV" -gt 1 ] && kill "$SRV" 2>/dev/null; rm -rf "$T"' EXIT
-
-cat > "$T/bus.py" <<'PY'
-import sys
-from http.server import BaseHTTPRequestHandler, HTTPServer
-class H(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200); self.end_headers(); self.wfile.write(b'{}')
-    def log_message(self, *a): pass
-HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
-PY
-python3 "$T/bus.py" "$PORT" & SRV=$!
-for _ in $(seq 1 50); do (exec 3<>/dev/tcp/127.0.0.1/$PORT) 2>/dev/null && break; sleep 0.1; done
-
-cat > "$T/bunker" <<'SH'
-#!/bin/sh
-case "$1" in
-  cp)   echo "CP $2 -> $3" >> "$STUB_LOG" ;;
-  exec) case "$*" in *crier.json*) printf '{"agent":"a1","project":"p","url":"%s"}\n' "$STUB_URL" ;; esac ;;
-esac
-SH
-chmod +x "$T/bunker"
-
-for i in 1 2; do
-  (cd "$REPO" && PATH="$T:$PATH" STUB_LOG="$T/calls" STUB_URL="http://127.0.0.1:$PORT" \
-     bash scripts/bunker-crier-connect.sh --agent a1 --server s1 \
-     --url "http://127.0.0.1:$PORT" --timeout 2 --apply >/dev/null 2>&1)
-  echo "apply run $i exit=$?"
-done
-echo "--- bunker cp calls observed: $(grep -c '^CP ' "$T/calls" 2>/dev/null || echo 0)"
-cat "$T/calls" 2>/dev/null
-```
-
-Observed:
-
-```
-apply run 1 exit=3
-apply run 2 exit=3
---- bunker cp calls observed: 2
-CP /mnt/bulk/scratch/tmp.cjsEs27O9w -> a1:.node/crier.json
-CP /mnt/bulk/scratch/tmp.kPoOksamwi -> a1:.node/crier.json
-```
-
-Two runs, two writes: `apply()` has no "value differs" comparison
-[scripts/bunker-crier-connect.sh:129-132], so line 17's claim is contradicted by the file's own
-measurement.
-
-**C. Environment reads.** One ambient variable changed per run against the same stub bus. Output
-verbatim; the `$ …` lines name the invocation, and the stub `bunker` and stub bus are on `PATH` as
-in probe A.
-
-```
-$ env -u HOME bash scripts/bunker-crier-connect.sh … --check     # bus answers 401 to the unsigned read
-crier-connect --check — agent=a1 url=http://127.0.0.1:18791
-  PASS  bus_health — http://127.0.0.1:18791/health -> 200
-  WARN  inbox — http://127.0.0.1:18791/agents/a1/inbox -> 401 — expected for an unsigned read (crier checks the signer before it looks the agent up); the signed probe needs agent.key + crier.token on the node
-  PASS  identity — node points at http://127.0.0.1:18791 as a1
-
-CRIER: UNVERIFIED — a1 at http://127.0.0.1:18791: the bus answered an UNSIGNED read, so this node's key and
-scripts/bunker-crier-connect.sh: line 100: HOME: unbound variable
---- exit=1 (with HOME set this run prints both remedy lines and exits 3)
-```
-
-```
-$ PATH=/usr/bin:/bin bash scripts/bunker-crier-connect.sh … --check   # no bunker client
-crier-connect --check — agent=a1 url=http://127.0.0.1:18791
-  PASS  bus_health — http://127.0.0.1:18791/health -> 200
-  WARN  inbox — http://127.0.0.1:18791/agents/a1/inbox -> 401 — expected for an unsigned read (crier checks the signer before it looks the agent up); the signed probe needs agent.key + crier.token on the node
-  FAIL  identity — $HOME/.node/crier.json absent — run --apply
-
-CRIER: NOT CONNECTED (1)
---- exit=1 (the absent client is reported as an absent file, not as an absent client)
-```
-
-```
-$ FAILED=1 bash scripts/bunker-crier-connect.sh … --check             # every row PASS, no signed read
-crier-connect --check — agent=a1 url=http://127.0.0.1:18791
-  PASS  bus_health — http://127.0.0.1:18791/health -> 200
-  PASS  inbox — http://127.0.0.1:18791/agents/a1/inbox -> 200
-  PASS  identity — node points at http://127.0.0.1:18791 as a1
-
-CRIER: NOT CONNECTED (1)
---- exit=1 (no CONNECTED line despite three PASS rows and no FAIL)
-```
-
-`HOME` is reached only on the `UNVERIFIED` path, which is why the same unset variable leaves a
-signed run untouched: under `env -u HOME` with a `PASS  inbox` row the run prints
-`CRIER: CONNECTED …` and exits 0 (measured). `FAILED` is the one inherited value that can veto a
-success, and it does so before `SIGNED_READ` is consulted
-[scripts/bunker-crier-connect.sh:94-97].
-
-**D. What a reviewer re-runs.** §3 in order: `bash -n`, the two argument guards, probe A, probe A2,
-probe B, probe C.
-A reviewer with a real node adds `bunker-crier-connect.sh --agent <a> --server <host> --url <bus>
---check` and expects either `CONNECTED` (signed read accepted) or `UNVERIFIED` exit 3 — never
-`CONNECTED` on an unsigned answer [scripts/bunker-crier-connect.sh:96-102] (fact: FACT-04 is that
-measured 200 on `cf-node`).
-
-**E. Documentation that has not caught up.** [docs/OPERATIONS.md:48] and
-[docs/ACCEPTANCE-PLAN.md:146] both state that `CONNECTED` is printed on a bare 200, which the
-code no longer does; both also cite line ranges (`:26-68`, `:89-104`) that predate the signed-read
-change [scripts/bunker-crier-connect.sh:91-104]. This module records the code's behaviour, and
-those two rows are the correction owed to them.
+**E. Current documentation alignment.** `docs/OPERATIONS.md:48` now describes the 401 `FAIL` row,
+the unsigned-200 `CONNECTED` verdict, distinct 403/404/000 failures, and optional `signed_read`
+evidence. The old standalone probe is not tracked, so this unit does not claim a run or paste a
+transcript for it.

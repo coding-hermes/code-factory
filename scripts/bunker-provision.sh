@@ -279,7 +279,13 @@ CFPROBE
       --agent "$AGENT" --server "$SERVER" --url "$CRIER_URL" --project "$PROJECT" 2>&1) || true
     case "$crier_out" in
       *"CRIER: CONNECTED"*)
-        ok "crier" "signed read accepted: $(printf '%s' "$crier_out" | grep -E 'PASS  inbox' | head -1 | sed 's/^ *//')" ;;
+        local signed_row
+        signed_row=$(printf '%s' "$crier_out" | grep -E '^  PASS  signed_read —' | head -1 | sed 's/^ *//')
+        if [ -n "$signed_row" ]; then
+          ok "crier" "signed read accepted: $signed_row"
+        else
+          warn "crier" "host inbox route answered 200, unsigned; signed read was not measured (node-side probe skipped)"
+        fi ;;
       *)
         bad "crier" "$(printf '%s' "$crier_out" | grep -E 'FAIL ' | head -1 | sed 's/^ *//')" ;;
     esac

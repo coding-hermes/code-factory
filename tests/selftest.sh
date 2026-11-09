@@ -2921,6 +2921,13 @@ case "$cmd" in
       '') ;;
       *) case "$*" in *"$BUNKER_FAKE_FAIL"*) exit 1 ;; esac ;;
     esac
+    case "$*" in
+      *node-bus-worker.py*)
+        if [ "${BUNKER_FAKE_CRIER_SIGNED:-0}" = 1 ]; then
+          printf '%s\n' '  PASS  inbox — GET /agents/demo-node/inbox/stats -> 200 (signed read accepted; queue_depth 0, leased_count 0)'
+        fi
+        exit 0 ;;
+    esac
     HOME="$BUNKER_FAKE_HOME" TMPDIR="$BUNKER_FAKE_HOME/tmp" "$@"; exit $? ;;
   destroy) exit 0 ;;
 esac
@@ -2928,10 +2935,12 @@ exit 0
 FBUNKER
 chmod +x "$cf214/bin/bunker"
 cf214_run() {  # cf214_run <provisioner args...>; CF214_EXTRA_PATH prefixes the fixture PATH
-  env -i PATH="${CF214_EXTRA_PATH:-}$cf214/bin:/usr/bin:/bin" HOME="$cf214/home" TMPDIR="$cf214/home/tmp" \
+  local cf214_provisioner="${CF214_PROVISIONER_OVERRIDE:-$HERE/scripts/bunker-provision.sh}"
+  env -i PATH="${CF214_EXTRA_PATH:-}$cf214/cbin:$cf214/bin:/usr/bin:/bin" HOME="$cf214/home" TMPDIR="$cf214/home/tmp" \
     BUNKER_FAKE_LOG="$cf214/argv.log" BUNKER_FAKE_HOME="$cf214/home" \
-    BUNKER_FAKE_FAIL="${BUNKER_FAKE_FAIL:-}" \
-    /bin/bash "$HERE/scripts/bunker-provision.sh" "$@"
+    BUNKER_FAKE_FAIL="${BUNKER_FAKE_FAIL:-}" BUNKER_FAKE_CRIER_SIGNED="${BUNKER_FAKE_CRIER_SIGNED:-0}" \
+    HERE="${CF214_SCRIPT_ROOT:-$HERE/scripts}" \
+    /bin/bash "$cf214_provisioner" "$@"
 }
 
 # (a) --check is READ-ONLY. The probe has to travel as a file (bunker's exec does not forward
@@ -3090,7 +3099,57 @@ else
   say "  FAIL  CF-214: crier code naming — $cf214_codes: $(printf '%s\n' "$cf214_cout" | grep -E 'FAIL|WARN|CRIER' | head -4 | tr '\n' ' ')"
   fails=$((fails+1))
 fi
-# (f) the skill ships with the scripts it documents. A skill that names a script nobody ships — or a
+# (f) the provisioner must describe the measurement that made crier CONNECTED. With no node-side
+# signed probe, the host's unsigned 200 is a WARN; a real signed_read row is quoted as such.
+cf214_provisioner_out=$(cf214_run --check --project demo --agent demo-node --server demo-server \
+  --crier-url http://crier.invalid:8767 2>&1)
+cf214_provisioner_row=yes
+printf '%s\n' "$cf214_provisioner_out" | grep -q 'WARN  crier — host inbox route answered 200, unsigned; signed read was not measured' \
+  || cf214_provisioner_row="no:unsigned-200-warning"
+printf '%s\n' "$cf214_provisioner_out" | grep -q 'signed read accepted' \
+  && cf214_provisioner_row="claims-unmeasured-signed-read"
+BUNKER_FAKE_CRIER_SIGNED=1
+cf214_signed_out=$(cf214_run --check --project demo --agent demo-node --server demo-server \
+  --crier-url http://crier.invalid:8767 2>&1)
+unset BUNKER_FAKE_CRIER_SIGNED
+printf '%s\n' "$cf214_signed_out" | grep -q 'PASS  crier — signed read accepted: PASS  signed_read — node-side signed inbox read accepted' \
+  || cf214_provisioner_row="no:signed-row-quote"
+cf214_mutated="$cf214/scripts/bunker-provision.sh"
+mkdir -p "$cf214/scripts"
+cp "$HERE/scripts/bunker-provision.sh" "$cf214_mutated"
+cp "$HERE/scripts/bunker-crier-connect.sh" "$cf214/scripts/bunker-crier-connect.sh"
+cp "$HERE/scripts/lib.sh" "$cf214/scripts/lib.sh"
+python3 -B - "$cf214_mutated" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+old = '''        local signed_row
+        signed_row=$(printf '%s' "$crier_out" | grep -E '^  PASS  signed_read —' | head -1 | sed 's/^ *//')
+        if [ -n "$signed_row" ]; then
+          ok "crier" "signed read accepted: $signed_row"
+        else
+          warn "crier" "host inbox route answered 200, unsigned; signed read was not measured (node-side probe skipped)"
+        fi ;;'''
+new = '''        ok "crier" "signed read accepted: $(printf '%s' "$crier_out" | grep -E 'PASS  inbox' | head -1 | sed 's/^ *//')" ;;'''
+if old not in text:
+    raise SystemExit("CF-214 mutation target not found")
+path.write_text(text.replace(old, new, 1))
+PY
+CF214_PROVISIONER_OVERRIDE="$cf214_mutated"
+cf214_old_out=$(cf214_run --check --project demo --agent demo-node --server demo-server \
+  --crier-url http://crier.invalid:8767 2>&1)
+CF214_PROVISIONER_OVERRIDE=""
+printf '%s\n' "$cf214_old_out" | grep -q 'signed read accepted' \
+  && printf '%s\n' "$cf214_old_out" | grep -q 'PASS  inbox' \
+  || cf214_provisioner_row="mutation-did-not-red"
+if [ "$cf214_provisioner_row" = yes ]; then
+  say "  PASS  CF-214: provisioner crier row distinguishes unsigned 200 from signed_read and the old PASS inbox certification reds"
+else
+  say "  FAIL  CF-214: provisioner crier evidence row — $cf214_provisioner_row"
+  fails=$((fails+1))
+fi
+# (g) the skill ships with the scripts it documents. A skill that names a script nobody ships — or a
 # mode the script refuses — is drift the operator only discovers at the command line.
 cf214_skill="$HERE/skills/code-factory-bunker/SKILL.md"
 cf214_missing=""
