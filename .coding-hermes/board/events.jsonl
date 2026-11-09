@@ -559,3 +559,6 @@
 {"id":559,"timestamp":"2026-11-09T06:03:48+00:00","event_type":"task_completed","task_id":"CF-292","actor":"foreman","detail":"{\"status\":\"complete\"}"}
 {"id":560,"timestamp":"2026-11-09T06:05:11+00:00","event_type":"task_created","task_id":"CF-395","actor":"foreman","detail":"{\"id\":\"CF-395\",\"status\":\"pending\"}"}
 {"id":561,"timestamp":"2026-11-09T06:05:11+00:00","event_type":"task_created","task_id":"CF-396","actor":"foreman","detail":"{\"id\":\"CF-396\",\"status\":\"pending\"}"}
+{"id":562,"timestamp":"2026-11-09T06:58:13+00:00","event_type":"task_updated","task_id":"CF-289","actor":"foreman","detail":"{\"status\":\"pending\"}"}
+{"id":563,"timestamp":"2026-11-09T07:06:08+00:00","event_type":"task_completed","task_id":"CF-087","actor":"foreman","detail":"{\"status\":\"complete\"}"}
+{"id":564,"timestamp":"2026-11-09T07:06:58+00:00","event_type":"task_updated","task_id":"CF-289","actor":"foreman","detail":"{\"status\":\"pending\"}"}
