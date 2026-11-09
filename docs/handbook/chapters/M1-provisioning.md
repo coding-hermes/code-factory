@@ -23,11 +23,29 @@ module (`docs/UNIT-MAP.yaml:9`).
 membership, no seeded repo, so the scheduler has nothing to dispatch to and every lane sits in
 the inbox until it expires.
 
-**What breaks if it lies.** Two measured lies:
-- `bunker-provision.sh` `--check` reports a credential "mode 600" while testing only file
-  non-emptiness: `:214` probes `[ -s "$HOME/.node/auth/github.token" ]`, and `:233` prints
-  `token file installed, mode 600 (value not read)`. A provisioner proceeds with an insecure
-  credential (F1-1).
+**What breaks if it lies.** The certification boundary is explicit: a printed `--apply` PASS is
+not readiness, and a required leg that was not measured remains UNVERIFIED. The current
+provisioner evidence is offline fixture evidence only; no live bunker certification is claimed.
+The remaining known finding is that `verify-node.sh` can certify `VERIFY: PASS` when checkout
+freshness is unmeasurable unless strict freshness is requested (B05; see §11).
+
+**CF-214 control-host provisioner.** `scripts/bunker-provision.sh --config <file> --check` parses
+the config as data, reports measured rows, and leaves no staged probe behind. `--apply` reuses an
+existing agent, transfers one mode-600 credential bundle as a file, installs credentials under
+`$HOME/.node/auth` at mode 600, deletes the bundle on both sides, stages the node identity and
+plumbing, and delegates the bus proof. `--destroy` requires `--yes` and names the exact agent and
+server before removal. Command-line values override the config for the documented target and
+credential-file inputs.
+
+`scripts/bunker-crier-connect.sh --check|--apply` measures the exact
+`<crier>/agents/<agent>/inbox` route. It reports `CONNECTED` only for HTTP 200; 401, 403, 404 and
+000 are named distinctly. If available, the node-side signed-read result is additional evidence,
+not a replacement for the route measurement. `tests/selftest.sh` section 40 proves these behaviors
+with network-free fixtures, including absent config, a shell line in config, missing bunker client,
+destroy without `--yes`, command-line precedence, credential residue/leakage, and Crier status
+classification. The fleet skill copy is outside this repository and is expected at
+`~/.hermes/skills/coding-hermes/code-factory-bunker/SKILL.md`.
+
 - `verify-node.sh` certifies `VERIFY: PASS` even when checkout freshness was **unmeasurable**
   (B05): the checkout leg prints WARN but does not set UNVERIFIED, unlike the seed leg (see §11).
 
@@ -267,7 +285,7 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
 |---|---|---|---|
 | — | `  PASS  %s — %s` / `  FAIL  %s — %s` (`lib.sh:6-7`) | every provisioner row | descriptive (see M0 F0-4) |
 | — | `  FAIL  reach:%s — %s` | an unreachable crier URL | evidentiary |
-| — | `token file installed, mode 600 (value not read)` (`bunker-provision.sh:233`) | `--check` credential row | **descriptive** — claims mode 600 while `:214` probes only `[ -s … ]` (F1-1) |
+| — | `installed under \$HOME/.node/auth at mode 600: <file>=600` (`bunker-provision.sh:417`) | `--apply` credential row | evidentiary — the node reports each installed file mode; any non-600 mode is a FAIL (CF-214) |
 | — | `RESULT: FAIL` (`verify-node.sh:76`) | the `agent_alive` leg fails early (before the terminal `VERIFY:` forms) | evidentiary — an early-branch failure that exits 1, distinct from `VERIFY: FAIL (N)` (B24) |
 | — | `VERIFY: PASS` / `VERIFY: FAIL (N)` / `VERIFY: UNVERIFIED — …` (`verify-node.sh:233-241`) | ladder exit | evidentiary |
 
@@ -276,7 +294,7 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
 | Failure | Presents as | Distinguished from | Recovery |
 |---|---|---|---|
 | Missing `lib.sh` | undefined `ok`/`have`/`bad`, shell aborts nonzero | a real check failure | restore `scripts/lib.sh` |
-| Credential mode not verified | `--check` passes on file non-emptiness, claims "mode 600" | a real 0600 stat | stage `stat -c '%a'`; open defect F1-1 |
+| Credential mode mismatch or bundle residue | `FAIL auth — installed but not mode 600: <file>=<mode>` or `FAIL auth_bundle — could not delete …` | a measured 0600 install with both copies deleted | fix the node permissions or cleanup path; re-run `--apply` (CF-214) |
 | Unknown explicit role | `FAIL disk-floor: unknown role …`, exit 2 (`disk_floor.py:123-125`, `:169-171`) | an absent role (which defaults to worker) | pass a valid role or drop the flag (F1-2) |
 | Gateway auth block absent at layer 20 | `FAIL gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent` from the adapter | a staged block — `project-node.sh` layer 20 runs `node_gateway_auth.py` before the adapter and prints `PASS gateway_auth — dashboard.basic_auth present …` (CF-150) | re-run `project-node.sh --apply`; a `dashboard` block that carries no **direct-child** `basic_auth:` stays a counted FAIL (producer exit 2, file left byte-identical) and needs a human. The structural rule (CF-292, tightened in round 2) is the indentation the consumer gate parses: the block is the run of indented, blank and comment lines after `dashboard:`, ending at the first column-0 key, and `basic_auth:` counts only at the block's **child indent** — so a `basic_auth:` under a sibling top-level key is *not* protection (it used to be certified by an eight-line window), a `basic_auth:` under one of dashboard's own child keys (`dashboard.child.basic_auth`) is *not* protection either (the first CF-292 fix still accepted any indented line), and a direct one passes however deep it sits (permanently pinned by `tests/test_node_gateway_auth.py`) |
 | Unreachable port, or no transport to it | exit 3 `VERIFY: UNVERIFIED` naming the transport it could not use — `no published port for cf-node:10800`, `no tunnel endpoint …`, `no route from this host to …` (`verify-node.sh:217-228`) | a measured **non-200** through a working transport (FAIL, `:229`), and a probe that never left the node (`--transport bunker-exec`, a counted FAIL at `:198-201`) | read the `transport` row and declare a path the control host can take: `--transport published-port` or `--transport tunnel`, each with `--transport-address HOST:PORT` (CF-224) |
@@ -402,8 +420,12 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
     mechanism behind the number. `gomodcache.py` makes it shared and sealed, and the fixture measures
     the property: 2,097,910 bytes seeded once, **0 bytes added** by a sealed rebuild with
     `GOPROXY=off`.
-  - **F1-1** (carried) — `bunker-provision.sh:181` resolves `bunker` via `have` (PATH); `:233`
-    claims "mode 600" while `:214` tests only `[ -s … ]`.
+  - **F1-1** (resolved by CF-214) — the provisioner now measures the node-reported mode for
+    each installed auth file, fails on a non-600 result, and proves the staged bundle is deleted;
+    the offline fixture covers both red arms. No live node was used for this result.
+  - **F1-9** (CF-214 boundary) — the fleet skill copy is installed outside this repository; this
+    chapter and the repo skill name the same commands, while the selftest treats an absent fleet
+    copy as a note on clean hosts.
   - **F1-2** — unknown explicit role raises `FloorError` (`disk_floor.py:123-125`, exit 2); only an
     absent role defaults to worker.
   - **F1-3** — floor precedence read and confirmed (`:115-141`).

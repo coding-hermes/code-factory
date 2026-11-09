@@ -23,6 +23,18 @@ names the value it measured) and `--apply` (idempotent). Neither takes a secret 
 `--check` stages its probe as a file (bunker's `exec` does not forward stdin) and deletes it again
 in the same run, so a check leaves nothing in the node's home.
 
+`bunker-provision.sh` also supports `--destroy --yes`; without `--yes` it refuses and prints the
+exact agent and server it would remove. The command line overrides the config for agent, server,
+repo, ref, harness, namespace(s), Crier URL, DuckBrain URL and credential-file paths. The config
+is parsed as `KEY=VALUE` data and is never sourced.
+
+`bunker-crier-connect.sh` probes the exact `<crier>/agents/<agent>/inbox` route. It reports
+`CONNECTED` only when that route returns HTTP 200 and names 401, 403, 404 and 000 separately;
+a signed node-side read is additional evidence, not a replacement for the route check.
+
+The fleet copy of this skill is installed at `~/.hermes/skills/coding-hermes/code-factory-bunker/SKILL.md`.
+It names the same `bunker-provision.sh` and `bunker-crier-connect.sh` commands.
+
 | script | does | refuses when |
 |---|---|---|
 `bunker-provision.sh` | config + agent lifecycle + clone + auth bundle + node identity + delegates crier connect | a check row FAILs and cannot be repaired; the config has a non-`KEY=VALUE` line |

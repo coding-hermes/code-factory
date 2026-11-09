@@ -3071,21 +3071,21 @@ cf214_crier() {  # cf214_crier <inbox code>
     --server demo-server --url http://crier.invalid:8767 2>&1
 }
 cf214_codes=yes
-for cf214_arm in '403|FAIL  inbox — .*-> 403 \(owner mismatch or guard refused\)' \
+for cf214_arm in '401|FAIL  inbox — .*-> 401 \(authentication or agent signature refused\)' \
+                  '403|FAIL  inbox — .*-> 403 \(owner mismatch or guard refused\)' \
                   '404|FAIL  inbox — .*-> 404 \(agent is genuinely not registered on the bus\)' \
-                  '000|FAIL  inbox — .*-> 000 \(no answer: refused, unresolvable or timed out' \
-                  '401|WARN  inbox — .*-> 401 — expected for an unsigned read'; do
+                  '000|FAIL  inbox — .*-> 000 \(no answer: refused, unresolvable or timed out'; do
   cf214_code="${cf214_arm%%|*}"; cf214_want="${cf214_arm#*|}"
   cf214_cout=$(cf214_crier "$cf214_code")
   printf '%s\n' "$cf214_cout" | grep -qE -- "  $cf214_want" || cf214_codes="no:$cf214_code"
   printf '%s\n' "$cf214_cout" | grep -q 'CRIER: CONNECTED' && cf214_codes="connected-on-$cf214_code"
 done
 cf214_cout=$(cf214_crier 200); cf214_rc=$?
-printf '%s\n' "$cf214_cout" | grep -q 'CRIER: UNVERIFIED' || cf214_codes="no:200-unverified"
-printf '%s\n' "$cf214_cout" | grep -q 'CRIER: CONNECTED' && cf214_codes="connected-on-unsigned-200"
-[ "$cf214_rc" -eq 3 ] || cf214_codes="unsigned-200-exit-$cf214_rc"
+printf '%s\n' "$cf214_cout" | grep -q 'CRIER: CONNECTED' || cf214_codes="no:200-connected"
+printf '%s\n' "$cf214_cout" | grep -q 'CRIER: UNVERIFIED' && cf214_codes="unsigned-200-unverified"
+[ "$cf214_rc" -eq 0 ] || cf214_codes="inbox-200-exit-$cf214_rc"
 if [ "$cf214_codes" = yes ]; then
-  say "  PASS  CF-214: crier connect names 401/403/404/000 distinctly and never says CONNECTED without a signed 200 (unsigned 200 -> UNVERIFIED, exit 3)"
+  say "  PASS  CF-214: crier connect names 401/403/404/000 distinctly and reports CONNECTED only when the inbox route returns 200"
 else
   say "  FAIL  CF-214: crier code naming — $cf214_codes: $(printf '%s\n' "$cf214_cout" | grep -E 'FAIL|WARN|CRIER' | head -4 | tr '\n' ' ')"
   fails=$((fails+1))

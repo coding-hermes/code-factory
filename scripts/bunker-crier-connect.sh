@@ -43,11 +43,22 @@ say "crier-connect --check — agent=$AGENT url=$URL"
     *)   bad "bus_health" "$URL/health -> ${health:-000} (bus not answering)" ;;
   esac
 
-  # A hardened bus answers 401 to an unsigned GET by design, so an unsigned probe cannot
-  # distinguish "not registered" from "not signed". When the node holds its key and bearer,
-  # probe FROM the node with the worker, which signs; only fall back to the plain read when it
-  # cannot, and then 401 is a WARN with the reason rather than a failure.
-  local via_node=""
+  # The acceptance contract names the exact inbox route. Measure it on every run and require
+  # HTTP 200 before a connected verdict; 401/403/404/000 are distinct failures, not warnings.
+  local code via_node=""
+  INBOX_200=0
+  code=$(probe)
+  case "$code" in
+    200) ok "inbox" "$URL/agents/$AGENT/inbox -> 200"; INBOX_200=1 ;;
+    401) bad "inbox" "$URL/agents/$AGENT/inbox -> 401 (authentication or agent signature refused)" ;;
+    403) bad "inbox" "$URL/agents/$AGENT/inbox -> 403 (owner mismatch or guard refused)" ;;
+    404) bad "inbox" "$URL/agents/$AGENT/inbox -> 404 (agent is genuinely not registered on the bus)" ;;
+    000) bad "inbox" "$URL/agents/$AGENT/inbox -> 000 (no answer: refused, unresolvable or timed out — the URL or the route to it, not the agent)" ;;
+    *)   bad "inbox" "$URL/agents/$AGENT/inbox -> $code" ;;
+  esac
+
+  # When the node-side worker is staged, also require its signed read. The host route remains the
+  # explicit acceptance probe above; the signed read proves the node's credentials were exercised.
   if [ -x "$(command -v bunker 2>/dev/null)" ] && [ -n "$SERVER" ]; then
     via_node=$(timeout 45 bunker exec --server "$SERVER" "$AGENT" -- bash -lc \
       'if [ -s "$HOME/.node/agent.key" ] && [ -s "$HOME/.node/auth/crier.token" ] && [ -f "$HOME/node-bus-worker.py" ]; then CRIER_URL='"$URL"' python3 "$HOME/node-bus-worker.py" --check 2>&1 | grep -E "PASS  inbox|FAIL  inbox" | head -1; fi' 2>/dev/null || true)
@@ -55,28 +66,15 @@ say "crier-connect --check — agent=$AGENT url=$URL"
   if [ -n "$via_node" ]; then
     case "$via_node" in
       *"PASS  inbox"*)
-        ok "inbox" "signed read accepted on the node: $via_node"; SIGNED_READ=1
-        # The requirement names <crier>/agents/<agent>/inbox, so that exact route is measured from
-        # this host as well and its code named. It is a note, not a gate: a hardened bus answers 401
-        # to an unsigned read even for a registered agent, so it can never by itself prove connection.
-        note "inbox_host $URL/agents/$AGENT/inbox -> $(probe) (unsigned, from this control host)" ;;
-      *)               bad "inbox" "the node's own signed probe failed: $via_node" ;;
+        ok "signed_read" "node-side signed inbox read accepted: $via_node"; SIGNED_READ=1 ;;
+      *)               bad "signed_read" "the node's own signed probe failed: $via_node" ;;
     esac
-    if [ "${FAILED:-0}" -gt 0 ]; then
-      say ""
-      say "CRIER: NOT CONNECTED (${FAILED})"
-      return 1
-    fi
-  else
-  code=$(probe)
-  case "$code" in
-    200) ok "inbox" "$URL/agents/$AGENT/inbox -> 200 (unsigned: proves the route, not this agent's key)" ;;
-    401) warn "inbox" "$URL/agents/$AGENT/inbox -> 401 — expected for an unsigned read (crier checks the signer before it looks the agent up); the signed probe needs agent.key + crier.token on the node" ;;
-    403) bad "inbox" "$URL/agents/$AGENT/inbox -> 403 (owner mismatch or guard refused)" ;;
-    404) bad "inbox" "$URL/agents/$AGENT/inbox -> 404 (agent is genuinely not registered on the bus)" ;;
-    000) bad "inbox" "$URL/agents/$AGENT/inbox -> 000 (no answer: refused, unresolvable or timed out — the URL or the route to it, not the agent)" ;;
-    *)   bad "inbox" "$URL/agents/$AGENT/inbox -> $code" ;;
-  esac
+  fi
+
+  if [ "${FAILED:-0}" -gt 0 ]; then
+    say ""
+    say "CRIER: NOT CONNECTED (${FAILED})"
+    return 1
   fi
 
   # the node-side identity must agree with the host we just probed. A missing client is ONE FAIL row
@@ -98,13 +96,17 @@ say "crier-connect --check — agent=$AGENT url=$URL"
   fi
 
   say ""
-  # CONNECTED is a claim about a SIGNED read. An unsigned 200 (a bus without auth) and an unsigned 401
-  # (a hardened bus, which is the normal answer) both prove nothing about this agent's key, so neither
-  # may print CONNECTED: that would be the requirement weakened to fit a probe (quorum round 2, B3).
+  # CONNECTED is now tied to the exact host inbox route required by CF-214. A signed worker
+  # response remains diagnostic evidence, but cannot replace that route's measured 200.
   if [ "$FAILED" -ne 0 ]; then
     say "CRIER: NOT CONNECTED ($FAILED)"
+  elif [ "${INBOX_200:-0}" -eq 1 ]; then
+    say "CRIER: CONNECTED — $AGENT at $URL (inbox route returned 200)"
   elif [ "${SIGNED_READ:-0}" -eq 1 ]; then
-    say "CRIER: CONNECTED — $AGENT at $URL (signed read accepted)"
+    # A signed worker response is useful diagnostic evidence, but without the exact host route
+    # returning 200 the provisioning contract is not satisfied.
+    say "CRIER: UNVERIFIED — $AGENT at $URL: signed read succeeded but the required inbox route was not 200"
+    return 3
   else
     say "CRIER: UNVERIFIED — $AGENT at $URL: the bus answered an UNSIGNED read, so this node's key and"
     say "        bearer were not exercised. Install $HOME/.node/agent.key and ~/.node/auth/crier.token"
