@@ -20,7 +20,7 @@ carries 366 rows / 549 events, 109 `complete`).
 | **S0** control host | `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9090/health` = 200; `curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8767/health` = 200; a DuckBrain POST of a key then GET of the same key returns the bytes | **CLOSED** |
 | **S1** node provisioned | `./scripts/bunker-provision.sh --config <conf> --check` → `BUNKER: PASS` | **CLOSED** (one WARN: no env file declared) |
 | **S2** node on the bus | `python3 ~/node-bus-worker.py --check` on the node → `BUS WORKER: READY` | **READY** — signed read 200; no production dispatch consumed yet |
-| **S3** foreman on the node | with the control host unreachable, on the node: `boardctl create` a row, do it, close it with the acceptance command's output quoted in the row | **OPEN** — `CF-220` (prompts/skills seed) |
+| **S3** foreman on the node | with the control host unreachable, on the node: `boardctl create` a row, do it, close it with the acceptance command's output quoted in the row | **OPEN** — `CF-249` (the seeded node consumes a real directive and returns a usable result; the prompts/skills seed itself, `CF-220`, is closed) |
 | **S4** result lands | `./scripts/land-node-branch.sh …` proves the commit is an ancestor of `origin/main` **and** the file is in that tree | **CLOSED** |
 | **S5** harness matrix | `tests/harness-conformance.sh` prints five legs per harness, `PASS` or `SKIP` naming the missing credential | **1 of 7** — hermes measured; six in flight |
 | **S6** scale out | two project lanes on two bunkers: each `/agents/<id>/inbox` answers 200 to a signed read, and each closes a row from inside its own node | **OPEN** — `CF-210` (17 lanes, one node) |
