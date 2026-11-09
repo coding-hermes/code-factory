@@ -411,6 +411,31 @@ monotonically: each wave's launches debit the remainder, results never credit it
 except through the declared failed-start accounting (§16), and a new wave never
 replenishes it. Newly eligible work after each wave competes for what remains.
 
+**Worker and attempt accounting.** A *worker* is one charged worker identity selected
+for a round; an *attempt* is one execution of one task by that worker; a *session* is a
+harness process within an attempt; and a *launch* is one native start request. Only
+worker identities debit the round allowance. The selected policy is `charge-on-start`:
+reserve one worker before a wave, move the reservation to `started` when the worker
+identity is accepted, and charge it when the first attempt is admitted. A native start
+that is refused before an execution identity exists is `failed-start` and refunds the
+reservation exactly once; a started worker, failed attempt, session retry or controller
+restart does not refund or replenish the allowance. A replacement worker requires a
+new reservation and debit. The ledger is append-only and keyed by
+`(round_id, worker_id, transition_id)` with transitions `reserved`, `started`,
+`charged`, `failed-start-refunded`, `released`, or `reconciled`; invalid transitions
+are `BUDGET_STATE_INVALID`.
+
+The round allowance and simultaneous capacity are independent. For example, an
+8-worker round on a host with concurrency 2 is legal: at most two workers run at once,
+but successive waves may charge all eight. The round's total budget is never reduced to
+2 and a wave never replenishes it. A T3 example with allowance 2 and one worker identity
+uses `w-1/worker-1`: reserve, start, charge, attempt 1 fails judge, correction attempt
+2 reuses the same worker, then release; the ledger remains `reserved → started → charged`
+with no second worker charge. If worker-1 is lost before start, the refund transition
+returns one allowance and a replacement may reserve it; if it is lost after start, the
+replacement is charged only if remaining allowance permits. Controller restart reads
+these ledger entries rather than recomputing them from task rows.
+
 ## VII.13 Correlation and result schemas
 
 The canonical `work.v1` correlation and result schema is normative. The existing
@@ -419,21 +444,30 @@ implementation mapping follows it without pretending missing fields exist
 
 | Schema | Required fields | State / refusal semantics | Durable identity |
 |---|---|---|---|
-| `round-request.v1` | `round_id`, `run_id`, `corr_id`, `task_scope`, `total_budget`, `config_generation` | `accepted`, `deferred`, `refused`; invalid budget/config is typed refusal | `round_id` |
+| `register.v1` | `registration_id`, `agent_id`, `project_id`, `profile`, `public_identity`, `capabilities` | `accepted`, `UNAUTHORIZED`, `PROFILE_UNSUPPORTED`, `IDENTITY_STALE`; round/wave/worker/attempt IDs are not required | `registration_id` |
+| `round-request.v1` | `round_id`, `run_id`, `corr_id`, `task_scope`, `total_budget`, `config_generation` | `accepted`, `deferred`, `refused`; invalid budget/config is typed refusal; future wave/worker/attempt IDs are absent | `round_id` |
 | `worker-brief.v1` | `round_id`, `wave_id`, `task_id`, `attempt_id`, `brief_digest`, `criteria`, `workspace` | digest mismatch or missing criteria is `BRIEF_INVALID`; brief custody is not success | `attempt_id` |
-| `worker-result.v1` | `attempt_id`, `dispatch_id`, `corr_id`, `status`, `commit`, `artifacts`, `evidence_refs`, `finished_at` | status enum `pass`, `fail`, `partial`, `unknown`; absent status is `INVALID_RESULT` | `attempt_id` |
+| `worker-result.v1` | `attempt_id`, `dispatch_id`, `corr_id`, `status`, `commit`, `artifacts`, `evidence_refs`, `finished_at` | status enum `pass`, `fail`, `unverified`, `partial`, `unknown`; absent status is `INVALID_RESULT`; conflicting legacy `ok` is `RESULT_CONFLICT` | `attempt_id` |
 | `wave-result.v1` | `round_id`, `wave_id`, worker results, integration result, budget used/remaining | `complete`, `partial`, `failed`; partial memory sync remains visible | `(round_id, wave_id)` |
 | `round-report.v1` | `round_id`, `run_id`, `corr_id`, all wave results, stop reason, budget, memory refs | final report is `settled` only after durable memory and evidence references | `round_id` |
 | `publication.v1` | `task_id`, `attempt_id`, exact commit/tree digest, verdict, remote proof | mismatch is `PUBLICATION_MISMATCH`; no board closeout | `(task_id, attempt_id, tree_digest)` |
 
-Every schema carries `schema_version`, `request_id` and correlation IDs. A required
-field cannot be null, empty or omitted; optional fields are explicitly nullable and their
+Every schema is carried in the outer `cf2a.v1` envelope with `message_type`,
+`schema_version`, `request_id`, `corr_id`, `sender`, `created_at` and `body`.
+Timestamps are RFC3339 UTC and digests are lowercase SHA-256 hex. A required field
+cannot be null, empty or omitted; optional fields are explicitly nullable and their
 absence has the card's stated meaning. Durable state transitions are `custody → running
 → reported → verified → published → closed → settled`; the foreman owns execution,
 verification, publication and closeout, Crier owns custody, and Scheduler owns admission
 and settlement. A preliminary custody receipt is never a final outcome. Duplicate same-digest
 results replay the original outcome; conflicting digests are refused. Unsupported schema
-versions are refused rather than coerced.
+versions and unknown fields outside `extensions` are refused rather than coerced.
+
+Identity creation is ordered: the controller creates `registration_id`; the scheduler
+creates `round_id` and `run_id`; the foreman creates `wave_id` and `attempt_id`; Crier
+creates `delivery_id` and `lease_id`; the worker creates `dispatch_id`; and the foreman
+creates `report_digest`. Thus registration and round admission do not require future
+wave/worker/attempt identities.
 
 Legacy mapping: `{dispatch_id, corr_id, status, ok}` becomes `worker-result.v1` only
 when `status` is in the canonical enum and the digest/evidence are present; legacy `ok`
@@ -443,6 +477,26 @@ field, never as evidence that the producer emitted it. Missing verdicts map to `
 The node-bus and dispatcher alternatives are compatibility adapters, not competing MVP
 execution authorities; the normative target launches the foreman in the project Bunker
 through Crier and returns `CT-06R`.
+
+**Resident launch/return consumer.** The scheduler persists and sends one
+`round-request.v1` through Crier. Crier returns custody, the Bunker foreman retrieves
+it under lease, creates waves and attempts, and returns one signed `round-report.v1`.
+The scheduler settles only after reading the report and its referenced durable memory
+and publication records. A timeout or conflicting digest records `unknown`; a retry
+reuses the same request identity and never starts a second round without reconciliation.
+Compatibility adapters may translate node-pull or dispatcher messages, but they do not
+change the selected Crier launch/return authority.
+
+**Concrete conformance trace.** Registration carries `{registration_id: reg-17,
+agent_id: bunker-a, project_id: code-factory, profile: homelab-vpn,
+public_identity: key-ref, capabilities: [hermes]}` and receives generation 3.
+Admission carries `{round_id: r-17, run_id: run-17, corr_id: c-17,
+task_scope: [CF-1, CF-2], total_budget: 2, config_generation: 17}` with no wave or
+attempt IDs. The foreman creates `wave_id: w-1`, then `attempt_id: a-1`; a correction
+creates `a-2`. A result with `status: unverified` remains non-passing. Missing version,
+unknown field, unknown version, same-id/different-digest, and legacy `ok: true` with
+`status: fail` produce `INVALID_FIELD`, `UNKNOWN_FIELD`, `UNSUPPORTED_VERSION`,
+`RESULT_CONFLICT`, and `RESULT_CONFLICT` respectively.
 
 | Canonical field | Meaning | Exists today as | Producer |
 |---|---|---|---|
@@ -552,11 +606,22 @@ keep the recovery honest:
 - **Budget is read from the ledger, never re-derived.** The reservation/consumption
   ledger (§12) is updated *before* each wave launches; a recovered round resumes with the
   consumed remainder, not a fresh allowance (R-29's silent-reset class).
-- **Work is resumed, never restarted.** Completed tasks are identified by their
+- **Work is reconciled before it is resumed.** Completed tasks are identified by their
   evidence-bound board closeout plus merged-tree proof; a recovered round does not
   re-execute them. An attempt whose outcome is unknown (crash between execution and
-  result) is re-run under a new attempt id after the idempotency check — the attempt
-  lineage (§8) records both, and the duplicate-prevention keys of §14 keep both records.
+  result) is first queried by its preassigned `attempt_id`/`dispatch_id` and checked for
+  descendant quiescence, durable board, Crier, Git and memory side effects. Only when
+  reconciliation proves no authorized execution or side effect remains may the foreman
+  create a new attempt id; otherwise it records the existing result or quarantines the
+  task as `UNKNOWN_START`. The attempt lineage (§8) records every case, and a control-side
+  idempotency check alone never authorizes a rerun.
+
+- **Protected writes are fenced at the resource.** Board events, Git publication,
+  Crier bindings and memory commits each validate the active `claim_generation`/
+  `owner_fence` at the write boundary; a stale controller lease is insufficient. A
+  resource returns `STALE_OWNER` without mutation. If descendants or external effects
+  cannot be proven quiescent, the execution remains quarantined and the project is not
+  ready for replacement admission.
 - **Memory writes complete before the round reports.** The recovered round reconciles
   pending memory entries (§14's outage path) before its round-summary entry; the report
   states local-persistence, Git-commit and remote-synchronization as distinct states

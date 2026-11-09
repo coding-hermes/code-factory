@@ -71,17 +71,18 @@ effective values never overwrite it.
 |---|---|---|
 | `schema_version` | enum `factory.v1`, required | any other version is `UNSUPPORTED_VERSION` |
 | `generation` | integer >= 1, required | immutable after write; update requires `expected_generation` |
-| `deployment.profile` | enum `kubernetes`, `compose`, `homelab-vpn`, `standalone`, required | no implicit profile; unsupported prerequisites yield `PROFILE_UNSUPPORTED` |
-| `deployment.endpoints` | map of named HTTPS/SSH endpoints, required for selected profile | endpoints are references, not discovered credentials; profile values override global defaults |
-| `hosts[]` | objects `{id, endpoint, capacity, capabilities}`, required | IDs unique; capacity is a declared limit, observed availability is separate |
-| `projects[]` | objects `{id, repository, eligible_hosts, bunkers, memory, lanes}`, required | project IDs unique; all host references must resolve |
+| `deployment.profile` | enum `kubernetes`, `compose`, `homelab-vpn`, `standalone`, required | no implicit profile; value must resolve in `profiles`; unsupported prerequisites yield `PROFILE_UNSUPPORTED` |
+| `deployment.endpoints` | map `name → {url, protocol, credential_ref?}`, required | every selected-profile endpoint name must resolve; `url` is `https` or `ssh`; absent optional credential means anonymous only |
+| `profiles` | map `profile_id → {isolation, terminal_jail, persistence?}`, required | profile IDs match `deployment.profile` and every `projects[].bunkers.profile`; unknown profiles are `PROFILE_UNKNOWN`; no implicit profile |
+| `hosts[]` | objects `{id, endpoint_ref, capacity, capabilities}`, required | IDs unique; `endpoint_ref` resolves in `deployment.endpoints`; capacity is a declared limit, observed availability is separate |
+| `projects[]` | objects `{id, repository, eligible_hosts, bunkers, memory, lanes}`, required | project IDs unique; all host and endpoint references must resolve |
 | `projects[].repository` | `{provider, url, credential_ref}`, required | `provider` is `github` or `gitlab`; `url` is repository identity and `credential_ref` is a `secretref://forge/...`; neither may stand in for the other |
 | `projects[].eligible_hosts` | non-empty list of host IDs, required | allocation considers only this declared set; no silent expansion |
-| `projects[].bunkers` | `{count, requirements, profile}`, required | `count >= 1`; requirements name disk/memory/network/capability constraints |
-| `projects[].memory` | `{namespace, local_root, remote_ref, sync_policy}`, required | namespace is project-scoped; `local_root` is durable; `remote_ref` may be absent only when `sync_policy: local-only` |
-| `projects[].lanes[]` | `{name, admission, cadence_s, weight, foreman}`, required | lane names unique; admission is `tasks` or `cooldown`; cadence/weight are bounded positive values |
-| `projects[].lanes[].foreman.round` | `{worker_budget, concurrency, retry_policy}`, required | total budget and concurrency are independent; retry policy is explicit and cannot replenish total budget |
-| `events.webhooks[]` | `{id, endpoint_ref, subscriptions, retry, retention}`, optional | absent means no delivery; endpoint secret material is referenced only; interpretation remains receiver-owned |
+| `projects[].bunkers` | `{count, requirements, profile}`, required | `count` integer 1..1024; requirements name disk/memory/network/capability constraints; profile resolves to a declared profile |
+| `projects[].memory` | `{namespace, local_root, remote_ref, sync_policy}`, required | namespace matches the project id; `local_root` is durable; `remote_ref` is required for `shared-git` and absent only for `local-only` |
+| `projects[].lanes[]` | `{name, admission, cadence_s, weight, foreman}`, required | lane names unique; admission is `tasks` or `cooldown`; `cadence_s` is 1..31536000 and `weight` is 1..1000 |
+| `projects[].lanes[].foreman.round` | `{worker_budget, concurrency, retry_policy}`, required | `worker_budget.total` is 1..100000; `concurrency` is 1..1024; retry policy is explicit and cannot replenish total budget |
+| `events.webhooks[]` | `{subscription_id, endpoint_ref, event_types, project_scope, status, retry_policy, retention_s}`, optional | absent means no delivery; `event_types` is a non-empty set from the catalog; endpoint secret material is referenced only; interpretation remains receiver-owned |
 | `safety` | `{terminal_jail, reclaim, backup}`, required | Terminal Jail defaults to `disabled`; enabled mode requires the guarded execution path and has no unguarded fallback |
 | `extensions` | map, optional | preserved but not interpreted by core reconciliation |
 
@@ -108,9 +109,10 @@ The target management surface is `factory.v1` and has these observable operation
 | `GET /v1/events` | versioned event cursor and delivery state | receiver outage is recorded per endpoint; it does not alter configuration status |
 
 Every mutation is authenticated, scoped, durable before adapters run, and idempotent by
-`(principal, operation, idempotency_key, request_digest)`. A changed request under an
-existing key returns `IDEMPOTENCY_KEY_REUSED`; a same request returns the original result.
-The API never claims convergence from request acceptance alone.
+`(principal, project_id, operation, idempotency_key)`. The request digest is stored as
+compared data, not part of the identity. A changed request under an existing key returns
+`IDEMPOTENCY_KEY_REUSED`; a same request returns the original result. The API never
+claims convergence from request acceptance alone.
 
 ### V.0.3 Factory event delivery and metric readout
 
@@ -133,25 +135,49 @@ whose type is fixed by `event_type`. The minimum catalog is:
 A subscription uses `{subscription_id, endpoint_ref, event_types, project_scope,
 status, retry_policy, retention_s}`. `endpoint_ref` is a secret reference. The manager
 persists the event before delivery and tracks per-endpoint `attempt`, `acknowledged_at`,
-`next_retry_at`, `last_error` and `delivery_state`. A receiver acknowledges the event id;
-the same event is redelivered with the same `event_id` and is not re-authored as a new
-event. Backoff and retention are bounded by the subscription; after exhaustion the event
-is `delivery_failed` and remains available for replay by cursor. Endpoint outage does not
-change configuration or reconciliation state. Signature/authentication failure is
-`ENDPOINT_UNAUTHORIZED`; malformed acknowledgement is `ACK_INVALID`; neither is treated
-as delivery success. Receiver interpretation and external repair remain outside Factory
-responsibility.
+`next_retry_at`, `last_error`, `delivery_state` and `cursor`. The receiver contract is
+an HTTPS POST with `Content-Type: application/json`, `X-Factory-Event-Id`,
+`X-Factory-Event-Version`, `X-Factory-Delivery-Attempt`, and `X-Factory-Signature`.
+The signature is HMAC-SHA256 over the exact UTF-8 request body and event id using the
+rotated endpoint secret; a receiver rejects an unknown key id or stale timestamp.
+The body is the `event.v1` object from this section. A valid receiver returns HTTP 202
+(or 200) with JSON `{event_id, acknowledged: true}`; any other status, malformed JSON,
+wrong event id or missing acknowledgement is `ACK_INVALID`. The same event is
+redelivered with the same `event_id` and is not re-authored as a new event. Defaults
+are timeout 10 s, max_attempts 5, initial backoff 5 s, maximum backoff 300 s, and
+retention 604800 s; backoff is exponential with jitter and attempts stop at exhaustion.
+After exhaustion the event is `delivery_failed` and remains available for replay by
+cursor; cursor replay is ordered by the durable event sequence and retains events for
+`retention_s`, while each endpoint's cursor advances only after acknowledgement.
+Endpoint outage does not change configuration or reconciliation state. Signature or
+authentication failure is `ENDPOINT_UNAUTHORIZED`; it is not delivery success.
+Receiver interpretation, paging and external repair remain outside Factory responsibility.
+
+A minimum `project.progress` extension uses `event_type: project.progress` and payload
+`{project_id, initiative_id, completed, total, unit: "criteria", status, evidence_refs}`;
+`completed` and `total` are integers with `0 <= completed <= total`, and `status` is
+`in_progress`, `blocked` or `complete`. This extension is emitted by the foreman path;
+receivers still own interpretation and paging.
 
 The manager independently serves metrics at a read-only versioned endpoint. Each metric
-has a name, unit, labels, collection owner, loss/unknown semantics and readout scope:
-`reconciliation_operations_total{state}`, `allocation_shortfall{project}`,
-`readiness{project,profile}`, `event_delivery_total{endpoint,state}`,
-`memory_sync_pending{namespace}`, and `effective_readback_age_seconds{scope}`.
-Counters increment only after the corresponding durable transition; gauges expose
-`unknown` when collection is unavailable rather than zero. `GET /v1/metrics` returns
-`metric_schema_version`, samples, `observed_at` and `collection_state`; a missing sample
-is not a successful zero. Metric collection and serving are manager responsibilities;
-receiver dashboards may consume them but do not redefine their meaning.
+has a name, metric type, unit, bounded labels, collection owner, reset semantics,
+loss/unknown semantics and readout scope:
+
+| Metric | Type / unit | Labels and sample semantics | Owner / reset |
+|---|---|---|---|
+| `reconciliation_operations_total` | counter / operations | `state` from the transition enum; one sample per durable transition | manager; resets only on process replacement, with `start_time` recorded |
+| `allocation_shortfall` | gauge / requested resource units | `project`, `resource`; quantity is the declared minus allocated amount, never a mixed unit | manager; current value, `unknown` if no observation |
+| `readiness` | gauge / boolean 0 or 1 | `project`, `profile`; absent probe is `unknown`, not 0 | manager; current observation |
+| `event_delivery_total` | counter / deliveries | `endpoint`, `state`; endpoint ids are bounded and secret-free | manager; resets only with `start_time` |
+| `memory_sync_pending` | gauge / records | `namespace`; count of durable pending records | memory adapter; current value, `unknown` if store unavailable |
+| `effective_readback_age_seconds` | gauge / seconds | `scope`; age since the newest accepted effective readback | manager; `unknown` when no readback exists |
+
+Counters increment only after the corresponding durable transition. A sample carries
+`metric_schema_version`, `metric_name`, `metric_type`, `unit`, bounded `labels`, `value`
+or `unknown`, `observed_at`, `collection_state` and `reset_at`/`start_time` as applicable.
+`GET /v1/metrics` returns those samples; a missing sample is not a successful zero.
+Metric collection and serving are manager responsibilities; receiver dashboards may
+consume them but do not redefine their meaning.
 
 ## V.1 Scopes and the complete participating-system inventory (V2-SET-01)
 
@@ -391,45 +417,69 @@ the figure lands.
 A complete example (YAML for readability; the serialization is not decided):
 
 ```yaml
-# CF2A desired state — generation 17
+# CF2A desired state — factory.v1, generation 17
+schema_version: factory.v1
 generation: 17
 deployment:
-  profile: homelab-vpn            # Kubernetes | compose | homelab-vpn | standalone
+  profile: homelab-vpn
+  endpoints:
+    h1-vpn: {url: https://h1.example.invalid, protocol: https}
+    h2-vpn: {url: https://h2.example.invalid, protocol: https}
+hosts:
+  - id: h1
+    endpoint_ref: h1-vpn
+    capacity: {disk_gib: 80, memory_gib: 16, concurrent_workers: 2}
+    capabilities: [hermes, git]
+  - id: h2
+    endpoint_ref: h2-vpn
+    capacity: {disk_gib: 80, memory_gib: 16, concurrent_workers: 2}
+    capabilities: [hermes, git]
+profiles:
+  homelab-vpn: {isolation: persistent-container, terminal_jail: disabled}
 projects:
   - id: code-factory
     repository:
       provider: github
       url: git@github.com:example/code-factory.git
       credential_ref: secretref://forge/github/deploy-key.cf2a
-    eligible_hosts: [h1, h2, h3]
+    eligible_hosts: [h1, h2]
     bunkers:
-      count: 2                    # desired count — shortfall is exposed, never absorbed
-      requirements:
-        disk_gib: 40
-        memory_gib: 8
-      memory:
-        namespace: code-factory   # same logical view as the controller
-        sync: {owner: manager, target: secretref://memory/duckbrain-url}
+      count: 2
+      requirements: {disk_gib: 40, memory_gib: 8, capabilities: [hermes, git]}
+      profile: homelab-vpn
+    memory:
+      namespace: code-factory
+      local_root: /var/lib/factory/memory/code-factory
+      remote_ref: https://memory.example.invalid/git/code-factory.git
+      sync_policy: shared-git
     lanes:
       - name: builder
         admission: tasks
-        foreman:
-          round:
-            worker_budget: {total: 8}
+        cadence_s: 300
+        weight: 100
+        foreman: {round: {worker_budget: {total: 8}, concurrency: 2,
+          retry_policy: {name: charge-on-start, failed_start: refund-before-run}}}
 events:
   webhooks:
-    - endpoint: secretref://events/ops-webhook
-      subscriptions: [progress, state, allocation.shortfall, failure]
-safety:
-  terminal_jail: disabled         # optional; disabled by default (resolved decision)
+    - subscription_id: ops
+      endpoint_ref: secretref://events/ops-webhook
+      event_types: [configuration.accepted, reconciliation.state, allocation.shortfall,
+        readiness.changed, credential.lifecycle, memory.sync, factory.failure]
+      project_scope: [code-factory]
+      status: enabled
+      retry_policy: {max_attempts: 5, initial_backoff_s: 5, max_backoff_s: 300}
+      retention_s: 604800
+safety: {terminal_jail: disabled, reclaim: {enabled: true}, backup: {enabled: true}}
+extensions: {}
 ```
 
 Resolved-state comparison (how the same file reads back):
 
 | Key | Desired | Observed | Effective | Status |
 |---|---|---|---|---|
-| `projects[code-factory].bunkers.count` | 2 | 1 allocated, 1 unallocatable (disk_gib 40 short on every eligible host) | 1 Bunker serving | **DEGRADED — allocation shortfall exposed**: desired count unchanged, unsatisfied requirement named (`disk_gib: 40`), affected scope `projects/code-factory` |
+| `projects[code-factory].bunkers.count` | 2 | 2 allocated on h1/h2 | 2 Bunkers serving | CONVERGED — allocation requirements and host references resolve |
 | `projects[code-factory].lanes[builder].foreman.round.worker_budget.total` | 8 | injected at admission | 8, remaining 3 after two waves | CONVERGED |
+| `projects[code-factory].memory` | shared-git, namespace `code-factory` | local commit acknowledged; remote sync pending | `pending-sync`, controller freshness not yet proven | **DEGRADED / UNVERIFIED** — the example defines the readback but does not claim it ran |
 | `deployment.profile` | homelab-vpn | profile applied | readiness record pending the profile-specific authenticated probes | **DEGRADED / UNVERIFIED** — no effective-readback evidence is available in this example; a RED procedure cannot establish convergence |
 | `safety.terminal_jail` | disabled | not enabled | no guarded path in use | CONVERGED — NOTE: enabling it is an operator act, and enabled mode has no unguarded fallback |
 | `projects[code-factory].repository` | `provider: github`, `url: git@github.com:example/code-factory.git` | repository identity read back independently | repository identity is not credential material | CONVERGED only for identity; credential activation remains a separate readback |
@@ -520,17 +570,25 @@ write. The supported local profile therefore remains usable when the HTTP/servic
 unavailable. A local loss is distinct from service outage and is reported as
 `LOCAL_STORE_LOST`; it is not represented as a successful pending sync.
 
-A record write carries `record_id`, `namespace`, `record_type`, `round_id`, `wave_id`,
-`attempt_id`, `payload_digest`, `body`, `writer_identity`, `local_commit` and
-`created_at`. Repeating the same identity and digest is an idempotent acknowledgement;
-the same identity with a different digest is `MEMORY_CONFLICT` and does not overwrite the
-first record. A reconnect exchanges commits, verifies namespace and writer authorization,
-and records `sync_commit`, `synced_at` and freshness. Controller readback is
-`fresh`, `pending-sync` or `stale`; it never upgrades a local record to controller-fresh
-without the synchronization evidence. Worker, wave and round records remain distinct and
+A record write proposes `record_id`, `namespace`, `record_type`, `round_id`, `wave_id`,
+`attempt_id`, `payload_digest`, `body`, `writer_identity` and `created_at`. The local
+writer returns the resulting `local_commit`, `sync_state` and `freshness`; those output
+fields are never trusted as write input. Repeating the same identity and digest is an
+idempotent acknowledgement; the same identity with a different digest is
+`MEMORY_CONFLICT` and does not overwrite the first record. A reconnect exchanges commits,
+verifies namespace and writer authorization, and records `sync_commit`, `synced_at` and
+freshness. The supported operations are `POST record` (local commit), `PUSH pending`
+(exchange missing commits), `MERGE namespace` (fast-forward or explicit conflict
+resolution), `REPLAY record_id` (same digest only), and `GET record_id` (readback with
+freshness). A conflict retains both digests and requires an authorized `RESOLVE` with a
+new record id; replay never overwrites the first record. Controller readback is `fresh`,
+`pending-sync` or `stale`; it never upgrades a local record to controller-fresh without
+the synchronization evidence. Worker, wave and round records remain distinct and
 correlated. Permissions bind the writer to one project namespace; a cross-project write
-is `NAMESPACE_FORBIDDEN`. The profile is a target contract until its cross-host and
-outage cases are exercised.
+is `NAMESPACE_FORBIDDEN`. `local-only` is valid only for one Bunker plus controller
+sharing the same Git-backed namespace repository or an explicitly mounted shared view;
+a multi-Bunker configuration without that shared view is refused as `MEMORY_TOPOLOGY_UNSUPPORTED`.
+The profile is a target contract until its cross-host and outage cases are exercised.
 
 | Dimension | State | Requiredness | Validation / errors | Precedence / activation | Redacted effective readback |
 |---|---|---|---|---|---|

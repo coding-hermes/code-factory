@@ -18,27 +18,39 @@ error, idempotency key, persistence boundary or recovery rule.
 
 ## IV.1 Normative contract cards
 
-All cards use `contract_version: "cf2a.v1"` and require `request_id` and `corr_id`
-where a request crosses a process boundary. IDs are opaque strings, ASCII, 1–128
-characters; absent required IDs are refused as `INVALID_ID`. Every response carries
-`contract_version`, `request_id`, `corr_id`, `status`, and `error` when `status` is not
-`ok`. Unknown versions are refused as `UNSUPPORTED_VERSION`; unknown fields are ignored
-only when the card says they are extension fields. Secret material is never carried;
-credential fields are references governed by Part V.
+All cards use an outer envelope `cf2a.v1` with `message_type`, `schema_version`,
+`request_id`, `corr_id`, `sender`, `created_at`, and `body`. `request_id` identifies
+one request at its owner boundary; `corr_id` correlates the complete round. IDs are
+opaque ASCII strings, 1–128 characters; absent required IDs are refused as `INVALID_ID`.
+The envelope is transport custody, not execution state. Each body has one inner schema
+version (`register.v1`, `round-admission.v1`, `worker-brief.v1`, `worker-result.v1`,
+`round-report.v1`, or `publication.v1`), and the receiver returns the same outer
+`request_id`/`corr_id` plus `schema_version`, `status`, and `error` when status is not
+`ok`. Unknown versions are refused as `UNSUPPORTED_VERSION`; unknown fields are
+refused as `UNKNOWN_FIELD` except under an explicitly declared `extensions` map.
+Timestamps are RFC3339 UTC, digests are lowercase SHA-256 hex, and secret material is
+never carried; credential fields are references governed by Part V.
+
+Identity ownership is explicit: the controller creates `registration_id` at enrollment;
+the scheduler creates `round_id` and `run_id` at admission; the foreman creates
+`wave_id` after admission and `attempt_id` immediately before worker launch; the Crier
+creates `delivery_id` and `lease_id` at custody; the worker/dispatcher creates
+`dispatch_id`; and the foreman creates the final `report_digest`. Enrollment and round
+admission therefore do not require future wave, worker or attempt identities.
 
 | Contract | Normative request / result | State, refusal and persistence rule |
 |---|---|---|
 | `CT-01` | `config_version`, `lane`, `enabled`, `admission_mode`, `cadence_s`, `weight`, `pin`; result `accepted`, `effective_config_version` | validate enum/ranges before persistence; stale generation is `GENERATION_CONFLICT`; accepted configuration is durable before admission |
-| `CT-02` | `run_id`, `corr_id`, `lane`, `board_ref`, `directive_digest`, `text_b64`, `envelope_version`, `expires_at`; result `accepted`, `delivery_id` | scheduler persists the envelope before send; Crier deduplicates `(run_id,corr_id)` and returns the existing custody receipt |
-| `CT-03` | `agent_id`, `delivery_id`, `lease_s`, `message`; result `lease_id`, `lease_expires_at` | retrieval atomically marks one lease; invalid signature is `UNAUTHORIZED`, expired lease is `LEASE_EXPIRED`; ack/release is durable and redelivery never creates a second execution identity |
-| `CT-04` | `delivery_id`, `run_id`, `corr_id`, `dispatch_id`, `attempt_id`, `status`, `commit`, `artifacts`, `finished_at`; result `accepted` or `DUPLICATE_RESULT` | status is typed (`pass`, `fail`, `partial`, `unknown`); missing status is `INVALID_RESULT`; the first durable result wins and conflicting duplicates are `RESULT_CONFLICT` |
-| `CT-05` | `lane`, `prompt_digest`, `skills`, `config_generation`; result `brief_version`, `accepted` | prompt/skill digest is immutable for the round; stale generation is `CONFIG_STALE`; acceptance is a custody receipt, not execution success |
-| `CT-06` | `run_id`, `corr_id`, `result_ref`, `status`, `attempts`, `finished_at`; result scheduler settlement | scheduler accepts only a correlated durable result; absent or conflicting verdict is `UNKNOWN_RESULT`, never success; settlement is durable before the next cadence decision |
-| `CT-06R` | foreman report: `round_id`, `run_id`, `corr_id`, `schema_version`, `waves`, `task_results`, `budget`, `stop_reason`, `memory_refs`, `evidence_refs` | foreman writes local custody and memory records before return; duplicate `(round_id, report_digest)` is replayed, conflicting report is refused |
+| `CT-02` | `round-admission.v1`: `round_id`, `run_id`, `corr_id`, `task_scope`, `total_budget`, `config_generation`; result `accepted`, `deferred`, or typed refusal | scheduler persists the admission before sending; future wave/worker/attempt IDs are absent; Crier deduplicates the envelope custody by `(run_id,corr_id)` |
+| `CT-03` | `agent_id`, `delivery_id`, `lease_s`, `message`; result `lease_id`, `lease_expires_at` | Crier retrieval atomically marks one lease; invalid signature is `UNAUTHORIZED`, expired lease is `LEASE_EXPIRED`; ack/release is durable and redelivery never creates a second execution identity |
+| `CT-04` | `worker-result.v1`: `attempt_id`, `dispatch_id`, `corr_id`, `status`, `commit`, `artifacts`, `evidence_refs`, `finished_at`; result `accepted` or `DUPLICATE_RESULT` | status is typed (`pass`, `fail`, `unverified`, `partial`, `unknown`); missing status is `INVALID_RESULT`; first durable result wins and conflicting duplicates are `RESULT_CONFLICT` |
+| `CT-05` | `worker-brief.v1`: `round_id`, `wave_id`, `task_id`, `attempt_id`, `brief_digest`, `criteria`, `workspace`; result `accepted`, `BRIEF_INVALID` | foreman owns wave/attempt IDs; prompt/skill digest is immutable for the round; acceptance is custody, not execution success |
+| `CT-06` | `round-report.v1` reference: `round_id`, `corr_id`, `report_digest`, `status`, `finished_at`; result scheduler settlement | scheduler accepts only a correlated durable report; absent or conflicting verdict is `UNKNOWN_RESULT`, never success; settlement precedes next cadence decision |
+| `CT-06R` | foreman report `round-report.v1`: `round_id`, `run_id`, `corr_id`, `waves`, `task_results`, `budget`, `stop_reason`, `memory_refs`, `evidence_refs` | foreman writes local custody and memory records before return; duplicate `(round_id, report_digest)` is replayed, conflicting report is refused |
 | `CT-07` | `model`, `provider`, `lane`, `policy_generation`; result selected model or `MODEL_NOT_ALLOWED` | allowlist and policy generation are checked before spend; selection is recorded with the session |
 | `CT-08` | `session_id`, `corr_id`, `message`, `model`; result `accepted`, `session_turn_id` | gateway acknowledges durable session custody; timeout is `DELIVERY_UNKNOWN` and replay uses the same idempotency key |
-| `CT-09` | memory record `{record_id, namespace, record_type, round_id, wave_id, attempt_id, payload_digest, body, local_commit}`; result `{record_id, local_ack, sync_state}` | local Git-backed namespace commit is the durable acknowledgement; `(namespace,record_id)` is unique; remote sync is separate and can be `pending-sync` |
-| `CT-10` | board event `{event_id, task_id, expected_revision, transition, evidence_refs}`; result `new_revision` | compare-and-set against canonical revision; stale revision is `CLAIM_CONFLICT`; append is idempotent by `event_id` and partial writes are replay-safe |
+| `CT-09` | memory record `{record_id, namespace, record_type, round_id, wave_id, attempt_id, payload_digest, body, writer_identity, created_at}`; result `{record_id, local_commit, sync_state, sync_commit, synced_at, freshness}` | local Git-backed namespace commit is the durable acknowledgement; `(namespace,record_id)` is unique; remote sync is separate and can be `pending-sync`, `fresh` or `stale`; same digest replays, different digest is `MEMORY_CONFLICT` |
+| `CT-10` | board claim/event `{task_id, board_revision, claimant_id, claim_id, lease_expires_at, claim_generation, transition, evidence_refs}`; result `new_revision` | canonical remote CAS is the cross-clone authority; stale revision is `CLAIM_CONFLICT`; row and event publish via one operation marker, and an incomplete marker is `PARTIAL_WRITE`, never a committed state |
 | `CT-11` | `session_id`, `turn_id`, `model`, token usage, cost basis; result durable turn row | gateway writes the turn atomically or returns `PERSISTENCE_UNAVAILABLE`; no usage row is inferred from a transport receipt |
 | `CT-12` | staged-tree digest, exact commit candidate, guard version and criteria | guard emits a named verdict bound to the staged tree; missing gate is `GATE_UNAVAILABLE`; no verdict means no closeout |
 | `CT-13` | verdict `{run_id, criteria, outcome, evidence_refs, tree_digest}`; result board closeout | board accepts only an evidence-bound verdict whose tree digest matches the landed tree; duplicate closeout is a no-op, conflicting closeout is `CLOSEOUT_CONFLICT` |
@@ -59,6 +71,30 @@ credential fields are references governed by Part V.
 | `CT-28` | binding update `{project_id, binding_generation, readiness_ref, crier_ref, scheduler_ref}`; result active binding | publish only after authenticated readiness probes; stale owner/generation is `STALE_OWNER`; old bindings remain fenced until replacement is verified |
 | `CT-29` | incident/recovery `{incident_id, scope, owner_fence, checkpoint, replacement}`; result resumed/degraded/failed | old owner is fenced before replacement side effects; crash recovery re-reads state and applies only missing idempotent steps |
 | `CT-30` | manager event/metric readout `{event_version, event_id, event_type, scope, payload}` or `{metric_schema_version, samples, observed_at}` | event delivery is per-endpoint durable and replayable; missing metrics are `unknown`, not zero; receiver interpretation remains external |
+
+**Resident Crier launch/return adapter (selected MVP path).** The scheduler persists a
+`round-admission.v1` envelope and sends it through Crier. Crier authenticates the
+sender, stores custody, and returns `delivery_id`; the project Bunker foreman retrieves
+it under a lease, creates waves and attempts only after admission, and returns one
+signed `round-report.v1` through Crier. Crier stores the report and forwards its
+`report_ref` to the control-host scheduler. The scheduler reads the report by
+`(round_id, corr_id, report_digest)`, settles only after the report and its referenced
+memory/evidence receipts are durable, and records `UNKNOWN_RESULT` on timeout or
+conflict. A node-pull/central-dispatcher implementation may translate these schemas
+for compatibility, but it does not become a new MVP authority.
+
+**Concrete protocol cases.** Registration sends `{message_type: register,
+schema_version: register.v1, registration_id: reg-17, agent_id: bunker-a,
+project_id: code-factory, profile: homelab-vpn, public_identity: key-ref,
+capabilities: [hermes]}` and receives generation 3. Admission sends
+`{message_type: round-admission, schema_version: round-admission.v1, round_id: r-17,
+run_id: run-17, corr_id: c-17, task_scope: [CF-1, CF-2], total_budget: 2,
+config_generation: 17}`; it contains no wave or attempt IDs. The foreman then creates
+`wave_id: w-1` and `attempt_id: a-1`, and a retry creates `a-2`. A final result with
+`status: unverified` remains a result, not a pass. Missing `schema_version`, an unknown
+field outside `extensions`, an unknown version, a conflicting duplicate digest, or a
+legacy `ok: true` paired with `status: fail` yields respectively `INVALID_FIELD`,
+`UNKNOWN_FIELD`, `UNSUPPORTED_VERSION`, `RESULT_CONFLICT`, or `RESULT_CONFLICT`.
 
 **Common acceptance cases.** A conforming implementation returns a typed refusal for
 missing required fields, wrong scope, unsupported version, stale generation, duplicate

@@ -904,9 +904,53 @@ with an explicit transaction boundary per transition. Recovery resumes an `accep
 `planned` or `applying` operation by idempotency key; it first fences an old owner,
 then re-reads observed state, and applies only missing steps. A replacement may publish
 a new binding only after readiness for that binding generation. A late result with an
-old owner token is rejected at the resource side and recorded as `STALE_OWNER`; it
-cannot alter effective state or publish a second binding. These are target guarantees;
+old owner token is rejected at the resource side and recorded as `STALE_OWNER`;
+it cannot alter effective state or publish a second binding. These are target guarantees;
 the implementation remains TARGET-UNIMPLEMENTED until independently exercised.
+
+### 1.8.1 Manager API and adapter contract
+
+`manager.v1` has one global configuration scope and one project scope; they are
+related by immutable generations, not by an implicit last-writer-wins merge. A global
+update creates `global_generation`; a project update records both its
+`project_generation` and the global generation it was validated against. A project
+reconciliation is refused as `GLOBAL_GENERATION_STALE` when its base is no longer the
+current global generation. The manager never edits the user's desired project values
+while rebasing them; an authorized editor must submit a new generation.
+
+Every request is authenticated before parsing its desired payload. The authentication
+principal is carried as `principal_id`, its role is checked against the operation and
+scope, and the request is rejected as `UNAUTHORIZED` or `FORBIDDEN` before any
+reservation or adapter call. The minimum authorization matrix is:
+
+| Operation | Factory administrator | Project editor | Foreman / scheduler | Adapter identity | Observer |
+|---|---|---|---|---|---|
+| Read global/project state | all scopes | named project | named project/readiness | own adapter scope | permitted scopes |
+| Change desired configuration | global + projects | named project only | no | no | no |
+| Reconcile / reserve | all | named project | request/read readiness only | own step only | no |
+| Cancel before irreversible step | all | named project | request for its operation | no | no |
+| Read secrets | no API caller | no | no | reference resolution only at its boundary | no |
+
+The adapter interface is versioned and observable: `validate(desired_generation)`
+returns typed capability failures; `plan` returns ordered steps and a plan digest;
+`reserve` returns a reservation id, owner fence and expiry; `apply` accepts that
+reservation and owner fence; `readback` returns an immutable observation with
+`observed_at`, `quality`, effective digest and binding generation; `release` is
+idempotent for reservations that never entered an irreversible step. Adapter results
+carry `adapter_id`, `operation_id`, `step_id`, `attempt`, `status`, a redacted error
+or effective digest, and the manager's correlation id. An adapter may not report
+`converged` from an apply acknowledgement without a successful readback.
+
+The non-circular readiness sequence is: validate candidates and capabilities; reserve
+capacity; apply host/runtime state; perform authenticated repository, memory, Crier,
+and scheduler probes; read back effective state; activate the binding; then mark the
+project `READY`. Candidate `ready` means only that a host can perform its probe; active
+route/admission `ready` additionally requires the binding generation and all required
+project probes. If a reservation, probe or readback is lost, the operation is
+`degraded` and the binding remains fenced. Cancellation is accepted only before the
+first irreversible adapter step; after that boundary it returns `NOT_CANCELLABLE` and
+reconciliation continues to a visible result. A restart replays the durable operation
+log, fences the previous owner, re-reads observations, and applies only missing steps.
 
 ## 1.9 The contract surface, as a count
 
