@@ -50,9 +50,9 @@ reads the directive, never spawns a harness, never touches the bus.
 (`grep -rl '\. "$HERE/lib.sh"' scripts/` → 11) plus 6 in `scripts/harness/` that source
 `$HERE/../lib.sh` (`grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` → 17). Both counts are verified.
 
-**What breaks if it lies.** `fetch_verified` (`lib.sh:19-42`) is the pinned-download primitive
+**What breaks if it lies.** `fetch_verified` (`lib.sh:51-74`) is the pinned-download primitive
 every installer relies on; a false digest match installs a wrong or tampered binary and reports
-PASS. `require_disk` (`lib.sh:48-57`) is the disk floor; a false "enough space" lets the
+PASS. `require_disk` (`lib.sh:80-89`) is the disk floor; a false "enough space" lets the
 provisioner proceed onto a host it must refuse.
 
 ## 3. Submodule inventory
@@ -69,13 +69,13 @@ provisioner proceed onto a host it must refuse.
 |---|---|---|---|
 | `say()` | `:5` | args → prints verbatim | none |
 | `ok()` / `bad()` / `warn()` / `note()` | `:6-9` | `bad` increments the per-script `FAILED` counter (`:7`) | treat PASS/FAIL rows as descriptive, not proof (F0-4) |
-| `have()` | `:13` | `command -v` **or `true`** — an absent binary yields an **empty, success** result | caller must test the *empty* result, not the exit code; empty `have` output = "not found" |
-| `fetch_verified()` | `:19-42` | url/dest/digest → 0 on digest-verified install, 1 on any failure; the verified artifact is made executable best-effort — `chmod +x "$dest" 2>/dev/null || true` (`:40`), so a **failed chmod is swallowed** and the install still returns 0 (the exit code is the INSTALL, not the chmod — `lib.sh:18`) | the pinned-download primitive (F0-2) |
-| `free_gb()` | `:45` | path → `%.1f` GB free | used by `require_disk` only |
-| `require_disk()` | `:48-57` | path/floor → `ok` or `bad` + return 1 | the disk-floor admission |
-| `once()` | `:60-64` | sentinel + command → runs command only if sentinel absent, then writes a timestamped sentinel | **no concurrency lock**: `:62` checks then `:63` runs with no `flock` — two racers both run; the sentinel is `date -u` text, not a digest |
-| `shq()` | `:67-70` | value → single-quoted shell token | quotes empties and apostrophes for remote-shell composition |
-| `bunker_exec()` | `:75-78` | server/agent/cmd… → `bunker exec … -- bash -lc "<joined>"` | joins remaining args as trusted shell text; interpolated data must pass `shq` first (`:72-74`) |
+| `have()` | `:41-45` | `command -v` — **present: exit 0 and the resolved path on stdout; absent: non-zero and NOTHING on stdout** (never an error message there: callers execute the result as a path, `"$b" cp …`) | either test now reports absence the same way — `if have x`, `have x && …`, and `p=$(have x); [ -n "$p" ]`; the status used to be constant 0, so status-guards written with it were dead code (CF-281) |
+| `fetch_verified()` | `:51-74` | url/dest/digest → 0 on digest-verified install, 1 on any failure; the verified artifact is made executable best-effort — `chmod +x "$dest" 2>/dev/null || true` (`:72`), so a **failed chmod is swallowed** and the install still returns 0 (the exit code is the INSTALL, not the chmod — `lib.sh:50`) | the pinned-download primitive (F0-2) |
+| `free_gb()` | `:77` | path → `%.1f` GB free | used by `require_disk` only |
+| `require_disk()` | `:80-89` | path/floor → `ok` or `bad` + return 1 | the disk-floor admission |
+| `once()` | `:92-96` | sentinel + command → runs command only if sentinel absent, then writes a timestamped sentinel | **no concurrency lock**: `:94` checks then `:95` runs with no `flock` — two racers both run; the sentinel is `date -u` text, not a digest |
+| `shq()` | `:99-102` | value → single-quoted shell token | quotes empties and apostrophes for remote-shell composition |
+| `bunker_exec()` | `:107-110` | server/agent/cmd… → `bunker exec … -- bash -lc "<joined>"` | joins remaining args as trusted shell text; interpolated data must pass `shq` first (`:104-106`) |
 
 ## 4. Dependencies
 
@@ -84,13 +84,13 @@ provisioner proceed onto a host it must refuse.
 | Dependency | Version constraint | Where | How absence is detected |
 |---|---|---|---|
 | bash | >= 4 | node + control host | `set -u` + undefined helper aborts the caller |
-| curl | any | node + control host | `curl -fsSL` nonzero → `fetch_verified` returns 1 (`lib.sh:22`) |
-| sha256sum | any | with curl | digest mismatch → return 1 (`lib.sh:24-27`) |
-| mktemp | any | with curl | a failed `mktemp` (`:21`) leaves `tmp` unset — `fetch_verified` then acts on an empty path, not a named refusal (no `mktemp` failure branch exists) |
-| rm | any | with curl | `rm -f` at `:22/:25/:31/:36` is best-effort cleanup, never a refusal |
-| cut / dirname / mkdir / mv | any | with curl | `mkdir -p` failure → named stderr + return 1 (`:30-34`); `mv` failure → named stderr + return 1 (`:35-39`) |
-| chmod | any | with curl | **best-effort**: `chmod +x "$dest" 2>/dev/null || true` (`:40`) — a failed chmod is swallowed; the artifact is left non-executable and the install still returns 0 |
-| df / awk | any | with curl | `free_gb` (`:45`) depends on `df`+`awk`; a missing `df` yields an empty `free` and `require_disk`'s awk admission (`:51`) mis-decides the floor |
+| curl | any | node + control host | `curl -fsSL` nonzero → `fetch_verified` returns 1 (`lib.sh:54`) |
+| sha256sum | any | with curl | digest mismatch → return 1 (`lib.sh:56-59`) |
+| mktemp | any | with curl | a failed `mktemp` (`:53`) leaves `tmp` unset — `fetch_verified` then acts on an empty path, not a named refusal (no `mktemp` failure branch exists) |
+| rm | any | with curl | `rm -f` at `:54/:57/:63/:68` is best-effort cleanup, never a refusal |
+| cut / dirname / mkdir / mv | any | with curl | `mkdir -p` failure → named stderr + return 1 (`:62-66`); `mv` failure → named stderr + return 1 (`:67-71`) |
+| chmod | any | with curl | **best-effort**: `chmod +x "$dest" 2>/dev/null || true` (`:72`) — a failed chmod is swallowed; the artifact is left non-executable and the install still returns 0 |
+| df / awk | any | with curl | `free_gb` (`:77`) depends on `df`+`awk`; a missing `df` yields an empty `free` and `require_disk`'s awk admission (`:83`) mis-decides the floor |
 
 **4b. Library contracts** — `lib.sh` imports nothing; it is the bottom of the shell stack.
 
@@ -102,7 +102,7 @@ provisioner proceed onto a host it must refuse.
 
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
-| `fetch_verified` `--max-time` | 120 s (`lib.sh:22`, hardcoded) | fixed | download stall ceiling | a download stalling past 120 s fails with rc 1; lowering it rejects slow-but-valid mirrors |
+| `fetch_verified` `--max-time` | 120 s (`lib.sh:54`, hardcoded) | fixed | download stall ceiling | a download stalling past 120 s fails with rc 1; lowering it rejects slow-but-valid mirrors |
 
 `FAILED` (`lib.sh:11`) is a per-script failure counter, not a setting. The CF_* variable
 contract settings (`CF_MAX_TURNS`, `CF_TIMEOUT_S`, `CF_API_KEY_FILE`, …) live in M5.S5, not here.
@@ -117,7 +117,7 @@ chapter row to agree with.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| (local) | bunker CLI | out | `lib.sh:75` `bunker_exec` (composes `bunker exec … -- bash -lc`) | **external** — the `bunker` binary's exec handler, not in this repo | **UNVERIFIED (boundary)** — `bunker` is an external peer with no in-repo function to name; the composed command is nameable, the far side is not, so no "works" verdict is attached to an unnamed side (F0-1) |
+| (local) | bunker CLI | out | `lib.sh:107` `bunker_exec` (composes `bunker exec … -- bash -lc`) | **external** — the `bunker` binary's exec handler, not in this repo | **UNVERIFIED (boundary)** — `bunker` is an external peer with no in-repo function to name; the composed command is nameable, the far side is not, so no "works" verdict is attached to an unnamed side (F0-1) |
 
 ## 7. Verification
 
@@ -155,9 +155,9 @@ rate are answerable only by the static greps above.
 | — | `  FAIL  %s — %s` (`lib.sh:7`) | `bad` called, `FAILED` incremented | **descriptive** (same reason) |
 | — | `  WARN  %s — %s` (`lib.sh:8`) | `warn` called | descriptive |
 | — | `  ..    %s` (`lib.sh:9`) | `note` called | descriptive |
-| — | `digest mismatch for %s: want %s got %s` (`lib.sh:26`, stderr) | `fetch_verified` digest mismatch | **evidentiary** — only after the sha256 comparison failed |
-| — | `cannot create destination directory %s for %s` (`lib.sh:32`, stderr) | `mkdir -p` of the artifact dir fails | **evidentiary** (B24) |
-| — | `cannot move verified download into place at %s for %s` (`lib.sh:37`, stderr) | `mv` of the verified artifact fails | **evidentiary** (B24) |
+| — | `digest mismatch for %s: want %s got %s` (`lib.sh:58`, stderr) | `fetch_verified` digest mismatch | **evidentiary** — only after the sha256 comparison failed |
+| — | `cannot create destination directory %s for %s` (`lib.sh:64`, stderr) | `mkdir -p` of the artifact dir fails | **evidentiary** (B24) |
+| — | `cannot move verified download into place at %s for %s` (`lib.sh:69`, stderr) | `mv` of the verified artifact fails | **evidentiary** (B24) |
 
 ## 10. Failure modes, indications and recovery
 
@@ -178,7 +178,7 @@ rate are answerable only by the static greps above.
 ## 12. Cross-references
 
 - F2 PROVISIONING uses `require_disk` (M1) and `fetch_verified` (M5).
-- M1 PROVISIONING sources `lib.sh`, resolves `bunker` via `have` (`:13`).
+- M1 PROVISIONING sources `lib.sh`, resolves `bunker` via `have` (`:41-45`).
 - **M5 HARNESS owns `harness-vars.sh` (M5.S5).** The variable contract is **not** sourced by every
   installer: `install-hermes.sh`, `install-opencode.sh`, `install-deepseek.sh`,
   `install-pi-agent.sh` source it; `install-codex.sh` sources it conditionally (`:47`) then
@@ -194,7 +194,7 @@ rate are answerable only by the static greps above.
   `grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` (17); `ffc_probe.sh` (fetch_verified fails
   closed, rc 1, no artifact).
 - **Findings:**
-  - **F0-1** (carried) — `bunker_exec` (`lib.sh:75-78`) invokes the **bunker CLI**, not crier.
+  - **F0-1** (carried) — `bunker_exec` (`lib.sh:107-110`) invokes the **bunker CLI**, not crier.
   - **F0-4** (carried) — `ok`/`bad` PASS/FAIL rows are descriptive, not evidentiary.
   - **F0-5** (now owned by M5 §11) — the CF_* variable contract is not a single implementation:
     `install-codex.sh` duplicates the validator; `install-claude-code.sh` sources `lib.sh` not
@@ -225,7 +225,8 @@ the reason a caller reaches for it; which caller roles/scripts invoke it; requir
 inputs with types, allowed forms, defaults/units and validation preconditions; returned values,
 exit codes, printed output; failure and warning conditions; state changes and side effects; and
 the caller's obligations — including how the caller must **propagate the result** (a caller that
-ignores a returned 1 or an empty `have` result violates the contract). §3's inventory table is
+ignores a returned 1, or that treats an empty `have` result as a success when the status says
+otherwise, violates the contract; since CF-281 the two agree). §3's inventory table is
 the seed, not the finished depth: an integrating agent must be able to use the documented
 interface from this chapter alone, without reverse-engineering the source (review notes M0,
 acceptance criterion "handbook sufficient for integration"). Caller/dependency flow is required

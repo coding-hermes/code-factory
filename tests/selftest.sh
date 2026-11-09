@@ -178,6 +178,73 @@ if [ "$caller_rc" -ne 0 ] && [ "$caller_rows" = 1 ]; then
 else
   say "  FAIL  caller did not surface the failed install (exit $caller_rc, $caller_rows go:download row(s))"; fails=$((fails+1))
 fi
+
+# BEGIN cf281-have-absence
+# CF-281: have() could not report absence. Its body ended in `|| true`, so the exit status was
+# `true`'s whether the tool existed or not: `b=$(have bunker) || { … }` could never fire, a bare
+# `have timeout && tmo=timeout` was always true, and the empty substitution reached `"$b" spawn`
+# as `: command not found` reported under someone else's row.
+# The contract this arm owns: present -> exit 0 and the resolved path on stdout; absent -> non-zero
+# and NOTHING on stdout (a message there would be executed as a path by `"$b" cp …`).
+# Every library is sourced inside its own subshell, so the pre-fix copy below cannot redefine
+# `have` for the rest of this suite.
+have_absence_arm() {  # $1 = lib.sh path -> 0 when THAT library reports absence correctly
+  local lib="$1" aout arc pout prc
+  aout=$(. "$lib"; have cf281-no-such-tool-xyzzy); arc=$?
+  pout=$(. "$lib"; have bash); prc=$?
+  printf 'have() reports absence — absent: rc=%s stdout=%sB; present(bash): rc=%s stdout=%s\n' \
+    "$arc" "${#aout}" "$prc" "${pout:-<empty>}"
+  [ "$arc" -ne 0 ] && [ -z "$aout" ] && [ "$prc" -eq 0 ] && [ -n "$pout" ]
+}
+if have_out=$(have_absence_arm "$HERE/scripts/lib.sh"); then
+  say "  PASS  $have_out"
+else
+  say "  FAIL  $have_out"; fails=$((fails+1))
+fi
+# The repaired caller, end to end: node-create.sh with the client off PATH prints ONE named FAIL row
+# and no shell diagnostic. The fixture PATH is asserted to resolve no client — a host that had one
+# in /usr/bin would make this arm vacuous.
+nc_path="/usr/bin:/bin"
+if PATH="$nc_path" command -v bunker >/dev/null 2>&1; then
+  say "  FAIL  have() reports absence — caller: fixture PATH $nc_path still resolves bunker; the arm would prove nothing"; fails=$((fails+1))
+else
+  nc_out=$(env -i PATH="$nc_path" HOME="$tmpd/nc-home" CRIER_URL=http://crier.example:8767 BUNKER_SERVER=srv.example \
+    /bin/bash "$HERE/scripts/node-create.sh" --project demo --repo git@git.example:demo/repo.git --harness hermes 2>&1); nc_rc=$?
+  nc_rows=$(printf '%s\n' "$nc_out" | grep -Ec '^  FAIL  bunker_cli — ' || true)
+  if [ "$nc_rc" -eq 1 ] && [ "${nc_rows:-0}" = 1 ] \
+    && ! printf '%s\n' "$nc_out" | grep -Fq 'command not found' \
+    && ! printf '%s\n' "$nc_out" | grep -Fq '  FAIL  spawn'; then
+    say "  PASS  have() reports absence — caller: node-create.sh with the client off PATH -> 1 'FAIL bunker_cli' row, exit $nc_rc, no shell diagnostic"
+  else
+    say "  FAIL  have() reports absence — caller: node-create.sh with the client off PATH -> $nc_rows bunker_cli row(s), exit $nc_rc"; fails=$((fails+1))
+    printf '%s\n' "$nc_out" | sed 's/^/    | /'
+  fi
+fi
+# Red control: the SAME script against the pre-fix library must reproduce the misattribution, or this
+# arm cannot discriminate. Taken from the base commit, so a revert of have() turns both arms red.
+if git -C "$HERE" show 06adfa6:scripts/lib.sh > "$tmpd/pre-fix-lib.sh" 2>/dev/null; then
+  pre_out=$(have_absence_arm "$tmpd/pre-fix-lib.sh"); pre_rc=$?
+  if [ "$pre_rc" -ne 0 ] && printf '%s\n' "$pre_out" | grep -Fq 'absent: rc=0 stdout=0B'; then
+    say "  PASS  have() reports absence — pre-fix control: 06adfa6:scripts/lib.sh answers rc=0 for an absent tool; the arm is falsifiable"
+  else
+    say "  FAIL  have() reports absence — pre-fix control did not reproduce the defect (exit $pre_rc): $pre_out"; fails=$((fails+1))
+  fi
+  cp -a "$HERE/scripts" "$tmpd/pre-fix-scripts"
+  cp "$tmpd/pre-fix-lib.sh" "$tmpd/pre-fix-scripts/lib.sh"
+  cf_out=$(env -i PATH="$nc_path" HOME="$tmpd/nc-home" CRIER_URL=http://crier.example:8767 BUNKER_SERVER=srv.example \
+    /bin/bash "$tmpd/pre-fix-scripts/node-create.sh" --project demo --repo git@git.example:demo/repo.git --harness hermes 2>&1); cf_rc=$?
+  if [ "$cf_rc" -eq 1 ] && printf '%s\n' "$cf_out" | grep -Fq '  FAIL  spawn' \
+    && printf '%s\n' "$cf_out" | grep -Fq 'command not found' \
+    && ! printf '%s\n' "$cf_out" | grep -Fq '  FAIL  bunker_cli'; then
+    say "  PASS  have() reports absence — caller control: the pre-fix library reports the absent client as 'FAIL spawn — …: command not found', exit $cf_rc"
+  else
+    say "  FAIL  have() reports absence — caller control did not reproduce the pre-fix misreport (exit $cf_rc)"; fails=$((fails+1))
+    printf '%s\n' "$cf_out" | sed 's/^/    | /'
+  fi
+else
+  say "  FAIL  have() reports absence — pre-fix source unavailable (git show 06adfa6:scripts/lib.sh)"; fails=$((fails+1))
+fi
+# END cf281-have-absence
 rm -rf "$tmpd"
 
 say "6. no literal credential assignments"

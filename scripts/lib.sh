@@ -33,7 +33,16 @@ verdict() {  # verdict <LABEL> [action] — prints the line, returns the status 
   return 0
 }
 
-have() { command -v "$1" >/dev/null 2>&1 && command -v "$1" || true; }
+# have <cmd> — prints the resolved path and exits 0 when <cmd> is on PATH; prints NOTHING on stdout
+# and exits non-zero when it is not. Absence must be observable by STATUS: the trailing `|| true`
+# this used to end in made the status constant 0, so every `b=$(have x) || { … }` guard in this tree
+# was dead code and `have x && …` was always true (CF-281). Never write an error here — callers
+# execute the result as a path (`"$b" cp …`), so the only thing on stdout is the path itself.
+have() {
+  local p
+  p=$(command -v "${1:-}" 2>/dev/null) || return 1
+  printf '%s\n' "$p"
+}
 
 # A pinned download that refuses a digest mismatch (CF-105). Never pipes to a shell.
 # CF-280: fails closed. Every step that can fail while putting the artifact in place is checked

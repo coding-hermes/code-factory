@@ -160,7 +160,7 @@ if [ -z "$SERVER" ]; then
 fi
 [ -z "$PROJECT" ] && { echo "usage: $0 --project P --repo URL [--ref R] [--harness H] [--agent ID] [--deploy-key FILE] [--gomodcache PATH]"; echo "       --agent ID reuses an agent that must already exist on the server; it is never spawned"; echo "       --deploy-key FILE injects a read-only per-repo key (mode 600, never in argv)"; echo "       --gomodcache PATH points the node at a sealed shared Go module cache"; exit 2; }
 
-b=$(have bunker) || { echo "bunker client missing" >&2; exit 1; }
+b=$(have bunker) || { bad "bunker_cli" "no bunker client on PATH — install the bunker client; without it no agent can be spawned, staged or verified (nothing was attempted)"; incomplete; }
 
 say "node-create — project=$PROJECT harness=$HARNESS server=$SERVER"
 

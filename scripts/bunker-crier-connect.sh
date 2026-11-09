@@ -79,18 +79,23 @@ say "crier-connect --check — agent=$AGENT url=$URL"
   esac
   fi
 
-  # the node-side identity must agree with the host we just probed
+  # the node-side identity must agree with the host we just probed. A missing client is ONE FAIL row
+  # and the run continues to its verdict line: returning from the middle of check() would drop
+  # `CRIER:` — the line the caller reads — and every row ordered after it (CF-281).
   local b json
-  b=$(have bunker) || { bad "identity" "no bunker client on PATH"; return 1; }
-  json=$(timeout 45 "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'cat "$HOME/.node/crier.json" 2>/dev/null || echo absent' 2>/dev/null || echo absent)
-  case "$json" in
-    absent) bad "identity" "\$HOME/.node/crier.json absent — run --apply" ;;
-    *"$AGENT"*) case "$json" in
-                  *"$URL"*) ok "identity" "node points at $URL as $AGENT" ;;
-                  *) bad "identity" "node points elsewhere: $json" ;;
-                esac ;;
-    *) bad "identity" "node identity names a different agent: $json" ;;
-  esac
+  if b=$(have bunker); then
+    json=$(timeout 45 "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'cat "$HOME/.node/crier.json" 2>/dev/null || echo absent' 2>/dev/null || echo absent)
+    case "$json" in
+      absent) bad "identity" "\$HOME/.node/crier.json absent — run --apply" ;;
+      *"$AGENT"*) case "$json" in
+                    *"$URL"*) ok "identity" "node points at $URL as $AGENT" ;;
+                    *) bad "identity" "node points elsewhere: $json" ;;
+                  esac ;;
+      *) bad "identity" "node identity names a different agent: $json" ;;
+    esac
+  else
+    bad "identity" "no bunker client on PATH — \$HOME/.node/crier.json cannot be read from the node"
+  fi
 
   say ""
   # CONNECTED is a claim about a SIGNED read. An unsigned 200 (a bus without auth) and an unsigned 401

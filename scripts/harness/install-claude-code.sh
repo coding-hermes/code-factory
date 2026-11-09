@@ -366,7 +366,8 @@ probe_binary() {
   case "$p" in
     '') bad "binary" "absent (no $BIN and no claude on PATH) — run --apply"; return 1 ;;
   esac
-  # `have` ends in `|| true` (lib.sh), so it never signals absence by status: test the path.
+  # `have` reports absence by STATUS and by empty output (CF-281), so either test is honest here;
+  # the path is tested directly because it is what the row names.
   # HARNESS.md: a PATH-provided binary is labelled host-provided and FAILs the binary row,
   # even when its version matches — this adapter did not install it at the pin.
   bad "binary" "host-provided $p (not installed by this adapter — run --apply)"

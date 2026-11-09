@@ -74,7 +74,7 @@ explicit warning/confirmation is a separate question.
 |---|---|---|---|
 | bash | >= 4 | node + control host | undefined `lib.sh` helper aborts |
 | python3 | 3.x | node + control host | `command -v python3` empty → FAIL row |
-| `bunker` CLI | resolved via `have bunker` (PATH order, `lib.sh:13`; `bunker-provision.sh:181`) — **not** an absolute path | control host | `bad "bunker_cli" "no bunker client on PATH"` (`:182`) |
+| `bunker` CLI | resolved via `have bunker` (PATH order, `lib.sh:41-45`; `bunker-provision.sh:181`) — **not** an absolute path | control host | `bad "bunker_cli" "no bunker client on PATH"` (`:182`) |
 | crier bus | reachable | `http://<crier-host>:8767` | `reach:` FAIL row / non-200 |
 
 **4b. Library contracts**

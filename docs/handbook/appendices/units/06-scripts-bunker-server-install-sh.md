@@ -47,7 +47,7 @@
   `apt-get`, no write under `/etc`, and no `/etc` read at all; measured by
   `grep -nE 'sudo|apt|apt-get|/etc/|root'`, which matches only the word "install" inside the three
   header comments [scripts/bunker-server-install.sh:2-5]. Every action it takes is a read: `have`
-  resolves binaries [scripts/lib.sh:13], `bunker --version` / `list` / `status` are read
+  resolves binaries [scripts/lib.sh:41-45], `bunker --version` / `list` / `status` are read
   subcommands [scripts/bunker-server-install.sh:30] [scripts/bunker-server-install.sh:47]
   [scripts/bunker-server-install.sh:61], and `df -Pk` reads free space [scripts/lib.sh:32]. It
   therefore cannot violate rule 6 — and equally cannot repair anything, which is the defect in §6.
@@ -75,8 +75,8 @@
 
 | Import | Provider | Contract relied on | If it changes |
 |---|---|---|---|
-| `. "$HERE/lib.sh"` (sourced, not a package) [scripts/bunker-server-install.sh:12] | `scripts/lib.sh` | five printers `say`/`ok`/`bad`/`warn`/`note` [scripts/lib.sh:5-9], `have` [scripts/lib.sh:13], and `require_disk`, which calls `free_gb` and prints the floor it measured [scripts/lib.sh:35-44]. `bad()` is the ONLY thing that increments `FAILED` [scripts/lib.sh:7], and `FAILED` is initialised by the library, not by the caller [scripts/lib.sh:11] | the verdict stops meaning anything: with `lib.sh` absent every printer degrades to `command not found`, `FAILED` stays 0, and line 73 exits **0** on a failed host [scripts/bunker-server-install.sh:73]. A renamed `bad` has the same effect without any error message |
-| `have` [scripts/lib.sh:13] | same library | returns the resolved path on stdout, empty on absence; the script tests `-n "$b"` [scripts/bunker-server-install.sh:29] | a `have` that printed something on absence would make every dependent row take the "present" arm and then fail at the binary |
+| `. "$HERE/lib.sh"` (sourced, not a package) [scripts/bunker-server-install.sh:12] | `scripts/lib.sh` | five printers `say`/`ok`/`bad`/`warn`/`note` [scripts/lib.sh:5-9], `have` [scripts/lib.sh:41-45], and `require_disk`, which calls `free_gb` and prints the floor it measured [scripts/lib.sh:35-44]. `bad()` is the ONLY thing that increments `FAILED` [scripts/lib.sh:7], and `FAILED` is initialised by the library, not by the caller [scripts/lib.sh:11] | the verdict stops meaning anything: with `lib.sh` absent every printer degrades to `command not found`, `FAILED` stays 0, and line 73 exits **0** on a failed host [scripts/bunker-server-install.sh:73]. A renamed `bad` has the same effect without any error message |
+| `have` [scripts/lib.sh:41-45] | same library | present: exit 0 and the resolved path on stdout; absent: non-zero and nothing on stdout (CF-281) — the script tests `-n "$b"` [scripts/bunker-server-install.sh:29], which was and remains correct | a `have` that printed something on absence would make every dependent row take the "present" arm and then fail at the binary |
 
 ### 2c. Service contracts (both sides must be named)
 
@@ -187,7 +187,7 @@ lives on the daemon or the network; **degraded** = the run continues with a weak
 | `BUNKER_SERVER` [scripts/bunker-server-install.sh:14] | empty | abort before any measurement: `  FAIL  server_declared — BUNKER_SERVER unset — the client has no server to talk to`, `RESULT: FAIL (1)`, exit 1 [scripts/bunker-server-install.sh:18-23]; measured §8 arm A |
 | `BUNKER_CONFIG` [scripts/bunker-server-install.sh:37] | `$HOME/.config/bunker/config.yaml` | the default path is tested instead; if it is missing the row FAILs but reachability is still attempted [scripts/bunker-server-install.sh:38-47] |
 | `HOME` [scripts/bunker-server-install.sh:37] [scripts/bunker-server-install.sh:70] | set by the login session | the config path collapses to `/.config/bunker/config.yaml` and the disk floor is measured at `/` |
-| `PATH` (through `have`) [scripts/lib.sh:13] | set by the session | no client, no tools; the run is still diagnosable but the `bunker_client` row FAILs [scripts/bunker-server-install.sh:28-34] |
+| `PATH` (through `have`) [scripts/lib.sh:41-45] | set by the session | no client, no tools; the run is still diagnosable but the `bunker_client` row FAILs [scripts/bunker-server-install.sh:28-34] |
 | `$1` — only `--json` is compared [scripts/bunker-server-install.sh:16] | no flag | `--check` and `--apply` are **not** modes; every argument other than `--json` is ignored, and `--json` itself is never read again [scripts/bunker-server-install.sh:15-16] |
 | no config key, flag or environment variable for a disk floor | hard-coded 5 GB [scripts/bunker-server-install.sh:70] | the floor cannot be raised or lowered without editing the file; AGENTS.md's 1.5 GB-per-node figure is not consulted [AGENTS.md:49-50] |
 | no setting for the status line cap | hard-coded `head -20` [scripts/bunker-server-install.sh:61] | a server with more than 20 status lines is truncated silently; a residue line below the cut is never seen |
