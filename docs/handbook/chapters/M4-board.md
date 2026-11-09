@@ -120,6 +120,15 @@ is therefore **UNVERIFIED**/**broken** per OUTLINE, not "works" — a "works" ve
 unnamed side is a rumour with a verdict. CT-10, CT-13 and CT-14 are
 boundary contracts.
 
+### Board integrity
+
+The `tests/selftest.sh` board gate requires every non-empty JSONL board to end in a newline.
+An unterminated final record is reported as one unterminated row and fails the gate; it is
+not counted as a valid record. An empty board remains valid and reports `PASS  0/0 rows parse`.
+This describes the selftest gate, not the separate `board_read.py` or external Boardctl behavior.
+
+ch:trace row=CF-048 spec=docs/handbook/chapters/M4-board.md#board-integrity wave=none:serial test=tests/selftest.sh::board-arm-unterminated-tail doc=docs/handbook/chapters/M4-board.md evidence=tests/selftest.sh::board-arm-unterminated-tail witness=none:local-fixture verdict=none:foreman-judge commit=none:worker-commit memory=none:foreman-writes
+
 ## 7. Verification
 
 | Check | Command | Expected | Last run | Result |

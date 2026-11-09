@@ -425,7 +425,7 @@ board_arm() {
     return 1
   fi
   # One parser process for the whole board (PERF-012), not python3 per row.
-  # Preserve `while read` semantics: skip an unterminated last line; empty is 0/0.
+  # Empty is 0/0; a non-empty board must not hide an unterminated final row.
   python3 - "$b" <<'PY'
 import json, sys
 try:
@@ -433,7 +433,15 @@ try:
 except OSError as exc:
     print(f"  FAIL  board unreadable: {exc}")
     sys.exit(1)
-rows = data.split(b"\n")[:-1]
+unterminated = bool(data) and not data.endswith(b"\n")
+rows = data.split(b"\n")
+if rows and rows[-1] == b"":
+    rows.pop()
+if unterminated:
+    legacy_rows = data.split(b"\n")[:-1]
+    print(f"  FAIL  board: 1 unterminated row (line {len(rows)})")
+    print(f"  note  pre-fix parser control would accept {len(legacy_rows)} of {len(rows)} rows")
+    sys.exit(1)
 statuses = ("pending", "in_progress", "blocked", "complete")
 seen = {}
 good = 0
@@ -519,6 +527,36 @@ if [ "$rc" -eq 1 ] && [ "$out" = '  FAIL  board parser: python3 missing' ]; then
 else
   say "  FAIL  missing python3 escaped the board gate (exit $rc)"; fails=$((fails+1))
 fi
+# board-arm-unterminated-tail: the same valid records must pass intact and fail without
+# the last newline. The empty board intentionally remains PASS 0/0.
+printf '%s\n' '{"id":"CF-001","status":"pending"}' '{"id":"CF-002","status":"complete"}' > "$tmpd/intact.jsonl"
+printf '%s\n%s' '{"id":"CF-001","status":"pending"}' '{"id":"CF-002","status":"complete"}' > "$tmpd/tail.jsonl"
+touch "$tmpd/empty.jsonl"
+for arm in intact tail empty; do
+  out=$(board_arm "$tmpd/$arm.jsonl" 2>&1); rc=$?
+  case "$arm:$rc" in
+    intact:0)
+      if [ "$out" = '  PASS  2/2 rows parse' ]; then
+        say "  PASS  board-arm-unterminated-tail intact: $out"
+      else
+        say "  FAIL  board-arm-unterminated-tail intact: $out"; fails=$((fails+1))
+      fi ;;
+    tail:1)
+      if printf '%s\n' "$out" | grep -Fxq '  FAIL  board: 1 unterminated row (line 2)' \
+        && printf '%s\n' "$out" | grep -Fxq '  note  pre-fix parser control would accept 1 of 2 rows'; then
+        say "  PASS  board-arm-unterminated-tail tail: $out"
+      else
+        say "  FAIL  board-arm-unterminated-tail tail (exit $rc): $out"; fails=$((fails+1))
+      fi ;;
+    empty:0)
+      if [ "$out" = '  PASS  0/0 rows parse' ]; then
+        say "  PASS  board-arm-unterminated-tail empty: $out"
+      else
+        say "  FAIL  board-arm-unterminated-tail empty: $out"; fails=$((fails+1))
+      fi ;;
+    *) say "  FAIL  board-arm-unterminated-tail $arm (exit $rc): $out"; fails=$((fails+1)) ;;
+  esac
+done
 rm -rf "$tmpd"
 
 say "8. project board entrypoint is real and fails closed without dependency"
