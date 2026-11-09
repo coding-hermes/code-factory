@@ -138,7 +138,7 @@ Primary findings: P3-20 (delivery-side consistency evidence). This wave records 
 | Part V — Settings register | 4 |
 | Part VI — Failure and risk | 3 |
 | Part VII — Work derivation | 2 |
-| Part VIII — Delivery | 1 |
+| Part VIII — Delivery | 0 |
 | Part IX — Disposition log | 0 |
 | **Total** | **26** |
 
