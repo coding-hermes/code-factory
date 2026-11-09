@@ -280,8 +280,33 @@ mkdir -p "$TURN_WORK"
 
 if [ -z "$KEYFILE" ]; then
   skip "no DeepSeek credential on this host — missing both CF_API_KEY_FILE and DEEPSEEK_API_KEY (checked HOME=$HOME); --turn would SKIP with exit 3"
-  out=$(HOME="$HOME" env -u DEEPSEEK_API_KEY -u CF_API_KEY_FILE -u CF_API_KEY \
-    "$SUT" --turn --prompt 'noop' 2>&1); rc=$?
+  # The exact invocation the CF-226 verdict reproduced: no credential, and none of the §5 run set
+  # either. The documented answer is the SKIP with exit 3 (specs/HARNESS.md "The verdict line"),
+  # because a credential is a RUN input and the run set is only required of a turn that will run.
+  #
+  # It runs against a HOME holding a STUB launcher that reports the pin. That measures the
+  # ADAPTER's ordering — which gate is reached first — on every host, without a real credential, a
+  # network call or a model turn. The stub logs each invocation, so "nothing was started" is
+  # measured instead of asserted.
+  STUB_HOME="$WORK/stub-home"
+  STUB_LOG="$WORK/stub-invocations.log"
+  mkdir -p "$STUB_HOME/.local/harness/dsh/bin"
+  cat > "$STUB_HOME/.local/harness/dsh/bin/dsh" <<STUB
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$STUB_LOG"
+[ "\${1:-}" = "--version" ] && { printf '%s\n' "$PIN"; exit 0; }
+exit 1
+STUB
+  chmod +x "$STUB_HOME/.local/harness/dsh/bin/dsh"
+  # stub_ran_only_version — true when the launcher was called at most for --version, i.e. the
+  # adapter never booted a profile. An absent or empty log is the strongest form of that.
+  stub_ran_only_version() {
+    [ -s "$STUB_LOG" ] || return 0
+    ! grep -qvx -- '--version' "$STUB_LOG"
+  }
+  SCRUB=(env -u DEEPSEEK_API_KEY -u CF_API_KEY_FILE -u CF_API_KEY -u DSH_API_KEY
+         -u CF_MODEL -u CF_PROVIDER -u CF_WORKDIR -u CF_NAMESPACE -u CF_RUN_ID -u CF_LANE)
+  out=$(HOME="$STUB_HOME" "${SCRUB[@]}" "$SUT" --turn --prompt 'noop' 2>&1); rc=$?
   [ "$rc" -eq 3 ] && pass "--turn reports SKIP with exit 3 when no credential exists (exit $rc)" \
     || fail "--turn returned $rc instead of skip-exit 3"
   printf '%s' "$out" | grep -q 'DSH: SKIP' && pass "the summary says SKIP, not PASS" \
@@ -290,6 +315,33 @@ if [ -z "$KEYFILE" ]; then
     || pass "a skipped turn is never reported as PASS"
   printf '%s' "$out" | grep -q 'CF_API_KEY_FILE' && pass "the SKIP names the missing input" \
     || fail "the SKIP does not name what is missing"
+  # The defect CF-226 was reworked for: the run-set check must not pre-empt the credential gate.
+  printf '%s' "$out" | grep -q 'contract:required' \
+    && fail "--turn refused the §5 run set before the credential gate (contract:required), so it never reached the SKIP path" \
+    || pass "the run-set check does not pre-empt the credential gate (no contract:required row)"
+  if stub_ran_only_version; then
+    pass "the skipped turn started nothing (the only launcher call was --version)"
+  else
+    fail "the skipped turn invoked the launcher beyond --version: $(tr '\n' ';' < "$STUB_LOG" 2>/dev/null)"
+  fi
+  # The other half of the same rule: a credential PATH means the turn WILL run, so an incomplete §5
+  # run set is still refused by name — exit 2, and nothing is started.
+  : > "$STUB_LOG"
+  out=$(HOME="$STUB_HOME" "${SCRUB[@]}" CF_API_KEY_FILE="$key600" \
+    "$SUT" --turn --prompt 'noop' 2>&1); rc=$?
+  [ "$rc" -eq 2 ] && pass "a credential-present --turn with no §5 run set is still refused (exit $rc)" \
+    || fail "a credential-present --turn missing the run set returned $rc, not the documented refusal (2)"
+  printf '%s' "$out" | grep -q 'contract:required' \
+    && pass "the refusal is contract:required, by name" \
+    || fail "the refusal does not name contract:required"
+  printf '%s' "$out" | grep -q 'CF_MODEL CF_PROVIDER CF_WORKDIR CF_NAMESPACE CF_RUN_ID CF_LANE' \
+    && pass "the refusal names every missing §5 run-set variable" \
+    || fail "the refusal does not name the missing run-set variables"
+  if stub_ran_only_version; then
+    pass "the refused turn started nothing (no profile boot)"
+  else
+    fail "a refused turn booted the harness anyway: $(tr '\n' ';' < "$STUB_LOG" 2>/dev/null)"
+  fi
 else
   out=$(CF_API_KEY_FILE="$KEYFILE" \
     CF_MODEL="${CF_MODEL:-deepseek-flash}" \

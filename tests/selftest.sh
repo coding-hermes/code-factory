@@ -6807,5 +6807,64 @@ else
 fi
 rm -rf "$cf211"
 
+# ch:trace row=CF-226 spec=specs/HARNESS.md#the-verdict-line wave=none:serial test=tests/harness/dsh-install-test.sh doc=specs/HARNESS-MATRIX.md#5-the-variable-contract--what-an-installer-and-a-harness-are-given prompt=none:worker-brief evidence=tests/harness/dsh-install-test.sh witness=none:local-fixture verdict=none:foreman-runs-judge commit=none:self-referential-hash memory=none:foreman-closeout
+say "64. a credential-less --turn reaches the dsh adapter's documented SKIP before the §5 run set is required (CF-226)"
+# CF-226: install-dsh.sh forced `cfv_validate contract` for --turn and called require_run_set in
+# main, both BEFORE do_turn's credential gate — so with no credential the adapter exited 2
+# "contract:required" and its documented SKIP (exit 3, specs/HARNESS.md "The verdict line") was
+# unreachable. The adapter's own test asserted the SKIP, so the shipped test and the shipped
+# subject disagreed; nothing in this suite ran that test, so the suite stayed green on the defect.
+# This section runs the test file and then runs the SAME file against the pre-fix subject, where it
+# must fail: a test that cannot fail on the defect is decoration (AGENTS.md rule 2). The test is
+# hermetic here — a stub launcher reports the pin, so no credential, no network and no model turn.
+dsh_env=(env -u DEEPSEEK_API_KEY -u CF_API_KEY_FILE -u CF_API_KEY -u DSH_API_KEY
+         -u CF_MODEL -u CF_PROVIDER -u CF_WORKDIR -u CF_NAMESPACE -u CF_RUN_ID -u CF_LANE)
+out=$("${dsh_env[@]}" bash "$HERE/tests/harness/dsh-install-test.sh" 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^DSH-INSTALL-TEST: PASS' \
+  && printf '%s\n' "$out" | grep -q '^  SKIP  no DeepSeek credential on this host'; then
+  say "  PASS  tests/harness/dsh-install-test.sh is green ($(printf '%s\n' "$out" | grep -c '^  PASS') rows), with the live turn skipped by name"
+else
+  say "  FAIL  tests/harness/dsh-install-test.sh (exit $rc): $(printf '%s\n' "$out" | grep -E '^  FAIL|^DSH-INSTALL-TEST|^  SKIP' | head -4 | tr '\n' ' ')"
+  fails=$((fails+1))
+fi
+# A green aggregate is not enough: the rows that decide the ordering must be present, so gutting
+# the test into a bare `exit 0` cannot satisfy this section.
+dsh_absent=""
+for dsh_want in \
+  'PASS  --turn reports SKIP with exit 3 when no credential exists' \
+  'PASS  the run-set check does not pre-empt the credential gate' \
+  'PASS  the skipped turn started nothing (the only launcher call was --version)' \
+  'PASS  a credential-present --turn with no §5 run set is still refused' \
+  'PASS  the refusal names every missing §5 run-set variable' ; do
+  printf '%s\n' "$out" | grep -Fq -- "$dsh_want" || dsh_absent="$dsh_absent [$dsh_want]"
+done
+if [ -z "$dsh_absent" ]; then
+  say "  PASS  the rows that decide the ordering are present: SKIP/3, no run-set refusal before it, nothing started, and the strict refusal kept"
+else
+  say "  FAIL  the dsh test did not print:$dsh_absent"
+  fails=$((fails+1))
+fi
+# The red control: the same test file against the subject revision this row was raised on.
+dsh_prefix=$(mktemp -d)
+mkdir -p "$dsh_prefix/scripts/harness" "$dsh_prefix/tests/harness"
+if git -C "$HERE" show 899bfe5:scripts/harness/install-dsh.sh > "$dsh_prefix/scripts/harness/install-dsh.sh" 2>/dev/null \
+  && cp "$HERE/scripts/lib.sh" "$dsh_prefix/scripts/lib.sh" \
+  && cp "$HERE/scripts/harness/harness-vars.sh" "$dsh_prefix/scripts/harness/harness-vars.sh" \
+  && cp "$HERE/tests/harness/dsh-install-test.sh" "$dsh_prefix/tests/harness/dsh-install-test.sh"; then
+  chmod +x "$dsh_prefix/scripts/harness/install-dsh.sh"
+  rout=$("${dsh_env[@]}" bash "$dsh_prefix/tests/harness/dsh-install-test.sh" 2>&1); rrc=$?
+  if [ "$rrc" -ne 0 ] \
+    && printf '%s\n' "$rout" | grep -q 'refused the §5 run set before the credential gate'; then
+    say "  PASS  pre-fix 899bfe5 fails the same test on the ordering row (exit $rrc) — this section discriminates"
+  else
+    say "  FAIL  pre-fix 899bfe5 did not fail the ordering row (exit $rrc): $(printf '%s\n' "$rout" | grep -E '^  FAIL|^DSH-INSTALL-TEST' | head -3 | tr '\n' ' ')"
+    fails=$((fails+1))
+  fi
+else
+  say "  FAIL  pre-fix source unavailable (git show 899bfe5:scripts/harness/install-dsh.sh)"
+  fails=$((fails+1))
+fi
+rm -rf "$dsh_prefix"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

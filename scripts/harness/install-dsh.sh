@@ -161,6 +161,11 @@ MODES
                 the turn to write $CF_TURN_FILE containing $CF_TURN_TOKEN, and reports the model
                 dsh recorded, the turn outcome, the tool count and the permission preset. On a
                 failure it prints the per-layer attribution rather than one line saying it broke.
+                With NO credential it prints `DSH: SKIP (no credential — nothing measured, nothing
+                claimed)` and exits 3: a credential is a run input, so a turn that cannot
+                authenticate certifies nothing — and the §5 run set is required only once a
+                credential exists, because that is when a turn actually runs (an incomplete set is
+                then exit 2, nothing measured).
   --layers      The six plugin layers, in order, one row each: package -> resolved -> enabled ->
                 service -> tool -> permission. A failure names the layer and the plugin/service
                 that failed; layers after it are reported as not measured, never as broken.
@@ -664,7 +669,9 @@ contract_extras() {
   esac
 }
 
-# The §5 run set, required by --turn (a turn is a run) and validated when present everywhere else.
+# The §5 run set, required by a turn that WILL run (do_turn calls this after the credential gate,
+# never before it: a credential is a run input, so its absence is the documented SKIP, not a
+# refusal) and validated when present everywhere else. CF-226.
 require_run_set() {
   local k missing=""
   for k in "${CFV_REQUIRED[@]}"; do
@@ -674,6 +681,7 @@ require_run_set() {
     cfv_fail "contract:required" "refused — --turn needs the §5 run set; missing:$missing"
     return 1
   fi
+  ok "contract:required" "the §5 run set is complete (${#CFV_DECLARED[@]} declared, ${#CFV_REQUIRED[@]} required)"
   return 0
 }
 
@@ -1056,11 +1064,19 @@ say "  note: the pin is an RC — re-measure it with --pin-status (registry inte
 
 mkdir -p "$(turn_cache_root)" 2>/dev/null || true
 
-# Every mode validates the §5 set; --turn additionally requires the run set, because a turn is a run.
-cfv_validate "$([ "$MODE" = "--turn" ] && printf 'contract' || printf '%s' "$CFV_MODE")"
+# Every mode validates the §5 set the same way: each name, by name, refusing a value where a path
+# belongs and an ambient key where the directive belongs. The run-SET completeness check is NOT
+# done here for --turn, and the reason is the documented contract rather than convenience: a
+# credential is a RUN input, so a --turn with none cannot authenticate and answers with the
+# SKIP (exit 3) that specs/HARNESS.md "The verdict line" records for exactly this case
+# (install-claude-code.sh does the same). Requiring the run set first made a credential-less
+# --turn exit 2 "contract:required" and never reach that path (CF-226). The strictness is not
+# weakened, it is placed where it decides: do_turn() calls require_run_set() once the credential
+# gate has passed, so a turn that WILL run is still refused (exit 2) when a required name is
+# missing, and every refusal above still runs before either gate.
+cfv_validate "$CFV_MODE"
 contract_extras
 check_workdir
-if [ "$MODE" = "--turn" ]; then require_run_set; fi
 if cfv_refused; then
   say ""
   say "DSH: FAIL ($CFV_FAILED) — contract refused; nothing was installed or run"
@@ -1119,6 +1135,13 @@ case "$MODE" in
     if [ "${SKIPPED:-0}" -eq 1 ]; then
       say "DSH: SKIP (no credential — nothing measured, nothing claimed)"
       exit 3
+    fi
+    # A turn refused by the contract BEFORE it ran (do_turn's require_run_set, reached once a
+    # credential exists) is a named refusal: exit 2, nothing measured, nothing claimed — not a
+    # failed run. CF-226.
+    if cfv_refused; then
+      say "DSH: FAIL ($CFV_FAILED) — contract refused; nothing was installed or run"
+      exit 2
     fi
     verdict DSH action
     exit $?
