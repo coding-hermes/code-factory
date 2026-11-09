@@ -289,6 +289,12 @@ class BusDispatchEncodingTest(unittest.TestCase):
             f"the refusal was not printed as a named brief_digest row: {self.output}",
         )
 
+    @unittest.skipUnless(
+        PREFIX_CONTROL,
+        "pre-fix control arm: asserts a PRE-FIX worker, so it needs the control env; run "
+        "tests/selftest.sh or CF_BUS_WORKER_SOURCE=<pre-fix node-bus-worker.py> "
+        "CF_BUS_DISPATCH_PREFIX_CONTROL=1 python3 tests/test_bus_dispatch_encoding.py",
+    )
     def test_p0_prefix_control_refuses_text_b64_with_the_brief_row(self):
         """P0  the PRE-FIX source refuses a text_b64 dispatch with the `brief` row (the red)"""
         dispatch = {

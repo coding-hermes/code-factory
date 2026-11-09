@@ -399,6 +399,12 @@ class BriefDigestBindingTest(unittest.TestCase):
             "the sender helper prints a digest the node would refuse",
         )
 
+    @unittest.skipUnless(
+        PREFIX_CONTROL,
+        "pre-fix control arm: asserts a PRE-FIX worker, so it needs the control env; run "
+        "tests/selftest.sh or CF_BUS_WORKER_SOURCE=<pre-fix node-bus-worker.py> "
+        "CF_BRIEF_DIGEST_PREFIX_CONTROL=1 python3 tests/test_brief_digest_binding.py",
+    )
     def test_p0_prefix_control_runs_a_gate_altered_after_the_digest(self):
         """P0  the PRE-FIX worker runs the gate whose cmd was altered (the defect reproduces)"""
         dispatch = self.dispatch(digest="legacy")

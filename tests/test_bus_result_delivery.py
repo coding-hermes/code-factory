@@ -1055,9 +1055,20 @@ def consumer_pin(failures):
 # It asserts the DEFECT: no `ok` on the envelope, no `in_reply_to`, no relay idempotency key —
 # and therefore a failed run read as a completed tick, and a refused delivery re-running the
 # harness. Pointed at the fixed worker these arms fail, so the pair discriminates.
+#
+# Under a bare `unittest discover` this class would be graded against the CURRENT (fixed) worker
+# and fail by construction, so the whole class skips without its control env: a reader sees WHY
+# and the exact command that makes the arms execute.
 # ---------------------------------------------------------------------------------------------
 
 
+@unittest.skipUnless(
+    PREFIX_CONTROL,
+    "pre-fix control arm: asserts a PRE-FIX worker, so it needs the control env; run "
+    "tests/selftest.sh or CF_BUS_WORKER_SOURCE=<pre-fix node-bus-worker.py> "
+    "CF_BUS_RESULT_PREFIX_CONTROL=1 python3 tests/test_bus_result_delivery.py",
+)
+# ch:trace row=CF-396 spec=docs/handbook/OUTLINE.md#VIII.5:chapter-unwritten-recorded-as-finding test=tests/test_bus_result_delivery.py::PreFixControlTest doc=none:chapter-gap-filed-separately evidence=A1,A2,A3 in commit body witness=none:reason no-external-surface verdict=none:reason foreman-runs-gitreins commit=none:reason-no-sha-in-own-body memory=none:reason
 class PreFixControlTest(Rig):
     def test_p1_envelope_carries_no_ok_and_no_in_reply_to(self):
         """P1  pre-fix: the delivered envelope has no `ok`, no in_reply_to, no relay key"""
