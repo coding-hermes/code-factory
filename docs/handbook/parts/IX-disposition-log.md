@@ -210,3 +210,5 @@ A finding without a disposition entry in this log cannot be considered resolved.
 dispositions are monotonic in visibility, deferred and unresolved rows re-decide at the
 next pass, and the log — not the page count — is the record that the review was
 answered (VIII.5).
+
+pass3 received, 26 findings, plan committed at pending
