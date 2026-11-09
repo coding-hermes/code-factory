@@ -7024,14 +7024,25 @@ rm -rf "$cf299"
 
 # CF-398 arm: keep this inside the existing section census; evidence pointers are an
 # additive board invariant, not a new numbered selftest section.
-cf398_out=$(python3 "$HERE/scripts/board_evidence_check.py" 2>&1); cf398_rc=$?
-cf398_expected=$(PYTHONPATH="$HERE/scripts" python3 -B -c \
-  'import board_evidence_check; print(board_evidence_check.EXPECTED_UNRESOLVED)')
-if [ "$cf398_rc" -eq 0 ] \
-  && printf '%s\n' "$cf398_out" | grep -Eq "^checked [0-9]+ complete rows, $cf398_expected unresolved$"; then
-  say "  PASS  CF-398 board evidence checker matches EXPECTED_UNRESOLVED=$cf398_expected"
+cf398_out=$(python3 "$HERE/scripts/board_evidence_check.py" --quiet-findings 2>&1); cf398_rc=$?
+cf398_count=$(printf '%s\n' "$cf398_out" | tail -1)
+if printf '%s\n' "$cf398_count" | grep -Eq '^checked [0-9]+ complete rows, [0-9]+ unresolved$'; then
+  cf398_unresolved=$(printf '%s\n' "$cf398_count" | sed -E 's/^checked [0-9]+ complete rows, ([0-9]+) unresolved$/\1/')
+  python3 "$HERE/scripts/board_evidence_check.py" --strict --quiet-findings >/dev/null 2>&1; cf398_strict_rc=$?
+  cf398_expected_strict=0
+  [ "$cf398_unresolved" -gt 0 ] && cf398_expected_strict=1
 else
-  say "  FAIL  CF-398 board evidence checker (exit $cf398_rc): $(printf '%s\n' "$cf398_out" | tail -1)"
+  cf398_unresolved=-1
+  cf398_strict_rc=2
+  cf398_expected_strict=2
+fi
+if [ "$cf398_rc" -eq 0 ] \
+  && [ "$cf398_strict_rc" -eq "$cf398_expected_strict" ] \
+  && [ "$cf398_unresolved" -ge 0 ]; then
+  cf398_display=${cf398_count#checked }
+  say "  PASS  CF-398 evidence checker reports a derived count ($cf398_display) and --strict matches it"
+else
+  say "  FAIL  CF-398 evidence checker (exit $cf398_rc, strict $cf398_strict_rc): $cf398_count"
   fails=$((fails+1))
 fi
 

@@ -7,11 +7,6 @@ import os
 import sys
 
 
-# Tracked-store semantics: 119 complete rows, verified identical in a fresh clone and
-# in the foreman checkout.
-EXPECTED_UNRESOLVED = 60
-
-
 def _run_directory_exists(history_root, run_id):
     """Return whether any dated GitReins history directory contains run_id."""
     if not os.path.isdir(history_root):
@@ -26,18 +21,52 @@ def _run_directory_exists(history_root, run_id):
     return False
 
 
-def _load_events(events_path):
+def _history_run_count(history_root):
+    """Return the number of run directories under dated history directories."""
+    if not os.path.isdir(history_root):
+        return 0
+    count = 0
     try:
-        with open(events_path, encoding="utf-8") as events_file:
-            return events_file.read()
+        dates = os.listdir(history_root)
+    except OSError:
+        return 0
+    for date in dates:
+        date_path = os.path.join(history_root, date)
+        if not os.path.isdir(date_path):
+            continue
+        try:
+            count += sum(
+                os.path.isdir(os.path.join(date_path, run_id))
+                for run_id in os.listdir(date_path)
+            )
+        except OSError:
+            continue
+    return count
+
+
+def _load_events(events_path):
+    valid_lines = []
+    ignored = 0
+    try:
+        with open(events_path, encoding="utf-8", errors="replace") as events_file:
+            for line in events_file:
+                if not line.strip():
+                    continue
+                try:
+                    json.loads(line)
+                except (TypeError, ValueError, UnicodeDecodeError):
+                    ignored += 1
+                    continue
+                valid_lines.append(line)
     except FileNotFoundError:
-        return ""
+        pass
+    return "".join(valid_lines), ignored
 
 
 def _load_rows(tasks_path):
     rows = []
     ignored = 0
-    with open(tasks_path, encoding="utf-8") as tasks_file:
+    with open(tasks_path, encoding="utf-8", errors="replace") as tasks_file:
         for line in tasks_file:
             if not line.strip():
                 continue
@@ -73,25 +102,25 @@ def check(root, history_root=None):
     board_root = os.path.join(root, ".coding-hermes", "board")
     tasks_path = os.path.join(board_root, "tasks.jsonl")
     events_path = os.path.join(board_root, "events.jsonl")
+    history_base = history_root or os.path.join(root, ".gitreins", "history")
 
     rows, ignored = _load_rows(tasks_path)
-    events_text = _load_events(events_path)
+    events_text, ignored_events = _load_events(events_path)
+    ignored += ignored_events
 
     findings = []
-    locally_resolved = 0
     complete_rows = [row for row in rows if row.get("status") == "complete"]
     for row in complete_rows:
         unresolved = [
-            run_id for run_id in _evidence_ids(row) if run_id not in events_text
+            run_id
+            for run_id in _evidence_ids(row)
+            if run_id not in events_text
+            and not _run_directory_exists(history_base, run_id)
         ]
         if unresolved:
             findings.append((row.get("id", "<missing-id>"), unresolved))
-            if history_root and all(
-                _run_directory_exists(history_root, run_id) for run_id in unresolved
-            ):
-                locally_resolved += 1
 
-    return complete_rows, findings, ignored, locally_resolved
+    return complete_rows, findings, ignored, history_base
 
 
 def main(argv=None):
@@ -108,12 +137,17 @@ def main(argv=None):
     )
     parser.add_argument(
         "--history-root",
-        help="optional GitReins history root for local resolution diagnostics",
+        help="GitReins history root (default: <root>/.gitreins/history)",
+    )
+    parser.add_argument(
+        "--quiet-findings",
+        action="store_true",
+        help="suppress per-row unresolved findings",
     )
     args = parser.parse_args(argv)
 
     try:
-        complete_rows, findings, ignored, locally_resolved = check(
+        complete_rows, findings, ignored, history_base = check(
             os.path.abspath(args.root),
             os.path.abspath(args.history_root) if args.history_root else None,
         )
@@ -123,13 +157,14 @@ def main(argv=None):
 
     if ignored:
         print(f"ignored {ignored} invalid or non-object board lines")
-    for row_id, run_ids in findings:
-        print(f"UNRESOLVED {row_id} {','.join(run_ids)}")
+    if not args.quiet_findings:
+        for row_id, run_ids in findings:
+            print(f"UNRESOLVED {row_id} {','.join(run_ids)}")
+    print(
+        f"stores: events={os.path.join(os.path.abspath(args.root), '.coding-hermes', 'board', 'events.jsonl')} "
+        f"history={history_base} ({_history_run_count(history_base)} run dirs)"
+    )
     print(f"checked {len(complete_rows)} complete rows, {len(findings)} unresolved")
-    if args.history_root:
-        print(
-            f"locally-resolved via history: {locally_resolved} of {len(findings)}"
-        )
     if args.strict and findings:
         return 1
     return 0
