@@ -208,7 +208,54 @@ The lifecycle is `REGISTERED → INSTALLED → PAIRED → ISSUABLE → DELIVERED
 
 The supported operation contract covers register, install/pair, check, issue, deliver, refresh, revoke and offboard. Each result names provider, mapping generation, repository scope, permission scope, expiry headroom and refusal reason. Git clone/fetch, branch push and protected-main/merge permissions are distinct; M3 requests only the operation it owns. M7 does not mint M11 dispatch credentials or M12 proxy node tokens.
 
-Required metrics cover issuance, delivery, renewal and revocation outcomes, expiry headroom, refused scopes, stale mappings, partial activation and provider/API errors. Acceptance cases cover GitHub least-privilege issuance, GitLab project scope, renewal before expiry, scope reduction, leaked-token revocation and restore without credential resurrection.
+The authorization matrix is explicit at the resource boundary:
+
+| Actor | Resource / operation | Required scope and result |
+|---|---|---|
+| controller issuer | register/pair an app or installation | customer authorization for the named forge/owner; creates mapping generation, never a repository token |
+| project foreman | request clone/fetch, branch push or protected-main/merge | only the project and operation named by M3; a broader installation is narrowed in the request body |
+| Bunker node | clone/fetch and use a delivered runtime credential | its `bunker_ref`, project, repository and expiry must match the mapping; it cannot mint, rotate, widen scope or merge protected main |
+| operator / owner | approve, rotate, revoke or offboard | explicit owner authorization; readback is required for every state change |
+| provider adapter | exchange, refresh or revoke | control-host issuer credential only; provider response must include provider id, scope, expiry and generation |
+
+Enrollment is `schema: cf.forge-trust.v1`: `forge_host`, `provider`, `owner`,
+`app_id`, `installation_id` or GitLab binding, `controller_identity`,
+`bunker_ref`, `authorization_ref`, `public_key_fingerprint`, `mapping_generation`
+and `expires_at`. The controller proves the provider/owner binding and key
+fingerprint, performs a signed provider read, and records the installation scope
+before issuance. A secret reference is `schema: cf.secret-ref.v1` with `ref`,
+`owner`, `purpose`, `mode`, `expires_at`, `generation` and `revocation_ref`; the
+secret store resolves it only for the issuer, and delivery returns mode, digest,
+scope and expiry without the value.
+
+Provider adapters return one normalized result, `schema: cf.forge-credential-result.v1`,
+with `request_id`, `provider`, `mapping_generation`, `credential_ref`,
+`repository_scope`, `permission_scope`, `expires_at`, `scope_digest`,
+`provider_credential_id`, `state` and `error`. GitHub requests use the App
+installation endpoint with an explicit `repositories`/repository-id restriction
+and `permissions` body; GitLab requests use a project/group or deploy-token
+binding with explicit project and role scopes. The adapter must reject an
+unconfirmed provider mode rather than inventing one. GitHub App signing authority
+and any GitLab application secret remain on the control host; the node receives
+only the resulting scoped credential.
+
+Delivery is two-phase: write an owner-only file through the Bunker control channel,
+read back its mode, scope digest and provider expiry, then activate the mapping.
+Read/fetch, worker-branch push and protected-main/merge are separate permissions;
+M3 requests the minimum one. Renewal requires issuer expiry metadata and a declared
+headroom margin, not file age. Scope reduction, compromise, provider revocation,
+expiry, mapping-generation change and offboarding explicitly revoke the old
+credential, record provider confirmation, remove the node copy and invalidate the
+cache. Restore replays the mapping but never reactivates a recorded revocation.
+All operations emit outcome and duration metrics with bounded labels for provider,
+project, bunker, operation and refusal reason; M7 collects/readbacks them. A request
+for a second project, wider permission or different Bunker is refused before any
+provider call.
+
+Acceptance cases cover trust enrollment, GitHub least-privilege issuance, GitLab
+project scope, allowed and denied operations across two projects, renewal before
+expiry, scope reduction, leaked-token revocation, offboarding and restore without
+credential resurrection.
 
 ## RED field count: 4 (Metrics §8 — absence-proved; §1 mint UNVERIFIED; M7-C1 contract state UNVERIFIED — consumer is an external API; §9 inventory 2 of 103 helper call sites — the descriptive rows not tabulated one-per-site)
 

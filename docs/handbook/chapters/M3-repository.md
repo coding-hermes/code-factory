@@ -298,6 +298,48 @@ The pre-commit guard and acceptance judge are different: the guard evaluates sta
 
 Required metrics cover freshness age, gate attempts/outcomes/skips, verdict unknowns, conflicts, merge/push/proof outcomes, retries and publication-to-closeout lag. The landing result names the exact source, merge and published objects, remote/ref and observation time. Acceptance cases cover absent verdict, stale proof, concurrent target movement, push failure, merged-but-unpublished recovery and repeated closeout.
 
+## 16. Pass-4 publication evidence profile (P4-PUBLICATION-01)
+
+The publication contract is `schema: cf.landing.v1` and the policy is
+`schema: cf.gate-policy.v1`. One policy generation is selected for each
+`(project_id, target_ref)` and is immutable for a request. It names required Tier-1
+guards, project checks, acceptance-judge criteria, allowed integration mode and
+freshness limits. A missing, wrong-version or ineffective guard, judge, hook or
+project check is `POLICY_UNAVAILABLE`, never an implicit pass; an explicitly
+approved exception records principal, reason, expiry and the omitted check.
+
+Each evidence object is `schema: cf.evidence.v1`:
+
+| Object | Required fields | Meaning |
+|---|---|---|
+| source | `commit`, `tree_digest`, `branch`, `policy_generation`, `checks`, `verdict_ref`, `observed_at` | the worker branch exactly tested |
+| integration | `merge_commit`, `tree_digest`, `target_ref`, `source_refs`, `revalidated_checks`, `verdict_ref`, `observed_at` | the fresh tree produced by integration |
+| published | `remote`, `ref`, `object`, `tree_digest`, `ancestry`, `fetched_at`, `observed_at` | the exact object proven at the remote |
+
+The source verdict cannot close a landing by itself. The foreman, inside its Bunker,
+serializes integration for a project/target, refreshes the target ref, and re-runs
+the required checks whenever the merge changes the tree. Equivalence is accepted only
+when the integration tree digest equals the tested source tree and all policy
+criteria remain applicable; otherwise the merged tree receives a new verdict. Crier
+is the launch/return boundary, and Scheduler records the return; the operator-invoked
+lander is an adapter and never a second publication authority.
+
+Publication uses the explicit merge object, not `HEAD`. After push, the foreman fetches
+the named remote/ref and compares object id, tree digest and ancestry at one observation
+time. A fetch or push acknowledgement lost after the request yields
+`PUBLISH_UNPROVEN`, not success; reconciliation queries the remote before retrying.
+`MERGED_NOT_PUBLISHED` retains the local merge object for retry. A moving target yields
+`STALE_TARGET`, requiring refresh and revalidation. The same `idempotency_key` returns
+the recorded result without a second push. Only a fresh published evidence object,
+then an M4 completion event, can close the work.
+
+Credentials are not minted here: M1/M7 provide separate read/fetch, worker-branch push
+and protected-main/PR-merge scopes. Expiry or insufficient scope is a named refusal.
+Metrics are typed counters/durations for freshness age, gate attempts and skips,
+verdict unknowns, conflicts, merge/push/proof outcomes, retries and
+publication-to-closeout lag, labelled only by project, target, policy generation and
+outcome; the foreman collects them and M4 reads them back.
+
 ## RED field count: 3 (Metrics §8 — absence-proved; §1 status — `repo_freshness.py` body not read line-by-line (behaviour exercised by the cf244 arm, source unread) and S3 hook *enforcement* UNVERIFIED (the landing arm proves landing behaviour, not that git invokes the installed pre-commit gate); §9 inventory 5 of 35 helper call sites)
 
 ## FLIGHT DATA FILE - M3 REPOSITORY

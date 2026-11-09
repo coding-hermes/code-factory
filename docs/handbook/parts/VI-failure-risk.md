@@ -553,8 +553,11 @@ default 60).
 **Retry / recovery.** Reconcile at startup against the bus inbox and the ledger; reap
 orphans after the grace; treat re-execution as possible after any crash (§3).
 
-**Proof.** A ledger row keyed by the native run identity, written before execution
-(required, not yet implemented). Contract: CT-23 (UNVERIFIED).
+**Proof.** A ledger row keyed by a preassigned `launch_id` and native run identity,
+written before execution (required target behavior). The Crier launch envelope carries
+that identity through the foreman Bunker; after a lost acknowledgement, reconciliation
+queries the Bunker by `launch_id` and `idempotency_key` before any retry. Contract:
+CT-23 (UNVERIFIED).
 
 ## 17. Authentication, scope and expiry
 
@@ -657,22 +660,38 @@ edits conflicting on reconnect.
 **Affected invariant.** One logical memory view across control host and Bunkers, with
 defined authority, consistency and conflict behavior.
 
-**Detection / metric.** Undefined — the topology itself is UNRESOLVED (Part V matrix).
+**Detection / metric.** Required target metrics are `memory_view_freshness_seconds`,
+`memory_sync_pending_total`, `memory_sync_conflicts_total` and `memory_sync_replays_total`,
+with namespace/project and outcome labels bounded to configured values. The controller
+reads the local Git-backed namespace and the last acknowledged remote commit; stale or
+partial quality is visible and cannot establish convergence.
 
 **Visible state.** A Bunker foreman reasoning over memory the controller cannot see, or the
-reverse.
+reverse; the result is `MEMORY_VIEW_STALE`, never an empty successful view.
 
-**Containment.** None specified. Until then, Bunker-local memory reads are treated the way
-the board treats a dirty worktree: a cache, never authority (VII §2's rule applied to
-memory).
+**Containment.** The supported profile keeps a local Git-backed namespace in every
+Bunker and controller. The namespace path and remote ref are configured per project;
+local writes remain valid during HTTP outage when the local store is durable, and each
+unpublished record is `pending-sync`. A local-only configuration is valid only for a
+single-host project or when all participants mount the same shared Git-backed view;
+otherwise it is refused as `MEMORY_TOPOLOGY_UNSUPPORTED`.
 
-**Owner.** Unresolved — assigned when the topology decision lands (handoff §6, carried).
+**Owner.** The project foreman owns the local record and pending queue; the memory sync
+owner authenticates the same namespace on the controller and Bunkers. Authorization
+binds `(project_id, namespace, writer_identity, generation)` and rejects cross-project
+writes.
 
-**Retry / recovery.** Unspecified; the offline/reconnect and replication-conflict behaviors
-are named follow-ups, not designed semantics.
+**Retry / recovery.** Reconnect exchanges namespace commits and record manifests. A
+same `record_id` and digest is an idempotent acknowledgement; the same id with a
+different digest is `MEMORY_CONFLICT` and is retained for explicit resolution. The
+sync owner merges independent records without dropping either, deduplicates replay by
+record id, verifies the resulting commit and reports freshness. Namespace loss is
+restored only from a validated backup; missing pending entries are reported as loss.
 
-**Proof.** Cross-host readback showing the same logical row from both sides (required).
-Contract: none — a named gap; CT-09 (MISSING) covers the node-side producer only.
+**Proof.** Cross-host readback shows both offline entries exactly once, then the
+controller and Bunker expose the same namespace commit and freshness. Contract: CT-09
+(MISSING) covers the node-side producer only; the sync profile remains target behavior
+until its live wire is measured.
 
 ## 21. Restore
 
@@ -696,14 +715,35 @@ executions.
 **Containment.** A durable backend is a deployment requirement (§2); the memory backend's
 data loss on restart is a negative control, not production readiness (M10 review).
 
-**Owner.** The Crier store owner.
+**Owner.** The Crier store owner, with M8 owning the cross-store backup boundary.
 
 **Retry / recovery.** Follow the restore procedure for the configured backend; verify by
-restored-delivery checks, not by daemon liveness.
+restored-delivery checks, not by daemon liveness. The supported backup profile is
+`schema: cf.backup.v1`: a scheduler/Crier durable backend, the per-project board and
+events, evidence objects, configuration generations, and pending Git-backed memory
+entries are captured only after writers checkpoint at one consistency marker. The
+manifest records `backup_id`, source repository/ref commits, board revision, custody
+transaction boundary, memory commit, marker time, destination, artifact digests,
+retention, encryption-key reference, revocation snapshot and excluded/loss windows.
+RPO/RTO and schedule are declared per store; a target policy may be daily with a
+24-hour RPO and 4-hour RTO, but an unsupported deployment must state its actual bound.
+A board-drift comparison is validation evidence, not a backup creator or checkpoint.
+
+Capture fails closed if any store cannot checkpoint or if a digest/readback fails; the
+backup is `CAPTURE_FAILED` and is not published. Validation re-hashes every artifact,
+checks the marker and source revisions, and records `VALIDATED` separately from
+`CREATED`. Restore runs in an isolated project scope, verifies key and revocation
+metadata before admission, reconciles claim/fence/custody/memory identities, and
+returns `RESTORE_RESULT` with restored revisions, actual loss per store, duplicate
+suppression and readiness status. Pending unsynchronized entries are reported as loss
+or pending-sync, never reconstructed from partial history. A revocation remains
+revoked after restore; no work resumes until stale owners are fenced and readiness
+passes.
 
 **Proof.** A restore-drill record naming the store revision, snapshot and verification
-result. Contracts: CT-02, CT-03 (PROVEN on the transport — the store is outside their
-measured sides).
+result, with an isolated mid-round case covering a pending memory entry and an
+acknowledged Crier message. Contracts: CT-02, CT-03 (PROVEN on the transport — the
+store is outside their measured sides).
 
 ## 22. Upgrade drift
 
@@ -955,29 +995,35 @@ instead of claiming restoration.
 
 **What fails.** The controller and Bunker copies of a project namespace accept
 divergent writes while disconnected (R-30's outage path), and on reconnect the
-synchronization must merge them. Conflict behaviors — last-writer-wins, Git merge, or
-duplication — are unspecified today (the shared topology is UNRESOLVED, Part V matrix),
-so a conflict can silently drop one side's record or duplicate both.
+synchronization must merge them. The supported profile uses explicit record identity and a Git-backed namespace merge;
+same-id/different-digest records are conflicts, never last-writer-wins. Independent
+record ids are retained once each, so a conflict cannot silently drop one side or
+duplicate a replay.
 
 **Affected invariant.** Synchronization has a declared owner, merge/conflict rule and
 duplicate handling; freshness is visible to subsequent readers (F3 step 6).
 
-**Detection / metric.** Required (TARGET-UNIMPLEMENTED): `memory_sync_conflicts` and
-`memory_sync_duplicates` counters with per-namespace freshness gauges. Today: none.
+**Detection / metric.** Required target metrics are `memory_sync_conflicts_total`,
+`memory_sync_duplicates_total` and `memory_view_freshness_seconds`, with bounded
+project/namespace and outcome labels. A same-id/different-digest conflict is visible
+and cannot be counted as a successful merge.
 
 **Visible state.** A worker entry present on the controller copy and absent on the
-Bunker copy; the same entry twice with two ids.
+Bunker copy is `MEMORY_VIEW_STALE`; the same entry twice is `memory_sync_duplicates`.
 
-**Containment.** Until the topology decision lands, the containment is the cache rule:
-a remote copy is a cache, never authority (R-20), and the local Git-backed namespace is
-the durable record.
+**Containment.** A remote copy is a cache until its commit is acknowledged by the
+sync owner; the local Git-backed namespace remains the durable record. During an HTTP
+outage, local writes continue and are marked `pending-sync`; a namespace that cannot
+provide a shared view is refused for multi-host use.
 
-**Owner / repair.** Assigned when the topology decision lands (R-20's owner note);
-until then UNSUPPORTED — the gap is recorded, not filled with an invented merge rule.
+**Owner / repair.** The project foreman owns pending local records; the sync owner
+performs the authenticated namespace merge and explicit conflict resolution. Replays
+are deduplicated by record id and digest; conflicts remain retained evidence until
+resolved, and freshness is read back after the resulting commit.
 
-**Verification case.** With the topology specified: diverge two copies by one worker
-entry each, synchronize, and assert both entries survive once each with correlation
-intact.
+**Verification case.** Diverge two copies by one worker entry each, synchronize, and
+assert both entries survive once each with correlation intact; repeat one id with a
+changed digest and assert `MEMORY_CONFLICT` without overwrite.
 
 ## 32. Unavailable verifier or model
 
@@ -1083,7 +1129,7 @@ tables to hold the page.
 | 14 | Proxy streaming completion (§19) | completion framing proved on the path | per-stream outcomes (TARGET) | truncated "success" |
 | 15 | Evidence destroyed or never written (§10) | retained evidence outlives reaping | reap/refusal counters (measured) | cited dir vanishes |
 | 16 | The record that lies (§11) | registers point at real files, real states | spine/doc gates (measured) | invented sink paths |
-| 17 | Shared-memory consistency (§20) | one logical memory view | undefined — UNRESOLVED | divergent namespaces |
+| 17 | Shared-memory consistency (§20) | one logical memory view | freshness, pending-sync and conflict counters (TARGET) | divergent namespaces |
 | 18 | Restore (§21) | custody survives host loss | backup/restore ages (TARGET) | duplicates after restore |
 | 19 | Upgrade drift (§22) | deployed equals pinned | drift counters (TARGET) | unmeasured build serving |
 | 20 | Unproven wires (§12) | every guarantee cited on both sides | the register itself | RED sides, no signal |

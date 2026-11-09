@@ -442,7 +442,7 @@ Harness (handoff §1.5).
 | A6 | Repo + **embedded board** checkout (the board ships inside the project repo, M4) | provisioner (M1 owns the checkout; M3 manages it afterwards) | M3/M4 | seed drift gates readiness |
 | A7 | Harness install: **exact Hermes/Oh My Hermes build pin** + tools/settings | provisioner via M5 installers | M5 lifecycle | version readback required, not name-only |
 | A8 | Inference access: node-scoped proxy credential + endpoint/model policy + **end-to-end inference proof** | M1 provisions; M12 owns the proxy credential chain | M5 run path | config-present-without-a-successful-request is not readiness |
-| A9 | DuckBrain integration in the Bunker, same logical memory view as controller | provisioner | M1–M12 memory projections | shared topology/offline behavior: still to be specified (handoff §6) |
+| A9 | DuckBrain integration in the Bunker, same logical memory view as controller | provisioner + memory sync owner | M1–M12 memory projections | local Git-backed namespace is durable during HTTP outage; pending-sync, conflict and freshness states are read back; unsupported multi-host topology is refused |
 | A10 | Readiness: certification ladder **plus effective-behavior validation** (R5); machine-readable readiness report | `verify-node.sh` | **M9 admission** — only a verified node is schedulable | CREATED ≠ CONFIGURED ≠ CONNECTED ≠ VERIFIED |
 
 *Flow B — new-project onboarding* (introduces an application/repo to the factory): caller is the
@@ -537,3 +537,51 @@ BUS - bunker-crier-connect.sh --stage, then --apply, then re-probe the inbox
 ROSTER - read fleet_agents.json and fleet-repo-scope.json
 √ MEMBER - the agent is in both stores before any dispatch
 ```
+
+## 16. Pass-4 qualified deployment profile (P4-DEPLOY-01)
+
+The supported profile is `bunker.user-image.v1`, a capability-qualified, rootless
+execution profile. It is not a universal Bunker mode. The profile manifest is the
+source of truth and is immutable for one provisioning generation:
+
+| Field | Required value or rule |
+|---|---|
+| `profile_id` | `bunker.user-image.v1` |
+| `artifact` | an OCI image or equivalent user-space archive named by digest, plus the Hermes artifact URL, version `0.19.0`, and SHA-256; a tag or version without a digest is refused |
+| `host` | Linux user namespace, `uidmap`, `fuse-overlayfs`, `slirp4netns`, `git`, Python `>=3.11,<3.14`, and the pinned Bunker CLI/protocol; capability probes must pass before create |
+| `runtime` | rootless image-backed container or equivalent user-space Bunker, no privileged mode, no host root, and no ambient provider credential |
+| `mounts` | `$HOME/.node` (0700), `$HOME/repo` (project checkout with embedded board), `$HOME/.cache/hermes`, sealed shared module cache, and `$HOME/.local/share/code-factory/evidence`; each path is absolute, owned by the node user, and recorded in the manifest |
+| `network` | Crier endpoint, forge endpoint and proxy endpoint are explicit HTTPS/TLS or declared tailnet endpoints; egress is denied except to those endpoints and DNS; the effective routes are read back |
+| `identity` | one `node_id`, `project_id`, profile generation and Bunker principal; repository identity `{forge, host, owner, repo, ref}` is separate from every `credential_ref` |
+| `credentials` | five references (forge, Crier, Bunker control, inference proxy, DuckBrain); references identify owner, scope, mode, expiry and revocation generation, never secret values |
+| `persistence` | the node home and evidence mount persist across restart; image-layer changes do not; the readiness report records the actual persistence result |
+
+Bootstrap is an operation `schema: cf.provision.v1` with `operation_id`,
+`request_id`, `project_id`, `node_id`, `profile_id`, `generation`, `manifest_digest`,
+`repository`, `credential_refs` and `idempotency_key`. The controller performs disk
+admission and capability probes, creates the user-space Bunker, mounts only declared
+paths, installs each digest-checked artifact, creates the project checkout and its
+embedded board, enrolls the Bunker and stages all credential classes. It then reads
+back the effective image digest, runtime capabilities, mount ownership/modes, network
+routes, repository commit, board identity, credential scope/expiry (without values),
+Hermes version and a successful Crier, inference and DuckBrain operation. A written
+configuration or HTTP liveness response alone is not readiness.
+
+The result is `schema: cf.provision-result.v1` with `operation_id`, `generation`,
+`state`, `completed_stages`, `artifact_digests`, `readiness_report_ref` and
+`failure_ref`. States are `ADMITTED`, `CREATED`, `ENROLLED`, `PROVISIONED`,
+`CONNECTED`, `VERIFIED`, `DEGRADED`, `REPLACEMENT_REQUIRED` and `REMOVED`; an
+unavailable required check is `UNVERIFIED` and blocks M9 admission. Repeating the
+same request and manifest digest returns the recorded result. A changed digest or
+generation is `GENERATION_CONFLICT` and cannot mutate the old Bunker.
+
+Upgrade drains Crier retrieval, refuses new admission, snapshots the manifest and
+credential generations, installs the new digest in a replacement generation, runs the
+same effective readback, then switches the registration only after `VERIFIED`. A
+failed upgrade keeps the previous generation or enters `REPLACEMENT_REQUIRED`; it
+never reports the new generation as ready. Replacement first fences the old Bunker,
+revokes its credentials, preserves evidence and then provisions the new generation.
+Removal verifies that no active lease remains, revokes all five credential classes,
+archives the readiness and operation records, and deletes only owned mounts. These
+procedures are specified target behavior; the live profile and cross-host operations
+remain `UNVERIFIED` until their stated readbacks are run.

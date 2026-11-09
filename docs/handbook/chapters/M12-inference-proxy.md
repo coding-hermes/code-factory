@@ -273,7 +273,50 @@ Supported API version `cf.inference.v1` exposes `GET /health` without paid/model
 
 A streamed response uses framed SSE records and an explicit terminal event containing response id, served model, usage and `complete`/`error`/`cancelled` state. The proxy closes or correctly frames the downstream connection after the terminal event; upstream read failure before headers is a clean 502, while failure after headers is an incomplete/error stream. Client disconnect cancels upstream work. Usage settlement records request id, token id, requested/served model, bytes, duration, first-byte time and terminal state; failed capture or usage persistence follows an explicit policy and is visible.
 
-Raw prompt capture is disabled unless policy enables it. When enabled, the policy names redaction, maximum size, retention, sink, access scope and failure behavior; capture loss never silently becomes a complete audit record. Required metrics cover authorized/refused requests, model mismatches, upstream errors, stream terminal outcomes, cancellations, usage settlement, capture failures, token expiry/revocation and budget denials. Acceptance cases cover finite stream completion, pre/post-header failure, cancellation, disallowed served model, expired token, revoked token and capture-sink failure.
+The maintained deployment interface is `cf-inference-proxy` package version `1.x` (the
+exact released artifact and digest are selected in the deployment manifest). It must
+ship the service unit, `cf.inference.v1` schema, configuration defaults, migration,
+upgrade/rollback and restore instructions. The unversioned workstation path measured
+above is not a supported build artifact; until a digest-pinned package or an exact
+maintained replacement is installed and read back, the deployment is `UNVERIFIED`.
+The Hermes compatibility adapter sends the same `model`, `messages`, `stream` and
+option fields, accepts HTTP status plus SSE `data:` records, and translates the
+terminal record to the client's completion object without inventing a second status.
+
+The node-token administrator exposes `schema: cf.node-token-admin.v1` operations
+`issue`, `read`, `rotate`, `revoke` and `offboard`. Requests carry `issuer_ref`,
+`node_id`, `project_id`, `namespace`, `allowed_routes`, `allowed_models`, `budget`,
+`concurrency`, `ttl`, `generation` and `idempotency_key`; results carry the token id,
+scope digest, generation, expiry and state, never the token value. Defaults are
+`stream=false`, upstream deadline `300 s`, request body limit `4 MiB`, and no raw
+prompt capture. A node token is valid only while the mapping generation, project,
+namespace, route, model, budget, concurrency and expiry checks all pass. Rotation has
+a declared overlap; revocation and offboarding invalidate immediately and survive
+restore.
+
+A stream consists of zero or more `data:` records followed by exactly one
+`event: terminal` whose JSON body is `{response_id, served_model, usage, state}`;
+`state` is one of `complete`, `error` or `cancelled`. The proxy sends no second HTTP
+status after headers. Before headers, upstream failure is `502 UPSTREAM_UNREACHABLE`;
+after headers, failure is a terminal `error` event or an incomplete stream, never a
+successful completion. Deadlines produce `408` before headers or a terminal error
+after headers. Client disconnect cancels the upstream request and records
+`cancelled`; successful completion closes or correctly frames the downstream
+connection so the Hermes client can finish at EOF. Usage settlement records
+`request_id`, token id, requested/chosen/resolved/served model, bytes, duration,
+first-byte time, terminal state and settlement status. A failed usage sink is a
+visible `USAGE_UNSETTLED` result and cannot be reported as complete.
+
+Raw prompt capture remains disabled unless a policy enables it. That policy names
+redaction before persistence, a maximum size of 120000 characters, retention (default
+30 days), sink, access scope and failure behavior; capture failure emits
+`CAPTURE_FAILED` and never silently becomes a complete audit record. Metrics are
+counters/gauges with units and bounded labels for authorization, model mismatch,
+upstream error, stream terminal state, cancellation, usage settlement, capture
+failure, token expiry/revocation and budget denial. Acceptance cases cover a finite
+Hermes-compatible stream to terminal EOF, pre/post-header failure, cancellation,
+requested-versus-served identity, expired/revoked token, budget exhaustion and both
+capture/usage sink failures.
 
 ## RED field count: 4 (Metrics §8 — absence-proved; CT-19 node-client half UNVERIFIED; CT-20 upstream half UNVERIFIED — one-sided external boundary; stream completion **FAILING** — F12-7 reproduced, and a first-byte-only flight card cannot close it)
 
