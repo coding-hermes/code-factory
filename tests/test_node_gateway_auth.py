@@ -11,9 +11,12 @@ consumer gate (`scripts/harness/install-hermes.sh`, `check_public_bind_auth`):
     false FAIL, exit 2, aborting a provisioning run on a node the gate accepts.
 
 Presence is now read structurally: the block is the run of indented, blank and comment lines after
-`dashboard:` and it ends at the first non-blank, non-comment column-0 line; only a NESTED
-(indented) `basic_auth:` inside that block counts. The two measured arms are regressions here: each
-one must keep the verdict the consumer gate already gave the same file.
+`dashboard:` and it ends at the first non-blank, non-comment column-0 line; only a `basic_auth:` that
+is a DIRECT child of `dashboard:` counts — its indentation equals the block's child indent, which is
+what the consumer gate's YAML parse reads at depth 1. A sibling top-level key's `basic_auth:`, a
+`basic_auth:` under one of dashboard's own child keys, and a column-0 `basic_auth:` of its own are
+all not protection. The two measured arms are regressions here: each one must keep the verdict the
+consumer gate already gave the same file.
 
 Everything runs in a tempfile home — no network, no gateway, no real `~/.hermes`.
 """
@@ -164,6 +167,48 @@ class GatewayAuth(unittest.TestCase):
             sha256(self.config), before, "an existing block must not be rewritten"
         )
 
+    # 4b. review finding 0: a `basic_auth:` hanging off a CHILD key is dashboard.child.basic_auth,
+    # which the consumer gate refuses — accepting any indented line certified it as protection
+    def test_basic_auth_under_a_child_key_is_refused(self):
+        self.write_config(
+            "dashboard:\n"
+            "  theme: dark\n"
+            "  child:\n"
+            "    basic_auth:\n"
+            "      username: u\n"
+            "      password: p\n"
+        )
+        before = sha256(self.config)
+        rc, out, err = self.run_main()
+        self.assertEqual(
+            rc, 2, f"a basic_auth under a child key was certified as protection: {out}"
+        )
+        self.assertEqual(out, "")
+        self.assertIn("has a dashboard block without basic_auth", err)
+        self.assertEqual(
+            sha256(self.config), before, "a refusal must leave the file untouched"
+        )
+        self.assertFalse(
+            os.path.exists(self.pass_file), "a refusal must not write a secret"
+        )
+
+    # 4c. the child indent is whatever the block uses — the rule is equality, not "two spaces"
+    def test_basic_auth_at_a_four_space_child_indent_passes(self):
+        self.write_config(
+            "dashboard:\n"
+            "    theme: dark\n"
+            "    basic_auth:\n"
+            "        username: node\n"
+            "        password: secret\n"
+        )
+        before = sha256(self.config)
+        rc, out, err = self.run_main()
+        self.assertEqual(
+            rc, 0, f"a direct child at a four-space indent was refused: {err}"
+        )
+        self.assertIn("already present", out)
+        self.assertEqual(sha256(self.config), before)
+
     # 5. the documented refusal, unchanged
     def test_dashboard_block_without_basic_auth_is_refused(self):
         self.write_config("dashboard:\n  theme: dark\n")
@@ -224,6 +269,32 @@ class GatewayAuth(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertIn("already present", out)
 
+    # review finding 2: a column-0 comment BETWEEN the block and the next top-level key does not
+    # extend the block over that key — the sibling's basic_auth stays outside it
+    def test_column_zero_comment_before_a_sibling_key_does_not_extend_the_block(self):
+        self.write_config(
+            "dashboard:\n"
+            "  theme: dark\n"
+            "# a note between the block and the next top-level key\n"
+            "other:\n"
+            "  basic_auth:\n"
+            "    username: x\n"
+            "    password: y\n"
+        )
+        before = sha256(self.config)
+        rc, out, err = self.run_main()
+        self.assertEqual(
+            rc, 2, f"a sibling key's basic_auth past a comment was certified: {out}"
+        )
+        self.assertEqual(out, "")
+        self.assertIn("has a dashboard block without basic_auth", err)
+        self.assertEqual(
+            sha256(self.config), before, "a refusal must leave the file untouched"
+        )
+        self.assertFalse(
+            os.path.exists(self.pass_file), "a refusal must not write a secret"
+        )
+
     # 8. a write failure is the module's own exit 1 line, never a traceback
     @unittest.skipIf(
         os.geteuid() == 0, "root ignores the directory mode that makes the write fail"
@@ -238,6 +309,29 @@ class GatewayAuth(unittest.TestCase):
         self.assertEqual(out, "")
         self.assertIn("FAIL  gateway_auth — cannot write", err)
         self.assertNotIn("Traceback", err)
+
+    # 9. the password-file branch of the same contract: exit 1, the path named, config untouched.
+    # The failure is forced by making the password file's PARENT a regular file, so os.makedirs
+    # raises NotADirectoryError for every user — root included, unlike a directory mode.
+    def test_unwritable_password_file_is_a_named_failure(self):
+        self.write_config("server:\n  host: 0.0.0.0\n")
+        blocker = os.path.join(self.home, ".node")
+        with open(blocker, "w", encoding="utf-8") as fh:
+            fh.write("not a directory\n")
+        before = sha256(self.config)
+        rc, out, err = self.run_main()
+        self.assertEqual(rc, 1, out)
+        self.assertEqual(out, "", "a failure must not report success on stdout")
+        self.assertIn(f"FAIL  gateway_auth — cannot write {self.pass_file}", err)
+        self.assertIn("[Errno 20] Not a directory", err, "the OSError must be named")
+        self.assertNotIn("Traceback", err)
+        self.assertEqual(
+            sha256(self.config), before, "no block may be appended after a failed write"
+        )
+        with open(blocker, encoding="utf-8") as fh:
+            self.assertEqual(
+                fh.read(), "not a directory\n", "the blocking file must be left alone"
+            )
 
 
 if __name__ == "__main__":

@@ -17,9 +17,11 @@ its directory could not be created / the file could not be written; 2 = the file
 dashboard block that is NOT basic_auth (left untouched, named).
 
 Presence is decided structurally, not by proximity: the dashboard block is the run of indented,
-blank and comment lines that follows `dashboard:`, and a `basic_auth:` counts only when it is
-itself indented — nested under `dashboard:` — so a sibling top-level key's `basic_auth:` is not
-protection, and a nested one is found however far down the block it sits.
+blank and comment lines that follows `dashboard:`, and a `basic_auth:` counts only when it is a
+DIRECT child of `dashboard:` — its indentation equals the indentation of the block's own children,
+which is what the consumer gate's YAML parse reads at depth 1. So a sibling top-level key's
+`basic_auth:` is not protection, a `basic_auth:` nested under one of dashboard's child keys is not
+protection either, and a direct one is found however far down the block it sits.
 """
 
 import os
@@ -53,16 +55,42 @@ def dashboard_block_end(lines: list, idx: int) -> int:
     return end
 
 
-def has_nested_basic_auth(lines: list, idx: int) -> bool:
-    """True when an indented `basic_auth:` line sits inside the `dashboard:` block.
+def dashboard_child_indent(lines: list, idx: int) -> int:
+    """Indentation of the `dashboard:` block's direct children, or -1 when the block has none.
 
-    Indentation is what makes it the dashboard's child: a `basic_auth:` at column 0 is a top-level
-    key of its own, and one belonging to a sibling top-level key lies outside the block entirely.
+    YAML forbids siblings at different indents, so the minimum indentation among the block's
+    non-blank, non-comment lines IS the child indent — the depth the consumer gate's parser reads
+    as `dashboard`'s own mapping. Comment and blank lines are excluded here for the same reason
+    they do not end the block: the gate strips them before it parses.
     """
+    end = dashboard_block_end(lines, idx)
+    indents = [
+        len(content) - len(content.lstrip())
+        for content in (raw.rstrip("\n") for raw in lines[idx + 1 : end])
+        if content.strip() and not content.strip().startswith("#")
+    ]
+    return min(indents) if indents else -1
+
+
+def has_nested_basic_auth(lines: list, idx: int) -> bool:
+    """True when a `basic_auth:` is a DIRECT child of `dashboard:`.
+
+    Indentation decides membership, and it has to be the child indent exactly: a `basic_auth:` at
+    column 0 is a top-level key of its own, one belonging to a sibling top-level key lies outside
+    the block entirely, and one hanging off a CHILD key (`dashboard: > child: > basic_auth:`) is a
+    different path — `dashboard.child.basic_auth`, which the consumer gate refuses. Accepting any
+    indented line certified that last shape as protection (CF-292 review finding 0), which is the
+    same producer/consumer false PASS one level further down.
+    """
+    child_indent = dashboard_child_indent(lines, idx)
+    if child_indent < 0:
+        return False
     for raw in lines[idx + 1 : dashboard_block_end(lines, idx)]:
         content = raw.rstrip("\n")
         stripped = content.lstrip()
-        if stripped.startswith("basic_auth:") and len(content) != len(stripped):
+        if stripped.startswith("basic_auth:") and (
+            len(content) - len(stripped) == child_indent
+        ):
             return True
     return False
 
