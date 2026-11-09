@@ -15,6 +15,11 @@ directory is created here, mode 700, when it is absent.
 Exit 0 = the block is present (added now or already there); 1 = the config could not be read, or
 its directory could not be created / the file could not be written; 2 = the file already has a
 dashboard block that is NOT basic_auth (left untouched, named).
+
+Presence is decided structurally, not by proximity: the dashboard block is the run of indented,
+blank and comment lines that follows `dashboard:`, and a `basic_auth:` counts only when it is
+itself indented — nested under `dashboard:` — so a sibling top-level key's `basic_auth:` is not
+protection, and a nested one is found however far down the block it sits.
 """
 
 import os
@@ -27,6 +32,39 @@ def find_dashboard(lines: list) -> int:
         if line.rstrip("\n") == "dashboard:" or line.startswith("dashboard:"):
             return i
     return -1
+
+
+def dashboard_block_end(lines: list, idx: int) -> int:
+    """Index just past the `dashboard:` block: its indented, blank and comment lines.
+
+    A block ends at the first line that is non-blank, not a comment, and starts at column 0 — that
+    line is a sibling (or the next) top-level key, not a child of `dashboard:`. Comments and blank
+    lines never end it: the consumer gate strips comments before it parses, so a comment between
+    the last key and the next top-level key is not a block boundary.
+    """
+    end = idx + 1
+    while end < len(lines):
+        content = lines[end].rstrip("\n")
+        stripped = content.strip()
+        if not stripped or stripped.startswith("#") or content[0] in " \t":
+            end += 1
+            continue
+        break
+    return end
+
+
+def has_nested_basic_auth(lines: list, idx: int) -> bool:
+    """True when an indented `basic_auth:` line sits inside the `dashboard:` block.
+
+    Indentation is what makes it the dashboard's child: a `basic_auth:` at column 0 is a top-level
+    key of its own, and one belonging to a sibling top-level key lies outside the block entirely.
+    """
+    for raw in lines[idx + 1 : dashboard_block_end(lines, idx)]:
+        content = raw.rstrip("\n")
+        stripped = content.lstrip()
+        if stripped.startswith("basic_auth:") and len(content) != len(stripped):
+            return True
+    return False
 
 
 def main(argv: list) -> int:
@@ -50,8 +88,7 @@ def main(argv: list) -> int:
 
     idx = find_dashboard(lines)
     if idx >= 0:
-        block = "".join(lines[idx : idx + 8])
-        if "basic_auth:" in block:
+        if has_nested_basic_auth(lines, idx):
             print(
                 f"PASS  gateway_auth — dashboard.basic_auth already present in {config}"
             )
@@ -81,11 +118,18 @@ def main(argv: list) -> int:
             return 1
 
     password = secrets.token_urlsafe(24)
-    os.makedirs(os.path.dirname(password_file) or ".", exist_ok=True)
-    fd = os.open(password_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as fh:
-        fh.write(password + "\n")
-    os.chmod(password_file, 0o600)
+    try:
+        os.makedirs(os.path.dirname(password_file) or ".", exist_ok=True)
+        fd = os.open(password_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(password + "\n")
+        os.chmod(password_file, 0o600)
+    except OSError as exc:
+        print(
+            f"FAIL  gateway_auth — cannot write {password_file} ({exc})",
+            file=sys.stderr,
+        )
+        return 1
 
     if lines and not lines[-1].endswith("\n"):
         lines[-1] += "\n"
@@ -97,10 +141,17 @@ def main(argv: list) -> int:
         f"    password: {password}\n",
     ]
     tmp = config + ".cf-tmp"
-    with open(tmp, "w") as fh:
-        fh.writelines(lines)
-    os.chmod(tmp, 0o600)
-    os.replace(tmp, config)
+    try:
+        with open(tmp, "w") as fh:
+            fh.writelines(lines)
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, config)
+    except OSError as exc:
+        print(
+            f"FAIL  gateway_auth — cannot write {config} ({exc})",
+            file=sys.stderr,
+        )
+        return 1
 
     print(
         f"PASS  gateway_auth — added dashboard.basic_auth (user {username}) to {config}"
