@@ -211,4 +211,4 @@ dispositions are monotonic in visibility, deferred and unresolved rows re-decide
 next pass, and the log — not the page count — is the record that the review was
 answered (VIII.5).
 
-pass3 received, 26 findings, plan committed at pending
+pass3 received, 26 findings, plan committed at ad984337f19d999977bd234475b442fcb84be9a0
