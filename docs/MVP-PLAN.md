@@ -23,8 +23,8 @@ lands the commit. Four moves, two of them wiring.
 
 Read top-down: 1–2 are **missing**, 3 now has a producer but **no live run**, 4 is **partly provisioned**
 and unmeasured since `CF-214` was filed, 5–6 are **miswired**, 7–8 are **working**. (Re-measured against
-the board at `3d1b642` on 2026-11-08: `CF-211` closed the producer leg; `CF-150` and `CF-214` still own
-what item 4 lacks.)
+the board at `3d1b642` on 2026-11-08: `CF-211` closed the producer leg; `CF-150` was already
+`complete` at that pin and so owns none of item 4, which `CF-214` still owns.)
 
 ## Phases
 
@@ -32,8 +32,11 @@ what item 4 lacks.)
 
 1. `bunker-provision.sh --apply` on `cf-node`: identity, auth bundle, harness, clone at the
    configured `REF`, and every declared DuckBrain namespace (`NAMESPACES=a,b` — the first is
-   primary, each is probed). (CF-214; the harness pin and the missing `dashboard.basic_auth` stay
-   open under CF-150.) The node environment is **declared**, not hand-edited: `NODE_ENV_FILE`
+   primary, each is probed). (CF-214; the harness pin stays open, while `dashboard.basic_auth` no
+   longer does: `CF-150` is `complete` (its subject was exactly that staging; `scripts/node_gateway_auth.py`
+   is wired into `bunker-provision.sh`, evidence run `71cc322f`) and `CF-388` closed the fresh-node
+   staging failure — the surviving auth-gate defects are `CF-292`, `CF-193` and `CF-194`, all pending.)
+   The node environment is **declared**, not hand-edited: `NODE_ENV_FILE`
    plus `CONFIG_SET_*` name the provider key (by file path), the model pin, the bind and the
    port, and `scripts/node_env.py --apply` writes them before the harness layer starts a
    gateway, so a rebuilt node is the same node.
