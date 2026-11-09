@@ -628,3 +628,4 @@
 {"id":628,"timestamp":"2026-11-09T09:54:24+00:00","event_type":"task_created","task_id":"P3B-62","actor":"foreman","detail":"{\"id\":\"P3B-62\",\"status\":\"pending\"}"}
 {"id":629,"timestamp":"2026-11-09T09:54:24+00:00","event_type":"task_created","task_id":"P3B-63","actor":"foreman","detail":"{\"id\":\"P3B-63\",\"status\":\"pending\"}"}
 {"id":630,"timestamp":"2026-11-09T11:31:59+00:00","event_type":"task_created","task_id":"CF-398","actor":"foreman","detail":"{\"id\":\"CF-398\",\"status\":\"pending\"}"}
+{"id":631,"timestamp":"2026-11-09T11:58:00Z","event_type":"task_updated","task_id":"CF-398","actor":"foreman","detail":"{\"id\": \"CF-398\", \"status\": \"pending\", \"fields\": [\"title\", \"acceptance_criteria\", \"reasoning\", \"capability_tags\"], \"why\": \"scope corrected after Tier-2 judge verdict a2cb1aa1: boardctl is an external binary, so the check must be an in-repo script plus fixture\"}"}
