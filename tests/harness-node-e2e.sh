@@ -72,13 +72,30 @@ for a in hermes claude-code codex opencode deepseek pi-agent; do
     bad "adapter:$a" "--check exit $rc (want $wantrc for $fails FAIL / $warns WARN rows), ${rows:-0} named row(s), verdict '${verdict_line:-none}', or --help does not document both modes"
   fi
 done
+count_new_repo_install_artifacts() {
+  local home="$1" before="$2" after="$3" path count=0
+  while IFS= read -r path; do
+    case "$path" in
+      "$home/.local/bin/"*|"$home/.local/harness/"*|"$home/.local/codex/"*|"$home/.pi/"*|"$home/.opencode/"*)
+        count=$((count+1))
+        ;;
+    esac
+  done < <(LC_ALL=C comm -13 "$before" "$after")
+  printf '%s\n' "$count"
+}
+
 for a in opencode deepseek pi-agent; do
   h="$W/refuse-$a"; mkdir -p "$h"
+  before="$W/refuse-$a.before"
+  after="$W/refuse-$a.after"
+  LC_ALL=C find "$h" -type f -perm -u+x -print 2>/dev/null | LC_ALL=C sort > "$before"
   out=$(env -i PATH="$PATH" HOME="$h" /bin/bash "$TREE/scripts/harness/install-$a.sh" --apply 2>&1); rc=$?
-  # `installed nothing` means exactly that: no executable landed under the throwaway HOME and no
-  # install row was printed. Probing a host binary may still create its own XDG cache/state
-  # directories (`opencode --version` does), which is host state, not an install.
-  placed=$(find "$h" -type f -perm -u+x 2>/dev/null | wc -l)
+  # `installed nothing` means no new file appeared under a repo-owned install root and no install
+  # row was printed. Probing a host binary may still create its own XDG cache/state directories
+  # (`pi --version` does), which are host state, not an install. Compare against the pre-run
+  # inventory after the adapter exits so a delayed probe extraction cannot race this measurement.
+  LC_ALL=C find "$h" -type f -perm -u+x -print 2>/dev/null | LC_ALL=C sort > "$after"
+  placed=$(count_new_repo_install_artifacts "$h" "$before" "$after")
   if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q '^  FAIL  apply — refused' \
      && printf '%s\n' "$out" | grep -qi 'ladder' && [ "${placed:-0}" = 0 ] \
      && ! printf '%s\n' "$out" | grep -q '^  PASS  install'; then
@@ -88,6 +105,24 @@ for a in opencode deepseek pi-agent; do
     printf '%s\n' "$out" | tail -4 | sed 's/^/    | /'
   fi
 done
+
+# The refusal measurement must still reject a real repo-owned artifact. Keep this control beside
+# the production check so a future broadening back to "any file under HOME" cannot hide the rule.
+negative_home="$W/refuse-negative"
+negative_before="$W/refuse-negative.before"
+negative_after="$W/refuse-negative.after"
+mkdir -p "$negative_home"
+LC_ALL=C find "$negative_home" -type f -perm -u+x -print 2>/dev/null | LC_ALL=C sort > "$negative_before"
+mkdir -p "$negative_home/.local/harness/x/bin"
+: > "$negative_home/.local/harness/x/bin/x"
+chmod +x "$negative_home/.local/harness/x/bin/x"
+LC_ALL=C find "$negative_home" -type f -perm -u+x -print 2>/dev/null | LC_ALL=C sort > "$negative_after"
+negative_placed=$(count_new_repo_install_artifacts "$negative_home" "$negative_before" "$negative_after")
+if [ "$negative_placed" -eq 1 ]; then
+  ok "refusal:repo-artifact" "a planted executable under \$HOME/.local/harness is detected as an install"
+else
+  bad "refusal:repo-artifact" "a planted executable under \$HOME/.local/harness was not detected (count $negative_placed)"
+fi
 
 # --------------------------------------------------------------------------------------------------
 pin="$(sed -n 's/^PIN="\${CF_CODEX_PIN:-\([^}]*\)}"$/\1/p' "$TREE/scripts/harness/install-codex.sh" | head -1)"
