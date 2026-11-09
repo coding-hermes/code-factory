@@ -83,7 +83,8 @@ class Resolve(unittest.TestCase):
         return path
 
     def test_role_defaults(self):
-        for role, expected in disk_floor.ROLE_DEFAULTS.items():
+        expected_defaults = {"worker": 5, "builder": 10, "full": 20}
+        for role, expected in expected_defaults.items():
             gib, source = disk_floor.resolve(role=role)
             self.assertEqual((gib, source), (expected, "role-default"))
 

@@ -6970,5 +6970,57 @@ else
 fi
 rm -rf "$dsh_prefix"
 
+say "65. resolver and ladder role tables stay in pair parity (CF-299)"
+cf299=$(mktemp -d)
+cf299_clean=$(python3 "$HERE/scripts/check_role_parity.py" 2>&1); cf299_clean_rc=$?
+if [ "$cf299_clean_rc" -eq 0 ] && printf '%s\n' "$cf299_clean" | grep -q '^PASS role parity:'; then
+  say "  PASS  clean role tables -> exit 0: $(printf '%s\n' "$cf299_clean" | grep '^PASS role parity:')"
+else
+  say "  FAIL  clean role tables -> exit $cf299_clean_rc: $cf299_clean"
+  fails=$((fails+1))
+fi
+mkdir -p "$cf299/ladder/scripts" "$cf299/resolver/scripts" "$cf299/marker/scripts"
+cp "$HERE/scripts/check_role_parity.py" "$cf299/ladder/scripts/check_role_parity.py"
+cp "$HERE/scripts/check_role_parity.py" "$cf299/resolver/scripts/check_role_parity.py"
+cp "$HERE/scripts/check_role_parity.py" "$cf299/marker/scripts/check_role_parity.py"
+cp "$HERE/scripts/disk_floor.py" "$cf299/ladder/scripts/disk_floor.py"
+cp "$HERE/scripts/project-node.sh" "$cf299/ladder/scripts/project-node.sh"
+cp "$HERE/scripts/disk_floor.py" "$cf299/resolver/scripts/disk_floor.py"
+cp "$HERE/scripts/project-node.sh" "$cf299/resolver/scripts/project-node.sh"
+cp "$HERE/scripts/disk_floor.py" "$cf299/marker/scripts/disk_floor.py"
+cp "$HERE/scripts/project-node.sh" "$cf299/marker/scripts/project-node.sh"
+sed -i 's/builder) FLOOR_BUILTIN=10/builder) FLOOR_BUILTIN=12/' "$cf299/ladder/scripts/project-node.sh"
+sed -i 's/"full": 20/"full": 25/' "$cf299/resolver/scripts/disk_floor.py"
+sed -i 's/worker) FLOOR_BUILTIN=5/wkr) FLOOR_BUILTIN=5/' "$cf299/marker/scripts/project-node.sh"
+cf299_ladder=$(python3 "$cf299/ladder/scripts/check_role_parity.py" --root "$cf299/ladder" 2>&1); cf299_ladder_rc=$?
+cf299_resolver=$(python3 "$cf299/resolver/scripts/check_role_parity.py" --root "$cf299/resolver" 2>&1); cf299_resolver_rc=$?
+cf299_marker=$(python3 "$cf299/marker/scripts/check_role_parity.py" --root "$cf299/marker" 2>&1); cf299_marker_rc=$?
+if [ "$cf299_ladder_rc" -eq 1 ] && printf '%s\n' "$cf299_ladder" | grep -q '^FAIL role builder: resolver=10; ladder=12$'; then
+  say "  PASS  ladder mutation -> exit 1: $(printf '%s\n' "$cf299_ladder" | grep '^FAIL role builder:')"
+else
+  say "  FAIL  ladder mutation -> exit $cf299_ladder_rc: $cf299_ladder"
+  fails=$((fails+1))
+fi
+if [ "$cf299_resolver_rc" -eq 1 ] && printf '%s\n' "$cf299_resolver" | grep -q '^FAIL role full: resolver=25; ladder=20$'; then
+  say "  PASS  resolver mutation -> exit 1: $(printf '%s\n' "$cf299_resolver" | grep '^FAIL role full:')"
+else
+  say "  FAIL  resolver mutation -> exit $cf299_resolver_rc: $cf299_resolver"
+  fails=$((fails+1))
+fi
+if [ "$cf299_marker_rc" -eq 1 ] && printf '%s\n' "$cf299_marker" | grep -q '^FAIL role-set drift:'; then
+  say "  PASS  case marker mutation -> exit 1: $(printf '%s\n' "$cf299_marker" | grep '^FAIL role-set drift:')"
+else
+  say "  FAIL  case marker mutation -> exit $cf299_marker_rc: $cf299_marker"
+  fails=$((fails+1))
+fi
+cf299_dirty=$(git -C "$HERE" status --porcelain -- scripts/disk_floor.py scripts/project-node.sh)
+if [ -z "$cf299_dirty" ]; then
+  say "  PASS  fixture mutations stayed in scratch copies; tracked role-table files are unchanged"
+else
+  say "  FAIL  fixture mutation changed tracked files: $cf299_dirty"
+  fails=$((fails+1))
+fi
+rm -rf "$cf299"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

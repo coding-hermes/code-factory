@@ -570,8 +570,8 @@ contract lives under M5 below.
 
 | Setting | Lives in | Default | Range | Changes | Cross-ref |
 |---|---|---|---|---|---|
-| `ROLE_DEFAULTS` | `disk_floor.py:36` | `{"worker": 5, "builder": 10, "full": 20}` GiB | 1..4096 GiB (`MIN_GIB`/`MAX_GIB`) | admission floor per role — a value outside the range is refused (`:68-71`) | M1 §5 |
-| `DEFAULT_ROLE` | `disk_floor.py:37` | `worker` | one of the role keys | which floor applies when no role is named — an unknown explicit role is refused, not defaulted (F1-2, raise at `:123-125`) | M1 §5 |
+| `ROLE_DEFAULTS` | `disk_floor.py:40` | `{"worker": 5, "builder": 10, "full": 20}` GiB | 1..4096 GiB (`MIN_GIB`/`MAX_GIB`) | admission floor per role — a value outside the range is refused (`:85-91`); role-table parity is gated by `tests/selftest.sh` section 65 | M1 §5 |
+| `DEFAULT_ROLE` | `disk_floor.py:41` | `worker` | one of the role keys | which floor applies when no role is named — an unknown explicit role is refused, not defaulted (F1-2, raise at `:123-125`) | M1 §5 |
 
 Floor precedence, verified (F1-3): `--disk-floor` → `NODE_DISK_FLOOR` → the `[disk]`
 config key (`{role}_gib`, then `default`) → `ROLE_DEFAULTS[role]` (`disk_floor.py:115-141`).

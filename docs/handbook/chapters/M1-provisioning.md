@@ -136,8 +136,8 @@ explicit warning/confirmation is a separate question.
 
 | Setting | Default | Range | Governs | What breaks if changed |
 |---|---|---|---|---|
-| `ROLE_DEFAULTS` | `{"worker": 5, "builder": 10, "full": 20}` GiB (`disk_floor.py:36`) | 1..4096 GiB (`MIN_GIB`/`MAX_GIB`) | admission floor per role | a value outside the range is refused (`:68-71`) |
-| `DEFAULT_ROLE` | `"worker"` (`:37`) | one of the role keys | which floor applies when no role is named | an **unknown explicit role is refused**, not defaulted (F1-2; raise at `:123-125`) |
+| `ROLE_DEFAULTS` | `{"worker": 5, "builder": 10, "full": 20}` GiB (`disk_floor.py:40`) | 1..4096 GiB (`MIN_GIB`/`MAX_GIB`) | admission floor per role | a value outside the range is refused (`:85-91`); role-table parity is gated by `tests/selftest.sh` section 65 |
+| `DEFAULT_ROLE` | `"worker"` (`:41`) | one of the role keys | which floor applies when no role is named | an **unknown explicit role is refused**, not defaulted (F1-2; raise at `:123-125`) |
 
 **`bunker-provision.sh` (S2):**
 
@@ -366,7 +366,7 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
 ## 13. Evidence of record
 
 - Code read: `bunker-provision.sh:38-46, 95-123, 147, 175-249, 354-358, 424-495, 518-533, 550-611`,
-  `disk_floor.py:36-40, 115-141`, `verify-node.sh:20-241`, `node_identity.py` (full),
+  `disk_floor.py:40-44, 136-167`, `verify-node.sh:20-241`, `node_identity.py` (full),
   `node_seed.py:43-44, 114-164, 205-333, 373-394`; settings surfaces of `node_env.py`,
   `node_seed_drift.py`, `node_freshness.py`, `bunker_config_gen.py`.
 - **CF-003 slice, read and re-measured 2026-11-07:** `scripts/deploy_key.py` (whole file),
