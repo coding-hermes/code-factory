@@ -94,13 +94,15 @@ WARNING in 184 pages). The W3 re-audit returned
 
 ## VIII.4 The delivery rule
 
-A build that fails a gate is not delivered. The rule has teeth because every gate exits
-non-zero and the builder stops at the first failure: a lint finding never reaches print, an
-overflow never reaches a folio, a headless page never reaches the font census. The gates
-also make silence impossible in both directions — `.page { overflow: hidden }` hides an
-overfull page from the reader, which is why the fit measurement exists at all
-(`build_book.py:409-412`), and a missing manifest entry is a build error rather than a
-quietly absent part (BOOK.yaml, rule 3).
+A build that fails a gate is not delivered. The rule has teeth because the builder stops
+at the first failure: a lint finding never reaches print, an overflow never reaches a
+folio, and a headless page never reaches the font census. Gates that reject the artifact
+exit non-zero; manifest assembly currently renders a visible BUILD ERROR sheet without
+itself stopping the process, so that exception is named and release-blocking in the
+acceptance record (VIII.11). The gates also make silence impossible in both directions —
+`.page { overflow: hidden }` hides an overfull page from the reader, which is why the fit
+measurement exists at all (`build_book.py:409-412`), and a missing manifest entry is a
+build error rather than a quietly absent part (BOOK.yaml, rule 3).
 
 The corollary governs the working tree: a build run against a tree whose sources fail lint
 is not a near-miss, it is a different artifact, and its output is not cited as evidence
@@ -381,3 +383,36 @@ install the Factory, and an installed Factory does not deliver a project. Every 
 user redline is mapped bidirectionally to its revised page/interface/figure and its
 disposition-log row (VIII.5); source/version and user-feedback changes are tracked
 through all affected artifacts in both directions.
+
+## VIII.14 Pass-3 consistency readback
+
+Pass 3 treats cross-section consistency as a dated evidence check, not as a claim that
+one corrected paragraph automatically corrected every view. Before an integrated issue
+is released, the owner compares the selected normative path in Parts I–IX, the module
+chapters, the contract register, the settings register, and every mounted figure. The
+comparison records, for each interface, its initiator, receiver, execution location,
+contract ID/version, state transition, durable writer, evidence required before the
+next transition, and the disposition row that closes the review finding. A historical
+measurement may remain in the record only when it is dated and explicitly labelled
+historical; it cannot silently override the current contract.
+
+The readback has four falsifiable outcomes:
+
+1. **PASS** — every current reference resolves to one owner, location, schema and
+   status vocabulary; the figure arrow and adjacent prose describe the same transition;
+   and the disposition row cites the exact resolving revision.
+2. **PARTIAL** — the current source is consistent, but a measured implementation or
+   external boundary is not yet verified. The row names the missing evidence and stays
+   `ADOPTED-IN-PROGRESS`, `DEFERRED`, or `UNRESOLVED`; it does not become a green
+   conformance claim.
+3. **FAIL** — any stale owner, contradictory state, duplicate identifier, unbound figure,
+   or gate/status claim remains. The issue is not delivered, even when the mechanical
+   build is green.
+4. **NOT RUN** — no readback evidence exists. This is an open review result, never an
+   inferred pass.
+
+The pass-3 disposition log is the result ledger for this readback. Its P3 rows preserve
+all 26 finding identities, identify the exact source and resolving commit (or the reason
+for deferral), and distinguish a source correction from build proof, implementation
+conformance, and owner acceptance. The integrated PDF's build line closes only the
+mechanical stage; it does not erase a `PARTIAL`, `FAIL`, or `NOT RUN` result.

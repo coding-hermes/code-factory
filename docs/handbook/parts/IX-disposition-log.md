@@ -211,4 +211,40 @@ dispositions are monotonic in visibility, deferred and unresolved rows re-decide
 next pass, and the log — not the page count — is the record that the review was
 answered (VIII.5).
 
+## IX.8 Pass-3 findings — integrated-wave disposition
+
+These rows preserve the 26 plan identities. A row is ADOPTED only when the resolving
+source change and its integrated evidence are identified; a row is DEFERRED when its
+owning wave has not yet landed, and names that missing evidence rather than implying
+closure. P3-20 also owns the delivery-side consistency readback in Part VIII §14.
+
+| ID | Source finding | Disposition | Resolving commit / reason | Evidence or next check |
+|---|---|---|---|---|
+| P3-01 | P3-FLW-01 | DEFERRED | Wave 2 has not landed | Reconcile F2 actor ownership and readiness identity after Wave 1 contracts |
+| P3-02 | P3-LAYOUT-01 | DEFERRED | Wave 2 has not landed | Verify unique F10 caption in the integrated PDF |
+| P3-03 | P3-INT-01 | DEFERRED | Wave 1 has not landed | Verify complete CT registry and observable examples |
+| P3-04 | P3-CONFIG-01 | DEFERRED | Wave 1 has not landed | Verify complete canonical settings schema and readback |
+| P3-05 | P3-CONFIG-02 | DEFERRED | Wave 1 has not landed | Verify identity/credential separation and round-budget example |
+| P3-06 | P3-MEM-01 | DEFERRED | Wave 1 has not landed | Verify local durable memory, sync, conflict and freshness contract |
+| P3-07 | P3-WORK-01 | DEFERRED | Wave 1 has not landed | Verify versioned round/wave/result/memory protocol |
+| P3-08 | P3-RECOVERY-01 | DEFERRED | Wave 3 has not landed | Verify reservation, fencing, crash-point and charging traces |
+| P3-09 | P3-OPS-01 | DEFERRED | Wave 1 has not landed | Verify event/subscription and independent metric contracts |
+| P3-10 | P3-DISPATCH-01 | DEFERRED | Waves 2 and 3 have not landed | Verify one normative Crier launch/return path |
+| P3-11 | P3-BOARD-01 | DEFERRED | Waves 1 and 3 have not landed | Verify claim/fence/evidence and partial-write recovery |
+| P3-12 | P3-MODULES-01 | DEFERRED | Wave 3 has not landed | Verify each module contains its normative contract |
+| P3-13 | P3-M0-01 | DEFERRED | Wave 3 has not landed | Verify executable helper example and absence branch |
+| P3-14 | P3-REPO-01 | DEFERRED | Wave 3 has not landed | Verify gate/publication policy and closeout recovery |
+| P3-15 | P3-PROVISION-01 | DEFERRED | Wave 3 has not landed | Verify qualified profile and lifecycle/readiness contract |
+| P3-16 | P3-FORGE-01 | DEFERRED | Wave 3 has not landed | Verify GitHub/GitLab mapping, rotation and revocation |
+| P3-17 | P3-PROXY-01 | DEFERRED | Wave 3 has not landed | Verify token, stream, accounting and deployable replacement contract |
+| P3-18 | P3-SCHED-01 | DEFERRED | Wave 3 has not landed | Verify typed scheduler transitions and settlement order |
+| P3-19 | P3-SAFETY-01 | DEFERRED | Wave 3 has not landed | Verify Bunker baseline, optional jail and cleanup races |
+| P3-20 | P3-CONSISTENCY-01 | ADOPTED | this integration commit | VIII §14 defines dated cross-section readback and separates PASS/PARTIAL/FAIL/NOT RUN |
+| P3-21 | P3-MANAGER-01 | DEFERRED | Wave 1 has not landed | Verify deterministic manager resource/reconciliation contract |
+| P3-22 | P3-RECOVERY-02 | DEFERRED | Wave 3 has not landed | Verify backup manifest, restore ordering and recovery bounds |
+| P3-23 | P3-ACCESS-01 | DEFERRED | Wave 3 has not landed | Verify controller/Bunker enrollment and enforced authorization |
+| P3-24 | P3-FLW-02 | DEFERRED | Wave 2 has not landed | Verify all sixteen diagrams against the normative path |
+| P3-25 | P3-DIAGRAM-01 | DEFERRED | Wave 2 has not landed | Verify arrangement/module diagrams against register and locations |
+| P3-26 | P3-LAYOUT-02 | DEFERRED | Wave 2 has not landed | Verify integrated PDF folios, headings, figures and print-scale labels |
+
 pass3 received, 26 findings, plan committed at ad984337f19d999977bd234475b442fcb84be9a0
