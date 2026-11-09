@@ -4,7 +4,39 @@
 import argparse
 import json
 import os
+import subprocess
 import sys
+
+
+def _default_history_roots(root):
+    """Return the GitReins history stores to consult, most specific first.
+
+    History directories are git-untracked, so a linked worktree carries only the
+    subset that happens to be committed.  Reading the checkout's own store plus
+    the repository-wide store (found through the common git directory) keeps a
+    worktree and the registered checkout on the same effective store, and leaves
+    a plain directory tree (e.g. a fixture) resolving from its own store only.
+    """
+    local = os.path.join(root, ".gitreins", "history")
+    roots = [local]
+    try:
+        result = subprocess.run(
+            ["git", "-C", root, "rev-parse", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return roots
+    if result.returncode != 0 or not result.stdout.strip():
+        return roots
+    common_dir = result.stdout.strip()
+    if not os.path.isabs(common_dir):
+        common_dir = os.path.join(root, common_dir)
+    shared = os.path.join(os.path.dirname(os.path.abspath(common_dir)), ".gitreins", "history")
+    if shared not in roots:
+        roots.append(shared)
+    return roots
 
 
 def _run_directory_exists(history_root, run_id):
@@ -102,7 +134,7 @@ def check(root, history_root=None):
     board_root = os.path.join(root, ".coding-hermes", "board")
     tasks_path = os.path.join(board_root, "tasks.jsonl")
     events_path = os.path.join(board_root, "events.jsonl")
-    history_base = history_root or os.path.join(root, ".gitreins", "history")
+    history_bases = [history_root] if history_root else _default_history_roots(root)
 
     rows, ignored = _load_rows(tasks_path)
     events_text, ignored_events = _load_events(events_path)
@@ -115,12 +147,12 @@ def check(root, history_root=None):
             run_id
             for run_id in _evidence_ids(row)
             if run_id not in events_text
-            and not _run_directory_exists(history_base, run_id)
+            and not any(_run_directory_exists(base, run_id) for base in history_bases)
         ]
         if unresolved:
             findings.append((row.get("id", "<missing-id>"), unresolved))
 
-    return complete_rows, findings, ignored, history_base
+    return complete_rows, findings, ignored, history_bases
 
 
 def main(argv=None):
@@ -137,7 +169,7 @@ def main(argv=None):
     )
     parser.add_argument(
         "--history-root",
-        help="GitReins history root (default: <root>/.gitreins/history)",
+        help="GitReins history root (default: the repository-wide .gitreins/history, shared by all worktrees)",
     )
     parser.add_argument(
         "--quiet-findings",
@@ -147,7 +179,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     try:
-        complete_rows, findings, ignored, history_base = check(
+        complete_rows, findings, ignored, history_bases = check(
             os.path.abspath(args.root),
             os.path.abspath(args.history_root) if args.history_root else None,
         )
@@ -162,7 +194,9 @@ def main(argv=None):
             print(f"UNRESOLVED {row_id} {','.join(run_ids)}")
     print(
         f"stores: events={os.path.join(os.path.abspath(args.root), '.coding-hermes', 'board', 'events.jsonl')} "
-        f"history={history_base} ({_history_run_count(history_base)} run dirs)"
+        + " ".join(
+            f"history={base} ({_history_run_count(base)} run dirs)" for base in history_bases
+        )
     )
     print(f"checked {len(complete_rows)} complete rows, {len(findings)} unresolved")
     if args.strict and findings:
