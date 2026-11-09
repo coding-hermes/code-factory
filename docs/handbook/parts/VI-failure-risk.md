@@ -338,8 +338,11 @@ delivery the front exposes); no CT for the scheduler listen surface.
 
 ## 10. Evidence is destroyed, or never written
 
-**What fails.** The reaper can delete a directory a module cites as evidence: the TTL
-governs age, not citation, and the two are conflated — CF-290 and CF-368 open (M8 §2).
+**What fails.** The reaper can delete a directory a module cites as evidence: since
+CF-290 the cache branch carries an age gate (`--cache-ttl-hours`, measured on the newest
+mtime anywhere in the subtree; `scripts/reclaim_disk.py:66-84`, `:154`), but the TTL
+governs age, not citation, and the two are still conflated at the citation end — CF-368
+open (M8 §2).
 Dispatcher jobs under `.cf-jobs` are not a reap target of `AGED_PARENTS`, so the
 dispatcher-job retention path has no reaper at all (F8-3). The node worker writes no
 board rows (CT-10, BROKEN) and makes zero DuckBrain calls (CT-09, MISSING, CF-329) — the
@@ -359,7 +362,7 @@ without a live-id registry.
 
 **Recovery.** `node_hygiene.py reap --min-age-minutes 60 --registry <ids>` for orphans
 inside the default grace; `reclaim_disk.py run` for caches; a reaped evidence directory
-is unrecoverable — the open exclusion rule (CF-290/368) is the only real fix.
+is unrecoverable — the still-open exclusion rule (CF-368) is the only real fix.
 
 **Contract that guards it.** CT-10 (BROKEN), CT-09 (MISSING) — both record sinks lack a
 measured producer; CT-14 (foreman → board, UNVERIFIED).
@@ -1081,7 +1084,7 @@ tables to hold the page.
 | 12 | Exposed binding | loopback default, auth gates | daemon owners | re-point, add front end | admission legs pass |
 | 13 | Route/truncation | allowlists, body ceiling | proxy owner | named failure to client | requested = served in usage log |
 | 14 | Streaming | none measured | proxy maintainer | client retry | actual-path conformance evidence |
-| 15 | Evidence loss | `PROTECTED` set, dry-run | safety owner | reaper rule fix (CF-290/368) | cited evidence survives a reap |
+| 15 | Evidence loss | `PROTECTED` set, dry-run | safety owner | reaper rule fix (CF-368) | cited evidence survives a reap |
 | 16 | Lying record | spine comparison, same-commit amend | documentation owner | re-pin locators | register matches disk |
 | 17 | Memory consistency | treat local reads as cache | unresolved | unspecified | cross-host readback |
 | 18 | Restore | durable backend requirement | Crier store owner | restore procedure + drill | restore-drill record |
