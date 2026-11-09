@@ -248,3 +248,5 @@ closure. P3-20 also owns the delivery-side consistency readback in Part VIII §1
 | P3-26 | P3-LAYOUT-02 | ADOPTED | `414a231` | `scripts/build_book.py` and figure diffs correct inline mounting, caption adjacency, folio geometry and print-scale layout |
 
 pass3 received, 26 findings, plan committed at ad984337f19d999977bd234475b442fcb84be9a0
+
+pass4 received, 16 findings, plan committed in this change; canonical review record `CF2A-01-pass4-review-log.json`, source `CF2A-01-pass3-integrated.pdf` (275 pages, SHA-256 `841f4626c00730de7940449e60408966c36f152318d5e027893f4f7acc6bd564`).
