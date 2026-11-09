@@ -560,8 +560,9 @@ def flow_sheets(
             code = fig_codes.get(m.group(1), fig.stem.upper())
             cap = f"<h2>FIGURE {code} — as of {today}</h2>"
             # The first prose block after the marker is the flow explanation. Keep
-            # it in the same non-splittable intro unit as the figure and caption;
-            # pagination may move that unit, but cannot strand its explanation.
+            # it directly after the figure unit. A short figure rides with that
+            # explanation; a tall figure opens an explicit adjacent spread instead
+            # of creating an overfull atomic block that pagination can strand.
             para = None
             para_i = i + 1
             while para_i < len(fblocks):
@@ -572,33 +573,32 @@ def flow_sheets(
                 if FLOW_HEAD.match(candidate) or FIG_MARK.match(candidate):
                     break
                 para_i += 1
-            intro = [svg_fit(fig), cap]
-            if para is not None:
-                intro.append(para)
-            intro_unit = "<div class=\"flow-intro\">" + "".join(intro) + "</div>"
             if fig_scaled_h(fig) <= INLINE_FIG_MAX_MM:
-                sheet.append(intro_unit)
+                intro = [svg_fit(fig), cap]
+                if para is not None:
+                    intro.append(para)
+                sheet.append("<div class=\"flow-intro\">" + "".join(intro) + "</div>")
                 i = para_i + 1 if para is not None else i + 1
                 continue
 
-            # Tall figures still carry the heading, figure, caption and explanation
-            # as one designed spread unit. Scale the hero to leave room for the
-            # explanation instead of emitting a title-only sheet or moving prose to
-            # an unrelated trailing sheet.
-            ref = (
-                f"<p>FIGURE {code} is reduced to share this flow sheet with its "
-                "explanatory paragraph; the flow id is repeated on continuation "
-                "heads.</p>"
+            # Explicit adjacent spread: the flow's running head identifies both
+            # sheets, the first carries the diagram/caption, and the next starts
+            # with the explanation before the ordered steps. This prevents a
+            # title-only or caption-only sheet and keeps reading order unambiguous.
+            sheet.append(
+                f"<p>FIGURE {code} is a tall hero; its explanation continues on the "
+                "immediately adjacent F1 spread sheet.</p>"
             )
-            sheet.append(ref)
-            sheet.extend(intro)
+            sheet.extend([svg_fit(fig, h_max=SEP_FIG_MAX_MM), cap])
             flush()
             if para is not None:
-                # The unscaled intro above is replaced by a bounded hero on the
-                # dedicated sheet; keep the paragraph adjacent to its caption.
-                prior = out.pop()
-                bounded = list(prior[1][:-len(intro)]) if len(intro) else list(prior[1])
-                out.append((section, bounded + [svg_fit(fig, h_max=SEP_FIG_MAX_MM), cap, para], tab))
+                out.append(
+                    (
+                        section,
+                        [f"<h2>{fid} CONTINUED — EXPLANATION</h2>", para],
+                        tab,
+                    )
+                )
                 i = para_i + 1
             else:
                 i += 1

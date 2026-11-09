@@ -22,7 +22,7 @@ diagrams are generated from `docs/SYSTEM-MODEL.yaml` by
 
 ## 2.1 F1 — Dispatch and settlement
 
-![FIGURE 2.1](figures/F1.svg)
+![FIGURE 2.1 — F1 DISPATCH AND SETTLEMENT](figures/F1.svg)
 
 F1 is the parent dispatch-and-return of one foreman round: a scheduler admission
 becomes a bounded program of compatible worker waves inside one project Bunker and
