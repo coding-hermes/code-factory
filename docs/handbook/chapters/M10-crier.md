@@ -325,6 +325,16 @@ named RED on this field).
     is scoped (runtime vs test helpers vs exposition components), not a completed per-metric register.
   - **F10-6** — repo moved `86c4c469`→`ae9fc57f`; all 9 cited files byte-identical; one fresh `go test ./...` passed clean (0 FAIL, `cmd/server` 65.4s), but the flaky-test files (`cmd/server/*_test.go`) changed since the earlier measurement, so a single green run does not retire the flaky finding.
 
+## 15. Normative Crier launch/return and custody contract (P3-12, P3-18)
+
+The MVP uses Crier as the launch and return boundary: Scheduler on the control host delivers a versioned launch envelope to the project foreman's Bunker inbox; retrieval grants the lease; the foreman returns a correlated result through Crier; Scheduler records the response. Webhook, session and harness adapters are partitioned compatibility modes and cannot execute the same attempt as the selected inbox mode.
+
+The wire contracts are `cf.register.v1`, `cf.deliver.v1`, `cf.retrieve.v1`, `cf.ack.v1` and `cf.return.v1`. Every message carries `message_id`, `dispatch_id`, `correlation_id`, `project_id`, `round_id`, `wave_id`, `attempt_id`, `generation`, `schema`, `payload_digest`, `sender`, `recipient`, `expires_at` and an idempotency key. Unknown schema, wrong scope, invalid signature, oversized body or expired generation is a refusal. Delivery writes durable custody but starts no lease; retrieve atomically claims and starts the lease; ack is allowed only for the matching lease owner and result digest.
+
+The selected production backend is SQLite or PostgreSQL; `memory` is a demo/negative-control backend and cannot satisfy restart durability. Boot readback names the resolved backend. Lease, HTTP, job, heartbeat, retry and retention clocks are independent. A duplicate delivery returns the recorded receipt; a duplicate retrieve returns the existing lease/result; a late return is retained as evidence but cannot alter a replaced attempt. Filter-after-claim reports temporarily leased nonmatching messages rather than calling the queue empty. Stats failure returns `UNAVAILABLE`, never zero-as-empty.
+
+The guard result is separate from execution safety and acceptance. `errored=true`, fail-open policy, oversize deterministic decisions and signature-disabled modes remain visible in the result and metrics. The selected policy's fail-closed behavior is explicit. Required metrics cover delivery acceptance, guard decisions/errors, queue and lease state, retries, duplicates, dead letters, backend availability and end-to-end latency. Acceptance cases cover registration, signed read, duplicate delivery, restart under the durable backend, lease expiry, wrong generation, malformed payload, guard outage and late return.
+
 ## RED field count: 5 (S1 handler 1895-line body not read line-by-line — the slog surface is complete but the body's non-slog semantics are not; §8 per-metric contract — series names inventoried but the type/labels/question/scrape table not filled; §9 guard log surface not tabulated — B22; §5 storage-selection custody-proof not written — B20; §7 `go test ./...` — one fresh clean run at HEAD `ae9fc57f`, but the flaky finding is not retired (single run ≠ determinism))
 
 ## FLIGHT DATA FILE - M10 CRIER

@@ -255,6 +255,26 @@ end-to-end attribution remains missing; existing upstream metrics do not automat
 an unrelated node-worker path. §8's absence-proved RED describes the snapshot, not the metric
 design.
 
+## 15. Normative launch and return contract (P3-12, P3-10)
+
+The MVP execution owner is the project foreman inside the project Bunker. Crier is the only launch and return boundary to the control-host Scheduler. The node pull worker and central dispatcher are retained compatibility adapters, not competing MVP authorities; a deployment selecting either records `execution_mode`, accepts only its matching envelope version, and must not execute the same `(project_id, round_id, wave_id, worker_id, attempt_id)` in two modes.
+
+A versioned launch envelope contains `schema: cf.launch.v1`, `message_id`, `dispatch_id`, `correlation_id`, `project_id`, `round_id`, `wave_id`, `worker_id`, `attempt_id`, `generation`, `workspace_ref`, `brief_digest`, `limits` and `cancel_ref`. Unknown required fields, unsupported schema, missing identity, digest mismatch, expired lease or wrong project scope are refusals before harness execution. The return envelope contains `schema: cf.return.v1`, the same identities, `transport_state`, `execution_state`, `result_digest`, `status`, `evidence_refs`, `artifacts`, `finished_at` and `error` when applicable. `status` and legacy `ok` cannot disagree; when both are present, the versioned `status` is authoritative and disagreement is `MALFORMED_RESULT`, never success.
+
+| State | Authorized writer | Durable condition | Next states |
+|---|---|---|---|
+| `OFFERED` | Scheduler/Crier | message accepted with idempotency key | `LEASED`, `REJECTED` |
+| `LEASED` | Crier | lease owner and expiry recorded | `STARTED`, `CANCELLED`, `EXPIRED` |
+| `STARTED` | Bunker foreman | native run identity and input digest recorded | `RUNNING`, `FAILED_TO_START` |
+| `RUNNING` | foreman | heartbeat renews the lease | `RETURNED`, `CANCELLED`, `DEADLINE` |
+| `RETURNED` | Crier/Scheduler | result durable before acknowledgment | `ACKED`, `RETRYABLE` |
+| `ACKED` | Crier | return delivery and receipt recorded | `SETTLED` |
+| `SETTLED` | Scheduler | execution outcome stored; acceptance/publication remain separate | terminal |
+
+Deduplication is durable before side effects on `dispatch_id + attempt_id + generation`; a duplicate returns the recorded custody or result receipt. Same-batch duplicates are coalesced before launch. Cancellation prevents a new start and propagates to the native run; a late result is stored as late evidence but cannot alter a replaced or settled attempt. Lease renewal failure freezes publication and triggers reconciliation. Acceptance cases cover duplicate delivery, unsupported schema, cancel-before-start, crash-after-start-before-return, late return after replacement and successful round-trip correlation.
+
+Required dispatch metrics are attempts, outcomes, refusals by reason, lease age, renewals, duplicates, cancellation, late results and projection lag. Crier owns transport metrics; the foreman owns execution metrics; Scheduler reads the correlated result. No transport receipt is an execution or acceptance verdict.
+
 ## RED field count: 3 (Metrics §8; §7 live bus-worker ladder not repeatable from this host; §9 inventory 4 of 70 helper call sites — the descriptive per-measurement rows not tabulated one-per-site)
 
 ## FLIGHT DATA FILE - M2 DISPATCH - NODE SIDE

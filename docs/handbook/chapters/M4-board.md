@@ -312,6 +312,18 @@ notes M4, proposal "required board metrics"). Upstream stats/doctor reports (§4
 are reusable components; a grep proving no Prometheus calls is coverage evidence, not the metric
 design.
 
+## 15. Normative board authority, claim and closeout contract (P3-12)
+
+Each project repository carries one board identity `(project_id, board_id, repository, canonical_ref)`. The published canonical ref is authoritative for scheduling and closeout; a local clone is an observation cache until it has refreshed and recorded the exact commit. The foreman owns task claims and closeout through Boardctl; Scheduler reads eligibility and admission but does not replace the board claim protocol.
+
+The canonical eligibility rule is: a row is eligible only when `status=pending`, its required acceptance criteria are present, every prerequisite is `complete`, it is not cancelled, its board revision is current, and no active claim exists. `blocked` and `deferred` are incomplete; a deferred row carries a reason, owner, review time and return condition. Missing or malformed prerequisites, dependency cycles, malformed rows and unreadable sources are `UNKNOWN`, never an empty workable board. A healthy empty board is `EMPTY`; a healthy board with no eligible row is `NO_WORK`; an unavailable or partial observation is `UNAVAILABLE`.
+
+A claim request is `schema: cf.board-claim.v1` with `task_id`, `project_id`, `board_commit`, `expected_revision`, `claim_id`, `owner_id`, `lease_until` and `fence_token`. Boardctl performs compare-and-set on `(task_id, expected_revision, status)` while holding the board write lock; it appends the row transition and event with the same operation id. A competing clone receives `CONFLICT`, refreshes the canonical ref and re-evaluates. Every protected write checks the current fence token, so an expired or replaced owner cannot publish, close or append a completion event.
+
+Closeout requires the task criteria, an accepted verdict, exact tested tree, published object, evidence references and a durable completion event. Partial row/event writes return `PARTIAL_WRITE` with the operation id; repair reads both stores, deduplicates by event id, completes the missing side or marks the operation `REPAIR_REQUIRED`, and never repeats a side effect blindly. Board backup/restore validates row/event revision, evidence references and git revision before admission resumes.
+
+Required metrics cover status and eligibility classes, stale claims, lock outcomes, parse/validation failures, claim conflicts, duplicate suppression, closeout evidence rejection, drift age and partial-write repair. Boardctl, `board_read.py`, Scheduler and the foreman consume the same eligibility oracle. Acceptance cases cover two clones claiming one row, a stale revision, malformed JSON, a dependency cycle, a failed event append and an idempotent repeated closeout.
+
 ## RED field count: 2 (Metrics §8 — absence-proved; CT-14/CT-13 states UNVERIFIED — every side is an external peer)
 
 ## FLIGHT DATA FILE - M4 BOARD

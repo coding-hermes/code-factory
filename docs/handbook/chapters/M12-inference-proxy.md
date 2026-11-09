@@ -263,6 +263,18 @@ is a capture log, not an emitted metric.
     the measured values are `cf-inference-usage.jsonl` (`:50`) and `cf-inference-requests.jsonl`
     (`:52`).
 
+## 15. Normative node-token, model API and capture contract (P3-12, P3-17)
+
+The maintained proxy package is the deployable authority. A deployment artifact carries a version, source digest, Python compatibility, service unit, configuration schema, upgrade/rollback procedure and restore procedure. A workstation path or active service without this package is `UNVERIFIED` and cannot certify a node.
+
+The node-token mapping is `schema: cf.node-token.v1`: `token_id`, `node_id`, `project_id`, `namespace`, `allowed_routes`, `allowed_models`, `budget`, `concurrency`, `issued_at`, `expires_at`, `generation`, `scope_digest`, `revoked_at` and `issuer_ref`. M1 requests issuance; the proxy owner administers the mapping; the token is delivered as an owner-only file and read back by id, scope digest and expiry without printing its value. Rotation overlaps only within a declared window. Revocation and decommission invalidate the token immediately, and every request checks generation, scope, expiry, budget and concurrency before forwarding.
+
+Supported API version `cf.inference.v1` exposes `GET /health` without paid/model authorization, `GET /v1/models` with node authorization, and `POST /v1/chat/completions` with model, messages, stream and option validation. A buffered result carries requested, chosen, resolved and served model identity, usage, completion state and response id. Errors use `401` missing/unknown/revoked token, `403` scope/model denial, `400` invalid body, `408` deadline, `429` budget/concurrency, `502` upstream-before-headers and `504` timeout. After headers, a failure is a terminal stream error or truncated result, never a second HTTP status.
+
+A streamed response uses framed SSE records and an explicit terminal event containing response id, served model, usage and `complete`/`error`/`cancelled` state. The proxy closes or correctly frames the downstream connection after the terminal event; upstream read failure before headers is a clean 502, while failure after headers is an incomplete/error stream. Client disconnect cancels upstream work. Usage settlement records request id, token id, requested/served model, bytes, duration, first-byte time and terminal state; failed capture or usage persistence follows an explicit policy and is visible.
+
+Raw prompt capture is disabled unless policy enables it. When enabled, the policy names redaction, maximum size, retention, sink, access scope and failure behavior; capture loss never silently becomes a complete audit record. Required metrics cover authorized/refused requests, model mismatches, upstream errors, stream terminal outcomes, cancellations, usage settlement, capture failures, token expiry/revocation and budget denials. Acceptance cases cover finite stream completion, pre/post-header failure, cancellation, disallowed served model, expired token, revoked token and capture-sink failure.
+
 ## RED field count: 4 (Metrics §8 — absence-proved; CT-19 node-client half UNVERIFIED; CT-20 upstream half UNVERIFIED — one-sided external boundary; stream completion **FAILING** — F12-7 reproduced, and a first-byte-only flight card cannot close it)
 
 ## FLIGHT DATA FILE - M12 INFERENCE PROXY

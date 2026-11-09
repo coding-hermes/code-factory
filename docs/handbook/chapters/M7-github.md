@@ -200,6 +200,16 @@ latency are answerable only by reading the refresh log.
     `~/.hermes/scripts/gh-app-token.py` (a separate minter), and the node-token producer for M12 is
     unknown.
 
+## 15. Normative forge credential contract (P3-12, P3-16)
+
+M7 defines one provider-neutral credential interface with GitHub and GitLab adapters. A mapping row is `schema: cf.forge-mapping.v1` with `forge_host`, `provider`, `owner`, `app_id`, `installation_id` or GitLab application/project binding, `repository_ids`, `role`, `permissions`, `issuer_ref`, `consumer_ref`, `bunker_ref`, `expires_at`, `scope_digest` and `generation`. The signing key remains on the control host. GitHub App installation tokens and GitLab project/group tokens are separate adapter credentials; provider-specific API details are not silently generalized.
+
+The lifecycle is `REGISTERED → INSTALLED → PAIRED → ISSUABLE → DELIVERED → ACTIVE → RENEWING → REVOKED → OFFBOARDED`. Issuance refuses an unmapped repository, excessive permission, expired installation, stale generation or missing customer authorization before any token request. Delivery writes an owner-only file through the Bunker control channel, reads back mode, scope digest and expiry without printing the value, and removes temporary control-host copies. Renewal overlaps only when both credentials are valid; compromise or scope reduction revokes the old credential explicitly and records provider confirmation. Restore reissues or revokes according to the recorded generation and never resurrects a revoked credential.
+
+The supported operation contract covers register, install/pair, check, issue, deliver, refresh, revoke and offboard. Each result names provider, mapping generation, repository scope, permission scope, expiry headroom and refusal reason. Git clone/fetch, branch push and protected-main/merge permissions are distinct; M3 requests only the operation it owns. M7 does not mint M11 dispatch credentials or M12 proxy node tokens.
+
+Required metrics cover issuance, delivery, renewal and revocation outcomes, expiry headroom, refused scopes, stale mappings, partial activation and provider/API errors. Acceptance cases cover GitHub least-privilege issuance, GitLab project scope, renewal before expiry, scope reduction, leaked-token revocation and restore without credential resurrection.
+
 ## RED field count: 4 (Metrics §8 — absence-proved; §1 mint UNVERIFIED; M7-C1 contract state UNVERIFIED — consumer is an external API; §9 inventory 2 of 103 helper call sites — the descriptive rows not tabulated one-per-site)
 
 ## FLIGHT DATA FILE - M7 GITHUB

@@ -251,6 +251,16 @@ lines — `:81` a comment mentioning `log()` and `:112` the `def log(` definitio
     so a surviving-harness failure mode exists and the descendant-termination guarantee is withdrawn
     until a test proves the kill reaches the harness group.
 
+## 15. Normative compatibility and crash-safe dispatcher contract (P3-12, P3-18)
+
+The central dispatcher is a retained migration adapter, not the MVP execution authority. When selected, it receives only the dispatcher envelope version, runs through the control-host-to-Bunker adapter and returns the same versioned result contract as M2. Selection is explicit in `execution_mode`; a task cannot be consumed by both dispatcher and foreman/Crier paths.
+
+Before launch, the dispatcher durably writes `schema: cf.dispatch-intent.v1` with `dispatch_id`, `project_id`, `task_id`, `round_id`, `wave_id`, `attempt_id`, `generation`, native Bunker job identity placeholder, input digest, lease, deadline, credential scope and idempotency key. Native job identity is bound immediately after launch. If launch acknowledgement is lost, restart reconciles the Bunker job by that identity before deciding whether to continue or cancel; it never reruns only because a result is missing. Results are journaled before ack and ledger failures are visible refusal/failure facts, not swallowed warnings.
+
+The total deadline is partitioned into launch, polling, transfer and cleanup reserves. If the remaining budget cannot satisfy the declared minimum, dispatch is refused rather than raised to a floor. Per-agent, per-node and global concurrency are bounded with fair polling and backpressure. Cancellation and deadline handling prove zero descendants in the selected Bunker backend; if quiescence is not proven, the result is `QUARANTINED` with surviving-process evidence and no new attempt.
+
+Scoped forge credentials are required when the job operation needs them. The dispatcher refuses before launch when issuer, repository scope, permission scope or expiry margin is missing. Tokens never appear in argv or logs and are removed at completion or decommission. Completion delivery is outbox-before-ack; duplicate delivery returns the recorded result, and late replies cannot replace a settled generation. Required metrics cover intent/launch uncertainty, reconciliation, lease renewal, deadline reserves, concurrency/backpressure, quiescence, credential refusals and result delivery. Acceptance cases cover crash before launch, crash after launch, ledger failure, tiny remaining wall, simultaneous agents, nested cancellation and restart.
+
 ## RED field count: 2 (Metrics §8, live-job test row §7 — decoration, cannot fail)
 
 ## FLIGHT DATA FILE - M11 DISPATCHER

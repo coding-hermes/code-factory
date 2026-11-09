@@ -279,6 +279,25 @@ outcomes and durations, retries/conflicts, and publication-to-closeout failures 
 meaning, units, bounded labels, emitter/collector/readout owners and verification (review notes
 M3, proposal "required repository metrics"). §8's absence-proved RED is current coverage only.
 
+## 15. Normative gate, publication and closeout contract (P3-12, P3-14)
+
+M1 creates the project checkout; M9 refreshes and admits it; the Bunker foreman authorizes landing; M3 validates, gates, integrates and proves publication; M4 records closeout. The foreman is the sole publication owner for the selected repository/branch. The operator-invoked lander is an adapter, not an independent authority.
+
+A landing request is `schema: cf.landing.v1` with `project_id`, `source_commit`, `source_branch`, `target_ref`, `tree_digest`, `accepted_verdict_ref`, `evidence_refs`, `policy_generation`, `request_id` and `idempotency_key`. The request is refused unless the verdict is passing, its criteria and exact source tree match, the required gate set is present, credentials have the required read/push/merge scope, and the remote freshness observation is within policy. `--gate-cmd` empty is therefore a non-production configuration, not an implicit acceptance.
+
+| Phase | Required proof | Failure state and retry |
+|---|---|---|
+| validate | source commit/tree and branch ancestry | `INVALID_SOURCE`; rebase and issue a new request |
+| gate | mandatory guard, project checks and independent acceptance verdict | `GATE_FAILED` or `VERDICT_UNKNOWN`; no merge |
+| integrate | serialized owner lock, fresh target ref and ff/no-ff policy | `CONFLICT` or `STALE_TARGET`; refresh and revalidate |
+| publish | explicit merge object pushed to named remote/ref | `MERGED_NOT_PUBLISHED`; retain the local object and retry |
+| verify | fetch remote, compare object/tree digest and ancestry at observation time | `PUBLISH_UNPROVEN`; never downgrade to PASS on a fetch warning |
+| close | evidence-bound M4 event and projection readback | `PUBLISHED_NOT_CLOSED`; idempotent closeout with the same request id |
+
+The pre-commit guard and acceptance judge are different: the guard evaluates staged changes, while the judge evaluates the work against criteria. A passing ancestry check does not replace either. Integration is one writer per `(project_id,target_ref)`; competing updates are re-fetched, the tree is revalidated, and only then retried. Repeated requests with the same idempotency key return the existing result without a second publication. Credential expiry or insufficient scope is a refusal owned by M7, not a scope expansion by M3.
+
+Required metrics cover freshness age, gate attempts/outcomes/skips, verdict unknowns, conflicts, merge/push/proof outcomes, retries and publication-to-closeout lag. The landing result names the exact source, merge and published objects, remote/ref and observation time. Acceptance cases cover absent verdict, stale proof, concurrent target movement, push failure, merged-but-unpublished recovery and repeated closeout.
+
 ## RED field count: 3 (Metrics §8 — absence-proved; §1 status — `repo_freshness.py` body not read line-by-line (behaviour exercised by the cf244 arm, source unread) and S3 hook *enforcement* UNVERIFIED (the landing arm proves landing behaviour, not that git invokes the installed pre-commit gate); §9 inventory 5 of 35 helper call sites)
 
 ## FLIGHT DATA FILE - M3 REPOSITORY

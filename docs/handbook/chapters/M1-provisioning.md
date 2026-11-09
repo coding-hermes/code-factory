@@ -502,6 +502,25 @@ reason, readiness results and useful step durations — each with meaning/type/u
 dimensions, an identified emitter and readout (review notes M1, change 11). §8's absence-proved
 RED is current coverage only.
 
+## 15. Normative provisioning, enrollment and readiness contract (P3-12, P3-15, P3-23)
+
+The qualified MVP profile is a user-space, image-backed Bunker with a persistent mounted node home. The profile supports a pinned Hermes/Oh My Hermes build, a project checkout containing the embedded board, Crier membership, node-scoped proxy access and local Git-backed DuckBrain. Kubernetes, Compose, homelab and standalone modes are not universal guarantees; each is unsupported unless it supplies the same readback and conformance rows.
+
+| Stage | Durable input and output | Required refusal / recovery |
+|---|---|---|
+| admission | declared profile, role, disk floor, footprint; `profile_id` and `generation` | unknown profile, insufficient measured headroom or unreadable host state refuses before spawn |
+| create | `node_id`, `project_id`, repository identity `{forge, host, owner, repo, ref}` and credential references, never credentials in the identity | duplicate `(project_id,node_id,generation)` is idempotent; conflicting generation is a compare-and-swap refusal |
+| enrollment | controller principal, Bunker principal, trust key/certificate fingerprint, Crier registration id and endpoint | missing trust, wrong project scope, expired identity or failed signed read leaves the node `ENROLLMENT_FAILED` and unschedulable |
+| provision | pinned artifacts and per-class credential references; seed manifest and digest | each artifact is digest-checked; partial installation records completed stages and retries only idempotent stages |
+| readiness | effective readback for profile, repo, Crier, harness, proxy inference and memory; machine-readable report | any unavailable or unmeasured required leg is `UNVERIFIED`, never READY; readiness is not inferred from file presence |
+| replace/remove | old generation fenced, new generation read back, revocations retained | replacement cannot inherit revoked credentials; removal preserves audit evidence and destroys only owned state |
+
+Five credential classes remain separate: forge, Crier bus, Bunker control, inference proxy and DuckBrain memory. Each class has an issuer, scope, mode-600 file reference, expiry metadata, renewal owner, revocation operation and readback result. The controller never copies a provider key into a Bunker. `agent:self` does not grant daemon administration; every operation is checked against `(principal, project_id, bunker_id, resource, generation)` at the resource boundary.
+
+The normative state sequence is `DECLARED → ADMITTED → CREATED → ENROLLED → PROVISIONED → CONNECTED → VERIFIED`, with `DEGRADED`, `REPLACEMENT_REQUIRED` and `REMOVED` terminal or recovery states. Only `VERIFIED` may be admitted by M9. The readiness report carries `report_version`, `node_id`, `project_id`, `generation`, per-check status and observation timestamp. A controller restart reloads the last durable state and resumes by generation; a Bunker loss fences the old identity before replacement. Acceptance cases cover an invalid credential mode, a stale certificate, a private repository with the wrong credential, an unavailable memory service with local persistence intact, and a successful restart with all identities unchanged.
+
+The target metrics are stage attempts, refusal reasons, artifact digest failures, enrollment/readiness outcomes, effective-generation lag and step duration, with `project_id`, `profile_id` and `generation` as bounded labels. The manager owns collection and readout; a printed PASS row is not readiness evidence.
+
 ## RED field count: 4 (Status §1 — `node_env`/`node_seed_drift`/`node_freshness`/`bunker_config_gen` bodies not read line-by-line; §7 certification ladder not run on a live node; Metrics §8 — absence-proved; §9 inventory 5 of 141 helper call sites — the descriptive rows not tabulated one-per-site)
 
 ## FLIGHT DATA FILE - M1 PROVISIONING

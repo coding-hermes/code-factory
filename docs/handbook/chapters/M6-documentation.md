@@ -265,6 +265,16 @@ coverage are derived by the census, not emitted.
     `reap_orphan_writers.py` (orphan reaper) are new S4 units. All M6 `panel_loop.py` locators
     re-pinned to the rewritten file (`main()` at `:321`, config `:33-38`, stop `:442-457`).
 
+## 15. Normative document production and acceptance contract (P3-12)
+
+The supported build path is manifest-driven. `BOOK.yaml` is the declared source set; the builder resolves every part, chapter, figure, table and gap sheet before rendering. Generation, structural lint, semantic/buildability review, evidence review, rendered visual inspection and owner acceptance are separate stages with separate results. A stage may report PASS only for its own inputs and never upgrades a later stage.
+
+The artifact manifest records document id, issue, source commit, manifest digest, dependency revisions, dirty state, page count, figure/table inventory and artifact hash. A missing referenced file or figure is a build error. The result envelope is `schema: cf.handbook-build.v1` with stage outcomes, named findings, output paths, hashes and timestamps; a budget stop, reviewer cap or empty selection is `INCOMPLETE`, not acceptance. Owner acceptance is an explicit decision bound to the exact artifact hash and is withheld while blocking findings remain.
+
+The rendered gate checks fit, page size, monochrome output, fonts, running furniture, folios, figure references and 300 dpi tiles. The source gate checks backticks, escaped pipes, required identifiers and cross-chapter contract consistency. The legacy `[0-9][0-9]-*.md` pipeline remains retired for M-numbered chapters and is not a competing authority. Historical coverage and current target behavior are labeled separately.
+
+Required metrics cover stage duration, candidate and artifact counts, missing references, lint/build/visual failures, unresolved blockers, reviewer budget stops and acceptance latency. Acceptance cases cover a missing figure, an orphan heading, an undersized label, a stale citation, a clean structural gate with an open semantic finding and a repeated build with the same manifest digest.
+
 ## RED field count: 2 (Status §1 — own gate reads FAIL, Metrics §8)
 
 ## FLIGHT DATA FILE - M6 DOCUMENTATION

@@ -275,6 +275,39 @@ variables are per-process state, **not** fleet-level telemetry, and do not satis
 requirement (review notes M0, user-directed change 2). Metric meaning/type/unit and bounded
 dimensions follow the cross-cutting metrics standard (handoff §2).
 
+## 15. Normative integration contract (P3-12, P3-13)
+
+The following contract is the supported M0 interface. Source line numbers in §§1–13 remain measured coverage and are not wire identifiers.
+
+| Helper | Required input | Result and exit contract | Caller obligation |
+|---|---|---|---|
+| `have` | executable name, non-empty shell word | present: exit 0 and one resolved path on stdout; absent: nonzero and empty stdout | test the exit status or the captured path before invoking it; an empty result is refusal, not success |
+| `fetch_verified` | URL, destination path, 64-hex digest | exit 0 only after download, digest comparison, destination move, and executable postcondition; any network, digest, directory, move, or chmod failure returns nonzero and leaves no accepted artifact | do not use the destination until rc 0; record URL, expected digest and measured digest |
+| `require_disk` | existing root and positive floor in GiB | exit 0 only when the measured free value is at least the floor; otherwise exit 1 and print the measured value | stop before creating dependent state; a missing measurement is failure, not zero free space |
+| `once` | sentinel path and command vector | exit 0 after the command and sentinel write; a present sentinel skips the command; command or sentinel failure is nonzero | use a per-operation identity when concurrent callers are possible; this helper is not a lock |
+| `shq` / `bunker_exec` | values to quote; server, agent and command vector | `shq` emits one safe shell token; `bunker_exec` returns the bunker command's status and output | quote every data value before composition; never treat composed output as proof of remote execution |
+
+`ok`, `bad`, `warn`, and `note` are reporting primitives. `FAILED` and `WARNED` are per-process counters. `verdict(label, mode)` is the final local result: check mode returns 0 for PASS, 3 for UNVERIFIED when warnings exist without failures, and 1 for FAIL when any failure exists; action mode preserves a successful operation despite advisory warnings. A caller branches on the returned status, never on a printed PASS row. `verdict` does not judge a commit or close a board row.
+
+A portable caller is:
+
+```sh
+. ./scripts/lib.sh
+if ! have curl >/dev/null; then bad deps "curl not found"; verdict setup check; exit $?
+fi
+if fetch_verified "$URL" "$DEST" "$DIGEST"; then ok fetch "digest verified"; else bad fetch "download or digest refused"; fi
+verify_all() {
+  # The caller supplies the complete local verification battery.
+  command -v verify_all_impl >/dev/null 2>&1 || return 1
+  verify_all_impl
+}
+if verify_all; then :; else bad setup "verification failed"; fi
+verdict setup check
+case $? in 0) exit 0 ;; 3) warn setup "unverified; admission remains closed"; exit 3 ;; *) exit 1 ;; esac
+```
+
+The target telemetry contract is one event per helper invocation with `helper`, `operation_id`, `outcome` (`success`, `failure`, `warning`, `refusal`), `reason`, duration in milliseconds and measured values where applicable. The shared helper emits local rows; the owning caller persists structured events and exposes counters and readout. A telemetry-write failure is itself a failure fact and cannot turn a failed check into PASS. Acceptance cases are: absent `curl` refuses before download; a wrong digest leaves no destination; a warning returns UNVERIFIED; and a successful fetch records the expected digest.
+
 ## RED field count: 1 (Metrics §8)
 
 ## FLIGHT DATA FILE - M0 SHARED CONTRACT

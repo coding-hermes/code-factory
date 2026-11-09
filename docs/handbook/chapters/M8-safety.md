@@ -223,6 +223,16 @@ output (`reclaimed_bytes`/`reclaimed_mib` at `:171-178`, plus both TTLs at `:175
   - **F8-4** — `reclaim_disk.py` is invoked by `project-node.sh:222` (rehearsal) and `:230` (reap);
     `check_scan_scope.py` has no production caller (operator-invoked, optional).
 
+## 15. Normative safety profile and cleanup contract (P3-12, P3-19)
+
+The required Bunker baseline is independent of Terminal Jail. Each supported profile records effective capabilities, user identity, mount boundaries, network/egress policy, per-file and aggregate storage behavior, process/resource limits and the readback command that proves them. Open/shared egress and a per-file disk limit are not containment claims. A profile lacking a measured baseline is `UNVERIFIED` and cannot be presented as universally supported.
+
+Terminal Jail is optional and disabled by default. When enabled, Hermes covered terminal/tool calls select the guarded executor explicitly; missing wrapper, policy or capability returns `ENFORCEMENT_UNAVAILABLE` and does not fall back to unguarded execution. The workload cannot disable or weaken the policy. Observer-plugin presence is telemetry only and is never enforcement evidence. Enable, rollback and effective-policy readback are recorded by generation.
+
+Cleanup uses `schema: cf.cleanup.v1` with `operation_id`, `bunker_id`, `root`, `policy_generation`, candidate class, owner/lease snapshot, evidence-reference snapshot, pending-memory snapshot and dry-run flag. Selection checks ownership, active lease, fence, evidence references, protected paths and synchronization custody before age. `cache`, `job`, package/image/volume and evidence classes are distinct; no class is added by convention. Dry-run reports projected logical bytes; apply reports logical bytes removed and a separate post-run physical free-space measurement. Disappearing, unreadable, open, cancelled and partially deleted targets carry reason codes; pressure that remains after safe cleanup stops admission and escalates.
+
+The reaper is idempotent by operation id and rechecks protection immediately before each deletion. A concurrent lease or new evidence reference changes the candidate to `PROTECTED` and leaves it intact. Required metrics cover pre/post bytes and inodes, projected versus actual logical bytes, physical gain, outcomes, refusals, partial errors and admission failures. Acceptance cases cover Terminal Jail disabled, missing enforcement when enabled, a live lease, retained evidence, a pending memory record, a symlink/outside-root target and low disk during partial cleanup.
+
 ## RED field count: 1 (Metrics §8)
 
 ## FLIGHT DATA FILE - M8 SAFETY

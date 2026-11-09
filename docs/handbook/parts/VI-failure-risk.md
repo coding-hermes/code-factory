@@ -1037,7 +1037,27 @@ service owns pressure observation; repair of an unsafe cleanup is the R-10 recov
 dir present; assert the cleanup refuses protected paths, reports the pressure, and no
 cited directory disappears.
 
-## 34. Risk summary — prioritized, with the review's mapping
+## 34. Durable recovery accounting and fencing (P3-08)
+
+**What fails.** A round can reserve capacity, launch a worker, lose the acknowledgement, publish a result or replace a Bunker between two durable writes. Without one ledger for round, wave, worker and attempt identities, a retry can double-debit the total-worker allowance, publish twice or let a partitioned owner write after replacement.
+
+**Normative contract.** The durable ledger records `round_id`, `wave_id`, `worker_id`, `attempt_id`, `operation_id`, `generation`, `owner_id`, `fence_token`, `reserved`, `started`, `terminal`, `charged`, `refunded`, `result_digest`, `publication_ref` and timestamps. Reservation is atomic before launch; `started` is written with the native Bunker identity; terminal result and publication are recorded before acknowledgement; each protected side effect checks the current fence token. The total-worker allowance is fixed at round admission and consumed across compatible waves; a retry does not replenish it. Worker-versus-attempt charging and failed-start refund are explicit policy values in the round record.
+
+**Crash-point recovery.** Intent without start is released or retried by idempotency key. Start without acknowledgement is reconciled against native identity before any retry. Publication without record is adopted by digest and recorded once. A replacement acquires a new generation and fences the old owner; lease expiry alone is not sufficient. A late result is evidence only when its generation is stale. Recovery states are `RESERVED`, `START_UNKNOWN`, `RUNNING`, `RECONCILE_REQUIRED`, `PUBLISHED_UNRECORDED`, `FENCED` and `SETTLED`.
+
+**Signal and proof.** The ledger exposes reservation, charge, refund, fence and reconciliation events with bounded metrics. A verification case crashes at each boundary and partitions the old owner; it proves one active owner, no silent budget reset or double debit, and no duplicate accepted publication. This is target behavior until the selected manager/foreman implementation supplies the cited durable store.
+
+## 35. Backup, restore and recovery boundary (P3-20, P3-22)
+
+**What fails.** Independent copies of configuration, board/events, evidence, scheduler/Crier custody and local pending memory can restore to mutually inconsistent states. A backup-created artifact is not a validated backup, and a restore drill is not proved by service liveness.
+
+**Normative contract.** A backup manifest is `schema: cf.backup.v1` with `backup_id`, source revisions, consistency marker, capture time, destination, artifact digests, included stores, excluded/loss windows, retention, encryption-key reference and revocation snapshot. Capture drains or checkpoints writers, records the board/git revision, scheduler transaction boundary, Crier custody boundary, evidence manifest and pending memory entries, then validates every artifact digest before off-host publication. Secrets are references, not plaintext; key recovery and revocation state are included.
+
+Restore occurs in an isolated scope: restore artifacts, verify manifests and key/revocation state, reconcile board/claims/custody/memory identities, fence stale owners, then run readiness and admission checks. A missing unsynchronized entry is reported at the actual recovery boundary and is never reconstructed from partial scheduler or Git history. Recovery objectives state RPO/RTO per store and name unsupported windows.
+
+**Signal and proof.** Metrics expose backup age, validation failures, last successful restore drill and per-store recovery lag. A restore case loses the controller or Bunker mid-round and verifies the round/task/claim/budget/custody/memory view without resurrecting acknowledged work or revoked credentials. Until this drill is run on the selected deployment, the recovery state remains `UNVERIFIED`.
+
+## 36. Risk summary — prioritized, with the review's mapping
 
 The classes are ordered by consequence, not by uncited-line counts: a class that can close
 work that never happened, spend after death, or lose custody outranks one that only

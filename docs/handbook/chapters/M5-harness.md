@@ -401,6 +401,16 @@ and conformance pass rate are answerable only by reading the leg rows.
     when the pin was written (31,059,464 bytes, `2e5d1356…`), and the fixture proves the ladder, not
     the download. The sealed-cache half is F1-8 (M1).
 
+## 15. Normative Hermes lifecycle and conformance contract (P3-12, P3-15)
+
+Hermes with the pinned Oh My Hermes operating layer is the MVP harness. A Bunker profile declares the image, persistent home/cache mounts, project worktree, network policy and resource limits. The harness installer receives `profile_id`, `harness_version`, `artifact_digest`, effective settings and credential references; it returns an operation id, state, measured versions, paths and readiness checks. A fresh image-backed execution does not retain rootfs changes; persistent state is mounted explicitly.
+
+The lifecycle is `ABSENT → INSTALLING → INSTALLED → CONFIGURED → RUNNING → DRAINING → STOPPED → REMOVED`, with `DEGRADED` and `ROLLBACK_REQUIRED` recovery states. Each transition is idempotent by `(node_id, harness_version, operation_id)`. Upgrade drains active sessions, snapshots configuration, applies a migration, reads back the effective settings and re-certifies before admission. Failed or partial installation rolls back only owned artifacts and leaves the previous certified version available; uninstall preserves required evidence and revokes credentials.
+
+The conformance result is `schema: cf.harness-conformance.v1` with `node_id`, `profile_id`, `harness_version`, `artifact_digest`, `run_id`, per-leg status (`PASS`, `FAIL`, `UNVERIFIED`), observations and timestamps. The required legs are executable identity, settings readback, workspace boundary, network/resource policy, real smoke turn, result delivery, cancellation and restart persistence. A missing live measurement is `UNVERIFIED`, not PASS. Terminal Jail remains optional and disabled by default; when enabled, covered execution refuses if the guarded executor or policy is unavailable and has no unguarded fallback. DuckBrain memory uses the shared logical namespace; harness activity does not equal acceptance or publication.
+
+Required metrics cover lifecycle operations, pin/digest drift, install/upgrade/rollback outcomes, active-session drain, conformance age, leg failures and effective-setting divergence. M5 owns collection and readout; M8 owns baseline safety policy. Acceptance cases cover a wrong digest, a fresh-rootfs restart, a drained upgrade, a missing guarded executor, a revoked credential and a successful end-to-end Hermes turn.
+
 ## RED field count: 4 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; M5-C2 contract state UNVERIFIED — a port/service is not a `file:function`; §9 inventory 4 of 215+ helper call sites — the descriptive per-measurement rows not tabulated one-per-site)
 
 ## FLIGHT DATA FILE - M5 HARNESS
