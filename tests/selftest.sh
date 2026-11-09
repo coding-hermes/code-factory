@@ -1151,6 +1151,30 @@ if [ "$refusal_ok" -eq 1 ]; then
 else
   say "  FAIL  crier_url refusal missing named FAIL or invoked bunker"; fails=$((fails+1))
 fi
+# CF-087: the staged-set validator reads every spelling of a HERE reference in every staged
+# member, and the set it prints is the closure it derived — not a second list nobody checks.
+# tests/node-create-staged-set.sh mutates its own temporary copy of scripts/ (never this tree)
+# and prints one row per arm, each naming the staged_set row it measured; those rows are the
+# rows below, so one arm cannot go green by asserting nothing.
+for staged_arm in spellings members derive; do
+  staged_out=$(bash "$HERE/tests/node-create-staged-set.sh" "$staged_arm" 2>&1); staged_rc=$?
+  staged_rows=0
+  while IFS= read -r staged_row; do
+    [ -n "$staged_row" ] || continue
+    case "$staged_row" in
+      "  PASS  "*staged_set*)
+        say "$staged_row"
+        staged_rows=$((staged_rows+1)) ;;
+      *)
+        say "  FAIL  staged_set:$staged_arm — probe row did not name its staged_set evidence: $staged_row"
+        fails=$((fails+1)) ;;
+    esac
+  done <<< "$staged_out"
+  if [ "$staged_rc" -ne 0 ] || [ "$staged_rows" -eq 0 ]; then
+    say "  FAIL  staged_set:$staged_arm — probe exited $staged_rc with $staged_rows asserted rows"
+    fails=$((fails+1))
+  fi
+done
 rm -rf "$tmpd"
 
 # CF-077: stub transport only; exercise the real verifier and node-create admission.

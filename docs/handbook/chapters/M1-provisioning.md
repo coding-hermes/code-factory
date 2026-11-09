@@ -42,6 +42,28 @@ the inbox until it expires.
 | S4 seed prompts/skills/env | `node_seed.py`, `node_seed_drift.py`, `node_env.py` | **active** | `node_seed.py build` at `bunker-provision.sh:454`; `node_env.py --check` at `:147` / `--apply` at `:426` |
 | S5 prove the node works | `verify-node.sh`, `node_freshness.py` | **active** | `verify-node.sh` is the certification ladder (`:20-241`, 241 lines at HEAD); `node_freshness.py` folded in at `:150-177` |
 
+**S2 staged set (CF-087).** `node-create.sh --staged-files` prints the manifest of files the node
+receives, and that manifest is validated before an agent is spawned: a reference the runtime
+follows but the set does not carry is a named `FAIL  staged_set — <file> references unstaged <ref>`,
+not a node that dies on its first line. The validator reads every spelling of a `HERE` reference
+(`$HERE/x`, `${HERE}/x`, and either quote style around it) in **every** staged member — the entry
+point, `lib.sh`, the `.py` bodies, the selected adapter, `deploy_key.py` — not only
+`project-node.sh` and `harness/install-$HARNESS.sh`: at 23114f4 the matcher was
+`\$HERE/([a-zA-Z0-9_./$-]+)`, so `${HERE}/unstaged.py` passed (exit 0, full manifest) and a
+reference appended to `lib.sh` was never read at all. Each reference is resolved the way the
+referring script resolves it — a reference inside `harness/<file>` is relative to `scripts/harness/`
+(`../lib.sh` → `lib.sh`), `$HARNESS` is the selected harness, a directory or a path that leaves
+`scripts/` is not a member candidate — and the staged set is **derived**: the transitive closure of
+those references from `project-node.sh` and `lib.sh`, plus the two members no reference reaches —
+`deploy_key.py` (run by `--deploy-key`, which lives in `node-create.sh`) and
+`harness/harness-vars.sh` (the harness contract every adapter sources, so a foreign adapter that
+does not name it still gets it) — asserted equal to the declared manifest in both directions. A
+member the entry point needs therefore cannot be missing
+from the list, and a listed member nothing references cannot ride along. Verification:
+`bash tests/node-create-staged-set.sh all` (arms `spellings`, `members`, `derive`; each mutates a
+private copy of `scripts/` in a temporary directory and reads the mutated copy's `--staged-files`),
+wired into `bash tests/selftest.sh` §16.
+
 **S3 identity-file contract (CF-289).** `$HOME/.node/node.json` has two writers and one shape, and
 **both merge** — neither may replace the document:
 
@@ -225,6 +247,7 @@ Both are listed below with local ids; the state is UNVERIFIED where the wire was
 | **F2 legs (CREATED vs VERIFIED)** | `node-create.sh --project P --repo git@gitlab… --deploy-key K` then `verify-node.sh --agent A --server S` | the clone succeeds under the per-repo key, the repo's suite runs (node-dependent tests included), the cache adds 0 bytes, `VERIFY: PASS` | not run | **UNVERIFIED** — needs the real read-only deploy key and a fresh bunker node; this repo proves the mechanism, not the grant |
 | gateway auth staged before the adapter | `bash tests/selftest.sh` §55 (`project-node.sh --apply --project <p> --layers 20` in a fixture home) | `PASS gateway_auth — dashboard.basic_auth present …; password in …/.node/auth/gateway.pass (mode 600, value not printed)` and the adapter's `PASS gateway_start — /api/status -> 200`; the same adapter still refuses without the block | 2026-11-07 | **PASS** (fixture only — no live node run) |
 | verify-node transport (CF-224) | `bash tests/selftest.sh` §62 | the pre-fix `bf16c05` verifier has no `--transport` (`unknown arg`, exit 2) and certifies a loopback-only node `VERIFY: PASS`; this tree refuses the same fixture `VERIFY: UNVERIFIED`, PASSes `node-address`/`published-port`/`tunnel` runs with the transport named in the row, names a dead published port (`no published port for cf-fixture:10800`) without printing `000`, and grades `--transport bunker-exec` `VERIFY: FAIL (2)` | 2026-11-08 | **PASS** (offline fixtures only — no bunker, no network; `docs/audits/cf-224-verify-transport-2026-11-08.md`) |
+| staged-set validator (CF-087) | `bash tests/node-create-staged-set.sh all` | four spellings of one unstaged reference in the entry point, one arm per staged member (`lib.sh`, `disk_floor.py`, `install-node.sh`), a needed member dropped from the declared set and an unreferenced member added both exit nonzero with a named `staged_set` row, and the printed set is closed under every reference its own members carry: `STAGED_SET: PASS` | 2026-11-09 | **PASS** (offline probe, 1.1 s; the pre-fix `node-create.sh` from 23114f4 scores `STAGED_SET: FAIL (5)`) |
 | identity-file union (CF-289) | `bash tests/selftest.sh` §47 — the `CF-289-node-json-union` arms; preconditions `bash -n scripts/project-node.sh`, `python3 -m py_compile scripts/node_identity.py` | `PASS CF-289-node-json-union — identity-then-apply leaves agent/namespace/duckbrain/provisioned_by AND the ladder's keys (mode 600, exit 0)` plus the red control `PASS pre-fix 23114f4 exits 0 while deleting agent/namespace/duckbrain/provisioned_by — this arm discriminates` | 2026-11-09 | **PASS** (offline fixture only — the identity step and the ladder both run on a fixture home; no live node run) |
 | certification ladder | `scripts/verify-node.sh --agent <id> --server <host>` on a live node | per-leg observation | not run | **UNVERIFIED** (needs a live node; legs documented in §11) |
 

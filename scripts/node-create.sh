@@ -30,41 +30,101 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 PROJECT="" REPO="" REF="${NODE_REF:-main}" HARNESS="hermes" AGENT="" TTL="6h" SERVER="${BUNKER_SERVER:-}" PORT=10800
 LIST_STAGED=0 SPAWNED=0 DEPLOY_KEY="" GOMODCACHE=""
 
+# staged_ref_path <referring-file-dir> <raw-ref> — normalise one HERE reference to a path relative
+# to scripts/, resolving it the way the referring script does: relative to ITS OWN directory, so the
+# adapter's "../lib.sh" is lib.sh and "$HARNESS" is the selected adapter. Prints the path and
+# returns 0; prints nothing and returns 1 when the reference leaves scripts/ (../config, .., the
+# repo root) — such a reference is not a staged-member candidate at all. A `..` that lands back on
+# scripts/ itself prints an empty path (the caller reads that as "not a file reference").
+staged_ref_path() {
+  local base="$1" ref="${2//\$\{HARNESS\}/$HARNESS}" out="" part
+  ref="${ref//\$HARNESS/$HARNESS}"
+  local -a parts=()
+  IFS=/ read -r -a parts <<< "${base:+$base/}$ref"
+  for part in ${parts[@]+"${parts[@]}"}; do
+    case "$part" in
+      ''|.) ;;
+      ..) case "$out" in
+            '') return 1 ;;
+            */*) out="${out%/*}" ;;
+            *) out="" ;;
+          esac ;;
+      *) out="${out:+$out/}$part" ;;
+    esac
+  done
+  printf '%s\n' "$out"
+}
+
 staged_files() {
-  local file source line ref base rest
-  # node_gateway_auth.py is here because project-node.sh layer 20 runs it: the harness adapter
+  local file line ref target base rest member
+  # node_gateway_auth.py is staged because project-node.sh layer 20 runs it: the harness adapter
   # refuses a public bind without dashboard.basic_auth, and no other stage writes it (CF-150).
   # install-node.sh/node_hygiene.py/gomodcache.py are layer 10/00 dependencies of the runtime,
   # footprint and shared-cache rows; deploy_key.py is the injector --deploy-key runs here
-  # (CF-003). A reference to an unstaged file is a FAIL below, not a node that half-works.
-  local -a staged=(project-node.sh install-go.sh install-node.sh lib.sh disk_floor.py reclaim_disk.py
-                   node_gateway_auth.py node_hygiene.py gomodcache.py deploy_key.py
-                   harness/harness-vars.sh "harness/install-$HARNESS.sh")
-  local pattern='\$HERE/([a-zA-Z0-9_./$-]+)'
-  for file in "${staged[@]}"; do
+  # (CF-003). This list is not the authority: the closure derived below must equal it, in both
+  # directions, or the run stops with a named staged_set row (CF-087).
+  local -a declared=(project-node.sh install-go.sh install-node.sh lib.sh disk_floor.py reclaim_disk.py
+                     node_gateway_auth.py node_hygiene.py gomodcache.py deploy_key.py
+                     harness/harness-vars.sh "harness/install-$HARNESS.sh")
+  # Files this script stages that the derived closure cannot reach: deploy_key.py is copied into
+  # the node and run there by --deploy-key, and that surface lives here, not in the entry point;
+  # harness/harness-vars.sh is part of the harness contract every adapter sources (specs/HARNESS.md),
+  # so an adapter that happens not to reference it — a foreign or fixture adapter — still gets it.
+  # Both are scanned for references like every other member.
+  local -a extra=(deploy_key.py harness/harness-vars.sh)
+  # Every spelling of a runtime reference: $HERE/x, ${HERE}/x, bare, and inside either quote
+  # style. The capture stops at the quote/space, so "$HERE/x" and '$HERE/x' both yield x.
+  local pattern='(\$HERE|\$\{HERE\})/([a-zA-Z0-9_./${}-]+)'
+  local -a staged=() queue=(project-node.sh lib.sh "${extra[@]}")
+  # Derive the staged set: walk the references from the entry point and the shared helper
+  # transitively, over EVERY staged member, and stage exactly the closure. A member the runtime
+  # needs is therefore staged because a reference exists, not because a second hand-written list
+  # remembers it (CF-087) — and a reference to a file this list does not carry is the named FAIL
+  # below, not a node that dies on its first line.
+  while [ "${#queue[@]}" -gt 0 ]; do
+    file="${queue[0]}"
+    queue=("${queue[@]:1}")
+    case " ${staged[*]-} " in *" $file "*) continue ;; esac
     [ -f "$HERE/$file" ] || { bad "staged_set" "missing scripts/$file" >&2; return 1; }
-  done
-  # Validate every HERE-relative reference in the entry point and selected adapter.
-  # Resolve the adapter's ../lib.sh and the entry point's selected $HARNESS literally.
-  for source in project-node.sh "harness/install-$HARNESS.sh"; do
-    base="${source%/*}"
-    [ "$base" = "$source" ] && base=.
+    staged+=("$file")
+    base="${file%/*}"
+    [ "$base" = "$file" ] && base=.
     while IFS= read -r line; do
       rest="$line"
       while [[ "$rest" =~ $pattern ]]; do
-        ref="${BASH_REMATCH[1]}"
+        ref="${BASH_REMATCH[2]}"
         rest="${rest#*"${BASH_REMATCH[0]}"}"
-        ref="${ref//\$HARNESS/$HARNESS}"
-        [ "$base" = harness ] && ref="harness/$ref"
-        ref="${ref#harness/../}"
-        case " ${staged[*]} " in
-          *" $ref "*) ;;
-          *) bad "staged_set" "$source references unstaged $ref" >&2; return 1 ;;
+        target="$(staged_ref_path "$base" "$ref")" || continue
+        [ -n "$target" ] || continue
+        [ -d "$HERE/$target" ] && continue
+        case " ${declared[*]} " in
+          *" $target "*) queue+=("$target") ;;
+          *) bad "staged_set" "$file references unstaged $ref" >&2; return 1 ;;
         esac
       done
-    done < "$HERE/$source"
+    done < "$HERE/$file"
   done
-  printf '%s\n' "${staged[@]}"
+  for member in "${extra[@]}"; do
+    [ -f "$HERE/$member" ] || { bad "staged_set" "missing scripts/$member" >&2; return 1; }
+    case " ${staged[*]} " in *" $member "*) ;; *) staged+=("$member") ;; esac
+  done
+  # The declared manifest and the derived closure are the same set or this is a FAIL that names
+  # the difference: a needed member cannot go missing from the list, and a listed member nothing
+  # references cannot ride along.
+  for member in "${staged[@]}"; do
+    case " ${declared[*]} " in
+      *" $member "*) ;;
+      *) bad "staged_set" "declared set omits $member, which the entry point references" >&2; return 1 ;;
+    esac
+  done
+  for member in "${declared[@]}"; do
+    [ -f "$HERE/$member" ] || { bad "staged_set" "missing scripts/$member" >&2; return 1; }
+    case " ${staged[*]} " in
+      *" $member "*) ;;
+      *) bad "staged_set" "declared set carries $member, which no staged member references" >&2; return 1 ;;
+    esac
+  done
+  printf '%s\n' "${declared[@]}"
 }
 
 incomplete() {
