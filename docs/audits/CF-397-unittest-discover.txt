@@ -1,0 +1,26 @@
+$ python3 -m unittest discover -s tests -p 'test_*.py'
+......s.....s.......sss..........................................................................................................................................................
+----------------------------------------------------------------------
+Ran 177 tests in 21.195s
+
+OK (skipped=5)
+[
+  {
+    "name": "code-factory-docs",
+    "workdir": "bunker://abc/home/{agent}/repo",
+    "parsed": {
+      "raw": "bunker://abc/home/{agent}/repo",
+      "kind": "remote",
+      "scheme": "bunker",
+      "path": "/home/{agent}/repo",
+      "user": null,
+      "host": null,
+      "port": null,
+      "agent": "abc"
+    }
+  }
+]
+
+  MEASURED shared GOMODCACHE 2097910 bytes; sealed rebuild added 0 bytes
+
+EXIT=0

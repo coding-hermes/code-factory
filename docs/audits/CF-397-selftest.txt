@@ -1,0 +1,35 @@
+1. every script parses
+  PASS  bash -n bunker-crier-connect.sh
+  PASS  bash -n bunker-provision.sh
+  PASS  bash -n bunker-server-install.sh
+  PASS  bash -n github-app-refresh.sh
+  PASS  bash -n github-app-setup.sh
+  PASS  bash -n install-gitreins.sh
+  PASS  bash -n install-go.sh
+  PASS  bash -n install-node.sh
+  PASS  bash -n land-node-branch.sh
+  PASS  bash -n lib.sh
+  PASS  bash -n node-create.sh
+  PASS  bash -n panel_supervise.sh
+  PASS  bash -n project-node.sh
+  PASS  bash -n verify-node.sh
+  PASS  bash -n verify-patch.sh
+  PASS  bash -n harness-vars.sh
+  PASS  bash -n install-aider.sh
+  PASS  bash -n install-claude-code.sh
+  PASS  bash -n install-codex.sh
+  PASS  bash -n install-deepseek.sh
+  PASS  bash -n install-dsh.sh
+  PASS  bash -n install-goose.sh
+  PASS  bash -n install-hermes.sh
+  PASS  bash -n install-opencode.sh
+  PASS  bash -n install-pi-agent.sh
+  PASS  bash -n harness-conformance.sh
+  PASS  bash -n harness-node-e2e.sh
+  PASS  bash -n node-create-staged-set.sh
+  PASS  bash -n selftest.sh
+  ...
+SELFTEST: FAIL (1)
+EXIT=1
+
+The full run was captured by the foreman. Its first failure was in section 16's staged disk-floor fixture: the temporary fixture could not resolve disk_floor.py. Other intentional negative arms printed FAIL rows as expected. This artifact preserves the terminal result without presenting the negative fixture rows as a clean gate.

@@ -265,7 +265,7 @@ Shipped mechanisms that change system behaviour and had no chapter:
 - **VIII.3 `config/`** — harness-matrix, node-seed, node.env.example, bunker.example,
   github-app.example
 - **VIII.4 `patches/`** — fleet-ops patch chain with `.orig` base and sha256 chain
-- **VIII.5 `tests/`** — selftest, conformance battery, per-unit falsifiers
+- **VIII.5 `tests/`** — selftest, conformance battery, per-unit falsifiers. The shipped mechanism chapter is `docs/handbook/chapters/VIII-5-tests.md`.
 
 ## APPENDICES
 
