@@ -220,31 +220,31 @@ closure. P3-20 also owns the delivery-side consistency readback in Part VIII §1
 
 | ID | Source finding | Disposition | Resolving commit / reason | Evidence or next check |
 |---|---|---|---|---|
-| P3-01 | P3-FLW-01 | DEFERRED | Wave 2 has not landed | Reconcile F2 actor ownership and readiness identity after Wave 1 contracts |
-| P3-02 | P3-LAYOUT-01 | DEFERRED | Wave 2 has not landed | Verify unique F10 caption in the integrated PDF |
-| P3-03 | P3-INT-01 | DEFERRED | Wave 1 has not landed | Verify complete CT registry and observable examples |
-| P3-04 | P3-CONFIG-01 | DEFERRED | Wave 1 has not landed | Verify complete canonical settings schema and readback |
-| P3-05 | P3-CONFIG-02 | DEFERRED | Wave 1 has not landed | Verify identity/credential separation and round-budget example |
-| P3-06 | P3-MEM-01 | DEFERRED | Wave 1 has not landed | Verify local durable memory, sync, conflict and freshness contract |
-| P3-07 | P3-WORK-01 | DEFERRED | Wave 1 has not landed | Verify versioned round/wave/result/memory protocol |
-| P3-08 | P3-RECOVERY-01 | DEFERRED | Wave 3 has not landed | Verify reservation, fencing, crash-point and charging traces |
-| P3-09 | P3-OPS-01 | DEFERRED | Wave 1 has not landed | Verify event/subscription and independent metric contracts |
-| P3-10 | P3-DISPATCH-01 | DEFERRED | Waves 2 and 3 have not landed | Verify one normative Crier launch/return path |
-| P3-11 | P3-BOARD-01 | DEFERRED | Waves 1 and 3 have not landed | Verify claim/fence/evidence and partial-write recovery |
-| P3-12 | P3-MODULES-01 | DEFERRED | Wave 3 has not landed | Verify each module contains its normative contract |
-| P3-13 | P3-M0-01 | DEFERRED | Wave 3 has not landed | Verify executable helper example and absence branch |
-| P3-14 | P3-REPO-01 | DEFERRED | Wave 3 has not landed | Verify gate/publication policy and closeout recovery |
-| P3-15 | P3-PROVISION-01 | DEFERRED | Wave 3 has not landed | Verify qualified profile and lifecycle/readiness contract |
-| P3-16 | P3-FORGE-01 | DEFERRED | Wave 3 has not landed | Verify GitHub/GitLab mapping, rotation and revocation |
-| P3-17 | P3-PROXY-01 | DEFERRED | Wave 3 has not landed | Verify token, stream, accounting and deployable replacement contract |
-| P3-18 | P3-SCHED-01 | DEFERRED | Wave 3 has not landed | Verify typed scheduler transitions and settlement order |
-| P3-19 | P3-SAFETY-01 | DEFERRED | Wave 3 has not landed | Verify Bunker baseline, optional jail and cleanup races |
+| P3-01 | P3-FLW-01 | ADOPTED | `414a231` | `docs/handbook/parts/II-flows.md`: F2 manager ownership, readiness identity and binding handoff are explicit |
+| P3-02 | P3-LAYOUT-01 | ADOPTED | `414a231` | `scripts/build_book.py`: flow intro units keep figure, dated caption and explanatory paragraph together; F10 is regenerated |
+| P3-03 | P3-INT-01 | ADOPTED | `bb56c68` | `docs/handbook/parts/IV-contract-register.md`: normative `CT-01`–`CT-30` cards and `CT-06R` define the complete registry and examples |
+| P3-04 | P3-CONFIG-01 | ADOPTED | `bb56c68` | `docs/handbook/parts/V-settings.md`: `factory.v1` desired-state schema and generation/readback API are added |
+| P3-05 | P3-CONFIG-02 | ADOPTED | `bb56c68` | `docs/handbook/parts/V-settings.md`: repository identity and credential reference are separate; worker budget is explicit in the schema/example |
+| P3-06 | P3-MEM-01 | ADOPTED | `bb56c68` | `docs/handbook/parts/V-settings.md`: same-namespace local/remote memory, conflict, freshness and pending-sync rules are specified |
+| P3-07 | P3-WORK-01 | ADOPTED | `bb56c68` | `docs/handbook/parts/VII-work-derivation.md`: normative `work.v1` round/wave/result/publication schemas and separate memory records are added |
+| P3-08 | P3-RECOVERY-01 | ADOPTED | `2497f69` | `docs/handbook/parts/VI-failure-risk.md` §34: durable reservation, fence, crash-point, charging and reconciliation states are defined |
+| P3-09 | P3-OPS-01 | ADOPTED | `bb56c68` | `docs/handbook/parts/V-settings.md`: versioned event catalog, subscriptions, delivery state and independent metrics are specified |
+| P3-10 | P3-DISPATCH-01 | ADOPTED | `2497f69` | `docs/handbook/chapters/M2-dispatch.md` and `M10-crier.md`: Crier launch/return custody and one normative path are explicit |
+| P3-11 | P3-BOARD-01 | ADOPTED | `2497f69`, `bb56c68` | `M4-board.md` defines claim/fence/closeout recovery; `VII-work-derivation.md` adds canonical eligibility and partial-write recovery |
+| P3-12 | P3-MODULES-01 | ADOPTED | `2497f69` | M0–M12 each gain a normative contract section; `git show 2497f69` confirms the chapter additions |
+| P3-13 | P3-M0-01 | ADOPTED | `2497f69` | `M0-shared-contract.md` defines executable helper inputs/results, refusal branches and a portable caller example |
+| P3-14 | P3-REPO-01 | ADOPTED | `2497f69` | `M3-repository.md` defines gate, publication, remote-proof, closeout and recovery states |
+| P3-15 | P3-PROVISION-01 | ADOPTED | `2497f69` | `M1-provisioning.md` defines the qualified profile, enrollment lifecycle, credential classes and readiness readback |
+| P3-16 | P3-FORGE-01 | ADOPTED | `2497f69` | `M7-github.md` adds GitHub/GitLab mapping, scoped delivery, renewal, revocation and restore rules |
+| P3-17 | P3-PROXY-01 | ADOPTED | `2497f69` | `M12-inference-proxy.md` adds token scope/expiry, finite-stream, accounting and deployable package contracts |
+| P3-18 | P3-SCHED-01 | ADOPTED | `2497f69` | `M9-scheduler.md` adds typed admission/settlement transitions, reservations, late-result handling and restart reconciliation |
+| P3-19 | P3-SAFETY-01 | ADOPTED | `2497f69` | `M8-safety.md` defines measured Bunker baseline, optional fail-closed jail and protected cleanup races |
 | P3-20 | P3-CONSISTENCY-01 | ADOPTED | this integration commit | VIII §14 defines dated cross-section readback and separates PASS/PARTIAL/FAIL/NOT RUN |
-| P3-21 | P3-MANAGER-01 | DEFERRED | Wave 1 has not landed | Verify deterministic manager resource/reconciliation contract |
-| P3-22 | P3-RECOVERY-02 | DEFERRED | Wave 3 has not landed | Verify backup manifest, restore ordering and recovery bounds |
-| P3-23 | P3-ACCESS-01 | DEFERRED | Wave 3 has not landed | Verify controller/Bunker enrollment and enforced authorization |
-| P3-24 | P3-FLW-02 | DEFERRED | Wave 2 has not landed | Verify all sixteen diagrams against the normative path |
-| P3-25 | P3-DIAGRAM-01 | DEFERRED | Wave 2 has not landed | Verify arrangement/module diagrams against register and locations |
-| P3-26 | P3-LAYOUT-02 | DEFERRED | Wave 2 has not landed | Verify integrated PDF folios, headings, figures and print-scale labels |
+| P3-21 | P3-MANAGER-01 | ADOPTED | `bb56c68` | `docs/handbook/parts/I-system-arrangement.md`: manager resources, operations, generations, fencing and readback are specified |
+| P3-22 | P3-RECOVERY-02 | ADOPTED | `2497f69` | `docs/handbook/parts/VI-failure-risk.md` §35: backup manifest, isolated restore ordering, recovery bounds and revoked-secret policy are defined |
+| P3-23 | P3-ACCESS-01 | ADOPTED | `2497f69` | `docs/handbook/chapters/M1-provisioning.md`: controller/Bunker enrollment, scoped authorization and readiness refusal paths are defined |
+| P3-24 | P3-FLW-02 | ADOPTED | `414a231` | `docs/handbook/parts/II-flows.md` and generated F1–F15 fixes reconcile flow steps with the normative path |
+| P3-25 | P3-DIAGRAM-01 | ADOPTED | `414a231` | `scripts/gen_handbook_figures.py` and F1–F15 SVG diffs update actor arrangement, module diagrams and labeled locations |
+| P3-26 | P3-LAYOUT-02 | ADOPTED | `414a231` | `scripts/build_book.py` and figure diffs correct inline mounting, caption adjacency, folio geometry and print-scale layout |
 
 pass3 received, 26 findings, plan committed at ad984337f19d999977bd234475b442fcb84be9a0
