@@ -12,6 +12,10 @@ RESOLVABLE = os.path.join(ROOT, "tests", "fixtures", "board_evidence", "resolvab
 UNRESOLVABLE = os.path.join(
     ROOT, "tests", "fixtures", "board_evidence", "unresolvable"
 )
+HISTORY_RESOLVABLE = os.path.join(
+    ROOT, "tests", "fixtures", "board_evidence", "history_resolvable"
+)
+HISTORY_ROOT = os.path.join(HISTORY_RESOLVABLE, ".gitreins", "history")
 
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import board_evidence_check  # noqa: E402
@@ -33,6 +37,19 @@ class BoardEvidenceCheck(unittest.TestCase):
         self.assertIn("checked 1 complete rows, 0 unresolved", result.stdout)
         strict = self.run_checker(RESOLVABLE, "--strict")
         self.assertEqual(strict.returncode, 0, strict.stdout + strict.stderr)
+
+    def test_history_resolution_is_opt_in_and_diagnostic_only(self):
+        without_history = self.run_checker(HISTORY_RESOLVABLE)
+        self.assertEqual(without_history.returncode, 0, without_history.stdout)
+        self.assertIn("checked 1 complete rows, 1 unresolved", without_history.stdout)
+        self.assertNotIn("locally-resolved via history:", without_history.stdout)
+
+        with_history = self.run_checker(
+            HISTORY_RESOLVABLE, "--history-root", HISTORY_ROOT
+        )
+        self.assertEqual(with_history.returncode, 0, with_history.stdout)
+        self.assertIn("checked 1 complete rows, 1 unresolved", with_history.stdout)
+        self.assertIn("locally-resolved via history: 1 of 1", with_history.stdout)
 
     def test_unresolvable_fixture_is_discriminating_and_strict(self):
         result = self.run_checker(UNRESOLVABLE)

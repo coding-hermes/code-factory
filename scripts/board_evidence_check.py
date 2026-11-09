@@ -7,7 +7,8 @@ import os
 import sys
 
 
-# Measured at base commit 12e1162 (119 complete rows); the selftest arm asserts this.
+# Tracked-store semantics: 119 complete rows, verified identical in a fresh clone and
+# in the foreman checkout.
 EXPECTED_UNRESOLVED = 60
 
 
@@ -68,29 +69,29 @@ def _evidence_ids(row):
     ]
 
 
-def check(root):
+def check(root, history_root=None):
     board_root = os.path.join(root, ".coding-hermes", "board")
     tasks_path = os.path.join(board_root, "tasks.jsonl")
     events_path = os.path.join(board_root, "events.jsonl")
-    history_root = os.path.join(root, ".gitreins", "history")
 
     rows, ignored = _load_rows(tasks_path)
     events_text = _load_events(events_path)
 
     findings = []
+    locally_resolved = 0
     complete_rows = [row for row in rows if row.get("status") == "complete"]
     for row in complete_rows:
-        unresolved = []
-        for run_id in _evidence_ids(row):
-            if not (
-                _run_directory_exists(history_root, run_id)
-                or run_id in events_text
-            ):
-                unresolved.append(run_id)
+        unresolved = [
+            run_id for run_id in _evidence_ids(row) if run_id not in events_text
+        ]
         if unresolved:
             findings.append((row.get("id", "<missing-id>"), unresolved))
+            if history_root and all(
+                _run_directory_exists(history_root, run_id) for run_id in unresolved
+            ):
+                locally_resolved += 1
 
-    return complete_rows, findings, ignored
+    return complete_rows, findings, ignored, locally_resolved
 
 
 def main(argv=None):
@@ -105,10 +106,17 @@ def main(argv=None):
         action="store_true",
         help="exit 1 when an unresolved complete row is found",
     )
+    parser.add_argument(
+        "--history-root",
+        help="optional GitReins history root for local resolution diagnostics",
+    )
     args = parser.parse_args(argv)
 
     try:
-        complete_rows, findings, ignored = check(os.path.abspath(args.root))
+        complete_rows, findings, ignored, locally_resolved = check(
+            os.path.abspath(args.root),
+            os.path.abspath(args.history_root) if args.history_root else None,
+        )
     except OSError as exc:
         print(f"board evidence check failed: {exc}", file=sys.stderr)
         return 2
@@ -118,6 +126,10 @@ def main(argv=None):
     for row_id, run_ids in findings:
         print(f"UNRESOLVED {row_id} {','.join(run_ids)}")
     print(f"checked {len(complete_rows)} complete rows, {len(findings)} unresolved")
+    if args.history_root:
+        print(
+            f"locally-resolved via history: {locally_resolved} of {len(findings)}"
+        )
     if args.strict and findings:
         return 1
     return 0
