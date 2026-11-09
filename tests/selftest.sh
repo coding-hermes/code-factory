@@ -7022,5 +7022,18 @@ else
 fi
 rm -rf "$cf299"
 
+# CF-398 arm: keep this inside the existing section census; evidence pointers are an
+# additive board invariant, not a new numbered selftest section.
+cf398_out=$(python3 "$HERE/scripts/board_evidence_check.py" 2>&1); cf398_rc=$?
+cf398_expected=$(PYTHONPATH="$HERE/scripts" python3 -B -c \
+  'import board_evidence_check; print(board_evidence_check.EXPECTED_UNRESOLVED)')
+if [ "$cf398_rc" -eq 0 ] \
+  && printf '%s\n' "$cf398_out" | grep -Eq "^checked [0-9]+ complete rows, $cf398_expected unresolved$"; then
+  say "  PASS  CF-398 board evidence checker matches EXPECTED_UNRESOLVED=$cf398_expected"
+else
+  say "  FAIL  CF-398 board evidence checker (exit $cf398_rc): $(printf '%s\n' "$cf398_out" | tail -1)"
+  fails=$((fails+1))
+fi
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
