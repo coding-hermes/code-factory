@@ -10,6 +10,65 @@ records only one side, the row is marked **RED** and carries the command that wo
 close it — a register that reads as complete while half its wires are one-sided is worse
 than an honest gap.
 
+The normative target contract is specified independently of implementation coverage.
+The detailed entries below retain measured producer/consumer citations and explicitly
+mark missing evidence; the contract cards in §IV.1 define the behavior an implementation
+must provide. A citation cannot replace a field, validation rule, state transition,
+error, idempotency key, persistence boundary or recovery rule.
+
+## IV.1 Normative contract cards
+
+All cards use `contract_version: "cf2a.v1"` and require `request_id` and `corr_id`
+where a request crosses a process boundary. IDs are opaque strings, ASCII, 1–128
+characters; absent required IDs are refused as `INVALID_ID`. Every response carries
+`contract_version`, `request_id`, `corr_id`, `status`, and `error` when `status` is not
+`ok`. Unknown versions are refused as `UNSUPPORTED_VERSION`; unknown fields are ignored
+only when the card says they are extension fields. Secret material is never carried;
+credential fields are references governed by Part V.
+
+| Contract | Normative request / result | State, refusal and persistence rule |
+|---|---|---|
+| `CT-01` | `config_version`, `lane`, `enabled`, `admission_mode`, `cadence_s`, `weight`, `pin`; result `accepted`, `effective_config_version` | validate enum/ranges before persistence; stale generation is `GENERATION_CONFLICT`; accepted configuration is durable before admission |
+| `CT-02` | `run_id`, `corr_id`, `lane`, `board_ref`, `directive_digest`, `text_b64`, `envelope_version`, `expires_at`; result `accepted`, `delivery_id` | scheduler persists the envelope before send; Crier deduplicates `(run_id,corr_id)` and returns the existing custody receipt |
+| `CT-03` | `agent_id`, `delivery_id`, `lease_s`, `message`; result `lease_id`, `lease_expires_at` | retrieval atomically marks one lease; invalid signature is `UNAUTHORIZED`, expired lease is `LEASE_EXPIRED`; ack/release is durable and redelivery never creates a second execution identity |
+| `CT-04` | `delivery_id`, `run_id`, `corr_id`, `dispatch_id`, `attempt_id`, `status`, `commit`, `artifacts`, `finished_at`; result `accepted` or `DUPLICATE_RESULT` | status is typed (`pass`, `fail`, `partial`, `unknown`); missing status is `INVALID_RESULT`; the first durable result wins and conflicting duplicates are `RESULT_CONFLICT` |
+| `CT-05` | `lane`, `prompt_digest`, `skills`, `config_generation`; result `brief_version`, `accepted` | prompt/skill digest is immutable for the round; stale generation is `CONFIG_STALE`; acceptance is a custody receipt, not execution success |
+| `CT-06` | `run_id`, `corr_id`, `result_ref`, `status`, `attempts`, `finished_at`; result scheduler settlement | scheduler accepts only a correlated durable result; absent or conflicting verdict is `UNKNOWN_RESULT`, never success; settlement is durable before the next cadence decision |
+| `CT-06R` | foreman report: `round_id`, `run_id`, `corr_id`, `schema_version`, `waves`, `task_results`, `budget`, `stop_reason`, `memory_refs`, `evidence_refs` | foreman writes local custody and memory records before return; duplicate `(round_id, report_digest)` is replayed, conflicting report is refused |
+| `CT-07` | `model`, `provider`, `lane`, `policy_generation`; result selected model or `MODEL_NOT_ALLOWED` | allowlist and policy generation are checked before spend; selection is recorded with the session |
+| `CT-08` | `session_id`, `corr_id`, `message`, `model`; result `accepted`, `session_turn_id` | gateway acknowledges durable session custody; timeout is `DELIVERY_UNKNOWN` and replay uses the same idempotency key |
+| `CT-09` | memory record `{record_id, namespace, record_type, round_id, wave_id, attempt_id, payload_digest, body, local_commit}`; result `{record_id, local_ack, sync_state}` | local Git-backed namespace commit is the durable acknowledgement; `(namespace,record_id)` is unique; remote sync is separate and can be `pending-sync` |
+| `CT-10` | board event `{event_id, task_id, expected_revision, transition, evidence_refs}`; result `new_revision` | compare-and-set against canonical revision; stale revision is `CLAIM_CONFLICT`; append is idempotent by `event_id` and partial writes are replay-safe |
+| `CT-11` | `session_id`, `turn_id`, `model`, token usage, cost basis; result durable turn row | gateway writes the turn atomically or returns `PERSISTENCE_UNAVAILABLE`; no usage row is inferred from a transport receipt |
+| `CT-12` | staged-tree digest, exact commit candidate, guard version and criteria | guard emits a named verdict bound to the staged tree; missing gate is `GATE_UNAVAILABLE`; no verdict means no closeout |
+| `CT-13` | verdict `{run_id, criteria, outcome, evidence_refs, tree_digest}`; result board closeout | board accepts only an evidence-bound verdict whose tree digest matches the landed tree; duplicate closeout is a no-op, conflicting closeout is `CLOSEOUT_CONFLICT` |
+| `CT-14` | row/event mutation with `task_id`, `expected_revision`, actor, criteria and evidence | foreman is the task-state writer; claim/close requires CAS and lease/fence; malformed, cyclic or stale updates are refused and never partially applied |
+| `CT-15` | memory decision/finding with stable `record_id`, namespace, correlations and evidence | designated foreman writer persists worker, wave and round records separately; remote outage yields durable local pending state, not loss or completion |
+| `CT-16` | handbook build receipt `{revision, checks, source_digest, artifact_digest}`; result owner decision receipt | a receipt says what was checked, not that the owner approved it; absent or failed required checks is `BUILD_NOT_ACCEPTED` |
+| `CT-17` | conformance leg `{profile, harness, pin, leg, result, evidence}`; result support state | every leg is independently `PASS`, `FAIL` or `UNVERIFIED`; a missing leg cannot be promoted to supported |
+| `CT-18` | revisioned delivery artifact `{document_id, revision, scope, artifact_digest, checks, open_findings}` | owner receives a complete receipt; approval is a separate human decision and is never inferred from build success |
+| `CT-19` | node token reference, `model`, request body, `corr_id`; result finite stream or typed HTTP error | token scope/expiry is checked before upstream work; revoked/expired token is `UNAUTHORIZED`; cancellation stops upstream work where supported and is recorded |
+| `CT-20` | proxy request with model policy, control-host credential reference and upstream correlation | proxy owns provider-key custody and usage accounting; upstream errors before/after headers are distinct, and capture failure follows configured redaction policy |
+| `CT-21` | provider/app identity, repository scope, credential reference, destination profile; result fingerprint, expiry, scope | issuer and installer remain distinct; wrong scope/mode is refused; renewal overlaps safely, revocation prevents restore from reactivating the credential |
+| `CT-22` | agent registration `{agent_id, project_id, profile, public_identity, capabilities}`; result registration generation and expiry | registration is idempotent by `(agent_id, registration_generation)`; stale identity is refused and deregistration is durable |
+| `CT-23` | pinned Bunker CLI/protocol request `{agent_id, operation, image/profile, request_id}`; result typed exit/status, stdout/stderr digest and capability readback | create/exec/cp are scoped to the agent; unsupported capability is refused; retries use the same request id and cannot duplicate a create |
+| `CT-24` | manager desired update `{schema_version, project_id, expected_generation, desired, idempotency_key}`; result new generation and operation id | configuration file/API is authoritative; stale generation is `GENERATION_CONFLICT`; desired state is durable before reconciliation |
+| `CT-25` | manager observed readback `{scope, adapter_id, observation_id, observed_at, values, quality}`; result effective state | observations are immutable; stale/partial quality is visible and cannot establish convergence |
+| `CT-26` | reconcile `{desired_generation, operation_id, idempotency_key}`; result per-adapter plan and status | `accepted → planned → applying → converged/degraded/failed`; each transition is durable and idempotent; same key/different digest is `IDEMPOTENCY_KEY_REUSED` |
+| `CT-27` | allocation request `{project_id, requirements, eligible_hosts, desired_count}`; result reservations and exact shortfall | allocation is deterministic and preserves desired count; insufficient capacity is `ALLOCATION_SHORTFALL`, not silent lowering |
+| `CT-28` | binding update `{project_id, binding_generation, readiness_ref, crier_ref, scheduler_ref}`; result active binding | publish only after authenticated readiness probes; stale owner/generation is `STALE_OWNER`; old bindings remain fenced until replacement is verified |
+| `CT-29` | incident/recovery `{incident_id, scope, owner_fence, checkpoint, replacement}`; result resumed/degraded/failed | old owner is fenced before replacement side effects; crash recovery re-reads state and applies only missing idempotent steps |
+| `CT-30` | manager event/metric readout `{event_version, event_id, event_type, scope, payload}` or `{metric_schema_version, samples, observed_at}` | event delivery is per-endpoint durable and replayable; missing metrics are `unknown`, not zero; receiver interpretation remains external |
+
+**Common acceptance cases.** A conforming implementation returns a typed refusal for
+missing required fields, wrong scope, unsupported version, stale generation, duplicate
+key with a changed digest and unavailable readback. It accepts a same-key retry without
+a second side effect, survives restart from its durable transition log, and reports
+partial propagation as degraded. A late result from a fenced owner cannot change board,
+manager, binding or memory state. These cases are target behavior; the measured evidence
+below remains coverage and may be RED or UNVERIFIED.
+
+
 > CAUTION: a row whose State reads PROVEN while its sender guarantee or receiver
 > requirement reads RED is self-contradictory — one side is measured, the other is not.
 > Treat such a row as UNVERIFIED until both sides carry citations. The generator
@@ -18,13 +77,14 @@ than an honest gap.
 **Register requirements (normative).** Approved target behavior governs; the per-entry citations
 below are implementation coverage, not the contracts.
 
-- **One versioned registry, 23 entries.** CT-01..CT-23 below are the register of record. The
-  older 18-entry assumptions in chapter headers and the build spine are reconciled to this count,
-  and figures, tables and cross-references are generated/validated from this one versioned
-  registry — unknown/duplicate ids, missing definitions and retired local labels (e.g. M12's
-  former M12-C1/M12-C2, now CT-19/CT-20) are rejected. Reconciliation is not done by changing the
-  count alone: each entry's endpoints, directions and actors must match the chapter that cites it
-  (CT-07 is router → gateway model choice; the proxy's legs are CT-19/CT-20).
+- **One versioned registry, 31 entries.** CT-01..CT-23, `CT-06R` and CT-24..CT-30 below
+  are the register of record. The older 18-entry assumptions in chapter headers and the build
+  spine are reconciled to this count, and figures, tables and cross-references are
+  generated/validated from this one versioned registry — unknown/duplicate ids, missing
+  definitions and retired local labels (e.g. M12's former M12-C1/M12-C2, now CT-19/CT-20)
+  are rejected. Reconciliation is not done by changing the count alone: each entry's
+  endpoints, directions and actors must match the chapter that cites it (CT-07 is router →
+  gateway model choice; the proxy's legs are CT-19/CT-20).
 - **Full contracts independent of citations.** Every entry specifies: types/units/required fields
   with examples; side effects; auth/scope; correlation and generations; ordering/idempotency;
   deadlines, leases and retries; the error vocabulary; durability; telemetry; and recovery. A
@@ -68,6 +128,14 @@ below are implementation coverage, not the contracts.
 | CT-21 | github → node | installation token installed at auth/github.token, mode 0600 | https api, JWT mint | UNVERIFIED |
 | CT-22 | node → crier | agent registration + token exchange | https, POST /agents | UNVERIFIED |
 | CT-23 | provisioner → bunker | create, exec, cp against the agent container | bunker CLI | UNVERIFIED |
+| CT-06R | foreman → crier → scheduler | versioned round report and durable return | async, signed, correlated | TARGET-UNIMPLEMENTED |
+| CT-24 | owner/agent → manager | desired configuration generation update | authenticated API/file, CAS | TARGET-UNIMPLEMENTED |
+| CT-25 | manager adapter → manager | observed/effective readback | adapter result | TARGET-UNIMPLEMENTED |
+| CT-26 | manager → adapters | deterministic reconciliation operation | durable async operation | TARGET-UNIMPLEMENTED |
+| CT-27 | manager → eligible hosts | allocation reservation and shortfall | fenced resource transaction | TARGET-UNIMPLEMENTED |
+| CT-28 | manager → crier/scheduler | verified readiness and binding activation | authenticated, generation-bound | TARGET-UNIMPLEMENTED |
+| CT-29 | manager → recovery actors | incident, fence and replacement recovery | durable, idempotent | TARGET-UNIMPLEMENTED |
+| CT-30 | manager → subscribers/operators | versioned event delivery and independent metric readout | durable cursor / read-only API | TARGET-UNIMPLEMENTED |
 
 ## Contracts in detail
 

@@ -59,6 +59,100 @@ file is selected by the review; the schema below defines shape and semantics. Ex
 render in YAML for readability — the serialization is an implementation choice, not a
 decision recorded here.
 
+### V.0.1 Canonical desired-state schema (`factory.v1`)
+
+The following is the complete normative shape. A deployment may add extension fields only
+under an `extensions` map; unknown fields elsewhere are refused as `UNKNOWN_FIELD`.
+Required fields are marked `required`; omitted optional fields have the stated absence
+semantics. The configuration file is the user/authorized-agent declaration; observed and
+effective values never overwrite it.
+
+| Path | Type / requiredness | Validation, default and precedence |
+|---|---|---|
+| `schema_version` | enum `factory.v1`, required | any other version is `UNSUPPORTED_VERSION` |
+| `generation` | integer >= 1, required | immutable after write; update requires `expected_generation` |
+| `deployment.profile` | enum `kubernetes`, `compose`, `homelab-vpn`, `standalone`, required | no implicit profile; unsupported prerequisites yield `PROFILE_UNSUPPORTED` |
+| `deployment.endpoints` | map of named HTTPS/SSH endpoints, required for selected profile | endpoints are references, not discovered credentials; profile values override global defaults |
+| `hosts[]` | objects `{id, endpoint, capacity, capabilities}`, required | IDs unique; capacity is a declared limit, observed availability is separate |
+| `projects[]` | objects `{id, repository, eligible_hosts, bunkers, memory, lanes}`, required | project IDs unique; all host references must resolve |
+| `projects[].repository` | `{provider, url, credential_ref}`, required | `provider` is `github` or `gitlab`; `url` is repository identity and `credential_ref` is a `secretref://forge/...`; neither may stand in for the other |
+| `projects[].eligible_hosts` | non-empty list of host IDs, required | allocation considers only this declared set; no silent expansion |
+| `projects[].bunkers` | `{count, requirements, profile}`, required | `count >= 1`; requirements name disk/memory/network/capability constraints |
+| `projects[].memory` | `{namespace, local_root, remote_ref, sync_policy}`, required | namespace is project-scoped; `local_root` is durable; `remote_ref` may be absent only when `sync_policy: local-only` |
+| `projects[].lanes[]` | `{name, admission, cadence_s, weight, foreman}`, required | lane names unique; admission is `tasks` or `cooldown`; cadence/weight are bounded positive values |
+| `projects[].lanes[].foreman.round` | `{worker_budget, concurrency, retry_policy}`, required | total budget and concurrency are independent; retry policy is explicit and cannot replenish total budget |
+| `events.webhooks[]` | `{id, endpoint_ref, subscriptions, retry, retention}`, optional | absent means no delivery; endpoint secret material is referenced only; interpretation remains receiver-owned |
+| `safety` | `{terminal_jail, reclaim, backup}`, required | Terminal Jail defaults to `disabled`; enabled mode requires the guarded execution path and has no unguarded fallback |
+| `extensions` | map, optional | preserved but not interpreted by core reconciliation |
+
+Canonical precedence is `field update generation` → project → deployment profile →
+global default, with native subsystem overrides permitted only when explicitly mapped in
+the adapter. An explicit empty value is either rejected or has the card's stated absence
+meaning; it never falls through silently. A valid file is first schema-validated, then
+cross-field validated, then committed as a new generation. A stale `expected_generation`
+returns `GENERATION_CONFLICT` without changing the file. Effective readback is obtained
+from the owning subsystem and is exposed separately as `effective`; a missing or stale
+readback is `degraded`, never `converged`.
+
+### V.0.2 Canonical update/readback API
+
+The target management surface is `factory.v1` and has these observable operations:
+
+| Operation | Request / result | Refusal or degraded result |
+|---|---|---|
+| `GET /v1/config` | `{desired, observed, effective, generation, status}` | `404 CONFIG_UNAVAILABLE` when no generation exists |
+| `PUT /v1/config` | `{expected_generation, desired, idempotency_key}` → `202 {operation_id, generation}` | `409 GENERATION_CONFLICT`; secret material is `422 SECRET_MATERIAL_FORBIDDEN` |
+| `POST /v1/reconcile` | `{generation, idempotency_key}` → `202 {operation_id, status: accepted}` | `409 GENERATION_NOT_CURRENT`; same-key retry returns the original operation |
+| `GET /v1/operations/{operation_id}` | per-adapter states, acknowledgements, effective readback | `200 degraded` when any required readback is missing/stale; never `converged` |
+| `GET /v1/readiness/{project_id}` | `{profile, generation, binding_generation, probes}` | `503 NOT_READY` until authenticated operation probes and Crier/Scheduler bindings pass |
+| `GET /v1/events` | versioned event cursor and delivery state | receiver outage is recorded per endpoint; it does not alter configuration status |
+
+Every mutation is authenticated, scoped, durable before adapters run, and idempotent by
+`(principal, operation, idempotency_key, request_digest)`. A changed request under an
+existing key returns `IDEMPOTENCY_KEY_REUSED`; a same request returns the original result.
+The API never claims convergence from request acceptance alone.
+
+### V.0.3 Factory event delivery and metric readout
+
+Factory events use `event.v1`. The manager emits only delivery facts; receivers own
+interpretation, paging, logging and repair-agent action (resolved decision P3-09). Every
+event carries `event_version`, `event_id`, `event_type`, `occurred_at`, `source`,
+`project_id` where scoped, `generation`, `operation_id` where applicable, and a payload
+whose type is fixed by `event_type`. The minimum catalog is:
+
+| Event | Occurs when | Required payload |
+|---|---|---|
+| `configuration.accepted` | a desired generation is durably accepted | generation, actor, request digest |
+| `reconciliation.state` | an operation changes state | operation id, old/new state, reason |
+| `allocation.shortfall` | declared capacity cannot be allocated | requirements, eligible hosts, unsatisfied amount |
+| `readiness.changed` | effective readiness or binding generation changes | profile, probes, old/new readiness, binding generation |
+| `credential.lifecycle` | reference is issued, renewed, revoked or replaced | domain, reference, scope, action, reason; never secret material |
+| `memory.sync` | local record sync changes state | namespace, record id, local commit, sync state, freshness |
+| `factory.failure` | an operation or adapter enters failed state | operation, adapter, typed error, retry eligibility |
+
+A subscription uses `{subscription_id, endpoint_ref, event_types, project_scope,
+status, retry_policy, retention_s}`. `endpoint_ref` is a secret reference. The manager
+persists the event before delivery and tracks per-endpoint `attempt`, `acknowledged_at`,
+`next_retry_at`, `last_error` and `delivery_state`. A receiver acknowledges the event id;
+the same event is redelivered with the same `event_id` and is not re-authored as a new
+event. Backoff and retention are bounded by the subscription; after exhaustion the event
+is `delivery_failed` and remains available for replay by cursor. Endpoint outage does not
+change configuration or reconciliation state. Signature/authentication failure is
+`ENDPOINT_UNAUTHORIZED`; malformed acknowledgement is `ACK_INVALID`; neither is treated
+as delivery success. Receiver interpretation and external repair remain outside Factory
+responsibility.
+
+The manager independently serves metrics at a read-only versioned endpoint. Each metric
+has a name, unit, labels, collection owner, loss/unknown semantics and readout scope:
+`reconciliation_operations_total{state}`, `allocation_shortfall{project}`,
+`readiness{project,profile}`, `event_delivery_total{endpoint,state}`,
+`memory_sync_pending{namespace}`, and `effective_readback_age_seconds{scope}`.
+Counters increment only after the corresponding durable transition; gauges expose
+`unknown` when collection is unavailable rather than zero. `GET /v1/metrics` returns
+`metric_schema_version`, samples, `observed_at` and `collection_state`; a missing sample
+is not a successful zero. Metric collection and serving are manager responsibilities;
+receiver dashboards may consume them but do not redefine their meaning.
+
 ## V.1 Scopes and the complete participating-system inventory (V2-SET-01)
 
 Every setting belongs to a scope, and every participating system has a settings surface
@@ -303,7 +397,10 @@ deployment:
   profile: homelab-vpn            # Kubernetes | compose | homelab-vpn | standalone
 projects:
   - id: code-factory
-    repo: secretref://forge/github/deploy-key.cf2a
+    repository:
+      provider: github
+      url: git@github.com:example/code-factory.git
+      credential_ref: secretref://forge/github/deploy-key.cf2a
     eligible_hosts: [h1, h2, h3]
     bunkers:
       count: 2                    # desired count — shortfall is exposed, never absorbed
@@ -333,9 +430,10 @@ Resolved-state comparison (how the same file reads back):
 |---|---|---|---|---|
 | `projects[code-factory].bunkers.count` | 2 | 1 allocated, 1 unallocatable (disk_gib 40 short on every eligible host) | 1 Bunker serving | **DEGRADED — allocation shortfall exposed**: desired count unchanged, unsatisfied requirement named (`disk_gib: 40`), affected scope `projects/code-factory` |
 | `projects[code-factory].lanes[builder].foreman.round.worker_budget.total` | 8 | injected at admission | 8, remaining 3 after two waves | CONVERGED |
-| `deployment.profile` | homelab-vpn | profile applied | readback via readiness record | CONVERGED (readback procedure itself RED — matrix) |
+| `deployment.profile` | homelab-vpn | profile applied | readiness record pending the profile-specific authenticated probes | **DEGRADED / UNVERIFIED** — no effective-readback evidence is available in this example; a RED procedure cannot establish convergence |
 | `safety.terminal_jail` | disabled | not enabled | no guarded path in use | CONVERGED — NOTE: enabling it is an operator act, and enabled mode has no unguarded fallback |
-| repo credential | `secretref://forge/github/deploy-key.cf2a` | reference only everywhere | installed key file, mode 0600, fingerprint `SHA256:…` | CONVERGED — fingerprint readback only, value never printed |
+| `projects[code-factory].repository` | `provider: github`, `url: git@github.com:example/code-factory.git` | repository identity read back independently | repository identity is not credential material | CONVERGED only for identity; credential activation remains a separate readback |
+| `projects[code-factory].repository.credential_ref` | `secretref://forge/github/deploy-key.cf2a` | reference only everywhere | installed key file, mode 0600, fingerprint `SHA256:…` | **UNVERIFIED** until the credential file and permitted operation are read back; value is never printed |
 
 ## V.8 Operator setting index
 
@@ -413,6 +511,27 @@ deployment profile, and every dimension below is set and proven per Bunker. The 
 the authoritative cross-module statement of that surface; the module chapters own the
 rows' details.
 
+**Supported memory profile — same-namespace local/remote.** Each project has one logical
+namespace and stable `record_id` values. The controller and every project Bunker hold
+Git-backed local namespace repositories with the same namespace identifier; the Bunker
+writer commits locally before acknowledging a record. A remote synchronization target is
+an optional transport for exchanging commits, not the durability authority for a local
+write. The supported local profile therefore remains usable when the HTTP/service path is
+unavailable. A local loss is distinct from service outage and is reported as
+`LOCAL_STORE_LOST`; it is not represented as a successful pending sync.
+
+A record write carries `record_id`, `namespace`, `record_type`, `round_id`, `wave_id`,
+`attempt_id`, `payload_digest`, `body`, `writer_identity`, `local_commit` and
+`created_at`. Repeating the same identity and digest is an idempotent acknowledgement;
+the same identity with a different digest is `MEMORY_CONFLICT` and does not overwrite the
+first record. A reconnect exchanges commits, verifies namespace and writer authorization,
+and records `sync_commit`, `synced_at` and freshness. Controller readback is
+`fresh`, `pending-sync` or `stale`; it never upgrades a local record to controller-fresh
+without the synchronization evidence. Worker, wave and round records remain distinct and
+correlated. Permissions bind the writer to one project namespace; a cross-project write
+is `NAMESPACE_FORBIDDEN`. The profile is a target contract until its cross-host and
+outage cases are exercised.
+
 | Dimension | State | Requiredness | Validation / errors | Precedence / activation | Redacted effective readback |
 |---|---|---|---|---|---|
 | Profile selection and identity (M1, M5) | TARGET-UNIMPLEMENTED | required — no Bunker reaches readiness without a named profile | readiness must validate effective host/isolation/resource/network/storage settings and real cross-host memory, inference and repo use; install success alone is insufficient | per-Bunker Factory settings override published defaults; platform examples establish no native support | the profile named in the readiness record — procedure not yet written (RED) |
@@ -420,7 +539,7 @@ rows' details.
 | Image (M5) | SUPPORTED; pin TARGET | the image carries the exact Hermes/Oh My Hermes build | `HERMES_PIN` and digest checks refuse a wrong build at install (M5 §5) | pin change is a deliberate re-provision, not drift | `install-hermes.sh --check` against the pin |
 | Persistence (M5) | SUPPORTED (opt-in), assignment TARGET | which Factory state survives the next exec must be stated per profile | a fresh rootfs install does not survive the next exec — no validation can assume it does | persistent containers are opt-in; the default is ephemeral | the profile's persistence row in the readiness record (pending) |
 | Mounts (M1, M5) | SUPPORTED measured; contract TARGET | dependency/package/cache/session/evidence persistence mounts declared per profile | a relative `--gomodcache` is refused; a declared-but-unsealed cache is a counted FAIL | mount changes take effect at the next spawn | `node_hygiene.py footprint --modcache` names the cache or prints `not-declared` |
-| Shared DuckBrain identity and topology (M1, M4, M5) | UNRESOLVED | every Bunker exposes the same logical project memory view as the controller (user decision) | none yet — consistency, authority, namespace/auth mapping, offline/reconnect and conflict behavior are unspecified | — | cross-host readback of the same logical row (not yet built) |
+| Shared DuckBrain identity and topology (M1, M4, M5) | TARGET-UNIMPLEMENTED — supported local profile specified below | every Bunker and controller use one Git-backed project namespace; service replication is optional, not required for local durability | `record_id` and namespace are validated; duplicate identity is refused; local commit is required before acknowledgement; remote outage yields `pending-sync` | local write applies immediately; remote sync retries with backoff; conflicts use record-id plus payload digest and retain both sides for explicit resolution | local namespace commit, pending-sync manifest, then controller readback of the same `record_id` |
 | Crier (M10) | SUPPORTED; selected profile TARGET | a durable registry backend on every deployment holding real work | `CR_GUARD_*` bounds refuse non-numeric and `<= 0` at startup with a named error | explicit `CR_REGISTRY_BACKEND` → `sqlite:` URL → postgres URL → `memory` (the last is the hazard); changes activate on restart | which backend is actually serving custody has no readback — a named RED on M10 §5 |
 | Board sync and hooks (M4, M9) | TARGET-UNIMPLEMENTED | scheduler-facing reads, claim/sync paths, local and remote board copies and the required lane hooks with a board-check verifier | an unreadable board is distinct from an empty one; the distinction is required behavior, current input handling is partial | PRE hooks follow selection, POST follows outcome recording and cannot change that tick's result | `repo_freshness` and `board_read.py load` report the source used |
 | Forge credentials (M7) | SUPPORTED mint/check; delivery TARGET | per-Bunker scoped delivery, activation and readback for forge credentials | wrong key mode refused by name before any mint or store rewrite | control-side signing authority; only scoped credentials reach nodes | fingerprint listing (`show` prints sha256 prefixes, never material) |

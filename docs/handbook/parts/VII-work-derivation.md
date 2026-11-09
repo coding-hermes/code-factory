@@ -5,6 +5,16 @@ project they want, the agent turns that intent into a Boardctl-backed plan, and 
 Factory builds the requested project end to end, producing an integrated, usable result
 demonstrated against the project's acceptance criteria. The chain that does it is:
 
+The normative execution protocol is `work.v1`. It distinguishes transport custody,
+execution, verification, publication, closeout and scheduler settlement; each state has
+one writer and a durable identity. Legacy node/dispatcher messages remain accepted only
+through the explicit compatibility mapping in §VII.13; they are not a second normative
+path. The total-worker allowance belongs to the round, is reserved monotonically across
+successive compatible waves, and is never replenished by a new wave. Worker, wave and
+round memory records remain separate even when a service outage leaves their
+synchronization pending.
+
+
 **project → initiative/acceptance plan → Boardctl tasks/dependencies → foreman round →
 compatible worker waves → execution attempts → verified integration → project
 acceptance** (§11).
@@ -20,16 +30,24 @@ infrastructure ready — it is not itself the work derivation (§11.9).
 
 ## VII.1 The chain, as a table
 
-| Hop | Actor decides | Contract | Carries | Measured in |
-|---|---|---|---|---|
-| file | the foreman files a row | CT-14 | row created, evidence bound at close | M4 §6 |
-| admit | the scheduler | CT-01 | lane enabled, cadence, weight, pin | M9 §6 |
-| envelope | the scheduler | CT-02 | run_id, corr_id, lane, board, text_b64 | M9 §6 |
-| lease | crier | CT-03 | inbox message plus a 30 s lease | M2 §6 |
-| execute | the node / dispatcher | CT-04 | reply: status, dispatch_id, corr_id, branch, commit | M2 §6 |
-| settle | the scheduler | CT-06 | completion event correlated to the run | M9 §6 |
-| grade | gitreins | CT-12 | the staged diff, guarded at commit | M3 §6 |
-| close | the board | CT-13 | a verdict that closes a row | M4 §6 |
+The following target sequence is normative. The `Measured in` column is implementation
+coverage only; it does not change the target actor or state owner.
+
+| Hop | Actor decides | Contract | Carries | State transition / durable proof | Measured in |
+|---|---|---|---|---|---|
+| file | foreman | CT-14 | row, criteria, dependencies | absent → pending; unique row/event | M4 §6 |
+| admit | scheduler | CT-01 | lane config and round reservation | pending → admitted or named refusal | M9 §6 |
+| envelope | scheduler → Crier | CT-02 | versioned envelope, run/corr IDs, digest | custody accepted before launch | M9 §6 |
+| lease | Crier → Bunker foreman | CT-03 | delivery and lease | custody → leased; lease/fence durable | M2 §6 |
+| execute | Bunker foreman → workers | CT-04/CT-06R | brief, attempt ID, typed result | leased → running → reported | M2 §6 |
+| verify | foreman / judge | CT-12/CT-13 | criteria, verdict, tree/evidence refs | reported → verified or correction | M3 §6 |
+| publish | foreman | CT-14 | exact commit/tree proof | verified → published | M4 §6 |
+| close | foreman → board | CT-14 | evidence-bound transition | published → complete | M4 §6 |
+| settle | scheduler | CT-06 | correlated round report | return → settled; unknown never means pass | M9 §6 |
+
+Legacy `node → crier` and `dispatcher` observations remain implementation coverage and
+are translated into `work.v1` only when their IDs, typed status and evidence satisfy the
+compatibility rules in §VII.13.
 
 One hop may refuse. A refusal names a reason; a silent drop is a defect, not a decision.
 
@@ -395,8 +413,36 @@ replenishes it. Newly eligible work after each wave competes for what remains.
 
 ## VII.13 Correlation and result schemas
 
-The canonical correlation, versioned, with the truthful mapping of what exists today
+The canonical `work.v1` correlation and result schema is normative. The existing
+implementation mapping follows it without pretending missing fields exist
 (V2-WRK-03 — existing fields are mapped, not invented, and not discarded):
+
+| Schema | Required fields | State / refusal semantics | Durable identity |
+|---|---|---|---|
+| `round-request.v1` | `round_id`, `run_id`, `corr_id`, `task_scope`, `total_budget`, `config_generation` | `accepted`, `deferred`, `refused`; invalid budget/config is typed refusal | `round_id` |
+| `worker-brief.v1` | `round_id`, `wave_id`, `task_id`, `attempt_id`, `brief_digest`, `criteria`, `workspace` | digest mismatch or missing criteria is `BRIEF_INVALID`; brief custody is not success | `attempt_id` |
+| `worker-result.v1` | `attempt_id`, `dispatch_id`, `corr_id`, `status`, `commit`, `artifacts`, `evidence_refs`, `finished_at` | status enum `pass`, `fail`, `partial`, `unknown`; absent status is `INVALID_RESULT` | `attempt_id` |
+| `wave-result.v1` | `round_id`, `wave_id`, worker results, integration result, budget used/remaining | `complete`, `partial`, `failed`; partial memory sync remains visible | `(round_id, wave_id)` |
+| `round-report.v1` | `round_id`, `run_id`, `corr_id`, all wave results, stop reason, budget, memory refs | final report is `settled` only after durable memory and evidence references | `round_id` |
+| `publication.v1` | `task_id`, `attempt_id`, exact commit/tree digest, verdict, remote proof | mismatch is `PUBLICATION_MISMATCH`; no board closeout | `(task_id, attempt_id, tree_digest)` |
+
+Every schema carries `schema_version`, `request_id` and correlation IDs. A required
+field cannot be null, empty or omitted; optional fields are explicitly nullable and their
+absence has the card's stated meaning. Durable state transitions are `custody → running
+→ reported → verified → published → closed → settled`; the foreman owns execution,
+verification, publication and closeout, Crier owns custody, and Scheduler owns admission
+and settlement. A preliminary custody receipt is never a final outcome. Duplicate same-digest
+results replay the original outcome; conflicting digests are refused. Unsupported schema
+versions are refused rather than coerced.
+
+Legacy mapping: `{dispatch_id, corr_id, status, ok}` becomes `worker-result.v1` only
+when `status` is in the canonical enum and the digest/evidence are present; legacy `ok`
+is advisory and is rejected when it conflicts with `status`. A legacy reply without
+`run_id` receives the surrounding envelope's `run_id` only as an explicit translation
+field, never as evidence that the producer emitted it. Missing verdicts map to `unknown`.
+The node-bus and dispatcher alternatives are compatibility adapters, not competing MVP
+execution authorities; the normative target launches the foreman in the project Bunker
+through Crier and returns `CT-06R`.
 
 | Canonical field | Meaning | Exists today as | Producer |
 |---|---|---|---|
@@ -471,6 +517,32 @@ a stale local copy:
 
 The revision the round worked from is part of the round report — the proof §2's read-path
 rule demands ("it reports which source it used"), bound into the round contract.
+
+### VII.15.1 Eligibility, claims and partial-write recovery
+
+Eligibility is a canonical predicate evaluated against the synchronized revision. A row is
+eligible only when its status is `pending`, its dependencies resolve to `complete`, its
+acceptance criteria are non-empty and executable, no active claim lease exists, and its
+project/lane scope is admitted. `in_progress`, `blocked`, `deferred`, malformed, cyclic,
+unknown-project and stale-revision rows are not eligible; an unreadable board is an
+`ELIGIBILITY_UNKNOWN` refusal, never an empty-board result.
+
+A claim carries `{task_id, board_revision, claimant_id, claim_id, lease_expires_at,
+claim_generation}`. Boardctl performs compare-and-set against the canonical revision and
+writes the claim and its event as one append transaction. Two foremen on different clones
+therefore produce one `CLAIMED` event; the loser receives `CLAIM_CONFLICT`, refreshes the
+canonical revision and re-evaluates eligibility. A lease expiry does not authorize a new
+claim until the board records stale-owner replacement with a new `claim_generation`.
+Every protected write checks claimant and generation at the resource boundary; a stale
+writer cannot close a row or append a result after replacement.
+
+Closeout is idempotent by `(task_id, claim_generation, evidence_run_id, tree_digest)`.
+A failed row append or event append is reported as `PARTIAL_WRITE`, retains the operation
+id and is replayed against the same expected revision; it is not treated as complete.
+Malformed rows, dependency cycles, stale refs and failed event appends each have named
+refusals and leave the canonical store unchanged. Scheduler admission may decide whether
+a lane runs, but it cannot claim a task or substitute for this foreman-owned board
+transaction.
 
 ## VII.16 Round crash recovery without double-counting
 

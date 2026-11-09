@@ -291,9 +291,9 @@ from approved target behavior.
   allocation it exposes the exact shortfall and preserves the desired request
   rather than silently changing desired state; a partitioned old host is fenced
   by lease/active-owner semantics, not assumed dead (§1.8).
-- **Pointers:** no module chapter yet — a required target component
-  (V2-ARCH-01); contract-register extension pending in Part IV; settings and
-  desired-state schema Part V (target); state store schema §1.7.
+- **Pointers:** no module chapter — required target component (V2-ARCH-01);
+  normative manager contracts `CT-24`–`CT-29` and `CT-06R` in Part IV §IV.1;
+  desired-state and readback schema Part V §V.3/§V.6; state model §1.7.1.
 
 ### 1.3.2 Transport — carries the decision
 
@@ -855,14 +855,65 @@ Steps carry resumable state, retries/backoff and idempotency; partial-update
 recovery and versioned status/events are required, and both controller views
 (desired and observed) are verified before the incident closes.
 
+## 1.7.1 Manager resource and operation state model
+
+The manager's target contract is versioned independently of implementation coverage.
+The resource model uses `manager.v1` and the following stable resources:
+
+| Resource | Required identity | Durable state and meaning |
+|---|---|---|
+| `desired-config` | `(project_id, generation)` | declared intent; generations are immutable after acceptance |
+| `observed-inventory` | `(scope, observation_id)` | adapter readback, timestamp and observation quality |
+| `reconciliation-operation` | `(operation_id, desired_generation)` | `accepted`, `planned`, `applying`, `degraded`, `converged`, `failed`, `cancelled` |
+| `binding` | `(project_id, binding_generation)` | verified Crier route and scheduler availability binding |
+| `incident` | `(incident_id, scope)` | detected failure, fence decision, replacement and recovery evidence |
+
+A manager request carries `schema_version: "manager.v1"`, `request_id`, `project_id`,
+`expected_generation` where a compare-and-swap applies, and the requested operation.
+The manager authenticates an authorized configuration principal and scopes every request
+to the named project or Factory scope. A successful accepted update returns
+`202 Accepted` with `operation_id`, `desired_generation`, and `status: "accepted"`;
+it does not claim readiness. A current-state read returns desired, observed and
+status objects together, with `effective` values only when the owning adapter has
+read them back. Secret values are never returned; secret references remain references.
+
+The normative operation set is:
+
+| Operation | Request example | Success / refusal |
+|---|---|---|
+| `GET /v1/projects/{id}/state` | `schema_version=manager.v1` | `200` with desired, observed, effective and operation status; `404 PROJECT_UNKNOWN` if absent |
+| `PUT /v1/projects/{id}/desired` | `{expected_generation: 17, desired: {...}}` | `202` with generation 18; `409 GENERATION_CONFLICT` leaves generation 17 unchanged |
+| `POST /v1/operations/{id}/reconcile` | `{desired_generation: 18, idempotency_key: "..."}` | `202` or the existing operation result for the same key; `409 GENERATION_NOT_CURRENT` if stale |
+| `POST /v1/operations/{id}/cancel` | `{operation_id: "..."}` | `202` when cancellation is accepted; `409 NOT_CANCELLABLE` after an irreversible adapter step |
+| `GET /v1/operations/{id}` | `{}` | `200` with state, per-adapter acknowledgements and readback; `404 OPERATION_UNKNOWN` if absent |
+| `GET /v1/readiness/{project_id}` | `{}` | `200 READY` only after authenticated operation probes and binding generation match; `503 NOT_READY` otherwise |
+
+Every mutating request is idempotent by `(principal, project_id, operation, idempotency_key)`.
+A reused key with a different request digest returns `409 IDEMPOTENCY_KEY_REUSED`; a
+reused key with the same digest returns the original result without a second adapter
+side effect. An adapter applies a change only when the operation's active-owner fence
+matches; `STALE_OWNER` is a typed refusal. Each adapter acknowledgement records
+`adapter_id`, `operation_id`, `attempt`, `effective_digest` or a redacted failure,
+and `observed_at`. An operation is `converged` only when every required acknowledgement
+and effective readback passes. Missing, stale or partial readback produces `degraded`,
+not `converged`.
+
+The manager persists the request, generation check, operation transition, adapter
+acknowledgements, binding changes and incident evidence in one durable operation log
+with an explicit transaction boundary per transition. Recovery resumes an `accepted`,
+`planned` or `applying` operation by idempotency key; it first fences an old owner,
+then re-reads observed state, and applies only missing steps. A replacement may publish
+a new binding only after readiness for that binding generation. A late result with an
+old owner token is rejected at the resource side and recorded as `STALE_OWNER`; it
+cannot alter effective state or publish a second binding. These are target guarantees;
+the implementation remains TARGET-UNIMPLEMENTED until independently exercised.
+
 ## 1.9 The contract surface, as a count
 
-Of the 24 modelled rows — `CT-01`…`CT-18`, the five chapter-local rows and the
-`CT-06R` foreman-return leg — 4 are PROVEN (`CT-02`, `CT-03`, `CT-06`, `CT-08` — all
-of them crier wires), 1 is PARTIAL (`CT-04`, the reply whose settlement reads only
-`ok`), 1 is BROKEN (`CT-10`, the node-to-board wire with no producer), 1 is MISSING
-(`CT-09`, the node-to-DuckBrain wire with zero call sites), and 17 are UNVERIFIED.
-The map's dashed and dotted lines carry the states; a reader who wants the closing
-command for any one of them finds it in Part IV. The factory manager's interfaces
-(§1.7) are not yet numbered in this count — their contract-register extension is
-pending in Part IV, and the manager itself is TARGET-UNIMPLEMENTED.
+The canonical register contains 31 rows: `CT-01`…`CT-23`, the foreman-return leg
+`CT-06R`, and the seven manager contracts `CT-24`…`CT-30`. Current implementation
+coverage remains separate from this target count: `CT-02`, `CT-03`, `CT-06` and
+`CT-08` are PROVEN; `CT-04` is PARTIAL; `CT-09` is MISSING for its legacy node
+producer; `CT-10` is BROKEN for that producer; and the remaining rows are UNVERIFIED
+or TARGET-UNIMPLEMENTED as detailed in Part IV. The map's dashed and dotted lines
+carry coverage states; they do not weaken the target contracts.
