@@ -997,9 +997,18 @@ if [ "$SCOPED" -eq 1 ]; then
 else
   say "[90] manifest"
   if [ "$MODE" = apply ] && [ "$FAILED" -eq 0 ]; then
-    python3 - "$STATE/node.json" "$PROJECT" "$HARNESS" "$PORT" "$REPO" "$REF" "$(hostname)" "$STATE/freshness.json" \
+    # CF-289: node.json has TWO writers. node_identity.py MERGES identity keys (agent,
+    # namespace, duckbrain, provisioned_by, provisioned_at) into it; this layer used to
+    # REPLACE the document with its own schema, so a later --apply deleted every key it did
+    # not know about and still exited 0 — the node was left with no `agent` for the bus.
+    # One file, one shape: BOTH writers merge. Read what is there, set only the keys this
+    # ladder owns, write the union back atomically at mode 600 (the same write discipline
+    # node_identity.py uses). An existing document that is not a readable JSON object is a
+    # named FAIL with the file left untouched — guessing (or silently rewriting) it is how
+    # the identity keys were lost in the first place.
+    if man_out=$(python3 - "$STATE/node.json" "$PROJECT" "$HARNESS" "$PORT" "$REPO" "$REF" "$(hostname)" "$STATE/freshness.json" \
       "$HARNESS_VERSION" "$HARNESS_VERSION_ROW" "$HARNESS_BINARY" "$MODE" <<'PY'
-import json, sys, time
+import json, os, sys, tempfile, time
 path, project, harness, port, repo, ref, host, fresh_path = sys.argv[1:9]
 # Names distinct from the freshness variables below: `measured` in this body is the checkout
 # measurement, and reusing it silently replaced the harness version with a dict of git state.
@@ -1044,17 +1053,67 @@ else:
         % (hmode or "check"))
 if hbin:
     harness_obj["binary"] = hbin
-json.dump({"node_id": host, "project": project,
-           "repo": {"origin": repo, "ref": ref, "path": "/home/" + __import__("os").environ.get("USER", "node") + "/repo"},
-           "harness": harness_obj,
-           "bus": {"base": __import__("os").environ.get("CRIER_BASE", "http://crier.example:8767")},
-           "freshness": freshness,
-           "created_by": "project-node.sh v1",
-           "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
-          open(path, "w"), indent=1)
-print("wrote", path)
+
+# Read the document an identity writer may already have merged into. A file that exists but
+# is not a JSON object is refused rather than overwritten: this ladder cannot tell which keys
+# matter, so it must not pretend the old bytes were its own.
+doc = {}
+try:
+    if os.path.exists(path):
+        with open(path) as fh:
+            doc = json.load(fh)
+        if not isinstance(doc, dict):
+            raise ValueError("top level is not an object")
+except (OSError, ValueError) as exc:
+    print("FAIL  manifest — %s is not a readable JSON object (%s); left untouched" % (path, exc),
+          file=sys.stderr)
+    raise SystemExit(1)
+
+# Only the keys this ladder owns are set; everything else in the document survives. `bus` is a
+# dict both writers touch, so it is merged one level down instead of replaced: an identity step
+# that added a sibling key under `bus` keeps it, and the base is the bus the create path
+# exported (CRIER_BASE, then CRIER_URL) rather than the documented placeholder.
+bus = doc.get("bus")
+if not isinstance(bus, dict):
+    bus = {}
+bus["base"] = (os.environ.get("CRIER_BASE") or os.environ.get("CRIER_URL")
+               or "http://crier.example:8767")
+
+doc["node_id"] = host
+doc["project"] = project
+doc["repo"] = {"origin": repo, "ref": ref,
+               "path": "/home/" + os.environ.get("USER", "node") + "/repo"}
+doc["harness"] = harness_obj
+doc["bus"] = bus
+doc["freshness"] = freshness
+doc["created_by"] = "project-node.sh v1"
+doc["created_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+# Atomic, mode 600, same shape as node_identity.py: a reader never sees half a manifest and a
+# crash never leaves the node without the identity it just had.
+directory = os.path.dirname(os.path.abspath(path)) or "."
+os.makedirs(directory, exist_ok=True)
+fd, tmp = tempfile.mkstemp(dir=directory)
+try:
+    with os.fdopen(fd, "w") as fh:
+        json.dump(doc, fh, indent=1, sort_keys=True)
+        fh.write("\n")
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+except Exception:
+    try:
+        os.unlink(tmp)
+    except OSError:
+        pass
+    raise
+print("merged into", path)
 PY
-    ok "manifest" "$STATE/node.json"
+    ); then
+      printf '%s\n' "$man_out" | sed 's/^/  ..    /'
+      ok "manifest" "$STATE/node.json (merged: keys this ladder does not own are preserved)"
+    else
+      bad "manifest" "could not merge the manifest into $STATE/node.json: $(row_tail "$man_out")"
+    fi
   elif [ -f "$STATE/node.json" ]; then
     ok "manifest" "$STATE/node.json"
   else

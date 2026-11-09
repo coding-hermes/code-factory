@@ -4405,6 +4405,86 @@ else
   say "  FAIL  a dirty checkout was not recorded as a finding (exit $rc)"; fails=$((fails+1))
   printf '%s\n' "$out" | sed 's/^/    | /'
 fi
+# ch:trace row=CF-289 spec=docs/handbook/OUTLINE.md#M1-PROVISIONING wave=none:serial-worker test=tests/selftest.sh::CF-289-node-json-union doc=docs/handbook/chapters/M1-provisioning.md evidence=tests/selftest.sh witness=none:local-fixture verdict=none:foreman-will-run-gitreins commit=none:worker-commit memory=none:foreman-closeout
+# CF-289: ~/.node/node.json has two writers. node_identity.py merges identity keys; layer 90 of
+# project-node.sh used to REPLACE the document with its own schema, so a later --apply deleted
+# `agent`, `namespace`, `duckbrain` and `provisioned_by` and still exited 0 (the node then had no
+# agent for the bus: node-bus-worker.py reads node.json.agent). The arm below is the union after
+# identity-then-apply; the second arm replays the SAME fixture against the pre-fix script and
+# requires the loss, so the pair discriminates instead of asserting a shape both revisions print.
+cf289_scripts() {  # $1 dest dir, $2 project-node.sh source
+  mkdir -p "$1/harness"
+  cp "$HERE/scripts/lib.sh" "$HERE/scripts/disk_floor.py" "$1/"
+  cp "$2" "$1/project-node.sh"
+  cp "$tmpd/pn-scripts/harness/install-fixture.sh" "$1/harness/install-fixture.sh"
+}
+cf289_identity() {  # $1 home -> node_identity.py merges the identity keys an operator's step writes
+  mkdir -p "$1/.node"
+  printf '{"agent":"fixture"}\n' > "$1/.node/crier.json"
+  chmod 600 "$1/.node/crier.json"
+  python3 "$HERE/scripts/node_identity.py" "$1/.node/node.json" \
+    agent=cf-289-fixture namespace=demo 'duckbrain.namespaces[]=demo,coder' \
+    'bus.channel=fleet-ops' provisioned_by=bunker-provision \
+    provisioned_at=2026-11-09T00:00:00Z >/dev/null 2>&1
+}
+cf289_apply() {  # $1 scripts dir, $2 fresh home -> project-node.sh --apply output+rc
+  git clone -q "$tmpd/origin.git" "$2/repo"
+  cf289_identity "$2"
+  env PATH="$tmpd/bin:$PATH" HOME="$2" NODE_PROJECT=demo NODE_HARNESS=fixture \
+    CRIER_URL=http://fixture.invalid:8767 NODE_DISK_FLOOR=1 \
+    /bin/bash "$1/project-node.sh" --apply --project demo --harness fixture 2>&1
+}
+cf289_scripts "$tmpd/pn-union" "$HERE/scripts/project-node.sh"
+out=$(cf289_apply "$tmpd/pn-union" "$tmpd/union"); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fxq 'NODE: PASS' \
+  && [ "$(stat -c '%a' "$tmpd/union/.node/node.json")" = 600 ] \
+  && python3 -B - "$tmpd/union/.node/node.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+# every key the identity writer merged survives the ladder's own write
+for key, value in (("agent", "cf-289-fixture"), ("namespace", "demo"),
+                   ("provisioned_by", "bunker-provision"),
+                   ("provisioned_at", "2026-11-09T00:00:00Z")):
+    assert d.get(key) == value, (key, d.get(key))
+assert d["duckbrain"]["namespaces"] == ["demo", "coder"], d.get("duckbrain")
+assert d["bus"]["channel"] == "fleet-ops", d.get("bus")
+assert d["bus"]["base"] == "http://fixture.invalid:8767", d.get("bus")
+# and every key the ladder owns is still written
+for key in ("node_id", "project", "repo", "harness", "freshness", "created_by", "created_at"):
+    assert key in d, "ladder key missing: %s" % key
+assert d["project"] == "demo"
+assert d["harness"]["name"] == "fixture"
+assert d["freshness"]["status"] == "PASS", d.get("freshness")
+PY
+then
+  say "  PASS  CF-289-node-json-union — identity-then-apply leaves agent/namespace/duckbrain/provisioned_by AND the ladder's keys (mode 600, exit $rc)"
+else
+  say "  FAIL  CF-289-node-json-union — the union was not preserved after --apply (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+  [ -r "$tmpd/union/.node/node.json" ] && python3 -B -c 'import json,sys;print("keys:",sorted(json.load(open(sys.argv[1])).keys()))' "$tmpd/union/.node/node.json" | sed 's/^/    | /'
+fi
+# The red control: the SAME fixture against the script this row was raised on. It must exit 0
+# (the loss was silent) and must NOT carry the identity keys — otherwise the arm proves nothing.
+if git -C "$HERE" show 23114f4:scripts/project-node.sh > "$tmpd/pn-prefix-src.sh" 2>/dev/null; then
+  cf289_scripts "$tmpd/pn-prefix" "$tmpd/pn-prefix-src.sh"
+  rout=$(cf289_apply "$tmpd/pn-prefix" "$tmpd/prefix"); rrc=$?
+  if [ "$rrc" -eq 0 ] && printf '%s\n' "$rout" | grep -Fxq 'NODE: PASS' \
+    && python3 -B - "$tmpd/prefix/.node/node.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+lost = [k for k in ("agent", "namespace", "duckbrain", "provisioned_by") if k not in d]
+assert lost == ["agent", "namespace", "duckbrain", "provisioned_by"], lost
+assert "node_id" in d and "harness" in d, sorted(d)
+PY
+  then
+    say "  PASS  pre-fix 23114f4 exits 0 while deleting agent/namespace/duckbrain/provisioned_by — this arm discriminates"
+  else
+    say "  FAIL  pre-fix 23114f4 did not lose the identity keys (exit $rrc) — the union arm proves nothing"; fails=$((fails+1))
+    printf '%s\n' "$rout" | sed 's/^/    | /'
+  fi
+else
+  say "  FAIL  pre-fix source unavailable (git show 23114f4:scripts/project-node.sh)"; fails=$((fails+1))
+fi
 rm -rf "$tmpd"
 # END cf244-node-freshness
 

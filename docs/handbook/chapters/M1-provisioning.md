@@ -38,9 +38,31 @@ the inbox until it expires.
 | S1 qualify the host — disk floor | `disk_floor.py` | **active** | `disk_floor.py` is invoked by `project-node.sh:173` (`python3 "$HERE/disk_floor.py" … resolve …`), not by `bunker-provision.sh` (F1-4). `node_hygiene.py footprint` is invoked by `project-node.sh` layer 00 (the row that admits the measured node footprint against that floor) and `node_hygiene.py reap` by `bunker-server-install.sh` when `BUNKER_HOMES_DIR`/`BUNKER_KEYS_DIR` are named (CF-003) |
 | S1 qualify the host — bunker server | `bunker-server-install.sh` | **operator-invoked (optional)** | no invoker — `grep -rn 'bunker-server-install' scripts/ tests/` matches only its own docstring and `tests/selftest.sh:1754`; a test arm is not a lane/cron/timer/unit (B7: the row previously classified both units **active** on `disk_floor.py`'s caller alone) |
 | S2 create the container + config | `bunker-provision.sh`, `bunker_config_gen.py`, `node-create.sh`, `bunker-crier-connect.sh`, `deploy_key.py` | **operator-invoked** | `bunker-provision.sh` is the orchestrator (probe `:175-249`) but has **no in-repo invoker** — `grep -rn 'bunker-provision' scripts/` matches `bunker-provision.sh` itself (`:2,5,6,7,178,336,522`) and `bunker_config_gen.py` (`:2,4,337,492`, docstring/description text naming the config it generates); an operator runs it (finding 2). `deploy_key.py install` is invoked by `node-create.sh --deploy-key` inside the new agent (CF-003) |
-| S3 identity and bus membership | `node_identity.py`, `node_gateway_auth.py` | **active** | `node_gateway_auth.py` staged and run inside `bunker-provision.sh:483-495`; `node_identity.py` at `:518-533`; the standalone create path now runs it too — `node-create.sh` stages the file and `project-node.sh` layer 20 runs it before the harness adapter (CF-150), which is the gap CF-192 recorded |
+| S3 identity and bus membership | `node_identity.py`, `node_gateway_auth.py` | **active** | `node_gateway_auth.py` staged and run inside `bunker-provision.sh:516-528`; `node_identity.py` at `:551-566` — step 7, **after** the `node-create.sh` → `project-node.sh` ladder in step 6, so its keys land last; `project-node.sh` layer 20 runs `node_gateway_auth.py` only, and an earlier reading that attributed the `node_identity.py` call to that layer is corrected here (CF-289 — the source carries no such call). Both writers of `$HOME/.node/node.json` now merge instead of replace; see the S3 merge contract below |
 | S4 seed prompts/skills/env | `node_seed.py`, `node_seed_drift.py`, `node_env.py` | **active** | `node_seed.py build` at `bunker-provision.sh:454`; `node_env.py --check` at `:147` / `--apply` at `:426` |
 | S5 prove the node works | `verify-node.sh`, `node_freshness.py` | **active** | `verify-node.sh` is the certification ladder (`:20-241`, 241 lines at HEAD); `node_freshness.py` folded in at `:150-177` |
+
+**S3 identity-file contract (CF-289).** `$HOME/.node/node.json` has two writers and one shape, and
+**both merge** — neither may replace the document:
+
+- `project-node.sh` layer 90 (`:998-1113`) owns `node_id`, `project`, `repo{origin,ref,path}`,
+  `harness`, `bus.base`, `freshness`, `created_by` and `created_at`. It reads the document that is
+  already there, sets only those keys, merges `bus` one level down (a sibling key an identity writer
+  put under `bus` survives, and `bus.base` is the `CRIER_BASE`/`CRIER_URL` the create path exported
+  rather than the documented placeholder), and writes the union back atomically at mode 600 — the
+  same write discipline `node_identity.py` uses.
+- `node_identity.py` (`set_path`/`main`, `:26-107`) owns the identity keys a provisioner supplies —
+  `agent`, `namespace`, `duckbrain.namespaces[]`, `provisioned_by`, `provisioned_at` — and merges
+  them into whatever layer 90 wrote.
+
+The failure this fixes: the pre-CF-289 layer 90 dumped a fresh dict through `open(path, "w")`, so an
+`--apply` after the identity step deleted every key it did not know about and still exited 0. The
+fixture measures exactly that on the pre-fix script (exit 0, mode still 600, `agent`, `namespace`,
+`duckbrain` and `provisioned_by` gone), and the keys are consumed, not decorative:
+`node-bus-worker.py:420-431` takes the agent and the bus URL out of `node.json`. An existing document
+that is not a readable JSON object is now a named `FAIL manifest — … is not a readable JSON object
+(…); left untouched`, and the ladder does not rewrite it: it cannot tell which keys matter, so it
+refuses instead of guessing.
 
 **S4 seed state machine (B06).** `node_seed.py` is three commands:
 
@@ -203,6 +225,7 @@ Both are listed below with local ids; the state is UNVERIFIED where the wire was
 | **F2 legs (CREATED vs VERIFIED)** | `node-create.sh --project P --repo git@gitlab… --deploy-key K` then `verify-node.sh --agent A --server S` | the clone succeeds under the per-repo key, the repo's suite runs (node-dependent tests included), the cache adds 0 bytes, `VERIFY: PASS` | not run | **UNVERIFIED** — needs the real read-only deploy key and a fresh bunker node; this repo proves the mechanism, not the grant |
 | gateway auth staged before the adapter | `bash tests/selftest.sh` §55 (`project-node.sh --apply --project <p> --layers 20` in a fixture home) | `PASS gateway_auth — dashboard.basic_auth present …; password in …/.node/auth/gateway.pass (mode 600, value not printed)` and the adapter's `PASS gateway_start — /api/status -> 200`; the same adapter still refuses without the block | 2026-11-07 | **PASS** (fixture only — no live node run) |
 | verify-node transport (CF-224) | `bash tests/selftest.sh` §62 | the pre-fix `bf16c05` verifier has no `--transport` (`unknown arg`, exit 2) and certifies a loopback-only node `VERIFY: PASS`; this tree refuses the same fixture `VERIFY: UNVERIFIED`, PASSes `node-address`/`published-port`/`tunnel` runs with the transport named in the row, names a dead published port (`no published port for cf-fixture:10800`) without printing `000`, and grades `--transport bunker-exec` `VERIFY: FAIL (2)` | 2026-11-08 | **PASS** (offline fixtures only — no bunker, no network; `docs/audits/cf-224-verify-transport-2026-11-08.md`) |
+| identity-file union (CF-289) | `bash tests/selftest.sh` §47 — the `CF-289-node-json-union` arms; preconditions `bash -n scripts/project-node.sh`, `python3 -m py_compile scripts/node_identity.py` | `PASS CF-289-node-json-union — identity-then-apply leaves agent/namespace/duckbrain/provisioned_by AND the ladder's keys (mode 600, exit 0)` plus the red control `PASS pre-fix 23114f4 exits 0 while deleting agent/namespace/duckbrain/provisioned_by — this arm discriminates` | 2026-11-09 | **PASS** (offline fixture only — the identity step and the ladder both run on a fixture home; no live node run) |
 | certification ladder | `scripts/verify-node.sh --agent <id> --server <host>` on a live node | per-leg observation | not run | **UNVERIFIED** (needs a live node; legs documented in §11) |
 
 ## 8. Metrics
@@ -238,6 +261,7 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
 | Deploy key readable by group/other | `FAIL repo_key — … mode 0644 — group/other can read it (chmod 600)` and, with no clone yet, `FAIL repo_clone — not attempted — the declared deploy key is unusable (see repo_key)` | a working key (`PASS repo_key — … mode 600`) | `chmod 600` the key and re-run; `node-create.sh --deploy-key` refuses it before spawning anything |
 | Shared module cache writable or drifted | `FAIL modcache_seal — N writable path(s)` / `FAIL modcache_manifest — ±N bytes since seal` | a sealed cache (`PASS modcache_seal — … read-only (no write bits, owner included)`) | `gomodcache.py seal` on the prewarm host; a node must never write the shared cache |
 | Footprint above the floor or the working room | `FAIL footprint:room — X required (Y + 2048 MiB working room) > Z free — short S` / `FAIL footprint:floor — … exceeds the N GiB floor` | a footprint with headroom (`PASS footprint:room — … headroom …`) | reap (`node_hygiene.py reap`, `reclaim_disk.py run`) or move the node; admission refuses before the host fills |
+| `node.json` present but not a JSON object | `FAIL manifest — <path> is not a readable JSON object (…); left untouched` and `NODE: FAIL (1)` | a first run with no file at all (layer 90 writes a fresh document) | inspect or restore the file; the ladder refuses rather than replacing a document whose keys it cannot read (CF-289) |
 | Orphan homes/keys on the server | `FAIL orphans — N orphan(s) would be reaped (… live kept, … inside grace): <paths>` (check), `PASS orphans — reaped N …` (apply) | `PASS orphans — none — … live entries kept` | `bunker-server-install.sh --reap-orphans` with `BUNKER_HOMES_DIR`/`BUNKER_KEYS_DIR` named |
 
 ## 11. Limits and margins
@@ -330,6 +354,13 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
   layer 40 `repo_key` `:853-889`, `core.sshCommand` `:916-925`), `scripts/bunker-server-install.sh`
   (`:60-89`), `tests/test_node_provisioning.py`, `tests/selftest.sh` §58.
 - `docs/UNIT-MAP.yaml:26-77` (M1 S1–S5).
+- **CF-289 slice, read and re-measured 2026-11-09:** `scripts/project-node.sh` layer 90
+  (`:998-1113`, whole block), `scripts/node_identity.py` (whole file), `scripts/bunker-provision.sh`
+  (`:547-568`, the identity step and its ordering after step 6), `scripts/node-bus-worker.py`
+  (`:411-431`, the `node.json` consumers), `tests/selftest.sh` §47 (`CF-289-node-json-union` arms).
+  The pre-fix control is the same fixture run against `git show 23114f4:scripts/project-node.sh`,
+  which exits 0 and leaves `mode 600` while dropping every identity key — measured on a fixture
+  home, never on a live node.
 - Board rows: CF-192 (auth gate), CF-224 (unreachable = UNVERIFIED), CF-379 (zero-file seed),
   **CF-003** (deploy key + node runtime + shared module cache + footprint + orphan reap).
 - **Findings:**
