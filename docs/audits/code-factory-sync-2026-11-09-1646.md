@@ -1,7 +1,7 @@
 # code-factory sync lane — 2026-11-09T16:46Z
 
-Lane: `code-factory-sync-2026-11-09-16-46-28`. Tick ran from the registered checkout
-`/home/kara/code-factory`, which was clean and level with `origin/main`
+Lane: `code-factory-sync-2026-11-09-16-46-28`. Tick ran from the registered checkout,
+which was clean and level with `origin/main`
 (`cd1a3f6a5c43ef150176270e4cd394d829873f60`, `git rev-list --count origin/main..HEAD` = 0) when the
 tick opened. Board source named in every figure below is the **committed** board at `origin/main`,
 read with `board_read.py` / `git show`, not the worktree cache.
@@ -100,9 +100,8 @@ here, which is the lane's job.
 
 ## 4. Ownership / unblock
 
-`python3 scripts/ownership.py status` at tick open:
-`{"workdir":"/home/kara/code-factory","untracked":0,"lock":null,"state":"clean"}` — nothing to
-dispose, nothing to attribute.
+`python3 scripts/ownership.py status` at tick open reported `state=clean` — `untracked=0`, `lock=null`,
+workdir the registered checkout — nothing to dispose, nothing to attribute.
 
 ## 5. Memory duty — decisions this tick records
 
