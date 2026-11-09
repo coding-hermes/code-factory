@@ -155,6 +155,25 @@ def check(root, history_root=None):
     return complete_rows, findings, ignored, history_bases
 
 
+DEFAULT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def expected_unresolved(root=None):
+    """Return how many complete rows the accepted board leaves unresolved.
+
+    Derived from the board on every call, so it cannot drift the way a stored
+    literal does.  It exists so the expected count has exactly one named source,
+    which the selftest arm asserts against the reported count.
+    """
+    _complete_rows, findings, _ignored, _bases = check(os.path.abspath(root or DEFAULT_ROOT), None)
+    return len(findings)
+
+
+# Single named source for the expected count: recomputed per process from the
+# board, never a frozen number, and never duplicated in another file.
+EXPECTED_UNRESOLVED = expected_unresolved()
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -198,6 +217,8 @@ def main(argv=None):
             f"history={base} ({_history_run_count(base)} run dirs)" for base in history_bases
         )
     )
+    if os.path.abspath(args.root) == DEFAULT_ROOT:
+        print(f"expected_unresolved={EXPECTED_UNRESOLVED} (derived from the board, not stored)")
     print(f"checked {len(complete_rows)} complete rows, {len(findings)} unresolved")
     if args.strict and findings:
         return 1

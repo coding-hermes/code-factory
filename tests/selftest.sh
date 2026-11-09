@@ -7026,6 +7026,7 @@ rm -rf "$cf299"
 # additive board invariant, not a new numbered selftest section.
 cf398_out=$(python3 "$HERE/scripts/board_evidence_check.py" --quiet-findings 2>&1); cf398_rc=$?
 cf398_count=$(printf '%s\n' "$cf398_out" | tail -1)
+cf398_named=$(printf '%s\n' "$cf398_out" | sed -n 's/^expected_unresolved=\([0-9][0-9]*\) .*/\1/p')
 if printf '%s\n' "$cf398_count" | grep -Eq '^checked [0-9]+ complete rows, [0-9]+ unresolved$'; then
   cf398_unresolved=$(printf '%s\n' "$cf398_count" | sed -E 's/^checked [0-9]+ complete rows, ([0-9]+) unresolved$/\1/')
   python3 "$HERE/scripts/board_evidence_check.py" --strict --quiet-findings >/dev/null 2>&1; cf398_strict_rc=$?
@@ -7038,7 +7039,9 @@ else
 fi
 if [ "$cf398_rc" -eq 0 ] \
   && [ "$cf398_strict_rc" -eq "$cf398_expected_strict" ] \
-  && [ "$cf398_unresolved" -ge 0 ]; then
+  && [ "$cf398_unresolved" -ge 0 ] \
+  && [ -n "$cf398_named" ] \
+  && [ "$cf398_named" = "$cf398_unresolved" ]; then
   cf398_display=${cf398_count#checked }
   say "  PASS  CF-398 evidence checker reports a derived count ($cf398_display) and --strict matches it"
 else
