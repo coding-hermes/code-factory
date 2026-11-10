@@ -1,0 +1,83 @@
+ref=origin/main complete_rows=127
+verdict_artifacts_checked=0
+rows_with_resolving_evidence=0 rows_without=127
+=== UNRESOLVABLE ===
+CF-041 run=9a957be6 artifact=.gitreins/history/2026-11-03/9a957be6/verdict.json
+CF-051 run=6fb779ad artifact=.gitreins/history/2026-11-06/6fb779ad/verdict.json
+CF-058 run=9bd93bd8 artifact=.gitreins/history/2026-11-03/9bd93bd8/verdict.json
+CF-064 run=cddf1a3d artifact=.gitreins/history/2026-11-03/cddf1a3d/verdict.json
+CF-065 run=ca3e8943 artifact=.gitreins/history/2026-11-03/ca3e8943/verdict.json
+CF-071 run=eb659af6 artifact=.gitreins/history/2026-11-04/eb659af6/verdict.json
+CF-077 run=410022a2 artifact=.gitreins/history/2026-11-03/410022a2/verdict.json
+CF-082 run=e2bd149d artifact=.gitreins/history/2026-11-07/e2bd149d/verdict.json
+CF-085 run=dc095aa0 artifact=.gitreins/history/2026-11-03/dc095aa0/verdict.json
+PERF-016 run=6779be47 artifact=.gitreins/history/2026-11-04/6779be47/verdict.json
+CF-091 run=f802e520 artifact=.gitreins/history/2026-11-03/f802e520/verdict.json
+CF-092 run=85a9f4c3 artifact=.gitreins/history/2026-11-03/6c2a1542/verdict.json
+CF-093 run=b08448b0 artifact=.gitreins/history/2026-11-04/b08448b0/verdict.json
+CF-097 run=b427397d artifact=.gitreins/history/2026-11-07/b427397d/verdict.json
+CF-099 run=3c3af231 artifact=.gitreins/history/2026-11-03/3c3af231/verdict.json
+CF-119 run=c32a220c artifact=.gitreins/history/2026-11-04/c32a220c/verdict.json
+CF-126 run=dd7f64bc artifact=.gitreins/history/2026-11-04/dd7f64bc/verdict.json
+CF-127 run=54dce109 artifact=.gitreins/history/2026-11-04/54dce109/verdict.json
+CF-129 run=59a87ee8 artifact=.gitreins/history/2026-11-04/59a87ee8/verdict.json
+CF-141 run=d1db81f0 artifact=.gitreins/history/2026-11-07/d1db81f0/verdict.json
+CF-145 run=d904bdb8 artifact=.gitreins/history/2026-11-04/d904bdb8/verdict.json
+CF-151 run=5b0baa08 artifact=.gitreins/history/2026-11-04/28522447/verdict.json
+CF-153 run=a516e16f artifact=.gitreins/history/2026-11-04/a516e16f/verdict.json
+CF-155 run=69407914 artifact=.gitreins/history/2026-11-04/69407914/verdict.json
+CF-156 run=783e56f0 artifact=.gitreins/history/2026-11-04/783e56f0/verdict.json
+CF-157 run=c602b132 artifact=.gitreins/history/2026-11-04/6ccd798a/verdict.json
+CF-159 run=f5fd4864 artifact=.gitreins/history/2026-11-04/f5fd4864/verdict.json
+CF-159 run=f5fd4864 artifact=.gitreins/history/2026-11-04/f5fd4864/verdict.json
+CF-166 run=8eb22cfa artifact=.gitreins/history/2026-11-04/8eb22cfa/verdict.json
+CF-167 run=a257fbd6 artifact=.gitreins/history/2026-11-04/a257fbd6/verdict.json
+CF-169 run=d5f53908 artifact=.gitreins/history/2026-11-04/d5f53908/verdict.json
+CF-176 run=d731d2df artifact=.gitreins/history/2026-11-04/d731d2df/verdict.json
+CF-182 run=360388a9 artifact=.gitreins/history/2026-11-04/360388a9/verdict.json
+CF-183 run=a539f890 artifact=.gitreins/history/2026-11-04/a539f890/verdict.json
+CF-187 run=dc535a6c artifact=.gitreins/history/2026-11-04/dc535a6c/verdict.json
+CF-189 run=406798ca artifact=.gitreins/history/2026-11-04/406798ca/verdict.json
+CF-192 run=a43b1573 artifact=.gitreins/history/2026-11-07/a43b1573/verdict.json
+CF-197 run=c884d5d4 artifact=.gitreins/history/2026-11-04/c884d5d4/verdict.json
+CF-198 run=efce6b5c artifact=.gitreins/history/2026-11-04/efce6b5c/verdict.json
+CF-202 run=f604b444 artifact=.gitreins/history/2026-11-04/f604b444/verdict.json
+CF-218 run=9597368a artifact=.gitreins/history/2026-11-05/9597368a/verdict.json
+CF-219 run=3f14d5b8 artifact=.gitreins/history/2026-11-05/3f14d5b8/verdict.json
+CF-220 run=e6f97b34 artifact=.gitreins/history/2026-11-05/e6f97b34/verdict.json
+CF-225 run=2d2bac34 artifact=.gitreins/history/2026-11-06/2d2bac34/verdict.json
+CF-227 run=a159384e artifact=.gitreins/history/2026-11-06/a159384e/verdict.json
+CF-229 run=d6fc04a4 artifact=.gitreins/history/2026-11-06/d6fc04a4/verdict.json
+CF-230 run=86c1c325 artifact=.gitreins/history/2026-11-05/86c1c325/verdict.json
+CF-241 run=a38753a7 artifact=.gitreins/history/2026-11-06/a38753a7/verdict.json
+CF-245 run=a6e7120a artifact=.gitreins/history/2026-11-06/a6e7120a/verdict.json
+CF-250 run=bdfb4ce9 artifact=.gitreins/history/2026-11-05/bdfb4ce9/verdict.json
+CF-252 run=fe64be7c artifact=.gitreins/history/2026-11-06/fe64be7c/verdict.json
+CF-254 run=abcc38ef artifact=.gitreins/history/2026-11-05/abcc38ef/verdict.json
+CF-257 run=bd8315a0 artifact=.gitreins/history/2026-11-06/bd8315a0/verdict.json
+CF-258 run=ab62cbc9 artifact=.gitreins/history/2026-11-06/ab62cbc9/verdict.json
+CF-259 run=0ae5eef6 artifact=.gitreins/history/2026-11-07/0ae5eef6/verdict.json
+CF-270 run=ce8bbfbc artifact=.gitreins/history/2026-11-07/ce8bbfbc/verdict.json
+CF-275 run=adbcd66a artifact=.gitreins/history/2026-11-07/adbcd66a/verdict.json
+CF-277 run=3b40fb2a artifact=.gitreins/history/2026-11-06/3b40fb2a/verdict.json
+CF-278 run=155a16e7 artifact=.gitreins/history/2026-11-08/155a16e7/verdict.json
+CF-280 run=c2c24292 artifact=.gitreins/history/2026-11-06/c2c24292/verdict.json
+CF-291 run=7af789d3 artifact=.gitreins/history/2026-11-06/7af789d3/verdict.json
+CF-302 run=85a546ff artifact=.gitreins/history/2026-11-05/85a546ff/verdict.json
+CF-303 run=1c00c57d artifact=.gitreins/history/2026-11-06/1c00c57d/verdict.json
+CF-320 run=87ce8fa8 artifact=.gitreins/history/2026-11-06/87ce8fa8/verdict.json
+CF-354 run=d18975d7 artifact=.gitreins/history/2026-11-06/d18975d7/verdict.json
+CF-357 run=fe46827a artifact=.gitreins/history/2026-11-06/fe46827a/verdict.json
+CF-370 run=08b7fa1f artifact=.gitreins/history/2026-11-06/08b7fa1f/verdict.json
+CF-370 run=08b7fa1f artifact=.gitreins/history/2026-11-06/08b7fa1f/verdict.json
+CF-372 run=df7b7412 artifact=.gitreins/history/2026-11-06/df7b7412/verdict.json
+CF-374 run=8e33887b artifact=.gitreins/history/2026-11-06/8e33887b/verdict.json
+CF-378 run=e060b303 artifact=.gitreins/history/2026-11-06/e060b303/verdict.json
+QA-CODE-FACTORY-2 run=3251e0c5 artifact=.gitreins/history/2026-11-07/3251e0c5/verdict.json
+CF-379 run=3d8734a9 artifact=.gitreins/history/2026-11-07/3d8734a9/verdict.json
+CF-382 run=737c86d3 artifact=.gitreins/history/2026-11-07/737c86d3/verdict.json
+unresolvable_pointers=74
+non_verdict_records=1
+=== ORPHANED ===
+orphan_count=0
+status=UNRESOLVED

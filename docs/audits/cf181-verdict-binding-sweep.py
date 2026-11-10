@@ -37,6 +37,9 @@ complete = [row for row in rows if row.get("status") == "complete"]
 
 checked = 0
 orphans = []
+unresolved = []
+nonverdict = 0
+rows_resolving = set()
 for row in complete:
     detail = row.get("detail")
     entries = detail.get("evidence") if isinstance(detail, dict) else []
@@ -47,14 +50,22 @@ for row in complete:
                 continue
             body = git("show", "%s:%s" % (ref, path)).stdout
             if not body:
+                # Pointer names a file that does not exist at the ref. Reported, never
+                # swallowed: an unresolvable pointer is a missing artifact, not a pass.
+                unresolved.append(
+                    "%s run=%s artifact=%s" % (row["id"], entry.get("run_id"), path)
+                )
                 continue
             try:
                 rec = json.loads(body)
             except json.JSONDecodeError:
+                nonverdict += 1
                 continue
             if not isinstance(rec, dict) or "commit" not in rec or "passed" not in rec:
+                nonverdict += 1
                 continue
             checked += 1
+            rows_resolving.add(row["id"])
             commit = rec["commit"] or ""
             if (
                 not commit
@@ -73,7 +84,17 @@ for row in complete:
 
 print("ref=%s complete_rows=%d" % (ref, len(complete)))
 print("verdict_artifacts_checked=%d" % checked)
+print(
+    "rows_with_resolving_evidence=%d rows_without=%d"
+    % (len(rows_resolving), len(complete) - len(rows_resolving))
+)
+print("=== UNRESOLVABLE ===")
+for line in unresolved:
+    print(line)
+print("unresolvable_pointers=%d" % len(unresolved))
+print("non_verdict_records=%d" % nonverdict)
 print("=== ORPHANED ===")
 for line in orphans:
     print(line)
 print("orphan_count=%d" % len(orphans))
+print("status=%s" % ("UNRESOLVED" if (unresolved or checked == 0) else "CLEAN"))
