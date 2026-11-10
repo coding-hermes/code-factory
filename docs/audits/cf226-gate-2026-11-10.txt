@@ -1,0 +1,124 @@
+CF-226 — deepseek-harness (dsh) acceptance gate, re-run by the code-factory foreman
+measured_at: 2026-11-10T08:32:28-05:00
+tree: /home/kara/code-factory @ 8d9982d2bfdcd958843beb58bb999f70069a8d85 (origin/main 8d9982d2bfdcd958843beb58bb999f70069a8d85)
+host: Linux 7.0.0-38-generic x86_64, loadavg 10.85 8.74 8.79
+
+What this is: the deterministic half of CF-226 re-run on this tip. The row asks for a pinned
+installer for npm @deepseek-ai/dsh, the §5 CF_* contract with credential-value refusal, one
+real turn (or an honest SKIP), per-layer plugin diagnosis, and the two spec surfaces.
+The installer itself landed earlier — 899bfe5c (installer, per-layer ladder, measured turn)
+and b8fb9920 (--turn reaches its documented SKIP before the §5 run set).
+
+--- implementation commits (ancestors of origin/main) ---
+b8fb9920 fix(harness): dsh --turn reaches its documented SKIP before the §5 run set. Addresses CF-226.
+899bfe5c feat(harness): dsh — pinned installer, per-layer diagnosis, one measured turn. Addresses CF-226.
+
+--- AC1 pin + re-measure instrument ---
+14:#   install-dsh.sh --pin-status  live registry re-measurement of an RC pin (this pin is an RC)
+77:#       install-dsh.sh --pin-status
+108:DSH_PIN="0.2.1-rc.5"
+146:  install-dsh.sh [--check | --apply | --turn | --layers | --pin-status | --contract] [CF_* options]
+172:  --pin-status  Live registry re-measurement. This pin is an RC, so the version is re-measured from
+219:    --turn|--layers|--pin-status) MODE="$1"; shift ;;
+1038:# ---------------------------------------------------------------- --pin-status
+1063:say "  note: the pin is an RC — re-measure it with --pin-status (registry integrity + a newer-RC check)"
+
+--- AC2 §5 contract + credential-value refusal ---
+85:#   A credential is a PATH to a mode-600 file (CF_API_KEY_FILE). A VALUE in argv, or a key exported
+86:#   into the ambient environment, is refused by name. `dsh` reads the key from DEEPSEEK_API_KEY in
+104:# path, an ambient key is refused, every declared name is recorded.
+198:  * a credential VALUE in CF_API_KEY_FILE, `--api-key`, or CF_API_KEY set at all;
+199:  * DEEPSEEK_API_KEY / DSH_API_KEY exported into the ambient environment, and an ambient
+202:  * a CF_API_KEY_FILE that is missing, empty, or not mode 600;
+616:# supplied, is read from CF_API_KEY_FILE inside the child shell and exported: never argv, never
+619:  local prompt="$1" out="$2" err="$3" prof patch="" keyfile="${CFV_VALUE[CF_API_KEY_FILE]:-}"
+643:# The §5 set is validated by harness-vars.sh; this adds the one ambient name THIS harness reads.
+655:      cfv_fail "contract:ambient" \
+
+--- AC3 per-layer ladder ---
+520:        bad "layer:enabled" "plugin(s)$named DISABLED in the profile's patch layer ($(profile_dir)/cordis.patch.yml), and $required required plugin(s) did not activate; the pin names what waits on them: $(printf '%s' "$pairs" | cut -c1-220) — re-enable in the patch layer (the pinned tree itself is intact)"
+523:        bad "layer:service" "startup failed: $required required plugin(s) did not activate; the pin names the missing service(s) and the plugins waiting on them: $(printf '%s' "$pairs" | cut -c1-220) — the plugin tree composed ($(composed_entries "$tree") entries), so the gap is a service no composed bundle provides"
+532:    ok "layer:service" "plugins mounted; the boot's only refusal is the credential seam — $(sed -n 's/.*MISSING_CREDENTIAL: *//p' "$err" | head -1 | cut -c1-180)"
+537:    bad "layer:resolved" "bundle(s) did not resolve: $(unresolved_bundles "$err" | paste -sd, -) — the launcher loaded a partial plugin tree"
+542:  bad "layer:unattributed" "the boot failed and this adapter could not place the failure in a layer; first diagnostic line: ${line:-<none>} (diagnostics: $DSH_HOME/logs)"
+951:      bad "layer:package" "bundle package(s) absent from the installed tree:$missing_bundles — the launcher will SKIP them and still exit 0"
+952:      say "  ..    layer:resolved, layer:enabled, layer:service, layer:tool, layer:permission — not measured: the package layer failed (a bundle that is not installed cannot be composed, so a boot would measure a partial tree, not this harness)"
+955:      ok "layer:package" "$(pkg_identity) present; the profile's bundle package(s) resolve in the installed tree ($(profile_bundles 2>/dev/null | paste -sd, -))"
+
+--- AC4 spec surfaces name dsh ---
+13
+  ^ occurrences of dsh in specs/HARNESS-MATRIX.md
+122:| **dsh** | `scripts/harness/install-dsh.sh`; npm `@deepseek-ai/dsh` at pin `0.2.1-rc.5`, launcher `$HOME/.local/harness/dsh/bin/dsh`, non-interactive surface `dsh <profile> --json "<task>"` (measured with the `headless` profile) | **MEASURED install + one measured turn** (CF-226, 2026-11-08): registry integrity + shasum pinned before download, version read back `0.2.1-rc.5`, second `--apply` a 0.2 s no-op with a byte-identical tree, one turn wrote `dsh-turn.txt` carrying the fixed token in ~11 s and the model was read from dsh's own session record. The pin is an **RC**, so the version is re-measured from the registry by `--pin-status`, and a plugin-layer failure is reported per layer (`--layers`) instead of as one verdict. No crier adapter — see "dsh — the adapter decision" below |
+
+--- AC5 recorded adapter decision (specs/HARNESS.md:166) ---
+## dsh — the installer, the layers, and the adapter decision
+
+DeepSeek's harness is real, and `scripts/harness/install-dsh.sh` is this repo's measurement of it. Two
+things about it are not like the other adapters, and both are decisions this section records rather
+than prose that a reader has to infer.
+
+**1. It is an RC, so the pin is re-measured, not remembered.** `DSH_PIN`, `DSH_SHASUM` and
+`DSH_INTEGRITY` are three constants at the top of the installer, adopted together or not at all. One
+command re-measures them from the registry without installing anything or reading a credential:
+
+```bash
+scripts/harness/install-dsh.sh --pin-status
+#   PASS  dist_tags — latest=0.2.2-rc.1 pin=0.2.1-rc.5 (a NEWER RC exists)
+#   PASS  provenance — … registry integrity + shasum match the recorded pin …
+```
+
+A registry that serves **different bytes for the same version** is a `FAIL`, not a warning: the point
+of pinning is that a version string names one set of bytes. Adopting a newer RC is the edit
+`--pin-status` prints — the three constants together, then `--apply`, `--layers`, `--turn`, and a
+recorded measurement in this file and in the matrix's §2 row.
+
+**2. A failure is reported PER LAYER.** The pin's own startup output already knows where a plugin
+failure happened, and this adapter quotes it rather than flattening it:
+
+| Layer | What the installer measures | Fails as |
+
+--- focused gate, as run (full output) ---
+--- bash -n installer ---
+PASS bash-n
+--- test file present ---
+-rwxrwxr-x 1 kara kara 21432 Nov  8 22:38 tests/harness/dsh-install-test.sh
+--- selftest wiring grep ---
+7071:# ch:trace row=CF-226 spec=specs/HARNESS.md#the-verdict-line wave=none:serial test=tests/harness/dsh-install-test.sh doc=specs/HARNESS-MATRIX.md#5-the-variable-contract--what-an-installer-and-a-harness-are-given prompt=none:worker-brief evidence=tests/harness/dsh-install-test.sh witness=none:local-fixture verdict=none:foreman-runs-judge commit=none:self-referential-hash memory=none:foreman-closeout
+7083:out=$("${dsh_env[@]}" bash "$HERE/tests/harness/dsh-install-test.sh" 2>&1); rc=$?
+7086:  say "  PASS  tests/harness/dsh-install-test.sh is green ($(printf '%s\n' "$out" | grep -c '^  PASS') rows), with the live turn skipped by name"
+7088:  say "  FAIL  tests/harness/dsh-install-test.sh (exit $rc): $(printf '%s\n' "$out" | grep -E '^  FAIL|^DSH-INSTALL-TEST|^  SKIP' | head -4 | tr '\n' ' ')"
+7114:  && cp "$HERE/tests/harness/dsh-install-test.sh" "$dsh_prefix/tests/harness/dsh-install-test.sh"; then
+7116:  rout=$("${dsh_env[@]}" bash "$dsh_prefix/tests/harness/dsh-install-test.sh" 2>&1); rrc=$?
+--- focused test run (hermetic) ---
+3. --apply installs the pin user-space, and a second run changes nothing
+  SKIP  --apply idempotence not attempted: it installs a 618-package, 858 MB tree; set CF_DSH_TEST_APPLY=1 to run it
+
+4. a plugin-layer failure is reported PER LAYER, naming the layer
+  PASS  a disabled required plugin fails --layers (exit 1)
+  PASS  the failing layer is named: layer:enabled
+  PASS  the row names the disabled plugin (llm)
+  PASS  the row quotes the pin's own waiting table (what depends on the missing service)
+  PASS  layers after the failing one are 'not measured', not 'broken'
+  PASS  the failure is never reported as 'dsh is broken'
+  PASS  an unresolvable bundle fails --layers (exit 1)
+  PASS  the failing layer is named: layer:package
+  PASS  the row names the bundle that did not resolve
+  PASS  --check also fails on the partial tree (exit 1), rather than trusting the exit code
+  PASS  --check names the unresolved bundle from the composition's stderr
+
+5. one real turn producing a fixed token (or an honest SKIP)
+  SKIP  no DeepSeek credential on this host — missing both CF_API_KEY_FILE and DEEPSEEK_API_KEY (checked HOME=/home/kara); --turn would SKIP with exit 3
+  PASS  --turn reports SKIP with exit 3 when no credential exists (exit 3)
+  PASS  the summary says SKIP, not PASS
+  PASS  a skipped turn is never reported as PASS
+  PASS  the SKIP names the missing input
+  PASS  the run-set check does not pre-empt the credential gate (no contract:required row)
+  PASS  the skipped turn started nothing (the only launcher call was --version)
+  PASS  a credential-present --turn with no §5 run set is still refused (exit 2)
+  PASS  the refusal is contract:required, by name
+  PASS  the refusal names every missing §5 run-set variable
+  PASS  the refused turn started nothing (no profile boot)
+
+DSH-INSTALL-TEST: PASS (43 passed, 2 skipped)
+test_rc=0
+--- done ---
