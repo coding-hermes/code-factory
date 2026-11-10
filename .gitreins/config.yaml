@@ -1,3 +1,14 @@
+# ── Global defaults (overrides engine.config.GitReinsDefaults) ─────
+defaults:
+  # 131,072 is engine/config.py's floor ("safe below most provider caps") and it
+  # starved the CF-412 re-judge: run 34.3 iterations, 603,516 in / 140,123 out,
+  # "Output token budget (131k) exceeded (140k used)", 0 of 2 criteria graded,
+  # Tier 1 PASS (2026-11-10). Raised one rung per the cap-sizing rule
+  # (GITREINS_MAX_ITERATIONS did not bind — the iteration count, 34.3 of 100, was
+  # nowhere near its cap), so the output budget is the rung that has to move:
+  # 400k gives ~2.8x the measured burn. Simplifying the criteria is the wrong
+  # lever — they name the acceptance the row is graded on.
+  max_output_tokens: "400k"
 guards:
   secrets: true
   lint: true
