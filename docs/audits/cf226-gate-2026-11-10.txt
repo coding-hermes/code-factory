@@ -1,6 +1,6 @@
 CF-226 — deepseek-harness (dsh) acceptance gate, re-run by the code-factory foreman
 measured_at: 2026-11-10T08:32:28-05:00
-tree: /home/kara/code-factory @ 8d9982d2bfdcd958843beb58bb999f70069a8d85 (origin/main 8d9982d2bfdcd958843beb58bb999f70069a8d85)
+tree: . (code-factory checkout) @ 8d9982d2bfdcd958843beb58bb999f70069a8d85 (origin/main 8d9982d2bfdcd958843beb58bb999f70069a8d85)
 host: Linux 7.0.0-38-generic x86_64, loadavg 10.85 8.74 8.79
 
 What this is: the deterministic half of CF-226 re-run on this tip. The row asks for a pinned
