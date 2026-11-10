@@ -576,7 +576,7 @@ do_turn() {
   local cli=(--print --output-format json --bare --setting-sources local
              --permission-mode acceptEdits --model "${CF_MODEL:-}")
   # The pin does not implement --max-turns; do not invent a flag it will reject.
-  if "$BIN" --help 2>/dev/null | grep -q -- '--max-turns'; then
+  if "$BIN" --help 2>&1 | grep -q -- '--max-turns'; then
     cli+=(--max-turns "$MAX_TURNS")
     note "budget — --max-turns $MAX_TURNS (advertised by this pin)"
   else

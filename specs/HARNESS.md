@@ -260,6 +260,11 @@ is its proof: refusals, the digest floor for both artefacts, idempotence, the ve
 arm, the sidecar-absent arm (with the pre-fix adapter as the red control), and — when a
 credential exists — one real turn.
 
+An explicit `--generation v2` request to the opencode adapter is refused under CRIER-HARNESS-10;
+the conformance v2 check supplies that request. This is not a live v2 support claim. Capability
+probes for Claude's turn budget and Codex's exec/app-server help also read both streams; their
+fixture regression is `tests/harness/capability-stream-test.py`.
+
 Opencode's adapter measures three things it used to guess at, and `--apply` still refuses by name
 (no ladder is recorded here). It resolves the binary from the `$HOME` prefix its own installer uses
 (`~/.opencode/bin/opencode`) before `PATH`, so an owned binary that `command -v` cannot see is

@@ -104,6 +104,15 @@ operator-initiated even though the installers are unit-invoked.
 | S4 harness resolution | `harness_resolve.py` | **optional** | no production caller (`grep -rln harness_resolve scripts/` → self + tests only); F5-2 |
 | S5 variable contract | `harness/harness-vars.sh` | **active** | sourced by `install-hermes.sh`, `install-opencode.sh:15`, `install-deepseek.sh`, `install-dsh.sh`, `install-pi-agent.sh`, `install-aider.sh:21`, `install-goose.sh:22`, `install-codex.sh:47` (conditional) |
 
+<a id="M5.S2"></a>
+
+**CF-240 — opencode and capability probes.** The adapter measures its binary version and reads
+both help streams for its non-interactive surface. An explicit `--generation v2` request is
+refused by name (CRIER-HARNESS-10); the shared binary name does not certify v2. The conformance
+v2 check passes that request to the adapter. The Claude budget and Codex help probes also inspect
+both streams. `tests/harness/opencode-install-test.sh` and `tests/harness/capability-stream-test.py`
+are offline fixture evidence, not proof of an upstream installation or a live node.
+
 **S2 no longer has a silent member.** `aider` and `goose` were named in `specs/HARNESS.md` with **no
 adapter file**, which is the one state this module forbids: a harness the spec names and the
 conformance battery cannot see produces no row at all, so nothing can go red (the S4-style silence,

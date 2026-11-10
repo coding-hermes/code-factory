@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # tests/harness/opencode-install-test.sh — standalone proof for scripts/harness/install-opencode.sh.
 # ch:trace row=CF-006 spec=specs/HARNESS.md#the-contract-every-adapter test=tests/harness/opencode-install-test.sh doc=specs/HARNESS.md prompt=none:local-fixture evidence=tests/harness/opencode-install-test.sh witness=none:local-fixture verdict=none:foreman-will-run-gitreins commit=HEAD memory=none:foreman-closeout
+# ch:trace row=CF-240 spec=docs/handbook/chapters/M5-harness.md#M5.S2 wave=none:single-row test=tests/harness/opencode-install-test.sh doc=specs/HARNESS.md prompt=CF-240-brief evidence=tests/harness/opencode-install-test.sh witness=focused-test verdict=none:foreman-judge commit=none:worker-commit memory=none:foreman
+# STATUS: partial
+# TIER: T1
+# EVIDENCE: tests/harness/opencode-install-test.sh
 #
 # Offline by construction: no network, no credential, no model, no install ladder. Every arm runs
 # against a throwaway $HOME and a stub `opencode` binary that reports whatever version/surface the
@@ -305,6 +309,33 @@ if [ "$rc" = "0" ] && grep -qF "PASS  binary — $H_HOME/.opencode/bin/opencode"
   ok "H1 the \$HOME-owned binary is named by path and measured — every row PASS, 'OPENCODE: PASS', exit 0"
 else
   no "H1 a \$HOME-owned binary that is not on PATH was not measured (exit $rc)"
+fi
+
+# Explicit requests use a different seam from measuring an installed binary.
+O="$SB/v2-request.out"; rc=$(runp "$SB/v1/bin" "$SB/home" "$O" --check --generation v2)
+if [ "$rc" = 2 ] && grep -qF 'CRIER-HARNESS-10: opencode v2 request refused' "$O"; then
+  ok "I1 v2 request is refused by name"
+else
+  no "I1 v2 request was not refused by name (exit $rc)"
+fi
+O="$SB/v1-request.out"; rc=$(runp "$SB/nobin" "$H_HOME" "$O" --check --generation=v1)
+if [ "$rc" = 0 ] && grep -qF 'PASS  version — 1.18.29' "$O"; then
+  ok "I2 explicit v1 request measures the owned fixture"
+else
+  no "I2 explicit v1 request failed (exit $rc)"
+fi
+O="$SB/repeated-request.out"; rc=$(runp "$SB/v1/bin" "$SB/home" "$O" --check --generation v2 --generation v1)
+if [ "$rc" = 2 ] && grep -qF 'FAIL  generation' "$O"; then
+  ok "I3 duplicate generation requests are refused"
+else
+  no "I3 duplicate generation request was accepted (exit $rc)"
+fi
+
+O="$SB/v1-wrong-binary.out"; rc=$(runp "$SB/v2/bin" "$SB/home" "$O" --check --generation v1)
+if [ "$rc" = 1 ] && grep -qF 'FAIL  generation — requested v1 but measured v2 (2.3.1)' "$O"; then
+  ok "I4 explicit v1 rejects a measured v2 binary"
+else
+  no "I4 explicit v1 did not reject a v2 binary (exit $rc)"
 fi
 
 # ---------------------------------------------------------------------------- summary

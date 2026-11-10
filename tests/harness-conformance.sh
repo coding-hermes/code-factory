@@ -531,7 +531,11 @@ leg_check() {  # <id> <adapter file> <binary> <generation>
     emit "$id" check FAIL "scripts/harness/$file is not valid bash"
     return 0
   fi
-  out="$(bash "$path" --check 2>&1)"; rc=$?
+  if [ "$id" = opencode-v2 ]; then
+    out="$(bash "$path" --check --generation v2 2>&1)"; rc=$?
+  else
+    out="$(bash "$path" --check 2>&1)"; rc=$?
+  fi
   printf '%s\n' "$out" > "$WORK/$id.check.txt"
 
   # A PASS with no measured value is a lie regardless of the adapter's exit code.
@@ -556,7 +560,7 @@ leg_check() {  # <id> <adapter file> <binary> <generation>
         # so this row names the measured generation instead of claiming no gate exists.
         gen_row="$(adapter_row "$out" PASS generation)"
         if [ -n "$gen_row" ]; then
-          emit "$id" check FAIL "the adapter's own row says \`$gen_row\` but this harness row is the v$gen generation — a v${major:-unknown} binary cannot certify v$gen"
+          emit "$id" check FAIL "CRIER-HARNESS-10: refused v$gen request — the adapter's own row says \`$gen_row\` but the measured binary is v${major:-unknown} ($ver)"
         else
           emit "$id" check FAIL "adapter passes on $bin $ver but this harness is the v$gen generation — the adapter has no generation gate"
         fi

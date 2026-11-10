@@ -21,7 +21,8 @@ usage() {
 install-opencode.sh — the opencode adapter (UNVERIFIED install ladder).
 
 USAGE
-  install-opencode.sh [--check | --contract | --apply] [CF_* options]
+  install-opencode.sh [--check | --contract | --apply] [--generation v1|v2] [CF_* options]
+  --generation v2 is refused (CRIER-HARNESS-10); v1 is the only requested generation supported.
 
 MODES
   --check      (default) Read-only. Reports the binary and the version it measured, whether it
@@ -53,8 +54,25 @@ WHAT THIS ADAPTER DOES WITH THE SET
 OPENCODE_TAIL
 }
 
+# The shared id does not imply v2 support. Preserve the common parser for all other options.
+requested_generation=""
+args=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --generation=*) set -- --generation "${1#*=}" "${@:2}" ;;
+    --generation)
+      [ "$#" -ge 2 ] && [ -z "$requested_generation" ] || cfv_refuse "generation" "--generation requires one v1 or v2 value"
+      requested_generation="$2"; shift 2 ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+case "$requested_generation" in
+  ""|v1) ;;
+  v2) cfv_refuse "generation" "CRIER-HARNESS-10: opencode v2 request refused — no measured v2 adapter or install ladder" ;;
+  *) cfv_refuse "generation" "unsupported generation '$requested_generation'" ;;
+esac
 cfv_load_env
-cfv_parse_args "$@"
+cfv_parse_args "${args[@]}"
 [ "$CFV_HELP" -eq 0 ] || { usage; exit 0; }
 MODE="--$CFV_MODE"
 
@@ -110,7 +128,12 @@ if [ -n "$v" ]; then
   major="${v%%.*}"
   case "$major" in
     ''|*[!0-9]*) warn "generation" "no major version in '$v' — this build's generation cannot be certified" ;;
-    *) ok "generation" "v$major (measured $v)" ;;
+    *)
+      if [ "$requested_generation" = v1 ] && [ "$major" != 1 ]; then
+        bad "generation" "requested v1 but measured v$major ($v)"
+      else
+        ok "generation" "v$major (measured $v)"
+      fi ;;
   esac
 else
   warn "generation" "no measured version — the generation cannot be certified"

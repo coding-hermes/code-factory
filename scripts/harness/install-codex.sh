@@ -367,8 +367,8 @@ report_auth() {
 
 report_exec_contract() {  # report_exec_contract <binary>
   local b="$1" h missing=0
-  h=$("$b" exec --help 2>/dev/null)
-  [ -n "$h" ] || { bad "exec_contract" "codex exec --help produced nothing"; return 1; }
+  h=$("$b" exec --help 2>&1)
+  [ -n "$h" ] || { bad "exec_contract" "codex exec --help produced nothing on stdout or stderr"; return 1; }
   case "$h" in
     *--json*) ok "exec_contract" "exec --json (the adapter's thread.started event)" ;;
     *) bad "exec_contract" "exec --json missing — crier cannot read the thread id"; missing=1 ;;
@@ -426,7 +426,7 @@ install_code_mode_host() {  # install_code_mode_host <target> — digest-verifie
 
 report_app_server() {  # report_app_server <binary>
   local b="$1" h
-  h=$("$b" app-server --help 2>/dev/null)
+  h=$("$b" app-server --help 2>&1)
   case "$h" in
     *app\ server*|*app-server*)
       # CF-384: the subcommand existing is an environment FACT, not an absence — crier runs exec
