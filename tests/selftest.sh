@@ -3797,6 +3797,12 @@ fi
 rm -rf "$buswtmp"
 # ch:trace row=CF-006 spec=specs/HARNESS.md#the-contract-every-adapter test=tests/selftest.sh::harness-conformance-battery doc=docs/HARNESS-CONFORMANCE.md prompt=none:fixture evidence=tests/harness-conformance.sh witness=none:local-fixture verdict=none:self-referential-hash commit=none:self-referential-hash memory=none:unresolved-namespace
 say "45. the harness conformance battery can go red (fixture mode)"
+# CF-231: the hermetic I3 writer and the battery's unsupported runtime rows are falsifiable.
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_harness_memory.py"; then
+  say "  PASS  shared memory fixture and missing/wrong namespace refusals (CF-231)"
+else
+  say "  FAIL  shared memory fixture or namespace refusal (CF-231)"; fails=$((fails+1))
+fi
 # The battery is a checker; a checker that cannot print FAIL is decoration (AGENTS.md rule 2).
 # Every leg below runs it against a fixture adapter dir and a fixture HOME: no credential, no
 # network, no install. A green matrix is only worth the fixtures that can turn it red.

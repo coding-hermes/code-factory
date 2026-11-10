@@ -8,6 +8,8 @@
 #   vars   the §5 variable contract: --help documents the declared set, the full set is accepted,
 #          a credential VALUE and an ambient provider key are each refused by name, and no
 #          declared variable is accepted and then silently dropped (row CF-229)
+#   memory  the shared I3 record writer writes and reads back identical bytes in an explicit
+#           hermetic backend; missing/wrong namespaces fail closed (CF-231)
 #   smoke  a REAL turn in a scratch directory that must leave a file containing a
 #          token this script chose, verified by bytes on the control host. The binary
 #          is the one the adapter's own --check measured (its "PASS binary" row),
@@ -21,7 +23,8 @@
 #
 #   tests/harness-conformance.sh                     # check + vars + smoke, no installs
 #   tests/harness-conformance.sh --install           # also run each --apply in a scratch HOME
-#   tests/harness-conformance.sh --vars-only         # only the §5 variable-contract leg
+#   tests/harness-conformance.sh  --vars-only         # only the §5 variable-contract leg
+#   tests/harness-conformance.sh --memory-only      # only the hermetic I3 memory leg
 #   tests/harness-conformance.sh --write-doc         # regenerate docs/HARNESS-CONFORMANCE.md
 #   tests/harness-conformance.sh --only hermes,codex # subset by id
 #   tests/harness-conformance.sh --adapter-dir DIR   # fixture hook (tests/selftest.sh §45)
@@ -51,6 +54,7 @@ HERE="$(cd "$(dirname "$0")/.." && pwd)"
 MODE_INSTALL=0
 WRITE_DOC=0
 VARS_ONLY=0
+MEMORY_ONLY=0
 ONLY=""
 ADAPTER_DIR="$HERE/scripts/harness"
 DOC="$HERE/docs/HARNESS-CONFORMANCE.md"
@@ -69,6 +73,7 @@ while [ "$#" -gt 0 ]; do
     --install) MODE_INSTALL=1; shift ;;
     --write-doc) WRITE_DOC=1; shift ;;
     --vars-only) VARS_ONLY=1; shift ;;
+    --memory-only) MEMORY_ONLY=1; shift ;;
     --only) ONLY="${2:-}"; [ -n "$ONLY" ] || { printf 'FAIL battery: --only needs an id\n'; exit 2; }; shift 2 ;;
     --adapter-dir) ADAPTER_DIR="${2:-}"; [ -n "$ADAPTER_DIR" ] || { printf 'FAIL battery: --adapter-dir needs a path\n'; exit 2; }; shift 2 ;;
     --doc) DOC="${2:-}"; [ -n "$DOC" ] || { printf 'FAIL battery: --doc needs a path\n'; exit 2; }; shift 2 ;;
@@ -358,6 +363,67 @@ hc_run() {  # hc_run <adapter> [args...] — a scrubbed env: this battery's set 
   local adapter="$1"; shift
   env -i PATH="$PATH" HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" LANG=C \
     "${RUN_ENV[@]}" "${HC_ENV[@]}" bash "$adapter" "$@"
+}
+
+leg_memory() {  # <id> — shared I3 writer/readback against a hermetic file backend
+  local id="$1" backend out rc namespace="code-factory-qa" run_id="cf231-${id}-run"
+  local model="fixture-model-1" version="fixture-1.0.0" commit="fixture-commit" binary written_sha read_sha
+  binary="$HERE/scripts/harness/harness_memory.py"
+  if [ ! -x "$binary" ]; then
+    emit "$id" memory FAIL "shared I3 writer is absent or not executable: scripts/harness/harness_memory.py"
+    return 0
+  fi
+  backend="$WORK/memory/$id/record.json"
+  mkdir -p "$(dirname "$backend")"
+  out="$(python3 -B "$binary" write --backend "$backend" --namespace "$namespace" --expected-namespace "$namespace" \
+    --run-id "$run_id" --lane "$namespace" --harness "$id" --harness-version "$version" \
+    --model-requested "$model" --model-served "$model" --provider-binding native \
+    --commit "$commit" --tick - 2>&1)"; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    emit "$id" memory FAIL "fixture writer exited $rc — $out"
+    return 0
+  fi
+  written_sha="$(sha256sum "$backend" | cut -d' ' -f1)"
+  out="$(python3 -B "$binary" read --backend "$backend" --namespace "$namespace" --expected-namespace "$namespace" \
+    --run-id "$run_id" --lane "$namespace" --harness "$id" --harness-version "$version" \
+    --model-requested "$model" --model-served "$model" --provider-binding native \
+    --commit "$commit" --tick - 2>&1)"; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    emit "$id" memory FAIL "fixture readback exited $rc — $out"
+    return 0
+  fi
+  read_sha="$(printf '%s' "$out" | sha256sum | cut -d' ' -f1)"
+  if [ "$written_sha" != "$read_sha" ] || ! python3 -B -c '
+import json, sys
+r = json.loads(sys.argv[1])
+expected = dict(namespace=sys.argv[2], run_id=sys.argv[3], lane=sys.argv[2],
+                harness=sys.argv[4], harness_version="fixture-1.0.0",
+                model_requested="fixture-model-1", model_served="fixture-model-1",
+                provider_binding="native", commit="fixture-commit", tick="-")
+sys.exit(0 if r == expected else 1)
+' "$out" "$namespace" "$run_id" "$id"; then
+    emit "$id" memory FAIL "fixture record bytes or I3 provenance fields disagree"
+    return 0
+  fi
+  # Negative controls are part of this leg: no namespace and a wrong namespace must refuse before
+  # any backend write, rather than silently selecting a default namespace.
+  if python3 -B "$binary" write --backend "$WORK/memory/$id/missing.json" --namespace "" --expected-namespace "$namespace" \
+      --run-id "$run_id" --lane "$namespace" --harness "$id" --harness-version "$version" \
+      --model-requested "$model" --model-served "$model" --provider-binding native \
+      --commit "$commit" --tick - >/dev/null 2>&1; then
+    emit "$id" memory FAIL "missing namespace was accepted"
+    return 0
+  fi
+  if python3 -B "$binary" write --backend "$WORK/memory/$id/wrong.json" --namespace wrong-namespace --expected-namespace "$namespace" \
+      --run-id "$run_id" --lane "$namespace" --harness "$id" --harness-version "$version" \
+      --model-requested "$model" --model-served "$model" --provider-binding native \
+      --commit "$commit" --tick - >/dev/null 2>&1 \
+      || [ -e "$WORK/memory/$id/wrong.json" ] || [ -e "$WORK/memory/$id/missing.json" ]; then
+    emit "$id" memory FAIL "wrong or missing namespace was accepted or wrote a record"
+    return 0
+  fi
+  emit "$id" memory-fixture PASS "hermetic fixture wrote and read back identical canonical I3 bytes (10 fields); namespace/run_id/lane/harness/harness_version/model_requested/model_served/commit verified; missing and wrong namespace refused"
+  emit "$id" memory FAIL "UNSUPPORTED — no runtime I3 exporter or live DuckBrain readback; fixture PASS is not harness evidence"
 }
 
 leg_vars() {  # <id> <adapter file>
@@ -855,15 +921,18 @@ while IFS='|' read -r id adapter bin gen smoke measured <&3; do
   [ -n "$id" ] || continue
   selected "$id" || continue
   say "$id"
-  if [ "$VARS_ONLY" -eq 0 ]; then
-    leg_check "$id" "$adapter" "$bin" "$gen"
-    leg_apply "$id" "$adapter"
+  if [ "$MEMORY_ONLY" -eq 0 ]; then
+    if [ "$VARS_ONLY" -eq 0 ]; then
+      leg_check "$id" "$adapter" "$bin" "$gen"
+      leg_apply "$id" "$adapter"
+    fi
+    leg_vars "$id" "$adapter"
+    if [ "$VARS_ONLY" -eq 0 ] && [ "$id" = codex ]; then
+      leg_node "$id"
+    fi
+    [ "$VARS_ONLY" -eq 0 ] && leg_smoke "$id" "$bin" "$gen" "$measured"
   fi
-  leg_vars "$id" "$adapter"
-  if [ "$VARS_ONLY" -eq 0 ] && [ "$id" = codex ]; then
-    leg_node "$id"
-  fi
-  [ "$VARS_ONLY" -eq 0 ] && leg_smoke "$id" "$bin" "$gen" "$measured"
+  [ "$VARS_ONLY" -eq 0 ] && leg_memory "$id"
   say ""
 done 3< <(printf '%s\n' "$HARNESSES")
 

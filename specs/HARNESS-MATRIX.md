@@ -26,11 +26,29 @@ legitimate configurations, not mistakes — an operator may want one harness's e
 another provider's price, or a sandbox they trust around a model they do not. §2's defaults are
 defaults.
 
-**I3 — Every harness reports to the same DuckBrain namespace.** Same namespace as the project, same
-key grammar, same provenance: `run_id, lane, harness, harness_version, model_requested,
-model_served, provider_binding, commit, tick`. A harness that cannot report this is not supported,
-regardless of whether it can code. This is the requirement that makes the matrix worth having:
-seven harnesses, one memory.
+**I3 — Every supported harness reports one canonical record to the same DuckBrain namespace.** The
+record is exactly this object (all values are non-empty strings):
+
+```json
+{"commit":"<sha>","harness":"<name>","harness_version":"<version>","lane":"<lane>","model_requested":"<id>","model_served":"<id-or-unavailable:reason>","namespace":"<project-namespace>","provider_binding":"<native-or-shim/name>","run_id":"<bus-run-id>","tick":"<tick-or->"}
+```
+
+The key order above is illustrative; the canonical bytes are UTF-8 JSON with sorted keys, compact
+separators and no ASCII escaping. `scripts/harness/harness_memory.py` is the one writer and reader
+used by the conformance fixture (and is a seam for a future DuckBrain adapter). It must be given the
+project namespace explicitly, writes no default, and rejects a missing or mismatched namespace.
+The conformance `memory` leg writes the record and reads those exact bytes back. A harness that
+cannot supply every field — including a real `model_served` or an explicit
+`unavailable:<reason>` — is marked `unsupported` in this matrix and is not silently skipped.
+This is the requirement that makes the matrix worth having: seven harnesses, one memory.
+
+**Memory support today:** hermes, claude-code, codex, opencode, pi-agent, dsh,
+deepseek, opencode-v2, aider and goose are **unsupported for I3 runtime capture**:
+none of their actual run paths calls the shared writer or exports the complete provenance.
+The conformance memory leg tests a labelled hermetic fixture for each ID, not the live
+harness or DuckBrain. In particular dsh cannot distinguish `model_served` from its request.
+OMH is an operating layer over Hermes and has no independent exporter. These statuses are
+not changed by a fixture PASS; live capture, DuckBrain transport and F3 R1/R2 remain unverified.
 
 **I4 — Nothing is supported because it is installed.** Support means five green legs in the
 conformance battery (`PASS`/`SKIP`/`FAIL` with a measured value), on a real node, for a real turn.
