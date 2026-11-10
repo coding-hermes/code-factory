@@ -99,9 +99,22 @@ which requires the
 invoking line; a repo-wide grep finds no invoker for any of S5–S8 (only self-references and
 `gen_unit_map.py`'s own `NOT_CALLERS` set at `:31`). They are **operator-invoked (optional)**.
 
-**Finding F6-3.** `scripts/ownership.py` (170 lines) decides who owns the canonical checkout before
+**Finding F6-3.** `scripts/ownership.py` decides who owns the canonical checkout before
 a lane blocks on it (`status`/`claim`/`release` over `.coding-hermes/panel.lock`). No script
-invokes it; the writer/judge session runs it manually. Classification: **optional**.
+invokes it; the writer/judge session runs it manually. Classification: **optional**. Its status
+contract has four states: `clean` (no tracked or untracked paths), `held-by-live-worker` (a live
+lock covers every dirty/untracked path), `residue` (untracked-only inherited residue), and
+`unowned-changes` (tracked modifications, or untracked paths not covered by a live lock). The
+invariant is: a tree whose `git status --porcelain` is non-empty is never `clean`, including when
+the modification is staged. JSON retains `untracked` as the untracked-path count and adds `dirty`
+(the tracked-modification count) and `dirty_paths` (the first 10 relative paths); `sample` remains
+the first 10 paths for unowned changes. `clean` and `held-by-live-worker` exit 0; `residue` and
+`unowned-changes` exit 3. Re-runnable staged-change check:
+`python3 scripts/ownership.py status --workdir "$fixture"` after staging `tracked.txt` must emit
+`"dirty": 1`, `"dirty_paths": ["tracked.txt"]`, `"state": "unowned-changes"` and exit 3;
+after `git restore --staged tracked.txt && git restore tracked.txt`, it must emit
+`"dirty": 0` and `"state": "clean"` and exit 0. The board row's `chapter` value
+`III.memory.ownership` is invalid—there is no memory module; this material is owned by M6.S4.
 
 ## 4. Dependencies
 
@@ -244,7 +257,7 @@ coverage are derived by the census, not emitted.
 - Code read: `master_doc_check.py` (268 lines, read in full); `master_doc_fill.py:24-28, 390-422`;
   `gen_nasa_handbook.py:15-20, 247-262`; `master_doc_panel.py:55-80`; `panel_loop.py:33-38, 321-461`
   (main() + config); `panel_supervise.sh` (47 lines); `reap_orphan_writers.py`
-  (61 lines); `ownership.py` (170 lines, read in full).
+  (61 lines); `ownership.py` (222 lines, read in full).
 - Commands run: `python3 scripts/master_doc_check.py` (FAIL, 44/37/50); `bash scripts/verify-patch.sh`
   (PASS); `grep -rn gen_nasa_handbook scripts/` (no caller).
 - Board rows: CF-360, CF-374 (complete), CF-381.

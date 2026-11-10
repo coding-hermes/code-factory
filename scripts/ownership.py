@@ -9,12 +9,14 @@ Two failure modes this exists to prevent, both observed on code-factory:
      The fix is to stand down, not to block: real work is in flight.
 
 Usage:
-  ownership.py status [--workdir DIR]   # JSON: clean | held-by-lock | live-writer | residue
+  ownership.py status [--workdir DIR]   # JSON: clean | held-by-live-worker | residue | unowned-changes
   ownership.py claim --owner X --pid N --paths a,b [--seconds 21600]
   ownership.py release [--owner X]
 
-Exit codes: 0 clean or held-by-live-worker (proceed/stand down), 3 residue (must dispose).
+A tree whose git status --porcelain is non-empty is never "clean".
+Exit codes: 0 clean or held-by-live-worker (proceed/stand down), 3 residue or unowned-changes (must dispose).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -35,13 +37,28 @@ def git(workdir: str, *args: str) -> str:
     ).stdout
 
 
-def untracked(workdir: str) -> list[str]:
+def status_paths(workdir: str) -> tuple[list[str], list[str]]:
     out = git(workdir, "status", "--porcelain=v1", "-z")
-    paths = []
-    for rec in out.split("\x00"):
-        if rec.startswith("?? "):
-            paths.append(rec[3:])
-    return paths
+    untracked_paths = []
+    dirty_paths = []
+    fields = out.split("\x00")
+    i = 0
+    while i < len(fields):
+        rec = fields[i]
+        i += 1
+        if not rec:
+            continue
+        status = rec[:2]
+        path = rec[3:]
+        if status == "??":
+            untracked_paths.append(path)
+        else:
+            dirty_paths.append(path)
+            if any(flag in "RC" for flag in status) and i < len(fields):
+                # With -z, Git emits the current (new) path in this record and
+                # the original path as the following field; consume both.
+                i += 1
+    return untracked_paths, dirty_paths
 
 
 def pid_alive(pid: int) -> bool:
@@ -58,7 +75,12 @@ def pid_alive(pid: int) -> bool:
 
 def pid_cmdline(pid: int) -> str:
     try:
-        return Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\x00", b" ").decode(errors="replace")
+        return (
+            Path(f"/proc/{pid}/cmdline")
+            .read_bytes()
+            .replace(b"\x00", b" ")
+            .decode(errors="replace")
+        )
     except OSError:
         return ""
 
@@ -75,18 +97,27 @@ def read_lock(workdir: str) -> dict | None:
 
 def classify(workdir: str) -> dict:
     lock = read_lock(workdir)
-    paths = untracked(workdir)
-    result = {"workdir": workdir, "untracked": len(paths), "lock": lock, "state": "clean"}
+    untracked_paths, dirty_paths = status_paths(workdir)
+    paths = untracked_paths + dirty_paths
+    result = {
+        "workdir": workdir,
+        "untracked": len(untracked_paths),
+        "dirty": len(dirty_paths),
+        "dirty_paths": dirty_paths[:10],
+        "lock": lock,
+        "state": "clean",
+    }
 
     if not paths:
-        result["state"] = "clean"
         return result
 
     # 1. A live lock holder owns the paths it claimed; anything outside the claim is a
     #    separate question and must not be excused by the lock.
     if lock and pid_alive(int(lock.get("pid") or 0)):
         claimed = tuple(lock.get("paths") or ())
-        covered = [p for p in paths if claimed and any(c.rstrip("/") in p for c in claimed)]
+        covered = [
+            p for p in paths if claimed and any(c.rstrip("/") in p for c in claimed)
+        ]
         outside = [p for p in paths if p not in covered]
         if covered and not outside:
             result.update(
@@ -109,8 +140,19 @@ def classify(workdir: str) -> dict:
             "alive": pid_alive(int(lock.get("pid") or 0)),
         }
 
-    # 3. Inherited residue: nothing alive owns it, so it requires disposition.
-    residue = [p for p in paths if any(p.startswith(r) or r in p for r in RESIDUE_IGNORES)]
+    # 3. Tracked modifications are not residue: they require attribution or disposition.
+    if dirty_paths:
+        result.update(
+            state="unowned-changes",
+            sample=paths[:10],
+            action="attribute to a live session before touching; if none, commit or revert",
+        )
+        return result
+
+    # 4. Inherited residue: nothing alive owns it, so it requires disposition.
+    residue = [
+        p for p in paths if any(p.startswith(r) or r in p for r in RESIDUE_IGNORES)
+    ]
     if residue and len(residue) == len(paths):
         result.update(
             state="residue",
@@ -146,15 +188,25 @@ def main() -> int:
     if a.cmd == "claim":
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         now = time.time()
-        lock_path.write_text(json.dumps({
-            "owner": a.owner,
-            "pid": a.pid,
-            "started": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(now)),
-            "expires": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(now + a.seconds)),
-            "workdir": a.workdir,
-            "paths": [p.strip() for p in a.paths.split(",") if p.strip()],
-            "reason": "handbook writer/judge loop in flight",
-        }, indent=2) + "\n")
+        lock_path.write_text(
+            json.dumps(
+                {
+                    "owner": a.owner,
+                    "pid": a.pid,
+                    "started": time.strftime(
+                        "%Y-%m-%dT%H:%M:%S%z", time.localtime(now)
+                    ),
+                    "expires": time.strftime(
+                        "%Y-%m-%dT%H:%M:%S%z", time.localtime(now + a.seconds)
+                    ),
+                    "workdir": a.workdir,
+                    "paths": [p.strip() for p in a.paths.split(",") if p.strip()],
+                    "reason": "handbook writer/judge loop in flight",
+                },
+                indent=2,
+            )
+            + "\n"
+        )
         print(f"claimed {a.workdir} for {a.owner} pid={a.pid}")
         return 0
 

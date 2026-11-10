@@ -895,6 +895,41 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_harness_resolve.py" >/
 else
   say "  FAIL  CF-230 harness resolution contract (refusals, order, spec sync)"; fails=$((fails+1))
 fi
+
+# BEGIN ownership-staged
+# CF-406: a staged tracked modification is dirty ownership state, not a clean tree. Part of
+# section 12: no new numbered section or census change. The source override makes this arm's
+# negative control runnable against the pre-fix classifier without touching the live checkout.
+ownership_staged_py="${OWNERSHIP_PY:-$HERE/scripts/ownership.py}"
+ownership_staged_tmp=$(mktemp -d)
+git init -q "$ownership_staged_tmp/repo"
+git -C "$ownership_staged_tmp/repo" config user.email fixture@example.invalid
+git -C "$ownership_staged_tmp/repo" config user.name fixture
+printf 'base\n' > "$ownership_staged_tmp/repo/tracked.txt"
+git -C "$ownership_staged_tmp/repo" add tracked.txt
+git -C "$ownership_staged_tmp/repo" commit -qm fixture
+echo two >> "$ownership_staged_tmp/repo/tracked.txt"
+git -C "$ownership_staged_tmp/repo" add tracked.txt
+ownership_staged_json=$(python3 "$ownership_staged_py" status --workdir "$ownership_staged_tmp/repo" 2>/dev/null); ownership_staged_rc=$?
+ownership_staged_stage_ok=0
+if [ "$ownership_staged_rc" -ne 0 ] \
+  && ! printf '%s\n' "$ownership_staged_json" | grep -Fq '"state": "clean"' \
+  && printf '%s\n' "$ownership_staged_json" | grep -Fq '"tracked.txt"'; then
+  ownership_staged_stage_ok=1
+fi
+git -C "$ownership_staged_tmp/repo" restore --staged tracked.txt
+git -C "$ownership_staged_tmp/repo" restore tracked.txt
+ownership_staged_clean_json=$(python3 "$ownership_staged_py" status --workdir "$ownership_staged_tmp/repo" 2>/dev/null); ownership_staged_clean_rc=$?
+if [ "$ownership_staged_stage_ok" -eq 1 ] \
+  && [ "$ownership_staged_clean_rc" -eq 0 ] \
+  && printf '%s\n' "$ownership_staged_clean_json" | grep -Fq '"state": "clean"'; then
+  say "  PASS  CF-406 ownership status distinguishes staged tracked changes and clean state"
+else
+  say "  FAIL  CF-406 ownership status staged/clean distinction (staged rc=$ownership_staged_rc, clean rc=$ownership_staged_clean_rc)"; fails=$((fails+1))
+fi
+rm -rf "$ownership_staged_tmp"
+# END ownership-staged
+
 say "13. node provisioning names its resolved floor and refuses below it"
 tmpd=$(mktemp -d)
 out=$(env HOME="$tmpd/home" NODE_DISK_FLOOR=999999 /bin/bash "$HERE/scripts/project-node.sh" --check --project fixture 2>&1); rc=$?
