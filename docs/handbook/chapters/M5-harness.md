@@ -99,10 +99,10 @@ operator-initiated even though the installers are unit-invoked.
 | Submodule | Unit | Classification | Evidence (invoking line) |
 |---|---|---|---|
 | S1 hermes | `install-hermes.sh` | **active (unit-invoked)** | invoked by `project-node.sh:498` (computed `install-$HARNESS.sh`) / `:508-510` (`--apply`/`--check`), and staged by `node-create.sh:29`; `project-node.sh` is itself operator-invoked (the provisioning entry, no cron/scheduler invokes it) — F5-5 |
-| S2 foreign harnesses | `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-pi-agent.sh`, `install-aider.sh`, `install-goose.sh` | **active (unit-invoked)** | same computed dispatch `project-node.sh:498,508-510`; `install-claude-code.sh:36` sources `lib.sh`, the other six source `harness-vars.sh` |
+| S2 foreign harnesses | `install-codex.sh`, `install-claude-code.sh`, `install-opencode.sh`, `install-deepseek.sh`, `install-dsh.sh`, `install-pi-agent.sh`, `install-aider.sh`, `install-goose.sh` | **active (unit-invoked)** | same computed dispatch `project-node.sh:498,508-510`; `install-claude-code.sh:36` sources `lib.sh`, the other seven source `harness-vars.sh` |
 | S3 toolchain/gate/node | `install-go.sh`, **`install-node.sh`**, **`gomodcache.py`**, `install-gitreins.sh`, `project-node.sh` | **active (unit-invoked)** | gate pin at `install-gitreins.sh:19`; `project-node.sh` is the one provisioning entry that invokes other units (`project-node.sh:173` disk_floor, `project-node.sh:212` reclaim, `install-go.sh --apply` in the `go` kind branch, `install-node.sh --apply` in the `node` kind branch `:396-414`, `gomodcache.py check` in the `go:modcache` row `:488-505`, the harness adapter `:498/:508-510`, and the CF-150 `gateway_auth` staging block at `:448-497`) |
 | S4 harness resolution | `harness_resolve.py` | **optional** | no production caller (`grep -rln harness_resolve scripts/` → self + tests only); F5-2 |
-| S5 variable contract | `harness/harness-vars.sh` | **active** | sourced by `install-hermes.sh`, `install-opencode.sh:15`, `install-deepseek.sh`, `install-pi-agent.sh`, `install-aider.sh:21`, `install-goose.sh:22`, `install-codex.sh:47` (conditional) |
+| S5 variable contract | `harness/harness-vars.sh` | **active** | sourced by `install-hermes.sh`, `install-opencode.sh:15`, `install-deepseek.sh`, `install-dsh.sh`, `install-pi-agent.sh`, `install-aider.sh:21`, `install-goose.sh:22`, `install-codex.sh:47` (conditional) |
 
 **S2 no longer has a silent member.** `aider` and `goose` were named in `specs/HARNESS.md` with **no
 adapter file**, which is the one state this module forbids: a harness the spec names and the
@@ -115,6 +115,19 @@ refuse `--apply` **by name** until someone measures a ladder and records it in `
 has a pin, an artefact digest or a measured non-interactive surface, so their conformance `smoke`
 column stays `0` and the battery prints a `SKIP` naming what is missing rather than a green row.
 
+**CF-226 — dsh is a real S2 member, not the `deepseek` binary row.** `install-dsh.sh` measures
+npm `@deepseek-ai/dsh` / CLI `dsh` at the exact RC `0.2.1-rc.5`, under the user-space prefix
+`$HOME/.local/harness/dsh`. Its `--check` is read-only, `--apply` verifies registry integrity and
+shasum before download, reads `dsh --version` back, and is idempotent; `--pin-status` re-measures
+the RC's registry bytes and names a newer RC before adoption. The adapter accepts the shared §5
+CF_* contract, refuses credential values and ambient keys, and reports plugin failures by layer
+(package → resolved → enabled → service → tool → permission). A real turn is required to claim
+artifact/model evidence; without a credential the adapter prints an explicit `SKIP`/exit 3, never a
+simulated PASS. dsh has no crier adapter: the written decision is to defer one, so the node's own
+worker is the only current driver and the memory leg remains unwritten. The separate
+`install-deepseek.sh` row still probes a binary named `deepseek` and may refuse its unmeasured
+`--apply`; it must not be read as saying that dsh does not exist.
+
 **Finding F5-4.** OUTLINE v2 lists M5 as 5 submodules (S1–S5); `docs/UNIT-MAP.yaml` lists 3
 (S1–S3). The two structure maps still disagree; the 5-submodule reading is authoritative here.
 
@@ -125,7 +138,7 @@ column stays `0` and the battery prints a `SKIP` naming what is missing rather t
 | Dependency | Version constraint | Where | How absence is detected |
 |---|---|---|---|
 | python3 | hermes adapter requires **>=3.11,<3.14** (`install-hermes.sh:27-30`, `:108-115`); host python3 is 3.14.9, which the adapter **refuses** | node | `bad "python" "… requires python >=3.11,<3.14; found …"` (`:112`) |
-| pinned harness version | per-installer exact pin (`HERMES_PIN=0.19.0`, `GITREINS_PIN=0.17.1`, `CF_CODEX_PIN=0.166.0`, `CLAUDE_CODE_PIN=2.1.318`) | node venv | installed version read back vs pin |
+| pinned harness version | per-installer exact pin (`HERMES_PIN=0.19.0`, `GITREINS_PIN=0.17.1`, `CF_CODEX_PIN=0.166.0`, `CLAUDE_CODE_PIN=2.1.318`, `DSH_PIN=0.2.1-rc.5`) | node venv or npm prefix | installed version read back vs pin; dsh's RC bytes are re-measured with `install-dsh.sh --pin-status` before promotion |
 | go toolchain | pinned | `install-go.sh` digest-checked | digest mismatch → refuse |
 | Node (claude-code) | **>= 22** (`install-claude-code.sh:43` `NODE_MIN_MAJOR=22`) | node | the pin's `engines` requirement |
 | Node runtime (kind `node`, CF-003) | **exactly `v22.22.3`** (`install-node.sh` `NODE_PIN`), digest-pinned per arch (`linux-x64` `2e5d1356…`, `linux-arm64` `1c4a9933…`) | node, `$HOME/node-toolchain/<pin>` | `sha256sum` mismatch → `FAIL node_dist`, nothing extracted; a binary whose `--version` is not the pin → `FAIL node` naming what it printed |
@@ -304,7 +317,7 @@ and conformance pass rate are answerable only by reading the leg rows.
 | Interpreter out of range | `hermes-agent … requires python >=3.11,<3.14` | a python absence | install a 3.11–3.13 interpreter |
 | Node runtime absent or wrong | `FAIL tool:node — missing — kind node needs a Node runtime …` (check) / `FAIL node — <path> reports 'vX' — want v22.22.3` (a lying binary) | a graded pass `PASS tool:node — $HOME/node-toolchain/current/bin/node (v22.22.3)` | `project-node.sh --apply` runs `install-node.sh`, which refuses a digest mismatch instead of extracting; `install-node.sh --check --root <r>` answers the scoped question |
 | Shared cache writable or grown | `FAIL modcache_seal — … writable path(s)` / `FAIL modcache_manifest — ±N bytes since seal` | `PASS modcache_seal — … read-only (no write bits, owner included)` | `gomodcache.py seal` on the prewarm host; a node never needs write access to a cache it does not own |
-| Unsupported adapter claims support | `install-deepseek.sh`/`install-pi-agent.sh` refuse `--apply` with "no measured install ladder" | a certified adapter | treat them as check-only until a ladder is measured (F5-3) |
+| Unsupported adapter claims support | `install-deepseek.sh`/`install-pi-agent.sh` refuse `--apply` with "no measured install ladder" | a certified adapter | treat them as check-only until a ladder is measured (F5-3); this does not apply to the separate measured `dsh` package adapter |
 | Worker seat not in registry | `deepseek-v4-flash@deepseek-foreman` absent | a valid seat | **OPEN** — CF-376 |
 
 ## 11. Limits and margins
@@ -325,7 +338,11 @@ and conformance pass rate are answerable only by reading the leg rows.
   - `install-opencode.sh` — **UNVERIFIED**, `--apply` refused (`:92-93`); sources
     `harness-vars.sh` (`:15`).
   - `install-deepseek.sh` — **`--apply` refused** (`:95-97`): "no measured deepseek install ladder";
-    sources `harness-vars.sh`.
+    sources `harness-vars.sh`; this is the binary named `deepseek`, not DeepSeek's `dsh` harness.
+  - `install-dsh.sh` — **measured RC ladder** (`DSH_PIN=0.2.1-rc.5`): npm integrity + shasum
+    provenance, user-space prefix, `dsh --version` readback, idempotent apply, and per-layer
+    diagnosis; `--pin-status` is the required RC re-measurement. Its crier adapter is explicitly
+    deferred, so only the node worker drives it today.
   - `install-pi-agent.sh` — **`--apply` refused** (`:107-109`): "no measured pi install ladder";
     sources `harness-vars.sh`.
   - `install-aider.sh` — **`--apply` refused** (`:103-106`): the aider ladder is unmeasured, and the
