@@ -1,0 +1,19 @@
+ch:trace row=CF-410 spec=docs/handbook/chapters/M5-harness.md#foreign-harness-adapters wave=none:serial-sync test=tests/harness-conformance.sh::write-doc doc=docs/HARNESS-CONFORMANCE.md evidence=docs/audits/cf-410-harness-conformance-regeneration.txt witness=none:unattended-local-fixture verdict=none:pending-foreman-judge commit=none:pending-commit memory=none:pending-sync
+
+CF-410 regeneration comparison
+
+Base tree: cd8601f9bcb6aca2176b6790f77549f98eb1422a
+Command: tests/harness-conformance.sh --write-doc
+Environment: HERMES_PYTHON_BIN=unset; HC_TIMEOUT=300; HC_APPLY_TIMEOUT=600; HC_CODEX_MODEL=gpt-6-luna; no live credentials supplied
+Command result: exit 1; HARNESS CONFORMANCE: FAIL (15)
+
+Generated document changes versus the stale committed document:
+- Header changed from 2026-11-06 / commit 75f41a6 + uncommitted changes to the measured commit cd8601f9.
+- Matrix grew from 6 rows to 10 rows. Added current rows: dsh, aider, goose; deepseek remains a distinct binary row.
+- The dsh row is measured PASS for check (0.2.1-rc.5), PASS for vars, SKIP for apply (not requested), and SKIP for smoke because HC_DSH_KEY_FILE (mode 600) or DEEPSEEK_API_KEY was absent.
+- Added memory-fixture and memory rows are emitted by the current battery for each harness. The fixture rows PASS; runtime memory rows FAIL as unsupported because no runtime I3 exporter or live DuckBrain readback was measured.
+- Codex includes the current offline node fixture PASS and live-node UNVERIFIED/SKIP rows.
+- Smoke tokens and measured binary paths changed because the battery generated a fresh run; these are retained as measured output.
+- The prior opencode non_interactive finding is absent from the regenerated findings because the current run did not emit it.
+
+Credential boundary: no credential values were read or supplied. The dsh smoke leg explicitly records the missing credential path.
