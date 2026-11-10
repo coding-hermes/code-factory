@@ -41,7 +41,7 @@
      [docs/OPERATIONS.md:48]. The shipped code now treats the host inbox route as the explicit
      acceptance probe: an unsigned 200 yields `CRIER: CONNECTED`, while the optional node-side
      signed probe is reported separately as `PASS  signed_read` [scripts/bunker-crier-connect.sh:46-71]
-     [scripts/bunker-crier-connect.sh:98-116]. An inbox 401 is a `FAIL` row naming the refused
+     [scripts/bunker-crier-connect.sh:51-57]. An inbox 401 is a `FAIL` row naming the refused
      authentication or agent signature.
   3. The health row labels *every* non-200 "(bus not answering)"
      [scripts/bunker-crier-connect.sh:43], so a bus that answers `404` on `/health` is described as
@@ -89,9 +89,9 @@
 | `. "$HERE/lib.sh"` | `scripts/lib.sh`, sourced with the script's own directory as `HERE` [scripts/bunker-crier-connect.sh:20-21] | defines `say`, `ok`, `bad`, `warn`, `have` [scripts/lib.sh:5-9] [scripts/lib.sh:41-45] | every row vanishes or errors; the script has no local fallback definitions [scripts/bunker-crier-connect.sh:21] |
 | `bad()` increments `FAILED` | `scripts/lib.sh:7` | each failure both prints `  FAIL …` and bumps the counter the verdict reads [scripts/bunker-crier-connect.sh:61] [scripts/bunker-crier-connect.sh:94] | if `bad` stopped counting, FAIL rows would print and the verdict would fall through to `SIGNED_READ`, i.e. a visibly failed run could still print `CONNECTED` |
 | `FAILED=${FAILED:-0}` | `scripts/lib.sh:11` | the variable exists before the first arithmetic test [scripts/bunker-crier-connect.sh:61] | with `set -u` in force [scripts/bunker-crier-connect.sh:19], an undefined `FAILED` aborts the run at the first `[ "$FAILED" … ]` instead of printing a verdict |
-| `ok`/`warn` never touch `FAILED`, `bad` does | `scripts/lib.sh:6` [scripts/lib.sh:8] [scripts/lib.sh:7] | the optional `PASS  signed_read` row is reported without changing the verdict [scripts/bunker-crier-connect.sh:68-70], while an inbox `401` goes through `bad "inbox" …` and therefore is a `FAIL` that condemns the run [scripts/bunker-crier-connect.sh:57] | if `ok` counted, every successful signed probe would red a healthy run; if `bad` stopped counting, the 401 would read as `CONNECTED`, since the 401/unsigned-200 distinction is carried by `bad` versus `ok` and not by row text |
+| `ok`/`warn` never touch `FAILED`, `bad` does | `scripts/lib.sh:6` [scripts/lib.sh:8] [scripts/lib.sh:7] | the optional `PASS  signed_read` row is reported without changing the verdict [scripts/bunker-crier-connect.sh:68-70], while an inbox `401` goes through `bad "inbox" …` and therefore is a `FAIL` that condemns the run [scripts/bunker-crier-connect.sh:53] | if `ok` counted, every successful signed probe would red a healthy run; if `bad` stopped counting, the 401 would read as `CONNECTED`, since the 401/unsigned-200 distinction is carried by `bad` versus `ok` and not by row text |
 | `have()` shape | `scripts/lib.sh:41-45` | **present: exit 0 and the resolved path on stdout; absent: non-zero and nothing on stdout** — absence is reported by STATUS as well as by empty output, since CF-281; it is used both as a command substitution [scripts/bunker-crier-connect.sh:86] [scripts/bunker-crier-connect.sh:119] and as a status test [scripts/bunker-crier-connect.sh:86] | a `have` that printed a message on absence would be executed as a command path in `"$b" cp` [scripts/bunker-crier-connect.sh:124]; the status half is what makes the `no bunker client on PATH` row reachable, which is the branch the pre-fix version could never take |
-| `bunker exec --server S AGENT -- bash -lc '<text>'` argv shape | established by `bunker_exec` [scripts/lib.sh:62-65]; this script builds the same shape inline rather than calling it [scripts/bunker-crier-connect.sh:52-53] [scripts/bunker-crier-connect.sh:80] | the client splits `--server`, agent, `--`, command | both call sites break together; this script would not inherit a fix made inside `bunker_exec` |
+| `bunker exec --server S AGENT -- bash -lc '<text>'` argv shape | established by `bunker_exec` [scripts/lib.sh:62-65]; this script builds the same shape inline rather than calling it [scripts/bunker-crier-connect.sh:85] | the client splits `--server`, agent, `--`, command | both call sites break together; this script would not inherit a fix made inside `bunker_exec` |
 
 ### 2c. Service contracts (both sides must be named)
 
@@ -132,15 +132,15 @@ the quoted `PASS  signed_read` row when the fixture emits one, and runs a scratc
 ## 4. Metrics emitted
 
 - **None.** The script opens no counter, histogram, exporter or timing instrument; it prints rows
-  and exits [scripts/bunker-crier-connect.sh:94-104] [scripts/bunker-crier-connect.sh:155-157].
+  and exits [scripts/bunker-crier-connect.sh:94-104] [scripts/bunker-crier-connect.sh:154-169].
   There is no dispatch-rate, attempt-count or latency series to scrape, and nothing persists a
   run's outcome except the identity file's own timestamp
-  [scripts/bunker-crier-connect.sh:113] [scripts/bunker-crier-connect.sh:130].
+  [scripts/bunker-crier-connect.sh:111-113] [scripts/bunker-crier-connect.sh:142].
 - What exists instead is a process-level verdict on the exit code: `0` connected
   [scripts/bunker-crier-connect.sh:104], `1` not connected — returned both by the
   `via_node` branch [scripts/bunker-crier-connect.sh:61-65] and by the final `[ "$FAILED" -eq 0 ]`
   [scripts/bunker-crier-connect.sh:104], `2` usage/argument refusal
-  [scripts/bunker-crier-connect.sh:25] [scripts/bunker-crier-connect.sh:155-156], `3` unverified
+  [scripts/bunker-crier-connect.sh:25] [scripts/bunker-crier-connect.sh:163] [scripts/bunker-crier-connect.sh:168], `3` unverified
   [scripts/bunker-crier-connect.sh:102]. The `FAIL` count is also printed once as
   `CRIER: NOT CONNECTED ($FAILED)` [scripts/bunker-crier-connect.sh:63]
   [scripts/bunker-crier-connect.sh:95] — the only aggregate the script ever reports, and it dies
@@ -203,8 +203,8 @@ values are the script's own variables, never invented here):
 - `  FAIL  identity — could not stage $HOME/.node/crier.json` and
   `  FAIL  identity — could not write $HOME/.node/crier.json` — evidentiary [scripts/bunker-crier-connect.sh:130] [scripts/bunker-crier-connect.sh:147].
 - `crier-connect --apply — agent=$AGENT url=$URL` — descriptive [scripts/bunker-crier-connect.sh:125].
-- `unknown argument: $1` — descriptive [scripts/bunker-crier-connect.sh:151].
-- `--server is required (the agent's bunker host)` — descriptive [scripts/bunker-crier-connect.sh:156].
+- `unknown argument: $1` — descriptive [scripts/bunker-crier-connect.sh:163].
+- `--server is required (the agent's bunker host)` — descriptive [scripts/bunker-crier-connect.sh:168].
 
 There is no logger, level, destination or retention policy: every line goes to stdout/stderr of
 the invoking shell and nothing is retained [scripts/bunker-crier-connect.sh:94-104].
@@ -236,7 +236,7 @@ continues on a weaker path, **open** = the run lets a weaker fact stand.
 ## 7. Environment and settings it reads
 
 - No *setting* arrives through a dedicated variable: every setting is a flag on the command line
-  [scripts/bunker-crier-connect.sh:142-153]. Three ambient variables still change what the script
+  [scripts/bunker-crier-connect.sh:154-165]. Three ambient variables still change what the script
   does — `PATH`, because every tool it needs is found by command lookup
   [scripts/bunker-crier-connect.sh:51] [scripts/bunker-crier-connect.sh:84]; the control host's
   `HOME`, expanded unescaped in the `UNVERIFIED` remedy text
@@ -245,22 +245,22 @@ continues on a weaker path, **open** = the run lets a weaker fact stand.
   The one variable the script *sets* is `CRIER_URL`, exported into the node-side worker invocation
   so the signed probe measures the same bus [scripts/bunker-crier-connect.sh:53]. Inside that
   remote shell `$HOME` is the *node's* home and resolves the node's `.node/` paths
-  [scripts/bunker-crier-connect.sh:53] [scripts/bunker-crier-connect.sh:80] — a different variable
+  [scripts/bunker-crier-connect.sh:85] — a different variable
   from the control host's `HOME` on line 100.
 
 | Setting | Default | Effect if absent |
 |---|---|---|
 | `--agent` | none [scripts/bunker-crier-connect.sh:23] | `FAIL  agent — AGENT unset` and exit 1 in `--check` [scripts/bunker-crier-connect.sh:36]; `stage`/`apply` build the identity from the empty string anyway [scripts/bunker-crier-connect.sh:112-114] |
 | `--server` | none [scripts/bunker-crier-connect.sh:23] | `--server is required (the agent's bunker host)`, exit 2, before any mode runs [scripts/bunker-crier-connect.sh:156] |
-| `--url` (alias `--crier-url`) | none [scripts/bunker-crier-connect.sh:146] | `FAIL  url — URL unset` and exit 1 [scripts/bunker-crier-connect.sh:37]; the signed probe is also skipped without it [scripts/bunker-crier-connect.sh:51-53] |
+| `--url` (alias `--crier-url`) | none [scripts/bunker-crier-connect.sh:158] | `FAIL  url — URL unset` and exit 1 [scripts/bunker-crier-connect.sh:37]; the signed probe is also skipped without it [scripts/bunker-crier-connect.sh:60-67] |
 | `--project` | `$AGENT` at write time, `${PROJECT:-$AGENT}` [scripts/bunker-crier-connect.sh:159] [scripts/bunker-crier-connect.sh:125] | the identity carries the agent name as the project |
-| `--timeout` | `10` seconds [scripts/bunker-crier-connect.sh:23] [scripts/bunker-crier-connect.sh:148] | applies to both `curl` calls as `-m` [scripts/bunker-crier-connect.sh:29] [scripts/bunker-crier-connect.sh:40]; the node-side `bunker exec` has its own hard-coded 45 s [scripts/bunker-crier-connect.sh:52] [scripts/bunker-crier-connect.sh:80] |
-| `--check` / `--apply` / `--stage` | none [scripts/bunker-crier-connect.sh:149] | usage text, exit 2 [scripts/bunker-crier-connect.sh:155] |
-| `-h` / `--help` | — | prints usage and exits 0 [scripts/bunker-crier-connect.sh:150] [scripts/bunker-crier-connect.sh:25] |
-| file mode of the identity | `600`, applied by a remote `chmod` after the copy [scripts/bunker-crier-connect.sh:125] [scripts/bunker-crier-connect.sh:142] | a `chmod` failure fails the whole write because it is chained with `&&` [scripts/bunker-crier-connect.sh:124-125] |
+| `--timeout` | `10` seconds [scripts/bunker-crier-connect.sh:23] [scripts/bunker-crier-connect.sh:160] | applies to both `curl` calls as `-m` [scripts/bunker-crier-connect.sh:29] [scripts/bunker-crier-connect.sh:40]; the node-side `bunker exec` has its own hard-coded 45 s [scripts/bunker-crier-connect.sh:85] |
+| `--check` / `--apply` / `--stage` | none [scripts/bunker-crier-connect.sh:161] | usage text, exit 2 [scripts/bunker-crier-connect.sh:167] |
+| `-h` / `--help` | — | prints usage and exits 0 [scripts/bunker-crier-connect.sh:162] [scripts/bunker-crier-connect.sh:25] |
+| file mode of the identity | `600`, applied by a remote `chmod` after the copy [scripts/bunker-crier-connect.sh:127] [scripts/bunker-crier-connect.sh:144] | a `chmod` failure fails the whole write because it is chained with `&&` [scripts/bunker-crier-connect.sh:126-127] |
 | `HOME` (control host) | inherited from the invoking shell; never assigned by the script [scripts/bunker-crier-connect.sh:112] | read only in the `UNVERIFIED` remedy text, unescaped, so it prints the control host's home directory [scripts/bunker-crier-connect.sh:112]. **Unset, `set -u` [scripts/bunker-crier-connect.sh:19] aborts there**: after the first `CRIER: UNVERIFIED …` line and before either remedy line, bash prints `line 112: HOME: unbound variable` and the run exits **1** instead of 3 — the operator loses both remedy lines and the exit code that means "unverified" (measured, §8 probe C). The `CONNECTED` [scripts/bunker-crier-connect.sh:104] and `NOT CONNECTED` [scripts/bunker-crier-connect.sh:95] verdicts never expand it, so a signed success is unaffected (measured: exit 0) |
 | `PATH` | inherited; the script writes no default | the only lookup path for `bunker` (`command -v` gate [scripts/bunker-crier-connect.sh:51], `have bunker` [scripts/bunker-crier-connect.sh:84] [scripts/bunker-crier-connect.sh:109]) and for `curl`, `timeout`, `python3`, `mktemp`, `chmod`, `date`, `sed` [scripts/bunker-crier-connect.sh:29] [scripts/bunker-crier-connect.sh:52] [scripts/bunker-crier-connect.sh:111] [scripts/bunker-crier-connect.sh:113]. With no `bunker` on `PATH`, `--check` skips the signed probe [scripts/bunker-crier-connect.sh:51] and names the client: `have()` exits non-zero on absence [scripts/lib.sh:41-45], so the identity step prints `FAIL  identity — no bunker client on PATH — $HOME/.node/crier.json cannot be read from the node` [scripts/bunker-crier-connect.sh:86-98] and the run still reaches its `CRIER: NOT CONNECTED (n)` verdict, exit 1 (before CF-281 the absence surfaced as `FAIL  identity — $HOME/.node/crier.json absent — run --apply`, with no client named). `--apply`/`--stage` name it too (`FAIL  bunker_cli — no bunker client on PATH`), exit 1 [scripts/bunker-crier-connect.sh:120] [scripts/bunker-crier-connect.sh:137]. No `curl` collapses both HTTP codes to `000` [scripts/bunker-crier-connect.sh:29-31]; no `timeout` silently forces the unsigned fallback [scripts/bunker-crier-connect.sh:52-55] (measured, §8 probe C) |
-| `FAILED` | `0`, from the library's `${FAILED:-0}` [scripts/lib.sh:11] | the default applies only when the variable is unset or empty, so an exported `FAILED=1` is kept and both verdict tests compare against it [scripts/bunker-crier-connect.sh:61] [scripts/bunker-crier-connect.sh:94]: an all-PASS signed run then prints `CRIER: NOT CONNECTED (1)` and exits 1 (measured, §8 probe C) |
+| `FAILED` | `0`, from the library's `${FAILED:-0}` [scripts/lib.sh:11] | the default applies only when the variable is unset or empty, so an exported `FAILED=1` is kept and both verdict tests compare against it [scripts/bunker-crier-connect.sh:74] [scripts/bunker-crier-connect.sh:116]: an all-PASS signed run then prints `CRIER: NOT CONNECTED (1)` and exits 1 (measured, §8 probe C) |
 
 ## 8. Evidence of record
 
