@@ -623,6 +623,11 @@ if in_scope 20; then
     rc=$?
     adapter_fails="$(grep -c '^  FAIL' "$adapter_log")" || true
     cat "$adapter_log"
+    # CF-066: a crashing or otherwise silent adapter must fail the node even when it printed no
+    # FAIL row. Use bad() for the parent-side row so the summary counts exactly the rows printed.
+    if [ "$rc" -ne 0 ] && [ "$adapter_fails" -eq 0 ]; then
+      bad "harness:$HARNESS" "installer exited $rc"
+    fi
     # CF-006: keep the adapter's measurement before the log is removed. `version` is the row that
     # says which build is on the node; `binary` says where it is. An adapter that measured neither
     # leaves these empty and node.json records the absence and its reason instead of the pin.

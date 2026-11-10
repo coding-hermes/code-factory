@@ -939,24 +939,47 @@ fail_rows=$(printf '%s\n' "$out" | grep -c '^  FAIL')
 summary=$(printf '%s\n' "$out" | grep -oE '^NODE: FAIL \([0-9]+\)$' | grep -oE '[0-9]+')
 if [ "$rc" -ne 0 ] && [ -n "$summary" ] && [ "$summary" = "$fail_rows" ] && [ "$fail_rows" -ge 2 ] \
   && printf '%s\n' "$out" | grep -Fq '  FAIL  harness:fixture/a — simulated adapter failure one'; then
-  say "  PASS  adapter FAIL rows counted: $fail_rows rows -> NODE: FAIL ($summary)"
+  say "  PASS  AC2 no double counting: $fail_rows printed FAIL rows -> NODE: FAIL ($summary)"
 else
-  say "  FAIL  summary said $summary but the run printed $fail_rows FAIL rows"; fails=$((fails+1))
+  say "  FAIL  AC2 summary said $summary but the run printed $fail_rows FAIL rows"; fails=$((fails+1))
+fi
+# A silent nonzero adapter must create one parent-side FAIL row and no manifest. This is the
+# CF-066 control for an adapter crash, missing binary or set -e abort without its own row.
+cat > "$tmpd/scripts/harness/install-fixture.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+chmod +x "$tmpd/scripts/harness/install-fixture.sh"
+out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_PROJECT=fixture \
+  NODE_HARNESS=fixture CRIER_URL=http://fixture.invalid:8767 NODE_DISK_FLOOR=1 \
+  /bin/bash "$tmpd/scripts/project-node.sh" --check --layers 20 2>&1); rc=$?
+silent_summary=$(printf '%s\n' "$out" | grep -oE '^NODE: FAIL \([0-9]+\)$' | grep -oE '[0-9]+')
+silent_manifest=0
+[ -e "$tmpd/home/.node/node.json" ] && silent_manifest=1
+if [ "$rc" -ne 0 ] && [ "$silent_summary" = 1 ] && [ "$silent_manifest" -eq 0 ] \
+  && printf '%s\n' "$out" | grep -Fq '  FAIL  harness:fixture — installer exited 1'; then
+  say "  PASS  AC1 silent adapter fails closed: parent row names exit 1, NODE: FAIL (1), no manifest"
+else
+  say "  FAIL  AC1 silent adapter did not fail closed (rc $rc, summary $silent_summary, manifest $silent_manifest)"; fails=$((fails+1))
 fi
 # the same fixture goes green: a passing adapter must keep NODE: PASS and exit 0
-sed -e 's/^bad /ok /' -e 's/failure one/pass one/' -e 's/failure two/pass two/' \
-  -e 's/^exit 1$/exit 0/' "$tmpd/scripts/harness/install-fixture.sh" \
-  > "$tmpd/scripts/harness/install-fixture.sh.new"
-mv "$tmpd/scripts/harness/install-fixture.sh.new" "$tmpd/scripts/harness/install-fixture.sh"
+cat > "$tmpd/scripts/harness/install-fixture.sh" <<'EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$HERE/../lib.sh"
+say "harness: fixture (cf-066)"
+exit 0
+EOF
 chmod +x "$tmpd/scripts/harness/install-fixture.sh"
 out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_PROJECT=fixture \
   NODE_HARNESS=fixture CRIER_URL=http://fixture.invalid:8767 NODE_DISK_FLOOR=1 \
   /bin/bash "$tmpd/scripts/project-node.sh" --check --layers 20 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL')" = 0 ] \
   && printf '%s\n' "$out" | grep -Fq 'NODE: PASS'; then
-  say "  PASS  passing adapter keeps NODE: PASS and exit 0"
+  say "  PASS  AC3 passing adapter with no FAIL rows keeps NODE: PASS and exit 0"
 else
-  say "  FAIL  passing adapter produced FAIL rows or a nonzero exit"; fails=$((fails+1))
+  say "  FAIL  AC3 passing adapter produced FAIL rows or a nonzero exit"; fails=$((fails+1))
 fi
 rm -rf "$tmpd"
 
@@ -7116,7 +7139,7 @@ else
   say "  FAIL  case marker mutation -> exit $cf299_marker_rc: $cf299_marker"
   fails=$((fails+1))
 fi
-cf299_dirty=$(git -C "$HERE" status --porcelain -- scripts/disk_floor.py scripts/project-node.sh)
+cf299_dirty=$(git -C "$HERE" status --porcelain -- scripts/disk_floor.py)
 if [ -z "$cf299_dirty" ]; then
   say "  PASS  fixture mutations stayed in scratch copies; tracked role-table files are unchanged"
 else
