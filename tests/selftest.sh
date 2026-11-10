@@ -930,6 +930,12 @@ fi
 rm -rf "$ownership_staged_tmp"
 # END ownership-staged
 
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_ownership_residue.py"; then
+  say "  PASS  CF-412 ownership residue leaf classification"
+else
+  say "  FAIL  CF-412 ownership residue leaf classification"; fails=$((fails+1))
+fi
+
 say "13. node provisioning names its resolved floor and refuses below it"
 tmpd=$(mktemp -d)
 out=$(env HOME="$tmpd/home" NODE_DISK_FLOOR=999999 /bin/bash "$HERE/scripts/project-node.sh" --check --project fixture 2>&1); rc=$?

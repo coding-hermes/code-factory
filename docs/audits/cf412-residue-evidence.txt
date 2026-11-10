@@ -1,0 +1,45 @@
+CF-412 command evidence
+Baseline: dafb7a9c1a976cb4fe25f9f07249198525e5b738
+
+Pre-fix, before implementation: python3 -B tests/test_ownership_residue.py
+  test_collapsed_rescue_directory_is_residue ... FAIL
+  AssertionError: 'unowned-changes' != 'residue'
+  observed porcelain: ?? .gitreins/
+  observed JSON state: unowned-changes; CLI exit 3
+  Ran 6 tests; FAILED (failures=1); command exit 1
+
+Negative control: baseline ownership.py with only --untracked-files=all added,
+retaining the old bare-substring residue expression; OWNERSHIP_PY points to this
+scratch copy: python3 -B tests/test_ownership_residue.py
+  test_nested_substring_is_not_residue ... FAIL
+  AssertionError: 'residue' != 'unowned-changes'
+  Ran 6 tests; FAILED (failures=1); command exit 1
+
+Fixed source: python3 -B tests/test_ownership_residue.py
+  test_clean ... ok
+  test_collapsed_rescue_directory_is_residue ... ok
+  test_nested_substring_is_not_residue ... ok
+  test_other_nested_file_is_not_residue ... ok
+  test_rescue_and_other_file_are_unowned ... ok
+  test_staged_tracked_changes_are_unowned ... ok
+  Ran 6 tests; OK; command exit 0
+
+ruff check scripts/ownership.py tests/test_ownership_residue.py
+  All checks passed! exit 0
+ruff format --check scripts/ownership.py tests/test_ownership_residue.py
+  2 files already formatted; exit 0
+bash -n tests/selftest.sh
+  exit 0
+
+Full bash tests/selftest.sh, isolated scratch HOME and XDG_CONFIG_HOME,
+GIT_CONFIG_NOSYSTEM=1 and GIT_CONFIG_GLOBAL unset:
+  PASS  CF-412 ownership residue leaf classification
+  PASS  CF-266: the hook apply wrote executes on a real commit
+  SELFTEST: PASS
+  SELFTEST_EXIT=0
+
+An earlier full run with GIT_CONFIG_GLOBAL=/dev/null failed CF-266: its
+installer could not write the fixture's global Git identity; SELFTEST: FAIL (1),
+exit 1. The subsequent runs used a scratch HOME instead, permitting that fixture
+to configure its own isolated global Git identity without consulting host config.
+No live node or foreman judge was exercised.

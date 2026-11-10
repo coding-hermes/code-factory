@@ -38,7 +38,7 @@ def git(workdir: str, *args: str) -> str:
 
 
 def status_paths(workdir: str) -> tuple[list[str], list[str]]:
-    out = git(workdir, "status", "--porcelain=v1", "-z")
+    out = git(workdir, "status", "--porcelain=v1", "-z", "--untracked-files=all")
     untracked_paths = []
     dirty_paths = []
     fields = out.split("\x00")
@@ -150,9 +150,7 @@ def classify(workdir: str) -> dict:
         return result
 
     # 4. Inherited residue: nothing alive owns it, so it requires disposition.
-    residue = [
-        p for p in paths if any(p.startswith(r) or r in p for r in RESIDUE_IGNORES)
-    ]
+    residue = [p for p in paths if any(p.startswith(r) for r in RESIDUE_IGNORES)]
     if residue and len(residue) == len(paths):
         result.update(
             state="residue",

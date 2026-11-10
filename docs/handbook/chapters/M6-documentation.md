@@ -109,7 +109,11 @@ invariant is: a tree whose `git status --porcelain` is non-empty is never `clean
 the modification is staged. JSON retains `untracked` as the untracked-path count and adds `dirty`
 (the tracked-modification count) and `dirty_paths` (the first 10 relative paths); `sample` remains
 the first 10 paths for unowned changes. `clean` and `held-by-live-worker` exit 0; `residue` and
-`unowned-changes` exit 3. Re-runnable staged-change check:
+`unowned-changes` exit 3. Status expands untracked directories to individual Git-reported paths:
+only root `.gitreins/rescued-*` paths qualify as inherited residue. Other untracked paths,
+including files elsewhere containing that substring, make the tree `unowned-changes`; tracked
+changes remain unowned even alongside rescue files. The `untracked` count is the number of
+expanded paths, not collapsed porcelain directory entries. Re-runnable staged-change check:
 `python3 scripts/ownership.py status --workdir "$fixture"` after staging `tracked.txt` must emit
 `"dirty": 1`, `"dirty_paths": ["tracked.txt"]`, `"state": "unowned-changes"` and exit 3;
 after `git restore --staged tracked.txt && git restore tracked.txt`, it must emit
