@@ -90,7 +90,10 @@ config scalar — and the provisioner applies it on the node before the harness 
 environment is reviewable and a second run changes nothing.
 
 The config is data (`KEY=VALUE`, parsed, never sourced), names token **files** rather than
-values, and the command line always wins. See `skills/code-factory-bunker/SKILL.md`.
+values, and the command line always wins. `GITHUB_AUTH_MODE=app` mints a one-hour GitHub App
+installation token before the bundle is built; `scripts/github-app-refresh.sh` re-mints it from
+the control host before expiry. Token mode remains the PAT-compatible fallback. See
+`skills/code-factory-bunker/SKILL.md`.
 
 ## Harness workstream — five harnesses, one memory, one foreman
 

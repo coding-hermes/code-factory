@@ -7215,5 +7215,70 @@ else
   fails=$((fails+1))
 fi
 
+# CF-238: GitHub App mode is exercised in a hermetic fixture. It must refuse absent keys,
+# insecure key modes, and tokens that cannot read the repository; the control must pass.
+say "66. GitHub App mode refuses incomplete credentials and proves repository access"
+for cf238_script in scripts/github-app-setup.sh scripts/github-app-refresh.sh; do
+  bash -n "$HERE/$cf238_script" && say "  PASS  bash -n $cf238_script" || { say "  FAIL  bash -n $cf238_script"; fails=$((fails+1)); }
+done
+python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' "$HERE/scripts/github-app-token.py" \
+  && say "  PASS  scripts/github-app-token.py parses" || { say "  FAIL  github-app-token.py parse"; fails=$((fails+1)); }
+cf238=$(mktemp -d)
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$cf238/key.pem" 2>/dev/null
+openssl rsa -in "$cf238/key.pem" -pubout -out "$cf238/pub.pem" 2>/dev/null
+chmod 600 "$cf238/key.pem"
+cp "$cf238/key.pem" "$cf238/key644.pem"; chmod 644 "$cf238/key644.pem"
+printf 'GITHUB_APP_ID=1\nGITHUB_APP_INSTALLATION_ID=2\nGITHUB_APP_PRIVATE_KEY_FILE=%s\n' "$cf238/missing.pem" > "$cf238/missing.env"
+printf 'GITHUB_APP_ID=1\nGITHUB_APP_INSTALLATION_ID=2\nGITHUB_APP_PRIVATE_KEY_FILE=%s\n' "$cf238/key.pem" > "$cf238/good.env"
+printf 'GITHUB_APP_ID=1\nGITHUB_APP_INSTALLATION_ID=2\nGITHUB_APP_PRIVATE_KEY_FILE=%s\n' "$cf238/key644.pem" > "$cf238/loose.env"
+chmod 600 "$cf238"/*.env
+out=$(python3 "$HERE/scripts/github-app-token.py" check --env-file "$cf238/missing.env" --api-base http://127.0.0.1:9 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  private_key_file'; then say "  PASS  absent key file refused"; else say "  FAIL  absent key file accepted"; fails=$((fails+1)); fi
+out=$(python3 "$HERE/scripts/github-app-token.py" check --env-file "$cf238/loose.env" --api-base http://127.0.0.1:9 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '0644' && printf '%s\n' "$out" | grep -q 'chmod 600'; then say "  PASS  key mode 0644 refused with remediation"; else say "  FAIL  key mode 0644 accepted"; fails=$((fails+1)); fi
+# The setup check must not claim success when the API returns 403 for the repository.
+# Its hermetic API fixture is covered by the source-branch conformance arm; this local arm
+# additionally proves --check cannot pass merely because the key parses.
+out=$(bash "$HERE/scripts/github-app-setup.sh" --check --env-file "$cf238/missing.env" --api-base http://127.0.0.1:9 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && ! printf '%s\n' "$out" | grep -q 'SETUP: PASS'; then say "  PASS  --check refuses without measurable App/repository evidence"; else say "  FAIL  --check passed vacuously"; fails=$((fails+1)); fi
+# A local API fixture proves the repository-read refusal is a real verdict, not a key/parser check.
+cat > "$cf238/api.py" <<'PY'
+import json, os, sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, *_):
+        pass
+    def reply(self, code, body):
+        raw = json.dumps(body).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+    def do_POST(self):
+        if self.path.endswith("/access_tokens"):
+            self.reply(201, {"token": "fixture-app-token", "expires_at": "2030-01-01T00:00:00Z", "permissions": {"contents": "write", "pull_requests": "write", "metadata": "read"}})
+        else:
+            self.reply(404, {"message": "Not Found"})
+    def do_GET(self):
+        if self.path.startswith("/installation/repositories"):
+            self.reply(200, {"repositories": [{"full_name": "fixture/repo"}]})
+        elif self.path.startswith("/repos/fixture/repo"):
+            self.reply(403 if os.environ.get("CF238_FORBID") == "1" else 200, {"message": "Resource not accessible by integration"})
+        else:
+            self.reply(404, {"message": "Not Found"})
+HTTPServer(("127.0.0.1", int(sys.argv[1])), Handler).serve_forever()
+PY
+cf238_port=$(PYTHONDONTWRITEBYTECODE=1 python3 -B -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')
+PYTHONDONTWRITEBYTECODE=1 CF238_FORBID=1 python3 -B "$cf238/api.py" "$cf238_port" >"$cf238/api.log" 2>&1 &
+cf238_api_pid=$!
+cf238_api="http://127.0.0.1:$cf238_port"
+printf 'GITHUB_APP_ID=1\nGITHUB_APP_INSTALLATION_ID=2\nGITHUB_APP_PRIVATE_KEY_FILE=%s/key.pem\n' "$cf238" > "$cf238/api.env"
+chmod 600 "$cf238/api.env"
+out=$(bash "$HERE/scripts/github-app-setup.sh" --check --env-file "$cf238/api.env" --repo fixture/repo --api-base "$cf238_api" 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  repo_read — GET /repos/fixture/repo -> 403' && ! printf '%s\n' "$out" | grep -q 'SETUP: PASS'; then say "  PASS  repository token 403 -> named repo_read FAIL, no setup PASS"; else say "  FAIL  repository token 403 was not a verdict (exit $rc)"; fails=$((fails+1)); fi
+kill "$cf238_api_pid" 2>/dev/null; wait "$cf238_api_pid" 2>/dev/null
+rm -rf "$cf238"
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

@@ -61,6 +61,8 @@ REF=main
 HARNESS=hermes
 NAMESPACES=code-factory,coder   # one or more; the first is primary
 TTL=30d
+GITHUB_AUTH_MODE=token                         # or app; app mints a one-hour installation token
+GITHUB_APP_ENV_FILE=~/.config/code-factory/github-app.env  # app mode only
 GITHUB_TOKEN_FILE=~/.config/code-factory/github.token
 DUCKBRAIN_TOKEN_FILE=~/.duckbrain/<role>.token
 S3_ENV_FILE=~/.config/code-factory/s3.env
@@ -174,6 +176,21 @@ The config names **files**; the provisioner reads them into one bundle of mode 6
 in, installs `$HOME/.node/auth/{github.token,duckbrain.token,s3.env}` at mode 600, points git
 at a credential store built from the token, and deletes the bundle on both sides. No value is
 ever printed, logged, or passed as an argument. `$HOME/.node/node.json` carries names only.
+
+## GitHub App credential mode
+
+Set `GITHUB_AUTH_MODE=app` to mint a scoped GitHub App installation token on the control host before provisioning. The node receives only the token, stored at mode 600; the private key never leaves the control host. Installation tokens expire after 3600 seconds, so `scripts/github-app-refresh.sh --node <agent> --server <host> --min-age 2400` must run from a control-host timer every 20 minutes. `--check` must prove the fresh token reads the target repository before any apply is trusted.
+
+Permission table:
+
+| Permission | Level | Reason | Expiry / risk |
+|---|---|---|---|
+| Contents | Read and write | Clone and push commits; push requires write | Installation token expires after 1 hour; without refresh pushes fail |
+| Pull requests | Read and write | Open the PR required by protected main | Same 1-hour expiry; scope is limited to installed repositories |
+| Metadata | Read | GitHub requires it to resolve repositories and installations | Same 1-hour expiry; no write capability |
+| Everything else | None | No administration, secrets, workflows, packages, members, or hooks access | Limits blast radius if a node token leaks |
+
+The legacy `GITHUB_AUTH_MODE=token` path remains available for existing PAT-based configurations.
 
 ## Declared node environment
 

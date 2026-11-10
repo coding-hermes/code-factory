@@ -13,10 +13,16 @@
 # this script reads them into ONE bundle of mode 600, copies it in, installs it, and deletes
 # both copies. No value is ever printed (CF-002).
 #
+# GITHUB_AUTH_MODE picks where the node's git credential comes from:
+#   token (default)  GITHUB_TOKEN_FILE is a long-lived PAT.
+#   app              a GitHub App installation token, minted here from GITHUB_APP_ENV_FILE.
+#                    The node receives only the 3600s token; arm github-app-refresh.sh so it
+#                    keeps push rights after the first hour.
+#
 # Keys (all optional except PROJECT and REPO):
 #   PROJECT  AGENT  SERVER  REPO  REF  HARNESS  NAMESPACES  TTL
 #   GIT_AUTHOR_NAME  GIT_AUTHOR_EMAIL  [GIT_CO_AUTHOR]   (required for --apply: the node commits)
-#   GITHUB_TOKEN_FILE  DUCKBRAIN_TOKEN_FILE  S3_ENV_FILE
+#   GITHUB_AUTH_MODE  GITHUB_TOKEN_FILE  GITHUB_APP_ENV_FILE  DUCKBRAIN_TOKEN_FILE  S3_ENV_FILE
 #   CRIER_AGENT_KEY_FILE  CRIER_AUTH_TOKEN_FILE   (the bus credentials: without them a node
 #                                                   cannot read its own inbox at all)
 #   CRIER_URL  DUCKBRAIN_URL
@@ -38,14 +44,14 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 
 CONFIG="" MODE="" AGENT="" PROJECT="" SERVER="" REPO="" REF="" HARNESS="" NAMESPACE="" NAMESPACES="" TTL=""
 GIT_AUTHOR_NAME="" GIT_AUTHOR_EMAIL="" GIT_CO_AUTHOR=""
-GITHUB_TOKEN_FILE="" DUCKBRAIN_TOKEN_FILE="" S3_ENV_FILE="" CRIER_URL="" DUCKBRAIN_URL=""
-CRIER_AGENT_KEY_FILE="" CRIER_AUTH_TOKEN_FILE=""
+GITHUB_AUTH_MODE="" GITHUB_APP_ENV_FILE="" GITHUB_TOKEN_FILE="" DUCKBRAIN_TOKEN_FILE="" S3_ENV_FILE="" CRIER_URL="" DUCKBRAIN_URL=""
+CRIER_AGENT_KEY_FILE="" GITHUB_APP_TOKEN_TMP="" CRIER_AUTH_TOKEN_FILE=""
 NODE_ENV_FILE=""
 CONFIG_SET_MODEL_PROVIDER="" CONFIG_SET_MODEL_NAME="" CONFIG_SET_GATEWAY_BIND=""
 CONFIG_SET_GATEWAY_PORT="" CONFIG_SET_AGENT_MAX_ITERATIONS=""
 YES=0
 CLI_PROJECT="" CLI_AGENT="" CLI_SERVER="" CLI_REPO="" CLI_REF="" CLI_HARNESS="" CLI_NAMESPACE="" CLI_NAMESPACES="" CLI_CRIER=""
-CLI_NODE_ENV_FILE=""
+CLI_NODE_ENV_FILE="" CLI_GITHUB_AUTH_MODE="" CLI_GITHUB_APP_ENV_FILE=""
 CLI_DUCKBRAIN_URL="" CLI_GITHUB_TOKEN_FILE="" CLI_DUCKBRAIN_TOKEN_FILE=""
 CLI_CRIER_AGENT_KEY_FILE="" CLI_CRIER_AUTH_TOKEN_FILE="" CLI_S3_ENV_FILE=""
 CLI_CONFIG_SET=()
@@ -108,13 +114,13 @@ load_config() {
     key="${BASH_REMATCH[1]}"; val="${BASH_REMATCH[2]}"
     val="${val%\"}"; val="${val#\"}"; val="${val%\'}"; val="${val#\'}"
     case "$key" in
-      PROJECT|AGENT|SERVER|REPO|REF|HARNESS|NAMESPACE|NAMESPACES|TTL|CRIER_URL|DUCKBRAIN_URL)
+      PROJECT|AGENT|SERVER|REPO|REF|HARNESS|NAMESPACE|NAMESPACES|TTL|CRIER_URL|DUCKBRAIN_URL|GITHUB_AUTH_MODE)
         printf -v "$key" '%s' "$val" ;;
       GIT_AUTHOR_NAME|GIT_AUTHOR_EMAIL|GIT_CO_AUTHOR)
         printf -v "$key" '%s' "$val" ;;
       CONFIG_SET_MODEL_PROVIDER|CONFIG_SET_MODEL_NAME|CONFIG_SET_GATEWAY_BIND|CONFIG_SET_GATEWAY_PORT|CONFIG_SET_AGENT_MAX_ITERATIONS)
         printf -v "$key" '%s' "$val" ;;
-      GITHUB_TOKEN_FILE|DUCKBRAIN_TOKEN_FILE|S3_ENV_FILE|NODE_ENV_FILE|CRIER_AGENT_KEY_FILE|CRIER_AUTH_TOKEN_FILE)
+      GITHUB_TOKEN_FILE|GITHUB_APP_ENV_FILE|DUCKBRAIN_TOKEN_FILE|S3_ENV_FILE|NODE_ENV_FILE|CRIER_AGENT_KEY_FILE|CRIER_AUTH_TOKEN_FILE)
         case "$val" in "~/"*) val="$HOME/${val#\~/}" ;; esac
         printf -v "$key" '%s' "$val" ;;
       *) bad "config" "$file:$n unknown key $key"; return 1 ;;
@@ -154,6 +160,24 @@ env_lint() {
   esac
 }
 
+# --- GitHub authentication -----------------------------------------------------------------
+printf_repo_slug() {
+  local repo="$1"
+  case "$repo" in
+    *github.com[:/]*) repo="${repo#*github.com}"; repo="${repo#[:/]}"; repo="${repo%.git}"; printf '%s' "$repo" ;;
+    *) printf '' ;;
+  esac
+}
+
+resolve_github_auth() {
+  GITHUB_AUTH_MODE="${GITHUB_AUTH_MODE:-token}"
+  GITHUB_APP_ENV_FILE="${GITHUB_APP_ENV_FILE:-$HOME/.config/code-factory/github-app.env}"
+  case "$GITHUB_AUTH_MODE" in
+    token|app) return 0 ;;
+    *) bad "github_auth_mode" "GITHUB_AUTH_MODE='$GITHUB_AUTH_MODE' is not app|token"; return 1 ;;
+  esac
+}
+
 # --- check: read-only, every row names what it measured --------------------------------------
 bunker_ok=0
 check() {
@@ -181,6 +205,35 @@ check() {
   resolve_namespaces || return 1
   say "bunker-provision --check — project=${PROJECT:-<unset>} agent=${AGENT:-<unset>} server=${SERVER:-<unset>}"
   note "resolved repo=${REPO:-<unset>} ref=${REF:-main} harness=${HARNESS:-hermes} namespaces=${NAMESPACES:-$PROJECT} (primary ${NAMESPACE:-$PROJECT}) ttl=${TTL:-default(6h)} crier=${CRIER_URL:-unset} duckbrain=${DUCKBRAIN_URL:-unset}"
+  resolve_github_auth || return 1
+  case "$GITHUB_AUTH_MODE" in
+    app)
+      if [ ! -r "$GITHUB_APP_ENV_FILE" ]; then
+        bad "github_app" "mode=app but GITHUB_APP_ENV_FILE $GITHUB_APP_ENV_FILE is unreadable"
+      else
+        local app_out app_rc app_slug
+        app_slug=$(printf_repo_slug "$REPO")
+        if [ -n "$app_slug" ]; then
+          app_out=$(python3 "$HERE/github-app-token.py" check --env-file "$GITHUB_APP_ENV_FILE" --repo "$app_slug" 2>&1)
+        else
+          app_out=$(python3 "$HERE/github-app-token.py" check --env-file "$GITHUB_APP_ENV_FILE" 2>&1)
+        fi
+        app_rc=$?
+        if [ "$app_rc" -eq 0 ]; then
+          ok "github_app" "mode=app: freshly minted installation token reads ${app_slug:-the configured repo}; token value never printed"
+        else
+          bad "github_app" "$(printf '%s\n' "$app_out" | grep '^  FAIL' | head -1 | sed 's/^  FAIL  //')"
+        fi
+      fi ;;
+    token)
+      if [ -n "$GITHUB_TOKEN_FILE" ] && [ -r "$GITHUB_TOKEN_FILE" ]; then
+        ok "github_auth" "mode=token, PAT file readable: $GITHUB_TOKEN_FILE"
+      elif [ -n "$GITHUB_TOKEN_FILE" ]; then
+        bad "github_auth" "GITHUB_TOKEN_FILE $GITHUB_TOKEN_FILE is unreadable"
+      else
+        warn "github_auth" "mode=token with no GITHUB_TOKEN_FILE — clone may be unauthenticated"
+      fi ;;
+  esac
 
   b=$(have bunker)
   [ -n "$b" ] || { bad "bunker_cli" "no bunker client on PATH"; return 1; }
@@ -376,7 +429,19 @@ apply() {
     fi
   fi
 
-  # 2. credentials BEFORE the clone: the repo layer authenticates with what lands here
+  # 2. credentials BEFORE the clone: app mode mints the 3600s installation token before
+  # building the same auth bundle used by token mode. The App key never enters the bundle.
+  resolve_github_auth || return 1
+  if [ "$GITHUB_AUTH_MODE" = app ]; then
+    [ -r "$GITHUB_APP_ENV_FILE" ] || { bad "github_app" "GITHUB_APP_ENV_FILE $GITHUB_APP_ENV_FILE is unreadable"; return 1; }
+    GITHUB_APP_TOKEN_TMP=$(mktemp); chmod 600 "$GITHUB_APP_TOKEN_TMP"
+    if ! python3 "$HERE/github-app-token.py" token --env-file "$GITHUB_APP_ENV_FILE" --out "$GITHUB_APP_TOKEN_TMP" >"${GITHUB_APP_TOKEN_TMP}.log" 2>&1; then
+      bad "github_app" "installation token mint failed — nothing was installed on the node"
+      rm -f "$GITHUB_APP_TOKEN_TMP"; GITHUB_APP_TOKEN_TMP=""; return 1
+    fi
+    GITHUB_TOKEN_FILE="$GITHUB_APP_TOKEN_TMP"
+    ok "github_app" "installation token minted before the auth bundle (valid 3600s; App key stays on control host)"
+  fi
   tmp=$(mktemp); chmod 600 "$tmp"
   bundle_paths x > "$tmp"
   if [ -s "$tmp" ]; then
@@ -434,6 +499,10 @@ apply() {
     warn "auth" "no token files named in config — the clone will run unauthenticated"
   fi
   rm -f "$tmp"
+  if [ -n "$GITHUB_APP_TOKEN_TMP" ]; then
+    rm -f "$GITHUB_APP_TOKEN_TMP" "${GITHUB_APP_TOKEN_TMP}.log"
+    GITHUB_APP_TOKEN_TMP=""
+  fi
 
   # 3. crier identity BEFORE provisioning: the node's bus layer refuses without it
   if [ -n "$CRIER_URL" ]; then
@@ -612,6 +681,8 @@ while [ $# -gt 0 ]; do
     --namespaces) CLI_NAMESPACES="$2"; shift 2 ;;
     --crier-url) CLI_CRIER="$2"; shift 2 ;;
     --duckbrain-url) CLI_DUCKBRAIN_URL="$2"; shift 2 ;;
+    --github-auth-mode) CLI_GITHUB_AUTH_MODE="$2"; shift 2 ;;
+    --github-app-env-file) CLI_GITHUB_APP_ENV_FILE="$(expand_tilde "$2")"; shift 2 ;;
     --github-token-file) CLI_GITHUB_TOKEN_FILE="$(expand_tilde "$2")"; shift 2 ;;
     --duckbrain-token-file) CLI_DUCKBRAIN_TOKEN_FILE="$(expand_tilde "$2")"; shift 2 ;;
     --crier-agent-key-file) CLI_CRIER_AGENT_KEY_FILE="$(expand_tilde "$2")"; shift 2 ;;
@@ -637,6 +708,8 @@ done
 [ -n "$CLI_NAMESPACES" ] && NAMESPACES="$CLI_NAMESPACES"
 [ -n "$CLI_CRIER" ] && CRIER_URL="$CLI_CRIER"
 [ -n "$CLI_NODE_ENV_FILE" ] && NODE_ENV_FILE="$CLI_NODE_ENV_FILE"
+[ -n "$CLI_GITHUB_AUTH_MODE" ] && GITHUB_AUTH_MODE="$CLI_GITHUB_AUTH_MODE"
+[ -n "$CLI_GITHUB_APP_ENV_FILE" ] && GITHUB_APP_ENV_FILE="$CLI_GITHUB_APP_ENV_FILE"
 # These five were assigned during flag parsing and then overwritten by load_config, so a documented
 # flag was silently ignored whenever a config was also passed. They are applied AFTER the config now,
 # which is the precedence the SKILL claims: the command line wins.
@@ -648,6 +721,7 @@ done
 [ -n "$CLI_S3_ENV_FILE" ] && S3_ENV_FILE="$CLI_S3_ENV_FILE"
 
 [ -n "$MODE" ] || usage 2
+trap 'if [ -n "${GITHUB_APP_TOKEN_TMP:-}" ]; then rm -f "$GITHUB_APP_TOKEN_TMP" "${GITHUB_APP_TOKEN_TMP}.log"; fi' EXIT
 case "$MODE" in
   check) check ;;
   apply)

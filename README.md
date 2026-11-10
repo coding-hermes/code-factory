@@ -135,6 +135,13 @@ scripts/         node checks and provisioners: bunker-server-install.sh, bunker-
                  bunker-crier-connect.sh, bunker_config_gen.py (writes one provision config per
                  project from the scheduler registry), project-node.sh, node-create.sh,
                  verify-node.sh, lib.sh
+scripts/ (github app) github-app-setup.sh (onboarding and refusal checks),
+                 github-app-token.py (stdlib RS256 -> one-hour installation token),
+                 github-app-refresh.sh (re-mints before expiry; key stays on control host)
+
+GitHub App mode is selected with `GITHUB_AUTH_MODE=app`; token mode remains the PAT-compatible
+fallback. The App key stays on the control host and only the one-hour installation token reaches
+the node. See `skills/code-factory-bunker/SKILL.md` for the permission table and refresh contract.
 scripts/ (CF-003) deploy_key.py (per-repo read-only deploy key + one generated ssh_config),
                  install-node.sh (digest-pinned Node runtime for kind `node`),
                  gomodcache.py (sealed shared Go module cache), node_hygiene.py (footprint
