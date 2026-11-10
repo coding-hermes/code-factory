@@ -32,7 +32,15 @@ set -uo pipefail
 HERE="${0%/*}"
 case "$HERE" in "$0") HERE=. ;; esac
 HERE="$(cd "$HERE" 2>/dev/null && pwd)" || HERE=.
-. "$HERE/lib.sh"
+FAILED=${FAILED:-0}
+if [ ! -f "$HERE/lib.sh" ] || [ ! -r "$HERE/lib.sh" ]; then
+  printf '  FAIL  lib.sh — missing or unreadable: %s\n' "$HERE/lib.sh" >&2
+  exit 1
+fi
+if ! . "$HERE/lib.sh"; then
+  printf '  FAIL  lib.sh — could not source: %s\n' "$HERE/lib.sh" >&2
+  exit 1
+fi
 
 PROJECT="${NODE_PROJECT:-}"
 HARNESS="${NODE_HARNESS:-hermes}"

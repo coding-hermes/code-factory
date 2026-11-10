@@ -139,6 +139,15 @@ explicit warning/confirmation is a separate question.
 | `bunker` CLI | resolved via `have bunker` (PATH order, `lib.sh:41-45`; `bunker-provision.sh:181`) — **not** an absolute path | control host | `bad "bunker_cli" "no bunker client on PATH"` (`:182`) |
 | crier bus | reachable | `http://<crier-host>:8767` | `reach:` FAIL row / non-200 |
 
+**Node bootstrap library (CF-298).** Before argument parsing or any provisioning layer,
+`project-node.sh` initializes its own `FAILED` counter and checks that the adjacent `lib.sh`
+is a readable regular file. If it is absent or unreadable, it prints `FAIL  lib.sh` with
+its path and exits 1; a source failure is also a named refusal. This does not depend on
+`set -u`. `bash tests/test_cf298_missing_lib.sh` exercises both nounset variants using
+isolated script copies without the library; it does not certify a live node.
+
+ch:trace row=CF-298 spec=docs/handbook/chapters/M1-provisioning.md test=tests/test_cf298_missing_lib.sh evidence=tests/test_cf298_missing_lib.sh witness=none:fixture-only verdict=none:pending commit=none:pending memory=none:pending
+
 **4b. Library contracts**
 
 | Import | Provider | Contract relied on | If it changes |

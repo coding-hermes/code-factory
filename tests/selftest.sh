@@ -12,6 +12,11 @@ for f in "$HERE"/scripts/*.sh "$HERE"/scripts/harness/*.sh "$HERE"/tests/*.sh; d
 done
 
 say "2. the node checker FAILS on an empty PATH"
+if bash "$HERE/tests/test_cf298_missing_lib.sh"; then
+  say "  PASS  CF-298 missing library fails closed"
+else
+  say "  FAIL  CF-298 missing library fixture"; fails=$((fails+1))
+fi
 out=$(env -i PATH=/nonexistent HOME="$HOME" NODE_PROJECT=t /bin/bash "$HERE/scripts/project-node.sh" --check 2>&1); rc=$?
 [ "$rc" -ne 0 ] && say "  PASS  empty PATH -> exit $rc" || { say "  FAIL  empty PATH reported success"; fails=$((fails+1)); }
 # The rows must be REAL named checks, not a bootstrap crash that happens to contain
