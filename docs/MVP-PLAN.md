@@ -15,16 +15,17 @@ lands the commit. Four moves, two of them wiring.
 | 1 | The board row is `complete` with a sha that `origin/main` contains, produced on a bunker | no path from a node commit to `main` | CF-213 |
 | 2 | The commit is in the control host's tree and the next dispatch reads it | nothing fetches project repos (119 enabled lanes) | CF-212 |
 | 3 | The result that named the commit reached the scheduler's inbox and completed the tick | consumer exists (`bus/inbox.go`, `dispatch_leg.go`) and the producer now ships — `scripts/node-bus-worker.py` posts `ok`/`error`/`reply_b64`/`in_reply_to` under an idempotency key (`CF-211` complete 2026-11-08) — but no live node has exercised it | CF-211 |
-| 4 | The node produced the result inside its own clone | clone present (`af67c3b`); `scripts/bunker-provision.sh` now installs identity, the auth bundle and the harness as declared inputs, while the node baseline that raised `CF-214` measured FAIL on auth_github, auth_duckbrain, harness and crier 401, and no re-measure has been published since | CF-150, CF-214 |
+| 4 | The node produced the result inside its own clone | clone present (`af67c3b`); `scripts/bunker-provision.sh` now installs identity, the auth bundle and the harness as declared inputs, while the node baseline that raised `CF-214` measured FAIL on auth_github, auth_duckbrain, harness and crier 401, and no re-measure has been published since — `CF-214` closed 2026-11-10 at `d5ca56f1` (provisioner, crier-connect and the doc locators shipped), so the cell now reads **shipped and unmeasured on a live node**, not unbuilt | CF-150, CF-214 |
 | 5 | The directive reached the node with its lane identity | mapping keyed per lane, 1 of 17 wired; 82 × 403 on the only attempt | CF-210 |
 | 6 | crier routed the project to that bunker | crier up; routes per lane; guard refuses reserved keys | CF-210, CF-131 |
 | 7 | The scheduler chose the lane and recorded the tick | works today for local projects — `sqlite3 ~/.hermes/coding-hermes/scheduler.db "select count(*) from ticks"` and a `tick_dispatch` row naming the lane; NOT proven for a remote lane | — |
 | 8 | The foreman wrote a brief the node can execute | the brief is written today, and the seeder that puts prompts and declared skills on a node ships (`CF-220` complete), but no lane has consumed one end to end (S3 remains OPEN in sheet 2.4; `CF-249` owns the residual) | CF-220 |
 
-Read top-down: 1–2 are **missing**, 3 now has a producer but **no live run**, 4 is **partly provisioned**
-and unmeasured since `CF-214` was filed, 5–6 are **miswired**, 7–8 are **working**. (Re-measured against
+Read top-down: 1–2 are **missing**, 3 now has a producer but **no live run**, 4 is **shipped**
+and still unmeasured on a live node (`CF-214` closed 2026-11-10 at `d5ca56f1`; the re-measure
+has no owner row yet), 5–6 are **miswired**, 7–8 are **working**. (Re-measured against
 the board at `3d1b642` on 2026-11-08: `CF-211` closed the producer leg; `CF-150` was already
-`complete` at that pin and so owns none of item 4, which `CF-214` still owns.)
+`complete` at that pin and so owns none of item 4, which `CF-214` owned until it closed on 2026-11-10.)
 
 ## Phases
 
