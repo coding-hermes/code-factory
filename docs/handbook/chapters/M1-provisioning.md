@@ -241,6 +241,19 @@ are applied again after the config (`:604-609`) — a documented precedence bug 
 `--disk-floor` (cli, `:127`) → `NODE_DISK_FLOOR` (env, `:129`) → `[disk]` config key
 (`{role}_gib`, then `default`, `:130-140`) → `ROLE_DEFAULTS[role]` (`:141`).
 
+### Disk floor
+
+**Layer 40 build-cache boundary (CF-040).** Layer 40 establishes only the project-repository
+clone and its checkout-freshness measurement. It does not create, seed, wire, or measure a build
+cache for artifacts produced from that checkout. Build-cache bytes are therefore excluded from the
+provisioning footprint and disk-floor budget; this is a documented no-cache boundary, not a
+measurement of a zero-byte cache. The sealed Go **module** cache remains a separate layer-10
+capability: its measured bytes are module-cache bytes and must not be described as a layer-40 build
+cache. Any future build cache requires a separately measured implementation and acceptance row
+before it may be named in the specification, handbook, footprint, or floor.
+
+ch:trace row=CF-040 spec=docs/handbook/chapters/M1-provisioning.md#disk-floor wave=none:serial test=none:worker-doc-boundary doc=docs/handbook/chapters/M1-provisioning.md evidence=docs/handbook/chapters/M1-provisioning.md witness=none:documentation-boundary-only verdict=none:foreman-judge commit=none:worker-commit memory=none:foreman-closeout
+
 ## 6. Contracts in and out
 
 Neither of M1's two edges is a canonical CT id (OUTLINE Part IV, CT-01..CT-18): node→crier
@@ -262,7 +275,7 @@ Both are listed below with local ids; the state is UNVERIFIED where the wire was
 | disk floor unit | `python3 tests/test_disk_floor.py` | 12 tests pass | 2026-11-06 | **PASS** (rc 0) |
 | credential / runtime / cache / footprint / reap battery | `python3 tests/test_node_provisioning.py` | 23 tests: 0644 key refused, HTTPS remote refused, public key refused, rotation gated, per-host config merge, node pin read back, wrong digest installs nothing, lying binary fails, sealed cache builds with `GOPROXY=off` and refuses to grow, footprint components exact, orphan reap spares live ids and symlinks | 2026-11-07 | **PASS** (rc 0; `MEASURED shared GOMODCACHE 2097910 bytes; sealed rebuild added 0 bytes`) |
 | layer wiring (10/40/00) | `bash tests/selftest.sh` §58 | `PASS tool:node — $HOME/node-toolchain/current/bin/node (v22.22.3)`, `PASS repo_key` + `PASS repo_key:config`, a 0644 key → `FAIL repo_key` **and** `FAIL repo_clone — not attempted`, `PASS footprint` / `PASS footprint:floor` | 2026-11-07 | **PASS** (fixtures only) |
-| **F2 legs (CREATED vs VERIFIED)** | `node-create.sh --project P --repo git@gitlab… --deploy-key K` then `verify-node.sh --agent A --server S` | the clone succeeds under the per-repo key, the repo's suite runs (node-dependent tests included), the cache adds 0 bytes, `VERIFY: PASS` | not run | **UNVERIFIED** — needs the real read-only deploy key and a fresh bunker node; this repo proves the mechanism, not the grant |
+| **F2 legs (CREATED vs VERIFIED)** | `node-create.sh --project P --repo git@gitlab… --deploy-key K` then `verify-node.sh --agent A --server S` | the clone succeeds under the per-repo key, the repo's suite runs (node-dependent tests included), the sealed Go module cache adds 0 bytes, `VERIFY: PASS` | not run | **UNVERIFIED** — needs the real read-only deploy key and a fresh bunker node; this repo proves the mechanism, not the grant |
 | gateway auth staged before the adapter | `bash tests/selftest.sh` §55 (`project-node.sh --apply --project <p> --layers 20` in a fixture home) | `PASS gateway_auth — dashboard.basic_auth present …; password in …/.node/auth/gateway.pass (mode 600, value not printed)` and the adapter's `PASS gateway_start — /api/status -> 200`; the same adapter still refuses without the block | 2026-11-07 | **PASS** (fixture only — no live node run) |
 | verify-node transport (CF-224) | `bash tests/selftest.sh` §62 | the pre-fix `bf16c05` verifier has no `--transport` (`unknown arg`, exit 2) and certifies a loopback-only node `VERIFY: PASS`; this tree refuses the same fixture `VERIFY: UNVERIFIED`, PASSes `node-address`/`published-port`/`tunnel` runs with the transport named in the row, names a dead published port (`no published port for cf-fixture:10800`) without printing `000`, and grades `--transport bunker-exec` `VERIFY: FAIL (2)` | 2026-11-08 | **PASS** (offline fixtures only — no bunker, no network; `docs/audits/cf-224-verify-transport-2026-11-08.md`) |
 | staged-set validator (CF-087) | `bash tests/node-create-staged-set.sh all` | four spellings of one unstaged reference in the entry point, one arm per staged member (`lib.sh`, `disk_floor.py`, `install-node.sh`), a needed member dropped from the declared set and an unreferenced member added both exit nonzero with a named `staged_set` row, and the printed set is closed under every reference its own members carry: `STAGED_SET: PASS` | 2026-11-09 | **PASS** (offline probe, 1.1 s; the pre-fix `node-create.sh` from 23114f4 scores `STAGED_SET: FAIL (5)`) |
