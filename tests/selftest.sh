@@ -7125,6 +7125,15 @@ else
 fi
 rm -rf "$cf299"
 
+# CF-008 lifecycle arm: keep this inside the existing section census; supervisor, lease,
+# process-group cancellation and destroy/create replay are one row-specific battery.
+# The fixture owns every process and state file; live bunker state is intentionally UNVERIFIED.
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_node_lifecycle.py" >/dev/null 2>&1; then
+  say "  PASS  CF-008 lifecycle supervisor restart evidence, TTL renewal/refusal, process-group cancellation and destroy/create replay"
+else
+  say "  FAIL  CF-008 lifecycle battery"
+  fails=$((fails+1))
+fi
 # CF-398 arm: keep this inside the existing section census; evidence pointers are an
 # additive board invariant, not a new numbered selftest section.
 cf398_out=$(python3 "$HERE/scripts/board_evidence_check.py" --quiet-findings 2>&1); cf398_rc=$?
