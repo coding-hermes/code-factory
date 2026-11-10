@@ -111,6 +111,21 @@ same exit codes.
 - **N-5** A node refuses to start work below the disk floor, and says the number; reap before refusing.
 - **N-6** Destroying the agent destroys the node; the scripts must rebuild it exactly.
 
+### Lifecycle contract (CF-008)
+
+The repository-local lifecycle helper (`scripts/node-lifecycle-supervisor.py`) provides the bounded
+control-host slice of N-6. `supervise` starts the child in a new process group, records its PID/PGID
+and every exit/restart in the state JSON, and writes a completion artifact only after a zero exit.
+A TTL lease renews while the child is active through an injectable clock in the test seam; expiry is
+a refusal and does not renew. A deadline sends SIGTERM, then bounded SIGKILL, to the recorded process
+group only, records `pid`, `pgid` and `killed`, and suppresses completion. `replay` executes the
+recorded destroy and create argv lists, snapshots the configuration, and checks the expected rebuilt
+state. These are deterministic repository fixtures; no live bunker host is certified here.
+
+The existing node bus result battery remains the redelivery/idempotency contract: an interrupted
+result is retried with the dispatch-derived key and the harness is not run twice (`specs/ENVELOPE.md`
+§ Durable delivery, and `tests/test_bus_result_delivery.py`).
+
 ## Credentials — per-repo deploy keys
 
 A private repo is cloned with a key that belongs to **that repo**, never with an account key and
