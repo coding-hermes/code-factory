@@ -636,6 +636,36 @@ leg_smoke() {  # <id> <binary> <generation> <measured>
   return 0
 }
 
+# ch:trace row=CF-283 spec=docs/handbook/chapters/M5-harness.md#S2-S3 wave=code-factory-20261110-01-41-01 test=tests/harness-conformance.sh doc=docs/handbook/chapters/M5-harness.md prompt=/home/kara/.hermes/cache/scratch/code-factory-CF-283-brief-20261110-0141.txt evidence=worker-report witness=fixture-or-live-node verdict=none:foreman-runs-gitreins commit=none memory=none:foreman-closeout
+leg_node() {  # <id> — prove node creation separately from the adapter install/check legs
+  local id="$1" script out rc missing row
+  missing=""
+  script="$HERE/tests/harness-node-e2e.sh"
+  if [ ! -x "$script" ]; then
+    emit "$id" node FAIL "tests/harness-node-e2e.sh is absent — no codex node-creation evidence exists"
+    emit "$id" live-node SKIP "live bunker/node measurement unavailable; no fixture or live node was run"
+    return 0
+  fi
+  out="$(bash "$script" 2>&1)"; rc=$?
+  printf '%s\n' "$out" > "$WORK/$id.node.txt"
+  # The positive arm must prove the real provisioning entry created a codex node and that the
+  # manifest came from the adapter's measured rows. The red arms keep a summary-only stub from
+  # turning an installer presence check into node evidence.
+  for row in \
+    'NODE: PASS' 'PASS  node:apply' 'PASS  node:manifest' 'PASS  verify:green' \
+    'PASS  verify:red-version' 'PASS  verify:red-binary' 'PASS  verify:null-version' \
+    'PASS  turn:directive'; do
+    grep -Fq "$row" <<< "$out" || missing="$missing $row"
+  done
+  if [ "$rc" -eq 0 ] && [ -z "$missing" ] && grep -Fxq 'HARNESS-NODE-E2E: PASS' <<< "$out"; then
+    emit "$id" node PASS "offline fixture created a codex node with a measured manifest and directive artifact; red controls for tampered/absent/unmeasured identity passed"
+  else
+    emit "$id" node FAIL "node fixture battery exit $rc or missing evidence:$missing"
+  fi
+  # This battery has no bunker credentials/transport. A fixture PASS is not a live-node claim.
+  emit "$id" live-node SKIP "UNVERIFIED — live bunker/node creation is unavailable; codex node evidence above is an offline fixture only"
+}
+
 leg_apply() {  # <id> <adapter file>
   local id="$1" file="$2" path home out rc port value waited code check_out
   path="$ADAPTER_DIR/$file"
@@ -830,6 +860,9 @@ while IFS='|' read -r id adapter bin gen smoke measured <&3; do
     leg_apply "$id" "$adapter"
   fi
   leg_vars "$id" "$adapter"
+  if [ "$VARS_ONLY" -eq 0 ] && [ "$id" = codex ]; then
+    leg_node "$id"
+  fi
   [ "$VARS_ONLY" -eq 0 ] && leg_smoke "$id" "$bin" "$gen" "$measured"
   say ""
 done 3< <(printf '%s\n' "$HARNESSES")
