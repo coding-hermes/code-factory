@@ -117,11 +117,11 @@ warnings; B5b alone would pass the defect the row was raised on.
 | **codex** | release tarball `codex-x86_64-unknown-linux-musl.tar.gz` from `rust-v0.166.0`, sha256-pinned, installed under `$HOME/.local/codex/<pin>`; **exec** mode (`codex exec --json -s <mode> -m <model> -- <text>`, `exec resume <id>`) | **MEASURED** (CF-227, 2026-11-04, `scripts/harness/install-codex.sh`): 7 s install, version read back `codex-cli 0.166.0`, idempotent second `--apply`, and one real turn wrote a fixed token with `model_served` read from codex's own rollout record. **CF-006 (re-measured 2026-11-08): the ladder also installs the exec file-write sidecar `codex-code-mode-host`** — a SEPARATE release asset, sha256-pinned, placed beside the binary because codex spawns it from its own directory. Without it every tool call fails closed (`ERROR … failed to spawn code-mode host … No such file or directory`) and the turn exits 0 having written no artifact; with it the turn writes the token and the battery's `codex:smoke` leg PASSes. The **app-server** sidecar is `[experimental]` and **nothing in crier uses it** — `codex.go` names "two verified surfaces: exec create / exec resume", and `grep -rn app-server` over crier is empty; `--app-server` probes it anyway (an `initialize` over stdio answers with a `userAgent`). |
 | **aider** | `scripts/harness/install-aider.sh`; binary `aider`. The documented method is `pip install aider-chat` into a venv — **documented, not measured** | not measured (no pin, no artefact digest, no measured non-interactive surface); the adapter ships a real `--check`/`--contract`, prints the documented method as a `..` note and refuses `--apply` by name, so a harness this spec names can no longer be silent in the battery (CF-006) |
 | **goose** | `scripts/harness/install-goose.sh`; binary `goose`. The documented method is a standalone release binary — **documented, not measured** | not measured (no release tag, no artefact digest, no measured non-interactive surface); the adapter ships a real `--check`/`--contract` and refuses `--apply` by name (CF-006) |
-| **pi-agent** | `scripts/harness/install-pi-agent.sh`; binary `pi`, non-interactive surface `pi -p --no-session "<prompt>"` | not measured as an install (no pin, no artefact digest); the adapter ships a documented `--check`/`--contract` and refuses `--apply` by name. The refusal battery rejects only a new file under a repo-owned install root, not host-probe cache/state created while reading `pi --version`. |
+| **pi-agent** | `scripts/harness/install-pi-agent.sh`; adapter alias `pi`, package `@oh-my-pi/pi-coding-agent`, binary `pi`, runtime Bun; non-interactive surface `pi -p --no-session "<prompt>"` | **Fixture-backed only**: pin `18.16.0`, Bun `1.4.4`, user-space root `$HOME/.local/harness/oh-my-pi/18.16.0`, package/version/runtime readback and idempotence are proven by `tests/harness/pi-agent-install-test.sh`. The fixture is not an upstream artifact, so live install, live node turn, and external credentialless turn remain **UNVERIFIED**; `--apply` refuses without `PI_FIXTURE_DIR`. |
 | **deepseek** | `scripts/harness/install-deepseek.sh`; the conformance row probes the binary `deepseek` | not measured (no `deepseek` binary, no ladder for one); the adapter ships a documented `--check`/`--contract` and refuses `--apply` by name. **This is not DeepSeek's harness** — that is `dsh`, the row above it in the matrix and the `dsh` row below here |
 | **dsh** | `scripts/harness/install-dsh.sh`; npm `@deepseek-ai/dsh` at pin `0.2.1-rc.5`, launcher `$HOME/.local/harness/dsh/bin/dsh`, non-interactive surface `dsh <profile> --json "<task>"` (measured with the `headless` profile) | **MEASURED install + one measured turn** (CF-226, 2026-11-08): registry integrity + shasum pinned before download, version read back `0.2.1-rc.5`, second `--apply` a 0.2 s no-op with a byte-identical tree, one turn wrote `dsh-turn.txt` carrying the fixed token in ~11 s and the model was read from dsh's own session record. The pin is an **RC**, so the version is re-measured from the registry by `--pin-status`, and a plugin-layer failure is reported per layer (`--layers`) instead of as one verdict. No crier adapter — see "dsh — the adapter decision" below |
 
-Hermes certifies only `$HOME/hermes-venv/bin/hermes` at `HERMES_PIN` (default `0.19.0`).
+The pi-agent fixture ladder certifies only the repository-provided fixture tree; it does not certify npm registry bytes. Hermes certifies only `$HOME/hermes-venv/bin/hermes` at `HERMES_PIN` (default `0.19.0`).
 A PATH-provided binary is labelled host-provided and FAILs the binary row, even if its
 version matches. `--apply` creates the venv and installs `hermes-agent==$HERMES_PIN`
 when the venv binary is absent, regardless of PATH. A venv version mismatch is named
@@ -129,8 +129,10 @@ and reinstalls the pin; only a matching venv binary earns "already installed".
 
 **hermes**, **codex**, **claude-code** and **dsh** have measured install ladders in this repo
 (`install-hermes.sh`, `install-codex.sh`, `install-claude-code.sh`, `install-dsh.sh`, each proved by a
-test that can go red). `opencode`, `deepseek`, `pi-agent`, `aider` and `goose` ship a real `--check`
-and a `--contract` and refuse `--apply` by name, because no ladder for them has been measured here.
+test that can go red). `opencode`, `deepseek`, `aider` and `goose` ship a real `--check` and a
+`--contract` and refuse `--apply` by name because no upstream ladder for them has been measured here.
+`pi-agent` has a deterministic fixture-backed ladder and test, but its upstream install and live turn
+remain explicitly UNVERIFIED.
 `aider`
 and `goose` were the last two with **no adapter file at all** — a harness this spec names and the
 battery cannot see produces no row, which is the failure mode this section exists to forbid; both now
@@ -153,7 +155,7 @@ support:
 | opencode | `UNVERIFIED` (exit 3) | binary 1.18.29 measured and its `run` surface advertised, but `user_space_binary` is a genuine WARN here: no install ladder is measured, so `--apply` refuses. |
 | deepseek | `FAIL (1)` | no `deepseek` binary; no ladder for one. This row measures a DIFFERENT binary from the `dsh` row below — DeepSeek's own harness is `dsh` |
 | dsh | `PASS` | pin `0.2.1-rc.5` installed by this adapter (package identity + `dsh --version` read back), bin symlink resolved into the pinned package, headless profile present, and the composed plugin tree measured (98 entries, 5 disabled); a missing credential is a `..` note, because `--turn` is where one decides. |
-| pi-agent | `PASS` | `pi` 1.5.0 measured on `PATH`, `-p` surface advertised; the auth file is a note beside a measured binary. Its install ladder is still unmeasured, so `--apply` refuses by name. |
+| pi-agent | `UNVERIFIED` (fixture PASS only) | the fixture proves package `@oh-my-pi/pi-coding-agent@18.16.0`, Bun `1.4.4`, user-space install, version readback, idempotence, artifact and `model_served`; upstream registry install, live node turn and external credentialless turn remain UNVERIFIED. |
 | aider | `FAIL (1)` | no `aider` binary on the control host and no ladder this repo measured; the documented method (`pip install aider-chat` into a venv) is printed as a `..` note, and `--apply` refuses by name. |
 | goose | `FAIL (1)` | no `goose` binary and no ladder; the documented method (a standalone release binary) is a `..` note, and `--apply` refuses by name. |
 
@@ -224,7 +226,9 @@ which this repo has measured), and the matrix's `memory` leg stays unwritten for
 smoke turn that must leave a file containing a token the battery chose (bytes re-read on the
 control host), and, only with `--install`, the adapter's `--apply` in a throwaway `$HOME` followed
 by a post-apply `--check`. It prints `PASS`/`FAIL`/`SKIP` with the measured value and regenerates
-`docs/HARNESS-CONFORMANCE.md` with `--write-doc`.
+`docs/HARNESS-CONFORMANCE.md` with `--write-doc`. The pi-agent fixture test is separate from this
+live battery: its fixture proves wiring, while upstream install, real-node execution, and memory remain
+UNVERIFIED residuals.
 
 The smoke leg resolves the binary from the adapter's own measurement (the `PASS binary` row that
 `--check` printed), and falls back to `PATH` only when the adapter names no path, or names one that
