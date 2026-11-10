@@ -1057,6 +1057,41 @@ else
 fi
 rm -rf "$tmpd"
 
+# CF-276 node-create-staged-set: the bus worker is a required sidecar at the exact path
+# bunker-crier-connect.sh probes. The negative control removes it from the manifest and must red.
+say "  .. CF-276: node-create stages node-bus-worker.py at the crier probe path"
+tmpd=$(mktemp -d)
+mkdir -p "$tmpd/scripts/harness" "$tmpd/home"
+staged=$(bash "$HERE/scripts/node-create.sh" --staged-files); rc=$?
+if [ "$rc" -eq 0 ] && printf '%s\n' "$staged" | grep -Fxq 'node-bus-worker.py' \
+  && [ "$(printf '%s\n' "$staged" | grep -Fc 'node-bus-worker.py')" = 1 ]; then
+  while IFS= read -r file; do
+    mkdir -p "$tmpd/scripts/$(dirname "$file")"
+    cp "$HERE/scripts/$file" "$tmpd/scripts/$file" || fails=$((fails+1))
+  done <<< "$staged"
+  mkdir -p "$tmpd/home"
+  cp "$tmpd/scripts/node-bus-worker.py" "$tmpd/home/node-bus-worker.py"
+  chmod +x "$tmpd/home/node-bus-worker.py"
+  if [ -x "$tmpd/home/node-bus-worker.py" ] && python3 -B "$tmpd/home/node-bus-worker.py" --help >/dev/null 2>&1; then
+    say "  PASS  staged node-bus-worker.py is executable at $HOME/node-bus-worker.py and accepts --help"
+  else
+    say "  FAIL  staged node-bus-worker.py is not usable at the crier probe path"; fails=$((fails+1))
+  fi
+else
+  say "  FAIL  staged node-bus-worker.py missing or duplicated (exit $rc)"; fails=$((fails+1))
+fi
+cp "$HERE/scripts/node-create.sh" "$tmpd/scripts/node-create.sh"
+sed -i 's/ deploy_key.py node-bus-worker.py/ deploy_key.py/' "$tmpd/scripts/node-create.sh"
+negative=$(bash "$tmpd/scripts/node-create.sh" --staged-files 2>&1); negative_rc=$?
+if [ "$negative_rc" -ne 0 ] && printf '%s\n' "$negative" | grep -Fq 'staged_set' \
+  && printf '%s\n' "$negative" | grep -Fq 'node-bus-worker.py'; then
+  say "  PASS  omitted node-bus-worker.py is rejected by the staged-set validator"
+else
+  say "  FAIL  staged-set negative control accepted an omitted node-bus-worker.py (exit $negative_rc)"; fails=$((fails+1))
+fi
+rm -rf "$tmpd"
+# ch:trace row=CF-276 spec=docs/handbook/chapters/M1-provisioning.md#M1-S2 test=bash tests/selftest.sh evidence=tests/selftest.sh:15b verdict=pending
+
 # CF-075 node-create-staged-set: real entry point and adapter, no network or installs.
 say "16. node-create staged set covers the disk floor and names missing dependencies"
 tmpd=$(mktemp -d)
@@ -2411,9 +2446,9 @@ mkdir -p "$tmpd/scripts/harness" "$tmpd/bin"
 no_ref=$(bash "$HERE/scripts/node-create.sh" --staged-files 2>&1); no_rc=$?
 with_ref=$(bash "$HERE/scripts/node-create.sh" --staged-files --ref master 2>&1); ref_rc=$?
 if [ "$no_rc" -eq 0 ] && [ "$ref_rc" -eq 0 ] && [ "$with_ref" = "$no_ref" ] \
-  && [ "$(printf '%s\n' "$with_ref" | grep -c .)" -eq 12 ] \
+  && [ "$(printf '%s\n' "$with_ref" | grep -c .)" -eq 13 ] \
   && ! printf '%s\n' "$with_ref" | grep -Fq 'unknown arg:'; then
-  say "  PASS  --staged-files --ref master -> exit 0, same twelve-file staged set"
+  say "  PASS  --staged-files --ref master -> exit 0, same thirteen-file staged set"
 else
   say "  FAIL  --ref rejected or changed the staged set (exit $no_rc/$ref_rc)"; fails=$((fails+1))
 fi
@@ -2496,7 +2531,7 @@ with tempfile.TemporaryDirectory(prefix="cf159-") as directory:
 
     for name in ("node-create.sh", "lib.sh", "project-node.sh", "install-go.sh", "disk_floor.py",
                  "reclaim_disk.py", "node_gateway_auth.py", "install-node.sh", "node_hygiene.py",
-                 "gomodcache.py", "deploy_key.py"):
+                 "gomodcache.py", "deploy_key.py", "node-bus-worker.py"):
         shutil.copyfile(root / "scripts" / name, scripts / name)
     shutil.copyfile(root / "scripts/harness/install-hermes.sh", scripts / "harness/install-hermes.sh")
     # The adapter sources this (CF-229); the fixture's staging tree must be a complete node.
@@ -2518,6 +2553,9 @@ esac
     executable(binary / "curl", "#!/bin/bash\nprintf 000\n")
     executable(home / "node-scripts/project-node.sh", '''#!/bin/bash
 printf '%s\\0' "$NODE_PROJECT" "$NODE_GATEWAY_PORT" "$CRIER_URL" "$@" > "$FIXTURE_VALUES"
+''')
+    executable(home / "node-bus-worker.py", '''#!/usr/bin/env python3
+print("fixture bus worker")
 ''')
     env = dict(os.environ, HOME=str(home), PATH=f"{binary}:/usr/bin:/bin",
                BUNKER_SERVER="fixture-server", CRIER_URL="http://fixture.invalid:8767",

@@ -61,17 +61,18 @@ staged_files() {
   # refuses a public bind without dashboard.basic_auth, and no other stage writes it (CF-150).
   # install-node.sh/node_hygiene.py/gomodcache.py are layer 10/00 dependencies of the runtime,
   # footprint and shared-cache rows; deploy_key.py is the injector --deploy-key runs here
-  # (CF-003). This list is not the authority: the closure derived below must equal it, in both
+  # (CF-003). node-bus-worker.py is the sidecar bunker-crier-connect.sh invokes from $HOME
+  # (CF-276). This list is not the authority: the closure derived below must equal it, in both
   # directions, or the run stops with a named staged_set row (CF-087).
   local -a declared=(project-node.sh install-go.sh install-node.sh lib.sh disk_floor.py reclaim_disk.py
-                     node_gateway_auth.py node_hygiene.py gomodcache.py deploy_key.py
+                     node_gateway_auth.py node_hygiene.py gomodcache.py deploy_key.py node-bus-worker.py
                      harness/harness-vars.sh "harness/install-$HARNESS.sh")
   # Files this script stages that the derived closure cannot reach: deploy_key.py is copied into
-  # the node and run there by --deploy-key, and that surface lives here, not in the entry point;
-  # harness/harness-vars.sh is part of the harness contract every adapter sources (specs/HARNESS.md),
-  # so an adapter that happens not to reference it — a foreign or fixture adapter — still gets it.
-  # Both are scanned for references like every other member.
-  local -a extra=(deploy_key.py harness/harness-vars.sh)
+  # the node and run there by --deploy-key, harness/harness-vars.sh is part of the harness contract
+  # every adapter sources (specs/HARNESS.md), and node-bus-worker.py is the sidecar consumed by
+  # bunker-crier-connect.sh. These surfaces live outside the entry point's closure, so they are
+  # explicit required sidecars and still participate in the same bidirectional validation.
+  local -a extra=(deploy_key.py harness/harness-vars.sh node-bus-worker.py)
   # Every spelling of a runtime reference: $HERE/x, ${HERE}/x, bare, and inside either quote
   # style. The capture stops at the quote/space, so "$HERE/x" and '$HERE/x' both yield x.
   local pattern='(\$HERE|\$\{HERE\})/([a-zA-Z0-9_./${}-]+)'
@@ -261,10 +262,14 @@ say "  ..    staging scripts"
 "$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'mkdir -p ~/node-scripts/harness' \
   || { bad "staged" "cannot create node-scripts directory"; incomplete; }
 while IFS= read -r file; do
-  "$b" cp "$HERE/$file" "$AGENT:node-scripts/$file" --server "$SERVER" \
+  case "$file" in
+    node-bus-worker.py) destination="$AGENT:node-bus-worker.py" ;;
+    *) destination="$AGENT:node-scripts/$file" ;;
+  esac
+  "$b" cp "$HERE/$file" "$destination" --server "$SERVER" \
     || { bad "staged" "copy failed: $file"; incomplete; }
 done <<< "$STAGED"
-"$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'chmod +x ~/node-scripts/project-node.sh ~/node-scripts/install-go.sh ~/node-scripts/install-node.sh ~/node-scripts/harness/*.sh' \
+"$b" exec --server "$SERVER" "$AGENT" -- bash -lc 'chmod +x ~/node-bus-worker.py ~/node-scripts/project-node.sh ~/node-scripts/install-go.sh ~/node-scripts/install-node.sh ~/node-scripts/harness/*.sh' \
   || { bad "staged" "cannot set script permissions"; incomplete; }
 ok "staged" "${STAGED//$'\n'/ + }"
 
