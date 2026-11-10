@@ -636,7 +636,7 @@ leg_smoke() {  # <id> <binary> <generation> <measured>
   return 0
 }
 
-# ch:trace row=CF-283 spec=docs/handbook/chapters/M5-harness.md#S2-S3 wave=code-factory-20261110-01-41-01 test=tests/harness-conformance.sh doc=docs/handbook/chapters/M5-harness.md prompt=/home/kara/.hermes/cache/scratch/code-factory-CF-283-brief-20261110-0141.txt evidence=worker-report witness=fixture-or-live-node verdict=none:foreman-runs-gitreins commit=none memory=none:foreman-closeout
+# ch:trace row=CF-283 spec=docs/handbook/chapters/M5-harness.md#S2-S3 wave=code-factory-20261110-01-41-01 test=tests/harness-conformance.sh doc=docs/handbook/chapters/M5-harness.md prompt=CF-283-brief evidence=worker-report witness=fixture-or-live-node verdict=none:foreman-runs-gitreins commit=none memory=none:foreman-closeout
 leg_node() {  # <id> — prove node creation separately from the adapter install/check legs
   local id="$1" script out rc missing row
   missing=""
