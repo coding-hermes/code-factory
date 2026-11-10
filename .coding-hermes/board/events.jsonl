@@ -655,3 +655,4 @@
 {"id":655,"timestamp":"2026-11-10T13:02:10Z","event_type":"task_created","task_id":"CF-409","actor":"foreman","detail":"{\"id\":\"CF-409\",\"status\":\"pending\"}","tick_number":null}
 {"id":656,"timestamp":"2026-11-10T13:02:18Z","event_type":"task_completed","task_id":"CF-408","actor":"foreman","detail":"{\"status\":\"complete\"}","tick_number":null}
 {"id":657,"timestamp":"2026-11-10T13:06:46Z","event_type":"task_updated","task_id":"CF-408","actor":"foreman","detail":"{\"status\":\"pending\"}","tick_number":null}
+{"id":658,"timestamp":"2026-11-10T13:10:22Z","event_type":"task_updated","task_id":"CF-409","actor":"foreman","detail":"{\"title\":\"Sync: 74 verdict-evidence pointers on 72 complete rows resolve to nothing at the ref\"}","tick_number":null}
