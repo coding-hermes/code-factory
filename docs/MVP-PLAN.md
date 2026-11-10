@@ -36,7 +36,10 @@ the board at `3d1b642` on 2026-11-08: `CF-211` closed the producer leg; `CF-150`
    primary, each is probed). (CF-214; the harness pin stays open, while `dashboard.basic_auth` no
    longer does: `CF-150` is `complete` (its subject was exactly that staging; `scripts/node_gateway_auth.py`
    is wired into `bunker-provision.sh`, evidence run `71cc322f`) and `CF-388` closed the fresh-node
-   staging failure — the surviving auth-gate defects are `CF-292`, `CF-193` and `CF-194`, all pending.)
+   staging failure — `CF-292` is also `complete` (board `commit_hash` `ee13de4`, an ancestor of
+   `origin/main`: presence is now the indented/blank/comment run after `dashboard:` with the
+   direct-child rule, pinned by `tests/test_node_gateway_auth.py`), so the surviving auth-gate
+   defects are `CF-193` and `CF-194`, both pending, plus the three residual shapes `CF-395` names.)
    The node environment is **declared**, not hand-edited: `NODE_ENV_FILE`
    plus `CONFIG_SET_*` name the provider key (by file path), the model pin, the bind and the
    port, and `scripts/node_env.py --apply` writes them before the harness layer starts a
