@@ -228,7 +228,20 @@ say "node-create — project=$PROJECT harness=$HARNESS server=$SERVER"
 if [ -z "$AGENT" ]; then
   AGENT="node-$PROJECT-$(date +%H%M%S)"
   say "  ..    spawning $AGENT (ttl $TTL)"
-  "$b" spawn "$AGENT" --server "$SERVER" --ttl "$TTL" >/tmp/spawn.log 2>&1 || { bad "spawn" "$(tail -1 /tmp/spawn.log)"; exit 1; }
+  spawn_log_root="${CF_RUNTIME_DIR:-${TMPDIR:-/tmp}}"
+  agent_log_id="${AGENT//[^[:alnum:]_.-]/_}"
+  spawn_log=$(mktemp "$spawn_log_root/cf-spawn-${agent_log_id}-XXXXXX.log") || {
+    bad "spawn" "cannot create spawn log under $spawn_log_root"
+    exit 1
+  }
+  if "$b" spawn "$AGENT" --server "$SERVER" --ttl "$TTL" >"$spawn_log" 2>&1; then
+    rm -f "$spawn_log"
+  else
+    spawn_diag=$(sed '/^[[:space:]]*$/d' "$spawn_log" 2>/dev/null | tail -n 1 || true)
+    [ -n "$spawn_diag" ] || spawn_diag="<no diagnostic output>"
+    bad "spawn" "failed; log=$spawn_log; final diagnostic: $spawn_diag"
+    exit 1
+  fi
   SPAWNED=1
   ok "spawn" "$AGENT"
 else

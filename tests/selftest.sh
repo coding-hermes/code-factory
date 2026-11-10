@@ -1115,7 +1115,12 @@ case "$1" in
   # CF-051: a supplied --agent is proved to exist before any success row; this fixture's
   # agent exists, so the reuse path still runs as it did.
   info) exit 0 ;;
-  spawn) printf '%s\n' "$2" > "$FIXTURE_AGENT" ;;
+  spawn)
+    if [ "${FIXTURE_SPAWN_FAIL:-0}" = 1 ]; then
+      printf '%s\n' 'fixture spawn refused: quota exhausted' >&2
+      exit 1
+    fi
+    printf '%s\n' "$2" > "$FIXTURE_AGENT" ;;
   cp) [ "${FIXTURE_CP_FAIL:-0}" = 0 ] || { echo 'fixture copy refused' >&2; exit 1; } ;;
   exec) case "$*" in *NODE_PROJECT=*)
     if [ -n "${FIXTURE_SCRIPTS:-}" ]; then
@@ -1147,12 +1152,37 @@ for arm in owned reused copy-failure; do
       say "  FAIL  reused agent cleanup ownership (exit $rc)"; fails=$((fails+1))
     fi
   elif [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fxq "cleanup required: bunker destroy $(cat "$tmpd/agent") --server fixture-server" \
-    && { [ "$arm" != copy-failure ] || printf '%s\n' "$out" | grep -Fq '  FAIL  staged — copy failed:'; }; then
+    && { [ "$arm" != copy-failure ] || { printf '%s\n' "$out" | grep -Fq '  FAIL  staged — copy failed:' \
+      && ! printf '%s\n' "$out" | grep -Fq '  PASS  provision'; }; }; then
     say "  PASS  $arm failure names spawned agent and explicit-server destroy command"
   else
     say "  FAIL  $arm failure lost cleanup command or staging error (exit $rc)"; fails=$((fails+1))
   fi
 done
+
+# CF-056: spawn diagnostics use a unique runtime log and a failed staging/spawn run cannot
+# print a later provision PASS. The fixture keeps the bunker dependency local and deterministic.
+mkdir -p "$tmpd/runtime"
+spawn_out=$(env -i HOME="$tmpd/control-home" PATH="$tmpd/bin:$PATH" BUNKER_SERVER=fixture-server \
+  CF_RUNTIME_DIR="$tmpd/runtime" FIXTURE_AGENT="$tmpd/agent" FIXTURE_SPAWN_FAIL=1 \
+  CRIER_URL=http://fixture.invalid:8767 \
+  /bin/bash "$tmpd/scripts/node-create.sh" --project fixture 2>&1); spawn_rc=$?
+spawn_log=$(printf '%s\n' "$spawn_out" | sed -n 's/.*log=\([^;]*\); final diagnostic:.*$/\1/p')
+if [ "$spawn_rc" -eq 1 ] \
+  && [ "$(printf '%s\n' "$spawn_out" | grep -Ec '^  FAIL  spawn — ' || true)" = 1 ] \
+  && [ -n "$spawn_log" ] && [ -f "$spawn_log" ] \
+  && printf '%s\n' "$spawn_log" | grep -Fq 'node-fixture-' \
+  && printf '%s\n' "$spawn_out" | grep -Fq 'final diagnostic: fixture spawn refused: quota exhausted' \
+  && ! printf '%s\n' "$spawn_out" | grep -Fq '  PASS  spawn' \
+  && ! printf '%s\n' "$spawn_out" | grep -Fq '  PASS  provision'; then
+  say "  PASS  CF-056 spawn/staging failure names unique log $spawn_log and emits no provision PASS"
+else
+  say "  FAIL  CF-056 spawn/staging failure lost unique log, diagnostic, or PASS suppression (exit $spawn_rc)"; fails=$((fails+1))
+  printf '%s\n' "$spawn_out" | sed 's/^/    | /'
+fi
+
+# ch:trace row=CF-056 spec=docs/handbook/chapters/M1-provisioning.md#S2-staged-set wave=none:serial test=tests/selftest.sh::cf056-spawn-staging-failure doc=docs/handbook/chapters/M1-provisioning.md evidence=tests/selftest.sh::cf056-spawn-staging-failure witness=none:local-fixture verdict=none:foreman-judges-at-accepted-tip commit=none:worker-commit memory=none:foreman-writes
+# END CF-056
 
 # CF-126 ARM A: the same transport fixture executes the real, staged layer 00.
 # No install or network access: only the scoped checker runs, with curl stubbed.
