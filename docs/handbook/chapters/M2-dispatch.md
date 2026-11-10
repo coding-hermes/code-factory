@@ -34,6 +34,20 @@ side is CF-355 (a failed result with no `ok` is recorded as success).
 | S2 resolve a target | `lane_target.py` | **active** | `scripts/configure_family.py:17` imports it and `:149` calls `lane_target.parse(workdir)` then branches on the result — a production caller **in-repo** (3 / B09). An earlier citation of "no production caller" was false. Passing the parse does not prove a remote checkout exists (it is structural parsing, not remote verification) |
 | S3 consume the inbox, sign, reply | `node-bus-worker.py` | **active** | decodes the directive (`directive_text`, `:977`), consumes one dispatch (`process`, `:1007`), builds the reply (`:1176-1192`), delivers (`:1208`), settles (`:1389-1422`) |
 
+**III.M2.S2 — CF-305.** `repo-url --row` compares each non-sync satellite against
+the row bearing its primary's full name, including a primary that itself ends in
+a satellite suffix. A row can participate in both its parent and child families;
+duplicate names are rejected as ambiguous. Sync leaves remain independent of
+their siblings. Comparable values are checked even when a root is invalid, while
+the root's own failure remains. An absent primary retains the existing
+lexicographic fallback. `tests/test_lane_target.py` exercises aligned and diverged
+ordinary and suffix-named primaries, nested families, duplicate names, invalid
+roots, and sync independence. A read-only scheduler census on 2026-11-10 found
+881 rows and 174 previously missed pairs: 174 comparable, 173 differing and all
+173 reported by the updated checker. This is not evidence that those roots exist.
+
+<!-- ch:trace row=CF-305 spec=docs/handbook/chapters/M2-dispatch.md wave=none:serial test=tests/test_lane_target.py doc=docs/handbook/chapters/M2-dispatch.md prompt=none:external-brief evidence=none:pending-foreman witness=none:pending-foreman verdict=none:pending-judge commit=none:pending-commit memory=none:pending-foreman -->
+
 **Finding F2-2.** `configure_family.py:24-28` hardcodes `PID = "1755676"` and reads
 `/proc/<PID>/environ` at module import to extract `SCHEDULER_OPERATOR_TOKEN`, with no fallback.
 Configuration fails (or mis-targets) before the chapter's "partial write" failure mode unless that

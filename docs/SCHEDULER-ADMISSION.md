@@ -100,10 +100,12 @@ not permitted, and 4 local verification failed. Recognized remote targets requir
 rows, exit 2 takes precedence over 3, then 4. The summary counts rejected and accepted rows.
 
 Since CF-091, `repo-url --row` also enforces step 1's value comparison itself: rows supplied
-by `--row` are grouped into families using the suffix table above (for a non-sync lane the
-primary is the lane name with its recognized suffix removed; for `-sync` the leaf is the full
-lane name, so sync lanes are never grouped with siblings), and every family with at least two
-rows is compared on a normalized `repo_url` (local targets by realpath, remote targets by the
+by `--row` are grouped using the suffix table above. Each row also serves as the reference
+for its own non-sync satellites, even when its name ends in a recognized suffix; a nested
+row can therefore be both a satellite and a primary. A `-sync` row keeps its full name as
+its family key and is not grouped with siblings. Duplicate names are rejected as ambiguous.
+Comparable rows are checked even if their individual root checks fail, without erasing those
+failures. Every family with at least two rows is compared on a normalized `repo_url` (local targets by realpath, remote targets by the
 parser's display form, trailing slash stripped). A row whose normalized value differs from the
 family's reference (the row named exactly `<primary>`, else the lexicographically first name
 in the family) is rejected with exit 4 and a line naming both lanes:

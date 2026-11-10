@@ -431,9 +431,8 @@ def scan(projects_jsonl: str, allow_remote: bool, home: Optional[str] = None) ->
 
 
 # Satellite-family suffixes, from docs/SCHEDULER-ADMISSION.md's family table (the
-# scheduler's `satelliteLaneSuffixes`). For a non-sync lane the primary is the lane
-# name with the recognized suffix removed; for -sync the leaf is the full lane
-# name, so sync lanes are never grouped with siblings.
+# scheduler's `satelliteLaneSuffixes`). A non-sync satellite may also be the
+# primary of a nested family; -sync lanes remain independent leaves.
 FAMILY_SUFFIXES = (
     "-qa",
     "-pm",
@@ -577,15 +576,37 @@ def repo_urls(
     # rejected above and has nothing comparable.
     if row_file is not None:
         families: dict[str, list[tuple[int, str, str, str]]] = {}
-        for idx, (name, raw, ok) in enumerate(zip(names, raws, ok_row)):
-            if not ok or not name or not isinstance(raw, str):
+        named: dict[str, list[int]] = {}
+        for idx, name in enumerate(names):
+            if name:
+                named.setdefault(name, []).append(idx)
+        for name, indices in named.items():
+            if len(indices) > 1:
+                codes.add(4)
+                for idx in indices:
+                    ok_row[idx] = False
+                print(f"FAIL repo_url — ambiguous duplicate lane name {name!r}")
+        for idx, (name, raw) in enumerate(zip(names, raws)):
+            if not name or not isinstance(raw, str) or len(named[name]) != 1:
                 continue
             normalized = normalized_repo_url(raw)
             if normalized is not None:
-                families.setdefault(family_key(name), []).append(
-                    (idx, name, raw, normalized)
-                )
+                member = (idx, name, raw, normalized)
+                key = family_key(name)
+                families.setdefault(key, []).append(member)
+                # A suffix-named row is simultaneously its own primary when it
+                # has children. Never reclassify a sync leaf as a parent.
+                if key != name and not name.endswith("-sync"):
+                    families.setdefault(name, []).append(member)
         for primary, members in families.items():
+            if primary in named and len(named[primary]) != 1:
+                for idx, name, raw, _ in members:
+                    codes.add(4)
+                    ok_row[idx] = False
+                    print(
+                        f"FAIL repo_url {raw!r} — ambiguous primary {primary!r} [{name}]"
+                    )
+                continue
             if len(members) < 2:
                 continue
             reference_row = next((m for m in members if m[1] == primary), None)

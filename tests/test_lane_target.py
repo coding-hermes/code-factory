@@ -391,6 +391,65 @@ class RepoURLFamilyAgreement(unittest.TestCase):
             text=True,
         )
 
+    def test_suffix_primary_and_ordinary_primary_match(self):
+        roots = two_roots()
+        for primary in ("notes", "notes-docs"):
+            for diverged in (False, True):
+                with self.subTest(primary=primary, diverged=diverged):
+                    rows = [
+                        {"name": primary, "repo_url": roots["repo-a"]},
+                        {
+                            "name": primary + "-qa",
+                            "repo_url": roots["repo-b" if diverged else "repo-a"],
+                        },
+                    ]
+                    out = self.run_check("--row", "-", rows=rows)
+                    self.assertEqual(out.returncode, 4 if diverged else 0, out.stdout)
+                    if diverged:
+                        self.assertIn(f"diverges from primary '{primary}'", out.stdout)
+
+    def test_nested_primary_compared_to_own_satellite_and_parent(self):
+        roots = two_roots()
+        rows = [
+            {"name": "notes", "repo_url": roots["repo-a"]},
+            {"name": "notes-docs", "repo_url": roots["repo-a"]},
+            {"name": "notes-docs-qa", "repo_url": roots["repo-b"]},
+        ]
+        out = self.run_check("--row", "-", rows=rows)
+        self.assertEqual(out.returncode, 4, out.stdout)
+        self.assertIn("diverges from primary 'notes-docs'", out.stdout)
+
+    def test_duplicate_primary_is_ambiguous(self):
+        roots = two_roots()
+        rows = [
+            {"name": "notes", "repo_url": roots["repo-a"]},
+            {"name": "notes", "repo_url": roots["repo-b"]},
+            {"name": "notes-qa", "repo_url": roots["repo-a"]},
+        ]
+        out = self.run_check("--row", "-", rows=rows)
+        self.assertNotEqual(out.returncode, 0, out.stdout)
+        self.assertIn("ambiguous", out.stdout)
+
+    def test_invalid_root_still_compared(self):
+        rows = [
+            {"name": "notes-docs", "repo_url": "/missing-cf305-root"},
+            {"name": "notes-docs-qa", "repo_url": fixture()["repo"]},
+        ]
+        out = self.run_check("--row", "-", rows=rows)
+        self.assertEqual(out.returncode, 4, out.stdout)
+        self.assertIn("diverges from primary 'notes-docs'", out.stdout)
+        self.assertIn("2 rejected, 0 accepted", out.stdout)
+
+    def test_sync_remains_independent_from_parent(self):
+        roots = two_roots()
+        rows = [
+            {"name": "notes", "repo_url": roots["repo-a"]},
+            {"name": "notes-sync", "repo_url": roots["repo-b"]},
+        ]
+        out = self.run_check("--row", "-", rows=rows)
+        self.assertEqual(out.returncode, 0, out.stdout)
+        self.assertNotIn("diverges", out.stdout)
+
     def test_diverged_satellite_is_rejected_naming_both_lanes(self):
         roots = two_roots()
         rows = [
