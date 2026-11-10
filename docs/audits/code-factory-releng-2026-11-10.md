@@ -8,7 +8,7 @@ Verdict: **tree is releasable from a green commit; no release is tagged, because
 
 | Item | Value |
 | --- | --- |
-| Checkout | `/home/kara/code-factory` (local cache — workers and sibling lanes are allowed to dirty it) |
+| Checkout | the project checkout on the lane host (local cache — workers and sibling lanes are allowed to dirty it) |
 | Canonical source of board and tree | `origin/main` |
 | Published tip verified | `72b7010ed00e261fd22b85da6a390e06d80afed1` |
 | Verification tree | detached worktree at `origin/main`, `git status --porcelain -uall` = 0 lines |
@@ -93,7 +93,7 @@ does not need the bundle — it proves the judged content is the landed content.
 | Visibility / license / default branch | `gh api repos/<slug>` | public, not archived, license `MIT`, default branch `main` |
 | License file in tree | `ls -1 \| grep -iE '^(LICENSE\|COPYING\|NOTICE)'` | `LICENSE` — "MIT License, Copyright (c) 2026 coding-hermes contributors" |
 | Tracked credential-shaped files | `git ls-files \| grep -E '(^\|/)\.env$\|id_rsa\|id_ed25519\|\.pem$\|\.p12$\|credentials'` | none tracked; one `.env.example` |
-| Secret scan of the published tree | `gitleaks dir . --no-banner --redact --exit-code 0` | `no leaks found`, ~3.75 MB scanned, rc=0 |
+| Secret scan of the published tree | `gitleaks dir . --no-banner --redact --exit-code 0` — a directory scan of this exact tree, deliberately run without `--log-opts`, so it certifies the tip's working tree and claims no revision range (a history-range claim is a different scan and is not made here) | `no leaks found`, ~3.75 MB scanned, rc=0 |
 | Secret scanning (GitHub) | `gh api repos/<slug> --jq '.security_and_analysis'` | `secret_scanning: enabled`, `secret_scanning_push_protection: enabled` |
 | Open secret-scanning alerts | `gh api 'repos/<slug>/secret-scanning/alerts?state=open'` | 0 |
 | Branch protection | `gh api repos/<slug>/branches/main/protection` | **404 "Branch not protected"** |
@@ -132,3 +132,18 @@ re-running this audit; the gate command and its verdict are recorded above.
 - No board row filed: every finding above maps to an existing row. The CF-008/CF-066 blob-identity
   result is evidence for CF-389, not a new defect class.
 - No tag, no version bump: blocked on CF-161 by design.
+
+## 7. How this document reached green
+
+The first version of this write-up was committed and pushed as `f94b0ede`, and the repository's own
+gate rejected it on two of its checks — both defects in the document, not in the tree it describes:
+
+| Caught by | Failure text | Cause | Fix |
+| --- | --- | --- | --- |
+| `scripts/check_scan_scope.py` (CF-163 AC3) | `audit-scope: docs/audits/code-factory-releng-2026-11-10.md:96 gitleaks claim names no --log-opts` | the secret-scan row quoted a `gitleaks` command without naming the revision scope it does and does not cover | the row now says the scan is a directory scan of the tip, deliberately without `--log-opts`, and claims no revision range |
+| `tests/selftest.sh` section 61 (CF-050) | `publish paths — baseline 143, current 144; paths: docs/audits/code-factory-releng-2026-11-10.md` | the identity table carried an absolute host-home checkout path into a public repository | the path is now described, not quoted; the baseline stayed at 143 instead of being raised to admit the leak |
+
+`f94b0ede` was the red commit on `main`; the fix is its child, and the gate is re-run on the fixed
+tree before this line is believed. Re-run the two checks alone — `python3 scripts/check_scan_scope.py .`
+and `bash tests/selftest.sh` section 61 — to reproduce both failures against `f94b0ede` (the
+`git grep -lIE '/home/[a-z][a-z0-9_-]*/' f94b0ede -- .` form is the publish-path check in one line).
