@@ -317,7 +317,7 @@ and conformance pass rate are answerable only by reading the leg rows.
 | Interpreter out of range | `hermes-agent … requires python >=3.11,<3.14` | a python absence | install a 3.11–3.13 interpreter |
 | Node runtime absent or wrong | `FAIL tool:node — missing — kind node needs a Node runtime …` (check) / `FAIL node — <path> reports 'vX' — want v22.22.3` (a lying binary) | a graded pass `PASS tool:node — $HOME/node-toolchain/current/bin/node (v22.22.3)` | `project-node.sh --apply` runs `install-node.sh`, which refuses a digest mismatch instead of extracting; `install-node.sh --check --root <r>` answers the scoped question |
 | Shared cache writable or grown | `FAIL modcache_seal — … writable path(s)` / `FAIL modcache_manifest — ±N bytes since seal` | `PASS modcache_seal — … read-only (no write bits, owner included)` | `gomodcache.py seal` on the prewarm host; a node never needs write access to a cache it does not own |
-| Unsupported adapter claims support | `install-deepseek.sh`/`install-pi-agent.sh` refuse `--apply` with "no measured install ladder" | a certified adapter | treat them as check-only until a ladder is measured (F5-3); this does not apply to the separate measured `dsh` package adapter |
+| Unsupported adapter claims support | `install-deepseek.sh` refuses `--apply` with "no measured deepseek install ladder"; `install-pi-agent.sh` refuses it only when `PI_FIXTURE_DIR` is unset (`:132-134`) | a certified adapter | treat `install-deepseek.sh` as check-only until a ladder is measured (F5-3); the pi adapter's fixture ladder is measured, but its live upstream install and live turn are not. Neither statement applies to the separate measured `dsh` package adapter |
 | Worker seat not in registry | `deepseek-v4-flash@deepseek-foreman` absent | a valid seat | **OPEN** — CF-376 |
 
 ## 11. Limits and margins
@@ -343,8 +343,12 @@ and conformance pass rate are answerable only by reading the leg rows.
     provenance, user-space prefix, `dsh --version` readback, idempotent apply, and per-layer
     diagnosis; `--pin-status` is the required RC re-measurement. Its crier adapter is explicitly
     deferred, so only the node worker drives it today.
-  - `install-pi-agent.sh` — **`--apply` refused** (`:107-109`): "no measured pi install ladder";
-    sources `harness-vars.sh`.
+  - `install-pi-agent.sh` — **fixture-backed `--apply`**, refused only without a fixture (`:132-134`:
+    "refused — no measured upstream ladder; set PI_FIXTURE_DIR for the hermetic fixture-backed
+    ladder"); with `PI_FIXTURE_DIR` set it publishes the pinned tree under
+    `$HOME/.local/harness/oh-my-pi/18.16.0` and reads the package, bun and pi versions back
+    (`:153`), so the live upstream install and the live turn stay **UNVERIFIED** while the fixture
+    ladder is measured (CF-228); sources `harness-vars.sh` (`:10`).
   - `install-aider.sh` — **`--apply` refused** (`:103-106`): the aider ladder is unmeasured, and the
     documented method (`pip install aider-chat` into a venv) is printed as a `..` note beside a real
     `--check`; sources `harness-vars.sh` (`:21`). Closes CF-006's last silent row for aider.
