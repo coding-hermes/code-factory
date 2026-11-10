@@ -6359,6 +6359,7 @@ fi
 rm -rf "$cf275"
 
 # ch:trace row=CF-003 spec=specs/NODE.md#credentials--per-repo-deploy-keys wave=none:single-shared-checkout test=tests/test_node_provisioning.py doc=docs/handbook/chapters/M1-provisioning.md prompt=CF-003-brief evidence=tests/test_node_provisioning.py witness=bash tests/selftest.sh verdict=none:foreman-lifecycle commit=none:worker-commit-pending memory=none:foreman-closeout
+# ch:trace row=CF-007 spec=docs/handbook/chapters/M8-safety.md#s1 wave=none:serial-worker test=tests/selftest.sh::section-58 doc=docs/handbook/chapters/M8-safety.md prompt=none:worker-brief evidence=tests/test_node_provisioning.py::OrphanReap witness=none:local-fixture verdict=none:foreman-will-run-gitreins commit=none:worker-commit memory=none:foreman-closeout
 say "58. per-repo deploy key, node runtime, shared module cache, footprint, orphan reap (CF-003)"
 # Two layers of proof. The unit battery owns the mechanisms (a key refused at 0644, a wrong
 # digest installing nothing, a sealed cache that builds with GOPROXY=off and refuses to grow,
