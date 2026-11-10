@@ -144,6 +144,9 @@ gate rejected it on two of its checks — both defects in the document, not in t
 | `tests/selftest.sh` section 61 (CF-050) | `publish paths — baseline 143, current 144; paths: docs/audits/code-factory-releng-2026-11-10.md` | the identity table carried an absolute host-home checkout path into a public repository | the path is now described, not quoted; the baseline stayed at 143 instead of being raised to admit the leak |
 
 `f94b0ede` was the red commit on `main`; the fix is its child, and the gate is re-run on the fixed
-tree before this line is believed. Re-run the two checks alone — `python3 scripts/check_scan_scope.py .`
+tree before this line is believed. The mechanism behind the second row — a pre-commit guard that
+evaluates HEAD cannot see a staged new file, so a lane that fixes what the guard complains about has
+to bypass it and land the red commit anyway — is filed as **CF-405**, together with the earlier
+incidents CF-401 and CF-404 that show the same sequence. Re-run the two checks alone — `python3 scripts/check_scan_scope.py .`
 and `bash tests/selftest.sh` section 61 — to reproduce both failures against `f94b0ede` (the
 `git grep -lIE '/home/[a-z][a-z0-9_-]*/' f94b0ede -- .` form is the publish-path check in one line).
