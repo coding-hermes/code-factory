@@ -491,22 +491,85 @@ event. A crash at each transaction/external-call boundary must preserve these co
 
 `hooks` is an ordered list of `{id,phase,required,artifact_digest,argv,timeout_s,
 max_attempts}`; phase is PRE/POST, required is boolean, argv is a nonempty string
-array without shell expansion, timeout_s is 1..300, max_attempts is 1..3 (default 1).
-IDs are unique within phase; required lists include PRE board-freshness and POST
-merged-tree verifier. The plan digest is canonical JSON SHA-256 pinned at admission.
+array without shell expansion, timeout_s is 1..300, max_attempts is 1..5 (default 1
+for PRE, 5 for read-only POST). IDs are unique within phase; required lists include PRE
+board-freshness and POST merged-tree verifier. The plan digest is canonical JSON SHA-256
+pinned at admission. POST retry delay is 30 seconds, and all attempts remain inside the
+original round/tick deadline.
 Hooks execute serially in declared order through M11's supervised runner with
-`hook.v1` input `{round_id,phase,board_commit,result_digest,deadline}` on fd 3;
-result_digest is null for PRE. fd 4 returns `{outcome: pass/fail/unknown,
-evidence_refs: digest[],error: Error or null}`. Nonzero exit, malformed output,
-timeout or runner crash is fail/unknown, never pass. Each receipt records plan digest,
+`hook.v1` input `{round_id,phase,board_commit,result_digest,deadline}` as one JCS line
+on stdin; result_digest is null for PRE. Stdout returns one `cf.native-event.v1`
+`result` record whose data is `{outcome: pass/fail/unknown,evidence_refs: digest[],
+error: Error or null}`. The retired fd-3/fd-4 hook channel is refused. Nonzero exit,
+malformed output, timeout or runner crash is fail/unknown, never pass. Each receipt records plan digest,
 hook ID, ordinal, attempt number, exit/signal, output digest and outcome durably.
 Retry identity is `(round_id,plan_digest,phase,hook_id,attempt)`; uncertainty first
 queries the original launch. Required PRE failure releases capacity before dispatch;
 optional failure records degraded and continues. Required POST failure leaves the
-execution result unchanged and Factory state PROJECTIONS_PENDING; retry needs a new
-hook attempt within the original deadline, otherwise fenced recovery remains pending.
+execution result unchanged and CT-06 state postcheck_pending. Retry uses the same hook
+identity up to the plan's five-attempt default within the original deadline; exhaustion
+settles failure as `POSTCHECK_FAILED` with one final accounting effect. An authorized
+later reconciliation appends a revision without relaunching work.
 Missing required hook or invalid plan is HOOK_REFUSED, with no unhooked fallback.
 [CT-12/13; VII.6; V.9]
+
+## 19. Grant admission, deadline and final settlement integration (P6-01/08/10/11/12)
+
+Before CT-02 custody, Scheduler obtains the exact one-use grant in Part I §1.9.10. The
+grant request binds round/run/correlation, active binding generation, owner fence,
+destination agent/endpoint digest and admission digest. Scheduler resolves the returned
+secret only through its control-broker sealed descriptor and presents it in the
+authorization header to Crier; no token appears in the CT-02 JSON or process environment.
+Crier consumes the grant by hash before custody. Scheduler handles outcomes as follows:
+`GRANT_EXPIRED`, `GRANT_CONFLICT`, `GRANT_REUSED` and `BINDING_NOT_ACTIVE` defer without
+native launch; `GRANT_UNAVAILABLE` is `UNKNOWN`, also without launch; a lost consume reply
+is resolved by `GET /v1/dispatch-grants/{grant_id}` and Crier delivery readback, never by
+creating another round or grant ID.
+
+Scheduler also implements the participant side of `binding.prepare.v1` and
+`binding.commit.v1` from Part I. Prepare persists a non-routable candidate and its probe
+receipt; commit activates only the matching prepared/active digests. After a one-sided
+acknowledgement, Scheduler serves its durable state to the manager and accepts the same
+commit replay. Until Crier and Scheduler readbacks agree, allocation can evaluate and
+report candidates but cannot reserve a new execution round. The Scheduler never writes a
+Crier binding through an undocumented database side channel.
+
+Admission materializes Part V §V.12. `total_budget` is 1..100000 worker identities,
+including the valid 20,000 case; simultaneous slots remain an independent resource.
+`deadline_s` is 120..604800 seconds, default 21600; `tick_wall_s` has the same default and
+must cover the round plus settlement. The scheduler's deadline record contains
+`admitted_monotonic`, `round_deadline`, `postcheck_deadline` and `tick_deadline`. Every
+model-turn timeout, attempt wall, hook, retry and outbox operation consumes the same
+monotonic round budget; none resets it at a wave or process restart. A remaining attempt
+budget insufficient for launch/transfer/cleanup reserves returns
+`DEADLINE_INSUFFICIENT` before grant request.
+
+The §15 lifecycle names are projections, not a second state machine. `RETURNED` is CT-06
+`received`; `PROJECTIONS_PENDING` for memory/evidence is `awaiting_evidence` (also named
+`REPORTED_PENDING_MEMORY` in VII); `PROJECTIONS_PENDING` for a required POST hook is
+`postcheck_pending`; `CLOSED` is one of `settled_success`, `settled_failure` or
+`settled_partial` from Part I's reduction; unresolved `UNKNOWN` is CT-06 `unknown`.
+Execution status remains immutable while settlement revisions change. Capacity releases
+only after native quiescence, even while projections remain pending. Worker allowance is
+not credited back, and no next round starts until the prior round reaches a terminal
+settlement revision.
+
+A clean worker exit without a durable result is `UNKNOWN_RESULT`, not pass. Worker death
+after result fsync replays that result; death before evidence fsync is unknown and
+quarantined. Control-plane death triggers recovery by round/grant/execution keys, never a
+new launch. A definitive launch refusal is fail with one never-started refund only when
+`NEVER_ACCEPTED` is proved. A definitive publication failure is partial; uncertain commit,
+push or gate evidence is unverified. POST exhaustion after the plan's valid 1..5 attempts
+(default five) settles `POSTCHECK_FAILED`. Late evidence appends a reconciliation revision
+and reruns read-only checks only.
+
+Scheduler emits admission, grant, binding, hook, capacity and settlement events through
+Part V §V.10 with full FactoryIdentity. Network errors use bounded peer/reason labels and
+retain round/run/attempt/task IDs in the event. Durable cursors suppress duplicates across
+collector and Scheduler restarts. Missing board, grant, metric or evidence observations
+remain unknown rather than zero/pass. Shared vectors exercise grant loss, one-sided
+binding recovery, 20,000 allowance/two slots, same-worker correction, failed-start refund,
+postcheck exhaustion and late evidence against these exact transitions.
 
 ## RED field count: 5 (§9 log inventory 2 of 382 sites — the remaining 380 are the named RED, not a "sample"; §3 S1 grep-level (`tick_process`/`packer_select`/`namespace_alloc` not line-by-line — `noop_pacing.go`/`packer_select.go:385-400`/`spawn.go` ARE read); §5 the auxiliary-flag reader/precedence not re-verified per flag (the consequence column is now filled); S4 per-route contract not written — B18; S3 write authorities/recovery queries not written — B17)
 

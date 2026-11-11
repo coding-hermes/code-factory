@@ -481,31 +481,40 @@ live conformance exist the runtime is UNVERIFIED and activation refuses.
 ### 16.1 Boot, invocation, status and cancellation
 
 The Bunker init launches exactly
-`$HOME/.local/libexec/cf-resident --protocol cf.supervisor.v1 --state $HOME/.node/execution`
-as the Bunker UID, cwd HOME, umask 077, after the persistent HOME mount. No shell
-expansion of request data occurs. A lifetime flock rejects a second supervisor.
-Boot replays the journal, validates release/config/fence/binding, discovers outstanding
-native runs, and only then starts the signed Crier admission receiver. Failed recovery
-serves status with admission=false; it does not discard prior attempts.
+`/opt/factory/supervisor/current/bin/cf-resident --protocol cf.supervisor.v1 --state /var/lib/factory/control/execution`
+as `factory-control`, cwd `/var/lib/factory/control`, umask 077, after the protected
+control mount and read-only release mounts are verified. No shell expansion of request
+data occurs. A lifetime flock rejects a second supervisor. Boot replays the journal,
+validates release/config/fence/binding, discovers outstanding native runs, and only then
+starts the signed Crier admission receiver. Failed recovery serves status with
+admission=false; it does not discard prior attempts.
 
-The supervisor exposes a mode-0600 AF_UNIX socket `.node/execution/control.sock`.
-Peer SO_PEERCRED must match the node UID. Each request is one UTF-8 JCS object plus
-LF (maximum 1048576 bytes): `{schema_version:"cf.supervisor.v1",request_id:ID,
-verb:submit/status/cancel/drain/resume,input:object}`. Submit input is the complete
+The supervisor exposes `/run/factory/<project>/supervisor.sock` for service
+administration and `/run/factory/<project>/submit.sock` for fenced foreman submission,
+both mode 0600 and owned by `factory-control`. The worker namespace contains neither.
+SO_PEERCRED, role, registration generation and live fence authorize each verb under M1
+§17.5. Each request is one UTF-8 JCS object plus LF (maximum 1048576 bytes):
+`{schema_version:"cf.supervisor.v1",request_id:ID,
+verb:submit/status/output/cancel/drain/resume,input:object}`. Submit input is the complete
 CT-02 or CT-05 outer envelope; status input is `{execution_key:SHA|null}` (null lists
-all); cancel is `{execution_key:SHA,control_id:ID,expected_state_version:PosInt,
-reason:Text}`; drain is `{operation_id:ID,deadline_s:integer[1,600]}`; resume is
-`{operation_id:ID,expected_generation:PosInt}`. Responses use Part IV ResponseBody.
-Submit returns the durable handle and duplicate flag; status returns journal records
-with execution_key, native_name, state, state_version, process_instance_id,
-native_session_id (ID or null), result_ref (EvidenceRef or null). Socket command
-receipt is not an execution verdict. Cancellation uses the M2 state CAS and exact
+all); output input is `{execution_key:SHA,stream:stdout|stderr,offset:UInt,
+limit:integer[1,65536]}`; cancel is `{execution_key:SHA,control_id:ID,
+expected_state_version:PosInt,reason:Text}`; drain is `{operation_id:ID,
+deadline_s:integer[1,600]}`; resume is `{operation_id:ID,expected_generation:PosInt}`.
+Responses use Part IV ResponseBody. Submit returns `{execution_key,launch_id,dispatch_id,
+native_name,state,state_version,duplicate}`; status returns journal records with role,
+execution_key, launch_id, native_name, state, state_version, process_instance_id,
+native_session_id (ID or null), result_ref (EvidenceRef or null). Output returns
+`{bytes_b64,next_offset,eof,digest}` and never restarts execution. Socket command receipt
+is not an execution verdict. Cancellation uses the M2 state CAS and exact
 boot/start/session identity before TERM/KILL; PID reuse never authorizes signaling.
 
 The launch adapter invocation is
-`$HOME/.local/libexec/cf-hermes --protocol cf.native.v1 --execution-key <SHA>`.
-It receives one `cf.native-input.v1` JCS object plus LF on stdin: schema_version,
-role (`foreman` or `worker`), execution_key, brief (BriefInput), brief_digest,
+`/opt/factory/hermes/current/bin/cf-hermes --protocol cf.native.v1 --execution-key <SHA>`.
+It runs as `factory-foreman` for a foreman or `factory-worker` for a worker, with no
+shell, no parent process outside the supervisor's cgroup and no role crossing. It receives
+one `cf.native-input.v1` JCS object plus LF on stdin: schema_version,
+role (`foreman` or `worker`), execution_key, launch_id, brief (BriefInput), brief_digest,
 workspace (Workspace), effective (EffectiveSettings), owner_fence (Fence).
 The supervisor creates the worktree at the exact Workspace base object, rejects
 symlink escape, sets cwd to its absolute realpath and connects stdin by pipe,
@@ -536,8 +545,11 @@ are IDs. CF_RUN_ID maps to admission.run_id, not corr_id. CF_WORKDIR is the vali
 Workspace absolute realpath. CF_BASE_URL is the registered HTTPS proxy endpoint;
 CF_API_KEY_FILE is the assigned proxy capability file; both are mandatory in the
 resident MVP even though optional for historical offline adapters. Its mode is
-exactly 0600, owner=node UID, regular file, no symlink, nonempty, unexpired; 000,
-0400 and 0700 are refused. The key is read inside the adapter, never argv or stdout.
+exactly 0600, owner is the current role UID (`factory-foreman` or `factory-worker`),
+regular file, no symlink, nonempty, unexpired; 000, 0400 and 0700 are refused. The file
+lives in that role's credential mount, never in the shared control root. The key is read
+inside the adapter, never argv or stdout. Cross-scope resolution and unsealed descriptors
+refuse before process release.
 
 Optional values: CF_SKILLS_DIR is the immutable seed generation's skills directory;
 CF_MAX_TURNS defaults 40 and is integer 1..10000; CF_TIMEOUT_S defaults 1800 and is
@@ -621,6 +633,48 @@ outage, not a permanent waiver of the memory leg. All conformance/check warnings
 reduce to UNVERIFIED; action-only advisory warnings may preserve action success but
 cannot certify a check. Shared memory export currently lacking implementation therefore
 blocks live support. Telemetry is M0 §16.1 with lifecycle/conformance events.
+
+### 16.5 Integrated release, containment and timeout qualification (P6-01/07/09/10/11/12)
+
+The release lock resolves through Part V `execution.artifact_ref` and
+`execution.harness_artifact_ref`, not an ambient `$HOME` binary. The supervisor verifies
+both SignedArtifact objects and the signed profile's service/foreman/worker UID, mount and
+socket map before `RUNNING`; any mismatch is `ARTIFACT_UNQUALIFIED` or `PROFILE_CONFLICT`.
+The effective-settings readback includes those release/profile digests, role UID, mount
+modes and socket visibility, so an executable answering a version string cannot qualify
+an unenforced installation.
+
+The conformance union gains the following required legs: `foreman-launch-identity`,
+`worker-launch-identity`, `protocol-framing`, `control-isolation`,
+`credential-sealing`, `attempt-deadline` and `round-deadline`. They prove one cold CT-02
+foreman launch without future worker IDs, subsequent CT-05 submission to the same
+supervisor, exact stdin/stdout event framing, worker denial of every administrative or
+credential interface, sealed-descriptor staging, the SC-09 two-turn deadline case and
+round-wide deadline accounting. The pre-integration `supervisor.v1`, fd-3/fd-4 and
+same-UID control-socket forms are negative controls and must be refused.
+
+The process contract is fail closed. The supervisor creates one cgroup and process group
+per execution key, registers the child's boot ID and `/proc` start ticks before release,
+and uses parent-death notification only as a signal to reconcile, never as proof of death.
+The child cannot reparent to a service manager or escape into another backend: no new
+PID-namespace parent is accepted, no host container runtime socket is mounted, and the
+launcher supports only the profile's registered backend. Unsupported delegation, a missing
+cgroup, a cross-backend native ID or uncertain descendant readback returns
+`EXECUTION_BACKEND_UNSUPPORTED` or `STOP_UNKNOWN` before admission/replacement.
+
+Terminal classification follows Part I §1.9.10. Exit 0 without one durable result is
+`UNKNOWN_RESULT`; process exit before evidence fsync is `unknown`; result fsync followed
+by worker death replays the existing outbox; native-start uncertainty remains quarantined;
+and an uncertain commit/gate readback is `unverified`, not a synthetic third verdict.
+Scheduler, not this harness, applies final settlement. A failed required projection does
+not rewrite a passing execution result.
+
+Lifecycle, cancellation, result and network events use the global projection in Part V
+§V.10. Each carries `factory-control` or the appropriate role as source and the complete
+FactoryIdentity once allocated. Metric emission and scrape both validate the event schema;
+unavailable observations remain null/unknown, and a successful local metric read never
+certifies containment or a live upstream adapter. Shared conformance vectors, rather than
+chapter-specific defaults, are the required fixtures.
 
 ## RED field count: 4 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; M5-C2 contract state UNVERIFIED — a port/service is not a `file:function`; §9 inventory 4 of 215+ helper call sites — the descriptive per-measurement rows not tabulated one-per-site)
 

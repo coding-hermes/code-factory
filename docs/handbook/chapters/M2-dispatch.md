@@ -317,9 +317,10 @@ mode/capability is `EXECUTION_MODE_UNSUPPORTED`; all modes share the same ledger
 
 ### 15.2 Launch journal and crash distinction (P5-B-05/07)
 
-The resident supervisor owns `$HOME/.node/execution/transactions.jsonl`, using the
-Part I §1.9.2 append/fsync/sequence/hash transaction format, exclusive lifetime lock
-and rebuildable indexes. One transaction reserves budget and execution_key and writes
+The resident supervisor owns `/var/lib/factory/control/execution/transactions.jsonl`
+under the `factory-control` UID, using the Part I §1.9.2 append/fsync/sequence/hash
+transaction format, exclusive lifetime lock and rebuildable indexes. Neither the foreman
+nor worker can mount or edit that journal. One transaction reserves budget and execution_key and writes
 `{execution_key, input_digest, native_name, state, state_version, boot_id,
 process_instance_id, native_session_id, result_ref, control_version}`. Optional
 identities/result are explicit null before discovery; native_name is
@@ -355,8 +356,11 @@ pinned round retry/budget policy; it does not erase unknown work. [M5 §16; Part
 
 ### 15.3 Time, cancellation and result reduction (P5-B-10/11)
 
-Crier custody leases are 30 s, renew every 10 s, and are independent of the 60 s
-owner lease (renew every 20 s) and 120 s task claim (renew every 40 s). Each authority
+Crier custody leases are 60 s, renew every 20 s, and are independent of the 60 s
+owner lease (renew every 20 s) and 120 s task claim (renew every 40 s). The single
+Crier lease_id remains stable from initial retrieve through renewal and final ack/release;
+its initial visibility, current expiry and final validity are signed custody facts, not
+a task-runtime bound. Each authority
 uses its monotonic clock; UTC fields are diagnostic with maximum 30 s signature skew.
 A launch validates all three and the 30 s one-use dispatch grant. Custody renewal
 loss does not create another executor: the durable execution key survives redelivery.
@@ -364,7 +368,10 @@ Owner/claim renewal failure immediately freezes protected effects; at their dead
 (with no grace) the supervisor sends TERM to the exact process group, then KILL after
 10 s if needed, records quiescence or `STOP_UNKNOWN`, and requests fencing. Round and
 attempt wall clocks start at the first durable release; restart cannot reset them.
-The default attempt wall is 1800 s, bounded by remaining round wall (Part IV Limits).
+The default attempt wall is 1800 s, bounded by remaining round wall minus the configured
+launch, transfer and cleanup reserves (Part V §V.12). CF_TIMEOUT_S limits each model turn;
+it does not replace this attempt wall or the 21600 s default round deadline. Scheduler's
+21600 s default tick wall includes the admitted round and its settlement work.
 
 The closed execution transition relation is RESERVED→START_INTENT/CANCELLED/EXPIRED;
 START_INTENT→STARTED/FAILED_TO_START/START_UNKNOWN; STARTED→RUNNING/CANCELLED/DEADLINE;
@@ -395,6 +402,55 @@ round partial and settlement partial/failure, never settled_success. No transpor
 start ambiguity, duplicate and deadline each produce one durable event.
 
 Required dispatch metrics are attempts, outcomes, refusals by reason, lease age, renewals, duplicates, cancellation, late results and projection lag. Crier owns transport metrics; the foreman owns execution metrics; Scheduler reads the correlated result. No transport receipt is an execution or acceptance verdict.
+
+### 15.4 One resident/native protocol and identity mapping (P6-01/02/10/11/12)
+
+`cf.supervisor.v1` on `/run/factory/<project>/submit.sock` is the sole target control
+protocol, and `cf.native.v1` on the child's stdin/stdout is the sole target native-adapter
+protocol. M5 §16.1 supplies their complete request/event framing; M11 exposes the same
+operations, not HTTP-shaped `supervisor.v1` launches. The former `.node/execution` socket,
+`supervisor.v1`, fd-3 input and fd-4 result channels are retired target drafts and return
+`UNSUPPORTED_VERSION`; they remain neither an alternate production profile nor a required
+compatibility mode. Supervisor stdout is diagnostic; structured native results travel only
+in `cf.native-event.v1` records on the child's stdout, with human output captured separately.
+
+Execution identity is allocated before any process exists:
+
+|| Role | Canonical execution-key input (RFC8785 JCS, then SHA-256) | Other identities |
+||---|---|---|
+|| foreman | `["foreman",project_id,round_id,run_id]` | `launch_id="l-"+execution_key`, `dispatch_id="d-"+execution_key`, `native_name="cf-"+execution_key` |
+|| worker | `[project_id,round_id,wave_id,worker_id,attempt_id]` (the existing CT-05 tuple) | same `l-`, `d-` and `cf-` derivations from that worker execution_key |
+
+The supervisor persists the unique execution_key/launch_id/dispatch_id/native_name and
+input digest in one reservation transaction. Duplicate CT-02 or CT-05 with the same digest
+returns that record; changed bytes are `ATTEMPT_CONFLICT`; a new delivery ID cannot force
+another execution. `launch_id` is the native lookup key, `execution_key` is the budget and
+result key, and `native_session_id` identifies one process incarnation without replacing
+either. The supervisor is the sole journal authority; the foreman and worker submit inputs
+and receive receipts but never write execution rows.
+
+On cold CT-02 submission the supervisor constructs the synthetic foreman BriefInput from
+the admitted task snapshot, ordered authorized task IDs and lane seed. It allocates no wave,
+worker or task-attempt identity. The deterministic foreman execution key above permits
+exactly one native foreman for the round. After that foreman starts, it allocates wave and
+worker identities in its own round ledger and submits CT-05 to the same `submit.sock`;
+the supervisor derives the worker key with the existing tuple and applies the same gated
+launch protocol. No undocumented bridge translates between two supervisor implementations.
+
+The signed 60-second Crier custody chain in M10 §16 covers initial reserved receiver,
+retrieve, renewal, return and final acknowledgement. A lost release/ack response is read
+back by delivery ID before any transfer. Lease expiry produces reconciliation, not a second
+native run. Duplicate delivery, lost acknowledgement, supervisor restart and cancellation
+all resolve by execution_key/launch_id and the durable state CAS in §15.2.
+
+The shared vectors are the only acceptance examples for this mapping: cold CT-02, one
+foreman CT-05, duplicate delivery, lost release acknowledgement, restart, cancellation,
+SC-01's 60-second lease and SC-09's turn/attempt/round deadlines. Failure outcomes follow
+Part I §1.9.10: proven launch refusal is `fail`, clean exit without a durable result is
+`unknown`, uncertain commit/gate evidence is `unverified`, and definitive publication
+failure after passing execution is `partial`. Telemetry uses Part V §V.10 with full
+FactoryIdentity on every launch, network failure and result event; no metric-only success
+is accepted.
 
 ## RED field count: 3 (Metrics §8; §7 live bus-worker ladder not repeatable from this host; §9 inventory 4 of 70 helper call sites — the descriptive per-measurement rows not tabulated one-per-site)
 

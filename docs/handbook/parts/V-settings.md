@@ -181,10 +181,10 @@ loss/unknown semantics and readout scope:
 
 | Metric | Type / unit | Labels and sample semantics | Owner / reset |
 |---|---|---|---|
-| `reconciliation_operations_total` | counter / operations | `state` from the transition enum; one sample per durable transition | manager; resets only on process replacement, with `start_time` recorded |
-| `allocation_shortfall` | gauge / requested resource units | `project`, `resource`; quantity is the declared minus allocated amount, never a mixed unit | manager; current value, `unknown` if no observation |
-| `readiness` | gauge / boolean 0 or 1 | `project`, `profile`; absent probe is `unknown`, not 0 | manager; current observation |
-| `event_delivery_total` | counter / deliveries | `endpoint`, `state`; endpoint ids are bounded and secret-free | manager; resets only with `start_time` |
+|| `reconciliation_operations_total` | counter / operations | `state` from the transition enum; one sample per durable transition | manager; reconstructed from the durable event cursor and checkpoint, never reset on process replacement |
+|| `allocation_shortfall` | gauge / requested resource units | `project`, `resource`; quantity is the declared minus allocated amount, never a mixed unit | manager; current value, `unknown` if no observation |
+|| `readiness` | gauge / boolean 0 or 1 | `project`, `profile`; absent probe is `unknown`, not 0 | manager; current observation |
+|| `event_delivery_total` | counter / deliveries | `endpoint`, `state`; endpoint ids are bounded and secret-free | manager; reconstructed from durable delivery transitions, with checkpoint `source_seq` |
 | `memory_sync_pending` | gauge / records | `namespace`; count of durable pending records | memory adapter; current value, `unknown` if store unavailable |
 | `effective_readback_age_seconds` | gauge / seconds | `scope`; age since the newest accepted effective readback | manager; `unknown` when no readback exists |
 
@@ -335,6 +335,7 @@ time (validation, V.6) and elided at read time.
 
 | Domain | Holds | Read a value | Hold a reference only |
 |---|---|---|---|
+| authority | Offline CA/trust bundle, enrollment grants, authority checkpoint signing material; public trust artifacts remain non-secret SignedArtifacts | the offline trust custodian and authority enrollment boundary | manager/bootstrap adapters (references and public checkpoints only) |
 | forge | GitHub App identity/private key, GitLab and other provider credentials, deploy keys | the issuing boundary (control-side signing authority, M7) | nodes and Bunkers (scoped per-repo credentials only) |
 | bunker | Bunker control/agent authentication | the Bunker installer/operator boundary | Crier, scheduler, workloads |
 | transport | Crier bus bearer, dispatcher signing keys | the dispatcher/bus on their host | — |
@@ -393,11 +394,12 @@ configuration is applied, not discovered at runtime: a round budget below one wo
 round deadline exceeding the tick cap; attempt wall exceeding remaining round time
 minus reserves; a lease that cannot cover renewal latency/skew; a tick timeout shorter
 than the round it launches. V.9 defines the exact inequalities. `CF_TIMEOUT_S` bounds
-the entire harness invocation, not each of its model turns; multiplying it by
-`CF_MAX_TURNS` is not a valid compatibility test. The
-cross-field check is a target requirement — where no cross-system validation exists today
-it is TARGET-UNIMPLEMENTED, and the affected combination is recorded here rather than
-implied safe. Hardcoded account-specific paths (`BUNKER_BIN`, `TOKEN_FILE`, M11/M12) are
+one model turn, not the entire harness invocation and not a budget multiplied by
+`CF_MAX_TURNS`; the separate attempt wall bounds all turns, backoffs and adapter work.
+The cross-field check is a target requirement — where no cross-system validation exists
+today it is TARGET-UNIMPLEMENTED, and the affected combination is recorded here rather
+than implied safe. Hardcoded account-specific paths (`BUNKER_BIN`, `TOKEN_FILE`, M11/M12)
+are
 replaced by declared profile mappings in the target; the hardcoded values remain recorded
 in the inventory as measured evidence. The supported Hermes variant, GitReins policy
 version, binaries, images and adapters are pinned with migration compatibility
@@ -439,9 +441,14 @@ The lifecycle control-flow figure is a named gap in this revision — this wave'
 keeps figures/ unchanged — and the ordered steps above are the normative statement until
 the figure lands.
 
-## V.7 Example desired-state file and resolved-state comparison (V2-SET-07)
+## V.7 Deliberately unready minimal example and resolved-state comparison (V2-SET-07)
 
-A complete example (YAML for readability; the serialization is not decided):
+This minimal example is a negative configuration fixture, not an admission-ready profile.
+It parses as YAML, but acceptance returns `REFERENCE_UNKNOWN` for the absent signed
+release/policy/profile artifacts and `NOT_READY` for the absent authority, broker,
+manager, Crier, Scheduler and inference endpoints and empty inference routes. V.11 supplies
+the separate composed example. The comparison below illustrates readback states only; it
+claims neither schema acceptance nor live convergence.
 
 ```yaml
 # CF2A desired state — factory.v1, generation 17
@@ -470,6 +477,7 @@ projects:
       provider: github
       url: git@github.com:example/code-factory.git
       credential_ref: secretref://forge/github/deploy-key.cf2a
+    gate_policy_ref: gate-policy
     eligible_hosts: [h1, h2]
     bunkers:
       count: 2
@@ -544,35 +552,43 @@ Lists are ordered unless called sets; sets refuse duplicates. Lists/maps have at
 1024 entries, except tasks/criteria governed by VII.18. Empty collections are valid
 only where explicitly stated. All members below are required unless a default or
 optional marker appears. Defaults materialize before digesting; explicit empty/null
-never means default. Root contains exactly V.0.1's keys plus transport, scheduler,
-execution, inference, credentials and readiness; the new objects may be omitted and
-expand to defaults below. Enabled features with unresolved references refuse activation.
+never means default. Root contains exactly V.0.1's keys plus trust, bootstrap,
+artifacts, policy, transport, scheduler, execution, inference, credentials and
+readiness; the new objects may be omitted and expand to defaults below except
+artifacts, policy and trust, which are mandatory at activation. Enabled features with
+unresolved references refuse activation.
 
 | Object | Complete members, types, bounds and defaults |
 |---|---|
-| deployment | profile: profile ID; endpoints: nonempty map of Endpoint |
-| Endpoint | url: URL; protocol: https or ssh (must match URL, ssh permitted only for repository transport); credential_ref: optional SecretRef |
-| profiles entry | isolation: persistent-container or image-container; terminal_jail: disabled or required; persistence: optional `{workspace: path, memory: path, evidence: path}` (all three distinct), absent uses manager-assigned per-Bunker durable roots; required jail additionally needs global jail policy |
+|| deployment | profile: profile ID; endpoints: nonempty map of Endpoint |
+|| Endpoint | url: URL; protocol: https or ssh (must match URL, ssh permitted only for repository transport); credential_ref: optional SecretRef |
+| trust | `{offline_ca_ref: SecretRef, authority_checkpoint_ref: EvidenceRef, certificate_lifetime_s: integer 300..86400 default 86400, renew_before_s: integer 60..43200 default 43200, enrollment_grant_ttl_s: integer 1..600 default 600}`; renewal margin is less than lifetime |
+| bootstrap | `{mode: offline or authority default offline, authority_endpoint_ref: Endpoint key default authority, installer_endpoint_ref: Endpoint key, trust_bundle_ref: artifact ID default trust-bundle, enrollment_grant_ref: authority SecretRef or null default null, timeout_s: integer 1..300 default 30}`; authority mode requires nonnull grant and authenticated installer enrollment; offline mode forbids grant and resolves trust-bundle before any network credential |
+| artifacts | nonempty map of artifact ID to SignedArtifact; required IDs are `release-lock`, `gate-policy`, `trust-bundle`, `receipt-policy`, `supervisor`, `hermes`, `adapter-capabilities` and each profile's `signed_profile_ref` plus every execution.adapter_artifacts value |
+| SignedArtifact | `{ref: EvidenceRef, digest: SHA-256, media_type: nonempty string <=128, signature: {algorithm: ed25519, key_id: ID, value: Base64url64}}`; signature covers `CF2A-RELEASE-1\n` plus the referenced JCS body excluding signature; missing bytes/signature is `ARTIFACT_UNQUALIFIED` |
+| policy | `{release_lock_ref: artifact ID, gate_policy_ref: artifact ID, trust_bundle_ref: artifact ID default trust-bundle, receipt_policy_ref: artifact ID default receipt-policy, adapter_capabilities_ref: artifact ID, postcheck_retry_s: integer 1..300 default 30, postcheck_max_attempts: integer 1..5 default 5}`; references resolve in artifacts and receipt_policy authenticates every acceptance/publication readback |
+|| profiles entry | isolation: persistent-container or image-container; terminal_jail: disabled or required; signed_profile_ref: artifact ID; persistence: optional `{workspace: path, memory: path, evidence: path}` (all three distinct), absent uses manager-assigned per-Bunker durable roots; required jail additionally needs global jail policy |
 | host | id: ID; endpoint_ref: Endpoint key; capacity: Capacity; capabilities: nonempty set of capability IDs |
 | Capacity | disk_gib: integer 1..1048576; memory_gib: integer 1..1048576; concurrent_workers: integer 1..1024; cpu_millis: integer 100..1024000 default 2000; pids: integer 16..1048576 default 256. GiB is 1073741824 bytes, no decimal rounding |
-| project | id: ID; repository: Repository; eligible_hosts: nonempty host-ID set; bunkers: Bunkers; memory: Memory; lanes: nonempty Lane list |
+| project | id: ID; repository: Repository; gate_policy_ref: artifact ID default policy.gate_policy_ref; eligible_hosts: nonempty host-ID set; bunkers: Bunkers; memory: Memory; lanes: nonempty Lane list |
 | Repository | provider: github or gitlab; url: repository URL; credential_ref: forge SecretRef |
 | Bunkers | count: integer 1..1024; requirements: Requirements; profile: profile ID |
 | Requirements | disk_gib, memory_gib: Capacity ranges; capabilities: nonempty capability-ID set; network: endpoint-ID set default all deployment endpoints; cpu_millis,pids: Capacity ranges/defaults |
 | Memory | namespace: project ID; local_root: path; sync_policy: shared-git or local-only; remote_ref: required HTTPS Git URL for shared-git, forbidden for local-only; sync_owner: ID default factory-memory-sync; sync_interval_s: integer 1..300 default 30; stale_after_s: integer 30..3600 default 90 |
 | Lane | name: ID; admission: tasks or cooldown; cadence_s: integer 1..31536000; weight: integer 1..1000; priority: integer 0..9 default 5; foreman: `{round: Round}`; enabled: boolean default true; hooks: M9.18 Hook list, default empty (required-hook readiness still refuses) |
-| Round | worker_budget: `{total: integer 1..100000}`; concurrency: integer 1..1024; retry_policy: WorkerRetry; deadline_s: integer 120..7200 default 7200; attempt_wall_s: integer 1..1800 default 1800; max_turns: integer 1..1000 default 40 |
+|| Round | worker_budget: `{total: integer 1..100000}`; concurrency: integer 1..1024; retry_policy: WorkerRetry; deadline_s: integer 120..604800 default 21600; attempt_wall_s: integer 1..86400 default 1800; turn_timeout_s: integer 1..86400 default 1800; max_turns: integer 1..10000 default 40 |
 | WorkerRetry | name: literal charge-on-start; failed_start: literal refund-before-run; max_attempts: integer 1..10 default 3; initial_backoff_s: integer 1..60 default 5; max_backoff_s: integer 1..300 default 60 |
 | events | webhooks: Subscription list, default empty |
 | Subscription | subscription_id: unique ID; endpoint_ref: events SecretRef; event_types: nonempty set of V.0.3 catalog enums including project.progress; project_scope: nonempty project-ID set; status: enabled or disabled; retry_policy: DeliveryRetry; retention_s: integer 3600..2592000 default 604800 |
 | DeliveryRetry | max_attempts: integer 1..20 default 5; initial_backoff_s: integer 1..60 default 5; max_backoff_s: integer 1..3600 default 300 |
 | safety | terminal_jail: disabled or required; jail_policy: optional M8.16 policy object, mandatory for required mode; reclaim: Reclaim; backup: Backup |
 | Reclaim | enabled: boolean; job_ttl_hours: finite number 0..8760 default 24; cache_ttl_hours: same default 24; free_floor_gib: integer 1..1024 default 4; classes: set of cache/job, default `[cache,job]`; no package/image/evidence deletion by this policy |
-| Backup | enabled: boolean; interval_s: integer 300..86400 default 3600; retention_s: integer 86400..31536000 default 2592000; rpo_s: integer 300..86400 default 3600; rto_s: integer 300..86400 default 7200; destination_ref: endpoint ID required if enabled; key_ref: backup SecretRef required if enabled; offline_policy: refuse or partial default refuse |
-| transport | registry: `{backend: sqlite or postgres, endpoint_ref: optional Endpoint key}`; default backend sqlite, endpoint required for postgres; lease_s: integer 30..300 default 60; renew_s: integer 1..60 default 20; call_timeout_s: integer 1..10 default 5 |
-| scheduler | budget: integer 1..1000000 default 100; max_concurrent: integer 1..1024 default 10; tick_wall_s: integer 120..86400 default 7200; namespaces: map of project-ID to `{reserved: integer 0..1024 default 0, hard_cap: integer 1..1024 default max_concurrent}`, absent means every project gets defaults |
-| execution | mode: resident or central-compat default resident; artifact_ref: optional ID resolving to M11.17 release record, mandatory at activation; launch_reserve_s: integer 1..120 default 30; transfer_reserve_s: integer 1..120 default 30; cleanup_reserve_s: integer 15..120 default 15 |
-| credentials | renewal_margin_s: integer 60..3600 default 300; overlap_s: integer 0..300 default 60; proxy_ttl_s: integer 600..86400 default 3600 |
+|| Backup | enabled: boolean; interval_s: integer 300..86400 default 3600; retention_s: integer 86400..31536000 default 2592000; rpo_s: integer 300..86400 default 3600; rto_s: integer 300..86400 default 7200; deadline_s: integer 300..86400 default 3600; destination_ref: endpoint ID required if enabled; key_ref: backup SecretRef required if enabled; offline_policy: refuse or partial default refuse |
+|| transport | registry: `{backend: sqlite or postgres, endpoint_ref: optional Endpoint key}`; default backend sqlite, endpoint required for postgres; lease_s: integer 30..300 default 60; renew_s: integer 1..60 default 20; call_timeout_s: integer 1..10 default 5; signature_profile: literal CF2A-CRIER-1 |
+|| scheduler | budget: integer 1..1000000 default 100; max_concurrent: integer 1..1024 default 10; tick_wall_s: integer 120..604800 default 21600; namespaces: map of project-ID to `{reserved: integer 0..1024 default 0, hard_cap: integer 1..1024 default max_concurrent}`, absent means every project gets defaults |
+|| execution | mode: literal resident default resident; artifact_ref: artifact ID default supervisor; harness_artifact_ref: artifact ID default hermes; adapter_artifacts: map of capability ID to artifact ID default empty, with an exact signed entry for every requested capability and hermes equal to harness_artifact_ref; socket_root: absolute path default `/run/factory`; state_root: absolute path default `/var/lib/factory/control`; launch_reserve_s: integer 1..120 default 30; transfer_reserve_s: integer 1..120 default 30; cleanup_reserve_s: integer 15..120 default 15 |
+|| credentials | renewal_margin_s: integer 60..3600 default 300; overlap_s: integer 0..300 default 60; proxy_ttl_s: integer 600..86400 default 3600; secret_bindings: SecretBinding list default empty; an enabled endpoint's credential_ref requires a matching binding |
+|| SecretBinding | `{ref: SecretRef, resolver: control-broker or node-broker, delivery: sealed-fd, scope: nonempty operation-ID set, file_mode: literal 0600}`; resolver names only a service identity and socket, never secret material |
 | readiness | probe_interval_s: integer 5..60 default 10; stale_after_s: integer 15..300 default 30; failures_to_fail: integer 1..10 default 3 |
 | inference | routes: Route list default empty (no inference admission); node_scope: NodeScope; capture: Capture; upstream_timeout_s: integer 1..300 default 300 |
 | Route | id: ID; requested_model: nonempty string <=128; provider: ID; served_model: nonempty string <=128; endpoint_ref: Endpoint key; credential_ref: model SecretRef; input_micro_usd_per_million, output_micro_usd_per_million: integer >=0; tokenizer_digest: SHA-256 |
@@ -601,8 +617,9 @@ for inference after a generation CAS. In-flight requests/rounds pin generation;
 revocation overrides pins. Readback is `GET /v1/config` and project state from Part I,
 with per-adapter generation, canonical applied-values digest and observed_at. Native
 mapping is CR_REGISTRY_BACKEND for transport, scheduler budget/max-concurrent/
-tick-timeout for scheduler, CF_TIMEOUT_S/CF_MAX_TURNS for attempt limits, and the
-reclaimer's two TTL flags for Reclaim. All other new controls are target adapter
+tick-timeout for scheduler, CF_TIMEOUT_S for turn_timeout_s, CF_MAX_TURNS for max_turns,
+and the reclaimer's two TTL flags for Reclaim. attempt_wall_s and deadline_s are
+supervisor/scheduler-enforced target fields, not CF_TIMEOUT_S aliases. All other new controls are target adapter
 fields, not fictitious native flags: an adapter without mapping/readback returns
 SETTING_UNSUPPORTED and readiness false. Model routing, token scope, capture,
 renewal margin, execution mode and backup bounds are therefore declared controls
@@ -617,39 +634,446 @@ Round deadline <= tick wall; each attempt gets min(attempt_wall_s, remaining rou
 seconds minus launch/transfer/cleanup reserves). A nonpositive remainder refuses
 DEADLINE_INSUFFICIENT. Deadline is pinned at admission using UTC plus a monotonic
 remaining-time budget; clock rollback cannot extend it. Default reserves total 75 s,
-so the 7200 s round admits a 1800 s harness with up to 40 turns, not 40 separate
-1800 s entitlements. Backoffs, hooks and subsequent waves consume the same deadline.
+so the 21600 s round admits an 1800 s attempt with up to 40 turns, each independently
+bounded by the 1800 s turn timeout, not 40 separate 1800 s entitlements. The global
+scheduler tick includes the admitted round, its postchecks and settlement work: admission
+computes `tick_deadline = min(configured tick_wall_s, round_deadline + remaining postcheck
+and projection budget)`, and a tick timeout cannot silently kill an admitted round early.
+Backoffs, hooks and subsequent waves consume the same deadline.
 [Part I §1.9; M9.16–18; M11.16]
 
-## V.10 Metric and readiness sample protocol (P5-C-32)
+### V.9.1 Mandatory-control crosswalk and effective precedence
 
-The target collector polls authenticated subsystem readbacks every 10 s and serves
-`GET /v1/metrics` in the Part I response wrapper. Every module contributes
-`factory_operations_total`, `factory_operation_duration_seconds`,
-`factory_active`, `factory_pending`, `factory_oldest_pending_seconds` and
-`factory_available`. Labels are exactly module (M0..M12 or manager), operation
-(configure/admit/launch/deliver/renew/verify/publish/sync/reclaim/backup/restore/
-issue/revoke/infer), outcome (accepted/pass/fail/refused/unknown/cancelled), and
-project (configured ID or factory-control). A metric not applicable to a module is
-omitted with a reason in collection_state; unknown source is value:null,
-collection_state:unavailable, never 0. Duration histogram boundaries are
-0.01,0.1,0.5,1,5,10,30,60,300,1800,7200 seconds plus infinity, with count/sum.
-Counters/histograms persist from committed event sequences; collector restart
-replays its durable cursor without double increment. Gauges reflect the latest
-snapshot, carrying observed_at and source_seq. No raw token, task ID or error text
-becomes a label. Module-specific units are budget in micro-USD, disk in bytes,
-inodes/counts as integers, expiry/freshness in seconds; readiness is boolean.
+Every mandatory control resolves to one typed location; an adapter may expose a native
+alias but may not invent a second value. The following crosswalk is complete for the
+cross-module controls:
+
+| Control | Canonical typed location and resolution | Missing/stale behavior |
+|---|---|---|
+| M1 signed release lock | `policy.release_lock_ref` → `artifacts[id]` SignedArtifact; activation compares release body digest and signature key | `ARTIFACT_UNQUALIFIED`; no provisioning/admission |
+| M3 target gate policy | `projects[].gate_policy_ref`, defaulting explicitly to `policy.gate_policy_ref`; a project override is a complete SignedArtifact, not a partial merge | `ARTIFACT_UNQUALIFIED`; source/integrated/closure checks cannot run as required |
+| Authority trust | `trust` plus `policy.trust_bundle_ref`/`bootstrap.trust_bundle_ref`; both must name the same trust-bundle artifact | `TRUST_UNRESOLVED`; no endpoint credential or checkpoint is trusted |
+| Deployment bootstrap | `bootstrap`; offline resolves the signed bundle locally, authority mode additionally redeems enrollment_grant_ref through installer_endpoint_ref | `BOOTSTRAP_REFUSED`; no fallback from authority to offline or reverse |
+| Supervisor release | `execution.artifact_ref` → signed supervisor manifest | `RELEASE_UNSUPPORTED`; no resident supervisor launch |
+| Harness/adapter releases | `execution.harness_artifact_ref` and `execution.adapter_artifacts[capability]`; every requested capability has an exact signed artifact and adapter-capabilities generation | `RELEASE_UNSUPPORTED`; no image/capability substitution |
+| Model routes | `inference.routes[]` exact requested_model/provider/served_model/endpoint/credential/tokenizer/pricing; NodeScope.allowed_routes is a subset | empty/unresolved route or wildcard served model is `ROUTE_UNRESOLVED`; no inference admission |
+| Global timeouts | `scheduler.tick_wall_s`, Round.deadline_s/attempt_wall_s/turn_timeout_s and execution reserves, using V.9 inequalities | `DEADLINE_INSUFFICIENT`; CF_TIMEOUT_S bounds only a turn |
+| Global sandbox | `safety.terminal_jail` and `safety.jail_policy` | required without policy is `JAIL_POLICY_REQUIRED`; no unguarded fallback |
+| Per-profile sandbox | `profiles[].terminal_jail` combined with global mode as below | effective state must be read back per Bunker or readiness is degraded |
+| Service connectivity | `deployment.endpoints` keys authority, broker, manager, crier, scheduler, forge, proxy, memory, artifact_mirror, dns and backup when enabled | any enabled unresolved endpoint is `REFERENCE_UNKNOWN`; no guessed localhost/default credential |
+| Receipt authority | `policy.receipt_policy_ref` SignedArtifact plus trust key/checkpoint | missing/unknown receipt authority leaves acceptance/publication `unknown`, never converged |
+
+Jail precedence is deliberately safety-monotonic rather than "nearest wins": global
+`required` makes every profile `effective=required`; global `disabled` permits each
+profile's explicit value, so profile `required` is effective required and profile
+`disabled` is effective disabled. Any effective required value needs the global
+jail_policy and guarded adapter. A profile cannot weaken a global requirement, and a
+global disabled value cannot silently disable a profile requirement. Readback returns
+`{global,profile,effective,policy_digest,adapter_generation}` for each Bunker.
+
+For all other fields, V.0 precedence remains field-update generation → project →
+profile → global default. A default is materialized before digesting. An explicit
+project gate_policy_ref overrides only that project's policy reference; it does not
+replace global release lock, trust, receipt or adapter artifacts. In-flight rounds pin
+their complete effective generation; revocation/fence advance still overrides pins.
+
+## V.10 Metric, event and readiness projection (P5-C-32; P6-12)
+
+The Factory separates module-local telemetry from the global readout. The canonical
+cross-module record is `factory.telemetry.v1`; `docs/handbook/contract-vectors.json`
+supplies the replay, duplicate, restart and source-loss cases. Every M0–M12 producer
+validates against that one record rather than inventing fields at a call site.
+
+`factory.telemetry.v1` is a closed object with `schema_version`, `event_id:ID`,
+`source_event_id:ID`, `source_seq:PosInt`, `module:M0|M1|...|M12|manager`,
+`event_type` from the local enum below, `operation` from the global enum,
+`outcome:accepted|pass|fail|refused|unknown|cancelled`, `reason:ID`,
+`duration_ms:UInt`, `observed_at:Time`, `identity:FactoryIdentity`,
+`measurements:{name:finite-number}`, and `error:{code:ErrorCode,retryable:boolean}|null`.
+FactoryIdentity is `{project_id:ID,round_id:ID|null,run_id:ID|null,wave_id:ID|null,
+attempt_id:ID|null,task_id:ID|null,dispatch_id:ID|null,corr_id:ID|null}`. Infrastructure
+events use null execution fields; execution, inference and network-failure events carry
+round/run/corr and every already allocated attempt/task identity. IDs live in the event,
+not unbounded metric labels. A network failure records `peer` and the bounded failure
+class in `reason` and measurements, with the same FactoryIdentity as the failed Factory
+operation. No prompt, credential, endpoint secret or free-form error text is admitted.
+
+Only durable state-changing operations, their terminal outcomes, and failed observations
+that change health emit events. Successful read-only GET/scrape/status operations update
+sample timestamps without creating another event, so scraping cannot feed back into event
+counts. An operation receipt is emitted only after its journal fsync; telemetry delivery
+failure retains the outbox and never converts the operation into failure or success.
+
+The local-to-global projection is fixed:
+
+|| Local `cf.telemetry.v1` field/value | Global `factory.telemetry.v1` projection |
+||---|---|
+|| `event_id` | `source_event_id`; the collector allocates one durable `event_id` and `source_seq` |
+|| `module` M0..M6 | unchanged; M7..M12 and manager use the same record directly |
+|| `outcome=success` | `pass`, or `accepted` for a durable asynchronous custody transition |
+|| `outcome=failure` | `fail`; `reason=cancelled` maps to `cancelled` |
+|| `outcome=warning` | `unknown` with the original bounded reason |
+|| `outcome=refusal` / `unknown` | `refused` / `unknown` |
+|| `helper`, `readiness`, `gate`, `conformance` | operation `verify` |
+|| `provision`, `lifecycle` | operation `configure` |
+|| `enrollment` | operation `issue` |
+|| `dispatch` | operation `launch` |
+|| `lease` | operation `renew` |
+|| `duplicate` | operation `deliver`, outcome `accepted`, reason `duplicate` |
+|| `cancellation` | operation `launch`, outcome `cancelled` |
+|| `publication`, `document-stage` | operation `publish` |
+|| `projection` | operation `sync` |
+|| `board-read` | operation `admit` |
+|| `claim` | operation `admit` |
+|| `repair` | operation `reclaim` |
+|| `duration_ms` | histogram seconds, exactly `duration_ms / 1000` |
+|| `measurements` | same named finite values; unit names remain singular seconds, bytes, tokens, workers or micro-USD |
+
+M7 uses operation `issue` for credential mint/renew, `revoke` for revocation and `verify`
+for scope/readback probes. M8 uses `reclaim` for deletion/hold operations and `verify` for
+isolation probes. M9 uses `admit`, `launch` and `verify`. M10 uses `deliver` and `renew`.
+M11 uses `launch` and `deliver`. M12 uses `infer`, `deliver` for response custody and
+`revoke` for token invalidation. Their `event_type` values remain the local enum above;
+`infer` is an additional global-only operation, not an unregistered local event type.
+
+The collector polls each source every 10 seconds. M0–M6 may additionally expose their
+existing 15-second local scrape; that local cadence does not create a second global
+sample. A source cursor records `{module,source_event_id,source_seq,checkpoint_digest}`.
+The collector fsyncs the cursor and updated counters in one transaction. Duplicate
+`(module,source_event_id)` replays change nothing; changed bytes are
+`TELEMETRY_CONFLICT`. Source or collector restart resumes from that cursor. Global
+counters never reset on process replacement. Retention is 90 days for events and 400 days
+for counter checkpoints; identity-bearing event access and metrics access use the same
+project-scoped mTLS role, audit and retention policy.
+
+The global series are:
+
+|| Series | Type / unit | Exact labels and derivation |
+||---|---|---|
+|| `factory_operations_total` | counter / operations | `module`, `operation`, `outcome`, `project`, `reason`; one increment per unique terminal event |
+|| `factory_operation_duration_seconds` | histogram / seconds | `module`, `operation`, `project`; boundaries 0.01,0.1,0.5,1,5,10,30,60,300,1800,7200,+Inf |
+|| `factory_active` | gauge / operations | `module`, `operation`, `project`; latest durable snapshot |
+|| `factory_pending` | gauge / operations | `module`, `operation`, `project`; latest durable snapshot |
+|| `factory_oldest_pending_seconds` | gauge / seconds | `module`, `operation`, `project`; null when no current observation, zero only for an observed empty queue |
+|| `factory_available` | gauge / boolean | `module`, `project`; current health, never inferred from stale success |
+|| `factory_network_failures_total` | counter / failures | `module`, `operation`, `project`, `peer`, `reason`; one per unique failed network observation; the source event retains full FactoryIdentity |
+|| `factory_observation_timestamp_seconds` | gauge / Unix seconds | `module`, `project`; last accepted observation |
+
+Local M0–M6 series project as follows: `cf_operations_total` to
+`factory_operations_total`; `cf_operation_duration_seconds` to
+`factory_operation_duration_seconds`; `cf_queue_depth` to `factory_pending{operation:deliver}`;
+`cf_oldest_pending_seconds` to `factory_oldest_pending_seconds`;
+`cf_projection_lag_seconds` to `factory_oldest_pending_seconds{operation:sync}`;
+`cf_certification_age_seconds` and `cf_observation_timestamp_seconds` to
+`factory_observation_timestamp_seconds` with operation `verify` retained in the source
+view; `cf_board_tasks` to the named derived view `factory_board_tasks{status,eligibility,project}`;
+`cf_recovery_pending` to `factory_pending{operation:reclaim}`. The derived views
+`dispatch_to_settlement_seconds`, `worker_budget{used,remaining}`,
+`lineage_completeness`, `closeout_evidence_rate` and `project_acceptance_progress`
+are computed from the same identity-bearing events and durable receipts, not new ad-hoc
+counters. Metric labels exclude round, wave, attempt and task IDs; authenticated
+`GET /v1/events?round_id=...&attempt_id=...` supplies their exact drill-down.
 
 Rates use delta of persistent counts over the trailing 300 s; fewer than two samples
-or a zero denominator yields null/insufficient_data, not zero percent. Each ratio
-names numerator and denominator in the sample. Healthy idle is fresh available=1,
+or a zero denominator yields null/insufficient_data. Healthy idle is fresh available=1,
 active=0, pending=0; stale is age > stale_after_s, degraded is a fresh failed optional
 probe or pending required projection, failed is three consecutive failed required
-probes. Missing observations are unknown and readiness false immediately; an old
-passing probe does not sustain readiness. Required operation-specific measures named
-in module sections are views of these counters/events plus the named unit gauges,
-not undocumented new label schemas. Receiver alert policy remains external. [V.0.3;
-Part I Probe; VII.10]
+probes. Missing observations emit value:null and collection_state:unavailable, never zero.
+Receiver alert policy remains external. [V.0.3; Part I Probe; VII.10; SC telemetry vectors]
+
+## V.11 Composed signed profile and activation contract (P6-07)
+
+The following composed example is the complete configuration fixture. Its artifact bytes,
+signatures and endpoints are declared test fixtures, not production qualification. A manager
+uses the same closed schema for this example and V.7: V.7 returns the named validation and
+readiness errors; this example resolves every mandatory reference and can be accepted as an
+immutable edition under the fixture trust root. Live activation still requires the signed
+release qualification and effective probes.
+
+```yaml
+schema_version: factory.v1
+generation: 18
+deployment:
+  profile: homelab-vpn
+  endpoints:
+    authority: {url: https://authority.example.invalid, protocol: https}
+    broker: {url: https://broker.example.invalid, protocol: https}
+    manager: {url: https://manager.example.invalid, protocol: https}
+    crier: {url: https://crier.example.invalid, protocol: https}
+    scheduler: {url: https://scheduler.example.invalid, protocol: https}
+    forge: {url: https://github.com, protocol: https}
+    proxy: {url: https://proxy.example.invalid/v1/inference, protocol: https}
+    memory: {url: https://memory.example.invalid/git/code-factory.git, protocol: https}
+    artifact_mirror: {url: https://artifacts.example.invalid/factory, protocol: https}
+    dns: {url: https://dns.example.invalid/dns-query, protocol: https}
+    backup: {url: https://backup.example.invalid/factory, protocol: https}
+    h1-vpn: {url: https://h1.example.invalid, protocol: https}
+    h2-vpn: {url: https://h2.example.invalid, protocol: https}
+trust:
+  offline_ca_ref: secretref://authority/offline-ca.cf2a
+  authority_checkpoint_ref: cas+sha256://code-factory/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  certificate_lifetime_s: 86400
+  renew_before_s: 43200
+  enrollment_grant_ttl_s: 600
+bootstrap:
+  mode: offline
+  authority_endpoint_ref: authority
+  installer_endpoint_ref: manager
+  trust_bundle_ref: trust-bundle
+  enrollment_grant_ref: null
+  timeout_s: 30
+artifacts:
+  release-lock: &fixture_artifact
+    ref: cas+sha256://code-factory/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    media_type: application/vnd.cf.release-lock.v1+json
+    signature: {algorithm: ed25519, key_id: fixture-release-owner, value: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA}
+  gate-policy:
+    <<: *fixture_artifact
+    media_type: application/vnd.cf.gate-policy.v1+json
+  trust-bundle:
+    <<: *fixture_artifact
+    media_type: application/vnd.cf.trust-bundle.v1+json
+  receipt-policy:
+    <<: *fixture_artifact
+    media_type: application/vnd.cf.receipt-policy.v1+json
+  supervisor:
+    <<: *fixture_artifact
+    media_type: application/vnd.cf.supervisor-release.v1+json
+  hermes:
+    <<: *fixture_artifact
+    media_type: application/vnd.cf.hermes-release.v1+json
+  git-adapter:
+    <<: *fixture_artifact
+    media_type: application/vnd.cf.adapter-release.v1+json
+  adapter-capabilities:
+    <<: *fixture_artifact
+    media_type: application/vnd.factory-adapter-capabilities.v1+json
+  profile-homelab:
+    <<: *fixture_artifact
+    media_type: application/vnd.cf.signed-profile.v1+json
+policy:
+  release_lock_ref: release-lock
+  gate_policy_ref: gate-policy
+  trust_bundle_ref: trust-bundle
+  receipt_policy_ref: receipt-policy
+  adapter_capabilities_ref: adapter-capabilities
+  postcheck_retry_s: 30
+  postcheck_max_attempts: 5
+profiles:
+  homelab-vpn:
+    isolation: persistent-container
+    terminal_jail: disabled
+    signed_profile_ref: profile-homelab
+    persistence:
+      workspace: /var/lib/factory/worker
+      memory: /var/lib/factory/memory
+      evidence: /var/lib/factory/evidence
+hosts:
+  - id: h1
+    endpoint_ref: h1-vpn
+    capacity: {disk_gib: 80, memory_gib: 16, concurrent_workers: 2, cpu_millis: 2000, pids: 256}
+    capabilities: [hermes, git]
+  - id: h2
+    endpoint_ref: h2-vpn
+    capacity: {disk_gib: 80, memory_gib: 16, concurrent_workers: 2, cpu_millis: 2000, pids: 256}
+    capabilities: [hermes, git]
+projects:
+  - id: code-factory
+    repository:
+      provider: github
+      url: git@github.com:example/code-factory.git
+      credential_ref: secretref://forge/github/deploy-key.cf2a
+    gate_policy_ref: gate-policy
+    eligible_hosts: [h1, h2]
+    bunkers:
+      count: 2
+      requirements:
+        disk_gib: 40
+        memory_gib: 8
+        capabilities: [hermes, git]
+        network: [authority, broker, crier, scheduler, forge, proxy, memory, dns]
+        cpu_millis: 2000
+        pids: 256
+      profile: homelab-vpn
+    memory:
+      namespace: code-factory
+      local_root: /var/lib/factory/memory/code-factory
+      remote_ref: https://memory.example.invalid/git/code-factory.git
+      sync_policy: shared-git
+      sync_owner: factory-memory-sync
+      sync_interval_s: 30
+      stale_after_s: 90
+    lanes:
+      - name: builder
+        admission: tasks
+        cadence_s: 300
+        weight: 100
+        priority: 5
+        enabled: true
+        foreman:
+          round:
+            worker_budget: {total: 20000}
+            concurrency: 2
+            retry_policy:
+              name: charge-on-start
+              failed_start: refund-before-run
+              max_attempts: 3
+              initial_backoff_s: 5
+              max_backoff_s: 60
+            deadline_s: 21600
+            attempt_wall_s: 1800
+            turn_timeout_s: 1800
+            max_turns: 40
+        hooks:
+          - {id: board-freshness, phase: PRE, required: true, artifact_digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, argv: [/opt/factory/bin/check-board], timeout_s: 60, max_attempts: 1}
+          - {id: merged-tree-verifier, phase: POST, required: true, artifact_digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, argv: [/opt/factory/bin/verify-tree], timeout_s: 300, max_attempts: 5}
+transport:
+  registry: {backend: sqlite}
+  lease_s: 60
+  renew_s: 20
+  call_timeout_s: 5
+  signature_profile: CF2A-CRIER-1
+scheduler:
+  budget: 100
+  max_concurrent: 10
+  tick_wall_s: 21600
+  namespaces:
+    code-factory: {reserved: 0, hard_cap: 2}
+execution:
+  mode: resident
+  artifact_ref: supervisor
+  harness_artifact_ref: hermes
+  adapter_artifacts: {hermes: hermes, git: git-adapter}
+  socket_root: /run/factory
+  state_root: /var/lib/factory/control
+  launch_reserve_s: 30
+  transfer_reserve_s: 30
+  cleanup_reserve_s: 15
+inference:
+  routes:
+    - id: hermes-default
+      requested_model: example/model
+      provider: fixture-provider
+      served_model: example/model-2026-11-11
+      endpoint_ref: proxy
+      credential_ref: secretref://model/fixture-upstream.cf2a
+      input_micro_usd_per_million: 1000000
+      output_micro_usd_per_million: 2000000
+      tokenizer_digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  node_scope:
+    allowed_routes: [hermes-default]
+    budget_micro_usd: 10000000
+    window_s: 86400
+    concurrency: 1
+    max_output_tokens: 4096
+  capture:
+    enabled: false
+    max_chars: 120000
+    retention_s: 2592000
+    failure: refuse
+    redaction: credentials-and-secrets
+  upstream_timeout_s: 300
+credentials:
+  renewal_margin_s: 300
+  overlap_s: 60
+  proxy_ttl_s: 3600
+  secret_bindings:
+    - {ref: secretref://forge/github/deploy-key.cf2a, resolver: node-broker, delivery: sealed-fd, scope: [read], file_mode: 0600}
+    - {ref: secretref://model/fixture-upstream.cf2a, resolver: control-broker, delivery: sealed-fd, scope: [infer], file_mode: 0600}
+    - {ref: secretref://memory/code-factory.cf2a, resolver: node-broker, delivery: sealed-fd, scope: [read, append], file_mode: 0600}
+    - {ref: secretref://backup/recovery.cf2a, resolver: control-broker, delivery: sealed-fd, scope: [backup], file_mode: 0600}
+    - {ref: secretref://events/ops-webhook.cf2a, resolver: control-broker, delivery: sealed-fd, scope: [deliver], file_mode: 0600}
+    - {ref: secretref://authority/offline-ca.cf2a, resolver: control-broker, delivery: sealed-fd, scope: [enroll], file_mode: 0600}
+readiness:
+  probe_interval_s: 10
+  stale_after_s: 30
+  failures_to_fail: 3
+events:
+  webhooks:
+    - subscription_id: ops
+      endpoint_ref: secretref://events/ops-webhook.cf2a
+      event_types: [configuration.accepted, reconciliation.state, allocation.shortfall, readiness.changed, credential.lifecycle, memory.sync, factory.failure]
+      project_scope: [code-factory]
+      status: enabled
+      retry_policy: {max_attempts: 5, initial_backoff_s: 5, max_backoff_s: 300}
+      retention_s: 604800
+safety:
+  terminal_jail: disabled
+  reclaim: {enabled: true, job_ttl_hours: 24, cache_ttl_hours: 24, free_floor_gib: 4, classes: [cache, job]}
+  backup:
+    enabled: true
+    interval_s: 3600
+    retention_s: 2592000
+    rpo_s: 3600
+    rto_s: 7200
+    deadline_s: 3600
+    destination_ref: backup
+    key_ref: secretref://backup/recovery.cf2a
+    offline_policy: refuse
+extensions: {}
+```
+
+The profile document referenced by `signed_profile_ref` contains service/foreman/worker
+UIDs, mount and socket rules, invocation lifecycle, release references, gate policy,
+inference route IDs, global deadlines and sandbox posture. Inline profile fields are a
+validation projection of that signed document; disagreement is `PROFILE_CONFLICT`.
+Precedence is accepted generation field → signed project/lane profile → signed deployment
+profile → global default. An explicit empty value never falls through. A secret binding
+changes only by generation CAS; revocation is an authority transition that overrides an
+in-flight generation without rewriting desired intent.
+
+|| Mandatory control | Type / default | Owner → consumer | Activation and redacted readback |
+||---|---|---|---|
+|| receipt authority/trust | `trust`, no insecure default | operator → authority, manager, provisioner | next reconcile; CA/reference digest, certificate serial, expiry and authority sequence only |
+|| invocation lifecycle | signed profile `cf.supervisor.v1`/`cf.native.v1` | release owner → supervisor and harness | next launch; release digest, socket UID/mode, effective state |
+|| gate policy | `policy.gate_policy_ref`, no ungated default | release owner → M3 and Scheduler | next hook/launch; artifact digest and hook receipt |
+|| execution artifact | `execution.artifact_ref=supervisor`, `harness_artifact_ref=hermes` | release owner → M1/M5/M11 | next replacement; immutable artifact digest, no version-only proof |
+|| exact inference routes | `inference.routes`, default empty denies inference | model owner → M5/M12 | next request after CAS; requested/provider/served IDs, endpoint and credential fingerprint |
+|| global timeout | `scheduler.tick_wall_s=21600`, round deadline included | operator → M9/M5 | admission; monotonic remaining budget and effective narrowing |
+|| sandbox | global/profile Terminal Jail `disabled`; baseline always required | safety owner → M1/M5/M8/M11 | next replacement; UID/mount/cgroup/network and jail-policy digests |
+
+DECISION SLOT B-RELEASE retains options to qualify the integrated bundle or select a newer
+complete bundle; the default is `RELEASE_LOCK_UNAPPROVED`, and admission refuses. DECISION
+SLOT C-SAFETY retains an equivalent measured profile as an option; the default is the
+fail-closed UID/mount baseline with Terminal Jail disabled. Neither slot permits a caller
+hash, ambient credential, unsigned profile or unguarded fallback.
+
+## V.12 Canonical limit catalogue (P6-11; SC-02/SC-09)
+
+All producers materialize this table before hashing. Narrowing compares only identical
+units. A zero never disables a canonical execution limit; an unsupported enforcement
+returns `LIMIT_UNSUPPORTED`.
+
+|| Quantity | Configuration → wire/native field | Unit, domain and default | Effective rule |
+||---|---|---|---|
+|| round worker allowance | `foreman.round.worker_budget.total` → CT-02 `total_budget` | workers, 1..100000; profile-selected | fixed for the round; charged plus reserved never exceeds it; waves never reset it |
+|| concurrent worker slots | `foreman.round.concurrency` → supervisor resource vector | workers, 1..1024; default min(host slots, allowance) | simultaneous native runs only; independent of allowance |
+|| attempts per worker | `retry_policy.max_attempts` → attempt ordinal | attempts, 1..10 default 3 | correction reuses the charged worker and consumes no second worker allowance |
+|| model turns | `foreman.round.max_turns` → `CF_MAX_TURNS` / `EffectiveSettings.max_turns` | turns, 1..10000 default 40 | counts model calls within one attempt |
+|| model-turn timeout | `foreman.round.turn_timeout_s` → `CF_TIMEOUT_S` / `turn_timeout_s` | seconds, 1..86400 default 1800 | each model call independently; never multiplied by max turns |
+|| attempt wall | `foreman.round.attempt_wall_s` → `attempt_timeout_s` | seconds, 1..86400 default 1800 | all turns, backoff and adapter work in one attempt |
+|| round deadline | `foreman.round.deadline_s` → admission `policy.round_wall_s` | seconds, 120..604800 default 21600 | starts at durable admission; includes every wave, hook and return |
+|| scheduler tick wall | `scheduler.tick_wall_s` → `tick-timeout` | seconds, 120..604800 default 21600 | includes admitted round plus settlement; admission refuses `round_deadline > tick_wall` |
+|| Crier custody | `transport.lease_s` / `renew_s` → CT-03 | seconds, lease 30..300 default 60; renew 1..60 default 20 | `lease_s > renew_s + call_timeout_s + 5 + cleanup_reserve_s`; no task-runtime inference |
+|| postchecks | `policy.postcheck_*` and hook `max_attempts` | attempts 1..5, retry 1..300 s; POST defaults 5 and 30 | same hook identity, within original round/tick deadline |
+|| backup barrier | `safety.backup.deadline_s` → cf.backup.v1 | seconds, 300..86400 default 3600 | lease 300, renew 60; no renewal by the lease expiry aborts the cut |
+
+Admission computes `remaining_round = round_deadline - elapsed_monotonic` and
+`attempt_effective = min(attempt_wall_s, remaining_round - launch_reserve_s -
+transfer_reserve_s - cleanup_reserve_s)`. A nonpositive result is
+`DEADLINE_INSUFFICIENT`. `turn_effective = min(turn_timeout_s, attempt_effective)`; turn
+count never extends either wall. Scheduler reservation includes round execution,
+postcheck and projection time, so the global harness deadline participates in turn
+scheduling instead of appearing only in prose.
+
+SC-02's 20,000-worker allowance is valid with two concurrent slots; it does not authorize
+20,000 simultaneous processes. SC-09 sets turn timeout 10, attempt wall 60, round deadline
+at least 135 and two eight-second model calls: both calls fit, and attempt and round walls
+also fit. Eight workers on two slots, one same-worker correction, one proven-never-started
+refund and a restart all preserve `remaining = allowance - charged - reserved`; an unknown
+start remains reserved and quarantined. Shared vectors, not chapter-local arithmetic, are
+the acceptance oracle.
 
 ---
 

@@ -682,27 +682,39 @@ for an unallocated generation. Changed grant/key under the same registration_id 
 `REGISTRATION_CONFLICT`. Response data is `{registration_id, registration_generation,
 certificate_der, expires_at, credential_refs:CredentialRef[], authority_seq}`;
 this certificate is public, not a bearer secret. A crash after issue returns the
-same certificate/refs. The node then uses mTLS plus signed request to Crier's target
-`POST /factory/v1/registrations` with `register.v1` (Part IV). This adapter is not a
+same certificate/refs. The node then uses mTLS plus the Crier-signed request to
+`POST /v1/factory/registrations` with `register.v1` (Part IV). The legacy
+`/factory/v1/registrations` spelling is an alias only at the migration adapter. This adapter is not a
 claim that legacy POST /agents already implements this wire. Crier checks the live
 authority binding, persists the registration, and returns registration metadata and
 a scoped bus credential reference before any inbox read.
 
 CredentialRef is `{id:ID,class:forge/crier/bunker/proxy/memory,subject:ID,
 project_id:ID,operations:ID[],generation:PosInt,expires_at:Time,issuer:ID}`.
-A local installer resolves it only through a private AF_UNIX broker socket mode
-0600 using SO_PEERCRED and the enrolled principal's assigned ref list. The response
-is a sealed file descriptor (SCM_RIGHTS), not JSON secret bytes. The installer copies
-it into an O_EXCL temporary file under `.node/auth`, chmods 0600, fsyncs and renames;
-parent directories are 0700, owner UID is the Bunker UID, no symlink is accepted.
-Readback returns fingerprint, effective scope, expiry and mode, never contents.
+A local installer resolves it only through the protected AF_UNIX broker protocol in Part I
+§1.9.10. The node-broker socket is not in the worker mount namespace; SO_PEERCRED and the
+enrolled principal's assigned ref list authorize the request. The response is a sealed file
+descriptor (SCM_RIGHTS), not JSON secret bytes. Cross-host transfer uses one assigned
+`secret-transfer.v1` per consumer and registration generation; fanout never shares a
+descriptor. The installer copies it into an O_EXCL temporary file under the service-owned
+credential staging directory, chmods 0600, fsyncs and renames; parent directories are 0700,
+owner UID is the exact service consumer UID, no symlink is accepted. Readback returns
+fingerprint, effective scope, expiry and mode, never contents. Revocation at the authority
+and a negative probe at the resource are required before a replacement becomes ready.
 The controller transfers only read-only forge credentials to the node; protected
 writes use broker capabilities (Part I §1.9.7). Proxy credentials cannot expose
 upstream provider keys. Every installed class has separate issuer and revocation id.
 
-Crier read proof is signed `GET /agents/<agent_id>/inbox/stats`, empty-body digest,
-with the same signature framing and mTLS; response binds registration generation and
-request id. Duplicate GET nonce replays its saved observation, not a fresh read.
+Crier read proof is signed `GET /v1/factory/deliveries/<delivery_id>` (or the collection
+form `GET /v1/factory/deliveries?agent_id=<id>&state=queued`) under the single
+`CF2A-CRIER-1` profile in M10 §16. The former unversioned
+`GET /agents/<agent_id>/inbox/stats` example and `CF2A-REQUEST-1` Crier variant are
+retired: `CF2A-REQUEST-1` remains the authority enrollment profile only. The Crier
+response binds request/response principals, registration generation, request nonce,
+body digest and lease/custody receipt. Duplicate GET nonce replays its saved observation,
+not a fresh read. The route map is normative: `/factory/v1/registrations` is the legacy
+adapter alias for `POST /v1/factory/registrations`; `/agents` and `/agents/*/inbox/*`
+are legacy-only and return `410 ROUTE_RETIRED` for target clients.
 Revocation is authority `POST /v1/revocations`, then readback of the exact ref/serial
 and a negative probe at the resource boundary. `401 CAPABILITY_REVOKED` or certificate
 refusal is proof; deletion of a file is not. Renewal starts at half lifetime (12 h
@@ -822,22 +834,34 @@ its digest. Runtime permits authority, Crier, forge read endpoint, proxy, memory
 DNS. Broker mutation endpoint is served by authority's declared endpoint. Each failed
 or unexpected connection invalidates network readiness. [M5 §16; Part I §1.6.]
 
-One persistent volume mounts the entire node HOME, owner=node UID, root mode 0700;
-no second overlapping mount masks `.hermes` or `.local`. Its required paths are
-`.node` (identity/journals/auth), `.hermes` (config/prompts/skills/sessions),
-`.local/harness` and toolchain roots (executables/venvs), `.local/share/duckbrain`
-(namespace Git repo and pending commits), `repo` and `worktrees`,
-`.local/share/code-factory/evidence` and `.cache/hermes`. Credentials/files are
-0600, directories 0700, executables 0700; immutable cache mount is separately
-read-only, never inside a writable path traversed by the installer. Restart preserves
-all HOME paths. Replacement copies journal/evidence/pending-memory snapshots under a
-new identity and revokes old auth; it never copies reusable write credentials.
-Uninstall preserves evidence, session history and pending memory under retention holds;
-only the signed owned_paths list is deletable after M3 backup receipt readback.
+The persistent-HOME requirement is implemented as separate, non-overlapping volumes, not
+one worker-writable root containing the enforcement records. `/var/lib/factory/control`
+(owner `factory-control`, mode 0700) holds supervisor journals, launch/budget records,
+retention state, policy and service credentials; only the supervisor mounts it read-write.
+`/var/lib/factory/foreman` (owner `factory-foreman`, mode 0700) holds the foreman HOME,
+Hermes sessions, configuration and board work; the worker sees none of it.
+`/var/lib/factory/worker` (owner `factory-worker`, mode 0700) holds the worker HOME,
+`repo`, `worktrees` and attempt scratch. `/var/lib/factory/memory` and
+`/var/lib/factory/evidence` are distinct durable mounts: the local memory writer and
+evidence broker own their protected roots, while the foreman and worker reach them only
+through their scoped writer sockets. `/var/lib/factory/node-broker` (owner
+`factory-node-broker`, mode 0700) stages sealed credentials and is not mounted by either
+harness. Release/toolchain and shared-cache mounts are read-only. Restart preserves every
+volume and its ownership; no mount masks another and no path is a symlink.
+
+Replacement copies journal/evidence/pending-memory snapshots under a new identity and
+revokes old auth; it never copies reusable write credentials. Uninstall preserves evidence,
+session history and pending memory under retention holds; only the signed owned_paths list
+is deletable after M3 backup receipt readback. Control, retention and credential records are
+never offered for ordinary worker deletion or modification. The effective UID, mount
+read/write modes, socket visibility, descriptor seals and negative access probes are part
+of readiness evidence; a directory-permission assertion without those probes is not proof.
 
 `node.json` schema is `cf.node.v1`: schema_version, revision (PosInt), node_id,
 project_id, generation, agent, namespace (ID), repo (Repository), harness
-`{name:"hermes",release_lock_ref:EvidenceRef}`, bus `{base:HTTPSURL,
+`{name:"hermes",release_lock_ref:EvidenceRef}`, identities
+`{service_uid:UInt,foreman_uid:UInt,worker_uid:UInt,node_broker_uid:UInt}`,
+profile_digest:SHA, bus `{base:HTTPSURL,
 registration_id:ID,registration_generation:PosInt}`, duckbrain
 `{namespaces:ID[],root:AbsolutePath}`, created_by/provisioned_by (ID),
 created_at/provisioned_at (Time), freshness `{commit:GitOID,observed_at:Time}`.
@@ -877,3 +901,57 @@ may finish locally but cannot settle until controller-readable evidence exists.
 Unknown/corrupt local memory stops work immediately. There is no false VERIFIED from
 an unavailable initial remote leg. Recovery performs fresh readbacks and creates a new
 report; historical reports remain immutable. [Part I §1.9.9; Part II F3.]
+
+### 17.5 Signed configuration resolution and enforced containment (P6-07/08/09)
+
+Provisioning consumes only the accepted `factory.v1` generation and the signed artifacts
+it names. `manifest.release_lock_ref` must equal the EvidenceRef in
+`artifacts[policy.release_lock_ref]`; the supervisor and Hermes artifact references must
+equal `execution.artifact_ref` and `execution.harness_artifact_ref`; the signed profile
+must match `profiles[profile].signed_profile_ref`. The provisioner downloads each object
+from the declared artifact mirror, recomputes its digest, verifies the release-owner
+signature and recursively validates the adapter capability registry before writing the
+operation's `DECLARED` record. An unsigned, missing, mismatched or incomplete object is
+`ARTIFACT_UNQUALIFIED`; a caller-provided replacement path or hash is not accepted.
+The composed and deliberately unready examples are Part V §§V.7/V.11, not alternate
+provisioning schemas.
+
+The resolved profile records four distinct Linux identities. Numeric UIDs are allocated
+once by the manager from the signed profile and persisted in `cf.node.v1.identities` as
+`service_uid`, `foreman_uid`, `worker_uid` and `node_broker_uid`; names below are canonical account
+labels. `factory-control` runs only the supervisor, retention owner and launcher.
+`factory-foreman` runs the fenced foreman and its harness. `factory-worker` runs ordinary
+worker attempts. `factory-node-broker` runs secret transfer and sealed staging. No two
+roles share a UID, supplementary group, writable HOME or capability set. Every role has
+`no_new_privileges`, no host devices, no host PID/network namespace and no added Linux
+capabilities; cgroup v2 CPU, memory and PID limits are service-owned.
+
+|| Interface | Visible to | Access contract |
+||---|---|---|
+|| `/run/factory/<project>/supervisor.sock` | `factory-control` only | administration, drain, resume, retention and launcher operations; worker mount has no socket |
+|| `/run/factory/<project>/submit.sock` | supervisor and `factory-foreman` | `cf.supervisor.v1` submit/status/cancel for the live fence only; no budget, retention, policy or credential administration |
+|| `/run/factory/<project>/worker-result.sock` | supervisor and `factory-worker` | one-way native-event/result writes for the current execution key; no submit, cancel, resume or other-attempt read |
+|| `/run/factory/node-broker/secrets.sock` | node broker and authorized service installer | `secret-resolve.v1` plus SCM_RIGHTS; absent from foreman/worker mounts |
+|| `/var/lib/factory/control` | `factory-control` | read-write service journal and policy root; all other roles have no mount |
+|| `/var/lib/factory/foreman` | `factory-foreman` | read-write foreman HOME; read-only release mounts; no worker mount |
+|| `/var/lib/factory/worker` | `factory-worker` | read-write worker HOME/worktree only; control, peer worktrees and policy are absent |
+|| `/var/lib/factory/memory` | local memory writer | writer socket mediates foreman/worker append; neither can edit Git refs or resolution records directly |
+
+The foreman's mediated submit carries its fenced capability in an inherited sealed
+descriptor, not an environment variable. The supervisor checks SO_PEERCRED, the live
+`owner_fence`, registration generation, role and exact CT-02/CT-05 body before accepting.
+A worker cannot use that descriptor: it is close-on-exec outside the foreman launcher,
+the worker mount excludes `submit.sock`, and the supervisor rejects `factory-worker` for
+every administrative verb. Worker native results use the separate one-way socket and are
+accepted only for the preassigned execution key and process incarnation.
+
+Readiness executes negative probes as the ordinary worker: open the control root; alter a
+launch, budget or retention record; resolve another scope's credential; connect to the
+supervisor or node-broker socket; submit/cancel/resume an execution; write the signed
+policy; and access a peer worktree. Every attempt must fail with `EACCES`,
+`SOCKET_NOT_PRESENT` or `CAPABILITY_SCOPE_DENIED` and produce no mutation. Positive probes
+prove that the fenced foreman can submit CT-05 and append local pending memory while the
+worker can return its own result and write only its worktree. The probe receipt includes
+UIDs, mount table, socket modes, cgroup values and policy digest. Terminal Jail remains
+optional/off; these kernel/service boundaries are the baseline and cannot be bypassed by
+a cooperative harness.

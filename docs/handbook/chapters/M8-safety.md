@@ -294,6 +294,50 @@ resolves to an administrator-signed immutable artifact; executor_digest and
 policy_digest are SHA-256. Unknown keys and overlapping forbidden host roots refuse.
 [Part V profiles; CT-17/23; VII.16]
 
+## 17. Worker-unreachable enforcement records (P6-07/09/12)
+
+The qualified baseline applies M1 §17.5's four-UID profile verbatim: `factory-control`
+owns supervisor, launch, budget, retention and policy state; `factory-foreman` owns only
+the fenced foreman HOME; `factory-worker` owns only its attempt HOME/worktree;
+`factory-node-broker` owns secret transfer and sealed staging. They do not share a UID,
+writable HOME, supplementary group or host privilege. Control and broker roots are not
+mounted by the worker. This is a kernel and service boundary, not a promise that Hermes
+will avoid protected files.
+
+Retention records under `/var/lib/factory/control/retention` are accessible only to the
+retention owner. A worker's `$HOME` maps to `/var/lib/factory/worker`; it contains no
+`.node` control journal, shared auth database, retention index, peer worktree, supervisor
+socket or policy mount. The local memory and evidence roots are separate volumes with
+writer sockets, so retaining them does not make their Git refs or hold records writable.
+Read-only release/policy mounts are owned by `factory-control`, and a mount readback must
+prove the effective `ro` flag rather than relying on a file-mode claim.
+
+The foreman's only execution interface is `/run/factory/<project>/submit.sock`, restricted
+by SO_PEERCRED and the live fence to CT-02/CT-05 submit/status/output/cancel. It cannot
+edit allowance, launch identity, retention, policy or credentials. The worker has no
+submit socket and can use only its one-way result socket for the preassigned execution
+key. Secret descriptors are delivered by the node broker directly to the authorized role,
+with seals and close-on-exec rules; no secret is placed in a shared environment, process
+argument, worker-readable staging directory or event.
+
+Configuration precedence is accepted generation → signed project/lane profile → signed
+deployment profile → global default. Global `safety.terminal_jail=required` requires the
+guarded path even when a profile says disabled; that conflict is `PROFILE_CONFLICT` until
+the profile also selects required. Global disabled with profile required is valid and
+enables the guarded path for that profile. Both disabled leaves Terminal Jail off without
+weakening the UID/mount/cgroup baseline. Any enabled mode lacking its signed policy,
+executor or negative bypass proof returns `ENFORCEMENT_UNAVAILABLE`.
+
+The mandatory readback executes the ordinary worker's attempts to open or rename the
+retention index, launch/budget journal, supervisor administration socket, another role's
+credential, signed policy and peer worktree. All must fail without mutation. Positive
+readback proves the foreman's mediated submit, local pending-memory append, own result
+return and worktree write. The receipt carries UID/gid, mount table, namespace IDs,
+cgroup limits, socket visibility/modes, no-new-privileges and network-denial results.
+Emission and scrape use Part V §V.10 with bounded `reclaim`/`verify` operations and the
+FactoryIdentity of the affected attempt. A passing probe is version-bound to the signed
+profile digest; an unobserved probe is `UNVERIFIED`, never inferred from documentation.
+
 ## RED field count: 1 (Metrics §8)
 
 ## FLIGHT DATA FILE - M8 SAFETY

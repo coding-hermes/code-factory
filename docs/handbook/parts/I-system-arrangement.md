@@ -1491,6 +1491,171 @@ hooks pass. The scheduler increments final counters and issues follow-up only
 once per final revision; correction events identify superseded revisions.
 [CT-06/06R; F1/F3/F11]
 
+### 1.9.10 Integrated authority, activation and terminal-state contracts (P6-01/08/10/12)
+
+The following operations complete the peer boundaries summarized in §1.9.3a and §1.9.4.
+They use the `cf2a.v1` envelope, mTLS principal, signed Crier profile where applicable,
+`ResponseBody` and typed Error from §1.9.1. Each mutation body carries `schema_version`,
+`idempotency_key` and `request_digest`; each route below adds exactly its listed fields.
+A same-key/digest retry returns the original receipt, changed bytes return
+`IDEMPOTENCY_KEY_REUSED`, and a lost reply is resolved by the named GET before any new
+effect. Secret values never occur in JSON, argv, events or logs. All journal commits and
+outbox insertion precede acknowledgement or external effects.
+
+**Certificate and capability lifecycle.** The authority owns these routes. `expires_at`
+is UTC for display; monotonic remaining lifetime governs enforcement. A certificate
+renewal increments registration_generation exactly once, permits at most the configured
+60-second overlap for in-flight reads, and revokes the old serial for mutations immediately.
+A failed live revocation check is `AUTHORITY_UNAVAILABLE`, never a cached allow.
+
+|| Route / body version | Additional request fields | Durable result and errors |
+||---|---|---|
+|| `POST /v1/certificates/renew` / `authority.v1` | registration_id, expected_generation, csr_der, public_key, requested_expires_at | `{registration_id,registration_generation,certificate_der,expires_at,credential_refs,authority_seq}`; wrong generation `REGISTRATION_CONFLICT`, weak/replayed key `UNAUTHORIZED` |
+|| `GET /v1/registrations/{id}` | none | registration metadata, certificate serials, generation, revocation state and assigned credential references; never private material |
+|| `POST /v1/capabilities/issue` / `authority.v1` | capability_id, subject_id, project_id, operations:ID[1..32], resource_refs:EvidenceRef[1..128], owner_fence, expires_at | `{capability_id,capability_ref,token_sha256,scope,expires_at,transfer_id}`; scope widening `FORBIDDEN`, lifetime above parent `CAPABILITY_EXPIRY_INVALID` |
+|| `GET /v1/capabilities/{id}` | none | `issued|active|revoked|expired`, scope, token hash, expiry and current authority sequence |
+|| `POST /v1/capabilities/{id}/revoke` / `authority.v1` | expected_authority_seq, reason | `200 {state:revoked,authority_seq}` only after online denial readback; otherwise `503 REVOCATION_UNVERIFIED` |
+|| `POST /v1/capabilities/exchange` / `authority.v1` | capability_ref, operation, node_id, registration_generation | metadata plus one-use `transfer_id`; the secret itself follows only the sealed-transfer protocol below |
+
+The Gateway consumes session/inference capabilities only. CT-08 session delivery and
+CT-19/CT-20 inference are its complete authority: it may validate a capability, create a
+durable session/turn and return usage or typed inference errors. It cannot enroll a Bunker,
+issue or consume a dispatch grant, allocate execution identity, launch a worker, acknowledge
+Crier custody, infer a worker verdict, or settle a round. A gateway-observed reply remains
+evidence to be returned through Crier, never Scheduler settlement.
+
+**One-use dispatch grant.** Scheduler requests `POST /v1/dispatch-grants` on the manager
+with body version `dispatch-grant.v1` and fields `grant_id`, `project_id`, `round_id`,
+`run_id`, `corr_id`, `binding_generation`, `owner_fence`, `destination:{agent_id,
+endpoint_digest}`, `admission_digest`, and `requested_expiry_s:integer[1,30]`. The manager
+validates the active pointer, fence, admission digest and destination, then stores
+`issued` with token hash and expiry before returning `{grant_id,grant_ref,token_sha256,
+expires_at,active_digest,transfer_id}`. The token is delivered only through the control
+broker's sealed-descriptor transfer to the Scheduler UID. Scheduler presents it to Crier
+in the authorization header; neither the token nor its file path enters the CT-02 body.
+
+Before custody, Crier calls `POST /v1/dispatch-grants/consume` with the same body version
+and `grant_id`, `token_sha256`, `delivery_id`, `round_id`, `binding_generation`,
+`active_digest`, and its own `operation_id`. The manager compares the token hash and all
+bound fields, then atomically transitions `issued → consumed` and inserts Crier's delivery
+outbox marker. Success returns `{state:consumed,grant_id,delivery_id,authority_seq}`;
+mismatch is `GRANT_CONFLICT`, replay with a different delivery is `GRANT_REUSED`, expiry is
+`GRANT_EXPIRED`, and authority/store outage is `503 GRANT_UNAVAILABLE` with no custody.
+An identical consume replays the original delivery receipt. `GET /v1/dispatch-grants/{id}`
+returns `issued|consumed|expired|revoked`, the bound delivery ID and digests, and resolves
+a lost acknowledgement without issuing a second grant. Crier delivery failure after consume
+leaves the grant consumed and the round in return/reconciliation, never a second launch.
+
+**Participant binding.** Crier and Scheduler expose the same routes under their enrolled
+service origins: `POST /v1/factory/bindings/prepare`,
+`POST /v1/factory/bindings/commit`, and `GET /v1/factory/bindings/{generation}`.
+Their principal role permits only their own `participant_id` and assigned project.
+`binding.prepare.v1` contains `operation_id`, `project_id`, `binding_generation`,
+`owner_fence`, `participant_id`, `candidate_endpoint:{url,tls_spki}`, `readiness_ref`,
+`readiness_digest`, and `idempotency_key`. The recipient verifies a fresh authenticated
+probe, persists a non-routable candidate, and returns `{participant_id,operation_id,
+binding_generation,prepared_digest,state:prepared}`. The same tuple/digest replays;
+changed content is `BINDING_CONFLICT`.
+
+After both prepare receipts and repeated probes, the manager commits its active pointer
+and sends `binding.commit.v1` containing `operation_id`, `project_id`,
+`binding_generation`, `owner_fence`, `participant_id`, `prepared_digest`, `active_digest`,
+`committed_at`, and `idempotency_key`. Each participant atomically activates the candidate
+and returns `{participant_id,binding_generation,active_digest,state:active}`. GET returns
+`candidate|active|superseded|absent`, both digests and durable operation ID. If only one
+participant prepared, activation remains false. If the manager crashes after pointer
+commit, recovery reads that pointer and replays the same commit to the missing participant;
+it never rolls back to N. Abort before pointer commit deletes only candidates. Readback
+mismatch is `BINDING_NOT_ACTIVE` and blocks every new grant.
+
+**Protected secret resolution and Bunker transfer.** The control broker socket is
+`/run/factory/broker/secrets.sock`, owned by the broker service UID, mode 0600. The node
+broker socket is `/run/factory/node-broker/secrets.sock`, owned by the node-broker UID,
+mode 0600. Neither socket is mounted into a worker namespace. A local request is one JCS
+line, at most 65536 bytes: `{schema_version:"secret-resolve.v1",request_id,corr_id,
+credential_ref,operation,idempotency_key}`. SO_PEERCRED supplies the principal; a caller
+principal field is forbidden. The broker validates the online assigned-reference list,
+operation, registration generation and revocation state. Success returns metadata
+`{schema_version,request_id,credential_ref,fingerprint,expires_at,scope}` plus exactly one
+SCM_RIGHTS descriptor for a sealed memfd. The descriptor carries `F_SEAL_SEAL`,
+`F_SEAL_SHRINK`, `F_SEAL_GROW` and `F_SEAL_WRITE`; JSON contains no secret bytes. Errors
+are `UNAUTHORIZED`, `CAPABILITY_REVOKED`, `REFERENCE_UNKNOWN` and
+`RESOLVER_UNAVAILABLE`, with no descriptor on failure.
+
+A cross-host installation starts with `POST /v1/secret-transfers` on the control broker,
+body version `secret-transfer.v1`, fields `transfer_id`, `credential_ref`, `node_id`,
+`registration_generation`, `operation`, `expires_at`, and `idempotency_key`. The broker
+stores one assigned one-use transfer and returns only its metadata. The enrolled node
+broker claims that transfer over mutually authenticated TLS to
+`POST /v1/secret-transfers/{id}/claim`, including `transfer_id`, `node_id`,
+`registration_generation`, `request_digest`, and `idempotency_key`. The response travels
+inside the authenticated encrypted channel, is placed directly into a sealed memfd by the
+node broker, and is acknowledged as `{transfer_id,state:delivered,fingerprint,expires_at}`
+without contents. Identical claim replays metadata and offers the same still-open local
+descriptor; after descriptor loss or process restart, a consumed transfer returns
+`TRANSFER_CONSUMED` and requires an explicitly linked replacement transfer. M1 then stages
+the descriptor atomically with owner-only permissions and readback. Fanout creates one
+independently scoped transfer per consumer; no broadcast descriptor or shared environment
+variable exists.
+
+The signed `factory-adapter-capabilities.v1` artifact named by Part V is the required
+resource registry. It contains `schema_version`, `registry_digest`, `release_lock_digest`,
+and `adapters:[{adapter_id,version_digest,resources}]`. Each resource entry is
+`{resource_type,json_schema,idempotent_verbs,discovery_verbs}`. Required resource types
+are `host`, `bunker`, `credential`, `endpoint`, `binding`, `release` and `runtime`.
+Their schemas respectively validate Capacity/host identity; Bunker image/count/profile;
+CredentialRef and revocation state; Endpoint and probe; binding tuple and generation;
+SignedArtifact and qualification receipt; execution mode, supervisor/harness digests,
+UID/mount/cgroup/network effective state. An adapter result or Observation that does not
+validate against the pinned resource schema is `CAPABILITY_SCHEMA_MISMATCH`; an absent
+resource type is `CAPABILITY_UNSUPPORTED`, not a manager-side improvised object.
+
+**One terminal reduction and settlement mapping.** Execution outcome, transport,
+projection and settlement remain separate records. The following table is exhaustive for
+the named failure branches; each branch has one accounting effect and no duplicate launch.
+
+|| Observed branch | Execution/round outcome and required disposition |
+||---|---|
+|| input refused or native launcher proves `NEVER_ACCEPTED` | attempt `fail` with phase `launch`; one proven never-started reservation refund; no commit or board close |
+|| native acceptance unknown, process existence unknown, or control dies before start acknowledgement | attempt `unknown`/`START_UNKNOWN`; reservation stays held, execution quarantined, no retry until native readback and fence |
+|| worker exits 0 without a schema-valid durable result | `UNKNOWN_RESULT`, round `unknown`; exit status is not a third verdict and not success |
+|| worker dies after result and evidence are fsynced | adopt the original result; replay outbox only; no native relaunch |
+|| worker/control dies after native start but before durable evidence | `unknown`, quarantine and reconcile native/board/Git/memory side effects before any new attempt |
+|| definitive execution or required gate failure | attempt `fail`; same-worker correction owns the task until terminal disposition or allowance/deadline exhaustion |
+|| execution passes and publication definitively fails | execution remains `pass`, task/round `partial`; no settled success |
+|| commit/push/gate verdict or remote readback is uncertain | task `unverified`, round `unverified`; no closeout and no inferred commit |
+|| required memory sync is pending after local commit | execution outcome is retained; CT-06 `awaiting_evidence`, internally `REPORTED_PENDING_MEMORY`; work may continue locally, next round is blocked |
+|| backup coordinator is lost | recover the same barrier while valid; lease expiry or backup deadline makes the cut `ABORTED`, never complete |
+
+Task reduction uses `unknown` if any required outcome is unknown; otherwise `partial` for
+mixed pass/fail/unverified outcomes or publication partiality; otherwise `unverified` if
+any required evidence is unverified; otherwise `fail` if no criterion passes; otherwise
+`pass` only when every criterion and required publication passes. Wave reduction applies
+the same ordered rule to its tasks. Round reduction applies it to waves, then preserves a
+`partial` caused by any publication/projection failure even if execution hooks later pass.
+`stop_reason` explains why scheduling stopped and never changes this outcome.
+
+The internal-to-CT-06 mapping is fixed: `RETURNED` maps to `received`;
+`PROJECTIONS_PENDING` and VII's `REPORTED_PENDING_MEMORY` map to `awaiting_evidence`
+when memory/evidence is missing and to `postcheck_pending` when a required postcheck is
+unfinished; `CLOSED` maps to exactly one of `settled_success`, `settled_failure`,
+`settled_partial` according to the reduction; unresolved `UNKNOWN` maps to `unknown`.
+Physical slots release only after process quiescence, independently of logical pending
+state. Allowance is never replenished, and the next round remains blocked until a terminal
+settlement revision. POST hooks use the pinned plan's 1..5 attempts, default five for
+read-only POST verification, at 30-second intervals within the original deadline.
+Exhaustion settles failure with `POSTCHECK_FAILED`; it does not leave an indefinite retry
+loop. Late evidence or an authorized retry appends a new reconciliation revision keyed by
+`(round_id,report_digest,settlement_revision)`, reruns only readback/hooks, and never
+reruns work or changes the immutable execution outcome.
+
+Every operation above emits `factory.telemetry.v1` under Part V §V.10 with its Factory
+identity, durable source sequence and typed network failure. Read-only lookup success does
+not emit a state-change event. `docs/handbook/contract-vectors.json` is the common fixture
+source for enrollment, lost grant/consume replies, one-sided binding acknowledgement,
+certificate renewal, secret assignment, failed launch, worker/control death, commit
+uncertainty, postcheck exhaustion and late evidence; module prose does not fork those cases.
+
 ## 1.10 The contract surface, as a count
 
 The canonical register contains 31 rows: `CT-01`…`CT-23`, the foreman-return leg

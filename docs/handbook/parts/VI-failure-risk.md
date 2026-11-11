@@ -1110,57 +1110,105 @@ Restore occurs in an isolated scope: restore artifacts, verify manifests and key
 
 **Signal and proof.** Metrics expose backup age, validation failures, last successful restore drill and per-store recovery lag. A restore case loses the controller or Bunker mid-round and verifies the round/task/claim/budget/custody/memory view without resurrecting acknowledged work or revoked credentials. Until this drill is run on the selected deployment, the recovery state remains `UNVERIFIED`.
 
-### 35.1 Coordinated capture and typed manifest (P5-C-26)
+### 35.1 One coordinated-cut lifecycle and manifest (P5-C-26; P6-06; SC-08)
 
-Backup is a manager operation with ID and state REQUESTED → FROZEN → CAPTURED →
-VALIDATED → PUBLISHED, or ABORTED. It closes new admissions, asks supervisors to
-quiesce all rounds, and opens an authority barrier B at authority_seq. Every registered
-writer acknowledges `{backup_id, barrier_seq, store_id, last_transaction, root_digest}`
-after draining writes and fsync. Only the protected service owner can acknowledge.
-The barrier prevents new broker effects, claims, custody transitions and canonical
-memory merges; disconnected Bunkers cannot publish. The barrier lease is 300 s,
-renewed every 60 s. Capture timeout or missing required acknowledgement aborts the
-complete backup. Lease expiry unfreezes participants but permanently marks that backup
-ABORTED; it cannot later be published as a consistent cut. Controller restart queries
-barrier state before continuing. Successful capture releases the barrier after immutable
-snapshots and manifest are durable, before remote upload. [F15; Part I §1.9.3]
+Backup is a manager operation with one authority-owned barrier and one manifest. The closed
+state relation is `REQUESTED → FROZEN → CAPTURED → VALIDATED → PUBLISHED → RELEASED`;
+`REQUESTED|FROZEN|CAPTURED|VALIDATED|PUBLISHED → ABORTED` is the failure relation, and
+`FROZEN|CAPTURED|VALIDATED → INCOMPLETE` is available only under an explicitly selected
+partial-offline policy. `PUBLISHED` means the encrypted archive and manifest have been
+uploaded and read back off-host. `RELEASED` means every participant has acknowledged the
+release after that readback. `ABORTED` and `INCOMPLETE` can never transition to a complete
+or published state, and a replay with changed state/digest is `BACKUP_CONFLICT`.
 
-| Required store | Frozen capture / validation |
-|---|---|
-| manager config, operations, bindings, effect receipts | copy committed JSONL segments plus durable commit markers; replay through recorded seq, validate row digests and active generation |
-| canonical code, board, events and memory Git refs | `git bundle create` of all declared managed refs while fenced; `git bundle verify`; restore into empty bare repository and compare every ref OID; object closure required |
-| scheduler SQLite and local Crier SQLite | writer checkpoint `PRAGMA wal_checkpoint(FULL)` then SQLite backup API into new files; `PRAGMA integrity_check` = ok and foreign_key_check empty; transaction watermark equals acknowledgement; copying only live main DB file is forbidden |
-| PostgreSQL Crier | custody writers paused; `pg_dump --format=custom` under one repeatable-read snapshot; isolated `pg_restore`, constraint checks and custody/lease/outbox counts and digests equal acknowledgement |
-| evidence/artifacts and supervisor result spools | immutable digest-addressed objects plus manifests and active hold records; hash every referenced object; missing object fails validation |
-| each Bunker pending memory/local journals | supervisor freezes local writer and bundles all pending branches and launch/result ledger at acknowledgement; absent Bunker is an explicit exclusion, not an empty store |
-| independent authority | signed checkpoint reference only; backup NEVER replaces its live epoch/revocation store (35.2) |
+The manager closes new admissions, asks supervisors to quiesce rounds, and creates
+`{backup_id,barrier_seq,authority_id,config_generation,operation_id,idempotency_key}`.
+The authority issues a 300-second barrier lease, renewable every 60 seconds by the same
+coordinator identity through `POST /v1/backups/{backup_id}/renew`. Every registered writer
+acknowledges `{backup_id,barrier_seq,store_id,last_transaction,root_digest,capture_ref}`
+only after draining writes and fsync. The barrier prevents new broker effects, claims,
+custody transitions and canonical memory merges; disconnected Bunkers cannot publish.
+Renewal carries the current barrier sequence and manifest pre-digest, not a new backup ID.
 
-`cf.backup.v1` has required backup_id (ID), schema_version, barrier_seq (integer),
-authority_id, authority_checkpoint_digest (SHA-256), config_generation (integer),
-captured_at (UTC), destination_ref, key_ref, stores (nonempty list), exclusions (list,
-may be empty), retention_until (UTC), rpo_s/rto_s (positive integers), state and
-manifest_digest. Each store is `{store_id,kind,source_revision,last_transaction,
-artifact_path,sha256,bytes,root_digest,validated}`; paths are relative without traversal,
-kind is jsonl/git/sqlite/postgres/objects/local-journal, revision is string, counts
-are nonnegative integers. Exclusion is `{store_id,reason,last_synced_at,loss_start,
-loss_end}` with UTC/null timestamps: null means unknown, never zero loss. Manifest
-digest hashes canonical JSON without its own digest/signature; offline operator-enrolled
-backup signer signs it. Archive uses authenticated encryption to backup public-key
-recipient; recovery private key remains with the offline custodian, not in the archive.
-The secret-free archive includes credential references/metadata only. Publication uses
-a unique backup-ID object, conditional create, then remote hash readback and validation
-receipt. Partial uploads are not listed as validated backups. Defaults: hourly capture,
-30-day retention, RPO 3600 s, RTO 7200 s; destination/key are required owner choices in
-V.9, not invented infrastructure. Retention removes only validated expired generations
-with no hold; at least the latest validated generation survives.
+Capture, local validation and off-host publication are three distinct commit points:
 
-DECISION SLOT C-BACKUP selects offline policy refuse (default) or partial. Partial
-captures reachable stores and names every missing Bunker/loss window; it is not a
-complete recovery cut and cannot certify that project's readiness. Restore decrypts
-in an isolated network, validates signature/hashes/schema/object closure and store
-watermarks, restores each store with its native reader, reconciles IDs, then executes
-35.2 before enabling credentials, writes or dispatch. A timed restore drill reports
-per-store actual loss/recovery time; declared objectives are not measured results.
+1. `CAPTURED`: every required store has an immutable local snapshot and acknowledgement.
+   Writers remain frozen; local capture is not permission to release.
+2. `VALIDATED`: native readers, hashes, object closure and watermarks pass and the signed
+   manifest is immutable. Writers remain frozen while upload/readback proceeds.
+3. `PUBLISHED`: conditional-create upload finishes and an independent off-host readback
+   returns the same manifest and artifact digests. Only now does the coordinator call
+   `POST /v1/backups/{backup_id}/release`; each writer resumes on the same barrier release
+   receipt and returns a final acknowledgement, producing `RELEASED`.
+
+The overall backup deadline is Part V's 3600-second default. Coordinator restart first
+reads `GET /v1/backups/{backup_id}` and resumes the recorded stage with the same identity.
+If the barrier remains valid, it renews and continues. If a participant cannot be contacted,
+the upload fails, the deadline passes, or the 300-second lease expires without renewal,
+the authority marks the operation `ABORTED` and issues an abort release that unfreezes
+writers. The 301-second unrenewed case therefore aborts and unfreezes exactly once; it
+cannot later become `PUBLISHED`. Upload outage may be retried under the same backup ID
+while the coordinator keeps the barrier alive, but never beyond the overall deadline.
+A missing Bunker under default `offline_policy=refuse` aborts the complete cut. Under the
+owner-selected `partial` option it produces `INCOMPLETE`, names the loss window, unfreezes
+reachable writers after local validation, and cannot certify project readiness or a full
+restore.
+
+|| Required store | Frozen capture / validation |
+||---|---|
+|| manager config, operations, bindings, effect receipts | committed JSONL segments and durable commit markers; replay through recorded sequence, validate row digests and active generation |
+|| canonical code, board, events and memory Git refs | `git bundle create` of every declared managed ref while fenced; `git bundle verify`; restore into an empty bare repository and compare every ref OID and object closure |
+|| scheduler SQLite and local Crier SQLite | writer checkpoint `PRAGMA wal_checkpoint(FULL)` then SQLite backup API; `PRAGMA integrity_check=ok`, empty foreign-key check, and transaction watermark equal to acknowledgement |
+|| PostgreSQL Crier | custody writers paused; `pg_dump --format=custom` under one repeatable-read snapshot; isolated restore, constraints, custody/lease/outbox counts and digests equal to acknowledgement |
+|| evidence/artifacts and supervisor result spools | immutable digest-addressed objects, manifests and active holds; every referenced object hashed; a missing object fails validation |
+|| each Bunker pending memory/local journal | supervisor freezes the local writer and bundles all pending branches and launch/result ledgers; absence is an explicit exclusion, never an empty store |
+|| independent authority | signed checkpoint reference only; backup never replaces the live epoch/revocation store |
+
+The canonical `cf.backup.v1` manifest is a closed object with these required members:
+`schema_version`, `backup_id:ID`, `operation_id:ID`, `barrier_seq:PosInt`,
+`authority_id:ID`, `authority_checkpoint_digest:SHA`, `config_generation:PosInt`,
+`consistency_marker:{authority_seq:PosInt,writer_watermarks:[{store_id,last_transaction,root_digest}]}`,
+`captured_at:Time`, `validated_at:Time|null`, `published_at:Time|null`,
+`released_at:Time|null`, `destination_ref:ID`, `key_ref:SecretRef`,
+`stores:Store[1..1024]`, `inventory:Artifact[1..1048576]`,
+`exclusions:Exclusion[]`, `retention_until:Time`, `rpo_s:PosInt`, `rto_s:PosInt`,
+`revocation_snapshot_ref:EvidenceRef`, `state:REQUESTED|FROZEN|CAPTURED|VALIDATED|PUBLISHED|RELEASED|ABORTED|INCOMPLETE`,
+`offhost_readback_ref:EvidenceRef|null`, `release_receipts:ReleaseReceipt[]`,
+`manifest_digest:SHA`, and `signature:Base64url64`. Nullable timestamps and off-host ref
+are null until their named commit point. `PUBLISHED` requires nonnull published time and
+readback ref; `RELEASED` additionally requires every writer's release receipt.
+
+Store is `{store_id:ID,kind:jsonl|git|sqlite|postgres|objects|local-journal,
+source_revision:Text,last_transaction:Text,artifact_path:relative-path,sha256:SHA,
+bytes:UInt,root_digest:SHA,validated:boolean}`. Artifact is `{path:relative-path,
+sha256:SHA,bytes:UInt,store_id:ID}` and inventory is sorted by path bytes with unique
+paths. Exclusion is `{store_id:ID,reason:ErrorCode,last_synced_at:Time|null,
+loss_start:Time|null,loss_end:Time|null}`; null time means unknown loss, never zero loss.
+ReleaseReceipt is `{store_id,barrier_seq,state:released|aborted,receipt_digest:SHA,
+acknowledged_at:Time}`. `manifest_digest` hashes RFC8785 JSON of the complete object
+excluding only `manifest_digest` and `signature`; the offline-enrolled backup signer signs
+`CF2A-BACKUP-1\n` plus that digest's lowercase hex bytes. Unknown keys, a missing store,
+changed bytes or invalid state/refusal combination is `BACKUP_MANIFEST_INVALID`.
+
+The archive uses authenticated encryption to the backup public-key recipient; the recovery
+private key remains with the offline custodian. Secret-free archives contain credential
+references and revocation metadata, never credential values. Publication uses a unique
+backup-ID object, conditional create, then remote hash readback and a signature/schema
+validation receipt. Partial uploads are not listed as validated backups. Defaults are
+hourly capture, 30-day retention, RPO 3600 seconds, RTO 7200 seconds and overall deadline
+3600 seconds. Destination and key remain required owner inputs. Retention deletes only
+validated expired generations with no hold and always retains the latest validated
+generation.
+
+DECISION SLOT C-BACKUP offers `refuse` (the fail-closed default) or `partial`; no silent
+partial capture is permitted. Restore decrypts in an isolated network, verifies signature,
+hashes, schema, object closure and store watermarks, restores with native readers,
+reconciles identities, then executes §35.2 before enabling credentials, writes or dispatch.
+A timed restore drill reports actual per-store loss/recovery time; declared objectives are
+not measured results. Current-authority revocation preservation and revoke-all recovery
+remain mandatory. Shared SC-08 vectors cover coordinator loss at every stage, the
+301-second pause, upload outage, missing Bunker, corrupt snapshot and post-revocation
+restore; no local artifact or service-liveness claim substitutes for that drill.
 
 ### 35.2 Non-rollback authority and resource enforcement (P5-C-17/27)
 
