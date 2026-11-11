@@ -95,7 +95,7 @@ installation token before the bundle is built; `scripts/github-app-refresh.sh` r
 the control host before expiry. Token mode remains the PAT-compatible fallback. See
 `skills/code-factory-bunker/SKILL.md`.
 
-Install refresh units with `scripts/github-app-refresh.sh --install-timer --node <agent> --server <host>` and run the printed enable command.
+Install refresh units with `scripts/github-app-refresh.sh --install-timer --node <agent> --server <host>` and run the printed enable command. Where systemctl is unavailable it exits non-zero without writing units, and provisioning prints the cron fallback.
 
 ## Harness workstream — five harnesses, one memory, one foreman
 

@@ -7391,6 +7391,12 @@ if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  install_timer' && pr
 else
   say "  FAIL  CF-238 daemon-reload refusal: $out"; fails=$((fails+1))
 fi
+out=$(HOME="$cf238/home" PATH="$cf238/bin:$PATH" CF_SYSTEMCTL="$cf238/bin/no-such-systemctl" bash "$HERE/scripts/github-app-refresh.sh" --install-timer --node fixture-nosys --server fixture-server 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  install_timer' && printf '%s\n' "$out" | grep -q 'unavailable' && [ ! -e "$cf238/home/.config/systemd/user/cf-github-app-refresh-fixture-nosys.service" ] && [ ! -e "$cf238/home/.config/systemd/user/cf-github-app-refresh-fixture-nosys.timer" ]; then
+  say "  PASS  CF-238 absent systemctl refuses before writing any unit"
+else
+  say "  FAIL  CF-238 absent-systemctl refusal: $out"; fails=$((fails+1))
+fi
 out=$(HOME="$cf238/home" PATH="$cf238/bin:$PATH" bash "$HERE/scripts/github-app-setup.sh" --check --node fixture-node --env-file "$cf238/missing.env" --api-base http://127.0.0.1:9 2>&1)
 if printf '%s\n' "$out" | grep -q 'PASS  refresh.*fixture-node'; then
   say "  PASS  CF-238 setup check accepts matching node and 20-minute cadence"

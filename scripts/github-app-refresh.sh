@@ -83,15 +83,17 @@ install_timer() {
   fi
   local b
   b=$(have bunker) || { bad "install_timer" "the bunker client is not on PATH"; return 1; }
+  # Refuse BEFORE writing anything: a unit written on a host that cannot arm it is a silent
+  # trap (the operator sees two files and no error), so an unarmable host gets no units at all.
+  command -v "$CF_SYSTEMCTL" >/dev/null 2>&1 || { bad "install_timer" "$CF_SYSTEMCTL is unavailable; nothing written, timer is unarmed"; return 1; }
   "$b" info "$NODE" --server "$SERVER" >/dev/null 2>&1 || { bad "install_timer" "$NODE not found on $SERVER (bunker info failed)"; return 1; }
   mkdir -p "$unit_dir" || { bad "install_timer" "cannot create $unit_dir"; return 1; }
   if [ -f "$service" ] && [ -f "$timer" ] && cmp -s "$service" <(printf '%s\n' "$service_body") && cmp -s "$timer" <(printf '%s\n' "$timer_body"); then
-    command -v "$CF_SYSTEMCTL" >/dev/null 2>&1 && "$CF_SYSTEMCTL" --user daemon-reload >/dev/null 2>&1 || { bad "install_timer" "$CF_SYSTEMCTL --user daemon-reload unavailable or failed; timer is unarmed"; return 1; }
+    "$CF_SYSTEMCTL" --user daemon-reload >/dev/null 2>&1 || { bad "install_timer" "$CF_SYSTEMCTL --user daemon-reload failed; timer is unarmed"; return 1; }
     say "github-app-refresh — $service and $timer unchanged"
     return 0
   fi
   printf '%s\n' "$service_body" > "$service" && printf '%s\n' "$timer_body" > "$timer" && chmod 644 "$service" "$timer" || { bad "install_timer" "cannot write units in $unit_dir"; return 1; }
-  command -v "$CF_SYSTEMCTL" >/dev/null 2>&1 || { bad "install_timer" "$CF_SYSTEMCTL is unavailable; timer is unarmed"; return 1; }
   "$CF_SYSTEMCTL" --user daemon-reload >/dev/null 2>&1 || { bad "install_timer" "$CF_SYSTEMCTL --user daemon-reload failed; timer is unarmed"; return 1; }
   ok "install_timer" "$service and $timer written"
   say "systemctl --user enable --now $timer_name"
