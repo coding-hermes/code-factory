@@ -42,13 +42,19 @@ cannot supply every field — including a real `model_served` or an explicit
 `unavailable:<reason>` — is marked `unsupported` in this matrix and is not silently skipped.
 This is the requirement that makes the matrix worth having: every named harness, one memory.
 
-**Memory support today:** hermes, claude-code, codex, opencode, pi-agent, dsh,
-deepseek, opencode-v2, aider and goose are **unsupported for I3 runtime capture**:
-none of their actual run paths calls the shared writer or exports the complete provenance.
-The conformance memory leg tests a labelled hermetic fixture for each ID, not the live
-harness or DuckBrain. In particular dsh cannot distinguish `model_served` from its request.
-OMH is an operating layer over Hermes and has no independent exporter. These statuses are
-not changed by a fixture PASS; live capture, DuckBrain transport and F3 R1/R2 remain unverified.
+**Memory support today:** the `scripts/node-bus-worker.py` Hermes path is the only wired
+runtime exporter. After a successful harness process, it calls the shared writer with the
+namespace, run id, lane, harness version, requested model, measured served model,
+provider binding, clone commit and dispatch tick, then reads the exact bytes back. The
+backend is a node-local evidence artifact under `$HOME/.node/harness-memory/`; it is not a
+DuckBrain transport, so the live DuckBrain leg remains UNVERIFIED.
+
+The Hermes path emits an explicit `UNSUPPORTED` memory result when namespace, harness
+version, served model, provider binding, commit or tick is unavailable. claude-code, codex,
+opencode, pi-agent, dsh, deepseek, opencode-v2, aider and goose remain **unsupported for
+I3 runtime capture** because their actual paths are not wired to this exporter (and dsh
+cannot distinguish `model_served` from its request). OMH is an operating layer over Hermes
+and has no independent exporter. A fixture PASS does not change any of these statuses.
 
 **I4 — Nothing is supported because it is installed.** Support means five green legs in the
 conformance battery (`PASS`/`SKIP`/`FAIL` with a measured value), on a real node, for a real turn.

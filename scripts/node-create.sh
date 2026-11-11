@@ -66,13 +66,13 @@ staged_files() {
   # directions, or the run stops with a named staged_set row (CF-087).
   local -a declared=(project-node.sh install-go.sh install-node.sh lib.sh disk_floor.py reclaim_disk.py
                      node_gateway_auth.py node_hygiene.py gomodcache.py deploy_key.py node-bus-worker.py
-                     harness/harness-vars.sh "harness/install-$HARNESS.sh")
+                     harness/harness_memory.py harness/harness-vars.sh "harness/install-$HARNESS.sh")
   # Files this script stages that the derived closure cannot reach: deploy_key.py is copied into
   # the node and run there by --deploy-key, harness/harness-vars.sh is part of the harness contract
   # every adapter sources (specs/HARNESS.md), and node-bus-worker.py is the sidecar consumed by
   # bunker-crier-connect.sh. These surfaces live outside the entry point's closure, so they are
   # explicit required sidecars and still participate in the same bidirectional validation.
-  local -a extra=(deploy_key.py harness/harness-vars.sh node-bus-worker.py)
+  local -a extra=(deploy_key.py harness/harness_memory.py harness/harness-vars.sh node-bus-worker.py)
   # Every spelling of a runtime reference: $HERE/x, ${HERE}/x, bare, and inside either quote
   # style. The capture stops at the quote/space, so "$HERE/x" and '$HERE/x' both yield x.
   local pattern='(\$HERE|\$\{HERE\})/([a-zA-Z0-9_./${}-]+)'

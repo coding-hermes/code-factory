@@ -79,22 +79,23 @@ inventory in §3 and the pin/verdict history are implementation coverage, not th
   acceptance; neither may stand in for the other in board or memory records.
 - **Shared harness memory measurement (III.M5.S6 / I3).** Every named adapter is enumerated by
   `tests/harness-conformance.sh` and uses the one `scripts/harness/harness_memory.py` writer in the
-  `memory` fixture. The writer requires an explicit non-default namespace and validates the same
-  non-empty I3 fields (`namespace`, `run_id`, `lane`, `harness`, `harness_version`,
-  `model_requested`, `model_served`, `provider_binding`, `commit`, `tick`); readback compares the
-  canonical UTF-8 bytes, not merely parsed values. The fixture is repository-local evidence only:
-  it does not contact DuckBrain or certify a live harness run. Because no in-repo adapter currently
-  exports complete runtime provenance, each adapter gets an explicit `memory — UNSUPPORTED` row
-  rather than an unlabelled skip. Live DuckBrain transport and runtime capture remain UNVERIFIED.
+  `memory` fixture. The production `scripts/node-bus-worker.py` Hermes path also calls that writer
+  after a harness run, using directive-supplied namespace/run/lane/model plus measured harness
+  output, provider binding, clone commit, harness version and dispatch tick; it reads exact canonical
+  bytes back. The runtime backend is a node-local evidence artifact under
+  `$HOME/.node/harness-memory/`, not DuckBrain, so live DuckBrain transport is UNVERIFIED. Missing
+  provenance produces explicit `memory — UNSUPPORTED`; the other named adapters remain unsupported
+  for runtime capture until their actual paths are wired.
 
 <a id="III.M5.S6"></a>
 ### III.M5.S6 — harness measurement
 
 The node's harness measurement surface records what the adapter actually reports; it does not turn
-an installer or fixture into a live run. The shared I3 memory seam is the same distinction: the
-fixture proves writer validation and exact-byte readback for every in-repo conformance adapter, while
-the unsupported rows preserve the missing runtime-exporter obligation. A future live adapter must
-keep the explicit namespace and all-field validation and replace only the hermetic backend.
+an installer or fixture into a live run. The shared I3 memory seam keeps that distinction: the fixture
+proves writer validation and exact-byte readback for every in-repo conformance adapter, while the
+Hermes node-bus path exports one complete runtime record to a local evidence artifact and reads it
+back. That artifact is not DuckBrain proof. Missing provenance and adapters without this wiring remain
+explicitly unsupported; a future live transport must keep the same namespace and all-field validation.
 
 
 **Finding F5-2.** `harness_resolve.py` is **not** the runtime resolver. A repo-wide search finds it

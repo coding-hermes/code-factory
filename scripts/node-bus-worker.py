@@ -90,6 +90,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+# The worker and the hermetic conformance battery share this exact writer.  The import is
+# deliberately relative to this script, never to the caller's current directory.
+_HARNESS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "harness")
+if _HARNESS_DIR not in sys.path:
+    sys.path.insert(0, _HARNESS_DIR)
+from harness_memory import MemoryRecordError, MemoryWriter  # noqa: E402
+
 DEFAULT_INBOX_LIMIT = 10
 DEFAULT_LEASE_SECONDS = 30
 DEFAULT_TIMEOUT = 10
@@ -1040,6 +1047,81 @@ def refusal(ident, dispatch, reason, detail, in_reply_to=""):
     }
 
 
+def _memory_values(dispatch, ident, stdout, commit, outcome):
+    """Build I3 provenance from directive data and measured harness output.
+
+    The directive is authoritative for requested model/provider/namespace/run/lane.  A served
+    model must be emitted by the harness; the worker never promotes the request to served.
+    """
+    values, problems = directive_vars(dispatch, ident.home)
+    required = {
+        "CF_NAMESPACE": "namespace",
+        "CF_RUN_ID": "run_id",
+        "CF_LANE": "lane",
+        "CF_MODEL": "model_requested",
+    }
+    for key, field in required.items():
+        if not values.get(key):
+            problems.append(f"{field} is unavailable from the directive")
+    provider_binding = str(dispatch.get("provider_binding") or "")
+    if not provider_binding:
+        problems.append("provider_binding is unavailable from the directive")
+    served = ""
+    version = str(dispatch.get("harness_version") or "")
+    for line in (stdout or "").splitlines():
+        if line.startswith("model_served="):
+            served = line.partition("=")[2].strip()
+        elif line.startswith("harness_version="):
+            version = line.partition("=")[2].strip()
+    if not served:
+        problems.append("model_served was not emitted by the harness")
+    if not version:
+        problems.append("harness_version was not supplied by the directive or harness")
+    tick = str(dispatch.get("tick") or "")
+    if not tick:
+        problems.append("tick is unavailable from the dispatch")
+    commit = str(commit or "")
+    if not commit:
+        problems.append("commit could not be measured from the clone")
+    record = {
+        "namespace": values.get("CF_NAMESPACE", ""),
+        "run_id": values.get("CF_RUN_ID", ""),
+        "lane": values.get("CF_LANE", ""),
+        "harness": ident.harness_name,
+        "harness_version": version,
+        "model_requested": values.get("CF_MODEL", ""),
+        "model_served": served,
+        "provider_binding": provider_binding,
+        "commit": commit,
+        "tick": tick,
+    }
+    return record, problems, outcome
+
+
+def export_memory(dispatch, ident, stdout, commit, outcome):
+    """Write a local evidence artifact through the canonical I3 writer.
+
+    This is intentionally not a DuckBrain transport: the path is a node-local artifact and the
+    result says so.  Missing provenance is unsupported/refused, never filled from host state.
+    """
+    record, problems, outcome = _memory_values(dispatch, ident, stdout, commit, outcome)
+    if problems:
+        return {"status": "unsupported", "reason": "; ".join(problems)}, False
+    backend = os.path.join(ident.home, ".node", "harness-memory", f"{record['run_id']}.json")
+    try:
+        payload = MemoryWriter(backend).write(record, record["namespace"])
+        MemoryWriter(backend).read(record["namespace"])
+    except (MemoryRecordError, OSError) as exc:
+        return {"status": "unsupported", "reason": f"I3 exporter refused: {exc}"}, False
+    return {
+        "status": "written",
+        "artifact": backend,
+        "bytes": len(payload),
+        "transport": "local-evidence-artifact; DuckBrain unverified",
+        "outcome": outcome,
+    }, True
+
+
 def directive_text(dispatch):
     """(text, reason) — the directive a dispatch carries, and the refusal reason if it has none.
 
@@ -1336,6 +1418,10 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
             in_reply_to=in_reply_to,
         )
         result["vars"] = section5_receipt(values)
+        result["memory"] = {
+            "status": "unsupported",
+            "reason": "; ".join(var_problems)[:500],
+        }
         return False, result, True
     if values:
         ok(
@@ -1389,6 +1475,8 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
         )
         result["wall_s"] = round(seconds, 1)
         result["vars"] = section5_receipt(values)
+        memory, _ = export_memory(dispatch, ident, stdout, result.get("commit"), "FAIL")
+        result["memory"] = memory
         return False, result, True
     ok("harness", f"{label} exit {code} in {seconds:.1f}s (wall limit {wall}s)")
 
@@ -1463,6 +1551,11 @@ def process(dispatch, ident, signer, args, seen, in_reply_to=""):
         "wall_s": round(seconds, 1),
         "finished_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
+    memory, memory_ok = export_memory(dispatch, ident, stdout, commit, "FAIL" if failed_status else "PASS")
+    result["memory"] = memory
+    if not memory_ok:
+        result["memory"]["status"] = "unsupported"
+        result["memory"]["reason"] = memory.get("reason", "I3 exporter refused")
     if reason_text:
         # Read by the scheduler's verdict BEFORE `reply_b64`, so the reason is the short one
         # rather than the whole transcript.
