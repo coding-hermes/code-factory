@@ -1712,6 +1712,34 @@ execution_contracts:
       fields: {schema_version: string, status: 'ok|accepted|error', data: object-or-null, error: Error-or-null}
       invariant: An accepted transport response is not an execution verdict.
   records:
+    Enrollment:
+      schema_version: register.v1
+      fields: '{registration_id:ID,agent_id:ID,project_id:ID,expected_generation:UInt,profile:ID,public_identity:{certificate_der:Text,key_id:ID},capabilities:ID-set,enrollment_nonce:Text}'
+      durability: Nonce consumption, principal enrollment and generation allocation commit atomically; expected_generation=0 allocates 1.
+      replay: Same registration_id/idempotency_key and digest replays; changed bytes or nonce reuse refuses before credential staging.
+      output: registration generation, expiry and CredentialRef only; private keys and bearer values are absent.
+    DispatchGrant:
+      schema_version: dispatch-grant.v1
+      fields: '{grant_id:ID,project_id:ID,round_id:ID,run_id:ID,corr_id:ID,binding_generation:PosInt,owner_fence:Fence,destination:{agent_id:ID,endpoint_digest:SHA},admission_digest:SHA,requested_expiry_s:integer[1,30]}'
+      states: 'issued|consumed|expired|revoked'
+      consume: Manager atomically compares token hash and all bound fields, transitions issued -> consumed and inserts the Crier delivery outbox marker.
+      errors: [GRANT_CONFLICT, GRANT_REUSED, GRANT_EXPIRED, GRANT_UNAVAILABLE, BINDING_NOT_ACTIVE]
+      recovery: GET /v1/dispatch-grants/{grant_id} plus Crier delivery readback resolves a lost consume reply; no second grant, round or launch is created.
+    ParticipantBinding:
+      prepare_schema: binding.prepare.v1
+      commit_schema: binding.commit.v1
+      fields: '{operation_id:ID,project_id:ID,binding_generation:PosInt,owner_fence:Fence,participant_id:ID,prepared_digest:SHA,active_digest:SHA,committed_at:Time,idempotency_key:ID}'
+      durability: Crier and Scheduler persist non-routable candidates before manager pointer commit, then atomically activate the matching prepared digest.
+      recovery: A one-sided acknowledgement replays the same participant commit and serves the durable operation; grants remain BINDING_NOT_ACTIVE until both readbacks agree.
+      error: BINDING_CONFLICT on changed tuple/digest; no rollback to an earlier generation after pointer commit.
+    SecretResolution:
+      schema_version: secret-resolve.v1
+      request: '{request_id:ID,corr_id:ID,credential_ref:CredentialRef,operation:ID,idempotency_key:ID}'
+      transport: owner-only broker Unix socket, maximum 65536 bytes, SO_PEERCRED principal; a caller principal field is forbidden.
+      response: '{schema_version,request_id,credential_ref,fingerprint,expires_at,scope} plus exactly one SCM_RIGHTS sealed memfd; JSON contains no secret bytes.'
+      seals: [F_SEAL_SEAL, F_SEAL_SHRINK, F_SEAL_GROW, F_SEAL_WRITE]
+      fanout: Each consumer receives an independently scoped one-use transfer; no broadcast descriptor or environment variable exists.
+      errors: [UNAUTHORIZED, CAPABILITY_REVOKED, REFERENCE_UNKNOWN, RESOLVER_UNAVAILABLE, TRANSFER_CONSUMED]
     RoundAdmission:
       schema_version: round-admission.v1
       writer: scheduler
@@ -1744,46 +1772,44 @@ execution_contracts:
           lane_seed: {prompt_digest: SHA, skills: string-array}
       forbidden_at_admission: [wave_id, worker_id, attempt_id]
     Criterion:
-      schema_version: criterion.v1
       closed: true
       fields:
         id: ID
-        text: Text
-        verification: Text
-        argv: string-array
-        cwd: string
-        timeout_s: PosInt
-        expected_exit: integer
+        description: Text
+        argv: string-array, 1..64 direct argv entries without a shell
+        cwd: safe repository-relative path
+        timeout_s: integer, 1..1800 seconds
+        expected_exit: integer, 0..255
         oracle_digest: SHA
-      retired_aliases: {description: text, check_argv: argv}
+      legacy_projection: text and verification survive only as migration evidence; they are never executable canonical fields.
     TaskRow:
-      schema_version: task-row.v1
+      schema_version: cf.board-task.v1
       writer: board_writer
       fields:
+        schema_version: {type: string, const: cf.board-task.v1}
         kind: {type: string, const: task}
         id: ID
+        initiative_id: ID
         revision: PosInt
         operation_id: ID
-        initiative_id: ID
-        created_seq: PosInt
         title: Text
-        status: 'pending|in_progress|blocked|complete'
-        priority: integer
-        complexity: UInt
+        status: 'pending|in_progress|blocked|deferred|cancel_requested|cancelled|complete'
+        complexity: integer, 1..10
         reasoning: Text
-        acceptance_criteria: Criterion-array
-        paths: string-array
-        resources: object
-        depends_on: ID-array
-        cancel_requested: boolean
+        acceptance_criteria: Criterion-array, 1..100
+        depends_on: unique bytewise-sorted ID-array
+        created_seq: UInt, immutable and unique within the initiative
+        paths: 1..1024 normalized repository-relative prefixes
+        resources: Resource-array with unique names and exclusive/shared modes
         fixture: boolean
         created_at: Time
         updated_at: Time
         claim: Claim-or-null
+        cancel_request: CancelRequest-or-null
         deferral: Deferral-or-null
         completion: Completion-or-null
-      ordering: priority DESC, created_seq ASC, id ASC after dependency and correction eligibility.
-      correction: A correction retains the same task and original worker until terminal disposition; it never waits behind its own new claim.
+      ordering: ascending (created_seq,id) after dependency and correction eligibility; lane priority is not a task field.
+      correction: A correction retains the same task, claim and original worker until terminal disposition; it never waits behind its own new claim.
     GroupClaimRequest:
       schema_version: cf.board-group-claim.v1
       writer: foreman
@@ -1843,7 +1869,7 @@ execution_contracts:
         corr_id: ID
         owner_fence: Fence
         execution_key: SHA
-        status: 'pass|fail|error|cancelled|timeout'
+        status: 'pass|fail|unverified|partial|unknown'
         commit: GitOID-or-null
         artifacts: Artifact-array
         evidence_refs: EvidenceRef-array
@@ -1862,10 +1888,10 @@ execution_contracts:
         waves: WaveResult-array
         task_results: TaskResultRef-array
         budget: {allowance: RoundAllowance, consumed: RoundAllowance, reserved: RoundAllowance, remaining: RoundAllowance}
-        stop_reason: 'no_useful_work|completed|deadline|abort|error|budget_exhausted|cancelled|paused|dependency_unavailable|failed'
+        stop_reason: 'no_useful_work|budget_exhausted|cancelled|paused|deadline|dependency_unavailable|failed'
         memory_refs: EvidenceRef-array
         evidence_refs: EvidenceRef-array
-        status: 'pass|fail|error|partial'
+        status: 'pass|fail|unverified|partial|unknown'
         finished_at: Time
         report_digest: SHA
       digest: JCS of the complete record with report_digest absent.
@@ -1953,9 +1979,11 @@ execution_contracts:
       expiry: LEASE_EXPIRED requires reconciliation; ack requires the matching durable result digest.
       retired: Three-line GET, audience-free signatures and lease_s 1..30 have no Factory authority.
     ChatRequest:
-      schema_version: m12-chat-request implicit in POST /v1/chat/completions
-      max_request_bytes: 4194304
+      schema_version: cf.inference.v1
+      max_request_bytes: 1048576
+      raw_transport_ceiling_bytes: 4194304
       fields:
+        schema_version: {type: string, const: cf.inference.v1}
         model: string
         messages: ChatMessage-array
         stream: {type: boolean, default: false}
@@ -1968,7 +1996,19 @@ execution_contracts:
         tool_calls: optional assistant ToolCall-array
         tool_call_id: required for tool and references a prior call
       options_closed: temperature, top_p, max_output_tokens, stop, tools and tool_choice are materialized; arbitrary provider keys refuse.
-      errors: [INVALID_BODY, UNSUPPORTED_CONTENT, UNAUTHORIZED, FORBIDDEN, DEADLINE_EXCEEDED, BUDGET_EXHAUSTED, PRICING_UNAVAILABLE]
+      errors: [INVALID_BODY, UNSUPPORTED_CONTENT, UNAUTHORIZED, FORBIDDEN, DEADLINE_EXCEEDED, BUDGET_EXHAUSTED, CONCURRENCY_EXHAUSTED, PRICING_UNAVAILABLE, PAYLOAD_TOO_LARGE]
+    InferenceAuthorization:
+      token_schema: cf.node-token.v1
+      token_fields: '{token_id:ID,node_id:ID,project_id:ID,namespace:ID,allowed_routes:ID-set,allowed_models:Text-set,budget:NodeScope,concurrency:integer[1,64],issued_at:Time,expires_at:Time,generation:PosInt,scope_digest:SHA,revoked_at:Time-or-null,issuer_ref:EvidenceRef}'
+      scope_fields: '{allowed_routes:ID-set,budget_micro_usd:UInt default 0,window_s:integer[60,86400] default 86400,concurrency:integer[1,64] default 1,max_output_tokens:integer[1,131072] default 4096}'
+      credential_durability: Authorization ledger stores SHA-256(token bytes); clear bearer exists only in encrypted one-time recipient-bound delivery; restore never reactivates bearers.
+      request_ledger: '{request_id:ID,digest:SHA,token_id:ID,generation:PosInt,window:UInt,reserved_cost:UInt,actual_cost:UInt-or-null,state:reserved|forwarding|settled|unsettled,upstream_id:ID-or-null,route_digest:SHA,tokenizer_digest:SHA,price_digest:SHA,result_ref:EvidenceRef-or-null,deadline:Time,created_at:Time,updated_at:Time}'
+      admission: One serializable SQL transaction enforces spent + held + reserve <= budget and active < concurrency before forwarding; zero-price requests still reserve a slot.
+      accounting: Unknown spend charges the full reservation and marks estimated; only proven no-send refunds once; known usage settles actual and releases the remainder.
+      deadlines: upstream timeout 300 seconds; caller and upstream deadlines narrow by minimum; first-byte and total stream resource limits are finite.
+      recovery: GET /v1/responses/{request_id} returns 202 pending, 200 committed terminal or 410 expired tombstone without re-execution; result retention is 30 days.
+      errors: [UNAUTHORIZED, FORBIDDEN, BUDGET_EXHAUSTED, CONCURRENCY_EXHAUSTED, PRICING_UNAVAILABLE, PAYLOAD_TOO_LARGE, UPSTREAM_UNREACHABLE, UPSTREAM_TIMEOUT, USAGE_UNSETTLED, CAPTURE_FAILED]
+      telemetry: Counters cover authorization, model mismatch, upstream errors, terminal streams, cancellation, usage settlement, capture failure, token expiry and budget denial; request/token/prompt/error text never become metric labels.
     InferenceStream:
       content_type: text/event-stream; UTF-8; two LF terminate each frame.
       max_event_bytes: 1048576
@@ -1983,27 +2023,38 @@ execution_contracts:
       schema_version: cf.backup.v1
       fields:
         backup_id: ID
+        operation_id: ID
         barrier_seq: PosInt
         authority_id: ID
         authority_checkpoint_digest: SHA
         config_generation: PosInt
+        consistency_marker: '{authority_seq:PosInt,writer_watermarks:[{store_id,last_transaction,root_digest}]}'
         captured_at: Time
-        destination_ref: string
-        key_ref: string
-        stores: StoreCapture-array
+        validated_at: Time-or-null
+        published_at: Time-or-null
+        released_at: Time-or-null
+        destination_ref: ID
+        key_ref: SecretRef
+        stores: StoreCapture-array, 1..1024
+        inventory: Artifact-array, 1..1048576 sorted by path bytes
         exclusions: Exclusion-array
         retention_until: Time
         rpo_s: PosInt
         rto_s: PosInt
-        state: 'CAPTURING|COMPLETE|INCOMPLETE|ABORTED|VALIDATED'
+        revocation_snapshot_ref: EvidenceRef
+        state: 'REQUESTED|FROZEN|CAPTURED|VALIDATED|PUBLISHED|RELEASED|ABORTED|INCOMPLETE'
+        offhost_readback_ref: EvidenceRef-or-null
+        release_receipts: ReleaseReceipt-array
         manifest_digest: SHA
-      digest: JCS of the complete manifest with manifest_digest absent.
-      store_capture: {store_id: ID, kind: string, source_revision: string, last_transaction: string, artifact_path: string, sha256: SHA, bytes: UInt, root_digest: SHA, validated: boolean}
-      lease: 300 seconds, renewable only by the live coordinator and authority fence.
-      expiry: Expiry marks ABORTED and keeps writers fenced; it never unfreezes participants.
-      release: Requires encrypted off-host upload, digest/byte readback and every required store acknowledgement.
-      coordinator_loss: Recovery authority decides resume or abort; a later replay cannot turn ABORTED into COMPLETE.
-      distinction: Local immutable capture, off-host durability and restore certification are separate commit points.
+        signature: Base64url64
+      digest: JCS of the complete manifest with manifest_digest and signature absent; signer transcript is CF2A-BACKUP-1 plus LF plus digest hex.
+      store_capture: '{store_id:ID,kind:jsonl|git|sqlite|postgres|objects|local-journal,source_revision:Text,last_transaction:Text,artifact_path:relative-path,sha256:SHA,bytes:UInt,root_digest:SHA,validated:boolean}'
+      lease: 300 seconds, renewed every 60 seconds by the live coordinator under the same barrier sequence and authority fence.
+      expiry: Expiry or the overall deadline marks ABORTED and retains every writer hold; only a fenced recovery decision releases holds, and PUBLISHED is never permitted afterward.
+      validated: Native readers, hashes, object closure and watermarks pass while writers remain frozen.
+      published: Conditional-create encrypted upload and independent off-host digest/byte readback succeed; only then may release begin.
+      released: Every participant acknowledges the same post-publication release receipt.
+      distinction: Local immutable capture, native validation, off-host publication and participant release are separate commit points.
     SettlementRecord:
       schema_version: settlement.v1
       fields:
@@ -2020,7 +2071,7 @@ execution_contracts:
         recorded_at: Time
       invariant: Execution pass plus failed required postcheck is settled_failure, never success.
   authority_transitions:
-    dispatch_grant: issued -> redeemed -> settled; one use, replay returns GRANT_REPLAY, no settlement before return custody.
+    dispatch_grant: issued -> consumed; one use, a different delivery replay returns GRANT_REUSED, and a lost consume reply resolves by grant and Crier delivery readback before any new launch.
     certificate: old and new serials overlap for 60 seconds; old revokes only after new identity readback.
     effect: begin commits operation_id, input_digest, resource_ref and owner fence before mutation; finish requires remote readback.
     stale_owner: Every mutation rejects an older epoch with STALE_OWNER before evaluating work.
@@ -2037,10 +2088,15 @@ execution_contracts:
     timeout_example: turn_timeout_s=10 and attempt_wall_s=60 permits two 8-second calls; a whole-invocation 10-second interpretation is retired.
     typed_resources: cpu_millis, memory_bytes, max_output_bytes, concurrency, allowance and timeouts are integers with explicit units; boolean-with-budget fields are forbidden.
   terminal_settlement_matrix:
-    launch_rejected_before_exec: {result: failed_start, worker_verdict: null, refund: reserved allowance only}
-    clean_exit_without_committed_result: {result: missing_result, worker_verdict: null, success: false, third_verdict: forbidden}
-    process_exit_before_durable_evidence: {result: evidence_missing, success: false, recovery: reconcile result digest before new exec}
-    control_death_while_worker_runs: {result: control_unknown, success: false, recovery: query execution_key, never relaunch blindly}
+    never_accepted: {attempt: fail, phase: launch, refund: one proven never-started reservation, board_close: false}
+    start_unknown: {attempt: unknown, reservation: held, quarantined: true, retry: native readback and fence required}
+    clean_exit_without_durable_result: {error: UNKNOWN_RESULT, round: unknown, success: false, third_verdict: forbidden}
+    death_after_result_and_evidence_fsync: {disposition: adopt original result and replay outbox only, native_relaunch: false}
+    death_before_durable_evidence: {round: unknown, quarantined: true, recovery: reconcile native, board, Git and memory effects}
+    definitive_execution_or_gate_failure: {attempt: fail, correction: same worker until terminal disposition or allowance/deadline exhaustion}
+    definitive_publication_failure: {execution: pass, round: partial, settled_success: false}
+    uncertain_commit_push_gate_or_readback: {task: unverified, round: unverified, closeout: false, inferred_commit: false}
+    pending_memory_sync: {settlement: awaiting_evidence, local_work_may_continue: true, next_round: blocked}
     turn_timeout: {result: turn_timeout, attempt_may_continue: true, round_deadline: unchanged}
     attempt_wall_timeout: {result: attempt_timeout, success: false, round_may_continue: true}
     round_deadline: {result: round_deadline, new_launches: false, cleanup_and_reports_continue: true}
@@ -2054,35 +2110,43 @@ execution_contracts:
     uncertain_judgment: Does not block conforming harness checks or publication when judgment is not a required closeout hook.
     uncertain_publication: Blocks closeout but leaves other check outcomes unchanged.
   telemetry:
-    identity:
-      required: [project_id, component, event_id, occurred_at, config_generation]
-      scoped: [round_id, run_id, wave_id, attempt_id, task_id, corr_id, owner_epoch]
-      rule: Scoped ids are present whenever the event belongs to that scope; unknown is null, never a fabricated label.
     record:
-      fields: {name: string, kind: 'counter|gauge|histogram|event', value: number-or-null, unit: string, identity: TelemetryIdentity, source_observed_at: Time-or-null, collection_state: 'fresh|stale|unavailable|insufficient_data'}
-      missing: Unavailable observations emit null and collection_state; they never become zero or ready.
-      network_failure: Retains Factory task identity and is an error observation, not zero traffic.
-    projection: event_id deduplicates emission and scrape; a scrape never performs another operation.
-    retention: Raw events 30 days and hourly rollups 90 days; project-scoped read access; secrets and prompt text are forbidden.
+      schema_version: factory.telemetry.v1
+      fields: '{schema_version,event_id:ID,source_event_id:ID,source_seq:PosInt,module:M0..M12|manager,event_type:Enum,operation:Enum,outcome:accepted|pass|fail|refused|unknown|cancelled,reason:ID,duration_ms:UInt,observed_at:Time,identity:FactoryIdentity,measurements:{name:finite-number},error:{code:ErrorCode,retryable:boolean}|null}'
+      identity: '{project_id:ID,round_id:ID|null,run_id:ID|null,wave_id:ID|null,attempt_id:ID|null,task_id:ID|null,dispatch_id:ID|null,corr_id:ID|null}'
+      rule: Execution, inference and network-failure events carry every already allocated scope identity; infrastructure events use null execution fields.
+      emission: A durable state-changing operation or failed health observation emits after journal fsync; successful read-only GET/scrape/status emits no state-changing event.
+      missing: Unavailable observations emit null and collection_state=unavailable; they never become zero or ready.
+      network_failure: Uses factory_network_failures_total with bounded peer/reason labels and retains full FactoryIdentity in the event.
+    projection: '(module,source_event_id) deduplicates emission and scrape; changed bytes are TELEMETRY_CONFLICT; source and collector cursors resume after restart without counter reset.'
+    intervals: Global collection is 10 seconds; an M0–M6 local 15-second scrape is independent and cannot create operations or extend freshness.
+    retention: Events 90 days and counter checkpoints 400 days with the same project-scoped mTLS role, audit and access policy.
+    global_series: [factory_operations_total, factory_operation_duration_seconds, factory_active, factory_pending, factory_oldest_pending_seconds, factory_available, factory_network_failures_total, factory_observation_timestamp_seconds]
+    operation_labels: factory_operations_total uses exactly module, operation, outcome and project; duration uses exactly module, operation and project. Bounded peer/reason labels belong only to registered network/derived views.
     m7:
       counters: factory_operations_total{module="M7",operation="issue|verify|deliver|renew|revoke",outcome,project}
-      duration: factory_operation_duration_seconds{module="M7",operation,outcome,project}
-      qualification: All five operations are checked at emission and scrape with the same event ids.
+      duration: factory_operation_duration_seconds{module="M7",operation,project}
+      qualification: All five operations are checked at emission and scrape with the same source event ids.
     m8_to_m12: Each module emits the same identity envelope; module-specific metrics add only registered bounded labels.
   signed_profiles:
     schema_version: cf.signed-profile.v1
     fields: {profile_id: ID, generation: PosInt, payload_digest: SHA, signature_ref: string, defaults: object}
     controls: [receipt authority and trust, invocation lifecycle, gate policy, execution artifact, exact inference routes, global timeout, sandbox]
     binding: Secret references resolve locally and are redacted; signed payload and generation precede activation.
-    precedence: attempt override -> signed project profile -> signed namespace profile -> fail-closed default.
+    precedence: accepted generation field -> signed project/lane profile -> signed deployment profile -> global fail-closed default; an explicit empty value never falls through.
     error: Unknown generation or signature refuses with CONFIG_VERSION_CONFLICT or UNSUPPORTED_VERSION.
   containment:
     credential_transport: owner-only file descriptor or mode-0600 atomic file; environment and argv are forbidden.
     staging: temporary file in the destination filesystem, fsync, mode check, atomic rename, directory fsync.
     fanout: Children do not inherit secrets unless a registered attenuated grant explicitly allows it.
-    backend: Only registered containment backends launch; an unavailable backend returns CONTAINMENT_UNAVAILABLE.
+    backend: Only registered containment backends launch; an unavailable backend returns EXECUTION_BACKEND_UNSUPPORTED.
     lifecycle: No-parent and backend-lifecycle semantics are explicit and cannot be assumed across backends.
   decision_slots:
+    A-SUPERVISOR-PROFILE:
+      owner: factory owner
+      options: {resident-supervisor-v1: JCS-line control socket and cf.native.v1 adapters under separate role UIDs, successor-v2: new approved schema and vectors}
+      default: resident-supervisor-v1
+      fail_closed: cf.supervisor.v1, submit.sock, submit/status/cancel/drain/resume verbs, fd-3/fd-4 channels and unsealed credentials refuse activation.
     A-EXECUTION-PROFILE:
       owner: factory owner
       options: {resident-v1: canonical scheduler/foreman/supervisor protocol, successor-v2: new approved profile and vectors}
@@ -2097,7 +2161,7 @@ execution_contracts:
       owner: factory owner
       options: {protected-receive-pack-cas: Git protected CAS, broker-only-repository-service: identical transaction through a repository service}
       default: protected-receive-pack-cas
-      fail_closed: Unsupported forge or unchecked merge returns CLAIM_CONFLICT before launch.
+      fail_closed: Unsupported forge or unchecked merge returns BOARD_CAS_UNSUPPORTED before launch.
     A-MEMORY-DIGEST:
       owner: factory owner
       options: {whole-record-v1: complete record excluding payload_digest, successor-v2: new version and migration vectors}
@@ -2113,6 +2177,11 @@ execution_contracts:
       options: {abort-and-hold: ABORTED with writers fenced, successor-v2: new approved recovery proof}
       default: abort-and-hold
       fail_closed: Expiry never releases writers or certifies a partial backup.
+    A-HA:
+      owner: factory owner
+      options: {single-writer-independent-authority: one manager writer and an operator-owned authority in another failure domain, quorum-controller: separately specified and qualified quorum design}
+      default: single-writer-independent-authority
+      fail_closed: Automatic multi-controller failover is unsupported; missing placement refuses replacement.
     B-BOARD:
       owner: factory owner
       options: {refuse: deployment remains unready, boardctl-qualified-adapter: pinned artifact with identical schema and CAS vectors}
@@ -2130,7 +2199,7 @@ execution_contracts:
       fail_closed: Missing stores or acknowledgements abort the complete backup.
     C-LOST-AUTHORITY:
       owner: factory owner
-      options: {refuse: no automatic failover, replacement: new authority epoch after every effect reconciles}
+      options: {refuse: no automatic failover, revoke-all-new-authority: complete fenced credential revocation and re-enrollment after every effect reconciles}
       default: refuse
       fail_closed: Unresolved effects block replacement activation.
   durability:

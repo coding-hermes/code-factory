@@ -12,7 +12,9 @@
     "B-BOARD": "refuse",
     "C-ARTIFACT": "refuse",
     "C-BACKUP": "refuse",
-    "C-LOST-AUTHORITY": "refuse"
+    "C-LOST-AUTHORITY": "refuse",
+    "A-SUPERVISOR-PROFILE": "resident-supervisor-v1",
+    "A-HA": "single-writer-independent-authority"
   },
   "canonicalization": {
     "json": "RFC 8785 JCS: UTF-8, sorted object keys, minimal separators, no trailing LF.",
@@ -39,17 +41,16 @@
       }
     },
     "criterion": {
-      "id": "AC-1",
-      "text": "The admitted change is verified.",
-      "verification": "Run the named verification and retain its output.",
       "argv": [
         "verify",
         "--fixture"
       ],
       "cwd": ".",
-      "timeout_s": 60,
+      "description": "The admitted change is verified.",
       "expected_exit": 0,
-      "oracle_digest": "fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8"
+      "id": "AC-1",
+      "oracle_digest": "fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8",
+      "timeout_s": 60
     }
   },
   "vectors": [
@@ -79,16 +80,16 @@
       "id": "CV-01-B",
       "kind": "positive",
       "name": "immutable worker brief",
-      "canonical_json": "{\"attempt_id\":\"a-1\",\"brief_digest\":\"55606fe015427fe678ac9a1de2ff2666ff04dc06eecb25a1a2eab5a858a050df\",\"brief_ref\":\"cas+sha256://code-factory/55606fe015427fe678ac9a1de2ff2666ff04dc06eecb25a1a2eab5a858a050df\",\"claim_generation\":1,\"claim_id\":\"claim-cf1-1\",\"criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"text\":\"The admitted change is verified.\",\"timeout_s\":60,\"verification\":\"Run the named verification and retain its output.\"}],\"dispatch_id\":\"d-1\",\"effective\":{\"attempt_timeout_s\":1800,\"base_url\":\"https://proxy.example.invalid\",\"cpu_millis\":1000,\"credential_ref\":\"proxy-credential-1\",\"deadline\":\"2026-11-11T21:00:00Z\",\"lane\":\"code-factory\",\"max_output_bytes\":10485760,\"max_turns\":40,\"memory_bytes\":4294967296,\"model\":\"fixture-model\",\"namespace\":\"code-factory\",\"network_policy_digest\":\"19cad144fbdff3476ace4b2a10084b5594a3c44e4b07863f6b6ef0c394d5f2cd\",\"provider\":\"fixture-provider\",\"release_lock_digest\":\"be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410\",\"run_id\":\"run-17\",\"skills_digest\":\"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"turn_timeout_s\":300},\"idempotency_key\":\"brief-a1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"worker-brief.v1\",\"task_id\":\"CF-1\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\",\"workspace\":{\"base\":{\"algorithm\":\"sha1\",\"value\":\"1111111111111111111111111111111111111111\"},\"relative_path\":\"code-factory/worker-1\",\"repository\":{\"commit\":{\"algorithm\":\"sha1\",\"value\":\"1111111111111111111111111111111111111111\"},\"forge\":\"github\",\"host\":\"github.com\",\"owner\":\"coding-hermes\",\"ref\":\"refs/heads/main\",\"repo\":\"code-factory\"}}}",
-      "canonical_sha256": "0f0fc0c2f9d907562c8d4878c3284b32f9502fdbd3e0d1aab2524dce1979bf33",
+      "canonical_json": "{\"attempt_id\":\"a-1\",\"brief_digest\":\"aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"brief_ref\":\"cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"claim_generation\":1,\"claim_id\":\"claim-cf1-1\",\"criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"description\":\"The admitted change is verified.\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"timeout_s\":60}],\"dispatch_id\":\"d-822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f\",\"effective\":{\"attempt_timeout_s\":1800,\"base_url\":\"https://proxy.example.invalid\",\"cpu_millis\":1000,\"credential_ref\":\"proxy-credential-1\",\"lane\":\"code-factory\",\"max_output_bytes\":10485760,\"max_turns\":40,\"memory_bytes\":4294967296,\"model\":\"fixture-model\",\"namespace\":\"code-factory\",\"network_policy_digest\":\"19cad144fbdff3476ace4b2a10084b5594a3c44e4b07863f6b6ef0c394d5f2cd\",\"provider\":\"fixture-provider\",\"release_lock_digest\":\"be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410\",\"run_id\":\"run-17\",\"skills_digest\":\"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"turn_timeout_s\":300},\"idempotency_key\":\"brief-a1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"worker-brief.v1\",\"task_id\":\"CF-1\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\",\"workspace\":{\"base\":{\"algorithm\":\"sha1\",\"value\":\"1111111111111111111111111111111111111111\"},\"relative_path\":\"code-factory/worker-1\",\"repository\":{\"commit\":{\"algorithm\":\"sha1\",\"value\":\"1111111111111111111111111111111111111111\"},\"forge\":\"github\",\"host\":\"github.com\",\"owner\":\"coding-hermes\",\"ref\":\"refs/heads/main\",\"repo\":\"code-factory\"}}}",
+      "canonical_sha256": "a7e71410c5b4083381f3b723852f9484e706f0d33b9dece0e70abcdb8c6993c2",
       "related_objects": {
-        "brief_input_canonical_json": "{\"attachments\":[],\"criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"text\":\"The admitted change is verified.\",\"timeout_s\":60,\"verification\":\"Run the named verification and retain its output.\"}],\"directive\":\"Complete the admitted board tasks and return evidence.\",\"schema_version\":\"cf.brief-input.v1\",\"skills\":[],\"task\":{\"acceptance_criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"text\":\"The admitted change is verified.\",\"timeout_s\":60,\"verification\":\"Run the named verification and retain its output.\"}],\"claim\":{\"claim_generation\":1,\"claim_id\":\"claim-cf1-1\",\"claimant_id\":\"foreman-1\",\"lease_expires_at\":\"2026-11-11T19:03:00Z\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"}},\"completion\":null,\"complexity\":3,\"created_at\":\"2026-11-11T18:00:00Z\",\"deferral\":null,\"depends_on\":[],\"fixture\":false,\"id\":\"CF-1\",\"kind\":\"task\",\"operation_id\":\"op-claim-cf1\",\"priority\":50,\"reasoning\":\"A complete vector is required before implementation.\",\"revision\":2,\"status\":\"in_progress\",\"title\":\"Prove the execution contract\",\"updated_at\":\"2026-11-11T19:01:00Z\"}}",
-        "brief_input_sha256": "55606fe015427fe678ac9a1de2ff2666ff04dc06eecb25a1a2eab5a858a050df",
-        "brief_ref": "cas+sha256://code-factory/55606fe015427fe678ac9a1de2ff2666ff04dc06eecb25a1a2eab5a858a050df"
+        "brief_input_canonical_json": "{\"attachments\":[],\"criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"description\":\"The admitted change is verified.\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"timeout_s\":60}],\"directive\":\"Complete the admitted board tasks and return evidence.\",\"schema_version\":\"cf.brief-input.v1\",\"skills\":[],\"task\":{\"acceptance_criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"description\":\"The admitted change is verified.\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"timeout_s\":60}],\"cancel_request\":null,\"claim\":{\"claim_generation\":1,\"claim_id\":\"claim-cf1-1\",\"claimant_id\":\"foreman-1\",\"lease_expires_at\":\"2026-11-11T19:03:00Z\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"}},\"completion\":null,\"complexity\":3,\"created_at\":\"2026-11-11T18:00:00Z\",\"created_seq\":1,\"deferral\":null,\"depends_on\":[],\"fixture\":false,\"id\":\"CF-1\",\"initiative_id\":\"initiative-1\",\"kind\":\"task\",\"operation_id\":\"op-claim-cf1\",\"paths\":[\".\"],\"reasoning\":\"A complete vector is required before implementation.\",\"resources\":[],\"revision\":2,\"schema_version\":\"cf.board-task.v1\",\"status\":\"in_progress\",\"title\":\"Prove the execution contract\",\"updated_at\":\"2026-11-11T19:01:00Z\"}}",
+        "brief_input_sha256": "aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a",
+        "brief_ref": "cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a"
       },
       "expected": {
         "accepted": true,
-        "execution_key": "67403d95585696bc77bc54f444f9542374cd5bdf7bbb3aea149dca39a785a761",
+        "execution_key": "822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f",
         "turn_timeout_s": 300,
         "attempt_timeout_s": 1800
       },
@@ -99,15 +100,15 @@
       "id": "CV-01-C",
       "kind": "positive",
       "name": "worker result and report digest chain",
-      "worker_result_canonical_json": "{\"artifacts\":[],\"attempt_id\":\"a-1\",\"commit\":{\"algorithm\":\"sha1\",\"value\":\"2222222222222222222222222222222222222222\"},\"corr_id\":\"c-17\",\"dispatch_id\":\"d-1\",\"error\":null,\"evidence_refs\":[\"cas+sha256://code-factory/86f6b067fe92956e41ce029cd6e54fa2ad590639940f44f55619b9bc7356ffdc\"],\"execution_key\":\"67403d95585696bc77bc54f444f9542374cd5bdf7bbb3aea149dca39a785a761\",\"finished_at\":\"2026-11-11T19:20:00Z\",\"idempotency_key\":\"result-a1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"worker-result.v1\",\"status\":\"pass\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\"}",
-      "worker_result_sha256": "081f606656adf020464e36fc4963a34f9bc1598ca7b774fb5c508951fafd685b",
-      "round_report_canonical_json": "{\"budget\":{\"allowance\":20000,\"consumed\":1,\"remaining\":19999,\"reserved\":0},\"corr_id\":\"c-17\",\"evidence_refs\":[\"cas+sha256://code-factory/081f606656adf020464e36fc4963a34f9bc1598ca7b774fb5c508951fafd685b\"],\"finished_at\":\"2026-11-11T19:25:00Z\",\"idempotency_key\":\"report-r17\",\"memory_refs\":[\"cas+sha256://code-factory/bb44e4bd537c419d2db6cc7e282c3d662427a648a08345733a87a0796b6c2a1a\"],\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"report_digest\":\"f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"round-report.v1\",\"status\":\"pass\",\"stop_reason\":\"no_useful_work\",\"task_results\":[{\"attempt_id\":\"a-1\",\"result_ref\":\"cas+sha256://code-factory/081f606656adf020464e36fc4963a34f9bc1598ca7b774fb5c508951fafd685b\",\"status\":\"pass\",\"task_id\":\"CF-1\"}],\"waves\":[{\"attempt_ids\":[\"a-1\"],\"state\":\"complete\",\"wave_id\":\"w-1\"}]}",
-      "round_report_sha256": "f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71",
+      "worker_result_canonical_json": "{\"artifacts\":[],\"attempt_id\":\"a-1\",\"commit\":{\"algorithm\":\"sha1\",\"value\":\"2222222222222222222222222222222222222222\"},\"corr_id\":\"c-17\",\"dispatch_id\":\"d-822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f\",\"error\":null,\"evidence_refs\":[\"cas+sha256://code-factory/86f6b067fe92956e41ce029cd6e54fa2ad590639940f44f55619b9bc7356ffdc\"],\"execution_key\":\"822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f\",\"finished_at\":\"2026-11-11T19:20:00Z\",\"idempotency_key\":\"result-a1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"worker-result.v1\",\"status\":\"pass\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\"}",
+      "worker_result_sha256": "9355b932d6fc0797669ec12f14eb3c3d1b61ec10cc2813ebdd1ebec9e4e1fdea",
+      "round_report_canonical_json": "{\"budget\":{\"allowance\":20000,\"consumed\":1,\"remaining\":19999,\"reserved\":0},\"corr_id\":\"c-17\",\"evidence_refs\":[\"cas+sha256://code-factory/9355b932d6fc0797669ec12f14eb3c3d1b61ec10cc2813ebdd1ebec9e4e1fdea\"],\"finished_at\":\"2026-11-11T19:25:00Z\",\"idempotency_key\":\"report-r17\",\"memory_refs\":[\"cas+sha256://code-factory/b3d87d8d873e664f2228d8ee945083265437e414884a3356d400599c66a1c5cf\",\"cas+sha256://code-factory/6f21de9d0d7aa01b1680e326b60c26002aa9c1e57e283dd68da996cd2adebc1b\"],\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"report_digest\":\"0575fbc0316802dcb6a59af3a8eb7de3b49cbecd93f2cff817e044f905262cc1\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"round-report.v1\",\"status\":\"pass\",\"stop_reason\":\"no_useful_work\",\"task_results\":[{\"attempt_id\":\"a-1\",\"result_ref\":\"cas+sha256://code-factory/9355b932d6fc0797669ec12f14eb3c3d1b61ec10cc2813ebdd1ebec9e4e1fdea\",\"status\":\"pass\",\"task_id\":\"CF-1\"}],\"waves\":[{\"attempt_ids\":[\"a-1\"],\"state\":\"complete\",\"wave_id\":\"w-1\"}]}",
+      "round_report_sha256": "0575fbc0316802dcb6a59af3a8eb7de3b49cbecd93f2cff817e044f905262cc1",
       "digest_rule": "round_report_sha256 excludes only report_digest; worker_result_sha256 covers the complete WorkerResult body.",
       "expected": {
         "budget_remaining": 19999,
         "stop_reason": "no_useful_work",
-        "report_ref": "cas+sha256://code-factory/f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71"
+        "report_ref": "cas+sha256://code-factory/0575fbc0316802dcb6a59af3a8eb7de3b49cbecd93f2cff817e044f905262cc1"
       },
       "domain": "execution",
       "static_controls": [
@@ -123,7 +124,7 @@
         "/body/execution/attempt_wall_s": 72000
       },
       "expected": {
-        "error": "RANGE_INVALID",
+        "error": "DEADLINE_INSUFFICIENT",
         "launch": "refused"
       },
       "domain": "execution",
@@ -136,7 +137,7 @@
       "id": "CV-01-E",
       "kind": "negative",
       "name": "missing worker status is not success",
-      "base_worker_result": "{\"artifacts\":[],\"attempt_id\":\"a-1\",\"commit\":{\"algorithm\":\"sha1\",\"value\":\"2222222222222222222222222222222222222222\"},\"corr_id\":\"c-17\",\"dispatch_id\":\"d-1\",\"error\":null,\"evidence_refs\":[\"cas+sha256://code-factory/86f6b067fe92956e41ce029cd6e54fa2ad590639940f44f55619b9bc7356ffdc\"],\"execution_key\":\"67403d95585696bc77bc54f444f9542374cd5bdf7bbb3aea149dca39a785a761\",\"finished_at\":\"2026-11-11T19:20:00Z\",\"idempotency_key\":\"result-a1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"worker-result.v1\",\"status\":\"pass\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\"}",
+      "base_worker_result": "{\"artifacts\":[],\"attempt_id\":\"a-1\",\"commit\":{\"algorithm\":\"sha1\",\"value\":\"2222222222222222222222222222222222222222\"},\"corr_id\":\"c-17\",\"dispatch_id\":\"d-822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f\",\"error\":null,\"evidence_refs\":[\"cas+sha256://code-factory/86f6b067fe92956e41ce029cd6e54fa2ad590639940f44f55619b9bc7356ffdc\"],\"execution_key\":\"822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f\",\"finished_at\":\"2026-11-11T19:20:00Z\",\"idempotency_key\":\"result-a1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"worker-result.v1\",\"status\":\"pass\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\"}",
       "remove": [
         "/status"
       ],
@@ -151,7 +152,7 @@
       "id": "CV-01-F",
       "kind": "negative",
       "name": "report budget arithmetic is closed",
-      "base_round_report_without_digest": "{\"budget\":{\"allowance\":20000,\"consumed\":1,\"remaining\":19999,\"reserved\":0},\"corr_id\":\"c-17\",\"evidence_refs\":[\"cas+sha256://code-factory/081f606656adf020464e36fc4963a34f9bc1598ca7b774fb5c508951fafd685b\"],\"finished_at\":\"2026-11-11T19:25:00Z\",\"idempotency_key\":\"report-r17\",\"memory_refs\":[\"cas+sha256://code-factory/bb44e4bd537c419d2db6cc7e282c3d662427a648a08345733a87a0796b6c2a1a\"],\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"round-report.v1\",\"status\":\"pass\",\"stop_reason\":\"no_useful_work\",\"task_results\":[{\"attempt_id\":\"a-1\",\"result_ref\":\"cas+sha256://code-factory/081f606656adf020464e36fc4963a34f9bc1598ca7b774fb5c508951fafd685b\",\"status\":\"pass\",\"task_id\":\"CF-1\"}],\"waves\":[{\"attempt_ids\":[\"a-1\"],\"state\":\"complete\",\"wave_id\":\"w-1\"}]}",
+      "base_round_report_without_digest": "{\"budget\":{\"allowance\":20000,\"consumed\":1,\"remaining\":19999,\"reserved\":0},\"corr_id\":\"c-17\",\"evidence_refs\":[\"cas+sha256://code-factory/9355b932d6fc0797669ec12f14eb3c3d1b61ec10cc2813ebdd1ebec9e4e1fdea\"],\"finished_at\":\"2026-11-11T19:25:00Z\",\"idempotency_key\":\"report-r17\",\"memory_refs\":[\"cas+sha256://code-factory/b3d87d8d873e664f2228d8ee945083265437e414884a3356d400599c66a1c5cf\",\"cas+sha256://code-factory/6f21de9d0d7aa01b1680e326b60c26002aa9c1e57e283dd68da996cd2adebc1b\"],\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"round-report.v1\",\"status\":\"pass\",\"stop_reason\":\"no_useful_work\",\"task_results\":[{\"attempt_id\":\"a-1\",\"result_ref\":\"cas+sha256://code-factory/9355b932d6fc0797669ec12f14eb3c3d1b61ec10cc2813ebdd1ebec9e4e1fdea\",\"status\":\"pass\",\"task_id\":\"CF-1\"}],\"waves\":[{\"attempt_ids\":[\"a-1\"],\"state\":\"complete\",\"wave_id\":\"w-1\"}]}",
       "mutate": {
         "/budget/remaining": 2
       },
@@ -168,12 +169,12 @@
       "id": "CV-02-A",
       "kind": "positive",
       "name": "resident supervisor PUT launch",
-      "canonical_json": "{\"body\":{\"attempt_id\":\"a-1\",\"deadline\":\"2026-11-11T21:00:00Z\",\"dispatch_id\":\"d-1\",\"input_digest\":\"55606fe015427fe678ac9a1de2ff2666ff04dc06eecb25a1a2eab5a858a050df\",\"input_ref\":\"cas+sha256://code-factory/55606fe015427fe678ac9a1de2ff2666ff04dc06eecb25a1a2eab5a858a050df\",\"kind\":\"worker\",\"limits\":{\"cpu_millis\":1000,\"memory_bytes\":4294967296,\"pids\":256},\"round_id\":\"r-17\",\"runtime_digest\":\"be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410\",\"task_id\":\"CF-1\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\",\"workspace_ref\":\"cas+sha256://code-factory/85edc4b2f340931dd4b873f4d06edb8252fee8ade465c7e2f95ac49995742c11\"},\"idempotency_key\":\"launch-a1-key\",\"method\":\"PUT\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"path\":\"/v1/launches/launch-a1\",\"project_id\":\"code-factory\",\"request_id\":\"supervise-a1\",\"schema_version\":\"supervisor.v1\"}",
-      "canonical_sha256": "2856616af37923f26cbf8ee0091be799067b989f523bab8185be2b4be8b1397e",
-      "response_canonical_json": "{\"accepted_at\":\"2026-11-11T19:02:00Z\",\"error\":null,\"execution_key\":\"67403d95585696bc77bc54f444f9542374cd5bdf7bbb3aea149dca39a785a761\",\"finished_at\":null,\"heartbeat_at\":null,\"input_digest\":\"55606fe015427fe678ac9a1de2ff2666ff04dc06eecb25a1a2eab5a858a050df\",\"launch_id\":\"launch-a1\",\"native_id\":null,\"result_digest\":null,\"started_at\":null,\"state\":\"accepted\",\"state_version\":1}",
+      "canonical_json": "{\"body\":{\"attempt_id\":\"a-1\",\"deadline\":\"2026-11-11T21:00:00Z\",\"dispatch_id\":\"d-822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f\",\"input_digest\":\"aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"input_ref\":\"cas+sha256://code-factory/aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"kind\":\"worker\",\"limits\":{\"cpu_millis\":1000,\"memory_bytes\":4294967296,\"pids\":256},\"round_id\":\"r-17\",\"runtime_digest\":\"be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410\",\"task_id\":\"CF-1\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\",\"workspace_ref\":\"cas+sha256://code-factory/85edc4b2f340931dd4b873f4d06edb8252fee8ade465c7e2f95ac49995742c11\"},\"idempotency_key\":\"launch-a1-key\",\"method\":\"PUT\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"path\":\"/v1/launches/l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048\",\"project_id\":\"code-factory\",\"request_id\":\"supervise-a1\",\"schema_version\":\"supervisor.v1\"}",
+      "canonical_sha256": "4efbb63d7754b45a4e5168d747919a707a32770d162cd516724f31a3b4921612",
+      "response_canonical_json": "{\"accepted_at\":\"2026-11-11T19:02:00Z\",\"error\":null,\"execution_key\":\"822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f\",\"finished_at\":null,\"heartbeat_at\":null,\"input_digest\":\"aa0776211ad78cfe469f9dc192e1cfebdadc863acb05e887fdcaa11a2712874a\",\"launch_id\":\"l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048\",\"native_id\":null,\"result_digest\":null,\"started_at\":null,\"state\":\"accepted\",\"state_version\":1}",
       "expected": {
         "http": 201,
-        "execution_key": "67403d95585696bc77bc54f444f9542374cd5bdf7bbb3aea149dca39a785a761",
+        "execution_key": "822015bf1408f7af9fd74d147b7fe6765aa4003730bd514d7264c01ea210055f",
         "socket": "$HOME/.local/state/factory/supervisor/control.sock"
       },
       "persistence": "Launch row and exclusive job directory are durable before the start permit.",
@@ -222,7 +223,7 @@
       "id": "CV-02-D",
       "kind": "fault",
       "name": "permit consumed before exec with unknown native state",
-      "launch_id": "launch-a1",
+      "launch_id": "l-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
       "permit_consumed": true,
       "native_proof": "unavailable",
       "expected": {
@@ -241,8 +242,8 @@
       "name": "signed retrieve and bounded lease",
       "canonical_json": "{\"agent_id\":\"bunker-a\",\"idempotency_key\":\"poll-r17-key\",\"lease_s\":60,\"limit\":10,\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"poll_id\":\"poll-r17\",\"registration_generation\":3,\"request_id\":\"retrieve-r17\",\"schema_version\":\"custody.v1\"}",
       "canonical_sha256": "ff8417f184fb9a4998523fcd294dfb485a0fb7b3e9de6f1ca73a3e17b7210f34",
-      "signature_transcript": "POST\n/v1/factory/retrieve\n1763424360\nsha256:ff8417f184fb9a4998523fcd294dfb485a0fb7b3e9de6f1ca73a3e17b7210f34\naudience:crier.factory",
-      "signature_transcript_sha256": "9c3a6368a627bf24a59482b254ea548ab4b105b9f67b5d1e3a10c62066f73b0a",
+      "signature_transcript": "POST\n/v1/factory/retrieve\n2026-11-11T19:02:00Z\nsha256:ff8417f184fb9a4998523fcd294dfb485a0fb7b3e9de6f1ca73a3e17b7210f34\naudience:crier.factory",
+      "signature_transcript_sha256": "d6c18e09b91fb1af7bcbfda485880dd976bb5ec838b48417ff883c5993576d06",
       "expected": {
         "http": 200,
         "poll_id": "poll-r17",
@@ -254,18 +255,25 @@
       "static_controls": [
         "SC-01",
         "SC-07"
-      ]
+      ],
+      "signature_profile": "CF2A-CRIER-1",
+      "signature_headers": {
+        "X-Agent-Id": "bunker-a",
+        "X-Agent-Ts": "2026-11-11T19:02:00Z",
+        "X-CF2A-Key-Id": "bunker-a-key-3",
+        "X-CF2A-Signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
     },
     {
       "id": "CV-03-B",
       "kind": "positive",
       "name": "ack requires matching durable report",
-      "canonical_json": "{\"delivery_id\":\"delivery-r17\",\"idempotency_key\":\"ack-r17-key\",\"lease_id\":\"lease-r17\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"registration_generation\":3,\"request_id\":\"ack-r17\",\"result_custody_receipt\":\"cas+sha256://code-factory/f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71\",\"result_digest\":\"f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71\",\"schema_version\":\"custody.v1\"}",
-      "canonical_sha256": "866d4ba6db438518bcb342faacbf903b39525344e3ef2587cecdf09d56faf5b7",
+      "canonical_json": "{\"delivery_id\":\"delivery-r17\",\"idempotency_key\":\"ack-r17-key\",\"lease_id\":\"lease-r17\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"registration_generation\":3,\"request_id\":\"ack-r17\",\"result_custody_receipt\":\"cas+sha256://code-factory/0575fbc0316802dcb6a59af3a8eb7de3b49cbecd93f2cff817e044f905262cc1\",\"result_digest\":\"0575fbc0316802dcb6a59af3a8eb7de3b49cbecd93f2cff817e044f905262cc1\",\"schema_version\":\"custody.v1\"}",
+      "canonical_sha256": "1ac3587a124a318c627122d1f34f8cde74dfde287996b7c75e297debc9ed2385",
       "expected": {
         "http": 200,
         "state": "acked",
-        "result_digest": "f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71"
+        "result_digest": "0575fbc0316802dcb6a59af3a8eb7de3b49cbecd93f2cff817e044f905262cc1"
       },
       "domain": "custody",
       "static_controls": [
@@ -309,16 +317,16 @@
       "id": "CV-04-A",
       "kind": "positive",
       "name": "row event pair and protected claim CAS",
-      "task_row_canonical_json": "{\"acceptance_criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"text\":\"The admitted change is verified.\",\"timeout_s\":60,\"verification\":\"Run the named verification and retain its output.\"}],\"claim\":null,\"completion\":null,\"complexity\":3,\"created_at\":\"2026-11-11T18:00:00Z\",\"deferral\":null,\"depends_on\":[],\"fixture\":false,\"id\":\"CF-1\",\"kind\":\"task\",\"operation_id\":\"op-create-cf1\",\"priority\":50,\"reasoning\":\"A complete vector is required before implementation.\",\"revision\":1,\"status\":\"pending\",\"title\":\"Prove the execution contract\",\"updated_at\":\"2026-11-11T18:00:00Z\"}",
-      "task_row_sha256": "ffc3994b09649008872d6ce887976f7bb0b9ca14292276dab3d20430f004394a",
-      "board_event_canonical_json": "{\"actor\":\"foreman-1\",\"event_id\":\"event-cf1-1\",\"evidence_refs\":[],\"expected_revision\":0,\"new_revision\":1,\"occurred_at\":\"2026-11-11T18:00:00Z\",\"operation_id\":\"op-create-cf1\",\"row_digest\":\"ffc3994b09649008872d6ce887976f7bb0b9ca14292276dab3d20430f004394a\",\"schema_version\":\"cf.board-event.v1\",\"task_id\":\"CF-1\",\"type\":\"create\"}",
-      "claim_request_canonical_json": "{\"board_id\":\"board-main\",\"board_revision\":{\"algorithm\":\"sha1\",\"value\":\"1111111111111111111111111111111111111111\"},\"claim_generation\":0,\"claim_id\":\"claim-cf1-1\",\"claimant_id\":\"foreman-1\",\"evidence_refs\":[],\"expected_revision\":1,\"expected_status\":\"pending\",\"idempotency_key\":\"claim-cf1-key\",\"lease_expires_at\":\"2026-11-11T19:03:00Z\",\"operation_id\":\"op-claim-cf1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"schema_version\":\"cf.board-claim.v1\",\"task_id\":\"CF-1\",\"transition\":\"claim\"}",
-      "claim_request_sha256": "9737375cbc70935b9ba9402e058f3585b1440a0b1975f7b9e9f81c7897a5bea2",
+      "task_row_canonical_json": "{\"acceptance_criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"description\":\"The admitted change is verified.\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"timeout_s\":60}],\"cancel_request\":null,\"claim\":null,\"completion\":null,\"complexity\":3,\"created_at\":\"2026-11-11T18:00:00Z\",\"created_seq\":1,\"deferral\":null,\"depends_on\":[],\"fixture\":false,\"id\":\"CF-1\",\"initiative_id\":\"initiative-1\",\"kind\":\"task\",\"operation_id\":\"op-create-cf1\",\"paths\":[\".\"],\"reasoning\":\"A complete vector is required before implementation.\",\"resources\":[],\"revision\":1,\"schema_version\":\"cf.board-task.v1\",\"status\":\"pending\",\"title\":\"Prove the execution contract\",\"updated_at\":\"2026-11-11T18:00:00Z\"}",
+      "task_row_sha256": "a36f13639500c06c804b6f3a1017534d3559e4b0251db0525e2241f92a20b117",
+      "board_event_canonical_json": "{\"actor\":\"foreman-1\",\"event_id\":\"event-cf1-1\",\"evidence_refs\":[],\"expected_revision\":0,\"new_revision\":1,\"occurred_at\":\"2026-11-11T18:00:00Z\",\"operation_id\":\"op-create-cf1\",\"row_digest\":\"a36f13639500c06c804b6f3a1017534d3559e4b0251db0525e2241f92a20b117\",\"schema_version\":\"cf.board-event.v1\",\"subject_id\":\"CF-1\",\"subject_kind\":\"task\",\"type\":\"create\"}",
+      "claim_request_canonical_json": "{\"board_id\":\"board-main\",\"board_revision\":{\"algorithm\":\"sha1\",\"value\":\"1111111111111111111111111111111111111111\"},\"claims\":[{\"claim_generation\":0,\"created_seq\":1,\"expected_revision\":1,\"expected_status\":\"pending\",\"task_id\":\"CF-1\"}],\"evidence_refs\":[],\"idempotency_key\":\"claim-cf1-key\",\"lease_expires_at\":\"2026-11-11T19:03:00Z\",\"operation_id\":\"op-claim-cf1\",\"ordering\":\"priority DESC, created_seq ASC, id ASC; dependencies must be settled; correction retains its original worker\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"schema_version\":\"cf.board-group-claim.v1\",\"transition\":\"claim\"}",
+      "claim_request_sha256": "724ae5d865fb6acf2d34d9d64b79fae23da30a8d911137cfb3b079ee69df0d6e",
       "expected": {
         "row_digest_matches": true,
         "new_revision": 2,
         "claim_generation": 1,
-        "native_start": "only after remote readback"
+        "native_start": "only after remote group readback"
       },
       "domain": "board",
       "static_controls": [
@@ -332,7 +340,7 @@
       "base": "CV-04-A",
       "base_field": "claim_request_canonical_json",
       "mutate": {
-        "/expected_revision": 0
+        "/claims/0/expected_revision": 0
       },
       "expected": {
         "http": 409,
@@ -349,7 +357,7 @@
       "id": "CV-04-C",
       "kind": "negative",
       "name": "published row without matching event is corruption",
-      "task_row_canonical_json": "{\"acceptance_criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"text\":\"The admitted change is verified.\",\"timeout_s\":60,\"verification\":\"Run the named verification and retain its output.\"}],\"claim\":null,\"completion\":null,\"complexity\":3,\"created_at\":\"2026-11-11T18:00:00Z\",\"deferral\":null,\"depends_on\":[],\"fixture\":false,\"id\":\"CF-1\",\"kind\":\"task\",\"operation_id\":\"op-create-cf1\",\"priority\":50,\"reasoning\":\"A complete vector is required before implementation.\",\"revision\":1,\"status\":\"pending\",\"title\":\"Prove the execution contract\",\"updated_at\":\"2026-11-11T18:00:00Z\"}",
+      "task_row_canonical_json": "{\"acceptance_criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"description\":\"The admitted change is verified.\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"timeout_s\":60}],\"cancel_request\":null,\"claim\":null,\"completion\":null,\"complexity\":3,\"created_at\":\"2026-11-11T18:00:00Z\",\"created_seq\":1,\"deferral\":null,\"depends_on\":[],\"fixture\":false,\"id\":\"CF-1\",\"initiative_id\":\"initiative-1\",\"kind\":\"task\",\"operation_id\":\"op-create-cf1\",\"paths\":[\".\"],\"reasoning\":\"A complete vector is required before implementation.\",\"resources\":[],\"revision\":1,\"schema_version\":\"cf.board-task.v1\",\"status\":\"pending\",\"title\":\"Prove the execution contract\",\"updated_at\":\"2026-11-11T18:00:00Z\"}",
       "event": null,
       "expected": {
         "read_status": "UNAVAILABLE",
@@ -359,14 +367,15 @@
       "domain": "board",
       "static_controls": [
         "SC-04"
-      ]
+      ],
+      "task_row_sha256": "a36f13639500c06c804b6f3a1017534d3559e4b0251db0525e2241f92a20b117"
     },
     {
       "id": "CV-05-A",
       "kind": "positive",
       "name": "closed chat request and seq-zero SSE",
-      "request_canonical_json": "{\"deadline\":\"2026-11-11T19:30:00Z\",\"messages\":[{\"content\":\"Return one short greeting.\",\"role\":\"user\"}],\"model\":\"fixture-route\",\"options\":{\"max_output_tokens\":128,\"stop\":[],\"temperature\":1,\"tool_choice\":\"auto\",\"tools\":[],\"top_p\":1},\"request_id\":\"infer-1\",\"stream\":true}",
-      "request_sha256": "fcba127bd433dc502cd541979a0c3a134e1cf2346b6db23b8d82a8e2f483a2e4",
+      "request_canonical_json": "{\"deadline\":\"2026-11-11T19:30:00Z\",\"messages\":[{\"content\":\"Return one short greeting.\",\"role\":\"user\"}],\"model\":\"fixture-route\",\"options\":{\"max_output_tokens\":128,\"stop\":[],\"temperature\":1,\"tool_choice\":\"auto\",\"tools\":[],\"top_p\":1},\"request_id\":\"infer-1\",\"schema_version\":\"cf.inference.v1\",\"stream\":true}",
+      "request_sha256": "24626cda67db52a5a7fc900014c954380e14c514f08e9826ac63bf3a3be5c7ea",
       "sse_text": "event: delta\ndata: {\"choices\":[{\"delta\":{\"content\":\"Hello\",\"role\":\"assistant\"},\"finish_reason\":null,\"index\":0}],\"id\":\"infer-1\",\"seq\":0}\n\nevent: delta\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\",\"index\":0}],\"id\":\"infer-1\",\"seq\":1}\n\nevent: usage\ndata: {\"id\":\"infer-1\",\"seq\":2,\"usage\":{\"cost_micro_usd\":3,\"estimated\":false,\"input_tokens\":8,\"output_tokens\":1,\"total_tokens\":9}}\n\nevent: terminal\ndata: {\"error\":null,\"response_id\":\"infer-1\",\"served_model\":\"fixture-model\",\"state\":\"complete\",\"usage\":{\"cost_micro_usd\":3,\"estimated\":false,\"input_tokens\":8,\"output_tokens\":1,\"total_tokens\":9}}\n\ndata: [DONE]\n\n",
       "sse_sha256": "fbfa894e6abd5b84234bef9d48949539503b520bdc241e5219e4842b73fb74ae",
       "expected": {
@@ -439,8 +448,8 @@
       "id": "CV-06-A",
       "kind": "positive",
       "name": "authority effect begins before resource mutation",
-      "canonical_json": "{\"credential_ref\":\"forge-broker-credential\",\"effect_id\":\"effect-1\",\"idempotency_key\":\"effect-1-key\",\"input_digest\":\"f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71\",\"operation_id\":\"op-effect-1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"resource_ref\":\"git:code-factory:refs/heads/main\",\"schema_version\":\"authority.v1\"}",
-      "canonical_sha256": "665bbc528acca1148367a40367fab4e00fc360e8ac66bd79144814af99882d06",
+      "canonical_json": "{\"credential_ref\":\"forge-broker-credential\",\"effect_id\":\"effect-1\",\"idempotency_key\":\"effect-1-key\",\"input_digest\":\"0575fbc0316802dcb6a59af3a8eb7de3b49cbecd93f2cff817e044f905262cc1\",\"operation_id\":\"op-effect-1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"resource_ref\":\"git:code-factory:refs/heads/main\",\"schema_version\":\"authority.v1\"}",
+      "canonical_sha256": "b352a64f9947f1848d0005bb32d36800320fa1d38ab8b95052a0094bec88ed96",
       "expected": {
         "state": "in-flight",
         "mutation_before_receipt": false,
@@ -456,24 +465,27 @@
       "store_bytes_utf8": "fixture-store-bytes\n",
       "store_bytes_length": 20,
       "store_sha256": "3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18",
-      "manifest_without_digest_canonical_json": "{\"authority_checkpoint_digest\":\"f0fc1b4807f5402cd867f3c823b0482f7ff41c83baaffb6515f69c422d8875ca\",\"authority_id\":\"auth-1\",\"backup_id\":\"backup-1\",\"barrier_seq\":9,\"captured_at\":\"2026-11-11T20:00:00Z\",\"config_generation\":17,\"destination_ref\":\"backup\",\"exclusions\":[],\"key_ref\":\"secretref://backup/recovery\",\"retention_until\":\"2026-12-11T20:00:00Z\",\"rpo_s\":3600,\"rto_s\":7200,\"schema_version\":\"cf.backup.v1\",\"state\":\"VALIDATED\",\"stores\":[{\"artifact_path\":\"manager/segment-42.jsonl\",\"bytes\":20,\"kind\":\"jsonl\",\"last_transaction\":\"tx-42\",\"root_digest\":\"3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18\",\"sha256\":\"3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18\",\"source_revision\":\"seq-42\",\"store_id\":\"manager\",\"validated\":true}]}",
-      "manifest_sha256": "ca044cc8c82dcbd80da25840c86f3efa4ac398a59baa98190ff2abe37eb4f2e2",
-      "manifest_canonical_json": "{\"authority_checkpoint_digest\":\"f0fc1b4807f5402cd867f3c823b0482f7ff41c83baaffb6515f69c422d8875ca\",\"authority_id\":\"auth-1\",\"backup_id\":\"backup-1\",\"barrier_seq\":9,\"captured_at\":\"2026-11-11T20:00:00Z\",\"config_generation\":17,\"destination_ref\":\"backup\",\"exclusions\":[],\"key_ref\":\"secretref://backup/recovery\",\"manifest_digest\":\"ca044cc8c82dcbd80da25840c86f3efa4ac398a59baa98190ff2abe37eb4f2e2\",\"retention_until\":\"2026-12-11T20:00:00Z\",\"rpo_s\":3600,\"rto_s\":7200,\"schema_version\":\"cf.backup.v1\",\"state\":\"VALIDATED\",\"stores\":[{\"artifact_path\":\"manager/segment-42.jsonl\",\"bytes\":20,\"kind\":\"jsonl\",\"last_transaction\":\"tx-42\",\"root_digest\":\"3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18\",\"sha256\":\"3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18\",\"source_revision\":\"seq-42\",\"store_id\":\"manager\",\"validated\":true}]}",
+      "manifest_without_digest_canonical_json": "{\"authority_checkpoint_digest\":\"f0fc1b4807f5402cd867f3c823b0482f7ff41c83baaffb6515f69c422d8875ca\",\"authority_id\":\"auth-1\",\"backup_id\":\"backup-1\",\"barrier_seq\":9,\"captured_at\":\"2026-11-11T20:00:00Z\",\"config_generation\":17,\"consistency_marker\":{\"authority_seq\":9,\"writer_watermarks\":[{\"last_transaction\":\"tx-42\",\"root_digest\":\"3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18\",\"store_id\":\"manager\"}]},\"destination_ref\":\"backup\",\"exclusions\":[],\"inventory\":[{\"bytes\":20,\"path\":\"manager/segment-42.jsonl\",\"sha256\":\"3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18\",\"store_id\":\"manager\"}],\"key_ref\":\"secretref://backup/recovery\",\"offhost_readback_ref\":\"cas+sha256://code-factory/5845557317bdb2f9e0cc31c618760522ed0bb3ff26312a36dcee2117aacf8f82\",\"operation_id\":\"op-backup-1\",\"published_at\":\"2026-11-11T20:02:00Z\",\"release_receipts\":[],\"released_at\":null,\"retention_until\":\"2026-12-11T20:00:00Z\",\"revocation_snapshot_ref\":\"cas+sha256://code-factory/d9d5036cbb0680419335abaa400e4c02495129078056a5bb10569d0f008b6dad\",\"rpo_s\":3600,\"rto_s\":7200,\"schema_version\":\"cf.backup.v1\",\"state\":\"PUBLISHED\",\"stores\":[{\"artifact_path\":\"manager/segment-42.jsonl\",\"bytes\":20,\"kind\":\"jsonl\",\"last_transaction\":\"tx-42\",\"root_digest\":\"3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18\",\"sha256\":\"3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18\",\"source_revision\":\"seq-42\",\"store_id\":\"manager\",\"validated\":true}],\"validated_at\":\"2026-11-11T20:01:00Z\"}",
+      "manifest_sha256": "cab00c261feac741c3024cc015385607af83d7666324a2e9f12e825c846b387f",
+      "manifest_canonical_json": "{\"authority_checkpoint_digest\":\"f0fc1b4807f5402cd867f3c823b0482f7ff41c83baaffb6515f69c422d8875ca\",\"authority_id\":\"auth-1\",\"backup_id\":\"backup-1\",\"barrier_seq\":9,\"captured_at\":\"2026-11-11T20:00:00Z\",\"config_generation\":17,\"consistency_marker\":{\"authority_seq\":9,\"writer_watermarks\":[{\"last_transaction\":\"tx-42\",\"root_digest\":\"3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18\",\"store_id\":\"manager\"}]},\"destination_ref\":\"backup\",\"exclusions\":[],\"inventory\":[{\"bytes\":20,\"path\":\"manager/segment-42.jsonl\",\"sha256\":\"3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18\",\"store_id\":\"manager\"}],\"key_ref\":\"secretref://backup/recovery\",\"manifest_digest\":\"cab00c261feac741c3024cc015385607af83d7666324a2e9f12e825c846b387f\",\"offhost_readback_ref\":\"cas+sha256://code-factory/5845557317bdb2f9e0cc31c618760522ed0bb3ff26312a36dcee2117aacf8f82\",\"operation_id\":\"op-backup-1\",\"published_at\":\"2026-11-11T20:02:00Z\",\"release_receipts\":[],\"released_at\":null,\"retention_until\":\"2026-12-11T20:00:00Z\",\"revocation_snapshot_ref\":\"cas+sha256://code-factory/d9d5036cbb0680419335abaa400e4c02495129078056a5bb10569d0f008b6dad\",\"rpo_s\":3600,\"rto_s\":7200,\"schema_version\":\"cf.backup.v1\",\"signature\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"state\":\"PUBLISHED\",\"stores\":[{\"artifact_path\":\"manager/segment-42.jsonl\",\"bytes\":20,\"kind\":\"jsonl\",\"last_transaction\":\"tx-42\",\"root_digest\":\"3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18\",\"sha256\":\"3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18\",\"source_revision\":\"seq-42\",\"store_id\":\"manager\",\"validated\":true}],\"validated_at\":\"2026-11-11T20:01:00Z\"}",
       "expected": {
         "validated": true,
-        "partial_upload": false
+        "published": true,
+        "partial_upload": false,
+        "release_requires": "every writer release receipt after off-host readback"
       },
       "domain": "recovery",
       "static_controls": [
         "SC-08"
-      ]
+      ],
+      "digest_rule": "RFC 8785 JCS of the complete manifest with manifest_digest and signature absent."
     },
     {
       "id": "CV-06-C",
       "kind": "negative",
       "name": "postcheck failure cannot settle success",
-      "canonical_json": "{\"error\":{\"code\":\"POSTCHECK_FAILED\",\"current_generation\":17,\"field\":null,\"message\":\"Required verifier failed.\",\"retryable\":false},\"evidence_refs\":[\"cas+sha256://code-factory/f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71\"],\"execution_status\":\"pass\",\"postcheck_results\":[{\"config_digest\":\"19cad144fbdff3476ace4b2a10084b5594a3c44e4b07863f6b6ef0c394d5f2cd\",\"error\":{\"code\":\"POSTCHECK_FAILED\",\"current_generation\":17,\"field\":null,\"message\":\"Required verifier failed.\",\"retryable\":false},\"hook_id\":\"merged-tree-verifier\",\"outcome\":\"fail\"}],\"recorded_at\":\"2026-11-11T20:05:00Z\",\"report_digest\":\"f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71\",\"revision\":1,\"round_id\":\"r-17\",\"schema_version\":\"settlement.v1\",\"settlement_id\":\"settlement-r17-1\",\"state\":\"settled_failure\",\"superseded_by\":null}",
-      "canonical_sha256": "c2d0b46e4ad612553c1b694ec4b78b75231b03a79d90c119c22a611399edeebb",
+      "canonical_json": "{\"error\":{\"code\":\"POSTCHECK_FAILED\",\"current_generation\":17,\"field\":null,\"message\":\"Required verifier failed.\",\"retryable\":false},\"evidence_refs\":[\"cas+sha256://code-factory/0575fbc0316802dcb6a59af3a8eb7de3b49cbecd93f2cff817e044f905262cc1\"],\"execution_status\":\"pass\",\"postcheck_results\":[{\"config_digest\":\"19cad144fbdff3476ace4b2a10084b5594a3c44e4b07863f6b6ef0c394d5f2cd\",\"error\":{\"code\":\"POSTCHECK_FAILED\",\"current_generation\":17,\"field\":null,\"message\":\"Required verifier failed.\",\"retryable\":false},\"hook_id\":\"merged-tree-verifier\",\"outcome\":\"fail\"}],\"recorded_at\":\"2026-11-11T20:05:00Z\",\"report_digest\":\"0575fbc0316802dcb6a59af3a8eb7de3b49cbecd93f2cff817e044f905262cc1\",\"revision\":1,\"round_id\":\"r-17\",\"schema_version\":\"settlement.v1\",\"settlement_id\":\"settlement-r17-1\",\"state\":\"settled_failure\",\"superseded_by\":null}",
+      "canonical_sha256": "809b2c602904a203b93ce2957e9fa2b6137fb25ca02690bdf8f59d3a36bb7666",
       "expected": {
         "state": "settled_failure",
         "error": "POSTCHECK_FAILED",
@@ -514,23 +526,23 @@
       "records": [
         {
           "record_type": "worker",
-          "canonical_json": "{\"attempt_id\":\"a-1\",\"body\":{\"evidence_refs\":[],\"outcome\":\"pass\",\"relations\":[],\"result_ref\":\"cas+sha256://code-factory/081f606656adf020464e36fc4963a34f9bc1598ca7b774fb5c508951fafd685b\"},\"created_at\":\"2026-11-11T19:26:00Z\",\"local_seq\":1,\"namespace\":\"code-factory\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"payload_digest\":\"d4b0040583370aa8eac2af3488c7b554876c54ca3462830b530cb32ac7f6b82d\",\"project_id\":\"code-factory\",\"record_id\":\"memory-worker-a1\",\"record_type\":\"worker\",\"round_id\":\"r-17\",\"schema_version\":\"memory-record.v1\",\"task_id\":\"CF-1\",\"wave_id\":\"w-1\",\"writer_id\":\"foreman-1\"}",
-          "payload_digest": "d4b0040583370aa8eac2af3488c7b554876c54ca3462830b530cb32ac7f6b82d"
+          "canonical_json": "{\"attempt_id\":\"a-1\",\"body\":{\"evidence_refs\":[],\"outcome\":\"pass\",\"relations\":[],\"result_ref\":\"cas+sha256://code-factory/9355b932d6fc0797669ec12f14eb3c3d1b61ec10cc2813ebdd1ebec9e4e1fdea\"},\"created_at\":\"2026-11-11T19:26:00Z\",\"local_seq\":1,\"namespace\":\"code-factory\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"payload_digest\":\"b3d87d8d873e664f2228d8ee945083265437e414884a3356d400599c66a1c5cf\",\"project_id\":\"code-factory\",\"record_id\":\"memory-worker-a1\",\"record_type\":\"worker\",\"round_id\":\"r-17\",\"schema_version\":\"memory-record.v1\",\"task_id\":\"CF-1\",\"wave_id\":\"w-1\",\"writer_id\":\"foreman-1\"}",
+          "payload_digest": "b3d87d8d873e664f2228d8ee945083265437e414884a3356d400599c66a1c5cf"
         },
         {
           "record_type": "wave",
-          "canonical_json": "{\"attempt_id\":null,\"body\":{\"relations\":[],\"state\":\"complete\",\"stop_reason\":\"wave_complete\",\"worker_refs\":[\"cas+sha256://code-factory/d4b0040583370aa8eac2af3488c7b554876c54ca3462830b530cb32ac7f6b82d\"]},\"created_at\":\"2026-11-11T19:26:00Z\",\"local_seq\":1,\"namespace\":\"code-factory\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"payload_digest\":\"53657c7d0eb4924d838d15dbdc9a9f7d327266caec588e0e592ccb1cb5937837\",\"project_id\":\"code-factory\",\"record_id\":\"memory-wave-w1\",\"record_type\":\"wave\",\"round_id\":\"r-17\",\"schema_version\":\"memory-record.v1\",\"task_id\":null,\"wave_id\":\"w-1\",\"writer_id\":\"foreman-1\"}",
-          "payload_digest": "53657c7d0eb4924d838d15dbdc9a9f7d327266caec588e0e592ccb1cb5937837"
+          "canonical_json": "{\"attempt_id\":null,\"body\":{\"relations\":[],\"state\":\"complete\",\"stop_reason\":\"wave_complete\",\"worker_refs\":[\"cas+sha256://code-factory/b3d87d8d873e664f2228d8ee945083265437e414884a3356d400599c66a1c5cf\"]},\"created_at\":\"2026-11-11T19:26:00Z\",\"local_seq\":1,\"namespace\":\"code-factory\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"payload_digest\":\"6f21de9d0d7aa01b1680e326b60c26002aa9c1e57e283dd68da996cd2adebc1b\",\"project_id\":\"code-factory\",\"record_id\":\"memory-wave-w1\",\"record_type\":\"wave\",\"round_id\":\"r-17\",\"schema_version\":\"memory-record.v1\",\"task_id\":null,\"wave_id\":\"w-1\",\"writer_id\":\"foreman-1\"}",
+          "payload_digest": "6f21de9d0d7aa01b1680e326b60c26002aa9c1e57e283dd68da996cd2adebc1b"
         },
         {
           "record_type": "round",
-          "canonical_json": "{\"attempt_id\":null,\"body\":{\"budget\":{\"allowance\":20000,\"consumed\":1,\"remaining\":19999,\"reserved\":0},\"relations\":[],\"report_ref\":\"cas+sha256://code-factory/f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71\",\"state\":\"pass\",\"wave_refs\":[\"cas+sha256://code-factory/53657c7d0eb4924d838d15dbdc9a9f7d327266caec588e0e592ccb1cb5937837\"]},\"created_at\":\"2026-11-11T19:26:00Z\",\"local_seq\":1,\"namespace\":\"code-factory\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"payload_digest\":\"aaf2136454e34d633e89e0dc08c526c5f2a2987eab0274f50e47c3da00c6dc88\",\"project_id\":\"code-factory\",\"record_id\":\"memory-round-r17\",\"record_type\":\"round\",\"round_id\":\"r-17\",\"schema_version\":\"memory-record.v1\",\"task_id\":null,\"wave_id\":null,\"writer_id\":\"foreman-1\"}",
-          "payload_digest": "aaf2136454e34d633e89e0dc08c526c5f2a2987eab0274f50e47c3da00c6dc88"
+          "canonical_json": "{\"attempt_id\":null,\"body\":{\"budget\":{\"allowance\":20000,\"consumed\":1,\"remaining\":19999,\"reserved\":0},\"relations\":[],\"report_ref\":\"cas+sha256://code-factory/0575fbc0316802dcb6a59af3a8eb7de3b49cbecd93f2cff817e044f905262cc1\",\"state\":\"pass\",\"wave_refs\":[\"cas+sha256://code-factory/53657c7d0eb4924d838d15dbdc9a9f7d327266caec588e0e592ccb1cb5937837\"]},\"created_at\":\"2026-11-11T19:26:00Z\",\"local_seq\":1,\"namespace\":\"code-factory\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"payload_digest\":\"fc0cedf5f629156f4c0a49339392628b016933f6e5bcb86290581e583c056b7c\",\"project_id\":\"code-factory\",\"record_id\":\"memory-round-r17\",\"record_type\":\"round\",\"round_id\":\"r-17\",\"schema_version\":\"memory-record.v1\",\"task_id\":null,\"wave_id\":null,\"writer_id\":\"foreman-1\"}",
+          "payload_digest": "fc0cedf5f629156f4c0a49339392628b016933f6e5bcb86290581e583c056b7c"
         },
         {
           "record_type": "resolution",
-          "canonical_json": "{\"attempt_id\":null,\"body\":{\"action\":\"accept\",\"evidence_refs\":[\"cas+sha256://code-factory/aaf2136454e34d633e89e0dc08c526c5f2a2987eab0274f50e47c3da00c6dc88\"],\"reason\":\"Matching report and memory digests.\",\"resolution_of\":[\"cas+sha256://code-factory/aaf2136454e34d633e89e0dc08c526c5f2a2987eab0274f50e47c3da00c6dc88\"]},\"created_at\":\"2026-11-11T19:26:00Z\",\"local_seq\":1,\"namespace\":\"code-factory\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"payload_digest\":\"1801697e0dd865999468a319edf51a9922abfb775df51e167d40326ca5e2faa5\",\"project_id\":\"code-factory\",\"record_id\":\"memory-resolution-r17\",\"record_type\":\"resolution\",\"round_id\":\"r-17\",\"schema_version\":\"memory-record.v1\",\"task_id\":null,\"wave_id\":null,\"writer_id\":\"foreman-1\"}",
-          "payload_digest": "1801697e0dd865999468a319edf51a9922abfb775df51e167d40326ca5e2faa5"
+          "canonical_json": "{\"attempt_id\":null,\"body\":{\"action\":\"accept\",\"evidence_refs\":[\"cas+sha256://code-factory/fc0cedf5f629156f4c0a49339392628b016933f6e5bcb86290581e583c056b7c\"],\"reason\":\"Matching report and memory digests.\",\"resolution_of\":[\"cas+sha256://code-factory/fc0cedf5f629156f4c0a49339392628b016933f6e5bcb86290581e583c056b7c\"]},\"created_at\":\"2026-11-11T19:26:00Z\",\"local_seq\":1,\"namespace\":\"code-factory\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"payload_digest\":\"7ee07abe1aede6c06e0ffb92a8dbaca9997d3cddb430a8e240e5bb4fa9c3123b\",\"project_id\":\"code-factory\",\"record_id\":\"memory-resolution-r17\",\"record_type\":\"resolution\",\"round_id\":\"r-17\",\"schema_version\":\"memory-record.v1\",\"task_id\":null,\"wave_id\":null,\"writer_id\":\"foreman-1\"}",
+          "payload_digest": "7ee07abe1aede6c06e0ffb92a8dbaca9997d3cddb430a8e240e5bb4fa9c3123b"
         }
       ],
       "digest_rule": "RFC 8785 JCS of the complete MemoryRecord with payload_digest absent; sync receipts are separate and mutable.",
@@ -553,7 +565,7 @@
       "kind": "positive",
       "name": "offline duplicate sync merges exactly once",
       "record_id": "memory-worker-a1",
-      "payload_digest": "d4b0040583370aa8eac2af3488c7b554876c54ca3462830b530cb32ac7f6b82d",
+      "payload_digest": "b3d87d8d873e664f2228d8ee945083265437e414884a3356d400599c66a1c5cf",
       "receipts": [
         {
           "destination": "duckbrain",
@@ -579,7 +591,7 @@
       "kind": "negative",
       "name": "same record id with changed body preserves conflict evidence",
       "record_id": "memory-worker-a1",
-      "original_digest": "d4b0040583370aa8eac2af3488c7b554876c54ca3462830b530cb32ac7f6b82d",
+      "original_digest": "b3d87d8d873e664f2228d8ee945083265437e414884a3356d400599c66a1c5cf",
       "changed_digest": "2ec4a11a853f9fa81a7b0ea54f1ede9009fb44505a5286f088369e062f4f3265",
       "expected": {
         "state": "conflict",
@@ -659,8 +671,8 @@
           "content": "{\"text\":\"hi\"}"
         }
       ],
-      "buffered_completion_canonical_json": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"hi\",\"role\":\"assistant\"}}],\"created\":1763424600,\"id\":\"infer-tools\",\"model\":\"fixture-route\",\"object\":\"chat.completion\",\"served_model\":\"fixture-model\",\"usage\":{\"cost_micro_usd\":5,\"estimated\":false,\"input_tokens\":20,\"output_tokens\":1,\"total_tokens\":21}}",
-      "buffered_completion_sha256": "b43455a384050b8628bf4676a6d118924115a0fc11872c8b24d36dd3d81b301a",
+      "buffered_completion_canonical_json": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"hi\",\"role\":\"assistant\",\"tool_calls\":[]}}],\"chosen_model\":\"fixture-route\",\"created\":1763424600,\"error\":null,\"id\":\"infer-tools\",\"model\":\"fixture-route\",\"object\":\"chat.completion\",\"requested_model\":\"fixture-route\",\"resolved_model\":\"fixture-route\",\"served_model\":\"fixture-model\",\"state\":\"complete\",\"usage\":{\"cost_micro_usd\":5,\"estimated\":false,\"input_tokens\":20,\"output_tokens\":1,\"total_tokens\":21}}",
+      "buffered_completion_sha256": "a8c2316db1c02adb332379a7afe4c53af9529707a9df68eecde94e76376587b1",
       "expected": {
         "tool_call_id": "call-1",
         "answer": "hi",
@@ -695,7 +707,7 @@
         "SC-08"
       ],
       "kind": "fault",
-      "name": "301 second coordinator loss expires into aborted hold",
+      "name": "301 second coordinator loss aborts and retains holds",
       "canonical_json": "{\"backup_id\":\"backup-1\",\"barrier_seq\":9,\"coordinator\":\"lost\",\"lease_expires_at\":\"2026-11-11T20:05:00Z\",\"observed_at\":\"2026-11-11T20:06:00Z\",\"offhost_readback\":false,\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"renewal_receipt\":null,\"schema_version\":\"cf.backup-barrier.v1\"}",
       "canonical_sha256": "80fa92b6b450a3f13e7da833a50db2294c30045634fbd536f63b29f99834a3ad",
       "expected": {
@@ -714,12 +726,13 @@
       ],
       "kind": "positive",
       "name": "per-turn timeout and whole-attempt deadline compose independently",
-      "canonical_json": "{\"attempt_wall_s\":60,\"max_turns\":2,\"model_call_seconds\":[8,8],\"turn_timeout_s\":10}",
-      "canonical_sha256": "6f92965cac25b2a297e9d1ac41c67bfd52ce6f40cab2582f197052e565295b0c",
+      "canonical_json": "{\"attempt_wall_s\":60,\"cleanup_reserve_s\":15,\"launch_reserve_s\":30,\"max_turns\":2,\"model_call_seconds\":[8,8],\"round_deadline_s\":135,\"transfer_reserve_s\":30,\"turn_timeout_s\":10}",
+      "canonical_sha256": "8d1a9b726e6f1985940d696fe2428335afec82410d22d24d5eb5bf9b69f71026",
       "expected": {
         "model_calls_fit": true,
         "attempt_seconds": 16,
         "attempt_fits": true,
+        "round_deadline_fits": true,
         "outcome": "pass",
         "legacy_whole_invocation_10_s": false
       }
@@ -732,29 +745,60 @@
       "name": "one terminal result for launch execution control and timeout trees",
       "cases": [
         {
-          "case": "launch rejected before exec",
-          "result": "failed_start",
+          "case": "input refused or native launcher proves NEVER_ACCEPTED",
+          "attempt": "fail",
+          "phase": "launch",
           "worker_verdict": null,
-          "refund": "reserved allowance only"
+          "refund": "one proven never-started reservation",
+          "board_close": false
         },
         {
-          "case": "clean exit without committed result",
-          "result": "missing_result",
-          "worker_verdict": null,
-          "success": false,
-          "retry": "same attempt identity under policy"
+          "case": "native acceptance or process existence unknown",
+          "attempt": "unknown",
+          "error": "START_UNKNOWN",
+          "reservation": "held",
+          "retry": "refused until native readback and fence"
         },
         {
-          "case": "process exit before durable evidence",
-          "result": "evidence_missing",
-          "success": false,
-          "retry": "reconcile result digest before any new exec"
+          "case": "worker exits 0 without a schema-valid durable result",
+          "error": "UNKNOWN_RESULT",
+          "round": "unknown",
+          "third_verdict": false,
+          "success": false
         },
         {
-          "case": "control dies while worker runs",
-          "result": "control_unknown",
-          "success": false,
-          "recovery": "query execution_key; never relaunch blindly"
+          "case": "worker dies after result and evidence fsync",
+          "disposition": "adopt original result and replay outbox only",
+          "native_relaunch": false
+        },
+        {
+          "case": "worker or control dies after native start before durable evidence",
+          "round": "unknown",
+          "disposition": "quarantine and reconcile native, board, Git and memory side effects"
+        },
+        {
+          "case": "definitive execution or required gate failure",
+          "attempt": "fail",
+          "correction": "same worker until terminal disposition or allowance/deadline exhaustion"
+        },
+        {
+          "case": "execution passes and publication definitively fails",
+          "execution": "pass",
+          "round": "partial",
+          "settled_success": false
+        },
+        {
+          "case": "commit, push, gate or remote readback uncertain",
+          "task": "unverified",
+          "round": "unverified",
+          "closeout": false,
+          "inferred_commit": false
+        },
+        {
+          "case": "required memory sync pending after local commit",
+          "settlement": "awaiting_evidence",
+          "local_work_may_continue": true,
+          "next_round": "blocked"
         },
         {
           "case": "turn timeout",
@@ -793,9 +837,17 @@
       "name": "M7 five counters at emission and scrape",
       "events": [
         {
-          "event_id": "m7-issue-1",
+          "schema_version": "factory.telemetry.v1",
+          "event_id": "global-m7-1",
+          "source_event_id": "m7-issue-1",
+          "source_seq": 1,
+          "module": "M7",
+          "event_type": "credential-issue",
           "operation": "issue",
-          "outcome": "ok",
+          "outcome": "pass",
+          "reason": "completed",
+          "duration_ms": 10,
+          "observed_at": "2026-11-11T19:30:00Z",
           "identity": {
             "project_id": "code-factory",
             "round_id": "r-17",
@@ -803,17 +855,26 @@
             "wave_id": "w-1",
             "attempt_id": "a-1",
             "task_id": "CF-1",
-            "corr_id": "c-17",
-            "owner_epoch": 7,
-            "component": "M7",
-            "config_generation": 17
+            "dispatch_id": "d-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+            "corr_id": "c-17"
           },
-          "occurred_at": "2026-11-11T19:30:00Z"
+          "measurements": {
+            "expiry_headroom_seconds": 3600
+          },
+          "error": null
         },
         {
-          "event_id": "m7-verify-1",
+          "schema_version": "factory.telemetry.v1",
+          "event_id": "global-m7-2",
+          "source_event_id": "m7-verify-1",
+          "source_seq": 2,
+          "module": "M7",
+          "event_type": "credential-check",
           "operation": "verify",
-          "outcome": "ok",
+          "outcome": "pass",
+          "reason": "completed",
+          "duration_ms": 10,
+          "observed_at": "2026-11-11T19:30:00Z",
           "identity": {
             "project_id": "code-factory",
             "round_id": "r-17",
@@ -821,17 +882,26 @@
             "wave_id": "w-1",
             "attempt_id": "a-1",
             "task_id": "CF-1",
-            "corr_id": "c-17",
-            "owner_epoch": 7,
-            "component": "M7",
-            "config_generation": 17
+            "dispatch_id": "d-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+            "corr_id": "c-17"
           },
-          "occurred_at": "2026-11-11T19:30:00Z"
+          "measurements": {
+            "expiry_headroom_seconds": 3600
+          },
+          "error": null
         },
         {
-          "event_id": "m7-deliver-1",
+          "schema_version": "factory.telemetry.v1",
+          "event_id": "global-m7-3",
+          "source_event_id": "m7-deliver-1",
+          "source_seq": 3,
+          "module": "M7",
+          "event_type": "credential-delivery",
           "operation": "deliver",
-          "outcome": "ok",
+          "outcome": "pass",
+          "reason": "completed",
+          "duration_ms": 10,
+          "observed_at": "2026-11-11T19:30:00Z",
           "identity": {
             "project_id": "code-factory",
             "round_id": "r-17",
@@ -839,17 +909,26 @@
             "wave_id": "w-1",
             "attempt_id": "a-1",
             "task_id": "CF-1",
-            "corr_id": "c-17",
-            "owner_epoch": 7,
-            "component": "M7",
-            "config_generation": 17
+            "dispatch_id": "d-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+            "corr_id": "c-17"
           },
-          "occurred_at": "2026-11-11T19:30:00Z"
+          "measurements": {
+            "expiry_headroom_seconds": 3600
+          },
+          "error": null
         },
         {
-          "event_id": "m7-renew-1",
+          "schema_version": "factory.telemetry.v1",
+          "event_id": "global-m7-4",
+          "source_event_id": "m7-renew-1",
+          "source_seq": 4,
+          "module": "M7",
+          "event_type": "credential-renew",
           "operation": "renew",
-          "outcome": "ok",
+          "outcome": "pass",
+          "reason": "completed",
+          "duration_ms": 10,
+          "observed_at": "2026-11-11T19:30:00Z",
           "identity": {
             "project_id": "code-factory",
             "round_id": "r-17",
@@ -857,17 +936,26 @@
             "wave_id": "w-1",
             "attempt_id": "a-1",
             "task_id": "CF-1",
-            "corr_id": "c-17",
-            "owner_epoch": 7,
-            "component": "M7",
-            "config_generation": 17
+            "dispatch_id": "d-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+            "corr_id": "c-17"
           },
-          "occurred_at": "2026-11-11T19:30:00Z"
+          "measurements": {
+            "expiry_headroom_seconds": 3600
+          },
+          "error": null
         },
         {
-          "event_id": "m7-revoke-1",
+          "schema_version": "factory.telemetry.v1",
+          "event_id": "global-m7-5",
+          "source_event_id": "m7-revoke-1",
+          "source_seq": 5,
+          "module": "M7",
+          "event_type": "credential-revoke",
           "operation": "revoke",
-          "outcome": "ok",
+          "outcome": "pass",
+          "reason": "completed",
+          "duration_ms": 10,
+          "observed_at": "2026-11-11T19:30:00Z",
           "identity": {
             "project_id": "code-factory",
             "round_id": "r-17",
@@ -875,12 +963,13 @@
             "wave_id": "w-1",
             "attempt_id": "a-1",
             "task_id": "CF-1",
-            "corr_id": "c-17",
-            "owner_epoch": 7,
-            "component": "M7",
-            "config_generation": 17
+            "dispatch_id": "d-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+            "corr_id": "c-17"
           },
-          "occurred_at": "2026-11-11T19:30:00Z"
+          "measurements": {
+            "expiry_headroom_seconds": 3600
+          },
+          "error": null
         }
       ],
       "expected": {
@@ -914,10 +1003,8 @@
         "wave_id": "w-1",
         "attempt_id": "a-1",
         "task_id": "CF-1",
-        "corr_id": "c-17",
-        "owner_epoch": 7,
-        "component": "M7",
-        "config_generation": 17
+        "dispatch_id": "d-8bf0b1797a09ac9cae1c0421aa27050b331acdaa554156d08753425acad49048",
+        "corr_id": "c-17"
       },
       "source_observed_at": null,
       "collection_state": "unavailable",
@@ -926,6 +1013,12 @@
         "ready": false,
         "network_error_is_zero": false,
         "task_id": "CF-1"
+      },
+      "schema_version": "factory.telemetry.v1",
+      "reason": "network_unreachable",
+      "error": {
+        "code": "NETWORK_UNAVAILABLE",
+        "retryable": true
       }
     },
     {
@@ -938,7 +1031,7 @@
         {
           "case": "mechanical pass, model judgment uncertain, publication readback matches",
           "mechanical": "pass",
-          "model_judgment": "uncertain",
+          "model_judgment": "unknown",
           "publication": "qualified",
           "closeout": "eligible when model judgment is not required"
         },
@@ -974,13 +1067,16 @@
       "static_controls": [],
       "kind": "positive",
       "name": "signed profile binds defaults and secret identity",
-      "canonical_json": "{\"defaults\":{\"attempt_wall_s\":60,\"lease_s\":60,\"round_allowance\":20000,\"turn_timeout_s\":10},\"generation\":17,\"payload_digest\":\"8b0ac03b3a9e2d3d529385ae15ca017cfb263febc702b4c0d2a2e61bc1a97f6b\",\"profile_id\":\"factory-default\",\"schema_version\":\"cf.signed-profile.v1\",\"signature_ref\":\"secretref://profiles/signing\"}",
-      "canonical_sha256": "ddef3b8e73585482815fbef9244d966b44818344111ac694a32fca7c49e13949",
+      "canonical_json": "{\"controls\":{\"execution_artifact\":{\"consumer\":[\"provisioning\",\"harness\",\"dispatcher\"],\"default\":\"refuse\",\"owner\":\"release-owner\",\"type\":\"signed-artifact-ref\"},\"gate_policy\":{\"consumer\":[\"repository\",\"scheduler\"],\"default\":\"refuse\",\"owner\":\"release-owner\",\"type\":\"signed-artifact-ref\"},\"global_timeout\":{\"consumer\":[\"scheduler\",\"harness\"],\"default\":21600,\"owner\":\"operator\",\"type\":\"integer-seconds\"},\"inference_routes\":{\"consumer\":[\"harness\",\"inference-proxy\"],\"default\":[],\"owner\":\"model-owner\",\"type\":\"closed-route-array\"},\"invocation_lifecycle\":{\"consumer\":[\"supervisor\",\"harness\"],\"default\":\"supervisor.v1+cf.native.v1\",\"owner\":\"release-owner\",\"type\":\"signed-profile\"},\"receipt_authority_trust\":{\"consumer\":[\"authority\",\"manager\",\"provisioner\"],\"default\":\"refuse\",\"owner\":\"operator\",\"type\":\"trust-bundle-ref\"},\"sandbox\":{\"consumer\":[\"provisioning\",\"harness\",\"safety\",\"dispatcher\"],\"default\":\"terminal-jail-disabled+baseline-required\",\"owner\":\"safety-owner\",\"type\":\"signed-profile\"}},\"defaults\":{\"attempt_wall_s\":1800,\"concurrency\":2,\"lease_s\":60,\"round_allowance\":20000,\"tick_wall_s\":21600,\"turn_timeout_s\":1800},\"generation\":18,\"payload_digest\":\"0d6d834412d2ea0d81adb4415bb6cfc0690feb94b8b320855752517ef285d827\",\"precedence\":[\"accepted-generation-field\",\"signed-project-lane-profile\",\"signed-deployment-profile\",\"global-default\"],\"profile_id\":\"factory-default\",\"schema_version\":\"cf.signed-profile.v1\",\"secret_bindings\":[{\"delivery\":\"sealed-fd\",\"file_mode\":\"0600\",\"ref\":\"secretref://model/fixture-upstream.cf2a\",\"resolver\":\"control-broker\",\"scope\":[\"infer\"]}],\"signature_ref\":\"secretref://profiles/signing\"}",
+      "canonical_sha256": "8b33458c46bc8d79b0b7b6cd59c2e4c6ca0a5d6cb2279396dbf708fdd41ccab2",
       "expected": {
         "accepted": true,
         "secret_value_present": false,
-        "unknown_generation": "CONFIG_VERSION_CONFLICT"
-      }
+        "unknown_generation": "CONFIG_VERSION_CONFLICT",
+        "empty_inference_routes_denies": true,
+        "precedence_registered": true
+      },
+      "digest_rule": "payload_digest hashes the complete profile with payload_digest absent; signature_ref is a reference, not a secret value."
     },
     {
       "id": "CV-14-A",
@@ -988,10 +1084,10 @@
       "static_controls": [],
       "kind": "positive",
       "name": "one-use grant and certificate renewal chain",
-      "canonical_json": "{\"certificate_serial\":\"cert-7\",\"grant_id\":\"grant-1\",\"one_use\":true,\"renewal\":{\"new_serial\":\"cert-8\",\"old_revoked_after_readback\":true,\"old_serial\":\"cert-7\",\"overlap_s\":60},\"state_chain\":[\"issued\",\"redeemed\",\"settled\"]}",
-      "canonical_sha256": "4757aa51a35f166c9d618c15eccce96784894421c6762504aa7350ecae9420f5",
+      "canonical_json": "{\"certificate_serial\":\"cert-7\",\"grant_id\":\"grant-1\",\"grant_replay_error\":\"GRANT_REUSED\",\"one_use\":true,\"renewal\":{\"new_serial\":\"cert-8\",\"old_revoked_after_readback\":true,\"old_serial\":\"cert-7\",\"overlap_s\":60},\"state_chain\":[\"issued\",\"consumed\"]}",
+      "canonical_sha256": "f37b3c8dd5f06934f03534518184038bee9f877ce9a45b9d1e1c12a8296ef6a7",
       "expected": {
-        "grant_replay": "GRANT_REPLAY",
+        "grant_replay": "GRANT_REUSED",
         "settlement_before_return": false,
         "old_certificate_after_overlap": "revoked"
       }
@@ -1007,8 +1103,440 @@
       "expected": {
         "environment_secret": false,
         "child_secret_inheritance": false,
-        "unregistered_backend": "CONTAINMENT_UNAVAILABLE",
+        "unregistered_backend": "EXECUTION_BACKEND_UNSUPPORTED",
         "secret_in_logs": false
+      }
+    },
+    {
+      "id": "CV-03-E",
+      "domain": "custody",
+      "static_controls": [
+        "SC-07"
+      ],
+      "kind": "positive",
+      "name": "signed individual custody read",
+      "body_utf8": "",
+      "body_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "signature_profile": "CF2A-CRIER-1",
+      "signature_transcript": "GET\n/v1/factory/deliveries/delivery-r17?idempotency_key=read-r17-key&request_id=read-r17\n2026-11-11T19:03:00Z\nsha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\naudience:crier.factory",
+      "signature_transcript_sha256": "e77f772eedf0bea9abb50d517916ff65cd477cd4af0975e488d4b2c92d2c8dce",
+      "expected": {
+        "http": 200,
+        "exact_stored_custody": true,
+        "synthesized_empty": false,
+        "backend_unavailable": "CUSTODY_UNAVAILABLE"
+      },
+      "query": {
+        "request_id": "read-r17",
+        "idempotency_key": "read-r17-key"
+      },
+      "signature_headers": {
+        "X-Agent-Id": "bunker-a",
+        "X-Agent-Ts": "2026-11-11T19:03:00Z",
+        "X-CF2A-Key-Id": "bunker-a-key-3",
+        "X-CF2A-Signature": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "id": "CV-03-F",
+      "domain": "custody",
+      "static_controls": [
+        "SC-01"
+      ],
+      "kind": "positive",
+      "name": "deliver names the initial reserved receiver",
+      "canonical_json": "{\"dispatch_grant_hash\":\"334534e4457593c0e6a7864ea935c63b1f201bfcf640cc5515c0cc8dda219310\",\"envelope\":{\"body\":{\"config_generation\":17,\"corr_id\":\"c-17\",\"execution\":{\"attempt_wall_s\":1800,\"cleanup_reserve_s\":15,\"concurrency\":2,\"deadline_s\":7200,\"launch_reserve_s\":30,\"max_turns\":40,\"retry_policy\":{\"failed_start\":\"refund-before-run\",\"initial_backoff_s\":5,\"max_attempts\":3,\"max_backoff_s\":60,\"name\":\"charge-on-start\"},\"round_deadline\":\"2026-11-11T21:00:00Z\",\"transfer_reserve_s\":30,\"turn_timeout_s\":300},\"extensions\":{\"binding_generation\":4,\"board_revision\":{\"algorithm\":\"sha1\",\"value\":\"1111111111111111111111111111111111111111\"},\"lane\":\"code-factory\",\"lane_seed\":{\"prompt_digest\":\"fb14f4b0b4abe9a49f9ad8c43312d54f127769f08cfb0754007ba1576d5e32dc\",\"skills\":[]},\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\"},\"idempotency_key\":\"admit-r17\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"round-admission.v1\",\"task_scope\":[\"CF-1\"],\"total_budget\":20000},\"corr_id\":\"c-17\",\"created_at\":\"2026-11-11T19:00:00Z\",\"message_type\":\"round-admission\",\"request_id\":\"req-r17\",\"schema_version\":\"cf2a.v1\",\"sender\":\"scheduler\"},\"expires_at\":\"2026-11-11T20:00:00Z\",\"idempotency_key\":\"deliver-r17-key\",\"initial_reservation\":{\"receiver_id\":\"bunker-a\",\"reservation_id\":\"reserve-r17\",\"valid_until\":\"2026-11-11T20:00:00Z\",\"visible_at\":\"2026-11-11T19:00:00Z\"},\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"payload_digest\":\"a752a167926162e648b47818011df73f6bbc25a4ac75b75e4596d9fafd538062\",\"recipient\":\"bunker-a\",\"registration_generation\":3,\"request_id\":\"deliver-r17\",\"schema_version\":\"custody.v1\",\"sender\":\"scheduler\"}",
+      "canonical_sha256": "87ec6f779501b22f7468942818aa905c88dcaa0edba7e9ef5fdf9241dd34eae1",
+      "expected": {
+        "http": 201,
+        "state": "queued",
+        "initial_receiver": "bunker-a",
+        "visible_at": "2026-11-11T19:00:00Z",
+        "valid_until": "2026-11-11T20:00:00Z",
+        "custody_before_launch": true
+      }
+    },
+    {
+      "id": "CV-04-F",
+      "domain": "board",
+      "static_controls": [
+        "SC-04"
+      ],
+      "kind": "matrix",
+      "name": "same-worker correction and stale sibling settlement",
+      "active_claim": {
+        "task_id": "T1",
+        "revision": 2,
+        "claim_id": "claim-t1-1",
+        "claim_generation": 1,
+        "worker_id": "worker-1",
+        "attempt_id": "a-1"
+      },
+      "correction": {
+        "attempt_id": "a-2",
+        "same_worker": true,
+        "same_claim": true,
+        "new_self_dependency": false,
+        "additional_worker_debit": 0
+      },
+      "stale_sibling": {
+        "claim_generation": 0,
+        "result": "CLAIM_CONFLICT",
+        "close": false,
+        "release": false
+      },
+      "expected": {
+        "correction_owns_until_terminal": true,
+        "stale_pass_closes": false,
+        "stale_fail_reopens": false
+      }
+    },
+    {
+      "id": "CV-05-G",
+      "domain": "inference",
+      "static_controls": [
+        "SC-06"
+      ],
+      "kind": "negative",
+      "name": "concurrency reservation is atomic across replicas",
+      "scope": {
+        "allowed_routes": [
+          "fixture-route"
+        ],
+        "budget_micro_usd": 1000,
+        "window_s": 86400,
+        "concurrency": 1,
+        "max_output_tokens": 128
+      },
+      "simultaneous_requests": [
+        "infer-race-1",
+        "infer-race-2"
+      ],
+      "expected": {
+        "accepted_request_ids": [
+          "infer-race-1"
+        ],
+        "refused": {
+          "request_id": "infer-race-2",
+          "error": "CONCURRENCY_EXHAUSTED",
+          "http": 429
+        },
+        "upstream_forwards": 1
+      }
+    },
+    {
+      "id": "CV-05-H",
+      "domain": "inference",
+      "static_controls": [
+        "SC-06"
+      ],
+      "kind": "fault",
+      "name": "upstream timeout is typed before and after headers",
+      "cases": [
+        {
+          "phase": "before_headers",
+          "upstream_timeout_s": 300,
+          "expected": {
+            "http": 504,
+            "error": "UPSTREAM_TIMEOUT"
+          }
+        },
+        {
+          "phase": "after_headers",
+          "terminal": {
+            "state": "error",
+            "error": {
+              "code": "UPSTREAM_TIMEOUT",
+              "retryable": true
+            }
+          },
+          "expected": {
+            "completion_returned": false,
+            "connection_close_after_terminal": true
+          }
+        }
+      ],
+      "expected": {
+        "silent_success": false,
+        "unbounded_connection": false
+      }
+    },
+    {
+      "id": "CV-05-I",
+      "domain": "inference",
+      "static_controls": [
+        "SC-06"
+      ],
+      "kind": "fault",
+      "name": "response recovery replays committed usage and terminal",
+      "request_id": "infer-1",
+      "usage_commit": "settled",
+      "response_send": "lost",
+      "expected": {
+        "route": "GET /v1/responses/infer-1",
+        "http": 200,
+        "state": "complete",
+        "second_inference_send": false
+      }
+    },
+    {
+      "id": "CV-07-D",
+      "domain": "memory",
+      "static_controls": [
+        "SC-03"
+      ],
+      "kind": "matrix",
+      "name": "failed partial and retried synchronization with restart reconciliation",
+      "cases": [
+        {
+          "case": "HTTP unavailable after local fsync",
+          "local_commit": "durable",
+          "state": "pending",
+          "http_qualified": false,
+          "continue_local_work": true
+        },
+        {
+          "case": "one destination committed and one failed",
+          "state": "partial",
+          "settlement": "awaiting_evidence",
+          "new_logical_record": false
+        },
+        {
+          "case": "retry after process restart",
+          "readback": "all local and remote receipts by record_id and payload_digest",
+          "state": "qualified only after global readback",
+          "duplicate_remote_records": 0
+        },
+        {
+          "case": "same record id with different digest",
+          "state": "conflict",
+          "settlement": "blocked",
+          "overwrite": false
+        }
+      ],
+      "expected": {
+        "local_commit_is_http_qualification": false,
+        "retry_reuses_identity": true,
+        "post_restart_global_receipt_reconciliation": true
+      }
+    },
+    {
+      "id": "CV-08-B",
+      "domain": "recovery",
+      "static_controls": [
+        "SC-08"
+      ],
+      "kind": "fault",
+      "name": "upload outage retries only inside the live barrier",
+      "backup_id": "backup-1",
+      "state": "VALIDATED",
+      "upload": "unavailable",
+      "barrier_renewal": "valid",
+      "offhost_readback": false,
+      "expected": {
+        "retry_same_backup_id": true,
+        "published": false,
+        "writers_unfrozen": false,
+        "release": false,
+        "new_backup_id": false
+      }
+    },
+    {
+      "id": "CV-08-C",
+      "domain": "recovery",
+      "static_controls": [
+        "SC-08"
+      ],
+      "kind": "matrix",
+      "name": "missing Bunker follows the selected offline policy",
+      "cases": [
+        {
+          "offline_policy": "refuse",
+          "state": "ABORTED",
+          "writers_unfrozen": false,
+          "project_ready": false,
+          "later_published": false
+        },
+        {
+          "offline_policy": "partial",
+          "state": "INCOMPLETE",
+          "missing_store": "bunker-a",
+          "loss_window": "named-or-unknown-not-zero",
+          "project_ready": false,
+          "full_restore_certified": false,
+          "offhost_readback": true
+        }
+      ],
+      "expected": {
+        "missing_store_is_empty_store": false,
+        "silent_partial": false
+      }
+    },
+    {
+      "id": "CV-08-D",
+      "domain": "recovery",
+      "static_controls": [
+        "SC-08"
+      ],
+      "kind": "negative",
+      "name": "corrupt snapshot cannot upload or release",
+      "backup_id": "backup-1",
+      "expected_store_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "observed_store_sha256": "710e844770bf2db482dfb4d4812c5d8b2e59e6fb314d15720114d1b11359b422",
+      "expected": {
+        "error": "BACKUP_MANIFEST_INVALID",
+        "state": "ABORTED",
+        "upload": false,
+        "release": false
+      }
+    },
+    {
+      "id": "CV-08-E",
+      "domain": "recovery",
+      "static_controls": [
+        "SC-08"
+      ],
+      "kind": "positive",
+      "name": "restore preserves current revocations and advances epoch",
+      "backup_authority_seq": 9,
+      "live_authority_seq": 10,
+      "backup_epoch": 7,
+      "restored_credential_state": "revoked",
+      "expected": {
+        "restored_credential_active": false,
+        "new_epoch": 8,
+        "old_epoch_write": "STALE_OWNER",
+        "activation": "after isolated readiness and revocation readback"
+      }
+    },
+    {
+      "id": "CV-14-B",
+      "domain": "authority",
+      "static_controls": [],
+      "kind": "fault",
+      "name": "lost grant consume reply resolves by readback",
+      "canonical_json": "{\"admission_digest\":\"a752a167926162e648b47818011df73f6bbc25a4ac75b75e4596d9fafd538062\",\"binding_generation\":4,\"corr_id\":\"c-17\",\"destination\":{\"agent_id\":\"bunker-a\",\"endpoint_digest\":\"7c564f6a14b0b6f4a84e5f5f0a0fbc622328e9b4a384e5e1d16612acf1029b7c\"},\"grant_id\":\"grant-1\",\"idempotency_key\":\"grant-1-key\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"requested_expiry_s\":30,\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"dispatch-grant.v1\"}",
+      "canonical_sha256": "7919dbbc8a419069d81ad12247537a2a0916a4c885d64beab4d3e5a6cff7e2bf",
+      "consume_reply": "lost",
+      "grant_readback": {
+        "state": "consumed",
+        "delivery_id": "delivery-r17"
+      },
+      "crier_delivery_readback": {
+        "state": "queued",
+        "delivery_id": "delivery-r17"
+      },
+      "expected": {
+        "second_grant": false,
+        "second_round": false,
+        "second_launch": false,
+        "resolution": "continue original delivery reconciliation"
+      }
+    },
+    {
+      "id": "CV-14-C",
+      "domain": "authority",
+      "static_controls": [],
+      "kind": "fault",
+      "name": "one-sided binding acknowledgement replays the same commit",
+      "canonical_json": "{\"active_digest\":\"03a98ffb24a798a40a9a504f7b11f0786e21899c6a6fc2ee59880191d2198677\",\"binding_generation\":4,\"committed_at\":\"2026-11-11T19:00:00Z\",\"idempotency_key\":\"binding-4-key\",\"operation_id\":\"op-binding-4\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"participant_id\":\"scheduler\",\"prepared_digest\":\"397b1e26b47d6103acaa370829a400fcb77ad0302e91cbb539b220ca8b604c44\",\"project_id\":\"code-factory\",\"schema_version\":\"binding.commit.v1\"}",
+      "canonical_sha256": "5b2a32b3363bfa348b46cd2426a3c26c75eebd3b16da3d1f8dff88d20ec2cad5",
+      "manager_pointer": "committed",
+      "crier_state": "active",
+      "scheduler_state": "prepared",
+      "expected": {
+        "new_grants_before_readback": "BINDING_NOT_ACTIVE",
+        "replay_same_commit": true,
+        "scheduler_state_after_replay": "active",
+        "rollback_to_generation_3": false
+      }
+    },
+    {
+      "id": "CV-14-D",
+      "domain": "authority",
+      "static_controls": [],
+      "kind": "positive",
+      "name": "sealed descriptor secret resolution carries no JSON secret",
+      "canonical_json": "{\"corr_id\":\"c-17\",\"credential_ref\":\"secretref://attempt/a1\",\"idempotency_key\":\"secret-a1-key\",\"operation\":\"infer\",\"request_id\":\"secret-a1\",\"schema_version\":\"secret-resolve.v1\"}",
+      "canonical_sha256": "b8d2976a1fff20635642049088b39a098841a0d5e248b13c92623298f88e5a5a",
+      "peer_principal": "factory-worker",
+      "response_metadata": {
+        "schema_version": "secret-resolve.v1",
+        "request_id": "secret-a1",
+        "credential_ref": "secretref://attempt/a1",
+        "fingerprint": "97173de4d100b1aec0c74c1c4367961238aa508352383c4cfd5ea1a83a25eae7",
+        "expires_at": "2026-11-11T20:00:00Z",
+        "scope": [
+          "infer"
+        ]
+      },
+      "descriptor": {
+        "transport": "SCM_RIGHTS",
+        "count": 1,
+        "seals": [
+          "F_SEAL_SEAL",
+          "F_SEAL_SHRINK",
+          "F_SEAL_GROW",
+          "F_SEAL_WRITE"
+        ]
+      },
+      "expected": {
+        "secret_bytes_in_json": false,
+        "descriptor_count": 1,
+        "worker_socket_mount": false,
+        "fanout_shared_descriptor": false,
+        "revoked_resolution": "CAPABILITY_REVOKED"
+      }
+    },
+    {
+      "id": "CV-14-E",
+      "domain": "authority",
+      "static_controls": [],
+      "kind": "matrix",
+      "name": "Gateway capabilities exclude launch and settlement authority",
+      "cases": [
+        {
+          "operation": "validate session/inference capability",
+          "gateway_allowed": true
+        },
+        {
+          "operation": "create durable session/turn and return usage",
+          "gateway_allowed": true
+        },
+        {
+          "operation": "issue/consume dispatch grant or launch worker",
+          "gateway_allowed": false
+        },
+        {
+          "operation": "ack Crier custody or settle Scheduler round",
+          "gateway_allowed": false
+        },
+        {
+          "operation": "observe reply",
+          "gateway_allowed": "evidence only",
+          "required_return": "Crier",
+          "scheduler_settlement": false
+        }
+      ],
+      "expected": {
+        "gateway_reply_is_settlement": false,
+        "node_pull_fallback": false
+      }
+    },
+    {
+      "id": "CV-14-F",
+      "domain": "authority",
+      "static_controls": [],
+      "kind": "positive",
+      "name": "generation-zero enrollment binds participant and scoped secret reference",
+      "canonical_json": "{\"agent_id\":\"bunker-a\",\"capabilities\":[\"hermes\"],\"enrollment_nonce\":\"fixture-nonce-single-use\",\"expected_generation\":0,\"idempotency_key\":\"register-bunker-a-key\",\"profile\":\"homelab-vpn\",\"project_id\":\"code-factory\",\"public_identity\":{\"certificate_der\":\"fixture-der-not-a-live-certificate\",\"key_id\":\"bunker-a-key-1\"},\"registration_id\":\"reg-bunker-a\",\"schema_version\":\"register.v1\"}",
+      "canonical_sha256": "0c1a666bed7309ec717920ce79f909c9949fe5cd8ab047efca7af1a68dabba56",
+      "expected": {
+        "registration_generation": 1,
+        "nonce_reuse": "UNAUTHORIZED",
+        "credential_value_in_response": false,
+        "credential_ref": "secretref://node/bunker-a",
+        "binding_required_before_dispatch": true
       }
     }
   ],
@@ -1090,7 +1618,8 @@
       "vector_ids": [
         "CV-03-A",
         "CV-03-C",
-        "CV-03-D"
+        "CV-03-D",
+        "CV-03-F"
       ],
       "status": "pass"
     },
@@ -1111,7 +1640,8 @@
       "vector_ids": [
         "CV-07-A",
         "CV-07-B",
-        "CV-07-C"
+        "CV-07-C",
+        "CV-07-D"
       ],
       "status": "pass"
     },
@@ -1123,7 +1653,8 @@
         "CV-04-B",
         "CV-04-C",
         "CV-04-D",
-        "CV-04-E"
+        "CV-04-E",
+        "CV-04-F"
       ],
       "status": "pass"
     },
@@ -1147,7 +1678,10 @@
         "CV-05-C",
         "CV-05-D",
         "CV-05-E",
-        "CV-05-F"
+        "CV-05-F",
+        "CV-05-G",
+        "CV-05-H",
+        "CV-05-I"
       ],
       "status": "pass"
     },
@@ -1155,7 +1689,8 @@
       "case": "Crier signed read request",
       "positive_vector": "CV-03-A",
       "vector_ids": [
-        "CV-03-A"
+        "CV-03-A",
+        "CV-03-E"
       ],
       "status": "pass"
     },
@@ -1164,7 +1699,11 @@
       "positive_vector": "CV-08-A",
       "vector_ids": [
         "CV-06-B",
-        "CV-08-A"
+        "CV-08-A",
+        "CV-08-B",
+        "CV-08-C",
+        "CV-08-D",
+        "CV-08-E"
       ],
       "status": "pass"
     },
@@ -1185,33 +1724,70 @@
         "CV-01-B",
         "CV-02-A",
         "CV-02-D",
-        "CV-10-A"
+        "CV-10-A",
+        "CV-14-B"
       ]
     },
     "P6-02": {
       "static_controls": [
         "SC-01",
         "SC-07"
+      ],
+      "vector_ids": [
+        "CV-03-A",
+        "CV-03-B",
+        "CV-03-E",
+        "CV-03-F"
       ]
     },
     "P6-03": {
       "static_controls": [
         "SC-04"
+      ],
+      "vector_ids": [
+        "CV-04-A",
+        "CV-04-D",
+        "CV-04-F"
       ]
     },
     "P6-04": {
       "static_controls": [
         "SC-03"
+      ],
+      "vector_ids": [
+        "CV-07-A",
+        "CV-07-B",
+        "CV-07-C",
+        "CV-07-D"
       ]
     },
     "P6-05": {
       "static_controls": [
         "SC-06"
+      ],
+      "vector_ids": [
+        "CV-05-A",
+        "CV-05-B",
+        "CV-05-C",
+        "CV-05-D",
+        "CV-05-E",
+        "CV-05-F",
+        "CV-05-G",
+        "CV-05-H",
+        "CV-05-I"
       ]
     },
     "P6-06": {
       "static_controls": [
         "SC-08"
+      ],
+      "vector_ids": [
+        "CV-06-B",
+        "CV-08-A",
+        "CV-08-B",
+        "CV-08-C",
+        "CV-08-D",
+        "CV-08-E"
       ]
     },
     "P6-07": {
@@ -1222,7 +1798,14 @@
     "P6-08": {
       "vector_ids": [
         "CV-14-A",
-        "CV-03-A"
+        "CV-14-B",
+        "CV-14-C",
+        "CV-14-D",
+        "CV-14-E",
+        "CV-14-F",
+        "CV-03-A",
+        "CV-03-E",
+        "CV-03-F"
       ]
     },
     "P6-09": {
