@@ -373,21 +373,26 @@ is a normalized repository-relative prefix; `.` declares repository-wide/generat
 effects. Resource is `{name:ID,mode:exclusive/shared}` with unique names.
 `created_seq` is immutable and unique within an initiative.
 
-Criterion is exactly `{id:ID,description:Text,argv:string[1..64],cwd:string,
-timeout_s:integer[1,1800],expected_exit:integer[0,255],oracle_digest:SHA}`. `argv`
-executes directly without a shell; `cwd` is a safe repository-relative path;
-`oracle_digest` identifies the versioned assertion and fixture code. Criterion order
-is meaningful and IDs are unique within the owning initiative/task. The legacy
-`{id,text,verification}` form is not executable and is never silently converted.
+Criterion is exactly the shared `{id:ID,text:Text,verification:Text,
+argv:string[1..64],cwd:string,timeout_s:integer[1,1800],
+expected_exit:integer[0,255],oracle_digest:SHA}`; `description` is a display alias
+for text and is not serialized. `contract-vectors.json/common_identities.criterion`
+and CV-04-A carry a complete fixture. `argv` executes directly without a shell; `cwd`
+is a safe repository-relative path; `oracle_digest` identifies the versioned assertion
+and fixture code. Criterion order is meaningful and IDs are unique within the owning
+initiative/task. A legacy `{id,text}` row without executable verification is invalid
+and is never silently converted.
 Claim is `{claim_id:ID,claimant_id:ID,claim_generation:PosInt,lease_expires_at:Time,
 owner_fence:Fence}`. CancelRequest is `{requested_by:ID,reason:Text,requested_at:Time,
 quiescence_evidence_refs:EvidenceRef[]}` and is required for cancel_requested/cancelled
 and null otherwise. Deferral is `{reason:Text,owner_id:ID,review_at:Time,
 return_condition:Text}`; required for deferred and forbidden otherwise.
 
-Completion is `{run_id:ID,implementation_commit:GitOID,integration_commit:GitOID,
-verdict_ref:EvidenceRef,publication_ref:EvidenceRef,criteria_evidence:Evidence[],
-evidence_refs:EvidenceRef[]}` and is required only for complete. Evidence is
+Completion is `{run_id:ID,change_id:ID,implementation_commit:GitOID,
+integration_commit:GitOID,staged_guard_ref:EvidenceRef,
+source_judgment_ref:EvidenceRef,integrated_judgment_ref:EvidenceRef,
+publication_ref:EvidenceRef,criteria_evidence:Evidence[],evidence_refs:EvidenceRef[]}`
+and is required only for complete. Evidence is
 `{criterion_id:ID,run_id:ID,commit:GitOID,tree_digest:SHA,argv_digest:SHA,
 exit_code:UInt,stdout_digest:SHA,stderr_digest:SHA,started_at:Time,finished_at:Time,
 outcome:pass/fail/unknown}`. There is exactly one Evidence per task criterion in
@@ -565,28 +570,33 @@ fixture exclusion and deferred/cancelled prerequisites. M0 §16.1 supplies telem
 ### 15.4 Post-judge settlement and correction ownership
 
 Board closeout is the last transition of the publication chain, not a synonym for a
-judge verdict or a successful `git push`. For the active `(task_id,revision,claim_id,
+judge verdict or a successful `git push`. The Change binds task_id, claim_generation,
+run_id, base, head and tree_digest. The staged-guard execution binds that same Change;
+a missing/different run, claim generation or staged tree returns
+`STAGED_IDENTITY_MISMATCH`. For the active `(task_id,revision,claim_id,
 claim_generation)` the foreman evaluates these artifacts in order:
 
 1. `staged-guard.v1` records the mechanical checks on the staged tree. `pass` permits
    the integration/publication pipeline regardless of model-judge availability; `fail`
    leaves completion null and starts a correction or records the task blocked with the
    failed evidence. `unknown` never becomes pass.
-2. `source-judgment.v1` grades the exact source tree independently of those checks.
-   `fail` requests correction under the same task and claim; `unknown` leaves the
-   judgment unsettled while the foreman reconciles the judge. Neither outcome stops
-   the mechanical integration/publication pipeline, neither publishes by itself, and
-   unknown is never rewritten as pass.
-3. `integrated-judgment.v1` and the criterion Evidence are rebound to the same
-   integrated tree after every merge/CAS refresh. A failed integrated gate or judgment
-   requests correction; an unavailable model or harness produces `unknown`, leaves
-   completion null, and does not suppress the independent mechanical artifacts or an
-   already proven remote publication.
-4. `publication.v1` must be `applied`, with `remote_ancestor_verified=true` and its
-   published_oid/tree_digest equal to the tested integrated parent. `refused` starts
-   the declared CAS/correction path. `unknown` leaves the row unsettled and invokes
-   remote marker/ancestor readback; neither a push exit status nor an uncertain model
-   judgment can override it.
+2. `source-judgment.v1`, using the shared `cf.verdict.v1` core, grades the exact source
+   tree independently of those checks. `overall=needs_work` requests correction under
+   the same task and claim; `uncertain` leaves the judgment unsettled while the foreman
+   reconciles the judge. Neither outcome stops the mechanical integration/publication
+   pipeline, neither publishes by itself, and unknown evidence is never rewritten as pass.
+3. `integrated-judgment.v1`, using the same verdict core, targets the integrated Change
+   and criterion Evidence are rebound to the same integrated tree after every merge/CAS
+   refresh. A failed integrated
+   gate or needs_work judgment requests correction; an unavailable model or harness
+   produces uncertain, leaves completion null, and does not suppress the independent
+   mechanical artifacts or an already proven remote publication.
+4. `publication.v1` must be `applied`, with expected_oid equal to observed_oid (or its
+   proven remote descendant), the accepted object's local_tree_digest equal to
+   remote_tree_digest, and every required postcheck pass. `failed` starts the declared
+   CAS/correction path. `unknown` leaves the row unsettled and invokes remote
+   marker/ancestor readback; neither a push exit status nor an uncertain model judgment
+   can override it.
 5. CT-13 validates the active claim, every task criterion Evidence, the applied parent
    publication and `closure-validator.v1`, then performs the same protected old-OID
    CAS as §15.2. It appends the complete row/event pair and reads the remote marker
@@ -602,6 +612,20 @@ active revision/claim/attempt and tested tree. In particular, a stale pass canno
 close the row early, and a stale fail cannot reopen a later valid closure. Releasing
 or blocking an abandoned attempt preserves all earlier evidence and requires the M2
 quiescence proof; it does not erase the correction lineage.
+
+The atomic claim operations are: validate the group against the pinned remote board;
+write all row/event pairs and the transaction marker in one candidate; CAS the protected
+old OID; fetch and verify the remote group receipt; then permit native starts. No member
+starts on a local claim file, and no staged guard, verdict or board closeout precedes
+the remote claim receipt. The settlement operations are staged guard, source verdict,
+integration/revalidation, integrated verdict, remote publication/readback, postchecks,
+closure CAS and remote closure readback, in that order.
+
+Conformance covers an accepted guard+verdict+publication, guard fail, needs_work,
+uncertain judgment, publication unknown, remote digest mismatch, stale claim generation,
+staged-tree mismatch and repeated settlement. CV-12-A pins the independent
+mechanical/model/publication cases. Each arm asserts the exact completion/null, side
+effect and correction lineage; an unavailable arm never emits success.
 
 ### 15.5 Board engine decision
 

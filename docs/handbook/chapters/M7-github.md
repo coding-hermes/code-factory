@@ -268,6 +268,14 @@ validation and secret-store headers, never token argv. Provider behavior is an e
 conformance requirement, not a measured mint in this chapter. [CT-21; GitHub REST,
 “Create an installation access token for an app”; GitLab Project access tokens API]
 
+Decision slot B-FORGE-ADAPTERS: the selected option is GitHub App plus GitLab project
+access tokens, with the provider-specific exchanges below. The alternatives are a
+GitHub-only MVP or an owner-approved additional adapter carrying this complete
+normalized contract and positive/negative vectors. The fail-closed default supports
+only the two named adapters; an unregistered provider, token mode or capability mapping
+returns PROVIDER_MODE_UNSUPPORTED/CAPABILITY_UNMAPPED before a provider call. Adding
+an adapter never silently generalizes GitHub semantics.
+
 | Adapter | Enrollment / issue / check / revoke |
 |---|---|
 | GitHub | Customer installs its own App and selects repositories. Issuer uses its App JWT for `GET /app/installations/{installation_id}`, checks account.id and installation.repository_selection against enrollment, then `POST /app/installations/{installation_id}/access_tokens` with exactly `{repository_ids: [integer], permissions: {contents: read or write}}`. Response 201 supplies token, expires_at, permissions and repositories; returned repository IDs and permissions must equal the requested restriction. Runtime token checks use `GET /installation/repositories`; revocation is `DELETE /installation/token` authenticated by that token, expected 204. API version header is `X-GitHub-Api-Version: 2022-11-28`; unsupported version refuses qualification. |
@@ -392,34 +400,33 @@ Lifecycle enforcement is:
    is QUIESCENCE_UNKNOWN/REVOCATION_UNKNOWN and blocks replacement that requires
    denial proof. Expiry alone is not revocation.
 
-All five operations emit M0 `cf.telemetry.v1` before acknowledgement with module M7,
-event_type `credential-issue`, `credential-check`, `credential-delivery`,
-`credential-renew` or `credential-revoke`, duration_ms and outcome. The payload adds
-bounded provider, bunker_id, operation, grant_id, request_id, project_id, task_id,
-attempt_id, expiry_headroom_seconds, refusal_code, mapping_generation and
-partial_activation_id as applicable. Missing task/attempt IDs are null only for
-control-plane enrollment/revocation. A scrape projects each event once by event_id;
-it never emits another operation.
+All five operations emit Part V `factory.telemetry.v1` before acknowledgement with
+module M7, event_type `credential-issue`, `credential-check`, `credential-delivery`,
+`credential-renew` or `credential-revoke`, operation issue/verify/deliver/renew/revoke,
+the closed global outcome set, reason, duration_ms and source_event_id. The event
+identity is FactoryIdentity; the payload adds bounded provider, bunker_id, grant_id,
+request_id, expiry_headroom_seconds, mapping_generation and partial_activation_id as
+applicable. Missing task/attempt IDs are null only for control-plane
+enrollment/revocation. No token value enters telemetry.
 
-At emission and at scrape, the five operation counters are
-`factory_operations_total{module="M7",operation="issue|verify|deliver|renew|revoke",
-outcome,project}` and durations are
-`factory_operation_duration_seconds{module="M7",operation,project}`.
-Check maps to global operation verify. Derived registered views are
-`factory_credential_expiry_headroom_seconds{module="M7",project,provider,bunker}`
+At emission and at scrape, base counters use exactly
+`factory_operations_total{module,operation,outcome,project}` and durations use
+`factory_operation_duration_seconds{module,operation,project}`. A successful revoke
+has outcome cancelled and reason cancelled. Global accepted comes only from an
+explicit accepted custody receipt. Derived registered views are
+`factory_credential_expiry_headroom_seconds{module,project,provider,bunker}`
 (minimum live headroom gauge),
-`factory_credential_scope_refusals_total{module="M7",project,provider,operation,
-reason}` (bounded refusal-code counter),
-`factory_mapping_stale{module="M7",project,provider,bunker}` (0/1 gauge), and
-`factory_partial_activations{module="M7",project,provider,bunker}` (current gauge).
-Provider/Bunker/reason are permitted only in those views; base labels are exactly
-module/operation/outcome/project. Global success maps to pass, failure to fail,
-refusal to refused, warning to unknown, and a successful credential-revoke terminal
-event to cancelled. Global accepted comes only from an explicit accepted custody
-receipt. M0's local 15 s telemetry read and the global collector's 10 s poll are
-independent read clocks. The collector stores source event_id/cursor durably,
-deduplicates retries/restarts, and derives freshness from the last new source event,
-not from a successful scrape.
+`factory_credential_scope_refusals_total{module,project,provider,operation,reason}`
+(bounded refusal-code counter), `factory_mapping_stale{module,project,provider,bunker}`
+(0/1 gauge), and `factory_partial_activations{module,project,provider,bunker}` (current
+gauge). Provider/Bunker/reason are permitted only in those views.
+
+The collector polls every 10 s, persists module/source_event_id/source_seq checkpoints,
+deduplicates retries/restarts and derives freshness from the last new source event,
+not a successful scrape. Missing source observations are unavailable, never zero.
+CV-11-A requires all five operations at emission and scrape with one duplicate event
+adding no count; CV-11-B requires missing observation to retain FactoryIdentity and
+ready=false.
 
 ## 19. Incomplete callbacks and provider outage (P6-12, P6-13)
 

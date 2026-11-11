@@ -345,6 +345,53 @@ M1/M7 provide read-only node access and broker-held publication scopes. Expiry o
 insufficient scope refuses. M0 §16.1 specifies metric types/labels; project, target
 and policy generation are event fields, not unbounded metric labels.
 
+### 16.1 Change, criterion and mechanical-gate records (P6-03, P6-13)
+
+Change is `{id:ID,task_id:ID,claim_generation:UInt,run_id:ID,base:GitOID,
+head:GitOID,tree_digest:SHA,worktree_ref:EvidenceRef,publication_ref:EvidenceRef|null,
+created_at:Time}`. Its immutable revision binds one attempt's staged evidence; it is
+not another name for a board revision. **Criterion** is exactly the shared
+`{id:ID,text:string,verification:string,argv:string[1..64],cwd:string,timeout_s:UInt,
+expected_exit:Int,oracle_digest:SHA256}` from M0 §16.2 and
+`contract-vectors.json/common_identities.criterion`; description is only a display alias
+for text and is not serialized. A predicate accepts text, verification, an executable
+argv, bounded cwd/timeout, expected exit and a digest of the named source oracle.
+Self-authored PASS text alone is not evidence.
+
+A staged-guard execution binds `{task_id,claim_generation,run_id,base,head,tree_digest}`.
+It refuses an unbound or changed staged set with `STAGED_IDENTITY_MISMATCH`, records
+each check's measured output as EvidenceRef and emits `staged-guard.v1` with overall
+pass/fail/unavailable. An unavailable prerequisite is unknown, never pass. The guard
+artifact is an input to review, not a model verdict. CV-04-A carries the Criterion bytes;
+CV-12-A covers the mechanical/model/publication matrix.
+
+### 16.2 Independent review verdict (P6-03, P6-13)
+
+The independent reviewer receives the Change, accepted Criterion set, staged-guard
+artifact and exact staged tree. It emits the shared `cf.verdict.v1`; `overall=accept`
+requires every applicable criterion `status=pass`, every required staged-guard check
+pass, matching run/change/tree identity and reviewer_id distinct from the implementer.
+A failed criterion yields needs_work; missing/unavailable evidence yields uncertain.
+Neither uncertain nor needs_work is FAIL mechanical-gate output. Model judgment never
+rewrites the mechanical artifact. Acceptance evaluates criterion results and source
+evidence; prose confidence is not a substitute. Section 17.1 adds the publication-policy
+fields to the same verdict.
+
+### 16.3 Publication and post-publication pipeline (P6-13)
+
+1. The accepted Change and verdict enter `cf.landing.v1`; §17.2 binds accepted_verdict_ref,
+   base, source and integration identity before an effect.
+2. Integration creates or confirms the expected_oid/tree_digest, revalidates a changed
+   tree and persists the publication request before push.
+3. The publisher compares remote base, applies the accepted object and records push_error
+   without treating HTTP success as remote evidence.
+4. A fresh fetch names observed_oid/observed_tip and remote_tree_digest. The exact object
+   or its proven descendant is accepted; the accepted object's own tree must match.
+5. Required postchecks run against that remote object. publication.v1 becomes applied
+   only when identity, tree and postchecks pass; a lost response stays unknown.
+6. Only then M4 §15 settles the board row. `PUBLISH_UNPROVEN`, `STALE_TARGET`,
+   `MERGED_NOT_PUBLISHED` and `RETRY_EXHAUSTED` retain their separate states.
+
 ## 17. P5 gate policy, publication recovery and evidence custody
 
 This section resolves P5-B-23–27. Part I §1.9.7 owns the four publication modes;
@@ -375,23 +422,27 @@ silent SKIP. Default timeouts are secrets/lint/board-validator=120 s,
 tests/build=1800 s, judge=600 s. Each record states applicability evaluated against
 the source/integration delta; changing the base invalidates all integrated-tree checks.
 
-Judge result is `{schema_version:"cf.verdict.v1",run_id:ID,reviewer_id:ID,
+Judge result extends the shared `cf.verdict.v1` core: `{schema_version:"cf.verdict.v1",
+run_id:ID,reviewer_id:ID,target:{change_id:ID,tree_digest:SHA},
 source_commit:GitOID,integration_commit:GitOID,tree_digest:SHA,policy_digest:SHA,
-criteria_digest:SHA,outcome:PASS/FAIL/UNVERIFIED,checks:CheckResult[],
-criteria:[{id:ID,outcome:PASS/FAIL/UNVERIFIED,evidence_refs:EvidenceRef[]}],
-observed_at:Time,expires_at:Time,evidence_refs:EvidenceRef[]}`. CheckResult is
-`{id:ID,outcome:PASS/FAIL/UNVERIFIED/SKIP,exit_code:integer|null,duration_ms:UInt,
+criteria_digest:SHA,criterion_results:[{id:ID,status:pass/fail/unknown,
+evidence:EvidenceRef[]}],overall:accept/needs_work/uncertain,claims:string[],
+limitations:string[],created_at:Time,checks:CheckResult[],observed_at:Time,
+expires_at:Time,evidence_refs:EvidenceRef[]}`. CheckResult is
+`{id:ID,status:pass/fail/unknown/skip,exit_code:integer|null,duration_ms:UInt,
 evidence_ref:EvidenceRef,error:Error|null}`. Signal/timeout/missing result is
-UNVERIFIED, not exit 0. Every required criterion/check must PASS; the reviewer is
-not the implementer principal and verifies actual bytes, not a worker's summary.
+unknown, not exit 0. Every required criterion/check must pass and overall must be
+accept; the reviewer is not the implementer principal and verifies actual bytes,
+not a worker's summary.
 
 Exception is a signed owner record `{policy_digest,check_id,artifact_digest,
 approver_id,reason,issued_at,expires_at,signature}` with maximum 24 h lifetime.
 The approver is in exception_approvers and the offline owner trust set. Default
 exception_approvers is empty. Evidence identity, secret protection, fence validation,
 publication readback and independent criteria judgment are never waivable. A permitted
-exception yields `ACCEPTED_WITH_EXCEPTION`, visibly distinct from PASS, and closure
-records its digest. Decision slot B-GATES: qualify installed GitReins 0.17.1 with
+exception yields publication qualification `ACCEPTED_WITH_EXCEPTION`, visibly distinct
+from an unqualified accept; the verdict's overall field remains accept and closure
+records the exception digest. Decision slot B-GATES: qualify installed GitReins 0.17.1 with
 this policy or adopt a newer signed-lock release; default blocks production
 qualification until negative hook and judge fixtures pass. Installed version is not
 upstream compatibility evidence; no undocumented auto-upgrade occurs.

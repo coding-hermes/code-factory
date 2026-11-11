@@ -428,7 +428,9 @@ without a model call and never exposes credential metadata.
 
 SSE uses Content-Type text/event-stream, UTF-8, each record terminated by two LF bytes.
 Text/tool chunks have `event: delta` then `data: <one-line canonical JSON>` with
-`{id,seq,choices:[{index:0,delta,finish_reason}]}`. seq starts at 0 and increases;
+`{id,seq,choices:[{index:0,delta,finish_reason}]}`. seq starts at 0 and increases by
+exactly 1 per sequenced event record; zero is the native protocol origin and is not
+configurable; legacy adapters may add 1 at their boundary.
 delta contains content string, role assistant, or tool_calls fragments
 `{index,id,type:function,function:{name,arguments}}`; indices join fragments and
 arguments strings concatenate in order. finish_reason is null until final delta.
@@ -501,12 +503,13 @@ missing usage, identity mismatch or terminal-after-terminal is
 UPSTREAM_PROTOCOL_ERROR. Recovery GET uses request_id; a new id never disguises a
 retry.
 
-M12 emits M0 `cf.telemetry.v1` before acknowledgement for event_type `inference`,
-`response-lookup`, `capture`, `credential-issue`, `credential-renew` and
-`credential-revoke`, with module M12, duration_ms and outcome. Payload carries
-request_id, project_id, attempt_id, nullable task_id, route, chosen/resolved/served
-model, upstream_id, token_id (never bearer), expiry_headroom_seconds, input/output/
-total tokens, cost_micro_usd, estimated, state, refusal/error code and capture_ref.
+M12 emits Part V `factory.telemetry.v1` before acknowledgement for event_type
+`inference`, `response-lookup`, `capture`, `credential-issue`, `credential-renew` and
+`credential-revoke`, with module M12, FactoryIdentity, source_event_id/source_seq,
+duration_ms and the closed global outcome set. Payload carries request_id, project_id,
+attempt_id, nullable task_id, route, chosen/resolved/served model, upstream_id,
+token_id (never bearer), expiry_headroom_seconds, input/output/total tokens,
+cost_micro_usd, estimated, state, refusal/error code and capture_ref.
 Global operations map inference→infer, response-lookup→verify, capture→capture and
 credential events→issue/renew/revoke. Base counters use exactly
 module/operation/outcome/project labels; duration histograms use exactly
@@ -516,9 +519,10 @@ module/operation/project labels. Derived views are
 `factory_inference_unsettled{module="M12",project}` and
 `factory_upstream_errors_total{module="M12",project,code}` with code from the bounded
 Part I/provider error registry. Model, route, token_id, request/attempt/task IDs stay
-in payload, never base labels. V.10's durable event_id cursor deduplicates emission,
-retry, scrape and restart; one request event counted twice is a projection defect.
-Reads/scrapes emit nothing and do not refresh the last-operation timestamp.
+in payload, never base labels. V.10's durable module/source_event_id/source_seq cursor
+deduplicates emission, retry, scrape and restart; one request event counted twice is
+a projection defect. Read-only GETs and scrapes emit nothing and do not refresh the
+last-operation timestamp.
 
 ## RED field count: 4 (Metrics §8 — absence-proved; CT-19 node-client half UNVERIFIED; CT-20 upstream half UNVERIFIED — one-sided external boundary; stream completion **FAILING** — F12-7 reproduced, and a first-byte-only flight card cannot close it)
 

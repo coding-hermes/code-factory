@@ -456,6 +456,31 @@ duplicate-emission readback, a restart readback and an emitted-versus-scraped
 count comparison. Existing M0-M6 telemetry is the measured baseline, not proof
 that M7-M12 already emit the global series. [CT-23/30; V.10; CV-11-A/B.]
 
+### 16.2 Shared evidence, verdict and publication vocabulary (P6-13)
+
+**EvidenceRef** is the URI string `cas+sha256://<namespace>/<64-lowercase-hex>`;
+its digest names immutable raw bytes. A release artifact may instead use its Part IV
+artifact URI. **Criterion** is
+`{id:ID,text:string,verification:string,argv:string[1..64],cwd:string,
+timeout_s:UInt,expected_exit:Int,oracle_digest:SHA256}`; `common_identities.criterion`
+is the complete fixture. **staged-guard.v1** is `{task_id,claim_generation,
+staged_tree_digest:SHA,status:pass/fail/unavailable,checks:[{name,status,started_at,
+finished_at,evidence_ref:EvidenceRef}]}` and records only mechanical checks on the staged
+tree. **cf.verdict.v1** is `{run_id:ID,reviewer_id:ID,target:{change_id:ID,tree_digest:SHA},
+criterion_results:[{id:ID,status:pass/fail/unknown,evidence:EvidenceRef[]}],
+overall:accept/needs_work/uncertain,claims:string[],limitations:string[],created_at:Time}`.
+It does not execute a gate or push and never converts unknown evidence to pass.
+
+**publication.v1** is `{run_id,change_id,tree_digest:SHA,remote_repository:GitURI,
+base_oid:GitOID,expected_oid:GitOID,observed_oid:GitOID|null,remote_tree_digest:SHA|null,
+status:requested/applied/failed/unknown,push_error:string|null,
+postchecks:[{name,status:pass/fail/unknown}],observed_at:Time|null,uncertainty:string|null}`.
+After an accepted verdict, an out-of-worktree publication sends the expected tree and
+accepted verdict reference to a publisher. Applied requires expected_oid=observed_oid,
+matching tree digests and all required postchecks=pass; HTTP success alone is insufficient.
+A push timeout leaves unknown and never writes failed by inference. Part IV retains the
+complete records; M3 §16 and M4 §15 own their execution and settlement.
+
 ## RED field count: 1 (Metrics §8)
 
 ## FLIGHT DATA FILE - M0 SHARED CONTRACT
