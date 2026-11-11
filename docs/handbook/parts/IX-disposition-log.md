@@ -284,3 +284,65 @@ acceptance. Those evidence boundaries remain explicit in the final two columns.
 The integrated build receipt is recorded above for P4-14 and P4-15. It closes
 mechanical artifact build evidence only; no source correction above is represented
 as a passed runtime-conformance or owner-acceptance result.
+
+## IX.9 Pass-5 wave C dispositions
+
+Review source is `/tmp/p5-review-C.json`, P5-C-01 through P5-C-38. Source revision
+C is `aef60687be3fd73f6dd026d49cbeace8b7bd4018`; A is
+`b26d2ecc494664322f339aa499d9b38a13179d78` (the immutable wave-A commit on origin/main). C changes only M7–M12 and
+Parts V–IX. Each ADOPTED row records a specification repair, not independent semantic
+approval or runtime conformance. Runtime tests and owner acceptance are NOT RUN/OPEN
+for every row. Mechanical lint is clean; the final artifact receipt accompanies the
+published PDF, not an invented self-referential build hash inside it.
+
+The bounded integration wait observes A landed and B absent through 2026-11-11
+19:36 UTC; the wait cap is exhausted. Cross-wave requirements remain explicitly
+UNRESOLVED until the register's wave-B correction is verified. The revision links
+below identify actual source bytes, not “this commit” placeholders. Owner of remaining
+artifact qualification is the deployment/release owner; owner of cross-register
+integration is wave B. The next review rechecks all residuals before accepted release.
+
+| Finding | Disposition | Resolving source / replacement contract | Evidence boundary or residual |
+|---|---|---|---|
+| P5-C-01 | UNRESOLVED | C: M9.15, M10.15, VII.13/18; A: I.1.9.1 | C aliases removed; IV's target envelope/cards still await wave B, so cross-book parity is not claimed |
+| P5-C-02 | ADOPTED | C: M9.15, M11.16, VII.13/18 | No future worker IDs at admission; launching foreman owns dispatch/launch IDs |
+| P5-C-03 | ADOPTED | C: V.9 | Recursive types, requiredness, bounds, duplicate/extension rules and refusal codes; validator implementation not claimed |
+| P5-C-04 | ADOPTED | C: V.9 | Missing controls have accepted paths, activation scope, mapping/readback and unsupported-adapter refusal |
+| P5-C-05 | ADOPTED | C: V.4/V.7 | events secret bundle separates destination URL from rotating HMAC key references |
+| P5-C-06 | ADOPTED | C: V.0.2; A: I.1.9.1/3 | Whole-document generation CAS, factory-control scope, mTLS principal and retired aliases |
+| P5-C-07 | ADOPTED | C: M10.16 | Exact five-line digest/audience transcript, hex signature, enrollment, key generation and replay window |
+| P5-C-08 | ADOPTED | C: V.0.3/V.4 | HMAC bytes, signed delivery time, key rotation, jitter and blocked contiguous cursor |
+| P5-C-09 | ADOPTED | C: M9.16 | Ordered predicate/allocation, priority aging, reservation and bytewise tie-break rules |
+| P5-C-10 | ADOPTED | C: M9.17; VI.34 | Typed records, transaction groups, outbox ownership and restart queries |
+| P5-C-11 | ADOPTED | C: M9.18 | Hook plan, fd input/output, ordering, timeout, retries and durable required-hook receipts |
+| P5-C-12 | ADOPTED | C: M10.16 | Poll-key replay, renew/release/ack, expiry reconciliation and dedupe retention |
+| P5-C-13 | ADOPTED | C: M11.16 | Preassigned launch ID, atomic start permit, authoritative lookup, capture and cancellation |
+| P5-C-14 | ADOPTED | C: M9.17; V.9; VII.12 | Reserved-to-charged atomic accounting, uncertain-start hold and bounded attempts |
+| P5-C-15 | ADOPTED | C: VII.18 | Failure branch permits null commit/empty artifacts with typed error, never invented output |
+| P5-C-16 | UNRESOLVED | C: VII.15.1; VI.13 | Foreman/Boardctl field names and partial-write rule corrected here; IV CT-10 awaits B reconciliation |
+| P5-C-17 | ADOPTED | C: M7.17; VI.35.2; A: I.1.9.3 | Broker-only credentials and effect intents serialize all four resources with epoch advance |
+| P5-C-18 | ADOPTED | C: M8.16 | Shared hold/tombstone transaction, private trash, immutable inventory and resumable per-target cursor |
+| P5-C-19 | ADOPTED | C: V measured M8 inventory | Cache TTL 24 h, aged=True and newest subtree mtime agree with M8/CF-290 |
+| P5-C-20 | ADOPTED | C: M7.16 | Supported GitHub/GitLab modes, endpoints, permissions, provider/local fields and errors; external conformance NOT RUN |
+| P5-C-21 | ADOPTED | C: M7.15/16 | Separate mapping/credential states, operation-key rotation, atomic activation and uncertain-mint recovery |
+| P5-C-22 | ADOPTED | C: M12.16 | mTLS admin operations, random token/hash, encrypted installer handoff, activation and revocation |
+| P5-C-23 | ADOPTED | C: M12.16; V.9 | Shared serializable budget/slot reservation, price units, unknown-spend charging and restart recovery |
+| P5-C-24 | ADOPTED | C: M12.17 | Closed messages/options/tools, model list, buffered and SSE records, timeout table and adapter behavior |
+| P5-C-25 | ADOPTED | C: M12.16/17 | Usage/result transaction precedes complete; unsettled error and response-ID lookup close crash window |
+| P5-C-26 | ADOPTED | C: VI.35.1; V.9 | Coordinated barrier, per-store snapshot/validation, typed manifest, schedule and partial-cut policy |
+| P5-C-27 | ADOPTED | C: VI.35.2; A: I.1.9.3 | Independent non-rollback authority; older restore cannot reactivate tokens; authority loss refuses or requires proven revoke-all |
+| P5-C-28 | ADOPTED | C: VII.18.1; V.9 | Record layout/types, digest scope, socket API, deterministic namespace union, conflict linkage and freshness |
+| P5-C-29 | ADOPTED | C: VII.18.2 | Local durability permits report, not settlement; quiescent capacity releases while lane remains pending memory |
+| P5-C-30 | ADOPTED | C: V.9 | Whole-harness wall, round/tick ceilings, explicit reserves and lease-renewal inequality |
+| P5-C-31 | DEFERRED | C: M11.17; M12.15 | Exact reproducible issuer/dispatcher/proxy artifacts do not exist in supplied evidence. Owner selects maintained release or commissions replacement; default BLOCKED; no fabricated hashes |
+| P5-C-32 | ADOPTED | C: V.10 | Collector endpoint, bounded labels, buckets, windows, persistent counters and unknown/stale readiness |
+| P5-C-33 | ADOPTED | C: M8.16; V.9 | Qualified isolation floor, immutable jail policy schema, covered executor paths and bypass-denial readback |
+| P5-C-34 | ADOPTED | C: VIII.10/15 | Seven-stage manifest and exact draft/accepted/refused predicate; evaluator implementation remains a target |
+| P5-C-35 | ADOPTED | C: IX.7/8; VIII.15 | Exact historical commits replace placeholders; prior COMPLETE claims corrected; runtime/build/owner evidence separated |
+| P5-C-36 | ADOPTED | C: VI.13/30/31/36; V.9; VII.18 | Foreman/sync ownership and local durability agree across recovery tables |
+| P5-C-37 | ADOPTED | C: M7/M8 register notes; VI.0/36; VIII.1/2 | CT-01..30 plus CT-06R, unique R-33, nine parts and dash-dot UNVERIFIED legend |
+| P5-C-38 | ADOPTED | C: VII.18 | Typed initiative/task/criterion/evidence/acceptance records, deterministic compatible waves and cancellation authority |
+
+This disposition is a specification draft: unresolved cross-register integration,
+artifact qualification, independent completeness review, runtime conformance and owner
+acceptance are not concealed by the mechanically buildable document.
