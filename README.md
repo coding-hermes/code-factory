@@ -334,9 +334,6 @@ run may differ, so use the census above as the authority rather than treating th
 current scheduler state.
 
 ch:trace row=CF-188 spec=README.md#the-lanes wave=code-factory-readme-2026-11-11-10-03-09#CF-188 test=bash-tests/selftest.sh::selftest doc=README.md evidence=README.md witness=README.md#the-lanes verdict=none:foreman-judges-after-merge commit=none:self-referential-hash memory=none:not-written
-STATUS: complete | partial | blocked
-TIER: T1
-EVIDENCE: README.md#the-lanes
 
 Evidence for the state of this README: the clone figure is covered by the published audit `docs/audits/code-factory-readme-2026-10-30-20-29-25.md`; the prompt column and the eleven-file/layout census are covered by the published audit `docs/audits/code-factory-readme-2026-10-30-23-28-00.md` (whose command transcript is the `.probe.txt` beside it).
 
