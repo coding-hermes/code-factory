@@ -7096,6 +7096,60 @@ fi
 rm -rf "$cf224"
 # END cf224-transport
 
+# ch:trace row=CF-063 spec=specs/NODE.md#verifier-usage test=tests/selftest.sh::cf063-verify-node-usage doc=docs/handbook/chapters/M1-provisioning.md evidence=tests/selftest.sh::cf063-verify-node-usage witness=none:offline-fixture verdict=none:foreman-runs-judge commit=none:worker-sha memory=none:foreman-closeout STATUS=complete TIER=1 EVIDENCE=offline-fixture
+# CF-063: the usage contract must be decided before BUNKER_SERVER, port, transport, or bunker use.
+# The pre-fix source is run from the pinned base revision in an isolated prefix; the fixed source
+# is exercised through its real adjacent lib.sh. Each outcome names the captured exit code and the
+# exact first line, so a substring-only or shell-crash result cannot satisfy this arm.
+say "  CF-063 verify-node usage is parse-first, environment-independent, and operational refusal remains named"
+cf063=$(mktemp -d)
+mkdir -p "$cf063/prefix/scripts" "$cf063/prefix/home"
+if git -C "$HERE" show 5e112be2e7da734fa5fa3faec915ca1f58328229:scripts/verify-node.sh > "$cf063/prefix/scripts/verify-node.sh" 2>/dev/null \
+  && cp "$HERE/scripts/lib.sh" "$cf063/prefix/scripts/lib.sh"; then
+  chmod +x "$cf063/prefix/scripts/verify-node.sh"
+  cf063_old_out=$(env -i PATH="$PATH" HOME="$cf063/prefix/home" /bin/bash "$cf063/prefix/scripts/verify-node.sh" --help 2>&1); cf063_old_rc=$?
+  if [ "$cf063_old_rc" -eq 2 ] && printf '%s\n' "$cf063_old_out" | grep -Fxq 'unknown arg: --help'; then
+    say "  PASS  CF-063 pre-fix verifier -> exit $cf063_old_rc, named unknown-arg control"
+  else
+    say "  FAIL  CF-063 pre-fix verifier did not reproduce unknown --help (exit $cf063_old_rc): $(printf '%s\n' "$cf063_old_out" | head -1)"
+    fails=$((fails+1))
+  fi
+else
+  say "  FAIL  CF-063 pre-fix source unavailable from 5e112be2:scripts/verify-node.sh"
+  fails=$((fails+1))
+fi
+cf063_usage_line="usage: $HERE/scripts/verify-node.sh --agent ID [--server NAME] [--port P] [--transport T [--transport-address HOST:PORT]] [--artifact PATH] [--strict-freshness] [--strict-seed]"
+cf063_check_usage() { # cf063_check_usage <label> [VAR=value ...] [script args...]
+  local label="$1" got rc2 first arg
+  local -a env_args=()
+  shift
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      *=*) env_args+=("$1"); shift ;;
+      *) break ;;
+    esac
+  done
+  got=$(env -i PATH="$PATH" HOME="$cf063/prefix/home" "${env_args[@]}" /bin/bash "$HERE/scripts/verify-node.sh" "$@" 2>&1); rc2=$?
+  first=$(printf '%s\n' "$got" | head -1)
+  if [ "$rc2" -eq 2 ] && [ "$first" = "$cf063_usage_line" ]; then
+    say "  PASS  CF-063 $label -> usage, exit $rc2"
+  else
+    say "  FAIL  CF-063 $label -> exit $rc2, first line: $first"
+    fails=$((fails+1))
+  fi
+}
+cf063_check_usage bare
+cf063_check_usage help --help
+cf063_check_usage help-with-server BUNKER_SERVER=fixture --help
+cf063_operational=$(env -i PATH="$PATH" HOME="$cf063/prefix/home" /bin/bash "$HERE/scripts/verify-node.sh" --agent fixture 2>&1); cf063_operational_rc=$?
+if [ "$cf063_operational_rc" -eq 2 ] && printf '%s\n' "$cf063_operational" | grep -Fxq 'set BUNKER_SERVER or pass --server <name>'; then
+  say "  PASS  CF-063 operational invocation -> exit $cf063_operational_rc, missing-server refusal names BUNKER_SERVER"
+else
+  say "  FAIL  CF-063 operational invocation lost its missing-server refusal (exit $cf063_operational_rc): $(printf '%s\n' "$cf063_operational" | head -1)"
+  fails=$((fails+1))
+fi
+rm -rf "$cf063"
+
 # ch:trace row=CF-211 spec=specs/ENVELOPE.md#result-node--reply_to-inbox wave=none:serial-worker test=tests/test_bus_result_delivery.py doc=specs/ENVELOPE.md prompt=none:worker-brief evidence=tests/test_bus_result_delivery.py witness=none:local-fixture verdict=none:foreman-runs-judge commit=none:self-referential-hash memory=none:foreman-closeout
 say "63. a node result completes a tick, fails one, and a wrong corr_id completes nothing (CF-211)"
 # The scheduler always had the RECEIVING half: dispatch_leg.go polls its own inbox, correlates by
