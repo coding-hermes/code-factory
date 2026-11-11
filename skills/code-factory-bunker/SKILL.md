@@ -179,7 +179,11 @@ ever printed, logged, or passed as an argument. `$HOME/.node/node.json` carries 
 
 ## GitHub App credential mode
 
-Set `GITHUB_AUTH_MODE=app` to mint a scoped GitHub App installation token on the control host before provisioning. The node receives only the token, stored at mode 600; the private key never leaves the control host. Installation tokens expire after 3600 seconds, so `scripts/github-app-refresh.sh --node <agent> --server <host> --min-age 2400` must run from a control-host timer every 20 minutes. `--check` must prove the fresh token reads the target repository before any apply is trusted.
+Set `GITHUB_AUTH_MODE=app` to mint a scoped GitHub App installation token on the control host before provisioning. The node receives only the token, stored at mode 600; the private key never leaves the control host. A node will lose push rights 3600s after provisioning without refresh. `--check` must prove the fresh token reads the target repository before any apply is trusted.
+
+Provisioning installs and enables a per-node timer. To install its units manually, run `scripts/github-app-refresh.sh --install-timer --node <agent> --server <host>`, then run the printed `systemctl --user enable --now` command. Without systemd-user, add this control-host cron entry (replace `<absolute-script-path>` with the absolute path to `scripts/github-app-refresh.sh`):
+
+`*/20 * * * * <absolute-script-path> --node <agent> --server <host> --min-age 2400 --quiet`
 
 Permission table:
 

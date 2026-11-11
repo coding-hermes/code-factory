@@ -178,6 +178,23 @@ resolve_github_auth() {
   esac
 }
 
+arm_github_app_refresh() {
+  local refresh_out refresh_rc cron_line
+  say "  ..    arming GitHub App refresh timer"
+  refresh_out=$("$HERE/github-app-refresh.sh" --install-timer --node "$AGENT" --server "$SERVER" --min-age 2400 2>&1)
+  refresh_rc=$?
+  printf '%s\n' "$refresh_out" | sed 's/^/  ..    /'
+  if [ "$refresh_rc" -eq 0 ]; then
+    if "${CF_SYSTEMCTL:-systemctl}" --user enable --now "cf-github-app-refresh-$AGENT.timer"; then
+      ok "github_app_refresh" "refresh timer enabled for $AGENT (20-minute cadence)"
+      return 0
+    fi
+  fi
+  cron_line="*/20 * * * * $HERE/github-app-refresh.sh --node $AGENT --server $SERVER --min-age 2400 --quiet"
+  warn "github_app_refresh" "timer installation or enable failed; add this cron entry: $cron_line"
+  return 1
+}
+
 # --- check: read-only, every row names what it measured --------------------------------------
 bunker_ok=0
 check() {
@@ -502,6 +519,10 @@ apply() {
   if [ -n "$GITHUB_APP_TOKEN_TMP" ]; then
     rm -f "$GITHUB_APP_TOKEN_TMP" "${GITHUB_APP_TOKEN_TMP}.log"
     GITHUB_APP_TOKEN_TMP=""
+  fi
+
+  if [ "$GITHUB_AUTH_MODE" = app ] && [ "$rc" -eq 0 ]; then
+    arm_github_app_refresh || rc=1
   fi
 
   # 3. crier identity BEFORE provisioning: the node's bus layer refuses without it

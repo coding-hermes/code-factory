@@ -7362,6 +7362,47 @@ chmod 600 "$cf238/api.env"
 out=$(bash "$HERE/scripts/github-app-setup.sh" --check --env-file "$cf238/api.env" --repo fixture/repo --api-base "$cf238_api" 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  repo_read — GET /repos/fixture/repo -> 403' && ! printf '%s\n' "$out" | grep -q 'SETUP: PASS'; then say "  PASS  repository token 403 -> named repo_read FAIL, no setup PASS"; else say "  FAIL  repository token 403 was not a verdict (exit $rc)"; fails=$((fails+1)); fi
 kill "$cf238_api_pid" 2>/dev/null; wait "$cf238_api_pid" 2>/dev/null
+
+# CF-238 timer installation uses only fixture HOME and fixture command stubs.
+mkdir -p "$cf238/home" "$cf238/bin"
+printf '#!/bin/sh\n[ "$1" = info ]\n' > "$cf238/bin/bunker"
+printf '#!/bin/sh\nexit 0\n' > "$cf238/bin/systemctl-ok"
+printf '#!/bin/sh\nexit 1\n' > "$cf238/bin/systemctl-fail"
+chmod 755 "$cf238/bin/"*
+cf238_service="$cf238/home/.config/systemd/user/cf-github-app-refresh-fixture-node.service"
+cf238_timer="${cf238_service%.service}.timer"
+out=$(HOME="$cf238/home" PATH="$cf238/bin:$PATH" CF_SYSTEMCTL="$cf238/bin/systemctl-ok" bash "$HERE/scripts/github-app-refresh.sh" --install-timer --node fixture-node --server fixture-server 2>&1); rc=$?
+if [ "$rc" -eq 0 ] && [ "$(stat -c %a "$cf238_service" 2>/dev/null)" = 644 ] && [ "$(stat -c %a "$cf238_timer" 2>/dev/null)" = 644 ] && grep -Fq -- '--node fixture-node --server fixture-server --min-age 2400 --quiet' "$cf238_service" && grep -Fxq 'OnUnitActiveSec=20min' "$cf238_timer"; then
+  say "  PASS  CF-238 timer installation writes both units with node, server, age, cadence, mode"
+else
+  say "  FAIL  CF-238 timer installation: $out"; fails=$((fails+1))
+fi
+cf238_before=$(sha256sum "$cf238_service" "$cf238_timer" 2>/dev/null)
+out=$(HOME="$cf238/home" PATH="$cf238/bin:$PATH" CF_SYSTEMCTL="$cf238/bin/systemctl-ok" bash "$HERE/scripts/github-app-refresh.sh" --install-timer --node fixture-node --server fixture-server 2>&1); rc=$?
+cf238_after=$(sha256sum "$cf238_service" "$cf238_timer" 2>/dev/null)
+if [ "$rc" -eq 0 ] && [ -n "$cf238_before" ] && [ "$cf238_before" = "$cf238_after" ] && printf '%s\n' "$out" | grep -q unchanged; then
+  say "  PASS  CF-238 second timer installation leaves both hashes unchanged"
+else
+  say "  FAIL  CF-238 timer idempotence: $out"; fails=$((fails+1))
+fi
+out=$(HOME="$cf238/home" PATH="$cf238/bin:$PATH" CF_SYSTEMCTL="$cf238/bin/systemctl-fail" bash "$HERE/scripts/github-app-refresh.sh" --install-timer --node fixture-failure --server fixture-server 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'FAIL  install_timer' && printf '%s\n' "$out" | grep -q 'unarmed' && ! printf '%s\n' "$out" | grep -Eq 'PASS|success|enabled'; then
+  say "  PASS  CF-238 failed daemon-reload refuses and names unarmed timer"
+else
+  say "  FAIL  CF-238 daemon-reload refusal: $out"; fails=$((fails+1))
+fi
+out=$(HOME="$cf238/home" PATH="$cf238/bin:$PATH" bash "$HERE/scripts/github-app-setup.sh" --check --node fixture-node --env-file "$cf238/missing.env" --api-base http://127.0.0.1:9 2>&1)
+if printf '%s\n' "$out" | grep -q 'PASS  refresh.*fixture-node'; then
+  say "  PASS  CF-238 setup check accepts matching node and 20-minute cadence"
+else
+  say "  FAIL  CF-238 setup check matching timer: $out"; fails=$((fails+1))
+fi
+out=$(HOME="$cf238/home" PATH="$cf238/bin:$PATH" bash "$HERE/scripts/github-app-setup.sh" --check --node fixture-other --env-file "$cf238/missing.env" --api-base http://127.0.0.1:9 2>&1)
+if printf '%s\n' "$out" | grep -q 'WARN  refresh.*different node.*fixture-other'; then
+  say "  PASS  CF-238 setup check warns on wrong node"
+else
+  say "  FAIL  CF-238 setup check wrong-node mismatch: $out"; fails=$((fails+1))
+fi
 rm -rf "$cf238"
 
 say ""

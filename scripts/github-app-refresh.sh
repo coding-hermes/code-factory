@@ -5,6 +5,10 @@
 #   github-app-refresh.sh --local                        # refresh this host's own token file
 #   github-app-refresh.sh --node cf-node --server b-01   # mint here, install into the node
 #   github-app-refresh.sh --node cf-node --server b-01 --min-age 2400 --quiet
+#   github-app-refresh.sh --install-timer --node cf-node --server b-01 [--interval 20min]
+#
+# --install-timer writes a user systemd service and timer, but never mints a token. CF_SYSTEMCTL
+# is a test-only override for the systemctl executable (default: systemctl).
 #
 # Two modes, one rule: the App PRIVATE KEY never leaves the control host. The node only ever
 # holds a token that dies within the hour, so a node compromise costs at most one hour of
@@ -26,10 +30,13 @@ TOKEN_FILE=""
 NODE=""
 SERVER=""
 MIN_AGE=2400
+INTERVAL="20min"
 GIT_CREDENTIALS="$HOME/.git-credentials"
 LOCAL=0
 DRY=0
 QUIET=0
+INSTALL_TIMER=0
+CF_SYSTEMCTL="${CF_SYSTEMCTL:-systemctl}"
 API_BASE="${GITHUB_API_BASE:-}"
 
 usage() { sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-2}"; }
@@ -41,9 +48,11 @@ while [ $# -gt 0 ]; do
     --node) NODE="${2:-}"; shift 2 ;;
     --server) SERVER="${2:-}"; shift 2 ;;
     --min-age) MIN_AGE="${2:-}"; shift 2 ;;
+    --interval) INTERVAL="${2:-}"; shift 2 ;;
     --git-credentials) GIT_CREDENTIALS="${2:-}"; shift 2 ;;
     --api-base) API_BASE="${2:-}"; shift 2 ;;
     --local) LOCAL=1; shift ;;
+    --install-timer) INSTALL_TIMER=1; shift ;;
     --dry-run) DRY=1; shift ;;
     --quiet) QUIET=1; shift ;;
     -h|--help) usage 0 ;;
@@ -52,7 +61,50 @@ while [ $# -gt 0 ]; do
 done
 case "$MIN_AGE" in ''|*[!0-9]*) say "--min-age must be a number of seconds"; exit 2 ;; esac
 
+
 say_q() { [ "$QUIET" -eq 1 ] || say "$@"; }
+
+install_timer() {
+  local unit_dir="$HOME/.config/systemd/user" service_name timer_name service timer
+  service_name="cf-github-app-refresh-$NODE.service"
+  timer_name="cf-github-app-refresh-$NODE.timer"
+  service="$unit_dir/$service_name"
+  timer="$unit_dir/$timer_name"
+  local service_body timer_body script_path
+  script_path="$HERE/github-app-refresh.sh"
+  service_body=$(printf '[Unit]\nDescription=Refresh the GitHub App installation token for %s\n\n[Service]\nType=oneshot\nExecStart=%s --node %s --server %s --min-age %s --quiet\n' "$NODE" "$script_path" "$NODE" "$SERVER" "$MIN_AGE")
+  timer_body=$(printf '[Unit]\nDescription=Refresh the GitHub App installation token for %s\n\n[Timer]\nOnBootSec=5min\nOnUnitActiveSec=%s\nUnit=%s\n\n[Install]\nWantedBy=timers.target\n' "$NODE" "$INTERVAL" "$service_name")
+  if [ "$DRY" -eq 1 ]; then
+    say "$service"
+    printf '%s\n' "$service_body"
+    say "$timer"
+    printf '%s\n' "$timer_body"
+    return 0
+  fi
+  local b
+  b=$(have bunker) || { bad "install_timer" "the bunker client is not on PATH"; return 1; }
+  "$b" info "$NODE" --server "$SERVER" >/dev/null 2>&1 || { bad "install_timer" "$NODE not found on $SERVER (bunker info failed)"; return 1; }
+  mkdir -p "$unit_dir" || { bad "install_timer" "cannot create $unit_dir"; return 1; }
+  if [ -f "$service" ] && [ -f "$timer" ] && cmp -s "$service" <(printf '%s\n' "$service_body") && cmp -s "$timer" <(printf '%s\n' "$timer_body"); then
+    command -v "$CF_SYSTEMCTL" >/dev/null 2>&1 && "$CF_SYSTEMCTL" --user daemon-reload >/dev/null 2>&1 || { bad "install_timer" "$CF_SYSTEMCTL --user daemon-reload unavailable or failed; timer is unarmed"; return 1; }
+    say "github-app-refresh — $service and $timer unchanged"
+    return 0
+  fi
+  printf '%s\n' "$service_body" > "$service" && printf '%s\n' "$timer_body" > "$timer" && chmod 644 "$service" "$timer" || { bad "install_timer" "cannot write units in $unit_dir"; return 1; }
+  command -v "$CF_SYSTEMCTL" >/dev/null 2>&1 || { bad "install_timer" "$CF_SYSTEMCTL is unavailable; timer is unarmed"; return 1; }
+  "$CF_SYSTEMCTL" --user daemon-reload >/dev/null 2>&1 || { bad "install_timer" "$CF_SYSTEMCTL --user daemon-reload failed; timer is unarmed"; return 1; }
+  ok "install_timer" "$service and $timer written"
+  say "systemctl --user enable --now $timer_name"
+}
+
+if [ "$INSTALL_TIMER" -eq 1 ]; then
+  [ -n "$NODE" ] && [ -n "$SERVER" ] || { bad "install_timer" "--install-timer requires --node and --server together"; exit 2; }
+  case "$NODE" in *[!A-Za-z0-9_.-]*|.|..|-*) bad "install_timer" "invalid node name"; exit 2 ;; esac
+  case "$SERVER" in *[!A-Za-z0-9_.-]*|-*) bad "install_timer" "invalid server name"; exit 2 ;; esac
+  [[ "$INTERVAL" =~ ^[1-9][0-9]*(s|sec|min|h)$ ]] || { bad "install_timer" "invalid interval $INTERVAL"; exit 2; }
+  install_timer
+  exit $?
+fi
 
 [ -f "$ENV_FILE" ] || { bad "env_file" "$ENV_FILE absent — run scripts/github-app-setup.sh --apply once"; exit 1; }
 TOKEN_FILE="${TOKEN_FILE:-$HOME/.config/code-factory/github.token}"

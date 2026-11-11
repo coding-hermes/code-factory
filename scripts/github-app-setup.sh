@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # github-app-setup.sh — the first-install walkthrough for the fleet's GitHub App credential.
 #
-#   github-app-setup.sh --check [--env-file F] [--repo ORG/NAME] [--slug SLUG]
+#   github-app-setup.sh --check [--env-file F] [--repo ORG/NAME] [--slug SLUG] [--node AGENT]
 #   github-app-setup.sh --apply --slug SLUG --repo ORG/NAME \
 #                             [--app-id N] [--installation-id N] [--key-file PATH]
 #   github-app-setup.sh --manifest [--name code-factory] [--org coding-hermes]
@@ -38,6 +38,7 @@ SLUG=""
 REPO=""
 ORG=""
 NAME="code-factory"
+NODE=""
 API_BASE="${GITHUB_API_BASE:-https://api.github.com}"
 MODE=""
 ASSUME_YES=0
@@ -84,6 +85,7 @@ while [ $# -gt 0 ]; do
     --key-file) KEY_FILE="$(expand_tilde "${2:-}")"; shift 2 ;;
     --slug) SLUG="${2:-}"; shift 2 ;;
     --repo) REPO="$(norm_repo "${2:-}")"; shift 2 ;;
+    --node) NODE="${2:-}"; shift 2 ;;
     --org) ORG="${2:-}"; shift 2 ;;
     --name) NAME="${2:-}"; shift 2 ;;
     --api-base) API_BASE="${2:-}"; shift 2 ;;
@@ -193,12 +195,47 @@ check() {
   fi
 
   # A token that expires in an hour needs something to re-mint it. Not a FAIL here (a
-  # control-host-only setup never installs one), but never silent either.
-  if [ -f "$HOME/.config/systemd/user/cf-github-app-refresh.timer" ] ||
-     crontab -l 2>/dev/null | grep -q 'github-app-refresh'; then
-    ok "refresh" "a refresh timer/cron entry is armed for this host"
+  # control-host-only setup never installs one), but never silent either. Existence alone is
+  # insufficient: the timer must target this node and run at least every 30 minutes.
+  local refresh_dir="$HOME/.config/systemd/user" timer="" service="" cadence="" refresh_ok=0 cron_minutes="" candidate unit command_line value seconds
+  if [ -n "$NODE" ]; then
+    for candidate in "$refresh_dir"/cf-github-app-refresh.timer "$refresh_dir"/cf-github-app-refresh-*.timer; do
+      [ -f "$candidate" ] || continue
+      unit=$(sed -n 's/^Unit=//p' "$candidate" | tail -1)
+      [ -n "$unit" ] || unit="$(basename "${candidate%.timer}.service")"
+      case "$unit" in */*|*..*) continue ;; esac
+      service="$refresh_dir/$unit"
+      command_line=$(sed -n 's/^ExecStart=//p' "$service" 2>/dev/null | tail -1)
+      if [[ " $command_line " == *" --node $NODE "* ]]; then
+        cadence=$(sed -n 's/^OnUnitActiveSec=//p' "$candidate" | head -1)
+        if [[ "$cadence" =~ ^([0-9]+)(s|sec|min)$ ]] && [ "${#BASH_REMATCH[1]}" -le 6 ]; then
+          value=$((10#${BASH_REMATCH[1]})); seconds=$value
+          [ "${BASH_REMATCH[2]}" != min ] || seconds=$((value * 60))
+          if [ "$seconds" -gt 0 ] && [ "$seconds" -le 1800 ]; then refresh_ok=1; timer="$candidate"; break; fi
+        fi
+        if [ -z "$cadence" ]; then warn "refresh" "$candidate has no OnUnitActiveSec cadence (expected 30 minutes or less)"; else warn "refresh" "$candidate has invalid or too slow cadence $cadence (maximum 30 minutes)"; fi
+      else
+        warn "refresh" "$candidate/$service targets a different node or has no service (expected --node $NODE)"
+      fi
+    done
+    if [ "$refresh_ok" -eq 0 ]; then
+      while IFS= read -r command_line; do
+        [[ " $command_line " == *" --node $NODE "* && "$command_line" == *github-app-refresh.sh* ]] || continue
+        if [[ "$command_line" =~ ^\*/([0-9]+)[[:space:]]+\*[[:space:]]+\*[[:space:]]+\*[[:space:]]+\*[[:space:]] ]]; then
+          cron_minutes="${BASH_REMATCH[1]}"
+          if [ "${#cron_minutes}" -le 2 ] && [ "$((10#$cron_minutes))" -gt 0 ] && [ "$((10#$cron_minutes))" -le 30 ]; then refresh_ok=1; cadence="${cron_minutes}min (cron)"; break; fi
+        fi
+      done < <(crontab -l 2>/dev/null)
+    fi
+  fi
+  if [ "$refresh_ok" -eq 1 ]; then
+    ok "refresh" "refresh timer/cron targets --node $NODE and runs every ${cadence:-$cron_minutes}"
+  elif [ -z "$NODE" ]; then
+    warn "refresh" "no node supplied for refresh cadence check — a node will lose push rights 3600s after provisioning (scripts/github-app-refresh.sh --node <agent> --server <host>; see skills/code-factory-bunker/SKILL.md)"
+  elif [ -n "$timer" ]; then
+    warn "refresh" "$timer has cadence $cadence, but it must run every 30 minutes or less — a node will lose push rights 3600s after provisioning (scripts/github-app-refresh.sh --node <agent> --server <host>; see skills/code-factory-bunker/SKILL.md)"
   else
-    warn "refresh" "no refresh timer on this host — a node will lose push rights 3600s after provisioning (scripts/github-app-refresh.sh --node <agent> --server <host>; see skills/code-factory-bunker/SKILL.md)"
+    warn "refresh" "no refresh timer for --node $NODE — a node will lose push rights 3600s after provisioning (scripts/github-app-refresh.sh --node <agent> --server <host>; see skills/code-factory-bunker/SKILL.md)"
   fi
 
   say ""
