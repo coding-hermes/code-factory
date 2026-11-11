@@ -671,3 +671,4 @@
 {"id":670,"timestamp":"2026-11-11T01:21:16Z","event_type":"task_completed","task_id":"CF-238","actor":"foreman","detail":"{\"status\":\"complete\"}"}
 {"id":671,"timestamp":"2026-11-11T03:14:21Z","event_type":"task_completed","task_id":"CF-304","actor":"foreman","detail":"{\"status\":\"complete\"}"}
 {"id":672,"timestamp":"2026-11-11T07:32:20Z","event_type":"task_completed","task_id":"CF-050","actor":"foreman","detail":"{\"status\":\"complete\"}"}
+{"id":673,"timestamp":"2026-11-11T07:37:05Z","event_type":"task_created","task_id":"CF-414","actor":"foreman","detail":"{\"id\":\"CF-414\",\"status\":\"pending\"}"}
