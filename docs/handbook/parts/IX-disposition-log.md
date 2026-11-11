@@ -353,3 +353,5 @@ colour `(0.0, 0.0, 0.933)`. The link originates in Part I, outside wave C's file
 fence. Fit passes with 2.1 mm worst-page clearance, but no green OK line exists.
 The generated PDF is diagnostic output, not an accepted build. This limitation
 requires the Part I owner to correct the link rendering/source, then rebuild.
+
+| PASS5-INTAKE | 2026-11-11 | Pass-5 review package | 16 actionable findings (9 critical / 6 high / 1 medium): 7 new, 9 repeats; all nine package files reconciled | **PLANNED** — `docs/handbook/PASS5-PLAN.md` maps P6-01…P6-16, P3/P4/P5G crosswalks, decision-conflict guards, and four disjoint integration waves; no prior disposition rewritten |
