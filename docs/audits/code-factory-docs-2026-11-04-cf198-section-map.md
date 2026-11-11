@@ -72,7 +72,7 @@ rc=0, 193 PASS rows, 50 FAIL rows (every FAIL row is an intentional negative fix
 ```
 
 Both arms ran in a throwaway clone of the published ref (`gh/main`), not in the registered
-checkout `/home/kara/code-factory`, which a sibling `gitreins task complete
+checkout `~/code-factory`, which a sibling `gitreins task complete
 CF-SYNC-20261104-0958-A1` (pid 3996532) was writing during this tick. The pre-fix arm ran in a
 `git worktree add --detach` of that clone at `a564cda`, so the RED is reproducible without touching
 the shared tree.

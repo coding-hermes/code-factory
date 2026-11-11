@@ -3,7 +3,7 @@
 Tick: `code-factory-perf-2026-11-03-10-56-35`. Lane: code-factory / perf.
 Measured clone: fresh `git clone git@github.com:coding-hermes/code-factory.git` at
 `4638e90f6ef14c6360c25bf9bff22c6624701bf4` (origin/main), clean working tree.
-The canonical checkout `/home/kara/code-factory` remains detached at `cc0a1e4` behind an
+The canonical checkout `~/code-factory` remains detached at `cc0a1e4` behind an
 interrupted rebase (`.git/rebase-merge` since 2026-10-30 14:03) and was not touched.
 
 Fixture: the tracked board, **30 rows**, `sha256 cfc42c9b2263a0b12e308786096d61ef6e4f161a8ca69680c8802fba6832ed22`.
@@ -50,7 +50,7 @@ hyperfine --warmup 3 --runs 15 'bash tests/selftest-old.sh' 'bash tests/selftest
 strace -f -c -o /tmp/strace.txt bash tests/selftest.sh
 ```
 
-Raw artifacts (JSON, this host): `/home/kara/.hermes/cache/scratch/cf-perf-20261103-114628/`
+Raw artifacts (JSON, this host): `~/.hermes/cache/scratch/cf-perf-20261103-114628/`
 — `base-30row.json`, `after-30row.json`, `paired-30row.json`, `strace-base.txt`, `strace-after.txt`.
 
 ## Behaviour preserved (negative controls)

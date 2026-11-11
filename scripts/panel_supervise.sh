@@ -14,8 +14,8 @@
 # place, so a restart costs one writer pass, never the whole document.
 set -uo pipefail
 
-REPO=${PANEL_ROOT:-/home/kara/code-factory}
-LOG=/home/kara/.hermes/logs/panel-supervisor.log
+REPO=${PANEL_ROOT:-$HOME/code-factory}
+LOG=$HOME/.hermes/logs/panel-supervisor.log
 STATE=$REPO/docs/handbook/_panel/STATE.json
 WAIT_PID=${1:-}
 

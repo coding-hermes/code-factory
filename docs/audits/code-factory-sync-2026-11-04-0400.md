@@ -1,7 +1,7 @@
 # Sync lane evidence — 2026-11-04T04:00Z (tick `code-factory-sync-2026-11-04-04-00-08`)
 
 Board/repo consistency pass for code-factory, run **in the registered checkout**
-`/home/kara/code-factory` because the ownership gate came back clean this time: attached `main`,
+`~/code-factory` because the ownership gate came back clean this time: attached `main`,
 no operation markers, no tracked edits (staged or unstaged), tip in parity with `origin/main`, and
 the board bytes identical to the published board. No clone transport was needed.
 
@@ -9,8 +9,8 @@ the board bytes identical to the published board. No clone transport was needed.
 
 | Check | Measured |
 |---|---|
-| `realpath /home/kara/code-factory` vs `git -C … rev-parse --show-toplevel` | equal (`/home/kara/code-factory`) |
-| registered `workdir` / `repo_url` (scheduler project row `code-factory-sync`) | `/home/kara/code-factory` / `local:/home/kara/code-factory` — matches the locator |
+| `realpath ~/code-factory` vs `git -C … rev-parse --show-toplevel` | equal (`~/code-factory`) |
+| registered `workdir` / `repo_url` (scheduler project row `code-factory-sync`) | `~/code-factory` / `local:~/code-factory` — matches the locator |
 | `origin` | `git@github.com:coding-hermes/code-factory.git` (the registered project repo) |
 | branch / operation markers | `main`, attached; no `MERGE_HEAD`/`REBASE_HEAD`/`CHERRY_PICK_HEAD`/`REVERT_HEAD`/`BISECT_LOG`/`rebase-merge`/`rebase-apply` |
 | `HEAD` / `origin/main` / `ls-remote` | `79e9b59` / `79e9b59` / `79e9b59c8286` — parity `0 0` |
@@ -51,7 +51,7 @@ Per-tick receipt series followed: `docs/audits/code-factory-sync-<date>-<HHMM>.m
 The three unresolvable entries are all pre-adjudicated history, **not new gaps**, and no row was
 re-filed for them:
 
-- `CF-011`, `CF-013` — both point at `/home/kara/.hermes/cache/scratch/code-factory-pm-20261031-114422-final-selftest.log`,
+- `CF-011`, `CF-013` — both point at `~/.hermes/cache/scratch/code-factory-pm-20261031-114422-final-selftest.log`,
   a pruned scratch log. Each row already carries a second, superseding evidence entry
   (`run_id: sync-20261103-cf011` / `…-cf013`) whose artifact is the committed
   `docs/audits/code-factory-sync-2026-11-03-evidence-rebind.md` — verified present in the tree, and

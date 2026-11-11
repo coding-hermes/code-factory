@@ -6,7 +6,7 @@ fixed the one figure the first fire left stale.
 
 ## Where the checks ran
 
-`/home/kara/code-factory` was **not** written, fetched into, or cleaned. It is behind the published tip
+`~/code-factory` was **not** written, fetched into, or cleaned. It is behind the published tip
 and carries a sibling lane's unpublished work: `docs/ACCEPTANCE-PLAN.md`,
 `docs/audits/cf099-prd-drift-probe.sh` and `tests/selftest.sh` are modified in the worktree by the
 `code-factory-docs` lane's in-flight CF-155 worker (scratch
@@ -14,7 +14,7 @@ and carries a sibling lane's unpublished work: `docs/ACCEPTANCE-PLAN.md`,
 tick holds another worker. All measurements below are from a scratch clone of the published tip:
 
 ```sh
-git clone /home/kara/code-factory land && cd land
+git clone ~/code-factory land && cd land
 git remote add gh git@github.com:coding-hermes/code-factory.git
 git fetch gh main && git checkout -B main gh/main    # 202fb61, porcelain 0
 ```
@@ -81,7 +81,7 @@ gh run list --repo coding-hermes/code-factory --limit 3 -> [] (no GitHub Actions
 
 ## Residue (disclosed, not cleaned)
 
-- `/home/kara/code-factory` remains behind the published tip with a sibling's three modified files and
+- `~/code-factory` remains behind the published tip with a sibling's three modified files and
   its untracked `.gitreins/history/` bundles; none were read as this tick's evidence or touched.
 - `docs/BOARD.md` keeps its older 116-row/168-event bullet verbatim; it is labelled an earlier
   snapshot, and CF-154 owns the `44 probe rows` sentence it quotes.

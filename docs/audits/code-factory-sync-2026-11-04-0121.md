@@ -1,7 +1,7 @@
 # Sync lane evidence — 2026-11-04T01:21-05:00 (tick `code-factory-sync-2026-11-04-01-21-15`)
 
 Board/repo consistency pass for code-factory. Four sibling code-factory lanes were `running` on the
-shared checkout when this tick started, so nothing was written in `/home/kara/code-factory`: the
+shared checkout when this tick started, so nothing was written in `~/code-factory`: the
 whole tick ran in a dedicated clone of `origin/main` in the tick scratch. The registered checkout
 was read only.
 
@@ -14,8 +14,8 @@ rewritten; this tick's own board row is `CF-142`.
 
 | Check | Measured |
 |---|---|
-| `realpath /home/kara/code-factory` vs `git rev-parse --show-toplevel` | equal (`/home/kara/code-factory`) |
-| registered `repo_url` (scheduler project row) | `local:/home/kara/code-factory` — matches the locator |
+| `realpath ~/code-factory` vs `git rev-parse --show-toplevel` | equal (`~/code-factory`) |
+| registered `repo_url` (scheduler project row) | `local:~/code-factory` — matches the locator |
 | branch / operation markers | `main`, attached; no `rebase-merge`/`rebase-apply`/`MERGE_HEAD`/`CHERRY_PICK_HEAD`/`REVERT_HEAD` |
 | tracked working tree | clean; 48 untracked paths = 0-byte `board/.lock` plus unpublished `.gitreins/history/2026-11-03/*` bundles. The lock is residue, not a barrier: `fuser -v .coding-hermes/board/.lock` reports no holder, no repo script opens it (`grep -rn 'flock\|fcntl' scripts/boardctl*` = 0 hits), and this tick's `boardctl` writes in the clone succeeded — which is also where a fresh 0-byte lock appeared |
 | sibling lanes `running` on this repo at tick start | `code-factory-duckbrain` (01:21:33), `code-factory-duckbrain-sync` (01:21:15), `code-factory-perf` (01:21:15), `code-factory-pm` (01:21:15) |
@@ -52,7 +52,7 @@ where name like 'code-factory%'"`) and scanned with `python3 scripts/lane_target
 Every `detail.evidence[].artifacts` path was resolved inside the committed tree with
 `git cat-file -e origin/main:<path>`. The only absolute paths left on the board are the historical
 first-run entries of **CF-011** and **CF-013**
-(`/home/kara/.hermes/cache/scratch/code-factory-pm-20261031-114422-final-selftest.log`); both rows
+(`~/.hermes/cache/scratch/code-factory-pm-20261031-114422-final-selftest.log`); both rows
 already carry a superseding `sync-20261103-*` entry pointing at the committed
 `docs/audits/code-factory-sync-2026-11-03-evidence-rebind.md`, so the dead entry is preserved
 history, not an open gap. Nothing was erased.

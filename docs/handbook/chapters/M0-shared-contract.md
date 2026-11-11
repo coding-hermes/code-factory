@@ -27,7 +27,7 @@ per-module and are not global numbers.
 | Field | Value |
 |---|---|
 | Module name | SHARED CONTRACT (`scripts/lib.sh`) |
-| Path | `/home/kara/code-factory/scripts/lib.sh` |
+| Path | `~/code-factory/scripts/lib.sh` |
 | Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; `scripts/lib.sh` byte-identical since `47d68b4` — no file M0 cites changed in `08a2c8a..fbc19cb`) |
 | Language / runtime | bash 5.3.9 (measured: `bash --version`); sourced, never executed |
 | Owner lane | code-factory (node-side + control-host shell) |
@@ -132,7 +132,7 @@ The probe is not shipped as a file in this repo; the complete invocation (B25) i
 that reproduce it against a refused loopback URL:
 
 ```
-$ printf '#!/bin/bash\n. /home/kara/code-factory/scripts/lib.sh\nfetch_verified http://127.0.0.1:1/nothing "$1" deliberately-wrong-digest\nprintf "rc=%s artifact=" "$?"; [ -e "$1" ] && echo yes || echo no\n' > /tmp/ffc_probe.sh && chmod +x /tmp/ffc_probe.sh
+$ printf '#!/bin/bash\n. ~/code-factory/scripts/lib.sh\nfetch_verified http://127.0.0.1:1/nothing "$1" deliberately-wrong-digest\nprintf "rc=%s artifact=" "$?"; [ -e "$1" ] && echo yes || echo no\n' > /tmp/ffc_probe.sh && chmod +x /tmp/ffc_probe.sh
 $ bash /tmp/ffc_probe.sh /tmp/ffc-artifact   # → curl: (7) … ; rc=1 artifact=no
 ```
 

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/check_scan_scope.py` — 118 lines [scripts/check_scan_scope.py:1] |
+| Path | `~/code-factory/scripts/check_scan_scope.py` — 118 lines [scripts/check_scan_scope.py:1] |
 | Repository | `code-factory` [scripts/check_scan_scope.py:1] |
 | Revision | `b9f56e6` — the `origin/main` tip every locator below was measured against; the file's own last-touching commit is `5fc2cbd` (2026-11-04, "style(scan-scope): wrap the audit-scope FAIL print for ruff format (CF-163)"), introduced by `5794a49` (CF-163 AC3) |
 | Status | **VERIFIED — 155 locators, all resolve; facts cited** |
@@ -144,17 +144,17 @@ RESULT: FAIL (4 violation(s))
 rc=1
 
 $ python3 $S I
-  FAIL  audit-scope: docs/SECURITY-TRIAGE.md unreadable ([Errno 21] Is a directory: '/home/kara/.hermes/cache/scratch/md20e-h/tmp/probes/I/docs/SECURITY-TRIAGE.md')
+  FAIL  audit-scope: docs/SECURITY-TRIAGE.md unreadable ([Errno 21] Is a directory: '~/.hermes/cache/scratch/md20e-h/tmp/probes/I/docs/SECURITY-TRIAGE.md')
 RESULT: FAIL (unreadable path)
 rc=2
 
 $ python3 $S S
-  FAIL  audit-scope: docs/audits/code-factory-releng-2026-11-03.md unreadable ([Errno 13] Permission denied: '/home/kara/.hermes/cache/scratch/md20e-h/tmp/probes/S/docs/audits/code-factory-releng-2026-11-03.md')
+  FAIL  audit-scope: docs/audits/code-factory-releng-2026-11-03.md unreadable ([Errno 13] Permission denied: '~/.hermes/cache/scratch/md20e-h/tmp/probes/S/docs/audits/code-factory-releng-2026-11-03.md')
 RESULT: FAIL (unreadable path)
 rc=2
 
 $ python3 $S W
-  FAIL  audit-scope: docs/audits/code-factory-releng-2026-11-03.md unreadable ([Errno 2] No such file or directory: '/home/kara/.hermes/cache/scratch/md20e-h/tmp/probes/W/docs/audits/code-factory-releng-2026-11-03.md')
+  FAIL  audit-scope: docs/audits/code-factory-releng-2026-11-03.md unreadable ([Errno 2] No such file or directory: '~/.hermes/cache/scratch/md20e-h/tmp/probes/W/docs/audits/code-factory-releng-2026-11-03.md')
 RESULT: FAIL (unreadable path)
 rc=2
 
@@ -224,12 +224,12 @@ RESULT: FAIL (1 violation(s))
 rc=1
 
 $ python3 $S does-not-exist
-  FAIL  audit-scope: /home/kara/.hermes/cache/scratch/md20e-h/tmp/probes/does-not-exist is not a readable directory
+  FAIL  audit-scope: ~/.hermes/cache/scratch/md20e-h/tmp/probes/does-not-exist is not a readable directory
 RESULT: FAIL (unreadable path)
 rc=2
 
 $ python3 $S not-a-dir
-  FAIL  audit-scope: /home/kara/.hermes/cache/scratch/md20e-h/tmp/probes/not-a-dir is not a readable directory
+  FAIL  audit-scope: ~/.hermes/cache/scratch/md20e-h/tmp/probes/not-a-dir is not a readable directory
 RESULT: FAIL (unreadable path)
 rc=2
 

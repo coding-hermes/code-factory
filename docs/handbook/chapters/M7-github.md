@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Module name | GITHUB |
-| Path | `/home/kara/code-factory/scripts/` — `github-app-setup.sh`, `github-app-token.py`, `github-app-refresh.sh` |
+| Path | `~/code-factory/scripts/` — `github-app-setup.sh`, `github-app-token.py`, `github-app-refresh.sh` |
 | Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; no M7-cited file (`github-app-*.sh`, `github-app-token.py`) changed in `08a2c8a..fbc19cb`) |
 | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
 | Owner lane | code-factory (control host) |

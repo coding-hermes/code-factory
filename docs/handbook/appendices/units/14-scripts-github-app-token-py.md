@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/github-app-token.py` — 768 lines, four subcommands (`check`, `token`, `manifest`, `jwt`), standard library only [scripts/github-app-token.py:1] [scripts/github-app-token.py:699-734] |
+| Path | `~/code-factory/scripts/github-app-token.py` — 768 lines, four subcommands (`check`, `token`, `manifest`, `jwt`), standard library only [scripts/github-app-token.py:1] [scripts/github-app-token.py:699-734] |
 | Repository | `code-factory` |
 | Revision | `6eea792` — the `origin/main` tip every locator below was measured against (worktree `~/proj-wt-md-14f`, 2026-11-05); the file's own last-touching commit is `e693942` (2026-11-04, "feat(github): the App first-install path — an onboarding check that verifies, a 1h token minter, a refresh for long-lived nodes") |
 | Status | **VERIFIED — 24 measured checks, every locator resolves; no live GitHub credential was minted: all API behaviour was measured against a local stub reached through `--api-base`; eleven defects recorded in §6, the first of which kills the invocation the module documents for itself** |
@@ -116,7 +116,7 @@ Transcript 2 — check 2, a host with no env file:
 
 ```
 $ python3 scripts/github-app-token.py check --env-file …/env/nosuch.env --api-base http://127.0.0.1:18771; echo "EXIT=$?"
-  FAIL  env_file — /home/kara/.hermes/cache/scratch/md14f/env/nosuch.env is absent — run scripts/github-app-setup.sh --apply once the App exists (creating it is a browser step a human must do)
+  FAIL  env_file — ~/.hermes/cache/scratch/md14f/env/nosuch.env is absent — run scripts/github-app-setup.sh --apply once the App exists (creating it is a browser step a human must do)
 
 GITHUB APP: FAIL (1) — nothing was minted; every piece above must be created before a token can exist
 EXIT=1

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/node_freshness.py` — 732 lines [scripts/node_freshness.py:1] |
+| Path | `~/code-factory/scripts/node_freshness.py` — 732 lines [scripts/node_freshness.py:1] |
 | Repository | `code-factory` [scripts/node_freshness.py:2] |
 | Revision | `b9f56e6` — the tree every locator below was measured against, and unchanged for this file; the branch is now rebased onto `930a407`, the current `origin/main` tip, where `scripts/node_freshness.py` is byte-identical. The file's own last-touching commit is `8db72b3` ("feat: prove a node checkout matches origin/main and name the drift — CF-244") |
 | Status | **VERIFIED — 250 locators, all resolve (161 distinct file:line pairs); facts cited and the checker green** |
@@ -51,7 +51,7 @@
 
 ## 3. Verification
 
-Run 2026-11-05 in the worktree `proj-wt-md-28e` at `b9f56e6`, Python 3.14.4, git 2.53.0. Every fixture is a real local `origin.git` under `$TMPDIR/md25b/nf28b`; the node fixture is a **stub `bunker`** that executes the battery against a fixture `$NODE_HOME` — **no live node was contacted** (the prohibition is honoured; the live `behind=26` instance is cited, not re-measured, in §8). `$S` is `scripts/node_freshness.py`, `$W` is `/home/kara/.hermes/cache/scratch/md25b/nf28b`.
+Run 2026-11-05 in the worktree `proj-wt-md-28e` at `b9f56e6`, Python 3.14.4, git 2.53.0. Every fixture is a real local `origin.git` under `$TMPDIR/md25b/nf28b`; the node fixture is a **stub `bunker`** that executes the battery against a fixture `$NODE_HOME` — **no live node was contacted** (the prohibition is honoured; the live `behind=26` instance is cited, not re-measured, in §8). `$S` is `scripts/node_freshness.py`, `$W` is `~/.hermes/cache/scratch/md25b/nf28b`.
 
 | # | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|---|
@@ -104,7 +104,7 @@ $ bash sec47.sh          # tests/selftest.sh:2829-3065, extracted verbatim
 FAILS=0
 
 $ python3 $S --workdir $W/node              # 2 commits behind origin
-node-freshness — workdir /home/kara/.hermes/cache/scratch/md25b/nf28b/node
+node-freshness — workdir ~/.hermes/cache/scratch/md25b/nf28b/node
   PASS  branch — branch=main
   PASS  worktree — 0 uncommitted paths
   PASS  ancestor — HEAD b4452d3cb2a6 is an ancestor of origin/main 8065ebdd8b75
@@ -149,8 +149,8 @@ RESULT: FAIL (bunker exec returned no HOME (first line: (empty)))
 [rc=2]
 
 $ python3 $S --workdir $W/node/a.txt        # the path EXISTS; the row says otherwise
-  FAIL  checkout — /home/kara/.hermes/cache/scratch/md25b/nf28b/node/a.txt does not exist — there is no tree to measure
-RESULT: FAIL (no checkout at /home/kara/.hermes/cache/scratch/md25b/nf28b/node/a.txt)
+  FAIL  checkout — ~/.hermes/cache/scratch/md25b/nf28b/node/a.txt does not exist — there is no tree to measure
+RESULT: FAIL (no checkout at ~/.hermes/cache/scratch/md25b/nf28b/node/a.txt)
 [rc=1]
 
 $ python3 $S --workdir $W/node --timeout 0 --json
@@ -161,8 +161,8 @@ RESULT: FAIL (usage: --timeout must be >= 1, got 0)
 json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)     # the consumer
 
 $ env PATH=<a PATH with python3 and no git> python3 $S --workdir $W/node
-  FAIL  checkout — /home/kara/.hermes/cache/scratch/md25b/nf28b/node is not a git checkout (FileNotFoundError: [Errno 2] No such file or directory: 'git') — a node cannot work a tree it cannot fast-forward
-RESULT: FAIL (/home/kara/.hermes/cache/scratch/md25b/nf28b/node is not a git checkout)
+  FAIL  checkout — ~/.hermes/cache/scratch/md25b/nf28b/node is not a git checkout (FileNotFoundError: [Errno 2] No such file or directory: 'git') — a node cannot work a tree it cannot fast-forward
+RESULT: FAIL (~/.hermes/cache/scratch/md25b/nf28b/node is not a git checkout)
 [rc=1]
 
 $ start=$(date +%s); python3 $S --workdir $W/node ; end=$(date +%s); echo $((end-start))s
@@ -185,8 +185,8 @@ Every line is one of three things: the header [scripts/node_freshness.py:631-637
 
 | Level | Line (verbatim) | Emitted when | Kind |
 |---|---|---|---|
-| header | `node-freshness — workdir /home/kara/repo` | local mode, first line, always [scripts/node_freshness.py:637] | descriptive — names the mode and the path the operator actually passed |
-| header | `node-freshness — agent cf-node via bunker-las-03, checkout /home/bunker-cf-node/repo (home /home/bunker-cf-node)` | bunker mode; the home is the one the agent printed [scripts/node_freshness.py:633-636] | descriptive — `(unresolved)` means the exec never answered [scripts/node_freshness.py:576-584] |
+| header | `node-freshness — workdir ~/repo` | local mode, first line, always [scripts/node_freshness.py:637] | descriptive — names the mode and the path the operator actually passed |
+| header | `node-freshness — agent cf-node via bunker-las-03, checkout ~/repo (home /home/bunker-cf-node)` | bunker mode; the home is the one the agent printed [scripts/node_freshness.py:633-636] | descriptive — `(unresolved)` means the exec never answered [scripts/node_freshness.py:576-584] |
 | PASS | `  PASS  branch — branch=main` | `HEAD` is an attached branch [scripts/node_freshness.py:269-270] | evidentiary |
 | FAIL | `  FAIL  branch — detached HEAD at 7f22d029bc99 — no attached branch to fast-forward` | a detached HEAD [scripts/node_freshness.py:272-275] | evidentiary |
 | FAIL | `  FAIL  branch — unborn HEAD (no commits) — no attached branch to fast-forward` | a repo with no commits yet [scripts/node_freshness.py:272-275] | evidentiary |
@@ -204,8 +204,8 @@ Every line is one of three things: the header [scripts/node_freshness.py:631-637
 | PASS | `  PASS  freshness — branch=main head=b4452d3cb2a6 origin_main=b4452d3cb2a6 ancestor=true behind=0` | no arm failed [scripts/node_freshness.py:364-369] | evidentiary — the exact text `verify-node.sh` greps for its PASS detail [scripts/verify-node.sh:131] |
 | FAIL | `  FAIL  unreachable — bunker exec failed: ssh: connect to host bunker-las-03 port 22: Connection timed out` | the exec did not exit 0, or no binary [scripts/node_freshness.py:568-571] | evidentiary — the only row of an exit-2 run, and the first line of the `RESULT:` the caller shows [scripts/verify-node.sh:137] |
 | FAIL | `  FAIL  unreachable — bunker exec returned no HOME (first line: (empty))` | the exec answered 0 but printed no `HOME=` — a cut stream [scripts/node_freshness.py:576-584] | evidentiary — "nothing about the checkout is known" is stated, not guessed [scripts/node_freshness.py:577-578] |
-| FAIL | `  FAIL  checkout — /home/bunker-cf-node/repo does not exist on agent cf-node — there is no tree to measure` | `EXISTS=0` from the battery [scripts/node_freshness.py:586-589] [scripts/node_freshness.py:240-247] | evidentiary |
-| FAIL | `  FAIL  checkout — /home/kara/repo is not a git checkout (fatal: not a git repository (or any of the parent directories): .git) — a node cannot work a tree it cannot fast-forward` | `rev-parse --show-toplevel` failed, or a bare repo [scripts/node_freshness.py:255-261] [scripts/node_freshness.py:394-401] | evidentiary — also the shape a missing `git` binary takes (§6, defect 2) |
+| FAIL | `  FAIL  checkout — ~/repo does not exist on agent cf-node — there is no tree to measure` | `EXISTS=0` from the battery [scripts/node_freshness.py:586-589] [scripts/node_freshness.py:240-247] | evidentiary |
+| FAIL | `  FAIL  checkout — ~/repo is not a git checkout (fatal: not a git repository (or any of the parent directories): .git) — a node cannot work a tree it cannot fast-forward` | `rev-parse --show-toplevel` failed, or a bare repo [scripts/node_freshness.py:255-261] [scripts/node_freshness.py:394-401] | evidentiary — also the shape a missing `git` binary takes (§6, defect 2) |
 | verdict | `RESULT: PASS` | exit 0 [scripts/node_freshness.py:208-209] [scripts/node_freshness.py:724] | evidentiary |
 | verdict | `RESULT: FAIL (behind 2 commit(s) vs origin/main)` | exit 1; the parenthesised reason is the arm reasons joined with `; ` [scripts/node_freshness.py:205] [scripts/node_freshness.py:361-362] | evidentiary |
 | verdict | `RESULT: FAIL (bunker exec failed: …)` | exit 2 [scripts/node_freshness.py:238] | evidentiary |

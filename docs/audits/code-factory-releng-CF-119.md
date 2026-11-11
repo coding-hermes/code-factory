@@ -75,7 +75,7 @@ a number. The selftest row asserts the verdict token, not the counts.
 Live adjudication of the registered workdir's actual lock (read-only):
 
 ```
-$ python3 -B scripts/board_lock.py /home/kara/code-factory/.coding-hermes/board/.lock
+$ python3 -B scripts/board_lock.py ~/code-factory/.coding-hermes/board/.lock
 RESIDUE consumers=0 commits_after_mtime=114
 rc=0
 ```

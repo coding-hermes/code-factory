@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/proj-wt-md-22c/scripts/lib.sh` — 65 lines, 12 functions at `b31c232`, sourced and never executed [scripts/lib.sh:1] [scripts/lib.sh:3]. At this tree the file is 110 lines and 13 functions (`verdict()` landed after `b31c232`; `have` grew eight lines in CF-281) |
+| Path | `~/proj-wt-md-22c/scripts/lib.sh` — 65 lines, 12 functions at `b31c232`, sourced and never executed [scripts/lib.sh:1] [scripts/lib.sh:3]. At this tree the file is 110 lines and 13 functions (`verdict()` landed after `b31c232`; `have` grew eight lines in CF-281) |
 | Repository | `code-factory` |
 | Revision | `b31c232` — the `origin/main` tip every locator below was measured against on 2026-11-05 |
 | Status | **VERIFIED — all 12 helpers exercised in a scratch shell; one PASS row captured byte-for-byte with `od` and `cat -A`** |
@@ -133,7 +133,7 @@ The level column is the row tag, not a severity the module assigns; lib.sh has n
 | `..` | `  ..    already done: marker` | [scripts/lib.sh:9] | context, or an idempotent skip | descriptive |
 | `PASS` | `  PASS  disk — 175.3 GB free (floor 1 GB)` | [scripts/lib.sh:39] | `require_disk` found the floor satisfied — carries the measured number | evidentiary |
 | `FAIL` | `  FAIL  disk — 175.3 GB free < floor 99999999 GB at .` | [scripts/lib.sh:41] | `require_disk` found the floor violated — carries the number, the floor and the path | evidentiary |
-| `–` (stderr) | `digest mismatch for file:///home/kara/.hermes/cache/scratch/md22/art.txt: want 0000000000000000000000000000000000000000000000000000000000000000 got d4e4877bac978b7952f0d544fc52ebff5411d351d129f1f056fa43f11da9af2b` | [scripts/lib.sh:23] | a pinned download hashed to something other than `want` — carries both digests, so the verdict can be re-derived | evidentiary |
+| `–` (stderr) | `digest mismatch for file://~/.hermes/cache/scratch/md22/art.txt: want 0000000000000000000000000000000000000000000000000000000000000000 got d4e4877bac978b7952f0d544fc52ebff5411d351d129f1f056fa43f11da9af2b` | [scripts/lib.sh:23] | a pinned download hashed to something other than `want` — carries both digests, so the verdict can be re-derived | evidentiary |
 | `..` | `  ..    already done: marker` | [scripts/lib.sh:49] | `once` found its sentinel; the basename is the evidence of what was skipped | descriptive |
 | `PASS` | `BUNKER: PASS — every row above measured` | [scripts/bunker-provision.sh:303] | that consumer's own verdict, driven by `$FAILED` | descriptive — a claim about rows, not a measurement |
 | `FAIL` | `BUNKER: FAIL ($FAILED)` (the literal source string; the counter is substituted at print time) | [scripts/bunker-provision.sh:303] | same, when the counter is non-zero | evidentiary — the count is checkable against the rows printed above it |
@@ -173,7 +173,7 @@ Direction is stated as "does the run end up green when it should not".
 
 ## 8. Evidence of record
 
-- Revision: worktree `/home/kara/proj-wt-md-22c`, branch `wt/md-22c`, based on `origin/main` at `b31c232`. `scripts/lib.sh` is byte-identical to the tree the probes ran in (`diff -q` → no output).
+- Revision: worktree `~/proj-wt-md-22c`, branch `wt/md-22c`, based on `origin/main` at `b31c232`. `scripts/lib.sh` is byte-identical to the tree the probes ran in (`diff -q` → no output).
 - Byte capture behind §2b and §3 rows 3-4, in a scratch shell with `PATH` reset:
 
   ```
@@ -216,7 +216,7 @@ Direction is stated as "does the run end up green when it should not".
   ```
   $ chmod 500 ro; bash -c '. scripts/lib.sh; fetch_verified "file://…/art.txt" "…/ro/sub/art.txt" d4e4877…; echo RC=$?'
   mkdir: Permission denied
-  mv: cannot move '/home/kara/.hermes/cache/scratch/md25b/tmp.K63kxk0xxB' to '…/ro/sub/art.txt': No such file or directory
+  mv: cannot move '~/.hermes/cache/scratch/md25b/tmp.K63kxk0xxB' to '…/ro/sub/art.txt': No such file or directory
   RC=0
   $ ls -l …/ro/sub/art.txt
   ls: cannot access '…/ro/sub/art.txt': No such file or directory

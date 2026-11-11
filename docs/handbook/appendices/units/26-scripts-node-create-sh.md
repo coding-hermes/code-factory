@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/node-create.sh` — 139 lines [scripts/node-create.sh:1] |
+| Path | `~/code-factory/scripts/node-create.sh` — 139 lines [scripts/node-create.sh:1] |
 | Repository | `code-factory` |
 | Revision | `b31c232` — the `origin/main` tip every locator below was measured against; the file's own last-touching commit is `50e5f5b` (2026-11-05, "feat(go): install a digest-pinned user-space toolchain — let Go-kind nodes fetch modules") |
 | Status | **VERIFIED — 215 locator citations (102 distinct file:line pairs), all resolve; cites fact: FACT-01, FACT-02, FACT-04; CF-276 confirmed and the staged set measured item by item (§2c); four defects recorded in §8** |

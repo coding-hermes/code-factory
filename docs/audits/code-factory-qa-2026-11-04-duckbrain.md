@@ -1,7 +1,7 @@
 # QA tick — code-factory-duckbrain-qa-2026-11-04-03-41-17
 
 Lane: `code-factory-duckbrain-qa` (QA for the `code-factory-duckbrain` family).
-Repo: `coding-hermes/code-factory`. Registered workdir `/home/kara/code-factory`.
+Repo: `coding-hermes/code-factory`. Registered workdir `~/code-factory`.
 Tip at filing: `92b0421` (board HEAD after the sibling review lane's `238cd0e`).
 
 ## Transport
@@ -13,7 +13,7 @@ residue class CF-119/CF-158 describe, not a barrier. Untracked `.gitreins/histor
 belong to other lanes and were left untouched.
 
 Measurements were taken in a throwaway clone of `origin/main`
-(`git clone /home/kara/code-factory <scratch>/cf`, HEAD `238cd0e`, then re-verified prose
+(`git clone ~/code-factory <scratch>/cf`, HEAD `238cd0e`, then re-verified prose
 claims at `92b0421`). The canonical checkout was written only for the two board rows.
 
 ## Rows re-verified (3)

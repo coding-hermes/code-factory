@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/configure_family.py` [scripts/configure_family.py:1] |
+| Path | `~/code-factory/scripts/configure_family.py` [scripts/configure_family.py:1] |
 | Repository | `code-factory` |
 | Revision | tree `ffecec4`, blob `1ff5a6db`, sha256 `44135f4deee873b823bcac9f53c236b4aa35496d3c20bb34bbe6fb00060a454a` (7 891 bytes); last changed in `222a8b0` (2026-11-03, "lane workdir targets and configurable node disk floors") |
 | Status | **VERIFIED — every request measured against a recording stub, and the daemon side measured against a scratch `schedulerd` built from its source over a copy of the live DB, 2026-11-05; the live service was never addressed** |
@@ -34,13 +34,13 @@
     its full 32 calls (16 `POST`, 16 `PUT`) and exits 0. Ten names already existed (409), six were
     answered 201, and 7 of the pre-existing rows changed on the six columns above.
   - against a scratch `schedulerd` (built from the daemon source at
-    `/home/kara/coding-hermes-scheduler/coding-herms-scheduler`, simulation mode, loopback
+    `~/coding-hermes-scheduler/coding-herms-scheduler`, simulation mode, loopback
     `127.0.0.1:19095`, same copy DB) the run **configures exactly one lane and fails the other
     fifteen**. The script opens a SQLite write transaction at its first `UPDATE`
     [scripts/configure_family.py:177] and commits only after the whole loop
     [scripts/configure_family.py:189]; while that transaction is open the daemon's `INSERT` for the
     next lane cannot take the write lock, waits out the 5 s `busy_timeout` the daemon arms
-    (`/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/database/schema.go:64`) and
+    (`~/coding-hermes-scheduler/coding-herms-scheduler/internal/database/schema.go:64`) and
     answers `500 … database is locked (5) (SQLITE_BUSY)`. Each refusal takes about 10 s, the run ends
     with `failed:` listing 15 lanes, and the exit status is **0**. Both runs are quoted verbatim in
     section 3.
@@ -101,15 +101,15 @@
 ### 2c. Service contracts (both sides must be named)
 
 The daemon is a separate repository
-(`/home/kara/coding-hermes-scheduler/coding-herms-scheduler`), so its files are cited by absolute
+(`~/coding-hermes-scheduler/coding-herms-scheduler`), so its files are cited by absolute
 path. Those files were read, and the handlers were exercised, on 2026-11-05.
 
 | Peer | Direction | Transport | Payload | Other side (file:function) |
 |---|---|---|---|---|
-| Scheduler `POST /api/v1/projects` [scripts/configure_family.py:160-164] | this script writes | HTTP/1.1 JSON, bearer token, 30 s timeout | `{"name", "repo_url": "local:<ROOT>", "workdir"}` — three keys, measured on all 16 calls | `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:219` (`createProject`): required fields at `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:226`, defaults `weight=10, priority=5, cooldown_s=900` at `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:250`, born-disarmed `p.Enabled = false` at `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:273`, `409 project already exists` at `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:279`, any other DB error mapped to 500 at `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:290`, `201` with the stored project at `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:293` |
-| Scheduler `PUT /api/v1/projects/<name>` [scripts/configure_family.py:171] | this script writes | HTTP/1.1 JSON | `{"namespace_id": <ns>}` — one key; response status and body are discarded | `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:442` (`updateProject`) → `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:557` (`database.UpdateProject`) → `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/database/projects.go:886` (`namespace_id = ?`) |
-| Lane-shape gate behind both writes | in (enforced by the peer) | — | refuses an off-convention workdir for a `<primary>-<family>` lane before any DB write | `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:291` (`validateLaneOnCreate`) → `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:197` (`validateLaneWorkdir`); accepted roots at `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:87`; measured: the derived `stand-in/<family>/code-factory` workdirs were accepted (201/409, no 400) |
-| `projects` table [scripts/configure_family.py:55-59] [scripts/configure_family.py:177-187] | this script reads and writes | direct SQLite, its own connection | six columns per row (section 1) | the daemon's own writer is `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/database/projects.go:33` (`CreateProject`) and is bypassed by this write; the daemon holds one connection (`SetMaxOpenConns(1)` at `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/database/schema.go:57`) with `PRAGMA busy_timeout=5000` at `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/database/schema.go:64`, which is why the script's open transaction starves it |
+| Scheduler `POST /api/v1/projects` [scripts/configure_family.py:160-164] | this script writes | HTTP/1.1 JSON, bearer token, 30 s timeout | `{"name", "repo_url": "local:<ROOT>", "workdir"}` — three keys, measured on all 16 calls | `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:219` (`createProject`): required fields at `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:226`, defaults `weight=10, priority=5, cooldown_s=900` at `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:250`, born-disarmed `p.Enabled = false` at `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:273`, `409 project already exists` at `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:279`, any other DB error mapped to 500 at `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:290`, `201` with the stored project at `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:293` |
+| Scheduler `PUT /api/v1/projects/<name>` [scripts/configure_family.py:171] | this script writes | HTTP/1.1 JSON | `{"namespace_id": <ns>}` — one key; response status and body are discarded | `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:442` (`updateProject`) → `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:557` (`database.UpdateProject`) → `~/coding-hermes-scheduler/coding-herms-scheduler/internal/database/projects.go:886` (`namespace_id = ?`) |
+| Lane-shape gate behind both writes | in (enforced by the peer) | — | refuses an off-convention workdir for a `<primary>-<family>` lane before any DB write | `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:291` (`validateLaneOnCreate`) → `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:197` (`validateLaneWorkdir`); accepted roots at `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:87`; measured: the derived `stand-in/<family>/code-factory` workdirs were accepted (201/409, no 400) |
+| `projects` table [scripts/configure_family.py:55-59] [scripts/configure_family.py:177-187] | this script reads and writes | direct SQLite, its own connection | six columns per row (section 1) | the daemon's own writer is `~/coding-hermes-scheduler/coding-herms-scheduler/internal/database/projects.go:33` (`CreateProject`) and is bypassed by this write; the daemon holds one connection (`SetMaxOpenConns(1)` at `~/coding-hermes-scheduler/coding-herms-scheduler/internal/database/schema.go:57`) with `PRAGMA busy_timeout=5000` at `~/coding-hermes-scheduler/coding-herms-scheduler/internal/database/schema.go:64`, which is why the script's open transaction starves it |
 | `<ROOT>/prompts/*.md` [scripts/configure_family.py:102-114] | this script writes, then reads its own output back into rows [scripts/configure_family.py:172-176] | filesystem | one fixed template per lane [scripts/configure_family.py:68-100] | the consumed artifact is the `prompt` column, not the file; the tick-time prompt reader lives in the daemon and was not exercised here |
 
 ## 3. Verification
@@ -155,37 +155,37 @@ configured:
 The complete 32-line request record from run S1, as the stub received it (seq, method, path, body):
 
 ```
- 1 POST /api/v1/projects                     {"name": "code-factory-docs", "repo_url": "local:<ROOT>", "workdir": "/home/kara/.hermes/stand-in/docs/code-factory"}
+ 1 POST /api/v1/projects                     {"name": "code-factory-docs", "repo_url": "local:<ROOT>", "workdir": "~/.hermes/stand-in/docs/code-factory"}
  2 PUT  /api/v1/projects/code-factory-docs   {"namespace_id": "docs"}
- 3 POST /api/v1/projects                     {"name": "code-factory-docs-qa", "repo_url": "local:<ROOT>", "workdir": "/home/kara/.hermes/stand-in/pm/code-factory-docs"}
+ 3 POST /api/v1/projects                     {"name": "code-factory-docs-qa", "repo_url": "local:<ROOT>", "workdir": "~/.hermes/stand-in/pm/code-factory-docs"}
  4 PUT  /api/v1/projects/code-factory-docs-qa {"namespace_id": "qa"}
- 5 POST /api/v1/projects                     {"name": "code-factory-dogfood", "repo_url": "local:<ROOT>", "workdir": "/home/kara/.hermes/stand-in/dogfood/code-factory"}
+ 5 POST /api/v1/projects                     {"name": "code-factory-dogfood", "repo_url": "local:<ROOT>", "workdir": "~/.hermes/stand-in/dogfood/code-factory"}
  6 PUT  /api/v1/projects/code-factory-dogfood {"namespace_id": "dogfood"}
- 7 POST /api/v1/projects                     {"name": "code-factory-foreman", "repo_url": "local:<ROOT>", "workdir": "/home/kara/code-factory"}
+ 7 POST /api/v1/projects                     {"name": "code-factory-foreman", "repo_url": "local:<ROOT>", "workdir": "~/code-factory"}
  8 PUT  /api/v1/projects/code-factory-foreman {"namespace_id": "coding-hermes"}
- 9 POST /api/v1/projects                     {"name": "code-factory-foreman-qa", "repo_url": "local:<ROOT>", "workdir": "/home/kara/.hermes/stand-in/pm/code-factory-foreman"}
+ 9 POST /api/v1/projects                     {"name": "code-factory-foreman-qa", "repo_url": "local:<ROOT>", "workdir": "~/.hermes/stand-in/pm/code-factory-foreman"}
 10 PUT  /api/v1/projects/code-factory-foreman-qa {"namespace_id": "qa"}
-11 POST /api/v1/projects                     {"name": "code-factory-ops", "repo_url": "local:<ROOT>", "workdir": "/home/kara/.hermes/stand-in/pm-lane/code-factory"}
+11 POST /api/v1/projects                     {"name": "code-factory-ops", "repo_url": "local:<ROOT>", "workdir": "~/.hermes/stand-in/pm-lane/code-factory"}
 12 PUT  /api/v1/projects/code-factory-ops    {"namespace_id": "ops"}
-13 POST /api/v1/projects                     {"name": "code-factory-perf", "repo_url": "local:<ROOT>", "workdir": "/home/kara/.hermes/stand-in/perf/code-factory"}
+13 POST /api/v1/projects                     {"name": "code-factory-perf", "repo_url": "local:<ROOT>", "workdir": "~/.hermes/stand-in/perf/code-factory"}
 14 PUT  /api/v1/projects/code-factory-perf   {"namespace_id": "perf"}
-15 POST /api/v1/projects                     {"name": "code-factory-pm", "repo_url": "local:<ROOT>", "workdir": "/home/kara/.hermes/stand-in/pm-lane/code-factory"}
+15 POST /api/v1/projects                     {"name": "code-factory-pm", "repo_url": "local:<ROOT>", "workdir": "~/.hermes/stand-in/pm-lane/code-factory"}
 16 PUT  /api/v1/projects/code-factory-pm     {"namespace_id": "pm"}
-17 POST /api/v1/projects                     {"name": "code-factory-qa", "repo_url": "local:<ROOT>", "workdir": "/home/kara/.hermes/stand-in/pm/code-factory"}
+17 POST /api/v1/projects                     {"name": "code-factory-qa", "repo_url": "local:<ROOT>", "workdir": "~/.hermes/stand-in/pm/code-factory"}
 18 PUT  /api/v1/projects/code-factory-qa     {"namespace_id": "qa"}
-19 POST /api/v1/projects                     {"name": "code-factory-readme", "repo_url": "local:<ROOT>", "workdir": "/home/kara/.hermes/stand-in/readme/code-factory"}
+19 POST /api/v1/projects                     {"name": "code-factory-readme", "repo_url": "local:<ROOT>", "workdir": "~/.hermes/stand-in/readme/code-factory"}
 20 PUT  /api/v1/projects/code-factory-readme {"namespace_id": "docs"}
-21 POST /api/v1/projects                     {"name": "code-factory-readme-qa", "repo_url": "local:<ROOT>", "workdir": "/home/kara/.hermes/stand-in/pm/code-factory-readme"}
+21 POST /api/v1/projects                     {"name": "code-factory-readme-qa", "repo_url": "local:<ROOT>", "workdir": "~/.hermes/stand-in/pm/code-factory-readme"}
 22 PUT  /api/v1/projects/code-factory-readme-qa {"namespace_id": "qa"}
-23 POST /api/v1/projects                     {"name": "code-factory-releng", "repo_url": "local:<ROOT>", "workdir": "/home/kara/.hermes/stand-in/releng-lane/code-factory"}
+23 POST /api/v1/projects                     {"name": "code-factory-releng", "repo_url": "local:<ROOT>", "workdir": "~/.hermes/stand-in/releng-lane/code-factory"}
 24 PUT  /api/v1/projects/code-factory-releng {"namespace_id": "releases"}
-25 POST /api/v1/projects                     {"name": "code-factory-releng-qa", "repo_url": "local:<ROOT>", "workdir": "/home/kara/.hermes/stand-in/pm/code-factory-releng"}
+25 POST /api/v1/projects                     {"name": "code-factory-releng-qa", "repo_url": "local:<ROOT>", "workdir": "~/.hermes/stand-in/pm/code-factory-releng"}
 26 PUT  /api/v1/projects/code-factory-releng-qa {"namespace_id": "qa"}
-27 POST /api/v1/projects                     {"name": "code-factory-review", "repo_url": "local:<ROOT>", "workdir": "/home/kara/.hermes/stand-in/review/code-factory"}
+27 POST /api/v1/projects                     {"name": "code-factory-review", "repo_url": "local:<ROOT>", "workdir": "~/.hermes/stand-in/review/code-factory"}
 28 PUT  /api/v1/projects/code-factory-review {"namespace_id": "review"}
-29 POST /api/v1/projects                     {"name": "code-factory-review-qa", "repo_url": "local:<ROOT>", "workdir": "/home/kara/.hermes/stand-in/pm/code-factory-review"}
+29 POST /api/v1/projects                     {"name": "code-factory-review-qa", "repo_url": "local:<ROOT>", "workdir": "~/.hermes/stand-in/pm/code-factory-review"}
 30 PUT  /api/v1/projects/code-factory-review-qa {"namespace_id": "qa"}
-31 POST /api/v1/projects                     {"name": "code-factory-sync", "repo_url": "local:<ROOT>", "workdir": "/home/kara/.hermes/sync-workdirs/code-factory-sync"}
+31 POST /api/v1/projects                     {"name": "code-factory-sync", "repo_url": "local:<ROOT>", "workdir": "~/.hermes/sync-workdirs/code-factory-sync"}
 32 PUT  /api/v1/projects/code-factory-sync   {"namespace_id": "duckbrain-sync"}
 ```
 
@@ -315,8 +315,8 @@ it fails?
   ground-rule block [scripts/configure_family.py:68-100] [scripts/configure_family.py:105-113].
 - Workdir derivation: the source family's workdir with the family name replaced by `code-factory`
   [scripts/configure_family.py:61-62] [scripts/configure_family.py:143]. Measured result:
-  `/home/kara/.hermes/stand-in/docs/code-factory`, `/home/kara/.hermes/stand-in/pm/code-factory`,
-  `/home/kara/.hermes/sync-workdirs/code-factory-sync`, and `/home/kara/code-factory` for the
+  `~/.hermes/stand-in/docs/code-factory`, `~/.hermes/stand-in/pm/code-factory`,
+  `~/.hermes/sync-workdirs/code-factory-sync`, and `~/code-factory` for the
   `foreman` lane. Under fact: FACT-01 and fact: FACT-02 a lane is expected to run on the project's
   bunker node, so these control-host stand-in paths are a mismatch to resolve, not a documented
   exception.
@@ -332,14 +332,14 @@ it fails?
 - Source identity: blob `1ff5a6db`, sha256 `44135f4deee873b823bcac9f53c236b4aa35496d3c20bb34bbe6fb00060a454a`,
   tree `ffecec4`, last touching commit `222a8b0` (2026-11-03). The module compiles cleanly.
 - Rig 1 — recording stub: `stub_server.py` under
-  `/home/kara/.hermes/cache/scratch/md10v/` is a `ThreadingHTTPServer` that records method, path,
+  `~/.hermes/cache/scratch/md10v/` is a `ThreadingHTTPServer` that records method, path,
   `Authorization`, `Content-Type`, `Content-Length` and the JSON body of every request to a JSONL
   file, answers 201/409/200 from an in-process existence set seeded from a read-only copy of the
   `projects` table, and can inject a 500 per name, a long error body, a non-JSON 201, or a dropped
   connection at the N-th call. It never writes the store, so the DB effects reported for runs S1–S6
   are the script's own `UPDATE`/`commit`, not the stub's.
 - Rig 2 — scratch daemon: `schedulerd` compiled from
-  `/home/kara/coding-hermes-scheduler/coding-herms-scheduler` on 2026-11-05 (the binary shipped in
+  `~/coding-hermes-scheduler/coding-herms-scheduler` on 2026-11-05 (the binary shipped in
   that tree is dated 2026-10-17 and predates the current `lane_onboarding.go`; its empty
   docs/readme/perf/review workdir allow-list refused those lanes, which is why the binary was
   rebuilt rather than used as shipped), run as `schedulerd -db copy.db -config scratch-config.toml
@@ -356,13 +356,13 @@ it fails?
   worktree are byte-identical to the module's output, so a run rewrites them with no content change
   — but a hand edit to any of the four would be lost without any message.
 - Live state, read-only, 2026-11-05: 17 `code-factory%` rows, all with
-  `workdir=/home/kara/code-factory`; `code-factory-dogfood` floor 3600, `code-factory-releng` floor
+  `workdir=~/code-factory`; `code-factory-dogfood` floor 3600, `code-factory-releng` floor
   3600 / ceiling 691200, `code-factory-review` prompt 1082, `code-factory-sync` prompt 2923 — the
   values the measured run would overwrite.
 - Side effect of the rig, disclosed: `ROOT` and the API were redirected, but the derived lane
   workdirs are absolute stand-in paths, so the module's `os.makedirs(..., exist_ok=True)`
-  [scripts/configure_family.py:154] ran against `/home/kara/.hermes/stand-in/...` (and
-  `/home/kara/.hermes/sync-workdirs/...`). No file content was written there; the directories are
+  [scripts/configure_family.py:154] ran against `~/.hermes/stand-in/...` (and
+  `~/.hermes/sync-workdirs/...`). No file content was written there; the directories are
   the ones a real run creates anyway.
 - Not verified here, and not claimed: any run against the live API or the live DB. Every daemon-side
   statement comes from a `schedulerd` built from the same source against a copied store on loopback;

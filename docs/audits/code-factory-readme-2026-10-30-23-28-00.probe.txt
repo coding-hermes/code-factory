@@ -4,10 +4,10 @@
 ########## RUN A — README command matrix at published tip ##########
 === PROBE META ===
 date: 2026-10-31T01:18:02Z
-source repo: /home/kara/code-factory
+source repo: ~/code-factory
 published tip: refs/heads/main = e2fc9d735376746f70a017ce8f161eb3af1010d9
 archive sha256 (tar of tree): cfa8a7e4f69a2e0b37dad8dfc1fbfb819adc6c0ad4b16dcfd24ef37561a1636a
-isolated HOME: /home/kara/.hermes/cache/scratch/cf-readme-2328/home
+isolated HOME: ~/.hermes/cache/scratch/cf-readme-2328/home
 
 === ENV before ===
 BUNKER_SERVER=<unset> CRIER_URL=<unset>
@@ -21,7 +21,7 @@ EXIT: 1
 $ export CRIER_URL=http://crier.example:8767 BUNKER_SERVER=your-bunker-server; scripts/bunker-server-install.sh --check
 bunker server: your-bunker-server
   PASS  bunker_client — /usr/local/bin/bunker bunker 0.2.0
-  FAIL  bunker_config — missing (/home/kara/.hermes/cache/scratch/cf-readme-2328/home/.config/bunker/config.yaml) — the client has no server to talk to
+  FAIL  bunker_config — missing (~/.hermes/cache/scratch/cf-readme-2328/home/.config/bunker/config.yaml) — the client has no server to talk to
   FAIL  server_reachable — your-bunker-server did not answer: bunker: reading server "your-bunker-server"
   PASS  tool:python3 — /usr/bin/python3
   PASS  tool:git — /usr/bin/git
@@ -60,7 +60,7 @@ HERMES: FAIL (3)
 [30] bus
   FAIL  crier_identity — absent — stage a bundle and re-run; a node without an identity is invisible
 [40] repo
-  FAIL  repo — /home/kara/.hermes/cache/scratch/cf-readme-2328/home/repo absent (pass --repo to clone)
+  FAIL  repo — ~/.hermes/cache/scratch/cf-readme-2328/home/repo absent (pass --repo to clone)
 [90] manifest
   ..    manifest is written only when every layer passes
 
@@ -146,7 +146,7 @@ HERMES: FAIL (3)
 [30] bus
   FAIL  crier_identity — absent — stage a bundle and re-run; a node without an identity is invisible
 [40] repo
-  FAIL  repo — /home/kara/.hermes/cache/scratch/cf-readme-2328/home/repo absent (pass --repo to clone)
+  FAIL  repo — ~/.hermes/cache/scratch/cf-readme-2328/home/repo absent (pass --repo to clone)
 [90] manifest
   ..    manifest is written only when every layer passes
 
@@ -252,20 +252,20 @@ matches: 0
 47:  bad "inference_key" "no provider key — a turn dies at 'No inference provider configured'"
 
 === CENSUS: historical figures 32 s / 133 JSON-RPC / 9402f6a in repo docs ===
-/home/kara/.hermes/cache/scratch/cf-readme-2328/src/README.md:73:| Hermes in a bunker + HTTP gateway over tailnet | **works** — observed on a live node in October 2026 (32 s install, `/api/status` 200, 133 JSON-RPC methods); not reproducible from this repo alone | `scripts/harness/install-hermes.sh --check` names the version, port and key it measured |
-/home/kara/.hermes/cache/scratch/cf-readme-2328/src/README.md:74:| Repo clone in a node | **works** for public https — `PASS repo_clone … @ 9402f6a` on 2026-10-30; the cloned repo's own HEAD moves, so re-run to re-derive. **No build step yet**: layer 40 clones only, so the build cache `specs/NODE.md` asks for is not established (CF-032). Private repos are **blocked** — a deploy key has no tested procedure yet | `./scripts/project-node.sh --apply --project myproject --repo https://github.com/you/myrepo` |
-/home/kara/.hermes/cache/scratch/cf-readme-2328/src/specs/HARNESS.md:20:| **hermes** | `python3 -m venv` + `pip install hermes-agent==0.19.0`; `hermes serve --host 0.0.0.0 --port P --skip-build` | **MEASURED working**: 32 s install, `/api/status` 200 over tailnet, 133 JSON-RPC methods, `session.create` + `prompt.submit`. Needs a provider key in `~/.hermes/.env`. |
-/home/kara/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-30-01-33-38.md:25:- The README still reports Hermes as **works** with `32 s install`, `/api/status 200`, and `133 JSON-RPC methods`, but the fresh `install-hermes.sh --check` failed and no repository-local rerunnable artifact proves those historical figures. Existing row CF-013 covers this.
-/home/kara/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-30-00-02-33.md:25:- CF-013 covers the status table's historical Hermes claim. The current adapter check cannot reproduce the live gateway measurement from a fresh HOME; the claimed 32-second install, `/api/status` 200, and 133 JSON-RPC methods remain historical measurements in `specs/HARNESS.md`, not a current repo-local run.
-/home/kara/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-30-18-28-33.md:84:counts in the status table (`32 s install`, `/api/status` 200, 133 JSON-RPC methods) are a
-/home/kara/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-30-14-54-06.md:41:- CF-013: The status table calls the Hermes bunker/gateway path **works** and repeats historical `32 s`, `/api/status 200`, and `133 JSON-RPC methods`, but the fresh-HOME adapter check failed and no live bunker/gateway boundary was available for this sweep. The historical figures remain unverified, not disproven.
-/home/kara/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-29-21-37-19.md:63:README.md:54 says Hermes in a bunker plus HTTP gateway works with a 32-second install, /api/status 200, and 133 JSON-RPC methods, but no repo artifact re-runs those figures and the current Hermes check cannot reproduce the gateway claim. Corrective direction: attach dated evidence or change the state to not currently verified.
-/home/kara/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-29-22-35-38.md:36:- CF-013 remains covered: the README's Hermes status row still states a historical 32-second install, `/api/status` 200, and 133 JSON-RPC methods without a repo-local rerunnable evidence artifact; the fresh adapter check reported `HERMES: FAIL (2)` in the clean HOME because the port and provider key were absent.
-/home/kara/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-30-20-29-25.md:59:figures (32 s install, `/api/status` 200, 133 JSON-RPC methods) are a historical observation and
-/home/kara/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-30-20-29-25.md:82:  PASS  repo_clone — <HOME>/repo @ 9402f6a
-/home/kara/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-30-20-29-25.md:84:Read back from disk after the run: `git -C <HOME>/repo log --oneline -1` → `9402f6a Merge pull
-/home/kara/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-30-14-54-06-lanes.md:93:- `CF-013` — status rows "works" (32 s install, `/api/status` 200, 133 JSON-RPC methods) still carry
-/home/kara/.hermes/cache/scratch/cf-readme-2328/src/docs/OPERATIONS.md:73:`specs/HARNESS.md` records a test-node measurement: Hermes Agent 0.19.0 installed in about 32 seconds, 248 MB venv; a gateway on the configured port answered `/api/status` with 200 over tailnet, and exposed 133 JSON-RPC methods. That historical measurement does not prove this node is working now. Use the exact adapter check/apply from inside the node:
+~/.hermes/cache/scratch/cf-readme-2328/src/README.md:73:| Hermes in a bunker + HTTP gateway over tailnet | **works** — observed on a live node in October 2026 (32 s install, `/api/status` 200, 133 JSON-RPC methods); not reproducible from this repo alone | `scripts/harness/install-hermes.sh --check` names the version, port and key it measured |
+~/.hermes/cache/scratch/cf-readme-2328/src/README.md:74:| Repo clone in a node | **works** for public https — `PASS repo_clone … @ 9402f6a` on 2026-10-30; the cloned repo's own HEAD moves, so re-run to re-derive. **No build step yet**: layer 40 clones only, so the build cache `specs/NODE.md` asks for is not established (CF-032). Private repos are **blocked** — a deploy key has no tested procedure yet | `./scripts/project-node.sh --apply --project myproject --repo https://github.com/you/myrepo` |
+~/.hermes/cache/scratch/cf-readme-2328/src/specs/HARNESS.md:20:| **hermes** | `python3 -m venv` + `pip install hermes-agent==0.19.0`; `hermes serve --host 0.0.0.0 --port P --skip-build` | **MEASURED working**: 32 s install, `/api/status` 200 over tailnet, 133 JSON-RPC methods, `session.create` + `prompt.submit`. Needs a provider key in `~/.hermes/.env`. |
+~/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-30-01-33-38.md:25:- The README still reports Hermes as **works** with `32 s install`, `/api/status 200`, and `133 JSON-RPC methods`, but the fresh `install-hermes.sh --check` failed and no repository-local rerunnable artifact proves those historical figures. Existing row CF-013 covers this.
+~/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-30-00-02-33.md:25:- CF-013 covers the status table's historical Hermes claim. The current adapter check cannot reproduce the live gateway measurement from a fresh HOME; the claimed 32-second install, `/api/status` 200, and 133 JSON-RPC methods remain historical measurements in `specs/HARNESS.md`, not a current repo-local run.
+~/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-30-18-28-33.md:84:counts in the status table (`32 s install`, `/api/status` 200, 133 JSON-RPC methods) are a
+~/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-30-14-54-06.md:41:- CF-013: The status table calls the Hermes bunker/gateway path **works** and repeats historical `32 s`, `/api/status 200`, and `133 JSON-RPC methods`, but the fresh-HOME adapter check failed and no live bunker/gateway boundary was available for this sweep. The historical figures remain unverified, not disproven.
+~/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-29-21-37-19.md:63:README.md:54 says Hermes in a bunker plus HTTP gateway works with a 32-second install, /api/status 200, and 133 JSON-RPC methods, but no repo artifact re-runs those figures and the current Hermes check cannot reproduce the gateway claim. Corrective direction: attach dated evidence or change the state to not currently verified.
+~/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-29-22-35-38.md:36:- CF-013 remains covered: the README's Hermes status row still states a historical 32-second install, `/api/status` 200, and 133 JSON-RPC methods without a repo-local rerunnable evidence artifact; the fresh adapter check reported `HERMES: FAIL (2)` in the clean HOME because the port and provider key were absent.
+~/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-30-20-29-25.md:59:figures (32 s install, `/api/status` 200, 133 JSON-RPC methods) are a historical observation and
+~/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-30-20-29-25.md:82:  PASS  repo_clone — <HOME>/repo @ 9402f6a
+~/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-30-20-29-25.md:84:Read back from disk after the run: `git -C <HOME>/repo log --oneline -1` → `9402f6a Merge pull
+~/.hermes/cache/scratch/cf-readme-2328/src/docs/audits/code-factory-readme-2026-10-30-14-54-06-lanes.md:93:- `CF-013` — status rows "works" (32 s install, `/api/status` 200, 133 JSON-RPC methods) still carry
+~/.hermes/cache/scratch/cf-readme-2328/src/docs/OPERATIONS.md:73:`specs/HARNESS.md` records a test-node measurement: Hermes Agent 0.19.0 installed in about 32 seconds, 248 MB venv; a gateway on the configured port answered `/api/status` with 200 over tailnet, and exposed 133 JSON-RPC methods. That historical measurement does not prove this node is working now. Use the exact adapter check/apply from inside the node:
 
 === CENSUS: AGENTS.md CF-108 citation and board census ===
 41:   test. A node gets one bundle file, mode 600, deleted after provisioning (`CF-108`).
@@ -282,7 +282,7 @@ Tier 1: DEGRADED PASS (skips: lint=no staged files, tests=no staged files)  (tes
   ✓ secrets — clean (gitleaks + builtin cross-check); scanners: nice=nice -n 10
   ~ lint — skipped (no staged files)
   ~ tests — skipped (no staged files)
-  guard log: /home/kara/.hermes/cache/scratch/cf-readme-2328/src/.gitreins/logs/guard-20261031T011808.431435Z.log
+  guard log: ~/.hermes/cache/scratch/cf-readme-2328/src/.gitreins/logs/guard-20261031T011808.431435Z.log
 
 EXIT: 0
 
@@ -302,7 +302,7 @@ EXIT: 1
 $ scripts/bunker-server-install.sh --check
 bunker server: your-bunker-server
   PASS  bunker_client — /usr/local/bin/bunker bunker 0.2.0
-  FAIL  bunker_config — missing (/home/kara/.hermes/cache/scratch/cf-readme-2328b/home/.config/bunker/config.yaml) — the client has no server to talk to
+  FAIL  bunker_config — missing (~/.hermes/cache/scratch/cf-readme-2328b/home/.config/bunker/config.yaml) — the client has no server to talk to
   FAIL  server_reachable — your-bunker-server did not answer: bunker: reading server "your-bunker-server"
   PASS  tool:python3 — /usr/bin/python3
   PASS  tool:git — /usr/bin/git
@@ -387,7 +387,7 @@ apply
   FAIL  crier_identity — absent — stage a bundle and re-run; a node without an identity is invisible
 [40] repo
   ..    cloning https://github.com/github/gitignore @ main
-  PASS  repo_clone — /home/kara/.hermes/cache/scratch/cf-readme-2328b/home/repo @ 6bb5af7
+  PASS  repo_clone — ~/.hermes/cache/scratch/cf-readme-2328b/home/repo @ 6bb5af7
 [90] manifest
   ..    manifest is written only when every layer passes
 
@@ -395,14 +395,14 @@ NODE: FAIL (2)
 EXIT: 1
 
 === CLONE READBACK from isolated HOME (not from the script's own output) ===
-path: /home/kara/.hermes/cache/scratch/cf-readme-2328b/home/repo
+path: ~/.hermes/cache/scratch/cf-readme-2328b/home/repo
 6bb5af7 Merge pull request #4802 from sonikaxel/patch-1
 HEAD: 6bb5af7a1b050e5add3a71b6e6365c93498822ac
 tracked files: 319
 build artefacts present? (node_modules/dist/target/.venv): 0
 
 === README:74 evidence pointer — which audit carries the @9402f6a clone measurement? ===
-/home/kara/.hermes/cache/scratch/cf-readme-2328b/src/docs/audits/code-factory-readme-2026-10-30-20-29-25.md
+~/.hermes/cache/scratch/cf-readme-2328b/src/docs/audits/code-factory-readme-2026-10-30-20-29-25.md
 --- README self-cited evidence line ---
 157:Evidence for the state of this README: `docs/audits/code-factory-readme-2026-10-30-18-28-33.md`.
 --- does the self-cited audit mention the current text (Prompt column / eleven files / repo_clone)? ---
@@ -438,7 +438,7 @@ Tier 1: DEGRADED PASS (skips: lint=no staged files)  (test mode: full)
   ✓ secrets — clean (gitleaks + builtin cross-check); scanners: nice=nice -n 10
   ~ lint — skipped (no staged files)
   ✓ tests (full)
-  guard log: /home/kara/.hermes/cache/scratch/cf-readme-2328b/src/.gitreins/logs/guard-20261031T012020.616687Z.log
+  guard log: ~/.hermes/cache/scratch/cf-readme-2328b/src/.gitreins/logs/guard-20261031T012020.616687Z.log
 
 EXIT: 2
 

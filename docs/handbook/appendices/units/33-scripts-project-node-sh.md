@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/project-node.sh` [scripts/project-node.sh:1] |
+| Path | `~/code-factory/scripts/project-node.sh` [scripts/project-node.sh:1] |
 | Repository | `code-factory` [scripts/project-node.sh:1] |
 | Revision | `f63acd3` — `git rev-parse HEAD` of the tree this document was measured against |
 | Status | **VERIFIED — 8 sections, every claim carries a resolving locator, one real `--check` run on this host (exit 1, `NODE: FAIL (4)`) and three layer-40 fixtures recorded in §3** |
@@ -105,18 +105,18 @@ node provisioning — project=cf-node harness=hermes host=karaHermes-mde-7840hs
   PASS  tool:tar — /usr/bin/tar
   PASS  tool:sha256sum — /usr/bin/sha256sum
   PASS  python:venv — importable
-  WARN  kinds — generic fallback — no --kinds/NODE_KINDS and no kind marker in /home/kara/repo — grading the fixed base set only, so a Go/Rust/Node repo would go ungraded
+  WARN  kinds — generic fallback — no --kinds/NODE_KINDS and no kind marker in ~/repo — grading the fixed base set only, so a Go/Rust/Node repo would go ungraded
   ..    census: bash scripts/project-node.sh --check --project <p> --layers 10 grades one node — markers go.mod→go, Cargo.toml→rust, package.json→node, pyproject.toml|setup.py→python; CF-218 counted 61 distinct fleet repo origins: go 27, node 22, python 16, rust 5
   PASS  tool:jq — /usr/bin/jq
   PASS  tool:rg — /usr/bin/rg
-  PASS  tool:node — /home/kara/.local/bin/node
+  PASS  tool:node — ~/.local/bin/node
 [20] harness
 harness: hermes (pin 0.19.0, port 10800)
   FAIL  python — hermes-agent 0.19.0 requires python >=3.11,<3.14; found 3.14.9
 [30] bus
   FAIL  crier_identity — absent — stage a bundle and re-run; a node without an identity is invisible
 [40] repo
-  FAIL  repo — /home/kara/repo absent (pass --repo to clone)
+  FAIL  repo — ~/repo absent (pass --repo to clone)
 [90] manifest
   ..    manifest is written only when every layer passes
 
@@ -233,7 +233,7 @@ Direction is the whole point here: **fail-closed** = the node is refused, **fail
 | `GO_INSTALL_ROOT` | `$HOME/go-toolchain` [scripts/project-node.sh:414] | Go binary resolution [scripts/project-node.sh:415] | the owned pin is looked for at `$HOME/go-toolchain/current/bin/go`, then `PATH` [scripts/project-node.sh:418] |
 | `GOPROXY` | unset; only a fallback [scripts/project-node.sh:305] | the Go proxy row when `go env GOPROXY` is empty [scripts/project-node.sh:304] | the row prints `via unset` and the download is attempted with no proxy |
 | `HOME` | unset is not handled [scripts/project-node.sh:50] | `$STATE`, `$RP` and every disk read [scripts/project-node.sh:50] [scripts/project-node.sh:53] [scripts/project-node.sh:202] | paths expand wrongly; a provisioned node home is assumed |
-| `USER` | `node` [scripts/project-node.sh:808] | manifest `repo.path` [scripts/project-node.sh:808] | the manifest records `/home/node/repo` |
+| `USER` | `node` [scripts/project-node.sh:808] | manifest `repo.path` [scripts/project-node.sh:808] | the manifest records `~/repo` |
 | `PATH` | inherited | every tool lookup, the helpers' probes and the adapters [scripts/lib.sh:41-45] | an empty `PATH` still yields named FAIL rows and exit 1 — measured `NODE: FAIL (11)` [tests/selftest.sh:15] |
 | `TMPDIR` | inherited | `mktemp` for the adapter log, the Go probe and freshness scratch [scripts/project-node.sh:448] | scratch lands in the system temp dir; an unusable temp is a `no-row` failure (§6) |
 | `HERMES_PIN`, `HERMES_PYTHON_BIN` | `0.19.0`, `python3` [scripts/harness/install-hermes.sh:18] | read by the child adapter, and therefore decide layer 20's verdict | the adapter grades the pinned version and the default interpreter — measured `FAIL python — hermes-agent 0.19.0 requires python >=3.11,<3.14; found 3.14.9` [scripts/harness/install-hermes.sh:47] |

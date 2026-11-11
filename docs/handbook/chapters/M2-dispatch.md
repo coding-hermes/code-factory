@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Module name | DISPATCH (NODE SIDE) |
-| Path | `/home/kara/code-factory/scripts/` — `add_family_lanes.py`, `configure_family.py`, `load_lane_config.py`, `lane_target.py`, `node-bus-worker.py` |
+| Path | `~/code-factory/scripts/` — `add_family_lanes.py`, `configure_family.py`, `load_lane_config.py`, `lane_target.py`, `node-bus-worker.py` |
 | Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; every file M2 cites is byte-identical since `47d68b4`) |
 | Language / runtime | Python 3.14.9 (measured) |
 | Owner lane | code-factory (node-side); consumes scheduler + crier |

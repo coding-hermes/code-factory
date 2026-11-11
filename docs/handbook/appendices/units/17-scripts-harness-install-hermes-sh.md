@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/harness/install-hermes.sh` — 307 lines, one file, two modes (`--check` is the default) [scripts/harness/install-hermes.sh:1] [scripts/harness/install-hermes.sh:24] |
+| Path | `~/code-factory/scripts/harness/install-hermes.sh` — 307 lines, one file, two modes (`--check` is the default) [scripts/harness/install-hermes.sh:1] [scripts/harness/install-hermes.sh:24] |
 | Repository | `code-factory` |
 | Revision | `b31c232` |
 | Status | **VERIFIED** — `--check` executed in four arms on 2026-11-05 (§3), 247 locator citations (127 distinct) resolving, `scripts/master_doc_check.py --only 17- --strict` → `MASTER-DOC: PASS` |
@@ -69,7 +69,7 @@ Run in a clean worktree of `b31c232` (`~/proj-wt-md-17c`) on 2026-11-05. `PATH` 
 | # | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|---|
 | 1 | The module's own gate as a stranger runs it | `bash scripts/harness/install-hermes.sh --check` | every row it can measure; non-zero if any failed [scripts/harness/install-hermes.sh:307] | 2026-11-05 | **exit 1**, one row: `FAIL  python` — the interpreter gate is fatal, so the binary/port/inference arms never run [scripts/harness/install-hermes.sh:216] |
-| 2 | Same gate on an in-range interpreter, `~/.local/bin` on `PATH` | `PATH=/home/kara/.local/bin:/usr/local/bin:/usr/bin:/bin HERMES_PYTHON_BIN=python3.12 bash scripts/harness/install-hermes.sh --check` | five rows, including a `version` row for the found binary [scripts/harness/install-hermes.sh:220-231] | 2026-11-05 | **exit 1**, `HERMES: FAIL (3)` — binary host-provided, version `0.22.5+3030.g770a952` ≠ pin, nothing on `:10800` |
+| 2 | Same gate on an in-range interpreter, `~/.local/bin` on `PATH` | `PATH=~/.local/bin:/usr/local/bin:/usr/bin:/bin HERMES_PYTHON_BIN=python3.12 bash scripts/harness/install-hermes.sh --check` | five rows, including a `version` row for the found binary [scripts/harness/install-hermes.sh:220-231] | 2026-11-05 | **exit 1**, `HERMES: FAIL (3)` — binary host-provided, version `0.22.5+3030.g770a952` ≠ pin, nothing on `:10800` |
 | 3 | Same gate with `~/.local/bin` off `PATH` | `PATH=/usr/local/bin:/usr/bin:/bin HERMES_PYTHON_BIN=python3.12 … --check` | four rows; no `version` row when no binary is found [scripts/harness/install-hermes.sh:229-231] | 2026-11-05 | **exit 1**, `HERMES: FAIL (2)` — `binary — absent`, `port — nothing on :10800` |
 | 4 | No provider key at all | `HOME=<empty scratch> HERMES_PYTHON_BIN=python3.12 … --check` | `FAIL  inference_key` [scripts/harness/install-hermes.sh:253] | 2026-11-05 | **exit 1**, `HERMES: FAIL (3)`, row printed verbatim |
 | 5 | A misspelled mode | `HERMES_PYTHON_BIN=python3.12 … --aply` | any mode other than `--apply` behaves as a check [scripts/harness/install-hermes.sh:24] [scripts/harness/install-hermes.sh:256] | 2026-11-05 | identical check rows, **no `apply` header**, exit 1 — the typo is silently a check (§6, D-4) |
@@ -91,10 +91,10 @@ EXIT=1
 Transcript 2 — check 2, the arm that reaches every row:
 
 ```
-$ PATH=/home/kara/.local/bin:/usr/local/bin:/usr/bin:/bin HERMES_PYTHON_BIN=python3.12 bash scripts/harness/install-hermes.sh --check; echo "EXIT=$?"
+$ PATH=~/.local/bin:/usr/local/bin:/usr/bin:/bin HERMES_PYTHON_BIN=python3.12 bash scripts/harness/install-hermes.sh --check; echo "EXIT=$?"
 harness: hermes (pin 0.19.0, port 10800)
   PASS  python — 3.12.13 (hermes-agent 0.19.0 requires >=3.11,<3.14)
-  FAIL  binary — host-provided /home/kara/.local/bin/hermes (not installed by this adapter — run --apply)
+  FAIL  binary — host-provided ~/.local/bin/hermes (not installed by this adapter — run --apply)
   FAIL  version — 0.22.5+3030.g770a952 != pin 0.19.0
   FAIL  port — nothing on :10800
   PASS  inference_key — a provider key is present in ~/.hermes/.env (value not read)
@@ -143,8 +143,8 @@ All rows are `printf` output; the format strings and the two-space gutter live i
 - `  FAIL  python — unable to run python3 --version` — **descriptive**: the interpreter could not be spawned [scripts/harness/install-hermes.sh:42].
 - `  FAIL  python — unable to determine interpreter version from: <raw>` — **descriptive**: the version regex found nothing [scripts/harness/install-hermes.sh:47].
 - `  FAIL  python — unable to parse interpreter version: <version>` — **descriptive**: the extracted version was not numeric [scripts/harness/install-hermes.sh:52].
-- `  PASS  binary — /home/kara/hermes-venv/bin/hermes` — **descriptive**: a venv-installed binary; the row that separates "installed by this adapter" from "on `PATH`" [scripts/harness/install-hermes.sh:222].
-- `  FAIL  binary — host-provided /home/kara/.local/bin/hermes (not installed by this adapter — run --apply)` — **evidentiary**: the CF-183 row [scripts/harness/install-hermes.sh:224].
+- `  PASS  binary — ~/hermes-venv/bin/hermes` — **descriptive**: a venv-installed binary; the row that separates "installed by this adapter" from "on `PATH`" [scripts/harness/install-hermes.sh:222].
+- `  FAIL  binary — host-provided ~/.local/bin/hermes (not installed by this adapter — run --apply)` — **evidentiary**: the CF-183 row [scripts/harness/install-hermes.sh:224].
 - `  FAIL  binary — absent — run --apply` — **evidentiary**: nothing in the venv and nothing on `PATH` [scripts/harness/install-hermes.sh:230].
 - `  PASS  version — 0.19.0 (pin 0.19.0)` — **descriptive**: the read-back agrees with the pin [scripts/harness/install-hermes.sh:227].
 - `  FAIL  version — 0.22.5+3030.g770a952 != pin 0.19.0` — **evidentiary**: the drift arm, naming both values [scripts/harness/install-hermes.sh:228].
@@ -158,9 +158,9 @@ All rows are `printf` output; the format strings and the two-space gutter live i
 - `apply` — **descriptive**: the mode banner, printed before the install block [scripts/harness/install-hermes.sh:257].
 - `  ..    venv version 0.22.5+3030.g770a952 != pin 0.19.0 — installing pin` — **descriptive**: the reinstall decision, naming both versions [scripts/harness/install-hermes.sh:260].
 - `  FAIL  venv — creation failed` — **descriptive**: `python -m venv` exited non-zero; the run ends [scripts/harness/install-hermes.sh:262].
-- `  FAIL  install_log — cannot create /home/kara/.hermes-install-10800.XXXXXXXX.log — <error>` — **descriptive**: the private log could not be made, so pip is never invoked [scripts/harness/install-hermes.sh:267].
+- `  FAIL  install_log — cannot create ~/.hermes-install-10800.XXXXXXXX.log — <error>` — **descriptive**: the private log could not be made, so pip is never invoked [scripts/harness/install-hermes.sh:267].
 - `  PASS  install — Hermes Agent v0.19.0` — **descriptive**: the first line of the installed binary's own `--version`, passed through unparsed [scripts/harness/install-hermes.sh:273].
-- `  FAIL  install — pip exited 23 — log: /home/kara/.hermes-install-10800.abcd1234.log` — **descriptive here, evidentiary in the suite**: the fixture asserts this exact shape [scripts/harness/install-hermes.sh:275] [tests/selftest.sh:1366-1375].
+- `  FAIL  install — pip exited 23 — log: ~/.hermes-install-10800.abcd1234.log` — **descriptive here, evidentiary in the suite**: the fixture asserts this exact shape [scripts/harness/install-hermes.sh:275] [tests/selftest.sh:1366-1375].
 - `  ..    already installed: Hermes Agent v0.19.0` — **descriptive**: the branch that skips pip [scripts/harness/install-hermes.sh:279].
 - `  PASS  gateway_start — /api/status -> 200` — **descriptive**: the start succeeded [scripts/harness/install-hermes.sh:288].
 - `  PASS  port — listening on :10800 (started by --apply)` — **descriptive**: the port re-checked after the start, distinguished from the pre-existing-listener row [scripts/harness/install-hermes.sh:290].
@@ -215,7 +215,7 @@ Direction is the module's measured or source-read behaviour. `fail closed` = the
 
 ## 8. Evidence of record
 
-- **Measured 2026-11-05** in a clean worktree of `b31c232` (`~/proj-wt-md-17c`): every transcript in §3 is literal terminal output. Host: Linux 7.0.0-38-generic, `python3` 3.14.9, `python3.12` 3.12.13, `hermes` 0.22.5+3030.g770a952 at `/home/kara/.local/bin/hermes`, no `$HOME/hermes-venv`, nothing on `:10800`.
+- **Measured 2026-11-05** in a clean worktree of `b31c232` (`~/proj-wt-md-17c`): every transcript in §3 is literal terminal output. Host: Linux 7.0.0-38-generic, `python3` 3.14.9, `python3.12` 3.12.13, `hermes` 0.22.5+3030.g770a952 at `~/.local/bin/hermes`, no `$HOME/hermes-venv`, nothing on `:10800`.
 - **What the runs establish**: the gate is real and exits non-zero on a host that is not a provisioned node; the interpreter gate is fatal and short-circuits the rest; the `binary` row splits into `absent` versus `host-provided` purely by `PATH`; the pin comparison catches a real version drift; `NODE_GATEWAY_PORT` and `HERMES_PIN` are read as documented; a misspelled mode is silently a check; the module cannot run without `scripts/lib.sh`.
 - **What these runs do not establish**: `--apply` was not executed here (it would create a venv and install from the index), so every start, install and refusal row is descriptive prose backed by the committed fixtures [tests/selftest.sh:328-504] [tests/selftest.sh:1336-1410], not by this host. `GET /api/status` was never answered on this host. No claim in this document rests on a live gateway.
 - **Automated coverage that exists**: `tests/selftest.sh` drives the public-bind gate with 19 config fixtures in two parser modes (`no-PyYAML` via `python3.12 -I -S`, and `installed`), two mutation oracles that must be rejected, and a 503 red control [tests/selftest.sh:466-495]; a separate battery covers pip failure (rc 23, a distinct mode-600 log, an unwritable fixed path, a successful install) [tests/selftest.sh:1366-1400]; the interpreter-range refusal is asserted by substring without reaching pip [tests/selftest.sh:305-325]. No arm covers an **already-listening** gateway — which is exactly D-2.

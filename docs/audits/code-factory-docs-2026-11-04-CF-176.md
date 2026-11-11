@@ -3,7 +3,7 @@
 - **Lane:** `code-factory-docs`, tick `code-factory-docs-2026-11-04-08-12-52`
 - **Tip measured:** `1fea92d204b6d851c7262b89e4b202636a85785d` (= `origin/main` when the tick began)
 - **Transport:** fresh clone of the published remote under tick scratch; the registered checkout
-  `/home/kara/code-factory` was not written to (siblings `code-factory`, `code-factory-perf` and
+  `~/code-factory` was not written to (siblings `code-factory`, `code-factory-perf` and
   `code-factory-duckbrain-sync` read `running` on the same workdir for this slot).
 - **Row:** CF-176 (`P3`, pending) — filed by `code-factory-qa` after the CF-169 correction.
 - **GitReins task:** `CF-176-DOC1`.

@@ -1,4 +1,4 @@
 // example — the live lock lives at .coding-hermes/panel.lock (gitignored)
-{"owner":"panel_loop","pid":0,"started":"ISO8601","workdir":"/home/kara/code-factory",
+{"owner":"panel_loop","pid":0,"started":"ISO8601","workdir":"~/code-factory",
  "paths":["docs/handbook/_panel/","docs/handbook/chapters/"],
  "expires":"ISO8601","reason":"handbook writer/judge loop in flight"}

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/repo_freshness.py` — 662 lines [scripts/repo_freshness.py:1] |
+| Path | `~/code-factory/scripts/repo_freshness.py` — 662 lines [scripts/repo_freshness.py:1] |
 | Repository | `code-factory` |
 | Revision | `d8c7796` — the `origin/main` tip every locator below was measured against; the file's own last-touching commit is `5634d58` (2026-11-04, "feat(scripts): measure lane workdir staleness and refuse to dispatch past a bound (CF-212)") |
 | Status | **VERIFIED — 151 locator citations (104 distinct file:line pairs across 7 files), all resolve; cites fact: FACT-01, FACT-09, FACT-10; the fetch/is-it-fresh question answered by measurement (§3 rows 4-6); eleven defects recorded in §8, the first of which is that this module produces none of the `checkout_freshness` rows it was credited with** |
@@ -104,9 +104,9 @@ owns, plus this checkout.
 
 | # | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|---|
-| 1 | live checkout, no network | `python3 -B scripts/repo_freshness.py --workdir /home/kara/code-factory --no-fetch` | `PASS`, exit 0 | 2026-11-05 | **PASS** — `PASS  code-factory — lag 0, ahead 2, main vs gh/main, last fetch 58s ago` |
+| 1 | live checkout, no network | `python3 -B scripts/repo_freshness.py --workdir ~/code-factory --no-fetch` | `PASS`, exit 0 | 2026-11-05 | **PASS** — `PASS  code-factory — lag 0, ahead 2, main vs gh/main, last fetch 58s ago` |
 | 2 | live checkout, fetch on | the same without `--no-fetch` | the fetch moves the refs, so `ahead` changes | 2026-11-05 | **PASS** — `ahead 2` became `ahead 0` and `last fetch 0s ago`; the row changed because the fetch moved `gh/main`, not because anything else did |
-| 3 | gate on the live checkout | `--workdir /home/kara/code-factory --no-fetch --gate --max-fetch-age 60` | exit 0 while fresh | 2026-11-05 | **PASS** — exit 0 |
+| 3 | gate on the live checkout | `--workdir ~/code-factory --no-fetch --gate --max-fetch-age 60` | exit 0 while fresh | 2026-11-05 | **PASS** — exit 0 |
 | 4 | **does the fetch change the number?** | scratch: clone, then advance the remote by 3 commits without telling the clone, then run `--no-fetch` and then the default | `--no-fetch` must report the stale world, the default must report 3 | 2026-11-05 | **PASS — and this is the module's whole value.** `--no-fetch` → `PASS … lag 0` (the ref was 3 commits stale); default → `FAIL … lag 3 > bound 0`. Transcript 2 |
 | 5 | remote unreachable, `lag > bound` | move the bare remote away, run the default | `FAIL` naming both the lag and the fetch error | 2026-11-05 | **PASS** — `FAIL  stale — lag 2 > bound 0 …; fetch failed: fatal: '…/origin.git' does not appear to be a git repository`, exit 0 without `--gate` |
 | 6 | remote unreachable, `lag == 0` | the same on a clone that matches its last-known ref | must not claim freshness | 2026-11-05 | **FAIL (design)** — `WARN  fresh — lag 0, ahead 0 … ; fetch failed: …` and then `FRESHNESS: PASS`, exit 0. The WARN names it; the verdict does not (§8 defect 3) |
@@ -115,7 +115,7 @@ owns, plus this checkout.
 | 9 | the real fleet, no network | `python3 -B scripts/repo_freshness.py --no-fetch --jobs 8` | rows for every enabled project's workdir | 2026-11-05 | **PASS as a measurement, FAIL as a verdict** — 74 enabled projects → 53 unique workdirs, **6 measured, 47 unmeasurable**, `FRESHNESS: PASS (6 measured, max lag 0)`, exit 0. Transcript 3 |
 | 10 | DB enumeration and dedupe | suite fixture, 10 rows / 9 enabled / 8 workdirs | `9 enabled projects, 8 unique workdirs`, disabled row skipped, `[2 lanes: …]` | 2026-11-05 | **PASS** [tests/selftest.sh:2164-2170] |
 | 11 | empty workdir path | `--workdir "  "` | a row, and not a `PASS` verdict | 2026-11-05 | **FAIL (design)** — `WARN  . — project row has an empty workdir`, `FRESHNESS: PASS (0 measured, max lag 0)`, exit 0 |
-| 12 | `git` absent from `PATH` | `env PATH=/nonexistent /usr/bin/python3 -B … --workdir /home/kara/code-factory` | a named dependency failure | 2026-11-05 | **FAIL (design)** — `WARN  code-factory — not a git workdir (…): FileNotFoundError: … 'git'`, `PASS (0 measured)`, exit 0 |
+| 12 | `git` absent from `PATH` | `env PATH=/nonexistent /usr/bin/python3 -B … --workdir ~/code-factory` | a named dependency failure | 2026-11-05 | **FAIL (design)** — `WARN  code-factory — not a git workdir (…): FileNotFoundError: … 'git'`, `PASS (0 measured)`, exit 0 |
 | 13 | the repository suite, this module's section | lines 2089-2229 extracted verbatim and run standalone | every leg `PASS` | 2026-11-05 | **PASS** — 13 legs, `fails=0`, exit 0. Transcript 5 |
 | 14 | bad argument | `--bound -1` | a named refusal, exit 2 | 2026-11-05 | **PASS on the exit code, misattributed on the row** — `  FAIL  scheduler-db — --bound must be >= 0, got -1`, exit 2 (§8 defect 7) |
 | 15 | a branch whose upstream is a local branch | scratch: `branch --set-upstream-to=main` on a lane branch | a comparison against a remote | 2026-11-05 | **FAIL (design)** — `WARN  w — … fetch failed: fatal: 'main' does not appear to be a git repository`, compared `local-copy vs main`, exit 0 (§8 defect 5) |
@@ -125,13 +125,13 @@ owns, plus this checkout.
 Transcript 1 (rows 1-3), literal:
 
 ```
-$ python3 -B scripts/repo_freshness.py --workdir /home/kara/code-factory --no-fetch
+$ python3 -B scripts/repo_freshness.py --workdir ~/code-factory --no-fetch
 repo-freshness — 1 explicit workdir, bound 0, fetch off
   PASS  code-factory — lag 0, ahead 2, main vs gh/main, last fetch 58s ago (2026-11-05T16:53:51Z)
 repo-freshness: 1 workdir, 1 measured (1 fresh, 0 failed), 0 unmeasurable, 0 fetch errors (bound 0, fetch off, max lag 0, report)
 FRESHNESS: PASS (1 measured, max lag 0)
 EXIT=0
-$ python3 -B scripts/repo_freshness.py --workdir /home/kara/code-factory
+$ python3 -B scripts/repo_freshness.py --workdir ~/code-factory
 repo-freshness — 1 explicit workdir, bound 0, fetch on
   PASS  code-factory — lag 0, ahead 0, main vs gh/main, last fetch 0s ago (2026-11-05T16:54:54Z)
 repo-freshness: 1 workdir, 1 measured (1 fresh, 0 failed), 0 unmeasurable, 0 fetch errors (bound 0, fetch on, max lag 0, report)
@@ -169,8 +169,8 @@ Transcript 3 (row 9), the fleet as it actually is — 74 enabled projects, 53 un
 
 ```
 $ python3 -B scripts/repo_freshness.py --no-fetch --jobs 8
-repo-freshness — db /home/kara/.hermes/coding-hermes/scheduler.db, 74 enabled projects, 53 unique workdirs, bound 0, fetch off
-  WARN  bunker-docs — not a git workdir (/home/kara/.hermes/stand-in/docs/bunker): fatal: not a git repository (or any of the parent directories): .git
+repo-freshness — db ~/.hermes/coding-hermes/scheduler.db, 74 enabled projects, 53 unique workdirs, bound 0, fetch off
+  WARN  bunker-docs — not a git workdir (~/.hermes/stand-in/docs/bunker): fatal: not a git repository (or any of the parent directories): .git
   PASS  bunker-foreman — lag 0, ahead 0, main vs origin/main, last fetch 21m ago (2026-11-05T16:34:30Z)
   PASS  code-factory — lag 0, ahead 0, main vs gh/main, last fetch 33s ago (2026-11-05T16:54:54Z) [16 lanes: code-factory, code-factory-docs, code-factory-dogfood, code-factory-duckbrain, code-factory-duckbrain-dogfood, code-factory-duckbrain-pm, code-factory-duckbrain-qa, code-factory-duckbrain-releng, code-factory-duckbrain-sync, code-factory-ops, code-factory-perf, code-factory-pm, code-factory-readme, code-factory-releng, code-factory-review, code-factory-sync]
   …
@@ -196,8 +196,8 @@ $ python3 -B … --workdir "  "
   WARN  . — project row has an empty workdir
 FRESHNESS: PASS (0 measured, max lag 0)
 EXIT=0
-$ env PATH=/nonexistent /usr/bin/python3 -B … --workdir /home/kara/code-factory
-  WARN  code-factory — not a git workdir (/home/kara/code-factory): FileNotFoundError: [Errno 2] No such file or directory: 'git'
+$ env PATH=/nonexistent /usr/bin/python3 -B … --workdir ~/code-factory
+  WARN  code-factory — not a git workdir (~/code-factory): FileNotFoundError: [Errno 2] No such file or directory: 'git'
 FRESHNESS: PASS (0 measured, max lag 0)
 EXIT=0
 $ python3 -B … --bound -1

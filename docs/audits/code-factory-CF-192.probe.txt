@@ -4,7 +4,7 @@ CF-192 probe — the occupied-port branch certified an unauthenticated public bi
 Row:  P3 — install-hermes.sh turns its own public-bind auth gate OFF when a listener already
       occupies the port: --apply prints PASS port / PASS status_probe / HERMES: PASS on a config
       with no basic_auth.
-Repo: /home/kara/code-factory
+Repo: ~/code-factory
 Base: 2ff60b59cceafbcc2d4a42e032256df01a5c3da5 ("chore(gitreins): publish the CF-150 verdict
       bundle (run 71cc322f)") — the pre-fix tree of the RED capture below.
 Host: Linux 7.0.0-38-generic, bash 5.3.9, python3 3.12/3.14 both present.

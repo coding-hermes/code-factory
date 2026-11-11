@@ -7,7 +7,7 @@ and fixed in this commit.
 
 ## Where the pass ran, and why
 
-The registered checkout `/home/kara/code-factory` is **writer-barriered**: HEAD `943ef98` is
+The registered checkout `~/code-factory` is **writer-barriered**: HEAD `943ef98` is
 behind-only (1 behind / 0 ahead of `origin/main`), and the working tree carries a live sibling's
 handbook workstream — `M docs/MASTER-DOC-SCHEMA.md`, `M docs/handbook/README.md`, and 47 untracked
 paths under `docs/handbook/_panel/` and `docs/handbook/chapters/`. Nothing under

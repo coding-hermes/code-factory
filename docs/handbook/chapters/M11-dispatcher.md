@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Module name | DISPATCHER (`crier-fleet`) |
-| Path | `/home/kara/crier-fleet/dispatcher.py` (538 lines) |
+| Path | `~/crier-fleet/dispatcher.py` (538 lines) |
 | Revision | `283bca91091933177ec521e52f37f1bc987cf7da` (crier-fleet HEAD) |
 | Language / runtime | Python — `#!/usr/bin/env python3`, no pinned version; host `python3` = 3.14.9 |
 | Owner lane | crier-fleet (control plane) |
@@ -98,7 +98,7 @@ is implementation coverage of one local revision, not the crash-safety requireme
 
 | Dependency | Version constraint | Where | How absence is detected |
 |---|---|---|---|
-| `bunker` CLI | 0.1.4+ (cert pinning) — **absolute path** default `/home/kara/.local/bin/bunker` (`:60`, `BUNKER_BIN`) | control box | exit 127 from subprocess |
+| `bunker` CLI | 0.1.4+ (cert pinning) — **absolute path** default `~/.local/bin/bunker` (`:60`, `BUNKER_BIN`) | control box | exit 127 from subprocess |
 | `hermes` CLI | on the node | `$HOME/.local/bin/hermes` | `DONE:127` in the job status file |
 
 **4b. Library contracts**
@@ -121,13 +121,13 @@ is implementation coverage of one local revision, not the crash-safety requireme
 | `DISPATCH_TASK_S` | `"240"` (`:48`, a **string**) | positive int at use (`task_seconds`, `:196`) | fallback task duration | a non-numeric env value raises `ValueError` **at use** (`int(TASK_S)` at `:196`), not at admission |
 | `DISPATCH_MARGIN_S` | 60 (`:52`) | positive int | reserve before the caller's deadline | see F11-4 |
 | `DISPATCH_TASK_CAP_S` | 7200 (`:53`) | positive int | ceiling on the envelope wall | a larger envelope wall is clamped |
-| `BUNKER_BIN` | `/home/kara/.local/bin/bunker` (`:60`) | absolute path | which bunker binary runs | PATH order would otherwise pick a wrong binary |
+| `BUNKER_BIN` | `~/.local/bin/bunker` (`:60`) | absolute path | which bunker binary runs | PATH order would otherwise pick a wrong binary |
 | `CF_DURABLE_JOB` | `"1"` (`:336`) | `"0"` or non-`"0"` | execution mode switch | **`"0"` selects the synchronous `hermes chat -q` path (`:334-358`)**, bypassing the detached start/poll job model (B23) |
 | `DISPATCH_LOG` / `DISPATCH_PIDFILE` | `$FLEET/logs/dispatcher.log` / `$FLEET/dispatcher.pid` (`:41-42`) | a path | log/PID location | a wrong path loses the journal/lock |
-| `FLEET_GH_SCOPE` | `/home/kara/.hermes/scripts/fleet-gh-scope.py` (`:68`) | a path | scoped-token minter | a wrong path disables scoped tokens (non-fatal) |
+| `FLEET_GH_SCOPE` | `~/.hermes/scripts/fleet-gh-scope.py` (`:68`) | a path | scoped-token minter | a wrong path disables scoped tokens (non-fatal) |
 | `FLEET_AGENTS` / `FLEET_AGENTS_FILE` | `fleet_agents.json` (`:104-109`) | a dict / path | agent registry | empty → "no FLEET_AGENTS configured" |
 | `CRIER_URL` (read as `BUS`) | `http://<bus-host>:8767` (`:38`) | an http(s) endpoint | which bus the dispatcher polls and replies to | a wrong URL polls/replies to the wrong bus |
-| `TOKEN_FILE` (bearer) | `/home/kara/.hermes/secrets/crier-fleet.token` (`:39`, a constant) | a path | the bus bearer identity | a missing file → client construction fails (`client for %s failed`) |
+| `TOKEN_FILE` (bearer) | `~/.hermes/secrets/crier-fleet.token` (`:39`, a constant) | a path | the bus bearer identity | a missing file → client construction fails (`client for %s failed`) |
 | `KEYS` (signing) | `$FLEET/keys` (`:40`, a constant) | a directory | the reply-signing key store | a missing key dir breaks reply signing |
 
 ## 6. Contracts in and out

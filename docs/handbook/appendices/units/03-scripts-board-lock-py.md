@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/board_lock.py` |
+| Path | `~/code-factory/scripts/board_lock.py` |
 | Repository | `code-factory` |
 | Revision | `373f71a` — the tree every locator below resolves against. The source itself last changed in `a012d02` (2026-11-03) and is byte-identical at HEAD. |
 | Status | **VERIFIED — 89 locators, all resolve; facts cited** |
@@ -72,7 +72,7 @@ CLI, and it is listed with both sides.
 Every row below was executed on 2026-11-05. The module under test is `scripts/board_lock.py` as it
 stands in `373f71a`, byte-identical to the registered checkout's copy (`git diff 373f71a..HEAD --
 scripts/board_lock.py` prints nothing); the live rows ran in the registered checkout
-`/home/kara/code-factory`, which is the tree that owns the real lock file.
+`~/code-factory`, which is the tree that owns the real lock file.
 
 | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|
@@ -141,7 +141,7 @@ sentence.
 | Setting | Kind | Default | Read at | Validation |
 |---|---|---|---|---|
 | lock path | positional argument `path` | `<repo root>/.coding-hermes/board/.lock`, where the root is `Path(__file__).resolve().parent.parent` | `scripts/board_lock.py:168` (default), `scripts/board_lock.py:172` (parsed) | none beyond `Path(...).expanduser()`; a directory or a dangling symlink is accepted and silently classified |
-| repository root | derived, not settable | computed from the script's own location (`scripts/board_lock.py:44`), so `DEFAULT_LOCK` and `consumer_count()` follow the checkout the script was loaded from, **not** the current directory | `scripts/board_lock.py:45`, `scripts/board_lock.py:100` | none; a copied or symlinked script silently changes the repository it inspects (measured: `python3 -h` from this worktree prints `default: /home/kara/proj-wt-md-03/.coding-hermes/board/.lock`, and the same copy run from `/tmp` answers `ABSENT` because that path does not exist) |
+| repository root | derived, not settable | computed from the script's own location (`scripts/board_lock.py:44`), so `DEFAULT_LOCK` and `consumer_count()` follow the checkout the script was loaded from, **not** the current directory | `scripts/board_lock.py:45`, `scripts/board_lock.py:100` | none; a copied or symlinked script silently changes the repository it inspects (measured: `python3 -h` from this worktree prints `default: ~/proj-wt-md-03/.coding-hermes/board/.lock`, and the same copy run from `/tmp` answers `ABSENT` because that path does not exist) |
 | `PATH` | inherited environment | the caller's | `scripts/board_lock.py:129` — `git` is resolved by name | none; a stripped `PATH` yields `commits_after_mtime=unknown` rather than an error |
 | environment variables | — | — | **none read**: `os.environ` / `getenv` appear nowhere in the file (measured: `grep -n 'os.environ\|getenv\|environ' scripts/board_lock.py` → no match, rc 1) | n/a |
 | config file | — | — | **none**: no file is opened for configuration; the only files touched are the lock itself and `scripts/boardctl*` for the consumer count | n/a |

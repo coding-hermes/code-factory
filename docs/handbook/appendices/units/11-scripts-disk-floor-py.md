@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/disk_floor.py` — 175 lines [scripts/disk_floor.py:1] |
+| Path | `~/code-factory/scripts/disk_floor.py` — 175 lines [scripts/disk_floor.py:1] |
 | Repository | `code-factory` [scripts/disk_floor.py:1] |
 | Revision | `f63acd3` — the `origin/main` tip every locator below was measured against; the file's own last-touching commit is `3b2c81e` (2026-11-03, ruff-format sweep) and it was introduced by `222a8b0` ("feat: lane workdir targets and configurable node disk floors") |
 | Status | **VERIFIED — 113 distinct locators (212 citations), all resolve; facts cited** |

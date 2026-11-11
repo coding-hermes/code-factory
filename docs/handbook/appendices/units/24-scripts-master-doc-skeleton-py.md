@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/master_doc_skeleton.py` — 242 lines [scripts/master_doc_skeleton.py:1] [scripts/master_doc_skeleton.py:242] |
+| Path | `~/code-factory/scripts/master_doc_skeleton.py` — 242 lines [scripts/master_doc_skeleton.py:1] [scripts/master_doc_skeleton.py:242] |
 | Repository | `code-factory`, one of the four trees the file names in its own `REPOS` table [scripts/master_doc_skeleton.py:16-24] |
 | Revision | `dad2749` — the tree every locator below was measured against; `sha256 01e7499d…` byte-identical to the `6eea792` checkout the generator reads as its own source [scripts/master_doc_skeleton.py:17]. Last commit touching the file: `0978d58` ("fix(lint): clear the F401 red … Addresses CF-254.") |
 | Status | **VERIFIED — 124 locators (62 distinct file:line pairs), all resolving; every mechanism below was run, including a regeneration diffed against `docs/master`; the template's eight headings still match the gate and all 40 shipped documents, its membership does not (§8)** |
@@ -23,7 +23,7 @@
 |---|---|---|---|
 | `python3` | 3.14.4 measured here; the file is stdlib-only and has no `from __future__`, so the floor is the first release with `subprocess.run(capture_output=...)` — 3.7 [scripts/master_doc_skeleton.py:10-13] [scripts/master_doc_skeleton.py:34-40] | The control host, in whatever interpreter runs the script — there is no wrapper, no Makefile target and no selftest arm that invokes it (§3 row 15) | Nothing: an interpreter that cannot parse the file is the only failure, and it is loud |
 | `git` | 2.53.0 measured | Any machine holding the four trees in `REPOS` [scripts/master_doc_skeleton.py:16-24]; invoked once per module as `git -C <repo> rev-parse --short HEAD` [scripts/master_doc_skeleton.py:34-40] | `rev()` catches every exception and returns `"unknown"` [scripts/master_doc_skeleton.py:41-43]. **Measured**: with `PATH` emptied, every one of the 40 documents carries a Revision row reading `unknown`, exit 0, 0 bytes on stderr (§3 row 8) |
-| writable `OUT` | — | `/home/kara/code-factory/docs/master`, absolute and unoverridable [scripts/master_doc_skeleton.py:15]; created if missing [scripts/master_doc_skeleton.py:197] | Loud, and early: `mkdir` runs before the first module is examined, and an existing *file* at that path raises `FileExistsError` with nothing written (§3 row 11) |
+| writable `OUT` | — | `~/code-factory/docs/master`, absolute and unoverridable [scripts/master_doc_skeleton.py:15]; created if missing [scripts/master_doc_skeleton.py:197] | Loud, and early: `mkdir` runs before the first module is examined, and an existing *file* at that path raises `FileExistsError` with nothing written (§3 row 11) |
 | no network client, no database, no HTTP library | — | — | The only child process is `git` [scripts/master_doc_skeleton.py:34]; no `urllib`, `http`, `socket` or `sqlite` token exists in the file [scripts/master_doc_skeleton.py:10-13] |
 
 ### 2b. Library contracts
@@ -44,7 +44,7 @@
 
 ## 3. Verification
 
-Run 2026-11-05 in worktree `proj-wt-md-28e` at `dad2749`, Python 3.14.4, git 2.53.0. The generator has **no output flag** [scripts/master_doc_skeleton.py:15], so every run below used a copy of the file whose single `OUT` constant was repointed at `$TMPDIR`; nothing else in the copy differs. `$W` is `/home/kara/.hermes/cache/scratch/md32/md24`, `$S` is `scripts/master_doc_skeleton.py`.
+Run 2026-11-05 in worktree `proj-wt-md-28e` at `dad2749`, Python 3.14.4, git 2.53.0. The generator has **no output flag** [scripts/master_doc_skeleton.py:15], so every run below used a copy of the file whose single `OUT` constant was repointed at `$TMPDIR`; nothing else in the copy differs. `$W` is `~/.hermes/cache/scratch/md32/md24`, `$S` is `scripts/master_doc_skeleton.py`.
 
 | # | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|---|
@@ -99,7 +99,7 @@ Exactly one line is printed on a healthy run — there is no `logging` import an
 
 | Level | Line (verbatim) | Emitted when | Kind |
 |---|---|---|---|
-| stdout | `{"modules": 40, "out": "/home/kara/.hermes/cache/scratch/md32/md24/A", "red_fields": 160}` | last statement of every successful `main()` [scripts/master_doc_skeleton.py:234-238]; the `out` field is whatever `OUT` is [scripts/master_doc_skeleton.py:15] | **evidentiary** — the only machine-readable statement of what was written, and the only way to see that the run happened at all |
+| stdout | `{"modules": 40, "out": "~/.hermes/cache/scratch/md32/md24/A", "red_fields": 160}` | last statement of every successful `main()` [scripts/master_doc_skeleton.py:234-238]; the `out` field is whatever `OUT` is [scripts/master_doc_skeleton.py:15] | **evidentiary** — the only machine-readable statement of what was written, and the only way to see that the run happened at all |
 | stderr | `PermissionError: [Errno 13] Permission denied: '…/fx2/scripts/locked.py'` | a source file cannot be read at [scripts/master_doc_skeleton.py:70]; the whole run aborts | **evidentiary** — names the exact file; the documents already written stay written (§3 row 10) |
 | stderr | `FileExistsError: [Errno 17] File exists: '…/out_is_file'` | `OUT` exists as a file, at [scripts/master_doc_skeleton.py:197] | **evidentiary** — fires before anything is written |
 | stdout (template) | a row whose middle column holds the placeholder token at [scripts/master_doc_skeleton.py:170], and whose last column is `descriptive (**unverified as evidence**)` | for every quoted string of 12–90 characters that follows `log`/`print`/`echo`/`info`/`warn`/`error` in a scanned module [scripts/master_doc_skeleton.py:80-87] [scripts/master_doc_skeleton.py:165-171] | **descriptive** — the template's own words: a captured string is not evidence that the line is ever emitted |
@@ -129,16 +129,16 @@ Direction means *which way the error goes*: fail-open (a wrong answer presented 
 
 | Setting | Value | Consequence if wrong |
 |---|---|---|
-| `OUT` [scripts/master_doc_skeleton.py:15] | `/home/kara/code-factory/docs/master` | writes into the shipped document set; the only way to redirect it is to edit the line (§3 preamble) |
+| `OUT` [scripts/master_doc_skeleton.py:15] | `~/code-factory/docs/master` | writes into the shipped document set; the only way to redirect it is to edit the line (§3 preamble) |
 | `REPOS` [scripts/master_doc_skeleton.py:16-24] | four absolute paths, one of them misspelt in its display name (`coding-herms-scheduler`) | a moved tree silently contributes zero components (§6) |
-| `PROXY` [scripts/master_doc_skeleton.py:25] | `/home/kara/.hermes/scripts/cf-inference-proxy.py`, appended after every repository component [scripts/master_doc_skeleton.py:211] | it is **never reached** while 40 or more components exist, because the slice happens after the append [scripts/master_doc_skeleton.py:212]; measured: `cf-inference-proxy` appears 0 times in a fresh `00-INDEX.md` |
+| `PROXY` [scripts/master_doc_skeleton.py:25] | `~/.hermes/scripts/cf-inference-proxy.py`, appended after every repository component [scripts/master_doc_skeleton.py:211] | it is **never reached** while 40 or more components exist, because the slice happens after the append [scripts/master_doc_skeleton.py:212]; measured: `cf-inference-proxy` appears 0 times in a fresh `00-INDEX.md` |
 | `SKIP` [scripts/master_doc_skeleton.py:27-29] | ten excluded directory names, no `.worktrees` | worktree copies of a repository are counted as components — measured: crier's first component is `go:.worktrees/crfeat036-worker-20261015/internal/a2a/card.go` |
 
 The one table in a generated document that looks like this section is unreliable by construction: the detector collects every upper-case token of four characters or more that starts with `CF_`, `HERMES_`, `CRIER_`, `DISPATCH_`, `API_` or `GITREINS_` [scripts/master_doc_skeleton.py:74-79] and prints one row per hit [scripts/master_doc_skeleton.py:185-191]. Because those six prefixes are themselves literals in the file, this module's own generated §7 lists `API_`, `CRIER_`, `DISPATCH_`, `GITREINS_` and `HERMES_` as variables — five rows, all false, each with `unknown` as its default. The detector finds the filter, not the environment.
 
 ## 8. Evidence of record
 
-All runs 2026-11-05, worktree `proj-wt-md-28e` at `dad2749`, `$W=/home/kara/.hermes/cache/scratch/md32/md24`, generator copied to `$W/run_skeleton.py` with only `OUT` repointed (line 15) — the file itself is byte-identical to the shipped one (`cmp` clean).
+All runs 2026-11-05, worktree `proj-wt-md-28e` at `dad2749`, `$W=~/.hermes/cache/scratch/md32/md24`, generator copied to `$W/run_skeleton.py` with only `OUT` repointed (line 15) — the file itself is byte-identical to the shipped one (`cmp` clean).
 
 1. **Generation**: `python3 run_skeleton.py` → `{"modules": 40, "out": "…/A", "red_fields": 160}`, exit 0, stderr 0 bytes, 0.79 s. 41 files (40 documents + index). Ran a second time into `B/`; `diff -r A B` empty (§3 row 3).
 2. **Template vs gate vs shipped set**: `python3 $W/probe_template.py $W/A docs/master .` → `TEMPLATE-MATCH: PASS`. The eight headings, in order, are identical in the fresh generation, in `REQUIRED_SECTIONS` [scripts/master_doc_check.py:21-30] and in all 40 shipped documents. **The template shape has not drifted.**

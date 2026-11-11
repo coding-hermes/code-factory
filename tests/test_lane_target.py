@@ -118,10 +118,10 @@ class ParseLocal(unittest.TestCase):
 
 class ParseRemote(unittest.TestCase):
     def test_scp_style_user_host_path(self):
-        t = lane_target.parse("builder@node-01:/home/agent/cf")
+        t = lane_target.parse("builder@node-01:/srv/cf")
         self.assertEqual(
             (t.kind, t.scheme, t.user, t.host, t.path),
-            ("remote", "ssh", "builder", "node-01", "/home/agent/cf"),
+            ("remote", "ssh", "builder", "node-01", "/srv/cf"),
         )
 
     def test_scp_style_relative_path_normalised(self):
@@ -564,7 +564,7 @@ class VerifyBunker(unittest.TestCase):
 
     def test_existing_path_verifies(self):
         self._shim(exists=True)
-        t = lane_target.parse("bunker://abc/home/bunker-abc/repo")
+        t = lane_target.parse("bunker://abc/srv/repo")
         old = os.environ["PATH"]
         os.environ["PATH"] = self.bin + os.pathsep + old
         try:
@@ -577,7 +577,7 @@ class VerifyBunker(unittest.TestCase):
 
     def test_missing_path_fails(self):
         self._shim(exists=False)
-        t = lane_target.parse("bunker://abc/home/bunker-abc/nope")
+        t = lane_target.parse("bunker://abc/srv/nope")
         old = os.environ["PATH"]
         os.environ["PATH"] = self.bin + os.pathsep + old
         try:
@@ -589,7 +589,7 @@ class VerifyBunker(unittest.TestCase):
         self.assertFalse(checks["path_exists"])
 
     def test_unreachable_agent_fails(self):
-        t = lane_target.parse("bunker://abc/home/bunker-abc/repo")
+        t = lane_target.parse("bunker://abc/srv/repo")
         old = os.environ["PATH"]
         os.environ["PATH"] = os.path.join(self.tmp, "empty")
         try:

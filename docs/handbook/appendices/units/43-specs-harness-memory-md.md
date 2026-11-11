@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/specs/HARNESS-MEMORY.md` |
+| Path | `~/code-factory/specs/HARNESS-MEMORY.md` |
 | Repository | `code-factory` |
 | Revision | `3d54355` |
 | Status | **RED — six harnesses researched, zero adapters export anything** |

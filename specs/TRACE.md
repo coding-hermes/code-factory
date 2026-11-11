@@ -3,7 +3,7 @@
 Status: **DESIGN + GAP REGISTER.** `specs/ENVELOPE.md` already defines `corr_id`, `dispatch_id` and
 `idempotency_key` (`specs/ENVELOPE.md:12`, `:61`), and the round-trip probe measured that the chain
 breaks in practice: five unacked replies carried `in_reply_to` and **none** carried `corr_id`
-(`/home/kara/code-factory-reports/crier-scheduler-roundtrip-2026-11-05.md:258`). This page fixes the
+(`~/code-factory-reports/crier-scheduler-roundtrip-2026-11-05.md:258`). This page fixes the
 whole ladder and names every break.
 
 ## 1. The problem

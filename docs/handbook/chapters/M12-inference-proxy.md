@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Module name | INFERENCE PROXY (`cf-inference-proxy.py`) |
-| Path | `/home/kara/.hermes/scripts/cf-inference-proxy.py` (273 lines) |
+| Path | `~/.hermes/scripts/cf-inference-proxy.py` (273 lines) |
 | Revision | content sha256 `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (lives outside any git repo; no revision to stamp) |
 | Language / runtime | Python — `#!/usr/bin/env python3`, no pinned version; **requires >= 3.10** (F12-5: `_forward` at `:164` declares `body: bytes | None`, an evaluated union annotation) |
 | Owner lane | code-factory (control-host service, consumed by nodes) |
@@ -84,7 +84,7 @@ failure for a paths register.
 | Dependency | Version constraint | Where | How absence is detected |
 |---|---|---|---|
 | python3 (stdlib only) | **>= 3.10** (`:164` union annotation) | control host | import/syntax failure on < 3.10 |
-| node token file | `TOKENS_PATH` `/home/kara/.hermes/secrets/cf-node-tokens.json` (`:48`) | control host | `FATAL: no token file … refusing to start open`, exit 2 (`:265-267`) |
+| node token file | `TOKENS_PATH` `~/.hermes/secrets/cf-node-tokens.json` (`:48`) | control host | `FATAL: no token file … refusing to start open`, exit 2 (`:265-267`) |
 | upstream key | selected by `CF_PROXY_UPSTREAM_KEY_ENV` (default `API_SERVER_KEY`, `:47`) in `~/.hermes/.env` | control host | `FATAL: API_SERVER_KEY missing`, exit 2 (`:268-270`) |
 
 **4b. Library contracts**
@@ -103,10 +103,10 @@ failure for a paths register.
 | `CF_PROXY_UPSTREAM_MODEL` | `""` (`:45`) | a model name or empty | model rewrite | non-empty rewrites the requested model before forwarding (`:166-170`) |
 | `CF_PROXY_UPSTREAM_KEY_ENV` | `API_SERVER_KEY` (`:47`) | an env var name | which credential the proxy reads | a renamed credential must be coordinated with the endpoint |
 | `CF_PROXY_ALLOWED_MODELS` | `hermes` (`:60-62`) | comma list | which models a node may ask for | empty env = deny all, never "allow everything" (`:58-59`) |
-| `TOKENS_PATH` | `/home/kara/.hermes/secrets/cf-node-tokens.json` (`:48`) | a JSON file | the node-token mapping read at request time | a missing file → `FATAL: no token file`, exit 2 (`:265-267`) |
-| `ENV_PATH` | `/home/kara/.hermes/.env` (`:49`, read by `upstream_key` `:75-80`) | an env file | where the upstream key is scanned | a renamed file must match the provisioner |
-| `USAGE_LOG` | `/home/kara/.hermes/logs/cf-inference-usage.jsonl` (`:50`) | a path | usage capture sink | a failing sink raises into the request path (F12-6) |
-| `CAPTURE_LOG` | `/home/kara/.hermes/logs/cf-inference-requests.jsonl` (`:52`) | a path | request capture sink | capture loss is silent (F12-6) |
+| `TOKENS_PATH` | `~/.hermes/secrets/cf-node-tokens.json` (`:48`) | a JSON file | the node-token mapping read at request time | a missing file → `FATAL: no token file`, exit 2 (`:265-267`) |
+| `ENV_PATH` | `~/.hermes/.env` (`:49`, read by `upstream_key` `:75-80`) | an env file | where the upstream key is scanned | a renamed file must match the provisioner |
+| `USAGE_LOG` | `~/.hermes/logs/cf-inference-usage.jsonl` (`:50`) | a path | usage capture sink | a failing sink raises into the request path (F12-6) |
+| `CAPTURE_LOG` | `~/.hermes/logs/cf-inference-requests.jsonl` (`:52`) | a path | request capture sink | capture loss is silent (F12-6) |
 | upstream timeout | **300 s** (`:204`, `:241`) | seconds | `urlopen` timeout on both stream and buffered legs | a shorter timeout truncates long generations |
 | `MAX_BODY` | 4 MiB (`:54`) | positive int | request body ceiling | a body `> MAX_BODY` → 400 (`:142-143`) |
 | `LISTEN` | `("0.0.0.0", 8775)` (`:53`) | **a hardcoded constant, not a setting** | proxy listener | no env/flag override; binds 0.0.0.0 so the tailnet can reach it |
@@ -155,8 +155,8 @@ to an open path.
 
 | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|
-| content hash | `sha256sum /home/kara/.hermes/scripts/cf-inference-proxy.py` | full digest | 2026-11-07 | **PASS** — `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (re-confirmed unchanged) |
-| python compile | `python3 -m py_compile /home/kara/.hermes/scripts/cf-inference-proxy.py` | exit 0 | 2026-11-07 | PASS |
+| content hash | `sha256sum ~/.hermes/scripts/cf-inference-proxy.py` | full digest | 2026-11-07 | **PASS** — `b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5` (re-confirmed unchanged) |
+| python compile | `python3 -m py_compile ~/.hermes/scripts/cf-inference-proxy.py` | exit 0 | 2026-11-07 | PASS |
 | admission (no token) | `curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8775/v1/chat/completions -d '{"model":"hermes"}'` | 401 | 2026-11-07 | **PASS** — 401 (proxy live on `:8775`) |
 | systemd unit active | `systemctl --user status cf-inference-proxy.service` | loaded, enabled, `active (running)` | 2026-11-07 | **PASS** — `active` (`systemctl --user is-active` → active) |
 | admission (disallowed model, valid token) | POST `{"model":"definitely-not-allowed-model"}` with a valid node token | 403 `model not permitted` | 2026-11-06 | reproduced in an earlier judge run (`:155-160`); **not re-run** — the node token file was not read |
@@ -164,7 +164,7 @@ to an open path.
 ## 8. Metrics
 
 **RED — none (absence-proved).** The proxy emits no counters, gauges or histograms.
-`grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' /home/kara/.hermes/scripts/cf-inference-proxy.py`
+`grep -nE 'prometheus|Counter|Gauge|Histogram|/metrics' ~/.hermes/scripts/cf-inference-proxy.py`
 → 0 matches (the file carries no metric registry). It **does** append structured capture/usage
 JSONL — `capture_request` (`:83-95`) and `log_usage` (`:98-101`) with
 `ts, node, model, status, bytes, secs, first_byte, streamed` (`:220-223`, `:252-253`) — but that

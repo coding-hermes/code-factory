@@ -7,7 +7,7 @@ ruff 0.15.22). Reproduce with `ruff format --check .` at the named commit.
 
 Pristine export of the tip commit:
 
-    $ git -C /home/kara/code-factory archive af67c3b | tar -x -C parent
+    $ git -C ~/code-factory archive af67c3b | tar -x -C parent
     $ (cd parent && ruff format --check .)
     Would reformat: scripts/lane_target.py
     Would reformat: tests/test_lane_target.py

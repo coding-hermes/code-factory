@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/github-app-setup.sh` — 297 lines, three modes (`--check`, `--apply`, `--manifest`) [scripts/github-app-setup.sh:1] [scripts/github-app-setup.sh:76] |
+| Path | `~/code-factory/scripts/github-app-setup.sh` — 297 lines, three modes (`--check`, `--apply`, `--manifest`) [scripts/github-app-setup.sh:1] [scripts/github-app-setup.sh:76] |
 | Repository | `code-factory` |
 | Revision | `dad2749` (worktree `~/proj-wt-md-28e`, clean) |
 | Status | **VERIFIED** — 21 arms executed on 2026-11-05 against a local GitHub API stub (§3); 267 locator citations (150 distinct file:line pairs), all resolve; cites fact: FACT-05, FACT-10; `python3 scripts/master_doc_check.py docs/master --only 13- --strict` → `MASTER-DOC: PASS` |

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/proj-wt-md-30d/scripts/node_identity.py` — 111 lines, two functions, `set_path` and `main` [scripts/node_identity.py:26] [scripts/node_identity.py:50] |
+| Path | `~/proj-wt-md-30d/scripts/node_identity.py` — 111 lines, two functions, `set_path` and `main` [scripts/node_identity.py:26] [scripts/node_identity.py:50] |
 | Repository | `code-factory` |
 | Revision | `d8c7796` — the `origin/main` tip every locator below was measured against on 2026-11-05 |
 | Status | **VERIFIED — 18 measured checks in scratch directories; one defect proven by execution (§6 row 8: a merge that lands and then exits 1), and nine input shapes measured byte-for-byte** |
@@ -61,7 +61,7 @@ Three consequences follow, and they are the reason this section is long:
 
 ## 3. Verification
 
-Measured 2026-11-05 in worktree `/home/kara/proj-wt-md-30d` at `d8c7796`, against scratch directories under `$TMPDIR`, with the manifest path passed explicitly (the module reads no `HOME` — §7). Every command below was run as written.
+Measured 2026-11-05 in worktree `~/proj-wt-md-30d` at `d8c7796`, against scratch directories under `$TMPDIR`, with the manifest path passed explicitly (the module reads no `HOME` — §7). Every command below was run as written.
 
 | # | Check | Command | Expected | Result |
 |---|---|---|---|---|
@@ -94,11 +94,11 @@ Every line has a two-space gap after the tag, the word `identity` as the row nam
 
 | Level | Line (verbatim, as measured) | Format site | Emitted when | Kind |
 |---|---|---|---|---|
-| `PASS` | `PASS  identity — merged agent, namespace, duckbrain.namespaces[], provisioned_by into /home/kara/.hermes/cache/scratch/md25b/p30/home/.node/node.json` | [scripts/node_identity.py:104] | at least one `key=value` differed from what the file held. The key list is in **argv order**, `[]` suffix included | evidentiary — the list is falsifiable: re-read the manifest and every named key holds the value that was passed |
-| `PASS` | `PASS  identity — /home/kara/.hermes/cache/scratch/md25b/p30/home/.node/node.json already carries every value (unchanged)` | [scripts/node_identity.py:106] | every `key=value` compared equal [scripts/node_identity.py:44] | evidentiary for its narrow claim, with a trap: "unchanged" describes the **JSON**, not the file — inode and mtime both move (§3 row 2) |
-| `FAIL` (stderr) | `FAIL  identity — /home/kara/.hermes/cache/scratch/md25b/p30b/z.json is not a readable JSON object (Expecting value: line 1 column 1 (char 0)); left untouched` | [scripts/node_identity.py:71] | the existing file did not parse, including the zero-byte case. The exception text is interpolated, so the tail varies by cause | evidentiary — "left untouched" is checkable with a hash, and was: identical before and after |
-| `FAIL` (stderr) | `FAIL  identity — /home/kara/.hermes/cache/scratch/md25b/p30b/home4.json is not a readable JSON object (top level is not an object); left untouched` | [scripts/node_identity.py:69] | the file parsed but was not a JSON object | evidentiary — same checkable claim |
-| `FAIL` (stderr) | `FAIL  identity — /home/kara/.hermes/cache/scratch/md25b/p30b/adir is not a readable JSON object ([Errno 21] Is a directory: '/home/kara/.hermes/cache/scratch/md25b/p30b/adir'); left untouched` | [scripts/node_identity.py:70] | the path is a directory or otherwise unreadable — one bare `except Exception` catches everything the `open`/`load` pair raises | evidentiary — the reason string is the OS's, which is why four different failures share one shape |
+| `PASS` | `PASS  identity — merged agent, namespace, duckbrain.namespaces[], provisioned_by into ~/.hermes/cache/scratch/md25b/p30/home/.node/node.json` | [scripts/node_identity.py:104] | at least one `key=value` differed from what the file held. The key list is in **argv order**, `[]` suffix included | evidentiary — the list is falsifiable: re-read the manifest and every named key holds the value that was passed |
+| `PASS` | `PASS  identity — ~/.hermes/cache/scratch/md25b/p30/home/.node/node.json already carries every value (unchanged)` | [scripts/node_identity.py:106] | every `key=value` compared equal [scripts/node_identity.py:44] | evidentiary for its narrow claim, with a trap: "unchanged" describes the **JSON**, not the file — inode and mtime both move (§3 row 2) |
+| `FAIL` (stderr) | `FAIL  identity — ~/.hermes/cache/scratch/md25b/p30b/z.json is not a readable JSON object (Expecting value: line 1 column 1 (char 0)); left untouched` | [scripts/node_identity.py:71] | the existing file did not parse, including the zero-byte case. The exception text is interpolated, so the tail varies by cause | evidentiary — "left untouched" is checkable with a hash, and was: identical before and after |
+| `FAIL` (stderr) | `FAIL  identity — ~/.hermes/cache/scratch/md25b/p30b/home4.json is not a readable JSON object (top level is not an object); left untouched` | [scripts/node_identity.py:69] | the file parsed but was not a JSON object | evidentiary — same checkable claim |
+| `FAIL` (stderr) | `FAIL  identity — ~/.hermes/cache/scratch/md25b/p30b/adir is not a readable JSON object ([Errno 21] Is a directory: '~/.hermes/cache/scratch/md25b/p30b/adir'); left untouched` | [scripts/node_identity.py:70] | the path is a directory or otherwise unreadable — one bare `except Exception` catches everything the `open`/`load` pair raises | evidentiary — the reason string is the OS's, which is why four different failures share one shape |
 | `FAIL` (stderr) | `FAIL  identity — argument is not key=value: noequalsign` | [scripts/node_identity.py:60] | an argv has no `=`, or an empty key. Printed **before** the manifest is read | descriptive — a fact about the caller's argv, nothing about the node |
 | `FAIL` (stderr) | `FAIL  identity — duckbrain.namespaces[] was declared empty` | [scripts/node_identity.py:32] | a `key[]=` value contained no non-blank items | descriptive |
 | `usage` (stderr) | `usage: node_identity.py <path> key=value [key=value ...]` | [scripts/node_identity.py:52] | fewer than two arguments | descriptive |
@@ -137,7 +137,7 @@ Direction is stated as **does the run end up green when it should not** (fails O
 
 ## 8. Evidence of record
 
-- Revision: worktree `/home/kara/proj-wt-md-30d`, branch `wt/md-30d`, based on `origin/main` at `d8c7796`. `scripts/node_identity.py` is byte-identical to that tree (111 lines, `py_compile` rc 0).
+- Revision: worktree `~/proj-wt-md-30d`, branch `wt/md-30d`, based on `origin/main` at `d8c7796`. `scripts/node_identity.py` is byte-identical to that tree (111 lines, `py_compile` rc 0).
 - The merge and the byte shape behind §3 rows 1-2, mode and inode included:
 
   ```

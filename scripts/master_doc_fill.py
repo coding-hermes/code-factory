@@ -23,7 +23,9 @@ from datetime import datetime, timezone
 import pathlib
 from pathlib import Path
 
-MASTER = Path(os.environ.get("CF_MASTER_DIR") or "/home/kara/code-factory/docs/master")
+MASTER = Path(
+    os.environ.get("CF_MASTER_DIR") or os.path.expanduser("~/code-factory/docs/master")
+)
 FILLED_MARKER = "FILLED — "
 STATUS_ROW = re.compile(r"^\| Status \| (.*?) \|[ \t]*$", re.MULTILINE)
 # The completions a fill has ever written. `mark_filled()` stamps FILLED; the earlier
@@ -31,8 +33,8 @@ STATUS_ROW = re.compile(r"^\| Status \| (.*?) \|[ \t]*$", re.MULTILINE)
 # that one. A bare `**VERIFIED**` row is the same claim with no measurements attached. All
 # three mean "already filled": selecting them again is the loop that never converged.
 COMPLETE_STATUS = re.compile(r"^\*\*(?:FILLED|VERIFIED)(?: — |\*\*)")
-STATE = Path("/home/kara/.hermes/logs/master-doc-fill.jsonl")
-ENV = Path("/home/kara/.hermes/.env")
+STATE = Path(os.path.expanduser("~/.hermes/logs/master-doc-fill.jsonl"))
+ENV = Path(os.path.expanduser("~/.hermes/.env"))
 
 # Self-talk at the start of a line. Kept narrow on purpose: a document may say "We" in
 # prose, but a construction note ("Let's create rows", "Maybe keep status RED") is not
@@ -213,7 +215,7 @@ def gate(before, after, out, repo_root):
     return "ok", "%d sections, %d locators" % (a["h2"], a["locators"])
 
 
-REPO_ROOT = pathlib.Path("/home/kara/code-factory")
+REPO_ROOT = pathlib.Path(os.path.expanduser("~/code-factory"))
 
 
 def resolve(path_field, repo):
@@ -221,11 +223,11 @@ def resolve(path_field, repo):
     if p.exists():
         return p
     for base in (
-        "/home/kara/code-factory",
-        "/home/kara/coding-hermes-scheduler/coding-herms-scheduler",
-        "/home/kara/crier",
-        "/home/kara/crier-fleet",
-        "/home/kara",
+        os.path.expanduser("~/code-factory"),
+        os.path.expanduser("~/coding-hermes-scheduler/coding-hermes-scheduler"),
+        os.path.expanduser("~/crier"),
+        os.path.expanduser("~/crier-fleet"),
+        os.path.expanduser("~"),
     ):
         cand = Path(base) / path_field
         if cand.exists():

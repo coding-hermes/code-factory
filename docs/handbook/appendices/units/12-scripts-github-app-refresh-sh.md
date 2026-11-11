@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/github-app-refresh.sh` — 146 lines [scripts/github-app-refresh.sh:1] |
+| Path | `~/code-factory/scripts/github-app-refresh.sh` — 146 lines [scripts/github-app-refresh.sh:1] |
 | Repository | `code-factory` [scripts/github-app-refresh.sh:1] |
 | Revision | `dad2749`; the file is byte-identical on `origin/main` (`6eea792`) — `git diff --stat HEAD origin/main -- scripts/github-app-refresh.sh` is empty — sha256 `b4d5d4d4d72c8cca467bbd1e4fa4ad0b102988be6f093a59c3435072a8b3e636` |
 | Status | **VERIFIED — 104 distinct locators (213 citations), all resolve; node-side remote body read-from-code (no node touched), stated as such in §6 and §8** |
@@ -31,7 +31,7 @@
 | A readable App env file | Pointers only, no secret: `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY_FILE` [scripts/github-app-token.py:20-26] | `$GITHUB_APP_ENV_FILE` or the default [scripts/github-app-refresh.sh:24], tested with `-f` | **Named refusal, exit 1**, naming the setup script: `run scripts/github-app-setup.sh --apply once` [scripts/github-app-refresh.sh:57] |
 | `stat` with `-c` (GNU/coreutils) | coreutils 0.8.0 (uutils) measured here | `PATH`, local mode only | Not detected as an absence: a `stat` that rejects `-c` falls to `echo '?'`, which then prints `is mode ?, expected 600` and — because that line has no exit — exits 0 [scripts/github-app-refresh.sh:101-102] |
 | `mktemp` | coreutils | `PATH`; honours `TMPDIR` | Not detected: the command substitution yields an empty name and the later `rm -f ""` is a no-op [scripts/github-app-refresh.sh:106] [scripts/github-app-refresh.sh:124] |
-| `bunker` client | not in this tree; `/home/kara/.local/bin/bunker` on the control host here | `PATH`, **node mode only** — local mode never looks for it [scripts/github-app-refresh.sh:92] [scripts/github-app-refresh.sh:118] | **Named refusal, exit 1**: `FAIL bunker_cli — the bunker client is not on PATH` [scripts/github-app-refresh.sh:119], measured §3 T18 |
+| `bunker` client | not in this tree; `~/.local/bin/bunker` on the control host here | `PATH`, **node mode only** — local mode never looks for it [scripts/github-app-refresh.sh:92] [scripts/github-app-refresh.sh:118] | **Named refusal, exit 1**: `FAIL bunker_cli — the bunker client is not on PATH` [scripts/github-app-refresh.sh:119], measured §3 T18 |
 | Network to the GitHub API | — | Outbound HTTPS from the **minter**, not from this script: `grep -c curl scripts/github-app-refresh.sh` = 0; the only `--api-base` this file does is pass-through [scripts/github-app-refresh.sh:33] [scripts/github-app-refresh.sh:68] | The minter turns any transport failure into one FAIL row, which this script reports as `FAIL refresh` and exit 1 [scripts/github-app-refresh.sh:95] |
 
 ### 2b. Library contracts
@@ -54,7 +54,7 @@
 
 ## 3. Verification
 
-Every row below was executed on 2026-11-05 from a scratch `HOME` (`/home/kara/.hermes/cache/scratch/md32/probe/home`) with `env -i`, a copied tree, and a **stub minter** in place of the real one — except R1-R3, which run the real minter against an env file that names a nonexistent key, so the failure path is reached before any network call and no token is ever minted. No GitHub App was contacted, no live token was produced, and no node was touched.
+Every row below was executed on 2026-11-05 from a scratch `HOME` (`~/.hermes/cache/scratch/md32/probe/home`) with `env -i`, a copied tree, and a **stub minter** in place of the real one — except R1-R3, which run the real minter against an env file that names a nonexistent key, so the failure path is reached before any network call and no token is ever minted. No GitHub App was contacted, no live token was produced, and no node was touched.
 
 | # | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|---|
@@ -144,7 +144,7 @@ github-app-refresh — node: cf-node on b-01 (min-age 2400s)
     PASS  token — /tmp/tmp.p61LoXa11B, mode 600, expires 2026-11-05T18:00:00Z
   GITHUB APP TOKEN: PASS — minted a 3600s token (value never printed)
   ..    token mode 600
-  PASS  refresh — cf-node:/home/kara/.hermes/cache/scratch/md32/probe/home/.node/auth/github.token replaced (mode 600), git credential store repointed
+  PASS  refresh — cf-node:~/.hermes/cache/scratch/md32/probe/home/.node/auth/github.token replaced (mode 600), git credential store repointed
 exit=0   temp leftovers in TMPDIR: (none)
 
 $ MOCK_BUNKER=execfail MOCK=ok bash ... --node cf-node --server b-01   # T14
@@ -263,8 +263,8 @@ Nothing else is read or written: the file contains no other redirection, no conf
 ## 8. Evidence of record
 
 - **Revision under test:** `dad2749` (worktree `wt/md-28e`). `scripts/github-app-refresh.sh` is byte-identical to `origin/main` (`6eea792`), sha256 `b4d5d4d4d72c8cca467bbd1e4fa4ad0b102988be6f093a59c3435072a8b3e636`.
-- **Method:** the script and `scripts/lib.sh` were copied byte-for-byte into `/home/kara/.hermes/cache/scratch/md32/probe/bin/`, with a **stub** `github-app-token.py` (sha256 `2a44897c4da0c3345527611d365a9b8a5eca1d9bc82c26c27666a8af1dc4fa40`) and a **stub** `bunker` (sha256 `3ebde3ef9e5f7e535b01408a799b0b11a7bafc1f8653c53347d847f5a03a9be1`) beside it. Every run used `env -i` with a scratch `HOME` and `TMPDIR` under the probe directory. R1-R3 are the **only** runs of the real minter, and each stops at the key check or at the mtime skip — no JWT is signed, no request is made, no token is minted.
-- **Probe scripts and transcripts** (all under `/home/kara/.hermes/cache/scratch/md32/probe/`):
+- **Method:** the script and `scripts/lib.sh` were copied byte-for-byte into `~/.hermes/cache/scratch/md32/probe/bin/`, with a **stub** `github-app-token.py` (sha256 `2a44897c4da0c3345527611d365a9b8a5eca1d9bc82c26c27666a8af1dc4fa40`) and a **stub** `bunker` (sha256 `3ebde3ef9e5f7e535b01408a799b0b11a7bafc1f8653c53347d847f5a03a9be1`) beside it. Every run used `env -i` with a scratch `HOME` and `TMPDIR` under the probe directory. R1-R3 are the **only** runs of the real minter, and each stops at the key check or at the mtime skip — no JWT is signed, no request is made, no token is minted.
+- **Probe scripts and transcripts** (all under `~/.hermes/cache/scratch/md32/probe/`):
   - `run.sh` sha256 `1d6d35342ee8fb610d3e24f40ed3d770525829c316b16cbe2b75b9db764783e1` → `t1.log` sha256 `eb261a32105b698d6edf79e537653e9b5ba126afa80abde77fa7a3dc98eec222` (T1-T17)
   - `run2.sh` sha256 `4757404bd623504b43aa057f13c3cc77cc9ace606869843dab25e47864a9a0f9` → `t2.log` sha256 `76321750dfab21c5592bf14a83159629767a99d5d41295dc134028e8eba821a7` (T18-T20: no-bunker PATH, env-declared token path ignored, sentinel census)
   - `run3.sh` sha256 `0852d48c260eccabc5dd59bcd873883de13e5d47d262da057b3375981864e92e` → `t3.log` sha256 `ddaff0cdd7dc13f5b217b88588173aa3320f6871d5dd0df63044adee99970e44` (R1-R3: real minter, both terminal directions)

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/add_family_lanes.py` |
+| Path | `~/code-factory/scripts/add_family_lanes.py` |
 | Repository | `code-factory` |
 | Revision | `29e8e5e` (source file last changed; tree `6eea792`) |
 | Status | **VERIFIED — every claim measured against a copy of the scheduler DB and a scratch `schedulerd` on 2026-11-05** |
@@ -31,7 +31,7 @@ The eight lanes are `code-factory-docs`, `code-factory-docs-qa`, `code-factory-r
 `code-factory-review` (`scripts/add_family_lanes.py:50`). Every one is a *satellite* name: it ends
 in a role suffix from the scheduler's suffix table (`-qa`, `-pm`, `-sync`, `-dogfood`, `-perf`,
 `-releng`, `-review`, `-docs`, `-readme`) at
-`/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/scheduler/lane_class.go:31`.
+`~/coding-hermes-scheduler/coding-herms-scheduler/internal/scheduler/lane_class.go:31`.
 That is why the script's own docstring says it may only be run after the scheduler gained nine
 satellite families (`scripts/add_family_lanes.py:4`).
 
@@ -39,7 +39,7 @@ satellite families (`scripts/add_family_lanes.py:4`).
   repository creates them — `scripts/load_lane_config.py:21` loads exactly six core lanes, and the
   README states the split explicitly (`README.md:219`). Absent lanes are not self-healing: the
   satellite machinery only looks rows up and *skips* the ones that are missing
-  (`/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:705`),
+  (`~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:705`),
   so no docs/readme/releng/perf/review coverage exists for this project until something posts the
   rows. Measured today, the live fleet carries 17 `code-factory%` rows and **not one of them is the
   three `-qa` satellites this script would create** — `code-factory-docs-qa`,
@@ -63,14 +63,14 @@ satellite families (`scripts/add_family_lanes.py:4`).
   prompt swapped for `prompts/*.md` as it stands today.
 - **What it does that it does not say:** the lanes are created **disabled**. The body carries no
   `enabled` key, and the API clamps `enabled` to false regardless — "create NEVER stores an enabled
-  row" (`/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:273`).
+  row" (`~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:273`).
   Measured: all eight rows landed with `enabled=0` (section 3, run A). Creating the family is not
   the same as turning it on, and this script has no step that turns it on.
 
 ## 2. Dependencies and library contracts
 
 The scheduler these writes target is a separate repository
-(`/home/kara/coding-hermes-scheduler/coding-herms-scheduler`), so its files are cited by absolute
+(`~/coding-hermes-scheduler/coding-herms-scheduler`), so its files are cited by absolute
 path, spelled out at every locator even where the surrounding prose shortens the name.
 
 ### 2a. Runtime dependencies
@@ -99,17 +99,17 @@ path, spelled out at every locator even where the surrounding prose shortens the
 
 | Peer | Direction | Transport | Payload | Other side (file:function) |
 |---|---|---|---|---|
-| scheduler `POST /api/v1/projects` | out | HTTP/1.1 JSON over loopback | `{"name", "repo_url": "local:<ROOT>", "workdir"}` — no `enabled`, no `model`, no `provider`, no pacing | `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:219` (`createProject`); operator gate `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:30`; body defaults `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:250`; born-disarmed clamp `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:273`; `409 project already exists` `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:279` |
-| scheduler `PUT /api/v1/projects/<name>` | out | HTTP/1.1 JSON over loopback | `{"namespace_id": <ns>}` — the response status is **discarded** (`scripts/add_family_lanes.py:82`) | `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:442` (`updateProject`) → `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/database/projects.go:885` (`namespace_id = ?`) |
-| lane-shape gate behind both writes | in (enforced by the peer) | — | refuses an off-convention workdir for a `<primary>-<family>` lane, and an enabled-but-unarmed satellite | `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:197` (`validateLaneWorkdir`), allow-list built at `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:166` from `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:75`, refusal text at `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:222` |
-| `projects` table | out | direct SQLite write, second connection | `parent`, `admission_mode`, `prompt`, `prompt_mode` for eight names | the API's own writer is `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/database/projects.go:706` (`UpdateProject`) and is **bypassed**; the admission law it enforces at `/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:551` never sees this write |
+| scheduler `POST /api/v1/projects` | out | HTTP/1.1 JSON over loopback | `{"name", "repo_url": "local:<ROOT>", "workdir"}` — no `enabled`, no `model`, no `provider`, no pacing | `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:219` (`createProject`); operator gate `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:30`; body defaults `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:250`; born-disarmed clamp `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:273`; `409 project already exists` `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:279` |
+| scheduler `PUT /api/v1/projects/<name>` | out | HTTP/1.1 JSON over loopback | `{"namespace_id": <ns>}` — the response status is **discarded** (`scripts/add_family_lanes.py:82`) | `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:442` (`updateProject`) → `~/coding-hermes-scheduler/coding-herms-scheduler/internal/database/projects.go:885` (`namespace_id = ?`) |
+| lane-shape gate behind both writes | in (enforced by the peer) | — | refuses an off-convention workdir for a `<primary>-<family>` lane, and an enabled-but-unarmed satellite | `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:197` (`validateLaneWorkdir`), allow-list built at `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:166` from `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:75`, refusal text at `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:222` |
+| `projects` table | out | direct SQLite write, second connection | `parent`, `admission_mode`, `prompt`, `prompt_mode` for eight names | the API's own writer is `~/coding-hermes-scheduler/coding-herms-scheduler/internal/database/projects.go:706` (`UpdateProject`) and is **bypassed**; the admission law it enforces at `~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:551` never sees this write |
 | `prompts/*.md` | in | filesystem read | the six role files; each lane's `prompt` column is set to a whole file | `README.md:222` states the loader copies prompt text into the row and that re-running the loader is how an edit is propagated |
 
 The asymmetry in the last two rows is the module's central design fact: **phase 1 is gated, phase 2
 is not.** `admission_mode='cooldown'` written by SQL is never checked against the law a PUT would
-enforce (`/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:551`). For these eight names it happens to agree — a lane whose name
+enforce (`~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:551`). For these eight names it happens to agree — a lane whose name
 ends in a role suffix is classified `satellite`
-(`/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/scheduler/lane_class.go:124`)
+(`~/coding-hermes-scheduler/coding-herms-scheduler/internal/scheduler/lane_class.go:124`)
 and satellites take `cooldown` — so the script is consistent with the law because the names were
 chosen well, not because anything checked.
 
@@ -131,7 +131,7 @@ target has an override seam (section 7).
 | E. Wrong operator token | `python3 probe2_add_family_lanes.py` (API → `:19091`, token deliberately mismatched) | 8 × 401, nothing created | 2026-11-05 | `accepted: none`, 8 × `401 {"error":"invalid operator credential"}`, `family:` empty, `EXIT=0`, `select count(*) from projects` = 0 |
 | F. `systemctl` not on `PATH` | `PATH=<scratch>/bin /usr/bin/python3 -c "runpy.run_path('probe_add_family_lanes.py', run_name='__main__')"` | dies before any API call | 2026-11-05 | `FileNotFoundError: [Errno 2] No such file or directory: '/proc/0/environ'`, `EXIT=1` |
 | G. Unit running without `SCHEDULER_OPERATOR_TOKEN` in its environ | same, with a stub `systemctl` printing a token-less PID | a message and no API call | 2026-11-05 | bare `StopIteration`, `EXIT=1` — no message at all |
-| P. Live fleet, read-only | `sqlite3 -readonly ~/.hermes/coding-hermes/scheduler.db "select name,… from projects where name like 'code-factory%'"` | the family this script claims to create | 2026-11-05 | 17 rows; `repo_url`/`workdir` are `local:/home/kara/code-factory` and `/home/kara/code-factory` on every one; no `code-factory-docs-qa`, `-readme-qa`, `-releng-qa` |
+| P. Live fleet, read-only | `sqlite3 -readonly ~/.hermes/coding-hermes/scheduler.db "select name,… from projects where name like 'code-factory%'"` | the family this script claims to create | 2026-11-05 | 17 rows; `repo_url`/`workdir` are `local:~/code-factory` and `~/code-factory` on every one; no `code-factory-docs-qa`, `-readme-qa`, `-releng-qa` |
 
 Verbatim output, run A — the success path and the only machine-readable summary the script produces:
 
@@ -222,13 +222,13 @@ the family is not what the operator asked for.
 | Token variable absent from the unit's environment | bare `StopIteration`, exit 1 (`scripts/add_family_lanes.py:32`) | a *wrong* token, which reaches the API and prints `401 {"error":"invalid operator credential"}` per lane | closed | put `SCHEDULER_OPERATOR_TOKEN` in the unit's environment; the script has no other credential source |
 | API unreachable, nothing listening on 9090 | `urllib.error.URLError` traceback — only `HTTPError` is caught (`scripts/add_family_lanes.py:46`) | a refused write, which returns a `(status, dict)` pair and never raises | closed, loudly | start the API; there is no override port (`scripts/add_family_lanes.py:14`) |
 | Wrong or expired token | eight `401` entries, `family:` empty, **exit 0** (run E) | a shape refusal, which prints `400 … is off-convention` | **open** | exit 0 must not be read as success — read `accepted:` |
-| Caller's `$HOME` is not the daemon's Hermes home | eight `400 … workdir … is off-convention: -docs lanes live in "/home/kara/.hermes/stand-in/docs/code-factory"`, exit 0 (run C) | a genuine name/workdir mismatch, which produces the same text for one lane only | **open** | run as the user that owns the daemon's `~/.hermes`; the gate resolves paths from the *server's* `HERMES_HOME`/home, not the client's (`/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:147`) |
+| Caller's `$HOME` is not the daemon's Hermes home | eight `400 … workdir … is off-convention: -docs lanes live in "~/.hermes/stand-in/docs/code-factory"`, exit 0 (run C) | a genuine name/workdir mismatch, which produces the same text for one lane only | **open** | run as the user that owns the daemon's `~/.hermes`; the gate resolves paths from the *server's* `HERMES_HOME`/home, not the client's (`~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:147`) |
 | Lane already exists | `code-factory-docs(existing)` in the accepted list, exit 0 (run B) | a fresh create, which prints the bare name | open, by design | none needed for existence — but see the next row |
 | An existing lane carries a namespace and prompt someone else set | nothing printed; the row silently changes | a first run, which has nothing to overwrite | **open** | re-running is the documented way to propagate `prompts/*.md` (`README.md:222`); know that it also re-points `namespace_id` and `parent` |
 | A prompt file is missing | `accepted:` list printed first, then `FileNotFoundError`, exit 1, and the rows exist with `prompt=''`, `parent=''`, `admission_mode=''` (run D) | a DB write failure, which raises `OperationalError` at `scripts/add_family_lanes.py:87` | **open** — half-built rows, and the rollback is silent | restore the prompt file and re-run; the second run is safe for existence and fills the empty columns |
 | A lane's row does not exist when phase 2 runs (its POST was refused) | nothing — `UPDATE … WHERE name=?` matches zero rows and commits, and `family:` simply omits it (run E) | a failed `UPDATE`, which would raise | **open** | read the `refused:` line; phase 2 cannot repair a lane phase 1 did not create |
 | The primary `code-factory` row is missing | nothing: `parent='code-factory'` is written anyway, and `parent` has an index but no foreign key | a present primary, whose class derivation then nests the satellites | **open** | ensure the primary exists; the script never checks |
-| Family created but never enabled | rows exist with `enabled=0`, `cooldown_floor_s=0`, and the run prints a clean family table (run A) | a live family, whose rows would show `enabled=1` and a non-zero floor | **open** — the family looks complete and schedules nothing | enable each lane with a PUT carrying the family pin; `create` never enables (`/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:273`) and the auto-arm path only fires on an enable transition (`/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:389`) |
+| Family created but never enabled | rows exist with `enabled=0`, `cooldown_floor_s=0`, and the run prints a clean family table (run A) | a live family, whose rows would show `enabled=1` and a non-zero floor | **open** — the family looks complete and schedules nothing | enable each lane with a PUT carrying the family pin; `create` never enables (`~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/server_projects.go:273`) and the auto-arm path only fires on an enable transition (`~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:389`) |
 | `model`/`provider` left empty on the new rows | the family table prints prompt lengths but never the model; the DB shows `model=''`, `provider=''` (run A) | a row pinned like the primary `code-factory` row, which carries `deepseek-v4-flash` / `deepseek-foreman` — only 2 of the 17 live rows carry a model at all | **open** — the lane inherits whatever the spawner resolves, which is exactly the pin `fact: FACT-06` says this project must not lose | PUT the model/provider, or a `model_chain`, before enabling |
 
 ## 7. Environment and settings it reads
@@ -254,7 +254,7 @@ the family is not what the operator asked for.
   `busy_timeout` 60000 ms (`scripts/add_family_lanes.py:87`, `scripts/add_family_lanes.py:88`).
 - **Settings on the *other* side that change this script's verdict:** the daemon's `HERMES_HOME`
   wins over its own home directory when it resolves the canonical workdir
-  (`/home/kara/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:147`), so the same script text succeeds or is refused depending on whose home
+  (`~/coding-hermes-scheduler/coding-herms-scheduler/internal/api/lane_onboarding.go:147`), so the same script text succeeds or is refused depending on whose home
   the *server* is using — measured as runs A and C.
 - **Exit codes:** `0` on a clean run **and** on a run where every lane was refused (runs A, B, C, E);
   `1` from any uncaught traceback (runs D, F, G). No other code is produced, and nothing
@@ -295,7 +295,7 @@ two lines:
 -API = "http://127.0.0.1:9090"
 -DB = os.path.expanduser("~/.hermes/coding-hermes/scheduler.db")
 +API = "http://127.0.0.1:19090"
-+DB = "/home/kara/.hermes/cache/scratch/md01f/copy.db"
++DB = "~/.hermes/cache/scratch/md01f/copy.db"
 ```
 
 Scratch artefacts, not part of the repository: `~/.hermes/cache/scratch/md01f/` holds `schema.sql`,
@@ -311,11 +311,11 @@ sqlite3 -readonly ~/.hermes/coding-hermes/scheduler.db \
           prompt_mode,length(prompt),created_at from projects where name like 'code-factory%'
    order by name;"
 #  17 rows; namespace_id = code-factory on 16 (the exception is code-factory-ops, in "ops");
-#  workdir = /home/kara/code-factory on all 17; docs/readme/perf/review floors = 604800,
+#  workdir = ~/code-factory on all 17; docs/readme/perf/review floors = 604800,
 #  releng floor = 3600; model/provider set on only 2 rows (code-factory, code-factory-ops)
 sqlite3 -readonly ~/.hermes/coding-hermes/scheduler.db \
   "select distinct repo_url from projects where name like 'code-factory%';"
-#  local:/home/kara/code-factory
+#  local:~/code-factory
 sqlite3 -readonly ~/.hermes/coding-hermes/scheduler.db \
   "select id,admission_mode from namespaces where id in ('docs','qa','releases','perf','review','code-factory');"
 #  code-factory|tasks ; docs|cooldown ; qa|cooldown ; perf|cooldown ; releases|cooldown ; review|cooldown

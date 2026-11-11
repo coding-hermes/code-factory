@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/specs/HARNESS-MATRIX.md` |
+| Path | `~/code-factory/specs/HARNESS-MATRIX.md` |
 | Repository | `code-factory` |
 | Revision | `6eea792` (doc-set base); spec content last changed at `160b872` |
 | Status | **FAILING — the spec's five-leg support gate is implemented as three legs, and the measured battery run is 5 PASS / 7 FAIL / 9 SKIP, exit 1** |
@@ -227,10 +227,10 @@ runs today.
 
 ## 8. Evidence of record
 
-- Run: `bash tests/harness-conformance.sh`, cwd `/home/kara/proj-wt-md-38f` at `6eea792`,
+- Run: `bash tests/harness-conformance.sh`, cwd `~/proj-wt-md-38f` at `6eea792`,
   2026-11-05T17:53:18Z, work root
-  `/home/kara/.harness-conformance/run-20261105T175318Z-2568151`. Full stdout log:
-  `/home/kara/.hermes/cache/scratch/md38/battery.log` (45 lines; row numbers in this document are
+  `~/.harness-conformance/run-20261105T175318Z-2568151`. Full stdout log:
+  `~/.hermes/cache/scratch/md38/battery.log` (45 lines; row numbers in this document are
   its line numbers). Summary: `5 pass, 7 fail, 9 skip`; `HARNESS CONFORMANCE: FAIL (7)`; exit `1`.
 - Counts recomputed from `results.tsv`: `PASS=5 FAIL=7 SKIP=9 NOTE=2 total=21`.
 - Leg census: `grep -c '^leg_' tests/harness-conformance.sh` → `3`; the spec requires five

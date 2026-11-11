@@ -53,8 +53,8 @@ Reproduction script (the exact file run for the transcript below):
 ```bash
 #!/usr/bin/env bash
 set -uo pipefail
-REPO=/home/kara/code-factory
-S=$(mktemp -d /home/kara/.hermes/cache/scratch/cf129.XXXXXX) || exit 1
+REPO=~/code-factory
+S=$(mktemp -d ~/.hermes/cache/scratch/cf129.XXXXXX) || exit 1
 A="$S/workdir"
 mkdir -p "$A/.coding-hermes/board" || exit 1
 git -C "$REPO" show origin/main:.coding-hermes/board/tasks.jsonl > "$A/.coding-hermes/board/tasks.jsonl" || exit 1
@@ -69,10 +69,10 @@ python3 -B "$REPO/scripts/board_drift.py" check --workdir "$A" --repo "$REPO" --
 python3 -B "$REPO/scripts/board_drift.py" check --workdir "$A" --ref origin/main; echo "ARM3_RC=$?"
 ```
 
-Transcript (`bash /home/kara/.hermes/cache/scratch/cf129-repro.sh`, 2026-11-04):
+Transcript (`bash ~/.hermes/cache/scratch/cf129-repro.sh`, 2026-11-04):
 
 ```text
-SCRATCH=/home/kara/.hermes/cache/scratch/cf129.7vvgx4
+SCRATCH=~/.hermes/cache/scratch/cf129.7vvgx4
 WORKDIR_HEAD=a8503e3c46c125db2c1420c7a98cb200b315d482
 WORKDIR_REF_ORIGIN_MAIN=<absent>
 REPO_REF_ORIGIN_MAIN=c29c024bdbd46182de3b57340d1a0661bff5bab9

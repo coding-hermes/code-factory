@@ -4,7 +4,7 @@ Comparison standard: Apollo Operations Handbook systems-description volumes and 
 
 Review baseline: code-factory commit 12d6f9accd9fe6c9be42d513a66197b928fdb8c9. The supplied inventory is stale: there are 44 numbered master sections, not 40, and 16 components in SYSTEM-MODEL.yaml, not 27. The strict document checker actually returned “44 module(s): 37 VERIFIED, 0 error(s), 0 warning(s)” and “MASTER-DOC: PASS.” That result does not establish operational correctness.
 
-Paths below are relative to /home/kara/code-factory unless absolute. The earlier PDF was found at /home/kara/code-factory-reports/handbook/code-factory-handbook-2026-11-05-r2.pdf. No reviewed files or services were changed. Another writer modified scripts/clone_lane.py during the review; the final CLI census was therefore recomputed from the committed baseline rather than that moving working tree.
+Paths below are relative to ~/code-factory unless absolute. The earlier PDF was found at ~/code-factory-reports/handbook/code-factory-handbook-2026-11-05-r2.pdf. No reviewed files or services were changed. Another writer modified scripts/clone_lane.py during the review; the final CLI census was therefore recomputed from the committed baseline rather than that moving working tree.
 
 STRUCTURE: PASS — the standalone system-view volume opens with a general arrangement and responsibility register (/tmp/cf-system-views.pdf, sheets 2–3; docs/SYSTEM-MODEL.yaml:13–145), but this is not an integrated operating-document hierarchy.
 
@@ -71,7 +71,7 @@ SETTINGS DOCUMENTED vs EXISTING: FAIL — 1 of 15 dispatcher environment-control
 
 Method:
 
-  • Dispatcher census: collect and deduplicate literal os.environ.get names in /home/kara/crier-fleet/dispatcher.py; search the master pages, system model, unit map, schema, Rumsfeld register and operations runbook. The earlier PDF supplies none of the fourteen missing names.
+  • Dispatcher census: collect and deduplicate literal os.environ.get names in ~/crier-fleet/dispatcher.py; search the master pages, system model, unit map, schema, Rumsfeld register and operations runbook. The earlier PDF supplies none of the fourteen missing names.
   • CLI census: read committed scripts/*.py, scripts/*.sh and scripts/harness/*.sh; extract literal long options from Python add_argument declarations and shell case labels, including aliases, help and explicit refusal spellings; deduplicate by implementation file and option. Count textual occurrence in master pages that reference that implementation.
   • These are name-coverage measurements. They do not establish correct defaults, units, ranges, precedence, reload behavior or downstream effects. They also exclude a complete census of the external scheduler, Crier, gateway and bunker settings. A defensible all-system n-of-m count is absent.
 
@@ -85,9 +85,9 @@ Concrete missing operating controls:
   • DISPATCH_TASK_CAP_S=7200
   • CF_DURABLE_JOB, defaulting to the durable-job path
 
-Sources: /home/kara/crier-fleet/dispatcher.py:38–68, 104–106, 334–337.
+Sources: ~/crier-fleet/dispatcher.py:38–68, 104–106, 334–337.
 
-Their interaction is the important missing specification: task_seconds uses the fallback task budget when no positive wall limit arrives, otherwise max(30, min(CAP_S, wall_s − MARGIN_S)); the worker leases messages using LEASE_S (/home/kara/crier-fleet/dispatcher.py:185–197, 435). The handbook does not tell an operator what changing these controls does to deadline reporting, lease expiry or duplicate execution.
+Their interaction is the important missing specification: task_seconds uses the fallback task budget when no positive wall limit arrives, otherwise max(30, min(CAP_S, wall_s − MARGIN_S)); the worker leases messages using LEASE_S (~/crier-fleet/dispatcher.py:185–197, 435). The handbook does not tell an operator what changing these controls does to deadline reporting, lease expiry or duplicate execution.
 
 Other omissions include eight of the resolver’s nine explicit options, five filler options and three panel options. The actual declarations are at scripts/harness_resolve.py:327–371, scripts/master_doc_fill.py:393–419 and scripts/master_doc_panel.py:106–111. Section 44’s settings table does not enumerate them (docs/master/44-doc-pipeline.md:91–99).
 
@@ -213,8 +213,8 @@ TOP 10 DEFECTS:
      Builder failure: a status can mean document accuracy, unresolved component failure or local probe success. There is no common admission decision.
 
   3. The critical operating dispatcher is not a subsystem in the system model.
-     The model’s component register omits the control-host dispatcher described by /home/kara/crier-fleet/dispatcher.py.
-     Locators: docs/SYSTEM-MODEL.yaml:33–145; /home/kara/crier-fleet/dispatcher.py:2–16, 215–225.
+     The model’s component register omits the control-host dispatcher described by ~/crier-fleet/dispatcher.py.
+     Locators: docs/SYSTEM-MODEL.yaml:33–145; ~/crier-fleet/dispatcher.py:2–16, 215–225.
      Builder failure: the reader cannot tell whether to deploy the node worker, the control-host dispatcher or both, or which path owns leases, deadlines and recovery.
 
   4. No executable off-nominal mode-transition procedure.
@@ -222,7 +222,7 @@ TOP 10 DEFECTS:
      Builder failure: an operator cannot reliably stop admission, preserve a live job, prevent duplicate execution, repair the fault and prove re-admission is safe.
 
   5. No complete controls-and-limits register.
-     Locators: /home/kara/crier-fleet/dispatcher.py:38–68, 185–197, 334–337; docs/MASTER-DOC-SCHEMA.md:12–101.
+     Locators: ~/crier-fleet/dispatcher.py:38–68, 185–197, 334–337; docs/MASTER-DOC-SCHEMA.md:12–101.
      Builder failure: changing a timeout, lease or execution-mode switch has undocumented cross-system consequences.
 
   6. No single controlled as-built configuration baseline.

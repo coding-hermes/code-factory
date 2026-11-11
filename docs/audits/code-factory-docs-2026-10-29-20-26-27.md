@@ -31,4 +31,4 @@ ch:trace row=CF-005 spec=docs/PRD-code-factory.md#requirements wave=code-factory
 
 STATUS: PASS
 TIER: T4 -- queried the real local scheduler SQLite project inventory and ran the repository selftest
-EVIDENCE: sqlite3 /home/kara/.hermes/coding-hermes/scheduler.db inventory query; bash tests/selftest.sh
+EVIDENCE: sqlite3 ~/.hermes/coding-hermes/scheduler.db inventory query; bash tests/selftest.sh

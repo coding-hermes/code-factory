@@ -16,7 +16,7 @@ exports the README now places before the commands), isolated `HOME`, no bunker c
 `scripts/bunker-server-install.sh --check`
 ```
 bunker server: your-bunker-server
-  PASS  bunker_client — /home/kara/.local/bin/bunker bunker 0.2.0
+  PASS  bunker_client — ~/.local/bin/bunker bunker 0.2.0
   FAIL  bunker_config — missing (.../.config/bunker/config.yaml) — the client has no server to talk to
   FAIL  server_reachable — your-bunker-server did not answer: bunker: reading server "your-bunker-server"
 RESULT: FAIL (2)          rc=1
@@ -49,7 +49,7 @@ naming the missing value is TRUE. Each of the three reached its checker; each na
 `scripts/harness/install-hermes.sh --check` (row 1's contradicting command)
 ```
 harness: hermes (pin 0.19.0, port 10800)
-  PASS  binary — /home/kara/.local/bin/hermes
+  PASS  binary — ~/.local/bin/hermes
   PASS  version — Hermes Agent v0.22.5+3029.g6337f1f.dirty (2026.9.24)
   FAIL  port — nothing on :10800
   FAIL  inference_key — no provider key

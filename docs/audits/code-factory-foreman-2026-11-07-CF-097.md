@@ -1,7 +1,7 @@
 # Foreman tick receipt — CF-097 (code-factory-2026-11-07-18-34-24)
 
 Lane: `code-factory` (scheduler tick `code-factory-2026-11-07-18-34-24`, 2026-11-07T13:34:24-05:00).
-Workdir / canonical root: `/home/kara/code-factory` (git top level matches the registered workdir; remote
+Workdir / canonical root: `~/code-factory` (git top level matches the registered workdir; remote
 `origin` = `git@github.com:coding-hermes/code-factory.git`).
 Board source for selection: **origin/main (359 rows)** via `python3 scripts/board_read.py --next 10`.
 
@@ -9,7 +9,7 @@ Board source for selection: **origin/main (359 rows)** via `python3 scripts/boar
 
 | Probe | Result |
 |---|---|
-| `git rev-parse --show-toplevel` | `/home/kara/code-factory` (not `$HOME`) |
+| `git rev-parse --show-toplevel` | `~/code-factory` (not `$HOME`) |
 | `python3 scripts/ownership.py status` | `state=clean`, untracked=0, lock owner `panel_supervisor` pid 3957150 |
 | `python3 scripts/board_lock.py` | `RESIDUE consumers=0 commits_after_mtime=379` — a lock FILE only; no barrier, not deleted |
 | `git status --porcelain -uall` | empty |

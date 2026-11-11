@@ -4,7 +4,7 @@ Publication boundary: `origin/main` resolved by `git ls-remote --symref origin H
 `e2fc9d735376746f70a017ce8f161eb3af1010d9`. The scheduler workdir
 (`~/.hermes/stand-in/readme/code-factory`) holds tick artifacts only and no repository files, so
 every probe ran from `git archive` of that published tip extracted into
-`/home/kara/.hermes/cache/scratch/cf-readme-2328{,b}/src` with an isolated `HOME`. No source file
+`~/.hermes/cache/scratch/cf-readme-2328{,b}/src` with an isolated `HOME`. No source file
 was edited by the probes; the two README corrections in this commit are described below.
 
 Frozen transcript: `docs/audits/code-factory-readme-2026-10-30-23-28-00.probe.txt`

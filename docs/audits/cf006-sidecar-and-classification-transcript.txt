@@ -11,14 +11,14 @@ docs/audits/cf006-codex-exec-sidecar-and-check-classification.md.
 -------------------------------------------------------------------------------------
 $ bash tests/harness-conformance.sh
   FAIL  hermes:check — adapter exit 1 — python — hermes-agent 0.19.0 requires python >=3.11,<3.14; found 3.14.9
-  FAIL  claude-code:check — adapter exit 3 (UNVERIFIED) — auth — no credential: ANTHROPIC_API_KEY unset, CF_API_KEY_FILE unset, /home/kara/.claude/.credentials.json absent — --turn will skip
+  FAIL  claude-code:check — adapter exit 3 (UNVERIFIED) — auth — no credential: ANTHROPIC_API_KEY unset, CF_API_KEY_FILE unset, ~/.claude/.credentials.json absent — --turn will skip
   PASS  codex:check — adapter exit 0 — version — 0.166.0 (pin 0.166.0)
   FAIL  codex:smoke — exited 0 without writing smoke.txt
   PASS  opencode:check — adapter exit 0 — version — 1.18.29
   PASS  opencode:smoke — smoke.txt contains CF-CONF-opencode-519606 (24 B, ... exit 0 ...)
   FAIL  opencode-v2:check — the adapter's own row says `generation — v1 (measured 1.18.29)` but this harness row is the v2 generation — a v1 binary cannot certify v2
   FAIL  deepseek:check — adapter exit 1 — binary — absent — no deepseek in this node (the matrix measures no binary here; the package it names is npm @deepseek-ai/dsh, CLI dsh)
-  FAIL  pi-agent:check — adapter exit 3 (UNVERIFIED) — credential_file — /home/kara/.pi/agent/auth.json is present, but a credential file is not a binary — the binary row above is the one that decides
+  FAIL  pi-agent:check — adapter exit 3 (UNVERIFIED) — credential_file — ~/.pi/agent/auth.json is present, but a credential file is not a binary — the binary row above is the one that decides
 summary: 12 pass, 6 fail, 11 skip
 HARNESS CONFORMANCE: FAIL (6)
 
@@ -31,15 +31,15 @@ The battery stores each turn's log under its run directory. The codex turn on th
   model: gpt-6-luna
   provider: openai
   warning: Code Mode is unavailable because failed to spawn code-mode host
-           /home/kara/.local/codex/0.166.0/bin/codex-code-mode-host: host executable was not found.
+           ~/.local/codex/0.166.0/bin/codex-code-mode-host: host executable was not found.
            Code mode will fail closed; enable `features.code_mode_host` and install
            `codex-code-mode-host`.
   ERROR codex_core::tools::router: error=failed to spawn code-mode host
-        /home/kara/.local/codex/0.166.0/bin/codex-code-mode-host: No such file or directory (os error 2)
+        ~/.local/codex/0.166.0/bin/codex-code-mode-host: No such file or directory (os error 2)
   codex
   I couldn't create `smoke.txt`: the command runner failed to start because its code-mode host is missing.
 
-`ls /home/kara/.local/codex/0.166.0/bin/` at that moment: `codex` only (319346888 bytes).
+`ls ~/.local/codex/0.166.0/bin/` at that moment: `codex` only (319346888 bytes).
 So the pinned install produced a harness that answered the directive in JSON and could not touch the
 worktree: the artifact leg failed, not the transport. This is an INSTALL defect of our own ladder,
 not a battery defect — the battery reported exactly what happened.
@@ -65,7 +65,7 @@ $ tar tzf cmh.tar.gz
 -------------------------------------------------------------------------------------
 $ mv ~/.local/codex/0.166.0/bin/codex-code-mode-host <scratch>/sidecar.saved
 $ bash scripts/harness/install-codex.sh --check ; echo rc=$?
-  WARN  code_mode — absent at /home/kara/.local/codex/0.166.0/bin/codex-code-mode-host — every exec tool call
+  WARN  code_mode — absent at ~/.local/codex/0.166.0/bin/codex-code-mode-host — every exec tool call
         fails closed ('failed to spawn code-mode host'), so a turn answers a directive and writes no artifact;
         --apply installs it (sha256 7588334fd47bc4003d970b70dfd4d1e4578491b1e9baa72976a4c2d7e97590da)
   ..
@@ -73,17 +73,17 @@ CODEX: UNVERIFIED
 rc=3
 
 $ bash scripts/harness/install-codex.sh --apply
-  PASS  install — /home/kara/.local/codex/0.166.0/bin/codex (0.166.0) unchanged
+  PASS  install — ~/.local/codex/0.166.0/bin/codex (0.166.0) unchanged
   PASS  version — 0.166.0 (pin 0.166.0)
-  PASS  binary — /home/kara/.local/codex/0.166.0/bin/codex
-  PASS  code_mode — /home/kara/.local/codex/0.166.0/bin/codex-code-mode-host (sha256 7588334fd47bc4003d970b70dfd4d1e4578491b1e9baa72976a4c2d7e97590da verified before extraction)
-  PASS  path — /home/kara/.local/bin/codex -> /home/kara/.local/codex/0.166.0/bin/codex
+  PASS  binary — ~/.local/codex/0.166.0/bin/codex
+  PASS  code_mode — ~/.local/codex/0.166.0/bin/codex-code-mode-host (sha256 7588334fd47bc4003d970b70dfd4d1e4578491b1e9baa72976a4c2d7e97590da verified before extraction)
+  PASS  path — ~/.local/bin/codex -> ~/.local/codex/0.166.0/bin/codex
   PASS  path_env — $HOME/.local/bin is on PATH
 CODEX: PASS
 rc=0
 
 $ bash scripts/harness/install-codex.sh --check ; echo rc=$?
-  PASS  code_mode — /home/kara/.local/codex/0.166.0/bin/codex-code-mode-host (file-writing exec sidecar present; answers --help)
+  PASS  code_mode — ~/.local/codex/0.166.0/bin/codex-code-mode-host (file-writing exec sidecar present; answers --help)
 CODEX: PASS
 rc=0
 
@@ -93,13 +93,13 @@ rc=0
 $ CF_MODEL=gpt-6-luna CF_PROVIDER=openai-codex CF_WORKDIR=~/.cache/cf006-turn \
   CF_NAMESPACE=code-factory CF_RUN_ID=cf006-cmh-turn CF_LANE=code-factory-qa \
   bash scripts/harness/install-codex.sh --turn
-  PASS  workdir — /home/kara/.cache/cf006-turn is a git work tree
-  PASS  binary — /home/kara/.local/codex/0.166.0/bin/codex (0.166.0)
+  PASS  workdir — ~/.cache/cf006-turn is a git work tree
+  PASS  binary — ~/.local/codex/0.166.0/bin/codex (0.166.0)
   PASS  turn_home — $HOME/.codex (host login; the model and provider are still pinned on argv)
   PASS  turn_exit — exit 0
   PASS  thread — 01a1b8f5-0ab2-7da2-9618-49c61b420cf8 (parsed from the thread.started event, as crier does)
   PASS  model_served — requested gpt-6-luna → served gpt-6-luna
-  PASS  artifact — /home/kara/.cache/cf006-turn/codex-turn.txt contains the fixed token (sha256 5eda6787f05c05891cdee66c684c8c671fcdfbbfb8f73963cb8434f4ae51d057)
+  PASS  artifact — ~/.cache/cf006-turn/codex-turn.txt contains the fixed token (sha256 5eda6787f05c05891cdee66c684c8c671fcdfbbfb8f73963cb8434f4ae51d057)
 CODEX: PASS
 $ cat ~/.cache/cf006-turn/codex-turn.txt
   CF-227-TOKEN-7f3a9c
@@ -127,7 +127,7 @@ $ bash tests/harness/codex-install-test.sh
   PASS  B8 the pre-fix adapter (dc7641f) calls that same binary-only pin 'CODEX: PASS' with no code_mode row — the arm is falsifiable
   PASS  C0 the installed pin answers: codex-cli 0.166.0
   PASS  C1 the app-server sidecar starts on stdio and answers initialize: …
-  PASS  C2 one real turn (host login ~/.codex/auth.json) wrote /home/kara/.cache/cf227-turn.…/codex-turn.txt containing the fixed token
+  PASS  C2 one real turn (host login ~/.codex/auth.json) wrote ~/.cache/cf227-turn.…/codex-turn.txt containing the fixed token
   PASS  C2 model_served: requested gpt-5.6-luna → served gpt-5.6-luna
   … (further arms in the same run: A1–A11 refusals, D1a–D3c CF_RUN_ID admission and turn-home
     containment — 57 arms total in that run's own summary line)
@@ -180,7 +180,7 @@ rc=0
 $ bash tests/harness-conformance.sh
   PASS  claude-code:check — adapter exit 0 — version — 2.1.318 (pin 2.1.318)
   PASS  codex:check — adapter exit 0 — version — 0.166.0 (pin 0.166.0)
-  PASS  codex:smoke — smoke.txt contains CF-CONF-codex-0d7fa8 (20 B, sha256 9883be175023..., exit 0; token sha256 9883be175023...; provider openai, model gpt-6-luna; binary /home/kara/.local/codex/0.166.0/bin/codex (the path its --check measured))
+  PASS  codex:smoke — smoke.txt contains CF-CONF-codex-0d7fa8 (20 B, sha256 9883be175023..., exit 0; token sha256 9883be175023...; provider openai, model gpt-6-luna; binary ~/.local/codex/0.166.0/bin/codex (the path its --check measured))
   PASS  pi-agent:check — adapter exit 0 — version — 1.5.0
   FAIL  hermes:check — adapter exit 1 — python — hermes-agent 0.19.0 requires python >=3.11,<3.14; found 3.14.9
   FAIL  opencode-v2:check — the adapter's own row says `generation — v1 (measured 1.18.29)` but this harness row is the v2 generation — a v1 binary cannot certify v2

@@ -17,8 +17,8 @@ ambiguity.
   "brief": {"digest": "<cf-brief-v1: sha256 over the canonical object of text, gate, repo, ref, workdir, vars>", "bytes": 4211},
   "route": {"provider": "xkiro", "model": "openai/gpt-6.1-sol", "harness": "hermes"},
   "vars": {"CF_MODEL": "openai/gpt-6.1-sol", "CF_PROVIDER": "xkiro",
-           "CF_API_KEY_FILE": "/home/node/.node/keys/xkiro.key",
-           "CF_WORKDIR": "/home/node/crier", "CF_NAMESPACE": "crier", "CF_RUN_ID": "lane-<ts>-<seq>",
+           "CF_API_KEY_FILE": "~/.node/keys/xkiro.key",
+           "CF_WORKDIR": "~/crier", "CF_NAMESPACE": "crier", "CF_RUN_ID": "lane-<ts>-<seq>",
            "CF_LANE": "crier", "CF_MAX_TURNS": 40},
   "limits": {"wall_s": 3600, "max_artifacts": 50},
   "gate": {"cmd": "go test ./...", "expect_exit": 0}

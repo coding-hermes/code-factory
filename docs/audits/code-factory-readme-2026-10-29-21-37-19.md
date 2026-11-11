@@ -3,7 +3,7 @@
 Target: README.md at local commit 1c30c6f9db45b6bd8f9698b1c8d373ef0f98b751.
 Published boundary: git ls-remote --symref origin HEAD returned refs/heads/main at d7faaf6aac31a9b9eb302a95887b68f83b8845d7. The local checkout was ahead/behind that boundary during probing; publication of this audit is verified separately by the board commit.
 
-The README was not edited by this audit lane. Six canonical findings are recorded below. Each command was executed against the real /home/kara/code-factory checkout.
+The README was not edited by this audit lane. Six canonical findings are recorded below. Each command was executed against the real ~/code-factory checkout.
 
 ## Finding CF-009 — Quick start starts with an unstated prerequisite
 

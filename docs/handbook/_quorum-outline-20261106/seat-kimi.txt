@@ -6,10 +6,10 @@ Evidence basis: walked all five trees. 51 script units on disk in code-factory (
 
 COVERAGE GAPS: 13
 
- 1. SCHEDULER — /home/kara/coding-hermes-scheduler/coding-herms-scheduler (7 cmd binaries: schedulerd, scheduler-dispatch, scheduler-query, migrate, queueprobe, backfill-commit-signals, cooldown-residue; 18 internal packages; 12 ops scripts incl. scheduler-watchdog.sh; scheduler.db). The component that decides what runs has no chapter. Its admission modes, cadence/weight/pin settings, DB migrations, watchdog and guards appear nowhere.
- 2. CRIER bus + guard — /home/kara/crier (cmd: server, crier-front, crier-mcp; ~30 internal packages incl. guard/: guard.go, circuit.go, jev.go, kanban.go). Every contract in Part IV rides it; the guard that grades traffic has no chapter.
- 3. FLEET DISPATCHER — /home/kara/crier-fleet (dispatcher.py — one loop per agent, runs work via bunker exec; courier.py; bridge/courier_bridge.py + bridge_ctl.py; register_fleet.py; renew-fleet.sh; fleet-gateway-facade.py; fleet-ttl-census.py; verify-repo-coverage.py; sender-stamp-check; test_all_agents.py; staged-remote-wiring.sh; fleet_agents.json; keys/). This is the machinery that actually runs fleet work. F1 as drawn (scheduler → crier → node-bus-worker) does not include it, and no chapter reconciles the two dispatch paths.
- 4. INFERENCE PROXY — /home/kara/.hermes/scripts/cf-inference-proxy.py (:8775; node token file; ALLOWED_MODELS deny-all default; usage + capture logs). CF-002's enforcement point — a security boundary — is absent from the outline, from UNIT-MAP, and from SYSTEM-MODEL.
+ 1. SCHEDULER — ~/coding-hermes-scheduler/coding-herms-scheduler (7 cmd binaries: schedulerd, scheduler-dispatch, scheduler-query, migrate, queueprobe, backfill-commit-signals, cooldown-residue; 18 internal packages; 12 ops scripts incl. scheduler-watchdog.sh; scheduler.db). The component that decides what runs has no chapter. Its admission modes, cadence/weight/pin settings, DB migrations, watchdog and guards appear nowhere.
+ 2. CRIER bus + guard — ~/crier (cmd: server, crier-front, crier-mcp; ~30 internal packages incl. guard/: guard.go, circuit.go, jev.go, kanban.go). Every contract in Part IV rides it; the guard that grades traffic has no chapter.
+ 3. FLEET DISPATCHER — ~/crier-fleet (dispatcher.py — one loop per agent, runs work via bunker exec; courier.py; bridge/courier_bridge.py + bridge_ctl.py; register_fleet.py; renew-fleet.sh; fleet-gateway-facade.py; fleet-ttl-census.py; verify-repo-coverage.py; sender-stamp-check; test_all_agents.py; staged-remote-wiring.sh; fleet_agents.json; keys/). This is the machinery that actually runs fleet work. F1 as drawn (scheduler → crier → node-bus-worker) does not include it, and no chapter reconciles the two dispatch paths.
+ 4. INFERENCE PROXY — ~/.hermes/scripts/cf-inference-proxy.py (:8775; node token file; ALLOWED_MODELS deny-all default; usage + capture logs). CF-002's enforcement point — a security boundary — is absent from the outline, from UNIT-MAP, and from SYSTEM-MODEL.
  5. SYSTEM-MODEL blind spot — docs/SYSTEM-MODEL.yaml holds 16 components and omits the dispatcher, the courier/bridge and the inference proxy, so Part I's rendered sheets inherit the gap. handbook/README.md claims "27 components"; that count is 6 layers + 16 components + 5 flows — a stale claim to correct at the source.
  6. fleet_ops_check.py — lives at ~/.hermes/scripts/fleet_ops_check.py, tracked in no commit, versioned only via the patches/ chain (patches/base + 3 patches + fleet-ops-chain.sha256). The drift gate exists (verify-patch.sh) but the censused script itself has no unit and no chapter.
  7. Lane prompt + skill corpus — code-factory/prompts/ (11 files) and skills/ (code-factory-foreman, code-factory-bunker). These are one side of the foreman → scheduler contract, whose measured state is "only 3 of 14 lanes match the shipped prompt". The drift the model measures has no home in the outline.
@@ -156,25 +156,25 @@ The 13 headings, in order:
   - III.9.2 scan scope — check_scan_scope.py
   - III.9.3 patch-chain drift gate — verify-patch.sh, patches/ (new)
   - III.9.4 repo self-test — tests/selftest.sh, tests/test_*.py (6) (new)
-- III.10 — M9 SCHEDULER (NEW — /home/kara/coding-hermes-scheduler/coding-herms-scheduler; unit assignment to be measured by extending gen_unit_map.py) · flows: F1, F11, F15 · contracts: owner → scheduler (works), scheduler → crier (broken), crier → scheduler (missing), foreman → scheduler (broken), scheduler → board (to be added), scheduler → gateway (to be added)
+- III.10 — M9 SCHEDULER (NEW — ~/coding-hermes-scheduler/coding-herms-scheduler; unit assignment to be measured by extending gen_unit_map.py) · flows: F1, F11, F15 · contracts: owner → scheduler (works), scheduler → crier (broken), crier → scheduler (missing), foreman → scheduler (broken), scheduler → board (to be added), scheduler → gateway (to be added)
   - III.10.1 admission and cadence — internal/scheduler, internal/config, fleet.example.toml, cmd/schedulerd
   - III.10.2 dispatch and bus egress — internal/bus (dispatch.go, inbox.go, ingest.go, websocket.go, query*.go), cmd/scheduler-dispatch
   - III.10.3 state and migrations — internal/database, cmd/migrate, scheduler.db
   - III.10.4 lane hooks and targets — internal/lanehook, internal/target, internal/remote, internal/foreman, internal/execution, internal/blocks, internal/sync, internal/clock
   - III.10.5 query and observability — internal/api, internal/dashboard, internal/agentlog, internal/cooldownaudit, internal/mcp, cmd/scheduler-query, cmd/queueprobe, cmd/backfill-commit-signals, cmd/cooldown-residue
   - III.10.6 ops scripts and guards — scripts/ (scheduler-watchdog.sh, check-invariants.sh, lint-guard.sh, board-commit-guard.sh, check-version-authority.sh, cooldown-residue-detector.sh, destination-coverage-check.py, noop_coverage_scan.py, policy-script-deploy-hash-guard.sh, verify-policy-script-deploy-hash.sh, release-prep.sh, install-hooks.sh, hooks/)
-- III.11 — M10 CRIER BUS (NEW — /home/kara/crier) · flows: F1, F12, F15, F16 · contracts: every transport contract in Part IV
+- III.11 — M10 CRIER BUS (NEW — ~/crier) · flows: F1, F12, F15, F16 · contracts: every transport contract in Part IV
   - III.11.1 server and delivery — cmd/server, internal/{ingress, session, relay, reads, registry, namespace, permissions, trust, ratelimit, tags, strictjson, httperr, pidfile, metrics, middleware, addressing, chat}
   - III.11.2 guard — internal/guard (guard.go, circuit.go, jev.go, kanban.go, client.go)
   - III.11.3 front doors — cmd/crier-front, cmd/crier-mcp, internal/{mcp, a2a, federation, mesh, detect, dispatchlive, harness, hermesession, ci, daggerctl, buildinfo}
   - III.11.4 clients and local state — clients/python (crier_client), crier-groups/, crier-sessions/
-- III.12 — M11 FLEET DISPATCHER (NEW — /home/kara/crier-fleet) · flows: F1 path (b), F12, F15 · contracts: courier → crier, dispatcher → node (both to be added)
+- III.12 — M11 FLEET DISPATCHER (NEW — ~/crier-fleet) · flows: F1 path (b), F12, F15 · contracts: courier → crier, dispatcher → node (both to be added)
   - III.12.1 the dispatcher loop — dispatcher.py (one loop per agent; lease/ack semantics; crash = redelivery)
   - III.12.2 orchestrator CLI — courier.py, test_all_agents.py
   - III.12.3 in-agent bridge — bridge/courier_bridge.py, bridge/bridge_ctl.py
   - III.12.4 registry and keys — register_fleet.py (keypairs not regenerable), fleet_agents.json, keys/, renew-fleet.sh, staged-remote-wiring.sh
   - III.12.5 facade and census — fleet-gateway-facade.py, fleet-ttl-census.py, verify-repo-coverage.py, sender-stamp-check
-- III.13 — M12 INFERENCE PROXY (NEW — /home/kara/.hermes/scripts/cf-inference-proxy.py) · flows: F1 (inference leg), F9, F16 · contracts: node → inference-proxy, inference-proxy → upstream (both to be added)
+- III.13 — M12 INFERENCE PROXY (NEW — ~/.hermes/scripts/cf-inference-proxy.py) · flows: F1 (inference leg), F9, F16 · contracts: node → inference-proxy, inference-proxy → upstream (both to be added)
   - III.13.1 relay and auth — cf-inference-proxy.py, cf-node-tokens.json, CF_PROXY_UPSTREAM / CF_PROXY_UPSTREAM_MODEL / CF_PROXY_UPSTREAM_KEY_ENV, ALLOWED_MODELS (empty = deny all), MAX_BODY 4 MiB, :8775, cf-inference-usage.jsonl, cf-inference-requests.jsonl (bounded 200)
 - III.14 — M13 EXTERNAL DEPENDENCY REGISTER (NEW — one submodule per dependency: version/pin source, reachability probe, blast radius if absent, degradation class it triggers in F9)
   - III.14.1 task-router · III.14.2 hermes gateway · III.14.3 duckbrain · III.14.4 sessionstore (state.db) · III.14.5 gitreins + gitleaks · III.14.6 bunker daemon · III.14.7 GitHub and App auth · III.14.8 the tailnet · III.14.9 package upstreams (PyPI, npm, Go) and model providers

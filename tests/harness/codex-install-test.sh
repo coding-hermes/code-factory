@@ -17,7 +17,7 @@
 #
 # Exit 0 only when every non-skipped assertion passed.
 #
-# ch:trace row=CF-384 spec=specs/HARNESS.md#verdict-line wave=none:serial-worker test=tests/harness/codex-install-test.sh::codex-warn-classification doc=docs/handbook/chapters/M5-harness.md prompt=/home/kara/.hermes/cache/scratch/code-factory-2026-11-07-23-36-05/CF-384-brief.txt evidence=tests/harness/codex-install-test.sh verdict=none:foreman-runs-gitreins-after-worker commit=none:worker-commit-created-at-exit memory=none:foreman-writes-after-publish witness=none:foreman-verifies
+# ch:trace row=CF-384 spec=specs/HARNESS.md#verdict-line wave=none:serial-worker test=tests/harness/codex-install-test.sh::codex-warn-classification doc=docs/handbook/chapters/M5-harness.md prompt=~/.../CF-384-brief.txt evidence=tests/harness/codex-install-test.sh verdict=none:foreman-runs-gitreins-after-worker commit=none:worker-commit-created-at-exit memory=none:foreman-writes-after-publish witness=none:foreman-verifies
 # STATUS: complete
 # TIER: T1
 # EVIDENCE: tests/harness/codex-install-test.sh

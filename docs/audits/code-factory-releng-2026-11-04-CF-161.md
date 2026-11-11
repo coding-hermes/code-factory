@@ -6,7 +6,7 @@ with the command beside it before quoting it in a later tick.
 
 ## Why the clone
 
-The registered checkout `/home/kara/code-factory` passed the root/remote/operation gate (realpath ==
+The registered checkout `~/code-factory` passed the root/remote/operation gate (realpath ==
 `git rev-parse --show-toplevel`, remote `git@github.com:coding-hermes/code-factory.git`, attached
 `main`, no rebase/merge markers), but carried three ownership surfaces at gate time (2026-11-03
 23:06 local): one unstaged tracked edit (`docs/ACCEPTANCE-PLAN.md`, +7, the sync lane's in-flight

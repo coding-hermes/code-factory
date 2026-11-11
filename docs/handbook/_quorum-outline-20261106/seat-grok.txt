@@ -2,10 +2,10 @@
 │ cache/scratch/cf-outline-quorum-20261106/check_units.py
 │ @@ -0,0 +1,17 @@
 │ +import re, subprocess, pathlib
-│ +um = pathlib.Path('/home/kara/code-factory/docs/UNIT-MAP.yaml').read_text()
+│ +um = pathlib.Path('~/code-factory/docs/UNIT-MAP.yaml').read_text()
 │ +units = re.findall(r'- unit: (\S+)', um)
 │ +print("units in UNIT-MAP:", len(units))
-│ +out = subprocess.check_output(['git', '-C', '/home/kara/code-factory', 'ls-files', 'scripts']).decode().split()
+│ +out = subprocess.check_output(['git', '-C', '~/code-factory', 'ls-files', 'scripts']).decode().split()
 │ +tracked = [p for p in out if '__pycache__' not in p]
 │ +print("tracked files under scripts/:", len(tracked))
 │ +names = {p.split('/')[-1] for p in tracked}
@@ -14,7 +14,7 @@
 │ +for p in sorted(tracked):
 │ +    if p.split('/')[-1] not in units:
 │ +        print("  ", p)
-│ +t = subprocess.check_output(['git', '-C', '/home/kara/code-factory', 'ls-files', 'tests']).decode().split()
+│ +t = subprocess.check_output(['git', '-C', '~/code-factory', 'ls-files', 'tests']).decode().split()
 │ +print("\ntests tracked:", len(t))
 │ +for x in t:
 │ +    print("  ", x)
@@ -26,7 +26,7 @@ COVERAGE GAPS: 24
 
 Each: component — where it lives — why it needs a chapter.
 
-Tree 1 — /home/kara/code-factory
+Tree 1 — ~/code-factory
 1. `scripts/harness_resolve.py` — scripts/, 4-step resolution (directive > lane > matrix by_family > default) with `--explain`, design authority `specs/HARNESS-MATRIX.md` §4 — it is the only place that decides which harness runs a model; no chapter means "why did this run in Codex?" is unanswerable, and it is not a unit in UNIT-MAP.
 2. `scripts/harness/install-deepseek.sh`, `scripts/harness/install-pi-agent.sh`, `scripts/harness/harness-vars.sh` — scripts/harness/ — HARNESS-MATRIX names 6 hosts (hermes, claude-code, codex, opencode, omh, dsh) but the outline charts 4 installers and the map charts 3, so "supported harness" has no single answer; `harness-vars.sh` is the executable §5 variable contract the conformance `vars` leg tests, so without it that leg has no subject.
 3. `tests/selftest.sh` — tests/ — the fixture that proves the checks can go red (AGENTS.md rule 2). A handbook that never describes it cannot distinguish "green" from "unable to fail".
@@ -39,24 +39,24 @@ Tree 1 — /home/kara/code-factory
 10. `patches/` (3 fleet-ops patches, `.orig` base, `fleet-ops-chain.sha256`) — patches/ — a shipped delivery mechanism with a checksum chain; a patch that silently fails to apply is invisible in every existing chapter.
 11. Operational doctrine with no home: `docs/OPERATIONS.md` (209 lines, readiness labels MEASURED / CHECK LOCALLY / BLOCKED / NOT YET), `THREAT-MODEL.md` (6 trust boundaries, 8 assets), `SECURITY-TRIAGE.md`, `SCHEDULER-ADMISSION.md` (9-family allowlist table with floors), `BOARD.md` (282 lines), `DESIGN.md`, `REPOSITORIES.md`, `HARNESS-CONFORMANCE.md`, `ACCEPTANCE-PLAN.md`, `MVP-PLAN.md`, `LOOP-CODEX.md`, `PRD-code-factory.md`, `traceability-doctrine.md`, `docs/audits/` (100+ evidence files) — docs/ — the outline cites only SYSTEM-MODEL, UNIT-MAP, RUMSFELD and MASTER-DOC-SCHEMA. OPERATIONS.md currently holds the honest truth that creation, dispatch, rebuild and end-to-end are BLOCKED; a handbook that does not absorb it will claim green where the runbook says otherwise.
 
-Tree 2 — /home/kara/coding-hermes-scheduler/coding-herms-scheduler
+Tree 2 — ~/coding-hermes-scheduler/coding-herms-scheduler
 12. Admission core — `internal/scheduler`, `internal/database`, `internal/execution`, `internal/remote`, `internal/target`, `internal/lanehook`, `internal/cooldownaudit`, `internal/foreman` (739 Go files) — no chapter anywhere. This is the component that answers the handbook's own first question ("whose turn is it") and it is described only as a box in Part I.
 13. Operator entry points — `cmd/schedulerd`, `scheduler-dispatch`, `scheduler-query`, `queueprobe`, `migrate`, `backfill-commit-signals`, `cooldown-residue` — no chapter; `scheduler-query` is the diagnostic tool an operator reaches for first and the handbook never names it.
 14. Scheduler configuration — `config.example.toml` ([daemon] db_path/listen :9090, [scheduler] min/max interval, num_levels, weight_budget 100, max_concurrent 12, tick_timeout, gateway_response_timeout, transient retries, namespace_mode, [gateway] url/key, [duckbrain]) and `fleet.toml` (`[[projects]]` ~40 lane keys incl. cooldown_s, weight, priority, model_chain, idle_*, daily/weekly/final budget, adaptive_cooldown floor/ceiling, wave_*; `[[namespaces]]` weight, reserved, hard_cap, max_concurrent, default_prompt, gateway tier) — not in Part V at all. Part V counts env vars and CLI flags and omits the layer that actually carries blast radius.
 15. The ledger — `scheduler.db` 26 tables (`ticks`, `tick_dispatch`, `tick_workers`, `execution_runs/attempts/events/outbox/projections`, `deferrals`, `usage_pool*`, `verification_receipts`, `workspace_leases`) — every number any report quotes is derived here; no chapter, no contract, no schema.
 16. Scheduler doctrine — `docs/scheduler-rules.md`, `dispatch-spec.md`, `execution-contracts.md`, `execution-store.md`, `runbook-drain-restart.md`, `hop-liveness-watchdog.md`, `sessions-reaper.md`, `usage-pools-spec.md`, `wave-config.md`, `load-attribution.md`, `cluster-chain-probe.md` — uncharted.
 
-Tree 3 — /home/kara/crier
+Tree 3 — ~/crier
 17. The guard — `internal/guard` (circuit, patterns, policy, prompt, render, jev, kanban, metrics) — pattern pre-scan → render → router LLM → verdict → escalation → quarantine, with fail_open/fail_closed and an audit line. The brief names it; the outline has no chapter and no contract. AGENTS.md rule 11 shows it is a hard wire contract: reserved keys (`system|instructions|prompt|tools|schema`) are rejected `403 GUARD_BLOCKED`.
 18. Transport core — 31 internal packages (`a2a`, `federation`, `mesh`, `ingress`, `relay`, `webhook`, `ratelimit`, `namespace`, `trust`, `permissions`, `session`, `registry`, `addressing`, `detection`, `chat`, `reads`, `tags`, `metrics`, `mcp`, 2,776 Go files, 77 routes) — zero chapters.
 19. Binaries, ports and services — `cmd/server` (:8767; :18767 also listening), `cmd/crier-front` (:8770 → upstream :8765), `cmd/crier-mcp`, `deploy/{crier.service,crier.user.service,crier-backup.timer,prometheus-scrape.example.yml}` — ports and units are exactly what a stranger needs and none appear.
 20. `clients/python/crier_client.py` (+ typescript) — imported by both `node-bus-worker.py` and `dispatcher.py`; a versioned library contract with no chapter; a breaking change here breaks two trees at once.
 21. Crier's own 25 specs (`CRIER-INGRESS`, `HERMES-SESSION-DELIVERY`, `FEDERATION-AUTH`, `A2A-OPTION`, `CHAT-*`, `DETECTION`, …) — the only normative descriptions of the bus, uncited.
 
-Tree 4 — /home/kara/crier-fleet
+Tree 4 — ~/crier-fleet
 22. `dispatcher.py` — the one loop for every agent, lease/ack law ("a task that FAILS is deliberately not acked"), runs work with `bunker exec` — no chapter. `fleet-gateway-facade.py` (:8650, per-lane key map at `~/.hermes/secrets/fleet-gateway-keys.json`, SSE translation, unmapped key → local gateway) — no chapter, and it is not currently listening, a fact the handbook must state rather than imply. `courier.py`, `bridge/*`, `register_fleet.py`, `renew-fleet.sh` (7-day TTL, destructive `bunker renew`, archive-gated), `fleet-ttl-census.py`, `verify-repo-coverage.py`, `ENDPOINT-CONTRACT.md` (5 protocols + the refusal rule) — all uncharted.
 
-Tree 5 — /home/kara/.hermes/scripts/cf-inference-proxy.py
+Tree 5 — ~/.hermes/scripts/cf-inference-proxy.py
 23. The inference relay — :8775, live now, node tokens at `~/.hermes/secrets/cf-node-tokens.json`, model allowlist where empty means deny-all, upstream key read from `~/.hermes/.env` at request time, usage + capture JSONL, 4 MiB body cap, 502-carries-upstream-status law — the CF-002 credential boundary. Zero mentions of the word "inference" in the outline.
 
 Cross-tree

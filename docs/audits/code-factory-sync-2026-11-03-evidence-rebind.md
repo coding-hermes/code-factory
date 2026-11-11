@@ -9,7 +9,7 @@ Two `complete` rows carried the only entry in `detail.evidence[].artifacts` as a
 **absolute path outside the repository**:
 
 ```
-/home/kara/.hermes/cache/scratch/code-factory-pm-20261031-114422-final-selftest.log
+~/.hermes/cache/scratch/code-factory-pm-20261031-114422-final-selftest.log
 ```
 
 - The file no longer exists (scratch entries are pruned), so the path cannot be re-read.
@@ -22,8 +22,8 @@ re-runnability). No other row on the board references an out-of-repo artifact pa
 ```
 $ jq -r 'select(.detail.evidence)|.id+"\t"+(.detail.evidence|map(.artifacts//[])|add|join(","))' \
     .coding-hermes/board/tasks.jsonl | grep -E '/(home|tmp)/'
-CF-011	/home/kara/.hermes/cache/scratch/code-factory-pm-20261031-114422-final-selftest.log
-CF-013	/home/kara/.hermes/cache/scratch/code-factory-pm-20261031-114422-final-selftest.log
+CF-011	~/.hermes/cache/scratch/code-factory-pm-20261031-114422-final-selftest.log
+CF-013	~/.hermes/cache/scratch/code-factory-pm-20261031-114422-final-selftest.log
 ```
 
 ## Evidence as re-run on 2026-11-03
@@ -86,7 +86,7 @@ evidence entry is a record of what was believed, not something to erase.
 
 ## Related drift (outside the board file)
 
-The stand-in sync workdir `/home/kara/.hermes/sync-workdirs/code-factory-sync` carried a
+The stand-in sync workdir `~/.hermes/sync-workdirs/code-factory-sync` carried a
 **36-row** copy of the board taken from the `feat/code-factory-bankai-20261030` worktree,
 while canonical `origin/main` carried **61 rows**. That mirror is refreshed from the
 canonical file by this tick; it is a read-only convenience copy, never a write target.

@@ -17,11 +17,11 @@ COVERAGE GAPS: 22
 These are missing responsibility groups, not a count of missing files. Mentioning a service in an interface register does not supply its operating chapter.
 
 Path abbreviations used below:
-  CF = /home/kara/code-factory
-  SCH = /home/kara/coding-hermes-scheduler/coding-herms-scheduler
-  CR = /home/kara/crier
-  FL = /home/kara/crier-fleet
-  PX = /home/kara/.hermes/scripts/cf-inference-proxy.py
+  CF = ~/code-factory
+  SCH = ~/coding-hermes-scheduler/coding-herms-scheduler
+  CR = ~/crier
+  FL = ~/crier-fleet
+  PX = ~/.hermes/scripts/cf-inference-proxy.py
 
 1. Scheduling admission and allocation.
    Lives: SCH/internal/scheduler/admission_mode.go, tick_process.go, packer_select.go, namespace_alloc.go, usage_pool_policy.go.

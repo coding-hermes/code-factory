@@ -1,6 +1,6 @@
 # docs lane — the runbook's "unless `--server`" branch does not exist (CF-167)
 
-- **Lane:** `code-factory-docs`, tick `code-factory-docs-2026-11-04-06-11-13` (scheduler workdir `/home/kara/code-factory`)
+- **Lane:** `code-factory-docs`, tick `code-factory-docs-2026-11-04-06-11-13` (scheduler workdir `~/code-factory`)
 - **Transport:** fresh clone of the published ref `gh/main` = `9b7fb6f`, because sibling lanes held the registered checkout (see "Transport" below). The registered checkout was not written to.
 - **Claim class:** a documented command line that fails as written — the same class CF-009, CF-041 and CF-145 closed for the quick start and `node-create.sh`, left behind in the runbook's dispatch-verification step.
 - **Owner of the code-side fix:** CF-063 (pending) owns relaxing `verify-node.sh`'s pre-parse guard. This row owns the prose that currently promises a branch the script does not have.

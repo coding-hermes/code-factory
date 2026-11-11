@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/node_env.py` — 589 lines [scripts/node_env.py:1] |
+| Path | `~/code-factory/scripts/node_env.py` — 589 lines [scripts/node_env.py:1] |
 | Repository | `code-factory` [scripts/node_env.py:1] |
 | Revision | `e7cf075` — the `origin/main` tip every locator below was measured against; the file's own last-touching commit is `a05667c` ("feat(node): a node's environment becomes declared data — env profile + config patches, diffed before applied") |
 | Status | **VERIFIED — 271 locators, all resolve; facts cited** |
@@ -63,7 +63,7 @@ Run on 2026-11-05 in a clean worktree of `e7cf075` (`~/proj-wt-md-27b`), Python 
 | 6 | `--check` is read-only | `run --env-file … --config-set … --check` [scripts/node_env.py:559-564] | `ENV: DRIFT (4)`, exit 1, `$N/.hermes` still absent | 2026-11-05 | **PASS** |
 | 7 | `--apply` writes both files at mode 600 and keeps unowned lines | same declaration with `--apply` [scripts/node_env.py:566-576] | `ENV: APPLIED (5 change(s))`, exit 0, `600`/`600`, comment and unmanaged line still present | 2026-11-05 | **PASS** |
 | 8 | Second `--apply` is a byte-identical no-op | same command again [scripts/node_env.py:581-585] | `ENV: PASS — already matches (no change)`, exit 0, both sha256 unchanged | 2026-11-05 | **PASS** |
-| 9 | A mode of 644 is corrected without touching content | `chmod 644` then `--apply` [scripts/node_env.py:444-453] [scripts/node_env.py:570-576] | `  ..    corrected /home/agent/.hermes/.env to mode 600`, exit 0, `600` after | 2026-11-05 | **PASS** (with the wording defect in §8) |
+| 9 | A mode of 644 is corrected without touching content | `chmod 644` then `--apply` [scripts/node_env.py:444-453] [scripts/node_env.py:570-576] | `  ..    corrected ~/.hermes/.env to mode 600`, exit 0, `600` after | 2026-11-05 | **PASS** (with the wording defect in §8) |
 | 10 | A `config.yaml` this editor cannot model | `--config-set gateway.port=10800 --check` against `gateway: something` [scripts/node_env.py:352-356] | a named refusal and exit 2 | 2026-11-05 | **FAIL — traceback, exit 1; CF-239, §8** |
 
 ```
@@ -74,7 +74,7 @@ $ python3 scripts/master_doc_check.py docs/master --only 27- --strict
 MASTER-DOC: PASS
 
 $ run --env-file "$W/absent.env" --check
-  FAIL  env — cannot read the profile /home/kara/.hermes/cache/scratch/md25b/ne27-canon/absent.env (No such file or directory)
+  FAIL  env — cannot read the profile ~/.hermes/cache/scratch/md25b/ne27-canon/absent.env (No such file or directory)
 rc=2
 
 $ printf "ENV_CF_PROXY_API_KEY=scratch-inline-0001\n" > inline.env; run --env-file inline.env --check
@@ -86,8 +86,8 @@ $ run --config-set logging.level=debug --check
 rc=2
 
 $ run --env-file node.env --config-set model.provider=cf-proxy --config-set gateway.port=10800 --check
-node-env --check — home=/home/kara/.hermes/cache/scratch/md25b/ne27-canon/node
-  ..    env /home/kara/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/.env, config /home/kara/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/config.yaml
+node-env --check — home=~/.hermes/cache/scratch/md25b/ne27-canon/node
+  ..    env ~/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/.env, config ~/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/config.yaml
   ..    declared 2 env var(s), 2 config key(s)
   DIFF  env:CF_PROXY_API_KEY — <absent> -> *** (masked)
   DIFF  env:MODEL_NAME — <absent> -> "scratch-model"
@@ -98,8 +98,8 @@ rc=1
 [ -d $N/.hermes ] -> absent
 
 $ run --env-file node.env --config-set model.provider=cf-proxy --config-set gateway.port=10800 --config-set gateway.bind=0.0.0.0 --apply
-node-env --apply — home=/home/kara/.hermes/cache/scratch/md25b/ne27-canon/node
-  ..    env /home/kara/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/.env, config /home/kara/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/config.yaml
+node-env --apply — home=~/.hermes/cache/scratch/md25b/ne27-canon/node
+  ..    env ~/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/.env, config ~/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/config.yaml
   ..    declared 2 env var(s), 3 config key(s)
   DIFF  env:CF_PROXY_API_KEY — <absent> -> *** (masked)
   DIFF  env:MODEL_NAME — <absent> -> "scratch-model"
@@ -108,8 +108,8 @@ node-env --apply — home=/home/kara/.hermes/cache/scratch/md25b/ne27-canon/node
   DIFF  config:gateway.bind — <absent> -> "0.0.0.0"
   WARN  unmanaged:LEFTOVER_VAR — present in the node's .env, not declared here (value masked)
   ..    1 unmanaged var(s) would carry forward on a re-provision
-  ..    wrote /home/kara/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/.env (2 change(s), mode 600)
-  ..    wrote /home/kara/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/config.yaml (3 change(s), mode 600)
+  ..    wrote ~/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/.env (2 change(s), mode 600)
+  ..    wrote ~/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/config.yaml (3 change(s), mode 600)
 ENV: APPLIED (5 change(s))
 rc=0
 [mode] .env=600 config.yaml=600
@@ -130,8 +130,8 @@ $ cat config.yaml
     bind: 0.0.0.0
 
 $ run ... --apply   # second time
-node-env --apply — home=/home/kara/.hermes/cache/scratch/md25b/ne27-canon/node
-  ..    env /home/kara/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/.env, config /home/kara/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/config.yaml
+node-env --apply — home=~/.hermes/cache/scratch/md25b/ne27-canon/node
+  ..    env ~/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/.env, config ~/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/config.yaml
   ..    declared 2 env var(s), 3 config key(s)
   PASS  env:CF_PROXY_API_KEY — matches (***)
   PASS  env:MODEL_NAME — matches ("scratch-model")
@@ -143,35 +143,35 @@ node-env --apply — home=/home/kara/.hermes/cache/scratch/md25b/ne27-canon/node
 ENV: PASS — already matches (no change)
 rc=0
 [sha256 run1]
-5bb014a836a51f4444e41934bf88e769de4a888c2af3b0bf1d8a1a43b13d9150  /home/kara/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/.env
-882b375760df22a8740d7a5335e950c031b98fe4467eb6c3ef592523c1055165  /home/kara/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/config.yaml
+5bb014a836a51f4444e41934bf88e769de4a888c2af3b0bf1d8a1a43b13d9150  ~/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/.env
+882b375760df22a8740d7a5335e950c031b98fe4467eb6c3ef592523c1055165  ~/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/config.yaml
 [sha256 run2]
-5bb014a836a51f4444e41934bf88e769de4a888c2af3b0bf1d8a1a43b13d9150  /home/kara/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/.env
-882b375760df22a8740d7a5335e950c031b98fe4467eb6c3ef592523c1055165  /home/kara/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/config.yaml
+5bb014a836a51f4444e41934bf88e769de4a888c2af3b0bf1d8a1a43b13d9150  ~/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/.env
+882b375760df22a8740d7a5335e950c031b98fe4467eb6c3ef592523c1055165  ~/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/config.yaml
 [identical] yes
 
 $ chmod 644 .env; run ... --apply   # content already matches
   ..    1 unmanaged var(s) would carry forward on a re-provision
-  ..    corrected /home/kara/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/.env to mode 600
+  ..    corrected ~/.hermes/cache/scratch/md25b/ne27-canon/node/.hermes/.env to mode 600
 ENV: PASS — already matches (no change)
 rc=0
 [mode now] 600
 
 $ printf "gateway: something\n" > bad/.hermes/config.yaml; run --config-set gateway.port=10800 --check
 Traceback (most recent call last):
-  File "/home/kara/proj-wt-md-27b/scripts/node_env.py", line 589, in <module>
+  File "~/proj-wt-md-27b/scripts/node_env.py", line 589, in <module>
     sys.exit(main(sys.argv[1:]))
              ~~~~^^^^^^^^^^^^^^
-  File "/home/kara/proj-wt-md-27b/scripts/node_env.py", line 509, in main
+  File "~/proj-wt-md-27b/scripts/node_env.py", line 509, in main
     config_out, config_changes = plan_config(config_lines, assigns)
                                  ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/kara/proj-wt-md-27b/scripts/node_env.py", line 417, in plan_config
+  File "~/proj-wt-md-27b/scripts/node_env.py", line 417, in plan_config
     out, current, changed = set_scalar(out, path, value)
                             ~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-  File "/home/kara/proj-wt-md-27b/scripts/node_env.py", line 385, in set_scalar
+  File "~/proj-wt-md-27b/scripts/node_env.py", line 385, in set_scalar
     start, end = section_span(lines, section)
                  ~~~~~~~~~~~~^^^^^^^^^^^^^^^^
-  File "/home/kara/proj-wt-md-27b/scripts/node_env.py", line 352, in section_span
+  File "~/proj-wt-md-27b/scripts/node_env.py", line 352, in section_span
     raise Refusal(
     ...<3 lines>...
     )
@@ -194,7 +194,7 @@ Paths in the rows below read `/home/agent`; the measured instance of each — wi
 | Level | Line (verbatim) | Emitted when | Kind |
 |---|---|---|---|
 | header | `node-env --apply — home=/home/agent` | first line of every successful run, after parsing [scripts/node_env.py:511] | descriptive — names the mode and the home the two paths are derived from |
-| note | `  ..    env /home/agent/.hermes/.env, config /home/agent/.hermes/config.yaml` | always, immediately after the header [scripts/node_env.py:512] | descriptive — the two exact paths, which is how an operator sees a wrong `HOME` |
+| note | `  ..    env ~/.hermes/.env, config ~/.hermes/config.yaml` | always, immediately after the header [scripts/node_env.py:512] | descriptive — the two exact paths, which is how an operator sees a wrong `HOME` |
 | note | `  ..    declared 2 env var(s), 3 config key(s)` | always [scripts/node_env.py:513] | descriptive — the input's size; the caller greps this exact shape with `sed -n 's/^  \.\.    declared /declared /p'` [scripts/bunker-provision.sh:150] |
 | PASS | `  PASS  env:CF_PROXY_API_KEY — matches (***)` | a declared key already holds the declared value; a secret-named key renders `***` [scripts/node_env.py:530-534] [scripts/node_env.py:107-113] | evidentiary — per-key, and the only positive proof that the key was compared rather than skipped |
 | PASS | `  PASS  config:gateway.port — matches (10800)` | a config scalar already matches; an integer renders unquoted [scripts/node_env.py:116-122] [scripts/node_env.py:546] | evidentiary |
@@ -203,8 +203,8 @@ Paths in the rows below read `/home/agent`; the measured instance of each — wi
 | DIFF | `  DIFF  config:model.provider — "openrouter" -> "cf-proxy"` | a config scalar differs [scripts/node_env.py:536-544] | evidentiary |
 | WARN | `  WARN  unmanaged:LEFTOVER_VAR — present in the node's .env, not declared here (value masked)` | a key exists in `~/.hermes/.env` that the profile does not declare [scripts/node_env.py:548-554] | descriptive — a warning about carry-forward, explicitly **not** drift [scripts/node_env.py:30-33]; the value is always masked, even for a non-secret name — `install-gitreins.sh`'s `CODING_HERMES_CO_AUTHOR` is the live example of such a key [scripts/install-gitreins.sh:150-157] |
 | note | `  ..    1 unmanaged var(s) would carry forward on a re-provision` | once, when the unmanaged set is non-empty [scripts/node_env.py:555-556] | descriptive |
-| note | `  ..    wrote /home/agent/.hermes/.env (2 change(s), mode 600)` | `--apply` rewrote a file [scripts/node_env.py:569] | evidentiary — names the file, the change count and the mode |
-| note | `  ..    corrected /home/agent/.hermes/.env to mode 600` | `--apply` found the content already correct but the mode not 600 [scripts/node_env.py:570-571] [scripts/node_env.py:444-453] | evidentiary |
+| note | `  ..    wrote ~/.hermes/.env (2 change(s), mode 600)` | `--apply` rewrote a file [scripts/node_env.py:569] | evidentiary — names the file, the change count and the mode |
+| note | `  ..    corrected ~/.hermes/.env to mode 600` | `--apply` found the content already correct but the mode not 600 [scripts/node_env.py:570-571] [scripts/node_env.py:444-453] | evidentiary |
 | verdict | `ENV: DRIFT (4)` | `--check` found any drift, exit 1 [scripts/node_env.py:559-562] | evidentiary — the count, on stdout |
 | verdict | `ENV: APPLIED (5 change(s))` | `--apply` closed drift, exit 0 [scripts/node_env.py:581-582] | evidentiary |
 | verdict | `ENV: PASS — already matches (no change)` | `--apply` found nothing to change, exit 0 [scripts/node_env.py:583-584] | evidentiary — this is the idempotence signal; note it is printed even when the mode was just corrected, §8 |
@@ -229,7 +229,7 @@ Direction is the module's own behaviour: **fail closed** means the run stops wit
 | An integer is out of range or not an integer | `gateway.port: 70000 is outside 1..65535` / `gateway.port: 'abc' is not an integer` / `gateway.port: '+5' is not an integer`, exit 2 [scripts/node_env.py:261-267] | **fail closed, and never clamped** — the bounds are a refusal, not a trim | The grammar is `^[0-9]+$` [scripts/node_env.py:57], so a leading `+` or `1e3` is a syntax error, while `0100` is accepted and written as `100` (measured) | pass a plain decimal inside the bounds |
 | The node drifts from a valid declaration | `ENV: DRIFT (4)`, rows for each key, exit 1, nothing written [scripts/node_env.py:559-562] | **fail closed for the check** (non-zero) but *not* a refusal — exit 1 is the valid-and-different code | Exit 2 means the declaration was refused; the two must not be conflated [scripts/node_env.py:24-28] | rerun with `--apply`, or run `--apply` twice and compare |
 | A `config.yaml` section is unmodellable (`gateway: value`) or appears twice | Python `Traceback …` ending `Refusal: gateway: appears twice (lines 1 and 3)`, raised as a `Refusal`, which everywhere else yields a named row and exit 2, but **measured as a traceback and exit 1** [scripts/node_env.py:352-361] raised from the plan phase [scripts/node_env.py:509], which sits **outside** the handler that ends at [scripts/node_env.py:506] | **fails closed by accident** — the run stops, but with a traceback and the same exit code as drift, so a refusal reads as a failed check | Every other refusal is a single `  FAIL` row on stderr with exit 2 [scripts/node_env.py:95-96] [scripts/node_env.py:504-506] | fix or delete the offending section by hand; **confirmed open as CF-239** [.coding-hermes/board/tasks.jsonl:213] |
-| The two target files are not mode 600 | `--check` prints `ENV: PASS — declared environment matches` and exits 0 with no mention of mode; only `--apply` corrects it and then says `  ..    corrected /home/agent/.hermes/.env to mode 600` [scripts/node_env.py:444-453] [scripts/node_env.py:570-576] | **silently permissive on `--check`** — a read-only run cannot report the permission state it is asked about, because `--check` returns at [scripts/node_env.py:559-564] before any `stat` | Content is the only node state `--check` compares; permissions are never examined | run `--apply`; the correction rewrites mode only, never content |
+| The two target files are not mode 600 | `--check` prints `ENV: PASS — declared environment matches` and exits 0 with no mention of mode; only `--apply` corrects it and then says `  ..    corrected ~/.hermes/.env to mode 600` [scripts/node_env.py:444-453] [scripts/node_env.py:570-576] | **silently permissive on `--check`** — a read-only run cannot report the permission state it is asked about, because `--check` returns at [scripts/node_env.py:559-564] before any `stat` | Content is the only node state `--check` compares; permissions are never examined | run `--apply`; the correction rewrites mode only, never content |
 | An existing `.env` line is duplicated (`A=1` then `A=2`) | Only the **last** occurrence is rewritten; the earlier line survives untouched (measured: declaring `A=3` yielded `A=1` then `A=3`) [scripts/node_env.py:303-320] | **fail open, silently** — the applier reports one change and leaves a shadowed stale line behind | `env_values` reads last-wins [scripts/node_env.py:291-297], so `--check` stays green whatever the consumer does with the first occurrence | de-duplicate `~/.hermes/.env` by hand; the applier will not delete a line it does not own [scripts/node_env.py:30-33] |
 | `HOME` is unset | `  FAIL  env — HOME is unset — the paths this applies to are unknown`, exit 2 [scripts/node_env.py:495-499] | **fail closed** — no default home is guessed | Every other path failure names the path it tried [scripts/node_env.py:216] | export `HOME`; the caller always sets it explicitly [scripts/bunker-provision.sh:147] [scripts/bunker-provision.sh:426] |
 | A write fails (permissions, full disk) | `  FAIL  env — cannot write the node's environment (<strerror>)`, exit 2 [scripts/node_env.py:577-579] | **fail closed**, and the temp file is unlinked so no partial file is left [scripts/node_env.py:435-440] | A refusal before the write never mentions writing | fix the directory; a partially written target is impossible because the write is `mkstemp` + `os.replace` [scripts/node_env.py:429-434] |

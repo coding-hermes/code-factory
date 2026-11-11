@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/install-gitreins.sh` — 180 lines, two modes in one file [scripts/install-gitreins.sh:1] |
+| Path | `~/code-factory/scripts/install-gitreins.sh` — 180 lines, two modes in one file [scripts/install-gitreins.sh:1] |
 | Repository | `code-factory` [scripts/install-gitreins.sh:2] |
 | Revision | `e7cf075` — the `origin/main` tip every locator below was measured against (worktree `~/proj-wt-md-19b`, 2026-11-05); the file's own last-touching commit is `d4d3fb7` (2026-11-04, "the commit gate and the bus credentials belong on the bunker …") |
 | Status | **VERIFIED — 218 locators, all resolve; facts cited** |
@@ -26,7 +26,7 @@
 | `bash` | 5.3.9 measured here; the script needs `set -uo pipefail`, `local` and unquoted-heredoc expansion [scripts/install-gitreins.sh:15] [scripts/install-gitreins.sh:124] | the interpreter on the shebang line [scripts/install-gitreins.sh:1] | **not detected** — the shell is already running by then; a `sh` without `pipefail` fails at line 15 before any row is printed |
 | `python3` | 3.14.9 (harness venv) and 3.14.4 (`/usr/bin`) both measured here; nothing in the file pins a minimum | on `PATH` on the node | `command -v python3` — `FAIL  python3 — absent — gitreins is a python package`, then `return 1`, which hides the other five rows [scripts/install-gitreins.sh:40-41]; in `--apply` the same probe returns 1 with `absent — cannot install gitreins` [scripts/install-gitreins.sh:84] |
 | `pip`, as `python3 -m pip` | 26.2.2 (venv interpreter) and 25.1.1 (`/usr/bin`) measured here | inside the interpreter that `python3` resolves to | `"$py" -m pip --version` captured on stdout — prints `FAIL  pip — python3 -m pip is unavailable — run 'python3 -m ensurepip --user'` **without returning**, so the run continues and fails later at the install [scripts/install-gitreins.sh:43-45] |
-| `gitreins` at the pin | 0.17.1 (the pin) — measured as `gitreins 0.17.1` from `/home/kara/.local/bin/gitreins` | `$VENV/bin/gitreins` first, else `PATH` | `installed()` tries `$VENV/bin/gitreins --version` and falls back to `command -v gitreins`; the version is field 2 of `--version` [scripts/install-gitreins.sh:33-34]. Empty → `absent (no …/bin/gitreins and none on PATH) — run --apply`; different → `version <v> != pin <PIN>` [scripts/install-gitreins.sh:47-54] |
+| `gitreins` at the pin | 0.17.1 (the pin) — measured as `gitreins 0.17.1` from `~/.local/bin/gitreins` | `$VENV/bin/gitreins` first, else `PATH` | `installed()` tries `$VENV/bin/gitreins --version` and falls back to `command -v gitreins`; the version is field 2 of `--version` [scripts/install-gitreins.sh:33-34]. Empty → `absent (no …/bin/gitreins and none on PATH) — run --apply`; different → `version <v> != pin <PIN>` [scripts/install-gitreins.sh:47-54] |
 | `venv` module of that interpreter | stdlib | same interpreter | `"$py" -m venv "$VENV"` failing produces `FAIL  venv — python3 -m venv failed (python3-venv missing?)` and `return 1` [scripts/install-gitreins.sh:95] |
 | `git` | 2.53.0 measured here | on `PATH`; it also supplies the repo state the hook runs in | **implicit and silent in `--check`**: `git config --global user.name|user.email` is read with `2>/dev/null || true` [scripts/install-gitreins.sh:69-70], so a missing git binary and an unset identity are the same row: `FAIL  identity — git user.name/user.email unset` [scripts/install-gitreins.sh:74]. In `--apply` the write is graded: `could not set user.name` [scripts/install-gitreins.sh:144-147] |
 | `awk` | POSIX awk, unpinned | on `PATH` | **not detected** — used only to take field 2 of `--version` [scripts/install-gitreins.sh:33-34]; its absence makes the version empty, i.e. it presents as `gitreins absent` (§6) |
@@ -49,7 +49,7 @@
 | Peer | Direction | Transport | Payload | Other side (file:function) |
 |---|---|---|---|---|
 | Python package index | `pip` → index | HTTPS, pip's own auth/config; no URL in this file | `gitreins==0.17.1` pinned [scripts/install-gitreins.sh:19] [scripts/install-gitreins.sh:100] | The index resolver inside the venv's `pip`; on this host the venv interpreter is the only one that may install anything (PEP 668) [scripts/install-gitreins.sh:20-22] |
-| `git commit` → repository hook | git → the hook file the script writes | `exec` of `.git/hooks/pre-commit`, cwd = repo root, exit status gates the commit [scripts/install-gitreins.sh:124-136] | Staged index is implicit; the hook reads `$REPO_ROOT/.gitreins/config.yaml` and exits 0 when it is absent [scripts/install-gitreins.sh:130-132] | `gitreins guard --quality-async` at the absolute venv path [scripts/install-gitreins.sh:134]. The other side of the *contract* is git's hook protocol itself; a live example with the same absolute-path pinning is the control-host hook `/home/kara/code-factory/.git/hooks/pre-commit` |
+| `git commit` → repository hook | git → the hook file the script writes | `exec` of `.git/hooks/pre-commit`, cwd = repo root, exit status gates the commit [scripts/install-gitreins.sh:124-136] | Staged index is implicit; the hook reads `$REPO_ROOT/.gitreins/config.yaml` and exits 0 when it is absent [scripts/install-gitreins.sh:130-132] | `gitreins guard --quality-async` at the absolute venv path [scripts/install-gitreins.sh:134]. The other side of the *contract* is git's hook protocol itself; a live example with the same absolute-path pinning is the control-host hook `~/code-factory/.git/hooks/pre-commit` |
 | `~/.gitconfig` | script → git config store | `git config --global` writes [scripts/install-gitreins.sh:144-147]; reads with `2>/dev/null \|\| true` [scripts/install-gitreins.sh:69-70] | `user.name`, `user.email`; optionally `CODING_HERMES_CO_AUTHOR` in a different store (below) | Consumer is git's commit path at commit time, and this script's own `check` on the next run — the only two readers |
 | `$HOME/.hermes/.env` | script → file | append, created mode 600 [scripts/install-gitreins.sh:150-152] [scripts/install-gitreins.sh:156] | `CODING_HERMES_CO_AUTHOR=<Name <mail>>`, written once, guarded by `grep -q '^CODING_HERMES_CO_AUTHOR='` [scripts/install-gitreins.sh:153-157] | **No reader in this repository** — `grep -rn CODING_HERMES_CO_AUTHOR` over the tree returns exactly the four writer lines [scripts/install-gitreins.sh:153-157]. The consumer is outside this repo; nothing here proves it exists |
 | `scripts/bunker-provision.sh` probe | control host → node, and control host → its own rows | `bunker exec -- bash -lc` running a heredoc that echoes `gitreins=` and `precommit=` [scripts/bunker-provision.sh:220-221] | Two of the same artifacts this installer produces | Graded at [scripts/bunker-provision.sh:245-248] as `gitreins` and `commit_hook`. This is a **duplicate** of rows 3 and 5 of `check` [scripts/install-gitreins.sh:47-64] — including a copy of `installed()`'s venv-then-PATH logic [scripts/bunker-provision.sh:220] — not a caller of this script |
@@ -74,34 +74,34 @@ Transcript 1 — the primary measurement, on this host, as delivered (`$HOME/rep
 
 ```
 $ bash scripts/install-gitreins.sh --check; echo "EXIT=$?"
-gitreins on the node — repo=/home/kara/repo pin=0.17.1
+gitreins on the node — repo=~/repo pin=0.17.1
   PASS  python3 — Python 3.14.9
-  PASS  pip — pip 26.2.2 from /home/kara/.hermes/installs/b0e47ae07995f891/environments/24f1df2ad984420181cb6be1707f6a03/venv/lib/python3.14/site-packages/pip (python 3.14)
+  PASS  pip — pip 26.2.2 from ~/.hermes/installs/b0e47ae07995f891/environments/24f1df2ad984420181cb6be1707f6a03/venv/lib/python3.14/site-packages/pip (python 3.14)
   PASS  gitreins — version 0.17.1 at pin 0.17.1
-  FAIL  repo — /home/kara/repo is not a directory — the gate has nothing to protect
+  FAIL  repo — ~/repo is not a directory — the gate has nothing to protect
   PASS  identity — totalwindupflightsystems <totalwindupflightsystems@gmail.com>
 
 GITREINS: FAIL (1)
 EXIT=1
 ```
 
-Note what this run does **not** prove: `gitreins` passed from `PATH` (`/home/kara/.local/bin/gitreins`, a pipx venv), not from `$HOME/gitreins-venv`, which does not exist here. The row cannot tell those two apart — that ambiguity is defect D-1.
+Note what this run does **not** prove: `gitreins` passed from `PATH` (`~/.local/bin/gitreins`, a pipx venv), not from `$HOME/gitreins-venv`, which does not exist here. The row cannot tell those two apart — that ambiguity is defect D-1.
 
 Transcript 2 — checks 2 and 3 (scratch repos, isolated `HOME`):
 
 ```
-$ NODE_REPO=/home/kara/.hermes/cache/scratch/g19/bare bash scripts/install-gitreins.sh --check; echo "EXIT=$?"
-  FAIL  config — /home/kara/.hermes/cache/scratch/g19/bare/.gitreins/config.yaml absent — the gate has no policy
-  FAIL  hook — no gitreins pre-commit in /home/kara/.hermes/cache/scratch/g19/bare/.git/hooks — run 'gitreins install' there
+$ NODE_REPO=~/.hermes/cache/scratch/g19/bare bash scripts/install-gitreins.sh --check; echo "EXIT=$?"
+  FAIL  config — ~/.hermes/cache/scratch/g19/bare/.gitreins/config.yaml absent — the gate has no policy
+  FAIL  hook — no gitreins pre-commit in ~/.hermes/cache/scratch/g19/bare/.git/hooks — run 'gitreins install' there
 GITREINS: FAIL (2)
 EXIT=1
 
-$ PATH=/usr/bin:/bin HOME=/home/kara/.hermes/cache/scratch/g19/home3 NODE_REPO=/home/kara/.hermes/cache/scratch/g19/bare bash scripts/install-gitreins.sh --check; echo "EXIT=$?"
+$ PATH=/usr/bin:/bin HOME=~/.hermes/cache/scratch/g19/home3 NODE_REPO=~/.hermes/cache/scratch/g19/bare bash scripts/install-gitreins.sh --check; echo "EXIT=$?"
   PASS  python3 — Python 3.14.4
   PASS  pip — pip 25.1.1 from /usr/lib/python3/dist-packages/pip (python 3.14)
-  FAIL  gitreins — absent (no /home/kara/.hermes/cache/scratch/g19/home3/gitreins-venv/bin/gitreins and none on PATH) — run --apply
-  FAIL  config — /home/kara/.hermes/cache/scratch/g19/bare/.gitreins/config.yaml absent — the gate has no policy
-  FAIL  hook — no gitreins pre-commit in /home/kara/.hermes/cache/scratch/g19/bare/.git/hooks — run 'gitreins install' there
+  FAIL  gitreins — absent (no ~/.hermes/cache/scratch/g19/home3/gitreins-venv/bin/gitreins and none on PATH) — run --apply
+  FAIL  config — ~/.hermes/cache/scratch/g19/bare/.gitreins/config.yaml absent — the gate has no policy
+  FAIL  hook — no gitreins pre-commit in ~/.hermes/cache/scratch/g19/bare/.git/hooks — run 'gitreins install' there
   FAIL  identity — git user.name/user.email unset — a commit from this node is unattributed
 
 GITREINS: FAIL (4)
@@ -131,14 +131,14 @@ All rows are `printf` output; the format strings and spacing live in `lib.sh` [s
 - `  FAIL  python3 — absent — gitreins is a python package` — **descriptive**: the fatal first row; `return 1` immediately after [scripts/install-gitreins.sh:41].
 - `  PASS  pip — pip 26.2.2 from …/site-packages/pip (python 3.14)` — **evidentiary**: pip's own `--version` first line [scripts/install-gitreins.sh:43-44].
 - `  FAIL  pip — python3 -m pip is unavailable — run 'python3 -m ensurepip --user'` — **descriptive**: the non-fatal pip row; it names the remedy [scripts/install-gitreins.sh:45].
-- `  FAIL  gitreins — absent (no /home/kara/.hermes/cache/scratch/g19/home3/gitreins-venv/bin/gitreins and none on PATH) — run --apply` — **evidentiary**: absence, naming both places that were searched [scripts/install-gitreins.sh:49].
+- `  FAIL  gitreins — absent (no ~/.hermes/cache/scratch/g19/home3/gitreins-venv/bin/gitreins and none on PATH) — run --apply` — **evidentiary**: absence, naming both places that were searched [scripts/install-gitreins.sh:49].
 - `  PASS  gitreins — version 0.17.1 at pin 0.17.1` — **evidentiary**: the read-back found the pin [scripts/install-gitreins.sh:51].
 - `  FAIL  gitreins — version <v> != pin <PIN>` — **descriptive**: drift at an exact pin [scripts/install-gitreins.sh:53].
 - `  PASS  config — <repo>/.gitreins/config.yaml` — **evidentiary**: the policy file exists [scripts/install-gitreins.sh:58].
 - `  FAIL  config — <repo>/.gitreins/config.yaml absent — the gate has no policy` — **evidentiary**: [scripts/install-gitreins.sh:58].
 - `  PASS  hook — pre-commit runs gitreins` — **evidentiary, and the row that can lie**: it matches the word in the hook text, it does not execute the hook [scripts/install-gitreins.sh:60-61].
 - `  FAIL  hook — no gitreins pre-commit in <repo>/.git/hooks — run 'gitreins install' there` — **evidentiary**: [scripts/install-gitreins.sh:63].
-- `  FAIL  repo — /home/kara/repo is not a directory — the gate has nothing to protect` — **evidentiary**: the row that fired on this host [scripts/install-gitreins.sh:66].
+- `  FAIL  repo — ~/repo is not a directory — the gate has nothing to protect` — **evidentiary**: the row that fired on this host [scripts/install-gitreins.sh:66].
 - `  PASS  identity — totalwindupflightsystems <totalwindupflightsystems@gmail.com>` — **evidentiary**: the global identity read back [scripts/install-gitreins.sh:72].
 - `  FAIL  identity — git user.name/user.email unset — a commit from this node is unattributed` — **evidentiary**: both keys empty [scripts/install-gitreins.sh:74].
 - `GITREINS: PASS — the gate is present on this node` — **evidentiary**: the success verdict [scripts/install-gitreins.sh:78].
@@ -149,11 +149,11 @@ All rows are `printf` output; the format strings and spacing live in `lib.sh` [s
 - `  PASS  venv — <venv>` — **descriptive**: [scripts/install-gitreins.sh:96].
 - `  FAIL  venv — python3 -m venv failed (python3-venv missing?)` — **descriptive**: the only place the `venv` dependency is named [scripts/install-gitreins.sh:95].
 - `  ..    installing gitreins==0.17.1 into the venv` — **descriptive**: progress; the pip output itself goes to the log, not the terminal [scripts/install-gitreins.sh:99-100].
-- `  PASS  install — gitreins 0.17.1 (log /home/kara/.gitreins-install-0.17.1.log)` — **descriptive**: install plus the path of the swallowed pip log [scripts/install-gitreins.sh:103].
+- `  PASS  install — gitreins 0.17.1 (log ~/.gitreins-install-0.17.1.log)` — **descriptive**: install plus the path of the swallowed pip log [scripts/install-gitreins.sh:103].
 - `  FAIL  install — installed <v> but the pin is <PIN> (log <path>)` — **descriptive**: pip succeeded and the read-back still disagreed — the row that catches a lying index [scripts/install-gitreins.sh:105].
 - `  FAIL  install — pip exited <n> — log <path>` — **descriptive**: pip's status, with the log path as the only route to the reason [scripts/install-gitreins.sh:108].
-- `  PASS  path — /home/kara/.local/bin/gitreins -> <venv>/bin/gitreins` — **descriptive**: the symlink that puts the pinned binary on `PATH` [scripts/install-gitreins.sh:112].
-- `  FAIL  path — could not link /home/kara/.local/bin/gitreins` — **descriptive**: non-fatal; the run continues to the hook [scripts/install-gitreins.sh:113].
+- `  PASS  path — ~/.local/bin/gitreins -> <venv>/bin/gitreins` — **descriptive**: the symlink that puts the pinned binary on `PATH` [scripts/install-gitreins.sh:112].
+- `  FAIL  path — could not link ~/.local/bin/gitreins` — **descriptive**: non-fatal; the run continues to the hook [scripts/install-gitreins.sh:113].
 - `  PASS  hook — already present in <repo> (left untouched)` — **descriptive**: an existing hook is never inspected or replaced [scripts/install-gitreins.sh:122].
 - `  PASS  hook — written, pinned to <venv>/bin/gitreins` — **descriptive, and misleading by construction**: it asserts the *text* it just wrote, not that the target executes — the exact wording that made D-1 invisible [scripts/install-gitreins.sh:137].
 - `  FAIL  hook — could not write <repo>/.git/hooks/pre-commit` — **descriptive**: [scripts/install-gitreins.sh:138].
@@ -180,7 +180,7 @@ Direction is the module's measured behaviour. `fail closed` = the run stops or e
 | Identity unset | `  FAIL  identity — git user.name/user.email unset — a commit from this node is unattributed` [scripts/install-gitreins.sh:74] | **fail closed in `--apply`** — it refuses before installing anything [scripts/install-gitreins.sh:86-87] | An identity that is set globally but wrong is indistinguishable here; the row only prints what it found [scripts/install-gitreins.sh:72] | pass `--author-name` and `--author-email`, or set `GIT_AUTHOR_NAME`/`GIT_AUTHOR_EMAIL` [scripts/install-gitreins.sh:27-28] |
 | `python3 -m venv` fails | `  FAIL  venv — python3 -m venv failed (python3-venv missing?)` then `return 1` [scripts/install-gitreins.sh:95] | **fail closed** — no hook is written, so the repo stays unarmed rather than half-armed | A pip failure happens later and names pip [scripts/install-gitreins.sh:108] | install the distro's `python3-venv`, rerun |
 | pip install fails or the read-back disagrees | `  FAIL  install — pip exited <n> — log <path>` or `installed <v> but the pin is <PIN>` [scripts/install-gitreins.sh:105-108] | **fail closed** — `return 1` before the symlink and the hook, so nothing is left pointing at a wrong binary | A version mismatch on a pre-existing install is caught earlier, before any pip run [scripts/install-gitreins.sh:90-92] | read the log at `$HOME/.gitreins-install-$PIN.log` [scripts/install-gitreins.sh:98] |
-| Symlink fails | `  FAIL  path — could not link /home/kara/.local/bin/gitreins` [scripts/install-gitreins.sh:113] | **degraded** — no `return`, the hook is still written and still pins the absolute venv path, so the gate works for that repo and `gitreins` is simply not on `PATH` | A wrong pin fails earlier, at the install row [scripts/install-gitreins.sh:105] | create the link by hand, or fix `$HOME/.local/bin` permissions |
+| Symlink fails | `  FAIL  path — could not link ~/.local/bin/gitreins` [scripts/install-gitreins.sh:113] | **degraded** — no `return`, the hook is still written and still pins the absolute venv path, so the gate works for that repo and `gitreins` is simply not on `PATH` | A wrong pin fails earlier, at the install row [scripts/install-gitreins.sh:105] | create the link by hand, or fix `$HOME/.local/bin` permissions |
 | An existing hook is present | `  PASS  hook — already present in <repo> (left untouched)` [scripts/install-gitreins.sh:122] | **fail open to the incumbent** — whatever that hook does, including nothing, is reported as a pass | A hook without the word gitreins is rewritten instead [scripts/install-gitreins.sh:121] | inspect `.git/hooks/pre-commit` yourself; the script deliberately will not |
 | **D-1** Install skipped, hook still written with the venv path | `  PASS  gitreins — already at pin 0.17.1 (no install)` [scripts/install-gitreins.sh:91] + `  PASS  hook — written, pinned to <venv>/bin/gitreins` [scripts/install-gitreins.sh:137], then every commit dies `/…/gitreins-venv/bin/gitreins: No such file or directory`, exit 1 | **fail closed at commit, LYING at check**: the check's PASS rows are text assertions, so the run exits 0 and reports `GITREINS: PASS` [scripts/install-gitreins.sh:78] while the gate is broken | A correct install prints `PASS  install` and links a binary that exists [scripts/install-gitreins.sh:103-112] | create `$VENV` and install the pin, or re-run `--apply` with the venv removed so the install branch is taken |
 | `--repo` supplied with no value | `scripts/install-gitreins.sh: line 168: $2: unbound variable`, exit 1, no usage block [scripts/install-gitreins.sh:168] | **fail closed**, abrupt: `set -u` kills the shell mid-parse | An unknown flag prints `unknown argument:` plus usage and exits 2 [scripts/install-gitreins.sh:173] | pass a value |
@@ -217,7 +217,7 @@ The only secret-adjacent value in this file is the co-author string, and its han
 
 Defects measured while filling this section (documented, **not** fixed — `scripts/` is out of scope for this task):
 
-1. **D-1 — `--check` cannot distinguish "installed" from "on `PATH`", and `--apply` then writes a hook to a path that does not exist.** `installed()` falls back to `PATH` [scripts/install-gitreins.sh:33-34]; if the pin is found there, `apply` prints `already at pin … (no install)` and skips venv creation entirely [scripts/install-gitreins.sh:89-97]; the hook heredoc then pins the *venv* path unconditionally [scripts/install-gitreins.sh:134]. Reproduced end to end with an isolated `HOME` and a scratch repo: hook written pinning `/…/g19/home/gitreins-venv/bin/gitreins`, `PASS  hook — written, pinned to …` and `GITREINS: PASS`, then `git commit` printed `.git/hooks/pre-commit: line 10: …/gitreins-venv/bin/gitreins: No such file or directory` and exited 1. On a node where gitreins was pipx-installed — the shape of this very host — every commit would be blocked with a message that names a path the installer never created. The check that should catch it (`grep -q gitreins` [scripts/install-gitreins.sh:60]) passes by construction.
+1. **D-1 — `--check` cannot distinguish "installed" from "on `PATH`", and `--apply` then writes a hook to a path that does not exist.** `installed()` falls back to `PATH` [scripts/install-gitreins.sh:33-34]; if the pin is found there, `apply` prints `already at pin … (no install)` and skips venv creation entirely [scripts/install-gitreins.sh:89-97]; the hook heredoc then pins the *venv* path unconditionally [scripts/install-gitreins.sh:134]. Reproduced end to end with an isolated `HOME` and a scratch repo: hook written pinning `/…/g19~/bin/gitreins`, `PASS  hook — written, pinned to …` and `GITREINS: PASS`, then `git commit` printed `.git/hooks/pre-commit: line 10: …/gitreins-venv/bin/gitreins: No such file or directory` and exited 1. On a node where gitreins was pipx-installed — the shape of this very host — every commit would be blocked with a message that names a path the installer never created. The check that should catch it (`grep -q gitreins` [scripts/install-gitreins.sh:60]) passes by construction.
 2. **D-2 — the header's stated premise about `gitreins install` is stale for the pinned version.** The comment claims `gitreins install` "skips a repo that already has .gitreins/config.yaml and writes no hook" [scripts/install-gitreins.sh:117-119]. Measured with 0.17.1 on a scratch repo that already had `.gitreins/config.yaml`: `gitreins install` printed `Skipped: …/.gitreins/config.yaml` and still wrote both `.git/hooks/pre-commit` and `.git/hooks/pre-push` (672 and 263 bytes, exit 0). The script's own hook-writing block is therefore redundant when `gitreins install` has run — harmless, but the justification recorded in the file is not the behaviour the pinned binary has.
 3. **D-3 — `usage()` leaks shell code into the help output.** `sed -n '2,16p'` [scripts/install-gitreins.sh:31] runs two lines past the comment block, which ends at line 14, so `--help` prints `set -uo pipefail` and `HERE="$(cd "$(dirname "$0")" && pwd)"` after the prose (measured, exit 0). Cosmetic, but it makes the documented usage block untrustworthy as a spec.
 4. **D-4 — a flag with no value kills the shell instead of refusing.** `--repo` with no argument hits `REPO="$2"` under `set -u` [scripts/install-gitreins.sh:168], producing `scripts/install-gitreins.sh: line 168: $2: unbound variable`, exit 1, and no usage block — while an unknown flag gets a proper `unknown argument:` + usage + exit 2 [scripts/install-gitreins.sh:173]. Two different refusal qualities for two adjacent operator mistakes.

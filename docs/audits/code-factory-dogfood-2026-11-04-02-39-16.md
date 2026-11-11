@@ -16,7 +16,7 @@ Result this tick: **one new row filed, CF-153**; no defect found in the other le
 
 ## 0. Identity and policy position
 
-- Locator `/home/kara/code-factory`: `realpath` = `git rev-parse --show-toplevel` = the locator.
+- Locator `~/code-factory`: `realpath` = `git rev-parse --show-toplevel` = the locator.
   Root equality PASS. Branch `main` attached; no `MERGE_HEAD`/`REBASE_HEAD`/`CHERRY_PICK_HEAD`/
   `REVERT_HEAD`/sequencer. `.git/AUTO_MERGE` (41 bytes, tree d2834400…, 2026-11-03 21:49:57) is
   residue from the merge that produced f26a608, recorded and left in place.

@@ -58,7 +58,7 @@ own measurement. The distinction matters: a carried fact is only as fresh as its
 | crier verifies the per-agent ed25519 signature **before** it resolves the agent, so an unsigned read is 401 by design | FACT-03; ladder 401/401/401/200 on cf-node |
 | the crier on `*:8767` here **is** the bus cf-node talks to (`/health -> 200`) | measured (`ss -ltnp`) |
 | `disk_floor.py roles` → builder 10 / full 20 / worker 5 GiB; `resolve --explain` names its source | measured |
-| `lane_target.py parse 'bunker://cf-node/home/x/repo'` → `{"kind":"remote","scheme":"bunker",…}` | measured |
+| `lane_target.py parse 'bunker://cf-node~/repo'` → `{"kind":"remote","scheme":"bunker",…}` | measured |
 | the conformance battery has **exactly three** legs (`leg_apply leg_check leg_smoke`) against a spec demanding five | measured; mod 38 FAILING for this reason |
 | `specs/ENVELOPE.md`: 23 of 24 defined fields disagree with at least one implementation | mod 37 |
 | `specs/TRACE.md`: five unacked replies carried `in_reply_to`, none carried `corr_id` — 4 of 7 hops broken | mod 42 |

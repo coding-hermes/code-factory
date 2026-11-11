@@ -20,12 +20,13 @@ gate — the skill names exactly that as the defect. This builder now:
     (exit 3 on overflow) and check.py (page size, black/white only, font census,
     300 dpi tiles), then the book's own furniture + fit gates
 
-    python3 scripts/build_book.py --out /home/kara/code-factory-reports/handbook/CF2A-01-w9.pdf
+    python3 scripts/build_book.py --out ~/code-factory-reports/handbook/CF2A-01-w9.pdf
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 import re
 import shutil
@@ -45,7 +46,7 @@ import handbook_lint  # noqa: E402
 ROOT = HERE.parent
 HB = ROOT / "docs/handbook"
 BOOK = HB / "BOOK.yaml"
-SKILL = pathlib.Path("/home/kara/.hermes/skills/nasa-handbook")
+SKILL = pathlib.Path(os.path.expanduser("~/.hermes/skills/nasa-handbook"))
 NASA_CHECK = SKILL / "scripts/check.py"
 IMG_RE = re.compile(r"^!\[([^\]]*)\]\((figures/[^)]+\.svg)\)\s*$")
 # inline-figure marker: parts/II keeps image lines AT their reading position
@@ -577,7 +578,7 @@ def flow_sheets(
                 intro = [svg_fit(fig), cap]
                 if para is not None:
                     intro.append(para)
-                sheet.append("<div class=\"flow-intro\">" + "".join(intro) + "</div>")
+                sheet.append('<div class="flow-intro">' + "".join(intro) + "</div>")
                 i = para_i + 1 if para is not None else i + 1
                 continue
 
@@ -939,7 +940,10 @@ def main() -> int:
 
     # --- the skill's check.py: page size, black-and-white only, font census ------
     # tiles land in the 24h-pruned scratch: they are a review artifact, not a deliverable
-    tiles = pathlib.Path("/home/kara/.hermes/cache/scratch") / f"tiles-{out_path.stem}"
+    tiles = (
+        pathlib.Path(os.path.expanduser("~/.hermes/cache/scratch"))
+        / f"tiles-{out_path.stem}"
+    )
     r = subprocess.run(
         [
             sys.executable,

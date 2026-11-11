@@ -18,7 +18,7 @@ Measured with one `bunker exec` round trip:
 
 ```
 $ bunker --server bunker-las-03 exec cf-node -- bash -lc 'ls -la $HOME/.hermes/seed-applied.json; find $HOME/.hermes/prompts $HOME/.hermes/skills -type f | wc -l'
--rw-rw-r-- 1 bunker-cf-node bunker-cf-node 2251 Nov  4 20:52 /home/bunker-cf-node/.hermes/seed-applied.json
+-rw-rw-r-- 1 bunker-cf-node bunker-cf-node 2251 Nov  4 20:52 ~/.hermes/seed-applied.json
 14
 ```
 
@@ -31,7 +31,7 @@ r=json.load(open(os.path.expanduser("~/.hermes/seed-applied.json")))
 print("applied_at=%s applied_to=%s files=%d" % (r.get("applied_at"), r.get("applied_to"), len(r.get("files",[]))))
 for f in r["files"][:3]: print("  %s %s" % (f["path"], f["sha256"][:12]))
 PY'
-applied_at=2026-11-05T04:52:15Z applied_to=/home/bunker-cf-node/.hermes files=13
+applied_at=2026-11-05T04:52:15Z applied_to=~/.hermes files=13
   prompts/docs.md 5d093e26d190
   prompts/dogfood.md 2236c575ac71
   prompts/duckbrain.md 587bffe05592

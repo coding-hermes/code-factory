@@ -12,7 +12,7 @@ Every number below names the tip it was measured at: `bc02e2c21eac0b058ecb3eaf54
 
 | Probe | Result |
 |---|---|
-| `realpath /home/kara/code-factory` vs `git rev-parse --show-toplevel` | equal — root equality proven before any other repo read |
+| `realpath ~/code-factory` vs `git rev-parse --show-toplevel` | equal — root equality proven before any other repo read |
 | `.coding-hermes/board` | a real directory here (not the bankai symlink) — canonical side |
 | branch / remotes | `main` attached; `origin`, `gh`, `worker` all `github.com/coding-hermes/code-factory` |
 | operation markers | none (`rebase-merge`, `rebase-apply`, `MERGE_HEAD`, `CHERRY_PICK_HEAD`, `index.lock` all absent) |

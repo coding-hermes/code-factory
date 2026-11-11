@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/harness/install-codex.sh` — 507 lines, four modes in one file [scripts/harness/install-codex.sh:1] [scripts/harness/install-codex.sh:8-11] |
+| Path | `~/code-factory/scripts/harness/install-codex.sh` — 507 lines, four modes in one file [scripts/harness/install-codex.sh:1] [scripts/harness/install-codex.sh:8-11] |
 | Repository | `code-factory` |
 | Revision | `b31c232` — the `origin/main` tip every locator below was measured against (worktree `~/proj-wt-md-16c`, 2026-11-05); the file's own last-touching commit is `20d1252` (2026-11-04, "feat(harness): install-codex.sh — a pinned codex, the CF_* refusals, and one measured turn") |
 | Status | **VERIFIED — 409 locators, all resolve; facts cited** |
@@ -36,7 +36,7 @@
 | `uname` | unpinned | `--check` and `--apply` target selection [scripts/harness/install-codex.sh:157-158] [scripts/harness/install-codex.sh:309] | **not detected**: an empty `uname -s` falls through `case "$os/$arch"` to `return 1`, which reads as "no artefact for this platform" [scripts/harness/install-codex.sh:164-167] |
 | `df` + `awk` | via `require_disk`/`free_gb` [scripts/lib.sh:32] [scripts/lib.sh:35-44] | `--apply` only | `  FAIL  disk — <n> GB free < floor 1.0 GB at <path>` [scripts/lib.sh:41]; an absent `awk` makes the comparison fail and reports the same row with an empty number |
 | `sed`, `grep`, `find`, `head`, `tr` | unpinned | used for version parsing, the member name, the `thread.started` id and the rollout lookup [scripts/harness/install-codex.sh:139] [scripts/harness/install-codex.sh:364] [scripts/harness/install-codex.sh:476] [scripts/harness/install-codex.sh:484] | **not detected**: each collapses to an empty value, i.e. to a FAIL that names the missing *data* rather than the missing tool |
-| `codex` at the pin | `0.166.0` — measured here as `codex-cli 0.166.0` from `/home/kara/.local/codex/0.166.0/bin/codex` | `$HOME/.local/codex/<pin>/bin/codex` first, else `PATH` [scripts/harness/install-codex.sh:52-55] [scripts/harness/install-codex.sh:133] | `  FAIL  binary — absent — run --apply (pin 0.166.0, <target>)` on a bare box [scripts/harness/install-codex.sh:317]; a `PATH` binary is a different FAIL — `host-provided <path> — not installed by this adapter, so the pin is unowned` [scripts/harness/install-codex.sh:315] |
+| `codex` at the pin | `0.166.0` — measured here as `codex-cli 0.166.0` from `~/.local/codex/0.166.0/bin/codex` | `$HOME/.local/codex/<pin>/bin/codex` first, else `PATH` [scripts/harness/install-codex.sh:52-55] [scripts/harness/install-codex.sh:133] | `  FAIL  binary — absent — run --apply (pin 0.166.0, <target>)` on a bare box [scripts/harness/install-codex.sh:317]; a `PATH` binary is a different FAIL — `host-provided <path> — not installed by this adapter, so the pin is unowned` [scripts/harness/install-codex.sh:315] |
 | No node, npm, python, database, container | — | — | Verified by reading the whole file: the only outbound call is the tarball fetch [scripts/harness/install-codex.sh:352] [scripts/harness/install-codex.sh:358]; there is no `python`, no `docker`, no SQL and no socket. The header says the tarball was chosen over npm precisely to keep node out of a node-less image [scripts/harness/install-codex.sh:31-33] |
 
 ### 2b. Library contracts
@@ -67,7 +67,7 @@
 
 ## 3. Verification
 
-Run from a clean worktree of `b31c232` (`~/proj-wt-md-16c`), 2026-11-05. Every command below was executed; the transcripts are literal output. The host is Linux x86_64, bash 5.3.9, git 2.53.0, `codex-cli 0.166.0` at `/home/kara/.local/codex/0.166.0/bin/codex`.
+Run from a clean worktree of `b31c232` (`~/proj-wt-md-16c`), 2026-11-05. Every command below was executed; the transcripts are literal output. The host is Linux x86_64, bash 5.3.9, git 2.53.0, `codex-cli 0.166.0` at `~/.local/codex/0.166.0/bin/codex`.
 
 | # | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|---|
@@ -89,7 +89,7 @@ Transcript 1 — check 1, the primary measurement, as delivered:
 ```
 $ bash scripts/harness/install-codex.sh --check; echo "EXIT=$?"
 harness: codex (pin 0.166.0, mode --check)
-  PASS  binary — /home/kara/.local/codex/0.166.0/bin/codex (installed by this adapter)
+  PASS  binary — ~/.local/codex/0.166.0/bin/codex (installed by this adapter)
   PASS  version — 0.166.0 (pin 0.166.0)
   PASS  exec_contract — exec --json (the adapter's thread.started event)
   PASS  exec_contract — exec -s/--sandbox (the mode is never inherited from config)
@@ -123,10 +123,10 @@ Transcript 3 — check 3, a second `--apply`. The `path_env` WARN is an artefact
 $ bash scripts/harness/install-codex.sh --apply; echo "EXIT=$?"
 harness: codex (pin 0.166.0, mode --apply)
   PASS  disk — 174.7 GB free (floor 1.0 GB)
-  ..    already installed: /home/kara/.local/codex/0.166.0/bin/codex (0.166.0) — nothing to do
-  PASS  install — /home/kara/.local/codex/0.166.0/bin/codex (0.166.0) unchanged
+  ..    already installed: ~/.local/codex/0.166.0/bin/codex (0.166.0) — nothing to do
+  PASS  install — ~/.local/codex/0.166.0/bin/codex (0.166.0) unchanged
   PASS  version — 0.166.0 (pin 0.166.0)
-  PASS  path — /home/kara/.local/bin/codex -> /home/kara/.local/codex/0.166.0/bin/codex
+  PASS  path — ~/.local/bin/codex -> ~/.local/codex/0.166.0/bin/codex
   PASS  path_env — $HOME/.local/bin is on PATH
   WARN  auth — $HOME/.codex/auth.json exists (mode 600) — a host login is ambient state, not a directive; fine for a measured turn, not for a node
 
@@ -139,7 +139,7 @@ Transcript 4 — check 4:
 ```
 $ bash scripts/harness/install-codex.sh --app-server; echo "EXIT=$?"
 harness: codex (pin 0.166.0, mode --app-server)
-  ..    binary /home/kara/.local/codex/0.166.0/bin/codex (0.166.0)
+  ..    binary ~/.local/codex/0.166.0/bin/codex (0.166.0)
   PASS  app_server — initialize answered: code-factory/0.166.0 (Ubuntu 26.4.0; x86_64) unknown (code-factory; 0.1.0)
 
 CODEX: PASS
@@ -182,13 +182,13 @@ $ sha256sum codex.tar.gz
 a0bf572d2f93f056c6712a6da348e96078dc84f3885fd7be67807ef389cb3978  codex.tar.gz
 $ tar tzf codex.tar.gz
 codex-x86_64-unknown-linux-musl
-$ sha256sum codex-x86_64-unknown-linux-musl /home/kara/.local/codex/0.166.0/bin/codex
+$ sha256sum codex-x86_64-unknown-linux-musl ~/.local/codex/0.166.0/bin/codex
 b8a11fedf24b2dfb59a70c9e52b030f9a508dcd49cd2dd0d41956f4c785156b8  codex-x86_64-unknown-linux-musl
-b8a11fedf24b2dfb59a70c9e52b030f9a508dcd49cd2dd0d41956f4c785156b8  /home/kara/.local/codex/0.166.0/bin/codex
-$ cmp codex-x86_64-unknown-linux-musl /home/kara/.local/codex/0.166.0/bin/codex && echo IDENTICAL
+b8a11fedf24b2dfb59a70c9e52b030f9a508dcd49cd2dd0d41956f4c785156b8  ~/.local/codex/0.166.0/bin/codex
+$ cmp codex-x86_64-unknown-linux-musl ~/.local/codex/0.166.0/bin/codex && echo IDENTICAL
 IDENTICAL
-$ ls -l /home/kara/.local/bin/codex
-lrwxrwxrwx 1 kara kara 41 Nov  4 22:35 /home/kara/.local/bin/codex -> /home/kara/.local/codex/0.166.0/bin/codex
+$ ls -l ~/.local/bin/codex
+lrwxrwxrwx 1 kara kara 41 Nov  4 22:35 ~/.local/bin/codex -> ~/.local/codex/0.166.0/bin/codex
 ```
 
 Transcript 7 — check 8, the shipped `--turn` with a key file (fake `$HOME`, stub binary, no network):
@@ -220,7 +220,7 @@ Transcript 9 — check 10, the ambient `CODEX_HOME` a host-login turn really rec
 ```
   PASS  turn_home — $HOME/.codex (host login; the model and provider are still pinned on argv)
 --- what codex was handed:
-CODEX_HOME_SEEN=/home/kara/.hermes/cache/scratch/c16probe4-ELSEWHERE
+CODEX_HOME_SEEN=~/.hermes/cache/scratch/c16probe4-ELSEWHERE
 ```
 
 Transcript 10 — check 11, the patched copy: the traversal, and the `auth.json` it wrote:
@@ -251,9 +251,9 @@ All rows are `printf` output; the format strings and spacing live in `lib.sh` [s
 | Level | Line (verbatim) | Emitted when | Kind |
 |---|---|---|---|
 | none | `harness: codex (pin 0.166.0, mode --check)` | first statement of every run; the two values every later row is judged against [scripts/harness/install-codex.sh:291] | evidentiary |
-| PASS | `  PASS  binary — /home/kara/.local/codex/0.166.0/bin/codex (installed by this adapter)` | `$BIN` is executable [scripts/harness/install-codex.sh:313] | evidentiary |
+| PASS | `  PASS  binary — ~/.local/codex/0.166.0/bin/codex (installed by this adapter)` | `$BIN` is executable [scripts/harness/install-codex.sh:313] | evidentiary |
 | FAIL | `  FAIL  binary — absent — run --apply (pin 0.166.0, x86_64-unknown-linux-musl)` | neither the pin nor a `PATH` binary exists; the target triple is appended [scripts/harness/install-codex.sh:317] | evidentiary |
-| FAIL | `  FAIL  binary — host-provided /home/kara/.local/bin/codex — not installed by this adapter, so the pin is unowned (run --apply)` | a `PATH` binary exists but the pinned path does not [scripts/harness/install-codex.sh:315] | descriptive |
+| FAIL | `  FAIL  binary — host-provided ~/.local/bin/codex — not installed by this adapter, so the pin is unowned (run --apply)` | a `PATH` binary exists but the pinned path does not [scripts/harness/install-codex.sh:315] | descriptive |
 | PASS | `  PASS  version — 0.166.0 (pin 0.166.0)` | the read-back version equals the pin [scripts/harness/install-codex.sh:321] | evidentiary |
 | FAIL | `  FAIL  version — 0.165.0 != pin 0.166.0` | the read-back disagrees; both values are named [scripts/harness/install-codex.sh:322] | evidentiary (observed by the test's mismatch arm [tests/harness/codex-install-test.sh:234]) |
 | FAIL | `  FAIL  version — unreadable — no binary` | there was nothing to ask [scripts/harness/install-codex.sh:327] | evidentiary |
@@ -276,8 +276,8 @@ All rows are `printf` output; the format strings and spacing live in `lib.sh` [s
 | FAIL | `  FAIL  workdir — <dir> is not a git work tree — codex refuses 'Not inside a trusted directory' and crier does not pass --skip-git-repo-check` | `git rev-parse --is-inside-work-tree` failed [scripts/harness/install-codex.sh:227] | evidentiary (test A11) |
 | PASS | `  PASS  disk — 174.7 GB free (floor 1.0 GB)` | `require_disk` above the floor [scripts/lib.sh:39] [scripts/harness/install-codex.sh:339] | evidentiary |
 | FAIL | `  FAIL  disk — <n> GB free < floor 1.0 GB at <path>` | below the floor; `--apply` stops here [scripts/lib.sh:41] [scripts/harness/install-codex.sh:339] | descriptive |
-| note | `  ..    already installed: /home/kara/.local/codex/0.166.0/bin/codex (0.166.0) — nothing to do` | a second `--apply` at the pin [scripts/harness/install-codex.sh:343] | evidentiary |
-| PASS | `  PASS  install — /home/kara/.local/codex/0.166.0/bin/codex (0.166.0) unchanged` | the same second run [scripts/harness/install-codex.sh:344] | evidentiary |
+| note | `  ..    already installed: ~/.local/codex/0.166.0/bin/codex (0.166.0) — nothing to do` | a second `--apply` at the pin [scripts/harness/install-codex.sh:343] | evidentiary |
+| PASS | `  PASS  install — ~/.local/codex/0.166.0/bin/codex (0.166.0) unchanged` | the same second run [scripts/harness/install-codex.sh:344] | evidentiary |
 | note | `  ..    /…/bin/codex reports 0.165.0 != pin 0.166.0 — replacing` | the installed binary drifts; `$PREFIX` is removed and re-fetched [scripts/harness/install-codex.sh:347-348] | descriptive |
 | note | `  ..    fetching https://github.com/openai/codex/releases/download/rust-v0.166.0/codex-x86_64-unknown-linux-musl.tar.gz` | the download begins, URL printed in full [scripts/harness/install-codex.sh:355] | descriptive |
 | PASS | `  PASS  install — /…/bin/codex (read back 0.166.0)` | the extracted binary reports the pin [scripts/harness/install-codex.sh:376] | descriptive (observed in the test's B3 [tests/harness/codex-install-test.sh:197]) |
@@ -287,8 +287,8 @@ All rows are `printf` output; the format strings and spacing live in `lib.sh` [s
 | FAIL | `  FAIL  layout — tarball has no top-level codex-<target> member` | `tar tzf` matched nothing [scripts/harness/install-codex.sh:366] | descriptive |
 | FAIL | `  FAIL  install — extraction failed for <member>` | `tar xzf` failed [scripts/harness/install-codex.sh:370] | descriptive |
 | FAIL | `  FAIL  install — cannot place <bin>` | `install -m 0755` failed [scripts/harness/install-codex.sh:372] | descriptive |
-| PASS | `  PASS  path — /home/kara/.local/bin/codex -> /home/kara/.local/codex/0.166.0/bin/codex` | the shim was (re)linked to the pin [scripts/harness/install-codex.sh:387] | evidentiary |
-| WARN | `  WARN  path — /home/kara/.local/bin/codex is a host-provided file — left alone; put /…/0.166.0/bin first on PATH instead` | a real file occupies the shim path and is never overwritten [scripts/harness/install-codex.sh:389] | descriptive |
+| PASS | `  PASS  path — ~/.local/bin/codex -> ~/.local/codex/0.166.0/bin/codex` | the shim was (re)linked to the pin [scripts/harness/install-codex.sh:387] | evidentiary |
+| WARN | `  WARN  path — ~/.local/bin/codex is a host-provided file — left alone; put /…/0.166.0/bin first on PATH instead` | a real file occupies the shim path and is never overwritten [scripts/harness/install-codex.sh:389] | descriptive |
 | PASS | `  PASS  path_env — $HOME/.local/bin is on PATH` | the shim directory is on `PATH` [scripts/harness/install-codex.sh:394] | evidentiary |
 | WARN | `  WARN  path_env — $HOME/.local/bin is not on PATH — export PATH="$HOME/.local/bin:$PATH"` | it is not, and the remedy is printed [scripts/harness/install-codex.sh:395] | evidentiary |
 | note | `  ..    CF_API_KEY_FILE unset — the turn will use the host login at $HOME/.codex/auth.json (ambient, named as such)` | a turn with no key file [scripts/harness/install-codex.sh:184] | evidentiary |

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/specs/TRACE.md` |
+| Path | `~/code-factory/specs/TRACE.md` |
 | Repository | `code-factory` |
 | Revision | `6eea792` |
 | Status | **RED — the ladder is specified; four of its seven hops are broken today** |
@@ -107,7 +107,7 @@ attempt counts inflate silently.
 - `specs/ENVELOPE.md:12` — the existing `corr_id` shape (`lane-<ts>-<seq>`, not a UUID).
 - `docs/master/37-specs-envelope-md.md` — the envelope module, RED, which already records that the
   spec matches neither implementation (CF-216).
-- `/home/kara/code-factory-reports/crier-scheduler-roundtrip-2026-11-05.md:258` — five unacked replies,
+- `~/code-factory-reports/crier-scheduler-roundtrip-2026-11-05.md:258` — five unacked replies,
   `in_reply_to` present, `corr_id` absent.
 - `specs/HARNESS-MATRIX.md:127` — `CF_RUN_ID` as a required node variable.
 - Board: CF-253 (stalled vs hung), CF-276 (worker not staged), CF-208 (namespace scoping).

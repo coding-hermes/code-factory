@@ -1,6 +1,6 @@
 # PM lane — tick `code-factory-duckbrain-pm-2026-11-04-03-41-13`
 
-Lane: `code-factory-duckbrain-pm`. Locator `/home/kara/code-factory`; the scheduler row for
+Lane: `code-factory-duckbrain-pm`. Locator `~/code-factory`; the scheduler row for
 `code-factory-pm`, `code-factory-duckbrain-pm` and every sibling of this family registers the same
 workdir. All numbers below were measured at the tip each one names; the doc snapshot lands pinned to
 `7989ba3`, the commit that carries these edits is `1ef9256`.
@@ -9,7 +9,7 @@ workdir. All numbers below were measured at the tip each one names; the doc snap
 
 | Probe | Result |
 |---|---|
-| `realpath` == `git rev-parse --show-toplevel` | `/home/kara/code-factory` — equal |
+| `realpath` == `git rev-parse --show-toplevel` | `~/code-factory` — equal |
 | remote | `origin` = `git@github.com:coding-hermes/code-factory.git` (the registered project remote) |
 | branch / operation markers in `$(git rev-parse --absolute-git-dir)` | `main`; no `MERGE_HEAD`/`rebase-merge`/`CHERRY_PICK_HEAD`/`REVERT_HEAD`/`BISECT_*` |
 | tracked porcelain at tick start | 0 paths (50 untracked = `.gitreins/history/2026-11-03/*` bundles) |

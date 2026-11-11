@@ -1,11 +1,11 @@
 # Releng lane — CF-163 AC3 landing and tree state (tick 2026-11-04-06-11-13)
 
 Lane: `code-factory-duckbrain-releng` · tick `code-factory-duckbrain-releng-2026-11-04-06-11-13`
-Host clock: 2026-11-04 01:11–01:35 -0500 · lane workdir locator `/home/kara/code-factory`
+Host clock: 2026-11-04 01:11–01:35 -0500 · lane workdir locator `~/code-factory`
 
 ## Transport (why this tick ran from a clone)
 
-The registered candidate `/home/kara/code-factory` is a valid, attached, marker-free `main` on
+The registered candidate `~/code-factory` is a valid, attached, marker-free `main` on
 `git@github.com:coding-hermes/code-factory.git` (root/operation gate: `gate_violations=0`), but it
 carries an unresolved family ownership surface:
 
@@ -178,7 +178,7 @@ No published tags (`git ls-remote --tags` empty), no `VERSION`/`CHANGELOG` in th
 scheme in `specs/` (CF-161 pending), and open work still includes **5 P0** and 11 P1 rows. Nothing
 was tagged, and no version scheme was invented.
 
-### Candidate state at close (`/home/kara/code-factory`, untouched by this pass)
+### Candidate state at close (`~/code-factory`, untouched by this pass)
 
 `HEAD=0b34155`, attached `refs/heads/main`, **3 behind** / 0 ahead of `origin/main`, 0 tracked edits,
 53 untracked paths (`.gitreins/history/**` bundles), `NO_ACTIVE_OP_DIRS` (no `rebase-merge` /
@@ -205,7 +205,7 @@ was tagged, and no version scheme was invented.
 
 ### Post-closeout observation — the candidate holds a foreign STAGED event that collides with this tick's `255`
 
-At `2026-11-04T02:03-05:00`, the registered candidate `/home/kara/code-factory` (HEAD `7400036`,
+At `2026-11-04T02:03-05:00`, the registered candidate `~/code-factory` (HEAD `7400036`,
 the tip this tick published before its memory appendix) carried exactly **one** dirty path, staged in
 the index and not in the worktree:
 
@@ -246,7 +246,7 @@ close (`2026-11-04T02:00:32-05:00`):
 
 | probe | result |
 |---|---|
-| `git rev-parse HEAD` vs `origin/main` in `/home/kara/code-factory` | `664a446` = `664a446`, `rev-list --left-right --count` → `0 0` |
+| `git rev-parse HEAD` vs `origin/main` in `~/code-factory` | `664a446` = `664a446`, `rev-list --left-right --count` → `0 0` |
 | tracked edits in the candidate | 0 (index and worktree) |
 | published board | 257 events, **0 duplicate ids**, 142 rows |
 | untracked residue | 53 `.gitreins/history/**` paths, unchanged |
@@ -266,7 +266,7 @@ lane's own gate at the published tip. Nothing was repaired and nothing was re-fi
 
 | Claim | Command | Result |
 |---|---|---|
-| Candidate at parity | `git -C /home/kara/code-factory rev-parse HEAD`, `git rev-list --left-right --count origin/main...HEAD` | `ef222d1` = `origin/main`; **`0 0`**; 0 tracked edits |
+| Candidate at parity | `git -C ~/code-factory rev-parse HEAD`, `git rev-list --left-right --count origin/main...HEAD` | `ef222d1` = `origin/main`; **`0 0`**; 0 tracked edits |
 | Board integrity | `git show origin/main:.coding-hermes/board/events.jsonl \| jq -s` | **258 events, 0 duplicate ids**, 142 task rows |
 | Rows filed by this tick | `jq -r 'select(.id=="CF-163" or .id=="CF-168")\|.status'` | both **`pending`** on the published ref (correct — the fix work is not this tick's) |
 | Format-leg verdict | `git show origin/main:.gitreins/history/2026-11-04/8f9396cb/verdict.json` | `task_id=CF-163-FMT`, `passed=true`, `commit=5fc2cbd…`, `evaluated_at=2026-11-04T06:50:41` |

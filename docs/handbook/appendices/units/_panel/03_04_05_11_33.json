@@ -1,10 +1,10 @@
 {
   "modules": [
-    "/home/kara/code-factory/docs/master/03-scripts-board-lock-py.md",
-    "/home/kara/code-factory/docs/master/04-scripts-bunker-crier-connect-sh.md",
-    "/home/kara/code-factory/docs/master/05-scripts-bunker-provision-sh.md",
-    "/home/kara/code-factory/docs/master/11-scripts-disk-floor-py.md",
-    "/home/kara/code-factory/docs/master/33-scripts-project-node-sh.md"
+    "~/code-factory/docs/master/03-scripts-board-lock-py.md",
+    "~/code-factory/docs/master/04-scripts-bunker-crier-connect-sh.md",
+    "~/code-factory/docs/master/05-scripts-bunker-provision-sh.md",
+    "~/code-factory/docs/master/11-scripts-disk-floor-py.md",
+    "~/code-factory/docs/master/33-scripts-project-node-sh.md"
   ],
   "seats": {
     "sol": {

@@ -235,7 +235,7 @@ cites the event count (372) and an `audit` event in the same commit would move t
 number the block just published.
 
 Known residual, unchanged and already owned: 35 of 63 `complete` rows carry no `probe` field
-(CF-074 class); `CF-011`/`CF-013` each keep one absolute `/home/kara/.hermes/cache/scratch/…` log
+(CF-074 class); `CF-011`/`CF-013` each keep one absolute `~/.hermes/cache/scratch/…` log
 pointer that no longer exists beside a committed artifact.
 
 

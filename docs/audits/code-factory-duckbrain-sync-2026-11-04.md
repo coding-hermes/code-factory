@@ -171,10 +171,10 @@ were re-verified against the tree instead of re-executed, and the tip had moved 
 
 ### Barrier
 
-The canonical checkout `/home/kara/code-factory` was read only. At tick start the family lanes
+The canonical checkout `~/code-factory` was read only. At tick start the family lanes
 `code-factory` (tick `code-factory-2026-11-04-02-39-16`, same 02-39 slot) and `code-factory-releng`
 (`…-02-59-07`) were `running` on the shared repo, and `code-factory-dogfood` had just completed. Root
-equality held (`realpath` = `git rev-parse --show-toplevel` = `/home/kara/code-factory`), remote
+equality held (`realpath` = `git rev-parse --show-toplevel` = `~/code-factory`), remote
 `coding-hermes/code-factory` matched the registered `repo_url`, `main` was attached, no operation
 marker was present, and tracked-tree porcelain was empty; only `.coding-hermes/board/.lock`
 (0 bytes, mtime 2026-11-03 07:40, no `flock`/`fcntl` consumer in `scripts/boardctl*`) and 50
@@ -235,7 +235,7 @@ remaining warnings are CF-034's two free-form fields and the headerless board.
 
 | Leg | Status | Reason |
 |---|---|---|
-| writes in `/home/kara/code-factory` | not run | sibling lanes `running` on the shared checkout in the same slot; all writes went to a fresh clone |
+| writes in `~/code-factory` | not run | sibling lanes `running` on the shared checkout in the same slot; all writes went to a fresh clone |
 | worker dispatch | not run | this lane's deliverable is reconciliation; no implementation was needed |
 
 ### Landing-tip delta — the board moved during this tick's rebase

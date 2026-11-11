@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/bunker-crier-connect.sh` [scripts/bunker-crier-connect.sh:1] |
+| Path | `~/code-factory/scripts/bunker-crier-connect.sh` [scripts/bunker-crier-connect.sh:1] |
 | Repository | `code-factory` [scripts/bunker-crier-connect.sh:1] |
 | Revision | `384a842a` — current shipped behavior; tree `bb7ac31e` |
 | Status | **UPDATED — behavior re-derived from the current script and the CF-214 selftest fixture; the named `probe-04-crier-connect.sh` is not tracked here, so no probe transcript or measurement date is claimed** |
@@ -169,7 +169,7 @@ Historical format examples (not re-run for this revision; values are source-deri
   the host route; it does not certify the node key [scripts/bunker-crier-connect.sh:103-105].
 - `CRIER: UNVERIFIED — a1 at http://127.0.0.1:18767: signed read succeeded but the required inbox route was not 200` — evidentiary for the signed-only case [scripts/bunker-crier-connect.sh:105-109].
 - `CRIER: UNVERIFIED — a1 at http://127.0.0.1:18767: the bus answered an UNSIGNED read, so this node's key and` — evidentiary, followed by the two indented remedy lines
-  `        bearer were not exercised. Install /home/kara/.node/agent.key and ~/.node/auth/crier.token`
+  `        bearer were not exercised. Install ~/.node/agent.key and ~/.node/auth/crier.token`
   and `        and stage the bus worker, then re-run --check.`
   [scripts/bunker-crier-connect.sh:110-114].
 - `CRIER: NOT CONNECTED (1)` / `CRIER: NOT CONNECTED (2)` — evidentiary; the number is `$FAILED`

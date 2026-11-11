@@ -1,6 +1,6 @@
 # PERF-014 — the lane-target suite rebuilt its fixture repo per test
 
-Repo `/home/kara/code-factory`, branch `main`. Brief tip `400a5ab`; this work started at `254c46e`
+Repo `~/code-factory`, branch `main`. Brief tip `400a5ab`; this work started at `254c46e`
 (docs/board only on top of `400a5ab`) and was committed on `77caa02` (see "A sibling landed while
 this ran"). Working tree clean at start apart from 11 pre-existing untracked `.gitreins/history/*`
 and `.coding-hermes/board/.lock` artifacts that this task did not create and did not touch.
@@ -19,7 +19,7 @@ why every number below is given as a set of runs rather than a single figure. CP
 Brief attribution, measured at `400a5ab`:
 
 ```sh
-cd /home/kara/code-factory
+cd ~/code-factory
 for i in 1 2 3; do /usr/bin/time -p python3 -B tests/test_lane_target.py >/dev/null; done
 ```
 
@@ -89,7 +89,7 @@ the formatted file (numbers below are the formatted file's).
 ## After
 
 ```sh
-cd /home/kara/code-factory
+cd ~/code-factory
 for i in 1 2 3; do /usr/bin/time -p python3 -B tests/test_lane_target.py >/dev/null; done
 ```
 
@@ -313,7 +313,7 @@ fixture is not mistaken for having removed it.
 ## Reproduction
 
 ```sh
-cd /home/kara/code-factory
+cd ~/code-factory
 
 # section 11, three runs (CPU = user+sys)
 for i in 1 2 3; do /usr/bin/time -p python3 -B tests/test_lane_target.py >/dev/null; done

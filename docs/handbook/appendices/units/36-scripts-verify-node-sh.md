@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/verify-node.sh` [scripts/verify-node.sh:2] |
+| Path | `~/code-factory/scripts/verify-node.sh` [scripts/verify-node.sh:2] |
 | Repository | `code-factory` [scripts/verify-node.sh:2] |
 | Revision | `e7cf075` — `git rev-parse HEAD` of the tree this document was measured against |
 | Status | **VERIFIED — 8 sections, 366 locators (142 distinct), 21 measured checks in §3 — three live probes against `cf-node` (`VERIFY: FAIL (1)`, exit 1), `--check` measured as a non-flag (exit 2), and the PASS / FAIL / UNVERIFIED(exit 3) ladder pinned by 16 fixture arms** |
@@ -25,7 +25,7 @@
 |---|---|---|---|
 | `bash` | not pinned; this host 5.3.9 | the shebang [scripts/verify-node.sh:1] | no probe inside the script; measured under this host's `/bin/sh`→dash, where the observed path behaved identically (§3) |
 | `scripts/lib.sh` | same revision as this file | `$HERE/lib.sh`, sourced unguarded [scripts/verify-node.sh:18] | **nothing inside the script can report it** — measured with the file copied away from its `lib.sh`: every row became `say: command not found` / `ok: command not found`, and the run died at `FAILED: unbound variable` with exit 1 (§3) |
-| `bunker` CLI | not pinned; `/home/kara/.local/bin/bunker` on this host | `PATH`; every agent probe and the two inside-the-node fallbacks [scripts/verify-node.sh:50] [scripts/verify-node.sh:57] [scripts/verify-node.sh:68] [scripts/verify-node.sh:107] [scripts/verify-node.sh:109] | `FAIL agent_alive — <bunker's own first line>` then `RESULT: FAIL`, exit 1 [scripts/verify-node.sh:53] — measured: `bunker: server "no-such-server-fx36" not found in config` (§3) |
+| `bunker` CLI | not pinned; `~/.local/bin/bunker` on this host | `PATH`; every agent probe and the two inside-the-node fallbacks [scripts/verify-node.sh:50] [scripts/verify-node.sh:57] [scripts/verify-node.sh:68] [scripts/verify-node.sh:107] [scripts/verify-node.sh:109] | `FAIL agent_alive — <bunker's own first line>` then `RESULT: FAIL`, exit 1 [scripts/verify-node.sh:53] — measured: `bunker: server "no-such-server-fx36" not found in config` (§3) |
 | `curl` | not pinned | `PATH`; the two outbound probes [scripts/verify-node.sh:62] [scripts/verify-node.sh:90] | no probe: a missing `curl` yields an empty capture, `code=${code:-000}` turns it into `000` [scripts/verify-node.sh:62], and the run takes the UNVERIFIED branch [scripts/verify-node.sh:75] — a silent degradation, named in §6 |
 | `python3` | not pinned (this host 3.14.9); the children are stdlib-only | `PATH`; both Python legs [scripts/verify-node.sh:136] [scripts/verify-node.sh:179] | the leg's non-zero exit lands in the `*)` branch and prints `WARN … could not be measured` [scripts/verify-node.sh:150] [scripts/verify-node.sh:194] — measured (§3, the clean-pass row) |
 | `scripts/node_freshness.py` | same revision | `$HERE/node_freshness.py`, readable [scripts/verify-node.sh:131] | `FAIL checkout_freshness — <path> missing — the checkout's git state is unmeasured` [scripts/verify-node.sh:133] |
@@ -46,7 +46,7 @@
 | the pass row's shape | `scripts/node_freshness.py:366` | `  PASS  freshness — branch=… head=… origin_main=… ancestor=true behind=0` | measured on this worktree: `branch=wt/md-36b head=e7cf075ffff4 origin_main=e7cf075ffff4 ancestor=true behind=0` (§3) |
 | the drift row's shape | `scripts/node_freshness.py:340` | `  FAIL  sync — behind=N (HEAD..<ref> <sha>): K differing path(s) — <paths>` | the parent flattens every FAIL row with `paste -sd '\|'` and cuts at 500 characters [scripts/verify-node.sh:143], so a wide drift is named but truncated (§3) |
 | `node_seed_drift.py --agent --server [--strict-seed] --json` | `scripts/node_seed_drift.py:477` | exit `0` matched, `1` drifted (or absent under `--strict-seed`), `2` usage, `3` could not measure [scripts/node_seed_drift.py:28] [scripts/node_seed_drift.py:58]; `3` is deliberately **not** drift [scripts/node_seed_drift.py:31] | the parent folds `0`→PASS, `1`→FAIL, everything else→WARN unless `--strict-seed` [scripts/verify-node.sh:181] [scripts/verify-node.sh:182] [scripts/verify-node.sh:191] |
-| the seed pass row | `scripts/node_seed_drift.py:191` | `  PASS  seed_drift — <record>: N seeded files present and matching` | the parent strips that exact prefix [scripts/verify-node.sh:183] — measured on the live node: `… /home/bunker-cf-node/.hermes/seed-applied.json: 13 seeded files present and matching` (§3) |
+| the seed pass row | `scripts/node_seed_drift.py:191` | `  PASS  seed_drift — <record>: N seeded files present and matching` | the parent strips that exact prefix [scripts/verify-node.sh:183] — measured on the live node: `… ~/.hermes/seed-applied.json: 13 seeded files present and matching` (§3) |
 | the seed warn row | `scripts/node_seed_drift.py:255` | `  WARN  seed_drift — <detail> — the seed could not be measured; pass --strict-seed to refuse it` | the parent lifts that whole sentence as `detail` and appends **the same sentence again** [scripts/verify-node.sh:189] [scripts/verify-node.sh:194] — measured duplication (§3, §6) |
 
 ### 2c. Service contracts (both sides must be named)
@@ -101,7 +101,7 @@ verify node cf-node
   WARN  gateway_reachable — no transport from this host to 192.168.123.66:10800 — the gateway answers 200 INSIDE the node, so this is unverified, not failed (CF-224: publish a port or define the transport)
   WARN  unauth_refused — unverified from here (no transport); inside the node it answers 401
   FAIL  checkout_freshness — sync — behind=26 (HEAD..origin/main e7cf075ffff4): 71 differing path(s) — .coding-hermes/board/events.jsonl, .coding-hermes/board/tasks.jsonl, .gitreins/history/2026-11-05/0e9f844d/commit.patch, .gitreins/history/2026-11-05/0e9f844d/summary.md, .gitreins/history/2026-11-05/0e9f844d/verdict.json, .gitreins/history/2026-11-05/3f14d5b8/verdict.json, .gitreins/history/2026-11-05/94c31d59/commit.patch, .gitreins/history/2026-11-05/94c31d59/summary.md, .gitreins/history/2026-11-05/94c31d59/verdict
-  PASS  seed_drift — /home/bunker-cf-node/.hermes/seed-applied.json: 13 seeded files present and matching
+  PASS  seed_drift — ~/.hermes/seed-applied.json: 13 seeded files present and matching
 
 VERIFY: FAIL (1)
 ```

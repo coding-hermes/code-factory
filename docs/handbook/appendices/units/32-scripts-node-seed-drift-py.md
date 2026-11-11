@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/node_seed_drift.py` — 554 lines [scripts/node_seed_drift.py:1] |
+| Path | `~/code-factory/scripts/node_seed_drift.py` — 554 lines [scripts/node_seed_drift.py:1] |
 | Repository | `code-factory` |
 | Revision | `d8c7796` (`origin/main`, 2026-11-05) — the tree every locator below was measured against |
 | Status | **VERIFIED — 185 locator citations (114 distinct file:line pairs), all resolving; cites fact: FACT-01; every state driven on a real applied seed (clean PASS, content drift FAIL, deletion FAIL, absent record WARN/FAIL, corrupt record WARN, valid-JSON-without-`files` WARN, empty record PASS, missing instrument WARN) and the two verifiers measured against each other; six defects in §8** |

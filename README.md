@@ -108,7 +108,7 @@ passed as an argument, and `$HOME/.node/node.json` carries names only
 ```
 PASS  config — bunker.example.conf — 25 lines, KEY=VALUE only
 bunker-provision --check — project=code-factory agent=cf-node server=bunker-node-01
-  PASS  bunker_cli — /home/kara/.local/bin/bunker
+  PASS  bunker_cli — ~/.local/bin/bunker
   FAIL  server — bunker-node-01 not listed by 'bunker list'
   FAIL  agent — cf-node absent — run --apply to create it
 ```

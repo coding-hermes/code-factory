@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/bunker-server-install.sh` [scripts/bunker-server-install.sh:1] |
+| Path | `~/code-factory/scripts/bunker-server-install.sh` [scripts/bunker-server-install.sh:1] |
 | Repository | `code-factory` [scripts/bunker-server-install.sh:1] |
 | Revision | `5cf6c03` — last commit touching this file (CF-145), on `main` @ `b9f56e6`; blob sha256 prefix `3b636488ede6bbb1` [scripts/bunker-server-install.sh:1] |
 | Status | **VERIFIED — 161 resolving locator references (55 distinct path:line pairs), re-run 2026-11-05, fact: FACT-01** |
@@ -133,13 +133,13 @@ marked *descriptive* carry context or pass-through text.
 | Level | Line (verbatim) | Emitted when | Kind |
 |---|---|---|---|
 | info | `bunker server: bunker-las-03` (template `bunker server: $SERVER`) | after the `BUNKER_SERVER` gate, before any measurement [scripts/bunker-server-install.sh:25] | descriptive |
-| PASS | `  PASS  bunker_client — /home/kara/.local/bin/bunker bunker 0.2.0` | the client resolved and its first `--version` line was read [scripts/bunker-server-install.sh:30-31] | evidentiary |
+| PASS | `  PASS  bunker_client — ~/.local/bin/bunker bunker 0.2.0` | the client resolved and its first `--version` line was read [scripts/bunker-server-install.sh:30-31] | evidentiary |
 | FAIL | `  FAIL  bunker_client — missing — no way to create or reach agents` | `have bunker` returned empty [scripts/bunker-server-install.sh:33] | evidentiary |
 | FAIL | `  FAIL  server_declared — BUNKER_SERVER unset — the client has no server to talk to` | the process variable is empty; this is the only pre-measurement abort [scripts/bunker-server-install.sh:18-19] | evidentiary |
-| PASS | `  PASS  bunker_config — /home/kara/.config/bunker/config.yaml` | the config path is a regular file [scripts/bunker-server-install.sh:38-39] | evidentiary |
+| PASS | `  PASS  bunker_config — ~/.config/bunker/config.yaml` | the config path is a regular file [scripts/bunker-server-install.sh:38-39] | evidentiary |
 | FAIL | `  FAIL  bunker_config — missing (/nonexistent/config.yaml) — the client has no server to talk to` | the config path is not a regular file [scripts/bunker-server-install.sh:41-42] | evidentiary |
 | PASS | `  PASS  server_declared — bunker-las-03 present in config` | `grep -q "$SERVER" "$cfg"` succeeded — a substring match, not an exact one [scripts/bunker-server-install.sh:40] | evidentiary |
-| FAIL | `  FAIL  server_declared — no-such-srv not found in /home/kara/.config/bunker/config.yaml` | the substring is absent [scripts/bunker-server-install.sh:40] | evidentiary |
+| FAIL | `  FAIL  server_declared — no-such-srv not found in ~/.config/bunker/config.yaml` | the substring is absent [scripts/bunker-server-install.sh:40] | evidentiary |
 | PASS | `  PASS  server_reachable — bunker-las-03 answered (agents listed: 1)` | `bunker list --server` exited 0 and the agent-row regex counted N [scripts/bunker-server-install.sh:49-51] | evidentiary |
 | FAIL | `  FAIL  server_reachable — no-such-srv did not answer: bunker: reading server "no-such-srv"` | `bunker list` exited non-zero; the detail is the first line of its combined output [scripts/bunker-server-install.sh:54-55] | evidentiary |
 | PASS | `  PASS  agents_running — 1 running` | always, immediately after a reachable server; the count is a bare substring count of `running` [scripts/bunker-server-install.sh:52-53] | evidentiary (weak: substring) |
@@ -203,14 +203,14 @@ directly with `${VAR:-}` and `${VAR:-default}` [scripts/bunker-server-install.sh
   `b9f56e6`, `scripts/bunker-server-install.sh` blob sha256
   `3b636488ede6bbb13d5d1be68e9af7d81c5a1f1224f1bc532f6f78e188365375`. The environment is pinned with
   `env -i` because the ambient `PATH` on this box contains a stub `bunker` fixture left by another
-  lane; every run below resolves `/home/kara/.local/bin/bunker` instead.
+  lane; every run below resolves `~/.local/bin/bunker` instead.
 
   The `URL:` row inside the `bunker-las-03` block below reads `http://<ci-box>:10001`: the real
   address is the one the operator's own `~/.config/bunker/config.yaml` names for that server, and it
   is redacted to a placeholder here because this repository is public (CF-378).
 
 ```
-$ env -i PATH=/home/kara/.local/bin:/usr/local/bin:/usr/bin:/bin HOME=/home/kara \
+$ env -i PATH=~/.local/bin:/usr/local/bin:/usr/bin:/bin HOME=/home/kara \
     bash scripts/bunker-server-install.sh --check
   FAIL  server_declared — BUNKER_SERVER unset — the client has no server to talk to
 
@@ -219,11 +219,11 @@ exit=1
 ```
 
 ```
-$ env -i PATH=/home/kara/.local/bin:/usr/local/bin:/usr/bin:/bin HOME=/home/kara \
+$ env -i PATH=~/.local/bin:/usr/local/bin:/usr/bin:/bin HOME=/home/kara \
     BUNKER_SERVER=bunker-las-03 bash scripts/bunker-server-install.sh --check
 bunker server: bunker-las-03
-  PASS  bunker_client — /home/kara/.local/bin/bunker bunker 0.2.0
-  PASS  bunker_config — /home/kara/.config/bunker/config.yaml
+  PASS  bunker_client — ~/.local/bin/bunker bunker 0.2.0
+  PASS  bunker_config — ~/.config/bunker/config.yaml
   PASS  server_declared — bunker-las-03 present in config
   PASS  server_reachable — bunker-las-03 answered (agents listed: 1)
   PASS  agents_running — 1 running
@@ -258,7 +258,7 @@ $ env -i PATH=/usr/bin:/bin HOME=/home/kara BUNKER_SERVER=bunker-las-03 \
     bash scripts/bunker-server-install.sh --check
 bunker server: bunker-las-03
   FAIL  bunker_client — missing — no way to create or reach agents
-  PASS  bunker_config — /home/kara/.config/bunker/config.yaml
+  PASS  bunker_config — ~/.config/bunker/config.yaml
   PASS  server_declared — bunker-las-03 present in config
   PASS  tool:python3 — /usr/bin/python3
   PASS  tool:git — /usr/bin/git
@@ -271,7 +271,7 @@ exit=1
 ```
 
 ```
-$ env -i PATH=/home/kara/.local/bin:/usr/bin:/bin HOME=/home/kara \
+$ env -i PATH=~/.local/bin:/usr/bin:/bin HOME=/home/kara \
     BUNKER_SERVER=bunker-las-03 bash scripts/bunker-server-install.sh --apply
 ... first rows identical to the --check run above, then:
   PASS  tool:jq — /usr/bin/jq
@@ -283,12 +283,12 @@ exit=0
 ```
 
 ```
-$ env -i PATH=/home/kara/.local/bin:/usr/bin:/bin HOME=/home/kara \
+$ env -i PATH=~/.local/bin:/usr/bin:/bin HOME=/home/kara \
     BUNKER_SERVER=no-such-srv bash scripts/bunker-server-install.sh --check
 bunker server: no-such-srv
-  PASS  bunker_client — /home/kara/.local/bin/bunker bunker 0.2.0
-  PASS  bunker_config — /home/kara/.config/bunker/config.yaml
-  FAIL  server_declared — no-such-srv not found in /home/kara/.config/bunker/config.yaml
+  PASS  bunker_client — ~/.local/bin/bunker bunker 0.2.0
+  PASS  bunker_config — ~/.config/bunker/config.yaml
+  FAIL  server_declared — no-such-srv not found in ~/.config/bunker/config.yaml
   FAIL  server_reachable — no-such-srv did not answer: bunker: reading server "no-such-srv"
   PASS  tool:python3 — /usr/bin/python3
   PASS  tool:git — /usr/bin/git
@@ -301,11 +301,11 @@ exit=1
 ```
 
 ```
-$ env -i PATH=/home/kara/.local/bin:/usr/bin:/bin HOME=/home/kara \
+$ env -i PATH=~/.local/bin:/usr/bin:/bin HOME=/home/kara \
     BUNKER_SERVER=bunker bash scripts/bunker-server-install.sh --check
 bunker server: bunker
-  PASS  bunker_client — /home/kara/.local/bin/bunker bunker 0.2.0
-  PASS  bunker_config — /home/kara/.config/bunker/config.yaml
+  PASS  bunker_client — ~/.local/bin/bunker bunker 0.2.0
+  PASS  bunker_config — ~/.config/bunker/config.yaml
   PASS  server_declared — bunker present in config
   FAIL  server_reachable — bunker did not answer: bunker: reading server "bunker"
   PASS  tool:python3 — /usr/bin/python3
@@ -321,11 +321,11 @@ exit=1
 ```
 
 ```
-$ env -i PATH=/home/kara/.local/bin:/usr/bin:/bin HOME=/home/kara \
+$ env -i PATH=~/.local/bin:/usr/bin:/bin HOME=/home/kara \
     BUNKER_CONFIG=/nonexistent/config.yaml BUNKER_SERVER=bunker-las-03 \
     bash scripts/bunker-server-install.sh --check
 bunker server: bunker-las-03
-  PASS  bunker_client — /home/kara/.local/bin/bunker bunker 0.2.0
+  PASS  bunker_client — ~/.local/bin/bunker bunker 0.2.0
   FAIL  bunker_config — missing (/nonexistent/config.yaml) — the client has no server to talk to
   PASS  server_reachable — bunker-las-03 answered (agents listed: 1)
   PASS  agents_running — 1 running

@@ -136,7 +136,7 @@ def main() -> int:
         f"ci gap emitted = {ci_gap(mod, 'docs', docs)} (want False)",
     )
 
-    live = os.path.expanduser("/home/kara/asce")
+    live = os.path.expanduser("~/asce")
     if os.path.isdir(os.path.join(live, ".git")) and os.path.exists(
         os.path.join(live, ".gitlab-ci.yml")
     ):

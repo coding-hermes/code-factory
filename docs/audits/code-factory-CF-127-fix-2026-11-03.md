@@ -33,7 +33,7 @@ for a filesystem permission failure that prevented pip from starting.
 
 ## Before-edit freeze and fixture
 
-Actual worktree: `/home/kara/proj-wt-code-factory-CF-127`.
+Actual worktree: `~/proj-wt-code-factory-CF-127`.
 Scratch directory for this run: `/var/tmp/hermes-scratch/CF-127.Ia1XE9c5`.
 `CF127_FIXTURE` below names that directory; `TMPDIR` was
 `/var/tmp/hermes-scratch`. These are ephemeral paths; the frozen observations
@@ -187,7 +187,7 @@ Scratch `failure-arms.sh` removed only the fixture's installed Hermes stub,
 then ran the fixed adapter with the same PATH/HOME and `FIXTURE_PIP_RC=23`:
 
 ```bash
-rm -f "$CF127_FIXTURE/home/hermes-venv/bin/hermes"
+rm -f "$CF127_FIXTURE~/bin/hermes"
 env LC_ALL=C PATH="$CF127_FIXTURE/bin:/usr/bin:/bin" HOME="$CF127_FIXTURE/home" FIXTURE_PIP_RC=23 \
   /bin/bash scripts/harness/install-hermes.sh --apply > "$CF127_FIXTURE/pip-failure.out" 2>&1
 rc=$?

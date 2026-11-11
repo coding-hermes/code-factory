@@ -8,7 +8,7 @@ landed a CF-156 closeout mid-tick, so the clone was fast-forwarded to `d3b06a8fe
 and every arm below was re-run there before filing; `git diff --name-only 7989ba3..d3b06a8 -- scripts/
 tests/ .gitignore` prints 0 files, so the reviewed code and the mutation result carry unchanged.
 Transport: throwaway `git clone` of the canonical checkout at the reviewed tip into tick scratch
-(`cf-review.XPTtul/cf-clone`); the registered workdir `/home/kara/code-factory` was left untouched
+(`cf-review.XPTtul/cf-clone`); the registered workdir `~/code-factory` was left untouched
 (attached `main`, parity 0/0, zero tracked edits, no operation markers).
 Row filed: `CF-158` (pending). This document is the review receipt, not the repair.
 

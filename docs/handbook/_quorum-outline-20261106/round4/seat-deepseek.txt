@@ -1,6 +1,6 @@
 I have walked all five trees and read the supporting model files. Two facts frame this verdict, stated up front so the review is honest about what it graded:
 
-1. The brief describes the artifact as "7 parts, 10 flows, 9 modules, 25 submodules, 11 headings" — that is the v1 outline. The file on disk, `/home/kara/code-factory/docs/handbook/OUTLINE.md`, is already v2 ("corrected by quorum", 8 parts, 16 flows, 13 modules, 13 headings). I graded the artifact as it actually is.
+1. The brief describes the artifact as "7 parts, 10 flows, 9 modules, 25 submodules, 11 headings" — that is the v1 outline. The file on disk, `~/code-factory/docs/handbook/OUTLINE.md`, is already v2 ("corrected by quorum", 8 parts, 16 flows, 13 modules, 13 headings). I graded the artifact as it actually is.
 2. v2 fixed the single largest v1 defect — the scheduler, crier, dispatcher and inference proxy now have modules (M9–M12). The prior round's `_quorum-outline-20261106/seat-*.txt` verdicts are folded in correctly. What remains below is what v2 still gets wrong.
 
 VERDICT: ACCEPT WITH CORRECTIONS
@@ -10,31 +10,31 @@ The architecture (arrangement → flows → subsystems → contracts → setting
 COVERAGE GAPS: 24 — each a component a run reaches that has no home in the outline.
 
 Control-plane — crier-fleet (M11 is 4 submodules; these are unlisted):
-1. fleet-gateway-facade.py — /home/kara/crier-fleet/fleet-gateway-facade.py. A SECOND dispatch transport: scheduler POSTs /v1/responses (stream) with X-Hermes-Session-Key = tick id; the adapter maps key→agent and drives it via `bunker exec` ("a TRANSLATOR, not a tunnel"). F1 as drawn is bus-only; this path is the other half of dispatch and appears nowhere. Needs its own submodule.
-2. courier.py — /home/kara/crier-fleet/courier.py. Orchestrator-side bus client (`send <agent> <task>`), imports crier_client.py. Unlisted.
-3. fleet-ttl-census.py — /home/kara/crier-fleet/fleet-ttl-census.py. TTL census (exit 1 below WARN_H). Unlisted.
-4. renew-fleet.sh — /home/kara/crier-fleet/renew-fleet.sh. F12's implementation: census/archive/renew; `bunker renew` is DESTRUCTIVE and refused without a verified archive; `bunker heartbeat` cannot extend a 7d agent. A credential/agent-lifecycle boundary with no owning chapter.
-5. bridge/ (courier_bridge.py, bridge_ctl.py) — /home/kara/crier-fleet/bridge/. Unlisted.
-6. sender-stamp-check/ — /home/kara/crier-fleet/sender-stamp-check/. A whole rollout/verification surface (probe, verify-live-sender, drain-orchestrator). Unlisted.
-7. verify-repo-coverage.py, test_all_agents.py, staged-remote-wiring.sh — /home/kara/crier-fleet/. Unlisted.
-8. ENDPOINT-CONTRACT.md — /home/kara/crier-fleet/ENDPOINT-CONTRACT.md. The endpoint-shape contract the facade implements. Unlisted.
+1. fleet-gateway-facade.py — ~/crier-fleet/fleet-gateway-facade.py. A SECOND dispatch transport: scheduler POSTs /v1/responses (stream) with X-Hermes-Session-Key = tick id; the adapter maps key→agent and drives it via `bunker exec` ("a TRANSLATOR, not a tunnel"). F1 as drawn is bus-only; this path is the other half of dispatch and appears nowhere. Needs its own submodule.
+2. courier.py — ~/crier-fleet/courier.py. Orchestrator-side bus client (`send <agent> <task>`), imports crier_client.py. Unlisted.
+3. fleet-ttl-census.py — ~/crier-fleet/fleet-ttl-census.py. TTL census (exit 1 below WARN_H). Unlisted.
+4. renew-fleet.sh — ~/crier-fleet/renew-fleet.sh. F12's implementation: census/archive/renew; `bunker renew` is DESTRUCTIVE and refused without a verified archive; `bunker heartbeat` cannot extend a 7d agent. A credential/agent-lifecycle boundary with no owning chapter.
+5. bridge/ (courier_bridge.py, bridge_ctl.py) — ~/crier-fleet/bridge/. Unlisted.
+6. sender-stamp-check/ — ~/crier-fleet/sender-stamp-check/. A whole rollout/verification surface (probe, verify-live-sender, drain-orchestrator). Unlisted.
+7. verify-repo-coverage.py, test_all_agents.py, staged-remote-wiring.sh — ~/crier-fleet/. Unlisted.
+8. ENDPOINT-CONTRACT.md — ~/crier-fleet/ENDPOINT-CONTRACT.md. The endpoint-shape contract the facade implements. Unlisted.
 
 Control-plane — crier (M10 is 4 submodules; these surfaces are unnamed):
-9. A2A protocol — /home/kara/crier/internal/a2a/ (a2a.go 55KB, a2aclient.go, a2apush.go, a2acard.go) + specs/A2A-OPTION.md. SHIPPED (INT-A2A-002..007): Agent Card, JSON-RPC SendMessage/Streaming, task lifecycle, outbound client. A shipped interop protocol with zero outline presence.
-10. Federation / mesh — /home/kara/crier/internal/federation/ + specs/CHAT-FEDERATION.md + FEDERATION-AUTH.md. Peer instances and per-peer policy. Unlisted.
-11. Webhook delivery — /home/kara/crier/internal/webhook/ + specs/WEBHOOK-DELIVERY.md. Push-based HTTP delivery. Unlisted.
-12. Chat surface — /home/kara/crier/internal/chat/ + 12 specs/CHAT-*.md + cmd/server/chat.html. Unlisted as a delivery surface.
-13. Ingress — /home/kara/crier/internal/ingress/ + specs/CRIER-INGRESS.md. Unlisted.
-14. Reads — /home/kara/crier/internal/reads/ + specs/CRIER-READS.md. Unlisted.
+9. A2A protocol — ~/crier/internal/a2a/ (a2a.go 55KB, a2aclient.go, a2apush.go, a2acard.go) + specs/A2A-OPTION.md. SHIPPED (INT-A2A-002..007): Agent Card, JSON-RPC SendMessage/Streaming, task lifecycle, outbound client. A shipped interop protocol with zero outline presence.
+10. Federation / mesh — ~/crier/internal/federation/ + specs/CHAT-FEDERATION.md + FEDERATION-AUTH.md. Peer instances and per-peer policy. Unlisted.
+11. Webhook delivery — ~/crier/internal/webhook/ + specs/WEBHOOK-DELIVERY.md. Push-based HTTP delivery. Unlisted.
+12. Chat surface — ~/crier/internal/chat/ + 12 specs/CHAT-*.md + cmd/server/chat.html. Unlisted as a delivery surface.
+13. Ingress — ~/crier/internal/ingress/ + specs/CRIER-INGRESS.md. Unlisted.
+14. Reads — ~/crier/internal/reads/ + specs/CRIER-READS.md. Unlisted.
 
 Control-plane — scheduler (M9.S4 lists 5 binaries; the tree has 7):
-15. cmd/cooldown-residue — /home/kara/coding-hermes-scheduler/coding-herms-scheduler/cmd/cooldown-residue/. Unlisted.
+15. cmd/cooldown-residue — ~/coding-hermes-scheduler/coding-herms-scheduler/cmd/cooldown-residue/. Unlisted.
 16. cmd/backfill-commit-signals — .../cmd/backfill-commit-signals/. Unlisted.
 17. ops/ monitoring surface — .../ops/ (fleet-infra-findings.py, fleet-infra-sweep.sh, cluster-chain-probe.sh, load-attribution.sh, check-daemon-freshness.sh, check-fleet-invariants.py, dagger-role-tick.sh, status-lock-ab.sh). These are F7 MONITORING and F14 observability implementers; M9.S5 names only hop-liveness-watchdog.
 
 Inference proxy:
-18. unstick-inference.sh — /home/kara/.hermes/scripts/unstick-inference.sh. Inference recovery. Unlisted.
-19. code-factory-foreman-watch.py — /home/kara/.hermes/scripts/code-factory-foreman-watch.py. Foreman liveness watcher. Unlisted.
+18. unstick-inference.sh — ~/.hermes/scripts/unstick-inference.sh. Inference recovery. Unlisted.
+19. code-factory-foreman-watch.py — ~/.hermes/scripts/code-factory-foreman-watch.py. Foreman liveness watcher. Unlisted.
 
 Node-side actors with no chapter:
 20. FOREMAN actor — prompts/foreman.md + skills/code-factory-foreman/SKILL.md. Owns three contracts (foreman→scheduler broken, foreman→board works, foreman→duckbrain works) and steps of F1/F4/F5. Folded into VIII.1/VIII.2 as "delivery mechanisms" — no operating chapter.

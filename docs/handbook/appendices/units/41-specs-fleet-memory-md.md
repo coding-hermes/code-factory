@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/specs/FLEET-MEMORY.md` |
+| Path | `~/code-factory/specs/FLEET-MEMORY.md` |
 | Repository | `code-factory` |
 | Revision | `6eea792` |
 | Status | **RED — design only; the writer it specifies does not exist** |

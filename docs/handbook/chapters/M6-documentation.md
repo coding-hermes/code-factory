@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Module name | DOCUMENTATION |
-| Path | `/home/kara/code-factory/scripts/` — `master_doc_skeleton.py`, `master_doc_fill.py`, `master_doc_check.py`, `master_doc_panel.py`, `gen_nasa_handbook.py`, `gen_system_views.py`, `sheet_style.py`, `extract_owner_decisions.py`, `gen_unit_map.py`, `verify-patch.sh`, `panel_loop.py`, `ownership.py`, `handbook_spine.py` |
+| Path | `~/code-factory/scripts/` — `master_doc_skeleton.py`, `master_doc_fill.py`, `master_doc_check.py`, `master_doc_panel.py`, `gen_nasa_handbook.py`, `gen_system_views.py`, `sheet_style.py`, `extract_owner_decisions.py`, `gen_unit_map.py`, `verify-patch.sh`, `panel_loop.py`, `ownership.py`, `handbook_spine.py` |
 | Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; `panel_loop.py` was rewritten for `--groups`/`--parallel` and `panel_supervise.sh`/`reap_orphan_writers.py` were added in `08a2c8a..fbc19cb`; every M6 file:line re-pinned) |
 | Language / runtime | Python 3.14.9 (measured) |
 | Owner lane | code-factory (control host) |

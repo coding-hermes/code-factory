@@ -58,7 +58,7 @@ and only when the script spawned the agent itself:
 The explicit --server is used because mutating bunker commands refuse the default-server fallback;
 an agent supplied with --agent is never offered for destruction.
 
-GATE at the judged commit 77caa02 (worktree /home/kara/proj-wt-cf-075-20261103, rebased onto
+GATE at the judged commit 77caa02 (worktree ~/proj-wt-cf-075-20261103, rebased onto
 origin/main ec6a842, clean porcelain):
 
   $ bash -n scripts/node-create.sh scripts/project-node.sh tests/selftest.sh   -> rc=0

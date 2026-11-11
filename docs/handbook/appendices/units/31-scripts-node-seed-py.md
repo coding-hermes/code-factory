@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/node_seed.py` — 276 lines, stdlib only [scripts/node_seed.py:1] |
+| Path | `~/code-factory/scripts/node_seed.py` — 276 lines, stdlib only [scripts/node_seed.py:1] |
 | Repository | `code-factory` |
 | Revision | `d8c7796` — the `origin/main` tip every locator below was measured against; the file's own last-touching commit is `b3ed55c` (2026-11-04, "feat(seed): a node receives its procedure and skills, digest-recorded, or nothing (CF-220)") |
 | Status | **VERIFIED — 177 locator citations (107 distinct file:line pairs across 6 files), all resolve; cites fact: FACT-01, FACT-02; 22 measured arms in §3; ten defects recorded in §8** |
@@ -138,7 +138,7 @@ actually leans on, because most of them are one default away from a different be
 ## 3. Verification
 
 Twenty-two arms, all run 2026-11-05 in a fresh worktree of `d8c7796` with Python 3.14.4, every one
-against scratch directories under `/home/kara/.hermes/cache/scratch/md31`. **No node was touched**
+against scratch directories under `~/.hermes/cache/scratch/md31`. **No node was touched**
 and no repository file was modified by any probe (`git status --short` empty after the suite run).
 Rows 1-10 and 20-21 build from the real manifest and the real archive; rows 11-16 differ only in
 the archive, the record or the node tree they hand to the same code; rows 17-19 are the refusal
@@ -430,7 +430,7 @@ input is argv or a file argv names, which is why the same command behaves identi
 ## 8. Evidence of record
 
 - **Measured 2026-11-05** in a fresh worktree of `d8c7796` (`~/proj-wt-md-31d`), Python 3.14.4, with
-  every probe pointed at a scratch directory under `/home/kara/.hermes/cache/scratch/md31`. No
+  every probe pointed at a scratch directory under `~/.hermes/cache/scratch/md31`. No
   `bunker` call was made and no node was touched; the repository was left clean by the suite run.
   The live-node statements below are quoted from the committed artifact, not re-measured here.
 - **The declared seed, as built**: 13 files, 41,211 bytes, `manifest=config/node-seed.txt`,
@@ -474,5 +474,5 @@ input is argv or a file argv names, which is why the same command behaves identi
 | 6 | **Missing inputs are tracebacks, not usage errors.** `--tar` and `--record` are required, but a path that does not exist bypasses argparse and dies in `open`/`tarfile` [scripts/node_seed.py:157-159] | measured: `FileNotFoundError` traceback, exit 1, for both verbs (§3 row 18). Exit 1 collides with "refused/drifted" [scripts/node_seed.py:23]. **Not filed** |
 | 7 | **`--exclude-backups` is inert (`store_true` with `default=True`), and the suite's arm for it cannot fail.** The rule fires only when the declared backup exists; when it does not, the missing-entry refusal supplies the same non-zero exit, which is all the arm asserts | measured both ways: `is a backup artefact and may not be seeded` (present) vs `REFUSED: manifest entry missing` (absent); the suite builds the absent case [tests/selftest.sh:3139-3145], and `--help` offers no way to disable the flag [scripts/node_seed.py:254] (§3 row 19). **Not filed** |
 | 8 | **The caller loses the node's rows and deletes its evidence on failure.** `seed_out` is captured [scripts/bunker-provision.sh:460] and only counted on success [scripts/bunker-provision.sh:462]; the failure row says "rows above" while printing none [scripts/bunker-provision.sh:464], and the tarball, record and seeder are removed in the same block [scripts/bunker-provision.sh:466-467] | read from the caller plus measured exit codes; the half-seed rows in §3 rows 8-9 are exactly the output that would be discarded. **Not filed** |
-| 9 | **The applied record carries the control host's absolute paths onto the node** — `repo_root` and `manifest` are copied from the build record verbatim [scripts/node_seed.py:208] [scripts/node_seed.py:142] | measured: `repo_root=/home/kara/proj-wt-md-31d` inside a record written under a scratch HOME (§3 row 2). Cosmetic, but it means the record describes a host the node cannot see. **Not filed** |
+| 9 | **The applied record carries the control host's absolute paths onto the node** — `repo_root` and `manifest` are copied from the build record verbatim [scripts/node_seed.py:208] [scripts/node_seed.py:142] | measured: `repo_root=~/proj-wt-md-31d` inside a record written under a scratch HOME (§3 row 2). Cosmetic, but it means the record describes a host the node cannot see. **Not filed** |
 | 10 | **`seed_install` reports a copy count as a correctness verdict.** The count walks the installed tree and re-hashes nothing [scripts/node_seed.py:206], so it prints `PASS` for a tree containing a file the record never declared | measured (§3 row 14), and it is the row an operator reads as "the seed is good". **Not filed** |

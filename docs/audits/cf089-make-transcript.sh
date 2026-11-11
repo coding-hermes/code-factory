@@ -5,7 +5,7 @@
 #   bash docs/audits/cf089-census-standin.py &      # port 18999, binds fail loudly if taken
 #   bash docs/audits/cf089-make-transcript.sh
 set -uo pipefail
-REPO=/home/kara/code-factory
+REPO=~/code-factory
 OUT="$REPO/docs/audits/code-factory-qa-2026-11-03-cf089.probe.txt"
 BASE=http://127.0.0.1:18999
 

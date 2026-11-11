@@ -6848,12 +6848,22 @@ for cf006_pair in aider:AIDER goose:GOOSE; do
 done
 rm -rf "$cf006"
 # ch:trace row=CF-050 spec=docs/ACCEPTANCE-PLAN.md#section-61 wave=none:serial-worker test=tests/selftest.sh::CF050_publish_gate doc=docs/ACCEPTANCE-PLAN.md evidence=none:no-frozen-transcript witness=none:not-published verdict=none:foreman-runs-gitreins commit=none:foreman-commit memory=none:foreman-closeout
-# CF-050: the published tree must not gain new absolute host-home paths. The measured baseline
-# counts legacy files so cleanup remains a separate row; this gate blocks only regressions.
+# CF-050: the published tree must not contain absolute host-home paths. The zero baseline
+# makes this a hard publication gate; .gitreins and the foreman-owned board are excluded.
 cf050_publish_gate() {
-  local root=$1 baseline=$2 hits count paths
-  hits=$(git -C "$root" grep -lIE '/home/[a-z][a-z0-9_-]*/' HEAD -- . \
-    ':!.gitreins/**' ':!.coding-hermes/board/**' 2>/dev/null || true)
+  local root=$1 baseline=$2 hits count paths ref=HEAD
+  # Grade the index when it contains staged changes so the pre-commit gate evaluates the tree it
+  # is about to publish. Fixture repositories have no staged changes, so grade their committed HEAD.
+  # A host-home leak is an absolute /home/<name>/ that is not part of a larger path expression, so
+  # "$tmpd/home/repo" (a scratch-relative path) must not be read as a leak.
+  local pat='(^|[^A-Za-z0-9])/home/[a-z][a-z0-9_-]*/'
+  local excl=(':!.gitreins/**' ':!.coding-hermes/board/**')
+  # Options must precede the pattern: `git grep <pattern> --cached` reads --cached as a pathspec.
+  if ! git -C "$root" diff --cached --quiet -- 2>/dev/null; then
+    hits=$(git -C "$root" grep --cached -lIE "$pat" -- . "${excl[@]}" 2>/dev/null || true)
+  else
+    hits=$(git -C "$root" grep -lIE "$pat" HEAD -- . "${excl[@]}" 2>/dev/null || true)
+  fi
   count=$(printf '%s\n' "$hits" | grep -c . || true)
   paths=$(printf '%s\n' "$hits" | sed 's/^HEAD://' | sort -u | sed -n '1,10p' | tr '\n' ' ')
   if [ "$count" -gt "$baseline" ]; then
@@ -6864,7 +6874,7 @@ cf050_publish_gate() {
   return 0
 }
 say "61. the published tree does not add absolute host-home paths (CF-050)"
-cf050_publish_gate "$HERE" 143 || fails=$((fails+1))
+cf050_publish_gate "$HERE" 0 || fails=$((fails+1))
 # Red proof: a committed fixture exercises the same git-grep path as HEAD. Build the path from
 # pieces so this test does not itself seed the production tree with a host-specific literal.
 cf050=$(mktemp -d)
@@ -6890,7 +6900,7 @@ else
 fi
 rm -rf "$cf050"
 
-# ch:trace row=CF-224 spec=F2/M1.S5 wave=none:serial test=tests/selftest.sh::section-62 doc=docs/OPERATIONS.md,specs/NODE.md prompt=/home/kara/.hermes/cache/scratch/code-factory-20261108-133437/brief-CF-224.txt evidence=docs/audits/cf-224-verify-transport-2026-11-08.md witness=none:offline-fixture verdict=none:foreman-runs-judge commit=none:self-referential-hash memory=none:foreman-writes-receipt
+# ch:trace row=CF-224 spec=F2/M1.S5 wave=none:serial test=tests/selftest.sh::section-62 doc=docs/OPERATIONS.md,specs/NODE.md prompt=~/.hermes/cache/scratch/code-factory-20261108-133437/brief-CF-224.txt evidence=docs/audits/cf-224-verify-transport-2026-11-08.md witness=none:offline-fixture verdict=none:foreman-runs-judge commit=none:self-referential-hash memory=none:foreman-writes-receipt
 say "62. verify-node names its transport, and a probe that never leaves the node is a FAIL (CF-224)"
 # The failure this closes: the verifier read `hostname -I` off the node and probed that address from
 # the control host, so a bunker node (no LAN address by default) reported itself unverified while a

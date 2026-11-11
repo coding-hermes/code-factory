@@ -1,6 +1,6 @@
 # PERF-013 — node fixtures ran every layer to assert one
 
-Worktree: `/home/kara/code-factory-wt-perf013`, branch `perf/perf-013-layer-scope`,
+Worktree: `~/code-factory-wt-perf013`, branch `perf/perf-013-layer-scope`,
 HEAD `d5f7fb2` (= `origin/main`), clean at start. `scripts/project-node.sh` and
 `tests/selftest.sh` only; the board was not touched.
 
@@ -20,7 +20,7 @@ Re-measured on this worktree at `d5f7fb2` before any edit (confirms the foreman'
 host):
 
 ```sh
-cd /home/kara/code-factory-wt-perf013
+cd ~/code-factory-wt-perf013
 for i in 1 2 3; do /usr/bin/time -p bash tests/selftest.sh >/tmp/b$i.log 2>/tmp/b$i.err; \
   echo "run$i rc=$? $(grep -E '^(real|user|sys) ' /tmp/b$i.err | tr '\n' ' ')PASS=$(grep -c '^  PASS' /tmp/b$i.log)"; done
 ```
@@ -36,7 +36,7 @@ CPU (user+sys): **2.50 / 2.45 / 2.45 s**.
 ## After
 
 ```sh
-cd /home/kara/code-factory-wt-perf013
+cd ~/code-factory-wt-perf013
 for i in 1 2 3; do /usr/bin/time -p bash tests/selftest.sh >/tmp/f$i.log 2>/tmp/f$i.err; \
   rc=$?; echo "run$i rc=$rc $(grep -E '^(real|user|sys) ' /tmp/f$i.err | tr '\n' ' ')PASS_ROWS=$(grep -c '^  PASS' /tmp/f$i.log) summary=$(tail -1 /tmp/f$i.log)"; done
 ```

@@ -7,8 +7,8 @@ This is the design authority for the harness work; `specs/HARNESS.md` owns the a
 `specs/NODE.md` owns the node, and this file owns the **selection rule**, the **variable contract**
 and the **switching model**.
 
-Measured inputs: `/home/kara/code-factory-reports/spec-crier-harness-support-2026-11-05.md` (what
-crier ships, file:line), `/home/kara/code-factory-reports/spec-bunker-toolchain-2026-11-05.md` (what
+Measured inputs: `~/code-factory-reports/spec-crier-harness-support-2026-11-05.md` (what
+crier ships, file:line), `~/code-factory-reports/spec-bunker-toolchain-2026-11-05.md` (what
 a node must install), and npm registry metadata read on 2026-11-05 for the versions in §2.
 
 ---

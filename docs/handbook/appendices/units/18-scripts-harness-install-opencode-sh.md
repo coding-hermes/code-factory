@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/harness/install-opencode.sh` — 37 lines [scripts/harness/install-opencode.sh:37] |
+| Path | `~/code-factory/scripts/harness/install-opencode.sh` — 37 lines [scripts/harness/install-opencode.sh:37] |
 | Repository | `code-factory` [scripts/harness/install-opencode.sh:1] |
 | Revision | `b31c232` — the `origin/main` tip every locator below was measured against; the file's last-touching commit is `d948c16` (2026-10-29, "feat: code-factory node ladder, specs and board") |
 | Status | **RED — the adapter installs nothing (`--apply` refuses by design) and its `non_interactive` row cannot pass on a host that has the capability: CF-240 is live at [scripts/harness/install-opencode.sh:25]. Every claim in this document is measured on `b31c232`; the RED is the module's, not the document's.** |
@@ -54,7 +54,7 @@
 
 ## 3. Verification
 
-Run on `b31c232`, 2026-11-05, bash 5.3.9, `opencode` 1.18.29 at `/home/kara/.opencode/bin/opencode`. Rows 1-2 differ only in how the caller was launched, and that is the point.
+Run on `b31c232`, 2026-11-05, bash 5.3.9, `opencode` 1.18.29 at `~/.opencode/bin/opencode`. Rows 1-2 differ only in how the caller was launched, and that is the point.
 
 | # | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|---|
@@ -74,9 +74,9 @@ Rows 1 and 2, verbatim:
 ```
 $ bash scripts/harness/install-opencode.sh --check      # PATH includes ~/.opencode/bin
 harness: opencode (UNVERIFIED adapter)
-  PASS  binary — /home/kara/.opencode/bin/opencode
+  PASS  binary — ~/.opencode/bin/opencode
   PASS  version — 1.18.29
-  PASS  user_space_binary — /home/kara/.opencode/bin/opencode
+  PASS  user_space_binary — ~/.opencode/bin/opencode
   WARN  non_interactive — could not confirm a non-interactive mode
 
 OPENCODE: PASS
@@ -87,7 +87,7 @@ exit=0
 $ bash -c 'bash scripts/harness/install-opencode.sh --check'   # default PATH
 harness: opencode (UNVERIFIED adapter)
   FAIL  binary — absent — no opencode in this node
-  PASS  user_space_binary — /home/kara/.opencode/bin/opencode
+  PASS  user_space_binary — ~/.opencode/bin/opencode
   WARN  non_interactive — could not confirm a non-interactive mode
 
 OPENCODE: FAIL (1)
@@ -138,10 +138,10 @@ Every line is a literal from the source or from a run on 2026-11-05. "evidentiar
 | Level | Line (verbatim) | Emitted when | Kind |
 |---|---|---|---|
 | stdout | `harness: opencode (UNVERIFIED adapter)` [scripts/harness/install-opencode.sh:12] | first line of every run, including `--apply` | descriptive — the file's own admission that it is not certified |
-| stdout | `  PASS  binary — /home/kara/.opencode/bin/opencode` [scripts/harness/install-opencode.sh:16] | `command -v opencode` resolves | evidentiary — names the absolute path it will test, measured |
+| stdout | `  PASS  binary — ~/.opencode/bin/opencode` [scripts/harness/install-opencode.sh:16] | `command -v opencode` resolves | evidentiary — names the absolute path it will test, measured |
 | stdout | `  FAIL  binary — absent — no opencode in this node` [scripts/harness/install-opencode.sh:19] | nothing named `opencode` on `PATH` | evidentiary — and it is a statement about `PATH`, not about the node: row 2 of §3 prints it beside a PASS for the same file |
 | stdout | `  PASS  version — 1.18.29` [scripts/harness/install-opencode.sh:17] | `--version` printed something on stdout | evidentiary, measured — but the value is `head -1` of stdout with stderr discarded, so a binary that prints its version on stderr yields `PASS  version — ` with nothing after the dash |
-| stdout | `  PASS  user_space_binary — /home/kara/.opencode/bin/opencode` [scripts/harness/install-opencode.sh:22] | `$HOME/.opencode/bin/opencode` has any execute bit | evidentiary — existence and mode, measured; proves nothing about `PATH` |
+| stdout | `  PASS  user_space_binary — ~/.opencode/bin/opencode` [scripts/harness/install-opencode.sh:22] | `$HOME/.opencode/bin/opencode` has any execute bit | evidentiary — existence and mode, measured; proves nothing about `PATH` |
 | stdout | `  WARN  user_space_binary — not installed under $HOME` [scripts/harness/install-opencode.sh:22] | that path is absent or not executable | descriptive of a gap — and it can never fail a run |
 | stdout | `  PASS  non_interactive — a run/exec/serve mode is advertised` [scripts/harness/install-opencode.sh:26] | stdout of `--help` matched `run\|exec\|serve` | evidentiary **in principle**, and **unreachable on every opencode measured here**: never observed, because the text is on stderr [scripts/harness/install-opencode.sh:25] |
 | stdout | `  WARN  non_interactive — could not confirm a non-interactive mode` [scripts/harness/install-opencode.sh:28] | the probe found nothing — which is every 1.x run on this host | **descriptive and, measured, false here**: `opencode run --help` exits 0 (§3 row 3). This is the line CF-240 is about |
@@ -180,7 +180,7 @@ There is no configuration file, no flag beyond the mode, no environment override
 
 ## 8. Evidence of record
 
-- **Measured here, 2026-11-05**, on `b31c232` with bash 5.3.9, `opencode` 1.18.29 at `/home/kara/.opencode/bin/opencode` (184 666 240 B, mtime 2026-10-03): §3 rows 1-9. Artifacts under `/home/kara/.hermes/cache/scratch/md18c/` — `nolib/` (row 8, the adapter copied alone), `hc/` and `hc2/` (two battery runs: the first from a default `PATH`, the second with `~/.opencode/bin` prepended, each with its `results.tsv`), and the capture files `/tmp/o.err`, `/tmp/r.err`, `/tmp/v.out` written by row 3. Rows 1-8 need no network, no credential and no node. The document carries 128 `path:line` locators, 50 of them distinct, and every one resolves inside the file it names.
+- **Measured here, 2026-11-05**, on `b31c232` with bash 5.3.9, `opencode` 1.18.29 at `~/.opencode/bin/opencode` (184 666 240 B, mtime 2026-10-03): §3 rows 1-9. Artifacts under `~/.hermes/cache/scratch/md18c/` — `nolib/` (row 8, the adapter copied alone), `hc/` and `hc2/` (two battery runs: the first from a default `PATH`, the second with `~/.opencode/bin` prepended, each with its `results.tsv`), and the capture files `/tmp/o.err`, `/tmp/r.err`, `/tmp/v.out` written by row 3. Rows 1-8 need no network, no credential and no node. The document carries 128 `path:line` locators, 50 of them distinct, and every one resolves inside the file it names.
 - **CF-240 is live and unfixed.** The board row is `CF-240` in `.coding-hermes/board/tasks.jsonl` — "install-opencode.sh's non_interactive row can never pass: it greps stdout while opencode writes --help to stderr", status `pending`, filed 2026-11-05T04:15:37Z. Its four acceptance criteria are all unmet at [scripts/harness/install-opencode.sh:25]: the row does not read both streams; there is no fixture either way; there is no version/generation refusal; and the stdout-only grep is not swept from siblings in this change. Cited by id per fact: FACT-09.
 - **The repo's own witness disagrees with the module.** The battery already detects the false WARN and writes a NOTE saying exactly this — `its probe greps stdout and opencode writes help to stderr` [tests/harness-conformance.sh:243-248] — but a NOTE is not a FAIL, so the battery stays green while the adapter row stays wrong. Same class of gap as the WARN: a mechanism that cannot fail is decoration.
 - **Generation, measured three ways**: the binary is `1.18.29` (major 1, §3 rows 1-3); the battery maps both `opencode` and `opencode-v2` onto this one adapter and refuses v2 with an explicit message (§3 row 7) [tests/harness-conformance.sh:92-93]; and the npm name a v2 would come from is a squatting stub — `opencode2`'s own description field is `security holding package`, its only versions are `0.0.0-stage` and `0.0.1-security`, while the real package `opencode-ai` is at `1.19.5` (§3 row 9), matching what the matrix already recorded [specs/HARNESS-MATRIX.md:52] [specs/HARNESS-MATRIX.md:194].

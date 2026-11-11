@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/specs/NODE.md` |
+| Path | `~/code-factory/specs/NODE.md` |
 | Repository | `code-factory` |
 | Revision | `3c4c639` |
 | Status | **RED — no verification recorded** |

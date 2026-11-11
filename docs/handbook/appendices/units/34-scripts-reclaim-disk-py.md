@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/reclaim_disk.py` — 169 lines, two subcommands (`targets`, `run`), no third-party import [scripts/reclaim_disk.py:1] [scripts/reclaim_disk.py:131-137] |
+| Path | `~/code-factory/scripts/reclaim_disk.py` — 169 lines, two subcommands (`targets`, `run`), no third-party import [scripts/reclaim_disk.py:1] [scripts/reclaim_disk.py:131-137] |
 | Repository | `code-factory` |
 | Revision | `d8c7796` — the `origin/main` tip every locator below was measured against (worktree `~/proj-wt-md-34d`, 2026-11-05); the file's own last-touching commit is `27df6ac` (2026-11-03, "feat(node): reap caches, job dirs and stale clones before disk-floor refusal — a node below its floor refused admission without reclaiming anything, so a full host could never recover. Addresses CF-007 (AC3)") |
 | Status | **VERIFIED — 266 locators, all resolve; every removal root enumerated from source and measured on scratch trees; ten defects recorded in §6** |
@@ -56,7 +56,7 @@
 
 ## 3. Verification
 
-Measured 2026-11-05 from a clean worktree of `d8c7796` (`~/proj-wt-md-34d`), Linux x86_64, Python 3.14.4. Every command below was executed; **each root is a scratch tree under `$TMPDIR`** (`/home/kara/.hermes/cache/scratch/md25b/md34/…`), never a real cache, and no real `$HOME` path was passed to the module.
+Measured 2026-11-05 from a clean worktree of `d8c7796` (`~/proj-wt-md-34d`), Linux x86_64, Python 3.14.4. Every command below was executed; **each root is a scratch tree under `$TMPDIR`** (`~/.hermes/cache/scratch/md25b/md34/…`), never a real cache, and no real `$HOME` path was passed to the module.
 
 | # | Check | Command | Expected | Last run | Result |
 |---|---|---|---|---|---|
@@ -120,7 +120,7 @@ EXIT=0
   SURVIVED .node/clones/stale/payload
 ```
 
-The `…/md34/e2/` prefix is an elision of `/home/kara/.hermes/cache/scratch/md25b/md34/e2/` in this and the following transcripts; the `entries` array is elided in transcript 2 and printed whole in transcript 3. Every other character is as printed.
+The `…/md34/e2/` prefix is an elision of `~/.hermes/cache/scratch/md25b/md34/e2/` in this and the following transcripts; the `entries` array is elided in transcript 2 and printed whole in transcript 3. Every other character is as printed.
 
 Transcript 3 — check 3, the real run on the same tree, and what survived:
 
@@ -397,7 +397,7 @@ print("root      =", root)
 print("calling safety_reason(root, /etc/hostname) …", flush=True)
 print("returned:", rd.safety_reason(root, pathlib.Path("/etc/hostname")))
 PY
-root      = /home/kara/.hermes/cache/scratch/md25b/md34/e9
+root      = ~/.hermes/cache/scratch/md25b/md34/e9
 calling safety_reason(root, /etc/hostname) …
 EXIT=124 (124 = the 5 s timeout fired: the call never returned)
 ```

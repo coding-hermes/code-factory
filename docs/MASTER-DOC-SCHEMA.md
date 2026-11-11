@@ -107,7 +107,7 @@ directories, log excerpts with timestamps.
 This section exists to demonstrate the shape with real values, including the
 places where the honest answer is "none".
 
-**1. Identity.** `dispatcher.py` · `/home/kara/crier-fleet/dispatcher.py` ·
+**1. Identity.** `dispatcher.py` · `~/crier-fleet/dispatcher.py` ·
 rev `283bca9` · Python 3.14.9 (host interpreter; the file pins no version — `#!/usr/bin/env python3`) · owner: the fleet dispatcher service
 (`fleet-dispatcher.service`) · status **VERIFIED** for the job model,
 **FAILING** for metrics and for the completion dialect (see 7).
@@ -120,7 +120,7 @@ is exactly what happened for 86 consecutive dispatches.
 
 | Dependency | Constraint | Where | Absence detected by |
 |---|---|---|---|
-| `bunker` CLI | 0.1.4+ (cert pinning) | `/home/kara/.local/bin/bunker` — **absolute path in code**, because two binaries exist on this host and PATH order silently picks the wrong one | exit 127 from `subprocess`, logged |
+| `bunker` CLI | 0.1.4+ (cert pinning) | `~/.local/bin/bunker` — **absolute path in code**, because two binaries exist on this host and PATH order silently picks the wrong one | exit 127 from `subprocess`, logged |
 | `hermes` CLI | on the node | `$HOME/.local/bin/hermes` inside the container | `DONE:127` in the job status file |
 | crier bus | reachable | `http://<crier-host>:8767` | `client for <agent> failed` log line |
 
@@ -128,7 +128,7 @@ The crier bus endpoint in this worked example is a placeholder: the real value l
 operator's own config on the control host, never in a published document.
 
 **3b. Library contracts.** `crier_client.Crier` — path-injected from
-`/home/kara/crier/clients/python`; the module relies on
+`~/crier/clients/python`; the module relies on
 `Crier.send/retrieve/complete` and on `msg.payload` being a dict **or** a JSON
 string (both are handled at `payload_task`). If the client renames `retrieve`,
 the dispatcher stops polling and tasks expire silently.

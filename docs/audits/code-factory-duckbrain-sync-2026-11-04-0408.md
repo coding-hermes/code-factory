@@ -7,8 +7,8 @@ Measured at published tip `c2a6a45b28f142635e9cb53d9d18f94c4d7d4208` on 2026-11-
 
 | Check | Measured |
 |---|---|
-| scheduler locator vs `git -C … rev-parse --show-toplevel` | `realpath /home/kara/code-factory` = `/home/kara/code-factory` — equal |
-| registered mapping (scheduler project row `code-factory-duckbrain`) | `repo_url` `local:/home/kara/code-factory`, `workdir` `/home/kara/code-factory` — matches the locator |
+| scheduler locator vs `git -C … rev-parse --show-toplevel` | `realpath ~/code-factory` = `~/code-factory` — equal |
+| registered mapping (scheduler project row `code-factory-duckbrain`) | `repo_url` `local:~/code-factory`, `workdir` `~/code-factory` — matches the locator |
 | `origin` / `worker` | both `git@github.com:coding-hermes/code-factory.git` |
 | branch / operation markers | `main`, attached; no `MERGE_HEAD` / `REBASE_HEAD` / `CHERRY_PICK_HEAD` / `rebase-merge` / `rebase-apply` |
 | tracked porcelain in the locator | empty; 53 untracked paths, all `.gitreins/history/2026-11-03/*` |
@@ -113,7 +113,7 @@ evidence number; `SELFTEST: PASS` and the rows-parse line are.
 
 | Leg | Status | Reason |
 |---|---|---|
-| writes in `/home/kara/code-factory` | not run | sibling lane `code-factory-sync` running on the shared checkout; all writes went to the clone |
+| writes in `~/code-factory` | not run | sibling lane `code-factory-sync` running on the shared checkout; all writes went to the clone |
 | re-executing every one of the 45 complete rows' acceptance commands | not run | the lane re-runs the repo-wide gates; per-row probes that clone repos or touch docker are out of this tick's budget, and each row's named artifact is checked to resolve instead |
 | further count deltas in `docs/BOARD.md` / `docs/ACCEPTANCE-PLAN.md` | not run | older ticks appended one, and it is stale within one merge. The counted snapshots are owned by CF-081 / CF-154 / CF-155, which the existing text already names |
 | worker dispatch | not run | the lane's deliverable is reconciliation; no implementation was needed |
@@ -123,7 +123,7 @@ evidence number; `SELFTEST: PASS` and the rows-parse line are.
 This commit is the pass commit. Re-run at the published tip, not at a local head:
 
 ```
-bash /home/kara/.hermes/skills/devops/sync-lane-tick-operations/scripts/board-evidence-census.sh \
+bash ~/.hermes/skills/devops/sync-lane-tick-operations/scripts/board-evidence-census.sh \
   <clone-of-origin/main> .coding-hermes/board/tasks.jsonl origin/main
 git cat-file -e origin/main:docs/audits/code-factory-duckbrain-sync-2026-11-04-0408.md
 ```

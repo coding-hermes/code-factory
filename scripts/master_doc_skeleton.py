@@ -8,21 +8,22 @@ something.
 """
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
 
-OUT = Path("/home/kara/code-factory/docs/master")
+OUT = Path(os.path.expanduser("~/code-factory/docs/master"))
 REPOS = [
-    ("code-factory", "/home/kara/code-factory"),
+    ("code-factory", os.path.expanduser("~/code-factory")),
     (
         "coding-herms-scheduler",
-        "/home/kara/coding-hermes-scheduler/coding-herms-scheduler",
+        os.path.expanduser("~/coding-hermes-scheduler/coding-hermes-scheduler"),
     ),
-    ("crier", "/home/kara/crier"),
-    ("crier-fleet", "/home/kara/crier-fleet"),
+    ("crier", os.path.expanduser("~/crier")),
+    ("crier-fleet", os.path.expanduser("~/crier-fleet")),
 ]
-PROXY = "/home/kara/.hermes/scripts/cf-inference-proxy.py"
+PROXY = os.path.expanduser("~/.hermes/scripts/cf-inference-proxy.py")
 
 SKIP = re.compile(
     r"(^|/)(\.git|node_modules|venv|\.venv|vendor|dist|build|__pycache__|\.gitreins|docs/master)(/|$)"

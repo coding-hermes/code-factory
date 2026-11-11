@@ -2,7 +2,7 @@
 
 Board/repo consistency pass for code-factory. Four sibling code-factory lanes were `running` on the
 shared checkout at tick start and a sibling lane had a live `gitreins task complete` grading the
-canonical working tree, so nothing was written in `/home/kara/code-factory`: the whole tick ran in a
+canonical working tree, so nothing was written in `~/code-factory`: the whole tick ran in a
 dedicated clone of `origin/main` in the tick scratch. The registered checkout was read only.
 
 The tip moved three times while this tick ran — `6d801c7` → `e657d98` → `0e16e63` → `2c48149` (a dogfood filing of CF-150, a
@@ -13,8 +13,8 @@ CI-equivalent gate re-run at the tip in `Landing tip` below; the earlier measure
 
 | Check | Measured |
 |---|---|
-| `realpath /home/kara/code-factory` vs `git -C … rev-parse --show-toplevel` | equal (`/home/kara/code-factory`) |
-| registered `workdir` / `repo_url` (scheduler project row) | `/home/kara/code-factory` / `local:/home/kara/code-factory` — matches the locator |
+| `realpath ~/code-factory` vs `git -C … rev-parse --show-toplevel` | equal (`~/code-factory`) |
+| registered `workdir` / `repo_url` (scheduler project row) | `~/code-factory` / `local:~/code-factory` — matches the locator |
 | branch / operation markers | `main`, attached; no `rebase-merge`/`rebase-apply`/`MERGE_HEAD`/`REBASE_HEAD`/`CHERRY_PICK_HEAD`/`BISECT_LOG` |
 | canonical `HEAD` vs `origin/main` at start | `bdadeb9` behind by 1 commit, ahead 0 |
 | staged index | `A docs/audits/code-factory-qa-duckbrain-2026-11-04.md` — a sibling QA lane's in-flight work, never touched |
@@ -62,7 +62,7 @@ Every `complete` row was resolved with `git cat-file -e <sha>^{commit}` and
 | `commit_hash` null | 0 |
 | commit object missing | 0 |
 | commit not reachable from the published tip | 0 |
-| `detail.evidence[].artifacts` unresolvable in the tree | 2 entries on 2 rows, both the historical first-run log `/home/kara/.hermes/cache/scratch/code-factory-pm-20261031-114422-final-selftest.log` on CF-011 and CF-013 |
+| `detail.evidence[].artifacts` unresolvable in the tree | 2 entries on 2 rows, both the historical first-run log `~/.hermes/cache/scratch/code-factory-pm-20261031-114422-final-selftest.log` on CF-011 and CF-013 |
 
 The two absolute-path artifacts are unchanged from the 2026-11-04T01:21 pass: each row already carries
 a superseding `sync-20261103-*` entry pointing at the committed
@@ -130,7 +130,7 @@ passing run at loadavg 19.25 is a sample, not a closure of CF-142; CF-142 stays 
 
 | Leg | Status | Reason |
 |---|---|---|
-| writes in `/home/kara/code-factory` | not run | live sibling judge (`CF-147-RV1`) grading that working tree, four sibling lanes running, one sibling file staged in the index |
+| writes in `~/code-factory` | not run | live sibling judge (`CF-147-RV1`) grading that working tree, four sibling lanes running, one sibling file staged in the index |
 | repair of the registered checkout's skew | not run | same barrier: a pull mid-judge mutates the tree being graded |
 | worker dispatch | not run | this lane's deliverable is reconciliation; no implementation was needed |
 

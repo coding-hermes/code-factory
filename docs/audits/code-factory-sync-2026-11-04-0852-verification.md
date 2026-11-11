@@ -6,11 +6,11 @@ Third execution of this tick id. The first fire landed `docs/audits/code-factory
 receipt is edited here. Per the resumed-tick rule this pass implemented nothing for the work those two
 fires closed and minted no second task for it.
 
-All measurements below are from a scratch clone of the published tip, because `/home/kara/code-factory`
+All measurements below are from a scratch clone of the published tip, because `~/code-factory`
 is 19 commits behind and carries a live sibling writer (see "Barrier"):
 
 ```sh
-git clone /home/kara/code-factory land && cd land
+git clone ~/code-factory land && cd land
 git remote add gh git@github.com:coding-hermes/code-factory.git
 git fetch gh main && git checkout -B main gh/main    # 7232954, porcelain 0
 ```
@@ -72,12 +72,12 @@ gh run list --repo coding-hermes/code-factory --limit 3      -> [] (no workflows
 
 ## Barrier and residue (disclosed, not cleaned)
 
-- `/home/kara/code-factory` was **not** written, fetched into, reset, or cleaned. It is 19 commits
+- `~/code-factory` was **not** written, fetched into, reset, or cleaned. It is 19 commits
   behind `origin/main` (`git rev-list --left-right --count origin/main...HEAD` = `19 0`), its board
   bytes differ from the published board for that reason, and it carries three modified tracked files —
   `docs/ACCEPTANCE-PLAN.md`, `docs/audits/cf099-prd-drift-probe.sh`, `tests/selftest.sh` — belonging to
   a sibling docs lane's in-flight CF-155 worker.
-- `scripts/checkout-writer-census.sh /home/kara/code-factory` reported `CENSUS_COUNT=8`, including
+- `scripts/checkout-writer-census.sh ~/code-factory` reported `CENSUS_COUNT=8`, including
   `comm=hermes` (pid 573391, started 03:34:46) with cwd at the checkout root. A live writer holds it, so
   the fast-forward route was refused and the pass ran from a clone.
 - 56+ untracked `.gitreins/history/` judge bundles remain in the registered checkout; not read, not

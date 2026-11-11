@@ -9,7 +9,7 @@ SCOPE RULING (binding for the gap list): graded against v2's own stated boundary
 ========================================================================
 COVERAGE GAPS: 12
 ========================================================================
-1. fleet-gateway-facade.py — lives in /home/kara/crier-fleet. It is the door the scheduler speaks for REMOTE work: it accepts the scheduler's POST /v1/responses, maps X-Hermes-Session-Key to a remote agent and box, drives the agent via bunker exec, and answers in the SSE shape the scheduler parses; it owns its own port (8650) and its own key store (~/.hermes/secrets/fleet-gateway-keys.json, 0600, minted by --mint). Nothing in the outline names it. F16 MULTI-NODE FAN-OUT declares an exit ("every target acknowledged, each with its own receipt") that no documented module can produce. Classification: designed-not-deployed (no listener on 8650 today) — which heading 3's rule requires the outline to say.
+1. fleet-gateway-facade.py — lives in ~/crier-fleet. It is the door the scheduler speaks for REMOTE work: it accepts the scheduler's POST /v1/responses, maps X-Hermes-Session-Key to a remote agent and box, drives the agent via bunker exec, and answers in the SSE shape the scheduler parses; it owns its own port (8650) and its own key store (~/.hermes/secrets/fleet-gateway-keys.json, 0600, minted by --mint). Nothing in the outline names it. F16 MULTI-NODE FAN-OUT declares an exit ("every target acknowledged, each with its own receipt") that no documented module can produce. Classification: designed-not-deployed (no listener on 8650 today) — which heading 3's rule requires the outline to say.
 
 2. Crier durable state — M10 has submodules for transport, guard, binaries and clients, but none for what crier REMEMBERS. Live state: crier is running on PostgreSQL (postgres: crier crier connections observed; CR_SESSION_BACKEND selects jsonl/sqlite/postgres, CR_DATABASE_URL points it), and deploy/ ships crier-backup.service + crier-backup.timer. F15 BACKUP AND RESTORE cannot name what is backed up, from where, or how restored. The scheduler has M9.S3 for exactly this; crier needs its equivalent.
 
@@ -19,11 +19,11 @@ COVERAGE GAPS: 12
 
 5. SYSTEM-MODEL.yaml stale — it has 16 components and no DISPATCHER and no INFERENCE PROXY. Part I.4/I.5 render from this file, so the rendered component and contract registers contradict Part III. The correction must land in the source model, not in prose.
 
-6. renew-fleet.sh — /home/kara/crier-fleet. Implements the fleet agent TTL lifecycle: census (exit 1 if any agent < WARN_H), archive (tar home = the safety net), renew (archive → bunker renew → restore → verify), with a measured doctrine (heartbeat cannot extend a 7d agent). Agent expiry is the fleet's scheduled self-destruction; F12 and F15 have legs with no owning submodule.
+6. renew-fleet.sh — ~/crier-fleet. Implements the fleet agent TTL lifecycle: census (exit 1 if any agent < WARN_H), archive (tar home = the safety net), renew (archive → bunker renew → restore → verify), with a measured doctrine (heartbeat cannot extend a 7d agent). Agent expiry is the fleet's scheduled self-destruction; F12 and F15 have legs with no owning submodule.
 
-7. fleet-ttl-census.py — /home/kara/crier-fleet. Measures TTL expiry across the fleet; the F6/F7 leg that tells anyone renewal is due before the machine disappears.
+7. fleet-ttl-census.py — ~/crier-fleet. Measures TTL expiry across the fleet; the F6/F7 leg that tells anyone renewal is due before the machine disappears.
 
-8. courier.py — /home/kara/crier-fleet. The orchestrator-side bus client (agents/send/inbox/wait/stats, its own keypair, its own token file). The operator surface for manual dispatch and for verifying an agent end to end; unmapped.
+8. courier.py — ~/crier-fleet. The orchestrator-side bus client (agents/send/inbox/wait/stats, its own keypair, its own token file). The operator surface for manual dispatch and for verifying an agent end to end; unmapped.
 
 9. Scheduler operator surfaces — M9.S4 names five cmd/ binaries and omits two that exist (cmd/backfill-commit-signals, cmd/cooldown-residue) and omits the entire ops/ toolbox (check-fleet-invariants.py, cluster-chain-probe.sh + selftest, check-daemon-freshness.sh, collapse-fleet-infra-findings.py, dagger-role-tick.sh) — these are the F7 MONITORING legs the scheduler actually has.
 

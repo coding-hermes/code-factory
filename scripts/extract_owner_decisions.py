@@ -12,6 +12,7 @@ Read-only: opens state.db with mode=ro and never writes to it.
 
 import argparse
 import json
+import os
 import sqlite3
 import sys
 import time
@@ -49,7 +50,7 @@ SIGNALS = (
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--db", default="/home/kara/.hermes/state.db")
+    ap.add_argument("--db", default=os.path.expanduser("~/.hermes/state.db"))
     ap.add_argument("--days", type=int, default=45)
     ap.add_argument("--out", default="/tmp/cf-owner-msgs.jsonl")
     ap.add_argument("--max-chars", type=int, default=2000)

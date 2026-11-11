@@ -204,7 +204,7 @@ CT-12 row: "…it does **not** stage the diff itself (sol B08) | … the wire to
 "**RED — none (absence-proved this round).**" → "**RED — none (absence-proved).**"
 
 ## M4-board.md:162
-"`boardctl` is an external binary (`/home/kara/.local/bin/boardctl`, measured this round — not in this repo), so these strings carry no in-repo `file:line`; the `validate` and `drift` rows are quoted from run output re-captured this round (2026-11-07, rev `fbc19cb`); the duplicate-id row is carried from the round-11/12 capture (N9):" → "…measured — not in this repo), … quoted from run output (2026-11-07, rev `fbc19cb`); the duplicate-id row is carried from an earlier capture (N9):" — "this round" markers and round-11/12 draft reference deleted; capture date/rev and N9 kept.
+"`boardctl` is an external binary (`~/.local/bin/boardctl`, measured this round — not in this repo), so these strings carry no in-repo `file:line`; the `validate` and `drift` rows are quoted from run output re-captured this round (2026-11-07, rev `fbc19cb`); the duplicate-id row is carried from the round-11/12 capture (N9):" → "…measured — not in this repo), … quoted from run output (2026-11-07, rev `fbc19cb`); the duplicate-id row is carried from an earlier capture (N9):" — "this round" markers and round-11/12 draft reference deleted; capture date/rev and N9 kept.
 
 ## M4-board.md:178
 "…this is an UNKNOWN observation, not proof of staleness (sol B09). Re-run the probe …" → "…(B09)." — agent name dropped, B09 kept.

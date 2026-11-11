@@ -5,11 +5,11 @@
 | Field | Value |
 |---|---|
 | Module name | BOARD |
-| Path | `/home/kara/code-factory/.coding-hermes/board/tasks.jsonl` + `events.jsonl`; tools `/home/kara/code-factory/scripts/boardctl`, `board_lock.py`, `board_drift.py` |
+| Path | `~/code-factory/.coding-hermes/board/tasks.jsonl` + `events.jsonl`; tools `~/code-factory/scripts/boardctl`, `board_lock.py`, `board_drift.py` |
 | Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; `scripts/board_read.py` was added and `handbook_spine.py` re-lined in `08a2c8a..fbc19cb`; the board store advanced 519→520 events via an uncommitted CF-150 transition) |
 | Language / runtime | bash (boardctl wrapper) + Python 3.14.9 (measured) |
 | Owner lane | code-factory (control host) |
-| Status | **VERIFIED (store)** — 357 rows / **520** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT (working copy)** — `board_drift` `RESULT: DRIFT (4 failed)`, 1 divergent id (CF-150: workdir `in_progress` vs published `pending`), HEAD == origin/main == `fbc19cb` — the divergence is an uncommitted working-copy transition (event 520, actor `foreman`, 2026-11-07T06:09:41), not a committed divergence, and `board_read.py` resolves it to `origin/main` by design. The `boardctl` verb surface is the external executable's (`/home/kara/.local/bin/boardctl`), not this repo's |
+| Status | **VERIFIED (store)** — 357 rows / **520** events / 0 fixtures, `boardctl validate` `RESULT: OK (7 warning(s))`; **DRIFT (working copy)** — `board_drift` `RESULT: DRIFT (4 failed)`, 1 divergent id (CF-150: workdir `in_progress` vs published `pending`), HEAD == origin/main == `fbc19cb` — the divergence is an uncommitted working-copy transition (event 520, actor `foreman`, 2026-11-07T06:09:41), not a committed divergence, and `board_read.py` resolves it to `origin/main` by design. The `boardctl` verb surface is the external executable's (`~/.local/bin/boardctl`), not this repo's |
 
 ## 2. Purpose, authority and position
 
@@ -82,7 +82,7 @@ file is a stale artifact, not a barrier — proceed and file a row to have it re
 
 | Dependency | Version constraint | Where | How absence is detected |
 |---|---|---|---|
-| external `boardctl` executable | version reports `dev` | `PATH` (`/home/kara/.local/bin/boardctl`, measured) | `scripts/boardctl` exits 127 with "boardctl executable not found on PATH" |
+| external `boardctl` executable | version reports `dev` | `PATH` (`~/.local/bin/boardctl`, measured) | `scripts/boardctl` exits 127 with "boardctl executable not found on PATH" |
 | bash + python3 | any / 3.x | control host | command-not-found |
 | jq (append path) | any | control host | jsonl row append via `jq -c . row.json >> file` |
 
@@ -135,7 +135,7 @@ ch:trace row=CF-048 spec=docs/handbook/chapters/M4-board.md#board-integrity wave
 |---|---|---|---|---|
 | store census | `jq -r '.id' .coding-hermes/board/tasks.jsonl | wc -l` | 357 rows | 2026-11-07 | PASS (357) |
 | events count | `wc -l .coding-hermes/board/events.jsonl` | 520 lines | 2026-11-07 | PASS (520) |
-| drift | `python3 scripts/board_drift.py check --workdir /home/kara/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-07 | **DRIFT (4 failed)** — byte parity `tasks.jsonl`/`events.jsonl` **differ** (workdir sha256 `57203cb9…`/`f3d8802e…` vs published `5aa15431…`/`783d556c…`); 357 vs 357 rows, **1 divergent id: CF-150** (workdir `in_progress` vs published `pending`); HEAD=origin/main=`fbc19cb` |
+| drift | `python3 scripts/board_drift.py check --workdir ~/code-factory --ref origin/main` | byte parity, RESULT OK | 2026-11-07 | **DRIFT (4 failed)** — byte parity `tasks.jsonl`/`events.jsonl` **differ** (workdir sha256 `57203cb9…`/`f3d8802e…` vs published `5aa15431…`/`783d556c…`); 357 vs 357 rows, **1 divergent id: CF-150** (workdir `in_progress` vs published `pending`); HEAD=origin/main=`fbc19cb` |
 | semantic validate | `scripts/boardctl validate` | RESULT OK with named warnings | 2026-11-07 | **PASS** — `357 tasks, 520 events, 0 fixtures`, `key uniformity 357/357 (0 drift)`, `RESULT: OK (7 warning(s))` |
 | lock adjudication | `scripts/board_lock.py` on an absent / unheld / unreadable / held lock | ABSENT / HELD / RESIDUE / ERROR named (`board_lock.py:166-185`) | 2026-11-07 | **PASS** — 0-byte lock → `RESIDUE consumers=0 commits_after_mtime=unknown` exit 0; chmod-000 lock → `ERROR lock=… probe=open-failed …` exit 3 (CF-259); absent path → `ABSENT` exit 0; HELD arm is `tests/selftest.sh` §33 |
 | duplicate id refusal | `boardctl create --id CF-357 --title x` | refused | 2026-11-06 | **PASS** — `task id "CF-357" already exists … create aborted` |
@@ -168,7 +168,7 @@ derived by hand.
 
 ## 9. Log lines (verbatim)
 
-`boardctl` is an external binary (`/home/kara/.local/bin/boardctl`, measured — not in
+`boardctl` is an external binary (`~/.local/bin/boardctl`, measured — not in
 this repo), so these strings carry no in-repo `file:line`; the `validate` and `drift` rows are
 quoted from run output (2026-11-07, rev `fbc19cb`); the duplicate-id row is
 carried from an earlier capture (N9):

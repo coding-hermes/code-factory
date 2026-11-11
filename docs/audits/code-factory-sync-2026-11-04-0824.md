@@ -2,7 +2,7 @@
 
 Board/repo consistency pass for code-factory. The registered checkout passed the identity gate but
 was **8 commits behind the published tip and carried one sibling lane's unpublished commit**, so this
-pass ran from a scratch clone of `origin/main` and left `/home/kara/code-factory` untouched.
+pass ran from a scratch clone of `origin/main` and left `~/code-factory` untouched.
 
 Lane: sync (board/repo drift reconciliation). Namespace: `code-factory`.
 
@@ -10,8 +10,8 @@ Lane: sync (board/repo drift reconciliation). Namespace: `code-factory`.
 
 | Check | Measured |
 |---|---|
-| `realpath /home/kara/code-factory` vs `git -C … rev-parse --show-toplevel` | equal (`/home/kara/code-factory`) |
-| registered `workdir` / `repo_url` (scheduler project row `code-factory-sync`) | `/home/kara/code-factory` / `local:/home/kara/code-factory` — matches the locator |
+| `realpath ~/code-factory` vs `git -C … rev-parse --show-toplevel` | equal (`~/code-factory`) |
+| registered `workdir` / `repo_url` (scheduler project row `code-factory-sync`) | `~/code-factory` / `local:~/code-factory` — matches the locator |
 | `origin` / `worker` | both `git@github.com:coding-hermes/code-factory.git` |
 | branch | `main`, attached |
 | `HEAD` / published tip (`git ls-remote`-equivalent after `fetch`) | `8f03159` / `a5be9c9` — `git rev-list --left-right --count origin/main...HEAD` = `8 1` |
@@ -23,7 +23,7 @@ Lane: sync (board/repo drift reconciliation). Namespace: `code-factory`.
 | untracked residue | 56 paths, every one under `.gitreins/history/2026-11-03/` or `/2026-11-04/` (unpublished judge bundles). Not read, not cleaned, not adopted |
 | per-tick receipt | `GET /api/memories/key//code-factory/sync/2026-11-04-08-24-10?namespace=code-factory` → `404 NOT_FOUND`: fresh tick, not a resumed one |
 | sibling lane | `code-factory-releng-qa-2026-11-04-08-24-10` shares this batch's `spawned_at`; the writer census, not its `running` row, decided that nothing is writing |
-| transport | `git clone /home/kara/code-factory` into tick scratch, `git remote add gh git@github.com:coding-hermes/code-factory.git`, `git fetch gh main`, `git checkout -B main gh/main` → `a5be9c9`, porcelain 0 |
+| transport | `git clone ~/code-factory` into tick scratch, `git remote add gh git@github.com:coding-hermes/code-factory.git`, `git fetch gh main`, `git checkout -B main gh/main` → `a5be9c9`, porcelain 0 |
 | host load | loadavg 7.36 / 12.82 / 19.53 at the gate run |
 
 ## Deliverable 1 — the board parses and the row count matches the commit
@@ -134,7 +134,7 @@ to `8b81369`'s (`git diff 8b81369 HEAD -- tests/selftest.sh` = 0 lines).
 
 ## Candidate state at close
 
-`/home/kara/code-factory` was **not** fetched into, fast-forwarded, written, or cleaned. It remains
+`~/code-factory` was **not** fetched into, fast-forwarded, written, or cleaned. It remains
 8 behind / 1 ahead of the published tip with the same 56 untracked judge bundles and the same
 0-byte `board/.lock`; the in-flight `8f03159` is still its owner's to publish. Per the sync-lane
 rule, a candidate that is behind **and** carries an unpublished sibling commit is the clone case, not

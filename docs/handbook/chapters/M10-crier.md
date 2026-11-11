@@ -5,9 +5,9 @@
 | Field | Value |
 |---|---|
 | Module name | CRIER |
-| Path | `/home/kara/crier/` (Go) |
+| Path | `~/crier/` (Go) |
 | Revision | `ae9fc57fdd4e9df7aff79c6d5a934d54329add95` (crier repo HEAD; moved from `86c4c469` through 23 commits. Every file M10 cites — `internal/registry/handler.go`, `internal/guard/guard.go`, `internal/guard/policy.go`, `internal/guard/metrics.go`, `config/config.go`, `clients/python/crier_client.py`, `cmd/crier-front/main.go`, `cmd/server/observability.go`, `internal/metrics/metrics.go` — is byte-identical since `86c4c469` (verified `git diff --quiet 86c4c469..HEAD` per file). The post-stamp changes are `internal/buildinfo/buildinfo.go` (DF-CRIER-502), `cmd/server/*_test.go` (the flaky-test files), `internal/harness/opencode/*_test.go`, and board/docs/releng files — none cited) |
-| Language / runtime | Go — `go.mod` declares `go 1.26.10` (a build/toolchain requirement, not a runtime one); host bootstrap `go` = **go1.26.5** (`/home/kara/.local/bin/go` → symlink → `/home/kara/sdk/go1.26.5/bin/go`), `/usr/bin/go` = **go1.26.8** (`/usr/lib/go-1.26/bin/go`; measured: `/usr/bin/go version` → `go1.26.8 linux/amd64`); `GOTOOLCHAIN=auto` auto-fetches 1.26.10 for this repo |
+| Language / runtime | Go — `go.mod` declares `go 1.26.10` (a build/toolchain requirement, not a runtime one); host bootstrap `go` = **go1.26.5** (`~/.local/bin/go` → symlink → `~/sdk/go1.26.5/bin/go`), `/usr/bin/go` = **go1.26.8** (`/usr/lib/go-1.26/bin/go`; measured: `/usr/bin/go version` → `go1.26.8 linux/amd64`); `GOTOOLCHAIN=auto` auto-fetches 1.26.10 for this repo |
 | Owner lane | crier (control plane) |
 | Status | **UNVERIFIED** — `internal/registry/handler.go` (deliver/retrieve/ack surfaces + the full 3-site slog surface), `internal/guard/guard.go` (pipeline, oversize branch, `errorResult`), `internal/guard/policy.go` (`ResolvePolicy`), `internal/guard/metrics.go`, `config/config.go` (controls + guard bounds + metrics default), `clients/python/crier_client.py`, `cmd/crier-front/main.go` read; the full 1895-line handler body still not read line-by-line (its slog surface *is* complete — see §9) |
 

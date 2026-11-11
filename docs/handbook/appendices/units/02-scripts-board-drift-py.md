@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/board_drift.py` — 209 lines [scripts/board_drift.py:1] |
+| Path | `~/code-factory/scripts/board_drift.py` — 209 lines [scripts/board_drift.py:1] |
 | Repository | `code-factory` |
 | Revision | `dad2749` (2026-11-05) — the tree every locator below resolves against and every measured row in §3 was taken in |
 | Status | **VERIFIED — 169 locator citations (91 distinct file:line pairs), all resolving, on every claim below; cites fact: FACT-09 and fact: FACT-10; 29 state arms measured on 2026-11-05 including the whole exit ladder and every fail-open direction; six defects in §8** |

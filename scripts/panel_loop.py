@@ -16,6 +16,7 @@ State lives in docs/handbook/_panel/. Every round writes:
 The loop stops on the first of: unanimous PASS, no new defect class for two
 consecutive rounds, or the round cap. It never claims success it did not observe.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -27,17 +28,24 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path(os.environ.get("PANEL_ROOT", "/home/kara/code-factory"))
+ROOT = Path(os.environ.get("PANEL_ROOT", "~/code-factory"))
 HB = ROOT / "docs" / "handbook"
 PANEL = HB / "_panel"
 CH = HB / "chapters"
-FANOUT = Path("/home/kara/.hermes/cache/scratch/cf-quorum-20261104/quorum_fanout_staggered.sh")
-MANIFEST = Path("/home/kara/.hermes/cache/scratch/cf-quorum-20261104/seats.manifest")
+FANOUT = Path("~/.hermes/cache/scratch/cf-quorum-20261104/quorum_fanout_staggered.sh")
+MANIFEST = Path("~/.hermes/cache/scratch/cf-quorum-20261104/seats.manifest")
 
 WRITER_MODEL = os.environ.get("PANEL_WRITER_MODEL", "deepseek-v4-pro")
 WRITER_PROVIDER = os.environ.get("PANEL_WRITER_PROVIDER", "deepseek")
 
-KINDS = ("FALSE CLAIM", "OMISSION", "CONTRADICTION", "UNBUILDABLE", "UNVERIFIED", "PADDING")
+KINDS = (
+    "FALSE CLAIM",
+    "OMISSION",
+    "CONTRADICTION",
+    "UNBUILDABLE",
+    "UNVERIFIED",
+    "PADDING",
+)
 
 
 def now() -> str:
@@ -52,7 +60,13 @@ def load_state() -> dict:
     p = state_path()
     if p.exists():
         return json.loads(p.read_text())
-    return {"round": 0, "status": "idle", "history": [], "classes_seen": [], "clean_streak": 0}
+    return {
+        "round": 0,
+        "status": "idle",
+        "history": [],
+        "classes_seen": [],
+        "clean_streak": 0,
+    }
 
 
 def save_state(st: dict) -> None:
@@ -66,7 +80,11 @@ def unfinished_chapters() -> list[str]:
     ids = sorted(set(re.findall(r"\bIII\.\d+(?:\.\d+)?\b", outline)))
     missing = []
     for cid in ids:
-        hits = list((HB / "chapters").glob(f"{cid}*.md")) if (HB / "chapters").exists() else []
+        hits = (
+            list((HB / "chapters").glob(f"{cid}*.md"))
+            if (HB / "chapters").exists()
+            else []
+        )
         if not hits:
             missing.append(cid)
     return missing
@@ -79,11 +97,7 @@ def writer_prompt(rnd: int, chapters: list[str] | None) -> str:
         if corr.exists()
         else "Write the chapters named below against docs/handbook/OUTLINE.md. "
     )
-    scope = (
-        "This round covers ONLY: " + ", ".join(chapters) + ". "
-        if chapters
-        else ""
-    )
+    scope = "This round covers ONLY: " + ", ".join(chapters) + ". " if chapters else ""
     return (
         "You are the writer for the code-factory NASA-style specification handbook. "
         "Read docs/handbook/PANEL-LOOP.md and docs/handbook/OUTLINE.md first, then "
@@ -101,23 +115,37 @@ def writer_prompt(rnd: int, chapters: list[str] | None) -> str:
         "the same CT id or nothing can verify they agree. "
         "Before you finish, run `python3 scripts/handbook_spine.py` and drive its finding "
         "count to zero; paste the summary line into your manifest. "
-
         "End by printing a manifest: chapters written, chapters still skeleton, RED field "
         "count per chapter, and every command you ran with its exit status. "
         "Print WRITER ROUND COMPLETE when done. Round %d." % rnd
     )
 
 
-def run_writer(rnd: int, chapters: list[str] | None, timeout_s: int,
-               tag: str = "", prompt: str | None = None) -> tuple[bool, Path]:
+def run_writer(
+    rnd: int,
+    chapters: list[str] | None,
+    timeout_s: int,
+    tag: str = "",
+    prompt: str | None = None,
+) -> tuple[bool, Path]:
     outdir = PANEL / f"round-{rnd}"
     outdir.mkdir(parents=True, exist_ok=True)
     log = outdir / (f"writer-{tag}.txt" if tag else "writer.txt")
     cmd = [
-        "timeout", str(timeout_s),
-        "hermes", "chat", "-q", prompt or writer_prompt(rnd, chapters),
-        "-m", WRITER_MODEL, "--provider", WRITER_PROVIDER,
-        "-Q", "--ignore-rules", "--max-turns", "200",
+        "timeout",
+        str(timeout_s),
+        "hermes",
+        "chat",
+        "-q",
+        prompt or writer_prompt(rnd, chapters),
+        "-m",
+        WRITER_MODEL,
+        "--provider",
+        WRITER_PROVIDER,
+        "-Q",
+        "--ignore-rules",
+        "--max-turns",
+        "200",
     ]
     with log.open("w") as fh:
         # The call's status is never read — completion is judged from the log text below — so it is
@@ -127,7 +155,9 @@ def run_writer(rnd: int, chapters: list[str] | None, timeout_s: int,
     return ok, log
 
 
-def run_writers_parallel(rnd: int, groups: list[list[str]], timeout_s: int) -> tuple[bool, list[Path]]:
+def run_writers_parallel(
+    rnd: int, groups: list[list[str]], timeout_s: int
+) -> tuple[bool, list[Path]]:
     """Run one writer per section group, concurrently.
 
     Serial single-section edits lose: a fix in M9 invalidates what M2 says about the
@@ -151,14 +181,32 @@ def run_writers_parallel(rnd: int, groups: list[list[str]], timeout_s: int) -> t
             "other chapter must satisfy, and write yours to match the canonical contract id."
         )
         cmd = [
-            "timeout", str(timeout_s),
-            "hermes", "chat", "-q", prompt,
-            "-m", WRITER_MODEL, "--provider", WRITER_PROVIDER,
-            "-Q", "--ignore-rules", "--max-turns", "200",
+            "timeout",
+            str(timeout_s),
+            "hermes",
+            "chat",
+            "-q",
+            prompt,
+            "-m",
+            WRITER_MODEL,
+            "--provider",
+            WRITER_PROVIDER,
+            "-Q",
+            "--ignore-rules",
+            "--max-turns",
+            "200",
         ]
         fh = log.open("w")
-        procs.append((tag, log, fh, subprocess.Popen(
-            cmd, stdout=fh, stderr=subprocess.STDOUT, cwd=str(ROOT))))
+        procs.append(
+            (
+                tag,
+                log,
+                fh,
+                subprocess.Popen(
+                    cmd, stdout=fh, stderr=subprocess.STDOUT, cwd=str(ROOT)
+                ),
+            )
+        )
     results = []
     for tag, log, fh, p in procs:
         p.wait()
@@ -172,7 +220,9 @@ def judge_brief(rnd: int, chapters: list[str] | None) -> Path:
     outdir = PANEL / f"round-{rnd}"
     outdir.mkdir(parents=True, exist_ok=True)
     brief = outdir / "brief.md"
-    scope = ("Judge only these chapters: " + ", ".join(chapters) + ". ") if chapters else ""
+    scope = (
+        ("Judge only these chapters: " + ", ".join(chapters) + ". ") if chapters else ""
+    )
     brief.write_text(f"""# PANEL BRIEF — handbook round {rnd}
 
 You are a judge. Judge the DOCUMENT AGAINST THE CODE. Never against the outline's own
@@ -183,9 +233,9 @@ Read:
 - `docs/handbook/OUTLINE.md` — the structure the document must satisfy
 - `docs/handbook/chapters/` — the chapters written so far
 - `docs/MASTER-DOC-SCHEMA.md` — the field contract per chapter
-- the code the chapters describe: `/home/kara/code-factory`,
-  `/home/kara/coding-hermes-scheduler/coding-herms-scheduler`, `/home/kara/crier`,
-  `/home/kara/crier-fleet`, `/home/kara/.hermes/scripts/cf-inference-proxy.py`
+- the code the chapters describe: `~/code-factory`,
+  `~/coding-hermes-scheduler/coding-herms-scheduler`, `~/crier`,
+  `~/crier-fleet`, `~/.hermes/scripts/cf-inference-proxy.py`
 
 Check every chapter against the four rules that make a claim admissible:
 
@@ -229,7 +279,15 @@ def run_panel(rnd: int, brief: Path, timeout_s: int) -> dict[str, Path]:
     outdir = PANEL / f"round-{rnd}" / "seats"
     outdir.mkdir(parents=True, exist_ok=True)
     subprocess.call(
-        ["bash", str(FANOUT), str(brief), str(outdir), str(MANIFEST), str(timeout_s), "90"],
+        [
+            "bash",
+            str(FANOUT),
+            str(brief),
+            str(outdir),
+            str(MANIFEST),
+            str(timeout_s),
+            "90",
+        ],
         cwd="/home/kara",
     )
     return {p.stem.replace("seat-", ""): p for p in sorted(outdir.glob("seat-*.txt"))}
@@ -245,8 +303,11 @@ def rerun_missing(rnd: int, brief: Path, timeout_s: int, missing: list[str]) -> 
     if not missing:
         return
     lines = [
-        ln for ln in MANIFEST.read_text().splitlines()
-        if ln.strip() and not ln.strip().startswith("#") and ln.split("|")[0].strip() in missing
+        ln
+        for ln in MANIFEST.read_text().splitlines()
+        if ln.strip()
+        and not ln.strip().startswith("#")
+        and ln.split("|")[0].strip() in missing
     ]
     if not lines:
         return
@@ -255,8 +316,15 @@ def rerun_missing(rnd: int, brief: Path, timeout_s: int, missing: list[str]) -> 
     sub.write_text("\n".join(lines) + "\n")
     print(f"  re-running missing seats: {', '.join(missing)}", flush=True)
     subprocess.call(
-        ["bash", str(FANOUT), str(brief), str(PANEL / f"round-{rnd}" / "seats"), str(sub),
-         str(timeout_s), "90"],
+        [
+            "bash",
+            str(FANOUT),
+            str(brief),
+            str(PANEL / f"round-{rnd}" / "seats"),
+            str(sub),
+            str(timeout_s),
+            "90",
+        ],
         cwd="/home/kara",
     )
 
@@ -267,14 +335,20 @@ def parse_seat(p: Path) -> dict:
     m = re.search(r"^VERDICT:\s*(.+)$", text, re.M)
     if m:
         v = m.group(1).strip().upper()
-        verdict = "PASS" if v.startswith("PASS") else ("FAIL" if v.startswith("FAIL") else v[:20])
+        verdict = (
+            "PASS"
+            if v.startswith("PASS")
+            else ("FAIL" if v.startswith("FAIL") else v[:20])
+        )
     blocking = 0
     m = re.search(r"^BLOCKING:\s*(\d+)", text, re.M)
     if m:
         blocking = int(m.group(1))
     else:
         # fall back to counting findings lines with a claimed kind
-        blocking = sum(1 for line in text.splitlines() if any(k in line.upper() for k in KINDS))
+        blocking = sum(
+            1 for line in text.splitlines() if any(k in line.upper() for k in KINDS)
+        )
     classes = []
     m = re.search(r"^DEFECT CLASSES:(.*?)(?=^[A-Z][A-Z ]+:|\Z)", text, re.S | re.M)
     if m:
@@ -326,10 +400,17 @@ def main() -> int:
     ap.add_argument("--writer-timeout", type=int, default=4200)
     ap.add_argument("--judge-timeout", type=int, default=2700)
     ap.add_argument("--chapters", default="")
-    ap.add_argument("--groups", default="",
-                    help="explicit section groups, e.g. 'M0,M1;M4,M5' — overrides --parallel")
-    ap.add_argument("--parallel", type=int, default=1,
-                    help="writers per round, one per section group (0/1 = single writer)")
+    ap.add_argument(
+        "--groups",
+        default="",
+        help="explicit section groups, e.g. 'M0,M1;M4,M5' — overrides --parallel",
+    )
+    ap.add_argument(
+        "--parallel",
+        type=int,
+        default=1,
+        help="writers per round, one per section group (0/1 = single writer)",
+    )
     args = ap.parse_args()
 
     chapters = [c.strip() for c in args.chapters.split(",") if c.strip()] or None
@@ -343,8 +424,10 @@ def main() -> int:
     t0 = time.time()
     PANEL.mkdir(parents=True, exist_ok=True)
 
-    print(f"panel loop: start round {rnd}, cap {rounds if rounds < 10**8 else 'none'} rounds / "
-          f"{budget if budget < 10**8 else 'none'}s")
+    print(
+        f"panel loop: start round {rnd}, cap {rounds if rounds < 10**8 else 'none'} rounds / "
+        f"{budget if budget < 10**8 else 'none'}s"
+    )
     print(f"writer: {WRITER_MODEL} @ {WRITER_PROVIDER}")
     st["status"] = "running"
 
@@ -360,22 +443,34 @@ def main() -> int:
                 print("no chapters to write — aborting round", flush=True)
                 break
             if args.groups:
-                groups = [[c.strip() for c in g.split(",") if c.strip()]
-                          for g in args.groups.split(";") if g.strip()]
+                groups = [
+                    [c.strip() for c in g.split(",") if c.strip()]
+                    for g in args.groups.split(";")
+                    if g.strip()
+                ]
             else:
-                groups = [all_ch[i::args.parallel] for i in range(args.parallel)]
-            print(f"parallel writers: {len(groups)} groups — " +
-                  " | ".join(f"s{i+1}={len(g)}({g[0]}..{g[-1]})" for i, g in enumerate(groups)),
-                  flush=True)
+                groups = [all_ch[i :: args.parallel] for i in range(args.parallel)]
+            print(
+                f"parallel writers: {len(groups)} groups — "
+                + " | ".join(
+                    f"s{i + 1}={len(g)}({g[0]}..{g[-1]})" for i, g in enumerate(groups)
+                ),
+                flush=True,
+            )
             ok, logs = run_writers_parallel(rnd, groups, args.writer_timeout)
             print(f"writers complete_all={ok} logs={len(logs)}", flush=True)
         else:
             ok, log = run_writer(rnd, chapters, args.writer_timeout)
             print(f"writer complete={ok} log={log}", flush=True)
         if not ok:
-            st["history"].append({"round": rnd, "status": "writer-incomplete", "at": now()})
+            st["history"].append(
+                {"round": rnd, "status": "writer-incomplete", "at": now()}
+            )
             save_state(st)
-            print("a writer did not print ROUND COMPLETE — round does not count", flush=True)
+            print(
+                "a writer did not print ROUND COMPLETE — round does not count",
+                flush=True,
+            )
             continue
 
         # Reconcile: concurrent writers cannot see each other's edits this round, so the
@@ -383,12 +478,18 @@ def main() -> int:
         if args.parallel > 1:
             spine = subprocess.run(
                 [sys.executable, str(ROOT / "scripts" / "handbook_spine.py")],
-                capture_output=True, text=True, cwd=str(ROOT))
+                capture_output=True,
+                text=True,
+                cwd=str(ROOT),
+            )
             summary = (spine.stdout or "").splitlines()
             head = " / ".join(summary[:2])
             print(f"spine after parallel write: {head}", flush=True)
             if spine.returncode != 0:
-                print("=== RECONCILE PASS — spine findings between concurrent sections ===", flush=True)
+                print(
+                    "=== RECONCILE PASS — spine findings between concurrent sections ===",
+                    flush=True,
+                )
                 rec = (
                     "You are the reconciler for the code-factory handbook. Concurrent writers "
                     "just edited different chapter groups in docs/handbook/chapters/ and could "
@@ -401,42 +502,84 @@ def main() -> int:
                     "RECONCILE COMPLETE."
                 )
                 subprocess.call(
-                    ["timeout", str(args.writer_timeout), "hermes", "chat", "-q", rec,
-                     "-m", WRITER_MODEL, "--provider", WRITER_PROVIDER,
-                     "-Q", "--ignore-rules", "--max-turns", "120"],
+                    [
+                        "timeout",
+                        str(args.writer_timeout),
+                        "hermes",
+                        "chat",
+                        "-q",
+                        rec,
+                        "-m",
+                        WRITER_MODEL,
+                        "--provider",
+                        WRITER_PROVIDER,
+                        "-Q",
+                        "--ignore-rules",
+                        "--max-turns",
+                        "120",
+                    ],
                     stdout=(PANEL / f"round-{rnd}" / "reconcile.txt").open("w"),
-                    stderr=subprocess.STDOUT, cwd=str(ROOT))
+                    stderr=subprocess.STDOUT,
+                    cwd=str(ROOT),
+                )
                 spine = subprocess.run(
                     [sys.executable, str(ROOT / "scripts" / "handbook_spine.py")],
-                    capture_output=True, text=True, cwd=str(ROOT))
-                print("spine after reconcile: " + " / ".join((spine.stdout or "").splitlines()[:2]),
-                      flush=True)
+                    capture_output=True,
+                    text=True,
+                    cwd=str(ROOT),
+                )
+                print(
+                    "spine after reconcile: "
+                    + " / ".join((spine.stdout or "").splitlines()[:2]),
+                    flush=True,
+                )
 
         print(f"=== ROUND {rnd} — panel ===", flush=True)
         brief = judge_brief(rnd, chapters)
         paths = run_panel(rnd, brief, args.judge_timeout)
         seats = {tag: parse_seat(p) for tag, p in paths.items()}
-        broken = [t for t, s in seats.items() if not s["complete"] or s["verdict"] == "MISSING"]
+        broken = [
+            t
+            for t, s in seats.items()
+            if not s["complete"] or s["verdict"] == "MISSING"
+        ]
         if broken:
             rerun_missing(rnd, brief, args.judge_timeout, broken)
             seats = {tag: parse_seat(p) for tag, p in paths.items()}
         for tag, s in seats.items():
-            print(f"  {tag}: {s['verdict']} blocking={s['blocking']} complete={s['complete']}", flush=True)
+            print(
+                f"  {tag}: {s['verdict']} blocking={s['blocking']} complete={s['complete']}",
+                flush=True,
+            )
 
         corr = merge_corrections(rnd, seats, paths)
         print(f"corrections: {corr}", flush=True)
 
-        real = [s for s in seats.values() if s["complete"] and s["verdict"] != "MISSING"]
-        unanimous = len(real) == len(seats) and all(s["verdict"] == "PASS" for s in real)
-        new_classes = sorted({c for s in seats.values() for c in s["classes"]} - set(st["classes_seen"]))
-        st["classes_seen"] = sorted(set(st["classes_seen"]) | {c for s in seats.values() for c in s["classes"]})
+        real = [
+            s for s in seats.values() if s["complete"] and s["verdict"] != "MISSING"
+        ]
+        unanimous = len(real) == len(seats) and all(
+            s["verdict"] == "PASS" for s in real
+        )
+        new_classes = sorted(
+            {c for s in seats.values() for c in s["classes"]} - set(st["classes_seen"])
+        )
+        st["classes_seen"] = sorted(
+            set(st["classes_seen"]) | {c for s in seats.values() for c in s["classes"]}
+        )
         st["clean_streak"] = 0 if new_classes else st["clean_streak"] + 1
 
-        st["history"].append({
-            "round": rnd, "at": now(), "writer_complete": ok,
-            "seats": seats, "new_classes": new_classes[:20],
-            "clean_streak": st["clean_streak"], "corrections": str(corr),
-        })
+        st["history"].append(
+            {
+                "round": rnd,
+                "at": now(),
+                "writer_complete": ok,
+                "seats": seats,
+                "new_classes": new_classes[:20],
+                "clean_streak": st["clean_streak"],
+                "corrections": str(corr),
+            }
+        )
         save_state(st)
 
         if unanimous:
@@ -449,7 +592,10 @@ def main() -> int:
             save_state(st)
             print(f"STOP: no new defect class for two rounds at round {rnd}")
             return 0
-        print(f"round {rnd} done: {len(new_classes)} new defect classes, streak {st['clean_streak']}", flush=True)
+        print(
+            f"round {rnd} done: {len(new_classes)} new defect classes, streak {st['clean_streak']}",
+            flush=True,
+        )
 
     st["status"] = "cap-reached"
     save_state(st)

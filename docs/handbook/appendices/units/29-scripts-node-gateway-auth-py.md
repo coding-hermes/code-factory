@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/node_gateway_auth.py` |
+| Path | `~/code-factory/scripts/node_gateway_auth.py` |
 | Repository | `code-factory` |
 | Revision | `868e2fc` (the first CF-292 commit) — every locator below is re-pinned to the **post-CF-292 round-2** file, 194 lines; the file's own last-touching commit is the commit that carries this document (self-referential), and its blob is the one measured in §3. The ten original arms were measured 2026-11-05 at `d8c7796` (95 lines) and are kept verbatim; arms 6 and 7 were re-measured 2026-11-08 against the CF-292 file, and the direct-child rule plus the two write/comment arms were added and measured 2026-11-08 against this one |
 | Status | **VERIFIED — measured 2026-11-05 against scratch configs, plus a cross-check against the consumer gate; CF-292 re-measured 2026-11-08; CF-292 round 2 (direct-child rule) measured 2026-11-08, 14 in-process arms** |

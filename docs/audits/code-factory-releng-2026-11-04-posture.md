@@ -7,7 +7,7 @@ Measured 2026-11-04T05:22–05:35 -05:00 from a fresh clone of the public remote
 
 ## Why the clone
 
-The registered checkout `/home/kara/code-factory` passed the root/remote/operation gate
+The registered checkout `~/code-factory` passed the root/remote/operation gate
 (`realpath` == `git rev-parse --show-toplevel`, remote
 `git@github.com:coding-hermes/code-factory.git`, attached `main`, no rebase/merge/cherry-pick
 markers, `gate_violations=0`), and `scripts/board_lock.py` answered `RESIDUE
@@ -91,7 +91,7 @@ and minted no second GitReins task for the closed work. It re-measured the recei
 **newer** published tip and added the legs the first pass did not run.
 
 Re-verified at published `main` = `d93d98b` (`board: event 354 — QA re-verification of CF-195 at the
-published tip`), measured from a throwaway clone; the registered checkout `/home/kara/code-factory`
+published tip`), measured from a throwaway clone; the registered checkout `~/code-factory`
 was again left untouched (it is behind the published tip and still carries untracked
 `.gitreins/history/**` bundles; a `gitreins guard` process from a sibling lane was live on the host
 during this pass).
@@ -213,7 +213,7 @@ decision work naming target, version and baseline SHA; inventing a version from 
 release claim with no contract behind it.
 
 Negatives scoped to this pass: no board row created, no worker dispatched, no release tag pushed, no
-write to the registered checkout `/home/kara/code-factory` (left with its untracked `.gitreins/history`
+write to the registered checkout `~/code-factory` (left with its untracked `.gitreins/history`
 bundles and 25-commit lag, untouched by this lane).
 
 ### Correction — tier-2 judge findings against this section's first draft

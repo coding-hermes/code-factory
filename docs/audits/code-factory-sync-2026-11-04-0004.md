@@ -8,7 +8,7 @@ independently, found no regression of that work, and fixed the one drift it left
 
 | Check | Measured |
 |---|---|
-| `realpath /home/kara/code-factory` vs `git rev-parse --show-toplevel` | equal (`/home/kara/code-factory`) |
+| `realpath ~/code-factory` vs `git rev-parse --show-toplevel` | equal (`~/code-factory`) |
 | branch / markers | `main`, attached; no `MERGE_HEAD`/`REBASE_HEAD`/`CHERRY_PICK_HEAD`/`REVERT_HEAD`/`BISECT_LOG`/`rebase-merge`/`rebase-apply` |
 | `origin` | `git@github.com:coding-hermes/code-factory.git` |
 | `HEAD` vs `origin/main` at start | `21d3265` = `21d3265`, ahead 0 / behind 0 |

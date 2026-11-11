@@ -251,7 +251,7 @@ A lane's `workdir` is a **target**, not a local directory string. Remote executi
 
 | Form | Kind | Example |
 |---|---|---|
-| absolute / `~` path | local | `/home/agent/code-factory` |
+| absolute / `~` path | local | `~/code-factory` |
 | `local:` / `file://` | local | `local:/srv/cf` |
 | `user@host:path` | remote (ssh/scp style) | `builder@node-01:/srv/code-factory` |
 | `ssh://user@host[:port]/path` | remote | `ssh://builder@node-01:2222/srv/cf` |

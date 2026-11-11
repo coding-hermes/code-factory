@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Module name | SAFETY |
-| Path | `/home/kara/code-factory/scripts/` — `reclaim_disk.py`, `check_scan_scope.py` |
+| Path | `~/code-factory/scripts/` — `reclaim_disk.py`, `check_scan_scope.py` |
 | Revision | `0e01a6faa9947594ddfe791681de737fe9ec0872` (code-factory HEAD measured; **CF-307 rewrote `check_scan_scope.py` in this chapter's commit — S2 is 196 lines now**; `reclaim_disk.py` is **no longer byte-identical since `47d68b4`** — CF-290 rewrote it to 224 lines with a cache TTL and a bounded containment walk; `project-node.sh` now rehearses the reap at `:222` and reaps at `:230`) |
 | Language / runtime | Python 3.14.9 + bash 5.3.9 (measured) |
 | Owner lane | code-factory (control host) |

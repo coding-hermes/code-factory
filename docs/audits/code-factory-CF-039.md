@@ -15,7 +15,7 @@ The subsequent `ls-remote --exit-code` accepts exactly the fixture URL and the `
 
 ## Exact verification command and reproducer
 
-Run from the repository root. The verification helper was written outside the repository at `/home/kara/.hermes/cache/scratch/cf039-verification.py` with the following contents. Save this Python block to that path (or another scratch path) to reproduce it:
+Run from the repository root. The verification helper was written outside the repository at `~/.hermes/cache/scratch/cf039-verification.py` with the following contents. Save this Python block to that path (or another scratch path) to reproduce it:
 
 ```python
 import os
@@ -95,7 +95,7 @@ print("exit=0", flush=True)
 Executed command:
 
 ```bash
-TMPDIR=/home/kara/.hermes/cache/scratch python3 /home/kara/.hermes/cache/scratch/cf039-verification.py > /home/kara/.hermes/cache/scratch/cf039-verification.log 2>&1
+TMPDIR=~/.hermes/cache/scratch python3 ~/.hermes/cache/scratch/cf039-verification.py > ~/.hermes/cache/scratch/cf039-verification.log 2>&1
 ```
 
 Helper exit: 0. Exact captured output follows. The temporary path in the unrelated digest-mismatch check is preserved literally; future runs will allocate a different directory.
@@ -128,7 +128,7 @@ $ bash tests/selftest.sh
   PASS  resolved main clone failure names the ref without missing-ref or private-repo hints
 5. fetch_verified refuses a wrong digest
   PASS  correct digest accepted
-digest mismatch for file:///home/kara/.hermes/cache/scratch/tmp.Xx9Spsuebg/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03
+digest mismatch for file://~/.hermes/cache/scratch/tmp.Xx9Spsuebg/src: want 0000000000000000000000000000000000000000000000000000000000000000 got 5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03
   PASS  wrong digest refused
 6. no literal credential assignments
   PASS  none found
@@ -176,7 +176,7 @@ Only the historical copy's two `/tmp/clone.log` path references were relocated t
 
 ## Commit gate limitation
 
-The normal commit attempt (`git commit -F /home/kara/.hermes/cache/scratch/cf039-commit-20261103.txt`) exited 1 and left HEAD at the baseline. Its hook reported (trailing spaces omitted):
+The normal commit attempt (`git commit -F ~/.hermes/cache/scratch/cf039-commit-20261103.txt`) exited 1 and left HEAD at the baseline. Its hook reported (trailing spaces omitted):
 
 ```text
 ⚠ DEGRADED PASS: lint=no staged files — these gates did not run, so this run is not
@@ -187,7 +187,7 @@ Tier 1: DEGRADED PASS (skips: lint=no staged files)  (test mode: full)
   ✓ secrets — clean (gitleaks + builtin cross-check); scanners: nice=nice -n 10
   ~ lint — skipped (no staged files)
   ✓ tests (full)
-  guard log: /home/kara/.hermes/cache/scratch/cf039-20261103-hyBIzY/merge/.gitreins/logs/guard-20261103T093457.430357Z.log
+  guard log: ~/.hermes/cache/scratch/cf039-20261103-hyBIzY/merge/.gitreins/logs/guard-20261103T093457.430357Z.log
 ```
 
 Both permitted paths were staged, but this guard does not select the shell/Markdown change for lint. This is the existing CF-031 skip-refusal limitation, not a passed lint gate. The implementation commit uses the established per-command `git -c core.hooksPath=/dev/null commit -F ...` exception, disclosed in its message. No hook or GitReins configuration is changed. Syntax checks, full selftest, focused positive/negative controls, audit-to-transcript equality, and diff checks are separate verified evidence; no foreman judge or lifecycle completion is claimed.

@@ -4,10 +4,10 @@
 A lane's `workdir` is not always a local directory. It can be a remote path
 addressed the way people actually address remote paths:
 
-    /home/kara/code-factory                  local absolute path
+    ~/code-factory                  local absolute path
     ~/work/code-factory                      local, home-relative
-    local:/home/kara/code-factory            local, explicitly tagged
-    builder@node-01:/home/agent/code-factory scp/rsync style (user, host, path)
+    local:~/code-factory            local, explicitly tagged
+    builder@node-01:builder@node-01:/srv/code-factory scp/rsync style (user, host, path)
     ssh://builder@node-01:2222/srv/cf       URL style with port
     sftp://builder@node-01/srv/cf           sftp URL
     ftp://deploy@mirror.example/pub/cf      ftp URL

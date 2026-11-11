@@ -1039,13 +1039,13 @@ never matches an unchanneled message.
 | `DISPATCH_TASK_S` | `:48` | `"240"` (a string) | positive int at use (`task_seconds`, `:196`) | fallback task duration — a non-numeric env value raises `ValueError` at use (`int(TASK_S)` at `:196`), not at admission | M11 §5 |
 | `DISPATCH_MARGIN_S` | `:52` | 60 | positive int | reserve before the caller's deadline — see F11-4: the reserve is intended, not guaranteed (`task_seconds(10)` and `task_seconds(60)` both return 30) | M11 §5 |
 | `DISPATCH_TASK_CAP_S` | `:53` | 7200 | positive int | ceiling on the envelope wall — a larger envelope wall is clamped | M11 §5 |
-| `BUNKER_BIN` | `:60` | `/home/kara/.local/bin/bunker` | absolute path | which bunker binary runs — PATH order would otherwise pick a wrong binary | M11 §5 |
+| `BUNKER_BIN` | `:60` | `~/.local/bin/bunker` | absolute path | which bunker binary runs — PATH order would otherwise pick a wrong binary | M11 §5 |
 | `CF_DURABLE_JOB` | `:336` | `"1"` | `"0"` or non-`"0"` | execution mode switch — `"0"` selects the synchronous `hermes chat -q` path (`:334-358`), bypassing the detached start/poll job model (B23); the synchronous path still participates in the outer replay ledger; the crash-before-ledger-write gap (F11-3) applies to both modes | M11 §5 |
 | `DISPATCH_LOG` / `DISPATCH_PIDFILE` | `:41-42` | `$FLEET/logs/dispatcher.log` / `$FLEET/dispatcher.pid` | a path | log/PID location — a wrong path loses the journal/lock | M11 §5 |
-| `FLEET_GH_SCOPE` | `:68` | `/home/kara/.hermes/scripts/fleet-gh-scope.py` | a path | scoped-token minter — a wrong path disables scoped tokens (non-fatal) | M11 §5 |
+| `FLEET_GH_SCOPE` | `:68` | `~/.hermes/scripts/fleet-gh-scope.py` | a path | scoped-token minter — a wrong path disables scoped tokens (non-fatal) | M11 §5 |
 | `FLEET_AGENTS` / `FLEET_AGENTS_FILE` | `:104-109` | `fleet_agents.json` | a dict / path | agent registry — empty → "no FLEET_AGENTS configured" | M11 §5 |
 | `CRIER_URL` (read as `BUS`) | `:38` | `http://<bus-host>:8767` | an http(s) endpoint | which bus the dispatcher polls and replies to — a wrong URL polls or replies to the wrong bus | M11 §5 |
-| `TOKEN_FILE` (bearer) | `:39`, a constant | `/home/kara/.hermes/secrets/crier-fleet.token` | a path | the bus bearer identity — a missing file → client construction fails (`client for %s failed`) | M11 §5 |
+| `TOKEN_FILE` (bearer) | `:39`, a constant | `~/.hermes/secrets/crier-fleet.token` | a path | the bus bearer identity — a missing file → client construction fails (`client for %s failed`) | M11 §5 |
 | `KEYS` (signing) | `:40`, a constant | `$FLEET/keys` | a directory | the reply-signing key store — a missing key dir breaks reply signing | M11 §5 |
 
 ## M12 — inference proxy
@@ -1056,10 +1056,10 @@ never matches an unchanneled message.
 | `CF_PROXY_UPSTREAM_MODEL` | `:45` | `""` | a model name or empty | model rewrite — non-empty rewrites the requested model before forwarding (`:166-170`) | M12 §5 |
 | `CF_PROXY_UPSTREAM_KEY_ENV` | `:47` | `API_SERVER_KEY` | an env var name | which credential the proxy reads — a renamed credential must be coordinated with the endpoint; the startup error at `:269` hardcodes `API_SERVER_KEY` in its message even when a different name is configured — the diagnostic lies about which variable it checked (F12-3) | M12 §5 |
 | `CF_PROXY_ALLOWED_MODELS` | `:60-62` | `hermes` | comma list | which models a node may ask for — empty env = deny all, never "allow everything" (`:58-59`) | M12 §5 |
-| `TOKENS_PATH` | `:48` | `/home/kara/.hermes/secrets/cf-node-tokens.json` | a JSON file | the node-token mapping read at request time — a missing file → `FATAL: no token file`, exit 2 (`:265-267`) | M12 §5 |
-| `ENV_PATH` | `:49`, read by `upstream_key` `:75-80` | `/home/kara/.hermes/.env` | an env file | where the upstream key is scanned — a renamed file must match the provisioner | M12 §5 |
-| `USAGE_LOG` | `:50` | `/home/kara/.hermes/logs/cf-inference-usage.jsonl` | a path | usage capture sink — a failing sink raises into the request path (F12-6); both sinks are hardcoded `pathlib.Path` constants, not environment settings (F12-8); an earlier register revision carried two invented filenames — an operator following it would open two files that are never written | M12 §5 |
-| `CAPTURE_LOG` | `:52` | `/home/kara/.hermes/logs/cf-inference-requests.jsonl` | a path | request capture sink — capture loss is silent (`capture_request` swallows every exception); the "last 200 requests only" comment (`:51`) is not implemented — the log appends indefinitely (F12-6) | M12 §5 |
+| `TOKENS_PATH` | `:48` | `~/.hermes/secrets/cf-node-tokens.json` | a JSON file | the node-token mapping read at request time — a missing file → `FATAL: no token file`, exit 2 (`:265-267`) | M12 §5 |
+| `ENV_PATH` | `:49`, read by `upstream_key` `:75-80` | `~/.hermes/.env` | an env file | where the upstream key is scanned — a renamed file must match the provisioner | M12 §5 |
+| `USAGE_LOG` | `:50` | `~/.hermes/logs/cf-inference-usage.jsonl` | a path | usage capture sink — a failing sink raises into the request path (F12-6); both sinks are hardcoded `pathlib.Path` constants, not environment settings (F12-8); an earlier register revision carried two invented filenames — an operator following it would open two files that are never written | M12 §5 |
+| `CAPTURE_LOG` | `:52` | `~/.hermes/logs/cf-inference-requests.jsonl` | a path | request capture sink — capture loss is silent (`capture_request` swallows every exception); the "last 200 requests only" comment (`:51`) is not implemented — the log appends indefinitely (F12-6) | M12 §5 |
 | upstream timeout | `:204`, `:241` | 300 s | seconds | `urlopen` timeout on both stream and buffered legs — a shorter timeout truncates long generations | M12 §5 |
 | `MAX_BODY` | `:54` | 4 MiB | positive int | request body ceiling — a body `> MAX_BODY` → 400 (`:142-143`) | M12 §5 |
 | `LISTEN` | `:53` | `("0.0.0.0", 8775)` | a hardcoded constant, not a setting | proxy listener — no env/flag override; binds 0.0.0.0 so the tailnet can reach it | M12 §5 |

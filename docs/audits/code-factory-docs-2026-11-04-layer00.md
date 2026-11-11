@@ -95,7 +95,7 @@ shipped `curl … || echo 000` path on a closed port (CF-037 owns that double-ze
 quoted as printed and not tidied.
 
 Recovery if re-run: the staged script lives at
-`/home/kara/.hermes/cache/scratch/cf-docs-20261104-0417/arms.sh` on this host only; the two commands
+`~/.hermes/cache/scratch/cf-docs-20261104-0417/arms.sh` on this host only; the two commands
 in the acceptance criteria reproduce it without that file.
 
 ## 4. Claims I could not verify

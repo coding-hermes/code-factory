@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/bunker-provision.sh` [scripts/bunker-provision.sh:1] |
+| Path | `~/code-factory/scripts/bunker-provision.sh` [scripts/bunker-provision.sh:1] |
 | Repository | `code-factory` [scripts/bunker-provision.sh:1] |
 | Revision | `b3ed55c` — last commit touching this file, on `main` @ `55ddb92`; blob sha256 prefix `981f9972ce7c2c47` [scripts/bunker-provision.sh:1] |
 | Status | **VERIFIED — 278 resolving locator references (162 distinct path:line pairs), re-run 2026-11-05, fact: FACT-05** |
@@ -181,10 +181,10 @@ $ cd ~/proj-wt-md-05   # main @ 55ddb92, scripts/bunker-provision.sh blob b3ed55
 $ bash scripts/bunker-provision.sh --config ~/.config/code-factory/code-factory.conf --check \
     --agent cf-node --crier-url http://<crier-host>:8767 --duckbrain-url http://<duckbrain-host>:3000
   PASS  config — code-factory.conf — 13 lines, KEY=VALUE only
-  FAIL  inputs — not readable: GITHUB_TOKEN_FILE(/home/kara/.config/code-factory/code-factory/github.token) DUCKBRAIN_TOKEN_FILE(/home/kara/.config/code-factory/code-factory/duckbrain.token) S3_ENV_FILE(/home/kara/.config/code-factory/code-factory/s3.env)
+  FAIL  inputs — not readable: GITHUB_TOKEN_FILE(~/.config/code-factory/code-factory/github.token) DUCKBRAIN_TOKEN_FILE(~/.config/code-factory/code-factory/duckbrain.token) S3_ENV_FILE(~/.config/code-factory/code-factory/s3.env)
 bunker-provision --check — project=code-factory agent=cf-node server=bunker-las-03
-  ..    resolved repo=/home/kara/code-factory ref=main harness=hermes namespaces=code-factory (primary code-factory) ttl=6h
-  PASS  bunker_cli — /home/kara/.local/bin/bunker
+  ..    resolved repo=~/code-factory ref=main harness=hermes namespaces=code-factory (primary code-factory) ttl=6h
+  PASS  bunker_cli — ~/.local/bin/bunker
   PASS  server — bunker-las-03 reachable
   PASS  agent — cf-node exists (bunker: reading server "bunker-las-03")
   PASS  repo — clone present (2889c52 branch main, 0 dirty)

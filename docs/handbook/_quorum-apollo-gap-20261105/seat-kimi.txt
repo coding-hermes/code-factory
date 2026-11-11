@@ -2,7 +2,7 @@
 │ @@ -0,0 +1,48 @@
 │ +import re, glob
 │ +
-│ +base = '/home/kara/code-factory'
+│ +base = '~/code-factory'
 │ +
 │ +doc = {}
 │ +for f in sorted(glob.glob(base + '/docs/master/*.md')):
@@ -52,7 +52,7 @@
 │ @@ -0,0 +1,57 @@
 │ +import re, glob
 │ +
-│ +base = '/home/kara/code-factory'
+│ +base = '~/code-factory'
 │ +
 │ +doc = {}
 │ +for f in sorted(glob.glob(base + '/docs/master/*.md')):

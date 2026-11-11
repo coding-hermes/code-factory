@@ -6,10 +6,10 @@ Measured at `origin/main` `b1359cc910365964cb9860adbacaeebb7f7f2b36` (board and 
 ## Identity and ownership gate
 
 ```
-$ realpath /home/kara/code-factory
-/home/kara/code-factory
-$ git -C /home/kara/code-factory rev-parse --show-toplevel
-/home/kara/code-factory
+$ realpath ~/code-factory
+~/code-factory
+$ git -C ~/code-factory rev-parse --show-toplevel
+~/code-factory
 $ git rev-parse --abbrev-ref HEAD            -> main
 $ git remote -v                              -> origin git@github.com:coding-hermes/code-factory.git
 $ ls <abs-git-dir> | grep -E '^(rebase-merge|rebase-apply|MERGE_HEAD|CHERRY_PICK_HEAD|REVERT_HEAD|index.lock)$'

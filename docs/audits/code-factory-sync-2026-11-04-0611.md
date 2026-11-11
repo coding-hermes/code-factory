@@ -1,7 +1,7 @@
 # Sync lane evidence — 2026-11-04T06:26Z (tick `code-factory-duckbrain-sync-2026-11-04-06-11-13`)
 
 Board/repo consistency pass for code-factory, run **in the registered checkout**
-`/home/kara/code-factory`: the ownership gate came back clean (attached `main`, no operation
+`~/code-factory`: the ownership gate came back clean (attached `main`, no operation
 markers, zero tracked edits, tip in parity with `origin/main`, board bytes identical to the
 published board), so no clone transport was needed.
 
@@ -11,8 +11,8 @@ Lane: sync (board/repo drift reconciliation). Namespace: `code-factory`.
 
 | Check | Measured |
 |---|---|
-| `realpath /home/kara/code-factory` vs `git -C … rev-parse --show-toplevel` | equal (`/home/kara/code-factory`) |
-| registered `workdir` / `repo_url` (scheduler project row `code-factory-duckbrain`) | `/home/kara/code-factory` / `local:/home/kara/code-factory` — matches the locator |
+| `realpath ~/code-factory` vs `git -C … rev-parse --show-toplevel` | equal (`~/code-factory`) |
+| registered `workdir` / `repo_url` (scheduler project row `code-factory-duckbrain`) | `~/code-factory` / `local:~/code-factory` — matches the locator |
 | `origin` / `worker` | both `git@github.com:coding-hermes/code-factory.git` |
 | branch / operation markers | `main`, attached; no `MERGE_HEAD` / `REBASE_HEAD` / `CHERRY_PICK_HEAD` / `REVERT_HEAD` / `rebase-merge` / `rebase-apply` |
 | `HEAD` / `origin/main` / `git ls-remote` | `1aeb0c7` / `1aeb0c7` / `1aeb0c7fb05dff56c12aaae97f8b39f02e32b441` — parity `0 0` |
@@ -42,7 +42,7 @@ here, and this lane did not mint events for transitions it did not witness.
 
 ## Deliverable 2 — complete-row evidence still binds and still runs
 
-`scripts/board-evidence-census.sh /home/kara/code-factory .coding-hermes/board/tasks.jsonl origin/main`:
+`scripts/board-evidence-census.sh ~/code-factory .coding-hermes/board/tasks.jsonl origin/main`:
 
 ```
 ref=origin/main complete_rows=45 finding_lines=0
@@ -123,7 +123,7 @@ correction applied, the completion-event gap re-measured). No row `status` field
 This file is the pass commit's evidence artifact. It is falsifiable from the published tip:
 
 ```
-bash /home/kara/.hermes/skills/devops/sync-lane-tick-operations/scripts/board-evidence-census.sh \
+bash ~/.hermes/skills/devops/sync-lane-tick-operations/scripts/board-evidence-census.sh \
   <clone-of-origin/main> .coding-hermes/board/tasks.jsonl origin/main   # finding_lines=0
 git cat-file -e origin/main:docs/audits/code-factory-sync-2026-11-04-0611.md
 jq -r 'select(.id=="CF-001" or .id=="CF-002")|[.id,.status]|@tsv' .coding-hermes/board/tasks.jsonl

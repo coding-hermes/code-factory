@@ -3,11 +3,11 @@ VERDICT: ACCEPT WITH CORRECTIONS
 This verdict applies to the file actually present, not the older outline described in the brief.
 
 Reviewed baseline:
-  CF = /home/kara/code-factory, revision bcde98901f9b98df3e05eb731db623b4089e45bf
-  SCH = /home/kara/coding-hermes-scheduler/coding-herms-scheduler, revision dfa9c84fbf0c0de0be5de6259609a13fc6ca8b1b
-  BUS = /home/kara/crier, revision 691f0c78fc75717295abf3bd85aaa9192616aac0
-  FLEET = /home/kara/crier-fleet, revision 283bca91091933177ec521e52f37f1bc987cf7da
-  PROXY = /home/kara/.hermes/scripts/cf-inference-proxy.py
+  CF = ~/code-factory, revision bcde98901f9b98df3e05eb731db623b4089e45bf
+  SCH = ~/coding-hermes-scheduler/coding-herms-scheduler, revision dfa9c84fbf0c0de0be5de6259609a13fc6ca8b1b
+  BUS = ~/crier, revision 691f0c78fc75717295abf3bd85aaa9192616aac0
+  FLEET = ~/crier-fleet, revision 283bca91091933177ec521e52f37f1bc987cf7da
+  PROXY = ~/.hermes/scripts/cf-inference-proxy.py
   PROXY SHA-256 = b12a0ac521c4b5a9cd7e2b76883a7edf2c9e0efd87d9bc3be3d2056d3f39e0b5
 
 The current outline already adds the scheduler, Crier, dispatcher, inference proxy and six additional flows. Those are not new findings from this review. Its banner still says v2; its latest commit describes v4.
@@ -111,7 +111,7 @@ These are responsibility-level coverage gaps, not a demand for one chapter per G
     Correction: M8.S4. Explain what the reconstructed script checks, its target selection and what each verdict proves.
 
 17. Installed service activation and deployment provenance.
-    Location: /home/kara/.config/systemd/user/fleet-dispatcher.service, cf-inference-proxy.service, crier-fleet.service and coding-hermes-scheduler.service; repository deploy directories and external environment-file references.
+    Location: ~/.config/systemd/user/fleet-dispatcher.service, cf-inference-proxy.service, crier-fleet.service and coding-hermes-scheduler.service; repository deploy directories and external environment-file references.
     Missing home: repository source, installed unit, environment file, process command and running artifact are different configuration layers.
     Correction: Part VIII plus M9.S11, M11.S5 and M12.S5.
     Read-only systemd inspection showed the dispatcher, inference proxy, fleet Crier and scheduler units active. The dispatcher’s installed unit uses Restart=on-failure; the proxy uses Restart=always. A handbook must explain these actual activation paths rather than infer deployment from a source file.

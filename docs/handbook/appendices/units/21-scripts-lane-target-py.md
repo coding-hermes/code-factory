@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Path | `/home/kara/code-factory/scripts/lane_target.py` |
+| Path | `~/code-factory/scripts/lane_target.py` |
 | Repository | `code-factory` |
 | Revision | `b9f56e6` |
 | Status | **VERIFIED** |
@@ -170,7 +170,7 @@ and exits 0 while the target is not what the caller meant.
 | Remote target verified without opt-in | `target ssh://… is remote; local verification is impossible. Re-run with --allow-remote …`, exit 3 — `scripts/lane_target.py:303` | a local target, which is verified and can exit 4 | closed | pass `--allow-remote` **knowing** it means structural only |
 | Remote target accepted as proof of existence | `"verified": "remote-structural-only"`, `"ok": true`, exit 0, with the note `reachability and existence are NOT checked here` — `scripts/lane_target.py:316`, `scripts/lane_target.py:318` | `verify --exec-bunker`, which does probe (`scripts/lane_target.py:322`) | open by design | use `--exec-bunker` for bunker targets; nothing equivalent exists for ssh/sftp/ftp |
 | `scan --exec-bunker` used on a `bunker://` row | the row is refused as remote with the exit-3 message above, exit 4 — the flag is parsed at `scripts/lane_target.py:620` and never passed to `verify` at `scripts/lane_target.py:423` | `verify --exec-bunker`, which does pass it (`scripts/lane_target.py:669`) | open in the other direction: the operator believes a probe ran | use `verify --exec-bunker`, or pass `--allow-remote` and read `remote-structural-only` honestly |
-| `plan` resolves the agent home from whatever `bunker` is on `$PATH` | measured: a local-exec stub answered `HOME=/home/kara` from the control host and `plan` emitted `bunker://cf-worker/home/kara/repo`, exit 0; no host identity is read (`scripts/lane_target.py:370`) | an unreachable agent, where `agent_home` stays empty and the module refuses with `cannot resolve the home of agent …` (`scripts/lane_target.py:695`) | **open** | pass `--path` explicitly, or check the planned paths against the agent before writing them |
+| `plan` resolves the agent home from whatever `bunker` is on `$PATH` | measured: a local-exec stub answered `HOME=/home/kara` from the control host and `plan` emitted `bunker://cf-worker~/repo`, exit 0; no host identity is read (`scripts/lane_target.py:370`) | an unreachable agent, where `agent_home` stays empty and the module refuses with `cannot resolve the home of agent …` (`scripts/lane_target.py:695`) | **open** | pass `--path` explicitly, or check the planned paths against the agent before writing them |
 | `plan` reads a line that is not JSON | `json.decoder.JSONDecodeError` traceback, exit 1 — `scripts/lane_target.py:704` | `scan`, which records `invalid JSON` per row and continues (`scripts/lane_target.py:415`) | loud but undocumented: exit 1 is not one of 0/2/3/4 | fix the input; do not treat exit 1 as a verdict |
 | `git` hangs past 30 s during `verify` | `subprocess.TimeoutExpired` traceback, exit 1 — `scripts/lane_target.py:227` | `repo-url`, which catches it per row and exits 4 (`scripts/lane_target.py:550`) | loud, but inconsistent across subcommands | rerun; treat exit 1 as "no verdict", not "target bad" |
 | `repo-url` has a diverging row | that row prints `PASS` **and** `FAIL` (measured: 881 row lines for 880 rows) — `scripts/lane_target.py:544` then `scripts/lane_target.py:593` | a row rejected outright, which prints only `FAIL` | misleading counts for any consumer that greps `PASS` | count the summary line, never the `PASS` lines |

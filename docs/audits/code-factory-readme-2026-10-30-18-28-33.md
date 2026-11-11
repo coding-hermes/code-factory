@@ -99,4 +99,4 @@ ch:trace row=CF-031 spec=.gitreins/config.yaml#guards wave=code-factory-readme-2
 
 STATUS: PASS
 TIER: T4 -- executed every README shell block from a fresh archive of origin/main, read each rc and output back, then re-ran the corrected blocks against the fixed tree
-EVIDENCE: docs/audits/code-factory-readme-2026-10-30-18-28-33.md plus the probe outputs f1.out-f4.out under /home/kara/.hermes/cache/scratch/cf-readme-182833-fixed
+EVIDENCE: docs/audits/code-factory-readme-2026-10-30-18-28-33.md plus the probe outputs f1.out-f4.out under ~/.hermes/cache/scratch/cf-readme-182833-fixed

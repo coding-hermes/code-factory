@@ -6,7 +6,7 @@
   `24916c54f3d9ed84af10aad7221e95fcc7b0f75b`, because a sibling landed board rows mid-tick. Every arm
   reading below is unchanged by those rebases — none of the amended files is touched by either tip.
 - Transport: throwaway `git clone` of `4295860` under tick scratch. The registered checkout
-  `/home/kara/code-factory` was **not touched**: a live sibling `hermes` process (pid 2971297,
+  `~/code-factory` was **not touched**: a live sibling `hermes` process (pid 2971297,
   started 04:54:53 local) held uncommitted work there (`M docs/PRD-code-factory.md`,
   `M tests/selftest.sh`, staged `.coding-hermes/board/tasks.jsonl`, `M events.jsonl`), which is an
   ownership barrier, not a stale checkout.

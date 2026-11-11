@@ -170,7 +170,7 @@ def classify(workdir: str) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["status", "claim", "release"])
-    ap.add_argument("--workdir", default="/home/kara/code-factory")
+    ap.add_argument("--workdir", default=os.path.expanduser("~/code-factory"))
     ap.add_argument("--owner", default="panel_loop")
     ap.add_argument("--pid", type=int, default=0)
     ap.add_argument("--paths", default="")

@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Module name | REPOSITORY |
-| Path | `/home/kara/code-factory/scripts/` — `clone_lane.py`, `repo_freshness.py`, `land-node-branch.sh`; gates via `install-gitreins.sh` + `.gitleaks.toml` |
+| Path | `~/code-factory/scripts/` — `clone_lane.py`, `repo_freshness.py`, `land-node-branch.sh`; gates via `install-gitreins.sh` + `.gitleaks.toml` |
 | Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; `land-node-branch.sh`/`install-gitreins.sh`/`clone_lane.py`/`repo_freshness.py` byte-identical since `47d68b4`; `tests/selftest.sh` grew +150 lines to 5,002 in `08a2c8a..fbc19cb` — every §1/§7 arm locator re-pinned, see §7) |
 | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
 | Owner lane | code-factory (node-side clone + control-host landing) |
@@ -293,6 +293,8 @@ A landing request is `schema: cf.landing.v1` with `project_id`, `source_commit`,
 | publish | explicit merge object pushed to named remote/ref | `MERGED_NOT_PUBLISHED`; retain the local object and retry |
 | verify | fetch remote, compare object/tree digest and ancestry at observation time | `PUBLISH_UNPROVEN`; never downgrade to PASS on a fetch warning |
 | close | evidence-bound M4 event and projection readback | `PUBLISHED_NOT_CLOSED`; idempotent closeout with the same request id |
+
+The publication gate runs `git grep -lIE '/home/[a-z][a-z0-9_-]*/' HEAD`, excluding `.gitreins` and `.coding-hermes/board`, with baseline 0; `.gitreins/history/` is not tracked, so a clone of `main` carries no `commit.patch` or `verdict.json` judge bundles.
 
 The pre-commit guard and acceptance judge are different: the guard evaluates staged changes, while the judge evaluates the work against criteria. A passing ancestry check does not replace either. Integration is one writer per `(project_id,target_ref)`; competing updates are re-fetched, the tree is revalidated, and only then retried. Repeated requests with the same idempotency key return the existing result without a second publication. Credential expiry or insufficient scope is a refusal owned by M7, not a scope expansion by M3.
 

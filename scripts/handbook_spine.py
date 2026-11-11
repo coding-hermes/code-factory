@@ -17,16 +17,18 @@ The spine is the set of facts every chapter must agree on:
 Run: python3 scripts/handbook_spine.py [--json]
 Exit: 0 clean, 1 findings, 2 cannot parse.
 """
+
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from collections import defaultdict
 from pathlib import Path
 
-HB = Path("/home/kara/code-factory/docs/handbook")
+HB = Path(os.path.expanduser("~/code-factory/docs/handbook"))
 CH = HB / "chapters"
 
 # Canonical contract register: the 18 interfaces named in OUTLINE Part IV.
@@ -63,7 +65,7 @@ CANON = {
 # a finding only when no chapter cites its canonical id at all.
 BOUNDARY = {
     "CT-01",  # owner -> scheduler  : the producer is a human writing fleet.toml + DB rows,
-              #                      not a function (round-9 re-grade; was miscounted internal)
+    #                      not a function (round-9 re-grade; was miscounted internal)
     # CT-05 (foreman -> scheduler) is INTERNAL, not boundary: both ends live in covered
     # code — producer scripts/load_lane_config.py:31-37 (copies prompts/*.md into
     # projects.prompt), consumer internal/scheduler/spawn.go:1244 buildForemanPrompt
@@ -85,7 +87,9 @@ BOUNDARY = {
 
 SETTING_ROW = re.compile(r"^\|\s*`?([A-Z][A-Z0-9_]{3,})`?\s*\|\s*([^|]{1,60})\|")
 REF = re.compile(r"\b(?:M\d{1,2}|F\d{1,2})\b")
-COUNT_CLAIM = re.compile(r"\b(\d{1,3})\s+(modules?|flows?|contracts?|chapters?|submodules?)\b", re.I)
+COUNT_CLAIM = re.compile(
+    r"\b(\d{1,3})\s+(modules?|flows?|contracts?|chapters?|submodules?)\b", re.I
+)
 
 
 def chapters() -> dict[str, str]:
@@ -107,20 +111,24 @@ def contract_rows(text: str) -> list[dict]:
         cells = [c.strip() for c in line.strip("|").split("|")]
         if len(cells) < 6 or cells[0].lower() == "id":
             continue
-        rows.append({
-            "local_id": cells[0],
-            "peer": cells[1],
-            "direction": cells[2],
-            "producer": cells[3],
-            "consumer": cells[4],
-            "state": cells[5],
-        })
+        rows.append(
+            {
+                "local_id": cells[0],
+                "peer": cells[1],
+                "direction": cells[2],
+                "producer": cells[3],
+                "consumer": cells[4],
+                "state": cells[5],
+            }
+        )
     return rows
 
 
 def has_fq(cell: str) -> bool:
     """A real implementation reference: file:line or file:function, not prose."""
-    return bool(re.search(r"[\w./-]+\.(?:py|go|sh|ts|js|yaml|toml)(?:[:#][\w.\-/()]*)?", cell))
+    return bool(
+        re.search(r"[\w./-]+\.(?:py|go|sh|ts|js|yaml|toml)(?:[:#][\w.\-/()]*)?", cell)
+    )
 
 
 def norm_default(cell: str) -> str:
@@ -130,8 +138,8 @@ def norm_default(cell: str) -> str:
     citation. Comparing whole cells reports a conflict that does not exist, which
     is exactly the noise that makes a checker ignorable.
     """
-    s = re.sub(r"`[^`]*`", "", cell)          # drop backticked refs
-    s = re.sub(r"\([^)]*\)", "", s)           # drop parentheticals
+    s = re.sub(r"`[^`]*`", "", cell)  # drop backticked refs
+    s = re.sub(r"\([^)]*\)", "", s)  # drop parentheticals
     s = s.strip().lower()
     m = re.match(r"^(-?\d+)", s)
     return m.group(1) if m else s[:24]
@@ -195,29 +203,37 @@ def main() -> int:
             m = re.search(r"CT-\d{2}", row["local_id"] + " " + row["peer"])
             if m:
                 register[m.group(0)].append((name, row))
-            edge[(row["peer"].lower(), row["direction"].lower()[:3])].append((name, row))
+            edge[(row["peer"].lower(), row["direction"].lower()[:3])].append(
+                (name, row)
+            )
 
     for cid, (label, prod, cons) in CANON.items():
         hits = register.get(cid, [])
         if not hits:
-            findings.append({
-                "kind": "CONTRACT UNREGISTERED",
-                "subject": cid,
-                "detail": f"{label} — no chapter cites canonical id {cid}; chapters invent local ids (M2-C1, M9-C2), so the two ends cannot be matched",
-            })
+            findings.append(
+                {
+                    "kind": "CONTRACT UNREGISTERED",
+                    "subject": cid,
+                    "detail": f"{label} — no chapter cites canonical id {cid}; chapters invent local ids (M2-C1, M9-C2), so the two ends cannot be matched",
+                }
+            )
             continue
         if cid in BOUNDARY:
             # Cited is sufficient: the far side is external by design, so "one side
             # named + the other marked rumour/missing" is the honest terminal state,
             # not a chapter defect.
             continue
-        sides = [h for h in hits if has_fq(h[1]["producer"]) and has_fq(h[1]["consumer"])]
+        sides = [
+            h for h in hits if has_fq(h[1]["producer"]) and has_fq(h[1]["consumer"])
+        ]
         if not sides:
-            findings.append({
-                "kind": "CONTRACT ONE-SIDED",
-                "subject": cid,
-                "detail": f"{label} — cited in {', '.join(h[0] for h in hits)} but no row names both implementations as file:line",
-            })
+            findings.append(
+                {
+                    "kind": "CONTRACT ONE-SIDED",
+                    "subject": cid,
+                    "detail": f"{label} — cited in {', '.join(h[0] for h in hits)} but no row names both implementations as file:line",
+                }
+            )
 
     # 1b. cross-chapter agreement: an internal contract's two ends live in two (or more)
     # chapters, and those chapters must name the SAME producer/consumer FUNCTION, not just
@@ -236,12 +252,16 @@ def main() -> int:
             nonempty = {name: frozenset(func_tokens(row[key])) for name, row in hits}
             nonempty = {n: t for n, t in nonempty.items() if t}
             if len(set(nonempty.values())) > 1:
-                findings.append({
-                    "kind": "CONTRACT PAIR DISAGREEMENT",
-                    "subject": cid,
-                    "detail": f"{label} — {role} differs across chapters: "
-                              + "; ".join(f"{n}: {sorted(t)}" for n, t in sorted(nonempty.items())),
-                })
+                findings.append(
+                    {
+                        "kind": "CONTRACT PAIR DISAGREEMENT",
+                        "subject": cid,
+                        "detail": f"{label} — {role} differs across chapters: "
+                        + "; ".join(
+                            f"{n}: {sorted(t)}" for n, t in sorted(nonempty.items())
+                        ),
+                    }
+                )
 
     # 1c. cross-chapter state agreement (round-9 CT-06 finding): two chapters that
     # describe one internal contract from opposite ends must state the SAME state
@@ -256,12 +276,16 @@ def main() -> int:
             continue
         states = {norm_state(row["state"]) for _, row in hits}
         if len(states) > 1:
-            findings.append({
-                "kind": "CONTRACT STATE DISAGREEMENT",
-                "subject": cid,
-                "detail": f"{label} — state differs across chapters: "
-                          + "; ".join(f"{name}: {norm_state(row['state'])}" for name, row in hits),
-            })
+            findings.append(
+                {
+                    "kind": "CONTRACT STATE DISAGREEMENT",
+                    "subject": cid,
+                    "detail": f"{label} — state differs across chapters: "
+                    + "; ".join(
+                        f"{name}: {norm_state(row['state'])}" for name, row in hits
+                    ),
+                }
+            )
 
     # 2. settings: same name, different default in two chapters
     seen: dict[str, list[tuple[str, str]]] = defaultdict(list)
@@ -273,11 +297,13 @@ def main() -> int:
     for var, hits in sorted(seen.items()):
         defaults = {d for _, d in hits}
         if len(hits) > 1 and len(defaults) > 1:
-            findings.append({
-                "kind": "SETTING CONFLICT",
-                "subject": var,
-                "detail": "; ".join(f"{c}: {d}" for c, d in hits),
-            })
+            findings.append(
+                {
+                    "kind": "SETTING CONFLICT",
+                    "subject": var,
+                    "detail": "; ".join(f"{c}: {d}" for c, d in hits),
+                }
+            )
 
     # 3. dangling references
     known = set(ch) | {f"M{i}" for i in range(13)}
@@ -287,17 +313,21 @@ def main() -> int:
             if re.search(rf"{ref}-\d", text):
                 continue
             if ref.startswith("M") and ref not in known:
-                findings.append({
-                    "kind": "DANGLING REFERENCE",
-                    "subject": f"{name} → {ref}",
-                    "detail": "chapter cites a module id that has no chapter",
-                })
+                findings.append(
+                    {
+                        "kind": "DANGLING REFERENCE",
+                        "subject": f"{name} → {ref}",
+                        "detail": "chapter cites a module id that has no chapter",
+                    }
+                )
             if ref.startswith("F") and not (1 <= int(ref[1:]) <= 16):
-                findings.append({
-                    "kind": "DANGLING REFERENCE",
-                    "subject": f"{name} → {ref}",
-                    "detail": "flow id outside F1-F16",
-                })
+                findings.append(
+                    {
+                        "kind": "DANGLING REFERENCE",
+                        "subject": f"{name} → {ref}",
+                        "detail": "flow id outside F1-F16",
+                    }
+                )
 
     # 4. count claims inside chapters vs what exists
     actual = {
@@ -316,21 +346,31 @@ def main() -> int:
             key = word.lower().rstrip("s")
             want = actual.get(key)
             if want and int(num) != want:
-                findings.append({
-                    "kind": "COUNT CLAIM",
-                    "subject": f"{name}: '{num} {word}'",
-                    "detail": f"document contains {want} {word}",
-                })
+                findings.append(
+                    {
+                        "kind": "COUNT CLAIM",
+                        "subject": f"{name}: '{num} {word}'",
+                        "detail": f"document contains {want} {word}",
+                    }
+                )
 
     summary = defaultdict(int)
     for f in findings:
         summary[f["kind"]] += 1
 
     if a.json:
-        print(json.dumps({"chapters": len(ch), "findings": findings, "summary": summary}, indent=2))
+        print(
+            json.dumps(
+                {"chapters": len(ch), "findings": findings, "summary": summary},
+                indent=2,
+            )
+        )
     else:
         print(f"chapters={len(ch)}  canonical contracts={len(CANON)}")
-        print(f"findings={len(findings)}  " + "  ".join(f"{k}={v}" for k, v in sorted(summary.items())))
+        print(
+            f"findings={len(findings)}  "
+            + "  ".join(f"{k}={v}" for k, v in sorted(summary.items()))
+        )
         for f in findings:
             print(f"  [{f['kind']}] {f['subject']}: {f['detail'][:170]}")
     return 0 if not findings else 1
