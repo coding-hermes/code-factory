@@ -44,7 +44,8 @@ The reason must not contain secrets, credentials, or whitespace.
    another record cannot substitute for the artifact or witness it claims.
 2. Evidence is a produced artifact or an external witness. Another board row, verdict,
    or marker is not evidence. A useful evidence pointer names the exact
-   repository-relative artifact, not only its containing directory.
+   repository-relative artifact, not only its containing directory. See `detail.evidence fields`
+   for the required run, tree, and artifact bindings.
 3. An open finding uses `verdict=none:open-finding` and `commit=none:open`.
    It must not use a guessed, future, or unrelated commit.
 4. A verdict that closes a finding must bind to a published commit. The commit value is
@@ -59,6 +60,19 @@ The reason must not contain secrets, credentials, or whitespace.
    `none:<reason>`.
 7. A docs-only check may prove local parsing or repository content, but it does not
    prove live remote execution, deployment, or an external service round trip.
+
+## detail.evidence fields
+
+Board row `detail.evidence` records the evidence binding for a judged implementation. Its fields are:
+
+- `run_id`: the published commit SHA for the run, or a named audit run whose record is a committed repository-relative artifact. A legal `run_id` is not a task id, printed verdict label, or placeholder.
+- `tree_fp`: the judged implementation commit's tree object. `git rev-parse 8f1e8c1^{tree}` -> `a3e9b7411d08670da83273b93189024a83e0fb30` is the judged implementation tree; `git rev-parse 0576a54^{tree}` -> `048fad50e6181dfaefa2ce15bbb838850b0846f8` is the verdict commit's own tree. Therefore, `tree_fp` records the judged implementation commit's tree, not the verdict commit's tree. It must pass `git cat-file -t <tree_fp>` as `tree`; an unresolvable hex value is not evidence. CF-011, CF-013, CF-037, and CF-038 are examples of stale non-object values; their rows are not repaired here.
+- `artifacts`: exact repository-relative paths. Resolve each path with `git cat-file -e HEAD:<path>`.
+
+ch:trace row=CF-047 spec=docs/handbook/chapters/M6-documentation.md#evidence-of-record wave=none:serial test=tests/selftest.sh::selftest doc=docs/traceability-doctrine.md prompt=CF-047-brief evidence=docs/traceability-doctrine.md witness=none:docs-only verdict=none:foreman-judge commit=none:worker-sha memory=none:foreman-closeout
+STATUS: partial
+TIER: T1
+EVIDENCE: docs/traceability-doctrine.md
 
 ## Falsifiable examples
 
