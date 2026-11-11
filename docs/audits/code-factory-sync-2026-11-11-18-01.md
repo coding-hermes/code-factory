@@ -86,9 +86,11 @@ One row filed — `CF-420`, P3, chapter III.M4.S1:
 > ten rows carry `deferred:true` with no recorded deferral, and six of them are also
 > `in_progress`.
 
-The ten are `CF-001 CF-049 CF-131 CF-132 CF-136 CF-137 CF-138 CF-139 CF-204 CF-248`. All were
-stamped 2026-11-05T13:02–13:04Z (five share the identical stamp `13:02:43Z`, i.e. one bulk
-write), and `events.jsonl` carries `task_created`/`task_updated` for them but no defer event and
+The ten are `CF-001 CF-049 CF-131 CF-132 CF-136 CF-137 CF-138 CF-139 CF-204 CF-248`. Nine were
+stamped inside one 113-second window on 2026-11-05 — `13:02:29Z` (CF-049) to `13:04:22Z`
+(CF-248), seven of them on the identical second `13:02:43Z`, i.e. one bulk write; `CF-001` sits
+apart at `18:51:37Z` the same evening. `events.jsonl` carries `task_created`/`task_updated` for
+them but no defer event and
 no reason text. The board status machine in `docs/handbook/chapters/M4-board.md:346-372` treats
 `deferred` as a *status* with a required `deferral` record (reason, review-by, return
 condition), and forbids that record otherwise (`:354`).
