@@ -2,14 +2,17 @@
 
 ![System map](figures/system-map.svg)
 
-The Factory arranges 28 components on six layers, joined by contracts (`CT-01`…`CT-18`
-plus the `CT-06R` foreman-return leg, Part IV) and exercised by 16 flows (Part II).
+The Factory arranges the components enumerated by `docs/SYSTEM-MODEL.yaml` on six
+layers, joined by `CT-01`…`CT-30` plus `CT-06R` (Part IV), and exercised by
+16 primary flows with explicit subflows (Part II). The model also names the two
+external forge peers, the inference provider, authority and mutation broker.
 A box on the map is a responsibility, not a path; the path that implements a box
 lives in its `impl` note and may move without the system changing. Every box also
 carries a role/host boundary: components tagged BUNKER execute inside the Bunker
 deployment/execution boundary — the Bunker daemon's create/exec/cp surface, in a
-fresh image-backed or persistent-container profile chosen per Bunker — and untagged
-components run on the control host. Solid lines are interfaces that work as
+profile selected by §1.6. Every model component has an explicit host value;
+`external` denotes a provider, `authority` an independent failure domain, and
+`controller-and-bunker` a separately instantiated service on both sides. Solid lines are interfaces that work as
 documented, dashed lines are broken and named, dotted lines are designed but not
 built.
 
@@ -23,12 +26,10 @@ they may evolve as the design becomes complete and are neither a frozen
 architecture nor a limit on the services the Factory may require. The stack reads
 bottom-up: control decides, transport carries, execution does the work, memory
 remembers, governance decides whether to believe the result, and evidence is what
-a human finally reads. Six components sit in control, three in transport, seven in
-execution, three in memory, eight in governance, one in evidence. Eight of the 28
-— the operator, the foreman, the task-router, the gateway, the bunker daemon,
-DuckBrain, the session store and the factory manager — sit outside the 13 module
-chapters (M0–M12) and are documented as boundary peers; the remaining 20 each key
-to one module chapter in Part III.
+a human finally reads. Counts are derived from the model's component/layer membership, including the
+GUARD responsibility and external peers, rather than frozen prose totals. The
+13 module chapters (M0–M12) remain implementation coverage; boundary peers and
+new target responsibilities below do not acquire invented module ownership.
 
 Four resolved decisions fix the arrangement and are repeated wherever they matter.
 First, the project foreman runs **inside its Bunker**; Crier is the launch/return
@@ -36,18 +37,17 @@ boundary — the scheduler's envelope enters the Bunker through Crier, and the
 foreman's response returns through Crier to the scheduler on the control host, which
 records it and triggers subsequent processing. Second, **DuckBrain is installed in
 every Bunker** and must expose the same logical project memory data/view as the
-controller; the physical shared-service or replication topology and the offline
-behavior are still open specifications, and this book treats the shared view as a
-requirement, not an installed fact. Third, the Task Router is future and not part
+controller under Part V's same-namespace shared-Git profile; F3 defines local
+commit acknowledgement and pending synchronization. This is specified target
+behavior, not a measured installation claim. Third, the Task Router is future and not part
 of the MVP, placed after Node and before Harness, and the MVP bypasses it — Hermes
 is the fixed MVP harness. Fourth, the **Factory manager** — the deterministic
 infrastructure-as-code management/reconciliation service and its desired/observed
 state store — is a required component of the arrangement; it is specified in this
 Part, registered in `docs/SYSTEM-MODEL.yaml`, and marked TARGET-UNIMPLEMENTED: not
-yet built, with its implementation language and storage explicitly undecided. The
-map sheet regenerates from the system model; until that regeneration lands, the
-figure above does not yet draw the manager box or the external Git-provider
-boundary described in §1.1 — a named deviation, not a concealed one.
+yet built. Its language remains open; §1.9.2 fixes persistence semantics. The
+CF2A-01/P5-A model contains manager and provider boundaries; wave C must regenerate
+figures and the manifest caption from its digest before issuing the book.
 
 ## 1.1 General arrangement
 
@@ -66,7 +66,7 @@ places the system's physical and trust structure:
   the per-Bunker DuckBrain integration which must expose the same logical project
   memory data/view as the controller. No universal Bunker execution mode is
   assumed: image-backed and persistent-container profiles are chosen per Bunker,
-  and no particular memory replication design is implied by the drawing.
+  and memory uses the same-namespace shared-Git profile (F3).
 - **The factory manager and its desired/observed state store** sit beside the
   scheduler on the control host. Its arrows carry its provisioning, readiness and
   binding updates **to** the Bunker (provision/install, replacement placement),
@@ -180,18 +180,17 @@ from approved target behavior.
   cadence/weight/pin, round issuance and settlement of every dispatch; the
   30-table SQLite execution record. Does not run work and does not know what a
   diff contains.
-- **Inputs:** `CT-01` lane configuration (UNVERIFIED), `CT-05` foreman lane
-  prompt text (UNVERIFIED), `CT-06` completion events (PROVEN), refreshed board
-  copies.
-- **Outputs:** `CT-02` the signed dispatch envelope — run_id, corr_id, lane,
-  board, text_b64 — rendered by `internal/bus/dispatch.go:202,266`
-  `BuildDispatch` (PROVEN); admission refusals with named reasons; settlement records.
+- **Inputs:** `CT-01` lane configuration and lane_seed extension, `CT-06` round
+  reports and refreshed board copies.
+- **Outputs:** `CT-02` round-admission.v1 inside cf2a.v1 (§1.9.6), admission
+  refusals and settlement revisions. Legacy BuildDispatch fields are translated
+  only with the persisted admission; their measured transport is not target proof.
 - **Consumers:** crier (delivery), the operator's metrics surface (`/api/v1/metrics`, M9 §8).
 - **Failure behavior:** gateway failure defers the tick rather than spawning
   (`no-exec-fallback=true`, M9 §5); load gate defers new spawns at threshold; an
   unreadable board is diagnosed, never dispatched.
 - **Pointers:** M9 (`docs/handbook/chapters/M9-scheduler.md`); contracts `CT-01`,
-  `CT-02`, `CT-05`, `CT-06`; settings Part V (cadence, admission, pacing).
+  `CT-02`, `CT-06`; settings Part V (cadence, admission, pacing).
 
 **3. FOREMAN (Hermes)**
 - **Purpose:** turn a scope of board work into briefed, verified, published,
@@ -233,25 +232,28 @@ from approved target behavior.
   token in argv (M7 §2). Does not mint the per-dispatch scoped token or the node
   tokens (M7 §12).
 - **Inputs:** the App private key file (mode 0600).
-- **Outputs:** `CT-21` an installation token installed at `auth/github.token`,
-  mode 0600 (UNVERIFIED — the mint was never run on the documenting host, no App
-  credentials; the consumer is a credential file, not a function, M7 §6).
-- **Consumers:** node credential files, refresh runs (`refresh --node`).
+- **Outputs:** CT-21 native installation credentials to the controller broker;
+  Bunkers receive read-only access and attenuated capabilities (§1.9.7). M7 §6
+  describes legacy node token-file delivery, not the fenced target.
+- **Consumers:** broker credential custody and issuer refresh runs.
 - **Failure behavior:** a failed mint yields no token file rather than a stale one; expiry is handled by refresh, not by extending scope.
 - **Pointers:** M7 (`docs/handbook/chapters/M7-github.md`); contracts `CT-21`,
   M7-C1; settings Part V. GitHub is one provider of at least two: GitLab is a
   required target with its own adapter and identity semantics (§1.4, V2-ARR-06).
 
 **5. SCOPE MINTER**
-- **Purpose:** mint the per-dispatch scoped GitHub token the dispatcher injects.
-- **Form/location:** script (process run per dispatch) — `~/.hermes/scripts/fleet-gh-scope.py`.
-- **Caller/trigger:** each dispatch preparation (M11 §3 S4).
-- **Owned decisions and state:** the per-dispatch scope restriction only; a
-  separate minter from M7's `github-app-token.py` (M7 §12).
-- **Inputs / outputs:** repository/operation scope in; scoped token out, dispatcher-side.
-- **Consumers:** the dispatcher's injected environment.
-- **Failure behavior:** no register row; the token travels dispatcher-side and the wire is not measured.
-- **Pointers:** M11 (`docs/handbook/chapters/M11-dispatcher.md`).
+- **Purpose:** attenuate broker authority to one dispatch, not deliver a native
+  GitHub write credential to a Bunker.
+- **Form/location:** authority/broker service operation on the control boundary;
+  fleet-gh-scope.py in M11 is legacy coverage.
+- **Caller/trigger:** each admitted attempt and its authorized refresh.
+- **Owned state:** capability hash, parent scope, attempt, fence and expiry.
+- **Inputs / outputs:** repository/operation scope in; reference-bound capability
+  out through the protected runtime-file path (§1.9.7).
+- **Consumers:** resident adapter and broker validation, not arbitrary forge clients.
+- **Failure behavior:** issuer/revocation outage refuses access; ending a process
+  alone is not revocation.
+- **Pointers:** CT-21, §1.9.7, F12; M11 legacy implementation evidence.
 
 **6. FACTORY MANAGER** — *TARGET-UNIMPLEMENTED*
 - **Purpose:** the deterministic infrastructure-as-code control service. It
@@ -263,8 +265,8 @@ from approved target behavior.
   or agent must learn and manually sequence every one of them.
 - **Form/location (target):** a runtime management service on the control host
   with a durable desired/observed state store. The implementation language and
-  concrete storage/HTTP framework are explicitly undecided — Go, Python and Rust
-  were named as possibilities and no selection was made (V2-ARCH-01, V2-ARCH-03).
+  HTTP framework remain open; the durable JSONL profile is §1.9.2 and the
+  required wire grammar is §1.9.1 (V2-ARCH-01, V2-ARCH-03).
 - **Caller/trigger:** declared events and cadence — authorized configuration
   update, drift detection, health/readiness observation, host-loss or placement
   failure, credential lifecycle operations.
@@ -292,8 +294,8 @@ from approved target behavior.
   rather than silently changing desired state; a partitioned old host is fenced
   by lease/active-owner semantics, not assumed dead (§1.8).
 - **Pointers:** no module chapter — required target component (V2-ARCH-01);
-  normative manager contracts `CT-24`–`CT-29` and `CT-06R` in Part IV §IV.1;
-  desired-state and readback schema Part V §V.3/§V.6; state model §1.7.1.
+  normative manager contracts `CT-24`–`CT-30` and `CT-06R` in Part IV §IV.1;
+  desired-state and readback schema Part V §V.3/§V.6; state model §1.9.2–§1.9.4.
 
 ### 1.3.2 Transport — carries the decision
 
@@ -323,15 +325,18 @@ from approved target behavior.
   through `CT-04`, `CT-06`, `CT-08`, `CT-22`; settings Part V.
 
 **8. HERMES GATEWAY**
-- **Purpose:** the session API — where a delivered message becomes a model turn.
-- **Form/location:** runtime process (`hermes gateway`) on the control host.
+- **Purpose:** controller telemetry/session readout; the resident Bunker adapter
+  owns foreman execution. CT-08 is a Bunker-local session endpoint when used for
+  work, never a controller execution fallback.
+- **Form/location:** separate instances: read-only controller gateway and
+  Bunker-local execution gateway under the project principal.
 - **Caller/trigger:** crier session delivery; dashboard and status requests.
 - **Owned decisions and state:** session records, `/api/status`, dashboard auth.
   Does not schedule and does not store the ledger.
 - **Inputs:** `CT-07` model choice (UNVERIFIED), `CT-08` delivered messages
-  (PROVEN, `platforms/api_server.py:1763`), `CT-20` forwarded inference with the
-  control-host key (UNVERIFIED).
-- **Outputs:** session rows; model turns.
+  (legacy coverage, platforms/api_server.py:1763). CT-20 terminates at the
+  configured inference provider, not this telemetry gateway.
+- **Outputs:** local session rows; model turns only in the Bunker instance.
 - **Consumers:** the session store; crier's hermesession client.
 - **Failure behavior:** its failure defers scheduler ticks (`no-exec-fallback=true`, M9 §5) — degradation, not fallback.
 - **Pointers:** boundary peer — no module chapter; contracts `CT-07`, `CT-08`, `CT-20`.
@@ -432,9 +437,10 @@ from approved target behavior.
 - **Pointers:** M5 (`docs/handbook/chapters/M5-harness.md`); contract `CT-17`; pins Part V.
 
 **14. DISPATCHER**
-- **Purpose:** run the work inside the agent's container via `bunker exec` —
-  start detached, poll with short calls, kill on deadline — and keep the replay
-  ledger (M11 §2).
+- **Purpose:** the target resident adapter launches foreman/worker processes in
+  its own Bunker cgroup and persists replay/control state. The legacy central
+  dispatcher calls bunker exec from the controller under a lifecycle principal;
+  that is not a Bunker-resident process with host-admin credentials (M11 §2).
 - **Form/location:** runtime process (`~/crier-fleet/dispatcher.py`) inside the Bunker.
 - **Caller/trigger:** the same `CT-03` inbox crier serves; its per-dispatch token
   comes from the scope minter (M11 §3 S4).
@@ -472,8 +478,9 @@ from approved target behavior.
 - **Pointers:** M1 (`docs/handbook/chapters/M1-provisioning.md`); contracts `CT-23`, M1-C2.
 
 **16. LANDER**
-- **Purpose:** merge a worker branch and prove the commit is an ancestor of
-  origin/main (M3 §2) — repository publication.
+- **Purpose:** broker-mediated publication to the declared destination ref,
+  with mode-specific commit/tree proof (§1.9.7, F5). The origin/main ancestry
+  rule is the measured merge-only implementation (M3 §2).
 - **Form/location:** script (`scripts/land-node-branch.sh`), run on the merged tree.
 - **Caller/trigger:** operator or configured foreman integration policy — the
   envelope names branch and commit, it does not call the lander (M3 §2).
@@ -490,9 +497,9 @@ from approved target behavior.
 - **Form/location:** data files with the `boardctl` CLI; the board lives in each
   project repo — including the copy **embedded in the project checkout inside
   each Bunker** — so a local working copy and the remote copy are distinct until
-  a recorded refresh or publication reconciles them; the scheduler's lane hooks
-  own that synchronization, and Figure 2.1 shows the copies and their refresh
-  order explicitly.
+  a recorded refresh or publication reconciles them. Scheduler hooks own their
+  admission/settlement read copies; the foreman owns claim/publication retries
+  through the canonical broker CAS (§1.9.6).
 - **Caller/trigger:** foreman writes, verifier reads, refresh hooks.
 - **Owned decisions and state:** row state and audit events — foreman-owned (the
   scheduler's settlement record is a separate execution record, V2-FLW-02). Not a
@@ -514,8 +521,8 @@ from approved target behavior.
 - **Form/location:** service plus **local Git-backed namespace repositories on
   the machine**; installed in every Bunker and on the control host. A resolved
   decision requires a per-Bunker instance to expose the same logical project
-  memory data/view as the controller; the physical shared-service/replication
-  topology and offline synchronization behavior are open specifications. Losing
+  memory data/view as the controller using Part V's same-namespace shared-Git
+  profile; local commit is the write acknowledgement, remote sync is separate. Losing
   the HTTP server does not imply losing local memory access — local queries and
   supported local persistence run against the same project namespace, with
   synchronization and shared-view freshness handled separately (V2-Q-04).
@@ -611,9 +618,9 @@ from approved target behavior.
 - **Caller/trigger:** periodic capacity maintenance (F6).
 - **Owned decisions and state:** reclaim eligibility by TTL and scope.
 - **Inputs:** filesystem state, scan-scope claims.
-- **Outputs:** reclaimed space; refusals. The TTL governs age, not citation — it
-  can delete a directory a module cites as evidence (M8 §2). Protected paths —
-  the repo, `node.json`, `crier.json` — are refused before inspection (M8 §5).
+- **Outputs:** reclaimed space and retained/refused reasons. The target requires
+  retention-index hold/tombstone CAS (§1.9.8); M8 §2's age-only deletion of cited
+  evidence is a prohibited legacy deviation. Protected paths remain refused.
 - **Consumers:** hosts, operators.
 - **Failure behavior:** refusal is the safe direction; over-deletion is bounded by protected paths.
 - **Pointers:** M8 (`docs/handbook/chapters/M8-safety.md`).
@@ -641,6 +648,30 @@ from approved target behavior.
 - **Consumers:** handbook delivery (F4).
 - **Failure behavior:** findings fail the spine run.
 - **Pointers:** M6.
+
+**28. DIRECTIVE GUARD**
+- **Purpose:** screen inbound work before Crier custody/launch; not the GitReins commit gate.
+- **Form/location:** Crier middleware on the controller transport boundary.
+- **Caller/inputs:** every CT-02 directive, authenticated sender and pinned policy digest.
+- **Owned state:** policy generation, redacted classification receipt and quarantine reference.
+- **Required behavior:** reserved-key/pattern validation precedes classification. Deny,
+  timeout, malformed response or classifier outage returns `503 GUARD_UNAVAILABLE`
+  or `403 GUARD_BLOCKED`; no custody acknowledgement or launch occurs. Only a
+  valid allow verdict for the exact payload digest passes. Retries keep request ID.
+- **Configuration:** administrators may change classifier pin/timeout (default 10 s),
+  never enable fail-open for production. Unknown policy refuses startup. Offline
+  qualification may simulate allow/deny, but cannot dispatch real work.
+- **Consumers/proof:** Crier and scheduler receive typed refusal; Crier owns
+  guard verdict/latency/outage counters. Replaying a denied digest cannot bypass
+  quarantine. M10 §10's fail-open behavior is legacy deviation. [CT-02/03; F9]
+
+**Boundary peers added by the target profile.** The authority owns authenticated
+principals, revocations and owner epochs (§1.9.3), outside the controller failure
+domain. The controller mutation broker owns fenced Git/board/memory publication
+and dispatch capability checks, not task choice. GitHub and GitLab are distinct
+external forge peers behind their own native issuers (§1.9.7); an external
+inference provider receives only proxy-mediated traffic (CT-20). The model carries
+these peers explicitly, with no claim of a measured adapter installation.
 
 ### 1.3.6 Evidence — what a human reads
 
@@ -674,7 +705,7 @@ human-readable meaning; complete versioned schemas live in Part IV.
 | Scheduler settlement | The scheduler reads the correlated reply (`dispatchReplyVerdict`) | `CT-04`, `CT-06` | PARTIAL / PROVEN |
 | Lane admission and round issuance | The scheduler | `CT-01`, `CT-02` | UNVERIFIED / PROVEN |
 | Credentials (issuance) | Native issuers at their own boundaries — GitHub App (M7); GitLab equivalent via its own adapter; install scripts deliver, they do not authorize | `CT-21`, M7-C1 | UNVERIFIED |
-| Effective configuration | The factory manager — desired vs observed vs effective readback; the configuration file is the desired-state authority, edited by the user or an authorized agent; Boardctl carries project work, never configuration authority | target — register extension pending (Part IV) | TARGET-UNIMPLEMENTED |
+| Effective configuration | The factory manager — desired vs observed vs effective readback; the configuration file is the desired-state authority, edited by the user or an authorized agent; Boardctl carries project work, never configuration authority | CT-24–CT-30; §1.9 (Part IV) | TARGET-UNIMPLEMENTED |
 | Replacement placement and rebalance | The factory manager, within the declared eligible host pool; task choice stays with the foreman, lane admission with the scheduler, delivery with Crier, per-host execution with Bunker | target — V2-ARCH-01 | TARGET-UNIMPLEMENTED |
 
 Duplicate-ownership notes: the node worker and the dispatcher are the two
@@ -692,9 +723,9 @@ place references and material in required runtime locations.
 
 | Identity | Issuer | Recipient and execution location | Scope | Secret reference and delivery | Renewal / revocation | Effective readback | Config owner |
 |---|---|---|---|---|---|---|---|
-| GitHub App installation token | GitHub App (JWT → installation token, M7 §5) | Node credential file `auth/github.token`, mode 0600 | Repository operations the App installation grants | File delivery via `refresh --node`; value never printed (M7 §7) | Refresh cycle; revocation by App management | Token file presence/mode; consumer is a file, not a function (M7 §6) | M7 settings |
-| GitLab provider credential (target) | GitLab's own issuer, via a GitLab-specific adapter — semantics NOT assumed from GitHub App | Bunker/node credential locations per profile | Repository operations per GitLab grant | Same install-delivery path as GitHub rows; reference syntax Part V (target) | Native GitLab lifecycle; renewal/revocation under manager policy | Effective readback required before admission (target) | Part V (target) |
-| Per-dispatch scoped token | Scope minter (`fleet-gh-scope.py`, M11 §3 S4) | Dispatcher environment, inside the Bunker | One dispatch, restricted operations | Injected per dispatch, not persisted to disk | Ends with the dispatch | Dispatcher-side; not a measured wire | M11 settings |
+| GitHub App installation token | GitHub App (M7 §5) | Controller broker custody, mode 0600 | Exact allowed repository and operations | Protected reference delivery; no native write token at node | Provider expiry/rotation/revoke, scoped denial probe | Allowed/denied repository operation, fingerprint/scope/expiry (§1.9.7) | M7 + §1.9.7 |
+| GitLab project access token (target) | Enrolled project-token issuer (§1.9.7) | Controller broker only | Exact project; Developer/write_repository | Protected secret reference, 0600 file | At most one day; rotate, revoke and denial-probe (§1.9.7) | Project identity/scope/expiry and allowed/denied Git operations | Part V + §1.9.7 |
+| Per-dispatch capability (target) | Authority/broker; legacy scope minter is coverage only | Bunker runtime file | Exact attempt/repository/operations/fence | 0600 reference delivery; no forge write secret | Online revocation at end/crash; maximum 300 s (§1.9.7) | Independent old-token denial through broker | §1.9.7 / F12 |
 | Node bearer token | Control-host provisioning | Node token file | Inference proxy admission only | File at provision time; fail-closed check (M12 §6) | Reprovision; no in-place widening | 401 without a token (measured) | M12 settings |
 | Crier agent identity | Registration exchange (`POST /agents`, M1-C1) | Node/foreman agent, inside its Bunker | Send/receive for one agent | Per-agent signature material from provisioning | Deregistration; registry check before reap (M1 §10) | Registration half not established (M1 §6) | Crier/Part V |
 | DuckBrain project authorization | Namespace provisioning (F2) | Per-Bunker DuckBrain instance | One project namespace | Namespace credential at install; same logical view as controller (resolved decision 2) | Re-issuance on rebuild | Identity + namespace readback (F2) | Part V (target) |
@@ -764,30 +795,63 @@ stop-reason metrics are owned and served by their owning modules (F7, F14).
 
 ## 1.6 Deployment and topology profiles
 
-The Factory must specify, evaluate and reconcile these profiles (V2-ARCH-02).
-They are **required target profiles to evaluate and specify** — stating one here
-is not a claim that every upstream component already supports it. For each
-profile the specification covers supported host/runtime versions, privilege and
-container prerequisites, persistent state locations, bootstrap/install ownership,
-endpoint discovery, controller-to-Bunker/Crier/memory/model/forge connectivity,
-authentication and certificate lifecycle, capacity and readiness checks, and
-update/restart and host-loss behavior. Native support and effective readback must
-be documented per profile (V2-SET-05); a profile whose requirements cannot be met
-is declared **unsupported** with a named reason, never silently attempted.
-Public-cloud-specific integrations are lower priority. Terminal Jail remains
-optional and disabled by default in every profile.
+All four topologies below are required target profiles (V2-ARCH-02), not measured
+support claims. Profile qualification requires the exact release lock and F2
+readback; an unqualified combination returns `PROFILE_UNSUPPORTED`. The control
+plane is one manager writer plus scheduler, durable Crier, controller DuckBrain,
+proxy and broker. The independent authority is outside that failure domain.
+A project execution boundary holds the resident adapter, foreman, Hermes workers,
+GitReins and local DuckBrain/session store. Bunkerd is a host service, not a
+privileged socket exposed to a worker. [CT-23–CT-29]
 
-| Profile | Disposition | Basis and conditions |
+| Profile | Installation and supervision | Durable volumes and execution composition |
 |---|---|---|
-| Kubernetes | Supported (target profile) | Ordinary Kubernetes is the first-class target. An orchestrator may restore a pod, but that does not automatically restore application-level state or bindings — the factory manager restores project/board/memory state and updates Crier and scheduler bindings (§1.8) |
-| Docker Compose | Supported (target profile) | Single-host declarative topology; the manager reconciles Compose-declared state with observed state through its adapters |
-| Homelab incl. VPN (Tailscale-style) | Supported — adapter required for endpoint discovery | Connectivity and addressing change with VPN topology; the manager accounts for changed addresses and disconnected sites without assuming every data path has the same reachability |
-| Standalone machines | Supported (target profile) | Individual hosts; on non-orchestrated hosts the factory manager coordinates placement/preparation equivalent to orchestrated profiles (V2-ARCH-01) |
-| Public-cloud-specific integrations | Lower priority (not unsupported) | Deprioritized by explicit user direction; evaluated after the four required profiles |
+| `kubernetes` | Operator-provided namespace and scoped service account; manager reconciles Deployments/StatefulSets through the Kubernetes adapter; non-root UID, read-only rootfs, dropped capabilities, no host network or Docker socket | one ReadWriteOnce PVC per stateful service and per project; manager replicas=1; image-backed Bunker only, with explicit state PVCs; pod restart never activates a binding |
+| `compose` | Operator-provided rootless engine and Compose-v2 CLI; manager applies a pinned Compose bundle; restart policy unless-stopped; no privileged containers or host socket in project containers | named local volumes per stateful service/project; persistent-container or image-backed mode with the same explicit data volumes |
+| `homelab-vpn` | Standalone user services on pre-enrolled VPN hosts; DNS names from the enrolled VPN identity resolve endpoints; changed address re-probes and creates a binding generation | standalone persistence rules; VPN is transport, not authorization; no assumption that VPN reachability proves forge/memory connectivity |
+| `standalone` | User-space pinned binaries and rootless Bunkerd under a pre-enabled persistent user supervisor; restart-on-failure with 5-second delay | local POSIX data directories; persistent-container or image-backed mode; no ephemeral data root |
 
-The manager selects/applies the profile per project deployment and reconciles
-per-Bunker desired configuration under it; profile choice is desired state, and a
-forced drift from it is exposed, not absorbed.
+All profiles use Linux with user namespaces, cgroup-v2 process containment,
+fsync-capable local ext4/XFS storage and a supported TLS stack. These are tested
+capabilities, not permission to install root packages. Missing host prerequisites
+are `HOST_PREREQUISITE_MISSING`; the installer never invokes sudo/apt or enables
+privileged pods. Session/evidence/namespace/repository/journal data survive runtime
+replacement; caches are separate disposable volumes. Manager state resides at
+§1.9.2's root, project state at `$HOME/.local/state/code-factory/projects/<id>`;
+Kubernetes/Compose mount these logical roots at `/state/<service-or-project>`.
+Shared manager filesystems and two replicas writing one namespace checkout are
+rejected. Memory exchange uses separate Git clones, not a shared mutable worktree.
+
+Each service has a distinct certificate identity and HTTPS endpoint named
+`authority`, `manager`, `crier`, `scheduler`, `memory`, `proxy`, or `bunker-<host>`
+in `deployment.endpoints`. Defaults are manager 8443, authority 8444, Crier 8445,
+scheduler 8446, memory 8447, proxy 8448, Bunkerd 8449; all bind loopback/private
+interfaces only, with explicit endpoint ports required when not default.
+Kubernetes Service DNS and Compose service DNS map those names; standalone/VPN
+use operator-declared DNS. HTTP upstreams must sit behind the profile's TLS adapter
+and remain loopback-only. No credential crosses plaintext. Certificate rotation
+uses F12 and §1.9.3; expired identity disables readiness. Project workloads receive
+only their own scoped capabilities; host lifecycle permission stays controller-side.
+The inference upstream is an explicitly configured external provider, not the
+control-host Hermes session endpoint. [CT-19–CT-23; F2/F12]
+
+**DECISION SLOT A-RELEASE:** the owner selects a tested release lock with exact
+OS/runtime/Kubernetes/Compose/Bunkerd/Hermes/Crier/DuckBrain/adapter artifact pins
+and digests, or authorizes a qualification-only installation. Default is no
+unmeasured release lock and production admission refused. Qualification mode
+cannot dispatch project work. This specification supplies topology and protocol
+requirements, not invented upstream version measurements. The lock includes
+platform architecture, minimum host capabilities, TLS adapter pin, image digest,
+volume layout and the §1.9.8 compatibility receipt. No `latest` or floating tag is
+accepted. Public-cloud adapters remain lower priority. Terminal Jail is disabled
+by default; enabling it requires the guarded-path probe and no fallback.
+
+F2 installs buses before workspaces, verifies restart durability with a sentinel
+per declared volume and an authenticated operation per endpoint, then performs
+§1.9.4 activation. A supervisor restart starts unready, replays durable state and
+re-probes; container-running/pod-ready alone never authorizes work. F13 changes
+pins; F8 replaces owners. Profile and execution-mode changes create a new desired
+generation and replacement, not an in-place reinterpretation of stored state.
 
 ## 1.7 The management service and its contracts
 
@@ -810,11 +874,10 @@ The factory manager's interfaces are specified before its implementation
   schemas, the state model, flow diagrams and conformance examples are kept
   consistent and versioned together.
 
-The implementation language and concrete storage/HTTP framework are explicitly
-undecided — Go, Python and Rust were named as possibilities and no selection was
-made. The component is therefore registered TARGET-UNIMPLEMENTED in
-`docs/SYSTEM-MODEL.yaml`; its contract-register rows are a Part IV extension
-pending that implementation reconciliation.
+The implementation language/HTTP framework remain open; wire types, persistence,
+authentication, idempotency and concurrency are fixed in §1.9. CT-24–CT-30 already
+exist in Part IV. TARGET-UNIMPLEMENTED means missing implementation evidence, not
+permission to select incompatible schemas.
 
 ## 1.8 Host-loss replacement
 
@@ -855,109 +918,637 @@ Steps carry resumable state, retries/backoff and idempotency; partial-update
 recovery and versioned status/events are required, and both controller views
 (desired and observed) are verified before the incident closes.
 
-## 1.7.1 Manager resource and operation state model
+## 1.9 Normative management and distributed-state profile
 
-The manager's target contract is versioned independently of implementation coverage.
-The resource model uses `manager.v1` and the following stable resources:
+This section resolves P5-A-01/02/04/05/07–11/14/15/18/19/21–24/33 for
+`CF2A-01/P5-A`. It refines CT-01–CT-30 and Part V without claiming installed
+support. The requirements below take precedence over the legacy coverage notes
+in §1.3. References identify contracts, not proof that their implementations exist.
 
-| Resource | Required identity | Durable state and meaning |
+### 1.9.1 One wire and configuration authority
+
+The canonical transport is Part IV §IV.1's `cf2a.v1` outer envelope. Its exact keys
+are `schema_version` (literal `cf2a.v1`), `message_type` (route verb below),
+`request_id`, `corr_id`, `sender` (authenticated principal ID), `created_at`
+(RFC3339 UTC), and `body`. Body versions are independent: manager bodies use
+`factory.v1`; round bodies use `round-admission.v1` and `round-report.v1`.
+Every body includes `schema_version`. Unknown keys are refused except inside
+`extensions`, an optional JSON object; null is permitted only where stated.
+IDs, timestamps and SHA-256 digests use Part IV's lexical rules. JSON is UTF-8,
+rejects duplicate keys and non-finite numbers, and uses RFC 8785 canonicalization
+for digests. Native Git object IDs carry `{algorithm: sha1|sha256, value: hex}`;
+they are not mislabeled SHA-256 content digests.
+
+Part V's whole-document configuration and routes are canonical, not the older
+`manager.v1` project-write routes. There is one integer `generation`, initially
+zero (no accepted configuration); creation compares zero and writes generation
+one. Every later accepted change writes the next integer. Global/project
+revision tuples and `desired_generation` are not additional wire fields:
+CT-26's desired-generation concept is this same `generation`. A project editor
+submits the complete document with only its authorized project changed; the
+manager compares all other fields to the current document and refuses cross-scope
+changes. A concurrent file/API edit loses the same CAS, never silently merges.
+
+The declared JSON configuration is authoritative intent, but only an accepted
+immutable edition is executable. File editing writes a proposal, not the active
+edition: the authenticated importer submits the exact bytes through the same
+PUT/CAS path. The manager journals the canonical edition, operation and receipt
+in one transaction, then materializes `config/generations/<generation>.json` and
+atomically renames the active pointer with directory fsync. A crash between these
+writes repairs the projection from the journal before serving reads. Manual edits
+to a committed edition are `CONFIG_TAMPERED`; they never become a generation.
+The manager never overwrites a user's rejected proposal or changes project intent.
+An accepted global change marks affected bindings unready, wakes reconciliation,
+and pauses new admission; unchanged effective project digests retain readiness.
+Running rounds keep their pinned generation unless access is revoked, in which
+case F8 control fences them. Revalidation failure remains degraded with a named
+editor action; no silent project resubmission occurs. [CT-24–CT-28; Part V §V.0]
+
+**HTTP grammar.** TLS with mutual authentication is mandatory (§1.9.3).
+`Accept: application/json` and `X-Request-Id` are required on all requests;
+mutations additionally require `Content-Type: application/json` and
+`Idempotency-Key` (an ID). These match envelope `request_id` and body
+`idempotency_key`; mismatch is `422 INVALID_FIELD`. GET has no body;
+`X-Correlation-Id` is required and is echoed. The body of every mutation also
+contains `idempotency_key`. No secret values occur in requests or responses.
+Mutation deduplication key is `(principal, scope, route-verb, idempotency_key)`;
+request digest is compared data, not part of the key. Same key/digest returns the
+original status/body; changed digest is `409 IDEMPOTENCY_KEY_REUSED`. The manager
+creates operation_id at accepted request commit, never asks a client to invent
+an operation before reconcile. Request deadline is 30 seconds; a timeout requires
+same-key retry or operation readback, not a fresh mutation.
+
+| Route / message_type | Body fields beyond common version/key | Result data / HTTP status |
 |---|---|---|
-| `desired-config` | `(project_id, generation)` | declared intent; generations are immutable after acceptance |
-| `observed-inventory` | `(scope, observation_id)` | adapter readback, timestamp and observation quality |
-| `reconciliation-operation` | `(operation_id, desired_generation)` | `accepted`, `planned`, `applying`, `degraded`, `converged`, `failed`, `cancelled` |
-| `binding` | `(project_id, binding_generation)` | verified Crier route and scheduler availability binding |
-| `incident` | `(incident_id, scope)` | detected failure, fence decision, replacement and recovery evidence |
+| `GET /v1/config` / `config.read` | none | `200 State`; no edition: `404 CONFIG_UNAVAILABLE` |
+| `PUT /v1/config` / `config.update` | `expected_generation: integer >=0`, `desired: factory.v1 document` | `202 Accepted`; CAS miss: `409 GENERATION_CONFLICT` |
+| `POST /v1/validate` / `config.validate` | `desired: document` | `200 {valid: true, desired_digest}`; invalid: `422` |
+| `POST /v1/reconcile` / `reconcile` | `generation: integer >=1`, `project_id: ID or null` (null means whole Factory) | `202 Accepted`; stale: `409 GENERATION_NOT_CURRENT` |
+| `GET /v1/projects/{id}/state` / `project.read` | none | `200 State` restricted to project; absent: `404 PROJECT_UNKNOWN` |
+| `GET /v1/operations/{id}` / `operation.read` | none | `200 Operation`; absent: `404 OPERATION_UNKNOWN` |
+| `POST /v1/operations/{id}/cancel` / `operation.cancel` | `expected_state_version: integer >=1` | `202 Operation`; irreversible/race: `409 NOT_CANCELLABLE` or `STATE_CONFLICT` |
+| `GET /v1/readiness/{project_id}` / `readiness.read` | none | `200 Readiness` only when ready, otherwise `503 NOT_READY` with Readiness in data |
+| `GET /v1/inventory` / `inventory.read` | `kind=hosts / bunkers / projects`, optional `cursor`, `limit` 1..1000, default 100 | `200 {items: Observation[], next_cursor: ID or null}` |
+| `GET /v1/events` / `events.read` | optional cursor/limit as above | `200 {items: event.v1[], next_cursor: ID or null}`; expired cursor: `410 CURSOR_EXPIRED` |
+| `GET /v1/metrics` / `metrics.read` | none | `200 {samples: Part V §V.0.3 samples[], observed_at}` |
+| `PUT /v1/rounds/{id}/progress` / `round.progress` | `sample: Progress` (§1.9.9) | `200 {accepted_seq: integer}` |
+| `GET /v1/rounds/{id}/progress` / `round.read` | none | `200 ProgressView`; absent: `404 ROUND_UNKNOWN` |
+| `POST /v1/rounds/{id}/control` / `round.control` | F8 control fields | `202 ControlReceipt`; stale fence: `409 STALE_OWNER` |
 
-A manager request carries `schema_version: "manager.v1"`, `request_id`, `project_id`,
-`expected_generation` where a compare-and-swap applies, and the requested operation.
-The manager authenticates an authorized configuration principal and scopes every request
-to the named project or Factory scope. A successful accepted update returns
-`202 Accepted` with `operation_id`, `desired_generation`, and `status: "accepted"`;
-it does not claim readiness. A current-state read returns desired, observed and
-status objects together, with `effective` values only when the owning adapter has
-read them back. Secret values are never returned; secret references remain references.
+Every response is the outer envelope with original request/correlation IDs and
+manager sender. Its body is `{schema_version: factory.v1, status: ok|accepted|error,
+data: typed object or null, error: Error or null}`. `Error` is exactly
+`{code: uppercase ASCII ID, message: redacted string, retryable: boolean,
+field: JSON-pointer or null, current_generation: integer or null}`. Success has
+null error; failure has non-null error. Authentication failures are `401`, role
+failures `403`, malformed JSON `400`, unknown version/field `422`, conflicts `409`,
+unavailable durability/authority `503`; unknown routes/methods return `404`/`405`.
+`503` returns `Retry-After: 5`; clients retry the same identity, not a new effect.
 
-The normative operation set is:
+| Type | Exact required members |
+|---|---|
+| Accepted | `operation_id: ID`, `generation: integer`, `status: accepted` |
+| State | `desired: document`, `observed: Observation[]`, `effective: document or null`, `generation: integer`, `status: operation-state`, `operation_id: ID or null` |
+| Observation | `scope: ID`, `adapter_id: ID`, `observation_id: ID`, `observed_at: timestamp`, `values: resource object from capability schema`, `quality: fresh / stale / partial / unavailable`, `effective_digest: digest or null` |
+| Operation | `operation_id`, `generation`, `project_id: ID or null`, `state`, `state_version: integer`, `plan_digest: digest or null`, `steps: StepResult[]`, `irreversible_started: boolean`, `error: Error or null` |
+| Readiness | `project_id`, `profile`, `generation`, `binding_generation: integer`, `owner_fence: Fence`, `ready: boolean`, `probes: Probe[]` |
+| Probe | `name: repository / board / memory / runtime / crier / scheduler / application`, `passed: boolean`, `observed_at`, `evidence_ref: digest`, `error: Error or null` |
 
-| Operation | Request example | Success / refusal |
-|---|---|---|
-| `GET /v1/projects/{id}/state` | `schema_version=manager.v1` | `200` with desired, observed, effective and operation status; `404 PROJECT_UNKNOWN` if absent |
-| `PUT /v1/projects/{id}/desired` | `{expected_generation: 17, desired: {...}}` | `202` with generation 18; `409 GENERATION_CONFLICT` leaves generation 17 unchanged |
-| `POST /v1/operations/{id}/reconcile` | `{desired_generation: 18, idempotency_key: "..."}` | `202` or the existing operation result for the same key; `409 GENERATION_NOT_CURRENT` if stale |
-| `POST /v1/operations/{id}/cancel` | `{operation_id: "..."}` | `202` when cancellation is accepted; `409 NOT_CANCELLABLE` after an irreversible adapter step |
-| `GET /v1/operations/{id}` | `{}` | `200` with state, per-adapter acknowledgements and readback; `404 OPERATION_UNKNOWN` if absent |
-| `GET /v1/readiness/{project_id}` | `{}` | `200 READY` only after authenticated operation probes and binding generation match; `503 NOT_READY` otherwise |
+Optional pagination cursors name a durable sequence and immutable query scope;
+responses contain no cross-project entries. Empty lists remain lists. The public
+OpenAPI artifact must encode these exact types and the Part V configuration
+schema; its digest is pinned in the release manifest. Unknown nested adapter
+objects are rejected unless the capability schema names them (§1.9.5).
+Legacy project PUT and operation-ID reconcile routes return `410 ROUTE_RETIRED`
+with the canonical route, and do not mutate. [CT-24–CT-30; Part IV §IV.1]
 
-Every mutating request is idempotent by `(principal, project_id, operation, idempotency_key)`.
-A reused key with a different request digest returns `409 IDEMPOTENCY_KEY_REUSED`; a
-reused key with the same digest returns the original result without a second adapter
-side effect. An adapter applies a change only when the operation's active-owner fence
-matches; `STALE_OWNER` is a typed refusal. Each adapter acknowledgement records
-`adapter_id`, `operation_id`, `attempt`, `effective_digest` or a redacted failure,
-and `observed_at`. An operation is `converged` only when every required acknowledgement
-and effective readback passes. Missing, stale or partial readback produces `degraded`,
-not `converged`.
+### 1.9.2 Durable records and acknowledgement
 
-The manager persists the request, generation check, operation transition, adapter
-acknowledgements, binding changes and incident evidence in one durable operation log
-with an explicit transaction boundary per transition. Recovery resumes an `accepted`,
-`planned` or `applying` operation by idempotency key; it first fences an old owner,
-then re-reads observed state, and applies only missing steps. A replacement may publish
-a new binding only after readiness for that binding generation. A late result with an
-old owner token is rejected at the resource side and recorded as `STALE_OWNER`;
-it cannot alter effective state or publish a second binding. These are target guarantees;
-the implementation remains TARGET-UNIMPLEMENTED until independently exercised.
+The reference profile has one manager writer on a local POSIX filesystem under
+`$HOME/.local/state/code-factory/manager`; NFS/shared-volume multiwriter is refused.
+Configuration and append-log records are Git-backed JSONL, not a live database.
+A lifetime exclusive `flock` prevents a second local writer; the independent
+fencing authority (§1.9.3) prevents a second host from becoming a writer. Readers
+consume immutable snapshots at a committed sequence; transaction processing is
+serializable. The manager serves no writes before replay and index validation.
 
-### 1.8.1 Manager API and adapter contract
+Each transaction is one newline-terminated JSON object:
+`{store_version: 1, seq: positive integer, tx_id: ID, previous_hash: digest,
+changes: [{table, key, expected_version, version, value}], receipt: object or null,
+hash: digest}`. The hash covers canonical bytes excluding `hash`; genesis uses
+64 zeroes as previous_hash. Row versions increment by one; expected version zero
+means create-only. Keys encode arrays of IDs, not delimiter concatenations.
+The writer validates every CAS/constraint against the preceding committed state,
+appends a complete transaction and newline, calls fsync on the file (and parent
+on creation), and only then acknowledges or sends an outbox message. In-memory
+indexes update as a unit after fsync; no observer sees half a transaction.
 
-`manager.v1` has one global configuration scope and one project scope; they are
-related by immutable generations, not by an implicit last-writer-wins merge. A global
-update creates `global_generation`; a project update records both its
-`project_generation` and the global generation it was validated against. A project
-reconciliation is refused as `GLOBAL_GENERATION_STALE` when its base is no longer the
-current global generation. The manager never edits the user's desired project values
-while rebasing them; an authorized editor must submit a new generation.
+| Table / unique key | Persisted value, in addition to row version |
+|---|---|
+| config / generation | immutable canonical document and digest, principal, parent generation |
+| current / singleton | accepted generation, store version, controller fence, active snapshot seq |
+| operation / operation_id | Operation, request digest, plan, step intents, retry_at, cancel decision |
+| dedupe / principal,scope,verb,idempotency_key | request digest, operation id, original HTTP status/body |
+| observation / observation_id | Observation; scope/time index |
+| reservation / reservation_id | host, project, operation, integer resource vector, expiry, state |
+| binding / project_id | prepared generations, participant receipts, active generation, fence |
+| incident / incident_id | scope, error, checkpoint, recovery operation, evidence digests |
+| outbox / event_id,destination | payload digest, attempts, ack, next retry, terminal state |
+| retention / resource_id | inode/object identity, state, holds, pending-sync, backup receipt |
+| progress / round_id | greatest durable seq, Progress, received_at, fenced late samples |
+| execution-control / control_id | round, action, control_version, state, checkpoint and error |
+| backup / backup_id | policy digest, barrier participants, source checkpoints, manifest and state |
 
-Every request is authenticated before parsing its desired payload. The authentication
-principal is carried as `principal_id`, its role is checked against the operation and
-scope, and the request is rejected as `UNAUTHORIZED` or `FORBIDDEN` before any
-reservation or adapter call. The minimum authorization matrix is:
+Uniqueness covers generation, transaction/event/observation IDs and the compound
+keys above. Secondary indexes (operation state/retry time, reservation host/state,
+incident scope, outbox next retry) are rebuildable, never independent authorities.
+Request admission atomically commits config CAS when applicable, operation,
+dedupe receipt and event outbox. Every operation transition commits its state,
+step intent/result and corresponding event in one transaction. Capacity decisions
+commit reservation and operation together. Binding activation commits active
+pointer and activation event together. No external call runs inside a locked
+transaction; its durable intent precedes it and readback resolves unknown outcomes.
 
-| Operation | Factory administrator | Project editor | Foreman / scheduler | Adapter identity | Observer |
-|---|---|---|---|---|---|
-| Read global/project state | all scopes | named project | named project/readiness | own adapter scope | permitted scopes |
-| Change desired configuration | global + projects | named project only | no | no | no |
-| Reconcile / reserve | all | named project | request/read readiness only | own step only | no |
-| Cancel before irreversible step | all | named project | request for its operation | no | no |
-| Read secrets | no API caller | no | no | reference resolution only at its boundary | no |
+A torn final record is quarantined and truncated to the last verified newline
+before restart; no acknowledgement can have depended on that uncommitted tail.
+A hash/sequence error in a complete record is `STORE_CORRUPT`: stop writes and
+restore a verified checkpoint plus intact suffix; never skip a middle record.
+Process/power loss must preserve every fsync-acknowledged transition. Host/media
+loss recovers only to the newest off-host verified backup (F15), not an invented
+zero-loss guarantee. Git commits archive closed log segments; Git alone does not
+replace fsync. A checkpoint contains sorted table/key row images, index metadata,
+last sequence/hash and SHA-256 manifest. It is fsynced and atomically published;
+compaction removes covered segments only after off-host readback and retention
+holds permit it. Retained receipts prevent reuse of old idempotency keys; expired
+receipt keys return `410 IDEMPOTENCY_EXPIRED`, never run again.
 
-The adapter interface is versioned and observable: `validate(desired_generation)`
-returns typed capability failures; `plan` returns ordered steps and a plan digest;
-`reserve` returns a reservation id, owner fence and expiry; `apply` accepts that
-reservation and owner fence; `readback` returns an immutable observation with
-`observed_at`, `quality`, effective digest and binding generation; `release` is
-idempotent for reservations that never entered an irreversible step. Adapter results
-carry `adapter_id`, `operation_id`, `step_id`, `attempt`, `status`, a redacted error
-or effective digest, and the manager's correlation id. An adapter may not report
-`converged` from an apply acknowledgement without a successful readback.
+Store migrations use F13: offline copy, verify, atomic active-directory switch;
+unknown store_version refuses startup. Required conformance kills the writer at
+every append/fsync/rename boundary, races two CAS requests and two reservations,
+starts two controllers, corrupts tail and middle records, and proves either the
+single acknowledged state or the named fail-closed result. [CT-24–CT-30]
 
-The non-circular readiness sequence is: validate candidates and capabilities; reserve
-capacity; apply host/runtime state; perform authenticated repository, memory, Crier,
-and scheduler probes; read back effective state; activate the binding; then mark the
-project `READY`. Candidate `ready` means only that a host can perform its probe; active
-route/admission `ready` additionally requires the binding generation and all required
-project probes. If a reservation, probe or readback is lost, the operation is
-`degraded` and the binding remains fenced. Cancellation is accepted only before the
-first irreversible adapter step; after that boundary it returns `NOT_CANCELLABLE` and
-reconciliation continues to a visible result. A restart replays the durable operation
-log, fences the previous owner, re-reads observations, and applies only missing steps.
+### 1.9.3 Authentication, fencing and mutation mediation
 
-## 1.9 The contract surface, as a count
+The bootstrap authority is an operator-held offline CA plus an independently
+retained authority ledger. Client certificates contain one URI SAN
+`urn:factory:principal:<id>` and clientAuth usage. The manager requires that SAN,
+a trusted chain, validity and unrevoked serial before decoding a body; `sender`
+must match it. A body `principal_id` is forbidden (`UNKNOWN_FIELD`). Server
+certificates bind the configured DNS endpoint and serverAuth usage. TLS 1.3 is
+required; client certificates last at most 24 hours and renew before 12 hours.
+The authority's versioned bindings map principal to role and explicit project IDs;
+role names in caller payloads have no effect. Revocation is checked online for
+every mutation/admission; authority outage is `503 AUTHORITY_UNAVAILABLE`, not a
+cached allow. Reads may use a role snapshot at most 30 seconds old and expose age.
+
+Administrators may change all desired scopes and trust bindings. Project editors
+may read/change/reconcile/cancel only their projects. Scheduler and foreman may
+read their scopes and request execution control for their rounds; the
+foreman may PUT progress only for its live fenced round. They cannot edit
+infrastructure. Adapters may read their own steps and resolve only assigned secret
+references. Observers read assigned scopes only. No manager API role reads secret
+material. Bootstrap/recovery enrollment requires the offline operator key and a
+one-use nonce consumed in the authority ledger; it revokes lost admin serials,
+records the new binding and proves denial of the old certificate before reopening
+writes. Losing the recovery key is an operator recovery stop, not unauthenticated
+administrator creation. [CT-24; F2/F12]
+
+A Fence is `{authority_id: ID, project_id: ID, epoch: integer >=1, owner_id: ID}`.
+The independent authority serializes epoch allocation using the same durable
+transaction rules as §1.9.2 and never reuses an epoch. Its controller record and
+per-project records include active owner, monotonic deadline and revocation state.
+Lease defaults are 60 seconds with renewal every 20 seconds. Expiry is judged by
+the authority's monotonic clock, not caller wall time; authority restart expires
+all leases and requires a fresh epoch. UTC timestamps are diagnostic only.
+Replacement advances the epoch and marks the previous owner fenced in one
+transaction. Failure to contact this authority prevents takeover and writes.
+
+The control-host mutation broker, owned by the manager, is the only custodian of
+forge write credentials and canonical board/memory publication credentials.
+Bunkers receive read-only forge access and broker capabilities, never a credential
+that bypasses fences. The broker serializes each project mutation with epoch
+advance: `begin-effect(fence,effect_id,digest)` validates live ownership and logs
+an in-flight intent; `finish-effect` records readback. Epoch advance waits for
+in-flight external mutations to be resolved or their credentials revoked and
+remote denial proven. An unknown in-flight push blocks takeover; lease expiry is
+not proof that a remote write stopped. Git provider requests already accepted
+must be read back before the new owner is activated. Direct human/provider writes
+outside this broker invalidate the managed single-writer guarantee and trigger
+`UNMANAGED_WRITER`, readiness false.
+
+Board ref CAS, memory remote commits and Git publication all pass through that
+broker. Crier binding changes and scheduler dispatch permission validate the
+current fence online; revocation/fence changes serialize with admission grants.
+The Bunker-local memory writer may commit disconnected draft evidence, but marks
+it pending authorization; a fenced draft cannot modify the canonical namespace.
+A stale owner cannot commit canonical state or publish; its late artifacts remain
+quarantined. Ordinary GitHub/GitLab push credentials do not validate a Fence and
+therefore cannot be delivered to the old host. [CT-10/14/21/28/29; F8]
+
+**DECISION SLOT A-HA:** options are this single-writer manager with an independent
+operator-owned authority service, or a separately specified quorum controller.
+Default is the former; automatic multi-controller failover is unsupported.
+Authority placement must be a different failure domain from the manager and its
+backup. A deployment lacking that placement refuses replacement rather than
+claiming partition safety. Recovery without a surviving authority follows F15's
+revoke-all/new-authority procedure.
+
+### 1.9.3a Authority and broker requests
+
+The authority uses the same authenticated cf2a.v1 wrapper, typed Error and
+durability rules, with body version `authority.v1`. Its allowed operations are
+`POST /v1/enroll` (offline-key signed bootstrap/recovery nonce only),
+`PUT /v1/principals/{id}` (administrator CAS role/scope bindings),
+`POST /v1/revocations` (administrator credential reference/serial and reason),
+`POST /v1/owners/{project_id}/acquire`, `/renew`, `/advance`,
+`POST /v1/effects/begin`, `/finish`, and `GET /v1/owners/{project_id}`.
+A reserved project ID `factory-control` names controller ownership. Acquire/advance
+requires the controller principal, expected epoch, owner_id, operation_id and
+idempotency_key; renew requires the exact Fence. Acquire only succeeds when no
+owner is active, advance also requires completed prior-effect readback or provider
+revocation proof. Success returns Fence, authority_seq and lease_remaining_s;
+conflict is `STALE_OWNER`, unknown effect is `EFFECT_UNRESOLVED`. Renew does not
+advance the epoch. Begin requires Fence, effect_id, input_digest, resource_ref and
+credential_ref; success returns a durable effect receipt. Finish requires that
+receipt and observed_result_digest; matching retry replays, changed digest is
+`EFFECT_CONFLICT`. Only the enrolled broker may begin/finish effects.
+
+The authority records principals by ID, certificate serials by issuer/serial,
+nonces by digest, owners by project, effects by effect_id, and revocations by
+credential reference. Rows carry version, sequence and a canonical payload digest
+under §1.9.2's transaction format. Nonce consumption and first-admin enrollment
+are one transaction. Credential revocation and capability denial are one authority
+transition; remote-provider revocation remains pending until independently probed.
+Online validation returns `{allowed: boolean, authority_seq, fence, reason}` and
+never permits a cached allow after connection loss.
+
+The broker accepts `POST /v1/effects` with body version `broker.v1`, capability
+reference supplied in `Authorization: Bearer` (never JSON), plus effect_id,
+owner_fence, repository/namespace reference, operation enum
+`git_publish|board_cas|memory_sync`, input_digest and the corresponding schema from
+§1.9.6/§1.9.7/F3. It authenticates the scoped Bunker certificate as well as the
+capability. It returns `202` with effect_id/state or replays the original receipt;
+`GET /v1/effects/{id}` returns state `pending|applied|refused|unknown`, result digest
+or null, and typed error or null. Provider credentials never appear in either
+response. It starts an external call only after authority begin and completes the
+effect only after remote readback. F12 owns issuance/revocation, F5 owns publication,
+F1 owns board mutations and F3 owns memory sync; these endpoints introduce no
+uncontracted execution flow. [CT-10/14/15/21/29]
+
+### 1.9.4 Operation transitions and binding activation
+
+The transition relation is closed: `accepted → planned|degraded|failed|cancelled`;
+`planned → applying|degraded|failed|cancelled`; `applying → converged|degraded|failed`;
+`degraded → planned|applying|converged|failed|cancelled`. Degraded-to-converged
+requires readback of all original effects, not skipping them. Degraded-to-cancelled
+requires no irreversible intent; degraded-to-applying requires a valid saved plan
+and renewed reservation. `converged`, `failed`, `cancelled` are terminal.
+A retry of a terminal operation's idempotency key returns its original result;
+a deliberate retry creates a new operation/key linked by `retry_of` in its plan.
+It first discovers prior effects and never assumes failed means no effect.
+
+Cancellation CAS and first irreversible-intent CAS compete on state_version in
+the same journal lock. Irreversible means any credential issue/revoke, resource
+create/delete, external config apply, publication, or binding activation; it is
+recorded BEFORE dispatching that effect. Validate, plan and unused reservations
+are reversible. If cancel wins, pending steps never execute and reservations
+release. If intent wins, cancellation returns `NOT_CANCELLABLE`, even when the
+call later times out. Readback and compensating reconciliation continue.
+Retryable outage uses delays 5, 10, 20, 40, 80, 160, then 300 seconds capped;
+ten failed attempts leave degraded awaiting operator retry, without erasing intent.
+
+Binding activation is a prepare/commit protocol, not two unrelated updates.
+The manager first marks the project unavailable and closes dispatch grants, drains
+or fences old rounds (F8), allocates generation N+1 and probes the candidate.
+It sends Crier and scheduler `binding.prepare.v1` containing project, generation,
+fence, candidate endpoint, readiness digest and operation ID. Each durably stores
+a non-routable candidate and returns `{participant_id, operation_id,
+binding_generation, prepared_digest}`. Same tuple/digest replays; changed digest
+is `BINDING_CONFLICT`. Only after both receipts and fresh probes exist does the
+manager CAS its active pointer to N+1, fsync it, and emit `binding.commit.v1`.
+Participant commit acknowledgements contain the same tuple and `active_digest`.
+Admission stays false until both readbacks match the pointer.
+
+On every dispatch the scheduler obtains a one-use grant from the manager binding
+authority naming round, generation, fence, destination and expiry (30 seconds).
+Crier validates/consumes that grant against the active pointer before custody;
+the resident adapter revalidates fence/generation before launch. Authority outage
+refuses launch. A grant is not a reusable offline lease. A crash with only Crier
+prepared leaves no active candidate; a crash after pointer commit repairs both
+participants from that pointer. Aborting before pointer commit removes candidates;
+after commit recovery rolls forward or fences and creates a later generation,
+never rolls the pointer backward. Thus N+1 accepted by Crier with scheduler timeout
+admits neither generation until readbacks agree. [CT-26/28/29; F2/F8]
+
+### 1.9.5 Adapter protocol and deterministic placement
+
+Adapters run on the controller as pinned executables, not shell strings. Invocation
+is `adapter --protocol factory-adapter.v1 --verb <verb>` with one UTF-8 JSON object
+on stdin and one JSON result on stdout, bounded to 1 MiB; stderr is redacted
+operator diagnostics. Verbs are `capabilities`, `validate`, `plan`, `reserve`,
+`apply`, `discover`, `readback`, `release`. Exit 0 means a valid result, not a
+successful effect; exit 2 means invalid input, exit 3 dependency unavailable, other
+exit/signal/timeout means unknown outcome. Default call timeout is 60 seconds;
+long steps use a returned effect handle and discover, never an unbounded process.
+
+Requests contain `schema_version`, `verb`, `adapter_id`, `operation_id`, `step_id`,
+`corr_id`, `generation`, `owner_fence`, `effect_id`, `input`, `input_digest` and
+`reservation_id` (null before reserve). Capabilities uses null operation/step/fence
+and empty input. Its result is `{protocol: factory-adapter.v1, adapter_id,
+version_digest, verbs: enum[], resource_schemas: map of JSON Schemas,
+idempotent_resources: string[], discovery_resources: string[]}`. Every input and
+observed resource object validates against its pinned schema; unknown capabilities
+refuse planning. Results are StepResult:
+`{adapter_id, operation_id, step_id, effect_id, attempt: integer >=1,
+status: planned|reserved|applied|absent|unknown|refused|released|observed,
+output: schema-validated object, effective_digest: digest or null,
+observed_at, error: Error or null}`. Non-success requires Error.
+
+Plans contain ordered steps `{step_id, adapter_id, resource_type, input,
+depends_on: ID[], irreversible: boolean, compensation: step_id or null}`.
+The manager topologically orders ready steps by bytewise step_id, rejects cycles,
+and hashes canonical plan bytes. Effect identity is SHA-256 of canonical
+`[operation_id,step_id]`; retries change attempt, not effect_id or input_digest.
+Before apply, the broker durably reserves that effect identity. The adapter must
+use native request deduplication or create a resource with that exact unique name
+and discover it by identity plus input digest. Create/credential issue without
+such a discovery mechanism is `CAPABILITY_UNSUPPORTED`, not retryable creation.
+On timeout, discover/readback runs first: matching effect returns the original
+result, proven absence permits same-effect retry, unknown blocks progress.
+Compensation is a separately journaled effect with its own identity and fence;
+release never deletes a resource merely because reserve expired. [CT-23/25/26]
+
+Capacity and requirements have exactly `cpu_millis`, `memory_bytes`, `disk_bytes`
+(nonnegative integers; requirements positive), `capabilities` (sorted unique
+strings), and `network_refs` (sorted endpoint IDs). No overcommit is allowed.
+Free capacity is componentwise min(declared limit, measured total) minus observed
+non-Factory usage minus all committed live allocations and unexpired reservations;
+negative results clamp to zero. Each vector uses one observation at most 30 seconds
+old with all required probes passing; absent units or partial observations exclude
+the host. Allocation snapshots generation, observations and reservation versions.
+Existing healthy allocations remain; missing replica ordinals are filled in order,
+sorting eligible hosts by bytewise host ID and choosing first fit. Each choice
+subtracts its requirement vector before the next. Reservation CAS rechecks all
+versions under the manager journal lock; conflict restarts the calculation.
+Reservations expire after 120 seconds unless renewed every 40 seconds; entered
+irreversible effects remain allocated until discovery proves absence/deletion.
+Shortfall reports unplaced replica count plus per-resource requested/allocated
+vectors, never sums unlike units. Rebalance occurs only on desired pool/profile
+change or failed readiness, not because a lexically earlier host reappeared.
+[CT-27; Part V hosts/bunkers requirements; F2]
+
+### 1.9.6 Canonical board, prompt and round identities
+
+CT-05 is solely foreman → worker `worker-brief.v1` (Part IV §IV.1). Seeded lane
+prompt/skill digests are a CT-01 configuration extension
+`extensions.lane_seed: {prompt_digest, skills: [{name, digest}]}`; they are not
+CT-05. CT-02 uses only `round-admission.v1`, never `round-request.v1`.
+Its required fields are Part IV's `round_id, run_id, corr_id, task_scope,
+total_budget, config_generation`; `task_scope` is a nonempty unique task-ID array,
+a fixed authorization ceiling. Later waves may claim newly eligible tasks in that
+array, not newly created/out-of-scope tasks. Initiative admission expands its
+membership into that array at the admitted board revision. Extensions carry
+`project_id, lane, board_revision, binding_generation, owner_fence, lane_seed`;
+config_generation is the single accepted generation (§1.9.1).
+
+Legacy translation requires a scheduler lookup: `run_id` and `corr_id` preserve
+identity; lane resolves project and seed; board resolves the canonical repository
+and admitted revision; decoded text_b64 must match the configured prompt digest.
+The persisted admission supplies round_id, authorized task_scope, budget and
+generation. No adapter guesses missing authority from free text; missing lookup
+returns `LEGACY_ADMISSION_UNRESOLVED`. Legacy `ok` must agree with typed result
+status or the result is `RESULT_CONFLICT`. [CT-01/02/04/05]
+
+The board broker publishes a single Git commit containing both appended task row
+and event plus `.coding-hermes/board/transactions/<operation_id>.json`:
+`{schema_version: board-transaction.v1, operation_id, parent_revision,
+task_id, claim_id, claim_generation, tasks_sha256, events_sha256}`. The two hashes
+cover complete resulting files. The canonical ref is the project's configured
+`refs/heads/<destination>`; the broker uses Git receive-pack compare-old-OID to
+new-OID ref update. The candidate has the advertised old OID as parent, cannot
+force-rewrite history, and the server rejects if old OID changed. A local lock
+alone is insufficient. A rejected CAS leaves canonical state unchanged; staged
+local files are not readable committed state. A reader encountering a published
+commit with absent/mismatched marker returns `PARTIAL_WRITE` and disables
+scheduling for that project until repair from a verified parent, never half-reads.
+
+Claims use CT-10's `claimant_id, claim_id, lease_expires_at, claim_generation`;
+M4's owner_id/lease_until/fence_token are legacy aliases, not alternate keys.
+Stale revision is `CLAIM_CONFLICT`, stale owner is `STALE_OWNER`; CONFLICT/FENCED
+are translated only at the legacy boundary. Claim generation increments under
+remote ref CAS and also checks the project Fence. The broker judges lease expiry
+using its authority clock; default lease is 120 seconds, renewed every 40 seconds.
+The foreman owns claim retries (fetch/revalidate dependencies and authorization,
+then new CAS, at most five conflicts before named deferral). Scheduler owns its
+pre-admission and post-result refresh only; it does not synchronize a foreman's
+unpublished task changes. A successful CAS wakes scheduler eligibility at the new
+revision. A lost acknowledgement is resolved by operation marker lookup before
+any append. [CT-10/14; F1/F11]
+
+### 1.9.7 Forge capability lifecycle and publication
+
+GitHub installation tokens and GitLab project access tokens are broker-side only
+in the target; node-delivered write tokens in M7/M11 are legacy coverage. GitLab
+uses a project access token issued by the GitLab project-token API for the exact
+numeric project ID, Developer access and `write_repository` scope; the broker
+supports Git receive-pack publication, not privileged project administration.
+A separate least-scope `read_api` credential may verify protected-ref policy;
+no group or personal token reaches a Bunker. The enrollment operator supplies a
+protected issuer reference authorized to create/revoke project tokens; the adapter
+never grants itself issuer authority. Issue uses
+`POST /api/v4/projects/{id}/access_tokens`, listing/discovery uses
+`GET /api/v4/projects/{id}/access_tokens`, revoke uses
+`DELETE /api/v4/projects/{id}/access_tokens/{token_id}`. Unique token name is the
+effect_id; discovery of an issued token whose secret response was lost revokes it
+before creating a separately recorded replacement effect. Required expiry is
+at most one day (UTC provider date semantics); rotation begins twelve hours
+before expiry, verifies same-project push in a disposable verification ref and
+denial against an ungranted project, then revokes the old token and proves denial.
+Unsupported API/tier/scope/branch policy returns `PROVIDER_CAPABILITY_UNSUPPORTED`.
+The adapter records token ID, fingerprint, scope and provider expiry, never value.
+Native API basis: [GitLab project access tokens API](https://docs.gitlab.com/api/project_access_tokens/),
+create/list/revoke operations; Developer is access_level 30. Enrollment checks that
+the configured instance supports these operations and the required token scope.
+[CT-21; F12]
+
+**DECISION SLOT A-GITLAB:** the operator selects/enrolls the GitLab instance,
+project and issuer account; default is no enrollment and admission refused for
+GitLab projects. This is not permission to use a personal account silently.
+
+Per-dispatch authority is an opaque 256-bit broker capability, stored only as a
+hash at the authority and delivered in a mode-0600 runtime file (not argv/log).
+It binds project/repository, round/attempt, allowed operations, owner fence and
+expiry: minimum of parent credential expiry, round deadline and now+300 seconds.
+Refresh requires the live attempt and fence and never widens the parent scope.
+Completion/cancel atomically marks the capability revoked before settlement;
+a 20-second authority sweeper revokes tokens for non-live attempts. A stolen token
+fails online authorization immediately after revocation and always at expiry,
+regardless of whether the process/environment survived. A denial probe through
+the broker verifies `401 CAPABILITY_REVOKED` using the old reference; cleanup alone
+is not proof. If revocation/readback is unavailable, settlement remains pending
+and no replacement publication is authorized. [CT-21/29; F8/F12]
+
+Publication policy requires explicit destination ref (default `refs/heads/main`)
+and mode `merge`, `fast-forward`, `squash`, or `rebase`. Broker CAS uses the last
+verified remote base. A publication receipt contains candidate commit/tree,
+base, mode, destination ref, accepted commit/tree, gate-run IDs and remote readback.
+Merge/fast-forward require candidate ancestry in the accepted commit; squash
+requires the exact tested squash tree; rebase records ordered old→new commit
+mapping and tests the resulting tree. All modes require accepted commit ancestry
+in the read-back destination and tree equality with the integration gate's tree.
+Any base, tree, criteria, dependency-lock or gate-config digest change invalidates
+ALL required integrated-tree gates; no path-based exemption is assumed.
+The broker tests a detached candidate, publishes by CAS, and repeats integration
+and gates after a CAS conflict. PR is an approval transport, not a fifth proof
+mode; provider automatic merges that cannot bind the exact tested tree are refused.
+[CT-12/13/14; F5]
+
+### 1.9.8 Retention and compatibility
+
+Every runtime workspace, evidence object, pending memory commit and backup enters
+the retention index before use. A hold is `{hold_id, owner, reason,
+resource_version, expires_at: timestamp or null}`; evidence and pending-sync holds
+have no automatic expiry. Publishing evidence first acquires its hold, then writes
+the reference. Cleanup CAS changes a resource from `live` to `deleting` only when
+it has no live owner/hold, no pending sync, a verified required backup receipt,
+TTL elapsed and no protected-path match. New acquisitions require `live`; they
+cannot race a tombstone. The local resource agent locks the path, validates its
+recorded device/inode (no symlink traversal), renames it into same-filesystem
+quarantine and fsyncs before unlink. Failure retains the tombstone for retry;
+a restored path with a new inode is a different resource. Unregistered/unknown
+resources are retained. Publication/sync/worker startup all use this index;
+a reaper without this integration is unsupported. [F6; CT-14/15/29]
+
+A release lock contains every component artifact URL/SHA-256, platform, protocol
+versions, config/store schema versions, migration digest and acceptance receipt.
+Allowed target wire set is cf2a.v1, factory.v1, factory-adapter.v1,
+round-admission.v1, worker-brief.v1, worker-result.v1, round-report.v1,
+board-transaction.v1, progress.v1, authority.v1, broker.v1, binding.prepare.v1,
+binding.commit.v1, execution-control.v1, execution-checkpoint.v1, fanout.v1,
+cf.backup.v1 and store_version 1. Components of different
+binary versions may coexist ONLY when they advertise this exact set for their
+roles and pass the same contract fixtures; unknown major schemas fail closed.
+An upgrade never reinterprets an in-flight envelope. F13 drains old rounds before
+changing a wire/store version; queued unsupported versions remain quarantined.
+The order is authority/broker, manager store/runtime, Crier custody, memory/board
+adapters, Bunker daemon/client, Hermes/runtime, scheduler admission last.
+Backward-compatible binary replacement permits rollback before new writes;
+store changes use copy/verify/switch, retain the old image, and prohibit old-binary
+restart after new-schema writes. Recovery then either rolls forward with the
+pinned repair migration or uses F15 isolated restore and explicit loss accounting.
+A release missing a migration/recovery recipe is `UPGRADE_UNSUPPORTED`.
+[CT-17/23/24; F13]
+
+### 1.9.9 Live round readout and settlement
+
+The resident foreman journals `progress.v1` before every budget reservation,
+worker-start, completion, wave boundary and stop; it also emits a heartbeat every
+10 seconds. Progress contains `schema_version, project_id, round_id, run_id,
+corr_id, owner_fence, seq, process_instance_id, observed_at, allowance, consumed,
+reserved, remaining, waves, stop_reason, checkpoint_digest`. Counts are integers
+>=0, allowance is fixed at admission, and remaining = allowance − consumed −
+reserved. `waves` is an array of `{wave_id, state: planned|running|complete|blocked,
+attempt_ids: ID[]}`; stop_reason is null while running, else
+`no_useful_work|budget_exhausted|cancelled|paused|deadline|dependency_unavailable|failed`.
+Seq survives restart; process_instance_id changes on restart, never round identity.
+The start/consume policy follows the pinned Part V retry policy, never resets.
+
+The authenticated Bunker writer PUTs progress to §1.9.1; manager checks identity,
+fence, monotonic seq and budget invariants and fsyncs before ack. Same seq/digest
+replays; changed digest is `PROGRESS_CONFLICT`; lower seq is `STALE_OBSERVATION`.
+Disconnected samples queue locally by seq and flush in order after reconnect;
+no sampled success substitutes for final evidence. GET returns
+`{sample: Progress or null, received_at: timestamp or null, age_s: integer or null,
+quality: fresh|stale|unavailable}`. Age uses controller receive time; fresh requires
+age <=30 seconds and a live fence; otherwise stale, or unavailable if no sample.
+Operators/observers see only their authorized projects. The same readout is
+available locally from the resident journal with source/freshness explicit;
+controller outage is not a fabricated zero. Foreman owns budget/wave facts,
+manager owns ingestion age/sequence gaps, scheduler owns settlement counters.
+Logs such as proxy JSONL are not served metric series. [CT-30; F7/F14]
+
+Scheduler settlement has its own durable states: `received → awaiting_evidence →
+postcheck_pending → settled_success|settled_failure|settled_partial|unknown`.
+The immutable execution verdict is separate from final acceptance. A locally
+committed but controller-inaccessible memory reference leaves awaiting_evidence;
+local durability permits continued work, not controller acceptance. Crier custody
+of the report alone is insufficient. The scheduler retries digest-addressed reads
+every 30 seconds for 24 hours, then records unknown and an incident. Arrival after
+that deadline creates an auditable reconciliation revision, never overwrites the
+old settlement. Evidence loss is unverified, not success.
+
+After all memory/evidence digests are verified in controller custody, required
+refresh/verifier hooks run keyed by `(round_id,report_digest,hook_id,config_digest)`.
+Hook failure leaves postcheck_pending with typed error and no success counter,
+dependency wakeup or successful-lane follow-up. It retries read-only hooks at
+30 seconds up to five times, then settles failure with reason `POSTCHECK_FAILED`.
+An authorized retry appends a new settlement revision for the same report and
+rechecks evidence; already published work is not executed again. Final success
+requires passing execution verdict, evidence readback, capability revocation and
+all required hooks. Failure/partial execution remains failure/partial even if
+hooks pass. The scheduler increments final counters and issues follow-up only
+once per final revision; correction events identify superseded revisions.
+[CT-06/06R; F1/F3/F11]
+
+## 1.10 The contract surface, as a count
 
 The canonical register contains 31 rows: `CT-01`…`CT-23`, the foreman-return leg
 `CT-06R`, and the seven manager contracts `CT-24`…`CT-30`. Current implementation
-coverage remains separate from this target count: `CT-02`, `CT-03`, `CT-06` and
-`CT-08` are PROVEN; `CT-04` is PARTIAL; `CT-09` is MISSING for its legacy node
-producer; `CT-10` is BROKEN for that producer; and the remaining rows are UNVERIFIED
-or TARGET-UNIMPLEMENTED as detailed in Part IV. The map's dashed and dotted lines
-carry coverage states; they do not weaken the target contracts.
+coverage remains separate from this target count: historic transport coverage
+appears under each model contract's legacy_coverage. All target wires remain
+UNVERIFIED until the versioned target contract is exercised; a legacy PROVEN
+transport cannot certify a new schema. Auxiliary boundary_edges are additional
+legs of named canonical contracts, not new contract IDs. The target model has
+33 component responsibilities including external peers; captions must derive this
+count rather than retaining the former 27/28-box scope. Wave C owns the out-of-scope
+BOOK.yaml caption and rendered figure updates.
+
+## 1.11 P5-A finding disposition and issue handoff
+
+These entries specify target fixes, not implemented or live-verified behavior.
+The owner accepts the combined issue after all waves; explicit decision slots
+remain visible at their fail-closed defaults.
+
+| Finding | Normative resolution |
+|---|---|
+| P5-A-01 | §1.9.2 transactional records, fsync, indexes, corruption and migration |
+| P5-A-02 | §1.9.3/3a independent authority, resource-side broker and epoch protocol |
+| P5-A-03 | F2.0 cold bootstrap, first administrator and generation one |
+| P5-A-04 | §1.9.1 cf2a.v1/factory.v1 layering, routes, types and errors |
+| P5-A-05 | §1.9.4 prepared participants, committed pointer and dispatch grants |
+| P5-A-06 | F15.1 ordered barriers, consistency marker and post-backup revocation |
+| P5-A-07 | §1.9.3 certificate principal, role scopes and recovery enrollment |
+| P5-A-08 | §1.9.4 full transition relation and cancel/irreversible CAS |
+| P5-A-09 | §1.9.5 CLI JSON protocol, capabilities, effect discovery and retries |
+| P5-A-10 | §1.9.5 integer resource units, first-fit ordering and atomic reservation |
+| P5-A-11 | §1.9.1 one generation, proposal import and durable active-edition publication |
+| P5-A-12 | §1.6 concrete topology/volume/network profiles; A-RELEASE pin decision slot |
+| P5-A-13 | Part V shared-Git choice applied to overview, arrangement, F3 and model |
+| P5-A-14 | §1.9.9 awaiting_evidence and controller-custody deadline |
+| P5-A-15 | §1.9.6 exact Git ref CAS, operation marker and claim vocabulary |
+| P5-A-16 | F8.1 execution controls, checkpoint, quiescence/fenced_unknown and resume |
+| P5-A-17 | §1.9.9 provisional versus final settlement and postcheck retry |
+| P5-A-18 | §1.9.6 CT-05 worker brief; CT-01 lane_seed extension |
+| P5-A-19 | §1.9.6 round-admission.v1, legacy translation and fixed authorization set |
+| P5-A-20 | §1.9.7 / F5 mode-specific destination/tree proof and gate invalidation |
+| P5-A-21 | §1.9.7 / F12 GitLab project-token lifecycle and A-GITLAB enrollment |
+| P5-A-22 | §1.9.7 online attenuated capability, expiry, revocation and denial probe |
+| P5-A-23 | §1.9.8 / F6 retention holds and delete-versus-acquire CAS |
+| P5-A-24 | §1.9.8 / F13 compatibility set, rollout order and migration recovery |
+| P5-A-25 | F16.1 required policy, target snapshot and aggregate truth table |
+| P5-A-26 | SYSTEM-MODEL canonical CT-19–CT-30, manager and external provider legs |
+| P5-A-27 | SYSTEM-MODEL target steps separated from legacy_steps; subflows registered |
+| P5-A-28 | Explicit model host ownership; resident execution versus telemetry gateway |
+| P5-A-29 | §1.3.5 GUARD responsibility and mandatory fail-closed production posture |
+| P5-A-30 | Model-derived caption contract fixed; BOOK.yaml/rendered caption remains wave-C handoff |
+| P5-A-31 | Sequential §1.6–§1.10 and CT-24–CT-30 signposts; regeneration release marker |
+| P5-A-32 | Part 0 authority/target revision and model precedence; SPEC_CONFLICT refusal |
+| P5-A-33 | §1.9.9 / F7/F14 live authenticated progress, sequence, freshness and owners |
+
+Wave C must render boundary_edges and explicit dual-instance/external host labels,
+retain target-only sequence figures, and derive the caption from view_contract.
+Wave B's contract/settings/work-derivation edits must retain the selected
+cf2a.v1/factory.v1/round-admission.v1 vocabulary and CT-05 worker-brief identity;
+contradictory legacy cards are not alternative formats. These cross-wave files
+are outside wave A's fence, so this handoff does not claim them corrected.

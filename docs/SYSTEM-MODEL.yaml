@@ -4,9 +4,8 @@
 # marked volatile — if a script moves, the model does not change, only its implementation note does.
 #
 # Every component, contract and flow step below is TRACEABLE: a component to its module chapter
-# (docs/handbook/chapters/M*.md), a contract to the Part IV register (CT-01..CT-18) or a chapter's
-# own local row (M1-C1, M3-C1, M7-C1, M12-C1, M12-C2), a flow step to chapter text. Nothing here is
-# invented — where a chapter marks a wire UNVERIFIED or MISSING, the model says so.
+# Target authority: Part IV IV.1 canonical CT-01..CT-30 plus CT-06R, Part V, Part I 1.9.
+# Legacy coverage is separately retained; source citations never redefine target behavior.
 #
 # Edit this, then run scripts/gen_handbook_figures.py. Every diagram is generated from this file.
 # Contract state vocabulary (STYLE-CORRECTIONS §"CT-nn stays a registry id"):
@@ -16,6 +15,15 @@ doc:
   id: CF2A-10
   title: CODE-FACTORY SYSTEM VIEWS
   subtitle: Components, contracts and flows
+  target_revision: CF2A-01/P5-A
+  authority_order:
+  - Part IV IV.1 canonical envelope and IDs
+  - Part V factory.v1 configuration and shared-Git memory
+  - Part I 1.9 explicit P5-A refinements
+  - Part II target procedures
+  - SYSTEM-MODEL derived views
+  conflict_behavior: SPEC_CONFLICT blocks issue; implementation never arbitrates target requirements
+  figure_release_gate: Wave C regenerates figures and BOOK caption from this model digest; no generated artifact is claimed current by P5-A
 
 layers:
   - id: control
@@ -37,683 +45,1600 @@ layers:
     name: EVIDENCE
     blurb: what a human reads
 
-# 28 components. `module` keys each box to its chapter (M0-M12); components outside the 13
-# modules (the human, the model router, the gateway, the bunker daemon, the memory and session
-# stores, the factory manager) carry no module — the chapters name them boundary peers, not
-# owned subsystems.
+# Component and canonical-contract counts derive from the parsed collections.
+# Module IDs preserve implementation coverage; additional boundary peers have no module.
 components:
-  - id: owner
-    name: OPERATOR
-    role: intent and approval
-    layer: control
-    owns: Intent, priorities, approval
-    not: Does not execute work
-    impl: [human]
-  - id: scheduler
-    name: SCHEDULER
-    role: whose turn it is
-    layer: control
-    module: M9
-    owns: Whose turn it is; lane admission (tasks vs cooldown); per-lane cadence, weight, pin; settlement of every dispatch
-    not: Does not run work, does not know what a diff contains
-    impl: [coding-hermes-scheduler]
-  - id: foreman
-    name: FOREMAN (Hermes)
-    role: turns a row into work
-    layer: control
-    host: bunker
-    owns: Runs inside its Bunker; turns a board row into a brief; verifies returned evidence; closes rows
-    not: Does not grade its own homework; its response returns through Crier to the scheduler (resolved decision 1)
-    impl: [prompts/foreman.md, skills/code-factory-foreman]
-  - id: github
-    name: GITHUB CREDENTIALS
-    role: forge authentication
-    layer: control
-    module: M7
-    owns: Mints, caches and refreshes GitHub App installation tokens; never a token in argv (M7 §2)
-    not: Does not mint the per-dispatch scoped token or the node tokens (M7 §12)
-    impl: [scripts/github-app-setup.sh, scripts/github-app-token.py, scripts/github-app-refresh.sh]
-  - id: scoper
-    name: SCOPE MINTER
-    role: per-dispatch token
-    layer: control
-    module: M11
-    owns: Mints the per-dispatch scoped GitHub token the dispatcher injects (M11 §3 S4)
-    not: A separate minter from M7's github-app-token.py (M7 §12)
-    impl: ['~/.hermes/scripts/fleet-gh-scope.py']
-  - id: manager
-    name: FACTORY MANAGER
-    role: deterministic IaC reconciliation
-    layer: control
-    tag: UNBUILT
-    owns: >-
-      The deterministic infrastructure-as-code control service — declared desired state and a
-      durable observed inventory for the whole Factory; settings mapping and adapters for the
-      participating systems; deterministic diff/plan and authorized idempotent apply/reconcile;
-      continuous drift detection, readiness and scoped repair; host-loss replacement placement
-      and Crier/scheduler binding updates (V2-ARCH-01)
-    not: >-
-      Infrastructure convergence is deterministic code, never LLM-improvised tool sequencing;
-      does not choose tasks (foreman), admit lanes or settle rounds (scheduler), deliver work
-      (Crier), provide per-host execution/isolation (Bunker) or hold Boardctl work authority —
-      Boardctl carries project work, not configuration authority (V2-SET-08)
-    note: >-
-      A required target component that is not yet built — impl is TARGET-UNIMPLEMENTED. The
-      implementation language and concrete storage/HTTP framework are explicitly undecided;
-      Go, Python and Rust were named as possibilities and no selection was made (V2-ARCH-01,
-      V2-ARCH-03)
-    impl: [TARGET-UNIMPLEMENTED]
-  - id: crier
-    name: CRIER (bus)
-    role: launch and return boundary
-    layer: transport
-    module: M10
-    owns: The launch/return boundary between control host and Bunkers — delivery with per-agent signature, leases, replies, idempotency (M10 §2); the foreman response returns through Crier to the scheduler
-    not: Does not decide, does not execute; no board admission (M4 §12 B04); delivery is not task acceptance
-    impl: [crier]
-  - id: guard
-    name: GUARD
-    role: screens every directive
-    layer: governance
-    module: M10
-    owns: Pattern pre-scan → payload render → LLM router verdict → escalation → sanitize quarantine on delivered messages (M10 §3 S2)
-    not: A false pass lets an untrusted directive reach a node (M10 §2)
-    impl: [crier internal/guard/guard.go]
-  - id: gateway
-    name: HERMES GATEWAY
-    role: session API
-    layer: transport
-    owns: Session API, /api/status, dashboard auth, session records
-    not: Does not schedule or store the ledger
-    impl: [hermes gateway]
-  - id: proxy
-    name: INFERENCE PROXY
-    role: holds the provider key
-    layer: transport
-    module: M12
-    owns: The only holder of the provider credential; admits nodes by token, models by allowlist, streams or buffers (M12 §2)
-    not: No anonymous paid path; a node never sees a provider key (M12 §2)
-    impl: ['~/.hermes/scripts/cf-inference-proxy.py']
-  - id: bunker
-    name: BUNKER DAEMON
-    role: the deployment and execution boundary
-    layer: execution
-    host: bunker
-    owns: The Bunker deployment/execution boundary itself — hosts agent containers; create/exec/cp; per-agent home
-    not: Does not own credentials or config
-    impl: [bunker]
-  - id: node
-    name: NODE
-    role: one project, one node
-    layer: execution
-    host: bunker
-    module: M2
-    owns: One project per node; the node runs inside its Bunker; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
-    not: Does not decide what to work on
-    impl: [scripts/project-node.sh, scripts/node-bus-worker.py]
-  - id: router
-    name: TASK-ROUTER
-    role: future harness selection
-    layer: execution
-    tag: FUTURE
-    owns: FUTURE and NOT PART OF MVP — placed after Node and before Harness; a future selection responsibility (harness selection is design intent; today's router documentation describes provider/model selection)
-    not: The MVP bypasses this point and uses the fixed Hermes harness directly; do not equate future harness selection with the separate current model/provider route
-    impl: [task-router]
-  - id: harness
-    name: HARNESS
-    role: the coding loop
-    layer: execution
-    host: bunker
-    module: M5
-    owns: The coding loop inside the node — Hermes is the fixed MVP harness — plus codex, claude-code, opencode, pi, dsh at pins (M5 §2)
-    not: Does not write the board
-    impl: [scripts/harness/*]
-  - id: dispatcher
-    name: DISPATCHER
-    role: executes the dispatch
-    layer: execution
-    host: bunker
-    module: M11
-    owns: Runs the work inside the agent's container via bunker exec — start detached, poll, deadline kill; keeps the replay ledger (M11 §2)
-    not: May not decide admission or what the work is (M11 §2)
-    impl: ['~/crier-fleet/dispatcher.py']
-  - id: provisioner
-    name: PROVISIONER
-    role: bare host to node
-    layer: execution
-    module: M1
-    owns: Qualifies the host (disk floor), creates the container, mints identity, seeds prompts/skills/env, connects the bus (M1 §2)
-    not: Does not certify the result — that is the verifier (M1 §12)
-    impl: [scripts/bunker-provision.sh, scripts/project-node.sh, scripts/node-create.sh]
-  - id: lander
-    name: LANDER
-    role: work into main
-    layer: execution
-    module: M3
-    owns: Merges a worker branch and proves the commit is an ancestor of origin/main (M3 §2)
-    not: Operator-triggered — the envelope names branch/commit, it does not call the lander (M3 §2 F3-5)
-    impl: [scripts/land-node-branch.sh]
-  - id: board
-    name: BOARD
-    role: the plan and its state
-    layer: memory
-    module: M4
-    owns: Append-only record of work and its state; the fleet's plan; the board lives in each project repo, with local and remote copies the scheduler keeps synchronized (M4 §2)
-    not: Not a run log; rows are reused across attempts; a local copy and the remote copy are distinct until a recorded refresh or publication reconciles them
-    impl: [.coding-hermes/board/tasks.jsonl, scripts/boardctl]
-  - id: duckbrain
-    name: DUCKBRAIN
-    role: searchable memory
-    layer: memory
-    host: bunker
-    owns: Namespaced durable memory; run records, findings, recall; installed in every Bunker and on the control host
-    not: Does not own the plan or the code; a per-Bunker instance must expose the same logical project memory data/view as the controller — physical shared-service/replication topology and offline behavior remain unspecified (resolved decision 2)
-    impl: [duckbrain]
-  - id: sessionstore
-    name: SESSION STORE
-    role: every turn and its cost
-    layer: memory
-    owns: Every model turn, its model, tokens and cost
-    not: Not the plan, not the product
-    impl: ['~/.hermes/state.db']
-  - id: gitreins
-    name: COMMIT GATE
-    role: grades the commit
-    layer: governance
-    module: M3
-    owns: Pre-commit grading (secrets, lint, tests) and the verdict that lands work (M3 §2)
-    not: Does not decide what to build
-    impl: [gitreins]
-  - id: docsgate
-    name: DOC GATE
-    role: grades the document
-    layer: governance
-    module: M6
-    owns: Whether a document is citable (sections, locators, facts, earned VERIFIED) — a structural gate, not a truth verifier (M6 §2 F6-2)
-    not: Cannot tell whether a sentence is true
-    impl: [scripts/master_doc_check.py]
-  - id: conformance
-    name: CONFORMANCE BATTERY
-    role: grades the harness
-    layer: governance
-    module: M5
-    owns: Whether a harness is supported, measured per leg on a real node (M5 §2)
-    not: Does not install anything by itself
-    impl: [tests/harness-conformance.sh]
-  - id: verifier
-    name: NODE VERIFIER
-    role: certifies the node
-    layer: governance
-    module: M1
-    owns: The certification ladder — agent, gateway, auth, artifact, tree, seed; VERIFIED is earned per leg (M1 §11)
-    not: An unreachable port is UNVERIFIED (exit 3), not FAIL (M1 §10 CF-224)
-    impl: [scripts/verify-node.sh]
-  - id: safety
-    name: SAFETY
-    role: reaper and scan scope
-    layer: governance
-    module: M8
-    owns: Reaps build caches and expired job dirs; refuses a gitleaks claim without its --log-opts scope (M8 §2)
-    not: The TTL governs age, not citation — it can delete a dir a module cites as evidence (M8 §2)
-    impl: [scripts/reclaim_disk.py, scripts/check_scan_scope.py]
-  - id: panel
-    name: DOC PANEL
-    role: independent seats
-    layer: governance
-    module: M6
-    owns: Three seats grade a module independently; splits are reported, never voted away (M6 §3 S4)
-    not: A STOP exit is process success, not document acceptance (M6 §5)
-    impl: [scripts/panel_loop.py, scripts/master_doc_panel.py]
-  - id: spine
-    name: SPINE GATE
-    role: cross-chapter consistency
-    layer: governance
-    module: M6
-    owns: Canonical CT ids cited; producer/consumer and state agreement; dangling refs; count claims (M6 §3 S9)
-    not: Checks locator presence, not that the cited line exists (M6 §3 S9)
-    impl: [scripts/handbook_spine.py]
-  - id: handbook
-    name: HANDBOOK
-    role: what you approve
-    layer: evidence
-    module: M6
-    owns: The readable system description plus its own deficiency register
-    not: Not the source of truth
-    impl: [scripts/gen_nasa_handbook.py, scripts/build_book.py]
+- id: owner
+  name: OPERATOR
+  role: intent and approval
+  layer: control
+  owns: Intent, priorities, approval
+  not: Does not execute work
+  impl:
+  - human
+  host: external
+- id: scheduler
+  name: SCHEDULER
+  role: whose turn it is
+  layer: control
+  module: M9
+  owns: Whose turn it is; lane admission (tasks vs cooldown); per-lane cadence, weight, pin; settlement of every dispatch
+  not: Does not run work, does not know what a diff contains
+  impl:
+  - coding-hermes-scheduler
+  host: control
+- id: foreman
+  name: FOREMAN (Hermes)
+  role: budgeted project rounds
+  layer: control
+  host: bunker
+  owns: 'Inside Bunker: fixed authorized task scope, compatible waves, durable total-worker budget, verification, board and worker/wave/round memory; Part I 1.9.6/9'
+  not: Does not grade its own homework; its response returns through Crier to the scheduler (resolved decision 1)
+  impl:
+  - prompts/foreman.md
+  - skills/code-factory-foreman
+- id: github
+  name: GITHUB CREDENTIALS
+  role: forge authentication
+  layer: control
+  module: M7
+  owns: Mints, caches and refreshes GitHub App installation tokens; never a token in argv (M7 §2)
+  not: Does not mint the per-dispatch scoped token or the node tokens (M7 §12)
+  impl:
+  - scripts/github-app-setup.sh
+  - scripts/github-app-token.py
+  - scripts/github-app-refresh.sh
+  host: control
+- id: scoper
+  name: SCOPE MINTER
+  role: per-dispatch token
+  layer: control
+  module: M11
+  owns: Mints the per-dispatch scoped GitHub token the dispatcher injects (M11 §3 S4)
+  not: A separate minter from M7's github-app-token.py (M7 §12)
+  impl:
+  - ~/.hermes/scripts/fleet-gh-scope.py
+  host: control
+- id: manager
+  name: FACTORY MANAGER
+  role: deterministic IaC reconciliation
+  layer: control
+  tag: UNBUILT
+  owns: The deterministic infrastructure-as-code control service — declared desired state and a durable observed inventory for the whole Factory; settings mapping and adapters for the participating systems; deterministic diff/plan and authorized idempotent apply/reconcile; continuous drift detection, readiness and scoped repair; host-loss replacement placement and Crier/scheduler binding updates (V2-ARCH-01)
+  not: Infrastructure convergence is deterministic code, never LLM-improvised tool sequencing; does not choose tasks (foreman), admit lanes or settle rounds (scheduler), deliver work (Crier), provide per-host execution/isolation (Bunker) or hold Boardctl work authority — Boardctl carries project work, not configuration authority (V2-SET-08)
+  note: TARGET-UNIMPLEMENTED; language open, transactional Git-backed JSONL single-writer profile fixed in Part I 1.9.2; authority/broker and adapter protocols in 1.9.3-5
+  impl:
+  - TARGET-UNIMPLEMENTED
+  host: control
+- id: crier
+  name: CRIER (bus)
+  role: launch and return boundary
+  layer: transport
+  module: M10
+  owns: The launch/return boundary between control host and Bunkers — delivery with per-agent signature, leases, replies, idempotency (M10 §2); the foreman response returns through Crier to the scheduler
+  not: Does not decide, does not execute; no board admission (M4 §12 B04); delivery is not task acceptance
+  impl:
+  - crier
+  host: control
+- id: guard
+  name: GUARD
+  role: screens every directive
+  layer: governance
+  module: M10
+  owns: Fail-closed directive screening before custody/launch; outage or invalid classifier response refuses; admin-owned policy; Part I 1.3.5 and F9
+  not: A false pass lets an untrusted directive reach a node (M10 §2)
+  impl:
+  - crier internal/guard/guard.go
+  host: control
+- id: gateway
+  name: HERMES GATEWAY
+  role: session API
+  layer: transport
+  owns: Control instance serves telemetry; Bunker instance accepts CT-08 work sessions; never a controller foreman fallback
+  not: Does not schedule or store the ledger
+  impl:
+  - hermes gateway
+  host: controller-and-bunker
+- id: proxy
+  name: INFERENCE PROXY
+  role: holds the provider key
+  layer: transport
+  module: M12
+  owns: The only holder of the provider credential; admits nodes by token, models by allowlist, streams or buffers (M12 §2)
+  not: No anonymous paid path; a node never sees a provider key (M12 §2)
+  impl:
+  - ~/.hermes/scripts/cf-inference-proxy.py
+  host: control
+- id: bunker
+  name: BUNKER DAEMON
+  role: the deployment and execution boundary
+  layer: execution
+  host: bunker
+  owns: The Bunker deployment/execution boundary itself — hosts agent containers; create/exec/cp; per-agent home
+  not: Does not own credentials or config
+  impl:
+  - bunker
+- id: node
+  name: NODE
+  role: one project, one node
+  layer: execution
+  host: bunker
+  module: M2
+  owns: One project per node; the node runs inside its Bunker; repo clone, seeded prompts/skills, env, identity, bus worker (M2 §2)
+  not: Does not decide what to work on
+  impl:
+  - scripts/project-node.sh
+  - scripts/node-bus-worker.py
+- id: router
+  name: TASK-ROUTER
+  role: future harness selection
+  layer: execution
+  tag: FUTURE
+  owns: FUTURE and NOT PART OF MVP — placed after Node and before Harness; a future selection responsibility (harness selection is design intent; today's router documentation describes provider/model selection)
+  not: The MVP bypasses this point and uses the fixed Hermes harness directly; do not equate future harness selection with the separate current model/provider route
+  impl:
+  - task-router
+  host: control
+- id: harness
+  name: HARNESS
+  role: the coding loop
+  layer: execution
+  host: bunker
+  module: M5
+  owns: The coding loop inside the node — Hermes is the fixed MVP harness — plus codex, claude-code, opencode, pi, dsh at pins (M5 §2)
+  not: Does not write the board
+  impl:
+  - scripts/harness/*
+- id: dispatcher
+  name: DISPATCHER
+  role: executes the dispatch
+  layer: execution
+  host: bunker
+  module: M11
+  owns: Resident Bunker adapter launches only local round cgroup under project identity, maintains replay/checkpoint ledger; legacy controller bunker-exec path is coverage only
+  not: May not decide admission or what the work is (M11 §2)
+  impl:
+  - ~/crier-fleet/dispatcher.py
+- id: provisioner
+  name: PROVISIONER
+  role: bare host to node
+  layer: execution
+  module: M1
+  owns: Qualifies the host (disk floor), creates the container, mints identity, seeds prompts/skills/env, connects the bus (M1 §2)
+  not: Does not certify the result — that is the verifier (M1 §12)
+  impl:
+  - scripts/bunker-provision.sh
+  - scripts/project-node.sh
+  - scripts/node-create.sh
+  host: control
+- id: lander
+  name: LANDER
+  role: work into main
+  layer: execution
+  module: M3
+  owns: 'Broker CAS publication: configured destination, merge/FF ancestry or squash/rebase tree mapping, exact-tree gates; Part I 1.9.7'
+  not: Operator-triggered — the envelope names branch/commit, it does not call the lander (M3 §2 F3-5)
+  impl:
+  - scripts/land-node-branch.sh
+  host: control
+- id: board
+  name: BOARD
+  role: the plan and its state
+  layer: memory
+  module: M4
+  owns: Canonical Git remote ref CAS publishes task/event/marker atomically; foreman owns claim retries; scheduler refreshes only its read copies; Part I 1.9.6
+  not: Not a run log; rows are reused across attempts; a local copy and the remote copy are distinct until a recorded refresh or publication reconciles them
+  impl:
+  - .coding-hermes/board/tasks.jsonl
+  - scripts/boardctl
+  host: control
+- id: duckbrain
+  name: DUCKBRAIN
+  role: searchable memory
+  layer: memory
+  host: controller-and-bunker
+  owns: Namespaced durable memory; run records, findings, recall; installed in every Bunker and on the control host
+  not: Same-namespace shared-Git profile selected in Part V; fsynced local commit is acknowledgement, sync separate; local-only requires shared view; F3
+  impl:
+  - duckbrain
+- id: sessionstore
+  name: SESSION STORE
+  role: every turn and its cost
+  layer: memory
+  owns: Every model turn, its model, tokens and cost
+  not: Not the plan, not the product
+  impl:
+  - ~/.hermes/state.db
+  host: controller-and-bunker
+- id: gitreins
+  name: COMMIT GATE
+  role: grades the commit
+  layer: governance
+  module: M3
+  owns: Pre-commit grading (secrets, lint, tests) and the verdict that lands work (M3 §2)
+  not: Does not decide what to build
+  impl:
+  - gitreins
+  host: bunker
+- id: docsgate
+  name: DOC GATE
+  role: grades the document
+  layer: governance
+  module: M6
+  owns: Whether a document is citable (sections, locators, facts, earned VERIFIED) — a structural gate, not a truth verifier (M6 §2 F6-2)
+  not: Cannot tell whether a sentence is true
+  impl:
+  - scripts/master_doc_check.py
+  host: control
+- id: conformance
+  name: CONFORMANCE BATTERY
+  role: grades the harness
+  layer: governance
+  module: M5
+  owns: Whether a harness is supported, measured per leg on a real node (M5 §2)
+  not: Does not install anything by itself
+  impl:
+  - tests/harness-conformance.sh
+  host: control
+- id: verifier
+  name: NODE VERIFIER
+  role: certifies the node
+  layer: governance
+  module: M1
+  owns: The certification ladder — agent, gateway, auth, artifact, tree, seed; VERIFIED is earned per leg (M1 §11)
+  not: An unreachable port is UNVERIFIED (exit 3), not FAIL (M1 §10 CF-224)
+  impl:
+  - scripts/verify-node.sh
+  host: control
+- id: safety
+  name: SAFETY
+  role: reaper and scan scope
+  layer: governance
+  module: M8
+  owns: Reaps build caches and expired job dirs; refuses a gitleaks claim without its --log-opts scope (M8 §2)
+  not: 'Age alone never authorizes deletion: retention holds and atomic tombstone CAS govern cleanup; Part I 1.9.8'
+  impl:
+  - scripts/reclaim_disk.py
+  - scripts/check_scan_scope.py
+  host: control
+- id: panel
+  name: DOC PANEL
+  role: independent seats
+  layer: governance
+  module: M6
+  owns: Three seats grade a module independently; splits are reported, never voted away (M6 §3 S4)
+  not: A STOP exit is process success, not document acceptance (M6 §5)
+  impl:
+  - scripts/panel_loop.py
+  - scripts/master_doc_panel.py
+  host: control
+- id: spine
+  name: SPINE GATE
+  role: cross-chapter consistency
+  layer: governance
+  module: M6
+  owns: Canonical CT ids cited; producer/consumer and state agreement; dangling refs; count claims (M6 §3 S9)
+  not: Checks locator presence, not that the cited line exists (M6 §3 S9)
+  impl:
+  - scripts/handbook_spine.py
+  host: control
+- id: handbook
+  name: HANDBOOK
+  role: what you approve
+  layer: evidence
+  module: M6
+  owns: Approved target requirements plus implementation coverage; versioned precedence is doc.authority_order
+  not: Implementation citations and generated figures cannot override the approved normative target
+  impl:
+  - scripts/gen_nasa_handbook.py
+  - scripts/build_book.py
+  host: control
+- id: authority
+  name: AUTHORITY
+  role: authority
+  layer: control
+  host: authority
+  owns: Independent trust/revocation and monotonic owner-epoch ledger; online permission; Part I 1.9.3; operator enrollment F2.0
+  not: Does not choose project work or settle rounds
+  impl:
+  - TARGET-UNIMPLEMENTED
+- id: broker
+  name: MUTATION BROKER
+  role: mutation broker
+  layer: control
+  host: control
+  owns: Only forge write custodian; serializes fenced effects, board/ref/memory CAS and dispatch capability checks with takeover; Part I 1.9.3/7
+  not: Does not choose project work or settle rounds
+  impl:
+  - TARGET-UNIMPLEMENTED
+- id: github_provider
+  name: GITHUB PROVIDER
+  role: github provider
+  layer: transport
+  host: external
+  owns: External GitHub App issuer and protected Git refs; CT-21 provider boundary
+  not: Does not choose project work or settle rounds
+  impl:
+  - external-boundary
+- id: gitlab_provider
+  name: GITLAB PROVIDER
+  role: gitlab provider
+  layer: transport
+  host: external
+  owns: External GitLab project access-token issuer and protected Git refs; CT-21; Part I 1.9.7
+  not: Does not choose project work or settle rounds
+  impl:
+  - external-boundary
+- id: inference_provider
+  name: INFERENCE PROVIDER
+  role: inference provider
+  layer: transport
+  host: external
+  owns: Explicit configured model upstream; provider key received only through proxy; CT-20
+  not: Does not choose project work or settle rounds
+  impl:
+  - external-boundary
 
-# Every edge is a CONTRACT: what crosses, in which direction, sync or async, and what the receiver
-# must be able to do with it. CT-01..CT-18 are the canonical register (Part IV); the M*-C* rows are
-# chapter-local contracts (M1 §6, M3 §6, M7 §6, M12 §6). States are the chapters' round-13
-# measurements, not the outline's structure text.
 contracts:
-  # ---- canonical register CT-01..CT-18 (Part IV order) ----
-  - id: CT-01
-    from: owner
-    to: scheduler
-    carries: lane enabled, cadence, weight, pin
-    mode: config
+- id: CT-01
+  from: owner
+  to: scheduler
+  carries: lane enabled, cadence, weight, pin
+  mode: config
+  state: UNVERIFIED
+  legacy_coverage:
     state: UNVERIFIED
-    sender_guarantee: "the owner declares it — fleet.example.toml:15,35 (per-lane weight, enabled); project admission rows in scheduler.db are the source of record"
-    receiver_requirement: "internal/scheduler/admission_mode.go:112 — admissionModeForProject resolves the project row (override → namespace default → cooldown)"
     note: boundary — the producer is a human writing fleet.toml and scheduler.db project rows; the consumer is admission_mode.go:112 admissionModeForProject (M9 §6)
-  - id: CT-02
-    from: scheduler
-    to: crier
-    carries: "envelope: run_id, corr_id, lane, board, text_b64"
-    mode: async, bearer + signature
+    sender_guarantee: the owner declares it — fleet.example.toml:15,35 (per-lane weight, enabled); project admission rows in scheduler.db are the source of record
+    receiver_requirement: internal/scheduler/admission_mode.go:112 — admissionModeForProject resolves the project row (override → namespace default → cooldown)
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-02
+  from: scheduler
+  to: crier
+  carries: 'cf2a.v1 / round-admission.v1: round/run/correlation IDs, fixed task_scope, total_budget, config_generation, fenced binding extension'
+  mode: async, bearer + signature
+  state: UNVERIFIED
+  legacy_coverage:
     state: PROVEN
-    sender_guarantee: "internal/bus/dispatch.go:202,266 — BuildDispatch renders run_id/corr_id/lane/board/text_b64 and signs before POST"
-    receiver_requirement: "crier internal/registry/handler.go:990 — HandleDeliver accepts the by-id delivery into the durable inbox"
     note: CF-354 fixed — crier HandleDeliver delivers the envelope verbatim (M9 §6, M10 §6)
-  - id: CT-03
-    from: crier
-    to: node
-    carries: inbox message + lease
-    mode: pull, 30 s lease
+    sender_guarantee: internal/bus/dispatch.go:202,266 — BuildDispatch renders run_id/corr_id/lane/board/text_b64 and signs before POST
+    receiver_requirement: crier internal/registry/handler.go:990 — HandleDeliver accepts the by-id delivery into the durable inbox
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-03
+  from: crier
+  to: node
+  carries: inbox message + lease
+  mode: pull, 30 s lease
+  state: UNVERIFIED
+  signal: LAUNCH
+  legacy_coverage:
     state: PROVEN
-    signal: LAUNCH
-    sender_guarantee: "crier internal/registry/handler.go:990 — deliver(): durable inbox write with lease/ack/TTL semantics"
-    receiver_requirement: "scripts/node-bus-worker.py:1356,1383 — signed GET /agents/<id>/inbox retrieve, then /inbox/ack"
     note: the node worker (M2 §6) and the dispatcher (M11 §6) are the two consumers; the node executes inside its Bunker — Crier is the launch boundary (resolved decision 1)
-  - id: CT-04
-    from: node
-    to: crier
-    carries: "reply: status, dispatch_id, corr_id, branch, commit, artifacts"
-    mode: async, signed
+    sender_guarantee: 'crier internal/registry/handler.go:990 — deliver(): durable inbox write with lease/ack/TTL semantics'
+    receiver_requirement: scripts/node-bus-worker.py:1356,1383 — signed GET /agents/<id>/inbox retrieve, then /inbox/ack
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-04
+  from: node
+  to: crier
+  carries: 'reply: status, dispatch_id, corr_id, branch, commit, artifacts'
+  mode: async, signed
+  state: UNVERIFIED
+  legacy_coverage:
     state: PARTIAL
     note: transport works; settlement reads only `ok` — CF-355 open (M2 §6, M9 §6)
-  - id: CT-05
-    from: foreman
-    to: scheduler
-    carries: the lane's prompt text and skills it may load
-    mode: seeded config
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-05
+  from: foreman
+  to: harness
+  carries: 'worker-brief.v1: round, wave, task, attempt, criteria, workspace, brief digest'
+  mode: resident launch custody
+  state: UNVERIFIED
+  legacy_coverage:
     state: UNVERIFIED
     note: both ends in-repo (load_lane_config.py:31 → spawn.go:1249 buildForemanPrompt); the "3 of 14 lanes disagree" breakage was never measured (M9 §6)
-  - id: CT-06
-    from: crier
-    to: scheduler
-    carries: completion event for a finished run
-    mode: async
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-06
+  from: crier
+  to: scheduler
+  carries: completion event for a finished run
+  mode: async
+  state: UNVERIFIED
+  signal: FOREMAN RETURN
+  legacy_coverage:
     state: PROVEN
-    signal: FOREMAN RETURN
-    sender_guarantee: "crier internal/registry/handler.go:170,1452 — the answering message carries ReplyTo correlation into the scheduler's durable inbox"
-    receiver_requirement: "internal/scheduler/dispatch_leg.go:713 — dispatchReplyVerdict reads the correlated payload's ok (first message wins, :428)"
     note: the resolved return path — the Bunker foreman's response travels through Crier back to the scheduler on the control host, which records it and triggers subsequent processing (resolved decision 1); the dispatcher leg works — it always sends `ok`, the field dispatchReplyVerdict reads (M11 §6)
-  - id: CT-06R
-    from: foreman
-    to: crier
-    carries: the foreman's durable response (return leg of CT-06)
-    mode: async, signed
+    sender_guarantee: crier internal/registry/handler.go:170,1452 — the answering message carries ReplyTo correlation into the scheduler's durable inbox
+    receiver_requirement: internal/scheduler/dispatch_leg.go:713 — dispatchReplyVerdict reads the correlated payload's ok (first message wins, :428)
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-06R
+  from: foreman
+  to: crier
+  carries: the foreman's durable response (return leg of CT-06)
+  mode: async, signed
+  state: UNVERIFIED
+  signal: RETURN LEG
+  label_dx: 70
+  legacy_coverage:
     state: UNVERIFIED
-    signal: RETURN LEG
-    label_dx: 70
     note: resolved decision 1 — Crier is the launch/return boundary; the foreman response enters Crier inside the Bunker and leaves for the scheduler, which records it and triggers subsequent processing; the foreman-side producing call is not yet contract-cited, so this leg is UNVERIFIED until Part IV reconciles it with CT-06
-  - id: CT-07
-    from: router
-    to: gateway
-    carries: model choice for a prompt
-    mode: in-band
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-07
+  from: router
+  to: gateway
+  carries: model choice for a prompt
+  mode: in-band
+  state: UNVERIFIED
+  legacy_coverage:
     state: UNVERIFIED
     note: boundary — neither side has an in-repo file:function; the wire was not measured (M12 §6). The Task Router itself is FUTURE and NOT PART OF MVP, placed after Node and before Harness with future harness-selection responsibility; do not equate that future selection with this separate current model/provider route
-  - id: CT-08
-    from: crier
-    to: gateway
-    carries: hermes-session delivery (message becomes a session turn)
-    mode: sync, 30 s
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-08
+  from: crier
+  to: gateway
+  carries: Bunker-local session custody; controller gateway is telemetry only
+  mode: sync, 30 s
+  state: UNVERIFIED
+  legacy_coverage:
     state: PROVEN
-    sender_guarantee: "crier internal/hermesession/hermesession.go:353 — Client.Deliver; :554 POSTs /api/sessions at the gateway origin"
-    receiver_requirement: "hermes gateway/platforms/api_server.py:1763 — POST /api/sessions creates the session row from the delivered message"
     note: crier side named — hermesession.go:353 Client.Deliver (M10 §6)
-  - id: CT-09
-    from: node
-    to: duckbrain
-    carries: "R1 run record, R2 fleet index"
-    mode: http, x-api-key
+    sender_guarantee: crier internal/hermesession/hermesession.go:353 — Client.Deliver; :554 POSTs /api/sessions at the gateway origin
+    receiver_requirement: hermes gateway/platforms/api_server.py:1763 — POST /api/sessions creates the session row from the delivered message
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-09
+  from: foreman
+  to: duckbrain
+  carries: worker/wave/round records, local_commit receipt, pending-sync/fresh/stale
+  mode: http, x-api-key
+  state: UNVERIFIED
+  legacy_coverage:
     state: MISSING
     note: node-bus-worker has zero DuckBrain calls (CF-329, M2 §6)
-  - id: CT-10
-    from: node
-    to: board
-    carries: row event with run_id and outcome
-    mode: append
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-10
+  from: foreman
+  to: board
+  carries: 'canonical board CAS: claimant_id, claim_id, lease_expires_at, claim_generation, row/event transaction marker'
+  mode: broker-mediated Git remote ref CAS
+  state: UNVERIFIED
+  legacy_coverage:
     state: BROKEN
     note: the node worker writes no board rows — no in-repo producer (M4 §6)
-  - id: CT-11
-    from: node
-    to: sessionstore
-    carries: every turn, model, tokens
-    mode: writes via gateway
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-11
+  from: node
+  to: sessionstore
+  carries: every turn, model, tokens
+  mode: writes via gateway
+  state: UNVERIFIED
+  legacy_coverage:
     state: UNVERIFIED
     note: boundary — both ends are the Hermes runtime, out of scope (M2 §6)
-  - id: CT-12
-    from: node
-    to: gitreins
-    carries: staged diff
-    mode: pre-commit hook
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-12
+  from: node
+  to: gitreins
+  carries: staged diff
+  mode: pre-commit hook
+  state: UNVERIFIED
+  legacy_coverage:
     state: UNVERIFIED
-    sender_guarantee: "scripts/install-gitreins.sh:124 — the pre-commit hook pins $VENV/bin/gitreins guard --quality-async on every seeded repo"
     note: the hook side is named (install-gitreins.sh:124); hook enforcement — that git invokes it — is unproven (M3 §6, M3 §11)
-  - id: CT-13
-    from: gitreins
-    to: board
-    carries: verdict that closes a row
-    mode: human/foreman action
+    sender_guarantee: scripts/install-gitreins.sh:124 — the pre-commit hook pins $VENV/bin/gitreins guard --quality-async on every seeded repo
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-13
+  from: gitreins
+  to: board
+  carries: verdict that closes a row
+  mode: human/foreman action
+  state: UNVERIFIED
+  legacy_coverage:
     state: UNVERIFIED
     note: completion requires --evidence-run-id (boardctl update); the verdict→close path was not re-run (M4 §6)
-  - id: CT-14
-    from: foreman
-    to: board
-    carries: row created, row closed, evidence
-    mode: boardctl
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-14
+  from: foreman
+  to: board
+  carries: row created, row closed, evidence
+  mode: boardctl
+  state: UNVERIFIED
+  legacy_coverage:
     state: UNVERIFIED
     note: the store is measured (357 rows / 520 events); the foreman write wire is not exercised in this repo (M4 §6)
-  - id: CT-15
-    from: foreman
-    to: duckbrain
-    carries: decisions, findings, goal
-    mode: mcp / http
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-15
+  from: foreman
+  to: duckbrain
+  carries: Same-namespace shared-Git decisions/findings; local commit, controller readback and sync freshness
+  mode: mcp / http
+  state: UNVERIFIED
+  signal: SHARED VIEW
+  legacy_coverage:
     state: UNVERIFIED
-    signal: SHARED VIEW
     note: boundary — the foreman lane and the duckbrain service are out of scope (M9 §6); the foreman writes through the DuckBrain installed in its own Bunker, which must expose the same logical project memory data/view as the controller (resolved decision 2; physical topology unresolved)
-  - id: CT-16
-    from: docsgate
-    to: handbook
-    carries: module status word
-    mode: read at build
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-16
+  from: docsgate
+  to: handbook
+  carries: module status word
+  mode: read at build
+  state: UNVERIFIED
+  legacy_coverage:
     state: UNVERIFIED
-    sender_guarantee: "scripts/master_doc_check.py:263 — prints MASTER-DOC: PASS|FAIL and exits 1 on FAIL"
     note: a structural gate, not a truth gate (M6 §6 F6-2); downgraded from PROVEN — the handbook build reads no MASTER-DOC output, so the receiver half is uncited
-  - id: CT-17
-    from: conformance
-    to: harness
-    carries: per-leg verdict (check, apply, smoke, vars, memory)
-    mode: executed
+    sender_guarantee: 'scripts/master_doc_check.py:263 — prints MASTER-DOC: PASS|FAIL and exits 1 on FAIL'
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-17
+  from: conformance
+  to: harness
+  carries: per-leg verdict (check, apply, smoke, vars, memory)
+  mode: executed
+  state: UNVERIFIED
+  legacy_coverage:
     state: UNVERIFIED
     note: not run this round (needs a live node); vars and memory had no executor (CF-328) (M5 §6)
-  - id: CT-18
-    from: handbook
-    to: owner
-    carries: the approval artifact
-    mode: read
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-18
+  from: handbook
+  to: owner
+  carries: the approval artifact
+  mode: read
+  state: UNVERIFIED
+  legacy_coverage:
     state: UNVERIFIED
     note: the legacy renderer hardcodes docs/master and does not select the M*.md chapters (M6 §6)
-  # ---- chapter-local contracts ----
-  - id: M12-C1
-    from: node
-    to: proxy
-    carries: chat completion with a node bearer token
-    mode: http, bearer node token
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-19
+  from: node
+  to: proxy
+  carries: chat completion with a node bearer token
+  mode: http, bearer node token
+  state: UNVERIFIED
+  legacy_coverage:
     state: UNVERIFIED
     note: proxy side verified (401 without a token); the node client half is config-wired, no call site in this repo (M12 §6)
-  - id: M12-C2
-    from: proxy
-    to: gateway
-    carries: forwarded inference with the control-host key
-    mode: http, 300 s timeout
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-20
+  from: proxy
+  to: inference_provider
+  carries: forwarded inference with the control-host key
+  mode: http, 300 s timeout
+  state: UNVERIFIED
+  legacy_coverage:
     state: UNVERIFIED
     note: external boundary — the upstream is a rumour with one side named; healthy streams are unframed to completion, F12-7 (M12 §6)
-  - id: M7-C1
-    from: github
-    to: node
-    carries: installation token installed at auth/github.token, mode 0600
-    mode: https api, JWT mint
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-21
+  from: github
+  to: broker
+  carries: Native forge write credentials stay broker-side; Bunker receives read-only access and online attenuated capabilities
+  mode: https api, JWT mint
+  state: UNVERIFIED
+  legacy_coverage:
     state: UNVERIFIED
     note: the mint was never run on this host (no App creds); the consumer is the node's credential file, not a function (M7 §6)
-  - id: M1-C1
-    from: node
-    to: crier
-    carries: agent registration + token exchange
-    mode: https, POST /agents
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-22
+  from: node
+  to: crier
+  carries: agent registration + token exchange
+  mode: https, POST /agents
+  state: UNVERIFIED
+  legacy_coverage:
     state: UNVERIFIED
     note: the in-repo producer half is not established; crier HandleRegister/HandleRegisterByID named (M1 §6)
-  - id: M1-C2
-    from: provisioner
-    to: bunker
-    carries: create, exec, cp against the agent container
-    mode: bunker CLI
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-23
+  from: provisioner
+  to: bunker
+  carries: create, exec, cp against the agent container
+  mode: bunker CLI
+  state: UNVERIFIED
+  legacy_coverage:
     state: UNVERIFIED
-    sender_guarantee: "scripts/bunker-provision.sh:504 — the node-create.sh stage drives create/exec/cp against the agent container"
     note: short create/exec/cp calls measured across M1's batteries (M1 §6); downgraded from PROVEN — the daemon's accept side has no in-repo file:function to cite
+    sender_guarantee: scripts/bunker-provision.sh:504 — the node-create.sh stage drives create/exec/cp against the agent container
+  target_revision: CF2A-01/P5-A
+  normative_source: Part IV IV.1; Part I 1.9; Part II
+  note: Target contract not certified by legacy transport measurements; see legacy_coverage and normative_source
+- id: CT-24
+  from: owner
+  to: manager
+  carries: factory.v1 configuration CAS / cf2a.v1 envelope
+  mode: authenticated HTTPS
+  state: UNVERIFIED
+  target_revision: CF2A-01/P5-A
+  normative_source: Part I 1.9; Part IV IV.1
+  note: TARGET-UNIMPLEMENTED; no measurement claim
+- id: CT-25
+  from: provisioner
+  to: manager
+  carries: immutable adapter observations and effective readback
+  mode: factory-adapter.v1
+  state: UNVERIFIED
+  target_revision: CF2A-01/P5-A
+  normative_source: Part I 1.9; Part IV IV.1
+  note: TARGET-UNIMPLEMENTED; no measurement claim
+- id: CT-26
+  from: manager
+  to: provisioner
+  carries: durable ordered plan / effect identity / discover-before-retry
+  mode: factory-adapter.v1
+  state: UNVERIFIED
+  target_revision: CF2A-01/P5-A
+  normative_source: Part I 1.9; Part IV IV.1
+  note: TARGET-UNIMPLEMENTED; no measurement claim
+- id: CT-27
+  from: manager
+  to: bunker
+  carries: deterministic first-fit capacity reservation and exact shortfall
+  mode: adapter reservation CAS
+  state: UNVERIFIED
+  target_revision: CF2A-01/P5-A
+  normative_source: Part I 1.9; Part IV IV.1
+  note: TARGET-UNIMPLEMENTED; no measurement claim
+- id: CT-28
+  from: manager
+  to: crier
+  carries: binding prepare/commit, active pointer, per-dispatch grants
+  mode: authenticated generation CAS
+  state: UNVERIFIED
+  target_revision: CF2A-01/P5-A
+  normative_source: Part I 1.9; Part IV IV.1
+  note: TARGET-UNIMPLEMENTED; no measurement claim
+- id: CT-29
+  from: manager
+  to: authority
+  carries: incident, epoch advance, fenced effect discovery and replacement
+  mode: online authenticated authority
+  state: UNVERIFIED
+  target_revision: CF2A-01/P5-A
+  normative_source: Part I 1.9; Part IV IV.1
+  note: TARGET-UNIMPLEMENTED; no measurement claim
+- id: CT-30
+  from: manager
+  to: owner
+  carries: progress.v1 / metrics / events with freshness and scoped reads
+  mode: authenticated HTTPS
+  state: UNVERIFIED
+  target_revision: CF2A-01/P5-A
+  normative_source: Part I 1.9; Part IV IV.1
+  note: TARGET-UNIMPLEMENTED; no measurement claim
 
-# F1-F5 carried from the outline; F6-F10 secondary; F11-F16 quorum-added. Each step names the
-# component pair and a what that cites the chapter text or contract row it came from.
 flows:
-  - id: F1
-    name: DISPATCH
-    question: How does a board row become settled, published work?
-    steps:
-      - [scheduler, board, "refresh local + remote repo/board copies BEFORE eligibility"]
-      - [scheduler, board, "board-check verifier hook: WORK / NO-WORK / UNREADABLE"]
-      - [scheduler, scheduler, "no-work → cooldown/defer; unreadable → diagnose, never dispatch"]
-      - [scheduler, scheduler, "admission (F11); GAP: today's PRE hook runs AFTER admission"]
-      - [scheduler, crier, "envelope: run_id, corr_id, lane, board, text_b64 (CT-02)"]
-      - [crier, node, "inbox pull + lease (CT-03) — launch into the Bunker"]
-      - [node, foreman, "foreman/worker start: brief + workspace in the Bunker"]
-      - [foreman, harness, "MVP: the foreman invokes the fixed Hermes harness directly"]
-      - [node, router, "FUTURE: Task Router between Node and Harness — NOT PART OF MVP"]
-      - [harness, foreman, "diff + evidence returned"]
-      - [foreman, foreman, "commit guard (Tier 1), then acceptance judgment (Tier 2)"]
-      - [foreman, duckbrain, "memory write — Bunker DuckBrain, shared controller view (CT-15)"]
-      - [foreman, board, "integration/publication: results + board changes (CT-14)"]
-      - [foreman, crier, "foreman response — the durable return leg through Crier (CT-06R)"]
-      - [crier, scheduler, "scheduler records completion, triggers follow-up (CT-06)"]
-      - [scheduler, scheduler, "POST hook runs AFTER outcome — cannot change the tick"]
-      - [scheduler, board, "end-of-lane sync: reconcile board copies; evidence bound"]
-    note: refresh-before-eligibility and the end verifier are the approved target; existing PRE/POST hook phases sit after admission and after outcome recording — that integration gap is shown, not concealed
-  - id: F2
-    name: PROVISIONING
-    question: How does a bare host become a node?
-    steps:
-      - [owner, scheduler, "lane declared: project, harness, pin"]
-      - [provisioner, bunker, "container created, home, keys (M1 §3 S2)"]
-      - [provisioner, node, "layers: base, harness, bus, repo (M1 §3)"]
-      - [provisioner, node, "DuckBrain installed in every Bunker — same logical memory view as the controller (resolved decision 2)"]
-      - [node, duckbrain, "identity + namespace credential"]
-      - [verifier, node, "verify-node measures the result — CREATED ≠ VERIFIED (M1 §12)"]
-  - id: F3
-    name: MEMORY
-    question: How does a run become searchable?
-    steps:
-      - [node, duckbrain, "R1 detail record (CT-09, missing)"]
-      - [node, duckbrain, "R2 fleet index record (CT-09, missing)"]
-      - [foreman, duckbrain, "R3 weekly rollup (CT-15)"]
-      - [owner, duckbrain, "recall by project, week, lane"]
-  - id: F4
-    name: DOCUMENTATION
-    question: How does a component become an approved document?
-    steps:
-      - [foreman, docsgate, "skeleton + source"]
-      - [foreman, docsgate, "seat fills, cites file:line"]
-      - [docsgate, foreman, "PASS or named refusals (CT-16)"]
-      - [panel, foreman, "3 seats grade independently; splits reported, never voted away (M6 §3 S4)"]
-      - [spine, handbook, "cross-chapter consistency: CT ids, states, dangling refs (M6 §3 S9)"]
-      - [handbook, owner, "PDF with status per module (CT-18)"]
-  - id: F5
-    name: LANDING
-    question: How does work reach main?
-    steps:
-      - [node, gitreins, "commit on a node branch; the gate grades the staged diff (CT-12)"]
-      - [gitreins, foreman, "verdict returned to the foreman (CT-13)"]
-      - [owner, lander, "lander merges the branch and proves ancestry on origin/main (M3 §2)"]
-      - [foreman, board, "row closed with evidence (CT-14)"]
-  - id: F6
-    name: MAINTENANCE
-    question: What keeps disks, branches, caches and freshness honest?
-    steps:
-      - [provisioner, safety, "layer 00 — reclaim_disk reaps build caches and job dirs past the 24 h TTL (M8 §3 S1)"]
-      - [provisioner, safety, "node_hygiene reap removes orphan homes/keys after a 60-minute grace (M1 §5)"]
-      - [node, node, "repo_freshness measures how far a workdir lags origin (M3 §5)"]
-      - [verifier, node, "node_freshness measures branch/HEAD/lag on the node (M1 §11)"]
-      - [safety, node, "protected paths refused before inspection: repo, node.json, crier.json (M8 §5)"]
-  - id: F7
-    name: MONITORING
-    question: How does anyone learn the machine is unwell?
-    steps:
-      - [scheduler, owner, "GET /api/v1/metrics — spawns, deferrals, ticks, tick duration (M9 §8)"]
-      - [scheduler, owner, "/api/v1/status — per-project failure-rate breakdown (M9 §5)"]
-      - [crier, owner, "/metrics, default-ON — guard and inbox series (M10 §8)"]
-      - [proxy, owner, "usage JSONL per request: node, model, status, bytes (M12 §8)"]
-    note: 11 of 13 modules emit no metrics — answerable only by grepping logs; the largest remaining system defect
-  - id: F8
-    name: RECOVERY
-    question: What happens after a crash, restart or orphaned run?
-    steps:
-      - [dispatcher, dispatcher, "redelivery replays the recorded result instead of re-running (M11 §3 S2)"]
-      - [crier, node, "an unacked message redelivers after lease expiry; an empty list is not a lost message (M10 §11)"]
-      - [scheduler, sessionstore, "--reap-sessions closes stale sessions; dry-run without --apply (M9 §5)"]
-      - [board, foreman, "board_read resolves the board from origin/main when the working copy drifts (M4 §3)"]
-      - [owner, board, "board_lock ERROR verdict — lock state unknown: stop and diagnose, never write (M4 §3)"]
-  - id: F9
-    name: DEGRADATION
-    question: A dependency is gone — what does the system do?
-    steps:
-      - [gateway, scheduler, "gateway fails: the tick is deferred, not exec-spawned (no-exec-fallback=true) (M9 §5)"]
-      - [scheduler, node, "load gate: new spawns deferred while load ≥ threshold (M9 §3)"]
-      - [guard, node, "guard provider outage: fail-open unless the policy is FailClosed (M10 §10)"]
-      - [proxy, node, "proxy fails closed at startup: no token file or no upstream key → exit 2 (M12 §11)"]
-      - [gitreins, node, "gate absent: the pre-commit hook exits 0 — a silent bypass that must be disclosed (M3 §10)"]
-  - id: F10
-    name: TEARDOWN / REBUILD
-    question: How is a node or lane removed without residue?
-    steps:
-      - [owner, provisioner, "--destroy requires --yes and a named agent (M1 §5)"]
-      - [provisioner, bunker, "container and per-agent home removed on the server (M1 §5)"]
-      - [provisioner, safety, "orphan homes/keys reaped against a live-registry check (M1 §10)"]
-      - [provisioner, node, "rebuild — the seed reapplies from the manifest, drift named per file (M1 §3 S4)"]
-  - id: F11
-    name: SCHEDULING ADMISSION
-    question: Does a lane's tick get admitted, and why not?
-    steps:
-      - [scheduler, board, "repo/board refresh BEFORE eligibility; the checked revision is recorded (approved target; see F1 gap note)"]
-      - [scheduler, scheduler, "cadence tick fires; admission mode — project override → namespace → cooldown (M9 §3)"]
-      - [scheduler, board, "board ownership and workability decide the tasks waiver — WORK, NO-WORK and UNREADABLE are distinct outcomes (M9 §3)"]
-      - [scheduler, scheduler, "usage pools reserved, or a capacity denial emitted (M9 §3)"]
-      - [scheduler, board, "board-stasis gate excludes an unchanged cooldown builder lane (M9 §3)"]
-      - [scheduler, scheduler, "NOOP-PACING spaces a no-artifact lane, doubling to 8× the floor (M9 §3)"]
-      - [scheduler, crier, "admitted — the envelope is dispatched (CT-02)"]
-    note: refused means a named reason — budget hold, cooldown, load gate, fairness, namespace allocation (OUTLINE F11); an unreadable board is never treated as no work
-  - id: F12
-    name: CREDENTIAL LIFECYCLE
-    question: How does a credential stay fresh, scoped and out of argv?
-    steps:
-      - [owner, github, "mint from an 0600 App private key — JWT → installation token (M7 §5)"]
-      - [github, owner, "token written to a 0600 file; the value is never printed (M7 §7)"]
-      - [github, node, "refresh --node installs auth/github.token on the node (M7 §5)"]
-      - [scoper, dispatcher, "fleet-gh-scope mints the per-dispatch scoped token (M11 §6)"]
-      - [node, proxy, "node bearer checked against the token file — fail-closed admission (M12 §6)"]
-  - id: F13
-    name: UPGRADE AND MIGRATION
-    question: How does a pinned bump or schema change reach the running system?
-    steps:
-      - [owner, harness, "pin bump — the installer fetches a digest-checked artifact (M5 §5)"]
-      - [harness, owner, "installed version read back against the pin; drift named (M5 §10)"]
-      - [owner, scheduler, "migration stores apply schema change to the 30-table store (M9 §3)"]
-      - [owner, board, "boardctl normalize-statuses migrates the row vocabulary (M4 §4)"]
-  - id: F14
-    name: OBSERVABILITY INGESTION
-    question: Where does a tick, turn or message become a visible, attributed line?
-    steps:
-      - [node, sessionstore, "every turn, model, tokens and cost recorded (CT-11)"]
-      - [scheduler, sessionstore, "tick and spawn counters served at /api/v1/metrics (M9 §8)"]
-      - [proxy, proxy, "usage and capture JSONL appended per request; capture loss is silent (M12 §11)"]
-      - [foreman, duckbrain, "decisions, findings and goals written to durable memory (CT-15)"]
-      - [scheduler, duckbrain, "scheduler syncs its namespace every 5 m (M9 §5)"]
-  - id: F15
-    name: BACKUP AND RESTORE
-    question: Can an artifact be restored and proven?
-    steps:
-      - [owner, board, "board_drift compares the checkout's board against origin/main row by row (M4 §7)"]
-      - [scheduler, board, "--verify-board checks board consistency at boot (M9 §5)"]
-      - [owner, duckbrain, "restore into a scratch home; a known row read back (OUTLINE F15)"]
-  - id: F16
-    name: MULTI-NODE FAN-OUT
-    question: How does one directive reach several nodes, each with its own receipt?
-    steps:
-      - [scheduler, dispatcher, "envelope addressed to each target agent in the registry (M11 §3 S4)"]
-      - [dispatcher, bunker, "bunker exec runs the harness inside each target container (M11 §3 S1)"]
-      - [dispatcher, crier, "reply delivered before ack; a redelivery replays, never re-runs (M11 §3 S3)"]
-      - [dispatcher, dispatcher, "serial loop — one long job head-of-line-blocks later agents (M11 §11 F11-5)"]
-      - [crier, scheduler, "completion settles per dispatch (CT-06)"]
+- id: F1
+  name: DISPATCH
+  question: How does a board row become settled, published work?
+  steps:
+  - - scheduler
+    - board
+    - Refresh before eligibility; WORK / NO-WORK / UNREADABLE (F11)
+  - - scheduler
+    - manager
+    - Read active binding; reserve total allowance; get one-use launch grant
+  - - scheduler
+    - crier
+    - Persist/send round-admission.v1 with fixed task_scope and budget (CT-02)
+  - - crier
+    - foreman
+    - Durable custody/lease; validate live fence; launch resident foreman (CT-03)
+  - - foreman
+    - duckbrain
+    - Recall same project namespace; local keyed reads supported (F3)
+  - - foreman
+    - board
+    - 'Wave loop: refresh, select authorized newly eligible tasks, CAS claims'
+  - - foreman
+    - harness
+    - Reserve remaining budget; worker-brief.v1; fixed Hermes in Bunker (CT-05)
+  - - harness
+    - gitreins
+    - Guard exact candidate; independent acceptance remains separate
+  - - foreman
+    - broker
+    - Exact-tree integrated gates, destination CAS and remote proof (F5)
+  - - foreman
+    - board
+    - Evidence-bound task closeout via broker CAS
+  - - foreman
+    - duckbrain
+    - Commit each worker and wave record; pending sync retained
+  - - foreman
+    - manager
+    - Publish budget/wave progress; repeat while useful authorized work and remaining budget
+  - - foreman
+    - duckbrain
+    - Distinct final-round summary; fsynced local commit (F3)
+  - - foreman
+    - crier
+    - Return correlated round-report.v1 (CT-06R)
+  - - crier
+    - scheduler
+    - Received -> awaiting_evidence; read controller memory/evidence custody
+  - - scheduler
+    - board
+    - Required postchecks; failure blocks final acceptance
+  - - scheduler
+    - scheduler
+    - Final settlement revision and once-only follow-up; no budget reset
+  legacy_steps:
+  - - scheduler
+    - board
+    - refresh local + remote repo/board copies BEFORE eligibility
+  - - scheduler
+    - board
+    - 'board-check verifier hook: WORK / NO-WORK / UNREADABLE'
+  - - scheduler
+    - scheduler
+    - no-work → cooldown/defer; unreadable → diagnose, never dispatch
+  - - scheduler
+    - scheduler
+    - 'admission (F11); GAP: today''s PRE hook runs AFTER admission'
+  - - scheduler
+    - crier
+    - 'envelope: run_id, corr_id, lane, board, text_b64 (CT-02)'
+  - - crier
+    - node
+    - inbox pull + lease (CT-03) — launch into the Bunker
+  - - node
+    - foreman
+    - 'foreman/worker start: brief + workspace in the Bunker'
+  - - foreman
+    - harness
+    - 'MVP: the foreman invokes the fixed Hermes harness directly'
+  - - node
+    - router
+    - 'FUTURE: Task Router between Node and Harness — NOT PART OF MVP'
+  - - harness
+    - foreman
+    - diff + evidence returned
+  - - foreman
+    - foreman
+    - commit guard (Tier 1), then acceptance judgment (Tier 2)
+  - - foreman
+    - duckbrain
+    - memory write — Bunker DuckBrain, shared controller view (CT-15)
+  - - foreman
+    - board
+    - 'integration/publication: results + board changes (CT-14)'
+  - - foreman
+    - crier
+    - foreman response — the durable return leg through Crier (CT-06R)
+  - - crier
+    - scheduler
+    - scheduler records completion, triggers follow-up (CT-06)
+  - - scheduler
+    - scheduler
+    - POST hook runs AFTER outcome — cannot change the tick
+  - - scheduler
+    - board
+    - 'end-of-lane sync: reconcile board copies; evidence bound'
+  legacy_note: refresh-before-eligibility and the end verifier are the approved target; existing PRE/POST hook phases sit after admission and after outcome recording — that integration gap is shown, not concealed
+  target_revision: CF2A-01/P5-A
+  normative_source: Part II F1; Part I 1.9
+- id: F2
+  name: PROVISIONING
+  question: How does a bare host become a node?
+  steps:
+  - - owner
+    - provisioner
+    - 'F2.0: verified release/trust bundle; user-space prerequisite checks'
+  - - provisioner
+    - authority
+    - Enroll first admin; consume nonce; establish independent authority
+  - - provisioner
+    - manager
+    - Start empty journal/broker; authenticated generation-zero read
+  - - owner
+    - manager
+    - CAS zero -> one global config; projects empty during bootstrap only
+  - - manager
+    - crier
+    - Install/probe durable custody before workspaces
+  - - manager
+    - duckbrain
+    - Controller namespace service; proxy/scheduler disabled-readiness probes
+  - - owner
+    - manager
+    - New generation adds project/lane/profile/credentials
+  - - manager
+    - bunker
+    - Fresh resource vectors; deterministic placement/reservation (CT-27)
+  - - provisioner
+    - node
+    - Pinned runtime, embedded board, namespace, credentials and volumes
+  - - verifier
+    - node
+    - Authenticated application/resource/memory/repository restart probes
+  - - manager
+    - crier
+    - Prepare non-routable candidate binding
+  - - manager
+    - scheduler
+    - Prepare candidate; commit active pointer; read back both; enable grants
+  legacy_steps:
+  - - owner
+    - scheduler
+    - 'lane declared: project, harness, pin'
+  - - provisioner
+    - bunker
+    - container created, home, keys (M1 §3 S2)
+  - - provisioner
+    - node
+    - 'layers: base, harness, bus, repo (M1 §3)'
+  - - provisioner
+    - node
+    - DuckBrain installed in every Bunker — same logical memory view as the controller (resolved decision 2)
+  - - node
+    - duckbrain
+    - identity + namespace credential
+  - - verifier
+    - node
+    - verify-node measures the result — CREATED ≠ VERIFIED (M1 §12)
+  target_revision: CF2A-01/P5-A
+  normative_source: Part II F2; Part I 1.9
+- id: F3
+  name: MEMORY
+  question: How does a run become searchable?
+  steps:
+  - - foreman
+    - duckbrain
+    - Resolve explicit namespace; recall before brief
+  - - foreman
+    - duckbrain
+    - Worker -> wave -> round records, immutable record IDs/digests
+  - - duckbrain
+    - foreman
+    - Fsync Git objects/ref and read back; local_commit is acknowledgement
+  - - duckbrain
+    - broker
+    - Exchange pending commits; validate namespace/writer/fence; no overwrite conflicts
+  - - broker
+    - duckbrain
+    - Controller readback records sync_commit/freshness; release pending hold
+  - - scheduler
+    - duckbrain
+    - Missing controller evidence keeps awaiting_evidence, not settled success
+  legacy_steps:
+  - - node
+    - duckbrain
+    - R1 detail record (CT-09, missing)
+  - - node
+    - duckbrain
+    - R2 fleet index record (CT-09, missing)
+  - - foreman
+    - duckbrain
+    - R3 weekly rollup (CT-15)
+  - - owner
+    - duckbrain
+    - recall by project, week, lane
+  target_revision: CF2A-01/P5-A
+  normative_source: Part II F3; Part I 1.9
+- id: F4
+  name: DOCUMENTATION
+  question: How does a component become an approved document?
+  steps:
+  - - foreman
+    - docsgate
+    - skeleton + source
+  - - foreman
+    - docsgate
+    - seat fills, cites file:line
+  - - docsgate
+    - foreman
+    - PASS or named refusals (CT-16)
+  - - panel
+    - foreman
+    - 3 seats grade independently; splits reported, never voted away (M6 §3 S4)
+  - - spine
+    - handbook
+    - 'cross-chapter consistency: CT ids, states, dangling refs (M6 §3 S9)'
+  - - handbook
+    - owner
+    - PDF with status per module (CT-18)
+  target_revision: CF2A-01/P5-A
+  normative_source: Part II F4; Part I 1.9
+- id: F5
+  name: LANDING
+  question: How does work reach main?
+  steps:
+  - - node
+    - gitreins
+    - Candidate exact-tree commit guard (CT-12)
+  - - gitreins
+    - foreman
+    - Independent acceptance evidence bound to candidate/criteria (CT-13)
+  - - foreman
+    - broker
+    - Mode-specific integration at remote base; all required tree gates
+  - - broker
+    - github_provider
+    - Destination ref CAS; native GitHub publication when selected
+  - - broker
+    - gitlab_provider
+    - Destination ref CAS; native GitLab publication when selected
+  - - foreman
+    - board
+    - Remote accepted-tree/ancestry mapping readback, evidence-bound closeout
+  legacy_steps:
+  - - node
+    - gitreins
+    - commit on a node branch; the gate grades the staged diff (CT-12)
+  - - gitreins
+    - foreman
+    - verdict returned to the foreman (CT-13)
+  - - owner
+    - lander
+    - lander merges the branch and proves ancestry on origin/main (M3 §2)
+  - - foreman
+    - board
+    - row closed with evidence (CT-14)
+  target_revision: CF2A-01/P5-A
+  normative_source: Part II F5; Part I 1.9
+- id: F6
+  name: MAINTENANCE
+  question: What keeps disks, branches, caches and freshness honest?
+  steps:
+  - - safety
+    - manager
+    - Inventory resources and retention/owner/sync/backup holds
+  - - manager
+    - manager
+    - CAS live -> deleting only with all eligibility facts
+  - - safety
+    - node
+    - Lock inode/path, quarantine/fsync/delete; new holds refused
+  - - safety
+    - manager
+    - Measured reclaimed bytes and retained/refused reasons
+  legacy_steps:
+  - - provisioner
+    - safety
+    - layer 00 — reclaim_disk reaps build caches and job dirs past the 24 h TTL (M8 §3 S1)
+  - - provisioner
+    - safety
+    - node_hygiene reap removes orphan homes/keys after a 60-minute grace (M1 §5)
+  - - node
+    - node
+    - repo_freshness measures how far a workdir lags origin (M3 §5)
+  - - verifier
+    - node
+    - node_freshness measures branch/HEAD/lag on the node (M1 §11)
+  - - safety
+    - node
+    - 'protected paths refused before inspection: repo, node.json, crier.json (M8 §5)'
+  target_revision: CF2A-01/P5-A
+  normative_source: Part II F6; Part I 1.9
+- id: F7
+  name: MONITORING
+  question: How does anyone learn the machine is unwell?
+  steps:
+  - - owner
+    - manager
+    - Authenticated scoped progress/readiness/metrics query
+  - - manager
+    - foreman
+    - Latest progress sequence/heartbeat; age >30 seconds is stale
+  - - manager
+    - owner
+    - Allowance/consumed/reserved/remaining, wave state, stop reason; unknown not zero
+  - - scheduler
+    - owner
+    - Settlement/admission series, separate from proxy usage JSONL
+  - - manager
+    - manager
+    - Authorized reconciliation; independently re-probe readiness
+  legacy_steps:
+  - - scheduler
+    - owner
+    - GET /api/v1/metrics — spawns, deferrals, ticks, tick duration (M9 §8)
+  - - scheduler
+    - owner
+    - /api/v1/status — per-project failure-rate breakdown (M9 §5)
+  - - crier
+    - owner
+    - /metrics, default-ON — guard and inbox series (M10 §8)
+  - - proxy
+    - owner
+    - 'usage JSONL per request: node, model, status, bytes (M12 §8)'
+  legacy_note: 11 of 13 modules emit no metrics — answerable only by grepping logs; the largest remaining system defect
+  target_revision: CF2A-01/P5-A
+  normative_source: Part II F7; Part I 1.9
+- id: F8
+  name: RECOVERY
+  question: What happens after a crash, restart or orphaned run?
+  steps:
+  - - manager
+    - manager
+    - Persist incident and unknown owner/effect state
+  - - manager
+    - crier
+    - 'F8.1 control: close grants, request drain/pause/cancel'
+  - - crier
+    - dispatcher
+    - Checkpoint then grace/TERM/KILL owned cgroup; receipt is not mere custody
+  - - manager
+    - authority
+    - Advance fence only after unresolved mutations are reconciled/denied
+  - - dispatcher
+    - manager
+    - Checkpoint/budget/claims readback or fenced_unknown
+  - - manager
+    - broker
+    - Discover published effects; never blind retry
+  - - manager
+    - provisioner
+    - F2 replacement on eligible host; restore committed state
+  - - manager
+    - scheduler
+    - Fenced binding prepare/commit/readback before resume
+  - - manager
+    - foreman
+    - Same round identities/budget; new attempt for stopped execution
+  legacy_steps:
+  - - dispatcher
+    - dispatcher
+    - redelivery replays the recorded result instead of re-running (M11 §3 S2)
+  - - crier
+    - node
+    - an unacked message redelivers after lease expiry; an empty list is not a lost message (M10 §11)
+  - - scheduler
+    - sessionstore
+    - --reap-sessions closes stale sessions; dry-run without --apply (M9 §5)
+  - - board
+    - foreman
+    - board_read resolves the board from origin/main when the working copy drifts (M4 §3)
+  - - owner
+    - board
+    - 'board_lock ERROR verdict — lock state unknown: stop and diagnose, never write (M4 §3)'
+  target_revision: CF2A-01/P5-A
+  normative_source: Part II F8; Part I 1.9
+- id: F9
+  name: DEGRADATION
+  question: A dependency is gone — what does the system do?
+  steps:
+  - - scheduler
+    - manager
+    - Dependency failure -> named admission deferral, no execution fallback
+  - - guard
+    - crier
+    - Classifier outage/invalid verdict -> refusal before custody; fail-closed
+  - - proxy
+    - node
+    - Missing/expired/revoked access refuses upstream work
+  - - foreman
+    - duckbrain
+    - HTTP outage permits local committed memory; pending sync retained
+  - - gitreins
+    - foreman
+    - Unavailable required gate forbids accepted publication
+  legacy_steps:
+  - - gateway
+    - scheduler
+    - 'gateway fails: the tick is deferred, not exec-spawned (no-exec-fallback=true) (M9 §5)'
+  - - scheduler
+    - node
+    - 'load gate: new spawns deferred while load ≥ threshold (M9 §3)'
+  - - guard
+    - node
+    - 'guard provider outage: fail-open unless the policy is FailClosed (M10 §10)'
+  - - proxy
+    - node
+    - 'proxy fails closed at startup: no token file or no upstream key → exit 2 (M12 §11)'
+  - - gitreins
+    - node
+    - 'gate absent: the pre-commit hook exits 0 — a silent bypass that must be disclosed (M3 §10)'
+  target_revision: CF2A-01/P5-A
+  normative_source: Part II F9; Part I 1.9
+- id: F10
+  name: TEARDOWN / REBUILD
+  question: How is a node or lane removed without residue?
+  steps:
+  - - owner
+    - manager
+    - Authorized target removal/rebuild; close new assignments
+  - - manager
+    - dispatcher
+    - F8.1 drain/checkpoint or fence; preserve evidence/memory
+  - - manager
+    - authority
+    - Revoke old capability/identity; prove denial
+  - - manager
+    - provisioner
+    - Destroy only retention-eligible quiescent resources
+  - - provisioner
+    - node
+    - F2 restore/rebuild and verifier probes
+  - - manager
+    - scheduler
+    - New verified binding; retained lifecycle receipt
+  legacy_steps:
+  - - owner
+    - provisioner
+    - --destroy requires --yes and a named agent (M1 §5)
+  - - provisioner
+    - bunker
+    - container and per-agent home removed on the server (M1 §5)
+  - - provisioner
+    - safety
+    - orphan homes/keys reaped against a live-registry check (M1 §10)
+  - - provisioner
+    - node
+    - rebuild — the seed reapplies from the manifest, drift named per file (M1 §3 S4)
+  target_revision: CF2A-01/P5-A
+  normative_source: Part II F10; Part I 1.9
+- id: F11
+  name: SCHEDULING ADMISSION
+  question: Does a lane's tick get admitted, and why not?
+  steps:
+  - - scheduler
+    - board
+    - repo/board refresh BEFORE eligibility; the checked revision is recorded (approved target; see F1 gap note)
+  - - scheduler
+    - scheduler
+    - cadence tick fires; admission mode — project override → namespace → cooldown (M9 §3)
+  - - scheduler
+    - board
+    - board ownership and workability decide the tasks waiver — WORK, NO-WORK and UNREADABLE are distinct outcomes (M9 §3)
+  - - scheduler
+    - scheduler
+    - usage pools reserved, or a capacity denial emitted (M9 §3)
+  - - scheduler
+    - board
+    - board-stasis gate excludes an unchanged cooldown builder lane (M9 §3)
+  - - scheduler
+    - scheduler
+    - NOOP-PACING spaces a no-artifact lane, doubling to 8× the floor (M9 §3)
+  - - scheduler
+    - crier
+    - admitted — the envelope is dispatched (CT-02)
+  note: refused means a named reason — budget hold, cooldown, load gate, fairness, namespace allocation (OUTLINE F11); an unreadable board is never treated as no work
+  target_revision: CF2A-01/P5-A
+  normative_source: Part II F11; Part I 1.9
+- id: F12
+  name: CREDENTIAL LIFECYCLE
+  question: How does a credential stay fresh, scoped and out of argv?
+  steps:
+  - - owner
+    - authority
+    - Enroll provider references and service principal scopes
+  - - github
+    - github_provider
+    - GitHub App issuance to broker, not node write-token delivery
+  - - broker
+    - gitlab_provider
+    - GitLab project token issue/discover/rotate/revoke; scoped denial proof
+  - - authority
+    - dispatcher
+    - Attempt capability <=300 s, attenuated scope and fence
+  - - manager
+    - authority
+    - End/crash revoke; independent denied-use probe before settlement
+  legacy_steps:
+  - - owner
+    - github
+    - mint from an 0600 App private key — JWT → installation token (M7 §5)
+  - - github
+    - owner
+    - token written to a 0600 file; the value is never printed (M7 §7)
+  - - github
+    - node
+    - refresh --node installs auth/github.token on the node (M7 §5)
+  - - scoper
+    - dispatcher
+    - fleet-gh-scope mints the per-dispatch scoped token (M11 §6)
+  - - node
+    - proxy
+    - node bearer checked against the token file — fail-closed admission (M12 §6)
+  target_revision: CF2A-01/P5-A
+  normative_source: Part II F12; Part I 1.9
+- id: F13
+  name: UPGRADE AND MIGRATION
+  question: How does a pinned bump or schema change reach the running system?
+  steps:
+  - - owner
+    - manager
+    - Exact release lock and role/protocol compatibility; reject unsupported
+  - - manager
+    - dispatcher
+    - F8.1 drain old wire-format rounds; F15 verified backup
+  - - manager
+    - authority
+    - Upgrade authority/broker, then manager store/runtime
+  - - manager
+    - crier
+    - Custody then memory/board adapters; copied migration verify/switch
+  - - provisioner
+    - bunker
+    - Bunkerd/client then Hermes pinned runtime
+  - - manager
+    - scheduler
+    - Admission last after readback; incompatible versions quarantined
+  - - manager
+    - manager
+    - Before new writes rollback; after schema writes forward repair or isolated F15 restore
+  legacy_steps:
+  - - owner
+    - harness
+    - pin bump — the installer fetches a digest-checked artifact (M5 §5)
+  - - harness
+    - owner
+    - installed version read back against the pin; drift named (M5 §10)
+  - - owner
+    - scheduler
+    - migration stores apply schema change to the 30-table store (M9 §3)
+  - - owner
+    - board
+    - boardctl normalize-statuses migrates the row vocabulary (M4 §4)
+  target_revision: CF2A-01/P5-A
+  normative_source: Part II F13; Part I 1.9
+- id: F14
+  name: OBSERVABILITY INGESTION
+  question: Where does a tick, turn or message become a visible, attributed line?
+  steps:
+  - - foreman
+    - foreman
+    - Journal progress.v1 at transitions and every 10 seconds
+  - - foreman
+    - manager
+    - 'Authenticated PUT: seq/digest/fence validation; fsync ack'
+  - - manager
+    - owner
+    - 'GET live progress: last sample, receive age, quality; scope ACL'
+  - - node
+    - sessionstore
+    - Native turn records separate from semantic memory
+  - - manager
+    - owner
+    - CT-30 outbox events; independent subscriber retry and cursor
+  - - foreman
+    - manager
+    - Reconnect flushes queued seq; gaps/conflicts visible
+  legacy_steps:
+  - - node
+    - sessionstore
+    - every turn, model, tokens and cost recorded (CT-11)
+  - - scheduler
+    - sessionstore
+    - tick and spawn counters served at /api/v1/metrics (M9 §8)
+  - - proxy
+    - proxy
+    - usage and capture JSONL appended per request; capture loss is silent (M12 §11)
+  - - foreman
+    - duckbrain
+    - decisions, findings and goals written to durable memory (CT-15)
+  - - scheduler
+    - duckbrain
+    - scheduler syncs its namespace every 5 m (M9 §5)
+  target_revision: CF2A-01/P5-A
+  normative_source: Part II F14; Part I 1.9
+- id: F15
+  name: BACKUP AND RESTORE
+  question: Can an artifact be restored and proven?
+  steps:
+  - - owner
+    - manager
+    - Explicit backup policy or refuse; create needs no prior artifact
+  - - manager
+    - scheduler
+    - Close admission barrier
+  - - manager
+    - dispatcher
+    - F8.1 drain/checkpoint all scoped writers
+  - - manager
+    - broker
+    - Resolve effects; freeze canonical writes
+  - - manager
+    - crier
+    - Hold custody checkpoint then namespace and manager checkpoints
+  - - manager
+    - duckbrain
+    - Capture Git objects/refs, SQLite native snapshots, evidence and journal
+  - - manager
+    - owner
+    - Off-host readback; signed cf.backup.v1 consistency marker; reverse release
+  - - provisioner
+    - node
+    - Isolated restore and source-specific integrity/readback
+  - - manager
+    - authority
+    - Current revocations/epochs, or revoke-all/new-authority; never restore old authority
+  - - manager
+    - scheduler
+    - Fresh credentials and verified binding; record actual RPO/RTO
+  legacy_steps:
+  - - owner
+    - board
+    - board_drift compares the checkout's board against origin/main row by row (M4 §7)
+  - - scheduler
+    - board
+    - --verify-board checks board consistency at boot (M9 §5)
+  - - owner
+    - duckbrain
+    - restore into a scratch home; a known row read back (OUTLINE F15)
+  target_revision: CF2A-01/P5-A
+  normative_source: Part II F15; Part I 1.9
+- id: F16
+  name: MULTI-NODE FAN-OUT
+  question: How does one directive reach several nodes, each with its own receipt?
+  steps:
+  - - scheduler
+    - scheduler
+    - Validate fanout.v1 explicit policy; immutable target snapshot
+  - - scheduler
+    - crier
+    - Durable per-target IDs; bounded concurrency; unreachable is outcome
+  - - crier
+    - dispatcher
+    - Each target uses fenced execution and final-settlement receipt
+  - - scheduler
+    - manager
+    - fail_fast/cancel/deadline invokes F8.1; replacement only resume_fenced
+  - - scheduler
+    - scheduler
+    - Aggregate success/partial/failed/cancelled/timed_out from receipts
+  - - scheduler
+    - owner
+    - Retain per-target and late-result evidence; no repeated settled execution
+  legacy_steps:
+  - - scheduler
+    - dispatcher
+    - envelope addressed to each target agent in the registry (M11 §3 S4)
+  - - dispatcher
+    - bunker
+    - bunker exec runs the harness inside each target container (M11 §3 S1)
+  - - dispatcher
+    - crier
+    - reply delivered before ack; a redelivery replays, never re-runs (M11 §3 S3)
+  - - dispatcher
+    - dispatcher
+    - serial loop — one long job head-of-line-blocks later agents (M11 §11 F11-5)
+  - - crier
+    - scheduler
+    - completion settles per dispatch (CT-06)
+  target_revision: CF2A-01/P5-A
+  normative_source: Part II F16; Part I 1.9
 
-# The 13 modules (docs/UNIT-MAP.yaml, chapters M0-M12): what each module view centres on.
-# contracts_in / contracts_out are the chapter §6 tables, by id; flows_owned is the README/OUTLINE
-# owner row; the generator derives every other flow participation from the steps themselves.
 modules:
-  - id: M0
-    name: SHARED CONTRACT
-    blurb: the shell substrate every node-side module sources — ok/bad/warn/note, fetch_verified, require_disk (M0 §2)
-    components: []
-    contracts_in: []
-    contracts_out: []
-  - id: M1
-    name: PROVISIONING
-    blurb: a bare host becomes a node with an identity, a bus membership and a seeded repo (M1 §2)
-    components: [provisioner, verifier]
-    contracts_in: []
-    contracts_out: [M1-C1, M1-C2]
-  - id: M2
-    name: DISPATCH (NODE SIDE)
-    blurb: whose turn it is becomes a brief, a run and a reply (M2 §2)
-    components: [node]
-    contracts_in: [CT-03]
-    contracts_out: [CT-04, CT-09, CT-11]
-  - id: M3
-    name: REPOSITORY
-    blurb: the node has the right tree, and work can leave it (M3 §2)
-    components: [lander, gitreins]
-    contracts_in: []
-    contracts_out: [CT-12]
-  - id: M4
-    name: BOARD
-    blurb: the fleet remembers what it decided and what it proved (M4 §2)
-    components: [board]
-    contracts_in: [CT-10, CT-13, CT-14]
-    contracts_out: []
-  - id: M5
-    name: HARNESS
-    blurb: the agent inside the node can actually code, and its commits are graded (M5 §2)
-    components: [harness, conformance]
-    contracts_in: [CT-17]
-    contracts_out: []
-  - id: M6
-    name: DOCUMENTATION
-    blurb: the system describes itself, and someone can check the description (M6 §2)
-    components: [docsgate, panel, spine, handbook]
-    contracts_in: []
-    contracts_out: [CT-16, CT-18]
-  - id: M7
-    name: GITHUB
-    blurb: the fleet can authenticate to the forge without a long-lived token in argv (M7 §2)
-    components: [github]
-    contracts_in: []
-    contracts_out: [M7-C1]
-  - id: M8
-    name: SAFETY
-    blurb: the checks that must be able to fail, and the disk they must not fill (M8 §2)
-    components: [safety]
-    contracts_in: []
-    contracts_out: []
-  - id: M9
-    name: SCHEDULER
-    blurb: the control plane's clock and admission authority (M9 §2)
-    components: [scheduler]
-    contracts_in: [CT-01, CT-05, CT-06]
-    contracts_out: [CT-02, CT-15]
-  - id: M10
-    name: CRIER
-    blurb: the bus — registration, routing, leases, retrieval, ack, TTL, dead letters (M10 §2)
-    components: [crier, guard]
-    contracts_in: [CT-02, CT-04]
-    contracts_out: [CT-03, CT-08]
-  - id: M11
-    name: DISPATCHER
-    blurb: one loop for every agent on every box; executes the work inside the container (M11 §2)
-    components: [dispatcher, scoper]
-    contracts_in: [CT-03]
-    contracts_out: [CT-06]
-  - id: M12
-    name: INFERENCE PROXY
-    blurb: the only thing holding the real provider credential (M12 §2)
-    components: [proxy]
-    contracts_in: [CT-07, M12-C1]
-    contracts_out: [M12-C2]
+- id: M0
+  name: SHARED CONTRACT
+  blurb: the shell substrate every node-side module sources — ok/bad/warn/note, fetch_verified, require_disk (M0 §2)
+  components: []
+  contracts_in: []
+  contracts_out: []
+- id: M1
+  name: PROVISIONING
+  blurb: a bare host becomes a node with an identity, a bus membership and a seeded repo (M1 §2)
+  components:
+  - provisioner
+  - verifier
+  contracts_in: []
+  contracts_out:
+  - CT-22
+  - CT-23
+- id: M2
+  name: DISPATCH (NODE SIDE)
+  blurb: whose turn it is becomes a brief, a run and a reply (M2 §2)
+  components:
+  - node
+  contracts_in:
+  - CT-03
+  contracts_out:
+  - CT-04
+  - CT-09
+  - CT-11
+- id: M3
+  name: REPOSITORY
+  blurb: the node has the right tree, and work can leave it (M3 §2)
+  components:
+  - lander
+  - gitreins
+  contracts_in: []
+  contracts_out:
+  - CT-12
+- id: M4
+  name: BOARD
+  blurb: the fleet remembers what it decided and what it proved (M4 §2)
+  components:
+  - board
+  contracts_in:
+  - CT-10
+  - CT-13
+  - CT-14
+  contracts_out: []
+- id: M5
+  name: HARNESS
+  blurb: the agent inside the node can actually code, and its commits are graded (M5 §2)
+  components:
+  - harness
+  - conformance
+  contracts_in:
+  - CT-17
+  contracts_out: []
+- id: M6
+  name: DOCUMENTATION
+  blurb: the system describes itself, and someone can check the description (M6 §2)
+  components:
+  - docsgate
+  - panel
+  - spine
+  - handbook
+  contracts_in: []
+  contracts_out:
+  - CT-16
+  - CT-18
+- id: M7
+  name: GITHUB
+  blurb: the fleet can authenticate to the forge without a long-lived token in argv (M7 §2)
+  components:
+  - github
+  contracts_in: []
+  contracts_out:
+  - CT-21
+- id: M8
+  name: SAFETY
+  blurb: the checks that must be able to fail, and the disk they must not fill (M8 §2)
+  components:
+  - safety
+  contracts_in: []
+  contracts_out: []
+- id: M9
+  name: SCHEDULER
+  blurb: the control plane's clock and admission authority (M9 §2)
+  components:
+  - scheduler
+  contracts_in:
+  - CT-01
+  - CT-06
+  contracts_out:
+  - CT-02
+  - CT-15
+- id: M10
+  name: CRIER
+  blurb: the bus — registration, routing, leases, retrieval, ack, TTL, dead letters (M10 §2)
+  components:
+  - crier
+  - guard
+  contracts_in:
+  - CT-02
+  - CT-04
+  contracts_out:
+  - CT-03
+  - CT-08
+- id: M11
+  name: DISPATCHER
+  blurb: one loop for every agent on every box; executes the work inside the container (M11 §2)
+  components:
+  - dispatcher
+  - scoper
+  contracts_in:
+  - CT-03
+  contracts_out:
+  - CT-06
+- id: M12
+  name: INFERENCE PROXY
+  blurb: the only thing holding the real provider credential (M12 §2)
+  components:
+  - proxy
+  contracts_in:
+  - CT-07
+  - CT-19
+  contracts_out:
+  - CT-20
+
+view_contract:
+  sequence_source: flows[].steps contains target only
+  legacy_source: flows[].legacy_steps is coverage only; never substituted for target
+  component_count: len(components)
+  canonical_contract_ids: CT-01..CT-30 plus CT-06R
+  canonical_count: count contracts whose id begins CT-
+  boundary_edges: Additional views of named canonical contracts; not new contract IDs
+  caption_template: 'Components and boundary peers: {component_count}; canonical contracts: {canonical_count}; model revision: {target_revision}'
+boundary_edges:
+- contract: CT-21
+  from: github
+  to: github_provider
+  carries: GitHub App issue/revoke; native provider scope
+- contract: CT-21
+  from: broker
+  to: gitlab_provider
+  carries: GitLab project access-token issue/discover/revoke
+- contract: CT-21
+  from: broker
+  to: node
+  carries: Read-only access and attenuated attempt capability; no forge write secret
+- contract: CT-28
+  from: manager
+  to: scheduler
+  carries: Prepared binding, committed active pointer and readiness readback
+- contract: CT-29
+  from: authority
+  to: broker
+  carries: Live owner fence; effect serialization and revocation
+- contract: CT-14
+  from: broker
+  to: board
+  carries: Atomic task/event/marker remote-ref CAS
+- contract: CT-15
+  from: broker
+  to: duckbrain
+  carries: Authorized namespace remote publication
+- contract: CT-30
+  from: foreman
+  to: manager
+  carries: progress.v1 durable seq and budget/wave facts
+subflows:
+- id: F2.0
+  parent: F2
+  source: Part II F2.0
+  contracts:
+  - CT-21
+  - CT-24
+  - CT-29
+- id: F8.1
+  parent: F8
+  source: Part II F8.1
+  contracts:
+  - CT-03
+  - CT-10
+  - CT-29
+- id: F15.1
+  parent: F15
+  source: Part II F15.1
+  contracts:
+  - CT-24
+  - CT-25
+  - CT-29
+- id: F16.1
+  parent: F16
+  source: Part II F16.1
+  contracts:
+  - CT-02
+  - CT-03
+  - CT-06
+  - CT-29

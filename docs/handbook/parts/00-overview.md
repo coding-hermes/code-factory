@@ -98,16 +98,18 @@ Jail is optional and disabled by default, enabled only by explicit operator
 configuration with no unguarded fallback when enabled. The deterministic
 management/reconciliation service is a required target component of this
 definition; it is specified in Parts I, IV and V and marked
-TARGET-UNIMPLEMENTED — it is not yet built, and its implementation language and
-storage are deliberately undecided.
+TARGET-UNIMPLEMENTED — it is not yet built. Its language remains open; its
+single-writer, fsync-acknowledged transactional JSONL persistence profile and
+crash/recovery requirements are fixed in Part I §1.9.2.
 
 ## The system, as a map
 
 ![FIGURE 0.1](figures/system-map.svg)
 
 Boxes are responsibilities, and each box carries a role/host boundary: a BUNKER tag
-marks a component that executes inside the Bunker deployment/execution boundary;
-untagged components run on the control host. Paths live in the model's `impl` field
+marks a component that executes inside the Bunker deployment/execution boundary.
+The model also declares control, external, independent-authority and dual-instance
+hosts explicitly; an untagged box never implies a controller foreman. Paths live in the model's `impl` field
 and are deliberately volatile — a script can move without the system changing.
 Colour is never used; line style is the contract state: solid means the interface
 works as documented, dashed means it is broken and named, dotted means it is
@@ -119,8 +121,9 @@ project foreman runs **inside its Bunker**; Crier is the launch/return boundary,
 the foreman's response returns through Crier to the scheduler on the control host,
 which records it and triggers subsequent processing. DuckBrain is installed **in
 every Bunker** and exposes the same logical project memory data/view as the
-controller — the physical shared-service or replication topology remains an open
-specification, not an assumed fact. DuckBrain memory is locally available in
+controller using the selected same-namespace shared-Git profile (Part V, supported
+memory profile; F3). Local-only requires the shared repository specified there;
+it is not a disconnected multi-Bunker deployment. DuckBrain memory is locally available in
 Git-backed namespace repositories on each machine: losing the HTTP server does not
 imply losing local memory access, and a disconnected server is never a reason to
 invent a separate memory store.
@@ -131,9 +134,10 @@ evolve as the design becomes complete; they are not a frozen architecture and
 not a limit on the services the Factory may require. The Factory
 management/reconciliation service and its desired/observed state store are part
 of the arrangement (Part I §1.1) and registered in `docs/SYSTEM-MODEL.yaml`; the
-map sheet regenerates from that model, and until that regeneration lands the
-figure above does not yet draw the manager box — a named deviation, not a
-concealed one.
+map sheet regenerates from that model. CF2A-01/P5-A is the target model revision;
+figure and BOOK.yaml caption regeneration remains the wave-C release gate. The
+rendered issue must identify the model digest and derive its component/contract
+totals from that exact input, not a hand-maintained caption.
 
 ## How a row moves
 
@@ -187,3 +191,22 @@ deployment evidence show implementation coverage and deviations — where the bu
 system and the approved target disagree, the disagreement is recorded as a named
 deviation with its evidence, not adopted as the requirement. This book is
 specification and record, not a proxy for either.
+
+## Issue authority and compatibility
+
+The target revision is `CF2A-01/P5-A`; implementation evidence has its own source
+revision and never changes a requirement. Part IV §IV.1 supplies the canonical
+`cf2a.v1` envelope and contract identities; Part V supplies `factory.v1` desired
+configuration and the same-namespace memory profile. Part I §1.9 supplies precise
+manager, adapter and concurrency refinements; Part II supplies ordered execution.
+The machine-readable model declares this revision and precedence. Conflicts
+without an explicit resolution in this issue are `SPEC_CONFLICT`: build acceptance
+stops rather than consulting implementation code as an alternative authority.
+Legacy chapter examples are coverage evidence, not an alternate wire protocol.
+
+The P5-A resolution chooses Part IV's more complete outer envelope/body cards,
+Part V's global `factory.v1` configuration/API and local-commit memory semantics.
+`manager.v1`, `round-request.v1`, seeded-prompt CT-05 and M*-C* aliases are not
+parallel target contracts. Part I §1.9.6 defines compatibility translation.
+Owner acceptance remains joint across waves; structural lint alone does not
+approve this target revision.

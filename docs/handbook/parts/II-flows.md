@@ -13,9 +13,9 @@ the twelve required scenario families to the flows that carry their normative
 sequences. A figure is mounted at its reading position — hero-sized on
 the flow's own sheet where it fits; a figure too large for a text sheet gets its
 own sheet with a reference line in its place, and the flow id is repeated on every
-continuation head. Nothing here is invented: every step cites the chapter text or
-contract row it came from, and where a chapter marks a wire UNVERIFIED, BROKEN or
-MISSING, the flow says so. Where the handbook has no measured metric for a flow,
+continuation head. Target steps cite the normative contract or refinement that
+requires them. Measured legacy deviations remain separately labeled; they never
+substitute for target steps in the CF2A-01/P5-A model. Where the handbook has no measured metric for a flow,
 the metric-owner line names the gap rather than inventing a counter. The sequence
 diagrams are generated from `docs/SYSTEM-MODEL.yaml` by
 `scripts/gen_handbook_figures.py`.
@@ -45,15 +45,15 @@ together with merged-tree/publication evidence and reconciled board copies. The
 worker-attempt detail (brief, commit, guard and judge verdicts, the worker's own
 memory entry) is the inner cycle of step 4; F3 and F5 carry its contracts.
 
-**Preconditions and inputs:** the lane is enabled and configured (`CT-01`); the repository and board copies were refreshed before eligibility; the board-check verifier found work; admission reserved capacity. Inputs: the dispatch envelope — run_id, corr_id, lane, board, text_b64 (`CT-02`, PROVEN); the lane prompt text (`CT-05`, UNVERIFIED); the board revision checked at admission.
+**Preconditions and inputs:** the lane is enabled and configured (`CT-01`); the repository and board copies were refreshed before eligibility; the board-check verifier found work; admission reserved capacity. Inputs: `round-admission.v1` in `cf2a.v1` (`CT-02`); the CT-01 lane_seed extension; the admitted board revision, fixed task_scope and generation. Part I §1.9.6 defines the complete legacy translation; free text never supplies missing budget or authorization.
 
 **Steps:**
 
 1. Entry from F11: the relevant board copies are refreshed and checked, eligible
    work is classified against no-work/stale/unreadable states, and the lane is
    admitted under its configured policy.
-2. The scheduler delivers an identified foreman-round request and total-worker
-   allowance through Crier (`CT-02`, PROVEN; `internal/bus/dispatch.go:202,266`);
+2. The scheduler delivers round-admission.v1 and the total-worker allowance
+   through Crier (CT-02 target; legacy transport: internal/bus/dispatch.go:202,266);
    the node's bus worker pulls the message and holds a 30-second lease (`CT-03`,
    PROVEN; `scripts/node-bus-worker.py:1356,1383`), and the execution adapter
    launches the project foreman inside its Bunker.
@@ -85,10 +85,11 @@ memory entry) is the inner cycle of step 4; F3 and F5 carry its contracts.
    scheduler's durable inbox, `CT-06`, PROVEN, `internal/registry/handler.go:170,1452`).
    The final round entry is likewise durably captured locally; local persistence,
    Git commit and remote synchronization are reported as distinct states.
-8. The scheduler durably records the round result. The end-of-lane repository/board
-   refresh and verifier then produce explicit results whose order and
-   final-acceptance effect are defined so a required post-hook failure cannot be
-   hidden by an earlier success record.
+8. The scheduler fsyncs received, verifies controller-readable memory/evidence
+   digests (otherwise awaiting_evidence), then runs required postchecks before
+   final settlement. Part I §1.9.9 fixes retry deadlines, revocation proof,
+   settlement revisions and once-only follow-up; execution success alone never
+   increments final-success counters.
 
 **Exceptional branches:** settlement must distinguish delivery acceptance, running,
 interrupted, rejected, partially published and settled results — but the measured
@@ -97,14 +98,16 @@ implementation reads only `ok` (`dispatch_leg.go:713-726`), so a node reply carr
 is scored a success (CF-355, M9 §2). An unacked message redelivers after lease
 expiry; reconciliation on replay must not duplicate accepted publication or reset
 the round budget, and an empty inbox list is not a lost message (M10 §11). A failed
-POST closeout hook never changes the recorded outcome; its failure must stay
-visible in the final accepted state rather than being absorbed (M9 §3). On DuckBrain
+POST closeout hook never rewrites the immutable execution verdict. It does block
+final acceptance: Part I §1.9.9 requires awaiting_evidence/postcheck_pending and
+settlement revisions, with success counters and follow-up withheld until checks
+pass. M9 §3's outcome-before-hook behavior is a legacy deviation. On DuckBrain
 unavailability the round continues on local native memory with pending
 synchronization tracked (V2-FLW-05, F3).
 
 **Contracts:** `CT-01` admission configuration (UNVERIFIED), `CT-02` dispatch
-envelope (PROVEN), `CT-03` lease/redelivery (PROVEN), `CT-05` lane prompt
-(UNVERIFIED), `CT-06`/`CT-06R` durable return, `CT-09` memory records (MISSING),
+envelope (legacy transport measured), `CT-03` lease/redelivery, `CT-05` worker brief
+(target), `CT-06`/`CT-06R` durable return, `CT-09` memory records (MISSING),
 `CT-13` verdict evidence, `CT-14` board closeout, `CT-15` memory boundary.
 
 **Settings:** lane cadence, weight, pin and admission mode (`CT-01`,
@@ -164,9 +167,10 @@ binding whose identity/version matches the readiness result.
    application readiness, memory paths, runtime permissions and required service
    connectivity — CREATED is not VERIFIED (M1 §12). Its result includes the
    verified identity and effective version.
-6. The manager registers or replaces the Crier binding only after matching
-   identity/readiness readback, then hands Scheduler the binding generation and
-   readiness identity; admission remains disabled until that readback is accepted.
+6. The manager prepares Crier and scheduler candidates, commits its authoritative
+   binding pointer, and reads back both participants using Part I §1.9.4. New
+   dispatch requires a one-use generation/fence grant; partial propagation never
+   leaves an old route admissible.
 7. The manager retains the operation, allocation and verifier evidence, including
    the refusal or partial state when any required leg is not complete.
 
@@ -197,6 +201,55 @@ verifier's per-leg ladder is the record of record (M1 §11).
 
 1. Provision a new project under each supported profile; the target cannot receive work before its readiness and routing checks pass.
 2. Lose a selected host mid-install; partial allocation is reconciled and resumed or replaced without registering two active owners.
+### F2.0 — Cold control-plane bootstrap (P5-A-03)
+
+**Trigger/actors:** an operator requests a new Factory; the offline bootstrap
+installer, authority administrator and service supervisors establish the control
+plane before the manager exists. F2 steps 1–7 apply only after this subflow.
+**Prerequisites/inputs:** a supported prequalified host/profile (Part I §1.6),
+operator-owned offline CA/recovery key, independent authority location, signed
+release lock, declared endpoint map and mode-0600 one-use enrollment bundle.
+No running manager, lane, board or project credential is a prerequisite.
+
+1. The installer verifies release-lock signature against the operator-supplied
+   trust anchor, SHA-256 checks every artifact before executing it, and checks
+   user-space host prerequisites. It creates isolated durable roots and service
+   identities; no download script runs before verification and no root action runs.
+2. The authority starts on its independent host with a genesis ledger, consumes
+   the enrollment nonce, creates the first administrator binding and issues the
+   controller/server identities. The offline signing key leaves the runtime host.
+3. The installer writes endpoint discovery and trust references, starts the
+   mutation broker and empty manager under supervision, and observes generation
+   zero through authenticated GET. Reusing enrollment is refused, not a second admin.
+4. The administrator submits a global factory.v1 document with an empty projects
+   array and expected_generation zero; its accepted generation is one. This is
+   the sole bootstrap exception permitting no projects. The manager's journal
+   now owns configuration; the bootstrap installer cannot change later editions.
+5. The manager installs durable Crier (no in-memory registry), disabled-admission
+   scheduler and controller DuckBrain, then the inference proxy and provider
+   adapters. It probes custody across service restart, namespace local commit/
+   readback, proxy authorized/denied access and scheduler disabled state. The bus
+   exists before any project workspace. Provider enrollment is F12, not implicit.
+6. The manager records effective endpoints, certificate identities, release digest
+   and restart probes in the bootstrap operation. It destroys the consumed bundle
+   after verified enrollment; failure retains only protected diagnostic references.
+7. An authorized generation update adds the first project and CT-01 lane seed.
+   F2 steps 1–7 provision it; §1.9.4 binding activation is the only admission enable.
+
+**State/failure/recovery:** an installer receipt tracks artifact digests and completed
+steps; before manager genesis it is a fsynced local journal with one installation
+ID. After genesis the manager imports that receipt and owns subsequent steps.
+Retry uses the same installation/effect IDs and readback, not duplicate identity
+issuance. Bad pins, missing host capability, unreachable authority or failed
+custody probe stop bootstrap unready; no fallback login or ephemeral store is
+allowed. Removing a failed service never removes its durable root.
+**Settings/metrics:** profile, release lock, endpoint map and certificate lifetimes
+are Part I §1.6/§1.9; bootstrap timeout is 15 minutes, then degraded/manual retry.
+The installer owns pre-genesis step receipts; manager owns bootstrap state events.
+**Completion proof:** generation-one receipt, rejected enrollment replay,
+authenticated post-restart service readbacks and first-project round-trip evidence
+are retained. A daemon version string alone cannot finish bootstrap. [CT-21–CT-29]
+
 ## 2.3 F3 — Memory
 
 ![FIGURE 2.3](figures/F3.svg)
@@ -213,11 +266,11 @@ designated writer persisting each worker's correlated description and outcome, t
 foreman's wave and final-round summaries, to synchronization that converges the
 controller and Bunker views under a declared freshness and conflict policy. The
 result is proven by read-after-write: the written record is retrievable under the
-intended namespace with its correlation intact, with native persistence
-acknowledgement, Git commit state and pending/complete remote synchronization
-recorded as three separate states.
+intended namespace with its correlation intact. A fsynced local Git commit is
+the durable acknowledgement; an uncommitted native append is not acknowledged.
+Remote synchronization remains a separate state (Part V supported memory profile).
 
-**Preconditions and inputs:** the DuckBrain namespace exists and is configured per project; the writer holds the namespace credential (M1 §3). Inputs: run records with run correlation (R1 detail, R2 fleet index); foreman decisions, findings and goals (R3 rollup); recall queries by project, week and lane.
+**Preconditions and inputs:** the DuckBrain namespace exists and is configured per project; the writer holds the namespace credential (M1 §3). Inputs: CT-09 worker, wave and round records with stable IDs and correlations; CT-15 decisions/findings; keyed/keyword recall. Legacy R1/R2/weekly R3 is not the required record taxonomy.
 
 **Steps:**
 
@@ -231,11 +284,15 @@ recorded as three separate states.
    all workers require direct write credentials (V2-FLW-02).
 4. After each wave persist the foreman summary, then add a distinct final-round
    summary at stop/settlement — a weekly rollup is not the final-round record.
-5. Record native persistence/durability acknowledgement, Git commit state and
-   pending/complete remote synchronization as separate states; Git backing alone
-   does not establish crash durability or synchronization.
-6. Synchronize under the declared owner, resolve conflicts and duplicates, and
-   make freshness and deferred synchronization visible to subsequent readers.
+5. The designated writer fsyncs record data, Git objects and ref transaction before
+   returning record_id/local_commit/payload_digest; it reads the record back. No
+   commit means PERSISTENCE_UNAVAILABLE. Pending records acquire retention holds.
+6. The memory adapter exchanges missing commits with the configured remote every
+   300 seconds and on reconnect, through the fenced broker; namespace/writer and
+   record digest are checked. Same ID/digest replays; changed digest retains both
+   and returns MEMORY_CONFLICT. Authorized resolution creates a new record ID,
+   never overwrites the first. Retry uses Part I §1.9.4 backoff. Controller readback
+   sets sync_commit/synced_at/freshness; only then is the pending hold released.
 
 **Exceptional branches:** continue useful work with native local reads/writes when
 the HTTP path is down (V2-FLW-05). Six failure classes are distinguished, not
@@ -249,16 +306,17 @@ supporting evidence with limits — a board note about unavailable DuckBrain is 
 completed memory write, and remote memory unavailability is never silently promoted
 to lost records. The measured defect stands: `node-bus-worker.py` makes zero
 DuckBrain calls, so no R1 or R2 record exists to recall (CF-329, M2 §6); a
-per-Bunker instance cut off from the controller view is a shared-view consistency
-failure whose offline/reconnect behavior remains an open requirement, not a handled
-case.
+per-Bunker instance cut off from the controller has pending-sync records. Losing
+that host before remote custody is LOCAL_STORE_LOST with a named loss interval,
+not a successful write at the controller. Scheduler settlement waits in
+awaiting_evidence under Part I §1.9.9; a successful local round is not yet accepted.
 
 **Contracts:** `CT-09` structured run-record sync (MISSING), `CT-15` foreman memory
 boundary (UNVERIFIED), namespace credential (M1 §3), sync cadence for cron-side
 writers (M9 §5).
 
-**Settings:** namespace selection (explicit per project — an omitted namespace
-falls back to sticky active configuration); HTTP/MCP auth (`x-api-key`); local data
+**Settings:** namespace selection (explicit per project — omitted namespace is
+NAMESPACE_REQUIRED; no sticky fallback); HTTP/MCP auth (`x-api-key`); local data
 root and native persistence mode; sync cadence, retry/backoff and conflict policy
 for controller/Bunker copies (M9 §5).
 
@@ -342,9 +400,10 @@ the configured policy, and the foreman closing the board item only after the
 required verdict and publication evidence match the work being accepted. A commit
 guard only authorizes its guarded action; it does not establish independent
 acceptance or prove the published tree — guard, judge, merged-tree verification and
-publication are distinct stages. The result is proven by the commit being an
-ancestor of origin/main AND the board row closed bound to the accepted verdict and
-retained evidence; either alone is insufficient.
+publication are distinct stages. Part I §1.9.7 defines merge/fast-forward ancestry
+and squash/rebase tree/mapping proof for the configured destination ref. The
+accepted revision AND evidence-bound board closeout are required; either alone
+is insufficient. Non-main destinations use the same rules.
 
 **Preconditions and inputs:** a worker branch commit exists; the pre-commit hook is installed in the seeded repo; the row's acceptance criteria are gradable. Inputs: the staged diff (`CT-12`); the gate verdict (`CT-13`); the branch and commit ids; the evidence run id.
 
@@ -357,12 +416,12 @@ retained evidence; either alone is insufficient.
    `scripts/install-gitreins.sh:124`).
 3. Run independent acceptance and record verdict/evidence bound to the candidate
    content and criteria (`CT-13`).
-4. Integrate by the configured PR/direct-merge or other supported policy, resolve
-   conflicts and account for concurrent base movement; the foreman proves the
-   commit is an ancestor of origin/main (M3 §2), rerunning the gates on the merged
-   tree as the same owner requires.
-5. Verify the integrated/published tree and required checks, recording destination
-   revision and evidence; rerun invalidated checks as policy requires.
+4. The broker integrates under the declared merge/fast-forward/squash/rebase mode
+   at an exact remote base, runs every required integrated-tree gate and publishes
+   by remote ref CAS. PR transport does not relax the exact-tree proof.
+5. The foreman reads the remote ref and validates the mode-specific receipt
+   (Part I §1.9.7). Any base/tree/criteria/dependency/gate-config change invalidates
+   all integrated-tree checks; CAS conflict repeats integration and these checks.
 6. Return publication evidence to the foreman; update the task board and
    worker/wave memory through recoverable closeout steps (`CT-14`, completion
    requires `--evidence-run-id` on `boardctl update`, M4 §6).
@@ -421,9 +480,11 @@ logical) freed bytes.
 3. Classify eligible, retained, refused and unknown resources; keep uncertainty
    visible and apply the declared destructive-action authority (`node_hygiene`
    removes orphan homes and keys after a 60-minute grace, M1 §5).
-4. Perform eligible cleanup through the correct resource owner; use M5 lifecycle
-   operations for installed harness packages/images rather than treating them as
-   generic caches.
+4. The retention owner CAS-tombstones only hold-free resources, then the local
+   agent locks and verifies inode/path identity, quarantines and deletes them
+   under Part I §1.9.8. Hold acquisition and deletion are mutually exclusive;
+   unknown or unregistered resources remain retained. M5 owns installed packages,
+   not the generic cache reaper.
 5. Measure results, free capacity and repository freshness — `repo_freshness`
    measures how far a workdir lags origin (M3 §5), the verifier's `node_freshness`
    measures branch, HEAD and lag on the node (M1 §11) — reporting each operation
@@ -431,8 +492,8 @@ logical) freed bytes.
 6. Update actual capacity and reconciliation observations; retry or escalate
    unresolved pressure through events/metrics under configured policy.
 
-**Exceptional branches:** the TTL governs age, not citation; the reaper can delete
-a directory a module cites as evidence (M8 §2). A gitleaks claim without its
+**Exceptional branches:** M8 §2's age-only reaper can delete cited evidence; this
+legacy deviation is prohibited by the target retention protocol (§1.9.8). A gitleaks claim without its
 `--log-opts` scope is refused (M8 §2). Safety refuses protected paths before
 inspection — the repo, `node.json`, `crier.json` (M8 §5); a refused path stops the
 pass for that path, not the remaining targets. An unknown active owner or retained
@@ -492,9 +553,9 @@ and collection meaning defined — not a port that happens to answer.
 6. Record continuing or exhausted recovery state. Receiver systems decide whether
    to log, page or run external repair; the Factory does not choose their responder.
 
-**Exceptional branches:** the measured gap is coverage, not correctness — 11 of 13
-modules emit no metrics, so most of the system is answerable only by grepping logs
-(M9 §8, model note). A stats error that degrades queue counters to zero cannot
+**Exceptional branches:** M9 §8 measures scheduler HTTP series and M10 §8 Crier
+series; M12 §8 usage JSONL is a log, not a served counter. No numeric fleet-wide
+coverage total is asserted without a source-by-source census. A stats error that degrades queue counters to zero cannot
 prove emptiness (M10 §6). Missing or stale telemetry is unknown observation, not
 evidence of health, and monitoring/repair failure must itself be observable.
 Subscriber outage has its own delivery state and retry policy; webhook failure is
@@ -507,8 +568,10 @@ F14).
 **Settings:** the metrics default-ON flags; scrape targets and cadence; webhook
 subscriptions and endpoints.
 
-**Metric owner:** the scheduler, crier and proxy own their own series; the other
-ten modules have no owner because they have no counter — the flow's named gap.
+**Metric owner:** scheduler and Crier own their served series; proxy owns its
+usage log. Foreman owns live round facts, manager owns progress ingestion/freshness
+and CT-30 readout under Part I §1.9.9. Required but unimplemented series remain
+unverified, not ownerless or zero.
 
 **Verification scenarios** — to specify and run, not results claimed by this handbook:
 
@@ -531,7 +594,7 @@ result is proven by the affected row and run being in a named state with a recor
 reason — never silently dropped — plus the reconciled board row and the
 replay/redelivery record.
 
-**Preconditions and inputs:** the crash site is identified; no writer is mutating the affected state. Inputs: the replay ledger; crier's unacked inbox messages; the board lock state; the session store's stale sessions.
+**Preconditions and inputs:** the affected scope is identified; old writers may still be running. F8 establishes fencing; quiescence is not assumed. Inputs: the replay ledger; crier's unacked inbox messages; the board lock state; the session store's stale sessions.
 
 **Steps:**
 
@@ -580,6 +643,74 @@ counter covers replay-ledger hits or orphaned runs.
 
 1. Lose a host after publication but before reply delivery; task/evidence state is reconciled and duplicate publication on the replacement is prevented.
 2. Restart the controller and re-read round budget/claims; the worker allowance is not replenished and no dispatch targets a stale node.
+### F8.1 — Execution control, drain and resume (P5-A-16)
+
+**Trigger/actors:** a project editor/administrator requests pause, cancel, drain,
+resume or restart; scheduler may cancel only its own deadline-expired round.
+Manager authenticates, Crier carries control, the resident adapter controls the
+entire round cgroup, and foreman/scheduler reconcile claims and budget. This is
+not cancellation of a manager provisioning operation.
+**Prerequisites/inputs:** an admitted round and its durable execution ledger exist;
+reachability is not required. The POST control route (Part I §1.9.1) accepts
+`{schema_version: factory.v1, idempotency_key, action: pause|cancel|drain|resume|restart,
+expected_control_version: integer, owner_fence, checkpoint_digest: digest or null}`.
+Target round is in the route; child attempts are derived from its ledger, never
+from a process-name scan. Reusing a key with changed action is refused.
+
+1. The manager CAS-appends `control_id`, action, round identity, incremented control
+   version and `requested` state; it closes new-launch grants. It emits an
+   authenticated `execution-control.v1` directive with that identity through Crier.
+   The response is `{control_id, round_id, control_version,
+   state: requested|draining|paused|cancelled|resuming|complete|fenced_unknown,
+   checkpoint_digest: digest or null, error: Error or null}`.
+2. For drain, existing attempts may finish but no new attempt starts. Pause requests
+   cooperative checkpoints; cancel forbids further publication and revokes dispatch
+   capabilities immediately. The resident adapter acknowledges custody, then records
+   every descendant PID/cgroup and final/checkpoint state. A custody ack is not
+   quiescence. Grace is 60 seconds; after grace it sends TERM to the owned cgroup,
+   waits 10 seconds, then KILLs that cgroup and verifies it is empty. Permission or
+   containment failure is `QUIESCENCE_UNPROVEN`, never a success response.
+3. Before destructive operations, the foreman writes and fsyncs
+   `execution-checkpoint.v1`: `{round_id, run_id, corr_id, control_version,
+   owner_fence, config_generation, board_revision, budget: {allowance, consumed,
+   reserved}, attempts: [{attempt_id, task_id, state, claim_id, claim_generation,
+   workspace_commit, result_digest}], memory_refs, evidence_refs, published_refs}`.
+   Fields without artifacts use explicit null; IDs/digests follow Part I §1.9.1.
+   The checkpoint is content-addressed, retained and transferred to controller
+   custody. Dirty work requires a retained workspace snapshot and its digest;
+   absence of either commit or snapshot makes that attempt unresumable.
+4. Reachable pause records `paused` only after checkpoint/readback and empty cgroup.
+   A paused started attempt becomes `interrupted`; a cancelled one becomes
+   `cancelled`. Claims are released by fenced board CAS with checkpoint evidence;
+   tasks become blocked, not complete. Unstarted reservations release; started
+   attempts remain consumed under the pinned budget policy.
+5. Unreachable owners are fenced through Part I §1.9.3; state is `fenced_unknown`,
+   not falsely quiescent. Resource-side mutation denial permits replacement only
+   after unknown external effects are reconciled. Destruction of the old host's
+   retained data waits for physical access/quiescence proof; network timeout is
+   never deletion eligibility.
+6. Resume verifies the exact checkpoint digest, live generation/fence and claims,
+   reuses round/run/correlation IDs and advances control version. Surviving active
+   attempts are discovered, not duplicated; stopped attempts receive new attempt
+   IDs with `resumes_attempt_id` and consume budget under the same policy. Resume
+   refuses when evidence is missing, an old owner can still publish, or remaining
+   budget is insufficient. Restart means pause/checkpoint followed by this resume,
+   never reset. Cancelled rounds are terminal; new work requires a new admission.
+
+**Failure/recovery:** duplicate controls replay their durable receipt; a stale
+control version returns `CONTROL_CONFLICT`. Crash recovery discovers cgroup,
+checkpoint and broker effects before retry. Missing checkpoint yields a named
+unrecoverable attempt and retained partial artifacts. Control delivery retries
+use Part I §1.9.4 backoff; exhaustion leaves fenced_unknown/degraded, not complete.
+**Settings/metric owner:** grace/TERM intervals are 60/10 seconds, configurable
+1..3600/1..300; administrators own overrides. Manager owns control transitions,
+resident adapter owns quiescence receipts, scheduler owns terminal settlement.
+**Completion proof:** exact cgroup-empty receipt or explicit fenced_unknown,
+checkpoint readback, denied old capability, reconciled claims and unchanged total
+allowance. Required scenarios race cancel with worker start, lose the host before
+ack, and replay resume after restart; no scenario creates duplicate publication.
+[CT-03/06/10/14/29; F8/F10/F13]
+
 ## 2.9 F9 — Degradation
 
 ![FIGURE 2.9](figures/F9.svg)
@@ -617,12 +748,13 @@ deferred tick or a disclosed posture, never an unexplained silence.
 **Exceptional branches:** the measured postures disagree by design — the gateway
 tick is deferred, not exec-spawned (`no-exec-fallback=true`, M9 §5); the load gate
 defers new spawns at or above the threshold (M9 §3); the guard fails open on
-provider outage unless policy is FailClosed (M10 §10); the proxy fails closed at
+provider outage in the legacy policy (M10 §10); target GUARD always refuses
+launch on outage under Part I §1.3.5; the proxy fails closed at
 startup — no token file or no upstream key exits 2 (M12 §11); the commit gate
 absent leaves the pre-commit hook exiting 0 — a silent bypass that must be
 disclosed (M3 §10). The only one of the three that is fail-closed and measured is
 the proxy's startup check. Existing fail-open or passing-absent-hook behavior is
-implementation evidence requiring explicit target disposition; it does not
+implementation deviation: target directive guard is fail-closed and it does not
 authorize accepted publication without required checks. For DuckBrain, service
 outage, local storage loss, stale remote view and semantic-provider loss are
 different states with different recoveries. Recovery is the dependency's own
@@ -633,7 +765,7 @@ work automatically beyond the policy's pending-effect rules.
 startup check (M12 §11), hook installation completeness (M3 §10), local memory
 fallback (F3, V2-FLW-05).
 
-**Settings:** `no-exec-fallback`; the guard's fail-open/FailClosed policy; the load
+**Settings:** `no-exec-fallback`; target guard fail-closed policy and classifier pin; the load
 threshold; hook installation completeness; degraded-mode policy per dependency
 class.
 
@@ -666,7 +798,7 @@ activates a new binding. The result is proven by the registry no longer listing 
 agent, the home gone, and a rebuild's seed diff naming every restored file —
 readback, not intention.
 
-**Preconditions and inputs:** destroy is operator-gated; the target agent is named; nothing active holds the node's work. Inputs: the agent name and `--yes`; the seed manifest for rebuild.
+**Preconditions and inputs:** destroy is operator-gated and names the agent; active work is allowed at entry and must be drained or fenced through F8.1 before destructive actions. Inputs: the agent name and `--yes`; the seed manifest for rebuild.
 
 **Steps:**
 
@@ -797,22 +929,23 @@ by a readback of the installed credential's scope and expiry from the consumer
 side — the file's existence and age are not validity — and, after revocation, by
 proven denial of the old authority.
 
-**Preconditions and inputs:** the App private key exists at 0600; the token file paths and their consumers are configured. Inputs: the App private key; installation id; the scope request for per-dispatch tokens; the node bearer token file.
+**Preconditions and inputs:** the selected issuer is enrolled and its protected reference and exact consumer scope are configured. GitHub needs App installation/key references; GitLab needs the project-token issuer/project ID (Part I §1.9.7). Dispatch capability and node inference authority are separate inputs; a GitHub key is not a GitLab prerequisite.
 
 **Steps:**
 
 1. Resolve user-owned provider/app installation, principal, project/repository
    scope, requested operations and credential reference under the declared access
    policy.
-2. Use the native issuer to create appropriately scoped and expiring access,
-   retaining signing/administrative authority at its specified boundary: the
-   operator mints from an 0600 App private key — JWT, then installation token
-   (M7 §5).
+2. The provider adapter issues scoped expiring access: GitHub uses its App
+   installation flow (M7 §5); GitLab uses project access tokens with the exact
+   issue/discover/revoke and lost-response rules in Part I §1.9.7. The issuer
+   remains controller-side, and issuer failure cannot widen scopes.
 3. Distribute through the supported provisioning/install path and bind the
    credential to the exact target identity/service/resource: the token is written
    to a 0600 file, the value never printed (M7 §7); `refresh --node` installs
-   `auth/github.token` on the node (M7 §5); `fleet-gh-scope` mints the per-dispatch
-   scoped token the dispatcher injects (M11 §3 S4, M11 §6).
+   `auth/github.token` on the node in the legacy path (M7 §5). Target forge write
+   credentials remain broker-side; nodes receive attenuated, online-revocable
+   capabilities under Part I §1.9.7, never the native forge write token.
 4. Verify permitted operations and denied out-of-scope operations, expiry/readiness
    and effective configuration without exposing secret values: the proxy checks
    the node bearer against the token file — fail-closed admission (M12 §6).
@@ -875,9 +1008,10 @@ proof.
    daemon/client/runtime, Hermes, Crier, DuckBrain and board schema.
 2. Plan a staged rollout with named prerequisites, drain/checkpoint requirements
    and a backup/recovery point.
-3. Fetch and verify declared artifacts, apply component changes and migrations in
-   the documented dependency order, persisting each operation (M5 §5: the
-   installer fetches a digest-checked artifact).
+3. Apply the exact role/version compatibility lock and dependency order of
+   Part I §1.9.8, persisting each step. Wire/schema changes drain old rounds via
+   F8.1 first. Store migration copies, verifies and atomically switches state;
+   after new-schema writes old-binary rollback is forbidden (F15 restore instead).
 4. Read back actual versions and schema/config state — installed version against
    the pin, drift named (M5 §10); the scheduler's migration stores apply schema
    change to the 30-table store (M9 §3).
@@ -931,8 +1065,9 @@ emitter — verified by sampling the sink, not by trusting the emitter's exit co
 
 **Steps:**
 
-1. Define versioned signal schemas, identifiers, meanings, units and ownership for
-   required events, metrics, logs, execution evidence and memory links.
+1. The resident foreman journals progress.v1 at every budget/attempt/wave change
+   and every 10-second heartbeat. Part I §1.9.9 fixes fields, budget equations,
+   persistent sequence and restart identity; Part V §V.0.3 fixes manager samples.
 2. Emit from the actual runtime/control components and ingest through supported
    pull/push/native/file interfaces to named sinks: the node records every turn,
    model, tokens and cost (`CT-11`, boundary, M2 §6); the scheduler serves tick and
@@ -942,9 +1077,11 @@ emitter — verified by sampling the sink, not by trusting the emitter's exit co
    buffering, retention and backpressure where needed.
 4. Expose capture/delivery gaps and freshness so missing records cannot be confused
    with no activity.
-5. Serve operator/API/metric readout and fan out subscribed events to configured
-   webhook endpoints with independent delivery accounting per endpoint, retries
-   and outage retention under the defined policy; events carry no secret material.
+5. The manager serves authenticated GET /v1/rounds/{id}/progress with last sample,
+   receive age and fresh/stale/unavailable quality; disconnected sources are not
+   zero budgets. PUT ingestion deduplicates seq/digest and checks the owner fence.
+   CT-30 events fan out under Part V's independent destination accounting; events
+   carry no secret material.
 6. Recover or reconcile pending ingestion/delivery after restart under explicit
    replay and duplicate rules, preserving correlation and retention.
 
@@ -953,7 +1090,7 @@ cannot be distinguished from a missing request (M12 §11); that is an identified
 defect to correct, not a normative delivery guarantee, and what can be replayed
 versus what is lost must be defined. The node-to-session-store wire is a boundary
 both of whose ends are the Hermes runtime, out of scope (M2 §6). This flow, like
-F7, inherits the 11-of-13 metric gap. A successful webhook delivery does not prove
+F7, distinguishes served series from JSONL logs; it asserts no unmeasured total. A successful webhook delivery does not prove
 a receiver paged someone or performed repair — a failed subscriber is a delivery
 outcome, never a declaration that the underlying incident failed, and optional
 subscriber unavailability does not mark a dispatch failed; any required-delivery
@@ -966,8 +1103,9 @@ catalog and webhook fan-out contract (V2-OPS-02).
 **Settings:** metric endpoint toggles; JSONL paths and retention; DuckBrain sync
 cadence and namespaces; webhook subscriptions, endpoints and delivery policy.
 
-**Metric owner:** the three emitters above own their own series; every other module
-is a named gap (M9 §8).
+**Metric owner:** foreman owns progress facts, manager owns ingest/freshness,
+scheduler owns settlement, Crier owns custody, proxy owns usage logs. Missing
+implementation remains a coverage gap, not missing ownership (Part I §1.9.9).
 
 **Verification scenarios** — to specify and run, not results claimed by this handbook:
 
@@ -993,19 +1131,15 @@ by representative board and memory records verified from the restored copy,
 execution recovery, accepted publications, application readiness, and recorded
 actual loss/recovery evidence — a copied file is not a restored one.
 
-**Preconditions and inputs:** a backup exists; a scratch environment is available for the restore drill. Inputs: the backup artifact; the known row/record to read back; the board's origin/main copy.
+**Preconditions and inputs:** creation requires a declared destination and reachable scoped writers, not an existing backup. Restore requires a verified manifest/artifact and isolated scratch deployment. Inputs are release/config digests, authority identity, source inventory and explicit recovery objectives (F15.1).
 
 **Steps:**
 
-1. Define configured backup scope, trigger, owner, destination/access, retention,
-   recovery-point and acceptable loss objectives without inventing numeric
-   defaults.
-2. Establish the documented consistency/checkpoint boundary across project
-   repository/board, local DuckBrain data/history, scheduler/Crier records,
-   configuration/manifests and required evidence.
-3. Create and verify the backup inventory, integrity and recovery metadata,
-   tracking incomplete or unsynchronized sources — Git repositories alone do not
-   back up every service state or unsynchronized host.
+1. Validate the explicit F15.1 backup policy and acquire its ordered barrier.
+2. Checkpoint each writer under that barrier and record its exact sequence/ref
+   and hash in the consistency marker; missing participants abort complete backup.
+3. Capture immutable snapshots and evidence inventory, verify hashes off-host,
+   sign and publish the cf.backup.v1 manifest, then release the barrier (F15.1).
 4. Select a recovery point and restore into an isolated or replacement deployment
    through the supported profile and provisioning path.
 5. Reconcile current identities/revocation, valid replacement credentials,
@@ -1017,10 +1151,8 @@ actual loss/recovery evidence — a copied file is not a restored one.
 
 **Exceptional branches:** `board_drift` compares the checkout's board against
 origin/main row by row, not as a bulk count (M4 §7); `--verify-board` checks board
-consistency at boot (M9 §5); the operator restores into a scratch home and reads
-back a known row. The model defines these steps and the chapters measure none of
-them end to end — this subsection stays short rather than padded with unmeasured
-detail. A failed or partial restore remains isolated and unready. Do not reactivate
+consistency at boot (M9 §5); these legacy probes alone do not measure F15.1's
+coordinated capture. Its conformance scenarios remain required and unverified. A failed or partial restore remains isolated and unready. Do not reactivate
 compromised or revoked credentials from a historical backup: a backup containing
 an old revoked secret must recover with revocation preserved. Protect backup
 access, report incomplete coverage, and state recoverability limits and manual
@@ -1041,6 +1173,88 @@ exists.
 
 1. Restore onto another eligible host; board, memory, durable execution state, valid access and updated Crier/scheduler routing verify.
 2. Use a backup containing an old revoked secret; recovery preserves revocation rather than restoring authority.
+### F15.1 — Coordinated capture and disaster authority (P5-A-06)
+
+**Trigger/actors:** scheduled backup, pre-migration capture or operator restore;
+manager coordinates scheduler, resident adapters, broker, Crier, board, DuckBrain
+and snapshot writers. Independent authority supplies current fences/revocations.
+**Prerequisites/inputs:** a policy names project scope, destination, encryption-key
+reference, retention_s, rpo_s and rto_s (positive integers), release digest and
+restore-test record IDs. Create does not require an older backup. Restore requires
+a signed complete manifest, decrypt authority and an isolated destination.
+**DECISION SLOT A-RECOVERY:** the owner chooses recovery/loss objectives, retention
+and off-host destination, or explicitly approves a qualification-only drill.
+Default is unset and `BACKUP_POLICY_REQUIRED`; production readiness refuses an
+unconfigured recovery policy rather than inventing a business loss tolerance.
+
+1. The manager journals a backup_id and acquires barriers in this fixed order:
+   scheduler admission closed; resident round drain/checkpoint (F8.1); broker
+   canonical writes frozen and in-flight effects resolved; Crier delivery/ack
+   state checkpoint; namespace writers flushed/paused; manager journal checkpoint.
+   Barriers are keyed by backup_id and idempotent. Authenticated prepare returns
+   `{backup_id, participant, state: held, checkpoint_ref, sequence, digest}`;
+   all participants retain the hold until explicit release or recovery decision.
+2. Barrier acquisition times out after 300 seconds. Any missing participant yields
+   an incomplete manifest; the manager releases acquired holds in reverse order
+   and records the excluded source/loss interval. It never labels partial coverage
+   complete. A disconnected Bunker's unsynced memory is explicitly excluded, and
+   its absence prevents a complete scoped backup. A manager crash causes each
+   participant to query durable backup state before release; no timeout silently
+   reopens a writer into a supposedly frozen snapshot.
+3. For each Git store the snapshot writer fsyncs objects/refs, captures all retained
+   refs and reachable objects plus pending local commits, and verifies object
+   connectivity. Board capture includes row/event/transaction-marker hashes at
+   that same ref. Scheduler/session/Crier SQLite stores use their online backup
+   API under the hold, not a raw copy missing WAL; other supported Crier stores
+   must provide a consistent native snapshot/restore with sequence. An adapter
+   without that capability is BACKUP_UNSUPPORTED. Manager copies its verified
+   checkpoint plus closed journal suffix. Evidence objects and desired editions
+   are captured by content digest; credentials are references only.
+4. The consistency_marker is an object, not an arbitrary note:
+   `{backup_id, barrier_generation, config_generation, manager_seq,
+   authority_id, authority_seq, sources: [{participant, sequence,
+   checkpoint_ref, digest}], acquired_at, released_at: timestamp or null}`.
+   Authority_seq is a lower-bound observation, never restored authority. All
+   snapshots must match these exact source receipts. The manager writes a
+   cf.backup.v1 manifest with backup_id, created_at, scope, release_digest,
+   consistency_marker, status complete/incomplete, inventory entries
+   `{source, object_ref, sha256, bytes, format_version, encrypted}`, excluded
+   sources/loss intervals, revocation_snapshot_ref, and restore probes.
+5. The writer encrypts artifacts using the configured destination key, uploads and
+   reads them back off-host, verifies bytes/digests, and signs the canonical
+   manifest digest with the backup identity. Only then does it mark complete and
+   release barriers in reverse order. Retention deletion requires a later verified
+   backup and the retention protocol, not merely a successful upload command.
+6. Restore verifies signature/inventory, installs the pinned compatible release
+   into an isolated network with admission and all outgoing mutation disabled,
+   restores snapshots, replays journal suffixes, rebuilds indexes, and verifies
+   named board/memory records, budget conservation, custody/result identities and
+   accepted publication refs. Restoration never pushes an old canonical ref over
+   newer remote work; current remote refs are reconciled before activation.
+7. Recovery contacts the independently retained authority, advances controller and
+   project epochs and imports current revocations; old credentials remain disabled.
+   If that authority is lost, the operator revokes ALL previous forge installations/
+   project tokens, broker capabilities, Crier/memory/Bunker identities and trust
+   roots at their enforcing boundaries, proves denial, and enrolls a new random
+   authority_id/CA. Numeric epochs may restart only under that new authority ID.
+   Missing provider access or inability to prove denial leaves restore isolated;
+   an old backup revocation snapshot never substitutes for current authority.
+8. Fresh credentials and §1.9.4 bindings activate only after the restore probes,
+   current remote reconciliation and revocation proof pass. A restore receipt
+   records recovered sequence per source, loss interval and measured elapsed time
+   against configured RPO/RTO. Failure preserves the isolated data for repair.
+
+**Recovery/settings/metrics:** on crash the same backup_id discovers completed
+snapshots and holds before resuming; mismatched digests fail closed. Barrier timeout
+is 300 s; retry uses Part I §1.9.4. Backup encryption/destination/retention and
+business recovery objectives require A-RECOVERY. Manager owns backup/restore
+states, bytes verified and objective violations; participants own source receipts.
+**Completion proof:** an independently restored copy passes the named readbacks,
+old-credential denial, new-owner-only publication and admission probes. Tests
+interrupt every barrier stage, omit a Bunker, corrupt one object, and restore a
+backup older than a revocation; none may produce ready from incomplete evidence.
+[CT-24/25/28/29; Part VI backup manifest; F2/F8/F12]
+
 ## 2.16 F16 — Multi-node fan-out
 
 ![FIGURE 2.16](figures/F16.svg)
@@ -1057,7 +1271,7 @@ delivery or completion must remain visible. The result is proven by one settled
 receipt per target — a fleet-wide count is the per-target receipts, each
 correlated by its own dispatch id, never an aggregate assumption.
 
-**Preconditions and inputs:** every target agent is registered and reachable; per-target credentials exist. Inputs: the directive text; the target registry; per-dispatch scoped tokens.
+**Preconditions and inputs:** target identities and bindings are snapshotted and authorized; reachability is an outcome, not a prerequisite. Inputs: directive digest, target snapshot, broker capabilities and the required F16.1 policy.
 
 **Steps:**
 
@@ -1086,8 +1300,8 @@ before the crash (M11 §3 S2), and result replay implies nothing about exactly-o
 execution — external effects are reconciled when no durable result was recorded.
 The deadline-kill defect of F8 applies per target (M11 §2). One slow or
 unreachable target follows the defined partial-completion policy rather than
-silently hiding all other targets; no concurrency number or fail-fast/all-targets
-default is selected here.
+silently hiding all other targets. F16.1 requires explicit concurrency/deadline
+and aggregate policy; omitted policy is refused rather than guessed.
 
 **Contracts:** `CT-06` per-dispatch settlement (PROVEN), custody/replay identities
 (M11 §3 S3), replay ledger (M11 §3 S2), per-dispatch scoped tokens (M11 §3 S4).
@@ -1103,6 +1317,69 @@ width or completion-ratio counter exists.
 1. Dispatch to several targets with one unavailable and one slow; per-target receipts, partial state and the aggregate policy hold.
 2. Replay delivery after a target result was durably recorded; it is not rerun or counted twice.
 
+### F16.1 — Fan-out policy and terminal outcomes (P5-A-25)
+
+**Trigger/actors:** an authorized scheduler request fans one directive to registered
+project targets. Scheduler owns the aggregate, Crier owns each custody receipt,
+resident adapters own execution, and manager owns replacement/fencing.
+**Inputs/prerequisites:** a `fanout.v1` body inside cf2a.v1 contains `fanout_id`,
+`directive_digest`, `targets: [{agent_id, project_id, binding_generation, owner_fence}]`,
+`policy: {concurrency, deadline_s, completion, replacement}` and `idempotency_key`.
+Targets are nonempty and unique; concurrency is integer 1..1024, deadline_s is
+integer 1..86400, completion is `all` or `fail_fast`, replacement is `never` or
+`resume_fenced`. Missing policy/fields returns `422 FANOUT_POLICY_REQUIRED` before
+custody. There is no implicit numeric concurrency or failure policy. The target
+snapshot digest hashes the sorted canonical target list and is immutable.
+
+1. Scheduler journals the request/policy/snapshot and creates one child operation
+   ID per snapshot entry. It dispatches in bytewise agent-ID order, at most
+   concurrency unsettled children; target unreachability remains a child outcome.
+2. Child identities survive transport retries and binding changes. Each child
+   follows CT-03 custody and F1 final settlement; success requires final accepted
+   evidence, not a delivery acknowledgement. The aggregate remains running while
+   any child is nonterminal and no cancellation/deadline applies.
+3. With `all`, failure does not cancel siblings. With `fail_fast`, the first
+   terminal non-success stops undispatched children and requests F8.1 cancellation
+   of running siblings. Their cancellation/fencing receipts are retained before
+   aggregation; successful children are not rolled back.
+4. Deadline is measured from accepted monotonic start; restart derives remaining
+   time conservatively from persisted UTC deadline and never extends it. At expiry
+   unfinished children become timed_out after cancellation/fence requests; unknown
+   quiescence is explicit. A result first received after the durable deadline-close
+   is retained as late evidence, not a new success. A conflicting duplicate is
+   RESULT_CONFLICT, not a second target receipt.
+5. An authorized aggregate cancel CAS closes dispatch, invokes F8.1 for every
+   running child and records cancelled children plus prior successes. Replacement
+   `never` leaves the original target failed/unavailable. `resume_fenced` permits
+   the same logical child on a replacement only after F8 fence/effect discovery;
+   it records old/new binding and does not expand the target snapshot, duplicate
+   effects or reset deadline. New physical execution attempts remain visible.
+6. Scheduler computes the closed aggregate below from durable child receipts and
+   publishes `{fanout_id, snapshot_digest, policy, children, aggregate,
+   completed_at, evidence_refs}`. Children contain their operation/target identity,
+   final status, settlement revision and late-result references. Replay reads this
+   object; it never launches a settled child again.
+
+| Condition, in priority order | Aggregate |
+|---|---|
+| Any child still nonterminal, before close/cancel/deadline | `running` |
+| Every child is final accepted success | `success` |
+| At least one success and at least one failure/cancel/timeout/unavailable/unknown | `partial` |
+| No success and explicit aggregate cancellation | `cancelled` |
+| No success and at least one timeout at deadline | `timed_out` |
+| No success and any other terminal non-success | `failed` |
+
+**Failure/recovery/settings:** pending aggregate recovery re-reads child custody,
+effects and settlement before retry; loss of its ledger yields UNKNOWN_RESULT,
+not an empty target list. Policy is immutable for the request; changing it needs
+another fanout_id and explicit authorization, not replay. Ledger/evidence retention
+uses Part I §1.9.8. **Metric owner:** scheduler owns fanout state and per-target
+terminal counters; Crier owns delivery counters, never acceptance counters.
+**Completion proof:** one receipt per original snapshot entry, bounded concurrency,
+unchanged deadline and recomputable aggregate. Scenarios include an unreachable
+and slow target, fail-fast cancellation, replacement, late result and duplicate
+replay; each must reproduce the truth-table outcome. [CT-02/03/06/29; F8.1]
+
 ## 2.17 Subflows and scenario families
 
 The sixteen flows above are the primary sequences; the coverage audit names twelve
@@ -1115,13 +1392,13 @@ stated rather than invented.
 
 | Family | Normative sequence lives in | Subflow status |
 | --- | --- | --- |
-| 1. Factory bootstrap and deployment-profile selection | F2 steps 1–2 (validate/profile), F12 (identities), F13 (component versions) | carried; per-profile support matrix (Kubernetes, Compose, homelab/VPN, standalone) is an explicit F2/V2-ARCH-02 requirement — cloud adapters lower priority |
+| 1. Factory bootstrap and deployment-profile selection | F2.0 cold bootstrap, Part I §1.6 profiles, F12 identities, F13 versions | carried; per-profile support matrix (Kubernetes, Compose, homelab/VPN, standalone) is an explicit F2/V2-ARCH-02 requirement — cloud adapters lower priority |
 | 2. Project and initiative onboarding | F2 (project path: repo, board, namespace, model access), F1 (worker budget seed), F11 (admission enable) | carried; ready state precedes admission (F2 step 6) |
 | 3. Controller-agent access and delegation | F12 (access policy, issuer, binding, verification), F2 (provisioned access), F1 (work delivery distinct) | carried; controller administration/repair access is distinct from Crier work delivery and per-Bunker foreman authority (V2-FLW-07) |
 | 4. Desired-state reconciliation and automatic host-loss replacement | F8 steps 3–5 (reconcile, recreate, rebind), F2 (replacement provisioning), F10 (teardown of the old target) | carried; fencing/lease semantics per V2-ARCH-01 |
 | 5. Board synchronization, claims and work wakeup | F11 step 2 (refresh before workability), F1 step 3 (claims), F8 (divergent copies, stale owners) | carried; one eligibility rule shared by scheduler and foreman |
-| 6. Local memory operation and controller/Bunker synchronization | F3 (all steps; the local fallback and three-state durability record) | carried; V2-FLW-05 failure classes and sync policy |
-| 7. Pause, cancellation, drain, restart and resume | F10 steps 1–2 (drain, checkpoint), F8 (resume, no budget reset), F13 (checkpoint requirements), F9 (deferred work) | carried; no silent budget reset, no duplicate publication |
+| 6. Local memory operation and controller/Bunker synchronization | F3 (all steps; the local-commit acknowledgement and separate synchronization state) | carried; V2-FLW-05 failure classes and sync policy |
+| 7. Pause, cancellation, drain, restart and resume | F8.1 execution control, F10 drain, F13 migration checkpoint, F9 deferral | carried; no silent budget reset, no duplicate publication |
 | 8. Credential leak, revocation and reauthorization | F12 steps 5–6 (rotation, revoke, prove denial), F15 step 5 (revocation across restore), F9 (degraded posture) | carried; leak triggers configurable (V2-FLW-08) |
 | 9. Backup, disaster restore and evidence retention | F15 (all steps), F6 (retention vs cleanup), F8 (recovery points), F10 (preserve-before-destroy) | carried; loss boundary of unsynchronized hosts stated in F3/F15 |
 | 10. Configuration and harness/model/policy lifecycle | F13 (pins, schema, rollout), F2 (per-Bunker configuration), F9 (policy postures) | carried; Hermes fixed for MVP, future harness routing explicit, Terminal Jail optional and disabled by default (V2-ARR-04) |
