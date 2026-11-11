@@ -40,7 +40,7 @@ chmod +x "$tmpd/curl"
 # The row under test is layer 00's `reach:` FAIL — one row per unreachable URL, not two.
 # PERF-013: a full run (base/harness/bus/repo) costs several times the CPU of the row it
 # proves here, so the fixture runs only that layer.
-out=$(env PATH="$tmpd:$PATH" HOME="$tmpd/home" NODE_PROJECT=demo CRIER_URL=http://closed.test:8767 \
+out=$(env PATH="$tmpd:$PATH" HOME="$tmpd/fakeroot" NODE_PROJECT=demo CRIER_URL=http://closed.test:8767 \
   /bin/bash "$HERE/scripts/project-node.sh" --check --project demo --layers 00 2>&1); rc=$?
 expected='  FAIL  reach:http://closed.test:8767/health — -> 000'
 if [ "$rc" -ne 0 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ]; then
@@ -612,7 +612,7 @@ printf 'unexpected interpreter invocation: %s\n' "$*" >&2
 exit 1
 EOF
 chmod +x "$tmpd/python-3.14"
-out=$(env HOME="$tmpd/home" HERMES_PYTHON_BIN="$tmpd/python-3.14" \
+out=$(env HOME="$tmpd/fakeroot" HERMES_PYTHON_BIN="$tmpd/python-3.14" \
   /bin/bash "$HERE/scripts/harness/install-hermes.sh" --apply 2>&1); rc=$?
 if [ "$rc" -ne 0 ] \
   && printf '%s\n' "$out" | grep -Fq 'hermes-agent 0.19.0 requires python >=3.11,<3.14; found 3.14.9' \
@@ -636,7 +636,9 @@ import sys
 # Fixture generation must work on the same stdlib-only hosts as the gate.
 root = Path(sys.argv[1])
 (root / "bin").mkdir()
-home = root / "home"
+# Named after the shell side's $tmpd/fakeroot: the fixture home must not read as an
+# absolute host home path to the §61 publish gate.
+home = root / "fakeroot"
 (home / ".hermes").mkdir(parents=True)
 (home / "hermes-venv/bin").mkdir(parents=True)
 # Random throwaway values stay in the private fixture, never in output or argv.
@@ -725,9 +727,9 @@ for name, body in {
 PY
 then
   auth_fixture_run() {
-    cp "$tmpd/$1" "$tmpd/home/.hermes/config.yaml"
+    cp "$tmpd/$1" "$tmpd/fakeroot/.hermes/config.yaml"
     rm -f "$tmpd/launch"
-    env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" HERMES_PYTHON_BIN="$tmpd/bin/python" \
+    env PATH="$tmpd/bin:$PATH" HOME="$tmpd/fakeroot" HERMES_PYTHON_BIN="$tmpd/bin/python" \
       HERMES_PIN=0.19.0 NODE_GATEWAY_PORT=10800 FAILED=0 AUTH_FIXTURE="$tmpd" \
       AUTH_PYTHON="$auth_python" AUTH_ISOLATED="$auth_isolated" AUTH_HTTP_CODE="${2:-200}" \
       /bin/bash "${3:-$HERE/scripts/harness/install-hermes.sh}" --apply
@@ -938,7 +940,7 @@ fi
 
 say "13. node provisioning names its resolved floor and refuses below it"
 tmpd=$(mktemp -d)
-out=$(env HOME="$tmpd/home" NODE_DISK_FLOOR=999999 /bin/bash "$HERE/scripts/project-node.sh" --check --project fixture 2>&1); rc=$?
+out=$(env HOME="$tmpd/fakeroot" NODE_DISK_FLOOR=999999 /bin/bash "$HERE/scripts/project-node.sh" --check --project fixture 2>&1); rc=$?
 if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -Fq 'FAIL disk-floor'; then
   say "  PASS  malformed floor refused before any install"
 else
@@ -954,14 +956,14 @@ say "14. harness-adapter FAIL rows are counted in the node summary (CF-055)"
 # points them at a fixture adapter that fails through the real lib.sh bad()
 # path; the counted rows are the real failure path, not a mock of the counter.
 tmpd=$(mktemp -d)
-mkdir -p "$tmpd/scripts/harness" "$tmpd/home/.node" "$tmpd/home/repo" "$tmpd/bin"
+mkdir -p "$tmpd/scripts/harness" "$tmpd/fakeroot/.node" "$tmpd/fakeroot/repo" "$tmpd/bin"
 cp "$HERE/scripts/project-node.sh" "$HERE/scripts/lib.sh" "$HERE/scripts/disk_floor.py" "$tmpd/scripts/"
 # green node inputs: bus identity, a local repo, and a fake curl answering 200. Layers
 # 00/10/30/40 are out of scope (PERF-013: only layer 20 rows are asserted here), but the
 # inputs stay staged so this fixture still works as written if it is ever unscoped.
-printf '{"agent":"fixture"}' > "$tmpd/home/.node/crier.json"; chmod 600 "$tmpd/home/.node/crier.json"
-git -C "$tmpd/home/repo" init -q -b main
-git -C "$tmpd/home/repo" -c user.email=fixture@example.invalid -c user.name=fixture commit -qm fixture --allow-empty
+printf '{"agent":"fixture"}' > "$tmpd/fakeroot/.node/crier.json"; chmod 600 "$tmpd/fakeroot/.node/crier.json"
+git -C "$tmpd/fakeroot/repo" init -q -b main
+git -C "$tmpd/fakeroot/repo" -c user.email=fixture@example.invalid -c user.name=fixture commit -qm fixture --allow-empty
 cat > "$tmpd/bin/curl" <<'EOF'
 #!/usr/bin/env bash
 printf '200'
@@ -978,7 +980,7 @@ bad "harness:fixture/b" "simulated adapter failure two"
 exit 1
 EOF
 chmod +x "$tmpd/scripts/harness/install-fixture.sh"
-out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_PROJECT=fixture \
+out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/fakeroot" NODE_PROJECT=fixture \
   NODE_HARNESS=fixture CRIER_URL=http://fixture.invalid:8767 NODE_DISK_FLOOR=1 \
   /bin/bash "$tmpd/scripts/project-node.sh" --check --layers 20 2>&1); rc=$?
 fail_rows=$(printf '%s\n' "$out" | grep -c '^  FAIL')
@@ -996,12 +998,12 @@ cat > "$tmpd/scripts/harness/install-fixture.sh" <<'EOF'
 exit 1
 EOF
 chmod +x "$tmpd/scripts/harness/install-fixture.sh"
-out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_PROJECT=fixture \
+out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/fakeroot" NODE_PROJECT=fixture \
   NODE_HARNESS=fixture CRIER_URL=http://fixture.invalid:8767 NODE_DISK_FLOOR=1 \
   /bin/bash "$tmpd/scripts/project-node.sh" --check --layers 20 2>&1); rc=$?
 silent_summary=$(printf '%s\n' "$out" | grep -oE '^NODE: FAIL \([0-9]+\)$' | grep -oE '[0-9]+')
 silent_manifest=0
-[ -e "$tmpd/home/.node/node.json" ] && silent_manifest=1
+[ -e "$tmpd/fakeroot/.node/node.json" ] && silent_manifest=1
 if [ "$rc" -ne 0 ] && [ "$silent_summary" = 1 ] && [ "$silent_manifest" -eq 0 ] \
   && printf '%s\n' "$out" | grep -Fq '  FAIL  harness:fixture — installer exited 1'; then
   say "  PASS  AC1 silent adapter fails closed: parent row names exit 1, NODE: FAIL (1), no manifest"
@@ -1018,7 +1020,7 @@ say "harness: fixture (cf-066)"
 exit 0
 EOF
 chmod +x "$tmpd/scripts/harness/install-fixture.sh"
-out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_PROJECT=fixture \
+out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/fakeroot" NODE_PROJECT=fixture \
   NODE_HARNESS=fixture CRIER_URL=http://fixture.invalid:8767 NODE_DISK_FLOOR=1 \
   /bin/bash "$tmpd/scripts/project-node.sh" --check --layers 20 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL')" = 0 ] \
@@ -1102,7 +1104,7 @@ rm -rf "$tmpd"
 # bunker-crier-connect.sh probes. The negative control removes it from the manifest and must red.
 say "  .. CF-276: node-create stages node-bus-worker.py at the crier probe path"
 tmpd=$(mktemp -d)
-mkdir -p "$tmpd/scripts/harness" "$tmpd/home"
+mkdir -p "$tmpd/scripts/harness" "$tmpd/fakeroot"
 staged=$(bash "$HERE/scripts/node-create.sh" --staged-files); rc=$?
 if [ "$rc" -eq 0 ] && printf '%s\n' "$staged" | grep -Fxq 'node-bus-worker.py' \
   && [ "$(printf '%s\n' "$staged" | grep -Fc 'node-bus-worker.py')" = 1 ]; then
@@ -1110,10 +1112,10 @@ if [ "$rc" -eq 0 ] && printf '%s\n' "$staged" | grep -Fxq 'node-bus-worker.py' \
     mkdir -p "$tmpd/scripts/$(dirname "$file")"
     cp "$HERE/scripts/$file" "$tmpd/scripts/$file" || fails=$((fails+1))
   done <<< "$staged"
-  mkdir -p "$tmpd/home"
-  cp "$tmpd/scripts/node-bus-worker.py" "$tmpd/home/node-bus-worker.py"
-  chmod +x "$tmpd/home/node-bus-worker.py"
-  if [ -x "$tmpd/home/node-bus-worker.py" ] && python3 -B "$tmpd/home/node-bus-worker.py" --help >/dev/null 2>&1; then
+  mkdir -p "$tmpd/fakeroot"
+  cp "$tmpd/scripts/node-bus-worker.py" "$tmpd/fakeroot/node-bus-worker.py"
+  chmod +x "$tmpd/fakeroot/node-bus-worker.py"
+  if [ -x "$tmpd/fakeroot/node-bus-worker.py" ] && python3 -B "$tmpd/fakeroot/node-bus-worker.py" --help >/dev/null 2>&1; then
     say "  PASS  staged node-bus-worker.py is executable at $HOME/node-bus-worker.py and accepts --help"
   else
     say "  FAIL  staged node-bus-worker.py is not usable at the crier probe path"; fails=$((fails+1))
@@ -1152,7 +1154,7 @@ cat > "$tmpd/bin/df" <<'EOF'
 printf '%s\n' 'Filesystem 1024-blocks Used Available Capacity Mounted on' 'fixture 1048576 0 1048576 0% /'
 EOF
 chmod +x "$tmpd/bin/df"
-out=$(env -i HOME="$tmpd/home" PATH="$tmpd/bin:$PATH" NODE_DISK_FLOOR=4096 \
+out=$(env -i HOME="$tmpd/fakeroot" PATH="$tmpd/bin:$PATH" NODE_DISK_FLOOR=4096 \
   /bin/bash "$tmpd/scripts/project-node.sh" --apply --project fixture --harness hermes 2>&1); rc=$?
 if [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -Fq '  PASS  disk_floor — 4096 GiB from env' \
   && printf '%s\n' "$out" | grep -Fq 'NODE: FAIL (disk admission)' \
@@ -1358,13 +1360,13 @@ cp "$HERE/scripts/lib.sh" "$tmpd/before/"
 # measurable seed — a node home with a real record and its files. Without it the seed leg is a
 # WARN, which now means UNVERIFIED, and these arms would measure the fixture instead of the auth
 # legs they name. The seed probe is the ONE bunker exec below whose command runs for real.
-mkdir -p "$tmpd/home/.hermes" "$tmpd/seed-src/prompts"
+mkdir -p "$tmpd/fakeroot/.hermes" "$tmpd/seed-src/prompts"
 printf 'prompts/foreman.md\n' > "$tmpd/seed.manifest"
 printf 'the foreman procedure\n' > "$tmpd/seed-src/prompts/foreman.md"
 python3 -B "$HERE/scripts/node_seed.py" build --manifest "$tmpd/seed.manifest" \
   --repo-root "$tmpd/seed-src" --out "$tmpd/seed.tar" >/dev/null 2>&1
 python3 -B "$HERE/scripts/node_seed.py" apply --tar "$tmpd/seed.tar" \
-  --record "$tmpd/seed.tar.json" --home "$tmpd/home" >/dev/null 2>&1
+  --record "$tmpd/seed.tar.json" --home "$tmpd/fakeroot" >/dev/null 2>&1
 cat > "$tmpd/bin/bunker" <<'EOF'
 #!/usr/bin/env bash
 # CF-224: the node reports a ROUTABLE address (TEST-NET-1, never actually routed — the stub curl
@@ -1395,7 +1397,7 @@ EOF
 chmod +x "$tmpd/bin/bunker" "$tmpd/bin/curl"
 cf077_run() {
   env PATH="$tmpd/bin:$PATH" BUNKER_SERVER=fixture CRIER_URL=http://fixture.invalid:8767 \
-    HOME="$tmpd/home" STATS_CODE="$1" STATUS_BODY="$2" \
+    HOME="$tmpd/fakeroot" STATS_CODE="$1" STATUS_BODY="$2" \
     /bin/bash "$3" "${@:4}" 2>&1
 }
 body='{"status":"ok","auth_required":true}'
@@ -1488,7 +1490,7 @@ fi
 # (`not_home_repo`, exit 4) instead of being reported as a valid root. HOME is set to
 # the fixture, so this measures the same directory both arms resolve and never the
 # host's real home.
-home_root="$tmpd/home"
+home_root="$tmpd/fakeroot"
 mkdir -p "$home_root"
 git init -q -b main "$home_root"
 git -C "$home_root" -c user.email=fixture@example.invalid -c user.name=fixture \
@@ -1528,25 +1530,25 @@ rm -rf "$tmpd"
 # CF-007 AC3: reclaim-before-refusal, using the shipped scripts in a local HOME.
 say "20. reclaim runs before disk refusal, while check never reaps"
 tmpd=$(mktemp -d)
-mkdir -p "$tmpd/scripts" "$tmpd/bin" "$tmpd/home/.cache/pip"
+mkdir -p "$tmpd/scripts" "$tmpd/bin" "$tmpd/fakeroot/.cache/pip"
 cp "$HERE/scripts/project-node.sh" "$HERE/scripts/lib.sh" "$HERE/scripts/disk_floor.py" \
   "$HERE/scripts/reclaim_disk.py" "$tmpd/scripts/"
-dd if=/dev/zero of="$tmpd/home/.cache/pip/payload" bs=4096 count=2 2>/dev/null
+dd if=/dev/zero of="$tmpd/fakeroot/.cache/pip/payload" bs=4096 count=2 2>/dev/null
 # CF-290: build caches are TTL-gated by the NEWEST mtime in the subtree, so this fixture
 # must be genuinely stale — writing the payload moved the cache dir's own mtime to now.
-touch -d '48 hours ago' "$tmpd/home/.cache/pip/payload" "$tmpd/home/.cache/pip"
+touch -d '48 hours ago' "$tmpd/fakeroot/.cache/pip/payload" "$tmpd/fakeroot/.cache/pip"
 cat > "$tmpd/bin/curl" <<'EOF'
 #!/usr/bin/env bash
 printf '200'
 EOF
 chmod +x "$tmpd/bin/curl"
-out=$(env -i PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_DISK_FLOOR=4096 \
+out=$(env -i PATH="$tmpd/bin:$PATH" HOME="$tmpd/fakeroot" NODE_DISK_FLOOR=4096 \
   CRIER_URL=http://fixture.invalid /bin/bash "$tmpd/scripts/project-node.sh" \
   --apply --project fixture --layers 00 2>&1); rc=$?
 reap_line=$(printf '%s\n' "$out" | awk '/^  reap  .cache\/pip —/{print NR; exit}')
 fail_line=$(printf '%s\n' "$out" | awk '/^  FAIL  disk —/{print NR; exit}')
 if [ "$rc" -ne 0 ] && [ -n "$reap_line" ] && [ -n "$fail_line" ] \
-  && [ "$reap_line" -lt "$fail_line" ] && [ ! -e "$tmpd/home/.cache/pip" ] \
+  && [ "$reap_line" -lt "$fail_line" ] && [ ! -e "$tmpd/fakeroot/.cache/pip" ] \
   && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL  disk —')" = 1 ] \
   && printf '%s\n' "$out" | grep -Fxq 'NODE: FAIL (disk admission)'; then
   say "  PASS  pip cache reaped before one final disk FAIL; admission still refuses"
@@ -1554,13 +1556,13 @@ else
   say "  FAIL  reclaim-before-refusal ordering or deletion (exit $rc)"; fails=$((fails+1))
   printf '%s\n' "$out"
 fi
-mkdir -p "$tmpd/home/.cache/pip"
-dd if=/dev/zero of="$tmpd/home/.cache/pip/payload" bs=4096 count=2 2>/dev/null
-out=$(env -i PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_DISK_FLOOR=4096 \
+mkdir -p "$tmpd/fakeroot/.cache/pip"
+dd if=/dev/zero of="$tmpd/fakeroot/.cache/pip/payload" bs=4096 count=2 2>/dev/null
+out=$(env -i PATH="$tmpd/bin:$PATH" HOME="$tmpd/fakeroot" NODE_DISK_FLOOR=4096 \
   CRIER_URL=http://fixture.invalid /bin/bash "$tmpd/scripts/project-node.sh" \
   --check --project fixture --layers 00 2>&1); rc=$?
-if [ "$rc" -ne 0 ] && [ -f "$tmpd/home/.cache/pip/payload" ] \
-  && [ "$(wc -c < "$tmpd/home/.cache/pip/payload")" = 8192 ] \
+if [ "$rc" -ne 0 ] && [ -f "$tmpd/fakeroot/.cache/pip/payload" ] \
+  && [ "$(wc -c < "$tmpd/fakeroot/.cache/pip/payload")" = 8192 ] \
   && printf '%s\n' "$out" | grep -Fq 'check mode never mutates' \
   && printf '%s\n' "$out" | grep -Fxq 'NODE: FAIL (1)' \
   && printf '%s\n' "$out" | grep -Fq '  PASS  reach:https://pypi.org/simple/'; then
@@ -1571,7 +1573,7 @@ fi
 # Positive control: df becomes green only after the real reclaimer removes pip.
 # CF-290: age the cache the check arm just wrote — a fresh cache is now kept, so a
 # non-stale fixture would leave df red and prove nothing about the reclaimer.
-touch -d '48 hours ago' "$tmpd/home/.cache/pip/payload" "$tmpd/home/.cache/pip"
+touch -d '48 hours ago' "$tmpd/fakeroot/.cache/pip/payload" "$tmpd/fakeroot/.cache/pip"
 cat > "$tmpd/bin/df" <<'EOF'
 #!/usr/bin/env bash
 blocks=0
@@ -1579,7 +1581,7 @@ blocks=0
 printf '%s\n' 'Filesystem 1024-blocks Used Available Capacity Mounted on' "fixture 2097152 0 $blocks 0% /"
 EOF
 chmod +x "$tmpd/bin/df"
-out=$(env -i PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_DISK_FLOOR=1 \
+out=$(env -i PATH="$tmpd/bin:$PATH" HOME="$tmpd/fakeroot" NODE_DISK_FLOOR=1 \
   CRIER_URL=http://fixture.invalid /bin/bash "$tmpd/scripts/project-node.sh" \
   --apply --project fixture --layers 00 2>&1); rc=$?
 if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -Fq '2.0 GB free after reclaim (freed ' \
@@ -1590,7 +1592,7 @@ else
   say "  FAIL  recovered node was not admitted (exit $rc)"; fails=$((fails+1))
 fi
 rm "$tmpd/scripts/reclaim_disk.py"
-out=$(env -i PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_DISK_FLOOR=4096 \
+out=$(env -i PATH="$tmpd/bin:$PATH" HOME="$tmpd/fakeroot" NODE_DISK_FLOOR=4096 \
   /bin/bash "$tmpd/scripts/project-node.sh" --apply --project fixture --layers 00 2>&1); rc=$?
 if [ "$rc" -eq 1 ] && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL  disk_floor — reclaimer missing or unreadable:')" = 1 ] \
   && printf '%s\n' "$out" | grep -Fxq 'NODE: FAIL (1)'; then
@@ -2061,7 +2063,7 @@ for name, text in stubs.items():
 PY
 then
   pip_fixture_run() {
-    env LC_ALL=C PATH="$tmpd/bin:/usr/bin:/bin" HOME="$tmpd/home" \
+    env LC_ALL=C PATH="$tmpd/bin:/usr/bin:/bin" HOME="$tmpd/fakeroot" \
       PIP_FIXTURE="$tmpd" HERMES_PYTHON_BIN=python3 HERMES_PIN=0.19.0 \
       NODE_GATEWAY_PORT=10800 FAILED=0 FIXTURE_PIP_RC="${pip_fixture_rc:-23}" \
       FIXTURE_LOG_DENY="${pip_fixture_deny:-0}" /bin/bash "$@"
@@ -2078,7 +2080,7 @@ then
   fi
   before_check=$(pip_fixture_run "$HERE/scripts/harness/install-hermes.sh" --check 2>&1); rc=$?
   shopt -s nullglob
-  logs=("$tmpd/home"/.hermes-install-*.log)
+  logs=("$tmpd/fakeroot"/.hermes-install-*.log)
   expected='  FAIL  binary — absent — run --apply'
   if [ "$rc" -eq 1 ] && [ "${#logs[@]}" -eq 0 ] && [ ! -e "$tmpd/pip.calls" ] \
     && [ "$(printf '%s\n' "$before_check" | grep -Fxc -- "$expected")" = 1 ] \
@@ -2089,12 +2091,12 @@ then
   fi
   for run in 1 2; do
     out=$(pip_fixture_run "$HERE/scripts/harness/install-hermes.sh" --apply 2>&1); rc=$?
-    logs=("$tmpd/home"/.hermes-install-*.log)
+    logs=("$tmpd/fakeroot"/.hermes-install-*.log)
     pip_log=$(printf '%s\n' "$out" | sed -n 's/^  FAIL  install — pip exited 23 — log: //p')
     expected="  FAIL  install — pip exited 23 — log: $pip_log"
     if [ "$rc" -eq 1 ] && [ "${#logs[@]}" -eq "$run" ] \
       && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ] \
-      && [[ "$pip_log" == "$tmpd/home/.hermes-install-10800."*.log ]] \
+      && [[ "$pip_log" == "$tmpd/fakeroot/.hermes-install-10800."*.log ]] \
       && [ "$(stat -c %a "$pip_log" 2>/dev/null)" = 600 ] \
       && [ "$(grep -Fxc 'fixture pip output' "$pip_log" 2>/dev/null)" = 1 ] \
       && [ "$(grep -Fxc 'pip invoked' "$tmpd/pip.calls" 2>/dev/null)" -eq "$run" ] \
@@ -2106,7 +2108,7 @@ then
   done
   pip_fixture_deny=1
   out=$(pip_fixture_run "$HERE/scripts/harness/install-hermes.sh" --apply 2>&1); rc=$?
-  template="$tmpd/home/.hermes-install-10800.XXXXXXXX.log"
+  template="$tmpd/fakeroot/.hermes-install-10800.XXXXXXXX.log"
   expected="  FAIL  install_log — cannot create $template — fixture: $template: Permission denied"
   if [ "$rc" -eq 1 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ] \
     && [ "$(grep -Fxc 'pip invoked' "$tmpd/pip.calls")" = 2 ]; then
@@ -2118,7 +2120,7 @@ then
   pip_fixture_rc=0
   out=$(pip_fixture_run "$HERE/scripts/harness/install-hermes.sh" --apply 2>&1); rc=$?
   expected='  PASS  install — hermes fixture 0.19.0'
-  logs=("$tmpd/home"/.hermes-install-*.log)
+  logs=("$tmpd/fakeroot"/.hermes-install-*.log)
   if [ "$rc" -eq 1 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ] \
     && [ "${#logs[@]}" -eq 3 ] && [ "$(grep -Fxc 'pip invoked' "$tmpd/pip.calls")" = 3 ]; then
     say "  PASS  pip-log successful install proceeds despite the unwritable fixed file"
@@ -2126,8 +2128,8 @@ then
     say "  FAIL  pip-log successful install did not proceed"; fails=$((fails+1))
   fi
   after_check=$(pip_fixture_run "$HERE/scripts/harness/install-hermes.sh" --check 2>&1); rc=$?
-  logs=("$tmpd/home"/.hermes-install-*.log)
-  expected="  PASS  binary — $tmpd/home/hermes-venv/bin/hermes"
+  logs=("$tmpd/fakeroot"/.hermes-install-*.log)
+  expected="  PASS  binary — $tmpd/fakeroot/hermes-venv/bin/hermes"
   if [ "$rc" -eq 1 ] && [ "${#logs[@]}" -eq 3 ] \
     && [ "$(grep -Fxc 'pip invoked' "$tmpd/pip.calls")" = 3 ] \
     && [ "$(printf '%s\n' "$after_check" | grep -Fxc -- "$expected")" = 1 ] \
@@ -2257,7 +2259,7 @@ for arm in bunker-server-install node-create; do
     node-create) args=(--project myrepo --repo https://github.com/you/myrepo --harness hermes);
                  closing='NODE INCOMPLETE ('; extra=(CRIER_URL=http://crier.example:8767) ;;
   esac
-  out=$(env -i PATH=/usr/local/bin:/usr/bin:/bin HOME="$tmpd/home" "${extra[@]}" \
+  out=$(env -i PATH=/usr/local/bin:/usr/bin:/bin HOME="$tmpd/fakeroot" "${extra[@]}" \
     /bin/bash "$HERE/scripts/$arm.sh" "${args[@]}" 2>&1); rc=$?
   if [ "$rc" -ne 0 ] \
     && printf '%s\n' "$out" | grep -Eq '^  FAIL  .*BUNKER_SERVER' \
@@ -3032,7 +3034,7 @@ rm -rf "$tmpd"
 # a fixture HOME, so a staged file really lands and a staged install really executes — a stub that
 # only echoed would let every hygiene row pass without measuring anything.
 cf214=$(mktemp -d)
-mkdir -p "$cf214/bin" "$cf214/home/tmp"
+mkdir -p "$cf214/bin" "$cf214/fakeroot/tmp"
 : > "$cf214/argv.log"; : > "$cf214/argv.log.modes"
 cat > "$cf214/bin/bunker" <<'FBUNKER'
 #!/usr/bin/env bash
@@ -3073,8 +3075,8 @@ FBUNKER
 chmod +x "$cf214/bin/bunker"
 cf214_run() {  # cf214_run <provisioner args...>; CF214_EXTRA_PATH prefixes the fixture PATH
   local cf214_provisioner="${CF214_PROVISIONER_OVERRIDE:-$HERE/scripts/bunker-provision.sh}"
-  env -i PATH="${CF214_EXTRA_PATH:-}$cf214/cbin:$cf214/bin:/usr/bin:/bin" HOME="$cf214/home" TMPDIR="$cf214/home/tmp" \
-    BUNKER_FAKE_LOG="$cf214/argv.log" BUNKER_FAKE_HOME="$cf214/home" \
+  env -i PATH="${CF214_EXTRA_PATH:-}$cf214/cbin:$cf214/bin:/usr/bin:/bin" HOME="$cf214/fakeroot" TMPDIR="$cf214/fakeroot/tmp" \
+    BUNKER_FAKE_LOG="$cf214/argv.log" BUNKER_FAKE_HOME="$cf214/fakeroot" \
     BUNKER_FAKE_FAIL="${BUNKER_FAKE_FAIL:-}" BUNKER_FAKE_CRIER_SIGNED="${BUNKER_FAKE_CRIER_SIGNED:-0}" \
     HERE="${CF214_SCRIPT_ROOT:-$HERE/scripts}" \
     /bin/bash "$cf214_provisioner" "$@"
@@ -3084,7 +3086,7 @@ cf214_run() {  # cf214_run <provisioner args...>; CF214_EXTRA_PATH prefixes the 
 # stdin), so the run must remove it again: before CF-214 every check left cf-probe.sh in the
 # node's home for good, which made "read-only" a claim about intent rather than a measurement.
 out=$(cf214_run --check --project demo --agent demo-node --server demo-server 2>&1); rc=$?
-cf214_left=$(find "$cf214/home" -type f | wc -l)
+cf214_left=$(find "$cf214/fakeroot" -type f | wc -l)
 if printf '%s\n' "$out" | grep -q 'PASS  agent — demo-node exists' \
    && grep -q 'cf-probe' "$cf214/argv.log" && [ "$cf214_left" -eq 0 ] && [ "$rc" -ne 0 ]; then
   say "  PASS  CF-214: --check probed the node, left no file behind, and an unmeasured node is a FAIL (exit $rc)"
@@ -3099,16 +3101,16 @@ cf214_tok="SYNTHETIC-CF214-CREDENTIAL-NOT-A-SECRET"
 printf '%s\n' "$cf214_tok" > "$cf214/gh.token"; chmod 600 "$cf214/gh.token"
 out=$(cf214_run --apply --project demo --repo https://example.invalid/x.git --agent demo-node \
       --server demo-server --harness none --github-token-file "$cf214/gh.token" 2>&1); rc=$?
-cf214_inst="$cf214/home/.node/auth/github.token"
+cf214_inst="$cf214/fakeroot/.node/auth/github.token"
 cf214_mode=$(stat -c %a "$cf214_inst" 2>/dev/null || echo absent)
 cf214_val=$(cat "$cf214_inst" 2>/dev/null || true)
 cf214_out_leak=$(printf '%s\n' "$out" | grep -c "$cf214_tok")
 cf214_arg_leak=$(grep -c "$cf214_tok" "$cf214/argv.log")
 # the bundle's own mode at the moment it was copied in — not the mode of some later artefact
 cf214_bundle_mode=$(awk '$2 == "cf-auth.bundle" {print $1}' "$cf214/argv.log.modes" | tail -1)
-cf214_bundle=$([ -e "$cf214/home/cf-auth.bundle" ] && echo left || echo gone)
-cf214_tmpfiles=$(find "$cf214/home/tmp" -type f | wc -l)
-cf214_cred=$(stat -c %a "$cf214/home/.git-credentials" 2>/dev/null || echo absent)
+cf214_bundle=$([ -e "$cf214/fakeroot/cf-auth.bundle" ] && echo left || echo gone)
+cf214_tmpfiles=$(find "$cf214/fakeroot/tmp" -type f | wc -l)
+cf214_cred=$(stat -c %a "$cf214/fakeroot/.git-credentials" 2>/dev/null || echo absent)
 if [ "$cf214_mode" = 600 ] && [ "$cf214_val" = "$cf214_tok" ] && [ "$cf214_out_leak" -eq 0 ] \
    && [ "$cf214_arg_leak" -eq 0 ] && [ "$cf214_bundle_mode" = 600 ] && [ "$cf214_bundle" = gone ] \
    && [ "$cf214_tmpfiles" -eq 0 ] && [ "$cf214_cred" = 600 ] && [ ! -e "$cf214/argv.log.spawn" ] \
@@ -3209,10 +3211,10 @@ esac
 exit 0
 FCURL
 chmod +x "$cf214/cbin/curl"
-printf '{"agent":"demo-node","project":"demo","url":"http://crier.invalid:8767"}\n' > "$cf214/home/.node/crier.json"
+printf '{"agent":"demo-node","project":"demo","url":"http://crier.invalid:8767"}\n' > "$cf214/fakeroot/.node/crier.json"
 cf214_crier() {  # cf214_crier <inbox code>
-  env -i PATH="$cf214/cbin:$cf214/bin:/usr/bin:/bin" HOME="$cf214/home" FIXTURE_CODE="$1" \
-    BUNKER_FAKE_LOG="$cf214/argv.log" BUNKER_FAKE_HOME="$cf214/home" \
+  env -i PATH="$cf214/cbin:$cf214/bin:/usr/bin:/bin" HOME="$cf214/fakeroot" FIXTURE_CODE="$1" \
+    BUNKER_FAKE_LOG="$cf214/argv.log" BUNKER_FAKE_HOME="$cf214/fakeroot" \
     /bin/bash "$HERE/scripts/bunker-crier-connect.sh" --check --agent demo-node \
     --server demo-server --url http://crier.invalid:8767 2>&1
 }
@@ -3944,7 +3946,7 @@ fi
 # Every leg below runs it against a fixture adapter dir and a fixture HOME: no credential, no
 # network, no install. A green matrix is only worth the fixtures that can turn it red.
 tmpd=$(mktemp -d)
-mkdir -p "$tmpd/adapters" "$tmpd/empty" "$tmpd/home" "$tmpd/bin"
+mkdir -p "$tmpd/adapters" "$tmpd/empty" "$tmpd/fakeroot" "$tmpd/bin"
 # The fixture harness binary exists so the smoke leg gets past "binary absent" and reaches the
 # credential probe — that is the row under test in the first arm.
 cat > "$tmpd/bin/claude" <<'STUB'
@@ -3966,7 +3968,7 @@ esac
 FIX
 runb() {  # runb <adapter-dir> <only> [extra args...]
   local dir="$1" only="$2"; shift 2
-  env -i PATH="$tmpd/bin:/usr/bin:/bin" HOME="$tmpd/home" FIXTURE_BIN="$tmpd" \
+  env -i PATH="$tmpd/bin:/usr/bin:/bin" HOME="$tmpd/fakeroot" FIXTURE_BIN="$tmpd" \
     /bin/bash "$HERE/tests/harness-conformance.sh" --only "$only" --adapter-dir "$dir" "$@" 2>&1
 }
 out=$(runb "$tmpd/adapters" claude-code --write-doc --doc "$tmpd/doc.md")
@@ -4052,7 +4054,7 @@ FIX
 synthetic_key="synthetic-$(printf '%s' fixture-key)"
 runb_nopath() {  # runb_nopath <adapter-dir> <only> [script] -- PATH holds no harness binary
   local dir="$1" only="$2" script="${3:-$HERE/tests/harness-conformance.sh}"
-  env -i PATH="/usr/bin:/bin" HOME="$tmpd/home" FIXTURE_BIN="$tmpd" FIXTURE_LIB="$HERE/scripts/lib.sh" \
+  env -i PATH="/usr/bin:/bin" HOME="$tmpd/fakeroot" FIXTURE_BIN="$tmpd" FIXTURE_LIB="$HERE/scripts/lib.sh" \
     ANTHROPIC_API_KEY="$synthetic_key" \
     /bin/bash "$script" --only "$only" --adapter-dir "$dir" 2>&1
 }
@@ -4060,7 +4062,7 @@ out=$(runb_nopath "$tmpd/offpath" claude-code)
 smoke_row=$(printf '%s\n' "$out" | grep '^  PASS  claude-code:smoke' | head -1)
 if [ -n "$smoke_row" ] \
   && printf '%s' "$smoke_row" | grep -qF "binary $tmpd/offpath-bin/claude" \
-  && grep -rqF 'stub-binary: ' "$tmpd/home/.harness-conformance" 2>/dev/null \
+  && grep -rqF 'stub-binary: ' "$tmpd/fakeroot/.harness-conformance" 2>/dev/null \
   && ! printf '%s\n' "$out" | grep -q 'claude-code:smoke .*absent'; then
   say "  PASS  a binary measured off PATH is resolved from the adapter's own row and that path runs the turn"
 else
@@ -4356,7 +4358,7 @@ fi
 mkdir -p "$tmpd/bin"
 printf '#!/usr/bin/env bash\ncase "$1" in list) echo bunker-01 ;; info) echo "agent b 6h" ;; exec) exit 0 ;; *) exit 1 ;; esac\n' > "$tmpd/bin/bunker"
 chmod +x "$tmpd/bin/bunker"
-out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" /bin/bash "$HERE/scripts/bunker-provision.sh" \
+out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/fakeroot" /bin/bash "$HERE/scripts/bunker-provision.sh" \
   --config "$tmpd/out/demo.conf" --check 2>&1)
 if printf '%s\n' "$out" | grep -q '  PASS  config — demo.conf — ' \
   && ! printf '%s\n' "$out" | grep -q 'FAIL  config'; then
@@ -5421,8 +5423,8 @@ say "49. layer 10 grades the toolchain the repository kind needs, Go included (C
 tmpd=$(mktemp -d)
 # Layer 10 reads $HOME/repo for kind evidence, because it runs BEFORE layer 40 clones.
 # A fresh node has no clone, so the fixture only seeds the marker file.
-mkdir -p "$tmpd/home/repo"
-printf 'module fixture.example/demo\n\ngo 1.21\n' > "$tmpd/home/repo/go.mod"
+mkdir -p "$tmpd/fakeroot/repo"
+printf 'module fixture.example/demo\n\ngo 1.21\n' > "$tmpd/fakeroot/repo/go.mod"
 mkdir -p "$tmpd/bin" "$tmpd/empty"
 
 # A PATH with a named tool removed entirely, built by dropping every directory that
@@ -5446,7 +5448,7 @@ else
 fi
 
 # --- arm RED: a go.mod workspace and no Go binary.
-out=$(env PATH="$nogo_path" HOME="$tmpd/home" NODE_PROJECT=demo \
+out=$(env PATH="$nogo_path" HOME="$tmpd/fakeroot" NODE_PROJECT=demo \
   /bin/bash "$HERE/scripts/project-node.sh" --check --project demo --layers 10 2>&1); rc=$?
 if [ "$rc" -ne 0 ] \
   && [ "$(printf '%s\n' "$out" | grep -c '^  FAIL  tool:go — ')" = 1 ] \
@@ -5470,7 +5472,7 @@ esac
 exit 0
 EOF
 chmod +x "$tmpd/bin/go"
-out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_PROJECT=demo \
+out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/fakeroot" NODE_PROJECT=demo \
   /bin/bash "$HERE/scripts/project-node.sh" --check --project demo --layers 10 2>&1); rc=$?
 if [ "$rc" -eq 0 ] \
   && printf '%s\n' "$out" | grep -Fq '  PASS  tool:go — ' \
@@ -5497,7 +5499,7 @@ esac
 exit 0
 EOF
 chmod +x "$tmpd/bin/go"
-out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/home" NODE_PROJECT=demo \
+out=$(env PATH="$tmpd/bin:$PATH" HOME="$tmpd/fakeroot" NODE_PROJECT=demo \
   /bin/bash "$HERE/scripts/project-node.sh" --check --project demo --layers 10 2>&1); rc=$?
 if [ "$rc" -ne 0 ] \
   && printf '%s\n' "$out" | grep -Fq '  PASS  tool:go — ' \
@@ -6467,12 +6469,12 @@ fi
 
 # ARM: layer 10 grades the OWNED pin. A fresh node has no node at all; the row must name
 # $HOME/node-toolchain/current/bin/node, not whichever node an ambient image exposes.
-mkdir -p "$cf003/home/node-toolchain/current/bin"
-printf '#!/bin/sh\necho v22.22.3\n' > "$cf003/home/node-toolchain/current/bin/node"
-chmod +x "$cf003/home/node-toolchain/current/bin/node"
-out=$(env HOME="$cf003/home" NODE_PROJECT=demo CRIER_URL=http://127.0.0.1:9 \
+mkdir -p "$cf003/fakeroot/node-toolchain/current/bin"
+printf '#!/bin/sh\necho v22.22.3\n' > "$cf003/fakeroot/node-toolchain/current/bin/node"
+chmod +x "$cf003/fakeroot/node-toolchain/current/bin/node"
+out=$(env HOME="$cf003/fakeroot" NODE_PROJECT=demo CRIER_URL=http://127.0.0.1:9 \
   bash "$HERE/scripts/project-node.sh" --check --project demo --kinds node --layers 10 2>&1); rc=$?
-expected="  PASS  tool:node — $cf003/home/node-toolchain/current/bin/node (v22.22.3)"
+expected="  PASS  tool:node — $cf003/fakeroot/node-toolchain/current/bin/node (v22.22.3)"
 if [ "$rc" -eq 0 ] && [ "$(printf '%s\n' "$out" | grep -Fxc -- "$expected")" = 1 ]; then
   say "  PASS  layer 10 grades the owned node pin, not a PATH runtime"
 else
@@ -6613,7 +6615,7 @@ else
 fi
 
 # ARM: layer 00 reports the footprint it will occupy against the resolved floor.
-out=$(env HOME="$cf003/home" NODE_PROJECT=demo CRIER_URL=http://127.0.0.1:9 \
+out=$(env HOME="$cf003/fakeroot" NODE_PROJECT=demo CRIER_URL=http://127.0.0.1:9 \
   bash "$HERE/scripts/project-node.sh" --check --project demo --layers 00 2>&1)
 if printf '%s\n' "$out" | grep -q '^  PASS  footprint — ' \
    && printf '%s\n' "$out" | grep -q '^  PASS  footprint:floor — '; then
@@ -6855,7 +6857,7 @@ cf050_publish_gate() {
   # Grade the index when it contains staged changes so the pre-commit gate evaluates the tree it
   # is about to publish. Fixture repositories have no staged changes, so grade their committed HEAD.
   # A host-home leak is an absolute /home/<name>/ that is not part of a larger path expression, so
-  # "$tmpd/home/repo" (a scratch-relative path) must not be read as a leak.
+  # "$tmpd/fakeroot/repo" (a scratch-relative path) must not be read as a leak.
   local pat='(^|[^A-Za-z0-9])/home/[a-z][a-z0-9_-]*/'
   local excl=(':!.gitreins/**' ':!.coding-hermes/board/**')
   # Options must precede the pattern: `git grep <pattern> --cached` reads --cached as a pathspec.
