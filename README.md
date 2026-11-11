@@ -328,8 +328,15 @@ this repo does not create (they are not part of the shipped family and are not c
 fourteen) and whose `enabled` state and admission mode live only in that scheduler. Of the fourteen,
 thirteen carried `enabled=true` and `code-factory-qa` carried `enabled=false` — the scheduler had
 disabled that lane on its own failure rate, which is the kind of drift a census catches and a
-hand-written count does not. The same run printed `code-factory-duckbrain admission=tasks` against
-the `cooldown` the loader writes — the drift the command exists to expose.
+hand-written count does not. The recorded 2026-11-04 run printed
+`code-factory-duckbrain admission=cooldown`, matching the value written by the loader; a later live
+run may differ, so use the census above as the authority rather than treating this snapshot as
+current scheduler state.
+
+ch:trace row=CF-188 spec=README.md#the-lanes wave=code-factory-readme-2026-11-11-10-03-09#CF-188 test=bash-tests/selftest.sh::selftest doc=README.md evidence=README.md witness=README.md#the-lanes verdict=none:foreman-judges-after-merge commit=none:self-referential-hash memory=none:not-written
+STATUS: complete | partial | blocked
+TIER: T1
+EVIDENCE: README.md#the-lanes
 
 Evidence for the state of this README: the clone figure is covered by the published audit `docs/audits/code-factory-readme-2026-10-30-20-29-25.md`; the prompt column and the eleven-file/layout census are covered by the published audit `docs/audits/code-factory-readme-2026-10-30-23-28-00.md` (whose command transcript is the `.probe.txt` beside it).
 
