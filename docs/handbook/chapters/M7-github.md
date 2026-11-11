@@ -246,10 +246,10 @@ headroom margin, not file age. Scope reduction, compromise, provider revocation,
 expiry, mapping-generation change and offboarding explicitly revoke the old
 credential, record provider confirmation, remove the node copy and invalidate the
 cache. Restore replays the mapping but never reactivates a recorded revocation.
-All operations emit outcome and duration metrics with bounded labels for provider,
-project, bunker, operation and refusal reason; M7 collects/readbacks them. A request
-for a second project, wider permission or different Bunker is refused before any
-provider call.
+All operations emit the common M0 event and are projected by §18/V.10. Base metric
+labels remain module/operation/outcome/project; provider, Bunker and refusal reason
+appear only in the registered bounded views below. A request for a second project,
+wider permission or different Bunker is refused before any provider call.
 
 Acceptance cases cover trust enrollment, GitHub least-privilege issuance, GitLab
 project scope, allowed and denied operations across two projects, renewal before
@@ -341,6 +341,85 @@ Acceptance races epoch advance against each resource write, partitions the forme
 owner, and proves either one completed old effect before advance or a refused write,
 never an old effect after replacement activation. These are required tests, not
 runtime evidence supplied by this source wave.
+
+## 18. Closed capabilities and credential telemetry
+
+`Capability` is the closed enum `contents_read`, `contents_write`, `issues_read`,
+`issues_write`, `pulls_read`, `pulls_write`, `actions_read`, `actions_write`,
+`statuses_write`, `secrets_write`. `cf.forge-grant.v1` is
+`{schema_version:"cf.forge-grant.v1",grant_id:ID,principal_id:ID,project_id:ID,
+bunker_id:ID,forge_host:Text,repository_ids:UInt[],capabilities:Capability[],
+not_before:Time,not_after:Time,max_after:Time,generation:PosInt,
+parent_token_fingerprint:SHA,policy_digest:SHA}`. repository_ids is unique/sorted,
+capabilities unique/bytewise sorted, and not_before < not_after ≤ max_after. A grant
+contains no bearer value. `cf.forge-token.v1` adds token_ref:SecretRef,
+token_fingerprint:SHA, grant_id and the exact minted repository/capability/expiry
+subset. `cf.forge-readback.v1` is `{grant_id,provider_credential_id,repository_ids,
+capabilities,expires_at,observed_at,mapping_generation}`.
+`cf.forge-quiescence.v1` is `{grant_id,observed_at,active_attempt_ids:ID[],
+external_effect_refs:EvidenceRef[],remote_revocation_id:ID|null,
+outcome:quiescent/unknown}`.
+
+The adapter mapping is explicit: GitHub contents read/write maps to
+contents_read/contents_write, issues to issues_*, pull_requests to pulls_*, actions
+to actions_*, commit_statuses:write to statuses_write and secrets:write to
+secrets_write. GitLab read_repository maps to contents_read; write_repository maps
+to contents_write; Reporter/Developer is provider role metadata, never an implied
+issue/pull/actions grant. Any unmapped provider permission returns
+CAPABILITY_UNMAPPED. The normalized result's permission_scope is this Capability
+set, not provider strings.
+
+Lifecycle enforcement is:
+
+1. **Issue** authenticates the manager grant/fence and computes requested ∩ granted ∩
+   adapter-supported. A missing required capability returns SCOPE_REFUSED before the
+   provider call; expiry is bounded by grant.not_after, max_after and §16. The issuer
+   stores only token_ref/fingerprint plus the normalized readback.
+2. **Check** performs provider readback and compares exact repository/capability sets,
+   expiry and mapping generation. A mismatch enters quarantine with
+   READBACK_MISMATCH; installation-wide coverage never substitutes for token scope.
+3. **Deliver** writes the mode-0600 per-attempt bundle and returns its
+   scope_digest/expiry receipt. A worker starts only when required capabilities are
+   proven and expiry exceeds its remaining bounded wall plus renewal margin;
+   otherwise TOKEN_EXPIRING/DELIVERY_NOT_PROVEN. No token value enters telemetry.
+4. **Renew** creates a child grant with a new grant_id/generation and expiry no later
+   than max_after, re-narrows against the current parent, activates the new token,
+   then fences/revokes the old one. Loss of readback is RENEWAL_REFUSED, never an
+   expiry extension.
+5. **Revoke** first denies new use and fences live attempts, obtains
+   cf.forge-quiescence.v1, deletes the node bundle, proves deletion/401 or provider
+   revocation, then records the audit tombstone. Unknown quiescence or remote denial
+   is QUIESCENCE_UNKNOWN/REVOCATION_UNKNOWN and blocks replacement that requires
+   denial proof. Expiry alone is not revocation.
+
+All five operations emit M0 `cf.telemetry.v1` before acknowledgement with module M7,
+event_type `credential-issue`, `credential-check`, `credential-delivery`,
+`credential-renew` or `credential-revoke`, duration_ms and outcome. The payload adds
+bounded provider, bunker_id, operation, grant_id, request_id, project_id, task_id,
+attempt_id, expiry_headroom_seconds, refusal_code, mapping_generation and
+partial_activation_id as applicable. Missing task/attempt IDs are null only for
+control-plane enrollment/revocation. A scrape projects each event once by event_id;
+it never emits another operation.
+
+At emission and at scrape, the five operation counters are
+`factory_operations_total{module="M7",operation="issue|verify|deliver|renew|revoke",
+outcome,project}` and durations are
+`factory_operation_duration_seconds{module="M7",operation,project}`.
+Check maps to global operation verify. Derived registered views are
+`factory_credential_expiry_headroom_seconds{module="M7",project,provider,bunker}`
+(minimum live headroom gauge),
+`factory_credential_scope_refusals_total{module="M7",project,provider,operation,
+reason}` (bounded refusal-code counter),
+`factory_mapping_stale{module="M7",project,provider,bunker}` (0/1 gauge), and
+`factory_partial_activations{module="M7",project,provider,bunker}` (current gauge).
+Provider/Bunker/reason are permitted only in those views; base labels are exactly
+module/operation/outcome/project. Global success maps to pass, failure to fail,
+refusal to refused, warning to unknown, and a successful credential-revoke terminal
+event to cancelled. Global accepted comes only from an explicit accepted custody
+receipt. M0's local 15 s telemetry read and the global collector's 10 s poll are
+independent read clocks. The collector stores source event_id/cursor durably,
+deduplicates retries/restarts, and derives freshness from the last new source event,
+not from a successful scrape.
 
 ## RED field count: 4 (Metrics §8 — absence-proved; §1 mint UNVERIFIED; M7-C1 contract state UNVERIFIED — consumer is an external API; §9 inventory 2 of 103 helper call sites — the descriptive rows not tabulated one-per-site)
 

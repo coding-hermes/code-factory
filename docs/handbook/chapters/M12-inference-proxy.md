@@ -388,9 +388,11 @@ without claiming a complete audit record. [VI.18/19; V.9/10]
 
 ## 17. Closed completion and stream grammar (P5-C-24)
 
-The supported request is `{model,messages,stream,options,request_id,deadline}`.
+The canonical native request `cf.inference.v1` is
+`{schema_version:"cf.inference.v1",model,messages,stream,options,request_id,deadline}`.
 model is an allowed route name <=128 UTF-8 characters; request_id is ID, deadline UTC;
-messages is 1..1024 entries, body <=4 MiB. stream boolean defaults false. Each message
+messages is 1..1000 entries and the canonical JSON body is <=1 MiB. stream boolean
+defaults false. Each message
 has role system/user/assistant/tool and content string <=1 MiB (empty allowed only
 for assistant tool calls), plus optional tool_calls for assistant or tool_call_id
 for tool. tool_calls is a list of `{id,type: function,function:{name,arguments}}`;
@@ -412,8 +414,12 @@ usage,state,error}`. content is string or null when only tool calls; tool_calls 
 list (empty permitted); finish_reason is stop/length/tool_calls; usage is
 `{input_tokens,output_tokens,total_tokens,cost_micro_usd,estimated}`; all counts are
 nonnegative integers, estimated boolean. state is complete/error/cancelled; error is
-null on complete, otherwise `{code,message,retryable}`. Identity mismatch is error,
-not a silent replacement. /health returns `{status:healthy/degraded,ready:boolean}`
+null on complete, otherwise `{code,message,retryable}`. `id` equals request_id and is
+also the stream response_id; upstream_id is the provider's distinct request identity.
+`model` is the requested route; chosen_model, resolved_model and served_model are the
+exact provider-served model returned by routing and must agree. requested_model is the
+caller-supplied string. Identity mismatch is error, not a silent replacement.
+/health returns `{status:healthy/degraded,ready:boolean}`
 without a model call and never exposes credential metadata.
 
 SSE uses Content-Type text/event-stream, UTF-8, each record terminated by two LF bytes.
@@ -440,6 +446,72 @@ on complete with settled usage, and raises typed error on error/cancelled/trunca
 It may query the response ID after disconnect but cannot silently resend with a new ID.
 This translation is the required compatibility behavior, not a claim about current
 Hermes implementation. [CT-19/20; VII.13]
+
+## 18. Application-proxy mapping and inference telemetry
+
+The native `cf.inference.v1` grammar in §17 is canonical. CT-19 and CT-20 are
+versioned transport adapters, not competing inference grammars. Their v2 body is
+`inference-request.v2` / `inference-forward.v2`: all native fields plus
+`project_id:ID`, `attempt_id:ID`, `corr_id:ID` and `credential_ref:SecretRef`.
+Forward adds `upstream_ref:EndpointRef`, `upstream_credential_ref:SecretRef`,
+`upstream_corr_id:ID`, `policy_generation:PosInt` and `upstream_deadline:Time`.
+The outer envelope request_id equals body request_id. The adapter authenticates
+credential refs locally and never serializes their values into the native request or
+provider JSON. Both envelope and native canonical JSON are limited to 1 MiB; the
+outer Part I 64 KiB text rule is not a second inference-body limit. Oversize input
+returns PAYLOAD_TOO_LARGE before authorization or forwarding.
+
+The total v2 mapping is: route model unchanged; messages/tool_calls/tool_call_id
+unchanged; stream defaults false; max_output_tokens and all other generation/tool
+controls live in options with §17 defaults; request_id becomes native id/response_id;
+deadline is the caller deadline; upstream_deadline is min(caller deadline, configured
+upstream deadline); project/attempt/corr IDs join the accounting row; upstream_corr_id
+joins provider logs. The upstream provider request contains only native model,
+messages, stream/options and provider-required routing fields. `requested_model`
+retains the route string; chosen/resolved/served model identity follows §17. v2 buffered
+results use the full §17 completion, including tool_calls and usage.
+
+`inference-request.v1` and `inference-forward.v1` are a read-compatible minimal
+profile only. Their ChatMessage `{role,content,call_id}` maps to native role/content
+and call_id→tool_call_id; top-level max_output_tokens maps to
+options.max_output_tokens; omitted options take §17 defaults; stream defaults false.
+That version cannot represent assistant tool_calls or declare tools. A v1 request
+that needs tools is refused UNSUPPORTED_VERSION before forwarding, and an unexpected
+tool-call response is UPSTREAM_PROTOCOL_ERROR, never silently dropped. v1 buffered
+InferenceResult.content concatenates ordered content deltas, finish_reason and error
+map directly, and upstream_id maps from the provider identity. A complete result still
+requires settled usage even though legacy InferenceResult does not display it.
+
+The native stream starts seq=0 and emits ordered delta events, exactly one usage
+event, exactly one terminal event, then [DONE]. `inference-stream.v1` is the legacy
+adapter with seq starting at 1 and native seq = legacy seq−1. Legacy delta `chunk`
+maps from native content only, legacy usage maps from the usage event, and terminal
+response_id is native request id. Tool-capable clients must use v2; v1 cannot erase
+tool deltas. Every terminal carries response_id, served_model, final usage, state and
+error. A complete terminal follows the usage commit; errors and cancellation use the
+same terminal shape. EOF/[DONE] without terminal is truncated. Duplicate sequence,
+missing usage, identity mismatch or terminal-after-terminal is
+UPSTREAM_PROTOCOL_ERROR. Recovery GET uses request_id; a new id never disguises a
+retry.
+
+M12 emits M0 `cf.telemetry.v1` before acknowledgement for event_type `inference`,
+`response-lookup`, `capture`, `credential-issue`, `credential-renew` and
+`credential-revoke`, with module M12, duration_ms and outcome. Payload carries
+request_id, project_id, attempt_id, nullable task_id, route, chosen/resolved/served
+model, upstream_id, token_id (never bearer), expiry_headroom_seconds, input/output/
+total tokens, cost_micro_usd, estimated, state, refusal/error code and capture_ref.
+Global operations map inference→infer, response-lookup→verify, capture→capture and
+credential events→issue/renew/revoke. Base counters use exactly
+module/operation/outcome/project labels; duration histograms use exactly
+module/operation/project labels. Derived views are
+`factory_inference_tokens_total{module="M12",project,kind="input|output"}`,
+`factory_inference_cost_micro_usd_total{module="M12",project}`,
+`factory_inference_unsettled{module="M12",project}` and
+`factory_upstream_errors_total{module="M12",project,code}` with code from the bounded
+Part I/provider error registry. Model, route, token_id, request/attempt/task IDs stay
+in payload, never base labels. V.10's durable event_id cursor deduplicates emission,
+retry, scrape and restart; one request event counted twice is a projection defect.
+Reads/scrapes emit nothing and do not refresh the last-operation timestamp.
 
 ## RED field count: 4 (Metrics §8 — absence-proved; CT-19 node-client half UNVERIFIED; CT-20 upstream half UNVERIFIED — one-sided external boundary; stream completion **FAILING** — F12-7 reproduced, and a first-byte-only flight card cannot close it)
 

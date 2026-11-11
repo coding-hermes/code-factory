@@ -342,46 +342,92 @@ only with consecutive revisions; duplicate `(id,revision)` is corruption even wh
 bytes agree. Old headerless stores require an explicit migration with preserved
 original evidence; readers do not silently infer a new schema.
 
-TaskRow has exact fields: `kind:"task"`, `id:ID`, `revision:PosInt`, `operation_id:ID`,
-`title:Text`, `status:pending/in_progress/blocked/deferred/complete/cancelled`,
-`priority:integer[0,100]`, `complexity:integer[1,10]`, `reasoning:Text`,
-`acceptance_criteria:Criterion[1..100]`, `depends_on:ID[]`, `fixture:boolean`,
-`created_at:Time`, `updated_at:Time`, `claim:Claim|null`, `deferral:Deferral|null`,
-`completion:Completion|null`. Criterion is `{id:ID,text:Text,verification:Text}`;
-arrays preserve order except depends_on is unique bytewise sorted. Claim is
-`{claim_id:ID,claimant_id:ID,claim_generation:PosInt,lease_expires_at:Time,
-owner_fence:Fence}`. Deferral is `{reason:Text,owner_id:ID,review_at:Time,
+Canonical storage comprises `initiatives.jsonl`, `tasks.jsonl` and `events.jsonl`.
+The first two carry full immutable row images; the third carries every initiative and
+task transition in canonical commit order. An Initiative has
+`schema_version:"cf.initiative.v1"`, `kind:"initiative"`, `id:ID`, `project_id:ID`,
+`revision:PosInt`, `operation_id:ID`, `title:Text`,
+`status:proposed/accepted/cancel_requested/cancelled/accepted_delivery`,
+`acceptance_criteria:Criterion[1..1024]`, `task_ids:ID[]`, `accepted_by:ID|null`,
+`accepted_at:Time|null`, and `input_digest:SHA`. `task_ids` is a unique bytewise-sorted
+set. `accepted_by` and `accepted_at` are nonnull exactly in `accepted` and
+`accepted_delivery`; the initiative owner is `accepted_by` or that principal's
+authenticated delegate. Initiative `edit` may change criteria/task membership before
+acceptance and may add tasks afterward; either increments revision and invalidates a
+prior delivery acceptance. `accepted_delivery` additionally requires the
+project-acceptance record in VII.18, not merely closed tasks.
+
+TaskRow is the sole task type; `task.v1` is a retired name, not a second record. It has
+exact fields `schema_version:"cf.board-task.v1"`, `kind:"task"`, `id:ID`,
+`initiative_id:ID`, `revision:PosInt`, `operation_id:ID`, `title:Text`,
+`status:pending/in_progress/blocked/deferred/cancel_requested/cancelled/complete`,
+`complexity:integer[1,10]`, `reasoning:Text`,
+`acceptance_criteria:Criterion[1..100]`, `depends_on:ID[]`, `created_seq:UInt`,
+`paths:string[1..1024]`, `resources:Resource[]`, `fixture:boolean`,
+`created_at:Time`, `updated_at:Time`, `claim:Claim|null`,
+`cancel_request:CancelRequest|null`, `deferral:Deferral|null`, and
+`completion:Completion|null`. The header supplies project_id; it is not duplicated in
+a task. `depends_on`, `paths` and `resources` are unique bytewise-sorted sets. A path
+is a normalized repository-relative prefix; `.` declares repository-wide/generated
+effects. Resource is `{name:ID,mode:exclusive/shared}` with unique names.
+`created_seq` is immutable and unique within an initiative.
+
+Criterion is exactly `{id:ID,description:Text,argv:string[1..64],cwd:string,
+timeout_s:integer[1,1800],expected_exit:integer[0,255],oracle_digest:SHA}`. `argv`
+executes directly without a shell; `cwd` is a safe repository-relative path;
+`oracle_digest` identifies the versioned assertion and fixture code. Criterion order
+is meaningful and IDs are unique within the owning initiative/task. The legacy
+`{id,text,verification}` form is not executable and is never silently converted.
+Claim is `{claim_id:ID,claimant_id:ID,claim_generation:PosInt,lease_expires_at:Time,
+owner_fence:Fence}`. CancelRequest is `{requested_by:ID,reason:Text,requested_at:Time,
+quiescence_evidence_refs:EvidenceRef[]}` and is required for cancel_requested/cancelled
+and null otherwise. Deferral is `{reason:Text,owner_id:ID,review_at:Time,
 return_condition:Text}`; required for deferred and forbidden otherwise.
+
 Completion is `{run_id:ID,implementation_commit:GitOID,integration_commit:GitOID,
-verdict_ref:EvidenceRef,publication_ref:EvidenceRef,evidence_refs:EvidenceRef[]}`;
-required only for complete. The referenced implementation/integration is the tested
-parent, never the closure commit itself (M3 §17).
+verdict_ref:EvidenceRef,publication_ref:EvidenceRef,criteria_evidence:Evidence[],
+evidence_refs:EvidenceRef[]}` and is required only for complete. Evidence is
+`{criterion_id:ID,run_id:ID,commit:GitOID,tree_digest:SHA,argv_digest:SHA,
+exit_code:UInt,stdout_digest:SHA,stderr_digest:SHA,started_at:Time,finished_at:Time,
+outcome:pass/fail/unknown}`. There is exactly one Evidence per task criterion in
+criterion order; every run_id equals Completion.run_id and every outcome is pass for a
+completed task. The referenced implementation/integration is the tested parent,
+never the closure commit itself (M3 §17).
 
 Event is `{schema_version:"cf.board-event.v1",event_id:ID,operation_id:ID,
-task_id:ID,expected_revision:UInt,new_revision:PosInt,actor:ID,
-type:create/claim/renew/release/block/defer/resume/cancel/complete/reopen,
-row_digest:SHA,occurred_at:Time,evidence_refs:EvidenceRef[]}`. Exactly one event
-matches each new row image, its row_digest hashes that whole row, and new_revision
-is expected_revision+1. Per-task revisions start at 1; event IDs are globally unique
-within board_id. Physical append order is canonical commit order, then event order
-within the transaction; timestamps never reorder state. The reducer validates all
-headers, rows, unique keys, marker hashes and event pairs before returning the highest
-revision for each id. It never skips malformed rows or takes a last-writer timestamp.
+subject_kind:initiative/task,subject_id:ID,expected_revision:UInt,new_revision:PosInt,
+actor:ID,type:create/edit/claim/renew/release/block/defer/resume/cancel_request/
+cancel/complete/reopen,row_digest:SHA,occurred_at:Time,evidence_refs:EvidenceRef[]}`.
+Exactly one event matches each new row image, its row_digest hashes that whole row,
+and new_revision is expected_revision+1. Per-subject revisions start at 1; event IDs
+are globally unique within board_id. Physical append order is canonical commit order,
+then event order within the transaction; timestamps never reorder state. The reducer
+validates all headers, rows, unique keys, marker hashes and event pairs before
+returning the highest revision for each subject. It never skips malformed rows or
+takes a last-writer timestamp.
 
-Legal transitions are create→pending; pending→in_progress/blocked/deferred/cancelled;
-in_progress→pending/blocked/deferred/complete/cancelled; blocked/deferred→pending/cancelled;
+Legal task transitions are create→pending; edit on pending/blocked/deferred;
+pending→in_progress/blocked/deferred/cancel_requested;
+in_progress→pending/blocked/deferred/cancel_requested/complete;
+blocked/deferred→pending/cancel_requested; cancel_requested→cancelled; and
 complete/cancelled→pending only through an authorized reopen carrying evidence and a
-new revision. Renew preserves in_progress and the same claim generation; release
-returns to pending after quiescence. Defer requires Deferral, resume clears it after
-the named condition's evidence; review_at never auto-completes a dependency. Cancellation
-first requests M2 control and quiescence; a pending request does not falsely mark a
-running process stopped. Cancelled prerequisites remain unsatisfied unless an explicit
-revision removes/replaces the dependency with owner rationale. Dependency cycles,
+new revision. `id`, `initiative_id` and `created_seq` never change. Edit may change
+title, complexity, reasoning, criteria, dependencies, paths or resources, increments
+revision, and invalidates every prior eligibility/wave plan. An active claim first
+requires release and quiescence; content cannot be edited underneath a worker. Renew
+preserves in_progress and claim generation; release returns to pending after
+quiescence. Defer requires Deferral, resume clears it after the named condition's
+evidence, and review_at never auto-completes a dependency. cancel_request blocks new
+claims and invokes M2 control; only proven quiescence permits cancel. Completed
+publications remain retained. Cancelled prerequisites remain unsatisfied unless an
+edit removes/replaces the dependency with owner rationale. Dependency cycles,
 self-links or missing targets refuse the whole mutation.
 
-The eligibility oracle excludes fixture=true, all non-pending states, missing criteria,
-active/quarantined claims and any prerequisite not complete. It validates the whole
-dependency graph first. It sorts eligible ids by descending priority, then bytewise id.
+The eligibility oracle excludes fixture=true, all non-pending states, tasks whose
+initiative is not accepted, missing/invalid criteria, active/quarantined claims and
+any prerequisite not complete at the pinned snapshot. It validates the whole
+dependency graph first. It sorts eligible ids by ascending `(created_seq,id)`;
+priority is lane configuration only and is not a task field or ordering input.
 `GET /factory/v1/boards/<board_id>/eligibility?revision=<algorithm>:<oid>` returns
 `{schema_version:"cf.board-read.v1",board_id,board_revision:GitOID,observed_at:Time,
 status:EMPTY/NO_WORK/WORK/UNAVAILABLE,eligible:ID[],counts:{tasks:UInt,fixtures:UInt,
@@ -393,51 +439,90 @@ foreman and Boardctl use this exact reducer/oracle; no separate terminal vocabul
 is permitted. The endpoint is a required target adapter, not an assertion that the
 current source-only board reader implements it.
 
+**Migration and Boardctl projection.** Migration preserves the original headerless
+store as a digest-bound evidence object and assigns created_seq by `(created_at,id)`.
+It maps `depends_on`, complexity and reasoning unchanged, assigns conservative
+`paths:["."]` and `resources:[]`, and drops legacy priority only from scheduling, not
+from the preserved evidence. A legacy `{text,verification}` criterion remains in that
+evidence until an authorized edit supplies executable argv/cwd/timeout/exit/oracle
+fields; migration never invents them. The target reducer and admission refuse
+`MIGRATION_INCOMPLETE` until every retained task has the canonical schema and belongs
+to an initiative. Boardctl's `acceptance_criteria`, `depends_on` and `verification`
+display is a compatibility projection only; its write adapter emits the canonical
+criterion and rejects unknown keys. Existing status/event history is replayed into
+new row revisions, never discarded.
+
 ### 15.2 Concrete claim CAS and server-side enforcement
 
-CT-10 request has `schema_version:"cf.board-claim.v1"`, operation_id, project_id,
-board_id, task_id, claimant_id, claim_id, idempotency_key (IDs), board_revision
-(GitOID), expected_revision (UInt), expected_status (`pending` or `in_progress`),
-claim_generation (UInt; expected current generation, zero for unclaimed),
-lease_expires_at (Time, requested bound), owner_fence (Fence), transition
-(`claim`, `renew`, `release`), evidence_refs (EvidenceRef[]). No owner_id,
-lease_until, fence_token, board_commit, staged_revision or published_revision aliases
-are accepted. The project owner_fence is distinct from per-task claim_generation.
-Only the broker allocates the next generation on claim/reclaim; renewal never advances it.
-Result is `{operation_id,claim_id,claim_generation:PosInt,new_revision:PosInt,
-board_revision:GitOID,lease_expires_at:Time,duplicate:boolean}`. The result's Git OID
-is returned after publication, not embedded in its own commit.
+New claims use `cf.board-group-claim.v1` on CT-10:
+`{schema_version:"cf.board-group-claim.v1",message_type:"board.group_claim",
+operation_id:ID,project_id:ID,board_id:ID,claimant_id:ID,claim_group_id:ID,
+wave_plan_digest:SHA,idempotency_key:ID,board_revision:GitOID,owner_fence:Fence,
+lease_expires_at:Time,claims:ClaimRequest[1..256]}`. ClaimRequest is
+`{task_id:ID,claim_id:ID,expected_revision:PosInt,expected_status:"pending",
+claim_generation:1,evidence_refs:EvidenceRef[]}`. Claims are ordered by the wave
+plan's `(created_seq,task_id)`; task_id and claim_id are unique, and the plan digest
+covers that ordered set, paths/resources, board revision and admission epoch.
+`cf.board-claim.v1` remains only for renew/release of one existing claim with
+`transition:"renew"/"release"`; it no longer creates claims. The project owner_fence
+is distinct from per-task claim_generation. Only the broker allocates generations on
+group claim/reclaim; renewal never advances them. The result's Git OID is returned
+after publication, not embedded in its own commit.
 
 The broker serializes project effects against epoch advance (Part I §1.9.3a), then:
 
 1. Fetches the protected ref into an isolated worktree and verifies it equals the
-   requested board_revision. It validates the full reducer, expected task revision,
-   expected status, dependencies, live owner fence and claimant's project scope.
-2. Uses the broker's monotonic clock for a 120 s lease, renewed every 40 s, bounds the
-   requested expiry accordingly, and increments claim_generation on a new claim.
-   The authority records the monotonic deadline; wall-clock expiry is readout only.
+   requested board_revision. It validates the full reducer, every task revision/status,
+   accepted initiative, dependencies, live owner fence and claimant project scope.
+2. Revalidates eligibility for the entire ordered group, including path/resource
+   conflicts inside the group and against live claims and cancel_requested states.
+   It uses the broker monotonic clock for a 120 s lease, renewed every 40 s, bounds
+   requested expiry accordingly, and allocates one claim_id/generation per task.
 3. Constructs one candidate Git commit with sole parent equal to the old remote OID.
-   It appends exactly one row and event and adds the Part I §1.9.6 marker at
-   `.coding-hermes/board/transactions/<operation_id>.json`. Marker hashes cover the
-   complete resulting tasks/events bytes. It records the candidate OID in its effect
-   journal, not inside that marker. No worker starts yet.
+   It appends exactly one TaskRow/Event pair per claimed task and adds the Part I
+   §1.9.6 marker at `.coding-hermes/board/transactions/<operation_id>.json`. A
+   registered `group_claim` marker member carries claim_group_id, wave_plan_digest,
+   ordered claim ids/generations and every row/event hash; marker hashes also cover
+   the complete resulting tasks/events bytes. The candidate OID is recorded in the
+   effect journal, not inside that marker. No worker starts yet.
 4. Submits receive-pack old-OID→candidate-OID update to the protected ref. A required
    server-side pre-receive validator, or an equivalent broker-only protected repository
-   service, verifies exact parent, append-only prefixes, marker hashes, authorized fields,
-   revision/status/claim transitions and unexpired broker effect authorization. The ref
-   lock compares old OID atomically; only one candidate can win. A forge exposing only
-   an unchecked merge API does not satisfy this contract.
-5. Fetches the exact remote marker/row/event and verifies the accepted OID before returning
-   success and waking Scheduler. A lost push acknowledgement is resolved by marker lookup;
-   identical operation/input replays the original receipt, never appends again.
+   service, verifies exact parent, all append-only prefixes, marker/group hashes,
+   authorized fields, every revision/status/claim transition and unexpired broker
+   effect authorization. The ref lock compares old OID atomically; only one candidate
+   can win. A forge exposing only an unchecked merge API does not satisfy this contract.
+5. Fetches the exact remote marker/rows/events and verifies every accepted claim before
+   returning Result `{operation_id,claim_group_id,board_revision:GitOID,
+   lease_expires_at:Time,duplicate:boolean,claims:[{task_id,claim_id,claim_generation,
+   new_revision,row_digest,event_digest}]}` in request order and waking Scheduler.
+   Every fenced lease is valid before the first process starts. A lost push
+   acknowledgement is resolved by marker lookup; identical operation/input replays
+   the original receipt with duplicate=true, never appends again. A repeated
+   idempotency_key with different canonical input returns IDEMPOTENCY_KEY_REUSED.
+   Duplicate task_id or claim_id inside one request is INVALID_FIELD; either rejects
+   the entire group before candidate construction rather than deduplicating members.
 
-A stale ref/revision returns `CLAIM_CONFLICT` (HTTP 409), stale project fence returns
-`STALE_OWNER`; neither grants permission to execute. The losing clone fetches, reruns
-eligibility and submits a new CAS at most five times, then defers with `CLAIM_BUSY`.
-It does not merge stale claims. Native-start permission requires the successful remote
-receipt plus current owner fence, not a local file or local flock. Reclaim requires
+A stale ref/revision or ineligible member returns `CLAIM_CONFLICT` (HTTP 409), stale
+project fence returns `STALE_OWNER`, and lease setup failure returns
+`LEASE_SETUP_FAILED`; none grants any member permission to execute. The losing clone
+fetches, reruns eligibility and submits a new whole-group CAS at most five times,
+then defers with `CLAIM_BUSY`. It never merges stale claims. No process in a losing
+candidate starts, including its first member. If any launch fails after publication,
+the launcher fences/releases the entire group and proves quiescence before another
+wave reuses its paths/resources. Native-start permission requires the complete remote
+group receipt plus current owner fence, not a local file/flock. Reclaim requires
 quiescence evidence or fenced-old-host proof from M2, not lease age alone. Restart of
 the lease authority expires claims and blocks starts until owner/run reconciliation.
+Release requires control ACK for the claimed task, hashes its complete pair,
+increments revision and clears claim; a late worker response never revives a lease.
+
+A correction keeps the same task id and initiative. It creates a new attempt under
+the current claim after fencing the failed attempt; it never inserts a dependency on
+its own correction or queues the row behind itself. If the old lease must be released,
+release first proves quiescence and returns that row to pending with its revision
+intact. A sibling settlement is accepted only when `(task_id,revision,claim_id,
+claim_generation,attempt_id,tree_digest,evidence_run)` equals the active row and claim.
+A stale sibling result returns CLAIM_CONFLICT and cannot close/reopen the row.
 
 ### 15.3 Partial writes, fencing and restore
 
@@ -472,7 +557,48 @@ UNAVAILABLE. Required conformance includes competing clones, lost push acknowled
 partial local staging, published marker corruption, delayed fenced push, revoked return,
 fixture exclusion and deferred/cancelled prerequisites. M0 §16.1 supplies telemetry.
 
-### 15.4 Board engine decision
+### 15.4 Post-judge settlement and correction ownership
+
+Board closeout is the last transition of the publication chain, not a synonym for a
+judge verdict or a successful `git push`. For the active `(task_id,revision,claim_id,
+claim_generation)` the foreman evaluates these artifacts in order:
+
+1. `staged-guard.v1` records the mechanical checks on the staged tree. `pass` permits
+   the integration/publication pipeline regardless of model-judge availability; `fail`
+   leaves completion null and starts a correction or records the task blocked with the
+   failed evidence. `unknown` never becomes pass.
+2. `source-judgment.v1` grades the exact source tree independently of those checks.
+   `fail` requests correction under the same task and claim; `unknown` leaves the
+   judgment unsettled while the foreman reconciles the judge. Neither outcome stops
+   the mechanical integration/publication pipeline, neither publishes by itself, and
+   unknown is never rewritten as pass.
+3. `integrated-judgment.v1` and the criterion Evidence are rebound to the same
+   integrated tree after every merge/CAS refresh. A failed integrated gate or judgment
+   requests correction; an unavailable model or harness produces `unknown`, leaves
+   completion null, and does not suppress the independent mechanical artifacts or an
+   already proven remote publication.
+4. `publication.v1` must be `applied`, with `remote_ancestor_verified=true` and its
+   published_oid/tree_digest equal to the tested integrated parent. `refused` starts
+   the declared CAS/correction path. `unknown` leaves the row unsettled and invokes
+   remote marker/ancestor readback; neither a push exit status nor an uncertain model
+   judgment can override it.
+5. CT-13 validates the active claim, every task criterion Evidence, the applied parent
+   publication and `closure-validator.v1`, then performs the same protected old-OID
+   CAS as §15.2. It appends the complete row/event pair and reads the remote marker
+   back before reporting complete. Only that remote closure receipt wakes dependents.
+   A failed or unknown closure CAS never emits completion or a success event.
+
+A fail, unverified or unknown artifact therefore cannot settle a task complete, and
+an applied push cannot repair a failed criterion or uncertain required judgment. The
+correction rules in §15.2 retain the same task id and initiative and charge a new
+attempt to the same worker; they never add a dependency from the task to its own
+correction. A late sibling result is quarantined unless its full identity matches the
+active revision/claim/attempt and tested tree. In particular, a stale pass cannot
+close the row early, and a stale fail cannot reopen a later valid closure. Releasing
+or blocking an abandoned attempt preserves all earlier evidence and requires the M2
+quiescence proof; it does not erase the correction lineage.
+
+### 15.5 Board engine decision
 
 The measured `dev` executable is not a qualified release. The proposed engine target
 is Boardctl v0.2.0; compatibility with this append-row/CAS profile is UNVERIFIED.

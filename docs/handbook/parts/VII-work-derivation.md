@@ -28,6 +28,51 @@ one commit, or a successful tick is not project completion evidence (§11), and 
 deterministic IaC control loop of Part V is the supporting control that keeps
 infrastructure ready — it is not itself the work derivation (§11.9).
 
+## VII.0 Canonical execution derivation
+
+The derivation consumes the canonical contracts in §IV.0 and the fixtures in
+`docs/handbook/contract-vectors.yaml`. It does not create a second wire format.
+
+A round begins with admitted task ids and a durable `total_budget` worker-attempt
+allowance. The scheduler persists that round before transport; Crier persists custody
+before acknowledgement. Only then does the foreman derive waves and attempts. Worker
+reservation is monotonic across compatible waves: `remaining = allowance - consumed -
+reserved`, and a later wave cannot restore allowance by changing concurrency. A failed
+start refunds only under the CT-06R proof rule.
+
+Each attempt binds one `BriefInput` digest to its task, acceptance criteria, directive,
+skills and attachments. The `WorkerBrief` then binds that immutable input to the exact
+repository/base, effective settings, claim generation and owner fence. The supervisor
+accepts a `LaunchInput` digest; it does not re-derive the brief from mutable lane state.
+The attempt cannot start until the protected board CAS and its remote readback have
+established the claim. The same chain carries `execution_key`, `attempt_id`, `run_id`
+and `corr_id` through the worker result, round report and evidence references.
+
+Round time and attempt time are independent. The round deadline persists across every
+wave, retry and reconciliation pause. `attempt_wall_s` covers harness start, execution,
+result upload and terminal reconciliation. `turn_timeout_s` covers one model turn and
+`max_turns` caps their count; neither multiplies into an attempt or round deadline.
+Admission and launch refuse a budget or deadline that cannot cover the declared launch,
+transfer and cleanup reserves.
+
+A worker result reports execution facts; it does not settle the round. The foreman
+persists a complete `RoundReport` with per-wave state, per-task result references,
+budget arithmetic, stop reason, memory references and a digest computed with the digest
+field absent. The scheduler deduplicates that digest before settlement. Required
+postchecks and board evidence decide closeout separately, so a passing harness can still
+produce `settled_failure` and cannot wake dependents as a success.
+
+The no-useful-work stop closes further launches but preserves pending reports, cleanup,
+usage settlement and evidence writing. Retry requires the original attempt identity,
+a live owner fence and the retry policy's declared charge. Unknown exec, transport or
+remote-effect state remains unknown until reconciled; no derivation step converts it
+into a fresh attempt, a second mutation or a success.
+
+The selected profile defaults are the fail-closed values in SC-01 through SC-06. An owner
+may select another listed option only through a new settings generation that carries the
+same invariants and evidence requirements. An unavailable board artifact, inference
+artifact, complete backup or lost-authority replacement refuses the dependent operation.
+
 ## VII.1 The chain, as a table
 
 The following target sequence is normative. The `Measured in` column is implementation
@@ -53,11 +98,14 @@ One hop may refuse. A refusal names a reason; a silent drop is a defect, not a d
 
 ## VII.2 The board row lifecycle
 
-The board is two JSONL stores, `tasks.jsonl` (rows) and `events.jsonl` (transitions), in
-`.coding-hermes/board/` (M4 §1). At the 2026-11-07 measurement the store held 357 rows and
-520 events (M4 §7). A row moves `pending` → `in_progress` → `complete`, and the non-forward
-states are part of the design: `blocked` carries a named blocker, `deferred` carries an
-unmet dependency (M4 §12; the front-matter overview, figures/board-lifecycle.svg).
+The target board is three JSONL stores, `initiatives.jsonl`, `tasks.jsonl` (rows) and
+`events.jsonl` (transitions), in `.coding-hermes/board/`; M4 §15.1 owns their
+canonical schemas. The measured legacy store has only tasks/events and requires the
+explicit migration in M4 §15.1. At the 2026-11-07 measurement that legacy store held
+357 rows and 520 events (M4 §7). A row moves `pending` → `in_progress` → `complete`,
+and the non-forward states are part of the design: `blocked` carries a named blocker,
+`deferred` carries an unmet dependency, and `cancel_requested` remains nonterminal
+until quiescence (M4 §12; the front-matter overview, figures/board-lifecycle.svg).
 
 Three rules govern the write path:
 
@@ -174,7 +222,13 @@ The rules that matter to a brief writer:
 ## VII.6 Judge and verdict readback
 
 The judge is a gate, not a correspondent. The staged diff goes to gitreins (CT-12, M3 §6),
-and the verdict that comes back is what closes a row (CT-13, M4 §6). The readback rules:
+and the verdict is one required input to acceptance (CT-13, M4 §6), not by itself a
+publication or closeout receipt. The target record split in VII.18 is normative:
+staged-guard grades only the staged tree, source-judgment grades the source commit,
+integrated-judgment grades the integrated tree, publication proves remote readback,
+and closure-validator checks the already published parent. A model-unknown verdict
+never converts a mechanical harness result to pass or a push outcome to success.
+The readback rules:
 
 - **The verdict names criteria.** A grade is PASS or FAIL "with named criteria, never a
   silent skip" (M5, FLIGHT DATA FILE). A verdict that cannot name what it graded is
@@ -304,6 +358,19 @@ metric.
 | `worker_budget{used, remaining}` | how much of the round's total-worker allowance is spent, per round and per wave? | gauge, workers; observable per wave, never reset at a wave boundary (V2-Q-02, §16) | foreman (round report) / scheduler (admission) |
 | `round_stop_reasons_total{reason}` | why did rounds stop — useful-work exhaustion, budget spent, or a required condition? | counter, one named reason class per stop (§11.8) | foreman |
 | `project_acceptance_progress{initiative}` | how much of the accepted plan is delivered and verified? | derived: accepted/verified integration results over planned acceptance criteria (§11.9) | foreman / board |
+
+V.10 owns the transport projection for this table. `admission_outcomes_total` is a
+named view of `factory_operations_total{module="M9",operation="admit"}`;
+`dispatch_to_settlement_seconds` is a correlated launch→settle duration view, not a
+second scrape clock; `settlement_outcomes_total` uses M9 operation `settle`.
+Credential headroom/refusals use M7's registered derived views. Ratios and lineage
+are computed from event/evidence refs, never from a scrape increment. Project, round,
+wave, task and attempt IDs remain in event payloads and join keys; they never become
+unbounded base-label sets. Views explicitly allow only the labels listed in their
+row; lane, initiative and reason views are bounded registries and are never inferred
+from arbitrary text. The local 15 s telemetry read and global 10 s collection are
+independent intervals owned by their respective readers; neither re-emits on read,
+so polling cannot create operations or extend freshness.
 
 Grep absence in current scripts is coverage evidence, not the metric design: where a
 definition above has no emitter, the metric is required behavior with the emitter named as
@@ -574,30 +641,35 @@ rule demands ("it reports which source it used"), bound into the round contract.
 
 ### VII.15.1 Eligibility, claims and partial-write recovery
 
-Eligibility is a canonical predicate evaluated against the synchronized revision. A row is
-eligible only when its status is `pending`, its dependencies resolve to `complete`, its
-acceptance criteria are non-empty and executable, no active claim lease exists, and its
-project/lane scope is admitted. `in_progress`, `blocked`, `deferred`, malformed, cyclic,
-unknown-project and stale-revision rows are not eligible; an unreadable board is an
-`ELIGIBILITY_UNKNOWN` refusal, never an empty-board result.
+Eligibility is exactly M4 §15.1 evaluated against the synchronized revision. A row is
+eligible only when its status is `pending`, its initiative is accepted, every
+dependency resolves to `complete`, its `acceptance_criteria` are nonempty/executable,
+no active claim lease or cancel request exists, and its project/lane scope is admitted.
+`in_progress`, `blocked`, `deferred`, malformed, cyclic, unknown-project and
+stale-revision rows are not eligible; an unreadable board is `ELIGIBILITY_UNKNOWN`,
+never an empty-board result. Ordering is ascending `(created_seq,id)` only.
 
-Claims use exactly Part I §1.9.6 and CT-10's canonical object: task_id,
-board_revision, claimant_id, claim_id, lease_expires_at and claim_generation,
-plus project owner_fence at the broker boundary. M4's owner_id/lease_until/
-fence_token/expected_revision names are legacy aliases translated only by its adapter;
-they are not accepted alternate canonical keys. The foreman requests and Boardctl
-publishes the row/event/claim candidate tree via broker ref CAS. A CAS loser receives
-CLAIM_CONFLICT and re-derives; a stale owner receives STALE_OWNER. Lease expiry alone
-never authorizes replacement. Resource enforcement is VI.35.2, not a local Git lock.
+Every new claim, including a single-task wave, uses M4's `cf.board-group-claim.v1`
+with an ordered `claims` array and digest-bound `wave-plan.v1`. The broker creates
+one row/event pair and one claim generation per member in a single remote CAS. It
+returns no grant until the remote marker and every fenced lease are proven. Any
+conflict refreshes and re-derives the whole group before launching any member; a
+first-member launch after CAS loss is a contract violation. Existing
+`cf.board-claim.v1` is limited to renew/release. Lease expiry alone never authorizes
+replacement. Resource enforcement is VI.35.2, not a local Git lock.
 
-Closeout is idempotent by `(task_id, claim_generation, evidence_run_id, tree_digest)`.
+Closeout is idempotent by `(task_id,revision,claim_id,claim_generation,attempt_id,
+evidence_run_id,tree_digest)`. A correction retains the same task and active row,
+starts a new fenced attempt, and never depends on its own correction. A stale sibling
+settlement cannot close or release the current claim. If release is required,
+quiescence precedes pending; only then can a new group claim select the row.
 Validation refusals before staging leave canonical state unchanged. Any partial
 staging/publication or event failure records PARTIAL_WRITE with operation ID and
 marks scheduling UNAVAILABLE until M4 repair reads the remote ref, verifies the
-row/event/claim set and either adopts it or retries from the current revision.
-No blanket unchanged-store claim applies to an uncertain publication. Scheduler admission may decide whether
-a lane runs, but it cannot claim a task or substitute for this foreman-owned board
-transaction.
+complete group row/event/claim set and either adopts it or retries from the current
+revision. No blanket unchanged-store claim applies to uncertain publication.
+Scheduler admission may decide whether a lane runs, but cannot claim a task or
+substitute for this foreman-owned board transaction.
 
 ## VII.16 Round crash recovery without double-counting
 
@@ -650,45 +722,78 @@ A missing status is INVALID_RESULT, not auto-converted to unknown; only an expli
 legacy adapter may create unknown plus a missing-verdict diagnostic. §13's blanket
 non-null rule excludes these declared nullable fields and empty failure collections.
 
-An accepted initiative is initiative.v1: id,project_id,revision (positive integer),
-title (1..512 characters),status (proposed/accepted/cancel_requested/cancelled/accepted_delivery),
-criteria (1..1024 Criterion),task_ids (ID set),accepted_by (principal ID),accepted_at
-(UTC),input_digest. A task.v1 contains id,initiative_id,project_id,title,status
-(pending/in_progress/blocked/deferred/complete/cancel_requested/cancelled),dependencies
-(ID set),criteria,created_seq (nonnegative integer),paths (1..1024 normalized
-repository-relative prefixes),resources (set of `{name:ID,mode:exclusive/shared}`),
-claim (M4 object or null),evidence_refs (digest refs, empty until available).
-Criterion is `{id,description,argv,cwd,timeout_s,expected_exit,oracle_digest}`; argv is
-nonempty string array, cwd is safe repo-relative path, timeout_s 1..1800, expected_exit
-0..255 and oracle_digest identifies the versioned assertion/fixture code. Evidence
-is `{criterion_id,run_id,commit,tree_digest,argv_digest,exit_code,stdout_digest,
-stderr_digest,started_at,finished_at,outcome}` with outcome pass/fail/unknown.
-All records use canonical JSON, explicit schema_version, unknown-key rejection and
-append-only revision CAS via M4. Priority is lane-only; task ordering is below.
+M4 §15.1 is the sole initiative/task/criterion authority; `initiative.v1`, `task.v1`
+and `criterion.v1` are retired aliases. Initiative uses
+`schema_version:"cf.initiative.v1"`; TaskRow uses `schema_version:"cf.board-task.v1"`.
+VII consumes canonical `acceptance_criteria`, `depends_on`, `created_seq`, `paths`,
+`resources`, claim and completion fields unchanged. `task_id` means TaskRow.id and
+`revision` its board revision. There is no second dependency, status, priority or
+free-text verification model here. All records use canonical JSON, explicit
+schema_version, unknown-key rejection and append-only revision CAS via M4. Priority
+is lane-only. Every criterion is executable before eligibility or SC-04 acceptance.
 
 On a fixed synchronized board, compute eligible tasks using VII.15, then sort by
-(created_seq,id), bytewise ID tie-break. Scan once: admit a candidate iff all its
-dependencies are already complete at that snapshot, its path prefixes have no ancestor/
-descendant overlap with selected tasks, and no equal resource name is exclusive on
-either task. Repository-wide/generated-file effects declare path `.`; undeclared
-write paths are BRIEF_SCOPE_VIOLATION, not post-hoc compatibility. Stop selecting at
-min(remaining worker allowance, free concurrency); skip conflicts and keep scanning.
-The snapshot, sorted candidates, selected set and rejection reasons form wave-plan.v1.
-Claims CAS as a group; any conflict refreshes and re-derives before launching any
-member. Integration follows the same selected order; a conflict halts the wave's
-publication pending correction, never silently reorders merges.
+`(created_seq,id)`. Scan once: admit a candidate iff all dependencies were complete at
+that snapshot, its path prefixes have no ancestor/descendant overlap with selected
+tasks, and no equal resource name is exclusive on either task. Repository-wide or
+generated-file effects declare path `.`; undeclared writes are BRIEF_SCOPE_VIOLATION.
+Stop at min(remaining worker allowance, free concurrency); skip conflicts and keep
+scanning. `wave-plan.v1` is `{schema_version:"wave-plan.v1",board_revision:GitOID,
+round_id:ID,wave_id:ID,ordered_candidates:[{task_id,created_seq,depends_on,paths,
+resources}],selected:ID[],rejections:[{task_id,code}],plan_digest:SHA}`; plan_digest
+covers every preceding member. M4's group claim binds this digest. Any CAS conflict
+refreshes/re-derives before any launch. Integration follows selected order; conflict
+halts publication pending correction and never silently reorders merges.
 
-Cancellation is requested by the initiative owner through authenticated boardctl
-adapter POST `/v1/projects/{id}/initiatives/{initiative}/cancel` with expected_revision,
-reason and idempotency_key. It records cancel_requested, blocks new claims, invokes
-M11 cancel for live launches, and retains completed publications. Only quiescence
-and durable partial outcomes permit cancelled; unknown children remain quarantined.
-A foreman can stop its round for deadline/budget without cancelling the initiative.
-project-acceptance.v1 contains project_id,initiative_id,initiative_revision,published_oid,
-criteria_results (one Evidence per criterion),task_refs,round_report_refs,memory_receipts,
-reviewer_id,accepted_at,outcome. outcome is accepted/refused/unknown; accepted requires
-all criteria pass on the SAME published tree, closed tasks and all required receipts.
-Owner acceptance, when required by initiative, is a separate signed decision ref.
+Cancellation is requested by the initiative owner through the authenticated Boardctl
+adapter `POST /v1/projects/{id}/initiatives/{initiative}/cancel` with
+`{schema_version:"cf.initiative-cancel.v1",operation_id:ID,project_id:ID,
+initiative_id:ID,expected_revision:PosInt,reason:Text,idempotency_key:ID}`.
+The same authenticated principal or an explicit delegate in M4 owns the operation.
+The broker validates live revision/authority, emits Initiative.cancel_request and
+TaskRow.cancel_request for every nonterminal member in one effect transaction, and
+returns `{operation_id,initiative_id,status:cancel_requested,initiative_revision,
+task_requests:[{task_id,revision,previous_status}],completed_task_ids:ID[],
+unknown_task_ids:ID[],duplicate:boolean}`. It retains completed publications, blocks
+new claims, and invokes M11 cancel for live launches. `cancel_requested` does not stop
+a process or satisfy acceptance. Only all-child quiescence plus durable partial
+outcomes permits one second transaction to set initiative and members `cancelled`;
+that result adds `cancelled_task_ids`, `partial_outcome_refs` and `quiescence_ref`.
+Unknown children remain cancel_requested/quarantined, never completed/cancelled.
+A revision conflict returns CANCEL_CONFLICT without changing state. Repeating the
+same idempotency key/input replays the original receipt; after terminal cancellation
+it returns the terminal receipt with duplicate=true. Different input under that key
+returns IDEMPOTENCY_CONFLICT. A foreman may stop its round for deadline/budget without
+cancelling the initiative.
+
+`project-acceptance.v1` contains project_id, initiative_id, initiative_revision,
+published_oid, criteria_results (one M4 Evidence per initiative criterion), task_refs,
+round_report_refs, memory_receipts, reviewer_id, accepted_at and outcome
+accepted/refused/unknown. Accepted requires all criteria pass on the SAME published
+tree, closed tasks and required receipts. Owner acceptance, when required, is a
+separate signed decision ref.
+
+Publication has separate mechanical, judgment and closure artifacts. `staged-guard.v1`
+is `{schema_version,staged_tree_digest:SHA,policy_ref:SignedRef,
+criterion_results:Evidence[],outcome:pass/fail/unknown}`; it never records a future
+source or integrated commit and its pass never proves HEAD moved.
+`source-judgment.v1` is `{schema_version,source_commit:GitOID,source_tree_digest:SHA,
+criteria_refs:EvidenceRef[],evidence_refs:EvidenceRef[],reviewer_id:ID,
+outcome:pass/fail/unknown}`; model judgment is graded evidence, not a publication
+receipt. `integrated-judgment.v1` substitutes integrated_commit/tree and must be rerun
+after any CAS conflict. Mechanical harness status remains recorded even when model
+judgment is unknown; unknown judgment never becomes pass and never fabricates a push
+failure/success. `publication.v1` is `{schema_version,operation_id,project_id,
+target_ref:Text,expected_old_oid:GitOID,observed_oid:GitOID,published_oid:GitOID,
+tree_digest:SHA,push_reported:boolean,remote_ancestor_verified:boolean,
+status:applied/refused/unknown,policy_receipt:EvidenceRef,error:Error|null}`.
+`applied` requires remote descendant/tree readback, not push exit status; `unknown`
+leaves the task unsettled. A CAS conflict is refused, reruns integrated checks, then
+retries with new expected_old_oid. The board closes only from applied publication,
+matching integrated evidence and the active claim identity. `closure-validator.v1`
+validates `{task_id,revision,claim_generation,completion_ref,parent_publication_ref}`;
+it reads the already published parent and never regrades the new closure commit's
+self-hash. Closure cannot make its own Git OID a precondition of its creation.
 
 The CSV fixture fixes columns `[name,count]` and records
 `[{name:"a,b",count:2},{name:"quoted\"name",count:0}]`. T1 owns src/export and tests/export;

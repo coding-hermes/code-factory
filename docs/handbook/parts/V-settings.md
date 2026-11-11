@@ -686,8 +686,10 @@ validates against that one record rather than inventing fields at a call site.
 
 `factory.telemetry.v1` is a closed object with `schema_version`, `event_id:ID`,
 `source_event_id:ID`, `source_seq:PosInt`, `module:M0|M1|...|M12|manager`,
-`event_type` from the local enum below, `operation` from the global enum,
-`outcome:accepted|pass|fail|refused|unknown|cancelled`, `reason:ID`,
+`event_type` from the local enum below, `operation` from the closed global enum
+`configure|admit|launch|deliver|renew|verify|publish|sync|reclaim|backup|restore|
+issue|revoke|infer|settle|capture|control`, `outcome:accepted|pass|fail|refused|
+unknown|cancelled`, `reason:ID`,
 `duration_ms:UInt`, `observed_at:Time`, `identity:FactoryIdentity`,
 `measurements:{name:finite-number}`, and `error:{code:ErrorCode,retryable:boolean}|null`.
 FactoryIdentity is `{project_id:ID,round_id:ID|null,run_id:ID|null,wave_id:ID|null,
@@ -729,12 +731,25 @@ The local-to-global projection is fixed:
 || `duration_ms` | histogram seconds, exactly `duration_ms / 1000` |
 || `measurements` | same named finite values; unit names remain singular seconds, bytes, tokens, workers or micro-USD |
 
-M7 uses operation `issue` for credential mint/renew, `revoke` for revocation and `verify`
-for scope/readback probes. M8 uses `reclaim` for deletion/hold operations and `verify` for
-isolation probes. M9 uses `admit`, `launch` and `verify`. M10 uses `deliver` and `renew`.
-M11 uses `launch` and `deliver`. M12 uses `infer`, `deliver` for response custody and
-`revoke` for token invalidation. Their `event_type` values remain the local enum above;
-`infer` is an additional global-only operation, not an unregistered local event type.
+The extension registry completes the local event vocabulary without changing M0's
+emitted shape. A producer uses only its registered row; an unregistered pair is
+`TELEMETRY_SCHEMA_REFUSED` and leaves the outbox pending.
+
+| Module | Additional local event_type → global operation |
+|---|---|
+| M7 | credential-issue→issue; credential-check→verify; credential-delivery→deliver; credential-renew→renew; credential-revoke→revoke |
+| M8 | backup→backup; restore→restore; reclaim→reclaim; terminal-jail→control |
+| M9 | admission→admit; worker-reservation→admit; round-settlement→settle; round-stop→control |
+| M10 | binding→deliver; custody→deliver; registry-sync→sync |
+| M11 | execution-launch→launch; execution-control→control; allocation→admit; worker-settlement→settle |
+| M12 | inference→infer; response-lookup→verify; capture→capture; credential-issue→issue; credential-renew→renew; credential-revoke→revoke |
+
+M0–M6 retain their existing enum. M7's five operation counters therefore remain
+issue/verify/deliver/renew/revoke at emission and scrape; M9 settlement is not folded
+into verify; M12 response lookup and raw capture are distinct from inference.
+`reason=cancelled` maps any successful cancellation/round-stop to outcome cancelled.
+A duplicate source replay has no new global event; a distinct local `duplicate` event
+is an accepted delivery observation with reason duplicate.
 
 The collector polls each source every 10 seconds. M0–M6 may additionally expose their
 existing 15-second local scrape; that local cadence does not create a second global
@@ -750,14 +765,15 @@ The global series are:
 
 || Series | Type / unit | Exact labels and derivation |
 ||---|---|---|
-|| `factory_operations_total` | counter / operations | `module`, `operation`, `outcome`, `project`, `reason`; one increment per unique terminal event |
-|| `factory_operation_duration_seconds` | histogram / seconds | `module`, `operation`, `project`; boundaries 0.01,0.1,0.5,1,5,10,30,60,300,1800,7200,+Inf |
+| `factory_operations_total` | counter / operations | exactly `module`, `operation`, `outcome`, `project`; one increment per unique durable event at its registered phase, with source replay deduplicated |
+| `factory_operation_duration_seconds` | histogram / seconds | exactly `module`, `operation`, `project`; boundaries 0.01,0.1,0.5,1,5,10,30,60,300,1800,7200,+Inf |
 || `factory_active` | gauge / operations | `module`, `operation`, `project`; latest durable snapshot |
 || `factory_pending` | gauge / operations | `module`, `operation`, `project`; latest durable snapshot |
 || `factory_oldest_pending_seconds` | gauge / seconds | `module`, `operation`, `project`; null when no current observation, zero only for an observed empty queue |
 || `factory_available` | gauge / boolean | `module`, `project`; current health, never inferred from stale success |
 || `factory_network_failures_total` | counter / failures | `module`, `operation`, `project`, `peer`, `reason`; one per unique failed network observation; the source event retains full FactoryIdentity |
-|| `factory_observation_timestamp_seconds` | gauge / Unix seconds | `module`, `project`; last accepted observation |
+|| `factory_observation_timestamp_seconds` | gauge / Unix seconds | `module`, `project`; last successful source observation, including an idle poll |
+| `factory_last_event_timestamp_seconds` | gauge / Unix seconds | `module`, `project`; last new durable source event; scrapes and read-only status never advance it |
 
 Local M0–M6 series project as follows: `cf_operations_total` to
 `factory_operations_total`; `cf_operation_duration_seconds` to
@@ -773,6 +789,19 @@ view; `cf_board_tasks` to the named derived view `factory_board_tasks{status,eli
 are computed from the same identity-bearing events and durable receipts, not new ad-hoc
 counters. Metric labels exclude round, wave, attempt and task IDs; authenticated
 `GET /v1/events?round_id=...&attempt_id=...` supplies their exact drill-down.
+
+Registered module views complete the projection rather than widening base labels:
+M7 exposes `factory_credential_expiry_headroom_seconds{module,project,provider,bunker}`,
+`factory_credential_scope_refusals_total{module,project,provider,operation,reason}`,
+`factory_mapping_stale{module,project,provider,bunker}` and
+`factory_partial_activations{module,project,provider,bunker}`. M12 exposes
+`factory_inference_tokens_total{module,project,kind}`,
+`factory_inference_cost_micro_usd_total{module,project}`,
+`factory_inference_unsettled{module,project}` and
+`factory_upstream_errors_total{module,project,code}`. Provider, Bunker, reason, kind
+and code are bounded registry values allowed only in these named views. Counts derive
+from unique source events; headroom/staleness/partial/unsettled are current gauges.
+The event payload, not a metric label, retains request/model/task/attempt identity.
 
 Rates use delta of persistent counts over the trailing 300 s; fewer than two samples
 or a zero denominator yields null/insufficient_data. Healthy idle is fresh available=1,
