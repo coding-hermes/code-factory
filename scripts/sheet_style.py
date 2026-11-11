@@ -24,6 +24,7 @@ MONO = '"SF Mono", Menlo, "DejaVu Sans Mono", monospace'
 _BASE = """
 html { font-size: 8pt; }
 body { font-family: %(serif)s; color: #000; line-height: 1.34; letter-spacing: 0.055em; margin: 0; }
+a { color: #000; text-decoration: none; }
 h1 { font-family: %(sans)s; font-size: 15pt; letter-spacing: 0.05em; text-transform: uppercase;
      border-bottom: 1.5pt solid #000; padding-bottom: 2mm; margin: 0 0 3mm;
      page-break-after: avoid; }
