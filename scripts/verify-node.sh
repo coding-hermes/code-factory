@@ -21,16 +21,20 @@
 # can therefore never certify one. specs/NODE.md "Transport" is the contract.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-. "$HERE/lib.sh"
 
-AGENT="" SERVER="${BUNKER_SERVER:-}" PORT=10800 ARTIFACT="" STRICT_FRESHNESS=0 STRICT_SEED=0
+usage() {
+  echo "usage: $0 --agent ID [--server NAME] [--port P] [--transport T [--transport-address HOST:PORT]] [--artifact PATH] [--strict-freshness] [--strict-seed]"
+}
+AGENT="" SERVER="" PORT=10800 ARTIFACT="" STRICT_FRESHNESS=0 STRICT_SEED=0
 # CF-224: the transport that carries the gateway probe. Default is the node's own address (the LAN
 # case, unchanged). NODE_TRANSPORT / NODE_TRANSPORT_ADDRESS let a spawn path (node-create.sh, which
 # inherits this environment) declare a bunker transport without new argv plumbing; the flags win.
 TRANSPORT="${NODE_TRANSPORT:-node-address}"
 TRANSPORT_ADDR="${NODE_TRANSPORT_ADDRESS:-}"
+[ "$#" -gt 0 ] || { usage; exit 2; }
 while [ $# -gt 0 ]; do
   case "$1" in
+    -h|--help) usage; exit 2 ;;
     --agent) AGENT="$2"; shift 2 ;;
     --server) SERVER="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
@@ -42,7 +46,9 @@ while [ $# -gt 0 ]; do
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
-[ -z "$AGENT" ] && { echo "usage: $0 --agent ID [--server NAME] [--port P] [--transport T [--transport-address HOST:PORT]] [--artifact PATH] [--strict-freshness] [--strict-seed]"; exit 2; }
+[ -z "$SERVER" ] && SERVER="${BUNKER_SERVER:-}"
+[ -z "$AGENT" ] && { usage; exit 2; }
+. "$HERE/lib.sh"
 # CF-270: --port was taken verbatim into PORT and then expanded LOCALLY inside a double-quoted
 # string that was handed to a REMOTE `bash -lc`, so
 #     --port "10800'; touch /tmp/cf270-canary; echo '"
