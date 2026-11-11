@@ -421,6 +421,69 @@ independent read clocks. The collector stores source event_id/cursor durably,
 deduplicates retries/restarts, and derives freshness from the last new source event,
 not from a successful scrape.
 
+## 19. Incomplete callbacks and provider outage (P6-12, P6-13)
+
+A provider callback is evidence about an effect, not the commit point of the
+effect. M7 persists a `cf.forge-attempt.v1` record before the first provider
+mutation. The record contains `schema_version:string="cf.forge-attempt.v1"`,
+`forge_attempt_id:ID`, `operation_id:ID`, `idempotency_key:string[1,200]`,
+`repository_id:ID`, `effect:create|merge|push|release|publish`,
+`target_ref:GitRef`, `expected_old_oid:GitOid|null`,
+`candidate_oid:GitOid`, `candidate_tree_digest:sha256`,
+`release:{tag:string,commit_oid:GitOid,tree_digest:sha256,asset_digests:sha256[]}|null`,
+`state:prepared|sent|applied|refused|unknown|superseded`,
+`provider_receipt:object|null`, `readback_refs:EvidenceRef[]`,
+`created_at:Time`, `updated_at:Time` and `policy_generation:PosInt`. Asset
+digests are bytewise sorted and unique. The provider request, response headers
+and body digest are evidence references; tokens and signed URLs are excluded.
+The idempotency identity is `(repository_id,effect,idempotency_key)`. An
+identical replay returns the existing attempt. Changed canonical input under
+that identity returns `IDEMPOTENCY_KEY_REUSED` without a provider mutation.
+
+`prepared` becomes `sent` only after the durable begin-effect and fenced
+authorization. An exact provider readback of repository, ref/tag, commit, tree
+and every asset digest makes the attempt `applied`; an explicit scope or policy
+denial makes it `refused`. A timeout, connection loss, 5xx, lost response or
+missing callback leaves `unknown`. `unknown` does not undo `applied`, does not
+become success and does not authorize a blind second mutation. Recovery first
+reads the provider by the original identity. A matching readback settles the
+original attempt; a proven absent effect may be retried with the same effect id;
+a different remote object returns `PROVIDER_DIVERGENCE` and preserves both
+identities. A newer candidate marks the old attempt `superseded` only after the
+old effect is resolved. Provider readback, not callback arrival, is the
+publication commit point.
+
+Callbacks use a separate `cf.forge-callback.v1` record with `callback_id:ID`,
+`forge_attempt_id:ID|null`, `repository_id:ID`, `provider_event_id:string`,
+`received_at:Time`, `payload_digest:sha256`, `signature_state:verified|invalid|
+unsupported`, `state:accepted|incomplete|orphan|duplicate|rejected` and
+`evidence_ref:EvidenceRef`. An unsigned or invalid-signature callback is
+rejected. A valid callback without a matching durable attempt is `orphan`; one
+missing repository, effect, object or digest identity is `incomplete`. Neither
+state advances publication. The receiver stores the bounded raw payload digest,
+returns `202 CALLBACK_PENDING` for an incomplete/orphan callback and schedules
+provider readback. Replayed `provider_event_id` with identical bytes is
+`duplicate`; changed bytes are `CALLBACK_CONFLICT`. Callback processing emits no
+second publication counter.
+
+M7's reconciliation worker runs every 30 seconds with exponential retry bounded
+by the operation deadline. It reads exact repository/tag/commit/tree/asset state
+through the same broker credential and writes the resulting `publication.v1`
+state. During an outage, existing `applied` evidence remains valid for its exact
+remote object; new closeout requiring an unobserved effect remains unsettled.
+Provider unavailability is `PROVIDER_UNAVAILABLE`, not a test, judge or push
+failure, and does not erase independent mechanical evidence. Restored provider
+access resumes from durable attempts and callbacks; no callback backlog is
+required to reconstruct an already readable remote effect.
+
+Decision slot `B-PUBLICATION-UNCERTAINTY` offers (a) exact provider readback as
+the authority with callbacks as hints, or (b) a provider-signed callback log with
+a proven complete replay and equivalence battery. The fail-closed default is (a);
+an incomplete callback or unavailable provider never certifies publication.
+Evidence includes lost-response, incomplete-callback, duplicate-callback,
+provider-outage, restart-during-readback and exact-applied-readback fixtures.
+[M3 §§17.2–17.3; M4 §15.4; CV-12-A; V.10.]
+
 ## RED field count: 4 (Metrics §8 — absence-proved; §1 mint UNVERIFIED; M7-C1 contract state UNVERIFIED — consumer is an external API; §9 inventory 2 of 103 helper call sites — the descriptive rows not tabulated one-per-site)
 
 ## FLIGHT DATA FILE - M7 GITHUB

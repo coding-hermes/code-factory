@@ -269,7 +269,11 @@ The maintained proxy package is the deployable authority. A deployment artifact 
 
 The node-token mapping is `schema: cf.node-token.v1`: `token_id`, `node_id`, `project_id`, `namespace`, `allowed_routes`, `allowed_models`, `budget`, `concurrency`, `issued_at`, `expires_at`, `generation`, `scope_digest`, `revoked_at` and `issuer_ref`. M1 requests issuance; the proxy owner administers the mapping; the token is delivered as an owner-only file and read back by id, scope digest and expiry without printing its value. Rotation overlaps only within a declared window. Revocation and decommission invalidate the token immediately, and every request checks generation, scope, expiry, budget and concurrency before forwarding.
 
-Supported API version `cf.inference.v1` exposes `GET /health` without paid/model authorization, `GET /v1/models` with node authorization, and `POST /v1/chat/completions` with model, messages, stream and option validation. A buffered result carries requested, chosen, resolved and served model identity, usage, completion state and response id. Errors use `401` missing/unknown/revoked token, `403` scope/model denial, `400` invalid body, `408` deadline, `429` budget/concurrency, `502` upstream-before-headers and `504` timeout. After headers, a failure is a terminal stream error or truncated result, never a second HTTP status.
+Supported API version `cf.inference.v1` exposes `GET /health` without paid/model authorization, `GET /v1/models` with node authorization, and `POST /v1/chat/completions` with model, messages, stream and option validation. A buffered result carries requested, chosen, resolved and served model identity, usage, completion state and response id. Errors use `401` missing/unknown/revoked token, `403` scope/model denial,
+`400` invalid body, `408` deadline, `402 BUDGET_EXHAUSTED` for budget exhaustion,
+`429 CONCURRENCY_EXHAUSTED` for concurrency exhaustion, `502`
+upstream-before-headers and `504` timeout. After headers, a failure is a terminal
+stream error or truncated result, never a second HTTP status.
 
 A streamed response uses framed SSE records and an explicit terminal event containing response id, served model, usage and `complete`/`error`/`cancelled` state. The proxy closes or correctly frames the downstream connection after the terminal event; upstream read failure before headers is a clean 502, while failure after headers is an incomplete/error stream. Client disconnect cancels upstream work. Usage settlement records request id, token id, requested/served model, bytes, duration, first-byte time and terminal state; failed capture or usage persistence follows an explicit policy and is visible.
 
@@ -327,7 +331,7 @@ POST `/{token_id}/rotate`, `/revoke`, `/offboard` mutate. Each request is the Pa
 cf2a.v1 wrapper with body version cf.node-token-admin.v1, operation_id,
 idempotency_key, expected_generation, node_id, project_id, scope (V.9 NodeScope),
 ttl_s and delivery_target (registered Bunker ID). Revoke/offboard instead require
-token_id and reason; rotate inherits scope unless explicitly narrowed. TTL is 600..86400 s,
+token_id and reason; rotate inherits scope unless explicitly narrowed. TTL is 60..86400 s,
 default 3600; overlap defaults 60 s, range 0..300, renewal margin 300 s. Admin responses
 use Part I Error and return 201/200 metadata only; conflict 409, scope 403, unavailable 503.
 
@@ -391,10 +395,10 @@ without claiming a complete audit record. [VI.18/19; V.9/10]
 The canonical native request `cf.inference.v1` is
 `{schema_version:"cf.inference.v1",model,messages,stream,options,request_id,deadline}`.
 model is an allowed route name <=128 UTF-8 characters; request_id is ID, deadline UTC;
-messages is 1..1000 entries and the canonical JSON body is <=1 MiB. stream boolean
-defaults false. Each message
-has role system/user/assistant/tool and content string <=1 MiB (empty allowed only
-for assistant tool calls), plus optional tool_calls for assistant or tool_call_id
+messages is 1..1000 entries and the canonical JSON body is <=1048576 bytes (1 MiB).
+stream boolean defaults false. Each message
+has role system/user/assistant/tool and content string <=1048576 bytes (1 MiB)
+(empty allowed only for assistant tool calls), plus optional tool_calls for assistant or tool_call_id
 for tool. tool_calls is a list of `{id,type: function,function:{name,arguments}}`;
 arguments is JSON text, not an object. Tool responses must reference a prior call ID.
 Images/audio/multimodal content are unsupported and return 400 UNSUPPORTED_CONTENT.
@@ -436,7 +440,8 @@ remains writable, then closes; missing terminal is truncated, never complete.
 
 Before headers: invalid request 400; missing/revoked/expired token 401; model/scope 403;
 caller deadline already elapsed or elapsed first 408 DEADLINE_EXCEEDED;
-budget/concurrency 429; upstream connect/protocol failure 502; upstream configured
+budget exhaustion 402 BUDGET_EXHAUSTED; concurrency exhaustion
+429 CONCURRENCY_EXHAUSTED; upstream connect/protocol failure 502; upstream configured
 300 s timeout elapsed before caller deadline 504 UPSTREAM_TIMEOUT; ledger failure 503.
 After headers the same code appears in terminal.error, not a second HTTP status.
 Client disconnect records cancelled and invokes upstream cancellation; bounded
@@ -457,9 +462,11 @@ Forward adds `upstream_ref:EndpointRef`, `upstream_credential_ref:SecretRef`,
 `upstream_corr_id:ID`, `policy_generation:PosInt` and `upstream_deadline:Time`.
 The outer envelope request_id equals body request_id. The adapter authenticates
 credential refs locally and never serializes their values into the native request or
-provider JSON. Both envelope and native canonical JSON are limited to 1 MiB; the
-outer Part I 64 KiB text rule is not a second inference-body limit. Oversize input
-returns PAYLOAD_TOO_LARGE before authorization or forwarding.
+provider JSON. The adapter envelope and adapted native JSON are limited to
+1048576 bytes, exactly the canonical native-chat schema ceiling in §17. The
+service's default 4194304-byte raw transport ceiling does not enlarge a valid
+canonical body. The outer Part I 64 KiB text rule is not an inference-body
+limit. Oversize input returns PAYLOAD_TOO_LARGE before authorization or forwarding.
 
 The total v2 mapping is: route model unchanged; messages/tool_calls/tool_call_id
 unchanged; stream defaults false; max_output_tokens and all other generation/tool

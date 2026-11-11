@@ -358,49 +358,103 @@ before `verdict ... action`; advisory warnings cannot erase a failed command. Ch
 warning reduction applies to readiness and conformance; action-mode advice does not certify
 readiness. [Contract basis: M0 §§14–15; M5 §16.]
 
-### 16.1 Shared event and metric vocabulary (CT-30)
+### 16.1 Shared event and metric vocabulary (CT-30, P6-12, P6-13)
 
-Each owning module persists a `cf.telemetry.v1` JSONL event before acknowledging a
-state-changing operation: `event_id:ID`, `operation_id:ID`, `module:M0..M6`,
-`event_type:Enum`, `outcome:success/failure/warning/refusal/unknown`, `reason:ID`,
-`duration_ms:UInt`, `observed_at:Time`, `measurements:{name:finite-number}`.
-The closed event_type set is `helper`, `provision`, `enrollment`, `readiness`, `dispatch`,
-`lease`, `duplicate`, `cancellation`, `gate`, `publication`, `projection`, `board-read`,
-`claim`, `repair`, `lifecycle`, `conformance`, `document-stage`. IDs and generations occur
-in event records, never metric labels. Secret values, prompt text and credential paths
-are excluded. Events use the operation journal's fsync transaction or durable outbox;
-outbox append failure is `PERSISTENCE_UNAVAILABLE` and withholds success. Delivery failure
-retains the outbox and does not undo an already committed operation.
+Each owning module persists a local `cf.telemetry.v1` JSONL event before
+acknowledging a state-changing operation. Its required fields are `event_id:ID`,
+`operation_id:ID`, `module:M0|...|M12`, `event_type:Enum`,
+`outcome:success|failure|warning|refusal|unknown`, `reason:ID`,
+`duration_ms:UInt`, `observed_at:Time`, `measurements:{name:finite-number}` and
+`identity:FactoryIdentity`. FactoryIdentity contains `project_id`, nullable
+`round_id`, `run_id`, `wave_id`, `attempt_id`, `task_id`, `dispatch_id` and
+`corr_id`. The existing M0-M6 event_type set remains `helper`, `provision`,
+`enrollment`, `readiness`, `dispatch`, `lease`, `duplicate`, `cancellation`,
+`gate`, `publication`, `projection`, `board-read`, `claim`, `repair`,
+`lifecycle`, `conformance` and `document-stage`. M7-M12 use the registered local
+names in V.10; an unregistered pair is `TELEMETRY_SCHEMA_REFUSED`. Secret values,
+prompt text, credential paths and unbounded error strings are excluded.
 
-The collector exposes authenticated, read-only `GET /factory/v1/metrics` (Prometheus
-text) and `GET /factory/v1/events?after=<sequence>&limit=<1..1000>` (Part IV response,
-ordered events and next sequence). Scrape period is 15 s. Event duplicates are suppressed
-by event_id; counters are reconstructed from the retained checkpoint plus events, not
-reset on process restart. Histograms are cumulative seconds buckets
-0.01, 0.1, 1, 5, 30, 120, 600, 3600, +Inf. The metrics use the closed label sets below. Operation instruments use module,
-event_type and outcome only; board counts additionally use the closed M4 status enum
-and eligibility enum. Project/task/generation/error text never appears in a metric label.
+The collector projects local events to durable `factory.telemetry.v1` records
+with `schema_version`, `event_id`, `source_event_id`, `source_seq:PosInt`,
+`module`, `event_type`, `operation`, `outcome`, `reason`, `duration_ms`,
+`observed_at`, `identity`, `measurements` and nullable structured `error`. The
+closed global operation set is `configure`, `admit`, `launch`, `deliver`,
+`renew`, `verify`, `publish`, `sync`, `reclaim`, `backup`, `restore`, `issue`,
+`revoke`, `infer`, `settle`, `capture` and `control`; global outcome is
+`accepted`, `pass`, `fail`, `refused`, `unknown` or `cancelled`. Local success
+maps to pass, or accepted for asynchronous custody; failure maps to fail;
+warning maps to unknown; refusal and unknown retain their meaning. A cancellation
+reason maps to cancelled. V.10 is the complete local-to-global registry.
 
-| Instrument | Type / units | Definition |
+M7 credential issue, verification, delivery, renewal and revocation map to
+`issue`, `verify`, `deliver`, `renew` and `revoke`, respectively. CV-11-A therefore
+produces exactly five operation increments at emission and scrape. M12 maps
+inference to `infer`, response lookup to `verify`, capture to `capture`, and
+credential issue/renewal/revocation to the corresponding operations. M4 maps
+board reads and claims to `admit`, repair to `reclaim`, and projection to `sync`.
+M3 maps publication to `publish` and remote readback to `verify`. A duplicate
+source replay produces no new global event or counter increment; identical
+`(module,source_event_id)` bytes return the existing receipt, while changed bytes
+are `TELEMETRY_CONFLICT` and leave the cursor pending.
+
+The collector exposes authenticated, read-only `GET /factory/v1/metrics` and
+`GET /factory/v1/events?after=<sequence>&limit=<1..1000>`. It polls each source
+every 10 seconds; an existing M0-M6 15-second local scrape does not create a
+second global sample. The collector fsyncs the event, cursor and updated counter
+checkpoint in one transaction. Restart resumes from the cursor and never resets
+counters. Local outbox append failure is `PERSISTENCE_UNAVAILABLE` and withholds
+success; later telemetry delivery failure retains the outbox and does not undo an
+already committed operation. Events retain 90 days and counter checkpoints 400
+days. Identity-bearing events and metrics use project-scoped mTLS authorization
+and audited export. Read-only GET, scrape and status operations update sample
+timestamps without emitting operation events.
+
+The canonical global series are:
+
+| Instrument | Type / units | Exact labels and definition |
 |---|---|---|
-| `cf_operations_total` | counter / operations | terminal event count by the three labels |
-| `cf_operation_duration_seconds` | histogram / seconds | terminal duration_ms / 1000 by module and event_type |
-| `cf_queue_depth` | gauge / messages | pending custody messages summed over configured projects |
-| `cf_oldest_pending_seconds` | gauge / seconds | maximum age of pending work; empty queue = 0 |
-| `cf_projection_lag_seconds` | gauge / seconds | oldest unacknowledged board/memory outbox event age; empty outbox = 0 |
-| `cf_certification_age_seconds` | gauge / seconds | maximum age among active bindings; absent bindings omit sample |
-| `cf_board_tasks` | gauge / tasks | count by status and eligibility (`eligible`, `unmet`, `unknown`) |
-| `cf_observation_timestamp_seconds` | gauge / Unix seconds | last successful source observation by module |
-| `cf_recovery_pending` | gauge / operations | unresolved recovery records by module |
+| `factory_operations_total` | counter / operations | exactly `module`, `operation`, `outcome`, `project`; one per unique durable source event |
+| `factory_operation_duration_seconds` | histogram / seconds | exactly `module`, `operation`, `project`; exactly `duration_ms / 1000` |
+| `factory_active` | gauge / operations | `module`, `operation`, `project`; latest durable snapshot |
+| `factory_pending` | gauge / operations | `module`, `operation`, `project`; latest durable snapshot |
+| `factory_oldest_pending_seconds` | gauge / seconds | `module`, `operation`, `project`; null without an observation, zero only for an observed empty queue |
+| `factory_available` | gauge / boolean | `module`, `project`; current health, never inferred from stale success |
+| `factory_network_failures_total` | counter / failures | `module`, `operation`, `project`, `peer`, `reason`; bounded peer and reason registries |
+| `factory_observation_timestamp_seconds` | gauge / Unix seconds | `module`, `project`; last successful source observation, including idle polls |
+| `factory_last_event_timestamp_seconds` | gauge / Unix seconds | `module`, `project`; last new durable source event |
 
-An unavailable observation omits the affected gauge and emits outcome=unknown; it never
-manufactures zero. Samples older than 60 s are stale. Alerts fire for observation age
-above 60 s for 60 s, queue age above 120 s for 120 s, projection age above 300 s for
-60 s, any unresolved recovery for 60 s, and certification age above 86400 s immediately.
-Events retain 90 days and counters/checkpoints 400 days; acceptance evidence follows
-M3 §17's longer roots. Ratios with zero denominator are unknown. These are specified
-defaults, not measured fleet thresholds. A collector restart, unavailable source and
-replayed event are required negative/positive conformance cases.
+The histogram boundaries are 0.01, 0.1, 0.5, 1, 5, 10, 30, 60, 300, 1800, 7200
+and +Inf seconds. Existing `cf_operations_total`,
+`cf_operation_duration_seconds`, `cf_queue_depth`,
+`cf_oldest_pending_seconds`, `cf_projection_lag_seconds`,
+`cf_certification_age_seconds`, `cf_board_tasks`,
+`cf_observation_timestamp_seconds` and `cf_recovery_pending` remain local M0-M6
+compatibility views and project according to V.10. They are not additional durable
+events. Base labels never include round, wave, attempt, task, request, claim,
+generation, board OID, prompt or error text. The authenticated event API supplies
+that drill-down. Provider, Bunker, reason, token kind and bounded upstream code
+are permitted only in the separately named M7/M12 views registered in V.10.
+
+Rates use the delta of persistent counts over the trailing 300 seconds. Fewer
+than two samples or a zero denominator yields `value:null` and
+`collection_state:"insufficient_data"`. A missing source or failed network
+observation yields `value:null`, `collection_state:"unavailable"` and
+`ready:false`, retains FactoryIdentity and never manufactures zero. Healthy idle
+is fresh `available=1`, `active=0`, `pending=0`. Stale, degraded and failed use
+V.10's thresholds. Execution success with a failed required postcheck is
+`settled_failure` and produces no success-counter delta. Derived measures
+`dispatch_to_settlement_seconds`, `worker_budget{used,remaining}`,
+`lineage_completeness`, `closeout_evidence_rate` and
+`project_acceptance_progress` are computed from identity-bearing events and
+receipts rather than new ad-hoc counters.
+
+Decision slot `A-TELEMETRY-CARDINALITY` offers (a) this bounded global label set
+with authenticated event drill-down, or (b) a separately approved high-cardinality
+event backend with its own retention and access budget. The fail-closed default
+is (a); an unbounded metric label refuses activation. Evidence is CV-11-A/B, a
+duplicate-emission readback, a restart readback and an emitted-versus-scraped
+count comparison. Existing M0-M6 telemetry is the measured baseline, not proof
+that M7-M12 already emit the global series. [CT-23/30; V.10; CV-11-A/B.]
 
 ## RED field count: 1 (Metrics §8)
 

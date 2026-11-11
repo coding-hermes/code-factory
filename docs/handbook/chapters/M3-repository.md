@@ -428,6 +428,44 @@ fetched_at and ancestry. A stale tracking ref or unavailable fetch cannot establ
 this fact. If a new base changes tree, criteria, dependencies or gate config, every
 required integration gate runs again. [Part I §1.9.7.]
 
+### 17.2.1 Independent mechanical, judgment and postcheck settlement (P6-08)
+
+Mechanical execution and model judgment are independent evidence channels. The
+versioned artifacts are `staged-guard.v1`, `source-judgment.v1`,
+`integrated-guard.v1`, `integrated-judgment.v1`, M7's `publication.v1` and
+`closure-validator.v1`. Every artifact carries `schema_version:string`,
+`subject:{commit_oid:GitOID,tree_digest:SHA}`, `verdict:pass|fail|unknown`,
+`evidence_refs:EvidenceRef[]`, `actor_id:ID`, `started_at:Time`,
+`finished_at:Time|null`, `policy_generation:PosInt` and `attempt_id:ID`. A guard
+artifact also carries `argv:string[]`, `cwd:Path`, `expected_exit:int`,
+`actual_exit:int|null`, `stdout_ref:EvidenceRef`, `stderr_ref:EvidenceRef` and
+`timeout_s:PosInt`. A judgment artifact carries `judge_release:EvidenceRef`,
+`rubric_digest:SHA` and bounded rationale evidence references. Unknown records
+unavailable or inconclusive evidence; it is not pass and not a mechanical fail.
+
+`staged-guard.v1` runs against the exact staged tree and index digest before
+integration. `integrated-guard.v1` runs against the exact post-integration tree.
+A source judgment names the source commit/tree it grades; an integrated judgment
+is rebound after every merge, rebase or CAS refresh. A staged mechanical pass
+permits integration and publication even when a model judge is unavailable. A
+source or integrated judgment of `unknown` never rewrites a mechanical pass or
+fail, never publishes by itself and never erases an already proven remote
+publication. If policy requires that judgment for closure, unknown leaves
+completion null and reconciliation open. A mechanical fail always blocks
+landing; a model pass cannot waive it.
+
+Postchecks are named independently as build, test, security, policy, provider
+readback and board-closure validation. Each has its own state, retry count,
+deadline and evidence. Failure of one required postcheck blocks the closeout that
+depends on it without rewriting unrelated postchecks to failure. A provider
+outage therefore makes publication `unknown`, while a mechanical test pass stays
+pass. The closure reducer evaluates the tuple
+`(staged_guard,integrated_guard,required_judgments,required_postchecks,publication)`;
+it does not collapse the tuple into the first failing or unavailable component.
+CV-12-A is the matrix oracle: uncertain publication is not a push failure,
+uncertain judgment does not rewrite mechanical evidence, and close requires exact
+remote readback.
+
 ### 17.3 Non-self-referential closeout
 
 Implementation I and tested/published integration P are immutable objects. The

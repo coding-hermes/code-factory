@@ -350,9 +350,10 @@ task transition in canonical commit order. An Initiative has
 `status:proposed/accepted/cancel_requested/cancelled/accepted_delivery`,
 `acceptance_criteria:Criterion[1..1024]`, `task_ids:ID[]`, `accepted_by:ID|null`,
 `accepted_at:Time|null`, and `input_digest:SHA`. `task_ids` is a unique bytewise-sorted
-set. `accepted_by` and `accepted_at` are nonnull exactly in `accepted` and
-`accepted_delivery`; the initiative owner is `accepted_by` or that principal's
-authenticated delegate. Initiative `edit` may change criteria/task membership before
+set. `accepted_by` and `accepted_at` are nonnull in `accepted`,
+`cancel_requested`, `cancelled` and `accepted_delivery`, and remain null only in
+`proposed`; cancellation preserves the acceptance provenance. The initiative
+owner is `accepted_by` or that principal's authenticated delegate. Initiative `edit` may change criteria/task membership before
 acceptance and may add tasks afterward; either increments revision and invalidates a
 prior delivery acceptance. `accepted_delivery` additionally requires the
 project-acceptance record in VII.18, not merely closed tasks.
@@ -454,20 +455,24 @@ new row revisions, never discarded.
 
 ### 15.2 Concrete claim CAS and server-side enforcement
 
-New claims use `cf.board-group-claim.v1` on CT-10:
-`{schema_version:"cf.board-group-claim.v1",message_type:"board.group_claim",
-operation_id:ID,project_id:ID,board_id:ID,claimant_id:ID,claim_group_id:ID,
-wave_plan_digest:SHA,idempotency_key:ID,board_revision:GitOID,owner_fence:Fence,
-lease_expires_at:Time,claims:ClaimRequest[1..256]}`. ClaimRequest is
-`{task_id:ID,claim_id:ID,expected_revision:PosInt,expected_status:"pending",
-claim_generation:1,evidence_refs:EvidenceRef[]}`. Claims are ordered by the wave
-plan's `(created_seq,task_id)`; task_id and claim_id are unique, and the plan digest
-covers that ordered set, paths/resources, board revision and admission epoch.
-`cf.board-claim.v1` remains only for renew/release of one existing claim with
-`transition:"renew"/"release"`; it no longer creates claims. The project owner_fence
-is distinct from per-task claim_generation. Only the broker allocates generations on
-group claim/reclaim; renewal never advances them. The result's Git OID is returned
-after publication, not embedded in its own commit.
+New claims use the CV-04-D `cf.board-group-claim.v1` closed body on CT-10:
+`{schema_version:"cf.board-group-claim.v1",operation_id:ID,project_id:ID,
+board_id:ID,board_revision:{algorithm:"sha1",value:GitOID},claims:ClaimRequest[1..256],
+evidence_refs:EvidenceRef[],idempotency_key:ID,lease_expires_at:Time,
+ordering:"priority DESC, created_seq ASC, id ASC; dependencies must be settled; correction retains its original worker",
+owner_fence:Fence,transition:"claim"}`. ClaimRequest is
+`{task_id:ID,created_seq:UInt,expected_revision:PosInt,expected_status:"pending",
+claim_generation:0}`. The request's zero is the expected pre-claim generation;
+the broker allocates generation 1 in each new Claim. `operation_id` is also the
+claim_group_id. Claims follow the request's ordering string after the reducer has
+removed ineligible work. task_id is unique, and the broker-computed wave plan
+digest covers the ordered set, paths/resources, board revision and admission
+epoch. `cf.board-claim.v1` remains only for renew/release of one existing claim
+with `transition:"renew"/"release"`; it no longer creates claims. The
+owner_fence principal is the claimant and is distinct from per-task
+claim_generation. Only the broker allocates generations on group claim/reclaim;
+renewal never advances them. The result's Git OID is returned after publication,
+not embedded in its own commit.
 
 The broker serializes project effects against epoch advance (Part I §1.9.3a), then:
 
@@ -499,8 +504,8 @@ The broker serializes project effects against epoch advance (Part I §1.9.3a), t
    acknowledgement is resolved by marker lookup; identical operation/input replays
    the original receipt with duplicate=true, never appends again. A repeated
    idempotency_key with different canonical input returns IDEMPOTENCY_KEY_REUSED.
-   Duplicate task_id or claim_id inside one request is INVALID_FIELD; either rejects
-   the entire group before candidate construction rather than deduplicating members.
+   A duplicate task_id inside one request is INVALID_FIELD and rejects the entire
+   group before candidate construction rather than deduplicating members.
 
 A stale ref/revision or ineligible member returns `CLAIM_CONFLICT` (HTTP 409), stale
 project fence returns `STALE_OWNER`, and lease setup failure returns
