@@ -252,6 +252,24 @@ external decision. A release claims a stage only with that stage's recorded resu
 the working-draft/accepted distinction of VIII.6 governs which of them a delivered
 artifact may cite.
 
+### VIII.9.1 Six build stages mapped to seven acceptance results
+
+The six-stage build pipeline and seven acceptance results are not a one-to-one count.
+This mapping is normative for the build receipt and disposition log:
+
+| Build stage (M6 §16.2) | Acceptance result(s) | Evidence owner |
+|---|---|---|
+| 1. markdown lint | **lint** | `handbook_lint.py` output; build fails before rendering on debris. |
+| 2. manifest assembly | **build** (input half) | Resolved BOOK/source inventory; any BUILD ERROR is a failed build, not a cosmetic sheet. |
+| 3. pagination plus render/fit/furniture | **build** (artifact half) | PDF exists, page parity/fit/furniture/font checks and the verbatim OK line. |
+| 4. visual QA | **visual_qa** | Independent rendered-page readback, figure/prose/table/font checks; build success alone cannot pass it. |
+| 5. completeness plus cross-section consistency | **completeness** and **cross_section_consistency** | Separate finding/disposition and contract/state/reference reviews; neither inherits visual QA. |
+| 6. operational conformance | **operational_conformance** | Executed runtime cells and their artifacts; specification-only matrices remain pending. |
+| External owner decision, not a build stage | **owner_acceptance** | Human acceptance of the exact document digest; never implied by stages 1–6. |
+
+M6 §16.2 links its six-stage pipeline overview and stage-16 receipt to this mapping;
+no earlier partial or misaligned description overrides it.
+
 ## VIII.10 The release manifest
 
 A release publishes a machine-readable manifest binding the artifact to everything that
@@ -284,6 +302,33 @@ recorded result is `pending`, never assumed pass; the disposition state is part 
 manifest (VIII.5's standing gate); and the produced approval *package* is separate from
 the owner approval *decision* — the manifest carries the former and names the latter as
 open until CT-18's decision record exists.
+
+### VIII.10.18 Build-record layout and parse cases
+
+`build_book.py` writes `<artifact-stem>.record.json` beside the PDF after every gate
+succeeds. The `handbook-release.v1` payload contains `doc_id`, `revision`, full
+`source_commit` and `source_tree`, `document_sha256`, exactly one
+`{path,sha256,bytes,pages}` artifact, all seven VIII.9 check objects, current P6
+`dispositions`, `build_errors`, a deterministic `record_id`, and the VIII.12.8
+`memory` object. Canonical JSON is UTF-8, sorted keys, separators `,` and `:` with
+no whitespace; `memory.payload_digest` is SHA-256 over the complete record except
+`record_id` and `memory`. Unknown schema versions, missing fields, duplicate stages,
+invalid digest/state combinations and artifact mismatches are parse refusals, not
+warnings. A sidecar is a draft build receipt, never owner acceptance or a release
+evaluation; external lint, visual, conformance and owner checks stay pending until
+their own receipts are attached.
+
+| Parse case | Required result |
+|---|---|
+| Built sidecar beside its unchanged PDF | `RECORD_OK`, with the recomputed payload digest printed. |
+| Payload byte changed without updating `memory.payload_digest` | exit 2, `RECORD_FAIL … payload_digest`. |
+| Artifact digest/bytes/pages or document digest changed | exit 2; artifact/document binding failure. |
+| Missing/duplicate seven-stage check, unknown schema, malformed source OID | exit 2; no defaulting or partial acceptance. |
+| ADOPTED disposition without a full resolving commit, or non-adopted row without reason | exit 2. |
+| `sync_commit` set while `local_commit` is null, or either commit is not a full Git OID | exit 2. |
+
+Probe: `python3 scripts/build_book.py --check-record <record.json>`. The negative
+control mutates only a scratch copy; it never rewrites the delivered receipt.
 
 ## VIII.11 Per-stage failure behavior and negative controls
 
@@ -355,6 +400,42 @@ preview render alone: coordinate inspection of sampled pages found the footer wo
 present and no off-page characters. Blank field *values* and visual layout defects are
 distinct findings and are recorded as the one that they are.
 
+### VIII.12.8 Memory record durability fields
+
+Every build receipt carries `memory.record_id`, `payload_digest`, `local_commit`,
+`sync_commit`, `synced_at`, `revision` and `state`. Their meanings are exact:
+
+- `record_id` is derived from the payload digest and is stable for identical bytes;
+  a changed payload is a new record, not silent mutation.
+- `payload_digest` authenticates the canonical payload before any persistence claim.
+- `local_commit` is the full Git object ID only after record data, Git objects and the
+  ref transaction are fsynced and read back. The build sidecar itself is fsynced, but
+  it is not a Git commit, so the builder emits `local_commit: null`.
+- `sync_commit` and `synced_at` remain null until the configured remote/controller
+  readback names the synchronized commit. Remote sync never follows from a local file
+  write; `sync_commit` without `local_commit` is invalid.
+- `revision` starts at 1 for a new record identity. An authorized correction keeps the
+  prior record immutable and creates a new payload/record identity with revision 1;
+  synchronization metadata for the same payload may advance only through readback.
+
+`LOCAL_RECORD_FSYNCED_NOT_GIT_COMMITTED` therefore proves only the sidecar's local
+write. It does not prove DuckBrain persistence, a local Git commit, controller
+replication or project acceptance.
+
+### VIII.12.9 Builder implementation and negative control
+
+The builder emits the VIII.10.18 record after PDF, furniture, `check.py` and font
+checks pass; writes a temporary file; fsyncs it; atomically renames it; fsyncs the
+containing directory; and immediately parses the result before printing `RECORD_OK`
+and the normal `OK` line. A record failure fails the build. The parser independently
+recomputes the artifact and payload digests and enforces the stage, disposition and
+local/sync invariants.
+
+Acceptance requires both arms: the delivered sidecar returns `RECORD_OK`; a scratch
+copy whose payload is changed without its digest exits 2 with `RECORD_FAIL` naming
+`payload_digest`. A successful PDF build with no record, or a record whose checks
+silently turn pending external reviews into pass, is a failed delivery gate.
+
 ## VIII.13 The acceptance package map — and the three acceptance scopes
 
 The complete build-from-spec acceptance package (V2-DLV-05) — what a reader must be able
@@ -391,7 +472,8 @@ through all affected artifacts in both directions.
 
 ## VIII.15 Machine release decision (P5-C-34/35)
 
-VIII.10 is an illustrative manifest, not a recorded pass. The target release evaluator
+VIII.10 is a normative manifest layout, not a recorded pass. The builder emits the
+VIII.10.18 sidecar with unobserved external checks pending; the target release evaluator
 accepts handbook-release.v1 JSON on stdin and emits `{decision,reasons,manifest_digest}`
 on stdout; decision is draft/accepted/refused. Exit is 0 for accepted, 3 for a valid
 review-pending draft and 2 for refused/invalid. This interface is a build-system

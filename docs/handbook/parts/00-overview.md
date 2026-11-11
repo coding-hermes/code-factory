@@ -106,15 +106,23 @@ crash/recovery requirements are fixed in Part I §1.9.2.
 
 ![FIGURE 0.1](figures/system-map.svg)
 
-Boxes are responsibilities, and each box carries a role/host boundary: a BUNKER tag
-marks a component that executes inside the Bunker deployment/execution boundary.
-The model also declares control, external, independent-authority and dual-instance
-hosts explicitly; an untagged box never implies a controller foreman. Paths live in the model's `impl` field
-and are deliberately volatile — a script can move without the system changing.
-Colour is never used; line style is the contract state: solid means the interface
-works as documented, dashed means it is broken and named, dotted means it is
-designed but not built. Wires carry both a contract id and, where one exists, a
-named signal — the envelope, the lease, the foreman's durable return.
+Boxes are responsibilities, and every box carries an explicit host/trust-domain
+enclosure: solid control-host, long-dash Bunker, fine-dash independent authority,
+dotted external trust domain, and a double enclosure for dual-instance components.
+Layer panels are explanatory groupings, never substitutes for those boundaries.
+Paths live in the model's `impl` field and are deliberately volatile — a script
+can move without the system changing. Colour is never used; wire line style is
+the contract state: solid means the interface works as documented, dashed means
+it is broken and named, dotted means it is designed but not built. Wires carry
+both a contract id and, where one exists, a named signal — the envelope, the
+lease, the foreman's durable return.
+
+The map is generated from `docs/SYSTEM-MODEL.yaml`, not drawn as a second
+inventory. This issue derives 33 components, six layers, 16 flows and 31 typed
+contracts (`CT-01` through `CT-30`, plus return leg `CT-06R`) from model SHA-256
+`86bab48ff85ea8adbd35b6071f96608c678a4e6434c99de76fb8fe1827cb2098`. The figure
+and BOOK caption carry that identity so a model edit cannot silently leave a
+stale map.
 
 Two resolved placement decisions are drawn on the map and govern every chapter. The
 project foreman runs **inside its Bunker**; Crier is the launch/return boundary, and
@@ -133,45 +141,45 @@ governance, evidence — are explanatory groupings that aid reading. They may
 evolve as the design becomes complete; they are not a frozen architecture and
 not a limit on the services the Factory may require. The Factory
 management/reconciliation service and its desired/observed state store are part
-of the arrangement (Part I §1.1) and registered in `docs/SYSTEM-MODEL.yaml`; the
-map sheet regenerates from that model. CF2A-01/P5-A is the target model revision;
-figure and BOOK.yaml caption regeneration remains the wave-C release gate. The
-rendered issue must identify the model digest and derive its component/contract
-totals from that exact input, not a hand-maintained caption.
+of the arrangement (Part I §1.1) and registered in `docs/SYSTEM-MODEL.yaml`.
+`CF2A-01/P5-A` is the target model revision; the rendered issue identifies the
+model digest and derives its component/contract totals from that exact input.
 
 ## How a row moves
 
 ![FIGURE 0.2](figures/board-lifecycle.svg)
 
 The forward path is the easy half. The half that decides whether a factory is honest is
-the other one. A claimed row is started by the foreman and its worker — not by the
-review plumbing; the commit then meets a Git commit guard, and its result meets a
-separate, independent acceptance judgment; only after integration and publication
-does the row complete, and completion is bound to retained evidence, never to a tool's
-internal status word. A row that cannot proceed goes **blocked** with a named
-blocker; a row whose dependency is unmet goes **deferred**, and the figure names the
-return trigger that makes a deferred row dispatchable again; a row whose worker died
-goes back to **blocked** instead of quietly vanishing; a review that requests
-changes returns the row to the worker as rework. A board that only ever
-moves forward is a board that is lying about something.
+the other one. A **pending** row becomes **in_progress** through an atomic group
+claim; release returns it to pending only after quiescence. Completion requires an
+accepted verdict, integrated publication and retained evidence, never a tool's
+internal status word. **Blocked** and **deferred** are open, nonterminal states:
+neither satisfies a prerequisite. A blocker must carry its identity, evidence and
+unblock condition; deferral must carry its return condition and owner.
+Cancellation first enters **cancel_requested**, denies new claims, and reaches
+**cancelled** only after every child is quiescent; cancellation also leaves all
+prerequisites unsatisfied. **Complete** and **cancelled** are the only closed
+states. An authorized reopen returns either to pending with reopened evidence,
+residual work and a new row revision; it never silently rewrites a historical
+completion.
 
 ## One round, end to end
 
 ![FIGURE 2.1](figures/F1.svg)
 
-The sequence shows the approved target and the deployed present side by side: the lane opens
-with a refresh of the local and remote repository/board copies **before** eligibility is
-judged, and a scheduler-owned board-check verifier distinguishes work, no-work and an
-unreadable board — an unreadable board is never mistaken for an empty one. The figure does not
-conceal the integration gap: the PRE and POST lane hooks that exist today run after
-admission and after outcome recording respectively, and the figure says so on the
-steps where it happens. Inside the Bunker, the MVP routes the node directly to the
-fixed Hermes harness; a future Task Router is drawn between Node and Harness,
-marked as not part of the MVP, and is never silently equated with the separate
-model/provider route. Each side's promises are contractual: the scheduler promises a
-well-formed envelope with a run id; crier promises delivery and a lease; the foreman
-promises a durable response that returns through Crier. Where any of those promises
-is unproven, the contract register (Part IV) marks that side RED.
+The sequence shows the approved target with implementation gaps named rather than
+silently promoted to requirements. The lane refreshes the repository and board
+**before** eligibility; `board-check` distinguishes work, no-work and an
+unreadable board, so an unreadable board is never mistaken for an empty one.
+`round-admission.v1` admits the total round allowance once; waves consume it and
+never replenish it. The resident Node supervisor retrieves signed custody,
+launches the Bunker foreman, and returns correlated evidence. CT-05 is
+`worker-brief.v1` with launch-custody identity and fences; CT-04 is
+`worker-result.v1`; CT-06R carries `round-report.v1` back to the scheduler's
+durable settlement. The board closeout binds the accepted verdict and publication
+proof, while memory records local commit and remote synchronization separately.
+Where a promise remains unproven, the contract register (Part IV) marks that
+side RED; legacy transport success is coverage evidence, not a second contract.
 
 ## How to read the rest
 

@@ -26,7 +26,7 @@
 <text x="10.0" y="169.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
 <polyline points="228.0,166.0 340.0,166.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
 <rect x="353.0" y="123.9" width="171.0" height="10.9" fill="#ffffff"/>
-<text x="356.0" y="132.0" font-size="9.50" fill="#000000" text-anchor="start">VALIDATE: BOARD_DRIFT COMPARES</text>
+<text x="356.0" y="132.0" font-size="9.50" fill="#000000" text-anchor="start">SNAPSHOT: BOARD_DRIFT COMPARES</text>
 <rect x="353.0" y="136.9" width="193.0" height="10.9" fill="#ffffff"/>
 <text x="356.0" y="145.0" font-size="9.50" fill="#000000" text-anchor="start">CHECKOUT VS ORIGIN/MAIN ROW BY ROW</text>
 <rect x="353.0" y="149.9" width="44.5" height="10.9" fill="#ffffff"/>

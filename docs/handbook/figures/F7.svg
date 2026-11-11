@@ -1,20 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="166.5mm" viewBox="0 0 680 666.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="666.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="12.0" y="22.0" font-size="17.00" fill="#000000" text-anchor="start">F7 — MONITORING</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="155.0mm" viewBox="0 0 680 620.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="620.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="12.0" y="22.0" font-size="17.00" fill="#000000" text-anchor="start">F7 — MONITORING</text>
 <text x="668.0" y="22.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT · DASHED = CONDITIONAL BRANCH</text>
 <rect x="67.0" y="36.0" width="98.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="116.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">OPERATOR</text>
-<polyline points="116.0,70.0 116.0,574.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="116.0,70.0 116.0,600.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="179.0" y="36.0" width="98.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="228.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">SCHEDULER</text>
-<polyline points="228.0,70.0 228.0,574.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="228.0,70.0 228.0,600.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="291.0" y="36.0" width="98.0" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="340.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">CRIER (bus)</text>
-<polyline points="340.0,70.0 340.0,574.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="340.0,70.0 340.0,600.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="402.8" y="36.0" width="98.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="452.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">INFERENCE PROXY</text>
-<polyline points="452.0,70.0 452.0,574.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="452.0,70.0 452.0,600.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="514.8" y="36.0" width="98.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="564.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">FACTORY MANAGER</text>
-<polyline points="564.0,70.0 564.0,574.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="564.0,70.0 564.0,600.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <text x="10.0" y="123.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
 <polyline points="116.0,120.0 228.0,120.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
 <rect x="297.0" y="90.9" width="198.5" height="10.9" fill="#ffffff"/>
@@ -68,6 +68,4 @@
 <rect x="249.0" y="504.9" width="182.0" height="10.9" fill="#ffffff"/>
 <text x="340.0" y="513.0" font-size="9.50" fill="#000000" text-anchor="middle">FACTORY EVENT DELIVERY: RECEIVER</text>
 <rect x="260.0" y="517.9" width="160.0" height="10.9" fill="#ffffff"/>
-<text x="340.0" y="526.0" font-size="9.50" fill="#000000" text-anchor="middle">INTERPRETS / PAGES / REPAIRS</text>
-<polyline points="6.0,574.0 674.0,574.0" fill="none" stroke="#000000" stroke-width="0.7"/>
-<text x="10.0" y="588.0" font-size="9.50" fill="#000000" text-anchor="start">NOTE. 11 of 13 modules emit no metrics — answerable only by grepping logs; the largest remaining system defect</text></g></svg>
+<text x="340.0" y="526.0" font-size="9.50" fill="#000000" text-anchor="middle">INTERPRETS / PAGES / REPAIRS</text></g></svg>

@@ -168,6 +168,10 @@ def fit_line(html_path: str | pathlib.Path) -> tuple[str, int]:
     )
     m = re.search(r'data-fit="([^"]*)"', r.stdout)
     fit = m.group(1) if m else "unknown (no fit script output)"
+    wp = re.search(r'data-worstpages="([^"]*)"', r.stdout)
+    if wp and fit.startswith("OVERFLOW"):
+        import html as _h
+        print("worst pages:", _h.unescape(wp.group(1)))
     return fit, len(re.findall(r'class="page"', r.stdout))
 
 

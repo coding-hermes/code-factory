@@ -495,6 +495,11 @@ projects:
         weight: 100
         foreman: {round: {worker_budget: {total: 8}, concurrency: 2,
           retry_policy: {name: charge-on-start, failed_start: refund-before-run}}}
+```
+
+The same register, concluded:
+
+```yaml
 events:
   webhooks:
     - subscription_id: ops
@@ -913,6 +918,11 @@ profiles:
       workspace: /var/lib/factory/worker
       memory: /var/lib/factory/memory
       evidence: /var/lib/factory/evidence
+```
+
+The same register, continued:
+
+```yaml
 hosts:
   - id: h1
     endpoint_ref: h1-vpn

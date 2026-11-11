@@ -26,6 +26,9 @@ gate — the skill names exactly that as the defect. This builder now:
 from __future__ import annotations
 
 import argparse
+import datetime
+import hashlib
+import json
 import os
 import pathlib
 import re
@@ -437,20 +440,29 @@ document.fonts.ready.then(function () {
   // render.sh reads <html data-fit> and exits 3 on OVERFLOW; build_book.py gates
   // the same string.
   var worst = Infinity;
-  Array.prototype.slice.call(document.querySelectorAll('.page')).forEach(function (page) {
+  var worstPages = [];
+  Array.prototype.slice.call(document.querySelectorAll('.page')).forEach(function (page, pi) {
     var foot = page.querySelector('.foot');
     if (!foot) return;
     var bottom = 0;
+    var deep = null;
     Array.prototype.slice.call(page.children).forEach(function (el) {
       if (el === foot || el.classList.contains('tab') || el.classList.contains('head')) return;
-      bottom = Math.max(bottom, el.getBoundingClientRect().bottom);
+      var b = el.getBoundingClientRect().bottom;
+      if (b > bottom) { bottom = b; deep = el; }
     });
     var free = (foot.getBoundingClientRect().top - bottom) * 25.4 / 96;
-    if (free < worst) worst = free;
+    if (free < worst) { worst = free; worstPages = [{page: pi + 1, free: Math.round(free*10)/10,
+      tag: deep ? deep.tagName + '.' + (deep.className || '') : '?',
+      txt: deep ? (deep.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 90) : ''}]; }
+    else if (free < 0 && worstPages.length < 8) worstPages.push({page: pi + 1, free: Math.round(free*10)/10,
+      tag: deep ? deep.tagName + '.' + (deep.className || '') : '?',
+      txt: deep ? (deep.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 90) : ''});
   });
   document.documentElement.dataset.fit = worst >= 0
     ? 'ok, ' + worst.toFixed(1) + ' mm free above the footer (worst page)'
     : 'OVERFLOW by ' + (-worst).toFixed(1) + ' mm';
+  if (worst < 0) document.documentElement.dataset.worstpages = JSON.stringify(worstPages);
 });
 """
 
@@ -607,10 +619,211 @@ def flow_sheets(
     return out
 
 
+def _canonical_json(value: object) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+
+
+def _git_oid(ref: str) -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", ref], cwd=ROOT, check=True, capture_output=True, text=True
+    )
+    return result.stdout.strip()
+
+
+def _dispositions() -> dict[str, object]:
+    rows = []
+    log = HB / "parts/IX-disposition-log.md"
+    for line in log.read_text().splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) < 8 or not re.fullmatch(r"P6-\d{2}", cells[0]):
+            continue
+        state = cells[4]
+        resolution = cells[5]
+        adopted = state == "ADOPTED"
+        rows.append(
+            {
+                "id": cells[0],
+                "severity": cells[1],
+                "state": state,
+                "resolving_commit": resolution if adopted else None,
+                "replacement_refs": [],
+                "reason": cells[3] if adopted else resolution,
+                "owner": "CF2A-01-wave4",
+                "waiver_ref": None,
+                "source_page": cells[2],
+                "built_page": cells[6],
+                "visual_readback": cells[7],
+            }
+        )
+    open_ids = [row["id"] for row in rows if row["state"] != "ADOPTED"]
+    return {
+        "log": "docs/handbook/parts/IX-disposition-log.md",
+        "rows": rows,
+        "open_count": len(open_ids),
+        "open_ids": open_ids,
+    }
+
+
+def write_build_record(
+    out_path: pathlib.Path, book: dict, page_count: int, ok_line: str
+) -> pathlib.Path:
+    pdf_bytes = out_path.read_bytes()
+    document_sha256 = hashlib.sha256(pdf_bytes).hexdigest()
+    source_commit = _git_oid("HEAD")
+    source_tree = _git_oid("HEAD^{tree}")
+    recorded_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    stages = (
+        "lint",
+        "build",
+        "visual_qa",
+        "completeness",
+        "cross_section_consistency",
+        "operational_conformance",
+        "owner_acceptance",
+    )
+    checks = []
+    for stage in stages:
+        passed = stage == "build"
+        check = {
+            "stage": stage,
+            "result": "pass" if passed else "pending",
+            "evidence_refs": [out_path.name] if passed else [],
+            "reviewer": "build_book.py" if passed else "unassigned",
+            "source_tree": source_tree,
+            "document_sha256": document_sha256,
+            "recorded_at": recorded_at,
+            "findings": [] if passed else ["not evaluated by build_book.py"],
+        }
+        if passed:
+            check.update({"exit": 0, "ok_line": ok_line})
+        checks.append(check)
+    payload = {
+        "schema_version": "handbook-release.v1",
+        "doc_id": book["doc"]["id"],
+        "revision": str(book["doc"].get("revision", book["doc"]["issue"])),
+        "source_commit": source_commit,
+        "source_tree": source_tree,
+        "document_sha256": document_sha256,
+        "artifacts": [
+            {
+                "path": out_path.name,
+                "sha256": document_sha256,
+                "bytes": len(pdf_bytes),
+                "pages": page_count,
+            }
+        ],
+        "checks": checks,
+        "dispositions": _dispositions(),
+        "build_errors": 0,
+    }
+    payload_digest = hashlib.sha256(_canonical_json(payload)).hexdigest()
+    record_id = f"HR-{payload_digest[:32]}"
+    record = {
+        **payload,
+        "record_id": record_id,
+        "memory": {
+            "record_id": record_id,
+            "payload_digest": payload_digest,
+            "local_commit": None,
+            "sync_commit": None,
+            "synced_at": None,
+            "revision": 1,
+            "state": "LOCAL_RECORD_FSYNCED_NOT_GIT_COMMITTED",
+        },
+    }
+    record_path = out_path.with_suffix(".record.json")
+    temporary = record_path.with_suffix(".record.json.tmp")
+    with temporary.open("w", encoding="utf-8") as handle:
+        json.dump(record, handle, indent=2, ensure_ascii=False)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, record_path)
+    directory = os.open(record_path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    parse_build_record(record_path)
+    return record_path
+
+
+def parse_build_record(path: pathlib.Path) -> dict:
+    try:
+        record = json.loads(path.read_text())
+        if record["schema_version"] != "handbook-release.v1":
+            raise ValueError("schema_version")
+        for key in ("doc_id", "revision", "source_commit", "source_tree", "document_sha256"):
+            if not isinstance(record[key], str) or not record[key]:
+                raise ValueError(key)
+        for key in ("source_commit", "source_tree"):
+            if not re.fullmatch(r"[0-9a-f]{40}", record[key]):
+                raise ValueError(key)
+        if not re.fullmatch(r"[0-9a-f]{64}", record["document_sha256"]):
+            raise ValueError("document_sha256")
+        if record["build_errors"] != 0 or len(record["artifacts"]) != 1:
+            raise ValueError("build_errors/artifacts")
+        artifact = record["artifacts"][0]
+        artifact_path = path.parent / artifact["path"]
+        artifact_bytes = artifact_path.read_bytes()
+        if hashlib.sha256(artifact_bytes).hexdigest() != record["document_sha256"]:
+            raise ValueError("artifact digest")
+        if artifact["sha256"] != record["document_sha256"] or artifact["bytes"] != len(artifact_bytes):
+            raise ValueError("artifact binding")
+        expected_stages = {
+            "lint", "build", "visual_qa", "completeness",
+            "cross_section_consistency", "operational_conformance", "owner_acceptance",
+        }
+        stages = [check["stage"] for check in record["checks"]]
+        if len(stages) != len(set(stages)) or set(stages) != expected_stages:
+            raise ValueError("checks")
+        for check in record["checks"]:
+            if check["result"] not in {"pass", "fail", "pending", "waived"}:
+                raise ValueError("check result")
+            if check["result"] == "pending" and check["evidence_refs"]:
+                raise ValueError("pending evidence")
+        build = next(check for check in record["checks"] if check["stage"] == "build")
+        if build["result"] != "pass" or build["exit"] != 0 or not build["ok_line"].startswith("OK:"):
+            raise ValueError("build receipt")
+        dispositions = record["dispositions"]
+        open_ids = [row["id"] for row in dispositions["rows"] if row["state"] != "ADOPTED"]
+        if dispositions["open_ids"] != open_ids or dispositions["open_count"] != len(open_ids):
+            raise ValueError("disposition counts")
+        for row in dispositions["rows"]:
+            if row["state"] == "ADOPTED" and not re.fullmatch(r"[0-9a-f]{40}", row["resolving_commit"] or ""):
+                raise ValueError("adoption commit")
+            if row["state"] != "ADOPTED" and not row["reason"]:
+                raise ValueError("disposition reason")
+        payload = {key: value for key, value in record.items() if key not in {"record_id", "memory"}}
+        memory = record["memory"]
+        digest = hashlib.sha256(_canonical_json(payload)).hexdigest()
+        if memory["payload_digest"] != digest:
+            raise ValueError("payload_digest")
+        if memory["record_id"] != record["record_id"] or memory["revision"] != 1:
+            raise ValueError("memory identity/revision")
+        for key in ("local_commit", "sync_commit"):
+            if memory[key] is not None and not re.fullmatch(r"[0-9a-f]{40}", memory[key]):
+                raise ValueError(key)
+        if memory["sync_commit"] is not None and memory["local_commit"] is None:
+            raise ValueError("sync without local commit")
+        return record
+    except (KeyError, TypeError, ValueError, OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"invalid build record: {exc}") from exc
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="/tmp/cf-handbook.pdf")
+    ap.add_argument("--check-record", type=pathlib.Path)
     a = ap.parse_args()
+    if a.check_record:
+        try:
+            checked = parse_build_record(a.check_record)
+        except ValueError as exc:
+            print(f"RECORD_FAIL: {exc}")
+            return 2
+        print(f"RECORD_OK: {a.check_record} payload_digest={checked['memory']['payload_digest']}")
+        return 0
 
     # Markdown debris fails the build before anything renders.
     problems = handbook_lint.lint()
@@ -973,12 +1186,15 @@ def main() -> int:
         )
         return 2
 
-    print(
+    ok_line = (
         f"OK {a.out} ({out_path.stat().st_size} bytes) · {pdf.page_count} pages · "
         f"head + tab + dated foot on every page · fit clean ({fit}) · "
         f"{len(table_codes)} table codes · {placards} continuation unit counts · "
         f"{notices} notice labels · check.py green · fonts: {sorted(census)}"
     )
+    record_path = write_build_record(out_path, book, pdf.page_count, ok_line)
+    print(f"RECORD_OK: {record_path} (fsynced; local_commit=null; sync_commit=null)")
+    print(ok_line)
     return 0
 
 

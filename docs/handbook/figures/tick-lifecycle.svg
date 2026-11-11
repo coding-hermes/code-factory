@@ -15,14 +15,14 @@
 <text x="340.0" y="468.6" font-size="9.50" fill="#000000" text-anchor="middle">SETTLE</text>
 <text x="340.0" y="478.1" font-size="9.50" fill="#000000" text-anchor="middle">DISPATCH_LEG.GO</text>
 <rect x="55.0" y="548.0" width="130.0" height="44.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="120.0" y="568.6" font-size="9.50" fill="#000000" text-anchor="middle">SETTLED</text>
-<text x="120.0" y="578.1" font-size="9.50" fill="#000000" text-anchor="middle">STATUS PASS</text>
+<text x="120.0" y="568.6" font-size="9.50" fill="#000000" text-anchor="middle">COMPLETED</text>
+<text x="120.0" y="578.1" font-size="9.50" fill="#000000" text-anchor="middle">REPLY OK</text>
 <rect x="275.0" y="548.0" width="130.0" height="44.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="340.0" y="568.6" font-size="9.50" fill="#000000" text-anchor="middle">FAILED</text>
-<text x="340.0" y="578.1" font-size="9.50" fill="#000000" text-anchor="middle">STATUS FAIL</text>
+<text x="340.0" y="578.1" font-size="9.50" fill="#000000" text-anchor="middle">REPLY FAILED</text>
 <rect x="495.0" y="548.0" width="130.0" height="44.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="560.0" y="568.6" font-size="9.50" fill="#000000" text-anchor="middle">UNKNOWN</text>
-<text x="560.0" y="578.1" font-size="9.50" fill="#000000" text-anchor="middle">DEADLINE / RECONCILE</text>
+<text x="560.0" y="568.6" font-size="9.50" fill="#000000" text-anchor="middle">TIMEOUT</text>
+<text x="560.0" y="578.1" font-size="9.50" fill="#000000" text-anchor="middle">DISPATCH_DEADLINE</text>
 <rect x="55.0" y="248.0" width="130.0" height="44.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="120.0" y="268.6" font-size="9.50" fill="#000000" text-anchor="middle">DEFERRED</text>
 <text x="120.0" y="278.1" font-size="9.50" fill="#000000" text-anchor="middle">LOAD GATE, GATEWAY,</text>

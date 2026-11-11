@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="146.2mm" viewBox="0 0 680 584.8" preserveAspectRatio="xMidYMid meet"><rect width="680" height="584.8" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="24.0" y="34.0" font-size="17.00" fill="#000000" text-anchor="start">M2 — DISPATCH (NODE SIDE)</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="142.4mm" viewBox="0 0 680 569.8" preserveAspectRatio="xMidYMid meet"><rect width="680" height="569.8" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="24.0" y="34.0" font-size="17.00" fill="#000000" text-anchor="start">M2 — DISPATCH (NODE SIDE)</text>
 <text x="24.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="start">WHOSE TURN IT IS BECOMES A BRIEF, A RUN AND A REPLY (M2 §2)</text>
 <text x="24.0" y="84.0" font-size="8.40" fill="#000000" text-anchor="start">CONTRACTS INTO THE MODULE</text>
 <text x="656.0" y="84.0" font-size="8.40" fill="#000000" text-anchor="end">CONTRACTS OUT OF THE MODULE</text>
@@ -13,63 +13,58 @@
 <text x="34.0" y="143.0" font-size="9.50" fill="#000000" text-anchor="start">CRIER</text>
 <text x="34.0" y="154.0" font-size="8.40" fill="#000000" text-anchor="start">LAUNCH/RETURN BOUNDARY</text>
 <text x="34.0" y="165.0" font-size="8.40" fill="#000000" text-anchor="start">CT-03 · LAUNCH</text>
-<text x="34.0" y="176.0" font-size="8.40" fill="#000000" text-anchor="start">PROVEN</text>
+<text x="34.0" y="176.0" font-size="8.40" fill="#000000" text-anchor="start">UNVERIFIED</text>
 <rect x="18.0" y="108.0" width="162.0" height="86.0" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="2.5 2.5"/>
 <text x="21.0" y="117.5" font-size="8.40" fill="#000000" text-anchor="start">CRIER · LAUNCH / RETURN BOUNDARY</text>
-<polyline points="174.0,150.0 271.2,150.0" fill="none" stroke="#000000" stroke-width="1.4" marker-end="url(#ar)"/>
+<polyline points="174.0,150.0 271.2,150.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
 <text x="222.6" y="145.0" font-size="8.40" fill="#000000" text-anchor="middle">CT-03</text>
 <rect x="506.0" y="128.0" width="150.0" height="58.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="516.0" y="143.0" font-size="9.50" fill="#000000" text-anchor="start">CRIER</text>
-<text x="516.0" y="154.0" font-size="8.40" fill="#000000" text-anchor="start">LAUNCH/RETURN BOUNDARY</text>
-<text x="516.0" y="165.0" font-size="8.40" fill="#000000" text-anchor="start">CT-04</text>
-<text x="516.0" y="176.0" font-size="8.40" fill="#000000" text-anchor="start">PARTIAL</text>
-<rect x="500.0" y="108.0" width="162.0" height="86.0" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="2.5 2.5"/>
-<text x="503.0" y="117.5" font-size="8.40" fill="#000000" text-anchor="start">CRIER · LAUNCH / RETURN BOUNDARY</text>
-<polyline points="408.0,130.0 494.0,130.0 494.0,157.0 504.8,157.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="12 7" marker-end="url(#ar)"/>
-<text x="451.0" y="125.0" font-size="8.40" fill="#000000" text-anchor="middle">CT-04</text>
+<text x="516.0" y="143.0" font-size="9.50" fill="#000000" text-anchor="start">DUCKBRAIN</text>
+<text x="516.0" y="154.0" font-size="8.40" fill="#000000" text-anchor="start">CONTROL HOST</text>
+<text x="516.0" y="165.0" font-size="8.40" fill="#000000" text-anchor="start">CT-09</text>
+<text x="516.0" y="176.0" font-size="8.40" fill="#000000" text-anchor="start">UNVERIFIED</text>
+<polyline points="416.0,138.0 494.0,138.0 494.0,157.0 504.8,157.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+<text x="455.0" y="133.0" font-size="8.40" fill="#000000" text-anchor="middle">CT-09</text>
 <rect x="506.0" y="212.0" width="150.0" height="58.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
-<text x="516.0" y="227.0" font-size="9.50" fill="#000000" text-anchor="start">DUCKBRAIN</text>
-<text x="516.0" y="238.0" font-size="8.40" fill="#000000" text-anchor="start">IN THE BUNKER</text>
-<text x="516.0" y="249.0" font-size="8.40" fill="#000000" text-anchor="start">CT-09</text>
-<text x="516.0" y="260.0" font-size="8.40" fill="#000000" text-anchor="start">MISSING</text>
+<text x="516.0" y="227.0" font-size="9.50" fill="#000000" text-anchor="start">CRIER</text>
+<text x="516.0" y="238.0" font-size="8.40" fill="#000000" text-anchor="start">LAUNCH/RETURN BOUNDARY</text>
+<text x="516.0" y="249.0" font-size="8.40" fill="#000000" text-anchor="start">CT-04</text>
+<text x="516.0" y="260.0" font-size="8.40" fill="#000000" text-anchor="start">UNVERIFIED</text>
 <rect x="500.0" y="192.0" width="162.0" height="86.0" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="2.5 2.5"/>
-<text x="503.0" y="201.5" font-size="8.40" fill="#000000" text-anchor="start">BUNKER EXECUTION BOUNDARY</text>
-<polyline points="408.0,150.0 484.0,150.0 484.0,241.0 504.8,241.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
-<text x="446.0" y="145.0" font-size="8.40" fill="#000000" text-anchor="middle">CT-09</text>
+<text x="503.0" y="201.5" font-size="8.40" fill="#000000" text-anchor="start">CRIER · LAUNCH / RETURN BOUNDARY</text>
+<polyline points="408.0,140.0 484.0,140.0 484.0,241.0 504.8,241.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+<text x="446.0" y="135.0" font-size="8.40" fill="#000000" text-anchor="middle">CT-04</text>
 <rect x="506.0" y="296.0" width="150.0" height="58.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="516.0" y="311.0" font-size="9.50" fill="#000000" text-anchor="start">SESSIONS</text>
 <text x="516.0" y="322.0" font-size="8.40" fill="#000000" text-anchor="start">CONTROL HOST</text>
 <text x="516.0" y="333.0" font-size="8.40" fill="#000000" text-anchor="start">CT-11</text>
 <text x="516.0" y="344.0" font-size="8.40" fill="#000000" text-anchor="start">UNVERIFIED</text>
-<polyline points="408.0,170.0 474.0,170.0 474.0,325.0 504.8,325.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
-<text x="441.0" y="165.0" font-size="8.40" fill="#000000" text-anchor="middle">CT-11</text>
+<polyline points="408.0,160.0 474.0,160.0 474.0,325.0 504.8,325.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
+<text x="441.0" y="155.0" font-size="8.40" fill="#000000" text-anchor="middle">CT-11</text>
 <text x="24.0" y="384.0" font-size="8.40" fill="#000000" text-anchor="start">FLOWS THIS MODULE PARTICIPATES IN</text>
-<text x="24.0" y="400.0" font-size="9.50" fill="#000000" text-anchor="start">F1  DISPATCH</text>
-<text x="236.0" y="400.0" font-size="9.50" fill="#000000" text-anchor="start">F2  PROVISIONING</text>
-<text x="448.0" y="400.0" font-size="9.50" fill="#000000" text-anchor="start">F3  MEMORY</text>
-<text x="24.0" y="415.0" font-size="9.50" fill="#000000" text-anchor="start">F5  LANDING</text>
-<text x="236.0" y="415.0" font-size="9.50" fill="#000000" text-anchor="start">F6  MAINTENANCE</text>
-<text x="448.0" y="415.0" font-size="9.50" fill="#000000" text-anchor="start">F8  RECOVERY</text>
-<text x="24.0" y="430.0" font-size="9.50" fill="#000000" text-anchor="start">F9  DEGRADATION</text>
-<text x="236.0" y="430.0" font-size="9.50" fill="#000000" text-anchor="start">F10  TEARDOWN / REBUILD</text>
-<text x="448.0" y="430.0" font-size="9.50" fill="#000000" text-anchor="start">F12  CREDENTIAL LIFECYCLE</text>
-<text x="24.0" y="445.0" font-size="9.50" fill="#000000" text-anchor="start">F14  OBSERVABILITY INGESTION</text>
-<text x="24.0" y="475.0" font-size="8.40" fill="#000000" text-anchor="start">CONTRACT STATE — LINE STYLE, INK ONLY</text>
-<polyline points="24.0,488.0 58.0,488.0" fill="none" stroke="#000000" stroke-width="1.4"/>
-<text x="66.0" y="491.0" font-size="8.40" fill="#000000" text-anchor="start">solid — exercised with evidence</text>
-<polyline points="24.0,504.0 58.0,504.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="12 7"/>
-<text x="66.0" y="506.9" font-size="8.40" fill="#000000" text-anchor="start">long dash — holds in part</text>
-<polyline points="24.0,519.9 58.0,519.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="4 3"/>
-<text x="66.0" y="522.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
-<polyline points="24.0,535.9 58.0,535.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
-<text x="66.0" y="538.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
-<polyline points="24.0,551.9 58.0,551.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
-<text x="66.0" y="554.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text>
-<rect x="24" y="562.8" width="9" height="6" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="2.5 2.5"/>
-<text x="40.0" y="568.3" font-size="8.40" fill="#000000" text-anchor="start">DASHED PANEL — MODULE / HOST / BUS BOUNDARY</text>
-<text x="330.0" y="485.0" font-size="8.40" fill="#000000" text-anchor="start">A BUNKER ENCLOSURE MARKS A COMPONENT THAT EXECUTES INSIDE THE BUNKER</text>
-<text x="330.0" y="496.0" font-size="8.40" fill="#000000" text-anchor="start">DEPLOYMENT / EXECUTION BOUNDARY; UNTAGGED BOXES RUN ON THE CONTROL HOST.</text>
-<text x="330.0" y="507.0" font-size="8.40" fill="#000000" text-anchor="start">THE CRIER ENCLOSURE MARKS THE LAUNCH / RETURN BOUNDARY BETWEEN THE CONTROL</text>
-<text x="330.0" y="518.0" font-size="8.40" fill="#000000" text-anchor="start">HOST AND THE BUNKERS (M10 §2).</text>
-<text x="330.0" y="529.0" font-size="8.40" fill="#000000" text-anchor="start">EACH PEER BOX CARRIES ITS CONTRACT ID, SIGNAL AND MEASURED STATE; THE WIRE</text>
-<text x="330.0" y="540.0" font-size="8.40" fill="#000000" text-anchor="start">STYLE REPEATS THE STATE (LEGEND, LEFT).</text></g></svg>
+<text x="24.0" y="400.0" font-size="9.50" fill="#000000" text-anchor="start">F2  PROVISIONING</text>
+<text x="236.0" y="400.0" font-size="9.50" fill="#000000" text-anchor="start">F5  LANDING</text>
+<text x="448.0" y="400.0" font-size="9.50" fill="#000000" text-anchor="start">F6  MAINTENANCE</text>
+<text x="24.0" y="415.0" font-size="9.50" fill="#000000" text-anchor="start">F9  DEGRADATION</text>
+<text x="236.0" y="415.0" font-size="9.50" fill="#000000" text-anchor="start">F10  TEARDOWN / REBUILD</text>
+<text x="448.0" y="415.0" font-size="9.50" fill="#000000" text-anchor="start">F14  OBSERVABILITY INGESTION</text>
+<text x="24.0" y="430.0" font-size="9.50" fill="#000000" text-anchor="start">F15  BACKUP AND RESTORE</text>
+<text x="24.0" y="460.0" font-size="8.40" fill="#000000" text-anchor="start">CONTRACT STATE — LINE STYLE, INK ONLY</text>
+<polyline points="24.0,473.0 58.0,473.0" fill="none" stroke="#000000" stroke-width="1.4"/>
+<text x="66.0" y="476.0" font-size="8.40" fill="#000000" text-anchor="start">solid — exercised with evidence</text>
+<polyline points="24.0,489.0 58.0,489.0" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="12 7"/>
+<text x="66.0" y="491.9" font-size="8.40" fill="#000000" text-anchor="start">long dash — holds in part</text>
+<polyline points="24.0,504.9 58.0,504.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="4 3"/>
+<text x="66.0" y="507.9" font-size="8.40" fill="#000000" text-anchor="start">fine dash — known not to hold</text>
+<polyline points="24.0,520.9 58.0,520.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+<text x="66.0" y="523.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — not built</text>
+<polyline points="24.0,536.9 58.0,536.9" fill="none" stroke="#000000" stroke-width="1.4" stroke-dasharray="1.5 3.5"/>
+<text x="66.0" y="539.8" font-size="8.40" fill="#000000" text-anchor="start">dotted — no evidence either way</text>
+<rect x="24" y="547.8" width="9" height="6" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="2.5 2.5"/>
+<text x="40.0" y="553.3" font-size="8.40" fill="#000000" text-anchor="start">DASHED PANEL — MODULE / HOST / BUS BOUNDARY</text>
+<text x="330.0" y="470.0" font-size="8.40" fill="#000000" text-anchor="start">A BUNKER ENCLOSURE MARKS A COMPONENT THAT EXECUTES INSIDE THE BUNKER</text>
+<text x="330.0" y="481.0" font-size="8.40" fill="#000000" text-anchor="start">DEPLOYMENT / EXECUTION BOUNDARY; UNTAGGED BOXES RUN ON THE CONTROL HOST.</text>
+<text x="330.0" y="492.0" font-size="8.40" fill="#000000" text-anchor="start">THE CRIER ENCLOSURE MARKS THE LAUNCH / RETURN BOUNDARY BETWEEN THE CONTROL</text>
+<text x="330.0" y="503.0" font-size="8.40" fill="#000000" text-anchor="start">HOST AND THE BUNKERS (M10 §2).</text>
+<text x="330.0" y="514.0" font-size="8.40" fill="#000000" text-anchor="start">EACH PEER BOX CARRIES ITS CONTRACT ID, SIGNAL AND MEASURED STATE; THE WIRE</text>
+<text x="330.0" y="525.0" font-size="8.40" fill="#000000" text-anchor="start">STYLE REPEATS THE STATE (LEGEND, LEFT).</text></g></svg>

@@ -1,81 +1,95 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="143.5mm" viewBox="0 0 680 574.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="574.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="12.0" y="22.0" font-size="17.00" fill="#000000" text-anchor="start">F4 — DOCUMENTATION</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="170.0mm" height="166.5mm" viewBox="0 0 680 666.0" preserveAspectRatio="xMidYMid meet"><rect width="680" height="666.0" fill="#ffffff"/><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#000000"/></marker></defs><g font-family="Routed Gothic Narrow, Routed Gothic, sans-serif"><text x="12.0" y="22.0" font-size="17.00" fill="#000000" text-anchor="start">F4 — DOCUMENTATION</text>
 <text x="668.0" y="22.0" font-size="8.40" fill="#000000" text-anchor="end">TIME FLOWS DOWN · EVERY STEP CITES ITS CHAPTER OR CONTRACT · DASHED = CONDITIONAL BRANCH</text>
 <rect x="67.0" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="106.7" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">OPERATOR</text>
-<polyline points="106.7,70.0 106.7,554.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="106.7,70.0 106.7,646.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="160.3" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="200.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">HANDBOOK</text>
-<polyline points="200.0,70.0 200.0,554.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="200.0,70.0 200.0,646.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="248.7" y="36.0" width="89.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="293.3" y="46.0" font-size="9.50" fill="#000000" text-anchor="middle">FOREMAN</text>
 <text x="293.3" y="58.0" font-size="9.50" fill="#000000" text-anchor="middle">(Hermes)</text>
-<polyline points="293.3,70.0 293.3,554.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="293.3,70.0 293.3,646.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="347.0" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="386.7" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">DOC GATE</text>
-<polyline points="386.7,70.0 386.7,554.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="386.7,70.0 386.7,646.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="440.3" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="480.0" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">DOC PANEL</text>
-<polyline points="480.0,70.0 480.0,554.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="480.0,70.0 480.0,646.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <rect x="533.7" y="36.0" width="79.3" height="30.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="573.3" y="56.0" font-size="9.50" fill="#000000" text-anchor="middle">SPINE GATE</text>
-<polyline points="573.3,70.0 573.3,554.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
+<polyline points="573.3,70.0 573.3,646.0" fill="none" stroke="#000000" stroke-width="0.7" stroke-dasharray="3 4"/>
 <text x="10.0" y="123.0" font-size="9.50" fill="#000000" text-anchor="start">1</text>
 <polyline points="106.7,120.0 200.0,120.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="297.0" y="90.9" width="165.5" height="10.9" fill="#ffffff"/>
-<text x="300.0" y="99.0" font-size="9.50" fill="#000000" text-anchor="start">SOURCE / REQUIREMENTS INTAKE:</text>
-<rect x="297.0" y="103.9" width="143.5" height="10.9" fill="#ffffff"/>
-<text x="300.0" y="112.0" font-size="9.50" fill="#000000" text-anchor="start">REDLINES + ACCEPTED ISSUE</text>
+<rect x="297.0" y="90.9" width="138.0" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="99.0" font-size="9.50" fill="#000000" text-anchor="start">1. SOURCE / REQUIREMENTS</text>
+<rect x="297.0" y="103.9" width="171.0" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="112.0" font-size="9.50" fill="#000000" text-anchor="start">INTAKE: REDLINES + PRIOR ISSUE</text>
 <text x="10.0" y="169.0" font-size="9.50" fill="#000000" text-anchor="start">2</text>
 <polyline points="293.3,166.0 386.7,166.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="367.0" y="149.9" width="154.5" height="10.9" fill="#ffffff"/>
-<text x="370.0" y="158.0" font-size="9.50" fill="#000000" text-anchor="start">SKELETON + SOURCE DELIVERED</text>
+<rect x="367.0" y="136.9" width="154.5" height="10.9" fill="#ffffff"/>
+<text x="370.0" y="145.0" font-size="9.50" fill="#000000" text-anchor="start">2. SKELETON + PINNED SOURCE</text>
+<rect x="367.0" y="149.9" width="55.5" height="10.9" fill="#ffffff"/>
+<text x="370.0" y="158.0" font-size="9.50" fill="#000000" text-anchor="start">DELIVERED</text>
 <text x="10.0" y="215.0" font-size="9.50" fill="#000000" text-anchor="start">3</text>
 <polyline points="480.0,212.0 386.7,212.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="221.7" y="182.9" width="149.0" height="10.9" fill="#ffffff"/>
-<text x="370.7" y="191.0" font-size="9.50" fill="#000000" text-anchor="end">SEAT AUTHORS: FILLS, CITES</text>
+<rect x="205.2" y="182.9" width="165.5" height="10.9" fill="#ffffff"/>
+<text x="370.7" y="191.0" font-size="9.50" fill="#000000" text-anchor="end">3. SEAT AUTHORS: FILLS, CITES</text>
 <rect x="315.2" y="195.9" width="55.5" height="10.9" fill="#ffffff"/>
 <text x="370.7" y="204.0" font-size="9.50" fill="#000000" text-anchor="end">FILE:LINE</text>
 <text x="10.0" y="261.0" font-size="9.50" fill="#000000" text-anchor="start">4</text>
 <polyline points="386.7,258.0 293.3,258.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="172.0" y="215.9" width="138.0" height="10.9" fill="#ffffff"/>
-<text x="310.0" y="224.0" font-size="9.50" fill="#000000" text-anchor="end">STRUCTURAL PASS OR NAMED</text>
+<rect x="155.5" y="215.9" width="154.5" height="10.9" fill="#ffffff"/>
+<text x="310.0" y="224.0" font-size="9.50" fill="#000000" text-anchor="end">4. STRUCTURAL PASS OR NAMED</text>
 <rect x="183.0" y="228.9" width="127.0" height="10.9" fill="#ffffff"/>
 <text x="310.0" y="237.0" font-size="9.50" fill="#000000" text-anchor="end">REFUSALS (CT-16) — NOT</text>
 <rect x="249.0" y="241.9" width="61.0" height="10.9" fill="#ffffff"/>
 <text x="310.0" y="250.0" font-size="9.50" fill="#000000" text-anchor="end">ACCEPTANCE</text>
 <text x="10.0" y="307.0" font-size="9.50" fill="#000000" text-anchor="start">5</text>
 <polyline points="480.0,304.0 293.3,304.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="301.2" y="261.9" width="171.0" height="10.9" fill="#ffffff"/>
-<text x="386.7" y="270.0" font-size="9.50" fill="#000000" text-anchor="middle">INDEPENDENT SEMANTIC REVIEW: 3</text>
-<rect x="303.9" y="274.9" width="165.5" height="10.9" fill="#ffffff"/>
-<text x="386.7" y="283.0" font-size="9.50" fill="#000000" text-anchor="middle">SEATS, SPLITS REPORTED (M6 §3</text>
-<rect x="375.4" y="287.9" width="22.5" height="10.9" fill="#ffffff"/>
-<text x="386.7" y="296.0" font-size="9.50" fill="#000000" text-anchor="middle">S4)</text>
+<rect x="320.4" y="261.9" width="132.5" height="10.9" fill="#ffffff"/>
+<text x="386.7" y="270.0" font-size="9.50" fill="#000000" text-anchor="middle">5. INDEPENDENT SEMANTIC</text>
+<rect x="323.2" y="274.9" width="127.0" height="10.9" fill="#ffffff"/>
+<text x="386.7" y="283.0" font-size="9.50" fill="#000000" text-anchor="middle">REVIEW: SEATS + SPLITS</text>
+<rect x="361.7" y="287.9" width="50.0" height="10.9" fill="#ffffff"/>
+<text x="386.7" y="296.0" font-size="9.50" fill="#000000" text-anchor="middle">REPORTED</text>
 <text x="10.0" y="353.0" font-size="9.50" fill="#000000" text-anchor="start">6</text>
 <polyline points="480.0,350.0 293.3,350.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4" marker-end="url(#ar)"/>
-<rect x="312.2" y="320.9" width="149.0" height="10.9" fill="#ffffff"/>
-<text x="386.7" y="329.0" font-size="9.50" fill="#000000" text-anchor="middle">BRANCH — REJECTED FINDINGS</text>
-<rect x="320.4" y="333.9" width="132.5" height="10.9" fill="#ffffff"/>
-<text x="386.7" y="342.0" font-size="9.50" fill="#000000" text-anchor="middle">RETURN: CORRECTION LOOP</text>
+<rect x="309.4" y="320.9" width="154.5" height="10.9" fill="#ffffff"/>
+<text x="386.7" y="329.0" font-size="9.50" fill="#000000" text-anchor="middle">BRANCH — CHANGES REQUESTED:</text>
+<rect x="312.2" y="333.9" width="149.0" height="10.9" fill="#ffffff"/>
+<text x="386.7" y="342.0" font-size="9.50" fill="#000000" text-anchor="middle">CORRECTION + REVIEW REPEAT</text>
 <text x="10.0" y="399.0" font-size="9.50" fill="#000000" text-anchor="start">7</text>
 <polyline points="573.3,396.0 200.0,396.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="301.2" y="353.9" width="171.0" height="10.9" fill="#ffffff"/>
-<text x="386.7" y="362.0" font-size="9.50" fill="#000000" text-anchor="middle">CROSS-DOCUMENT CHECKS: CT IDS,</text>
 <rect x="306.7" y="366.9" width="160.0" height="10.9" fill="#ffffff"/>
-<text x="386.7" y="375.0" font-size="9.50" fill="#000000" text-anchor="middle">STATES, DANGLING REFS (M6 §3</text>
-<rect x="375.4" y="379.9" width="22.5" height="10.9" fill="#ffffff"/>
-<text x="386.7" y="388.0" font-size="9.50" fill="#000000" text-anchor="middle">S9)</text>
+<text x="386.7" y="375.0" font-size="9.50" fill="#000000" text-anchor="middle">6. CROSS-DOCUMENT CHECKS: CT</text>
+<rect x="312.2" y="379.9" width="149.0" height="10.9" fill="#ffffff"/>
+<text x="386.7" y="388.0" font-size="9.50" fill="#000000" text-anchor="middle">IDS, STATES, DANGLING REFS</text>
 <text x="10.0" y="445.0" font-size="9.50" fill="#000000" text-anchor="start">8</text>
 <polyline points="192.0,440.0 214.0,440.0 214.0,466.0 192.0,466.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="221.0" y="412.9" width="182.0" height="10.9" fill="#ffffff"/>
-<text x="224.0" y="421.0" font-size="9.50" fill="#000000" text-anchor="start">LOCAL: BUILD + RENDER QA — PAGES</text>
-<rect x="221.0" y="425.9" width="121.5" height="10.9" fill="#ffffff"/>
-<text x="224.0" y="434.0" font-size="9.50" fill="#000000" text-anchor="start">INSPECTED, UNIQUE IDS</text>
+<rect x="221.0" y="412.9" width="204.0" height="10.9" fill="#ffffff"/>
+<text x="224.0" y="421.0" font-size="9.50" fill="#000000" text-anchor="start">7. LOCAL: LINT + BUILD + RENDER QA +</text>
+<rect x="221.0" y="425.9" width="116.0" height="10.9" fill="#ffffff"/>
+<text x="224.0" y="434.0" font-size="9.50" fill="#000000" text-anchor="start">DISPOSITION COVERAGE</text>
 <text x="10.0" y="491.0" font-size="9.50" fill="#000000" text-anchor="start">9</text>
 <polyline points="200.0,488.0 106.7,488.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
-<rect x="161.0" y="445.9" width="149.0" height="10.9" fill="#ffffff"/>
-<text x="310.0" y="454.0" font-size="9.50" fill="#000000" text-anchor="end">VERSIONED REVIEW PACKAGE —</text>
+<rect x="144.5" y="445.9" width="165.5" height="10.9" fill="#ffffff"/>
+<text x="310.0" y="454.0" font-size="9.50" fill="#000000" text-anchor="end">8. VERSIONED REVIEW PACKAGE +</text>
 <rect x="177.5" y="458.9" width="132.5" height="10.9" fill="#ffffff"/>
-<text x="310.0" y="467.0" font-size="9.50" fill="#000000" text-anchor="end">DRAFT / ACCEPTED STATUS</text>
+<text x="310.0" y="467.0" font-size="9.50" fill="#000000" text-anchor="end">EXACT ARTIFACT IDENTITY</text>
 <rect x="265.5" y="471.9" width="44.5" height="10.9" fill="#ffffff"/>
-<text x="310.0" y="480.0" font-size="9.50" fill="#000000" text-anchor="end">(CT-18)</text></g></svg>
+<text x="310.0" y="480.0" font-size="9.50" fill="#000000" text-anchor="end">(CT-18)</text>
+<text x="10.0" y="537.0" font-size="9.50" fill="#000000" text-anchor="start">10</text>
+<polyline points="106.7,534.0 200.0,534.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="297.0" y="504.9" width="154.5" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="513.0" font-size="9.50" fill="#000000" text-anchor="start">9. OWNER DECISION: ACCEPTED</text>
+<rect x="297.0" y="517.9" width="149.0" height="10.9" fill="#ffffff"/>
+<text x="300.0" y="526.0" font-size="9.50" fill="#000000" text-anchor="start">ISSUE OR CHANGES REQUESTED</text>
+<text x="10.0" y="583.0" font-size="9.50" fill="#000000" text-anchor="start">11</text>
+<polyline points="200.0,580.0 293.3,580.0" fill="none" stroke="#000000" stroke-width="1.2" marker-end="url(#ar)"/>
+<rect x="306.3" y="537.9" width="110.5" height="10.9" fill="#ffffff"/>
+<text x="309.3" y="546.0" font-size="9.50" fill="#000000" text-anchor="start">10. ACCEPTED SOURCE</text>
+<rect x="306.3" y="550.9" width="121.5" height="10.9" fill="#ffffff"/>
+<text x="309.3" y="559.0" font-size="9.50" fill="#000000" text-anchor="start">INTEGRATION, OR NAMED</text>
+<rect x="306.3" y="563.9" width="88.5" height="10.9" fill="#ffffff"/>
+<text x="309.3" y="572.0" font-size="9.50" fill="#000000" text-anchor="start">CORRECTION LOOP</text></g></svg>

@@ -282,6 +282,15 @@ coverage are derived by the census, not emitted.
 
 The supported build path is manifest-driven. `BOOK.yaml` is the declared source set; the builder resolves every part, chapter, figure, table and gap sheet before rendering. Generation, structural lint, semantic/buildability review, evidence review, rendered visual inspection and owner acceptance are separate stages with separate results. A stage may report PASS only for its own inputs and never upgrades a later stage.
 
+The six-stage build pipeline is (1) markdown lint, (2) manifest assembly,
+(3) pagination/render/fit/furniture, (4) visual QA, (5) completeness plus
+cross-section consistency, and (6) operational conformance. VIII.9.1 maps these to
+seven acceptance results: stage 1 → lint; stages 2–3 → build; stage 4 → visual QA;
+stage 5 → completeness AND cross-section consistency as separate results; stage 6 →
+operational conformance; external owner decision → owner acceptance. The stage-16
+receipt must preserve that mapping rather than treating six stages and seven results
+as a one-to-one count or inheriting a pass from the previous stage.
+
 The artifact manifest records document id, issue, source commit, manifest digest, dependency revisions, dirty state, page count, figure/table inventory and artifact hash. A missing reference fails the build. The request is `cf.handbook-build.v1` and the result is `cf.handbook-receipt.v1` (§16.2); a budget stop, reviewer cap or empty selection is INCOMPLETE. Owner acceptance binds the exact artifact hash and is withheld while unwaived blockers remain; §16.3 limits waiver authority, severity and expiry.
 
 The rendered gate checks fit, page size, monochrome output, fonts, running furniture, folios, figure references and 300 dpi tiles. The source gate checks backticks, escaped pipes, required identifiers and cross-chapter contract consistency. The legacy `[0-9][0-9]-*.md` pipeline remains retired for M-numbered chapters and is not a competing authority. Historical coverage and current target behavior are labeled separately.

@@ -91,6 +91,19 @@ memory entry) is the inner cycle of step 4; F3 and F5 carry its contracts.
    settlement revisions and once-only follow-up; execution success alone never
    increments final-success counters.
 
+**F1 step-to-contract map.** The diagram's numbers are normative references, not
+decoration: step 1 refreshes the pinned board (`CT-14`); 2 returns work/no-work/
+unavailable; 3 reserves the total round allowance; 4 admits
+`round-admission.v1` (`CT-02`); 5–6 retrieve and release signed `custody.v1`
+(`CT-03`); 7 launches the resident Bunker foreman; 8 performs only local planning;
+9 issues `worker-brief.v1` with launch-custody identity and fences (`CT-05`);
+10 returns `worker-result.v1`; 11 executes the pre-commit guard and source/
+integrated judgments (`CT-12`/`CT-13`); 12 closes the board from verdict plus
+publication proof (`CT-14`); 13 records local/sync memory separately (`CT-15`);
+14 returns `worker-result.v1` and `round-report.v1` (`CT-04`/`CT-06R`); and 15
+settles the durable report (`CT-06`). Runtime cells `R01`–`R05` in §2.17 cover the
+corresponding nominal, replay, crash, concurrency and revocation behavior.
+
 **Exceptional branches:** settlement must distinguish delivery acceptance, running,
 interrupted, rejected, partially published and settled results — but the measured
 implementation reads only `ok` (`dispatch_leg.go:713-726`), so a node reply carrying
@@ -201,6 +214,21 @@ verifier's per-leg ladder is the record of record (M1 §11).
 
 1. Provision a new project under each supported profile; the target cannot receive work before its readiness and routing checks pass.
 2. Lose a selected host mid-install; partial allocation is reconciled and resumed or replaced without registering two active owners.
+
+**Builder scenario matrix (F2 / F17.2):**
+
+| Cell | Trigger and required sequence | Observable proof |
+|---|---|---|
+| B1 cold bootstrap | Operator installs an empty control plane; F2.0 verifies release lock, identity, authority, durable state and initial enrollment before F2 starts. | No manager-dependent prerequisite; initial enrollment is one-use; empty desired/observed state is explicit. |
+| B2 new project | Desired deployment → eligible host reservation → workspace/seed → memory/harness → verifier ladder → committed binding → admission. | Every readiness leg is VERIFIED; effective identity/version and Crier binding match; no earlier dispatch. |
+| B3 replace failed runtime | Revoke the old generation → drain/checkpoint → preserve workspace/memory → create replacement → reverify → issue a new fence. | Old route cannot accept work; retained evidence survives; only the new generation becomes admissible. |
+| B4 late memory | DuckBrain is unavailable through launch and board work; the foreman persists native local records, then syncs after restoration. | Local, commit and sync states remain distinct; pending records converge without duplication or false remote durability. |
+| B5 late board | Repository/board read or refresh fails before eligibility, then recovers. | Result is UNAVAILABLE, never NO_WORK; no round is admitted from an empty projection; pinned revision is refreshed. |
+| B6 late Crier | Registration/custody response is delayed beyond launch preparation, then arrives. | No route is asserted before binding readback; retrieval uses the correct agent/generation; a stale response cannot start a second foreman. |
+| B7 partial readiness | Repository passes while memory or routing fails. | The operation remains created-but-unverified, records the failed leg, and receives no work; retry reuses valid completed legs. |
+| B8 retry | The same provisioning operation retries after a crash following workspace creation. | Resumable state and idempotent seed/drift records prevent duplicate allocation, credentials or registration. |
+| B9 replay | A signed create/register request or completion is replayed with the same identity and payload. | The original operation/result is returned once; conflicting payload or generation is refused and metered. |
+
 ### F2.0 — Cold control-plane bootstrap (P5-A-03)
 
 **Trigger/actors:** an operator requests a new Factory; the offline bootstrap
@@ -425,6 +453,22 @@ is insufficient. Non-main destinations use the same rules.
 6. Return publication evidence to the foreman; update the task board and
    worker/wave memory through recoverable closeout steps (`CT-14`, completion
    requires `--evidence-run-id` on `boardctl update`, M4 §6).
+
+**Stage-to-acceptance map (F5).**
+
+| Stage | Required artifact and transition | Refusal / observable proof |
+|---|---|---|
+| 1 pre-commit guard | The exact staged bytes, criteria and gate configuration produce a guard receipt; only then may the candidate commit exist. | Refusal leaves HEAD unmoved. Re-run with an unstaged fix and with an empty staged set; neither may borrow a green verdict. |
+| 2 source judge | Independent acceptance reads the exact candidate commit, criteria and test evidence and returns a source verdict (`CT-13`). | A missing/invalid verdict cannot become accepted; the verdict names the tested commit and evidence run. |
+| 3 integrate and publish | Integrate at an exact base, rerun every required check on the merged tree, CAS the destination ref, and read back the mode-specific remote descendant/tree mapping. | Base/tree/config drift or CAS conflict invalidates prior checks; integration repeats. A local merge or push attempt is not publication proof. |
+| 4 close and retain | The foreman validates the tested parent and evidence references, then closes the row and persists worker/wave/round records. | No closure artifact contains its own future hash. Interruption after publication replays to one publication and evidence-backed closeout. |
+
+**Landing scenario matrix.** In addition to the two base-change and post-publication
+crash cells below, F17.5 requires guard refusal, invalid verdict, pre-integration
+crash, integrated-gate denial, CAS conflict, remote denial, post-publication board
+failure, memory failure, replay and concurrent claims. Each records the last
+durable artifact, recovery actor and proof that no second commit/publication or
+unverified closure was created.
 
 **Exceptional branches:** rejected criteria return to correction; missing required
 verification cannot become accepted merely because a hook exits successfully. The
@@ -911,6 +955,18 @@ gap.
 
 1. Complete a prerequisite remotely just before admission; refreshed board data admits the newly unblocked work.
 2. Return an unreadable board and then restore it; the deferral is named, the wakeup supported, and no false no-op completion is recorded.
+
+| Admission cell | Trigger | Required result |
+|---|---|---|
+| A1 nominal | Fresh pinned revision contains eligible work and all admission gates pass. | One `round-admission.v1` record binds lane, board revision, total allowance and generation. |
+| A2 unreadable | Repository/board refresh or decode fails. | UNAVAILABLE plus a retry wakeup; never NO_WORK, never an empty-board round. |
+| A3 duplicate | The same admission request is replayed before or after the response. | One reservation and one round; identical replay returns the original receipt. |
+| A4 stale | Board revision, lane generation, usage-pool revision or readiness fence is older than the admission decision. | Re-read and re-evaluate; stale work cannot consume the new allowance. |
+| A5 reserve crash | Scheduler dies after durable reservation but before Crier custody. | Reconciliation releases or resumes exactly that reservation; restart cannot double the round allowance. |
+| A6 concurrent rounds | Two ticks or lanes select the same work/pool capacity. | Atomic board claims and pool CAS admit only compatible ownership; losers name their contention reason. |
+| A7 policy denial | Cooldown, load, fairness, capacity, revocation or disabled-lane policy refuses admission. | Durable reason, released reservations and next eligible wakeup; no dispatch message. |
+| A8 post-settlement failure | Execution succeeded but a required refresh, board-check or evidence postcheck fails. | Settlement revision becomes awaiting/postcheck-pending; final-success and follow-up remain withheld. |
+
 ## 2.12 F12 — Credential lifecycle
 
 ![FIGURE 2.12](figures/F12.svg)
@@ -1404,3 +1460,34 @@ stated rather than invented.
 | 10. Configuration and harness/model/policy lifecycle | F13 (pins, schema, rollout), F2 (per-Bunker configuration), F9 (policy postures) | carried; Hermes fixed for MVP, future harness routing explicit, Terminal Jail optional and disabled by default (V2-ARR-04) |
 | 11. Idle, discovery, external signals and useful-work limits | F11 step 5 (named deferral, next wakeup), F1 step 6 (stop when useful work is gone), F7 (observation of progress) | carried; no-op pacing is implementation evidence, not an approved universal default |
 | 12. Publication, application handoff and document change control | F5 (task-to-verified-publication), F4 (document issue/acceptance), F13 (effective rollout state) | carried; project-level deployment scope stays a per-project acceptance question, not a Factory default |
+
+### F17 runtime conformance matrix
+
+Every primary flow has a nominal cell and the applicable replay, stale/late,
+crash-window, concurrency and denial/revocation cells. A conformance run must name
+the exact input revision, execution/operation identity, injected fault and durable
+artifacts; a green nominal path never substitutes for these cells. `Rnn` is the
+stable scenario id and `F17.nn` is its acceptance index into the corresponding
+Part II section.
+
+| Scenario | Flow and nominal path | Fault cells and required observable proof |
+|---|---|---|
+| R01 / F17.1 | F1 dispatch: fresh board → one admitted round → custody → briefs/results → guard/verdict → publication → memory → round settlement. | Replay custody/result/report without a second foreman, publication or budget reset; refuse stale generation; crash before launch, after local commit and after report; race two claims for one execution key; revoke mid-round. Exactly one durable settlement revision chain and once-only follow-up. |
+| R02 / F17.2 | F2 provisioning: B1–B9 covers bootstrap, project/replacement, late memory/board/Crier, partial readiness, retry and replay. | Crash after create and after binding; concurrent create/register for one desired deployment; stale binding or unauthorized registration denied. One verified identity/fence becomes admissible, with no duplicate allocation. |
+| R03 / F17.3 | F3 memory: recall → local fsynced worker/wave/round commits → readback → periodic/reconnect sync → controller readback. | Replay same ID/digest; changed digest returns MEMORY_CONFLICT; crash after fsync before acknowledgement; concurrent local/remote writers; wrong namespace denied. Pending holds survive restart and converge without duplicate or overwritten history. |
+| R04 / F17.4 | F4 documentation: source intake → structural gate → independent review → spine/build/render QA → dispositioned owner package. | Replay identical source/draft without a new issue; crash between structural and semantic review; concurrent source edits invalidate stale evidence; owner denial preserves correction state. Accepted status binds exact source and artifact digests, not panel exit. |
+| R05 / F17.5 | F5 landing: four stages and artifact transitions in §2.5. | Guard refusal, invalid source verdict, crash before/after integration/publication, integrated-gate denial, CAS race, remote denial, board/memory failure and replay. No unverified acceptance, duplicate publication or self-hashed closure. |
+| R06 / F17.6 | F6 maintenance: discover candidates → resolve ownership/retention/pending-sync holds → bounded reclaim → ledger/readback. | Replay pass; crash after deletion before ledger; concurrent worker claim and reaper; protected path or ownership denial. Only proven-unowned eligible resources are removed; retained memory/evidence remains readable. |
+| R07 / F17.7 | F7 monitoring: collect signed/host-scoped observations → freshness evaluation → metrics/events → subscriber delivery. | Duplicate sample/event id is idempotent; stale freshness is explicit; exporter crash resumes from checkpoint; concurrent readers see consistent counters; unauthorized subscription denied. No absent series is rendered as zero. |
+| R08 / F17.8 | F8 recovery: detect desired/observed divergence → fence/drain → reconcile/recreate → rebind → verify → resume. | Replay recovery operation; crash before/after rebind; two reconcilers race; stale owner and unauthorized resume denied. One live generation owns the route, work resumes without duplicated execution and evidence names the loss interval. |
+| R09 / F17.9 | F9 degradation: classify unavailable dependency → select configured posture → retain local/pending work → recover and reconcile. | Retry/replay preserves identities; crash during degraded write retains pending hold; concurrent healthy/degraded writers conflict explicitly; policy may deny degraded admission. Recovery never backdates remote durability or acceptance. |
+| R10 / F17.10 | F10 teardown/rebuild: authorize → drain → quiesce/checkpoint → preserve/readback → destroy → reap → rebuild → reverify → re-register. | Replay destroy/rebuild; crash after destroy before ledger; concurrent teardown and rebuild; retention denial blocks destruction. No new dispatch before verified readiness; preserved and lost evidence are both reported. |
+| R11 / F17.11 | F11 admission: A1–A8 covers nominal, unreadable, duplicate, stale, reservation crash, concurrency, denial and postcheck failure. | Reservation/claim CAS and generation fences prove one allowance/owner; failed refresh is UNAVAILABLE; revoked/disabled lanes emit no dispatch; recovery defines the next wakeup. |
+| R12 / F17.12 | F12 credentials: authorize issue → scoped install/readback → rotate → revoke → prove old denial → reauthorize. | Replay rotation; stale credential/fence refused; crash after issue before binding is reconciled; concurrent rotations serialize; unauthorized issuance denied. Secret material never enters evidence; old authority remains denied after restore. |
+| R13 / F17.13 | F13 upgrade: signed candidate → preflight/backup → canary → migration checkpoint → rollout → verification → rollback/continue. | Replay migration; crash mid-migration resumes from checkpoint; concurrent rollouts refuse; policy/signature denial stops before mutation. Effective version and schema readback match; rollback preserves data and names unsupported irreversible steps. |
+| R14 / F17.14 | F14 observability ingestion: validate/envelope-authenticate → dedupe → durable append → index → query/export. | Duplicate event returns original receipt; late/stale event retains observed-vs-ingested time; crash after append before index rebuilds; concurrent writers preserve order per stream; malformed/unauthorized input denied. Counts reconcile exactly. |
+| R15 / F17.15 | F15 backup/restore: encrypted snapshot → manifest/digest → independent custody → restore to isolated generation → integrity/readiness readback. | Replay restore; stale backup generation is labeled; crash after restore before readback remains unverified; concurrent restore CAS; retention/authorization denial blocks access. RPO/RTO, revoked credentials and unsynchronized loss interval are explicit. |
+| R16 / F17.16 | F16 fan-out: derive independent lanes → allocate capacity → bind distinct workspaces → collect individual evidence → join only when required legs settle. | Duplicate/late lane completion reconciles by execution identity; crash after one lane preserves partial state; concurrent allocation cannot share a lane/workspace; stale fence denied. No worker is double-booked and aggregate success never hides a failed lane. |
+
+The matrix is a requirement index, not a claim that these scenarios have already
+run. Part VIII carries their execution evidence and unresolved coverage.
