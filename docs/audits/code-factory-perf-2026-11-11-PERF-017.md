@@ -8,7 +8,7 @@
 
 All four paths were measured in an **immutable clone** detached at `ea1fda5`, because the canonical
 checkout was held by live workers (two sibling ticks were running `tests/selftest.sh` in it while this
-audit ran). Nothing in this audit wrote to `/home/kara/code-factory`.
+audit ran). Nothing in this audit wrote to `~/code-factory`.
 
 ## Load caveat — read this before quoting any number
 
@@ -149,7 +149,7 @@ Chapter: `III.M5.S3`.
 
 ```bash
 S=/tmp/perf-audit && mkdir -p "$S" && cd "$S"
-git clone --no-hardlinks --quiet /home/kara/code-factory tree
+git clone --no-hardlinks --quiet ~/code-factory tree
 git -C tree checkout --quiet --detach ea1fda5
 
 # M1 gate (3 samples; each ~3 min)
