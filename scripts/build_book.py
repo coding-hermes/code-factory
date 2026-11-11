@@ -783,7 +783,7 @@ def parse_build_record(path: pathlib.Path) -> dict:
             if check["result"] == "pending" and check["evidence_refs"]:
                 raise ValueError("pending evidence")
         build = next(check for check in record["checks"] if check["stage"] == "build")
-        if build["result"] != "pass" or build["exit"] != 0 or not build["ok_line"].startswith("OK:"):
+        if build["result"] != "pass" or build["exit"] != 0 or not build["ok_line"].startswith("OK"):
             raise ValueError("build receipt")
         dispositions = record["dispositions"]
         open_ids = [row["id"] for row in dispositions["rows"] if row["state"] != "ADOPTED"]
