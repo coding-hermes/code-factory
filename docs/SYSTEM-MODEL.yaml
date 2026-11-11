@@ -1642,3 +1642,506 @@ subflows:
   - CT-03
   - CT-06
   - CT-29
+
+execution_contracts:
+  schema_version: cf.execution-contracts.v1
+  status: normative-target; implementation and runtime qualification remain separate
+  vector_source: docs/handbook/contract-vectors.json
+  ownership_manifest:
+    scheduler:
+      owns: [round admission, worker allowance, round report receipt, settlement]
+      does_not_own: [native exec, Crier delivery lease, board claim CAS]
+    foreman:
+      owns: [wave derivation, immutable brief, claim request, worker and round memory]
+      does_not_own: [scheduler settlement, proxy usage ledger, remote forge readback]
+    crier:
+      owns: [signed custody, delivery identity, retrieve replay, lease renewal, acknowledgement]
+      does_not_own: [worker verdict, board status, scheduler settlement]
+    supervisor:
+      owns: [launch_id, execution_key, start permit, native result, reconciliation]
+      does_not_own: [round allowance, model judgment, publication qualification]
+    board_writer:
+      owns: [row and event reduction, operation marker, protected-ref CAS, remote readback]
+      does_not_own: [harness execution, inference usage, backup release]
+    inference_proxy:
+      owns: [token scope, budget reservation, request identity, seq-zero stream, usage commit]
+      does_not_own: [worker allowance, task verdict, forge publication]
+    authority:
+      owns: [owner fence, dispatch grant, effect receipt, revocation, backup recovery decision]
+      does_not_own: [project work selection, model judgment]
+  lexical_types:
+    UInt: {json_type: integer, minimum: 0, maximum: 9007199254740991, booleans: forbidden}
+    PosInt: {json_type: integer, minimum: 1, maximum: 9007199254740991}
+    RoundAllowance: {json_type: integer, minimum: 0, maximum: 20000, note: 20000 is legal}
+    ID: {json_type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'}
+    Time: {json_type: string, format: 'YYYY-MM-DDTHH:MM:SS[.sss]Z', offsets: forbidden, leap_seconds: forbidden}
+    SHA: {json_type: string, pattern: '^[0-9a-f]{64}$'}
+    Text: {json_type: string, utf8_bytes: 1..65536, nul: forbidden}
+    EvidenceRef: {json_type: string, pattern: '^cas\+sha256://<project_id>/<64-lowercase-hex>$'}
+    Error:
+      closed: true
+      fields:
+        code: {type: string, pattern: '^[A-Z][A-Z0-9_]{0,127}$'}
+        message: {type: Text}
+        retryable: {type: boolean}
+        field: {type: string-or-null, format: JSON-pointer}
+        current_generation: {type: UInt-or-null}
+    Fence:
+      closed: true
+      fields: {authority_id: ID, project_id: ID, epoch: PosInt, owner_id: ID}
+  shared_rules:
+    objects: Closed unless a field is explicitly optional; null never means absent.
+    json: RFC 8785 JCS, UTF-8 without BOM, sorted object keys, no trailing LF.
+    digest: Lowercase SHA-256 over the exact canonical bytes named by the record.
+    integers: JSON booleans and floating-point resource values are rejected.
+    idempotency: The first request digest is durable; same identity with different bytes is a conflict.
+    time: Deadlines use the owner's monotonic clock; wall timestamps are evidence only.
+    errors: [INVALID_FIELD, RANGE_INVALID, UNSUPPORTED_VERSION, STALE_OWNER, CONFIG_VERSION_CONFLICT, CLAIM_CONFLICT, LAUNCH_CONFLICT, USAGE_UNSETTLED, EFFECT_UNRESOLVED]
+  envelope:
+    schema_version: cf2a.v1
+    closed: true
+    fields:
+      schema_version: {type: string, const: cf2a.v1}
+      message_type: {type: ID}
+      request_id: {type: ID}
+      corr_id: {type: ID}
+      sender: {type: ID}
+      created_at: {type: Time}
+      body: {type: object}
+    response:
+      fields: {schema_version: string, status: 'ok|accepted|error', data: object-or-null, error: Error-or-null}
+      invariant: An accepted transport response is not an execution verdict.
+  records:
+    RoundAdmission:
+      schema_version: round-admission.v1
+      writer: scheduler
+      durability: The round row commits before CT-02 delivery; the Crier queued receipt precedes accepted.
+      fields:
+        idempotency_key: ID
+        round_id: ID
+        run_id: ID
+        corr_id: ID
+        task_scope: ID-array
+        total_budget: RoundAllowance
+        config_generation: PosInt
+        execution:
+          round_deadline: Time
+          deadline_s: PosInt
+          attempt_wall_s: PosInt
+          turn_timeout_s: PosInt
+          max_turns: PosInt
+          concurrency: PosInt
+          retry_policy: RetryPolicy
+          launch_reserve_s: UInt
+          transfer_reserve_s: UInt
+          cleanup_reserve_s: UInt
+        extensions:
+          project_id: ID
+          lane: ID
+          board_revision: GitOID
+          binding_generation: PosInt
+          owner_fence: Fence
+          lane_seed: {prompt_digest: SHA, skills: string-array}
+      forbidden_at_admission: [wave_id, worker_id, attempt_id]
+    Criterion:
+      schema_version: criterion.v1
+      closed: true
+      fields:
+        id: ID
+        text: Text
+        verification: Text
+        argv: string-array
+        cwd: string
+        timeout_s: PosInt
+        expected_exit: integer
+        oracle_digest: SHA
+      retired_aliases: {description: text, check_argv: argv}
+    TaskRow:
+      schema_version: task-row.v1
+      writer: board_writer
+      fields:
+        kind: {type: string, const: task}
+        id: ID
+        revision: PosInt
+        operation_id: ID
+        initiative_id: ID
+        created_seq: PosInt
+        title: Text
+        status: 'pending|in_progress|blocked|complete'
+        priority: integer
+        complexity: UInt
+        reasoning: Text
+        acceptance_criteria: Criterion-array
+        paths: string-array
+        resources: object
+        depends_on: ID-array
+        cancel_requested: boolean
+        fixture: boolean
+        created_at: Time
+        updated_at: Time
+        claim: Claim-or-null
+        deferral: Deferral-or-null
+        completion: Completion-or-null
+      ordering: priority DESC, created_seq ASC, id ASC after dependency and correction eligibility.
+      correction: A correction retains the same task and original worker until terminal disposition; it never waits behind its own new claim.
+    GroupClaimRequest:
+      schema_version: cf.board-group-claim.v1
+      writer: foreman
+      fields:
+        operation_id: ID
+        idempotency_key: ID
+        project_id: ID
+        board_id: ID
+        board_revision: GitOID
+        owner_fence: Fence
+        ordering: string
+        claims: ClaimPrecondition-array
+        lease_expires_at: Time
+        transition: 'claim|renew|release'
+        evidence_refs: EvidenceRef-array
+      claim_precondition: {task_id: ID, created_seq: PosInt, expected_revision: UInt, expected_status: 'pending|in_progress', claim_generation: UInt}
+      atomicity: One protected old-OID to candidate-OID CAS commits every row, event and operation marker or none.
+      loser: CLAIM_CONFLICT returns current board_revision and changed task ids; no partial wave launches.
+      commit_point: Remote marker, row and event readback precedes native start.
+      lease: Broker monotonic 120 seconds, renewed every 40 seconds; requested expiry is only an upper bound.
+    BriefInput:
+      schema_version: cf.brief-input.v1
+      fields: {directive: Text, task: TaskRow, criteria: Criterion-array, skills: string-array, attachments: EvidenceRef-array}
+      digest: JCS of the complete object.
+    WorkerBrief:
+      schema_version: worker-brief.v1
+      fields:
+        idempotency_key: ID
+        project_id: ID
+        round_id: ID
+        run_id: ID
+        wave_id: ID
+        worker_id: ID
+        task_id: ID
+        attempt_id: ID
+        dispatch_id: ID
+        owner_fence: Fence
+        claim_id: ID
+        claim_generation: PosInt
+        brief_ref: EvidenceRef
+        brief_digest: SHA
+        criteria: Criterion-array
+        workspace: Workspace
+        effective: EffectiveSettings
+      immutable: A changed input requires a new attempt and claim generation.
+    WorkerResult:
+      schema_version: worker-result.v1
+      fields:
+        idempotency_key: ID
+        project_id: ID
+        round_id: ID
+        run_id: ID
+        wave_id: ID
+        worker_id: ID
+        attempt_id: ID
+        dispatch_id: ID
+        corr_id: ID
+        owner_fence: Fence
+        execution_key: SHA
+        status: 'pass|fail|error|cancelled|timeout'
+        commit: GitOID-or-null
+        artifacts: Artifact-array
+        evidence_refs: EvidenceRef-array
+        finished_at: Time
+        error: Error-or-null
+      invariant: Worker status is an execution fact, not settlement or board closeout.
+    RoundReport:
+      schema_version: round-report.v1
+      fields:
+        idempotency_key: ID
+        project_id: ID
+        round_id: ID
+        run_id: ID
+        corr_id: ID
+        owner_fence: Fence
+        waves: WaveResult-array
+        task_results: TaskResultRef-array
+        budget: {allowance: RoundAllowance, consumed: RoundAllowance, reserved: RoundAllowance, remaining: RoundAllowance}
+        stop_reason: 'no_useful_work|completed|deadline|abort|error|budget_exhausted|cancelled|paused|dependency_unavailable|failed'
+        memory_refs: EvidenceRef-array
+        evidence_refs: EvidenceRef-array
+        status: 'pass|fail|error|partial'
+        finished_at: Time
+        report_digest: SHA
+      digest: JCS of the complete record with report_digest absent.
+      budget_invariant: remaining = allowance - consumed - reserved.
+    MemoryRecord:
+      schema_version: memory-record.v1
+      discriminated_by: record_type
+      common_fields:
+        schema_version: {type: string, const: memory-record.v1}
+        record_type: 'worker|wave|round|resolution|decision|finding'
+        record_id: ID
+        project_id: ID
+        namespace: ID
+        round_id: ID
+        wave_id: ID-or-null
+        attempt_id: ID-or-null
+        task_id: ID-or-null
+        owner_fence: Fence
+        writer_id: ID
+        local_seq: PosInt
+        created_at: Time
+        body: object
+        payload_digest: SHA
+      presence:
+        worker: wave_id, attempt_id and task_id are required.
+        wave: wave_id is required; attempt_id and task_id are null.
+        round: wave_id, attempt_id and task_id are null.
+        resolution: wave_id, attempt_id and task_id are null; body.resolution_of is non-empty.
+        decision_finding: wave_id, attempt_id and task_id are null; body uses the generic evidence shape.
+      bodies:
+        worker: {outcome: string, result_ref: EvidenceRef, evidence_refs: EvidenceRef-array, relations: Relation-array}
+        wave: {state: string, worker_refs: EvidenceRef-array, stop_reason: string, relations: Relation-array}
+        round: {state: string, wave_refs: EvidenceRef-array, budget: RoundBudget, report_ref: EvidenceRef, relations: Relation-array}
+        resolution: {resolution_of: EvidenceRef-array, action: string, reason: Text, evidence_refs: EvidenceRef-array}
+        decision_finding: {text: Text, evidence_refs: EvidenceRef-array, relations: Relation-array}
+      digest: JCS of the complete record with payload_digest absent; writer, fence, ids and body are included.
+      local_commit: Temporary file, fsync, atomic rename and directory fsync acknowledge local-only durability.
+      sync_receipt: MemorySyncReceipt is separate and mutable; it never changes payload_digest.
+    MemorySyncReceipt:
+      fields:
+        record_id: ID
+        payload_digest: SHA
+        destination: string
+        state: 'pending|qualified|failed|partial|conflict'
+        remote_receipt: string-or-null
+        attempts: UInt
+        last_error: Error-or-null
+      transitions:
+        - local_commit -> pending; an HTTP outage never discards local work.
+        - pending -> qualified only after canonical remote readback of record_id and payload_digest.
+        - failed retries the same record and digest with a new sync attempt, never a new logical record.
+        - partial reconciles all destination receipts after restart before settlement.
+        - conflict preserves both digests and blocks settlement; no last-writer overwrite.
+    SupervisorRequest:
+      schema_version: supervisor.v1
+      transport: Unix socket $HOME/.local/state/factory/supervisor/control.sock, mode 0600, peer UID verified.
+      fields:
+        schema_version: {type: string, const: supervisor.v1}
+        request_id: ID
+        idempotency_key: ID
+        owner_fence: Fence
+        project_id: ID
+        method: {type: string, const: PUT}
+        path: {type: string, pattern: '^/v1/launches/[A-Za-z0-9._:-]+$'}
+        body: LaunchInput
+      launch_identity: launch_id is owner identity; execution_key = SHA256(JCS({launch_id,input_digest})).
+      replay: Identical request returns the original response; changed digest returns LAUNCH_CONFLICT without exec.
+      retired: cf.supervisor.v1, .node/execution/control.sock and submit/status/cancel/drain/resume are not a second protocol.
+    CustodyRequest:
+      schema_version: custody.v1
+      common_fields: {request_id: ID, idempotency_key: ID, owner_fence: Fence, registration_generation: PosInt}
+      signature:
+        algorithm: Ed25519
+        encoding: lowercase hex
+        transcript: 'METHOD\norigin-form-path\nX-Agent-Ts\nsha256:<body-sha256>\naudience:<principal>'
+        nonce: request_id plus idempotency key prevents replay within the timestamp window.
+        body_hash: SHA-256 of the complete wrapper; payload_digest names the application envelope.
+      operations:
+        retrieve: {agent_id: ID, poll_id: ID, limit: '1..100 default 10', lease_s: '30..300 default 60'}
+        renew: {delivery_id: ID, lease_id: ID}
+        ack: {delivery_id: ID, lease_id: ID, result_digest: SHA, result_custody_receipt: EvidenceRef}
+      renewal: Every 20 seconds with a 5-second bounded call; it never creates a fresh poll or extends beyond deadline.
+      replay: (agent_id,poll_id) returns original messages and lease after a lost response; it claims nothing new.
+      durability: Claim and lease commit before response; unavailable storage is CUSTODY_UNAVAILABLE, never an empty inbox.
+      expiry: LEASE_EXPIRED requires reconciliation; ack requires the matching durable result digest.
+      retired: Three-line GET, audience-free signatures and lease_s 1..30 have no Factory authority.
+    ChatRequest:
+      schema_version: m12-chat-request implicit in POST /v1/chat/completions
+      max_request_bytes: 4194304
+      fields:
+        model: string
+        messages: ChatMessage-array
+        stream: {type: boolean, default: false}
+        options: InferenceOptions
+        request_id: ID
+        deadline: Time
+      message:
+        role: 'system|user|assistant|tool'
+        content: string-or-null
+        tool_calls: optional assistant ToolCall-array
+        tool_call_id: required for tool and references a prior call
+      options_closed: temperature, top_p, max_output_tokens, stop, tools and tool_choice are materialized; arbitrary provider keys refuse.
+      errors: [INVALID_BODY, UNSUPPORTED_CONTENT, UNAUTHORIZED, FORBIDDEN, DEADLINE_EXCEEDED, BUDGET_EXHAUSTED, PRICING_UNAVAILABLE]
+    InferenceStream:
+      content_type: text/event-stream; UTF-8; two LF terminate each frame.
+      max_event_bytes: 1048576
+      sequence: First delta or usage seq is 0 and increases by one; native harness event seq is a separate domain.
+      order: [zero-or-more delta, one usage, exactly one terminal, data-DONE]
+      terminal: Usage commits before terminal complete; DONE without terminal is STREAM_TRUNCATED.
+      fragmentation: UTF-8 fragments may split a code point; incremental decoding never emits replacement characters for valid input.
+      tools: Tool fragments assemble by call id and index before tool execution; a tool response does not trigger a second inference send.
+      errors: [UPSTREAM_UNREACHABLE, UPSTREAM_TIMEOUT, USAGE_UNSETTLED, CAPTURE_FAILED, STREAM_TRUNCATED, STREAM_SEQUENCE_INVALID]
+      recovery: GET /v1/responses/{request_id} returns pending, committed terminal or expired tombstone without re-execution.
+    BackupManifest:
+      schema_version: cf.backup.v1
+      fields:
+        backup_id: ID
+        barrier_seq: PosInt
+        authority_id: ID
+        authority_checkpoint_digest: SHA
+        config_generation: PosInt
+        captured_at: Time
+        destination_ref: string
+        key_ref: string
+        stores: StoreCapture-array
+        exclusions: Exclusion-array
+        retention_until: Time
+        rpo_s: PosInt
+        rto_s: PosInt
+        state: 'CAPTURING|COMPLETE|INCOMPLETE|ABORTED|VALIDATED'
+        manifest_digest: SHA
+      digest: JCS of the complete manifest with manifest_digest absent.
+      store_capture: {store_id: ID, kind: string, source_revision: string, last_transaction: string, artifact_path: string, sha256: SHA, bytes: UInt, root_digest: SHA, validated: boolean}
+      lease: 300 seconds, renewable only by the live coordinator and authority fence.
+      expiry: Expiry marks ABORTED and keeps writers fenced; it never unfreezes participants.
+      release: Requires encrypted off-host upload, digest/byte readback and every required store acknowledgement.
+      coordinator_loss: Recovery authority decides resume or abort; a later replay cannot turn ABORTED into COMPLETE.
+      distinction: Local immutable capture, off-host durability and restore certification are separate commit points.
+    SettlementRecord:
+      schema_version: settlement.v1
+      fields:
+        settlement_id: ID
+        revision: PosInt
+        round_id: ID
+        report_digest: SHA
+        state: 'pending|settled_success|settled_failure|superseded'
+        execution_status: string
+        evidence_refs: EvidenceRef-array
+        postcheck_results: PostcheckResult-array
+        superseded_by: ID-or-null
+        error: Error-or-null
+        recorded_at: Time
+      invariant: Execution pass plus failed required postcheck is settled_failure, never success.
+  authority_transitions:
+    dispatch_grant: issued -> redeemed -> settled; one use, replay returns GRANT_REPLAY, no settlement before return custody.
+    certificate: old and new serials overlap for 60 seconds; old revokes only after new identity readback.
+    effect: begin commits operation_id, input_digest, resource_ref and owner fence before mutation; finish requires remote readback.
+    stale_owner: Every mutation rejects an older epoch with STALE_OWNER before evaluating work.
+    unresolved_effect: EFFECT_UNRESOLVED blocks replacement activation and cannot be retried blindly.
+    backup_expiry: active -> ABORTED on unrenewed expiry; only a fenced recovery decision releases holds.
+    revocation: Current-authority revocation and offboard state survive backup restore.
+  numeric_rules:
+    allowance: total_budget is the round-wide worker-attempt allowance, range 0..20000 inclusive; concurrency is independent.
+    reservation: remaining = allowance - consumed - reserved; compatible waves never reset it.
+    charge: Reserve before launch and consume at attempt start; NEVER_ACCEPTED proof alone refunds once.
+    round_deadline: persisted at admission and includes queue, launch, transfer, retries, execution and cleanup.
+    attempt_deadline: min(round_deadline, attempt_started_at + attempt_wall_s).
+    turn_deadline: min(attempt_deadline, turn_started_at + turn_timeout_s); max_turns independently caps count.
+    timeout_example: turn_timeout_s=10 and attempt_wall_s=60 permits two 8-second calls; a whole-invocation 10-second interpretation is retired.
+    typed_resources: cpu_millis, memory_bytes, max_output_bytes, concurrency, allowance and timeouts are integers with explicit units; boolean-with-budget fields are forbidden.
+  terminal_settlement_matrix:
+    launch_rejected_before_exec: {result: failed_start, worker_verdict: null, refund: reserved allowance only}
+    clean_exit_without_committed_result: {result: missing_result, worker_verdict: null, success: false, third_verdict: forbidden}
+    process_exit_before_durable_evidence: {result: evidence_missing, success: false, recovery: reconcile result digest before new exec}
+    control_death_while_worker_runs: {result: control_unknown, success: false, recovery: query execution_key, never relaunch blindly}
+    turn_timeout: {result: turn_timeout, attempt_may_continue: true, round_deadline: unchanged}
+    attempt_wall_timeout: {result: attempt_timeout, success: false, round_may_continue: true}
+    round_deadline: {result: round_deadline, new_launches: false, cleanup_and_reports_continue: true}
+    postcheck_failure: {result: settled_failure, success: false, dependency_success_wakeup: false}
+  evidence_classes:
+    execution: WorkerResult and native result bytes establish execution only.
+    mechanical_policy: Deterministic argv, exit, oracle and repository checks have independent refs and outcomes.
+    model_judgment: A judge verdict is pass, fail or uncertain; uncertainty never rewrites mechanical results.
+    publication: Remote OID, tree/digest and readback qualify publication; an uncertain push is unknown, not failure.
+    settlement: Required postchecks consume the other classes; closeout requires published machine evidence.
+    uncertain_judgment: Does not block conforming harness checks or publication when judgment is not a required closeout hook.
+    uncertain_publication: Blocks closeout but leaves other check outcomes unchanged.
+  telemetry:
+    identity:
+      required: [project_id, component, event_id, occurred_at, config_generation]
+      scoped: [round_id, run_id, wave_id, attempt_id, task_id, corr_id, owner_epoch]
+      rule: Scoped ids are present whenever the event belongs to that scope; unknown is null, never a fabricated label.
+    record:
+      fields: {name: string, kind: 'counter|gauge|histogram|event', value: number-or-null, unit: string, identity: TelemetryIdentity, source_observed_at: Time-or-null, collection_state: 'fresh|stale|unavailable|insufficient_data'}
+      missing: Unavailable observations emit null and collection_state; they never become zero or ready.
+      network_failure: Retains Factory task identity and is an error observation, not zero traffic.
+    projection: event_id deduplicates emission and scrape; a scrape never performs another operation.
+    retention: Raw events 30 days and hourly rollups 90 days; project-scoped read access; secrets and prompt text are forbidden.
+    m7:
+      counters: factory_operations_total{module="M7",operation="issue|verify|deliver|renew|revoke",outcome,project}
+      duration: factory_operation_duration_seconds{module="M7",operation,outcome,project}
+      qualification: All five operations are checked at emission and scrape with the same event ids.
+    m8_to_m12: Each module emits the same identity envelope; module-specific metrics add only registered bounded labels.
+  signed_profiles:
+    schema_version: cf.signed-profile.v1
+    fields: {profile_id: ID, generation: PosInt, payload_digest: SHA, signature_ref: string, defaults: object}
+    controls: [receipt authority and trust, invocation lifecycle, gate policy, execution artifact, exact inference routes, global timeout, sandbox]
+    binding: Secret references resolve locally and are redacted; signed payload and generation precede activation.
+    precedence: attempt override -> signed project profile -> signed namespace profile -> fail-closed default.
+    error: Unknown generation or signature refuses with CONFIG_VERSION_CONFLICT or UNSUPPORTED_VERSION.
+  containment:
+    credential_transport: owner-only file descriptor or mode-0600 atomic file; environment and argv are forbidden.
+    staging: temporary file in the destination filesystem, fsync, mode check, atomic rename, directory fsync.
+    fanout: Children do not inherit secrets unless a registered attenuated grant explicitly allows it.
+    backend: Only registered containment backends launch; an unavailable backend returns CONTAINMENT_UNAVAILABLE.
+    lifecycle: No-parent and backend-lifecycle semantics are explicit and cannot be assumed across backends.
+  decision_slots:
+    A-EXECUTION-PROFILE:
+      owner: factory owner
+      options: {resident-v1: canonical scheduler/foreman/supervisor protocol, successor-v2: new approved profile and vectors}
+      default: resident-v1
+      fail_closed: Unregistered aliases and mixed legacy profiles refuse UNSUPPORTED_VERSION.
+    A-CRIER-CUSTODY-PROFILE:
+      owner: factory owner
+      options: {factory-ed25519-v1: body and audience bound signed custody, successor-v2: new approved enrollment and vectors}
+      default: factory-ed25519-v1
+      fail_closed: Legacy unsigned or audience-free requests refuse admission.
+    A-BOARD-AUTHORITY:
+      owner: factory owner
+      options: {protected-receive-pack-cas: Git protected CAS, broker-only-repository-service: identical transaction through a repository service}
+      default: protected-receive-pack-cas
+      fail_closed: Unsupported forge or unchecked merge returns CLAIM_CONFLICT before launch.
+    A-MEMORY-DIGEST:
+      owner: factory owner
+      options: {whole-record-v1: complete record excluding payload_digest, successor-v2: new version and migration vectors}
+      default: whole-record-v1
+      fail_closed: Body-only or compatibility hashes are not accepted as the same version.
+    A-INFERENCE-PROFILE:
+      owner: factory owner
+      options: {m12-closed-v1: M12 request and seq-zero SSE grammar, successor-v2: new approved client and proxy profile}
+      default: m12-closed-v1
+      fail_closed: Seq-one streams and arbitrary provider options refuse activation.
+    A-BACKUP-EXPIRY:
+      owner: factory owner
+      options: {abort-and-hold: ABORTED with writers fenced, successor-v2: new approved recovery proof}
+      default: abort-and-hold
+      fail_closed: Expiry never releases writers or certifies a partial backup.
+    B-BOARD:
+      owner: factory owner
+      options: {refuse: deployment remains unready, boardctl-qualified-adapter: pinned artifact with identical schema and CAS vectors}
+      default: refuse
+      fail_closed: An unqualified board artifact refuses dependent execution.
+    C-ARTIFACT:
+      owner: factory owner
+      options: {refuse: inference remains unverified, qualified-package: pinned maintained package with deployment evidence}
+      default: refuse
+      fail_closed: A version string or workstation process is not deployment evidence.
+    C-BACKUP:
+      owner: factory owner
+      options: {refuse: abort incomplete backup, partial: name every missing store and loss window without readiness certification}
+      default: refuse
+      fail_closed: Missing stores or acknowledgements abort the complete backup.
+    C-LOST-AUTHORITY:
+      owner: factory owner
+      options: {refuse: no automatic failover, replacement: new authority epoch after every effect reconciles}
+      default: refuse
+      fail_closed: Unresolved effects block replacement activation.
+  durability:
+    round: Scheduler durable round precedes delivery; custody durable queue precedes accepted.
+    launch: Durable launch and exclusive job directory precede start permit; consumed permit without proof is quarantined.
+    board: Protected CAS plus remote readback precedes native start; row without matching event is PARTIAL_WRITE.
+    result: Worker result, usage and evidence commit before their success responses.
+    memory: Local fsync acknowledges local work; only remote digest readback qualifies synchronization.
+    backup: Off-host digest and byte readback precede release; local capture alone is not durable backup.
+  runtime_conformance:
+    status: NOT ASSESSED / NOT RUN
+    fixture_source: docs/handbook/contract-vectors.json
+    required: [SC-01, SC-02, SC-03, SC-04, SC-05, SC-06, SC-07, SC-08, SC-09]
+    rule: Fixture validation does not promote an adapter or deployment to live PROVEN.

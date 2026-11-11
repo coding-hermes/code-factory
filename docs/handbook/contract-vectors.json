@@ -1,0 +1,1269 @@
+{
+  "schema_version": "cf.contract-vectors.v1",
+  "title": "Self-checkable execution contract vectors",
+  "status": "fixture-only; static vectors are normative, runtime conformance is NOT ASSESSED / NOT RUN",
+  "selected_decisions": {
+    "A-EXECUTION-PROFILE": "resident-v1",
+    "A-CRIER-CUSTODY-PROFILE": "factory-ed25519-v1",
+    "A-BOARD-AUTHORITY": "protected-receive-pack-cas",
+    "A-MEMORY-DIGEST": "whole-record-v1",
+    "A-INFERENCE-PROFILE": "m12-closed-v1",
+    "A-BACKUP-EXPIRY": "abort-and-hold",
+    "B-BOARD": "refuse",
+    "C-ARTIFACT": "refuse",
+    "C-BACKUP": "refuse",
+    "C-LOST-AUTHORITY": "refuse"
+  },
+  "canonicalization": {
+    "json": "RFC 8785 JCS: UTF-8, sorted object keys, minimal separators, no trailing LF.",
+    "sha256": "Lowercase SHA-256 of the exact canonical_json or UTF-8 byte string named by the vector.",
+    "mutation": "Parse the named base, apply JSON-pointer mutation/removal, validate before any effect, and compare the exact expected error and side-effect assertions.",
+    "external_objects": "EvidenceRef availability and signatures are outside fixture scope; digest arithmetic and schema behavior are in scope."
+  },
+  "common_identities": {
+    "fence": {
+      "authority_id": "auth-1",
+      "project_id": "code-factory",
+      "epoch": 7,
+      "owner_id": "manager-1"
+    },
+    "repository": {
+      "forge": "github",
+      "host": "github.com",
+      "owner": "coding-hermes",
+      "repo": "code-factory",
+      "ref": "refs/heads/main",
+      "commit": {
+        "algorithm": "sha1",
+        "value": "1111111111111111111111111111111111111111"
+      }
+    },
+    "criterion": {
+      "id": "AC-1",
+      "text": "The admitted change is verified.",
+      "verification": "Run the named verification and retain its output.",
+      "argv": [
+        "verify",
+        "--fixture"
+      ],
+      "cwd": ".",
+      "timeout_s": 60,
+      "expected_exit": 0,
+      "oracle_digest": "fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8"
+    }
+  },
+  "vectors": [
+    {
+      "id": "CV-01-A",
+      "kind": "positive",
+      "name": "round admission canonical envelope",
+      "canonical_json": "{\"body\":{\"config_generation\":17,\"corr_id\":\"c-17\",\"execution\":{\"attempt_wall_s\":1800,\"cleanup_reserve_s\":15,\"concurrency\":2,\"deadline_s\":7200,\"launch_reserve_s\":30,\"max_turns\":40,\"retry_policy\":{\"failed_start\":\"refund-before-run\",\"initial_backoff_s\":5,\"max_attempts\":3,\"max_backoff_s\":60,\"name\":\"charge-on-start\"},\"round_deadline\":\"2026-11-11T21:00:00Z\",\"transfer_reserve_s\":30,\"turn_timeout_s\":300},\"extensions\":{\"binding_generation\":4,\"board_revision\":{\"algorithm\":\"sha1\",\"value\":\"1111111111111111111111111111111111111111\"},\"lane\":\"code-factory\",\"lane_seed\":{\"prompt_digest\":\"fb14f4b0b4abe9a49f9ad8c43312d54f127769f08cfb0754007ba1576d5e32dc\",\"skills\":[]},\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\"},\"idempotency_key\":\"admit-r17\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"round-admission.v1\",\"task_scope\":[\"CF-1\"],\"total_budget\":20000},\"corr_id\":\"c-17\",\"created_at\":\"2026-11-11T19:00:00Z\",\"message_type\":\"round-admission\",\"request_id\":\"req-r17\",\"schema_version\":\"cf2a.v1\",\"sender\":\"scheduler\"}",
+      "canonical_sha256": "a752a167926162e648b47818011df73f6bbc25a4ac75b75e4596d9fafd538062",
+      "expected": {
+        "status": "accepted",
+        "disposition": "accepted",
+        "future_identity_fields_absent": [
+          "wave_id",
+          "worker_id",
+          "attempt_id"
+        ],
+        "worker_allowance": 20000
+      },
+      "persistence": "Scheduler round row precedes deliver; Crier queued receipt precedes accepted.",
+      "domain": "execution",
+      "static_controls": [
+        "SC-02"
+      ]
+    },
+    {
+      "id": "CV-01-B",
+      "kind": "positive",
+      "name": "immutable worker brief",
+      "canonical_json": "{\"attempt_id\":\"a-1\",\"brief_digest\":\"55606fe015427fe678ac9a1de2ff2666ff04dc06eecb25a1a2eab5a858a050df\",\"brief_ref\":\"cas+sha256://code-factory/55606fe015427fe678ac9a1de2ff2666ff04dc06eecb25a1a2eab5a858a050df\",\"claim_generation\":1,\"claim_id\":\"claim-cf1-1\",\"criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"text\":\"The admitted change is verified.\",\"timeout_s\":60,\"verification\":\"Run the named verification and retain its output.\"}],\"dispatch_id\":\"d-1\",\"effective\":{\"attempt_timeout_s\":1800,\"base_url\":\"https://proxy.example.invalid\",\"cpu_millis\":1000,\"credential_ref\":\"proxy-credential-1\",\"deadline\":\"2026-11-11T21:00:00Z\",\"lane\":\"code-factory\",\"max_output_bytes\":10485760,\"max_turns\":40,\"memory_bytes\":4294967296,\"model\":\"fixture-model\",\"namespace\":\"code-factory\",\"network_policy_digest\":\"19cad144fbdff3476ace4b2a10084b5594a3c44e4b07863f6b6ef0c394d5f2cd\",\"provider\":\"fixture-provider\",\"release_lock_digest\":\"be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410\",\"run_id\":\"run-17\",\"skills_digest\":\"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"turn_timeout_s\":300},\"idempotency_key\":\"brief-a1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"worker-brief.v1\",\"task_id\":\"CF-1\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\",\"workspace\":{\"base\":{\"algorithm\":\"sha1\",\"value\":\"1111111111111111111111111111111111111111\"},\"relative_path\":\"code-factory/worker-1\",\"repository\":{\"commit\":{\"algorithm\":\"sha1\",\"value\":\"1111111111111111111111111111111111111111\"},\"forge\":\"github\",\"host\":\"github.com\",\"owner\":\"coding-hermes\",\"ref\":\"refs/heads/main\",\"repo\":\"code-factory\"}}}",
+      "canonical_sha256": "0f0fc0c2f9d907562c8d4878c3284b32f9502fdbd3e0d1aab2524dce1979bf33",
+      "related_objects": {
+        "brief_input_canonical_json": "{\"attachments\":[],\"criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"text\":\"The admitted change is verified.\",\"timeout_s\":60,\"verification\":\"Run the named verification and retain its output.\"}],\"directive\":\"Complete the admitted board tasks and return evidence.\",\"schema_version\":\"cf.brief-input.v1\",\"skills\":[],\"task\":{\"acceptance_criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"text\":\"The admitted change is verified.\",\"timeout_s\":60,\"verification\":\"Run the named verification and retain its output.\"}],\"claim\":{\"claim_generation\":1,\"claim_id\":\"claim-cf1-1\",\"claimant_id\":\"foreman-1\",\"lease_expires_at\":\"2026-11-11T19:03:00Z\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"}},\"completion\":null,\"complexity\":3,\"created_at\":\"2026-11-11T18:00:00Z\",\"deferral\":null,\"depends_on\":[],\"fixture\":false,\"id\":\"CF-1\",\"kind\":\"task\",\"operation_id\":\"op-claim-cf1\",\"priority\":50,\"reasoning\":\"A complete vector is required before implementation.\",\"revision\":2,\"status\":\"in_progress\",\"title\":\"Prove the execution contract\",\"updated_at\":\"2026-11-11T19:01:00Z\"}}",
+        "brief_input_sha256": "55606fe015427fe678ac9a1de2ff2666ff04dc06eecb25a1a2eab5a858a050df",
+        "brief_ref": "cas+sha256://code-factory/55606fe015427fe678ac9a1de2ff2666ff04dc06eecb25a1a2eab5a858a050df"
+      },
+      "expected": {
+        "accepted": true,
+        "execution_key": "67403d95585696bc77bc54f444f9542374cd5bdf7bbb3aea149dca39a785a761",
+        "turn_timeout_s": 300,
+        "attempt_timeout_s": 1800
+      },
+      "domain": "execution",
+      "static_controls": []
+    },
+    {
+      "id": "CV-01-C",
+      "kind": "positive",
+      "name": "worker result and report digest chain",
+      "worker_result_canonical_json": "{\"artifacts\":[],\"attempt_id\":\"a-1\",\"commit\":{\"algorithm\":\"sha1\",\"value\":\"2222222222222222222222222222222222222222\"},\"corr_id\":\"c-17\",\"dispatch_id\":\"d-1\",\"error\":null,\"evidence_refs\":[\"cas+sha256://code-factory/86f6b067fe92956e41ce029cd6e54fa2ad590639940f44f55619b9bc7356ffdc\"],\"execution_key\":\"67403d95585696bc77bc54f444f9542374cd5bdf7bbb3aea149dca39a785a761\",\"finished_at\":\"2026-11-11T19:20:00Z\",\"idempotency_key\":\"result-a1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"worker-result.v1\",\"status\":\"pass\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\"}",
+      "worker_result_sha256": "081f606656adf020464e36fc4963a34f9bc1598ca7b774fb5c508951fafd685b",
+      "round_report_canonical_json": "{\"budget\":{\"allowance\":20000,\"consumed\":1,\"remaining\":19999,\"reserved\":0},\"corr_id\":\"c-17\",\"evidence_refs\":[\"cas+sha256://code-factory/081f606656adf020464e36fc4963a34f9bc1598ca7b774fb5c508951fafd685b\"],\"finished_at\":\"2026-11-11T19:25:00Z\",\"idempotency_key\":\"report-r17\",\"memory_refs\":[\"cas+sha256://code-factory/bb44e4bd537c419d2db6cc7e282c3d662427a648a08345733a87a0796b6c2a1a\"],\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"report_digest\":\"f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"round-report.v1\",\"status\":\"pass\",\"stop_reason\":\"no_useful_work\",\"task_results\":[{\"attempt_id\":\"a-1\",\"result_ref\":\"cas+sha256://code-factory/081f606656adf020464e36fc4963a34f9bc1598ca7b774fb5c508951fafd685b\",\"status\":\"pass\",\"task_id\":\"CF-1\"}],\"waves\":[{\"attempt_ids\":[\"a-1\"],\"state\":\"complete\",\"wave_id\":\"w-1\"}]}",
+      "round_report_sha256": "f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71",
+      "digest_rule": "round_report_sha256 excludes only report_digest; worker_result_sha256 covers the complete WorkerResult body.",
+      "expected": {
+        "budget_remaining": 19999,
+        "stop_reason": "no_useful_work",
+        "report_ref": "cas+sha256://code-factory/f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71"
+      },
+      "domain": "execution",
+      "static_controls": [
+        "SC-02"
+      ]
+    },
+    {
+      "id": "CV-01-D",
+      "kind": "negative",
+      "name": "attempt wall cannot be replaced by turn timeout product",
+      "base": "CV-01-A",
+      "mutate": {
+        "/body/execution/attempt_wall_s": 72000
+      },
+      "expected": {
+        "error": "RANGE_INVALID",
+        "launch": "refused"
+      },
+      "domain": "execution",
+      "static_controls": [
+        "SC-02",
+        "SC-09"
+      ]
+    },
+    {
+      "id": "CV-01-E",
+      "kind": "negative",
+      "name": "missing worker status is not success",
+      "base_worker_result": "{\"artifacts\":[],\"attempt_id\":\"a-1\",\"commit\":{\"algorithm\":\"sha1\",\"value\":\"2222222222222222222222222222222222222222\"},\"corr_id\":\"c-17\",\"dispatch_id\":\"d-1\",\"error\":null,\"evidence_refs\":[\"cas+sha256://code-factory/86f6b067fe92956e41ce029cd6e54fa2ad590639940f44f55619b9bc7356ffdc\"],\"execution_key\":\"67403d95585696bc77bc54f444f9542374cd5bdf7bbb3aea149dca39a785a761\",\"finished_at\":\"2026-11-11T19:20:00Z\",\"idempotency_key\":\"result-a1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"worker-result.v1\",\"status\":\"pass\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\"}",
+      "remove": [
+        "/status"
+      ],
+      "expected": {
+        "error": "INVALID_RESULT",
+        "settlement": "none"
+      },
+      "domain": "execution",
+      "static_controls": []
+    },
+    {
+      "id": "CV-01-F",
+      "kind": "negative",
+      "name": "report budget arithmetic is closed",
+      "base_round_report_without_digest": "{\"budget\":{\"allowance\":20000,\"consumed\":1,\"remaining\":19999,\"reserved\":0},\"corr_id\":\"c-17\",\"evidence_refs\":[\"cas+sha256://code-factory/081f606656adf020464e36fc4963a34f9bc1598ca7b774fb5c508951fafd685b\"],\"finished_at\":\"2026-11-11T19:25:00Z\",\"idempotency_key\":\"report-r17\",\"memory_refs\":[\"cas+sha256://code-factory/bb44e4bd537c419d2db6cc7e282c3d662427a648a08345733a87a0796b6c2a1a\"],\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"round_id\":\"r-17\",\"run_id\":\"run-17\",\"schema_version\":\"round-report.v1\",\"status\":\"pass\",\"stop_reason\":\"no_useful_work\",\"task_results\":[{\"attempt_id\":\"a-1\",\"result_ref\":\"cas+sha256://code-factory/081f606656adf020464e36fc4963a34f9bc1598ca7b774fb5c508951fafd685b\",\"status\":\"pass\",\"task_id\":\"CF-1\"}],\"waves\":[{\"attempt_ids\":[\"a-1\"],\"state\":\"complete\",\"wave_id\":\"w-1\"}]}",
+      "mutate": {
+        "/budget/remaining": 2
+      },
+      "expected": {
+        "error": "INVALID_FIELD",
+        "field": "/budget/remaining"
+      },
+      "domain": "execution",
+      "static_controls": [
+        "SC-02"
+      ]
+    },
+    {
+      "id": "CV-02-A",
+      "kind": "positive",
+      "name": "resident supervisor PUT launch",
+      "canonical_json": "{\"body\":{\"attempt_id\":\"a-1\",\"deadline\":\"2026-11-11T21:00:00Z\",\"dispatch_id\":\"d-1\",\"input_digest\":\"55606fe015427fe678ac9a1de2ff2666ff04dc06eecb25a1a2eab5a858a050df\",\"input_ref\":\"cas+sha256://code-factory/55606fe015427fe678ac9a1de2ff2666ff04dc06eecb25a1a2eab5a858a050df\",\"kind\":\"worker\",\"limits\":{\"cpu_millis\":1000,\"memory_bytes\":4294967296,\"pids\":256},\"round_id\":\"r-17\",\"runtime_digest\":\"be4bd8d671d581f1a49eb9e6ca8fb764ecb6d6ce288f84b16f93f83abb0c8410\",\"task_id\":\"CF-1\",\"wave_id\":\"w-1\",\"worker_id\":\"worker-1\",\"workspace_ref\":\"cas+sha256://code-factory/85edc4b2f340931dd4b873f4d06edb8252fee8ade465c7e2f95ac49995742c11\"},\"idempotency_key\":\"launch-a1-key\",\"method\":\"PUT\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"path\":\"/v1/launches/launch-a1\",\"project_id\":\"code-factory\",\"request_id\":\"supervise-a1\",\"schema_version\":\"supervisor.v1\"}",
+      "canonical_sha256": "2856616af37923f26cbf8ee0091be799067b989f523bab8185be2b4be8b1397e",
+      "response_canonical_json": "{\"accepted_at\":\"2026-11-11T19:02:00Z\",\"error\":null,\"execution_key\":\"67403d95585696bc77bc54f444f9542374cd5bdf7bbb3aea149dca39a785a761\",\"finished_at\":null,\"heartbeat_at\":null,\"input_digest\":\"55606fe015427fe678ac9a1de2ff2666ff04dc06eecb25a1a2eab5a858a050df\",\"launch_id\":\"launch-a1\",\"native_id\":null,\"result_digest\":null,\"started_at\":null,\"state\":\"accepted\",\"state_version\":1}",
+      "expected": {
+        "http": 201,
+        "execution_key": "67403d95585696bc77bc54f444f9542374cd5bdf7bbb3aea149dca39a785a761",
+        "socket": "$HOME/.local/state/factory/supervisor/control.sock"
+      },
+      "persistence": "Launch row and exclusive job directory are durable before the start permit.",
+      "domain": "supervisor",
+      "static_controls": [
+        "SC-05"
+      ]
+    },
+    {
+      "id": "CV-02-B",
+      "kind": "negative",
+      "name": "legacy supervisor schema refuses",
+      "base": "CV-02-A",
+      "mutate": {
+        "/schema_version": "cf.supervisor.v1"
+      },
+      "expected": {
+        "http": 422,
+        "error": "UNSUPPORTED_VERSION",
+        "native_start": false
+      },
+      "domain": "supervisor",
+      "static_controls": [
+        "SC-05"
+      ]
+    },
+    {
+      "id": "CV-02-C",
+      "kind": "negative",
+      "name": "changed launch digest does not exec twice",
+      "base": "CV-02-A",
+      "mutate": {
+        "/body/input_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "expected": {
+        "http": 409,
+        "error": "LAUNCH_CONFLICT",
+        "second_exec": false
+      },
+      "domain": "supervisor",
+      "static_controls": [
+        "SC-05"
+      ]
+    },
+    {
+      "id": "CV-02-D",
+      "kind": "fault",
+      "name": "permit consumed before exec with unknown native state",
+      "launch_id": "launch-a1",
+      "permit_consumed": true,
+      "native_proof": "unavailable",
+      "expected": {
+        "state": "quarantined",
+        "replacement": "refused",
+        "error": "START_UNKNOWN"
+      },
+      "domain": "supervisor",
+      "static_controls": [
+        "SC-05"
+      ]
+    },
+    {
+      "id": "CV-03-A",
+      "kind": "positive",
+      "name": "signed retrieve and bounded lease",
+      "canonical_json": "{\"agent_id\":\"bunker-a\",\"idempotency_key\":\"poll-r17-key\",\"lease_s\":60,\"limit\":10,\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"poll_id\":\"poll-r17\",\"registration_generation\":3,\"request_id\":\"retrieve-r17\",\"schema_version\":\"custody.v1\"}",
+      "canonical_sha256": "ff8417f184fb9a4998523fcd294dfb485a0fb7b3e9de6f1ca73a3e17b7210f34",
+      "signature_transcript": "POST\n/v1/factory/retrieve\n1763424360\nsha256:ff8417f184fb9a4998523fcd294dfb485a0fb7b3e9de6f1ca73a3e17b7210f34\naudience:crier.factory",
+      "signature_transcript_sha256": "9c3a6368a627bf24a59482b254ea548ab4b105b9f67b5d1e3a10c62066f73b0a",
+      "expected": {
+        "http": 200,
+        "poll_id": "poll-r17",
+        "lease_s": 60,
+        "renew_every_s": 20,
+        "bounded_call_s": 5
+      },
+      "domain": "custody",
+      "static_controls": [
+        "SC-01",
+        "SC-07"
+      ]
+    },
+    {
+      "id": "CV-03-B",
+      "kind": "positive",
+      "name": "ack requires matching durable report",
+      "canonical_json": "{\"delivery_id\":\"delivery-r17\",\"idempotency_key\":\"ack-r17-key\",\"lease_id\":\"lease-r17\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"registration_generation\":3,\"request_id\":\"ack-r17\",\"result_custody_receipt\":\"cas+sha256://code-factory/f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71\",\"result_digest\":\"f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71\",\"schema_version\":\"custody.v1\"}",
+      "canonical_sha256": "866d4ba6db438518bcb342faacbf903b39525344e3ef2587cecdf09d56faf5b7",
+      "expected": {
+        "http": 200,
+        "state": "acked",
+        "result_digest": "f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71"
+      },
+      "domain": "custody",
+      "static_controls": [
+        "SC-01"
+      ]
+    },
+    {
+      "id": "CV-03-C",
+      "kind": "negative",
+      "name": "legacy 29 second lease refuses",
+      "base": "CV-03-A",
+      "mutate": {
+        "/lease_s": 29
+      },
+      "expected": {
+        "http": 422,
+        "error": "RANGE_INVALID",
+        "claim": false
+      },
+      "domain": "custody",
+      "static_controls": [
+        "SC-01"
+      ]
+    },
+    {
+      "id": "CV-03-D",
+      "kind": "fault",
+      "name": "duplicate poll after response loss",
+      "original_poll_id": "poll-r17",
+      "first_response": "lost",
+      "expected": {
+        "replay": "original messages and lease",
+        "new_messages_claimed": false
+      },
+      "domain": "custody",
+      "static_controls": [
+        "SC-01"
+      ]
+    },
+    {
+      "id": "CV-04-A",
+      "kind": "positive",
+      "name": "row event pair and protected claim CAS",
+      "task_row_canonical_json": "{\"acceptance_criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"text\":\"The admitted change is verified.\",\"timeout_s\":60,\"verification\":\"Run the named verification and retain its output.\"}],\"claim\":null,\"completion\":null,\"complexity\":3,\"created_at\":\"2026-11-11T18:00:00Z\",\"deferral\":null,\"depends_on\":[],\"fixture\":false,\"id\":\"CF-1\",\"kind\":\"task\",\"operation_id\":\"op-create-cf1\",\"priority\":50,\"reasoning\":\"A complete vector is required before implementation.\",\"revision\":1,\"status\":\"pending\",\"title\":\"Prove the execution contract\",\"updated_at\":\"2026-11-11T18:00:00Z\"}",
+      "task_row_sha256": "ffc3994b09649008872d6ce887976f7bb0b9ca14292276dab3d20430f004394a",
+      "board_event_canonical_json": "{\"actor\":\"foreman-1\",\"event_id\":\"event-cf1-1\",\"evidence_refs\":[],\"expected_revision\":0,\"new_revision\":1,\"occurred_at\":\"2026-11-11T18:00:00Z\",\"operation_id\":\"op-create-cf1\",\"row_digest\":\"ffc3994b09649008872d6ce887976f7bb0b9ca14292276dab3d20430f004394a\",\"schema_version\":\"cf.board-event.v1\",\"task_id\":\"CF-1\",\"type\":\"create\"}",
+      "claim_request_canonical_json": "{\"board_id\":\"board-main\",\"board_revision\":{\"algorithm\":\"sha1\",\"value\":\"1111111111111111111111111111111111111111\"},\"claim_generation\":0,\"claim_id\":\"claim-cf1-1\",\"claimant_id\":\"foreman-1\",\"evidence_refs\":[],\"expected_revision\":1,\"expected_status\":\"pending\",\"idempotency_key\":\"claim-cf1-key\",\"lease_expires_at\":\"2026-11-11T19:03:00Z\",\"operation_id\":\"op-claim-cf1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"schema_version\":\"cf.board-claim.v1\",\"task_id\":\"CF-1\",\"transition\":\"claim\"}",
+      "claim_request_sha256": "9737375cbc70935b9ba9402e058f3585b1440a0b1975f7b9e9f81c7897a5bea2",
+      "expected": {
+        "row_digest_matches": true,
+        "new_revision": 2,
+        "claim_generation": 1,
+        "native_start": "only after remote readback"
+      },
+      "domain": "board",
+      "static_controls": [
+        "SC-04"
+      ]
+    },
+    {
+      "id": "CV-04-B",
+      "kind": "negative",
+      "name": "stale board revision loses before launch",
+      "base": "CV-04-A",
+      "base_field": "claim_request_canonical_json",
+      "mutate": {
+        "/expected_revision": 0
+      },
+      "expected": {
+        "http": 409,
+        "error": "CLAIM_CONFLICT",
+        "canonical_ref_changed": false,
+        "native_start": false
+      },
+      "domain": "board",
+      "static_controls": [
+        "SC-04"
+      ]
+    },
+    {
+      "id": "CV-04-C",
+      "kind": "negative",
+      "name": "published row without matching event is corruption",
+      "task_row_canonical_json": "{\"acceptance_criteria\":[{\"argv\":[\"verify\",\"--fixture\"],\"cwd\":\".\",\"expected_exit\":0,\"id\":\"AC-1\",\"oracle_digest\":\"fc360a2ecbbd5eec0f5748b31a5ae732497b5c2ee81ebce4feee6a15acbd7eb8\",\"text\":\"The admitted change is verified.\",\"timeout_s\":60,\"verification\":\"Run the named verification and retain its output.\"}],\"claim\":null,\"completion\":null,\"complexity\":3,\"created_at\":\"2026-11-11T18:00:00Z\",\"deferral\":null,\"depends_on\":[],\"fixture\":false,\"id\":\"CF-1\",\"kind\":\"task\",\"operation_id\":\"op-create-cf1\",\"priority\":50,\"reasoning\":\"A complete vector is required before implementation.\",\"revision\":1,\"status\":\"pending\",\"title\":\"Prove the execution contract\",\"updated_at\":\"2026-11-11T18:00:00Z\"}",
+      "event": null,
+      "expected": {
+        "read_status": "UNAVAILABLE",
+        "error": "PARTIAL_WRITE",
+        "eligible": []
+      },
+      "domain": "board",
+      "static_controls": [
+        "SC-04"
+      ]
+    },
+    {
+      "id": "CV-05-A",
+      "kind": "positive",
+      "name": "closed chat request and seq-zero SSE",
+      "request_canonical_json": "{\"deadline\":\"2026-11-11T19:30:00Z\",\"messages\":[{\"content\":\"Return one short greeting.\",\"role\":\"user\"}],\"model\":\"fixture-route\",\"options\":{\"max_output_tokens\":128,\"stop\":[],\"temperature\":1,\"tool_choice\":\"auto\",\"tools\":[],\"top_p\":1},\"request_id\":\"infer-1\",\"stream\":true}",
+      "request_sha256": "fcba127bd433dc502cd541979a0c3a134e1cf2346b6db23b8d82a8e2f483a2e4",
+      "sse_text": "event: delta\ndata: {\"choices\":[{\"delta\":{\"content\":\"Hello\",\"role\":\"assistant\"},\"finish_reason\":null,\"index\":0}],\"id\":\"infer-1\",\"seq\":0}\n\nevent: delta\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\",\"index\":0}],\"id\":\"infer-1\",\"seq\":1}\n\nevent: usage\ndata: {\"id\":\"infer-1\",\"seq\":2,\"usage\":{\"cost_micro_usd\":3,\"estimated\":false,\"input_tokens\":8,\"output_tokens\":1,\"total_tokens\":9}}\n\nevent: terminal\ndata: {\"error\":null,\"response_id\":\"infer-1\",\"served_model\":\"fixture-model\",\"state\":\"complete\",\"usage\":{\"cost_micro_usd\":3,\"estimated\":false,\"input_tokens\":8,\"output_tokens\":1,\"total_tokens\":9}}\n\ndata: [DONE]\n\n",
+      "sse_sha256": "fbfa894e6abd5b84234bef9d48949539503b520bdc241e5219e4842b73fb74ae",
+      "expected": {
+        "seq": [
+          0,
+          1,
+          2
+        ],
+        "terminal_state": "complete",
+        "assembled_content": "Hello",
+        "usage_settled_before_terminal": true
+      },
+      "domain": "inference",
+      "static_controls": [
+        "SC-06"
+      ]
+    },
+    {
+      "id": "CV-05-B",
+      "kind": "negative",
+      "name": "seq one is not the inference origin",
+      "base": "CV-05-A",
+      "mutate_sse": {
+        "first_seq": 1
+      },
+      "expected": {
+        "error": "STREAM_SEQUENCE_INVALID",
+        "completion_returned": false
+      },
+      "domain": "inference",
+      "static_controls": [
+        "SC-06"
+      ]
+    },
+    {
+      "id": "CV-05-C",
+      "kind": "negative",
+      "name": "DONE without terminal is truncated",
+      "base": "CV-05-A",
+      "remove_sse_events": [
+        "terminal"
+      ],
+      "expected": {
+        "error": "STREAM_TRUNCATED",
+        "completion_returned": false
+      },
+      "domain": "inference",
+      "static_controls": [
+        "SC-06"
+      ]
+    },
+    {
+      "id": "CV-05-D",
+      "kind": "fault",
+      "name": "usage ledger fails before headers",
+      "request_id": "infer-1",
+      "usage_commit": "unavailable",
+      "headers_sent": false,
+      "expected": {
+        "http": 503,
+        "error": "USAGE_UNSETTLED",
+        "upstream_forwarded": false
+      },
+      "domain": "inference",
+      "static_controls": [
+        "SC-06"
+      ]
+    },
+    {
+      "id": "CV-06-A",
+      "kind": "positive",
+      "name": "authority effect begins before resource mutation",
+      "canonical_json": "{\"credential_ref\":\"forge-broker-credential\",\"effect_id\":\"effect-1\",\"idempotency_key\":\"effect-1-key\",\"input_digest\":\"f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71\",\"operation_id\":\"op-effect-1\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"resource_ref\":\"git:code-factory:refs/heads/main\",\"schema_version\":\"authority.v1\"}",
+      "canonical_sha256": "665bbc528acca1148367a40367fab4e00fc360e8ac66bd79144814af99882d06",
+      "expected": {
+        "state": "in-flight",
+        "mutation_before_receipt": false,
+        "finish_requires": "remote readback with matching result digest"
+      },
+      "domain": "recovery",
+      "static_controls": []
+    },
+    {
+      "id": "CV-06-B",
+      "kind": "positive",
+      "name": "backup manifest digest and raw store bytes",
+      "store_bytes_utf8": "fixture-store-bytes\n",
+      "store_bytes_length": 20,
+      "store_sha256": "3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18",
+      "manifest_without_digest_canonical_json": "{\"authority_checkpoint_digest\":\"f0fc1b4807f5402cd867f3c823b0482f7ff41c83baaffb6515f69c422d8875ca\",\"authority_id\":\"auth-1\",\"backup_id\":\"backup-1\",\"barrier_seq\":9,\"captured_at\":\"2026-11-11T20:00:00Z\",\"config_generation\":17,\"destination_ref\":\"backup\",\"exclusions\":[],\"key_ref\":\"secretref://backup/recovery\",\"retention_until\":\"2026-12-11T20:00:00Z\",\"rpo_s\":3600,\"rto_s\":7200,\"schema_version\":\"cf.backup.v1\",\"state\":\"VALIDATED\",\"stores\":[{\"artifact_path\":\"manager/segment-42.jsonl\",\"bytes\":20,\"kind\":\"jsonl\",\"last_transaction\":\"tx-42\",\"root_digest\":\"3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18\",\"sha256\":\"3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18\",\"source_revision\":\"seq-42\",\"store_id\":\"manager\",\"validated\":true}]}",
+      "manifest_sha256": "ca044cc8c82dcbd80da25840c86f3efa4ac398a59baa98190ff2abe37eb4f2e2",
+      "manifest_canonical_json": "{\"authority_checkpoint_digest\":\"f0fc1b4807f5402cd867f3c823b0482f7ff41c83baaffb6515f69c422d8875ca\",\"authority_id\":\"auth-1\",\"backup_id\":\"backup-1\",\"barrier_seq\":9,\"captured_at\":\"2026-11-11T20:00:00Z\",\"config_generation\":17,\"destination_ref\":\"backup\",\"exclusions\":[],\"key_ref\":\"secretref://backup/recovery\",\"manifest_digest\":\"ca044cc8c82dcbd80da25840c86f3efa4ac398a59baa98190ff2abe37eb4f2e2\",\"retention_until\":\"2026-12-11T20:00:00Z\",\"rpo_s\":3600,\"rto_s\":7200,\"schema_version\":\"cf.backup.v1\",\"state\":\"VALIDATED\",\"stores\":[{\"artifact_path\":\"manager/segment-42.jsonl\",\"bytes\":20,\"kind\":\"jsonl\",\"last_transaction\":\"tx-42\",\"root_digest\":\"3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18\",\"sha256\":\"3029033fe3b30cdf7a2a3bb553e7a898380caadaa64905394f1e384fc05eef18\",\"source_revision\":\"seq-42\",\"store_id\":\"manager\",\"validated\":true}]}",
+      "expected": {
+        "validated": true,
+        "partial_upload": false
+      },
+      "domain": "recovery",
+      "static_controls": [
+        "SC-08"
+      ]
+    },
+    {
+      "id": "CV-06-C",
+      "kind": "negative",
+      "name": "postcheck failure cannot settle success",
+      "canonical_json": "{\"error\":{\"code\":\"POSTCHECK_FAILED\",\"current_generation\":17,\"field\":null,\"message\":\"Required verifier failed.\",\"retryable\":false},\"evidence_refs\":[\"cas+sha256://code-factory/f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71\"],\"execution_status\":\"pass\",\"postcheck_results\":[{\"config_digest\":\"19cad144fbdff3476ace4b2a10084b5594a3c44e4b07863f6b6ef0c394d5f2cd\",\"error\":{\"code\":\"POSTCHECK_FAILED\",\"current_generation\":17,\"field\":null,\"message\":\"Required verifier failed.\",\"retryable\":false},\"hook_id\":\"merged-tree-verifier\",\"outcome\":\"fail\"}],\"recorded_at\":\"2026-11-11T20:05:00Z\",\"report_digest\":\"f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71\",\"revision\":1,\"round_id\":\"r-17\",\"schema_version\":\"settlement.v1\",\"settlement_id\":\"settlement-r17-1\",\"state\":\"settled_failure\",\"superseded_by\":null}",
+      "canonical_sha256": "c2d0b46e4ad612553c1b694ec4b78b75231b03a79d90c119c22a611399edeebb",
+      "expected": {
+        "state": "settled_failure",
+        "error": "POSTCHECK_FAILED",
+        "success_counter_delta": 0,
+        "dependency_wakeup": false
+      },
+      "domain": "recovery",
+      "static_controls": []
+    },
+    {
+      "id": "CV-06-D",
+      "kind": "fault",
+      "name": "old owner partitioned with unresolved effect",
+      "old_fence": {
+        "authority_id": "auth-1",
+        "project_id": "code-factory",
+        "epoch": 7,
+        "owner_id": "manager-1"
+      },
+      "new_epoch": 8,
+      "old_effect_state": "unknown",
+      "expected": {
+        "error": "EFFECT_UNRESOLVED",
+        "replacement_activation": "blocked",
+        "old_write": "STALE_OWNER"
+      },
+      "domain": "recovery",
+      "static_controls": []
+    },
+    {
+      "id": "CV-07-A",
+      "domain": "memory",
+      "static_controls": [
+        "SC-03"
+      ],
+      "kind": "positive",
+      "name": "worker wave round and resolution digest domain",
+      "records": [
+        {
+          "record_type": "worker",
+          "canonical_json": "{\"attempt_id\":\"a-1\",\"body\":{\"evidence_refs\":[],\"outcome\":\"pass\",\"relations\":[],\"result_ref\":\"cas+sha256://code-factory/081f606656adf020464e36fc4963a34f9bc1598ca7b774fb5c508951fafd685b\"},\"created_at\":\"2026-11-11T19:26:00Z\",\"local_seq\":1,\"namespace\":\"code-factory\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"payload_digest\":\"d4b0040583370aa8eac2af3488c7b554876c54ca3462830b530cb32ac7f6b82d\",\"project_id\":\"code-factory\",\"record_id\":\"memory-worker-a1\",\"record_type\":\"worker\",\"round_id\":\"r-17\",\"schema_version\":\"memory-record.v1\",\"task_id\":\"CF-1\",\"wave_id\":\"w-1\",\"writer_id\":\"foreman-1\"}",
+          "payload_digest": "d4b0040583370aa8eac2af3488c7b554876c54ca3462830b530cb32ac7f6b82d"
+        },
+        {
+          "record_type": "wave",
+          "canonical_json": "{\"attempt_id\":null,\"body\":{\"relations\":[],\"state\":\"complete\",\"stop_reason\":\"wave_complete\",\"worker_refs\":[\"cas+sha256://code-factory/d4b0040583370aa8eac2af3488c7b554876c54ca3462830b530cb32ac7f6b82d\"]},\"created_at\":\"2026-11-11T19:26:00Z\",\"local_seq\":1,\"namespace\":\"code-factory\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"payload_digest\":\"53657c7d0eb4924d838d15dbdc9a9f7d327266caec588e0e592ccb1cb5937837\",\"project_id\":\"code-factory\",\"record_id\":\"memory-wave-w1\",\"record_type\":\"wave\",\"round_id\":\"r-17\",\"schema_version\":\"memory-record.v1\",\"task_id\":null,\"wave_id\":\"w-1\",\"writer_id\":\"foreman-1\"}",
+          "payload_digest": "53657c7d0eb4924d838d15dbdc9a9f7d327266caec588e0e592ccb1cb5937837"
+        },
+        {
+          "record_type": "round",
+          "canonical_json": "{\"attempt_id\":null,\"body\":{\"budget\":{\"allowance\":20000,\"consumed\":1,\"remaining\":19999,\"reserved\":0},\"relations\":[],\"report_ref\":\"cas+sha256://code-factory/f50fcc4b9040a66ac389b2f3251f027b3c1c5092672bf86e417ba37a007feb71\",\"state\":\"pass\",\"wave_refs\":[\"cas+sha256://code-factory/53657c7d0eb4924d838d15dbdc9a9f7d327266caec588e0e592ccb1cb5937837\"]},\"created_at\":\"2026-11-11T19:26:00Z\",\"local_seq\":1,\"namespace\":\"code-factory\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"payload_digest\":\"aaf2136454e34d633e89e0dc08c526c5f2a2987eab0274f50e47c3da00c6dc88\",\"project_id\":\"code-factory\",\"record_id\":\"memory-round-r17\",\"record_type\":\"round\",\"round_id\":\"r-17\",\"schema_version\":\"memory-record.v1\",\"task_id\":null,\"wave_id\":null,\"writer_id\":\"foreman-1\"}",
+          "payload_digest": "aaf2136454e34d633e89e0dc08c526c5f2a2987eab0274f50e47c3da00c6dc88"
+        },
+        {
+          "record_type": "resolution",
+          "canonical_json": "{\"attempt_id\":null,\"body\":{\"action\":\"accept\",\"evidence_refs\":[\"cas+sha256://code-factory/aaf2136454e34d633e89e0dc08c526c5f2a2987eab0274f50e47c3da00c6dc88\"],\"reason\":\"Matching report and memory digests.\",\"resolution_of\":[\"cas+sha256://code-factory/aaf2136454e34d633e89e0dc08c526c5f2a2987eab0274f50e47c3da00c6dc88\"]},\"created_at\":\"2026-11-11T19:26:00Z\",\"local_seq\":1,\"namespace\":\"code-factory\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"payload_digest\":\"1801697e0dd865999468a319edf51a9922abfb775df51e167d40326ca5e2faa5\",\"project_id\":\"code-factory\",\"record_id\":\"memory-resolution-r17\",\"record_type\":\"resolution\",\"round_id\":\"r-17\",\"schema_version\":\"memory-record.v1\",\"task_id\":null,\"wave_id\":null,\"writer_id\":\"foreman-1\"}",
+          "payload_digest": "1801697e0dd865999468a319edf51a9922abfb775df51e167d40326ca5e2faa5"
+        }
+      ],
+      "digest_rule": "RFC 8785 JCS of the complete MemoryRecord with payload_digest absent; sync receipts are separate and mutable.",
+      "expected": {
+        "record_types": [
+          "worker",
+          "wave",
+          "round",
+          "resolution"
+        ],
+        "all_digests_recompute": true
+      }
+    },
+    {
+      "id": "CV-07-B",
+      "domain": "memory",
+      "static_controls": [
+        "SC-03"
+      ],
+      "kind": "positive",
+      "name": "offline duplicate sync merges exactly once",
+      "record_id": "memory-worker-a1",
+      "payload_digest": "d4b0040583370aa8eac2af3488c7b554876c54ca3462830b530cb32ac7f6b82d",
+      "receipts": [
+        {
+          "destination": "duckbrain",
+          "receipt": "remote-1"
+        },
+        {
+          "destination": "duckbrain",
+          "receipt": "remote-1"
+        }
+      ],
+      "expected": {
+        "remote_records": 1,
+        "state": "qualified",
+        "second_write": false
+      }
+    },
+    {
+      "id": "CV-07-C",
+      "domain": "memory",
+      "static_controls": [
+        "SC-03"
+      ],
+      "kind": "negative",
+      "name": "same record id with changed body preserves conflict evidence",
+      "record_id": "memory-worker-a1",
+      "original_digest": "d4b0040583370aa8eac2af3488c7b554876c54ca3462830b530cb32ac7f6b82d",
+      "changed_digest": "2ec4a11a853f9fa81a7b0ea54f1ede9009fb44505a5286f088369e062f4f3265",
+      "expected": {
+        "state": "conflict",
+        "overwrite": false,
+        "both_digests_retained": true,
+        "settlement": "blocked"
+      }
+    },
+    {
+      "id": "CV-04-D",
+      "domain": "board",
+      "static_controls": [
+        "SC-04"
+      ],
+      "kind": "positive",
+      "name": "atomic three-task group claim",
+      "canonical_json": "{\"board_id\":\"board-main\",\"board_revision\":{\"algorithm\":\"sha1\",\"value\":\"1111111111111111111111111111111111111111\"},\"claims\":[{\"claim_generation\":0,\"created_seq\":11,\"expected_revision\":1,\"expected_status\":\"pending\",\"task_id\":\"T1\"},{\"claim_generation\":0,\"created_seq\":12,\"expected_revision\":1,\"expected_status\":\"pending\",\"task_id\":\"T2\"},{\"claim_generation\":0,\"created_seq\":13,\"expected_revision\":1,\"expected_status\":\"pending\",\"task_id\":\"T3\"}],\"evidence_refs\":[],\"idempotency_key\":\"wave-1-key\",\"lease_expires_at\":\"2026-11-11T19:03:00Z\",\"operation_id\":\"op-wave-1\",\"ordering\":\"priority DESC, created_seq ASC, id ASC; dependencies must be settled; correction retains its original worker\",\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"project_id\":\"code-factory\",\"schema_version\":\"cf.board-group-claim.v1\",\"transition\":\"claim\"}",
+      "canonical_sha256": "bbbeb092580d19c8ecb80476684929fbd23af9fb7fc38764fcd1b61c01f28bdb",
+      "expected": {
+        "claimed": [
+          "T1",
+          "T2",
+          "T3"
+        ],
+        "partial_claim": false,
+        "native_launch_before_readback": false
+      }
+    },
+    {
+      "id": "CV-04-E",
+      "domain": "board",
+      "static_controls": [
+        "SC-04"
+      ],
+      "kind": "negative",
+      "name": "conflicting subset loses without partial launch",
+      "base": "CV-04-D",
+      "mutate": {
+        "/claims/1/expected_revision": 0
+      },
+      "expected": {
+        "error": "CLAIM_CONFLICT",
+        "claimed": [],
+        "native_start": false
+      }
+    },
+    {
+      "id": "CV-05-E",
+      "domain": "inference",
+      "static_controls": [
+        "SC-06"
+      ],
+      "kind": "positive",
+      "name": "tool call response and buffered answer mapping",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Call echo."
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call-1",
+              "type": "function",
+              "function": {
+                "name": "echo",
+                "arguments": "{\"text\":\"hi\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call-1",
+          "content": "{\"text\":\"hi\"}"
+        }
+      ],
+      "buffered_completion_canonical_json": "{\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"hi\",\"role\":\"assistant\"}}],\"created\":1763424600,\"id\":\"infer-tools\",\"model\":\"fixture-route\",\"object\":\"chat.completion\",\"served_model\":\"fixture-model\",\"usage\":{\"cost_micro_usd\":5,\"estimated\":false,\"input_tokens\":20,\"output_tokens\":1,\"total_tokens\":21}}",
+      "buffered_completion_sha256": "b43455a384050b8628bf4676a6d118924115a0fc11872c8b24d36dd3d81b301a",
+      "expected": {
+        "tool_call_id": "call-1",
+        "answer": "hi",
+        "second_inference_send": false
+      }
+    },
+    {
+      "id": "CV-05-F",
+      "domain": "inference",
+      "static_controls": [
+        "SC-06"
+      ],
+      "kind": "positive",
+      "name": "UTF-8 fragmentation across a code point",
+      "text": "A🙂B",
+      "utf8_hex": "41f09f998242",
+      "fragment_hex": [
+        "41f0",
+        "9f9982",
+        "42"
+      ],
+      "expected": {
+        "decoded": "A🙂B",
+        "replacement_characters": 0,
+        "fragment_boundaries_are_not_character_boundaries": true
+      }
+    },
+    {
+      "id": "CV-08-A",
+      "domain": "recovery",
+      "static_controls": [
+        "SC-08"
+      ],
+      "kind": "fault",
+      "name": "301 second coordinator loss expires into aborted hold",
+      "canonical_json": "{\"backup_id\":\"backup-1\",\"barrier_seq\":9,\"coordinator\":\"lost\",\"lease_expires_at\":\"2026-11-11T20:05:00Z\",\"observed_at\":\"2026-11-11T20:06:00Z\",\"offhost_readback\":false,\"owner_fence\":{\"authority_id\":\"auth-1\",\"epoch\":7,\"owner_id\":\"manager-1\",\"project_id\":\"code-factory\"},\"renewal_receipt\":null,\"schema_version\":\"cf.backup-barrier.v1\"}",
+      "canonical_sha256": "80fa92b6b450a3f13e7da833a50db2294c30045634fbd536f63b29f99834a3ad",
+      "expected": {
+        "state": "ABORTED",
+        "writers_unfrozen": false,
+        "release": false,
+        "recovery_decision_required": true,
+        "later_replay_can_complete": false
+      }
+    },
+    {
+      "id": "CV-09-A",
+      "domain": "execution",
+      "static_controls": [
+        "SC-09"
+      ],
+      "kind": "positive",
+      "name": "per-turn timeout and whole-attempt deadline compose independently",
+      "canonical_json": "{\"attempt_wall_s\":60,\"max_turns\":2,\"model_call_seconds\":[8,8],\"turn_timeout_s\":10}",
+      "canonical_sha256": "6f92965cac25b2a297e9d1ac41c67bfd52ce6f40cab2582f197052e565295b0c",
+      "expected": {
+        "model_calls_fit": true,
+        "attempt_seconds": 16,
+        "attempt_fits": true,
+        "outcome": "pass",
+        "legacy_whole_invocation_10_s": false
+      }
+    },
+    {
+      "id": "CV-10-A",
+      "domain": "settlement",
+      "static_controls": [],
+      "kind": "matrix",
+      "name": "one terminal result for launch execution control and timeout trees",
+      "cases": [
+        {
+          "case": "launch rejected before exec",
+          "result": "failed_start",
+          "worker_verdict": null,
+          "refund": "reserved allowance only"
+        },
+        {
+          "case": "clean exit without committed result",
+          "result": "missing_result",
+          "worker_verdict": null,
+          "success": false,
+          "retry": "same attempt identity under policy"
+        },
+        {
+          "case": "process exit before durable evidence",
+          "result": "evidence_missing",
+          "success": false,
+          "retry": "reconcile result digest before any new exec"
+        },
+        {
+          "case": "control dies while worker runs",
+          "result": "control_unknown",
+          "success": false,
+          "recovery": "query execution_key; never relaunch blindly"
+        },
+        {
+          "case": "turn timeout",
+          "result": "turn_timeout",
+          "attempt_may_continue": true,
+          "round_deadline_unchanged": true
+        },
+        {
+          "case": "attempt wall timeout",
+          "result": "attempt_timeout",
+          "success": false,
+          "round_may_continue": true
+        },
+        {
+          "case": "round deadline",
+          "result": "round_deadline",
+          "new_launches": false,
+          "cleanup_and_reports_continue": true
+        },
+        {
+          "case": "execution pass and required postcheck fails",
+          "result": "settled_failure",
+          "success": false
+        }
+      ],
+      "expected": {
+        "clean_exit_without_result_has_third_verdict": false,
+        "unknown_is_not_success": true
+      }
+    },
+    {
+      "id": "CV-11-A",
+      "domain": "telemetry",
+      "static_controls": [],
+      "kind": "positive",
+      "name": "M7 five counters at emission and scrape",
+      "events": [
+        {
+          "event_id": "m7-issue-1",
+          "operation": "issue",
+          "outcome": "ok",
+          "identity": {
+            "project_id": "code-factory",
+            "round_id": "r-17",
+            "run_id": "run-17",
+            "wave_id": "w-1",
+            "attempt_id": "a-1",
+            "task_id": "CF-1",
+            "corr_id": "c-17",
+            "owner_epoch": 7,
+            "component": "M7",
+            "config_generation": 17
+          },
+          "occurred_at": "2026-11-11T19:30:00Z"
+        },
+        {
+          "event_id": "m7-verify-1",
+          "operation": "verify",
+          "outcome": "ok",
+          "identity": {
+            "project_id": "code-factory",
+            "round_id": "r-17",
+            "run_id": "run-17",
+            "wave_id": "w-1",
+            "attempt_id": "a-1",
+            "task_id": "CF-1",
+            "corr_id": "c-17",
+            "owner_epoch": 7,
+            "component": "M7",
+            "config_generation": 17
+          },
+          "occurred_at": "2026-11-11T19:30:00Z"
+        },
+        {
+          "event_id": "m7-deliver-1",
+          "operation": "deliver",
+          "outcome": "ok",
+          "identity": {
+            "project_id": "code-factory",
+            "round_id": "r-17",
+            "run_id": "run-17",
+            "wave_id": "w-1",
+            "attempt_id": "a-1",
+            "task_id": "CF-1",
+            "corr_id": "c-17",
+            "owner_epoch": 7,
+            "component": "M7",
+            "config_generation": 17
+          },
+          "occurred_at": "2026-11-11T19:30:00Z"
+        },
+        {
+          "event_id": "m7-renew-1",
+          "operation": "renew",
+          "outcome": "ok",
+          "identity": {
+            "project_id": "code-factory",
+            "round_id": "r-17",
+            "run_id": "run-17",
+            "wave_id": "w-1",
+            "attempt_id": "a-1",
+            "task_id": "CF-1",
+            "corr_id": "c-17",
+            "owner_epoch": 7,
+            "component": "M7",
+            "config_generation": 17
+          },
+          "occurred_at": "2026-11-11T19:30:00Z"
+        },
+        {
+          "event_id": "m7-revoke-1",
+          "operation": "revoke",
+          "outcome": "ok",
+          "identity": {
+            "project_id": "code-factory",
+            "round_id": "r-17",
+            "run_id": "run-17",
+            "wave_id": "w-1",
+            "attempt_id": "a-1",
+            "task_id": "CF-1",
+            "corr_id": "c-17",
+            "owner_epoch": 7,
+            "component": "M7",
+            "config_generation": 17
+          },
+          "occurred_at": "2026-11-11T19:30:00Z"
+        }
+      ],
+      "expected": {
+        "emission_operations": [
+          "issue",
+          "verify",
+          "deliver",
+          "renew",
+          "revoke"
+        ],
+        "scrape_factory_operations_total": 5,
+        "duplicate_event_projection": 0,
+        "labels": [
+          "module",
+          "operation",
+          "outcome",
+          "project"
+        ]
+      }
+    },
+    {
+      "id": "CV-11-B",
+      "domain": "telemetry",
+      "static_controls": [],
+      "kind": "negative",
+      "name": "missing observation and failed network retain Factory identity",
+      "identity": {
+        "project_id": "code-factory",
+        "round_id": "r-17",
+        "run_id": "run-17",
+        "wave_id": "w-1",
+        "attempt_id": "a-1",
+        "task_id": "CF-1",
+        "corr_id": "c-17",
+        "owner_epoch": 7,
+        "component": "M7",
+        "config_generation": 17
+      },
+      "source_observed_at": null,
+      "collection_state": "unavailable",
+      "expected": {
+        "value": null,
+        "ready": false,
+        "network_error_is_zero": false,
+        "task_id": "CF-1"
+      }
+    },
+    {
+      "id": "CV-12-A",
+      "domain": "evidence",
+      "static_controls": [],
+      "kind": "matrix",
+      "name": "publication mechanical policy and model judgment stay separate",
+      "cases": [
+        {
+          "case": "mechanical pass, model judgment uncertain, publication readback matches",
+          "mechanical": "pass",
+          "model_judgment": "uncertain",
+          "publication": "qualified",
+          "closeout": "eligible when model judgment is not required"
+        },
+        {
+          "case": "mechanical pass, publication uncertain",
+          "mechanical": "pass",
+          "publication": "unknown",
+          "closeout": "blocked",
+          "other_checks_remain": "pass"
+        },
+        {
+          "case": "model judgment pass, mechanical failure",
+          "mechanical": "fail",
+          "model_judgment": "pass",
+          "closeout": "blocked"
+        },
+        {
+          "case": "published OID and digest match, required postchecks pass",
+          "publication": "qualified",
+          "mechanical": "pass",
+          "closeout": "settled_success"
+        }
+      ],
+      "expected": {
+        "uncertain_publication_is_not_push_failure": true,
+        "close_requires_remote_readback": true,
+        "uncertain_model_does_not_rewrite_mechanical_result": true
+      }
+    },
+    {
+      "id": "CV-13-A",
+      "domain": "configuration",
+      "static_controls": [],
+      "kind": "positive",
+      "name": "signed profile binds defaults and secret identity",
+      "canonical_json": "{\"defaults\":{\"attempt_wall_s\":60,\"lease_s\":60,\"round_allowance\":20000,\"turn_timeout_s\":10},\"generation\":17,\"payload_digest\":\"8b0ac03b3a9e2d3d529385ae15ca017cfb263febc702b4c0d2a2e61bc1a97f6b\",\"profile_id\":\"factory-default\",\"schema_version\":\"cf.signed-profile.v1\",\"signature_ref\":\"secretref://profiles/signing\"}",
+      "canonical_sha256": "ddef3b8e73585482815fbef9244d966b44818344111ac694a32fca7c49e13949",
+      "expected": {
+        "accepted": true,
+        "secret_value_present": false,
+        "unknown_generation": "CONFIG_VERSION_CONFLICT"
+      }
+    },
+    {
+      "id": "CV-14-A",
+      "domain": "authority",
+      "static_controls": [],
+      "kind": "positive",
+      "name": "one-use grant and certificate renewal chain",
+      "canonical_json": "{\"certificate_serial\":\"cert-7\",\"grant_id\":\"grant-1\",\"one_use\":true,\"renewal\":{\"new_serial\":\"cert-8\",\"old_revoked_after_readback\":true,\"old_serial\":\"cert-7\",\"overlap_s\":60},\"state_chain\":[\"issued\",\"redeemed\",\"settled\"]}",
+      "canonical_sha256": "4757aa51a35f166c9d618c15eccce96784894421c6762504aa7350ecae9420f5",
+      "expected": {
+        "grant_replay": "GRANT_REPLAY",
+        "settlement_before_return": false,
+        "old_certificate_after_overlap": "revoked"
+      }
+    },
+    {
+      "id": "CV-15-A",
+      "domain": "isolation",
+      "static_controls": [],
+      "kind": "negative",
+      "name": "credential fanout and unregistered containment refuse",
+      "canonical_json": "{\"atomic_rename\":true,\"backend\":\"registered-only\",\"credential_ref\":\"secretref://attempt/a1\",\"environment_allowed\":false,\"fanout_inherits_secret\":false,\"staged_mode\":\"0600\",\"transport\":\"owner-only-fd\"}",
+      "canonical_sha256": "5f19e79058fa5e86e6f2af403f57ceec3de46b255d252c6d3eeabe271a774567",
+      "expected": {
+        "environment_secret": false,
+        "child_secret_inheritance": false,
+        "unregistered_backend": "CONTAINMENT_UNAVAILABLE",
+        "secret_in_logs": false
+      }
+    }
+  ],
+  "fault_matrix": [
+    {
+      "contract": "SC-01",
+      "crash_point": "after worker reservation before launch",
+      "expected": "reserved remains counted; NEVER_ACCEPTED alone refunds once"
+    },
+    {
+      "contract": "SC-01",
+      "crash_point": "after result commit before custody ack",
+      "expected": "same result digest replays; no second execution"
+    },
+    {
+      "contract": "SC-02",
+      "crash_point": "after permit before exec",
+      "expected": "quarantined unless authoritative never_started proof exists"
+    },
+    {
+      "contract": "SC-03",
+      "crash_point": "after claim before retrieve response",
+      "expected": "same agent_id and poll_id returns original lease/messages"
+    },
+    {
+      "contract": "SC-04",
+      "crash_point": "after protected CAS before response",
+      "expected": "operation marker readback returns original receipt without another append"
+    },
+    {
+      "contract": "SC-05",
+      "crash_point": "after usage commit before response",
+      "expected": "GET response ID returns committed result; never re-executes"
+    },
+    {
+      "contract": "SC-06",
+      "crash_point": "after authority begin before resource write",
+      "expected": "in-flight effect is recovered or blocks epoch advance"
+    }
+  ],
+  "telemetry_oracles": [
+    {
+      "case": "healthy idle",
+      "expected": {
+        "available": 1,
+        "active": 0,
+        "pending": 0,
+        "quality": "fresh"
+      }
+    },
+    {
+      "case": "missing source observation",
+      "expected": {
+        "value": null,
+        "collection_state": "unavailable",
+        "ready": false
+      }
+    },
+    {
+      "case": "rate with fewer than two samples",
+      "expected": {
+        "value": null,
+        "collection_state": "insufficient_data"
+      }
+    },
+    {
+      "case": "execution pass with failed required postcheck",
+      "expected": {
+        "settlement": "settled_failure",
+        "success_counter_delta": 0
+      }
+    }
+  ],
+  "canonical_model": "docs/SYSTEM-MODEL.yaml#execution_contracts",
+  "static_controls": {
+    "SC-01": {
+      "case": "Crier default lease 60 seconds",
+      "positive_vector": "CV-03-A",
+      "vector_ids": [
+        "CV-03-A",
+        "CV-03-C",
+        "CV-03-D"
+      ],
+      "status": "pass"
+    },
+    "SC-02": {
+      "case": "Round total worker allowance 20000",
+      "positive_vector": "CV-01-A",
+      "vector_ids": [
+        "CV-01-A",
+        "CV-01-C",
+        "CV-01-D",
+        "CV-01-F"
+      ],
+      "status": "pass"
+    },
+    "SC-03": {
+      "case": "One memory payload digest domain",
+      "positive_vector": "CV-07-A",
+      "vector_ids": [
+        "CV-07-A",
+        "CV-07-B",
+        "CV-07-C"
+      ],
+      "status": "pass"
+    },
+    "SC-04": {
+      "case": "Criterion and atomic group claim",
+      "positive_vector": "CV-04-D",
+      "vector_ids": [
+        "CV-04-A",
+        "CV-04-B",
+        "CV-04-C",
+        "CV-04-D",
+        "CV-04-E"
+      ],
+      "status": "pass"
+    },
+    "SC-05": {
+      "case": "Resident supervisor request",
+      "positive_vector": "CV-02-A",
+      "vector_ids": [
+        "CV-02-A",
+        "CV-02-B",
+        "CV-02-C",
+        "CV-02-D"
+      ],
+      "status": "pass"
+    },
+    "SC-06": {
+      "case": "First streamed fragment begins at seq zero",
+      "positive_vector": "CV-05-A",
+      "vector_ids": [
+        "CV-05-A",
+        "CV-05-B",
+        "CV-05-C",
+        "CV-05-D",
+        "CV-05-E",
+        "CV-05-F"
+      ],
+      "status": "pass"
+    },
+    "SC-07": {
+      "case": "Crier signed read request",
+      "positive_vector": "CV-03-A",
+      "vector_ids": [
+        "CV-03-A"
+      ],
+      "status": "pass"
+    },
+    "SC-08": {
+      "case": "Backup coordinator crash and barrier expiry",
+      "positive_vector": "CV-08-A",
+      "vector_ids": [
+        "CV-06-B",
+        "CV-08-A"
+      ],
+      "status": "pass"
+    },
+    "SC-09": {
+      "case": "CF_TIMEOUT_S=10, attempt wall=60, two calls of 8 seconds",
+      "positive_vector": "CV-09-A",
+      "vector_ids": [
+        "CV-01-D",
+        "CV-09-A"
+      ],
+      "status": "pass"
+    }
+  },
+  "finding_coverage": {
+    "P6-01": {
+      "vector_ids": [
+        "CV-01-A",
+        "CV-01-B",
+        "CV-02-A",
+        "CV-02-D",
+        "CV-10-A"
+      ]
+    },
+    "P6-02": {
+      "static_controls": [
+        "SC-01",
+        "SC-07"
+      ]
+    },
+    "P6-03": {
+      "static_controls": [
+        "SC-04"
+      ]
+    },
+    "P6-04": {
+      "static_controls": [
+        "SC-03"
+      ]
+    },
+    "P6-05": {
+      "static_controls": [
+        "SC-06"
+      ]
+    },
+    "P6-06": {
+      "static_controls": [
+        "SC-08"
+      ]
+    },
+    "P6-07": {
+      "vector_ids": [
+        "CV-13-A"
+      ]
+    },
+    "P6-08": {
+      "vector_ids": [
+        "CV-14-A",
+        "CV-03-A"
+      ]
+    },
+    "P6-09": {
+      "vector_ids": [
+        "CV-15-A",
+        "CV-02-D"
+      ]
+    },
+    "P6-10": {
+      "vector_ids": [
+        "CV-10-A",
+        "CV-01-C",
+        "CV-06-C"
+      ]
+    },
+    "P6-11": {
+      "static_controls": [
+        "SC-02",
+        "SC-09"
+      ]
+    },
+    "P6-12": {
+      "vector_ids": [
+        "CV-11-A",
+        "CV-11-B"
+      ]
+    },
+    "P6-13": {
+      "vector_ids": [
+        "CV-12-A",
+        "CV-06-C"
+      ]
+    },
+    "P6-14": {
+      "non_applicability": "Wave 4 consumes the frozen authority graph for figure regeneration; no independent execution vector applies."
+    },
+    "P6-15": {
+      "non_applicability": "Wave 4 owns typography and rendered-page inspection; no execution contract vector applies."
+    },
+    "P6-16": {
+      "non_applicability": "Wave 4 binds the commit, build and readback evidence; a fixture cannot supply those future artifacts."
+    }
+  }
+}

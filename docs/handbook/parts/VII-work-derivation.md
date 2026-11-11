@@ -30,48 +30,63 @@ infrastructure ready — it is not itself the work derivation (§11.9).
 
 ## VII.0 Canonical execution derivation
 
-The derivation consumes the canonical contracts in §IV.0 and the fixtures in
-`docs/handbook/contract-vectors.yaml`. It does not create a second wire format.
+The derivation consumes `docs/SYSTEM-MODEL.yaml#execution_contracts` and the single
+normative examples in `docs/handbook/contract-vectors.json`. It does not create a second
+wire format or a chapter-local default.
 
 A round begins with admitted task ids and a durable `total_budget` worker-attempt
-allowance. The scheduler persists that round before transport; Crier persists custody
-before acknowledgement. Only then does the foreman derive waves and attempts. Worker
-reservation is monotonic across compatible waves: `remaining = allowance - consumed -
-reserved`, and a later wave cannot restore allowance by changing concurrency. A failed
-start refunds only under the CT-06R proof rule.
+allowance in the inclusive range 0–20,000. The scheduler persists that round before
+transport; Crier persists custody before acknowledgement. Only then does the foreman
+derive waves and attempts. Reservation is monotonic across compatible waves:
+`remaining = allowance - consumed - reserved`; changing concurrency never restores
+allowance. A failed start refunds only under the CT-06R proof rule.
 
-Each attempt binds one `BriefInput` digest to its task, acceptance criteria, directive,
-skills and attachments. The `WorkerBrief` then binds that immutable input to the exact
+Each attempt binds one `BriefInput` digest to its task, executable criteria, directive,
+skills and attachments. The `WorkerBrief` binds that immutable input to the exact
 repository/base, effective settings, claim generation and owner fence. The supervisor
 accepts a `LaunchInput` digest; it does not re-derive the brief from mutable lane state.
-The attempt cannot start until the protected board CAS and its remote readback have
-established the claim. The same chain carries `execution_key`, `attempt_id`, `run_id`
-and `corr_id` through the worker result, round report and evidence references.
+The protected group-claim CAS and remote readback establish every claim before native
+start, and a conflicting subset launches no partial wave.
 
 Round time and attempt time are independent. The round deadline persists across every
 wave, retry and reconciliation pause. `attempt_wall_s` covers harness start, execution,
 result upload and terminal reconciliation. `turn_timeout_s` covers one model turn and
-`max_turns` caps their count; neither multiplies into an attempt or round deadline.
-Admission and launch refuse a budget or deadline that cannot cover the declared launch,
-transfer and cleanup reserves.
+`max_turns` caps their count. The attempt deadline is the minimum of the round deadline
+and attempt start plus its wall allowance; the turn deadline is the minimum of the
+attempt deadline and turn start plus its timeout. Thus two 8-second calls fit a 10-second
+per-turn limit and a 60-second attempt wall.
 
-A worker result reports execution facts; it does not settle the round. The foreman
-persists a complete `RoundReport` with per-wave state, per-task result references,
-budget arithmetic, stop reason, memory references and a digest computed with the digest
-field absent. The scheduler deduplicates that digest before settlement. Required
-postchecks and board evidence decide closeout separately, so a passing harness can still
-produce `settled_failure` and cannot wake dependents as a success.
+Worker, wave, round and resolution memory records share one closed envelope and one
+hash domain: the complete record with `payload_digest` absent. Local fsync acknowledges
+durable local work while HTTP synchronization is pending. Retry uses the same record id
+and digest; post-restart reconciliation reads every remote receipt. A changed digest at
+the same record id preserves conflict evidence and blocks settlement rather than
+overwriting either record.
+
+A worker result reports execution facts; it does not settle the round. A clean exit with
+no committed result is `missing_result`, not a third verdict. Control death with a live
+worker is `control_unknown`; process exit before durable evidence is `evidence_missing`.
+The foreman persists a complete `RoundReport` and the scheduler deduplicates its digest
+before settlement. Required postchecks decide closeout separately, so execution pass plus
+a failed required postcheck is `settled_failure` and cannot wake dependents as success.
+
+Mechanical policy, model judgment and publication retain separate evidence refs and
+outcomes. Uncertain model judgment does not rewrite a mechanical pass or block unrelated
+harness checks. Publication is qualified only by remote OID/tree/digest readback;
+uncertain publication blocks closeout without becoming a push failure.
+
+Telemetry events carry project, component, event, configuration and applicable Factory
+execution identity. Emission and scrape deduplicate by event id. Missing observations are
+null with an explicit collection state, and network failures remain bound to their Factory
+task rather than becoming zero traffic. M7's issue, verify, deliver, renew and revoke
+counters are validated at both emission and scrape.
 
 The no-useful-work stop closes further launches but preserves pending reports, cleanup,
-usage settlement and evidence writing. Retry requires the original attempt identity,
-a live owner fence and the retry policy's declared charge. Unknown exec, transport or
-remote-effect state remains unknown until reconciled; no derivation step converts it
-into a fresh attempt, a second mutation or a success.
-
-The selected profile defaults are the fail-closed values in SC-01 through SC-06. An owner
-may select another listed option only through a new settings generation that carries the
-same invariants and evidence requirements. An unavailable board artifact, inference
-artifact, complete backup or lost-authority replacement refuses the dependent operation.
+usage settlement and evidence writing. Unknown exec, transport or remote-effect state
+remains unknown until reconciled; no derivation step converts it into a fresh attempt,
+a second mutation or success. Decision slots use the fail-closed defaults in the canonical
+model; an unqualified board, inference, backup or replacement artifact refuses the
+dependent operation.
 
 ## VII.1 The chain, as a table
 

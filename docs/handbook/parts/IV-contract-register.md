@@ -16,6 +16,50 @@ mark missing evidence; the contract cards in §IV.1 define the behavior an imple
 must provide. A citation cannot replace a field, validation rule, state transition,
 error, idempotency key, persistence boundary or recovery rule.
 
+## IV.0 Canonical execution model and vector source
+
+`docs/SYSTEM-MODEL.yaml#execution_contracts` is the canonical ownership, record,
+authority, timing, settlement, evidence and telemetry model. The single normative source
+for executable examples is `docs/handbook/contract-vectors.json`. Later chapter examples
+reference those vectors rather than maintaining independent field sets or constants.
+Fixture results do not claim live adapter or deployment qualification.
+
+The vector file covers every static control: SC-01 Crier's 60-second lease; SC-02 the
+20,000 worker-attempt allowance; SC-03 whole-record memory digests; SC-04 criterion and
+atomic group claims; SC-05 the resident supervisor request; SC-06 seq-zero inference;
+SC-07 the signed Crier read; SC-08 backup expiry; and SC-09 independent turn and attempt
+timeouts. It also covers authority transitions, terminal settlement, M7 telemetry,
+publication-versus-judgment evidence, signed profiles and containment.
+
+The following resolutions govern every card and registry entry below:
+
+* `total_budget` is the round-wide worker-attempt allowance, range 0–20,000 inclusive;
+  concurrency is independent. Round, attempt and turn deadlines compose by minimum,
+  never by multiplying turn timeout and turn count. `policy.round_wall_s` is retired.
+* The supervisor protocol is `supervisor.v1` at
+  `$HOME/.local/state/factory/supervisor/control.sock`; `launch_id` is the owner identity
+  and `execution_key` binds it to the input digest. The `cf.supervisor.v1` draft is not
+  an alternate protocol.
+* Factory custody uses signed `custody.v1` operations with a 30–300-second lease,
+  60-second default, 20-second renewal and 5-second bounded renewal call. The 1–30-second
+  retrieve shorthand and unsigned/audience-free reads are retired.
+* Criterion uses `id`, `text`, `verification`, `argv`, `cwd`, `timeout_s`,
+  `expected_exit` and `oracle_digest`. Group claims use one protected CAS for every row,
+  event and marker; a loser launches no partial wave.
+* Memory `payload_digest` hashes the complete `memory-record.v1` except that digest field.
+  Worker, wave, round and resolution bodies are discriminated; mutable synchronization
+  receipts are separate. Body-only hashes are not the same version.
+* Worker execution, mechanical policy, model judgment, publication and settlement are
+  separate evidence classes. Uncertain judgment does not rewrite mechanical results;
+  uncertain publication blocks closeout without becoming a push failure.
+* M12 inference starts at `seq = 0`, settles usage before terminal and treats `[DONE]`
+  only as an end marker. Backup expiry aborts and holds writers until a fenced recovery
+  decision; it never releases on local capture alone.
+
+Where an older card or example below uses a retired alias, this section and the canonical
+model replace that alias. The registry entries are updated to the same field unions;
+historical implementation citations remain coverage evidence, not alternate schemas.
+
 ## IV.1 Normative contract cards
 
 All cards use the outer envelope `cf2a.v1`: exactly `schema_version`,
@@ -44,15 +88,15 @@ the closed typed bodies and results; M1–M6 supply the referenced operation pro
 |---|---|---|
 | `CT-01` | `config_version`, `lane`, `enabled`, `admission_mode`, `cadence_s`, `weight`, `pin`; result `accepted`, `effective_config_version` | validate enum/ranges before persistence; stale generation is `GENERATION_CONFLICT`; accepted configuration is durable before admission |
 | `CT-02` | `round-admission.v1`: `round_id`, `run_id`, `corr_id`, `task_scope`, `total_budget`, `config_generation`; result `accepted`, `deferred`, or typed refusal | scheduler persists the admission before sending; future wave/worker/attempt IDs are absent; Crier deduplicates the envelope custody by `(run_id,corr_id)` |
-| `CT-03` | `agent_id`, `delivery_id`, `lease_s`, `message`; result `lease_id`, `lease_expires_at` | Crier retrieval atomically marks one lease; invalid signature is `UNAUTHORIZED`, expired lease is `LEASE_EXPIRED`; ack/release is durable and redelivery never creates a second execution identity |
-| `CT-04` | `worker-result.v1`: execution identity, status, commit, artifacts, evidence and finish time; result accepted/duplicate/result_digest receipt (IV.2) | status is typed (`pass`, `fail`, `unverified`, `partial`, `unknown`); missing status is `INVALID_RESULT`; first durable result wins and conflicting duplicates are `RESULT_CONFLICT` |
+| `CT-03` | signed `custody.v1` retrieve/renew/ack with registration generation, poll/delivery/lease identity and result receipt | retrieve leases 30–300 s (default 60), renews every 20 s with a 5 s bounded call, replays `(agent_id,poll_id)`; expired lease is `LEASE_EXPIRED`; unavailable custody is never an empty inbox |
+| `CT-04` | `worker-result.v1`: execution identity, status, commit, artifacts, evidence and finish time; result accepted/duplicate/result_digest receipt (IV.2) | status is typed (`pass`, `fail`, `error`, `cancelled`, `timeout`); missing status is `INVALID_RESULT`; first durable result wins and conflicting duplicates are `RESULT_CONFLICT`; clean exit without a committed result is `missing_result` |
 | `CT-05` | `worker-brief.v1`: `round_id`, `wave_id`, `task_id`, `attempt_id`, `brief_digest`, `criteria`, `workspace`; result `accepted`, `BRIEF_INVALID` | foreman owns wave/attempt IDs; prompt/skill digest is immutable for the round; acceptance is custody, not execution success |
 | `CT-06` | `round-report.v1` reference: `round_id`, `corr_id`, `report_digest`, `status`, `finished_at`; result scheduler settlement | scheduler accepts only a correlated durable report; absent or conflicting verdict is `UNKNOWN_RESULT`, never success; settlement precedes next cadence decision |
 | `CT-06R` | foreman report `round-report.v1`: `round_id`, `run_id`, `corr_id`, `waves`, `task_results`, `budget`, `stop_reason`, `memory_refs`, `evidence_refs` | foreman writes local custody and memory records before return; duplicate `(round_id, report_digest)` is replayed, conflicting report is refused |
 | `CT-07` | `model`, `provider`, `lane`, `policy_generation`; result selected model or `MODEL_NOT_ALLOWED` | allowlist and policy generation are checked before spend; selection is recorded with the session |
 | `CT-08` | `session_id`, `corr_id`, `message_ref`, `model`, `selection_id`; result `accepted`, `session_turn_id` | gateway acknowledges durable session custody; timeout is `DELIVERY_UNKNOWN` and replay uses the same idempotency key |
-| `CT-09` | memory record `{record_id, namespace, record_type, round_id, wave_id, attempt_id, payload_digest, body, writer_identity, created_at}`; result `{record_id, local_commit, sync_state, sync_commit, synced_at, freshness}` | local Git-backed namespace commit is the durable acknowledgement; `(namespace,record_id)` is unique; remote sync is separate and can be `pending-sync`, `fresh` or `stale`; same digest replays, different digest is `MEMORY_CONFLICT` |
-| `CT-10` | exact M4 §15.2 claim request/result and row/event mapping | canonical remote CAS is the cross-clone authority; stale revision is `CLAIM_CONFLICT`; row and event publish via one operation marker, and a published incomplete marker is `PARTIAL_WRITE`, never a committed state |
+| `CT-09` | canonical `memory-record.v1`: record/project/namespace/round ids, discriminated type, scoped ids, writer, local sequence, fence, body and payload_digest; result MemorySyncReceipt | local fsync is durable local-only acknowledgement; digest covers the complete record except payload_digest; sync is pending/qualified/failed/partial/conflict; same digest merges once, changed digest preserves conflict evidence |
+| `CT-10` | canonical `cf.board-group-claim.v1`: board revision, ordered task preconditions, owner fence, lease and operation identity | one protected CAS commits every row, event and marker or none; stale revision is `CLAIM_CONFLICT`; remote readback precedes native start and no partial wave launches |
 | `CT-11` | `session_id`, `turn_id`, `model`, token usage, cost basis; result durable turn row | gateway writes the turn atomically or returns `PERSISTENCE_UNAVAILABLE`; no usage row is inferred from a transport receipt |
 | `CT-12` | staged-tree digest, exact commit candidate, guard version and criteria | guard emits a named verdict bound to the staged tree; missing gate is `GATE_UNAVAILABLE`; no verdict means no closeout |
 | `CT-13` | verdict `{run_id, criteria, outcome, evidence_refs, tree_digest}`; result board closeout | board accepts only an evidence-bound verdict whose tree digest matches the landed tree; duplicate closeout is a no-op, conflicting closeout is `CLOSEOUT_CONFLICT` |
@@ -114,16 +158,19 @@ manager `Probe.evidence_ref` is the digest component of EvidenceRef in that prob
 project scope, not another storage scheme. Artifact is `{name:ID,ref:EvidenceRef,
 media_type:Text,size_bytes:UInt}`. Workspace is `{repository:Repository,
 base:GitOID,relative_path:relative-path}`; relative_path resolves under the enrolled
-node's `worktrees` directory and cannot name any other project. Criterion is M4 §15.1.
+node's `worktrees` directory and cannot name any other project. Criterion is the closed
+`criterion.v1` in the canonical execution model; M4 §15.1 is its board projection.
 LaneSeed is `{prompt_digest:SHA,skills:[{name:ID,digest:SHA}]}` with unique names
 and meaningful skill order. Limits is `{max_turns:integer[1,10000],
 turn_timeout_s:integer[1,86400],attempt_timeout_s:integer[1,86400],
 cpu_millis:PosInt,memory_bytes:PosInt,max_output_bytes:PosInt}`. Defaults, when the
 whole limits object is omitted from policy proposals, are 40,1800,1800,1000,
 4294967296,10485760 respectively; wire execution requests carry the fully materialized
-object. Resource narrowing/enforcement is M5 §16.2. total_budget is integer[1,10000]
-worker-attempt slots, not dollars or seconds; the pinned Part V retry policy decides
-consumption. A round wall bound is policy.round_wall_s, integer[1,604800], default 21600.
+object. Resource narrowing/enforcement is M5 §16.2. total_budget is RoundAllowance,
+integer[0,20000] worker-attempt slots, not dollars, seconds or concurrency; the pinned
+retry policy decides consumption. RoundAdmission.deadline_s and round_deadline bound the
+whole round. attempt_wall_s bounds one attempt independently; turn_timeout_s and
+max_turns bound individual turns and their count. policy.round_wall_s is retired.
 
 BriefInput is `{schema_version:"cf.brief-input.v1",directive:Text,
 task:TaskRow,criteria:Criterion[1..100],skills:[{name:ID,ref:EvidenceRef,digest:SHA}],
@@ -162,26 +209,26 @@ and Part V §V.0, not the earlier card shorthand `desired_generation` aliases.
 | ID / verb / body version | Request fields beyond version/key | Result data and domain rules |
 |---|---|---|
 | CT-01 / lane.configure / lane-config.v1 | project_id:ID, config_version:PosInt, expected_generation:UInt, lane:ID, enabled:boolean, admission_mode:tasks/cooldown, cadence_s:integer[1,31536000], weight:integer[1,1000], pin:{provider:ID,model:Text} or null, extensions:{lane_seed:LaneSeed} | {accepted:boolean,effective_config_version:PosInt}; maps one lane into whole factory.v1 CAS, never a separate configuration authority; ranges match Part V §V.0.1 |
-| CT-02 / round-admission / round-admission.v1 | round_id/run_id/corr_id:ID, task_scope:ID[1..10000] unique, total_budget:integer[1,100000], config_generation:PosInt, extensions:{project_id:ID,lane:ID,board_revision:GitOID,binding_generation:PosInt,owner_fence:Fence,lane_seed:LaneSeed} | {disposition:accepted/deferred,delivery_id:ID or null,reason:Error or null}; fixed authorization ceiling matches Part V §V.0.1 worker_budget.total, no wave/attempt IDs; one-use binding grant is separate authenticated transport authorization |
-| CT-03 / custody.retrieve / custody.v1 | agent_id:ID, delivery_id:ID or null, lease_s:integer[1,30], action:retrieve/renew/ack/release, lease_id:ID or null | {delivery_id:ID,lease_id:ID,lease_expires_at:Time,message:Envelope or null}; retrieve allows null IDs, renew/ack/release require both; ack/release message=null; empty inbox returns data=null, status=ok |
-| CT-04 / worker-result / worker-result.v1 | project_id/round_id/run_id/wave_id/worker_id/attempt_id/dispatch_id/corr_id:ID, owner_fence:Fence, execution_key:SHA, status:pass/fail/unverified/partial/unknown, commit:GitOID or null, artifacts:Artifact[], evidence_refs:EvidenceRef[], finished_at:Time, error:Error or null | {accepted:boolean,duplicate:boolean,result_digest:SHA}; pass requires error=null; identical body dedupes, differing body RESULT_CONFLICT; M2 §15.3 |
+| CT-02 / round-admission / round-admission.v1 | round_id/run_id/corr_id:ID, task_scope:ID[1..10000] unique, total_budget:RoundAllowance integer[0,20000], config_generation:PosInt, execution:{round_deadline:Time,deadline_s:PosInt,attempt_wall_s:PosInt,turn_timeout_s:PosInt,max_turns:PosInt,concurrency:PosInt,retry_policy:RetryPolicy,launch_reserve_s/transfer_reserve_s/cleanup_reserve_s:UInt}, extensions:{project_id:ID,lane:ID,board_revision:GitOID,binding_generation:PosInt,owner_fence:Fence,lane_seed:LaneSeed} | {disposition:accepted/deferred,delivery_id:ID or null,reason:Error or null}; fixed authorization ceiling matches Part V §V.0.1 worker_budget.total, no wave/attempt IDs; one-use binding grant is separate authenticated transport authorization |
+| CT-03 / custody.retrieve / custody.v1 | common:{request_id/idempotency_key:ID,owner_fence:Fence,registration_generation:PosInt}; retrieve:{agent_id:ID,poll_id:ID,limit:integer[1,100] default 10,lease_s:integer[30,300] default 60}; renew:{delivery_id/lease_id:ID}; ack adds result_digest:SHA and result_custody_receipt:EvidenceRef | Signed method/path/timestamp/body-hash/audience transcript; (agent_id,poll_id) replays original messages and lease, renewal runs every 20 s with a 5 s bounded call, unavailable custody is CUSTODY_UNAVAILABLE rather than an empty inbox |
+| CT-04 / worker-result / worker-result.v1 | project_id/round_id/run_id/wave_id/worker_id/attempt_id/dispatch_id/corr_id:ID, owner_fence:Fence, execution_key:SHA, status:pass/fail/error/cancelled/timeout, commit:GitOID or null, artifacts:Artifact[], evidence_refs:EvidenceRef[], finished_at:Time, error:Error or null | {accepted:boolean,duplicate:boolean,result_digest:SHA}; pass requires error=null; identical body dedupes, differing body RESULT_CONFLICT; clean exit without a committed result is missing_result, not a third verdict |
 | CT-05 / worker-brief / worker-brief.v1 | project_id/round_id/run_id/wave_id/worker_id/task_id/attempt_id/dispatch_id:ID, owner_fence:Fence, claim_id:ID, claim_generation:PosInt, brief_ref:EvidenceRef, brief_digest:SHA, criteria:Criterion[1..100], workspace:Workspace, limits:Limits | {accepted:boolean,execution_key:SHA,duplicate:boolean}; retrieves exact BriefInput and reserves M2 execution key |
-| CT-06 / round-settlement / round-report.v1 | round_id/run_id/corr_id:ID, report_digest:SHA, report_ref:EvidenceRef, status:pass/fail/unverified/partial/unknown, finished_at:Time | {settlement:received/awaiting_evidence/postcheck_pending/settled_success/settled_failure/settled_partial/unknown,report_digest:SHA}; this reference variant is discriminated by message_type from CT-06R's full-report variant; verifies CT-06R bytes, evidence/replication and scope before durable settlement; Part I §1.9.9 |
-| CT-06R / round-report / round-report.v1 | project_id/round_id/run_id/corr_id:ID, owner_fence:Fence, waves:[{wave_id:ID,state:complete/blocked,attempt_ids:ID[]}], task_results:[{task_id:ID,attempt_id:ID,result_ref:EvidenceRef,status:pass/fail/unverified/partial/unknown}], budget:{allowance:UInt,consumed:UInt,reserved:UInt,remaining:UInt}, stop_reason:StopReason, memory_refs:EvidenceRef[], evidence_refs:EvidenceRef[], status:Outcome, finished_at:Time, report_digest:SHA | {accepted:boolean,duplicate:boolean,report_ref:EvidenceRef}; budget invariant in Part I §1.9.9; status not inferred from process exit |
+| CT-06 / round-settlement / round-report.v1 | round_id/run_id/corr_id:ID, report_digest:SHA, report_ref:EvidenceRef, status:pass/fail/error/partial, finished_at:Time | {settlement:received/awaiting_evidence/postcheck_pending/settled_success/settled_failure/settled_partial/unknown,report_digest:SHA}; this reference variant is discriminated by message_type from CT-06R's full-report variant; verifies CT-06R bytes, evidence/replication and scope before durable settlement; Part I §1.9.9 |
+| CT-06R / round-report / round-report.v1 | project_id/round_id/run_id/corr_id:ID, owner_fence:Fence, waves:[{wave_id:ID,state:complete/blocked,attempt_ids:ID[]}], task_results:[{task_id:ID,attempt_id:ID,result_ref:EvidenceRef,status:pass/fail/error/cancelled/timeout}], budget:{allowance/consumed/reserved/remaining:RoundAllowance}, stop_reason:StopReason, memory_refs:EvidenceRef[], evidence_refs:EvidenceRef[], status:pass/fail/error/partial, finished_at:Time, report_digest:SHA | {accepted:boolean,duplicate:boolean,report_ref:EvidenceRef}; remaining=allowance-consumed-reserved; status not inferred from process exit |
 | CT-07 / model.select / model-selection.v1 | project_id:ID, model:Text, provider:ID, lane:ID, policy_generation:PosInt | {model:Text,provider:ID,lane:ID,policy_generation:PosInt,selection_id:ID}; current allowlist checked before session cost |
 | CT-08 / session.deliver / session-delivery.v1 | session_id/corr_id:ID, message_ref:EvidenceRef, model:Text, selection_id:ID | {accepted:boolean,session_turn_id:ID}; same request identity on timeout, durable session before ACK |
-| CT-09 / memory.append / memory-record.v1 | record_id/namespace/round_id/writer_identity:ID, wave_id/attempt_id:ID or null, record_type:worker/wave/round/decision/finding, payload_digest:SHA, body:MemoryBody, created_at:Time, owner_fence:Fence | MemoryReceipt below; local Git commit then independent broker sync; no lost draft on outage |
-| CT-10 / board.claim / cf.board-claim.v1 | exact M4 §15.2 request | exact M4 §15.2 result; remote ref CAS, same claim vocabulary |
+| CT-09 / memory.append / memory-record.v1 | record_id/project_id/namespace/round_id/writer_id:ID, wave_id/attempt_id/task_id:ID or null, record_type:worker/wave/round/resolution/decision/finding, owner_fence:Fence, local_seq:PosInt, created_at:Time, body:discriminated MemoryBody, payload_digest:SHA | MemorySyncReceipt below; local fsync then independent broker sync; digest covers the complete record except payload_digest; no lost draft on outage |
+| CT-10 / board.claim / cf.board-group-claim.v1 | operation_id/idempotency_key:ID, project_id/board_id:ID, board_revision:GitOID, owner_fence:Fence, claims:ClaimPrecondition[1..1000], lease_expires_at:Time, transition:claim/renew/release, evidence_refs:EvidenceRef[] | One protected CAS commits every row, event and operation marker or none; CLAIM_CONFLICT names current revision and changed tasks; remote readback precedes native start |
 | CT-11 / turn.record / turn-record.v1 | session_id/turn_id:ID, model:Text, input_tokens/output_tokens/cached_tokens:UInt, cost_microusd:UInt or null, cost_basis:list-price/provider-reported/unknown, observed_at:Time | {turn_id:ID,durable_seq:PosInt}; unique session/turn, changed usage is TURN_CONFLICT, unknown cost is null not zero |
 | CT-12 / gate.run / cf.gate-request.v1 | run_id:ID, candidate:GitOID, tree_digest:SHA, policy_ref:EvidenceRef, criteria:Criterion[1..100] | M3 §17.1 Verdict; no optional missing required gate |
 | CT-13 / board.close / cf.board-close.v1 | operation_id/project_id/board_id/task_id/claim_id:ID, claim_generation:PosInt, owner_fence:Fence, expected_revision:UInt, board_revision:GitOID, completion:Completion | {new_revision:PosInt,board_revision:GitOID,closure_receipt_ref:EvidenceRef}; M4 Completion + M3 §17.3 parent certification |
 | CT-14 / board.mutate / cf.board-mutation.v1 | operation_id/project_id/board_id/task_id:ID, expected_revision:UInt, board_revision:GitOID, owner_fence:Fence, row:TaskRow, event:Event | {new_revision:PosInt,board_revision:GitOID}; M4 state transition/CAS; actor may not spoof authenticated principal |
-| CT-15 / memory.append / memory-record.v1 | same CT-09, record_type=decision/finding/wave/round | same MemoryReceipt; foreman is writer, not transport worker |
+| CT-15 / memory.append / memory-record.v1 | same CT-09, record_type=decision/finding/wave/round/resolution | same MemorySyncReceipt; foreman is writer, not transport worker |
 | CT-16 / handbook.build / cf.handbook-build.v1 | M6 §16 build request/receipt schemas | M6 build receipt; no owner decision occurs on this edge |
 | CT-17 / harness.qualify / cf.harness-conformance.v1 | M5 §16.4 complete report | {support_state:SUPPORTED/UNSUPPORTED/UNVERIFIED,report_ref:EvidenceRef,expires_at:Time}; exact required union, live/fixture separation |
 | CT-18 / handbook.decide / cf.handbook-decision.v1 | M6 §16.3 decision fields | {decision_ref:EvidenceRef,artifact_digest:SHA,state:accepted/rejected/withheld}; authenticated human action |
-| CT-19 / inference.request / inference-request.v1 | project_id/attempt_id/corr_id:ID, credential_ref:ID, model:Text, messages:ChatMessage[1..1000], max_output_tokens:integer[1,1000000], stream:boolean | InferenceResult or framed stream below; proxy translates to pinned provider API, never forwards arbitrary options |
-| CT-20 / inference.forward / inference-forward.v1 | CT-19 fields except node credential_ref, plus upstream_credential_ref:ID, policy_generation:PosInt, upstream_corr_id:ID | same inference result; provider secret stays at gateway/proxy, transient upstream ambiguity is not usage-free |
+| CT-19 / inference.request / POST /v1/chat/completions | model:Text, messages:ChatMessage[1..1000], stream:boolean default false, options:{temperature,top_p,max_output_tokens,stop,tools,tool_choice}, request_id:ID, deadline:Time; body <=4194304 bytes | BufferedCompletion or M12 SSE with seq=0 origin, usage then terminal then [DONE]; arbitrary provider options and multimodal content refuse; token scope/expiry checks precede upstream work |
+| CT-20 / inference.forward / proxy request identity | CT-19 request plus token_id, upstream_credential_ref:ID, policy_generation:PosInt, upstream_corr_id:ID | same buffered/stream result and served-model identity; serializable budget/slot reservation precedes forwarding, usage commits before complete, response lookup never re-executes |
 | CT-21 / credential.install / credential-install.v1 | operation_id:ID, credential_ref:CredentialRef, destination_profile:ID | {fingerprint:SHA,expires_at:Time,scope:ID[],mode:literal "0600"}; M1 §17.1 sealed-fd resolution/readback |
 | CT-22 / register / register.v1 | registration_id/agent_id/project_id:ID, expected_generation:UInt, profile:ID, public_identity:{certificate_der:Text,key_id:ID}, capabilities:ID[1..100] unique | {registration_id:ID,registration_generation:PosInt,expires_at:Time,credential_ref:CredentialRef}; first expected=0, repeats key off registration_id+idempotency_key, never an unknown generation |
 | CT-23 / adapter.apply / factory-adapter.v1 | exact Part I §1.9.5 adapter request, input=cf.provision.v1 from M1 §17.2 for provisioning | StepResult with output=M1 result; CLI/daemon artifact digests from signed release lock |
@@ -193,19 +240,23 @@ and Part V §V.0, not the earlier card shorthand `desired_generation` aliases.
 | CT-29 / round.control / execution-control.v1 | Part II F8.1 control fields with Fence/version | F8.1 ControlReceipt/checkpoint, fenced replacement only |
 | CT-30 / events.read or metrics.read / factory.v1 | GET query grammar Part I §1.9.1 | Part V §V.0.3 events/samples; M0 §16.1 defines M0–M6 telemetry exporter, not a replacement manager API |
 
-Outcome is pass/fail/unverified/partial/unknown. StopReason is
-no_useful_work/budget_exhausted/cancelled/paused/deadline/dependency_unavailable/failed.
-MemoryBody is `{text:Text,evidence_refs:EvidenceRef[],relations:ID[]}`;
-MemoryReceipt is `{record_id:ID,local_commit:GitOID,sync_state:pending-sync/fresh/stale,
-sync_commit:GitOID or null,synced_at:Time or null,freshness:{age_s:UInt or null,quality:fresh/stale/unavailable}}`.
-Unknown age is null. ChatMessage is `{role:system/user/assistant/tool,content:Text,
-call_id:ID or null}`; call_id is required nonnull for tool messages. These nested role
-values are data, never forbidden transport keys. InferenceResult is
-`{request_id:ID,content:Text,finish_reason:stop/length/cancelled/error,
-input_tokens:UInt,output_tokens:UInt,error:Error or null}`. Stream is SSE with JSON
-`{seq:PosInt,type:delta/final/error,text:string,result:InferenceResult or null,error:Error or null}`;
-seq starts one, exactly one terminal event, EOF without it is STREAM_TRUNCATED.
-First-byte deadline is 30 s, absolute request deadline 300 s; cancellation propagates
+Outcome remains a generic evidence vocabulary; WorkerResult uses
+pass/fail/error/cancelled/timeout and RoundReport uses pass/fail/error/partial. StopReason is
+no_useful_work/completed/deadline/abort/error/budget_exhausted/cancelled/paused/dependency_unavailable/failed.
+MemoryBody is discriminated by record_type: worker, wave, round and resolution use the
+canonical role bodies; decision/finding use `{text:Text,evidence_refs:EvidenceRef[],relations:ID[]}`.
+MemorySyncReceipt is `{record_id:ID,payload_digest:SHA,destination:string,
+state:pending/qualified/failed/partial/conflict,remote_receipt:string or null,attempts:UInt,
+last_error:Error or null}`. Receipts are mutable and excluded from the memory digest.
+ChatMessage is `{role:system/user/assistant/tool,content:string or null,
+tool_calls:ToolCall[] optional for assistant,tool_call_id:ID required for tool}`.
+ToolCall is `{id:ID,type:function,function:{name:FunctionName,arguments:JSON-text}}`.
+BufferedCompletion carries response id, requested and served model, choices, finish reason
+and typed Usage. Stream is M12 SSE: delta/usage/terminal frames with seq beginning at zero
+and increasing by one, exactly one terminal, then `data: [DONE]`; DONE or EOF without a
+terminal is STREAM_TRUNCATED. Usage commits before terminal complete. UTF-8 fragmentation
+may split a code point, and tool fragments assemble by call id and index.
+First-byte deadline is 30 s, absolute upstream request deadline 300 s; cancellation propagates
 by the same request_id and its observed outcome is recorded, never asserted from
 socket closure. No automatic retry after any content or unknown provider outcome.
 
@@ -250,8 +301,9 @@ RFC 8785 JCS defines all structured content bytes (UTF-8, sorted object keys, no
 trailing LF, no Unicode normalization, arrays unchanged). Integer schema avoids
 large-number rounding; semantically invalid objects are rejected before hashing.
 Raw archive/file digests hash raw bytes; text payloads preserve CR/LF and normalization.
-BriefInput hashes the whole validated object. Memory payload_digest hashes MemoryBody,
-not its surrounding record or Git commit. Manifest/config/seed hashes cover their
+BriefInput hashes the whole validated object. Memory payload_digest hashes the complete
+memory-record.v1 with payload_digest absent, including its writer, fence, ids and body;
+mutable MemorySyncReceipt and Git commit ids are outside that domain. Manifest/config/seed hashes cover their
 whole objects except an explicitly self-named digest and signature; each such field
 is excluded only when named by its type. report_digest hashes CT-06R's entire body
 except report_digest, including its schema/idempotency key, evidence and timestamps;
