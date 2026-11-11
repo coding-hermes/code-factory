@@ -88,9 +88,9 @@ at `:192`/`:206`. A landing with no `--gate-cmd` runs **no** project gate.
 
 ## 6. Contracts in and out
 
-Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). M3's own interfaces
-(M3-C1, M3-C2) are not among the 18; the canonical id M3 participates in is CT-12 (`node →
-gitreins` staged diff), cited as a boundary contract.
+Canonical IDs come from the 31-entry Part IV §IV.2.4 registry. CT-12 owns gate
+execution and CT-13/14 own evidence-bound board closeout. M3-C1/M3-C2 below are
+historical local observations, not additional cross-system IDs or target qualification.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
@@ -283,7 +283,7 @@ M3, proposal "required repository metrics"). §8's absence-proved RED is current
 
 M1 creates the project checkout; M9 refreshes and admits it; the Bunker foreman authorizes landing; M3 validates, gates, integrates and proves publication; M4 records closeout. The foreman is the sole publication owner for the selected repository/branch. The operator-invoked lander is an adapter, not an independent authority.
 
-A landing request is `schema: cf.landing.v1` with `project_id`, `source_commit`, `source_branch`, `target_ref`, `tree_digest`, `accepted_verdict_ref`, `evidence_refs`, `policy_generation`, `request_id` and `idempotency_key`. The request is refused unless the verdict is passing, its criteria and exact source tree match, the required gate set is present, credentials have the required read/push/merge scope, and the remote freshness observation is within policy. `--gate-cmd` empty is therefore a non-production configuration, not an implicit acceptance.
+A landing request is the complete `schema_version: cf.landing.v1` type in §17.2, including claim identity and owner_fence. The request is refused unless the verdict is passing, its criteria and exact source tree match, the required gate set is present, credentials have the required read/push/merge scope, and the remote freshness observation is within policy. `--gate-cmd` empty is therefore a non-production configuration, not an implicit acceptance.
 
 | Phase | Required proof | Failure state and retry |
 |---|---|---|
@@ -302,15 +302,20 @@ Required metrics cover freshness age, gate attempts/outcomes/skips, verdict unkn
 
 ## 16. Pass-4 publication evidence profile (P4-PUBLICATION-01)
 
-The publication contract is `schema: cf.landing.v1` and the policy is
-`schema: cf.gate-policy.v1`. One policy generation is selected for each
+The publication contract uses `schema_version: cf.landing.v1` and the policy uses
+`schema_version: cf.gate-policy.v1`; §17 defines their complete fields. One policy generation is selected for each
 `(project_id, target_ref)` and is immutable for a request. It names required Tier-1
 guards, project checks, acceptance-judge criteria, allowed integration mode and
 freshness limits. A missing, wrong-version or ineffective guard, judge, hook or
 project check is `POLICY_UNAVAILABLE`, never an implicit pass; an explicitly
 approved exception records principal, reason, expiry and the omitted check.
 
-Each evidence object is `schema: cf.evidence.v1`:
+Each publication evidence record uses `schema_version: cf.evidence.v1`, with
+`kind` selecting the following closed shape. Fields commit/merge_commit/object are
+GitOID, tree_digest is SHA, branch/target_ref/ref are GitRef, policy_generation is
+PosInt, checks/revalidated_checks are M3 §17.1 CheckResult arrays, verdict_ref is
+EvidenceRef, source_refs is GitOID[], remote is HTTPSURL, ancestry is boolean,
+and observed_at/fetched_at are Time. No self commit identity is embedded.
 
 | Object | Required fields | Meaning |
 |---|---|---|
@@ -331,16 +336,143 @@ the named remote/ref and compares object id, tree digest and ancestry at one obs
 time. A fetch or push acknowledgement lost after the request yields
 `PUBLISH_UNPROVEN`, not success; reconciliation queries the remote before retrying.
 `MERGED_NOT_PUBLISHED` retains the local merge object for retry. A moving target yields
-`STALE_TARGET`, requiring refresh and revalidation. The same `idempotency_key` returns
-the recorded result without a second push. Only a fresh published evidence object,
-then an M4 completion event, can close the work.
+`STALE_TARGET`, requiring refresh and revalidation. The same idempotency_key replays
+its original acceptance receipt; §17.2 resumes unfinished effects without repeating
+a proven successful push. Only fresh publication evidence followed by the M4 closure
+transaction can close work.
 
-Credentials are not minted here: M1/M7 provide separate read/fetch, worker-branch push
-and protected-main/PR-merge scopes. Expiry or insufficient scope is a named refusal.
-Metrics are typed counters/durations for freshness age, gate attempts and skips,
-verdict unknowns, conflicts, merge/push/proof outcomes, retries and
-publication-to-closeout lag, labelled only by project, target, policy generation and
-outcome; the foreman collects them and M4 reads them back.
+M1/M7 provide read-only node access and broker-held publication scopes. Expiry or
+insufficient scope refuses. M0 §16.1 specifies metric types/labels; project, target
+and policy generation are event fields, not unbounded metric labels.
+
+## 17. P5 gate policy, publication recovery and evidence custody
+
+This section resolves P5-B-23–27. Part I §1.9.7 owns the four publication modes;
+Part IV §IV.2 owns digest types; M4 §15 owns board transactions. The broker, not the
+worker, holds native protected-ref credentials and serializes effects with epoch
+advance. A pre-push client fence test alone is not authorization.
+
+### 17.1 Policy and verdict
+
+`cf.gate-policy.v1` is a closed object: schema_version, project_id (ID), generation
+(PosInt), target_ref (GitRef), mode (`merge`, `fast-forward`, `squash`, `rebase`),
+release_lock_ref (EvidenceRef), required_checks (CheckSpec[1..100]), criteria
+(Criterion[1..100]), freshness_s (integer[1,300], default 30), verdict_ttl_s
+(integer[1,86400], default 3600), exception_approvers (ID[]), policy_digest (SHA).
+The policy digest excludes only itself. CheckSpec is `{id:ID,kind:secrets/lint/test/
+build/judge/board-validator,argv:Text[1..100],timeout_s:integer[1,7200],
+applicability:all/code/document/board,required:boolean}`. argv elements are executed
+without shell interpolation in a detached exact-candidate worktree. Network is denied
+except declared gate endpoints. Empty commands and unknown/skipped required results
+refuse `POLICY_UNAVAILABLE` or `GATE_UNAVAILABLE`.
+
+The MVP required set is secrets, repository lint, repository tests, repository build
+when a build artifact exists, independent criteria judge, and board-validator for
+board changes. Documentation requires source lint, semantic/evidence review and
+render gates if an artifact is delivered; board-only closure requires the closure
+validator below. A missing project-specific command is a blocking policy gap, not a
+silent SKIP. Default timeouts are secrets/lint/board-validator=120 s,
+tests/build=1800 s, judge=600 s. Each record states applicability evaluated against
+the source/integration delta; changing the base invalidates all integrated-tree checks.
+
+Judge result is `{schema_version:"cf.verdict.v1",run_id:ID,reviewer_id:ID,
+source_commit:GitOID,integration_commit:GitOID,tree_digest:SHA,policy_digest:SHA,
+criteria_digest:SHA,outcome:PASS/FAIL/UNVERIFIED,checks:CheckResult[],
+criteria:[{id:ID,outcome:PASS/FAIL/UNVERIFIED,evidence_refs:EvidenceRef[]}],
+observed_at:Time,expires_at:Time,evidence_refs:EvidenceRef[]}`. CheckResult is
+`{id:ID,outcome:PASS/FAIL/UNVERIFIED/SKIP,exit_code:integer|null,duration_ms:UInt,
+evidence_ref:EvidenceRef,error:Error|null}`. Signal/timeout/missing result is
+UNVERIFIED, not exit 0. Every required criterion/check must PASS; the reviewer is
+not the implementer principal and verifies actual bytes, not a worker's summary.
+
+Exception is a signed owner record `{policy_digest,check_id,artifact_digest,
+approver_id,reason,issued_at,expires_at,signature}` with maximum 24 h lifetime.
+The approver is in exception_approvers and the offline owner trust set. Default
+exception_approvers is empty. Evidence identity, secret protection, fence validation,
+publication readback and independent criteria judgment are never waivable. A permitted
+exception yields `ACCEPTED_WITH_EXCEPTION`, visibly distinct from PASS, and closure
+records its digest. Decision slot B-GATES: qualify installed GitReins 0.17.1 with
+this policy or adopt a newer signed-lock release; default blocks production
+qualification until negative hook and judge fixtures pass. Installed version is not
+upstream compatibility evidence; no undocumented auto-upgrade occurs.
+
+### 17.2 Landing request and resumable publication
+
+The closed `cf.landing.v1` body is schema_version, request_id, idempotency_key,
+project_id, task_id, claim_id (ID), claim_generation (PosInt), owner_fence (Fence),
+repository (Repository), source_commit (GitOID), source_branch/target_ref (GitRef),
+expected_target (GitOID), tree_digest (SHA), accepted_verdict_ref (EvidenceRef),
+evidence_refs (EvidenceRef[]), policy_generation (PosInt), policy_digest (SHA).
+The source digest and verdict bind the source object; after integration the journal
+also records the exact candidate and accepted integration verdict. Expired claim or
+fence refuses at begin-effect, and epoch advance waits for finish-effect/readback.
+
+The dedupe key is `[project_id,target_ref,idempotency_key]`; changed input is
+IDEMPOTENCY_KEY_REUSED. The initial POST returns a durable operation handle, never
+claims publication from an accepted request. GET returns current phase. Same-key
+POST replays the initial response; it neither repeats a completed push nor prevents
+the operation's recovery worker from completing an unfinished phase. The worker uses
+one stable effect_id per candidate push, attempts at 5,10,20,40,80 s (five attempts),
+then `RETRY_EXHAUSTED` pending an authorized resume of the same operation. Before each
+attempt it fetches the destination and checks effect state: accepted candidate already
+an ancestor means no second push; known failure with unchanged base permits same-object
+CAS retry; unknown remote state remains PUBLISH_UNPROVEN without blind retry. Changed
+base produces STALE_TARGET and a new integration candidate/gates within the operation,
+with new candidate effect_id and a preserved old-candidate record. The old effect must
+be resolved before another candidate is sent. No second logical landing key is minted.
+
+Remote verification accepts the exact accepted object as the tip OR its proven ancestor
+in a later tip. Its own tree must equal the tested integration tree; a descendant's
+tree need not equal it. The receipt records both accepted_object and observed_tip plus
+fetched_at and ancestry. A stale tracking ref or unavailable fetch cannot establish
+this fact. If a new base changes tree, criteria, dependencies or gate config, every
+required integration gate runs again. [Part I §1.9.7.]
+
+### 17.3 Non-self-referential closeout
+
+Implementation I and tested/published integration P are immutable objects. The
+completion event certifies P, not the later board-only closure C. C has P (or a verified
+descendant containing P) as its base and changes only board rows/events/transaction
+markers. A separate closure validator proves the permitted paths, row/event pairing,
+criteria/verdict/evidence digests and P's remote ancestry; it never pretends the full
+tree of C equals P. If C changes any implementation, policy or dependency file it is
+not a closure-only commit and requires a new full integration verdict. A closure
+receipt in the broker journal names C after its ref update; neither C's marker nor
+its event embeds C's own hash. Claim markers similarly contain parent_revision only.
+This removes the recursive demand to re-grade the commit that records the grade.
+
+### 17.4 Evidence references and loss recovery
+
+EvidenceRef is `cas+sha256://<project_id>/<64-lowercase-hex>`; the hash names immutable
+raw bytes. The authenticated evidence service supports `PUT /factory/v1/evidence/<project>/<digest>`
+with content type/length, and `GET` on the same path. PUT compares bytes before storing,
+refuses mismatches (`DIGEST_MISMATCH`) and never replaces existing content. Authorization
+requires project scope and current broker effect for publication; readers require
+project scope. TLS/client identity follows M1. Receipts are signed JCS
+`{schema_version:"cf.evidence-receipt.v1",ref,size_bytes:UInt,media_type:Text,
+writer:ID,stored_at:Time,replicas:[{store_id:ID,verified_at:Time,digest:SHA}],
+issuer_key_id:ID,signature:Base64url64}` using domain `CF2A-EVIDENCE-1\n`.
+
+Local evidence is durable after file and directory fsync. Accepted publication/settlement
+requires two verified copies in distinct failure domains, at least one controller-readable
+after Bunker destruction. The service re-GETs and hashes both copies before issuing a
+replicated receipt. A worker-local path or untracked `.gitreins/history` path is never
+an accepted EvidenceRef. Upload uses outbox retries; absent remote custody is
+EVIDENCE_UNAVAILABLE and blocks closure, not local work. Exact digest readback and
+signed receipt verification are required even on HTTP 200.
+
+A task completion/round/backup reference creates a nonexpiring retention hold before
+publication. Pending-sync data is also held. Unreferenced failed-run evidence has a
+minimum 90-day retention; root release requires an owner-signed tombstone, a verified
+backup and 30-day grace. No age-only reaper removes rooted evidence. Backup manifest
+is `{schema_version:"cf.evidence-backup.v1",backup_id:ID,board_revision:GitOID,
+objects:[{ref:EvidenceRef,size_bytes:UInt,receipt_ref:EvidenceRef}],
+authority_seq:UInt,created_at:Time}`; its own digest is stored in an independent
+signed backup receipt, not recursively in itself. Restore walks every reference,
+checks all bytes/receipts/holds and board markers before scheduling resumes. A lost
+replica is repaired from the verified survivor; no surviving copy means UNVERIFIED,
+incident and blocked closeout. M0 §16.1 specifies gate, publication and projection
+telemetry and stale/recovery alerts.
 
 ## RED field count: 3 (Metrics §8 — absence-proved; §1 status — `repo_freshness.py` body not read line-by-line (behaviour exercised by the cf244 arm, source unread) and S3 hook *enforcement* UNVERIFIED (the landing arm proves landing behaviour, not that git invokes the installed pre-commit gate); §9 inventory 5 of 35 helper call sites)
 

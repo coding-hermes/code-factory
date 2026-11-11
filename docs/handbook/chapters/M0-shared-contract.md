@@ -31,7 +31,7 @@ per-module and are not global numbers.
 | Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; `scripts/lib.sh` byte-identical since `47d68b4` — no file M0 cites changed in `08a2c8a..fbc19cb`) |
 | Language / runtime | bash 5.3.9 (measured: `bash --version`); sourced, never executed |
 | Owner lane | code-factory (node-side + control-host shell) |
-| Status | **VERIFIED** — `lib.sh` (78 lines) read in full; every cited line re-verified |
+| Status | **SOURCE COVERAGE ONLY** — the earlier 78-line full-read claim is superseded; the P5 snapshot `fb11e92c1580b98e2e8d64cb9a81cdcb3ef64f02` has 110 lines (`wc -l scripts/lib.sh`). Historical read/test rows do not qualify the new §16 ABI (P5-B-39). |
 
 The variable contract (`scripts/harness/harness-vars.sh`, 318 lines) is **not** part of M0.
 OUTLINE M0.S1 is the *shell* contract only; `harness-vars.sh` is M5.S5 (see §12).
@@ -109,15 +109,13 @@ contract settings (`CF_MAX_TURNS`, `CF_TIMEOUT_S`, `CF_API_KEY_FILE`, …) live 
 
 ## 6. Contracts in and out
 
-M0 has **no entry in the canonical register** (CT-01..CT-18, OUTLINE Part IV). `lib.sh` is the
-bottom of the shell stack and exposes no cross-system wire contract: its only outbound call is a
-local library composition (`bunker_exec`), not an interface two chapters describe from opposite
-ends. That edge is listed below with a `(local)` tag — it is not a canonical id and has no peer
-chapter row to agree with.
+M0's outbound Bunker execution edge is CT-23, shared with M1; the shell helper ABI
+itself is local. Part IV §IV.2.4 is the 31-entry identity registry. Historical local
+labels are import aliases only, not alternate target contract IDs.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| (local) | bunker CLI | out | `lib.sh:107` `bunker_exec` (composes `bunker exec … -- bash -lc`) | **external** — the `bunker` binary's exec handler, not in this repo | **UNVERIFIED (boundary)** — `bunker` is an external peer with no in-repo function to name; the composed command is nameable, the far side is not, so no "works" verdict is attached to an unnamed side (F0-1) |
+| CT-23 | bunker CLI | out | `lib.sh:107` `bunker_exec` | external public CLI/protocol; M1 §17 and Part I §1.9.5 | UNVERIFIED — source composition exists; no version-bound target end-to-end qualification record |
 
 ## 7. Verification
 
@@ -189,7 +187,9 @@ rate are answerable only by the static greps above.
 
 ## 13. Evidence of record
 
-- Code: `scripts/lib.sh` (78 lines) — read in full.
+- Historical full-read claim: 78 lines, tied only to the old identity note; it is
+  superseded by the P5 source inventory (110 lines at `fb11e92c1580b98e2e8d64cb9a81cdcb3ef64f02`).
+  No claim that the current target ABI was runtime-verified follows from that old read.
 - Commands run: `bash -n scripts/lib.sh`; `grep -rl '\. "$HERE/lib.sh"' scripts/` (11);
   `grep -rlE '\. "\$HERE/(\.\./)?lib\.sh"' scripts/` (17); `ffc_probe.sh` (fetch_verified fails
   closed, rc 1, no artifact).
@@ -307,6 +307,100 @@ case $? in 0) exit 0 ;; 3) warn setup "unverified; admission remains closed"; ex
 ```
 
 The target telemetry contract is one event per helper invocation with `helper`, `operation_id`, `outcome` (`success`, `failure`, `warning`, `refusal`), `reason`, duration in milliseconds and measured values where applicable. The shared helper emits local rows; the owning caller persists structured events and exposes counters and readout. A telemetry-write failure is itself a failure fact and cannot turn a failed check into PASS. Acceptance cases are: absent `curl` refuses before download; a wrong digest leaves no destination; a warning returns UNVERIFIED; and a successful fetch records the expected digest.
+
+## 16. P5 helper ABI and telemetry profile
+
+This section resolves P5-B-31 and P5-B-32. It is target behavior, not a claim that the
+historical `scripts/lib.sh` snapshot implements it. Part IV §IV.2 supplies the shared
+types, canonical bytes and error record; M1 §17 supplies filesystem durability.
+
+The ABI version is `cf.shell.v1`. Sourcing initializes unset `FAILED` and `WARNED` to
+integer zero, preserves existing nonnegative integers, and returns 2 without replacing
+invalid values. Repeated sourcing neither resets counters nor emits output. The caller
+explicitly assigns both counters to zero at the start of one operation, never midway
+through a battery. Except where stated below, a helper returns 0, writes nothing to
+stderr, and changes no filesystem state. Wrong arity/type returns 2, emits
+`FAIL usage — <helper>: <reason>` on stderr, increments `FAILED` once and performs no
+requested operation. Newline, CR and NUL in a reporting argument are rejected; an empty
+measurement string is allowed, an empty label is not.
+
+| Signature (exact positional arity) | Required behavior |
+|---|---|
+| `say(text)`; `note(text)` | one string; stdout is text plus LF, or `  ..    ` plus text plus LF; counters unchanged |
+| `ok(label, measurement)`; `bad(label, measurement)`; `warn(label, measurement)` | two strings; exactly one stdout row `  PASS  <label> — <measurement>`, `  FAIL  ...`, or `  WARN  ...` plus LF; only `bad` increments FAILED, only `warn` increments WARNED, by one |
+| `have(name)` | one executable basename without slash or whitespace; stdout is resolved executable path plus LF and rc 0, or empty stdout and rc 1 if absent; no counter change |
+| `free_gb(path)` | one existing directory; decimal GiB (available bytes / 1073741824), one fractional digit, C locale, LF; rc 1 and empty stdout on measurement error; admission compares unrounded bytes, not this display value |
+| `require_disk(path, floor)` | floor is decimal GiB in (0,4096]; compares available bytes with ceiling(floor × 1073741824); one `ok` row on success, one `bad` row and rc 1 on insufficient/unmeasurable capacity |
+| `verdict(label, mode)` | mode is exactly `check` or `action`; FAILED>0 prints `<label>: FAIL (<n>)`, rc 1; otherwise check with WARNED>0 prints `<label>: UNVERIFIED`, rc 3; otherwise prints `<label>: PASS`, rc 0; no counter change |
+| `shq(value)` | one string, including empty; emits one POSIX single-quoted token with embedded apostrophes encoded by closing/escaped/reopening quotes, no LF; no execution |
+| `bunker_exec(server, agent, command...)` | at least three arguments; server/agent are Part IV IDs; command fragments are explicitly trusted shell syntax, data passes through `shq`; stdout/stderr and exit status are those of Bunker; no independent PASS |
+| `fetch_verified(url, destination, digest)` | exactly three strings; HTTPS URL or explicit offline `file:` URL, absolute destination and SHA-256; at most 120 s download; verifies temporary bytes and executable mode 0700 before atomic rename; rc 1 on network/hash/chmod/fsync/rename error |
+| `once(sentinel, command...)` | at least two arguments; absolute sentinel and nonempty argv; execs argv directly without eval; returns command status on failure, 1 on persistence failure, 0 on authenticated skip/success |
+
+`fetch_verified` uses an O_EXCL temporary regular file in the destination directory,
+rejects a symlink destination/parent, and fsyncs the verified/chmodded temporary file
+before rename and the parent afterward. Before rename, every error removes the temporary
+file and preserves any previous destination byte-for-byte. A post-rename directory-fsync
+failure returns 1 with `PERSISTENCE_UNAVAILABLE`; the new destination is quarantined as
+unaccepted, not used, and the recovery record names both digests. It never unlinks a
+previous valid destination merely because the new download fails. Acceptance tests cover
+an absent destination and a pre-existing executable on each failure arm.
+
+`once` locks `<sentinel>.lock` with exclusive flock before reading. Its sentinel is a
+mode-0600 JCS object `{schema:"cf.once.v1", command_digest:SHA, completed_at:Time}`;
+command_digest hashes the JCS argv array, with cwd and effective non-secret environment
+included in a surrounding `{argv,cwd,env}` object. An existing malformed sentinel or a
+different command digest returns 1 `SENTINEL_CONFLICT` without execution. The caller
+uses an operation-idempotent command: if execution succeeds but sentinel persistence
+fails, retry may invoke it again. The helper cannot promise exactly-once external effects.
+The sentinel uses file/directory fsync and atomic rename. Failed actions call `bad`
+before `verdict ... action`; advisory warnings cannot erase a failed command. Check-mode
+warning reduction applies to readiness and conformance; action-mode advice does not certify
+readiness. [Contract basis: M0 §§14–15; M5 §16.]
+
+### 16.1 Shared event and metric vocabulary (CT-30)
+
+Each owning module persists a `cf.telemetry.v1` JSONL event before acknowledging a
+state-changing operation: `event_id:ID`, `operation_id:ID`, `module:M0..M6`,
+`event_type:Enum`, `outcome:success/failure/warning/refusal/unknown`, `reason:ID`,
+`duration_ms:UInt`, `observed_at:Time`, `measurements:{name:finite-number}`.
+The closed event_type set is `helper`, `provision`, `enrollment`, `readiness`, `dispatch`,
+`lease`, `duplicate`, `cancellation`, `gate`, `publication`, `projection`, `board-read`,
+`claim`, `repair`, `lifecycle`, `conformance`, `document-stage`. IDs and generations occur
+in event records, never metric labels. Secret values, prompt text and credential paths
+are excluded. Events use the operation journal's fsync transaction or durable outbox;
+outbox append failure is `PERSISTENCE_UNAVAILABLE` and withholds success. Delivery failure
+retains the outbox and does not undo an already committed operation.
+
+The collector exposes authenticated, read-only `GET /factory/v1/metrics` (Prometheus
+text) and `GET /factory/v1/events?after=<sequence>&limit=<1..1000>` (Part IV response,
+ordered events and next sequence). Scrape period is 15 s. Event duplicates are suppressed
+by event_id; counters are reconstructed from the retained checkpoint plus events, not
+reset on process restart. Histograms are cumulative seconds buckets
+0.01, 0.1, 1, 5, 30, 120, 600, 3600, +Inf. The metrics use the closed label sets below. Operation instruments use module,
+event_type and outcome only; board counts additionally use the closed M4 status enum
+and eligibility enum. Project/task/generation/error text never appears in a metric label.
+
+| Instrument | Type / units | Definition |
+|---|---|---|
+| `cf_operations_total` | counter / operations | terminal event count by the three labels |
+| `cf_operation_duration_seconds` | histogram / seconds | terminal duration_ms / 1000 by module and event_type |
+| `cf_queue_depth` | gauge / messages | pending custody messages summed over configured projects |
+| `cf_oldest_pending_seconds` | gauge / seconds | maximum age of pending work; empty queue = 0 |
+| `cf_projection_lag_seconds` | gauge / seconds | oldest unacknowledged board/memory outbox event age; empty outbox = 0 |
+| `cf_certification_age_seconds` | gauge / seconds | maximum age among active bindings; absent bindings omit sample |
+| `cf_board_tasks` | gauge / tasks | count by status and eligibility (`eligible`, `unmet`, `unknown`) |
+| `cf_observation_timestamp_seconds` | gauge / Unix seconds | last successful source observation by module |
+| `cf_recovery_pending` | gauge / operations | unresolved recovery records by module |
+
+An unavailable observation omits the affected gauge and emits outcome=unknown; it never
+manufactures zero. Samples older than 60 s are stale. Alerts fire for observation age
+above 60 s for 60 s, queue age above 120 s for 120 s, projection age above 300 s for
+60 s, any unresolved recovery for 60 s, and certification age above 86400 s immediately.
+Events retain 90 days and counters/checkpoints 400 days; acceptance evidence follows
+M3 §17's longer roots. Ratios with zero denominator are unknown. These are specified
+defaults, not measured fleet thresholds. A collector restart, unavailable source and
+replayed event are required negative/positive conformance cases.
 
 ## RED field count: 1 (Metrics §8)
 

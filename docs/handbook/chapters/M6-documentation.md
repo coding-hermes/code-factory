@@ -155,16 +155,12 @@ after `git restore --staged tracked.txt && git restore tracked.txt`, it must emi
 | fill `--model` | `""` (`:411`) | a model id | the seat model for `--engine hermes` | empty falls back to `openai/gpt-6.1-sol` (`:454`) |
 | fill `--dry-run` | false (`:413`) | flag | list candidates without provider calls or writes | **`--dry-run` suppresses all provider calls and writes** (`:438-440`); `--force` decides *which* documents may be rewritten — the documented five controls omit the switches that decide whether writing or provider execution occurs (B11) |
 
-**Spine gate (S9, B5).** `handbook_spine.py` carries no settings surface;
-its policy is four hardcoded sets: `CANON` (the 18 contract ids + expected producer/consumer
-systems), `BOUNDARY` (the **13** boundary contracts whose far side is a human/LLM/service with no
-in-repo file), the `SETTING_ROW`/`REF`/`COUNT_CLAIM` regexes, and the internal-vs-boundary split
-that decides which contracts must name both `file:function`. The defect this gate closes:
-its predecessor compared function tokens but never the **state** column, so M9 ("broken") and
-M11 ("works") could both cite CT-06 and pass while flatly disagreeing. The state-agreement check
-(and the CT-05 boundary→internal re-grade) are part of the gate; the remaining blind spots are that
-it does **not** verify cited line numbers exist in the cited file, and it trusts the chapters'
-self-reported status word rather than re-deriving it.
+**Historical spine coverage (S9, B5), not target policy.** The older
+`handbook_spine.py` snapshot hardcodes 18 contract IDs and 13 external boundaries.
+That implementation cannot certify the current 31-entry register. The target checker
+consumes Part IV §IV.2.4, validates endpoints, versions, evidence class and actual
+locator bounds, and rejects unknown/duplicate IDs. Its implementation remains
+unqualified; the old source-coverage pass is retained below only as dated evidence.
 
 **`panel_loop.py` settings and stop semantics (B14).** The loop that
 produces this handbook carries its own controls; a process exit 0 is **not** document acceptance:
@@ -191,13 +187,13 @@ per round) separately.
 
 ## 6. Contracts in and out
 
-Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Local ids are
+Canonical IDs come from the 31-entry Part IV §IV.2.4 registry. Local ids are
 retired; each row carries the CT id its peer chapter cites.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| CT-16 | docsgate | out | `master_doc_check.py:263` prints `MASTER-DOC: PASS|FAIL` | **external** — "the handbook's status word", no in-repo function | works (exit 1 = FAIL) — but it is a structural gate, not a truth gate (F6-2) |
-| CT-18 | handbook | out | `gen_nasa_handbook.py:247` `main()` (the render entry) | **external** — "the owner's approval artifact" (the owner is a human) | **UNVERIFIED** — the renderer hardcodes `docs/master` and selects `[0-9][0-9]-*.md`, so it does **not** render these `M*.md` chapters (see §11) |
+| CT-16 | acceptance service | out | `scripts/build_book.py:612` build entry plus target receipt adapter (§16.2) | acceptance service validates BuildReceipt | TARGET-UNIMPLEMENTED — current builder exists; version-bound receipt handoff is not qualified |
+| CT-18 | owner | out | artifact/receipt service (§16.3), following build_book.py | authenticated human decision endpoint | TARGET-UNIMPLEMENTED — no decision receipt proves this target boundary; retired renderer is not its producer |
 
 CT-18 is a boundary contract: the consumer is a human owner, so "producer named + consumer
 marked external" is the honest terminal state, not a chapter defect.
@@ -231,7 +227,7 @@ coverage are derived by the census, not emitted.
 | Failure | Presents as | Distinguished from | Recovery |
 |---|---|---|---|
 | Stale locators | 50 locator errors naming nonexistent `docs/master` paths | a vacuous PASS (now named, not silent) | **OPEN** — re-point the unit locators to the real root |
-| Gate does not select these chapters | the glob `[0-9][0-9]-*.md` (`:188`) does not match `M0-shared-contract.md` | a chapter-aware gate | **OPEN** — add a chapter-aware gate or a separate path (F6-1) |
+| Gate selection (legacy failure superseded) | legacy numeric-module gate does not select M-numbered chapters | supported BOOK.yaml path | run handbook_lint.py and build_book.py as §16.2 specifies; spine exists but its legacy registry coverage remains unqualified, not absent (P5-B-40) |
 | File-shaped census | 44 unit sections, 0 of docs/tests/prompts/skills/config covered | a system-shaped census | **OPEN** — CF-360 |
 | Panel selection is stale | `master_doc_panel.py:67-71` globs `docs/master` (deleted); `panel_loop.py:33-34` depends on a fanout script + seat manifest under a dated scratch dir; `unfinished_chapters` (`:62-70`) searches `III.*` ids, not `M*.md` filenames | a deployable panel loop | **OPEN** — F6-3: the two panel mechanisms use incompatible selection conventions |
 | Stale doc drift | unit 12 still records CF-320 as live | current doc | **OPEN** — CF-381 |
@@ -286,11 +282,159 @@ coverage are derived by the census, not emitted.
 
 The supported build path is manifest-driven. `BOOK.yaml` is the declared source set; the builder resolves every part, chapter, figure, table and gap sheet before rendering. Generation, structural lint, semantic/buildability review, evidence review, rendered visual inspection and owner acceptance are separate stages with separate results. A stage may report PASS only for its own inputs and never upgrades a later stage.
 
-The artifact manifest records document id, issue, source commit, manifest digest, dependency revisions, dirty state, page count, figure/table inventory and artifact hash. A missing referenced file or figure is a build error. The result envelope is `schema: cf.handbook-build.v1` with stage outcomes, named findings, output paths, hashes and timestamps; a budget stop, reviewer cap or empty selection is `INCOMPLETE`, not acceptance. Owner acceptance is an explicit decision bound to the exact artifact hash and is withheld while blocking findings remain.
+The artifact manifest records document id, issue, source commit, manifest digest, dependency revisions, dirty state, page count, figure/table inventory and artifact hash. A missing reference fails the build. The request is `cf.handbook-build.v1` and the result is `cf.handbook-receipt.v1` (§16.2); a budget stop, reviewer cap or empty selection is INCOMPLETE. Owner acceptance binds the exact artifact hash and is withheld while unwaived blockers remain; §16.3 limits waiver authority, severity and expiry.
 
 The rendered gate checks fit, page size, monochrome output, fonts, running furniture, folios, figure references and 300 dpi tiles. The source gate checks backticks, escaped pipes, required identifiers and cross-chapter contract consistency. The legacy `[0-9][0-9]-*.md` pipeline remains retired for M-numbered chapters and is not a competing authority. Historical coverage and current target behavior are labeled separately.
 
 Required metrics cover stage duration, candidate and artifact counts, missing references, lint/build/visual failures, unresolved blockers, reviewer budget stops and acceptance latency. Acceptance cases cover a missing figure, an orphan heading, an undersized label, a stale citation, a clean structural gate with an open semantic finding and a repeated build with the same manifest digest.
+
+## 16. P5 reproducible build and decision protocol
+
+This section resolves P5-B-33/34/36/38. It distinguishes the supported source path
+(`BOOK.yaml` → `scripts/build_book.py`) from its unqualified target receipt and
+acceptance adapters. A clean source lint is not a rendered-book or owner-approval claim.
+
+### 16.1 Manifest, dependencies and geometry
+
+BOOK.yaml is UTF-8 YAML 1.2 with duplicate keys, tags, aliases and merge keys refused.
+The current manifest has exactly doc, parts, figures and rules. doc has required
+id/title/subtitle/scope/classification (nonempty strings) and issue (quoted YYYY-MM-DD).
+parts is an ordered nonempty list of `{id:ID,title:Text,files:relative-path[],prefix:UInt?}`;
+only prefix is optional. figures is an ordered list of `{code:decimal-label,
+file:relative-path,caption:Text}`; code is parsed from its YAML scalar spelling, not
+binary float (3.10 differs from 3.1). New manifests quote these codes. rules is an
+ordered nonempty Text array. Paths resolve under docs/handbook, cannot escape through
+symlinks, and must exist exactly once. Every parts/chapter Markdown source and every
+referenced SVG appears in the manifest; unexpected source files, duplicate ids/codes,
+unknown keys and missing/empty parts fail MANIFEST_INVALID before rendering. Migration
+of a legacy numeric figure scalar preserves its original spelling or refuses, never
+silently rounds it. Array order determines part/page order, not filesystem order.
+
+A build request (`cf.handbook-build.v1`) contains document_id:ID, issue:Text,
+source_commit:GitOID, book_digest:SHA, build_lock_ref:EvidenceRef,
+source_date_epoch:UInt, allow_dirty:boolean (must be false for acceptance),
+output_directory:AbsolutePath, idempotency_key:ID. Book digest hashes JCS of the
+normalized manifest; the source inventory binds each raw file SHA, mode and path.
+A clean detached source commit is mandatory for accepted artifacts. Draft dirty builds
+record every content hash and dirty=true and cannot receive owner acceptance.
+source_date_epoch is that commit's committer UTC second; issue is manifest issue,
+never current time. Locale C.UTF-8, TZ=UTC, font selection, browser flags, dependency
+bytes and page order are pinned. PDF creation/modification dates and document ID are
+derived from source_date_epoch and input digest, not wall clock/randomness. Byte-identical
+inputs/lock must yield byte-identical PDF; otherwise BUILD_NONDETERMINISTIC blocks
+qualification. An incidental dependency or font found on PATH cannot satisfy the lock.
+
+`cf.book-lock.v1` has schema_version, platform, source_commit, artifacts (M1 release
+artifact type), python_version, browser_version, font_inventory
+`[{family:Text,style:Text,ref:EvidenceRef,digest:SHA,license_ref:EvidenceRef}]`,
+template_ref, checker_ref, builder_digest, issue_rules_version, qualification_ref,
+issuer_key_id and signature. The artifact set includes Python runtime, PyYAML, PyMuPDF,
+Chromium/Chrome, every Python/native dependency, `book_style.py`, renderer/checker and
+fonts. A fresh user-space environment installs only those verified archives/wheels
+with offline dependency resolution; absent digest refuses BUILD_LOCK_INCOMPLETE.
+The external nasa-handbook `scripts/check.py`, template and fonts are snapshotted
+as immutable EvidenceRefs in that lock, not resolved from a mutable home skill directory.
+
+Decision slot B-DOC-LOCK: release owner either qualifies a snapshot of the current
+nasa-handbook toolchain or a replacement reproducible toolchain against the rules below.
+Default is no approved document release lock and no reproducibility certification.
+The current builder's ambient skill paths and mtime-derived issue behavior are
+implementation deviations, not normative dependencies an independent builder must guess.
+No font/browser digest or live render is fabricated by this spec edit.
+
+The supported Markdown subset is ATX headings, paragraphs, ordered/unordered lists,
+blockquotes, emphasis, inline code, escaped pipes, pipe tables with one header row,
+fenced code/checklist blocks, and standalone relative SVG images with alt/caption.
+Raw HTML, executable directives, remote images, unmatched fences/backticks and
+unregistered image extensions refuse SOURCE_SYNTAX_UNSUPPORTED. Heading/contract/figure
+refs must resolve exactly once. Tables split only between complete body rows, repeat
+the header and a continuation caption, and never leave a lone header. A heading must
+share its page with at least two body lines or one complete table row; otherwise it
+moves. Code/preformatted lines never clip; unbreakable content fails fit rather than
+shrinking below the text floor.
+
+The target sheet is A4 portrait 210×297 mm, tolerance 0.2 mm. Body width is 170 mm
+with 20 mm side margins; running header band ends at 22 mm, body starts at 28 mm,
+footer band starts at 278 mm. Body/figure content ends no lower than 272 mm; the
+existing PDF extraction rounding gate at 276 mm is a secondary hard limit, not
+permission to invade the 6 mm footer clearance. Every page carries document id, part,
+issue and consecutive folio; tables/figures have resolved unique labels. Body text
+minimum is 9 pt, table/code 8 pt, rendered figure label 2.5 mm high. Routed Gothic
+and Letter Gothic are required technical faces; exactly one licensed serif chosen in
+the lock (Iowan or Georgia) serves prose. All are embedded; substitution is failure.
+Figures preserve aspect ratio at min(1,170/width_mm,250/height_mm), with a 200 mm height
+ceiling when sharing a flow page. A figure exceeding label floor after fitting moves
+to its own sheet or is redesigned, not shrunk further. Page content is black, white
+or neutral gray only (RGB channels within 1/255); every page has a 300 dpi raster tile
+for inspection. Overlap/clipping, missing glyph, unresolved reference or nonconsecutive
+folio is a blocking visual finding. [Geometry basis: build_book.py:61–71,115–128.]
+
+Output directory contains `<document_id>-<issue>.pdf`, same-stem HTML,
+`source-inventory.json`, `build-receipt.json`, `fonts/`, `tiles/page-0001.png` onward,
+and `gates/<stage>.json`. Each output is written temporarily, fsynced, renamed and
+hashed before receipt publication; the receipt is uploaded to M3 evidence custody.
+A failed build retains diagnostics, does not replace a prior accepted artifact, and
+returns BUILD_FAILED plus the failed stage. No automatic publication follows build.
+
+### 16.2 Gate stages and CT-16 handoff
+
+Stages are `source`, `build`, `semantic`, `evidence`, `visual`, `owner` in that order.
+The source stage runs `python3 scripts/handbook_lint.py`, then a registry/type/locator
+consistency check against Part IV §IV.2.4 and the pinned source inventory. Existing
+`handbook_spine.py` is a source-coverage aid until it consumes that registry; its
+hardcoded legacy count cannot certify the target. Build runs
+`python3 scripts/build_book.py --out <output_directory>/<document_id>-<issue>.pdf`
+in the locked environment and requires fit/furniture/checker output. The command
+currently needs implementation reconciliation to emit the full target receipt.
+Semantic/evidence reviewers independently inspect cross-contract behavior and
+source-bound claims. Visual review examines every 300 dpi tile, not a sample.
+
+BuildReceipt is `{schema_version:"cf.handbook-receipt.v1",build_id:ID,
+document_id:ID,issue:Text,source_commit:GitOID,source_inventory_digest:SHA,
+book_digest:SHA,build_lock_digest:SHA,dirty:boolean,artifact_digest:SHA,
+artifact_ref:EvidenceRef,page_count:PosInt,figures:ID[],tables:ID[],
+stages:[{name:Enum,status:PASS/FAIL/INCOMPLETE,reviewer_id:ID,
+evidence_refs:EvidenceRef[],started_at:Time,finished_at:Time}],
+findings:Finding[],created_at:Time}`. It includes source/build/semantic/evidence/visual
+results only; owner state is stored in the separate decision, not retroactively
+inserted into the hashed receipt. The build service publishes CT-16 to the acceptance
+service. A response `{receipt_ref:EvidenceRef,state:ready/blocked}` confirms receipt
+custody, not approval. Missing required stages, caps, empty selection and timeouts are
+INCOMPLETE. Stage budget defaults are source 120 s, build 1800 s and each review 3600 s;
+a cap emits evidence and never closes findings. M0 telemetry records document-stage.
+
+### 16.3 Findings, independence and owner decision (CT-18)
+
+Finding is `{id:ID,fingerprint:SHA,severity:critical/major/minor,stage:Enum,
+location:Text,requirement_id:ID,description:Text,state:open/fixed/waived,
+evidence_refs:EvidenceRef[],resolution_ref:EvidenceRef|null}`. Fingerprint hashes JCS
+`[requirement_id,location,description]`; exact duplicates retain the original id plus
+source refs, semantic merges require reviewer rationale and preserve both originals.
+Critical/major are blockers. A fixed finding requires changed-source/artifact evidence
+and an independent reviewer readback. The author cannot approve their own semantic,
+evidence or visual stage; reviewer principal differs from author, regardless of model.
+Owner is an authenticated human with project acceptance role, not a renderer agent.
+
+Critical findings and identity/integrity/security/required-evidence failures are never
+waivable. Major non-safety presentation findings may be waived only by the owner,
+using `{finding_id,artifact_digest,reason,owner_id,issued_at,expires_at}` signed under
+the authority identity; maximum validity is 30 days. Minor findings are visible but
+nonblocking. Expired waiver or any artifact-byte change requires a new decision.
+Thus acceptance is withheld while any unwaived blocker remains; a valid permitted
+waiver resolves the blocker for that exact artifact only, never reports it fixed.
+
+CT-18 decision is `{schema_version:"cf.handbook-decision.v1",idempotency_key:ID,
+decision_id:ID,document_id:ID,issue:Text,artifact_digest:SHA,build_receipt_ref:EvidenceRef,
+owner_id:ID,decision:accept/reject/withhold,waiver_refs:EvidenceRef[],reason:Text,
+decided_at:Time,expires_at:Time|null}`. Authenticated owner_id must match sender;
+accept requires clean source and all required stages PASS or an explicitly permitted
+waived review finding. Expiry is the earliest waiver expiry, otherwise null. The
+service persists the immutable decision and artifact retention hold before ACK,
+returns its evidence ref, and verifies readback. Repeated decision_id/input replays;
+changed input is DECISION_CONFLICT. New owner decisions use new IDs and name the prior
+receipt in reason; prior decisions remain historical. Delivery includes the artifact,
+complete build receipt and decision reference. The human boundary is qualified by
+that observable authenticated action, never an imaginary function inside the owner.
 
 ## RED field count: 2 (Status §1 — own gate reads FAIL, Metrics §8)
 
@@ -299,10 +443,12 @@ Required metrics cover stage duration, candidate and artifact counts, missing re
 ```checklist
 TITLE: M6 DOCUMENTATION
 WHO: DOC PANEL
-LINT - python3 scripts/master_doc_check.py
-√ PASS - MASTER-DOC: PASS, exit 0; a FAIL names the section and line
+LINT - python3 scripts/handbook_lint.py
+√ SOURCE - handbook_lint: clean; registry and locator validation remain separate
 BUILD - python3 scripts/build_book.py --out <pdf>
-√ GATES - lint, fit, furniture and check.py all green; page count printed
+√ GATES - locked source, fit, furniture, checker, semantic/evidence and every-page visual review
+DECIDE - publish CT-16 receipt, then obtain authenticated CT-18 owner decision
+√ HASH - decision binds the exact artifact digest; a process exit is not approval
 FIGURE FIT - svg_fit scales a sheet by min(1, 170/w_mm, 250/h_mm), aspect kept
 √ ONE RULE - the builder's fit rule and gen_handbook_figures.min_label_mm agree
 CROSSWALK - spot-check one M-id against its chapter section

@@ -2,6 +2,14 @@
 
 ## 1. Identity
 
+P5-B-39 reconciliation: the following identity/locator table is historical source
+coverage at its stated revision, not a current-HEAD assertion. The P5 source snapshot
+`fb11e92c1580b98e2e8d64cb9a81cdcb3ef64f02` contains a 510-line verify-node.sh
+(`wc -l`), including the later usage fix in `fe63289e58b554d46afce69ea25bbced35d329e1`.
+The 241-line identity review and 504-line ladder review are superseded inventories;
+no fresh live ladder run is claimed. Their old line locators remain dated source
+references, not executable target definitions. §§15–17 specify the current target.
+
 | Field | Value |
 |---|---|
 | Module name | PROVISIONING |
@@ -265,15 +273,14 @@ ch:trace row=CF-040 spec=docs/handbook/chapters/M1-provisioning.md#disk-floor wa
 
 ## 6. Contracts in and out
 
-Neither of M1's two edges is a canonical CT id (OUTLINE Part IV, CT-01..CT-18): node→crier
-**registration** (POST `/agents`) and the `bunker` daemon are host-level operations, not
-cross-system contracts with a peer chapter describing the same interface from the opposite end.
-Both are listed below with local ids; the state is UNVERIFIED where the wire was not measured.
+M1's canonical edges are CT-22 (enrollment/registration) and CT-23 (Bunker
+provisioning/exec). Part IV §IV.2.4 retires M1-C1/M1-C2 to coverage-import aliases.
+The following citations describe legacy source coverage, not target qualification.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| M1-C1 | crier | out | **none in-repo** — `bunker-crier-connect.sh` stages `$HOME/.node/crier.json` and probes the inbox via `node-bus-worker.py --check` (`:13`, `:33`, `:53`, `:114-118`); it does **not** issue a registration request or write `auth/crier.token` (B06). **Neither `node_identity.py` (`:50-107`, merges/replaces local JSON) nor `node_gateway_auth.py` (`:70-162`, writes dashboard basic-auth + a password file) registers an agent** (B03): the actual key-generation/registration producer is not established in any code read | crier `internal/registry/handler.go:598` `HandleRegister` (POST `/agents`) and `:613` `HandleRegisterByID` (POST `/agents/{id}`) — an earlier citation listed only `HandleRegister` for the id-in-path route (B08) | **UNVERIFIED** — the token/registration exchange was not re-run, and the in-repo producer half is not established |
-| M1-C2 | bunker daemon | out | `lib.sh:75` `bunker_exec` | **rumour — one side only** (the external `bunker` binary) | works (short create/exec/cp calls) |
+| CT-22 | crier | out | **none in-repo** — `bunker-crier-connect.sh` stages `$HOME/.node/crier.json` and probes the inbox via `node-bus-worker.py --check` (`:13`, `:33`, `:53`, `:114-118`); it does **not** issue a registration request or write `auth/crier.token` (B06). **Neither `node_identity.py` (`:50-107`, merges/replaces local JSON) nor `node_gateway_auth.py` (`:70-162`, writes dashboard basic-auth + a password file) registers an agent** (B03): the actual key-generation/registration producer is not established in any code read | crier `internal/registry/handler.go:598` `HandleRegister` (POST `/agents`) and `:613` `HandleRegisterByID` (POST `/agents/{id}`) — an earlier citation listed only `HandleRegister` for the id-in-path route (B08) | **UNVERIFIED** — the token/registration exchange was not re-run, and the in-repo producer half is not established |
+| CT-23 | bunker daemon | out | `lib.sh:107` `bunker_exec` | external public CLI/protocol | UNVERIFIED — legacy short-call observations lack a version-bound target qualification record |
 
 ## 7. Verification
 
@@ -317,7 +324,7 @@ Provisioning rate, refusal rate and per-leg latency are answerable only by readi
 
 | Failure | Presents as | Distinguished from | Recovery |
 |---|---|---|---|
-| Missing `lib.sh` | undefined `ok`/`have`/`bad`, shell aborts nonzero | a real check failure | restore `scripts/lib.sh` |
+| Missing `lib.sh` | named missing-library refusal before checks execute | a measured check failure | restore the repository-owned scripts/lib.sh, then rerun check; the old undefined-helper diagnostic is superseded (P5-B-40) |
 | Credential mode mismatch or bundle residue | `FAIL auth — installed but not mode 600: <file>=<mode>` or `FAIL auth_bundle — could not delete …` | a measured 0600 install with both copies deleted | fix the node permissions or cleanup path; re-run `--apply` (CF-214) |
 | Unknown explicit role | `FAIL disk-floor: unknown role …`, exit 2 (`disk_floor.py:123-125`, `:169-171`) | an absent role (which defaults to worker) | pass a valid role or drop the flag (F1-2) |
 | Gateway auth block absent at layer 20 | `FAIL gateway_start — refused: a public bind needs dashboard.basic_auth in ~/.hermes/config.yaml — block absent` from the adapter | a staged block — `project-node.sh` layer 20 runs `node_gateway_auth.py` before the adapter and prints `PASS gateway_auth — dashboard.basic_auth present …` (CF-150) | re-run `project-node.sh --apply`; a `dashboard` block that carries no **direct-child** `basic_auth:` stays a counted FAIL (producer exit 2, file left byte-identical) and needs a human. The structural rule (CF-292, tightened in round 2) is the indentation the consumer gate parses: the block is the run of indented, blank and comment lines after `dashboard:`, ending at the first column-0 key, and `basic_auth:` counts only at the block's **child indent** — so a `basic_auth:` under a sibling top-level key is *not* protection (it used to be certified by an eight-line window), a `basic_auth:` under one of dashboard's own child keys (`dashboard.child.basic_auth`) is *not* protection either (the first CF-292 fix still accepted any indented line), and a direct one passes however deep it sits (permanently pinned by `tests/test_node_gateway_auth.py`) |
@@ -550,7 +557,7 @@ RED is current coverage only.
 
 ## 15. Normative provisioning, enrollment and readiness contract (P3-12, P3-15, P3-23)
 
-The qualified MVP profile is a user-space, image-backed Bunker with a persistent mounted node home. The profile supports a pinned Hermes/Oh My Hermes build, a project checkout containing the embedded board, Crier membership, node-scoped proxy access and local Git-backed DuckBrain. Kubernetes, Compose, homelab and standalone modes are not universal guarantees; each is unsupported unless it supplies the same readback and conformance rows.
+The specified, not yet release-qualified, MVP profile is a user-space, image-backed Bunker with a persistent mounted node home. The profile supports a pinned Hermes/Oh My Hermes build, a project checkout containing the embedded board, Crier membership, node-scoped proxy access and local Git-backed DuckBrain. Kubernetes, Compose, homelab and standalone modes are not universal guarantees; each is unsupported unless it supplies the same readback and conformance rows.
 
 | Stage | Durable input and output | Required refusal / recovery |
 |---|---|---|
@@ -584,10 +591,10 @@ ROSTER - read fleet_agents.json and fleet-repo-scope.json
 √ MEMBER - the agent is in both stores before any dispatch
 ```
 
-## 16. Pass-4 qualified deployment profile (P4-DEPLOY-01)
+## 16. Deployment profile summary (P4-DEPLOY-01, refined by §17)
 
-The supported profile is `bunker.user-image.v1`, a capability-qualified, rootless
-execution profile. It is not a universal Bunker mode. The profile manifest is the
+The target profile is `bunker.user-image.v1`, a rootless execution profile requiring
+capability and release qualification under §17.3. It is not a universal Bunker mode. The profile manifest is the
 source of truth and is immutable for one provisioning generation:
 
 | Field | Required value or rule |
@@ -596,30 +603,21 @@ source of truth and is immutable for one provisioning generation:
 | `artifact` | an OCI image or equivalent user-space archive named by digest, plus the Hermes artifact URL, version `0.19.0`, and SHA-256; a tag or version without a digest is refused |
 | `host` | Linux user namespace, `uidmap`, `fuse-overlayfs`, `slirp4netns`, `git`, Python `>=3.11,<3.14`, and the pinned Bunker CLI/protocol; capability probes must pass before create |
 | `runtime` | rootless image-backed container or equivalent user-space Bunker, no privileged mode, no host root, and no ambient provider credential |
-| `mounts` | `$HOME/.node` (0700), `$HOME/repo` (project checkout with embedded board), `$HOME/.cache/hermes`, sealed shared module cache, and `$HOME/.local/share/code-factory/evidence`; each path is absolute, owned by the node user, and recorded in the manifest |
-| `network` | Crier endpoint, forge endpoint and proxy endpoint are explicit HTTPS/TLS or declared tailnet endpoints; egress is denied except to those endpoints and DNS; the effective routes are read back |
+| `mounts` | whole persistent HOME and a separate read-only module cache; §17.4 specifies every retained path, owner, mode and replacement/removal rule |
+| `network` | §17.4 phase-specific authority/Crier/forge/proxy/memory/DNS allowlist plus bootstrap-only signed artifact mirror; effective routes are read back |
 | `identity` | one `node_id`, `project_id`, profile generation and Bunker principal; repository identity `{forge, host, owner, repo, ref}` is separate from every `credential_ref` |
 | `credentials` | five references (forge, Crier, Bunker control, inference proxy, DuckBrain); references identify owner, scope, mode, expiry and revocation generation, never secret values |
 | `persistence` | the node home and evidence mount persist across restart; image-layer changes do not; the readiness report records the actual persistence result |
 
-Bootstrap is an operation `schema: cf.provision.v1` with `operation_id`,
-`request_id`, `project_id`, `node_id`, `profile_id`, `generation`, `manifest_digest`,
-`repository`, `credential_refs` and `idempotency_key`. The controller performs disk
-admission and capability probes, creates the user-space Bunker, mounts only declared
-paths, installs each digest-checked artifact, creates the project checkout and its
-embedded board, enrolls the Bunker and stages all credential classes. It then reads
-back the effective image digest, runtime capabilities, mount ownership/modes, network
-routes, repository commit, board identity, credential scope/expiry (without values),
-Hermes version and a successful Crier, inference and DuckBrain operation. A written
-configuration or HTTP liveness response alone is not readiness.
+Bootstrap uses the complete `cf.provision.v1` request and ordered stages in §17.2.
+Trust, enrollment and a verified bus read precede credential-dependent private clone.
+Effective mounts, network, repository, board, credential scope, harness, inference and
+local/remote memory are measured before certification; liveness alone is insufficient.
 
-The result is `schema: cf.provision-result.v1` with `operation_id`, `generation`,
-`state`, `completed_stages`, `artifact_digests`, `readiness_report_ref` and
-`failure_ref`. States are `ADMITTED`, `CREATED`, `ENROLLED`, `PROVISIONED`,
-`CONNECTED`, `VERIFIED`, `DEGRADED`, `REPLACEMENT_REQUIRED` and `REMOVED`; an
-unavailable required check is `UNVERIFIED` and blocks M9 admission. Repeating the
-same request and manifest digest returns the recorded result. A changed digest or
-generation is `GENERATION_CONFLICT` and cannot mutate the old Bunker.
+The result uses `schema_version: cf.provision-result.v1` and §17.2's complete
+state/version fields, including DECLARED and ENROLLMENT_FAILED. UNVERIFIED belongs
+to check outcomes, not the provisioning state enum. Same-key replay, resume and
+N→N+1 upgrade/replace are distinct operations with the §17.2 CAS preconditions.
 
 Upgrade drains Crier retrieval, refuses new admission, snapshots the manifest and
 credential generations, installs the new digest in a replacement generation, runs the
@@ -631,3 +629,251 @@ Removal verifies that no active lease remains, revokes all five credential class
 archives the readiness and operation records, and deletes only owned mounts. These
 procedures are specified target behavior; the live profile and cross-host operations
 remain `UNVERIFIED` until their stated readbacks are run.
+
+## 17. P5 executable provisioning profile
+
+This section resolves P5-B-03/06/13–19. Types and canonical serialization are Part IV
+§IV.2; authority, certificates, broker-only write credentials and journal durability
+are Part I §§1.9.1–1.9.3a. These protocols specify required behavior, not installed
+capabilities. Any earlier stage list is a summary of the ordered stages below.
+
+### 17.1 First trust, registration and credential exchange
+
+The offline operator CA is Ed25519 (RFC 8032); public keys are 32-byte raw values,
+base64url without padding; private keys never leave their originating custodian.
+Certificates are X.509 DER carried as base64, with the SAN and usages in Part I
+§1.9.3. The operator provisions a read-only trust bundle containing CA certificate,
+authority DNS name, server SPKI SHA-256 and permitted project into the fresh Bunker
+through the authenticated Bunker-control channel. A failed chain/DNS/SPKI check
+refuses before any enrollment secret is sent; trust-on-first-use is forbidden.
+The Bunker generates its own key and PKCS#10 CSR. The initial Bunker-control credential
+is operator-owned, not obtained through the bus it is creating.
+
+The operator authorizes one enrollment grant, signed offline, containing exactly
+`{schema_version:"enrollment-grant.v1", grant_id:ID, registration_id:ID,
+agent_id:ID, project_id:ID, node_id:ID, generation:PosInt, public_key:Base64url32,
+nonce:Base64url32, issued_at:Time, expires_at:Time, issuer_key_id:ID}` plus
+`signature:Base64url64`. Lifetime is at most 600 s. The signature covers UTF-8
+`CF2A-ENROLL-1\n` followed by JCS of the object excluding signature. The nonce uses
+32 cryptographically random bytes. registration_id is controller-allocated before
+first exchange, not registration_generation. A grant is delivered in a mode-0600
+file, removed after successful enrollment on both endpoints; it is never argv/log.
+
+`POST /v1/enroll` is the sole client-certificate exception: TLS 1.3 authenticates
+the pinned authority server; grant signature and proof of possession authenticate
+the client. Body is `authority.v1` with idempotency_key, grant, csr_der and
+public_key. The request has X-Request-Id, X-Correlation-Id, X-Nonce (fresh 32 bytes),
+X-Created-At, X-Key-Id and X-Signature. Signature bytes are Ed25519 over the UTF-8
+string `CF2A-REQUEST-1\n<METHOD>\n<path>\n<request_id>\n<corr_id>\n<created_at>\n<nonce>\n<sha256(JCS(body))>`
+with no final LF, signed by the Bunker key. No query is permitted on enrollment;
+other signed routes sort percent-encoded query pairs bytewise and include them in
+path. The authority rejects more than 30 s clock skew (`CLOCK_SKEW`), an expired
+or revoked grant (`GRANT_EXPIRED`/`UNAUTHORIZED`), reused nonce with different digest
+(`REPLAY_CONFLICT`) or wrong key/scope (`UNAUTHORIZED`). Nonce/digest/receipt retention
+is at least 24 h after credential expiry. An identical nonce/digest returns the saved
+receipt and performs no issue operation. A fresh nonce with the same idempotency key
+and body digest also returns the original receipt.
+
+The authority atomically consumes the grant and records certificate serial,
+registration_id, agent/project binding and registration_generation=1 using the
+Part I journal. Renewal requires the current certificate and expected_generation;
+it increments registration_generation once. First registration never asks a caller
+for an unallocated generation. Changed grant/key under the same registration_id is
+`REGISTRATION_CONFLICT`. Response data is `{registration_id, registration_generation,
+certificate_der, expires_at, credential_refs:CredentialRef[], authority_seq}`;
+this certificate is public, not a bearer secret. A crash after issue returns the
+same certificate/refs. The node then uses mTLS plus signed request to Crier's target
+`POST /factory/v1/registrations` with `register.v1` (Part IV). This adapter is not a
+claim that legacy POST /agents already implements this wire. Crier checks the live
+authority binding, persists the registration, and returns registration metadata and
+a scoped bus credential reference before any inbox read.
+
+CredentialRef is `{id:ID,class:forge/crier/bunker/proxy/memory,subject:ID,
+project_id:ID,operations:ID[],generation:PosInt,expires_at:Time,issuer:ID}`.
+A local installer resolves it only through a private AF_UNIX broker socket mode
+0600 using SO_PEERCRED and the enrolled principal's assigned ref list. The response
+is a sealed file descriptor (SCM_RIGHTS), not JSON secret bytes. The installer copies
+it into an O_EXCL temporary file under `.node/auth`, chmods 0600, fsyncs and renames;
+parent directories are 0700, owner UID is the Bunker UID, no symlink is accepted.
+Readback returns fingerprint, effective scope, expiry and mode, never contents.
+The controller transfers only read-only forge credentials to the node; protected
+writes use broker capabilities (Part I §1.9.7). Proxy credentials cannot expose
+upstream provider keys. Every installed class has separate issuer and revocation id.
+
+Crier read proof is signed `GET /agents/<agent_id>/inbox/stats`, empty-body digest,
+with the same signature framing and mTLS; response binds registration generation and
+request id. Duplicate GET nonce replays its saved observation, not a fresh read.
+Revocation is authority `POST /v1/revocations`, then readback of the exact ref/serial
+and a negative probe at the resource boundary. `401 CAPABILITY_REVOKED` or certificate
+refusal is proof; deletion of a file is not. Renewal starts at half lifetime (12 h
+for the maximum 24 h certificate), and admission stops at expiry. All enrollment,
+renewal, denial and failure records use M0 §16.1 telemetry without nonce/key values.
+A grant signed by an unknown operator, duplicate first request, changed CSR retry,
+clock-skew failure, lost response and revoked read are mandatory conformance cases.
+
+### 17.2 Ordered stages, complete request and resume
+
+Only this dependency order is executable: (1) validate request/release lock and disk;
+(2) reserve host capacity and create Bunker with persistent mounts; (3) install trust
+and enroll; (4) install Crier credential and prove signed bus read; (5) install
+read-only forge/proxy/memory references; (6) clone exact repository object and embedded
+board; (7) install seed and Hermes/omh from the release lock; (8) measure inference,
+local/remote memory and effective isolation; (9) activate readiness/binding. A private
+clone never precedes its credential, and clone failure leaves a bus-visible degraded
+node. Each stage records input digest, start intent, result and artifact refs in the
+operation journal. Dependents do not run after failure. No automatic destroy erases
+diagnostics.
+
+The `cf.provision.v1` request has these exact required members (closed object):
+operation_id, request_id, project_id, node_id (ID); profile_id literal
+`bunker.user-image.v1`; generation (PosInt); expected_generation (UInt);
+operation (`create`, `resume`, `upgrade`, `replace`, `remove`); manifest_digest (SHA);
+repository `{forge:github/gitlab,host:DNS,owner:ID,repo:ID,ref:GitRef,commit:GitOID}`;
+credential_refs (one ref per required class); idempotency_key (ID); manifest (below).
+No field is null. A create compares expected_generation=0 and installs generation=1;
+upgrade/replace compares N and installs N+1 with a new operation/key after drain/fence.
+remove compares current N without allocating a new runtime. Reusing a key with changed
+input is `IDEMPOTENCY_KEY_REUSED`, not an upgrade. Resume references the same
+operation_id, generation and manifest digest with a distinct request/idempotency key;
+it returns current progress and resumes only unfinished idempotent stages after discovery.
+An exact retry replays the original receipt; GET operation reads subsequent progress.
+
+Manifest fields are `release_lock_ref:EvidenceRef`, `role:worker/builder/full`,
+`disk_floor_gib:integer[1,4096]`, `ttl_s:integer[60,604800]`, `namespace:ID`,
+`endpoints:{authority,crier,forge,proxy,memory,artifact_mirror,dns}` (Endpoint each),
+`mount_root:AbsolutePath`, `seed_ref:EvidenceRef`, `network_phase:bootstrap/runtime`.
+Endpoint is `{host:DNS,port:integer[1,65535],tls_spki:SHA}`; DNS uses port 53 and
+an empty tls_spki string only. The minimal request contains all fields; optional
+settings are absent and supplied by the following defaults: worker floor=5 GiB,
+builder=10, full=20, ttl_s=21600, network_phase=bootstrap. The request is materialized
+with these values before hashing, so omitted/defaulted requests have identical intent.
+
+The target CLI accepts `--request FILE` (UTF-8 JSON), `--config FILE` and repeatable
+`--set KEY=JSON`; it never sources config. The complete KEY set is the top-level request
+member names above plus `role`, `disk_floor_gib`, `ttl_s`, `namespace`, `endpoints`,
+`mount_root`, `seed_ref`, `release_lock_ref` for manifest members. A config line is
+ASCII KEY, `=`, one JSON value; blank lines and lines beginning `#` are ignored;
+inline comments, duplicate keys, shell expansion, unknown keys, unquoted strings and
+empty RHS are refused. Precedence is explicit CLI sets > request JSON > config >
+role defaults; conflicting duplicate CLI sets refuse. The sole ambient exception is
+NODE_DISK_FLOOR, between CLI/request and config; all other CF/provision environment
+values are ignored. A missing required member is `INVALID_FIELD` before spawn.
+This is a target adapter grammar, not an assertion about existing shell flags.
+A complete create example is specified in Part IV §IV.3 using declared fixture refs;
+it cannot certify a real installation.
+
+The durable state enum is DECLARED, ADMITTED, CREATED, ENROLLED, PROVISIONED,
+CONNECTED, VERIFIED, ENROLLMENT_FAILED, DEGRADED, REPLACEMENT_REQUIRED, REMOVED.
+UNVERIFIED is a check outcome, never a provisioning state. The forward sequence in
+§15 applies; any nonterminal stage may enter DEGRADED (enrollment failure uses
+ENROLLMENT_FAILED), then resume the last completed stage after dependency readback.
+VERIFIED→DEGRADED on drift/expiry; VERIFIED→REPLACEMENT_REQUIRED on lost state;
+REMOVED is terminal. Results include operation_id, generation, state, completed_stages
+(ordered unique stage numbers 1..9), artifact_digests (SHA[]), readiness_report_ref
+(EvidenceRef or null), failure_ref (EvidenceRef or null), state_version (PosInt).
+Mutation effects and result are journaled/fsynced before acknowledgement.
+
+### 17.3 Release lock and owner decision B-RELEASE
+
+No complete qualified release lock is evidenced by this issue. Therefore the profile
+is SPECIFIED, NOT QUALIFIED, and apply/admission refuses `RELEASE_LOCK_UNAPPROVED`.
+Hermes 0.19.0 and omh 4.0.5 are proposed compatibility targets, not proof of a complete
+reproducible deployment. This resolves the former false claim of a qualified profile
+without inventing a download or digest. Decision slot B-RELEASE (shared with A-RELEASE):
+options are qualify the existing pins as one integrated bundle, or select and qualify
+a newer complete bundle. Default is neither; release owner supplies a signed lock and
+live certification before installation. It cannot be waived by a caller-supplied hash.
+
+The release owner publishes immutable `cf.release-lock.v1` with release_id, platform
+(`linux/amd64` or `linux/arm64`), artifacts (nonempty ordered entries), protocol_versions
+(sorted unique strings), config_versions (sorted unique strings), qualification_ref
+(EvidenceRef), issuer_key_id and signature. Each artifact has name, exact version,
+HTTPS URL, full SHA-256, byte size, media_type, install_path, dependency_names and
+owned_paths. Required names are image/archive, Bunker client, Bunker daemon, Python,
+Hermes, omh, omh-config, Node, Go, GitReins, Boardctl, DuckBrain, supervisor and all
+transitive wheels/npm archives/OS libraries; a lock with unresolved dependencies,
+floating tags, ellipses or an absent architecture refuses. The signature is Ed25519
+on `CF2A-RELEASE-1\n` plus JCS excluding signature; the offline operator trust bundle
+pins the release signer. omh-config is content-addressed configuration including exact
+plugins and enablement; a package version is not integrated configuration. The target
+protocol compatibility set is Part I §1.9.8 plus the schemas in Part IV §IV.2.
+
+Existing full source pins, not qualification evidence, are:
+
+| Artifact | Source URL | SHA-256 |
+|---|---|---|
+| Node v22.22.3 linux-x64 | https://nodejs.org/dist/v22.22.3/node-v22.22.3-linux-x64.tar.xz | `2e5d13569282d016861fae7c8f935e741693c269101a5bebcf761a5376d1f99f` |
+| Node v22.22.3 linux-arm64 | https://nodejs.org/dist/v22.22.3/node-v22.22.3-linux-arm64.tar.xz | `1c4a9933a5e45bc88f54f70b5f91232c127ec49f1a5989d23fb85824c7adf9b7` |
+| Go 1.26.5 linux-amd64 | https://go.dev/dl/go1.26.5.linux-amd64.tar.gz | `5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053` |
+| Go 1.26.5 linux-arm64 | https://go.dev/dl/go1.26.5.linux-arm64.tar.gz | `fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49` |
+
+Sources: `scripts/install-node.sh:26-28`, `scripts/install-go.sh:7-9` at the source
+revision of this change. These values are copied from source, not re-downloaded here.
+
+### 17.4 Network, mounts, storage transactions and certification
+
+Bootstrap permits only the manifest endpoints, including artifact_mirror and memory,
+over their pinned transports, plus the declared DNS resolver. Artifacts and dependency
+archives come from the signed mirror; redirects outside its allowlist refuse. Go cold
+cache proof uses a mirrored module/sum database or a preloaded signed cache with
+GOPROXY=off; no arbitrary internet exception exists. Before runtime admission the
+provisioner disables artifact-mirror egress, reads back the firewall policy and records
+its digest. Runtime permits authority, Crier, forge read endpoint, proxy, memory and
+DNS. Broker mutation endpoint is served by authority's declared endpoint. Each failed
+or unexpected connection invalidates network readiness. [M5 §16; Part I §1.6.]
+
+One persistent volume mounts the entire node HOME, owner=node UID, root mode 0700;
+no second overlapping mount masks `.hermes` or `.local`. Its required paths are
+`.node` (identity/journals/auth), `.hermes` (config/prompts/skills/sessions),
+`.local/harness` and toolchain roots (executables/venvs), `.local/share/duckbrain`
+(namespace Git repo and pending commits), `repo` and `worktrees`,
+`.local/share/code-factory/evidence` and `.cache/hermes`. Credentials/files are
+0600, directories 0700, executables 0700; immutable cache mount is separately
+read-only, never inside a writable path traversed by the installer. Restart preserves
+all HOME paths. Replacement copies journal/evidence/pending-memory snapshots under a
+new identity and revokes old auth; it never copies reusable write credentials.
+Uninstall preserves evidence, session history and pending memory under retention holds;
+only the signed owned_paths list is deletable after M3 backup receipt readback.
+
+`node.json` schema is `cf.node.v1`: schema_version, revision (PosInt), node_id,
+project_id, generation, agent, namespace (ID), repo (Repository), harness
+`{name:"hermes",release_lock_ref:EvidenceRef}`, bus `{base:HTTPSURL,
+registration_id:ID,registration_generation:PosInt}`, duckbrain
+`{namespaces:ID[],root:AbsolutePath}`, created_by/provisioned_by (ID),
+created_at/provisioned_at (Time), freshness `{commit:GitOID,observed_at:Time}`.
+No secret and no unregistered field is allowed. Both writers take the same
+`.node/node.lock` exclusive flock, reread revision, compare expected_revision,
+merge only their §3-owned fields, increment revision, fsync temporary file, rename,
+fsync parent and release. Conflict is `IDENTITY_CONFLICT`; malformed input preserves
+the old file and refuses. Atomic rename without the shared lock/CAS is insufficient.
+
+Seed is `cf.seed.v1` with seed_id, generation, release_lock_ref, entries
+`[{path:relative-path,mode:0644/0755,size:UInt,digest:SHA}]`, issuer_key_id, signature.
+Entries sort bytewise by path, are unique, restricted to prompts/skills/config, and
+forbid absolute paths, `..`, symlinks, hardlinks, device nodes and duplicate tar entries.
+Total expanded bytes are at most 16777216. Archive SHA-256 is in the signed release lock;
+seed signature uses `CF2A-SEED-1\n` plus JCS excluding signature. Applied record is
+`{schema_version:"cf.seed-applied.v1",seed_id,generation,manifest_digest,
+installed_tree_digest,applied_at,operation_id}`. Extraction/verification occurs in a
+new immutable generation directory. A single atomic current symlink switches the whole
+seed after fsync; prompts/skills/config consumers resolve through that pointer.
+Force-reseed requires an explicit operation and retained old-generation snapshot;
+crash before pointer switch uses old tree, afterward uses new tree and repairs the
+applied-record projection from the journal. Mixed multi-directory copies never count
+as applied. Local edits are detected, preserved as evidence and refuse forced switch
+without recorded operator authorization.
+
+Readiness check names are profile, disk, mounts, network, identity, repo, board,
+Crier, harness, inference, memory-local and memory-remote. Each is
+`{name,status:PASS/FAIL/UNVERIFIED,observed_at:Time,evidence_ref:EvidenceRef,error:Error|null}`.
+Initial VERIFIED requires all live legs PASS and certificate/fence validity; a
+report expires after 86400 s or earlier credential expiry. Admission rechecks live
+fence/binding and observation age <=30 s for repo/board/authority. Artifact/config
+change, credential revocation, mount/network drift or corrupted local memory immediately
+invalidates it. A remote-memory outage after certification permits already admitted
+work with local Git durability and pending-sync; new admission requires remote freshness
+<=300 s. Beyond 300 s the node is DEGRADED, new admission stops, and existing work
+may finish locally but cannot settle until controller-readable evidence exists.
+Unknown/corrupt local memory stops work immediately. There is no false VERIFIED from
+an unavailable initial remote leg. Recovery performs fresh readbacks and creates a new
+report; historical reports remain immutable. [Part I §1.9.9; Part II F3.]

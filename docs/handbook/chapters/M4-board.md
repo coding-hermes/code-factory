@@ -105,7 +105,7 @@ file is a stale artifact, not a barrier — proceed and file a row to have it re
 
 ## 6. Contracts in and out
 
-Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Local ids are
+Canonical IDs come from the 31-entry Part IV §IV.2.4 registry. The table below retains historical source coverage, not target qualification. Local ids are
 retired; each row carries the CT id its peer chapter cites.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
@@ -184,7 +184,7 @@ carried from an earlier capture (N9):
 | Failure | Presents as | Distinguished from | Recovery |
 |---|---|---|---|
 | Stale lock (RESIDUE, clean scan) | `board_lock.py` → `RESIDUE consumers=<n> commits_after_mtime=<n>` from a clean scan | a held lock (HELD names a live `holder=pid-N`/`flock-eagain`) | the file is not a barrier; proceed and file a row to remove it deliberately — never delete it in-band (CF-119) |
-| Stale lock (RESIDUE, degraded probe) | the same `RESIDUE` shape produced from a failed/unreadable `flock_probe` or a `/proc` scan that skipped processes | a clean-scan RESIDUE | **do NOT proceed** — this is an UNKNOWN observation, not proof of staleness (B09). Re-run the probe or establish observation quality before acting; `adjudicate` discards the probe error/detail, so the classifier alone cannot tell the two apart |
+| Probe error (ERROR, degraded observation) | `board_lock.py` reports `ERROR lock=… probe=open-failed …`, exit 3 (CF-259) | a successfully probed RESIDUE | do not write; repair permissions/filesystem and rerun. The older error-discarding RESIDUE behavior is superseded, not the current diagnostic. A partial process scan remains unproven until a complete probe succeeds |
 | Live holder (HELD) | `board_lock.py` → `HELD holder=pid-N` or `HELD holder=flock-eagain` | a residue | wait; the holder is live, do not force the lock |
 | Duplicate id / fingerprint | refused on append (`already exists … create aborted`) | a valid new row | use a new id or resolve the duplicate finding |
 | Rule set only in chat | nine board rules have no module home | a written law | **OPEN** — CF-344 |
@@ -321,23 +321,165 @@ notes M4, proposal "required board metrics"). Upstream stats/doctor reports (§4
 are reusable components; a grep proving no Prometheus calls is coverage evidence, not the metric
 design.
 
-## 15. Normative board authority, claim and closeout contract (P3-12)
+## 15. Normative board authority, claim and closeout contract (P5-B-04/20–23/26)
 
-Each project repository carries one board identity `(project_id, board_id, repository, canonical_ref)`. The published canonical ref is authoritative for scheduling and closeout; a local clone is an observation cache until it has refreshed and recorded the exact commit. The foreman owns task claims and closeout through Boardctl; Scheduler reads eligibility and admission but does not replace the board claim protocol.
+The project board identity is `{project_id:ID,board_id:ID,repository:Repository,
+canonical_ref:GitRef}`. The authority is the configured published ref, not any clone
+or local lock. Part I §1.9.6 fixes its compare-old-OID operation and transaction
+marker. This section supplies validation, storage and recovery. The broker is the
+only principal permitted to update the protected canonical ref; force pushes, deletes,
+non-broker writes and writes omitting the validator are denied by server policy.
+If the forge cannot enforce that policy, readiness refuses `BOARD_CAS_UNSUPPORTED`.
+Boardctl constructs/validates requests; it is not a second claim authority.
 
-The canonical eligibility rule is: a row is eligible only when `status=pending`, its required acceptance criteria are present, every prerequisite is `complete`, it is not cancelled, its board revision is current, and no active claim exists. `blocked` and `deferred` are incomplete; a deferred row carries a reason, owner, review time and return condition. Missing or malformed prerequisites, dependency cycles, malformed rows and unreadable sources are `UNKNOWN`, never an empty workable board. A healthy empty board is `EMPTY`; a healthy board with no eligible row is `NO_WORK`; an unavailable or partial observation is `UNAVAILABLE`.
+### 15.1 Append-only row images, events and reducer
 
-A claim request is `schema: cf.board-claim.v1` with `task_id`, `project_id`, `board_commit`, `expected_revision`, `claim_id`, `owner_id`, `lease_until` and `fence_token`. Boardctl performs compare-and-set on `(task_id, expected_revision, status)` while holding the board write lock; it appends the row transition and event with the same operation id. A competing clone receives `CONFLICT`, refreshes the canonical ref and re-evaluates. Every protected write checks the current fence token, so an expired or replaced owner cannot publish, close or append a completion event.
+Target board format is `cf.board.v1`. Both JSONL files start with exactly one header
+`{schema_version:"cf.board.v1",kind:"header",project_id:ID,board_id:ID}`.
+Subsequent lines are RFC 8785 objects plus LF, no blank or unterminated lines.
+Tasks are full immutable row images, not in-place updates. Repeated task id is legal
+only with consecutive revisions; duplicate `(id,revision)` is corruption even when
+bytes agree. Old headerless stores require an explicit migration with preserved
+original evidence; readers do not silently infer a new schema.
 
-Closeout requires the task criteria, an accepted verdict, exact tested tree, published object, evidence references and a durable completion event. Partial row/event writes return `PARTIAL_WRITE` with the operation id; repair reads both stores, deduplicates by event id, completes the missing side or marks the operation `REPAIR_REQUIRED`, and never repeats a side effect blindly. Board backup/restore validates row/event revision, evidence references and git revision before admission resumes.
+TaskRow has exact fields: `kind:"task"`, `id:ID`, `revision:PosInt`, `operation_id:ID`,
+`title:Text`, `status:pending/in_progress/blocked/deferred/complete/cancelled`,
+`priority:integer[0,100]`, `complexity:integer[1,10]`, `reasoning:Text`,
+`acceptance_criteria:Criterion[1..100]`, `depends_on:ID[]`, `fixture:boolean`,
+`created_at:Time`, `updated_at:Time`, `claim:Claim|null`, `deferral:Deferral|null`,
+`completion:Completion|null`. Criterion is `{id:ID,text:Text,verification:Text}`;
+arrays preserve order except depends_on is unique bytewise sorted. Claim is
+`{claim_id:ID,claimant_id:ID,claim_generation:PosInt,lease_expires_at:Time,
+owner_fence:Fence}`. Deferral is `{reason:Text,owner_id:ID,review_at:Time,
+return_condition:Text}`; required for deferred and forbidden otherwise.
+Completion is `{run_id:ID,implementation_commit:GitOID,integration_commit:GitOID,
+verdict_ref:EvidenceRef,publication_ref:EvidenceRef,evidence_refs:EvidenceRef[]}`;
+required only for complete. The referenced implementation/integration is the tested
+parent, never the closure commit itself (M3 §17).
 
-The shared claim authority is the published canonical ref for the project repository. A clone first refreshes and records `(project_id, board_id, canonical_ref, board_commit, observed_at, freshness)`; its local lock is only a serialization aid and is not cross-clone authority. A claim is staged as one operation id in a temporary row and event, then published with a commit marker. Readers accept only a matching row/event pair at the published revision. Before the commit marker is visible, no foreman may start work. A competing clone whose `(task_id, expected_revision, status)` no longer matches receives `CONFLICT`, refreshes and re-evaluates; it never starts on a local winning lock.
+Event is `{schema_version:"cf.board-event.v1",event_id:ID,operation_id:ID,
+task_id:ID,expected_revision:UInt,new_revision:PosInt,actor:ID,
+type:create/claim/renew/release/block/defer/resume/cancel/complete/reopen,
+row_digest:SHA,occurred_at:Time,evidence_refs:EvidenceRef[]}`. Exactly one event
+matches each new row image, its row_digest hashes that whole row, and new_revision
+is expected_revision+1. Per-task revisions start at 1; event IDs are globally unique
+within board_id. Physical append order is canonical commit order, then event order
+within the transaction; timestamps never reorder state. The reducer validates all
+headers, rows, unique keys, marker hashes and event pairs before returning the highest
+revision for each id. It never skips malformed rows or takes a last-writer timestamp.
 
-The normalized claim record is `schema: cf.board-claim.v1` with `operation_id`, `task_id`, `project_id`, `board_commit`, `expected_revision`, `claim_id`, `owner_id`, `lease_until`, `fence_token`, `staged_revision`, `published_revision` and `state`. The same names are used in row and event projections. A lease expiry is not a fence by itself: the canonical authority increments the fence generation, publishes the replacement, and every protected start, progress, closeout and return checks the current token. An old owner receives `FENCED` and its late result is retained as evidence only.
+Legal transitions are create→pending; pending→in_progress/blocked/deferred/cancelled;
+in_progress→pending/blocked/deferred/complete/cancelled; blocked/deferred→pending/cancelled;
+complete/cancelled→pending only through an authorized reopen carrying evidence and a
+new revision. Renew preserves in_progress and the same claim generation; release
+returns to pending after quiescence. Defer requires Deferral, resume clears it after
+the named condition's evidence; review_at never auto-completes a dependency. Cancellation
+first requests M2 control and quiescence; a pending request does not falsely mark a
+running process stopped. Cancelled prerequisites remain unsatisfied unless an explicit
+revision removes/replaces the dependency with owner rationale. Dependency cycles,
+self-links or missing targets refuse the whole mutation.
 
-If row staging succeeds but event staging or publication fails, readers see `PARTIAL_WRITE` with the operation id, not an unchanged-store claim and not a second owner. Repair reads both stores and the commit marker, deduplicates by operation/event id, completes the missing projection or records `REPAIR_REQUIRED`; scheduling is `UNAVAILABLE` until repair and revision validation succeed. An abandoned claim is released only after lease, owner liveness and native-run reconciliation; if quiescence is unknown it is quarantined and cannot be reclaimed. Acceptance evidence is the canonical commit and readback of both row and event, including the competing-clone loser and a fenced late return.
+The eligibility oracle excludes fixture=true, all non-pending states, missing criteria,
+active/quarantined claims and any prerequisite not complete. It validates the whole
+dependency graph first. It sorts eligible ids by descending priority, then bytewise id.
+`GET /factory/v1/boards/<board_id>/eligibility?revision=<algorithm>:<oid>` returns
+`{schema_version:"cf.board-read.v1",board_id,board_revision:GitOID,observed_at:Time,
+status:EMPTY/NO_WORK/WORK/UNAVAILABLE,eligible:ID[],counts:{tasks:UInt,fixtures:UInt,
+eligible:UInt},errors:Error[]}`. EMPTY means zero non-fixture tasks; NO_WORK means
+non-fixture tasks exist but none eligible; corruption/stale/unreadable/missing source
+means UNAVAILABLE, empty eligible and nonempty errors, never healthy empty. The revision
+must match the freshly fetched remote observation at most 30 s old. Scheduler,
+foreman and Boardctl use this exact reducer/oracle; no separate terminal vocabulary
+is permitted. The endpoint is a required target adapter, not an assertion that the
+current source-only board reader implements it.
 
-Required metrics cover status and eligibility classes, stale claims, lock outcomes, parse/validation failures, claim conflicts, duplicate suppression, closeout evidence rejection, drift age and partial-write repair. Boardctl, `board_read.py`, Scheduler and the foreman consume the same eligibility oracle. Acceptance cases cover two clones claiming one row, a stale revision, malformed JSON, a dependency cycle, a failed event append and an idempotent repeated closeout.
+### 15.2 Concrete claim CAS and server-side enforcement
+
+CT-10 request has `schema_version:"cf.board-claim.v1"`, operation_id, project_id,
+board_id, task_id, claimant_id, claim_id, idempotency_key (IDs), board_revision
+(GitOID), expected_revision (UInt), expected_status (`pending` or `in_progress`),
+claim_generation (UInt; expected current generation, zero for unclaimed),
+lease_expires_at (Time, requested bound), owner_fence (Fence), transition
+(`claim`, `renew`, `release`), evidence_refs (EvidenceRef[]). No owner_id,
+lease_until, fence_token, board_commit, staged_revision or published_revision aliases
+are accepted. The project owner_fence is distinct from per-task claim_generation.
+Only the broker allocates the next generation on claim/reclaim; renewal never advances it.
+Result is `{operation_id,claim_id,claim_generation:PosInt,new_revision:PosInt,
+board_revision:GitOID,lease_expires_at:Time,duplicate:boolean}`. The result's Git OID
+is returned after publication, not embedded in its own commit.
+
+The broker serializes project effects against epoch advance (Part I §1.9.3a), then:
+
+1. Fetches the protected ref into an isolated worktree and verifies it equals the
+   requested board_revision. It validates the full reducer, expected task revision,
+   expected status, dependencies, live owner fence and claimant's project scope.
+2. Uses the broker's monotonic clock for a 120 s lease, renewed every 40 s, bounds the
+   requested expiry accordingly, and increments claim_generation on a new claim.
+   The authority records the monotonic deadline; wall-clock expiry is readout only.
+3. Constructs one candidate Git commit with sole parent equal to the old remote OID.
+   It appends exactly one row and event and adds the Part I §1.9.6 marker at
+   `.coding-hermes/board/transactions/<operation_id>.json`. Marker hashes cover the
+   complete resulting tasks/events bytes. It records the candidate OID in its effect
+   journal, not inside that marker. No worker starts yet.
+4. Submits receive-pack old-OID→candidate-OID update to the protected ref. A required
+   server-side pre-receive validator, or an equivalent broker-only protected repository
+   service, verifies exact parent, append-only prefixes, marker hashes, authorized fields,
+   revision/status/claim transitions and unexpired broker effect authorization. The ref
+   lock compares old OID atomically; only one candidate can win. A forge exposing only
+   an unchecked merge API does not satisfy this contract.
+5. Fetches the exact remote marker/row/event and verifies the accepted OID before returning
+   success and waking Scheduler. A lost push acknowledgement is resolved by marker lookup;
+   identical operation/input replays the original receipt, never appends again.
+
+A stale ref/revision returns `CLAIM_CONFLICT` (HTTP 409), stale project fence returns
+`STALE_OWNER`; neither grants permission to execute. The losing clone fetches, reruns
+eligibility and submits a new CAS at most five times, then defers with `CLAIM_BUSY`.
+It does not merge stale claims. Native-start permission requires the successful remote
+receipt plus current owner fence, not a local file or local flock. Reclaim requires
+quiescence evidence or fenced-old-host proof from M2, not lease age alone. Restart of
+the lease authority expires claims and blocks starts until owner/run reconciliation.
+
+### 15.3 Partial writes, fencing and restore
+
+Unpublished staging failure is visible only in the broker operation journal; it returns
+`STAGING_FAILED` and leaves the canonical ref unchanged. Other clones may continue to
+read the last valid revision. They cannot observe or be required to stop for an
+unpublished file in another clone. Broker startup repairs/removes its incomplete
+candidate from the durable intent; no remote operation ran before the complete candidate.
+A failed CAS likewise leaves canonical state unchanged. `PARTIAL_WRITE` is reserved
+for a published malformed marker/pair (unmanaged writer, storage corruption or violated
+server validation): readers expose UNAVAILABLE and the broker records REPAIR_REQUIRED.
+The recovery owner is the manager's board adapter. It preserves the bad commit as
+incident evidence, appends a corrective commit derived from the last verified parent,
+validates complete row/event correspondence and only then re-enables admission.
+It never resets shared history or guesses a missing completion verdict.
+
+Every Git publication, canonical memory sync and board transition enters the single
+broker's begin-effect/finish-effect transaction. Epoch advance waits for all admitted
+in-flight effects to be read back or remotely revoked with denial proof. Crier result
+acceptance atomically validates live generation with its receipt write; stale results
+enter a quarantine evidence stream and cannot settle. Native forge write keys never
+reach Bunkers; otherwise a pre-push fence check leaves an exploitable race. A disconnected
+Bunker may append local memory drafts only, marked pending authorization. These rules
+make resource-side enforcement, not voluntary caller checks, the safety boundary.
+[Part I §§1.9.3/1.9.3a; M3 §17.]
+
+Backup manifest binds board OID, task/event digests, transaction marker set, authority
+sequence, claim generations and M3 evidence-object inventory. Restore validates each
+hash and evidence receipt and advances the authority epoch before permitting claims;
+old credentials never reactivate. Unknown evidence or unresolved native activity leaves
+UNAVAILABLE. Required conformance includes competing clones, lost push acknowledgement,
+partial local staging, published marker corruption, delayed fenced push, revoked return,
+fixture exclusion and deferred/cancelled prerequisites. M0 §16.1 supplies telemetry.
+
+### 15.4 Board engine decision
+
+The measured `dev` executable is not a qualified release. The proposed engine target
+is Boardctl v0.2.0; compatibility with this append-row/CAS profile is UNVERIFIED.
+Decision slot B-BOARD offers qualification of that release with a broker adapter or
+qualification of a newer pinned release. Default is no production activation until
+M1's signed release lock and the complete negative/positive board battery pass.
+A successful legacy boardctl command cannot waive the target transaction contract.
 
 ## RED field count: 2 (Metrics §8 — absence-proved; CT-14/CT-13 states UNVERIFIED — every side is an external peer)
 

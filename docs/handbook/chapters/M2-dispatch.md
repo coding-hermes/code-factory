@@ -94,7 +94,7 @@ is established.
 
 ## 6. Contracts in and out
 
-Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). Rows that are
+Canonical IDs come from the 31-entry Part IV §IV.2.4 registry. The table below is historical implementation coverage, not cf2a.v1 qualification. Rows that are
 cross-system contracts carry their CT id; an interface with no canonical entry is listed with a
 `(local)` tag and is not a peer to any CT row, so it cannot be matched against another chapter.
 
@@ -271,21 +271,128 @@ design.
 
 ## 15. Normative launch and return contract (P3-12, P3-10)
 
-The MVP execution owner is the project foreman inside the project Bunker. Crier is the only launch and return boundary to the control-host Scheduler. The node pull worker and central dispatcher are retained compatibility adapters, not competing MVP authorities; a deployment selecting either records `execution_mode`, accepts only its matching envelope version, and must not execute the same `(project_id, round_id, wave_id, worker_id, attempt_id)` in two modes.
+The MVP execution owner is the project foreman inside the project Bunker. Crier is
+the sole launch/return boundary. The canonical wire is the `cf2a.v1` outer envelope
+specified in Part I §1.9.1 and Part IV §§IV.1–IV.2. `schema_version` is `cf2a.v1`;
+`message_type`, `request_id`, `corr_id`, `sender`, `created_at`, `body` complete its
+required key set. Body `schema_version` selects `round-admission.v1`,
+`worker-brief.v1`, `worker-result.v1` or `round-report.v1`. There is no
+`cf.launch.v1`, `cf.return.v1` or `correlation_id` target wire. The former names
+are retired draft terms, refused as `UNSUPPORTED_VERSION`/`UNKNOWN_FIELD`.
 
-A versioned launch envelope contains `schema: cf.launch.v1`, `message_id`, `dispatch_id`, `correlation_id`, `project_id`, `round_id`, `wave_id`, `worker_id`, `attempt_id`, `generation`, `workspace_ref`, `brief_digest`, `limits` and `cancel_ref`. Unknown required fields, unsupported schema, missing identity, digest mismatch, expired lease or wrong project scope are refusals before harness execution. The return envelope contains `schema: cf.return.v1`, the same identities, `transport_state`, `execution_state`, `result_digest`, `status`, `evidence_refs`, `artifacts`, `finished_at` and `error` when applicable. `status` and legacy `ok` cannot disagree; when both are present, the versioned `status` is authoritative and disagreement is `MALFORMED_RESULT`, never success.
+CT-02 admission contains `round_id`, `run_id`, `corr_id`, `task_scope`,
+`total_budget`, `config_generation` and the Part I §1.9.6 extensions. It contains
+no wave, worker or attempt identity. CT-05 is foreman-to-worker delivery, not lane
+configuration; CT-01 owns `extensions.lane_seed`. The foreman allocates wave_id,
+worker_id, attempt_id and dispatch_id once in its durable launch transaction.
+CT-04 returns the worker result; CT-06R returns the entire round report; CT-06
+notifies Scheduler of that report. Part IV gives complete bodies and response forms.
 
-| State | Authorized writer | Durable condition | Next states |
-|---|---|---|---|
-| `OFFERED` | Scheduler/Crier | message accepted with idempotency key | `LEASED`, `REJECTED` |
-| `LEASED` | Crier | lease owner and expiry recorded | `STARTED`, `CANCELLED`, `EXPIRED` |
-| `STARTED` | Bunker foreman | native run identity and input digest recorded | `RUNNING`, `FAILED_TO_START` |
-| `RUNNING` | foreman | heartbeat renews the lease | `RETURNED`, `CANCELLED`, `DEADLINE` |
-| `RETURNED` | Crier/Scheduler | result durable before acknowledgment | `ACKED`, `RETRYABLE` |
-| `ACKED` | Crier | return delivery and receipt recorded | `SETTLED` |
-| `SETTLED` | Scheduler | execution outcome stored; acceptance/publication remain separate | terminal |
+### 15.1 Immutable brief and mode selection (P5-B-01/02/12/35)
 
-Deduplication is durable before side effects on `dispatch_id + attempt_id + generation`; a duplicate returns the recorded custody or result receipt. Same-batch duplicates are coalesced before launch. Cancellation prevents a new start and propagates to the native run; a late result is stored as late evidence but cannot alter a replaced or settled attempt. Lease renewal failure freezes publication and triggers reconciliation. Acceptance cases cover duplicate delivery, unsupported schema, cancel-before-start, crash-after-start-before-return, late return after replacement and successful round-trip correlation.
+A lane_seed identifies the SHA-256 of UTF-8 prompt bytes and an ordered skills list
+`{name:ID,digest:SHA}`. The evidence service in M3 §17 resolves each digest; prompt
+and skill bytes are not re-read from mutable paths during a round. The foreman
+constructs `BriefInput` (Part IV): directive text, exact task row snapshot, ordered
+criteria, ordered skill objects and ordered attachment references. The byte encoding
+is RFC 8785 JCS, UTF-8 without BOM or trailing LF; brief_digest hashes those bytes.
+Directive string bytes preserve whitespace and Unicode without normalization. Base64
+transport, if used by a legacy adapter, hashes the decoded bytes, not base64 text.
+Missing or changed content yields `BRIEF_UNAVAILABLE` or `DIGEST_MISMATCH` before
+reservation or native start. The worker receives the same byte object through the
+M5 supervisor stdin contract, not a reconstructed summary. [Part I §1.9.6.]
+
+The execution key is the JCS array `[project_id,round_id,wave_id,worker_id,attempt_id]`;
+its SHA-256 is `execution_key`. Dispatch/delivery IDs are receipt identities, not
+uniqueness authority. Unique indexes exist for execution_key and for
+`[project_id,round_id,task_id,attempt_id]`. Reusing an attempt for different input
+is `ATTEMPT_CONFLICT`. Round custody deduplicates on `[run_id,corr_id]` independently.
+The manager's active binding records `execution_mode=resident`, binding_generation
+and owner_fence. Mode changes disable admission, drain or fence every old attempt,
+prove old credential denial, then prepare/commit a new binding (Part I §1.9.4).
+Pull/central adapters can only translate a persisted authorized admission and submit
+it to the same supervisor. They cannot allocate another execution key or start
+Hermes directly. A different dispatch_id never bypasses deduplication. Unsupported
+mode/capability is `EXECUTION_MODE_UNSUPPORTED`; all modes share the same ledger.
+
+### 15.2 Launch journal and crash distinction (P5-B-05/07)
+
+The resident supervisor owns `$HOME/.node/execution/transactions.jsonl`, using the
+Part I §1.9.2 append/fsync/sequence/hash transaction format, exclusive lifetime lock
+and rebuildable indexes. One transaction reserves budget and execution_key and writes
+`{execution_key, input_digest, native_name, state, state_version, boot_id,
+process_instance_id, native_session_id, result_ref, control_version}`. Optional
+identities/result are explicit null before discovery; native_name is
+`cf-<execution_key>` and never reused. The supervisor fsyncs RESERVED before start.
+Each subsequent transaction CASes state_version, records evidence and an outbox event.
+No acknowledgement or process release precedes the corresponding fsync.
+
+The local launcher provides atomic `create-or-discover(native_name,input_digest)`;
+its durable START_INTENT is written before creating a process group. The child waits
+on a private release pipe before running any harness code. Parent records PID,
+`/proc` start ticks, boot_id and native session ID, fsyncs STARTED, then releases the
+child. A pipe EOF before release makes the child exit without invoking Hermes.
+The launcher retains start/release/exit tombstones for the life of the round and
+M3 evidence retention. It never relies on PID alone or a bounded seen cache.
+
+Recovery distinguishes these cases, rather than calling all of them unstarted:
+
+| Durable / native observation | Required recovery |
+|---|---|
+| RESERVED and launcher proves no START_INTENT | unstarted; same execution_key may enter create-or-discover once |
+| START_INTENT, child exists and remains gated | discover by name, input digest, boot/start identity; persist STARTED, then release |
+| STARTED but release outcome unknown | discover release tombstone and exact native session; never launch again; reattach/status only |
+| launcher release or native output exists but parent STARTED absent | launched-before-parent-persist; recover identity from launcher journal and mark RUNNING; never allocate another process |
+| new boot after intent, absent child and no terminal/release proof | `START_UNKNOWN`; quarantine, fence, consume reserved budget conservatively; no same-attempt relaunch |
+| terminal journal/result present | replay result/outbox only; no native invocation |
+
+The gated child makes the fourth case a protocol violation on the reference launcher,
+but it remains a mandatory recovery case for native adapters. An adapter unable to
+prove absence/discover a prior run refuses with `START_UNKNOWN`; absence from a
+process listing alone is not proof of never-started. A distinct retry attempt is
+allowed only after cancellation/quiescence or old-host fencing, and follows the
+pinned round retry/budget policy; it does not erase unknown work. [M5 §16; Part II F8.1.]
+
+### 15.3 Time, cancellation and result reduction (P5-B-10/11)
+
+Crier custody leases are 30 s, renew every 10 s, and are independent of the 60 s
+owner lease (renew every 20 s) and 120 s task claim (renew every 40 s). Each authority
+uses its monotonic clock; UTC fields are diagnostic with maximum 30 s signature skew.
+A launch validates all three and the 30 s one-use dispatch grant. Custody renewal
+loss does not create another executor: the durable execution key survives redelivery.
+Owner/claim renewal failure immediately freezes protected effects; at their deadline
+(with no grace) the supervisor sends TERM to the exact process group, then KILL after
+10 s if needed, records quiescence or `STOP_UNKNOWN`, and requests fencing. Round and
+attempt wall clocks start at the first durable release; restart cannot reset them.
+The default attempt wall is 1800 s, bounded by remaining round wall (Part IV Limits).
+
+The closed execution transition relation is RESERVED→START_INTENT/CANCELLED/EXPIRED;
+START_INTENT→STARTED/FAILED_TO_START/START_UNKNOWN; STARTED→RUNNING/CANCELLED/DEADLINE;
+RUNNING→RETURNED/CANCELLED/DEADLINE/STOP_UNKNOWN. FAILED_TO_START requires proof no
+harness code ran. Cancel/control and terminal-result CAS compete on state_version:
+first durable winner determines execution outcome; a later completion is retained
+as late evidence and cannot replace CANCELLED. START_UNKNOWN/STOP_UNKNOWN resolve
+only to a discovered running/terminal observation or fenced quarantine; no direct
+retry edge exists. Rejected input never reserves an attempt. Every terminal state
+produces a durable typed result, outbox and Crier acknowledgement after custody;
+expired/unstarted cancellation reports fail with the specific reason, not pass.
+
+Return transport states are `pending`, `delivered`, `acked`; delivery retries use
+the same envelope/result bytes at 5,10,20,40,80,160,300 s (then 300 s), through 24 h.
+After 24 h the result/outbox is retained, an incident is emitted, and manual replay
+uses the same key. Crier retains unacknowledged custody for 7 days and archived
+receipts for 90 days; expiry emits an incident and never permits re-execution.
+Scheduler settlement follows Part I §1.9.9, not execution state.
+
+Typed status is `pass`, `fail`, `unverified`, `partial`, or `unknown`. Target bodies
+never carry `ok`. The legacy translator requires ok=true iff status=pass and refuses
+disagreement as `RESULT_CONFLICT` without settlement. An identical canonical body
+returns the original accepted receipt with duplicate=true; different optional evidence
+is still a conflict, submitted only as a new supplemental evidence record, never an
+overwrite. Execution pass plus publication failure remains execution pass but yields
+round partial and settlement partial/failure, never settled_success. No transport
+`status=ok/accepted` denotes execution pass. Required telemetry is M0 §16.1; refusal,
+start ambiguity, duplicate and deadline each produce one durable event.
 
 Required dispatch metrics are attempts, outcomes, refusals by reason, lease age, renewals, duplicates, cancellation, late results and projection lag. Crier owns transport metrics; the foreman owns execution metrics; Scheduler reads the correlated result. No transport receipt is an execution or acceptance verdict.
 

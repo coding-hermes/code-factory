@@ -2,6 +2,14 @@
 
 ## 1. Identity
 
+P5-B-39 snapshot reconciliation: the identity table and historical locator rows retain
+older source-review editions, not the present target. At source commit
+`fb11e92c1580b98e2e8d64cb9a81cdcb3ef64f02`, tests/harness-conformance.sh is 956 lines
+(`wc -l`); that source inventory does not assert a fresh execution. §7's dated fixture
+runs supersede only the blanket not-run claim, never the unrun live ladder. An old
+record lacking an exact run revision is historical/unqualified, not silently rebound
+to the current HEAD. §16 is target behavior and has no implied execution evidence.
+
 | Field | Value |
 |---|---|
 | Module name | HARNESS |
@@ -9,7 +17,7 @@
 | Revision | `fbc19cbc807de729e25c358fa7e94207b912f010` (code-factory HEAD; `project-node.sh` layer 20 gained the CF-150 `gateway_auth` staging block and `node-create.sh` re-lined in `08a2c8a..fbc19cb`; every M5 file:line re-pinned) |
 | Language / runtime | bash 5.3.9 + Python 3.14.9 (measured) |
 | Owner lane | code-factory (node-side) |
-| Status | **UNVERIFIED** — `harness-vars.sh` (318 lines), `harness_resolve.py` (400 lines), `install-hermes.sh` (388 lines, +13 for the CF-192 occupied-port auth gate), `install-gitreins.sh` (180 lines), `install-claude-code.sh` (settings surface), `install-codex.sh` (settings surface + partial body), `install-opencode.sh` (98 lines), `install-deepseek.sh` (101 lines), `install-pi-agent.sh` (113 lines), `install-aider.sh` (110 lines), `install-goose.sh` (111 lines) read; `install-claude-code.sh`/`install-codex.sh` full bodies not line-by-line; the conformance battery not run |
+| Status | **UNVERIFIED** — `harness-vars.sh` (318 lines), `harness_resolve.py` (400 lines), `install-hermes.sh` (388 lines, +13 for the CF-192 occupied-port auth gate), `install-gitreins.sh` (180 lines), `install-claude-code.sh` (settings surface), `install-codex.sh` (settings surface + partial body), `install-opencode.sh` (98 lines), `install-deepseek.sh` (101 lines), `install-pi-agent.sh` (113 lines), `install-aider.sh` (110 lines), `install-goose.sh` (111 lines) read; `install-claude-code.sh`/`install-codex.sh` full bodies not line-by-line; live conformance unrun; §7 separately records fixture runs. These are historical source/fixture records, not qualification of §16 (P5-B-39). |
 
 ## 2. Purpose, authority and position
 
@@ -266,8 +274,10 @@ file must be 600". The ambient-key checks (`:176`, `:181`) test **non-emptiness*
 
 ## 6. Contracts in and out
 
-Canonical ids are the register of record (OUTLINE Part IV, CT-01..CT-18). M5-C2 (gateway) is not
-among the 18; the canonical id M5 participates in is CT-17 (`conformance → harness`).
+Canonical IDs come from the 31-entry Part IV §IV.2.4 registry. Legacy source tables
+below remain coverage only; CT-17 qualification is the exact §16.4 union. M5-C2 is
+a retained local service-start observation, not a new wire ID; CT-19 owns inference.
+The external consumer is qualified through observable behavior, not an in-repo function.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
@@ -415,9 +425,10 @@ and conformance pass rate are answerable only by reading the leg rows.
   - **F5-1** (carried) — `install-hermes.sh:108-115` refuses anything outside >=3.11,<3.14.
   - **F5-2** — `harness_resolve.py` has no production caller; runtime selection is
     `node-bus-worker.py:412-414,459-469` / `dispatcher.py:260`.
-  - **F5-3** — the adapters are not uniform; `install-deepseek.sh`/`install-pi-agent.sh` refuse
-    `--apply`, `install-opencode.sh` is UNVERIFIED/`--apply`-refusing, `install-claude-code.sh`
-    sources `lib.sh` not `harness-vars.sh`.
+  - **F5-3 (superseded blanket refusal)** — deepseek remains apply-refusing;
+    pi accepts only its explicit repository fixture ladder and refuses without
+    PI_FIXTURE_DIR. §7 fixture evidence does not certify a live upstream pi install.
+    The older statement that every pi apply refuses is retired (P5-B-39).
   - **F5-4** — UNIT-MAP (3) vs OUTLINE (5) submodule split.
   - **F5-5** (B02) — the "no production installer caller" claim was false:
     `project-node.sh:498` computes `install-$HARNESS.sh` and `:508-510` invokes it; the literal
@@ -456,9 +467,160 @@ Hermes with the pinned Oh My Hermes operating layer is the MVP harness. A Bunker
 
 The lifecycle is `ABSENT → INSTALLING → INSTALLED → CONFIGURED → RUNNING → DRAINING → STOPPED → REMOVED`, with `DEGRADED` and `ROLLBACK_REQUIRED` recovery states. Each transition is idempotent by `(node_id, harness_version, operation_id)`. Upgrade drains active sessions, snapshots configuration, applies a migration, reads back the effective settings and re-certifies before admission. Failed or partial installation rolls back only owned artifacts and leaves the previous certified version available; uninstall preserves required evidence and revokes credentials.
 
-The conformance result is `schema: cf.harness-conformance.v1` with `node_id`, `profile_id`, `harness_version`, `artifact_digest`, `run_id`, per-leg status (`PASS`, `FAIL`, `UNVERIFIED`), observations and timestamps. The required legs are executable identity, settings readback, workspace boundary, network/resource policy, real smoke turn, result delivery, cancellation and restart persistence. A missing live measurement is `UNVERIFIED`, not PASS. Terminal Jail remains optional and disabled by default; when enabled, covered execution refuses if the guarded executor or policy is unavailable and has no unguarded fallback. DuckBrain memory uses the shared logical namespace; harness activity does not equal acceptance or publication.
+The conformance result uses `schema_version: cf.harness-conformance.v1` with the complete fields and required leg union in §16.4, including local/remote memory and credential revocation. A missing live measurement is `UNVERIFIED`, not PASS. Terminal Jail remains optional and disabled by default; when enabled, covered execution refuses if the guarded executor or policy is unavailable and has no unguarded fallback. DuckBrain memory uses the shared logical namespace; harness activity does not equal acceptance or publication.
 
 Required metrics cover lifecycle operations, pin/digest drift, install/upgrade/rollback outcomes, active-session drain, conformance age, leg failures and effective-setting divergence. M5 owns collection and readout; M8 owns baseline safety policy. Acceptance cases cover a wrong digest, a fresh-rootfs restart, a drained upgrade, a missing guarded executor, a revoked credential and a successful end-to-end Hermes turn.
+
+## 16. P5 resident supervisor and qualification protocol
+
+This section resolves P5-B-07/28/29/30. It specifies new Factory interfaces, not
+undocumented commands of the upstream Hermes binary. M1 §17's release lock pins
+both the Factory adapter and its tested native-Hermes mapping. Until that lock and
+live conformance exist the runtime is UNVERIFIED and activation refuses.
+
+### 16.1 Boot, invocation, status and cancellation
+
+The Bunker init launches exactly
+`$HOME/.local/libexec/cf-resident --protocol cf.supervisor.v1 --state $HOME/.node/execution`
+as the Bunker UID, cwd HOME, umask 077, after the persistent HOME mount. No shell
+expansion of request data occurs. A lifetime flock rejects a second supervisor.
+Boot replays the journal, validates release/config/fence/binding, discovers outstanding
+native runs, and only then starts the signed Crier admission receiver. Failed recovery
+serves status with admission=false; it does not discard prior attempts.
+
+The supervisor exposes a mode-0600 AF_UNIX socket `.node/execution/control.sock`.
+Peer SO_PEERCRED must match the node UID. Each request is one UTF-8 JCS object plus
+LF (maximum 1048576 bytes): `{schema_version:"cf.supervisor.v1",request_id:ID,
+verb:submit/status/cancel/drain/resume,input:object}`. Submit input is the complete
+CT-02 or CT-05 outer envelope; status input is `{execution_key:SHA|null}` (null lists
+all); cancel is `{execution_key:SHA,control_id:ID,expected_state_version:PosInt,
+reason:Text}`; drain is `{operation_id:ID,deadline_s:integer[1,600]}`; resume is
+`{operation_id:ID,expected_generation:PosInt}`. Responses use Part IV ResponseBody.
+Submit returns the durable handle and duplicate flag; status returns journal records
+with execution_key, native_name, state, state_version, process_instance_id,
+native_session_id (ID or null), result_ref (EvidenceRef or null). Socket command
+receipt is not an execution verdict. Cancellation uses the M2 state CAS and exact
+boot/start/session identity before TERM/KILL; PID reuse never authorizes signaling.
+
+The launch adapter invocation is
+`$HOME/.local/libexec/cf-hermes --protocol cf.native.v1 --execution-key <SHA>`.
+It receives one `cf.native-input.v1` JCS object plus LF on stdin: schema_version,
+role (`foreman` or `worker`), execution_key, brief (BriefInput), brief_digest,
+workspace (Workspace), effective (EffectiveSettings), owner_fence (Fence).
+The supervisor creates the worktree at the exact Workspace base object, rejects
+symlink escape, sets cwd to its absolute realpath and connects stdin by pipe,
+not a quoted `-q` shell argument. The native adapter verifies brief_digest before
+calling its pinned upstream entry point. The foreman input contains the admitted
+snapshot/seed and immutable task_scope; worker input is the exact CT-05 brief.
+
+Adapter stdout is newline-delimited closed records, at most 1048576 bytes each,
+with `schema_version:"cf.native-event.v1",execution_key:SHA,seq:PosInt,
+type:started/progress/result,error:Error|null,data:object`. started data is
+`{native_session_id:ID,process_instance_id:ID}`; progress data is
+`{turns:UInt,tokens:UInt,elapsed_ms:UInt}`; result data is the CT-04 body for a
+worker or CT-06R body for a foreman. Exactly one result is permitted, sequences
+increase from one and IDs match stdin. Human output is captured as a separate
+bounded artifact, never parsed as result JSON. stderr is redacted diagnostic text,
+rotated at 10485760 bytes with SHA references. Missing/duplicate/conflicting result,
+invalid framing or exit-before-result is UNKNOWN_RESULT. Exit 0 alone never passes.
+The supervisor fsyncs streams and journal evidence before acknowledging a terminal
+result. Native session discovery and gated startup follow M2 §15.2.
+
+### 16.2 Effective settings and enforcement
+
+The six unconditional CF variables are CF_MODEL, CF_PROVIDER, CF_WORKDIR,
+CF_NAMESPACE, CF_RUN_ID and CF_LANE (source: `scripts/harness/harness-vars.sh:28-31`).
+The target requires them from the authenticated directive, never ambient host state.
+CF_MODEL is a nonempty registry model string <=256 bytes; provider/lane/namespace/run
+are IDs. CF_RUN_ID maps to admission.run_id, not corr_id. CF_WORKDIR is the validated
+Workspace absolute realpath. CF_BASE_URL is the registered HTTPS proxy endpoint;
+CF_API_KEY_FILE is the assigned proxy capability file; both are mandatory in the
+resident MVP even though optional for historical offline adapters. Its mode is
+exactly 0600, owner=node UID, regular file, no symlink, nonempty, unexpired; 000,
+0400 and 0700 are refused. The key is read inside the adapter, never argv or stdout.
+
+Optional values: CF_SKILLS_DIR is the immutable seed generation's skills directory;
+CF_MAX_TURNS defaults 40 and is integer 1..10000; CF_TIMEOUT_S defaults 1800 and is
+integer 1..86400 seconds per model turn, not whole attempt; CF_HARNESS_OPTS defaults
+empty and the MVP permits no nonempty options (`UNSUPPORTED_SETTING`). A later
+release may enumerate options in its signed capability schema, never arbitrary flags.
+The adapter environment is allowlisted: HOME, USER, LOGNAME, PATH (owned release
+binaries plus /usr/bin:/bin), LANG=C.UTF-8, TZ=UTC, TMPDIR (private attempt scratch),
+XDG_CONFIG_HOME/XDG_DATA_HOME/XDG_CACHE_HOME under persistent HOME and the declared
+CF variables. Provider keys, proxies, inherited shell options and arbitrary PYTHONPATH
+are cleared. Credentials are only assigned references/files.
+
+EffectiveSettings is `{model:Text,provider:ID,base_url:HTTPSURL,credential_ref:ID,
+namespace:ID,run_id:ID,lane:ID,skills_digest:SHA,max_turns:integer[1,10000],
+turn_timeout_s:integer[1,86400],attempt_timeout_s:integer[1,86400],
+cpu_millis:PosInt,memory_bytes:PosInt,max_output_bytes:PosInt,
+network_policy_digest:SHA,release_lock_digest:SHA}`. Requested limits may only
+narrow policy: effective value is the minimum for the same unit of requested and
+pinned policy limits; attempt time is additionally bounded by remaining round wall
+time. Worker-attempt slot budget is checked separately, never compared with seconds,
+bytes or turn counts. A literal zero refuses. Supervisor enforces
+attempt wall on monotonic elapsed time and cgroup v2 CPU/memory limits; adapter
+enforces max turns and each model-call deadline. Output budget closes capture and
+terminates with OUTPUT_LIMIT. Unsupported enforcement or inability to read back
+settings is LIMIT_UNSUPPORTED, before release. CF_MAX_TURNS/CF_TIMEOUT_S map to
+max_turns/turn_timeout_s; attempt_timeout_s is separate (default 1800 s). Readback
+returns the entire effective object and digest, and requested values above policy
+are reported as narrowed. Native settings differing from that object refuse with
+EFFECTIVE_SETTING_MISMATCH; an exit-0 version string is not readback.
+
+### 16.3 Lifecycle transactions
+
+Lifecycle mutation is `cf.harness-operation.v1` with operation_id, idempotency_key,
+node_id (IDs), action (`install`, `configure`, `start`, `stop`, `restart`, `upgrade`,
+`rollback`, `remove`), expected_generation (UInt), release_lock_ref (EvidenceRef),
+config_ref (EvidenceRef), force_cancel (boolean, default false). Authority checks
+node scope; the journal commits intent, resulting state and response before ACK.
+Same key/digest replays; changed digest conflicts. The release-owned artifact manifest
+lists relative paths, modes and digests; deletion never uses unconstrained globbing.
+
+| Operation / precondition | Transition and recovery |
+|---|---|
+| install / ABSENT | INSTALLING→INSTALLED after verified immutable version directory; failure restores ABSENT and preserves diagnostic evidence |
+| configure / INSTALLED or STOPPED | CONFIGURED after schema-versioned config validation and atomic generation pointer; missing migration refuses |
+| start / CONFIGURED or STOPPED | RUNNING only after supervisor readiness readback; failure DEGRADED, no new admission |
+| stop / RUNNING or DEGRADED | DRAINING, reject new work, query all nonterminal execution records; wait <=300 s, then STOPPED only when none remain |
+| restart / RUNNING, CONFIGURED or STOPPED | stop/drain if needed, then start same certified generation; no generation reset |
+| upgrade / RUNNING, CONFIGURED or STOPPED | drain, snapshot config/store plus backup receipt, install inactive new release, migrate copy, validate; atomic pointer switch is commit point; certify before admission |
+| rollback / failed pre-write upgrade | switch to retained prior snapshot and certify; after new-schema writes, ROLLBACK_REQUIRED forbids old binary and requires pinned reverse migration or isolated restore |
+| remove / STOPPED | revoke only harness-owned capabilities, verify denial, delete only owned release paths; REMOVED retains node identity, board, sessions/evidence and pending memory |
+
+Drain timeout without force_cancel returns DRAIN_TIMEOUT and DEGRADED with active
+handles intact. An authorized force_cancel follows M2 cancellation and requires
+quiescence before migration/removal; STOP_UNKNOWN blocks both. Runtime crash or failed
+readiness takes RUNNING→DEGRADED and disables admission. Recovery replays native
+journals, reads effective settings and recertifies before RUNNING. DEGRADED can stop,
+repair/configure or resume the same generation; ROLLBACK_REQUIRED admits only recovery.
+REMOVED→ABSENT requires a new install operation after retained-state discovery.
+Node-wide forge/Crier/Bunker/memory identities belong to M1 and are not silently
+revoked by harness removal. Revocation of proxy/session capabilities is recorded.
+
+### 16.4 One conformance union (CT-17)
+
+`cf.harness-conformance.v1` has schema_version, run_id, node_id, profile_id,
+release_lock_digest, effective_digest, observed_at, expires_at, legs and support_state.
+Each leg is `{name:Enum,mode:live/fixture,status:PASS/FAIL/UNVERIFIED,
+evidence_refs:EvidenceRef[],observations:Text,error:Error|null}`. Required names are
+`executable-identity`, `install-check`, `effective-settings`, `workspace-boundary`,
+`network-policy`, `resource-limits`, `smoke-turn`, `result-delivery`, `cancellation`,
+`restart-persistence`, `memory-local`, `memory-remote`, `credential-revocation`.
+Memory-local includes write/read exact bytes after restart; memory-remote includes
+cross-host read by another authenticated controller after sync. Fixture mode proves
+wiring only and never substitutes for any required live leg. Optional `terminal-jail`
+becomes required when enabled; failure never falls back to an unguarded executor.
+
+support_state is SUPPORTED only when every required live leg PASSes; any FAIL yields
+UNSUPPORTED, otherwise UNVERIFIED. Missing/duplicate leg names refuse the report.
+Validity is at most 86400 s, bounded by credential expiry; any release/config/network/
+mount/fence change invalidates it. M1 §17.4 owns readiness after temporary remote
+outage, not a permanent waiver of the memory leg. All conformance/check warnings
+reduce to UNVERIFIED; action-only advisory warnings may preserve action success but
+cannot certify a check. Shared memory export currently lacking implementation therefore
+blocks live support. Telemetry is M0 §16.1 with lifecycle/conformance events.
 
 ## RED field count: 4 (Metrics §8 — absence-proved; §7 conformance battery not run on a live node; M5-C2 contract state UNVERIFIED — a port/service is not a `file:function`; §9 inventory 4 of 215+ helper call sites — the descriptive per-measurement rows not tabulated one-per-site)
 
