@@ -7465,5 +7465,13 @@ else
 fi
 rm -rf "$cf238"
 
+say "67. load_lane_config.py is read-only unless --apply is explicit (CF-304)"
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_lane_config_readonly.py"; then
+  say "  PASS  CF-304 default and dry-run leave copied DBs byte-identical; --apply is scoped; red control caught"
+else
+  say "  FAIL  CF-304 lane configuration read-only fixture"
+  fails=$((fails+1))
+fi
+
 say ""
 [ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }

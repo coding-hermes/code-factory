@@ -30,7 +30,7 @@ side is CF-355 (a failed result with no `ok` is recorded as success).
 
 | Submodule | Unit | Classification | Evidence (invoking line) |
 |---|---|---|---|
-| S1 declare and configure lanes | `add_family_lanes.py`, `configure_family.py`, `load_lane_config.py` | **operator-invoked** | no in-repo caller — `grep -rn 'add_family_lanes\|configure_family\|load_lane_config' scripts/` matches only the files themselves. `configure_family.py:24-28` reads the scheduler operator token at module import |
+| S1 declare and configure lanes | `add_family_lanes.py`, `configure_family.py`, `load_lane_config.py` | **operator-invoked** | no in-repo caller — `grep -rn 'add_family_lanes\|configure_family\|load_lane_config' scripts/` matches only the files themselves. `load_lane_config.py` is read-only by default and prints the six proposed updates; `--apply` is required to write and `--dry-run` is always read-only. `configure_family.py:24-28` reads the scheduler operator token at module import |
 | S2 resolve a target | `lane_target.py` | **active** | `scripts/configure_family.py:17` imports it and `:149` calls `lane_target.parse(workdir)` then branches on the result — a production caller **in-repo** (3 / B09). An earlier citation of "no production caller" was false. Passing the parse does not prove a remote checkout exists (it is structural parsing, not remote verification) |
 | S3 consume the inbox, sign, reply | `node-bus-worker.py` | **active** | decodes the directive (`directive_text`, `:977`), consumes one dispatch (`process`, `:1007`), builds the reply (`:1176-1192`), delivers (`:1208`), settles (`:1389-1422`) |
 
