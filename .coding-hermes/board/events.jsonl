@@ -706,3 +706,5 @@
 {"id":705,"timestamp":"2026-11-11T10:50:44Z","event_type":"task_created","task_id":"P5G-32","actor":"cf2a-01-design-review","detail":"{\"id\":\"P5G-32\",\"status\":\"pending\",\"severity\":\"MAJOR\",\"evidence_refs\":[\"P5-B-33\"]}"}
 {"id":706,"timestamp":"2026-11-11T10:54:07Z","event_type":"task_created","task_id":"P5G-33","actor":"cf2a-01-design-review","detail":"{\"id\":\"P5G-33\",\"status\":\"pending\",\"severity\":\"CRITICAL\",\"evidence_refs\":[\"P5-C-18\"]}"}
 {"id":707,"timestamp":"2026-11-11T16:00:57Z","event_type":"task_completed","task_id":"CF-239","actor":"foreman","detail":"{\"status\":\"complete\"}"}
+{"id":708,"timestamp":"2026-11-11T18:48:26Z","event_type":"task_created","task_id":"CF-418","actor":"foreman","detail":"{\"id\":\"CF-418\",\"status\":\"pending\"}"}
+{"id":709,"timestamp":"2026-11-11T18:48:26Z","event_type":"task_created","task_id":"CF-419","actor":"foreman","detail":"{\"id\":\"CF-419\",\"status\":\"pending\"}"}
