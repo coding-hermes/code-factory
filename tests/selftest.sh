@@ -3757,6 +3757,33 @@ else
   say "  FAIL  an inline secret was accepted or echoed (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
 fi
 
+mkdir -p "$envtmp/node/.hermes"
+cat > "$envtmp/node/.hermes/config.yaml" <<'YAML'
+gateway: inline-value
+YAML
+out=$(envrun --config-set gateway.port=10800 --check 2>&1); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q 'FAIL  config — gateway: at line 1 carries an inline value' \
+  && ! printf '%s\n' "$out" | grep -q 'Traceback'; then
+  say "  PASS  an inline config section is refused by named row and line, exit $rc"
+else
+  say "  FAIL  an inline config section escaped its named refusal (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+fi
+
+cat > "$envtmp/node/.hermes/config.yaml" <<'YAML'
+gateway:
+  port: 9000
+gateway:
+  bind: 127.0.0.1
+YAML
+out=$(envrun --config-set gateway.port=10800 --check 2>&1); rc=$?
+if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q 'FAIL  config — gateway: appears twice (lines 1 and 3)' \
+  && ! printf '%s\n' "$out" | grep -q 'Traceback'; then
+  say "  PASS  a duplicated config section is refused by named row and lines, exit $rc"
+else
+  say "  FAIL  a duplicated config section escaped its named refusal (exit $rc): $(printf '%s' "$out" | tail -1)"; fails=$((fails+1))
+fi
+rm -rf "$envtmp/node/.hermes"
+
 out=$(envrun --config-set logging.level=debug --check 2>&1); rc=$?
 if [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q "unknown config path 'logging.level'" \
   && printf '%s\n' "$out" | grep -q 'model.provider'; then

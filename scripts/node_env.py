@@ -501,12 +501,11 @@ def main(argv):
         config_path = os.path.join(home, ".hermes", "config.yaml")
         env_lines = read_env(env_path)
         config_lines = read_config(config_path)
+        env_out, env_changes, current_env = plan_env(env_lines, declared)
+        config_out, config_changes = plan_config(config_lines, assigns)
     except Refusal as exc:
         fail(exc.subject, exc.detail)
         return 2
-
-    env_out, env_changes, current_env = plan_env(env_lines, declared)
-    config_out, config_changes = plan_config(config_lines, assigns)
 
     print(redact(f"node-env --{mode} — home={home}"))
     note(f"env {env_path}, config {config_path}")
