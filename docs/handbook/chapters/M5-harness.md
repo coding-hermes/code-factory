@@ -77,6 +77,25 @@ inventory in §3 and the pin/verdict history are implementation coverage, not th
   **published** (landed tree) are distinct downstream facts with distinct owners (M3 grading,
   acceptance judgment, landing, board closure). Readiness evidence is likewise distinct from task
   acceptance; neither may stand in for the other in board or memory records.
+- **Shared harness memory measurement (III.M5.S6 / I3).** Every named adapter is enumerated by
+  `tests/harness-conformance.sh` and uses the one `scripts/harness/harness_memory.py` writer in the
+  `memory` fixture. The writer requires an explicit non-default namespace and validates the same
+  non-empty I3 fields (`namespace`, `run_id`, `lane`, `harness`, `harness_version`,
+  `model_requested`, `model_served`, `provider_binding`, `commit`, `tick`); readback compares the
+  canonical UTF-8 bytes, not merely parsed values. The fixture is repository-local evidence only:
+  it does not contact DuckBrain or certify a live harness run. Because no in-repo adapter currently
+  exports complete runtime provenance, each adapter gets an explicit `memory — UNSUPPORTED` row
+  rather than an unlabelled skip. Live DuckBrain transport and runtime capture remain UNVERIFIED.
+
+<a id="III.M5.S6"></a>
+### III.M5.S6 — harness measurement
+
+The node's harness measurement surface records what the adapter actually reports; it does not turn
+an installer or fixture into a live run. The shared I3 memory seam is the same distinction: the
+fixture proves writer validation and exact-byte readback for every in-repo conformance adapter, while
+the unsupported rows preserve the missing runtime-exporter obligation. A future live adapter must
+keep the explicit namespace and all-field validation and replace only the hermetic backend.
+
 
 **Finding F5-2.** `harness_resolve.py` is **not** the runtime resolver. A repo-wide search finds it
 referenced only by itself, `tests/selftest.sh` and `tests/test_harness_resolve.py` — no production

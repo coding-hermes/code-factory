@@ -1,10 +1,13 @@
 # HARNESS-MEMORY — how each harness hands its run to DuckBrain
 
-Status: **DESIGN, grounded in six research passes (2026-11-05).** Nothing here is implemented:
-`scripts/node-bus-worker.py` has zero DuckBrain calls and `tests/harness-conformance.sh` has no
-`memory` leg. Each harness section below was produced by reading that harness's own on-disk format or
-its upstream source; where a claim is source-read rather than measured on this host, the section says
-so.
+Status: **PARTIAL — repository-local I3 fixture implemented; live runtime capture and DuckBrain transport UNVERIFIED.**
+`scripts/harness/harness_memory.py` is the shared writer/reader used by every row in
+`tests/harness-conformance.sh`'s memory leg. The fixture writes canonical UTF-8 JSON and verifies
+exact byte-identical readback, while refusing missing, default or mismatched namespaces. It does not
+contact DuckBrain, and no in-repo harness adapter currently exports complete runtime provenance; each
+adapter is therefore reported as explicitly `UNSUPPORTED` rather than silently skipped. The
+per-harness sections below remain source-read design notes, not live evidence.
+
 
 This page is the per-harness half of `specs/FLEET-MEMORY.md`: that page defines the records (R1/R2/R3),
 this one defines how each harness produces them.
@@ -119,19 +122,21 @@ run that never happened (`specs/FLEET-MEMORY.md:87`).
 
 ## 5. Verification — the `memory` conformance leg
 
-`tests/harness-conformance.sh` implements three legs (`check`, `apply`, `smoke`) while
-`specs/HARNESS-MATRIX.md:167` specifies five; `vars` and `memory` have no executor, so per invariant I4
-nothing can be supported today. This section defines the missing leg so it can be written:
+`tests/harness-conformance.sh` implements the `memory` fixture for every named adapter in its
+`HARNESSES` table. The fixture invokes only `scripts/harness/harness_memory.py`, the shared I3 writer
+and reader; it uses an explicit file backend and never contacts DuckBrain. It proves:
 
-    memory — for one real turn on a real node:
-      1. a run record exists for the run_id, in the project namespace, and reads back
-      2. the fleet index record exists and names the same run_id and outcome
-      3. model_served is either a real model id or the literal `unavailable:<reason>` — never the request echoed
-      4. a killed run still leaves both records with outcome FAIL
-      5. cost is either a number with a cost_basis, or absent with `cost_basis: "unavailable"` — never 0.0 pretending
-      6. reading the record back and re-reading the native store agree on outcome and token totals
+    memory fixture — for each named adapter:
+      1. the canonical record contains all ten non-empty I3 fields
+      2. writing and reading back produces byte-identical canonical UTF-8 JSON
+      3. missing, default and mismatched namespaces fail before a backend file is written
+      4. the row names the adapter and the fixture-only boundary
+      5. the runtime leg is explicitly `UNSUPPORTED` when no exporter supplies complete provenance
 
-Leg 6 is the one that catches a lying adapter: it compares the record against the harness's own store.
+This fixture is repository-local wiring evidence, not a real-node or live-DuckBrain claim. A future
+runtime adapter must preserve the same writer validation and byte comparison, then add a separately
+measured live row. Missing runtime capture must remain an explicit unsupported result rather than a
+silent skip.
 
 ## 6. Traps that will be hit in that order
 

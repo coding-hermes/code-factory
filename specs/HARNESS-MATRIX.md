@@ -40,7 +40,7 @@ project namespace explicitly, writes no default, and rejects a missing or mismat
 The conformance `memory` leg writes the record and reads those exact bytes back. A harness that
 cannot supply every field — including a real `model_served` or an explicit
 `unavailable:<reason>` — is marked `unsupported` in this matrix and is not silently skipped.
-This is the requirement that makes the matrix worth having: seven harnesses, one memory.
+This is the requirement that makes the matrix worth having: every named harness, one memory.
 
 **Memory support today:** hermes, claude-code, codex, opencode, pi-agent, dsh,
 deepseek, opencode-v2, aider and goose are **unsupported for I3 runtime capture**:

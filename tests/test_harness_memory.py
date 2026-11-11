@@ -74,25 +74,32 @@ class MemoryContract(unittest.TestCase):
         with self.assertRaises(memory.MemoryRecordError):
             self.writer.read("project-qa")
 
-    def test_battery_names_fixture_and_unsupported_runtime(self):
+    def test_battery_names_fixture_and_unsupported_runtime_for_every_adapter(self):
+        harnesses = (
+            "hermes",
+            "claude-code",
+            "codex",
+            "opencode",
+            "opencode-v2",
+            "dsh",
+            "deepseek",
+            "pi-agent",
+            "aider",
+            "goose",
+        )
         env = dict(os.environ, HC_WORK_ROOT=self.temp.name)
         proc = subprocess.run(
-            [
-                "bash",
-                str(ROOT / "tests" / "harness-conformance.sh"),
-                "--memory-only",
-                "--only",
-                "hermes,codex,claude-code,opencode,pi-agent",
-            ],
+            ["bash", str(ROOT / "tests" / "harness-conformance.sh"), "--memory-only"],
             capture_output=True,
             text=True,
             env=env,
             timeout=60,
         )
         self.assertNotEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        for harness in ("hermes", "codex", "claude-code", "opencode", "pi-agent"):
-            self.assertIn(f"PASS  {harness}:memory-fixture", proc.stdout)
-            self.assertIn(f"FAIL  {harness}:memory — UNSUPPORTED", proc.stdout)
+        for harness in harnesses:
+            with self.subTest(harness=harness):
+                self.assertIn(f"PASS  {harness}:memory-fixture", proc.stdout)
+                self.assertIn(f"FAIL  {harness}:memory — UNSUPPORTED", proc.stdout)
 
 
 if __name__ == "__main__":
