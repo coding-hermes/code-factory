@@ -1625,7 +1625,7 @@ the named failure branches; each branch has one accounting effect and no duplica
 || execution passes and publication definitively fails | execution remains `pass`, task/round `partial`; no settled success |
 || commit/push/gate verdict or remote readback is uncertain | task `unverified`, round `unverified`; no closeout and no inferred commit |
 || required memory sync is pending after local commit | execution outcome is retained; CT-06 `awaiting_evidence`, internally `REPORTED_PENDING_MEMORY`; work may continue locally, next round is blocked |
-|| backup coordinator is lost | recover the same barrier while valid; lease expiry or backup deadline makes the cut `ABORTED`, never complete |
+|| backup coordinator is lost | recover the same barrier while valid; lease expiry or backup deadline makes the cut `ABORTED`, permanently aborts upload, holds writers, and can never become complete |
 
 Task reduction uses `unknown` if any required outcome is unknown; otherwise `partial` for
 mixed pass/fail/unverified outcomes or publication partiality; otherwise `unverified` if

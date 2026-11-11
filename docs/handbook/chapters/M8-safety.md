@@ -312,13 +312,15 @@ writer sockets, so retaining them does not make their Git refs or hold records w
 Read-only release/policy mounts are owned by `factory-control`, and a mount readback must
 prove the effective `ro` flag rather than relying on a file-mode claim.
 
-The foreman's only execution interface is `/run/factory/<project>/submit.sock`, restricted
-by SO_PEERCRED and the live fence to CT-02/CT-05 submit/status/output/cancel. It cannot
-edit allowance, launch identity, retention, policy or credentials. The worker has no
-submit socket and can use only its one-way result socket for the preassigned execution
-key. Secret descriptors are delivered by the node broker directly to the authorized role,
-with seals and close-on-exec rules; no secret is placed in a shared environment, process
-argument, worker-readable staging directory or event.
+The foreman's only execution interface is
+`$HOME/.local/state/factory/supervisor/control.sock`, restricted by SO_PEERCRED
+and the live fence to `supervisor.v1` HTTP-shaped `PUT /v1/launches/{launch_id}`
+and query/reconciliation operations. It cannot edit allowance, launch identity,
+retention, policy or credentials. The worker has no control socket and can use
+only its one-way native-result channel for the preassigned execution key.
+Secret descriptors are delivered by the node broker directly to the authorized
+role, with seals and close-on-exec rules; no secret is placed in a shared
+environment, process argument, worker-readable staging directory or event.
 
 Configuration precedence is accepted generation → signed project/lane profile → signed
 deployment profile → global default. Global `safety.terminal_jail=required` requires the

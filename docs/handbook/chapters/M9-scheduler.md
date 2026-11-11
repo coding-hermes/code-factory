@@ -433,7 +433,10 @@ Active plus newly reserved weights must not exceed budget; all resource-vector
 components must fit. A non-fitting lane is CAPACITY_DEFERRED; scanning continues.
 The allocator writes no partial resource reservation: all host/namespace/global
 reservations and admission are one serializable transaction with snapshot versions.
-CAS loss reruns the complete evaluation. Weight above total budget is CONFIG_INVALID,
+`ResourceVector` is the closed object `{cpu_millis:PosInt,memory_bytes:PosInt,
+max_output_bytes:PosInt,worker_attempts:integer 0..20000,concurrency:PosInt}`;
+all quantities are integers with explicit units. Boolean-with-budget fields and
+untyped capacity strings are `INVALID_BODY`. CAS loss reruns the complete evaluation. Weight above total budget is CONFIG_INVALID,
 not a permanently waiting candidate. Aging prevents priority starvation among fitting
 candidates; continuous capacity exhaustion is exposed as oldest-eligible age, not an
 unconditional liveness promise. [Part V §V.9; CT-01/02/27]
@@ -534,8 +537,9 @@ commit replay. Until Crier and Scheduler readbacks agree, allocation can evaluat
 report candidates but cannot reserve a new execution round. The Scheduler never writes a
 Crier binding through an undocumented database side channel.
 
-Admission materializes Part V §V.12. `total_budget` is 1..100000 worker identities,
-including the valid 20,000 case; simultaneous slots remain an independent resource.
+Admission materializes Part V §V.12. `total_budget` is the integer 0..20,000
+worker-attempt allowance, including the valid 20,000 case; zero admits no worker
+launches. Simultaneous slots remain an independent resource.
 `deadline_s` is 120..604800 seconds, default 21600; `tick_wall_s` has the same default and
 must cover the round plus settlement. The scheduler's deadline record contains
 `admitted_monotonic`, `round_deadline`, `postcheck_deadline` and `tick_deadline`. Every

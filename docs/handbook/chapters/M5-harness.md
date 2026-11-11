@@ -481,7 +481,7 @@ live conformance exist the runtime is UNVERIFIED and activation refuses.
 ### 16.1 Boot, invocation, status and cancellation
 
 The Bunker init launches exactly
-`/opt/factory/supervisor/current/bin/cf-resident --protocol cf.supervisor.v1 --state /var/lib/factory/control/execution`
+`/opt/factory/supervisor/current/bin/cf-resident --protocol supervisor.v1 --state /var/lib/factory/control/execution`
 as `factory-control`, cwd `/var/lib/factory/control`, umask 077, after the protected
 control mount and read-only release mounts are verified. No shell expansion of request
 data occurs. A lifetime flock rejects a second supervisor. Boot replays the journal,
@@ -489,25 +489,44 @@ validates release/config/fence/binding, discovers outstanding native runs, and o
 starts the signed Crier admission receiver. Failed recovery serves status with
 admission=false; it does not discard prior attempts.
 
-The supervisor exposes `/run/factory/<project>/supervisor.sock` for service
-administration and `/run/factory/<project>/submit.sock` for fenced foreman submission,
-both mode 0600 and owned by `factory-control`. The worker namespace contains neither.
-SO_PEERCRED, role, registration generation and live fence authorize each verb under M1
-§17.5. Each request is one UTF-8 JCS object plus LF (maximum 1048576 bytes):
-`{schema_version:"cf.supervisor.v1",request_id:ID,
-verb:submit/status/output/cancel/drain/resume,input:object}`. Submit input is the complete
-CT-02 or CT-05 outer envelope; status input is `{execution_key:SHA|null}` (null lists
-all); output input is `{execution_key:SHA,stream:stdout|stderr,offset:UInt,
-limit:integer[1,65536]}`; cancel is `{execution_key:SHA,control_id:ID,
-expected_state_version:PosInt,reason:Text}`; drain is `{operation_id:ID,
-deadline_s:integer[1,600]}`; resume is `{operation_id:ID,expected_generation:PosInt}`.
-Responses use Part IV ResponseBody. Submit returns `{execution_key,launch_id,dispatch_id,
-native_name,state,state_version,duplicate}`; status returns journal records with role,
-execution_key, launch_id, native_name, state, state_version, process_instance_id,
-native_session_id (ID or null), result_ref (EvidenceRef or null). Output returns
-`{bytes_b64,next_offset,eof,digest}` and never restarts execution. Socket command receipt
-is not an execution verdict. Cancellation uses the M2 state CAS and exact
-boot/start/session identity before TERM/KILL; PID reuse never authorizes signaling.
+The supervisor exposes exactly one socket,
+`$HOME/.local/state/factory/supervisor/control.sock`, mode 0600, owned by
+`factory-control`, with peer-UID verification. The worker namespace contains no
+control socket. SO_PEERCRED, role, registration generation and live fence
+authorize each request under M1 §17.5. Each request is one UTF-8 JCS object plus
+LF (maximum 1048576 bytes). Launch is HTTP-shaped
+`PUT /v1/launches/{launch_id}` with body
+`{schema_version:"supervisor.v1",request_id:ID,idempotency_key:ID,
+owner_fence:Fence,project_id:ID,method:"PUT",path:"/v1/launches/{launch_id}",
+body:LaunchInput}`.
+
+`LaunchInput` is `{kind:foreman|worker,dispatch_id:ID,
+input_digest:SHA,input_ref:EvidenceRef,workspace_ref:EvidenceRef,
+runtime_digest:SHA,round_id:ID,wave_id:ID|null,task_id:ID|null,
+worker_id:ID|null,attempt_id:ID|null,deadline:Time,limits:ResourceLimits}`;
+`launch_id` occurs only in the outer path, not as a duplicate body member.
+Worker launches require wave/task/worker/attempt IDs; a cold foreman launch has
+null wave/task/worker/attempt IDs and cannot mint them. `input_digest` is
+SHA-256 over RFC 8785 JCS of the resolved LaunchInput with `input_digest`
+absent. `execution_key = SHA256(JCS({launch_id,input_digest}))`; the supervisor
+recomputes it before reservation. Identical retries replay the original record;
+changed bytes return `LAUNCH_CONFLICT` without exec.
+
+`GET /v1/launches/{launch_id}` reads the durable launch journal.
+`GET /v1/launches/{launch_id}/result` reads only committed result evidence.
+`POST /v1/launches/{launch_id}/cancellation` accepts
+`{request_id:ID,expected_state_version:PosInt,reason:Text}` and uses the M2
+state CAS plus exact boot/start/session identity before TERM/KILL. PID reuse
+never authorizes signaling. These are the complete target operations; retired
+submit/status/output/cancel/drain/resume verbs and fd-3/fd-4 channels return
+`UNSUPPORTED_VERSION`. Responses use Part IV ResponseBody. LaunchResponse is
+`{execution_key:SHA,launch_id:ID,input_digest:SHA,native_id:ID|null,
+state:accepted|running|succeeded|failed|cancelled,state_version:PosInt,
+accepted_at:Time,started_at:Time|null,heartbeat_at:Time|null,finished_at:Time|null,
+result_digest:SHA|null,error:Error|null}`; a new launch returns HTTP 201.
+Socket command receipt is not an execution verdict. Service lifecycle operations
+use the M1 signed service manifest and the same control socket under the
+`factory-control` role; no second socket or launch protocol exists.
 
 The launch adapter invocation is
 `/opt/factory/hermes/current/bin/cf-hermes --protocol cf.native.v1 --execution-key <SHA>`.
@@ -650,8 +669,8 @@ The conformance union gains the following required legs: `foreman-launch-identit
 foreman launch without future worker IDs, subsequent CT-05 submission to the same
 supervisor, exact stdin/stdout event framing, worker denial of every administrative or
 credential interface, sealed-descriptor staging, the SC-09 two-turn deadline case and
-round-wide deadline accounting. The pre-integration `supervisor.v1`, fd-3/fd-4 and
-same-UID control-socket forms are negative controls and must be refused.
+round-wide deadline accounting. The retired `cf.supervisor.v1`, `submit.sock`,
+fd-3/fd-4 and same-UID control-socket forms are negative controls and must be refused.
 
 The process contract is fail closed. The supervisor creates one cgroup and process group
 per execution key, registers the child's boot ID and `/proc` start ticks before release,

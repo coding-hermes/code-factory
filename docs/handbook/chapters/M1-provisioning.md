@@ -705,20 +705,24 @@ The controller transfers only read-only forge credentials to the node; protected
 writes use broker capabilities (Part I §1.9.7). Proxy credentials cannot expose
 upstream provider keys. Every installed class has separate issuer and revocation id.
 
-Crier read proof is signed `GET /v1/factory/deliveries/<delivery_id>` (or the collection
-form `GET /v1/factory/deliveries?agent_id=<id>&state=queued`) under the single
-`CF2A-CRIER-1` profile in M10 §16. The former unversioned
+Crier read proof is signed
+`GET /v1/factory/deliveries/<delivery_id>?request_id=<id>&idempotency_key=<key>`
+(or the collection form with agent/state plus the same signed-read parameters)
+under the single `CF2A-CRIER-1` profile in M10 §16. The former unversioned
 `GET /agents/<agent_id>/inbox/stats` example and `CF2A-REQUEST-1` Crier variant are
 retired: `CF2A-REQUEST-1` remains the authority enrollment profile only. The Crier
-response binds request/response principals, registration generation, request nonce,
-body digest and lease/custody receipt. Duplicate GET nonce replays its saved observation,
-not a fresh read. The route map is normative: `/factory/v1/registrations` is the legacy
-adapter alias for `POST /v1/factory/registrations`; `/agents` and `/agents/*/inbox/*`
-are legacy-only and return `410 ROUTE_RETIRED` for target clients.
+response binds request/response principals, registration generation, request
+ID/idempotency nonce, exact body digest and lease/custody receipt. Duplicate GET
+nonce replays its saved observation, not a fresh read. The route map is normative:
+`/factory/v1/registrations` is the legacy adapter alias for
+`POST /v1/factory/registrations`; `/agents` and `/agents/*/inbox/*` are legacy-only
+and return `410 ROUTE_RETIRED` for target clients.
 Revocation is authority `POST /v1/revocations`, then readback of the exact ref/serial
 and a negative probe at the resource boundary. `401 CAPABILITY_REVOKED` or certificate
 refusal is proof; deletion of a file is not. Renewal starts at half lifetime (12 h
-for the maximum 24 h certificate), and admission stops at expiry. All enrollment,
+for the maximum 24 h certificate). The new serial is verified by readback, overlaps
+the old serial for exactly 60 seconds for in-flight reads, and the old serial is then
+revoked; mutations use only the new generation. Admission stops at expiry. All enrollment,
 renewal, denial and failure records use M0 §16.1 telemetry without nonce/key values.
 A grant signed by an unknown operator, duplicate first request, changed CSR retry,
 clock-skew failure, lost response and revoked read are mandatory conformance cases.
@@ -928,8 +932,7 @@ capabilities; cgroup v2 CPU, memory and PID limits are service-owned.
 
 || Interface | Visible to | Access contract |
 ||---|---|---|
-|| `/run/factory/<project>/supervisor.sock` | `factory-control` only | administration, drain, resume, retention and launcher operations; worker mount has no socket |
-|| `/run/factory/<project>/submit.sock` | supervisor and `factory-foreman` | `cf.supervisor.v1` submit/status/cancel for the live fence only; no budget, retention, policy or credential administration |
+|| `$HOME/.local/state/factory/supervisor/control.sock` | supervisor and `factory-control`; `factory-foreman` for launch only | `supervisor.v1` HTTP-shaped `PUT /v1/launches/{launch_id}`, query/reconciliation and role-guarded service operations for the live fence only; mode 0600 and peer-UID verification; worker mount has no socket |
 || `/run/factory/<project>/worker-result.sock` | supervisor and `factory-worker` | one-way native-event/result writes for the current execution key; no submit, cancel, resume or other-attempt read |
 || `/run/factory/node-broker/secrets.sock` | node broker and authorized service installer | `secret-resolve.v1` plus SCM_RIGHTS; absent from foreman/worker mounts |
 || `/var/lib/factory/control` | `factory-control` | read-write service journal and policy root; all other roles have no mount |
@@ -937,12 +940,12 @@ capabilities; cgroup v2 CPU, memory and PID limits are service-owned.
 || `/var/lib/factory/worker` | `factory-worker` | read-write worker HOME/worktree only; control, peer worktrees and policy are absent |
 || `/var/lib/factory/memory` | local memory writer | writer socket mediates foreman/worker append; neither can edit Git refs or resolution records directly |
 
-The foreman's mediated submit carries its fenced capability in an inherited sealed
+The foreman's mediated launch carries its fenced capability in an inherited sealed
 descriptor, not an environment variable. The supervisor checks SO_PEERCRED, the live
-`owner_fence`, registration generation, role and exact CT-02/CT-05 body before accepting.
+`owner_fence`, registration generation, role and exact `supervisor.v1` launch body before accepting.
 A worker cannot use that descriptor: it is close-on-exec outside the foreman launcher,
-the worker mount excludes `submit.sock`, and the supervisor rejects `factory-worker` for
-every administrative verb. Worker native results use the separate one-way socket and are
+the worker mount excludes `control.sock`, and the supervisor rejects `factory-worker` for
+every launch or administrative operation. Worker native results use the separate one-way channel and are
 accepted only for the preassigned execution key and process incarnation.
 
 Readiness executes negative probes as the ordinary worker: open the control root; alter a

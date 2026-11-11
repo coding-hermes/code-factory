@@ -302,11 +302,13 @@ Missing or changed content yields `BRIEF_UNAVAILABLE` or `DIGEST_MISMATCH` befor
 reservation or native start. The worker receives the same byte object through the
 M5 supervisor stdin contract, not a reconstructed summary. [Part I §1.9.6.]
 
-The execution key is the JCS array `[project_id,round_id,wave_id,worker_id,attempt_id]`;
-its SHA-256 is `execution_key`. Dispatch/delivery IDs are receipt identities, not
-uniqueness authority. Unique indexes exist for execution_key and for
-`[project_id,round_id,task_id,attempt_id]`. Reusing an attempt for different input
-is `ATTEMPT_CONFLICT`. Round custody deduplicates on `[run_id,corr_id]` independently.
+The worker `launch_id` derives from the JCS array
+`[project_id,round_id,wave_id,worker_id,attempt_id]` as specified in §15.4;
+`execution_key = SHA256(JCS({launch_id,input_digest}))`. Dispatch/delivery IDs
+are receipt identities, not uniqueness authority. Unique indexes exist for
+execution_key and for `[project_id,round_id,task_id,attempt_id]`. Reusing an
+attempt for different input is `LAUNCH_CONFLICT`. Round custody deduplicates on
+`[run_id,corr_id]` independently.
 The manager's active binding records `execution_mode=resident`, binding_generation
 and owner_fence. Mode changes disable admission, drain or fence every old attempt,
 prove old credential denial, then prepare/commit a new binding (Part I §1.9.4).
@@ -405,43 +407,61 @@ Required dispatch metrics are attempts, outcomes, refusals by reason, lease age,
 
 ### 15.4 One resident/native protocol and identity mapping (P6-01/02/10/11/12)
 
-`cf.supervisor.v1` on `/run/factory/<project>/submit.sock` is the sole target control
-protocol, and `cf.native.v1` on the child's stdin/stdout is the sole target native-adapter
-protocol. M5 §16.1 supplies their complete request/event framing; M11 exposes the same
-operations, not HTTP-shaped `supervisor.v1` launches. The former `.node/execution` socket,
-`supervisor.v1`, fd-3 input and fd-4 result channels are retired target drafts and return
-`UNSUPPORTED_VERSION`; they remain neither an alternate production profile nor a required
-compatibility mode. Supervisor stdout is diagnostic; structured native results travel only
-in `cf.native-event.v1` records on the child's stdout, with human output captured separately.
+`supervisor.v1` on `$HOME/.local/state/factory/supervisor/control.sock` is the
+sole target control protocol, and `cf.native.v1` on the child's stdin/stdout is
+the sole target native-adapter protocol. M5 §16.1 supplies their complete
+request/event framing. The socket has mode 0600 and verifies peer UID. The
+foreman sends HTTP-shaped `PUT /v1/launches/{launch_id}` with outer fields
+`{schema_version:"supervisor.v1",request_id:ID,idempotency_key:ID,
+owner_fence:Fence,project_id:ID,method:"PUT",path:"/v1/launches/{launch_id}",
+body:LaunchInput}`. The former `.node/execution/control.sock`, `submit.sock`,
+`cf.supervisor.v1`, submit/status/cancel/drain/resume verbs and fd-3/fd-4
+channels are retired and return `UNSUPPORTED_VERSION`; they are neither an
+alternate production profile nor a required compatibility mode. Supervisor
+stdout is diagnostic; structured native results travel only in
+`cf.native-event.v1` records on the child's stdout, with human output captured
+separately.
 
-Execution identity is allocated before any process exists:
+Execution identity is allocated before any process exists. `launch_id` is the
+owner's stable logical-launch identity and
+`execution_key = SHA256(JCS({launch_id,input_digest}))`. `input_digest` is the
+SHA-256 of the complete resolved `LaunchInput` in RFC 8785 JCS, excluding the
+digest member itself.
 
-|| Role | Canonical execution-key input (RFC8785 JCS, then SHA-256) | Other identities |
-||---|---|---|
-|| foreman | `["foreman",project_id,round_id,run_id]` | `launch_id="l-"+execution_key`, `dispatch_id="d-"+execution_key`, `native_name="cf-"+execution_key` |
-|| worker | `[project_id,round_id,wave_id,worker_id,attempt_id]` (the existing CT-05 tuple) | same `l-`, `d-` and `cf-` derivations from that worker execution_key |
+|| Role | launch_id derivation | Other identities |
+|---|---|---|
+|| foreman | `l-` + SHA-256(JCS(`["foreman",project_id,round_id,run_id]`)) | `execution_key` from launch ID/input digest; `dispatch_id="d-"+execution_key`; `native_name="cf-"+execution_key` |
+|| worker | `l-` + SHA-256(JCS(`[project_id,round_id,wave_id,worker_id,attempt_id]`)) | the same execution-key, dispatch-ID and native-name derivation |
 
-The supervisor persists the unique execution_key/launch_id/dispatch_id/native_name and
-input digest in one reservation transaction. Duplicate CT-02 or CT-05 with the same digest
-returns that record; changed bytes are `ATTEMPT_CONFLICT`; a new delivery ID cannot force
-another execution. `launch_id` is the native lookup key, `execution_key` is the budget and
-result key, and `native_session_id` identifies one process incarnation without replacing
-either. The supervisor is the sole journal authority; the foreman and worker submit inputs
-and receive receipts but never write execution rows.
+The dispatcher reserves budget and the supervisor persists the unique
+execution_key/launch_id/dispatch_id/native_name and input digest before exec.
+The supervisor independently recomputes the execution key from the path launch
+ID and body input digest. Duplicate CT-02 or CT-05 with the same digest returns
+the original durable record without exec. Changed input under either identity
+is `LAUNCH_CONFLICT`; a new request or delivery ID cannot force another
+execution. `launch_id` is the launch lookup key, `execution_key` is the budget
+and result key, and `native_session_id` identifies one process incarnation
+without replacing either. The supervisor is the sole journal authority; the
+foreman and worker submit inputs and receive receipts but never write execution
+rows.
 
-On cold CT-02 submission the supervisor constructs the synthetic foreman BriefInput from
-the admitted task snapshot, ordered authorized task IDs and lane seed. It allocates no wave,
-worker or task-attempt identity. The deterministic foreman execution key above permits
-exactly one native foreman for the round. After that foreman starts, it allocates wave and
-worker identities in its own round ledger and submits CT-05 to the same `submit.sock`;
-the supervisor derives the worker key with the existing tuple and applies the same gated
-launch protocol. No undocumented bridge translates between two supervisor implementations.
+On cold CT-02 submission the supervisor constructs the synthetic foreman
+BriefInput from the admitted task snapshot, ordered authorized task IDs and lane
+seed. It allocates no wave, worker or task-attempt identity. The deterministic
+foreman launch ID permits exactly one native foreman for the round. After that
+foreman starts, it allocates wave and worker identities in its own round ledger
+and creates `attempt_id` immediately before each worker launch. It submits the
+resulting `LaunchInput` to the same `control.sock`; the supervisor derives the
+worker execution key from launch ID and input digest and applies the same gated
+launch protocol. No undocumented bridge translates between two supervisor
+implementations.
 
-The signed 60-second Crier custody chain in M10 §16 covers initial reserved receiver,
-retrieve, renewal, return and final acknowledgement. A lost release/ack response is read
-back by delivery ID before any transfer. Lease expiry produces reconciliation, not a second
-native run. Duplicate delivery, lost acknowledgement, supervisor restart and cancellation
-all resolve by execution_key/launch_id and the durable state CAS in §15.2.
+The signed 60-second Crier custody chain in M10 §16 covers initial reserved
+receiver, retrieve, renewal, return and final acknowledgement. A lost
+release/ack response is read back by delivery ID before any transfer. Lease
+expiry produces reconciliation, not a second native run. Duplicate delivery,
+lost acknowledgement, supervisor restart and cancellation all resolve by
+execution_key/launch_id and the durable state CAS in §15.2.
 
 The shared vectors are the only acceptance examples for this mapping: cold CT-02, one
 foreman CT-05, duplicate delivery, lost release acknowledgement, restart, cancellation,

@@ -338,83 +338,90 @@ The guard result is separate from execution safety and acceptance. `errored=true
 ## 16. One signed custody chain and durable operation table (P5-C-07/12; P6-02/08/12; SC-01/07)
 
 Factory peers use TLS 1.3/mTLS enrollment and online revocation from Part I §1.9.3.
-Every Crier application request and response uses the `CF2A-CRIER-1` Ed25519 profile;
-M1's `CF2A-REQUEST-1` remains restricted to authority enrollment and is not a second
-Crier signature profile. A Crier-specific signed read therefore verifies with the same
-transcript at issuer, provisioner and Crier.
+Every Crier application request and response uses the `CF2A-CRIER-1` Ed25519 profile
+with lowercase-hex signatures; M1's `CF2A-REQUEST-1` remains restricted to
+authority enrollment and is not a second Crier signature profile. The profile
+identifier is metadata, not a transcript prefix. Signed request headers are
+exactly `X-Agent-Id`, `X-Agent-Ts` (RFC3339 UTC), `X-CF2A-Key-Id` and
+`X-CF2A-Signature`. The registered body carries request identity, idempotency,
+owner fence/epoch and registration generation. `request_id` plus
+`idempotency_key` is the replay nonce; no unsigned `X-Nonce` or correlation
+header substitutes for it.
 
-The request headers are `X-Agent-ID`, `X-Request-Id`, `X-Correlation-Id`,
-`X-Created-At` (RFC3339 UTC), `X-Nonce` (Base64url32), `X-Key-Id`,
-`X-Registration-Generation`, `X-Lease-Id` (`-` when none), `X-Crier-Audience`, and
-`X-Signature` (Base64url64). The exact UTF-8 transcript, with no final newline, is:
+The signed bytes are RFC 8785 JCS of the complete application body with any
+`signature` member excluded. The body digest is lowercase SHA-256 hex of those
+signed JCS bytes. The signature transcript is the following five
+UTF-8 lines with no prefix and no final newline:
 
 ```text
-CF2A-CRIER-1
 <METHOD>
-<origin-form path with bytewise-sorted percent-encoded query>
-<request_id>
-<corr_id>
-<created_at>
-<nonce>
-<request_principal>
-<audience_principal>
-<registration_generation>
-<lease_id_or_->
-<lowercase sha256 hex of exact transmitted body bytes>
+<origin-form-path, including bytewise-canonical query when present>
+<X-Agent-Ts>
+sha256:<lowercase-body-sha256-hex>
+audience:<registered-principal>
 ```
 
-JSON mutation bodies are RFC8785 UTF-8 and at most 1 MiB; an empty body hashes zero
-bytes. Key ID resolves only to the enrolled principal/generation. Audience is the Crier
-service principal for requests and the original requester for responses. Clock skew is
-±30 seconds. A fresh nonce with the same idempotency key and body digest replays the
-original operation; the same nonce/digest returns the saved observation; the same nonce
-with different bytes is `REPLAY_CONFLICT`. Unknown key/profile, stale generation,
-incorrect body hash, sender/audience mismatch and expired/revoked identity are
-`UNAUTHORIZED` before any custody effect.
-
-A response uses `CF2A-CRIER-RESPONSE-1` followed by method, original path, request ID,
-correlation ID, original request nonce, response creation time, fresh response nonce,
-Crier principal, registration generation, lease ID or `-`, integer HTTP status, and
-lowercase SHA-256 of exact response body bytes, in that order and with no final newline.
-The response's signed `CustodyReceipt` additionally names both request and response
-principals and nonces. Signature and body verification precedes interpretation of any
-queue emptiness, lease or result status.
+Request audience is `crier.factory`; response audience is the original
+requester. A response uses the same headers, JCS rule and transcript with its
+own response timestamp and canonical response-body digest. Its signed CustodyReceipt
+binds the original request ID/idempotency nonce, request and response principals,
+request body digest, response body digest, registration generation, delivery
+and lease identity. Mutation and receipt bodies are RFC 8785 JCS UTF-8, at most
+1 MiB; an empty signed read hashes zero bytes. Clock skew is ±30 seconds. Signed reads carry `request_id`
+and `idempotency_key` as canonical query parameters; their enrolled key resolves
+principal/generation and the addressed delivery resolves the active fence. Key
+ID resolves only to the enrolled principal and generation. A fresh request ID
+with the same idempotency key and body digest replays the original operation;
+the same request ID/idempotency nonce and digest returns the saved observation;
+the same nonce with different bytes is `REPLAY_CONFLICT`. Unknown key/profile,
+stale generation,
+incorrect body hash, sender/audience mismatch, expired/revoked identity, stale
+timestamp or nonce/digest conflict is `UNAUTHORIZED` or `REPLAY_CONFLICT`
+before any custody effect. Signature and body verification precedes
+interpretation of queue emptiness, lease or result status.
 
 All target routes are under `/v1/factory`. The `/factory/v1/*` spellings are temporary
 migration aliases with identical semantics; unversioned `/agents` and `/agents/*/inbox/*`
 return `410 ROUTE_RETIRED` to target clients. Registration is
 `POST /registrations` with `register.v1`; collection read is
-`GET /deliveries?agent_id=<id>&state=<queued|leased|reconciliation-held|acked|dead>`;
-individual read is `GET /deliveries/{delivery_id}`. Reads return the same durable
+`GET /deliveries?agent_id=<id>&state=<queued|leased|reconciliation-held|acked|dead>&request_id=<id>&idempotency_key=<key>`;
+individual read is
+`GET /deliveries/{delivery_id}?request_id=<id>&idempotency_key=<key>`. Reads return the same durable
 custody record, never a synthesized zero/empty observation when the store is unavailable.
 
-Every mutation body contains `schema_version:"custody.v1"`, `request_id`,
-`idempotency_key`, `owner_fence`, `registration_generation`, `expected_chain_seq`
-(nonnegative integer), and `previous_receipt_digest` (SHA or null at chain start).
-The operation rows add these exact fields:
+Every retrieve, renew and ack body contains exactly the common fields
+`schema_version:"custody.v1"`, `request_id:ID`, `idempotency_key:ID`,
+`owner_fence:Fence` and `registration_generation:PosInt`, plus the operation
+fields below. Delivery, result and release bodies use the same common fields and
+their registered operation fields; unknown fields are `INVALID_BODY`. The
+operation rows add these exact fields:
 
 || Method/path | Additional request fields | Durable success result |
-||---|---|---|
+|---|---|---|
 || `POST /deliver` | recipient, sender, envelope, payload_digest, expires_at, dispatch_grant_hash, `initial_reservation:{reservation_id,receiver_id,visible_at,valid_until}` | 201 `{delivery_id,payload_digest,state:queued,initial_reservation,receipt}`; grant consumed first under Part I §1.9.10 |
 || `POST /retrieve` | agent_id, poll_id, limit 1..100 default 10, lease_s 30..300 default 60 | 200 `{poll_id,messages:Envelope[],lease_id,visible_at,lease_expires_at,valid_until,receipt}`; empty uses messages `[]` and null lease/time fields |
-|| `POST /renew` | delivery_id, lease_id, lease_s 30..300 | 200 `{delivery_id,lease_id,lease_expires_at,valid_until,receipt}`; lease_id never changes |
+|| `POST /renew` | delivery_id, lease_id | 200 `{delivery_id,lease_id,lease_expires_at,valid_until,receipt}`; the configured 20-second cadence and five-second call never change lease_id |
 || `POST /results` | delivery_id, lease_id, result_envelope, result_digest | 201 `{delivery_id,result_digest,result_custody_receipt,receipt}` after result/outbox fsync |
 || `GET /results/{delivery_id}` | no body | 200 exact stored result and custody receipt; 202 while absent, 503 when readback is unknown |
 || `POST /release` | delivery_id, lease_id, reason, never_started_or_quiescence_ref | 200 `{state:queued,receipt}` only with proof; otherwise 409 `EXECUTION_UNKNOWN` |
 || `POST /ack` | delivery_id, lease_id, result_digest, result_custody_receipt | 200 `{state:acked,result_digest,finalized_at,receipt}` only when result custody matches the original correlation |
 
-`CustodyReceipt` is `{delivery_id,reservation_id,initial_receiver,request_principal,
-response_principal,request_nonce,response_nonce,registration_generation,lease_id,
-chain_seq,previous_receipt_digest,visible_at,lease_expires_at,valid_until,finalized_at,
-state,receipt_digest,signature}`. `visible_at` is the initial instant the reserved message
-became retrievable by the explicitly named initial receiver. `lease_expires_at` is the
-current lease deadline. `valid_until` is the earlier of message expiry and round deadline,
-and bounds every renewal. `finalized_at` is null until ack/dead. `chain_seq` starts at one
-on deliver and increases once per signed state transition; `previous_receipt_digest`
-links the preceding receipt. `receipt_digest` is SHA-256 of `CF2A-CUSTODY-1\n` plus
-RFC8785 JSON of the receipt excluding `receipt_digest` and `signature`; `signature` is
-Base64url64 Crier Ed25519 over those digest hex bytes. A wrong previous digest or sequence
-is `CUSTODY_CHAIN_CONFLICT`.
+`CustodyReceipt` is `{receipt_id:ID,delivery_id:ID,reservation_id:ID,
+initial_receiver:ID,request_id:ID,idempotency_key:ID,request_principal:ID,
+response_principal:ID,request_body_digest:SHA,response_body_digest:SHA,
+registration_generation:PosInt,lease_id:ID|null,chain_seq:PosInt,
+previous_receipt_digest:SHA|null,visible_at:Time|null,lease_expires_at:Time|null,
+valid_until:Time,finalized_at:Time|null,state,receipt_digest:SHA,signature:Hex}`.
+`visible_at` is the initial instant the reserved message became retrievable by
+the explicitly named initial receiver. `receipt_id` is the response nonce.
+`lease_expires_at` is the current lease deadline. `valid_until` is the earlier of message expiry and round deadline and
+bounds every renewal. `finalized_at` is null until ack/dead. `chain_seq` starts
+at one on deliver and increases once per signed state transition;
+`previous_receipt_digest` links the preceding receipt. `receipt_digest` is
+SHA-256 of RFC 8785 JCS of the receipt excluding `receipt_digest` and
+`signature`. `signature` is the lowercase-hex Ed25519 response signature over
+the transcript above; `X-CF2A-Signature` carries the same value. A wrong
+previous digest or sequence is `CUSTODY_CHAIN_CONFLICT`.
 
 One delivery has one lease ID across its whole validity interval. Retrieve creates it;
 renewal extends only `lease_expires_at`, never beyond `valid_until`; result return,

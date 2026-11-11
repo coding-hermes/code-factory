@@ -81,7 +81,7 @@ effective values never overwrite it.
 | `projects[].bunkers` | `{count, requirements, profile}`, required | `count` integer 1..1024; requirements name disk/memory/network/capability constraints; profile resolves to a declared profile |
 | `projects[].memory` | `{namespace, local_root, remote_ref, sync_policy}`, required | namespace matches the project id; `local_root` is durable; `remote_ref` is required for `shared-git` and absent only for `local-only` |
 | `projects[].lanes[]` | `{name, admission, cadence_s, weight, foreman}`, required | lane names unique; admission is `tasks` or `cooldown`; `cadence_s` is 1..31536000 and `weight` is 1..1000 |
-| `projects[].lanes[].foreman.round` | `{worker_budget, concurrency, retry_policy}`, required | `worker_budget.total` is 1..100000; `concurrency` is 1..1024; retry policy is explicit and cannot replenish total budget |
+| `projects[].lanes[].foreman.round` | `{worker_budget, concurrency, retry_policy}`, required | `worker_budget.total` is the integer 0..20000 worker-attempt allowance; `concurrency` is 1..1024; retry policy is explicit and cannot replenish total budget |
 | `events.webhooks[]` | `{subscription_id, endpoint_ref, event_types, project_scope, status, retry_policy, retention_s}`, optional | absent means no delivery; `event_types` is a non-empty set from the catalog; endpoint secret material is referenced only; interpretation remains receiver-owned |
 | `safety` | `{terminal_jail, reclaim, backup}`, required | Terminal Jail defaults to `disabled`; enabled mode requires the guarded execution path and has no unguarded fallback |
 | `extensions` | map, optional | preserved but not interpreted by core reconciliation |
@@ -576,17 +576,17 @@ unresolved references refuse activation.
 | Requirements | disk_gib, memory_gib: Capacity ranges; capabilities: nonempty capability-ID set; network: endpoint-ID set default all deployment endpoints; cpu_millis,pids: Capacity ranges/defaults |
 | Memory | namespace: project ID; local_root: path; sync_policy: shared-git or local-only; remote_ref: required HTTPS Git URL for shared-git, forbidden for local-only; sync_owner: ID default factory-memory-sync; sync_interval_s: integer 1..300 default 30; stale_after_s: integer 30..3600 default 90 |
 | Lane | name: ID; admission: tasks or cooldown; cadence_s: integer 1..31536000; weight: integer 1..1000; priority: integer 0..9 default 5; foreman: `{round: Round}`; enabled: boolean default true; hooks: M9.18 Hook list, default empty (required-hook readiness still refuses) |
-|| Round | worker_budget: `{total: integer 1..100000}`; concurrency: integer 1..1024; retry_policy: WorkerRetry; deadline_s: integer 120..604800 default 21600; attempt_wall_s: integer 1..86400 default 1800; turn_timeout_s: integer 1..86400 default 1800; max_turns: integer 1..10000 default 40 |
+|| Round | worker_budget: `{total: integer 0..20000}`; concurrency: integer 1..1024; retry_policy: WorkerRetry; deadline_s: integer 120..604800 default 21600; attempt_wall_s: integer 1..86400 default 1800; turn_timeout_s: integer 1..86400 default 1800; max_turns: integer 1..10000 default 40 |
 | WorkerRetry | name: literal charge-on-start; failed_start: literal refund-before-run; max_attempts: integer 1..10 default 3; initial_backoff_s: integer 1..60 default 5; max_backoff_s: integer 1..300 default 60 |
 | events | webhooks: Subscription list, default empty |
 | Subscription | subscription_id: unique ID; endpoint_ref: events SecretRef; event_types: nonempty set of V.0.3 catalog enums including project.progress; project_scope: nonempty project-ID set; status: enabled or disabled; retry_policy: DeliveryRetry; retention_s: integer 3600..2592000 default 604800 |
 | DeliveryRetry | max_attempts: integer 1..20 default 5; initial_backoff_s: integer 1..60 default 5; max_backoff_s: integer 1..3600 default 300 |
 | safety | terminal_jail: disabled or required; jail_policy: optional M8.16 policy object, mandatory for required mode; reclaim: Reclaim; backup: Backup |
 | Reclaim | enabled: boolean; job_ttl_hours: finite number 0..8760 default 24; cache_ttl_hours: same default 24; free_floor_gib: integer 1..1024 default 4; classes: set of cache/job, default `[cache,job]`; no package/image/evidence deletion by this policy |
-|| Backup | enabled: boolean; interval_s: integer 300..86400 default 3600; retention_s: integer 86400..31536000 default 2592000; rpo_s: integer 300..86400 default 3600; rto_s: integer 300..86400 default 7200; deadline_s: integer 300..86400 default 3600; destination_ref: endpoint ID required if enabled; key_ref: backup SecretRef required if enabled; offline_policy: refuse or partial default refuse |
+|| Backup | enabled: boolean; interval_s: integer 300..86400 default 3600; retention_s: integer 86400..31536000 default 2592000; rpo_s: integer 300..86400 default 3600; rto_s: integer 300..86400 default 7200; deadline_s: integer 300..86400 default 3600; destination_ref: endpoint ID required if enabled; key_ref: backup SecretRef required if enabled; coordinator_loss: abort-and-hold default; offline_policy: refuse or partial default refuse |
 || transport | registry: `{backend: sqlite or postgres, endpoint_ref: optional Endpoint key}`; default backend sqlite, endpoint required for postgres; lease_s: integer 30..300 default 60; renew_s: integer 1..60 default 20; call_timeout_s: integer 1..10 default 5; signature_profile: literal CF2A-CRIER-1 |
 || scheduler | budget: integer 1..1000000 default 100; max_concurrent: integer 1..1024 default 10; tick_wall_s: integer 120..604800 default 21600; namespaces: map of project-ID to `{reserved: integer 0..1024 default 0, hard_cap: integer 1..1024 default max_concurrent}`, absent means every project gets defaults |
-|| execution | mode: literal resident default resident; artifact_ref: artifact ID default supervisor; harness_artifact_ref: artifact ID default hermes; adapter_artifacts: map of capability ID to artifact ID default empty, with an exact signed entry for every requested capability and hermes equal to harness_artifact_ref; socket_root: absolute path default `/run/factory`; state_root: absolute path default `/var/lib/factory/control`; launch_reserve_s: integer 1..120 default 30; transfer_reserve_s: integer 1..120 default 30; cleanup_reserve_s: integer 15..120 default 15 |
+|| execution | mode: literal resident default resident; artifact_ref: artifact ID default supervisor; harness_artifact_ref: artifact ID default hermes; adapter_artifacts: map of capability ID to artifact ID default empty, with an exact signed entry for every requested capability and hermes equal to harness_artifact_ref; control_socket: absolute path default `$HOME/.local/state/factory/supervisor/control.sock`; state_root: absolute path default `/var/lib/factory/control`; launch_reserve_s: integer 1..120 default 30; transfer_reserve_s: integer 1..120 default 30; cleanup_reserve_s: integer 15..120 default 15 |
 || credentials | renewal_margin_s: integer 60..3600 default 300; overlap_s: integer 0..300 default 60; proxy_ttl_s: integer 600..86400 default 3600; secret_bindings: SecretBinding list default empty; an enabled endpoint's credential_ref requires a matching binding |
 || SecretBinding | `{ref: SecretRef, resolver: control-broker or node-broker, delivery: sealed-fd, scope: nonempty operation-ID set, file_mode: literal 0600}`; resolver names only a service identity and socket, never secret material |
 | readiness | probe_interval_s: integer 5..60 default 10; stale_after_s: integer 15..300 default 30; failures_to_fail: integer 1..10 default 3 |
@@ -594,6 +594,16 @@ unresolved references refuse activation.
 | Route | id: ID; requested_model: nonempty string <=128; provider: ID; served_model: nonempty string <=128; endpoint_ref: Endpoint key; credential_ref: model SecretRef; input_micro_usd_per_million, output_micro_usd_per_million: integer >=0; tokenizer_digest: SHA-256 |
 | NodeScope | allowed_routes: route-ID set default empty; budget_micro_usd: integer >=0 default 0; window_s: integer 60..86400 default 86400; concurrency: integer 1..64 default 1; max_output_tokens: integer 1..131072 default 4096 |
 | Capture | enabled: boolean default false; max_chars: integer 1..120000 default 120000; retention_s: integer 60..2592000 default 2592000; sink_ref: Endpoint key required when enabled; failure: refuse or record default refuse; redaction: literal credentials-and-secrets default credentials-and-secrets |
+
+DECISION SLOT A-CRIER-CUSTODY-PROFILE: options are (a)
+`factory-ed25519-v1`, the complete CF2A-CRIER-1 signed retrieve/renew/ack
+protocol in M10 §16 with 30..300-second leases, default 60, renewal every 20
+seconds and a five-second bounded call; or (b) `disabled`, which refuses all
+custody admission and leaves the node unschedulable. The fail-closed production
+default is `factory-ed25519-v1`; `transport.signature_profile=CF2A-CRIER-1` is
+its literal configuration value. Audience-free reads, three-line GETs,
+`lease_s=1..30`, unsigned responses and silent signature-disable modes are
+`UNSUPPORTED_VERSION`, never fallback profiles.
 
 Before Part I §1.9.5 allocator invocation, declared disk_gib/memory_gib multiply
 exactly by 1073741824 into disk_bytes/memory_bytes, and requirements.network maps to
@@ -881,6 +891,11 @@ artifacts:
   profile-homelab:
     <<: *fixture_artifact
     media_type: application/vnd.cf.signed-profile.v1+json
+```
+
+The same register, continued:
+
+```yaml
 policy:
   release_lock_ref: release-lock
   gate_policy_ref: gate-policy
@@ -957,6 +972,11 @@ projects:
         hooks:
           - {id: board-freshness, phase: PRE, required: true, artifact_digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, argv: [/opt/factory/bin/check-board], timeout_s: 60, max_attempts: 1}
           - {id: merged-tree-verifier, phase: POST, required: true, artifact_digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, argv: [/opt/factory/bin/verify-tree], timeout_s: 300, max_attempts: 5}
+```
+
+The same register, continued:
+
+```yaml
 transport:
   registry: {backend: sqlite}
   lease_s: 60
@@ -974,7 +994,7 @@ execution:
   artifact_ref: supervisor
   harness_artifact_ref: hermes
   adapter_artifacts: {hermes: hermes, git: git-adapter}
-  socket_root: /run/factory
+  control_socket: $HOME/.local/state/factory/supervisor/control.sock
   state_root: /var/lib/factory/control
   launch_reserve_s: 30
   transfer_reserve_s: 30
@@ -1014,6 +1034,11 @@ credentials:
     - {ref: secretref://backup/recovery.cf2a, resolver: control-broker, delivery: sealed-fd, scope: [backup], file_mode: 0600}
     - {ref: secretref://events/ops-webhook.cf2a, resolver: control-broker, delivery: sealed-fd, scope: [deliver], file_mode: 0600}
     - {ref: secretref://authority/offline-ca.cf2a, resolver: control-broker, delivery: sealed-fd, scope: [enroll], file_mode: 0600}
+```
+
+The same register, continued:
+
+```yaml
 readiness:
   probe_interval_s: 10
   stale_after_s: 30
@@ -1039,6 +1064,7 @@ safety:
     deadline_s: 3600
     destination_ref: backup
     key_ref: secretref://backup/recovery.cf2a
+    coordinator_loss: abort-and-hold
     offline_policy: refuse
 extensions: {}
 ```
@@ -1055,7 +1081,7 @@ in-flight generation without rewriting desired intent.
 || Mandatory control | Type / default | Owner → consumer | Activation and redacted readback |
 ||---|---|---|---|
 || receipt authority/trust | `trust`, no insecure default | operator → authority, manager, provisioner | next reconcile; CA/reference digest, certificate serial, expiry and authority sequence only |
-|| invocation lifecycle | signed profile `cf.supervisor.v1`/`cf.native.v1` | release owner → supervisor and harness | next launch; release digest, socket UID/mode, effective state |
+|| invocation lifecycle | signed profile `supervisor.v1`/`cf.native.v1` | release owner → supervisor and harness | next launch; release digest, socket UID/mode, effective state |
 || gate policy | `policy.gate_policy_ref`, no ungated default | release owner → M3 and Scheduler | next hook/launch; artifact digest and hook receipt |
 || execution artifact | `execution.artifact_ref=supervisor`, `harness_artifact_ref=hermes` | release owner → M1/M5/M11 | next replacement; immutable artifact digest, no version-only proof |
 || exact inference routes | `inference.routes`, default empty denies inference | model owner → M5/M12 | next request after CAS; requested/provider/served IDs, endpoint and credential fingerprint |
@@ -1076,7 +1102,7 @@ returns `LIMIT_UNSUPPORTED`.
 
 || Quantity | Configuration → wire/native field | Unit, domain and default | Effective rule |
 ||---|---|---|---|
-|| round worker allowance | `foreman.round.worker_budget.total` → CT-02 `total_budget` | workers, 1..100000; profile-selected | fixed for the round; charged plus reserved never exceeds it; waves never reset it |
+|| round worker allowance | `foreman.round.worker_budget.total` → CT-02 `total_budget` | workers, 0..20000; profile-selected | fixed for the round; charged plus reserved never exceeds it; waves never reset it |
 || concurrent worker slots | `foreman.round.concurrency` → supervisor resource vector | workers, 1..1024; default min(host slots, allowance) | simultaneous native runs only; independent of allowance |
 || attempts per worker | `retry_policy.max_attempts` → attempt ordinal | attempts, 1..10 default 3 | correction reuses the charged worker and consumes no second worker allowance |
 || model turns | `foreman.round.max_turns` → `CF_MAX_TURNS` / `EffectiveSettings.max_turns` | turns, 1..10000 default 40 | counts model calls within one attempt |

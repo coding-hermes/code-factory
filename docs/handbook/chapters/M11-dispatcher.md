@@ -270,31 +270,31 @@ can only translate a persisted admission into those submissions. It cannot invok
 Hermes directly, allocate a second execution key or consume the same round through a
 parallel path. `execution_mode=resident` is the only target mode.
 
-The control protocol is exactly M5 §16.1's `cf.supervisor.v1` on
-`/run/factory/<project>/submit.sock`, with service administration on
-`/run/factory/<project>/supervisor.sock`. The former
-`$HOME/.local/state/factory/supervisor/control.sock`, `supervisor.v1`, HTTP-shaped
-`/v1/launches` operations and fd-3/fd-4 harness channels are retired drafts. They return
-`UNSUPPORTED_VERSION`; they are not an unlabelled alternate. The route mapping is:
-`PUT /v1/launches/{launch_id}` → `submit`; `GET /v1/launches/{launch_id}` → `status`;
-`GET .../output` → `output`; `POST .../cancel` → `cancel`; and
-`GET .../result` → `status` followed by the referenced result read. There is no HTTP
-translation layer in the target Bunker.
+The control protocol is exactly M5 §16.1's `supervisor.v1` on
+`$HOME/.local/state/factory/supervisor/control.sock`, mode 0600 with peer-UID
+verification. The foreman issues HTTP-shaped `PUT /v1/launches/{launch_id}`;
+journal and result reads use GET on that launch resource and its result
+subresource, and cancellation uses the registered cancellation subresource.
+`cf.supervisor.v1`, `submit.sock`, the retired submit/status/output/cancel/drain/
+resume verb set and fd-3/fd-4 harness channels return `UNSUPPORTED_VERSION`.
+There is no translation to a second supervisor implementation.
 
-M2 §15.4 owns identity. A cold CT-02 uses the deterministic foreman execution key and
-creates launch/dispatch/native identities without future worker IDs. CT-05 uses the
-existing worker tuple. `launch_id` addresses native lookup and cancellation;
-`execution_key` addresses budget/result dedupe; `native_session_id` plus boot ID and
-`/proc` start ticks addresses one process incarnation. A duplicate submit performs
-lookup only. Changed input under any existing identity is `ATTEMPT_CONFLICT`.
+M2 §15.4 owns identity. A cold CT-02 uses the deterministic foreman launch ID
+and creates no future worker IDs. CT-05 creates `attempt_id` immediately before
+the worker launch. `launch_id` addresses launch lookup and cancellation;
+`execution_key = SHA256(JCS({launch_id,input_digest}))` addresses budget/result
+dedupe; `native_session_id` plus boot ID and `/proc` start ticks addresses one
+process incarnation. A duplicate launch with the same digest performs lookup
+only. Changed input under any existing identity is `LAUNCH_CONFLICT`.
 
-The `Launch` fields from the retired interface are projections of the supervisor journal:
-`accepted` is `RESERVED`, `starting` is `START_INTENT`, `running` is `STARTED|RUNNING`,
-`cancelling` is `CANCELLED` pending quiescence, `terminal` is the durable typed result,
-`never_started` requires authoritative `NEVER_ACCEPTED`, and `quarantined` is
-`START_UNKNOWN|STOP_UNKNOWN`. `NEVER_ACCEPTED` is returned only after complete journal
-and native-backend replay; an unavailable journal is `START_UNKNOWN`, not absence.
-Result plus delivery outbox commit atomically before Crier ack.
+The `Launch` fields from the retired interface are projections of the supervisor
+journal: `accepted` is `RESERVED`, `starting` is `START_INTENT`, `running` is
+`STARTED|RUNNING`, `cancelling` is `CANCELLED` pending quiescence, `terminal` is
+the durable typed result, `never_started` requires authoritative
+`NEVER_ACCEPTED`, and `quarantined` is `START_UNKNOWN|STOP_UNKNOWN`.
+`NEVER_ACCEPTED` is returned only after complete journal and native-backend
+replay; an unavailable journal is `START_UNKNOWN`, not absence. Result plus
+delivery outbox commit atomically before Crier ack.
 
 The native adapter receives one `cf.native-input.v1` JCS line on stdin and emits
 `cf.native-event.v1` on stdout under M5. Started, progress and exactly one result use
@@ -325,9 +325,9 @@ gap is suspect/unknown, not proof of death.
 
 The service uses the four-UID/mount profile in M1 §17.5. It runs with a read-only release
 prefix, protected control/job state, private tmp, no host devices/sockets, no added
-capabilities and no-new-privileges. Ordinary workers cannot mount the submit or admin
+capabilities and no-new-privileges. Ordinary workers cannot mount the control
 socket, edit launch/budget/retention records, resolve another credential or signal a
-peer cgroup. Authorized foreman submission and local memory writing remain available
+peer cgroup. Authorized foreman launch and local memory writing remain available
 through their mediated interfaces. Terminal Jail is independent and optional/off.
 
 Every launch, output, cancellation, result, denial and backend network failure emits

@@ -1145,14 +1145,26 @@ The overall backup deadline is Part V's 3600-second default. Coordinator restart
 reads `GET /v1/backups/{backup_id}` and resumes the recorded stage with the same identity.
 If the barrier remains valid, it renews and continues. If a participant cannot be contacted,
 the upload fails, the deadline passes, or the 300-second lease expires without renewal,
-the authority marks the operation `ABORTED` and issues an abort release that unfreezes
-writers. The 301-second unrenewed case therefore aborts and unfreezes exactly once; it
-cannot later become `PUBLISHED`. Upload outage may be retried under the same backup ID
-while the coordinator keeps the barrier alive, but never beyond the overall deadline.
-A missing Bunker under default `offline_policy=refuse` aborts the complete cut. Under the
-owner-selected `partial` option it produces `INCOMPLETE`, names the loss window, unfreezes
-reachable writers after local validation, and cannot certify project readiness or a full
-restore.
+the authority marks the operation `ABORTED`, permanently aborts the upload and retains
+every writer hold. The 301-second unrenewed case therefore aborts and remains fenced
+exactly once; it cannot later become `PUBLISHED` or release writers. A fenced recovery
+decision is the only operation that can later release those holds. Upload outage may be
+retried under the same backup ID while the coordinator keeps the barrier alive, but never
+beyond the overall deadline.
+
+DECISION SLOT A-BACKUP-EXPIRY: options are (a) `abort-and-hold`, which marks the
+cut ABORTED, stops the coordinator/upload and holds all participants until a
+fenced recovery decision; or (b) `resume-same-barrier`, permitted only while the
+live coordinator renews the still-valid 300-second lease and the 3600-second
+deadline has not passed. The fail-closed default and Part V `coordinator_loss`
+value are `abort-and-hold`; expiry, coordinator loss without a valid renewable
+barrier, or any uncertainty selects it automatically.
+
+A missing Bunker under default `offline_policy=refuse` aborts the complete cut
+and retains every reachable writer hold. Under the owner-selected `partial`
+option it produces `INCOMPLETE`, names the loss window, uploads the incomplete
+archive off-host, verifies digest and byte readback, and only then unfreezes
+reachable writers. It cannot certify project readiness or a full restore.
 
 || Required store | Frozen capture / validation |
 ||---|---|
