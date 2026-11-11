@@ -45,6 +45,7 @@ def load_css() -> str:
 # vocabulary (serif body at 8 pt with Selectric spacing, hairline black table rules,
 # no tint anywhere), plus the cover.
 BOOK_CSS = """
+a { color: #000; text-decoration: none; }
 /* ---- markdown content, in the template's vocabulary ---- */
 h1 { font: 400 15pt/1.3 var(--type); letter-spacing: 0.12em; text-align: center;
      border-bottom: 1.5pt solid var(--ink); padding-bottom: 2mm; margin: 4mm 0 4mm; }
