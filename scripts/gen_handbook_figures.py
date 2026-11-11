@@ -33,6 +33,7 @@ the builder's print scale; no colour anywhere except pure black/white.
 
 from __future__ import annotations
 
+import hashlib
 import html
 import pathlib
 import re
@@ -237,22 +238,43 @@ def system_map_sheet(model) -> Sheet:
     """The map is taller than the 250 mm figure band, so it prints scaled down —
     its type sizes start above the shared sizes so the PRINTED label still clears
     the 2.05 mm floor (the gate verifies this against the real scale)."""
-    TINY, SMALL, TITLE = 17.5, 18.5, 24.0
+    TINY, SMALL, TITLE = 18.0, 18.5, 24.0
     by_layer = {layer["id"]: [] for layer in model["layers"]}
     for c in model["components"]:
         by_layer[c["layer"]].append(c)
     by_id = {c["id"]: c for c in model["components"]}
+    contract_signals = {
+        "CT-04": "worker-result.v1",
+        "CT-05": "worker-brief.v1 + launch custody",
+    }
+    model_digest = hashlib.sha256(MODEL.read_bytes()).hexdigest()
+    host_labels = {
+        "control": "CONTROL HOST",
+        "bunker": "BUNKER",
+        "authority": "INDEPENDENT AUTHORITY",
+        "external": "EXTERNAL TRUST DOMAIN",
+        "controller-and-bunker": "DUAL: CONTROLLER + BUNKER",
+    }
+    host_dashes = {
+        "control": None,
+        "bunker": "8 3",
+        "authority": "2 2",
+        "external": "1 3",
+        "controller-and-bunker": "8 3",
+    }
 
     PX, BW, BH, COLGAP, ROWGAP = 16, 150, 40, 16, 12
     NAME_H = 18
     cols = 4
     col_x = [PX + i * (BW + COLGAP) for i in range(cols)]
     corridors = Corridors(
-        [8.0] + [col_x[i] + BW + COLGAP / 2 for i in range(cols - 1)] + [672.0]
+        [4.0, 12.0]
+        + [x for i in range(cols - 1) for x in (col_x[i] + BW + 4, col_x[i] + BW + 12)]
+        + [668.0, 676.0]
     )
 
     GH = 180  # gutter between panels (holds routing lanes)
-    LANE0, LANE_STEP, N_LANES = 12, 18, 10
+    LANE0, LANE_STEP, N_LANES = 10, 8.5, 20
     panels = []
     y = 64  # title band above the first panel
     for layer in model["layers"]:
@@ -267,13 +289,17 @@ def system_map_sheet(model) -> Sheet:
     TINY_ = TINY
     legend_h = TINY_ + len(STATE_LEGEND) * TINY_ * 1.9
     notes = [
-        "A BUNKER TAG MARKS A COMPONENT THAT EXECUTES INSIDE THE BUNKER DEPLOYMENT / "
-        "EXECUTION BOUNDARY; UNTAGGED COMPONENTS RUN ON THE CONTROL HOST.",
+        "EACH COMPONENT HAS AN EXPLICIT HOST / TRUST ENCLOSURE: SOLID CONTROL, "
+        "LONG-DASH BUNKER, FINE-DASH INDEPENDENT AUTHORITY, DOTTED EXTERNAL, "
+        "DOUBLE DUAL-INSTANCE. AN ABSENT HOST IS A MODEL DEFECT, NOT A DEFAULT.",
         "THE PROJECT FOREMAN RUNS IN ITS BUNKER; ITS RESPONSE RETURNS THROUGH CRIER "
         "TO THE SCHEDULER, WHICH RECORDS IT AND TRIGGERS SUBSEQUENT PROCESSING "
         "(CT-06R → CT-06).",
         "DUCKBRAIN IS INSTALLED IN EVERY BUNKER AND EXPOSES THE SAME LOGICAL PROJECT "
-        "MEMORY DATA/VIEW AS THE CONTROLLER — PHYSICAL TOPOLOGY REMAINS UNRESOLVED.",
+        "MEMORY DATA/VIEW AS THE CONTROLLER THROUGH THE SELECTED SAME-NAMESPACE "
+        "SHARED-GIT PROFILE; LOCAL DURABILITY AND REMOTE SYNCHRONIZATION ARE DISTINCT.",
+        "LAYER PANELS ARE RESPONSIBILITY GROUPS, NOT HOST CLAIMS. THE PER-COMPONENT "
+        "ENCLOSURES AND HOST LABELS ARE THE AUTHORITATIVE TRUST BOUNDARIES.",
     ]
     note_lines = [ln for n in notes for ln in wrap(n, 62)]
     notes_h = len(note_lines) * (TINY_ + 3) + 22
@@ -281,6 +307,7 @@ def system_map_sheet(model) -> Sheet:
 
     sh = Sheet(H)
     sh.text(16, 30, "CODE FACTORY — SYSTEM MAP", TITLE)
+    sh.text(664, 30, f"MODEL {model.get('issue', 'UNISSUED')} · SHA-256 {model_digest[:16]}", TINY, anchor="end")
     sh.text(
         664,
         52,
@@ -297,21 +324,29 @@ def system_map_sheet(model) -> Sheet:
             r, k = divmod(i, cols)
             bx, by = col_x[k], py + NAME_H + r * (BH + ROWGAP)
             pos[c["id"]] = (bx, by, BW, BH, li)
+            host = c.get("host")
+            if host not in host_labels:
+                raise ValueError(f"component {c['id']} has no declared host/trust domain")
+            dash = host_dashes[host]
+            dash_attr = f' stroke-dasharray="{dash}"' if dash else ""
+            sh.add(
+                f'<rect x="{bx - 3:.1f}" y="{by - 3:.1f}" width="{BW + 6:.1f}" '
+                f'height="{BH + 6:.1f}" fill="none" stroke="{INK}" stroke-width="1.0"{dash_attr}/>'
+            )
+            if host == "controller-and-bunker":
+                sh.add(
+                    f'<rect x="{bx - 6:.1f}" y="{by - 6:.1f}" width="{BW + 12:.1f}" '
+                    f'height="{BH + 12:.1f}" fill="none" stroke="{INK}" stroke-width="1.0"/>'
+                )
             sh.box(bx, by, BW, BH)
             name = SHORT.get(c["name"], c["name"])
             lines = wrap(name, 22)[:2]
-            tagged = bool(c.get("host") == "bunker" or c.get("tag"))
-            y0 = by + BH / 2 - (len(lines) - 1) * SMALL / 2 + SMALL * 0.35
-            if tagged:
-                y0 -= 5  # clear the tag strip at the bottom of the box
+            y0 = by + BH / 2 - (len(lines) - 1) * SMALL / 2 + SMALL * 0.35 - 5
             for j, ln in enumerate(lines):
                 sh.text(bx + BW / 2, y0 + j * SMALL, ln, SMALL, anchor="middle")
             if c.get("tag"):
-                sh.text(bx + BW / 2, by + BH - 5, c["tag"], TINY, anchor="middle")
-            if c.get("host") == "bunker" and name != "BUNKER":
-                # role/host boundary: a tagged box executes INSIDE the Bunker
-                # deployment/execution boundary; untagged boxes sit on the control host
-                sh.text(bx + BW - 5, by + BH - 5, "BUNKER", TINY, anchor="end")
+                sh.text(bx + BW - 4, by + 10, c["tag"], TINY, anchor="end")
+            sh.text(bx + BW / 2, by + BH - 5, host_labels[host], TINY, anchor="middle")
 
     gutter_top = {i: panels[i][2] + panels[i][3] for i in range(len(panels) - 1)}
     lanes: dict[int, list[float]] = {i: [] for i in range(len(panels) - 1)}
@@ -325,7 +360,8 @@ def system_map_sheet(model) -> Sheet:
 
     for k in sorted(model["contracts"], key=lambda k: k.get("id", "")):
         cid = str(k.get("id", ""))
-        sig = k.get("signal")
+        sig = k.get("signal") or contract_signals.get(cid)
+        label = f"{cid} · {sig}" if sig else cid
         a, b = by_id.get(k["from"]), by_id.get(k["to"])
         if not a or not b or a["id"] not in pos or b["id"] not in pos:
             continue
@@ -341,9 +377,7 @@ def system_map_sheet(model) -> Sheet:
                 dash=dash,
                 arrow=True,
             )
-            sh.text((x1 + x2) / 2, ly - 5, cid, TINY, anchor="middle")
-            if sig:
-                sh.text((x1 + x2) / 2, ly + 14, sig, TINY, anchor="middle")
+            sh.text((x1 + x2) / 2, ly - 5, label, TINY, anchor="middle")
         elif la < lb:
             x1 = ax + aw / 2
             x2 = bx + bw / 2
@@ -353,9 +387,7 @@ def system_map_sheet(model) -> Sheet:
                 sh.poly(
                     [(x1, ay + ah), (x1, ly), (x2, ly), (x2, by)], dash=dash, arrow=True
                 )
-                sh.text(lx, ly - 5, cid, TINY, anchor="middle")
-                if sig:
-                    sh.text(lx, ly + 14, sig, TINY, anchor="middle")
+                sh.text(lx, ly - 5, label, TINY, anchor="middle")
             else:
                 g1, g2 = lane(la), lane(lb - 1)
                 xc = corridors.claim(ay + ah, by)
@@ -364,9 +396,7 @@ def system_map_sheet(model) -> Sheet:
                     dash=dash,
                     arrow=True,
                 )
-                sh.text((x1 + xc) / 2, g1 - 5, cid, TINY, anchor="middle")
-                if sig:
-                    sh.text((x1 + xc) / 2, g1 + 14, sig, TINY, anchor="middle")
+                sh.text((x1 + xc) / 2, g1 - 5, label, TINY, anchor="middle")
         else:
             x1 = ax + aw / 2
             x2 = bx + bw / 2
@@ -375,9 +405,7 @@ def system_map_sheet(model) -> Sheet:
                 sh.poly(
                     [(x1, ay), (x1, ly), (x2, ly), (x2, by + bh)], dash=dash, arrow=True
                 )
-                sh.text((x1 + x2) / 2, ly - 5, cid, TINY, anchor="middle")
-                if sig:
-                    sh.text((x1 + x2) / 2, ly + 14, sig, TINY, anchor="middle")
+                sh.text((x1 + x2) / 2, ly - 5, label, TINY, anchor="middle")
             else:
                 g1, g2 = lane(la - 1), lane(lb)
                 xc = corridors.claim(ay, by + bh)
@@ -386,23 +414,40 @@ def system_map_sheet(model) -> Sheet:
                     dash=dash,
                     arrow=True,
                 )
-                sh.text((x1 + xc) / 2, g1 - 5, cid, TINY, anchor="middle")
-                if sig:
-                    sh.text((x1 + xc) / 2, g1 + 14, sig, TINY, anchor="middle")
+                sh.text((x1 + xc) / 2, g1 - 5, label, TINY, anchor="middle")
 
     yl = H - notes_h - legend_h - 4
     legend_block(
         sh, 16, yl, STATE_LEGEND, "CONTRACT STATE — LINE STYLE, INK ONLY", fs=TINY
     )
+    sh.text(370, yl, "HOST / TRUST ENCLOSURE — COMPONENT BOUNDARY", TINY)
+    for i, host in enumerate(("control", "bunker", "authority", "external", "controller-and-bunker")):
+        hy = yl + (i + 1) * TINY * 1.9
+        dash = host_dashes[host]
+        dash_attr = f' stroke-dasharray="{dash}"' if dash else ""
+        sh.add(
+            f'<rect x="370" y="{hy - 8:.1f}" width="18" height="12" fill="none" '
+            f'stroke="{INK}" stroke-width="1.0"{dash_attr}/>'
+        )
+        if host == "controller-and-bunker":
+            sh.add(
+                f'<rect x="367" y="{hy - 11:.1f}" width="24" height="18" fill="none" '
+                f'stroke="{INK}" stroke-width="1.0"/>'
+            )
+        sh.text(398, hy + 2, host_labels[host], TINY)
     sh.hair(16, yl + legend_h + 8, 664, yl + legend_h + 8)
     notes = [
-        "A BUNKER TAG MARKS A COMPONENT THAT EXECUTES INSIDE THE BUNKER DEPLOYMENT / "
-        "EXECUTION BOUNDARY; UNTAGGED COMPONENTS RUN ON THE CONTROL HOST.",
+        "EACH COMPONENT HAS AN EXPLICIT HOST / TRUST ENCLOSURE: SOLID CONTROL, "
+        "LONG-DASH BUNKER, FINE-DASH INDEPENDENT AUTHORITY, DOTTED EXTERNAL, "
+        "DOUBLE DUAL-INSTANCE. AN ABSENT HOST IS A MODEL DEFECT, NOT A DEFAULT.",
         "THE PROJECT FOREMAN RUNS IN ITS BUNKER; ITS RESPONSE RETURNS THROUGH CRIER "
         "TO THE SCHEDULER, WHICH RECORDS IT AND TRIGGERS SUBSEQUENT PROCESSING "
         "(CT-06R → CT-06).",
         "DUCKBRAIN IS INSTALLED IN EVERY BUNKER AND EXPOSES THE SAME LOGICAL PROJECT "
-        "MEMORY DATA/VIEW AS THE CONTROLLER — PHYSICAL TOPOLOGY REMAINS UNRESOLVED.",
+        "MEMORY DATA/VIEW AS THE CONTROLLER THROUGH THE SELECTED SAME-NAMESPACE "
+        "SHARED-GIT PROFILE; LOCAL DURABILITY AND REMOTE SYNCHRONIZATION ARE DISTINCT.",
+        "LAYER PANELS ARE RESPONSIBILITY GROUPS, NOT HOST CLAIMS. THE PER-COMPONENT "
+        "ENCLOSURES AND HOST LABELS ARE THE AUTHORITATIVE TRUST BOUNDARIES.",
     ]
     ny = yl + legend_h + 26
     for ln in note_lines:
@@ -521,89 +566,70 @@ def sm_sheet(states, edges, title, note) -> Sheet:
 
 def board_lifecycle() -> Sheet:
     states = [
-        ("pending", ["PENDING", "DISPATCHABLE"], 1, 0),
-        ("claimed", ["CLAIMED", "BY A TICK"], 1, 1),
-        ("running", ["IN PROGRESS", "FOREMAN/WORKER RUN"], 1, 2),
-        ("guard", ["COMMIT GUARD", "GITREINS TIER 1"], 1, 3),
-        ("review", ["ACCEPTANCE JUDGMENT", "TIER 2 VERDICT"], 1, 4),
-        ("integrate", ["INTEGRATION /", "PUBLICATION"], 1, 5),
-        ("complete", ["COMPLETE", "EVIDENCE-BOUND"], 1, 6),
-        ("deferred", ["DEFERRED", "NOT THIS CADENCE"], 0, 0),
-        ("blocked", ["BLOCKED", "OWNERSHIP OR DEFECT"], 2, 2),
+        ("pending", ["PENDING · OPEN", "ELIGIBLE WHEN READY"], 1, 0),
+        ("in_progress", ["IN_PROGRESS · OPEN", "CLAIMED / RUNNING"], 1, 1),
+        ("blocked", ["BLOCKED · OPEN", "NAMED BLOCKER"], 0, 1),
+        ("deferred", ["DEFERRED · OPEN", "RETURN CONDITION"], 2, 1),
+        ("cancel_requested", ["CANCEL_REQUESTED · OPEN", "NO NEW CLAIMS"], 1, 2),
+        ("cancelled", ["CANCELLED · CLOSED", "QUIESCENCE PROVEN"], 0, 3),
+        ("complete", ["COMPLETE · CLOSED", "EVIDENCE BOUND"], 2, 3),
     ]
     edges = [
-        ("pending", "claimed", "TICK SELECTS", "V"),
-        # foreman/worker start — GitReins belongs to the pre-commit review plumbing,
-        # not to the start transition (user correction on the w10 issue)
-        ("claimed", "running", "FOREMAN / WORKER START", "V"),
-        ("running", "guard", "COMMIT STAGED", "V"),
-        ("guard", "review", "GUARD PASSED", "V"),
-        ("review", "integrate", "VERDICT ACCEPTED", "V"),
-        ("integrate", "complete", "PUBLISHED + EVIDENCE BOUND", "V"),
-        # rework: acceptance verdict returns to the worker (preserved channel)
+        ("pending", "in_progress", "GROUP CLAIM / CAS", "V"),
+        ("pending", "blocked", "BLOCK", "G"),
+        ("pending", "deferred", "DEFER", "G"),
+        ("in_progress", "blocked", "BLOCK", "H"),
+        ("in_progress", "deferred", "DEFER", "H"),
         (
-            "review",
-            "running",
-            (
-                [(405, 470), (440, 470), (440, 280), (405, 280)],
-                "CHANGES REQUESTED -> WORKER REWORK",
-                448,
-                375,
-                -90,
-            ),
-            "S",
-        ),
-        # guard failure also returns to the worker, on its own left-side channel
-        (
-            "guard",
-            "running",
-            (
-                [(275, 370), (230, 370), (230, 280), (275, 280)],
-                "GUARD FAIL -> REWORK",
-                224,
-                325,
-                -90,
-            ),
-            "S",
-        ),
-        ("pending", "deferred", "DEPENDENCY UNMET", "H"),
-        ("pending", "blocked", "CANNOT PROCEED", "G"),
-        # deferred return trigger: the condition that makes a deferred row
-        # dispatchable again is named on the figure (user redline)
-        (
-            "deferred",
+            "in_progress",
             "pending",
-            (
-                [(120, 92), (120, 114), (300, 114), (300, 92)],
-                "RETURN: DEPENDENCY MET / CADENCE",
-                208,
-                110,
-                None,
-            ),
+            ([(275, 170), (240, 170), (240, 70), (275, 70)], "RELEASE AFTER QUIESCENCE", 234, 120, -90),
             "S",
         ),
-        # blocked/unblock path (preserved)
         (
             "blocked",
             "pending",
-            (
-                [(560, 248), (560, 126), (450, 126), (450, 92)],
-                "BLOCKER ROW CLOSED",
-                505,
-                122,
-                None,
-            ),
+            ([(120, 148), (120, 114), (300, 114), (300, 92)], "RESUME: BLOCKER EVIDENCE", 208, 110, None),
             "S",
         ),
-        ("running", "blocked", "WORKER DIED", "H"),
+        (
+            "deferred",
+            "pending",
+            ([(560, 148), (560, 126), (380, 126), (380, 92)], "RESUME: RETURN CONDITION", 472, 122, None),
+            "S",
+        ),
+        ("in_progress", "cancel_requested", "CANCEL REQUEST", "V"),
+        ("blocked", "cancel_requested", "CANCEL REQUEST", "G"),
+        ("deferred", "cancel_requested", "CANCEL REQUEST", "G"),
+        ("cancel_requested", "cancelled", "ALL CHILDREN QUIESCENT", "G"),
+        ("in_progress", "complete", "VERDICT + PUBLICATION + EVIDENCE", "G"),
+        (
+            "complete",
+            "pending",
+            ([(625, 370), (655, 370), (655, 70), (405, 70)], "AUTHORIZED REOPEN + EVIDENCE + NEW REVISION", 649, 220, -90),
+            "S",
+        ),
+        (
+            "cancelled",
+            "pending",
+            ([(55, 370), (25, 370), (25, 70), (275, 70)], "AUTHORIZED REOPEN + EVIDENCE + NEW REVISION", 19, 220, -90),
+            "S",
+        ),
     ]
-    return sm_sheet(
+    sh = sm_sheet(
         states,
         edges,
-        "BOARD ROW LIFECYCLE — INCLUDING THE PATHS THAT ARE NOT FORWARD",
-        "COMPLETION CONSUMES AN ACCEPTED VERDICT, PUBLICATION PROOF AND RETAINED "
-        "EVIDENCE — NEVER THE GITREINS INTERNAL STATUS ALONE.",
+        "BOARD ROW LIFECYCLE — OPEN, CLOSED, CANCEL AND REOPEN (M4 §15.1)",
+        "CLOSED MEANS COMPLETE OR CANCELLED. DEFERRED IS OPEN AND NEVER SATISFIES A PREREQUISITE.",
     )
+    sh.text(
+        16,
+        sh.h - 10,
+        "PENDING/BLOCKED/DEFERRED ALSO ENTER CANCEL_REQUESTED DIRECTLY; COMPLETE/CANCELLED RETURN ONLY THROUGH AUTHORIZED REOPEN.",
+        F_TINY,
+    )
+    sh.h += 12
+    return sh
 
 
 def tick_lifecycle() -> Sheet:
@@ -963,26 +989,21 @@ def module_sheet(model, mod) -> Sheet:
 # A 4th element "BR" marks a conditional branch arrow.
 FLOW_FIXES = {
     "F1": [
-        (["scheduler", "board", "REFRESH + READ: LOCAL + REMOTE BOARD COPIES"]),
-        (["board", "scheduler", "READ RESULT: COPY + WORKABILITY"]),
-        (["scheduler", "scheduler", "LOCAL: ADMISSION (F11); PRE HOOK AFTER (IMPL EVIDENCE)"]),
-        (["scheduler", "crier", "FOREMAN-ROUND REQUEST + ALLOWANCE (CT-02)"]),
-        (["crier", "node", "CUSTODY: INBOX WRITE + 30 S LEASE (CT-03)"]),
-        (["node", "crier", "INBOX PULL REQUEST — SIGNED GET"]),
-        (["crier", "node", "LEASED RESPONSE — LAUNCH IN BUNKER"]),
-        (["node", "foreman", "FOREMAN START: BRIEF + WORKSPACE IN BUNKER"]),
-        (["foreman", "foreman", "LOCAL: READ BOARD + MEMORY, SELECT WORK, BUILD BRIEFS"]),
-        (["foreman", "harness", "WAVE N: BRIEF — MVP HERMES HARNESS"]),
-        (["harness", "foreman", "DIFF + EVIDENCE RETURNED"]),
-        (["foreman", "gitreins", "GUARD TIER 1: STAGED DIFF (CT-12)"]),
-        (["gitreins", "foreman", "JUDGMENT VERDICT + EVIDENCE (CT-13)"]),
-        (["foreman", "board", "BOARD CLOSEOUT: ROWS + EVIDENCE (CT-14)"]),
-        (["foreman", "duckbrain", "WORKER / WAVE / ROUND MEMORY (CT-15)"]),
-        (["foreman", "foreman", "NEXT WAVE: ALLOWANCE NOT REPLENISHED"]),
-        (["foreman", "crier", "ROUND REPORT — DURABLE RETURN LEG (CT-06R)"]),
-        (["crier", "scheduler", "CORRELATED COMPLETION EVENT (CT-06)"]),
-        (["scheduler", "scheduler", "LOCAL: EXECUTION SETTLEMENT — NOT BOARD"]),
-        (["scheduler", "board", "END-OF-LANE: SYNC COPIES, BIND EVIDENCE"]),
+        (["scheduler", "board", "1. REFRESH BOARD + CHECK ELIGIBILITY (CT-14)"]),
+        (["board", "scheduler", "2. WORK / NO_WORK / UNAVAILABLE + REVISION"]),
+        (["scheduler", "scheduler", "3. RESERVE TOTAL ROUND ALLOWANCE"]),
+        (["scheduler", "crier", "4. ROUND-ADMISSION.V1 + ALLOWANCE (CT-02)"]),
+        (["node", "crier", "5. RETRIEVE SIGNED CUSTODY.V1 (CT-03)"]),
+        (["crier", "node", "6. RELEASE REQUEST + LEASE (CT-03)"]),
+        (["node", "foreman", "7. LAUNCH FOREMAN IN PROJECT BUNKER"]),
+        (["foreman", "foreman", "8. LOCAL PLAN + CLAIMS + IMMUTABLE BRIEFS"]),
+        (["foreman", "harness", "9. WORKER-BRIEF.V1 + LAUNCH FENCE (CT-05)"]),
+        (["harness", "foreman", "10. WORKER-RESULT.V1 + EVIDENCE"]),
+        (["foreman", "gitreins", "11. GUARD + SOURCE / INTEGRATED VERDICTS"]),
+        (["foreman", "board", "12. CLOSE ROW FROM VERDICT + PUBLICATION"]),
+        (["foreman", "duckbrain", "13. LOCAL COMMIT + SEPARATE SYNC STATE"]),
+        (["foreman", "crier", "14. RESULT + ROUND-REPORT.V1 RETURN"]),
+        (["crier", "scheduler", "15. DURABLE SETTLEMENT + NEXT WAKEUP"]),
     ],
     "F2": [
         (["owner", "manager", "DESIRED: HOST, PROJECT, PROFILE, PIN"]),
@@ -1011,25 +1032,29 @@ FLOW_FIXES = {
         (["duckbrain", "duckbrain", "LOCAL: GIT-BACKED NAMESPACE PERSIST + PENDING-SYNC STATE"]),
     ],
     "F4": [
-        (["owner", "handbook", "SOURCE / REQUIREMENTS INTAKE: REDLINES + ACCEPTED ISSUE"]),
-        (["foreman", "docsgate", "SKELETON + SOURCE DELIVERED"]),
-        (["panel", "docsgate", "SEAT AUTHORS: FILLS, CITES FILE:LINE"]),
-        (["docsgate", "foreman", "STRUCTURAL PASS OR NAMED REFUSALS (CT-16) — NOT ACCEPTANCE"]),
-        (["panel", "foreman", "INDEPENDENT SEMANTIC REVIEW: 3 SEATS, SPLITS REPORTED (M6 §3 S4)"]),
-        (["panel", "foreman", "BRANCH — REJECTED FINDINGS RETURN: CORRECTION LOOP", "BR"]),
-        (["spine", "handbook", "CROSS-DOCUMENT CHECKS: CT IDS, STATES, DANGLING REFS (M6 §3 S9)"]),
-        (["handbook", "handbook", "LOCAL: BUILD + RENDER QA — PAGES INSPECTED, UNIQUE IDS"]),
-        (["handbook", "owner", "VERSIONED REVIEW PACKAGE — DRAFT / ACCEPTED STATUS (CT-18)"]),
+        (["owner", "handbook", "1. SOURCE / REQUIREMENTS INTAKE: REDLINES + PRIOR ISSUE"]),
+        (["foreman", "docsgate", "2. SKELETON + PINNED SOURCE DELIVERED"]),
+        (["panel", "docsgate", "3. SEAT AUTHORS: FILLS, CITES FILE:LINE"]),
+        (["docsgate", "foreman", "4. STRUCTURAL PASS OR NAMED REFUSALS (CT-16) — NOT ACCEPTANCE"]),
+        (["panel", "foreman", "5. INDEPENDENT SEMANTIC REVIEW: SEATS + SPLITS REPORTED"]),
+        (["panel", "foreman", "BRANCH — CHANGES REQUESTED: CORRECTION + REVIEW REPEAT", "BR"]),
+        (["spine", "handbook", "6. CROSS-DOCUMENT CHECKS: CT IDS, STATES, DANGLING REFS"]),
+        (["handbook", "handbook", "7. LOCAL: LINT + BUILD + RENDER QA + DISPOSITION COVERAGE"]),
+        (["handbook", "owner", "8. VERSIONED REVIEW PACKAGE + EXACT ARTIFACT IDENTITY (CT-18)"]),
+        (["owner", "handbook", "9. OWNER DECISION: ACCEPTED ISSUE OR CHANGES REQUESTED"]),
+        (["handbook", "foreman", "10. ACCEPTED SOURCE INTEGRATION, OR NAMED CORRECTION LOOP"]),
     ],
     "F5": [
-        (["node", "gitreins", "COMMIT ON A NODE BRANCH — GUARD GRADES THE STAGED DIFF (CT-12)"]),
-        (["gitreins", "node", "BRANCH — GUARD REFUSAL RETURNS FOR CORRECTION", "BR"]),
-        (["gitreins", "foreman", "INDEPENDENT ACCEPTANCE VERDICT + EVIDENCE (CT-13)"]),
-        (["owner", "lander", "LANDER MERGES BY THE CONFIGURED PR / DIRECT-MERGE POLICY"]),
-        (["lander", "lander", "LOCAL: MERGED-TREE VERIFICATION — INVALIDATED CHECKS RERUN"]),
-        (["lander", "foreman", "PUBLICATION PROOF: COMMIT ANCESTOR OF ORIGIN/MAIN (M3 §2)"]),
-        (["foreman", "board", "ROW CLOSED ONLY AFTER VERDICT + PROOF MATCH (CT-14)"]),
-        (["foreman", "duckbrain", "WORKER / WAVE MEMORY THROUGH RECOVERABLE CLOSEOUT (CT-15)"]),
+        (["node", "gitreins", "STAGE 1 · PRE-COMMIT GUARD: STAGED BYTES ONLY (CT-12)"]),
+        (["gitreins", "node", "STAGE 1 · PASS OR REFUSE; REFUSAL LEAVES HEAD UNMOVED", "BR"]),
+        (["node", "gitreins", "STAGE 2 · SOURCE JUDGE: EXACT COMMIT + CRITERIA + TESTS"]),
+        (["gitreins", "foreman", "STAGE 2 · SOURCE VERDICT + EVIDENCE BOUND TO COMMIT (CT-13)"]),
+        (["owner", "lander", "STAGE 3 · INTEGRATE BY CONFIGURED PR / DIRECT-MERGE POLICY"]),
+        (["lander", "gitreins", "STAGE 3 · INTEGRATED CANDIDATE: MERGED TREE + RERUN CHECKS"]),
+        (["gitreins", "lander", "STAGE 3 · INTEGRATED VERDICT; CAS CONFLICT INVALIDATES / RERUNS"]),
+        (["lander", "foreman", "STAGE 3 · REMOTE TREE + REF READBACK = PUBLISHED"]),
+        (["foreman", "board", "STAGE 4 · CLOSE AGAINST TESTED PARENT (CT-14)"]),
+        (["foreman", "duckbrain", "STAGE 4 · RETAIN ALL EVIDENCE (CT-15)"]),
     ],
     "F6": [
         (["provisioner", "safety", "MAINTENANCE TRIGGER: PERIODIC OR CAPACITY PRESSURE"]),
@@ -1073,16 +1098,18 @@ FLOW_FIXES = {
         (["scheduler", "gateway", "EXIT BRANCH — DEPENDENCY BACK: ADMISSION RE-EVALUATED, MODE CLEARED", "BR"]),
     ],
     "F10": [
-        (["owner", "manager", "INTENT: STOP / REMOVE / REBUILD — AUTHORITY + RETENTION (M1 §5)"]),
-        (["manager", "provisioner", "DRAIN: NO NEW ASSIGNMENTS; ACTIVE WORK QUIESCED / CHECKPOINTED"]),
-        (["manager", "provisioner", "PRESERVE: WORKSPACE, MEMORY, EVIDENCE BEFORE DESTRUCTION"]),
-        (["provisioner", "bunker", "DESTROY: CONTAINER + PER-AGENT HOME REMOVED (M1 §5)"]),
-        (["provisioner", "safety", "ORPHAN HOMES / KEYS REAPED VS A LIVE-REGISTRY CHECK (M1 §10)"]),
-        (["manager", "provisioner", "REBUILD: SEED REAPPLIES FROM THE MANIFEST, DRIFT NAMED (M1 §3 S4)"]),
-        (["provisioner", "verifier", "VERIFY: CREATED ≠ VERIFIED BEFORE WORK RE-ENABLED (M1 §12)"]),
-        (["verifier", "manager", "VERIFIED IDENTITY + VERSION / READINESS RESULT"]),
-        (["manager", "crier", "RE-REGISTER: NEW BINDING AFTER READINESS (M1-C1)"]),
-        (["manager", "owner", "LIFECYCLE RESULT + RETAINED EVIDENCE REPORTED"]),
+        (["owner", "manager", "1. AUTHORIZE STOP / REMOVE / REBUILD + RETENTION"]),
+        (["manager", "manager", "2. BIND PRINCIPAL, TARGET, GENERATION, SCOPE"]),
+        (["manager", "provisioner", "3. DRAIN + QUIESCE / CHECKPOINT ACTIVE WORK"]),
+        (["provisioner", "safety", "4. PRESERVE WORKSPACE / MEMORY + RESTORE READBACK"]),
+        (["provisioner", "bunker", "5. DESTROY AFTER PRESERVATION + QUIESCENCE"]),
+        (["provisioner", "safety", "6. REAP ORPHANS AGAINST LIVE REGISTRY"]),
+        (["manager", "provisioner", "7. REBUILD SIGNED MANIFEST + PINNED ARTIFACTS"]),
+        (["provisioner", "verifier", "8. REVERIFY FULL READINESS; CREATED ≠ VERIFIED"]),
+        (["verifier", "manager", "9. RETURN IDENTITY + VERSION + READINESS PROBES"]),
+        (["manager", "crier", "10. RE-REGISTER ONLY AFTER VERIFIED READINESS"]),
+        (["crier", "scheduler", "11. BINDING READBACK → ENABLE ADMISSION"]),
+        (["manager", "owner", "12. REPORT RETAINED / LOST EVIDENCE"]),
     ],
     "F11": [
         (["scheduler", "board", "REFRESH BEFORE ELIGIBILITY: REPO + BOARD COPIES, REVISION RECORDED"]),
@@ -1319,7 +1346,9 @@ def bw_gate(svg: str, fname: str) -> str | None:
 
 
 def main() -> int:
-    model = yaml.safe_load(MODEL.read_text())
+    model_bytes = MODEL.read_bytes()
+    model = yaml.safe_load(model_bytes)
+    model_digest = hashlib.sha256(model_bytes).hexdigest()
     OUT.mkdir(parents=True, exist_ok=True)
     made = []
 
@@ -1329,7 +1358,7 @@ def main() -> int:
         (
             "system-map.svg",
             f"{len(model['components'])} components in {len(model['layers'])} layers; "
-            f"every edge is a numbered contract",
+            f"{len(model['contracts'])} typed contracts; model SHA-256 {model_digest[:16]}",
         )
     )
 
@@ -1392,6 +1421,23 @@ def main() -> int:
                 failures.append(
                     f"{fname}: drawing covers only {fill:.0%} of the sheet (floor 70%)"
                 )
+
+    book_path = ROOT / "docs/handbook/BOOK.yaml"
+    book_text = book_path.read_text()
+    map_caption = (
+        f"System map — {len(model['components'])} components, {len(model['layers'])} layers, "
+        f"{len(model['flows'])} flows, {len(model['contracts'])} typed contracts; "
+        f"five host/trust enclosures; edges keyed CT-01…CT-30 plus CT-06R; "
+        f"model {model_digest[:8]}… {model_digest[-6:]}."
+    )
+    book_text, replacements = re.subn(
+        r'(?m)^(\s*- \{code: 0\.1, file: figures/system-map\.svg, caption: ")[^"]*("\})$',
+        lambda match: match.group(1) + map_caption + match.group(2),
+        book_text,
+    )
+    if replacements != 1:
+        raise RuntimeError("BOOK.yaml FIGURE 0.1 caption did not resolve exactly once")
+    book_path.write_text(book_text)
 
     index = [
         "# Figures",

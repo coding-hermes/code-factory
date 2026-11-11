@@ -77,7 +77,7 @@ parts:
 
 figures:
   # Part 0 — Overview (the three whole-system views)
-  - {code: 0.1, file: figures/system-map.svg, caption: "System map — 33 components, 6 layers, 16 flows, 31 typed contracts; five host/trust enclosures; edges keyed CT-01…CT-30 plus CT-06R; model 86bab48f… cb2098."}
+  - {code: 0.1, file: figures/system-map.svg, caption: "System map — 33 components, 6 layers, 16 flows, 31 typed contracts; five host/trust enclosures; edges keyed CT-01…CT-30 plus CT-06R; model d386d1da… 936caf."}
   - {code: 0.2, file: figures/board-lifecycle.svg, caption: "Board row lifecycle, including the paths that are not forward"}
   - {code: 0.3, file: figures/tick-lifecycle.svg, caption: "Scheduler tick lifecycle"}
   # Part III — per-module centered views, one per module chapter, mounted as its hero
