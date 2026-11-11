@@ -579,6 +579,12 @@ expand to defaults below. Enabled features with unresolved references refuse act
 | NodeScope | allowed_routes: route-ID set default empty; budget_micro_usd: integer >=0 default 0; window_s: integer 60..86400 default 86400; concurrency: integer 1..64 default 1; max_output_tokens: integer 1..131072 default 4096 |
 | Capture | enabled: boolean default false; max_chars: integer 1..120000 default 120000; retention_s: integer 60..2592000 default 2592000; sink_ref: Endpoint key required when enabled; failure: refuse or record default refuse; redaction: literal credentials-and-secrets default credentials-and-secrets |
 
+Before Part I §1.9.5 allocator invocation, declared disk_gib/memory_gib multiply
+exactly by 1073741824 into disk_bytes/memory_bytes, and requirements.network maps to
+network_refs. The allocator's closed byte-vector is an adapter request type, not
+another accepted desired-state shape; configured concurrent_workers remains a
+separate slot constraint. Conversion overflow refuses RANGE_INVALID.
+
 Capabilities are declarations matched byte-for-byte against authenticated adapter
 capability inventories; unknown/unavailable capability refuses activation rather than
 being assumed. `SecretRef` has domain from V.4 and name of 1..256 ASCII path characters,

@@ -319,7 +319,7 @@ integration is wave B. The next review rechecks all residuals before accepted re
 | P5-C-13 | ADOPTED | C: M11.16 | Preassigned launch ID, atomic start permit, authoritative lookup, capture and cancellation |
 | P5-C-14 | ADOPTED | C: M9.17; V.9; VII.12 | Reserved-to-charged atomic accounting, uncertain-start hold and bounded attempts |
 | P5-C-15 | ADOPTED | C: VII.18 | Failure branch permits null commit/empty artifacts with typed error, never invented output |
-| P5-C-16 | UNRESOLVED | C: VII.15.1; VI.13 | Foreman/Boardctl field names and partial-write rule corrected here; IV CT-10 awaits B reconciliation |
+| P5-C-16 | UNRESOLVED | C: VII.15.1; VI.13; A: I.1.9.6 | Canonical CT-10 names and errors are selected; the M4 legacy-alias reconciliation still awaits B |
 | P5-C-17 | ADOPTED | C: M7.17; VI.35.2; A: I.1.9.3 | Broker-only credentials and effect intents serialize all four resources with epoch advance |
 | P5-C-18 | ADOPTED | C: M8.16 | Shared hold/tombstone transaction, private trash, immutable inventory and resumable per-target cursor |
 | P5-C-19 | ADOPTED | C: V measured M8 inventory | Cache TTL 24 h, aged=True and newest subtree mtime agree with M8/CF-290 |
@@ -346,3 +346,10 @@ integration is wave B. The next review rechecks all residuals before accepted re
 This disposition is a specification draft: unresolved cross-register integration,
 artifact qualification, independent completeness review, runtime conformance and owner
 acceptance are not concealed by the mechanically buildable document.
+
+Build evidence at source `28b4f8784390df13fdee887f9a3438ad4288a6ec` is FAIL:
+`build_book.py` returns 2 after the skill checker finds page 30's GitLab API link
+colour `(0.0, 0.0, 0.933)`. The link originates in Part I, outside wave C's file
+fence. Fit passes with 2.1 mm worst-page clearance, but no green OK line exists.
+The generated PDF is diagnostic output, not an accepted build. This limitation
+requires the Part I owner to correct the link rendering/source, then rebuild.

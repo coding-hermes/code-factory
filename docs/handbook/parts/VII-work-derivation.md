@@ -581,14 +581,16 @@ project/lane scope is admitted. `in_progress`, `blocked`, `deferred`, malformed,
 unknown-project and stale-revision rows are not eligible; an unreadable board is an
 `ELIGIBILITY_UNKNOWN` refusal, never an empty-board result.
 
-Claims use exactly M4's normalized object: task_id, board_commit, expected_revision,
-owner_id, claim_id, lease_until and fence_token; no board_revision/claimant_id/
-lease_expires_at/claim_generation aliases are accepted. The foreman requests and
-Boardctl publishes the row/event/claim candidate tree via broker ref CAS. A CAS loser
-receives CONFLICT and re-derives; a stale owner receives FENCED. Lease expiry alone
+Claims use exactly Part I §1.9.6 and CT-10's canonical object: task_id,
+board_revision, claimant_id, claim_id, lease_expires_at and claim_generation,
+plus project owner_fence at the broker boundary. M4's owner_id/lease_until/
+fence_token/expected_revision names are legacy aliases translated only by its adapter;
+they are not accepted alternate canonical keys. The foreman requests and Boardctl
+publishes the row/event/claim candidate tree via broker ref CAS. A CAS loser receives
+CLAIM_CONFLICT and re-derives; a stale owner receives STALE_OWNER. Lease expiry alone
 never authorizes replacement. Resource enforcement is VI.35.2, not a local Git lock.
 
-Closeout is idempotent by `(task_id, fence_token, evidence_run_id, tree_digest)`.
+Closeout is idempotent by `(task_id, claim_generation, evidence_run_id, tree_digest)`.
 Validation refusals before staging leave canonical state unchanged. Any partial
 staging/publication or event failure records PARTIAL_WRITE with operation ID and
 marks scheduling UNAVAILABLE until M4 repair reads the remote ref, verifies the
@@ -617,7 +619,7 @@ keep the recovery honest:
 
 - **Protected writes are fenced at the resource.** Board events, Git publication,
   Crier bindings and memory commits use the broker/authority serialization in
-  VI.35.2 with the active fence_token/owner_fence; a stale controller lease is insufficient. A
+  VI.35.2 with the active claim_generation/owner_fence; a stale controller lease is insufficient. A
   resource returns `STALE_OWNER` without mutation. If descendants or external effects
   cannot be proven quiescent, the execution remains quarantined and the project is not
   ready for replacement admission.

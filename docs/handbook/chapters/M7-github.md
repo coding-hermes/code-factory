@@ -297,7 +297,10 @@ secret durably, delivers a staged file (0600), and verifies id/scope/expiry. Con
 activation is an atomic pointer swap plus fsynced receipt keyed by operation_id;
 lost acknowledgement reads that receipt rather than minting again. Mapping CAS
 then selects the new reference and enters ACTIVE. Old credential overlap is at most
-60 s; renewal starts with 300 s headroom. Failed staging leaves the old credential
+60 s. GitHub renewal starts with 300 s headroom; GitLab provider tokens use
+Part I §1.9.7's at-most-one-day expiry and twelve-hour renewal margin. The 300 s
+margin in V.9 governs proxy/local capabilities, not GitLab provider-date expiry.
+Failed staging leaves the old credential
 active only while valid and scope unchanged. Compromise/scope reduction first denies
 old capabilities in the independent authority; overlap is zero. Remote revocation
 failure remains revoke_pending and blocks takeover that needs denial proof.
