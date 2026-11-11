@@ -415,23 +415,22 @@ replenishes it. Newly eligible work after each wave competes for what remains.
 for a round; an *attempt* is one execution of one task by that worker; a *session* is a
 harness process within an attempt; and a *launch* is one native start request. Only
 worker identities debit the round allowance. The selected policy is `charge-on-start`:
-reserve one worker before a wave, move the reservation to `started` when the worker
-identity is accepted, and charge it when the first attempt is admitted. A native start
-that is refused before an execution identity exists is `failed-start` and refunds the
-reservation exactly once; a started worker, failed attempt, session retry or controller
-restart does not refund or replenish the allowance. A replacement worker requires a
-new reservation and debit. The ledger is append-only and keyed by
-`(round_id, worker_id, transition_id)` with transitions `reserved`, `started`,
-`charged`, `failed-start-refunded`, `released`, or `reconciled`; invalid transitions
-are `BUDGET_STATE_INVALID`.
+reserve one worker and launch intent atomically before a wave. Native acceptance
+moves reserved directly to charged; started is an observation, not an intermediate
+budget state. Before acknowledgement, reserved still counts against allowance.
+Only proven NEVER_ACCEPTED refunds once. Unknown acceptance remains held/quarantined;
+a failed running attempt never refunds. M9.17 defines the exact stored rows,
+transaction groups and recovery queries. Worker state is reserved/charged/refunded;
+invalid transitions return BUDGET_STATE_INVALID. Attempts are bounded by V.9
+max_attempts, backoff and the original round deadline.
 
 The round allowance and simultaneous capacity are independent. For example, an
 8-worker round on a host with concurrency 2 is legal: at most two workers run at once,
 but successive waves may charge all eight. The round's total budget is never reduced to
 2 and a wave never replenishes it. A T3 example with allowance 2 and one worker identity
 uses `w-1/worker-1`: reserve, start, charge, attempt 1 fails judge, correction attempt
-2 reuses the same worker, then release; the ledger remains `reserved → started → charged`
-with no second worker charge. If worker-1 is lost before start, the refund transition
+2 reuses the same worker, then release; the ledger remains `reserved → charged`
+with no second worker charge. Native start is observed in the same accounting transition. If worker-1 is lost before start, the refund transition
 returns one allowance and a replacement may reserve it; if it is lost after start, the
 replacement is charged only if remaining allowance permits. Controller restart reads
 these ledger entries rather than recomputing them from task rows.
@@ -445,7 +444,7 @@ implementation mapping follows it without pretending missing fields exist
 | Schema | Required fields | State / refusal semantics | Durable identity |
 |---|---|---|---|
 | `register.v1` | `registration_id`, `agent_id`, `project_id`, `profile`, `public_identity`, `capabilities` | `accepted`, `UNAUTHORIZED`, `PROFILE_UNSUPPORTED`, `IDENTITY_STALE`; round/wave/worker/attempt IDs are not required | `registration_id` |
-| `round-request.v1` | `round_id`, `run_id`, `corr_id`, `task_scope`, `total_budget`, `config_generation` | `accepted`, `deferred`, `refused`; invalid budget/config is typed refusal; future wave/worker/attempt IDs are absent | `round_id` |
+| `round-admission.v1` | `round_id`, `run_id`, `corr_id`, `task_scope`, `total_budget`, `config_generation` | `accepted`, `deferred`, `refused`; invalid budget/config is typed refusal; future wave/worker/attempt IDs are absent | `round_id` |
 | `worker-brief.v1` | `round_id`, `wave_id`, `task_id`, `attempt_id`, `brief_digest`, `criteria`, `workspace` | digest mismatch or missing criteria is `BRIEF_INVALID`; brief custody is not success | `attempt_id` |
 | `worker-result.v1` | `attempt_id`, `dispatch_id`, `corr_id`, `status`, `commit`, `artifacts`, `evidence_refs`, `finished_at` | status enum `pass`, `fail`, `unverified`, `partial`, `unknown`; absent status is `INVALID_RESULT`; conflicting legacy `ok` is `RESULT_CONFLICT` | `attempt_id` |
 | `wave-result.v1` | `round_id`, `wave_id`, worker results, integration result, budget used/remaining | `complete`, `partial`, `failed`; partial memory sync remains visible | `(round_id, wave_id)` |
@@ -465,7 +464,8 @@ versions and unknown fields outside `extensions` are refused rather than coerced
 
 Identity creation is ordered: the controller creates `registration_id`; the scheduler
 creates `round_id` and `run_id`; the foreman creates `wave_id` and `attempt_id`; Crier
-creates `delivery_id` and `lease_id`; the worker creates `dispatch_id`; and the foreman
+creates `delivery_id` and `lease_id`; the launching foreman assigns `dispatch_id`
+and `launch_id` before process creation (M11.16); and the foreman
 creates `report_digest`. Thus registration and round admission do not require future
 wave/worker/attempt identities.
 
@@ -479,7 +479,7 @@ execution authorities; the normative target launches the foreman in the project 
 through Crier and returns `CT-06R`.
 
 **Resident launch/return consumer.** The scheduler persists and sends one
-`round-request.v1` through Crier. Crier returns custody, the Bunker foreman retrieves
+`round-admission.v1` through Crier. Crier returns custody, the Bunker foreman retrieves
 it under lease, creates waves and attempts, and returns one signed `round-report.v1`.
 The scheduler settles only after reading the report and its referenced durable memory
 and publication records. A timeout or conflicting digest records `unknown`; a retry
@@ -581,20 +581,19 @@ project/lane scope is admitted. `in_progress`, `blocked`, `deferred`, malformed,
 unknown-project and stale-revision rows are not eligible; an unreadable board is an
 `ELIGIBILITY_UNKNOWN` refusal, never an empty-board result.
 
-A claim carries `{task_id, board_revision, claimant_id, claim_id, lease_expires_at,
-claim_generation}`. Boardctl performs compare-and-set against the canonical revision and
-writes the claim and its event as one append transaction. Two foremen on different clones
-therefore produce one `CLAIMED` event; the loser receives `CLAIM_CONFLICT`, refreshes the
-canonical revision and re-evaluates eligibility. A lease expiry does not authorize a new
-claim until the board records stale-owner replacement with a new `claim_generation`.
-Every protected write checks claimant and generation at the resource boundary; a stale
-writer cannot close a row or append a result after replacement.
+Claims use exactly M4's normalized object: task_id, board_commit, expected_revision,
+owner_id, claim_id, lease_until and fence_token; no board_revision/claimant_id/
+lease_expires_at/claim_generation aliases are accepted. The foreman requests and
+Boardctl publishes the row/event/claim candidate tree via broker ref CAS. A CAS loser
+receives CONFLICT and re-derives; a stale owner receives FENCED. Lease expiry alone
+never authorizes replacement. Resource enforcement is VI.35.2, not a local Git lock.
 
-Closeout is idempotent by `(task_id, claim_generation, evidence_run_id, tree_digest)`.
-A failed row append or event append is reported as `PARTIAL_WRITE`, retains the operation
-id and is replayed against the same expected revision; it is not treated as complete.
-Malformed rows, dependency cycles, stale refs and failed event appends each have named
-refusals and leave the canonical store unchanged. Scheduler admission may decide whether
+Closeout is idempotent by `(task_id, fence_token, evidence_run_id, tree_digest)`.
+Validation refusals before staging leave canonical state unchanged. Any partial
+staging/publication or event failure records PARTIAL_WRITE with operation ID and
+marks scheduling UNAVAILABLE until M4 repair reads the remote ref, verifies the
+row/event/claim set and either adopts it or retries from the current revision.
+No blanket unchanged-store claim applies to an uncertain publication. Scheduler admission may decide whether
 a lane runs, but it cannot claim a task or substitute for this foreman-owned board
 transaction.
 
@@ -617,8 +616,8 @@ keep the recovery honest:
   idempotency check alone never authorizes a rerun.
 
 - **Protected writes are fenced at the resource.** Board events, Git publication,
-  Crier bindings and memory commits each validate the active `claim_generation`/
-  `owner_fence` at the write boundary; a stale controller lease is insufficient. A
+  Crier bindings and memory commits use the broker/authority serialization in
+  VI.35.2 with the active fence_token/owner_fence; a stale controller lease is insufficient. A
   resource returns `STALE_OWNER` without mutation. If descendants or external effects
   cannot be proven quiescent, the execution remains quarantined and the project is not
   ready for replacement admission.
@@ -630,6 +629,132 @@ keep the recovery honest:
 The recovery sequence is F8's, applied at round scope: detect and persist the incident,
 fence stale actors (R-27), reconcile Crier custody and scheduler attempts against the
 ledger and published commits, resume, and retain the recovery evidence.
+
+## VII.18 Concrete records, deterministic waves and settlement (P5-C-15/28/29/38)
+
+The canonical outer envelope and inner body versions are Part I §1.9.1; VII.13's
+schema table is an index, not permission to omit body.schema_version or flatten
+fields. Its examples show body fragments only. Admission is round-admission.v1;
+round-request.v1 is retired. IDs are assigned at the boundaries in VII.13/M11.16.
+worker-result.v1 has required correlation IDs, status and finished_at plus commit,
+artifacts, evidence_refs and error keys. For pass, commit is a full Git OID,
+artifacts/evidence_refs contain at least one digest-bound verification record and
+error is null. For fail/partial/unverified/unknown, commit may be null and lists may
+be empty; error is required Part I Error and names failure/refusal phase. Thus a
+pre-launch refusal has status fail, commit:null, artifacts:[], evidence_refs:[],
+error code HARNESS_UNAVAILABLE with retryable:true; it is valid, not fabricated work.
+A supervisor refusal receipt in its ledger provides the audit trail independently.
+A missing status is INVALID_RESULT, not auto-converted to unknown; only an explicit
+legacy adapter may create unknown plus a missing-verdict diagnostic. §13's blanket
+non-null rule excludes these declared nullable fields and empty failure collections.
+
+An accepted initiative is initiative.v1: id,project_id,revision (positive integer),
+title (1..512 characters),status (proposed/accepted/cancel_requested/cancelled/accepted_delivery),
+criteria (1..1024 Criterion),task_ids (ID set),accepted_by (principal ID),accepted_at
+(UTC),input_digest. A task.v1 contains id,initiative_id,project_id,title,status
+(pending/in_progress/blocked/deferred/complete/cancel_requested/cancelled),dependencies
+(ID set),criteria,created_seq (nonnegative integer),paths (1..1024 normalized
+repository-relative prefixes),resources (set of `{name:ID,mode:exclusive/shared}`),
+claim (M4 object or null),evidence_refs (digest refs, empty until available).
+Criterion is `{id,description,argv,cwd,timeout_s,expected_exit,oracle_digest}`; argv is
+nonempty string array, cwd is safe repo-relative path, timeout_s 1..1800, expected_exit
+0..255 and oracle_digest identifies the versioned assertion/fixture code. Evidence
+is `{criterion_id,run_id,commit,tree_digest,argv_digest,exit_code,stdout_digest,
+stderr_digest,started_at,finished_at,outcome}` with outcome pass/fail/unknown.
+All records use canonical JSON, explicit schema_version, unknown-key rejection and
+append-only revision CAS via M4. Priority is lane-only; task ordering is below.
+
+On a fixed synchronized board, compute eligible tasks using VII.15, then sort by
+(created_seq,id), bytewise ID tie-break. Scan once: admit a candidate iff all its
+dependencies are already complete at that snapshot, its path prefixes have no ancestor/
+descendant overlap with selected tasks, and no equal resource name is exclusive on
+either task. Repository-wide/generated-file effects declare path `.`; undeclared
+write paths are BRIEF_SCOPE_VIOLATION, not post-hoc compatibility. Stop selecting at
+min(remaining worker allowance, free concurrency); skip conflicts and keep scanning.
+The snapshot, sorted candidates, selected set and rejection reasons form wave-plan.v1.
+Claims CAS as a group; any conflict refreshes and re-derives before launching any
+member. Integration follows the same selected order; a conflict halts the wave's
+publication pending correction, never silently reorders merges.
+
+Cancellation is requested by the initiative owner through authenticated boardctl
+adapter POST `/v1/projects/{id}/initiatives/{initiative}/cancel` with expected_revision,
+reason and idempotency_key. It records cancel_requested, blocks new claims, invokes
+M11 cancel for live launches, and retains completed publications. Only quiescence
+and durable partial outcomes permit cancelled; unknown children remain quarantined.
+A foreman can stop its round for deadline/budget without cancelling the initiative.
+project-acceptance.v1 contains project_id,initiative_id,initiative_revision,published_oid,
+criteria_results (one Evidence per criterion),task_refs,round_report_refs,memory_receipts,
+reviewer_id,accepted_at,outcome. outcome is accepted/refused/unknown; accepted requires
+all criteria pass on the SAME published tree, closed tasks and all required receipts.
+Owner acceptance, when required by initiative, is a separate signed decision ref.
+
+The CSV fixture fixes columns `[name,count]` and records
+`[{name:"a,b",count:2},{name:"quoted\"name",count:0}]`. T1 owns src/export and tests/export;
+T2 owns src/cli and tests/cli; T3 owns tests/roundtrip and depends on T1/T2. Their
+created_seq values are 1,2,3. Each criterion invokes its repository-owned assertion
+via argv without a shell; T3's oracle parses generated CSV and compares column order,
+quoted names and integer values with this exact input, then checks the CLI exit is 0.
+With two slots the deterministic selected set is T1,T2; next wave waits for their
+published-tree closeouts. A reversed-column or dropped-column mutation fails T3;
+a correct round trip passes. These are required fixture cases, not reports of a run.
+
+### VII.18.1 Git memory layout and local interface
+
+Each namespace is a Git repository rooted at V.9 local_root; records live under
+`records/<record_id>/<payload_digest>.json`, immutable. payload_digest is SHA-256 of
+RFC8785 JSON of the entire record excluding payload_digest, with schema_version
+memory-record.v1, record_id,namespace,record_type,round_id,writer_identity,created_at,
+body, and scope fields. worker-outcome requires wave_id/attempt_id/task_id and body
+worker-result.v1; wave-summary requires wave_id, forbids attempt_id/task_id and has
+body `{worker_refs,integration_result,budget,remaining_tasks}`; round-summary forbids
+wave_id/attempt_id/task_id and body is round-report.v1 excluding its own memory ref.
+Ref is `{record_id,payload_digest}`. Budget is `{allowance,used,held,remaining}` integers
+satisfying M9.17. No self-referential digest is constructed.
+
+The protected local writer exposes HTTP over owner-only Unix socket
+`<local_root>/writer.sock`: POST `/v1/records` accepts the record; GET
+`/v1/records/{id}?digest=<hex>` reads exact bytes; POST `/v1/sync` requests brokered
+publication; POST `/v1/conflicts/{id}/resolve` accepts resolution; GET
+`/v1/view?after=<record_id>&limit=<1..1000>` defaults 100 and returns records sorted
+bytewise by record_id,payload_digest plus next_cursor, local_commit, sync_commit,
+synced_at, pending_count, conflict_count and freshness. Socket peer UID and project
+capability scope authenticate; workloads do not hold a canonical push credential.
+Mutation idempotency is namespace/record_id/digest, different digest preserves both
+as MEMORY_CONFLICT. Local acknowledgement requires Git objects/ref and containing
+directory fsync; it never claims remote synchronization.
+
+Each writer owns `refs/heads/pending/<writer_id>`; only brokered sync owner publishes
+`refs/heads/namespace`. Sync fetches declared pending refs over authenticated Git,
+validates each record/fence, unions file paths by bytes, and writes a sorted
+`index.json` of record IDs/digests. Conflicts are indexed, not overwritten. A
+resolution.v1 record contains record_id, all conflicting digests, selected_digest or
+replacement_digest, reason and authorized resolver identity; every original survives.
+The canonical view chooses only a valid resolution or a single nonconflicting digest;
+unresolved IDs are returned as conflicts, never arbitrary last-writer-wins.
+
+Canonical merge uses sorted unique parent OIDs, fixed author/committer
+`factory-memory-sync <factory-memory-sync@invalid>`, timestamp equal to the maximum
+parent commit timestamp, message `memory merge <index SHA-256>`, no signatures in
+commit bytes; the external broker receipt authenticates it. The same parent set and
+records therefore produce the same tree/commit. Different intermediate merge history
+may produce different commit IDs but must produce identical index/view digests.
+Remote CAS failure fetches and recomputes; no force push. Auth/authority failure leaves
+pending-sync. Freshness is now minus acknowledged sync time; >V.9 stale_after_s is
+stale, null acknowledgement is unknown. Local-only mode is single-host and cannot
+satisfy a cross-host settled receipt. [CT-09/15; F3; VI.30/31/35.2]
+
+### VII.18.2 Disconnected completion
+
+Local committed entries permit continued work and a returned execution report; they
+do not settle the round. The scheduler stores REPORTED_PENDING_MEMORY with exact
+record/digest refs and the authenticated supervisor receipt. It releases physical
+capacity only after quiescence, keeps worker debit unchanged, and blocks the next
+round for that lane until broker sync/readback proves every referenced record visible
+on the control side. No local receipt substitutes for that readback. On reconnect,
+the sync owner publishes once, scheduler verifies refs, then applies remaining
+projections and settles. Host loss before sync is MEMORY_LOST with named missing
+records; owner-approved abandonment is a separate fenced terminal failure, not
+successful completion. VII.17's outage example reaches acceptance only after sync.
 
 ## VII.17 Worked example — one project through the whole chain
 

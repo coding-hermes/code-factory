@@ -273,8 +273,8 @@ Supported API version `cf.inference.v1` exposes `GET /health` without paid/model
 
 A streamed response uses framed SSE records and an explicit terminal event containing response id, served model, usage and `complete`/`error`/`cancelled` state. The proxy closes or correctly frames the downstream connection after the terminal event; upstream read failure before headers is a clean 502, while failure after headers is an incomplete/error stream. Client disconnect cancels upstream work. Usage settlement records request id, token id, requested/served model, bytes, duration, first-byte time and terminal state; failed capture or usage persistence follows an explicit policy and is visible.
 
-The maintained deployment interface is `cf-inference-proxy` package version `1.x` (the
-exact released artifact and digest are selected in the deployment manifest). It must
+The deployment package name/version is not yet selected; M11.17's C-ARTIFACT decision
+is blocking. No arbitrary `cf-inference-proxy` 1.x release is implied. A qualified artifact must
 ship the service unit, `cf.inference.v1` schema, configuration defaults, migration,
 upgrade/rollback and restore instructions. The unversioned workstation path measured
 above is not a supported build artifact; until a digest-pinned package or an exact
@@ -317,6 +317,129 @@ failure, token expiry/revocation and budget denial. Acceptance cases cover a fin
 Hermes-compatible stream to terminal EOF, pre/post-header failure, cancellation,
 requested-versus-served identity, expired/revoked token, budget exhaustion and both
 capture/usage sink failures.
+
+## 16. Token issuance and atomic inference ledger (P5-C-22/23/25)
+
+The target proxy admin API is mTLS on a separate listener bound to the management
+network; only enrolled issuer/provisioner principals with matching project scope can
+use `/v1/admin/node-tokens`. POST issues, GET `/{token_id}` reads metadata,
+POST `/{token_id}/rotate`, `/revoke`, `/offboard` mutate. Each request is the Part I
+cf2a.v1 wrapper with body version cf.node-token-admin.v1, operation_id,
+idempotency_key, expected_generation, node_id, project_id, scope (V.9 NodeScope),
+ttl_s and delivery_target (registered Bunker ID). Revoke/offboard instead require
+token_id and reason; rotate inherits scope unless explicitly narrowed. TTL is 600..86400 s,
+default 3600; overlap defaults 60 s, range 0..300, renewal margin 300 s. Admin responses
+use Part I Error and return 201/200 metadata only; conflict 409, scope 403, unavailable 503.
+
+Issuer generates 32 cryptographic random bytes, encodes base64url without padding,
+and stores only SHA-256(token bytes), token_id, scope, expiry, state and generation
+in the authorization ledger. Clear bearer exists in an encrypted, recipient-bound
+one-time delivery object at secretref://model/deliveries/<operation_id>; only the
+registered M1 credential installer can redeem it using mTLS, over TLS to a protected
+installer, never as application API JSON. The reference and receipt ID are returned.
+Redemption writes an owner-only file via temporary file/fsync/rename/directory fsync;
+readback attests token_id, file mode and scope hash without returning bearer. Delivery
+ciphertext expires after 300 s and is destroyed after acknowledgement. Lost receipt
+queries installer operation_id; a new bearer is not minted on a blind retry. The
+ledger atomically changes staged → active only after matching readback; a CAS replaces
+active pointer during rotation. Old credential becomes overlap then revoked. Unknown
+delivery stays staged/unusable until receipt or expiry. Revoke records denial in the
+independent authority before acknowledgement, cancels admitted requests and marks
+unknown upstream spend for conservative settlement; it cannot undo already incurred
+cost. Offboard revokes all node token IDs. Restore uses VI.35.2, never restores active
+bearers from a backup. [CT-19/21; M7.16]
+
+All proxy replicas share one serializable SQL authorization/accounting database.
+Authorization and admission run in a single transaction keyed by `(token_id,request_id)`;
+request digest is compared, not part of the key. The transaction locks token generation,
+current fixed window and concurrency rows, checks live authority/fence, expiry, route,
+and deadline, then reserves both cost and a slot before forwarding. Windows are
+UTC-aligned floor(server_epoch_s/window_s), with V.9's units. Budget is integer
+micro-USD (one million per USD); route prices are micro-USD per million tokens, pinned
+at admission. Reserve ceil(input_tokens*input_rate/1000000) plus
+ceil(max_output_tokens*output_rate/1000000). The pinned tokenizer measures input;
+unavailable tokenizer or price refuses PRICING_UNAVAILABLE. Condition is
+spent + held + reserve <= budget and active < concurrency; a race has one transaction
+winner. Zero-price models still reserve a concurrency slot. Streamed output cannot
+exceed the reserved maximum. Tokens cannot cross windows by extending a request.
+
+Request row contains request_id,digest,token_id,generation,window,reserved_cost,
+actual_cost nullable,state (reserved/forwarding/settled/unsettled),upstream_id nullable,
+route/tokenizer/price digests,result_ref nullable,deadline and timestamps. Usage,
+result blob digest and terminal state commit together before success is returned.
+Unknown spend after upstream timeout/crash is charged the full reservation, tagged
+estimated; it is never refunded merely because a client disconnected. Proven no-send
+refunds; known usage settles actual <= reserved and releases remainder. Provider
+usage above bound is a breach event and blocks the route. Concurrency releases only
+when upstream terminal/quiescence is proved; otherwise the slot stays quarantined.
+Restart scans forwarding/unsettled rows, queries upstream by ID where supported,
+and otherwise retains conservative charge/quarantine. Same-ID retry returns pending
+or durable result and never forwards again; changed digest returns 409.
+
+The usage commit is the response commit point. Mandatory ledger failure produces
+503 USAGE_UNSETTLED before headers or terminal state error with error.code
+USAGE_UNSETTLED after headers; if even that cannot be delivered, EOF without terminal
+is incomplete. There is no complete event before settlement. Crash after commit but
+before send is recoverable at authenticated GET `/v1/responses/{request_id}` returning
+202 pending, 200 committed terminal/result, or 404 unknown. Result records persist
+30 days; afterward ID tombstone returns 410, never re-executes. Raw capture failure
+uses V.9 policy: refuse prevents complete, record retains a CAPTURE_FAILED diagnostic
+without claiming a complete audit record. [VI.18/19; V.9/10]
+
+## 17. Closed completion and stream grammar (P5-C-24)
+
+The supported request is `{model,messages,stream,options,request_id,deadline}`.
+model is an allowed route name <=128 UTF-8 characters; request_id is ID, deadline UTC;
+messages is 1..1024 entries, body <=4 MiB. stream boolean defaults false. Each message
+has role system/user/assistant/tool and content string <=1 MiB (empty allowed only
+for assistant tool calls), plus optional tool_calls for assistant or tool_call_id
+for tool. tool_calls is a list of `{id,type: function,function:{name,arguments}}`;
+arguments is JSON text, not an object. Tool responses must reference a prior call ID.
+Images/audio/multimodal content are unsupported and return 400 UNSUPPORTED_CONTENT.
+options is a closed object: temperature number 0..2 default 1, top_p number (0,1]
+default 1, max_output_tokens integer 1..scope maximum default min(4096,scope maximum), stop list of 0..4
+nonempty strings <=256 characters default empty, tools list 0..128 of
+`{type: function,function:{name,description,parameters}}`, tool_choice auto/none or a
+named declared function default auto. Function name is `[A-Za-z_][A-Za-z0-9_]{0,63}`;
+parameters is JSON Schema draft 2020-12 object without remote $ref. Other options,
+unknown keys/roles, duplicate call IDs and invalid tool references are 400 INVALID_BODY.
+
+GET `/v1/models` returns `{object:list,data:[{id,object:model,owned_by,capabilities}]}`,
+filtered by token scope; capabilities is set text/tools/stream. Buffered completion
+is `{id,object:chat.completion,created,model,requested_model,chosen_model,resolved_model,
+served_model,choices:[{index:0,message:{role:assistant,content,tool_calls},finish_reason}],
+usage,state,error}`. content is string or null when only tool calls; tool_calls is a
+list (empty permitted); finish_reason is stop/length/tool_calls; usage is
+`{input_tokens,output_tokens,total_tokens,cost_micro_usd,estimated}`; all counts are
+nonnegative integers, estimated boolean. state is complete/error/cancelled; error is
+null on complete, otherwise `{code,message,retryable}`. Identity mismatch is error,
+not a silent replacement. /health returns `{status:healthy/degraded,ready:boolean}`
+without a model call and never exposes credential metadata.
+
+SSE uses Content-Type text/event-stream, UTF-8, each record terminated by two LF bytes.
+Text/tool chunks have `event: delta` then `data: <one-line canonical JSON>` with
+`{id,seq,choices:[{index:0,delta,finish_reason}]}`. seq starts at 0 and increases;
+delta contains content string, role assistant, or tool_calls fragments
+`{index,id,type:function,function:{name,arguments}}`; indices join fragments and
+arguments strings concatenate in order. finish_reason is null until final delta.
+A usage event follows with `{id,seq,usage}`. Exactly one terminal event follows with
+`{response_id,served_model,usage,state,error}` and then `data: [DONE]` and a framed
+connection close. A complete terminal is emitted only after §16's commit; [DONE]
+alone is not proof. Midstream failure emits terminal error/cancelled if connection
+remains writable, then closes; missing terminal is truncated, never complete.
+
+Before headers: invalid request 400; missing/revoked/expired token 401; model/scope 403;
+caller deadline already elapsed or elapsed first 408 DEADLINE_EXCEEDED;
+budget/concurrency 429; upstream connect/protocol failure 502; upstream configured
+300 s timeout elapsed before caller deadline 504 UPSTREAM_TIMEOUT; ledger failure 503.
+After headers the same code appears in terminal.error, not a second HTTP status.
+Client disconnect records cancelled and invokes upstream cancellation; bounded
+quiescence/unknown-spend rules still apply. Hermes adapter consumes deltas in seq
+order, assembles tool calls, waits for terminal + [DONE], returns one completion only
+on complete with settled usage, and raises typed error on error/cancelled/truncation.
+It may query the response ID after disconnect but cannot silently resend with a new ID.
+This translation is the required compatibility behavior, not a claim about current
+Hermes implementation. [CT-19/20; VII.13]
 
 ## RED field count: 4 (Metrics §8 — absence-proved; CT-19 node-client half UNVERIFIED; CT-20 upstream half UNVERIFIED — one-sided external boundary; stream completion **FAILING** — F12-7 reproduced, and a first-byte-only flight card cannot close it)
 

@@ -54,8 +54,8 @@ scored a success — the control-plane half of the silent-success defect (CF-355
   result is to be reconciled, not assumed away by the schema's existence.
 - **Hook semantics.** PRE hooks run after selection/slot acquisition; POST hooks run after the
   outcome is recorded and cannot change that tick's result. Hook-plan/freshness/verification
-  behavior is mandatory target policy, not decoration: an invalid hook plan emits an event and can
-  run without hooks, and a hook being configured does not prove it ran or that its result gates
+  behavior is mandatory target policy, not decoration: an invalid required plan refuses dispatch;
+  the historical unhooked fallback is not the target, and configuration alone does not establish
   completion. **Failures in required later stages (publication, verification, synchronization)
   must remain visible in Factory completion** even when execution itself succeeded, with recovery
   and release of acquired resources — execution success and Factory completion are different facts.
@@ -399,11 +399,114 @@ the named RED on this field — not a "sample" claimed as complete.
 
 A scheduler tick is distinct from an execution run and a board task. The supported sequence is `TICKED → SNAPSHOT_READ → ELIGIBILITY_EVALUATED → RESERVED → HOOKS_PRE → DISPATCHED → RETURNED → SETTLED → PROJECTIONS_PENDING → CLOSED`, with `DEFERRED`, `NO_WORK`, `UNKNOWN`, `FAILED` and `CANCELLED` outcomes. An unreadable or stale board is `UNKNOWN`/`DEFERRED`, never an empty board. Auto-disable changes observed protective state; it does not silently rewrite desired configuration.
 
-The scheduler requests Crier launch with `schema: cf.scheduler-launch.v1`, `tick_id`, `project_id`, `board_commit`, `task_ids`, `round_id`, `wave_id`, `reservation_id`, `hook_plan_digest`, `limits`, `correlation_id` and `generation`. Crier returns a typed result with the same identities, transport/execution state, result digest and error. A missing, malformed, late or contradictory result is `UNKNOWN` and releases or reconciles its reservation according to the recorded transition; it is never success. Legacy `ok`/`status` replies are accepted only through an explicit compatibility adapter that rejects disagreement.
+The scheduler sends only `round-admission.v1` in the canonical `cf2a.v1` envelope (Part I §1.9.1; VII.13). `corr_id` is the sole correlation spelling; `cf.scheduler-launch.v1` is retired and refused. Admission contains no wave, attempt or worker dispatch identity. Reservation, board revision, hook-plan digest, fence and deadline are persisted admission metadata bound to the request digest; no actor invents future IDs to satisfy a transport schema.
 
 PRE hooks run after selection and reservation; a required hook that cannot validate or run produces `HOOK_REFUSED` before dispatch. POST hooks run after execution outcome is durable and cannot rewrite that outcome. Acceptance/publication/projection/closeout remain foreman and repository concerns: Scheduler settles execution and records the correlated response, then schedules projection verification and the next cadence. A successful execution with failed publication remains `PROJECTIONS_PENDING`, not complete.
 
 Every route that mutates state has a versioned request/result/error schema, authorization, write authority, transaction boundary and effective readback. The resolved settings precedence is defaults, TOML, environment, then CLI/persisted explicit state as defined by the selected surface; readback redacts secrets. Durable leases, outbox delivery and restart reconciliation preserve `tick_id`, `run_id`, `attempt_id`, reservation and projection state. Required metrics cover each disposition, board freshness, hook outcomes, reservations, active/stale leases, malformed/late replies, execution versus acceptance and projection backlog, with unavailable data reported as unavailable rather than zero. Acceptance cases cover healthy work, no work, unreadable board, invalid hook, post-verifier failure, capacity denial, late result and restart.
+
+## 16. Deterministic target allocation (P5-C-09)
+
+This algorithm replaces the historical §3 ordering for the target profile. Evaluation
+uses one durable config generation, board snapshot, capacity snapshot and authority
+clock instant. Each candidate is evaluated in this order: disabled → DISABLED;
+invalid identity/profile → INVALID_CONFIG; unavailable ownership/health/load data →
+UNKNOWN; active round → BUSY; stale/unreadable board → BOARD_UNAVAILABLE;
+failed dependency/claim safety → SAFETY_REFUSED; tasks mode with no eligible task →
+NO_WORK; cadence or tasks-pacing not due → NOT_DUE; required hook plan invalid →
+HOOK_REFUSED. Only survivors enter allocation. A cooldown reporter without a board
+still requires its declared input snapshots, and does not receive a fabricated empty
+board. No earlier fail-open historical predicate overrides these rules.
+
+Lane priority is integer 0..9, default 5 (0 highest); weight is integer 1..1000 and
+is a capacity cost, not a priority. eligible_since is persisted when a lane first
+survives the safety predicates and is not reset by capacity deferral. Effective
+priority is `max(0, priority - floor(wait_seconds / 300))`. Candidate order is
+(effective_priority, eligible_since, lane_id), ascending bytewise ID for ties.
+Namespace reservation is an integer count of simultaneous round slots, default 0;
+hard_cap is a count, default global max_concurrent. Reservation sum must not exceed
+global max_concurrent. Phase one visits namespaces bytewise and admits their oldest
+ordered candidates until their reserved slot count (including active rounds) is met.
+Phase two merges all remaining candidates in the same total order and admits those
+that fit global slots, namespace hard cap, host resources and weight budget.
+Active plus newly reserved weights must not exceed budget; all resource-vector
+components must fit. A non-fitting lane is CAPACITY_DEFERRED; scanning continues.
+The allocator writes no partial resource reservation: all host/namespace/global
+reservations and admission are one serializable transaction with snapshot versions.
+CAS loss reruns the complete evaluation. Weight above total budget is CONFIG_INVALID,
+not a permanently waiting candidate. Aging prevents priority starvation among fitting
+candidates; continuous capacity exhaustion is exposed as oldest-eligible age, not an
+unconditional liveness promise. [Part V §V.9; CT-01/02/27]
+
+## 17. Transaction journal and recovery (P5-C-10/14)
+
+Scheduler execution uses SQLite WAL with synchronous FULL and one write transaction
+per transition; manager/config logs retain Part I's Git-backed JSONL authority.
+The resident foreman uses the same record model for its round-local worker ledger,
+with fsynced transaction records as Part I §1.9.2. Scheduler does not independently
+debit worker allowance. Keys are unique and all foreign references must exist:
+
+| Record / key | Required stored fields beyond key |
+|---|---|
+| round / round_id | run_id, corr_id, project_id, lane_id, config_generation, board OID, owner_fence, allowance integer, deadline, request_digest, state, state_version, created_at, updated_at |
+| capacity / reservation_id | round_id, host_id, resource vector, weight, state held/released, release_reason nullable |
+| worker / round_id,worker_id | state reserved/charged/refunded, launch_id, first_attempt_id, transition_seq integer |
+| attempt / attempt_id | round_id,worker_id, wave_id,dispatch_id,launch_id,input_digest,deadline,state intent/start_unknown/running/terminal/quarantined, native_id nullable, result_digest nullable |
+| result / attempt_id or round_id | canonical body, digest, received_at, terminal outcome, fence, late boolean |
+| projection / round_id,sink | sink board/memory/publication/verifier, expected_digest, state pending/applied/conflict, receipt nullable |
+| outbox / destination,message_id | canonical body, digest, state pending/claimed/acked/dead, attempts, available_at, claim_owner nullable, claim_until nullable, receipt nullable |
+| event / aggregate_id,seq | transition_id unique, old_state,new_state,reason,time,related IDs |
+
+One transaction reserves a worker and creates attempt intent plus launch outbox;
+no native call precedes it. The native start acceptance and `reserved → charged`
+transition are applied together on observation; while that acknowledgement is absent,
+reserved continues to count against available allowance. There is no independently
+persisted uncharged `started` state. `used=count(charged)`, `held=count(reserved)`,
+`remaining=allowance-used-held`. Proven never_started changes reserved to refunded
+exactly once. Unknown start remains reserved/quarantined; failed running work never
+refunds. Repeated attempts by the same charged worker consume no further allowance,
+but max_attempts and the round deadline still bound retries (V.9).
+
+Terminal result, result digest, event and result-delivery outbox commit together;
+only then may input custody be acknowledged. Scheduler round-result commit records
+execution outcome and creates required projections; settlement to CLOSED requires
+all receipts and verified quiescence. Physical slots may be released after quiescence
+while logical state remains PROJECTIONS_PENDING; allowance is never replenished.
+Outbox claim is a CAS pending/due or expired-claim → claimed with a 30 s lease;
+only its matching claim owner may acknowledge the recorded digest. Delivery attempts
+use the original message ID, backoff 5,10,20,40,80,160,300 s capped, until deadline;
+exhaustion is dead and remains visible for recovery, not deleted.
+
+Restart scans attempts in intent/start_unknown/running/quarantined and queries
+M11's launch_id. NEVER_ACCEPTED permits same-ID launch; running resumes observation;
+terminal imports the exact result; unavailable lookup quarantines. It scans unacked
+outboxes by available_at,message_id, expired claims included; scans projections where
+state != applied and reads the destination effect before replay; scans returned
+rounds for missing receipts and never creates a new round until settlement or explicit
+fenced abandonment. Publication without receipt is adopted only from matching remote
+OID and effect digest. Every repair transition checks state_version and emits one
+event. A crash at each transaction/external-call boundary must preserve these counts.
+
+## 18. Hook plan and receipts (P5-C-11)
+
+`hooks` is an ordered list of `{id,phase,required,artifact_digest,argv,timeout_s,
+max_attempts}`; phase is PRE/POST, required is boolean, argv is a nonempty string
+array without shell expansion, timeout_s is 1..300, max_attempts is 1..3 (default 1).
+IDs are unique within phase; required lists include PRE board-freshness and POST
+merged-tree verifier. The plan digest is canonical JSON SHA-256 pinned at admission.
+Hooks execute serially in declared order through M11's supervised runner with
+`hook.v1` input `{round_id,phase,board_commit,result_digest,deadline}` on fd 3;
+result_digest is null for PRE. fd 4 returns `{outcome: pass/fail/unknown,
+evidence_refs: digest[],error: Error or null}`. Nonzero exit, malformed output,
+timeout or runner crash is fail/unknown, never pass. Each receipt records plan digest,
+hook ID, ordinal, attempt number, exit/signal, output digest and outcome durably.
+Retry identity is `(round_id,plan_digest,phase,hook_id,attempt)`; uncertainty first
+queries the original launch. Required PRE failure releases capacity before dispatch;
+optional failure records degraded and continues. Required POST failure leaves the
+execution result unchanged and Factory state PROJECTIONS_PENDING; retry needs a new
+hook attempt within the original deadline, otherwise fenced recovery remains pending.
+Missing required hook or invalid plan is HOOK_REFUSED, with no unhooked fallback.
+[CT-12/13; VII.6; V.9]
 
 ## RED field count: 5 (§9 log inventory 2 of 382 sites — the remaining 380 are the named RED, not a "sample"; §3 S1 grep-level (`tick_process`/`packer_select`/`namespace_alloc` not line-by-line — `noop_pacing.go`/`packer_select.go:385-400`/`spawn.go` ARE read); §5 the auxiliary-flag reader/precedence not re-verified per flag (the consequence column is now filled); S4 per-route contract not written — B18; S3 write authorities/recovery queries not written — B17)
 

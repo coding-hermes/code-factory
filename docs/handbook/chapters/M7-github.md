@@ -122,10 +122,9 @@ is implementation coverage, not the requirement.
 
 ## 6. Contracts in and out
 
-M7 has **no entry in the canonical register** (CT-01..CT-18, OUTLINE Part IV): the GitHub App
-installation-token mint is a node→github.com credential exchange, not one of the 18 cross-system
-contracts, and no peer chapter describes it from the opposite end. It is listed below as a local
-edge; the mint was never run on this host (no App creds), so the state is UNVERIFIED.
+The canonical register is Part IV, CT-01 through CT-30 plus CT-06R. CT-21 covers
+credential delivery; M7-C1 below is the external provider exchange, not another CT
+identifier. Its mint remains UNVERIFIED at the measured revision.
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
@@ -204,7 +203,7 @@ latency are answerable only by reading the refresh log.
 
 M7 defines one provider-neutral credential interface with GitHub and GitLab adapters. A mapping row is `schema: cf.forge-mapping.v1` with `forge_host`, `provider`, `owner`, `app_id`, `installation_id` or GitLab application/project binding, `repository_ids`, `role`, `permissions`, `issuer_ref`, `consumer_ref`, `bunker_ref`, `expires_at`, `scope_digest` and `generation`. The signing key remains on the control host. GitHub App installation tokens and GitLab project/group tokens are separate adapter credentials; provider-specific API details are not silently generalized.
 
-The lifecycle is `REGISTERED → INSTALLED → PAIRED → ISSUABLE → DELIVERED → ACTIVE → RENEWING → REVOKED → OFFBOARDED`. Issuance refuses an unmapped repository, excessive permission, expired installation, stale generation or missing customer authorization before any token request. Delivery writes an owner-only file through the Bunker control channel, reads back mode, scope digest and expiry without printing the value, and removes temporary control-host copies. Renewal overlaps only when both credentials are valid; compromise or scope reduction revokes the old credential explicitly and records provider confirmation. Restore reissues or revokes according to the recorded generation and never resurrects a revoked credential.
+Mapping state is `REGISTERED → INSTALLED → PAIRED → ISSUABLE → ACTIVE`, with `ACTIVE → RENEWING → ACTIVE`, and any live state to `SUSPENDED` or `OFFBOARDED`. Credentials have their own staged/active/revoked/expired states (§16). Issuance refuses an unmapped repository, excessive permission, expired installation, stale generation or missing customer authorization before any token request. Delivery writes an owner-only file through the Bunker control channel, reads back mode, scope digest and expiry without printing the value, and removes temporary control-host copies. Renewal overlaps only when both credentials are valid; compromise or scope reduction revokes the old credential explicitly and records provider confirmation. Restore reissues or revokes according to the recorded generation and never resurrects a revoked credential.
 
 The supported operation contract covers register, install/pair, check, issue, deliver, refresh, revoke and offboard. Each result names provider, mapping generation, repository scope, permission scope, expiry headroom and refusal reason. Git clone/fetch, branch push and protected-main/merge permissions are distinct; M3 requests only the operation it owns. M7 does not mint M11 dispatch credentials or M12 proxy node tokens.
 
@@ -216,7 +215,7 @@ The authorization matrix is explicit at the resource boundary:
 | project foreman | request clone/fetch, branch push or protected-main/merge | only the project and operation named by M3; a broader installation is narrowed in the request body |
 | Bunker node | clone/fetch and use a delivered runtime credential | its `bunker_ref`, project, repository and expiry must match the mapping; it cannot mint, rotate, widen scope or merge protected main |
 | operator / owner | approve, rotate, revoke or offboard | explicit owner authorization; readback is required for every state change |
-| provider adapter | exchange, refresh or revoke | control-host issuer credential only; provider response must include provider id, scope, expiry and generation |
+| provider adapter | exchange, refresh or revoke | control-host issuer credential only; provider response supplies id, scope and expiry; generation is adapter metadata |
 
 Enrollment is `schema: cf.forge-trust.v1`: `forge_host`, `provider`, `owner`,
 `app_id`, `installation_id` or GitLab binding, `controller_identity`,
@@ -237,7 +236,7 @@ and `permissions` body; GitLab requests use a project/group or deploy-token
 binding with explicit project and role scopes. The adapter must reject an
 unconfirmed provider mode rather than inventing one. GitHub App signing authority
 and any GitLab application secret remain on the control host; the node receives
-only the resulting scoped credential.
+only a read-only credential and a scoped mutation-broker capability. Forge write tokens remain at the broker (Part I §1.9.3).
 
 Delivery is two-phase: write an owner-only file through the Bunker control channel,
 read back its mode, scope digest and provider expiry, then activate the mapping.
@@ -256,6 +255,89 @@ Acceptance cases cover trust enrollment, GitHub least-privilege issuance, GitLab
 project scope, allowed and denied operations across two projects, renewal before
 expiry, scope reduction, leaked-token revocation, offboarding and restore without
 credential resurrection.
+
+## 16. Provider exchanges and rotation (P5-C-20/21)
+
+The target supports GitHub App installation tokens and GitLab project access tokens
+only. Group/deploy tokens are not equivalent; requests selecting them return
+PROVIDER_MODE_UNSUPPORTED. Customer authorization is an administrator-signed enrollment
+record with provider host, numeric project/repository IDs, installation ID, allowed
+roles, expiry and authorization_ref, committed before issuance. The issuer verifies
+it against provider reads, not a caller-supplied owner name. API calls use TLS hostname
+validation and secret-store headers, never token argv. Provider behavior is an external
+conformance requirement, not a measured mint in this chapter. [CT-21; GitHub REST,
+“Create an installation access token for an app”; GitLab Project access tokens API]
+
+| Adapter | Enrollment / issue / check / revoke |
+|---|---|
+| GitHub | Customer installs its own App and selects repositories. Issuer uses its App JWT for `GET /app/installations/{installation_id}`, checks account.id and installation.repository_selection against enrollment, then `POST /app/installations/{installation_id}/access_tokens` with exactly `{repository_ids: [integer], permissions: {contents: read or write}}`. Response 201 supplies token, expires_at, permissions and repositories; returned repository IDs and permissions must equal the requested restriction. Runtime token checks use `GET /installation/repositories`; revocation is `DELETE /installation/token` authenticated by that token, expected 204. API version header is `X-GitHub-Api-Version: 2022-11-28`; unsupported version refuses qualification. |
+| GitLab | Customer authorizes a project Owner/admin issuer for `GET /api/v4/projects/{id}` and project access-token administration. `POST /api/v4/projects/{id}/access_tokens` carries `{name: operation_id, scopes: [read_repository or write_repository], access_level: 20 or 30, expires_at: YYYY-MM-DD}`. Token result includes id, token, scopes, access_level and expires_at; issuer verifies project binding with `GET /api/v4/projects/{id}/access_tokens/{token_id}` and a repository read using the minted token. Revocation is `DELETE /api/v4/projects/{id}/access_tokens/{token_id}`, expected 204; follow-up metadata must report revoked or 404 under issuer auth. |
+
+Clone/fetch uses GitHub contents:read or GitLab read_repository/Reporter (20).
+Worker-branch publication uses contents:write or write_repository/Developer (30),
+held only by the broker. Main publication uses the same minimal repository write
+scope plus a provider protected-branch rule authorizing only the broker identity;
+force-push and bypass-admin privileges are disabled. A provider rejecting that rule
+returns PROTECTED_REF_UNSUPPORTED; it does not receive a broader token. Branch/ref
+restrictions are enforced by the broker even when the provider token spans all refs.
+GitLab expiry is provider-date-granular; the issuer additionally enforces the shorter
+local capability TTL. No provider field is named mapping_generation: the adapter
+adds its pinned mapping generation and SHA-256 of canonical scope to the normalized
+result. Provider 401/403/404/409/429/5xx map to AUTH_FAILED/SCOPE_DENIED/
+BINDING_NOT_FOUND/PROVIDER_CONFLICT/RATE_LIMITED/PROVIDER_UNAVAILABLE. Network loss
+is ISSUANCE_UNKNOWN; only 429/5xx are retryable after lookup/reconciliation, never
+blindly minting twice. Error bodies are redacted and carry provider request ID.
+
+Rotation records `{operation_id,mapping_id,generation,old_ref,new_ref,state,
+provider_id,expires_at,activation_receipt,error}` durably; references/receipt/error
+are nullable only before produced. Credential states are `mint_intent`, `mint_unknown`,
+`staged`, `active`, `revoke_pending`, `revoked`, `expired`. Unique operation_id plus
+request digest deduplicates retries. The issuer commits intent, mints, stores the
+secret durably, delivers a staged file (0600), and verifies id/scope/expiry. Consumer
+activation is an atomic pointer swap plus fsynced receipt keyed by operation_id;
+lost acknowledgement reads that receipt rather than minting again. Mapping CAS
+then selects the new reference and enters ACTIVE. Old credential overlap is at most
+60 s; renewal starts with 300 s headroom. Failed staging leaves the old credential
+active only while valid and scope unchanged. Compromise/scope reduction first denies
+old capabilities in the independent authority; overlap is zero. Remote revocation
+failure remains revoke_pending and blocks takeover that needs denial proof.
+Expired credentials become expired on trusted issuer time, not falsely provider-revoked.
+A mint with lost provider response stays mint_unknown: GitLab reconciles by the
+unique operation name; GitHub has no guaranteed token-recovery API, so the issuer
+waits the provider maximum lifetime or suspends the installation with denial proof
+before retry. Restore uses VI.35's independent watermark, never backup expiry alone.
+
+## 17. Resource-side mutation fencing (P5-C-17)
+
+The independent authority and broker in Part I §1.9.3 are mandatory, not a client-side
+preflight. The authority's serializable `begin-effect` transaction compares the full
+Fence, active lease and revocation sequence and inserts the unique effect ID. Epoch
+advance and revocation acquire that same project gate. Advance cannot complete while
+an effect is pending/unknown; this is a safety block during partition, not a timeout
+that grants a replacement permission. The broker retains the gate through remote
+readback by leaving the durable effect pending, not by holding a network mutex.
+
+| Resource | Atomic enforcement and effect completion |
+|---|---|
+| Git publication | Only the broker has forge write credentials; node credentials are read-only. A push request gives repository_id, ref, expected old OID, new OID, evidence digest and Fence. Broker checks the permitted ref, records begin-effect, pushes with exact ref CAS (no blind force), then reads the remote ref. Matching new OID finishes applied; old OID plus proven no pending transport permits refusal/retry; any other/unknown result holds the gate. Provider hooks are not assumed on hosted GitHub. |
+| Board | The broker is the sole canonical ref writer. Boardctl validates claim/fence/expected revision under the same effect gate, stages row+event+operation marker in one Git tree and publishes with ref CAS. Partial local staging is not canonical success; uncertain publication makes the board UNAVAILABLE until readback. No direct worker push can bypass it. |
+| Memory | Local offline drafts are permitted, canonical publication is not. Broker validates writer namespace, Fence and each record digest before a single canonical-ref CAS. Stale records go to quarantine evidence, not the namespace index. Canonical acknowledgement follows remote ref and record readback. |
+| Crier | Binding/delivery mutation obtains an authority effect grant. In one durable Crier transaction the handler checks registration generation, fence and unique grant ID, consumes the grant, updates binding/custody and writes receipt. The authority holds advance until receipt readback. Duplicate grant returns the stored result; altered payload is EFFECT_CONFLICT. |
+
+The protected resource authenticates the broker principal, not a worker-asserted epoch.
+An old broker is itself fenced by the controller authority record. During broker
+replacement its outstanding grants are resolved and its provider credentials revoked
+with denial proof before a new broker gets credentials; an unreachable old broker
+therefore blocks replacement, rather than creating two privileged writers. The broker
+never delivers its write credentials to workloads. Existing direct node write tokens
+must be revoked and tested denied before this profile is ready. An unmanaged forge
+administrator bypass invalidates the guarantee and readiness, as Part I specifies.
+Authority outage returns AUTHORITY_UNAVAILABLE; stale fence returns STALE_OWNER with
+no new effect. Metrics count these refusals and age of unresolved effects (V.10).
+Acceptance races epoch advance against each resource write, partitions the former
+owner, and proves either one completed old effect before advance or a refused write,
+never an old effect after replacement activation. These are required tests, not
+runtime evidence supplied by this source wave.
 
 ## RED field count: 4 (Metrics §8 — absence-proved; §1 mint UNVERIFIED; M7-C1 contract state UNVERIFIED — consumer is an external API; §9 inventory 2 of 103 helper call sites — the descriptive rows not tabulated one-per-site)
 

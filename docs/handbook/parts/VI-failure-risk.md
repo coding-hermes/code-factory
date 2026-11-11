@@ -6,8 +6,9 @@ wire involved. The classes are built from three sources: the contract register's
 UNVERIFIED sides (Part IV), the WARNING-class hazards the chapters carry (off-loopback
 binding, memory-lost-on-restart), and each chapter's own "what breaks if it lies" record.
 
-The register counts 23 contracts: 4 PROVEN (CT-02, CT-03, CT-06, CT-08), 1 PARTIAL
-(CT-04), 1 BROKEN (CT-10), 1 MISSING (CT-09) and 16 UNVERIFIED. Every UNVERIFIED row
+The canonical register contains CT-01 through CT-30 plus CT-06R. The former 23-row
+state census is a historical snapshot, not the current inventory. Current measured
+states are read from Part IV; new target cards do not imply newly proven wires. Every UNVERIFIED row
 carries at least one RED side — a guarantee no `file:line` in the model states — so a
 failure on those wires has no measured early warning. Where no canonical contract covers
 a failure, the subsection says so; an unguarded failure is a risk entry, not a hidden one.
@@ -36,11 +37,11 @@ the page number, is what other sections, settings cards and the disposition log 
 | R-13 | Stale boards and stale claims | 13 | R-31 | Memory synchronization conflicts | 31 |
 | R-14 | Unknown verdicts | 14 | R-32 | Unavailable verifier or model | 32 |
 | R-15 | Publication and memory projections fail | 15 | R-33 | Resource pressure and unsafe cleanup | 33 |
-| R-16 | Replay, uncertain starts and orphans | 16 | R-33 | Resource pressure and unsafe cleanup | 33 |
-| R-17 | Authentication, scope and expiry | 17 | | | |
+| R-16 | Replay, uncertain starts and orphans | 16 | R-34 | Durable recovery accounting and fencing | 34 |
+| R-17 | Authentication, scope and expiry | 17 | R-35 | Backup, restore and recovery boundary | 35 |
 
 NOTE: the former summary section §24 carried no risk identifier (it indexes classes, it
-is not one); this wave renumbers it to §34 to keep sections in reading order. No R-id
+is not one); the summary is now §36. No R-id
 was dropped or reassigned.
 
 **Notice convention.** This document defines its own accepted scheme, used deliberately:
@@ -451,7 +452,8 @@ work on a board whose canonical copy holds dispatchable rows.
 exit 3, never permission to write (M4 §3, CF-259); the read path reports which ref it
 resolved, so a stale-source read is at least visible.
 
-**Owner.** The scheduler owns claim exclusivity; the foreman owns refresh-before-work
+**Owner.** The foreman owns claims through Boardctl's canonical CAS; Scheduler owns
+lane admission only. The foreman owns refresh-before-work
 (Figure 2.1 requirement, TARGET).
 
 **Retry / recovery.** Re-fetch `origin/main`, re-evaluate eligibility, re-derive the
@@ -978,8 +980,8 @@ unsynchronized portion is unrecoverable — say so in the recovery record rather
 reconstructing it from scheduler notes and Git history, which retain only parts of the
 trail.
 
-**Owner / repair.** The foreman owns pending-entry durability; the sync owner (V.7
-example `sync.owner`) owns reconciliation; repair after HTTP recovery is the scheduled
+**Owner / repair.** The foreman owns pending-entry durability; the sync owner (V.9
+Memory.sync_owner, default factory-memory-sync) owns reconciliation; repair after HTTP recovery is the scheduled
 synchronization with conflict handling (R-31).
 
 **Recoverability limit / residual exposure.** An unsynchronized host lost takes its
@@ -1087,7 +1089,12 @@ cited directory disappears.
 
 **What fails.** A round can reserve capacity, launch a worker, lose the acknowledgement, publish a result or replace a Bunker between two durable writes. Without one ledger for round, wave, worker and attempt identities, a retry can double-debit the total-worker allowance, publish twice or let a partitioned owner write after replacement.
 
-**Normative contract.** The durable ledger records `round_id`, `wave_id`, `worker_id`, `attempt_id`, `operation_id`, `generation`, `owner_id`, `fence_token`, `reserved`, `started`, `terminal`, `charged`, `refunded`, `result_digest`, `publication_ref` and timestamps. Reservation is atomic before launch; `started` is written with the native Bunker identity; terminal result and publication are recorded before acknowledgement; each protected side effect checks the current fence token. The total-worker allowance is fixed at round admission and consumed across compatible waves; a retry does not replenish it. Worker-versus-attempt charging and failed-start refund are explicit policy values in the round record.
+**Normative contract.** M9.17 is the authoritative typed ledger and transaction model;
+its worker state reserved/charged/refunded replaces the former independent boolean
+flags. The supervisor preallocates launch_id and native identity as M11.16 specifies.
+Resource writes use VI.35.2's serialized authority/broker effect protocol, not a
+check-then-write fence test. Each attempt, result, projection, outbox and event retains
+its exact identity and digest; the round allowance never resets on recovery.
 
 **Crash-point recovery.** Intent without start is released or retried by idempotency key. Start without acknowledgement is reconciled against native identity before any retry. Publication without record is adopted by digest and recorded once. A replacement acquires a new generation and fences the old owner; lease expiry alone is not sufficient. A late result is evidence only when its generation is stale. Recovery states are `RESERVED`, `START_UNKNOWN`, `RUNNING`, `RECONCILE_REQUIRED`, `PUBLISHED_UNRECORDED`, `FENCED` and `SETTLED`.
 
@@ -1102,6 +1109,105 @@ cited directory disappears.
 Restore occurs in an isolated scope: restore artifacts, verify manifests and key/revocation state, reconcile board/claims/custody/memory identities, fence stale owners, then run readiness and admission checks. A missing unsynchronized entry is reported at the actual recovery boundary and is never reconstructed from partial scheduler or Git history. Recovery objectives state RPO/RTO per store and name unsupported windows.
 
 **Signal and proof.** Metrics expose backup age, validation failures, last successful restore drill and per-store recovery lag. A restore case loses the controller or Bunker mid-round and verifies the round/task/claim/budget/custody/memory view without resurrecting acknowledged work or revoked credentials. Until this drill is run on the selected deployment, the recovery state remains `UNVERIFIED`.
+
+### 35.1 Coordinated capture and typed manifest (P5-C-26)
+
+Backup is a manager operation with ID and state REQUESTED → FROZEN → CAPTURED →
+VALIDATED → PUBLISHED, or ABORTED. It closes new admissions, asks supervisors to
+quiesce all rounds, and opens an authority barrier B at authority_seq. Every registered
+writer acknowledges `{backup_id, barrier_seq, store_id, last_transaction, root_digest}`
+after draining writes and fsync. Only the protected service owner can acknowledge.
+The barrier prevents new broker effects, claims, custody transitions and canonical
+memory merges; disconnected Bunkers cannot publish. The barrier lease is 300 s,
+renewed every 60 s. Capture timeout or missing required acknowledgement aborts the
+complete backup. Lease expiry unfreezes participants but permanently marks that backup
+ABORTED; it cannot later be published as a consistent cut. Controller restart queries
+barrier state before continuing. Successful capture releases the barrier after immutable
+snapshots and manifest are durable, before remote upload. [F15; Part I §1.9.3]
+
+| Required store | Frozen capture / validation |
+|---|---|
+| manager config, operations, bindings, effect receipts | copy committed JSONL segments plus durable commit markers; replay through recorded seq, validate row digests and active generation |
+| canonical code, board, events and memory Git refs | `git bundle create` of all declared managed refs while fenced; `git bundle verify`; restore into empty bare repository and compare every ref OID; object closure required |
+| scheduler SQLite and local Crier SQLite | writer checkpoint `PRAGMA wal_checkpoint(FULL)` then SQLite backup API into new files; `PRAGMA integrity_check` = ok and foreign_key_check empty; transaction watermark equals acknowledgement; copying only live main DB file is forbidden |
+| PostgreSQL Crier | custody writers paused; `pg_dump --format=custom` under one repeatable-read snapshot; isolated `pg_restore`, constraint checks and custody/lease/outbox counts and digests equal acknowledgement |
+| evidence/artifacts and supervisor result spools | immutable digest-addressed objects plus manifests and active hold records; hash every referenced object; missing object fails validation |
+| each Bunker pending memory/local journals | supervisor freezes local writer and bundles all pending branches and launch/result ledger at acknowledgement; absent Bunker is an explicit exclusion, not an empty store |
+| independent authority | signed checkpoint reference only; backup NEVER replaces its live epoch/revocation store (35.2) |
+
+`cf.backup.v1` has required backup_id (ID), schema_version, barrier_seq (integer),
+authority_id, authority_checkpoint_digest (SHA-256), config_generation (integer),
+captured_at (UTC), destination_ref, key_ref, stores (nonempty list), exclusions (list,
+may be empty), retention_until (UTC), rpo_s/rto_s (positive integers), state and
+manifest_digest. Each store is `{store_id,kind,source_revision,last_transaction,
+artifact_path,sha256,bytes,root_digest,validated}`; paths are relative without traversal,
+kind is jsonl/git/sqlite/postgres/objects/local-journal, revision is string, counts
+are nonnegative integers. Exclusion is `{store_id,reason,last_synced_at,loss_start,
+loss_end}` with UTC/null timestamps: null means unknown, never zero loss. Manifest
+digest hashes canonical JSON without its own digest/signature; offline operator-enrolled
+backup signer signs it. Archive uses authenticated encryption to backup public-key
+recipient; recovery private key remains with the offline custodian, not in the archive.
+The secret-free archive includes credential references/metadata only. Publication uses
+a unique backup-ID object, conditional create, then remote hash readback and validation
+receipt. Partial uploads are not listed as validated backups. Defaults: hourly capture,
+30-day retention, RPO 3600 s, RTO 7200 s; destination/key are required owner choices in
+V.9, not invented infrastructure. Retention removes only validated expired generations
+with no hold; at least the latest validated generation survives.
+
+DECISION SLOT C-BACKUP selects offline policy refuse (default) or partial. Partial
+captures reachable stores and names every missing Bunker/loss window; it is not a
+complete recovery cut and cannot certify that project's readiness. Restore decrypts
+in an isolated network, validates signature/hashes/schema/object closure and store
+watermarks, restores each store with its native reader, reconciles IDs, then executes
+35.2 before enabling credentials, writes or dispatch. A timed restore drill reports
+per-store actual loss/recovery time; declared objectives are not measured results.
+
+### 35.2 Non-rollback authority and resource enforcement (P5-C-17/27)
+
+The independent operator-owned authority in Part I §1.9.3 lives outside the manager
+backup/failure domain. Its durable monotonic sequence covers authority_id, project
+epoch/owner, credential revocations and enrolled principal serials. A restore never
+imports older authority records. It obtains an authenticated live checkpoint and
+requires its sequence >= the backup checkpoint under the SAME authority_id; each
+project receives a newly advanced epoch before any restored writer is enabled.
+All restored token/capability material is disabled, reissued against that epoch, and
+old provider credentials are revoked or observed expired. Authority outages refuse
+restore activation. A missing/replaced authority cannot be treated as sequence zero.
+
+DECISION SLOT C-LOST-AUTHORITY permits only default REFUSE, or operator-authorized
+revoke-all/new-authority recovery: fence network access, revoke all forge App/project
+credentials and proxy/admin tokens at their issuers, prove old credential denial and
+quiescence of old broker executions, create a new random authority_id and keys,
+re-enroll every resource and issue new credentials. Old authority IDs are permanently
+denied by resources. A provider that cannot confirm revocation/expiry keeps recovery
+blocked. No backup-local watermark can prove later revocations; that shortcut is
+explicitly forbidden. [M7.16; M12.16; F12/F15]
+
+Resource mutations use one effect protocol, not caller-side check-then-write. The
+broker submits `(effect_id, resource_ref, input_digest, owner_fence)` to the authority;
+begin validates owner/lease and inserts an in-flight intent atomically with epoch
+serialization. Only a begin receipt permits downstream mutation. Advance/revoke waits
+for ALL earlier in-flight effects to finish/read back or for credential denial AND
+old executor quiescence; an unknown effect blocks replacement indefinitely and emits
+EFFECT_UNRESOLVED. Therefore a write accepted before replacement may finish before
+replacement is declared, but cannot race after its completion. New effects from a
+partitioned former owner fail STALE_OWNER or AUTHORITY_UNAVAILABLE without mutation.
+
+| Resource | Actual effect and atomic resource boundary |
+|---|---|
+| Git branch/main publication | only broker holds write token; receives object bundle, expected remote OID, target OID and evidence; performs provider compare-and-swap ref update or Git push with explicit expected OID, reads remote OID, finishes effect. Protected refs deny all non-broker identities. A provider lacking enforceable sole-writer/ref-CAS support is unsupported |
+| Board | broker constructs row/event/claim blobs in one candidate Git tree and publishes its canonical ref with expected old OID under M4 transaction. Concurrent CAS loser returns CONFLICT; stale Fence returns FENCED. Staging failure retains operation receipt and marks board UNAVAILABLE until repair |
+| Memory | sync owner submits canonical namespace tree and expected OID through broker; canonical ref is CAS-published only under current Fence. Bunker local commits are drafts, not authorized remote writes; old drafts are quarantined and may be adopted only by a current-owner reviewed resolution |
+| Crier binding/custody write | Crier service begins effect as an enrolled broker delegate, then commits binding generation, consumed grant, custody record and effect ID in one native store transaction. Same effect ID/digest replays; mismatch refuses. It finishes after durable readback; an unavailable authority denies mutation, not a cached allow |
+
+The effect receipt itself is not an offline reusable capability: only its enrolled
+broker executor can finish it, and its completed effect ID is deduplicated forever
+within the retained resource history. Authority recovery never drops an unresolved
+intent. API ACLs, read-only Bunker credentials and protected resource refs prevent
+bypass; direct human writes are UNMANAGED_WRITER and invalidate readiness. Tests must
+partition an old owner, advance only after effect resolution, then attempt all four
+writes with old credentials/Fence; every canonical OID/row digest remains unchanged.
+These are required target tests, not executed conformance claims.
 
 ## 36. Risk summary — prioritized, with the review's mapping
 
@@ -1152,7 +1258,7 @@ tables to hold the page.
 | 14 | Streaming | none measured | proxy maintainer | client retry | actual-path conformance evidence |
 | 15 | Evidence loss | `PROTECTED` set, dry-run | safety owner | reaper rule fix (CF-368) | cited evidence survives a reap |
 | 16 | Lying record | spine comparison, same-commit amend | documentation owner | re-pin locators | register matches disk |
-| 17 | Memory consistency | treat local reads as cache | unresolved | unspecified | cross-host readback |
+| 17 | Memory consistency | local Git is durable; remote acknowledgement is separate | foreman + sync owner | VII.18.1 deterministic union/conflict resolution | matching index digest across hosts |
 | 18 | Restore | durable backend requirement | Crier store owner | restore procedure + drill | restore-drill record |
 | 19 | Drift | refuse-on-mismatch install | pin owners | re-apply the pin | dated `--check` exit 0 |
 | 20 | Unproven wires | five-state vocabulary, same-commit amend | contract owners | cite both ends | register row leaves UNVERIFIED |
@@ -1167,6 +1273,6 @@ The manager and state-store classes added this wave, on the same columns:
 | 24 | Failed rebind (R-28) | binding-consistency check before admission | management service | re-run registration + scheduler update | both views agree at readback |
 | 25 | Budget exhaustion/reset (R-29) | durable reservation ledger, monotonic spend | foreman + scheduler | fence and re-account from ledger | resumed round reports consumed remainder |
 | 26 | Memory loss vs outage (R-30) | distinct ack states; local record durable | foreman + sync owner | sync on recovery; name lost portion | pending-sync converges; loss record honest |
-| 27 | Memory sync conflicts (R-31) | cache rule until topology lands | unresolved (R-20) | unspecified — gap recorded | both diverged entries survive once |
+| 27 | Memory sync conflicts (R-31) | preserve all conflicting digests, no last-writer-wins | foreman + sync owner | VII.18.1 explicit resolution record | both diverged entries survive once |
 | 28 | Unavailable verifier/model (R-32) | outcomes `unknown`, closure defers | scheduler + gitreins + proxy | verifier recovery, re-grade | re-grade replaces the gap |
 | 29 | Pressure/unsafe cleanup (R-33) | protection before selection | safety owner (M8) | prevention (recovery is R-10) | cited evidence survives pressure |

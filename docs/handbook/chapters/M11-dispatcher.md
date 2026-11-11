@@ -255,11 +255,102 @@ lines — `:81` a comment mentioning `log()` and `:112` the `def log(` definitio
 
 The central dispatcher is a retained migration adapter, not the MVP execution authority. When selected, it receives only the dispatcher envelope version, runs through the control-host-to-Bunker adapter and returns the same versioned result contract as M2. Selection is explicit in `execution_mode`; a task cannot be consumed by both dispatcher and foreman/Crier paths.
 
-Before launch, the dispatcher durably writes `schema: cf.dispatch-intent.v1` with `dispatch_id`, `project_id`, `task_id`, `round_id`, `wave_id`, `attempt_id`, `generation`, native Bunker job identity placeholder, input digest, lease, deadline, credential scope and idempotency key. Native job identity is bound immediately after launch. If launch acknowledgement is lost, restart reconciles the Bunker job by that identity before deciding whether to continue or cancel; it never reruns only because a result is missing. Results are journaled before ack and ledger failures are visible refusal/failure facts, not swallowed warnings.
+Before launch, the dispatcher commits `cf.dispatch-intent.v1` containing `dispatch_id`, `launch_id`, `project_id`, `task_id`, `round_id`, `wave_id`, `attempt_id`, `generation`, `owner_fence`, input digest, lease, deadline, credential scope and idempotency key. The launching foreman, never the launched worker, assigns both dispatch and launch IDs. Native identity is deterministically addressable by launch ID before a process exists; §16 defines that boundary. A placeholder or a PID learned only after launch is insufficient. Results are journaled before ack and persistence failure stops acknowledgement.
 
 The total deadline is partitioned into launch, polling, transfer and cleanup reserves. If the remaining budget cannot satisfy the declared minimum, dispatch is refused rather than raised to a floor. Per-agent, per-node and global concurrency are bounded with fair polling and backpressure. Cancellation and deadline handling prove zero descendants in the selected Bunker backend; if quiescence is not proven, the result is `QUARANTINED` with surviving-process evidence and no new attempt.
 
 Scoped forge credentials are required when the job operation needs them. The dispatcher refuses before launch when issuer, repository scope, permission scope or expiry margin is missing. Tokens never appear in argv or logs and are removed at completion or decommission. Completion delivery is outbox-before-ack; duplicate delivery returns the recorded result, and late replies cannot replace a settled generation. Required metrics cover intent/launch uncertainty, reconciliation, lease renewal, deadline reserves, concurrency/backpressure, quiescence, credential refusals and result delivery. Acceptance cases cover crash before launch, crash after launch, ledger failure, tiny remaining wall, simultaneous agents, nested cancellation and restart.
+
+## 16. Resident execution interface (P5-C-13; CT-02/05/06R/23)
+
+This is a target adapter contract, not a claim that the historical dispatcher or
+Bunker CLI already implements it. The resident supervisor runs inside the project
+Bunker, outside the workload's writable filesystem and credential domain. Crier's
+pull consumer submits the round to this supervisor; the supervisor invokes the
+pinned foreman harness, and that foreman submits worker attempts to the same
+supervisor. Only the registered consumer may start a round; only its fenced foreman
+may start a worker. `execution_mode=resident` excludes central-dispatcher consumption.
+
+The authenticated local interface is a Unix socket at
+`$HOME/.local/state/factory/supervisor/control.sock` (0600, supervisor owner).
+Peer credentials plus a manager-issued project capability authenticate requests;
+the workload cannot mount the socket or issue capabilities. JSON uses RFC 8785
+canonical bytes, a 1 MiB ceiling and `schema_version: supervisor.v1`. Every mutation
+carries request_id, idempotency_key, owner_fence and project_id. IDs and Error follow
+Part I §1.9. The following bodies are closed; missing/extra fields return 422.
+
+| Operation | Additional required request fields | Result |
+|---|---|---|
+| `PUT /v1/launches/{launch_id}` | kind `foreman` or `worker`, round_id, input_ref, input_digest, runtime_digest, absolute deadline, limits `{memory_bytes,pids,cpu_millis}`, workspace_ref; worker additionally wave_id, worker_id, task_id, attempt_id, dispatch_id | 201 Launch; same ID/digest 200 same Launch; changed input 409 LAUNCH_CONFLICT |
+| `GET /v1/launches/{launch_id}` | no body | 200 Launch or 404 NEVER_ACCEPTED only after authoritative journal replay; unavailable journal gives 503 START_UNKNOWN |
+| `GET /v1/launches/{launch_id}/output?stream=stdout&offset=0&limit=65536` | stream stdout/stderr; byte offset >=0, limit 1..65536 | `{bytes_b64,next_offset,eof,digest}`; offset beyond end 416; reads never restart execution |
+| `POST /v1/launches/{launch_id}/cancel` | reason `owner_request`, `deadline`, `lease_lost` or `revoked` | 202 Launch; terminal retry returns original terminal result |
+| `GET /v1/launches/{launch_id}/result` | no body | 200 result and digest only after durable result; 202 RUNNING; 503 RESULT_UNAVAILABLE |
+
+Launch is `{launch_id, input_digest, state, state_version, native_id, accepted_at,
+started_at, finished_at, heartbeat_at, result_digest, error}`. Native_id is the
+immutable supervisor ID plus deterministic cgroup name `factory-<launch_id>`;
+timestamps other than accepted_at and result_digest/error may be null before the
+corresponding event. State is `accepted`, `starting`, `running`, `cancelling`,
+`terminal`, `never_started` or `quarantined`. The supervisor durably creates the
+unique launch row and exclusive job directory before issuing any native start.
+Its separately authorized unprivileged runner atomically consumes the one-use start permit under that
+launch lock, registers the cgroup, then execs the runtime argv from the pinned
+manifest, with input on a read-only file descriptor, not shell interpolation.
+The runner never automatically restarts an exec. A crash after permit consumption
+but before exec is `quarantined` unless native inspection proves never_started;
+missing PID alone is not that proof. Duplicate PUT does lookup, never another exec.
+An adapter lacking atomic permit consumption/deterministic native lookup is
+`EXECUTION_BACKEND_UNSUPPORTED`, not a best-effort fallback.
+
+The pinned harness adapter receives input JSON on fd 3 and writes one structured
+result on fd 4; stdout/stderr are diagnostic streams, not verdicts. Exit 0 without
+schema-valid result is `INVALID_RESULT`; exit nonzero is fail with exit_code and
+stderr digest. The supervisor independently records exit status, signal, output
+SHA-256, native incarnation and descendant count. Output is fsynced in 64 KiB chunks;
+a 16 MiB per-stream cap terminates the launch with OUTPUT_LIMIT rather than silently
+truncating evidence. Result plus delivery outbox commit atomically before Crier ack.
+A foreman result is round-report.v1; worker results follow VII.13. Pending outboxes
+replay the same bytes until a matching custody/result digest is acknowledged.
+
+Heartbeat every 10 s reports native liveness and output offsets; 30 s without a
+heartbeat marks suspect, not dead. The supervisor polls all active launches every
+5 s in launch_id order without waiting for any launch to finish. Cancellation
+persists `cancelling`, denies new tool/inference admissions, sends TERM to the whole
+cgroup, waits 10 s, sends KILL, and requires empty cgroup readback within a further
+5 s. Surviving descendants or unavailable readback produce QUARANTINED and block
+replacement. Deadline/lease-loss use this same path; neither grants a new deadline.
+Restart enumerates accepted/starting/running/cancelling rows and reconciles native
+state before any launch. The authoritative tombstone for a never-started or terminal
+launch remains through retention; an expired ID returns 410, never a new start.
+
+The resident service uses restart-on-failure for the supervisor only, a read-only
+runtime prefix, private job/state mounts, and cgroup v2 delegation. Its manifest
+pins argv, environment names, runtime digest and migration version; no guessed
+Hermes command is substituted. Package qualification remains blocked under §17.
+Required acceptance injects loss before/after permit, exec, result fsync and ack;
+repeats the same PUT; disconnects control; and cancels nested children. Counters
+launch/lookup/cancel/result and gauges active/quarantined follow Part V §V.10.
+
+## 17. Artifact qualification decision (P5-C-31)
+
+No reproducible dispatcher/scoped-issuer/proxy release is supplied by this review.
+Historical hashes above identify inspected bytes, not redistributable packages.
+DECISION SLOT C-ARTIFACT: owner selects a maintained release or commissions a
+repository-owned replacement; default is BLOCKED, never an arbitrary 1.x download.
+A release supplies `{component, source_url, source_commit, artifact_url, sha256,
+platform, runtime_version, config_version, store_version, unit_sha256,
+conformance_receipts}`. All fields are required; URLs are HTTPS, hashes are full,
+and source_commit is an immutable native Git object. Missing fields refuse install
+with ARTIFACT_UNQUALIFIED. The install layout is
+`$HOME/.local/lib/factory/<component>/<sha256>/` with an atomically switched `current`
+symlink; state is outside that prefix. Upgrade disables new admission, drains or
+quarantines all launches, captures VI.35 backup, verifies bytes before execution,
+migrates a state copy, starts the pinned unit and proves readback before re-enabling.
+Rollback is allowed only when the old binary declares the new store/config versions
+readable; otherwise the offline backup is restored under the revocation barrier.
+Tokens and in-flight work are never recreated from defaults. This procedure is
+specified; exact release pins and runtime proof remain DEFERRED in IX.
 
 ## RED field count: 2 (Metrics §8, live-job test row §7 — decoration, cannot fail)
 

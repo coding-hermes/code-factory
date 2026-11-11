@@ -8,7 +8,7 @@ them — a build that fails a gate is not delivered.
 ## VIII.1 The book as data
 
 `docs/handbook/BOOK.yaml` is the single manifest: the document identity (`CF2A-01`, title,
-subtitle, issue date, scope, classification), the eight parts with their files, and the
+subtitle, issue date, scope, classification), the nine parts with their files, and the
 figure registry that maps every figure code to its SVG (BOOK.yaml). Its four rules are
 load-bearing (BOOK.yaml, `rules:`):
 
@@ -20,7 +20,7 @@ load-bearing (BOOK.yaml, `rules:`):
 4. A part with no files renders as one page naming what is missing — never silently
    skipped.
 
-The addresses come from the manifest, not from the file tree: parts `I–VIII`, figure codes
+The addresses come from the manifest, not from the file tree: parts `I–IX`, figure codes
 `x.y`, table codes `TABLE x.y-n` assigned mechanically at build time, and the `M0–M12`
 module ids survive only as a crosswalk into the addresses (STYLE-CORRECTIONS.md, "The fix
 that makes the rest hold"). The contents sheet is generated from the manifest for the same
@@ -51,7 +51,8 @@ every page, the fit reading, table-code count, continuation unit counts, notice-
 checker status and the font list (`build_book.py:833-838`). The figure generator runs its
 own three gates upstream of any build — every SVG parses, the smallest label clears the
 2.05 mm floor at print scale, and the ink is black and white only — with state carried by
-line style: solid PROVEN, long-dash PARTIAL, fine-dash BROKEN, dotted MISSING/UNVERIFIED
+line style: solid PROVEN, long-dash PARTIAL, fine-dash BROKEN, dotted MISSING,
+dash-dot UNVERIFIED
 (`gen_handbook_figures.py` header and `:780-885`).
 
 ## VIII.3 The audit rubric
@@ -150,8 +151,9 @@ and no state is claimed without its identity.
   build's OK line. A draft is not cited as evidence of correctness anywhere in the book.
 - **Release.** The artifact published with its required checks satisfied. Identified by
   document id and revision, the exact source commit sha, the PDF's hash, the retained
-  gate reports, and the disposition-log state — every finding dispositioned, or the open
-  ones named. A release with failed or unapproved output staged beside it identifies that
+  gate reports, and the disposition-log state — every finding dispositioned. Named
+  unresolved findings still block an accepted release; deferred findings require an
+  explicit scope waiver as VIII.15 specifies. A release with failed or unapproved output staged beside it identifies that
   output explicitly; it is never silently bundled (M6 review, deliverable integrity).
 - **Approval.** The owner's recorded decision, bound to the exact release identity — id,
   revision, commit sha and artifact hash. An approval of "the handbook" without that
@@ -257,6 +259,7 @@ was claimed about it (V2-DLV-01, V2-DLV-02):
 
 ```json
 {
+  "schema_version": "handbook-release.v1",
   "doc_id": "CF2A-01",
   "revision": "vd",
   "source_commit": "<full sha of the tree the build ran against>",
@@ -267,7 +270,9 @@ was claimed about it (V2-DLV-01, V2-DLV-02):
     {"stage": "build",         "tool": "build_book.py",    "result": "pass", "ok_line": "<the verbatim OK line>"},
     {"stage": "visual_qa",     "tool": "layout-semantics battery", "result": "<pass|fail|pending>", "findings": []},
     {"stage": "completeness",  "result": "pending", "open": ["V2-* dispositions not yet adopted"]},
-    {"stage": "owner_acceptance", "result": "open", "note": "human decision; never implied by any check"}
+    {"stage": "cross_section_consistency", "result": "pending", "findings": []},
+    {"stage": "operational_conformance", "result": "pending", "findings": []},
+    {"stage": "owner_acceptance", "result": "pending", "note": "human decision; never implied by any check"}
   ],
   "dispositions": {"log": "change/redline disposition log", "open_count": 0,
                    "open_ids": []}
@@ -383,6 +388,49 @@ install the Factory, and an installed Factory does not deliver a project. Every 
 user redline is mapped bidirectionally to its revised page/interface/figure and its
 disposition-log row (VIII.5); source/version and user-feedback changes are tracked
 through all affected artifacts in both directions.
+
+## VIII.15 Machine release decision (P5-C-34/35)
+
+VIII.10 is an illustrative manifest, not a recorded pass. The target release evaluator
+accepts handbook-release.v1 JSON on stdin and emits `{decision,reasons,manifest_digest}`
+on stdout; decision is draft/accepted/refused. Exit is 0 for accepted, 3 for a valid
+review-pending draft and 2 for refused/invalid. This interface is a build-system
+requirement; no existing command is asserted to implement it. Until implemented,
+release is manual and must retain the same evaluated predicate and receipts.
+
+Required manifest fields are schema_version, doc_id, revision, source_commit (full
+Git OID), source_tree (full OID), document_sha256 (64 lowercase hex), artifacts,
+checks, dispositions and build_errors (nonnegative integer). artifacts is a nonempty
+list of `{path,sha256,bytes,pages}`, path relative, bytes/pages positive integers.
+checks has exactly one of each of the seven VIII.9 stages: lint, build, visual_qa,
+completeness, cross_section_consistency, operational_conformance, owner_acceptance.
+Every check is `{stage,result,evidence_refs,reviewer,source_tree,document_sha256,
+recorded_at,findings}` with result pass/fail/pending/waived, reviewer principal ID,
+UTC time and digest-bound evidence refs; absent evidence permits pending only.
+Mechanical checks additionally require exit:0 and build requires the verbatim OK line.
+A review receipt is a signed JSON object with those same fields and reviewer role;
+recording is an append keyed by (artifact digest,stage,reviewer,receipt digest), not
+an editable checkbox. An owner decision uses a human principal and exact artifact.
+
+Dispositions contains rows `{id,severity,state,resolving_commit,replacement_refs,
+reason,owner,waiver_ref}`. State is ADOPTED/DEFERRED/UNRESOLVED/REJECTED; nullable
+resolving_commit is allowed only when not adopted, nullable waiver_ref means no waiver.
+Unknown/duplicate stages or finding IDs, missing digest/revision binding, unrepresented
+findings or mismatching evidence are refusal. A literal BUILD ERROR sheet or a missing
+manifest asset forces build_errors >0 and build.result=fail even if renderer exit=0;
+the release evaluator checks both source manifest inventory and rendered page text.
+
+Draft requires lint/build pass, build_errors=0, every finding represented and no
+mechanical failure. Pending semantic reviews, unresolved findings and unapproved
+deferrals are prominently listed; a draft makes no accepted-spec claim. Accepted
+requires all seven stages pass, zero unresolved/undispositioned findings, and each
+adoption tied to immutable source/evidence. A DEFERRED item is allowed only with an
+owner-signed waiver excluding it from this release's claimed scope and a named next
+review; critical security/correctness deferrals block any scope that exercises them.
+Waivers never convert failed tests or pending review into pass. REJECTED findings
+require recorded reviewer rationale and owner agreement. Runtime conformance and
+owner acceptance cannot be inferred from lint, source additions or the build line.
+A package without executable artifact pins (M11.17) remains a specification draft.
 
 ## VIII.14 Pass-3 consistency readback
 

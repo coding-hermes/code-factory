@@ -118,7 +118,7 @@ is implementation coverage, not the safety requirement.
 
 ## 6. Contracts in and out
 
-M8 has **no entry in the canonical register** (CT-01..CT-18, OUTLINE Part IV): the filesystem reap
+M8 has no separate cleanup entry in Part IV (CT-01 through CT-30 plus CT-06R): the filesystem reap
 boundary is a local host operation (`reclaim_disk.py` → the directory tree it enumerates), not a
 cross-system contract with a peer chapter describing the same interface from the opposite end. It
 is listed below as a local edge.
@@ -232,6 +232,67 @@ Terminal Jail is optional and disabled by default. When enabled, Hermes covered 
 Cleanup uses `schema: cf.cleanup.v1` with `operation_id`, `bunker_id`, `root`, `policy_generation`, candidate class, owner/lease snapshot, evidence-reference snapshot, pending-memory snapshot and dry-run flag. Selection checks ownership, active lease, fence, evidence references, protected paths and synchronization custody before age. `cache`, `job`, package/image/volume and evidence classes are distinct; no class is added by convention. Dry-run reports projected logical bytes; apply reports logical bytes removed and a separate post-run physical free-space measurement. Disappearing, unreadable, open, cancelled and partially deleted targets carry reason codes; pressure that remains after safe cleanup stops admission and escalates.
 
 The reaper is idempotent by operation id and rechecks protection immediately before each deletion. A concurrent lease or new evidence reference changes the candidate to `PROTECTED` and leaves it intact. Required metrics cover pre/post bytes and inodes, projected versus actual logical bytes, physical gain, outcomes, refusals, partial errors and admission failures. Acceptance cases cover Terminal Jail disabled, missing enforcement when enabled, a live lease, retained evidence, a pending memory record, a symlink/outside-root target and low disk during partial cleanup.
+
+## 16. Serialized retention and qualified isolation (P5-C-18/33)
+
+The retention owner uses the manager's retention rows (Part I §1.9.2) as the sole
+admission authority for leases, evidence references and cleanup. Each target has
+`resource_id`, canonical root-relative path, device/inode identity, version,
+state `live`, `deleting`, `deleted` or `quarantined`, and a set of typed holds
+`lease`, `evidence`, `pending_sync`, `backup`. Hold creation and transition
+`live → deleting` use the same serializable transaction/CAS. Cleanup commits that
+transition only with zero holds, matching inode, expired TTL and safe containment.
+A concurrent holder either commits first (cleanup returns PROTECTED) or loses to
+the tombstone (holder returns RESOURCE_DELETING and cannot launch/use/cite the target).
+Thus the safety guarantee is serialization, not a recheck followed by an unsafe unlink.
+
+Deletion is supervisor-owned: workloads cannot rename protected roots or edit
+retention state. After the tombstone is durable, the reaper atomically renames the
+object under a private same-filesystem trash directory, fsyncs both directories,
+then unlinks with descriptor-relative no-follow traversal. Device changes or inode
+mismatch quarantine without deletion. The operation records an immutable sorted
+child inventory, per-child cursor, logical bytes removed, errors and result digest;
+each cursor advance is durable. Crash between unlink and cursor commit observes
+ENOENT as already removed under the same tombstone, not a new eligible object.
+Cancellation before tombstone is no effect; afterward leaves `deleting` with cursor
+for the same operation to resume. New holds cannot resurrect trash. Dry-run writes
+no tombstone and labels all byte counts projected. Physical free-byte/inode deltas
+are separately measured. An unavailable hold ledger refuses cleanup. [VI.33; F6]
+
+The minimum qualified Linux profile uses a distinct unprivileged UID per Bunker,
+user/mount/PID/network namespaces, cgroup v2 memory/pids/CPU limits, no host socket,
+no device pass-through, no added capabilities, no-new-privileges and read-only runtime
+and policy mounts. Workspace and pending-memory/evidence are separate durable mounts;
+shared caches are read-only. Defaults are 8 GiB memory, 256 processes, 2000 CPU millis
+and 40 GiB aggregate disk quota, with 4 GiB free-space admission floor. A host lacking
+aggregate quota or delegated cgroup enforcement refuses PROFILE_UNSUPPORTED; a
+per-file limit does not qualify. Network permits only configured Crier, proxy,
+repository-read and broker endpoints over TLS; arbitrary egress and host networking
+are denied. These are target defaults, not claims about the historical Bunker binary.
+
+Terminal Jail configuration is `{mode: disabled or required, policy_ref, policy_digest,
+executor_digest, covered_paths}`. Disabled omits the other fields; required needs all
+of them and covered_paths exactly `[terminal, subprocess, tool_exec, hook_exec]`.
+The supervisor, not the model, constructs argv as `[pinned_executor, --policy-file,
+read_only_policy_path, --, pinned_command, ...]`; the adapter proves that those exact
+flags are supported before qualification. Shell, Python subprocesses, MCP/tool
+subprocess launches and hooks have no alternate workload-visible launcher. Policy
+is administrator-owned and read-only to both harness and child processes; enabling
+without that separation returns ENFORCEMENT_UNAVAILABLE. Policy contains allowed
+executable digests, read/write roots, endpoint allowlist and numeric resource limits;
+unknown fields, writable policy, missing digest/capability or bypass entrypoint deny
+readiness. Readback reports UID, effective capabilities, mount modes, cgroup limits,
+network-denial probe and guarded/unguarded execution probes with policy digest.
+DECISION SLOT C-SAFETY selects another profile only with equivalent measured probes;
+default is this fail-closed profile with Terminal Jail disabled, not open host exec.
+The policy is a closed object `{schema_version:jail-policy.v1, executable_digests,
+read_roots,write_roots,endpoints,memory_bytes,pids,cpu_millis}`. Digest sets contain
+1..1024 SHA-256 values; roots are normalized absolute paths, endpoint entries resolve
+to V.9 deployment endpoints, collection bounds are 0..1024. memory_bytes is positive
+integer <= host capacity, pids is 16..1048576, cpu_millis is 100..1024000. policy_ref
+resolves to an administrator-signed immutable artifact; executor_digest and
+policy_digest are SHA-256. Unknown keys and overlapping forbidden host roots refuse.
+[Part V profiles; CT-17/23; VII.16]
 
 ## RED field count: 1 (Metrics §8)
 

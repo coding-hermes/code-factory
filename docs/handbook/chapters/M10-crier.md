@@ -329,11 +329,70 @@ named RED on this field).
 
 The MVP uses Crier as the launch and return boundary: Scheduler on the control host delivers a versioned launch envelope to the project foreman's Bunker inbox; retrieval grants the lease; the foreman returns a correlated result through Crier; Scheduler records the response. Webhook, session and harness adapters are partitioned compatibility modes and cannot execute the same attempt as the selected inbox mode.
 
-The wire contracts are `cf.register.v1`, `cf.deliver.v1`, `cf.retrieve.v1`, `cf.ack.v1` and `cf.return.v1`. Every message carries `message_id`, `dispatch_id`, `correlation_id`, `project_id`, `round_id`, `wave_id`, `attempt_id`, `generation`, `schema`, `payload_digest`, `sender`, `recipient`, `expires_at` and an idempotency key. Unknown schema, wrong scope, invalid signature, oversized body or expired generation is a refusal. Delivery writes durable custody but starts no lease; retrieve atomically claims and starts the lease; ack is allowed only for the matching lease owner and result digest.
+The canonical application wire is `cf2a.v1`, with `register.v1`, `round-admission.v1`, worker and report bodies from Part IV/VII.13. The earlier `cf.register.v1`/`cf.return.v1` aliases are retired, not negotiated silently. Registration excludes round/wave/attempt IDs; admission excludes wave/attempt/worker IDs. Custody IDs belong to the Crier response, not to the initial application envelope. §16 defines signed custody operations, including explicit renew and release. Unknown schema, wrong scope, invalid signature, oversized body or expired generation is refused.
 
 The selected production backend is SQLite or PostgreSQL; `memory` is a demo/negative-control backend and cannot satisfy restart durability. Boot readback names the resolved backend. Lease, HTTP, job, heartbeat, retry and retention clocks are independent. A duplicate delivery returns the recorded receipt; a duplicate retrieve returns the existing lease/result; a late return is retained as evidence but cannot alter a replaced attempt. Filter-after-claim reports temporarily leased nonmatching messages rather than calling the queue empty. Stats failure returns `UNAVAILABLE`, never zero-as-empty.
 
 The guard result is separate from execution safety and acceptance. `errored=true`, fail-open policy, oversize deterministic decisions and signature-disabled modes remain visible in the result and metrics. The selected policy's fail-closed behavior is explicit. Required metrics cover delivery acceptance, guard decisions/errors, queue and lease state, retries, duplicates, dead letters, backend availability and end-to-end latency. Acceptance cases cover registration, signed read, duplicate delivery, restart under the durable backend, lease expiry, wrong generation, malformed payload, guard outage and late return.
+
+## 16. Authentication and durable custody operations (P5-C-07/12)
+
+Factory peers are protected service identities. TLS 1.3/mTLS enrollment and online
+revocation use Part I §1.9.3; an operator-signed one-use enrollment nonce binds the
+Ed25519 public key, principal, project and registration generation. Registration
+uses that bootstrap credential, not an invented future round ID. Rotation enrolls
+a new key generation, atomically activates it and revokes the old generation;
+requests from the old generation fail even inside the timestamp window.
+
+The selected Factory signature profile is `factory-ed25519-v1`. It uses the measured
+body-bound, audience-bound variant, extended to every Factory custody mutation;
+it is not the legacy three-line GET or audience-free POST profile (appendix unit 25,
+§3 rows 7/12). Headers are X-Agent-ID, X-Agent-Ts (decimal Unix seconds),
+X-Agent-Key-Id, X-Agent-Body-SHA256, X-Crier-Audience and X-Agent-Sig (lowercase hex Ed25519 signature). The exact UTF-8 transcript is five lines, no final newline:
+uppercase method, exact origin-form path including canonically sorted query,
+timestamp, `sha256:` followed by lowercase SHA-256 of exact transmitted body bytes,
+`audience:` followed
+by configured service principal. Empty body hashes zero bytes. JSON bodies are
+RFC8785 UTF-8, duplicate keys refused. Signed key ID resolves only to the enrolled
+principal/generation; audience must be the route's recipient. Replay window is ±30 s;
+the durable idempotency key, not timestamp freshness alone, prevents repeated effects.
+Unknown profile/key, mismatched digest/sender/audience, stale generation or clock
+window returns 401/403 before custody mutation. payload_digest is SHA-256 of the
+canonical entire application envelope, excluding the custody wrapper; the HTTP body
+hash separately covers the complete transmitted wrapper. [CT-02/03/06R/22]
+
+All target paths below are under `/v1/factory`; they are adapter requirements, not
+assertions that historical unversioned Crier paths implement them. Mutation bodies
+include schema_version `custody.v1`, request_id, idempotency_key, owner_fence and
+registration_generation. Error shape is Part I Error. Maximum body is 1 MiB.
+
+| Method/path | Additional request fields | Success |
+|---|---|---|
+| POST `/deliver` | recipient, sender, envelope, payload_digest, expires_at | 201 `{delivery_id,payload_digest,state: queued}` |
+| POST `/retrieve` | agent_id, poll_id, limit 1..100 default 10, lease_s 30..300 default 60 | 200 `{poll_id,lease_id,messages,lease_expires_at}`; empty messages permits null lease fields |
+| POST `/renew` | delivery_id, lease_id, lease_s | 200 `{lease_id,lease_expires_at}` |
+| POST `/release` | delivery_id, lease_id, reason | 200 `{state: queued}` only after never-started/quiescence receipt; otherwise 409 EXECUTION_UNKNOWN |
+| POST `/ack` | delivery_id, lease_id, result_digest, result_custody_receipt | 200 `{state: acked,result_digest}` only when receipt proves durable result with matching input correlation |
+| GET `/deliveries/{id}` | no body | durable state, payload_digest, lease metadata and receipt, scoped to sender/recipient |
+
+Delivery dedupe key is (sender,recipient,idempotency_key); same digest replays and a
+changed digest is 409 IDEMPOTENCY_KEY_REUSED. Retrieve key is (agent_id,poll_id);
+same poll returns the same originally claimed messages/lease, never claims more.
+A fresh poll_id omits currently leased messages. Claim and receipt insertion are one
+store transaction; filtering occurs before claiming in this target profile. Renew
+checks current owner, Fence and unexpired lease in that same transaction. Extension
+is from server now and never beyond message expires_at or round deadline. Server
+monotonic time governs leases; restart expires leases conservatively and marks
+associated execution reconciliation required, never authorizes duplicate launch.
+Renew every 20 s, bounded call 5 s; a failed renewal stops new effects immediately
+and invokes M11 cancellation before lease expiry. An expired lease returns 409
+LEASE_EXPIRED; its message becomes reconciliation-held until launch_id lookup proves
+safe transfer. TTL expiry moves to dead with an expiry receipt; it does not kill or
+silently forget a native execution. Durable queued/leased/reconciliation-held/acked/
+dead transitions and outbox receipts survive SQLite/PostgreSQL restart.
+Dedupe receipts persist 30 days after terminal state; expired IDs remain tombstoned
+and return 410, not a new effect. Late results are retained as fenced evidence.
+Backend loss returns 503 CUSTODY_UNAVAILABLE, never an empty queue. [M9.17; VI.34]
 
 ## RED field count: 5 (S1 handler 1895-line body not read line-by-line — the slog surface is complete but the body's non-slog semantics are not; §8 per-metric contract — series names inventoried but the type/labels/question/scrape table not filled; §9 guard log surface not tabulated — B22; §5 storage-selection custody-proof not written — B20; §7 `go test ./...` — one fresh clean run at HEAD `ae9fc57f`, but the flaky finding is not retired (single run ≠ determinism))
 

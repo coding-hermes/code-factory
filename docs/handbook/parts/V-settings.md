@@ -61,7 +61,7 @@ decision recorded here.
 
 ### V.0.1 Canonical desired-state schema (`factory.v1`)
 
-The following is the complete normative shape. A deployment may add extension fields only
+The following is the normative top-level index, completed recursively by V.9. A deployment may add extension fields only
 under an `extensions` map; unknown fields elsewhere are refused as `UNKNOWN_FIELD`.
 Required fields are marked `required`; omitted optional fields have the stated absence
 semantics. The configuration file is the user/authorized-agent declaration; observed and
@@ -109,7 +109,13 @@ The target management surface is `factory.v1` and has these observable operation
 | `GET /v1/events` | versioned event cursor and delivery state | receiver outage is recorded per endpoint; it does not alter configuration status |
 
 Every mutation is authenticated, scoped, durable before adapters run, and idempotent by
-`(principal, project_id, operation, idempotency_key)`. The request digest is stored as
+`(principal, scope, operation, idempotency_key)`, where scope is `factory-control`
+for whole-document/global operations and the authorized project ID for project reads/
+reconcile. Part I §1.9.1 supplies the exact mTLS HTTP wrapper, principal derivation,
+response/Error schema and route retirement rules; there is one generation, not a
+second project/global tuple. A project edit after any global change re-reads the
+whole document and submits the new expected_generation with only its allowed project
+changed. The request digest is stored as
 compared data, not part of the identity. A changed request under an existing key returns
 `IDEMPOTENCY_KEY_REUSED`; a same request returns the original result. The API never
 claims convergence from request acceptance alone.
@@ -138,17 +144,27 @@ persists the event before delivery and tracks per-endpoint `attempt`, `acknowled
 `next_retry_at`, `last_error`, `delivery_state` and `cursor`. The receiver contract is
 an HTTPS POST with `Content-Type: application/json`, `X-Factory-Event-Id`,
 `X-Factory-Event-Version`, `X-Factory-Delivery-Attempt`, and `X-Factory-Signature`.
-The signature is HMAC-SHA256 over the exact UTF-8 request body and event id using the
-rotated endpoint secret; a receiver rejects an unknown key id or stale timestamp.
+The signed headers additionally include `X-Factory-Key-Id` and
+`X-Factory-Delivery-Time` (decimal Unix seconds). X-Factory-Signature is lowercase
+hex HMAC-SHA256 over UTF-8 `factory-event-v1`, newline, key ID, newline, delivery
+time, newline, event ID, newline, followed by exact body bytes (no final newline
+added). IDs contain no newline; the body is RFC8785 JSON. Verification checks key ID,
+signature and ±60 s delivery-time skew before accepting. occurred_at remains the
+original event time; cursor replay signs a fresh delivery time with the active key.
+A receiver durably deduplicates event_id/body digest; changed digest is 409 conflict.
+A stale or unknown-key delivery returns 401 and cannot advance the cursor.
 The body is the `event.v1` object from this section. A valid receiver returns HTTP 202
 (or 200) with JSON `{event_id, acknowledged: true}`; any other status, malformed JSON,
 wrong event id or missing acknowledgement is `ACK_INVALID`. The same event is
 redelivered with the same `event_id` and is not re-authored as a new event. Defaults
 are timeout 10 s, max_attempts 5, initial backoff 5 s, maximum backoff 300 s, and
-retention 604800 s; backoff is exponential with jitter and attempts stop at exhaustion.
+retention 604800 s. Retry n waits a uniformly sampled integer millisecond delay in
+`[0, min(300000, 5000 * 2^(n-1))]`, persisted when scheduled; restart does not redraw it.
 After exhaustion the event is `delivery_failed` and remains available for replay by
-cursor; cursor replay is ordered by the durable event sequence and retains events for
-`retention_s`, while each endpoint's cursor advances only after acknowledgement.
+cursor. Later events may deliver, but the contiguous acknowledgement cursor stops
+before the failed event; an administrator may explicitly dead-letter/skip it with a
+reason receipt, never silently advance it. Replay is ordered by durable sequence and
+retention_s; an expired cursor returns 410 CURSOR_EXPIRED with earliest available seq.
 Endpoint outage does not change configuration or reconciliation state. Signature or
 authentication failure is `ENDPOINT_UNAUTHORIZED`; it is not delivery success.
 Receiver interpretation, paging and external repair remain outside Factory responsibility.
@@ -274,7 +290,7 @@ Two worked cards, one target and one measured:
 | Type / units | integer, workers |
 | Range / enum | >= 1; a value < 1 refused at admission |
 | Default / absence | TARGET: a declared default is a specification detail this register leaves to implementation reconciliation; absence refuses admission (fail-closed) rather than defaulting silently — unset, empty and zero are the same refusal |
-| Dependencies | distinct from concurrent-workers and from any wave-count limit (no separate fixed wave cap is imposed); bounded by any platform concurrency ceiling, which is a separate setting |
+| Dependencies | distinct from concurrent-workers and from any wave-count limit (no separate fixed wave cap is imposed); not bounded by platform concurrency; only simultaneous workers are bounded by that separate ceiling (VII.12) |
 | Validation + typed error | admission validates the round request; error class `BUDGET_INVALID` names the field and the offending value |
 | Authorized editor | user intent |
 | Activation | the next admitted round; a running round's allowance is fixed at admission |
@@ -324,6 +340,14 @@ time (validation, V.6) and elided at read time.
 | transport | Crier bus bearer, dispatcher signing keys | the dispatcher/bus on their host | — |
 | model | inference proxy upstream key, node tokens | the proxy owner's env boundary (M12) | nodes (token files by path, never values) |
 | memory | DuckBrain/local-filesystem authorization | the memory service owner | foremen and workers |
+| events | typed webhook destination bundle `{url: HTTPS URL, active_key_id: ID, keys: [{id, hmac_key_ref, valid_until}]}` | manager delivery worker and authorized receiver key provisioner | subscription endpoint_ref; host endpoint_ref instead resolves deployment.endpoints |
+| backup | encryption recipient and recovery-key reference | backup writer (public encryption key) and offline recovery custodian (private key) | backup configuration |
+
+An events reference resolves to destination metadata plus references to 32-byte HMAC
+keys, not a naked URL or concatenated credential. The secret store separately resolves
+key bytes only for authorized sender/receiver provisioning. Rotation atomically changes
+active_key_id and preserves verification keys for 300 s; URL changes require a new
+subscription generation and do not silently reuse an old destination key.
 
 **Issuance vs installation.** The native issuer (GitHub App JWT mint, provider API)
 retains signing/administrative authority at its boundary; Bunker
@@ -366,8 +390,11 @@ These are different quantities and must never be conflated:
 
 **Compatibility validation at admission.** Impossible combinations are validated when
 configuration is applied, not discovered at runtime: a round budget below one worker; a
-per-turn wall × turn budget exceeding the envelope cap; a lease shorter than the longest
-legitimate poll interval; a tick timeout shorter than the round it launches. The
+round deadline exceeding the tick cap; attempt wall exceeding remaining round time
+minus reserves; a lease that cannot cover renewal latency/skew; a tick timeout shorter
+than the round it launches. V.9 defines the exact inequalities. `CF_TIMEOUT_S` bounds
+the entire harness invocation, not each of its model turns; multiplying it by
+`CF_MAX_TURNS` is not a valid compatibility test. The
 cross-field check is a target requirement — where no cross-system validation exists today
 it is TARGET-UNIMPLEMENTED, and the affected combination is recorded here rather than
 implied safe. Hardcoded account-specific paths (`BUNKER_BIN`, `TOKEN_FILE`, M11/M12) are
@@ -425,6 +452,7 @@ deployment:
   endpoints:
     h1-vpn: {url: https://h1.example.invalid, protocol: https}
     h2-vpn: {url: https://h2.example.invalid, protocol: https}
+    backup: {url: https://backup.example.invalid/factory, protocol: https}
 hosts:
   - id: h1
     endpoint_ref: h1-vpn
@@ -469,7 +497,10 @@ events:
       status: enabled
       retry_policy: {max_attempts: 5, initial_backoff_s: 5, max_backoff_s: 300}
       retention_s: 604800
-safety: {terminal_jail: disabled, reclaim: {enabled: true}, backup: {enabled: true}}
+safety:
+  terminal_jail: disabled
+  reclaim: {enabled: true}
+  backup: {enabled: true, destination_ref: backup, key_ref: secretref://backup/recovery}
 extensions: {}
 ```
 
@@ -498,6 +529,121 @@ Resolved-state comparison (how the same file reads back):
 | tune timing without creating an impossible combination | compatibility validation | V.5 |
 | know which measured variables are not settings | classification | V.2, inventory notes |
 | audit a configuration change | lifecycle stages, audit events | V.6 |
+
+## V.9 Recursive target types and activation (P5-C-03/04/06/30)
+
+This section completes V.0.1; it is normative target design, not a generated validator
+or a claim of deployment. Serialization is JSON UTF-8 as selected in Part I §1.9.1;
+V.7 YAML is a lossless authoring illustration. Duplicate JSON/YAML keys, NaN/Infinity,
+unknown keys, wrong types and null (unless explicitly allowed) are refused. Boolean
+is not integer. All integers are in 0..9007199254740991 before narrower bounds.
+`ID` is ASCII `[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}`; desired-state map keys use the same
+rule. A path is an absolute normalized POSIX path with no parent traversal; a URL is
+absolute HTTPS without userinfo (repository identity also accepts scp-style SSH).
+Lists are ordered unless called sets; sets refuse duplicates. Lists/maps have at most
+1024 entries, except tasks/criteria governed by VII.18. Empty collections are valid
+only where explicitly stated. All members below are required unless a default or
+optional marker appears. Defaults materialize before digesting; explicit empty/null
+never means default. Root contains exactly V.0.1's keys plus transport, scheduler,
+execution, inference, credentials and readiness; the new objects may be omitted and
+expand to defaults below. Enabled features with unresolved references refuse activation.
+
+| Object | Complete members, types, bounds and defaults |
+|---|---|
+| deployment | profile: profile ID; endpoints: nonempty map of Endpoint |
+| Endpoint | url: URL; protocol: https or ssh (must match URL, ssh permitted only for repository transport); credential_ref: optional SecretRef |
+| profiles entry | isolation: persistent-container or image-container; terminal_jail: disabled or required; persistence: optional `{workspace: path, memory: path, evidence: path}` (all three distinct), absent uses manager-assigned per-Bunker durable roots; required jail additionally needs global jail policy |
+| host | id: ID; endpoint_ref: Endpoint key; capacity: Capacity; capabilities: nonempty set of capability IDs |
+| Capacity | disk_gib: integer 1..1048576; memory_gib: integer 1..1048576; concurrent_workers: integer 1..1024; cpu_millis: integer 100..1024000 default 2000; pids: integer 16..1048576 default 256. GiB is 1073741824 bytes, no decimal rounding |
+| project | id: ID; repository: Repository; eligible_hosts: nonempty host-ID set; bunkers: Bunkers; memory: Memory; lanes: nonempty Lane list |
+| Repository | provider: github or gitlab; url: repository URL; credential_ref: forge SecretRef |
+| Bunkers | count: integer 1..1024; requirements: Requirements; profile: profile ID |
+| Requirements | disk_gib, memory_gib: Capacity ranges; capabilities: nonempty capability-ID set; network: endpoint-ID set default all deployment endpoints; cpu_millis,pids: Capacity ranges/defaults |
+| Memory | namespace: project ID; local_root: path; sync_policy: shared-git or local-only; remote_ref: required HTTPS Git URL for shared-git, forbidden for local-only; sync_owner: ID default factory-memory-sync; sync_interval_s: integer 1..300 default 30; stale_after_s: integer 30..3600 default 90 |
+| Lane | name: ID; admission: tasks or cooldown; cadence_s: integer 1..31536000; weight: integer 1..1000; priority: integer 0..9 default 5; foreman: `{round: Round}`; enabled: boolean default true; hooks: M9.18 Hook list, default empty (required-hook readiness still refuses) |
+| Round | worker_budget: `{total: integer 1..100000}`; concurrency: integer 1..1024; retry_policy: WorkerRetry; deadline_s: integer 120..7200 default 7200; attempt_wall_s: integer 1..1800 default 1800; max_turns: integer 1..1000 default 40 |
+| WorkerRetry | name: literal charge-on-start; failed_start: literal refund-before-run; max_attempts: integer 1..10 default 3; initial_backoff_s: integer 1..60 default 5; max_backoff_s: integer 1..300 default 60 |
+| events | webhooks: Subscription list, default empty |
+| Subscription | subscription_id: unique ID; endpoint_ref: events SecretRef; event_types: nonempty set of V.0.3 catalog enums including project.progress; project_scope: nonempty project-ID set; status: enabled or disabled; retry_policy: DeliveryRetry; retention_s: integer 3600..2592000 default 604800 |
+| DeliveryRetry | max_attempts: integer 1..20 default 5; initial_backoff_s: integer 1..60 default 5; max_backoff_s: integer 1..3600 default 300 |
+| safety | terminal_jail: disabled or required; jail_policy: optional M8.16 policy object, mandatory for required mode; reclaim: Reclaim; backup: Backup |
+| Reclaim | enabled: boolean; job_ttl_hours: finite number 0..8760 default 24; cache_ttl_hours: same default 24; free_floor_gib: integer 1..1024 default 4; classes: set of cache/job, default `[cache,job]`; no package/image/evidence deletion by this policy |
+| Backup | enabled: boolean; interval_s: integer 300..86400 default 3600; retention_s: integer 86400..31536000 default 2592000; rpo_s: integer 300..86400 default 3600; rto_s: integer 300..86400 default 7200; destination_ref: endpoint ID required if enabled; key_ref: backup SecretRef required if enabled; offline_policy: refuse or partial default refuse |
+| transport | registry: `{backend: sqlite or postgres, endpoint_ref: optional Endpoint key}`; default backend sqlite, endpoint required for postgres; lease_s: integer 30..300 default 60; renew_s: integer 1..60 default 20; call_timeout_s: integer 1..10 default 5 |
+| scheduler | budget: integer 1..1000000 default 100; max_concurrent: integer 1..1024 default 10; tick_wall_s: integer 120..86400 default 7200; namespaces: map of project-ID to `{reserved: integer 0..1024 default 0, hard_cap: integer 1..1024 default max_concurrent}`, absent means every project gets defaults |
+| execution | mode: resident or central-compat default resident; artifact_ref: optional ID resolving to M11.17 release record, mandatory at activation; launch_reserve_s: integer 1..120 default 30; transfer_reserve_s: integer 1..120 default 30; cleanup_reserve_s: integer 15..120 default 15 |
+| credentials | renewal_margin_s: integer 60..3600 default 300; overlap_s: integer 0..300 default 60; proxy_ttl_s: integer 600..86400 default 3600 |
+| readiness | probe_interval_s: integer 5..60 default 10; stale_after_s: integer 15..300 default 30; failures_to_fail: integer 1..10 default 3 |
+| inference | routes: Route list default empty (no inference admission); node_scope: NodeScope; capture: Capture; upstream_timeout_s: integer 1..300 default 300 |
+| Route | id: ID; requested_model: nonempty string <=128; provider: ID; served_model: nonempty string <=128; endpoint_ref: Endpoint key; credential_ref: model SecretRef; input_micro_usd_per_million, output_micro_usd_per_million: integer >=0; tokenizer_digest: SHA-256 |
+| NodeScope | allowed_routes: route-ID set default empty; budget_micro_usd: integer >=0 default 0; window_s: integer 60..86400 default 86400; concurrency: integer 1..64 default 1; max_output_tokens: integer 1..131072 default 4096 |
+| Capture | enabled: boolean default false; max_chars: integer 1..120000 default 120000; retention_s: integer 60..2592000 default 2592000; sink_ref: Endpoint key required when enabled; failure: refuse or record default refuse; redaction: literal credentials-and-secrets default credentials-and-secrets |
+
+Capabilities are declarations matched byte-for-byte against authenticated adapter
+capability inventories; unknown/unavailable capability refuses activation rather than
+being assumed. `SecretRef` has domain from V.4 and name of 1..256 ASCII path characters,
+no empty/dot/parent segments; it is not a value. extensions is an optional map keyed
+by reverse-DNS namespace, each value a JSON object <=64 KiB, retained uninterpreted;
+core behavior never depends on it. Empty hosts/projects/profiles/endpoints refuse.
+Duplicate IDs anywhere within their owning collection refuse DUPLICATE_ID. Missing
+required keys return REQUIRED_FIELD; type/range/ref errors return TYPE_INVALID,
+RANGE_INVALID, REFERENCE_UNKNOWN with JSON pointer; no adapter runs on validation error.
+
+The owner edits intent. Activation is the next reconcile for transport/profile/
+credentials/readiness, next round for scheduler/round/retry/hooks, and next request
+for inference after a generation CAS. In-flight requests/rounds pin generation;
+revocation overrides pins. Readback is `GET /v1/config` and project state from Part I,
+with per-adapter generation, canonical applied-values digest and observed_at. Native
+mapping is CR_REGISTRY_BACKEND for transport, scheduler budget/max-concurrent/
+tick-timeout for scheduler, CF_TIMEOUT_S/CF_MAX_TURNS for attempt limits, and the
+reclaimer's two TTL flags for Reclaim. All other new controls are target adapter
+fields, not fictitious native flags: an adapter without mapping/readback returns
+SETTING_UNSUPPORTED and readiness false. Model routing, token scope, capture,
+renewal margin, execution mode and backup bounds are therefore declared controls
+with explicit unsupported behavior, not hidden extension keys.
+
+Cross-field validation runs both at config acceptance and admission: concurrency <=
+host concurrent_workers and round allowance (allowance may exceed host concurrency);
+initial backoff <= maximum; sum namespace reserved <= global slots; each weight <=
+budget; readiness stale_after >= 3*probe_interval; lease_s > renew_s + call_timeout_s
++ 5 s clock margin + cleanup_reserve_s; renewal_margin < proxy_ttl; overlap < margin.
+Round deadline <= tick wall; each attempt gets min(attempt_wall_s, remaining round
+seconds minus launch/transfer/cleanup reserves). A nonpositive remainder refuses
+DEADLINE_INSUFFICIENT. Deadline is pinned at admission using UTC plus a monotonic
+remaining-time budget; clock rollback cannot extend it. Default reserves total 75 s,
+so the 7200 s round admits a 1800 s harness with up to 40 turns, not 40 separate
+1800 s entitlements. Backoffs, hooks and subsequent waves consume the same deadline.
+[Part I §1.9; M9.16–18; M11.16]
+
+## V.10 Metric and readiness sample protocol (P5-C-32)
+
+The target collector polls authenticated subsystem readbacks every 10 s and serves
+`GET /v1/metrics` in the Part I response wrapper. Every module contributes
+`factory_operations_total`, `factory_operation_duration_seconds`,
+`factory_active`, `factory_pending`, `factory_oldest_pending_seconds` and
+`factory_available`. Labels are exactly module (M0..M12 or manager), operation
+(configure/admit/launch/deliver/renew/verify/publish/sync/reclaim/backup/restore/
+issue/revoke/infer), outcome (accepted/pass/fail/refused/unknown/cancelled), and
+project (configured ID or factory-control). A metric not applicable to a module is
+omitted with a reason in collection_state; unknown source is value:null,
+collection_state:unavailable, never 0. Duration histogram boundaries are
+0.01,0.1,0.5,1,5,10,30,60,300,1800,7200 seconds plus infinity, with count/sum.
+Counters/histograms persist from committed event sequences; collector restart
+replays its durable cursor without double increment. Gauges reflect the latest
+snapshot, carrying observed_at and source_seq. No raw token, task ID or error text
+becomes a label. Module-specific units are budget in micro-USD, disk in bytes,
+inodes/counts as integers, expiry/freshness in seconds; readiness is boolean.
+
+Rates use delta of persistent counts over the trailing 300 s; fewer than two samples
+or a zero denominator yields null/insufficient_data, not zero percent. Each ratio
+names numerator and denominator in the sample. Healthy idle is fresh available=1,
+active=0, pending=0; stale is age > stale_after_s, degraded is a fresh failed optional
+probe or pending required projection, failed is three consecutive failed required
+probes. Missing observations are unknown and readiness false immediately; an old
+passing probe does not sustain readiness. Required operation-specific measures named
+in module sections are views of these counters/events plus the named unit gauges,
+not undocumented new label schemas. Receiver alert policy remains external. [V.0.3;
+Part I Probe; VII.10]
 
 ---
 
@@ -907,13 +1053,15 @@ class` exit is a successful process termination, not proof the document is align
 
 | Setting | Lives in | Default | Range | Changes | Cross-ref |
 |---|---|---|---|---|---|
-| `--job-ttl-hours` | `reclaim_disk.py:42`, `:135` | 24 | finite, nonnegative (`:46-47`) | how old a job/clone dir must be before reaping — the TTL applies only to `AGED_PARENTS` children (`.node/jobs`, `.node/clones`); build caches are reaped without any age condition (`:102-103` vs `:104-111`, B15); a non-finite or negative value → `ValueError` (`:47`) | M8 §5 |
+| `--job-ttl-hours` | `scripts/reclaim_disk.py`, CF-290 | 24 | finite, nonnegative hours | age of job/clone directories; cache age is independently controlled below | M8 §5 |
+| `--cache-ttl-hours` | `scripts/reclaim_disk.py`, CF-290 | 24 | finite, nonnegative hours | fresh build caches survive; eligibility uses newest subtree mtime and inclusive TTL boundary | M8 §5 |
 | `--root` | `:134` | required | a directory other than `/` (`:44-45`) | the reap boundary — `/` or a non-directory → `ValueError` (`:45`) | M8 §5 |
 | `--dry-run` | `reclaim_disk.py` | false | boolean | whether anything is deleted — true → nothing unlinked (`:78-79`); byte totals are still printed as projected (`would free`), not actually reclaimed (`:119-123`, B15) | M8 §5 |
 
 Exact targets (B15): `BUILD_CACHES` (`:14-19` — `.cache/pip`, `.cache/uv`,
-`.cache/pre-commit`, `.cache/go-build`, `.npm/_cacache`) are processed with `aged=False`;
-`AGED_PARENTS` (`:21` — `.node/jobs`, `.node/clones`) with `aged=True`, where the TTL is a
+`.cache/pre-commit`, `.cache/go-build`, `.npm/_cacache`) are processed with `aged=True`
+and cache TTL (default 24 h), using newest subtree mtime (CF-290);
+`AGED_PARENTS` (`:21` — `.node/jobs`, `.node/clones`) also use `aged=True` with job TTL, where the TTL is a
 `<=` boundary (inclusive); `PROTECTED` (`:22` — `repo`, `.node/node.json`,
 `.node/crier.json`, `.node/floor.toml`) are refused via `safety_reason` (`:25-39`) before
 inspection.
