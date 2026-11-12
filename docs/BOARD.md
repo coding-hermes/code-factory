@@ -138,41 +138,44 @@ scripts/boardctl validate
 bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 ```
 
-- **Re-measured 2026-11-12T12:31Z at tip `cdf12123`:** 492 task rows, 714 events at census time
-  (max event id 713; the one legacy event row at line 670 carries no `id` field, which is the
-  `boardctl` warning that names it). This tick then appends two events — 714 (census) and 715
-  (disclosure note) — taking the file to 716 lines with max id 715. The census row's own
-  `detail.events` records the pre-append count, so the line count, the detail field and this
-  paragraph describe three different moments on purpose; each is labelled.
-  Status break: 138 `complete`, 14 `in_progress`, 340 `pending`, no `blocked`, no duplicate task ids.
+- **Re-measured 2026-11-12T21:18Z at tip `fdc74207`:** 498 task rows, 730 events at census time
+  (max event id 729; the one legacy event row at line 670 carries no `id` field, which is the
+  `boardctl` warning that names it, and the benign duplicate event id 336 at line 337 is **CF-196**).
+  This tick then appends one census event — 730 — taking the file to 731 lines with max id 730. The
+  census row's own `detail.events` records the pre-append count, so the line count, the detail field
+  and this paragraph describe three different moments on purpose; each is labelled.
+  Status break: 142 `complete`, 14 `in_progress`, 342 `pending`, no `blocked`, no duplicate task ids.
   Both board files are byte-identical to their `origin/main` copies
   (`python3 scripts/board_drift.py check --workdir . --ref origin/main` prints `RESULT: OK`,
-  `board rows — 492 vs 492 rows; 0 divergent ids`, and the HEAD and HEAD-ancestry legs both name
-  `cdf12123`). `scripts/boardctl validate` prints `RESULT: OK (97 warning(s))` and
-  `key uniformity: 490/492 rows carry only canon keys; drift 2 row(s): acceptance(2), chapter(2),
+  `board rows — 498 vs 498 rows; 0 divergent ids`, and the HEAD and HEAD-ancestry legs both name
+  `fdc74207`). `scripts/boardctl validate` prints `RESULT: OK (89 warning(s))` and
+  `key uniformity: 496/498 rows carry only canon keys; drift 2 row(s): acceptance(2), chapter(2),
   created(2), model(2) — 0 fixable by 'boardctl update <id> --normalize'`, so the warning count still
-  is not a function of the board bytes (**CF-154**) and two rows carry off-canon keys. Of the 138
-  `complete` rows, 137 bind a commit that exists and is an ancestor of `origin/main`; the single
-  exception is **CF-245**, whose fix landed in the scheduler repo so its `commit_hash` is `null`
-  (**CF-377** owns the shape). Closure evidence is where the tip and the store disagree:
-  `python3 scripts/board_evidence_check.py` prints `checked 138 complete rows, 57 unresolved`
-  against its LOCAL store (`.gitreins/history`, 87 run dirs), i.e. 81 resolving as the difference of
-  two printed numbers; at the published tip **none** of the 138 resolve, because `.gitreins/history`
+  is not a function of the board bytes (**CF-154**) and two rows carry off-canon keys. Of the 142
+  `complete` rows, 140 bind a commit that exists and is an ancestor of `origin/main`; both exceptions
+  carry `commit_hash: null` — **CF-245**, whose fix landed in the scheduler repo, and **P5G-34**,
+  whose acceptance was a measurement of the judge path rather than a source change (**CF-377** owns
+  the shape). Closure evidence is where the tip and the store disagree:
+  `python3 scripts/board_evidence_check.py` prints `checked 142 complete rows, 57 unresolved`
+  against its LOCAL store (`.gitreins/history`, 94 run dirs), i.e. 85 resolving as the difference of
+  two printed numbers; at the published tip **none** of the 142 resolve, because `.gitreins/history`
   is gitignored and `82bdf49` deleted its 937 tracked files, so
-  `python3 docs/audits/cf181-verdict-binding-sweep.py` prints `ref=origin/main complete_rows=138
-  verdict_artifacts_checked=0 rows_without_resolving=138 orphan_count=0 status=UNRESOLVED`
-  (`unresolvable_pointers=74`, `non_verdict_records=1`) — an unavailable population, not proof that
-  no orphaned verdicts exist. **CF-389** owns that instrument and its text still quotes the earlier
-  `66 of 106` measurement, so the census above supersedes the numbers, not the defect. The `detail`
-  shape class **CF-200** filed has shrunk but not closed: exactly one row still stores `detail` as a
-  bare string (**CF-130**, whose own title is about malformed completion transitions) and two
-  `complete` rows carry `detail: null`, an evidence block that does not exist at all (**CF-289**,
-  **CF-305**); every iterating consumer still errors on the string row. `bash tests/selftest.sh`
-  prints `SELFTEST: PASS` (rc 0) on a CLEAN DETACHED WORKTREE of this tip — `PASS 492/492 rows parse`,
-  547 two-space-indented `PASS` check lines and 61 `FAIL` lines that all sit inside negative
-  fixtures, 726-line log — at loadavg 23.82 (1 min), and `python3 scripts/handbook_lint.py` prints `handbook_lint: clean`. The
-  newest closure, **P5G-01** (`commit_hash 00ce1825`, evidence run `56130e3d`), was re-probed here
-  rather than trusted: all of its published proofs reproduce at this tip — the IV.1 outer-envelope
+  `python3 docs/audits/cf181-verdict-binding-sweep.py` prints `ref=origin/main complete_rows=142
+  verdict_artifacts_checked=0 rows_with_resolving_evidence=0 rows_without=142 orphan_count=0
+  status=UNRESOLVED` (`unresolvable_pointers=75`, `non_verdict_records=1`) — an unavailable
+  population, not proof that no orphaned verdicts exist. **CF-389** owns that instrument and its text
+  still quotes the earlier `66 of 106` measurement, so the census above supersedes the numbers, not
+  the defect. The `detail` shape class **CF-200** filed has shrunk but not closed: exactly one row
+  still stores `detail` as a bare string (**CF-130**, whose own title is about malformed completion
+  transitions), and two `complete` rows (**CF-289**, **CF-305**) carry no `detail` key at all — no
+  row at this tip stores `detail: null`; every iterating consumer still errors on the string row.
+  `bash tests/selftest.sh` prints `SELFTEST: PASS` (rc 0) on a CLEAN DETACHED WORKTREE of this tip —
+  `PASS 498/498 rows parse`, 549 two-space-indented `PASS` check lines and 65 `FAIL` lines that all
+  sit inside negative fixtures, 742-line log — at loadavg 9.73 (1 min), and
+  `python3 scripts/handbook_lint.py` prints `handbook_lint: clean`. The
+  newest closure, **P5G-01** (`commit_hash 00ce1825`, evidence run `56130e3d`), was re-probed in that
+  census rather than trusted, and nothing folded since touches a handbook part: all of its published
+  proofs reproduce there — the IV.1 outer-envelope
   rule via `awk '/^All cards use the outer envelope/,/^$/'` on
   `docs/handbook/parts/IV-contract-register.md`, `grep -n '"message_type":"round-admission"'` printing
   line 386 whose line parses with envelope keys `body, corr_id, created_at, message_type, request_id,
