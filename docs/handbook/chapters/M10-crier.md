@@ -329,7 +329,7 @@ named RED on this field).
 
 The MVP uses Crier as the launch and return boundary: Scheduler on the control host delivers a versioned launch envelope to the project foreman's Bunker inbox; retrieval grants the lease; the foreman returns a correlated result through Crier; Scheduler records the response. Webhook, session and harness adapters are partitioned compatibility modes and cannot execute the same attempt as the selected inbox mode.
 
-The canonical application wire is `cf2a.v1`, with `register.v1`, `round-admission.v1`, worker and report bodies from Part IV/VII.13. The earlier `cf.register.v1`/`cf.return.v1` aliases are retired, not negotiated silently. Registration excludes round/wave/attempt IDs; admission excludes wave/attempt/worker IDs. Custody IDs belong to the Crier response, not to the initial application envelope. §16 defines signed custody operations, including explicit renew and release. Unknown schema, wrong scope, invalid signature, oversized body or expired generation is refused.
+The canonical application wire is `cf2a.v1`, with `register.v1`, `round-admission.v1`, worker and report bodies from Part IV/VII.13. The earlier `cf.register.v1`/`cf.return.v1` aliases are retired, not negotiated silently. Registration is admitted only after the authority's single-use enrollment grant is consumed and carries the already-bound `project_id`, `profile_id`, `operation_id` and generation; Crier allocates exactly one node identity. Registration excludes round/wave/attempt IDs; admission excludes wave/attempt/worker IDs. A worker-class principal is refused before allocation as `WORKER_IDENTITY_FORBIDDEN`; worker execution inherits the node identity. Custody IDs belong to the Crier response, not to the initial application envelope. §16 defines signed custody operations, including explicit renew and release. Unknown schema, wrong scope, invalid signature, oversized body or expired generation is refused. Part I §1.9.11 defines exact repeat, conflict and lost-reply readback.
 
 The selected production backend is SQLite or PostgreSQL; `memory` is a demo/negative-control backend and cannot satisfy restart durability. Boot readback names the resolved backend. Lease, HTTP, job, heartbeat, retry and retention clocks are independent. A duplicate delivery returns the recorded receipt; a duplicate retrieve returns the existing lease/result; a late return is retained as evidence but cannot alter a replaced attempt. Filter-after-claim reports temporarily leased nonmatching messages rather than calling the queue empty. Stats failure returns `UNAVAILABLE`, never zero-as-empty.
 
@@ -397,7 +397,7 @@ interpretation of queue emptiness, lease or result status.
 All target routes are under `/v1/factory`. The `/factory/v1/*` spellings are temporary
 migration aliases with identical semantics; unversioned `/agents` and `/agents/*/inbox/*`
 return `410 ROUTE_RETIRED` to target clients. Registration is
-`POST /registrations` with `register.v1`; collection read is
+`POST /v1/factory/registrations` with `register.v1`; collection read is
 `GET /deliveries?agent_id=<id>&state=<queued|leased|reconciliation-held|acked|dead>&request_id=<id>&idempotency_key=<key>`;
 individual read is
 `GET /deliveries/{delivery_id}?request_id=<id>&idempotency_key=<key>`. Reads return the same durable

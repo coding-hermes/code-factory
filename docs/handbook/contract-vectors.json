@@ -1540,6 +1540,101 @@
         "credential_ref": "secretref://node/bunker-a",
         "binding_required_before_dispatch": true
       }
+    },
+    {
+      "id": "CV-P5G-09",
+      "domain": "enrollment",
+      "kind": "matrix",
+      "name": "fresh Bunker enrollment identity and trust bootstrap",
+      "wire": {
+        "outer_schema_version": "cf2a.v1",
+        "message_type": "register",
+        "body_schema_version": "register.v1",
+        "credential_install": "credential-install.v1",
+        "registration_route": "POST /v1/factory/registrations"
+      },
+      "inputs": {
+        "project_id": "code-factory",
+        "profile_id": "bunker.user-image.v1",
+        "generation": 1,
+        "operation_id": "op-enroll-17",
+        "registration_id": "reg-bunker-a",
+        "public_key_id": "bunker-a-key-1",
+        "bootstrap_credential_ref": "secretref://bootstrap/reg-bunker-a",
+        "idempotency_key": "enroll-key-reg-bunker-a-op-enroll-17-g1",
+        "request_digest": "sha256:enrollment-request-digest-17",
+        "claimed_principal_class": "crier"
+      },
+      "derived": {
+        "node_id": "node-code-factory-bunker-a-1",
+        "identity_key": "code-factory|bunker.user-image.v1|1|op-enroll-17|reg-bunker-a",
+        "scope": "project=code-factory;profile=bunker.user-image.v1;generation=1;class=crier",
+        "credential_ref": "secretref://node/node-code-factory-bunker-a-1/crier/g1",
+        "signed_read": "GET /v1/factory/deliveries/delivery-enroll-17?request_id=read-enroll-17&idempotency_key=read-enroll-17"
+      },
+      "cases": [
+        {
+          "id": "CV-P5G-09-A",
+          "name": "fresh accept",
+          "mutation": "none",
+          "expected": {
+            "outcome": "accepted",
+            "state": "ENROLLED",
+            "node_id": "node-code-factory-bunker-a-1",
+            "generation": 1,
+            "durable_identity_allocations": 1,
+            "signed_read_required_before_admission": true
+          }
+        },
+        {
+          "id": "CV-P5G-09-B",
+          "name": "exact repeat",
+          "mutation": "none; repeat the complete request with the same identity_key and request_digest",
+          "expected": {
+            "outcome": "replayed",
+            "state": "ENROLLED",
+            "node_id": "node-code-factory-bunker-a-1",
+            "generation": 1,
+            "durable_identity_allocations_total": 1,
+            "second_allocation": false
+          }
+        },
+        {
+          "id": "CV-P5G-09-C",
+          "name": "conflicting generation",
+          "mutation": "generation=2",
+          "expected": {
+            "outcome": "refused",
+            "error": "REGISTRATION_CONFLICT",
+            "durable_identity_allocations_total": 1
+          }
+        },
+        {
+          "id": "CV-P5G-09-D",
+          "name": "expired bootstrap",
+          "mutation": "bootstrap_expires_at=2026-11-11T18:59:59Z; authority_now=2026-11-11T19:00:00Z",
+          "expected": {
+            "outcome": "refused",
+            "error": "GRANT_EXPIRED",
+            "state": "ENROLLMENT_FAILED",
+            "durable_identity_allocations": 0
+          }
+        },
+        {
+          "id": "CV-P5G-09-E",
+          "name": "worker-class claim refused",
+          "mutation": "claimed_principal_class=worker",
+          "expected": {
+            "outcome": "refused",
+            "error": "WORKER_IDENTITY_FORBIDDEN",
+            "state": "ENROLLMENT_FAILED",
+            "allocation_order": "class check before identity allocation",
+            "durable_identity_allocations": 0
+          }
+        }
+      ],
+      "recovery": "If the response is lost, GET /v1/registrations/reg-bunker-a returns the durable node and generation; retrying does not allocate another identity.",
+      "static_controls": []
     }
   ],
   "fault_matrix": [
