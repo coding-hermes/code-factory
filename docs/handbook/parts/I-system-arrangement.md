@@ -1069,6 +1069,36 @@ commit reservation and operation together. Binding activation commits active
 pointer and activation event together. No external call runs inside a locked
 transaction; its durable intent precedes it and readback resolves unknown outcomes.
 
+**Cross-store crash procedure (III.M9.S3 / F8; P5G-02).** This manager
+transaction format is not the scheduler's database format. M9 §17 specifies
+the scheduler's SQLite WAL/synchronous FULL round, capacity, result, projection,
+event and outbox records and the resident foreman's fsynced worker ledger. The
+scheduler owns admission and settlement; the foreman owns worker reservation,
+launch and results; Crier owns custody; the broker owns protected effect
+mediation. Their transactions are local to each authority, not one distributed
+transaction. Part IV §IV.1/IV.2 fixes the `cf2a.v1` wire and the
+`round-admission.v1`, `worker-result.v1` and `round-report.v1` bodies.
+
+For a reproducible interruption check, evaluate these rows independently, using
+the identities and recovery scans in M9 §17 and the terminal mapping in §1.9.10:
+
+| Last durable fact / interruption | Required recovery outcome |
+|---|---|
+| Admission committed; acknowledgement lost | Replay the original receipt or delivery identity; custody is not execution success. |
+| Worker reservation, attempt intent and launch outbox committed; start uncertain | Query the original `launch_id`; observe running, import terminal, or quarantine if unavailable. Only `NEVER_ACCEPTED` permits the same-ID launch. |
+| Result, digest, event and result-delivery outbox committed; input acknowledgement lost | Replay the same result/outbox; do not relaunch. A changed result is `RESULT_CONFLICT`. |
+| Round result and projections committed; sink effect or receipt uncertain | Scan non-applied projections, read the destination before replay, and adopt only matching evidence; unavailable readback cannot prove success. |
+| Report received; evidence, postcheck or settlement interrupted | Resume the same report/revision under §1.9.9, withhold success and follow-up until required proofs exist, and never rerun completed work. |
+
+These are recovery branches, not claims that a distributed transaction commits
+across stores. A crash before a local commit cannot justify its acknowledgement;
+unknown external effects remain fenced until readback resolves them. Manager
+admission dedupe uses the stored request digest and original receipt; changed
+bytes are refused. For the actual versioned records, constraints, retry and
+expired-claim scans, use M9 §17 rather than a second record schema here.
+
+ch:trace row=P5G-02 spec=docs/handbook/parts/I-system-arrangement.md#1.9.2-durable-records-and-acknowledgement wave=none:serial test=none doc=docs/handbook/parts/I-system-arrangement.md evidence=none:worker-local-handbook-change witness=none:repository-local-spec-only verdict=none commit=none memory=none
+
 A torn final record is quarantined and truncated to the last verified newline
 before restart; no acknowledgement can have depended on that uncommitted tail.
 A hash/sequence error in a complete record is `STORE_CORRUPT`: stop writes and

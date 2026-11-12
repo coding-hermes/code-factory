@@ -164,9 +164,9 @@ keys and their relationships, at `internal/database/migrations.go`:
 
 Relationship: a run (`execution_runs`) has 1:N attempts (`execution_attempts`) and 1:N ordered
 events (`execution_events`); the projection is the per-destination delivery/sync state; the outbox is the
-durable-delivery queue; the workspace lease is the single-active-writer boundary. The write
-authorities and recovery queries per table are not yet written — the keys, their uniqueness
-guarantees and their relationships are.
+durable-delivery queue; the workspace lease is the single-active-writer boundary. The
+write authorities and recovery procedure for this record set are fixed in §17 below;
+the keys, uniqueness guarantees and relationships above are not a competing store.
 
 ## 4. Dependencies
 
