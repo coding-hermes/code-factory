@@ -6,7 +6,7 @@ Every label is verified >= 2.05 mm at the builder's print scale; ink is black/wh
 
 | figure | what it answers |
 |---|---|
-| `system-map.svg` | 33 components in 6 layers; 31 typed contracts; model SHA-256 86bab48ff85ea8ad |
+| `system-map.svg` | 33 components in 6 layers; 31 typed contracts; model SHA-256 d386d1da44b5c527 |
 | `module-M0.svg` | M0 SHARED CONTRACT — inputs left, outputs right, flows below |
 | `module-M1.svg` | M1 PROVISIONING — inputs left, outputs right, flows below |
 | `module-M2.svg` | M2 DISPATCH (NODE SIDE) — inputs left, outputs right, flows below |

@@ -262,6 +262,15 @@ def system_map_sheet(model) -> Sheet:
         "external": "1 3",
         "controller-and-bunker": "8 3",
     }
+    # Component boxes are 150 units wide. Keep the full legal names in the
+    # enclosure legend, but do not let those names overlap adjacent components.
+    component_host_labels = {
+        "control": "CONTROL",
+        "bunker": "BUNKER",
+        "authority": "AUTHORITY",
+        "external": "EXTERNAL",
+        "controller-and-bunker": "DUAL INSTANCE",
+    }
 
     PX, BW, BH, COLGAP, ROWGAP = 16, 150, 40, 16, 12
     NAME_H = 18
@@ -346,7 +355,7 @@ def system_map_sheet(model) -> Sheet:
                 sh.text(bx + BW / 2, y0 + j * SMALL, ln, SMALL, anchor="middle")
             if c.get("tag"):
                 sh.text(bx + BW - 4, by + 10, c["tag"], TINY, anchor="end")
-            sh.text(bx + BW / 2, by + BH - 5, host_labels[host], TINY, anchor="middle")
+            sh.text(bx + BW / 2, by + BH - 5, component_host_labels[host], TINY, anchor="middle")
 
     gutter_top = {i: panels[i][2] + panels[i][3] for i in range(len(panels) - 1)}
     lanes: dict[int, list[float]] = {i: [] for i in range(len(panels) - 1)}

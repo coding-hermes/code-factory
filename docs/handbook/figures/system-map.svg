@@ -6,11 +6,11 @@
 <rect x="13.0" y="79.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="1 3"/>
 <rect x="16.0" y="82.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="91.0" y="103.5" font-size="18.50" fill="#000000" text-anchor="middle">OPERATOR</text>
-<text x="91.0" y="117.0" font-size="18.00" fill="#000000" text-anchor="middle">EXTERNAL TRUST DOMAIN</text>
+<text x="91.0" y="117.0" font-size="18.00" fill="#000000" text-anchor="middle">EXTERNAL</text>
 <rect x="179.0" y="79.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="182.0" y="82.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="257.0" y="103.5" font-size="18.50" fill="#000000" text-anchor="middle">SCHEDULER</text>
-<text x="257.0" y="117.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="257.0" y="117.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="345.0" y="79.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="8 3"/>
 <rect x="348.0" y="82.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="423.0" y="103.5" font-size="18.50" fill="#000000" text-anchor="middle">FOREMAN</text>
@@ -18,51 +18,51 @@
 <rect x="511.0" y="79.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="514.0" y="82.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="589.0" y="103.5" font-size="18.50" fill="#000000" text-anchor="middle">GITHUB</text>
-<text x="589.0" y="117.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="589.0" y="117.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="13.0" y="131.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="16.0" y="134.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="91.0" y="155.5" font-size="18.50" fill="#000000" text-anchor="middle">SCOPE MINTER</text>
-<text x="91.0" y="169.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="91.0" y="169.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="179.0" y="131.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="182.0" y="134.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="257.0" y="155.5" font-size="18.50" fill="#000000" text-anchor="middle">FACTORY MANAGER</text>
 <text x="328.0" y="144.0" font-size="18.00" fill="#000000" text-anchor="end">UNBUILT</text>
-<text x="257.0" y="169.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="257.0" y="169.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="345.0" y="131.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="2 2"/>
 <rect x="348.0" y="134.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="423.0" y="155.5" font-size="18.50" fill="#000000" text-anchor="middle">AUTHORITY</text>
-<text x="423.0" y="169.0" font-size="18.00" fill="#000000" text-anchor="middle">INDEPENDENT AUTHORITY</text>
+<text x="423.0" y="169.0" font-size="18.00" fill="#000000" text-anchor="middle">AUTHORITY</text>
 <rect x="511.0" y="131.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="514.0" y="134.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="589.0" y="155.5" font-size="18.50" fill="#000000" text-anchor="middle">MUTATION BROKER</text>
-<text x="589.0" y="169.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="589.0" y="169.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="16.0" y="374.0" width="648.0" height="130.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4"/>
 <text x="22.0" y="386.0" font-size="18.50" fill="#000000" text-anchor="start">TRANSPORT</text>
 <rect x="13.0" y="389.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="16.0" y="392.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="91.0" y="413.5" font-size="18.50" fill="#000000" text-anchor="middle">CRIER</text>
-<text x="91.0" y="427.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="91.0" y="427.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="179.0" y="389.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="8 3"/>
 <rect x="176.0" y="386.0" width="162.0" height="52.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="182.0" y="392.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="257.0" y="413.5" font-size="18.50" fill="#000000" text-anchor="middle">HERMES GATEWAY</text>
-<text x="257.0" y="427.0" font-size="18.00" fill="#000000" text-anchor="middle">DUAL: CONTROLLER + BUNKER</text>
+<text x="257.0" y="427.0" font-size="18.00" fill="#000000" text-anchor="middle">DUAL INSTANCE</text>
 <rect x="345.0" y="389.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="348.0" y="392.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="423.0" y="413.5" font-size="18.50" fill="#000000" text-anchor="middle">PROXY</text>
-<text x="423.0" y="427.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="423.0" y="427.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="511.0" y="389.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="1 3"/>
 <rect x="514.0" y="392.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="589.0" y="413.5" font-size="18.50" fill="#000000" text-anchor="middle">GITHUB PROVIDER</text>
-<text x="589.0" y="427.0" font-size="18.00" fill="#000000" text-anchor="middle">EXTERNAL TRUST DOMAIN</text>
+<text x="589.0" y="427.0" font-size="18.00" fill="#000000" text-anchor="middle">EXTERNAL</text>
 <rect x="13.0" y="441.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="1 3"/>
 <rect x="16.0" y="444.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="91.0" y="465.5" font-size="18.50" fill="#000000" text-anchor="middle">GITLAB PROVIDER</text>
-<text x="91.0" y="479.0" font-size="18.00" fill="#000000" text-anchor="middle">EXTERNAL TRUST DOMAIN</text>
+<text x="91.0" y="479.0" font-size="18.00" fill="#000000" text-anchor="middle">EXTERNAL</text>
 <rect x="179.0" y="441.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="1 3"/>
 <rect x="182.0" y="444.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="257.0" y="465.5" font-size="18.50" fill="#000000" text-anchor="middle">INFERENCE PROVIDER</text>
-<text x="257.0" y="479.0" font-size="18.00" fill="#000000" text-anchor="middle">EXTERNAL TRUST DOMAIN</text>
+<text x="257.0" y="479.0" font-size="18.00" fill="#000000" text-anchor="middle">EXTERNAL</text>
 <rect x="16.0" y="684.0" width="648.0" height="130.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4"/>
 <text x="22.0" y="696.0" font-size="18.50" fill="#000000" text-anchor="start">EXECUTION</text>
 <rect x="13.0" y="699.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="8 3"/>
@@ -77,7 +77,7 @@
 <rect x="348.0" y="702.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="423.0" y="723.5" font-size="18.50" fill="#000000" text-anchor="middle">TASK-ROUTER</text>
 <text x="494.0" y="712.0" font-size="18.00" fill="#000000" text-anchor="end">FUTURE</text>
-<text x="423.0" y="737.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="423.0" y="737.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="511.0" y="699.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="8 3"/>
 <rect x="514.0" y="702.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="589.0" y="723.5" font-size="18.50" fill="#000000" text-anchor="middle">HARNESS</text>
@@ -89,33 +89,33 @@
 <rect x="179.0" y="751.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="182.0" y="754.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="257.0" y="775.5" font-size="18.50" fill="#000000" text-anchor="middle">PROVISIONER</text>
-<text x="257.0" y="789.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="257.0" y="789.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="345.0" y="751.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="348.0" y="754.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="423.0" y="775.5" font-size="18.50" fill="#000000" text-anchor="middle">LANDER</text>
-<text x="423.0" y="789.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="423.0" y="789.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="16.0" y="994.0" width="648.0" height="78.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4"/>
 <text x="22.0" y="1006.0" font-size="18.50" fill="#000000" text-anchor="start">MEMORY</text>
 <rect x="13.0" y="1009.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="16.0" y="1012.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="91.0" y="1033.5" font-size="18.50" fill="#000000" text-anchor="middle">BOARD</text>
-<text x="91.0" y="1047.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="91.0" y="1047.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="179.0" y="1009.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="8 3"/>
 <rect x="176.0" y="1006.0" width="162.0" height="52.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="182.0" y="1012.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="257.0" y="1033.5" font-size="18.50" fill="#000000" text-anchor="middle">DUCKBRAIN</text>
-<text x="257.0" y="1047.0" font-size="18.00" fill="#000000" text-anchor="middle">DUAL: CONTROLLER + BUNKER</text>
+<text x="257.0" y="1047.0" font-size="18.00" fill="#000000" text-anchor="middle">DUAL INSTANCE</text>
 <rect x="345.0" y="1009.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="8 3"/>
 <rect x="342.0" y="1006.0" width="162.0" height="52.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="348.0" y="1012.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="423.0" y="1033.5" font-size="18.50" fill="#000000" text-anchor="middle">SESSIONS</text>
-<text x="423.0" y="1047.0" font-size="18.00" fill="#000000" text-anchor="middle">DUAL: CONTROLLER + BUNKER</text>
+<text x="423.0" y="1047.0" font-size="18.00" fill="#000000" text-anchor="middle">DUAL INSTANCE</text>
 <rect x="16.0" y="1252.0" width="648.0" height="130.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4"/>
 <text x="22.0" y="1264.0" font-size="18.50" fill="#000000" text-anchor="start">GOVERNANCE</text>
 <rect x="13.0" y="1267.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="16.0" y="1270.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="91.0" y="1291.5" font-size="18.50" fill="#000000" text-anchor="middle">GUARD</text>
-<text x="91.0" y="1305.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="91.0" y="1305.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="179.0" y="1267.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0" stroke-dasharray="8 3"/>
 <rect x="182.0" y="1270.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="257.0" y="1291.5" font-size="18.50" fill="#000000" text-anchor="middle">COMMIT GATE</text>
@@ -123,33 +123,33 @@
 <rect x="345.0" y="1267.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="348.0" y="1270.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="423.0" y="1291.5" font-size="18.50" fill="#000000" text-anchor="middle">DOC GATE</text>
-<text x="423.0" y="1305.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="423.0" y="1305.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="511.0" y="1267.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="514.0" y="1270.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="589.0" y="1291.5" font-size="18.50" fill="#000000" text-anchor="middle">CONFORMANCE</text>
-<text x="589.0" y="1305.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="589.0" y="1305.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="13.0" y="1319.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="16.0" y="1322.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="91.0" y="1343.5" font-size="18.50" fill="#000000" text-anchor="middle">NODE VERIFIER</text>
-<text x="91.0" y="1357.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="91.0" y="1357.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="179.0" y="1319.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="182.0" y="1322.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="257.0" y="1343.5" font-size="18.50" fill="#000000" text-anchor="middle">SAFETY</text>
-<text x="257.0" y="1357.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="257.0" y="1357.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="345.0" y="1319.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="348.0" y="1322.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="423.0" y="1343.5" font-size="18.50" fill="#000000" text-anchor="middle">DOC PANEL</text>
-<text x="423.0" y="1357.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="423.0" y="1357.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="511.0" y="1319.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="514.0" y="1322.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="589.0" y="1343.5" font-size="18.50" fill="#000000" text-anchor="middle">SPINE GATE</text>
-<text x="589.0" y="1357.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="589.0" y="1357.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <rect x="16.0" y="1562.0" width="648.0" height="78.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="6 4"/>
 <text x="22.0" y="1574.0" font-size="18.50" fill="#000000" text-anchor="start">EVIDENCE</text>
 <rect x="13.0" y="1577.0" width="156.0" height="46.0" fill="none" stroke="#000000" stroke-width="1.0"/>
 <rect x="16.0" y="1580.0" width="150.0" height="40.0" fill="#ffffff" stroke="#000000" stroke-width="1.8"/>
 <text x="91.0" y="1601.5" font-size="18.50" fill="#000000" text-anchor="middle">HANDBOOK</text>
-<text x="91.0" y="1615.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL HOST</text>
+<text x="91.0" y="1615.0" font-size="18.00" fill="#000000" text-anchor="middle">CONTROL</text>
 <polyline points="46.0,122.0 46.0,204.0 302.0,204.0 302.0,122.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>
 <text x="174.0" y="199.0" font-size="18.00" fill="#000000" text-anchor="middle">CT-01</text>
 <polyline points="257.0,122.0 257.0,212.5 91.0,212.5 91.0,392.0" fill="none" stroke="#000000" stroke-width="1.2" stroke-dasharray="1.5 3.5" marker-end="url(#ar)"/>

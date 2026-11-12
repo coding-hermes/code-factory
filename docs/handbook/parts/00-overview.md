@@ -120,7 +120,7 @@ lease, the foreman's durable return.
 The map is generated from `docs/SYSTEM-MODEL.yaml`, not drawn as a second
 inventory. This issue derives 33 components, six layers, 16 flows and 31 typed
 contracts (`CT-01` through `CT-30`, plus return leg `CT-06R`) from model SHA-256
-`86bab48ff85ea8adbd35b6071f96608c678a4e6434c99de76fb8fe1827cb2098`. The figure
+`d386d1da44b5c527eb71b46844dcf5b870bef9682bbafbdb28e07b8964936caf`. The figure
 and BOOK caption carry that identity so a model edit cannot silently leave a
 stale map.
 
@@ -162,6 +162,18 @@ prerequisites unsatisfied. **Complete** and **cancelled** are the only closed
 states. An authorized reopen returns either to pending with reopened evidence,
 residual work and a new row revision; it never silently rewrites a historical
 completion.
+
+## How a tick moves
+
+![FIGURE 0.3](figures/tick-lifecycle.svg)
+
+A due tick evaluates admission mode, board workability and resource pools before
+any envelope leaves the scheduler. A gate hold produces **deferred**, with a later
+evaluation rather than a fabricated no-op success. An admitted tick awaits its
+reply only within the dispatch deadline, then settles as **completed**, **failed**
+or **timeout** from the correlated result; reply success and timeout are distinct
+terminal evidence classes. The round-wide allowance and board state remain bound
+to the same dispatch identity throughout this lifecycle.
 
 ## One round, end to end
 

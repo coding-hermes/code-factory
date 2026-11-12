@@ -839,6 +839,7 @@ def main() -> int:
     today = str(doc["issue"])
     # Figure codes live in BOOK.yaml, not in filenames: one id resolves to one object.
     fig_codes = {str(f["file"]): str(f["code"]) for f in book.get("figures", [])}
+    fig_captions = {str(f["file"]): str(f.get("caption", "")) for f in book.get("figures", [])}
 
     sheets: list[
         tuple[str, list[str], str]
@@ -1017,14 +1018,34 @@ def main() -> int:
             ):  # one figure per sheet, hero-sized, caption carries the snapshot date
                 if fig is None:
                     continue
-                code = fig_codes.get(str(fig.relative_to(HB)), fig.stem.upper())
-                sheets.append(
-                    (
-                        f"PART {p['id']} · FIGURE {code}",
-                        [f"<h2>FIGURE {code} — as of {today}</h2>", svg_fit(fig)],
-                        tab,
+                rel_fig = str(fig.relative_to(HB))
+                code = fig_codes.get(rel_fig, fig.stem.upper())
+                title = f"PART {p['id']} · FIGURE {code}"
+                heading = f"<h2>FIGURE {code} — as of {today}</h2>"
+                caption = fig_captions.get(rel_fig, "")
+                explanation = f"<p>{inline(caption)}</p>" if caption else ""
+                if fig_scaled_h(fig) > SEP_FIG_MAX_MM:
+                    # Keep the full-scale print floor. A tall hero gets an explicit
+                    # adjacent spread instead of a title-only page created implicitly
+                    # by pagination; the running head binds the full-scale figure to
+                    # the explanation on the preceding sheet.
+                    sheets.append(
+                        (
+                            title,
+                            [heading, explanation,
+                             f"<p>FIGURE {code} continues at full scale on the immediately adjacent sheet.</p>"],
+                            tab,
+                        )
                     )
-                )
+                    sheets.append((title + " · CONTINUED", [svg_fit(fig)], tab))
+                else:
+                    sheets.append(
+                        (
+                            title,
+                            [heading, svg_fit(fig, h_max=SEP_FIG_MAX_MM), explanation],
+                            tab,
+                        )
+                    )
 
     # The .page container is what makes overflow measurable (skill: without it the fit
     # script no-ops and every page is silently unconstrained). The cover is its own page
