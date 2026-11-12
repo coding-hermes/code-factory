@@ -4,6 +4,30 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 . "$HERE/scripts/lib.sh"
 fails=0
+finished=0
+finish() {
+  local rc="${1:-1}"
+  [ "$finished" -eq 1 ] && return
+  finished=1
+  trap - EXIT
+  if [ "$rc" -eq 0 ]; then
+    say "SELFTEST: PASS"
+    say "EXIT=0"
+    exit 0
+  fi
+  say "SELFTEST: FAIL (${fails:-1})"
+  say "EXIT=1"
+  exit 1
+}
+# Keep an unexpected top-level abort observable to pollers too. Subshells run
+# fixture commands and must not append a suite sentinel to captured output.
+selftest_exit_trap() {
+  local rc=$?
+  [ "${BASH_SUBSHELL:-0}" -eq 0 ] || return
+  [ "$finished" -eq 1 ] || finish 1
+  return "$rc"
+}
+trap selftest_exit_trap EXIT
 t() { if eval "$2" >/dev/null 2>&1; then say "  PASS  $1"; else say "  FAIL  $1"; fails=$((fails+1)); fi; }
 
 say "1. every script parses"
@@ -7513,4 +7537,4 @@ else
 fi
 
 say ""
-[ "$fails" -eq 0 ] && { say "SELFTEST: PASS"; exit 0; } || { say "SELFTEST: FAIL ($fails)"; exit 1; }
+[ "$fails" -eq 0 ] && finish 0 || finish 1
