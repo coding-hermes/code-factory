@@ -310,7 +310,10 @@ from approved target behavior.
 - **Inputs:** `CT-02` the scheduler's signed envelope, accepted by
   `internal/registry/handler.go:990` `HandleDeliver` into the durable inbox,
   verbatim after the CF-354 fix (PROVEN); `CT-04` the node's reply (PARTIAL);
-  `CT-22` agent registration (producer half not established, M1 §6).
+  `CT-22` agent registration: normatively the authority/controller creates
+  `registration_id` and issues the class-`crier` credential reference at enrollment;
+  the node emits `register.v1` (outer `cf2a.v1`). Implementation coverage is
+  unverified because no in-repo producer was measured (CF-276; M1 §6).
 - **Outputs:** `CT-03` inbox message plus a 30-second lease, pulled by
   `scripts/node-bus-worker.py:1356,1383` with a signed GET and cleared by
   `/inbox/ack` (PROVEN); `CT-06` the completion event carried with ReplyTo
@@ -397,8 +400,11 @@ from approved target behavior.
   events (BROKEN — no in-repo producer, M4 §6); `CT-11` turns to the session
   store (boundary wire, M2 §6); `CT-12` the staged diff via the pre-commit hook
   pinned at `scripts/install-gitreins.sh:124` (hook enforcement unproven, M3 §6);
-  `CT-19` inference through the proxy; `CT-22` agent registration (producer half
-  not established, M1 §6).
+  `CT-19` inference through the proxy; `CT-22` agent registration. The normative
+  actor/data shape is the authority/controller-issued `registration_id` and
+  class-`crier` credential reference followed by node `register.v1` (outer
+  `cf2a.v1`); implementation coverage is unverified because no in-repo producer
+  was measured (CF-276, M1 §6).
 - **Consumers:** crier (reply), harness, proxy, gitreins.
 - **Failure behavior:** a dead worker returns its row to blocked rather than
   letting it vanish (Part 0); redelivery replays only a recorded result (M11 §3 S2).

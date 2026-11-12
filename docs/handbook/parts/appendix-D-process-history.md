@@ -51,7 +51,7 @@ the state is UNVERIFIED where the wire was not measured this round
 (sol B06)
 
 ## M1-provisioning.md:193
-(B03, sol): the actual key-generation/registration producer is not established in any code read this round
+(B03, sol): historical implementation-coverage observation — the actual key-generation/registration producer was not established in any code read that round; the target actor and CT-22 wire are now normative in M1 §6/§17.1 and IV.2.1, while CF-276 tracks the measured absence
 
 ## M1-provisioning.md:193
 round-4 cited only `HandleRegister` for the id-in-path route, which is wrong (kimi B08)

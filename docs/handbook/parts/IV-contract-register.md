@@ -77,7 +77,8 @@ only at the explicitly listed object positions and with registered members.
 Transport response status is not a worker verdict. Secret values never enter an
 envelope; M1 §17 defines credential-reference exchange and authentication.
 
-Identity ownership is explicit: the controller creates `registration_id` at enrollment;
+Identity ownership is explicit: the controller creates `registration_id` at enrollment and
+issues the Crier identity plus the class-`crier` `credential_ref`;
 the scheduler creates `round_id` and `run_id` at admission; the foreman creates
 `wave_id` after admission and `attempt_id` immediately before worker launch; the Crier
 creates `delivery_id` and `lease_id` at custody; the foreman reserves
@@ -111,7 +112,7 @@ the closed typed bodies and results; M1–M6 supply the referenced operation pro
 | `CT-19` | node token reference, `model`, request body, `corr_id`; result finite stream or typed HTTP error | token scope/expiry is checked before upstream work; revoked/expired token is `UNAUTHORIZED`; cancellation stops upstream work where supported and is recorded |
 | `CT-20` | proxy request with model policy, control-host credential reference and upstream correlation | proxy owns provider-key custody and usage accounting; upstream errors before/after headers are distinct, and capture failure follows configured redaction policy |
 | `CT-21` | provider/app identity, repository scope, credential reference, destination profile; result fingerprint, expiry, scope | issuer and installer remain distinct; wrong scope/mode is refused; renewal overlaps safely, revocation prevents restore from reactivating the credential |
-| CT-22 | `register.v1`: registration_id, agent_id, project_id, expected_generation, profile, public_identity, capabilities (§IV.2.1) | first expected_generation=0 allocates 1; same registration_id/idempotency_key replays; changed input conflicts; M1 §17.1 defines trust, signature, nonce and credential exchange |
+| CT-22 | `cf2a.v1` envelope with `register.v1` body: registration_id, agent_id, project_id, expected_generation, profile, public_identity, capabilities (§IV.2.1); the authority/controller creates `registration_id` at enrollment and issues the class-`crier` `credential_ref` | first expected_generation=0 allocates 1; same registration_id/idempotency_key replays; changed input conflicts; M1 §17.1 defines trust, signature, nonce and credential exchange |
 | `CT-23` | pinned Bunker CLI/protocol request `{agent_id, operation, image/profile, request_id}`; result typed exit/status, stdout/stderr digest and capability readback | create/exec/cp are scoped to the agent; unsupported capability is refused; retries use the same request id and cannot duplicate a create |
 | `CT-24` | manager desired update `{schema_version, project_id, expected_generation, desired, idempotency_key}`; result new generation and operation id | configuration file/API is authoritative; stale generation is `GENERATION_CONFLICT`; desired state is durable before reconciliation |
 | `CT-25` | manager observed readback `{scope, adapter_id, observation_id, observed_at, values, quality}`; result effective state | observations are immutable; stale/partial quality is visible and cannot establish convergence |
@@ -239,7 +240,7 @@ and Part V §V.0, not the earlier card shorthand `desired_generation` aliases.
 | CT-19 / inference.request / POST /v1/chat/completions | schema_version:cf.inference.v1, model:Text, messages:ChatMessage[1..1000], stream:boolean default false, options:{temperature,top_p,max_output_tokens,stop,tools,tool_choice}, request_id:ID, deadline:Time; canonical body <=1048576 bytes and raw transport ceiling <=4194304 bytes | BufferedCompletion or M12 SSE with seq=0 origin, usage then terminal then [DONE]; arbitrary provider options and multimodal content refuse; token scope/expiry checks precede upstream work |
 | CT-20 / inference.forward / proxy request identity | CT-19 request plus token_id, upstream_credential_ref:ID, policy_generation:PosInt, upstream_corr_id:ID | same buffered/stream result and served-model identity; serializable budget/slot reservation precedes forwarding, usage commits before complete, response lookup never re-executes |
 | CT-21 / credential.install / credential-install.v1 | operation_id:ID, credential_ref:CredentialRef, destination_profile:ID | {fingerprint:SHA,expires_at:Time,scope:ID[],mode:literal "0600"}; M1 §17.1 sealed-fd resolution/readback |
-| CT-22 / register / register.v1 | registration_id/agent_id/project_id:ID, expected_generation:UInt, profile:ID, public_identity:{certificate_der:Text,key_id:ID}, capabilities:ID[1..100] unique | {registration_id:ID,registration_generation:PosInt,expires_at:Time,credential_ref:CredentialRef}; first expected=0, repeats key off registration_id+idempotency_key, never an unknown generation |
+| CT-22 / register / `cf2a.v1` with `register.v1` body | registration_id/agent_id/project_id:ID, expected_generation:UInt, profile:ID, public_identity:{certificate_der:Text,key_id:ID}, capabilities:ID[1..100] unique | {registration_id:ID,registration_generation:PosInt,expires_at:Time,credential_ref:CredentialRef}; first expected=0, repeats key off registration_id+idempotency_key, never an unknown generation |
 | CT-23 / adapter.apply / factory-adapter.v1 | exact Part I §1.9.5 adapter request, input=cf.provision.v1 from M1 §17.2 for provisioning | StepResult with output=M1 result; CLI/daemon artifact digests from signed release lock |
 | CT-24 / config.update / factory.v1 | Part I §1.9.1 PUT /v1/config request and Part V §V.0 desired document | Accepted, generation CAS |
 | CT-25 / adapter.readback / factory-adapter.v1 | Part I §1.9.5 readback request | StepResult and exact capability-registered Observation |
@@ -520,7 +521,7 @@ below are implementation coverage, not the contracts.
 | CT-19 | node → proxy | chat completion with a node bearer token | http, bearer node token | UNVERIFIED |
 | CT-20 | proxy → gateway | forwarded inference with the control-host key | http, 300 s timeout | UNVERIFIED |
 | CT-21 | github → node | installation token installed at auth/github.token, mode 0600 | https api, JWT mint | UNVERIFIED |
-| CT-22 | node → crier | agent registration + token exchange | https, POST /agents | UNVERIFIED |
+| CT-22 | authority/controller → node → crier | enrollment-issued Crier identity and class-`crier` credential reference, then `cf2a.v1`/`register.v1` agent registration + token exchange | target `/v1/factory/registrations`; measured `/agents` coverage boundary | UNVERIFIED — implementation producer not measured in-repo (CF-276); target actor and wire are normative |
 | CT-23 | provisioner → bunker | create, exec, cp against the agent container | bunker CLI | UNVERIFIED |
 | CT-06R | foreman → crier → scheduler | versioned round report and durable return | async, signed, correlated | TARGET-UNIMPLEMENTED |
 | CT-24 | owner/agent → manager | desired configuration generation update | authenticated API/file, CAS | TARGET-UNIMPLEMENTED |

@@ -279,7 +279,7 @@ The following citations describe legacy source coverage, not target qualificatio
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| CT-22 | crier | out | **none in-repo** — `bunker-crier-connect.sh` stages `$HOME/.node/crier.json` and probes the inbox via `node-bus-worker.py --check` (`:13`, `:33`, `:53`, `:114-118`); it does **not** issue a registration request or write `auth/crier.token` (B06). **Neither `node_identity.py` (`:50-107`, merges/replaces local JSON) nor `node_gateway_auth.py` (`:70-162`, writes dashboard basic-auth + a password file) registers an agent** (B03): the actual key-generation/registration producer is not established in any code read | crier `internal/registry/handler.go:598` `HandleRegister` (POST `/agents`) and `:613` `HandleRegisterByID` (POST `/agents/{id}`) — an earlier citation listed only `HandleRegister` for the id-in-path route (B08) | **UNVERIFIED** — the token/registration exchange was not re-run, and the in-repo producer half is not established |
+| CT-22 | crier | out | **Normative target:** the authority/controller creates `registration_id` at enrollment and issues the Crier identity plus the CT-21 `credential.install` `credential_ref` with class `crier`; the node then emits the CT-22 outer `cf2a.v1` / body `register.v1` request (POST `/agents` at the CT-22 coverage boundary; the target adapter path is `/v1/factory/registrations` per §17.1) and proves a verified signed bus read before scheduling. **Implementation coverage:** no in-repo producer was measured — `bunker-crier-connect.sh` only stages `$HOME/.node/crier.json` and probes the inbox via `node-bus-worker.py --check` (`:13`, `:33`, `:53`, `:114-118`); it does **not** issue the registration request or write `auth/crier.token` (B06). **Neither `node_identity.py` (`:50-107`, merges/replaces local JSON) nor `node_gateway_auth.py` (`:70-162`, writes dashboard basic-auth + a password file) registers an agent** (B03); this measured absence is tracked as CF-276 and is not a gap in the target contract. | crier `internal/registry/handler.go:598` `HandleRegister` (POST `/agents`) and `:613` `HandleRegisterByID` (POST `/agents/{id}`) — implementation coverage only; the target contract is CT-22 `register.v1` | **UNVERIFIED** — the token/registration exchange was not re-run; the implementation producer is absent from the measured in-repo surface, while the normative actor and wire are specified above |
 | CT-23 | bunker daemon | out | `lib.sh:107` `bunker_exec` | external public CLI/protocol | UNVERIFIED — legacy short-call observations lack a version-bound target qualification record |
 
 ## 7. Verification
@@ -299,6 +299,19 @@ The following citations describe legacy source coverage, not target qualificatio
 | spawn/staging failure diagnostics (CF-056) | `bash tests/selftest.sh` §16 (`tests/selftest.sh::cf056-spawn-staging-failure`) | a staging failure names the failed artifact and emits no later `PASS provision`; a spawn failure names a unique per-run log containing the agent id and its final diagnostic | 2026-11-10 | **PASS** (offline fixture only — no live bunker evidence) |
 | identity-file union (CF-289) | `bash tests/selftest.sh` §47 — the `CF-289-node-json-union` arms; preconditions `bash -n scripts/project-node.sh`, `python3 -m py_compile scripts/node_identity.py` | `PASS CF-289-node-json-union — identity-then-apply leaves agent/namespace/duckbrain/provisioned_by AND the ladder's keys (mode 600, exit 0)` plus the red control `PASS pre-fix 23114f4 exits 0 while deleting agent/namespace/duckbrain/provisioned_by — this arm discriminates` | 2026-11-09 | **PASS** (offline fixture only — the identity step and the ladder both run on a fixture home; no live node run) |
 | certification ladder | `scripts/verify-node.sh --agent <id> --server <host>` on a live node | per-leg observation | not run | **UNVERIFIED** (needs a live node; legs documented in §11) |
+
+**Cold-bootstrap specification proof (P5G-04).** Run from the repository root;
+the first command prints `0` (and grep exits 1 for no match), the second prints the
+CT-22 and A5 actor/registration rows, the third prints the IV register fixture and
+the M1 CT-22 row, and the fourth prints A5 including both failure states and resume
+identity. Line numbers in the output are navigation aids, not asserted values.
+
+```bash
+forbidden='named spec'; forbidden="$forbidden gap"; grep -c "$forbidden" docs/handbook/chapters/M1-provisioning.md
+grep -nE 'authority/controller.*CT-22.*register[.]v1' docs/handbook/chapters/M1-provisioning.md
+grep -nE 'cf2a[.]v1.*register[.]v1' docs/handbook/parts/IV-contract-register.md docs/handbook/chapters/M1-provisioning.md
+grep -F '| A5 | Bus membership:' docs/handbook/chapters/M1-provisioning.md | grep -E 'ENROLLMENT_FAILED|DEGRADED|operation_id|manifest_digest'
+```
 
 ## 8. Metrics
 
@@ -491,7 +504,7 @@ Harness (handoff §1.5).
 | A2 | Bunker server prep (homes/keys, orphan reap) | operator, control host (`bunker-server-install.sh`) | A3 | server-level refusal, nothing spawned |
 | A3 | Agent create + per-Bunker config generate/readback | operator via `bunker-provision.sh --apply` / `node-create.sh` | A4 | partial artifacts named; destroy/retry contract below |
 | A4 | Credentials issued and installed — all five classes (R4) | control host + node, per class issuer | A5–A9 | a class that fails to install blocks its dependent legs only |
-| A5 | Bus membership: Crier identity + registration/token exchange, verified signed read | **producer currently unestablished — a named spec gap**; consumer `bunker-crier-connect.sh` staging + inbox probe | M2 dispatch | an unverified bus membership is not schedulable |
+| A5 | Bus membership: Crier identity + registration/token exchange, verified signed read | **Normative actor/data:** the authority/controller issues the Crier identity and the CT-21 `credential.install` `credential_ref` with class `crier` at enrollment; the node then performs CT-22 `register.v1` (outer `cf2a.v1`, target `/v1/factory/registrations`; `/agents` is the measured coverage boundary) and proves a verified signed bus read before it is schedulable. **Implementation coverage:** `bunker-crier-connect.sh` only stages `$HOME/.node/crier.json` and probes the inbox; no in-repo registration producer was measured (CF-276), as recorded in the CT-22 coverage row. | M2 dispatch | enrollment failure sets `ENROLLMENT_FAILED`; a failed or unproven signed bus read sets `DEGRADED` and the node is **NOT** schedulable; stage-6 private clone and other dependents do not run. Resume the last completed stage under §17.2 with the same `operation_id`, `generation` and `manifest_digest`. |
 | A6 | Repo + **embedded board** checkout (the board ships inside the project repo, M4) | provisioner (M1 owns the checkout; M3 manages it afterwards) | M3/M4 | seed drift gates readiness |
 | A7 | Harness install: **exact Hermes/Oh My Hermes build pin** + tools/settings | provisioner via M5 installers | M5 lifecycle | version readback required, not name-only |
 | A8 | Inference access: node-scoped proxy credential + endpoint/model policy + **end-to-end inference proof** | M1 provisions; M12 owns the proxy credential chain | M5 run path | config-present-without-a-successful-request is not readiness |
@@ -530,11 +543,12 @@ inference access; and DuckBrain on every Bunker (review notes M1 + handoff §1.2
 harness installation chain connects to M5 through a precise integration contract; Task Router is
 future and outside this list.
 
-**R4 — Distinct credential classes (required).** Five classes with separate producers, scopes,
+**R4 — Distinct credential classes (required).** Five classes with separate authorities/producers, scopes,
 delivery, renewal and revocation, never interchangeable: (1) forge/GitHub (app installation,
 scoped tokens, deploy keys — clone/fetch vs push vs merge permissions documented separately; a
 read-only deploy-key proof does not establish publication capability); (2) Crier bus
-(key generation, registration, token exchange — producer to be named); (3) Bunker-control;
+(the authority/controller issues the Crier identity and class-`crier` credential reference at enrollment;
+the node performs CT-22 `register.v1` and the signed-read proof); (3) Bunker-control;
 (4) proxy/model access (node-scoped, preserving the control-host provider-secret boundary —
 provider keys are **not** copied to workers); (5) memory/DuckBrain. Each needs issuer, secure
 installation, expiry, renewal, revocation and error reporting (review notes M1, changes 4/8;

@@ -189,9 +189,13 @@ binding whose identity/version matches the readiness result.
 
 **Exceptional branches:** the certification ladder awards VERIFIED per leg — agent,
 gateway, auth, artifact, tree, seed — and an unreachable port is UNVERIFIED
-(exit 3), not FAIL (M1 §10, CF-224). The node's registration producer half is not
-established; crier's `HandleRegister`/`HandleRegisterByID` are named, the wire is
-UNVERIFIED (M1 §6). A partial failure re-runs from the manifest: the seed reapplies
+(exit 3), not FAIL (M1 §10, CF-224). Normatively, the authority/controller creates
+`registration_id` at enrollment, issues the Crier identity and class-`crier`
+`credential_ref`, and the node performs CT-22 `register.v1` (outer `cf2a.v1`) before
+the verified signed bus read. Implementation coverage remains UNVERIFIED: no in-repo
+producer was measured; `bunker-crier-connect.sh` stages and probes only (CF-276),
+while crier's `HandleRegister`/`HandleRegisterByID` are the measured receiver surface.
+A partial failure re-runs from the manifest: the seed reapplies
 and names drift per file (M1 §3 S4). Preparation steps persist which legs
 succeeded, so retry is idempotent or compensates named partial resources, and
 created-but-unverified is never reported as ready. If no eligible capacity
@@ -199,9 +203,11 @@ satisfies the request, desired state is retained, the unsatisfied allocation is
 exposed as a metric/event with configured webhook delivery, and host eligibility is
 never silently widened.
 
-**Contracts:** node manifest and seed (`M1 §3`); registration producer/wire
-(UNVERIFIED, M1 §6); verifier ladder legs (M1 §10–12); crier registration
-`HandleRegister`/`HandleRegisterByID` (UNVERIFIED).
+**Contracts:** node manifest and seed (`M1 §3`); CT-21 enrollment credential
+installation and CT-22 `register.v1` (outer `cf2a.v1`, M1 §§6, 17.1–17.2);
+verifier ladder legs (M1 §10–12). The measured crier receiver surface is
+`HandleRegister`/`HandleRegisterByID` (UNVERIFIED); implementation coverage is
+not the target contract.
 
 **Settings:** disk floor; the Bunker deployment profile (fresh image-backed or
 persistent container) and per-Bunker Factory configuration with setup/readback;
@@ -263,6 +269,13 @@ No running manager, lane, board or project credential is a prerequisite.
    after verified enrollment; failure retains only protected diagnostic references.
 7. An authorized generation update adds the first project and CT-01 lane seed.
    F2 steps 1–7 provision it; §1.9.4 binding activation is the only admission enable.
+
+For the first private-repository node, the manager is the authoritative enrollment
+actor: it obtains the authority/controller-issued Crier identity and class-`crier`
+`credential_ref`, then the node performs CT-22 `register.v1` in a `cf2a.v1`
+envelope and proves the signed bus read before the §17.2 stage-6 private clone.
+This is the target sequence; implementation coverage remains separately measured in
+M1 §6 and CF-276.
 
 **State/failure/recovery:** an installer receipt tracks artifact digests and completed
 steps; before manager genesis it is a fsynced local journal with one installation

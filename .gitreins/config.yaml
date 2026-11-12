@@ -43,7 +43,18 @@ evaluator:
   # Measured tier-2 input tokens at this cap: 515,807 (run b6c85e4e) and 1,197,393 (run
   # 606d010f) over 40 iterations = 13k-30k tokens/iteration burn, so the binding rung is
   # iteration count, not the time or input-token budget. Raised one rung (40 -> 100).
-  max_iterations: 100
+  # 100 bound twice on 2026-11-12 while grading one docs/board criterion on this repo, and
+  # both times the criterion was the thing that lost, not the code:
+  #   run a1481cc6 (7d110b1b) — verdict reached at 31.7 iterations (415,453 in) but the run
+  #     kept exploring to 100.1 before it could report FAIL on two counts it had falsified;
+  #   run 16932ace (284417cb) — 100.2 iterations, 4,806,540 in / 8,575 out, and the single
+  #     criterion came back "Not examined — evaluation ended before this criterion was
+  #     reached", so 0 of 1 graded and an INCOMPLETE that says nothing about the diff.
+  # The judge re-derives every quoted number from the instruments (selftest, board_drift,
+  # boardctl, board_evidence_check, cf181 sweep, P5G-01 re-probe), so ~48k input tokens per
+  # iteration is the price of one full pass. Raised one rung (100 -> 200) per the cap-sizing
+  # rule so a full pass fits inside the budget instead of being cut off after it.
+  max_iterations: 200
   static_analysis_diagnostics: false
 history:
   enabled: true
