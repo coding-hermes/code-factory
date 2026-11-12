@@ -138,9 +138,12 @@ scripts/boardctl validate
 bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 ```
 
-- **Re-measured 2026-11-12T12:31Z at tip `cdf12123`:** 492 task rows, 714 events (max event id 713;
-  the one legacy event row at line 670 carries no `id` field, which is the `boardctl` warning that
-  names it) — 138 `complete`, 14 `in_progress`, 340 `pending`, no `blocked`, no duplicate task ids.
+- **Re-measured 2026-11-12T12:31Z at tip `cdf12123`:** 492 task rows, 714 events at census time
+  (max event id 713; the one legacy event row at line 670 carries no `id` field, which is the
+  `boardctl` warning that names it). The census event this commit appends takes the file to 715
+  lines with max id 714, and that row's own `detail.events` records the pre-append count — so the
+  line count and the detail field are two different numbers on purpose, not a discrepancy to
+  reconcile. Status break: 138 `complete`, 14 `in_progress`, 340 `pending`, no `blocked`, no duplicate task ids.
   Both board files are byte-identical to their `origin/main` copies
   (`python3 scripts/board_drift.py check --workdir . --ref origin/main` prints `RESULT: OK`,
   `board rows — 492 vs 492 rows; 0 divergent ids`, and the HEAD and HEAD-ancestry legs both name
@@ -165,8 +168,8 @@ bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
   `complete` rows carry `detail: null`, an evidence block that does not exist at all (**CF-289**,
   **CF-305**); every iterating consumer still errors on the string row. `bash tests/selftest.sh`
   prints `SELFTEST: PASS` (rc 0) on a CLEAN DETACHED WORKTREE of this tip — `PASS 492/492 rows parse`,
-  552 `PASS` rows and 61 `FAIL` rows that all sit inside negative fixtures, 726-line log — at
-  loadavg 23.82 (1 min), and `python3 scripts/handbook_lint.py` prints `handbook_lint: clean`. The
+  547 two-space-indented `PASS` check lines and 61 `FAIL` lines that all sit inside negative
+  fixtures, 726-line log — at loadavg 23.82 (1 min), and `python3 scripts/handbook_lint.py` prints `handbook_lint: clean`. The
   newest closure, **P5G-01** (`commit_hash 00ce1825`, evidence run `56130e3d`), was re-probed here
   rather than trusted: all of its published proofs reproduce at this tip — the IV.1 outer-envelope
   rule via `awk '/^All cards use the outer envelope/,/^$/'` on
