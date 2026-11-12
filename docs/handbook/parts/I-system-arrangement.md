@@ -1176,6 +1176,13 @@ outside this broker invalidate the managed single-writer guarantee and trigger
 Board ref CAS, memory remote commits and Git publication all pass through that
 broker. Crier binding changes and scheduler dispatch permission validate the
 current fence online; revocation/fence changes serialize with admission grants.
+F15 backup capture does not replace this authority: the manager's ordered
+cross-store barrier checkpoints M9 scheduler state and M10 Crier custody, while
+this independent authority supplies newer fences and revocations during isolated
+restore. The restored manager must reconcile those values before a writer or
+credential is admitted; an old backup watermark cannot authorize an old owner.
+The target procedure is `cf.backup.v1` with `RESTORE_RESULT` and known-row
+readback, and remains `TARGET-UNIMPLEMENTED` / `UNVERIFIED` until a live drill.
 The Bunker-local memory writer may commit disconnected draft evidence, but marks
 it pending authorization; a fenced draft cannot modify the canonical namespace.
 M7 §17–17.1 specifies the resource transaction boundaries and deterministic

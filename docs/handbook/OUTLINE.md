@@ -87,8 +87,14 @@ day-one/empty case · degradation path · diagram.
   the running artifact's version read back, and the DB migrated. *(MISSING)*
 - **F14 OBSERVABILITY INGESTION** — trigger: every tick, turn and message; exit: the row
   or line is visible and attributed where a human will look for it. *(MISSING)*
-- **F15 BACKUP AND RESTORE** — trigger: schedule, or detected corruption; exit: an
-  artifact restored into a scratch home and a known row read back. *(MISSING)*
+### F15 BACKUP AND RESTORE
+
+Trigger: schedule, detected corruption, pre-migration capture or restore drill; exit: a
+verified `cf.backup.v1` artifact restored into an isolated scratch scope, current
+fences/revocations reconciled, and a known row read back. The Factory manager is the
+authoritative coordinator; M8 owns the cross-store safety boundary, M9 the scheduler
+checkpoint leg, and M10 the Crier custody checkpoint leg. Runtime restore remains
+`TARGET-UNIMPLEMENTED` / `UNVERIFIED` until an independent drill proves it.
 - **F16 MULTI-NODE FAN-OUT** — trigger: a lane or row targeting more than one node; exit:
   every target acknowledged, each with its own receipt. *(MISSING)*
 

@@ -730,6 +730,27 @@ retention, encryption-key reference, revocation snapshot and excluded/loss windo
 RPO/RTO and schedule are declared per store; a target policy may be daily with a
 24-hour RPO and 4-hour RTO, but an unsupported deployment must state its actual bound.
 A board-drift comparison is validation evidence, not a backup creator or checkpoint.
+The barrier ordering and manifest vocabulary in F15.1 are authoritative here: the
+manager closes scheduler admission, drains/checkpoints the round, freezes broker
+writes, checkpoints Crier custody, flushes memory writers, and checkpoints its own
+journal before any snapshot is captured. The resulting `consistency_marker` carries
+one receipt per participant; `cf.backup.v1` is the only backup schema. A missing
+participant or failed digest/readback aborts a complete cut rather than silently
+turning an exclusion into success.
+
+Restore is isolated and starts with the independently retained authority, not the
+backup-local watermark. It imports newer fences and revocations, then reconciles
+scheduler/Crier custody, board claims, memory identities and credentials before
+admission. A stale owner or credential is denied (`STALE_OWNER` or
+`AUTHORITY_UNAVAILABLE`); an old revocation snapshot never grants authority. The
+known-row readback is a readiness gate, and `RESTORE_RESULT` reports per-store
+revisions, loss intervals, duplicate suppression and readiness. These are target
+rules; live restore remains `TARGET-UNIMPLEMENTED` / `UNVERIFIED`.
+
+A deterministic state vector for the pending Crier, acknowledged Crier, pending
+memory, stale owner/credential and known-row cases is specified in Part II F15 and
+uses `CV-06-B` (`backup-1`, barrier sequence 9). It is independently checkable from
+that specification and does not claim a live restore drill.
 
 Capture fails closed if any store cannot checkpoint or if a digest/readback fails; the
 backup is `CAPTURE_FAILED` and is not published. Validation re-hashes every artifact,
