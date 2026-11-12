@@ -316,7 +316,8 @@ Expired credentials become expired on trusted issuer time, not falsely provider-
 A mint with lost provider response stays mint_unknown: GitLab reconciles by the
 unique operation name; GitHub has no guaranteed token-recovery API, so the issuer
 waits the provider maximum lifetime or suspends the installation with denial proof
-before retry. Restore uses VI.35's independent watermark, never backup expiry alone.
+before retry. Restore uses VI.35's independent authority checkpoint and current
+revocation set from F15, never backup expiry or a backup-local watermark alone.
 
 ## 17. Resource-side mutation fencing (P5-C-17)
 

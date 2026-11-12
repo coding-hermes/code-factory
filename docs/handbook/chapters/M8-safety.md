@@ -236,7 +236,11 @@ The reaper is idempotent by operation id and rechecks protection immediately bef
 ## 16. Serialized retention and qualified isolation (P5-C-18/33)
 
 The retention owner uses the manager's retention rows (Part I §1.9.2) as the sole
-admission authority for leases, evidence references and cleanup. Each target has
+admission authority for leases, evidence references and cleanup. F15 backup holds
+are a distinct typed hold: a target referenced by a `cf.backup.v1` capture cannot
+be deleted until the manager records capture, validation and off-host readback, or
+a fenced recovery decision records the loss interval. A backup exclusion is not an
+empty store and never authorizes cleanup. Each target has
 `resource_id`, canonical root-relative path, device/inode identity, version,
 state `live`, `deleting`, `deleted` or `quarantined`, and a set of typed holds
 `lease`, `evidence`, `pending_sync`, `backup`. Hold creation and transition

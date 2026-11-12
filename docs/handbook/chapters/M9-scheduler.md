@@ -494,6 +494,12 @@ rounds for missing receipts and never creates a new round until settlement or ex
 fenced abandonment. Publication without receipt is adopted only from matching remote
 OID and effect digest. Every repair transition checks state_version and emits one
 event. A crash at each transaction/external-call boundary must preserve these counts.
+For F15, the manager captures this store only after the scheduler admission barrier
+and round checkpoint; a restored scheduler imports the current authority Fence and
+revocations before reopening admission. An older `cf.backup.v1` watermark cannot
+authorize an old owner, and a pending outbox/round is restored once by identity rather
+than relaunched. A failed checkpoint or known-row readback leaves admission closed and
+`RESTORE_RESULT` not ready.
 
 ## 18. Hook plan and receipts (P5-C-11)
 

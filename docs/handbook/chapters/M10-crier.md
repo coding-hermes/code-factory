@@ -463,6 +463,16 @@ receipts persist 30 days after terminal state and archived custody receipts 90 d
 expired IDs return 410. Crier never launches work, infers execution success or settles
 Scheduler state. [M9.17; VI.34; shared SC-01/SC-07 vectors]
 
+For F15, M10 checkpoints this custody store only while the manager-owned barrier is
+held and records the last transaction, custody sequence and root digest in the
+`cf.backup.v1` `consistency_marker`. A pending `queued` delivery is restored once
+under its `delivery_id` and remains pending; an `acked` delivery and its result
+receipt are never replayed as a new message. A failed native snapshot, digest or
+known-row readback fails closed and leaves the isolated restore unready. Current
+authority fences and revocations are reconciled before any retrieve, deliver or ack;
+an older backup watermark cannot admit a stale owner. `RESTORE_RESULT` reports
+per-store revision, duplicate suppression, loss/pending-sync intervals and readiness.
+
 Crier emits `factory.telemetry.v1` operations `deliver` and `renew` with delivery chain
 sequence, bounded backend/peer outcomes and FactoryIdentity. Result custody is
 `deliver`, not a `pass` verdict. Duplicate/replay events do not increment operation

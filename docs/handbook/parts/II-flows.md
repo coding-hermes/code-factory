@@ -1251,13 +1251,15 @@ an old revoked secret must recover with revocation preserved. Protect backup
 access, report incomplete coverage, and state recoverability limits and manual
 steps rather than claiming Git alone backs up every component.
 
-**Contracts:** `board_drift` row-level report (M4 §7), boot `--verify-board`
-(M9 §5), scratch-restore readback (M9 §5), F2 provisioning path for replacement,
-revocation persistence (V2-FLW-08, F12).
+**Contracts:** `cf.backup.v1` manifest and `consistency_marker` (M8 §35.1),
+`board_drift` row-level report (M4 §7), boot `--verify-board` (M9 §5),
+scratch-restore readback (M9 §5), F2 provisioning path for replacement,
+revocation persistence (V2-FLW-08, F12). `RESTORE_RESULT` is the common restore
+result; no legacy backup schema or result name is a competing target.
 
 **Settings:** backup cadence, scope, destination/access and retention; the boot
 verification flag; scratch-home provisioning; revocation/credential recovery
-policy.
+policy and the per-store RPO/RTO.
 
 **Metric owner:** none measured — no restore-drill counter or durability series
 exists.
@@ -1266,6 +1268,32 @@ exists.
 
 1. Restore onto another eligible host; board, memory, durable execution state, valid access and updated Crier/scheduler routing verify.
 2. Use a backup containing an old revoked secret; recovery preserves revocation rather than restoring authority.
+
+**Deterministic F15 state vector (specification only; runtime `TARGET-UNIMPLEMENTED` / `UNVERIFIED`).**
+Use one `backup_id=backup-1`, `barrier_seq=9`, and the published vector `CV-06-B`.
+The manager must acquire the barrier and checkpoint writers before capture: scheduler
+admission is closed, the round is drained/checkpointed, broker writes are frozen,
+Crier custody is checkpointed, memory writers are flushed, and the manager journal is
+checkpointed. Every source receipt is included in `consistency_marker` and every
+artifact is in the `cf.backup.v1` manifest. Execute each row independently from the
+stated pre-state; do not infer a result from daemon liveness.
+
+| Case | Pre-state at barrier | Required isolated-restore result |
+|---|---|---|
+| Pending Crier message | `delivery_id=msg-pending`, state `queued`, no ack receipt | Restore retains exactly one pending custody row; it is not auto-launched or duplicated. `RESTORE_RESULT` reports `queued` and the restored Crier source revision. |
+| Acknowledged Crier message | `delivery_id=msg-acked`, state `acked`, result digest `r-1` | Restore retains the ack and result receipt; replaying delivery does not create a second message or execution. |
+| Pending memory entry | `record_id=mem-pending`, local commit present, canonical sync receipt absent | Restore reports `pending-sync` or loss at the recorded boundary; it does not invent a canonical memory commit from partial history. |
+| Stale owner/credential | old `owner_fence=F7` and credential `cred-old` are in the backup; current authority is `F8`, and `cred-old` is revoked | Restore imports the live authority checkpoint/revocation set, keeps `cred-old` denied, and rejects an old-owner write as `STALE_OWNER` / `AUTHORITY_UNAVAILABLE`. It issues no replacement credential before denial is proven. |
+| Known-row readback | restored board row `row-known`, plus the pending/acked Crier and memory identities above | `RESTORE_RESULT` is not ready until the exact row and source revisions/digests read back from the isolated stores; a missing row is `UNVERIFIED`, not success. |
+
+For a capture failure, a missing participant, corrupt digest, expired barrier or
+failed off-host readback, the manager records `CAPTURE_FAILED`/`ABORTED` or
+`INCOMPLETE` with the excluded store and loss interval, retains the holds, and never
+publishes a complete manifest. Validation (`VALIDATED`) is distinct from creation
+(`CREATED`); publication and release occur only after digest/readback checks. The
+known-row procedure is a target acceptance vector, not a claim that live restore has
+run. [M8 §35.1; M9 §17; M10 §16; Part I §1.9.3a]
+
 ### F15.1 — Coordinated capture and disaster authority (P5-A-06)
 
 **Trigger/actors:** scheduled backup, pre-migration capture or operator restore;

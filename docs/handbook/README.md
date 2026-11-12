@@ -46,7 +46,7 @@ for. Read this first; everything else is detail hanging off it.
 | II.12 | CREDENTIAL LIFECYCLE (F12) | quorum | **MISSING** (owner: M1/M7/M12) |
 | II.13 | UPGRADE AND MIGRATION (F13) | quorum | **MISSING** (owner: M9/M6) |
 | II.14 | OBSERVABILITY INGESTION (F14) | quorum | **MISSING** (no owning module) |
-| II.15 | BACKUP AND RESTORE (F15) | quorum | **MISSING** (owner: ops) |
+| II.15 | BACKUP AND RESTORE (F15) | quorum | **WRITTEN / UNVERIFIED** (owners: M8 safety boundary; M9 scheduler checkpoint; M10 Crier custody; manager coordinator) |
 | II.16 | MULTI-NODE FAN-OUT (F16) | quorum | **MISSING** (owner: M11) |
 
 **This round's deliverable is Part III only.** Parts I (beyond the rendered

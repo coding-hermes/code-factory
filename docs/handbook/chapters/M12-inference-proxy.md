@@ -350,8 +350,9 @@ active pointer during rotation. Old credential becomes overlap then revoked. Unk
 delivery stays staged/unusable until receipt or expiry. Revoke records denial in the
 independent authority before acknowledgement, cancels admitted requests and marks
 unknown upstream spend for conservative settlement; it cannot undo already incurred
-cost. Offboard revokes all node token IDs. Restore uses VI.35.2, never restores active
-bearers from a backup. [CT-19/21; M7.16]
+cost. Offboard revokes all node token IDs. Restore uses VI.35.2 and the current
+authority/revocation readback, never restores active bearers from a backup or
+trusts a backup-local watermark. [CT-19/21; M7.16; F15]
 
 All proxy replicas share one serializable SQL authorization/accounting database.
 Authorization and admission run in a single transaction keyed by `(token_id,request_id)`;
