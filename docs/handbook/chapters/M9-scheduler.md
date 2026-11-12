@@ -534,13 +534,23 @@ native launch; `GRANT_UNAVAILABLE` is `UNKNOWN`, also without launch; a lost con
 is resolved by `GET /v1/dispatch-grants/{grant_id}` and Crier delivery readback, never by
 creating another round or grant ID.
 
-Scheduler also implements the participant side of `binding.prepare.v1` and
-`binding.commit.v1` from Part I. Prepare persists a non-routable candidate and its probe
-receipt; commit activates only the matching prepared/active digests. After a one-sided
-acknowledgement, Scheduler serves its durable state to the manager and accepts the same
-commit replay. Until Crier and Scheduler readbacks agree, allocation can evaluate and
-report candidates but cannot reserve a new execution round. The Scheduler never writes a
-Crier binding through an undocumented database side channel.
+Scheduler implements the participant side of `binding.prepare.v1` and
+`binding.commit.v1` from Part I §1.9.4, under the normative III.M9.S2/S3 contract.
+It durably records its non-routable candidate, prepare receipt and commit/active receipt;
+its identity is the exact `(project_id,binding_generation,owner_fence,prepared_digest,
+active_digest)` tuple. Prepare and commit accept only the matching tuple, fsync the
+participant record, and replay an identical request. Changed content or a reused
+idempotency key with a different tuple is `BINDING_CONFLICT`.
+
+The manager, not Scheduler, owns the active pointer CAS and its fsync. A one-sided
+acknowledgement is recovered by reading that pointer and returning the same durable
+candidate/receipt to the manager; after the pointer commit Scheduler accepts the same
+`binding.commit.v1` replay and never invents N+2 or rolls back to N. Until Scheduler,
+Crier and the manager pointer readbacks match every generation, fence and digest,
+Scheduler may report a candidate but cannot reserve a new execution round. A mismatch
+is `BINDING_NOT_ACTIVE`; no grant, custody or native launch is permitted. The Scheduler
+never writes a Crier binding through an undocumented database side channel. The
+interruption table and reproducible readback procedure are Part I §1.9.4 and F11.
 
 Admission materializes Part V §V.12. `total_budget` is the integer 0..20,000
 worker-attempt allowance, including the valid 20,000 case; zero admits no worker

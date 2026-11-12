@@ -333,6 +333,20 @@ The canonical application wire is `cf2a.v1`, with `register.v1`, `round-admissio
 
 The selected production backend is SQLite or PostgreSQL; `memory` is a demo/negative-control backend and cannot satisfy restart durability. Boot readback names the resolved backend. Lease, HTTP, job, heartbeat, retry and retention clocks are independent. A duplicate delivery returns the recorded receipt; a duplicate retrieve returns the existing lease/result; a late return is retained as evidence but cannot alter a replaced attempt. Filter-after-claim reports temporarily leased nonmatching messages rather than calling the queue empty. Stats failure returns `UNAVAILABLE`, never zero-as-empty.
 
+**Binding participant (normative III.M9.S2/S3 / F2/F11).** Crier does not own activation:
+the Factory manager owns the active pointer CAS and fsync. Crier durably stores a
+non-routable candidate and prepare receipt for `binding.prepare.v1`, then atomically
+activates only the matching `(project_id,binding_generation,owner_fence,prepared_digest,
+active_digest)` tuple from `binding.commit.v1`, fsyncing its active pointer and receipt.
+Identical requests replay their durable receipt; a changed tuple or digest returns
+`BINDING_CONFLICT`. A missing commit acknowledgement is resolved by GET readback and
+replaying the same manager commit after pointer commit; Crier never chooses a new
+generation or rolls the pointer back. Until Crier's active readback equals the manager
+pointer and Scheduler's readback in generation, fence and both digests, it must reject
+new custody/grant use as `BINDING_NOT_ACTIVE`. This is a participant receipt, not an
+activation decision. The interruption table and state procedure are Part I §1.9.4;
+Crier's route is one leg of F2 and F11 admission.
+
 The guard result is separate from execution safety and acceptance. `errored=true`, fail-open policy, oversize deterministic decisions and signature-disabled modes remain visible in the result and metrics. The selected policy's fail-closed behavior is explicit. Required metrics cover delivery acceptance, guard decisions/errors, queue and lease state, retries, duplicates, dead letters, backend availability and end-to-end latency. Acceptance cases cover registration, signed read, duplicate delivery, restart under the durable backend, lease expiry, wrong generation, malformed payload, guard outage and late return.
 
 ## 16. One signed custody chain and durable operation table (P5-C-07/12; P6-02/08/12; SC-01/07)

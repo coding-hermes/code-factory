@@ -1584,27 +1584,63 @@ returns `issued|consumed|expired|revoked`, the bound delivery ID and digests, an
 a lost acknowledgement without issuing a second grant. Crier delivery failure after consume
 leaves the grant consumed and the round in return/reconciliation, never a second launch.
 
-**Participant binding.** Crier and Scheduler expose the same routes under their enrolled
-service origins: `POST /v1/factory/bindings/prepare`,
+**Participant binding (the normative III.M9.S2/S3 / F2/F11 contract).** The Factory
+manager is the sole activation authority. Crier and Scheduler are participants: each
+owns its own durable candidate, prepare receipt and commit/active receipt, but neither
+may declare the factory binding active or admit work from a local observation. They expose
+the same routes under their enrolled service origins: `POST /v1/factory/bindings/prepare`,
 `POST /v1/factory/bindings/commit`, and `GET /v1/factory/bindings/{generation}`.
 Their principal role permits only their own `participant_id` and assigned project.
-`binding.prepare.v1` contains `operation_id`, `project_id`, `binding_generation`,
-`owner_fence`, `participant_id`, `candidate_endpoint:{url,tls_spki}`, `readiness_ref`,
-`readiness_digest`, and `idempotency_key`. The recipient verifies a fresh authenticated
-probe, persists a non-routable candidate, and returns `{participant_id,operation_id,
-binding_generation,prepared_digest,state:prepared}`. The same tuple/digest replays;
-changed content is `BINDING_CONFLICT`.
 
-After both prepare receipts and repeated probes, the manager commits its active pointer
-and sends `binding.commit.v1` containing `operation_id`, `project_id`,
-`binding_generation`, `owner_fence`, `participant_id`, `prepared_digest`, `active_digest`,
-`committed_at`, and `idempotency_key`. Each participant atomically activates the candidate
-and returns `{participant_id,binding_generation,active_digest,state:active}`. GET returns
-`candidate|active|superseded|absent`, both digests and durable operation ID. If only one
-participant prepared, activation remains false. If the manager crashes after pointer
-commit, recovery reads that pointer and replays the same commit to the missing participant;
-it never rolls back to N. Abort before pointer commit deletes only candidates. Readback
-mismatch is `BINDING_NOT_ACTIVE` and blocks every new grant.
+The binding identity is the tuple
+`(project_id,binding_generation,owner_fence,prepared_digest,active_digest)`;
+`binding_generation` and `owner_fence` fence old routes, `prepared_digest` hashes the
+canonical candidate/readiness record, and `active_digest` hashes the manager's committed
+pointer plus that candidate. `binding.prepare.v1` contains `operation_id`, `project_id`,
+`binding_generation`, `owner_fence`, `participant_id`,
+`candidate_endpoint:{url,tls_spki}`, `readiness_ref`, `readiness_digest`, and
+`idempotency_key`. The participant verifies a fresh authenticated probe, fsyncs a
+non-routable candidate and its receipt, then returns
+`{participant_id,operation_id,binding_generation,prepared_digest,state:prepared}`.
+The manager retains both participant receipts and the probe evidence in its operation
+journal. Same tuple and digest replay the original receipt; a changed tuple or digest
+is `BINDING_CONFLICT` and cannot overwrite the candidate.
+
+Only after both durable prepare receipts and repeated authenticated probes match does
+the manager CAS its active pointer from N to N+1, fsync the pointer and journal, and
+then emit `binding.commit.v1`. The commit contains
+`operation_id`, `project_id`, `binding_generation`, `owner_fence`, `participant_id`,
+`prepared_digest`, `active_digest`, `committed_at`, and `idempotency_key`. Each participant
+must atomically activate only its matching candidate, fsync its active pointer and receipt,
+and return `{participant_id,binding_generation,owner_fence,active_digest,state:active}`.
+GET returns `candidate|active|superseded|absent`, the tuple digests, and durable
+operation ID. A participant acknowledgement is not proof that the other participant
+committed.
+
+The active pointer CAS is the commit record: it is the manager's decision that N+1 is the
+only candidate eligible for readback. Recovery always reads that pointer and operation
+journal. If the manager has committed but one participant's acknowledgement is missing,
+it replays the same commit tuple until both participant readbacks match; it never rolls
+back to N. If the pointer CAS did not commit, recovery may delete only non-routable
+candidates. A readback with a different generation, fence or digest is `BINDING_NOT_ACTIVE`
+and blocks every new grant. Two different candidates for the same idempotency key are
+`BINDING_CONFLICT`; duplicate identical prepare/commit calls replay the original receipt.
+No timeout is interpreted as a negative acknowledgement or as permission to issue N+2.
+
+| Durable observation after interruption | Manager repair action | Dispatch result |
+|---|---|---|
+| no prepare receipt, or only one participant prepared | retain operation; retry missing prepare or abort the uncommitted candidate | no active replacement; old route remains fenced/unavailable and no new grant |
+| both prepare receipts, pointer CAS absent | verify tuple, then commit pointer or abort candidates; never activate locally | no dispatch until a single pointer decision is durable |
+| pointer CAS committed; one participant is `prepared`/receipt missing | read pointer, replay the same `binding.commit.v1`, then verify both readbacks | `BINDING_NOT_ACTIVE` / fail closed until both match |
+| both participants active with exact tuple and digest | record commit receipts and close operation | one dispatchable binding: the exact pointer tuple only |
+| duplicate identical request | return the durable receipt without another effect | unchanged; at most one active binding |
+| mismatched generation, fence, prepared or active digest | retain evidence, return `BINDING_CONFLICT` or `BINDING_NOT_ACTIVE` as applicable | no grant, no custody, no launch |
+
+This table is independently checkable from the manager journal, the pointer file and both
+participant GET readbacks. Admission is therefore the conjunction
+`manager_pointer == participant_Crier_active == participant_Scheduler_active`, with exact
+`generation`, `fence`, `prepared_digest` and `active_digest` equality; otherwise it is
+false. [CT-26/28/29; F2/F11; III.M9.S2/S3]
 
 **Protected secret resolution and Bunker transfer.** The control broker socket is
 `/run/factory/broker/secrets.sock`, owned by the broker service UID, mode 0600. The node
@@ -1693,6 +1729,11 @@ not emit a state-change event. `docs/handbook/contract-vectors.json` is the comm
 source for enrollment, lost grant/consume replies, one-sided binding acknowledgement,
 certificate renewal, secret assignment, failed launch, worker/control death, commit
 uncertainty, postcheck exhaustion and late evidence; module prose does not fork those cases.
+
+ch:trace row=P5G-06 spec=docs/handbook/OUTLINE.md#part-iii--modules wave=none:serial-worker test=bash tests/selftest.sh doc=docs/handbook/parts/I-system-arrangement.md evidence=none:handbook-specification-no-live-binding-runtime witness=none:repository-local-spec-only verdict=none:foreman-runs-gitreins commit=none:worker-commit memory=none:foreman-writes
+STATUS: complete
+TIER: T0
+EVIDENCE: docs/handbook/parts/I-system-arrangement.md and commit recorded by the foreman
 
 ## 1.10 The contract surface, as a count
 

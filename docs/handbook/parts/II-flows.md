@@ -180,10 +180,15 @@ binding whose identity/version matches the readiness result.
    application readiness, memory paths, runtime permissions and required service
    connectivity — CREATED is not VERIFIED (M1 §12). Its result includes the
    verified identity and effective version.
-6. The manager prepares Crier and scheduler candidates, commits its authoritative
-   binding pointer, and reads back both participants using Part I §1.9.4. New
-   dispatch requires a one-use generation/fence grant; partial propagation never
-   leaves an old route admissible.
+6. The manager prepares Crier and Scheduler candidates, retaining each participant's
+   durable prepare receipt and probe/readiness digest. It then owns the sole active
+   pointer CAS from generation N to N+1, fsyncs the pointer and operation journal, and
+   emits the matching `binding.commit.v1` to both participants. A candidate is not
+   routable merely because one participant acknowledged; one-sided acknowledgement is
+   recovered by pointer readback and replay of the same generation/fence/digest tuple.
+   New dispatch requires a one-use grant only after manager, Crier and Scheduler GET
+   readbacks match exactly; partial propagation is `BINDING_NOT_ACTIVE` and remains
+   fail-closed.
 7. The manager retains the operation, allocation and verifier evidence, including
    the refusal or partial state when any required leg is not complete.
 
@@ -220,6 +225,15 @@ verifier's per-leg ladder is the record of record (M1 §11).
 
 1. Provision a new project under each supported profile; the target cannot receive work before its readiness and routing checks pass.
 2. Lose a selected host mid-install; partial allocation is reconciled and resumed or replaced without registering two active owners.
+3. Reproduce a one-sided activation by stopping one participant after the manager pointer CAS: inspect the manager journal and pointer, GET both participant generations, replay the exact `binding.commit.v1`, and assert that admission remains false until the three tuple/digest readbacks are identical. A mismatch must report `BINDING_NOT_ACTIVE`; a changed replay must report `BINDING_CONFLICT`; an identical replay must return the original receipt.
+
+**Binding interruption procedure (III.M9.S2/S3; F2/F11):** independently record
+`manager_pointer`, Crier GET, Scheduler GET, and each `(binding_generation,owner_fence,
+prepared_digest,active_digest)`. The only dispatchable state is all three records
+`active` with exact equality. Any missing, stale, conflicting or unreadable record is
+`BINDING_NOT_ACTIVE`/unavailable and fail-closed; repair is pointer-led replay, never a
+local participant choice or a new generation.
+
 
 **Builder scenario matrix (F2 / F17.2):**
 
@@ -933,12 +947,16 @@ its reason and the board revision it was based on.
 3. Compute eligible work, dependencies and claims using the canonical lifecycle
    rules; distinguish no work from unavailable information — WORK, NO-WORK and
    UNREADABLE are distinct outcomes (M9 §3).
-4. Evaluate applicable admission, capacity, fairness, load and pacing rules and
-   durably account for reservations: admission mode resolves project override,
-   then namespace default, then cooldown (`admission_mode.go:98,112`); usage pools
-   reserve or emit a capacity denial; the board-stasis gate excludes an unchanged
-   cooldown builder lane (`packer_select.go:474,614`); NOOP-PACING spaces a
-   no-artifact lane, doubling to 8 times the floor (`noop_pacing.go:74`).
+4. Evaluate applicable binding readiness before other admission gates: read the
+   manager active pointer plus Crier and Scheduler participant records and require exact
+   equality of generation, fence, prepared_digest and active_digest. A missing or
+   mismatching record is `BINDING_NOT_ACTIVE` and fails closed; no reservation or grant
+   is created. Then evaluate capacity, fairness, load and pacing rules and durably
+   account for reservations: admission mode resolves project override, then namespace
+   default, then cooldown (`admission_mode.go:98,112`); usage pools reserve or emit a
+   capacity denial; the board-stasis gate excludes an unchanged cooldown builder lane
+   (`packer_select.go:474,614`); NOOP-PACING spaces a no-artifact lane, doubling to 8
+   times the floor (`noop_pacing.go:74`).
 5. If admitted, send the identified round through Crier (`CT-02`, PROVEN); if
    deferred or refused, record the exact reason, release unused reservations and
    define the next eligible wakeup.
@@ -983,6 +1001,7 @@ gap.
 | A5 reserve crash | Scheduler dies after durable reservation but before Crier custody. | Reconciliation releases or resumes exactly that reservation; restart cannot double the round allowance. |
 | A6 concurrent rounds | Two ticks or lanes select the same work/pool capacity. | Atomic board claims and pool CAS admit only compatible ownership; losers name their contention reason. |
 | A7 policy denial | Cooldown, load, fairness, capacity, revocation or disabled-lane policy refuses admission. | Durable reason, released reservations and next eligible wakeup; no dispatch message. |
+| A9 binding mismatch | Manager pointer, Crier and Scheduler differ in generation, fence or digest, or a readback is unavailable. | `BINDING_NOT_ACTIVE`/unavailable, no reservation, grant or dispatch; repair replays the manager's committed tuple only. |
 | A8 post-settlement failure | Execution succeeded but a required refresh, board-check or evidence postcheck fails. | Settlement revision becomes awaiting/postcheck-pending; final-success and follow-up remain withheld. |
 
 ## 2.12 F12 — Credential lifecycle
