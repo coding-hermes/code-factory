@@ -94,7 +94,7 @@ the closed typed bodies and results; M1–M6 supply the referenced operation pro
 | `CT-02` | `round-admission.v1`: `round_id`, `run_id`, `corr_id`, `task_scope`, `total_budget`, `config_generation`; result `accepted`, `deferred`, or typed refusal | scheduler persists the admission before sending; future wave/worker/attempt IDs are absent; Crier deduplicates the envelope custody by `(run_id,corr_id)` |
 | `CT-03` | signed `custody.v1` retrieve/renew/ack with registration generation, poll/delivery/lease identity and result receipt | retrieve leases 30–300 s (default 60), renews every 20 s with a 5 s bounded call, replays `(agent_id,poll_id)`; expired lease is `LEASE_EXPIRED`; unavailable custody is never an empty inbox |
 | `CT-04` | `worker-result.v1`: execution identity, status, commit, artifacts, evidence and finish time; result accepted/duplicate/result_digest receipt (IV.2) | status is typed (`pass`, `fail`, `unverified`, `partial`, `unknown`); missing status is `INVALID_RESULT`; first durable result wins and conflicting duplicates are `RESULT_CONFLICT`; clean exit without a committed result is `UNKNOWN_RESULT` |
-| `CT-05` | `worker-brief.v1`: `round_id`, `wave_id`, `task_id`, `attempt_id`, `brief_digest`, `criteria`, `workspace`; result `accepted`, `BRIEF_INVALID` | foreman owns wave/attempt IDs; prompt/skill digest is immutable for the round; acceptance is custody, not execution success |
+| `CT-05` | `worker-brief.v1`: `round_id`, `wave_id`, `task_id`, `attempt_id`, `brief_ref`, `brief_digest`, `criteria`, `workspace`; result `accepted`, `BRIEF_INVALID` | foreman owns wave/attempt IDs; `brief_ref` and `brief_digest` bind the immutable `cf.brief-input.v1` JCS bytes; acceptance is custody, not execution success |
 | `CT-06` | `round-report.v1` reference: `round_id`, `corr_id`, `report_digest`, `status`, `finished_at`; result scheduler settlement | scheduler accepts only a correlated durable report; absent or conflicting verdict is `UNKNOWN_RESULT`, never success; settlement precedes next cadence decision |
 | `CT-06R` | foreman report `round-report.v1`: `round_id`, `run_id`, `corr_id`, `waves`, `task_results`, `budget`, `stop_reason`, `memory_refs`, `evidence_refs` | foreman writes local custody and memory records before return; duplicate `(round_id, report_digest)` is replayed, conflicting report is refused |
 | `CT-07` | `model`, `provider`, `lane`, `policy_generation`; result selected model or `MODEL_NOT_ALLOWED` | allowlist and policy generation are checked before spend; selection is recorded with the session |
@@ -182,16 +182,27 @@ retry policy decides consumption. RoundAdmission.deadline_s and round_deadline b
 whole round. attempt_wall_s bounds one attempt independently; turn_timeout_s and
 max_turns bound individual turns and their count. policy.round_wall_s is retired.
 
-BriefInput is `{schema_version:"cf.brief-input.v1",directive:Text,
+BriefInput is the closed object `{schema_version:"cf.brief-input.v1",directive:Text,
 task:TaskRow,criteria:Criterion[1..100],skills:[{name:ID,ref:EvidenceRef,digest:SHA}],
-attachments:Artifact[]}`. TaskRow is the exact admitted M4 snapshot. Criteria match
-that snapshot by id/description/order. The foreman resolves lane_seed.prompt_digest through
-project CAS storage as directive and skill digests as ordered content refs; it does
-not substitute its mutable prompt. An attachment name is unique, attachment order is
-explicit, and its bytes hash to its ref. A foreman-role BriefInput uses a synthetic
-read-only task snapshot naming the round whose acceptance_criteria require a complete
-CT-06R report; this snapshot and ordered authorized task IDs are persisted at admission
-and cannot widen task_scope. It is never appended as a real board task.
+attachments:Artifact[]}`. The Factory foreman/manager owns its construction and persists
+its exact immutable bytes at accepted admission. TaskRow is the exact admitted M4
+snapshot, not a later board read. Criteria match that snapshot by id/description/order;
+skills preserve declared order; attachment names are unique and attachment order is
+explicit. Skill and attachment refs resolve project CAS content, and attachment bytes
+must hash to their refs. The complete object is serialized once with RFC 8785 JCS as
+UTF-8, sorted keys, compact separators, no BOM and no trailing LF. `brief_digest` is
+lowercase SHA-256 over exactly those bytes; `brief_ref` addresses those same bytes.
+Whitespace and Unicode string bytes are preserved. A transport decoder verifies the
+recovered UTF-8 bytes, never base64 text or a reconstructed summary. Missing/changed
+content is refused before reservation/native start. `worker-brief.v1` carries the ref
+and digest but does not redefine their meaning; identical retries replay the original
+receipt without reserving or starting again, while changed content is
+`DIGEST_MISMATCH`/`LAUNCH_CONFLICT`. CV-01-B is the shared deterministic vector.
+
+A foreman-role BriefInput uses a synthetic read-only task snapshot naming the round whose
+acceptance_criteria require a complete CT-06R report; this snapshot and ordered authorized
+task IDs are persisted at admission and cannot widen task_scope. It is never appended as
+a real board task.
 
 ### IV.2.1 Requests, responses and closed body registry
 
