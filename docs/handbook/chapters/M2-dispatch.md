@@ -146,7 +146,7 @@ on this field, not a "sample" claimed complete:
 | — | `  PASS  %s — %s` / `  FAIL  %s — %s` (`node-bus-worker.py:125,129`) | every measurement row | descriptive (same rule as M0 F0-4) |
 | — | `  FAIL  identity — …; refusing` (`:608`) | unparseable/absent identity | evidentiary |
 | — | `inbox — GET /agents/cf-node/inbox/stats -> 200` | a valid signed inbox read (FACT-04) | evidentiary |
-| — | `  FAIL  brief_digest — {label} brief.digest {expected[:16]}… != sha256(text) {actual[:16]}… — the brief was altered in flight; refused, not run` (`node-bus-worker.py:1050-1052`) | dispatch digest != sha256(text) | evidentiary — a brief.digest mismatch is refused, not warned |
+| — | `  FAIL  brief_digest — {label} brief.digest … — the brief was altered in flight; refused, not run` (`node-bus-worker.py:1050-1052`) | **legacy implementation evidence:** node-side digest check over the measured dispatch shape | evidentiary — the target `cf.brief-input.v1` digest contract is the normative rule in §15.1/Part IV, not this historical text-only wording |
 
 ## 10. Failure modes, indications and recovery
 
@@ -290,17 +290,40 @@ notifies Scheduler of that report. Part IV gives complete bodies and response fo
 
 ### 15.1 Immutable brief and mode selection (P5-B-01/02/12/35)
 
-A lane_seed identifies the SHA-256 of UTF-8 prompt bytes and an ordered skills list
-`{name:ID,digest:SHA}`. The evidence service in M3 §17 resolves each digest; prompt
-and skill bytes are not re-read from mutable paths during a round. The foreman
-constructs `BriefInput` (Part IV): directive text, exact task row snapshot, ordered
-criteria, ordered skill objects and ordered attachment references. The byte encoding
-is RFC 8785 JCS, UTF-8 without BOM or trailing LF; brief_digest hashes those bytes.
-Directive string bytes preserve whitespace and Unicode without normalization. Base64
-transport, if used by a legacy adapter, hashes the decoded bytes, not base64 text.
-Missing or changed content yields `BRIEF_UNAVAILABLE` or `DIGEST_MISMATCH` before
-reservation or native start. The worker receives the same byte object through the
-M5 supervisor stdin contract, not a reconstructed summary. [Part I §1.9.6.]
+The Factory foreman/manager is authoritative for BriefInput construction, immutable
+storage and replay. It snapshots the accepted admission before any worker reservation:
+`BriefInput` is exactly the closed `cf.brief-input.v1` object
+`{schema_version:"cf.brief-input.v1",directive:Text,task:TaskRow,criteria:Criterion[1..100],skills:[{name:ID,ref:EvidenceRef,digest:SHA}],attachments:Artifact[]}`.
+The object carries the directive bytes, the exact admitted `TaskRow` image (not a later
+board read), criteria in their admitted order, skills in their declared order, and
+attachments in explicit order. Skill `ref` resolves immutable content in project CAS;
+attachment `ref` resolves the immutable attachment bytes and the bytes must hash to its
+reference. Attachment names are unique. No mutable prompt, skill path, board row,
+criterion list or attachment path is reread after this snapshot.
+
+The foreman serializes the complete object using RFC 8785 JCS: UTF-8, sorted object
+keys, compact separators, no BOM and no trailing LF. String bytes preserve whitespace
+and Unicode; no normalization or pretty-printing occurs. `brief_digest` is the lowercase
+SHA-256 of exactly those canonical `cf.brief-input.v1` bytes, and `brief_ref` is the
+content-addressed `EvidenceRef` for the same bytes. It never covers a reconstructed
+summary, the `worker-brief.v1` envelope, transport framing, base64 text, or mutable
+source paths. If a legacy transport base64-encodes the object, the receiver decodes to
+exactly the UTF-8 bytes first, then verifies `brief_ref` and `brief_digest`; base64 text
+itself is never hashed. CV-01-B in `docs/handbook/contract-vectors.json` is the normative
+reproducible vector: hash its `related_objects.brief_input_canonical_json` bytes and
+compare with `related_objects.brief_input_sha256` and `brief_ref`.
+
+`worker-brief.v1` carries the launch-custody identity plus `brief_ref` and
+`brief_digest`; it does not redefine BriefInput or its digest. The receiver resolves the
+ref, verifies byte length/content and digest before reserving an execution key or
+starting a native process. Missing, changed, unavailable or mismatched content is
+refused as `BRIEF_UNAVAILABLE` or `DIGEST_MISMATCH`; no reservation, process start or
+side effect occurs. The worker receives the same immutable byte object through the M5
+supervisor stdin contract, not a reconstructed summary. An identical retry for the same
+`(project_id,round_id,task_id,attempt_id,brief_digest)` replays the original custody and
+launch receipt without a second reservation or native start. A changed digest, ref,
+TaskRow, criteria, skill or attachment set is `LAUNCH_CONFLICT`/`DIGEST_MISMATCH`, not a
+new execution under a new delivery id. [Part I §1.9.6; Part IV §IV.2; CV-01-B.]
 
 The worker `launch_id` derives from the JCS array
 `[project_id,round_id,wave_id,worker_id,attempt_id]` as specified in §15.4;

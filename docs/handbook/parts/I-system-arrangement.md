@@ -1345,8 +1345,11 @@ change or failed readiness, not because a lexically earlier host reappeared.
 
 ### 1.9.6 Canonical board, prompt and round identities
 
-CT-05 is solely foreman → worker `worker-brief.v1` (Part IV §IV.1). Seeded lane
-prompt/skill digests are a CT-01 configuration extension
+CT-05 is solely foreman → worker `worker-brief.v1` (Part IV §IV.1). Its `brief_ref`
+and `brief_digest` refer to the exact immutable `cf.brief-input.v1` JCS bytes defined in
+Part IV §IV.2 and M2 §15.1; they never refer to a reconstructed prompt or envelope.
+The Factory foreman/manager owns the snapshot, CAS resolution, digest verification and
+replay. Seeded lane prompt/skill digests are a CT-01 configuration extension
 `extensions.lane_seed: {prompt_digest, skills: [{name, digest}]}`; they are not
 CT-05. CT-02 uses only `round-admission.v1`, never `round-request.v1`.
 Its required fields are Part IV's `round_id, run_id, corr_id, task_scope,

@@ -59,10 +59,14 @@ contract id · timing, limits, retries, idempotency · duplicate/concurrent case
 day-one/empty case · degradation path · diagram.
 
 **Primary (5, rendered today)**
-- **F1 DISPATCH AND SETTLEMENT** — *rescoped*: begins at the node's inbox (admission is
-  F11). Exit is a correlated terminal result persisted, or a named refusal / deadline /
-  uncertain result — the reply accepted by the bus **and** the acknowledgement recorded.
-  v1 conflated transport acceptance with completed work. *(MISSING)*
+### F1 DISPATCH AND SETTLEMENT
+
+*Rescoped*: begins at the node's inbox (admission is F11). Exit is a correlated terminal
+result persisted, or a named refusal / deadline / uncertain result — the reply accepted
+by the bus **and** the acknowledgement recorded. Part II §2.1 specifies the flow;
+runtime conformance remains unverified. The immutable `cf.brief-input.v1` /
+`worker-brief.v1` delivery, JCS bytes and `brief_digest` contract is defined in M2 §15.1
+and Part IV §IV.2, with deterministic vector CV-01-B.
 - **F2 PROVISIONING AND CERTIFICATION** — exit is certification legs passing, or the
   exact failed or unmeasurable legs named. Must distinguish **CREATED** from **VERIFIED**.
   *(MISSING)*

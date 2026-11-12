@@ -59,11 +59,16 @@ memory entry) is the inner cycle of step 4; F3 and F5 carry its contracts.
    launches the project foreman inside its Bunker.
 3. The foreman reads the current board and project memory, analyzes impact through
    Hilo, selects and claims useful compatible work, and assembles worker briefs
-   with acceptance criteria, model/provider access and isolated workspaces. Local
-   namespace queries remain a supported path when the DuckBrain HTTP service is
-   unavailable. The MVP harness is fixed — the foreman invokes Hermes directly; a
-   future Task Router would sit between Node and Harness and is drawn NOT PART OF
-   MVP.
+   with acceptance criteria, model/provider access and isolated workspaces. Each
+   brief is the immutable `cf.brief-input.v1` JCS byte object owned by the Factory
+   foreman/manager; its exact task snapshot, ordered criteria/skills and ordered
+   attachment refs are delivered through `worker-brief.v1` as `brief_ref` and
+   `brief_digest` (M2 §15.1; Part IV §IV.2; CV-01-B). The receiver decodes transport
+   framing before hashing, refuses missing/changed content before reservation/native
+   start, and replays an identical retry without a second start. Local namespace
+   queries remain a supported path when the DuckBrain HTTP service is unavailable.
+   The MVP harness is fixed — the foreman invokes Hermes directly; a future Task
+   Router would sit between Node and Harness and is drawn NOT PART OF MVP.
 4. Workers implement and produce commits under the required GitReins guard
    (Tier 1) and independent acceptance process (Tier 2) (M3 §2, M9 §6). Failed
    criteria return to correction; branch success remains distinct from verified
