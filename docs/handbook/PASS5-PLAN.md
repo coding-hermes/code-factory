@@ -1,6 +1,6 @@
 # CF2A-01 — Pass-5 integration triage and correction plan
 
-Review base: `d4b686c82178208d9c4220b2d6f4f2ba8e87ae4d` (`main` at review time). Review artifacts: all nine files in `/home/kara/.hermes/cache/scratch/pass5/`, SHA-256 `3e6be59164729985b48feb187c1c23401c5f276f848c066a97ba095929e7d8` for `CF2A-01-pass5-review-log.json`.
+Review base: `d4b686c82178208d9c4220b2d6f4f2ba8e87ae4d` (`main` at review time). Review artifacts: all nine files in the review's scratch directory (`pass5/` under the Hermes scratch cache, retained on the foreman host), SHA-256 `3e6be59164729985b48feb187c1c23401c5f276f848c066a97ba095929e7d8` for `CF2A-01-pass5-review-log.json`.
 
 The pass-5 verdict is **NOT YET BUILDABLE END TO END FROM THE SPECIFICATION ALONE**. The next work is contract integration, not another expansion of independent module detail. There are 16 actionable findings: 9 critical, 6 high, 1 medium; 7 new and 9 repeats/regressions. Runtime conformance remains **NOT ASSESSED / NOT RUN**, and owner acceptance is not granted.
 
