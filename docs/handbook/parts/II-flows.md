@@ -673,6 +673,11 @@ reconciliation is a required behavior, not an implemented one (M11 §2). Restart
 the controller must not replenish worker allowance or dispatch to a stale target,
 and automatic repair stays within configured authority and capacity.
 
+**Target fencing:** Part I §§1.9.3–1.9.3a and M7 §17–17.1 govern the
+independent authority, effect gate and each protected resource, including the
+scheduler; unresolved effects block replacement. This is UNIMPLEMENTED and runtime
+UNVERIFIED, not a claim about the current scripts below.
+
 **Contracts:** replay ledger (M11 §3 S2), lease/redelivery (`CT-03`, M10 §11),
 board lock verdicts (M4 §3), session reap (M9 §5), Crier binding update
 (V2-ARCH-01).

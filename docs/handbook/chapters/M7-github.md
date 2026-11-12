@@ -334,6 +334,7 @@ readback by leaving the durable effect pending, not by holding a network mutex.
 | Board | The broker is the sole canonical ref writer. Boardctl validates claim/fence/expected revision under the same effect gate, stages row+event+operation marker in one Git tree and publishes with ref CAS. Partial local staging is not canonical success; uncertain publication makes the board UNAVAILABLE until readback. No direct worker push can bypass it. |
 | Memory | Local offline drafts are permitted, canonical publication is not. Broker validates writer namespace, Fence and each record digest before a single canonical-ref CAS. Stale records go to quarantine evidence, not the namespace index. Canonical acknowledgement follows remote ref and record readback. |
 | Crier | Binding/delivery mutation obtains an authority effect grant. In one durable Crier transaction the handler checks registration generation, fence and unique grant ID, consumes the grant, updates binding/custody and writes receipt. The authority holds advance until receipt readback. Duplicate grant returns the stored result; altered payload is EFFECT_CONFLICT. |
+| Scheduler | Binding, admission and other project mutations obtain an authority effect grant. In one durable scheduler transaction the handler authenticates the broker and validates the full Fence, binding generation and unique grant ID, consumes the grant, changes state and writes its receipt. The authority blocks advance until receipt readback; duplicate grant returns its stored result and altered payload is EFFECT_CONFLICT. |
 
 The protected resource authenticates the broker principal, not a worker-asserted epoch.
 An old broker is itself fenced by the controller authority record. During broker
@@ -349,6 +350,65 @@ Acceptance races epoch advance against each resource write, partitions the forme
 owner, and proves either one completed old effect before advance or a refused write,
 never an old effect after replacement activation. These are required tests, not
 runtime evidence supplied by this source wave.
+
+### 17.1 Deterministic fencing procedure
+
+TARGET-UNIMPLEMENTED; runtime UNVERIFIED. This is an independently checkable
+specification example, not a claim that the authority, broker or participants exist.
+Part I §§1.9.3–1.9.3a define the only authority protocol: an enrolled controller
+requests acquire/advance, but the independent operator-owned authority issues the
+Fence and serializes its non-reused epoch with begin/finish and revocations. Requests
+use `cf2a.v1` and `authority.v1`; the three Git-backed broker operations use
+`broker.v1`. Crier and scheduler consume authority effect grants in their own durable
+transactions, not as additional `broker.v1` operation enums. A participant must
+verify a grant's authenticity, resource, complete Fence and input digest and consume
+its unique ID atomically with the mutation and receipt; an online preflight without
+that transaction and the authority's durable pending-effect gate is insufficient.
+The broker holds the exclusive write credential and effect gate across each remote
+CAS and readback; no worker or old broker may bypass it. Advance and begin serialize
+at the authority, so a grant accepted before advance must be resolved first.
+
+Execute the same ordered scenario independently for each table row (do not carry
+state between rows). `F7={authority_id:auth-1,project_id:code-factory,epoch:7,
+owner_id:manager-1}` is live; `F8` differs only in epoch=8 and owner_id=manager-2.
+The authority is reachable, the old owner is isolated, the broker is authenticated,
+all grants are unique, and each row's old/new values stand for exact distinct bytes
+or durable records. Start with active=F7, no pending effect, and the row's `before`.
+
+1. F7 begins effect `old-1` for that row; authority durably marks it pending before
+   any resource mutation. The mutation's acknowledgement is lost: its outcome is
+   unknown, so the resource value is not assumed. An advance request to F8 returns
+   `EFFECT_UNRESOLVED`; active remains F7, F8 is not activated, and no new-owner
+   effect is admitted. Neither lease expiry nor an unreachable owner resolves it.
+2. Reconcile the original operation, without blind retry. For this example only,
+   authoritative readback proves `old-1` applied and the resource equals `old`;
+   `finish-effect` durably records that result. If proof is unavailable, remain
+   blocked; alternatively, only proven remote denial plus reconciliation sufficient
+   to exclude a late effect can resolve it. A receipt alone is not denial proof.
+3. The authority atomically advances F7 to F8 and fences F7 after all pending or
+   unknown effects resolve. A new F7 operation returns `STALE_OWNER`, creates no
+   effect and leaves `old` unchanged. An unavailable authority instead returns
+   `AUTHORITY_UNAVAILABLE` with no write; it never uses a cached allow.
+4. F8 begins `new-1`, changes the resource from `old` to `new` using that row's
+   atomic boundary, and finishes only after its durable readback/receipt. Final
+   active=F8, effect `new-1`=applied, and resource=`new`. A retry of an identical
+   grant replays its receipt; changed payload for the same grant is `EFFECT_CONFLICT`.
+   For the opposite race, let advance commit before F7 begins: F7 returns
+   `STALE_OWNER` and the resource remains `before`; F8 can then write from `before`.
+
+| Resource | Before | Old | New | Atomic boundary / readback |
+|---|---|---|---|---|
+| Git publication | git-A | git-B | git-C | broker ref CAS and remote ref readback |
+| Board | board-A | board-B | board-C | row/event/marker tree ref CAS and remote readback |
+| Memory | memory-A | memory-B | memory-C | namespace ref CAS and record readback |
+| Crier | crier-A | crier-B | crier-C | grant consumption, binding/custody and receipt in one transaction |
+| Scheduler | scheduler-A | scheduler-B | scheduler-C | grant consumption, admission/binding and receipt in one transaction |
+
+Run `python3 docs/audits/p5g03_fencing_check.py`: it checks these five rows and
+executes both orderings and the unknown-effect recovery model against the stated
+oracles. It is a specification model, not a production conformance test.
+
+ch:trace row=P5G-03 spec=docs/handbook/chapters/M7-github.md#17-resource-side-mutation-fencing-p5-c-17 wave=none:serial test=docs/audits/p5g03_fencing_check.py doc=docs/handbook/chapters/M7-github.md prompt=none:external-brief evidence=docs/audits/p5g03-fencing.md witness=none:specification-only-runtime-unimplemented verdict=none:foreman-pending commit=none:implementation-not-yet-frozen memory=none:foreman-pending
 
 ## 18. Closed capabilities and credential telemetry
 

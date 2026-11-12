@@ -155,7 +155,9 @@ fragment and non-HTTPS schemes. DNS is an ASCII hostname with labels 1..63 bytes
 no wildcard, maximum 253 bytes. No implicit coercion is permitted.
 
 Repository is `{forge:github/gitlab,host:DNS,owner:ID,repo:ID,ref:GitRef,commit:GitOID}`.
-Fence is Part I §1.9.3's `{authority_id:ID,project_id:ID,epoch:PosInt,owner_id:ID}`.
+Fence is Part I §1.9.3's `{authority_id:ID,project_id:ID,epoch:PosInt,owner_id:ID}`;
+M7 §17–17.1 defines the shared resource-side effect gate and deterministic oracle,
+not a second Fence or wire version. Target fencing is UNIMPLEMENTED/runtime UNVERIFIED.
 EvidenceRef and CredentialRef are M3 §17.4 and M1 §17.1; a bare SHA in Part I's
 manager `Probe.evidence_ref` is the digest component of EvidenceRef in that probe's
 project scope, not another storage scheme. Artifact is `{name:ID,ref:EvidenceRef,

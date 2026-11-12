@@ -1172,6 +1172,8 @@ broker. Crier binding changes and scheduler dispatch permission validate the
 current fence online; revocation/fence changes serialize with admission grants.
 The Bunker-local memory writer may commit disconnected draft evidence, but marks
 it pending authorization; a fenced draft cannot modify the canonical namespace.
+M7 §17–17.1 specifies the resource transaction boundaries and deterministic
+stale-owner/recovery oracle, including scheduler and Crier.
 A stale owner cannot commit canonical state or publish; its late artifacts remain
 quarantined. Ordinary GitHub/GitLab push credentials do not validate a Fence and
 therefore cannot be delivered to the old host. [CT-10/14/21/28/29; F8]

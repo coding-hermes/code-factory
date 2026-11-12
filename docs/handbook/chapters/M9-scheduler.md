@@ -443,6 +443,11 @@ unconditional liveness promise. [Part V §V.9; CT-01/02/27]
 
 ## 17. Transaction journal and recovery (P5-C-10/14)
 
+Project mutation grants, atomic consumption and receipts follow the independent
+authority and scheduler resource boundary in M7 §17–17.1 and Part I §1.9.3a.
+This target fencing protocol is UNIMPLEMENTED and runtime UNVERIFIED; the measured
+scheduler behavior in §§1–13 is not proof of it.
+
 Scheduler execution uses SQLite WAL with synchronous FULL and one write transaction
 per transition; manager/config logs retain Part I's Git-backed JSONL authority.
 The resident foreman uses the same record model for its round-local worker ledger,

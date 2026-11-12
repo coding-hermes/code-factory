@@ -557,7 +557,8 @@ enter a quarantine evidence stream and cannot settle. Native forge write keys ne
 reach Bunkers; otherwise a pre-push fence check leaves an exploitable race. A disconnected
 Bunker may append local memory drafts only, marked pending authorization. These rules
 make resource-side enforcement, not voluntary caller checks, the safety boundary.
-[Part I §§1.9.3/1.9.3a; M3 §17.]
+[Part I §§1.9.3/1.9.3a; M3 §17; M7 §17–17.1 resource oracle.] The target
+protocol is UNIMPLEMENTED and runtime UNVERIFIED.
 
 Backup manifest binds board OID, task/event digests, transaction marker set, authority
 sequence, claim generations and M3 evidence-object inventory. Restore validates each

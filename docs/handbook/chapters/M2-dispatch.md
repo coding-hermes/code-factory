@@ -310,7 +310,9 @@ execution_key and for `[project_id,round_id,task_id,attempt_id]`. Reusing an
 attempt for different input is `LAUNCH_CONFLICT`. Round custody deduplicates on
 `[run_id,corr_id]` independently.
 The manager's active binding records `execution_mode=resident`, binding_generation
-and owner_fence. Mode changes disable admission, drain or fence every old attempt,
+and owner_fence. Resource-side enforcement of the full Fence follows Part I
+§1.9.3a and M7 §17–17.1; it is TARGET-UNIMPLEMENTED/runtime UNVERIFIED.
+Mode changes disable admission, drain or fence every old attempt,
 prove old credential denial, then prepare/commit a new binding (Part I §1.9.4).
 Pull/central adapters can only translate a persisted authorized admission and submit
 it to the same supervisor. They cannot allocate another execution key or start

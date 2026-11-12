@@ -397,7 +397,9 @@ fields to the same verdict.
 This section resolves P5-B-23–27. Part I §1.9.7 owns the four publication modes;
 Part IV §IV.2 owns digest types; M4 §15 owns board transactions. The broker, not the
 worker, holds native protected-ref credentials and serializes effects with epoch
-advance. A pre-push client fence test alone is not authorization.
+advance. A pre-push client fence test alone is not authorization. M7 §17–17.1
+specifies the resource CAS, readback and stale-owner recovery oracle; the target
+protocol is UNIMPLEMENTED and runtime UNVERIFIED.
 
 ### 17.1 Policy and verdict
 

@@ -705,8 +705,9 @@ keep the recovery honest:
   idempotency check alone never authorizes a rerun.
 
 - **Protected writes are fenced at the resource.** Board events, Git publication,
-  Crier bindings and memory commits use the broker/authority serialization in
-  VI.35.2 with the active claim_generation/owner_fence; a stale controller lease is insufficient. A
+  Crier and scheduler mutations, and memory commits use the independent authority's
+  serialization and M7 §17–17.1 resource boundaries (also VI.35.2), with the full
+  owner_fence and any applicable claim_generation; a stale controller lease is insufficient. A
   resource returns `STALE_OWNER` without mutation. If descendants or external effects
   cannot be proven quiescent, the execution remains quarantined and the project is not
   ready for replacement admission.

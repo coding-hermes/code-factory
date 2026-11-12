@@ -875,13 +875,15 @@ Today: nothing fences at the Factory level.
 **Visible state.** Both old and new Bunkers writing the board; a claim honored on two
 hosts; duplicate workers on one task.
 
-**Containment.** Explicit active-owner/lease semantics: the replacement acquires the
-lease, the old holder's writes are fenced by identity (claim/lease tokens carried on
-board writes and Crier registration), and a partitioned host whose lease expired is
-refused on reconnect rather than re-admitted silently.
+**Containment.** The independent authority serializes effect resolution and epoch
+advance before activating the replacement; the broker and participants enforce the
+full Fence at the resource, not merely tokens carried by the caller. A partitioned
+former owner is refused on reconnect. Unknown effects block takeover. The exact
+resource boundaries and ordered oracle are M7 §17–17.1.
 
-**Owner / repair.** The management service owns the lease and fencing decision;
-operator-invoked quarantine of the partitioned host if it cannot be reached to drain.
+**Owner / repair.** The independent operator-owned authority issues and advances the
+lease/fence on the enrolled controller's request (Part I §1.9.3a); the management
+service requests recovery, and the operator quarantines an unreachable old host.
 
 **Recoverability limit / residual exposure.** A partitioned host holding unsynchronized
 local memory may lose the unsynchronized portion on quarantine (R-30's loss limit).
