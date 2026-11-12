@@ -798,6 +798,7 @@ def module_sheet(model, mod) -> Sheet:
             p = w["peer"]
             if p in merged:
                 merged[p]["ks"].append(w)
+                merged[p]["h"] += 22  # each contract draws two lines at a 22-unit pitch
             else:
                 merged[p] = dict(peer=p, ks=[w], h=34 + 24)
         rows, ytop = [], 128
