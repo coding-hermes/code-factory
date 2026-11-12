@@ -54,7 +54,12 @@ evaluator:
   # boardctl, board_evidence_check, cf181 sweep, P5G-01 re-probe), so ~48k input tokens per
   # iteration is the price of one full pass. Raised one rung (100 -> 200) per the cap-sizing
   # rule so a full pass fits inside the budget instead of being cut off after it.
-  max_iterations: 200
+  # 200 bound again on 2026-11-12 (CF-424): run 19049a4f spent 200.7 iterations and
+  # 9,037,091 input tokens for 68 output tokens, ended with "0 of 1 criteria graded, 1
+  # ungraded" — the criterion was never examined, so the FAIL says nothing about the diff.
+  # ~45k input/iteration holds, so the binding rung is still iteration count. Raised one
+  # rung (200 -> 400) per the cap-sizing rule.
+  max_iterations: 400
   static_analysis_diagnostics: false
 history:
   enabled: true

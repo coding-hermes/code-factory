@@ -727,3 +727,4 @@
 {"id": 726, "event_type": "task_created", "task_id": "CF-423", "actor": "foreman", "timestamp": "2026-11-12T19:34:13Z", "detail": "{\"id\":\"CF-423\",\"status\":\"pending\"}"}
 {"id": 727, "event_type": "task_created", "task_id": "CF-424", "actor": "foreman", "timestamp": "2026-11-12T20:21:33Z", "detail": "{\"id\":\"CF-424\",\"status\":\"pending\"}"}
 {"id": 728, "event_type": "task_updated", "task_id": "CF-424", "actor": "foreman", "timestamp": "2026-11-12T20:21:46Z", "detail": "{\"status\":\"in_progress\"}"}
+{"id": 729, "event_type": "task_completed", "task_id": "CF-424", "actor": "foreman", "timestamp": "2026-11-12T21:04:30Z", "detail": "{\"status\":\"complete\"}"}
