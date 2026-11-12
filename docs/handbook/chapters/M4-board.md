@@ -277,12 +277,12 @@ path, cancelled prerequisites, fixtures and missing-dependency/cycle handling, a
 must be aligned to it; eligibility is defined separately from open-row count (review notes M4,
 proposal "one lifecycle and workability definition").
 
-**R3 — Authoritative revision and copies (required).** The chapter must define which board state
+**R3 — Authoritative revision and copies (resolved in §15.2).** The chapter defines which board state
 — local working copy, node copy, control-host copy, published ref — is **authoritative** for
 scheduling, claims and closeout; bind every read to repository/ref/commit and freshness; assign
 the publish-vs-refresh owners (refresh before admission, publish/refresh at lane end); explain
 how an uncommitted in-progress claim (the measured CF-150 divergence, §7) stays visible when the
-published state still says pending; and define an atomic claim/revision precondition across
+published state still says pending; and defines an atomic claim/revision precondition across
 dispatchers plus recovery of abandoned claims, so independent clones cannot schedule the same
 task. Which actor publishes versus merely refreshes is required content, not optional detail
 (review notes M4, proposal "authoritative copies, freshness and claims"). Resolved normatively in §15.2 (and §15.1 for the reducer): the published ref and broker CAS are authoritative for claims, with revision-bound observations, fencing and recovery across clones.
@@ -310,9 +310,9 @@ the chapter must assign the checks it does not perform (verdict payload, tree eq
 remote-main ancestry) and define malformed/missing/expired/mismatched evidence plus retry/idempotent
 closeout behavior (review notes M4, proposal "evidence sufficient for completion").
 
-**R6 — Partial-write recovery (required).** Row updates and event appends are two file writes; a
+**R6 — Partial-write recovery (resolved in §15.3).** Row updates and event appends are two file writes; a
 lock around them is not a transaction. The engine can persist a task row and then fail its audit
-event (upstream write path, review notes M4 source findings) — the chapter must define
+event (upstream write path, review notes M4 source findings) — the chapter defines
 recoverable partial-result statuses, operation/event identity, replay/deduplication and repair so
 callers neither assume nothing happened nor blindly repeat a completion, plus backup/restore
 consistency across rows, events, evidence and the git revision, validated before scheduling
