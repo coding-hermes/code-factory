@@ -686,7 +686,7 @@ script's measured runtime node-token admission does not qualify this contract.
 [Part I §1.9.1–§1.9.3; Part IV CT-24–CT-26; Part V §V.0/§V.4/§V.6;
 M1.S3; M9.S4; F12; F13]
 
-ch:trace row=P5G-05 spec=docs/handbook/OUTLINE.md#part-iii--modules wave=none:serial-worker test=bash tests/selftest.sh doc=docs/handbook/chapters/M12-inference-proxy.md prompt=~/.hermes/cache/scratch/code-factory-2026-11-12-15-11-40-P5G-05-brief.txt evidence=docs/handbook/chapters/M12-inference-proxy.md witness=none:handbook-specification-no-live-management-api verdict=none:foreman-runs-gitreins commit=none:worker-commit memory=none:foreman-writes
+ch:trace row=P5G-05 spec=docs/handbook/chapters/M12-inference-proxy.md#19-iii-m12-s1--management-api-configuration-authority-and-authentication wave=none:serial-worker test=none:documentation-contract-readback doc=docs/handbook/chapters/M12-inference-proxy.md evidence=docs/handbook/chapters/M12-inference-proxy.md witness=none:handbook-specification-no-live-management-api verdict=none:foreman-runs-gitreins commit=none:foreman-closeout memory=none:foreman-writes
 STATUS: complete
 TIER: T1
 EVIDENCE: docs/handbook/chapters/M12-inference-proxy.md
