@@ -6,7 +6,7 @@
 |---|---|
 | Module name | SAFETY |
 | Path | `~/code-factory/scripts/` — `reclaim_disk.py`, `check_scan_scope.py` |
-| Revision | `0e01a6faa9947594ddfe791681de737fe9ec0872` (code-factory HEAD measured; **CF-307 rewrote `check_scan_scope.py` in this chapter's commit — S2 is 196 lines now**; `reclaim_disk.py` is **no longer byte-identical since `47d68b4`** — CF-290 rewrote it to 224 lines with a cache TTL and a bounded containment walk; `project-node.sh` now rehearses the reap at `:222` and reaps at `:230`) |
+| Revision | `0e01a6faa9947594ddfe791681de737fe9ec0872` (code-factory HEAD measured; **CF-307 rewrote `check_scan_scope.py` in this chapter's commit — S2 is 196 lines now**; `reclaim_disk.py` is **no longer byte-identical since `47d68b4`** — CF-290 rewrote it to 224 lines with a cache TTL and a bounded containment walk; **CF-422 added `os.path.expanduser` to the `--root` resolver, so the file is 227 lines now and the §12 read status below describes the 224-line revision it measured**; `project-node.sh` now rehearses the reap at `:222` and reaps at `:230`) |
 | Language / runtime | Python 3.14.9 + bash 5.3.9 (measured) |
 | Owner lane | code-factory (control host) |
 | Status | **VERIFIED** — `reclaim_disk.py` (224 lines) and `check_scan_scope.py` (196 lines) both read in full |
@@ -107,7 +107,7 @@ is implementation coverage, not the safety requirement.
 |---|---|---|---|---|
 | `--job-ttl-hours` | 24 (`DEFAULT_TTL_HOURS`, `:24`, `:89`) | finite, nonnegative (`:96-98`) | how old a `AGED_PARENTS` child (`.node/jobs/<dir>`, `.node/clones/<dir>`) must be before reaping — **boundary is inclusive** (`age <= TTL` is `kept`, `:143-144`) | a non-finite or negative value → `ValueError` (`:98`) |
 | `--cache-ttl-hours` | 24 (`DEFAULT_TTL_HOURS`, `:24`, `:91`) | finite, nonnegative (`:96-98`) | how old a `BUILD_CACHES` root must be before reaping; age is the **newest mtime in the subtree** (`newest_mtime`, `:66-84`), and a cache with any file newer than the TTL is `kept` with the measured age and the TTL in its reason (`:142-145`) | a non-finite or negative value → `ValueError` (`:98`); `0` reaps every cache regardless of age (the selftest uses that to prove the flag is wired, not a constant) |
-| `--root` | required (`:186`) | a directory other than `/` (`:93-95`) | the reap boundary | `/` or a non-directory → `ValueError` (`:95`) |
+| `--root` | required (`:189`) | a directory other than `/`, after `expanduser` + `realpath` (`:96`) | the reap boundary; a literal `~` is expanded **by the tool** (`os.path.expanduser`, `:96`) because callers pass it unexpanded (transcripts, cron lines, briefs) and `realpath('~')` is cwd-relative — pre-fix a documented `--root ~` failed closed as "not a directory" (CF-422) | `/` or a non-directory → `ValueError` (`:97-98`) |
 | `--dry-run` | false | boolean | whether anything is deleted | true → nothing unlinked (`:125-130`); **byte totals are still printed as projected (`would free`), not actually reclaimed** (`:202-215`) |
 
 **Exact targets (B15).** `reclaim_disk.py:15-23` fixes three constant sets:

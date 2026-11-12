@@ -133,6 +133,37 @@ class Reclaim(unittest.TestCase):
                 2,
             )
 
+    def test_tilde_root_expands(self):
+        """CF-422: `--root ~` must resolve, not be read as a cwd-relative literal.
+
+        The pre-fix resolver called os.path.realpath(root) with no expanduser, so a
+        documented `--root ~` failed closed with rc=2 ('root must be a directory other
+        than /') — a published transcript then recorded an exit code its own command
+        could not reproduce. HOME is redirected so the arm is hermetic.
+        """
+        cache = self.payload(".cache/pip", old=True)
+        env = dict(os.environ, HOME=str(self.root))
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                reclaim_disk.__file__,
+                "run",
+                "--root",
+                "~",
+                "--dry-run",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        summary = json.loads(result.stdout.splitlines()[-1])
+        self.assertEqual(summary["root"], str(self.root))
+        self.assertEqual(summary["reclaimed_bytes"], 4096)
+        self.assertTrue((cache / "payload").exists(), "dry run must not delete")
+
     def test_idempotence_and_json(self):
         self.payload(".cache/pip", old=True)
         first = self.cli("run", "--root", str(self.root), "--json")

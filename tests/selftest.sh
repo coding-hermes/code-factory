@@ -6905,18 +6905,20 @@ rm -rf "$cf006"
 # makes this a hard publication gate; .gitreins and the foreman-owned board are excluded.
 cf050_publish_gate() {
   local root=$1 baseline=$2 hits count paths ref=HEAD
-  # Grade the index when it contains staged changes so the pre-commit gate evaluates the tree it
-  # is about to publish. Fixture repositories have no staged changes, so grade their committed HEAD.
+  # Grade the union of the index and HEAD. The pre-commit gate must evaluate the tree it is about
+  # to publish AND the tree it already published: a lane that stages its repair but commits with it
+  # unstaged reds itself either way, and a staged clean file must not hide a leak that is already
+  # committed (CF-422 uncovered both directions). Fixture repositories have no staged changes and
+  # still resolve to their committed HEAD.
   # A host-home leak is an absolute /home/<name>/ that is not part of a larger path expression, so
   # "$tmpd/fakeroot/repo" (a scratch-relative path) must not be read as a leak.
   local pat='(^|[^A-Za-z0-9])/home/[a-z][a-z0-9_-]*/'
   local excl=(':!.gitreins/**' ':!.coding-hermes/board/**')
   # Options must precede the pattern: `git grep <pattern> --cached` reads --cached as a pathspec.
-  if ! git -C "$root" diff --cached --quiet -- 2>/dev/null; then
-    hits=$(git -C "$root" grep --cached -lIE "$pat" -- . "${excl[@]}" 2>/dev/null || true)
-  else
-    hits=$(git -C "$root" grep -lIE "$pat" HEAD -- . "${excl[@]}" 2>/dev/null || true)
-  fi
+  hits=$({
+    git -C "$root" grep --cached -lIE "$pat" -- . "${excl[@]}" 2>/dev/null || true
+    git -C "$root" grep -lIE "$pat" HEAD -- . "${excl[@]}" 2>/dev/null || true
+  } | sed 's/^HEAD://' | sort -u)
   count=$(printf '%s\n' "$hits" | grep -c . || true)
   paths=$(printf '%s\n' "$hits" | sed 's/^HEAD://' | sort -u | sed -n '1,10p' | tr '\n' ' ')
   if [ "$count" -gt "$baseline" ]; then
@@ -6943,6 +6945,19 @@ if [ "$rc" -ne 0 ] \
 else
   say "  FAIL  seeded fixture did not trigger the named publish-path row: $out"; fails=$((fails+1))
 fi
+# Blind-spot arm (CF-422): the leak is committed and only a clean file is staged. A gate that
+# grades the index instead of the union reports PASS here, so this arm is the falsifier for the
+# "the fix is not provable from a clean HEAD alone" failure mode the judge named.
+printf 'clean\n' > "$cf050/seed/docs/clean.md"
+git -C "$cf050/seed" add docs/clean.md
+out=$(cf050_publish_gate "$cf050/seed" 0 2>&1); rc=$?
+if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -Fq 'paths: docs/fixture.md'; then
+  say "  PASS  staged clean file cannot hide a committed leak; gate grades index + HEAD"
+else
+  say "  FAIL  staged clean file hid the committed leak (exit $rc): $out"; fails=$((fails+1))
+fi
+git -C "$cf050/seed" reset -q docs/clean.md
+rm -f "$cf050/seed/docs/clean.md"
 git -C "$cf050/seed" rm -q docs/fixture.md
 git -C "$cf050/seed" -c user.name=fixture -c user.email=fixture@example.invalid commit -qm clean
 out=$(cf050_publish_gate "$cf050/seed" 0 2>&1); rc=$?

@@ -90,7 +90,10 @@ def reclaim(
     dry_run: bool = False,
     cache_ttl_hours: float = DEFAULT_TTL_HOURS,
 ) -> dict:
-    root_path = Path(os.path.realpath(root))
+    # `~` is a shell convenience but callers also pass it unexpanded (documented transcripts,
+    # cron lines, briefs), so resolve it here: realpath('~') is cwd-relative and fails closed
+    # with a misleading "not a directory" error (CF-422).
+    root_path = Path(os.path.realpath(os.path.expanduser(root)))
     if root_path == Path("/") or not root_path.is_dir():
         raise ValueError("root must be a directory other than /")
     for label, ttl in (("job", job_ttl_hours), ("cache", cache_ttl_hours)):
