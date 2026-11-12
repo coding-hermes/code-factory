@@ -525,7 +525,7 @@ implementation mapping follows it without pretending missing fields exist
 
 | Schema | Required fields | State / refusal semantics | Durable identity |
 |---|---|---|---|
-| `register.v1` | `registration_id`, `agent_id`, `project_id`, `profile`, `public_identity`, `capabilities` | `accepted`, `UNAUTHORIZED`, `PROFILE_UNSUPPORTED`, `IDENTITY_STALE`; round/wave/worker/attempt IDs are not required | `registration_id` |
+| `register.v1` | `registration_id`, `agent_id`, `project_id`, `profile_id`, `operation_id`, `public_identity`, `capabilities` | `accepted`, `UNAUTHORIZED`, `PROFILE_UNSUPPORTED`, `IDENTITY_STALE`, `REGISTRATION_CONFLICT`, `WORKER_IDENTITY_FORBIDDEN`; class is checked before allocation; round/wave/worker/attempt IDs are not required | `registration_id` plus `(project_id,profile_id,generation,operation_id)` |
 | `round-admission.v1` | `round_id`, `run_id`, `corr_id`, `task_scope`, `total_budget`, `config_generation` | `accepted`, `deferred`, `refused`; invalid budget/config is typed refusal; future wave/worker/attempt IDs are absent | `round_id` |
 | `worker-brief.v1` | `round_id`, `wave_id`, `task_id`, `attempt_id`, `brief_digest`, `criteria`, `workspace` | digest mismatch or missing criteria is `BRIEF_INVALID`; brief custody is not success | `attempt_id` |
 | `worker-result.v1` | `attempt_id`, `dispatch_id`, `corr_id`, `status`, `commit`, `artifacts`, `evidence_refs`, `finished_at` | status enum `pass`, `fail`, `unverified`, `partial`, `unknown`; absent status is `INVALID_RESULT`; conflicting legacy `ok` is `RESULT_CONFLICT` | `attempt_id` |
@@ -544,7 +544,7 @@ and settlement. A preliminary custody receipt is never a final outcome. Duplicat
 results replay the original outcome; conflicting digests are refused. Unsupported schema
 versions and unknown fields outside `extensions` are refused rather than coerced.
 
-Identity creation is ordered: the controller creates `registration_id`; the scheduler
+The canonical identity creation order is: the authority/controller consumes the single-use enrollment grant; Crier allocates exactly one `node_id` and `registration_id`; the scheduler
 creates `round_id` and `run_id`; the foreman creates `wave_id` and `attempt_id`; Crier
 creates `delivery_id` and `lease_id`; the launching foreman assigns `dispatch_id`
 and `launch_id` before process creation (M11.16); and the foreman
@@ -570,8 +570,10 @@ Compatibility adapters may translate node-pull or dispatcher messages, but they 
 change the selected Crier launch/return authority.
 
 **Concrete conformance trace.** Registration carries `{registration_id: reg-17,
-agent_id: bunker-a, project_id: code-factory, profile: homelab-vpn,
-public_identity: key-ref, capabilities: [hermes]}` and receives generation 3.
+agent_id: bunker-a, project_id: code-factory, profile_id: homelab-vpn,
+operation_id: op-enroll-17, public_identity: key-ref, capabilities: [hermes]}` and
+receives generation 1 after the authority grant is consumed; the node identity is
+already admitted before any round identity is created.
 Admission carries `{round_id: r-17, run_id: run-17, corr_id: c-17,
 task_scope: [CF-1, CF-2], total_budget: 2, config_generation: 17}` with no wave or
 attempt IDs. The foreman creates `wave_id: w-1`, then `attempt_id: a-1`; a correction

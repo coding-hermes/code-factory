@@ -279,7 +279,7 @@ The following citations describe legacy source coverage, not target qualificatio
 
 | ID | Peer | Direction | Producer `file:function` | Consumer `file:function` | State |
 |---|---|---|---|---|---|
-| CT-22 | crier | out | **Normative target:** the authority/controller creates `registration_id` at enrollment and issues the Crier identity plus the CT-21 `credential.install` `credential_ref` with class `crier`; the node then emits the CT-22 outer `cf2a.v1` / body `register.v1` request (POST `/agents` at the CT-22 coverage boundary; the target adapter path is `/v1/factory/registrations` per §17.1) and proves a verified signed bus read before scheduling. **Implementation coverage:** no in-repo producer was measured — `bunker-crier-connect.sh` only stages `$HOME/.node/crier.json` and probes the inbox via `node-bus-worker.py --check` (`:13`, `:33`, `:53`, `:114-118`); it does **not** issue the registration request or write `auth/crier.token` (B06). **Neither `node_identity.py` (`:50-107`, merges/replaces local JSON) nor `node_gateway_auth.py` (`:70-162`, writes dashboard basic-auth + a password file) registers an agent** (B03); this measured absence is tracked as CF-276 and is not a gap in the target contract. | crier `internal/registry/handler.go:598` `HandleRegister` (POST `/agents`) and `:613` `HandleRegisterByID` (POST `/agents/{id}`) — implementation coverage only; the target contract is CT-22 `register.v1` | **UNVERIFIED** — the token/registration exchange was not re-run; the implementation producer is absent from the measured in-repo surface, while the normative actor and wire are specified above |
+| CT-22 | crier | out | **Normative target:** the authority/controller consumes the single-use tuple-bound `enrollment-grant.v1` reference, creates `registration_id` and issues the Crier identity plus the CT-21 `credential.install` `credential_ref` with class `crier`; the node then emits the CT-22 outer `cf2a.v1` / body `register.v1` request at `POST /v1/factory/registrations` and proves a verified signed bus read before scheduling. **Implementation coverage:** no in-repo producer was measured — `bunker-crier-connect.sh` only stages `$HOME/.node/crier.json` and probes the inbox via `node-bus-worker.py --check` (`:13`, `:33`, `:53`, `:114-118`); it does **not** issue the registration request or write `auth/crier.token` (B06). **Neither `node_identity.py` (`:50-107`, merges/replaces local JSON) nor `node_gateway_auth.py` (`:70-162`, writes dashboard basic-auth + a password file) registers an agent** (B03); this measured absence is tracked as CF-276 and is not a gap in the target contract. | crier `internal/registry/handler.go:598` `HandleRegister` (legacy implementation coverage) and `:613` `HandleRegisterByID` (legacy implementation coverage) — target contract is CT-22 `register.v1` at `/v1/factory/registrations` | **UNVERIFIED** — the token/registration exchange was not re-run; the implementation producer is absent from the measured in-repo surface, while the normative actor and wire are specified above |
 | CT-23 | bunker daemon | out | `lib.sh:107` `bunker_exec` | external public CLI/protocol | UNVERIFIED — legacy short-call observations lack a version-bound target qualification record |
 
 ## 7. Verification
@@ -504,7 +504,7 @@ Harness (handoff §1.5).
 | A2 | Bunker server prep (homes/keys, orphan reap) | operator, control host (`bunker-server-install.sh`) | A3 | server-level refusal, nothing spawned |
 | A3 | Agent create + per-Bunker config generate/readback | operator via `bunker-provision.sh --apply` / `node-create.sh` | A4 | partial artifacts named; destroy/retry contract below |
 | A4 | Credentials issued and installed — all five classes (R4) | control host + node, per class issuer | A5–A9 | a class that fails to install blocks its dependent legs only |
-| A5 | Bus membership: Crier identity + registration/token exchange, verified signed read | **Normative actor/data:** the authority/controller issues the Crier identity and the CT-21 `credential.install` `credential_ref` with class `crier` at enrollment; the node then performs CT-22 `register.v1` (outer `cf2a.v1`, target `/v1/factory/registrations`; `/agents` is the measured coverage boundary) and proves a verified signed bus read before it is schedulable. **Implementation coverage:** `bunker-crier-connect.sh` only stages `$HOME/.node/crier.json` and probes the inbox; no in-repo registration producer was measured (CF-276), as recorded in the CT-22 coverage row. | M2 dispatch | enrollment failure sets `ENROLLMENT_FAILED`; a failed or unproven signed bus read sets `DEGRADED` and the node is **NOT** schedulable; stage-6 private clone and other dependents do not run. Resume the last completed stage under §17.2 with the same `operation_id`, `generation` and `manifest_digest`. |
+| A5 | Bus membership: Crier identity + registration/token exchange, verified signed read | **Normative actor/data:** Part I §1.9.11 governs first registration: the authority consumes the tuple-bound single-use `enrollment-grant.v1`, creates `registration_id` and issues the Crier identity plus the CT-21 `credential.install` `credential_ref` with class `crier`; the node then performs CT-22 `register.v1` (outer `cf2a.v1`, target `POST /v1/factory/registrations`) and proves a verified signed bus read before it is schedulable. **Implementation coverage:** `bunker-crier-connect.sh` only stages `$HOME/.node/crier.json` and probes the inbox; no in-repo registration producer was measured (CF-276), as recorded in the CT-22 coverage row. | M2 dispatch | enrollment failure sets `ENROLLMENT_FAILED`; a failed or unproven signed bus read sets `DEGRADED` and the node is **NOT** schedulable; stage-6 private clone and other dependents do not run. Resume the last completed stage under §17.2 with the same `operation_id`, `generation` and `manifest_digest`. |
 | A6 | Repo + **embedded board** checkout (the board ships inside the project repo, M4) | provisioner (M1 owns the checkout; M3 manages it afterwards) | M3/M4 | seed drift gates readiness |
 | A7 | Harness install: **exact Hermes/Oh My Hermes build pin** + tools/settings | provisioner via M5 installers | M5 lifecycle | version readback required, not name-only |
 | A8 | Inference access: node-scoped proxy credential + endpoint/model policy + **end-to-end inference proof** | M1 provisions; M12 owns the proxy credential chain | M5 run path | config-present-without-a-successful-request is not readiness |
@@ -577,7 +577,7 @@ The specified, not yet release-qualified, MVP profile is a user-space, image-bac
 |---|---|---|
 | admission | declared profile, role, disk floor, footprint; `profile_id` and `generation` | unknown profile, insufficient measured headroom or unreadable host state refuses before spawn |
 | create | `node_id`, `project_id`, repository identity `{forge, host, owner, repo, ref}` and credential references, never credentials in the identity | duplicate `(project_id,node_id,generation)` is idempotent; conflicting generation is a compare-and-swap refusal |
-| enrollment | controller principal, Bunker principal, trust key/certificate fingerprint, Crier registration id and endpoint | missing trust, wrong project scope, expired identity or failed signed read leaves the node `ENROLLMENT_FAILED` and unschedulable |
+| enrollment | controller principal, Bunker principal, tuple-bound single-use bootstrap reference, trust key/certificate fingerprint, Crier registration id and endpoint | §1.9.11 consumes the grant, allocates one node identity, installs class-`crier`, then proves the signed read; missing trust, wrong project/profile/generation, expired identity or registration refusal leaves `ENROLLMENT_FAILED` with no durable identity; failed read leaves `DEGRADED` and unschedulable |
 | provision | pinned artifacts and per-class credential references; seed manifest and digest | each artifact is digest-checked; partial installation records completed stages and retries only idempotent stages |
 | readiness | effective readback for profile, repo, Crier, harness, proxy inference and memory; machine-readable report | any unavailable or unmeasured required leg is `UNVERIFIED`, never READY; readiness is not inferred from file presence |
 | replace/remove | old generation fenced, new generation read back, revocations retained | replacement cannot inherit revoked credentials; removal preserves audit evidence and destroys only owned state |
@@ -663,15 +663,19 @@ refuses before any enrollment secret is sent; trust-on-first-use is forbidden.
 The Bunker generates its own key and PKCS#10 CSR. The initial Bunker-control credential
 is operator-owned, not obtained through the bus it is creating.
 
-The operator authorizes one enrollment grant, signed offline, containing exactly
-`{schema_version:"enrollment-grant.v1", grant_id:ID, registration_id:ID,
-agent_id:ID, project_id:ID, node_id:ID, generation:PosInt, public_key:Base64url32,
-nonce:Base64url32, issued_at:Time, expires_at:Time, issuer_key_id:ID}` plus
-`signature:Base64url64`. Lifetime is at most 600 s. The signature covers UTF-8
+The authority issues one enrollment grant, signed offline, as the single-use
+`credential_ref` `enrollment-grant.v1` bound to exactly
+`(project_id, profile_id, generation, operation_id)` and the Bunker's
+`public_key`. Its authority-side record is `{schema_version:"enrollment-grant.v1",
+grant_id:ID, registration_id:ID, project_id:ID, profile_id:ID, generation:PosInt,
+operation_id:ID, public_key:Base64url32, nonce:Base64url32, issued_at:Time,
+expires_at:Time, issuer_key_id:ID}` plus `signature:Base64url64`; it carries no
+inline secret material. Lifetime is at most 600 s. The signature covers UTF-8
 `CF2A-ENROLL-1\n` followed by JCS of the object excluding signature. The nonce uses
-32 cryptographically random bytes. registration_id is controller-allocated before
-first exchange, not registration_generation. A grant is delivered in a mode-0600
-file, removed after successful enrollment on both endpoints; it is never argv/log.
+32 cryptographically random bytes. `registration_id` is controller-allocated before
+first exchange, not `registration_generation`. The reference is delivered in a
+mode-0600 file, removed after successful consumption, and is never argv, JSON, log or
+worker environment. The Bunker does not supply `node_id`; Crier allocates it.
 
 `POST /v1/enroll` is the sole client-certificate exception: TLS 1.3 authenticates
 the pinned authority server; grant signature and proof of possession authenticate

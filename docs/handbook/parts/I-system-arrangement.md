@@ -1737,6 +1737,93 @@ source for enrollment, lost grant/consume replies, one-sided binding acknowledge
 certificate renewal, secret assignment, failed launch, worker/control death, commit
 uncertainty, postcheck exhaustion and late evidence; module prose does not fork those cases.
 
+### 1.9.11 Enrollment identity and trust bootstrap
+
+This subsection is the normative first-registration contract. It specializes §1.9.3 and
+§1.9.3a for a fresh Bunker; it does not replace their offline operator-key, certificate,
+nonce, revocation or authority-ledger rules. The authority is the only actor that may
+issue a bootstrap grant or mint a Bunker principal. The Crier registrar is the only actor
+that may admit `register.v1` and allocate a node identity. The operator, provisioner,
+Scheduler, Crier worker, Gateway and any other third party may relay or verify these
+objects but may not mint either credential or identity.
+
+The bootstrap grant is a single-use, signed `enrollment-grant.v1` reference bound to the
+exact tuple `(project_id, profile_id, generation, operation_id)` and to the Bunker's
+public key. The grant file contains a `credential_ref`, never inline secret material;
+its authority-side record contains `grant_id`, `registration_id`, `project_id`,
+`profile_id`, `generation`, `operation_id`, `public_key`, `nonce`, `issued_at`,
+`expires_at` and `issuer_key_id`. The reference is delivered through the protected
+Bunker-control channel in a mode-0600 file and is deleted after successful consumption.
+A grant is valid for one operation only and is never placed in argv, JSON, logs or a
+worker environment. `profile_id` is the live spelling everywhere; `profile` is not an
+alternate enrollment field. The `node_id` is allocated by Crier, not supplied by the
+Bunker.
+
+The first exchange is ordered and has one wire/version pair only:
+
+1. The authority validates the offline operator signature, tuple, expiry, nonce and
+   public-key proof, then atomically consumes the grant. Bad, expired or replayed grants,
+   wrong project/profile/generation, invalid proof and unavailable authority fail before
+   allocation.
+2. The Crier registrar accepts the authenticated `cf2a.v1` envelope with body
+   `register.v1` at `POST /v1/factory/registrations` (CT-22), and atomically allocates
+   exactly one `node_id` plus `registration_id` at generation 1. CT-21's
+   `credential.install` then installs the class-`crier` credential reference for that
+   node. No worker-class principal, child identity or second allocation is permitted.
+3. The node resolves the returned reference through the broker, installs the credential,
+   and performs a signed Crier bus read under `CF2A-CRIER-1`. Only a verified read proves
+   membership and permits M9 admission; installing a file or receiving HTTP 200 does not.
+
+The admitted identity is exactly the Bunker principal and its one `node_id`,
+`registration_id`, `project_id`, `profile_id`, registration `generation`, public-key
+fingerprint, Crier endpoint and class-`crier` credential reference. Its scope is the
+bound project, profile and generation, plus the explicitly listed Crier operations;
+it cannot access another project or generation. Worker execution inherits this already
+admitted node identity through the node's custody channel. A worker or child process
+never registers and cannot claim a worker-class principal: M9 refuses that class before
+allocation or launch with `WORKER_IDENTITY_FORBIDDEN`. Round, wave, worker and attempt
+IDs are execution identities, not enrollment identities.
+
+Failure is fail-closed and has no hidden allocation. A bad/expired/replayed grant,
+wrong project/profile/generation, wrong key or failed authority validation produces
+`ENROLLMENT_FAILED`; it allocates no durable `node_id`, registration or credential.
+A Crier registration refusal is also `ENROLLMENT_FAILED` with no durable identity. A
+signed-read failure after the registration and credential are durably present produces
+`DEGRADED`, closes M9 schedulability and retains the one allocated identity for
+readback/recovery; it is not a second enrollment opportunity. Loss or removal of a
+Bunker fences and revokes the identity and ends in `REMOVED` only after the revocation
+and negative resource probe are recorded. Recovery resumes the same
+`(project_id,profile_id,generation,operation_id)` operation and reads back its existing
+registration before retrying a missing step.
+
+The idempotency key is the tuple `(registration_id, operation_id, generation)` together
+with the canonical request digest. An exact repeat of the same tuple and digest returns
+the original `node_id`, `registration_id`, generation and credential reference and
+performs no allocation or installation. A conflicting tuple, generation, public key or
+request digest returns `REGISTRATION_CONFLICT` (compare-and-swap refusal), and the
+registrar does not mutate state. If the reply is lost, the authority or Crier reads
+back `GET /v1/registrations/{registration_id}` and resumes the missing CT-21/read-proof
+step; it never allocates a second identity.
+
+| Deterministic state | Durable fact | Next action |
+|---|---|---|
+| `GRANT_READY` | exact tuple and one-use reference are valid | consume once; no identity yet |
+| `ENROLLMENT_FAILED` | validation or registration failed before allocation | retain failure; repair trust/input and retry the same operation |
+| `ENROLLED` | one node identity and class-`crier` reference are durable | install reference and prove signed read |
+| `DEGRADED` | identity exists but signed read is unproven | no admission; read back and retry proof, never allocate |
+| `VERIFIED` | identity, credential and signed read all match | M9 may admit the node |
+| `REMOVED` | identity fenced/revoked and negative probe recorded | no reuse; replacement gets a new generation |
+
+The hand-checkable cases are `CV-P5G-09-A` through `CV-P5G-09-E` in
+`docs/handbook/contract-vectors.json`. They are the sole normative vector source for
+fresh accept, exact repeat, conflicting generation, expired grant and worker-class
+refusal. [CT-21/22; M1 §§14–15, 17.1–17.2; M9 §§15–16; M10 §15; VII §13]
+
+ch:trace row=P5G-09 spec=docs/handbook/parts/I-system-arrangement.md#section-1911-enrollment-identity-and-trust-bootstrap wave=none:serial test=docs/handbook/contract-vectors.json::CV-P5G-09-A..E doc=docs/handbook/chapters/M1-provisioning.md prompt=none:worker-owned evidence=docs/handbook/contract-vectors.json witness=docs/handbook/contract-vectors.json verdict=none:foreman-runs-gitreins commit=none memory=none:foreman-writes
+STATUS: partial
+TIER: T1
+EVIDENCE: docs/handbook/contract-vectors.json
+
 ch:trace row=P5G-06 spec=docs/handbook/OUTLINE.md#part-iii--modules wave=none:serial-worker test=bash tests/selftest.sh doc=docs/handbook/parts/I-system-arrangement.md evidence=none:handbook-specification-no-live-binding-runtime witness=none:repository-local-spec-only verdict=none:foreman-runs-gitreins commit=none:worker-commit memory=none:foreman-writes
 STATUS: complete
 TIER: T0
