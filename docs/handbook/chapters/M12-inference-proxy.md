@@ -524,6 +524,173 @@ deduplicates emission, retry, scrape and restart; one request event counted twic
 a projection defect. Read-only GETs and scrapes emit nothing and do not refresh the
 last-operation timestamp.
 
+## 19. III.M12.S1 — Management API, configuration authority and authentication (P5G-05; F12/F13)
+
+This section is the normative M12.S1 contract for proxy admission and management. It
+extends the node-token administration surface in §16 without replacing the Factory
+manager contract in Part I §1.9 and Part V §V.0. The same terms and versions apply on
+both surfaces: the outer request/result envelope is `cf2a.v1`, the configuration body
+is `factory.v1`, and the node-token body remains `cf.node-token-admin.v1`. A
+`manager.v1`, `desired_generation`, or M12-specific project-write grammar is not a
+second target. The manager is TARGET-UNIMPLEMENTED; this specification is not a
+claim that the unversioned proxy script implements it.
+
+### 19.1 Boundary and authenticated request/result
+
+The management listener is separate from runtime inference and is reachable only on
+the management network over TLS 1.3 with mutual client authentication. Before a
+body is decoded, the server validates the client certificate chain, clientAuth usage,
+URI SAN `urn:factory:principal:<id>`, validity and online revocation. The authenticated
+SAN is the `sender`; a body-supplied principal is refused. The authority maps that
+principal to a role and explicit scope. Administrators may mutate global and project
+intent; project editors may mutate only their project; M9.S4 operator readers may
+read and reconcile only the scopes granted to them. Authority outage is
+`503 AUTHORITY_UNAVAILABLE`, never cached authorization. M1.S3 owns node identity
+and Crier membership; it does not authorize management configuration or proxy
+provider spend.
+
+Every mutation is an HTTP request carrying `Accept: application/json`,
+`Content-Type: application/json`, `X-Request-Id`, `X-Correlation-Id` and
+`Idempotency-Key`. `X-Request-Id` equals the outer `request_id`, the correlation
+header equals `corr_id`, and the header idempotency key equals the body key;
+mismatches are `422 INVALID_FIELD`. The canonical outer object is exactly:
+
+`{schema_version:"cf2a.v1",message_type,request_id,corr_id,sender,created_at,body}`
+
+The `body` is closed except for registered `extensions`. A configuration mutation
+uses `message_type:"config.update"` and this exact `factory.v1` body shape:
+
+`{schema_version:"factory.v1",operation_id:ID|null,idempotency_key:ID,expected_generation:UInt,scope:"factory-control"|"project:<ID>",project_id:ID|null,node_id:ID|null,desired:FactoryDocument}`
+
+`scope` is `factory-control` for a global update or `project:<project_id>` for a
+project update. `project_id` is required for project scope and null for global
+scope; `node_id` is null on a configuration update and is present only on the
+separate M12 node-token-admin operation. `operation_id` is null on a first attempt;
+when supplied on retry it must identify the already accepted operation and cannot
+create a second effect. Thus the server, not the caller, allocates the operation
+identity at the accepted commit. `expected_generation` is the one global
+configuration generation, initially zero. There is no independent project
+counter. A project editor submits the complete document with only its authorized
+project changed, so the manager can reject a cross-scope edit rather than merge it.
+
+The successful result is the same typed `factory.v1` response everywhere:
+
+`{schema_version:"factory.v1",status:"accepted"|"ok",data:{operation_id,generation,scope,desired_digest},error:null}`
+
+A readback uses the same `cf2a.v1` envelope and returns `State` from Part I §1.9.1:
+`{desired,observed,effective,generation,status,operation_id}`. `effective` is
+separate from desired and is null or degraded until the owning subsystem supplies a
+fresh readback. `Error` is exactly `{code,message,retryable,field,current_generation}`;
+messages are redacted and secret values never occur in requests, results, logs,
+events, plans, files or desired-state backups.
+
+The node-token endpoints in §16 use the same mTLS, envelope, idempotency and CAS
+rules, but their body is `cf.node-token-admin.v1`: `operation_id`,
+`idempotency_key`, `expected_generation`, `node_id`, `project_id`, `scope` and the
+operation-specific fields (`ttl_s`, `delivery_target`, `token_id`, or `reason`).
+They return metadata, `secretref` and receipt identifiers, never a bearer. A node
+token authorizes runtime `cf.inference.v1` admission only; it cannot call this
+management listener. M7 app-token issuance is a third domain: it issues forge
+installation credentials and never issues node tokens, management certificates or
+provider keys. M11's scoped forge credential is likewise not a proxy token.
+
+### 19.2 Settings and typed secret references
+
+`FactoryDocument` is the Part V `factory.v1` desired document. Its fields retain
+Part V's classes: user intent is caller-editable, derived values are manager-owned,
+observed/effective values are readback-only, and secret material is forbidden.
+Credential-bearing fields use the typed reference object represented on the wire as
+`secretref://<domain>/<name>`; the URI is a reference, not a string containing a
+credential. The domain is one of the mapped authority domains in Part V §V.4
+(`authority`, `forge`, `bunker`, `transport`, `model`, `memory`, `events`, or
+`backup`), the name is non-empty and path-safe, and the reference is resolved only
+by the owning issuer/adapter. A `secretref` is safe in desired state, API results,
+diffs, events and audit records; resolved material is never returned or copied into
+the `factory.v1` document. A plain secret, inline key, bearer, PEM, or environment
+value in a secret field returns `422 SECRET_MATERIAL_FORBIDDEN`.
+
+Configuration precedence is explicit and non-implicit: accepted generation and
+scope update → project value → deployment/profile mapping → global default, with a
+native subsystem override only when the adapter explicitly registers that mapping.
+Empty and absent are distinct according to the Part V field card; neither silently
+falls through to an unrelated scope. The manager does not rewrite desired intent
+from observed/effective state.
+
+### 19.3 One-writer ordering, CAS and recovery
+
+The authoritative actor is the Factory manager's single local writer, fenced by the
+independent authority in Part I §1.9.3. The configuration file is the human-readable
+desired-state proposal; it is not a second writer. An authenticated file importer
+reads the proposal's exact bytes and submits them through the same `config.update`
+validator and `expected_generation` CAS as an API caller. The manager serializes
+updates under the writer lock, validates schema, scope, cross-field constraints and
+secret references, computes the canonical request digest, and then, in order:
+
+1. Append the complete transaction containing the immutable config edition,
+   generation, operation and dedupe receipt to Git-backed JSONL.
+2. `fsync` the log and parent directory; update in-memory indexes only after fsync.
+3. Materialize `config/generations/<generation>.json` from canonical bytes, fsync it,
+   atomically rename the active pointer, and fsync the directory.
+4. Return the accepted `factory.v1` result only after the journal and active
+   projection are readable. Reconciliation and adapter calls begin after this
+   commit; they cannot make an unaccepted setting active.
+
+The CAS tuple is `(scope, expected_generation, principal authorization,
+request_digest)`, evaluated against the one current generation while holding the
+writer/fence. A successful edit advances generation exactly once. A stale
+`expected_generation` returns `409 GENERATION_CONFLICT` with
+`current_generation`, writes no config edition, and leaves the proposal untouched.
+An identical `(principal, scope, route, idempotency_key, request_digest)` returns
+the original response without advancing generation. The same key with a different
+digest returns `409 IDEMPOTENCY_KEY_REUSED`. A timeout is resolved by retrying the
+same idempotency identity or reading the operation; a new key is not a recovery.
+
+A crash before the journal fsync returns no acknowledgement and the next startup
+replays only the last complete newline. A crash after journal fsync but before the
+active pointer is repaired by replaying the journal and atomically rebuilding the
+projection. A torn final record is truncated to the last verified newline; a
+middle hash/sequence error is `STORE_CORRUPT` and stops writes until a verified
+checkpoint plus intact suffix is restored. Manual edits to a committed generation
+are `CONFIG_TAMPERED`, never a new generation. Adapter failure after acceptance
+leaves the generation durable and the operation `degraded` or `failed`; recovery
+re-reads the operation and retries idempotent steps, or follows F13's fenced
+rollback/forward-repair procedure. Running inference remains pinned to its admitted
+policy generation unless revocation fences it; a config edit never silently
+restarts a round.
+
+### 19.4 Deterministic state table and vector
+
+The following vector is independently checkable without a live service. Start with
+current generation `17`, current canonical document digest `D17`, no pending
+operation, and a valid administrator certificate `admin-7`. Each row is one request;
+all fields not shown are the common `cf2a.v1` fields and valid `factory.v1` values.
+
+| Case | Request identity and CAS | Durable precondition | Required result and next state |
+|---|---|---|---|
+| Success | `scope=factory-control`, `expected_generation=17`, `idempotency_key=k18`, digest `D18` | generation 17 | `202 accepted`, `operation_id=op-18`, `generation=18`; append one edition and active pointer; current document is D18 |
+| Stale generation | same valid request but `expected_generation=17` after the success row | generation 18 | `409 GENERATION_CONFLICT`, `current_generation=18`; no new edition, no operation, state remains D18 |
+| Duplicate idempotency | exact replay of the success row: same principal/scope/key/digest | generation 18, receipt for k18 | original `202` body with `op-18`, generation 18; append count and generation do not change |
+| Reused key | same principal/scope/key `k18`, digest `D19` | generation 18, receipt for D18 | `409 IDEMPOTENCY_KEY_REUSED`; no new edition and no generation change |
+| File/API race, API wins | file importer and API both read 17 and submit different digests with expected 17; API acquires writer first | generation 17 | API is the sole winner at 18; file receives `409 GENERATION_CONFLICT` with 18 and must re-read/produce a new proposal; no merge or last-writer-wins |
+| File/API race, file wins | same two requests, file importer acquires writer first | generation 17 | file is the sole winner at 18; API receives `409 GENERATION_CONFLICT` with 18 and retries only with a new read plus new idempotency key or the same key if its digest is unchanged |
+
+For every accepted row, the check is `generation=18 ∧ active_digest=D18 ∧
+log_receipt=returned_receipt ∧ operation_state=accepted`; for every conflict,
+`generation` and active digest remain unchanged and no adapter call is allowed.
+The vector therefore checks CAS, idempotency, file/API ordering, returned
+readback and the recovery rule rather than merely checking an HTTP status.
+
+Runtime implementation of this management listener, its authority service and the
+file importer remains **UNVERIFIED / TARGET-UNIMPLEMENTED**. The existing proxy
+script's measured runtime node-token admission does not qualify this contract.
+[Part I §1.9.1–§1.9.3; Part IV CT-24–CT-26; Part V §V.0/§V.4/§V.6;
+M1.S3; M9.S4; F12; F13]
+
+ch:trace row=P5G-05 spec=docs/handbook/OUTLINE.md#part-iii--modules wave=none:serial-worker test=bash tests/selftest.sh doc=docs/handbook/chapters/M12-inference-proxy.md prompt=/home/kara/.hermes/cache/scratch/code-factory-2026-11-12-15-11-40-P5G-05-brief.txt evidence=docs/handbook/chapters/M12-inference-proxy.md witness=none:handbook-specification-no-live-management-api verdict=none:foreman-runs-gitreins commit=none:worker-commit memory=none:foreman-writes
+STATUS: complete
+TIER: T1
+EVIDENCE: docs/handbook/chapters/M12-inference-proxy.md
+
 ## RED field count: 4 (Metrics §8 — absence-proved; CT-19 node-client half UNVERIFIED; CT-20 upstream half UNVERIFIED — one-sided external boundary; stream completion **FAILING** — F12-7 reproduced, and a first-byte-only flight card cannot close it)
 
 ## FLIGHT DATA FILE - M12 INFERENCE PROXY

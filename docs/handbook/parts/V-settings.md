@@ -110,8 +110,11 @@ The target management surface is `factory.v1` and has these observable operation
 
 Every mutation is authenticated, scoped, durable before adapters run, and idempotent by
 `(principal, scope, operation, idempotency_key)`, where scope is `factory-control`
-for whole-document/global operations and the authorized project ID for project reads/
-reconcile. Part I §1.9.1 supplies the exact mTLS HTTP wrapper, principal derivation,
+for whole-document/global operations and `project:<project_id>` for project operations.
+The exact `cf2a.v1` / `factory.v1` `config.update` body, including
+`expected_generation`, `scope`, `project_id`, `node_id` and `desired`, is fixed in
+Part I §1.9.1 and M12 §19; this register does not define a second manager grammar.
+Part I §1.9.1 supplies the exact mTLS HTTP wrapper, principal derivation,
 response/Error schema and route retirement rules; there is one generation, not a
 second project/global tuple. A project edit after any global change re-reads the
 whole document and submits the new expected_generation with only its allowed project
