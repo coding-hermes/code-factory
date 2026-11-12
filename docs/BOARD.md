@@ -140,10 +140,11 @@ bash tests/selftest.sh | grep -E 'rows parse|^SELFTEST'
 
 - **Re-measured 2026-11-12T12:31Z at tip `cdf12123`:** 492 task rows, 714 events at census time
   (max event id 713; the one legacy event row at line 670 carries no `id` field, which is the
-  `boardctl` warning that names it). The census event this commit appends takes the file to 715
-  lines with max id 714, and that row's own `detail.events` records the pre-append count — so the
-  line count and the detail field are two different numbers on purpose, not a discrepancy to
-  reconcile. Status break: 138 `complete`, 14 `in_progress`, 340 `pending`, no `blocked`, no duplicate task ids.
+  `boardctl` warning that names it). This tick then appends two events — 714 (census) and 715
+  (disclosure note) — taking the file to 716 lines with max id 715. The census row's own
+  `detail.events` records the pre-append count, so the line count, the detail field and this
+  paragraph describe three different moments on purpose; each is labelled.
+  Status break: 138 `complete`, 14 `in_progress`, 340 `pending`, no `blocked`, no duplicate task ids.
   Both board files are byte-identical to their `origin/main` copies
   (`python3 scripts/board_drift.py check --workdir . --ref origin/main` prints `RESULT: OK`,
   `board rows — 492 vs 492 rows; 0 divergent ids`, and the HEAD and HEAD-ancestry legs both name
