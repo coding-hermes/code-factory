@@ -958,7 +958,10 @@ changes. A concurrent file/API edit loses the same CAS, never silently merges.
 The declared JSON configuration is authoritative intent, but only an accepted
 immutable edition is executable. File editing writes a proposal, not the active
 edition: the authenticated importer submits the exact bytes through the same
-PUT/CAS path. The manager journals the canonical edition, operation and receipt
+PUT/CAS path as an API writer. Both writers submit to the authenticated manager's
+single CAS/journal authority: the first successful comparison returns one new
+`generation`; the stale loser receives `GENERATION_CONFLICT`, without mutation or
+silent merge. The manager journals the canonical edition, operation and receipt
 in one transaction, then materializes `config/generations/<generation>.json` and
 atomically renames the active pointer with directory fsync. A crash between these
 writes repairs the projection from the journal before serving reads. Manual edits
@@ -1027,6 +1030,36 @@ schema; its digest is pinned in the release manifest. Unknown nested adapter
 objects are rejected unless the capability schema names them (§1.9.5).
 Legacy project PUT and operation-ID reconcile routes return `410 ROUTE_RETIRED`
 with the canonical route, and do not mutate. [CT-24–CT-30; Part IV §IV.1]
+
+**Deterministic management state vector.** The following table is a transition
+and readback vector over the existing `factory.v1` request, `Accepted`, and `State`
+types above and in Part V §V.0.2; it is not a competing schema or a second
+configuration authority. For a mutation, the comparison identity is
+`(principal, scope, route-verb, idempotency_key)` and `request_digest` is compared
+data. `desired`, `observed`, `effective`, `generation`, and `status` retain their
+existing meanings; an absent observation is not evidence of convergence.
+
+| State/vector case | Deterministic input and result | Mutation/readback obligation |
+|---|---|---|
+| Genesis/create | Current `generation=0`; an authenticated `PUT /v1/config` supplies `expected_generation=0` and a valid complete desired document. | Commit exactly one accepted edition at `generation=1` and return `202 Accepted` with the operation receipt. No second writer may also create generation 1. |
+| Exact retry | Same authenticated principal, scope, route-verb, idempotency key, and request digest as an accepted mutation. | Replay the original receipt/status/body; do not allocate another generation, operation, or mutation. |
+| Key reuse | Same principal/scope/verb/idempotency key, but a changed request digest. | Return `409 IDEMPOTENCY_KEY_REUSED`; preserve the original receipt and state, with no mutation. |
+| Concurrent stale writer | A file importer or API writer submits stale `expected_generation` after another writer has accepted the next generation. | Return `409 GENERATION_CONFLICT`; perform no journal, generation, pointer, or desired-state mutation. The rejected file proposal is not silently merged or overwritten. |
+| Secret representation | Desired input contains secret material rather than a typed reference. | Reject with `422 SECRET_MATERIAL_FORBIDDEN`; a typed `secretref://...` value is accepted and retained as a reference, while secret material never enters the desired document or response. |
+| Readback after acceptance | `GET /v1/config` or the authorized project state read returns the current `State`. | Return `desired`, `observed`, `effective`, `generation`, and `status` (plus the already-defined operation identity where applicable). `202 Accepted` means durable asynchronous custody only; it is not convergence. `status=converged` requires the required authenticated adapter readbacks and effective state to prove it. |
+
+File proposals are therefore imported through the same authenticated PUT/CAS
+path and journal authority as API writes. A proposal cannot silently merge with
+an intervening API or file update: it must be retried from a fresh readback with
+the new generation and a new request identity where the operation is materially
+new. The manager remains **TARGET-UNIMPLEMENTED**; this vector specifies the
+required behavior and does not claim a running implementation. [Part V §V.0.2;
+CT-24–CT-26]
+
+ch:trace row=P5G-05 spec=docs/handbook/parts/I-system-arrangement.md#1.9.1-one-wire-and-configuration-authority wave=none:serial test=none:specification-only doc=docs/handbook/parts/I-system-arrangement.md evidence=none:specification-only-bounded-checks witness=none:target-manager-unimplemented verdict=none:foreman-closeout commit=none:worker-commit memory=none
+STATUS: TARGET-UNIMPLEMENTED — normative state vector specified; no manager implementation or runtime conformance is claimed.
+TIER: T1 — bounded handbook checks and content grep only.
+EVIDENCE: §1.9.1 deterministic state vector, Part V §V.0.2 cross-reference, M1 §17.5 cross-reference, and the bounded checks run for this change.
 
 ### 1.9.2 Durable records and acknowledgement
 
