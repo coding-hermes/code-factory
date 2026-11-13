@@ -102,6 +102,9 @@ MINTER="$HERE/github-app-token.py"
 [ -r "$MINTER" ] || { bad "minter" "$MINTER is missing"; exit 1; }
 
 if [ -z "$REPO" ]; then REPO="$(default_repo)"; fi
+if [ -z "$REPO" ] && [ -f "$ENV_FILE" ]; then
+  REPO="$(sed -n 's/^GITHUB_APP_REPO=//p' "$ENV_FILE" | tail -1)"
+fi
 
 print_permissions() {
   local row name why
@@ -240,7 +243,11 @@ check() {
 
   say ""
   if [ "$rc" -eq 0 ]; then
-    say "GITHUB APP SETUP: PASS — the App credential is real, scoped, and reads ${REPO:-the target repo}"
+    if [ -n "$REPO" ]; then
+      say "GITHUB APP SETUP: PASS — the App credential is real, scoped, and reads $REPO -> 200"
+    else
+      say "GITHUB APP SETUP: PASS — every configured App piece was measured; no repository read was requested"
+    fi
   else
     say "GITHUB APP SETUP: FAIL"
   fi

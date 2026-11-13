@@ -501,8 +501,12 @@ def cmd_check(args):
                 "/apps/%s -> %d (no public App with that slug)" % (slug, s_status),
             )
 
-    if args.repo:
-        owner, _, name = args.repo.partition("/")
+    # A setup-created env file records GITHUB_APP_REPO, so read that pointer as
+    # data rather than requiring the caller to export it into this process.
+    target_repo = args.repo or vals.get("GITHUB_APP_REPO", "")
+    repo_read_status = None
+    if target_repo:
+        owner, _, name = target_repo.partition("/")
         cov_status, cov_payload = api(
             "GET",
             "%s/installation/repositories?per_page=100" % args.api_base,
@@ -558,12 +562,23 @@ def cmd_check(args):
                 % (owner, name, r_status, _message(r_payload) or "no answer"),
             )
 
+        repo_read_status = r_status
+    else:
+        fail_row(
+            "repo_read",
+            "no repository named, so the read was not measured (pass --repo OWNER/NAME "
+            "or set GITHUB_APP_REPO)",
+        )
+
     if failures:
         say("")
         say("GITHUB APP: FAIL (%d)" % failures)
         return 1
     say("")
-    say("GITHUB APP: PASS — every piece measured, a fresh token reads the target repo")
+    say(
+        "GITHUB APP: PASS — every piece measured, a fresh token reads %s -> %d"
+        % (target_repo, repo_read_status)
+    )
     return 0
 
 

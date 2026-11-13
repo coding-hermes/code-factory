@@ -71,6 +71,10 @@ is implementation coverage, not the requirement.
 
 ## 3. Submodule inventory
 
+### III.M7.S1 — App credential check
+
+`--check` is fail-closed on repository evidence. The minter resolves the target from `--repo` or the `GITHUB_APP_REPO` key in the pointer file, performs both the installation-coverage request and `GET /repos/<owner>/<name>` with the fresh token, and includes the repository and HTTP status in the PASS row. If neither source names a repository, it emits `FAIL repo_read — no repository named, so the read was not measured ...` and exits non-zero; it never prints a PASS sentence claiming it reads the target repo. This behavior is covered by the hermetic local-stub fixture `tests/test_github_app_check.py`, with unreadable 403, readable 200, and no-repository arms recorded in `docs/audits/code-factory-CF-319-fix-2026-11-13.md`.
+
 | Submodule | Unit | Classification | Evidence (invoking line) |
 |---|---|---|---|
 | S1 app credentials | `github-app-setup.sh`, `github-app-token.py`, `github-app-refresh.sh` | **operator-invoked** | `grep -rn 'github-app-token\|github-app-refresh\|github-app-setup' scripts/ config/` finds no timer/cron/scheduler invocation — only `github-app-setup.sh:201/:284` printing manual refresh instructions (B43); an operator runs the mint/refresh on demand |
