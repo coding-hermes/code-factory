@@ -59,7 +59,17 @@ evaluator:
   # ungraded" — the criterion was never examined, so the FAIL says nothing about the diff.
   # ~45k input/iteration holds, so the binding rung is still iteration count. Raised one
   # rung (200 -> 400) per the cap-sizing rule.
-  max_iterations: 400
+  # 400 bound twice on 2026-11-13 (P5G-10), again grading ONE docs criterion:
+  #   run f7bc6f9b / 4d0b4388 — "Iteration cap (400) reached (400.4 used)", 0 of 1
+  #     criteria graded, 2,985,128 in / 7,843 out.
+  #   run 186b3284 — same shape, 400.1 used, 4,318,343 in / 8,569 out, criterion
+  #     UNVERIFIED ("not examined"). A per-call max_iterations=800 override was
+  #     accepted by the job record but did NOT bind the evaluator (it still cut at
+  #     400), so the config value is the only effective knob on this install.
+  # Two starvations of a single-criterion task at the same rung license one raise;
+  # input budget is nowhere near binding (4.3M at 400 iterations), so raise the
+  # iteration rung one more step (400 -> 800) rather than splitting the criterion.
+  max_iterations: 800
   static_analysis_diagnostics: false
 history:
   enabled: true
