@@ -189,10 +189,12 @@ attachments:Artifact[]}`. The Factory foreman/manager owns its construction and 
 its exact immutable bytes at accepted admission. TaskRow is the exact admitted M4
 snapshot, not a later board read. Criteria match that snapshot by id/description/order;
 skills preserve declared order; attachment names are unique and attachment order is
-explicit. Skill and attachment refs resolve project CAS content, and attachment bytes
-must hash to their refs. The complete object is serialized once with RFC 8785 JCS as
-UTF-8, sorted keys, compact separators, no BOM and no trailing LF. `brief_digest` is
-lowercase SHA-256 over exactly those bytes; `brief_ref` addresses those same bytes.
+explicit. The receiver fetches each skill and attachment from project CAS by its
+reference before start; skill bytes must hash to `digest`, and attachment bytes must
+match both `size_bytes` and their reference digest. The complete object is serialized once
+with RFC 8785 JCS as UTF-8, sorted keys, compact separators, no BOM and no trailing LF.
+`brief_digest` is lowercase SHA-256 over exactly those bytes; `brief_ref` addresses those
+same bytes.
 Whitespace and Unicode string bytes are preserved. A transport decoder verifies the
 recovered UTF-8 bytes, never base64 text or a reconstructed summary. Missing/changed
 content is refused before reservation/native start. `worker-brief.v1` carries the ref

@@ -62,10 +62,11 @@ memory entry) is the inner cycle of step 4; F3 and F5 carry its contracts.
    with acceptance criteria, model/provider access and isolated workspaces. Each
    brief is the immutable `cf.brief-input.v1` JCS byte object owned by the Factory
    foreman/manager; its exact task snapshot, ordered criteria/skills and ordered
-   attachment refs are delivered through `worker-brief.v1` as `brief_ref` and
-   `brief_digest` (M2 §15.1; Part IV §IV.2; CV-01-B). The receiver decodes transport
-   framing before hashing, refuses missing/changed content before reservation/native
-   start, and replays an identical retry without a second start. Local namespace
+   attachment refs are carried by `worker-brief.v1` as `brief_ref` and `brief_digest`
+   (M2 §15.1; Part IV §IV.2; CV-01-B). The receiver fetches the referenced skill and
+   attachment CAS bytes, verifies each digest (and attachment size), decodes transport
+   framing before hashing the brief, refuses missing/changed content before reservation/
+   native start, and replays an identical retry without a second start. Local namespace
    queries remain a supported path when the DuckBrain HTTP service is unavailable.
    The MVP harness is fixed — the foreman invokes Hermes directly; a future Task
    Router would sit between Node and Harness and is drawn NOT PART OF MVP.
