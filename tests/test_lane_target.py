@@ -551,7 +551,7 @@ class VerifyBunker(unittest.TestCase):
         os.makedirs(self.bin)
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
 
-    def _shim(self, home="/home/bunker-abc", exists=True, exit_code=0):
+    def _shim(self, home="/srv/bunker-abc", exists=True, exit_code=0):
         path = os.path.join(self.bin, "bunker")
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(
@@ -579,7 +579,7 @@ class VerifyBunker(unittest.TestCase):
             os.environ["PATH"] = old
         self.assertTrue(out["ok"], json.dumps(out, indent=2))
         self.assertEqual(out["verified"], "bunker-exec")
-        self.assertEqual(out["agent_home"], "/home/bunker-abc")
+        self.assertEqual(out["agent_home"], "/srv/bunker-abc")
 
     def test_missing_path_fails(self):
         self._shim(exists=False)
@@ -675,7 +675,7 @@ class VerifyBunker(unittest.TestCase):
             rows = json.loads(out.stdout)
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["workdir"], "bunker://abc" +
-                             ("/srv/repo" if extra else "/home/bunker-abc/repo"))
+                             ("/srv/repo" if extra else "/srv/bunker-abc/repo"))
 
     def test_mimicking_path_stub_requires_matching_pin(self):
         mimic = self._shim()
