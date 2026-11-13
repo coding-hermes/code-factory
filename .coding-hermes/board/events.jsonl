@@ -737,3 +737,4 @@
 {"id":736,"timestamp":"2026-11-13T01:25:20Z","event_type":"task_created","task_id":"CF-426","actor":"foreman","detail":"{\"id\":\"CF-426\",\"status\":\"pending\"}"}
 {"id":737,"timestamp":"2026-11-13T02:00:58Z","event_type":"task_evidence","task_id":"P5G-09","actor":"foreman","detail":"{\"runs\": [\"f7bdada9 graded FAIL\", \"a5039e6d cap 10.0M/720.5 iters\"], \"landed\": [\"4a93253b\", \"d8cc2eda\"], \"merge\": \"684b89af\", \"status\": \"blocked\", \"blocked_on\": \"CF-425\"}"}
 {"id":738,"timestamp":"2026-11-13T02:00:58Z","event_type":"task_updated","task_id":"CF-425","actor":"foreman","detail":"{\"added\": \"f7bdada9 graded at 800 iterations; a5039e6d bound 10.0M input at 720.5 iterations\", \"config_rungs\": \"max_iterations 800, max_input_tokens 10M\"}"}
+{"id":739,"timestamp":"2026-11-13T02:23:15Z","event_type":"task_updated","task_id":"P5G-08","actor":"foreman","detail":"{\"status\":\"pending\"}"}
