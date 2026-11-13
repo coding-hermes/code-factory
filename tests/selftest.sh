@@ -2916,8 +2916,10 @@ else
 fi
 rm -rf "$cf057_tmp"
 
-# ch:trace row=CF-057 spec=docs/handbook/chapters/M1-provisioning.md#3-submodule-inventory wave=none:serial test=tests/selftest.sh::cf057-apply-refusal doc=docs/handbook/chapters/M1-provisioning.md evidence=tests/selftest.sh::cf057-apply-refusal witness=none:offline-fixture verdict=none:foreman-runs-gitreins commit=none:worker-commit memory=none:foreman-closeout
-# END cf057-apply-refusal
+# ch:trace row=CF-057 spec=docs/handbook/chapters/M1-provisioning.md#M1.S1 wave=code-factory-2026-11-13-16-29-30#CF-057 test=tests/selftest.sh::cf057-apply-refusal doc=docs/handbook/chapters/M1-provisioning.md prompt=CF-057-brief evidence=tests/selftest.sh::cf057-apply-refusal witness=none:offline-fixture verdict=none:foreman-gitreins commit=none:worker memory=none:foreman
+# STATUS: partial
+# TIER: T1
+# EVIDENCE: tests/selftest.sh::cf057-apply-refusal
 
 # a flag handler may only assign CLI_* variables: anything else is overwritten by load_config and the
 # documented flag silently does nothing (four of them did, including --github-token-file)

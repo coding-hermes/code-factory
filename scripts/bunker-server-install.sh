@@ -3,9 +3,10 @@
 #
 #   ./bunker-server-install.sh --check [--json]        # measure, exit non-zero on a gap
 #   ./bunker-server-install.sh --reap-orphans [--json] # remove named orphan homes and keys (CF-003)
+#   ./bunker-server-install.sh --apply                # refuse: no measured install path exists
 #
-# Accepted flags are --check, --json, and --reap-orphans. The unimplemented generic
-# install mode is recognized only to refuse --apply explicitly; it is not a usage mode.
+# Accepted flags are --check, --json, --reap-orphans, and --apply. The generic install
+# mode is recognized only to refuse --apply explicitly; it is not a usage mode.
 #
 # A "bunker server" is the daemon that hosts agents. It is NOT the same machine as the
 # scheduler: the control host designs work, the bunker server runs nodes.
