@@ -69,6 +69,15 @@ evaluator:
   # Two starvations of a single-criterion task at the same rung license one raise;
   # input budget is nowhere near binding (4.3M at 400 iterations), so raise the
   # iteration rung one more step (400 -> 800) rather than splitting the criterion.
+  # ⚠ PROBE RESULT (job-2ef71d1edcf148bba7bc017f864aa913, clean detached worktree of
+  # 76839918): at 800 the run reached 716.3 iterations and then died on
+  # "Input token budget (10.0M) exceeded (10.1M used)" — 10,070,101 in / 19,714 out,
+  # again 0 of 1 criteria graded with the criterion UNVERIFIED. So the rung is NOT
+  # settled: iteration headroom was still available and the input budget became the
+  # binding cap (~14k in/iteration measured). Four runs, four different binding
+  # budgets, zero criteria graded — the evaluator is not converging on this task, so
+  # the fix is NOT another rung. Filed as CF-426 (shrink the judged evidence scope for
+  # docs-only rows, or name the code path that never reaches the criterion).
   max_iterations: 800
   static_analysis_diagnostics: false
 history:
