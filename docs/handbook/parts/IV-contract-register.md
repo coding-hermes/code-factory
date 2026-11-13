@@ -36,6 +36,10 @@ The following resolutions govern every card and registry entry below:
 * `total_budget` is the round-wide worker-attempt allowance, range 0–20,000 inclusive;
   concurrency is independent. Round, attempt and turn deadlines compose by minimum,
   never by multiplying turn timeout and turn count. `policy.round_wall_s` is retired.
+* A round report uses exactly `allowance`, `consumed`, `reserved` and `remaining` for
+  worker-count accounting, with `remaining = allowance - consumed - reserved`. The worker
+  ledger state `charged` is the representation counted by `consumed`; a refused admission
+  has no reservation or charge and leaves `consumed` unchanged.
 * The supervisor protocol is `supervisor.v1` at
   `$HOME/.local/state/factory/supervisor/control.sock`; `launch_id` is the owner identity
   derived as `l-` plus the role-tuple hash, and `execution_key` hashes

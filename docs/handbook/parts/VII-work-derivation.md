@@ -39,7 +39,9 @@ allowance in the inclusive range 0–20,000. The scheduler persists that round b
 transport; Crier persists custody before acknowledgement. Only then does the foreman
 derive waves and attempts. Reservation is monotonic across compatible waves:
 `remaining = allowance - consumed - reserved`; changing concurrency never restores
-allowance. A failed start refunds only under the CT-06R proof rule.
+allowance. The round report uses these four field names; `charged` is only the worker
+ledger state counted by `consumed`, and a refused admission leaves `consumed` unchanged.
+A failed start refunds only under the CT-06R proof rule.
 
 Each attempt binds one `BriefInput` digest to its task, executable criteria, directive,
 skills and attachments. The `WorkerBrief` binds that immutable input to the exact
@@ -370,7 +372,7 @@ metric.
 | `queue_depth` / `oldest_message_age_seconds` | is the bus holding real work or draining it? | gauge, seconds (M10 review definitions) | Crier store owner |
 | `replayed_results` / `uncertain_starts` / `orphans_reaped` | is execution crash-safe? | counters (M11 review definitions, VI §16) | dispatcher |
 | `expiry_headroom_seconds` / `refused_scope_total` | will credentials die mid-run, and is scope narrowing real? | minimum headroom gauge; refusal counter by class (M7 review) | credential issuer |
-| `worker_budget{used, remaining}` | how much of the round's total-worker allowance is spent, per round and per wave? | gauge, workers; observable per wave, never reset at a wave boundary (V2-Q-02, §16) | foreman (round report) / scheduler (admission) |
+| `worker_budget{consumed, remaining}` | how much of the round's total-worker allowance is consumed, per round and per wave? | gauge, workers; observable per wave, never reset at a wave boundary (V2-Q-02, §16) | foreman (round report) / scheduler (admission) |
 | `round_stop_reasons_total{reason}` | why did rounds stop — useful-work exhaustion, budget spent, or a required condition? | counter, one named reason class per stop (§11.8) | foreman |
 | `project_acceptance_progress{initiative}` | how much of the accepted plan is delivered and verified? | derived: accepted/verified integration results over planned acceptance criteria (§11.9) | foreman / board |
 
@@ -529,7 +531,7 @@ implementation mapping follows it without pretending missing fields exist
 | `round-admission.v1` | `round_id`, `run_id`, `corr_id`, `task_scope`, `total_budget`, `config_generation` | `accepted`, `deferred`, `refused`; invalid budget/config is typed refusal; future wave/worker/attempt IDs are absent | `round_id` |
 | `worker-brief.v1` | `round_id`, `wave_id`, `task_id`, `attempt_id`, `brief_digest`, `criteria`, `workspace` | digest mismatch or missing criteria is `BRIEF_INVALID`; brief custody is not success | `attempt_id` |
 | `worker-result.v1` | `attempt_id`, `dispatch_id`, `corr_id`, `status`, `commit`, `artifacts`, `evidence_refs`, `finished_at` | status enum `pass`, `fail`, `unverified`, `partial`, `unknown`; absent status is `INVALID_RESULT`; conflicting legacy `ok` is `RESULT_CONFLICT` | `attempt_id` |
-| `wave-result.v1` | `round_id`, `wave_id`, worker results, integration result, budget used/remaining | `complete`, `partial`, `failed`; partial memory sync remains visible | `(round_id, wave_id)` |
+| `wave-result.v1` | `round_id`, `wave_id`, worker results, integration result, budget consumed/remaining | `complete`, `partial`, `failed`; partial memory sync remains visible | `(round_id, wave_id)` |
 | `round-report.v1` | `round_id`, `run_id`, `corr_id`, all wave results, stop reason, budget, memory refs | final report is `settled` only after durable memory and evidence references | `round_id` |
 | `publication.v1` | `task_id`, `attempt_id`, exact commit/tree digest, verdict, remote proof | mismatch is `PUBLICATION_MISMATCH`; no board closeout | `(task_id, attempt_id, tree_digest)` |
 
@@ -834,7 +836,7 @@ body, and scope fields. worker-outcome requires wave_id/attempt_id/task_id and b
 worker-result.v1; wave-summary requires wave_id, forbids attempt_id/task_id and has
 body `{worker_refs,integration_result,budget,remaining_tasks}`; round-summary forbids
 wave_id/attempt_id/task_id and body is round-report.v1 excluding its own memory ref.
-Ref is `{record_id,payload_digest}`. Budget is `{allowance,used,held,remaining}` integers
+Ref is `{record_id,payload_digest}`. Budget is `{allowance,consumed,reserved,remaining}` integers
 satisfying M9.17. No self-referential digest is constructed.
 
 The protected local writer exposes HTTP over owner-only Unix socket

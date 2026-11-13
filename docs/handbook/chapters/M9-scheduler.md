@@ -452,7 +452,9 @@ Scheduler execution uses SQLite WAL with synchronous FULL and one write transact
 per transition; manager/config logs retain Part I's Git-backed JSONL authority.
 The resident foreman uses the same record model for its round-local worker ledger,
 with fsynced transaction records as Part I §1.9.2. Scheduler does not independently
-debit worker allowance. Keys are unique and all foreign references must exist:
+debit worker allowance. The round report names the count `consumed`; ledger state
+`charged` is counted by `consumed`, while a refused admission increments neither
+`consumed` nor `reserved`. Keys are unique and all foreign references must exist:
 
 | Record / key | Required stored fields beyond key |
 |---|---|
@@ -469,8 +471,9 @@ One transaction reserves a worker and creates attempt intent plus launch outbox;
 no native call precedes it. The native start acceptance and `reserved → charged`
 transition are applied together on observation; while that acknowledgement is absent,
 reserved continues to count against available allowance. There is no independently
-persisted uncharged `started` state. `used=count(charged)`, `held=count(reserved)`,
-`remaining=allowance-used-held`. Proven never_started changes reserved to refunded
+persisted uncharged `started` state. `consumed=count(charged ledger states)`,
+`reserved=count(reserved ledger states)`, `remaining=allowance-consumed-reserved`.
+Proven never_started changes reserved to refunded
 exactly once. Unknown start remains reserved/quarantined; failed running work never
 refunds. Repeated attempts by the same charged worker consume no further allowance,
 but max_attempts and the round deadline still bound retries (V.9).

@@ -443,7 +443,7 @@ observation yields `value:null`, `collection_state:"unavailable"` and
 is fresh `available=1`, `active=0`, `pending=0`. Stale, degraded and failed use
 V.10's thresholds. Execution success with a failed required postcheck is
 `settled_failure` and produces no success-counter delta. Derived measures
-`dispatch_to_settlement_seconds`, `worker_budget{used,remaining}`,
+`dispatch_to_settlement_seconds`, `worker_budget{consumed,remaining}`,
 `lineage_completeness`, `closeout_evidence_rate` and
 `project_acceptance_progress` are computed from identity-bearing events and
 receipts rather than new ad-hoc counters.

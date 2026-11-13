@@ -394,6 +394,10 @@ These are different quantities and must never be conflated:
 | Inference admission budget per node scope | V.9 `NodeScope.budget_micro_usd`, `window_s`, `concurrency`; M12 §16 `reserved_cost`, `actual_cost`, `spent`, `held`, `reserve` | integer micro-USD per UTC-aligned window; `concurrency` counts slots | TARGET-UNIMPLEMENTED |
 | Foreman round report worker budget | V.3 card 1 `foreman.round.worker_budget.total`; `budget` object `allowance`, `consumed`, `remaining`, `reserved` (CV-01-F) | worker count; `remaining = allowance - consumed - reserved` | REQUIRED-BUT-UNSUPPORTED |
 
+The round report's `consumed` field is the count of worker identities whose ledger state is
+`charged`; `charged` is retained only as that ledger state, not as a competing report field.
+A refused admission has no worker identity and therefore leaves `consumed` unchanged.
+
 Under the target contract, the inference proxy's shared ledger owns micro-USD
 reservation and settlement and its concurrency slots (M12 §16 and V.9); the scheduler
 admits the round allowance and the foreman allocates its worker budget (V.3 card 1),
@@ -812,7 +816,7 @@ Local M0–M6 series project as follows: `cf_operations_total` to
 `factory_observation_timestamp_seconds` with operation `verify` retained in the source
 view; `cf_board_tasks` to the named derived view `factory_board_tasks{status,eligibility,project}`;
 `cf_recovery_pending` to `factory_pending{operation:reclaim}`. The derived views
-`dispatch_to_settlement_seconds`, `worker_budget{used,remaining}`,
+`dispatch_to_settlement_seconds`, `worker_budget{consumed,remaining}`,
 `lineage_completeness`, `closeout_evidence_rate` and `project_acceptance_progress`
 are computed from the same identity-bearing events and durable receipts, not new ad-hoc
 counters. Metric labels exclude round, wave, attempt and task IDs; authenticated
@@ -1125,7 +1129,7 @@ returns `LIMIT_UNSUPPORTED`.
 
 || Quantity | Configuration → wire/native field | Unit, domain and default | Effective rule |
 ||---|---|---|---|
-|| round worker allowance | `foreman.round.worker_budget.total` → CT-02 `total_budget` | workers, 0..20000; profile-selected | fixed for the round; charged plus reserved never exceeds it; waves never reset it |
+|| round worker allowance | `foreman.round.worker_budget.total` → CT-02 `total_budget` | workers, 0..20000; profile-selected | fixed for the round; consumed (ledger state `charged`) plus reserved never exceeds it; waves never reset it |
 || concurrent worker slots | `foreman.round.concurrency` → supervisor resource vector | workers, 1..1024; default min(host slots, allowance) | simultaneous native runs only; independent of allowance |
 || attempts per worker | `retry_policy.max_attempts` → attempt ordinal | attempts, 1..10 default 3 | correction reuses the charged worker and consumes no second worker allowance |
 || model turns | `foreman.round.max_turns` → `CF_MAX_TURNS` / `EffectiveSettings.max_turns` | turns, 1..10000 default 40 | counts model calls within one attempt |
@@ -1149,7 +1153,7 @@ SC-02's 20,000-worker allowance is valid with two concurrent slots; it does not 
 20,000 simultaneous processes. SC-09 sets turn timeout 10, attempt wall 60, round deadline
 at least 135 and two eight-second model calls: both calls fit, and attempt and round walls
 also fit. Eight workers on two slots, one same-worker correction, one proven-never-started
-refund and a restart all preserve `remaining = allowance - charged - reserved`; an unknown
+refund and a restart all preserve `remaining = allowance - consumed - reserved`; an unknown
 start remains reserved and quarantined. Shared vectors, not chapter-local arithmetic, are
 the acceptance oracle.
 

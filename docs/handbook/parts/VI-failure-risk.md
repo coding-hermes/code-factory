@@ -952,7 +952,7 @@ allowance that should stay consumed, and the round regains workers it no longer 
 monotonically consumed across waves, and never replenished — not by a new wave, not by a
 retry, not by a restart.
 
-**Detection / metric.** Required (TARGET-UNIMPLEMENTED): `worker_budget{round, used,
+**Detection / metric.** Required (TARGET-UNIMPLEMENTED): `worker_budget{round, consumed,
 remaining}` observable per round and per wave (Part I §6; VII §14's budget metric);
 a replenishment is a counted anomaly. Today: no budget accounting exists in the measured
 scheduler/foreman surfaces.

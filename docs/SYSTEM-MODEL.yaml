@@ -1896,6 +1896,7 @@ execution_contracts:
         report_digest: SHA
       digest: JCS of the complete record with report_digest absent.
       budget_invariant: remaining = allowance - consumed - reserved.
+      accounting_mode: charge-on-start; charged is the worker ledger state counted by consumed; refusal before admission leaves consumed unchanged.
     MemoryRecord:
       schema_version: memory-record.v1
       discriminated_by: record_type
@@ -2081,7 +2082,8 @@ execution_contracts:
   numeric_rules:
     allowance: total_budget is the round-wide worker-attempt allowance, range 0..20000 inclusive; concurrency is independent.
     reservation: remaining = allowance - consumed - reserved; compatible waves never reset it.
-    charge: Reserve before launch and consume at attempt start; NEVER_ACCEPTED proof alone refunds once.
+    report_fields: RoundReport budget uses allowance, consumed, reserved and remaining; consumed counts worker ledger state charged; a refused admission increments neither consumed nor reserved.
+    charge: Charge-on-start atomically reserves worker and launch intent; native acceptance moves reserved to charged, counted in consumed; started is observation; unknown acceptance remains reserved and NEVER_ACCEPTED proof alone refunds once.
     round_deadline: persisted at admission and includes queue, launch, transfer, retries, execution and cleanup.
     attempt_deadline: min(round_deadline, attempt_started_at + attempt_wall_s).
     turn_deadline: min(attempt_deadline, turn_started_at + turn_timeout_s); max_turns independently caps count.

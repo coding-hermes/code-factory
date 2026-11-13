@@ -1792,6 +1792,62 @@
       ],
       "recovery": "If the response is lost, GET /v1/factory/registrations/reg-bunker-a returns the durable node, registration_generation and state; retrying does not allocate another identity.",
       "static_controls": []
+    },
+    {
+      "id": "P5G-36-accounting-vector",
+      "domain": "scheduling",
+      "kind": "matrix",
+      "name": "round report uses one worker-count vocabulary and charges at start",
+      "schema": "round-report.v1",
+      "inputs": {
+        "allowance": 4,
+        "initial": {
+          "consumed": 0,
+          "reserved": 0,
+          "remaining": 4
+        }
+      },
+      "cases": [
+        {
+          "id": "charged-at-start",
+          "admission": "accepted",
+          "launch": "native acceptance",
+          "ledger_state": "charged",
+          "mutation": {
+            "consumed": 1,
+            "reserved": 0
+          },
+          "expected": {
+            "allowance": 4,
+            "consumed": 1,
+            "reserved": 0,
+            "remaining": 3,
+            "arithmetic": "4 - 1 - 0 = 3"
+          }
+        },
+        {
+          "id": "refused-before-admission",
+          "admission": "refused",
+          "refusal": "SAFETY_REFUSED",
+          "launch": "none",
+          "ledger_state": "none",
+          "mutation": {
+            "consumed": 0,
+            "reserved": 0
+          },
+          "expected": {
+            "allowance": 4,
+            "consumed": 0,
+            "reserved": 0,
+            "remaining": 4,
+            "arithmetic": "4 - 0 - 0 = 4",
+            "consumed_unchanged": true
+          }
+        }
+      ],
+      "invariant": "remaining = allowance - consumed - reserved; refusal before admission does not increment consumed.",
+      "accounting_mode": "charge-on-start",
+      "trace_marker": "ch:trace row=P5G-36 spec=docs/handbook/OUTLINE.md#f11-scheduling-admission wave=none:serial-worker test=docs/handbook/contract-vectors.json::P5G-36-accounting-vector doc=docs/handbook/parts/V-settings.md evidence=docs/handbook/contract-vectors.json witness=none:repository-specification-only verdict=none:foreman-judge commit=none:not-yet-published memory=none:foreman-writes\nSTATUS: complete\nTIER: T1\nEVIDENCE: docs/handbook/contract-vectors.json"
     }
   ],
   "fault_matrix": [
