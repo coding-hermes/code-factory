@@ -375,6 +375,7 @@ unavailable tokenizer or price refuses PRICING_UNAVAILABLE. Condition is
 spent + held + reserve <= budget and active < concurrency; a race has one transaction
 winner. Zero-price models still reserve a concurrency slot. Streamed output cannot
 exceed the reserved maximum. Tokens cannot cross windows by extending a request.
+For budget-unit disambiguation see §V.5: the round-report `budget` object counts worker slots, not micro-USD.
 
 Request row contains request_id,digest,token_id,generation,window,reserved_cost,
 actual_cost nullable,state (reserved/forwarding/settled/unsettled),upstream_id nullable,

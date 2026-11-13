@@ -1334,6 +1334,107 @@
       }
     },
     {
+      "id": "CV-05-J",
+      "domain": "inference",
+      "static_controls": [
+        "SC-06"
+      ],
+      "kind": "matrix",
+      "name": "budget reservation and settlement are atomic and replay-safe",
+      "scope": {
+        "budget_micro_usd": 1000,
+        "window_s": 86400,
+        "concurrency": 2,
+        "max_output_tokens": 128
+      },
+      "cases": [
+        {
+          "case": "budget-exhaustion race",
+          "simultaneous_requests": [
+            "infer-budget-race-1",
+            "infer-budget-race-2"
+          ],
+          "reservation": "the first request is admitted and state is reserved; the second cannot fit the remaining window budget",
+          "reserve": 700,
+          "expected": {
+            "accepted_request_ids": [
+              "infer-budget-race-1"
+            ],
+            "state": "reserved",
+            "reserved_cost": 700,
+            "refused": {
+              "request_id": "infer-budget-race-2",
+              "error": "BUDGET_EXHAUSTED",
+              "http": 402
+            },
+            "upstream_forwards": 1
+          }
+        },
+        {
+          "case": "settled actual below reservation",
+          "state": "settled",
+          "reserved_cost": 100,
+          "actual_cost": 60,
+          "expected": {
+            "actual_cost": 60,
+            "reserved_cost": 0,
+            "spent": 60,
+            "held": 0,
+            "settlement": "actual_cost charged and remainder released"
+          }
+        },
+        {
+          "case": "proven no-send failure before headers",
+          "state": "settled",
+          "expected": {
+            "actual_cost": 0,
+            "reserved_cost": 0,
+            "settlement": "proven no-send refunds full reservation; no charge",
+            "state": "settled",
+            "upstream_forwards": 0
+          }
+        },
+        {
+          "case": "unknown spend after ledger unavailable or process restart while forwarding",
+          "state": "unsettled",
+          "reserved_cost": 100,
+          "expected": {
+            "actual_cost": 100,
+            "estimated": true,
+            "settlement": "full reservation charged",
+            "state": "unsettled"
+          }
+        },
+        {
+          "case": "unproven quiescence",
+          "state": "unsettled",
+          "expected": {
+            "concurrency": "slot stays quarantined",
+            "settlement": "not released"
+          }
+        },
+        {
+          "case": "retry with same request id and same request digest",
+          "request_id": "infer-retry-1",
+          "digest": "digest-a",
+          "expected": {
+            "result_ref": "durable result",
+            "second_upstream_forward": false
+          }
+        },
+        {
+          "case": "retry with same request id and different digest",
+          "request_id": "infer-retry-1",
+          "digest": "digest-b",
+          "expected": {
+            "error": "409",
+            "http": 409,
+            "second_upstream_forward": false
+          }
+        }
+      ]
+    },
+    {
       "id": "CV-07-D",
       "domain": "memory",
       "static_controls": [
@@ -1891,7 +1992,8 @@
         "CV-05-F",
         "CV-05-G",
         "CV-05-H",
-        "CV-05-I"
+        "CV-05-I",
+        "CV-05-J"
       ],
       "status": "pass"
     },
@@ -1984,7 +2086,8 @@
         "CV-05-F",
         "CV-05-G",
         "CV-05-H",
-        "CV-05-I"
+        "CV-05-I",
+        "CV-05-J"
       ]
     },
     "P6-06": {

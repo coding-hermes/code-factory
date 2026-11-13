@@ -391,6 +391,16 @@ These are different quantities and must never be conflated:
 | Scheduler tick wall | `tick-timeout` (M9) | 7200 s | NATIVE |
 | Per-request transport call | `fetch_verified --max-time` (M0) | 120 s | FIXED CONSTANT |
 | Inert "timeout" | `DISPATCH_EXEC_TIMEOUT` (M11) | — | INERT |
+| Inference admission budget per node scope | V.9 `NodeScope.budget_micro_usd`, `window_s`, `concurrency`; M12 §16 `reserved_cost`, `actual_cost`, `spent`, `held`, `reserve` | integer micro-USD per UTC-aligned window; `concurrency` counts slots | TARGET-UNIMPLEMENTED |
+| Foreman round report worker budget | V.3 card 1 `foreman.round.worker_budget.total`; `budget` object `allowance`, `consumed`, `remaining`, `reserved` (CV-01-F) | worker count; `remaining = allowance - consumed - reserved` | REQUIRED-BUT-UNSUPPORTED |
+
+Under the target contract, the inference proxy's shared ledger owns micro-USD
+reservation and settlement and its concurrency slots (M12 §16 and V.9); the scheduler
+admits the round allowance and the foreman allocates its worker budget (V.3 card 1),
+while the harness applies `CF_MAX_TURNS` to model turns (M5). None of these quantities
+may be substituted for another. An inference admission refusal must name the exhausted
+quantity: `BUDGET_EXHAUSTED` for micro-USD or `CONCURRENCY_EXHAUSTED` for slots,
+not a bare "budget".
 
 **Compatibility validation at admission.** Impossible combinations are validated when
 configuration is applied, not discovered at runtime: a round budget below one worker; a
