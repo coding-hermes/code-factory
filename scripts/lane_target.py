@@ -34,6 +34,7 @@ This module is stdlib-only; optional bunker probes invoke a networked client.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -319,19 +320,16 @@ def verify_remote(target: Target, allow_remote: bool) -> dict:
     }
 
 
-def bunker_identity(agent: str, server: Optional[str], timeout: int = 60) -> dict:
-    """Check the identity fields printed by the Bunker info command.
-
-    This trusts the selected client to report its server and agent honestly; it
-    does not authenticate the client executable against an independent authority.
-    """
-    cmd = ["bunker", "info", agent]
+def bunker_identity(agent: str, server: Optional[str], client: str, digest: str, timeout: int = 60) -> dict:
+    """Check identity reported by the explicitly selected client."""
+    evidence = f"pinned_realpath={client} sha256={digest}"
+    cmd = [client, "info", agent]
     if server:
         cmd += ["--server", server]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
     except (subprocess.TimeoutExpired, OSError) as exc:
-        return {"check": "client_identity", "ok": False, "value": f"{type(exc).__name__}: {exc}"}
+        return {"check": "client_identity", "ok": False, "value": f"{evidence}\n{type(exc).__name__}: {exc}"}
     words = (proc.stdout + "\n" + proc.stderr).strip()
     agents = re.findall(r"^\s*═+\s*Agent:\s*(\S+)\s*═+\s*$", proc.stdout, re.MULTILINE)
     servers = re.findall(r'^bunker: reading server "([^"\n]+)"\s*$', proc.stderr, re.MULTILINE)
@@ -341,11 +339,12 @@ def bunker_identity(agent: str, server: Optional[str], timeout: int = 60) -> dic
         and len(servers) == 1
         and (not server or servers[0] == server)
     )
-    return {"check": "client_identity", "ok": ok, "value": words or f"exit={proc.returncode} (no output)"}
+    return {"check": "client_identity", "ok": ok, "value": f"{evidence}\n{words or f'exit={proc.returncode} (no output)'}"}
 
 
 def verify_bunker(
-    target: Target, server: Optional[str] = None, timeout: int = 60
+    target: Target, server: Optional[str] = None, timeout: int = 60,
+    bunker_bin: Optional[str] = None,
 ) -> dict:
     """Prove a bunker:// target exists by asking the agent itself.
 
@@ -366,7 +365,24 @@ def verify_bunker(
         "checks": [],
         "ok": False,
     }
-    identity = bunker_identity(target.agent, server, timeout=timeout)
+    pin = bunker_bin if bunker_bin is not None else os.environ.get("BUNKER_BIN")
+    if not pin:
+        result["checks"].append({"check": "client_identity", "ok": False,
+                                 "value": "client is unpinned; supply --bunker-bin PATH or BUNKER_BIN"})
+        return result
+    client = os.path.realpath(os.path.expanduser(pin))
+    if not os.path.isfile(client) or not os.access(client, os.X_OK):
+        result["checks"].append({"check": "client_identity", "ok": False,
+                                 "value": f"pinned client is not an executable regular file: {client}"})
+        return result
+    try:
+        with open(client, "rb") as fh:
+            digest = hashlib.file_digest(fh, "sha256").hexdigest()
+    except OSError as exc:
+        result["checks"].append({"check": "client_identity", "ok": False,
+                                 "value": f"cannot hash pinned client {client}: {exc}"})
+        return result
+    identity = bunker_identity(target.agent, server, client, digest, timeout=timeout)
     result["checks"].append(identity)
     if not identity["ok"]:
         return result
@@ -377,7 +393,7 @@ def verify_bunker(
     if selected_server is None:  # defensive; bunker_identity validates this
         return result
     cmd = [
-        "bunker", "exec", "--server", selected_server.group(1), target.agent,
+        client, "exec", "--server", selected_server.group(1), target.agent,
         "--", "sh", "-lc",
         f'echo "HOME=$HOME"; if [ -d "{target.path}" ]; then echo "PATH_EXISTS=1"; else echo "PATH_EXISTS=0"; fi',
     ]
@@ -389,7 +405,7 @@ def verify_bunker(
         proc = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout, check=False
         )
-    except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+    except (subprocess.TimeoutExpired, OSError) as exc:
         add("agent_reachable", False, f"{type(exc).__name__}: {exc}")
         return result
 
@@ -418,6 +434,7 @@ def verify(
     home: Optional[str] = None,
     exec_bunker: bool = False,
     bunker_server: Optional[str] = None,
+    bunker_bin: Optional[str] = None,
 ) -> dict:
     if target.is_local:
         out = verify_local(target.path, home=home)
@@ -425,11 +442,13 @@ def verify(
         out["verified"] = "local"
         return out
     if exec_bunker and target.scheme == "bunker":
-        return verify_bunker(target, server=bunker_server)
+        return verify_bunker(target, server=bunker_server, bunker_bin=bunker_bin)
     return verify_remote(target, allow_remote)
 
 
-def scan(projects_jsonl: str, allow_remote: bool, home: Optional[str] = None) -> dict:
+def scan(projects_jsonl: str, allow_remote: bool, home: Optional[str] = None,
+         exec_bunker: bool = False, bunker_server: Optional[str] = None,
+         bunker_bin: Optional[str] = None) -> dict:
     rows = []
     bad = 0
     with open(projects_jsonl, encoding="utf-8") as fh:
@@ -449,7 +468,9 @@ def scan(projects_jsonl: str, allow_remote: bool, home: Optional[str] = None) ->
             workdir = row.get("workdir")
             try:
                 t = parse(workdir)
-                out = verify(t, allow_remote=allow_remote, home=home)
+                out = verify(t, allow_remote=allow_remote, home=home,
+                             exec_bunker=exec_bunker, bunker_server=bunker_server,
+                             bunker_bin=bunker_bin)
                 ok = bool(out.get("ok"))
             except (TargetError, PermissionError) as exc:
                 out = {"resolved": workdir, "ok": False, "error": str(exc)}
@@ -671,6 +692,7 @@ def main(argv: Optional[list] = None) -> int:
     v.add_argument("--allow-remote", action="store_true")
     v.add_argument("--exec-bunker", action="store_true")
     v.add_argument("--bunker-server", default=None)
+    v.add_argument("--bunker-bin", default=None)
     v.add_argument("--home", default=None)
 
     s = sub.add_parser("scan", help="verify every workdir in a projects JSONL")
@@ -678,6 +700,7 @@ def main(argv: Optional[list] = None) -> int:
     s.add_argument("--allow-remote", action="store_true")
     s.add_argument("--exec-bunker", action="store_true")
     s.add_argument("--bunker-server", default=None)
+    s.add_argument("--bunker-bin", default=None)
     s.add_argument("--home", default=None)
 
     r = sub.add_parser("repo-url", help="check project repo_url git roots (read-only)")
@@ -692,6 +715,7 @@ def main(argv: Optional[list] = None) -> int:
         "plan", help="emit bunker:// targets for every lane in a JSONL (writes nothing)"
     )
     p2.add_argument("file")
+    p2.add_argument("--bunker-bin", default=None)
     p2.add_argument(
         "--agent", required=True, help="bunker agent id that hosts the lane"
     )
@@ -727,11 +751,14 @@ def main(argv: Optional[list] = None) -> int:
                 home=a.home,
                 exec_bunker=a.exec_bunker,
                 bunker_server=a.bunker_server,
+                bunker_bin=a.bunker_bin,
             )
             print(json.dumps(out, indent=2))
             return 0 if out.get("ok") else 4
         if a.cmd == "scan":
-            out = scan(a.file, allow_remote=a.allow_remote, home=a.home)
+            out = scan(a.file, allow_remote=a.allow_remote, home=a.home,
+                       exec_bunker=a.exec_bunker, bunker_server=a.bunker_server,
+                       bunker_bin=a.bunker_bin)
             print(json.dumps(out, indent=2))
             return 0 if out["ok"] else 4
         plan = []
@@ -748,6 +775,7 @@ def main(argv: Optional[list] = None) -> int:
                 agent=a.agent,
             ),
             server=a.server,
+            bunker_bin=a.bunker_bin,
         )
         identity = next(
             (check for check in probe.get("checks", []) if check["check"] == "client_identity"),

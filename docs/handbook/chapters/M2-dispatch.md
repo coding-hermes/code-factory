@@ -37,8 +37,13 @@ side is CF-355 (a failed result with no `ok` is recorded as success).
 **III.M2.S2 — CF-306.** Bunker `plan` and `verify --exec-bunker` check
 `client_identity`: `bunker info` must name the requested agent and the selected
 server, before an exec probe or plan target. An explicit `--path` does not bypass
-this check. This is client-reported identity, not independent authentication of
-an untrusted executable; `--allow-remote` still permits structural-only results.
+this check. The client is pinned by `--bunker-bin PATH`, then `BUNKER_BIN`; if
+neither is supplied the check refuses as unpinned. The pin is resolved with
+`realpath`, must be an executable regular file, and the same pinned path is used
+for both `info` and `exec`; its realpath and SHA-256 are recorded in the check
+value. `scan --exec-bunker` forwards the flag, server, and pin through `verify`
+so bunker rows are actually probed. `--allow-remote` still permits
+structural-only results when exec probing is not requested.
 `plan` probes `/` and does not establish that the proposed repository exists.
 
 **III.M2.S2 — CF-305.** `repo-url --row` compares each non-sync satellite against
@@ -159,7 +164,7 @@ on this field, not a "sample" claimed complete:
 
 | Failure | Presents as | Distinguished from | Recovery |
 |---|---|---|---|
-| Stub or wrong Bunker client cannot prove identity | `client_identity` fails; plan is refused and no target emitted | a matching client-reported agent and server | use the intended client and server; inspect the reported identity |
+| Stub, PATH-shadowed, or unpinned Bunker client cannot prove identity | `client_identity` fails; plan is refused and no target emitted. A client that merely prints matching words is insufficient unless it is the pinned executable | a matching client-reported agent and server from the pinned realpath | pass `--bunker-bin PATH` or set `BUNKER_BIN` to the intended executable; inspect the recorded realpath and SHA-256 |
 | `text_b64` undecodable | node refuses: "`text_b64` does not decode to UTF-8 text" (`:1022-1034`), no silent fallback to another member | a malformed dispatch | **resolved** — CF-354 (complete): the node decodes `text_b64` first and refuses a non-decoding value rather than reading a different member |
 | Failed result recorded as success | scheduler pass for a `status:"failed"` reply | a real pass | **OPEN** — CF-355 (control-plane half, M9) |
 | `configure_family` PID hardcode | config fails at import unless PID 1755676 is alive | a live scheduler | **OPEN** — F2-2 |

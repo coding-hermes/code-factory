@@ -38,9 +38,8 @@ sufficiently verified project checkout.
   (a) two valid roots, one family, but the primary's own name ends in a recognized satellite suffix,
   so the pair is never compared — fixture exits 0 (section 3, run G); (b) a satellite whose primary
   row is absent is compared against an arbitrary sibling and the message still calls it "primary"
-  (`scripts/lane_target.py:582`); (c) `plan` resolves an agent's home from whatever `bunker` answers
-  on `$PATH`, with no host identity check (`scripts/lane_target.py:370`), and a local-exec stub made
-  it emit a control-host path as an agent path (section 3, run V).
+  (`scripts/lane_target.py:582`). Historically (c) `plan` trusted a PATH-resolved client; CF-306
+  now requires an explicitly pinned executable and checks its reported identity.
 
 ## 2. Dependencies and library contracts
 
@@ -50,7 +49,7 @@ sufficiently verified project checkout.
 |---|---|---|---|
 | `python3` | measured on 3.14.4; all annotations are deferred by `from __future__ import annotations` (`scripts/lane_target.py:34`), and the runtime imports are stdlib | `$PATH` | the interpreter is the caller's |
 | `git` | any | resolved **once** at import through `shutil.which("git")`, falling back to the literal `"git"` (`scripts/lane_target.py:223`) | `FileNotFoundError` from the probe reaches `main` and exits 2 (`scripts/lane_target.py:720`) |
-| `bunker` CLI | any | `$PATH`, only for `verify --exec-bunker` and for site resolution in `plan` (`scripts/lane_target.py:334`) | `FileNotFoundError` is caught inside `verify_bunker` and recorded as a failed `agent_reachable` check (`scripts/lane_target.py:363`) |
+| `bunker` CLI | any | Explicit `--bunker-bin PATH`, then `BUNKER_BIN`; no pin means refusal. The realpath must be an executable regular file and is used for both `info` and `exec` (`scripts/lane_target.py:365`) | `client_identity` records the pinned realpath and SHA-256; an unpinned or invalid pin is refused |
 | projects file | — | the path passed to `scan` (JSONL) or `repo-url --row` (JSON object/array, `-` = stdin) (`scripts/lane_target.py:406`, `scripts/lane_target.py:514`) | per-row error for malformed JSONL in `scan` (`scripts/lane_target.py:415`); whole-call `FAIL repo_url — …` exit 2 for malformed JSON in `repo-url` (`scripts/lane_target.py:524`) |
 
 ### 2b. Library contracts
@@ -98,7 +97,7 @@ wrote to this repository.
 | Home meta-repo guard | `verify <scratch>/repo-a --home <scratch>/repo-a` | `not_home_repo` false, exit 4 | 2026-11-05 | exit 4 |
 | Unrelated checkout with its own remote | `verify <scratch>/repo-c` (own bare `origin`) | should distinguish it from the intended repo | 2026-11-05 | all six checks true, exit 0 — indistinguishable |
 | Unrelated checkout through `repo-url` | `repo-url <scratch>/repo-c` | should distinguish it | 2026-11-05 | `PASS`, exit 0 — identity is not checked |
-| `scan --exec-bunker` on a `bunker://` row | `scan bunker.jsonl --exec-bunker` | exec probe, or a failure naming the agent | 2026-11-05 | refused as remote, exit 4 — the flag is ignored |
+| `scan --exec-bunker` on a `bunker://` row | `scan bunker.jsonl --exec-bunker` | exec probe, or a failure naming the agent | 2026-11-05 | historical: refused as remote because the flag was ignored; CF-306 now forwards it |
 | `plan` on malformed JSONL | `plan bad.jsonl --agent x --path /srv/cf` | a documented exit code | 2026-11-05 | traceback, exit 1 |
 
 Verbatim summary lines (run B, real fleet, 880 rows):
@@ -169,8 +168,8 @@ and exits 0 while the target is not what the caller meant.
 | Workdir is a subdirectory inside a checkout | `toplevel_matches_target` false, exit 4 — `scripts/lane_target.py:276` | a real root, where the value equals `os.path.realpath(path)` | closed | use the checkout root |
 | Remote target verified without opt-in | `target ssh://… is remote; local verification is impossible. Re-run with --allow-remote …`, exit 3 — `scripts/lane_target.py:303` | a local target, which is verified and can exit 4 | closed | pass `--allow-remote` **knowing** it means structural only |
 | Remote target accepted as proof of existence | `"verified": "remote-structural-only"`, `"ok": true`, exit 0, with the note `reachability and existence are NOT checked here` — `scripts/lane_target.py:316`, `scripts/lane_target.py:318` | `verify --exec-bunker`, which does probe (`scripts/lane_target.py:322`) | open by design | use `--exec-bunker` for bunker targets; nothing equivalent exists for ssh/sftp/ftp |
-| `scan --exec-bunker` used on a `bunker://` row | the row is refused as remote with the exit-3 message above, exit 4 — the flag is parsed at `scripts/lane_target.py:620` and never passed to `verify` at `scripts/lane_target.py:423` | `verify --exec-bunker`, which does pass it (`scripts/lane_target.py:669`) | open in the other direction: the operator believes a probe ran | use `verify --exec-bunker`, or pass `--allow-remote` and read `remote-structural-only` honestly |
-| `plan` resolves the agent home from whatever `bunker` is on `$PATH` | measured: a local-exec stub answered `HOME=/home/kara` from the control host and `plan` emitted `bunker://cf-worker~/repo`, exit 0; no host identity is read (`scripts/lane_target.py:370`) | an unreachable agent, where `agent_home` stays empty and the module refuses with `cannot resolve the home of agent …` (`scripts/lane_target.py:695`) | **open** | pass `--path` explicitly, or check the planned paths against the agent before writing them |
+| `scan --exec-bunker` used on a `bunker://` row | the row invokes the pinned client through `verify`; missing pin or failed identity is recorded as `client_identity` failure | `verify --exec-bunker`, which uses the same path | closed: the flag, server, and pin are forwarded | supply `--bunker-bin PATH` or `BUNKER_BIN`, then inspect the row checks |
+| Unpinned, invalid, or wrong-identity Bunker client | `client_identity` false; `plan` refuses before emitting a target, even with `--path` | a matching agent and server reported by the pinned client | closed against PATH substitution; the pin itself remains a trust decision | pass `--bunker-bin PATH` or `BUNKER_BIN`, and inspect its realpath, SHA-256 and reported identity |
 | `plan` reads a line that is not JSON | `json.decoder.JSONDecodeError` traceback, exit 1 — `scripts/lane_target.py:704` | `scan`, which records `invalid JSON` per row and continues (`scripts/lane_target.py:415`) | loud but undocumented: exit 1 is not one of 0/2/3/4 | fix the input; do not treat exit 1 as a verdict |
 | `git` hangs past 30 s during `verify` | `subprocess.TimeoutExpired` traceback, exit 1 — `scripts/lane_target.py:227` | `repo-url`, which catches it per row and exits 4 (`scripts/lane_target.py:550`) | loud, but inconsistent across subcommands | rerun; treat exit 1 as "no verdict", not "target bad" |
 | `repo-url` has a diverging row | that row prints `PASS` **and** `FAIL` (measured: 881 row lines for 880 rows) — `scripts/lane_target.py:544` then `scripts/lane_target.py:593` | a row rejected outright, which prints only `FAIL` | misleading counts for any consumer that greps `PASS` | count the summary line, never the `PASS` lines |
@@ -179,18 +178,15 @@ and exits 0 while the target is not what the caller meant.
 
 - Subcommands and flags, all from `scripts/lane_target.py:605` onward:
   - `parse <target>` — no flags (`scripts/lane_target.py:607`).
-  - `verify <target> [--allow-remote] [--exec-bunker] [--bunker-server S] [--home PATH]`
+  - `verify <target> [--allow-remote] [--exec-bunker] [--bunker-server S] [--bunker-bin PATH] [--home PATH]`
     (`scripts/lane_target.py:610`).
-  - `scan <file> [--allow-remote] [--exec-bunker] [--bunker-server S] [--home PATH]` — `--exec-bunker`
-    and `--bunker-server` are accepted and unused (`scripts/lane_target.py:617`, `scripts/lane_target.py:675`).
+  - `scan <file> [--allow-remote] [--exec-bunker] [--bunker-server S] [--bunker-bin PATH] [--home PATH]` — `--exec-bunker`, server, and client pin are forwarded to `verify` for each bunker row.
   - `repo-url <target> | --row FILE|-, [--allow-remote]`, mutually exclusive and one required
     (`scripts/lane_target.py:624`).
-  - `plan <file> --agent ID [--server S] [--suffix PATH] [--path PATH] [--prefix NAME]`, with
+  - `plan <file> --agent ID [--server S] [--bunker-bin PATH] [--suffix PATH] [--path PATH] [--prefix NAME]`, with
     `--suffix` defaulting to `/repo` (`scripts/lane_target.py:646`).
-- **Environment variables: none are read directly.** There is no `os.environ` or `os.getenv` in the
-  file. Two are consumed indirectly: `$HOME` through `os.path.expanduser` (`scripts/lane_target.py:129`,
-  `scripts/lane_target.py:259`) and `$PATH` through `shutil.which("git")` at import
-  (`scripts/lane_target.py:223`) and through `subprocess` resolving `bunker` (`scripts/lane_target.py:334`).
+- `BUNKER_BIN` supplies the client pin when `--bunker-bin` is absent. `$HOME` is used by
+  `os.path.expanduser`; `$PATH` resolves git, but not the bunker client.
 - **No config file is read.** A projects file is always an argument; the module never locates one.
 - Exit codes: `0` ok, `2` unparseable/invalid input, `3` remote verification not permitted, `4` local
   target failed verification (`scripts/lane_target.py:28`), with the precedence for mixed `repo-url`
@@ -228,10 +224,10 @@ python3 -B scripts/lane_target.py scan fleet-workdirs.jsonl               # exit
   `repo-c`, `plain/`, `unknown.jsonl`, `ambiguous-only.json`, `control.json`, `noprimary.json`,
   `bunker.jsonl`, `bad.jsonl`. They are scratch, rebuilt by the commands above, and are not part of
   the repository.
-- The `plan`-home result in section 6 depends on a **local-exec stub `bunker`** placed earlier on
+- The historical `plan`-home result depends on a **local-exec stub `bunker`** placed earlier on
   `$PATH` by unrelated scratch work (`~/.hermes/cache/scratch/md32/bin/bunker`, which `exec`s the
   command on the control host). That is the point of the row: the probe reads `HOME=` without ever
-  checking which host answered, so any `bunker` that runs locally produces a confidently wrong plan.
+  checking which host answered. CF-306 now requires a pin and checks the reported identity.
   The real CLI exists at `/usr/local/bin/bunker`; no live agent was contacted for this document, so
   bunker-path existence against a real agent is **not** verified here.
 - Not verified here: behaviour against a real ssh/sftp/ftp peer (structural only, by design) and the
