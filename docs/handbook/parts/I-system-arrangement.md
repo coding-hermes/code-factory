@@ -1751,10 +1751,10 @@ Scheduler, Crier worker, Gateway and any other third party may relay or verify t
 objects but may not mint either credential or identity.
 
 The bootstrap grant is a single-use, signed `enrollment-grant.v1` reference bound to the
-exact tuple `(project_id, profile_id, generation, operation_id)` and to the Bunker's
-public key. The grant file contains a `credential_ref`, never inline secret material;
-its authority-side record contains `grant_id`, `registration_id`, `project_id`,
-`profile_id`, `generation`, `operation_id`, `public_key`, `nonce`, `issued_at`,
+exact registration tuple `(registration_id, project_id, profile_id, operation_id)` and to
+the Bunker's public key. The grant file contains a `credential_ref`, never inline secret
+material; its authority-side record contains `grant_id`, `registration_id`,
+`project_id`, `profile_id`, `operation_id`, `public_key`, `nonce`, `issued_at`,
 `expires_at` and `issuer_key_id`. The reference is delivered through the protected
 Bunker-control channel in a mode-0600 file and is deleted after successful consumption.
 A grant is valid for one operation only and is never placed in argv, JSON, logs or a
@@ -1762,17 +1762,26 @@ worker environment. `profile_id` is the live spelling everywhere; `profile` is n
 alternate enrollment field. The `node_id` is allocated by Crier, not supplied by the
 Bunker.
 
+The `register.v1` enrollment request is a closed body with exactly these required
+members: `registration_id`, `agent_id`, `project_id`, `operation_id`,
+`expected_generation: UInt` (the first registration sends `0`), `profile_id`,
+`public_identity {certificate_der, key_id}`, `capabilities` (unique, at least one),
+and `idempotency_key`. The caller never supplies `generation`; the registrar allocates
+`registration_generation=1` for the first accepted registration and returns exactly
+`{registration_id, registration_generation, expires_at, credential_ref}`.
+
 The first exchange is ordered and has one wire/version pair only:
 
 1. The authority validates the offline operator signature, tuple, expiry, nonce and
    public-key proof, then atomically consumes the grant. Bad, expired or replayed grants,
-   wrong project/profile/generation, invalid proof and unavailable authority fail before
-   allocation.
-2. The Crier registrar accepts the authenticated `cf2a.v1` envelope with body
-   `register.v1` at `POST /v1/factory/registrations` (CT-22), and atomically allocates
-   exactly one `node_id` plus `registration_id` at generation 1. CT-21's
-   `credential.install` then installs the class-`crier` credential reference for that
-   node. No worker-class principal, child identity or second allocation is permitted.
+   wrong project/profile, a CAS-miss `expected_generation`, invalid proof and unavailable
+   authority fail before allocation.
+2. The Crier registrar accepts the authenticated `cf2a.v1` envelope with the closed
+   `register.v1` body at `POST /v1/factory/registrations` (CT-22). The first request
+   carries `expected_generation=0`; the registrar atomically allocates exactly one
+   `node_id` and `registration_generation=1`. CT-21's `credential.install` then
+   installs the returned class-`crier` `credential_ref` for that node. No worker-class
+   principal, child identity or second allocation is permitted.
 3. The node resolves the returned reference through the broker, installs the credential,
    and performs a signed Crier bus read under `CF2A-CRIER-1`. Only a verified read proves
    membership and permits M9 admission; installing a file or receiving HTTP 200 does not.
@@ -1788,23 +1797,24 @@ allocation or launch with `WORKER_IDENTITY_FORBIDDEN`. Round, wave, worker and a
 IDs are execution identities, not enrollment identities.
 
 Failure is fail-closed and has no hidden allocation. A bad/expired/replayed grant,
-wrong project/profile/generation, wrong key or failed authority validation produces
-`ENROLLMENT_FAILED`; it allocates no durable `node_id`, registration or credential.
+wrong project/profile, a CAS-miss `expected_generation`, wrong key or failed authority
+validation produces `ENROLLMENT_FAILED`; it allocates no durable `node_id`, registration
+or credential.
 A Crier registration refusal is also `ENROLLMENT_FAILED` with no durable identity. A
 signed-read failure after the registration and credential are durably present produces
 `DEGRADED`, closes M9 schedulability and retains the one allocated identity for
 readback/recovery; it is not a second enrollment opportunity. Loss or removal of a
 Bunker fences and revokes the identity and ends in `REMOVED` only after the revocation
 and negative resource probe are recorded. Recovery resumes the same
-`(project_id,profile_id,generation,operation_id)` operation and reads back its existing
+`(registration_id,operation_id,expected_generation)` request and reads back its existing
 registration before retrying a missing step.
 
-The idempotency key is the tuple `(registration_id, operation_id, generation)` together
-with the canonical request digest. An exact repeat of the same tuple and digest returns
+The idempotency tuple is `(registration_id, operation_id, generation)`, where
+`generation` is the registrar-allocated registration generation, together with the
+canonical request digest. An exact repeat of the same tuple and digest returns
 the original `node_id`, `registration_id`, generation and credential reference and
-performs no allocation or installation. A conflicting tuple, generation, public key or
-request digest returns `REGISTRATION_CONFLICT` (compare-and-swap refusal), and the
-registrar does not mutate state. If the reply is lost, the authority or Crier reads
+performs no allocation or installation. A changed tuple or request digest returns `REGISTRATION_CONFLICT`
+(compare-and-swap refusal), and the registrar does not mutate state. If the reply is lost, the authority or Crier reads
 back `GET /v1/registrations/{registration_id}` and resumes the missing CT-21/read-proof
 step; it never allocates a second identity.
 

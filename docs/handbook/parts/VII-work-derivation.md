@@ -525,7 +525,7 @@ implementation mapping follows it without pretending missing fields exist
 
 | Schema | Required fields | State / refusal semantics | Durable identity |
 |---|---|---|---|
-| `register.v1` | `registration_id`, `agent_id`, `project_id`, `profile_id`, `operation_id`, `public_identity`, `capabilities` | `accepted`, `UNAUTHORIZED`, `PROFILE_UNSUPPORTED`, `IDENTITY_STALE`, `REGISTRATION_CONFLICT`, `WORKER_IDENTITY_FORBIDDEN`; class is checked before allocation; round/wave/worker/attempt IDs are not required | `registration_id` plus `(project_id,profile_id,generation,operation_id)` |
+| `register.v1` | `registration_id`, `agent_id`, `project_id`, `operation_id`, `expected_generation`, `profile_id`, `public_identity`, `capabilities`, `idempotency_key` | `accepted`, `UNAUTHORIZED`, `PROFILE_UNSUPPORTED`, `IDENTITY_STALE`, `REGISTRATION_CONFLICT`, `WORKER_IDENTITY_FORBIDDEN`; first expected generation is 0; class is checked before allocation; round/wave/worker/attempt IDs are not required | `registration_id` plus `(registration_id,operation_id,generation)` |
 | `round-admission.v1` | `round_id`, `run_id`, `corr_id`, `task_scope`, `total_budget`, `config_generation` | `accepted`, `deferred`, `refused`; invalid budget/config is typed refusal; future wave/worker/attempt IDs are absent | `round_id` |
 | `worker-brief.v1` | `round_id`, `wave_id`, `task_id`, `attempt_id`, `brief_digest`, `criteria`, `workspace` | digest mismatch or missing criteria is `BRIEF_INVALID`; brief custody is not success | `attempt_id` |
 | `worker-result.v1` | `attempt_id`, `dispatch_id`, `corr_id`, `status`, `commit`, `artifacts`, `evidence_refs`, `finished_at` | status enum `pass`, `fail`, `unverified`, `partial`, `unknown`; absent status is `INVALID_RESULT`; conflicting legacy `ok` is `RESULT_CONFLICT` | `attempt_id` |
@@ -570,9 +570,10 @@ Compatibility adapters may translate node-pull or dispatcher messages, but they 
 change the selected Crier launch/return authority.
 
 **Concrete conformance trace.** Registration carries `{registration_id: reg-17,
-agent_id: bunker-a, project_id: code-factory, profile_id: homelab-vpn,
-operation_id: op-enroll-17, public_identity: key-ref, capabilities: [hermes]}` and
-receives generation 1 after the authority grant is consumed; the node identity is
+agent_id: bunker-a, project_id: code-factory, operation_id: op-enroll-17,
+expected_generation: 0, profile_id: homelab-vpn, public_identity: key-ref,
+capabilities: [hermes], idempotency_key: enroll-reg-17}` and receives generation 1
+after the authority grant is consumed; the node identity is
 already admitted before any round identity is created.
 Admission carries `{round_id: r-17, run_id: run-17, corr_id: c-17,
 task_scope: [CF-1, CF-2], total_budget: 2, config_generation: 17}` with no wave or
