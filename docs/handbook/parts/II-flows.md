@@ -1099,26 +1099,34 @@ vocabulary. The result is proven by read-back against the pin at every upgraded
 component plus a post-migration state check; installation output alone is not the
 proof.
 
-**Preconditions and inputs:** the new pin's artifact is published and digest-checked; the schema migration set is versioned. Inputs: pin manifests; migration scripts; the row-vocabulary mapping.
+**Preconditions and inputs:** the new `cf.release-lock.v1` is published by the
+Factory release manager and digest-checked; the schema migration set is versioned. Inputs:
+the complete lock, migration scripts, component receipts and the operation id.
+The complete manifest shape and the manager's authority boundary are M1 §18.1; this
+flow is the one F13 procedure, not a competing manifest contract.
 
 **Steps:**
 
-1. Validate the proposed version/config/schema change and compatibility matrix for
-   the chosen deployment profile and participating components — Bunker
-   daemon/client/runtime, Hermes, Crier, DuckBrain and board schema.
-2. Plan a staged rollout with named prerequisites, drain/checkpoint requirements
-   and a backup/recovery point.
-3. Apply the exact role/version compatibility lock and dependency order of
-   Part I §1.9.8, persisting each step. Wire/schema changes drain old rounds via
-   F8.1 first. Store migration copies, verifies and atomically switches state;
-   after new-schema writes old-binary rollback is forbidden (F15 restore instead).
-4. Read back actual versions and schema/config state — installed version against
-   the pin, drift named (M5 §10); the scheduler's migration stores apply schema
-   change to the 30-table store (M9 §3).
-5. Resume admitted work only on verified compatible targets; publish the effective
-   rollout state and evidence.
-6. On failed apply/readback, perform supported rollback or explicit forward
-   recovery without silently reporting the desired version as effective.
+1. The release manager qualifies/resolves the complete lock, then verifies its signature,
+   every artifact digest/size, platform, dependency closure and compatible Factory/body/
+   store schema versions. Any missing, partial, unsupported or unqualified artifact
+   refuses before execution with `ARTIFACT_UNQUALIFIED`.
+2. Acquire the generation fence, refuse concurrent upgrades and stop new admission;
+   drain or checkpoint in-flight launches without changing their launch/execution
+   identities, tokens or leases. Persist the operation phase before each transition.
+3. Stage all artifacts and migrations into a new immutable generation, apply the exact
+   dependency order of Part I §1.9.8, and atomically switch the active pointer only after
+   transactional/copy-on-write migration. Wire/schema changes drain old rounds via F8.1.
+4. Read back actual binary, config and schema versions plus token generation, Crier,
+   scheduler and proxy receipts and the in-flight checkpoint. Version output alone is
+   not readiness; a failed postcheck keeps the old pointer or enters forward-repair hold.
+5. Resume admitted work only on verified compatible targets, then finalize the operation
+   journal and receipt/outbox. A lost acknowledgement is resolved by querying
+   `GET operation/{operation_id}`, not by a second install or launch.
+6. Before new-schema writes, discard the stage and reconcile the old pointer on failure;
+   after an irreversible/new-schema write, old-binary rollback is forbidden and recovery
+   uses the pre-migration backup in an isolated generation or a compatible forward repair.
+   M1 §18.3's interrupted-phase table is authoritative for every restart point.
 
 **Exceptional branches:** version drift is detected by read-back and named per file
 (M5 §10); the chapters name no automatic rollback. Schema migration is a measured

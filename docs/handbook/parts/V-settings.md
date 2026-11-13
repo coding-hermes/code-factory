@@ -668,7 +668,7 @@ cross-module controls:
 
 | Control | Canonical typed location and resolution | Missing/stale behavior |
 |---|---|---|
-| M1 signed release lock | `policy.release_lock_ref` → `artifacts[id]` SignedArtifact; activation compares release body digest and signature key | `ARTIFACT_UNQUALIFIED`; no provisioning/admission |
+| M1 signed release lock | `policy.release_lock_ref` → the single `cf.release-lock.v1` manifest in `artifacts[id]`; M1 §18 owns complete inventory, ordering and recovery; activation compares manifest digest and signature key | `ARTIFACT_UNQUALIFIED`; no provisioning/admission |
 | M3 target gate policy | `projects[].gate_policy_ref`, defaulting explicitly to `policy.gate_policy_ref`; a project override is a complete SignedArtifact, not a partial merge | `ARTIFACT_UNQUALIFIED`; source/integrated/closure checks cannot run as required |
 | Authority trust | `trust` plus `policy.trust_bundle_ref`/`bootstrap.trust_bundle_ref`; both must name the same trust-bundle artifact | `TRUST_UNRESOLVED`; no endpoint credential or checkpoint is trusted |
 | Deployment bootstrap | `bootstrap`; offline resolves the signed bundle locally, authority mode additionally redeems enrollment_grant_ref through installer_endpoint_ref | `BOOTSTRAP_REFUSED`; no fallback from authority to offline or reverse |

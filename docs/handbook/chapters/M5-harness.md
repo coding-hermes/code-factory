@@ -655,11 +655,13 @@ blocks live support. Telemetry is M0 §16.1 with lifecycle/conformance events.
 
 ### 16.5 Integrated release, containment and timeout qualification (P6-01/07/09/10/11/12)
 
-The release lock resolves through Part V `execution.artifact_ref` and
-`execution.harness_artifact_ref`, not an ambient `$HOME` binary. The supervisor verifies
-both SignedArtifact objects and the signed profile's service/foreman/worker UID, mount and
-socket map before `RUNNING`; any mismatch is `ARTIFACT_UNQUALIFIED` or `PROFILE_CONFLICT`.
-The effective-settings readback includes those release/profile digests, role UID, mount
+The release lock resolves through the single `cf.release-lock.v1` manifest in M1 §18,
+then through Part V `execution.artifact_ref` and `execution.harness_artifact_ref`, not an
+ambient `$HOME` binary. The supervisor verifies the complete artifact inventory, signature,
+digest, platform and compatibility before `RUNNING`; any mismatch is
+`ARTIFACT_UNQUALIFIED` or `PROFILE_CONFLICT`. The effective-settings readback includes
+those release/profile digests, role UID, mount
+
 modes and socket visibility, so an executable answering a version string cannot qualify
 an unenforced installation.
 

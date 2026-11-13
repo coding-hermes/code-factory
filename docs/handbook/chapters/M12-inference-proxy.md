@@ -265,7 +265,15 @@ is a capture log, not an emitted metric.
 
 ## 15. Normative node-token, model API and capture contract (P3-12, P3-17)
 
-The maintained proxy package is the deployable authority. A deployment artifact carries a version, source digest, Python compatibility, service unit, configuration schema, upgrade/rollback procedure and restore procedure. A workstation path or active service without this package is `UNVERIFIED` and cannot certify a node.
+The maintained proxy package is the deployable component, but its release identity is
+owned by the single `cf.release-lock.v1` manifest in M1 §18. A deployment artifact carries
+a version, source digest, Python compatibility, service unit, configuration schema,
+upgrade/rollback procedure and restore procedure; the release manager's lock must also
+inventory its adapter, policy, trust and receipt dependencies with architecture, digest,
+provenance and compatibility. A workstation path or active service without this package
+is `UNVERIFIED` and cannot certify a node. M12 preserves token generations and admitted
+request identities during F13; it does not mint replacement tokens or independently
+activate a release.
 
 The node-token mapping is `schema: cf.node-token.v1`: `token_id`, `node_id`, `project_id`, `namespace`, `allowed_routes`, `allowed_models`, `budget`, `concurrency`, `issued_at`, `expires_at`, `generation`, `scope_digest`, `revoked_at` and `issuer_ref`. M1 requests issuance; the proxy owner administers the mapping; the token is delivered as an owner-only file and read back by id, scope digest and expiry without printing its value. Rotation overlaps only within a declared window. Revocation and decommission invalidate the token immediately, and every request checks generation, scope, expiry, budget and concurrency before forwarding.
 

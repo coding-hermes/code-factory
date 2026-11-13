@@ -820,19 +820,20 @@ options are qualify the existing pins as one integrated bundle, or select and qu
 a newer complete bundle. Default is neither; release owner supplies a signed lock and
 live certification before installation. It cannot be waived by a caller-supplied hash.
 
-The release owner publishes immutable `cf.release-lock.v1` with release_id, platform
-(`linux/amd64` or `linux/arm64`), artifacts (nonempty ordered entries), protocol_versions
-(sorted unique strings), config_versions (sorted unique strings), qualification_ref
-(EvidenceRef), issuer_key_id and signature. Each artifact has name, exact version,
-HTTPS URL, full SHA-256, byte size, media_type, install_path, dependency_names and
-owned_paths. Required names are image/archive, Bunker client, Bunker daemon, Python,
-Hermes, omh, omh-config, Node, Go, GitReins, Boardctl, DuckBrain, supervisor and all
-transitive wheels/npm archives/OS libraries; a lock with unresolved dependencies,
-floating tags, ellipses or an absent architecture refuses. The signature is Ed25519
-on `CF2A-RELEASE-1\n` plus JCS excluding signature; the offline operator trust bundle
-pins the release signer. omh-config is content-addressed configuration including exact
-plugins and enablement; a package version is not integrated configuration. The target
-protocol compatibility set is Part I §1.9.8 plus the schemas in Part IV §IV.2.
+The release owner publishes immutable `cf.release-lock.v1` with the complete shape and
+ordering in §18.1. Its target platform/architecture, compatible Factory/body/store schema
+versions, source/build identity, qualification receipts, issuer key and signature are
+mandatory. Artifact entries carry the §18.1 fields (including exact version, full SHA-256,
+byte size, media type, install path, dependencies and provenance). Required inventory
+includes image/archive, Bunker client/daemon, Python, Hermes, omh, omh-config, Node, Go,
+GitReins, Boardctl, DuckBrain, supervisor, dispatcher/proxy/harness adapters, policy,
+trust/receipt artifacts and every transitive wheel/npm archive/OS library. A lock with
+unresolved dependencies, floating tags, ellipses or an absent architecture refuses.
+The signature is Ed25519 on `CF2A-RELEASE-1\n` plus JCS excluding signature; the offline
+operator trust bundle pins the release signer. omh-config is content-addressed
+configuration including exact plugins and enablement; a package version is not integrated
+configuration. The target protocol compatibility set is Part I §1.9.8 plus the schemas
+in Part IV §IV.2.
 
 Existing full source pins, not qualification evidence, are:
 
@@ -977,4 +978,99 @@ prove that the fenced foreman can submit CT-05 and append local pending memory w
 worker can return its own result and write only its worktree. The probe receipt includes
 UIDs, mount table, socket modes, cgroup values and policy digest. Terminal Jail remains
 optional/off; these kernel/service boundaries are the baseline and cannot be bypassed by
-a cooperative harness.
+ a cooperative harness.
+
+## 18. Normative release manifest and F13 upgrade/rollback contract (P5G-12)
+
+`cf.release-lock.v1` is the one normative release manifest. “Release lock”, “release
+manifest” and `release-lock` are the same object; no component-local manifest or
+`ReleaseManifest` schema is permitted. The Factory release manager is authoritative for
+resolving/signing the complete lock, choosing the target generation, coordinating the
+operation journal and final readback. It does not own component implementation,
+credential issuance/revocation, Crier custody, scheduler admission policy, board state or
+inference accounting; those owners provide receipts and remain authoritative for their
+stores. M5, M11 and M12 consume only the manager-accepted lock.
+
+### 18.1 Complete `cf.release-lock.v1` shape
+
+The manifest is RFC 8785 JCS, UTF-8, no trailing LF. The Ed25519 signature covers
+`CF2A-RELEASE-1\n` plus JCS with `signature` omitted:
+
+```text
+{schema_version:"cf.release-lock.v1",release_id:ID,manifest_digest:SHA-256,
+ factory_version:Version,compatible_factory_versions:SortedVersionSet,
+ compatible_schema_versions:SortedSchemaSet,
+ target:{platform:linux,architecture:amd64|arm64,os_version:ID|null},
+ source:{repository:HTTPSURL,commit:GitOID,tree_digest:SHA-256},
+ build:{builder:ID,build_id:ID,reproducible_inputs_digest:SHA-256,
+        toolchain_versions:Sorted[{name,version,digest}]},
+ artifacts:SortedArtifact[],
+ qualification:{qualification_ref:EvidenceRef,status:qualified|unqualified,
+                 conformance_receipts:SortedEvidenceRef[]},
+ issuer_key_id:ID,signature:{algorithm:ed25519,value:Base64url64}}
+```
+
+Each artifact entry has `{kind,name,version,platform,architecture,url,digest,size,
+media_type,install_path,source_ref,build_ref,depends_on,provenance}`. `kind` is one of
+`binary`, `image`, `script`, `adapter`, `policy`, `trust`, `receipt`. Digest is lowercase
+64-hex SHA-256, size is exact bytes, URL is HTTPS or a declared content-addressed mirror,
+and dependencies are sorted. Provenance contains immutable source commit or registry
+digest, builder/build id and a signed receipt reference. The inventory includes every
+binary/image, install and migration script, dispatcher/proxy/harness adapter, gate and
+migration policy, operator trust bundle, receipt policy and transitive dependency needed
+by the profile. Architecture/platform and compatible Factory/body/store schema versions
+are mandatory; arrays and IDs are unique and bytewise sorted. Missing, unresolved,
+unsigned, wrong-size/digest, unsupported platform/version or unqualified receipt is
+`ARTIFACT_UNQUALIFIED`; nothing executes or migrates. The Node and Go hashes in §17.3
+are source-pinned examples only, not external release qualification.
+
+### 18.2 Deterministic upgrade and preservation
+
+The release manager journals `operation_id`, `idempotency_key`, `expected_generation`,
+`owner_fence`, `manifest_digest`, `phase` and `state_version`, then performs exactly:
+(1) qualify/resolve the lock; (2) verify signature, digest, size, platform, dependency
+closure and compatibility; (3) fence the manager, refuse concurrent operations, stop new
+admission and drain or checkpoint in-flight work; (4) stage all artifacts/migrations in
+a new immutable generation; (5) apply transactional/copy-on-write migration and atomically
+switch the active pointer; (6) postcheck binary/config/schema versions, token
+scope/generation, Crier/scheduler/proxy receipts and in-flight checkpoint; (7) finalize
+receipts/outbox and reopen admission. Version output alone is not success.
+
+Tokens are never recreated from defaults or copied from a manifest: issuer, token id,
+scope digest, expiry, revocation state and generation remain in the credential authority;
+rotation is a separate operation. In-flight launches retain launch_id, execution_key,
+attempt_id, lease, owner fence, native identity, checkpoint and result/outbox state.
+A drained launch resumes or settles by that identity; a lost acknowledgement never causes
+a second launch. Old work may use a new generation only when declared schemas are
+compatible and the live fence matches; otherwise it remains held/quarantined.
+
+### 18.3 Failure, rollback and interrupted recovery
+
+Missing/partial/mismatched/unsupported artifacts, failed migration or failed postcheck
+leave the old verified pointer active, make the new generation unavailable and record a
+typed failure. Before new-schema writes, rollback discards the stage and reconciles the
+old pointer. After an irreversible or new-schema write, old-binary rollback is forbidden:
+restore the pre-migration backup in an isolated generation or perform compatible forward
+repair, then prove readback before reopening admission. Lost acknowledgement is resolved
+by `GET operation/{operation_id}` plus component receipts; the same manifest retry is
+idempotent read/continue, changed bytes or stale fence yields `GENERATION_CONFLICT`.
+
+| Interrupted phase | Recovery query/readback | Deterministic next state |
+|---|---|---|
+| `QUALIFYING`/`VERIFYING` | journal, lock digest/signature, artifact receipts | `REFUSED` if incomplete; else `STAGING` |
+| `DRAINING`/`CHECKPOINTING` | fence, admission, leases, launch checkpoints | resume drain; hold work; no duplicate launch |
+| `STAGING` | staged inventory and per-artifact digests | discard incomplete stage or resume idempotently |
+| `MIGRATING` | migration journal, source/target schema, backup receipt | continue or isolated restore; no old-binary rollback after target write |
+| `ACTIVATING` | active pointer and fsync/receipt record | complete pointer CAS or retain last durable pointer |
+| `POSTCHECKING` | effective versions, schema, token generation, receipts | retry readback; old generation or repair hold |
+| `FINALIZING`/lost acknowledgement | operation id, outbox/result receipt, state version | replay finalization; never reinstall or rerun work |
+
+Unknown or unavailable readback is not success: admission stays closed and the generation
+fenced until an operator-approved restore or forward repair produces a new receipt. This
+is a repository-local specification/vector only; no live release artifact or runtime
+qualification is claimed.
+
+ch:trace row=P5G-12 spec=docs/handbook/OUTLINE.md#f13-upgrade-and-migration wave=none:serial-worker test=none:handbook-vector doc=docs/handbook/chapters/M1-provisioning.md evidence=docs/handbook/contract-vectors.json witness=none:runtime-artifact-unverified verdict=none:not-yet-judged commit=none:not-yet-published memory=none:foreman-writes
+STATUS: partial
+TIER: T0
+EVIDENCE: docs/handbook/contract-vectors.json

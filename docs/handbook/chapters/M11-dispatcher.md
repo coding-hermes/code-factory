@@ -340,6 +340,12 @@ does not qualify an upstream package.
 
 ## 17. Artifact qualification decision (P5-C-31)
 
+The authoritative release manifest is `cf.release-lock.v1`, specified in M1 §18;
+this section's legacy field list is an inventory summary, not a second manifest schema.
+The Factory manager coordinates F13; component owners retain their execution, credential,
+and data authorities. The full ordered recovery protocol in M1 §18 supersedes this
+section's abbreviated upgrade and rollback summary.
+
 No reproducible dispatcher/scoped-issuer/proxy release is supplied by this review.
 Historical hashes above identify inspected bytes, not redistributable packages.
 DECISION SLOT C-ARTIFACT: owner selects a maintained release or commissions a

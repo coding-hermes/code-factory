@@ -1764,6 +1764,63 @@
     }
   ],
   "canonical_model": "docs/SYSTEM-MODEL.yaml#execution_contracts",
+  "release_manifest_vector": {
+    "id": "P5G-12-F13-V1",
+    "schema_version": "cf.release-lock.v1",
+    "status": "normative-fixture-only; runtime qualification NOT ASSESSED / NOT RUN",
+    "artifact_order": [
+      "adapter|cf-dispatcher|1.0.0|amd64",
+      "binary|cf-resident|1.0.0|amd64",
+      "policy|gate-policy|1.0.0|amd64",
+      "receipt|qualification|1.0.0|amd64",
+      "script|migrate|1.0.0|amd64",
+      "trust|operator-bundle|1.0.0|amd64"
+    ],
+    "ordering_rule": "bytewise (kind, name, version, architecture)",
+    "required_artifact_fields": [
+      "kind", "name", "version", "platform", "architecture", "url",
+      "digest", "size", "media_type", "install_path", "source_ref",
+      "build_ref", "depends_on", "provenance"
+    ],
+    "required_inventory": [
+      "binary", "image", "script", "adapter", "policy", "trust", "receipt"
+    ],
+    "valid_shapes": {
+      "architecture": ["amd64", "arm64"],
+      "digest": "lowercase 64-hex SHA-256",
+      "signature": "ed25519 Base64url64",
+      "source_commit": "immutable GitOID",
+      "qualification_status": "qualified"
+    },
+    "procedure": [
+      "qualify-resolve", "verify-signature-digest-platform-version",
+      "fence-stop-admission-drain-or-checkpoint", "stage",
+      "migrate-and-activate-atomically", "postcheck-readback", "finalize"
+    ],
+    "preservation": {
+      "tokens": "retain issuer, token_id, scope_digest, expiry, revocation_state and generation",
+      "in_flight": "retain launch_id, execution_key, attempt_id, lease, owner_fence, native_identity, checkpoint and result/outbox",
+      "lost_ack": "GET operation/{operation_id}; never reinstall or rerun"
+    },
+    "fault_expectations": {
+      "missing_or_mismatched_artifact": "ARTIFACT_UNQUALIFIED; no execution or migration",
+      "failed_postcheck": "old_generation_or_forward_repair_hold; admission remains closed",
+      "interrupted_migration_after_target_write": "isolated_backup_restore_or_forward_repair; no old-binary rollback",
+      "same_manifest_retry": "idempotent read-or-continue",
+      "changed_manifest_retry": "GENERATION_CONFLICT"
+    },
+    "recovery_phases": [
+      "QUALIFYING", "VERIFYING", "DRAINING", "CHECKPOINTING", "STAGING",
+      "MIGRATING", "ACTIVATING", "POSTCHECKING", "FINALIZING"
+    ],
+    "source": "docs/handbook/chapters/M1-provisioning.md#18-normative-release-manifest-and-f13-upgraderollback-contract",
+    "expected": {
+      "manifest_is_single_contract": true,
+      "arrays_are_sorted": true,
+      "external_release_hashes_fabricated": false,
+      "runtime_qualified": false
+    }
+  },
   "static_controls": {
     "SC-01": {
       "case": "Crier default lease 60 seconds",

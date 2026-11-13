@@ -88,7 +88,10 @@ and Part IV §IV.2, with deterministic vector CV-01-B.
 - **F12 CREDENTIAL LIFECYCLE** — trigger: near-expiry, or a new agent or box; exit: fresh
   credential on disk at 0600, the old one rotated, no long-lived token in argv. *(MISSING)*
 - **F13 UPGRADE AND MIGRATION** — trigger: a pinned version bump or a schema change; exit:
-  the running artifact's version read back, and the DB migrated. *(MISSING)*
+  the running artifact's version read back, and the DB migrated. The normative
+  `cf.release-lock.v1` manifest, deterministic upgrade order, preservation rules and
+  interrupted-phase recovery table are specified in M1 §18; runtime conformance remains
+  **UNVERIFIED** until a qualified external release is exercised.
 - **F14 OBSERVABILITY INGESTION** — trigger: every tick, turn and message; exit: the row
   or line is visible and attributed where a human will look for it. *(MISSING)*
 ### F15 BACKUP AND RESTORE
