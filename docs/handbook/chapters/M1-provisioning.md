@@ -577,7 +577,7 @@ The specified, not yet release-qualified, MVP profile is a user-space, image-bac
 |---|---|---|
 | admission | declared profile, role, disk floor, footprint; `profile_id` and `generation` | unknown profile, insufficient measured headroom or unreadable host state refuses before spawn |
 | create | `node_id`, `project_id`, repository identity `{forge, host, owner, repo, ref}` and credential references, never credentials in the identity | duplicate `(project_id,node_id,generation)` is idempotent; conflicting generation is a compare-and-swap refusal |
-| enrollment | controller principal, Bunker principal, tuple-bound single-use bootstrap reference, trust key/certificate fingerprint, Crier registration id and endpoint | §1.9.11 consumes the grant, allocates one node identity, installs class-`crier`, then proves the signed read; missing trust, wrong project/profile/generation, expired identity or registration refusal leaves `ENROLLMENT_FAILED` with no durable identity; failed read leaves `DEGRADED` and unschedulable |
+| enrollment | controller principal, Bunker principal, tuple-bound single-use bootstrap reference, trust key/certificate fingerprint, Crier registration id and endpoint | §1.9.11 consumes the grant, allocates one node identity, installs class-`crier`, then proves the signed read; missing trust, wrong project/profile, a CAS-miss `expected_generation`, expired identity or registration refusal leaves `ENROLLMENT_FAILED` with no durable identity; failed read leaves `DEGRADED` and unschedulable |
 | provision | pinned artifacts and per-class credential references; seed manifest and digest | each artifact is digest-checked; partial installation records completed stages and retries only idempotent stages |
 | readiness | effective readback for profile, repo, Crier, harness, proxy inference and memory; machine-readable report | any unavailable or unmeasured required leg is `UNVERIFIED`, never READY; readiness is not inferred from file presence |
 | replace/remove | old generation fenced, new generation read back, revocations retained | replacement cannot inherit revoked credentials; removal preserves audit evidence and destroys only owned state |
@@ -665,10 +665,10 @@ is operator-owned, not obtained through the bus it is creating.
 
 The authority issues one enrollment grant, signed offline, as the single-use
 `credential_ref` `enrollment-grant.v1` bound to exactly
-`(project_id, profile_id, generation, operation_id)` and the Bunker's
+`(registration_id, project_id, profile_id, operation_id)` and the Bunker's
 `public_key`. Its authority-side record is `{schema_version:"enrollment-grant.v1",
-grant_id:ID, registration_id:ID, project_id:ID, profile_id:ID, generation:PosInt,
-operation_id:ID, public_key:Base64url32, nonce:Base64url32, issued_at:Time,
+ grant_id:ID, registration_id:ID, project_id:ID, profile_id:ID,
+ operation_id:ID, public_key:Base64url32, nonce:Base64url32, issued_at:Time,
 expires_at:Time, issuer_key_id:ID}` plus `signature:Base64url64`; it carries no
 inline secret material. Lifetime is at most 600 s. The signature covers UTF-8
 `CF2A-ENROLL-1\n` followed by JCS of the object excluding signature. The nonce uses
@@ -701,7 +701,9 @@ for an unallocated generation. Changed grant/key under the same registration_id 
 certificate_der, expires_at, credential_refs:CredentialRef[], authority_seq}`;
 this certificate is public, not a bearer secret. A crash after issue returns the
 same certificate/refs. The node then uses mTLS plus the Crier-signed request to
-`POST /v1/factory/registrations` with `register.v1` (Part IV). The legacy
+`POST /v1/factory/registrations` with the closed `register.v1` body (Part IV):
+`registration_id`, `agent_id`, `project_id`, `operation_id`, `expected_generation`,
+`profile_id`, `public_identity`, `capabilities` and `idempotency_key`. The legacy
 `/factory/v1/registrations` spelling is an alias only at the migration adapter. This adapter is not a
 claim that legacy POST /agents already implements this wire. Crier checks the live
 authority binding, persists the registration, and returns registration metadata and

@@ -1531,8 +1531,8 @@
       "static_controls": [],
       "kind": "positive",
       "name": "generation-zero enrollment binds participant and scoped secret reference",
-      "canonical_json": "{\"agent_id\":\"bunker-a\",\"capabilities\":[\"hermes\"],\"enrollment_nonce\":\"fixture-nonce-single-use\",\"expected_generation\":0,\"idempotency_key\":\"register-bunker-a-key\",\"profile\":\"homelab-vpn\",\"project_id\":\"code-factory\",\"public_identity\":{\"certificate_der\":\"fixture-der-not-a-live-certificate\",\"key_id\":\"bunker-a-key-1\"},\"registration_id\":\"reg-bunker-a\",\"schema_version\":\"register.v1\"}",
-      "canonical_sha256": "0c1a666bed7309ec717920ce79f909c9949fe5cd8ab047efca7af1a68dabba56",
+      "canonical_json": "{\"agent_id\":\"bunker-a\",\"capabilities\":[\"hermes\"],\"enrollment_nonce\":\"fixture-nonce-single-use\",\"expected_generation\":0,\"idempotency_key\":\"register-bunker-a-key\",\"profile_id\":\"homelab-vpn\",\"project_id\":\"code-factory\",\"public_identity\":{\"certificate_der\":\"fixture-der-not-a-live-certificate\",\"key_id\":\"bunker-a-key-1\"},\"registration_id\":\"reg-bunker-a\",\"schema_version\":\"register.v1\"}",
+      "canonical_sha256": "9bec1ee3e0e194bc6cd96837a18b030f5e2cca3185c87ff48a6e340bec74fe77",
       "expected": {
         "registration_generation": 1,
         "nonce_reuse": "UNAUTHORIZED",
@@ -1554,16 +1554,20 @@
         "registration_route": "POST /v1/factory/registrations"
       },
       "inputs": {
+        "registration_id": "reg-bunker-a",
+        "agent_id": "bunker-a",
         "project_id": "code-factory",
         "profile_id": "bunker.user-image.v1",
-        "generation": 1,
+        "expected_generation": 0,
         "operation_id": "op-enroll-17",
-        "registration_id": "reg-bunker-a",
-        "public_key_id": "bunker-a-key-1",
-        "bootstrap_credential_ref": "secretref://bootstrap/reg-bunker-a",
-        "idempotency_key": "enroll-key-reg-bunker-a-op-enroll-17-g1",
-        "request_digest": "sha256:enrollment-request-digest-17",
-        "claimed_principal_class": "crier"
+        "public_identity": {
+          "certificate_der": "FIXTURE-CERTIFICATE-NOT-A-CREDENTIAL",
+          "key_id": "bunker-a-key-1"
+        },
+        "capabilities": [
+          "hermes"
+        ],
+        "idempotency_key": "enroll-key-reg-bunker-a-op-enroll-17-g1"
       },
       "derived": {
         "node_id": "node-code-factory-bunker-a-1",
@@ -1602,7 +1606,7 @@
         {
           "id": "CV-P5G-09-C",
           "name": "conflicting generation",
-          "mutation": "generation=2",
+          "mutation": "expected_generation=1 after CV-P5G-09-A allocated registration_generation=1",
           "expected": {
             "outcome": "refused",
             "error": "REGISTRATION_CONFLICT",
