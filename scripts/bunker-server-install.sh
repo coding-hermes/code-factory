@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # bunker-server-install.sh — the control-host side: is this machine able to run the factory?
 #
-#   ./bunker-server-install.sh --check     # measure, exit non-zero on a gap
-#   ./bunker-server-install.sh --apply     # install what is missing (user-space)
-#   ./bunker-server-install.sh --reap-orphans   # with BUNKER_HOMES_DIR/BUNKER_KEYS_DIR set,
-#                                               # remove orphan homes and keys (CF-003)
+#   ./bunker-server-install.sh --check [--json]        # measure, exit non-zero on a gap
+#   ./bunker-server-install.sh --reap-orphans [--json] # remove named orphan homes and keys (CF-003)
+#
+# Accepted flags are --check, --json, and --reap-orphans. The unimplemented generic
+# install mode is recognized only to refuse --apply explicitly; it is not a usage mode.
 #
 # A "bunker server" is the daemon that hosts agents. It is NOT the same machine as the
 # scheduler: the control host designs work, the bunker server runs nodes.
@@ -16,10 +17,27 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 SERVER="${BUNKER_SERVER:-}"
 JSON=0
 REAP_ORPHANS=0
-case "${1:-}" in
-  --json) JSON=1 ;;
-  --reap-orphans) REAP_ORPHANS=1 ;;
-esac
+APPLY=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --check) ;;
+    --json) JSON=1 ;;
+    --reap-orphans) REAP_ORPHANS=1 ;;
+    --apply) APPLY=1 ;;
+    *)
+      printf '  FAIL  usage — unsupported option %s; accepted: --check, --json, --reap-orphans\n' "$1"
+      printf 'RESULT: FAIL (usage)\n'
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+if [ "$APPLY" -eq 1 ]; then
+  printf '  FAIL  apply — unsupported: no measured user-space install path exists for bunker-server-install.sh\n'
+  printf 'RESULT: FAIL (apply unsupported)\n'
+  exit 2
+fi
 
 if [ -z "$SERVER" ]; then
   bad "server_declared" "BUNKER_SERVER unset — the client has no server to talk to"

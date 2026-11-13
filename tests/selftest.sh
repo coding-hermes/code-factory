@@ -2858,6 +2858,67 @@ else
   say "  FAIL  missing bunker client did not surface (exit $rc)"; fails=$((fails+1))
 fi
 
+# BEGIN cf057-apply-refusal
+# CF-057: bunker-server-install.sh has no measured generic install path. Its --apply
+# spelling must therefore be a deliberate refusal, not an ignored argument that runs
+# the read-only check and can print RESULT: PASS. The fixture supplies a server, config,
+# and an isolated HOME so the arm remains detached from the live host.
+say "32a. bunker-server-install --apply refuses instead of false-green checking (CF-057)"
+cf057_tmp=$(mktemp -d)
+mkdir -p "$cf057_tmp/bin" "$cf057_tmp/home"
+printf '%s\n' 'server: fixture-server' > "$cf057_tmp/config.yaml"
+printf '%s\n' '#!/usr/bin/env bash' 'printf called > "$CF057_CALL_MARKER"' > "$cf057_tmp/bin/bunker"
+chmod +x "$cf057_tmp/bin/bunker"
+out=$(env -i PATH="$cf057_tmp/bin:/usr/bin:/bin" HOME="$cf057_tmp/home" \
+  BUNKER_SERVER=fixture-server BUNKER_CONFIG="$cf057_tmp/config.yaml" \
+  CF057_CALL_MARKER="$cf057_tmp/bunker-called" \
+  /bin/bash "$HERE/scripts/bunker-server-install.sh" --apply 2>&1); rc=$?
+if [ "$rc" -eq 2 ] \
+  && printf '%s\n' "$out" | grep -Fq 'FAIL  apply — unsupported:' \
+  && printf '%s\n' "$out" | grep -Fq 'RESULT: FAIL (apply unsupported)' \
+  && ! printf '%s\n' "$out" | grep -Eq '(^|[[:space:]])(PASS|OK)([[:space:]]|$)' \
+  && ! printf '%s\n' "$out" | grep -Fq 'RESULT: PASS' \
+  && [ ! -e "$cf057_tmp/bunker-called" ] \
+  && [ -z "$(find "$cf057_tmp/home" -mindepth 1 -print -quit)" ]; then
+  say "  PASS  CF-057 --apply -> named unsupported refusal, exit $rc, no fixture command or HOME mutation"
+else
+  say "  FAIL  CF-057 --apply was not fail-closed (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+# The ordinary check path remains available, and --reap-orphans does not consume an
+# unrelated positional argument as if it were another flag.
+out=$(env -i PATH="$cf057_tmp/bin:/usr/bin:/bin" HOME="$cf057_tmp/home" \
+  BUNKER_SERVER=fixture-server BUNKER_CONFIG="$cf057_tmp/config.yaml" \
+  CF057_CALL_MARKER="$cf057_tmp/bunker-called" \
+  /bin/bash "$HERE/scripts/bunker-server-install.sh" --check 2>&1); rc=$?
+if [ "$rc" -eq 0 ] \
+  && printf '%s\n' "$out" | grep -Fq 'bunker server: fixture-server' \
+  && printf '%s\n' "$out" | grep -Fq 'RESULT: PASS' \
+  && [ -e "$cf057_tmp/bunker-called" ]; then
+  say "  PASS  CF-057 --check remains a measured check path, exit $rc"
+else
+  say "  FAIL  CF-057 --check no longer reaches the check path (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+
+out=$(env -i PATH="$cf057_tmp/bin:/usr/bin:/bin" HOME="$cf057_tmp/home" \
+  BUNKER_SERVER=fixture-server BUNKER_CONFIG="$cf057_tmp/config.yaml" \
+  CF057_CALL_MARKER="$cf057_tmp/bunker-called" \
+  /bin/bash "$HERE/scripts/bunker-server-install.sh" --reap-orphans unexpected 2>&1); rc=$?
+if [ "$rc" -eq 2 ] \
+  && printf '%s\n' "$out" | grep -Fq 'FAIL  usage — unsupported option unexpected' \
+  && ! printf '%s\n' "$out" | grep -Fq 'RESULT: PASS'; then
+  say "  PASS  CF-057 --reap-orphans rejects an extra argument, exit $rc"
+else
+  say "  FAIL  CF-057 --reap-orphans accepted an extra argument (exit $rc)"; fails=$((fails+1))
+  printf '%s\n' "$out" | sed 's/^/    | /'
+fi
+rm -rf "$cf057_tmp"
+
+# ch:trace row=CF-057 spec=docs/handbook/chapters/M1-provisioning.md#3-submodule-inventory wave=none:serial test=tests/selftest.sh::cf057-apply-refusal doc=docs/handbook/chapters/M1-provisioning.md evidence=tests/selftest.sh::cf057-apply-refusal witness=none:offline-fixture verdict=none:foreman-runs-gitreins commit=none:worker-commit memory=none:foreman-closeout
+# END cf057-apply-refusal
+
 # a flag handler may only assign CLI_* variables: anything else is overwritten by load_config and the
 # documented flag silently does nothing (four of them did, including --github-token-file)
 direct=$(awk '/^while \[ \$# -gt 0 \]/,/^done/' "$HERE/scripts/bunker-provision.sh" \
