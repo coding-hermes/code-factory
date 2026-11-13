@@ -310,8 +310,9 @@ from approved target behavior.
 - **Inputs:** `CT-02` the scheduler's signed envelope, accepted by
   `internal/registry/handler.go:990` `HandleDeliver` into the durable inbox,
   verbatim after the CF-354 fix (PROVEN); `CT-04` the node's reply (PARTIAL);
-  `CT-22` agent registration: normatively the authority/controller creates
-  `registration_id` and issues the class-`crier` credential reference at enrollment;
+  `CT-22` agent registration: normatively the authority creates `registration_id` and
+  the class-`crier` credential reference at enrollment, the Crier registrar is the only
+  actor that admits `register.v1` and allocates the node identity;
   the node emits `register.v1` (outer `cf2a.v1`). Implementation coverage is
   unverified because no in-repo producer was measured (CF-276; M1 §6).
 - **Outputs:** `CT-03` inbox message plus a 30-second lease, pulled by
