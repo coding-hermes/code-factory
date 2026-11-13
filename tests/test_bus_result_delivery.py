@@ -150,7 +150,7 @@ def unb64(text):
 def dispatch_envelope(
     dispatch_id, corr_id, reply_to="scheduler", gate=None, text=DIRECTIVE
 ):
-    """A dispatch exactly as the scheduler sends it, with a cf-brief-v1 digest over what runs."""
+    """A dispatch exactly as the scheduler sends it, with a cf.brief-input.v1 digest over what runs."""
     dispatch = {
         "env_version": 1,
         "dispatch_id": dispatch_id,
