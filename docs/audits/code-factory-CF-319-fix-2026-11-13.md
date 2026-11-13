@@ -5,7 +5,7 @@ All arms used a local HTTP stub through `--api-base`; no network or real credent
 ## Arm A — unreadable repo (403)
 
 ```text
-  PASS  private_key_file — <scratch>/cf-319/github-app.pem, mode 600, parses as RSA 2048-bit
+  PASS  private_key_file — /var/tmp/hermes-scratch/cf-319-ttx292d2/github-app.pem, mode 600, parses as RSA 2048-bit
   PASS  token_mint — installation 123 answered 201; token expires 2099-01-01T00:00:00Z (permissions read back, never the token)
   PASS  permission:contents — write (need write — clone and push commits; a push is a contents write)
   PASS  permission:metadata — read (need read — mandatory for every App; resolves the repo and the installation)
@@ -21,7 +21,7 @@ EXIT=1
 ## Arm B — readable repo (200)
 
 ```text
-  PASS  private_key_file — <scratch>/cf-319/github-app.pem, mode 600, parses as RSA 2048-bit
+  PASS  private_key_file — /var/tmp/hermes-scratch/cf-319-ttx292d2/github-app.pem, mode 600, parses as RSA 2048-bit
   PASS  token_mint — installation 123 answered 201; token expires 2099-01-01T00:00:00Z (permissions read back, never the token)
   PASS  permission:contents — write (need write — clone and push commits; a push is a contents write)
   PASS  permission:metadata — read (need read — mandatory for every App; resolves the repo and the installation)
@@ -37,7 +37,7 @@ EXIT=0
 ## Arm C — no repo named
 
 ```text
-  PASS  private_key_file — <scratch>/cf-319/github-app.pem, mode 600, parses as RSA 2048-bit
+  PASS  private_key_file — /var/tmp/hermes-scratch/cf-319-ttx292d2/github-app.pem, mode 600, parses as RSA 2048-bit
   PASS  token_mint — installation 123 answered 201; token expires 2099-01-01T00:00:00Z (permissions read back, never the token)
   PASS  permission:contents — write (need write — clone and push commits; a push is a contents write)
   PASS  permission:metadata — read (need read — mandatory for every App; resolves the repo and the installation)
