@@ -838,14 +838,7 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_lane_target.py" >/dev/
 else
   say "  FAIL  lane target contract"; fails=$((fails+1))
 fi
-# ch:trace row=CF-319 spec=docs/handbook/chapters/M7-github.md#M7-S1 wave=none:serial test=tests/test_github_app_check.py doc=docs/audits/code-factory-CF-319-fix-2026-11-13.md prompt=none:foreman-brief evidence=tests/test_github_app_check.py::arms-a-b-c witness=none:local-stub verdict=none:foreman-judges commit=none:worker-commit memory=none:foreman-writes
-say "12. github app check reads the named repo and fails closed (CF-319)"
-if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_github_app_check.py" >/dev/null 2>&1; then
-  say "  PASS  CF-319 GitHub App repository-read fixture arms A/B/C"
-else
-  say "  FAIL  CF-319 GitHub App repository-read fixture"; fails=$((fails+1))
-fi
-say "13. node disk floor resolves from CLI/env/config with fail-closed values"
+say "12. node disk floor resolves from CLI/env/config with fail-closed values"
 if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_disk_floor.py" >/dev/null 2>&1; then
   say "  PASS  floor precedence, role defaults, malformed values refused"
 else
@@ -7618,6 +7611,15 @@ if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_lane_config_readonly.p
   say "  PASS  CF-304 default and dry-run leave copied DBs byte-identical; --apply is scoped; red control caught"
 else
   say "  FAIL  CF-304 lane configuration read-only fixture"
+  fails=$((fails+1))
+fi
+
+# ch:trace row=CF-319 spec=docs/handbook/chapters/M7-github.md#M7-S1 wave=none:serial test=tests/test_github_app_check.py doc=docs/audits/code-factory-CF-319-fix-2026-11-13.md prompt=none:foreman-brief evidence=tests/test_github_app_check.py::arms-a-b-c witness=none:local-stub verdict=none:foreman-judges commit=none:foreman-commit memory=none:foreman-writes
+say "68. github app check reads the named repo and fails closed (CF-319)"
+if PYTHONDONTWRITEBYTECODE=1 python3 -B "$HERE/tests/test_github_app_check.py"; then
+  say "  PASS  CF-319 GitHub App repository-read fixture arms A/B/C"
+else
+  say "  FAIL  CF-319 GitHub App repository-read fixture"
   fails=$((fails+1))
 fi
 
