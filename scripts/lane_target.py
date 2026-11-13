@@ -28,7 +28,7 @@ Checks, all falsifiable without a network:
 Exit codes: 0 ok, 2 unparseable/invalid, 3 remote verification not permitted,
 4 local target failed verification.
 
-This module is stdlib-only and never makes a network call.
+This module is stdlib-only; optional bunker probes invoke a networked client.
 """
 
 from __future__ import annotations
@@ -319,6 +319,31 @@ def verify_remote(target: Target, allow_remote: bool) -> dict:
     }
 
 
+def bunker_identity(agent: str, server: Optional[str], timeout: int = 60) -> dict:
+    """Check the identity fields printed by the Bunker info command.
+
+    This trusts the selected client to report its server and agent honestly; it
+    does not authenticate the client executable against an independent authority.
+    """
+    cmd = ["bunker", "info", agent]
+    if server:
+        cmd += ["--server", server]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return {"check": "client_identity", "ok": False, "value": f"{type(exc).__name__}: {exc}"}
+    words = (proc.stdout + "\n" + proc.stderr).strip()
+    agents = re.findall(r"^\s*═+\s*Agent:\s*(\S+)\s*═+\s*$", proc.stdout, re.MULTILINE)
+    servers = re.findall(r'^bunker: reading server "([^"\n]+)"\s*$', proc.stderr, re.MULTILINE)
+    ok = (
+        proc.returncode == 0
+        and agents == [agent]
+        and len(servers) == 1
+        and (not server or servers[0] == server)
+    )
+    return {"check": "client_identity", "ok": ok, "value": words or f"exit={proc.returncode} (no output)"}
+
+
 def verify_bunker(
     target: Target, server: Optional[str] = None, timeout: int = 60
 ) -> dict:
@@ -331,17 +356,6 @@ def verify_bunker(
     if target.scheme != "bunker" or not target.agent:
         raise TargetError("verify_bunker needs a bunker://<agent>/<path> target")
 
-    cmd = ["bunker"]
-    if server:
-        cmd += ["--server", server]
-    cmd += [
-        "exec",
-        target.agent,
-        "--",
-        "sh",
-        "-lc",
-        f'echo "HOME=$HOME"; if [ -d "{target.path}" ]; then echo "PATH_EXISTS=1"; else echo "PATH_EXISTS=0"; fi',
-    ]
     result = {
         "resolved": target.display(),
         "kind": "remote",
@@ -352,6 +366,21 @@ def verify_bunker(
         "checks": [],
         "ok": False,
     }
+    identity = bunker_identity(target.agent, server, timeout=timeout)
+    result["checks"].append(identity)
+    if not identity["ok"]:
+        return result
+    # Pin exec to the same server that info reported, including an active default.
+    selected_server = re.search(
+        r'^bunker: reading server "([^"\n]+)"\s*$', identity["value"], re.MULTILINE
+    )
+    if selected_server is None:  # defensive; bunker_identity validates this
+        return result
+    cmd = [
+        "bunker", "exec", "--server", selected_server.group(1), target.agent,
+        "--", "sh", "-lc",
+        f'echo "HOME=$HOME"; if [ -d "{target.path}" ]; then echo "PATH_EXISTS=1"; else echo "PATH_EXISTS=0"; fi',
+    ]
 
     def add(name: str, ok: bool, value: str) -> None:
         result["checks"].append({"check": name, "ok": ok, "value": value})
@@ -706,20 +735,33 @@ def main(argv: Optional[list] = None) -> int:
             print(json.dumps(out, indent=2))
             return 0 if out["ok"] else 4
         plan = []
+        parse(f"bunker://{a.agent}/probe")
+        # Even an explicitly supplied path must be gated by the client's identity;
+        # otherwise a PATH-shadowing stub can make plan emit a target without a
+        # verified agent/server conversation.
+        probe = verify_bunker(
+            Target(
+                raw=f"bunker://{a.agent}/",
+                kind="remote",
+                scheme="bunker",
+                path="/",
+                agent=a.agent,
+            ),
+            server=a.server,
+        )
+        identity = next(
+            (check for check in probe.get("checks", []) if check["check"] == "client_identity"),
+            None,
+        )
+        if not identity or not identity["ok"]:
+            detail = identity["value"] if identity else "identity check missing"
+            raise TargetError(f"client_identity: {detail}")
+        if not probe.get("ok"):
+            raise TargetError(f"bunker probe failed: {json.dumps(probe['checks'])}")
         in_path = a.path
         if in_path is None:
             # Resolve the agent's real home instead of guessing a path: an agent's
             # home is /home/bunker-<id> today, which a template silently mis-guesses.
-            probe = verify_bunker(
-                Target(
-                    raw=f"bunker://{a.agent}/",
-                    kind="remote",
-                    scheme="bunker",
-                    path="/",
-                    agent=a.agent,
-                ),
-                server=a.server,
-            )
             home = probe.get("agent_home") or ""
             if not home:
                 raise TargetError(

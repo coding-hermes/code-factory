@@ -34,6 +34,13 @@ side is CF-355 (a failed result with no `ok` is recorded as success).
 | S2 resolve a target | `lane_target.py` | **active** | `scripts/configure_family.py:17` imports it and `:149` calls `lane_target.parse(workdir)` then branches on the result — a production caller **in-repo** (3 / B09). An earlier citation of "no production caller" was false. Passing the parse does not prove a remote checkout exists (it is structural parsing, not remote verification) |
 | S3 consume the inbox, sign, reply | `node-bus-worker.py` | **active** | decodes the directive (`directive_text`, `:977`), consumes one dispatch (`process`, `:1007`), builds the reply (`:1176-1192`), delivers (`:1208`), settles (`:1389-1422`) |
 
+**III.M2.S2 — CF-306.** Bunker `plan` and `verify --exec-bunker` check
+`client_identity`: `bunker info` must name the requested agent and the selected
+server, before an exec probe or plan target. An explicit `--path` does not bypass
+this check. This is client-reported identity, not independent authentication of
+an untrusted executable; `--allow-remote` still permits structural-only results.
+`plan` probes `/` and does not establish that the proposed repository exists.
+
 **III.M2.S2 — CF-305.** `repo-url --row` compares each non-sync satellite against
 the row bearing its primary's full name, including a primary that itself ends in
 a satellite suffix. A row can participate in both its parent and child families;
@@ -152,6 +159,7 @@ on this field, not a "sample" claimed complete:
 
 | Failure | Presents as | Distinguished from | Recovery |
 |---|---|---|---|
+| Stub or wrong Bunker client cannot prove identity | `client_identity` fails; plan is refused and no target emitted | a matching client-reported agent and server | use the intended client and server; inspect the reported identity |
 | `text_b64` undecodable | node refuses: "`text_b64` does not decode to UTF-8 text" (`:1022-1034`), no silent fallback to another member | a malformed dispatch | **resolved** — CF-354 (complete): the node decodes `text_b64` first and refuses a non-decoding value rather than reading a different member |
 | Failed result recorded as success | scheduler pass for a `status:"failed"` reply | a real pass | **OPEN** — CF-355 (control-plane half, M9) |
 | `configure_family` PID hardcode | config fails at import unless PID 1755676 is alive | a live scheduler | **OPEN** — F2-2 |

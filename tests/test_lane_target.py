@@ -549,12 +549,18 @@ class VerifyBunker(unittest.TestCase):
         self.tmp = tempfile.mkdtemp(prefix="bunker-shim-")
         self.bin = os.path.join(self.tmp, "bin")
         os.makedirs(self.bin)
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
 
     def _shim(self, home="/home/bunker-abc", exists=True, exit_code=0):
         path = os.path.join(self.bin, "bunker")
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(
                 "#!/usr/bin/env bash\n"
+                "if [ \"$1\" = info ]; then\n"
+                "  echo '══════════ Agent: abc ══════════'\n"
+                "  echo 'bunker: reading server \"staging\"' >&2\n"
+                "  exit 0\n"
+                "fi\n"
                 f'echo "HOME={home}"\n'
                 f'echo "PATH_EXISTS={"1" if exists else "0"}"\n'
                 f"exit {exit_code}\n"
@@ -597,26 +603,79 @@ class VerifyBunker(unittest.TestCase):
         finally:
             os.environ["PATH"] = old
         self.assertFalse(out["ok"])
-        self.assertEqual(out["checks"][0]["check"], "agent_reachable")
+        self.assertIn("client_identity", [c["check"] for c in out["checks"]])
+
+    def test_exec_flag_and_identity_server(self):
+        self._shim()
+        env = {**os.environ, "PATH": self.bin + os.pathsep + os.environ["PATH"]}
+        out = subprocess.run(
+            [sys.executable, lane_target.__file__, "verify", "bunker://abc/srv/repo",
+             "--exec-bunker", "--bunker-server", "staging"],
+            capture_output=True, text=True, env=env,
+        )
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        result = json.loads(out.stdout)
+        self.assertEqual(result["verified"], "bunker-exec")
+        self.assertTrue(next(c for c in result["checks"] if c["check"] == "client_identity")["ok"])
+
+    def test_stub_and_wrong_identity_refused_by_verify_and_plan(self):
+        path = os.path.join(self.tmp, "lanes.jsonl")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"name": "lane"}) + "\n")
+        env = {**os.environ, "PATH": self.bin + os.pathsep + os.environ["PATH"]}
+        for identity in ("HOME=/home/kara\\nPATH_EXISTS=1", "══════════ Agent: wrong ══════════"):
+            with self.subTest(identity=identity):
+                with open(os.path.join(self.bin, "bunker"), "w", encoding="utf-8") as fh:
+                    fh.write("#!/bin/sh\nprintf '" + identity + "\\n'\n")
+                os.chmod(os.path.join(self.bin, "bunker"), 0o755)
+                verified = subprocess.run(
+                    [sys.executable, lane_target.__file__, "verify", "bunker://abc/srv/repo", "--exec-bunker"],
+                    capture_output=True, text=True, env=env,
+                )
+                self.assertNotEqual(verified.returncode, 0)
+                row = next(c for c in json.loads(verified.stdout)["checks"] if c["check"] == "client_identity")
+                self.assertFalse(row["ok"])
+                self.assertIn(identity.split("\\n")[0], row["value"])
+                for extra in ([], ["--path", "/srv/repo"]):
+                    plan = subprocess.run(
+                        [sys.executable, lane_target.__file__, "plan", path, "--agent", "abc", *extra],
+                        capture_output=True, text=True, env=env,
+                    )
+                    self.assertNotEqual(plan.returncode, 0, plan.stdout)
+                    self.assertIn("client_identity", plan.stderr)
+                    self.assertEqual(plan.stdout, "")
+
+    def test_wrong_server_refused(self):
+        self._shim()
+        env = {**os.environ, "PATH": self.bin + os.pathsep + os.environ["PATH"]}
+        out = subprocess.run(
+            [sys.executable, lane_target.__file__, "verify", "bunker://abc/srv/repo",
+             "--exec-bunker", "--bunker-server", "other"],
+            capture_output=True, text=True, env=env,
+        )
+        self.assertNotEqual(out.returncode, 0)
+        row = next(c for c in json.loads(out.stdout)["checks"] if c["check"] == "client_identity")
+        self.assertFalse(row["ok"])
+        self.assertIn('reading server "staging"', row["value"])
 
     def test_plan_refuses_nothing_but_emits_targets(self):
         path = os.path.join(self.tmp, "lanes.jsonl")
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(json.dumps({"name": "code-factory-docs"}) + "\n")
             fh.write(json.dumps({"name": "other-lane"}) + "\n")
-        rc = lane_target.main(
-            [
-                "plan",
-                path,
-                "--agent",
-                "abc",
-                "--path",
-                "/home/{agent}/repo",
-                "--prefix",
-                "code-factory",
-            ]
-        )
-        self.assertEqual(rc, 0)
+        self._shim()
+        env = {**os.environ, "PATH": self.bin + os.pathsep + os.environ["PATH"]}
+        for extra in (["--path", "/srv/repo"], []):
+            out = subprocess.run(
+                [sys.executable, lane_target.__file__, "plan", path, "--agent", "abc",
+                 "--prefix", "code-factory", *extra],
+                capture_output=True, text=True, env=env,
+            )
+            self.assertEqual(out.returncode, 0, out.stderr)
+            rows = json.loads(out.stdout)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["workdir"], "bunker://abc" +
+                             ("/srv/repo" if extra else "/home/bunker-abc/repo"))
 
 
 if __name__ == "__main__":
