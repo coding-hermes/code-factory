@@ -1478,8 +1478,8 @@ a restored path with a new inode is a different resource. Unregistered/unknown
 resources are retained. Publication/sync/worker startup all use this index;
 a reaper without this integration is unsupported. [F6; CT-14/15/29]
 
-A release lock contains every component artifact URL/SHA-256, platform, protocol
-versions, config/store schema versions, migration digest and acceptance receipt.
+A release lock contains every component artifact URL/SHA-256, platform, `protocol_versions`,
+config/store schema versions, migration digest and acceptance receipt.
 Allowed target wire set is cf2a.v1, factory.v1, factory-adapter.v1,
 round-admission.v1, worker-brief.v1, worker-result.v1, round-report.v1,
 board-transaction.v1, progress.v1, authority.v1, broker.v1, binding.prepare.v1,
@@ -1495,7 +1495,10 @@ Backward-compatible binary replacement permits rollback before new writes;
 store changes use copy/verify/switch, retain the old image, and prohibit old-binary
 restart after new-schema writes. Recovery then either rolls forward with the
 pinned repair migration or uses F15 isolated restore and explicit loss accounting.
-A release missing a migration/recovery recipe is `UPGRADE_UNSUPPORTED`.
+A release missing a migration/recovery recipe is `UPGRADE_UNSUPPORTED`; missing or invalid
+artifact integrity/qualification is `ARTIFACT_UNQUALIFIED`, and changed manifest bytes or
+a stale generation fence is `GENERATION_CONFLICT`. These are the single F13 disposition
+codes used by M1 §18.3.
 [CT-17/23/24; F13]
 
 ### 1.9.9 Live round readout and settlement

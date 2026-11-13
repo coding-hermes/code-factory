@@ -341,28 +341,18 @@ does not qualify an upstream package.
 ## 17. Artifact qualification decision (P5-C-31)
 
 The authoritative release manifest is `cf.release-lock.v1`, specified in M1 §18;
-this section's legacy field list is an inventory summary, not a second manifest schema.
-The Factory manager coordinates F13; component owners retain their execution, credential,
-and data authorities. The full ordered recovery protocol in M1 §18 supersedes this
-section's abbreviated upgrade and rollback summary.
+this section does not define a field list or upgrade procedure. The Factory manager
+coordinates F13; component owners retain their execution, credential, and data
+authorities. M1 §18.1 is the only manifest schema and M1 §18.2–18.3 are the only
+upgrade/rollback procedure and recovery contract.
 
 No reproducible dispatcher/scoped-issuer/proxy release is supplied by this review.
 Historical hashes above identify inspected bytes, not redistributable packages.
 DECISION SLOT C-ARTIFACT: owner selects a maintained release or commissions a
 repository-owned replacement; default is BLOCKED, never an arbitrary 1.x download.
-A release supplies `{component, source_url, source_commit, artifact_url, sha256,
-platform, runtime_version, config_version, store_version, unit_sha256,
-conformance_receipts}`. All fields are required; URLs are HTTPS, hashes are full,
-and source_commit is an immutable native Git object. Missing fields refuse install
-with ARTIFACT_UNQUALIFIED. The install layout is
-`$HOME/.local/lib/factory/<component>/<sha256>/` with an atomically switched `current`
-symlink; state is outside that prefix. Upgrade disables new admission, drains or
-quarantines all launches, captures VI.35 backup, verifies bytes before execution,
-migrates a state copy, starts the pinned unit and proves readback before re-enabling.
-Rollback is allowed only when the old binary declares the new store/config versions
-readable; otherwise the offline backup is restored under the revocation barrier.
-Tokens and in-flight work are never recreated from defaults. This procedure is
-specified; exact release pins and runtime proof remain DEFERRED in IX.
+Release qualification, installation layout, backup, upgrade and rollback are specified
+only by M1 §18.1–18.3; this section supplies no competing field list or procedure.
+Exact release pins and runtime proof remain DEFERRED in IX.
 
 ## RED field count: 2 (Metrics §8, live-job test row §7 — decoration, cannot fail)
 

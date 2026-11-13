@@ -1925,20 +1925,55 @@
     "id": "P5G-12-F13-V1",
     "schema_version": "cf.release-lock.v1",
     "status": "normative-fixture-only; runtime qualification NOT ASSESSED / NOT RUN",
+    "release_id": "cf-release-2026-11-13-fixture",
+    "protocol_versions": ["cf2a.v1", "factory.v1", "worker-brief.v1"],
     "artifact_order": [
-      "adapter|cf-dispatcher|1.0.0|amd64",
       "binary|cf-resident|1.0.0|amd64",
-      "policy|gate-policy|1.0.0|amd64",
-      "receipt|qualification|1.0.0|amd64",
-      "script|migrate|1.0.0|amd64",
-      "trust|operator-bundle|1.0.0|amd64"
+      "script|cf-migrate|1.0.0|amd64"
     ],
     "ordering_rule": "bytewise (kind, name, version, architecture)",
     "required_artifact_fields": [
       "kind", "name", "version", "platform", "architecture", "url",
       "digest", "size", "media_type", "install_path", "source_ref",
-      "build_ref", "depends_on", "provenance"
+      "build_ref", "depends_on", "protocol_versions", "provenance"
     ],
+    "artifacts": [
+      {
+        "kind": "binary", "name": "cf-resident", "version": "1.0.0",
+        "platform": "linux", "architecture": "amd64",
+        "url": "https://artifacts.example.invalid/cf-resident-1.0.0",
+        "digest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "size": 1048576, "media_type": "application/octet-stream",
+        "install_path": "bin/cf-resident", "source_ref": "git:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "build_ref": "build:cf-release-2026-11-13", "depends_on": [],
+        "protocol_versions": ["cf2a.v1", "factory.v1", "worker-brief.v1"],
+        "provenance": "receipt:cf-resident-1.0.0"
+      },
+      {
+        "kind": "script", "name": "cf-migrate", "version": "1.0.0",
+        "platform": "linux", "architecture": "amd64",
+        "url": "https://artifacts.example.invalid/cf-migrate-1.0.0",
+        "digest": "2222222222222222222222222222222222222222222222222222222222222222",
+        "size": 4096, "media_type": "text/x-shellscript",
+        "install_path": "migrations/cf-migrate", "source_ref": "git:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "build_ref": "build:cf-release-2026-11-13", "depends_on": ["binary|cf-resident|1.0.0|amd64"],
+        "protocol_versions": ["cf2a.v1", "factory.v1", "worker-brief.v1"],
+        "provenance": "receipt:cf-migrate-1.0.0"
+      }
+    ],
+    "canonical_jcs": "{\"artifacts\":[{\"architecture\":\"amd64\",\"build_ref\":\"build:cf-release-2026-11-13\",\"depends_on\":[],\"digest\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"install_path\":\"bin/cf-resident\",\"kind\":\"binary\",\"media_type\":\"application/octet-stream\",\"name\":\"cf-resident\",\"platform\":\"linux\",\"protocol_versions\":[\"cf2a.v1\",\"factory.v1\",\"worker-brief.v1\"],\"provenance\":\"receipt:cf-resident-1.0.0\",\"size\":1048576,\"source_ref\":\"git:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"url\":\"https://artifacts.example.invalid/cf-resident-1.0.0\",\"version\":\"1.0.0\"},{\"architecture\":\"amd64\",\"build_ref\":\"build:cf-release-2026-11-13\",\"depends_on\":[\"binary|cf-resident|1.0.0|amd64\"],\"digest\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"install_path\":\"migrations/cf-migrate\",\"kind\":\"script\",\"media_type\":\"text/x-shellscript\",\"name\":\"cf-migrate\",\"platform\":\"linux\",\"protocol_versions\":[\"cf2a.v1\",\"factory.v1\",\"worker-brief.v1\"],\"provenance\":\"receipt:cf-migrate-1.0.0\",\"size\":4096,\"source_ref\":\"git:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"url\":\"https://artifacts.example.invalid/cf-migrate-1.0.0\",\"version\":\"1.0.0\"}],\"protocol_versions\":[\"cf2a.v1\",\"factory.v1\",\"worker-brief.v1\"],\"release_id\":\"cf-release-2026-11-13-fixture\",\"schema_version\":\"cf.release-lock.v1\"}",
+    "signature_preimage": "UTF-8 bytes: CF2A-RELEASE-1\\n followed by the canonical JCS bytes above; manifest_digest and signature are omitted from those bytes.",
+    "signature": {
+      "algorithm": "ed25519",
+      "key_id": "fixture-release-owner",
+      "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    "expected": {
+      "manifest_digest": "a6de3d5caf9210b858a268ed30a68048a5f27efabd9603e576d7f79f9494bdfb",
+      "protocol_versions": ["cf2a.v1", "factory.v1", "worker-brief.v1"],
+      "artifact_order": ["binary|cf-resident|1.0.0|amd64", "script|cf-migrate|1.0.0|amd64"]
+    },
+    "verification_procedure": "python3 tests/test_release_manifest_vector.py",
     "required_inventory": [
       "binary", "image", "script", "adapter", "policy", "trust", "receipt"
     ],
@@ -1951,7 +1986,7 @@
     },
     "procedure": [
       "qualify-resolve", "verify-signature-digest-platform-version",
-      "fence-stop-admission-drain-or-checkpoint", "stage",
+      "fence-stop-admission-drain-or-checkpoint", "stage", "verify-f15-backup",
       "migrate-and-activate-atomically", "postcheck-readback", "finalize"
     ],
     "preservation": {
@@ -1963,6 +1998,7 @@
       "missing_or_mismatched_artifact": "ARTIFACT_UNQUALIFIED; no execution or migration",
       "failed_postcheck": "old_generation_or_forward_repair_hold; admission remains closed",
       "interrupted_migration_after_target_write": "isolated_backup_restore_or_forward_repair; no old-binary rollback",
+      "missing_migration_or_recovery_recipe": "UPGRADE_UNSUPPORTED",
       "same_manifest_retry": "idempotent read-or-continue",
       "changed_manifest_retry": "GENERATION_CONFLICT"
     },
@@ -1971,12 +2007,7 @@
       "MIGRATING", "ACTIVATING", "POSTCHECKING", "FINALIZING"
     ],
     "source": "docs/handbook/chapters/M1-provisioning.md#18-normative-release-manifest-and-f13-upgraderollback-contract",
-    "expected": {
-      "manifest_is_single_contract": true,
-      "arrays_are_sorted": true,
-      "external_release_hashes_fabricated": false,
-      "runtime_qualified": false
-    }
+    "runtime_qualified": false
   },
   "static_controls": {
     "SC-01": {

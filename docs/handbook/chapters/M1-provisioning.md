@@ -999,7 +999,7 @@ The manifest is RFC 8785 JCS, UTF-8, no trailing LF. The Ed25519 signature cover
 ```text
 {schema_version:"cf.release-lock.v1",release_id:ID,manifest_digest:SHA-256,
  factory_version:Version,compatible_factory_versions:SortedVersionSet,
- compatible_schema_versions:SortedSchemaSet,
+ compatible_schema_versions:SortedSchemaSet,protocol_versions:SortedProtocolVersionSet,
  target:{platform:linux,architecture:amd64|arm64,os_version:ID|null},
  source:{repository:HTTPSURL,commit:GitOID,tree_digest:SHA-256},
  build:{builder:ID,build_id:ID,reproducible_inputs_digest:SHA-256,
@@ -1011,14 +1011,16 @@ The manifest is RFC 8785 JCS, UTF-8, no trailing LF. The Ed25519 signature cover
 ```
 
 Each artifact entry has `{kind,name,version,platform,architecture,url,digest,size,
-media_type,install_path,source_ref,build_ref,depends_on,provenance}`. `kind` is one of
+media_type,install_path,source_ref,build_ref,depends_on,protocol_versions,provenance}`.
+`kind` is one of
 `binary`, `image`, `script`, `adapter`, `policy`, `trust`, `receipt`. Digest is lowercase
 64-hex SHA-256, size is exact bytes, URL is HTTPS or a declared content-addressed mirror,
 and dependencies are sorted. Provenance contains immutable source commit or registry
 digest, builder/build id and a signed receipt reference. The inventory includes every
 binary/image, install and migration script, dispatcher/proxy/harness adapter, gate and
 migration policy, operator trust bundle, receipt policy and transitive dependency needed
-by the profile. Architecture/platform and compatible Factory/body/store schema versions
+by the profile. Architecture/platform, compatible Factory/body/store schema versions and the
+`protocol_versions` compatibility set
 are mandatory; arrays and IDs are unique and bytewise sorted. Missing, unresolved,
 unsigned, wrong-size/digest, unsupported platform/version or unqualified receipt is
 `ARTIFACT_UNQUALIFIED`; nothing executes or migrates. The Node and Go hashes in §17.3
@@ -1030,11 +1032,12 @@ The release manager journals `operation_id`, `idempotency_key`, `expected_genera
 `owner_fence`, `manifest_digest`, `phase` and `state_version`, then performs exactly:
 (1) qualify/resolve the lock; (2) verify signature, digest, size, platform, dependency
 closure and compatibility; (3) fence the manager, refuse concurrent operations, stop new
-admission and drain or checkpoint in-flight work; (4) stage all artifacts/migrations in
-a new immutable generation; (5) apply transactional/copy-on-write migration and atomically
-switch the active pointer; (6) postcheck binary/config/schema versions, token
-scope/generation, Crier/scheduler/proxy receipts and in-flight checkpoint; (7) finalize
-receipts/outbox and reopen admission. Version output alone is not success.
+admission and drain or checkpoint in-flight work; (4) stage all artifacts/migrations in a
+new immutable generation; (5) create and verify the F15 pre-migration backup, retain it in
+an isolated generation, and record its receipt; (6) apply transactional/copy-on-write
+migration and atomically switch the active pointer; (7) postcheck binary/config/schema
+versions, token scope/generation, Crier/scheduler/proxy receipts and in-flight checkpoint;
+(8) finalize receipts/outbox and reopen admission. Version output alone is not success.
 
 Tokens are never recreated from defaults or copied from a manifest: issuer, token id,
 scope digest, expiry, revocation state and generation remain in the credential authority;
@@ -1048,19 +1051,22 @@ compatible and the live fence matches; otherwise it remains held/quarantined.
 
 Missing/partial/mismatched/unsupported artifacts, failed migration or failed postcheck
 leave the old verified pointer active, make the new generation unavailable and record a
-typed failure. Before new-schema writes, rollback discards the stage and reconciles the
-old pointer. After an irreversible or new-schema write, old-binary rollback is forbidden:
-restore the pre-migration backup in an isolated generation or perform compatible forward
-repair, then prove readback before reopening admission. Lost acknowledgement is resolved
-by `GET operation/{operation_id}` plus component receipts; the same manifest retry is
-idempotent read/continue, changed bytes or stale fence yields `GENERATION_CONFLICT`.
+typed failure. `ARTIFACT_UNQUALIFIED` means artifact integrity, qualification, platform
+or compatibility is absent or invalid; `GENERATION_CONFLICT` means the manifest bytes or
+generation fence changed; `UPGRADE_UNSUPPORTED` means the release has no declared
+migration or recovery recipe. Before new-schema writes, rollback discards the stage and
+reconciles the old pointer. After an irreversible or new-schema write, old-binary rollback
+is forbidden: restore the pre-migration backup from step (5) in an isolated generation or
+perform compatible forward repair, then prove readback before reopening admission. Lost
+acknowledgement is resolved by `GET operation/{operation_id}` plus component receipts; the
+same manifest retry is idempotent read/continue.
 
 | Interrupted phase | Recovery query/readback | Deterministic next state |
 |---|---|---|
-| `QUALIFYING`/`VERIFYING` | journal, lock digest/signature, artifact receipts | `REFUSED` if incomplete; else `STAGING` |
+| `QUALIFYING`/`VERIFYING` | journal, lock digest/signature, artifact receipts | `ARTIFACT_UNQUALIFIED` if incomplete; else `STAGING` |
 | `DRAINING`/`CHECKPOINTING` | fence, admission, leases, launch checkpoints | resume drain; hold work; no duplicate launch |
 | `STAGING` | staged inventory and per-artifact digests | discard incomplete stage or resume idempotently |
-| `MIGRATING` | migration journal, source/target schema, backup receipt | continue or isolated restore; no old-binary rollback after target write |
+| `MIGRATING` | migration journal, source/target schema, step (5) backup receipt | continue or isolated restore; no old-binary rollback after target write |
 | `ACTIVATING` | active pointer and fsync/receipt record | complete pointer CAS or retain last durable pointer |
 | `POSTCHECKING` | effective versions, schema, token generation, receipts | retry readback; old generation or repair hold |
 | `FINALIZING`/lost acknowledgement | operation id, outbox/result receipt, state version | replay finalization; never reinstall or rerun work |

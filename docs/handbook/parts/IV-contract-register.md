@@ -294,7 +294,8 @@ fields are rejected until a new version registers them. The enrollment/seed/boar
 policy/conformance/storage versions in M0–M6 are also registered domain types, not
 alternative outer wires. Required protocol versions are the union of Part I §1.9.8's
 control-plane baseline and these role-specific types; a role need not implement an
-unrelated renderer API. A release lock advertises the union applicable to each role.
+unrelated renderer API. A release lock advertises the union applicable to each role in
+`protocol_versions` as specified in M1 §18.1.
 
 ### IV.2.2 Shared effects, retries, errors and telemetry
 

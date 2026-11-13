@@ -616,10 +616,12 @@ lists relative paths, modes and digests; deletion never uses unconstrained globb
 | start / CONFIGURED or STOPPED | RUNNING only after supervisor readiness readback; failure DEGRADED, no new admission |
 | stop / RUNNING or DEGRADED | DRAINING, reject new work, query all nonterminal execution records; wait <=300 s, then STOPPED only when none remain |
 | restart / RUNNING, CONFIGURED or STOPPED | stop/drain if needed, then start same certified generation; no generation reset |
-| upgrade / RUNNING, CONFIGURED or STOPPED | drain, snapshot config/store plus backup receipt, install inactive new release, migrate copy, validate; atomic pointer switch is commit point; certify before admission |
-| rollback / failed pre-write upgrade | switch to retained prior snapshot and certify; after new-schema writes, ROLLBACK_REQUIRED forbids old binary and requires pinned reverse migration or isolated restore |
+| upgrade / RUNNING, CONFIGURED or STOPPED | defer to M1 §18.2: qualify, verify, fence/drain, stage, create and verify the retained F15 backup, migrate/switch, postcheck and finalize |
+| rollback / failed pre-write upgrade | defer to M1 §18.3: `ARTIFACT_UNQUALIFIED`, `GENERATION_CONFLICT` and `UPGRADE_UNSUPPORTED` retain the old pointer; after new-schema writes, `ROLLBACK_REQUIRED` uses the step-(5) isolated restore or compatible forward repair |
 | remove / STOPPED | revoke only harness-owned capabilities, verify denial, delete only owned release paths; REMOVED retains node identity, board, sessions/evidence and pending memory |
 
+This table defers to M1 §18.3 for release transition conditions and recovery outcomes;
+the tuple is `(condition, failure code/state, pointer outcome, recovery action)`.
 Drain timeout without force_cancel returns DRAIN_TIMEOUT and DEGRADED with active
 handles intact. An authorized force_cancel follows M2 cancellation and requires
 quiescence before migration/removal; STOP_UNKNOWN blocks both. Runtime crash or failed

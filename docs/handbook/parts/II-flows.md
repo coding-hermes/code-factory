@@ -1113,26 +1113,18 @@ flow is the one F13 procedure, not a competing manifest contract.
 
 **Steps:**
 
-1. The release manager qualifies/resolves the complete lock, then verifies its signature,
-   every artifact digest/size, platform, dependency closure and compatible Factory/body/
-   store schema versions. Any missing, partial, unsupported or unqualified artifact
-   refuses before execution with `ARTIFACT_UNQUALIFIED`.
-2. Acquire the generation fence, refuse concurrent upgrades and stop new admission;
-   drain or checkpoint in-flight launches without changing their launch/execution
-   identities, tokens or leases. Persist the operation phase before each transition.
-3. Stage all artifacts and migrations into a new immutable generation, apply the exact
-   dependency order of Part I §1.9.8, and atomically switch the active pointer only after
-   transactional/copy-on-write migration. Wire/schema changes drain old rounds via F8.1.
-4. Read back actual binary, config and schema versions plus token generation, Crier,
-   scheduler and proxy receipts and the in-flight checkpoint. Version output alone is
-   not readiness; a failed postcheck keeps the old pointer or enters forward-repair hold.
-5. Resume admitted work only on verified compatible targets, then finalize the operation
-   journal and receipt/outbox. A lost acknowledgement is resolved by querying
-   `GET operation/{operation_id}`, not by a second install or launch.
-6. Before new-schema writes, discard the stage and reconcile the old pointer on failure;
-   after an irreversible/new-schema write, old-binary rollback is forbidden and recovery
-   uses the pre-migration backup in an isolated generation or a compatible forward repair.
-   M1 §18.3's interrupted-phase table is authoritative for every restart point.
+1. Qualify/resolve the lock.
+2. Verify signature, digest, size, platform, dependency closure and compatibility.
+3. Fence the manager, refuse concurrent operations, stop new admission and drain or
+   checkpoint in-flight work.
+4. Stage all artifacts/migrations in a new immutable generation.
+5. Create and verify the F15 pre-migration backup, retain it in an isolated generation,
+   and record its receipt.
+6. Apply transactional/copy-on-write migration and atomically switch the active pointer.
+7. Postcheck binary/config/schema versions, token scope/generation, Crier/scheduler/proxy
+   receipts and the in-flight checkpoint.
+8. Finalize receipts/outbox and reopen admission.
+   This is the same ordered sequence as M1 §18.2; version output alone is not success.
 
 **Exceptional branches:** version drift is detected by read-back and named per file
 (M5 §10); the chapters name no automatic rollback. Schema migration is a measured
